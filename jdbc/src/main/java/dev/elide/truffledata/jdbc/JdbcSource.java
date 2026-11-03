@@ -60,6 +60,49 @@ public final class JdbcSource {
       Decoder decoder,
       StatementConfigurer configurer)
       throws SQLException {
+    return executeInternal(
+        connection, sql, parameters, contract, limits, decoder, configurer, null);
+  }
+
+  /**
+   * Reuse one language-owned layout for a known query contract across executions. SQL remains
+   * opaque.
+   */
+  @TruffleBoundary
+  public static JdbcCursor executeStatic(
+      Connection connection,
+      String sql,
+      List<? extends @Nullable Object> parameters,
+      StaticLayout layout,
+      Limits limits,
+      Decoder decoder,
+      StatementConfigurer configurer)
+      throws SQLException {
+    return executeInternal(
+        connection, sql, parameters, layout.schema(), limits, decoder, configurer, layout);
+  }
+
+  public static JdbcCursor executeStatic(
+      Connection connection,
+      String sql,
+      List<? extends @Nullable Object> parameters,
+      StaticLayout layout,
+      Limits limits)
+      throws SQLException {
+    return executeStatic(
+        connection, sql, parameters, layout, limits, DEFAULT_DECODER, statement -> {});
+  }
+
+  private static JdbcCursor executeInternal(
+      Connection connection,
+      String sql,
+      List<? extends @Nullable Object> parameters,
+      @Nullable Schema contract,
+      Limits limits,
+      Decoder decoder,
+      StatementConfigurer configurer,
+      @Nullable StaticLayout layout)
+      throws SQLException {
     PreparedStatement statement = connection.prepareStatement(sql);
     try {
       configurer.configure(statement);
@@ -72,7 +115,7 @@ public final class JdbcSource {
         Schema schema = contract == null ? describe(metadata) : contract;
         if (schema.size() != count)
           throw new ContractViolation("JDBC result width differs from contract");
-        return new JdbcCursor(statement, result, schema, limits, decoder);
+        return new JdbcCursor(statement, result, schema, limits, decoder, layout);
       } catch (SQLException | RuntimeException e) {
         try {
           result.close();

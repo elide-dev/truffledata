@@ -13,7 +13,7 @@ public final class TestLanguage extends TruffleLanguage<TestLanguage.State> {
   private static final ContextReference<State> REFERENCE =
       ContextReference.create(TestLanguage.class);
 
-  public record State(StaticLayout layout) {}
+  public record State(TestLanguage language, StaticLayout layout) {}
 
   public static State current() {
     return REFERENCE.get(null);
@@ -21,7 +21,8 @@ public final class TestLanguage extends TruffleLanguage<TestLanguage.State> {
 
   @Override
   protected State createContext(Env env) {
-    return new State(new StaticLayout(this, Schema.of(Field.requiredLong("a")), Limits.DEFAULT));
+    return new State(
+        this, new StaticLayout(this, Schema.of(Field.requiredLong("a")), Limits.DEFAULT));
   }
 
   @Override

@@ -8,7 +8,9 @@ data_java_library(
     testonly = True,
     srcs = [
         "src/test/java/dev/elide/truffledata/AllocationTest.java",
+        "src/test/java/dev/elide/truffledata/ContractsTest.java",
         "src/test/java/dev/elide/truffledata/CoreTest.java",
+        "src/test/java/dev/elide/truffledata/IntegrationTest.java",
         "src/test/java/dev/elide/truffledata/JdbcTest.java",
         "src/test/java/dev/elide/truffledata/PolicyTest.java",
         "src/test/java/dev/elide/truffledata/PolyglotTest.java",
@@ -34,7 +36,7 @@ java_test(
         "--package",
         "dev.elide.truffledata",
         "--include-class",
-        "dev.elide.truffledata.(Core|Jdbc|Protobuf|Polyglot|Policy)Test",
+        "dev.elide.truffledata.(Core|Jdbc|Protobuf|Polyglot|Policy|Contracts|Integration)Test",
     ],
     data = [
         "//bazel:java.bzl",
@@ -62,6 +64,7 @@ java_test(
         "@maven//:org_graalvm_python_python_language",
         "@maven//:org_graalvm_python_python_resources",
         "@maven//:org_graalvm_truffle_truffle_runtime",
+        "@maven//:org_xerial_sqlite_jdbc",
     ],
 )
 

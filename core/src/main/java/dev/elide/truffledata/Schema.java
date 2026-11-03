@@ -10,14 +10,24 @@ public final class Schema {
   private final Field[] fields;
 
   private final DataArray names;
+  private final @org.jspecify.annotations.Nullable String typeName;
 
   public Schema(List<Field> fields) {
+    this(null, fields);
+  }
+
+  public Schema(@org.jspecify.annotations.Nullable String typeName, List<Field> fields) {
+    this.typeName = typeName;
     this.fields = fields.toArray(Field[]::new);
     this.names = new DataArray(fields.stream().map(Field::name).distinct().toArray());
   }
 
   public static Schema of(Field... fields) {
     return new Schema(List.of(fields));
+  }
+
+  public @org.jspecify.annotations.Nullable String typeName() {
+    return typeName;
   }
 
   public int size() {
@@ -43,6 +53,18 @@ public final class Schema {
       }
     }
     return found;
+  }
+
+  @com.oracle.truffle.api.dsl.Idempotent
+  public boolean requiredDouble(int index) {
+    Field field = fields[index];
+    return field.kind() == Field.Kind.FLOAT64 && !field.nullable() && !field.optional();
+  }
+
+  @com.oracle.truffle.api.dsl.Idempotent
+  public boolean requiredBoolean(int index) {
+    Field field = fields[index];
+    return field.kind() == Field.Kind.BOOLEAN && !field.nullable() && !field.optional();
   }
 
   @com.oracle.truffle.api.dsl.Idempotent

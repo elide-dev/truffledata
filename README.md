@@ -22,6 +22,10 @@ BuildBuddy credentials belong in your user Bazel configuration, never in source 
 
 Bazel stages `dev.elide:truffledata-{core,jdbc,protobuf}` for publication to `https://maven.elide.dev`, including source jars and consumer POMs. See [publishing and consumption](docs/PUBLISHING.md) for the staging command, explicit upload command and repository setup.
 
+## Known schemas and static data
+
+See [contracts and executable integration samples](docs/CONTRACTS.md) for Protobuf descriptor graphs, static query contracts, width/length facts, and native SQLite support.
+
 ## Embedding JDBC
 
 ```java
@@ -65,8 +69,8 @@ The internal `DataLibrary` is for cooperating implementations. `ReadLongNode` pr
 
 - **Batches:** validated snapshots with primitive `long[]` columns for INT64, optional state arrays for null/missing values, and object storage for other kinds. Creating a row view allocates; reading a retained INT64 row does not allocate per element in the compiled acceptance workload.
 - **DynamicRecord:** a live view over a `DynamicObject`. Cached `GetNode`/`ContainsKeyNode` operations track shape changes. Reads validate mutable values; a schema assertion is never permission to assume an arbitrary mutable object remains non-null. The owner must confine access to its language/context thread. Values should use core canonical representations.
-- **StaticLayout:** built with the embedding language's `TruffleLanguage` instance. Required INT64 fields use primitive final static properties; other fields use final object properties. Storage is private and initialized once. Property handles are cached by layout and ordinal.
-- **ProtobufAdapter:** snapshots immutable `Message` values through descriptors. Explicit absence stays distinct from null; implicit scalar fields expose their default values. Repeated fields become sequences, maps become sequences of entry records, and `oneof` presence is retained. Enum values expose their descriptor names. UINT32/FIXED32 widen to long; UINT64/FIXED64 use an exact numeric wrapper. Nested values have depth, cell, and string budgets.
+- **StaticLayout:** built with the embedding language's `TruffleLanguage` instance. Validated widths/ranges select final narrow integer properties; float32/64 and boolean fields also use primitive storage, with independent presence bytes for optional/null values. Other fields use final object properties. Storage is private and initialized once. Property handles are cached by layout and ordinal.
+- **ProtobufAdapter:** snapshots immutable `Message` values through descriptors. Explicit absence stays distinct from null; implicit scalar fields expose their default values. Repeated fields become sequences, maps become sequences of entry records, and `oneof` presence is retained. Enum values expose their descriptor names. UINT32/FIXED32 widen to long; UINT64/FIXED64 use an exact numeric wrapper. With a language owner, the descriptor graph selects static layouts for every message type. Nested values have depth, cell, and string budgets.
 - **DataArray:** a sequence with no column schema, usable for positional or scalar data.
 
 Java null is confined to annotated ingestion boundaries. `DataNull` is the interop null object; `Missing` is an internal presence marker. Reading a missing field through interop raises the appropriate unknown-member/index exception. A present null remains readable.
@@ -83,4 +87,4 @@ Java null is confined to annotated ingestion boundaries. `DataNull` is the inter
 - Allocation limits for retained reads, ingestion, and retained row creation. See [budgets and scope](docs/TRUFFLE.md).
 - Gazelle generation for source-set targets. Source membership is generated; dependency boundaries are explicit in `bazel/gazelle/sources.json`.
 
-This is a foundation, not an Elide production integration. The database tests currently use H2; real MySQL/PostgreSQL driver matrices, Native Image integration, cancellation, asynchronous/RPC execution, and JSON/CSV adapters remain production follow-ups. There is no SQL planner dependency.
+This is a foundation, not an Elide production integration. The database tests use H2, native SQLite, and MySQL/PostgreSQL-shaped JDBC fixtures; real MySQL/PostgreSQL driver matrices, Native Image integration, cancellation, asynchronous/RPC execution, and JSON/CSV adapters remain production follow-ups. There is no SQL planner dependency.

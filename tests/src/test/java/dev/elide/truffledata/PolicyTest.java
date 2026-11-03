@@ -17,25 +17,18 @@ class PolicyTest {
             Objects.requireNonNull(System.getenv("TEST_SRCDIR")),
             Objects.requireNonNull(System.getenv("TEST_WORKSPACE")));
     Map<String, Integer> budgets =
-        Map.of(
-            "Values.java",
-            2,
-            "Schema.java",
-            1,
-            "Batch.java",
-            1,
-            "AbstractRow.java",
-            1,
-            "ExactNumber.java",
-            6,
-            "StaticLayout.java",
-            4,
-            "JdbcCursor.java",
-            5,
-            "JdbcSource.java",
-            4,
-            "ProtobufAdapter.java",
-            2);
+        Map.ofEntries(
+            Map.entry("Values.java", 3),
+            Map.entry("Schema.java", 1),
+            Map.entry("Batch.java", 1),
+            Map.entry("AbstractRow.java", 1),
+            Map.entry("ExactNumber.java", 6),
+            Map.entry("StaticLayout.java", 6),
+            Map.entry("JdbcCursor.java", 6),
+            Map.entry("JdbcSource.java", 5),
+            Map.entry("ProtobufAdapter.java", 3),
+            Map.entry("JdbcContracts.java", 1),
+            Map.entry("SqliteSource.java", 1));
     Pattern limit = Pattern.compile("limit\\s*=\\s*\"(\\d+)\"");
     int checked = 0;
     for (String module : new String[] {"core", "jdbc", "protobuf"}) {

@@ -20,6 +20,18 @@ public abstract class DataLibrary extends Library {
     throw new UnexpectedResultException(value);
   }
 
+  public double readDouble(Object receiver, int index) throws UnexpectedResultException {
+    Object value = read(receiver, index);
+    if (value instanceof Double n) return n;
+    throw new UnexpectedResultException(value);
+  }
+
+  public boolean readBoolean(Object receiver, int index) throws UnexpectedResultException {
+    Object value = read(receiver, index);
+    if (value instanceof Boolean b) return b;
+    throw new UnexpectedResultException(value);
+  }
+
   public boolean isPresent(Object receiver, int index) {
     return read(receiver, index) != Missing.INSTANCE;
   }

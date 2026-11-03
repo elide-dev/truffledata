@@ -26,6 +26,7 @@
     "org.junit.platform:junit-platform-reporting": -749387971,
     "org.openjdk.jmh:jmh-core": 983716932,
     "org.openjdk.jmh:jmh-generator-annprocess": -1162360421,
+    "org.xerial:sqlite-jdbc": 1866718706,
     "repositories": 44730676
   },
   "__RESOLVED_ARTIFACTS_HASH": {
@@ -86,7 +87,8 @@
     "org.openjdk.jmh:jmh-core": 1935023029,
     "org.openjdk.jmh:jmh-generator-annprocess": -1569033546,
     "org.opentest4j:opentest4j": 793813175,
-    "org.pcollections:pcollections": 1838442927
+    "org.pcollections:pcollections": 1838442927,
+    "org.xerial:sqlite-jdbc": -522066959
   },
   "conflict_resolution": {
     "com.google.errorprone:error_prone_annotations:2.5.1": "com.google.errorprone:error_prone_annotations:2.50.0",
@@ -443,6 +445,12 @@
         "jar": "1f82766d7c3221930854033bebff5073ea46b43f27326074bbe15d148c18bfb3"
       },
       "version": "4.0.1"
+    },
+    "org.xerial:sqlite-jdbc": {
+      "shasums": {
+        "jar": "bcb1f51e36f940867e83342f9efbf5968ac44a6bef4d397bb4af7b17b45cd2fb"
+      },
+      "version": "3.53.4.0"
     }
   },
   "dependencies": {
@@ -1543,6 +1551,16 @@
     ],
     "org.pcollections:pcollections": [
       "org.pcollections"
+    ],
+    "org.xerial:sqlite-jdbc": [
+      "org.sqlite",
+      "org.sqlite.core",
+      "org.sqlite.date",
+      "org.sqlite.javax",
+      "org.sqlite.jdbc3",
+      "org.sqlite.jdbc4",
+      "org.sqlite.nativeimage",
+      "org.sqlite.util"
     ]
   },
   "repositories": {
@@ -1604,7 +1622,8 @@
       "org.openjdk.jmh:jmh-core",
       "org.openjdk.jmh:jmh-generator-annprocess",
       "org.opentest4j:opentest4j",
-      "org.pcollections:pcollections"
+      "org.pcollections:pcollections",
+      "org.xerial:sqlite-jdbc"
     ],
     "https://maven.elide.dev/gvm-elide/25.5.5-elide.5/": [
       "com.github.ben-manes.caffeine:caffeine",
@@ -1664,7 +1683,8 @@
       "org.openjdk.jmh:jmh-core",
       "org.openjdk.jmh:jmh-generator-annprocess",
       "org.opentest4j:opentest4j",
-      "org.pcollections:pcollections"
+      "org.pcollections:pcollections",
+      "org.xerial:sqlite-jdbc"
     ]
   },
   "services": {
@@ -1846,6 +1866,11 @@
     "org.openjdk.jmh:jmh-generator-annprocess": {
       "javax.annotation.processing.Processor": [
         "org.openjdk.jmh.generators.BenchmarkProcessor"
+      ]
+    },
+    "org.xerial:sqlite-jdbc": {
+      "java.sql.Driver": [
+        "org.sqlite.JDBC"
       ]
     }
   },

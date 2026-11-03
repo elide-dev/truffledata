@@ -37,7 +37,7 @@ public final class DynamicRecord extends AbstractRow {
           Values.validate(field, value == null ? DataNull.INSTANCE : value));
     }
     try {
-      return get.executeLong(object, field.name(), Missing.INSTANCE);
+      return Values.validateLong(field, get.executeLong(object, field.name(), Missing.INSTANCE));
     } catch (UnexpectedResultException e) {
       Object value = e.getResult();
       Object checked = Values.validate(field, value == null ? DataNull.INSTANCE : value);

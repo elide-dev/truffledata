@@ -16,6 +16,7 @@ public final class JdbcCursor implements AutoCloseable, TruffleObject {
   private final Schema schema;
   private final Limits limits;
   private final JdbcSource.Decoder decoder;
+  private final @Nullable StaticLayout layout;
   private final Thread owner = Thread.currentThread();
   private boolean closed;
   private boolean exhausted;
@@ -29,12 +30,14 @@ public final class JdbcCursor implements AutoCloseable, TruffleObject {
       ResultSet result,
       Schema schema,
       Limits limits,
-      JdbcSource.Decoder decoder) {
+      JdbcSource.Decoder decoder,
+      @Nullable StaticLayout layout) {
     this.statement = statement;
     this.result = result;
     this.schema = schema;
     this.limits = limits;
     this.decoder = decoder;
+    this.layout = layout;
   }
 
   public Schema schema() {
@@ -60,21 +63,18 @@ public final class JdbcCursor implements AutoCloseable, TruffleObject {
       int capacity =
           (int) Math.min(limits.maxRows(), limits.maxCells() / Math.max(1, schema.size()));
       List<Object[]> rows = new ArrayList<>(capacity);
-      long stringBytes = 0;
+      PayloadBudget budget = new PayloadBudget(limits);
       while (rows.size() < capacity) {
         if (!result.next()) {
           exhausted = true;
           close();
           break;
         }
+        budget.cells(schema.size());
         Object[] row = new Object[schema.size()];
         for (int c = 0; c < row.length; c++) {
           Object value = Values.normalize(decoder.read(result, c + 1));
-          if (value instanceof String s) {
-            stringBytes += 2L * s.length();
-            if (stringBytes > limits.maxStringBytes())
-              throw new ContractViolation("JDBC batch string budget exceeded");
-          }
+          budget.accept(value);
           row[c] = Values.validate(schema.field(c), value);
         }
         rows.add(row);
@@ -132,18 +132,43 @@ public final class JdbcCursor implements AutoCloseable, TruffleObject {
     return true;
   }
 
-  @ExportMessage
-  @TruffleBoundary
-  boolean hasIteratorNextElement() {
+  private boolean prepareNext() throws SQLException {
     checkThread();
     if (batchMode) throw new IllegalStateException("Cannot mix batch and iterator consumption");
     iteratorMode = true;
     if (pending != null && nextRow < pending.size()) return true;
     if (exhausted) return false;
+    pending = fetch();
+    nextRow = 0;
+    return pending != null;
+  }
+
+  /** Retained immutable row; static when executeStatic supplied a layout. */
+  @TruffleBoundary
+  public @Nullable AbstractRow nextRecord() throws SQLException {
+    if (!prepareNext()) return null;
+    Batch.Row row = Objects.requireNonNull(pending).row(nextRow++);
+    if (layout == null) return row;
+    Object[] values = new Object[schema.size()];
+    DataLibrary data = DataLibrary.factory().getUncached();
+    for (int i = 0; i < values.length; i++) values[i] = data.read(row, i);
     try {
-      pending = fetch();
-      nextRow = 0;
-      return pending != null;
+      return layout.create(values);
+    } catch (RuntimeException failure) {
+      try {
+        close();
+      } catch (SQLException close) {
+        failure.addSuppressed(close);
+      }
+      throw failure;
+    }
+  }
+
+  @ExportMessage
+  @TruffleBoundary
+  boolean hasIteratorNextElement() {
+    try {
+      return prepareNext();
     } catch (SQLException e) {
       throw new IllegalStateException("JDBC read failed", e);
     }
@@ -152,8 +177,13 @@ public final class JdbcCursor implements AutoCloseable, TruffleObject {
   @ExportMessage
   @TruffleBoundary
   Object getIteratorNextElement() throws StopIterationException {
-    if (!hasIteratorNextElement()) throw StopIterationException.create();
-    return Objects.requireNonNull(pending).row(nextRow++);
+    try {
+      AbstractRow row = nextRecord();
+      if (row == null) throw StopIterationException.create();
+      return row;
+    } catch (SQLException e) {
+      throw new IllegalStateException("JDBC read failed", e);
+    }
   }
 
   @ExportMessage

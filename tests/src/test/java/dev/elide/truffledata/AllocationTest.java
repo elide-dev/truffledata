@@ -40,6 +40,90 @@ class AllocationTest {
     }
   }
 
+  @Test
+  void narrowTypedReadsAndExactLengthCompileWithoutAllocation() {
+    try (Context context = Context.newBuilder("td-test").allowExperimentalOptions(true).build()) {
+      context.initialize("td-test");
+      context.enter();
+      try {
+        Schema schema =
+            Schema.of(
+                Field.integer("n", 16, true, false, false),
+                new Field(
+                    "f", Field.Kind.FLOAT64, false, false, Constraints.NONE.withFloatBits(32)),
+                new Field("b", Field.Kind.BOOLEAN, false, false),
+                new Field(
+                    "s",
+                    Field.Kind.STRING,
+                    false,
+                    false,
+                    Constraints.NONE.withLength(
+                        new Constraints.Length(3, 3, Constraints.LengthUnit.UTF16))));
+        StaticLayout layout =
+            new StaticLayout(TestLanguage.current().language(), schema, Limits.DEFAULT);
+        var row = layout.create(1000L, 1.5, true, "abc");
+        MixedRoot root = new MixedRoot();
+        var target = root.getCallTarget();
+        for (int i = 0; i < 20; i++) target.call(row, 100000);
+        ThreadMXBean bean = (ThreadMXBean) ManagementFactory.getThreadMXBean();
+        bean.setThreadAllocatedMemoryEnabled(true);
+        long before = bean.getThreadAllocatedBytes(Thread.currentThread().threadId());
+        long sum = (Long) target.call(row, 1000000);
+        double perRead =
+            (bean.getThreadAllocatedBytes(Thread.currentThread().threadId()) - before) / 4000000.0;
+        assertEquals(1005000000L, sum);
+        System.out.printf(
+            "ALLOCATION static-typed %.6f bytes/read compiled=%s%n", perRead, root.compiled);
+        assertTrue(perRead <= 0.05, "Typed static read allocation budget exceeded");
+        assertTrue(
+            com.oracle.truffle.api.nodes.NodeUtil.countNodes(root) <= 256,
+            "Mixed PIC node budget exceeded");
+        if (Boolean.getBoolean("truffledata.requireCompiled")) assertTrue(root.compiled);
+        Object[] input = {1000L, 1.5, true, "abc"};
+        for (int i = 0; i < 10000; i++) retained = layout.create(input);
+        before = bean.getThreadAllocatedBytes(Thread.currentThread().threadId());
+        for (int i = 0; i < 10000; i++) retained = layout.create(input);
+        double perRow =
+            (bean.getThreadAllocatedBytes(Thread.currentThread().threadId()) - before) / 10000.0;
+        System.out.printf("ALLOCATION static-ingestion %.3f bytes/row%n", perRow);
+        assertTrue(perRow <= 256, "Static ingestion allocation budget exceeded");
+      } finally {
+        context.leave();
+      }
+    }
+  }
+
+  private static final class MixedRoot extends RootNode {
+    @Child private ReadLongNode integer = ReadLongNode.create();
+    @Child private ReadDoubleNode floating = ReadDoubleNode.create();
+    @Child private ReadBooleanNode bool = ReadBooleanNode.create();
+    @Child private ReadLengthNode length = ReadLengthNode.create();
+    boolean compiled;
+
+    MixedRoot() {
+      super(null);
+    }
+
+    @Override
+    public Object execute(VirtualFrame frame) {
+      Object row = frame.getArguments()[0];
+      int count = (Integer) frame.getArguments()[1];
+      long sum = 0;
+      for (int i = 0; i < count; i++) {
+        int exactLength = length.execute(row, 3);
+        com.oracle.truffle.api.CompilerAsserts.partialEvaluationConstant(exactLength);
+        sum +=
+            integer.execute(row, 0)
+                + (long) floating.execute(row, 1)
+                + (bool.execute(row, 2) ? 1 : 0)
+                + exactLength;
+      }
+      if (CompilerDirectives.inInterpreter()) LoopNode.reportLoopCount(this, count);
+      compiled |= CompilerDirectives.inCompiledCode();
+      return sum;
+    }
+  }
+
   private static volatile Object retained = DataNull.INSTANCE;
 
   @Test

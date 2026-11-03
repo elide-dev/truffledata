@@ -13,6 +13,14 @@ public final class DataArray implements TruffleObject {
     for (Object v : values) Values.requireInterop(v);
   }
 
+  public int size() {
+    return values.length;
+  }
+
+  public Object get(int index) {
+    return values[index];
+  }
+
   @ExportMessage
   public boolean hasArrayElements() {
     return true;

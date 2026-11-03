@@ -29,18 +29,16 @@ public final class Batch {
     limits.check(rows.size(), schema.size());
     Column[] columns = new Column[schema.size()];
     for (int i = 0; i < columns.length; i++) columns[i] = new Column(schema.field(i), rows.size());
-    long stringBytes = 0;
+    PayloadBudget budget = new PayloadBudget(limits);
+    budget.cells((long) rows.size() * schema.size());
     for (int r = 0; r < rows.size(); r++) {
       Object[] row = rows.get(r);
       if (row.length != schema.size())
         throw new ContractViolation("Row width differs from contract");
       for (int c = 0; c < columns.length; c++) {
-        Object value = Values.validate(schema.field(c), Values.normalize(row[c]));
-        if (value instanceof String s) {
-          stringBytes += 2L * s.length();
-          if (stringBytes > limits.maxStringBytes())
-            throw new ContractViolation("Batch string budget exceeded");
-        }
+        Object value = Values.normalize(row[c]);
+        budget.accept(value);
+        Values.validate(schema.field(c), value);
         columns[c].set(r, value);
       }
     }
