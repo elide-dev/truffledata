@@ -9,6 +9,7 @@ import java.util.*;
 /** Immutable native message: readable defaults, separate protobuf presence, no retained Message. */
 @ExportLibrary(DataLibrary.class)
 public final class ProtoRow extends AbstractRow {
+  private static final byte[] NO_UNKNOWN_FIELDS = new byte[0];
   private final ProtoPlan plan;
   final AbstractRow storage;
   private final boolean[] present;
@@ -19,7 +20,7 @@ public final class ProtoRow extends AbstractRow {
     this.plan = plan;
     this.storage = plan.storage(values);
     this.present = present.clone();
-    this.unknown = unknown.clone();
+    this.unknown = unknown.length == 0 ? NO_UNKNOWN_FIELDS : unknown.clone();
   }
 
   public ProtoPlan plan() {
@@ -64,7 +65,7 @@ public final class ProtoRow extends AbstractRow {
     final ProtoPlan plan;
     final Object[] values;
     final boolean[] present;
-    byte[] unknown = new byte[0];
+    byte[] unknown = NO_UNKNOWN_FIELDS;
 
     Builder(ProtoPlan plan) {
       this.plan = plan;

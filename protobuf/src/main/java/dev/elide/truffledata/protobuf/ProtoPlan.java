@@ -249,6 +249,9 @@ public final class ProtoPlan {
   private final @Nullable StaticLayout layout;
   private final Map<Integer, Integer> numbers;
 
+  @CompilationFinal(dimensions = 1)
+  private final int[] denseNumbers;
+
   private ProtoPlan(Model model, @Nullable TruffleLanguage<?> language, Type definition) {
     this.model = model;
     this.definition = definition;
@@ -261,6 +264,14 @@ public final class ProtoPlan {
       if (indices.put(fields[i].number(), i) != null || !names.add(fields[i].name()))
         throw new ContractViolation("Duplicate protobuf field");
       contracts.add(fields[i].contract());
+    }
+    // Bound the dense prefix by schema size, never by an untrusted maximum tag.
+    // Common low field numbers avoid hashing and boxing; sparse tags retain the map path.
+    int denseSize = (int) Math.min(4096L, 2L * fields.length + 1);
+    denseNumbers = new int[denseSize];
+    Arrays.fill(denseNumbers, -1);
+    for (var field : indices.entrySet()) {
+      if (field.getKey() < denseSize) denseNumbers[field.getKey()] = field.getValue();
     }
     numbers = Map.copyOf(indices);
     schema = new Schema(definition.name(), contracts);
@@ -306,7 +317,9 @@ public final class ProtoPlan {
 
   @TruffleBoundary
   public int ordinal(int number) {
-    return numbers.getOrDefault(number, -1);
+    return number >= 0 && number < denseNumbers.length
+        ? denseNumbers[number]
+        : numbers.getOrDefault(number, -1);
   }
 
   public ProtoPlan nested(int ordinal) {

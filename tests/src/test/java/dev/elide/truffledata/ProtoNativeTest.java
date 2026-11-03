@@ -42,6 +42,41 @@ class ProtoNativeTest {
   }
 
   @Test
+  void denseAndSparseTagLookupPreservesOrdinals() throws Exception {
+    var message = DescriptorProtos.DescriptorProto.newBuilder().setName("Tags");
+    int[] numbers = {536870911, 1, 7, 4096, 3};
+    for (int number : numbers) {
+      message.addField(
+          DescriptorProtos.FieldDescriptorProto.newBuilder()
+              .setName("f" + number)
+              .setNumber(number)
+              .setType(DescriptorProtos.FieldDescriptorProto.Type.TYPE_INT64)
+              .setLabel(DescriptorProtos.FieldDescriptorProto.Label.LABEL_OPTIONAL));
+    }
+    var file =
+        FileDescriptor.buildFrom(
+            DescriptorProtos.FileDescriptorProto.newBuilder()
+                .setName("tags.proto")
+                .setSyntax("proto3")
+                .addMessageType(message)
+                .build(),
+            new FileDescriptor[0]);
+    var descriptor = file.getMessageTypes().getFirst();
+    var plan = ProtoCompiler.compile(null, descriptor, Limits.DEFAULT, 8, WIRE_LIMIT);
+    var value = DynamicMessage.newBuilder(descriptor);
+    for (int i = 0; i < numbers.length; i++) {
+      assertEquals(i, plan.ordinal(numbers[i]));
+      value.setField(descriptor.findFieldByNumber(numbers[i]), 1000L + i);
+    }
+    for (int absent : new int[] {-1, 0, 2, 6, 10, 11, 4095, 4097, Integer.MAX_VALUE})
+      assertEquals(-1, plan.ordinal(absent));
+    var expected = value.build();
+    assertEquals(
+        expected,
+        DynamicMessage.parseFrom(descriptor, plan.encode(plan.decode(expected.toByteArray()))));
+  }
+
+  @Test
   void jsonNullEnumAndWellKnownMappingBoundary() {
     var nullEnum =
         new ProtoPlan.EnumType("google.protobuf.NullValue", true, Map.of("NULL_VALUE", 0));
