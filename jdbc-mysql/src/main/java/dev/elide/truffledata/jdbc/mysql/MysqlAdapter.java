@@ -49,6 +49,34 @@ public final class MysqlAdapter implements JdbcAdapter {
   }
 
   @Override
+  public ResultSet execute(PreparedStatement statement) throws SQLException {
+    JdbcConnection connection = statement.getConnection().unwrap(JdbcConnection.class);
+    var owner = statement.unwrap(com.mysql.cj.jdbc.StatementImpl.class);
+    var lock = connection.getConnectionLock();
+    lock.lock();
+    try {
+      return statement.executeQuery();
+    } catch (SQLException | RuntimeException | Error failure) {
+      try {
+        // Connector/J can register a stream before its timeout check throws, leaving no JDBC
+        // ResultSet assigned to the statement. Only clean up a stream owned by this execution.
+        var protocol = ((com.mysql.cj.NativeSession) connection.getSession()).getProtocol();
+        var stream = protocol.getStreamingData();
+        if (stream != null) {
+          var resultOwner = stream.getOwner();
+          if (resultOwner != null && resultOwner.getOwningQuery() == owner)
+            resultOwner.closeOwner();
+        }
+      } catch (RuntimeException | Error cleanup) {
+        if (cleanup != failure) failure.addSuppressed(cleanup);
+      }
+      throw failure;
+    } finally {
+      lock.unlock();
+    }
+  }
+
+  @Override
   public Schema describe(ResultSetMetaData metadata, Limits limits) throws SQLException {
     return JdbcContracts.describe(metadata, JdbcContracts.Dialect.MYSQL, limits);
   }

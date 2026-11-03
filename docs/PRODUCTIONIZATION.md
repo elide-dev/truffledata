@@ -102,7 +102,9 @@ each passed three repetitions with the existing budgets unchanged. The updated l
 service runner also passed MySQL/PostgreSQL acceptance. The previous CI service job
 failed before running tests because its no-remote-exec tag prevented remote compilation;
 the corrected runner selects standalone test execution and a local TestRunner strategy
-without restricting compilation. Linux CI verification of this correction is pending.
+without restricting compilation. Linux CI verification completed successfully, including
+Codecov, CodSpeed, real services and the Maven BOM consumer:
+https://github.com/elide-dev/truffledata/actions/runs/41583533382.
 
 Direct column ingestion increment: JDBC batch consumption now uses a checked,
 synchronous `Batch.read` source to fill owned column storage directly. It removes
@@ -114,3 +116,17 @@ budget. No throughput improvement is inferred from this allocation result.
 All ten regular targets passed at
 https://app.buildbuddy.io/invocation/e2b09873-2a1c-4cf8-b7b2-8c1a74ea994d,
 and the real MySQL/PostgreSQL service runner passed again with direct batch filling.
+
+Real-driver failure/value increment: six live acceptance methods now cover both database
+integrations, including exact DECIMAL(30,10), Unicode, 64 KiB binary snapshots, nullable
+values, leap-day/local microsecond timestamps, retained batch/static rows, budget
+failure cleanup and driver query timeouts. The timeout test exposed Connector/J's
+orphaned streaming-result path. An additive default `JdbcAdapter.execute` hook permits
+the MySQL adapter to close only a result owned by its failed statement, under the driver
+lock, preserving the original error and borrowed connection. A rejected second query
+also verifies that another statement's active stream is untouched. The implementation
+is tied to the pinned Connector/J protocol API and needs upgrade acceptance.
+All ten ordinary targets passed at
+https://app.buildbuddy.io/invocation/da2c0cc3-1790-4e09-8d9e-6f4aa361c197.
+Xerial's query timeout only bounds lock waiting; cross-driver execution/fetch/cleanup
+deadlines and cancellation are still outstanding, not implied by these timeout tests.

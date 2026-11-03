@@ -4,6 +4,7 @@ import dev.elide.truffledata.Limits;
 import dev.elide.truffledata.Schema;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
+import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
 
@@ -27,6 +28,15 @@ public interface JdbcAdapter {
    */
   PreparedStatement prepare(Connection connection, String sql, JdbcQueryOptions options)
       throws SQLException;
+
+  /**
+   * Execute the prepared query. Overrides may clean up driver-owned results that become visible
+   * internally before execution throws. The caller still closes the statement on any failure; the
+   * override must preserve the primary failure and must not close the borrowed connection.
+   */
+  default ResultSet execute(PreparedStatement statement) throws SQLException {
+    return statement.executeQuery();
+  }
 
   /** Conservative driver metadata interpretation; returned facts are validated during ingestion. */
   Schema describe(ResultSetMetaData metadata, Limits limits) throws SQLException;

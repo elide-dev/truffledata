@@ -26,6 +26,169 @@ class RealDriversTest {
     exercise(url("TRUFFLEDATA_POSTGRESQL_URL"), false, PostgresqlAdapter.INSTANCE);
   }
 
+  @Test
+  void mysqlValueAndFailureMatrix() throws Exception {
+    edgeValues(url("TRUFFLEDATA_MYSQL_URL"), true, MysqlAdapter.INSTANCE);
+  }
+
+  @Test
+  void postgresqlValueAndFailureMatrix() throws Exception {
+    edgeValues(url("TRUFFLEDATA_POSTGRESQL_URL"), false, PostgresqlAdapter.INSTANCE);
+  }
+
+  @Test
+  void mysqlQueryTimeoutPreservesBorrowedConnection() throws Exception {
+    timeout(url("TRUFFLEDATA_MYSQL_URL"), "select sleep(5)", MysqlAdapter.INSTANCE);
+  }
+
+  @Test
+  void postgresqlQueryTimeoutPreservesBorrowedConnection() throws Exception {
+    timeout(url("TRUFFLEDATA_POSTGRESQL_URL"), "select pg_sleep(5)", PostgresqlAdapter.INSTANCE);
+  }
+
+  private static void timeout(String url, String sql, JdbcAdapter adapter) throws Exception {
+    try (Connection connection = DriverManager.getConnection(url)) {
+      connection.setAutoCommit(false);
+      SQLException failure =
+          assertThrows(
+              SQLException.class,
+              () -> {
+                try (var cursor =
+                    JdbcSource.execute(
+                        connection,
+                        sql,
+                        List.of(),
+                        null,
+                        null,
+                        Limits.DEFAULT,
+                        adapter,
+                        new JdbcQueryOptions(2, 1, true))) {
+                  cursor.nextRecord();
+                }
+              });
+      assertTrue(
+          failure instanceof SQLTimeoutException || "57014".equals(failure.getSQLState()),
+          "Expected a driver timeout, got " + failure.getClass().getName());
+      assertFalse(connection.isClosed());
+      assertFalse(connection.getAutoCommit());
+      // PostgreSQL aborts a timed-out transaction. Recovery belongs to the borrower.
+      connection.rollback();
+      assertUsable(connection);
+    }
+  }
+
+  private static void assertUsable(Connection connection) throws SQLException {
+    try (Statement statement = connection.createStatement();
+        ResultSet result = statement.executeQuery("select 42")) {
+      assertTrue(result.next());
+      assertEquals(42, result.getInt(1));
+    }
+  }
+
+  private static void edgeValues(String url, boolean mysql, JdbcAdapter adapter) throws Exception {
+    byte[] payload = new byte[65536];
+    Arrays.fill(payload, (byte) 255);
+    String text = "a😀é".repeat(4096);
+    var amount = new java.math.BigDecimal("12345678901234567890.1234567890");
+    var schema =
+        Schema.of(
+            new Field("amount", Field.Kind.EXACT, false, false),
+            new Field("label", Field.Kind.STRING, false, false),
+            new Field("payload", Field.Kind.ARRAY, false, false),
+            new Field("nullable_value", Field.Kind.INT64, true, false),
+            new Field("day_value", Field.Kind.STRING, false, false),
+            new Field("stamp", Field.Kind.STRING, false, false));
+    String sql =
+        "select cast(? as decimal(30,10)) as amount, ? as label, ? as payload, "
+            + "cast(null as "
+            + (mysql ? "signed" : "bigint")
+            + ") as nullable_value, "
+            + "cast('2024-02-29' as date) as day_value, "
+            + "cast('2024-02-29 12:34:56.123456' as "
+            + (mysql ? "datetime(6)" : "timestamp(6)")
+            + ") as stamp";
+    List<AbstractRow> retained = new ArrayList<>();
+    var data = DataLibrary.factory().getUncached();
+    try (Connection connection = DriverManager.getConnection(url);
+        Context context = Context.newBuilder("td-test").build()) {
+      connection.setAutoCommit(false);
+      context.initialize("td-test");
+      context.enter();
+      try {
+        var layout = new StaticLayout(TestLanguage.current().language(), schema, Limits.DEFAULT);
+        for (boolean useStatic : new boolean[] {false, true}) {
+          try (var cursor =
+              JdbcSource.execute(
+                  connection,
+                  sql,
+                  List.of(amount, text, payload),
+                  schema,
+                  useStatic ? layout : null,
+                  Limits.DEFAULT,
+                  adapter,
+                  JdbcQueryOptions.DEFAULT)) {
+            retained.add(Objects.requireNonNull(cursor.nextRecord()));
+            assertNull(cursor.nextRecord());
+          }
+        }
+        for (Limits limits : List.of(new Limits(2, 6, 32, 100000), new Limits(2, 6, 100000, 8))) {
+          for (boolean useStatic : new boolean[] {false, true}) {
+            try (var cursor =
+                JdbcSource.execute(
+                    connection,
+                    sql,
+                    List.of(amount, text, payload),
+                    schema,
+                    useStatic ? layout : null,
+                    limits,
+                    adapter,
+                    JdbcQueryOptions.DEFAULT)) {
+              assertThrows(ContractViolation.class, cursor::nextRecord);
+              assertTrue(cursor.isClosed());
+            }
+            assertFalse(connection.getAutoCommit());
+            assertUsable(connection);
+          }
+        }
+        assertThrows(
+            SQLException.class,
+            () -> {
+              try (var ignored =
+                  JdbcSource.execute(
+                      connection,
+                      "select td_nonexistent_column",
+                      List.of(),
+                      null,
+                      null,
+                      Limits.DEFAULT,
+                      adapter,
+                      JdbcQueryOptions.DEFAULT)) {
+                fail("Invalid SQL was accepted");
+              }
+            });
+        assertFalse(connection.isClosed());
+        assertFalse(connection.getAutoCommit());
+        connection.rollback();
+        assertUsable(connection);
+      } finally {
+        context.leave();
+      }
+    }
+    // Both representations survive cursor, connection and context close and parameter mutation.
+    Arrays.fill(payload, (byte) 0);
+    for (AbstractRow row : retained) {
+      assertEquals(amount, ((ExactNumber) data.read(row, 0)).decimal());
+      assertEquals(text, data.read(row, 1));
+      var bytes = (DataArray) data.read(row, 2);
+      assertTrue(bytes.isBytes());
+      assertEquals(65536, bytes.size());
+      assertEquals(255L, bytes.get(65535));
+      assertSame(DataNull.INSTANCE, data.read(row, 3));
+      assertEquals("2024-02-29", data.read(row, 4));
+      assertEquals("2024-02-29T12:34:56.123456", data.read(row, 5));
+    }
+  }
+
   private static void exercise(String url, boolean mysql, JdbcAdapter adapter) throws Exception {
     try (Connection connection = DriverManager.getConnection(url);
         Context context =
@@ -185,6 +348,30 @@ class RealDriversTest {
               DataLibrary.factory()
                   .getUncached()
                   .readLong(Objects.requireNonNull(cursor.nextRecord()), 0));
+          if (mysql) {
+            // A rejected second execution must not close the first statement's active stream.
+            assertThrows(
+                SQLException.class,
+                () -> {
+                  try (var rejected =
+                      JdbcSource.execute(
+                          connection,
+                          "select 42",
+                          List.of(),
+                          null,
+                          null,
+                          Limits.DEFAULT,
+                          adapter,
+                          JdbcQueryOptions.DEFAULT)) {
+                    fail("Connector/J accepted another query while streaming");
+                  }
+                });
+            assertEquals(
+                2L,
+                DataLibrary.factory()
+                    .getUncached()
+                    .readLong(Objects.requireNonNull(cursor.nextRecord()), 0));
+          }
           if (!mysql) {
             try (Statement statement = connection.createStatement();
                 ResultSet cursors = statement.executeQuery("select count(*) from pg_cursors")) {

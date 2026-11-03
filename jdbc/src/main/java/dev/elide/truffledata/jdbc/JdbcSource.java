@@ -113,7 +113,7 @@ public final class JdbcSource {
     PreparedStatement statement = adapter.prepare(connection, sql, options);
     try {
       for (int i = 0; i < parameters.size(); i++) statement.setObject(i + 1, parameters.get(i));
-      ResultSet result = statement.executeQuery();
+      ResultSet result = adapter.execute(statement);
       try {
         ResultSetMetaData metadata = result.getMetaData();
         int count = metadata.getColumnCount();

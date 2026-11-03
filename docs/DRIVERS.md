@@ -33,13 +33,25 @@ protocol data. An explicit BOOLEAN contract over integer/BIT metadata checks the
 integral domain 0..1, because `getObject` can otherwise hide a value such as 2 by
 converting it to true. Non-streaming operation is an explicit query option.
 
+The adapter's execution hook also handles a Connector/J timeout edge: the driver may
+register a streaming result before throwing, without returning a JDBC ResultSet or
+assigning it to the statement. Under the driver's connection lock, the integration
+closes that result only when its owning query is the failed statement. It preserves
+the execution exception and suppresses cleanup failures. This uses Connector/J's
+internal protocol API and is covered against the pinned version; driver upgrades
+must rerun timeout and unrelated-stream ownership acceptance.
+
 SQLite steps a native cursor and uses conservative nullable ANY metadata. See
 [the SQLite contract notes](CONTRACTS.md#sqlite-driver-integration).
 
 These settings do not prove bounded driver packets, cell allocations, database engine
 memory, total retained rows, or end-to-end deadlines. Statement query timeouts are
-configured, but cancellation races and driver-specific timeout semantics still require
-production acceptance. Connections must remain exclusively controlled by their caller
+configured. Live tests exercise MySQL/PostgreSQL timeout exceptions and connection
+reuse after caller rollback. These are statement-timeout checks, not deadlines across
+execution, fetching and cleanup. Xerial 3.53.4.0 implements its statement timeout using
+a temporary connection busy timeout (lock waiting), not a CPU/query execution deadline.
+See [Xerial's implementation](https://github.com/xerial/sqlite-jdbc/blob/master/src/main/java/org/sqlite/jdbc3/JDBC3Statement.java).
+Cross-driver deadlines and cancellation races still require implementation and acceptance. Connections must remain exclusively controlled by their caller
 while a query is consumed; do not change transaction settings under an active cursor.
 
 ## Value conversion
@@ -77,9 +89,13 @@ so ordinary remote unit tests do not need database networking.
 Acceptance currently covers prepared parameters, metadata widths, static layouts,
 JS/Python reads with host access disabled, unsigned MySQL integers, binary values,
 PostgreSQL arrays with NULL and JSON, MySQL boolean-domain rejection, early close,
-connection reuse, caller rollback, and PostgreSQL streaming preflight. Extreme decimal,
-temporal, multidimensional-array, timeout/cancellation and large-payload cases remain
-in the production ledger.
+connection reuse, caller rollback, and PostgreSQL streaming preflight. The edge matrix
+adds DECIMAL(30,10) precision/scale, supplementary Unicode, 64 KiB compact binary values,
+SQL NULL, leap-day dates and microsecond local timestamps in both batch/static storage.
+It verifies retention after closing the source/context, parameter mutation isolation,
+string/cell budget failures, invalid SQL, and MySQL/PostgreSQL statement timeouts.
+Timezone/offset behavior, multidimensional arrays, cancellation races and adversarial
+payloads larger than driver buffers remain in the production ledger.
 
 `.github/workflows/check.drivers.yml` runs the same target against pinned services and
 uploads JUnit reporting. It then runs `tools/release/consumer.py` to exercise the staged
