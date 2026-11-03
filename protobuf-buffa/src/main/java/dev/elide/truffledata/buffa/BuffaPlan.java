@@ -305,7 +305,7 @@ public final class BuffaPlan implements AutoCloseable {
         }
         if (!field.explicitPresence()) present[i] = nonDefault(field, values[i]);
         if (field.required() && !present[i]) throw new ContractViolation("Missing required field");
-        Values.validate(field.contract(), values[i]);
+        Values.validate(plan.schema().field(i), values[i]);
       }
       return new TypedRow(owner, plan, values, present);
     }

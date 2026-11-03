@@ -114,3 +114,40 @@ reads across these fixtures. Direct stock AOT reads were still faster. For MySQL
 INT4 retained data, static TruffleData reads measured about 5.7/6.1 ns per row at peak,
 versus 29.2/31.2 ns interpreted and 2.6/3.0 ns for direct stock scalar reads. This isolates
 contract/guest-access costs and does not establish database-query performance.
+
+## Decoder optimization checkpoint
+
+Revision `5c7e528` ([samples](../benchmarks/results/svm-comparison-5c7e528/comparison.json),
+[table](../benchmarks/results/svm-comparison-5c7e528/comparison.md)) removes eager unknown-field
+buffers, shares empty unknown-field storage, and uses a bounded dense prefix for field-number
+lookup. Sparse field numbers still use the map; the dense prefix is bounded by schema size
+and capped at 4096 entries.
+
+Owned scalar ingestion dropped from 616 to 496 Java heap bytes/message. In this run it took
+490 ns/message versus stock's 99 ns/message, with stock allocating 136 bytes. Stock timings
+also changed substantially from the initial run, so the absolute timing change between runs
+must not be attributed entirely to these edits. This checkpoint does not meet stock parity.
+
+A separate experiment made the generated static storage subclass the row itself. It passed
+correctness and comparison smoke tests but failed the existing mixed-representation allocation
+gate: four receivers caused 12 bytes/read instead of the allowed 0.05 bytes/read. Distinct
+generated receiver classes saturated library dispatch earlier. The experiment was reverted;
+the allocation gate and dispatch limits were not relaxed. Any future combined row/storage
+representation must preserve polymorphic dispatch behavior as well as improve ingestion.
+
+Revision `e194e54` ([samples](../benchmarks/results/svm-comparison-e194e54/comparison.json),
+[table](../benchmarks/results/svm-comparison-e194e54/comparison.md)) additionally reuses
+compiled field contracts and immutable empty native-view fields, and avoids slicing a freshly
+wrapped byte array. Java heap allocation changes from the initial baseline are:
+
+| Ingestion | Initial B/message | Updated B/message |
+|---|---:|---:|
+| Owned scalar | 616 | 448 |
+| Buffa scalar | 592 | 400 |
+| Buffa borrowed bytes | 568 | 392 |
+| Buffa Timestamp JSON | 984 | 792 |
+
+All original comparison cells and stock baselines remain. Core/protobuf regressions, Buffa
+JVM acceptance, SVM smoke, and the full 31-cell measurement passed. Timing remains noisy:
+owned scalar took 679 ns versus stock's 167 ns in this run; Buffa took 1012 ns. Allocation
+improvements do not establish timing parity or superiority, and exclude native heap usage.

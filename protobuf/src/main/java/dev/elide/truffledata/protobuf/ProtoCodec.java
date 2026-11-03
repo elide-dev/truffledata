@@ -13,11 +13,14 @@ final class ProtoCodec {
   private ProtoCodec() {}
 
   static ProtoRow decode(ProtoPlan plan, byte[] wire) {
-    return decode(plan, ByteBuffer.wrap(wire));
+    return decodeRegion(plan, ByteBuffer.wrap(wire));
   }
 
   static ProtoRow decode(ProtoPlan plan, ByteBuffer source) {
-    ByteBuffer wire = source.slice();
+    return decodeRegion(plan, source.slice());
+  }
+
+  private static ProtoRow decodeRegion(ProtoPlan plan, ByteBuffer wire) {
     if (wire.remaining() > plan.model.maxWireBytes) throw bad("Wire byte budget exceeded");
     Reader input = new Reader(wire, new ProtoRow.Budget(plan.model.limits), plan.model.maxDepth);
     State state = new State(plan, input.budget);
@@ -44,7 +47,13 @@ final class ProtoCodec {
   private static final class State {
     final ProtoRow.Builder builder;
     final Object[] values;
-    final ByteArrayOutputStream unknown = new ByteArrayOutputStream();
+    @Nullable ByteArrayOutputStream unknown;
+
+    ByteArrayOutputStream unknown() {
+      if (unknown == null) unknown = new ByteArrayOutputStream();
+      return unknown;
+    }
+
     boolean invalidMapEnum;
 
     State(ProtoPlan plan, ProtoRow.Budget budget) {
@@ -93,7 +102,7 @@ final class ProtoCodec {
         if (field.required() && !builder.present[i])
           throw bad("Missing required field: " + field.name());
       }
-      builder.unknown = unknown.toByteArray();
+      if (unknown != null) builder.unknown = unknown.toByteArray();
       // The reader has charged allocations and depth before materialization; validate aggregate
       // too.
       return builder.build();
@@ -176,7 +185,7 @@ final class ProtoCodec {
               out.varint((long) number << 3);
               out.varint((Long) value);
               budget.bytes(unknown.length);
-              state.unknown.writeBytes(unknown);
+              state.unknown().writeBytes(unknown);
             } else {
               budget.cells(1);
               state.add(ordinal, value);
@@ -233,8 +242,8 @@ final class ProtoCodec {
     void retain(State state, int start) {
       budget.bytes(position - start);
       if (wire.hasArray())
-        state.unknown.write(wire.array(), wire.arrayOffset() + start, position - start);
-      else for (int i = start; i < position; i++) state.unknown.write(wire.get(i));
+        state.unknown().write(wire.array(), wire.arrayOffset() + start, position - start);
+      else for (int i = start; i < position; i++) state.unknown().write(wire.get(i));
     }
 
     Object scalar(ProtoPlan.Kind kind, int end) {

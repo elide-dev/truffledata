@@ -7,11 +7,12 @@ import dev.elide.truffledata.*;
  * A decoded view owns a lease, not the payload. Snapshot to detach; close after guest consumption.
  */
 public final class WireMessage implements AutoCloseable {
+  private static final DataArray EMPTY_FIELDS = new DataArray(new Object[0]);
   final WireInput.Lease lease;
   private final com.oracle.truffle.api.Assumption alive =
       com.oracle.truffle.api.Truffle.getRuntime().createAssumption("wire view alive");
   private boolean open = true;
-  private DataArray fields = new DataArray(new Object[0]);
+  private DataArray fields = EMPTY_FIELDS;
   private final long nativeBytes;
   private final Limits limits;
 
