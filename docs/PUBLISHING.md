@@ -1,0 +1,54 @@
+# Maven publishing
+
+Bazel produces three thin libraries, with source jars and POMs:
+
+| Coordinate | Contents |
+| --- | --- |
+| `dev.elide:truffledata-core:<version>` | Schema, batches, interop, dynamic/static records, specialized access |
+| `dev.elide:truffledata-jdbc:<version>` | JDBC adapter; depends on core |
+| `dev.elide:truffledata-protobuf:<version>` | Protobuf adapter; depends on core and protobuf-java |
+
+All artifacts require Java 25 and currently target Elide GraalVM `25.5.5-elide.5`. They do not bundle GraalVM, guest languages, JDBC drivers, annotation processors, or test libraries. Select the runtime, guest languages and JDBC drivers in the embedding application. JSpecify annotations and the Truffle API are compile dependencies. Release dependencies are checked against `maven_install.json` by `//tools/release:test`.
+
+## Stage and inspect
+
+```sh
+# Build publication outputs only, with the normal remote execution/cache configuration:
+bazel build //tools/release:publications --//tools/release:version=0.1.0-alpha.1
+
+# Run all checks and stage jars, POMs, metadata and checksums without network writes:
+tools/release/publish.sh 0.1.0-alpha.1
+```
+
+The staging command prints a unique directory under `build/release-repo.*`. Each artifact includes its binary jar (including generated Truffle implementations), source jar, POM, and MD5/SHA-1/SHA-256/SHA-512 checksums. Source jars come from the library's JavaInfo, rather than an independently maintained source list. The default Bazel version is `0.1.0-SNAPSHOT` for checks; the release script requires an explicit immutable version and refuses snapshots.
+
+## Upload
+
+The publisher follows Komodo's deployment: `rclone` remote `elide:`, bucket `elide-maven`, public URL `https://maven.elide.dev`. Provision rclone credentials outside the repository. If your configured remote has a different name, set `MAVEN_BUCKET`, for example `MAVEN_BUCKET=r2:elide-maven tools/release/publish.sh 0.1.0-alpha.1 --publish`. The publishing host needs Bash, Python 3, curl, rclone and Bazelisk; compilation and tests retain the normal hermetic Bazel toolchains and RBE settings. The small repository-layout check runs with Python 3 from the pinned remote executor image.
+
+```sh
+# Run from a clean, committed checkout. This command writes to the public repository.
+tools/release/publish.sh 0.1.0-alpha.1 --publish
+```
+
+The command runs the full test suite, stages artifacts, merges existing metadata, uploads immutable payloads, verifies bucket contents and public payload bytes, then uploads metadata and checksums. Missing credentials, failed listings and malformed existing metadata fail the release; they are never interpreted as an empty repository. It neither tags nor pushes Git history. CI already exercises publication validation through `bazel test //...`; uploading is an explicit release operation, not a pull-request action.
+
+**Serialize publishers**, including publishers on other machines. Rclone/R2 has no atomic multi-artifact transaction or cross-machine release lock. A failed upload can leave a partial version; the publisher refuses to overwrite or automatically resume that version. Inspect and repair the incomplete release before publishing again. Metadata's `latest` and `release` identify the most recently published version, so publish releases in intended discovery order. Explicit versions work independently of these fields. No signing key or Maven Central publishing is configured.
+
+## Consume
+
+After publishing the selected version, Gradle consumers can use:
+
+```kotlin
+repositories {
+    mavenCentral()
+    maven("https://maven.elide.dev")
+    maven("https://maven.elide.dev/gvm-elide/25.5.5-elide.5")
+}
+dependencies {
+    implementation("dev.elide:truffledata-jdbc:0.1.0-alpha.1")
+    implementation("dev.elide:truffledata-protobuf:0.1.0-alpha.1")
+}
+```
+
+For Maven, declare `https://maven.elide.dev` in `<repositories>` and the same coordinates in `<dependencies>`. Published POMs also declare the fork repository; Gradle and Bazel consumers must explicitly configure it. For Bazel, add the two repositories and desired coordinates to `maven.install`, then repin. Use core alone if neither adapter is needed. The example version is a proposed first prerelease, not a claim that it has been uploaded.

@@ -1,0 +1,23 @@
+load("//bazel:java.bzl", "data_java_library")
+
+package(default_visibility = ["//visibility:public"])
+
+data_java_library(
+    name = "protobuf",
+    srcs = [
+        "src/main/java/dev/elide/truffledata/protobuf/ProtobufAdapter.java",
+        "src/main/java/dev/elide/truffledata/protobuf/package-info.java",
+    ],
+    deps = [
+        "//core",
+        "@maven//:com_google_protobuf_protobuf_java",
+        "@maven//:org_graalvm_truffle_truffle_api",
+    ],
+)
+
+filegroup(
+    name = "sources",
+    srcs = glob(["src/main/java/**/*.java"]),
+)
+
+exports_files(["BUILD.bazel"])

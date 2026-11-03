@@ -1,0 +1,41 @@
+load("//bazel:versions.bzl", "RBE_IMAGE")
+
+package(default_visibility = ["//visibility:public"])
+
+# Host platform conditions (os_cpu), for per-platform inputs such as compile-latency budgets.
+[config_setting(
+    name = "%s_%s" % (os, cpu),
+    constraint_values = [
+        "@platforms//os:" + os,
+        "@platforms//cpu:" + {
+            "amd64": "x86_64",
+            "arm64": "aarch64",
+        }[cpu],
+    ],
+) for os, cpu in [
+    ("macos", "arm64"),
+    ("linux", "amd64"),
+    ("linux", "arm64"),
+]]
+
+# BuildBuddy's remote Linux executors (--config=remote): Firecracker microVMs from RBE_IMAGE, no network (actions are
+# hermetic: every input is declared). Actions needing more set exec_properties (bazel/test.bzl, native images).
+platform(
+    name = "rbe_linux_amd64",
+    constraint_values = [
+        "@platforms//os:linux",
+        "@platforms//cpu:x86_64",
+    ],
+    exec_properties = {
+        "OSFamily": "Linux",
+        "Arch": "amd64",
+        "container-image": RBE_IMAGE,
+        "workload-isolation-type": "firecracker",
+        "network": "off",
+        # BuildBuddy's cloud executors, whatever the organization's default.
+        "use-self-hosted-executors": "false",
+        # Most actions run a JVM (JavaBuilder, kotlinc, generators): room beyond the small default VM.
+        "EstimatedCPU": "2",
+        "EstimatedMemory": "6GB",
+    },
+)

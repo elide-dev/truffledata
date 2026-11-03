@@ -1,0 +1,34 @@
+--- a/cc	1969-12-31 16:00:00
++++ b/cc	2026-10-07 10:31:54
+@@ -0,0 +1,31 @@
++#!/bin/sh
++# elide-dev/toolchain's clang for Bazel, native-image and Cargo. The host triple's cfg (target, sysroot, compiler-rt,
++# libunwind, libc++, lld) is passed explicitly with <CFGDIR> as this wrapper's own path rather than auto-loaded: clang
++# expands <CFGDIR> to an absolute path, which Bazel's header checks reject on remote executors, while invoked through a
++# relative path (with -no-canonical-prefixes) every header stays under the execroot-relative toolchain directory.
++#
++# On macOS the bundle overlays the system SDK (SDKROOT, else xcrun's). LLVM 23's lld cannot read the stubs of SDKs newer
++# than macOS 26 (Xcode 27), so such an SDK falls back to the newest CommandLineTools SDK it can read.
++here=$(dirname "$0")
++case "$(uname -s)" in
++  Darwin)
++    triple=arm64-apple-darwin
++    sdk_major() { /usr/bin/plutil -extract Version raw "$1/SDKSettings.plist" 2>/dev/null | cut -d. -f1; }
++    sdk=${SDKROOT:-$(/usr/bin/xcrun --show-sdk-path 2>/dev/null)}
++    major=$(sdk_major "$sdk")
++    if [ -n "$major" ] && [ "$major" -gt 26 ]; then
++      for candidate in /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk $(ls -dr /Library/Developer/CommandLineTools/SDKs/MacOSX[0-9]*.sdk 2>/dev/null); do
++        candidate_major=$(sdk_major "$candidate")
++        if [ -n "$candidate_major" ] && [ "$candidate_major" -le 26 ]; then sdk=$candidate; break; fi
++      done
++    fi
++    SDKROOT=$sdk
++    export SDKROOT
++    ;;
++  *) triple="$(uname -m)-unknown-linux-gnu" ;;
++esac
++# The cfg's arguments contain no spaces.
++# shellcheck disable=SC2046
++set -- $(sed "s#<CFGDIR>#$here/bin#g" "$here/bin/$triple.cfg") "$@"
++# -Qunused-arguments: link flags reach compiles too, as cfg-file arguments do (clang is quiet about those).
++exec "$here/bin/clang" --no-default-config -Qunused-arguments "$@"

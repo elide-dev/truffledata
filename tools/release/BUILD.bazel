@@ -1,0 +1,85 @@
+load("@rules_java//java:defs.bzl", "java_import", "java_test")
+load("@rules_shell//shell:sh_test.bzl", "sh_test")
+load("//bazel:maven.bzl", "maven_publication", "release_version")
+
+release_version(
+    name = "version",
+    build_setting_default = "0.1.0-SNAPSHOT",
+    visibility = ["//visibility:public"],
+)
+
+COMMON = [
+    "org.graalvm.truffle:truffle-api:25.5.5-elide.5",
+    "org.jspecify:jspecify:1.0.1",
+]
+
+[maven_publication(
+    name = module,
+    dependencies = COMMON + ([] if module == "core" else ["dev.elide:truffledata-core:{version}"]) + (["com.google.protobuf:protobuf-java:4.33.2"] if module == "protobuf" else []),
+    library = "//%s" % module,
+    module = module,
+) for module in [
+    "core",
+    "jdbc",
+    "protobuf",
+]]
+
+filegroup(
+    name = "publications",
+    srcs = [
+        ":core",
+        ":jdbc",
+        ":protobuf",
+    ],
+)
+
+sh_test(
+    name = "test",
+    srcs = ["test.sh"],
+    data = [
+        "maven_repo.py",
+        "test_release.py",
+        ":publications",
+        "//:MODULE.bazel",
+        "//:maven_install.json",
+    ],
+)
+
+# Exercise consumption of the actual published jars, without source-library deps.
+[filegroup(
+    name = module + "_binary",
+    srcs = [":" + module],
+    output_group = "binary",
+) for module in [
+    "core",
+    "jdbc",
+    "protobuf",
+]]
+
+[java_import(
+    name = module + "_import",
+    jars = [":" + module + "_binary"],
+    deps = [
+        "@maven//:org_graalvm_truffle_truffle_api",
+        "@maven//:org_jspecify_jspecify",
+    ] + ([] if module == "core" else [":core_import"]) + (["@maven//:com_google_protobuf_protobuf_java"] if module == "protobuf" else []),
+) for module in [
+    "core",
+    "jdbc",
+    "protobuf",
+]]
+
+java_test(
+    name = "consumer_test",
+    srcs = ["Consumer.java"],
+    javacopts = ["-XepDisableAllChecks"],
+    main_class = "Consumer",
+    use_testrunner = False,
+    deps = [
+        ":core_import",
+        ":jdbc_import",
+        ":protobuf_import",
+        "@maven//:com_google_protobuf_protobuf_java",
+        "@maven//:org_graalvm_truffle_truffle_api",
+    ],
+)

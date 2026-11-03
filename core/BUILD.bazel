@@ -1,0 +1,33 @@
+load("//bazel:java.bzl", "data_java_library")
+
+package(default_visibility = ["//visibility:public"])
+
+data_java_library(
+    name = "core",
+    srcs = [
+        "src/main/java/dev/elide/truffledata/AbstractRow.java",
+        "src/main/java/dev/elide/truffledata/Batch.java",
+        "src/main/java/dev/elide/truffledata/ContractViolation.java",
+        "src/main/java/dev/elide/truffledata/DataArray.java",
+        "src/main/java/dev/elide/truffledata/DataLibrary.java",
+        "src/main/java/dev/elide/truffledata/DataNull.java",
+        "src/main/java/dev/elide/truffledata/DynamicRecord.java",
+        "src/main/java/dev/elide/truffledata/ExactNumber.java",
+        "src/main/java/dev/elide/truffledata/Field.java",
+        "src/main/java/dev/elide/truffledata/Limits.java",
+        "src/main/java/dev/elide/truffledata/Missing.java",
+        "src/main/java/dev/elide/truffledata/ReadLongNode.java",
+        "src/main/java/dev/elide/truffledata/Schema.java",
+        "src/main/java/dev/elide/truffledata/StaticLayout.java",
+        "src/main/java/dev/elide/truffledata/Values.java",
+        "src/main/java/dev/elide/truffledata/package-info.java",
+    ],
+    deps = ["@maven//:org_graalvm_truffle_truffle_api"],
+)
+
+filegroup(
+    name = "sources",
+    srcs = glob(["src/main/java/**/*.java"]),
+)
+
+exports_files(["BUILD.bazel"])

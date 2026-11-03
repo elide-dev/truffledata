@@ -1,0 +1,69 @@
+load("@rules_java//java:defs.bzl", "java_binary", "java_test")
+load("//bazel:java.bzl", "data_java_library")
+
+package(default_visibility = ["//visibility:public"])
+
+data_java_library(
+    name = "benchmarks",
+    srcs = [
+        "src/main/java/dev/elide/truffledata/bench/ReadBenchmark.java",
+        "src/main/java/dev/elide/truffledata/bench/package-info.java",
+    ],
+    plugins = ["//bazel:jmh_processor"],
+    deps = [
+        "//core",
+        "@maven//:org_graalvm_truffle_truffle_api",
+        "@maven//:org_openjdk_jmh_jmh_core",
+    ],
+)
+
+java_binary(
+    name = "jmh",
+    jvm_flags = ["--enable-native-access=ALL-UNNAMED"],
+    main_class = "org.openjdk.jmh.Main",
+    tags = ["manual"],
+    runtime_deps = [
+        ":benchmarks",
+        "@maven//:org_graalvm_truffle_truffle_runtime",
+    ],
+)
+
+exports_files(["BUILD.bazel"])
+
+filegroup(
+    name = "sources",
+    srcs = glob(["src/**/*.java"]),
+)
+
+java_test(
+    name = "smoke",
+    args = [
+        "ReadBenchmark",
+        "-wi",
+        "1",
+        "-i",
+        "1",
+        "-w",
+        "100ms",
+        "-r",
+        "100ms",
+        "-f",
+        "0",
+        "-prof",
+        "gc",
+    ],
+    jvm_flags = [
+        "--enable-native-access=ALL-UNNAMED",
+        "-Dpolyglot.engine.WarnInterpreterOnly=false",
+    ],
+    main_class = "org.openjdk.jmh.Main",
+    tags = [
+        "benchmark",
+        "manual",
+    ],
+    use_testrunner = False,
+    runtime_deps = [
+        ":benchmarks",
+        "@maven//:org_graalvm_truffle_truffle_runtime",
+    ],
+)

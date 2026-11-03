@@ -1,0 +1,39 @@
+load("@rules_java//java:defs.bzl", "java_test")
+load("//bazel:java.bzl", "data_java_library")
+
+data_java_library(
+    name = "nullness_probe_lib",
+    testonly = True,
+    srcs = ["NullnessProbe.java"],
+    deps = [
+        "@maven//:com_google_errorprone_error_prone_check_api",
+        "@maven//:com_google_errorprone_error_prone_core",
+        "@maven//:com_uber_nullaway_nullaway",
+    ],
+)
+
+java_test(
+    name = "nullness_probe",
+    jvm_flags = ["--add-exports=jdk.compiler/com.sun.tools.javac.%s=ALL-UNNAMED" % p for p in [
+        "api",
+        "file",
+        "main",
+        "model",
+        "parser",
+        "processing",
+        "tree",
+        "util",
+        "code",
+        "comp",
+    ]] + [
+        "--add-opens=jdk.compiler/com.sun.tools.javac.code=ALL-UNNAMED",
+        "--add-opens=jdk.compiler/com.sun.tools.javac.comp=ALL-UNNAMED",
+    ],
+    main_class = "dev.elide.truffledata.tools.NullnessProbe",
+    use_testrunner = False,
+    runtime_deps = [
+        ":nullness_probe_lib",
+        "@maven//:com_google_errorprone_error_prone_core",
+        "@maven//:com_uber_nullaway_nullaway",
+    ],
+)

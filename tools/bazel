@@ -1,0 +1,88 @@
+#!/usr/bin/env python3
+"""Bazelisk wrapper: preserve Linux toolchain filenames on macOS.
+
+Linux sysroots contain distinct xt_CONNMARK.h and xt_connmark.h files. Extracting
+them on ordinary APFS silently changes remote action inputs. Only Bazel's output
+tree needs a case-sensitive volume; the checkout can stay where it is.
+"""
+import fcntl
+import os
+from pathlib import Path
+import subprocess
+import sys
+import tempfile
+
+
+def case_sensitive(directory):
+    directory.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix=".komodo-case-", dir=directory) as probe:
+        lower = Path(probe) / "header.h"
+        lower.touch()
+        return not lower.with_name("HEADER.h").exists()
+
+
+def output_options(args):
+    options = {}
+    for index, arg in enumerate(args):
+        if arg == "--":
+            break
+        for name in ("--output_base", "--output_user_root"):
+            if arg.startswith(name + "="):
+                options[name] = arg.split("=", 1)[1]
+            elif arg == name and index + 1 < len(args):
+                options[name] = args[index + 1]
+    return options
+
+
+def macos_output_root(cache):
+    """Serialize first-use creation and mounting across worktrees/processes."""
+    cache.mkdir(parents=True, exist_ok=True)
+    mount = cache / "komodo-bazel-volume"
+    image = cache / "komodo-bazel.sparsebundle"
+    with (cache / "komodo-bazel-volume.lock").open("a") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        if not os.path.ismount(mount):
+            if not image.exists():
+                print("Creating case-sensitive Bazel cache (sparse; grows as used)", file=sys.stderr)
+                subprocess.run([
+                    "hdiutil", "create", "-size", "128g", "-type", "SPARSEBUNDLE",
+                    "-fs", "Case-sensitive APFS", "-volname", "komodo-bazel", str(image),
+                ], check=True, stdout=sys.stderr)
+            mount.mkdir(exist_ok=True)
+            subprocess.run([
+                "hdiutil", "attach", "-nobrowse", "-mountpoint", str(mount), str(image),
+            ], check=True, stdout=sys.stderr)
+        root = mount / "root"
+        if not case_sensitive(root):
+            raise RuntimeError(f"Bazel cache is not case-sensitive: {root}")
+        return root
+
+
+def bazel_args(args):
+    if sys.platform != "darwin":
+        return args
+    options = output_options(args)
+    for explicit in options.values():
+        if not explicit or not case_sensitive(Path(explicit).expanduser()):
+            raise RuntimeError("Bazel output directories must be case-sensitive. "
+                               "Omit the output override to use the managed cache; see docs/BAZEL.md.")
+    if "--output_user_root" in options:
+        return args
+    root = macos_output_root(Path.home() / "Library" / "Caches")
+    # Command-line startup flags take precedence over user bazelrc output roots.
+    return [f"--output_user_root={root}", *args]
+
+
+def main():
+    real = os.environ.get("BAZEL_REAL")
+    if not real:
+        raise RuntimeError("Run bazel through Bazelisk (brew install bazelisk on macOS).")
+    os.execv(real, [real, *bazel_args(sys.argv[1:])])
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except (OSError, RuntimeError, subprocess.CalledProcessError) as error:
+        print(f"truffledata bazel: {error}", file=sys.stderr)
+        sys.exit(1)

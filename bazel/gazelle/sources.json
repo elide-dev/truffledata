@@ -1,0 +1,65 @@
+[
+  {
+    "directory": "core",
+    "root": "src/main/java",
+    "name": "core",
+    "deps": [
+      "@maven//:org_graalvm_truffle_truffle_api"
+    ],
+    "testonly": false,
+    "plugins": []
+  },
+  {
+    "directory": "jdbc",
+    "root": "src/main/java",
+    "name": "jdbc",
+    "deps": [
+      "//core:core",
+      "@maven//:org_graalvm_truffle_truffle_api"
+    ],
+    "testonly": false,
+    "plugins": []
+  },
+  {
+    "directory": "protobuf",
+    "root": "src/main/java",
+    "name": "protobuf",
+    "deps": [
+      "//core:core",
+      "@maven//:org_graalvm_truffle_truffle_api",
+      "@maven//:com_google_protobuf_protobuf_java"
+    ],
+    "testonly": false,
+    "plugins": []
+  },
+  {
+    "directory": "tests",
+    "root": "src/test/java",
+    "name": "test_lib",
+    "deps": [
+      "//core:core",
+      "//jdbc:jdbc",
+      "//protobuf:protobuf",
+      "@maven//:org_graalvm_truffle_truffle_api",
+      "@maven//:org_graalvm_polyglot_polyglot",
+      "@maven//:com_google_protobuf_protobuf_java",
+      "@maven//:org_junit_jupiter_junit_jupiter_api"
+    ],
+    "testonly": true,
+    "plugins": []
+  },
+  {
+    "directory": "benchmarks",
+    "root": "src/main/java",
+    "name": "benchmarks",
+    "deps": [
+      "//core:core",
+      "@maven//:org_graalvm_truffle_truffle_api",
+      "@maven//:org_openjdk_jmh_jmh_core"
+    ],
+    "testonly": false,
+    "plugins": [
+      "//bazel:jmh_processor"
+    ]
+  }
+]

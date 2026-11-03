@@ -1,0 +1,145 @@
+load("@rules_java//java:defs.bzl", "java_test")
+load("//bazel:java.bzl", "data_java_library")
+
+package(default_visibility = ["//visibility:public"])
+
+data_java_library(
+    name = "test_lib",
+    testonly = True,
+    srcs = [
+        "src/test/java/dev/elide/truffledata/AllocationTest.java",
+        "src/test/java/dev/elide/truffledata/CoreTest.java",
+        "src/test/java/dev/elide/truffledata/JdbcTest.java",
+        "src/test/java/dev/elide/truffledata/PolicyTest.java",
+        "src/test/java/dev/elide/truffledata/PolyglotTest.java",
+        "src/test/java/dev/elide/truffledata/ProtobufTest.java",
+        "src/test/java/dev/elide/truffledata/TestLanguage.java",
+        "src/test/java/dev/elide/truffledata/package-info.java",
+    ],
+    deps = [
+        "//core",
+        "//jdbc",
+        "//protobuf",
+        "@maven//:com_google_protobuf_protobuf_java",
+        "@maven//:org_graalvm_polyglot_polyglot",
+        "@maven//:org_graalvm_truffle_truffle_api",
+        "@maven//:org_junit_jupiter_junit_jupiter_api",
+    ],
+)
+
+java_test(
+    name = "test",
+    size = "medium",
+    args = [
+        "--package",
+        "dev.elide.truffledata",
+        "--include-class",
+        "dev.elide.truffledata.(Core|Jdbc|Protobuf|Polyglot|Policy)Test",
+    ],
+    data = [
+        "//bazel:java.bzl",
+        "//core:sources",
+        "//jdbc:sources",
+        "//protobuf:sources",
+    ],
+    exec_properties = {
+        "EstimatedCPU": "4",
+        "EstimatedMemory": "6GB",
+    },
+    jvm_flags = [
+        "-ea",
+        "--enable-native-access=ALL-UNNAMED",
+        "-Dpolyglot.engine.WarnInterpreterOnly=false",
+    ],
+    main_class = "dev.elide.bazel.junit.BazelJUnitRunner",
+    tags = [],
+    use_testrunner = False,
+    runtime_deps = [
+        ":test_lib",
+        "//bazel/junit:runner",
+        "@maven//:com_h2database_h2",
+        "@maven//:org_graalvm_js_js_language",
+        "@maven//:org_graalvm_python_python_language",
+        "@maven//:org_graalvm_python_python_resources",
+        "@maven//:org_graalvm_truffle_truffle_runtime",
+    ],
+)
+
+java_test(
+    name = "allocation",
+    size = "medium",
+    args = [
+        "--package",
+        "dev.elide.truffledata",
+        "--include-class",
+        "dev.elide.truffledata.AllocationTest",
+    ],
+    exec_properties = {
+        "EstimatedCPU": "4",
+        "EstimatedMemory": "6GB",
+    },
+    jvm_flags = [
+        "-ea",
+        "--enable-native-access=ALL-UNNAMED",
+        "-Dpolyglot.engine.WarnInterpreterOnly=false",
+    ],
+    main_class = "dev.elide.bazel.junit.BazelJUnitRunner",
+    tags = ["allocation"],
+    use_testrunner = False,
+    runtime_deps = [
+        ":test_lib",
+        "//bazel/junit:runner",
+        "@maven//:com_h2database_h2",
+        "@maven//:org_graalvm_js_js_language",
+        "@maven//:org_graalvm_python_python_language",
+        "@maven//:org_graalvm_python_python_resources",
+        "@maven//:org_graalvm_truffle_truffle_runtime",
+    ],
+)
+
+java_test(
+    name = "compiled",
+    size = "medium",
+    args = [
+        "--package",
+        "dev.elide.truffledata",
+        "--include-class",
+        "dev.elide.truffledata.AllocationTest",
+    ],
+    exec_properties = {
+        "EstimatedCPU": "4",
+        "EstimatedMemory": "6GB",
+    },
+    jvm_flags = [
+        "-ea",
+        "--enable-native-access=ALL-UNNAMED",
+        "-Dpolyglot.engine.WarnInterpreterOnly=false",
+        "-Dtruffledata.requireCompiled=true",
+        "-Dpolyglot.engine.BackgroundCompilation=false",
+        "-Dpolyglot.engine.CompilationFailureAction=Throw",
+        "-Dpolyglot.compiler.TreatPerformanceWarningsAsErrors=all",
+        "-Dpolyglot.compiler.MaximumGraalGraphSize=10000",
+    ],
+    main_class = "dev.elide.bazel.junit.BazelJUnitRunner",
+    tags = [
+        "allocation",
+        "jit",
+    ],
+    use_testrunner = False,
+    runtime_deps = [
+        ":test_lib",
+        "//bazel/junit:runner",
+        "@maven//:com_h2database_h2",
+        "@maven//:org_graalvm_js_js_language",
+        "@maven//:org_graalvm_python_python_language",
+        "@maven//:org_graalvm_python_python_resources",
+        "@maven//:org_graalvm_truffle_truffle_runtime",
+    ],
+)
+
+exports_files(["BUILD.bazel"])
+
+filegroup(
+    name = "sources",
+    srcs = glob(["src/**/*.java"]),
+)

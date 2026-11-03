@@ -1,0 +1,207 @@
+module(
+    name = "truffledata",
+    version = "0.1.0",
+)
+
+bazel_dep(name = "platforms", version = "1.1.0")
+bazel_dep(name = "rules_cc", version = "0.2.26")
+bazel_dep(name = "rules_java", version = "9.9.0")
+bazel_dep(name = "rules_jvm_external", version = "7.1")
+bazel_dep(name = "rules_shell", version = "0.8.0")
+
+bazel_dep(name = "gazelle", version = "0.47.0", dev_dependency = True)
+bazel_dep(name = "rules_go", version = "0.59.0", dev_dependency = True)
+
+bazel_dep(name = "rules_graalvm", version = "0.12.0")
+git_override(
+    module_name = "rules_graalvm",
+    # Owned rules: platform-specific SDKs, C library inputs and declared Native Image outputs.
+    commit = "69b645681f8dce07c0dc3a94dc8f4b99e1d1ba9c",
+    remote = "https://github.com/sgammon/rules_graalvm.git",
+)
+
+GRAALVM = "25.5.5-elide.5"
+
+GRAALVM_DISTS = {
+    "macos-aarch64": "c5e25b18682482dc14a1678ff4a327ed198319e672390bff7ae63122b3e81104",
+    "linux-x64": "af2bd180962d498217da2146b7a9653b5bb9d0ba5ffa9dae5a4de42f6685105d",
+    "linux-aarch64": "5c8335cd98a930e0d49d6be73f16383efa636b816365392fc06eb0232146a8a5",
+}
+
+# The fork names its archives macos-aarch64, linux-amd64 and linux-aarch64.
+GRAALVM_ARCHIVES = {key: key.replace("x64", "amd64") for key in GRAALVM_DISTS}
+
+# The EE toolchain profile (docs/NATIVE_BENCHMARKS.md): the fork's Oracle GraalVM overlay of the same release, the test and
+# run runtime under --config=ee (compilation stays on CE). Its budgets and graph expectations are tracked separately.
+GRAALVM_EE_DISTS = {
+    "macos-aarch64": "5af4f6b88d8594446bd7a6eabc1634126a3440a0e7bc14c75e2b33ac9ebb2b83",
+    "linux-x64": "f4041026703daf4fa1d4bccae1c3013e8f4eef6b77234772643f746ee514d689",
+    "linux-aarch64": "dc3cf2fba5feeac08e6e7b4a90500ca1df56714ae406641651b32c7fb946265d",
+}
+
+# One repository per platform and edition (graalvm_<os>_<cpu>, graalvm_ee_<os>_<cpu>), its toolchains constrained to that
+# platform, so a client of any OS builds for remote Linux executors with their JDK. A repository is fetched only when a
+# toolchain of its platform is selected.
+GRAALVM_PLATFORMS = {
+    "macos-aarch64": (
+        "macos_aarch64",
+        [
+            "@platforms//os:macos",
+            "@platforms//cpu:aarch64",
+        ],
+    ),
+    "linux-x64": (
+        "linux_amd64",
+        [
+            "@platforms//os:linux",
+            "@platforms//cpu:x86_64",
+        ],
+    ),
+    "linux-aarch64": (
+        "linux_aarch64",
+        [
+            "@platforms//os:linux",
+            "@platforms//cpu:aarch64",
+        ],
+    ),
+}
+
+gvm = use_extension("@rules_graalvm//:extensions.bzl", "graalvm")
+
+[gvm.graalvm(
+    name = "graalvm_%s%s" % (edition_prefix, suffix),
+    distribution = distribution,
+    java_version = "25",
+    platform = key,
+    sha256s = {key: dists[key]},
+    strip_prefixes = {key: "graalvm-%s-%s-%s" % (
+        edition,
+        GRAALVM,
+        GRAALVM_ARCHIVES[key],
+    )},
+    target_compatible_with = constraints,
+    toolchain_prefix = "graalvm" + ("_ee" if edition == "ee" else ""),
+    urls = {key: "https://maven.elide.dev/gvm-elide/%s/dist/graalvm-%s-%s-%s.tar.gz" % (
+        GRAALVM,
+        edition,
+        GRAALVM,
+        GRAALVM_ARCHIVES[key],
+    )},
+    version = GRAALVM,
+) for edition, edition_prefix, distribution, dists in [
+    ("ce", "", "ce", GRAALVM_DISTS),
+    ("ee", "ee_", "oracle", GRAALVM_EE_DISTS),
+] for key, (suffix, constraints) in GRAALVM_PLATFORMS.items()]
+
+use_repo(
+    gvm,
+    "graalvm_ee_linux_aarch64",
+    "graalvm_ee_linux_aarch64_toolchains",
+    "graalvm_ee_linux_amd64",
+    "graalvm_ee_linux_amd64_toolchains",
+    "graalvm_ee_macos_aarch64",
+    "graalvm_ee_macos_aarch64_toolchains",
+    "graalvm_linux_aarch64",
+    "graalvm_linux_aarch64_toolchains",
+    "graalvm_linux_amd64",
+    "graalvm_linux_amd64_toolchains",
+    "graalvm_macos_aarch64",
+    "graalvm_macos_aarch64_toolchains",
+)
+
+register_toolchains(
+    "//bazel/toolchains:all",
+    "@graalvm_linux_amd64_toolchains//:all",
+    "@graalvm_linux_aarch64_toolchains//:all",
+    "@graalvm_macos_aarch64_toolchains//:all",
+    "@graalvm_ee_linux_amd64_toolchains//:all",
+    "@graalvm_ee_linux_aarch64_toolchains//:all",
+    "@graalvm_ee_macos_aarch64_toolchains//:all",
+)
+
+maven = use_extension("@rules_jvm_external//:extensions.bzl", "maven")
+maven.install(
+    name = "maven",
+    artifacts = [a + ":" + GRAALVM for a in [
+        "org.graalvm.truffle:truffle-api",
+        "org.graalvm.truffle:truffle-dsl-processor",
+        "org.graalvm.truffle:truffle-runtime",
+        "org.graalvm.polyglot:polyglot",
+        "org.graalvm.js:js-language",
+        "org.graalvm.python:python-language",
+        "org.graalvm.python:python-resources",
+    ]] + [
+        "org.jspecify:jspecify:1.0.0",
+        "com.uber.nullaway:nullaway:0.14.2",
+        "com.google.errorprone:error_prone_core:2.50.0",
+        "com.google.errorprone:error_prone_type_annotations:2.37.0",
+        "com.google.protobuf:protobuf-java:4.33.2",
+        "com.h2database:h2:2.3.232",
+        "org.junit.jupiter:junit-jupiter:5.11.4",
+        "org.junit.platform:junit-platform-console:1.11.4",
+        "org.junit.platform:junit-platform-launcher:1.11.4",
+        "org.junit.platform:junit-platform-reporting:1.11.4",
+        "org.openjdk.jmh:jmh-core:1.37",
+        "org.openjdk.jmh:jmh-generator-annprocess:1.37",
+        "com.google.googlejavaformat:google-java-format:1.28.0",
+    ],
+    fail_if_repin_required = True,
+    fetch_sources = False,
+    known_contributing_modules = ["protobuf"],
+    lock_file = "//:maven_install.json",
+    repositories = [
+        "https://repo.maven.apache.org/maven2",
+        "https://maven.elide.dev/gvm-elide/" + GRAALVM,
+    ],
+)
+use_repo(maven, "maven")
+
+go_sdk = use_extension("@rules_go//go:extensions.bzl", "go_sdk", dev_dependency = True)
+
+[
+    go_sdk.download(
+        name = "truffledata_go_" + goos + "_" + goarch,
+        goarch = goarch,
+        goos = goos,
+        version = "1.25.0",
+    )
+    for goos, goarch in [
+        ("linux", "amd64"),
+        ("linux", "arm64"),
+        ("darwin", "arm64"),
+    ]
+]
+
+http_archive = use_repo_rule("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
+
+# ---- C/C++: elide-dev/toolchain (LLVM 23, libc++, lld, ThinLTO bitcode sysroots).
+ELIDE_TOOLCHAIN = "2026.10.0"
+
+ELIDE_TOOLCHAIN_BUNDLES = {
+    "darwin_arm64": ("darwin-arm64", "e39b6430f36b3d3d20439a42e9047b6edb64d0c2a9277e69afd35e290dc93064"),
+    "linux_amd64": ("linux-amd64", "e966f3a9e8fa210e5018ae6e4a834874577e2288b27a6c9edfe5e264de0fd035"),
+    "linux_arm64": ("linux-arm64", "2dbe94d4db07cd59e09a4f5536c6591c131f7ca8ba167eb7926f4b93545d271e"),
+}
+
+[http_archive(
+    name = "elide_toolchain_" + key,
+    build_file = "//bazel:elide_toolchain.BUILD",
+    # `cc`: bin/clang behind the macOS SDK selection (bazel/patches/elide-toolchain-cc.patch).
+    patch_cmds = ["chmod +x cc"] + ([
+        # Linux headers have case-distinct names. A case-insensitive output base silently
+        # overwrites them, splitting the RBE cache from Linux CI (and corrupting the sysroot).
+        # Catch direct Bazel / output-base overrides that bypass the tools/bazel launcher.
+        "probe=$(mktemp -d .komodo-case.XXXXXX); touch \"$probe/lower\"; " +
+        "if [ -e \"$probe/LOWER\" ]; then rm \"$probe/lower\"; rmdir \"$probe\"; " +
+        "echo 'Linux toolchains require a case-sensitive Bazel output base. Use Bazelisk with tools/bazel; see docs/BAZEL.md.' >&2; exit 1; fi; " +
+        "rm \"$probe/lower\"; rmdir \"$probe\"",
+    ] if key.startswith("linux_") else []),
+    patch_strip = 1,
+    patches = ["//bazel/patches:elide-toolchain-cc.patch"],
+    sha256 = sha,
+    strip_prefix = "elide-toolchain",
+    urls = [
+        "https://github.com/elide-dev/toolchain/releases/download/v%s/elide-toolchain-%s-%s.tar.xz" % (ELIDE_TOOLCHAIN, ELIDE_TOOLCHAIN, bundle),
+        "https://static.elideusercontent.com/toolchain/%s/elide-toolchain-%s-%s.tar.xz" % (ELIDE_TOOLCHAIN, ELIDE_TOOLCHAIN, bundle),
+    ],
+) for key, (bundle, sha) in ELIDE_TOOLCHAIN_BUNDLES.items()]

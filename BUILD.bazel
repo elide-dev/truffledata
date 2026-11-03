@@ -1,0 +1,30 @@
+alias(
+    name = "gazelle",
+    actual = "//bazel/gazelle:update",
+    tags = ["manual"],
+)
+
+exports_files([
+    "MODULE.bazel",
+    "maven_install.json",
+    ".bazelrc",
+    ".bazelversion",
+])
+
+filegroup(
+    name = "gazelle_inputs",
+    srcs = [
+        "MODULE.bazel",
+        "//bazel/gazelle:sources.json",
+    ] + ["//%s:%s" % (module, target) for module in [
+        "core",
+        "jdbc",
+        "protobuf",
+        "tests",
+        "benchmarks",
+    ] for target in [
+        "sources",
+        "BUILD.bazel",
+    ]],
+    visibility = ["//visibility:public"],
+)

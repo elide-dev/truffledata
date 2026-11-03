@@ -1,0 +1,71 @@
+load("@gazelle//:def.bzl", "gazelle", "gazelle_binary")
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+load("@rules_shell//shell:sh_test.bzl", "sh_test")
+
+gazelle_binary(
+    name = "gazelle_bin",
+    languages = [":java"],
+    tags = ["manual"],
+)
+
+_ARGS = [
+    "-r=false",
+    "-index=false",
+    "core",
+    "jdbc",
+    "protobuf",
+    "tests",
+    "benchmarks",
+]
+
+gazelle(
+    name = "update",
+    args = _ARGS,
+    gazelle = ":gazelle_bin",
+    tags = ["manual"],
+    visibility = ["//visibility:public"],
+)
+
+gazelle(
+    name = "check",
+    args = ["-mode=diff"] + _ARGS,
+    gazelle = ":gazelle_bin",
+    tags = ["manual"],
+)
+
+go_library(
+    name = "java",
+    srcs = ["java.go"],
+    importpath = "dev.elide/truffledata/gazelle",
+    deps = [
+        "@gazelle//config",
+        "@gazelle//label",
+        "@gazelle//language",
+        "@gazelle//repo",
+        "@gazelle//resolve",
+        "@gazelle//rule",
+    ],
+)
+
+go_test(
+    name = "test",
+    srcs = ["java_test.go"],
+    embed = [":java"],
+    pure = "on",
+    deps = [
+        "@gazelle//config",
+        "@gazelle//language",
+    ],
+)
+
+exports_files(["sources.json"])
+
+sh_test(
+    name = "drift",
+    srcs = ["drift.sh"],
+    args = ["$(rootpath :gazelle_bin)"],
+    data = [
+        ":gazelle_bin",
+        "//:gazelle_inputs",
+    ],
+)

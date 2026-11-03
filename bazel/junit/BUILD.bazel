@@ -1,0 +1,20 @@
+load("@rules_java//java:defs.bzl", "java_library")
+
+# JUnit Platform runner for java_test (see BazelJUnitRunner): sharding by class, JUnit XML, tag/class filters.
+java_library(
+    name = "runner",
+    srcs = ["BazelJUnitRunner.java"],
+    javacopts = ["-XepDisableAllChecks"],
+    visibility = ["//visibility:public"],
+    exports = [
+        "@maven//:org_junit_jupiter_junit_jupiter",
+        "@maven//:org_junit_platform_junit_platform_launcher",
+    ],
+    runtime_deps = ["@maven//:org_junit_platform_junit_platform_reporting"],
+    deps = [
+        "@maven//:org_junit_platform_junit_platform_commons",
+        "@maven//:org_junit_platform_junit_platform_engine",
+        "@maven//:org_junit_platform_junit_platform_launcher",
+        "@maven//:org_junit_platform_junit_platform_reporting",
+    ],
+)

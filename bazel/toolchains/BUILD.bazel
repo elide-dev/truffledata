@@ -1,0 +1,43 @@
+load("@rules_java//toolchains:default_java_toolchain.bzl", "DEFAULT_TOOLCHAIN_CONFIGURATION", "default_java_toolchain")
+
+alias(
+    name = "graalvm_jdk",
+    actual = select({
+        "//bazel/platforms:macos_arm64": "@graalvm_macos_aarch64//:jdk",
+        "//bazel/platforms:linux_amd64": "@graalvm_linux_amd64//:jdk",
+        "//bazel/platforms:linux_arm64": "@graalvm_linux_aarch64//:jdk",
+    }),
+    visibility = ["//visibility:public"],
+)
+
+# Java compilation on the fork's JDK (Gradle's toolchain): javac, JavaBuilder and the system modules all come from it,
+# so --add-modules=org.graalvm.nativeimage resolves as it does under Gradle.
+default_java_toolchain(
+    name = "graalvm_java25",
+    configuration = DEFAULT_TOOLCHAIN_CONFIGURATION,
+    java_runtime = ":graalvm_jdk",
+    # Every Java compilation (Kotlin modules' Java sources too) runs NullAway where //bazel:nullaway is a plugin.
+    source_version = "25",
+    target_version = "25",
+)
+
+[toolchain(
+    name = "elide_cc_" + bundle,
+    exec_compatible_with = constraints,
+    target_compatible_with = constraints,
+    toolchain = "@elide_toolchain_%s//:cc_toolchain" % bundle,
+    toolchain_type = "@bazel_tools//tools/cpp:toolchain_type",
+) for bundle, constraints in {
+    "darwin_arm64": [
+        "@platforms//os:macos",
+        "@platforms//cpu:aarch64",
+    ],
+    "linux_amd64": [
+        "@platforms//os:linux",
+        "@platforms//cpu:x86_64",
+    ],
+    "linux_arm64": [
+        "@platforms//os:linux",
+        "@platforms//cpu:aarch64",
+    ],
+}.items()]
