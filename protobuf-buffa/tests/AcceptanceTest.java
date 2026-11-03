@@ -42,6 +42,13 @@ final class AcceptanceTest {
   }
 
   @Test
+  void cachedLifetimeChecksSurviveCloseAndCacheSaturation() throws Exception {
+    try (var decoder = BuffaWire.open(BuffaWire.Mode.NATIVE, library())) {
+      CompiledReads.cachedLifetimes(decoder);
+    }
+  }
+
+  @Test
   void nativeJvmAcceptance() throws Exception {
     Acceptance.run(true, library());
   }

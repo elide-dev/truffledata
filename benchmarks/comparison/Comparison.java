@@ -111,6 +111,21 @@ public final class Comparison {
         if (smoke) {
           measure(operation, 128, fixture.expected);
           fixture.tier(peak);
+          if (ImageInfo.inImageRuntimeCode()
+              && workload.equals("proto-scalar")
+              && engine.equals("owned")
+              && ingest) {
+            var counter = Objects.requireNonNull(bean);
+            long thread = Thread.currentThread().threadId();
+            long before = counter.getThreadAllocatedBytes(thread);
+            measure(operation, 8, fixture.expected);
+            double bytes = (counter.getThreadAllocatedBytes(thread) - before) / (8.0 * ROWS);
+            double budget = stage.equals("ingest-typed") ? 64 : 96;
+            if (bytes < 0 || bytes > budget)
+              throw new AssertionError(
+                  "Compact scalar allocation budget: " + bytes + " > " + budget);
+            System.out.println("ALLOCATION compact-scalar " + stage + " bytes/message=" + bytes);
+          }
           return;
         }
         double[] samples = new double[3];
