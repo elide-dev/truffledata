@@ -186,3 +186,19 @@ cells while retaining all 31 previous cells. Owned scalar ingestion measured 73.
 56 Java heap bytes with primitive projection, 75.93 ns and 88 bytes with generic projection,
 and stock measured 64.17 ns and 136 bytes. Both TruffleData routes win allocation in this
 fixture; neither establishes a latency win. The 37-cell SVM run and JVM/native smoke passed.
+
+### Scoped lifetime and binary bookkeeping allocations
+
+The `8696d83` and `8c3fbec` reports retain the complete 37-cell matrix. Cached
+retained owners acquire a lifetime assumption before compilation; uncached and
+megamorphic reads use ordinary lifetime checks. Close invalidates cached owners,
+and the acceptance corpus checks constant receivers and cache saturation on JVM,
+static SVM, and the SVM Java fallback. Binary decoding also avoids text-only
+field tracking, and ordinary repeated fields no longer allocate a map.
+
+Buffa scalar ingestion fell from 400 to 312 Java heap bytes per message, binary
+bytes ingestion from 392 to 304, and Timestamp JSON from 792 to 720. These are
+Java heap savings, not total native-plus-Java allocation figures. Timing varies
+substantially between the short shared-hardware runs; stock aliased bytes and
+stock driver decoding still lead. The native smoke enforces compact owned scalar
+allocation budgets of 96 B for generic and 64 B for primitive projections.

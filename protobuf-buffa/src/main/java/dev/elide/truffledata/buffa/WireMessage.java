@@ -85,6 +85,7 @@ public final class WireMessage implements AutoCloseable {
   abstract static class CheckOpenNode extends Node {
     abstract void execute(WireMessage owner);
 
+    @NeverDefault
     static CheckOpenNode create() {
       return WireMessageFactory.CheckOpenNodeGen.create();
     }
