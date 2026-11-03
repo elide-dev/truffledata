@@ -206,3 +206,13 @@ ELIDE_TOOLCHAIN_BUNDLES = {
         "https://static.elideusercontent.com/toolchain/%s/elide-toolchain-%s-%s.tar.xz" % (ELIDE_TOOLCHAIN, ELIDE_TOOLCHAIN, bundle),
     ],
 ) for key, (bundle, sha) in ELIDE_TOOLCHAIN_BUNDLES.items()]
+
+# Pinned native measurement hooks, shared with Komodo.
+http_archive(
+    name = "codspeed_hooks",
+    build_file = "//bazel:codspeed_hooks.BUILD",
+    sha256 = "a1a486756f307e3dfe42518784a9d8d29217878c5e36a9ebe72d3e5a89150bda",
+    strip_prefix = "instrument-hooks-1ec92c8c9db59db2d0adc37f47d003d3db4e1c64",
+    type = "tar.gz",
+    urls = ["https://codeload.github.com/CodSpeedHQ/instrument-hooks/tar.gz/1ec92c8c9db59db2d0adc37f47d003d3db4e1c64"],
+)

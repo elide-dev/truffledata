@@ -1,17 +1,29 @@
+load("@rules_graalvm//graalvm:defs.bzl", "native_image")
 load("@rules_java//java:defs.bzl", "java_binary", "java_test")
+load("@rules_shell//shell:sh_test.bzl", "sh_test")
 load("//bazel:java.bzl", "data_java_library")
+load("//bazel:simulation.bzl", "simulation_image")
 
 package(default_visibility = ["//visibility:public"])
 
 data_java_library(
     name = "benchmarks",
     srcs = [
+        "src/main/java/dev/elide/truffledata/bench/BenchmarkLanguage.java",
+        "src/main/java/dev/elide/truffledata/bench/JdbcFixture.java",
+        "src/main/java/dev/elide/truffledata/bench/NativeHooks.java",
         "src/main/java/dev/elide/truffledata/bench/ReadBenchmark.java",
+        "src/main/java/dev/elide/truffledata/bench/SimulationBenchmark.java",
         "src/main/java/dev/elide/truffledata/bench/package-info.java",
     ],
     plugins = ["//bazel:jmh_processor"],
     deps = [
         "//core",
+        "//jdbc",
+        "//protobuf",
+        "@maven//:com_google_protobuf_protobuf_java",
+        "@maven//:org_graalvm_polyglot_polyglot",
+        "@maven//:org_graalvm_sdk_nativeimage",
         "@maven//:org_graalvm_truffle_truffle_api",
         "@maven//:org_openjdk_jmh_jmh_core",
     ],
@@ -65,5 +77,94 @@ java_test(
     runtime_deps = [
         ":benchmarks",
         "@maven//:org_graalvm_truffle_truffle_runtime",
+    ],
+)
+
+# Native Image and the C hooks are built remotely; simulation runs on the CI client.
+java_test(
+    name = "simulation_smoke",
+    args = ["--smoke"],
+    jvm_flags = ["--enable-native-access=ALL-UNNAMED"],
+    main_class = "dev.elide.truffledata.bench.SimulationBenchmark",
+    use_testrunner = False,
+    runtime_deps = [
+        ":benchmarks",
+        "@maven//:org_graalvm_truffle_truffle_runtime",
+    ],
+)
+
+native_image(
+    name = "native",
+    cc_deps = ["//benchmarks/native:hooks"],
+    data = [
+        "proxy-config.json",
+        "reflect-config.json",
+        "//benchmarks/native:databench.h",
+    ],
+    debug = True,
+    exec_properties = {
+        "EstimatedCPU": "8",
+        "EstimatedMemory": "24GB",
+        "EstimatedFreeDiskBytes": "16GB",
+    },
+    executable_name = "truffledata-bench",
+    extra_args = [
+        "--gc=serial",
+        # Library static state is immutable schema/sentinel/DSL metadata. Workloads and sinks stay runtime-owned.
+        "--initialize-at-build-time=dev.elide.truffledata",
+        "--initialize-at-run-time=dev.elide.truffledata.bench",
+        "--initialize-at-build-time=dev.elide.truffledata.bench.BenchmarkLanguageProvider",
+        "--parallelism=8",
+        "-march=compatibility",
+        "-H:+UnlockExperimentalVMOptions",
+        "-H:-DeleteLocalSymbols",
+        "-H:+PreserveFramePointer",
+        "-H:DynamicProxyConfigurationFiles=benchmarks/proxy-config.json",
+        "-H:ReflectionConfigurationFiles=benchmarks/reflect-config.json",
+        "-H:-UnlockExperimentalVMOptions",
+    ],
+    graalvm_sdk = "@graalvm_linux_amd64//:gvm",
+    main_class = "dev.elide.truffledata.bench.SimulationBenchmark",
+    optimization_mode = "3",
+    tags = ["manual"],
+    target_compatible_with = [
+        "@platforms//os:linux",
+        "@platforms//cpu:x86_64",
+    ],
+    workspace_tmp = True,
+    deps = [
+        ":benchmarks",
+        "@maven//:org_graalvm_truffle_truffle_runtime",
+    ],
+)
+
+simulation_image(
+    name = "simulation",
+    image = ":native",
+    tags = ["manual"],
+    target_compatible_with = [
+        "@platforms//os:linux",
+        "@platforms//cpu:x86_64",
+    ],
+)
+
+filegroup(
+    name = "native_debug",
+    srcs = [":native"],
+    output_group = "debug_files",
+    tags = ["manual"],
+)
+
+exports_files(["cases.json"])
+
+sh_test(
+    name = "native_smoke",
+    srcs = ["native_smoke.sh"],
+    args = ["$(rootpath :simulation)"],
+    data = [":simulation"],
+    tags = ["manual"],
+    target_compatible_with = [
+        "@platforms//os:linux",
+        "@platforms//cpu:x86_64",
     ],
 )

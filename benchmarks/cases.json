@@ -1,0 +1,102 @@
+[
+  {
+    "name": "batch-required-sum",
+    "checksum": 32640,
+    "description": "Read one required integer per retained columnar row"
+  },
+  {
+    "name": "batch-nullable-sum",
+    "checksum": 16384,
+    "description": "Read nullable integers, skip 50% nulls"
+  },
+  {
+    "name": "batch-wide-project-one",
+    "checksum": 32640,
+    "description": "Project one of 16 columns from retained rows"
+  },
+  {
+    "name": "static-required-sum",
+    "checksum": 32640,
+    "description": "Read required uint16 static properties"
+  },
+  {
+    "name": "static-mixed-projection",
+    "checksum": 33792,
+    "description": "Read int32, boolean and exact string length"
+  },
+  {
+    "name": "dynamic-required-sum",
+    "checksum": 32640,
+    "description": "Read live dynamic objects with width validation"
+  },
+  {
+    "name": "interop-member-sum",
+    "checksum": 32640,
+    "description": "Guest interop member-name access"
+  },
+  {
+    "name": "interop-ordinal-sum",
+    "checksum": 32640,
+    "description": "Guest interop ordinal access"
+  },
+  {
+    "name": "static-exact-string-length",
+    "checksum": 1024,
+    "description": "Read known four-code-unit string length"
+  },
+  {
+    "name": "ingest-narrow-batch",
+    "checksum": 256,
+    "description": "Normalize and validate a one-column batch"
+  },
+  {
+    "name": "ingest-wide-batch",
+    "checksum": 256,
+    "description": "Normalize and validate a 16-column batch"
+  },
+  {
+    "name": "ingest-static-mixed",
+    "checksum": 256,
+    "description": "Create static records with mixed kinds and nulls"
+  },
+  {
+    "name": "retain-row-views",
+    "checksum": 256,
+    "description": "Allocate escaping retained row views"
+  },
+  {
+    "name": "protobuf-generated-batch",
+    "checksum": 1024,
+    "description": "Snapshot nested generated Protobuf messages to batches"
+  },
+  {
+    "name": "protobuf-generated-static",
+    "checksum": 1024,
+    "description": "Snapshot nested generated Protobuf messages to static records"
+  },
+  {
+    "name": "protobuf-wire-static",
+    "checksum": 1024,
+    "description": "Decode wire bytes to DynamicMessage and snapshot static records"
+  },
+  {
+    "name": "mysql-fixture-batch",
+    "checksum": 32640,
+    "description": "Unsigned int32 JDBC contract; execute, bind, ingest, consume and close"
+  },
+  {
+    "name": "mysql-fixture-static",
+    "checksum": 32640,
+    "description": "Unsigned int32 JDBC contract with static retained rows"
+  },
+  {
+    "name": "postgres-fixture-batch",
+    "checksum": 32640,
+    "description": "Signed int32 JDBC contract; execute, bind, ingest, consume and close"
+  },
+  {
+    "name": "postgres-fixture-static",
+    "checksum": 32640,
+    "description": "Signed int32 JDBC contract with static retained rows"
+  }
+]

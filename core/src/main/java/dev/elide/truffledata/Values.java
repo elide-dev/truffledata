@@ -101,9 +101,13 @@ public final class Values {
   }
 
   public static int stringLength(String value, Constraints.LengthUnit unit) {
-    return unit == Constraints.LengthUnit.CODE_POINTS
-        ? value.codePointCount(0, value.length())
-        : value.length();
+    return unit == Constraints.LengthUnit.CODE_POINTS ? codePointLength(value) : value.length();
+  }
+
+  // Unicode traversal and its JDK bounds-check machinery do not belong in guest compilation.
+  @TruffleBoundary
+  private static int codePointLength(String value) {
+    return value.codePointCount(0, value.length());
   }
 
   @TruffleBoundary

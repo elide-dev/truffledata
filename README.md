@@ -85,6 +85,7 @@ Java null is confined to annotated ingestion boundaries. `DataNull` is the inter
 - GraalJS and GraalPy interoperability without host access.
 - Compiled Truffle acceptance with synchronous compilation, compilation failures and performance warnings treated as errors, and a 10,000-node graph budget.
 - Allocation limits for retained reads, ingestion, and retained row creation. See [budgets and scope](docs/TRUFFLE.md).
+- [Continuous CodSpeed simulation](docs/BENCHMARKS.md): 20 fixed-work Native Image workloads, independently checked alongside JVM JIT/allocation gates.
 - Gazelle generation for source-set targets. Source membership is generated; dependency boundaries are explicit in `bazel/gazelle/sources.json`.
 
-This is a foundation, not an Elide production integration. The database tests use H2, native SQLite, and MySQL/PostgreSQL-shaped JDBC fixtures; real MySQL/PostgreSQL driver matrices, Native Image integration, cancellation, asynchronous/RPC execution, and JSON/CSV adapters remain production follow-ups. There is no SQL planner dependency.
+This is a foundation, not an Elide production integration. The database tests use H2, native SQLite, and MySQL/PostgreSQL-shaped JDBC fixtures; real MySQL/PostgreSQL driver matrices, broader Native Image deployment integration, cancellation, asynchronous/RPC execution, and JSON/CSV adapters remain production follow-ups. There is no SQL planner dependency.

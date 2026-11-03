@@ -71,36 +71,42 @@ public final class ExactNumber implements TruffleObject {
   }
 
   @ExportMessage
+  @TruffleBoundary
   byte asByte() throws UnsupportedMessageException {
     if (!fitsInByte()) throw UnsupportedMessageException.create();
     return value.byteValue();
   }
 
   @ExportMessage
+  @TruffleBoundary
   short asShort() throws UnsupportedMessageException {
     if (!fitsInShort()) throw UnsupportedMessageException.create();
     return value.shortValue();
   }
 
   @ExportMessage
+  @TruffleBoundary
   int asInt() throws UnsupportedMessageException {
     if (!fitsInInt()) throw UnsupportedMessageException.create();
     return value.intValue();
   }
 
   @ExportMessage
+  @TruffleBoundary
   long asLong() throws UnsupportedMessageException {
     if (!fitsInLong()) throw UnsupportedMessageException.create();
     return value.longValue();
   }
 
   @ExportMessage
+  @TruffleBoundary
   float asFloat() throws UnsupportedMessageException {
     if (!fitsInFloat()) throw UnsupportedMessageException.create();
     return value.floatValue();
   }
 
   @ExportMessage
+  @TruffleBoundary
   double asDouble() throws UnsupportedMessageException {
     if (!fitsInDouble()) throw UnsupportedMessageException.create();
     return value.doubleValue();
