@@ -30,7 +30,7 @@ class PolicyTest {
             Map.entry("JdbcCursor.java", 7),
             Map.entry("JdbcSource.java", 6),
             Map.entry("ProtobufAdapter.java", 5),
-            Map.entry("ProtoPlan.java", 6),
+            Map.entry("ProtoPlan.java", 9),
             Map.entry("ProtoRow.java", 3),
             Map.entry("ProtoCompiler.java", 8),
             Map.entry("ProtoWire.java", 1),

@@ -2,7 +2,7 @@ package dev.elide.truffledata.buffa.tests;
 
 import dev.elide.truffledata.*;
 import dev.elide.truffledata.buffa.*;
-import dev.elide.truffledata.protobuf.ProtoWire;
+import dev.elide.truffledata.protobuf.*;
 import java.lang.foreign.*;
 import java.nio.file.Path;
 import java.util.*;
@@ -36,6 +36,7 @@ public final class Acceptance {
     try (var decoder =
         BuffaWire.open(nativeExpected ? BuffaWire.Mode.NATIVE : BuffaWire.Mode.AUTO, library)) {
       check((decoder.selected() != BuffaWire.Selected.JAVA) == nativeExpected, "backend selection");
+      typed(decoder);
       parity(decoder);
       budgets(decoder);
       ownership(decoder);
@@ -57,6 +58,30 @@ public final class Acceptance {
           () -> BuffaWire.open(BuffaWire.Mode.NATIVE, null), UnsupportedOperationException.class);
     System.out.println(
         "BUFFA acceptance passed native=" + nativeExpected + " svm=" + ImageInfo.inImageCode());
+  }
+
+  static void typed(BuffaWire decoder) {
+    var field =
+        new ProtoPlan.FieldPlan(
+            "count", 1, ProtoPlan.Kind.INT32, false, false, false, false, false, -1, "", null, 0L);
+    var plan =
+        new ProtoPlan.Model(
+                null, List.of(new ProtoPlan.Type("Typed", false, List.of(field))), LIMITS, 16, 1024)
+            .type("Typed");
+    byte[] wire = plan.encode(plan.parseText("count: 150"));
+    check(
+        Arrays.equals(wire, plan.encode(plan.parseJson("{\"count\":150}"))),
+        "descriptor-free JSON");
+    ProtoRow row;
+    try (var input = decoder.allocate(wire.length).put(wire)) {
+      row = decoder.decodeTyped(input, plan);
+      rejects(() -> input.put(0, (byte) 0), IllegalStateException.class);
+    }
+    check(DATA.read(row, 0).equals(150L), "typed row owns storage after input closes");
+    var invalid = decoder.allocate(1).put(new byte[] {8});
+    rejects(() -> decoder.decodeTyped(invalid, plan), ContractViolation.class);
+    invalid.close();
+    rejects(() -> decoder.decodeTyped(invalid, plan), IllegalStateException.class);
   }
 
   static void parity(BuffaWire decoder) {
@@ -248,7 +273,30 @@ public final class Acceptance {
     wire[1] = (byte) 128;
     wire[2] = (byte) 128;
     wire[3] = 4;
+    var field =
+        new ProtoPlan.FieldPlan(
+            "blob",
+            2,
+            ProtoPlan.Kind.BYTES,
+            false,
+            false,
+            false,
+            false,
+            false,
+            -1,
+            "",
+            null,
+            DataArray.copyOfBytes(java.nio.ByteBuffer.allocate(0)));
+    var typed =
+        new ProtoPlan.Model(
+                null,
+                List.of(new ProtoPlan.Type("Payload", false, List.of(field))),
+                LIMITS,
+                16,
+                wire.length)
+            .type("Payload");
     try (var input = decoder.allocate(wire.length).put(wire)) {
+      for (int i = 0; i < 100; i++) sink = decoder.decodeTyped(input, typed);
       for (int i = 0; i < 100; i++)
         try (var message = decoder.decode(input, LIMITS, 16, wire.length, 128)) {
           sink = message.fields();
@@ -268,6 +316,13 @@ public final class Acceptance {
         double allocated = (bean.getThreadAllocatedBytes(thread) - before) / 100.0;
         System.out.println("BUFFA borrowed ingestion bytes/message=" + allocated);
         check(allocated < 16384, "borrowed ingestion must not copy the 64KiB payload");
+        before = bean.getThreadAllocatedBytes(thread);
+        for (int i = 0; i < 100; i++) sink = decoder.decodeTyped(input, typed);
+        double typedBytes = (bean.getThreadAllocatedBytes(thread) - before) / 100.0;
+        System.out.println("BUFFA owned typed ingestion bytes/message=" + typedBytes);
+        check(
+            typedBytes < length + 16384,
+            "typed ingestion copies payload once, not the whole input too");
       }
     }
   }

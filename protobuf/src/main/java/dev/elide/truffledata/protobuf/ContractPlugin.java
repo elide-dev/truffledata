@@ -139,7 +139,12 @@ public final class ContractPlugin {
           }
           source.append("))");
         }
-        source.append(",").append(literal(f.defaultValue())).append("); }\n");
+        source
+            .append(",")
+            .append(literal(f.defaultValue()))
+            .append(",")
+            .append(quote(f.jsonName()))
+            .append("); }\n");
       }
     }
     source.append("}\n");

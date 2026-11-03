@@ -238,3 +238,41 @@ The direct codec is Java code suitable for JVM and Native Image execution. Buffa
 
 
 SVM is the primary target for an optional Myna backend: native parser code must be statically linked, with direct generated C bindings and no runtime shared-library discovery. JVM support may use Myna's JVM binding route where the runtime/platform supports it. Backend selection must retain the Java codec when native support is absent or disabled on either runtime. A malformed input or contract failure must propagate, never trigger a retry through a more permissive parser. Native enablement requires differential tests and allocation/ownership checks on JVM and SVM, including an explicit Java-only fallback run. These are requirements for a future backend, not capabilities of a bundled Buffa implementation today.
+
+
+### Descriptor-free text input
+
+Generated and runtime-compiled plans expose `parseText(String)` and `parseJson(String)`.
+They construct the same owned `ProtoRow` representation as binary decoding, including
+static layouts when the plan has a language owner. Parsing stays behind Truffle boundaries;
+guest reads continue through the existing cached `DataLibrary` exports.
+
+Text format supports scalar types, numeric/named enums, quoted and concatenated strings,
+byte escapes, comments, repeated lists, message braces/angle brackets, proto2 groups,
+map entries, required fields, explicit presence, and oneofs. Unknown fields, extensions,
+duplicate singular fields, and multiple oneof members are rejected. Duplicate map keys
+use the last entry. Extensions and expanded `Any` syntax are unsupported by this parser; the existing model
+also rejects schemas declaring extension ranges.
+
+ProtoJSON streams ordinary messages directly into contract rows. It accepts proto names
+and JSON names (including custom `json_name`, now retained by the contract generator),
+base64/base64url bytes, quoted integers, integral exponent notation, named/open numeric
+enums, repeated arrays, and map objects. Null leaves a field unset; null array elements
+and map values are rejected, except for the explicit `google.protobuf.NullValue` enum. Duplicate fields, aliases of the same field, duplicate map
+keys, and competing oneof members are rejected. Regenerate older contracts to retain custom JSON names. Special well-known-type JSON mappings
+(`Any`, wrappers, `Timestamp`, `Duration`, `FieldMask`, `Struct`, `Value`, `ListValue`) require
+`ProtoCompiler.bind(plan, descriptor).parseJson(json)` where supported by that parser.
+The bound API does not currently expose an `Any` type registry. There is no silent fallback.
+
+Both parsers reject input exceeding `maxWireBytes / 2` UTF-16 characters before tokenization.
+Model cell, string-payload, and message-depth budgets apply to the aggregate result and
+are charged during parsing. Tokenization/unescape scratch is bounded by the input limit;
+these limits are not exact total-allocation counters. Integer tokens are capped at 128
+characters, and large exponents are checked before decimal-to-integer expansion. These
+resource limits can deliberately reject excessively padded spellings accepted by protobuf-java.
+Malformed input raises `ContractViolation`; errors do not include input values.
+
+`ProtoPlan.decode(ByteBuffer)` parses a buffer's remaining region without changing its
+position/limit or making an intermediate whole-input copy. Keep its memory immutable and
+alive during the call. Returned rows own their payloads. Native `WireInput` users can call
+`BuffaWire.decodeTyped(input, plan)` to enforce the input lease during this operation.

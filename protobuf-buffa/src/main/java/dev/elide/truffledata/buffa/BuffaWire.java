@@ -4,6 +4,8 @@ import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import dev.elide.truffledata.*;
 import dev.elide.truffledata.buffa.generated.Buffa;
 import dev.elide.truffledata.buffa.generated.BuffaFFM;
+import dev.elide.truffledata.protobuf.ProtoPlan;
+import dev.elide.truffledata.protobuf.ProtoRow;
 import dev.elide.truffledata.protobuf.ProtoWire;
 import java.math.BigInteger;
 import java.nio.*;
@@ -131,6 +133,23 @@ public final class BuffaWire implements AutoCloseable {
       if (message == null) lease.release();
       else message.close();
       throw failure;
+    }
+  }
+
+  /**
+   * Typed, descriptor-free Java decoding over the input region, including native allocations. No
+   * intermediate wire copy or native validation pass. The returned row owns its payloads; input
+   * leases are released before returning. Backend selection applies to wire decoding only.
+   */
+  @TruffleBoundary
+  public ProtoRow decodeTyped(WireInput input, ProtoPlan plan) {
+    check();
+    Objects.requireNonNull(plan);
+    WireInput.Lease lease = input.retain();
+    try {
+      return plan.decode(lease.bytes);
+    } finally {
+      lease.release();
     }
   }
 

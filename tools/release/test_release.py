@@ -28,7 +28,7 @@ class PublicationTest(unittest.TestCase):
                 if module != 'core':
                     expected.add('dev.elide:truffledata-core')
                 if module == 'protobuf':
-                    expected.update(('com.google.protobuf:protobuf-java', 'com.google.protobuf:protobuf-java-util'))
+                    expected.update(('com.google.protobuf:protobuf-java', 'com.google.protobuf:protobuf-java-util', 'com.google.code.gson:gson'))
                 if module == 'jdbc-sqlite':
                     expected.update(('dev.elide:truffledata-jdbc', 'org.xerial:sqlite-jdbc'))
                 if module in ('jdbc-mysql', 'jdbc-postgresql'):

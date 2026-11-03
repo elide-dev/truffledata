@@ -42,6 +42,223 @@ class ProtoNativeTest {
   }
 
   @Test
+  void jsonNullEnumAndWellKnownMappingBoundary() {
+    var nullEnum =
+        new ProtoPlan.EnumType("google.protobuf.NullValue", true, Map.of("NULL_VALUE", 0));
+    var field =
+        new ProtoPlan.FieldPlan(
+            "null_value",
+            1,
+            ProtoPlan.Kind.ENUM,
+            false,
+            false,
+            true,
+            false,
+            false,
+            -1,
+            "",
+            nullEnum,
+            0L);
+    var plan =
+        new ProtoPlan.Model(
+                null,
+                List.of(new ProtoPlan.Type("Nulls", false, List.of(field))),
+                Limits.DEFAULT,
+                8,
+                WIRE_LIMIT)
+            .type("Nulls");
+    assertTrue(plan.parseJson("{\"nullValue\":null}").has(0));
+    assertEquals(0L, get(plan.parseJson("{\"nullValue\":null}"), "null_value"));
+    var timestamp =
+        ProtoCompiler.compile(null, Timestamp.getDescriptor(), Limits.DEFAULT, 8, WIRE_LIMIT);
+    assertThrows(ContractViolation.class, () -> timestamp.parseJson("\"2026-01-01T00:00:00Z\""));
+  }
+
+  @Test
+  void seededTextAndJsonRoundTrips() throws Exception {
+    var descriptor = descriptor("truffledata.lossless.Sample");
+    var plan = plan(descriptor.getFullName());
+    Random random = new Random(90210);
+    for (int i = 0; i < 200; i++) {
+      byte[] bytes = new byte[random.nextInt(100)];
+      random.nextBytes(bytes);
+      var message =
+          DynamicMessage.newBuilder(descriptor)
+              .setField(descriptor.findFieldByName("count"), random.nextInt())
+              .setField(descriptor.findFieldByName("u64"), random.nextLong())
+              .setField(descriptor.findFieldByName("f"), Float.intBitsToFloat(random.nextInt()))
+              .setField(descriptor.findFieldByName("d"), Double.longBitsToDouble(random.nextLong()))
+              .setField(descriptor.findFieldByName("blob"), ByteString.copyFrom(bytes))
+              .setField(descriptor.findFieldByName("text"), "quote \" slash \\ newline\n 中 😀 " + i)
+              .setField(descriptor.findFieldByName("custom_value"), i)
+              .build();
+      assertEquals(
+          message,
+          DynamicMessage.parseFrom(
+              descriptor,
+              plan.encode(plan.parseText(TextFormat.printer().printToString(message)))));
+      assertEquals(
+          message,
+          DynamicMessage.parseFrom(
+              descriptor,
+              plan.encode(
+                  plan.parseJson(com.google.protobuf.util.JsonFormat.printer().print(message)))));
+    }
+  }
+
+  @Test
+  void textPayloadAndCellBudgetsAreSharedAcrossFields() {
+    var small =
+        TruffleDataContracts.create(null, new Limits(10, 256, 100, 2), 16, 10000)
+            .type("truffledata.lossless.Sample");
+    assertEquals("中", get(small.parseText("text: '中'"), "text"));
+    assertEquals("中", get(small.parseJson("{\"text\":\"中\"}"), "text"));
+    assertThrows(ContractViolation.class, () -> small.parseText("text: 'ab'"));
+    assertThrows(ContractViolation.class, () -> small.parseJson("{\"text\":\"ab\"}"));
+    assertThrows(
+        ContractViolation.class, () -> small.parseText("numbers: [" + "1,".repeat(100) + "1]"));
+    assertThrows(
+        ContractViolation.class,
+        () -> small.parseJson("{\"numbers\":[" + "1,".repeat(100) + "1]}"));
+  }
+
+  @Test
+  void descriptorFreeJsonMatchesProtobufJava() throws Exception {
+    var d = descriptor("truffledata.lossless.Sample");
+    var plan = plan(d.getFullName());
+    for (String json :
+        List.of(
+            "{\"customAlias\":17}",
+            "{\"custom_value\":18}",
+            "{\"count\":-2147483648,\"explicitCount\":0,\"u32\":4294967295,\"u64\":\"18446744073709551615\"}",
+            "{\"text\":\"hello €\",\"blob\":\"Af8=\",\"blobs\":[\"eA\",\"_w\"]}",
+            "{\"numbers\":[1,-2,3e0,\"4\"],\"statuses\":[\"READY\",999],\"flag\":true}",
+            "{\"child\":{\"a\":1},\"selectedChild\":{\"b\":\"ok\"}}",
+            "{\"children\":{\"a\":{\"a\":1}},\"counts\":{\"18446744073709551615\":-1}}",
+            "{\"f\":\"-Infinity\",\"d\":\"NaN\",\"count\":null}")) {
+      var expected = DynamicMessage.newBuilder(d);
+      com.google.protobuf.util.JsonFormat.parser().merge(json, expected);
+      assertEquals(
+          expected.build(), DynamicMessage.parseFrom(d, plan.encode(plan.parseJson(json))), json);
+    }
+    for (String json :
+        List.of(
+            "{\"count\":1,\"count\":2}",
+            "{\"explicitCount\":1,\"explicit_count\":2}",
+            "{\"count\":1.1}",
+            "{\"selected\":1,\"selectedChild\":{}}",
+            "{\"unknown\":0}",
+            "{\"count\":1e999999999}",
+            "{\"count\":1e-999999999}",
+            "{\"blob\":\"=\"}",
+            "{\"f\":1e100}",
+            "{\"numbers\":[null]}",
+            "{\"text\":123}",
+            "{} {}",
+            "{count:1}",
+            "{\"counts\":{\"1\":1,\"1.0\":2}}"))
+      assertThrows(ContractViolation.class, () -> plan.parseJson(json), json);
+  }
+
+  @Test
+  void descriptorFreeTextMatchesProtobufJava() throws Exception {
+    var d = descriptor("truffledata.lossless.Sample");
+    var plan = plan(d.getFullName());
+    for (String text :
+        List.of(
+            "count: -2147483648 explicit_count: 0 u32: 0xffffffff u64: 18446744073709551615",
+            "text: 'hello' \" world\" blob: '\\001\\377' blobs: ['x', 'y']",
+            "numbers: [1, -2, 03, 0x4] numbers: 5 statuses: [READY, 999] flag: True",
+            "child < a: 1 b: 'ok' > selected_child: { a: 2 } # comment\n",
+            "children { key: 'a' value { a: 1 } } children { key: 'a' value { b: 'last' } }",
+            "counts { key: 18446744073709551615 value: -1 }",
+            "f: -inf d: nan fixed32: 4294967295 sfixed64: -9223372036854775808",
+            "text: '\\342\\202\\254'")) {
+      var expected = DynamicMessage.newBuilder(d);
+      TextFormat.getParser().merge(text, expected);
+      assertEquals(
+          expected.build(), DynamicMessage.parseFrom(d, plan.encode(plan.parseText(text))), text);
+    }
+    var legacy = descriptor("truffledata.lossless.Legacy");
+    var expected = DynamicMessage.newBuilder(legacy);
+    TextFormat.getParser().merge("Old { value: 9 } status: FIRST", expected);
+    var legacyPlan = plan(legacy.getFullName());
+    assertEquals(
+        expected.build(),
+        DynamicMessage.parseFrom(
+            legacy, legacyPlan.encode(legacyPlan.parseText("Old { value: 9 } status: FIRST"))));
+  }
+
+  @Test
+  void descriptorFreeTextRejectsMalformedAndBudgetedInputs() {
+    var plan = plan("truffledata.lossless.Sample");
+    for (String text :
+        List.of(
+            "unknown: 1",
+            "count: 1 count: 2",
+            "selected: 1 selected_child {}",
+            "count: 2147483648",
+            "u64: 18446744073709551616",
+            "u32: -1",
+            "flag: yes",
+            "child {",
+            "child >",
+            "count 1",
+            "numbers: [1,]",
+            "text: 'unterminated",
+            "text: '\\xff'",
+            "text: '\\q'",
+            "text: 'line\nbreak'",
+            "status: UNKNOWN",
+            "count: --1",
+            "count: 0x-1",
+            "count: 1 }",
+            "[extension]: 1"))
+      assertThrows(ContractViolation.class, () -> plan.parseText(text), text);
+    assertThrows(
+        ContractViolation.class, () -> plan("truffledata.lossless.Required").parseText(""));
+    assertThrows(
+        ContractViolation.class,
+        () -> plan("truffledata.lossless.Legacy").parseText("status: 999"));
+    var shallow =
+        TruffleDataContracts.create(null, Limits.DEFAULT, 1, WIRE_LIMIT)
+            .type("truffledata.lossless.Sample");
+    assertThrows(ContractViolation.class, () -> shallow.parseText("child {}"));
+    var small =
+        TruffleDataContracts.create(null, Limits.DEFAULT, 32, 4)
+            .type("truffledata.lossless.Sample");
+    assertThrows(ContractViolation.class, () -> small.parseText("count: 1"));
+  }
+
+  @Test
+  void typedBuffersPreserveRegionAndOwnTheirPayloads() throws Exception {
+    var d = descriptor("truffledata.lossless.Sample");
+    var plan = plan(d.getFullName());
+    var message =
+        DynamicMessage.newBuilder(d)
+            .setField(d.findFieldByName("text"), "hello €")
+            .setField(d.findFieldByName("blob"), ByteString.copyFrom(new byte[] {1, -1}))
+            .setUnknownFields(
+                UnknownFieldSet.newBuilder()
+                    .addField(100, UnknownFieldSet.Field.newBuilder().addVarint(17).build())
+                    .build())
+            .build();
+    byte[] wire = message.toByteArray();
+    for (java.nio.ByteBuffer buffer :
+        List.of(
+            java.nio.ByteBuffer.allocate(wire.length + 4),
+            java.nio.ByteBuffer.allocateDirect(wire.length + 4))) {
+      buffer.position(2).put(wire).limit(wire.length + 2).position(2);
+      var view = buffer.asReadOnlyBuffer();
+      var row = plan.decode(view);
+      assertEquals(2, view.position());
+      assertEquals(wire.length + 2, view.limit());
+      buffer.put(2, (byte) 0);
+      assertEquals(message, DynamicMessage.parseFrom(d, plan.encode(row)));
+    }
+  }
+
+  @Test
   void proto3PresenceValuesAndMessageOrBuilderInputs() throws Exception {
     var d = descriptor("truffledata.lossless.Sample");
     var plan = plan(d.getFullName());

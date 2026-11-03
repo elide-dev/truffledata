@@ -68,6 +68,39 @@ FFM is a separate JVM adapter; it requires Java 25 and native access enabled. Th
 fallback image is built without the Feature/archive to prove that Java-only use needs no
 native symbols. The native-enabled image uses `BuffaFeature`, not runtime FFM registration.
 
+## Typed and text input
+
+`BuffaWire.decodeTyped(input, plan)` reads the sealed input region directly through the
+bounded Java codec. This works with allocated or adopted native memory on JVM and SVM,
+and with Java-only input. It does **not** run a redundant native validation pass or copy
+the entire wire buffer into a Java array. The result is an ordinary owned `ProtoRow`:
+strings, bytes, and unknown fields are materialized; it can outlive the input and decoder.
+The temporary lease is released on success and failure. Backend selection describes
+schemaless `decode`, not a promise that `decodeTyped` runs inside Rust.
+
+```java
+try (var input = decoder.allocate(wire.length).put(wire)) {
+  ProtoRow row = decoder.decodeTyped(input, plan);
+}
+ProtoRow text = plan.parseText("count: 150");
+ProtoRow json = plan.parseJson("{\"count\":150}");
+```
+
+`ProtoPlan.decode(ByteBuffer)` also accepts heap, direct, sliced, and read-only buffers.
+It consumes only the remaining region and preserves the caller's position and limit.
+The caller must keep that region alive and immutable for the duration of the call.
+
+Both text routes can use generated or runtime-compiled plans without retained descriptors
+or temporary `DynamicMessage` objects. Text format uses protobuf-java's scalar escape
+utility; ProtoJSON uses Gson's streaming token reader. Special JSON mappings for well-known
+messages still require `ProtoCompiler.bind(...).parseJson(...)`; the descriptor-free route
+rejects those mappings explicitly. See [text contracts](CONTRACTS.md#descriptor-free-text-input)
+for syntax, budgets, and compatibility limits.
+
+This closes the descriptor-free typed/text ingestion gap, not the native typed-view gap.
+Generated Buffa views, native schema-aware text parsing, and borrowed typed payload rows
+remain future work. Typed results intentionally retain the existing owned-row contract.
+
 ## Build and validation
 
 The optional `//protobuf-buffa` target is not part of the 0.1.0 Maven artifacts. This PR
@@ -97,9 +130,10 @@ do not make an arbitrary untrusted native library safe to load. Allocation budge
 allocator metadata and the caller's independently owned input region. Index-growth budgets
 also allow for the old and new buffers coexisting during relocation.
 
-The Linux amd64 JVM acceptance run measured about 1.4 KB of Java allocation per borrowed
+The Linux amd64 JVM acceptance run measured 66,328 bytes of Java allocation per owned
+typed 64 KiB payload (one payload copy plus row metadata), and about 1.4 KB per borrowed
 64 KiB message and 0.000064 bytes per compiled byte read, with a 10-node access AST.
 These are allocation checks, not throughput claims. CI enforces a 16 KiB/message allocation
-ceiling, 0.05 bytes/compiled read, a 192-node AST ceiling, and a 128-byte native index budget
+ceiling, an 80 KiB ceiling for owned typed ingestion of the same payload, 0.05 bytes/compiled read, a 192-node AST ceiling, and a 128-byte native index budget
 for this single-payload case. JVM allocation counters are not used in SVM; SVM runs the same
 semantic/lifetime corpus, compiled-read checks, native index budgets, and blocklist gates.

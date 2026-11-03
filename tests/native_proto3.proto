@@ -26,4 +26,5 @@ message Sample {
   repeated Status statuses = 22;
   repeated bytes blobs = 23;
   map<uint64, int32> counts = 24;
+  int32 custom_value = 25 [json_name = "customAlias"];
 }
