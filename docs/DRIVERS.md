@@ -70,7 +70,8 @@ tools/integration/run.sh
 The script uses pinned MySQL/PostgreSQL image digests, temporary containers, localhost
 ports, and test-only credentials, then removes its containers. On macOS it selects the
 local Java toolchain; on Linux compilation retains RBE and the service test executes
-beside the local databases. The test is `//tests:drivers`, tagged manual/no-remote-exec,
+beside the local databases. The test is `//tests:drivers`, tagged manual, with local
+TestRunner execution selected by the runner,
 so ordinary remote unit tests do not need database networking.
 
 Acceptance currently covers prepared parameters, metadata widths, static layouts,

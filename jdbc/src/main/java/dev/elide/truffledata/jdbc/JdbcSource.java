@@ -126,16 +126,16 @@ public final class JdbcSource {
       } catch (SQLException | RuntimeException | Error failure) {
         try {
           result.close();
-        } catch (SQLException close) {
-          failure.addSuppressed(close);
+        } catch (SQLException | RuntimeException | Error close) {
+          if (failure != close) failure.addSuppressed(close);
         }
         throw failure;
       }
     } catch (SQLException | RuntimeException | Error failure) {
       try {
         statement.close();
-      } catch (SQLException close) {
-        failure.addSuppressed(close);
+      } catch (SQLException | RuntimeException | Error close) {
+        if (failure != close) failure.addSuppressed(close);
       }
       throw failure;
     }
@@ -167,16 +167,16 @@ public final class JdbcSource {
       } catch (SQLException | RuntimeException | Error e) {
         try {
           result.close();
-        } catch (SQLException close) {
-          e.addSuppressed(close);
+        } catch (SQLException | RuntimeException | Error close) {
+          if (e != close) e.addSuppressed(close);
         }
         throw e;
       }
     } catch (SQLException | RuntimeException | Error e) {
       try {
         statement.close();
-      } catch (SQLException close) {
-        e.addSuppressed(close);
+      } catch (SQLException | RuntimeException | Error close) {
+        if (e != close) e.addSuppressed(close);
       }
       throw e;
     }

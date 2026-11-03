@@ -60,7 +60,7 @@ jobs:
           TRUFFLEDATA_POSTGRESQL_URL: "jdbc:postgresql://127.0.0.1:5432/truffledata?user=postgres&password=truffledata"
         # Compile through RBE; the manual service test runs on the runner beside the databases.
         run: >-
-          bazel test //tests:drivers --build_runfile_links --remote_download_toplevel
+          bazel test //tests:drivers --build_runfile_links --remote_download_toplevel --test_strategy=standalone --strategy=TestRunner=local
           --test_env=TRUFFLEDATA_MYSQL_URL --test_env=TRUFFLEDATA_POSTGRESQL_URL
       - name: Preserve JUnit results
         if: ${{ !cancelled() && steps.tests.outcome != 'skipped' }}

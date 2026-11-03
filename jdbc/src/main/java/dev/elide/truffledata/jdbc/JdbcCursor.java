@@ -82,11 +82,7 @@ public final class JdbcCursor implements AutoCloseable, TruffleObject {
       }
       return rows.isEmpty() ? null : Batch.copyOf(schema, rows, limits);
     } catch (SQLException | RuntimeException | Error e) {
-      try {
-        close();
-      } catch (SQLException close) {
-        e.addSuppressed(close);
-      }
+      closeResources(e);
       throw e;
     }
   }
@@ -100,23 +96,31 @@ public final class JdbcCursor implements AutoCloseable, TruffleObject {
   @TruffleBoundary
   public void close() throws SQLException {
     checkThread();
-    if (closed) return;
+    Throwable failure = closeResources(null);
+    if (failure instanceof SQLException sql) throw sql;
+    if (failure instanceof RuntimeException runtime) throw runtime;
+    if (failure instanceof Error error) throw error;
+  }
+
+  /** Preserve a primary failure and attach independent close failures directly to it. */
+  private @Nullable Throwable closeResources(@Nullable Throwable failure) {
+    if (closed) return failure;
     closed = true;
     pending = null;
     pendingStatic = null;
-    SQLException failure = null;
     try {
       result.close();
-    } catch (SQLException e) {
-      failure = e;
+    } catch (SQLException | RuntimeException | Error close) {
+      if (failure == null) failure = close;
+      else if (failure != close) failure.addSuppressed(close);
     }
     try {
       statement.close();
-    } catch (SQLException e) {
-      if (failure == null) failure = e;
-      else failure.addSuppressed(e);
+    } catch (SQLException | RuntimeException | Error close) {
+      if (failure == null) failure = close;
+      else if (failure != close) failure.addSuppressed(close);
     }
-    if (failure != null) throw failure;
+    return failure;
   }
 
   @ExportMessage
@@ -178,11 +182,7 @@ public final class JdbcCursor implements AutoCloseable, TruffleObject {
       pendingStatic = Objects.requireNonNull(layout).create(values);
       return true;
     } catch (SQLException | RuntimeException | Error failure) {
-      try {
-        close();
-      } catch (SQLException close) {
-        failure.addSuppressed(close);
-      }
+      closeResources(failure);
       throw failure;
     }
   }

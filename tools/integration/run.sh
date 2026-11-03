@@ -40,5 +40,5 @@ export TRUFFLEDATA_MYSQL_URL="jdbc:mysql://127.0.0.1:${mysql_port##*:}/truffleda
 profile=()
 # Remote builds target Linux; local macOS tests need the macOS Java toolchain.
 [[ $(uname -s) != Darwin ]] || profile=(--config=local)
-"${BAZEL:-bazel}" test "${profile[@]}" //tests:drivers --build_runfile_links --remote_download_toplevel \
+"${BAZEL:-bazel}" test "${profile[@]}" //tests:drivers --build_runfile_links --remote_download_toplevel --test_strategy=standalone --strategy=TestRunner=local \
   --test_env=TRUFFLEDATA_MYSQL_URL --test_env=TRUFFLEDATA_POSTGRESQL_URL

@@ -87,3 +87,19 @@ this remains a benchmark image, not real-driver native acceptance. Six-module co
 passed at https://app.buildbuddy.io/invocation/9da27b6f-27e5-41fc-866d-5d86becb9e34.
 The prior pushed increment's CI, including CodSpeed, completed successfully at
 https://github.com/elide-dev/truffledata/actions/runs/41578766603.
+
+Lifecycle failure increment: owned result sets and statements are both closed even
+when cleanup throws an unchecked exception or assertion error. Ingestion/initialization
+failures remain primary, with independent cleanup failures suppressed directly and
+self-suppression guarded. Five adversarial H2 tests cover both execution APIs, static
+and batch decoding, idempotence, and borrowed connection ownership. This is not yet
+cancellation, deadline, pool or context-shutdown acceptance. All ten targets passed:
+https://app.buildbuddy.io/invocation/1f8fed17-4d33-47e7-b783-db2038a3083f.
+
+The scalar allocation fixture now uses a warmed real H2 result through a shared call
+site, avoiding dynamic-proxy/tiered-compilation noise. Allocation and compiled gates
+each passed three repetitions with the existing budgets unchanged. The updated local
+service runner also passed MySQL/PostgreSQL acceptance. The previous CI service job
+failed before running tests because its no-remote-exec tag prevented remote compilation;
+the corrected runner selects standalone test execution and a local TestRunner strategy
+without restricting compilation. Linux CI verification of this correction is pending.

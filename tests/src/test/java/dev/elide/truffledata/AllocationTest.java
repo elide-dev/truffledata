@@ -19,35 +19,38 @@ import org.junit.jupiter.api.Test;
 class AllocationTest {
   @Test
   void scalarJdbcDecodingDoesNotAllocatePerCellBudgets() throws Exception {
-    var result =
-        (java.sql.ResultSet)
-            java.lang.reflect.Proxy.newProxyInstance(
-                getClass().getClassLoader(),
-                new Class<?>[] {java.sql.ResultSet.class},
-                (proxy, method, args) -> {
-                  if (method.getName().equals("getObject")) return 1000L;
-                  throw new UnsupportedOperationException(method.getName());
-                });
-    var decoder =
-        dev.elide.truffledata.jdbc.JdbcValues.decoder(
-            Schema.of(Field.requiredLong("n")), Limits.DEFAULT);
-    var baseline = dev.elide.truffledata.jdbc.JdbcSource.DEFAULT_DECODER;
-    for (int i = 0; i < 100000; i++) {
-      retained = Objects.requireNonNull(baseline.read(result, 1));
-      retained = Objects.requireNonNull(decoder.read(result, 1));
+    try (var connection = java.sql.DriverManager.getConnection("jdbc:h2:mem:");
+        var statement = connection.prepareStatement("select cast(1000 as bigint)");
+        var result = statement.executeQuery()) {
+      assertTrue(result.next());
+      var decoder =
+          dev.elide.truffledata.jdbc.JdbcValues.decoder(
+              Schema.of(Field.requiredLong("n")), Limits.DEFAULT);
+      var baseline = dev.elide.truffledata.jdbc.JdbcSource.DEFAULT_DECODER;
+      ThreadMXBean bean = (ThreadMXBean) ManagementFactory.getThreadMXBean();
+      bean.setThreadAllocatedMemoryEnabled(true);
+      // Both implementations use the same call site through warmup and measurement. A real
+      // driver avoids measuring proxy argument-array elimination and return-value boxing.
+      for (int warmup = 0; warmup < 20; warmup++) {
+        scalarBytes(baseline, result, bean);
+        scalarBytes(decoder, result, bean);
+      }
+      long baselineBytes = scalarBytes(baseline, result, bean);
+      long decodedBytes = scalarBytes(decoder, result, bean);
+      double extra = (decodedBytes - baselineBytes) / 100000.0;
+      System.out.printf("ALLOCATION JDBC scalar %.6f extra bytes/cell%n", extra);
+      assertTrue(extra <= 8, "Scalar conversion allocated a per-cell budget");
     }
-    ThreadMXBean bean = (ThreadMXBean) ManagementFactory.getThreadMXBean();
-    bean.setThreadAllocatedMemoryEnabled(true);
+  }
+
+  private static long scalarBytes(
+      dev.elide.truffledata.jdbc.JdbcSource.Decoder decoder,
+      java.sql.ResultSet result,
+      ThreadMXBean bean)
+      throws java.sql.SQLException {
     long before = bean.getThreadAllocatedBytes(Thread.currentThread().threadId());
-    for (int i = 0; i < 100000; i++) retained = Objects.requireNonNull(baseline.read(result, 1));
-    long baselineBytes = bean.getThreadAllocatedBytes(Thread.currentThread().threadId()) - before;
-    before = bean.getThreadAllocatedBytes(Thread.currentThread().threadId());
     for (int i = 0; i < 100000; i++) retained = Objects.requireNonNull(decoder.read(result, 1));
-    double extra =
-        (bean.getThreadAllocatedBytes(Thread.currentThread().threadId()) - before - baselineBytes)
-            / 100000.0;
-    System.out.printf("ALLOCATION JDBC scalar %.6f extra bytes/cell%n", extra);
-    assertTrue(extra <= 8, "Scalar conversion allocated a per-cell budget");
+    return bean.getThreadAllocatedBytes(Thread.currentThread().threadId()) - before;
   }
 
   @Test

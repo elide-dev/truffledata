@@ -11,6 +11,7 @@ data_java_library(
         "src/test/java/dev/elide/truffledata/ContractsTest.java",
         "src/test/java/dev/elide/truffledata/CoreTest.java",
         "src/test/java/dev/elide/truffledata/IntegrationTest.java",
+        "src/test/java/dev/elide/truffledata/JdbcLifecycleTest.java",
         "src/test/java/dev/elide/truffledata/JdbcTest.java",
         "src/test/java/dev/elide/truffledata/PolicyTest.java",
         "src/test/java/dev/elide/truffledata/PolyglotTest.java",
@@ -42,7 +43,7 @@ java_test(
         "--package",
         "dev.elide.truffledata",
         "--include-class",
-        "dev.elide.truffledata.(Core|Jdbc|Protobuf|Polyglot|Policy|Contracts|Integration)Test",
+        "dev.elide.truffledata.(Core|Jdbc|JdbcLifecycle|Protobuf|Polyglot|Policy|Contracts|Integration)Test",
     ],
     data = [
         "//bazel:java.bzl",
@@ -189,7 +190,6 @@ java_test(
     tags = [
         "external",
         "manual",
-        "no-remote-exec",
     ],
     use_testrunner = False,
     runtime_deps = [
