@@ -1,6 +1,7 @@
 package dev.elide.truffledata.protobuf;
 
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
+import com.oracle.truffle.api.dsl.*;
 import com.oracle.truffle.api.library.*;
 import com.oracle.truffle.api.nodes.UnexpectedResultException;
 import dev.elide.truffledata.*;
@@ -45,7 +46,7 @@ public final class ProtoRow extends AbstractRow {
   }
 
   private long scalar(int index) {
-    Objects.checkIndex(index, plan.size());
+    Objects.checkIndex(index, descriptor.size());
     Scalars scalars = (Scalars) storage;
     return index == 0 ? scalars.first() : scalars.second();
   }
@@ -64,15 +65,36 @@ public final class ProtoRow extends AbstractRow {
     return descriptor;
   }
 
-  @ExportMessage
-  Object read(int index, @CachedLibrary("this.storage") DataLibrary data) {
-    return present == null ? scalar(index) : data.read(storage, index);
+  @Idempotent
+  boolean compact() {
+    return present == null;
   }
 
   @ExportMessage
-  long readLong(int index, @CachedLibrary("this.storage") DataLibrary data)
-      throws UnexpectedResultException {
-    return present == null ? scalar(index) : data.readLong(storage, index);
+  static class Read {
+    @Specialization(guards = "row.compact()")
+    static Object scalar(ProtoRow row, int index) {
+      return row.scalar(index);
+    }
+
+    @Specialization(guards = "!row.compact()")
+    static Object stored(ProtoRow row, int index, @CachedLibrary("row.storage") DataLibrary data) {
+      return data.read(row.storage, index);
+    }
+  }
+
+  @ExportMessage
+  static class ReadLong {
+    @Specialization(guards = "row.compact()")
+    static long scalar(ProtoRow row, int index) {
+      return row.scalar(index);
+    }
+
+    @Specialization(guards = "!row.compact()")
+    static long stored(ProtoRow row, int index, @CachedLibrary("row.storage") DataLibrary data)
+        throws UnexpectedResultException {
+      return data.readLong(row.storage, index);
+    }
   }
 
   @ExportMessage
