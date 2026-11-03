@@ -19,6 +19,18 @@ public final class Consumer {
     if (!interop.readMember(proto.snapshot(StringValue.of("hello")), "value").equals("hello")) {
       throw new AssertionError("protobuf interop");
     }
+    var plan =
+        dev.elide.truffledata.protobuf.ProtoCompiler.compile(
+            null, StringValue.getDescriptor(), Limits.DEFAULT, 8, 4096);
+    var source =
+        dev.elide.truffledata.protobuf.ProtoCompiler.bind(plan, StringValue.getDescriptor());
+    var nativeRow = plan.decode(StringValue.of("hello").toByteArray());
+    if (!nativeRow.has(0) || !interop.readMember(nativeRow, "value").equals("hello"))
+      throw new AssertionError("native protobuf publication");
+    if (!interop.readMember(source.parseJson("\"hello\""), "value").equals("hello"))
+      throw new AssertionError("ProtoJSON publication dependencies");
+    if (!interop.readMember(source.parseText("value: 'hello'"), "value").equals("hello"))
+      throw new AssertionError("protobuf text publication");
     Class.forName("org.sqlite.JDBC");
     Class.forName("org.postgresql.Driver");
     Class.forName("com.mysql.cj.jdbc.Driver");

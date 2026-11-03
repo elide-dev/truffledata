@@ -66,7 +66,8 @@
     "deps": [
       "//core:core",
       "@maven//:org_graalvm_truffle_truffle_api",
-      "@maven//:com_google_protobuf_protobuf_java"
+      "@maven//:com_google_protobuf_protobuf_java",
+      "@maven//:com_google_protobuf_protobuf_java_util"
     ],
     "testonly": false,
     "plugins": []
@@ -89,7 +90,8 @@
       "//jdbc-postgresql:jdbc-postgresql",
       "@maven//:org_postgresql_postgresql",
       "@maven//:org_xerial_sqlite_jdbc",
-      "//benchmarks:benchmarks"
+      "//benchmarks:benchmarks",
+      "//tests:native_contracts"
     ],
     "testonly": true,
     "plugins": []
@@ -99,6 +101,7 @@
     "root": "src/main/java",
     "name": "benchmarks",
     "deps": [
+      "//benchmarks/fixtures:contracts",
       "//core:core",
       "@maven//:org_graalvm_truffle_truffle_api",
       "@maven//:org_openjdk_jmh_jmh_core",

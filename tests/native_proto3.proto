@@ -1,0 +1,29 @@
+syntax = "proto3";
+package truffledata.lossless;
+message Sample {
+  int32 count = 1;
+  optional int32 explicit_count = 2;
+  bytes blob = 3;
+  enum Status { ZERO = 0; READY = 1; }
+  Status status = 4;
+  uint32 u32 = 5;
+  uint64 u64 = 6;
+  map<string, Child> children = 7;
+  message Child { int32 a = 1; string b = 2; Child child = 3; }
+  Child child = 8;
+  repeated sint32 numbers = 9;
+  oneof choice { int32 selected = 10; Child selected_child = 11; }
+  float f = 12;
+  double d = 13;
+  bool flag = 14;
+  string text = 15;
+  fixed32 fixed32 = 16;
+  fixed64 fixed64 = 17;
+  sfixed32 sfixed32 = 18;
+  sfixed64 sfixed64 = 19;
+  sint64 sint64 = 20;
+  int64 int64 = 21;
+  repeated Status statuses = 22;
+  repeated bytes blobs = 23;
+  map<uint64, int32> counts = 24;
+}

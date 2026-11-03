@@ -10,6 +10,10 @@ ACCESS_CLASSES = {
 }
 
 
+ACCESS_SOURCES = {f'core/src/main/java/dev/elide/truffledata/{name}.java' for name in ACCESS_CLASSES} | {
+    'protobuf/src/main/java/dev/elide/truffledata/protobuf/ProtoRow.java',
+}
+
 def analyze(text):
     summary = {}
     for record in text.split('end_of_record'):
@@ -43,8 +47,7 @@ def analyze(text):
 
 
 def enforce(summary):
-    for name in sorted(ACCESS_CLASSES):
-        source = f'core/src/main/java/dev/elide/truffledata/{name}.java'
+    for source in sorted(ACCESS_SOURCES):
         entry = summary.get(source)
         if not entry or not entry['methods_total']:
             raise ValueError('Missing access-method coverage: ' + source)

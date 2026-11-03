@@ -10,6 +10,7 @@
     "com.google.guava:guava": 1943808618,
     "com.google.j2objc:j2objc-annotations": 2003271689,
     "com.google.protobuf:protobuf-java": 1938090909,
+    "com.google.protobuf:protobuf-java-util": -1594565472,
     "com.h2database:h2": 2037113602,
     "com.mysql:mysql-connector-j": -644338065,
     "com.uber.nullaway:nullaway": 590882514,
@@ -49,6 +50,7 @@
     "com.google.guava:listenablefuture": 1588902908,
     "com.google.j2objc:j2objc-annotations": -2074422376,
     "com.google.protobuf:protobuf-java": -884647484,
+    "com.google.protobuf:protobuf-java-util": 1712778529,
     "com.h2database:h2": -1401264984,
     "com.mysql:mysql-connector-j": 149885885,
     "com.uber.nullaway:nullaway": 2093849653,
@@ -201,6 +203,12 @@
     "com.google.protobuf:protobuf-java": {
       "shasums": {
         "jar": "26434a93561a1a44bf7157b2630fa73a5b4d8df20e94df167bc03fcd14abd7e4"
+      },
+      "version": "4.36.1"
+    },
+    "com.google.protobuf:protobuf-java-util": {
+      "shasums": {
+        "jar": "90722adb6fa80fb0dba8d49602abae2d14f8483e922cae29431d78edbfd4d040"
       },
       "version": "4.36.1"
     },
@@ -516,6 +524,12 @@
       "com.google.j2objc:j2objc-annotations",
       "org.jspecify:jspecify"
     ],
+    "com.google.protobuf:protobuf-java-util": [
+      "com.google.code.findbugs:jsr305",
+      "com.google.code.gson:gson",
+      "com.google.errorprone:error_prone_annotations",
+      "com.google.protobuf:protobuf-java"
+    ],
     "com.mysql:mysql-connector-j": [
       "com.google.protobuf:protobuf-java"
     ],
@@ -750,6 +764,9 @@
     "com.google.protobuf:protobuf-java": [
       "com.google.protobuf",
       "com.google.protobuf.compiler"
+    ],
+    "com.google.protobuf:protobuf-java-util": [
+      "com.google.protobuf.util"
     ],
     "com.h2database:h2": [
       "org.h2",
@@ -1677,6 +1694,7 @@
       "com.google.guava:listenablefuture",
       "com.google.j2objc:j2objc-annotations",
       "com.google.protobuf:protobuf-java",
+      "com.google.protobuf:protobuf-java-util",
       "com.h2database:h2",
       "com.mysql:mysql-connector-j",
       "com.uber.nullaway:nullaway",
@@ -1740,6 +1758,7 @@
       "com.google.guava:listenablefuture",
       "com.google.j2objc:j2objc-annotations",
       "com.google.protobuf:protobuf-java",
+      "com.google.protobuf:protobuf-java-util",
       "com.h2database:h2",
       "com.mysql:mysql-connector-j",
       "com.uber.nullaway:nullaway",

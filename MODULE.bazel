@@ -8,8 +8,8 @@ bazel_dep(name = "rules_cc", version = "0.2.26")
 bazel_dep(name = "rules_java", version = "9.9.0")
 bazel_dep(name = "rules_jvm_external", version = "7.1")
 bazel_dep(name = "rules_shell", version = "0.8.0")
+bazel_dep(name = "protobuf", version = "33.4")
 
-bazel_dep(name = "protobuf", version = "33.4", dev_dependency = True)
 bazel_dep(name = "gazelle", version = "0.47.0", dev_dependency = True)
 bazel_dep(name = "rules_go", version = "0.59.0", dev_dependency = True)
 
@@ -137,6 +137,7 @@ maven.install(
         "com.google.errorprone:error_prone_core:2.50.0",
         "com.google.errorprone:error_prone_type_annotations:2.37.0",
         "com.google.protobuf:protobuf-java:4.36.1",
+        "com.google.protobuf:protobuf-java-util:4.36.1",
         "com.h2database:h2:2.3.232",
         "org.xerial:sqlite-jdbc:3.53.4.0",
         "org.postgresql:postgresql:42.7.14",

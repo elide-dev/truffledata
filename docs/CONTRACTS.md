@@ -40,7 +40,7 @@ For `.proto` sources, use the normal Protobuf compiler and include imports:
 protoc --include_imports --descriptor_set_out=model.pb model.proto
 ```
 
-Pass the parsed `FileDescriptorSet` to `ProtobufAdapter.fromDescriptorSet(language, set, "package.Message", limits, maxDepth)`. Use the returned adapter's `descriptor()` when decoding dynamic messages; descriptor identity is deliberately enforced. The data runtime consumes compiler output rather than implementing another Protobuf parser.
+Pass the parsed `FileDescriptorSet` to `ProtobufAdapter.fromDescriptorSet(language, set, "package.Message", limits, maxDepth)`. Use the returned adapter's `descriptor()` when decoding dynamic messages; descriptor identity is deliberately enforced. This is the compatibility tabular adapter. The lossless path below also accepts wire bytes directly, without constructing protobuf-java messages.
 
 ## JDBC and SQLite
 
@@ -183,3 +183,58 @@ Acceptance compiles the upstream v1.1.0 `validate.proto` at commit
 protoc. Tests cover registered and unknown options, Unicode, presence/ignore cases,
 excluded ranges, static narrowing, rejected values and wire-decoded batch snapshots.
 See [upstream rule definitions](https://github.com/bufbuild/protovalidate/blob/4abe5a0b321404d9c825a6c6ca5e384fd3946018/proto/protovalidate/buf/validate/validate.proto).
+
+
+## Lossless native protobuf messages
+
+`ProtoPlan` and `ProtoRow` are additive to `ProtobufAdapter`; the original tabular enum-name and optional-field behavior remains available. Plans contain immutable field numbers, ordinals, scalar kinds, explicit presence, declared defaults, oneof groups, map/repeated shape, enum names/numbers and openness, integer widths, and nested type names. Neither a plan nor a native row retains a protobuf-java descriptor or message.
+
+```java
+var plan = ProtoCompiler.compile(language, MyMessage.getDescriptor(), limits, 32, maxWireBytes);
+var source = ProtoCompiler.bind(plan, MyMessage.getDescriptor()); // bind once
+ProtoRow fromMessage = source.snapshot(message);               // MessageOrBuilder, including builders
+ProtoRow fromWire = plan.decode(bytes);                         // direct bounded wire parser
+ProtoRow fromJson = source.parseJson(json);                     // ProtoJSON
+ProtoRow fromText = source.parseText(text);                     // protobuf text format
+ProtoRow constructed = plan.newBuilder().set(countOrdinal, 42L).build();
+byte[] wire = plan.encode(constructed);
+```
+
+For runtime schemas, the `ProtoCompiler.compile` overload accepts a `FileDescriptorSet` and fully qualified message name, with the same language owner and budgets. `ProtoCompiler.bind` verifies the entire reachable graph once and enforces descriptor identity on subsequent snapshots. `ProtoCompiler.snapshot` is a convenient one-shot form; reuse a bound source for repeated ingestion. Schemas containing proto2 maps with closed-enum values use a preflighted serialization/decode compatibility path for source objects: protobuf-java `DynamicMessage` otherwise gives those unknown entries different semantics from wire parsing. This uncommon case incurs a temporary wire copy. Host construction accepts normalized TruffleData values. `uint64` and `fixed64` use `ExactNumber`, including small values; `Values.normalize(BigInteger)` constructs one. Builders are mutable host objects and must not be shared concurrently. Built rows are immutable snapshots, including binary payloads.
+
+Read values using cached `DataLibrary` dispatch, as with other rows. `row.has(ordinal)` reports protobuf presence separately: explicit fields retain their set bit, implicit fields use non-default values, and repeated/map fields use non-emptiness. Absent scalar fields remain readable with declared defaults (including proto2 defaults); an absent message reads `Missing.INSTANCE`. Thus `DataLibrary.isPresent` describes readability, while `ProtoRow.has` describes protobuf presence. Closed-enum unknown numbers remain unknown wire fields; open-enum numbers are returned as signed INT32 values without losing unknown numbers. `FieldPlan.kind() == BYTES` and `DataArray.isBytes()` distinguish binary payloads from numeric repeated fields. Maps remain sequences of typed entry rows with last-key-wins decoding; map construction rejects duplicate keys. Nested message plans are available through `plan.nested(ordinal)`.
+
+The direct binary codec handles proto2/proto3 scalar encodings, packed/unpacked repeated fields, groups, oneofs, recursive messages, singular-message merging, unknown fields, required-field checks, and malformed wire input. Serialization preserves semantics and unknown fields, not the original byte ordering or noncanonical varint spelling. Input is bounded by `maxWireBytes`; depth, cells, and payload budgets are checked before expanding input. UTF-8 strings are validated strictly. Editions, extension ranges, and MessageSet currently fail explicitly when compiling lossless plans. ProtoJSON/text compatibility parsing uses protobuf-java and temporary dynamic builders on the host; input length and lexical nesting are checked first, then the resulting graph receives the same native-row validation. This path does not claim the binary decoder's allocation bound or descriptor-free parsing.
+
+### Compile contracts with protoc and Bazel
+
+```starlark
+load("@truffledata//bazel:protobuf.bzl", "proto_contract_library")
+
+proto_contract_library(
+    name = "contracts",
+    srcs = ["example.proto"],
+    proto_path = "path/to/protos",
+    java_package = "example.data",
+    class_name = "Contracts",
+)
+```
+
+The protoc plugin `//protobuf:protoc-gen-truffledata` emits ordinary Java literals, including imported/reachable types and proto3 optional fields. It does not embed descriptor blobs or invoke `ProtoCompiler` at runtime. Include imported `.proto` inputs in `srcs` under the same declared source root. Each target emits one registry class; use distinct class/package names for multiple registries.
+
+```java
+var model = Contracts.create(language, limits, 32, maxWireBytes);
+var plan = model.type("example.Message");
+var row = plan.decode(bytes);
+```
+
+The same generated class supports static storage with a language owner and batch storage without one. Runtime plan identity remains local to each model/context, with no global descriptor or layout cache. `tests/native_proto2.proto`, `tests/native_proto3.proto`, and `ProtoNativeTest` exercise actual protoc generation, Java compilation, direct decoding, source ingestion, both text formats, and differential round trips against protobuf-java. The shared JVM/Native Image JIT matrix exercises the native row access surface; allocation tests bound retained reads and compact binary ingestion separately.
+
+### Schemaless wire input and native backends
+
+`ProtoWire.decode(bytes, limits, maxDepth, maxWireBytes)` returns an ordered `DataArray` of rows with `number`, `wireType`, and `value`. Duplicate fields stay separate. Varints and fixed-width values expose raw unsigned numeric bits, length-delimited fields remain compact bytes, and groups contain nested wire rows. No schema means no reliable field names, declared signedness, defaults, presence discipline, or distinction between strings, bytes, packed arrays, and embedded messages. Text formats with named fields require a schema.
+
+The direct codec is Java code suitable for JVM and Native Image execution. Buffa/Myna is not a bundled backend. A future optional native decoder should consume the same generated contracts, cross the ABI once per message/batch, and materialize the same native-row semantics. Its ownership contract must keep borrowed Buffa views alive until consumption completes; guest reads must not make a native call per field. Myna can generate direct Substrate VM C bindings and JVM FFM bindings, but those crossings, lifetimes, and platform artifacts need their own tests and measurements before claiming a performance improvement. The current Java path provides the differential oracle and allocation baselines for that experiment.
+
+
+SVM is the primary target for an optional Myna backend: native parser code must be statically linked, with direct generated C bindings and no runtime shared-library discovery. JVM support may use Myna's JVM binding route where the runtime/platform supports it. Backend selection must retain the Java codec when native support is absent or disabled on either runtime. A malformed input or contract failure must propagate, never trigger a retry through a more permissive parser. Native enablement requires differential tests and allocation/ownership checks on JVM and SVM, including an explicit Java-only fallback run. These are requirements for a future backend, not capabilities of a bundled Buffa implementation today.

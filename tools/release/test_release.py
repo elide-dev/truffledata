@@ -28,7 +28,7 @@ class PublicationTest(unittest.TestCase):
                 if module != 'core':
                     expected.add('dev.elide:truffledata-core')
                 if module == 'protobuf':
-                    expected.add('com.google.protobuf:protobuf-java')
+                    expected.update(('com.google.protobuf:protobuf-java', 'com.google.protobuf:protobuf-java-util'))
                 if module == 'jdbc-sqlite':
                     expected.update(('dev.elide:truffledata-jdbc', 'org.xerial:sqlite-jdbc'))
                 if module in ('jdbc-mysql', 'jdbc-postgresql'):
@@ -40,7 +40,7 @@ class PublicationTest(unittest.TestCase):
                         'org.graalvm.truffle:truffle-runtime', 'org.graalvm.polyglot:polyglot',
                         'org.graalvm.js:js-language', 'org.graalvm.python:python-language',
                         'org.graalvm.python:python-resources', 'com.mysql:mysql-connector-j',
-                        'org.postgresql:postgresql', 'org.xerial:sqlite-jdbc', 'com.google.protobuf:protobuf-java'}
+                        'org.postgresql:postgresql', 'org.xerial:sqlite-jdbc', 'com.google.protobuf:protobuf-java', 'com.google.protobuf:protobuf-java-util'}
                     self.assertEqual(root.findtext('m:packaging', namespaces=NAMESPACE), 'pom')
                     self.assertIsNone(root.find('m:dependencies', NAMESPACE))
                     self.assertFalse(Path(str(prefix) + '.jar').exists())

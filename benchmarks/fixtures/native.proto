@@ -1,0 +1,11 @@
+syntax = "proto3";
+package truffledata.benchdata;
+
+message Native {
+  optional int32 f0 = 1;
+  double f1 = 2;
+  bool f2 = 3;
+  bytes f3 = 4;
+  enum Status { ZERO = 0; }
+  Status f4 = 5;
+}

@@ -16,7 +16,10 @@ COMMON = [
 
 [maven_publication(
     name = module,
-    dependencies = COMMON + ([] if module == "core" else ["dev.elide:truffledata-core:{version}"]) + (["com.google.protobuf:protobuf-java:4.36.1"] if module == "protobuf" else []) + ([
+    dependencies = COMMON + ([] if module == "core" else ["dev.elide:truffledata-core:{version}"]) + ([
+        "com.google.protobuf:protobuf-java:4.36.1",
+        "com.google.protobuf:protobuf-java-util:4.36.1",
+    ] if module == "protobuf" else []) + ([
         "dev.elide:truffledata-jdbc:{version}",
         "org.xerial:sqlite-jdbc:3.53.4.0",
     ] if module == "jdbc-sqlite" else []) + ([
@@ -51,6 +54,7 @@ maven_bom(
         "org.postgresql:postgresql:42.7.14",
         "org.xerial:sqlite-jdbc:3.53.4.0",
         "com.google.protobuf:protobuf-java:4.36.1",
+        "com.google.protobuf:protobuf-java-util:4.36.1",
     ] + [coordinate + ":25.5.5-elide.5" for coordinate in [
         "org.graalvm.truffle:truffle-runtime",
         "org.graalvm.polyglot:polyglot",
@@ -105,7 +109,10 @@ sh_test(
     deps = [
         "@maven//:org_graalvm_truffle_truffle_api",
         "@maven//:org_jspecify_jspecify",
-    ] + ([] if module == "core" else [":core_import"]) + (["@maven//:com_google_protobuf_protobuf_java"] if module == "protobuf" else []) + ([
+    ] + ([] if module == "core" else [":core_import"]) + ([
+        "@maven//:com_google_protobuf_protobuf_java",
+        "@maven//:com_google_protobuf_protobuf_java_util",
+    ] if module == "protobuf" else []) + ([
         ":jdbc_import",
         "@maven//:org_xerial_sqlite_jdbc",
     ] if module == "jdbc-sqlite" else []) + ([

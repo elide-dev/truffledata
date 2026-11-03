@@ -1,0 +1,10 @@
+load("//bazel:protobuf.bzl", "proto_contract_library")
+
+proto_contract_library(
+    name = "contracts",
+    srcs = ["native.proto"],
+    class_name = "NativeContracts",
+    java_package = "dev.elide.truffledata.bench.generated",
+    proto_path = "benchmarks/fixtures",
+    visibility = ["//visibility:public"],
+)

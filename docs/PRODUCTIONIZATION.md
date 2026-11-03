@@ -269,3 +269,33 @@ https://app.buildbuddy.io/invocation/83907085-0e65-43c0-9cc8-e8c51f628bc1.
 [Supported rules and explicit omissions](CONTRACTS.md#protovalidate-structural-annotations)
 prevent equating these facts with full Protovalidate validation. Native execution of
 the annotation-enabled path and broader schema features remain acceptance work.
+
+Lossless protobuf increment: `ProtoPlan`/`ProtoRow` add protobuf type metadata,
+separate presence, compact bytes, numeric enums, unsigned widths, native construction,
+and a bounded direct Java wire codec. Runtime descriptors and build-time generated
+contracts share this model; generated contracts do not initialize descriptors.
+`MessageOrBuilder`, ProtoJSON, and protobuf text format are host ingestion routes.
+The latter two use protobuf-java compatibility parsing, not a new native text parser.
+Schemaless input exposes wire fields without guessing their declared types.
+
+The shared JVM/SVM matrix now includes generated contracts with static and batch
+storage, and allocation gates cover retained reads and binary ingestion. `ProtoRow`
+also joins the required complete executable-method coverage surface. These checks
+cover the pinned runtime and operation inventory; they are not a universal guarantee
+about arbitrary guest call graphs. Editions, extension ranges, and MessageSet remain
+explicitly unsupported by lossless plan compilation. The existing tabular adapter is
+unchanged. Buffa/Myna remains an optional future backend, with SVM static linkage,
+JVM support where available, and the Java codec as the required fallback; see the
+[backend contract](CONTRACTS.md#schemaless-wire-input-and-native-backends).
+
+Validation for this increment: all 13 targets, including Native Image smoke and the
+453-case compiled operation matrix, passed at
+https://app.buildbuddy.io/invocation/b0c7a9e2-657e-45bd-bbb0-8d6bdb668f2e.
+Static protobuf reads measured 0.000064 bytes/read; decoding a 65,540-byte binary
+message allocated 66,632 bytes with static storage (67,848 with batch storage),
+within the enforced payload-plus-16-KiB ingestion budget.
+Coverage passed at
+https://app.buildbuddy.io/invocation/6ffde015-dad0-445f-8e9e-9856ae529135:
+ProtoCodec 305/333 lines and 25/25 methods; ProtoCompiler 240/264 lines and
+22/22 methods; ProtoRow 97/104 lines and 20/20 methods. The complete access-method
+gate passed, and CI uploads LCOV and JUnit reports through the existing Codecov jobs.

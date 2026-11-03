@@ -6,7 +6,13 @@ package(default_visibility = ["//visibility:public"])
 data_java_library(
     name = "protobuf",
     srcs = [
+        "src/main/java/dev/elide/truffledata/protobuf/ContractPlugin.java",
         "src/main/java/dev/elide/truffledata/protobuf/NativeMetadata.java",
+        "src/main/java/dev/elide/truffledata/protobuf/ProtoCodec.java",
+        "src/main/java/dev/elide/truffledata/protobuf/ProtoCompiler.java",
+        "src/main/java/dev/elide/truffledata/protobuf/ProtoPlan.java",
+        "src/main/java/dev/elide/truffledata/protobuf/ProtoRow.java",
+        "src/main/java/dev/elide/truffledata/protobuf/ProtoWire.java",
         "src/main/java/dev/elide/truffledata/protobuf/ProtobufAdapter.java",
         "src/main/java/dev/elide/truffledata/protobuf/ProtovalidateContracts.java",
         "src/main/java/dev/elide/truffledata/protobuf/package-info.java",
@@ -14,6 +20,7 @@ data_java_library(
     deps = [
         "//core",
         "@maven//:com_google_protobuf_protobuf_java",
+        "@maven//:com_google_protobuf_protobuf_java_util",
         "@maven//:org_graalvm_truffle_truffle_api",
     ],
 )
@@ -28,5 +35,11 @@ exports_files(["BUILD.bazel"])
 java_binary(
     name = "native_metadata",
     main_class = "dev.elide.truffledata.protobuf.NativeMetadata",
+    runtime_deps = [":protobuf"],
+)
+
+java_binary(
+    name = "protoc-gen-truffledata",
+    main_class = "dev.elide.truffledata.protobuf.ContractPlugin",
     runtime_deps = [":protobuf"],
 )

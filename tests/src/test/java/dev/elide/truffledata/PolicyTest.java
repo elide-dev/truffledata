@@ -30,6 +30,10 @@ class PolicyTest {
             Map.entry("JdbcCursor.java", 7),
             Map.entry("JdbcSource.java", 6),
             Map.entry("ProtobufAdapter.java", 5),
+            Map.entry("ProtoPlan.java", 6),
+            Map.entry("ProtoRow.java", 3),
+            Map.entry("ProtoCompiler.java", 8),
+            Map.entry("ProtoWire.java", 1),
             Map.entry("NativeMetadata.java", 1),
             Map.entry("JdbcContracts.java", 1),
             Map.entry("JdbcContract.java", 1),
@@ -41,6 +45,8 @@ class PolicyTest {
     Pattern limit = Pattern.compile("limit\\s*=\\s*\"(\\d+)\"");
     Map<String, Integer> exportedMessages =
         Map.of(
+            "ProtoRow.java",
+            5,
             "AbstractRow.java",
             8,
             "Batch.java",

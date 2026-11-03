@@ -37,6 +37,30 @@ class IntegrationTest {
   }
 
   @Test
+  void generatedNativeContractsDecodeDirectlyIntoJavaScriptAndPython() {
+    try (Context context = context()) {
+      context.enter();
+      try {
+        var plan =
+            dev.elide.truffledata.generated.TruffleDataContracts.create(
+                    TestLanguage.current().language(), Limits.DEFAULT, 16, 4096)
+                .type("truffledata.lossless.Sample");
+        var row = plan.decode(new byte[] {8, 7, 26, 1, (byte) 255, 32, 99, 66, 2, 8, 3});
+        guests(
+            context,
+            row,
+            "row.count + row.blob[0] + row.status + row.child.a + row.explicit_count",
+            "row[0] + row.blob[0] + row.status + row.child.a + row.explicit_count",
+            364);
+        assertFalse(row.has(1));
+        assertTrue(DataLibrary.factory().getUncached().isPresent(row, 1));
+      } finally {
+        context.leave();
+      }
+    }
+  }
+
+  @Test
   void generatedProtobufAndSerializedDescriptorSetUseStaticNestedRecords() throws Exception {
     // Real protoc-generated classes, from google/protobuf/type.proto in protobuf-java.
     Type input =

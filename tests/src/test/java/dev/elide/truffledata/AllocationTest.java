@@ -69,6 +69,45 @@ class AllocationTest {
     }
   }
 
+  @Test
+  void nativeProtobufReadsAndBinaryIngestionStayWithinAllocationBudgets() {
+    try (Context context = Context.newBuilder("td-test").allowExperimentalOptions(true).build()) {
+      context.initialize("td-test");
+      context.enter();
+      try {
+        for (boolean useStatic : new boolean[] {false, true}) {
+          var plan =
+              dev.elide.truffledata.generated.TruffleDataContracts.create(
+                      useStatic ? TestLanguage.current().language() : null,
+                      Limits.DEFAULT,
+                      16,
+                      1024 * 1024)
+                  .type("truffledata.lossless.Sample");
+          check(
+              "protobuf-" + (useStatic ? "static" : "batch"),
+              plan.newBuilder().set(0, 1000L).build());
+          byte[] wire =
+              plan.encode(plan.newBuilder().set(2, DataArray.copyOfBytes(new byte[65536])).build());
+          ThreadMXBean bean = (ThreadMXBean) ManagementFactory.getThreadMXBean();
+          bean.setThreadAllocatedMemoryEnabled(true);
+          for (int i = 0; i < 100; i++) retained = plan.decode(wire);
+          long before = bean.getThreadAllocatedBytes(Thread.currentThread().threadId());
+          for (int i = 0; i < 100; i++) retained = plan.decode(wire);
+          double bytes =
+              (bean.getThreadAllocatedBytes(Thread.currentThread().threadId()) - before) / 100.0;
+          System.out.printf(
+              "ALLOCATION protobuf-wire static=%s %.3f bytes/message payload=%d%n",
+              useStatic, bytes, wire.length);
+          assertTrue(
+              bytes <= wire.length + 16384,
+              "Binary ingestion must not expand or repeatedly copy byte payloads");
+        }
+      } finally {
+        context.leave();
+      }
+    }
+  }
+
   private static final class NestedRoot extends RootNode {
     @Child private DataLibrary outer = DataLibrary.factory().createDispatched(3);
     @Child private ReadLongNode leaf = ReadLongNode.create();

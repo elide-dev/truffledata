@@ -1,12 +1,12 @@
 import unittest
-from coverage_contract import ACCESS_CLASSES, analyze, enforce
+from coverage_contract import ACCESS_SOURCES, analyze, enforce
 
 
 class CoverageContractTest(unittest.TestCase):
     def report(self):
-        return ''.join(f'SF:core/src/main/java/dev/elide/truffledata/{name}.java\n'
+        return ''.join(f'SF:{source}\n'
                        'FNDA:1,Example::read ()V\nFNDA:0,Example::<init> ()V\n'
-                       'DA:1,1\nDA:2,0\nend_of_record\n' for name in ACCESS_CLASSES)
+                       'DA:1,1\nDA:2,0\nend_of_record\n' for source in ACCESS_SOURCES)
 
     def test_reports_gaps_and_excludes_only_constructors(self):
         summary = analyze(self.report())
