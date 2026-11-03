@@ -257,3 +257,15 @@ This improves shared-model evidence; general consumer Native Image, API compatib
 transitive ownership contracts and actual Elide embedding remain open. Protovalidate
 annotation translation is now in scope: supported rules must respect presence/ignore
 semantics, while unrepresentable rules cannot become compiler assumptions.
+
+Protovalidate increment: opt-in annotation compilation now derives presence-bearing
+required facts, integer intervals and string/bytes/repeated lengths from real upstream
+options. Tests use a SHA-pinned v1.1.0 schema compiled with Bazel protoc and exercise
+both registered extensions and unknown descriptor-set options. Integer bounds select
+narrow static storage; ingestion still enforces them. All eleven targets passed at
+https://app.buildbuddy.io/invocation/cbeb753f-713f-4192-a89e-85dab6a88ebd.
+The registered-extension and source-descriptor acceptance additions passed at
+https://app.buildbuddy.io/invocation/83907085-0e65-43c0-9cc8-e8c51f628bc1.
+[Supported rules and explicit omissions](CONTRACTS.md#protovalidate-structural-annotations)
+prevent equating these facts with full Protovalidate validation. Native execution of
+the annotation-enabled path and broader schema features remain acceptance work.

@@ -9,6 +9,7 @@ bazel_dep(name = "rules_java", version = "9.9.0")
 bazel_dep(name = "rules_jvm_external", version = "7.1")
 bazel_dep(name = "rules_shell", version = "0.8.0")
 
+bazel_dep(name = "protobuf", version = "33.4", dev_dependency = True)
 bazel_dep(name = "gazelle", version = "0.47.0", dev_dependency = True)
 bazel_dep(name = "rules_go", version = "0.59.0", dev_dependency = True)
 
@@ -217,4 +218,13 @@ http_archive(
     strip_prefix = "instrument-hooks-1ec92c8c9db59db2d0adc37f47d003d3db4e1c64",
     type = "tar.gz",
     urls = ["https://codeload.github.com/CodSpeedHQ/instrument-hooks/tar.gz/1ec92c8c9db59db2d0adc37f47d003d3db4e1c64"],
+)
+
+http_file = use_repo_rule("@bazel_tools//tools/build_defs/repo:http.bzl", "http_file")
+
+http_file(
+    name = "protovalidate_schema",
+    downloaded_file_path = "validate.proto",
+    sha256 = "901bd5ad3bbbdcf84850132b8f012235a2d08580c77a7ed98069fae00b2d2074",
+    urls = ["https://raw.githubusercontent.com/bufbuild/protovalidate/4abe5a0b321404d9c825a6c6ca5e384fd3946018/proto/protovalidate/buf/validate/validate.proto"],
 )

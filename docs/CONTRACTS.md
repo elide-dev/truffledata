@@ -131,3 +131,55 @@ access. Mutable arrays/buffers are copied once into private storage; subsequent
 rows can share the immutable `DataArray`. SQLite and Protobuf snapshots use this
 representation instead of expanding bytes into boxed object arrays. This keeps
 retained data independent of source mutation while reducing ingestion allocation.
+
+## Protovalidate structural annotations
+
+Opt in when constructing a Protobuf adapter, using the final boolean argument:
+
+```java
+var adapter = new ProtobufAdapter(language, descriptor, limits, 16, Map.of(), true);
+// Or consume protoc --descriptor_set_out --include_imports output directly:
+var adapterFromSources = ProtobufAdapter.fromDescriptorSet(
+    language, descriptorSet, "example.Order", limits, 16, true);
+```
+
+The compiler reads `buf.validate.field` once while creating schemas. Registered custom
+options and descriptor-set options retained as unknown fields are both supported. The
+latter require the imported validation descriptor; options are decoded as DynamicMessage,
+so consumers do not need the Protovalidate Java/CEL runtime just to derive these facts.
+Existing constructors keep annotation translation disabled. All imported facts are
+still enforced on ingestion in both static and batch representations.
+
+| Annotation | Derived contract |
+| --- | --- |
+| `required` on a presence-bearing field | Field cannot be missing |
+| Signed integer and uint32 `const`, `gt/gte`, `lt/lte` | Inclusive INT64 range intersected with the Protobuf width |
+| String `len`, `min_len`, `max_len` | Unicode code-point length, not UTF-16 units or UTF-8 bytes |
+| Bytes `len`, `min_len`, `max_len` | Unsigned-byte element count |
+| Repeated `min_items`, `max_items` | Sequence element count intersected with the existing structural limit |
+
+These bounds participate in ordinary storage selection: int32 `[0,127]` uses a byte
+static property. The same rules apply to nested descriptors. Existing explicit length
+contracts are intersected when their units agree; mixing units fails construction
+rather than dropping a constraint. Impossible represented bounds fail construction.
+
+`IGNORE_ALWAYS` disables annotation-derived facts, including `required`.
+`IGNORE_IF_ZERO_VALUE` on an implicit-presence field makes its rules conditional, so
+no unconditional annotation facts are derived. On a presence-bearing field it preserves
+the default absent-field behavior. Required implicit-presence fields mean non-default,
+not merely non-null; that rule remains external. Reversed numeric bounds express an
+excluded interval and are not translated into a contiguous range.
+
+This is **not complete Protovalidate validation**. General CEL, patterns/formats,
+float/uint64 bounds, enum membership, collection item/key/value rules, oneof rules,
+and implicit-presence non-default requirements still need the caller's validator.
+Map cardinality is also external: TruffleData represents map entry sequences, which can
+retain duplicate keys in dynamic messages, so entry count is not always logical map size.
+Strict mode audits the facts actually represented in TruffleData; it does not add the
+omitted validator semantics. A snapshot succeeding does not prove full Protovalidate validity.
+
+Acceptance compiles the upstream v1.1.0 `validate.proto` at commit
+`4abe5a0b321404d9c825a6c6ca5e384fd3946018`, SHA-256 verified, through Bazel's pinned
+protoc. Tests cover registered and unknown options, Unicode, presence/ignore cases,
+excluded ranges, static narrowing, rejected values and wire-decoded batch snapshots.
+See [upstream rule definitions](https://github.com/bufbuild/protovalidate/blob/4abe5a0b321404d9c825a6c6ca5e384fd3946018/proto/protovalidate/buf/validate/validate.proto).

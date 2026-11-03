@@ -15,6 +15,7 @@ import org.jspecify.annotations.Nullable;
 /** Snapshot adapter. Reflection/conversion happens once at ingestion, never in field read nodes. */
 public final class ProtobufAdapter {
   private final Descriptor descriptor;
+  private final boolean protovalidate;
   private final Limits limits;
   private final int maxDepth;
   private final Schema schema;
@@ -42,6 +43,19 @@ public final class ProtobufAdapter {
       Limits limits,
       int maxDepth,
       Map<String, Constraints.Length> lengthContracts) {
+    this(language, descriptor, limits, maxDepth, lengthContracts, false);
+  }
+
+  /** Opt in to supported structural buf.validate rules; general CEL validation stays external. */
+  @TruffleBoundary
+  public ProtobufAdapter(
+      @Nullable TruffleLanguage<?> language,
+      Descriptor descriptor,
+      Limits limits,
+      int maxDepth,
+      Map<String, Constraints.Length> lengthContracts,
+      boolean protovalidate) {
+    this.protovalidate = protovalidate;
     this.lengthContracts = Map.copyOf(lengthContracts);
     if (maxDepth < 1 || maxDepth > 128)
       throw new IllegalArgumentException("Depth must be between 1 and 128");
@@ -132,6 +146,10 @@ public final class ProtobufAdapter {
         fields.set(i, field.withConstraints(field.constraints().withLength(length)));
       }
     }
+    if (protovalidate) {
+      for (int i = 0; i < fields.size(); i++)
+        fields.set(i, ProtovalidateContracts.refine(descriptor.getFields().get(i), fields.get(i)));
+    }
     return new Schema(descriptor.getFullName(), fields);
   }
 
@@ -177,6 +195,19 @@ public final class ProtobufAdapter {
       Limits limits,
       int maxDepth)
       throws DescriptorValidationException {
+    return fromDescriptorSet(language, set, messageName, limits, maxDepth, false);
+  }
+
+  /** Descriptor-set loading with opt-in structural Protovalidate contract translation. */
+  @TruffleBoundary
+  public static ProtobufAdapter fromDescriptorSet(
+      @Nullable TruffleLanguage<?> language,
+      FileDescriptorSet set,
+      String messageName,
+      Limits limits,
+      int maxDepth,
+      boolean protovalidate)
+      throws DescriptorValidationException {
     if (set.getSerializedSize() > limits.maxStringBytes())
       throw new ContractViolation("Descriptor byte budget exceeded");
     if (set.getFileCount() > limits.maxColumns())
@@ -205,7 +236,7 @@ public final class ProtobufAdapter {
     while (!messages.isEmpty()) {
       Descriptor candidate = messages.removeFirst();
       if (candidate.getFullName().equals(messageName))
-        return new ProtobufAdapter(language, candidate, limits, maxDepth);
+        return new ProtobufAdapter(language, candidate, limits, maxDepth, Map.of(), protovalidate);
       messages.addAll(candidate.getNestedTypes());
     }
     throw new ContractViolation("Unknown message: " + messageName);

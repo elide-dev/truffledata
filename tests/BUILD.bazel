@@ -47,6 +47,7 @@ java_test(
         "dev.elide.truffledata.(Core|Jdbc|JdbcLifecycle|Protobuf|Polyglot|Policy|Contracts|Integration)Test",
     ],
     data = [
+        ":validation_descriptors",
         "//bazel:java.bzl",
         "//core:sources",
         "//jdbc:sources",
@@ -169,6 +170,7 @@ java_test(
         "dev.elide.truffledata.RealDriversTest",
     ],
     data = [
+        ":validation_descriptors",
         "//bazel:java.bzl",
         "//core:sources",
         "//jdbc:sources",
@@ -203,4 +205,18 @@ java_test(
         "@maven//:org_graalvm_truffle_truffle_runtime",
         "@maven//:org_xerial_sqlite_jdbc",
     ],
+)
+
+genrule(
+    name = "validation_descriptors",
+    testonly = True,
+    srcs = [
+        "validation.proto",
+        "@protovalidate_schema//file",
+        "@protobuf//:descriptor_proto_srcs",
+        "@protobuf//:well_known_type_protos",
+    ],
+    outs = ["validation.pb"],
+    cmd = "$(location @protobuf//:protoc) --proto_path=tests --proto_path=$$(dirname $(location @protovalidate_schema//file)) --proto_path=$$(dirname $(location @protobuf//:descriptor_proto_srcs))/../.. --include_imports --descriptor_set_out=$@ $(location validation.proto)",
+    tools = ["@protobuf//:protoc"],
 )

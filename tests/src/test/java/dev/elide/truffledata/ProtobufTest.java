@@ -13,6 +13,163 @@ import org.junit.jupiter.api.Test;
 
 class ProtobufTest {
   @Test
+  void protovalidateOptionsCompileFromRealDescriptorSetWithUnknownExtensions() throws Exception {
+    var file =
+        java.nio.file.Path.of(
+            java.util.Objects.requireNonNull(System.getenv("TEST_SRCDIR")),
+            java.util.Objects.requireNonNull(System.getenv("TEST_WORKSPACE")),
+            "tests/validation.pb");
+    var set = FileDescriptorSet.parseFrom(java.nio.file.Files.readAllBytes(file));
+    try (var context = org.graalvm.polyglot.Context.newBuilder("td-test").build()) {
+      context.initialize("td-test");
+      context.enter();
+      try {
+        var plain =
+            ProtobufAdapter.fromDescriptorSet(
+                TestLanguage.current().language(),
+                set,
+                "truffledata.validation.Sample",
+                Limits.DEFAULT,
+                16);
+        var descriptor = plain.descriptor();
+        var adapter =
+            new ProtobufAdapter(
+                TestLanguage.current().language(),
+                descriptor,
+                Limits.DEFAULT,
+                16,
+                java.util.Map.of(),
+                true);
+        var schema = adapter.schema();
+        assertFalse(schema.field(0).optional());
+        assertEquals(
+            new Constraints.Length(2, 3, Constraints.LengthUnit.CODE_POINTS),
+            schema.field(0).constraints().length());
+        assertEquals(
+            new Constraints.IntegerRange(0, 127), schema.field(1).constraints().integerRange());
+        assertNull(
+            schema.field(5).constraints().integerRange(),
+            "Excluded intervals are not contiguous facts");
+        assertNull(
+            schema.field(6).constraints().integerRange(),
+            "Conditional rules cannot become unconditional facts");
+        assertTrue(schema.field(7).optional());
+        assertEquals(
+            10,
+            java.util.Objects.requireNonNull(schema.field(7).constraints().integerRange()).min());
+        assertTrue(schema.field(8).optional());
+        assertNull(schema.field(8).constraints().length());
+        var builder =
+            DynamicMessage.newBuilder(descriptor)
+                .setField(descriptor.findFieldByName("name"), "😀a")
+                .setField(descriptor.findFieldByName("small"), 42)
+                .addRepeatedField(descriptor.findFieldByName("numbers"), 1)
+                .setField(
+                    descriptor.findFieldByName("blob"),
+                    com.google.protobuf.ByteString.copyFrom(new byte[] {1, 2}));
+        var map = descriptor.findFieldByName("pairs");
+        var entry =
+            DynamicMessage.newBuilder(map.getMessageType())
+                .setField(map.getMessageType().findFieldByName("key"), "key")
+                .setField(map.getMessageType().findFieldByName("value"), 1)
+                .build();
+        builder.addRepeatedField(map, entry);
+        var valid = builder.build();
+        // Build the option extension against canonical generated descriptor types, then parse
+        // registered options as generated Java schemas do instead of retaining unknown fields.
+        var validationFile =
+            set.getFileList().stream()
+                .filter(value -> value.getName().equals("validate.proto"))
+                .findFirst()
+                .orElseThrow();
+        var validationDescriptor =
+            FileDescriptor.buildFrom(
+                validationFile,
+                new FileDescriptor[] {
+                  com.google.protobuf.DescriptorProtos.getDescriptor(),
+                  com.google.protobuf.DurationProto.getDescriptor(),
+                  com.google.protobuf.FieldMaskProto.getDescriptor(),
+                  com.google.protobuf.TimestampProto.getDescriptor()
+                });
+        var extension = validationDescriptor.findExtensionByName("field");
+        var registry = com.google.protobuf.ExtensionRegistry.newInstance();
+        registry.add(extension, DynamicMessage.getDefaultInstance(extension.getMessageType()));
+        var sourceFile =
+            set.getFileList().stream()
+                .filter(value -> value.getName().equals("validation.proto"))
+                .findFirst()
+                .orElseThrow();
+        var registeredFile =
+            FileDescriptor.buildFrom(
+                FileDescriptorProto.parseFrom(sourceFile.toByteArray(), registry),
+                new FileDescriptor[] {validationDescriptor});
+        var registered =
+            new ProtobufAdapter(
+                null,
+                registeredFile.findMessageTypeByName("Sample"),
+                Limits.DEFAULT,
+                16,
+                java.util.Map.of(),
+                true);
+        assertEquals(schema.field(0), registered.schema().field(0));
+        assertEquals(schema.field(1), registered.schema().field(1));
+        registered.snapshot(DynamicMessage.parseFrom(registered.descriptor(), valid.toByteArray()));
+        var batchAdapter =
+            ProtobufAdapter.fromDescriptorSet(
+                null, set, "truffledata.validation.Sample", Limits.DEFAULT, 16, true);
+        assertInstanceOf(
+            Batch.Row.class,
+            batchAdapter.snapshot(
+                DynamicMessage.parseFrom(batchAdapter.descriptor(), valid.toByteArray())));
+        assertEquals(
+            StaticLayout.Storage.BYTE,
+            new StaticLayout(TestLanguage.current().language(), schema, Limits.DEFAULT)
+                .storageKind(1));
+        var row = adapter.snapshot(valid);
+        assertEquals(
+            0, java.util.Objects.requireNonNull(schema.field(4).constraints().length()).min());
+        adapter.snapshot(
+            valid.toBuilder().addRepeatedField(map, entry).addRepeatedField(map, entry).build());
+        assertInstanceOf(StaticLayout.Record.class, row);
+        assertEquals("😀a", DataLibrary.factory().getUncached().read(row, 0));
+        assertThrows(
+            ContractViolation.class,
+            () ->
+                adapter.snapshot(
+                    valid.toBuilder().clearField(descriptor.findFieldByName("name")).build()));
+        for (Object[] invalid :
+            new Object[][] {
+              {"name", "a"},
+              {"name", "abcd"},
+              {"small", -1},
+              {"small", 128},
+              {"present", 0},
+              {"blob", com.google.protobuf.ByteString.EMPTY}
+            }) {
+          assertThrows(
+              ContractViolation.class,
+              () ->
+                  adapter.snapshot(
+                      valid.toBuilder()
+                          .setField(descriptor.findFieldByName((String) invalid[0]), invalid[1])
+                          .build()));
+        }
+        assertThrows(
+            ContractViolation.class,
+            () ->
+                adapter.snapshot(
+                    valid.toBuilder().clearField(descriptor.findFieldByName("numbers")).build()));
+        // No validator-wide claim: implicit required/nonzero and ignored conditional bounds remain
+        // external.
+        assertFalse((Boolean) DataLibrary.factory().getUncached().read(row, 9));
+        assertTrue(plain.schema().field(0).optional(), "Annotation interpretation is opt-in");
+      } finally {
+        context.leave();
+      }
+    }
+  }
+
+  @Test
   void consumerNativeMetadataIncludesImportedMessagesBuildersEnumsAndDescriptors() {
     String config =
         dev.elide.truffledata.protobuf.NativeMetadata.reflectionConfig(
