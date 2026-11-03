@@ -380,6 +380,25 @@ class RealDriversTest {
             }
           }
         }
+        for (boolean useStatic : new boolean[] {false, true}) {
+          try (var bounded =
+              JdbcSource.execute(
+                  connection,
+                  series,
+                  List.of(),
+                  seriesSchema,
+                  useStatic ? seriesLayout : null,
+                  new Limits(1, 1, 100, 0),
+                  adapter,
+                  new JdbcQueryOptions(2, 10, true),
+                  new JdbcConsumptionLimits(2, 100, 0))) {
+            assertNotNull(bounded.nextRecord());
+            assertNotNull(bounded.nextRecord());
+            assertThrows(ContractViolation.class, bounded::nextRecord);
+            assertTrue(bounded.isClosed());
+          }
+          assertUsable(connection);
+        }
         // Early close must leave the borrowed transaction usable. The caller controls rollback.
         assertFalse(connection.getAutoCommit());
         try (Statement statement = connection.createStatement();

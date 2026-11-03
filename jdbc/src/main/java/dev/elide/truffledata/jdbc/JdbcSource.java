@@ -97,7 +97,6 @@ public final class JdbcSource {
    * Execute with an explicit cooperating driver. An explicit contract overrides metadata inference;
    * a supplied layout must belong to that exact schema identity. The connection remains borrowed.
    */
-  @TruffleBoundary
   public static JdbcCursor execute(
       Connection connection,
       String sql,
@@ -107,6 +106,31 @@ public final class JdbcSource {
       Limits limits,
       JdbcAdapter adapter,
       JdbcQueryOptions options)
+      throws SQLException {
+    return execute(
+        connection,
+        sql,
+        parameters,
+        contract,
+        layout,
+        limits,
+        adapter,
+        options,
+        JdbcConsumptionLimits.DEFAULT);
+  }
+
+  /** Execute with separate per-batch and cumulative query ingestion limits. */
+  @TruffleBoundary
+  public static JdbcCursor execute(
+      Connection connection,
+      String sql,
+      List<? extends @Nullable Object> parameters,
+      @Nullable Schema contract,
+      @Nullable StaticLayout layout,
+      Limits limits,
+      JdbcAdapter adapter,
+      JdbcQueryOptions options,
+      JdbcConsumptionLimits consumption)
       throws SQLException {
     if (layout != null && contract != layout.schema())
       throw new IllegalArgumentException("Static layout requires its exact schema as contract");
@@ -122,7 +146,13 @@ public final class JdbcSource {
         if (schema.size() != count)
           throw new ContractViolation("JDBC result width differs from contract");
         return new JdbcCursor(
-            statement, result, schema, limits, adapter.decoder(metadata, schema, limits), layout);
+            statement,
+            result,
+            schema,
+            limits,
+            adapter.decoder(metadata, schema, limits),
+            layout,
+            consumption);
       } catch (SQLException | RuntimeException | Error failure) {
         try {
           result.close();

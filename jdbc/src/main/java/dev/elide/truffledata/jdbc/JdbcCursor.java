@@ -15,6 +15,9 @@ public final class JdbcCursor implements AutoCloseable, TruffleObject {
   private final ResultSet result;
   private final Schema schema;
   private final Limits limits;
+  private final JdbcConsumptionLimits consumption;
+  private final PayloadBudget queryBudget;
+  private long rowsRead;
   private final JdbcSource.Decoder decoder;
   private final @Nullable StaticLayout layout;
   private final Thread owner = Thread.currentThread();
@@ -33,6 +36,19 @@ public final class JdbcCursor implements AutoCloseable, TruffleObject {
       Limits limits,
       JdbcSource.Decoder decoder,
       @Nullable StaticLayout layout) {
+    this(statement, result, schema, limits, decoder, layout, JdbcConsumptionLimits.DEFAULT);
+  }
+
+  JdbcCursor(
+      PreparedStatement statement,
+      ResultSet result,
+      Schema schema,
+      Limits limits,
+      JdbcSource.Decoder decoder,
+      @Nullable StaticLayout layout,
+      JdbcConsumptionLimits consumption) {
+    this.consumption = consumption;
+    this.queryBudget = consumption.budget();
     this.statement = statement;
     this.result = result;
     this.schema = schema;
@@ -63,6 +79,7 @@ public final class JdbcCursor implements AutoCloseable, TruffleObject {
     try {
       int capacity =
           (int) Math.min(limits.maxRows(), limits.maxCells() / Math.max(1, schema.size()));
+      capacity = (int) Math.min(capacity, Math.max(1, consumption.maxRows() - rowsRead));
       Batch batch =
           Batch.read(
               schema,
@@ -70,13 +87,14 @@ public final class JdbcCursor implements AutoCloseable, TruffleObject {
               limits,
               new Batch.Source<SQLException>() {
                 public boolean next() throws SQLException {
-                  return result.next();
+                  return advance();
                 }
 
                 public @Nullable Object read(int column) throws SQLException {
                   return decoder.read(result, column + 1);
                 }
-              });
+              },
+              queryBudget);
       if (batch.size() < capacity) {
         exhausted = true;
         close();
@@ -86,6 +104,14 @@ public final class JdbcCursor implements AutoCloseable, TruffleObject {
       closeResources(e);
       throw e;
     }
+  }
+
+  private boolean advance() throws SQLException {
+    if (!result.next()) return false;
+    if (rowsRead == consumption.maxRows())
+      throw new ContractViolation("Cumulative query row budget exceeded");
+    rowsRead++;
+    return true;
   }
 
   private void checkThread() {
@@ -167,12 +193,12 @@ public final class JdbcCursor implements AutoCloseable, TruffleObject {
     if (exhausted) return false;
     if (closed) throw new IllegalStateException("Cursor is closed");
     try {
-      if (!result.next()) {
+      if (!advance()) {
         exhausted = true;
         close();
         return false;
       }
-      PayloadBudget budget = new PayloadBudget(limits);
+      PayloadBudget budget = new PayloadBudget(limits, queryBudget);
       budget.cells(schema.size());
       Object[] values = new Object[schema.size()];
       for (int i = 0; i < values.length; i++) {

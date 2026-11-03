@@ -10,6 +10,102 @@ import org.junit.jupiter.api.Test;
 
 class JdbcTest {
   @Test
+  void cumulativeLimitsSurviveBatchAndStaticAdvancement() throws Exception {
+    var adapter = dev.elide.truffledata.jdbc.sqlite.SqliteAdapter.INSTANCE;
+    var options = new JdbcQueryOptions(1, 10, true);
+    var local = new Limits(1, 4, 100, 1000);
+    try (var connection = DriverManager.getConnection("jdbc:sqlite::memory:");
+        var context = org.graalvm.polyglot.Context.newBuilder("td-test").build()) {
+      context.initialize("td-test");
+      context.enter();
+      try {
+        for (int mode = 0; mode < 3; mode++) {
+          for (int kind = 0; kind < 3; kind++) {
+            Schema schema =
+                Schema.of(
+                    new Field(
+                        "v",
+                        kind == 0
+                            ? Field.Kind.INT64
+                            : kind == 1 ? Field.Kind.ARRAY : Field.Kind.STRING,
+                        false,
+                        false));
+            String value = kind == 0 ? "n" : kind == 1 ? "X'00FF00FF'" : "'abc'";
+            String sql =
+                "with recursive series(n) as (select 1 union all select n+1 from series where n<3)"
+                    + " select "
+                    + value
+                    + " as v from series";
+            var cumulative =
+                kind == 0
+                    ? new JdbcConsumptionLimits(2, 100, 1000)
+                    : kind == 1
+                        ? new JdbcConsumptionLimits(10, 10, 1000)
+                        : new JdbcConsumptionLimits(10, 100, 12);
+            var layout =
+                mode == 2
+                    ? new StaticLayout(TestLanguage.current().language(), schema, local)
+                    : null;
+            try (var cursor =
+                JdbcSource.execute(
+                    connection,
+                    sql,
+                    List.of(),
+                    schema,
+                    layout,
+                    local,
+                    adapter,
+                    options,
+                    cumulative)) {
+              AbstractRow retained;
+              if (mode == 0) {
+                retained = Objects.requireNonNull(cursor.nextBatch()).row(0);
+                assertNotNull(cursor.nextBatch());
+                assertThrows(ContractViolation.class, cursor::nextBatch);
+              } else {
+                retained = Objects.requireNonNull(cursor.nextRecord());
+                assertNotNull(cursor.nextRecord());
+                assertThrows(ContractViolation.class, cursor::nextRecord);
+              }
+              assertTrue(cursor.isClosed());
+              assertNotNull(DataLibrary.factory().getUncached().read(retained, 0));
+              cursor.close();
+            }
+            assertFalse(connection.isClosed());
+          }
+        }
+        // Exactly reaching the row limit still permits an EOF probe and successful exhaustion.
+        var schema = Schema.of(Field.requiredLong("v"));
+        for (boolean useStatic : new boolean[] {false, true}) {
+          var layout =
+              useStatic ? new StaticLayout(TestLanguage.current().language(), schema, local) : null;
+          try (var cursor =
+              JdbcSource.execute(
+                  connection,
+                  "select 1 as v union all select 2",
+                  List.of(),
+                  schema,
+                  layout,
+                  Limits.DEFAULT,
+                  adapter,
+                  options,
+                  new JdbcConsumptionLimits(2, 2, 0))) {
+            assertNotNull(cursor.nextRecord());
+            assertNotNull(cursor.nextRecord());
+            assertNull(cursor.nextRecord());
+            assertTrue(cursor.isClosed());
+          }
+        }
+      } finally {
+        context.leave();
+      }
+    }
+    assertThrows(IllegalArgumentException.class, () -> new JdbcConsumptionLimits(0, 1, 0));
+    assertThrows(IllegalArgumentException.class, () -> new JdbcConsumptionLimits(1, 0, 0));
+    assertThrows(IllegalArgumentException.class, () -> new JdbcConsumptionLimits(1, 1, -1));
+  }
+
+  @Test
   void serverAdaptersRejectOtherDriversAndCompileValueDecoders() throws Exception {
     for (JdbcAdapter adapter :
         List.of(

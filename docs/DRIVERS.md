@@ -71,6 +71,28 @@ allocated driver values. Scalar conversion does not allocate a per-cell budget o
 compound arrays get scoped accounting. The current allocation gate compares scalar
 conversion with the same ResultSet baseline and allows at most 8 additional bytes/cell.
 
+## Cumulative query limits
+
+Every JDBC cursor uses `JdbcConsumptionLimits.DEFAULT`: 1,000,000 rows, 64,000,000
+cells including nested elements, and 256 MiB of UTF-16 string payload. These limits
+are independent of `Limits`, which still bounds each batch/static-row snapshot.
+The adapter-aware `JdbcSource.execute` overload accepts an explicit
+`JdbcConsumptionLimits` after `JdbcQueryOptions` to raise or lower these totals.
+
+Counts persist across advancement and are not refunded when rows are released. A
+breach fails ingestion and closes the owned statement/result, leaving the borrowed
+connection open. Retained prior rows remain valid. Accounting shares the per-snapshot
+payload walk and does not traverse nested values a second time. Rows consumed into
+batch lookahead count even before guest delivery; a failed batch is not partially
+published. At the exact row limit, the next request probes for EOF; an additional
+source row fails before cell decoding. Closing instead of probing is always allowed.
+
+These defaults are a new finite limit on previously unlimited total consumption.
+They bound accepted logical payload, not driver buffering, object overhead, arbitrary
+precision scalar storage, or later mutation of live custom-decoder views. MySQL close
+may drain unread wire data. Query retention leases, physical memory envelopes and
+execution/cleanup deadlines remain separate requirements.
+
 ## Reproduce the real-service tests
 
 With a local Docker daemon:

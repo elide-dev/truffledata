@@ -1,18 +1,28 @@
 package dev.elide.truffledata;
 
+import org.jspecify.annotations.Nullable;
+
 /** Per-snapshot/batch accounting, including nested array elements and UTF-16 string payloads. */
 public final class PayloadBudget {
   private final Limits limits;
+  private final @Nullable PayloadBudget parent;
   private long cells;
   private long stringBytes;
 
   public PayloadBudget(Limits limits) {
+    this(limits, null);
+  }
+
+  /** Thread-confined cumulative parent; failed snapshots do not refund accepted payloads. */
+  public PayloadBudget(Limits limits, @Nullable PayloadBudget parent) {
     this.limits = limits;
+    this.parent = parent;
   }
 
   public void cells(long count) {
     if (count < 0 || count > limits.maxCells() - cells)
       throw new ContractViolation("Nested cell budget exceeded");
+    if (parent != null) parent.cells(count);
     cells += count;
   }
 
@@ -20,13 +30,18 @@ public final class PayloadBudget {
     accept(value, 0);
   }
 
+  private void stringBytes(long count) {
+    if (count > limits.maxStringBytes() - stringBytes)
+      throw new ContractViolation("String payload budget exceeded");
+    if (parent != null) parent.stringBytes(count);
+    stringBytes += count;
+  }
+
   private void accept(Object value, int depth) {
     if (depth > 128) throw new ContractViolation("Value nesting budget exceeded");
     if (value instanceof String text) {
       long bytes = 2L * text.length();
-      if (bytes > limits.maxStringBytes() - stringBytes)
-        throw new ContractViolation("String payload budget exceeded");
-      stringBytes += bytes;
+      stringBytes(bytes);
     } else if (value instanceof DataArray array) {
       cells(array.size());
       if (!array.isBytes() || depth == 128)

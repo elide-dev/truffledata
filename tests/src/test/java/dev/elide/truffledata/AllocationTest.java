@@ -32,15 +32,23 @@ class AllocationTest {
             return value;
           }
         };
-    for (int i = 0; i < 2000; i++) retained = Batch.read(schema, 1024, Limits.DEFAULT, source);
     ThreadMXBean bean = (ThreadMXBean) ManagementFactory.getThreadMXBean();
     bean.setThreadAllocatedMemoryEnabled(true);
-    long before = bean.getThreadAllocatedBytes(Thread.currentThread().threadId());
-    for (int i = 0; i < 1000; i++) retained = Batch.read(schema, 1024, Limits.DEFAULT, source);
-    double perBatch =
-        (bean.getThreadAllocatedBytes(Thread.currentThread().threadId()) - before) / 1000.0;
-    System.out.printf("ALLOCATION direct-column batch %.3f bytes/1024 longs%n", perBatch);
-    assertTrue(perBatch <= 9216, "Direct ingestion allocated intermediate rows or copied columns");
+    for (boolean cumulative : new boolean[] {false, true}) {
+      var parent = cumulative ? new PayloadBudget(new Limits(1, 1, Long.MAX_VALUE, 0)) : null;
+      for (int i = 0; i < 2000; i++)
+        retained = Batch.read(schema, 1024, Limits.DEFAULT, source, parent);
+      long before = bean.getThreadAllocatedBytes(Thread.currentThread().threadId());
+      for (int i = 0; i < 1000; i++)
+        retained = Batch.read(schema, 1024, Limits.DEFAULT, source, parent);
+      double perBatch =
+          (bean.getThreadAllocatedBytes(Thread.currentThread().threadId()) - before) / 1000.0;
+      System.out.printf(
+          "ALLOCATION direct-column batch %.3f bytes/1024 longs cumulative=%s%n",
+          perBatch, cumulative);
+      assertTrue(
+          perBatch <= 9216, "Direct ingestion allocated intermediate rows or copied columns");
+    }
   }
 
   @Test

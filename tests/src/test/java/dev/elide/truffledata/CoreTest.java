@@ -12,6 +12,31 @@ import org.junit.jupiter.api.Test;
 
 class CoreTest {
   @Test
+  void cumulativeBudgetSharesThePayloadWalkAndDoesNotReset() {
+    var nested = new UncheckedRow(new Field("s", Field.Kind.STRING, false, false), "abc");
+    var schema = Schema.of(new Field("row", Field.Kind.RECORD, false, false));
+    var parent = new PayloadBudget(new Limits(10, 10, 10, 6));
+    var source =
+        new Batch.Source<RuntimeException>() {
+          public boolean next() {
+            return true;
+          }
+
+          public Object read(int column) {
+            return nested;
+          }
+        };
+    assertEquals(1, Batch.read(schema, 1, Limits.DEFAULT, source, parent).size());
+    assertEquals(1, nested.reads, "Parent accounting must not traverse the row again");
+    assertThrows(
+        ContractViolation.class, () -> Batch.read(schema, 1, Limits.DEFAULT, source, parent));
+    assertEquals(2, nested.reads);
+    var cells = new PayloadBudget(new Limits(1, 1, Long.MAX_VALUE, 0));
+    cells.cells(Long.MAX_VALUE);
+    assertThrows(ContractViolation.class, () -> cells.cells(1));
+  }
+
+  @Test
   void directBatchFillingPreservesRetentionNullityAndSourcePosition() throws Exception {
     Schema schema =
         Schema.of(Field.requiredLong("n"), new Field("s", Field.Kind.STRING, true, false));

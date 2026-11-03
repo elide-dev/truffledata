@@ -11,7 +11,7 @@ the database owns planning. CSV, RPC execution and asynchronous delivery are sub
 | BOM | Published dependency management with tested driver/library combinations | Implemented and staged consumer verified; public publication pending |
 | Real-driver matrix | Actual MySQL/PostgreSQL services and SQLite; values, streaming, prepared statements, failures and connection reuse through JS/Python | Initial real-service cases verified; broader edge/failure matrix pending |
 | Lifecycle | Deadlines, cancellation races, early close, context shutdown, borrowed/owned connections and pool reuse tests | Pending |
-| Memory | Bounded stream decoding, aggregate consumption/retention policies, large payload and adversarial tests including driver buffering | Pending |
+| Memory | Bounded stream decoding, aggregate consumption/retention policies, large payload and adversarial tests including driver buffering | Aggregate logical ingestion limits implemented; retention leases, physical memory and driver buffering pending |
 | Contract provenance | Explicit vs metadata origins, revision/lifetime policy, projection/session/schema compatibility tests | Pending |
 | Consumer Native Image | Packaged library/driver metadata, schema-specific Protobuf generation, real-driver native executables on supported platforms | Pending; existing native benchmark is fixture-specific |
 | Truffle gates | Nullable, polymorphic/megamorphic, nested, exception and context-ownership cases; graph/allocation budgets | Pending extensions; existing primitive gates pass |
@@ -130,3 +130,20 @@ All ten ordinary targets passed at
 https://app.buildbuddy.io/invocation/da2c0cc3-1790-4e09-8d9e-6f4aa361c197.
 Xerial's query timeout only bounds lock waiting; cross-driver execution/fetch/cleanup
 deadlines and cancellation are still outstanding, not implied by these timeout tests.
+
+Aggregate consumption increment: every JDBC cursor now retains query-wide row, nested
+cell and string-byte budgets across batch/static advancement, with finite configurable
+defaults. Parent accounting shares the existing payload walk; a test verifies one read
+per nested value rather than another traversal. SQLite exercises row/cell/string limits
+in all three consumption modes and exact-limit EOF, plus overflow rejection in the
+core accountant. All ten targets passed at
+https://app.buildbuddy.io/invocation/9ef7c9d1-3a80-42b7-aa12-708ae4e80ac7.
+Allocation and compiled budgets remain unchanged. These limits bound accepted logical
+payload; they are not a bound on driver buffers or actual retained JVM memory.
+Live MySQL/PostgreSQL acceptance also passed with cumulative row exhaustion in batch
+and static modes, followed by successful borrowed-connection reuse.
+The cumulative-accounting allocation gate passed in both ordinary and compiled modes:
+8,280–8,320 bytes per 1,024 required longs against the unchanged 9,216-byte bound,
+https://app.buildbuddy.io/invocation/6694f9e9-b178-4233-b3d7-96ef1182f9d4.
+The direct-column increment's full CI also passed:
+https://github.com/elide-dev/truffledata/actions/runs/41583973197.
