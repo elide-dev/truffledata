@@ -13,11 +13,14 @@ final class ProtoCodec {
   private ProtoCodec() {}
 
   static ProtoRow decode(ProtoPlan plan, byte[] wire) {
-    return decode(plan, ByteBuffer.wrap(wire));
+    return decodeRegion(plan, ByteBuffer.wrap(wire));
   }
 
   static ProtoRow decode(ProtoPlan plan, ByteBuffer source) {
-    ByteBuffer wire = source.slice();
+    return decodeRegion(plan, source.slice());
+  }
+
+  private static ProtoRow decodeRegion(ProtoPlan plan, ByteBuffer wire) {
     if (wire.remaining() > plan.model.maxWireBytes) throw bad("Wire byte budget exceeded");
     Reader input = new Reader(wire, new ProtoRow.Budget(plan.model.limits), plan.model.maxDepth);
     State state = new State(plan, input.budget);
