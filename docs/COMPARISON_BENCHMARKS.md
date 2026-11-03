@@ -89,3 +89,28 @@ execution tier. Missing samples, wrong backends/tiers and failed calibration inv
 run. Short samples on shared RBE hardware are diagnostics for these fixtures, not performance
 guarantees; use a quiet pinned host and longer repeated experiments before tuning around
 small differences.
+
+## Initial measured baseline
+
+[Raw samples](../benchmarks/results/svm-comparison-fa855f7/comparison.json) and the
+[full comparison table](../benchmarks/results/svm-comparison-fa855f7/comparison.md) record
+revision `fa855f7`. The 31-cell run took 34.5 seconds inside the remote test; native-image
+build time is separate. These are short shared-hardware diagnostic measurements.
+
+| Ingestion/projection | Stock default | Stock aliased | Buffa native |
+|---|---:|---:|---:|
+| Timestamp JSON | 8.24 µs / 6,440 B | — | 1.59 µs / 984 B |
+| 64 KiB bytes | 51.04 µs / 65,699 B | 0.156 µs / 144 B | 0.791 µs / 568 B |
+| Scalar protobuf | 0.149 µs / 136 B | — | 1.068 µs / 592 B |
+
+Bytes here are current-thread Java heap allocation, excluding native heap. The aliased
+protobuf-Java baseline is faster and allocates less Java heap than Buffa on this byte
+fixture; the large advantage over default parsing mostly reflects avoiding payload copies.
+Native Timestamp JSON has a clear advantage in this sample. Small scalar ingestion favors
+stock generated protobuf. There is no across-the-board performance win.
+
+Peak-JIT TruffleData retained reads were approximately 3.3–5.8× faster than its interpreter
+reads across these fixtures. Direct stock AOT reads were still faster. For MySQL/Postgres
+INT4 retained data, static TruffleData reads measured about 5.7/6.1 ns per row at peak,
+versus 29.2/31.2 ns interpreted and 2.6/3.0 ns for direct stock scalar reads. This isolates
+contract/guest-access costs and does not establish database-query performance.
