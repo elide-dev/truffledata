@@ -111,5 +111,25 @@
     "plugins": [
       "//bazel:jmh_processor"
     ]
+  },
+  {
+    "directory": "benchmarks/jdbc",
+    "root": "src/main/java",
+    "name": "jdbc_benchmarks",
+    "deps": [
+      "//benchmarks:benchmarks",
+      "//core:core",
+      "//jdbc:jdbc",
+      "//jdbc-mysql:jdbc-mysql",
+      "//jdbc-postgresql:jdbc-postgresql",
+      "//jdbc-sqlite:jdbc-sqlite",
+      "@maven//:org_graalvm_truffle_truffle_api",
+      "@maven//:org_graalvm_polyglot_polyglot",
+      "@maven//:org_openjdk_jmh_jmh_core"
+    ],
+    "testonly": false,
+    "plugins": [
+      "//bazel:jmh_processor"
+    ]
   }
 ]

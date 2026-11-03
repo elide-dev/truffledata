@@ -52,20 +52,60 @@ simulator; its Bazel action checks that the machine-code section is byte-identic
 to the original image. CI retains separate debug symbols, logs, the prepared
 binary's SHA-256/commit identity, summary and raw profiles for 14 days.
 
-## Comparing driver baselines later
+## Elapsed driver baselines
 
-The four JDBC cases use deterministic driver-boundary mocks, **not MySQL or
-Postgres drivers or servers**. They isolate this layer's overhead. SQLite already
-has real-driver integration coverage; this initial suite claims no SQLite timing.
+The original four CodSpeed JDBC cases remain driver-boundary mocks. A separate
+[JMH suite](../benchmarks/jdbc/src/main/java/dev/elide/truffledata/bench/jdbc/JdbcPipelineBenchmark.java)
+now compares real SQLite, MySQL and PostgreSQL drivers. Each driver has six cases:
 
-For plain-JDBC comparisons, reuse the exact 256 rows, four projected columns,
-null distribution, binding, signed/unsigned contract, checksum and consumption
-boundary. Name a new baseline explicitly; never replace a fixture with a real
-driver under an existing identity. Match output ownership too: retained immutable
-records and a streaming ResultSet have different lifetimes and allocation costs.
-Report decoding/materialization separately from network/server execution; the
-database owns planning. Compare equal validation/retention guarantees or label
-their differences.
+| Cases | Measured boundary |
+| --- | --- |
+| `plainQueryRetain`, `batchQueryRetain`, `staticQueryRetain` | Prepare/bind/execute, decode/validate, retain 256 immutable rows, close cursor resources, then checksum all four fields |
+| `plainRetainedRead`, `batchRetainedRead`, `staticRetainedRead` | Checksum the same retained rows, with database work and materialization excluded |
+
+The dataset identity is `jdbc-retained-four-field-v1`: 256 rows, required signed INT32
+IDs 1000–1255, 50% nullable INT32 values (twice the even row ordinal), an exact
+four-code-unit string, and booleans true every third row. The checksum is 322262.
+Every invocation checks it. The plain baseline stores immutable Java records and
+validates the same nullity, width, string length, boolean domain and row count. It
+uses JDBC directly with the same forward-only/streaming/fetch/timeout policies,
+including MySQL's raw integer boolean check. All variants retain their output beyond
+result-set close; escaping output storage is included in query-case allocation.
+The plain retained-read baseline is direct Java access, not guest host-object interop.
+
+Schema/layout creation, database seeding, and initial retained outputs happen outside
+measurement. Both Truffle read call targets must demonstrate compiled execution in
+trial setup; interpreter-only runs fail. Compilation failures/performance warnings are
+errors, and the compiler graph budget is 10,000 nodes. Normal JMH warmup still runs afterward.
+Default timing uses three JVM forks, five one-second warmups and eight one-second
+measurements. Scores and GC allocation are normalized **per row**, not per query or
+field. JMH/GC harness cost, volatile output publication, checksum checks and Truffle
+call-target entry remain included. Strict diagnostic mode is rejected for timing.
+
+Run a local elapsed-time experiment with the Bazel-provided host JVM:
+
+```sh
+tools/bench/jdbc.sh sqlite
+# Uses TRUFFLEDATA_MYSQL_URL or TRUFFLEDATA_POSTGRESQL_URL:
+tools/bench/jdbc.sh mysql
+tools/bench/jdbc.sh postgresql
+```
+
+Optional trailing arguments override JMH timing/fork settings. Results must still
+contain all six cases for the selected driver with elapsed and allocation metrics.
+The runner writes JSON results, raw JMH logs, commit/dirty state, source SHA-256 and
+machine metadata to `build/reports/jmh/<driver>/run.XXXXXX/` (a new directory for each run). Logs include driver/server versions,
+dataset identity and checksum. It does not print connection URLs or credentials.
+Avoid unrelated CPU/database work while measuring. These are local elapsed timings;
+network/server effects belong in the query cases and do not imply guest-language
+throughput improvements across other workloads.
+
+`//benchmarks/jdbc:smoke` checks SQLite in ordinary CI. The reusable service job and
+`tools/integration/run.sh` also run `//benchmarks/jdbc:drivers_smoke` for MySQL and
+PostgreSQL. All smoke cases require compiled Truffle reads and correct outputs, but
+their one short, non-forked measurement is **not performance evidence** and does not
+gate noisy wall-clock scores. CodSpeed's 20 stable AOT/interpreter identities remain
+unchanged and separate from these elapsed-time experiments.
 
 Changes to work size, dataset, representation or measured boundary need new
 benchmark identities. CodSpeed tracks instruction regressions; no absolute

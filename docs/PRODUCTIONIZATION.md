@@ -15,7 +15,7 @@ the database owns planning. CSV, RPC execution and asynchronous delivery are sub
 | Contract provenance | Explicit vs metadata origins, revision/lifetime policy, projection/session/schema compatibility tests | Pending |
 | Consumer Native Image | Packaged library/driver metadata, schema-specific Protobuf generation, real-driver native executables on supported platforms | Pending; existing native benchmark is fixture-specific |
 | Truffle gates | Nullable, polymorphic/megamorphic, nested, exception and context-ownership cases; graph/allocation budgets | Pending extensions; existing primitive gates pass |
-| Performance comparisons | Equivalent plain-JDBC baselines; warmed JIT elapsed-time suite separate from CodSpeed simulation | Pending |
+| Performance comparisons | Equivalent plain-JDBC baselines; warmed JIT elapsed-time suite separate from CodSpeed simulation | Six real-driver JMH boundaries per driver implemented; smoke acceptance passed, elapsed experiments and review pending |
 | Elide integration | Real embedding tests for guest capabilities, cleanup and host access disabled | Pending |
 | Operational diagnostics | Bounded rows/bytes/error/cancellation/contract telemetry without query/parameter disclosure by default | Pending |
 | Compatibility and release | API/binary compatibility gate, support matrix, dependency reporting/provenance and verified publication | Pending extensions |

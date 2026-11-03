@@ -1,0 +1,96 @@
+load("@rules_java//java:defs.bzl", "java_binary", "java_test")
+load("//bazel:java.bzl", "data_java_library")
+
+package(default_visibility = ["//visibility:public"])
+
+data_java_library(
+    name = "jdbc_benchmarks",
+    srcs = glob(["src/main/java/**/*.java"]),
+    plugins = ["//bazel:jmh_processor"],
+    deps = [
+        "//benchmarks",
+        "//core",
+        "//jdbc",
+        "//jdbc-mysql",
+        "//jdbc-postgresql",
+        "//jdbc-sqlite",
+        "@maven//:org_graalvm_polyglot_polyglot",
+        "@maven//:org_graalvm_truffle_truffle_api",
+        "@maven//:org_openjdk_jmh_jmh_core",
+    ],
+)
+
+java_binary(
+    name = "jmh",
+    jvm_flags = ["--enable-native-access=ALL-UNNAMED"],
+    main_class = "org.openjdk.jmh.Main",
+    runtime_deps = [
+        ":jdbc_benchmarks",
+        "@maven//:org_graalvm_truffle_truffle_runtime",
+    ],
+)
+
+java_test(
+    name = "smoke",
+    size = "large",
+    args = [
+        "JdbcPipelineBenchmark",
+        "-p",
+        "driver=sqlite",
+        "-wi",
+        "0",
+        "-i",
+        "1",
+        "-r",
+        "100ms",
+        "-f",
+        "0",
+        "-foe",
+        "true",
+    ],
+    jvm_flags = ["--enable-native-access=ALL-UNNAMED"],
+    main_class = "org.openjdk.jmh.Main",
+    use_testrunner = False,
+    runtime_deps = [
+        ":jdbc_benchmarks",
+        "@maven//:org_graalvm_truffle_truffle_runtime",
+    ],
+)
+
+java_test(
+    name = "drivers_smoke",
+    size = "large",
+    args = [
+        "JdbcPipelineBenchmark",
+        "-p",
+        "driver=mysql,postgresql",
+        "-wi",
+        "0",
+        "-i",
+        "1",
+        "-r",
+        "100ms",
+        "-f",
+        "0",
+        "-foe",
+        "true",
+    ],
+    jvm_flags = ["--enable-native-access=ALL-UNNAMED"],
+    main_class = "org.openjdk.jmh.Main",
+    tags = [
+        "external",
+        "manual",
+    ],
+    use_testrunner = False,
+    runtime_deps = [
+        ":jdbc_benchmarks",
+        "@maven//:org_graalvm_truffle_truffle_runtime",
+    ],
+)
+
+exports_files(["BUILD.bazel"])
+
+filegroup(
+    name = "sources",
+    srcs = glob(["src/**/*.java"]),
+)
