@@ -16,7 +16,15 @@ public final class ProtoRow extends AbstractRow {
   final Object storage;
   private final boolean @Nullable [] present;
 
-  private record Scalars(long first, long second) {}
+  private static final class Scalars {
+    final long first;
+    final long second;
+
+    Scalars(long first, long second) {
+      this.first = first;
+      this.second = second;
+    }
+  }
 
   final byte[] unknown;
 
@@ -48,7 +56,7 @@ public final class ProtoRow extends AbstractRow {
   private long scalar(int index) {
     Objects.checkIndex(index, descriptor.size());
     Scalars scalars = (Scalars) storage;
-    return index == 0 ? scalars.first() : scalars.second();
+    return index == 0 ? scalars.first : scalars.second;
   }
 
   public ProtoPlan plan() {

@@ -179,3 +179,10 @@ The 78-test regression suite, compiled allocation tests, JIT matrix, Buffa JVM a
 SVM smoke, and the full comparison run passed during these two revisions. No allocation or
 JIT budgets were relaxed. The row class remains uniform across compact and general messages
 so the previous generated-class dispatch regression is not reintroduced.
+
+Revision `3507913` ([samples](../benchmarks/results/svm-comparison-3507913/comparison.json),
+[table](../benchmarks/results/svm-comparison-3507913/comparison.md)) adds the six typed-ingestion
+cells while retaining all 31 previous cells. Owned scalar ingestion measured 73.48 ns and
+56 Java heap bytes with primitive projection, 75.93 ns and 88 bytes with generic projection,
+and stock measured 64.17 ns and 136 bytes. Both TruffleData routes win allocation in this
+fixture; neither establishes a latency win. The 37-cell SVM run and JVM/native smoke passed.
