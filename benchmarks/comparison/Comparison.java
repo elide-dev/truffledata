@@ -85,16 +85,25 @@ public final class Comparison {
         boolean ingest = stage.equals("ingest");
         Operation operation = ingest ? fixture::ingest : fixture::read;
         for (int i = 0; i < 4; i++) fixture.check(operation.run(i));
+        // Calibrate before warmup: initialization must not disturb measured guest code.
+        ThreadMXBean bean = memory || smoke ? allocationCounter() : null;
         if (peak) {
-          for (int i = 0; i < 1000; i++) fixture.check(operation.run(i));
-          fixture.target.compile(true);
-          fixture.target.waitForCompilation();
+          // An initial compilation can be a deoptimization stub until all runtime profiles have
+          // been exercised. Execute the actual measurement loop, then require a stable last tier.
+          boolean stable = false;
+          for (int attempt = 0; attempt < 8 && !stable; attempt++) {
+            measure(operation, 1024, fixture.expected);
+            fixture.target.compile(true);
+            fixture.target.waitForCompilation();
+            measure(operation, 1024, fixture.expected);
+            stable = fixture.target.isValidLastTier();
+          }
+          if (!stable) throw new AssertionError("Peak warmup did not stabilize");
         }
         fixture.tier(peak);
-        // Verify the allocation counter even in smoke, on JVM and SVM.
-        ThreadMXBean bean = memory || smoke ? allocationCounter() : null;
         if (smoke) {
-          fixture.check(operation.run(1));
+          measure(operation, 128, fixture.expected);
+          fixture.tier(peak);
           return;
         }
         double[] samples = new double[3];
@@ -103,16 +112,19 @@ public final class Comparison {
           measure(operation, batch, fixture.expected);
           long thread = Thread.currentThread().threadId();
           for (int s = 0; s < samples.length; s++) {
+            fixture.tier(peak);
             long before = Objects.requireNonNull(bean).getThreadAllocatedBytes(thread);
             measure(operation, batch, fixture.expected);
             long allocated = bean.getThreadAllocatedBytes(thread) - before;
             if (allocated < 0) throw new AssertionError("Allocation counter regressed");
             samples[s] = (double) allocated / (batch * ROWS);
+            fixture.tier(peak);
           }
         } else {
           long until = System.nanoTime() + 100_000_000;
           while (System.nanoTime() < until) measure(operation, batch, fixture.expected);
           for (int s = 0; s < samples.length; s++) {
+            fixture.tier(peak);
             long count = 0, start = System.nanoTime(), elapsed;
             do {
               measure(operation, batch, fixture.expected);
@@ -120,6 +132,7 @@ public final class Comparison {
               elapsed = System.nanoTime() - start;
             } while (elapsed < 50_000_000);
             samples[s] = (double) elapsed / (count * ROWS);
+            fixture.tier(peak);
           }
         }
         fixture.tier(peak);
