@@ -4,6 +4,8 @@ on:
     secrets:
       BUILDBUDDY_API_KEY:
         required: false
+      BUILDBUDDY_APIKEY:
+        required: false
       CODECOV_TOKEN:
         required: false
 permissions:
@@ -28,7 +30,7 @@ jobs:
           df -h /
       - name: Configure BuildBuddy
         env:
-          BUILDBUDDY_API_KEY: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && secrets.BUILDBUDDY_API_KEY || '' }}
+          BUILDBUDDY_API_KEY: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && (secrets.BUILDBUDDY_API_KEY || secrets.BUILDBUDDY_APIKEY) || '' }}
         run: .github/scripts/configure-buildbuddy.sh
       - name: Install Bazelisk
         run: .github/scripts/install-bazelisk.sh
