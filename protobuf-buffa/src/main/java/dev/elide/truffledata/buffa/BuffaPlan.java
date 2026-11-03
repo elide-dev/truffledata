@@ -136,6 +136,7 @@ public final class BuffaPlan implements AutoCloseable {
   }
 
   private static final class State {
+    private static final boolean[] NO_SEEN_FIELDS = new boolean[0];
     final ProtoPlan plan;
     final WireMessage owner;
     final int format;
@@ -154,7 +155,8 @@ public final class BuffaPlan implements AutoCloseable {
       charge(plan.size());
       values = new Object[plan.size()];
       present = new boolean[values.length];
-      seen = new boolean[values.length];
+      // Binary protobuf permits duplicate fields; only text formats track duplicates.
+      seen = format == 0 ? NO_SEEN_FIELDS : new boolean[values.length];
       for (int i = 0; i < values.length; i++) values[i] = initial(plan.field(i));
     }
 
@@ -213,7 +215,7 @@ public final class BuffaPlan implements AutoCloseable {
         }
         if (!f.repeated() && format != 0 && seen[ordinal])
           throw new ContractViolation("Duplicate singular field");
-        seen[ordinal] = true;
+        if (format != 0) seen[ordinal] = true;
         if (kind == 101) {
           if (format != 2
               || plan.jsonType() != ProtoJsonType.ANY
@@ -290,18 +292,18 @@ public final class BuffaPlan implements AutoCloseable {
         if (values[i] instanceof State child) values[i] = child.finish(depth + 1);
         else if (values[i] instanceof List<?> list) {
           Object[] items = new Object[list.size()];
-          Map<Object, Object> keys = new LinkedHashMap<>();
+          Map<Object, Object> keys = field.map() ? new LinkedHashMap<>() : null;
           for (int j = 0; j < items.length; j++) {
             Object item = list.get(j);
             items[j] = item instanceof State child ? child.finish(depth + 1) : item;
-            if (field.map()) {
+            if (keys != null) {
               Object key = DataLibrary.factory().getUncached().read(items[j], 0);
               if (key instanceof ExactNumber number) key = number.decimal().toBigIntegerExact();
               if (keys.put(key, items[j]) != null && format == 2)
                 throw new ContractViolation("Duplicate JSON map key");
             }
           }
-          values[i] = new TypedArray(owner, field.map() ? keys.values().toArray() : items);
+          values[i] = new TypedArray(owner, keys != null ? keys.values().toArray() : items);
         }
         if (!field.explicitPresence()) present[i] = nonDefault(field, values[i]);
         if (field.required() && !present[i]) throw new ContractViolation("Missing required field");
