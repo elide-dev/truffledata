@@ -36,6 +36,7 @@ public final class Acceptance {
     try (var decoder =
         BuffaWire.open(nativeExpected ? BuffaWire.Mode.NATIVE : BuffaWire.Mode.AUTO, library)) {
       check((decoder.selected() != BuffaWire.Selected.JAVA) == nativeExpected, "backend selection");
+      TypedAcceptance.run(decoder);
       typed(decoder);
       parity(decoder);
       budgets(decoder);

@@ -12,6 +12,8 @@ mod seam {
     include!("generated/seam.rs");
 }
 
+mod typed;
+
 const MALFORMED: i32 = 1;
 const BUDGET: i32 = 2;
 const ALLOCATION: i32 = 3;
@@ -159,6 +161,71 @@ pub unsafe extern "C" fn td_buffa_decode(
     match catch_unwind(AssertUnwindSafe(|| {
         let input = unsafe { slice::from_raw_parts(data, length as usize) };
         parse(input, max_cells, max_depth, max_native_bytes)
+    })) {
+        Ok(Ok(mut fields)) => {
+            unsafe {
+                result.write(seam::Result {
+                    data: fields.as_mut_ptr().cast(),
+                    count: fields.len() as u64,
+                    capacity: fields.capacity() as u64,
+                });
+            }
+            mem::forget(fields);
+            0
+        }
+        Ok(Err(code)) => code,
+        Err(_) => PANIC,
+    }
+}
+
+/// # Safety
+/// Input/schema are live immutable regions; payload/result are disjoint writable regions.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn td_buffa_typed(
+    schema: *const u8,
+    schema_length: u64,
+    data: *const u8,
+    length: u64,
+    format: u32,
+    payload: *mut u8,
+    payload_length: u64,
+    max_cells: u64,
+    max_string_bytes: u64,
+    max_depth: u32,
+    max_native_bytes: u64,
+    result: *mut std::ffi::c_void,
+) -> i32 {
+    if result.is_null() {
+        return MALFORMED;
+    }
+    let result = result.cast::<seam::Result>();
+    unsafe {
+        result.write(seam::Result {
+            data: std::ptr::null_mut(),
+            count: 0,
+            capacity: 0,
+        });
+    }
+    if schema.is_null()
+        || data.is_null()
+        || payload.is_null()
+        || schema_length > i32::MAX as u64
+        || length > i32::MAX as u64
+        || payload_length > i32::MAX as u64
+    {
+        return MALFORMED;
+    }
+    match catch_unwind(AssertUnwindSafe(|| unsafe {
+        typed::decode(
+            slice::from_raw_parts(schema, schema_length as usize),
+            slice::from_raw_parts(data, length as usize),
+            format,
+            slice::from_raw_parts_mut(payload, payload_length as usize),
+            max_cells,
+            max_string_bytes,
+            max_depth,
+            max_native_bytes,
+        )
     })) {
         Ok(Ok(mut fields)) => {
             unsafe {

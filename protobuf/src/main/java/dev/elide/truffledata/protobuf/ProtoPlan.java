@@ -258,6 +258,18 @@ public final class ProtoPlan {
     layout = language == null ? null : new StaticLayout(language, schema, model.limits);
   }
 
+  public Limits limits() {
+    return model.limits;
+  }
+
+  public int maxDepth() {
+    return model.maxDepth;
+  }
+
+  public int maxWireBytes() {
+    return model.maxWireBytes;
+  }
+
   public String name() {
     return definition.name();
   }

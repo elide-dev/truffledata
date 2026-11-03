@@ -67,6 +67,31 @@ final class AcceptanceTest {
   void nativeAllocation() throws Exception {
     try (var decoder = BuffaWire.open(BuffaWire.Mode.NATIVE, library())) {
       Acceptance.allocation(decoder);
+      var bean =
+          (com.sun.management.ThreadMXBean)
+              java.lang.management.ManagementFactory.getThreadMXBean();
+      bean.setThreadAllocatedMemoryEnabled(true);
+      long thread = Thread.currentThread().threadId();
+      byte[] wire = new byte[65540];
+      wire[0] = 26;
+      wire[1] = (byte) 128;
+      wire[2] = (byte) 128;
+      wire[3] = 4;
+      try (var plan = decoder.compile(TypedAcceptance.plan("Sample"), 65536);
+          var input = decoder.allocate(wire.length).put(wire)) {
+        for (int i = 0; i < 2000; i++)
+          try (var message = plan.decode(input, 4096)) {
+            message.row();
+          }
+        long before = bean.getThreadAllocatedBytes(thread);
+        for (int i = 0; i < 1000; i++)
+          try (var message = plan.decode(input, 4096)) {
+            message.row();
+          }
+        long perMessage = (bean.getThreadAllocatedBytes(thread) - before) / 1000;
+        System.out.println("BUFFA typed bytes/message=" + perMessage);
+        Acceptance.check(perMessage < 16384, "typed binary avoids payload-sized Java copy");
+      }
     }
   }
 

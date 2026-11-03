@@ -1,7 +1,11 @@
 package dev.elide.truffledata.buffa;
 
+import com.oracle.truffle.api.dsl.Bind;
+import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.interop.*;
 import com.oracle.truffle.api.library.*;
+import com.oracle.truffle.api.nodes.Node;
+import com.oracle.truffle.api.profiles.InlinedExactClassProfile;
 import dev.elide.truffledata.DataArray;
 
 /** Read-only, zero-copy payload view. Its enclosing WireMessage must remain open. */
@@ -50,8 +54,11 @@ public final class BorrowedBytes implements dev.elide.truffledata.BorrowedBinary
   }
 
   @ExportMessage
-  public Object readArrayElement(long index) throws InvalidArrayIndexException {
+  public Object readArrayElement(
+      long index, @Bind Node node, @Cached InlinedExactClassProfile bufferType)
+      throws InvalidArrayIndexException {
     if (!isArrayElementReadable(index)) throw InvalidArrayIndexException.create(index);
-    return get((int) index);
+    return Byte.toUnsignedLong(
+        bufferType.profile(node, message.lease.bytes).get(offset + (int) index));
   }
 }

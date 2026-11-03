@@ -49,6 +49,8 @@ rust_library(
     srcs = [
         "generated/seam.rs",
         "lib.rs",
+        "typed.rs",
+        "typed_json.rs",
     ],
     crate_name = "truffledata_buffa",
     crate_root = "lib.rs",
@@ -57,6 +59,7 @@ rust_library(
     deps = [
         "@crates//:buffa",
         "@crates//:bytes",
+        "@crates//:serde_json",
     ],
 )
 
@@ -65,6 +68,8 @@ rust_static_library(
     srcs = [
         "generated/seam.rs",
         "lib.rs",
+        "typed.rs",
+        "typed_json.rs",
     ],
     crate_name = "truffledata_buffa",
     crate_root = "lib.rs",
@@ -73,6 +78,7 @@ rust_static_library(
     deps = [
         "@crates//:buffa",
         "@crates//:bytes",
+        "@crates//:serde_json",
     ],
 )
 
@@ -81,6 +87,8 @@ rust_shared_library(
     srcs = [
         "generated/seam.rs",
         "lib.rs",
+        "typed.rs",
+        "typed_json.rs",
     ],
     crate_name = "truffledata_buffa",
     crate_root = "lib.rs",
@@ -89,6 +97,7 @@ rust_shared_library(
     deps = [
         "@crates//:buffa",
         "@crates//:bytes",
+        "@crates//:serde_json",
     ],
 )
 

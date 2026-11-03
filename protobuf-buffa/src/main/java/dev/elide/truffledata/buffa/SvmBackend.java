@@ -73,5 +73,58 @@ final class SvmBackend implements BuffaWire.Backend {
   }
 
   @Override
+  public BuffaWire.Tape typed(
+      WireInput schema,
+      WireInput input,
+      int format,
+      WireInput payload,
+      dev.elide.truffledata.protobuf.ProtoPlan plan,
+      int nativeBytes) {
+    if (!(schema.lease.attachment instanceof BuffaSvm.Address schemaAddress)
+        || !(input.lease.attachment instanceof BuffaSvm.Address inputAddress)
+        || !(payload.lease.attachment instanceof BuffaSvm.Address payloadAddress))
+      throw new IllegalArgumentException("Inputs are not SVM native memory");
+    VoidPointer result = UnmanagedMemory.calloc(Buffa.Result.SIZE);
+    if (result.isNull()) throw new OutOfMemoryError("Native typed result allocation");
+    try {
+      BuffaWire.status(
+          Buffa.typed(
+              WordFactory.pointer(schemaAddress.value()),
+              schema.size(),
+              WordFactory.pointer(inputAddress.value()),
+              input.size(),
+              format,
+              WordFactory.pointer(payloadAddress.value()),
+              payload.size(),
+              plan.limits().maxCells(),
+              plan.limits().maxStringBytes(),
+              plan.maxDepth(),
+              nativeBytes,
+              result));
+      long count = Buffa.Result.count(result), capacity = Buffa.Result.capacity(result);
+      ByteBuffer bytes =
+          count == 0
+              ? ByteBuffer.allocate(0)
+              : CTypeConversion.asByteBuffer(
+                  Buffa.Result.data(result),
+                  Math.toIntExact(Math.multiplyExact(count, Buffa.Field.SIZE)));
+      long address = result.rawValue();
+      return new BuffaWire.Tape(
+          bytes,
+          count,
+          capacity,
+          () -> {
+            VoidPointer owned = WordFactory.pointer(address);
+            Buffa.release(owned);
+            UnmanagedMemory.free(owned);
+          });
+    } catch (RuntimeException | Error failure) {
+      Buffa.release(result);
+      UnmanagedMemory.free(result);
+      throw failure;
+    }
+  }
+
+  @Override
   public void close() {}
 }

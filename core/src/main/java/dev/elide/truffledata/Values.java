@@ -55,15 +55,16 @@ public final class Values {
             case BOOLEAN -> value instanceof Boolean;
             case STRING -> value instanceof String;
             case EXACT -> value instanceof ExactNumber;
-            case ARRAY -> value instanceof DataArray;
+            case ARRAY -> value instanceof DataArray || value instanceof BorrowedArray;
             case RECORD -> value instanceof AbstractRow;
             case ANY -> true;
           };
       if (!valid) throw violation(field, "type mismatch");
-      // Scoped adapter results may carry borrowed bytes under ANY. normalize/requireInterop
+      // Scoped adapter results may carry borrowed arrays under ANY or ARRAY.
+      // normalize/requireInterop
       // still reject them, so immutable snapshots cannot silently retain a foreign lease.
-      if (!(field.kind() == Field.Kind.ANY && value instanceof BorrowedBinary))
-        requireInterop(value);
+      if (!((field.kind() == Field.Kind.ANY || field.kind() == Field.Kind.ARRAY)
+          && value instanceof BorrowedArray)) requireInterop(value);
       validateConstraints(field, value, depth);
     }
     return value;
@@ -89,7 +90,11 @@ public final class Values {
     var length = facts.length();
     if (length != null) {
       int size =
-          value instanceof DataArray a ? a.size() : stringLength((String) value, length.unit());
+          value instanceof DataArray a
+              ? a.size()
+              : value instanceof BorrowedArray a
+                  ? a.size()
+                  : stringLength((String) value, length.unit());
       if (size < length.min() || size > length.max()) throw violation(field, "length");
     }
     var element = facts.element();
@@ -97,6 +102,11 @@ public final class Values {
         && value instanceof DataArray array
         && !(depth < 128 && array.isBytes() && acceptsUnsignedBytes(element)))
       validateElements(element, array, depth);
+    if (element != null && value instanceof BorrowedArray array) {
+      array.size(); // Validate the lease even when the binary element contract folds.
+      if (!(depth < 128 && array instanceof BorrowedBinary && acceptsUnsignedBytes(element)))
+        validateBorrowedElements(element, array, depth);
+    }
     var recordType = facts.recordType();
     if (recordType != null
         && value instanceof AbstractRow row
@@ -110,6 +120,11 @@ public final class Values {
   @TruffleBoundary
   private static void validateElements(Field element, DataArray array, int depth) {
     for (int i = 0; i < array.size(); i++) validate(element, array.get(i), depth + 1);
+  }
+
+  @TruffleBoundary
+  private static void validateBorrowedElements(Field field, BorrowedArray array, int depth) {
+    for (int i = 0; i < array.size(); i++) validate(field, array.element(i), depth + 1);
   }
 
   // Compact bytes establish every element's type, presence and range without scanning or boxing.

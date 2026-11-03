@@ -13,6 +13,7 @@ final class FfmBackend implements BuffaWire.Backend {
   private final Arena libraryArena = Arena.ofConfined();
   private final MethodHandle decode;
   private final MethodHandle release;
+  private final MethodHandle typed;
 
   FfmBackend(Path library) {
     try {
@@ -31,6 +32,7 @@ final class FfmBackend implements BuffaWire.Backend {
         throw new IllegalStateException("Myna/Buffa ABI fingerprint mismatch");
       decode = BuffaFFM.decode(symbols);
       release = BuffaFFM.release(symbols);
+      typed = BuffaFFM.typed(symbols);
     } catch (RuntimeException | Error failure) {
       libraryArena.close();
       throw failure;
@@ -73,6 +75,73 @@ final class FfmBackend implements BuffaWire.Backend {
       BuffaWire.status(status);
       long count = result.get(ValueLayout.JAVA_LONG, BuffaFFM.Result_count_OFFSET),
           capacity = result.get(ValueLayout.JAVA_LONG, BuffaFFM.Result_capacity_OFFSET);
+      ByteBuffer tape =
+          count == 0
+              ? ByteBuffer.allocate(0)
+              : result
+                  .get(ValueLayout.ADDRESS, BuffaFFM.Result_data_OFFSET)
+                  .reinterpret(
+                      Math.multiplyExact(count, BuffaFFM.Field_LAYOUT.byteSize()), call, null)
+                  .asByteBuffer();
+      return new BuffaWire.Tape(
+          tape,
+          count,
+          capacity,
+          () -> {
+            try {
+              free(result);
+            } finally {
+              call.close();
+            }
+          });
+    } catch (RuntimeException | Error failure) {
+      try {
+        free(result);
+      } finally {
+        call.close();
+      }
+      throw failure;
+    }
+  }
+
+  @Override
+  public BuffaWire.Tape typed(
+      WireInput schema,
+      WireInput input,
+      int format,
+      WireInput payload,
+      dev.elide.truffledata.protobuf.ProtoPlan plan,
+      int nativeBytes) {
+    if (!(schema.lease.attachment instanceof MemorySegment schemaMemory)
+        || !(input.lease.attachment instanceof MemorySegment inputMemory)
+        || !(payload.lease.attachment instanceof MemorySegment payloadMemory))
+      throw new IllegalArgumentException("Inputs are not JVM native memory");
+    Arena call = Arena.ofConfined();
+    MemorySegment result = call.allocate(BuffaFFM.Result_LAYOUT);
+    try {
+      int status;
+      try {
+        status =
+            (int)
+                typed.invokeExact(
+                    schemaMemory,
+                    (long) schema.size(),
+                    inputMemory,
+                    (long) input.size(),
+                    format,
+                    payloadMemory,
+                    (long) payload.size(),
+                    plan.limits().maxCells(),
+                    plan.limits().maxStringBytes(),
+                    plan.maxDepth(),
+                    (long) nativeBytes,
+                    result);
+      } catch (Throwable failure) {
+        throw callFailure(failure);
+      }
+      BuffaWire.status(status);
+      long count = result.get(ValueLayout.JAVA_LONG, BuffaFFM.Result_count_OFFSET);
+      long capacity = result.get(ValueLayout.JAVA_LONG, BuffaFFM.Result_capacity_OFFSET);
       ByteBuffer tape =
           count == 0
               ? ByteBuffer.allocate(0)

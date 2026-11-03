@@ -93,4 +93,4 @@ This is a foundation, not an Elide production integration. The database tests us
 
 ## Optional native wire backend (0.2.0 development)
 
-[The Myna/Buffa integration](docs/BUFFA.md) adds borrowed wire decoding, explicit off-heap ownership, JVM FFM and static SVM linkage, with Java fallback. Build it with `//protobuf-buffa`; it is not included in the 0.1.0 Maven artifacts.
+[The Myna/Buffa integration](docs/BUFFA.md) adds borrowed wire and typed decoding, native schema-aware text parsing, explicit off-heap ownership, JVM FFM and static SVM linkage, with Java fallback. Build it with `//protobuf-buffa`; it is not included in the 0.1.0 Maven artifacts.

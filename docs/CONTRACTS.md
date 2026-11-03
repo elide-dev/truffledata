@@ -276,3 +276,5 @@ Malformed input raises `ContractViolation`; errors do not include input values.
 position/limit or making an intermediate whole-input copy. Keep its memory immutable and
 alive during the call. Returned rows own their payloads. Native `WireInput` users can call
 `BuffaWire.decodeTyped(input, plan)` to enforce the input lease during this operation.
+For scoped native typed rows and native schema-aware text ingestion, use the optional
+`BuffaPlan` API described in [the Buffa integration](BUFFA.md#typed-and-text-input).

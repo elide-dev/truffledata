@@ -35,6 +35,14 @@ public final class BuffaWire implements AutoCloseable {
 
     Tape decode(WireInput input, Limits limits, int depth, int nativeBytes);
 
+    Tape typed(
+        WireInput schema,
+        WireInput input,
+        int format,
+        WireInput payload,
+        ProtoPlan plan,
+        int nativeBytes);
+
     @Override
     void close();
   }
@@ -49,7 +57,7 @@ public final class BuffaWire implements AutoCloseable {
           Field.requiredLong("wireType"),
           new Field("value", Field.Kind.ANY, false, false));
   private final Thread owner = Thread.currentThread();
-  private final @Nullable Backend backend;
+  final @Nullable Backend backend;
   private final Selected selected;
   private boolean open = true;
 
@@ -153,6 +161,13 @@ public final class BuffaWire implements AutoCloseable {
     }
   }
 
+  /** Compile a reusable native schema program; close it when ingestion is finished. */
+  @TruffleBoundary
+  public BuffaPlan compile(ProtoPlan plan, int maxSchemaBytes) {
+    check();
+    return new BuffaPlan(this, plan, maxSchemaBytes);
+  }
+
   private static DataArray materialize(
       WireMessage message, Tape tape, int start, int end, Limits limits) {
     List<Object> rows = new ArrayList<>();
@@ -183,7 +198,7 @@ public final class BuffaWire implements AutoCloseable {
     return new DataArray(rows.toArray());
   }
 
-  private void check() {
+  void check() {
     if (Thread.currentThread() != owner || !open)
       throw new IllegalStateException("Decoder closed or accessed from another thread");
   }
@@ -199,7 +214,7 @@ public final class BuffaWire implements AutoCloseable {
   }
 
   static void status(int code) {
-    if (code == 1) throw new ContractViolation("Malformed protobuf wire input");
+    if (code == 1) throw new ContractViolation("Malformed protobuf input");
     if (code == 2)
       throw new ContractViolation("Buffa structural or native allocation budget exceeded");
     if (code != 0) throw new IllegalStateException("Buffa decoder failure: " + code);
