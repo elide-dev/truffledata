@@ -229,3 +229,75 @@ http_file(
     sha256 = "901bd5ad3bbbdcf84850132b8f012235a2d08580c77a7ed98069fae00b2d2074",
     urls = ["https://raw.githubusercontent.com/bufbuild/protovalidate/4abe5a0b321404d9c825a6c6ca5e384fd3946018/proto/protovalidate/buf/validate/validate.proto"],
 )
+
+# Optional Buffa backend: reproducible Rust compilation under the same RBE toolchain.
+bazel_dep(name = "rules_rust", version = "0.74.0")
+
+RUST_SHA256S = {
+    "cargo-1.99.1-aarch64-apple-darwin.tar.xz": "685e563d94db1f003ffa5f5831439eec02569b9950b69867953c8213269c1eaf",
+    "cargo-1.99.1-aarch64-unknown-linux-gnu.tar.xz": "5156832e0c1254e9b49a79edabdc6d4c35f32f8fc1cf3ca700f268ff96087ab0",
+    "cargo-1.99.1-x86_64-unknown-linux-gnu.tar.xz": "53f3521949404d595efb06a55c12c5658d4ed1c75566f33d3d514eaebe70bd8a",
+    "clippy-1.99.1-aarch64-apple-darwin.tar.xz": "c463f31831196702fc544900a0dc4c1837905327507fbec751fe46e59ca098bf",
+    "clippy-1.99.1-aarch64-unknown-linux-gnu.tar.xz": "3bea76c26dcf30c176c0a8a8cc283eb59fabd754e24a68b4ca0701e5f3245f6b",
+    "clippy-1.99.1-x86_64-unknown-linux-gnu.tar.xz": "458339712a058e52cc4522ff9ef8b59cd1ea1340312216cd94194c464a3f6dc5",
+    "llvm-tools-1.99.1-aarch64-apple-darwin.tar.xz": "b348db9d79666aee4b5e2ff4269029fffd16815cbd47f47018cd0b06e4f815f5",
+    "llvm-tools-1.99.1-aarch64-unknown-linux-gnu.tar.xz": "cd1818058908c1c4e99bd2843fe103df255157454e16186ec9cc3b5b5823b39c",
+    "llvm-tools-1.99.1-x86_64-unknown-linux-gnu.tar.xz": "8429c5117debfb45c22cf2f97712ef00e0e94976c96cf92f661974a458ca7e84",
+    "rust-analyzer-1.99.1-aarch64-apple-darwin.tar.xz": "c1ee8a54e685e13414e53fc46029d46db12613bc45c081f1a49020f1674ad6b4",
+    "rust-analyzer-1.99.1-aarch64-unknown-linux-gnu.tar.xz": "b626351402eb9ea16af2ebc2b2cd02ec6f6ca6f0c18fa74b41243eb42996e2b1",
+    "rust-analyzer-1.99.1-x86_64-unknown-linux-gnu.tar.xz": "5f2613d62003fc8cbe788d4ae409359c91c241ba248adbefe032df8bb77357bf",
+    "rust-std-1.99.1-aarch64-apple-darwin.tar.xz": "fe79d6ab5a0321de26463999d8c112b8ad3eafbcbcf822d66a2300b45dde1031",
+    "rust-std-1.99.1-aarch64-unknown-linux-gnu.tar.xz": "e25668477083d6a9ddb87b9beb9c00742225f38233ccb4bfba3afa7a07427f52",
+    "rust-std-1.99.1-x86_64-unknown-linux-gnu.tar.xz": "109b074225bf5b9ea3820890876bfdf4ed161adbfaf94b2b4b5984c85ee5d958",
+    "rustc-1.99.1-aarch64-apple-darwin.tar.xz": "23948a0a9c162fd2952defb3fb0462c44e8fcfd1a4ab8a274a1e1bdb2cf810a3",
+    "rustc-1.99.1-aarch64-unknown-linux-gnu.tar.xz": "acdcdfe09ae1f103aa9a2b7f88903a9588bc2e99288af10e6fbf5514e2e49f25",
+    "rustc-1.99.1-x86_64-unknown-linux-gnu.tar.xz": "2ff05ff9c08a90861e7f6e4065b40a8b87463b4576186fd613871c3e37f2091f",
+    "rustfmt-1.99.1-aarch64-apple-darwin.tar.xz": "8b80dda570f140ee9ced8799294e812bba847a025f185bae4cba85a2ba235570",
+    "rustfmt-1.99.1-aarch64-unknown-linux-gnu.tar.xz": "26b3200b1461921415927abf7fe410202a6eda2db3e419abde59e0abfcd93fc2",
+    "rustfmt-1.99.1-x86_64-unknown-linux-gnu.tar.xz": "e3b36c4c7ec3486c059d8067ff48787676612007123aad7a4e8ec12c48ee9ba2",
+}
+
+rust = use_extension("@rules_rust//rust:extensions.bzl", "rust")
+rust.toolchain(
+    edition = "2024",
+    extra_target_triples = [],
+    rust_analyzer_version = "1.99.1",
+    rustfmt_version = "1.99.1",
+    sha256s = RUST_SHA256S,
+    versions = ["1.99.1"],
+)
+use_repo(rust, "rust_toolchains")
+
+register_toolchains("@rust_toolchains//:all")
+
+rust_host = use_extension("@rules_rust//rust:extensions.bzl", "rust_host_tools")
+rust_host.host_tools(
+    name = "truffledata_rust_host_tools",
+    sha256s = RUST_SHA256S,
+    version = "1.99.1",
+)
+use_repo(rust_host, "truffledata_rust_host_tools")
+
+crate = use_extension("@rules_rust//crate_universe:extensions.bzl", "crate")
+crate.from_cargo(
+    name = "crates",
+    cargo_lockfile = "//:Cargo.lock",
+    host_tools = "@truffledata_rust_host_tools",
+    lockfile = "//:Cargo.Bazel.lock",
+    manifests = ["//:Cargo.toml"],
+    supported_platform_triples = [
+        "aarch64-apple-darwin",
+        "aarch64-unknown-linux-gnu",
+        "x86_64-unknown-linux-gnu",
+    ],
+)
+use_repo(crate, "crates")
+
+http_archive(
+    name = "myna",
+    build_file = "//bazel:myna.BUILD",
+    sha256 = "c72df655cb6c8742c466bd8efb552d21dac0d74b992bbaf10a8833e5547e1393",
+    strip_prefix = "myna-66ee758fa3073cfac1dc386510105e41f219bad3",
+    type = "tar.gz",
+    urls = ["https://codeload.github.com/elide-dev/myna/tar.gz/66ee758fa3073cfac1dc386510105e41f219bad3"],
+)

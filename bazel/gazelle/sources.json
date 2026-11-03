@@ -135,5 +135,20 @@
     "plugins": [
       "//bazel:jmh_processor"
     ]
+  },
+  {
+    "directory": "protobuf-buffa",
+    "root": "src/main/java",
+    "name": "protobuf-buffa",
+    "deps": [
+      ":bindings",
+      "//core",
+      "//protobuf",
+      "@maven//:org_graalvm_sdk_nativeimage",
+      "@maven//:org_graalvm_sdk_word",
+      "@maven//:org_graalvm_truffle_truffle_api"
+    ],
+    "testonly": false,
+    "plugins": []
   }
 ]

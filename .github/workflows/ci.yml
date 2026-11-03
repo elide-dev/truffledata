@@ -33,3 +33,11 @@ jobs:
       contents: read
       id-token: write
     secrets: inherit
+
+  buffa:
+    name: Buffa
+    uses: ./.github/workflows/check.buffa.yml
+    permissions:
+      contents: read
+      id-token: write
+    secrets: inherit

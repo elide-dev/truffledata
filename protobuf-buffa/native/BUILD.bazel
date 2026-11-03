@@ -1,0 +1,100 @@
+load("@rules_rust//rust:defs.bzl", "rust_library", "rust_shared_library", "rust_static_library", "rust_test")
+
+package(default_visibility = ["//visibility:public"])
+
+config_setting(
+    name = "linux_arm64",
+    constraint_values = [
+        "@platforms//os:linux",
+        "@platforms//cpu:aarch64",
+    ],
+)
+
+genrule(
+    name = "bindings",
+    srcs = ["buffa.seam"],
+    outs = [
+        "generated/BuffaFFM.java",
+        "generated/Buffa.java",
+        "generated/BuffaForeignFeature.java",
+        "generated/seam.rs",
+        "generated/seam.h",
+        "generated/seam.json",
+        "generated/seam.abi",
+        "generated/seam.ll",
+    ],
+    cmd = "$(location @myna//:generator) generate $(location buffa.seam) --out $(RULEDIR)/generated --target " + select({
+        "@platforms//os:macos": "aarch64-apple-darwin",
+        ":linux_arm64": "aarch64-unknown-linux-gnu",
+        "//conditions:default": "x86_64-unknown-linux-gnu",
+    }),
+    tools = ["@myna//:generator"],
+)
+
+filegroup(
+    name = "java_bindings",
+    srcs = [
+        "generated/Buffa.java",
+        "generated/BuffaFFM.java",
+    ],
+)
+
+filegroup(
+    name = "header",
+    srcs = ["generated/seam.h"],
+)
+
+rust_library(
+    name = "lib",
+    srcs = [
+        "generated/seam.rs",
+        "lib.rs",
+    ],
+    crate_name = "truffledata_buffa",
+    crate_root = "lib.rs",
+    edition = "2024",
+    rustc_flags = ["-Copt-level=3"],
+    deps = [
+        "@crates//:buffa",
+        "@crates//:bytes",
+    ],
+)
+
+rust_static_library(
+    name = "truffledata_buffa",
+    srcs = [
+        "generated/seam.rs",
+        "lib.rs",
+    ],
+    crate_name = "truffledata_buffa",
+    crate_root = "lib.rs",
+    edition = "2024",
+    rustc_flags = ["-Copt-level=3"],
+    deps = [
+        "@crates//:buffa",
+        "@crates//:bytes",
+    ],
+)
+
+rust_shared_library(
+    name = "shared",
+    srcs = [
+        "generated/seam.rs",
+        "lib.rs",
+    ],
+    crate_name = "truffledata_buffa",
+    crate_root = "lib.rs",
+    edition = "2024",
+    rustc_flags = ["-Copt-level=3"],
+    deps = [
+        "@crates//:buffa",
+        "@crates//:bytes",
+    ],
+)
+
+rust_test(
+    name = "test",
+    crate = ":lib",
+)
+
+exports_files(["Cargo.toml"])

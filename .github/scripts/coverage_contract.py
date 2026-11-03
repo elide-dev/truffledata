@@ -12,6 +12,10 @@ ACCESS_CLASSES = {
 
 ACCESS_SOURCES = {f'core/src/main/java/dev/elide/truffledata/{name}.java' for name in ACCESS_CLASSES} | {
     'protobuf/src/main/java/dev/elide/truffledata/protobuf/ProtoRow.java',
+    'protobuf-buffa/src/main/java/dev/elide/truffledata/buffa/BorrowedBytes.java',
+    'protobuf-buffa/src/main/java/dev/elide/truffledata/buffa/WireField.java',
+    'protobuf-buffa/src/main/java/dev/elide/truffledata/buffa/WireInput.java',
+    'protobuf-buffa/src/main/java/dev/elide/truffledata/buffa/WireMessage.java',
 }
 
 def analyze(text):

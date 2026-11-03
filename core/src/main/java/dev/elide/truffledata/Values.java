@@ -60,7 +60,10 @@ public final class Values {
             case ANY -> true;
           };
       if (!valid) throw violation(field, "type mismatch");
-      requireInterop(value);
+      // Scoped adapter results may carry borrowed bytes under ANY. normalize/requireInterop
+      // still reject them, so immutable snapshots cannot silently retain a foreign lease.
+      if (!(field.kind() == Field.Kind.ANY && value instanceof BorrowedBinary))
+        requireInterop(value);
       validateConstraints(field, value, depth);
     }
     return value;
