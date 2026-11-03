@@ -18,21 +18,21 @@ All artifacts require Java 25 and currently target Elide GraalVM `25.5.5-elide.5
 
 ```sh
 # Build publication outputs only, with the normal remote execution/cache configuration:
-bazel build //tools/release:publications --//tools/release:version=0.1.0-alpha.3
+bazel build //tools/release:publications --//tools/release:version=0.1.0-alpha.4
 
 # Run all checks and stage jars, POMs, metadata and checksums without network writes:
-tools/release/publish.sh 0.1.0-alpha.3
+tools/release/publish.sh 0.1.0-alpha.4
 ```
 
 The staging command prints a unique directory under `build/release-repo.*`. Each library artifact includes its binary jar (including generated Truffle implementations), source jar, POM, and MD5/SHA-1/SHA-256/SHA-512 checksums. Source jars come from the library's JavaInfo, rather than an independently maintained source list. The default Bazel version is `0.1.0-SNAPSHOT` for checks; the release script requires an explicit immutable version and refuses snapshots.
 
 ## Upload
 
-The publisher follows Komodo's deployment: `rclone` remote `elide:`, bucket `elide-maven`, public URL `https://maven.elide.dev`. Provision rclone credentials outside the repository. If your configured remote has a different name, set `MAVEN_BUCKET`, for example `MAVEN_BUCKET=r2:elide-maven tools/release/publish.sh 0.1.0-alpha.4 --publish`. The publishing host needs Bash, Python 3, curl, rclone and Bazelisk; compilation and tests retain the normal hermetic Bazel toolchains and RBE settings. The small repository-layout check runs with Python 3 from the pinned remote executor image.
+The publisher follows Komodo's deployment: `rclone` remote `elide:`, bucket `elide-maven`, public URL `https://maven.elide.dev`. Provision rclone credentials outside the repository. If your configured remote has a different name, set `MAVEN_BUCKET`, for example `MAVEN_BUCKET=r2:elide-maven tools/release/publish.sh 0.1.0-alpha.5 --publish`. The publishing host needs Bash, Python 3, curl, rclone and Bazelisk; compilation and tests retain the normal hermetic Bazel toolchains and RBE settings. The small repository-layout check runs with Python 3 from the pinned remote executor image.
 
 ```sh
 # Run from a clean, committed checkout. This command writes to the public repository.
-tools/release/publish.sh 0.1.0-alpha.4 --publish
+tools/release/publish.sh 0.1.0-alpha.5 --publish
 ```
 
 The command runs the full test suite, stages artifacts, merges existing metadata, uploads immutable payloads, verifies bucket contents and public payload bytes, then uploads metadata and checksums. Missing credentials, failed listings and malformed existing metadata fail the release; they are never interpreted as an empty repository. It neither tags nor pushes Git history. CI already exercises publication validation through `bazel test //...`; uploading is an explicit release operation, not a pull-request action.
@@ -41,7 +41,7 @@ The command runs the full test suite, stages artifacts, merges existing metadata
 
 ## Consume
 
-Version `0.1.0-alpha.3` is published. Gradle consumers can use:
+Version `0.1.0-alpha.4` is published. Gradle consumers can use:
 
 ```kotlin
 repositories {
@@ -50,14 +50,14 @@ repositories {
     maven("https://maven.elide.dev/gvm-elide/25.5.5-elide.5")
 }
 dependencies {
-    implementation(platform("dev.elide:truffledata-bom:0.1.0-alpha.3"))
+    implementation(platform("dev.elide:truffledata-bom:0.1.0-alpha.4"))
     implementation("dev.elide:truffledata-jdbc-sqlite")
     implementation("dev.elide:truffledata-protobuf")
     // Select truffledata-jdbc-mysql or truffledata-jdbc-postgresql as needed.
 }
 ```
 
-For Maven, declare `https://maven.elide.dev` in `<repositories>` and the same coordinates in `<dependencies>`. Published POMs also declare the fork repository; Gradle and Bazel consumers must explicitly configure it. For Bazel, add the two repositories and desired coordinates to `maven.install`, then repin. Use core alone if neither adapter is needed. All six libraries and the BOM are published at `0.1.0-alpha.3`; public artifact bytes and metadata were verified. The staging examples can reproduce that version locally. Choose a new version for the next upload: published versions are immutable.
+For Maven, declare `https://maven.elide.dev` in `<repositories>` and the same coordinates in `<dependencies>`. Published POMs also declare the fork repository; Gradle and Bazel consumers must explicitly configure it. For Bazel, add the two repositories and desired coordinates to `maven.install`, then repin. Use core alone if neither adapter is needed. All six libraries and the BOM are published at `0.1.0-alpha.4`; public artifact bytes and metadata were verified. The staging examples can reproduce that version locally. Choose a new version for the next upload: published versions are immutable.
 
 
 ## BOM and consumer acceptance
