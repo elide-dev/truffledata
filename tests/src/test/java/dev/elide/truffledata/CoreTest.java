@@ -68,6 +68,65 @@ class CoreTest {
     assertThrows(UnexpectedResultException.class, () -> data.readLong(nullable, 0));
   }
 
+  @Test
+  void compactBytesOwnTheirSnapshotAndPreserveUnsignedGuestValues() throws Exception {
+    byte[] input = {0, 127, (byte) 128, (byte) 255};
+    DataArray bytes = DataArray.copyOfBytes(input);
+    input[3] = 0;
+    assertTrue(bytes.isBytes());
+    assertEquals(255L, bytes.get(3));
+    assertEquals(128L, InteropLibrary.getUncached().readArrayElement(bytes, 2));
+    assertThrows(InvalidArrayIndexException.class, () -> bytes.readArrayElement(4));
+    var buffer = java.nio.ByteBuffer.wrap(input);
+    buffer.position(1);
+    buffer.limit(3);
+    DataArray slice = DataArray.copyOfBytes(buffer);
+    assertEquals(1, buffer.position());
+    assertEquals(2, slice.size());
+    input[1] = 0;
+    assertEquals(127L, slice.get(0));
+    new PayloadBudget(new Limits(1, 1, 4, 0)).accept(bytes);
+    assertThrows(
+        ContractViolation.class, () -> new PayloadBudget(new Limits(1, 1, 3, 0)).accept(bytes));
+    var field =
+        new Field("bytes", Field.Kind.ARRAY, false, false)
+            .withConstraints(
+                Constraints.NONE.withElement(Field.integer("byte", 8, true, false, false)));
+    assertThrows(ContractViolation.class, () -> Values.validate(field, bytes));
+    DataArray signed = DataArray.copyOfBytes(new byte[] {0, 127});
+    assertSame(signed, Values.validate(field, signed));
+    var narrow =
+        field.withConstraints(
+            Constraints.NONE.withElement(
+                Field.requiredLong("byte")
+                    .withConstraints(
+                        Constraints.NONE.withIntegerRange(new Constraints.IntegerRange(1, 255)))));
+    assertThrows(ContractViolation.class, () -> Values.validate(narrow, bytes));
+    DataArray empty = DataArray.copyOfBytes(new byte[0]);
+    assertSame(empty, Values.validate(narrow, empty));
+  }
+
+  @Test
+  void compactBytesPreserveNestingBudgets() {
+    Object compact = DataArray.copyOfBytes(new byte[] {1});
+    Object boxed = new DataArray(new Object[] {1L});
+    Field field =
+        new Field("array", Field.Kind.ARRAY, false, false)
+            .withConstraints(Constraints.NONE.withElement(Field.requiredLong("item")));
+    for (int i = 0; i < 128; i++) {
+      compact = new DataArray(new Object[] {compact});
+      boxed = new DataArray(new Object[] {boxed});
+      field =
+          new Field("array", Field.Kind.ARRAY, false, false)
+              .withConstraints(Constraints.NONE.withElement(field));
+    }
+    Field contract = field;
+    for (Object value : new Object[] {compact, boxed}) {
+      assertThrows(ContractViolation.class, () -> Values.validate(contract, value));
+      assertThrows(ContractViolation.class, () -> new PayloadBudget(Limits.DEFAULT).accept(value));
+    }
+  }
+
   private static Batch.Row row(Schema schema, Object... values) {
     return Batch.copyOf(schema, Collections.singletonList(values), Limits.DEFAULT).row(0);
   }

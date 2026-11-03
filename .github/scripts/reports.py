@@ -5,7 +5,7 @@ import shutil
 import sys
 import xml.etree.ElementTree as ET
 
-MODULES = ('core', 'jdbc', 'protobuf')
+MODULES = ('core', 'jdbc', 'jdbc-sqlite', 'protobuf')
 
 
 def junit(root=Path('.')):
@@ -45,7 +45,7 @@ def coverage(root=Path('.')):
     destination = root / 'build/reports/coverage/lcov.info'
     destination.parent.mkdir(parents=True, exist_ok=True)
     destination.write_text(report)
-    print(f'Validated coverage for {len(sources)} production source files across all three modules')
+    print(f'Validated coverage for {len(sources)} production source files across {len(MODULES)} modules')
 
 
 if __name__ == '__main__':

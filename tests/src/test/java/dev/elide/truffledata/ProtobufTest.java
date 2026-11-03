@@ -12,6 +12,28 @@ import java.math.BigInteger;
 import org.junit.jupiter.api.Test;
 
 class ProtobufTest {
+  @Test
+  void generatedBinaryMessagesUseCompactUnsignedSnapshots() throws Exception {
+    byte[] input = new byte[256];
+    java.util.Arrays.fill(input, (byte) 255);
+    var chunk = com.google.protobuf.ByteString.copyFrom(input);
+    var message = com.google.protobuf.BytesValue.of(chunk.concat(chunk));
+    var adapter =
+        new ProtobufAdapter(com.google.protobuf.BytesValue.getDescriptor(), Limits.DEFAULT, 8);
+    var decoded = com.google.protobuf.BytesValue.parseFrom(message.toByteArray());
+    var row = adapter.snapshot(decoded);
+    var bytes = (DataArray) DataLibrary.factory().getUncached().read(row, 0);
+    assertTrue(bytes.isBytes());
+    assertEquals(512, bytes.size());
+    input[0] = 0;
+    assertEquals(255L, bytes.get(0));
+    assertEquals(255L, InteropLibrary.getUncached().readArrayElement(bytes, 511));
+    var bounded =
+        new ProtobufAdapter(
+            com.google.protobuf.BytesValue.getDescriptor(), new Limits(1, 1, 511, 0), 8);
+    assertThrows(ContractViolation.class, () -> bounded.snapshot(decoded));
+  }
+
   static Descriptor descriptor() throws Exception {
     var message =
         DescriptorProto.newBuilder()

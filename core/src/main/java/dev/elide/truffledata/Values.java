@@ -90,7 +90,9 @@ public final class Values {
       if (size < length.min() || size > length.max()) throw violation(field, "length");
     }
     var element = facts.element();
-    if (element != null && value instanceof DataArray array)
+    if (element != null
+        && value instanceof DataArray array
+        && !(depth < 128 && array.isBytes() && acceptsUnsignedBytes(element)))
       for (int i = 0; i < array.size(); i++) validate(element, array.get(i), depth + 1);
     var recordType = facts.recordType();
     if (recordType != null
@@ -98,6 +100,17 @@ public final class Values {
         && !recordType.equals(row.schema().typeName())) throw violation(field, "record type");
     if (value instanceof ExactNumber number && (facts.integer() != null || facts.decimal() != null))
       validateExact(field, number);
+  }
+
+  // Compact bytes establish every element's type, presence and range without scanning or boxing.
+  // Narrower contracts still inspect actual values: e.g. signed INT8 can accept a 0..127 payload.
+  private static boolean acceptsUnsignedBytes(Field field) {
+    if (field.kind() == Field.Kind.ANY) return true;
+    if (field.kind() != Field.Kind.INT64) return false;
+    var width = field.constraints().integer();
+    var range = field.constraints().integerRange();
+    return (width == null || (width.minimum() <= 0 && width.maximum() >= 255))
+        && (range == null || (range.min() <= 0 && range.max() >= 255));
   }
 
   public static int stringLength(String value, Constraints.LengthUnit unit) {

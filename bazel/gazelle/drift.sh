@@ -7,9 +7,9 @@ work="$TEST_TMPDIR/sources"
 mkdir -p "$work"
 cp -RL "$workspace/." "$work/"
 cd "$work"
-"$generator" -repo_root "$work" -r=false -index=false core jdbc protobuf tests benchmarks
+"$generator" -repo_root "$work" -r=false -index=false core jdbc jdbc-sqlite protobuf tests benchmarks
 status=0
-for module in core jdbc protobuf tests benchmarks; do
+for module in core jdbc jdbc-sqlite protobuf tests benchmarks; do
   mkdir -p "$TEST_UNDECLARED_OUTPUTS_DIR/$module"
   cp "$module/BUILD.bazel" "$TEST_UNDECLARED_OUTPUTS_DIR/$module/BUILD.bazel"
   diff -u "$workspace/$module/BUILD.bazel" "$module/BUILD.bazel" || status=1

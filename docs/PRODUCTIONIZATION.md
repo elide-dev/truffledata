@@ -40,3 +40,23 @@ benchmark smoke and Maven consumer tests:
 https://app.buildbuddy.io/invocation/7d91e496-2f6f-4adf-bb6b-d02bcb83827b.
 These checks establish correctness and existing budgets, not an end-to-end throughput
 improvement or completion of the real-driver/Native Image acceptance matrix.
+
+SQLite integration increment: `truffledata-jdbc-sqlite` now has a Gazelle-generated
+Bazel target, a thin Maven publication with explicit Xerial dependency, and a consumer
+that runs a real SQLite query against the publication jars. Acceptance exercises
+borrowed transaction rollback, wrong-driver rejection, conservative untyped metadata,
+invalid storage classes, and static JS/Python access. MySQL/PostgreSQL artifacts and
+the BOM remain pending. This SQLite artifact has not yet been published publicly.
+
+Compact binary snapshots replace boxed arrays in SQLite and Protobuf. The allocation
+gate includes unsigned-byte contract validation and measures 65,568 bytes for a
+65,536-byte payload (one owned byte array plus 32 bytes overhead). Narrower byte
+contracts still inspect values. This is allocation evidence, not a throughput claim.
+The coverage pipeline now includes the fourth production module; validation found
+32 production source records with coverage in all four modules in
+https://app.buildbuddy.io/invocation/7aa7a213-098f-4145-878b-8c2a863ea4f8.
+Driver cell buffering, native consumers, cancellation/deadlines and total query
+retention bounds are still pending acceptance items.
+Final verification of this increment, including generated Protobuf binary messages
+and equivalent nesting-limit rejection for compact/boxed arrays: all 10 Bazel test
+targets passed at https://app.buildbuddy.io/invocation/862c7502-0b59-430f-9406-29db51ada748.

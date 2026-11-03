@@ -19,6 +19,22 @@ public final class Consumer {
     if (!interop.readMember(proto.snapshot(StringValue.of("hello")), "value").equals("hello")) {
       throw new AssertionError("protobuf interop");
     }
+    Class.forName("org.sqlite.JDBC");
+    try (var connection = java.sql.DriverManager.getConnection("jdbc:sqlite::memory:");
+        var cursor =
+            JdbcSource.execute(
+                connection,
+                "select 42 as a",
+                List.of(),
+                schema,
+                null,
+                Limits.DEFAULT,
+                dev.elide.truffledata.jdbc.sqlite.SqliteAdapter.INSTANCE,
+                dev.elide.truffledata.jdbc.JdbcQueryOptions.DEFAULT)) {
+      var record = java.util.Objects.requireNonNull(cursor.nextRecord());
+      if (!interop.readMember(record, "a").equals(42L))
+        throw new AssertionError("SQLite publication");
+    }
     if (JdbcSource.class.getDeclaredMethods().length == 0) throw new AssertionError("JDBC linkage");
   }
 }

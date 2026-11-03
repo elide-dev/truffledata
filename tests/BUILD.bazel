@@ -21,6 +21,7 @@ data_java_library(
     deps = [
         "//core",
         "//jdbc",
+        "//jdbc-sqlite",
         "//protobuf",
         "@maven//:com_google_protobuf_protobuf_java",
         "@maven//:org_graalvm_polyglot_polyglot",
@@ -42,6 +43,7 @@ java_test(
         "//bazel:java.bzl",
         "//core:sources",
         "//jdbc:sources",
+        "//jdbc-sqlite:sources",
         "//protobuf:sources",
     ],
     exec_properties = {

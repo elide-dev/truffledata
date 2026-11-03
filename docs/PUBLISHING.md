@@ -1,34 +1,35 @@
 # Maven publishing
 
-Bazel produces three thin libraries, with source jars and POMs:
+Bazel produces four thin libraries, with source jars and POMs:
 
 | Coordinate | Contents |
 | --- | --- |
 | `dev.elide:truffledata-core:<version>` | Schema, batches, interop, dynamic/static records, specialized access |
 | `dev.elide:truffledata-jdbc:<version>` | JDBC adapter; depends on core |
+| `dev.elide:truffledata-jdbc-sqlite:<version>` | Xerial SQLite integration; depends on JDBC, core and sqlite-jdbc |
 | `dev.elide:truffledata-protobuf:<version>` | Protobuf adapter; depends on core and protobuf-java |
 
-All artifacts require Java 25 and currently target Elide GraalVM `25.5.5-elide.5`. They do not bundle GraalVM, guest languages, JDBC drivers, annotation processors, or test libraries. Select the runtime, guest languages and JDBC drivers in the embedding application. JSpecify annotations and the Truffle API are compile dependencies. Release dependencies are checked against `maven_install.json` by `//tools/release:test`.
+All artifacts require Java 25 and currently target Elide GraalVM `25.5.5-elide.5`. They do not bundle GraalVM, guest languages, JDBC drivers, annotation processors, or test libraries. Select the runtime and guest languages in the embedding application. The SQLite integration declares its upstream driver transitively; generic JDBC remains driver independent. JSpecify annotations and the Truffle API are compile dependencies. Release dependencies are checked against `maven_install.json` by `//tools/release:test`.
 
 ## Stage and inspect
 
 ```sh
 # Build publication outputs only, with the normal remote execution/cache configuration:
-bazel build //tools/release:publications --//tools/release:version=0.1.0-alpha.1
+bazel build //tools/release:publications --//tools/release:version=0.1.0-alpha.3
 
 # Run all checks and stage jars, POMs, metadata and checksums without network writes:
-tools/release/publish.sh 0.1.0-alpha.1
+tools/release/publish.sh 0.1.0-alpha.3
 ```
 
 The staging command prints a unique directory under `build/release-repo.*`. Each artifact includes its binary jar (including generated Truffle implementations), source jar, POM, and MD5/SHA-1/SHA-256/SHA-512 checksums. Source jars come from the library's JavaInfo, rather than an independently maintained source list. The default Bazel version is `0.1.0-SNAPSHOT` for checks; the release script requires an explicit immutable version and refuses snapshots.
 
 ## Upload
 
-The publisher follows Komodo's deployment: `rclone` remote `elide:`, bucket `elide-maven`, public URL `https://maven.elide.dev`. Provision rclone credentials outside the repository. If your configured remote has a different name, set `MAVEN_BUCKET`, for example `MAVEN_BUCKET=r2:elide-maven tools/release/publish.sh 0.1.0-alpha.1 --publish`. The publishing host needs Bash, Python 3, curl, rclone and Bazelisk; compilation and tests retain the normal hermetic Bazel toolchains and RBE settings. The small repository-layout check runs with Python 3 from the pinned remote executor image.
+The publisher follows Komodo's deployment: `rclone` remote `elide:`, bucket `elide-maven`, public URL `https://maven.elide.dev`. Provision rclone credentials outside the repository. If your configured remote has a different name, set `MAVEN_BUCKET`, for example `MAVEN_BUCKET=r2:elide-maven tools/release/publish.sh 0.1.0-alpha.3 --publish`. The publishing host needs Bash, Python 3, curl, rclone and Bazelisk; compilation and tests retain the normal hermetic Bazel toolchains and RBE settings. The small repository-layout check runs with Python 3 from the pinned remote executor image.
 
 ```sh
 # Run from a clean, committed checkout. This command writes to the public repository.
-tools/release/publish.sh 0.1.0-alpha.1 --publish
+tools/release/publish.sh 0.1.0-alpha.3 --publish
 ```
 
 The command runs the full test suite, stages artifacts, merges existing metadata, uploads immutable payloads, verifies bucket contents and public payload bytes, then uploads metadata and checksums. Missing credentials, failed listings and malformed existing metadata fail the release; they are never interpreted as an empty repository. It neither tags nor pushes Git history. CI already exercises publication validation through `bazel test //...`; uploading is an explicit release operation, not a pull-request action.
@@ -46,9 +47,9 @@ repositories {
     maven("https://maven.elide.dev/gvm-elide/25.5.5-elide.5")
 }
 dependencies {
-    implementation("dev.elide:truffledata-jdbc:0.1.0-alpha.1")
-    implementation("dev.elide:truffledata-protobuf:0.1.0-alpha.1")
+    implementation("dev.elide:truffledata-jdbc:0.1.0-alpha.3")
+    implementation("dev.elide:truffledata-protobuf:0.1.0-alpha.3")
 }
 ```
 
-For Maven, declare `https://maven.elide.dev` in `<repositories>` and the same coordinates in `<dependencies>`. Published POMs also declare the fork repository; Gradle and Bazel consumers must explicitly configure it. For Bazel, add the two repositories and desired coordinates to `maven.install`, then repin. Use core alone if neither adapter is needed. The example version is a proposed first prerelease, not a claim that it has been uploaded.
+For Maven, declare `https://maven.elide.dev` in `<repositories>` and the same coordinates in `<dependencies>`. Published POMs also declare the fork repository; Gradle and Bazel consumers must explicitly configure it. For Bazel, add the two repositories and desired coordinates to `maven.install`, then repin. Use core alone if neither adapter is needed. The staging examples use the proposed next prerelease `0.1.0-alpha.3`; it has not been uploaded. Core/JDBC/Protobuf `0.1.0-alpha.2` are already published. The SQLite integration is new and awaits the next release.

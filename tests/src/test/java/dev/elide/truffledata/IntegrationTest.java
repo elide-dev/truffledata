@@ -215,12 +215,15 @@ class IntegrationTest {
                         .withElement(Field.integer("byte", 8, false, false, false))));
         var layout = new StaticLayout(TestLanguage.current().language(), schema, Limits.DEFAULT);
         try (var cursor =
-            SqliteSource.execute(
+            JdbcSource.execute(
                 connection,
                 "select id, name, enabled, payload from people where id = ?",
                 List.of(7L),
+                schema,
                 layout,
-                Limits.DEFAULT)) {
+                Limits.DEFAULT,
+                dev.elide.truffledata.jdbc.sqlite.SqliteAdapter.INSTANCE,
+                JdbcQueryOptions.DEFAULT)) {
           AbstractRow row = Objects.requireNonNull(cursor.nextRecord());
           assertInstanceOf(StaticLayout.Record.class, row);
           assertNull(cursor.nextRecord());

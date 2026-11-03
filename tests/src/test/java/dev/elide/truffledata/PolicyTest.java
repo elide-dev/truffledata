@@ -29,10 +29,11 @@ class PolicyTest {
             Map.entry("JdbcSource.java", 6),
             Map.entry("ProtobufAdapter.java", 3),
             Map.entry("JdbcContracts.java", 1),
-            Map.entry("SqliteSource.java", 1));
+            Map.entry("SqliteSource.java", 1),
+            Map.entry("SqliteAdapter.java", 1));
     Pattern limit = Pattern.compile("limit\\s*=\\s*\"(\\d+)\"");
     int checked = 0;
-    for (String module : new String[] {"core", "jdbc", "protobuf"}) {
+    for (String module : new String[] {"core", "jdbc", "jdbc-sqlite", "protobuf"}) {
       try (var paths = Files.walk(root.resolve(module + "/src/main/java"))) {
         for (Path path : paths.filter(p -> p.toString().endsWith(".java")).toList()) {
           String source = Files.readString(path);

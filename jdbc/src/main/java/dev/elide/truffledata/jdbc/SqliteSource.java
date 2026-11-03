@@ -31,14 +31,12 @@ public final class SqliteSource {
   }
 
   @TruffleBoundary
-  private static @Nullable Object decode(@Nullable Object value, Field field, Limits limits) {
+  public static @Nullable Object decode(@Nullable Object value, Field field, Limits limits) {
     if (value == null) return null;
     if (value instanceof byte[] bytes) {
       if (bytes.length > limits.maxCells())
         throw new ContractViolation("SQLite blob budget exceeded");
-      Object[] items = new Object[bytes.length];
-      for (int i = 0; i < bytes.length; i++) items[i] = (long) Byte.toUnsignedInt(bytes[i]);
-      return new DataArray(items);
+      return DataArray.copyOfBytes(bytes);
     }
     if (field.kind() == Field.Kind.BOOLEAN && (value instanceof Integer || value instanceof Long)) {
       long number = ((Number) value).longValue();

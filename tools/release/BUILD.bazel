@@ -15,12 +15,16 @@ COMMON = [
 
 [maven_publication(
     name = module,
-    dependencies = COMMON + ([] if module == "core" else ["dev.elide:truffledata-core:{version}"]) + (["com.google.protobuf:protobuf-java:4.33.2"] if module == "protobuf" else []),
+    dependencies = COMMON + ([] if module == "core" else ["dev.elide:truffledata-core:{version}"]) + (["com.google.protobuf:protobuf-java:4.33.2"] if module == "protobuf" else []) + ([
+        "dev.elide:truffledata-jdbc:{version}",
+        "org.xerial:sqlite-jdbc:3.53.4.0",
+    ] if module == "jdbc-sqlite" else []),
     library = "//%s" % module,
     module = module,
 ) for module in [
     "core",
     "jdbc",
+    "jdbc-sqlite",
     "protobuf",
 ]]
 
@@ -29,6 +33,7 @@ filegroup(
     srcs = [
         ":core",
         ":jdbc",
+        ":jdbc-sqlite",
         ":protobuf",
     ],
 )
@@ -53,6 +58,7 @@ sh_test(
 ) for module in [
     "core",
     "jdbc",
+    "jdbc-sqlite",
     "protobuf",
 ]]
 
@@ -62,10 +68,14 @@ sh_test(
     deps = [
         "@maven//:org_graalvm_truffle_truffle_api",
         "@maven//:org_jspecify_jspecify",
-    ] + ([] if module == "core" else [":core_import"]) + (["@maven//:com_google_protobuf_protobuf_java"] if module == "protobuf" else []),
+    ] + ([] if module == "core" else [":core_import"]) + (["@maven//:com_google_protobuf_protobuf_java"] if module == "protobuf" else []) + ([
+        ":jdbc_import",
+        "@maven//:org_xerial_sqlite_jdbc",
+    ] if module == "jdbc-sqlite" else []),
 ) for module in [
     "core",
     "jdbc",
+    "jdbc-sqlite",
     "protobuf",
 ]]
 
@@ -77,6 +87,7 @@ java_test(
     use_testrunner = False,
     deps = [
         ":core_import",
+        ":jdbc-sqlite_import",
         ":jdbc_import",
         ":protobuf_import",
         "@maven//:com_google_protobuf_protobuf_java",

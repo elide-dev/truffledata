@@ -18,6 +18,25 @@ import org.junit.jupiter.api.Test;
  */
 class AllocationTest {
   @Test
+  void binarySnapshotsAllocateOneCompactPayload() {
+    byte[] input = new byte[65536];
+    Arrays.fill(input, (byte) 255);
+    Field field =
+        new Field("binary", Field.Kind.ARRAY, false, false)
+            .withConstraints(
+                Constraints.NONE.withElement(Field.integer("byte", 8, false, false, false)));
+    for (int i = 0; i < 1000; i++) retained = Values.validate(field, DataArray.copyOfBytes(input));
+    ThreadMXBean bean = (ThreadMXBean) ManagementFactory.getThreadMXBean();
+    bean.setThreadAllocatedMemoryEnabled(true);
+    long before = bean.getThreadAllocatedBytes(Thread.currentThread().threadId());
+    for (int i = 0; i < 1000; i++) retained = Values.validate(field, DataArray.copyOfBytes(input));
+    double perSnapshot =
+        (bean.getThreadAllocatedBytes(Thread.currentThread().threadId()) - before) / 1000.0;
+    System.out.printf("ALLOCATION binary-snapshot %.3f bytes/65536-byte payload%n", perSnapshot);
+    assertTrue(perSnapshot <= input.length + 128, "Binary snapshot expanded or copied twice");
+  }
+
+  @Test
   void primitiveReadsStayWithinAllocationBudget() {
     var row =
         Batch.copyOf(

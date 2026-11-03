@@ -9,7 +9,7 @@ import sys
 import xml.etree.ElementTree as ET
 import zipfile
 
-MODULES = ('core', 'jdbc', 'protobuf')
+MODULES = ('core', 'jdbc', 'jdbc-sqlite', 'protobuf')
 NAMESPACE = {'m': 'http://maven.apache.org/POM/4.0.0'}
 
 

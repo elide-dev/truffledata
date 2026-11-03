@@ -250,10 +250,7 @@ public final class ProtobufAdapter {
     }
     if (value instanceof ByteString bytes) {
       budget.cells(bytes.size());
-      Object[] values = new Object[bytes.size()];
-      for (int i = 0; i < values.length; i++)
-        values[i] = (long) Byte.toUnsignedInt(bytes.byteAt(i));
-      return new DataArray(values);
+      return DataArray.copyOfBytes(bytes.asReadOnlyByteBuffer());
     }
     if (value instanceof EnumValueDescriptor e) value = e.getName();
     if (value instanceof String s) budget.string(s);

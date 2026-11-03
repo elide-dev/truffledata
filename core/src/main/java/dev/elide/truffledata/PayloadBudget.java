@@ -29,7 +29,8 @@ public final class PayloadBudget {
       stringBytes += bytes;
     } else if (value instanceof DataArray array) {
       cells(array.size());
-      for (int i = 0; i < array.size(); i++) accept(array.get(i), depth + 1);
+      if (!array.isBytes() || depth == 128)
+        for (int i = 0; i < array.size(); i++) accept(array.get(i), depth + 1);
     } else if (value instanceof AbstractRow row) {
       cells(row.schema().size());
       DataLibrary data = DataLibrary.factory().getUncached();

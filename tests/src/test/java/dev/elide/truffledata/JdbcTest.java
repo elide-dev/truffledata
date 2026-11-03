@@ -10,6 +10,60 @@ import org.junit.jupiter.api.Test;
 
 class JdbcTest {
   @Test
+  void sqliteAdapterPreservesBorrowedTransactionsAndRejectsCoercion() throws Exception {
+    var adapter = dev.elide.truffledata.jdbc.sqlite.SqliteAdapter.INSTANCE;
+    try (Connection wrong = DriverManager.getConnection("jdbc:h2:mem:")) {
+      assertThrows(
+          SQLException.class, () -> adapter.prepare(wrong, "select 1", JdbcQueryOptions.DEFAULT));
+    }
+    try (Connection connection = DriverManager.getConnection("jdbc:sqlite::memory:")) {
+      connection.setAutoCommit(false);
+      try (Statement statement = connection.createStatement()) {
+        statement.execute("create table sample(value)");
+        statement.execute("insert into sample values (1), ('invalid'), (NULL)");
+      }
+      try (var cursor =
+          JdbcSource.execute(
+              connection,
+              "select value from sample",
+              List.of(),
+              null,
+              null,
+              Limits.DEFAULT,
+              adapter,
+              JdbcQueryOptions.DEFAULT)) {
+        assertEquals(Field.Kind.ANY, cursor.schema().field(0).kind());
+        assertTrue(cursor.schema().field(0).nullable());
+        Batch batch = java.util.Objects.requireNonNull(cursor.nextBatch());
+        assertEquals(3, batch.size());
+        assertEquals("invalid", DataLibrary.factory().getUncached().read(batch.row(1), 0));
+      }
+      try (var cursor =
+          JdbcSource.execute(
+              connection,
+              "select value from sample",
+              List.of(),
+              Schema.of(Field.requiredLong("value")),
+              null,
+              Limits.DEFAULT,
+              adapter,
+              JdbcQueryOptions.DEFAULT)) {
+        assertThrows(ContractViolation.class, cursor::nextBatch);
+        assertTrue(cursor.isClosed());
+      }
+      assertFalse(connection.getAutoCommit());
+      assertFalse(connection.isClosed());
+      connection.rollback();
+      try (Statement statement = connection.createStatement();
+          ResultSet result =
+              statement.executeQuery("select count(*) from sqlite_master where name='sample'")) {
+        assertTrue(result.next());
+        assertEquals(0, result.getInt(1));
+      }
+    }
+  }
+
+  @Test
   void bindsParametersRetainsRowsAndBorrowsConnection() throws Exception {
     try (Connection connection = DriverManager.getConnection("jdbc:h2:mem:")) {
       var limits = new Limits(1, 4, 4, 1024);

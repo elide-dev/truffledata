@@ -60,7 +60,7 @@ Guest iteration also yields static rows when the cursor was opened with `execute
 
 `JdbcContracts.describe(metadata, MYSQL|POSTGRESQL, limits)` is opt-in metadata cooperation. It interprets numeric widths/sign, nullability, string precision as a maximum code-point length, and decimal precision/scale. Unknown widths or kinds remain unconstrained. Supply an explicit schema for query refinements (such as non-null projections), arrays, unreliable driver metadata, or application-specific conversions. Defaults do not inspect SQL.
 
-SQLite's affinity does not prove a storage type, width, or length. `JdbcContracts.describe(..., SQLITE, ...)` is conservative. `SqliteSource.execute` requires a known `StaticLayout`, adapts SQLite integer booleans strictly from 0/1 and BLOBs into unsigned-byte arrays, and validates each value. The application supplies a JDBC connection; this library does not manage database credentials or pool connections. The example uses Xerial SQLite JDBC and its actual native SQLite engine, not an emulation. SQLite JDBC is a test runtime dependency, not a mandatory dependency for other JDBC consumers.
+SQLite's affinity does not prove a storage type, width, or length. `JdbcContracts.describe(..., SQLITE, ...)` is conservative. `SqliteSource.execute` requires a known `StaticLayout`, adapts SQLite integer booleans strictly from 0/1 and BLOBs into unsigned-byte arrays, and validates each value. The application supplies a JDBC connection; this library does not manage database credentials or pool connections. The example uses Xerial SQLite JDBC and its actual native SQLite engine, not an emulation. The separate `truffledata-jdbc-sqlite` integration declares Xerial SQLite JDBC as a dependency; generic JDBC consumers do not inherit it.
 
 ## Executable integration samples and budgets
 
@@ -101,3 +101,27 @@ arbitrary third-party export's purity. Snapshot construction still copies caller
 owned mutable storage where required to preserve retained-row semantics. Static
 JDBC iteration avoids an intermediate columnar batch; remaining allocations and
 copies must be evaluated against that ownership guarantee.
+
+
+## SQLite driver integration
+
+`dev.elide.truffledata.jdbc.sqlite.SqliteAdapter.INSTANCE` implements the versioned
+adapter SPI in the separate `truffledata-jdbc-sqlite` artifact. Pass it and
+`JdbcQueryOptions` to `JdbcSource.execute`; an explicit schema and optional reusable
+static layout preserve known query facts. Without a contract, SQLite fields stay
+nullable `ANY` because affinity cannot establish runtime storage types. Driver
+wrappers must support JDBC `isWrapperFor(SQLiteConnection.class)`.
+
+The adapter configures a forward-only/read-only statement, fetch hint and driver
+query timeout without changing the borrowed connection's transaction settings.
+`requireStreaming` means stepping the native result cursor here; it does not bound
+SQLite engine execution memory, temporary sorts, or each driver's native-to-Java
+cell conversion. Xerial may materialize a complete BLOB/string before the library
+can inspect it. End-to-end payload limits and deadline/cancellation guarantees
+remain production acceptance work; `setQueryTimeout` alone is not their proof.
+
+Binary snapshots now use compact `byte[]` storage with unsigned INT64 element
+access. Mutable arrays/buffers are copied once into private storage; subsequent
+rows can share the immutable `DataArray`. SQLite and Protobuf snapshots use this
+representation instead of expanding bytes into boxed object arrays. This keeps
+retained data independent of source mutation while reducing ingestion allocation.

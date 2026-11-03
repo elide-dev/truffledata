@@ -29,6 +29,8 @@ class PublicationTest(unittest.TestCase):
                     expected.add('dev.elide:truffledata-core')
                 if module == 'protobuf':
                     expected.add('com.google.protobuf:protobuf-java')
+                if module == 'jdbc-sqlite':
+                    expected.update(('dev.elide:truffledata-jdbc', 'org.xerial:sqlite-jdbc'))
                 actual = set()
                 for dep in root.findall('m:dependencies/m:dependency', NAMESPACE):
                     get = lambda key: dep.findtext('m:' + key, namespaces=NAMESPACE)

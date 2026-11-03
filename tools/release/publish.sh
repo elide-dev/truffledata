@@ -15,7 +15,7 @@ if 'SNAPSHOT' in sys.argv[1].upper():
 PY
 bucket=${MAVEN_BUCKET:-elide:elide-maven}
 public=https://maven.elide.dev
-modules=(core jdbc protobuf)
+modules=(core jdbc jdbc-sqlite protobuf)
 bazel=${BAZEL:-$(command -v bazelisk || command -v bazel)}
 mkdir -p build
 repo=$(mktemp -d "$PWD/build/release-repo.XXXXXX")
@@ -61,4 +61,4 @@ for module in "${modules[@]}"; do
   rclone check "$repo/$path" "$bucket/$path" --include 'maven-metadata.xml*' --one-way
 done
 rm -f "$repo/public-check"
-echo "Published dev.elide:truffledata-{core,jdbc,protobuf}:$version at $public"
+echo "Published dev.elide:truffledata-{core,jdbc,jdbc-sqlite,protobuf}:$version at $public"

@@ -21,6 +21,19 @@
     "plugins": []
   },
   {
+    "directory": "jdbc-sqlite",
+    "root": "src/main/java",
+    "name": "jdbc-sqlite",
+    "deps": [
+      "//core:core",
+      "//jdbc:jdbc",
+      "@maven//:org_graalvm_truffle_truffle_api",
+      "@maven//:org_xerial_sqlite_jdbc"
+    ],
+    "testonly": false,
+    "plugins": []
+  },
+  {
     "directory": "protobuf",
     "root": "src/main/java",
     "name": "protobuf",
@@ -43,7 +56,8 @@
       "@maven//:org_graalvm_truffle_truffle_api",
       "@maven//:org_graalvm_polyglot_polyglot",
       "@maven//:com_google_protobuf_protobuf_java",
-      "@maven//:org_junit_jupiter_junit_jupiter_api"
+      "@maven//:org_junit_jupiter_junit_jupiter_api",
+      "//jdbc-sqlite:jdbc-sqlite"
     ],
     "testonly": true,
     "plugins": []
