@@ -33,3 +33,46 @@ Protobuf schemas are compiled once per adapter into an immutable descriptor grap
 Structural limits are checked before allocating batch storage. Core ingestion accounts nested arrays/rows and strings, and the Protobuf adapter also checks nested/repeated payloads before constructing them. These limits do not bound JDBC driver buffering, pre-existing caller objects, future mutation of retained live views, or total retained application memory. The owner must bound retention and configure source-level limits. Native Image, cancellation, and large real-driver payload behavior need dedicated acceptance gates before shipping.
 
 The continuous Native Image benchmark build also checks Truffle runtime-compilation reachability. Exact-number conversion bodies (not just their fits checks) are bounded away from guest compilation; Unicode code-point counting uses a separate boundary while UTF-16 length and exact-length specialization stay inline. See [simulation scope](BENCHMARKS.md).
+
+## Expanded shared-model gates
+
+The allocation and compiled targets exercise nullable static reads with null/missing
+failures, and one adopted accessor transitioning through 1, 2, 4 and 8 distinct schema
+identities across static, batch and dynamic representations. Rows originate in two
+contexts on a shared engine and are read after those producing contexts close. This
+checks retained representation independence; it does not authorize sharing live dynamic
+objects across threads. The 1/2/4-identity paths must stay within 0.05 bytes/read; the
+8-identity generic path has a 16-byte/read budget and currently measures 12 bytes/read.
+AST size remains bounded (12 nodes observed at saturation, 256-node ceiling).
+
+A nested static outer record containing a live DynamicRecord exercises post-compilation
+shape changes, width/type/null/missing rejection and successful recovery. Compiled
+execution is required again after recovery, with a 0.05-byte/read allocation ceiling.
+The outer record's slots are immutable; retaining a live nested object deliberately
+preserves that object's live semantics, rather than silently copying it. Do not infer
+transitive immutability from a static outer representation.
+
+## Protobuf Native Image metadata
+
+`dev.elide.truffledata.protobuf.NativeMetadata` generates reflection configuration from
+full-runtime Protobuf message classes on a build JVM. For a consumer classpath:
+
+```sh
+java -cp "$CONSUMER_CLASSPATH" dev.elide.truffledata.protobuf.NativeMetadata   example.Messages\$Order > reflect-config.json
+```
+
+Package the JSON under `META-INF/native-image/<group>/<artifact>/reflect-config.json`,
+or pass its path to Native Image's reflection configuration option. A Bazel consumer
+can define a `java_binary` using this main class and its own generated message runtime
+dependencies, then invoke it from a genrule. `//protobuf:native_metadata` is the ready
+binary for classes in this repository's Protobuf runtime; the native benchmark now
+uses such a genrule rather than a hand-maintained list.
+
+The generator includes messages, builders, enums, imported message return types,
+and descriptor/edition classes used by dynamic messages. Names are deterministic and
+class discovery is bounded to 16,384 classes. Full Message API is required; lite-only
+classes and custom reflection conventions are outside this generator's contract.
+This is reflection metadata, not general class-initialization policy or driver support.
+Generated metadata passed the native simulation executable, including generated and
+wire-decoded Protobuf paths. Consumer-specific native executables and additional schema
+features still require acceptance; image construction alone is insufficient evidence.

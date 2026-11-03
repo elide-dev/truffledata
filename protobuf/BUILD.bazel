@@ -1,3 +1,4 @@
+load("@rules_java//java:defs.bzl", "java_binary")
 load("//bazel:java.bzl", "data_java_library")
 
 package(default_visibility = ["//visibility:public"])
@@ -5,6 +6,7 @@ package(default_visibility = ["//visibility:public"])
 data_java_library(
     name = "protobuf",
     srcs = [
+        "src/main/java/dev/elide/truffledata/protobuf/NativeMetadata.java",
         "src/main/java/dev/elide/truffledata/protobuf/ProtobufAdapter.java",
         "src/main/java/dev/elide/truffledata/protobuf/package-info.java",
     ],
@@ -21,3 +23,9 @@ filegroup(
 )
 
 exports_files(["BUILD.bazel"])
+
+java_binary(
+    name = "native_metadata",
+    main_class = "dev.elide.truffledata.protobuf.NativeMetadata",
+    runtime_deps = [":protobuf"],
+)

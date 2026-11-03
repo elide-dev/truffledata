@@ -93,12 +93,19 @@ java_test(
     ],
 )
 
+genrule(
+    name = "protobuf_reflection",
+    outs = ["protobuf-reflect-config.json"],
+    cmd = "$(location //protobuf:native_metadata) com.google.protobuf.Type > $@",
+    tools = ["//protobuf:native_metadata"],
+)
+
 native_image(
     name = "native",
     cc_deps = ["//benchmarks/native:hooks"],
     data = [
         "proxy-config.json",
-        "reflect-config.json",
+        ":protobuf_reflection",
         "//benchmarks/native:databench.h",
     ],
     debug = True,
@@ -120,7 +127,7 @@ native_image(
         "-H:-DeleteLocalSymbols",
         "-H:+PreserveFramePointer",
         "-H:DynamicProxyConfigurationFiles=benchmarks/proxy-config.json",
-        "-H:ReflectionConfigurationFiles=benchmarks/reflect-config.json",
+        "-H:ReflectionConfigurationFiles=$(location :protobuf_reflection)",
         "-H:-UnlockExperimentalVMOptions",
     ],
     graalvm_sdk = "@graalvm_linux_amd64//:gvm",

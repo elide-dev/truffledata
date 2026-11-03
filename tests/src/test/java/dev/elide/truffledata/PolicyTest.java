@@ -28,6 +28,7 @@ class PolicyTest {
             Map.entry("JdbcCursor.java", 7),
             Map.entry("JdbcSource.java", 6),
             Map.entry("ProtobufAdapter.java", 3),
+            Map.entry("NativeMetadata.java", 1),
             Map.entry("JdbcContracts.java", 1),
             Map.entry("JdbcContract.java", 1),
             Map.entry("SqliteSource.java", 1),

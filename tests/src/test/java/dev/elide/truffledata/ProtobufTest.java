@@ -13,6 +13,39 @@ import org.junit.jupiter.api.Test;
 
 class ProtobufTest {
   @Test
+  void consumerNativeMetadataIncludesImportedMessagesBuildersEnumsAndDescriptors() {
+    String config =
+        dev.elide.truffledata.protobuf.NativeMetadata.reflectionConfig(
+            com.google.protobuf.Type.class);
+    for (Class<?> required :
+        new Class<?>[] {
+          com.google.protobuf.Type.class,
+          com.google.protobuf.Type.Builder.class,
+          com.google.protobuf.Field.class,
+          com.google.protobuf.Field.Builder.class,
+          com.google.protobuf.SourceContext.class,
+          com.google.protobuf.SourceContext.Builder.class,
+          com.google.protobuf.Syntax.class,
+          com.google.protobuf.DescriptorProtos.FeatureSet.class,
+          com.google.protobuf.DescriptorProtos.FeatureSet.Builder.class,
+          com.google.protobuf.JavaFeaturesProto.JavaFeatures.class
+        }) {
+      assertTrue(config.contains("\"name\":\"" + required.getName() + "\""), required.getName());
+    }
+    assertEquals(
+        config,
+        dev.elide.truffledata.protobuf.NativeMetadata.reflectionConfig(
+            com.google.protobuf.Type.class, com.google.protobuf.Type.class));
+    assertFalse(config.contains("java.lang.String"));
+    assertThrows(
+        IllegalArgumentException.class,
+        () -> dev.elide.truffledata.protobuf.NativeMetadata.reflectionConfig(String.class));
+    assertThrows(
+        IllegalArgumentException.class,
+        () -> dev.elide.truffledata.protobuf.NativeMetadata.reflectionConfig(Message.class));
+  }
+
+  @Test
   void generatedBinaryMessagesUseCompactUnsignedSnapshots() throws Exception {
     byte[] input = new byte[256];
     java.util.Arrays.fill(input, (byte) 255);

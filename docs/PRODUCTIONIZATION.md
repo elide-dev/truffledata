@@ -1,9 +1,23 @@
 # Production acceptance ledger
 
 This ledger tracks the full productionization goal. An unchecked item is not a shipped guarantee.
-The intended first production scope is bounded synchronous query consumption with MySQL,
-PostgreSQL and SQLite integrations plus Protobuf, embedded in Elide. SQL stays opaque;
-the database owns planning. CSV, RPC execution and asynchronous delivery are subsequent scopes.
+The production goal is the shared TruffleData layer: static/dynamic/nested object models,
+nullity and presence contracts, bounded specialization across shapes and contexts, allocation
+and retention, Protobuf and consumer Native Image support, stable APIs/diagnostics, and
+actual Elide embedding. JDBC is one integration use case, already covered extensively.
+Additional database pooling, deadlines, server benchmarking and session automation are
+deferred unless they expose a shared-layer defect. SQL remains opaque to this library.
+
+Shared-layer acceptance still required:
+
+- Compiled nullable, polymorphic/megamorphic, nested, mutation and multi-context gates.
+- Cross-representation ownership/retention and allocation evidence, beyond JDBC ingestion.
+- Consumer Native Image support including generated and dynamic Protobuf schemas.
+- API/binary compatibility, bounded diagnostics, support matrix and release provenance.
+- Actual Elide embedding with host access disabled and context isolation.
+
+The table below retains prior implementation history; database-specific open items are
+not the governing definition of shared-layer production readiness.
 
 | Requirement | Required acceptance evidence | State |
 | --- | --- | --- |
@@ -230,3 +244,16 @@ and twelve compiled benchmark smoke cases passed. A three-fork static-query elap
 check retained the 236.53 bytes/row allocation result; timing intervals overlap the
 prior direct-ingestion run. [Samples](BENCHMARKS.md#host-cleanup-serialization-follow-up)
 are committed without claiming a general zero-cost synchronization guarantee.
+
+Shared-layer readiness increment: nullable/static, mixed 1/2/4/8-identity dispatch,
+retained values across producing-context closure, and nested dynamic mutation/recovery
+now run under the existing 10,000-node compiler graph and allocation gates. Native
+Protobuf reflection metadata is generated from message classes, replacing the benchmark's
+hand-maintained list. All eleven ordinary targets and the actual native smoke executable
+passed at https://app.buildbuddy.io/invocation/3d21c451-ec1a-40d2-99e2-4d25b2a7ad3f.
+Native compilation used generated metadata at
+https://app.buildbuddy.io/invocation/db6a50a2-11d8-470f-a742-1a5ab0454f19.
+This improves shared-model evidence; general consumer Native Image, API compatibility,
+transitive ownership contracts and actual Elide embedding remain open. Protovalidate
+annotation translation is now in scope: supported rules must respect presence/ignore
+semantics, while unrepresentable rules cannot become compiler assumptions.

@@ -18,6 +18,193 @@ import org.junit.jupiter.api.Test;
  */
 class AllocationTest {
   @Test
+  void nestedAccessAndDynamicMutationRemainCorrectAfterCompilation() {
+    try (Context context = Context.newBuilder("td-test").allowExperimentalOptions(true).build()) {
+      context.initialize("td-test");
+      context.enter();
+      try {
+        DynamicObject object = new DynamicObject(Shape.newBuilder().build()) {};
+        var put = DynamicObject.PutNode.getUncached();
+        put.execute(object, "value", 1000L);
+        DynamicRecord leaf =
+            new DynamicRecord(object, Schema.of(Field.integer("value", 16, true, false, false)));
+        var layout =
+            new StaticLayout(
+                TestLanguage.current().language(),
+                Schema.of(new Field("child", Field.Kind.RECORD, false, false)),
+                Limits.DEFAULT);
+        Object outer = layout.create(leaf);
+        NestedRoot root = new NestedRoot();
+        var target = root.getCallTarget();
+        for (int i = 0; i < 30; i++) assertEquals(100000000L, target.call(outer, 100000));
+        if (Boolean.getBoolean("truffledata.requireCompiled")) assertTrue(root.compiled);
+        put.execute(object, "extra", true);
+        put.execute(object, "value", 2000L);
+        assertEquals(200000000L, target.call(outer, 100000));
+        put.execute(object, "value", 40000L);
+        assertThrows(ContractViolation.class, () -> target.call(outer, 1));
+        put.execute(object, "value", DataNull.INSTANCE);
+        assertThrows(ContractViolation.class, () -> target.call(outer, 1));
+        put.execute(object, "value", 3.5);
+        assertThrows(ContractViolation.class, () -> target.call(outer, 1));
+        DynamicObject.RemoveKeyNode.getUncached().execute(object, "value");
+        assertThrows(ContractViolation.class, () -> target.call(outer, 1));
+        put.execute(object, "value", 3000L);
+        root.compiled = false;
+        for (int i = 0; i < 30; i++) target.call(outer, 100000);
+        ThreadMXBean bean = (ThreadMXBean) ManagementFactory.getThreadMXBean();
+        bean.setThreadAllocatedMemoryEnabled(true);
+        long before = bean.getThreadAllocatedBytes(Thread.currentThread().threadId());
+        assertEquals(3000000000L, target.call(outer, 1000000));
+        double bytes =
+            (bean.getThreadAllocatedBytes(Thread.currentThread().threadId()) - before) / 1000000.0;
+        System.out.printf(
+            "ALLOCATION nested-mutation %.6f bytes/read compiled=%s%n", bytes, root.compiled);
+        assertTrue(bytes <= 0.05, "Nested retained access allocation budget exceeded");
+        if (Boolean.getBoolean("truffledata.requireCompiled")) assertTrue(root.compiled);
+        assertTrue(com.oracle.truffle.api.nodes.NodeUtil.countNodes(root) <= 256);
+      } finally {
+        context.leave();
+      }
+    }
+  }
+
+  private static final class NestedRoot extends RootNode {
+    @Child private DataLibrary outer = DataLibrary.factory().createDispatched(3);
+    @Child private ReadLongNode leaf = ReadLongNode.create();
+    boolean compiled;
+
+    NestedRoot() {
+      super(null);
+    }
+
+    @Override
+    public Object execute(VirtualFrame frame) {
+      Object row = frame.getArguments()[0];
+      int count = (Integer) frame.getArguments()[1];
+      long sum = 0;
+      for (int i = 0; i < count; i++) sum += leaf.execute(outer.read(row, 0), 0);
+      if (CompilerDirectives.inInterpreter()) LoopNode.reportLoopCount(this, count);
+      compiled |= CompilerDirectives.inCompiledCode();
+      return sum;
+    }
+  }
+
+  @Test
+  void mixedRepresentationsSaturateCachesWithoutUnboundedGrowth() {
+    Object[] rows = new Object[8];
+    try (var engine =
+        org.graalvm.polyglot.Engine.newBuilder().allowExperimentalOptions(true).build()) {
+      // Independent contexts deliberately use distinct schema/layout identities with equal names.
+      for (int contextIndex = 0; contextIndex < 2; contextIndex++) {
+        try (Context context = Context.newBuilder("td-test").engine(engine).build()) {
+          context.initialize("td-test");
+          context.enter();
+          try {
+            for (int j = 0; j < 4; j++) {
+              int index = contextIndex * 4 + j;
+              Schema schema = Schema.of(Field.requiredLong("n"));
+              long value = 1000L + index;
+              if (j == 0 || j == 3) {
+                rows[index] =
+                    new StaticLayout(TestLanguage.current().language(), schema, Limits.DEFAULT)
+                        .create(value);
+              } else if (j == 1) {
+                rows[index] =
+                    Batch.copyOf(
+                            schema, Collections.singletonList(new Object[] {value}), Limits.DEFAULT)
+                        .row(0);
+              } else {
+                DynamicObject object = new DynamicObject(Shape.newBuilder().build()) {};
+                DynamicObject.PutNode.getUncached().execute(object, "n", value);
+                rows[index] = new DynamicRecord(object, schema);
+              }
+            }
+          } finally {
+            context.leave();
+          }
+        }
+      }
+      try (Context consumer = Context.newBuilder("td-test").engine(engine).build()) {
+        consumer.initialize("td-test");
+        consumer.enter();
+        try {
+          MatrixRoot root = new MatrixRoot();
+          var target = root.getCallTarget();
+          ThreadMXBean bean = (ThreadMXBean) ManagementFactory.getThreadMXBean();
+          bean.setThreadAllocatedMemoryEnabled(true);
+          for (int width : new int[] {1, 2, 4, 8}) {
+            Object[] active = Arrays.copyOf(rows, width);
+            long expected = (1000L * width + (long) width * (width - 1) / 2) * (1000000 / width);
+            root.compiled = false;
+            for (int i = 0; i < 30; i++) target.call(active, 100000);
+            long before = bean.getThreadAllocatedBytes(Thread.currentThread().threadId());
+            assertEquals(expected, target.call(active, 1000000));
+            double allocated =
+                (bean.getThreadAllocatedBytes(Thread.currentThread().threadId()) - before)
+                    / 1000000.0;
+            int nodes = com.oracle.truffle.api.nodes.NodeUtil.countNodes(root);
+            System.out.printf(
+                "ALLOCATION mixed-width-%d %.6f bytes/read nodes=%d compiled=%s%n",
+                width, allocated, nodes, root.compiled);
+            assertTrue(
+                allocated <= (width <= 4 ? 0.05 : 16), "Mixed dispatch allocation budget exceeded");
+            assertTrue(nodes <= 256, "Mixed representation AST budget exceeded");
+            if (Boolean.getBoolean("truffledata.requireCompiled")) assertTrue(root.compiled);
+          }
+        } finally {
+          consumer.leave();
+        }
+      }
+    }
+  }
+
+  private static final class MatrixRoot extends RootNode {
+    @Child private ReadLongNode read = ReadLongNode.create();
+    boolean compiled;
+
+    MatrixRoot() {
+      super(null);
+    }
+
+    @Override
+    public Object execute(VirtualFrame frame) {
+      Object[] rows = (Object[]) frame.getArguments()[0];
+      int count = (Integer) frame.getArguments()[1];
+      long sum = 0;
+      for (int i = 0; i < count; i++) sum += read.execute(rows[i & (rows.length - 1)], 0);
+      if (CompilerDirectives.inInterpreter()) LoopNode.reportLoopCount(this, count);
+      compiled |= CompilerDirectives.inCompiledCode();
+      return sum;
+    }
+  }
+
+  @Test
+  void nullableStaticPresentReadsStayPrimitiveAfterNullAndMissing() {
+    try (Context context = Context.newBuilder("td-test").allowExperimentalOptions(true).build()) {
+      context.initialize("td-test");
+      context.enter();
+      try {
+        Schema schema = Schema.of(Field.integer("n", 32, true, true, true));
+        StaticLayout layout =
+            new StaticLayout(TestLanguage.current().language(), schema, Limits.DEFAULT);
+        Object row = layout.create(1000L);
+        check("nullable-static", row);
+        LoopRoot root = new LoopRoot();
+        var target = root.getCallTarget();
+        for (int i = 0; i < 20; i++) assertEquals(100000000L, target.call(row, 100000));
+        assertThrows(
+            ContractViolation.class, () -> target.call(layout.create(DataNull.INSTANCE), 1));
+        assertThrows(
+            ContractViolation.class, () -> target.call(layout.create(Missing.INSTANCE), 1));
+        assertEquals(1000000L, target.call(row, 1000));
+      } finally {
+        context.leave();
+      }
+    }
+  }
+
+  @Test
   void directColumnIngestionAvoidsIntermediateRowArrays() {
     Schema schema = Schema.of(Field.requiredLong("n"));
     var source =
