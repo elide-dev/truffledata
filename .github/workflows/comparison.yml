@@ -1,0 +1,52 @@
+name: SVM comparison measurements
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  compare:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43 # v2.22.3
+        with:
+          egress-policy: audit
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Configure BuildBuddy
+        env:
+          BUILDBUDDY_API_KEY: ${{ secrets.BUILDBUDDY_API_KEY || secrets.BUILDBUDDY_APIKEY }}
+        run: .github/scripts/configure-buildbuddy.sh
+      - name: Install Bazelisk
+        run: .github/scripts/install-bazelisk.sh
+      - name: Measure isolated SVM processes
+        env:
+          TRUFFLEDATA_BENCH_REVISION: ${{ github.sha }}
+        run: >-
+          bazel test //benchmarks/comparison:measure --nocache_test_results
+          --test_env=TRUFFLEDATA_BENCH_REVISION --test_output=errors
+      - name: Collect measurements
+        if: always()
+        run: |
+          mkdir -p build/comparison
+          if test -f bazel-testlogs/benchmarks/comparison/measure/test.outputs/outputs.zip; then
+            unzip -o bazel-testlogs/benchmarks/comparison/measure/test.outputs/outputs.zip -d build/comparison
+          else
+            cp -R bazel-testlogs/benchmarks/comparison/measure/test.outputs/. build/comparison/ || true
+          fi
+          if test -f build/comparison/comparison.md; then cat build/comparison/comparison.md >> "$GITHUB_STEP_SUMMARY"; fi
+      - name: Remove BuildBuddy credentials
+        if: always()
+        run: rm -f user.bazelrc
+      - name: Preserve raw samples
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: svm-comparison
+          path: |
+            build/comparison/
+            bazel-testlogs/benchmarks/comparison/measure/test.log
+          retention-days: 30

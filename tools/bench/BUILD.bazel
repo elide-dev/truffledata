@@ -5,7 +5,11 @@ sh_test(
     srcs = ["test.sh"],
     data = [
         "bench.py",
+        "compare.py",
         "test_bench.py",
+        "test_compare.py",
         "//benchmarks:cases.json",
     ],
 )
+
+exports_files(["compare.py"])
