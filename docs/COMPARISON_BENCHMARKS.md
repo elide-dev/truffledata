@@ -134,3 +134,20 @@ gate: four receivers caused 12 bytes/read instead of the allowed 0.05 bytes/read
 generated receiver classes saturated library dispatch earlier. The experiment was reverted;
 the allocation gate and dispatch limits were not relaxed. Any future combined row/storage
 representation must preserve polymorphic dispatch behavior as well as improve ingestion.
+
+Revision `e194e54` ([samples](../benchmarks/results/svm-comparison-e194e54/comparison.json),
+[table](../benchmarks/results/svm-comparison-e194e54/comparison.md)) additionally reuses
+compiled field contracts and immutable empty native-view fields, and avoids slicing a freshly
+wrapped byte array. Java heap allocation changes from the initial baseline are:
+
+| Ingestion | Initial B/message | Updated B/message |
+|---|---:|---:|
+| Owned scalar | 616 | 448 |
+| Buffa scalar | 592 | 400 |
+| Buffa borrowed bytes | 568 | 392 |
+| Buffa Timestamp JSON | 984 | 792 |
+
+All original comparison cells and stock baselines remain. Core/protobuf regressions, Buffa
+JVM acceptance, SVM smoke, and the full 31-cell measurement passed. Timing remains noisy:
+owned scalar took 679 ns versus stock's 167 ns in this run; Buffa took 1012 ns. Allocation
+improvements do not establish timing parity or superiority, and exclude native heap usage.
