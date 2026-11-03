@@ -93,8 +93,8 @@ The caller must keep that region alive and immutable for the duration of the cal
 Both text routes can use generated or runtime-compiled plans without retained descriptors
 or temporary `DynamicMessage` objects. Text format uses protobuf-java's scalar escape
 utility; ProtoJSON uses Gson's streaming token reader. Special JSON mappings for well-known
-messages still require `ProtoCompiler.bind(...).parseJson(...)`; the descriptor-free route
-rejects those mappings explicitly. See [text contracts](CONTRACTS.md#descriptor-free-text-input)
+messages use schema-validated dispatch, including wrappers, Timestamp, Duration, FieldMask,
+Struct, Value, ListValue and explicitly registered Any payloads. See [text contracts](CONTRACTS.md#descriptor-free-text-input)
 for syntax, budgets, and compatibility limits.
 
 For native typed views, compile a reusable plan instead:
@@ -125,12 +125,35 @@ values. JAVA mode uses the Java parsers with the same scoped result API. Parse f
 never switch backends. Existing `decodeTyped` remains the owned Java route.
 
 Native text supports ordinary proto2/proto3 messages, groups, enums, repeated fields,
-maps and oneofs. Special well-known-type ProtoJSON mappings, extensions and Any registries
-are not implemented by this API; use the existing descriptor-bound compatibility route
-where supported. Input/depth/cell/string budgets apply before expansion. The native byte
+maps and oneofs. Native ProtoJSON also specializes the well-known types listed above.
+Timestamp/Duration use integer parsing; FieldMask writes converted paths into native payload
+storage. Struct/Value/ListValue retain dynamic content beneath their fixed schema shapes.
+Extensions and expanded Any syntax in protobuf text format remain unsupported. Input/depth/cell/string budgets apply before expansion. The native byte
 budget covers index growth and conservative text scratch headroom; caller-owned schema,
 input and decoded-payload regions have separate size bounds. Schema compilation has an
 explicit byte limit and is intended to be reused across messages.
+
+For Any JSON, explicitly allow payload plans at compilation:
+
+```java
+try (var compiled = decoder.compile(anyPlan, 64 << 10, List.of(timestampPlan))) {
+  try (var message = compiled.parseJson(
+      "{\"@type\":\"type.googleapis.com/google.protobuf.Timestamp\","
+          + "\"value\":\"1970-01-01T00:00:01Z\"}", 1 << 20)) {
+    ProtoRow owned = message.snapshot();
+  }
+}
+```
+
+Native Any parsing selects only registered schemas and produces a typed index. Java then
+packs the validated payload with the bounded wire encoder. This packing allocates owned
+bytes; it is not zero-copy. Binary Any byte fields still borrow their input. There is no
+network lookup or automatic descriptor discovery. The Java-only equivalent is
+`anyPlan.parseJson(json, List.of(timestampPlan))`.
+
+Null wrapper fields are unset; Value null is a present null sentinel, including inside
+lists and maps. A bare wrapper root cannot represent absence in a non-null row and rejects
+JSON null; use an enclosing message when that distinction matters.
 
 ## Build and validation
 
@@ -168,3 +191,12 @@ These are allocation checks, not throughput claims. CI enforces a 16 KiB/message
 ceiling for both schemaless and native typed ingestion, an 80 KiB ceiling for owned typed ingestion of the same payload, 0.05 bytes/compiled read, a 192-node AST ceiling, and a 128-byte native index budget
 for this single-payload case. JVM allocation counters are not used in SVM; SVM runs the same
 semantic/lifetime corpus, compiled-read checks, native index budgets, and blocklist gates.
+
+WKT acceptance compares generated and runtime contracts against protobuf-java, including
+all wrappers, temporal limits, 200 seeded timestamps, nested Value/null cases and registered
+Any payloads. Timestamp, Duration and Int64Value reads must execute compiled code within
+the same allocation/AST budgets and reject access after close. On the Linux amd64 JVM,
+measured Java allocations per native parsed message were 1,752 bytes for Timestamp versus
+8,208 for descriptor-bound compatibility parsing, 1,624 versus 3,840 for Int64Value, and
+2,352 versus 5,000 for FieldMask. CI caps each native case at 16 KiB. These figures exclude
+native heap allocations and do not establish throughput gains.

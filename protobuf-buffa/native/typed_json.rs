@@ -1,5 +1,7 @@
 //! Streaming schema-aware ProtoJSON. serde_json handles JSON string escaping, not a value tree.
 use super::*;
+#[path = "typed_wkt.rs"]
+mod wkt;
 struct Json<'a> {
     text: &'a str,
     at: usize,
@@ -71,24 +73,41 @@ impl<'a, 'b> Decoder<'a, 'b> {
                 .map_err(|_| MALFORMED)
         }
     }
-    fn json_object(&mut self, ty: u32, json: &mut Json<'a>, depth: u32) -> Result<()> {
+    fn json_object(
+        &mut self,
+        ty: u32,
+        json: &mut Json<'a>,
+        depth: u32,
+        skip_type: bool,
+    ) -> Result<()> {
         if depth > self.depth {
             return Err(BUDGET);
         }
-        if self.schema.word(self.schema.ty(ty)? + 4)? & 2 != 0 {
-            return Err(MALFORMED);
-        }
         self.charge(self.schema.word(self.schema.ty(ty)?)? as u64)?;
+        let mapping = self.mapping(ty)?;
+        if mapping != 0 {
+            return self.json_special(ty, mapping, json, depth);
+        }
         json.need(b'{')?;
         if json.eat(b'}') {
             return Ok(());
         }
         loop {
             let name = self.json_string(json)?;
-            let f = self.schema.name(ty, &name, true)?;
             json.need(b':')?;
+            if skip_type && name == "@type" {
+                self.json_string(json)?;
+                if json.eat(b'}') {
+                    break;
+                }
+                json.need(b',')?;
+                continue;
+            }
+            let f = self.schema.name(ty, &name, true)?;
             json.space();
-            if json.text[json.at..].starts_with("null") {
+            if json.text[json.at..].starts_with("null")
+                && (f.repeated()? || !self.value_message(f)?)
+            {
                 self.json_null(f, json, false)?;
             } else if f.word(8)? & 2 != 0 {
                 let marker = self.push(f, 0, 0)?;
@@ -133,13 +152,13 @@ impl<'a, 'b> Decoder<'a, 'b> {
         element: bool,
     ) -> Result<()> {
         json.space();
-        if json.text[json.at..].starts_with("null") {
+        if json.text[json.at..].starts_with("null") && !self.value_message(f)? {
             return self.json_null(f, json, element);
         }
         let kind = f.kind()?;
         if kind == 10 || kind == 11 {
             let i = self.push(f, 0, 0)?;
-            self.json_object(f.word(12)?, json, depth + 1)?;
+            self.json_object(f.word(12)?, json, depth + 1, false)?;
             self.fields[i].end = self.fields.len() as u64;
             return Ok(());
         }
@@ -236,7 +255,7 @@ impl<'a, 'b> Decoder<'a, 'b> {
     pub(super) fn json(&mut self) -> Result<()> {
         let text = std::str::from_utf8(self.input).map_err(|_| MALFORMED)?;
         let mut json = Json { text, at: 0 };
-        self.json_object(0, &mut json, 1)?;
+        self.json_object(0, &mut json, 1, false)?;
         json.space();
         if json.at != text.len() {
             return Err(MALFORMED);

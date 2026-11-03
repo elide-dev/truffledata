@@ -50,6 +50,38 @@ final class CompiledReads {
             }
           }
         }
+        for (String type : java.util.List.of("Timestamp", "Duration", "Int64Value")) {
+          var contract = WellKnownAcceptance.model().type("google.protobuf." + type);
+          String json =
+              type.equals("Timestamp")
+                  ? "\"1970-01-01T00:00:01.000000002Z\""
+                  : type.equals("Duration") ? "\"-1.000000002s\"" : "7";
+          long expected = type.equals("Timestamp") ? 3 : type.equals("Duration") ? -3 : 7;
+          try (var plan = decoder.compile(contract, 65536);
+              var typed = plan.parseJson(json, 4096)) {
+            var typedRoot = new WktRoot(!type.equals("Int64Value"));
+            var typedTarget = typedRoot.getCallTarget();
+            Object row = typed.row();
+            for (int i = 0; i < 200 && !typedRoot.compiled; i++) typedTarget.call(row, 100000);
+            Acceptance.check(typedRoot.compiled, "WKT compiled " + type);
+            Acceptance.check(
+                ((Long) typedTarget.call(row, 1000000)) == expected * 1000000, "WKT scalar reads");
+            Acceptance.check(NodeUtil.countNodes(typedRoot) <= 192, "WKT AST budget");
+            if (!ImageInfo.inImageCode()) {
+              var bean =
+                  (com.sun.management.ThreadMXBean)
+                      java.lang.management.ManagementFactory.getThreadMXBean();
+              bean.setThreadAllocatedMemoryEnabled(true);
+              long thread = Thread.currentThread().threadId(),
+                  before = bean.getThreadAllocatedBytes(thread);
+              typedTarget.call(row, 1000000);
+              double bytes = (bean.getThreadAllocatedBytes(thread) - before) / 1000000.0;
+              Acceptance.check(bytes <= 0.05, "WKT compiled allocation budget");
+            }
+            typed.close();
+            Acceptance.rejects(() -> typedTarget.call(row, 1), IllegalStateException.class);
+          }
+        }
         var root = new ReadRoot();
         var target = root.getCallTarget();
         Object row = message.fields().get(0);
@@ -77,6 +109,30 @@ final class CompiledReads {
       } finally {
         context.leave();
       }
+    }
+  }
+
+  private static final class WktRoot extends RootNode {
+    @Child private ReadLongNode first = ReadLongNode.create();
+    @Child private ReadLongNode second = ReadLongNode.create();
+    private final boolean paired;
+    boolean compiled;
+
+    WktRoot(boolean paired) {
+      super(null);
+      this.paired = paired;
+    }
+
+    @Override
+    public Object execute(VirtualFrame frame) {
+      Object row = frame.getArguments()[0];
+      int count = (Integer) frame.getArguments()[1];
+      long sum = 0;
+      for (int i = 0; i < count; i++)
+        sum += first.execute(row, 0) + (paired ? second.execute(row, 1) : 0);
+      if (CompilerDirectives.inInterpreter()) LoopNode.reportLoopCount(this, count);
+      compiled |= CompilerDirectives.inCompiledCode();
+      return sum;
     }
   }
 

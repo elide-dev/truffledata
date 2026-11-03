@@ -12,38 +12,39 @@ import java.util.*;
 
 /** Streaming ProtoJSON into owned contract rows; no intermediate JSON or protobuf object tree. */
 final class ProtoJson {
-  private static final Set<String> SPECIAL_JSON_TYPES =
-      Set.of(
-          "google.protobuf.Any",
-          "google.protobuf.Timestamp",
-          "google.protobuf.Duration",
-          "google.protobuf.FieldMask",
-          "google.protobuf.Struct",
-          "google.protobuf.Value",
-          "google.protobuf.ListValue",
-          "google.protobuf.DoubleValue",
-          "google.protobuf.FloatValue",
-          "google.protobuf.Int64Value",
-          "google.protobuf.UInt64Value",
-          "google.protobuf.Int32Value",
-          "google.protobuf.UInt32Value",
-          "google.protobuf.BoolValue",
-          "google.protobuf.StringValue",
-          "google.protobuf.BytesValue");
-
+  private static final java.util.regex.Pattern DURATION =
+      java.util.regex.Pattern.compile("(-?)([0-9]+)(?:\\.([0-9]+))?s");
+  private static final java.util.regex.Pattern TIMESTAMP =
+      java.util.regex.Pattern.compile(
+          "([0-9]{4})-([0-9]{2})-([0-9]{2})T([0-9]{2}):([0-9]{2}):([0-9]{2})(?:\\.([0-9]+))?(Z|[+-][0-9]{2}:[0-9]{2})");
   private final JsonReader input;
   private final ProtoRow.Budget budget;
+  private final Map<String, ProtoPlan> anyTypes;
+  private final int maxText;
+  private final int depthLimit;
 
-  private ProtoJson(ProtoPlan plan, String json) {
+  private ProtoJson(
+      ProtoPlan plan,
+      String json,
+      Map<String, ProtoPlan> anyTypes,
+      ProtoRow.Budget budget,
+      int depthLimit) {
     if (json.length() > plan.model.maxWireBytes / 2)
       throw bad("Protobuf JSON input budget exceeded");
     input = new JsonReader(new StringReader(json));
     input.setLenient(false);
-    budget = new ProtoRow.Budget(plan.model.limits);
+    this.budget = budget;
+    this.depthLimit = Math.min(depthLimit, plan.maxDepth());
+    this.anyTypes = anyTypes;
+    maxText = plan.maxWireBytes() / 2;
   }
 
-  static ProtoRow decode(ProtoPlan plan, String json) {
-    ProtoJson parser = new ProtoJson(plan, json);
+  static ProtoRow decode(ProtoPlan plan, String json, List<ProtoPlan> registry) {
+    Map<String, ProtoPlan> anyTypes = new HashMap<>();
+    for (ProtoPlan registered : registry)
+      if (anyTypes.put(registered.name(), registered) != null) throw bad("Duplicate Any type");
+    ProtoJson parser =
+        new ProtoJson(plan, json, anyTypes, new ProtoRow.Budget(plan.limits()), plan.maxDepth());
     try {
       ProtoRow row = parser.message(plan, 1);
       if (parser.input.peek() != JsonToken.END_DOCUMENT) throw bad("Trailing JSON input");
@@ -53,7 +54,8 @@ final class ProtoJson {
     } catch (IOException
         | IllegalStateException
         | IllegalArgumentException
-        | ArithmeticException e) {
+        | ArithmeticException
+        | java.time.DateTimeException e) {
       throw bad("Invalid ProtoJSON");
     }
   }
@@ -63,11 +65,9 @@ final class ProtoJson {
   }
 
   private ProtoRow message(ProtoPlan plan, int depth) throws IOException {
-    // These types have special JSON mappings. Never silently treat them as ordinary objects.
-    if (SPECIAL_JSON_TYPES.contains(plan.name()))
-      throw bad("Well-known JSON mapping requires ProtoCompiler.bind(...).parseJson");
-    if (depth > plan.model.maxDepth) throw bad("JSON nesting budget exceeded");
+    if (depth > depthLimit) throw bad("JSON nesting budget exceeded");
     budget.cells(plan.size());
+    if (plan.jsonType() != ProtoJsonType.ORDINARY) return special(plan, depth);
     var builder = plan.newBuilder();
     boolean[] seen = new boolean[plan.size()];
     input.beginObject();
@@ -85,7 +85,8 @@ final class ProtoJson {
       if (seen[ordinal]) throw bad("Duplicate JSON field: " + name);
       seen[ordinal] = true;
       var field = plan.field(ordinal);
-      if (input.peek() == JsonToken.NULL && (field.repeated() || !nullEnum(field))) {
+      if (input.peek() == JsonToken.NULL
+          && (field.repeated() || (!nullEnum(field) && !valueMessage(plan, ordinal)))) {
         input.nextNull();
         continue;
       }
@@ -112,7 +113,7 @@ final class ProtoJson {
   }
 
   private DataArray map(ProtoPlan entry, int depth) throws IOException {
-    if (depth > entry.model.maxDepth) throw bad("JSON map nesting budget exceeded");
+    if (depth > depthLimit) throw bad("JSON map nesting budget exceeded");
     input.beginObject();
     Map<Object, ProtoRow> items = new LinkedHashMap<>();
     while (input.hasNext()) {
@@ -145,7 +146,11 @@ final class ProtoJson {
 
   private Object value(ProtoPlan plan, int ordinal, int depth) throws IOException {
     var field = plan.field(ordinal);
-    if (field.kind().message()) return message(plan.nested(ordinal), depth + 1);
+    if (field.kind().message()) {
+      if (input.peek() == JsonToken.NULL && !valueMessage(plan, ordinal))
+        throw bad("Null repeated element or map value");
+      return message(plan.nested(ordinal), depth + 1);
+    }
     if (input.peek() == JsonToken.NULL) {
       if (!nullEnum(field)) throw bad("Null repeated element or map value");
       input.nextNull();
@@ -206,6 +211,209 @@ final class ProtoJson {
       }
       default -> integer(field.kind(), input.nextString());
     };
+  }
+
+  private static boolean valueMessage(ProtoPlan plan, int ordinal) {
+    return plan.field(ordinal).kind().message()
+        && plan.nested(ordinal).jsonType() == ProtoJsonType.VALUE;
+  }
+
+  private ProtoRow special(ProtoPlan plan, int depth) throws IOException {
+    var builder = plan.newBuilder();
+    switch (plan.jsonType()) {
+      case WRAPPER -> {
+        if (input.peek() == JsonToken.NULL)
+          throw bad("Null wrapper requires an enclosing nullable field");
+        builder.set(plan.ordinal(1), value(plan, plan.ordinal(1), depth));
+      }
+      case TIMESTAMP, DURATION -> {
+        if (input.peek() != JsonToken.STRING) throw bad("Expected time string");
+        String text = input.nextString();
+        if (text.length() > 128) throw bad("Time token budget");
+        long[] parts =
+            plan.jsonType() == ProtoJsonType.TIMESTAMP ? timestamp(text) : duration(text);
+        builder.set(plan.ordinal(1), parts[0]).set(plan.ordinal(2), parts[1]);
+      }
+      case FIELD_MASK -> {
+        if (input.peek() != JsonToken.STRING) throw bad("Expected FieldMask string");
+        String text = input.nextString();
+        List<Object> paths = new ArrayList<>();
+        for (String path : text.split(",", -1)) {
+          if (path.isEmpty()) continue;
+          budget.cells(1);
+          StringBuilder converted = new StringBuilder();
+          for (int i = 0; i < path.length(); i++) {
+            char c = path.charAt(i);
+            if (c >= 'A' && c <= 'Z') converted.append('_').append((char) (c + 32));
+            else converted.append(c);
+          }
+          budget.bytes(2L * converted.length());
+          paths.add(converted.toString());
+        }
+        builder.set(plan.ordinal(1), new DataArray(paths.toArray()));
+      }
+      case STRUCT -> builder.set(plan.ordinal(1), map(plan.nested(plan.ordinal(1)), depth + 1));
+      case LIST_VALUE -> {
+        input.beginArray();
+        List<Object> items = new ArrayList<>();
+        while (input.hasNext()) {
+          budget.cells(1);
+          items.add(value(plan, plan.ordinal(1), depth));
+        }
+        input.endArray();
+        builder.set(plan.ordinal(1), new DataArray(items.toArray()));
+      }
+      case VALUE -> {
+        int number =
+            switch (input.peek()) {
+              case NULL -> 1;
+              case NUMBER -> 2;
+              case STRING -> 3;
+              case BOOLEAN -> 4;
+              case BEGIN_OBJECT -> 5;
+              case BEGIN_ARRAY -> 6;
+              default -> throw bad("Invalid Value token");
+            };
+        builder.set(plan.ordinal(number), value(plan, plan.ordinal(number), depth));
+      }
+      case ANY -> {
+        return any(plan, depth);
+      }
+      default -> throw bad("Invalid JSON dispatch");
+    }
+    return builder.build();
+  }
+
+  private static long fraction(String text) {
+    if (text.isEmpty() || text.length() > 9 || !text.chars().allMatch(c -> c >= '0' && c <= '9'))
+      throw bad("Invalid nanoseconds");
+    long value = Long.parseLong(text);
+    for (int i = text.length(); i < 9; i++) value *= 10;
+    return value;
+  }
+
+  private static long[] duration(String text) {
+    var match = DURATION.matcher(text);
+    if (!match.matches()) throw bad("Invalid Duration");
+    long seconds = Long.parseLong(match.group(2));
+    String fractional = match.group(3);
+    long nanos = fractional == null ? 0 : fraction(fractional);
+    if (seconds > 315576000000L) throw bad("Duration range");
+    boolean negative = !match.group(1).isEmpty();
+    return new long[] {negative ? -seconds : seconds, negative ? -nanos : nanos};
+  }
+
+  private static long[] timestamp(String text) {
+    var match = TIMESTAMP.matcher(text);
+    if (!match.matches()) throw bad("Invalid Timestamp");
+    int year = Integer.parseInt(match.group(1));
+    if (year == 0) throw bad("Timestamp year");
+    var date =
+        java.time.LocalDateTime.of(
+            year,
+            Integer.parseInt(match.group(2)),
+            Integer.parseInt(match.group(3)),
+            Integer.parseInt(match.group(4)),
+            Integer.parseInt(match.group(5)),
+            Integer.parseInt(match.group(6)));
+    String zone = match.group(8);
+    int offset = 0;
+    if (!zone.equals("Z")) {
+      int hour = Integer.parseInt(zone.substring(1, 3)),
+          minute = Integer.parseInt(zone.substring(4));
+      if (hour > 23 || minute > 59) throw bad("Timestamp offset");
+      offset = (hour * 3600 + minute * 60) * (zone.charAt(0) == '-' ? -1 : 1);
+    }
+    long seconds = date.toEpochSecond(java.time.ZoneOffset.UTC) - offset;
+    if (seconds < -62135596800L || seconds > 253402300799L) throw bad("Timestamp range");
+    String fractional = match.group(7);
+    return new long[] {seconds, fractional == null ? 0 : fraction(fractional)};
+  }
+
+  // Any permits @type after payload fields. Buffer bounded JSON text, not a DynamicMessage/DOM
+  // tree.
+  private ProtoRow any(ProtoPlan plan, int depth) throws IOException {
+    input.beginObject();
+    String typeUrl = "";
+    boolean sawType = false;
+    java.io.StringWriter text = new java.io.StringWriter();
+    var output = new com.google.gson.stream.JsonWriter(text);
+    output.beginObject();
+    while (input.hasNext()) {
+      String name = input.nextName();
+      if (name.equals("@type")) {
+        if (sawType || input.peek() != JsonToken.STRING) throw bad("Invalid Any type URL");
+        sawType = true;
+        typeUrl = input.nextString();
+      } else {
+        output.name(name);
+        copyJson(output, text, depth + 1);
+      }
+    }
+    input.endObject();
+    output.endObject();
+    output.close();
+    if (!sawType) {
+      if (!text.toString().equals("{}")) throw bad("Missing Any type URL");
+      return plan.newBuilder().build();
+    }
+    int slash = typeUrl.lastIndexOf('/');
+    ProtoPlan target = slash < 0 ? null : anyTypes.get(typeUrl.substring(slash + 1));
+    if (target == null) throw bad("Unregistered Any type");
+    ProtoJson nested = new ProtoJson(target, text.toString(), anyTypes, budget, depthLimit);
+    ProtoRow value;
+    if (target.jsonType() == ProtoJsonType.ORDINARY) value = nested.message(target, depth + 1);
+    else {
+      nested.input.beginObject();
+      if (!nested.input.hasNext() || !nested.input.nextName().equals("value"))
+        throw bad("Missing Any value");
+      value = nested.message(target, depth + 1);
+      if (nested.input.hasNext()) throw bad("Unknown Any member");
+      nested.input.endObject();
+    }
+    if (nested.input.peek() != JsonToken.END_DOCUMENT) throw bad("Trailing Any input");
+    byte[] wire = target.encode(value);
+    budget.cells(wire.length);
+    budget.bytes(typeUrl.length() * 2L);
+    return plan.newBuilder()
+        .set(plan.ordinal(1), typeUrl)
+        .set(plan.ordinal(2), DataArray.copyOfBytes(wire))
+        .build();
+  }
+
+  private void copyJson(
+      com.google.gson.stream.JsonWriter output, java.io.StringWriter text, int depth)
+      throws IOException {
+    if (depth > depthLimit) throw bad("Any JSON nesting budget");
+    budget.cells(1);
+    switch (input.peek()) {
+      case BEGIN_OBJECT -> {
+        input.beginObject();
+        output.beginObject();
+        while (input.hasNext()) {
+          output.name(input.nextName());
+          copyJson(output, text, depth + 1);
+        }
+        input.endObject();
+        output.endObject();
+      }
+      case BEGIN_ARRAY -> {
+        input.beginArray();
+        output.beginArray();
+        while (input.hasNext()) copyJson(output, text, depth + 1);
+        input.endArray();
+        output.endArray();
+      }
+      case STRING -> output.value(input.nextString());
+      case NUMBER -> output.jsonValue(input.nextString());
+      case BOOLEAN -> output.value(input.nextBoolean());
+      case NULL -> {
+        input.nextNull();
+        output.nullValue();
+      }
+      default -> throw bad("Invalid Any JSON");
+    }
+    if (text.getBuffer().length() > maxText) throw bad("Any text buffer budget");
   }
 
   private static boolean nullEnum(ProtoPlan.FieldPlan field) {

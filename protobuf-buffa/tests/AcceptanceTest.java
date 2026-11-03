@@ -67,6 +67,7 @@ final class AcceptanceTest {
   void nativeAllocation() throws Exception {
     try (var decoder = BuffaWire.open(BuffaWire.Mode.NATIVE, library())) {
       Acceptance.allocation(decoder);
+      WellKnownAcceptance.allocation(decoder);
       var bean =
           (com.sun.management.ThreadMXBean)
               java.lang.management.ManagementFactory.getThreadMXBean();

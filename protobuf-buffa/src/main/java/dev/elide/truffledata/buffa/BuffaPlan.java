@@ -12,14 +12,18 @@ import java.util.*;
 public final class BuffaPlan implements AutoCloseable {
   private final BuffaWire decoder;
   private final ProtoPlan plan;
+  private final List<ProtoPlan> types;
+  private final List<ProtoPlan> anyTypes;
   private final WireInput schema;
   private final WireInput empty;
   private boolean open = true;
 
-  BuffaPlan(BuffaWire decoder, ProtoPlan plan, int maxSchemaBytes) {
+  BuffaPlan(BuffaWire decoder, ProtoPlan plan, int maxSchemaBytes, List<ProtoPlan> anyTypes) {
     this.decoder = decoder;
     this.plan = Objects.requireNonNull(plan);
-    byte[] program = NativeSchema.encode(plan, maxSchemaBytes);
+    this.anyTypes = List.copyOf(anyTypes);
+    types = NativeSchema.types(plan, this.anyTypes, maxSchemaBytes);
+    byte[] program = NativeSchema.encode(types, this.anyTypes, maxSchemaBytes);
     schema = decoder.allocate(program.length).put(program);
     try {
       empty = decoder.allocate(0);
@@ -61,7 +65,7 @@ public final class BuffaPlan implements AutoCloseable {
     if (text.length() > plan.maxWireBytes() / 2) throw new ContractViolation("Text input budget");
     byte[] utf8 = text.getBytes(StandardCharsets.UTF_8);
     try (var input = decoder.allocate(utf8.length).put(utf8);
-        var payload = decoder.allocate(utf8.length)) {
+        var payload = decoder.allocate(Math.multiplyExact(utf8.length, 2))) {
       return parse(input, payload, format, nativeBytes);
     }
   }
@@ -82,11 +86,12 @@ public final class BuffaPlan implements AutoCloseable {
                     ? plan.parseText(
                         StandardCharsets.UTF_8.decode(source.bytes.duplicate()).toString())
                     : plan.parseJson(
-                        StandardCharsets.UTF_8.decode(source.bytes.duplicate()).toString());
+                        StandardCharsets.UTF_8.decode(source.bytes.duplicate()).toString(),
+                        anyTypes);
         return new TypedMessage(owner, fromJava(owner, owned), format == 0, 0);
       }
       try (var tape = backend.typed(schema, input, format, payload, plan, nativeBytes)) {
-        State state = new State(plan, owner, format, new long[] {plan.limits().maxCells()});
+        State state = new State(plan, owner, format, new long[] {plan.limits().maxCells()}, types);
         state.consume(tape, 0, tape.count);
         return new TypedMessage(owner, state.finish(1), format == 0, tape.allocated);
       }
@@ -135,15 +140,17 @@ public final class BuffaPlan implements AutoCloseable {
     final WireMessage owner;
     final int format;
     final long[] cells;
+    final List<ProtoPlan> types;
     final Object[] values;
     final boolean[] present;
     final boolean[] seen;
 
-    State(ProtoPlan plan, WireMessage owner, int format, long[] cells) {
+    State(ProtoPlan plan, WireMessage owner, int format, long[] cells, List<ProtoPlan> types) {
       this.plan = plan;
       this.owner = owner;
       this.format = format;
       this.cells = cells;
+      this.types = types;
       charge(plan.size());
       values = new Object[plan.size()];
       present = new boolean[values.length];
@@ -207,6 +214,22 @@ public final class BuffaPlan implements AutoCloseable {
         if (!f.repeated() && format != 0 && seen[ordinal])
           throw new ContractViolation("Duplicate singular field");
         seen[ordinal] = true;
+        if (kind == 101) {
+          if (format != 2
+              || plan.jsonType() != ProtoJsonType.ANY
+              || f.number() != 2
+              || value < 0
+              || value >= types.size()) throw new IllegalStateException("Invalid Any index");
+          ProtoPlan target = types.get((int) value);
+          State payload = new State(target, owner, format, cells, types);
+          payload.consume(tape, index + 1, next);
+          byte[] encoded = target.encode(payload.finish(1).snapshot());
+          charge(encoded.length);
+          values[ordinal] = DataArray.copyOfBytes(encoded);
+          present[ordinal] = encoded.length != 0;
+          index = next;
+          continue;
+        }
         if (kind != 0 && kind != f.kind().ordinal() + 1)
           throw new IllegalStateException("Native kind mismatch");
         if (f.map() && format == 0 && length != 0) {
@@ -220,7 +243,7 @@ public final class BuffaPlan implements AutoCloseable {
           State child =
               !f.repeated() && values[ordinal] instanceof State old
                   ? old
-                  : new State(plan.nested(ordinal), owner, format, cells);
+                  : new State(plan.nested(ordinal), owner, format, cells, types);
           child.consume(tape, index + 1, next);
           decoded = child;
         } else if (kind == 0) decoded = 0L;
@@ -259,7 +282,7 @@ public final class BuffaPlan implements AutoCloseable {
       if (plan.definition().mapEntry()
           && plan.field(1).kind().message()
           && values[1] == Missing.INSTANCE) {
-        values[1] = new State(plan.nested(1), owner, format, cells);
+        values[1] = new State(plan.nested(1), owner, format, cells, types);
         present[1] = true;
       }
       for (int i = 0; i < values.length; i++) {

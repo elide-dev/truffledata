@@ -37,7 +37,7 @@ impl<'a> Schema<'a> {
         .map_err(|_| MALFORMED)
     }
     fn ty(self, index: u32) -> Result<usize> {
-        if self.word(0)? != 0x54444232 || index >= self.word(4)? {
+        if self.word(0)? != 0x54444233 || index >= self.word(4)? {
             return Err(MALFORMED);
         }
         Ok(self.word(8 + index as usize * 4)? as usize)
@@ -48,7 +48,7 @@ impl<'a> Schema<'a> {
             return Err(MALFORMED);
         }
         let at = base
-            .checked_add(8 + ordinal as usize * 40)
+            .checked_add(16 + ordinal as usize * 40)
             .ok_or(MALFORMED)?;
         if self.0.get(at..at + 40).is_none() {
             return Err(MALFORMED);
@@ -527,10 +527,12 @@ mod tests {
     fn schema(kind: u32) -> Vec<u8> {
         let mut bytes = Vec::new();
         for word in [
-            0x54444232,
+            0x54444233u32,
             1,
             12,
             1,
+            0,
+            0,
             0,
             1,
             kind,
@@ -538,9 +540,9 @@ mod tests {
             u32::MAX,
             0,
             0,
-            60,
+            68,
             1,
-            60,
+            68,
             1,
         ] {
             bytes.extend_from_slice(&word.to_le_bytes());

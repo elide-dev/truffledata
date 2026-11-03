@@ -197,6 +197,14 @@ public final class ProtoPlan {
               throw new ContractViolation("Invalid map entry reference");
           }
         }
+        if (plan.jsonType() == ProtoJsonType.STRUCT) {
+          ProtoPlan entry = plan.nested(plan.ordinal(1));
+          if (entry.size() != 2
+              || entry.field(0).kind() != Kind.STRING
+              || entry.field(1).kind() != Kind.MESSAGE
+              || !entry.field(1).typeName().equals("google.protobuf.Value"))
+            throw new ContractViolation("Invalid Struct entry schema");
+        }
         if (plan.definition.mapEntry()) {
           if (plan.size() != 2
               || plan.field(0).number() != 1
@@ -237,6 +245,7 @@ public final class ProtoPlan {
   private final FieldPlan[] fields;
 
   private final Schema schema;
+  private final ProtoJsonType jsonType;
   private final @Nullable StaticLayout layout;
   private final Map<Integer, Integer> numbers;
 
@@ -256,6 +265,11 @@ public final class ProtoPlan {
     numbers = Map.copyOf(indices);
     schema = new Schema(definition.name(), contracts);
     layout = language == null ? null : new StaticLayout(language, schema, model.limits);
+    jsonType = ProtoJsonType.classify(this);
+  }
+
+  public ProtoJsonType jsonType() {
+    return jsonType;
   }
 
   public Limits limits() {
@@ -324,10 +338,16 @@ public final class ProtoPlan {
     return ProtoText.decode(this, text);
   }
 
-  /** Descriptor-free ProtoJSON for ordinary message types (not well-known-type mappings). */
+  /** Descriptor-free ProtoJSON, including schema-specialized well-known types. */
   @TruffleBoundary
   public ProtoRow parseJson(String json) {
-    return ProtoJson.decode(this, json);
+    return ProtoJson.decode(this, json, List.of());
+  }
+
+  /** Explicit allowlist for Any payloads; no descriptor discovery or network resolution. */
+  @TruffleBoundary
+  public ProtoRow parseJson(String json, List<ProtoPlan> anyTypes) {
+    return ProtoJson.decode(this, json, anyTypes);
   }
 
   @TruffleBoundary

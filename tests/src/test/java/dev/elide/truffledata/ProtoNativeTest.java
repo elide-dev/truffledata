@@ -71,7 +71,7 @@ class ProtoNativeTest {
     assertEquals(0L, get(plan.parseJson("{\"nullValue\":null}"), "null_value"));
     var timestamp =
         ProtoCompiler.compile(null, Timestamp.getDescriptor(), Limits.DEFAULT, 8, WIRE_LIMIT);
-    assertThrows(ContractViolation.class, () -> timestamp.parseJson("\"2026-01-01T00:00:00Z\""));
+    assertEquals(1767225600L, get(timestamp.parseJson("\"2026-01-01T00:00:00Z\""), "seconds"));
   }
 
   @Test

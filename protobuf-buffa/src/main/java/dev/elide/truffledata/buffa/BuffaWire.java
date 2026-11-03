@@ -165,7 +165,14 @@ public final class BuffaWire implements AutoCloseable {
   @TruffleBoundary
   public BuffaPlan compile(ProtoPlan plan, int maxSchemaBytes) {
     check();
-    return new BuffaPlan(this, plan, maxSchemaBytes);
+    return new BuffaPlan(this, plan, maxSchemaBytes, List.of());
+  }
+
+  /** Compile with an explicit allowlist of Any payload contracts. */
+  @TruffleBoundary
+  public BuffaPlan compile(ProtoPlan plan, int maxSchemaBytes, List<ProtoPlan> anyTypes) {
+    check();
+    return new BuffaPlan(this, plan, maxSchemaBytes, anyTypes);
   }
 
   private static DataArray materialize(

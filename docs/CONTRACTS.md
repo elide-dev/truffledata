@@ -254,15 +254,26 @@ duplicate singular fields, and multiple oneof members are rejected. Duplicate ma
 use the last entry. Extensions and expanded `Any` syntax are unsupported by this parser; the existing model
 also rejects schemas declaring extension ranges.
 
-ProtoJSON streams ordinary messages directly into contract rows. It accepts proto names
-and JSON names (including custom `json_name`, now retained by the contract generator),
+ProtoJSON streams messages directly into contract rows. It accepts proto names
+and JSON names (including custom `json_name`, retained by the contract generator),
 base64/base64url bytes, quoted integers, integral exponent notation, named/open numeric
-enums, repeated arrays, and map objects. Null leaves a field unset; null array elements
-and map values are rejected, except for the explicit `google.protobuf.NullValue` enum. Duplicate fields, aliases of the same field, duplicate map
-keys, and competing oneof members are rejected. Regenerate older contracts to retain custom JSON names. Special well-known-type JSON mappings
-(`Any`, wrappers, `Timestamp`, `Duration`, `FieldMask`, `Struct`, `Value`, `ListValue`) require
-`ProtoCompiler.bind(plan, descriptor).parseJson(json)` where supported by that parser.
-The bound API does not currently expose an `Any` type registry. There is no silent fallback.
+enums, repeated arrays, and map objects. Null leaves ordinary fields unset; Value null
+is a present sentinel. Null array elements and map values are otherwise rejected, except
+for the explicit `google.protobuf.NullValue` enum. Duplicate fields, aliases of the same
+field, duplicate map keys, and competing oneof members are rejected.
+
+Well-known types have schema-validated special JSON mappings: wrappers, Timestamp,
+Duration, FieldMask, Struct, Value, ListValue and Any. A bare wrapper root rejects null;
+use a containing message for nullable wrapper presence. Any requires an explicit payload
+allowlist, supplied as `plan.parseJson(json, List.of(payloadPlan))`; unknown type URLs fail.
+Registries resolve the type name after the final URL slash without network access. Any
+payloads are packed with the bounded wire encoder and share aggregate parsing budgets.
+The descriptor-bound compatibility API remains available and does not expose this registry.
+
+Generated contracts can include standard protobuf imports using the Bazel macro's
+`proto_deps` attribute with public `proto_library` targets; for example, the WKT test
+contracts consume `@protobuf//:timestamp_proto` through `//tests:wkt_proto`. Generation
+uses the transitive ProtoInfo import graph, so these plans need no runtime descriptors.
 
 Both parsers reject input exceeding `maxWireBytes / 2` UTF-16 characters before tokenization.
 Model cell, string-payload, and message-depth budgets apply to the aggregate result and
