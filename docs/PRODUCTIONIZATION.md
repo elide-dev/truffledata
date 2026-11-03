@@ -7,8 +7,8 @@ the database owns planning. CSV, RPC execution and asynchronous delivery are sub
 
 | Requirement | Required acceptance evidence | State |
 | --- | --- | --- |
-| Adapter SPI and three driver artifacts | Versioned SPI, explicit overrides, concrete driver dependencies, Gazelle targets and publication consumer tests | In progress |
-| BOM | Published dependency management with tested driver/library combinations | Implemented and staged consumer verified; public publication pending |
+| Adapter SPI and three driver artifacts | Versioned SPI, explicit overrides, concrete driver dependencies, Gazelle targets and publication consumer tests | Initial alpha.3 SPI/artifacts published; compatibility gate pending |
+| BOM | Published dependency management with tested driver/library combinations | Published in alpha.3; staged consumer and public bytes verified |
 | Real-driver matrix | Actual MySQL/PostgreSQL services and SQLite; values, streaming, prepared statements, failures and connection reuse through JS/Python | Initial real-service cases verified; broader edge/failure matrix pending |
 | Lifecycle | Deadlines, cancellation races, early close, context shutdown, borrowed/owned connections and pool reuse tests | Opt-in active-execution cancellation and core cleanup races tested; fetch interruption, deadlines, context shutdown and pool ownership pending |
 | Memory | Bounded stream decoding, aggregate consumption/retention policies, large payload and adversarial tests including driver buffering | Aggregate logical ingestion limits implemented; retention leases, physical memory and driver buffering pending |
@@ -177,3 +177,15 @@ are recorded in [BENCHMARKS.md](BENCHMARKS.md#initial-sqlite-elapsed-baseline).
 Query timing intervals overlap, and batch/static allocation exceeds plain records;
 there is no accepted general speedup claim. The previous cancellation increment's
 full CI passed: https://github.com/elide-dev/truffledata/actions/runs/41586275999.
+
+Release increment: `0.1.0-alpha.3` published all six library artifacts and the BOM
+from `5c0be85`, with immutable jar/source/POM byte checks against public downloads
+and all seven public Maven metadata documents verified. The versioned release build
+passed all eleven targets at
+https://app.buildbuddy.io/invocation/4770d5f0-ce63-4295-8e5b-afe43087c84c.
+The implementation's complete CI, including final graph-budget driver smoke checks,
+passed at https://github.com/elide-dev/truffledata/actions/runs/41588045830.
+Release: https://github.com/elide-dev/truffledata/releases/tag/v0.1.0-alpha.3.
+This makes the integrations consumable; it does not close the remaining production
+requirements in the table above. Earlier publication-pending notes describe historical
+increments and are superseded by this release evidence.

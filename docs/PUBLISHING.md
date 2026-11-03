@@ -28,11 +28,11 @@ The staging command prints a unique directory under `build/release-repo.*`. Each
 
 ## Upload
 
-The publisher follows Komodo's deployment: `rclone` remote `elide:`, bucket `elide-maven`, public URL `https://maven.elide.dev`. Provision rclone credentials outside the repository. If your configured remote has a different name, set `MAVEN_BUCKET`, for example `MAVEN_BUCKET=r2:elide-maven tools/release/publish.sh 0.1.0-alpha.3 --publish`. The publishing host needs Bash, Python 3, curl, rclone and Bazelisk; compilation and tests retain the normal hermetic Bazel toolchains and RBE settings. The small repository-layout check runs with Python 3 from the pinned remote executor image.
+The publisher follows Komodo's deployment: `rclone` remote `elide:`, bucket `elide-maven`, public URL `https://maven.elide.dev`. Provision rclone credentials outside the repository. If your configured remote has a different name, set `MAVEN_BUCKET`, for example `MAVEN_BUCKET=r2:elide-maven tools/release/publish.sh 0.1.0-alpha.4 --publish`. The publishing host needs Bash, Python 3, curl, rclone and Bazelisk; compilation and tests retain the normal hermetic Bazel toolchains and RBE settings. The small repository-layout check runs with Python 3 from the pinned remote executor image.
 
 ```sh
 # Run from a clean, committed checkout. This command writes to the public repository.
-tools/release/publish.sh 0.1.0-alpha.3 --publish
+tools/release/publish.sh 0.1.0-alpha.4 --publish
 ```
 
 The command runs the full test suite, stages artifacts, merges existing metadata, uploads immutable payloads, verifies bucket contents and public payload bytes, then uploads metadata and checksums. Missing credentials, failed listings and malformed existing metadata fail the release; they are never interpreted as an empty repository. It neither tags nor pushes Git history. CI already exercises publication validation through `bazel test //...`; uploading is an explicit release operation, not a pull-request action.
@@ -41,7 +41,7 @@ The command runs the full test suite, stages artifacts, merges existing metadata
 
 ## Consume
 
-After publishing the selected version, Gradle consumers can use:
+Version `0.1.0-alpha.3` is published. Gradle consumers can use:
 
 ```kotlin
 repositories {
@@ -50,12 +50,14 @@ repositories {
     maven("https://maven.elide.dev/gvm-elide/25.5.5-elide.5")
 }
 dependencies {
-    implementation("dev.elide:truffledata-jdbc:0.1.0-alpha.3")
-    implementation("dev.elide:truffledata-protobuf:0.1.0-alpha.3")
+    implementation(platform("dev.elide:truffledata-bom:0.1.0-alpha.3"))
+    implementation("dev.elide:truffledata-jdbc-sqlite")
+    implementation("dev.elide:truffledata-protobuf")
+    // Select truffledata-jdbc-mysql or truffledata-jdbc-postgresql as needed.
 }
 ```
 
-For Maven, declare `https://maven.elide.dev` in `<repositories>` and the same coordinates in `<dependencies>`. Published POMs also declare the fork repository; Gradle and Bazel consumers must explicitly configure it. For Bazel, add the two repositories and desired coordinates to `maven.install`, then repin. Use core alone if neither adapter is needed. The staging examples use the proposed next prerelease `0.1.0-alpha.3`; it has not been uploaded. Core/JDBC/Protobuf `0.1.0-alpha.2` are already published. The three driver integrations and BOM are new and await the next release.
+For Maven, declare `https://maven.elide.dev` in `<repositories>` and the same coordinates in `<dependencies>`. Published POMs also declare the fork repository; Gradle and Bazel consumers must explicitly configure it. For Bazel, add the two repositories and desired coordinates to `maven.install`, then repin. Use core alone if neither adapter is needed. All six libraries and the BOM are published at `0.1.0-alpha.3`; public artifact bytes and metadata were verified. The staging examples can reproduce that version locally. Choose a new version for the next upload: published versions are immutable.
 
 
 ## BOM and consumer acceptance
