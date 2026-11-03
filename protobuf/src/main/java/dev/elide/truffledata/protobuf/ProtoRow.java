@@ -5,22 +5,49 @@ import com.oracle.truffle.api.library.*;
 import com.oracle.truffle.api.nodes.UnexpectedResultException;
 import dev.elide.truffledata.*;
 import java.util.*;
+import org.jspecify.annotations.Nullable;
 
 /** Immutable native message: readable defaults, separate protobuf presence, no retained Message. */
 @ExportLibrary(DataLibrary.class)
 public final class ProtoRow extends AbstractRow {
   private static final byte[] NO_UNKNOWN_FIELDS = new byte[0];
   private final ProtoPlan plan;
-  final AbstractRow storage;
-  private final boolean[] present;
+  final Object storage;
+  private final boolean @Nullable [] present;
+
+  private record Scalars(long first, long second) {}
+
   final byte[] unknown;
 
   ProtoRow(ProtoPlan plan, Object[] values, boolean[] present, byte[] unknown) {
     super(plan.schema());
     this.plan = plan;
-    this.storage = plan.storage(values);
-    this.present = present.clone();
+    if (plan.compactScalars) {
+      long first = (Long) Values.validate(plan.schema().field(0), values[0]);
+      long second =
+          values.length == 2 ? (Long) Values.validate(plan.schema().field(1), values[1]) : 0;
+      storage = new Scalars(first, second);
+      this.present = null;
+    } else {
+      storage = plan.storage(values);
+      this.present = present.clone();
+    }
     this.unknown = unknown.length == 0 ? NO_UNKNOWN_FIELDS : unknown.clone();
+  }
+
+  /** Only the bounded scalar decoder calls this constructor after validating wire values. */
+  ProtoRow(ProtoPlan plan, long first, long second) {
+    super(plan.schema());
+    this.plan = plan;
+    storage = new Scalars(first, second);
+    present = null;
+    unknown = NO_UNKNOWN_FIELDS;
+  }
+
+  private long scalar(int index) {
+    Objects.checkIndex(index, plan.size());
+    Scalars scalars = (Scalars) storage;
+    return index == 0 ? scalars.first() : scalars.second();
   }
 
   public ProtoPlan plan() {
@@ -29,7 +56,7 @@ public final class ProtoRow extends AbstractRow {
 
   /** Explicit presence, or non-default/non-empty state for implicit and repeated fields. */
   public boolean has(int ordinal) {
-    return present[ordinal];
+    return present == null ? scalar(ordinal) != 0 : present[ordinal];
   }
 
   @ExportMessage
@@ -39,24 +66,26 @@ public final class ProtoRow extends AbstractRow {
 
   @ExportMessage
   Object read(int index, @CachedLibrary("this.storage") DataLibrary data) {
-    return data.read(storage, index);
+    return present == null ? scalar(index) : data.read(storage, index);
   }
 
   @ExportMessage
   long readLong(int index, @CachedLibrary("this.storage") DataLibrary data)
       throws UnexpectedResultException {
-    return data.readLong(storage, index);
+    return present == null ? scalar(index) : data.readLong(storage, index);
   }
 
   @ExportMessage
   double readDouble(int index, @CachedLibrary("this.storage") DataLibrary data)
       throws UnexpectedResultException {
+    if (present == null) throw new UnexpectedResultException(scalar(index));
     return data.readDouble(storage, index);
   }
 
   @ExportMessage
   boolean readBoolean(int index, @CachedLibrary("this.storage") DataLibrary data)
       throws UnexpectedResultException {
+    if (present == null) throw new UnexpectedResultException(scalar(index));
     return data.readBoolean(storage, index);
   }
 

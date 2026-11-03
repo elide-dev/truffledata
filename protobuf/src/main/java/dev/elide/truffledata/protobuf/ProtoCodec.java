@@ -13,7 +13,43 @@ final class ProtoCodec {
   private ProtoCodec() {}
 
   static ProtoRow decode(ProtoPlan plan, byte[] wire) {
+    if (wire.length > plan.model.maxWireBytes) throw bad("Wire byte budget exceeded");
+    if (plan.compactScalars) {
+      ProtoRow compact = scalars(plan, wire);
+      if (compact != null) return compact;
+    }
     return decodeRegion(plan, ByteBuffer.wrap(wire));
+  }
+
+  /** Common small integer records need no builder, boxed values, or temporary arrays. */
+  private static @Nullable ProtoRow scalars(ProtoPlan plan, byte[] wire) {
+    int firstTag = plan.field(0).number() << 3;
+    int secondTag = plan.size() == 2 ? plan.field(1).number() << 3 : -1;
+    long first = 0, second = 0;
+    int position = 0;
+    while (position < wire.length) {
+      int tag = wire[position++] & 255;
+      // Preserve unknown fields, noncanonical tags, and errors in the general lossless codec.
+      if (tag != firstTag && tag != secondTag) return null;
+      long value = 0;
+      boolean complete = false;
+      for (int shift = 0; shift < 64; shift += 7) {
+        if (position == wire.length) return null;
+        int octet = wire[position++] & 255;
+        if (shift == 63 && (octet & 254) != 0) return null;
+        value |= (long) (octet & 127) << shift;
+        if ((octet & 128) == 0) {
+          complete = true;
+          break;
+        }
+      }
+      if (!complete) return null;
+      int ordinal = tag == firstTag ? 0 : 1;
+      if (plan.field(ordinal).kind() == ProtoPlan.Kind.INT32) value = (int) value;
+      if (ordinal == 0) first = value;
+      else second = value;
+    }
+    return new ProtoRow(plan, first, second);
   }
 
   static ProtoRow decode(ProtoPlan plan, ByteBuffer source) {
