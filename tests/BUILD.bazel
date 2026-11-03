@@ -13,6 +13,7 @@ data_java_library(
         "src/test/java/dev/elide/truffledata/IntegrationTest.java",
         "src/test/java/dev/elide/truffledata/JdbcLifecycleTest.java",
         "src/test/java/dev/elide/truffledata/JdbcTest.java",
+        "src/test/java/dev/elide/truffledata/JitMatrixTest.java",
         "src/test/java/dev/elide/truffledata/PolicyTest.java",
         "src/test/java/dev/elide/truffledata/PolyglotTest.java",
         "src/test/java/dev/elide/truffledata/ProtobufTest.java",
@@ -21,6 +22,7 @@ data_java_library(
         "src/test/java/dev/elide/truffledata/package-info.java",
     ],
     deps = [
+        "//benchmarks",
         "//core",
         "//jdbc",
         "//jdbc-mysql",
@@ -44,7 +46,7 @@ java_test(
         "--package",
         "dev.elide.truffledata",
         "--include-class",
-        "dev.elide.truffledata.(Core|Jdbc|JdbcLifecycle|Protobuf|Polyglot|Policy|Contracts|Integration)Test",
+        "dev.elide.truffledata.(Core|Jdbc|JdbcLifecycle|Protobuf|Polyglot|Policy|Contracts|Integration|JitMatrix)Test",
     ],
     data = [
         ":validation_descriptors",
@@ -219,4 +221,29 @@ genrule(
     outs = ["validation.pb"],
     cmd = "$(location @protobuf//:protoc) --proto_path=tests --proto_path=$$(dirname $(location @protovalidate_schema//file)) --proto_path=$$(dirname $(location @protobuf//:descriptor_proto_srcs))/../.. --include_imports --descriptor_set_out=$@ $(location validation.proto)",
     tools = ["@protobuf//:protoc"],
+)
+
+java_test(
+    name = "jit_matrix",
+    size = "large",
+    args = [
+        "--package",
+        "dev.elide.truffledata",
+        "--include-class",
+        "dev.elide.truffledata.JitMatrixTest",
+    ],
+    jvm_flags = [
+        "-ea",
+        "--enable-native-access=ALL-UNNAMED",
+        "-Dtruffledata.requireCompiled=true",
+        "-Dtruffledata.strict=true",
+    ],
+    main_class = "dev.elide.bazel.junit.BazelJUnitRunner",
+    tags = ["jit"],
+    use_testrunner = False,
+    runtime_deps = [
+        ":test_lib",
+        "//bazel/junit:runner",
+        "@maven//:org_graalvm_truffle_truffle_runtime",
+    ],
 )

@@ -93,13 +93,20 @@ public final class Values {
     if (element != null
         && value instanceof DataArray array
         && !(depth < 128 && array.isBytes() && acceptsUnsignedBytes(element)))
-      for (int i = 0; i < array.size(); i++) validate(element, array.get(i), depth + 1);
+      validateElements(element, array, depth);
     var recordType = facts.recordType();
     if (recordType != null
         && value instanceof AbstractRow row
         && !recordType.equals(row.schema().typeName())) throw violation(field, "record type");
     if (value instanceof ExactNumber number && (facts.integer() != null || facts.decimal() != null))
       validateExact(field, number);
+  }
+
+  // Variable-size recursive walks must not expand into an unbounded guest compilation graph.
+  // Scalar validation and the compact-byte fast path remain inline; no data is copied here.
+  @TruffleBoundary
+  private static void validateElements(Field element, DataArray array, int depth) {
+    for (int i = 0; i < array.size(); i++) validate(element, array.get(i), depth + 1);
   }
 
   // Compact bytes establish every element's type, presence and range without scanning or boxing.

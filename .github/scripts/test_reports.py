@@ -23,6 +23,8 @@ class ReportsTest(unittest.TestCase):
         junit(self.root)
         result = ET.parse(self.root / 'build/reports/junit.xml')
         self.assertEqual(len(result.findall('.//testcase/failure')), 2)
+        classes = [case.get('classname') for case in result.findall('.//testcase')]
+        self.assertEqual(len(set(classes)), 2)
         self.assertTrue((self.root / 'build/reports/junit/tests/compiled/test.xml').is_file())
 
     def test_junit_rejects_empty_reports(self):

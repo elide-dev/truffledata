@@ -2,6 +2,8 @@ name: Benchmark - CodSpeed simulation
 on:
   workflow_call:
     secrets:
+      CODECOV_TOKEN:
+        required: false
       BUILDBUDDY_API_KEY:
         required: false
       BUILDBUDDY_APIKEY:
@@ -36,6 +38,19 @@ jobs:
         run: python3 tools/bench/bench.py prepare
       - name: Native correctness smoke
         run: python3 tools/bench/bench.py smoke
+      - name: Native JIT and blocklist rejection gates
+        run: python3 .github/scripts/jit_gate.py
+      - name: Upload native JIT results to Codecov
+        if: ${{ !cancelled() && hashFiles('build/reports/native-jit/junit.xml') != '' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
+        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          slug: ${{ github.repository }}
+          files: build/reports/native-jit/junit.xml
+          report_type: test_results
+          disable_search: true
+          flags: native-jit
+          fail_ci_if_error: true
       - name: Measure all 20 cases
         uses: CodSpeedHQ/action@373d6868929f444bc08d901fd0eb0ad52a8875ea # v5.2.1; shared with Komodo
         with:
@@ -53,5 +68,7 @@ jobs:
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: codspeed-simulation
-          path: build/simulation/
+          path: |
+            build/simulation/
+            build/reports/native-jit/
           retention-days: 14

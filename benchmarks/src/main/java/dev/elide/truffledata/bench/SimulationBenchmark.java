@@ -44,7 +44,11 @@ public final class SimulationBenchmark {
     }
   }
 
-  public static void main(String[] args) {
+  public static void main(String[] args) throws Exception {
+    if (args.length == 1 && args[0].equals("--jit-check")) {
+      JitMatrix.run(true);
+      return;
+    }
     boolean smoke = args.length == 1 && args[0].equals("--smoke");
     if (!smoke && args.length != 1)
       throw new IllegalArgumentException("Expected case name or --smoke");

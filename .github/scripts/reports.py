@@ -18,6 +18,10 @@ def junit(root=Path('.')):
         tree = ET.parse(report).getroot()
         suites = [tree] if tree.tag == 'testsuite' else list(tree.findall('testsuite'))
         for suite in suites:
+            target = str(report.parent.relative_to(root / 'bazel-testlogs'))
+            suite.set('name', target + ':' + suite.get('name', 'suite'))
+            for case in suite.findall('.//testcase'):
+                case.set('classname', target.replace('/', '.') + '.' + case.get('classname', 'test'))
             cases += len(suite.findall('.//testcase'))
             combined.append(suite)
         output = destination / 'junit' / report.relative_to(root / 'bazel-testlogs')

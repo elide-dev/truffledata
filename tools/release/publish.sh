@@ -37,7 +37,8 @@ if [[ $mode == --publish ]]; then
     fi
   done
 fi
-"$bazel" test //... "--//tools/release:version=$version"
+"$bazel" test //... //benchmarks:native_smoke "--//tools/release:version=$version"
+BAZEL="$bazel" python3 .github/scripts/jit_gate.py --probes-only
 "$bazel" build //tools/release:publications "--//tools/release:version=$version"
 python3 tools/release/maven_repo.py bazel-bin/tools/release "$repo" "$version"
 echo "Staged Maven repository: $repo"

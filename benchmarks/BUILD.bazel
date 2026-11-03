@@ -2,6 +2,7 @@ load("@rules_graalvm//graalvm:defs.bzl", "native_image")
 load("@rules_java//java:defs.bzl", "java_binary", "java_test")
 load("@rules_shell//shell:sh_test.bzl", "sh_test")
 load("//bazel:java.bzl", "data_java_library")
+load("//bazel:jit.bzl", "TRUFFLE_JIT_CHECKS")
 load("//bazel:simulation.bzl", "simulation_image")
 
 package(default_visibility = ["//visibility:public"])
@@ -11,6 +12,7 @@ data_java_library(
     srcs = [
         "src/main/java/dev/elide/truffledata/bench/BenchmarkLanguage.java",
         "src/main/java/dev/elide/truffledata/bench/JdbcFixture.java",
+        "src/main/java/dev/elide/truffledata/bench/JitMatrix.java",
         "src/main/java/dev/elide/truffledata/bench/NativeHooks.java",
         "src/main/java/dev/elide/truffledata/bench/ReadBenchmark.java",
         "src/main/java/dev/elide/truffledata/bench/SimulationBenchmark.java",
@@ -119,7 +121,7 @@ native_image(
         "--gc=serial",
         # Library static state is immutable schema/sentinel/DSL metadata. Workloads and sinks stay runtime-owned.
         "--initialize-at-build-time=dev.elide.truffledata",
-        "--initialize-at-run-time=dev.elide.truffledata.bench",
+        "--initialize-at-run-time=dev.elide.truffledata.bench.SimulationBenchmark",
         "--initialize-at-build-time=dev.elide.truffledata.bench.BenchmarkLanguageProvider",
         "--parallelism=8",
         "-march=compatibility",
@@ -128,6 +130,8 @@ native_image(
         "-H:+PreserveFramePointer",
         "-H:DynamicProxyConfigurationFiles=benchmarks/proxy-config.json",
         "-H:ReflectionConfigurationFiles=$(location :protobuf_reflection)",
+        "-H:+PrintRuntimeCompileMethods",
+    ] + TRUFFLE_JIT_CHECKS + [
         "-H:-UnlockExperimentalVMOptions",
     ],
     graalvm_sdk = "@graalvm_linux_amd64//:gvm",

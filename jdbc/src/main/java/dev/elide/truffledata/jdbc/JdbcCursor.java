@@ -146,6 +146,10 @@ public final class JdbcCursor implements AutoCloseable, TruffleObject {
    */
   @TruffleBoundary
   public synchronized void closeFromHost() throws SQLException {
+    // Exhaustion may have closed driver resources before installing the final pending batch.
+    // Explicit close must discard that remaining lookahead even when resource close is idempotent.
+    pending = null;
+    pendingStatic = null;
     Throwable failure = closeResources(null);
     if (failure instanceof SQLException sql) throw sql;
     if (failure instanceof RuntimeException runtime) throw runtime;

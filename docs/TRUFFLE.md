@@ -4,7 +4,7 @@ Schema identity is stable adapter-owned state, not a global interning cache. Fie
 
 `ReadLongNode`, `ReadDoubleNode`, `ReadBooleanNode`, `ReadLengthNode`, and row member access have three-entry polymorphic caches and a generic fallback. The standalone accessor deliberately owns its cache as an adopted child; node object inlining is explicitly disabled for that API. Immutable schema predicates are marked idempotent. Dynamic-object getter caches are explicitly shared between generic and primitive reads. Static-object property handles are cached by layout and ordinal. The primitive batch specialization bypasses state-array reads only for a validated required, non-null INT64 field.
 
-Ingestion, JDBC execution, Protobuf reflection, exact numeric conversion, Unicode code-point traversal, and name lookup live behind Truffle boundaries. Primitive batch/dynamic reads do not cross a boundary. Static-record access uses cached property handles; megamorphic fallback has an explicit boundary. Immutable descriptor/property arrays use `@CompilationFinal`; mutable payload arrays are never declared compilation-final by contents. There is no speculative database-schema assumption requiring an external invalidation notification.
+Ingestion, JDBC execution, Protobuf reflection, exact numeric conversion, Unicode code-point traversal, recursive array-element validation, and name lookup live behind Truffle boundaries. Primitive batch/dynamic reads do not cross a boundary. Static-record access uses cached property handles; megamorphic fallback has an explicit boundary. Immutable descriptor/property arrays use `@CompilationFinal`; mutable payload arrays are never declared compilation-final by contents. There is no speculative database-schema assumption requiring an external invalidation notification.
 
 Java null is represented with JSpecify `@Nullable` only where it can occur (driver return values, end-of-stream, optional storage arrays). SQL/data null and missing are explicit non-null sentinel objects. Generated DSL sources are excluded from NullAway; handwritten production packages are NullMarked, and there are no NullAway suppressions. A source-policy test guards annotation coverage, cache limits, and reviewed boundary counts. Compiler warnings are errors.
 
@@ -76,3 +76,59 @@ This is reflection metadata, not general class-initialization policy or driver s
 Generated metadata passed the native simulation executable, including generated and
 wire-decoded Protobuf paths. Consumer-specific native executables and additional schema
 features still require acceptance; image construction alone is insufficient evidence.
+
+## JIT assurance gate
+
+The supported guarantee is scoped to the pinned Elide GraalVM runtime and the checked-in
+operation matrix. Native Image must reject any blocklisted call or
+`CompilerAsserts.neverPartOfCompilation` reachable for runtime compilation from those roots.
+This includes branches the runtime fixtures do not execute: reachability analysis is stronger
+than line coverage for this check. It is not proof about arbitrary third-party implementations,
+new guest compositions, driver internals behind boundaries, or different GraalVM versions.
+
+`JitMatrix` contains 387 cases shared by three gates:
+
+- `//tests:test` runs instrumented correctness coverage with strict contract assertions.
+- `//tests:jit_matrix` runs without coverage instrumentation, with strict assertions and
+  synchronous compilation. Every successful case must execute compiled code under the
+  10,000-node graph budget and performance-warnings-as-errors policy.
+- `//benchmarks:native_smoke` builds the native executable with the explicit checks from
+  `bazel/jit.bzl`, then runs the same matrix with runtime compilation enabled.
+
+The matrix covers batch/static/dynamic representations, all field kinds, integer and floating
+storage widths, typed and generic reads, null/missing/rejection behavior, UTF-16 and Unicode
+lengths, nested arrays and records, member enumeration and ordinal access, every ExactNumber
+conversion, and PIC transitions through 1/2/3/4/8 schema identities. It also covers generated
+and wire-decoded Protobuf snapshots and the JDBC cursor interop protocol. Existing allocation
+tests separately cover mutation, context closure, retained values, and compiled recovery.
+Expected rejection cases verify their exception category without requiring repeated failures
+to remain compiled: those paths deliberately transfer to the interpreter. They remain in the
+native reachability graph.
+
+Two isolated negative controls must fail native construction with the specific diagnostic and
+fixture call trace: an unbounded BigDecimal operation and a reachable `neverPartOfCompilation`.
+Network errors, compilation errors, unrelated diagnostics, or an unexpectedly successful build
+do not count as a successful control. Positive and negative images share the enforcement flags.
+Run the controls with `python3 .github/scripts/jit_gate.py --probes-only`; the full command also
+runs the prepared native executable and writes per-case JUnit reports. CI uploads those reports
+to Codecov. The Maven publisher requires the native smoke test and both negative controls
+before uploading artifacts.
+
+Coverage is collected separately so probes do not change allocation or compilation budgets.
+`.github/scripts/coverage_contract.py` requires 100% executable-method coverage for the listed
+core access classes, excluding constructors and abstract declarations. It also emits
+`build/reports/coverage/gaps.json` with uncovered lines, methods, and branches for every
+reported production file. This is a regression gate and a guide for new tests, not a claim
+of 100% branch coverage. Codecov receives LCOV and JUnit; target-qualified JVM test identities
+keep correctness and compiled runs distinct. The source-policy test requires review when a
+new exported interop surface or message is introduced. The native gate also compares every
+case and its expected outcome against `benchmarks/jit-cases.json`.
+
+The initial expanded run covers 603/638 core lines (94.5%). All four typed accessors,
+DynamicRecord, and ExactNumber have 100% line coverage. DataLibrary covers 55/59 lines
+(93.2%) and every executable method. The 387-case matrix consists of 340 successful
+compiled operations and 47 expected rejections, verified on both JVM and Native Image.
+The test interpreter metadata uses build-time initialization; applying the old blanket
+runtime initialization policy to the benchmark package prevented the new root from being
+usable by the native JIT. The benchmark now keeps only its workload holder initialized at
+runtime, and prints the runtime-compilation method inventory for audit.
