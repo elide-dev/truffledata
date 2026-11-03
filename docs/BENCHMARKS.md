@@ -158,3 +158,14 @@ Direct static ingestion measured 236.53 bytes/row versus the earlier 268.43, app
 payload accounting into one traversal. Query timing was 381.69 ± 3.28 ns/row; these
 separate sequential runs do not establish a general throughput improvement. Allocation
 still exceeds the plain-record baseline, and the other five cases were not remeasured.
+
+### Host cleanup serialization follow-up
+
+The clean `f6c51c7` static-query run used the same dataset, benchmark source, machine,
+JVM and default three forks/24 samples. [Raw samples](../benchmarks/results/sqlite-host-close-f6c51c7/results.json)
+and [environment](../benchmarks/results/sqlite-host-close-f6c51c7/environment.json)
+are retained. Cursor operation serialization measured 387.32 ± 4.37 ns/row and
+236.53 allocated bytes/row. The prior direct-ingestion run was 381.69 ± 3.28 ns/row;
+the timing intervals overlap and allocation is effectively unchanged. This does not
+establish a general absence of lock overhead; retained guest reads do not acquire the
+cursor monitor. No other elapsed cases were remeasured in this follow-up.

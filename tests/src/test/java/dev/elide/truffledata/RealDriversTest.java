@@ -98,6 +98,16 @@ class RealDriversTest {
             DataLibrary.factory()
                 .getUncached()
                 .readLong(Objects.requireNonNull(cursor.nextRecord()), 0));
+        try (var host = Executors.newSingleThreadExecutor()) {
+          host.submit(
+                  () -> {
+                    cursor.closeFromHost();
+                    return null;
+                  })
+              .get(10, TimeUnit.SECONDS);
+        }
+        assertTrue(cursor.isClosed());
+        assertFalse(connection.isClosed());
       }
       for (String sql :
           List.of(

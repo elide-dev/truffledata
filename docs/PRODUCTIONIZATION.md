@@ -223,3 +223,10 @@ retained rows, and does not close the borrowed connection. All eleven targets pa
 https://app.buildbuddy.io/invocation/8c0b86b7-0319-47ce-ba04-a34d68e1f878.
 This is an embedding prerequisite, not completed Elide context registration or a hard
 deadline guarantee. No Elide repository changes have been made yet.
+
+The host-cleanup increment also passed live MySQL/PostgreSQL tests closing a cursor
+from a host executor and then reusing the borrowed connection. All ten driver methods
+and twelve compiled benchmark smoke cases passed. A three-fork static-query elapsed
+check retained the 236.53 bytes/row allocation result; timing intervals overlap the
+prior direct-ingestion run. [Samples](BENCHMARKS.md#host-cleanup-serialization-follow-up)
+are committed without claiming a general zero-cost synchronization guarantee.
