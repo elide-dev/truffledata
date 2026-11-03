@@ -42,6 +42,64 @@ class ProtoNativeTest {
   }
 
   @Test
+  void compactIntegerRowsMatchGeneralDecoderAndGeneratedMessages() throws Exception {
+    var descriptor = Timestamp.getDescriptor();
+    var plan = ProtoCompiler.compile(null, descriptor, Limits.DEFAULT, 8, WIRE_LIMIT);
+    Random random = new Random(77219);
+    for (int i = 0; i < 500; i++) {
+      long seconds =
+          i == 0 ? 0 : i == 1 ? Long.MIN_VALUE : i == 2 ? Long.MAX_VALUE : random.nextLong();
+      int nanos =
+          i == 0 ? 0 : i == 1 ? Integer.MIN_VALUE : i == 2 ? Integer.MAX_VALUE : random.nextInt();
+      var expected = Timestamp.newBuilder().setSeconds(seconds).setNanos(nanos).build();
+      byte[] wire = expected.toByteArray();
+      for (var row : List.of(plan.decode(wire), plan.decode(java.nio.ByteBuffer.wrap(wire)))) {
+        assertEquals(seconds, DATA.readLong(row, 0));
+        assertEquals((long) nanos, DATA.readLong(row, 1));
+        assertEquals(seconds != 0, row.has(0));
+        assertEquals(nanos != 0, row.has(1));
+        assertEquals(expected, Timestamp.parseFrom(plan.encode(row)));
+        assertThrows(
+            com.oracle.truffle.api.nodes.UnexpectedResultException.class,
+            () -> DATA.readDouble(row, 0));
+        assertThrows(
+            com.oracle.truffle.api.nodes.UnexpectedResultException.class,
+            () -> DATA.readBoolean(row, 1));
+        assertThrows(IndexOutOfBoundsException.class, () -> row.has(2));
+      }
+    }
+    for (byte[] wire :
+        List.of(
+            new byte[] {8, 1, 8, 2, 16, 4}, // Duplicate scalar: last value wins.
+            new byte[] {(byte) 0x88, 0, 1}, // Noncanonical tag uses the general codec.
+            new byte[] {8, (byte) 0x81, 0},
+            new byte[] {24, 7}, // Unknown field must survive compact storage.
+            new byte[] {10, 1, 42})) { // Known number with mismatched wire type is unknown.
+      assertEquals(Timestamp.parseFrom(wire), Timestamp.parseFrom(plan.encode(plan.decode(wire))));
+    }
+    for (byte[] bad :
+        List.of(
+            new byte[] {8},
+            new byte[] {0},
+            new byte[] {8, (byte) 0x80},
+            new byte[] {8, -1, -1, -1, -1, -1, -1, -1, -1, -1, 2})) {
+      assertThrows(ContractViolation.class, () -> plan.decode(bad));
+      assertThrows(ContractViolation.class, () -> plan.decode(java.nio.ByteBuffer.wrap(bad)));
+    }
+    var builder = plan.newBuilder().set(0, 1000L);
+    var first = builder.build();
+    builder.set(0, 2000L);
+    assertEquals(1000L, DATA.readLong(first, 0));
+    assertEquals(2000L, DATA.readLong(builder.build(), 0));
+    var small = ProtoCompiler.compile(null, descriptor, Limits.DEFAULT, 8, 1);
+    assertThrows(ContractViolation.class, () -> small.decode(new byte[] {8, 1}));
+    var single =
+        ProtoCompiler.compile(null, Int64Value.getDescriptor(), Limits.DEFAULT, 8, WIRE_LIMIT);
+    assertEquals(-1L, DATA.readLong(single.decode(Int64Value.of(-1).toByteArray()), 0));
+    assertFalse(single.decode(new byte[0]).has(0));
+  }
+
+  @Test
   void denseAndSparseTagLookupPreservesOrdinals() throws Exception {
     var message = DescriptorProtos.DescriptorProto.newBuilder().setName("Tags");
     int[] numbers = {536870911, 1, 7, 4096, 3};

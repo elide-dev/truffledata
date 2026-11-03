@@ -239,6 +239,7 @@ public final class ProtoPlan {
   }
 
   final Model model;
+  final boolean compactScalars;
   private final Type definition;
 
   @CompilationFinal(dimensions = 1)
@@ -257,6 +258,16 @@ public final class ProtoPlan {
     this.definition = definition;
     fields = definition.fields().toArray(FieldPlan[]::new);
     model.limits.check(1, fields.length);
+    boolean compact = fields.length > 0 && fields.length <= 2;
+    for (var field : fields) {
+      compact &=
+          !field.repeated()
+              && !field.explicitPresence()
+              && (field.kind() == Kind.INT32 || field.kind() == Kind.INT64)
+              && field.number() < 16
+              && field.defaultValue().equals(0L);
+    }
+    compactScalars = compact;
     List<Field> contracts = new ArrayList<>();
     Map<Integer, Integer> indices = new HashMap<>();
     Set<String> names = new HashSet<>();

@@ -43,6 +43,12 @@ The stock read loops use concrete generated protobuf getters or unbox retained s
 
 `ingest` includes parse/decode, row materialization, retention, a projected read and scoped
 cleanup. Guest compilation is disabled; TruffleData projection uses the uncached data API.
+`ingest-typed` adds six measurements using the primitive `DataLibrary.readLong` projection
+for owned/Buffa scalar messages and Timestamp JSON, and static MySQL/Postgres integer rows.
+The original generic `ingest` measurements remain. Byte-length projections already use the
+typed interop length API and receive no duplicate measurement. Stock continues to use its
+generated primitive getters. This separates library improvements from the effect of callers
+choosing typed reads. Report schema 2 includes these cells; schema 1 remains readable.
 Schema construction, parser construction, source creation and context startup are excluded.
 For binary Buffa, source bytes already reside in unmanaged memory and the result borrows
 that memory. Stock/owned parsers consume existing Java arrays and own their decoded payloads.
@@ -69,8 +75,8 @@ No dependency upgrades or query-planning functionality are introduced by this su
 
 ## Measurement and limits
 
-Each of 31 cells has three independent timing processes and three independent allocation
-processes (186 short-lived processes). Each process records three samples. Timing uses
+Each of 37 cells has three independent timing processes and three independent allocation
+processes (222 short-lived processes). Each process records three samples. Timing uses
 100 ms warmup and at least 50 ms per sample. Allocation uses fixed work: eight batches for
 ingestion or 128 batches for retained reads, with one warmup batch of the same size.
 Results report medians of process medians and the min/max process medians, not confidence
@@ -151,3 +157,32 @@ All original comparison cells and stock baselines remain. Core/protobuf regressi
 JVM acceptance, SVM smoke, and the full 31-cell measurement passed. Timing remains noisy:
 owned scalar took 679 ns versus stock's 167 ns in this run; Buffa took 1012 ns. Allocation
 improvements do not establish timing parity or superiority, and exclude native heap usage.
+
+## Compact scalar records
+
+Revision `71b4c16` ([samples](../benchmarks/results/svm-comparison-71b4c16/comparison.json))
+adds compact storage and bounded direct decoding for one or two implicit-presence INT32/INT64
+fields with zero defaults and single-byte tags. This applies by contract shape, not message
+name. Unknown/mismatched fields and noncanonical tags fall back to the lossless decoder;
+malformed values retain the existing rejection behavior. The generic ByteBuffer route is
+covered as a differential oracle alongside generated protobuf Java messages.
+
+Revision `0945211` ([samples](../benchmarks/results/svm-comparison-0945211/comparison.json),
+[table](../benchmarks/results/svm-comparison-0945211/comparison.md)) moves compact reads into
+Truffle specializations before delegated-library initialization. The unchanged generic
+projection benchmark measured scalar ingestion at 80.59 ns and 88 Java heap bytes/message,
+versus stock's 66.98 ns and 136 bytes. Retained peak reads measured 2.20 ns/row versus the direct
+stock AOT lower bound of 1.39 ns/row. These results establish an allocation win for this case,
+not a latency win. Other cells remain mixed and shared-host timings vary substantially.
+
+The 78-test regression suite, compiled allocation tests, JIT matrix, Buffa JVM acceptance,
+SVM smoke, and the full comparison run passed during these two revisions. No allocation or
+JIT budgets were relaxed. The row class remains uniform across compact and general messages
+so the previous generated-class dispatch regression is not reintroduced.
+
+Revision `3507913` ([samples](../benchmarks/results/svm-comparison-3507913/comparison.json),
+[table](../benchmarks/results/svm-comparison-3507913/comparison.md)) adds the six typed-ingestion
+cells while retaining all 31 previous cells. Owned scalar ingestion measured 73.48 ns and
+56 Java heap bytes with primitive projection, 75.93 ns and 88 bytes with generic projection,
+and stock measured 64.17 ns and 136 bytes. Both TruffleData routes win allocation in this
+fixture; neither establishes a latency win. The 37-cell SVM run and JVM/native smoke passed.
