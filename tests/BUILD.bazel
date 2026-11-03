@@ -15,18 +15,23 @@ data_java_library(
         "src/test/java/dev/elide/truffledata/PolicyTest.java",
         "src/test/java/dev/elide/truffledata/PolyglotTest.java",
         "src/test/java/dev/elide/truffledata/ProtobufTest.java",
+        "src/test/java/dev/elide/truffledata/RealDriversTest.java",
         "src/test/java/dev/elide/truffledata/TestLanguage.java",
         "src/test/java/dev/elide/truffledata/package-info.java",
     ],
     deps = [
         "//core",
         "//jdbc",
+        "//jdbc-mysql",
+        "//jdbc-postgresql",
         "//jdbc-sqlite",
         "//protobuf",
         "@maven//:com_google_protobuf_protobuf_java",
+        "@maven//:com_mysql_mysql_connector_j",
         "@maven//:org_graalvm_polyglot_polyglot",
         "@maven//:org_graalvm_truffle_truffle_api",
         "@maven//:org_junit_jupiter_junit_jupiter_api",
+        "@maven//:org_postgresql_postgresql",
     ],
 )
 
@@ -43,6 +48,8 @@ java_test(
         "//bazel:java.bzl",
         "//core:sources",
         "//jdbc:sources",
+        "//jdbc-mysql:sources",
+        "//jdbc-postgresql:sources",
         "//jdbc-sqlite:sources",
         "//protobuf:sources",
     ],
@@ -148,4 +155,51 @@ exports_files(["BUILD.bazel"])
 filegroup(
     name = "sources",
     srcs = glob(["src/**/*.java"]),
+)
+
+java_test(
+    name = "drivers",
+    size = "large",
+    args = [
+        "--package",
+        "dev.elide.truffledata",
+        "--include-class",
+        "dev.elide.truffledata.RealDriversTest",
+    ],
+    data = [
+        "//bazel:java.bzl",
+        "//core:sources",
+        "//jdbc:sources",
+        "//jdbc-mysql:sources",
+        "//jdbc-postgresql:sources",
+        "//jdbc-sqlite:sources",
+        "//protobuf:sources",
+    ],
+    exec_properties = {
+        "EstimatedCPU": "4",
+        "EstimatedMemory": "6GB",
+    },
+    jvm_flags = [
+        "-ea",
+        "-Dtruffledata.strict=true",
+        "--enable-native-access=ALL-UNNAMED",
+        "-Dpolyglot.engine.WarnInterpreterOnly=false",
+    ],
+    main_class = "dev.elide.bazel.junit.BazelJUnitRunner",
+    tags = [
+        "external",
+        "manual",
+        "no-remote-exec",
+    ],
+    use_testrunner = False,
+    runtime_deps = [
+        ":test_lib",
+        "//bazel/junit:runner",
+        "@maven//:com_h2database_h2",
+        "@maven//:org_graalvm_js_js_language",
+        "@maven//:org_graalvm_python_python_language",
+        "@maven//:org_graalvm_python_python_resources",
+        "@maven//:org_graalvm_truffle_truffle_runtime",
+        "@maven//:org_xerial_sqlite_jdbc",
+    ],
 )

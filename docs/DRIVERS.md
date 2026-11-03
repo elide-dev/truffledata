@@ -1,0 +1,87 @@
+# Driver integrations and acceptance
+
+The three integration artifacts cooperate with upstream drivers through `JdbcAdapter`.
+They accept borrowed connections (including pool wrappers that implement JDBC unwrap),
+retain statement/result ownership, and leave commit/rollback/connection close to the
+caller. They do not fork drivers, manage credentials, or plan SQL. Applications may
+provide a different adapter through the same opt-in API.
+
+| Artifact | Pinned driver | Observed database version |
+| --- | --- | --- |
+| `truffledata-jdbc-mysql` | Connector/J 26.10.0 | MySQL 8.4.13 |
+| `truffledata-jdbc-postgresql` | pgJDBC 42.7.14 | PostgreSQL 18.6 |
+| `truffledata-jdbc-sqlite` | Xerial 3.53.4.0 | SQLite 3.53.4 |
+
+This is the tested development combination, not a claim of compatibility with every
+server/driver version. The BOM also manages Protobuf 4.36.1 and the Elide GraalVM
+25.5.5-elide.5 API/runtime/language versions. Driver versions remain overridable;
+consumer override resolution does not establish functional compatibility for that override.
+
+## Streaming prerequisites
+
+PostgreSQL streaming requires an existing non-autocommit transaction, extended query
+mode, and a single statement. The adapter asks pgJDBC's own JDBC query parser to
+classify the statement; it does not implement SQL parsing or planning. Statements
+are forward-only/read-only, close cursors at commit, and use a positive fetch size.
+Preflight rejects an unsupported mode instead of silently accepting eager buffering.
+The real-service test observes a live server cursor via `pg_cursors`.
+
+MySQL streaming selects Connector/J's `Integer.MIN_VALUE` fetch mode and requires
+`allowMultiQueries=false`. In this mode the positive fetch-size option is not a block
+size; Connector/J streams rows. Closing an unread result may drain its remaining
+protocol data. An explicit BOOLEAN contract over integer/BIT metadata checks the raw
+integral domain 0..1, because `getObject` can otherwise hide a value such as 2 by
+converting it to true. Non-streaming operation is an explicit query option.
+
+SQLite steps a native cursor and uses conservative nullable ANY metadata. See
+[the SQLite contract notes](CONTRACTS.md#sqlite-driver-integration).
+
+These settings do not prove bounded driver packets, cell allocations, database engine
+memory, total retained rows, or end-to-end deadlines. Statement query timeouts are
+configured, but cancellation races and driver-specific timeout semantics still require
+production acceptance. Connections must remain exclusively controlled by their caller
+while a query is consumed; do not change transaction settings under an active cursor.
+
+## Value conversion
+
+The server integrations normalize numbers and SQL NULL to core values, snapshot binary
+values into compact unsigned-byte arrays, and materialize JDBC arrays with nested
+budgets. Array result sets are closed and `Array.free()` runs on success or failure.
+Vendor scalar conversion applies to nested array elements too. PostgreSQL PGobjects
+become their textual value; UUIDs and JDBC date/time values become strings (JDBC
+local date/time values use their local ISO representation). These text conversions do
+not expose a richer temporal or vendor-type contract. Unsupported host representations
+fail instead of leaking through guest interop. Explicit field contracts still validate
+converted values before publication.
+
+Owned payload limits are checked during conversion, but `getObject` may already have
+allocated driver values. Scalar conversion does not allocate a per-cell budget object;
+compound arrays get scoped accounting. The current allocation gate compares scalar
+conversion with the same ResultSet baseline and allows at most 8 additional bytes/cell.
+
+## Reproduce the real-service tests
+
+With a local Docker daemon:
+
+```sh
+tools/integration/run.sh
+```
+
+The script uses pinned MySQL/PostgreSQL image digests, temporary containers, localhost
+ports, and test-only credentials, then removes its containers. On macOS it selects the
+local Java toolchain; on Linux compilation retains RBE and the service test executes
+beside the local databases. The test is `//tests:drivers`, tagged manual/no-remote-exec,
+so ordinary remote unit tests do not need database networking.
+
+Acceptance currently covers prepared parameters, metadata widths, static layouts,
+JS/Python reads with host access disabled, unsigned MySQL integers, binary values,
+PostgreSQL arrays with NULL and JSON, MySQL boolean-domain rejection, early close,
+connection reuse, caller rollback, and PostgreSQL streaming preflight. Extreme decimal,
+temporal, multidimensional-array, timeout/cancellation and large-payload cases remain
+in the production ledger.
+
+`.github/workflows/check.drivers.yml` runs the same target against pinned services and
+uploads JUnit reporting. It then runs `tools/release/consumer.py` to exercise the staged
+BOM with Maven and the Bazel-provided Java SDK. The ordinary coverage job covers all
+six Java modules. Production Native Image consumers and direct Elide embedding tests
+remain separate acceptance requirements; the native benchmark smoke is not their proof.

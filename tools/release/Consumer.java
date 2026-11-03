@@ -20,6 +20,13 @@ public final class Consumer {
       throw new AssertionError("protobuf interop");
     }
     Class.forName("org.sqlite.JDBC");
+    Class.forName("org.postgresql.Driver");
+    Class.forName("com.mysql.cj.jdbc.Driver");
+    if (!dev.elide.truffledata.jdbc.mysql.MysqlAdapter.INSTANCE.id().equals("mysql-v1"))
+      throw new AssertionError("MySQL publication");
+    if (!dev.elide.truffledata.jdbc.postgresql.PostgresqlAdapter.INSTANCE
+        .id()
+        .equals("postgresql-v1")) throw new AssertionError("PostgreSQL publication");
     try (var connection = java.sql.DriverManager.getConnection("jdbc:sqlite::memory:");
         var cursor =
             JdbcSource.execute(

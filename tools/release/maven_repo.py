@@ -9,7 +9,7 @@ import sys
 import xml.etree.ElementTree as ET
 import zipfile
 
-MODULES = ('core', 'jdbc', 'jdbc-sqlite', 'protobuf')
+MODULES = ('core', 'jdbc', 'jdbc-sqlite', 'jdbc-mysql', 'jdbc-postgresql', 'protobuf', 'bom')
 NAMESPACE = {'m': 'http://maven.apache.org/POM/4.0.0'}
 
 
@@ -32,7 +32,7 @@ def stage(publications, repository, version):
         source = publications / module / relative / version
         target = repository / relative / version
         target.mkdir(parents=True, exist_ok=True)
-        for suffix in ('.pom', '.jar', '-sources.jar'):
+        for suffix in (('.pom',) if module == 'bom' else ('.pom', '.jar', '-sources.jar')):
             name = artifact + '-' + version + suffix
             path = source / name
             if suffix == '.pom':

@@ -31,7 +31,7 @@ class ReportsTest(unittest.TestCase):
 
     def report(self):
         records = []
-        for module in ('core', 'jdbc', 'jdbc-sqlite', 'protobuf'):
+        for module in ('core', 'jdbc', 'jdbc-sqlite', 'jdbc-mysql', 'jdbc-postgresql', 'protobuf'):
             path = f'{module}/src/main/java/Example.java'
             self.write(path, '// source')
             records.append(f'SF:{path}\nDA:1,1\nend_of_record\n')

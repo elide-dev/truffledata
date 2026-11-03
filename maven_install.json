@@ -9,8 +9,9 @@
     "com.google.googlejavaformat:google-java-format": 1313155323,
     "com.google.guava:guava": 1943808618,
     "com.google.j2objc:j2objc-annotations": 2003271689,
-    "com.google.protobuf:protobuf-java": 1226523227,
+    "com.google.protobuf:protobuf-java": 1938090909,
     "com.h2database:h2": 2037113602,
+    "com.mysql:mysql-connector-j": -644338065,
     "com.uber.nullaway:nullaway": 590882514,
     "org.graalvm.js:js-language": -138877393,
     "org.graalvm.polyglot:polyglot": 2088198898,
@@ -26,6 +27,7 @@
     "org.junit.platform:junit-platform-reporting": -749387971,
     "org.openjdk.jmh:jmh-core": 983716932,
     "org.openjdk.jmh:jmh-generator-annprocess": -1162360421,
+    "org.postgresql:postgresql": 1204219156,
     "org.xerial:sqlite-jdbc": 1866718706,
     "repositories": 44730676
   },
@@ -40,14 +42,15 @@
     "com.google.errorprone:error_prone_annotation": -238456426,
     "com.google.errorprone:error_prone_annotations": 1213248887,
     "com.google.errorprone:error_prone_check_api": -2050833242,
-    "com.google.errorprone:error_prone_core": 450398759,
+    "com.google.errorprone:error_prone_core": -1375938270,
     "com.google.googlejavaformat:google-java-format": 88704608,
     "com.google.guava:failureaccess": -56291903,
     "com.google.guava:guava": 2119344697,
     "com.google.guava:listenablefuture": 1588902908,
     "com.google.j2objc:j2objc-annotations": -2074422376,
-    "com.google.protobuf:protobuf-java": 250155405,
+    "com.google.protobuf:protobuf-java": -884647484,
     "com.h2database:h2": -1401264984,
+    "com.mysql:mysql-connector-j": 149885885,
     "com.uber.nullaway:nullaway": 2093849653,
     "io.github.eisop:dataflow-errorprone": -2128745085,
     "io.github.java-diff-utils:java-diff-utils": 900549404,
@@ -88,6 +91,7 @@
     "org.openjdk.jmh:jmh-generator-annprocess": -1569033546,
     "org.opentest4j:opentest4j": 793813175,
     "org.pcollections:pcollections": 1838442927,
+    "org.postgresql:postgresql": -1836201652,
     "org.xerial:sqlite-jdbc": -522066959
   },
   "conflict_resolution": {
@@ -196,15 +200,21 @@
     },
     "com.google.protobuf:protobuf-java": {
       "shasums": {
-        "jar": "c5b582aa127fb62c5fc3077329d522dfb7930b4e9a625c08760b681b2ba5aab7"
+        "jar": "26434a93561a1a44bf7157b2630fa73a5b4d8df20e94df167bc03fcd14abd7e4"
       },
-      "version": "4.33.2"
+      "version": "4.36.1"
     },
     "com.h2database:h2": {
       "shasums": {
         "jar": "8dae62d22db8982c3dcb3826edb9c727c5d302063a67eef7d63d82de401f07d3"
       },
       "version": "2.3.232"
+    },
+    "com.mysql:mysql-connector-j": {
+      "shasums": {
+        "jar": "cef70caf532833c9ab8f41f74773ce22c08bf503fad215c9c2ee1e9db87e759e"
+      },
+      "version": "26.10.0"
     },
     "com.uber.nullaway:nullaway": {
       "shasums": {
@@ -446,6 +456,12 @@
       },
       "version": "4.0.1"
     },
+    "org.postgresql:postgresql": {
+      "shasums": {
+        "jar": "73914527305a40cce504b0d3d90b23caf565136912d607ae8ae7c5895512332c"
+      },
+      "version": "42.7.14"
+    },
     "org.xerial:sqlite-jdbc": {
       "shasums": {
         "jar": "bcb1f51e36f940867e83342f9efbf5968ac44a6bef4d397bb4af7b17b45cd2fb"
@@ -499,6 +515,9 @@
       "com.google.guava:listenablefuture",
       "com.google.j2objc:j2objc-annotations",
       "org.jspecify:jspecify"
+    ],
+    "com.mysql:mysql-connector-j": [
+      "com.google.protobuf:protobuf-java"
     ],
     "com.uber.nullaway:nullaway": [
       "com.google.guava:guava",
@@ -605,6 +624,9 @@
     ],
     "org.openjdk.jmh:jmh-generator-annprocess": [
       "org.openjdk.jmh:jmh-core"
+    ],
+    "org.postgresql:postgresql": [
+      "org.checkerframework:checker-qual"
     ]
   },
   "packages": {
@@ -788,6 +810,39 @@
       "org.h2.util.json",
       "org.h2.value",
       "org.h2.value.lob"
+    ],
+    "com.mysql:mysql-connector-j": [
+      "com.mysql.cj",
+      "com.mysql.cj.admin",
+      "com.mysql.cj.callback",
+      "com.mysql.cj.conf",
+      "com.mysql.cj.conf.url",
+      "com.mysql.cj.exceptions",
+      "com.mysql.cj.interceptors",
+      "com.mysql.cj.jdbc",
+      "com.mysql.cj.jdbc.admin",
+      "com.mysql.cj.jdbc.exceptions",
+      "com.mysql.cj.jdbc.ha",
+      "com.mysql.cj.jdbc.integration.c3p0",
+      "com.mysql.cj.jdbc.interceptors",
+      "com.mysql.cj.jdbc.jmx",
+      "com.mysql.cj.jdbc.result",
+      "com.mysql.cj.jdbc.util",
+      "com.mysql.cj.log",
+      "com.mysql.cj.otel",
+      "com.mysql.cj.protocol",
+      "com.mysql.cj.protocol.a",
+      "com.mysql.cj.protocol.a.authentication",
+      "com.mysql.cj.protocol.a.result",
+      "com.mysql.cj.protocol.result",
+      "com.mysql.cj.protocol.x",
+      "com.mysql.cj.result",
+      "com.mysql.cj.sasl",
+      "com.mysql.cj.telemetry",
+      "com.mysql.cj.util",
+      "com.mysql.cj.x.protobuf",
+      "com.mysql.cj.xdevapi",
+      "com.mysql.jdbc"
     ],
     "com.uber.nullaway:nullaway": [
       "com.uber.nullaway",
@@ -1552,6 +1607,46 @@
     "org.pcollections:pcollections": [
       "org.pcollections"
     ],
+    "org.postgresql:postgresql": [
+      "org.postgresql",
+      "org.postgresql.copy",
+      "org.postgresql.core",
+      "org.postgresql.core.v3",
+      "org.postgresql.core.v3.adaptivefetch",
+      "org.postgresql.core.v3.replication",
+      "org.postgresql.ds",
+      "org.postgresql.ds.common",
+      "org.postgresql.fastpath",
+      "org.postgresql.geometric",
+      "org.postgresql.gss",
+      "org.postgresql.hostchooser",
+      "org.postgresql.jdbc",
+      "org.postgresql.jdbc2",
+      "org.postgresql.jdbc2.optional",
+      "org.postgresql.jdbc3",
+      "org.postgresql.jdbcurlresolver",
+      "org.postgresql.largeobject",
+      "org.postgresql.osgi",
+      "org.postgresql.plugin",
+      "org.postgresql.replication",
+      "org.postgresql.replication.fluent",
+      "org.postgresql.replication.fluent.logical",
+      "org.postgresql.replication.fluent.physical",
+      "org.postgresql.shaded.com.ongres.saslprep",
+      "org.postgresql.shaded.com.ongres.scram.client",
+      "org.postgresql.shaded.com.ongres.scram.common",
+      "org.postgresql.shaded.com.ongres.scram.common.exception",
+      "org.postgresql.shaded.com.ongres.scram.common.util",
+      "org.postgresql.shaded.com.ongres.stringprep",
+      "org.postgresql.ssl",
+      "org.postgresql.ssl.jdbc4",
+      "org.postgresql.sspi",
+      "org.postgresql.translation",
+      "org.postgresql.util",
+      "org.postgresql.util.internal",
+      "org.postgresql.xa",
+      "org.postgresql.xml"
+    ],
     "org.xerial:sqlite-jdbc": [
       "org.sqlite",
       "org.sqlite.core",
@@ -1583,6 +1678,7 @@
       "com.google.j2objc:j2objc-annotations",
       "com.google.protobuf:protobuf-java",
       "com.h2database:h2",
+      "com.mysql:mysql-connector-j",
       "com.uber.nullaway:nullaway",
       "io.github.eisop:dataflow-errorprone",
       "io.github.java-diff-utils:java-diff-utils",
@@ -1623,6 +1719,7 @@
       "org.openjdk.jmh:jmh-generator-annprocess",
       "org.opentest4j:opentest4j",
       "org.pcollections:pcollections",
+      "org.postgresql:postgresql",
       "org.xerial:sqlite-jdbc"
     ],
     "https://maven.elide.dev/gvm-elide/25.5.5-elide.5/": [
@@ -1644,6 +1741,7 @@
       "com.google.j2objc:j2objc-annotations",
       "com.google.protobuf:protobuf-java",
       "com.h2database:h2",
+      "com.mysql:mysql-connector-j",
       "com.uber.nullaway:nullaway",
       "io.github.eisop:dataflow-errorprone",
       "io.github.java-diff-utils:java-diff-utils",
@@ -1684,6 +1782,7 @@
       "org.openjdk.jmh:jmh-generator-annprocess",
       "org.opentest4j:opentest4j",
       "org.pcollections:pcollections",
+      "org.postgresql:postgresql",
       "org.xerial:sqlite-jdbc"
     ]
   },
@@ -1704,6 +1803,11 @@
     "com.h2database:h2": {
       "java.sql.Driver": [
         "org.h2.Driver"
+      ]
+    },
+    "com.mysql:mysql-connector-j": {
+      "java.sql.Driver": [
+        "com.mysql.cj.jdbc.Driver"
       ]
     },
     "com.uber.nullaway:nullaway": {
@@ -1866,6 +1970,11 @@
     "org.openjdk.jmh:jmh-generator-annprocess": {
       "javax.annotation.processing.Processor": [
         "org.openjdk.jmh.generators.BenchmarkProcessor"
+      ]
+    },
+    "org.postgresql:postgresql": {
+      "java.sql.Driver": [
+        "org.postgresql.Driver"
       ]
     },
     "org.xerial:sqlite-jdbc": {

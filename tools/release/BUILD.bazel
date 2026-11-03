@@ -1,6 +1,7 @@
 load("@rules_java//java:defs.bzl", "java_import", "java_test")
 load("@rules_shell//shell:sh_test.bzl", "sh_test")
 load("//bazel:maven.bzl", "maven_publication", "release_version")
+load("//bazel:maven_bom.bzl", "maven_bom")
 
 release_version(
     name = "version",
@@ -15,24 +16,58 @@ COMMON = [
 
 [maven_publication(
     name = module,
-    dependencies = COMMON + ([] if module == "core" else ["dev.elide:truffledata-core:{version}"]) + (["com.google.protobuf:protobuf-java:4.33.2"] if module == "protobuf" else []) + ([
+    dependencies = COMMON + ([] if module == "core" else ["dev.elide:truffledata-core:{version}"]) + (["com.google.protobuf:protobuf-java:4.36.1"] if module == "protobuf" else []) + ([
         "dev.elide:truffledata-jdbc:{version}",
         "org.xerial:sqlite-jdbc:3.53.4.0",
-    ] if module == "jdbc-sqlite" else []),
+    ] if module == "jdbc-sqlite" else []) + ([
+        "dev.elide:truffledata-jdbc:{version}",
+        "com.mysql:mysql-connector-j:26.10.0",
+    ] if module == "jdbc-mysql" else []) + ([
+        "dev.elide:truffledata-jdbc:{version}",
+        "org.postgresql:postgresql:42.7.14",
+    ] if module == "jdbc-postgresql" else []),
     library = "//%s" % module,
     module = module,
 ) for module in [
     "core",
     "jdbc",
     "jdbc-sqlite",
+    "jdbc-mysql",
+    "jdbc-postgresql",
     "protobuf",
 ]]
+
+maven_bom(
+    name = "bom",
+    managed = COMMON + ["dev.elide:truffledata-" + module + ":{version}" for module in [
+        "core",
+        "jdbc",
+        "jdbc-sqlite",
+        "jdbc-mysql",
+        "jdbc-postgresql",
+        "protobuf",
+    ]] + [
+        "com.mysql:mysql-connector-j:26.10.0",
+        "org.postgresql:postgresql:42.7.14",
+        "org.xerial:sqlite-jdbc:3.53.4.0",
+        "com.google.protobuf:protobuf-java:4.36.1",
+    ] + [coordinate + ":25.5.5-elide.5" for coordinate in [
+        "org.graalvm.truffle:truffle-runtime",
+        "org.graalvm.polyglot:polyglot",
+        "org.graalvm.js:js-language",
+        "org.graalvm.python:python-language",
+        "org.graalvm.python:python-resources",
+    ]],
+)
 
 filegroup(
     name = "publications",
     srcs = [
+        ":bom",
         ":core",
         ":jdbc",
+        ":jdbc-mysql",
+        ":jdbc-postgresql",
         ":jdbc-sqlite",
         ":protobuf",
     ],
@@ -59,6 +94,8 @@ sh_test(
     "core",
     "jdbc",
     "jdbc-sqlite",
+    "jdbc-mysql",
+    "jdbc-postgresql",
     "protobuf",
 ]]
 
@@ -71,11 +108,19 @@ sh_test(
     ] + ([] if module == "core" else [":core_import"]) + (["@maven//:com_google_protobuf_protobuf_java"] if module == "protobuf" else []) + ([
         ":jdbc_import",
         "@maven//:org_xerial_sqlite_jdbc",
-    ] if module == "jdbc-sqlite" else []),
+    ] if module == "jdbc-sqlite" else []) + ([
+        ":jdbc_import",
+        "@maven//:com_mysql_mysql_connector_j",
+    ] if module == "jdbc-mysql" else []) + ([
+        ":jdbc_import",
+        "@maven//:org_postgresql_postgresql",
+    ] if module == "jdbc-postgresql" else []),
 ) for module in [
     "core",
     "jdbc",
     "jdbc-sqlite",
+    "jdbc-mysql",
+    "jdbc-postgresql",
     "protobuf",
 ]]
 
@@ -87,6 +132,8 @@ java_test(
     use_testrunner = False,
     deps = [
         ":core_import",
+        ":jdbc-mysql_import",
+        ":jdbc-postgresql_import",
         ":jdbc-sqlite_import",
         ":jdbc_import",
         ":protobuf_import",

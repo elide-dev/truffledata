@@ -10,6 +10,30 @@ import org.junit.jupiter.api.Test;
 
 class JdbcTest {
   @Test
+  void serverAdaptersRejectOtherDriversAndCompileValueDecoders() throws Exception {
+    for (JdbcAdapter adapter :
+        List.of(
+            dev.elide.truffledata.jdbc.mysql.MysqlAdapter.INSTANCE,
+            dev.elide.truffledata.jdbc.postgresql.PostgresqlAdapter.INSTANCE)) {
+      try (Connection connection = DriverManager.getConnection("jdbc:h2:mem:");
+          PreparedStatement statement =
+              connection.prepareStatement("select cast(7 as integer) as id, X'00FF' as payload");
+          ResultSet result = statement.executeQuery()) {
+        assertThrows(
+            SQLException.class,
+            () -> adapter.prepare(connection, "select 1", JdbcQueryOptions.DEFAULT));
+        Schema schema = adapter.describe(result.getMetaData(), Limits.DEFAULT);
+        var decoder = adapter.decoder(result.getMetaData(), schema, Limits.DEFAULT);
+        assertTrue(result.next());
+        assertEquals(7L, decoder.read(result, 1));
+        var bytes = (DataArray) java.util.Objects.requireNonNull(decoder.read(result, 2));
+        assertTrue(bytes.isBytes());
+        assertEquals(255L, bytes.get(1));
+      }
+    }
+  }
+
+  @Test
   void sqliteAdapterPreservesBorrowedTransactionsAndRejectsCoercion() throws Exception {
     var adapter = dev.elide.truffledata.jdbc.sqlite.SqliteAdapter.INSTANCE;
     try (Connection wrong = DriverManager.getConnection("jdbc:h2:mem:")) {

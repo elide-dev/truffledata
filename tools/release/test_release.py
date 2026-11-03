@@ -31,19 +31,34 @@ class PublicationTest(unittest.TestCase):
                     expected.add('com.google.protobuf:protobuf-java')
                 if module == 'jdbc-sqlite':
                     expected.update(('dev.elide:truffledata-jdbc', 'org.xerial:sqlite-jdbc'))
+                if module in ('jdbc-mysql', 'jdbc-postgresql'):
+                    expected.add('dev.elide:truffledata-jdbc')
+                    expected.add('com.mysql:mysql-connector-j' if module == 'jdbc-mysql' else 'org.postgresql:postgresql')
+                if module == 'bom':
+                    expected = {'dev.elide:truffledata-' + name for name in MODULES if name != 'bom'} | {
+                        'org.graalvm.truffle:truffle-api', 'org.jspecify:jspecify',
+                        'org.graalvm.truffle:truffle-runtime', 'org.graalvm.polyglot:polyglot',
+                        'org.graalvm.js:js-language', 'org.graalvm.python:python-language',
+                        'org.graalvm.python:python-resources', 'com.mysql:mysql-connector-j',
+                        'org.postgresql:postgresql', 'org.xerial:sqlite-jdbc', 'com.google.protobuf:protobuf-java'}
+                    self.assertEqual(root.findtext('m:packaging', namespaces=NAMESPACE), 'pom')
+                    self.assertIsNone(root.find('m:dependencies', NAMESPACE))
+                    self.assertFalse(Path(str(prefix) + '.jar').exists())
                 actual = set()
-                for dep in root.findall('m:dependencies/m:dependency', NAMESPACE):
+                dep_path = 'm:dependencyManagement/m:dependencies/m:dependency' if module == 'bom' else 'm:dependencies/m:dependency'
+                for dep in root.findall(dep_path, NAMESPACE):
                     get = lambda key: dep.findtext('m:' + key, namespaces=NAMESPACE)
                     coordinate = get('groupId') + ':' + get('artifactId')
                     actual.add(coordinate)
                     self.assertEqual(get('scope'), 'compile')
                     self.assertEqual(get('version'), version if coordinate.startswith('dev.elide:') else lock['artifacts'][coordinate]['version'])
                 self.assertEqual(actual, expected)
-                with zipfile.ZipFile(str(prefix) + '.jar') as jar:
-                    names = jar.namelist()
-                    self.assertTrue(any(n.endswith('.class') for n in names))
-                    if module == 'core':
-                        self.assertTrue(any(n.endswith('ReadLongNodeGen.class') for n in names))
+                if module != 'bom':
+                    with zipfile.ZipFile(str(prefix) + '.jar') as jar:
+                        names = jar.namelist()
+                        self.assertTrue(any(n.endswith('.class') for n in names))
+                        if module == 'core':
+                            self.assertTrue(any(n.endswith('ReadLongNodeGen.class') for n in names))
                 for path in (directory / version).iterdir():
                     if path.suffix in ('.pom', '.jar'):
                         self.assertEqual(Path(str(path) + '.sha256').read_text().strip(), hashlib.sha256(path.read_bytes()).hexdigest())

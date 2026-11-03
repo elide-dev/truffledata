@@ -5,7 +5,7 @@ import shutil
 import sys
 import xml.etree.ElementTree as ET
 
-MODULES = ('core', 'jdbc', 'jdbc-sqlite', 'protobuf')
+MODULES = ('core', 'jdbc', 'jdbc-sqlite', 'jdbc-mysql', 'jdbc-postgresql', 'protobuf')
 
 
 def junit(root=Path('.')):

@@ -15,7 +15,7 @@ if 'SNAPSHOT' in sys.argv[1].upper():
 PY
 bucket=${MAVEN_BUCKET:-elide:elide-maven}
 public=https://maven.elide.dev
-modules=(core jdbc jdbc-sqlite protobuf)
+modules=(core jdbc jdbc-sqlite jdbc-mysql jdbc-postgresql protobuf bom)
 bazel=${BAZEL:-$(command -v bazelisk || command -v bazel)}
 mkdir -p build
 repo=$(mktemp -d "$PWD/build/release-repo.XXXXXX")
@@ -49,7 +49,9 @@ for module in "${modules[@]}"; do
   path=dev/elide/$artifact/$version
   rclone copy "$repo/$path" "$bucket/$path" --immutable --checksum
   rclone check "$repo/$path" "$bucket/$path" --one-way
-  for suffix in .pom .jar -sources.jar; do
+  suffixes=(.pom .jar -sources.jar)
+  [[ $module != bom ]] || suffixes=(.pom)
+  for suffix in "${suffixes[@]}"; do
     file=$artifact-$version$suffix
     curl --fail --silent --show-error "$public/$path/$file" -o "$repo/public-check"
     cmp "$repo/$path/$file" "$repo/public-check"
@@ -61,4 +63,4 @@ for module in "${modules[@]}"; do
   rclone check "$repo/$path" "$bucket/$path" --include 'maven-metadata.xml*' --one-way
 done
 rm -f "$repo/public-check"
-echo "Published dev.elide:truffledata-{core,jdbc,jdbc-sqlite,protobuf}:$version at $public"
+echo "Published dev.elide:truffledata-{core,jdbc,jdbc-sqlite,jdbc-mysql,jdbc-postgresql,protobuf,bom}:$version at $public"

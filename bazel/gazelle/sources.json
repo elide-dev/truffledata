@@ -21,6 +21,32 @@
     "plugins": []
   },
   {
+    "directory": "jdbc-postgresql",
+    "root": "src/main/java",
+    "name": "jdbc-postgresql",
+    "deps": [
+      "//core:core",
+      "//jdbc:jdbc",
+      "@maven//:org_graalvm_truffle_truffle_api",
+      "@maven//:org_postgresql_postgresql"
+    ],
+    "testonly": false,
+    "plugins": []
+  },
+  {
+    "directory": "jdbc-mysql",
+    "root": "src/main/java",
+    "name": "jdbc-mysql",
+    "deps": [
+      "//core:core",
+      "//jdbc:jdbc",
+      "@maven//:org_graalvm_truffle_truffle_api",
+      "@maven//:com_mysql_mysql_connector_j"
+    ],
+    "testonly": false,
+    "plugins": []
+  },
+  {
     "directory": "jdbc-sqlite",
     "root": "src/main/java",
     "name": "jdbc-sqlite",
@@ -57,7 +83,11 @@
       "@maven//:org_graalvm_polyglot_polyglot",
       "@maven//:com_google_protobuf_protobuf_java",
       "@maven//:org_junit_jupiter_junit_jupiter_api",
-      "//jdbc-sqlite:jdbc-sqlite"
+      "//jdbc-sqlite:jdbc-sqlite",
+      "//jdbc-mysql:jdbc-mysql",
+      "@maven//:com_mysql_mysql_connector_j",
+      "//jdbc-postgresql:jdbc-postgresql",
+      "@maven//:org_postgresql_postgresql"
     ],
     "testonly": true,
     "plugins": []

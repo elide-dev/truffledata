@@ -22,3 +22,8 @@ jobs:
       contents: read
       id-token: write
     secrets: inherit
+
+  drivers:
+    name: Drivers
+    uses: ./.github/workflows/check.drivers.yml
+    secrets: inherit

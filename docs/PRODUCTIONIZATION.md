@@ -8,8 +8,8 @@ the database owns planning. CSV, RPC execution and asynchronous delivery are sub
 | Requirement | Required acceptance evidence | State |
 | --- | --- | --- |
 | Adapter SPI and three driver artifacts | Versioned SPI, explicit overrides, concrete driver dependencies, Gazelle targets and publication consumer tests | In progress |
-| BOM | Published dependency management with tested driver/library combinations | Pending |
-| Real-driver matrix | Actual MySQL/PostgreSQL services and SQLite; values, streaming, prepared statements, failures and connection reuse through JS/Python | Pending |
+| BOM | Published dependency management with tested driver/library combinations | Implemented and staged consumer verified; public publication pending |
+| Real-driver matrix | Actual MySQL/PostgreSQL services and SQLite; values, streaming, prepared statements, failures and connection reuse through JS/Python | Initial real-service cases verified; broader edge/failure matrix pending |
 | Lifecycle | Deadlines, cancellation races, early close, context shutdown, borrowed/owned connections and pool reuse tests | Pending |
 | Memory | Bounded stream decoding, aggregate consumption/retention policies, large payload and adversarial tests including driver buffering | Pending |
 | Contract provenance | Explicit vs metadata origins, revision/lifetime policy, projection/session/schema compatibility tests | Pending |
@@ -60,3 +60,30 @@ retention bounds are still pending acceptance items.
 Final verification of this increment, including generated Protobuf binary messages
 and equivalent nesting-limit rejection for compact/boxed arrays: all 10 Bazel test
 targets passed at https://app.buildbuddy.io/invocation/862c7502-0b59-430f-9406-29db51ada748.
+
+
+Server integrations and BOM increment (2026-11-02): MySQL and PostgreSQL now have
+separate Gazelle targets and thin Maven publications, completing the three integration
+artifact implementations. The POM-only BOM manages all six libraries, three upstream
+drivers, Protobuf and the tested Truffle runtime/language versions. A repeatable Maven
+consumer verifies downloaded staged artifact bytes, compiles/runs using the Bazel SDK,
+and proves an explicit pgJDBC version override. These artifacts are not yet public.
+
+`tools/integration/run.sh` passed against MySQL 8.4.13 and PostgreSQL 18.6, including
+static JS/Python access, prepared values, PostgreSQL arrays/JSON and a real server
+cursor, early close, rollback ownership and connection reuse. It also verifies that
+MySQL's TINYINT boolean coercion cannot hide values outside 0..1. The reusable CI job
+uses pinned server images, harden-runner, inherited BuildBuddy credentials and JUnit
+uploading, with the service test local to its databases and compilation through RBE.
+See [driver scope and remaining gaps](DRIVERS.md).
+
+All ten regular Bazel targets passed at
+https://app.buildbuddy.io/invocation/032b7b57-4cb9-4d55-bb55-0c073968e539.
+The scalar decoder allocation comparison measured 0 additional bytes/cell in the
+allocation target (the compiled target also passed its bound). The Protobuf 4.36.1
+upgrade passed the Native Image simulation smoke at
+https://app.buildbuddy.io/invocation/d5794217-7b8c-45ef-9d89-0612832d2f54;
+this remains a benchmark image, not real-driver native acceptance. Six-module coverage
+passed at https://app.buildbuddy.io/invocation/9da27b6f-27e5-41fc-866d-5d86becb9e34.
+The prior pushed increment's CI, including CodSpeed, completed successfully at
+https://github.com/elide-dev/truffledata/actions/runs/41578766603.
