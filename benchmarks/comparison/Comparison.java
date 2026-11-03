@@ -57,10 +57,13 @@ public final class Comparison {
   }
 
   static List<String> stages(String workload, String engine) {
-    if (workload.equals("timestamp-json")) return List.of("ingest");
+    if (workload.equals("timestamp-json"))
+      return engine.startsWith("stock") ? List.of("ingest") : List.of("ingest", "ingest-typed");
     return engine.startsWith("stock")
         ? List.of("ingest", "read-aot")
-        : List.of("ingest", "interpret", "peak");
+        : workload.equals("proto-bytes")
+            ? List.of("ingest", "interpret", "peak")
+            : List.of("ingest", "ingest-typed", "interpret", "peak");
   }
 
   private static void run(
@@ -83,8 +86,11 @@ public final class Comparison {
       context.initialize("td-compare");
       context.enter();
       try (Fixture fixture = new Fixture(workload, engine)) {
-        boolean ingest = stage.equals("ingest");
-        Operation operation = ingest ? fixture::ingest : fixture::read;
+        boolean ingest = stage.startsWith("ingest");
+        Operation operation =
+            stage.equals("ingest-typed")
+                ? fixture::ingestTyped
+                : ingest ? fixture::ingest : fixture::read;
         for (int i = 0; i < 4; i++) fixture.check(operation.run(i));
         // Calibrate before warmup: initialization must not disturb measured guest code.
         ThreadMXBean bean = memory || smoke ? allocationCounter() : null;
@@ -294,24 +300,33 @@ public final class Comparison {
     }
 
     long ingest(int rotation) throws Exception {
+      return ingest(rotation, false);
+    }
+
+    long ingestTyped(int rotation) throws Exception {
+      return ingest(rotation, true);
+    }
+
+    private long ingest(int rotation, boolean typed) throws Exception {
       long sum = 0;
       for (int n = 0; n < ROWS; n++) {
         int i = (n + rotation) & (ROWS - 1);
         if (nativePlan != null) {
           try (var message = parseNative(i)) {
             retained = message;
-            sum += readOne(message.row());
+            sum += readOne(message.row(), typed);
           }
         } else {
           Object row = parse(i);
           retained = row;
-          sum += readOne(row);
+          sum += readOne(row, typed);
         }
       }
       return sum;
     }
 
-    long readOne(Object row) {
+    long readOne(Object row, boolean typed)
+        throws com.oracle.truffle.api.nodes.UnexpectedResultException {
       if (engine.startsWith("stock")) {
         if (row instanceof Timestamp t) return t.getSeconds() + t.getNanos();
         if (row instanceof BytesValue b) return b.getValue().size();
@@ -326,8 +341,10 @@ public final class Comparison {
           throw new AssertionError(e);
         }
       }
-      long value = (Long) data.read(row, 0);
-      return workload.endsWith("int4") ? value : value + (Long) data.read(row, 1);
+      long value = typed ? data.readLong(row, 0) : (Long) data.read(row, 0);
+      return workload.endsWith("int4")
+          ? value
+          : value + (typed ? data.readLong(row, 1) : (Long) data.read(row, 1));
     }
 
     long read(int rotation) {

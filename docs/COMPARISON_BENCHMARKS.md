@@ -43,6 +43,12 @@ The stock read loops use concrete generated protobuf getters or unbox retained s
 
 `ingest` includes parse/decode, row materialization, retention, a projected read and scoped
 cleanup. Guest compilation is disabled; TruffleData projection uses the uncached data API.
+`ingest-typed` adds six measurements using the primitive `DataLibrary.readLong` projection
+for owned/Buffa scalar messages and Timestamp JSON, and static MySQL/Postgres integer rows.
+The original generic `ingest` measurements remain. Byte-length projections already use the
+typed interop length API and receive no duplicate measurement. Stock continues to use its
+generated primitive getters. This separates library improvements from the effect of callers
+choosing typed reads. Report schema 2 includes these cells; schema 1 remains readable.
 Schema construction, parser construction, source creation and context startup are excluded.
 For binary Buffa, source bytes already reside in unmanaged memory and the result borrows
 that memory. Stock/owned parsers consume existing Java arrays and own their decoded payloads.
@@ -69,8 +75,8 @@ No dependency upgrades or query-planning functionality are introduced by this su
 
 ## Measurement and limits
 
-Each of 31 cells has three independent timing processes and three independent allocation
-processes (186 short-lived processes). Each process records three samples. Timing uses
+Each of 37 cells has three independent timing processes and three independent allocation
+processes (222 short-lived processes). Each process records three samples. Timing uses
 100 ms warmup and at least 50 ms per sample. Allocation uses fixed work: eight batches for
 ingestion or 128 batches for retained reads, with one warmup batch of the same size.
 Results report medians of process medians and the min/max process medians, not confidence

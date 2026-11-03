@@ -5,18 +5,20 @@ import compare
 
 
 class ComparisonTest(unittest.TestCase):
-    def dataset(self):
+    def dataset(self, schema=2):
         rows = []
-        for cell, fork in itertools.product(compare.cells(), range(3)):
+        for cell, fork in itertools.product(compare.cells(schema), range(3)):
             workload, engine, stage = cell
             rows.append(dict(workload=workload, engine=engine, stage=stage, fork=fork,
                              runtime='svm', backend='SVM_STATIC' if engine == 'buffa' else 'none',
                              guest_compiled=stage == 'peak', rows=32, checksum=compare.CHECKSUMS[workload],
                              ns_per_row=[1., 2., 3.], allocated_bytes_per_row=[0., 0., 0.]))
-        return dict(schema=1, forks=3, results=rows)
+        return dict(schema=schema, forks=3, results=rows)
 
     def test_complete(self):
-        self.assertEqual(len(list(compare.cells())), 31)
+        self.assertEqual(len(list(compare.cells())), 37)
+        self.assertEqual(len(list(compare.cells(1))), 31)
+        compare.validate(self.dataset(1))
         compare.validate(self.dataset())
 
     def test_rejects_incomplete_duplicate_and_wrong_identity(self):

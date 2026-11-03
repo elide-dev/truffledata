@@ -18,13 +18,15 @@ CHECKSUMS = {'proto-scalar': 54400032992, 'proto-bytes': 2097648, 'timestamp-jso
              'mysql-int4': 35472, 'postgres-int4': 35472}
 
 
-def cells():
+def cells(schema=2):
     for workload in WORKLOADS:
         engines = ('stock', 'stock-aliased', 'owned', 'buffa') if workload == 'proto-bytes' else (
             ('stock', 'owned', 'buffa') if workload in WORKLOADS[:3] else ('stock', 'static'))
         for engine in engines:
             stages = ('ingest',) if workload == 'timestamp-json' else (
                 ('ingest', 'read-aot') if engine.startswith('stock') else ('ingest', 'interpret', 'peak'))
+            if schema >= 2 and not engine.startswith('stock') and workload != 'proto-bytes':
+                stages = ('ingest', 'ingest-typed', *stages[1:])
             for stage in stages:
                 yield workload, engine, stage
 
@@ -46,9 +48,9 @@ def validate_row(row, cell, metric):
 
 
 def validate(data):
-    if data['schema'] != 1 or data['forks'] != 3:
+    if data['schema'] not in (1, 2) or data['forks'] != 3:
         raise ValueError('Expected three isolated processes per cell')
-    expected = set(itertools.product(cells(), range(3)))
+    expected = set(itertools.product(cells(data['schema']), range(3)))
     seen = set()
     for row in data['results']:
         cell = row['workload'], row['engine'], row['stage']
@@ -69,7 +71,7 @@ def render(data, path):
             'Time and allocations use separate fresh processes. Lower is better.', '',
             '| Workload | Engine | Stage | ns/row (range) | Java heap B/row |',
             '|---|---|---|---:|---:|']
-    for cell in cells():
+    for cell in cells(data['schema']):
         rows = [r for r in data['results'] if (r['workload'], r['engine'], r['stage']) == cell]
         times = [statistics.median(r['ns_per_row']) for r in rows]
         allocations = [statistics.median(r['allocated_bytes_per_row']) for r in rows]
@@ -77,6 +79,7 @@ def render(data, path):
             *cell, statistics.median(times), min(times), max(times), statistics.median(allocations)))
     text += ['', 'Stock read-aot is the native-image host baseline; it has no Truffle interpreter/JIT tier.',
              'Ingest includes parsing/materialization and an uncached projected read. Setup is excluded.',
+             'ingest-typed uses primitive readLong projections; ingest retains generic read projections.',
              'Buffa binary input is already in unmanaged memory; owned engines start with Java byte arrays.',
              'Buffa results are scoped borrowed views; stock-aliased borrows immutable ByteString input; stock/owned copy payloads.',
              'The direct stock AOT baseline excludes guest interop and contract enforcement.',
@@ -94,7 +97,7 @@ def measure(args):
     args.output.mkdir(parents=True, exist_ok=True)
     cpu = next((line.split(':', 1)[1].strip() for line in Path('/proc/cpuinfo').read_text().splitlines()
                 if line.startswith('model name')), platform.processor())
-    data = {'schema': 1, 'forks': 3, 'captured_at': datetime.datetime.now(datetime.timezone.utc).isoformat(),
+    data = {'schema': 2, 'forks': 3, 'captured_at': datetime.datetime.now(datetime.timezone.utc).isoformat(),
             'revision': args.revision, 'binary_sha256': hashlib.sha256(binary.read_bytes()).hexdigest(),
             'host': {'system': platform.system(), 'machine': platform.machine(), 'cpu': cpu,
                      'kernel': platform.release(), 'logical_cpus': os.cpu_count()},
@@ -102,7 +105,7 @@ def measure(args):
             'versions': {'graalvm': '25.5.5-elide.5', 'protobuf-java': '4.36.1',
                          'mysql-connector-j': '26.10.0', 'postgresql': '42.7.14'},
             'results': []}
-    jobs = list(itertools.product(cells(), range(3)))
+    jobs = list(itertools.product(cells(data['schema']), range(3)))
     random.Random(20261103).shuffle(jobs)
     for cell, fork in jobs:
         print('/'.join(cell) + f' fork {fork + 1}/3', flush=True)
