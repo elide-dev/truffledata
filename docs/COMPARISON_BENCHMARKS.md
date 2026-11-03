@@ -151,3 +151,25 @@ All original comparison cells and stock baselines remain. Core/protobuf regressi
 JVM acceptance, SVM smoke, and the full 31-cell measurement passed. Timing remains noisy:
 owned scalar took 679 ns versus stock's 167 ns in this run; Buffa took 1012 ns. Allocation
 improvements do not establish timing parity or superiority, and exclude native heap usage.
+
+## Compact scalar records
+
+Revision `71b4c16` ([samples](../benchmarks/results/svm-comparison-71b4c16/comparison.json))
+adds compact storage and bounded direct decoding for one or two implicit-presence INT32/INT64
+fields with zero defaults and single-byte tags. This applies by contract shape, not message
+name. Unknown/mismatched fields and noncanonical tags fall back to the lossless decoder;
+malformed values retain the existing rejection behavior. The generic ByteBuffer route is
+covered as a differential oracle alongside generated protobuf Java messages.
+
+Revision `0945211` ([samples](../benchmarks/results/svm-comparison-0945211/comparison.json),
+[table](../benchmarks/results/svm-comparison-0945211/comparison.md)) moves compact reads into
+Truffle specializations before delegated-library initialization. The unchanged generic
+projection benchmark measured scalar ingestion at 80.59 ns and 88 Java heap bytes/message,
+versus stock's 66.98 ns and 136 bytes. Retained peak reads measured 2.20 ns/row versus the direct
+stock AOT lower bound of 1.39 ns/row. These results establish an allocation win for this case,
+not a latency win. Other cells remain mixed and shared-host timings vary substantially.
+
+The 78-test regression suite, compiled allocation tests, JIT matrix, Buffa JVM acceptance,
+SVM smoke, and the full comparison run passed during these two revisions. No allocation or
+JIT budgets were relaxed. The row class remains uniform across compact and general messages
+so the previous generated-class dispatch regression is not reintroduced.
