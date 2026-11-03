@@ -7,6 +7,7 @@ import dev.elide.truffledata.jdbc.mysql.MysqlAdapter;
 import dev.elide.truffledata.jdbc.postgresql.PostgresqlAdapter;
 import java.sql.*;
 import java.util.*;
+import java.util.concurrent.*;
 import org.graalvm.polyglot.*;
 import org.junit.jupiter.api.Test;
 
@@ -44,6 +45,92 @@ class RealDriversTest {
   @Test
   void postgresqlQueryTimeoutPreservesBorrowedConnection() throws Exception {
     timeout(url("TRUFFLEDATA_POSTGRESQL_URL"), "select pg_sleep(5)", PostgresqlAdapter.INSTANCE);
+  }
+
+  @Test
+  void mysqlActiveQueryCancellation() throws Exception {
+    cancelActive(url("TRUFFLEDATA_MYSQL_URL"), true, MysqlAdapter.INSTANCE);
+  }
+
+  @Test
+  void postgresqlActiveQueryCancellation() throws Exception {
+    cancelActive(url("TRUFFLEDATA_POSTGRESQL_URL"), false, PostgresqlAdapter.INSTANCE);
+  }
+
+  private static void cancelActive(String url, boolean mysql, JdbcAdapter adapter)
+      throws Exception {
+    var cancellation = new JdbcCancellation();
+    try (Connection connection = DriverManager.getConnection(url);
+        Connection monitor = DriverManager.getConnection(url);
+        var owner = Executors.newSingleThreadExecutor()) {
+      connection.setAutoCommit(false);
+      long id;
+      try (Statement statement = connection.createStatement();
+          ResultSet result =
+              statement.executeQuery(
+                  mysql ? "select connection_id()" : "select pg_backend_pid()")) {
+        assertTrue(result.next());
+        id = result.getLong(1);
+      }
+      Future<?> query =
+          owner.submit(
+              () -> {
+                assertThrows(
+                    SQLException.class,
+                    () -> {
+                      try (var cursor =
+                          JdbcSource.execute(
+                              connection,
+                              mysql ? "select sleep(30)" : "select pg_sleep(30)",
+                              List.of(),
+                              null,
+                              null,
+                              Limits.DEFAULT,
+                              adapter,
+                              new JdbcQueryOptions(2, 60, true),
+                              JdbcConsumptionLimits.DEFAULT,
+                              cancellation)) {
+                        cursor.nextRecord();
+                      }
+                    });
+                assertTrue(cancellation.isCancelled());
+                assertFalse(connection.isClosed());
+                assertFalse(connection.getAutoCommit());
+                connection.rollback();
+                assertUsable(connection);
+                return null;
+              });
+      String probe =
+          mysql
+              ? "select info from information_schema.processlist where id = ?"
+              : "select query from pg_stat_activity where pid = ? and state = 'active'";
+      boolean running = false;
+      long start = System.nanoTime();
+      try (PreparedStatement statement = monitor.prepareStatement(probe)) {
+        statement.setLong(1, id);
+        while (System.nanoTime() - start < TimeUnit.SECONDS.toNanos(10)) {
+          try (ResultSet result = statement.executeQuery()) {
+            if (result.next()) {
+              String text = result.getString(1);
+              if (text != null && text.contains("sleep(30)")) {
+                running = true;
+                break;
+              }
+            }
+          }
+          if (query.isDone()) break;
+          Thread.sleep(20);
+        }
+      }
+      // Observe execution on the server rather than guessing that a client thread has started.
+      try {
+        assertTrue(running, "Sleeping query did not become visible on the server");
+      } finally {
+        cancellation.cancel();
+      }
+      query.get(15, TimeUnit.SECONDS);
+      cancellation.cancel();
+    }
   }
 
   private static void timeout(String url, String sql, JdbcAdapter adapter) throws Exception {

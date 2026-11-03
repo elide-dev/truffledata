@@ -38,6 +38,11 @@ public interface JdbcAdapter {
     return statement.executeQuery();
   }
 
+  /** Called from a cancellation thread during an active operation; never close the connection. */
+  default void cancel(PreparedStatement statement) throws SQLException {
+    statement.cancel();
+  }
+
   /** Conservative driver metadata interpretation; returned facts are validated during ingestion. */
   Schema describe(ResultSetMetaData metadata, Limits limits) throws SQLException;
 

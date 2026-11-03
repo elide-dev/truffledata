@@ -17,6 +17,7 @@ public final class JdbcCursor implements AutoCloseable, TruffleObject {
   private final Limits limits;
   private final JdbcConsumptionLimits consumption;
   private final PayloadBudget queryBudget;
+  private final @Nullable JdbcCancellation cancellation;
   private long rowsRead;
   private final JdbcSource.Decoder decoder;
   private final @Nullable StaticLayout layout;
@@ -36,7 +37,7 @@ public final class JdbcCursor implements AutoCloseable, TruffleObject {
       Limits limits,
       JdbcSource.Decoder decoder,
       @Nullable StaticLayout layout) {
-    this(statement, result, schema, limits, decoder, layout, JdbcConsumptionLimits.DEFAULT);
+    this(statement, result, schema, limits, decoder, layout, JdbcConsumptionLimits.DEFAULT, null);
   }
 
   JdbcCursor(
@@ -46,7 +47,9 @@ public final class JdbcCursor implements AutoCloseable, TruffleObject {
       Limits limits,
       JdbcSource.Decoder decoder,
       @Nullable StaticLayout layout,
-      JdbcConsumptionLimits consumption) {
+      JdbcConsumptionLimits consumption,
+      @Nullable JdbcCancellation cancellation) {
+    this.cancellation = cancellation;
     this.consumption = consumption;
     this.queryBudget = consumption.budget();
     this.statement = statement;
@@ -77,6 +80,7 @@ public final class JdbcCursor implements AutoCloseable, TruffleObject {
     if (exhausted) return null;
     if (closed) throw new IllegalStateException("Cursor is closed");
     try {
+      if (cancellation != null) cancellation.enter();
       int capacity =
           (int) Math.min(limits.maxRows(), limits.maxCells() / Math.max(1, schema.size()));
       capacity = (int) Math.min(capacity, Math.max(1, consumption.maxRows() - rowsRead));
@@ -95,6 +99,7 @@ public final class JdbcCursor implements AutoCloseable, TruffleObject {
                 }
               },
               queryBudget);
+      if (cancellation != null) cancellation.check();
       if (batch.size() < capacity) {
         exhausted = true;
         close();
@@ -103,11 +108,16 @@ public final class JdbcCursor implements AutoCloseable, TruffleObject {
     } catch (SQLException | RuntimeException | Error e) {
       closeResources(e);
       throw e;
+    } finally {
+      if (cancellation != null) cancellation.leave();
     }
   }
 
   private boolean advance() throws SQLException {
-    if (!result.next()) return false;
+    if (cancellation != null) cancellation.check();
+    boolean available = result.next();
+    if (cancellation != null) cancellation.check();
+    if (!available) return false;
     if (rowsRead == consumption.maxRows())
       throw new ContractViolation("Cumulative query row budget exceeded");
     rowsRead++;
@@ -132,6 +142,7 @@ public final class JdbcCursor implements AutoCloseable, TruffleObject {
   /** Preserve a primary failure and attach independent close failures directly to it. */
   private @Nullable Throwable closeResources(@Nullable Throwable failure) {
     if (closed) return failure;
+    if (cancellation != null) cancellation.finish();
     closed = true;
     pending = null;
     pendingStatic = null;
@@ -167,6 +178,14 @@ public final class JdbcCursor implements AutoCloseable, TruffleObject {
 
   private boolean prepareNext() throws SQLException {
     checkThread();
+    if (cancellation != null) {
+      try {
+        cancellation.check();
+      } catch (SQLException failure) {
+        closeResources(failure);
+        throw failure;
+      }
+    }
     if (batchMode) throw new IllegalStateException("Cannot mix batch and iterator consumption");
     iteratorMode = true;
     if (layout != null) return prepareStatic();
@@ -193,6 +212,7 @@ public final class JdbcCursor implements AutoCloseable, TruffleObject {
     if (exhausted) return false;
     if (closed) throw new IllegalStateException("Cursor is closed");
     try {
+      if (cancellation != null) cancellation.enter();
       if (!advance()) {
         exhausted = true;
         close();
@@ -207,10 +227,13 @@ public final class JdbcCursor implements AutoCloseable, TruffleObject {
         values[i] = value;
       }
       pendingStatic = Objects.requireNonNull(layout).create(values);
+      if (cancellation != null) cancellation.check();
       return true;
     } catch (SQLException | RuntimeException | Error failure) {
       closeResources(failure);
       throw failure;
+    } finally {
+      if (cancellation != null) cancellation.leave();
     }
   }
 

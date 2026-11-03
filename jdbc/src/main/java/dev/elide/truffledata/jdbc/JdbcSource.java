@@ -120,7 +120,6 @@ public final class JdbcSource {
   }
 
   /** Execute with separate per-batch and cumulative query ingestion limits. */
-  @TruffleBoundary
   public static JdbcCursor execute(
       Connection connection,
       String sql,
@@ -132,10 +131,35 @@ public final class JdbcSource {
       JdbcQueryOptions options,
       JdbcConsumptionLimits consumption)
       throws SQLException {
+    return execute(
+        connection, sql, parameters, contract, layout, limits, adapter, options, consumption, null);
+  }
+
+  /** Optional single-execution control supports cancellation from another thread. */
+  @TruffleBoundary
+  public static JdbcCursor execute(
+      Connection connection,
+      String sql,
+      List<? extends @Nullable Object> parameters,
+      @Nullable Schema contract,
+      @Nullable StaticLayout layout,
+      Limits limits,
+      JdbcAdapter adapter,
+      JdbcQueryOptions options,
+      JdbcConsumptionLimits consumption,
+      @Nullable JdbcCancellation cancellation)
+      throws SQLException {
     if (layout != null && contract != layout.schema())
       throw new IllegalArgumentException("Static layout requires its exact schema as contract");
+    if (cancellation != null) cancellation.check();
     PreparedStatement statement = adapter.prepare(connection, sql, options);
+    boolean attached = false;
     try {
+      if (cancellation != null) {
+        cancellation.attach(statement, adapter);
+        attached = true;
+        cancellation.enter();
+      }
       for (int i = 0; i < parameters.size(); i++) statement.setObject(i + 1, parameters.get(i));
       ResultSet result = adapter.execute(statement);
       try {
@@ -145,15 +169,12 @@ public final class JdbcSource {
         Schema schema = contract == null ? adapter.describe(metadata, limits) : contract;
         if (schema.size() != count)
           throw new ContractViolation("JDBC result width differs from contract");
+        JdbcSource.Decoder decoder = adapter.decoder(metadata, schema, limits);
+        if (cancellation != null) cancellation.check();
         return new JdbcCursor(
-            statement,
-            result,
-            schema,
-            limits,
-            adapter.decoder(metadata, schema, limits),
-            layout,
-            consumption);
+            statement, result, schema, limits, decoder, layout, consumption, cancellation);
       } catch (SQLException | RuntimeException | Error failure) {
+        if (attached && cancellation != null) cancellation.finish();
         try {
           result.close();
         } catch (SQLException | RuntimeException | Error close) {
@@ -162,12 +183,15 @@ public final class JdbcSource {
         throw failure;
       }
     } catch (SQLException | RuntimeException | Error failure) {
+      if (attached && cancellation != null) cancellation.finish();
       try {
         statement.close();
       } catch (SQLException | RuntimeException | Error close) {
         if (failure != close) failure.addSuppressed(close);
       }
       throw failure;
+    } finally {
+      if (attached && cancellation != null) cancellation.leave();
     }
   }
 

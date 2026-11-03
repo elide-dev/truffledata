@@ -10,7 +10,7 @@ the database owns planning. CSV, RPC execution and asynchronous delivery are sub
 | Adapter SPI and three driver artifacts | Versioned SPI, explicit overrides, concrete driver dependencies, Gazelle targets and publication consumer tests | In progress |
 | BOM | Published dependency management with tested driver/library combinations | Implemented and staged consumer verified; public publication pending |
 | Real-driver matrix | Actual MySQL/PostgreSQL services and SQLite; values, streaming, prepared statements, failures and connection reuse through JS/Python | Initial real-service cases verified; broader edge/failure matrix pending |
-| Lifecycle | Deadlines, cancellation races, early close, context shutdown, borrowed/owned connections and pool reuse tests | Pending |
+| Lifecycle | Deadlines, cancellation races, early close, context shutdown, borrowed/owned connections and pool reuse tests | Opt-in active-execution cancellation and core cleanup races tested; fetch interruption, deadlines, context shutdown and pool ownership pending |
 | Memory | Bounded stream decoding, aggregate consumption/retention policies, large payload and adversarial tests including driver buffering | Aggregate logical ingestion limits implemented; retention leases, physical memory and driver buffering pending |
 | Contract provenance | Explicit vs metadata origins, revision/lifetime policy, projection/session/schema compatibility tests | Pending |
 | Consumer Native Image | Packaged library/driver metadata, schema-specific Protobuf generation, real-driver native executables on supported platforms | Pending; existing native benchmark is fixture-specific |
@@ -147,3 +147,21 @@ The cumulative-accounting allocation gate passed in both ordinary and compiled m
 https://app.buildbuddy.io/invocation/6694f9e9-b178-4233-b3d7-96ef1182f9d4.
 The direct-column increment's full CI also passed:
 https://github.com/elide-dev/truffledata/actions/runs/41583973197.
+
+Cancellation increment: opt-in single-execution controls register a statement before
+execution, permit cross-thread driver cancellation, reject subsequent buffered/static
+reads, and serialize core resource cleanup after cancellation hooks. Tests cover
+pre-cancelled admission, idle buffered data, reuse rejection, late cancellation, and
+in-flight cleanup ordering. Eight live MySQL/PostgreSQL acceptance methods passed,
+including active-query cancellation observed through server state and caller recovery.
+SQLite native execution cancellation also passed, with a VM progress handler used only
+to coordinate the test. All ten ordinary targets passed at
+https://app.buildbuddy.io/invocation/3a3f5708-7573-441c-9c34-8d2889f9d495.
+No hard deadline or automatic context shutdown guarantee is implied: ignored driver
+cancellation, driver-start races, idle owner cleanup, fetch and cleanup phases remain
+explicit acceptance work. The previous MySQL recovery increment's full CI passed:
+https://github.com/elide-dev/truffledata/actions/runs/41584620950.
+An additional cancellation-hook transport-failure test verifies that the requester
+receives the driver error while the consuming thread still rejects and cleans up the
+query; the correctness suite passed at
+https://app.buildbuddy.io/invocation/f8b1d114-82f9-428d-9cd2-ed5b2832f641.

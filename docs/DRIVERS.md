@@ -71,6 +71,33 @@ allocated driver values. Scalar conversion does not allocate a per-cell budget o
 compound arrays get scoped accounting. The current allocation gate compares scalar
 conversion with the same ResultSet baseline and allows at most 8 additional bytes/cell.
 
+## Cancellation
+
+The adapter-aware execute overload accepts an optional `JdbcCancellation` after the
+consumption limits. Create one control per execution. Another thread may call
+`cancel()`; the consuming thread remains responsible for closing the cursor with
+try-with-resources. The connection remains borrowed, and rollback after cancellation
+is the caller's decision. Controls cannot be reused for another execution.
+
+Cancellation before preparation rejects the query without creating a statement.
+During execution/ingestion the control invokes `JdbcAdapter.cancel`, which defaults
+to JDBC `Statement.cancel`. Between operations it only records the request. Further
+reads reject buffered data as well as new fetches, and core cleanup waits for an
+in-flight cancellation hook before closing its result/statement. A late request after
+cleanup does not invoke the driver. Driver cancellation failures propagate to the
+requesting thread; the cancellation flag remains set for the consuming thread.
+
+The pinned MySQL/PostgreSQL integrations pass active sleeping-query cancellation and
+connection reuse after caller rollback. SQLite passes native VM execution cancellation
+with a test progress callback proving execution had started. These tests do not prove
+interruption of every fetch/driver phase. There is a race between entering an operation
+and the driver starting it: a driver may ignore cancellation in that window. The
+control still rejects results when the operation returns. A cancellation request may
+block in the driver, and does not impose a hard execution or cleanup deadline. Idle
+cursors must still be closed by their owner; automatic context teardown is not yet
+provided. Never concurrently use a borrowed connection for unrelated work during a
+controlled query or cancellation.
+
 ## Cumulative query limits
 
 Every JDBC cursor uses `JdbcConsumptionLimits.DEFAULT`: 1,000,000 rows, 64,000,000
