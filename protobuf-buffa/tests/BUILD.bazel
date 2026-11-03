@@ -1,0 +1,164 @@
+load("@rules_cc//cc:defs.bzl", "cc_binary")
+load("@rules_graalvm//graalvm:defs.bzl", "native_image")
+load("@rules_java//java:defs.bzl", "java_test")
+load("@rules_shell//shell:sh_test.bzl", "sh_test")
+load("//bazel:java.bzl", "data_java_library")
+load("//bazel:jit.bzl", "TRUFFLE_JIT_CHECKS")
+
+package(default_visibility = ["//visibility:public"])
+
+data_java_library(
+    name = "acceptance",
+    testonly = True,
+    srcs = [
+        "Acceptance.java",
+        "CompiledReads.java",
+        "TestLanguage.java",
+        "TypedAcceptance.java",
+        "WellKnownAcceptance.java",
+        "package-info.java",
+    ],
+    deps = [
+        "//core",
+        "//protobuf",
+        "//protobuf-buffa",
+        "//tests:native_contracts",
+        "//tests:wkt_contracts",
+        "@maven//:com_google_protobuf_protobuf_java",
+        "@maven//:com_google_protobuf_protobuf_java_util",
+        "@maven//:org_graalvm_polyglot_polyglot",
+        "@maven//:org_graalvm_sdk_nativeimage",
+        "@maven//:org_graalvm_sdk_word",
+        "@maven//:org_graalvm_truffle_truffle_api",
+    ],
+)
+
+java_test(
+    name = "jvm",
+    size = "large",
+    srcs = ["AcceptanceTest.java"],
+    args = [
+        "--package",
+        "dev.elide.truffledata.buffa.tests",
+        "--include-class",
+        "dev.elide.truffledata.buffa.tests.AcceptanceTest",
+    ],
+    data = [
+        ":wrong_abi.so",
+        "//protobuf-buffa/native:shared",
+    ],
+    jvm_flags = [
+        "--enable-native-access=ALL-UNNAMED",
+        "-Dtruffledata.strict=true",
+        "-ea",
+    ],
+    main_class = "dev.elide.bazel.junit.BazelJUnitRunner",
+    use_testrunner = False,
+    runtime_deps = [
+        "//bazel/junit:runner",
+        "@maven//:org_graalvm_truffle_truffle_runtime",
+    ],
+    deps = [
+        ":acceptance",
+        "//protobuf-buffa",
+        "@maven//:org_junit_jupiter_junit_jupiter_api",
+    ],
+)
+
+[
+    native_image(
+        name = name,
+        testonly = True,
+        cc_deps = ["//protobuf-buffa/native:truffledata_buffa"] if enabled else [],
+        exec_properties = {
+            "EstimatedCPU": "8",
+            "EstimatedMemory": "24GB",
+        },
+        executable_name = name,
+        extra_args = [
+            "--gc=serial",
+            "-ea",
+            "-Dtruffledata.strict=true",
+            "--initialize-at-build-time=dev.elide.truffledata",
+            "--parallelism=8",
+            "-march=compatibility",
+            "-H:+UnlockExperimentalVMOptions",
+        ] + TRUFFLE_JIT_CHECKS + ["-H:-UnlockExperimentalVMOptions"] + (["--features=dev.elide.truffledata.buffa.BuffaFeature"] if enabled else []),
+        graalvm_sdk = "@graalvm_linux_amd64//:gvm",
+        main_class = "dev.elide.truffledata.buffa.tests.Acceptance",
+        optimization_mode = "2",
+        tags = ["manual"],
+        target_compatible_with = [
+            "@platforms//os:linux",
+            "@platforms//cpu:x86_64",
+        ],
+        deps = [
+            ":acceptance",
+            "@maven//:org_graalvm_truffle_truffle_runtime",
+        ],
+    )
+    for name, enabled in [
+        ("native", True),
+        ("fallback", False),
+    ]
+]
+
+[
+    sh_test(
+        name = name + "_test",
+        size = "large",
+        srcs = ["native_test.sh"],
+        args = [
+            "$(rootpath :" + name + ")",
+            mode,
+        ],
+        data = [":" + name],
+        tags = ["manual"],
+        target_compatible_with = [
+            "@platforms//os:linux",
+            "@platforms//cpu:x86_64",
+        ],
+    )
+    for name, mode in [
+        ("native", "native"),
+        ("fallback", "java"),
+    ]
+]
+
+java_test(
+    name = "jvm_no_native_access",
+    size = "medium",
+    srcs = [
+        "AcceptanceTest.java",
+        "NativeDeniedTest.java",
+    ],
+    args = [
+        "--package",
+        "dev.elide.truffledata.buffa.tests",
+        "--include-class",
+        "dev.elide.truffledata.buffa.tests.NativeDeniedTest",
+    ],
+    data = ["//protobuf-buffa/native:shared"],
+    jvm_flags = [
+        "--illegal-native-access=deny",
+        "-Dtruffledata.strict=true",
+        "-ea",
+    ],
+    main_class = "dev.elide.bazel.junit.BazelJUnitRunner",
+    use_testrunner = False,
+    runtime_deps = [
+        "//bazel/junit:runner",
+    ],
+    deps = [
+        ":acceptance",
+        "//protobuf-buffa",
+        "@maven//:org_junit_jupiter_junit_jupiter_api",
+    ],
+)
+
+cc_binary(
+    name = "wrong_abi.so",
+    testonly = True,
+    srcs = ["wrong_abi.c"],
+    linkshared = True,
+)

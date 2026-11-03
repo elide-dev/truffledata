@@ -20,7 +20,7 @@ class PolicyTest {
             Objects.requireNonNull(System.getenv("TEST_WORKSPACE")));
     Map<String, Integer> budgets =
         Map.ofEntries(
-            Map.entry("Values.java", 5),
+            Map.entry("Values.java", 6),
             Map.entry("DataLibrary.java", 1),
             Map.entry("Schema.java", 1),
             Map.entry("Batch.java", 2),
@@ -30,7 +30,7 @@ class PolicyTest {
             Map.entry("JdbcCursor.java", 7),
             Map.entry("JdbcSource.java", 6),
             Map.entry("ProtobufAdapter.java", 5),
-            Map.entry("ProtoPlan.java", 6),
+            Map.entry("ProtoPlan.java", 10),
             Map.entry("ProtoRow.java", 3),
             Map.entry("ProtoCompiler.java", 8),
             Map.entry("ProtoWire.java", 1),

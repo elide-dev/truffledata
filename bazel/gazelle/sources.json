@@ -67,7 +67,8 @@
       "//core:core",
       "@maven//:org_graalvm_truffle_truffle_api",
       "@maven//:com_google_protobuf_protobuf_java",
-      "@maven//:com_google_protobuf_protobuf_java_util"
+      "@maven//:com_google_protobuf_protobuf_java_util",
+      "@maven//:com_google_code_gson_gson"
     ],
     "testonly": false,
     "plugins": []
@@ -91,7 +92,8 @@
       "@maven//:org_postgresql_postgresql",
       "@maven//:org_xerial_sqlite_jdbc",
       "//benchmarks:benchmarks",
-      "//tests:native_contracts"
+      "//tests:native_contracts",
+      "@maven//:com_google_protobuf_protobuf_java_util"
     ],
     "testonly": true,
     "plugins": []
@@ -135,5 +137,20 @@
     "plugins": [
       "//bazel:jmh_processor"
     ]
+  },
+  {
+    "directory": "protobuf-buffa",
+    "root": "src/main/java",
+    "name": "protobuf-buffa",
+    "deps": [
+      ":bindings",
+      "//core",
+      "//protobuf",
+      "@maven//:org_graalvm_sdk_nativeimage",
+      "@maven//:org_graalvm_sdk_word",
+      "@maven//:org_graalvm_truffle_truffle_api"
+    ],
+    "testonly": false,
+    "plugins": []
   }
 ]

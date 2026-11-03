@@ -295,6 +295,20 @@ public final class JitMatrix {
       add(cases, prefix + "/boolean", Op.DATA_BOOLEAN, row, 2, "", true);
       add(cases, prefix + "/bytes-length", Op.LENGTH, row, 3, "", 1);
       add(cases, prefix + "/enum", Op.DATA_LONG, row, 4, "", 999L);
+      ProtoRow[] textRows = {
+        plan.parseText("f0: 1000 f1: 1.5 f2: true f3: '\\377' f4: 999"),
+        plan.parseJson("{\"f0\":1000,\"f1\":1.5,\"f2\":true,\"f3\":\"/w==\",\"f4\":999}")
+      };
+      for (int format = 0; format < textRows.length; format++) {
+        String textPrefix = prefix + (format == 0 ? "/text" : "/json");
+        ProtoRow parsed = textRows[format];
+        add(cases, textPrefix + "/long", Op.DATA_LONG, parsed, 0, "", 1000L);
+        add(cases, textPrefix + "/double", Op.DATA_DOUBLE, parsed, 1, "", 1.5);
+        add(cases, textPrefix + "/boolean", Op.DATA_BOOLEAN, parsed, 2, "", true);
+        add(cases, textPrefix + "/bytes-length", Op.LENGTH, parsed, 3, "", 1);
+        add(cases, textPrefix + "/enum", Op.DATA_LONG, parsed, 4, "", 999L);
+        add(cases, textPrefix + "/presence", Op.PROTO_HAS, parsed, 0, "", true);
+      }
       add(cases, prefix + "/wrong-long", Op.DATA_LONG, row, 1, "", Failure.UNEXPECTED);
       add(cases, prefix + "/wrong-double", Op.DATA_DOUBLE, row, 0, "", Failure.UNEXPECTED);
       add(cases, prefix + "/wrong-boolean", Op.DATA_BOOLEAN, row, 0, "", Failure.UNEXPECTED);

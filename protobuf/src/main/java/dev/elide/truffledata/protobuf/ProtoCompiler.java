@@ -69,7 +69,8 @@ public final class ProtoCompiler {
                 oneof == null ? -1 : oneof.getIndex(),
                 typeName,
                 enumeration,
-                defaultValue));
+                defaultValue,
+                field.getJsonName()));
       }
       result.put(
           descriptor.getFullName(),
@@ -206,7 +207,8 @@ public final class ProtoCompiler {
                 actual.oneof(),
                 actual.typeName(),
                 actual.enumType(),
-                field.defaultValue());
+                field.defaultValue(),
+                actual.jsonName());
         if (!shape.equals(field) || !sameDefault(actual.defaultValue(), field.defaultValue()))
           throw new ContractViolation("Message field differs from plan: " + actual.name());
       }

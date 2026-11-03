@@ -13,17 +13,22 @@ final class ProtoCodec {
   private ProtoCodec() {}
 
   static ProtoRow decode(ProtoPlan plan, byte[] wire) {
-    if (wire.length > plan.model.maxWireBytes) throw bad("Wire byte budget exceeded");
+    return decode(plan, ByteBuffer.wrap(wire));
+  }
+
+  static ProtoRow decode(ProtoPlan plan, ByteBuffer source) {
+    ByteBuffer wire = source.slice();
+    if (wire.remaining() > plan.model.maxWireBytes) throw bad("Wire byte budget exceeded");
     Reader input = new Reader(wire, new ProtoRow.Budget(plan.model.limits), plan.model.maxDepth);
     State state = new State(plan, input.budget);
-    input.message(state, wire.length, 0, 1);
+    input.message(state, wire.remaining(), 0, 1);
     return state.finish();
   }
 
   static DataArray inspect(byte[] wire, Limits limits, int maxDepth, int maxWireBytes) {
     if (wire.length > maxWireBytes || maxWireBytes < 0 || maxDepth < 1 || maxDepth > 128)
       throw bad("Invalid wire budgets");
-    Reader reader = new Reader(wire, new ProtoRow.Budget(limits), maxDepth);
+    Reader reader = new Reader(ByteBuffer.wrap(wire), new ProtoRow.Budget(limits), maxDepth);
     Schema schema =
         Schema.of(
             Field.requiredLong("number"),
@@ -96,12 +101,12 @@ final class ProtoCodec {
   }
 
   private static final class Reader {
-    final byte[] wire;
+    final ByteBuffer wire;
     final ProtoRow.Budget budget;
     final int maxDepth;
     int position;
 
-    Reader(byte[] wire, ProtoRow.Budget budget, int maxDepth) {
+    Reader(ByteBuffer wire, ProtoRow.Budget budget, int maxDepth) {
       this.wire = wire;
       this.budget = budget;
       this.maxDepth = maxDepth;
@@ -111,7 +116,7 @@ final class ProtoCodec {
       long value = 0;
       for (int shift = 0; shift < 64; shift += 7) {
         if (position >= end) throw bad("Truncated varint");
-        int b = wire[position++] & 255;
+        int b = wire.get(position++) & 255;
         if (shift == 63 && (b & 254) != 0) throw bad("Varint overflow");
         value |= (long) (b & 127) << shift;
         if ((b & 128) == 0) return value;
@@ -128,7 +133,7 @@ final class ProtoCodec {
     long fixed(int width, int end) {
       if (end - position < width) throw bad("Truncated fixed-width field");
       long value = 0;
-      for (int i = 0; i < width; i++) value |= (long) (wire[position++] & 255) << (i * 8);
+      for (int i = 0; i < width; i++) value |= (long) (wire.get(position++) & 255) << (i * 8);
       return value;
     }
 
@@ -227,7 +232,9 @@ final class ProtoCodec {
 
     void retain(State state, int start) {
       budget.bytes(position - start);
-      state.unknown.write(wire, start, position - start);
+      if (wire.hasArray())
+        state.unknown.write(wire.array(), wire.arrayOffset() + start, position - start);
+      else for (int i = start; i < position; i++) state.unknown.write(wire.get(i));
     }
 
     Object scalar(ProtoPlan.Kind kind, int end) {
@@ -254,14 +261,18 @@ final class ProtoCodec {
         case STRING -> {
           int count = length(end);
           budget.bytes(2L * utf16Length(position, count));
-          String result = new String(wire, position, count, StandardCharsets.UTF_8);
+          String result =
+              wire.hasArray()
+                  ? new String(
+                      wire.array(), wire.arrayOffset() + position, count, StandardCharsets.UTF_8)
+                  : StandardCharsets.UTF_8.decode(wire.slice(position, count)).toString();
           position += count;
           yield result;
         }
         case BYTES -> {
           int count = length(end);
           budget.cells(count);
-          DataArray result = DataArray.copyOfBytes(ByteBuffer.wrap(wire, position, count));
+          DataArray result = DataArray.copyOfBytes(wire.slice(position, count));
           position += count;
           yield result;
         }
@@ -273,7 +284,7 @@ final class ProtoCodec {
     int utf16Length(int start, int count) {
       int cursor = start, end = start + count, units = 0;
       while (cursor < end) {
-        int first = wire[cursor++] & 255;
+        int first = wire.get(cursor++) & 255;
         if (first < 128) {
           units++;
           continue;
@@ -294,7 +305,7 @@ final class ProtoCodec {
         } else throw bad("Invalid UTF-8 leading byte");
         if (tails > end - cursor) throw bad("Truncated UTF-8");
         for (int i = 0; i < tails; i++) {
-          int next = wire[cursor++] & 255;
+          int next = wire.get(cursor++) & 255;
           if ((next & 0xc0) != 0x80) throw bad("Invalid UTF-8 continuation");
           code = code << 6 | next & 63;
         }

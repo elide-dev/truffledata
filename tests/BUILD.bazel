@@ -1,3 +1,4 @@
+load("@protobuf//bazel:proto_library.bzl", "proto_library")
 load("@rules_java//java:defs.bzl", "java_test")
 load("//bazel:java.bzl", "data_java_library")
 load("//bazel:protobuf.bzl", "proto_contract_library")
@@ -33,6 +34,7 @@ data_java_library(
         "//protobuf",
         "//tests:native_contracts",
         "@maven//:com_google_protobuf_protobuf_java",
+        "@maven//:com_google_protobuf_protobuf_java_util",
         "@maven//:com_mysql_mysql_connector_j",
         "@maven//:org_graalvm_polyglot_polyglot",
         "@maven//:org_graalvm_truffle_truffle_api",
@@ -274,4 +276,27 @@ genrule(
     outs = ["native.pb"],
     cmd = "$(location @protobuf//:protoc) --proto_path=tests --include_imports --descriptor_set_out=$@ $(SRCS)",
     tools = ["@protobuf//:protoc"],
+)
+
+proto_library(
+    name = "wkt_proto",
+    testonly = True,
+    srcs = ["wkt.proto"],
+    strip_import_prefix = "/tests",
+    deps = [
+        "@protobuf//:any_proto",
+        "@protobuf//:duration_proto",
+        "@protobuf//:field_mask_proto",
+        "@protobuf//:struct_proto",
+        "@protobuf//:timestamp_proto",
+        "@protobuf//:type_proto",
+        "@protobuf//:wrappers_proto",
+    ],
+)
+
+proto_contract_library(
+    name = "wkt_contracts",
+    testonly = True,
+    class_name = "WellKnownContracts",
+    proto_deps = [":wkt_proto"],
 )

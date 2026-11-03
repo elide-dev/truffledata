@@ -4,6 +4,7 @@ import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.TruffleLanguage;
 import dev.elide.truffledata.*;
+import java.nio.ByteBuffer;
 import java.util.*;
 import org.jspecify.annotations.Nullable;
 
@@ -72,9 +73,41 @@ public final class ProtoPlan {
       int oneof,
       String typeName,
       @Nullable EnumType enumType,
-      Object defaultValue) {
+      Object defaultValue,
+      String jsonName) {
+    /** Source-compatible constructor for contracts using the standard JSON field spelling. */
+    public FieldPlan(
+        String name,
+        int number,
+        Kind kind,
+        boolean repeated,
+        boolean map,
+        boolean explicitPresence,
+        boolean required,
+        boolean packed,
+        int oneof,
+        String typeName,
+        @Nullable EnumType enumType,
+        Object defaultValue) {
+      this(
+          name,
+          number,
+          kind,
+          repeated,
+          map,
+          explicitPresence,
+          required,
+          packed,
+          oneof,
+          typeName,
+          enumType,
+          defaultValue,
+          standardJsonName(name));
+    }
+
     public FieldPlan {
       Objects.requireNonNull(name);
+      Objects.requireNonNull(jsonName);
       Objects.requireNonNull(kind);
       Objects.requireNonNull(typeName);
       Objects.requireNonNull(defaultValue);
@@ -113,6 +146,20 @@ public final class ProtoPlan {
     }
   }
 
+  private static String standardJsonName(String name) {
+    StringBuilder result = new StringBuilder();
+    boolean upper = false;
+    for (int i = 0; i < name.length(); i++) {
+      char c = name.charAt(i);
+      if (c == '_') upper = true;
+      else {
+        result.append(upper && c >= 'a' && c <= 'z' ? (char) (c - 'a' + 'A') : c);
+        upper = false;
+      }
+    }
+    return result.toString();
+  }
+
   /** All graph references resolve once when the model is built, including recursive messages. */
   public static final class Model {
     private final Map<String, ProtoPlan> types;
@@ -149,6 +196,14 @@ public final class ProtoPlan {
             if (field.map() != nested.definition.mapEntry())
               throw new ContractViolation("Invalid map entry reference");
           }
+        }
+        if (plan.jsonType() == ProtoJsonType.STRUCT) {
+          ProtoPlan entry = plan.nested(plan.ordinal(1));
+          if (entry.size() != 2
+              || entry.field(0).kind() != Kind.STRING
+              || entry.field(1).kind() != Kind.MESSAGE
+              || !entry.field(1).typeName().equals("google.protobuf.Value"))
+            throw new ContractViolation("Invalid Struct entry schema");
         }
         if (plan.definition.mapEntry()) {
           if (plan.size() != 2
@@ -190,6 +245,7 @@ public final class ProtoPlan {
   private final FieldPlan[] fields;
 
   private final Schema schema;
+  private final ProtoJsonType jsonType;
   private final @Nullable StaticLayout layout;
   private final Map<Integer, Integer> numbers;
 
@@ -209,6 +265,23 @@ public final class ProtoPlan {
     numbers = Map.copyOf(indices);
     schema = new Schema(definition.name(), contracts);
     layout = language == null ? null : new StaticLayout(language, schema, model.limits);
+    jsonType = ProtoJsonType.classify(this);
+  }
+
+  public ProtoJsonType jsonType() {
+    return jsonType;
+  }
+
+  public Limits limits() {
+    return model.limits;
+  }
+
+  public int maxDepth() {
+    return model.maxDepth;
+  }
+
+  public int maxWireBytes() {
+    return model.maxWireBytes;
   }
 
   public String name() {
@@ -248,6 +321,33 @@ public final class ProtoPlan {
   @TruffleBoundary
   public ProtoRow decode(byte[] wire) {
     return ProtoCodec.decode(this, wire);
+  }
+
+  /**
+   * Reads the remaining region without changing position/limit or copying the whole input. The
+   * caller must keep the region alive and immutable during this call. Returned rows own data.
+   */
+  @TruffleBoundary
+  public ProtoRow decode(ByteBuffer wire) {
+    return ProtoCodec.decode(this, wire);
+  }
+
+  /** Descriptor-free protobuf text format. Unknown fields and duplicate singular fields fail. */
+  @TruffleBoundary
+  public ProtoRow parseText(String text) {
+    return ProtoText.decode(this, text);
+  }
+
+  /** Descriptor-free ProtoJSON, including schema-specialized well-known types. */
+  @TruffleBoundary
+  public ProtoRow parseJson(String json) {
+    return ProtoJson.decode(this, json, List.of());
+  }
+
+  /** Explicit allowlist for Any payloads; no descriptor discovery or network resolution. */
+  @TruffleBoundary
+  public ProtoRow parseJson(String json, List<ProtoPlan> anyTypes) {
+    return ProtoJson.decode(this, json, anyTypes);
   }
 
   @TruffleBoundary

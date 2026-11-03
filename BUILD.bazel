@@ -6,6 +6,9 @@ alias(
 
 exports_files([
     "MODULE.bazel",
+    "Cargo.toml",
+    "Cargo.lock",
+    "Cargo.Bazel.lock",
     "maven_install.json",
     ".bazelrc",
     ".bazelversion",
@@ -14,6 +17,9 @@ exports_files([
 filegroup(
     name = "gazelle_inputs",
     srcs = [
+        "Cargo.Bazel.lock",
+        "Cargo.lock",
+        "Cargo.toml",
         "MODULE.bazel",
         "//bazel/gazelle:sources.json",
     ] + ["//%s:%s" % (module, target) for module in [
@@ -23,6 +29,7 @@ filegroup(
         "jdbc-mysql",
         "jdbc-postgresql",
         "protobuf",
+        "protobuf-buffa",
         "tests",
         "benchmarks",
         "benchmarks/jdbc",
