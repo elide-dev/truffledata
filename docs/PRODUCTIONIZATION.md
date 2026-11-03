@@ -299,3 +299,11 @@ https://app.buildbuddy.io/invocation/6ffde015-dad0-445f-8e9e-9856ae529135:
 ProtoCodec 305/333 lines and 25/25 methods; ProtoCompiler 240/264 lines and
 22/22 methods; ProtoRow 97/104 lines and 20/20 methods. The complete access-method
 gate passed, and CI uploads LCOV and JUnit reports through the existing Codecov jobs.
+
+Release `0.1.0` publishes all six libraries and the BOM from `ccfd951`.
+[Release-source CI](https://github.com/elide-dev/truffledata/actions/runs/41686654801)
+passed all jobs, including real driver acceptance, Codecov reporting, native JIT
+controls, and all 20 CodSpeed measurements. The publisher reran all 13 targets
+with version `0.1.0` plus both native negative controls, verified public artifacts
+and metadata, and an isolated Maven consumer resolved, compiled, and executed
+the published release. [Release notes](https://github.com/elide-dev/truffledata/releases/tag/v0.1.0).

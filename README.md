@@ -1,6 +1,6 @@
 # TruffleData
 
-A prototype of an embeddable, query-informed data runtime for Elide. Databases execute SQL; this project does not parse SQL, plan queries, or translate guest callbacks into queries.
+An embeddable, query-informed data runtime for Elide. Databases execute SQL; this project does not parse SQL, plan queries, or translate guest callbacks into queries.
 
 The adapter supplies a result schema, optionally refined by an application contract. Ingestion validates that contract before exposing immutable batch rows. Truffle specializes access to the resulting representation. A separate live adapter supports Truffle dynamic objects, and a language-owned static layout supports immutable records.
 
@@ -20,7 +20,7 @@ BuildBuddy credentials belong in your user Bazel configuration, never in source 
 
 ## Maven artifacts
 
-Bazel stages `dev.elide:truffledata-{core,jdbc,protobuf}` for publication to `https://maven.elide.dev`, including source jars and consumer POMs. See [publishing and consumption](docs/PUBLISHING.md) for the staging command, explicit upload command and repository setup.
+[Version 0.1.0](https://github.com/elide-dev/truffledata/releases/tag/v0.1.0) is published at `https://maven.elide.dev`: `dev.elide:truffledata-{core,jdbc,jdbc-sqlite,jdbc-mysql,jdbc-postgresql,protobuf}`, plus `truffledata-bom`. Libraries include source jars and consumer POMs. See [publishing and consumption](docs/PUBLISHING.md) for the staging command, explicit upload command and repository setup.
 
 ## Known schemas and static data
 
