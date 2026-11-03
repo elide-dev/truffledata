@@ -31,7 +31,7 @@ python3 tools/bench/compare.py run --binary /path/to/truffledata-comparison \
 | Workload | Stock baseline | TruffleData engines | Projection |
 |---|---|---|---|
 | `proto-scalar` | `Timestamp.parseFrom(byte[])` | owned static contract rows, Buffa scoped typed views | seconds + nanos |
-| `proto-bytes` | `BytesValue.parseFrom(byte[])` with default copying | owned static contract rows, Buffa scoped typed views | length of a 64 KiB payload |
+| `proto-bytes` | `BytesValue.parseFrom(byte[])` with default copying, plus `stock-aliased` using immutable ByteString + `enableAliasing(true)` | owned static contract rows, Buffa scoped typed views | length of a 64 KiB payload |
 | `timestamp-json` | reused `JsonFormat.Parser` into a generated Timestamp builder | descriptor-free Java parser, native WKT parser | seconds + nanos |
 | `mysql-int4` | Connector/J `MysqlTextValueDecoder.getInt` | the same decoder followed by a static INT32 contract | integer value |
 | `postgres-int4` | pgjdbc `ByteConverter.int4` | the same decoder followed by a static INT32 contract | integer value |
@@ -46,14 +46,19 @@ cleanup. Guest compilation is disabled; TruffleData projection uses the uncached
 Schema construction, parser construction, source creation and context startup are excluded.
 For binary Buffa, source bytes already reside in unmanaged memory and the result borrows
 that memory. Stock/owned parsers consume existing Java arrays and own their decoded payloads.
+`stock-aliased` instead starts with an immutable ByteString and enables CodedInputStream
+aliasing, retaining slices of that input; ByteString creation is setup, like native input
+creation. This supplies a closer ownership baseline for Buffa’s borrowed byte views.
 This is deliberately a comparison of those public APIs and ownership policies, not an
 assertion of equal ownership or a measurement of copying data into native memory.
 
 Retained-read stages exclude ingestion. `interpret` disables Truffle compilation;
 `peak` warms and explicitly compiles the call target, requiring valid final-tier code before
-and after measurement. Performance warnings are errors and the Graal graph is bounded.
+and after every sample. Warmup exercises the measurement loop until the compiled target
+remains valid, including after initial profile-driven deoptimizations. Performance warnings are errors and the Graal graph is bounded.
 `read-aot` is the stock SVM host baseline: stock Java APIs do not acquire a Truffle execution
-tier. Timestamp JSON is ingestion-only because retained Timestamp reads are already covered
+tier. These direct host getters also exclude guest interop and contract enforcement.
+Timestamp JSON is ingestion-only because retained Timestamp reads are already covered
 by `proto-scalar`.
 
 MySQL/Postgres cases isolate actual driver decoding functions and retained data access.
@@ -64,8 +69,8 @@ No dependency upgrades or query-planning functionality are introduced by this su
 
 ## Measurement and limits
 
-Each of 29 cells has three independent timing processes and three independent allocation
-processes (174 short-lived processes). Each process records three samples. Timing uses
+Each of 31 cells has three independent timing processes and three independent allocation
+processes (186 short-lived processes). Each process records three samples. Timing uses
 100 ms warmup and at least 50 ms per sample. Allocation uses fixed work: eight batches for
 ingestion or 128 batches for retained reads, with one warmup batch of the same size.
 Results report medians of process medians and the min/max process medians, not confidence

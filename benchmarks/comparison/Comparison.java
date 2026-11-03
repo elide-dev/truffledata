@@ -50,6 +50,7 @@ public final class Comparison {
   }
 
   static List<String> engines(String workload) {
+    if (workload.equals("proto-bytes")) return List.of("stock", "stock-aliased", "owned", "buffa");
     return workload.startsWith("proto-") || workload.equals("timestamp-json")
         ? List.of("stock", "owned", "buffa")
         : List.of("stock", "static");
@@ -57,7 +58,7 @@ public final class Comparison {
 
   static List<String> stages(String workload, String engine) {
     if (workload.equals("timestamp-json")) return List.of("ingest");
-    return engine.equals("stock")
+    return engine.startsWith("stock")
         ? List.of("ingest", "read-aot")
         : List.of("ingest", "interpret", "peak");
   }
@@ -200,6 +201,7 @@ public final class Comparison {
     final String workload, engine;
     final byte[][] wire = new byte[ROWS][];
     final String[] json = new String[ROWS];
+    final ByteString[] immutableWire = new ByteString[ROWS];
     final Object[] rows = new Object[ROWS];
     final @Nullable TypedMessage[] messages = new TypedMessage[ROWS];
     final @Nullable WireInput[] inputs = new WireInput[ROWS];
@@ -248,6 +250,7 @@ public final class Comparison {
           json[i] = JsonFormat.printer().print(timestamp);
           sum += timestamp.getSeconds() + timestamp.getNanos();
         }
+        if (engine.equals("stock-aliased")) immutableWire[i] = ByteString.copyFrom(wire[i]);
         if (decoder != null) {
           inputs[i] = decoder.allocate(wire[i].length).put(wire[i]);
           messages[i] = parseNative(i);
@@ -264,11 +267,18 @@ public final class Comparison {
             workload.equals("mysql-int4")
                 ? MysqlTextValueDecoder.getInt(wire[i], 0, wire[i].length)
                 : ByteConverter.int4(wire[i], 0);
-        return engine.equals("stock") ? value : layout.create(value);
+        return engine.startsWith("stock") ? value : layout.create(value);
       }
       if (engine.equals("owned"))
         return workload.equals("timestamp-json") ? plan.parseJson(json[i]) : plan.decode(wire[i]);
-      if (workload.equals("proto-bytes")) return BytesValue.parseFrom(wire[i]);
+      if (workload.equals("proto-bytes")) {
+        if (engine.equals("stock-aliased")) {
+          var input = immutableWire[i].newCodedInput();
+          input.enableAliasing(true);
+          return BytesValue.parseFrom(input);
+        }
+        return BytesValue.parseFrom(wire[i]);
+      }
       if (workload.equals("timestamp-json")) {
         var builder = Timestamp.newBuilder();
         jsonParser.merge(json[i], builder);
@@ -302,7 +312,7 @@ public final class Comparison {
     }
 
     long readOne(Object row) {
-      if (engine.equals("stock")) {
+      if (engine.startsWith("stock")) {
         if (row instanceof Timestamp t) return t.getSeconds() + t.getNanos();
         if (row instanceof BytesValue b) return b.getValue().size();
         return (Long) row;
@@ -321,7 +331,7 @@ public final class Comparison {
     }
 
     long read(int rotation) {
-      if (!engine.equals("stock")) return (Long) target.call(rows, rotation);
+      if (!engine.startsWith("stock")) return (Long) target.call(rows, rotation);
       long sum = 0;
       if (workload.equals("proto-bytes")) {
         for (int n = 0; n < ROWS; n++)

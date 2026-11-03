@@ -20,9 +20,11 @@ CHECKSUMS = {'proto-scalar': 54400032992, 'proto-bytes': 2097648, 'timestamp-jso
 
 def cells():
     for workload in WORKLOADS:
-        for engine in (('stock', 'owned', 'buffa') if workload in WORKLOADS[:3] else ('stock', 'static')):
+        engines = ('stock', 'stock-aliased', 'owned', 'buffa') if workload == 'proto-bytes' else (
+            ('stock', 'owned', 'buffa') if workload in WORKLOADS[:3] else ('stock', 'static'))
+        for engine in engines:
             stages = ('ingest',) if workload == 'timestamp-json' else (
-                ('ingest', 'read-aot') if engine == 'stock' else ('ingest', 'interpret', 'peak'))
+                ('ingest', 'read-aot') if engine.startswith('stock') else ('ingest', 'interpret', 'peak'))
             for stage in stages:
                 yield workload, engine, stage
 
@@ -76,7 +78,8 @@ def render(data, path):
     text += ['', 'Stock read-aot is the native-image host baseline; it has no Truffle interpreter/JIT tier.',
              'Ingest includes parsing/materialization and an uncached projected read. Setup is excluded.',
              'Buffa binary input is already in unmanaged memory; owned engines start with Java byte arrays.',
-             'Buffa results are scoped borrowed views; stock/owned results own their payloads. No equal-ownership claim.',
+             'Buffa results are scoped borrowed views; stock-aliased borrows immutable ByteString input; stock/owned copy payloads.',
+             'The direct stock AOT baseline excludes guest interop and contract enforcement.',
              'MySQL/Postgres measure driver INT4 decoder functions and retained scalar rows, not JDBC queries, transport, or servers.',
              'Java heap counters exclude native allocations and compiler/background threads. Native allocation is not reported as zero.',
              'Shared execution hardware and short samples make these diagnostic comparisons, not performance guarantees.', '',

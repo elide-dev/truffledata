@@ -16,7 +16,7 @@ class ComparisonTest(unittest.TestCase):
         return dict(schema=1, forks=3, results=rows)
 
     def test_complete(self):
-        self.assertEqual(len(list(compare.cells())), 29)
+        self.assertEqual(len(list(compare.cells())), 31)
         compare.validate(self.dataset())
 
     def test_rejects_incomplete_duplicate_and_wrong_identity(self):
