@@ -10,6 +10,22 @@ import org.junit.jupiter.api.Test;
 
 class PolyglotTest {
   @Test
+  void strictAssertionsAreEnforcedAcrossGuestInterop() {
+    try (Context context =
+        Context.newBuilder("js", "python")
+            .allowExperimentalOptions(true)
+            .allowHostAccess(HostAccess.NONE)
+            .build()) {
+      for (String language : List.of("js", "python")) {
+        var broken = new CoreTest.UncheckedRow(Field.requiredLong("a"), DataNull.INSTANCE);
+        context.getBindings(language).putMember("broken", broken);
+        assertThrows(PolyglotException.class, () -> context.eval(language, "broken.a"));
+        assertEquals(1, broken.reads);
+      }
+    }
+  }
+
+  @Test
   void batchRowsWorkInJsAndPythonWithoutHostAccess() {
     var row =
         Batch.copyOf(

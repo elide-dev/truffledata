@@ -56,7 +56,7 @@ try (var cursor = JdbcSource.executeStatic(connection, sql, parameters, layout, 
 }
 ```
 
-Guest iteration also yields static rows when the cursor was opened with `executeStatic`. The batch API remains columnar; do not mix batch and record/iterator consumption. JDBC fetches bounded batches, then materializes static records as consumed. The connection is borrowed and stays open; result sets and statements close on exhaustion, failure, or explicit cursor closure. Custom decoders and statement configuration remain available.
+Guest iteration also yields static rows when the cursor was opened with `executeStatic`. The batch API remains columnar; do not mix batch and record/iterator consumption. JDBC static iteration decodes one row directly into its static layout, with one-record lookahead for idempotent guest has-next calls; it creates no intermediate columnar batch. Batch consumption remains a separate mode. The connection is borrowed and stays open; result sets and statements close on exhaustion, failure, or explicit cursor closure. Custom decoders and statement configuration remain available.
 
 `JdbcContracts.describe(metadata, MYSQL|POSTGRESQL, limits)` is opt-in metadata cooperation. It interprets numeric widths/sign, nullability, string precision as a maximum code-point length, and decimal precision/scale. Unknown widths or kinds remain unconstrained. Supply an explicit schema for query refinements (such as non-null projections), arrays, unreliable driver metadata, or application-specific conversions. Defaults do not inspect SQL.
 
@@ -71,3 +71,33 @@ SQLite's affinity does not prove a storage type, width, or length. `JdbcContract
 ```sh
 bazel test //tests:test //tests:compiled //tests:allocation
 ```
+
+## Strict diagnostic mode
+
+Run the embedding JVM with **both** `-ea -Dtruffledata.strict=true` to audit
+`DataLibrary` exports, including accesses made by JavaScript/Python through row
+interop. Configure these before initializing Truffle; this is a process-wide test
+setting, not a guest-controlled or dynamically switchable option. The correctness
+suite enables both flags. Compiled/allocation gates leave the property disabled to
+measure the production path while retaining other JVM/Truffle assertions.
+
+The implementation uses Truffle's `GenerateLibrary.assertions` wrapper. Strict mode
+checks returned values against field nullity, presence, type, width, range, length
+and nested element constraints; primitive messages also audit their fallback
+results. Row schema identity and required presence are checked. Each requested
+value accessor executes once, so diagnostics do not reread mutable sources. A
+contradiction raises `AssertionError`; data values are not included in diagnostics.
+Checks run behind a diagnostic Truffle boundary and can allocate/box, so strict
+runs are not representative throughput measurements. Without JVM assertions,
+Truffle does not install the wrapper; without the property, its diagnostic work
+is disabled. Native Image embeddings must configure assertion support and the
+property at the appropriate initialization stage; runtime toggling of a setting
+captured during image construction is not supported.
+
+Strict mode supplements the mandatory ingestion validation and mutable-source
+checks; disabling it does not authorize invalid inputs. It currently audits field
+results and row schema identity, not every ownership/lifetime invariant or an
+arbitrary third-party export's purity. Snapshot construction still copies caller
+owned mutable storage where required to preserve retained-row semantics. Static
+JDBC iteration avoids an intermediate columnar batch; remaining allocations and
+copies must be evaluated against that ownership guarantee.

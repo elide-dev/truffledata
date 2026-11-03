@@ -5,8 +5,10 @@ package(default_visibility = ["//visibility:public"])
 data_java_library(
     name = "jdbc",
     srcs = [
+        "src/main/java/dev/elide/truffledata/jdbc/JdbcAdapter.java",
         "src/main/java/dev/elide/truffledata/jdbc/JdbcContracts.java",
         "src/main/java/dev/elide/truffledata/jdbc/JdbcCursor.java",
+        "src/main/java/dev/elide/truffledata/jdbc/JdbcQueryOptions.java",
         "src/main/java/dev/elide/truffledata/jdbc/JdbcSource.java",
         "src/main/java/dev/elide/truffledata/jdbc/SqliteSource.java",
         "src/main/java/dev/elide/truffledata/jdbc/package-info.java",

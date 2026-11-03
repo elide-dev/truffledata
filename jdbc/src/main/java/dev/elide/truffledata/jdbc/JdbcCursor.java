@@ -22,6 +22,7 @@ public final class JdbcCursor implements AutoCloseable, TruffleObject {
   private boolean exhausted;
   private @Nullable Batch pending;
   private int nextRow;
+  private @Nullable AbstractRow pendingStatic;
   private boolean iteratorMode;
   private boolean batchMode;
 
@@ -80,7 +81,7 @@ public final class JdbcCursor implements AutoCloseable, TruffleObject {
         rows.add(row);
       }
       return rows.isEmpty() ? null : Batch.copyOf(schema, rows, limits);
-    } catch (SQLException | RuntimeException e) {
+    } catch (SQLException | RuntimeException | Error e) {
       try {
         close();
       } catch (SQLException close) {
@@ -102,6 +103,7 @@ public final class JdbcCursor implements AutoCloseable, TruffleObject {
     if (closed) return;
     closed = true;
     pending = null;
+    pendingStatic = null;
     SQLException failure = null;
     try {
       result.close();
@@ -136,6 +138,7 @@ public final class JdbcCursor implements AutoCloseable, TruffleObject {
     checkThread();
     if (batchMode) throw new IllegalStateException("Cannot mix batch and iterator consumption");
     iteratorMode = true;
+    if (layout != null) return prepareStatic();
     if (pending != null && nextRow < pending.size()) return true;
     if (exhausted) return false;
     pending = fetch();
@@ -147,14 +150,34 @@ public final class JdbcCursor implements AutoCloseable, TruffleObject {
   @TruffleBoundary
   public @Nullable AbstractRow nextRecord() throws SQLException {
     if (!prepareNext()) return null;
-    Batch.Row row = Objects.requireNonNull(pending).row(nextRow++);
-    if (layout == null) return row;
-    Object[] values = new Object[schema.size()];
-    DataLibrary data = DataLibrary.factory().getUncached();
-    for (int i = 0; i < values.length; i++) values[i] = data.read(row, i);
+    if (layout == null) return Objects.requireNonNull(pending).row(nextRow++);
+    AbstractRow row = Objects.requireNonNull(pendingStatic);
+    pendingStatic = null;
+    return row;
+  }
+
+  /** One-row lookahead: static consumers never allocate an intermediate columnar batch. */
+  private boolean prepareStatic() throws SQLException {
+    if (pendingStatic != null) return true;
+    if (exhausted) return false;
+    if (closed) throw new IllegalStateException("Cursor is closed");
     try {
-      return layout.create(values);
-    } catch (RuntimeException failure) {
+      if (!result.next()) {
+        exhausted = true;
+        close();
+        return false;
+      }
+      PayloadBudget budget = new PayloadBudget(limits);
+      budget.cells(schema.size());
+      Object[] values = new Object[schema.size()];
+      for (int i = 0; i < values.length; i++) {
+        Object value = Values.normalize(decoder.read(result, i + 1));
+        budget.accept(value);
+        values[i] = value;
+      }
+      pendingStatic = Objects.requireNonNull(layout).create(values);
+      return true;
+    } catch (SQLException | RuntimeException | Error failure) {
       try {
         close();
       } catch (SQLException close) {

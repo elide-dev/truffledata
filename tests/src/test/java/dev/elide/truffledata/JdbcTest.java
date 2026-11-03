@@ -126,4 +126,113 @@ class JdbcTest {
                   Limits.DEFAULT));
     }
   }
+
+  @Test
+  void staticRowsAreDecodedLazilyWithoutBatchCopies() throws Exception {
+    try (var context = org.graalvm.polyglot.Context.newBuilder("td-test").build();
+        Connection connection = DriverManager.getConnection("jdbc:h2:mem:")) {
+      context.initialize("td-test");
+      context.enter();
+      try {
+        Schema schema = Schema.of(Field.requiredLong("a"));
+        StaticLayout layout =
+            new StaticLayout(TestLanguage.current().language(), schema, Limits.DEFAULT);
+        int[] decoded = {0};
+        try (var cursor =
+            JdbcSource.executeStatic(
+                connection,
+                "select cast(x as bigint) from system_range(1, 3)",
+                List.of(),
+                layout,
+                Limits.DEFAULT,
+                (result, column) -> {
+                  decoded[0]++;
+                  return result.getObject(column);
+                },
+                statement -> {})) {
+          InteropLibrary io = InteropLibrary.getUncached();
+          assertTrue(io.hasIteratorNextElement(cursor));
+          assertTrue(io.hasIteratorNextElement(cursor));
+          assertEquals(1, decoded[0], "lookahead must decode exactly one row");
+          Object retained = io.getIteratorNextElement(cursor);
+          assertInstanceOf(StaticLayout.Record.class, retained);
+          assertEquals(1, decoded[0], "consumption must reuse the lookahead record");
+          cursor.close();
+          assertEquals(1L, io.readArrayElement(retained, 0));
+          assertThrows(IllegalStateException.class, cursor::nextRecord);
+        }
+        try (var cursor =
+            JdbcSource.executeStatic(
+                connection,
+                "select case when x = 1 then cast(1 as bigint) else null end from system_range(1,"
+                    + " 2)",
+                List.of(),
+                layout,
+                Limits.DEFAULT)) {
+          assertNotNull(
+              cursor.nextRecord(), "an invalid subsequent row must not force eager ingestion");
+          assertThrows(ContractViolation.class, cursor::nextRecord);
+          assertTrue(cursor.isClosed());
+        }
+      } finally {
+        context.leave();
+      }
+    }
+  }
+
+  @Test
+  void cooperatingAdapterCompilesDecoderOnceAndClosesAfterErrors() throws Exception {
+    try (Connection connection = DriverManager.getConnection("jdbc:h2:mem:")) {
+      List<PreparedStatement> statements = new ArrayList<>();
+      List<ResultSet> results = new ArrayList<>();
+      int[] decoders = {0};
+      JdbcAdapter adapter =
+          new JdbcAdapter() {
+            public String id() {
+              return "test-h2";
+            }
+
+            public PreparedStatement prepare(Connection c, String sql, JdbcQueryOptions options)
+                throws SQLException {
+              assertFalse(options.requireStreaming());
+              PreparedStatement statement =
+                  c.prepareStatement(sql, ResultSet.TYPE_FORWARD_ONLY, ResultSet.CONCUR_READ_ONLY);
+              statement.setFetchSize(options.fetchSize());
+              statement.setQueryTimeout(options.timeoutSeconds());
+              statements.add(statement);
+              return statement;
+            }
+
+            public Schema describe(ResultSetMetaData metadata, Limits limits) throws SQLException {
+              return JdbcContracts.describe(metadata, JdbcContracts.Dialect.POSTGRESQL, limits);
+            }
+
+            public JdbcSource.Decoder decoder(
+                ResultSetMetaData metadata, Schema schema, Limits limits) {
+              decoders[0]++;
+              return (result, column) -> {
+                results.add(result);
+                throw new AssertionError("decoder assertion");
+              };
+            }
+          };
+      var cursor =
+          JdbcSource.execute(
+              connection,
+              "select cast(? as bigint)",
+              List.of(7),
+              null,
+              null,
+              Limits.DEFAULT,
+              adapter,
+              new JdbcQueryOptions(16, 5, false));
+      assertEquals(1, decoders[0]);
+      assertThrows(AssertionError.class, cursor::nextBatch);
+      assertTrue(cursor.isClosed());
+      assertTrue(statements.getFirst().isClosed());
+      assertTrue(results.getFirst().isClosed());
+      assertFalse(connection.isClosed());
+      assertTrue(connection.getAutoCommit(), "borrowed transaction policy must be unchanged");
+    }
+  }
 }

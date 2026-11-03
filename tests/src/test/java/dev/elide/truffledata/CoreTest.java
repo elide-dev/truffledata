@@ -11,6 +11,63 @@ import java.util.*;
 import org.junit.jupiter.api.Test;
 
 class CoreTest {
+  @com.oracle.truffle.api.library.ExportLibrary(DataLibrary.class)
+  static final class UncheckedRow extends AbstractRow {
+    final Object value;
+    int reads;
+
+    UncheckedRow(Field field, Object value) {
+      super(Schema.of(field));
+      this.value = value;
+    }
+
+    @com.oracle.truffle.api.library.ExportMessage
+    Schema getSchema() {
+      return descriptor;
+    }
+
+    @com.oracle.truffle.api.library.ExportMessage
+    Object read(int index) {
+      reads++;
+      return value;
+    }
+
+    @com.oracle.truffle.api.library.ExportMessage
+    boolean isPresent(int index) {
+      return value != Missing.INSTANCE;
+    }
+  }
+
+  @Test
+  void strictAssertionsCatchBrokenExportsWithoutRereadingValues() throws Exception {
+    assertTrue(
+        Boolean.getBoolean("truffledata.strict"), "Correctness suite must enable strict mode");
+    var data = DataLibrary.factory().getUncached();
+    for (Object invalid : List.of(DataNull.INSTANCE, Missing.INSTANCE, "wrong type", 128L)) {
+      var broken = new UncheckedRow(Field.integer("a", 8, true, false, false), invalid);
+      assertThrows(AssertionError.class, () -> data.read(broken, 0));
+      assertEquals(1, broken.reads);
+      assertThrows(AssertionError.class, () -> data.readLong(broken, 0));
+      assertEquals(2, broken.reads);
+    }
+    var valid = new UncheckedRow(Field.requiredLong("a"), 1000L);
+    assertEquals(1000L, data.readLong(valid, 0));
+    assertEquals(1, valid.reads);
+    var length =
+        new Field("a", Field.Kind.STRING, false, false)
+            .withConstraints(
+                Constraints.NONE.withLength(
+                    new Constraints.Length(3, 3, Constraints.LengthUnit.UTF16)));
+    var brokenLength = new UncheckedRow(length, "x");
+    assertThrows(
+        AssertionError.class, () -> ReadLengthNodeGen.getUncached().execute(brokenLength, 0));
+    assertEquals(1, brokenLength.reads);
+    var nullable =
+        new UncheckedRow(new Field("a", Field.Kind.INT64, true, true), DataNull.INSTANCE);
+    assertSame(DataNull.INSTANCE, data.read(nullable, 0));
+    assertThrows(UnexpectedResultException.class, () -> data.readLong(nullable, 0));
+  }
+
   private static Batch.Row row(Schema schema, Object... values) {
     return Batch.copyOf(schema, Collections.singletonList(values), Limits.DEFAULT).row(0);
   }

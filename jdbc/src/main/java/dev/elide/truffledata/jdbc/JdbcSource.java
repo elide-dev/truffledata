@@ -93,6 +93,54 @@ public final class JdbcSource {
         connection, sql, parameters, layout, limits, DEFAULT_DECODER, statement -> {});
   }
 
+  /**
+   * Execute with an explicit cooperating driver. An explicit contract overrides metadata inference;
+   * a supplied layout must belong to that exact schema identity. The connection remains borrowed.
+   */
+  @TruffleBoundary
+  public static JdbcCursor execute(
+      Connection connection,
+      String sql,
+      List<? extends @Nullable Object> parameters,
+      @Nullable Schema contract,
+      @Nullable StaticLayout layout,
+      Limits limits,
+      JdbcAdapter adapter,
+      JdbcQueryOptions options)
+      throws SQLException {
+    if (layout != null && contract != layout.schema())
+      throw new IllegalArgumentException("Static layout requires its exact schema as contract");
+    PreparedStatement statement = adapter.prepare(connection, sql, options);
+    try {
+      for (int i = 0; i < parameters.size(); i++) statement.setObject(i + 1, parameters.get(i));
+      ResultSet result = statement.executeQuery();
+      try {
+        ResultSetMetaData metadata = result.getMetaData();
+        int count = metadata.getColumnCount();
+        limits.check(1, count);
+        Schema schema = contract == null ? adapter.describe(metadata, limits) : contract;
+        if (schema.size() != count)
+          throw new ContractViolation("JDBC result width differs from contract");
+        return new JdbcCursor(
+            statement, result, schema, limits, adapter.decoder(metadata, schema, limits), layout);
+      } catch (SQLException | RuntimeException | Error failure) {
+        try {
+          result.close();
+        } catch (SQLException close) {
+          failure.addSuppressed(close);
+        }
+        throw failure;
+      }
+    } catch (SQLException | RuntimeException | Error failure) {
+      try {
+        statement.close();
+      } catch (SQLException close) {
+        failure.addSuppressed(close);
+      }
+      throw failure;
+    }
+  }
+
   private static JdbcCursor executeInternal(
       Connection connection,
       String sql,
@@ -116,7 +164,7 @@ public final class JdbcSource {
         if (schema.size() != count)
           throw new ContractViolation("JDBC result width differs from contract");
         return new JdbcCursor(statement, result, schema, limits, decoder, layout);
-      } catch (SQLException | RuntimeException e) {
+      } catch (SQLException | RuntimeException | Error e) {
         try {
           result.close();
         } catch (SQLException close) {
@@ -124,7 +172,7 @@ public final class JdbcSource {
         }
         throw e;
       }
-    } catch (SQLException | RuntimeException e) {
+    } catch (SQLException | RuntimeException | Error e) {
       try {
         statement.close();
       } catch (SQLException close) {

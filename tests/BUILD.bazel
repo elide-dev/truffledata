@@ -50,6 +50,7 @@ java_test(
     },
     jvm_flags = [
         "-ea",
+        "-Dtruffledata.strict=true",
         "--enable-native-access=ALL-UNNAMED",
         "-Dpolyglot.engine.WarnInterpreterOnly=false",
     ],
