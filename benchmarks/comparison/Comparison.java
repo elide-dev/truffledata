@@ -28,7 +28,7 @@ import org.postgresql.util.ByteConverter;
 public final class Comparison {
   static final int ROWS = 32;
   static final String[] WORKLOADS = {
-    "proto-scalar", "proto-bytes", "timestamp-json", "mysql-int4", "postgres-int4"
+    "proto-scalar", "proto-bytes", "timestamp-json", "mysql-int4", "postgres-int4", "proto-mixed"
   };
   private static volatile @Nullable Object retained;
   private static volatile long checksum;
@@ -238,17 +238,22 @@ public final class Comparison {
       this.workload = workload;
       this.engine = engine;
       boolean bytes = workload.equals("proto-bytes");
+      boolean mixed = workload.equals("proto-mixed");
       boolean jdbc = workload.endsWith("int4");
       var language = ComparisonLanguage.current();
       plan =
           ComparisonContracts.create(language, Limits.DEFAULT, 16, 1 << 20)
-              .type(bytes ? "google.protobuf.BytesValue" : "google.protobuf.Timestamp");
+              .type(
+                  mixed
+                      ? "google.protobuf.Type"
+                      : bytes ? "google.protobuf.BytesValue" : "google.protobuf.Timestamp");
       layout =
           new StaticLayout(
               language, Schema.of(Field.integer("id", 32, true, false, false)), Limits.DEFAULT);
       decoder = engine.equals("buffa") ? BuffaWire.open(BuffaWire.Mode.NATIVE, library()) : null;
       nativePlan = decoder == null ? null : decoder.compile(plan, 65536);
-      target = (OptimizedCallTarget) new ReadRoot(bytes ? 1 : jdbc ? 2 : 0).getCallTarget();
+      target =
+          (OptimizedCallTarget) new ReadRoot(mixed ? 3 : bytes ? 1 : jdbc ? 2 : 0).getCallTarget();
       long sum = 0;
       for (int i = 0; i < ROWS; i++) {
         if (jdbc) {
@@ -259,6 +264,31 @@ public final class Comparison {
                   : new byte[4];
           if (workload.equals("postgres-int4")) ByteConverter.int4(wire[i], 0, value);
           sum += value;
+        } else if (mixed) {
+          var builder =
+              com.google.protobuf.Type.newBuilder()
+                  .setName("user-" + i + "-λ")
+                  .setSyntax(com.google.protobuf.Syntax.SYNTAX_PROTO3)
+                  .addOneofs("identity-" + i)
+                  .addOneofs("contact-" + i)
+                  .setSourceContext(
+                      com.google.protobuf.SourceContext.newBuilder().setFileName("user.proto"));
+          for (int j = 0; j < 4 + i % 5; j++) {
+            builder.addFields(
+                com.google.protobuf.Field.newBuilder()
+                    .setName("field-" + j)
+                    .setNumber(j + 1)
+                    .setKind(com.google.protobuf.Field.Kind.TYPE_INT64)
+                    .setCardinality(com.google.protobuf.Field.Cardinality.CARDINALITY_REPEATED)
+                    .setPacked(true));
+          }
+          var value = builder.build();
+          wire[i] = value.toByteArray();
+          sum +=
+              value.getName().length()
+                  + value.getFieldsCount()
+                  + value.getOneofsCount()
+                  + value.getSyntaxValue();
         } else if (bytes) {
           byte[] payload = new byte[65536 + i];
           Arrays.fill(payload, (byte) (i + 1));
@@ -305,6 +335,7 @@ public final class Comparison {
         jsonParser.merge(json[i], builder);
         return builder.build();
       }
+      if (workload.equals("proto-mixed")) return com.google.protobuf.Type.parseFrom(wire[i]);
       return Timestamp.parseFrom(wire[i]);
     }
 
@@ -343,6 +374,11 @@ public final class Comparison {
     long readOne(Object row, boolean typed)
         throws com.oracle.truffle.api.nodes.UnexpectedResultException {
       if (engine.startsWith("stock")) {
+        if (row instanceof com.google.protobuf.Type t)
+          return t.getName().length()
+              + t.getFieldsCount()
+              + t.getOneofsCount()
+              + t.getSyntaxValue();
         if (row instanceof Timestamp t) return t.getSeconds() + t.getNanos();
         if (row instanceof BytesValue b) return b.getValue().size();
         return (Long) row;
@@ -356,10 +392,24 @@ public final class Comparison {
           throw new AssertionError(e);
         }
       }
+      if (workload.equals("proto-mixed")) {
+        return ((String) data.read(row, 0)).length()
+            + arraySize(data.read(row, 1))
+            + arraySize(data.read(row, 2))
+            + (typed ? data.readLong(row, 5) : (Long) data.read(row, 5));
+      }
       long value = typed ? data.readLong(row, 0) : (Long) data.read(row, 0);
       return workload.endsWith("int4")
           ? value
           : value + (typed ? data.readLong(row, 1) : (Long) data.read(row, 1));
+    }
+
+    static long arraySize(Object value) {
+      try {
+        return com.oracle.truffle.api.interop.InteropLibrary.getUncached().getArraySize(value);
+      } catch (com.oracle.truffle.api.interop.UnsupportedMessageException e) {
+        throw new AssertionError(e);
+      }
     }
 
     long read(int rotation) {
@@ -368,6 +418,15 @@ public final class Comparison {
       if (workload.equals("proto-bytes")) {
         for (int n = 0; n < ROWS; n++)
           sum += ((BytesValue) rows[(n + rotation) & (ROWS - 1)]).getValue().size();
+      } else if (workload.equals("proto-mixed")) {
+        for (int n = 0; n < ROWS; n++) {
+          var value = (com.google.protobuf.Type) rows[(n + rotation) & (ROWS - 1)];
+          sum +=
+              value.getName().length()
+                  + value.getFieldsCount()
+                  + value.getOneofsCount()
+                  + value.getSyntaxValue();
+        }
       } else if (workload.endsWith("int4")) {
         for (int n = 0; n < ROWS; n++) sum += (Long) rows[(n + rotation) & (ROWS - 1)];
       } else {
@@ -403,6 +462,8 @@ public final class Comparison {
     @Child private ReadLongNode first = ReadLongNode.create();
     @Child private ReadLongNode second = ReadLongNode.create();
     @Child private ReadLengthNode length = ReadLengthNode.create();
+    @Child private ReadLengthNode fieldsLength = ReadLengthNode.create();
+    @Child private ReadLengthNode oneofsLength = ReadLengthNode.create();
 
     ReadRoot(int kind) {
       super(ComparisonLanguage.current());
@@ -417,9 +478,14 @@ public final class Comparison {
       for (int n = 0; n < ROWS; n++) {
         Object row = rows[(n + rotation) & (ROWS - 1)];
         sum +=
-            kind == 1
+            kind == 3
                 ? length.execute(row, 0)
-                : first.execute(row, 0) + (kind == 0 ? second.execute(row, 1) : 0);
+                    + fieldsLength.execute(row, 1)
+                    + oneofsLength.execute(row, 2)
+                    + first.execute(row, 5)
+                : kind == 1
+                    ? length.execute(row, 0)
+                    : first.execute(row, 0) + (kind == 0 ? second.execute(row, 1) : 0);
       }
       return sum;
     }
