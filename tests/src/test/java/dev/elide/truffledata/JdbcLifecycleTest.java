@@ -15,6 +15,100 @@ class JdbcLifecycleTest {
   private static final Schema SCHEMA = Schema.of(Field.requiredLong("n"));
 
   @Test
+  void hostCleanupWaitsForIngestionAndPreservesRetainedRows() throws Exception {
+    var reading = new CountDownLatch(1);
+    var release = new CountDownLatch(1);
+    var closing = new CountDownLatch(1);
+    var published = new CompletableFuture<JdbcCursor>();
+    try (Fixture fixture = new Fixture(null, null, null);
+        var owner = Executors.newSingleThreadExecutor();
+        var host = Executors.newSingleThreadExecutor()) {
+      Future<AbstractRow> operation =
+          owner.submit(
+              () -> {
+                var cursor =
+                    JdbcSource.execute(
+                        fixture.borrowed,
+                        "select 1000",
+                        List.of(),
+                        SCHEMA,
+                        new Limits(1, 1, 1, 0),
+                        (result, column) -> {
+                          reading.countDown();
+                          try {
+                            if (!release.await(10, TimeUnit.SECONDS))
+                              throw new SQLException("Test release timed out");
+                          } catch (InterruptedException interrupted) {
+                            Thread.currentThread().interrupt();
+                            throw new SQLException(interrupted);
+                          }
+                          return result.getObject(column);
+                        });
+                published.complete(cursor);
+                return Objects.requireNonNull(cursor.nextRecord());
+              });
+      JdbcCursor cursor = published.get(10, TimeUnit.SECONDS);
+      assertTrue(reading.await(10, TimeUnit.SECONDS));
+      Future<?> cleanup =
+          host.submit(
+              () -> {
+                closing.countDown();
+                cursor.closeFromHost();
+                return null;
+              });
+      try {
+        assertTrue(closing.await(10, TimeUnit.SECONDS));
+        assertFalse(
+            fixture.resultClosed.await(100, TimeUnit.MILLISECONDS),
+            "Host close raced an active decoder");
+      } finally {
+        release.countDown();
+      }
+      AbstractRow retained = operation.get(10, TimeUnit.SECONDS);
+      cleanup.get(10, TimeUnit.SECONDS);
+      assertTrue(cursor.isClosed());
+      cursor.closeFromHost();
+      fixture.assertClosedOnce();
+      assertEquals(1000L, DataLibrary.factory().getUncached().readLong(retained, 0));
+      assertThrows(IllegalStateException.class, cursor::close);
+      assertThrows(IllegalStateException.class, cursor::nextRecord);
+      owner
+          .submit(
+              () -> {
+                assertThrows(IllegalStateException.class, cursor::nextRecord);
+                cursor.close();
+                return null;
+              })
+          .get(10, TimeUnit.SECONDS);
+    } finally {
+      release.countDown();
+    }
+  }
+
+  @Test
+  void hostCleanupAggregatesFailuresWithoutClosingBorrowedConnection() throws Exception {
+    var resultFailure = new SQLException("result cleanup");
+    var statementFailure = new IllegalStateException("statement cleanup");
+    try (Fixture fixture = new Fixture(resultFailure, statementFailure, null);
+        var host = Executors.newSingleThreadExecutor()) {
+      var cursor =
+          JdbcSource.execute(fixture.borrowed, "select 1000", List.of(), SCHEMA, Limits.DEFAULT);
+      host.submit(
+              () -> {
+                assertSame(resultFailure, assertThrows(SQLException.class, cursor::closeFromHost));
+                assertArrayEquals(
+                    new Throwable[] {statementFailure}, resultFailure.getSuppressed());
+                cursor.closeFromHost();
+                return null;
+              })
+          .get(10, TimeUnit.SECONDS);
+      fixture.assertClosedOnce();
+      assertTrue(cursor.isClosed());
+      assertFalse(fixture.borrowed.isClosed());
+    }
+  }
+
+  @Test
   void preCancelledExecutionDoesNotPrepareAndFinishedControlCannotCancelAgain() throws Exception {
     var cancellation = new JdbcCancellation();
     cancellation.cancel();

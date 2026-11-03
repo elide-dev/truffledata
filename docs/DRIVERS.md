@@ -203,3 +203,18 @@ hooks. Signature checks allocate only at execution admission; they add no work t
 retained guest reads. SQLite tests cover identity, revisions, lifetime and invalid values;
 real MySQL/PostgreSQL tests cover inferred contracts, alias/type/length drift rejection
 and successful borrowed-connection reuse after rejection.
+
+## Host lifecycle cleanup
+
+Register `JdbcCursor.closeFromHost()` with an embedding's resource lifecycle when a
+cursor can be abandoned by its guest. The host method may run on a different thread
+and serializes cleanup after an active cursor operation. Ordinary `close()`, batch
+advancement and guest iteration still require the creating thread. Retained immutable
+rows do not acquire this lock and remain readable after cursor cleanup.
+
+Request `JdbcCancellation.cancel()` separately before host cleanup if execution/fetch
+may be blocked. Host cleanup waits for the operation and cancellation hook to finish;
+it is not a hard timeout and can itself block in driver cleanup. Resource registration
+must handle the race between query creation and context shutdown, and the embedding
+must close any contract scope before releasing its connection acquisition. The host
+method alone does not install automatic context cleanup or pool ownership.

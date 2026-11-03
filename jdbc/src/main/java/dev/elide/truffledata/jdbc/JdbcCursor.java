@@ -23,7 +23,7 @@ public final class JdbcCursor implements AutoCloseable, TruffleObject {
   private final StaticLayout.Source<SQLException> staticSource;
   private final @Nullable StaticLayout layout;
   private final Thread owner = Thread.currentThread();
-  private boolean closed;
+  private volatile boolean closed;
   private boolean exhausted;
   private @Nullable Batch pending;
   private int nextRow;
@@ -71,7 +71,7 @@ public final class JdbcCursor implements AutoCloseable, TruffleObject {
   }
 
   @TruffleBoundary
-  public @Nullable Batch nextBatch() throws SQLException {
+  public synchronized @Nullable Batch nextBatch() throws SQLException {
     checkThread();
     if (iteratorMode) throw new IllegalStateException("Cannot mix batch and iterator consumption");
     batchMode = true;
@@ -133,8 +133,19 @@ public final class JdbcCursor implements AutoCloseable, TruffleObject {
 
   @Override
   @TruffleBoundary
-  public void close() throws SQLException {
+  public synchronized void close() throws SQLException {
     checkThread();
+    closeFromHost();
+  }
+
+  /**
+   * Host lifecycle cleanup, callable from any thread. Serializes after any cursor operation and
+   * preserves borrowed connection ownership. This does not interrupt a blocked driver operation;
+   * request cancellation separately before waiting for cleanup. Retained immutable rows remain
+   * usable. Guest iteration and ordinary close remain confined to the creating thread.
+   */
+  @TruffleBoundary
+  public synchronized void closeFromHost() throws SQLException {
     Throwable failure = closeResources(null);
     if (failure instanceof SQLException sql) throw sql;
     if (failure instanceof RuntimeException runtime) throw runtime;
@@ -200,7 +211,7 @@ public final class JdbcCursor implements AutoCloseable, TruffleObject {
 
   /** Retained immutable row; static when executeStatic supplied a layout. */
   @TruffleBoundary
-  public @Nullable AbstractRow nextRecord() throws SQLException {
+  public synchronized @Nullable AbstractRow nextRecord() throws SQLException {
     if (!prepareNext()) return null;
     if (layout == null) return Objects.requireNonNull(pending).row(nextRow++);
     AbstractRow row = Objects.requireNonNull(pendingStatic);
@@ -234,7 +245,7 @@ public final class JdbcCursor implements AutoCloseable, TruffleObject {
 
   @ExportMessage
   @TruffleBoundary
-  boolean hasIteratorNextElement() {
+  synchronized boolean hasIteratorNextElement() {
     try {
       return prepareNext();
     } catch (SQLException e) {

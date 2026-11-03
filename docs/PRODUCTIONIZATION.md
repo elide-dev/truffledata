@@ -214,3 +214,12 @@ Ten live-driver acceptance methods and twelve compiled benchmark smoke cases pas
 including new MySQL/PostgreSQL projection/type/length drift and connection reuse cases.
 This is opt-in caller cooperation; automatic Elide/pool/session invalidation remains
 outstanding. [Contract usage and limitations](DRIVERS.md#scoped-reusable-contracts).
+
+Host cleanup prerequisite: cursor operations and `closeFromHost` now serialize through
+the cursor monitor. A host/context cleanup thread can close an abandoned cursor while
+ordinary guest operations remain owner-thread confined. Tests prove cleanup waits for
+an active decoder, aggregates independent cleanup failures, is idempotent, preserves
+retained rows, and does not close the borrowed connection. All eleven targets passed:
+https://app.buildbuddy.io/invocation/8c0b86b7-0319-47ce-ba04-a34d68e1f878.
+This is an embedding prerequisite, not completed Elide context registration or a hard
+deadline guarantee. No Elide repository changes have been made yet.
