@@ -100,6 +100,7 @@ java_test(
         "-ea",
         "--enable-native-access=ALL-UNNAMED",
         "-Dpolyglot.engine.WarnInterpreterOnly=false",
+        "-Dpolyglot.engine.BackgroundCompilation=false",
     ],
     main_class = "dev.elide.bazel.junit.BazelJUnitRunner",
     tags = ["allocation"],

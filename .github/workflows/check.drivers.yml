@@ -10,6 +10,7 @@ on:
         required: false
 permissions:
   contents: read
+  id-token: write
 jobs:
   test:
     name: MySQL and PostgreSQL acceptance
@@ -70,6 +71,7 @@ jobs:
         uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
+          use_oidc: ${{ secrets.CODECOV_TOKEN == '' }}
           slug: ${{ github.repository }}
           files: build/reports/junit.xml
           report_type: test_results

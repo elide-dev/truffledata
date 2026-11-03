@@ -119,7 +119,8 @@ Coverage is collected separately so probes do not change allocation or compilati
 core access classes, excluding constructors and abstract declarations. It also emits
 `build/reports/coverage/gaps.json` with uncovered lines, methods, and branches for every
 reported production file. This is a regression gate and a guide for new tests, not a claim
-of 100% branch coverage. Codecov receives LCOV and JUnit; target-qualified JVM test identities
+of 100% branch coverage. Codecov receives LCOV and JUnit using the configured token or
+GitHub OIDC when that token is unavailable; target-qualified JVM test identities
 keep correctness and compiled runs distinct. The source-policy test requires review when a
 new exported interop surface or message is introduced. The native gate also compares every
 case and its expected outcome against `benchmarks/jit-cases.json`.
