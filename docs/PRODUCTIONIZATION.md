@@ -12,7 +12,7 @@ the database owns planning. CSV, RPC execution and asynchronous delivery are sub
 | Real-driver matrix | Actual MySQL/PostgreSQL services and SQLite; values, streaming, prepared statements, failures and connection reuse through JS/Python | Initial real-service cases verified; broader edge/failure matrix pending |
 | Lifecycle | Deadlines, cancellation races, early close, context shutdown, borrowed/owned connections and pool reuse tests | Opt-in active-execution cancellation and core cleanup races tested; fetch interruption, deadlines, context shutdown and pool ownership pending |
 | Memory | Bounded stream decoding, aggregate consumption/retention policies, large payload and adversarial tests including driver buffering | Aggregate logical ingestion limits implemented; retention leases, physical memory and driver buffering pending |
-| Contract provenance | Explicit vs metadata origins, revision/lifetime policy, projection/session/schema compatibility tests | Pending |
+| Contract provenance | Explicit vs metadata origins, revision/lifetime policy, projection/session/schema compatibility tests | Opt-in JDBC scope/revision and exact projection guards verified; automatic host/session integration pending |
 | Consumer Native Image | Packaged library/driver metadata, schema-specific Protobuf generation, real-driver native executables on supported platforms | Pending; existing native benchmark is fixture-specific |
 | Truffle gates | Nullable, polymorphic/megamorphic, nested, exception and context-ownership cases; graph/allocation budgets | Pending extensions; existing primitive gates pass |
 | Performance comparisons | Equivalent plain-JDBC baselines; warmed JIT elapsed-time suite separate from CodSpeed simulation | Six real-driver JMH boundaries per driver implemented; full SQLite baseline reviewed, server experiments and allocation optimization pending |
@@ -203,3 +203,14 @@ Three forked SQLite static-query trials measured approximately 32 fewer allocate
 bytes/row; [samples and limitations](BENCHMARKS.md#direct-static-ingestion-follow-up)
 are retained. This improves ingestion without completing physical-memory or retention
 acceptance, and is newer than the published alpha.3 artifacts.
+
+Scoped contract increment: `JdbcContract` records explicit/driver-metadata origin and
+a caller-defined revision, pins reuse to one connection acquisition, and compares
+ordered metadata signatures before decoder creation. Scope closure revokes new
+admissions without taking connection ownership or invalidating retained snapshots.
+All eleven ordinary targets passed at
+https://app.buildbuddy.io/invocation/f3672159-d785-4e4f-8c82-2e8051560a6e.
+Ten live-driver acceptance methods and twelve compiled benchmark smoke cases passed,
+including new MySQL/PostgreSQL projection/type/length drift and connection reuse cases.
+This is opt-in caller cooperation; automatic Elide/pool/session invalidation remains
+outstanding. [Contract usage and limitations](DRIVERS.md#scoped-reusable-contracts).

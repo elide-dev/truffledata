@@ -151,3 +151,55 @@ uploads JUnit reporting. It then runs `tools/release/consumer.py` to exercise th
 BOM with Maven and the Bazel-provided Java SDK. The ordinary coverage job covers all
 six Java modules. Production Native Image consumers and direct Elide embedding tests
 remain separate acceptance requirements; the native benchmark smoke is not their proof.
+
+## Scoped reusable contracts
+
+`JdbcContract` is an opt-in envelope for a schema and its provenance. Capture it from
+an actual result's metadata using the same adapter and connection acquisition that
+will consume it. Pass an explicit schema to record `Origin.EXPLICIT`, or null to use
+adapter inference and record `Origin.DRIVER_METADATA`. Origins describe the schema
+as a whole; they do not imply a database proof of query semantics.
+
+```java
+try (var scope = new JdbcContract.Scope(connection, "orders-schema-v3/session-v1")) {
+  JdbcContract contract;
+  try (var statement = connection.prepareStatement(sql);
+       var result = statement.executeQuery()) {
+    contract = JdbcContract.capture(adapter, scope, result.getMetaData(), schema, limits);
+  }
+  var guarded = contract.guardedAdapter();
+  try (var cursor = JdbcSource.execute(connection, sql, parameters,
+      contract.schema(), layout, limits, guarded, options)) {
+    // Consume through the ordinary batch/static/guest interfaces.
+  }
+}
+```
+
+The capture query above is an ordinary database execution, not a dry run or SQL
+analysis; bind its parameters when required. Applications can instead capture from
+metadata of a result they already own. No connection, statement or result ownership
+is transferred. `layout`, if supplied, must use `contract.schema()` by identity.
+
+The guard checks connection identity before preparation and the ordered column labels,
+JDBC types/type names, nullability, signedness, precision and scale before decoder
+creation. Duplicate labels are preserved by ordinal. Explicit schema names can differ
+from captured labels; changing those captured labels still rejects reuse. Unknown or
+unstable driver metadata can conservatively reject an otherwise valid query. Metadata
+errors propagate with ordinary statement/result cleanup. SQL, parameters and metadata
+values are not included in contract rejection messages.
+
+Create a scope per borrowed connection acquisition and caller-defined revision. Close
+it **before** returning a pooled connection or changing session/schema assumptions;
+construct a fresh scope/contract after the change. Closing is idempotent, releases the
+scope's connection reference, and does not close the borrowed connection. Already
+admitted cursors retain their immutable schema and continue ordinary value validation;
+use cancellation separately to stop execution. Scope closure racing admission may
+reject decoder creation. This is explicit lifetime cooperation, not automatic DDL,
+transaction, pool or session-change detection. Equal metadata does not establish equal
+query semantics. Every value is still checked against the selected schema.
+
+The wrapper preserves the underlying adapter's prepare, execute, decode and cancellation
+hooks. Signature checks allocate only at execution admission; they add no work to
+retained guest reads. SQLite tests cover identity, revisions, lifetime and invalid values;
+real MySQL/PostgreSQL tests cover inferred contracts, alias/type/length drift rejection
+and successful borrowed-connection reuse after rejection.

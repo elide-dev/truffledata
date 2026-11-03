@@ -10,6 +10,144 @@ import org.junit.jupiter.api.Test;
 
 class JdbcTest {
   @Test
+  void reusableContractsGuardProjectionRevisionAndConnectionScope() throws Exception {
+    var adapter = dev.elide.truffledata.jdbc.sqlite.SqliteAdapter.INSTANCE;
+    var options = new JdbcQueryOptions(1, 10, true);
+    try (var connection = DriverManager.getConnection("jdbc:sqlite::memory:");
+        var other = DriverManager.getConnection("jdbc:sqlite::memory:");
+        var statement = connection.createStatement()) {
+      statement.execute("create table sample(id integer not null, label text not null)");
+      statement.execute("insert into sample values(1000, 'abc')");
+      Schema schema =
+          Schema.of(
+              Field.integer("id", 16, true, false, false),
+              new Field("label", Field.Kind.STRING, false, false));
+      var scope = new JdbcContract.Scope(connection, "schema-v1/session-v1");
+      JdbcContract contract;
+      try (var result = statement.executeQuery("select id, label from sample")) {
+        contract =
+            JdbcContract.capture(adapter, scope, result.getMetaData(), schema, Limits.DEFAULT);
+        var inferred =
+            JdbcContract.capture(adapter, scope, result.getMetaData(), null, Limits.DEFAULT);
+        assertEquals(JdbcContract.Origin.DRIVER_METADATA, inferred.origin());
+        assertEquals(Field.Kind.ANY, inferred.schema().field(0).kind());
+      }
+      assertEquals(JdbcContract.Origin.EXPLICIT, contract.origin());
+      assertEquals("schema-v1/session-v1", contract.revision());
+      assertSame(schema, contract.schema());
+      var guarded = contract.guardedAdapter();
+      AbstractRow retained;
+      try (var cursor =
+          JdbcSource.execute(
+              connection,
+              "select id, label from sample",
+              List.of(),
+              null,
+              null,
+              Limits.DEFAULT,
+              guarded,
+              options)) {
+        assertSame(schema, cursor.schema());
+        retained = Objects.requireNonNull(cursor.nextRecord());
+      }
+      // Same width and valid individual values are insufficient: labels/order are also checked.
+      for (String sql :
+          List.of(
+              "select id as changed, label from sample",
+              "select label, id from sample",
+              "select id from sample")) {
+        assertThrows(
+            ContractViolation.class,
+            () ->
+                JdbcSource.execute(
+                    connection, sql, List.of(), null, null, Limits.DEFAULT, guarded, options));
+      }
+      assertThrows(
+          ContractViolation.class,
+          () ->
+              JdbcSource.execute(
+                  other,
+                  "select 1000 as id, 'abc' as label",
+                  List.of(),
+                  null,
+                  null,
+                  Limits.DEFAULT,
+                  guarded,
+                  options));
+      assertThrows(
+          ContractViolation.class,
+          () ->
+              JdbcSource.execute(
+                  connection,
+                  "select id, label from sample",
+                  List.of(),
+                  Schema.of(schema.field(0), schema.field(1)),
+                  null,
+                  Limits.DEFAULT,
+                  guarded,
+                  options));
+      // A stable signature never permits invalid values to bypass ingestion checks.
+      statement.execute("update sample set id=40000");
+      try (var cursor =
+          JdbcSource.execute(
+              connection,
+              "select id, label from sample",
+              List.of(),
+              null,
+              null,
+              Limits.DEFAULT,
+              guarded,
+              options)) {
+        assertThrows(ContractViolation.class, cursor::nextRecord);
+        assertTrue(cursor.isClosed());
+      }
+      scope.close();
+      scope.close();
+      assertFalse(connection.isClosed());
+      assertThrows(
+          ContractViolation.class,
+          () ->
+              JdbcSource.execute(
+                  connection,
+                  "select id, label from sample",
+                  List.of(),
+                  null,
+                  null,
+                  Limits.DEFAULT,
+                  guarded,
+                  options));
+      assertEquals(1000L, DataLibrary.factory().getUncached().readLong(retained, 0));
+      try (var newScope = new JdbcContract.Scope(connection, "schema-v2/session-v1");
+          var result = statement.executeQuery("select id, label from sample")) {
+        var replacement =
+            JdbcContract.capture(
+                adapter,
+                newScope,
+                result.getMetaData(),
+                Schema.of(Field.integer("id", 32, true, false, false), schema.field(1)),
+                Limits.DEFAULT);
+        assertEquals("schema-v2/session-v1", replacement.revision());
+        try (var cursor =
+            JdbcSource.execute(
+                connection,
+                "select id, label from sample",
+                List.of(),
+                null,
+                null,
+                Limits.DEFAULT,
+                replacement.guardedAdapter(),
+                options)) {
+          assertEquals(
+              40000L,
+              DataLibrary.factory()
+                  .getUncached()
+                  .readLong(Objects.requireNonNull(cursor.nextRecord()), 0));
+        }
+      }
+    }
+  }
+
+  @Test
   void cumulativeLimitsSurviveBatchAndStaticAdvancement() throws Exception {
     var adapter = dev.elide.truffledata.jdbc.sqlite.SqliteAdapter.INSTANCE;
     var options = new JdbcQueryOptions(1, 10, true);

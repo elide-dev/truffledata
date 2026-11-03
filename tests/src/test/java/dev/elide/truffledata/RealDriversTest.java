@@ -57,6 +57,77 @@ class RealDriversTest {
     cancelActive(url("TRUFFLEDATA_POSTGRESQL_URL"), false, PostgresqlAdapter.INSTANCE);
   }
 
+  @Test
+  void mysqlScopedContract() throws Exception {
+    scopedContract(url("TRUFFLEDATA_MYSQL_URL"), MysqlAdapter.INSTANCE);
+  }
+
+  @Test
+  void postgresqlScopedContract() throws Exception {
+    scopedContract(url("TRUFFLEDATA_POSTGRESQL_URL"), PostgresqlAdapter.INSTANCE);
+  }
+
+  private static void scopedContract(String url, JdbcAdapter adapter) throws Exception {
+    try (var connection = DriverManager.getConnection(url);
+        var scope = new JdbcContract.Scope(connection, "fixture-schema-v1");
+        var statement = connection.createStatement()) {
+      connection.setAutoCommit(false);
+      statement.execute(
+          "create temporary table td_contract(id integer not null, label varchar(8) not null)");
+      statement.execute("insert into td_contract values(1000, 'abc')");
+      JdbcContract contract;
+      try (var result = statement.executeQuery("select id, label from td_contract")) {
+        contract = JdbcContract.capture(adapter, scope, result.getMetaData(), null, Limits.DEFAULT);
+      }
+      assertEquals(JdbcContract.Origin.DRIVER_METADATA, contract.origin());
+      assertEquals(Field.Kind.INT64, contract.schema().field(0).kind());
+      var guarded = contract.guardedAdapter();
+      var options = new JdbcQueryOptions(2, 10, true);
+      try (var cursor =
+          JdbcSource.execute(
+              connection,
+              "select id, label from td_contract",
+              List.of(),
+              null,
+              null,
+              Limits.DEFAULT,
+              guarded,
+              options)) {
+        assertEquals(
+            1000L,
+            DataLibrary.factory()
+                .getUncached()
+                .readLong(Objects.requireNonNull(cursor.nextRecord()), 0));
+      }
+      for (String sql :
+          List.of(
+              "select id as different, label from td_contract",
+              "select id, cast(label as char(16)) as label from td_contract")) {
+        assertThrows(
+            ContractViolation.class,
+            () ->
+                JdbcSource.execute(
+                    connection, sql, List.of(), null, null, Limits.DEFAULT, guarded, options));
+        assertUsable(connection);
+      }
+      scope.close();
+      assertThrows(
+          ContractViolation.class,
+          () ->
+              JdbcSource.execute(
+                  connection,
+                  "select id, label from td_contract",
+                  List.of(),
+                  null,
+                  null,
+                  Limits.DEFAULT,
+                  guarded,
+                  options));
+      assertUsable(connection);
+      connection.rollback();
+    }
+  }
+
   private static void cancelActive(String url, boolean mysql, JdbcAdapter adapter)
       throws Exception {
     var cancellation = new JdbcCancellation();
