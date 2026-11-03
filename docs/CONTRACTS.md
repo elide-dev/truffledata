@@ -99,8 +99,14 @@ checks; disabling it does not authorize invalid inputs. It currently audits fiel
 results and row schema identity, not every ownership/lifetime invariant or an
 arbitrary third-party export's purity. Snapshot construction still copies caller
 owned mutable storage where required to preserve retained-row semantics. Static
-JDBC iteration avoids an intermediate columnar batch; remaining allocations and
-copies must be evaluated against that ownership guarantee.
+JDBC iteration avoids an intermediate columnar batch. Batch JDBC ingestion fills
+columns through `Batch.read`, validating each cell once without intermediate row
+arrays. Its synchronous source is not retained, and column storage is never exposed
+for mutation. Capacity is checked against structural limits before allocation and
+retained without trimming/copying, so a short final batch retains unused capacity.
+Nested payload limits still apply while reading. These per-batch limits do not bound
+driver buffering or total application retention. Remaining allocations and copies
+must be evaluated against that ownership guarantee.
 
 
 ## SQLite driver integration

@@ -63,24 +63,25 @@ public final class JdbcCursor implements AutoCloseable, TruffleObject {
     try {
       int capacity =
           (int) Math.min(limits.maxRows(), limits.maxCells() / Math.max(1, schema.size()));
-      List<Object[]> rows = new ArrayList<>(capacity);
-      PayloadBudget budget = new PayloadBudget(limits);
-      while (rows.size() < capacity) {
-        if (!result.next()) {
-          exhausted = true;
-          close();
-          break;
-        }
-        budget.cells(schema.size());
-        Object[] row = new Object[schema.size()];
-        for (int c = 0; c < row.length; c++) {
-          Object value = Values.normalize(decoder.read(result, c + 1));
-          budget.accept(value);
-          row[c] = Values.validate(schema.field(c), value);
-        }
-        rows.add(row);
+      Batch batch =
+          Batch.read(
+              schema,
+              capacity,
+              limits,
+              new Batch.Source<SQLException>() {
+                public boolean next() throws SQLException {
+                  return result.next();
+                }
+
+                public @Nullable Object read(int column) throws SQLException {
+                  return decoder.read(result, column + 1);
+                }
+              });
+      if (batch.size() < capacity) {
+        exhausted = true;
+        close();
       }
-      return rows.isEmpty() ? null : Batch.copyOf(schema, rows, limits);
+      return batch.size() == 0 ? null : batch;
     } catch (SQLException | RuntimeException | Error e) {
       closeResources(e);
       throw e;

@@ -11,6 +11,78 @@ import java.util.*;
 import org.junit.jupiter.api.Test;
 
 class CoreTest {
+  @Test
+  void directBatchFillingPreservesRetentionNullityAndSourcePosition() throws Exception {
+    Schema schema =
+        Schema.of(Field.requiredLong("n"), new Field("s", Field.Kind.STRING, true, false));
+    var source =
+        new Batch.Source<Exception>() {
+          int row = -1;
+          int reads;
+
+          public boolean next() {
+            return ++row < 3;
+          }
+
+          public Object read(int column) {
+            reads++;
+            return column == 0 ? (Object) (long) row : row == 1 ? DataNull.INSTANCE : "ok";
+          }
+        };
+    Batch first = Batch.read(schema, 2, Limits.DEFAULT, source);
+    assertEquals(1, source.row, "Full batches must not consume a lookahead row");
+    Batch last = Batch.read(schema, 2, Limits.DEFAULT, source);
+    assertEquals(2, first.size());
+    assertEquals(1, last.size());
+    assertEquals(6, source.reads);
+    var data = DataLibrary.factory().getUncached();
+    assertEquals(0L, data.readLong(first.row(0), 0));
+    assertSame(DataNull.INSTANCE, data.read(first.row(1), 1));
+    assertEquals(2L, data.readLong(last.row(0), 0));
+    assertThrows(IndexOutOfBoundsException.class, () -> last.row(1));
+  }
+
+  @Test
+  void directBatchFillingEnforcesStructuralPayloadAndValueContracts() {
+    var source =
+        new Batch.Source<RuntimeException>() {
+          int advances;
+
+          public boolean next() {
+            advances++;
+            return true;
+          }
+
+          public Object read(int column) {
+            return "abc";
+          }
+        };
+    Schema strings = Schema.of(new Field("s", Field.Kind.STRING, false, false));
+    assertThrows(
+        ContractViolation.class, () -> Batch.read(strings, 2, new Limits(1, 1, 1, 10), source));
+    assertEquals(0, source.advances);
+    assertThrows(
+        ContractViolation.class, () -> Batch.read(strings, 1, new Limits(1, 1, 1, 5), source));
+    assertThrows(
+        ContractViolation.class,
+        () -> Batch.read(Schema.of(Field.requiredLong("n")), 1, Limits.DEFAULT, source));
+    var failure = new java.sql.SQLException("source failed");
+    var broken =
+        new Batch.Source<java.sql.SQLException>() {
+          public boolean next() throws java.sql.SQLException {
+            throw failure;
+          }
+
+          public Object read(int column) {
+            throw new AssertionError("unreachable");
+          }
+        };
+    assertSame(
+        failure,
+        assertThrows(
+            java.sql.SQLException.class, () -> Batch.read(strings, 1, Limits.DEFAULT, broken)));
+  }
+
   @com.oracle.truffle.api.library.ExportLibrary(DataLibrary.class)
   static final class UncheckedRow extends AbstractRow {
     final Object value;

@@ -21,7 +21,7 @@ class PolicyTest {
             Map.entry("Values.java", 4),
             Map.entry("DataLibrary.java", 1),
             Map.entry("Schema.java", 1),
-            Map.entry("Batch.java", 1),
+            Map.entry("Batch.java", 2),
             Map.entry("AbstractRow.java", 1),
             Map.entry("ExactNumber.java", 12),
             Map.entry("StaticLayout.java", 6),

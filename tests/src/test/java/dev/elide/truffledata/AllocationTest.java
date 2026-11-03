@@ -18,6 +18,32 @@ import org.junit.jupiter.api.Test;
  */
 class AllocationTest {
   @Test
+  void directColumnIngestionAvoidsIntermediateRowArrays() {
+    Schema schema = Schema.of(Field.requiredLong("n"));
+    var source =
+        new Batch.Source<RuntimeException>() {
+          final Object value = 1000L;
+
+          public boolean next() {
+            return true;
+          }
+
+          public Object read(int column) {
+            return value;
+          }
+        };
+    for (int i = 0; i < 2000; i++) retained = Batch.read(schema, 1024, Limits.DEFAULT, source);
+    ThreadMXBean bean = (ThreadMXBean) ManagementFactory.getThreadMXBean();
+    bean.setThreadAllocatedMemoryEnabled(true);
+    long before = bean.getThreadAllocatedBytes(Thread.currentThread().threadId());
+    for (int i = 0; i < 1000; i++) retained = Batch.read(schema, 1024, Limits.DEFAULT, source);
+    double perBatch =
+        (bean.getThreadAllocatedBytes(Thread.currentThread().threadId()) - before) / 1000.0;
+    System.out.printf("ALLOCATION direct-column batch %.3f bytes/1024 longs%n", perBatch);
+    assertTrue(perBatch <= 9216, "Direct ingestion allocated intermediate rows or copied columns");
+  }
+
+  @Test
   void scalarJdbcDecodingDoesNotAllocatePerCellBudgets() throws Exception {
     try (var connection = java.sql.DriverManager.getConnection("jdbc:h2:mem:");
         var statement = connection.prepareStatement("select cast(1000 as bigint)");

@@ -17,6 +17,7 @@ Java null is represented with JSpecify `@Nullable` only where it can occur (driv
 | Retained INT64 read | 0.05 allocated bytes/read, averaged over 1,000,000 reads |
 | Static four-field ingestion | 256 allocated bytes/row |
 | Batch ingestion, one required INT64 column | 64 allocated bytes/cell |
+| Direct column filling, 1,024 required INT64 cells | 9,216 allocated bytes/batch |
 | Retained row view creation | 48 allocated bytes/row |
 | Default batch rows | 1,024 |
 | Default columns | 256 |

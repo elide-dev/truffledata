@@ -103,3 +103,14 @@ service runner also passed MySQL/PostgreSQL acceptance. The previous CI service 
 failed before running tests because its no-remote-exec tag prevented remote compilation;
 the corrected runner selects standalone test execution and a local TestRunner strategy
 without restricting compilation. Linux CI verification of this correction is pending.
+
+Direct column ingestion increment: JDBC batch consumption now uses a checked,
+synchronous `Batch.read` source to fill owned column storage directly. It removes
+intermediate row arrays and the second validation pass; retained rows remain valid.
+Capacity is bounded before allocation and deliberately not trimmed, trading unused
+slots in the final batch for avoiding another allocation/copy. Both allocation and
+compiled gates measured 8,312 bytes for 1,024 required longs against a 9,216-byte
+budget. No throughput improvement is inferred from this allocation result.
+All ten regular targets passed at
+https://app.buildbuddy.io/invocation/e2b09873-2a1c-4cf8-b7b2-8c1a74ea994d,
+and the real MySQL/PostgreSQL service runner passed again with direct batch filling.

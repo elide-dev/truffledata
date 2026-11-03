@@ -45,6 +45,39 @@ public final class Batch {
     return new Batch(schema, columns, rows.size());
   }
 
+  /** Synchronous source; column indexes are zero-based. The caller owns source cleanup. */
+  public interface Source<E extends Exception> {
+    boolean next() throws E;
+
+    @Nullable Object read(int column) throws E;
+  }
+
+  /**
+   * Fill immutable columns directly, validating each cell once. Capacity is retained without
+   * trimming/copying; callers should choose a bounded capacity appropriate to their fetch size. No
+   * source reference is retained. A short batch means the source is exhausted.
+   */
+  @TruffleBoundary
+  public static <E extends Exception> Batch read(
+      Schema schema, int capacity, Limits limits, Source<E> source) throws E {
+    if (capacity <= 0) throw new IllegalArgumentException("Capacity must be positive");
+    limits.check(capacity, schema.size());
+    Column[] columns = new Column[schema.size()];
+    for (int i = 0; i < columns.length; i++) columns[i] = new Column(schema.field(i), capacity);
+    PayloadBudget budget = new PayloadBudget(limits);
+    int size = 0;
+    while (size < capacity && source.next()) {
+      budget.cells(schema.size());
+      for (int c = 0; c < columns.length; c++) {
+        Object value = Values.normalize(source.read(c));
+        budget.accept(value);
+        columns[c].set(size, Values.validate(schema.field(c), value));
+      }
+      size++;
+    }
+    return new Batch(schema, columns, size);
+  }
+
   public int size() {
     return size;
   }
