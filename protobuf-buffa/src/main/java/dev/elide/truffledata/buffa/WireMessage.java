@@ -2,6 +2,7 @@ package dev.elide.truffledata.buffa;
 
 import com.oracle.truffle.api.CompilerDirectives;
 import dev.elide.truffledata.*;
+import org.jspecify.annotations.Nullable;
 
 /**
  * A decoded view owns a lease, not the payload. Snapshot to detach; close after guest consumption.
@@ -9,8 +10,7 @@ import dev.elide.truffledata.*;
 public final class WireMessage implements AutoCloseable {
   private static final DataArray EMPTY_FIELDS = new DataArray(new Object[0]);
   final WireInput.Lease lease;
-  private final com.oracle.truffle.api.Assumption alive =
-      com.oracle.truffle.api.Truffle.getRuntime().createAssumption("wire view alive");
+  @CompilerDirectives.CompilationFinal private @Nullable com.oracle.truffle.api.Assumption alive;
   private boolean open = true;
   private DataArray fields = EMPTY_FIELDS;
   private final long nativeBytes;
@@ -65,7 +65,20 @@ public final class WireMessage implements AutoCloseable {
 
   void check() {
     lease.check();
-    if (!alive.isValid()) throw new IllegalStateException("Wire view closed");
+    // Dynamic owners need a normal state check. Only constant-owner compiled reads benefit
+    // from an assumption; ingestion-only views never allocate or invalidate one.
+    if (CompilerDirectives.inCompiledCode()
+        && CompilerDirectives.isPartialEvaluationConstant(this)) {
+      var lifetime = alive;
+      if (lifetime == null) {
+        CompilerDirectives.transferToInterpreterAndInvalidate();
+        if (!open) throw new IllegalStateException("Wire view closed");
+        alive =
+            lifetime =
+                com.oracle.truffle.api.Truffle.getRuntime().createAssumption("wire view alive");
+      }
+      if (!lifetime.isValid()) throw new IllegalStateException("Wire view closed");
+    } else if (!open) throw new IllegalStateException("Wire view closed");
   }
 
   @Override
@@ -73,7 +86,7 @@ public final class WireMessage implements AutoCloseable {
   public void close() {
     lease.thread();
     if (open) {
-      alive.invalidate();
+      if (alive != null) alive.invalidate();
       open = false;
       lease.release();
     }

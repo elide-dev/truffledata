@@ -78,8 +78,18 @@ final class CompiledReads {
               double bytes = (bean.getThreadAllocatedBytes(thread) - before) / 1000000.0;
               Acceptance.check(bytes <= 0.05, "WKT compiled allocation budget");
             }
+            // Constant receivers may fold scalar values, but must still invalidate on close.
+            var constantRoot = new ConstantWktRoot(row);
+            var constantTarget = constantRoot.getCallTarget();
+            for (int i = 0; i < 200 && !constantRoot.compiled; i++) constantTarget.call(100000);
+            Acceptance.check(constantRoot.compiled, "constant WKT reads compiled " + type);
+            long firstValue = type.equals("Timestamp") ? 1 : type.equals("Duration") ? -1 : 7;
+            Acceptance.check(
+                ((Long) constantTarget.call(1000000)) == firstValue * 1000000,
+                "constant WKT value");
             typed.close();
             Acceptance.rejects(() -> typedTarget.call(row, 1), IllegalStateException.class);
+            Acceptance.rejects(() -> constantTarget.call(1), IllegalStateException.class);
           }
         }
         var root = new ReadRoot();
@@ -109,6 +119,27 @@ final class CompiledReads {
       } finally {
         context.leave();
       }
+    }
+  }
+
+  private static final class ConstantWktRoot extends RootNode {
+    private final Object row;
+    @Child private ReadLongNode read = ReadLongNode.create();
+    boolean compiled;
+
+    ConstantWktRoot(Object row) {
+      super(null);
+      this.row = row;
+    }
+
+    @Override
+    public Object execute(VirtualFrame frame) {
+      int count = (Integer) frame.getArguments()[0];
+      long sum = 0;
+      for (int i = 0; i < count; i++) sum += read.execute(row, 0);
+      if (CompilerDirectives.inInterpreter()) LoopNode.reportLoopCount(this, count);
+      compiled |= CompilerDirectives.inCompiledCode();
+      return sum;
     }
   }
 
