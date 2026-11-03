@@ -122,3 +122,28 @@ JIT/allocation budgets still fail CI independently.
 - Within CodSpeed simulation: `python3 tools/bench/bench.py run`.
 
 The runner never falls back to elapsed timing or an uninstrumented run.
+
+## Initial SQLite elapsed baseline
+
+The clean `dc12d6565090e423248caa109dc01dbdaa3ad23f` experiment on macOS arm64
+used the default three forks, five warmups and eight measurement iterations per fork,
+with SQLite JDBC 3.53.4.0 / SQLite 3.53.4 and the Bazel host JVM 25.0.4.1.1.
+[Raw JMH samples](../benchmarks/results/sqlite-dc12d65/results.json) and
+[environment/source identity](../benchmarks/results/sqlite-dc12d65/environment.json)
+are retained. All six cases passed checksums and compiled-read admission.
+
+| Boundary | Plain JDBC records | Batch rows | Static rows |
+| --- | ---: | ---: | ---: |
+| Query + retained output, ns/row | 401.83 ± 26.28 | 379.46 ± 2.20 | 388.61 ± 3.35 |
+| Query + retained output, allocated bytes/row | 194.35 | 231.47 | 268.43 |
+| Retained read, ns/row | 1.00 ± 0.06 | 2.77 ± 0.08 | 1.26 ± 0.06 |
+| Retained read, allocated bytes/row | approximately 0 | 0.188 | 0.188 |
+
+Errors are JMH's reported 99.9% confidence intervals, not bounds on other machines
+or workloads. Query intervals overlap; this run does not establish a query speedup.
+Batch/static query allocation exceeds the plain baseline by approximately 19%/38%.
+Direct Java retained reads are fastest here. The Truffle retained-read allocation
+includes call-target entry and result boxing amortized over 256 rows; it must not be
+advertised as zero allocation. These results identify optimization work, not a
+production performance certification. Server-driver elapsed experiments and broader
+payload/projection distributions remain outstanding.

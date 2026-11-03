@@ -15,7 +15,7 @@ the database owns planning. CSV, RPC execution and asynchronous delivery are sub
 | Contract provenance | Explicit vs metadata origins, revision/lifetime policy, projection/session/schema compatibility tests | Pending |
 | Consumer Native Image | Packaged library/driver metadata, schema-specific Protobuf generation, real-driver native executables on supported platforms | Pending; existing native benchmark is fixture-specific |
 | Truffle gates | Nullable, polymorphic/megamorphic, nested, exception and context-ownership cases; graph/allocation budgets | Pending extensions; existing primitive gates pass |
-| Performance comparisons | Equivalent plain-JDBC baselines; warmed JIT elapsed-time suite separate from CodSpeed simulation | Six real-driver JMH boundaries per driver implemented; smoke acceptance passed, elapsed experiments and review pending |
+| Performance comparisons | Equivalent plain-JDBC baselines; warmed JIT elapsed-time suite separate from CodSpeed simulation | Six real-driver JMH boundaries per driver implemented; full SQLite baseline reviewed, server experiments and allocation optimization pending |
 | Elide integration | Real embedding tests for guest capabilities, cleanup and host access disabled | Pending |
 | Operational diagnostics | Bounded rows/bytes/error/cancellation/contract telemetry without query/parameter disclosure by default | Pending |
 | Compatibility and release | API/binary compatibility gate, support matrix, dependency reporting/provenance and verified publication | Pending extensions |
@@ -165,3 +165,15 @@ An additional cancellation-hook transport-failure test verifies that the request
 receives the driver error while the consuming thread still rejects and cleans up the
 query; the correctness suite passed at
 https://app.buildbuddy.io/invocation/f8b1d114-82f9-428d-9cd2-ed5b2832f641.
+
+JMH comparison increment: all eleven ordinary targets passed at
+https://app.buildbuddy.io/invocation/ef5e3cfb-dce6-4b08-8cf9-87310e018ad3.
+SQLite's final compiler graph/performance-warning checks passed at
+https://app.buildbuddy.io/invocation/6a697a07-30f1-49c0-a8a1-3207ac855aec.
+The local service runner passed eight driver acceptance methods and twelve compiled
+MySQL/PostgreSQL benchmark smoke cases. A full clean-commit SQLite run completed
+three forks and 24 measured samples for each of six cases; raw results and limitations
+are recorded in [BENCHMARKS.md](BENCHMARKS.md#initial-sqlite-elapsed-baseline).
+Query timing intervals overlap, and batch/static allocation exceeds plain records;
+there is no accepted general speedup claim. The previous cancellation increment's
+full CI passed: https://github.com/elide-dev/truffledata/actions/runs/41586275999.
