@@ -169,3 +169,8 @@ are retained. Cursor operation serialization measured 387.32 ± 4.37 ns/row and
 the timing intervals overlap and allocation is effectively unchanged. This does not
 establish a general absence of lock overhead; retained guest reads do not acquire the
 cursor monitor. No other elapsed cases were remeasured in this follow-up.
+
+## SVM stock-library comparisons
+
+For interpreter, final-tier JIT and allocation comparisons with protobuf Java and
+MySQL/Postgres decoder functions, see [the small comparison suite](COMPARISON_BENCHMARKS.md).

@@ -1,0 +1,8 @@
+syntax = "proto3";
+package truffledata.comparison;
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/wrappers.proto";
+message Fixtures {
+  google.protobuf.Timestamp timestamp = 1;
+  google.protobuf.BytesValue bytes = 2;
+}

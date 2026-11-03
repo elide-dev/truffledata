@@ -1,0 +1,129 @@
+load("@protobuf//bazel:proto_library.bzl", "proto_library")
+load("@rules_graalvm//graalvm:defs.bzl", "native_image")
+load("@rules_java//java:defs.bzl", "java_binary", "java_test")
+load("@rules_shell//shell:sh_test.bzl", "sh_test")
+load("//bazel:java.bzl", "data_java_library")
+load("//bazel:jit.bzl", "TRUFFLE_JIT_CHECKS")
+load("//bazel:protobuf.bzl", "proto_contract_library")
+
+proto_library(
+    name = "fixtures",
+    testonly = True,
+    srcs = ["fixtures.proto"],
+    deps = [
+        "@protobuf//:timestamp_proto",
+        "@protobuf//:wrappers_proto",
+    ],
+)
+
+proto_contract_library(
+    name = "contracts",
+    testonly = True,
+    class_name = "ComparisonContracts",
+    proto_deps = [":fixtures"],
+)
+
+data_java_library(
+    name = "comparison",
+    testonly = True,
+    srcs = [
+        "Comparison.java",
+        "ComparisonLanguage.java",
+    ],
+    deps = [
+        ":contracts",
+        "//core",
+        "//protobuf",
+        "//protobuf-buffa",
+        "@maven//:com_google_protobuf_protobuf_java",
+        "@maven//:com_google_protobuf_protobuf_java_util",
+        "@maven//:com_mysql_mysql_connector_j",
+        "@maven//:org_graalvm_polyglot_polyglot",
+        "@maven//:org_graalvm_sdk_nativeimage",
+        "@maven//:org_graalvm_truffle_truffle_api",
+        "@maven//:org_graalvm_truffle_truffle_runtime",
+        "@maven//:org_postgresql_postgresql",
+    ],
+)
+
+java_binary(
+    name = "jvm",
+    testonly = True,
+    jvm_flags = ["--enable-native-access=ALL-UNNAMED"],
+    main_class = "dev.elide.truffledata.comparison.Comparison",
+    runtime_deps = [":comparison"],
+)
+
+java_test(
+    name = "smoke",
+    size = "large",
+    args = ["--smoke"],
+    data = ["//protobuf-buffa/native:shared"],
+    jvm_flags = ["--enable-native-access=ALL-UNNAMED"],
+    main_class = "dev.elide.truffledata.comparison.Comparison",
+    use_testrunner = False,
+    runtime_deps = [":comparison"],
+)
+
+native_image(
+    name = "svm",
+    testonly = True,
+    cc_deps = ["//protobuf-buffa/native:truffledata_buffa"],
+    exec_properties = {
+        "EstimatedCPU": "4",
+        "EstimatedMemory": "16GB",
+    },
+    executable_name = "truffledata-comparison",
+    extra_args = [
+        "--gc=serial",
+        "--add-exports=org.graalvm.truffle.runtime/com.oracle.truffle.runtime=ALL-UNNAMED",
+        "--parallelism=4",
+        "-march=compatibility",
+        "--initialize-at-build-time=dev.elide.truffledata",
+        "--initialize-at-run-time=dev.elide.truffledata.comparison.Comparison",
+        "--features=dev.elide.truffledata.buffa.BuffaFeature",
+        "-H:+UnlockExperimentalVMOptions",
+    ] + TRUFFLE_JIT_CHECKS + ["-H:-UnlockExperimentalVMOptions"],
+    graalvm_sdk = "@graalvm_linux_amd64//:gvm",
+    main_class = "dev.elide.truffledata.comparison.Comparison",
+    optimization_mode = "2",
+    tags = ["manual"],
+    target_compatible_with = [
+        "@platforms//os:linux",
+        "@platforms//cpu:x86_64",
+    ],
+    deps = [":comparison"],
+)
+
+sh_test(
+    name = "native_smoke",
+    size = "large",
+    srcs = ["native_smoke.sh"],
+    args = ["$(rootpath :svm)"],
+    data = [":svm"],
+    tags = ["manual"],
+    target_compatible_with = [
+        "@platforms//os:linux",
+        "@platforms//cpu:x86_64",
+    ],
+)
+
+sh_test(
+    name = "measure",
+    size = "large",
+    timeout = "long",
+    srcs = ["measure.sh"],
+    args = ["$(rootpath :svm)"],
+    data = [
+        ":svm",
+        "//tools/bench:compare.py",
+    ],
+    tags = [
+        "benchmark",
+        "manual",
+    ],
+    target_compatible_with = [
+        "@platforms//os:linux",
+        "@platforms//cpu:x86_64",
+    ],
+)

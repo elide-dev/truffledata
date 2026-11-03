@@ -1,0 +1,152 @@
+#!/usr/bin/env python3
+"""Small SVM comparisons: fresh processes, raw samples, verified tiers and allocation counters."""
+import argparse
+import datetime
+import hashlib
+import itertools
+import json
+import math
+import os
+from pathlib import Path
+import platform
+import random
+import statistics
+import subprocess
+
+WORKLOADS = ('proto-scalar', 'proto-bytes', 'timestamp-json', 'mysql-int4', 'postgres-int4')
+CHECKSUMS = {'proto-scalar': 54400032992, 'proto-bytes': 2097648, 'timestamp-json': 54400032992,
+             'mysql-int4': 35472, 'postgres-int4': 35472}
+
+
+def cells():
+    for workload in WORKLOADS:
+        engines = ('stock', 'stock-aliased', 'owned', 'buffa') if workload == 'proto-bytes' else (
+            ('stock', 'owned', 'buffa') if workload in WORKLOADS[:3] else ('stock', 'static'))
+        for engine in engines:
+            stages = ('ingest',) if workload == 'timestamp-json' else (
+                ('ingest', 'read-aot') if engine.startswith('stock') else ('ingest', 'interpret', 'peak'))
+            for stage in stages:
+                yield workload, engine, stage
+
+
+def validate_row(row, cell, metric):
+    workload, engine, stage = cell
+    if (row['workload'], row['engine'], row['stage']) != cell or row['runtime'] != 'svm':
+        raise ValueError('Mislabeled measurement')
+    if row['guest_compiled'] != (stage == 'peak'):
+        raise ValueError('Wrong guest execution tier')
+    if row['backend'] != ('SVM_STATIC' if engine == 'buffa' else 'none'):
+        raise ValueError('Wrong backend')
+    if row['rows'] != 32 or row['checksum'] != CHECKSUMS[workload]:
+        raise ValueError('Wrong dataset/checksum')
+    samples = row[metric]
+    if len(samples) != 3 or any(type(n) not in (int, float) or not math.isfinite(n)
+                               or n < 0 or (metric == 'ns_per_row' and n == 0) for n in samples):
+        raise ValueError('Invalid measurement samples')
+
+
+def validate(data):
+    if data['schema'] != 1 or data['forks'] != 3:
+        raise ValueError('Expected three isolated processes per cell')
+    expected = set(itertools.product(cells(), range(3)))
+    seen = set()
+    for row in data['results']:
+        cell = row['workload'], row['engine'], row['stage']
+        key = cell, row['fork']
+        if key not in expected or key in seen:
+            raise ValueError('Duplicate or unexpected cell')
+        seen.add(key)
+        for metric in ('ns_per_row', 'allocated_bytes_per_row'):
+            validate_row(row, cell, metric)
+    if seen != expected:
+        raise ValueError('Incomplete comparison matrix')
+
+
+def render(data, path):
+    validate(data)
+    text = ['# SVM data access comparison', '',
+            'Median of three process medians; ranges are min–max process medians, not confidence intervals.',
+            'Time and allocations use separate fresh processes. Lower is better.', '',
+            '| Workload | Engine | Stage | ns/row (range) | Java heap B/row |',
+            '|---|---|---|---:|---:|']
+    for cell in cells():
+        rows = [r for r in data['results'] if (r['workload'], r['engine'], r['stage']) == cell]
+        times = [statistics.median(r['ns_per_row']) for r in rows]
+        allocations = [statistics.median(r['allocated_bytes_per_row']) for r in rows]
+        text.append('| %s | %s | %s | %.2f (%.2f–%.2f) | %.2f |' % (
+            *cell, statistics.median(times), min(times), max(times), statistics.median(allocations)))
+    text += ['', 'Stock read-aot is the native-image host baseline; it has no Truffle interpreter/JIT tier.',
+             'Ingest includes parsing/materialization and an uncached projected read. Setup is excluded.',
+             'Buffa binary input is already in unmanaged memory; owned engines start with Java byte arrays.',
+             'Buffa results are scoped borrowed views; stock-aliased borrows immutable ByteString input; stock/owned copy payloads.',
+             'The direct stock AOT baseline excludes guest interop and contract enforcement.',
+             'MySQL/Postgres measure driver INT4 decoder functions and retained scalar rows, not JDBC queries, transport, or servers.',
+             'Java heap counters exclude native allocations and compiler/background threads. Native allocation is not reported as zero.',
+             'Shared execution hardware and short samples make these diagnostic comparisons, not performance guarantees.', '',
+             f"Binary SHA-256: `{data['binary_sha256']}`", f"Revision: `{data['revision']}`", '']
+    path.write_text('\n'.join(text))
+
+
+def measure(args):
+    if platform.system() != 'Linux' or platform.machine() != 'x86_64':
+        raise ValueError('Use the Linux amd64 SVM image (or bazel test //benchmarks/comparison:measure)')
+    binary = args.binary.resolve()
+    args.output.mkdir(parents=True, exist_ok=True)
+    cpu = next((line.split(':', 1)[1].strip() for line in Path('/proc/cpuinfo').read_text().splitlines()
+                if line.startswith('model name')), platform.processor())
+    data = {'schema': 1, 'forks': 3, 'captured_at': datetime.datetime.now(datetime.timezone.utc).isoformat(),
+            'revision': args.revision, 'binary_sha256': hashlib.sha256(binary.read_bytes()).hexdigest(),
+            'host': {'system': platform.system(), 'machine': platform.machine(), 'cpu': cpu,
+                     'kernel': platform.release(), 'logical_cpus': os.cpu_count()},
+            'allocation_scope': 'current-thread Java heap; excludes native heap and compiler/background threads',
+            'versions': {'graalvm': '25.5.5-elide.5', 'protobuf-java': '4.36.1',
+                         'mysql-connector-j': '26.10.0', 'postgresql': '42.7.14'},
+            'results': []}
+    jobs = list(itertools.product(cells(), range(3)))
+    random.Random(20261103).shuffle(jobs)
+    for cell, fork in jobs:
+        print('/'.join(cell) + f' fork {fork + 1}/3', flush=True)
+        merged = None
+        for mode, metric in [('time', 'ns_per_row'), ('memory', 'allocated_bytes_per_row')]:
+            result = subprocess.run([str(binary), *cell, mode], capture_output=True, text=True, timeout=90)
+            if result.returncode:
+                raise RuntimeError(result.stdout + '\n' + result.stderr)
+            records = [json.loads(line) for line in result.stdout.splitlines() if line.startswith('{')]
+            if len(records) != 1:
+                raise ValueError('Expected exactly one measurement')
+            row = records[0]
+            validate_row(row, cell, metric)
+            if merged is None:
+                merged = row
+            else:
+                if any(merged[k] != v for k, v in row.items() if k != metric):
+                    raise ValueError('Timing/allocation identity mismatch')
+                merged[metric] = row[metric]
+        merged['fork'] = fork
+        data['results'].append(merged)
+        (args.output / 'comparison.partial.json').write_text(json.dumps(data, indent=2) + '\n')
+    validate(data)
+    (args.output / 'comparison.json').write_text(json.dumps(data, indent=2) + '\n')
+    render(data, args.output / 'comparison.md')
+    (args.output / 'comparison.partial.json').unlink()
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    sub = parser.add_subparsers(dest='command', required=True)
+    run = sub.add_parser('run')
+    run.add_argument('--binary', type=Path, required=True)
+    run.add_argument('--output', type=Path, default=Path('build/comparison'))
+    run.add_argument('--revision', default=os.getenv('TRUFFLEDATA_BENCH_REVISION', 'unrecorded'))
+    report = sub.add_parser('render')
+    report.add_argument('input', type=Path)
+    report.add_argument('output', type=Path)
+    args = parser.parse_args()
+    if args.command == 'run':
+        measure(args)
+    else:
+        render(json.loads(args.input.read_text()), args.output)
+
+
+if __name__ == '__main__':
+    main()
