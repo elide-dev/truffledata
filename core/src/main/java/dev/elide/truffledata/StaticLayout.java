@@ -126,11 +126,28 @@ public final class StaticLayout {
   public Record create(Object... values) {
     if (values.length != schema.size())
       throw new ContractViolation("Static record width differs from contract");
+    return read(index -> values[index], null);
+  }
+
+  /** Synchronous field source; each ordinal is read once, in order, and is never retained. */
+  @FunctionalInterface
+  public interface Source<E extends Exception> {
+    @Nullable Object read(int column) throws E;
+  }
+
+  /**
+   * Fill owned static storage directly, without a temporary row array. Layout and parent budgets
+   * share one payload walk. No record escapes if reading or validation fails; accepted parent
+   * charges are not refunded.
+   */
+  @TruffleBoundary
+  public <E extends Exception> Record read(Source<E> source, @Nullable PayloadBudget parent)
+      throws E {
     Object storage = shape.getFactory().create();
-    PayloadBudget budget = new PayloadBudget(limits);
+    PayloadBudget budget = new PayloadBudget(limits, parent);
     budget.cells(schema.size());
-    for (int i = 0; i < values.length; i++) {
-      Object value = Values.normalize(values[i]);
+    for (int i = 0; i < schema.size(); i++) {
+      Object value = Values.normalize(source.read(i));
       budget.accept(value);
       Values.validate(schema.field(i), value);
       byte state = (byte) (value == DataNull.INSTANCE ? 1 : value == Missing.INSTANCE ? 2 : 0);

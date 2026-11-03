@@ -176,6 +176,14 @@ class AllocationTest {
             (bean.getThreadAllocatedBytes(Thread.currentThread().threadId()) - before) / 10000.0;
         System.out.printf("ALLOCATION static-ingestion %.3f bytes/row%n", perRow);
         assertTrue(perRow <= 256, "Static ingestion allocation budget exceeded");
+        StaticLayout.Source<RuntimeException> source = column -> input[column];
+        for (int i = 0; i < 10000; i++) retained = layout.read(source, null);
+        before = bean.getThreadAllocatedBytes(Thread.currentThread().threadId());
+        for (int i = 0; i < 10000; i++) retained = layout.read(source, null);
+        double directPerRow =
+            (bean.getThreadAllocatedBytes(Thread.currentThread().threadId()) - before) / 10000.0;
+        System.out.printf("ALLOCATION static-direct-ingestion %.3f bytes/row%n", directPerRow);
+        assertTrue(directPerRow <= 192, "Direct static ingestion allocation budget exceeded");
       } finally {
         context.leave();
       }

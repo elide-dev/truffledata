@@ -12,6 +12,58 @@ import org.junit.jupiter.api.Test;
 
 class ContractsTest {
   @Test
+  void directStaticIngestionPreservesBudgetsAndFailureIdentity() throws Exception {
+    try (Context context = Context.newBuilder("td-test").build()) {
+      context.initialize("td-test");
+      context.enter();
+      try {
+        Schema schema =
+            Schema.of(
+                Field.integer("id", 16, true, false, false),
+                new Field("text", Field.Kind.STRING, false, false));
+        StaticLayout layout =
+            new StaticLayout(TestLanguage.current().language(), schema, new Limits(1, 2, 2, 6));
+        PayloadBudget parent = new PayloadBudget(new Limits(2, 2, 4, 12));
+        int[] calls = {0};
+        StaticLayout.Source<Exception> source =
+            column -> {
+              assertEquals(calls[0]++ % 2, column);
+              return column == 0 ? 1000L : "abc";
+            };
+        var data = DataLibrary.factory().getUncached();
+        var first = layout.read(source, parent);
+        layout.read(source, parent);
+        assertEquals(4, calls[0]);
+        assertThrows(ContractViolation.class, () -> layout.read(source, parent));
+        assertEquals(4, calls[0], "Exhausted parent rejects before reading fields");
+        assertEquals(1000L, data.readLong(first, 0));
+        assertEquals("abc", data.read(first, 1));
+        assertThrows(
+            ContractViolation.class,
+            () -> layout.read(column -> column == 0 ? 40000L : "abc", null));
+        assertThrows(
+            ContractViolation.class,
+            () -> layout.read(column -> column == 0 ? 1000L : "abcd", null));
+        assertThrows(
+            ContractViolation.class, () -> layout.read(column -> column == 0 ? 1000L : null, null));
+        Exception failure = new Exception("source failed");
+        assertSame(
+            failure,
+            assertThrows(
+                Exception.class,
+                () ->
+                    layout.read(
+                        column -> {
+                          throw failure;
+                        },
+                        null)));
+      } finally {
+        context.leave();
+      }
+    }
+  }
+
+  @Test
   void staticWidthsPresenceAndLengthFacts() throws Exception {
     try (Context context = Context.newBuilder("td-test").build()) {
       context.initialize("td-test");

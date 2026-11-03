@@ -20,6 +20,7 @@ public final class JdbcCursor implements AutoCloseable, TruffleObject {
   private final @Nullable JdbcCancellation cancellation;
   private long rowsRead;
   private final JdbcSource.Decoder decoder;
+  private final StaticLayout.Source<SQLException> staticSource;
   private final @Nullable StaticLayout layout;
   private final Thread owner = Thread.currentThread();
   private boolean closed;
@@ -57,6 +58,7 @@ public final class JdbcCursor implements AutoCloseable, TruffleObject {
     this.schema = schema;
     this.limits = limits;
     this.decoder = decoder;
+    this.staticSource = column -> decoder.read(result, column + 1);
     this.layout = layout;
   }
 
@@ -219,14 +221,7 @@ public final class JdbcCursor implements AutoCloseable, TruffleObject {
         return false;
       }
       PayloadBudget budget = new PayloadBudget(limits, queryBudget);
-      budget.cells(schema.size());
-      Object[] values = new Object[schema.size()];
-      for (int i = 0; i < values.length; i++) {
-        Object value = Values.normalize(decoder.read(result, i + 1));
-        budget.accept(value);
-        values[i] = value;
-      }
-      pendingStatic = Objects.requireNonNull(layout).create(values);
+      pendingStatic = Objects.requireNonNull(layout).read(staticSource, budget);
       if (cancellation != null) cancellation.check();
       return true;
     } catch (SQLException | RuntimeException | Error failure) {
