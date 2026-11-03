@@ -147,3 +147,14 @@ includes call-target entry and result boxing amortized over 256 rows; it must no
 advertised as zero allocation. These results identify optimization work, not a
 production performance certification. Server-driver elapsed experiments and broader
 payload/projection distributions remain outstanding.
+
+### Direct static ingestion follow-up
+
+A clean `9debf6b` run repeated `staticQueryRetain` alone with the same benchmark source,
+dataset, machine, JVM, three forks and 24 measured samples. [Raw samples](../benchmarks/results/sqlite-static-9debf6b/results.json)
+and [environment](../benchmarks/results/sqlite-static-9debf6b/environment.json) are retained.
+Direct static ingestion measured 236.53 bytes/row versus the earlier 268.43, approximately
+32 bytes/row (12%) less. It removes the temporary four-element row array and combines
+payload accounting into one traversal. Query timing was 381.69 ± 3.28 ns/row; these
+separate sequential runs do not establish a general throughput improvement. Allocation
+still exceeds the plain-record baseline, and the other five cases were not remeasured.

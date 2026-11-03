@@ -189,3 +189,17 @@ Release: https://github.com/elide-dev/truffledata/releases/tag/v0.1.0-alpha.3.
 This makes the integrations consumable; it does not close the remaining production
 requirements in the table above. Earlier publication-pending notes describe historical
 increments and are superseded by this release evidence.
+
+Direct static ingestion increment: `StaticLayout.read` fills owned shape properties from
+a synchronous field source and charges local/parent budgets in the same payload walk.
+JDBC reuses one source per cursor instead of allocating a temporary row array and
+walking its payload twice. All eleven targets passed at
+https://app.buildbuddy.io/invocation/0311e0b2-a3f6-4191-bdc5-cff7fa0b1e84.
+The new mixed-record allocation gate measured 88 bytes/row against 192 in ordinary
+and compiled modes at
+https://app.buildbuddy.io/invocation/f4f13c8b-6bb2-4a0f-9b0b-34b6e9d71df7.
+Live MySQL/PostgreSQL acceptance and twelve compiled benchmark smoke cases passed.
+Three forked SQLite static-query trials measured approximately 32 fewer allocated
+bytes/row; [samples and limitations](BENCHMARKS.md#direct-static-ingestion-follow-up)
+are retained. This improves ingestion without completing physical-memory or retention
+acceptance, and is newer than the published alpha.3 artifacts.
