@@ -86,8 +86,8 @@ No dependency upgrades or query-planning functionality are introduced by this su
 
 ## Measurement and limits
 
-Each of 59 cells has three independent timing processes and three independent allocation
-processes (354 short-lived processes). Each process records three samples. Timing uses
+Each of 62 cells has three independent timing processes and three independent allocation
+processes (372 short-lived processes). Each process records three samples. Timing uses
 100 ms warmup and at least 50 ms per sample. Allocation uses fixed work: eight batches for
 ingestion or 128 batches for retained reads, with one warmup batch of the same size.
 Results report medians of process medians and the min/max process medians, not confidence
@@ -274,3 +274,11 @@ summaries with source recording hashes, sample counts, ingestion filtering, and 
 safepoint-dominance flag. The raw JFR files remain test artifacts in the linked
 BuildBuddy invocation; the repository stores summaries and full recording-off timing
 samples. No recording's absence of allocation samples is interpreted as zero allocation.
+
+Report schema 5 adds `proto-mixed-full` ingestion for stock, owned, and Buffa. It uses the
+same mixed messages but consumes every populated field, including all nested field names,
+numbers, kinds, cardinalities, packed flags, oneof strings, and the source filename. This
+checks the materialization cost when consumers read the whole message. Compiled-plan setup
+and warmup remain excluded; adaptive native string hints have seen the projection before
+measured samples. It is not a first-message or cold-plan measurement. Existing schemas and
+all prior comparison cells remain supported.

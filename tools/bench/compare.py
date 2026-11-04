@@ -13,19 +13,21 @@ import random
 import statistics
 import subprocess
 
-WORKLOADS = ('proto-scalar', 'proto-bytes', 'timestamp-json', 'mysql-int4', 'postgres-int4', 'proto-mixed')
+WORKLOADS = ('proto-scalar', 'proto-bytes', 'timestamp-json', 'mysql-int4', 'postgres-int4', 'proto-mixed', 'proto-mixed-full')
 CHECKSUMS = {'proto-scalar': 54400032992, 'proto-bytes': 2097648, 'timestamp-json': 54400032992,
-             'mysql-int4': 35472, 'postgres-int4': 35472, 'proto-mixed': 563}
+             'mysql-int4': 35472, 'postgres-int4': 35472, 'proto-mixed': 563, 'proto-mixed-full': 4866}
 
 
-def cells(schema=4):
+def cells(schema=5):
     for workload in WORKLOADS:
+        if schema < 5 and workload == 'proto-mixed-full':
+            continue
         if schema < 3 and workload == 'proto-mixed':
             continue
         engines = ('stock', 'stock-aliased', 'owned', 'buffa') if workload == 'proto-bytes' else (
             ('stock', 'owned', 'buffa') if workload.startswith('proto-') or workload == 'timestamp-json' else ('stock', 'static'))
         for engine in engines:
-            if workload == 'timestamp-json':
+            if workload in ('timestamp-json', 'proto-mixed-full'):
                 stages = ('ingest',)
             elif engine.startswith('stock'):
                 stages = ('ingest', 'read-aot')
@@ -34,7 +36,7 @@ def cells(schema=4):
                                else ('interpret', 'peak'))
             else:
                 stages = ('ingest', 'interpret', 'peak')
-            if schema >= 2 and not engine.startswith('stock') and workload != 'proto-bytes':
+            if schema >= 2 and not engine.startswith('stock') and workload not in ('proto-bytes', 'proto-mixed-full'):
                 stages = ('ingest', 'ingest-typed', *stages[1:])
             for stage in stages:
                 yield workload, engine, stage
@@ -57,7 +59,7 @@ def validate_row(row, cell, metric):
 
 
 def validate(data):
-    if data['schema'] not in (1, 2, 3, 4) or data['forks'] != 3:
+    if data['schema'] not in (1, 2, 3, 4, 5) or data['forks'] != 3:
         raise ValueError('Expected three isolated processes per cell')
     expected = set(itertools.product(cells(data['schema']), range(3)))
     seen = set()
@@ -106,7 +108,7 @@ def measure(args):
     args.output.mkdir(parents=True, exist_ok=True)
     cpu = next((line.split(':', 1)[1].strip() for line in Path('/proc/cpuinfo').read_text().splitlines()
                 if line.startswith('model name')), platform.processor())
-    data = {'schema': 4, 'forks': 3, 'captured_at': datetime.datetime.now(datetime.timezone.utc).isoformat(),
+    data = {'schema': 5, 'forks': 3, 'captured_at': datetime.datetime.now(datetime.timezone.utc).isoformat(),
             'revision': args.revision, 'binary_sha256': hashlib.sha256(binary.read_bytes()).hexdigest(),
             'host': {'system': platform.system(), 'machine': platform.machine(), 'cpu': cpu,
                      'kernel': platform.release(), 'logical_cpus': os.cpu_count()},
