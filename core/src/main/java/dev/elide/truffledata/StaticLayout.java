@@ -298,7 +298,7 @@ public final class StaticLayout {
   }
 
   @ExportLibrary(DataLibrary.class)
-  public static final class Record extends AbstractRow {
+  public static final class Record extends AbstractRow implements SnapshotStorage {
     private final StaticLayout layout;
     private final Object storage;
 
@@ -306,6 +306,14 @@ public final class StaticLayout {
       super(layout.schema);
       this.layout = layout;
       this.storage = storage;
+    }
+
+    void acceptPayload(PayloadBudget budget, int depth) {
+      // Primitive properties have already been validated and cannot contain nested payloads.
+      for (int i = 0; i < layout.properties.length; i++)
+        if (layout.storageKinds[i] == Storage.OBJECT)
+          budget.accept(
+              value(storage, layout.properties[i], Storage.OBJECT, layout.states[i]), depth);
     }
 
     @Idempotent

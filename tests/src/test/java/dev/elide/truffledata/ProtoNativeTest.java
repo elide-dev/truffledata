@@ -252,6 +252,11 @@ class ProtoNativeTest {
       var expected = Timestamp.newBuilder().setSeconds(seconds).setNanos(nanos).build();
       byte[] wire = expected.toByteArray();
       for (var row : List.of(plan.decode(wire), plan.decode(java.nio.ByteBuffer.wrap(wire)))) {
+        if (i == 0) {
+          new PayloadBudget(new Limits(1, 2, 2, 0)).accept(row);
+          assertThrows(
+              ContractViolation.class, () -> new PayloadBudget(new Limits(1, 2, 1, 0)).accept(row));
+        }
         assertEquals(seconds, DATA.readLong(row, 0));
         assertEquals((long) nanos, DATA.readLong(row, 1));
         assertEquals(seconds != 0, row.has(0));

@@ -81,8 +81,9 @@ final class ProtoCodec {
   }
 
   private static final class State {
-    final ProtoRow.Builder builder;
+    final ProtoPlan plan;
     final Object[] values;
+    final boolean[] present;
     @Nullable ByteArrayOutputStream unknown;
 
     ByteArrayOutputStream unknown() {
@@ -95,13 +96,13 @@ final class ProtoCodec {
     long retainedBytes;
 
     private void cells(long count) {
-      if (count < 0 || count > builder.plan.limits().maxCells() - retainedCells)
+      if (count < 0 || count > plan.limits().maxCells() - retainedCells)
         throw bad("Protobuf cell budget exceeded");
       retainedCells += count;
     }
 
     private void bytes(long count) {
-      if (count < 0 || count > builder.plan.limits().maxStringBytes() - retainedBytes)
+      if (count < 0 || count > plan.limits().maxStringBytes() - retainedBytes)
         throw bad("Protobuf payload budget exceeded");
       retainedBytes += count;
     }
@@ -114,8 +115,8 @@ final class ProtoCodec {
       } else if (value instanceof ProtoAccess) {
         // Only deduplicated map entries need a retained traversal. Ordinary children pass
         // their already checked totals directly to their parent before their state is released.
-        var budget = new ProtoRow.Budget(builder.plan.limits());
-        budget.value(value, depth, builder.plan.maxDepth());
+        var budget = new ProtoRow.Budget(plan.limits());
+        budget.value(value, depth, plan.maxDepth());
         cells(budget.cellCount());
         bytes(budget.byteCount());
       }
@@ -123,13 +124,16 @@ final class ProtoCodec {
 
     State(ProtoPlan plan, ProtoRow.Budget budget) {
       budget.cells(plan.size());
-      builder = new ProtoRow.Builder(plan);
-      values = builder.values;
+      this.plan = plan;
+      values = new Object[plan.size()];
+      present = new boolean[plan.size()];
+      for (int i = 0; i < values.length; i++)
+        values[i] = ProtoRow.Builder.defaultValue(plan.field(i));
     }
 
     void select(int ordinal) {
-      builder.select(ordinal);
-      builder.present[ordinal] = true;
+      ProtoRow.selectOneof(plan, values, present, ordinal);
+      present[ordinal] = true;
     }
 
     @SuppressWarnings("unchecked")
@@ -142,22 +146,22 @@ final class ProtoCodec {
         values[ordinal] = list;
       }
       list.add(value);
-      builder.present[ordinal] = true;
+      present[ordinal] = true;
     }
 
     ProtoRow finish(int depth) {
-      if (builder.plan.definition().mapEntry()
-          && builder.plan.field(1).kind().message()
+      if (plan.definition().mapEntry()
+          && plan.field(1).kind().message()
           && values[1] == Missing.INSTANCE) {
-        if (depth >= builder.plan.maxDepth()) throw bad("Map value nesting budget exceeded");
-        values[1] = builder.plan.nested(1).newBuilder().build();
-        builder.present[1] = true;
+        if (depth >= plan.maxDepth()) throw bad("Map value nesting budget exceeded");
+        values[1] = plan.nested(1).newBuilder().build();
+        present[1] = true;
       }
       retainedCells = 0;
       retainedBytes = 0;
       cells(values.length);
       for (int i = 0; i < values.length; i++) {
-        var field = builder.plan.field(i);
+        var field = plan.field(i);
         if (values[i] instanceof State nested) {
           values[i] = nested.finish(depth + 1);
           cells(nested.retainedCells);
@@ -188,17 +192,16 @@ final class ProtoCodec {
             values[i] = DataArray.copyOf(finished);
           }
         } else retained(values[i], depth);
-        if (!field.explicitPresence()) builder.present[i] = ProtoRow.nonDefault(field, values[i]);
-        if (field.required() && !builder.present[i])
-          throw bad("Missing required field: " + field.name());
+        if (!field.explicitPresence()) present[i] = ProtoRow.nonDefault(field, values[i]);
+        if (field.required() && !present[i]) throw bad("Missing required field: " + field.name());
       }
       if (unknown != null) {
         bytes(unknown.size());
-        builder.unknown = unknown.toByteArray();
       }
       // Parsing work, required fields and retained totals have all been checked. Static/batch
       // storage still validates normalized field contracts while constructing its final layout.
-      return builder.buildDecoded();
+      return ProtoRow.decoded(
+          plan, values, present, unknown == null ? null : unknown.toByteArray());
     }
   }
 
@@ -255,8 +258,8 @@ final class ProtoCodec {
           if (group != number) throw bad("Unexpected end group");
           return;
         }
-        int ordinal = state.builder.plan.ordinal(number);
-        var field = ordinal < 0 ? null : state.builder.plan.field(ordinal);
+        int ordinal = state.plan.ordinal(number);
+        var field = ordinal < 0 ? null : state.plan.field(ordinal);
         boolean packed =
             field != null && field.repeated() && field.kind().packable() && wireType == 2;
         if (field == null || (!packed && wireType != field.kind().wire)) {
@@ -292,7 +295,7 @@ final class ProtoCodec {
           State nested;
           if (!field.repeated() && state.values[ordinal] instanceof State existing)
             nested = existing;
-          else nested = new State(state.builder.plan.nested(ordinal), budget);
+          else nested = new State(state.plan.nested(ordinal), budget);
           if (!field.repeated()) state.select(ordinal);
           if (field.kind() == ProtoPlan.Kind.GROUP) message(nested, end, number, depth + 1);
           else {
@@ -307,7 +310,7 @@ final class ProtoCodec {
         } else {
           value = scalar(field.kind(), end);
           var enumeration = field.enumType();
-          if (state.builder.plan.definition().mapEntry() && ordinal == 1 && enumeration != null)
+          if (state.plan.definition().mapEntry() && ordinal == 1 && enumeration != null)
             state.invalidMapEnum = !enumeration.accepts(((Long) value).intValue());
           if (enumeration != null && !enumeration.accepts(((Long) value).intValue())) {
             retain(state, start);
@@ -323,12 +326,12 @@ final class ProtoCodec {
         }
       }
       if (group != 0) throw bad("Unterminated group");
-      if (state.builder.plan.definition().mapEntry()
-          && state.builder.plan.field(1).kind().message()
+      if (state.plan.definition().mapEntry()
+          && state.plan.field(1).kind().message()
           && state.values[1] == Missing.INSTANCE) {
         if (depth >= maxDepth) throw bad("Protobuf nesting budget exceeded");
-        state.values[1] = new State(state.builder.plan.nested(1), budget);
-        state.builder.present[1] = true;
+        state.values[1] = new State(state.plan.nested(1), budget);
+        state.present[1] = true;
       }
     }
 

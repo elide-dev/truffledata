@@ -55,6 +55,26 @@ public final class ProtoRow extends AbstractRow implements ProtoAccess {
     unknown = NO_UNKNOWN_FIELDS;
   }
 
+  /**
+   * Internal decoder-only transfer, after State.finish checks required fields and aggregate
+   * retained budgets. The caller must never reuse or expose these arrays.
+   */
+  static ProtoRow decoded(
+      ProtoPlan plan, Object[] values, boolean[] present, byte @Nullable [] unknown) {
+    return new ProtoRow(plan, values, present, unknown == null ? NO_UNKNOWN_FIELDS : unknown, true);
+  }
+
+  static void selectOneof(ProtoPlan plan, Object[] values, boolean[] present, int ordinal) {
+    int oneof = plan.field(ordinal).oneof();
+    if (oneof >= 0) {
+      for (int i = 0; i < values.length; i++)
+        if (i != ordinal && plan.field(i).oneof() == oneof) {
+          values[i] = Builder.defaultValue(plan.field(i));
+          present[i] = false;
+        }
+    }
+  }
+
   long scalar(int index) {
     Objects.checkIndex(index, descriptor.size());
     Scalars scalars = (Scalars) storage;
@@ -63,6 +83,11 @@ public final class ProtoRow extends AbstractRow implements ProtoAccess {
 
   public ProtoPlan plan() {
     return plan;
+  }
+
+  @Override
+  protected @Nullable SnapshotStorage payloadStorage() {
+    return storage instanceof SnapshotStorage snapshot ? snapshot : null;
   }
 
   @Override
@@ -194,11 +219,7 @@ public final class ProtoRow extends AbstractRow implements ProtoAccess {
     }
 
     void select(int ordinal) {
-      int oneof = plan.field(ordinal).oneof();
-      if (oneof >= 0) {
-        for (int i = 0; i < values.length; i++)
-          if (i != ordinal && plan.field(i).oneof() == oneof) clear(i);
-      }
+      selectOneof(plan, values, present, ordinal);
     }
 
     @TruffleBoundary
@@ -210,14 +231,6 @@ public final class ProtoRow extends AbstractRow implements ProtoAccess {
 
     public ProtoRow build() {
       return build(false);
-    }
-
-    /**
-     * Internal decoder-only transfer, after State.finish checks required fields and aggregate
-     * retained budgets. The caller must never reuse or expose this builder.
-     */
-    ProtoRow buildDecoded() {
-      return new ProtoRow(plan, values, present, unknown, true);
     }
 
     @TruffleBoundary

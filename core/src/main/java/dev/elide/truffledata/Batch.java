@@ -131,7 +131,7 @@ public final class Batch {
   }
 
   @ExportLibrary(DataLibrary.class)
-  public static final class Row extends AbstractRow {
+  public static final class Row extends AbstractRow implements SnapshotStorage {
     private final Batch batch;
     private final int index;
 
@@ -139,6 +139,14 @@ public final class Batch {
       super(batch.schema);
       this.batch = batch;
       this.index = index;
+    }
+
+    void acceptPayload(PayloadBudget budget, int depth) {
+      for (int i = 0; i < batch.columns.length; i++) {
+        Field.Kind kind = descriptor.field(i).kind();
+        if (kind != Field.Kind.INT64 && kind != Field.Kind.FLOAT64 && kind != Field.Kind.BOOLEAN)
+          budget.accept(batch.columns[i].read(index), depth);
+      }
     }
 
     @ExportMessage

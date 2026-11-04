@@ -94,6 +94,19 @@ is disabled. Native Image embeddings must configure assertion support and the
 property at the appropriate initialization stage; runtime toggling of a setting
 captured during image construction is not supported.
 
+Payload accounting traverses validated `StaticLayout.Record` and `Batch.Row` storage
+directly, skipping primitive properties that cannot contain nested payloads. This adds
+no per-row metadata or copies. Transparent host adapters can override the protected
+`AbstractRow.payloadStorage()` hook to return their existing `SnapshotStorage`.
+Only the two immutable core representations implement this sealed interface. The
+backing must have the identical schema and field values as the adapter, including
+null and missing states; mutable or transforming adapters must use the default
+library traversal. Schema identity is always checked. Strict mode also compares
+the facade's field values with its backing and raises `AssertionError` on a
+contradiction. Cell, string, parent and nesting budgets are unchanged. `ProtoRow`
+uses this hook for its static/column backing; compact scalar rows retain the
+ordinary traversal.
+
 Strict mode supplements the mandatory ingestion validation and mutable-source
 checks; disabling it does not authorize invalid inputs. It currently audits field
 results and row schema identity, not every ownership/lifetime invariant or an

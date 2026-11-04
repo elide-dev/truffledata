@@ -4,6 +4,7 @@ import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.dsl.*;
 import com.oracle.truffle.api.interop.*;
 import com.oracle.truffle.api.library.*;
+import org.jspecify.annotations.Nullable;
 
 /** Shared interop facade. Concrete representations export DataLibrary. */
 @ExportLibrary(InteropLibrary.class)
@@ -16,6 +17,16 @@ public abstract class AbstractRow implements TruffleObject {
 
   public final Schema schema() {
     return descriptor;
+  }
+
+  /**
+   * Optional transparent immutable backing for host-side payload accounting. The returned storage
+   * must have the identical schema and values that DataLibrary reads from this row, including null
+   * and missing states. Strict mode checks this cooperation contract. Mutable or transforming
+   * adapters must retain the default; their values are read through DataLibrary as usual.
+   */
+  protected @Nullable SnapshotStorage payloadStorage() {
+    return null;
   }
 
   @ExportMessage

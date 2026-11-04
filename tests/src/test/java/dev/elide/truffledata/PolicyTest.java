@@ -23,6 +23,7 @@ class PolicyTest {
         Map.ofEntries(
             Map.entry("Values.java", 6),
             Map.entry("DataLibrary.java", 1),
+            Map.entry("PayloadBudget.java", 1), // Strict-only immutable-backing diagnostics.
             Map.entry("Schema.java", 1),
             Map.entry("Batch.java", 2),
             Map.entry("AbstractRow.java", 1),

@@ -12,6 +12,142 @@ import org.junit.jupiter.api.Test;
 
 class CoreTest {
   @Test
+  void immutableStoragePayloadWalkPreservesExactBudgetsAndFacadeContracts() {
+    try (var context = org.graalvm.polyglot.Context.newBuilder("td-test").build()) {
+      context.initialize("td-test");
+      context.enter();
+      try {
+        var language = TestLanguage.current().language();
+        var childSchema =
+            Schema.of(Field.requiredLong("n"), new Field("s", Field.Kind.STRING, false, false));
+        var childLayout = new StaticLayout(language, childSchema, Limits.DEFAULT);
+        var schema =
+            Schema.of(
+                Field.integer("n", 8, true, true, true),
+                new Field("d", Field.Kind.FLOAT64, true, true),
+                new Field("b", Field.Kind.BOOLEAN, true, true),
+                new Field("text", Field.Kind.STRING, true, true),
+                new Field("bytes", Field.Kind.ARRAY, false, false),
+                new Field("values", Field.Kind.ARRAY, false, false),
+                new Field("child", Field.Kind.ANY, false, false),
+                new Field("exact", Field.Kind.EXACT, false, false));
+        var layout = new StaticLayout(language, schema, Limits.DEFAULT);
+        for (AbstractRow child :
+            List.of(childLayout.create(1000L, "x"), row(childSchema, 1000L, "x"))) {
+          for (Object absent : List.of(7L, DataNull.INSTANCE, Missing.INSTANCE)) {
+            Object[] values = {
+              absent,
+              absent instanceof Long ? 1.5 : absent,
+              absent instanceof Long ? true : absent,
+              "abc",
+              DataArray.copyOfBytes(new byte[] {1, 2, 3}),
+              new DataArray(new Object[] {child, "yz", 17L}),
+              child,
+              new ExactNumber(new BigDecimal("0.1"))
+            };
+            for (SnapshotStorage storage : List.of(layout.create(values), row(schema, values))) {
+              assertPayloadLimits((AbstractRow) storage, 18, 14);
+              assertPayloadLimits(new SnapshotFacade(schema, storage, values), 18, 14);
+            }
+          }
+        }
+        var stored = childLayout.create(1000L, "x");
+        var dishonest = new SnapshotFacade(childSchema, stored, new Object[] {1000L, "more"});
+        assertThrows(
+            AssertionError.class, () -> new PayloadBudget(Limits.DEFAULT).accept(dishonest));
+        var otherSchema = Schema.of(childSchema.field(0), childSchema.field(1));
+        var wrongSchema = new SnapshotFacade(otherSchema, stored, new Object[] {1000L, "x"});
+        assertThrows(
+            ContractViolation.class, () -> new PayloadBudget(Limits.DEFAULT).accept(wrongSchema));
+      } finally {
+        context.leave();
+      }
+    }
+  }
+
+  private static void assertPayloadLimits(AbstractRow row, long cells, long bytes) {
+    new PayloadBudget(new Limits(1, row.schema().size(), cells, bytes)).accept(row);
+    assertThrows(
+        ContractViolation.class,
+        () -> new PayloadBudget(new Limits(1, row.schema().size(), cells - 1, bytes)).accept(row));
+    assertThrows(
+        ContractViolation.class,
+        () -> new PayloadBudget(new Limits(1, row.schema().size(), cells, bytes - 1)).accept(row));
+    var parent = new PayloadBudget(new Limits(1, row.schema().size(), cells * 2, bytes * 2));
+    new PayloadBudget(Limits.DEFAULT, parent).accept(row);
+    new PayloadBudget(Limits.DEFAULT, parent).accept(row);
+    assertThrows(
+        ContractViolation.class, () -> new PayloadBudget(Limits.DEFAULT, parent).accept(row));
+  }
+
+  @Test
+  void immutableStoragePreservesDepthLimitsIncludingPrimitiveAndEmptyRows() {
+    try (var context = org.graalvm.polyglot.Context.newBuilder("td-test").build()) {
+      context.initialize("td-test");
+      context.enter();
+      try {
+        for (var schema :
+            List.of(
+                Schema.of(),
+                Schema.of(Field.requiredLong("n")),
+                Schema.of(new Field("s", Field.Kind.STRING, false, false)))) {
+          Object[] values =
+              schema.size() == 0
+                  ? new Object[0]
+                  : new Object[] {schema.field(0).kind() == Field.Kind.INT64 ? 1000L : "x"};
+          var layout = new StaticLayout(TestLanguage.current().language(), schema, Limits.DEFAULT);
+          for (SnapshotStorage storage : List.of(layout.create(values), row(schema, values))) {
+            for (AbstractRow tested :
+                List.of((AbstractRow) storage, new SnapshotFacade(schema, storage, values))) {
+              Object nested = tested;
+              for (int i = 0; i < 127; i++) nested = new DataArray(new Object[] {nested});
+              new PayloadBudget(Limits.DEFAULT).accept(nested);
+              Object atLimit = new DataArray(new Object[] {nested});
+              if (schema.size() == 0) new PayloadBudget(Limits.DEFAULT).accept(atLimit);
+              else
+                assertThrows(
+                    ContractViolation.class,
+                    () -> new PayloadBudget(Limits.DEFAULT).accept(atLimit));
+              Object tooDeep = new DataArray(new Object[] {atLimit});
+              assertThrows(
+                  ContractViolation.class, () -> new PayloadBudget(Limits.DEFAULT).accept(tooDeep));
+            }
+          }
+        }
+      } finally {
+        context.leave();
+      }
+    }
+  }
+
+  @com.oracle.truffle.api.library.ExportLibrary(DataLibrary.class)
+  static final class SnapshotFacade extends AbstractRow {
+    private final SnapshotStorage storage;
+    private final Object[] values;
+
+    SnapshotFacade(Schema schema, SnapshotStorage storage, Object[] values) {
+      super(schema);
+      this.storage = storage;
+      this.values = values;
+    }
+
+    @Override
+    protected SnapshotStorage payloadStorage() {
+      return storage;
+    }
+
+    @com.oracle.truffle.api.library.ExportMessage
+    Schema getSchema() {
+      return descriptor;
+    }
+
+    @com.oracle.truffle.api.library.ExportMessage
+    Object read(int index) {
+      return values[index];
+    }
+  }
+
+  @Test
   void directPrimitiveStaticAccessPreservesStatesAndParentBudgets() {
     try (var context = org.graalvm.polyglot.Context.newBuilder("td-test").build()) {
       context.initialize("td-test");
