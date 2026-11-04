@@ -223,3 +223,8 @@ Native materialization reuses the plan validation of standard absent/default val
 of validating them for every message. The shortcut requires exact equality with the standard
 field contract; richer contracts retain value validation. Required-field, wire, UTF-8, depth,
 and cumulative budget checks still run before a result is returned.
+
+Repeated native fields materialize into privately owned arrays which transfer to the final
+view after merges and validation. The decoder sizes the current contiguous run from the
+native index; interleaved fields and later message merges grow storage geometrically, bounded
+by index cardinality. Empty views still share storage only within their owning message.

@@ -18,6 +18,55 @@ final class TypedAcceptance {
         .type("truffledata.lossless." + name);
   }
 
+  private static void mergedRepeated(BuffaWire decoder) {
+    var numbers =
+        new ProtoPlan.FieldPlan(
+            "numbers", 1, ProtoPlan.Kind.INT32, true, false, false, false, false, -1, "", null, 0L);
+    var child =
+        new ProtoPlan.FieldPlan(
+            "child",
+            2,
+            ProtoPlan.Kind.MESSAGE,
+            false,
+            false,
+            true,
+            false,
+            false,
+            -1,
+            "RepeatedMerge",
+            null,
+            Missing.INSTANCE);
+    var plan =
+        new ProtoPlan.Model(
+                null,
+                List.of(new ProtoPlan.Type("RepeatedMerge", false, List.of(numbers, child))),
+                Limits.DEFAULT,
+                16,
+                65536)
+            .type("RepeatedMerge");
+    byte[] merged = {18, 2, 8, 1, 18, 4, 8, 2, 8, 3};
+    equal(plan.parseText("child { numbers: [1,2,3] }"), plan.decode(merged));
+    var interleaved = new java.io.ByteArrayOutputStream();
+    for (int i = 0; i < 33; i++) {
+      interleaved.write(8);
+      interleaved.write(i);
+      interleaved.write(18);
+      interleaved.write(0);
+    }
+    try (var compiled = decoder.compile(plan, 65536)) {
+      for (byte[] wire : List.of(merged, interleaved.toByteArray())) {
+        var expected = plan.decode(wire);
+        try (var input = decoder.allocate(wire.length).put(wire);
+            var parsed = compiled.decode(input, NATIVE)) {
+          equal(expected, parsed.row());
+          equal(expected, parsed.snapshot());
+          input.close();
+          equal(expected, parsed.row());
+        }
+      }
+    }
+  }
+
   /** Exercise both sides of the packed presence boundary, including the sign bit. */
   private static void presenceWidths(BuffaWire decoder) {
     for (int size : new int[] {0, 1, 63, 64, 65, 129}) {
@@ -86,6 +135,7 @@ final class TypedAcceptance {
   }
 
   static void run(BuffaWire decoder) throws Exception {
+    mergedRepeated(decoder);
     presenceWidths(decoder);
     unreadStrings(decoder);
     stringsRemainFreshAfterProfileWarmup(decoder);

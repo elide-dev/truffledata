@@ -198,6 +198,42 @@ public final class BuffaPlan implements AutoCloseable {
     }
   }
 
+  /** Private staging storage is transferred once after all protobuf merges finish. */
+  private static final class Repeated {
+    Object[] items = State.EMPTY_ITEMS;
+    int size;
+
+    void add(Object value, BuffaWire.Tape tape, int index, int end, int ordinal) {
+      if (size == items.length) {
+        int count = 0;
+        for (int cursor = index; cursor < end; ) {
+          int at = Math.multiplyExact(cursor, Buffa.Field.SIZE);
+          int number = tape.bytes.getInt(at + (int) BuffaFFM.Field_number_OFFSET);
+          int next = Math.toIntExact(tape.bytes.getLong(at + (int) BuffaFFM.Field_end_OFFSET));
+          if (next <= cursor || next > end)
+            throw new IllegalStateException("Invalid repeated index");
+          if (number != ordinal + 1) break;
+          count++;
+          cursor = next;
+        }
+        if (count == 0) throw new IllegalStateException("Missing repeated index");
+        // A later singular-message merge can append another segment to this repeated field.
+        int required = Math.addExact(size, count);
+        int capacity =
+            items.length == 0
+                ? required
+                : Math.max(required, (int) Math.min(tape.count, 2L * items.length));
+        items = Arrays.copyOf(items, capacity);
+      }
+      items[size++] = value;
+    }
+
+    Object[] finish() {
+      // Skipped null markers or invalid map entries can leave unused capacity.
+      return size == items.length ? items : Arrays.copyOf(items, size);
+    }
+  }
+
   private static final class State {
     private static final boolean[] NO_SEEN_FIELDS = new boolean[0];
     private static final Object[] EMPTY_ITEMS = new Object[0];
@@ -232,7 +268,7 @@ public final class BuffaPlan implements AutoCloseable {
     }
 
     static Object initial(ProtoPlan.FieldPlan field) {
-      return field.repeated() ? List.of() : field.defaultValue();
+      return field.repeated() ? EMPTY_ITEMS : field.defaultValue();
     }
 
     void select(int ordinal) {
@@ -248,7 +284,6 @@ public final class BuffaPlan implements AutoCloseable {
         }
     }
 
-    @SuppressWarnings("unchecked")
     void consume(BuffaWire.Tape tape, int start, int end) {
       for (int index = start; index < end; ) {
         context.charge(1);
@@ -355,13 +390,13 @@ public final class BuffaPlan implements AutoCloseable {
                 default -> value;
               };
         if (f.repeated()) {
-          List<Object> items;
-          if (values[ordinal] instanceof ArrayList<?>) items = (List<Object>) values[ordinal];
+          Repeated items;
+          if (values[ordinal] instanceof Repeated existing) items = existing;
           else {
-            items = new ArrayList<>();
+            items = new Repeated();
             values[ordinal] = items;
           }
-          items.add(decoded);
+          items.add(decoded, tape, index, end, ordinal);
         } else {
           select(ordinal);
           values[ordinal] = decoded;
@@ -382,11 +417,12 @@ public final class BuffaPlan implements AutoCloseable {
       for (int i = 0; i < values.length; i++) {
         var field = plan.field(i);
         if (values[i] instanceof State child) values[i] = child.finish(depth + 1);
-        else if (values[i] instanceof List<?> list) {
-          Object[] items = list.isEmpty() ? EMPTY_ITEMS : new Object[list.size()];
-          Map<Object, Object> keys = field.map() && !list.isEmpty() ? new LinkedHashMap<>() : null;
+        else if (field.repeated()) {
+          Object[] items = values[i] instanceof Repeated repeated ? repeated.finish() : EMPTY_ITEMS;
+          Map<Object, Object> keys =
+              field.map() && items.length != 0 ? new LinkedHashMap<>() : null;
           for (int j = 0; j < items.length; j++) {
-            Object item = list.get(j);
+            Object item = items[j];
             items[j] = item instanceof State child ? child.finish(depth + 1) : item;
             if (keys != null) {
               Object key = DataLibrary.factory().getUncached().read(items[j], 0);
