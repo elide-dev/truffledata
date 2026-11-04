@@ -1,5 +1,45 @@
 # SVM comparison benchmarks
 
+## Release 0.3.0 measurements
+
+The [0.3.0 run](https://github.com/elide-dev/truffledata/actions/runs/41766750084)
+passed all 62 cells on release commit `98a8c6304a40`, using Elide GraalVM
+`25.5.5-elide.24`. Each cell has three fresh timing forks and three separate
+allocation forks. [Raw JSON](../benchmarks/results/svm-comparison-0.3.0/comparison.json)
+and the [full table](../benchmarks/results/svm-comparison-0.3.0/comparison.md) include
+interpreter, peak JIT, ingestion, and direct AOT baselines. The
+[0.2.0 baseline](../benchmarks/results/svm-comparison-0.2.0/comparison.md) remains available.
+
+![Interpreter reads](images/comparison-interpreter.svg)
+
+![Peak JIT reads](images/comparison-peak.svg)
+
+![Ingestion Java heap allocations](images/comparison-allocations.svg)
+
+Buffa's nested-message projected ingestion uses 1,767.75 Java heap bytes/message,
+versus stock's 1,776.75; full consumption uses 1,894.25 versus 1,776.75. These allocation
+counts are unchanged from 0.2.0. Projected Buffa ingestion measured 3.88 µs/message
+and full consumption 4.65 µs/message in this run. This does not establish a universal
+performance win: stock remains faster in several paths, timings come from shared
+runners, and Java heap counters exclude native memory. BytesValue ownership differs
+between engines; the aliased stock baseline is shown explicitly. SQL cases measure
+INT4 decoder functions, not servers, transport, or complete JDBC queries. Stock mixed
+message guest reads use the explicitly marked boundary variant.
+
+To regenerate the SVG/PNG graphics and provenance manifest:
+
+```sh
+python3 -m venv build/plot-venv
+build/plot-venv/bin/pip install -r tools/bench/plot-requirements.txt
+build/plot-venv/bin/python tools/bench/plot_comparison.py \
+  benchmarks/results/svm-comparison-0.3.0/comparison.json docs/images --label 0.3.0
+```
+
+The [manifest](images/comparison-manifest.json) records the source data hash,
+measured binary hash, revision, and plotting-library version. PNG copies are next
+to the SVG files, and release assets include both formats.
+
+
 This small suite compares TruffleData with protobuf Java's generated-message APIs and
 stock MySQL/Postgres integer decoding. One SVM image includes all engines; each measured
 cell runs in a fresh process. The default CI smoke checks correctness, execution tiers,

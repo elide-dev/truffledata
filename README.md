@@ -94,3 +94,10 @@ This is a foundation, not an Elide production integration. The database tests us
 ## Optional native wire backend
 
 [The Myna/Buffa integration](docs/BUFFA.md) adds borrowed wire and typed decoding, native schema-aware text parsing, explicit off-heap ownership, JVM FFM and static SVM linkage, with Java fallback. Build it with `//protobuf-buffa`; version 0.2.0 includes Maven artifacts and Linux x86-64 native attachments.
+
+## Release performance results
+
+[0.3.0 comparison results and graphics](docs/COMPARISON_BENCHMARKS.md#release-030-measurements)
+cover interpreter reads, peak JIT reads, and ingestion allocations across protobuf,
+MySQL, and PostgreSQL cases. Raw measurements and the 0.2.0 baseline are included;
+Java heap counts exclude native memory and SQL cases cover decoder functions only.
