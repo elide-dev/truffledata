@@ -7,12 +7,13 @@ import dev.elide.truffledata.protobuf.*;
 import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
+import org.jspecify.annotations.Nullable;
 
 /** Reusable schema program shared by native binary, textproto and ProtoJSON ingestion. */
 public final class BuffaPlan implements AutoCloseable {
   private final BuffaWire decoder;
   private final ProtoPlan plan;
-  private final List<ProtoPlan> types;
+  private final ReadProfile profile;
   private final List<ProtoPlan> anyTypes;
   private final WireInput schema;
   private final WireInput empty;
@@ -22,8 +23,9 @@ public final class BuffaPlan implements AutoCloseable {
     this.decoder = decoder;
     this.plan = Objects.requireNonNull(plan);
     this.anyTypes = List.copyOf(anyTypes);
-    types = NativeSchema.types(plan, this.anyTypes, maxSchemaBytes);
+    var types = NativeSchema.types(plan, this.anyTypes, maxSchemaBytes);
     byte[] program = NativeSchema.encode(types, this.anyTypes, maxSchemaBytes);
+    profile = new ReadProfile(types);
     schema = decoder.allocate(program.length).put(program);
     try {
       empty = decoder.allocate(0);
@@ -91,7 +93,8 @@ public final class BuffaPlan implements AutoCloseable {
         return new TypedMessage(owner, fromJava(owner, owned), format == 0, 0);
       }
       try (var tape = backend.typed(schema, input, format, payload, plan, nativeBytes)) {
-        State state = new State(plan, owner, format, new long[] {plan.limits().maxCells()}, types);
+        State state =
+            new State(plan, new DecodeContext(owner, format, plan.limits().maxCells(), profile));
         state.consume(tape, 0, tape.count);
         return new TypedMessage(owner, state.finish(1), format == 0, tape.allocated);
       }
@@ -105,13 +108,18 @@ public final class BuffaPlan implements AutoCloseable {
 
   private static TypedRow fromJava(WireMessage owner, ProtoRow row) {
     Object[] values = new Object[row.plan().size()];
-    boolean[] present = new boolean[values.length];
+    boolean[] present =
+        values.length > Long.SIZE ? new boolean[values.length] : State.NO_SEEN_FIELDS;
+    long presenceBits = 0;
     var data = DataLibrary.factory().getUncached();
     for (int i = 0; i < values.length; i++) {
       values[i] = javaValue(owner, data.read(row, i));
-      present[i] = row.has(i);
+      if (row.has(i)) {
+        if (present.length == 0) presenceBits |= 1L << i;
+        else present[i] = true;
+      }
     }
-    return new TypedRow(owner, row.plan(), values, present);
+    return new TypedRow(owner, row.plan(), values, presenceBits, present);
   }
 
   private static Object javaValue(WireMessage owner, Object value) {
@@ -135,39 +143,132 @@ public final class BuffaPlan implements AutoCloseable {
     }
   }
 
+  /** Thread-confined, bounded hints: reading a string makes later values eager for that field. */
+  private static final class ReadProfile {
+    final List<ProtoPlan> types;
+    final Map<String, TypeProfile> byType;
+
+    ReadProfile(List<ProtoPlan> types) {
+      this.types = types;
+      Map<String, TypeProfile> profiles = new HashMap<>();
+      for (ProtoPlan type : types) profiles.put(type.name(), new TypeProfile(type));
+      byType = Map.copyOf(profiles);
+    }
+  }
+
+  /** Defaults are validated by FieldPlan; richer contracts keep the general validation route. */
+  private static final class TypeProfile {
+    final boolean[] stringReads;
+    final boolean[] standardDefaults;
+
+    TypeProfile(ProtoPlan plan) {
+      stringReads = new boolean[plan.size()];
+      standardDefaults = new boolean[plan.size()];
+      for (int i = 0; i < plan.size(); i++) {
+        standardDefaults[i] = plan.schema().field(i).equals(plan.field(i).contract());
+      }
+    }
+  }
+
+  /** Shared per-decode state; nested messages must charge one cumulative cell budget. */
+  private static final class DecodeContext {
+    final WireMessage owner;
+    final int format;
+    final ReadProfile profile;
+    long cells;
+    private @Nullable TypedArray emptyArray;
+
+    DecodeContext(WireMessage owner, int format, long cells, ReadProfile profile) {
+      this.owner = owner;
+      this.format = format;
+      this.cells = cells;
+      this.profile = profile;
+    }
+
+    TypedArray emptyArray() {
+      TypedArray result = emptyArray;
+      if (result == null) emptyArray = result = new TypedArray(owner, State.EMPTY_ITEMS);
+      return result;
+    }
+
+    void charge(long count) {
+      if (count < 0 || count > cells)
+        throw new ContractViolation("Typed materialization cell budget");
+      cells -= count;
+    }
+  }
+
+  /** Private staging storage is transferred once after all protobuf merges finish. */
+  private static final class Repeated {
+    Object[] items = State.EMPTY_ITEMS;
+    int size;
+
+    void add(Object value, BuffaWire.Tape tape, int index, int end, int ordinal) {
+      if (size == items.length) {
+        int count = 0;
+        for (int cursor = index; cursor < end; ) {
+          int at = Math.multiplyExact(cursor, Buffa.Field.SIZE);
+          int number = tape.bytes.getInt(at + (int) BuffaFFM.Field_number_OFFSET);
+          int next = Math.toIntExact(tape.bytes.getLong(at + (int) BuffaFFM.Field_end_OFFSET));
+          if (next <= cursor || next > end)
+            throw new IllegalStateException("Invalid repeated index");
+          if (number != ordinal + 1) break;
+          count++;
+          cursor = next;
+        }
+        if (count == 0) throw new IllegalStateException("Missing repeated index");
+        // A later singular-message merge can append another segment to this repeated field.
+        int required = Math.addExact(size, count);
+        int capacity =
+            items.length == 0
+                ? required
+                : Math.max(required, (int) Math.min(tape.count, 2L * items.length));
+        items = Arrays.copyOf(items, capacity);
+      }
+      items[size++] = value;
+    }
+
+    Object[] finish() {
+      // Skipped null markers or invalid map entries can leave unused capacity.
+      return size == items.length ? items : Arrays.copyOf(items, size);
+    }
+  }
+
   private static final class State {
     private static final boolean[] NO_SEEN_FIELDS = new boolean[0];
     private static final Object[] EMPTY_ITEMS = new Object[0];
     final ProtoPlan plan;
-    final WireMessage owner;
-    final int format;
-    final long[] cells;
-    final List<ProtoPlan> types;
+    final DecodeContext context;
+    final TypeProfile hints;
     final Object[] values;
     final boolean[] present;
+    long presenceBits;
     final boolean[] seen;
 
-    State(ProtoPlan plan, WireMessage owner, int format, long[] cells, List<ProtoPlan> types) {
+    State(ProtoPlan plan, DecodeContext context) {
       this.plan = plan;
-      this.owner = owner;
-      this.format = format;
-      this.cells = cells;
-      this.types = types;
-      charge(plan.size());
+      this.context = context;
+      hints = Objects.requireNonNull(context.profile.byType.get(plan.name()));
+      context.charge(plan.size());
       values = new Object[plan.size()];
-      present = new boolean[values.length];
+      present = values.length > Long.SIZE ? new boolean[values.length] : NO_SEEN_FIELDS;
       // Binary protobuf permits duplicate fields; only text formats track duplicates.
-      seen = format == 0 ? NO_SEEN_FIELDS : new boolean[values.length];
+      seen = context.format == 0 ? NO_SEEN_FIELDS : new boolean[values.length];
       for (int i = 0; i < values.length; i++) values[i] = initial(plan.field(i));
     }
 
-    void charge(long count) {
-      if (count > cells[0]) throw new ContractViolation("Typed materialization cell budget");
-      cells[0] -= count;
+    boolean present(int ordinal) {
+      return present.length == 0 ? (presenceBits & (1L << ordinal)) != 0 : present[ordinal];
+    }
+
+    void present(int ordinal, boolean value) {
+      if (present.length != 0) present[ordinal] = value;
+      else if (value) presenceBits |= 1L << ordinal;
+      else presenceBits &= ~(1L << ordinal);
     }
 
     static Object initial(ProtoPlan.FieldPlan field) {
-      return field.repeated() ? List.of() : field.defaultValue();
+      return field.repeated() ? EMPTY_ITEMS : field.defaultValue();
     }
 
     void select(int ordinal) {
@@ -175,17 +276,17 @@ public final class BuffaPlan implements AutoCloseable {
       if (field.oneof() >= 0)
         for (int i = 0; i < values.length; i++) {
           if (i != ordinal && plan.field(i).oneof() == field.oneof()) {
-            if (format != 0 && present[i]) throw new ContractViolation("Multiple oneof members");
+            if (context.format != 0 && present(i))
+              throw new ContractViolation("Multiple oneof members");
             values[i] = initial(plan.field(i));
-            present[i] = false;
+            present(i, false);
           }
         }
     }
 
-    @SuppressWarnings("unchecked")
     void consume(BuffaWire.Tape tape, int start, int end) {
       for (int index = start; index < end; ) {
-        charge(1);
+        context.charge(1);
         int at = index * Buffa.Field.SIZE;
         int ordinal = tape.bytes.getInt(at + (int) BuffaFFM.Field_number_OFFSET) - 1;
         int kind = tape.bytes.getInt(at + (int) BuffaFFM.Field_wire_OFFSET);
@@ -196,7 +297,7 @@ public final class BuffaPlan implements AutoCloseable {
           throw new IllegalStateException("Invalid native typed index");
         var f = plan.field(ordinal);
         if (kind == 100) {
-          if (format != 2 || !f.repeated() || seen[ordinal])
+          if (context.format != 2 || !f.repeated() || seen[ordinal])
             throw new ContractViolation("Duplicate JSON field");
           seen[ordinal] = true;
           index = next;
@@ -205,7 +306,7 @@ public final class BuffaPlan implements AutoCloseable {
         boolean nullEnum =
             f.enumType() != null && f.enumType().name().equals("google.protobuf.NullValue");
         if (kind == 0) {
-          if (format != 2) throw new IllegalStateException("Unexpected null marker");
+          if (context.format != 2) throw new IllegalStateException("Unexpected null marker");
           if (length == 0 && (f.repeated() || !nullEnum)) {
             if (seen[ordinal]) throw new ContractViolation("Duplicate JSON field");
             seen[ordinal] = true;
@@ -214,39 +315,40 @@ public final class BuffaPlan implements AutoCloseable {
           }
           if (!nullEnum) throw new ContractViolation("Null JSON element");
         }
-        if (!f.repeated() && format != 0 && seen[ordinal])
+        if (!f.repeated() && context.format != 0 && seen[ordinal])
           throw new ContractViolation("Duplicate singular field");
-        if (format != 0) seen[ordinal] = true;
+        if (context.format != 0) seen[ordinal] = true;
         if (kind == 101) {
-          if (format != 2
+          if (context.format != 2
               || plan.jsonType() != ProtoJsonType.ANY
               || f.number() != 2
               || value < 0
-              || value >= types.size()) throw new IllegalStateException("Invalid Any index");
-          ProtoPlan target = types.get((int) value);
-          State payload = new State(target, owner, format, cells, types);
+              || value >= context.profile.types.size())
+            throw new IllegalStateException("Invalid Any index");
+          ProtoPlan target = context.profile.types.get((int) value);
+          State payload = new State(target, context);
           payload.consume(tape, index + 1, next);
           byte[] encoded = target.encode(payload.finish(1).snapshot());
-          charge(encoded.length);
+          context.charge(encoded.length);
           values[ordinal] = DataArray.copyOfBytes(encoded);
-          present[ordinal] = encoded.length != 0;
+          present(ordinal, encoded.length != 0);
           index = next;
           continue;
         }
         if (kind != 0 && kind != f.kind().ordinal() + 1)
           throw new IllegalStateException("Native kind mismatch");
-        if (f.map() && format == 0 && length != 0) {
+        if (f.map() && context.format == 0 && length != 0) {
           index = next;
           continue;
         }
-        if (f.kind() == ProtoPlan.Kind.BYTES) charge(length);
+        if (f.kind() == ProtoPlan.Kind.BYTES) context.charge(length);
         Object decoded;
         if (f.kind().message()) {
           if (!f.repeated()) select(ordinal);
           State child =
               !f.repeated() && values[ordinal] instanceof State old
                   ? old
-                  : new State(plan.nested(ordinal), owner, format, cells, types);
+                  : new State(plan.nested(ordinal), context);
           child.consume(tape, index + 1, next);
           decoded = child;
         } else if (kind == 0) decoded = 0L;
@@ -254,16 +356,27 @@ public final class BuffaPlan implements AutoCloseable {
           decoded =
               switch (f.kind()) {
                 case STRING -> {
-                  // Native decoding has validated UTF-8. Materialize once without CharsetDecoder,
-                  // sliced buffers, or an intermediate UTF-16 character buffer.
-                  owner.lease.check();
+                  // Singular unconstrained strings can remain in sealed source memory until read.
+                  // Repeated strings still materialize for element-contract validation below.
+                  if (!f.repeated()
+                      && ((String) f.defaultValue()).isEmpty()
+                      && !hints.stringReads[ordinal])
+                    yield length == 0
+                        ? ""
+                        : new TypedRow.Utf8(
+                            context.owner,
+                            Math.toIntExact(value),
+                            length,
+                            hints.stringReads,
+                            ordinal);
+                  context.owner.lease.check();
                   int offset = Math.toIntExact(value);
-                  Objects.checkFromIndexSize(offset, length, owner.lease.bytes.capacity());
+                  Objects.checkFromIndexSize(offset, length, context.owner.lease.bytes.capacity());
                   byte[] utf8 = new byte[length];
-                  owner.lease.bytes.get(offset, utf8);
+                  context.owner.lease.bytes.get(offset, utf8);
                   yield new String(utf8, StandardCharsets.UTF_8);
                 }
-                case BYTES -> new BorrowedBytes(owner, Math.toIntExact(value), length);
+                case BYTES -> new BorrowedBytes(context.owner, Math.toIntExact(value), length);
                 case DOUBLE -> Double.longBitsToDouble(value);
                 case FLOAT -> (double) Float.intBitsToFloat((int) value);
                 case BOOL -> value != 0;
@@ -277,18 +390,18 @@ public final class BuffaPlan implements AutoCloseable {
                 default -> value;
               };
         if (f.repeated()) {
-          List<Object> items;
-          if (values[ordinal] instanceof ArrayList<?>) items = (List<Object>) values[ordinal];
+          Repeated items;
+          if (values[ordinal] instanceof Repeated existing) items = existing;
           else {
-            items = new ArrayList<>();
+            items = new Repeated();
             values[ordinal] = items;
           }
-          items.add(decoded);
+          items.add(decoded, tape, index, end, ordinal);
         } else {
           select(ordinal);
           values[ordinal] = decoded;
         }
-        present[ordinal] = true;
+        present(ordinal, true);
         index = next;
       }
     }
@@ -298,35 +411,53 @@ public final class BuffaPlan implements AutoCloseable {
       if (plan.definition().mapEntry()
           && plan.field(1).kind().message()
           && values[1] == Missing.INSTANCE) {
-        values[1] = new State(plan.nested(1), owner, format, cells, types);
-        present[1] = true;
+        values[1] = new State(plan.nested(1), context);
+        present(1, true);
       }
       for (int i = 0; i < values.length; i++) {
         var field = plan.field(i);
         if (values[i] instanceof State child) values[i] = child.finish(depth + 1);
-        else if (values[i] instanceof List<?> list) {
-          Object[] items = list.isEmpty() ? EMPTY_ITEMS : new Object[list.size()];
-          Map<Object, Object> keys = field.map() && !list.isEmpty() ? new LinkedHashMap<>() : null;
+        else if (field.repeated()) {
+          Object[] items = values[i] instanceof Repeated repeated ? repeated.finish() : EMPTY_ITEMS;
+          Map<Object, Object> keys =
+              field.map() && items.length != 0 ? new LinkedHashMap<>() : null;
           for (int j = 0; j < items.length; j++) {
-            Object item = list.get(j);
+            Object item = items[j];
             items[j] = item instanceof State child ? child.finish(depth + 1) : item;
             if (keys != null) {
               Object key = DataLibrary.factory().getUncached().read(items[j], 0);
               if (key instanceof ExactNumber number) key = number.decimal().toBigIntegerExact();
-              if (keys.put(key, items[j]) != null && format == 2)
+              if (keys.put(key, items[j]) != null && context.format == 2)
                 throw new ContractViolation("Duplicate JSON map key");
             }
           }
-          values[i] = new TypedArray(owner, keys != null ? keys.values().toArray() : items);
+          values[i] =
+              items.length == 0
+                  ? context.emptyArray()
+                  : new TypedArray(context.owner, keys != null ? keys.values().toArray() : items);
         }
-        if (!field.explicitPresence()) present[i] = nonDefault(field, values[i]);
-        if (field.required() && !present[i]) throw new ContractViolation("Missing required field");
-        Values.validate(plan.schema().field(i), values[i]);
+        if (!field.explicitPresence()) present(i, nonDefault(field, values[i]));
+        if (field.required() && !present(i)) throw new ContractViolation("Missing required field");
+        // Absent scalars carry validated defaults; absent repeated fields are empty typed arrays.
+        // Required-field and native input checks remain above this shortcut.
+        if (!present(i) && hints.standardDefaults[i]) continue;
+        if (values[i] instanceof TypedRow.Utf8 text) {
+          // FieldPlan supplies the standard STRING contract, and native parsing has already
+          // validated its type, UTF-8 and cumulative payload budget. Never bypass richer facts.
+          var contract = plan.schema().field(i);
+          if (contract.kind() != Field.Kind.STRING
+              || !contract.constraints().equals(Constraints.NONE))
+            Values.validate(contract, text.value(context.owner));
+        } else {
+          Values.validate(plan.schema().field(i), values[i]);
+        }
       }
-      return new TypedRow(owner, plan, values, present);
+      return new TypedRow(context.owner, plan, values, presenceBits, present);
     }
 
     private static boolean nonDefault(ProtoPlan.FieldPlan field, Object value) {
+      // Deferred strings are nonempty and only used with the empty default.
+      if (value instanceof TypedRow.Utf8) return true;
       if (value instanceof BorrowedArray a) return a.size() != 0;
       if (value instanceof DataArray a) return a.size() != 0;
       if (value instanceof ExactNumber n && field.defaultValue() instanceof ExactNumber d)

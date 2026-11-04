@@ -112,7 +112,16 @@ try (var compiled = decoder.compile(plan, 64 << 10);
 
 On a native backend, these three methods parse in Rust. Binary byte fields borrow the
 sealed input, including nested and repeated payloads. Text unescaping/base64 decoding
-writes into a retained native payload region; strings become Java strings. Repeated and
+writes into a retained native payload region. Singular strings with empty defaults defer
+Java materialization until first access; subsequent reads return the same Java String.
+Each compiled plan remembers which string fields have been read and eagerly materializes
+those fields on later messages. These bounded, thread-confined flags guide allocation only;
+values and validation remain message-specific. The first encounter may allocate a deferred
+holder, while stable projections avoid holders for fields they consistently read.
+Native parsing still validates UTF-8 and cumulative payload budgets before returning.
+Repeated strings and nonempty defaults materialize during ingestion, and any richer string
+contract forces validation before returning. The deferred holder memoizes without mutating
+compilation-final row storage or invalidating guest code for each new message. Repeated and
 map fields are `TypedArray` values. Guest reads use Java/Truffle accessors without native
 calls. The temporary native index is released before ingestion returns. Closing the
 message invalidates every scoped row and array; closing its input, compiled plan, or
@@ -200,3 +209,22 @@ measured Java allocations per native parsed message were 1,752 bytes for Timesta
 8,208 for descriptor-bound compatibility parsing, 1,624 versus 3,840 for Int64Value, and
 2,352 versus 5,000 for FieldMask. CI caps each native case at 16 KiB. These figures exclude
 native heap allocations and do not establish throughput gains.
+
+Empty repeated-field views share one immutable view per decoded native message, including
+its nested rows. This avoids a wrapper allocation for each empty field. Views from different
+messages retain independent leases; closing a message invalidates all its empty views, while
+detached snapshots remain readable.
+
+Typed rows with at most 64 fields store protobuf presence in a primitive bit mask. Wider
+schemas retain an indexed presence array. Explicit default values, oneof clearing, snapshots,
+and bounds checks have the same semantics in both representations and in the Java fallback.
+
+Native materialization reuses the plan validation of standard absent/default values instead
+of validating them for every message. The shortcut requires exact equality with the standard
+field contract; richer contracts retain value validation. Required-field, wire, UTF-8, depth,
+and cumulative budget checks still run before a result is returned.
+
+Repeated native fields materialize into privately owned arrays which transfer to the final
+view after merges and validation. The decoder sizes the current contiguous run from the
+native index; interleaved fields and later message merges grow storage geometrically, bounded
+by index cardinality. Empty views still share storage only within their owning message.

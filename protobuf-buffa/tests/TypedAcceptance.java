@@ -18,13 +18,134 @@ final class TypedAcceptance {
         .type("truffledata.lossless." + name);
   }
 
+  private static void mergedRepeated(BuffaWire decoder) {
+    var numbers =
+        new ProtoPlan.FieldPlan(
+            "numbers", 1, ProtoPlan.Kind.INT32, true, false, false, false, false, -1, "", null, 0L);
+    var child =
+        new ProtoPlan.FieldPlan(
+            "child",
+            2,
+            ProtoPlan.Kind.MESSAGE,
+            false,
+            false,
+            true,
+            false,
+            false,
+            -1,
+            "RepeatedMerge",
+            null,
+            Missing.INSTANCE);
+    var plan =
+        new ProtoPlan.Model(
+                null,
+                List.of(new ProtoPlan.Type("RepeatedMerge", false, List.of(numbers, child))),
+                Limits.DEFAULT,
+                16,
+                65536)
+            .type("RepeatedMerge");
+    byte[] merged = {18, 2, 8, 1, 18, 4, 8, 2, 8, 3};
+    equal(plan.parseText("child { numbers: [1,2,3] }"), plan.decode(merged));
+    var interleaved = new java.io.ByteArrayOutputStream();
+    for (int i = 0; i < 33; i++) {
+      interleaved.write(8);
+      interleaved.write(i);
+      interleaved.write(18);
+      interleaved.write(0);
+    }
+    try (var compiled = decoder.compile(plan, 65536)) {
+      for (byte[] wire : List.of(merged, interleaved.toByteArray())) {
+        var expected = plan.decode(wire);
+        try (var input = decoder.allocate(wire.length).put(wire);
+            var parsed = compiled.decode(input, NATIVE)) {
+          equal(expected, parsed.row());
+          equal(expected, parsed.snapshot());
+          input.close();
+          equal(expected, parsed.row());
+        }
+      }
+    }
+  }
+
+  /** Exercise both sides of the packed presence boundary, including the sign bit. */
+  private static void presenceWidths(BuffaWire decoder) {
+    for (int size : new int[] {0, 1, 63, 64, 65, 129}) {
+      var fields = new ArrayList<ProtoPlan.FieldPlan>();
+      for (int i = 0; i < size; i++) {
+        fields.add(
+            new ProtoPlan.FieldPlan(
+                "f" + i,
+                i + 1,
+                ProtoPlan.Kind.INT32,
+                false,
+                false,
+                true,
+                false,
+                false,
+                size == 64 && i >= 62 ? 0 : -1,
+                "",
+                null,
+                0L));
+      }
+      var plan =
+          new ProtoPlan.Model(
+                  null,
+                  List.of(new ProtoPlan.Type("Presence", false, fields)),
+                  Limits.DEFAULT,
+                  16,
+                  65536)
+              .type("Presence");
+      var builder = plan.newBuilder();
+      // Explicitly present defaults must remain distinguishable from absent defaults.
+      for (int i = 0; i < size; i++) if (i % 3 != 1) builder.set(i, 0L);
+      var expected = builder.build();
+      byte[] wire = plan.encode(expected);
+      try (var compiled = decoder.compile(plan, 65536);
+          var input = decoder.allocate(wire.length).put(wire);
+          var parsed = compiled.decode(input, NATIVE)) {
+        equal(expected, parsed.row());
+        equal(expected, parsed.snapshot());
+        var text = new StringBuilder();
+        for (int i = 0; i < size; i++)
+          if (expected.has(i)) text.append("f").append(i).append(": 0 ");
+        try (var textual = compiled.parseText(text.toString(), NATIVE)) {
+          equal(expected, textual.row());
+          equal(expected, textual.snapshot());
+        }
+        for (int i = 0; i < size; i++) {
+          Acceptance.check(parsed.row().has(i) == expected.has(i), "presence width " + size);
+        }
+        Acceptance.rejects(() -> parsed.row().has(-1), IndexOutOfBoundsException.class);
+        Acceptance.rejects(() -> parsed.row().has(size), IndexOutOfBoundsException.class);
+        if (size == 64) {
+          byte[] first = plan.encode(plan.newBuilder().set(62, 1L).build());
+          byte[] second = plan.encode(plan.newBuilder().set(63, 0L).build());
+          byte[] merged = Arrays.copyOf(first, first.length + second.length);
+          System.arraycopy(second, 0, merged, first.length, second.length);
+          try (var switchedInput = decoder.allocate(merged.length).put(merged);
+              var switched = compiled.decode(switchedInput, NATIVE)) {
+            Acceptance.check(
+                !switched.row().has(62) && switched.row().has(63),
+                "oneof clears and sets top presence bits");
+            equal(plan.decode(merged), switched.snapshot());
+          }
+        }
+      }
+    }
+  }
+
   static void run(BuffaWire decoder) throws Exception {
+    mergedRepeated(decoder);
+    presenceWidths(decoder);
+    unreadStrings(decoder);
+    stringsRemainFreshAfterProfileWarmup(decoder);
     ProtoPlan plan = plan("Sample");
     Acceptance.rejects(() -> decoder.compile(plan, 1), ContractViolation.class);
     Acceptance.rejects(() -> decoder.compile(plan, 64), ContractViolation.class);
     try (var nativePlan = decoder.compile(plan, 65536)) {
       for (String text :
           List.of(
+              "",
               "count: -2147483648 explicit_count: 0 u32: 4294967295 u64: 18446744073709551615",
               "text: 'hello' ' €' blob: '\\001\\377' blobs: ['x','y']",
               "numbers: [1,-2,03,0x4] numbers: 5 statuses: [READY,999] flag: True",
@@ -49,6 +170,7 @@ final class TypedAcceptance {
       }
       for (String json :
           List.of(
+              "{}",
               "{\"explicitCount\":0,\"u64\":\"18446744073709551615\",\"count\":-2147483648}",
               "{\"text\":\"hello €\",\"blob\":\"Af8=\",\"blobs\":[\"eA\",\"_w\"]}",
               "{\"numbers\":[1,-2,3e0,\"4\"],\"statuses\":[\"READY\",999],\"flag\":true}",
@@ -124,10 +246,23 @@ final class TypedAcceptance {
         var emptyMessage = nativePlan.parseText("", NATIVE);
         var emptyNumbers = (BorrowedArray) DATA.read(emptyMessage.row(), 8);
         Acceptance.check(emptyNumbers.size() == 0, "empty repeated field");
+        for (int ordinal = 0; ordinal < plan.size(); ordinal++) {
+          if (plan.field(ordinal).repeated()) {
+            Acceptance.check(
+                DATA.read(emptyMessage.row(), ordinal) == emptyNumbers,
+                "one empty view per decoded owner");
+          }
+        }
+        var secondMessage = nativePlan.parseText("", NATIVE);
+        var independentEmpty = (BorrowedArray) DATA.read(secondMessage.row(), 8);
         var emptySnapshot = emptyNumbers.snapshot();
         emptyMessage.close();
         Acceptance.rejects(emptyNumbers::size, IllegalStateException.class);
         Acceptance.check(emptySnapshot.size() == 0, "detached empty repeated field");
+        Acceptance.check(
+            independentEmpty.size() == 0, "empty arrays keep independent message leases");
+        secondMessage.close();
+        Acceptance.rejects(independentEmpty::size, IllegalStateException.class);
         var message = nativePlan.parseText("blob: '\\377' numbers: [1,2] child { a: 42 }", NATIVE);
         var row = message.row();
         var bytes = (BorrowedBinary) DATA.read(row, 2);
@@ -236,6 +371,57 @@ final class TypedAcceptance {
     }
   }
 
+  private static void unreadStrings(BuffaWire decoder) {
+    var plan = plan("Sample");
+    String text = "text: 'hello € 🦊' child { b: 'nested λ' }";
+    String json = "{\"text\":\"hello € 🦊\",\"child\":{\"b\":\"nested λ\"}}";
+    var expected = plan.parseText(text);
+    byte[] wire = plan.encode(expected);
+    int ordinal = plan.schema().indexOf("text");
+    try (var nativePlan = decoder.compile(plan, 65536)) {
+      for (int format = 0; format < 3; format++) {
+        try (var input = decoder.allocate(wire.length).put(wire);
+            var parsed =
+                switch (format) {
+                  case 0 -> nativePlan.decode(input, NATIVE);
+                  case 1 -> nativePlan.parseText(text, NATIVE);
+                  default -> nativePlan.parseJson(json, NATIVE);
+                }) {
+          var row = parsed.row();
+          input.close();
+          Object first = DATA.read(row, ordinal);
+          Acceptance.check(first.equals("hello € 🦊"), "first string read after input closes");
+          Acceptance.check(DATA.read(row, ordinal) == first, "string materializes once");
+          // The nested string has not been read: snapshot must resolve it while retaining safety.
+          var detached = parsed.snapshot();
+          parsed.close();
+          Acceptance.rejects(() -> DATA.read(row, ordinal), IllegalStateException.class);
+          equal(expected, detached);
+        }
+      }
+    }
+  }
+
+  private static void stringsRemainFreshAfterProfileWarmup(BuffaWire decoder) {
+    var plan = plan("Sample");
+    int ordinal = plan.schema().indexOf("text");
+    try (var compiled = decoder.compile(plan, 65536)) {
+      for (String value : List.of("first", "second", "", "third 🦊")) {
+        try (var parsed = compiled.parseJson("{\"text\":\"" + value + "\"}", NATIVE)) {
+          Acceptance.check(
+              DATA.read(parsed.row(), ordinal).equals(value), "profile does not cache data");
+        }
+      }
+    }
+    try (var compiled = decoder.compile(plan, 65536);
+        var parsed = compiled.parseText("text: 'still alive €'", NATIVE)) {
+      var row = parsed.row();
+      compiled.close();
+      Acceptance.check(
+          DATA.read(row, ordinal).equals("still alive €"), "unread string outlives plan");
+    }
+  }
+
   static void equal(Object expected, Object actual) {
     if (expected instanceof AbstractRow a && actual instanceof AbstractRow b) {
       Acceptance.check(a.schema().size() == b.schema().size(), "typed schema width");
@@ -243,6 +429,8 @@ final class TypedAcceptance {
         equal(DATA.read(a, i), DATA.read(b, i));
         if (a instanceof ProtoRow proto && b instanceof TypedRow typed)
           Acceptance.check(proto.has(i) == typed.has(i), "typed presence " + i);
+        if (a instanceof ProtoRow proto && b instanceof ProtoRow snapshot)
+          Acceptance.check(proto.has(i) == snapshot.has(i), "snapshot presence " + i);
       }
     } else if (expected instanceof DataArray a) {
       int size = actual instanceof DataArray b ? b.size() : ((BorrowedArray) actual).size();
