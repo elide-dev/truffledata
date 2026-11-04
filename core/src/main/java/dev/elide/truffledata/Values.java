@@ -23,9 +23,6 @@ public final class Values {
   }
 
   public static void requireInterop(Object value) {
-    if (value instanceof AbstractRow row && row.scoped())
-      throw new ContractViolation(
-          "Scoped rows require an explicit snapshot before ownership transfer");
     if (!(value instanceof String
         || value instanceof Long
         || value instanceof Double
@@ -33,8 +30,11 @@ public final class Values {
         || value instanceof ExactNumber
         || value instanceof DataNull
         || value instanceof Missing
-        || value instanceof AbstractRow
-        || value instanceof DataArray)) {
+        || value instanceof DataArray
+        || value instanceof AbstractRow row && !row.scoped())) {
+      if (value instanceof AbstractRow)
+        throw new ContractViolation(
+            "Scoped rows require an explicit snapshot before ownership transfer");
       throw new ContractViolation(
           "Unsupported value representation: " + value.getClass().getName());
     }
@@ -63,16 +63,12 @@ public final class Values {
             case ANY -> true;
           };
       if (!valid) throw violation(field, "type mismatch");
-      // Scoped adapters may expose borrowed arrays and rows while their owner is live.
-      // normalize/requireInterop reject ownership transfer without explicit detachment.
-      boolean scopedArray =
-          (field.kind() == Field.Kind.ANY || field.kind() == Field.Kind.ARRAY)
-              && value instanceof BorrowedArray;
-      boolean scopedRow =
-          (field.kind() == Field.Kind.ANY || field.kind() == Field.Kind.RECORD)
-              && value instanceof AbstractRow row
-              && row.scoped();
-      if (!scopedArray && !scopedRow) requireInterop(value);
+      // Known kinds already prove a supported representation above. ANY still needs that check,
+      // allowing scoped rows/arrays for guest validation; ownership transfer goes through
+      // normalize.
+      if (field.kind() == Field.Kind.ANY
+          && !(value instanceof BorrowedArray)
+          && !(value instanceof AbstractRow)) requireInterop(value);
       validateConstraints(field, value, depth);
     }
     return value;
