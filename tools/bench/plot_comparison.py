@@ -39,6 +39,14 @@ def render(data, output, label):
     if data['schema'] >= 6:
         charts += [('generated-' + name, title + ' · generated getters', stage + '-generated', metric, unit)
                    for name, title, stage, metric, unit in list(charts)]
+    if data['schema'] >= 7:
+        charts += [('serialization', 'Binary serialization', 'serialize', 'ns_per_row', 'ns / message')]
+    if data['schema'] >= 9:
+        charts += [('projection-' + tier, 'Parse and project · ' + title, 'project-' + tier,
+                    'ns_per_row', 'ns / message')
+                   for tier, title in [('aot', 'SVM AOT'), ('interpret', 'interpreter'), ('peak', 'peak JIT')]]
+        charts += [('projection-allocations', 'Parse and project · peak allocations', 'project-peak',
+                    'allocated_bytes_per_row', 'Java heap bytes / message')]
     for name, title, stage, metric, unit in charts:
         generated = stage.endswith('-generated')
         base = stage.removesuffix('-generated')
@@ -82,8 +90,17 @@ def render(data, output, label):
         fig.suptitle(f'TruffleData {label}  |  {title}', x=0.025, ha='left', fontsize=18, fontweight='bold')
         footer = ('Median of three process medians; whiskers show min–max process medians, not confidence intervals.\n'
                   'Shared Linux x86-64 SVM runner. SQL: decoder functions only; no server or transport.\n')
-        footer += ('Current-thread Java heap only; native allocations are excluded. Generic ingestion projection. '
-                   if base == 'ingest' else '* Stock nested-protobuf reads cross an explicitly measured Truffle boundary. ')
+        if metric == 'allocated_bytes_per_row':
+            footer += 'Current-thread Java heap only; native allocations are excluded. '
+        if base == 'ingest':
+            footer += 'Generic ingestion projection. '
+        elif base.startswith('project-'):
+            footer += 'Both parsers can inline; no stock parser boundary. '
+        elif base == 'serialize':
+            footer += 'Buffa forwards borrowed binary input; owned engines serialize retained messages. '
+        else:
+            footer += '* Stock nested-protobuf reads cross an explicitly measured Truffle boundary. '
+
         if generated:
             footer = footer.replace('Generic ingestion projection.', 'Generated getter projection.')
         footer += f'Revision: {data["revision"][:12]}.'

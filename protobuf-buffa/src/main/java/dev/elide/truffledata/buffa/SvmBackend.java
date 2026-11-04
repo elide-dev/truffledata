@@ -12,6 +12,7 @@ import org.graalvm.word.*;
 final class SvmBackend implements BuffaWire.Backend {
   private final long resultAddress;
   private boolean busy;
+  private final BuffaWire.Scalars scalarValues = new BuffaWire.Scalars();
   private final Runnable releaseAction = this::releaseResult;
   private boolean closed;
 
@@ -141,7 +142,7 @@ final class SvmBackend implements BuffaWire.Backend {
               plan.limits().maxCells(),
               plan.maxDepth(),
               output));
-      return new BuffaWire.Scalars(
+      return scalarValues.set(
           Buffa.Scalars.first(output), Buffa.Scalars.second(output), Buffa.Scalars.present(output));
     } finally {
       busy = false;

@@ -241,7 +241,7 @@ required fields, declared defaults and unknown-field forwarding retain their usu
 Unknown groups still obey the depth limit; recognized field occurrences consume the cell budget.
 
 Both static SVM and JVM FFM use this path. The Java fallback remains available. The backend
-owns the fixed output slot until closure; each decoded message owns independent scalar values
+owns the fixed output slot and Java scalar scratch until closure; each decoded message owns independent scalar values
 and an input lease, so reusing or closing the decoder cannot invalidate a live message.
 `nativeIndexBytes()` is zero for this path, and a zero per-message native-index budget is valid.
 This excludes the fixed decoder/schema storage and caller-owned wire input. Rust tests instrument
@@ -250,3 +250,9 @@ tests exercise lifetime, presence, unknown fields and zero-index-budget behavior
 
 ABI fingerprints prevent mixing these bindings with released native libraries. Publish the
 bindings and native attachments together in the next release.
+
+Typed messages now hold their own lease and invalidation assumption, avoiding a separate
+lifetime-wrapper allocation. Construction completes once before any message or row is
+exposed. Closing one message invalidates its rows but preserves sibling messages, including
+messages borrowing the same input. Shared backend scalar scratch is copied into immutable
+row fields before the next decode can reuse it.

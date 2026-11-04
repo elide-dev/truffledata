@@ -13,7 +13,7 @@ import org.jspecify.annotations.Nullable;
 /** Schema-stable native typed view. The enclosing message owns every borrowed payload. */
 @ExportLibrary(DataLibrary.class)
 public sealed class TypedRow extends AbstractRow implements ProtoAccess permits ScalarRow {
-  final WireMessage owner;
+  final ViewOwner owner;
   private final ProtoPlan plan;
 
   @CompilationFinal(dimensions = 1)
@@ -24,8 +24,7 @@ public sealed class TypedRow extends AbstractRow implements ProtoAccess permits 
 
   private final long presenceBits;
 
-  TypedRow(
-      WireMessage owner, ProtoPlan plan, Object[] values, long presenceBits, boolean[] present) {
+  TypedRow(ViewOwner owner, ProtoPlan plan, Object[] values, long presenceBits, boolean[] present) {
     super(plan.schema());
     this.owner = owner;
     this.plan = plan;
@@ -82,7 +81,7 @@ public sealed class TypedRow extends AbstractRow implements ProtoAccess permits 
   static Object read(
       TypedRow row,
       int index,
-      @Cached.Shared("owner") @Cached("create()") WireMessage.CheckOpenNode check) {
+      @Cached.Shared("owner") @Cached("create()") ViewOwner.CheckOpenNode check) {
     check.execute(row.owner);
     return row.resolved(index);
   }
@@ -91,7 +90,7 @@ public sealed class TypedRow extends AbstractRow implements ProtoAccess permits 
   static long readLong(
       TypedRow row,
       int index,
-      @Cached.Shared("owner") @Cached("create()") WireMessage.CheckOpenNode check)
+      @Cached.Shared("owner") @Cached("create()") ViewOwner.CheckOpenNode check)
       throws UnexpectedResultException {
     check.execute(row.owner);
     Object value = row.values[index];
@@ -103,7 +102,7 @@ public sealed class TypedRow extends AbstractRow implements ProtoAccess permits 
   static double readDouble(
       TypedRow row,
       int index,
-      @Cached.Shared("owner") @Cached("create()") WireMessage.CheckOpenNode check)
+      @Cached.Shared("owner") @Cached("create()") ViewOwner.CheckOpenNode check)
       throws UnexpectedResultException {
     check.execute(row.owner);
     Object value = row.resolved(index);
@@ -115,7 +114,7 @@ public sealed class TypedRow extends AbstractRow implements ProtoAccess permits 
   static boolean readBoolean(
       TypedRow row,
       int index,
-      @Cached.Shared("owner") @Cached("create()") WireMessage.CheckOpenNode check)
+      @Cached.Shared("owner") @Cached("create()") ViewOwner.CheckOpenNode check)
       throws UnexpectedResultException {
     check.execute(row.owner);
     Object value = row.resolved(index);
@@ -136,7 +135,7 @@ public sealed class TypedRow extends AbstractRow implements ProtoAccess permits 
     final int length;
     private @Nullable String cached;
 
-    Utf8(WireMessage owner, int offset, int length, boolean[] readProfile, int ordinal) {
+    Utf8(ViewOwner owner, int offset, int length, boolean[] readProfile, int ordinal) {
       owner.lease.check();
       Objects.checkFromIndexSize(offset, length, owner.lease.bytes.capacity());
       Objects.checkIndex(ordinal, readProfile.length);
@@ -146,13 +145,13 @@ public sealed class TypedRow extends AbstractRow implements ProtoAccess permits 
       this.length = length;
     }
 
-    String value(WireMessage owner) {
+    String value(ViewOwner owner) {
       String result = cached;
       return result == null ? decode(owner) : result;
     }
 
     @TruffleBoundary
-    private String decode(WireMessage owner) {
+    private String decode(ViewOwner owner) {
       owner.check();
       byte[] bytes = new byte[length];
       owner.lease.bytes.get(offset, bytes);

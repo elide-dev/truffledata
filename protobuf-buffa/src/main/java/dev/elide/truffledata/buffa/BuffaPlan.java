@@ -88,9 +88,9 @@ public final class BuffaPlan implements AutoCloseable {
     if (nativeBytes < 0 || input.size() > plan.maxWireBytes())
       throw new ContractViolation("Typed input budget");
     WireInput.Lease source = input.retain();
-    WireMessage owner = null;
+    TypedMessage owner = null;
     try {
-      owner = new WireMessage((format == 0 ? input : payload).retain(), 0, plan.limits());
+      owner = new TypedMessage((format == 0 ? input : payload).retain(), format == 0);
       var backend = decoder.backend;
       if (backend == null) {
         ProtoRow owned =
@@ -102,7 +102,7 @@ public final class BuffaPlan implements AutoCloseable {
                     : plan.parseJson(
                         StandardCharsets.UTF_8.decode(source.bytes.duplicate()).toString(),
                         anyTypes);
-        return new TypedMessage(owner, fromJava(owner, owned), format == 0, 0);
+        return owner.finish(fromJava(owner, owned), 0);
       }
       if (format == 0 && compactScalars)
         return compact(owner, backend.scalars(schema, input, plan));
@@ -110,7 +110,7 @@ public final class BuffaPlan implements AutoCloseable {
         State state =
             new State(plan, new DecodeContext(owner, format, plan.limits().maxCells(), profile));
         state.consume(tape, 0, tape.count);
-        return new TypedMessage(owner, state.finish(1), format == 0, tape.allocated);
+        return owner.finish(state.finish(1), tape.allocated);
       }
     } catch (RuntimeException | Error failure) {
       if (owner != null) owner.close();
@@ -121,7 +121,7 @@ public final class BuffaPlan implements AutoCloseable {
   }
 
   /** Fixed native scalar output avoids allocating or materializing an index. */
-  private TypedMessage compact(WireMessage owner, BuffaWire.Scalars values) {
+  private TypedMessage compact(TypedMessage owner, BuffaWire.Scalars values) {
     long present = values.present();
     long first = (present & 1) != 0 ? values.first() : (Long) plan.field(0).defaultValue();
     long second =
@@ -138,10 +138,10 @@ public final class BuffaPlan implements AutoCloseable {
         else present |= 1L << i;
       }
     }
-    return new TypedMessage(owner, new ScalarRow(owner, plan, first, second, present), true, 0);
+    return owner.finish(new ScalarRow(owner, plan, first, second, present), 0);
   }
 
-  private static TypedRow fromJava(WireMessage owner, ProtoRow row) {
+  private static TypedRow fromJava(ViewOwner owner, ProtoRow row) {
     Object[] values = new Object[row.plan().size()];
     boolean[] present =
         values.length > Long.SIZE ? new boolean[values.length] : State.NO_SEEN_FIELDS;
@@ -157,7 +157,7 @@ public final class BuffaPlan implements AutoCloseable {
     return new TypedRow(owner, row.plan(), values, presenceBits, present);
   }
 
-  private static Object javaValue(WireMessage owner, Object value) {
+  private static Object javaValue(ViewOwner owner, Object value) {
     if (value instanceof ProtoRow row) return fromJava(owner, row);
     if (value instanceof DataArray array && !array.isBytes()) {
       Object[] items = new Object[array.size()];
@@ -207,13 +207,13 @@ public final class BuffaPlan implements AutoCloseable {
 
   /** Shared per-decode state; nested messages must charge one cumulative cell budget. */
   private static final class DecodeContext {
-    final WireMessage owner;
+    final ViewOwner owner;
     final int format;
     final ReadProfile profile;
     long cells;
     private @Nullable TypedArray emptyArray;
 
-    DecodeContext(WireMessage owner, int format, long cells, ReadProfile profile) {
+    DecodeContext(ViewOwner owner, int format, long cells, ReadProfile profile) {
       this.owner = owner;
       this.format = format;
       this.cells = cells;

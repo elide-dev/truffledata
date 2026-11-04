@@ -15,7 +15,7 @@ final class ScalarRow extends TypedRow {
   private final long first;
   private final long second;
 
-  ScalarRow(WireMessage owner, ProtoPlan plan, long first, long second, long presence) {
+  ScalarRow(ViewOwner owner, ProtoPlan plan, long first, long second, long presence) {
     super(owner, plan, NO_VALUES, presence, NO_PRESENCE);
     this.first = first;
     this.second = second;
@@ -30,7 +30,7 @@ final class ScalarRow extends TypedRow {
   static Object read(
       ScalarRow row,
       int index,
-      @Cached.Shared("owner") @Cached("create()") WireMessage.CheckOpenNode check) {
+      @Cached.Shared("owner") @Cached("create()") ViewOwner.CheckOpenNode check) {
     check.execute(row.owner);
     return row.scalar(index);
   }
@@ -39,7 +39,7 @@ final class ScalarRow extends TypedRow {
   static long readLong(
       ScalarRow row,
       int index,
-      @Cached.Shared("owner") @Cached("create()") WireMessage.CheckOpenNode check) {
+      @Cached.Shared("owner") @Cached("create()") ViewOwner.CheckOpenNode check) {
     check.execute(row.owner);
     return row.scalar(index);
   }
@@ -48,7 +48,7 @@ final class ScalarRow extends TypedRow {
   static double readDouble(
       ScalarRow row,
       int index,
-      @Cached.Shared("owner") @Cached("create()") WireMessage.CheckOpenNode check)
+      @Cached.Shared("owner") @Cached("create()") ViewOwner.CheckOpenNode check)
       throws UnexpectedResultException {
     check.execute(row.owner);
     throw new UnexpectedResultException(row.scalar(index));
@@ -58,7 +58,7 @@ final class ScalarRow extends TypedRow {
   static boolean readBoolean(
       ScalarRow row,
       int index,
-      @Cached.Shared("owner") @Cached("create()") WireMessage.CheckOpenNode check)
+      @Cached.Shared("owner") @Cached("create()") ViewOwner.CheckOpenNode check)
       throws UnexpectedResultException {
     check.execute(row.owner);
     throw new UnexpectedResultException(row.scalar(index));

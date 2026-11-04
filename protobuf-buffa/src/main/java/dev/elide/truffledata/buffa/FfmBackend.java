@@ -18,6 +18,7 @@ final class FfmBackend implements BuffaWire.Backend {
   private final MemorySegment scalarResult;
   private final MemorySegment result;
   private boolean busy;
+  private final BuffaWire.Scalars scalarValues = new BuffaWire.Scalars();
   private final Runnable releaseAction = this::releaseResult;
 
   private MemorySegment acquireResult() {
@@ -193,7 +194,7 @@ final class FfmBackend implements BuffaWire.Backend {
         throw callFailure(failure);
       }
       BuffaWire.status(status);
-      return new BuffaWire.Scalars(
+      return scalarValues.set(
           scalarResult.get(ValueLayout.JAVA_LONG, BuffaFFM.Scalars_first_OFFSET),
           scalarResult.get(ValueLayout.JAVA_LONG, BuffaFFM.Scalars_second_OFFSET),
           scalarResult.get(ValueLayout.JAVA_LONG, BuffaFFM.Scalars_present_OFFSET));

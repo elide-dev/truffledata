@@ -8,12 +8,12 @@ import dev.elide.truffledata.*;
 /** Immutable array of scoped typed values. Reads never call native code. */
 @ExportLibrary(InteropLibrary.class)
 public final class TypedArray implements BorrowedArray {
-  private final WireMessage owner;
+  private final ViewOwner owner;
 
   @CompilationFinal(dimensions = 1)
   private final Object[] values;
 
-  TypedArray(WireMessage owner, Object[] values) {
+  TypedArray(ViewOwner owner, Object[] values) {
     this.owner = owner;
     this.values = values;
   }

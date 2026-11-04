@@ -405,3 +405,10 @@ Generated records and generic owned rows are separate engines. Buffa's binary sc
 uses a fixed native output slot and has a dedicated zero-native-allocation test. Benchmark
 Java allocation counters still exclude native allocations in other workloads; they do not
 imply that all Buffa ingestion is allocation-free.
+
+Schema 10 gives concrete generated records the same direct getter loops as stock records
+for retained AOT/interpreter/JIT reads, without the generic projection adapter used in
+schemas 7–9. Schema-bound generic and borrowed getter measurements remain separate cases.
+Removing an explicit parser boundary allows inlining; a compiled root alone does not prove
+that every stock parser helper was inlined. The measurements report the resulting operation,
+including any calls the SVM compiler elects to retain.

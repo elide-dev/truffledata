@@ -34,7 +34,7 @@ public final class StockParseProbe {
             || !root.compiled
             || !target.isValidLastTier())
           throw new AssertionError("Stock parser did not execute at peak tier");
-        System.out.println("STOCK_PARSE_INLINE_COMPILED");
+        System.out.println("STOCK_PARSE_ROOT_COMPILED_NO_EXPLICIT_BOUNDARY");
       } finally {
         context.leave();
       }

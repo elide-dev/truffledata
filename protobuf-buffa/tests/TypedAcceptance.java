@@ -114,6 +114,22 @@ final class TypedAcceptance {
                   65536)
               .type("Compact");
       try (var compiled = decoder.compile(p, 65536)) {
+        try (var leftInput = decoder.allocate(2).put(new byte[] {8, 1});
+            var rightInput = decoder.allocate(2).put(new byte[] {8, 2});
+            var left = compiled.decode(leftInput, 0);
+            var right = compiled.decode(rightInput, 0);
+            var sibling = compiled.decode(leftInput, 0)) {
+          Acceptance.check(
+              left.row().getLong(0) == 1 && right.row().getLong(0) == 2,
+              "native scalar scratch is not retained by messages");
+          var leftRow = left.row();
+          leftInput.close();
+          left.close();
+          Acceptance.rejects(() -> leftRow.getLong(0), IllegalStateException.class);
+          Acceptance.check(
+              sibling.row().getLong(0) == 1 && right.row().getLong(0) == 2,
+              "closing one message preserves sibling and separate-input views");
+        }
         for (byte[] wire :
             List.of(new byte[] {8, 7}, new byte[] {8, 1, 8, 0}, new byte[] {8, 2, 16, 99, 24, 7})) {
           var expected = p.decode(wire);

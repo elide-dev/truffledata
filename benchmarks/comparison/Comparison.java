@@ -52,10 +52,12 @@ public final class Comparison {
               run(workload, engine, stage, true, false);
             } catch (com.oracle.truffle.api.OptimizationFailedException failure) {
               // A capability result for HotSpot only. Every SVM comparison must compile.
-              if (ImageInfo.inImageRuntimeCode() || !engine.equals("stock")
+              if (ImageInfo.inImageRuntimeCode()
+                  || !engine.equals("stock")
                   || !stage.equals("project-peak")
                   || !failure.toString().contains("GraphTooBigBailoutException")) throw failure;
-              System.out.println("JVM_CAPABILITY stock/project-peak supported=false graph-budget=10000");
+              System.out.println(
+                  "JVM_CAPABILITY stock/project-peak supported=false graph-budget=10000");
             }
           }
         }
@@ -177,7 +179,7 @@ public final class Comparison {
             double bytes = (counter.getThreadAllocatedBytes(thread) - before) / (8.0 * ROWS);
             double budget =
                 engine.equals("buffa")
-                    ? (stage.equals("ingest") ? 272 : 240)
+                    ? (stage.equals("ingest") ? 128 : 96)
                     : (stage.equals("ingest") ? 96 : 64);
             if (bytes < 0 || bytes > budget)
               throw new AssertionError(
@@ -349,9 +351,11 @@ public final class Comparison {
       RootNode root =
           projectRoot != null
               ? projectRoot
-              : generated != null
-                  ? new GeneratedReadRoot(generated)
-                  : engine.startsWith("stock") ? new StockReadRoot(kind) : new ReadRoot(kind);
+              : engine.equals("generated-owned")
+                  ? new OwnedReadRoot(kind)
+                  : generated != null
+                      ? new GeneratedReadRoot(generated)
+                      : engine.startsWith("stock") ? new StockReadRoot(kind) : new ReadRoot(kind);
       target = (OptimizedCallTarget) root.getCallTarget();
       long sum = 0;
       for (int i = 0; i < ROWS; i++) {
@@ -596,6 +600,25 @@ public final class Comparison {
     }
 
     long read(int rotation) {
+      if (engine.equals("generated-owned") && !guestRead) {
+        long sum = 0;
+        if (workload.equals("proto-bytes")) {
+          for (int n = 0; n < ROWS; n++)
+            sum +=
+                ((ComparisonContracts.Message_google$protobuf$BytesValue)
+                        rows[(n + rotation) & (ROWS - 1)])
+                    .get_value()
+                    .size();
+        } else {
+          for (int n = 0; n < ROWS; n++) {
+            var row =
+                (ComparisonContracts.Message_google$protobuf$Timestamp)
+                    rows[(n + rotation) & (ROWS - 1)];
+            sum += row.get_seconds() + row.get_nanos();
+          }
+        }
+        return sum;
+      }
       if (generated != null && !guestRead) {
         long sum = 0;
         for (int n = 0; n < ROWS; n++)
@@ -794,6 +817,33 @@ public final class Comparison {
           + access.size_fields(row)
           + access.size_oneofs(row)
           + access.get_syntax(row);
+    }
+  }
+
+  /** Concrete generated getter loop mirrors the stock root without an adapter interface. */
+  private static final class OwnedReadRoot extends RootNode {
+    private final int kind;
+
+    OwnedReadRoot(int kind) {
+      super(ComparisonLanguage.current());
+      this.kind = kind;
+    }
+
+    @Override
+    public Object execute(VirtualFrame frame) {
+      Object[] rows = (Object[]) frame.getArguments()[0];
+      int rotation = (Integer) frame.getArguments()[1];
+      long sum = 0;
+      for (int n = 0; n < ROWS; n++) {
+        Object row = rows[(n + rotation) & (ROWS - 1)];
+        if (kind == 1) {
+          sum += ((ComparisonContracts.Message_google$protobuf$BytesValue) row).get_value().size();
+        } else {
+          var value = (ComparisonContracts.Message_google$protobuf$Timestamp) row;
+          sum += value.get_seconds() + value.get_nanos();
+        }
+      }
+      return sum;
     }
   }
 
