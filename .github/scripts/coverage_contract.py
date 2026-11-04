@@ -6,7 +6,7 @@ import sys
 
 ACCESS_CLASSES = {
     'AbstractRow', 'DataArray', 'DataLibrary', 'DynamicRecord', 'ExactNumber',
-    'Missing', 'ReadBooleanNode', 'ReadDoubleNode', 'ReadLengthNode', 'ReadLongNode',
+    'Missing', 'PayloadBudget', 'ReadBooleanNode', 'ReadDoubleNode', 'ReadLengthNode', 'ReadLongNode',
 }
 
 

@@ -512,7 +512,7 @@ UTF-8 arrays; its nested serialization allocation falls from 1130.50 to 556 byte
 [The complete native run](https://app.buildbuddy.io/invocation/d7d680e7-ccd7-4b6c-b5e0-a06e0a6fa1a4)
 passes the comparison, both native access gates, and the protobuf-free native consumer.
 
-## Current generated graph comparison
+## Decoder size proof comparison
 
 The [`8fc6670` measurement](../benchmarks/results/svm-comparison-8fc6670/comparison.json)
 reuses decoder-proven encoded sizes for eligible generated graphs. All 120 cells remain in
@@ -550,6 +550,52 @@ Tests exercise these conditions, presence above bit 31, canonical-expansion limi
 passes the full benchmark, comparison/native access gates, and the protobuf-free native
 consumer. CI also passed on implementation revision `8fc6670`, including native/fallback
 acceptance, real driver acceptance, coverage, JUnit reporting, and CodSpeed reporting.
+
+## Current generated graph comparison
+
+The [`0faad26` run](../benchmarks/results/svm-comparison-0faad26/comparison.json)
+keeps every one of the 120 comparison cells. Generic snapshot accounting now traverses
+validated static/column storage directly, with strict-mode checks for transparent
+facades. The decoder also owns its state arrays directly instead of allocating a public
+builder for each message. Required fields, normalization, ownership and all existing
+budgets remain enforced.
+
+| Operation | Stock | Generated owned | Stock / generated Java bytes |
+| --- | ---: | ---: | ---: |
+| Scalar ingestion | 157.34 ns | 69.45 ns | 136 / 88 |
+| Scalar interpreter reads | 3.17 ns | 3.20 ns | 2 / 2 |
+| Scalar peak reads | 3.05 ns | 2.53 ns | 1 / 1 |
+| Scalar serialization | 32.82 ns | 43.62 ns | 56 / 24 |
+| Scalar parse/project, peak | 81.80 ns | 15.55 ns | 137 / 1 |
+| Nested ingestion, projection | 1474.16 ns | 2308.47 ns | 1776.75 / 1800.50 |
+| Nested ingestion, full consumption | 1429.60 ns | 1985.01 ns | 1776.75 / 1800.50 |
+| Nested serialization | 1022.12 ns | 1768.83 ns | 436.50 / 192.50 |
+
+Generic nested full-consumption decoding measures 9.80 µs and 3086.50 Java bytes,
+versus stock's 1.43 µs and 1776.75 bytes. Its allocation falls from 3339.50 bytes in
+`8fc6670` to 3213 bytes in the preceding
+[`0105fcb` run](../benchmarks/results/svm-comparison-0105fcb/comparison.json), then to
+3086.50 here: a 7.6% total reduction. Owned byte-message ingestion saves another 16 bytes
+in this batch. Those are allocation results, not proof of an isolated timing improvement.
+The latest two runs used Intel Xeon workers; `8fc6670` used AMD EPYC. Even on the same
+reported CPU model, process timing ranges remain broad. All raw results are retained.
+
+Generated nested decoding allocates 1.3% more than stock and is 39% slower in this run.
+Generated nested serialization allocates 56% less, but is 73% slower. Scalar retained
+interpreter/peak read ranges overlap. This does not establish parity across contexts:
+generic decoding, Buffa borrowing, aliased bytes, and SQL wrappers still have gaps.
+
+[The complete SVM cycle](https://app.buildbuddy.io/invocation/87da3b8e-daca-4062-a526-63392b00d824)
+passes the 120-cell comparison, both native access gates (including the 511-case matrix),
+and the protobuf-free native consumer. The
+[JVM coverage cycle](https://app.buildbuddy.io/invocation/f7b31a8f-aab0-486f-afee-9c81ebbff773)
+passes the correctness suite, native-enabled JVM acceptance and disabled-native-access
+fallback. Access-method coverage passes; PayloadBudget has 48/48 covered lines and
+5/5 covered methods. Exact cell, string, parent and depth boundaries, compact scalar
+fallback, facade/schema mismatches, merges, defaults and map deduplication are exercised.
+The [Gazelle drift gate](https://app.buildbuddy.io/invocation/6603031e-78e7-4bb9-ae2e-06e82306d0f0)
+also passes. CI on this implementation revision is tracked separately from these local
+RBE results.
 
 ![Current generated interpreter reads](images/independent-latest/comparison-generated-interpreter.svg)
 ![Current generated peak reads](images/independent-latest/comparison-generated-peak.svg)
