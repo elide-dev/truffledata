@@ -32,6 +32,7 @@ python3 tools/bench/compare.py run --binary /path/to/truffledata-comparison \
 |---|---|---|---|
 | `proto-scalar` | `Timestamp.parseFrom(byte[])` | owned static contract rows, Buffa scoped typed views | seconds + nanos |
 | `proto-bytes` | `BytesValue.parseFrom(byte[])` with default copying, plus `stock-aliased` using immutable ByteString + `enableAliasing(true)` | owned static contract rows, Buffa scoped typed views | length of a 64 KiB payload |
+| `proto-mixed` | `Type.parseFrom(byte[])` | owned contract rows, Buffa scoped typed views | UTF-16 name length + nested field count + oneof count + syntax enum |
 | `timestamp-json` | reused `JsonFormat.Parser` into a generated Timestamp builder | descriptor-free Java parser, native WKT parser | seconds + nanos |
 | `mysql-int4` | Connector/J `MysqlTextValueDecoder.getInt` | the same decoder followed by a static INT32 contract | integer value |
 | `postgres-int4` | pgjdbc `ByteConverter.int4` | the same decoder followed by a static INT32 contract | integer value |
@@ -75,7 +76,7 @@ No dependency upgrades or query-planning functionality are introduced by this su
 
 ## Measurement and limits
 
-Each of 37 cells has three independent timing processes and three independent allocation
+Each of 47 cells has three independent timing processes and three independent allocation
 processes (222 short-lived processes). Each process records three samples. Timing uses
 100 ms warmup and at least 50 ms per sample. Allocation uses fixed work: eight batches for
 ingestion or 128 batches for retained reads, with one warmup batch of the same size.
@@ -202,3 +203,9 @@ Java heap savings, not total native-plus-Java allocation figures. Timing varies
 substantially between the short shared-hardware runs; stock aliased bytes and
 stock driver decoding still lead. The native smoke enforces compact owned scalar
 allocation budgets of 96 B for generic and 64 B for primitive projections.
+
+The mixed binary fixture uses the ordinary-schema `google.protobuf.Type` message
+with a Unicode name, 4–8 repeated nested field records, two oneof names, an enum,
+and a nested source context. It uses the existing generated protobuf-java classes
+without another Java code-generation toolchain. Report schema 3 adds ten cells;
+the validator continues to accept complete schema 1 and 2 reports.

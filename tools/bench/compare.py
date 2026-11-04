@@ -13,15 +13,17 @@ import random
 import statistics
 import subprocess
 
-WORKLOADS = ('proto-scalar', 'proto-bytes', 'timestamp-json', 'mysql-int4', 'postgres-int4')
+WORKLOADS = ('proto-scalar', 'proto-bytes', 'timestamp-json', 'mysql-int4', 'postgres-int4', 'proto-mixed')
 CHECKSUMS = {'proto-scalar': 54400032992, 'proto-bytes': 2097648, 'timestamp-json': 54400032992,
-             'mysql-int4': 35472, 'postgres-int4': 35472}
+             'mysql-int4': 35472, 'postgres-int4': 35472, 'proto-mixed': 563}
 
 
-def cells(schema=2):
+def cells(schema=3):
     for workload in WORKLOADS:
+        if schema < 3 and workload == 'proto-mixed':
+            continue
         engines = ('stock', 'stock-aliased', 'owned', 'buffa') if workload == 'proto-bytes' else (
-            ('stock', 'owned', 'buffa') if workload in WORKLOADS[:3] else ('stock', 'static'))
+            ('stock', 'owned', 'buffa') if workload.startswith('proto-') or workload == 'timestamp-json' else ('stock', 'static'))
         for engine in engines:
             stages = ('ingest',) if workload == 'timestamp-json' else (
                 ('ingest', 'read-aot') if engine.startswith('stock') else ('ingest', 'interpret', 'peak'))
@@ -48,7 +50,7 @@ def validate_row(row, cell, metric):
 
 
 def validate(data):
-    if data['schema'] not in (1, 2) or data['forks'] != 3:
+    if data['schema'] not in (1, 2, 3) or data['forks'] != 3:
         raise ValueError('Expected three isolated processes per cell')
     expected = set(itertools.product(cells(data['schema']), range(3)))
     seen = set()
@@ -97,7 +99,7 @@ def measure(args):
     args.output.mkdir(parents=True, exist_ok=True)
     cpu = next((line.split(':', 1)[1].strip() for line in Path('/proc/cpuinfo').read_text().splitlines()
                 if line.startswith('model name')), platform.processor())
-    data = {'schema': 2, 'forks': 3, 'captured_at': datetime.datetime.now(datetime.timezone.utc).isoformat(),
+    data = {'schema': 3, 'forks': 3, 'captured_at': datetime.datetime.now(datetime.timezone.utc).isoformat(),
             'revision': args.revision, 'binary_sha256': hashlib.sha256(binary.read_bytes()).hexdigest(),
             'host': {'system': platform.system(), 'machine': platform.machine(), 'cpu': cpu,
                      'kernel': platform.release(), 'logical_cpus': os.cpu_count()},
