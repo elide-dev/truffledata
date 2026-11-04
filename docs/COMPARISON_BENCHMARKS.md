@@ -1,5 +1,61 @@
 # SVM comparison benchmarks
 
+## Generated-access measurements
+
+The [88-cell SVM run](https://github.com/elide-dev/truffledata/actions/runs/41776420028)
+on implementation commit `c8ef96a2b4be` compares our generated getters with stock
+protobuf Java. It uses three fresh timing forks and three separate allocation forks
+per cell. [Raw JSON](../benchmarks/results/svm-comparison-c8ef96a/comparison.json) and
+[full results](../benchmarks/results/svm-comparison-c8ef96a/comparison.md) retain the
+original generic and typed API cases as well as the new generated cases.
+
+| Ingestion projection | Stock ns/message | TruffleData ns/message | Stock / TruffleData Java heap bytes |
+|---|---:|---:|---:|
+| Scalar, owned generated getters | 67.01 | 29.82 | 136 / 56 |
+| Scalar, Buffa generated getters | 67.01 | 161.51 | 136 / 200 |
+| Timestamp JSON, Buffa generated getters | 3389.41 | 471.51 | 6439.75 / 712 |
+| Nested protobuf, Buffa generated getters | 897.82 | 3198.47 | 1776.75 / 1751.75 |
+
+Generated getters reduce Buffa nested interpreted reads from 51.79 to 22.58 ns/row
+in the same run. Peak reads measure 10.01 versus 9.65 ns/row, with overlapping fork
+ranges; this does not establish a peak-read improvement. Stock scalar peak reads
+remain 1.09 ns versus owned 1.82 and Buffa 2.08; stock nested guest reads cross the
+marked boundary. The aliased stock bytes baseline remains faster than Buffa
+(51.13 versus 170.82 ns ingestion). General nested messages still materialize a
+native index into rows and arrays; these results do not establish that the remaining
+cost is in Buffa's parser itself.
+
+The scalar native path skips general materialization state, temporary arrays and
+boxed integers; both native backends reuse their result slot and release callback.
+Existing generic Buffa scalar ingestion now uses 232 Java heap bytes versus 320 in
+the 0.3.0 report; generated ingestion uses 200. Primitive-only static rows avoid a
+payload tracker, reducing the SQL fixtures from 160 to 128 bytes. Native memory is
+excluded from these Java heap counts. Timing ranges remain visible in the full
+report, including noisy large-payload copies; the owned bytes generated-ingestion
+result is especially unstable and should not be used to rank implementations.
+
+An intermediate scalar storage union slowed ordinary bytes/nested reads. Separate
+scalar rows, static library exports and final public accessors remove that dispatch
+cost: ordinary Buffa peak reads measure 3.87 ns for bytes and 10.01 ns for nested
+messages, versus 4.00 and 10.21 ns in the 0.3.0 run. These cross-run timings indicate
+recovery, not a statistically established speedup. The earlier
+[8fceec4 run](../benchmarks/results/svm-comparison-8fceec4/comparison.md),
+[9c8a013 run](../benchmarks/results/svm-comparison-9c8a013/comparison.md) and
+[repeat](../benchmarks/results/svm-comparison-9c8a013-repeat/comparison.md) remain
+available, including their noisy results.
+
+![Generated interpreter reads](images/generated-access/comparison-generated-interpreter.svg)
+
+![Generated peak reads](images/generated-access/comparison-generated-peak.svg)
+
+![Generated ingestion allocations](images/generated-access/comparison-generated-allocations.svg)
+
+The same directory also contains generic-API charts and a provenance manifest.
+The subsequent smoke-only allocation gates allow at most 240 Java heap bytes for
+Buffa typed/generated scalar ingestion, 272 for generic scalar ingestion, and
+4 bytes per retained read including guest arguments and the boxed batch checksum.
+They do not change the timed measurement loop.
+
 ## Release 0.3.0 measurements
 
 The [0.3.0 run](https://github.com/elide-dev/truffledata/actions/runs/41766750084)
@@ -90,6 +146,13 @@ The original generic `ingest` measurements remain. Byte-length projections alrea
 typed interop length API and receive no duplicate measurement. Stock continues to use its
 generated primitive getters. This separates library improvements from the effect of callers
 choosing typed reads. Report schema 2 includes these cells; schema 1 remains readable.
+Report schema 6 additionally compares our generated contract getters with stock generated
+getters. `ingest-generated`, `read-generated-aot`, `interpret-generated`, and
+`peak-generated` use the same projections and fixture rotation. The generated accessor
+binds to a contract once, uses literal ordinals and primitive return types, and preserves
+borrowed-message lifetime checks. These 26 additional cells bring the matrix to 88;
+the original library-dispatch measurements remain available. JSON adds ingestion only.
+
 Schema construction, parser construction, source creation and context startup are excluded.
 For binary Buffa, source bytes already reside in unmanaged memory and the result borrows
 that memory. Stock/owned parsers consume existing Java arrays and own their decoded payloads.

@@ -14,6 +14,7 @@ public final class BuffaPlan implements AutoCloseable {
   private final BuffaWire decoder;
   private final ProtoPlan plan;
   private final ReadProfile profile;
+  private final boolean compactScalars;
   private final List<ProtoPlan> anyTypes;
   private final WireInput schema;
   private final WireInput empty;
@@ -26,6 +27,17 @@ public final class BuffaPlan implements AutoCloseable {
     var types = NativeSchema.types(plan, this.anyTypes, maxSchemaBytes);
     byte[] program = NativeSchema.encode(types, this.anyTypes, maxSchemaBytes);
     profile = new ReadProfile(types);
+    boolean compact = plan.size() > 0 && plan.size() <= 2;
+    for (int i = 0; i < plan.size(); i++) {
+      var field = plan.field(i);
+      compact &=
+          !field.repeated()
+              && field.oneof() < 0
+              && (field.kind() == ProtoPlan.Kind.INT32 || field.kind() == ProtoPlan.Kind.INT64)
+              && field.defaultValue() instanceof Long
+              && plan.schema().field(i).equals(field.contract());
+    }
+    compactScalars = compact;
     schema = decoder.allocate(program.length).put(program);
     try {
       empty = decoder.allocate(0);
@@ -93,6 +105,7 @@ public final class BuffaPlan implements AutoCloseable {
         return new TypedMessage(owner, fromJava(owner, owned), format == 0, 0);
       }
       try (var tape = backend.typed(schema, input, format, payload, plan, nativeBytes)) {
+        if (format == 0 && compactScalars) return compact(owner, tape);
         State state =
             new State(plan, new DecodeContext(owner, format, plan.limits().maxCells(), profile));
         state.consume(tape, 0, tape.count);
@@ -104,6 +117,43 @@ public final class BuffaPlan implements AutoCloseable {
     } finally {
       source.release();
     }
+  }
+
+  /** Binary scalar views consume the validated native index without object staging or boxing. */
+  private TypedMessage compact(WireMessage owner, BuffaWire.Tape tape) {
+    if ((long) plan.size() + tape.count > plan.limits().maxCells())
+      throw new ContractViolation("Typed materialization cell budget");
+    long first = (Long) plan.field(0).defaultValue();
+    long second = plan.size() == 2 ? (Long) plan.field(1).defaultValue() : 0;
+    long present = 0;
+    for (int index = 0; index < tape.count; index++) {
+      int at = index * Buffa.Field.SIZE;
+      int ordinal = tape.bytes.getInt(at + (int) BuffaFFM.Field_number_OFFSET) - 1;
+      if (ordinal < 0 || ordinal >= plan.size())
+        throw new IllegalStateException("Invalid scalar ordinal");
+      var field = plan.field(ordinal);
+      if (tape.bytes.getInt(at + (int) BuffaFFM.Field_wire_OFFSET) != field.kind().ordinal() + 1
+          || tape.bytes.getLong(at + (int) BuffaFFM.Field_length_OFFSET) != 0
+          || tape.bytes.getLong(at + (int) BuffaFFM.Field_end_OFFSET) != index + 1L)
+        throw new IllegalStateException("Invalid scalar tape");
+      long value = tape.bytes.getLong(at + (int) BuffaFFM.Field_value_OFFSET);
+      if (field.kind() == ProtoPlan.Kind.INT32) value = (int) value;
+      if (ordinal == 0) first = value;
+      else second = value;
+      present |= 1L << ordinal;
+    }
+    for (int i = 0; i < plan.size(); i++) {
+      var field = plan.field(i);
+      if (field.required() && (present & (1L << i)) == 0)
+        throw new ContractViolation("Missing required field");
+      if (!field.explicitPresence()) {
+        long value = i == 0 ? first : second;
+        if (value == (Long) field.defaultValue()) present &= ~(1L << i);
+        else present |= 1L << i;
+      }
+    }
+    return new TypedMessage(
+        owner, new ScalarRow(owner, plan, first, second, present), true, tape.allocated);
   }
 
   private static TypedRow fromJava(WireMessage owner, ProtoRow row) {

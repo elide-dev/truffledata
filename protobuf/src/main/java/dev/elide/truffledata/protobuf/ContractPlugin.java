@@ -147,6 +147,76 @@ public final class ContractPlugin {
             .append("); }\n");
       }
     }
+    // Schema-bound generated getters contain literal ordinals and no library dispatch.
+    for (int i = 0; i < definitions.size(); i++) {
+      var type = definitions.get(i);
+      String name = "Access_" + type.name().replace('.', '$');
+      source
+          .append(" public static final class ")
+          .append(name)
+          .append(" {\n")
+          .append(" private final ProtoPlan plan;\n public ")
+          .append(name)
+          .append("(ProtoPlan plan) { if (!plan.matchesDefinition(type")
+          .append(i)
+          .append(
+              "())) throw new ContractViolation(\"Generated contract mismatch\"); this.plan = plan;"
+                  + " }\n")
+          .append(
+              " private void check(dev.elide.truffledata.protobuf.ProtoAccess row) { if (row.plan()"
+                  + " != plan) throw new ContractViolation(\"Generated plan mismatch\"); }\n");
+      for (int j = 0; j < type.fields().size(); j++) {
+        var field = type.fields().get(j);
+        String result = "Object", read = "get";
+        if (!field.repeated()) {
+          switch (field.kind()) {
+            case INT32, INT64, SINT32, SINT64, SFIXED32, SFIXED64, UINT32, FIXED32, ENUM -> {
+              result = "long";
+              read = "getLong";
+            }
+            case FLOAT, DOUBLE -> {
+              result = "double";
+              read = "getDouble";
+            }
+            case BOOL -> {
+              result = "boolean";
+              read = "getBoolean";
+            }
+            case STRING -> result = "String";
+            default -> {}
+          }
+        }
+        source
+            .append(" public ")
+            .append(result)
+            .append(" get_")
+            .append(field.name())
+            .append("(dev.elide.truffledata.protobuf.ProtoAccess row) { check(row); return ")
+            .append(result.equals("String") ? "(String) " : "")
+            .append("plan.")
+            .append(read)
+            .append("(row,")
+            .append(j)
+            .append("); }\n");
+        source
+            .append(" public boolean has_")
+            .append(field.name())
+            .append(
+                "(dev.elide.truffledata.protobuf.ProtoAccess row) { check(row); return row.has(")
+            .append(j)
+            .append("); }\n");
+        if (field.repeated() || field.kind() == ProtoPlan.Kind.BYTES)
+          source
+              .append(" public int size_")
+              .append(field.name())
+              .append(
+                  "(dev.elide.truffledata.protobuf.ProtoAccess row) { check(row); return"
+                      + " plan.getSize(row,")
+              .append(j)
+              .append("); }\n");
+      }
+      source.append(" }\n");
+    }
     source.append("}\n");
     return CodeGeneratorResponse.newBuilder()
         .setSupportedFeatures(CodeGeneratorResponse.Feature.FEATURE_PROTO3_OPTIONAL_VALUE)

@@ -12,6 +12,50 @@ import org.junit.jupiter.api.Test;
 
 class CoreTest {
   @Test
+  void directPrimitiveStaticAccessPreservesStatesAndParentBudgets() {
+    try (var context = org.graalvm.polyglot.Context.newBuilder("td-test").build()) {
+      context.initialize("td-test");
+      context.enter();
+      try {
+        var schema =
+            Schema.of(
+                Field.integer("n", 32, true, true, true),
+                new Field("d", Field.Kind.FLOAT64, true, true),
+                new Field("b", Field.Kind.BOOLEAN, true, true));
+        var layout = new StaticLayout(TestLanguage.current().language(), schema, Limits.DEFAULT);
+        var row = layout.create(1000L, 1.5, true);
+        assertEquals(1000, layout.getLong(row, 0));
+        assertEquals(1.5, layout.getDouble(row, 1));
+        assertTrue(layout.getBoolean(row, 2));
+        assertThrows(ContractViolation.class, () -> layout.getDouble(row, 0));
+        assertThrows(ContractViolation.class, () -> layout.getBoolean(row, 0));
+        assertThrows(IndexOutOfBoundsException.class, () -> layout.getLong(row, -1));
+        var other = new StaticLayout(TestLanguage.current().language(), schema, Limits.DEFAULT);
+        assertThrows(ContractViolation.class, () -> other.getLong(row, 0));
+        assertThrows(ContractViolation.class, () -> other.get(row, 0));
+        assertThrows(ContractViolation.class, () -> other.getDouble(row, 1));
+        assertThrows(ContractViolation.class, () -> other.getBoolean(row, 2));
+        assertThrows(ContractViolation.class, () -> layout.getLong(row, 1));
+        for (Object absent : List.of(DataNull.INSTANCE, Missing.INSTANCE)) {
+          var empty = layout.create(absent, absent, absent);
+          assertSame(absent, layout.get(empty, 0));
+          assertThrows(ContractViolation.class, () -> layout.getLong(empty, 0));
+          assertThrows(ContractViolation.class, () -> layout.getDouble(empty, 1));
+          assertThrows(ContractViolation.class, () -> layout.getBoolean(empty, 2));
+        }
+        var parent = new PayloadBudget(new Limits(10, 10, 3, 0));
+        Object[] values = {1000L, 1.5, true};
+        layout.read(i -> values[i], parent);
+        assertThrows(ContractViolation.class, () -> layout.read(i -> values[i], parent));
+        assertThrows(ContractViolation.class, () -> layout.create(2147483648L, 1.5, true));
+        assertThrows(ContractViolation.class, () -> layout.create("bad", 1.5, true));
+      } finally {
+        context.leave();
+      }
+    }
+  }
+
+  @Test
   void listSnapshotsOwnAndValidateTheirElements() {
     var source = new java.util.ArrayList<Object>(java.util.List.of(7L, "value"));
     var snapshot = DataArray.copyOf(source);

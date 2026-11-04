@@ -3,6 +3,7 @@ package dev.elide.truffledata.buffa;
 import com.oracle.truffle.api.CompilerDirectives.*;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.library.*;
+import com.oracle.truffle.api.nodes.UnexpectedResultException;
 import dev.elide.truffledata.*;
 import dev.elide.truffledata.protobuf.*;
 import java.nio.charset.StandardCharsets;
@@ -11,8 +12,8 @@ import org.jspecify.annotations.Nullable;
 
 /** Schema-stable native typed view. The enclosing message owns every borrowed payload. */
 @ExportLibrary(DataLibrary.class)
-public final class TypedRow extends AbstractRow {
-  private final WireMessage owner;
+public sealed class TypedRow extends AbstractRow implements ProtoAccess permits ScalarRow {
+  final WireMessage owner;
   private final ProtoPlan plan;
 
   @CompilationFinal(dimensions = 1)
@@ -33,14 +34,39 @@ public final class TypedRow extends AbstractRow {
     this.presenceBits = presenceBits;
   }
 
-  public ProtoPlan plan() {
+  @Override
+  public final long getLong(int ordinal) {
+    owner.check();
+    if (this instanceof ScalarRow scalar) return scalar.scalar(ordinal);
+    Object value = values[ordinal];
+    if (value instanceof Long number) return number;
+    throw new ContractViolation("Expected INT64");
+  }
+
+  public final ProtoPlan plan() {
     return plan;
   }
 
-  public boolean has(int ordinal) {
+  public final boolean has(int ordinal) {
     owner.check();
-    Objects.checkIndex(ordinal, values.length);
+    Objects.checkIndex(ordinal, descriptor.size());
     return present(ordinal);
+  }
+
+  @Override
+  public final Object get(int ordinal) {
+    owner.check();
+    Objects.checkIndex(ordinal, descriptor.size());
+    return this instanceof ScalarRow scalar ? scalar.scalar(ordinal) : resolved(ordinal);
+  }
+
+  @Override
+  public final int getSize(int ordinal) {
+    Object value = get(ordinal);
+    if (value instanceof TypedArray array) return array.size();
+    if (value instanceof BorrowedBytes bytes) return bytes.size();
+    if (value instanceof DataArray array) return array.size();
+    throw new ContractViolation("Expected array");
   }
 
   private boolean present(int ordinal) {
@@ -53,9 +79,48 @@ public final class TypedRow extends AbstractRow {
   }
 
   @ExportMessage
-  Object read(int index, @Cached("create()") WireMessage.CheckOpenNode check) {
-    check.execute(owner);
-    return resolved(index);
+  static Object read(
+      TypedRow row,
+      int index,
+      @Cached.Shared("owner") @Cached("create()") WireMessage.CheckOpenNode check) {
+    check.execute(row.owner);
+    return row.resolved(index);
+  }
+
+  @ExportMessage
+  static long readLong(
+      TypedRow row,
+      int index,
+      @Cached.Shared("owner") @Cached("create()") WireMessage.CheckOpenNode check)
+      throws UnexpectedResultException {
+    check.execute(row.owner);
+    Object value = row.values[index];
+    if (value instanceof Long number) return number;
+    throw new UnexpectedResultException(row.resolved(index));
+  }
+
+  @ExportMessage
+  static double readDouble(
+      TypedRow row,
+      int index,
+      @Cached.Shared("owner") @Cached("create()") WireMessage.CheckOpenNode check)
+      throws UnexpectedResultException {
+    check.execute(row.owner);
+    Object value = row.resolved(index);
+    if (value instanceof Double number) return number;
+    throw new UnexpectedResultException(value);
+  }
+
+  @ExportMessage
+  static boolean readBoolean(
+      TypedRow row,
+      int index,
+      @Cached.Shared("owner") @Cached("create()") WireMessage.CheckOpenNode check)
+      throws UnexpectedResultException {
+    check.execute(row.owner);
+    Object value = row.resolved(index);
+    if (value instanceof Boolean flag) return flag;
+    throw new UnexpectedResultException(value);
   }
 
   private Object resolved(int index) {
@@ -102,7 +167,7 @@ public final class TypedRow extends AbstractRow {
   ProtoRow snapshot() {
     owner.check();
     var builder = plan.newBuilder();
-    for (int i = 0; i < values.length; i++) if (present(i)) builder.set(i, detach(resolved(i)));
+    for (int i = 0; i < descriptor.size(); i++) if (present(i)) builder.set(i, detach(get(i)));
     return builder.build();
   }
 

@@ -10,6 +10,23 @@ import org.graalvm.word.*;
 
 /** Direct static C bindings. No FFM downcalls or dynamic loading are reachable in this path. */
 final class SvmBackend implements BuffaWire.Backend {
+  private final long resultAddress;
+  private boolean busy;
+  private final Runnable releaseAction = this::releaseResult;
+  private boolean closed;
+
+  private VoidPointer acquireResult() {
+    if (closed || busy) throw new IllegalStateException("Native backend unavailable");
+    busy = true;
+    return WordFactory.pointer(resultAddress);
+  }
+
+  private void releaseResult() {
+    if (!busy) throw new IllegalStateException("Native result already released");
+    Buffa.release(WordFactory.pointer(resultAddress));
+    busy = false;
+  }
+
   static final class Factory implements BuffaWire.NativeFactory {
     @Override
     public BuffaWire.Backend create() {
@@ -22,6 +39,9 @@ final class SvmBackend implements BuffaWire.Backend {
     CTypeConversion.asByteBuffer(Buffa.fingerprint(), 64).get(fingerprint);
     if (!new String(fingerprint, StandardCharsets.US_ASCII).equals(Buffa.ABI_FINGERPRINT))
       throw new IllegalStateException("Myna/Buffa ABI fingerprint mismatch");
+    VoidPointer result = UnmanagedMemory.calloc(Buffa.Result.SIZE);
+    if (result.isNull()) throw new OutOfMemoryError("Native result allocation");
+    resultAddress = result.rawValue();
   }
 
   @Override
@@ -37,8 +57,7 @@ final class SvmBackend implements BuffaWire.Backend {
   public BuffaWire.Tape decode(WireInput input, Limits limits, int depth, int nativeBytes) {
     if (!(input.lease.attachment instanceof BuffaSvm.Address address))
       throw new IllegalArgumentException("Input is not SVM native memory");
-    VoidPointer result = UnmanagedMemory.calloc(Buffa.Result.SIZE);
-    if (result.isNull()) throw new OutOfMemoryError("Native result allocation");
+    VoidPointer result = acquireResult();
     try {
       BuffaWire.status(
           Buffa.decode(
@@ -55,19 +74,9 @@ final class SvmBackend implements BuffaWire.Backend {
               : CTypeConversion.asByteBuffer(
                   Buffa.Result.data(result),
                   Math.toIntExact(Math.multiplyExact(count, Buffa.Field.SIZE)));
-      long resultAddress = result.rawValue();
-      return new BuffaWire.Tape(
-          bytes,
-          count,
-          capacity,
-          () -> {
-            VoidPointer ownedResult = WordFactory.pointer(resultAddress);
-            Buffa.release(ownedResult);
-            UnmanagedMemory.free(ownedResult);
-          });
+      return new BuffaWire.Tape(bytes, count, capacity, releaseAction);
     } catch (RuntimeException | Error failure) {
-      Buffa.release(result);
-      UnmanagedMemory.free(result);
+      releaseResult();
       throw failure;
     }
   }
@@ -84,8 +93,7 @@ final class SvmBackend implements BuffaWire.Backend {
         || !(input.lease.attachment instanceof BuffaSvm.Address inputAddress)
         || !(payload.lease.attachment instanceof BuffaSvm.Address payloadAddress))
       throw new IllegalArgumentException("Inputs are not SVM native memory");
-    VoidPointer result = UnmanagedMemory.calloc(Buffa.Result.SIZE);
-    if (result.isNull()) throw new OutOfMemoryError("Native typed result allocation");
+    VoidPointer result = acquireResult();
     try {
       BuffaWire.status(
           Buffa.typed(
@@ -108,23 +116,19 @@ final class SvmBackend implements BuffaWire.Backend {
               : CTypeConversion.asByteBuffer(
                   Buffa.Result.data(result),
                   Math.toIntExact(Math.multiplyExact(count, Buffa.Field.SIZE)));
-      long address = result.rawValue();
-      return new BuffaWire.Tape(
-          bytes,
-          count,
-          capacity,
-          () -> {
-            VoidPointer owned = WordFactory.pointer(address);
-            Buffa.release(owned);
-            UnmanagedMemory.free(owned);
-          });
+      return new BuffaWire.Tape(bytes, count, capacity, releaseAction);
     } catch (RuntimeException | Error failure) {
-      Buffa.release(result);
-      UnmanagedMemory.free(result);
+      releaseResult();
       throw failure;
     }
   }
 
   @Override
-  public void close() {}
+  public void close() {
+    if (busy) throw new IllegalStateException("Native result still in use");
+    if (!closed) {
+      closed = true;
+      UnmanagedMemory.free(WordFactory.pointer(resultAddress));
+    }
+  }
 }

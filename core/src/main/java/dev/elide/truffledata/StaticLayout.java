@@ -1,5 +1,6 @@
 package dev.elide.truffledata;
 
+import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.TruffleLanguage;
@@ -28,6 +29,7 @@ public final class StaticLayout {
 
   private final Schema schema;
   private final Limits limits;
+  private final boolean primitivePayload;
   private final StaticShape<DefaultStaticObjectFactory> shape;
 
   @CompilationFinal(dimensions = 1)
@@ -71,6 +73,13 @@ public final class StaticLayout {
       }
     }
     shape = builder.build();
+    boolean primitives = true;
+    for (int i = 0; i < schema.size(); i++) {
+      Field.Kind kind = schema.field(i).kind();
+      primitives &=
+          kind == Field.Kind.INT64 || kind == Field.Kind.FLOAT64 || kind == Field.Kind.BOOLEAN;
+    }
+    primitivePayload = primitives;
   }
 
   private static Storage storage(Field field) {
@@ -149,11 +158,14 @@ public final class StaticLayout {
   public <E extends Exception> Record read(Source<E> source, @Nullable PayloadBudget parent)
       throws E {
     Object storage = shape.getFactory().create();
-    PayloadBudget budget = new PayloadBudget(limits, parent);
-    budget.cells(schema.size());
+    // The constructor already checked local cell limits. Valid primitive fields carry no
+    // nested cells or string payload; cumulative parent accounting still charges the row.
+    PayloadBudget budget = primitivePayload ? null : new PayloadBudget(limits, parent);
+    if (budget != null) budget.cells(schema.size());
+    else if (parent != null) parent.cells(schema.size());
     for (int i = 0; i < schema.size(); i++) {
       Object value = Values.normalize(source.read(i));
-      budget.accept(value);
+      if (budget != null) budget.accept(value);
       Values.validate(schema.field(i), value);
       byte state = (byte) (value == DataNull.INSTANCE ? 1 : value == Missing.INSTANCE ? 2 : 0);
       StaticProperty stateProperty = states[i];
@@ -200,6 +212,89 @@ public final class StaticLayout {
       case BOOLEAN -> property.getBoolean(storage);
       case OBJECT -> Objects.requireNonNull(property.getObject(storage));
     };
+  }
+
+  /** Direct access for a generated getter bound to this immutable layout. */
+  public Object get(Record row, int ordinal) {
+    if (!CompilerDirectives.isPartialEvaluationConstant(this)) return genericGet(row, ordinal);
+    return directGet(row, ordinal);
+  }
+
+  @TruffleBoundary
+  private Object genericGet(Record row, int ordinal) {
+    return directGet(row, ordinal);
+  }
+
+  private Object directGet(Record row, int ordinal) {
+    if (row.layout != this) throw new ContractViolation("Static layout mismatch");
+    Objects.checkIndex(ordinal, properties.length);
+    return value(row.storage, properties[ordinal], storageKinds[ordinal], states[ordinal]);
+  }
+
+  /** Primitive direct access, retaining type, null, and missing checks. */
+  public long getLong(Record row, int ordinal) {
+    if (!CompilerDirectives.isPartialEvaluationConstant(this)) return genericLong(row, ordinal);
+    return directLong(row, ordinal);
+  }
+
+  @TruffleBoundary
+  private long genericLong(Record row, int ordinal) {
+    return directLong(row, ordinal);
+  }
+
+  private long directLong(Record row, int ordinal) {
+    if (row.layout != this) throw new ContractViolation("Static layout mismatch");
+    Objects.checkIndex(ordinal, properties.length);
+    if (!longField(ordinal)) throw new ContractViolation("Expected INT64");
+    StaticProperty state = states[ordinal];
+    if (state != null && state.getByte(row.storage) != 0)
+      throw new ContractViolation("Expected present, non-null INT64");
+    return integer(row.storage, properties[ordinal], storageKinds[ordinal]);
+  }
+
+  public double getDouble(Record row, int ordinal) {
+    if (!CompilerDirectives.isPartialEvaluationConstant(this)) return genericDouble(row, ordinal);
+    return directDouble(row, ordinal);
+  }
+
+  @TruffleBoundary
+  private double genericDouble(Record row, int ordinal) {
+    return directDouble(row, ordinal);
+  }
+
+  private double directDouble(Record row, int ordinal) {
+    if (row.layout != this) throw new ContractViolation("Static layout mismatch");
+    Objects.checkIndex(ordinal, properties.length);
+    Storage kind = storageKinds[ordinal];
+    if (kind != Storage.FLOAT && kind != Storage.DOUBLE)
+      throw new ContractViolation("Unexpected primitive type");
+    StaticProperty state = states[ordinal];
+    if (state != null && state.getByte(row.storage) != 0)
+      throw new ContractViolation("Expected present, non-null value");
+    StaticProperty property = properties[ordinal];
+    return kind == Storage.FLOAT ? property.getFloat(row.storage) : property.getDouble(row.storage);
+  }
+
+  public boolean getBoolean(Record row, int ordinal) {
+    if (!CompilerDirectives.isPartialEvaluationConstant(this)) return genericBoolean(row, ordinal);
+    return directBoolean(row, ordinal);
+  }
+
+  @TruffleBoundary
+  private boolean genericBoolean(Record row, int ordinal) {
+    return directBoolean(row, ordinal);
+  }
+
+  private boolean directBoolean(Record row, int ordinal) {
+    if (row.layout != this) throw new ContractViolation("Static layout mismatch");
+    Objects.checkIndex(ordinal, properties.length);
+    Storage kind = storageKinds[ordinal];
+    if (kind != Storage.BOOLEAN) throw new ContractViolation("Unexpected primitive type");
+    StaticProperty state = states[ordinal];
+    if (state != null && state.getByte(row.storage) != 0)
+      throw new ContractViolation("Expected present, non-null value");
+    StaticProperty property = properties[ordinal];
+    return property.getBoolean(row.storage);
   }
 
   @ExportLibrary(DataLibrary.class)
