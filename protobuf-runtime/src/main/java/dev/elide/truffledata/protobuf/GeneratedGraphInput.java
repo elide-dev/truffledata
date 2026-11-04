@@ -13,6 +13,8 @@ public final class GeneratedGraphInput {
   private final ProtoPlan root;
   private int position;
   private int limit;
+  // Counts are nonnegative, so the sign bit can track whether input lengths remain reusable.
+  // Mask it during accounting; every value through Long.MAX_VALUE remains representable.
   private long cells;
   private long bytes;
 
@@ -50,9 +52,18 @@ public final class GeneratedGraphInput {
   }
 
   public void cells(long count) {
-    if (count < 0 || count > root.limits().maxCells() - cells)
+    long used = cells & Long.MAX_VALUE;
+    if (count < 0 || count > root.limits().maxCells() - used)
       throw invalid("Generated cell budget exceeded");
-    cells += count;
+    cells = (cells & Long.MIN_VALUE) | (used + count);
+  }
+
+  public void discardEncodedSize() {
+    cells |= Long.MIN_VALUE;
+  }
+
+  public boolean encodedSizeReusable() {
+    return cells >= 0;
   }
 
   private void bytes(long count) {
@@ -114,7 +125,10 @@ public final class GeneratedGraphInput {
       int next = source[position++] & 255;
       if (shift == 63 && (next & 254) != 0) throw invalid("Varint overflow");
       value |= (long) (next & 127) << shift;
-      if ((next & 128) == 0) return value;
+      if ((next & 128) == 0) {
+        if (shift != 0 && next == 0) discardEncodedSize();
+        return value;
+      }
     }
     throw invalid("Malformed varint");
   }
@@ -170,6 +184,8 @@ public final class GeneratedGraphInput {
 
   public ByteArrayOutputStream enumeration(
       @Nullable ByteArrayOutputStream out, int number, long value) {
+    // Unknown packed enums are emitted unpacked, changing the enclosing encoded length.
+    discardEncodedSize();
     long tag = (long) number << 3;
     bytes(GeneratedOutput.varintSize(tag) + GeneratedOutput.varintSize(value));
     if (out == null) out = new ByteArrayOutputStream();

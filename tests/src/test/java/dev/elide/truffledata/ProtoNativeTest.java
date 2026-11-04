@@ -33,6 +33,20 @@ class ProtoNativeTest {
     return TruffleDataContracts.create(null, Limits.DEFAULT, 32, WIRE_LIMIT).type(name);
   }
 
+  private static ProtoPlan boundedPlan(String name, Limits limits, int depth, int wire) {
+    Map<String, ProtoPlan.Type> definitions = new LinkedHashMap<>();
+    var pending = new ArrayDeque<ProtoPlan>();
+    pending.add(plan(name));
+    while (!pending.isEmpty()) {
+      var current = pending.removeFirst();
+      if (definitions.putIfAbsent(current.name(), current.definition()) != null) continue;
+      for (int i = 0; i < current.size(); i++)
+        if (current.field(i).kind().message()) pending.add(current.nested(i));
+    }
+    return new ProtoPlan.Model(null, List.copyOf(definitions.values()), limits, depth, wire)
+        .type(name);
+  }
+
   private static Object get(ProtoRow row, String field) {
     return DATA.read(row, row.schema().indexOf(field));
   }
@@ -385,9 +399,7 @@ class ProtoNativeTest {
 
   @Test
   void textPayloadAndCellBudgetsAreSharedAcrossFields() {
-    var small =
-        TruffleDataContracts.create(null, new Limits(10, 256, 100, 2), 16, 10000)
-            .type("truffledata.lossless.Sample");
+    var small = boundedPlan("truffledata.lossless.Sample", new Limits(10, 256, 100, 2), 16, 10000);
     assertEquals("中", get(small.parseText("text: '中'"), "text"));
     assertEquals("中", get(small.parseJson("{\"text\":\"中\"}"), "text"));
     assertThrows(ContractViolation.class, () -> small.parseText("text: 'ab'"));
@@ -853,9 +865,7 @@ class ProtoNativeTest {
 
   @Test
   void resourceLimitsAndInvalidPlansAreEnforced() {
-    var small =
-        TruffleDataContracts.create(null, new Limits(10, 256, 100, 2), 16, 1024)
-            .type("truffledata.lossless.Sample");
+    var small = boundedPlan("truffledata.lossless.Sample", new Limits(10, 256, 100, 2), 16, 1024);
     assertThrows(ContractViolation.class, () -> small.decode(new byte[] {122, 2, 97, 98}));
     // One CJK code point consumes two UTF-16 bytes, despite requiring three wire bytes.
     assertEquals(

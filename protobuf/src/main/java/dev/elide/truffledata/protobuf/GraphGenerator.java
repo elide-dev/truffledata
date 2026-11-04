@@ -123,10 +123,18 @@ final class GraphGenerator {
   private static void scalar(StringBuilder out, ProtoPlan.Type type, int i, boolean packed)
       throws Exception {
     var f = type.fields().get(i);
+    if (f.kind().wire == 0) out.append(" long encoded=input.varint();\n");
     out.append(f.repeated() ? scalarType(f) : type(f))
         .append(" value=")
-        .append(read(f))
+        .append(f.kind().wire == 0 ? read(f).replace("input.varint()", "encoded") : read(f))
         .append(";\n");
+    switch (f.kind()) {
+      case INT32, ENUM, UINT32 -> out.append(" if(value!=encoded) input.discardEncodedSize();\n");
+      case SINT32 ->
+          out.append(" if(encoded!=(encoded&0xffffffffL)) input.discardEncodedSize();\n");
+      case BOOL -> out.append(" if(encoded!=0 && encoded!=1) input.discardEncodedSize();\n");
+      default -> {}
+    }
     if (f.enumType() != null && !f.enumType().open()) {
       out.append(" boolean accepted=switch((int)value) {case ")
           .append(
@@ -187,6 +195,7 @@ final class GraphGenerator {
             " }\n"
                 + " private void consume(dev.elide.truffledata.protobuf.GeneratedGraphInput"
                 + " input,int group,int depth) {\n")
+        .append(" int bodyStart=input.position();\n")
         .append(
             " while(input.remaining()) { int start=input.position(); int tag=input.tag();"
                 + " if((tag&7)==4) { if(group==0 || group!=(tag>>>3)) throw"
@@ -195,6 +204,14 @@ final class GraphGenerator {
     for (int i = 0; i < fields.size(); i++) {
       var f = fields.get(i);
       out.append(" case ").append((f.number() << 3) | f.kind().wire).append(" -> {\n");
+      if (!f.repeated()) {
+        long mask = 1L << i;
+        if (f.oneof() >= 0)
+          for (int n = 0; n < fields.size(); n++)
+            if (fields.get(n).oneof() == f.oneof()) mask |= 1L << n;
+        out.append(" if((presence&").append(mask).append("L)!=0) input.discardEncodedSize();\n");
+      } else if (f.packed()) out.append(" input.discardEncodedSize();\n");
+      if (f.map() || f.kind() == ProtoPlan.Kind.GROUP) out.append(" input.discardEncodedSize();\n");
       if (f.kind().message()) {
         if (!f.repeated()) select(out, type, i);
         out.append(" var child=");
@@ -221,15 +238,25 @@ final class GraphGenerator {
             .append((f.number() << 3) | 2)
             .append(
                 " -> { int parent=input.limit(); int end=input.end(); input.limit(end);"
-                    + " while(input.remaining()) {\n");
+                    + " if(!input.remaining()) input.discardEncodedSize();\n");
+        if (f.packed())
+          out.append(" if((presence&")
+              .append(1L << i)
+              .append("L)!=0) input.discardEncodedSize();\n");
+        else out.append(" input.discardEncodedSize();\n");
+        out.append(" while(input.remaining()) {\n");
         scalar(out, type, i, true);
         out.append(" } input.limit(parent); }\n");
       }
     }
     out.append(
         " default -> unknown=input.unknown(unknown,start,tag,depth); } } if(group!=0) throw"
-            + " dev.elide.truffledata.protobuf.GeneratedGraphInput.invalid(\"Unterminated group\");"
-            + " }\n");
+            + " dev.elide.truffledata.protobuf.GeneratedGraphInput.invalid(\"Unterminated"
+            + " group\");\n");
+    if (fields.size() <= 32)
+      out.append(
+          " presence=(presence&0xffffffffL)" + " | ((input.position()-bodyStart+1L)<<32);\n");
+    out.append(" }\n");
     out.append(" private ")
         .append(message(type.name()))
         .append(" finish(dev.elide.truffledata.protobuf.GeneratedGraphInput input,int depth) {\n")
@@ -298,9 +325,11 @@ final class GraphGenerator {
               .append(".bytes());\n");
         out.append(" if(value")
             .append(i)
-            .append(".size()==0) presence &= ~")
+            .append(".size()==0) { if((presence&")
             .append(1L << i)
-            .append("L;\n");
+            .append("L)!=0) input.discardEncodedSize(); presence &= ~")
+            .append(1L << i)
+            .append("L; }\n");
       } else if (f.kind().message()) {
         out.append(" Object value")
             .append(i)
@@ -326,10 +355,18 @@ final class GraphGenerator {
                 case "DataArray" -> "f" + i + ".size()==0";
                 default -> "((ExactNumber)f" + i + ").decimal().signum()==0";
               };
-          out.append(" if(").append(zero).append(") presence &= ~").append(1L << i).append("L;\n");
+          out.append(" if(")
+              .append(zero)
+              .append(") { if((presence&")
+              .append(1L << i)
+              .append("L)!=0) input.discardEncodedSize(); presence &= ~")
+              .append(1L << i)
+              .append("L; }\n");
         }
       }
     }
+    if (fields.size() <= 32)
+      out.append(" if(!input.encodedSizeReusable()) presence&=0xffffffffL;\n");
     out.append(" return new ")
         .append(message(type.name()))
         .append(

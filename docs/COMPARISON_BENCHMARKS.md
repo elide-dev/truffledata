@@ -500,3 +500,14 @@ SQL decoder wrappers and stock's aliased-byte decoder still expose overhead to a
 the objective of matching stock across the supported contexts is not complete. Native
 allocation remains outside the Java heap counters. See the raw report for every case,
 process range, and borrowing/copying distinction.
+
+The next [`2fae8de` run](../benchmarks/results/svm-comparison-2fae8de/comparison.json)
+keeps the same 120 cells and adds direct generated graph serializers and narrow decode-state
+fields. Generated nested serialization moves from 4.07 µs / 1130.50 bytes to 1.45 µs /
+192.50 bytes. Stock in that run measures 0.67 µs / 436.50 bytes: the generated writer now
+allocates less, but is still slower. Nested decode allocation drops from 1895 to 1800.50
+bytes, versus stock's 1776.75. Full-consumption generated decoding measures 0.97 µs versus
+stock's 1.15 µs, with overlapping process ranges. Generic serialization also avoids temporary
+UTF-8 arrays; its nested serialization allocation falls from 1130.50 to 556 bytes.
+[The complete native run](https://app.buildbuddy.io/invocation/d7d680e7-ccd7-4b6c-b5e0-a06e0a6fa1a4)
+passes the comparison, both native access gates, and the protobuf-free native consumer.

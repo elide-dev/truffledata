@@ -24,6 +24,71 @@ class GeneratedGraphTest {
   }
 
   @Test
+  void reusableInputSizesRemainCorrectAcrossCanonicalizationAndWidePresence() {
+    var plans = model();
+    var plan = plans.type(PREFIX + "Sample");
+    var access = new TruffleDataContracts.Access_truffledata$lossless$Sample(plan);
+    for (byte[] wire :
+        List.of(
+            new byte[] {8, 0},
+            new byte[] {8, (byte) 128, 0},
+            new byte[] {8, -1, -1, -1, -1, 15},
+            new byte[] {8, 1, 8, 2},
+            new byte[] {8, 1, 8, 0},
+            new byte[] {16, 0},
+            new byte[] {32, 0},
+            new byte[] {40, (byte) 129, (byte) 128, (byte) 128, (byte) 128, 16},
+            new byte[] {80, 1, 90, 0},
+            new byte[] {90, 2, 8, 1, 90, 3, 18, 1, 65},
+            new byte[] {74, 2, 2, 4, 74, 1, 6},
+            new byte[] {72, 2, 72, 4},
+            new byte[] {74, 0},
+            new byte[] {(byte) 178, 1, 2, 0, 1},
+            new byte[] {18, 0},
+            new byte[] {122, 0},
+            new byte[] {26, 0},
+            new byte[] {112, 2},
+            new byte[] {112, 0},
+            new byte[] {112, (byte) 128, 1},
+            new byte[] {(byte) 248, 1, (byte) 129, 0},
+            new byte[] {(byte) 136, 0, 1},
+            region(8, new byte[] {8, 0}),
+            region(8, new byte[] {18, 0}),
+            region(7, new byte[] {10, 1, 97}))) {
+      equivalent(plan, wire, access.decode(wire));
+    }
+    var sizing = plans.type(PREFIX + "WireSizing");
+    var packedAccess = new TruffleDataContracts.Access_truffledata$lossless$WireSizing(sizing);
+    for (byte[] wire :
+        List.of(
+            new byte[] {10, 3, 1, 2, 3},
+            new byte[] {18, 0},
+            new byte[] {18, 2, 0, 1},
+            new byte[] {16, 1, 16, 0},
+            new byte[] {18, 1, 2})) equivalent(sizing, wire, packedAccess.decode(wire));
+    var wide = plans.type(PREFIX + "WideGraph");
+    byte[] wire = wide.encode(wide.parseText("f33: 9 f34: 10 child {a: 7}"));
+    var actual = new TruffleDataContracts.Access_truffledata$lossless$WideGraph(wide).decode(wire);
+    equivalent(wide, wire, actual);
+    assertTrue(actual.has(32));
+    assertTrue(actual.has(33));
+    assertTrue(actual.has(34));
+    assertFalse(actual.has(31));
+    assertEquals(9, actual.get_f33());
+    assertEquals(10, actual.get_f34());
+    var input =
+        new GeneratedGraphInput(
+            model(new Limits(1024, 256, Long.MAX_VALUE, 1000), 32, 1000).type(plan.name()),
+            new byte[0]);
+    assertTrue(input.encodedSizeReusable());
+    input.discardEncodedSize();
+    input.cells(Long.MAX_VALUE);
+    input.cells(0);
+    assertFalse(input.encodedSizeReusable());
+    assertThrows(ContractViolation.class, () -> input.cells(1));
+  }
+
+  @Test
   void graphEncodingBudgetsCheckCanonicalExpansionAndReturnIndependentOutputs() {
     var full = model().type(PREFIX + "Sample");
     var access = new TruffleDataContracts.Access_truffledata$lossless$Sample(full);
@@ -143,7 +208,7 @@ class GeneratedGraphTest {
     var random = new Random(0x6aaf);
     for (var decoder : decoders) {
       byte[] seed = decoder.plan().encode(decoder.plan().parseText(decoder.text()));
-      for (int attempt = 0; attempt < 256; attempt++) {
+      for (int attempt = 0; attempt < 1024; attempt++) {
         byte[] wire = Arrays.copyOf(seed, random.nextInt(seed.length + 8));
         for (int edit = 0; edit < 1 + attempt % 3 && wire.length > 0; edit++)
           wire[random.nextInt(wire.length)] = (byte) random.nextInt(256);

@@ -132,6 +132,7 @@ final class EncoderGenerator {
       out.append(" } return checkedSize(size); }\n");
     }
     out.append(" private int sizeForGraph() {\n");
+    out.append(" int decoded=decodedWireSize(); if(decoded>=0) return checkedSize(decoded);\n");
     if (OwnedGenerator.inlineSupported(schema)) out.append(" return encodedSize(); }\n");
     else {
       out.append(" long size=unknownSize();\n");

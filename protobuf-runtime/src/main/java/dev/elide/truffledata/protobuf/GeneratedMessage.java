@@ -12,6 +12,8 @@ import java.util.Objects;
 public abstract class GeneratedMessage extends AbstractRow implements ProtoAccess {
   private static final byte[] EMPTY = new byte[0];
   private final ProtoPlan plan;
+  // For <=32 fields, the high bits can hold a decoder-proven encoded size plus one.
+  // Zero means unknown; wider messages use every bit for presence and have no size cache.
   private final long presence;
   final byte[] unknown;
 
@@ -52,6 +54,11 @@ public abstract class GeneratedMessage extends AbstractRow implements ProtoAcces
 
   protected final boolean isSet(long mask) {
     return (presence & mask) != 0;
+  }
+
+  /** Generated decoders can retain a proven wire size in spare, immutable presence bits. */
+  protected final int decodedWireSize() {
+    return plan.size() <= 32 ? (int) ((presence >>> 32) - 1) : -1;
   }
 
   protected final int unknownSize() {
