@@ -264,8 +264,15 @@ public final class ProtoRow extends AbstractRow {
         if (depth >= maxDepth) throw new ContractViolation("Protobuf nesting budget exceeded");
         cells(row.plan.size());
         bytes(row.unknown.length);
-        var data = DataLibrary.factory().getUncached();
-        for (int i = 0; i < row.plan.size(); i++) value(data.read(row, i), depth + 1, maxDepth);
+        // Owned storage is immutable and has a fixed export class. Avoid redispatching through
+        // the guest-facing ProtoRow facade for each field in this host-side accounting walk.
+        // Compact rows contain only primitive integers, so have no nested or string payload.
+        if (!row.compact()) {
+          Object storage = row.storage;
+          var data = DataLibrary.factory().getUncached(storage);
+          for (int i = 0; i < row.plan.size(); i++)
+            value(data.read(storage, i), depth + 1, maxDepth);
+        }
       }
     }
   }
