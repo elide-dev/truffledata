@@ -466,6 +466,8 @@ public final class Comparison {
   /** Stock getters under the same guest call, loop, checksum, and tier checks as TD reads. */
   private static final class StockReadRoot extends RootNode {
     private final int kind;
+    private final com.oracle.truffle.api.profiles.ValueProfile bytesClass =
+        com.oracle.truffle.api.profiles.ValueProfile.createClassProfile();
 
     StockReadRoot(int kind) {
       super(ComparisonLanguage.current());
@@ -492,7 +494,7 @@ public final class Comparison {
         if (kind == 3) {
           sum += mixedProjection((com.google.protobuf.Type) row);
         } else if (kind == 1) {
-          sum += ((BytesValue) row).getValue().size();
+          sum += bytesClass.profile(((BytesValue) row).getValue()).size();
         } else if (kind == 2) {
           sum += (Long) row;
         } else {
