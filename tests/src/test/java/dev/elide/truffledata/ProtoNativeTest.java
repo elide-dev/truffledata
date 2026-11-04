@@ -14,6 +14,155 @@ class ProtoNativeTest {
   private static final DataLibrary DATA = DataLibrary.factory().getUncached();
   private static final int WIRE_LIMIT = 1024 * 1024;
 
+  private static Descriptor presenceDescriptor(int size, boolean required) throws Exception {
+    var message = DescriptorProtos.DescriptorProto.newBuilder().setName("Presence");
+    if (size > 1)
+      message.addOneofDecl(DescriptorProtos.OneofDescriptorProto.newBuilder().setName("choice"));
+    for (int i = 0; i < size; i++) {
+      var field =
+          DescriptorProtos.FieldDescriptorProto.newBuilder()
+              .setName("f" + i)
+              .setNumber(i + 1)
+              .setType(DescriptorProtos.FieldDescriptorProto.Type.TYPE_INT64)
+              .setLabel(DescriptorProtos.FieldDescriptorProto.Label.LABEL_OPTIONAL);
+      if (size > 1 && (i == 0 || i == size - 1)) field.setOneofIndex(0);
+      else {
+        field.setDefaultValue("7");
+        if (required && (i == size - 2 || Set.of(31, 32, 63, 64, 127, 128).contains(i)))
+          field.setLabel(DescriptorProtos.FieldDescriptorProto.Label.LABEL_REQUIRED);
+      }
+      message.addField(field);
+    }
+    return FileDescriptor.buildFrom(
+            DescriptorProtos.FileDescriptorProto.newBuilder()
+                .setName("presence.proto")
+                .setPackage("presence")
+                .setSyntax("proto2")
+                .addMessageType(message)
+                .build(),
+            new FileDescriptor[0])
+        .getMessageTypes()
+        .getFirst();
+  }
+
+  private static void assertPresence(DynamicMessage expected, ProtoRow actual) throws Exception {
+    var fields = expected.getDescriptorForType().getFields();
+    for (int i = 0; i < fields.size(); i++) {
+      assertEquals(expected.hasField(fields.get(i)), actual.has(i), "Presence ordinal " + i);
+      assertEquals(
+          expected.getField(fields.get(i)), DATA.readLong(actual, i), "Value ordinal " + i);
+    }
+    assertEquals(
+        expected,
+        DynamicMessage.parseFrom(expected.getDescriptorForType(), actual.plan().encode(actual)));
+    assertThrows(IndexOutOfBoundsException.class, () -> actual.has(-1));
+    assertThrows(IndexOutOfBoundsException.class, () -> actual.has(fields.size()));
+    assertThrows(IndexOutOfBoundsException.class, () -> actual.has(Integer.MAX_VALUE));
+  }
+
+  @Test
+  void packedPresenceMatchesStockAcrossWordsOneofsDefaultsAndRetainedBuilders() throws Exception {
+    try (var context = org.graalvm.polyglot.Context.newBuilder("td-test").build()) {
+      context.initialize("td-test");
+      context.enter();
+      try {
+        for (int size : new int[] {0, 1, 32, 64, 65, 128, 129, 256}) {
+          var descriptor = presenceDescriptor(size, false);
+          for (boolean useStatic : new boolean[] {false, true}) {
+            var plan =
+                ProtoCompiler.compile(
+                    useStatic ? TestLanguage.current().language() : null,
+                    descriptor,
+                    Limits.DEFAULT,
+                    8,
+                    WIRE_LIMIT);
+            var stock = DynamicMessage.newBuilder(descriptor);
+            var builder = plan.newBuilder();
+            List<ProtoRow> retained = new ArrayList<>();
+            List<DynamicMessage> expected = new ArrayList<>();
+            retained.add(builder.build());
+            expected.add(stock.build());
+            var random = new Random(77591 + size);
+            for (int iteration = 0; size != 0 && iteration < 48; iteration++) {
+              int[] boundaries = {0, 31, 32, 63, 64, 127, 128, size - 1};
+              int ordinal =
+                  iteration < boundaries.length
+                      ? boundaries[iteration] % size
+                      : random.nextInt(size);
+              if (iteration >= boundaries.length && iteration % 3 == 0) {
+                builder.clear(ordinal);
+                stock.clearField(descriptor.getFields().get(ordinal));
+              } else {
+                long value = iteration < boundaries.length ? 0 : random.nextLong();
+                builder.set(ordinal, value);
+                stock.setField(descriptor.getFields().get(ordinal), value);
+              }
+              retained.add(builder.build());
+              expected.add(stock.build());
+            }
+            // Revisit every snapshot after the mutable builder has changed all its presence words.
+            for (int i = 0; i < retained.size(); i++) {
+              var message = expected.get(i);
+              assertPresence(message, retained.get(i));
+              byte[] wire = message.toByteArray();
+              assertPresence(message, plan.decode(wire));
+              assertPresence(
+                  message, plan.decode(java.nio.ByteBuffer.wrap(wire).asReadOnlyBuffer()));
+            }
+            var withUnknown =
+                stock
+                    .clone()
+                    .setUnknownFields(
+                        UnknownFieldSet.newBuilder()
+                            .addField(
+                                1000, UnknownFieldSet.Field.newBuilder().addVarint(991).build())
+                            .build())
+                    .build();
+            assertPresence(withUnknown, plan.decode(withUnknown.toByteArray()));
+            if (size > 1) {
+              var last = descriptor.getFields().get(size - 1);
+              var textExpected = DynamicMessage.newBuilder(descriptor).setField(last, 0L).build();
+              assertPresence(textExpected, plan.parseText("f" + (size - 1) + ": 0"));
+              assertPresence(textExpected, plan.parseJson("{\"f" + (size - 1) + "\":0}"));
+              assertThrows(
+                  ContractViolation.class,
+                  () -> plan.parseJson("{\"f0\":0,\"f" + (size - 1) + "\":0}"));
+            }
+          }
+        }
+      } finally {
+        context.leave();
+      }
+    }
+  }
+
+  @Test
+  void packedRequiredPresenceRemainsDistinctFromReadableDefaultsAcrossWords() throws Exception {
+    for (int size : new int[] {64, 65, 128, 129, 256}) {
+      var descriptor = presenceDescriptor(size, true);
+      var plan = ProtoCompiler.compile(null, descriptor, Limits.DEFAULT, 8, WIRE_LIMIT);
+      var stock = DynamicMessage.newBuilder(descriptor);
+      var builder = plan.newBuilder();
+      assertThrows(ContractViolation.class, builder::build);
+      assertThrows(ContractViolation.class, () -> plan.decode(new byte[0]));
+      for (var field : descriptor.getFields()) {
+        if (!field.isRequired()) continue;
+        builder.set(field.getIndex(), field.getDefaultValue());
+        stock.setField(field, field.getDefaultValue());
+      }
+      assertPresence(stock.build(), builder.build());
+      for (var field : descriptor.getFields()) {
+        if (!field.isRequired()) continue;
+        builder.clear(field.getIndex());
+        assertThrows(ContractViolation.class, builder::build);
+        var partial = stock.clone().clearField(field).buildPartial();
+        assertThrows(ContractViolation.class, () -> plan.decode(partial.toByteArray()));
+        builder.set(field.getIndex(), field.getDefaultValue());
+      }
+      assertPresence(stock.build(), plan.decode(stock.build().toByteArray()));
+    }
+  }
+
   private static Descriptor descriptor(String name) throws Exception {
     Path path =
         Path.of(

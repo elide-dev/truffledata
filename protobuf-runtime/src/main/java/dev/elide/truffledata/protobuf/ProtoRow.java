@@ -15,44 +15,51 @@ public final class ProtoRow extends AbstractRow implements ProtoAccess {
   private static final DataArray EMPTY_REPEATED = new DataArray(new Object[0]);
   private final ProtoPlan plan;
   final Object storage;
-  private final boolean @Nullable [] present;
+  // Compact integer rows use this word for their first value; other rows use presence bits.
+  private final long presence;
+  private final Object wireState;
 
-  private static final class Scalars {
-    final long first;
-    final long second;
+  /** Only schemas wider than 64 fields need a separate presence object. */
+  private static final class WidePresence {
+    final byte[] unknown;
+    final long[] spill;
 
-    Scalars(long first, long second) {
-      this.first = first;
-      this.second = second;
+    WidePresence(byte[] unknown, long[] spill) {
+      this.unknown = unknown;
+      this.spill = spill;
     }
   }
 
-  final byte[] unknown;
-
   private ProtoRow(
-      ProtoPlan plan, Object[] values, boolean[] present, byte[] unknown, boolean owned) {
+      ProtoPlan plan,
+      Object[] values,
+      long presence,
+      long @Nullable [] spill,
+      byte[] unknown,
+      boolean owned) {
     super(plan.schema());
     this.plan = plan;
     if (plan.compactScalars) {
       long first = (Long) Values.validate(plan.schema().field(0), values[0]);
-      long second =
-          values.length == 2 ? (Long) Values.validate(plan.schema().field(1), values[1]) : 0;
-      storage = new Scalars(first, second);
-      this.present = null;
+      storage =
+          values.length == 2 ? Values.validate(plan.schema().field(1), values[1]) : Long.valueOf(0);
+      this.presence = first;
     } else {
       storage = plan.storage(values);
-      this.present = owned ? present : present.clone();
+      this.presence = presence;
     }
-    this.unknown = unknown.length == 0 ? NO_UNKNOWN_FIELDS : owned ? unknown : unknown.clone();
+    byte[] retained = unknown.length == 0 ? NO_UNKNOWN_FIELDS : owned ? unknown : unknown.clone();
+    wireState =
+        spill == null ? retained : new WidePresence(retained, owned ? spill : spill.clone());
   }
 
   /** Only the bounded scalar decoder calls this constructor after validating wire values. */
   ProtoRow(ProtoPlan plan, long first, long second) {
     super(plan.schema());
     this.plan = plan;
-    storage = new Scalars(first, second);
-    present = null;
-    unknown = NO_UNKNOWN_FIELDS;
+    storage = second;
+    presence = first;
+    wireState = NO_UNKNOWN_FIELDS;
   }
 
   /**
@@ -60,25 +67,55 @@ public final class ProtoRow extends AbstractRow implements ProtoAccess {
    * retained budgets. The caller must never reuse or expose these arrays.
    */
   static ProtoRow decoded(
-      ProtoPlan plan, Object[] values, boolean[] present, byte @Nullable [] unknown) {
-    return new ProtoRow(plan, values, present, unknown == null ? NO_UNKNOWN_FIELDS : unknown, true);
+      ProtoPlan plan,
+      Object[] values,
+      long presence,
+      long @Nullable [] spill,
+      byte @Nullable [] unknown) {
+    return new ProtoRow(
+        plan, values, presence, spill, unknown == null ? NO_UNKNOWN_FIELDS : unknown, true);
   }
 
-  static void selectOneof(ProtoPlan plan, Object[] values, boolean[] present, int ordinal) {
+  static boolean present(long presence, long @Nullable [] spill, int ordinal) {
+    long word = ordinal < 64 ? presence : Objects.requireNonNull(spill)[(ordinal >>> 6) - 1];
+    return (word & (1L << ordinal)) != 0;
+  }
+
+  static long withPresence(long presence, long @Nullable [] spill, int ordinal, boolean set) {
+    long mask = 1L << ordinal;
+    if (ordinal < 64) return set ? presence | mask : presence & ~mask;
+    long[] words = Objects.requireNonNull(spill);
+    int index = (ordinal >>> 6) - 1;
+    words[index] = set ? words[index] | mask : words[index] & ~mask;
+    return presence;
+  }
+
+  static long selectOneof(
+      ProtoPlan plan, Object[] values, long presence, long @Nullable [] spill, int ordinal) {
     int oneof = plan.field(ordinal).oneof();
     if (oneof >= 0) {
       for (int i = 0; i < values.length; i++)
         if (i != ordinal && plan.field(i).oneof() == oneof) {
           values[i] = Builder.defaultValue(plan.field(i));
-          present[i] = false;
+          presence = withPresence(presence, spill, i, false);
         }
     }
+    return presence;
+  }
+
+  byte[] unknown() {
+    return wireState instanceof WidePresence wide ? wide.unknown : (byte[]) wireState;
   }
 
   long scalar(int index) {
     Objects.checkIndex(index, descriptor.size());
-    Scalars scalars = (Scalars) storage;
-    return index == 0 ? scalars.first : scalars.second;
+    return index == 0 ? presence : (Long) storage;
+  }
+
+  private Object boxedScalar(int index) {
+    Objects.checkIndex(index, descriptor.size());
+    // The second scalar already owns an immutable box; generic reads can reuse it.
+    return index == 0 ? Long.valueOf(presence) : storage;
   }
 
   public ProtoPlan plan() {
@@ -92,7 +129,7 @@ public final class ProtoRow extends AbstractRow implements ProtoAccess {
 
   @Override
   public Object get(int ordinal) {
-    if (compact()) return scalar(ordinal);
+    if (compact()) return boxedScalar(ordinal);
     return plan.directValue(storage, ordinal);
   }
 
@@ -104,7 +141,10 @@ public final class ProtoRow extends AbstractRow implements ProtoAccess {
 
   /** Explicit presence, or non-default/non-empty state for implicit and repeated fields. */
   public boolean has(int ordinal) {
-    return present == null ? scalar(ordinal) != 0 : present[ordinal];
+    if (compact()) return scalar(ordinal) != 0;
+    Objects.checkIndex(ordinal, descriptor.size());
+    if (ordinal < 64) return (presence & (1L << ordinal)) != 0;
+    return present(presence, ((WidePresence) wireState).spill, ordinal);
   }
 
   @ExportMessage
@@ -114,14 +154,14 @@ public final class ProtoRow extends AbstractRow implements ProtoAccess {
 
   @Idempotent
   boolean compact() {
-    return present == null;
+    return plan.compactScalars;
   }
 
   @ExportMessage
   static class Read {
     @Specialization(guards = "row.compact()")
     static Object scalar(ProtoRow row, int index) {
-      return row.scalar(index);
+      return row.boxedScalar(index);
     }
 
     @Specialization(guards = "!row.compact()")
@@ -147,14 +187,14 @@ public final class ProtoRow extends AbstractRow implements ProtoAccess {
   @ExportMessage
   double readDouble(int index, @CachedLibrary("this.storage") DataLibrary data)
       throws UnexpectedResultException {
-    if (present == null) throw new UnexpectedResultException(scalar(index));
+    if (compact()) throw new UnexpectedResultException(scalar(index));
     return data.readDouble(storage, index);
   }
 
   @ExportMessage
   boolean readBoolean(int index, @CachedLibrary("this.storage") DataLibrary data)
       throws UnexpectedResultException {
-    if (present == null) throw new UnexpectedResultException(scalar(index));
+    if (compact()) throw new UnexpectedResultException(scalar(index));
     return data.readBoolean(storage, index);
   }
 
@@ -162,13 +202,14 @@ public final class ProtoRow extends AbstractRow implements ProtoAccess {
   public static final class Builder {
     final ProtoPlan plan;
     final Object[] values;
-    final boolean[] present;
+    long presence;
+    final long @Nullable [] spill;
     byte[] unknown = NO_UNKNOWN_FIELDS;
 
     Builder(ProtoPlan plan) {
       this.plan = plan;
       values = new Object[plan.size()];
-      present = new boolean[plan.size()];
+      spill = plan.size() > 64 ? new long[(plan.size() - 1) >>> 6] : null;
       for (int i = 0; i < values.length; i++) values[i] = defaultValue(plan.field(i));
     }
 
@@ -185,7 +226,9 @@ public final class ProtoRow extends AbstractRow implements ProtoAccess {
       validateType(field, value);
       select(ordinal);
       values[ordinal] = value;
-      present[ordinal] = field.explicitPresence() || nonDefault(field, value);
+      presence =
+          withPresence(
+              presence, spill, ordinal, field.explicitPresence() || nonDefault(field, value));
       return this;
     }
 
@@ -219,13 +262,17 @@ public final class ProtoRow extends AbstractRow implements ProtoAccess {
     }
 
     void select(int ordinal) {
-      selectOneof(plan, values, present, ordinal);
+      presence = selectOneof(plan, values, presence, spill, ordinal);
+    }
+
+    boolean has(int ordinal) {
+      return present(presence, spill, ordinal);
     }
 
     @TruffleBoundary
     public Builder clear(int ordinal) {
       values[ordinal] = defaultValue(plan.field(ordinal));
-      present[ordinal] = false;
+      presence = withPresence(presence, spill, ordinal, false);
       return this;
     }
 
@@ -241,10 +288,10 @@ public final class ProtoRow extends AbstractRow implements ProtoAccess {
         if (plan.model.maxDepth < 2)
           throw new ContractViolation("Map value nesting budget exceeded");
         values[1] = plan.nested(1).newBuilder().build();
-        present[1] = true;
+        presence = withPresence(presence, spill, 1, true);
       }
       check(new Budget(plan.model.limits), 1);
-      return new ProtoRow(plan, values, present, unknown, owned);
+      return new ProtoRow(plan, values, presence, spill, unknown, owned);
     }
 
     private void check(Budget budget, int depth) {
@@ -253,7 +300,7 @@ public final class ProtoRow extends AbstractRow implements ProtoAccess {
       budget.cells(values.length);
       budget.bytes(unknown.length);
       for (int i = 0; i < values.length; i++) {
-        if (plan.field(i).required() && !present[i])
+        if (plan.field(i).required() && !has(i))
           throw new ContractViolation("Missing required field");
         budget.value(values[i], depth, plan.model.maxDepth);
       }
@@ -316,7 +363,7 @@ public final class ProtoRow extends AbstractRow implements ProtoAccess {
       } else if (value instanceof ProtoRow row) {
         if (depth >= maxDepth) throw new ContractViolation("Protobuf nesting budget exceeded");
         cells(row.plan.size());
-        bytes(row.unknown.length);
+        bytes(row.unknown().length);
         // Owned storage is immutable and has a fixed export class. Avoid redispatching through
         // the guest-facing ProtoRow facade for each field in this host-side accounting walk.
         // Compact rows contain only primitive integers, so have no nested or string payload.

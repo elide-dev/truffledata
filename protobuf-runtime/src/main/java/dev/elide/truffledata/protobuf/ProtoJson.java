@@ -92,7 +92,7 @@ final class ProtoJson {
       }
       if (field.oneof() >= 0)
         for (int i = 0; i < plan.size(); i++)
-          if (i != ordinal && builder.present[i] && plan.field(i).oneof() == field.oneof())
+          if (i != ordinal && builder.has(i) && plan.field(i).oneof() == field.oneof())
             throw bad("Multiple JSON oneof members");
       Object value;
       if (field.map()) value = map(plan.nested(ordinal), depth + 1);

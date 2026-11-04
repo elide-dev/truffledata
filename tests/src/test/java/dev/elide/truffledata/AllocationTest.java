@@ -9,6 +9,8 @@ import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.object.*;
 import com.oracle.truffle.runtime.OptimizedCallTarget;
 import com.sun.management.ThreadMXBean;
+import dev.elide.truffledata.protobuf.ProtoPlan;
+import dev.elide.truffledata.protobuf.ProtoRow;
 import java.lang.management.ManagementFactory;
 import java.util.*;
 import org.graalvm.polyglot.Context;
@@ -18,6 +20,58 @@ import org.junit.jupiter.api.Test;
  * Measures retained primitive reads, including dispatch. Ingestion and row creation are separate.
  */
 class AllocationTest {
+  @Test
+  void compactIntegerDecodingDoesNotAllocatePresenceOrScalarTuples() {
+    ThreadMXBean bean = (ThreadMXBean) ManagementFactory.getThreadMXBean();
+    bean.setThreadAllocatedMemoryEnabled(true);
+    for (int width : new int[] {1, 2}) {
+      List<ProtoPlan.FieldPlan> fields = new ArrayList<>();
+      for (int i = 0; i < width; i++)
+        fields.add(
+            new ProtoPlan.FieldPlan(
+                "f" + i,
+                i + 1,
+                i == 0 ? ProtoPlan.Kind.INT64 : ProtoPlan.Kind.INT32,
+                false,
+                false,
+                false,
+                false,
+                false,
+                -1,
+                "",
+                null,
+                0L));
+      var plan =
+          new ProtoPlan.Model(
+                  null,
+                  List.of(new ProtoPlan.Type("allocation.Scalar", false, fields)),
+                  Limits.DEFAULT,
+                  8,
+                  32)
+              .type("allocation.Scalar");
+      for (long second : width == 1 ? new long[] {0} : new long[] {0, 1000}) {
+        long first = 1L << 40;
+        var builder = plan.newBuilder().set(0, first);
+        if (width == 2) builder.set(1, second);
+        byte[] wire = plan.encode(builder.build());
+        for (int i = 0; i < 20000; i++) retained = plan.decode(wire);
+        long before = bean.getThreadAllocatedBytes(Thread.currentThread().threadId());
+        for (int i = 0; i < 100000; i++) retained = plan.decode(wire);
+        double bytes =
+            (bean.getThreadAllocatedBytes(Thread.currentThread().threadId()) - before) / 100000.0;
+        var row = (ProtoRow) retained;
+        assertEquals(first, row.getLong(0));
+        if (width == 2) assertEquals(second, row.getLong(1));
+        System.out.printf(
+            "ALLOCATION compact-integer width=%d second=%d %.3f bytes/message%n",
+            width, second, bytes);
+        // Cached/absent second values need only the row. A noncached second gets one Long.
+        assertTrue(
+            bytes <= (second == 0 ? 48 : 72), "Compact integer ingestion allocated extra state");
+      }
+    }
+  }
+
   @Test
   void nestedAccessAndDynamicMutationRemainCorrectAfterCompilation() {
     try (Context context = Context.newBuilder("td-test").allowExperimentalOptions(true).build()) {

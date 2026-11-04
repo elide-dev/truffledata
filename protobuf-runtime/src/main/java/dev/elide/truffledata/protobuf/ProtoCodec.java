@@ -83,7 +83,8 @@ final class ProtoCodec {
   private static final class State {
     final ProtoPlan plan;
     final Object[] values;
-    final boolean[] present;
+    long presence;
+    final long @Nullable [] spill;
     @Nullable ByteArrayOutputStream unknown;
 
     ByteArrayOutputStream unknown() {
@@ -126,14 +127,14 @@ final class ProtoCodec {
       budget.cells(plan.size());
       this.plan = plan;
       values = new Object[plan.size()];
-      present = new boolean[plan.size()];
+      spill = plan.size() > 64 ? new long[(plan.size() - 1) >>> 6] : null;
       for (int i = 0; i < values.length; i++)
         values[i] = ProtoRow.Builder.defaultValue(plan.field(i));
     }
 
     void select(int ordinal) {
-      ProtoRow.selectOneof(plan, values, present, ordinal);
-      present[ordinal] = true;
+      presence = ProtoRow.selectOneof(plan, values, presence, spill, ordinal);
+      presence = ProtoRow.withPresence(presence, spill, ordinal, true);
     }
 
     @SuppressWarnings("unchecked")
@@ -146,7 +147,7 @@ final class ProtoCodec {
         values[ordinal] = list;
       }
       list.add(value);
-      present[ordinal] = true;
+      presence = ProtoRow.withPresence(presence, spill, ordinal, true);
     }
 
     ProtoRow finish(int depth) {
@@ -155,7 +156,7 @@ final class ProtoCodec {
           && values[1] == Missing.INSTANCE) {
         if (depth >= plan.maxDepth()) throw bad("Map value nesting budget exceeded");
         values[1] = plan.nested(1).newBuilder().build();
-        present[1] = true;
+        presence = ProtoRow.withPresence(presence, spill, 1, true);
       }
       retainedCells = 0;
       retainedBytes = 0;
@@ -192,8 +193,11 @@ final class ProtoCodec {
             values[i] = DataArray.copyOf(finished);
           }
         } else retained(values[i], depth);
-        if (!field.explicitPresence()) present[i] = ProtoRow.nonDefault(field, values[i]);
-        if (field.required() && !present[i]) throw bad("Missing required field: " + field.name());
+        if (!field.explicitPresence())
+          presence =
+              ProtoRow.withPresence(presence, spill, i, ProtoRow.nonDefault(field, values[i]));
+        if (field.required() && !ProtoRow.present(presence, spill, i))
+          throw bad("Missing required field: " + field.name());
       }
       if (unknown != null) {
         bytes(unknown.size());
@@ -201,7 +205,7 @@ final class ProtoCodec {
       // Parsing work, required fields and retained totals have all been checked. Static/batch
       // storage still validates normalized field contracts while constructing its final layout.
       return ProtoRow.decoded(
-          plan, values, present, unknown == null ? null : unknown.toByteArray());
+          plan, values, presence, spill, unknown == null ? null : unknown.toByteArray());
     }
   }
 
@@ -331,7 +335,7 @@ final class ProtoCodec {
           && state.values[1] == Missing.INSTANCE) {
         if (depth >= maxDepth) throw bad("Protobuf nesting budget exceeded");
         state.values[1] = new State(state.plan.nested(1), budget);
-        state.present[1] = true;
+        state.presence = ProtoRow.withPresence(state.presence, state.spill, 1, true);
       }
     }
 
@@ -548,7 +552,7 @@ final class ProtoCodec {
         } else field(field, value);
       }
       byte[] unknown =
-          row instanceof ProtoRow owned ? owned.unknown : ((GeneratedMessage) row).unknown;
+          row instanceof ProtoRow owned ? owned.unknown() : ((GeneratedMessage) row).unknown;
       raw(unknown);
     }
 

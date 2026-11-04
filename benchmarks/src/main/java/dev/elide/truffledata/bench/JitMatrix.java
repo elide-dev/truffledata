@@ -11,6 +11,7 @@ import com.oracle.truffle.api.object.*;
 import dev.elide.truffledata.*;
 import dev.elide.truffledata.jdbc.*;
 import dev.elide.truffledata.protobuf.ProtoAccess;
+import dev.elide.truffledata.protobuf.ProtoPlan;
 import dev.elide.truffledata.protobuf.ProtoRow;
 import dev.elide.truffledata.protobuf.ProtobufAdapter;
 import java.math.BigDecimal;
@@ -313,6 +314,61 @@ public final class JitMatrix {
       add(cases, prefix + "/wrong-long", Op.DATA_LONG, row, 1, "", Failure.UNEXPECTED);
       add(cases, prefix + "/wrong-double", Op.DATA_DOUBLE, row, 0, "", Failure.UNEXPECTED);
       add(cases, prefix + "/wrong-boolean", Op.DATA_BOOLEAN, row, 0, "", Failure.UNEXPECTED);
+    }
+    for (boolean useStatic : new boolean[] {false, true}) {
+      for (int size : new int[] {65, 129}) {
+        List<ProtoPlan.FieldPlan> definitions = new ArrayList<>();
+        for (int i = 0; i < size; i++) {
+          boolean choice = i == 0 || i == size - 1;
+          definitions.add(
+              new ProtoPlan.FieldPlan(
+                  "f" + i,
+                  i + 1,
+                  ProtoPlan.Kind.INT64,
+                  false,
+                  false,
+                  true,
+                  false,
+                  false,
+                  choice ? 0 : -1,
+                  "",
+                  null,
+                  choice ? 0L : 7L));
+        }
+        String name = "presence.Wide" + size;
+        var plan =
+            new ProtoPlan.Model(
+                    useStatic ? BenchmarkLanguage.current().language() : null,
+                    List.of(new ProtoPlan.Type(name, false, definitions)),
+                    Limits.DEFAULT,
+                    16,
+                    4096)
+                .type(name);
+        String prefix = "proto-presence/" + (useStatic ? "static" : "batch") + "/" + size;
+        var builder = plan.newBuilder().set(0, 0L);
+        var low = builder.build();
+        for (int index : new int[] {31, 32, 63, 64, 127, 128})
+          if (index < size) builder.set(index, 0L);
+        var row = plan.decode(plan.encode(builder.build()));
+        var absent = plan.decode(new byte[0]);
+        for (int index : new int[] {31, 32, 63, 64, 127, 128}) {
+          if (index >= size) continue;
+          add(cases, prefix + "/has/" + index, Op.PROTO_HAS, row, index, "", true);
+          add(cases, prefix + "/absent/" + index, Op.PROTO_HAS, absent, index, "", false);
+          add(cases, prefix + "/read/" + index, Op.DATA_LONG, row, index, "", 0L);
+          add(
+              cases,
+              prefix + "/default/" + index,
+              Op.DATA_LONG,
+              absent,
+              index,
+              "",
+              index == size - 1 ? 0L : 7L);
+        }
+        add(cases, prefix + "/oneof-low-before", Op.PROTO_HAS, low, 0, "", true);
+        add(cases, prefix + "/oneof-low-after", Op.PROTO_HAS, row, 0, "", false);
+        add(cases, prefix + "/oneof-high", Op.PROTO_HAS, row, size - 1, "", true);
+      }
     }
     for (boolean useStatic : new boolean[] {false, true}) {
       String prefix = "generated-graph/" + (useStatic ? "static" : "batch");
