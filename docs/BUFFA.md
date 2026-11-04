@@ -209,3 +209,8 @@ measured Java allocations per native parsed message were 1,752 bytes for Timesta
 8,208 for descriptor-bound compatibility parsing, 1,624 versus 3,840 for Int64Value, and
 2,352 versus 5,000 for FieldMask. CI caps each native case at 16 KiB. These figures exclude
 native heap allocations and do not establish throughput gains.
+
+Empty repeated-field views share one immutable view per decoded native message, including
+its nested rows. This avoids a wrapper allocation for each empty field. Views from different
+messages retain independent leases; closing a message invalidates all its empty views, while
+detached snapshots remain readable.

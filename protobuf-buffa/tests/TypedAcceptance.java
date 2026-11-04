@@ -126,10 +126,23 @@ final class TypedAcceptance {
         var emptyMessage = nativePlan.parseText("", NATIVE);
         var emptyNumbers = (BorrowedArray) DATA.read(emptyMessage.row(), 8);
         Acceptance.check(emptyNumbers.size() == 0, "empty repeated field");
+        for (int ordinal = 0; ordinal < plan.size(); ordinal++) {
+          if (plan.field(ordinal).repeated()) {
+            Acceptance.check(
+                DATA.read(emptyMessage.row(), ordinal) == emptyNumbers,
+                "one empty view per decoded owner");
+          }
+        }
+        var secondMessage = nativePlan.parseText("", NATIVE);
+        var independentEmpty = (BorrowedArray) DATA.read(secondMessage.row(), 8);
         var emptySnapshot = emptyNumbers.snapshot();
         emptyMessage.close();
         Acceptance.rejects(emptyNumbers::size, IllegalStateException.class);
         Acceptance.check(emptySnapshot.size() == 0, "detached empty repeated field");
+        Acceptance.check(
+            independentEmpty.size() == 0, "empty arrays keep independent message leases");
+        secondMessage.close();
+        Acceptance.rejects(independentEmpty::size, IllegalStateException.class);
         var message = nativePlan.parseText("blob: '\\377' numbers: [1,2] child { a: 42 }", NATIVE);
         var row = message.row();
         var bytes = (BorrowedBinary) DATA.read(row, 2);

@@ -7,6 +7,7 @@ import dev.elide.truffledata.protobuf.*;
 import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
+import org.jspecify.annotations.Nullable;
 
 /** Reusable schema program shared by native binary, textproto and ProtoJSON ingestion. */
 public final class BuffaPlan implements AutoCloseable {
@@ -156,12 +157,19 @@ public final class BuffaPlan implements AutoCloseable {
     final int format;
     final ReadProfile profile;
     long cells;
+    private @Nullable TypedArray emptyArray;
 
     DecodeContext(WireMessage owner, int format, long cells, ReadProfile profile) {
       this.owner = owner;
       this.format = format;
       this.cells = cells;
       this.profile = profile;
+    }
+
+    TypedArray emptyArray() {
+      TypedArray result = emptyArray;
+      if (result == null) emptyArray = result = new TypedArray(owner, State.EMPTY_ITEMS);
+      return result;
     }
 
     void charge(long count) {
@@ -353,7 +361,10 @@ public final class BuffaPlan implements AutoCloseable {
                 throw new ContractViolation("Duplicate JSON map key");
             }
           }
-          values[i] = new TypedArray(context.owner, keys != null ? keys.values().toArray() : items);
+          values[i] =
+              items.length == 0
+                  ? context.emptyArray()
+                  : new TypedArray(context.owner, keys != null ? keys.values().toArray() : items);
         }
         if (!field.explicitPresence()) present[i] = nonDefault(field, values[i]);
         if (field.required() && !present[i]) throw new ContractViolation("Missing required field");
