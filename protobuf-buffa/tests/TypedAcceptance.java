@@ -19,6 +19,7 @@ final class TypedAcceptance {
   }
 
   static void run(BuffaWire decoder) throws Exception {
+    unreadStrings(decoder);
     ProtoPlan plan = plan("Sample");
     Acceptance.rejects(() -> decoder.compile(plan, 1), ContractViolation.class);
     Acceptance.rejects(() -> decoder.compile(plan, 64), ContractViolation.class);
@@ -231,6 +232,37 @@ final class TypedAcceptance {
                     contract.encode(contract.decode(unknown)), contract.encode(parsed.snapshot())),
                 "unknown enum snapshot");
           }
+        }
+      }
+    }
+  }
+
+  private static void unreadStrings(BuffaWire decoder) {
+    var plan = plan("Sample");
+    String text = "text: 'hello € 🦊' child { b: 'nested λ' }";
+    String json = "{\"text\":\"hello € 🦊\",\"child\":{\"b\":\"nested λ\"}}";
+    var expected = plan.parseText(text);
+    byte[] wire = plan.encode(expected);
+    int ordinal = plan.schema().indexOf("text");
+    try (var nativePlan = decoder.compile(plan, 65536)) {
+      for (int format = 0; format < 3; format++) {
+        try (var input = decoder.allocate(wire.length).put(wire);
+            var parsed =
+                switch (format) {
+                  case 0 -> nativePlan.decode(input, NATIVE);
+                  case 1 -> nativePlan.parseText(text, NATIVE);
+                  default -> nativePlan.parseJson(json, NATIVE);
+                }) {
+          var row = parsed.row();
+          input.close();
+          Object first = DATA.read(row, ordinal);
+          Acceptance.check(first.equals("hello € 🦊"), "first string read after input closes");
+          Acceptance.check(DATA.read(row, ordinal) == first, "string materializes once");
+          // The nested string has not been read: snapshot must resolve it while retaining safety.
+          var detached = parsed.snapshot();
+          parsed.close();
+          Acceptance.rejects(() -> DATA.read(row, ordinal), IllegalStateException.class);
+          equal(expected, detached);
         }
       }
     }

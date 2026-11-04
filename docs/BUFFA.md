@@ -112,7 +112,12 @@ try (var compiled = decoder.compile(plan, 64 << 10);
 
 On a native backend, these three methods parse in Rust. Binary byte fields borrow the
 sealed input, including nested and repeated payloads. Text unescaping/base64 decoding
-writes into a retained native payload region; strings become Java strings. Repeated and
+writes into a retained native payload region. Singular strings with empty defaults defer
+Java materialization until first access; subsequent reads return the same Java String.
+Native parsing still validates UTF-8 and cumulative payload budgets before returning.
+Repeated strings and nonempty defaults materialize during ingestion, and any richer string
+contract forces validation before returning. The deferred holder memoizes without mutating
+compilation-final row storage or invalidating guest code for each new message. Repeated and
 map fields are `TypedArray` values. Guest reads use Java/Truffle accessors without native
 calls. The temporary native index is released before ingestion returns. Closing the
 message invalidates every scoped row and array; closing its input, compiled plan, or

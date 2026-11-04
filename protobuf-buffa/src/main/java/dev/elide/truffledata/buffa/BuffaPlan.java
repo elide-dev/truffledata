@@ -254,8 +254,12 @@ public final class BuffaPlan implements AutoCloseable {
           decoded =
               switch (f.kind()) {
                 case STRING -> {
-                  // Native decoding has validated UTF-8. Materialize once without CharsetDecoder,
-                  // sliced buffers, or an intermediate UTF-16 character buffer.
+                  // Singular unconstrained strings can remain in sealed source memory until read.
+                  // Repeated strings still materialize for element-contract validation below.
+                  if (!f.repeated() && ((String) f.defaultValue()).isEmpty())
+                    yield length == 0
+                        ? ""
+                        : new TypedRow.Utf8(owner, Math.toIntExact(value), length);
                   owner.lease.check();
                   int offset = Math.toIntExact(value);
                   Objects.checkFromIndexSize(offset, length, owner.lease.bytes.capacity());
@@ -321,12 +325,23 @@ public final class BuffaPlan implements AutoCloseable {
         }
         if (!field.explicitPresence()) present[i] = nonDefault(field, values[i]);
         if (field.required() && !present[i]) throw new ContractViolation("Missing required field");
-        Values.validate(plan.schema().field(i), values[i]);
+        if (values[i] instanceof TypedRow.Utf8 text) {
+          // FieldPlan supplies the standard STRING contract, and native parsing has already
+          // validated its type, UTF-8 and cumulative payload budget. Never bypass richer facts.
+          var contract = plan.schema().field(i);
+          if (contract.kind() != Field.Kind.STRING
+              || !contract.constraints().equals(Constraints.NONE))
+            Values.validate(contract, text.value());
+        } else {
+          Values.validate(plan.schema().field(i), values[i]);
+        }
       }
       return new TypedRow(owner, plan, values, present);
     }
 
     private static boolean nonDefault(ProtoPlan.FieldPlan field, Object value) {
+      // Deferred strings are nonempty and only used with the empty default.
+      if (value instanceof TypedRow.Utf8) return true;
       if (value instanceof BorrowedArray a) return a.size() != 0;
       if (value instanceof DataArray a) return a.size() != 0;
       if (value instanceof ExactNumber n && field.defaultValue() instanceof ExactNumber d)
