@@ -30,7 +30,8 @@ def cells(schema=4):
             elif engine.startswith('stock'):
                 stages = ('ingest', 'read-aot')
                 if schema >= 4:
-                    stages += ('interpret', 'peak')
+                    stages += (('interpret-boundary', 'peak-boundary') if workload == 'proto-mixed'
+                               else ('interpret', 'peak'))
             else:
                 stages = ('ingest', 'interpret', 'peak')
             if schema >= 2 and not engine.startswith('stock') and workload != 'proto-bytes':
@@ -43,7 +44,7 @@ def validate_row(row, cell, metric):
     workload, engine, stage = cell
     if (row['workload'], row['engine'], row['stage']) != cell or row['runtime'] != 'svm':
         raise ValueError('Mislabeled measurement')
-    if row['guest_compiled'] != (stage == 'peak'):
+    if row['guest_compiled'] != (stage in ('peak', 'peak-boundary')):
         raise ValueError('Wrong guest execution tier')
     if row['backend'] != ('SVM_STATIC' if engine == 'buffa' else 'none'):
         raise ValueError('Wrong backend')
@@ -85,7 +86,7 @@ def render(data, path):
         allocations = [statistics.median(r['allocated_bytes_per_row']) for r in rows]
         text.append('| %s | %s | %s | %.2f (%.2f–%.2f) | %.2f |' % (
             *cell, statistics.median(times), min(times), max(times), statistics.median(allocations)))
-    text += ['', 'Stock read-aot is the native-image host baseline. Schema 4 also measures stock getters in matched Truffle interpreter/peak loops.',
+    text += ['', 'Stock read-aot is the native-image host baseline. Schema 4 adds stock guest tiers; mixed protobuf uses explicitly labeled boundary projections because its collection getters fail the SVM JIT blocklist.',
              'Ingest includes parsing/materialization and an uncached projected read. Setup is excluded.',
              'ingest-typed uses primitive readLong projections; ingest retains generic read projections.',
              'Buffa binary input is already in unmanaged memory; owned engines start with Java byte arrays.',

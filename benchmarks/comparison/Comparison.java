@@ -5,6 +5,7 @@ import com.google.protobuf.BytesValue;
 import com.google.protobuf.Timestamp;
 import com.google.protobuf.util.JsonFormat;
 import com.mysql.cj.protocol.a.MysqlTextValueDecoder;
+import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.runtime.OptimizedCallTarget;
@@ -60,7 +61,9 @@ public final class Comparison {
     if (workload.equals("timestamp-json"))
       return engine.startsWith("stock") ? List.of("ingest") : List.of("ingest", "ingest-typed");
     return engine.startsWith("stock")
-        ? List.of("ingest", "read-aot", "interpret", "peak")
+        ? workload.equals("proto-mixed")
+            ? List.of("ingest", "read-aot", "interpret-boundary", "peak-boundary")
+            : List.of("ingest", "read-aot", "interpret", "peak")
         : workload.equals("proto-bytes")
             ? List.of("ingest", "interpret", "peak")
             : List.of("ingest", "ingest-typed", "interpret", "peak");
@@ -73,7 +76,7 @@ public final class Comparison {
         || !engines(workload).contains(engine)
         || !stages(workload, engine).contains(stage))
       throw new IllegalArgumentException("Unknown comparison cell");
-    boolean peak = stage.equals("peak");
+    boolean peak = stage.equals("peak") || stage.equals("peak-boundary");
     try (Context context =
         Context.newBuilder("td-compare")
             .allowExperimentalOptions(true)
@@ -85,7 +88,7 @@ public final class Comparison {
             .build()) {
       context.initialize("td-compare");
       context.enter();
-      try (Fixture fixture = new Fixture(workload, engine, stage.equals("interpret") || peak)) {
+      try (Fixture fixture = new Fixture(workload, engine, stage.startsWith("interpret") || peak)) {
         boolean ingest = stage.startsWith("ingest");
         Operation operation =
             stage.equals("ingest-typed")
@@ -469,6 +472,16 @@ public final class Comparison {
       this.kind = kind;
     }
 
+    // Stock collection getters are not SVM runtime-compilation safe under the shared
+    // blocklist. Only this mixed projection crosses a boundary; primitive getters stay inline.
+    @TruffleBoundary
+    private static long mixedProjection(com.google.protobuf.Type value) {
+      return value.getName().length()
+          + value.getFieldsCount()
+          + value.getOneofsCount()
+          + value.getSyntaxValue();
+    }
+
     @Override
     public Object execute(VirtualFrame frame) {
       Object[] rows = (Object[]) frame.getArguments()[0];
@@ -477,12 +490,7 @@ public final class Comparison {
       for (int n = 0; n < ROWS; n++) {
         Object row = rows[(n + rotation) & (ROWS - 1)];
         if (kind == 3) {
-          var value = (com.google.protobuf.Type) row;
-          sum +=
-              value.getName().length()
-                  + value.getFieldsCount()
-                  + value.getOneofsCount()
-                  + value.getSyntaxValue();
+          sum += mixedProjection((com.google.protobuf.Type) row);
         } else if (kind == 1) {
           sum += ((BytesValue) row).getValue().size();
         } else if (kind == 2) {

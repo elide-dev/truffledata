@@ -69,6 +69,12 @@ roots with the same batch size, rotation, call arguments, boxed checksum return,
 and tier assertions as TruffleData. These matched guest cases distinguish call/tier costs
 from data-access costs; they do not add TruffleData contracts or interop to stock objects.
 The direct AOT baseline remains in every new report. Older report schemas remain valid.
+For mixed protobuf only, stock stages are labeled `interpret-boundary` and `peak-boundary`:
+its collection getters make forbidden JDK methods reachable when exposed directly to guest
+compilation ([failed build](https://app.buildbuddy.io/invocation/1914c4d8-1d9d-4b28-a1dc-a01690f88f2a)).
+That projection therefore uses one boundary per row; its getter code remains AOT while the
+guest loop compiles. Scalar, byte-length, and retained SQL stock getters remain directly
+compilable. No blocklist entry or performance-warning check is disabled.
 Timestamp JSON is ingestion-only because retained Timestamp reads are already covered
 by `proto-scalar`.
 
