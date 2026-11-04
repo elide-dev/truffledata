@@ -60,7 +60,7 @@ public final class Comparison {
     if (workload.equals("timestamp-json"))
       return engine.startsWith("stock") ? List.of("ingest") : List.of("ingest", "ingest-typed");
     return engine.startsWith("stock")
-        ? List.of("ingest", "read-aot")
+        ? List.of("ingest", "read-aot", "interpret", "peak")
         : workload.equals("proto-bytes")
             ? List.of("ingest", "interpret", "peak")
             : List.of("ingest", "ingest-typed", "interpret", "peak");
@@ -85,7 +85,7 @@ public final class Comparison {
             .build()) {
       context.initialize("td-compare");
       context.enter();
-      try (Fixture fixture = new Fixture(workload, engine)) {
+      try (Fixture fixture = new Fixture(workload, engine, stage.equals("interpret") || peak)) {
         boolean ingest = stage.startsWith("ingest");
         Operation operation =
             stage.equals("ingest-typed")
@@ -220,6 +220,7 @@ public final class Comparison {
 
   private static final class Fixture implements AutoCloseable {
     final String workload, engine;
+    final boolean guestRead;
     final byte[][] wire = new byte[ROWS][];
     final String[] json = new String[ROWS];
     final ByteString[] immutableWire = new ByteString[ROWS];
@@ -234,7 +235,8 @@ public final class Comparison {
     final OptimizedCallTarget target;
     final long expected;
 
-    Fixture(String workload, String engine) throws Exception {
+    Fixture(String workload, String engine, boolean guestRead) throws Exception {
+      this.guestRead = guestRead;
       this.workload = workload;
       this.engine = engine;
       boolean bytes = workload.equals("proto-bytes");
@@ -252,8 +254,9 @@ public final class Comparison {
               language, Schema.of(Field.integer("id", 32, true, false, false)), Limits.DEFAULT);
       decoder = engine.equals("buffa") ? BuffaWire.open(BuffaWire.Mode.NATIVE, library()) : null;
       nativePlan = decoder == null ? null : decoder.compile(plan, 65536);
-      target =
-          (OptimizedCallTarget) new ReadRoot(mixed ? 3 : bytes ? 1 : jdbc ? 2 : 0).getCallTarget();
+      int kind = mixed ? 3 : bytes ? 1 : jdbc ? 2 : 0;
+      RootNode root = engine.startsWith("stock") ? new StockReadRoot(kind) : new ReadRoot(kind);
+      target = (OptimizedCallTarget) root.getCallTarget();
       long sum = 0;
       for (int i = 0; i < ROWS; i++) {
         if (jdbc) {
@@ -413,7 +416,7 @@ public final class Comparison {
     }
 
     long read(int rotation) {
-      if (!engine.startsWith("stock")) return (Long) target.call(rows, rotation);
+      if (guestRead || !engine.startsWith("stock")) return (Long) target.call(rows, rotation);
       long sum = 0;
       if (workload.equals("proto-bytes")) {
         for (int n = 0; n < ROWS; n++)
@@ -454,6 +457,42 @@ public final class Comparison {
       for (var input : inputs) if (input != null) input.close();
       if (nativePlan != null) nativePlan.close();
       if (decoder != null) decoder.close();
+    }
+  }
+
+  /** Stock getters under the same guest call, loop, checksum, and tier checks as TD reads. */
+  private static final class StockReadRoot extends RootNode {
+    private final int kind;
+
+    StockReadRoot(int kind) {
+      super(ComparisonLanguage.current());
+      this.kind = kind;
+    }
+
+    @Override
+    public Object execute(VirtualFrame frame) {
+      Object[] rows = (Object[]) frame.getArguments()[0];
+      int rotation = (Integer) frame.getArguments()[1];
+      long sum = 0;
+      for (int n = 0; n < ROWS; n++) {
+        Object row = rows[(n + rotation) & (ROWS - 1)];
+        if (kind == 3) {
+          var value = (com.google.protobuf.Type) row;
+          sum +=
+              value.getName().length()
+                  + value.getFieldsCount()
+                  + value.getOneofsCount()
+                  + value.getSyntaxValue();
+        } else if (kind == 1) {
+          sum += ((BytesValue) row).getValue().size();
+        } else if (kind == 2) {
+          sum += (Long) row;
+        } else {
+          var value = (Timestamp) row;
+          sum += value.getSeconds() + value.getNanos();
+        }
+      }
+      return sum;
     }
   }
 

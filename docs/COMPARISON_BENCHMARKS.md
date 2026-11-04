@@ -63,8 +63,12 @@ Retained-read stages exclude ingestion. `interpret` disables Truffle compilation
 `peak` warms and explicitly compiles the call target, requiring valid final-tier code before
 and after every sample. Warmup exercises the measurement loop until the compiled target
 remains valid, including after initial profile-driven deoptimizations. Performance warnings are errors and the Graal graph is bounded.
-`read-aot` is the stock SVM host baseline: stock Java APIs do not acquire a Truffle execution
-tier. These direct host getters also exclude guest interop and contract enforcement.
+`read-aot` remains the direct stock SVM host baseline, excluding guest calls and contract
+checks. Report schema 4 additionally runs stock getters in Truffle `interpret` and `peak`
+roots with the same batch size, rotation, call arguments, boxed checksum return, warmup,
+and tier assertions as TruffleData. These matched guest cases distinguish call/tier costs
+from data-access costs; they do not add TruffleData contracts or interop to stock objects.
+The direct AOT baseline remains in every new report. Older report schemas remain valid.
 Timestamp JSON is ingestion-only because retained Timestamp reads are already covered
 by `proto-scalar`.
 
@@ -76,8 +80,8 @@ No dependency upgrades or query-planning functionality are introduced by this su
 
 ## Measurement and limits
 
-Each of 47 cells has three independent timing processes and three independent allocation
-processes (222 short-lived processes). Each process records three samples. Timing uses
+Each of 59 cells has three independent timing processes and three independent allocation
+processes (354 short-lived processes). Each process records three samples. Timing uses
 100 ms warmup and at least 50 ms per sample. Allocation uses fixed work: eight batches for
 ingestion or 128 batches for retained reads, with one warmup batch of the same size.
 Results report medians of process medians and the min/max process medians, not confidence
