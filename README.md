@@ -20,7 +20,7 @@ BuildBuddy credentials belong in your user Bazel configuration, never in source 
 
 ## Maven artifacts
 
-[Version 0.2.0](https://github.com/elide-dev/truffledata/releases/tag/v0.2.0) is published at `https://maven.elide.dev`: `dev.elide:truffledata-{core,jdbc,jdbc-sqlite,jdbc-mysql,jdbc-postgresql,protobuf,protobuf-buffa,protobuf-buffa-bindings}`, plus `truffledata-bom`. Libraries include source jars and consumer POMs. See [publishing and consumption](docs/PUBLISHING.md) for the staging command, explicit upload command and repository setup.
+[Version 0.3.0](https://github.com/elide-dev/truffledata/releases/tag/v0.3.0) is published at `https://maven.elide.dev`: `dev.elide:truffledata-{core,jdbc,jdbc-sqlite,jdbc-mysql,jdbc-postgresql,protobuf,protobuf-buffa,protobuf-buffa-bindings}`, plus `truffledata-bom`. Libraries include source jars and consumer POMs. See [publishing and consumption](docs/PUBLISHING.md) for the staging command, explicit upload command and repository setup.
 
 ## Known schemas and static data
 
@@ -91,6 +91,6 @@ Java null is confined to annotated ingestion boundaries. `DataNull` is the inter
 
 This is a foundation, not an Elide production integration. The database tests use H2, native SQLite, and MySQL/PostgreSQL-shaped JDBC fixtures; real MySQL/PostgreSQL driver matrices, broader Native Image deployment integration, cancellation, asynchronous/RPC execution, and JSON/CSV adapters remain production follow-ups. There is no SQL planner dependency.
 
-## Optional native wire backend (0.2.0 development)
+## Optional native wire backend
 
 [The Myna/Buffa integration](docs/BUFFA.md) adds borrowed wire and typed decoding, native schema-aware text parsing, explicit off-heap ownership, JVM FFM and static SVM linkage, with Java fallback. Build it with `//protobuf-buffa`; version 0.2.0 includes Maven artifacts and Linux x86-64 native attachments.

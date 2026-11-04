@@ -1,6 +1,6 @@
 module(
     name = "truffledata",
-    version = "0.2.0",
+    version = "0.3.0",
 )
 
 bazel_dep(name = "platforms", version = "1.1.0")
@@ -21,12 +21,12 @@ git_override(
     remote = "https://github.com/sgammon/rules_graalvm.git",
 )
 
-GRAALVM = "25.5.5-elide.5"
+GRAALVM = "25.5.5-elide.24"
 
 GRAALVM_DISTS = {
-    "macos-aarch64": "c5e25b18682482dc14a1678ff4a327ed198319e672390bff7ae63122b3e81104",
-    "linux-x64": "af2bd180962d498217da2146b7a9653b5bb9d0ba5ffa9dae5a4de42f6685105d",
-    "linux-aarch64": "5c8335cd98a930e0d49d6be73f16383efa636b816365392fc06eb0232146a8a5",
+    "macos-aarch64": "8b03207cb35ab5b9bec6422b4266178315f7a056ae88e90f57cc22b2362c44a6",
+    "linux-x64": "83bd7b3b78e76de00bb3879eeae79a8b439f9356fefd3bf3b84d2818af8961e7",
+    "linux-aarch64": "f89eb4bdc6596b8aa7acdf063997c69ab06aa9a488e8f98cff07865b0261618f",
 }
 
 # The fork names its archives macos-aarch64, linux-amd64 and linux-aarch64.
@@ -35,9 +35,9 @@ GRAALVM_ARCHIVES = {key: key.replace("x64", "amd64") for key in GRAALVM_DISTS}
 # The EE toolchain profile (docs/NATIVE_BENCHMARKS.md): the fork's Oracle GraalVM overlay of the same release, the test and
 # run runtime under --config=ee (compilation stays on CE). Its budgets and graph expectations are tracked separately.
 GRAALVM_EE_DISTS = {
-    "macos-aarch64": "5af4f6b88d8594446bd7a6eabc1634126a3440a0e7bc14c75e2b33ac9ebb2b83",
-    "linux-x64": "f4041026703daf4fa1d4bccae1c3013e8f4eef6b77234772643f746ee514d689",
-    "linux-aarch64": "dc3cf2fba5feeac08e6e7b4a90500ca1df56714ae406641651b32c7fb946265d",
+    "macos-aarch64": "c9c21b7b58bb9cead0925b2611054443b264289adaa1b036a2712d3b78066b1b",
+    "linux-x64": "652ad0ebe5d50b59958f95045336f5498267a668b9cb123e7bbb540a1e0fede4",
+    "linux-aarch64": "efd2be28c6e755b1f883c289a33182ac4c55685f26c39ccf199d85a097caadd9",
 }
 
 # One repository per platform and edition (graalvm_<os>_<cpu>, graalvm_ee_<os>_<cpu>), its toolchains constrained to that
