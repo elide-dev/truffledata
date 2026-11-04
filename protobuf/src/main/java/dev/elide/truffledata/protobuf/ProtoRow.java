@@ -10,7 +10,7 @@ import org.jspecify.annotations.Nullable;
 
 /** Immutable native message: readable defaults, separate protobuf presence, no retained Message. */
 @ExportLibrary(DataLibrary.class)
-public final class ProtoRow extends AbstractRow {
+public final class ProtoRow extends AbstractRow implements ProtoAccess {
   private static final byte[] NO_UNKNOWN_FIELDS = new byte[0];
   private static final DataArray EMPTY_REPEATED = new DataArray(new Object[0]);
   private final ProtoPlan plan;
@@ -55,7 +55,7 @@ public final class ProtoRow extends AbstractRow {
     unknown = NO_UNKNOWN_FIELDS;
   }
 
-  private long scalar(int index) {
+  long scalar(int index) {
     Objects.checkIndex(index, descriptor.size());
     Scalars scalars = (Scalars) storage;
     return index == 0 ? scalars.first : scalars.second;
@@ -63,6 +63,18 @@ public final class ProtoRow extends AbstractRow {
 
   public ProtoPlan plan() {
     return plan;
+  }
+
+  @Override
+  public Object get(int ordinal) {
+    if (compact()) return scalar(ordinal);
+    return plan.directValue(storage, ordinal);
+  }
+
+  @Override
+  public long getLong(int ordinal) {
+    if (compact()) return scalar(ordinal);
+    return plan.directLong(storage, ordinal);
   }
 
   /** Explicit presence, or non-default/non-empty state for implicit and repeated fields. */

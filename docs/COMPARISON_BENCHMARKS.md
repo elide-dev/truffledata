@@ -90,6 +90,13 @@ The original generic `ingest` measurements remain. Byte-length projections alrea
 typed interop length API and receive no duplicate measurement. Stock continues to use its
 generated primitive getters. This separates library improvements from the effect of callers
 choosing typed reads. Report schema 2 includes these cells; schema 1 remains readable.
+Report schema 6 additionally compares our generated contract getters with stock generated
+getters. `ingest-generated`, `read-generated-aot`, `interpret-generated`, and
+`peak-generated` use the same projections and fixture rotation. The generated accessor
+binds to a contract once, uses literal ordinals and primitive return types, and preserves
+borrowed-message lifetime checks. These 26 additional cells bring the matrix to 88;
+the original library-dispatch measurements remain available. JSON adds ingestion only.
+
 Schema construction, parser construction, source creation and context startup are excluded.
 For binary Buffa, source bytes already reside in unmanaged memory and the result borrows
 that memory. Stock/owned parsers consume existing Java arrays and own their decoded payloads.

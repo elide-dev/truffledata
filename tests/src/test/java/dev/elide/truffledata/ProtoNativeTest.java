@@ -42,6 +42,34 @@ class ProtoNativeTest {
   }
 
   @Test
+  void generatedGettersCheckContractsAndPreserveNormalizedTypes() {
+    var p = plan("truffledata.lossless.Sample");
+    var access = new TruffleDataContracts.Access_truffledata$lossless$Sample(p);
+    var row =
+        p.parseText(
+            "count: 1234 explicit_count: 0 text: 'hello' blob: 'abc' numbers: [1,2] f: 1.5 d: 2.5"
+                + " flag: true");
+    assertEquals(1234L, access.get_count(row));
+    assertTrue(access.has_explicit_count(row));
+    assertEquals("hello", access.get_text(row));
+    assertEquals(3, access.size_blob(row));
+    assertEquals(2, access.size_numbers(row));
+    assertEquals(1.5, access.get_f(row));
+    assertEquals(2.5, access.get_d(row));
+    assertTrue(access.get_flag(row));
+    assertThrows(
+        ContractViolation.class,
+        () -> access.get_count(plan("truffledata.lossless.Sample").decode(new byte[0])));
+    assertThrows(
+        ContractViolation.class,
+        () ->
+            new TruffleDataContracts.Access_truffledata$lossless$Sample(
+                plan("truffledata.lossless.Sample.Child")));
+    assertThrows(ContractViolation.class, () -> p.getBoolean(row, 0));
+    assertThrows(IndexOutOfBoundsException.class, () -> p.getLong(row, -1));
+  }
+
+  @Test
   void decodedOwnershipDoesNotAliasInputsOrPublicBuilders() {
     var plan = plan("truffledata.lossless.Sample");
     int ordinal = plan.schema().indexOf("explicit_count");

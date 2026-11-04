@@ -1,5 +1,6 @@
 package dev.elide.truffledata;
 
+import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.TruffleLanguage;
@@ -200,6 +201,44 @@ public final class StaticLayout {
       case BOOLEAN -> property.getBoolean(storage);
       case OBJECT -> Objects.requireNonNull(property.getObject(storage));
     };
+  }
+
+  /** Direct access for a generated getter bound to this immutable layout. */
+  public Object get(Record row, int ordinal) {
+    if (!CompilerDirectives.isPartialEvaluationConstant(this)) return genericGet(row, ordinal);
+    return directGet(row, ordinal);
+  }
+
+  @TruffleBoundary
+  private Object genericGet(Record row, int ordinal) {
+    return directGet(row, ordinal);
+  }
+
+  private Object directGet(Record row, int ordinal) {
+    if (row.layout != this) throw new ContractViolation("Static layout mismatch");
+    Objects.checkIndex(ordinal, properties.length);
+    return value(row.storage, properties[ordinal], storageKinds[ordinal], states[ordinal]);
+  }
+
+  /** Primitive direct access, retaining type, null, and missing checks. */
+  public long getLong(Record row, int ordinal) {
+    if (!CompilerDirectives.isPartialEvaluationConstant(this)) return genericLong(row, ordinal);
+    return directLong(row, ordinal);
+  }
+
+  @TruffleBoundary
+  private long genericLong(Record row, int ordinal) {
+    return directLong(row, ordinal);
+  }
+
+  private long directLong(Record row, int ordinal) {
+    if (row.layout != this) throw new ContractViolation("Static layout mismatch");
+    Objects.checkIndex(ordinal, properties.length);
+    if (!longField(ordinal)) throw new ContractViolation("Expected INT64");
+    StaticProperty state = states[ordinal];
+    if (state != null && state.getByte(row.storage) != 0)
+      throw new ContractViolation("Expected present, non-null INT64");
+    return integer(row.storage, properties[ordinal], storageKinds[ordinal]);
   }
 
   @ExportLibrary(DataLibrary.class)

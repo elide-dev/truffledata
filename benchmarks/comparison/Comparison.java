@@ -64,6 +64,17 @@ public final class Comparison {
   }
 
   static List<String> stages(String workload, String engine) {
+    List<String> result = new ArrayList<>(baseStages(workload, engine));
+    if ((engine.equals("owned") || engine.equals("buffa"))
+        && !workload.equals("proto-mixed-full")) {
+      result.add("ingest-generated");
+      if (!workload.equals("timestamp-json"))
+        result.addAll(List.of("read-generated-aot", "interpret-generated", "peak-generated"));
+    }
+    return result;
+  }
+
+  private static List<String> baseStages(String workload, String engine) {
     if (workload.equals("proto-mixed-full")) return List.of("ingest");
     if (workload.equals("timestamp-json"))
       return engine.startsWith("stock") ? List.of("ingest") : List.of("ingest", "ingest-typed");
@@ -83,7 +94,7 @@ public final class Comparison {
         || !engines(workload).contains(engine)
         || !stages(workload, engine).contains(stage))
       throw new IllegalArgumentException("Unknown comparison cell");
-    boolean peak = stage.equals("peak") || stage.equals("peak-boundary");
+    boolean peak = stage.startsWith("peak");
     try (Context context =
         Context.newBuilder("td-compare")
             .allowExperimentalOptions(true)
@@ -95,7 +106,12 @@ public final class Comparison {
             .build()) {
       context.initialize("td-compare");
       context.enter();
-      try (Fixture fixture = new Fixture(workload, engine, stage.startsWith("interpret") || peak)) {
+      try (Fixture fixture =
+          new Fixture(
+              workload,
+              engine,
+              stage.startsWith("interpret") || peak,
+              stage.contains("generated"))) {
         boolean ingest = stage.startsWith("ingest");
         Operation operation =
             stage.equals("ingest-typed")
@@ -244,8 +260,14 @@ public final class Comparison {
     final @Nullable BuffaPlan nativePlan;
     final OptimizedCallTarget target;
     final long expected;
+    final @Nullable GeneratedProjection generated;
 
     Fixture(String workload, String engine, boolean guestRead) throws Exception {
+      this(workload, engine, guestRead, false);
+    }
+
+    Fixture(String workload, String engine, boolean guestRead, boolean generatedReads)
+        throws Exception {
       this.guestRead = guestRead;
       this.workload = workload;
       this.engine = engine;
@@ -265,7 +287,11 @@ public final class Comparison {
       decoder = engine.equals("buffa") ? BuffaWire.open(BuffaWire.Mode.NATIVE, library()) : null;
       nativePlan = decoder == null ? null : decoder.compile(plan, 65536);
       int kind = mixed ? 3 : bytes ? 1 : jdbc ? 2 : 0;
-      RootNode root = engine.startsWith("stock") ? new StockReadRoot(kind) : new ReadRoot(kind);
+      generated = generatedReads ? new GeneratedProjection(plan, kind) : null;
+      RootNode root =
+          generated != null
+              ? new GeneratedReadRoot(generated)
+              : engine.startsWith("stock") ? new StockReadRoot(kind) : new ReadRoot(kind);
       target = (OptimizedCallTarget) root.getCallTarget();
       long sum = 0;
       for (int i = 0; i < ROWS; i++) {
@@ -391,6 +417,7 @@ public final class Comparison {
 
     long readOne(Object row, boolean typed)
         throws com.oracle.truffle.api.nodes.UnexpectedResultException {
+      if (generated != null) return generated.read((ProtoAccess) row);
       if (workload.equals("proto-mixed-full")) return readAll(row);
       if (engine.startsWith("stock")) {
         if (row instanceof com.google.protobuf.Type t)
@@ -486,6 +513,12 @@ public final class Comparison {
     }
 
     long read(int rotation) {
+      if (generated != null && !guestRead) {
+        long sum = 0;
+        for (int n = 0; n < ROWS; n++)
+          sum += generated.read((ProtoAccess) rows[(n + rotation) & (ROWS - 1)]);
+        return sum;
+      }
       if (workload.equals("proto-mixed-full")) {
         long sum = 0;
         for (int n = 0; n < ROWS; n++) sum += readAll(rows[(n + rotation) & (ROWS - 1)]);
@@ -574,6 +607,54 @@ public final class Comparison {
           sum += value.getSeconds() + value.getNanos();
         }
       }
+      return sum;
+    }
+  }
+
+  private static final class GeneratedProjection {
+    private final int kind;
+    private final ComparisonContracts.@Nullable Access_google$protobuf$Timestamp timestamp;
+    private final ComparisonContracts.@Nullable Access_google$protobuf$BytesValue bytes;
+    private final ComparisonContracts.@Nullable Access_google$protobuf$Type mixed;
+
+    GeneratedProjection(ProtoPlan plan, int kind) {
+      this.kind = kind;
+      timestamp = kind == 0 ? new ComparisonContracts.Access_google$protobuf$Timestamp(plan) : null;
+      bytes = kind == 1 ? new ComparisonContracts.Access_google$protobuf$BytesValue(plan) : null;
+      mixed = kind == 3 ? new ComparisonContracts.Access_google$protobuf$Type(plan) : null;
+    }
+
+    long read(ProtoAccess row) {
+      if (kind == 0) {
+        var access = Objects.requireNonNull(timestamp);
+        return access.get_seconds(row) + access.get_nanos(row);
+      }
+      if (kind == 1) return Objects.requireNonNull(bytes).size_value(row);
+      var access = Objects.requireNonNull(mixed);
+      return access.get_name(row).length()
+          + access.size_fields(row)
+          + access.size_oneofs(row)
+          + access.get_syntax(row);
+    }
+  }
+
+  private static final class GeneratedReadRoot extends RootNode {
+    private final GeneratedProjection projection;
+    private final com.oracle.truffle.api.profiles.ValueProfile rowClass =
+        com.oracle.truffle.api.profiles.ValueProfile.createClassProfile();
+
+    GeneratedReadRoot(GeneratedProjection projection) {
+      super(ComparisonLanguage.current());
+      this.projection = projection;
+    }
+
+    @Override
+    public Object execute(VirtualFrame frame) {
+      Object[] rows = (Object[]) frame.getArguments()[0];
+      int rotation = (Integer) frame.getArguments()[1];
+      long sum = 0;
+      for (int n = 0; n < ROWS; n++)
+        sum += projection.read((ProtoAccess) rowClass.profile(rows[(n + rotation) & (ROWS - 1)]));
       return sum;
     }
   }

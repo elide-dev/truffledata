@@ -26,11 +26,11 @@ class PolicyTest {
             Map.entry("Batch.java", 2),
             Map.entry("AbstractRow.java", 1),
             Map.entry("ExactNumber.java", 12),
-            Map.entry("StaticLayout.java", 7),
+            Map.entry("StaticLayout.java", 9), // Nonconstant-layout direct access fallbacks.
             Map.entry("JdbcCursor.java", 7),
             Map.entry("JdbcSource.java", 6),
             Map.entry("ProtobufAdapter.java", 5),
-            Map.entry("ProtoPlan.java", 10),
+            Map.entry("ProtoPlan.java", 11), // Generated contract binding, outside reads.
             Map.entry("ProtoRow.java", 3),
             Map.entry("ProtoCompiler.java", 8),
             Map.entry("ProtoWire.java", 1),

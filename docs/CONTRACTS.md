@@ -289,3 +289,18 @@ alive during the call. Returned rows own their payloads. Native `WireInput` user
 `BuffaWire.decodeTyped(input, plan)` to enforce the input lease during this operation.
 For scoped native typed rows and native schema-aware text ingestion, use the optional
 `BuffaPlan` API described in [the Buffa integration](BUFFA.md#typed-and-text-input).
+
+## Generated protobuf getters
+
+The contract plugin also emits an `Access_` class for each message, with package/nesting
+separators replaced by `$`. Bind it once to the corresponding `ProtoPlan`, then use
+`get_<proto_field_name>`, `has_<proto_field_name>`, and array/bytes
+`size_<proto_field_name>`. Both `ProtoRow` and Buffa `TypedRow` implement `ProtoAccess`.
+Integer, floating point, and boolean getters return normalized Java primitives;
+unsigned 64-bit values retain their exact representation. Construction checks the
+structural definition, and reads reject rows belonging to another plan. Borrowed
+rows retain their lifetime and thread checks.
+
+Keep the bound accessor in a final guest-node field so partial evaluation can fold
+its plan and ordinal. Static-object access with a nonconstant layout uses a boundary
+fallback. Generated getters do not perform native calls or descriptor lookup.

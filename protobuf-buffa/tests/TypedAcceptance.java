@@ -18,6 +18,91 @@ final class TypedAcceptance {
         .type("truffledata.lossless." + name);
   }
 
+  private static void generatedGetters(BuffaWire decoder) {
+    var p = plan("Sample");
+    var access = new TruffleDataContracts.Access_truffledata$lossless$Sample(p);
+    try (var compiled = decoder.compile(p, 65536)) {
+      for (int i = 0; i < 3; i++) {
+        try (var parsed =
+            compiled.parseText("count: 1234 text: 'hello' blob: 'abc' f: 1.5 flag: true", NATIVE)) {
+          var row = parsed.row();
+          Acceptance.check(
+              access.get_count(row) == 1234 && access.get_f(row) == 1.5 && access.get_flag(row),
+              "generated primitive getters");
+          Acceptance.check(
+              access.get_text(row).equals("hello") && access.size_blob(row) == 3,
+              "generated reference getters");
+          parsed.close();
+          Acceptance.rejects(() -> access.get_count(row), IllegalStateException.class);
+          Acceptance.rejects(() -> access.has_count(row), IllegalStateException.class);
+        }
+      }
+    }
+  }
+
+  private static void compactScalars(BuffaWire decoder) throws Exception {
+    for (boolean explicit : new boolean[] {false, true}) {
+      var field =
+          new ProtoPlan.FieldPlan(
+              "value",
+              1,
+              ProtoPlan.Kind.INT32,
+              false,
+              false,
+              explicit,
+              explicit,
+              false,
+              -1,
+              "",
+              null,
+              explicit ? 7L : 0L);
+      var p =
+          new ProtoPlan.Model(
+                  null,
+                  List.of(new ProtoPlan.Type("Compact", false, List.of(field))),
+                  Limits.DEFAULT,
+                  16,
+                  65536)
+              .type("Compact");
+      try (var compiled = decoder.compile(p, 65536)) {
+        for (byte[] wire :
+            List.of(new byte[] {8, 7}, new byte[] {8, 1, 8, 0}, new byte[] {8, 2, 16, 99})) {
+          var expected = p.decode(wire);
+          try (var input = decoder.allocate(wire.length).put(wire);
+              var parsed = compiled.decode(input, NATIVE)) {
+            var row = parsed.row();
+            equal(expected, row);
+            equal(expected, parsed.snapshot());
+            Acceptance.check(
+                row.has(0) == expected.has(0) && row.getLong(0) == expected.getLong(0),
+                "compact presence and primitive");
+            Acceptance.check(
+                DATA.readLong(row, 0) == expected.getLong(0), "primitive library export");
+            Acceptance.rejects(() -> row.getLong(1), IndexOutOfBoundsException.class);
+            parsed.close();
+            Acceptance.rejects(() -> row.getLong(0), IllegalStateException.class);
+          }
+        }
+        try (var empty = decoder.allocate(0);
+            var malformed = decoder.allocate(1).put(new byte[] {8})) {
+          Acceptance.rejects(() -> compiled.decode(malformed, NATIVE), ContractViolation.class);
+          if (explicit)
+            Acceptance.rejects(() -> compiled.decode(empty, NATIVE), ContractViolation.class);
+          else
+            try (var parsed = compiled.decode(empty, NATIVE)) {
+              Acceptance.check(
+                  !parsed.row().has(0) && parsed.row().getLong(0) == 0, "implicit default");
+            }
+        }
+        // A failed native parse must release the reusable result slot.
+        try (var input = decoder.allocate(2).put(new byte[] {8, 9});
+            var parsed = compiled.decode(input, NATIVE)) {
+          Acceptance.check(parsed.row().getLong(0) == 9, "reuse after failure");
+        }
+      }
+    }
+  }
+
   private static void mergedRepeated(BuffaWire decoder) {
     var numbers =
         new ProtoPlan.FieldPlan(
@@ -135,6 +220,8 @@ final class TypedAcceptance {
   }
 
   static void run(BuffaWire decoder) throws Exception {
+    compactScalars(decoder);
+    generatedGetters(decoder);
     mergedRepeated(decoder);
     presenceWidths(decoder);
     unreadStrings(decoder);

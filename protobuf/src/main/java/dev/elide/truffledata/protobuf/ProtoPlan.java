@@ -380,6 +380,93 @@ public final class ProtoPlan {
     return ProtoCodec.encode(row);
   }
 
+  /** Structural contract comparison, including byte defaults by value rather than identity. */
+  @TruffleBoundary
+  public boolean matchesDefinition(Type expected) {
+    Type actual = definition();
+    if (!actual.name().equals(expected.name())
+        || actual.mapEntry() != expected.mapEntry()
+        || actual.fields().size() != expected.fields().size()) return false;
+    for (int i = 0; i < actual.fields().size(); i++) {
+      FieldPlan a = actual.fields().get(i), b = expected.fields().get(i);
+      if (a.defaultValue() instanceof DataArray x && b.defaultValue() instanceof DataArray y) {
+        if (x.size() != y.size()) return false;
+        for (int j = 0; j < x.size(); j++) if (!x.get(j).equals(y.get(j))) return false;
+      } else if (a.defaultValue() instanceof ExactNumber x
+          && b.defaultValue() instanceof ExactNumber y) {
+        if (x.decimal().compareTo(y.decimal()) != 0) return false;
+      } else if (!a.defaultValue().equals(b.defaultValue())) return false;
+      b =
+          new FieldPlan(
+              b.name(),
+              b.number(),
+              b.kind(),
+              b.repeated(),
+              b.map(),
+              b.explicitPresence(),
+              b.required(),
+              b.packed(),
+              b.oneof(),
+              b.typeName(),
+              b.enumType(),
+              a.defaultValue(),
+              b.jsonName());
+      if (!a.equals(b)) return false;
+    }
+    return true;
+  }
+
+  /** Direct access: keep this plan constant in compiled guest code. */
+  public Object get(ProtoAccess row, int ordinal) {
+    if (row.plan() != this) throw new ContractViolation("Generated plan mismatch");
+    if (row instanceof ProtoRow owned && !compactScalars)
+      return directValue(owned.storage, ordinal);
+    return row.get(ordinal);
+  }
+
+  public long getLong(ProtoAccess row, int ordinal) {
+    if (row.plan() != this) throw new ContractViolation("Generated plan mismatch");
+    if (row instanceof ProtoRow owned)
+      return compactScalars ? owned.scalar(ordinal) : directLong(owned.storage, ordinal);
+    return row.getLong(ordinal);
+  }
+
+  public double getDouble(ProtoAccess row, int ordinal) {
+    Object value = get(row, ordinal);
+    if (value instanceof Double number) return number;
+    throw new ContractViolation("Expected FLOAT64");
+  }
+
+  public boolean getBoolean(ProtoAccess row, int ordinal) {
+    Object value = get(row, ordinal);
+    if (value instanceof Boolean flag) return flag;
+    throw new ContractViolation("Expected BOOLEAN");
+  }
+
+  public int getSize(ProtoAccess row, int ordinal) {
+    if (row instanceof ProtoRow) {
+      Object value = get(row, ordinal);
+      if (value instanceof DataArray array) return array.size();
+      throw new ContractViolation("Expected array");
+    }
+    if (row.plan() != this) throw new ContractViolation("Generated plan mismatch");
+    return row.getSize(ordinal);
+  }
+
+  Object directValue(Object storage, int ordinal) {
+    if (layout != null) return layout.get((StaticLayout.Record) storage, ordinal);
+    return DataLibrary.factory().getUncached().read(storage, ordinal);
+  }
+
+  long directLong(Object storage, int ordinal) {
+    if (layout != null) return layout.getLong((StaticLayout.Record) storage, ordinal);
+    try {
+      return DataLibrary.factory().getUncached().readLong(storage, ordinal);
+    } catch (com.oracle.truffle.api.nodes.UnexpectedResultException error) {
+      throw new ContractViolation("Expected INT64");
+    }
+  }
+
   AbstractRow storage(Object[] values) {
     return layout == null
         ? Batch.copyOf(schema, Collections.singletonList(values), model.limits).row(0)
