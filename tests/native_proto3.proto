@@ -65,3 +65,21 @@ message PrimitiveWrites {
   double real = 22;
 }
 message PrimitiveFlag { bool flag = 1; }
+
+message RepeatedScalars {
+  repeated int32 i32 = 1;
+  repeated int64 i64 = 2;
+  repeated uint32 u32 = 3;
+  repeated uint64 u64 = 4;
+  repeated sint32 s32 = 5;
+  repeated sint64 s64 = 6;
+  repeated fixed32 f32 = 7;
+  repeated fixed64 f64 = 8;
+  repeated sfixed32 sf32 = 9;
+  repeated sfixed64 sf64 = 10;
+  repeated bool flag = 11;
+  repeated float single = 12;
+  repeated double real = 13;
+  repeated string text = 14;
+  repeated bytes blob = 15;
+}

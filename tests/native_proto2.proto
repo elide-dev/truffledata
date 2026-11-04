@@ -24,3 +24,8 @@ message FlatDefaults {
   optional bytes blob = 4 [default = "\001\377"];
   optional uint64 big = 5 [default = 18446744073709551615];
 }
+message DefaultGraph {
+  optional FlatDefaults child = 1;
+  repeated FlatDefaults children = 2;
+  optional string text = 3 [default = "root"];
+}

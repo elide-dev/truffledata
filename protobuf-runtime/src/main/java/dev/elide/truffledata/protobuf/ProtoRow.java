@@ -182,7 +182,9 @@ public final class ProtoRow extends AbstractRow implements ProtoAccess {
     private void validateScalar(ProtoPlan.FieldPlan field, Object value) {
       if (value instanceof String text) ProtoPlan.validateString(text);
       if (field.kind().message()) {
-        if (!(value instanceof ProtoRow row) || row.plan() != plan.model.type(field.typeName()))
+        if (!(value instanceof ProtoAccess row)
+            || !(row instanceof ProtoRow || row instanceof GeneratedMessage)
+            || row.plan() != plan.model.type(field.typeName()))
           throw new ContractViolation("Nested message plan mismatch");
       } else if (field.kind() == ProtoPlan.Kind.BYTES && !((DataArray) value).isBytes()) {
         throw new ContractViolation("Protobuf bytes require compact binary storage");
@@ -264,6 +266,14 @@ public final class ProtoRow extends AbstractRow implements ProtoAccess {
       this.limits = limits;
     }
 
+    long cellCount() {
+      return cells;
+    }
+
+    long byteCount() {
+      return bytes;
+    }
+
     void cells(long count) {
       if (count > limits.maxCells() - cells)
         throw new ContractViolation("Protobuf cell budget exceeded");
@@ -282,6 +292,11 @@ public final class ProtoRow extends AbstractRow implements ProtoAccess {
         cells(array.size());
         if (!array.isBytes())
           for (int i = 0; i < array.size(); i++) value(array.get(i), depth, maxDepth);
+      } else if (value instanceof GeneratedMessage row) {
+        if (depth >= maxDepth) throw new ContractViolation("Protobuf nesting budget exceeded");
+        cells(row.plan().size());
+        bytes(row.unknown.length);
+        for (int i = 0; i < row.plan().size(); i++) value(row.get(i), depth + 1, maxDepth);
       } else if (value instanceof ProtoRow row) {
         if (depth >= maxDepth) throw new ContractViolation("Protobuf nesting budget exceeded");
         cells(row.plan.size());

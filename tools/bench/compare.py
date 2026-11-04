@@ -14,12 +14,12 @@ import statistics
 import subprocess
 
 WORKLOADS = ('proto-scalar', 'proto-bytes', 'timestamp-json', 'mysql-int4', 'postgres-int4', 'proto-mixed', 'proto-mixed-full')
-SERIALIZE_CHECKSUMS = {'proto-scalar': 288, 'proto-bytes': 2097776}
+SERIALIZE_CHECKSUMS = {'proto-scalar': 288, 'proto-bytes': 2097776, 'proto-mixed': 5257}
 CHECKSUMS = {'proto-scalar': 54400032992, 'proto-bytes': 2097648, 'timestamp-json': 54400032992,
              'mysql-int4': 35472, 'postgres-int4': 35472, 'proto-mixed': 563, 'proto-mixed-full': 4866}
 
 
-def cells(schema=10):
+def cells(schema=11):
     for workload in WORKLOADS:
         if schema < 5 and workload == 'proto-mixed-full':
             continue
@@ -27,11 +27,13 @@ def cells(schema=10):
             continue
         engines = ('stock', 'stock-aliased', 'owned', 'buffa') if workload == 'proto-bytes' else (
             ('stock', 'owned', 'buffa') if workload.startswith('proto-') or workload == 'timestamp-json' else ('stock', 'static'))
-        if schema >= 7 and workload in ('proto-scalar', 'proto-bytes'):
+        if (schema >= 7 and workload in ('proto-scalar', 'proto-bytes')
+                or schema >= 11 and workload.startswith('proto-mixed')):
             engines += ('generated-owned',)
         for engine in engines:
             if engine == 'generated-owned':
-                for stage in ('ingest', 'read-aot', 'interpret', 'peak', 'serialize'):
+                for stage in (('ingest',) if workload == 'proto-mixed-full'
+                              else ('ingest', 'read-aot', 'interpret', 'peak', 'serialize')):
                     yield workload, engine, stage
                 if schema >= 8 and workload == 'proto-scalar':
                     for stage in ('project-aot', 'project-interpret', 'project-peak'):
@@ -52,7 +54,8 @@ def cells(schema=10):
                 stages += ('ingest-generated',)
                 if workload != 'timestamp-json':
                     stages += ('read-generated-aot', 'interpret-generated', 'peak-generated')
-            if schema >= 7 and workload in SERIALIZE_CHECKSUMS:
+            if schema >= 7 and (workload in ('proto-scalar', 'proto-bytes')
+                                or schema >= 11 and workload == 'proto-mixed'):
                 stages += ('serialize',)
             if schema >= 8 and workload == 'proto-scalar' and engine == 'stock':
                 stages += ('project-aot', 'project-interpret', 'project-peak')
@@ -77,7 +80,7 @@ def validate_row(row, cell, metric):
 
 
 def validate(data):
-    if data['schema'] not in (1, 2, 3, 4, 5, 6, 7, 8, 9, 10) or data['forks'] != 3:
+    if data['schema'] not in (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11) or data['forks'] != 3:
         raise ValueError('Expected three isolated processes per cell')
     expected = set(itertools.product(cells(data['schema']), range(3)))
     seen = set()
@@ -113,6 +116,7 @@ def render(data, path):
              'Schema 7 adds generated-owned concrete scalar/bytes records and serialization. Serialization emits a fresh byte array; Buffa binary views forward the validated original wire, while owned and stock messages encode fields. These operations have equivalent wire semantics, but differ in work performed.',
              ('Schema 9 measures parse-and-project with both parsers eligible for guest compilation (no explicit parser boundary); only invalid-input exception construction crosses a boundary. Both engines use a 10,000 graph-size budget. AOT and interpreter measurements use the same operation.' if data['schema'] >= 9 else 'Schema 8 adds parse-and-project without retaining messages: generated code can fuse in guest compilation; stock parsing stays behind an explicit boundary. AOT and interpreter measurements use the same operation.'),
              ('Schema 10 uses direct concrete generated getter loops matching the stock retained-read harness, without the generic projection adapter.' if data['schema'] >= 10 else 'Earlier generated-record reads use the shared projection adapter.'),
+             ('Schema 11 adds concrete generated nested/repeated decoding, full consumption, and matched mixed-message serialization.' if data['schema'] >= 11 else 'Concrete generated nested decoding is not measured in this schema.'),
              'Buffa binary input is already in unmanaged memory; owned engines start with Java byte arrays.',
              'Buffa results are scoped borrowed views; stock-aliased borrows immutable ByteString input; stock/owned copy payloads.',
              'The direct stock AOT baseline excludes guest interop and contract enforcement.',
@@ -130,7 +134,7 @@ def measure(args):
     args.output.mkdir(parents=True, exist_ok=True)
     cpu = next((line.split(':', 1)[1].strip() for line in Path('/proc/cpuinfo').read_text().splitlines()
                 if line.startswith('model name')), platform.processor())
-    data = {'schema': 10, 'forks': 3, 'captured_at': datetime.datetime.now(datetime.timezone.utc).isoformat(),
+    data = {'schema': 11, 'forks': 3, 'captured_at': datetime.datetime.now(datetime.timezone.utc).isoformat(),
             'revision': args.revision, 'binary_sha256': hashlib.sha256(binary.read_bytes()).hexdigest(),
             'host': {'system': platform.system(), 'machine': platform.machine(), 'cpu': cpu,
                      'kernel': platform.release(), 'logical_cpus': os.cpu_count()},

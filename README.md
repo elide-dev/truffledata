@@ -154,8 +154,9 @@ some operations. These changes are **unreleased** and are not included in the 0.
 
 See [both full runs and caveats](docs/COMPARISON_BENCHMARKS.md#measured-independent-runtime-development-snapshot)
 and the [independent runtime API and current limits](docs/CONTRACTS.md#independent-protobuf-runtime-unreleased).
-Concrete generated codecs currently cover flat scalar schemas; nested/repeated messages
-continue to use the generic runtime. Editions, extensions and MessageSet remain unsupported.
+Concrete generated binary decoders now cover nested/repeated schemas when every reachable
+message has at most 64 fields. Their performance is not included in the charts above yet.
+Editions, extensions and MessageSet remain unsupported.
 
 </details>
 

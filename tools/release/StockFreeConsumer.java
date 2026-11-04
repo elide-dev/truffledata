@@ -55,6 +55,21 @@ public final class StockFreeConsumer {
         DataLibrary.factory().getUncached().readLong(generated, 0) == 123,
         "generated library export");
     check(getters.get_seconds(timestamp.decode(wire)) == 123, "binary scalar");
+    var envelope = model.type("truffledata.wkt.Envelope");
+    var graphAccess = new WellKnownContracts.Access_truffledata$wkt$Envelope(envelope);
+    byte[] graphWire =
+        envelope.encode(
+            envelope.parseText(
+                "when {seconds: 7} values {string_value: 'first'} values {bool_value: true}"
+                    + " counts {value: 1} counts {value: 2}"));
+    var graph = graphAccess.decode(graphWire);
+    check(
+        graph.get_values().size() == 2 && graph.get_counts().size() == 2, "generated graph arrays");
+    check(
+        ((WellKnownContracts.Message_google$protobuf$Timestamp) graph.get_when()).get_seconds()
+            == 7,
+        "generated nested concrete message");
+    check(Arrays.equals(graphWire, graph.encode()), "generated graph serialization");
     check(
         getters.get_nanos(timestamp.parseJson("\"1970-01-01T00:02:03.000000456Z\"")) == 456,
         "well-known JSON");

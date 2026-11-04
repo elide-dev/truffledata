@@ -72,7 +72,7 @@ public final class Comparison {
   static List<String> engines(String workload) {
     if (workload.equals("proto-bytes"))
       return List.of("stock", "stock-aliased", "owned", "buffa", "generated-owned");
-    if (workload.equals("proto-scalar"))
+    if (workload.equals("proto-scalar") || workload.startsWith("proto-mixed"))
       return List.of("stock", "owned", "buffa", "generated-owned");
     return workload.startsWith("proto-") || workload.equals("timestamp-json")
         ? List.of("stock", "owned", "buffa")
@@ -81,6 +81,7 @@ public final class Comparison {
 
   static List<String> stages(String workload, String engine) {
     if (engine.equals("generated-owned")) {
+      if (workload.equals("proto-mixed-full")) return List.of("ingest");
       var result = new ArrayList<>(List.of("ingest", "read-aot", "interpret", "peak", "serialize"));
       if (workload.equals("proto-scalar"))
         result.addAll(List.of("project-aot", "project-interpret", "project-peak"));
@@ -95,7 +96,9 @@ public final class Comparison {
       if (!workload.equals("timestamp-json"))
         result.addAll(List.of("read-generated-aot", "interpret-generated", "peak-generated"));
     }
-    if (workload.equals("proto-scalar") || workload.equals("proto-bytes")) result.add("serialize");
+    if (workload.equals("proto-scalar")
+        || workload.equals("proto-bytes")
+        || workload.equals("proto-mixed")) result.add("serialize");
     return result;
   }
 
@@ -504,8 +507,8 @@ public final class Comparison {
 
     long readOne(Object row, boolean typed)
         throws com.oracle.truffle.api.nodes.UnexpectedResultException {
-      if (generated != null) return generated.read((ProtoAccess) row);
       if (workload.equals("proto-mixed-full")) return readAll(row);
+      if (generated != null) return generated.read((ProtoAccess) row);
       if (engine.startsWith("stock")) {
         if (row instanceof com.google.protobuf.Type t)
           return t.getName().length()
@@ -560,6 +563,30 @@ public final class Comparison {
         for (int i = 0; i < oneofs; i++) sum += value.getOneofs(i).length();
         return sum;
       }
+      if (engine.equals("generated-owned")) {
+        var value = (ComparisonContracts.Message_google$protobuf$Type) row;
+        var fields = value.get_fields();
+        var oneofs = value.get_oneofs();
+        var source =
+            (ComparisonContracts.Message_google$protobuf$SourceContext) value.get_source_context();
+        long sum =
+            value.get_name().length()
+                + fields.size()
+                + oneofs.size()
+                + value.get_syntax()
+                + source.get_file_name().length();
+        for (int i = 0; i < fields.size(); i++) {
+          var field = (ComparisonContracts.Message_google$protobuf$Field) fields.get(i);
+          sum +=
+              field.get_name().length()
+                  + field.get_number()
+                  + field.get_kind()
+                  + field.get_cardinality()
+                  + (field.get_packed() ? 1 : 0);
+        }
+        for (int i = 0; i < oneofs.size(); i++) sum += ((String) oneofs.get(i)).length();
+        return sum;
+      }
       var data = DataLibrary.factory().getUncached();
       Object fields = data.read(row, 1), oneofs = data.read(row, 2);
       int count = Math.toIntExact(arraySize(fields)), groups = Math.toIntExact(arraySize(oneofs));
@@ -609,6 +636,14 @@ public final class Comparison {
                         rows[(n + rotation) & (ROWS - 1)])
                     .get_value()
                     .size();
+        } else if (workload.startsWith("proto-mixed")) {
+          for (int n = 0; n < ROWS; n++) {
+            Object row = rows[(n + rotation) & (ROWS - 1)];
+            sum +=
+                workload.equals("proto-mixed-full")
+                    ? readAll(row)
+                    : ownedMixedProjection((ComparisonContracts.Message_google$protobuf$Type) row);
+          }
         } else {
           for (int n = 0; n < ROWS; n++) {
             var row =
@@ -770,14 +805,17 @@ public final class Comparison {
     private final int kind;
     private final ComparisonContracts.@Nullable Access_google$protobuf$Timestamp timestamp;
     private final ComparisonContracts.@Nullable Access_google$protobuf$BytesValue bytes;
+    private final ComparisonContracts.@Nullable Access_google$protobuf$Type mixed;
 
     OwnedProjection(ProtoPlan plan, int kind) {
       this.kind = kind;
       timestamp = kind == 0 ? new ComparisonContracts.Access_google$protobuf$Timestamp(plan) : null;
       bytes = kind == 1 ? new ComparisonContracts.Access_google$protobuf$BytesValue(plan) : null;
+      mixed = kind == 3 ? new ComparisonContracts.Access_google$protobuf$Type(plan) : null;
     }
 
     ProtoAccess decode(byte[] wire) {
+      if (kind == 3) return Objects.requireNonNull(mixed).decode(wire);
       return kind == 0
           ? Objects.requireNonNull(timestamp).decode(wire)
           : Objects.requireNonNull(bytes).decode(wire);
@@ -789,6 +827,8 @@ public final class Comparison {
         var value = (ComparisonContracts.Message_google$protobuf$Timestamp) row;
         return value.get_seconds() + value.get_nanos();
       }
+      if (kind == 3)
+        return ownedMixedProjection((ComparisonContracts.Message_google$protobuf$Type) row);
       return ((ComparisonContracts.Message_google$protobuf$BytesValue) row).get_value().size();
     }
   }
@@ -820,6 +860,13 @@ public final class Comparison {
     }
   }
 
+  private static long ownedMixedProjection(ComparisonContracts.Message_google$protobuf$Type value) {
+    return value.get_name().length()
+        + value.get_fields().size()
+        + value.get_oneofs().size()
+        + value.get_syntax();
+  }
+
   /** Concrete generated getter loop mirrors the stock root without an adapter interface. */
   private static final class OwnedReadRoot extends RootNode {
     private final int kind;
@@ -838,6 +885,8 @@ public final class Comparison {
         Object row = rows[(n + rotation) & (ROWS - 1)];
         if (kind == 1) {
           sum += ((ComparisonContracts.Message_google$protobuf$BytesValue) row).get_value().size();
+        } else if (kind == 3) {
+          sum += ownedMixedProjection((ComparisonContracts.Message_google$protobuf$Type) row);
         } else {
           var value = (ComparisonContracts.Message_google$protobuf$Timestamp) row;
           sum += value.get_seconds() + value.get_nanos();

@@ -33,7 +33,7 @@ final class OwnedGenerator {
     };
   }
 
-  private static String storage(ProtoPlan.FieldPlan field) {
+  static String storage(ProtoPlan.FieldPlan field) {
     return switch (field.kind()) {
       case INT32, UINT32, SINT32, FIXED32, SFIXED32, ENUM -> "int";
       case FLOAT -> "float";
@@ -41,7 +41,7 @@ final class OwnedGenerator {
     };
   }
 
-  private static String storedValue(ProtoPlan.FieldPlan field, int ordinal) {
+  static String storedValue(ProtoPlan.FieldPlan field, int ordinal) {
     String value = "f" + ordinal;
     return switch (field.kind()) {
       case UINT32, FIXED32 -> "Integer.toUnsignedLong(" + value + ")";

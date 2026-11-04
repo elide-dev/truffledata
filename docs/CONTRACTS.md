@@ -346,8 +346,19 @@ Small primitive-only schemas (up to eight fields) also expose `decodeForProjecti
 inside a Truffle operation and consume the result immediately to let partial evaluation and
 escape analysis remove temporary storage. Unknown fields use the ordinary bounded decoder.
 The optimization is measured with a compiled allocation gate; it is not a blanket promise that
-every caller eliminates allocations. Nested/repeated generated codecs still use the generic
-plan path and are not emitted as concrete owned records yet.
+every caller eliminates allocations.
+
+Generated binary decoders also emit concrete immutable records for nested/repeated schemas
+when every reachable message has at most 64 fields. They support recursive message merges,
+packed/unpacked repeated values, oneofs, groups, required fields, closed-enum unknowns and
+last-key-wins maps. Each graph shares one bounded input cursor. Completed subtrees propagate
+retained cell/payload totals, including declared defaults, without revisiting ordinary child
+graphs; maps account for their deduplicated retained entries. Parsing limits also count
+discarded input. Final scalar fields use their declared widths. Read these records through
+direct getters, generated accessors, DataLibrary or interop. Complex records currently use
+the generic encoder; concrete builders and fused projection decoding remain flat-only.
+Wider schemas retain generic getters and the generic plan codec. Generated nested children
+can be installed in a generic builder when they belong to the exact same model.
 
 Borrowed `TypedMessage.encode()` forwards validated binary wire bytes into an owned output
 array, preserving unknown fields. Text/JSON views encode their semantic snapshot. Both paths

@@ -10,6 +10,7 @@ import com.oracle.truffle.api.nodes.UnexpectedResultException;
 import com.oracle.truffle.api.object.*;
 import dev.elide.truffledata.*;
 import dev.elide.truffledata.jdbc.*;
+import dev.elide.truffledata.protobuf.ProtoAccess;
 import dev.elide.truffledata.protobuf.ProtoRow;
 import dev.elide.truffledata.protobuf.ProtobufAdapter;
 import java.math.BigDecimal;
@@ -313,6 +314,43 @@ public final class JitMatrix {
       add(cases, prefix + "/wrong-double", Op.DATA_DOUBLE, row, 0, "", Failure.UNEXPECTED);
       add(cases, prefix + "/wrong-boolean", Op.DATA_BOOLEAN, row, 0, "", Failure.UNEXPECTED);
     }
+    for (boolean useStatic : new boolean[] {false, true}) {
+      String prefix = "generated-graph/" + (useStatic ? "static" : "batch");
+      var plan =
+          dev.elide.truffledata.bench.generated.NativeContracts.create(
+                  useStatic ? BenchmarkLanguage.current().language() : null,
+                  Limits.DEFAULT,
+                  16,
+                  1024)
+              .type("truffledata.benchdata.Graph");
+      var access =
+          new dev.elide.truffledata.bench.generated.NativeContracts
+              .Access_truffledata$benchdata$Graph(plan);
+      var row =
+          access.decode(
+              plan.encode(
+                  plan.parseText(
+                      "number: 42 score: 1.5 active: true name: 'graph' payload: 'abc' child {name:"
+                          + " 'child'} children {name: 'first'} children {name: 'second'}")));
+      var absent = access.decode(new byte[0]);
+      add(cases, prefix + "/long", Op.DATA_LONG, row, 0, "", 42L);
+      add(cases, prefix + "/double", Op.DATA_DOUBLE, row, 1, "", 1.5);
+      add(cases, prefix + "/boolean", Op.DATA_BOOLEAN, row, 2, "", true);
+      add(cases, prefix + "/string", Op.READ, row, 3, "", "graph");
+      add(cases, prefix + "/bytes-length", Op.LENGTH, row, 4, "", 3);
+      add(cases, prefix + "/children-length", Op.LENGTH, row, 6, "", 2);
+      add(cases, prefix + "/nested", Op.PROTO_NESTED, row, 6, "", "first");
+      add(cases, prefix + "/member", Op.MEMBER, row, 3, "name", "graph");
+      add(cases, prefix + "/ordinal", Op.ORDINAL, row, 0, "", 42L);
+      add(cases, prefix + "/has", Op.PROTO_HAS, row, 0, "", true);
+      add(cases, prefix + "/absent", Op.PROTO_HAS, absent, 5, "", false);
+      add(cases, prefix + "/absent-readable", Op.PRESENT, absent, 5, "", false);
+      add(cases, prefix + "/missing", Op.READ, absent, 5, "", Missing.INSTANCE);
+      add(cases, prefix + "/wrong-long", Op.DATA_LONG, row, 3, "", Failure.UNEXPECTED);
+      add(cases, prefix + "/wrong-double", Op.DATA_DOUBLE, row, 0, "", Failure.UNEXPECTED);
+      add(cases, prefix + "/wrong-boolean", Op.DATA_BOOLEAN, row, 0, "", Failure.UNEXPECTED);
+      add(cases, prefix + "/invalid", Op.ORDINAL, row, -1, "", Failure.INDEX);
+    }
     // Reuse one adopted accessor across more schema identities than its PIC can hold.
     List<Field> fields = new ArrayList<>();
     for (int i = 0; i < schema.size(); i++) fields.add(schema.field(i));
@@ -476,7 +514,7 @@ public final class JitMatrix {
               case INVOCABLE -> interop.isMemberInvocable(receiver, member);
               case PROTO_NESTED ->
                   nested.readMember(nested.readArrayElement(data.read(receiver, index), 0), "name");
-              case PROTO_HAS -> ((ProtoRow) receiver).has(index);
+              case PROTO_HAS -> ((ProtoAccess) receiver).has(index);
               case READ -> data.read(receiver, index);
               case DATA_LONG -> data.readLong(receiver, index);
               case DATA_DOUBLE -> data.readDouble(receiver, index);

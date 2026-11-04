@@ -50,6 +50,10 @@ public abstract class GeneratedMessage extends AbstractRow implements ProtoAcces
   /** Implemented by the schema-generated codec behind its own Truffle boundary. */
   public abstract byte[] encode();
 
+  protected final byte[] encodeGraph() {
+    return ProtoCodec.encode(this);
+  }
+
   protected final boolean isSet(long mask) {
     return (presence & mask) != 0;
   }
