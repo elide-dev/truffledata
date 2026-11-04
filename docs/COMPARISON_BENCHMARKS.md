@@ -227,8 +227,16 @@ before/after evidence.
 
 Use `bazel test //benchmarks/comparison:profile --nocache_test_results` to capture
 three fresh JFR processes per engine for mixed-message ingestion. Each process
-runs eight diagnostic rounds, and the image explicitly enables asynchronous
-signal-handler sampling to avoid the safepoint callback sampler. Select another
+runs eight diagnostic rounds with Serial GC. Use the separate
+`//benchmarks/comparison:profile_epsilon` target for a no-GC probe with one round
+per process and a 1 GiB heap cap. Both targets also collect matched one-round
+fresh-process timings with recording off (`*.unprofiled.jsonl`); `gc.txt` labels
+the collector. These ingestion-only diagnostics supplement the full comparison.
+
+This toolchain rejects signal-handler sampling when Truffle runtime code installation
+is enabled. The recordings therefore use the safepoint sampler: distributions are
+biased toward safepoint locations and are clues for experiments, not unbiased CPU
+percentages. Runtime code installation and normal peak-JIT checks remain enabled. Select another
 workload with `--test_arg=proto-scalar` (or another comparison workload). Raw
 recordings and diagnostic output are under the test's `test.outputs` directory.
 Pass `--test_env=TRUFFLEDATA_BENCH_REVISION` with the current commit in the environment

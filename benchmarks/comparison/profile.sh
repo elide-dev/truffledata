@@ -18,6 +18,9 @@ printf '%s\n' "${TRUFFLEDATA_BENCH_REVISION:-unknown}" > "${TEST_UNDECLARED_OUTP
 for engine in "${engines[@]}"; do
   for fork in 0 1 2; do
     output="${TEST_UNDECLARED_OUTPUTS_DIR}/${workload}-${engine}-${fork}"
+    # Matched fresh-process timing with recording off, before the separate sampled run.
+    "$binary" -Xmx1g -Dtruffledata.profile.rounds=1 \
+      "$workload" "$engine" ingest time > "${output}.unprofiled.jsonl"
     "$binary" -Xmx1g "-Dtruffledata.profile.rounds=${rounds}" "-XX:StartFlightRecording=filename=${output}.jfr,settings=${settings},dumponexit=true" \
       "$workload" "$engine" ingest time > "${output}.jsonl"
     test -s "${output}.jfr"
