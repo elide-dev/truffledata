@@ -359,6 +359,48 @@ final class TypedAcceptance {
     }
   }
 
+  private static void textRejectsMalformedUtf16BeforeEncoding(BuffaWire decoder) {
+    var p = plan("Sample");
+    try (var compiled = decoder.compile(p, 65536)) {
+      for (String malformed :
+          List.of(
+              String.valueOf((char) 0xd800),
+              String.valueOf((char) 0xdc00),
+              "prefix" + (char) 0xd800 + "suffix")) {
+        Acceptance.rejects(
+            () -> compiled.parseText("text: '" + malformed + "'", NATIVE), ContractViolation.class);
+        Acceptance.rejects(
+            () -> compiled.parseJson("{\"text\":\"" + malformed + "\"}", NATIVE),
+            ContractViolation.class);
+      }
+      Acceptance.rejects(() -> compiled.parseText("text: 'valid'", -1), ContractViolation.class);
+      Acceptance.rejects(
+          () -> compiled.parseJson("{\"text\":\"valid\"}", -1), ContractViolation.class);
+      try (var parsed = compiled.parseJson("{\"text\":\"é中😀\"}", NATIVE)) {
+        Acceptance.check(
+            parsed.row().get(p.schema().indexOf("text")).equals("é中😀"),
+            "failed text parsing leaves the plan reusable");
+      }
+    }
+    // Three-byte BMP characters can exceed the wire limit despite satisfying the UTF-16 limit.
+    var tiny =
+        TruffleDataContracts.create(null, Limits.DEFAULT, 32, 32)
+            .type("truffledata.lossless.Sample");
+    try (var compiled = decoder.compile(tiny, 65536)) {
+      Acceptance.rejects(
+          () -> compiled.parseText("text:'" + "中".repeat(9) + "'", NATIVE),
+          ContractViolation.class);
+    }
+    var jsonTiny =
+        TruffleDataContracts.create(null, Limits.DEFAULT, 32, 64)
+            .type("truffledata.lossless.Sample");
+    try (var compiled = decoder.compile(jsonTiny, 65536)) {
+      Acceptance.rejects(
+          () -> compiled.parseJson("{\"text\":\"" + "中".repeat(21) + "\"}", NATIVE),
+          ContractViolation.class);
+    }
+  }
+
   private static void unicode(BuffaWire decoder) {
     var field =
         new ProtoPlan.FieldPlan(
@@ -419,6 +461,7 @@ final class TypedAcceptance {
 
   static void run(BuffaWire decoder) throws Exception {
     scopedRowsRequireDetachmentBeforeEnteringOwnedContainers(decoder);
+    textRejectsMalformedUtf16BeforeEncoding(decoder);
     unicode(decoder);
     compactScalars(decoder);
     generatedGetters(decoder);

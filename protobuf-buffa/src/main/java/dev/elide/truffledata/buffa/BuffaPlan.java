@@ -76,7 +76,12 @@ public final class BuffaPlan implements AutoCloseable {
 
   private TypedMessage text(String text, int format, int nativeBytes) {
     check();
-    if (text.length() > plan.maxWireBytes() / 2) throw new ContractViolation("Text input budget");
+    if (nativeBytes < 0 || text.length() > plan.maxWireBytes() / 2)
+      throw new ContractViolation("Text input budget");
+    // String.getBytes replaces malformed UTF-16. Validate scalar values and bound the exact
+    // UTF-8 expansion first, before allocating either heap or native input/payload storage.
+    if (GeneratedOutput.utf8Length(text) > plan.maxWireBytes())
+      throw new ContractViolation("Text wire byte budget");
     byte[] utf8 = text.getBytes(StandardCharsets.UTF_8);
     try (var input = decoder.allocate(utf8.length).put(utf8);
         var payload = decoder.allocate(Math.multiplyExact(utf8.length, 2))) {

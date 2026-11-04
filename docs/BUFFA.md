@@ -295,3 +295,8 @@ RECORD/ANY fields during guest execution, while `Values.normalize` and
 `snapshot()` to retain values independently of message closure. Shared JVM/SVM
 tests cover both top-level and nested borrowed rows, rejection by owned containers,
 and detached nested values surviving all source owners.
+
+Protobuf text/ProtoJSON entry points reject unpaired Java UTF-16 surrogates before
+UTF-8 encoding can replace them. They also reject negative native budgets and
+check the exact UTF-8 expansion before allocating input/payload buffers. This is
+separate from the future general-JSON facade's Java UTF-16 factory semantics.
