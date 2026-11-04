@@ -551,7 +551,7 @@ passes the full benchmark, comparison/native access gates, and the protobuf-free
 consumer. CI also passed on implementation revision `8fc6670`, including native/fallback
 acceptance, real driver acceptance, coverage, JUnit reporting, and CodSpeed reporting.
 
-## Current generated graph comparison
+## Generic immutable storage comparison
 
 The [`0faad26` run](../benchmarks/results/svm-comparison-0faad26/comparison.json)
 keeps every one of the 120 comparison cells. Generic snapshot accounting now traverses
@@ -596,6 +596,53 @@ fallback, facade/schema mismatches, merges, defaults and map deduplication are e
 The [Gazelle drift gate](https://app.buildbuddy.io/invocation/6603031e-78e7-4bb9-ae2e-06e82306d0f0)
 also passes. CI on this implementation revision is tracked separately from these local
 RBE results.
+
+## Current generated graph comparison
+
+The [`fa89f1f` run](../benchmarks/results/svm-comparison-fa89f1f/comparison.json)
+packs generic protobuf presence into one inline word, with spill words only above
+64 fields. Compact integer rows use that word for their first value and reuse their
+boxed second value for generic reads. The same 120 measurement cells remain.
+
+| Operation | Stock | Generated owned | Stock / generated Java bytes |
+| --- | ---: | ---: | ---: |
+| Scalar ingestion | 119.28 ns | 40.71 ns | 136 / 88 |
+| Scalar interpreter reads | 3.72 ns | 2.64 ns | 2 / 2 |
+| Scalar peak reads | 1.63 ns | 2.66 ns | 1 / 1 |
+| Scalar serialization | 32.82 ns | 52.00 ns | 56 / 24 |
+| Scalar parse/project, peak | 81.45 ns | 20.52 ns | 137 / 1 |
+| Nested ingestion, projection | 1307.37 ns | 1638.80 ns | 1776.75 / 1800.50 |
+| Nested ingestion, full consumption | 2120.11 ns | 1591.31 ns | 1776.75 / 1800.50 |
+| Nested serialization | 968.58 ns | 1365.33 ns | 436.50 / 192.50 |
+
+Generic scalar ingestion now allocates 64 bytes (previously 88); primitive projection
+allocates 48 (previously 56). Generic scalar serialization drops from 136 to 104 bytes,
+but still takes 156.17 ns versus stock's 32.82 ns. Generic nested ingestion falls from
+3086.50 to 2976 bytes, a 3.6% reduction in this batch and 10.9% from the earlier 3339.50
+baseline. Its full-consumption time is 11.30 µs versus stock's 2.12 µs. Owned byte-message
+ingestion drops another eight bytes. Timestamp ProtoJSON ingestion allocates 3655.75
+bytes versus stock's 6439.75.
+
+Generated-code allocation is unchanged by this generic representation change. Stock
+still has faster scalar peak reads and scalar/nested serialization in this run. Generated
+nested full parsing is faster here, but process ranges overlap. The last three runs
+report the same Intel Xeon model; process timing ranges are still broad, and earlier
+AMD runs are kept separately. Compare engines within a run and retain those ranges;
+the allocation changes do not prove isolated timing improvements or universal parity.
+Generic decoding, several Buffa paths, aliased bytes and SQL wrappers remain behind.
+
+[All six validation targets pass](https://app.buildbuddy.io/invocation/276b73c0-b8ab-4e3c-bb31-6f9c63f9a02c):
+the full comparison, comparison/native access gates, protobuf-free native consumer,
+compiled JVM allocation gate and Gazelle drift. The native matrix now has **603 cases**:
+all previous 511 plus 92 for presence/read access across word boundaries and wide oneof
+transitions. Every success case executes compiled code under unchanged warning, graph
+and allocation limits. The
+[coverage cycle](https://app.buildbuddy.io/invocation/edebd856-2684-4be7-b5d5-614e5c12071c)
+passes correctness and both Buffa JVM routes, with 37/37 ProtoRow methods covered.
+Stock-oracle tests cover empty through 256-field schemas, defaults, required fields,
+unknown fields, text/JSON, buffer input and retained builder snapshots. The compiled
+JVM gate measures compact integer decoding at 40 bytes for one integer or a cached
+second integer, and 64 bytes for a noncached second integer; limits are 48/72 bytes.
 
 ![Current generated interpreter reads](images/independent-latest/comparison-generated-interpreter.svg)
 ![Current generated peak reads](images/independent-latest/comparison-generated-peak.svg)

@@ -143,11 +143,11 @@ builders and codecs. Buffa scalar decoding uses fixed native results without all
 an index, and typed messages own their lifetimes directly.
 
 The latest development run has generated nested full-consumption decoding at
-**1.99 µs versus stock’s 1.43 µs**, with **1,801 versus 1,777 Java bytes**. Nested serialization
-uses **193 versus 437 bytes**, but takes **1.77 µs versus stock’s 1.02 µs**. Scalar parse/project
-at peak measures **15.6 ns versus stock’s 81.8 ns**. Generic nested decoding now allocates
-**3,087 bytes**, down from **3,340** before the recent accounting/state changes, and still
-takes **9.80 µs versus stock’s 1.43 µs**. These are short shared-runner measurements;
+**1.59 µs versus stock’s 2.12 µs**, with **1,801 versus 1,777 Java bytes**. Nested serialization
+uses **193 versus 437 bytes**, but takes **1.37 µs versus stock’s 0.97 µs**. Scalar parse/project
+at peak measures **20.5 ns versus stock’s 81.5 ns**. Generic nested decoding now allocates
+**2,976 bytes**, down from **3,340** before the recent accounting/state changes, and still
+takes **11.30 µs versus stock’s 2.12 µs**. These are short shared-runner measurements;
 generic decoding and several borrowed/SQL paths still lag stock. These changes are **unreleased**
 and are not included in the 0.4.0 artifacts.
 
