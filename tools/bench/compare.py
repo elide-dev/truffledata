@@ -18,15 +18,22 @@ CHECKSUMS = {'proto-scalar': 54400032992, 'proto-bytes': 2097648, 'timestamp-jso
              'mysql-int4': 35472, 'postgres-int4': 35472, 'proto-mixed': 563}
 
 
-def cells(schema=3):
+def cells(schema=4):
     for workload in WORKLOADS:
         if schema < 3 and workload == 'proto-mixed':
             continue
         engines = ('stock', 'stock-aliased', 'owned', 'buffa') if workload == 'proto-bytes' else (
             ('stock', 'owned', 'buffa') if workload.startswith('proto-') or workload == 'timestamp-json' else ('stock', 'static'))
         for engine in engines:
-            stages = ('ingest',) if workload == 'timestamp-json' else (
-                ('ingest', 'read-aot') if engine.startswith('stock') else ('ingest', 'interpret', 'peak'))
+            if workload == 'timestamp-json':
+                stages = ('ingest',)
+            elif engine.startswith('stock'):
+                stages = ('ingest', 'read-aot')
+                if schema >= 4:
+                    stages += (('interpret-boundary', 'peak-boundary') if workload == 'proto-mixed'
+                               else ('interpret', 'peak'))
+            else:
+                stages = ('ingest', 'interpret', 'peak')
             if schema >= 2 and not engine.startswith('stock') and workload != 'proto-bytes':
                 stages = ('ingest', 'ingest-typed', *stages[1:])
             for stage in stages:
@@ -37,7 +44,7 @@ def validate_row(row, cell, metric):
     workload, engine, stage = cell
     if (row['workload'], row['engine'], row['stage']) != cell or row['runtime'] != 'svm':
         raise ValueError('Mislabeled measurement')
-    if row['guest_compiled'] != (stage == 'peak'):
+    if row['guest_compiled'] != (stage in ('peak', 'peak-boundary')):
         raise ValueError('Wrong guest execution tier')
     if row['backend'] != ('SVM_STATIC' if engine == 'buffa' else 'none'):
         raise ValueError('Wrong backend')
@@ -50,7 +57,7 @@ def validate_row(row, cell, metric):
 
 
 def validate(data):
-    if data['schema'] not in (1, 2, 3) or data['forks'] != 3:
+    if data['schema'] not in (1, 2, 3, 4) or data['forks'] != 3:
         raise ValueError('Expected three isolated processes per cell')
     expected = set(itertools.product(cells(data['schema']), range(3)))
     seen = set()
@@ -79,7 +86,7 @@ def render(data, path):
         allocations = [statistics.median(r['allocated_bytes_per_row']) for r in rows]
         text.append('| %s | %s | %s | %.2f (%.2f–%.2f) | %.2f |' % (
             *cell, statistics.median(times), min(times), max(times), statistics.median(allocations)))
-    text += ['', 'Stock read-aot is the native-image host baseline; it has no Truffle interpreter/JIT tier.',
+    text += ['', 'Stock read-aot is the native-image host baseline. Schema 4 adds stock guest tiers; mixed protobuf uses explicitly labeled boundary projections because its collection getters fail the SVM JIT blocklist.',
              'Ingest includes parsing/materialization and an uncached projected read. Setup is excluded.',
              'ingest-typed uses primitive readLong projections; ingest retains generic read projections.',
              'Buffa binary input is already in unmanaged memory; owned engines start with Java byte arrays.',
@@ -99,7 +106,7 @@ def measure(args):
     args.output.mkdir(parents=True, exist_ok=True)
     cpu = next((line.split(':', 1)[1].strip() for line in Path('/proc/cpuinfo').read_text().splitlines()
                 if line.startswith('model name')), platform.processor())
-    data = {'schema': 3, 'forks': 3, 'captured_at': datetime.datetime.now(datetime.timezone.utc).isoformat(),
+    data = {'schema': 4, 'forks': 3, 'captured_at': datetime.datetime.now(datetime.timezone.utc).isoformat(),
             'revision': args.revision, 'binary_sha256': hashlib.sha256(binary.read_bytes()).hexdigest(),
             'host': {'system': platform.system(), 'machine': platform.machine(), 'cpu': cpu,
                      'kernel': platform.release(), 'logical_cpus': os.cpu_count()},

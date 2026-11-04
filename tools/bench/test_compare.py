@@ -5,23 +5,37 @@ import compare
 
 
 class ComparisonTest(unittest.TestCase):
-    def dataset(self, schema=3):
+    def dataset(self, schema=4):
         rows = []
         for cell, fork in itertools.product(compare.cells(schema), range(3)):
             workload, engine, stage = cell
             rows.append(dict(workload=workload, engine=engine, stage=stage, fork=fork,
                              runtime='svm', backend='SVM_STATIC' if engine == 'buffa' else 'none',
-                             guest_compiled=stage == 'peak', rows=32, checksum=compare.CHECKSUMS[workload],
+                             guest_compiled=stage in ('peak', 'peak-boundary'), rows=32, checksum=compare.CHECKSUMS[workload],
                              ns_per_row=[1., 2., 3.], allocated_bytes_per_row=[0., 0., 0.]))
         return dict(schema=schema, forks=3, results=rows)
 
     def test_complete(self):
-        self.assertEqual(len(list(compare.cells())), 47)
+        self.assertEqual(len(list(compare.cells())), 59)
         self.assertEqual(len(list(compare.cells(1))), 31)
         self.assertEqual(len(list(compare.cells(2))), 37)
+        self.assertEqual(len(list(compare.cells(3))), 47)
+        compare.validate(self.dataset(3))
         compare.validate(self.dataset(2))
         compare.validate(self.dataset(1))
         compare.validate(self.dataset())
+
+    def test_stock_guest_tiers_keep_direct_baselines(self):
+        self.assertTrue(set(compare.cells(3)).issubset(set(compare.cells())))
+        stock_peak = [c for c in compare.cells() if c[1].startswith('stock') and c[2].startswith('peak')]
+        self.assertEqual(len(stock_peak), 6)
+        for stage, wrong in [('peak', False), ('interpret', True),
+                             ('peak-boundary', False), ('interpret-boundary', True)]:
+            data = self.dataset()
+            row = next(r for r in data['results'] if r['engine'] == 'stock' and r['stage'] == stage)
+            row['guest_compiled'] = wrong
+            with self.assertRaises(ValueError):
+                compare.validate(data)
 
     def test_rejects_incomplete_duplicate_and_wrong_identity(self):
         original = self.dataset()
