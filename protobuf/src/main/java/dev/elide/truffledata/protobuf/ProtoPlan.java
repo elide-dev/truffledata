@@ -432,12 +432,18 @@ public final class ProtoPlan {
   }
 
   public double getDouble(ProtoAccess row, int ordinal) {
+    if (row.plan() != this) throw new ContractViolation("Generated plan mismatch");
+    if (row instanceof ProtoRow owned && !compactScalars && layout != null)
+      return layout.getDouble((StaticLayout.Record) owned.storage, ordinal);
     Object value = get(row, ordinal);
     if (value instanceof Double number) return number;
     throw new ContractViolation("Expected FLOAT64");
   }
 
   public boolean getBoolean(ProtoAccess row, int ordinal) {
+    if (row.plan() != this) throw new ContractViolation("Generated plan mismatch");
+    if (row instanceof ProtoRow owned && !compactScalars && layout != null)
+      return layout.getBoolean((StaticLayout.Record) owned.storage, ordinal);
     Object value = get(row, ordinal);
     if (value instanceof Boolean flag) return flag;
     throw new ContractViolation("Expected BOOLEAN");

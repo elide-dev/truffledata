@@ -71,6 +71,7 @@ final class CompiledReads {
       context.initialize("buffa-test");
       context.enter();
       try {
+        generatedReads(decoder);
         try (var plan = decoder.compile(TypedAcceptance.plan("Sample"), 65536)) {
           for (int format = 0; format < 3; format++) {
             try (var typedInput = decoder.allocate(3).put(new byte[] {26, 1, (byte) 255});
@@ -173,6 +174,64 @@ final class CompiledReads {
       } finally {
         context.leave();
       }
+    }
+  }
+
+  private static void generatedReads(BuffaWire decoder) {
+    var plan =
+        dev.elide.truffledata.generated.TruffleDataContracts.create(
+                TestLanguage.current(), Limits.DEFAULT, 16, 65536)
+            .type("truffledata.lossless.Sample");
+    String text = "count: 1000 f: 1.5 d: 2.5 flag: true";
+    try (var nativePlan = decoder.compile(plan, 65536);
+        var message = nativePlan.parseText(text, 65536)) {
+      for (dev.elide.truffledata.protobuf.ProtoAccess row :
+          java.util.List.of(plan.parseText(text), message.row())) {
+        var root = new GeneratedRoot(plan);
+        var target = root.getCallTarget();
+        for (int i = 0; i < 200 && !root.compiled; i++) target.call(row, 100000);
+        Acceptance.check(root.compiled, "generated primitive getters compiled");
+        Acceptance.check(
+            ((Long) target.call(row, 1000000)) == 1004000000L, "generated primitive values");
+        Acceptance.check(NodeUtil.countNodes(root) <= 192, "generated getter AST budget");
+        if (row instanceof TypedRow) {
+          message.close();
+          Acceptance.rejects(() -> target.call(row, 1), IllegalStateException.class);
+        }
+      }
+    }
+  }
+
+  private static final class GeneratedRoot extends RootNode {
+    private final dev.elide.truffledata.generated.TruffleDataContracts
+            .Access_truffledata$lossless$Sample
+        access;
+    private final com.oracle.truffle.api.profiles.ValueProfile rowClass =
+        com.oracle.truffle.api.profiles.ValueProfile.createClassProfile();
+    boolean compiled;
+
+    GeneratedRoot(dev.elide.truffledata.protobuf.ProtoPlan plan) {
+      super(TestLanguage.current());
+      access =
+          new dev.elide.truffledata.generated.TruffleDataContracts
+              .Access_truffledata$lossless$Sample(plan);
+    }
+
+    @Override
+    public Object execute(VirtualFrame frame) {
+      var row =
+          (dev.elide.truffledata.protobuf.ProtoAccess) rowClass.profile(frame.getArguments()[0]);
+      int count = (Integer) frame.getArguments()[1];
+      long sum = 0;
+      for (int i = 0; i < count; i++)
+        sum +=
+            access.get_count(row)
+                + (long) access.get_f(row)
+                + (long) access.get_d(row)
+                + (access.get_flag(row) ? 1 : 0);
+      if (CompilerDirectives.inInterpreter()) LoopNode.reportLoopCount(this, count);
+      compiled |= CompilerDirectives.inCompiledCode();
+      return sum;
     }
   }
 
