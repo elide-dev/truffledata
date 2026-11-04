@@ -4,3 +4,6 @@ flag instead of explicit presence. Commit `e277052` corrects that fixture and st
 snapshot presence checks without changing production code. Both JVM acceptance targets
 then passed: https://app.buildbuddy.io/invocation/4132e9e9-a8ed-4fc6-8143-41b5bb84cbb3
 Corrected static SVM acceptance remains required before merging this optimization.
+
+The corrected static SVM and fallback suites subsequently passed alongside the default-validation
+change at `e522fe9`: https://app.buildbuddy.io/invocation/799047a5-255c-4086-9181-2ab410f54dde
