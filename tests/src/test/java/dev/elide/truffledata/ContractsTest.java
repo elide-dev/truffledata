@@ -64,6 +64,95 @@ class ContractsTest {
   }
 
   @Test
+  void primitiveStaticConstructionPreservesWidthsRangesAndPresence() throws Exception {
+    try (Context context = Context.newBuilder("td-test").build()) {
+      context.initialize("td-test");
+      context.enter();
+      try {
+        var language = TestLanguage.current().language();
+        var data = DataLibrary.factory().getUncached();
+        for (int bits : new int[] {8, 16, 32, 64}) {
+          for (boolean signed : new boolean[] {false, true}) {
+            if (bits == 64 && !signed) continue; // UINT64 has the EXACT kind.
+            var width = new Constraints.IntegerWidth(bits, signed);
+            for (boolean nullable : new boolean[] {false, true}) {
+              for (boolean optional : new boolean[] {false, true}) {
+                var layout =
+                    new StaticLayout(
+                        language,
+                        Schema.of(Field.integer("n", bits, signed, nullable, optional)),
+                        new Limits(1, 1, 1, 0));
+                for (long value : new long[] {width.minimum(), 0, width.maximum()}) {
+                  var row = layout.createLong(value);
+                  assertEquals(value, layout.getLong(row, 0));
+                  assertEquals(value, data.readLong(row, 0));
+                  assertTrue(data.isPresent(row, 0));
+                  assertNotSame(DataNull.INSTANCE, data.read(row, 0));
+                }
+                if (width.minimum() != Long.MIN_VALUE)
+                  assertThrows(
+                      ContractViolation.class, () -> layout.createLong(width.minimum() - 1));
+                if (width.maximum() != Long.MAX_VALUE)
+                  assertThrows(
+                      ContractViolation.class, () -> layout.createLong(width.maximum() + 1));
+                // The existing varargs API must continue accepting boxed null, without unboxing.
+                Long absent = null;
+                if (nullable) assertSame(DataNull.INSTANCE, data.read(layout.create(absent), 0));
+                else assertThrows(ContractViolation.class, () -> layout.create(absent));
+                if (optional) assertFalse(data.isPresent(layout.create(Missing.INSTANCE), 0));
+              }
+            }
+          }
+        }
+        for (long[] range :
+            new long[][] {
+              {0, 120},
+              {128, 255},
+              {-1000, 1000},
+              {32768, 65535},
+              {-100000, 100000},
+              {2147483648L, 4294967295L},
+              {Long.MIN_VALUE, Long.MAX_VALUE}
+            }) {
+          var field =
+              Field.requiredLong("n")
+                  .withConstraints(
+                      Constraints.NONE.withIntegerRange(
+                          new Constraints.IntegerRange(range[0], range[1])));
+          var layout = new StaticLayout(language, Schema.of(field), Limits.DEFAULT);
+          for (long value : range) assertEquals(value, layout.getLong(layout.createLong(value), 0));
+          if (range[0] != Long.MIN_VALUE)
+            assertThrows(ContractViolation.class, () -> layout.createLong(range[0] - 1));
+          if (range[1] != Long.MAX_VALUE)
+            assertThrows(ContractViolation.class, () -> layout.createLong(range[1] + 1));
+        }
+        var intersection =
+            Field.integer("n", 16, true, false, false)
+                .withConstraints(
+                    Constraints.NONE
+                        .withInteger(new Constraints.IntegerWidth(16, true))
+                        .withIntegerRange(new Constraints.IntegerRange(100, 40000)));
+        var layout = new StaticLayout(language, Schema.of(intersection), Limits.DEFAULT);
+        assertEquals(32767, layout.getLong(layout.createLong(32767), 0));
+        assertThrows(ContractViolation.class, () -> layout.createLong(99));
+        assertThrows(ContractViolation.class, () -> layout.createLong(32768));
+        for (Schema schema :
+            new Schema[] {
+              Schema.of(),
+              Schema.of(Field.requiredLong("a"), Field.requiredLong("b")),
+              Schema.of(new Field("s", Field.Kind.STRING, false, false)),
+              Schema.of(Field.integer("u", 64, false, false, false))
+            }) {
+          var invalid = new StaticLayout(language, schema, Limits.DEFAULT);
+          assertThrows(ContractViolation.class, () -> invalid.createLong(1));
+        }
+      } finally {
+        context.leave();
+      }
+    }
+  }
+
+  @Test
   void staticWidthsPresenceAndLengthFacts() throws Exception {
     try (Context context = Context.newBuilder("td-test").build()) {
       context.initialize("td-test");

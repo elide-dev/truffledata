@@ -43,11 +43,7 @@ impl<'a, 'b> Decoder<'a, 'b> {
                         self.used += 1;
                     }
                     let bytes = self.payload.get(start..self.used).ok_or(BUDGET)?;
-                    let units: u64 = std::str::from_utf8(bytes)
-                        .map_err(|_| MALFORMED)?
-                        .chars()
-                        .map(|c| c.len_utf16() as u64 * 2)
-                        .sum();
+                    let units = 2 * crate::unicode::utf16_length(bytes)? as u64;
                     self.strings = self.strings.checked_sub(units).ok_or(BUDGET)?;
                     self.push(f, start as u64, (self.used - start) as u64)?;
                 }

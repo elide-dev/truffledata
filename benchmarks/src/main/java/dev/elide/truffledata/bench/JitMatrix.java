@@ -10,6 +10,8 @@ import com.oracle.truffle.api.nodes.UnexpectedResultException;
 import com.oracle.truffle.api.object.*;
 import dev.elide.truffledata.*;
 import dev.elide.truffledata.jdbc.*;
+import dev.elide.truffledata.protobuf.ProtoAccess;
+import dev.elide.truffledata.protobuf.ProtoPlan;
 import dev.elide.truffledata.protobuf.ProtoRow;
 import dev.elide.truffledata.protobuf.ProtobufAdapter;
 import java.math.BigDecimal;
@@ -33,6 +35,7 @@ public final class JitMatrix {
 
   enum Op {
     READ,
+    CREATE_LONG,
     ITERATOR,
     IS_ITERATOR,
     HAS_ITERATOR,
@@ -133,6 +136,21 @@ public final class JitMatrix {
 
   private static List<Case> cases(boolean requireCompiled) throws Exception {
     List<Case> cases = new ArrayList<>();
+    for (int bits : new int[] {8, 16, 32, 64}) {
+      for (boolean nullable : new boolean[] {false, true}) {
+        String prefix = nullable ? "static-create-nullable/" : "static-create/";
+        add(cases, prefix + "i" + bits, Op.CREATE_LONG, 42L, bits, Boolean.toString(nullable), 42L);
+        if (bits != 64)
+          add(
+              cases,
+              prefix + "overflow-i" + bits,
+              Op.CREATE_LONG,
+              1L << (bits - 1),
+              bits,
+              Boolean.toString(nullable),
+              Failure.CONTRACT);
+      }
+    }
     Schema childSchema = Schema.of(Field.requiredLong("child"));
     AbstractRow child =
         Batch.copyOf(childSchema, Collections.singletonList(new Object[] {42L}), Limits.DEFAULT)
@@ -313,6 +331,98 @@ public final class JitMatrix {
       add(cases, prefix + "/wrong-double", Op.DATA_DOUBLE, row, 0, "", Failure.UNEXPECTED);
       add(cases, prefix + "/wrong-boolean", Op.DATA_BOOLEAN, row, 0, "", Failure.UNEXPECTED);
     }
+    for (boolean useStatic : new boolean[] {false, true}) {
+      for (int size : new int[] {65, 129}) {
+        List<ProtoPlan.FieldPlan> definitions = new ArrayList<>();
+        for (int i = 0; i < size; i++) {
+          boolean choice = i == 0 || i == size - 1;
+          definitions.add(
+              new ProtoPlan.FieldPlan(
+                  "f" + i,
+                  i + 1,
+                  ProtoPlan.Kind.INT64,
+                  false,
+                  false,
+                  true,
+                  false,
+                  false,
+                  choice ? 0 : -1,
+                  "",
+                  null,
+                  choice ? 0L : 7L));
+        }
+        String name = "presence.Wide" + size;
+        var plan =
+            new ProtoPlan.Model(
+                    useStatic ? BenchmarkLanguage.current().language() : null,
+                    List.of(new ProtoPlan.Type(name, false, definitions)),
+                    Limits.DEFAULT,
+                    16,
+                    4096)
+                .type(name);
+        String prefix = "proto-presence/" + (useStatic ? "static" : "batch") + "/" + size;
+        var builder = plan.newBuilder().set(0, 0L);
+        var low = builder.build();
+        for (int index : new int[] {31, 32, 63, 64, 127, 128})
+          if (index < size) builder.set(index, 0L);
+        var row = plan.decode(plan.encode(builder.build()));
+        var absent = plan.decode(new byte[0]);
+        for (int index : new int[] {31, 32, 63, 64, 127, 128}) {
+          if (index >= size) continue;
+          add(cases, prefix + "/has/" + index, Op.PROTO_HAS, row, index, "", true);
+          add(cases, prefix + "/absent/" + index, Op.PROTO_HAS, absent, index, "", false);
+          add(cases, prefix + "/read/" + index, Op.DATA_LONG, row, index, "", 0L);
+          add(
+              cases,
+              prefix + "/default/" + index,
+              Op.DATA_LONG,
+              absent,
+              index,
+              "",
+              index == size - 1 ? 0L : 7L);
+        }
+        add(cases, prefix + "/oneof-low-before", Op.PROTO_HAS, low, 0, "", true);
+        add(cases, prefix + "/oneof-low-after", Op.PROTO_HAS, row, 0, "", false);
+        add(cases, prefix + "/oneof-high", Op.PROTO_HAS, row, size - 1, "", true);
+      }
+    }
+    for (boolean useStatic : new boolean[] {false, true}) {
+      String prefix = "generated-graph/" + (useStatic ? "static" : "batch");
+      var plan =
+          dev.elide.truffledata.bench.generated.NativeContracts.create(
+                  useStatic ? BenchmarkLanguage.current().language() : null,
+                  Limits.DEFAULT,
+                  16,
+                  1024)
+              .type("truffledata.benchdata.Graph");
+      var access =
+          new dev.elide.truffledata.bench.generated.NativeContracts
+              .Access_truffledata$benchdata$Graph(plan);
+      var row =
+          access.decode(
+              plan.encode(
+                  plan.parseText(
+                      "number: 42 score: 1.5 active: true name: 'graph' payload: 'abc' child {name:"
+                          + " 'child'} children {name: 'first'} children {name: 'second'}")));
+      var absent = access.decode(new byte[0]);
+      add(cases, prefix + "/long", Op.DATA_LONG, row, 0, "", 42L);
+      add(cases, prefix + "/double", Op.DATA_DOUBLE, row, 1, "", 1.5);
+      add(cases, prefix + "/boolean", Op.DATA_BOOLEAN, row, 2, "", true);
+      add(cases, prefix + "/string", Op.READ, row, 3, "", "graph");
+      add(cases, prefix + "/bytes-length", Op.LENGTH, row, 4, "", 3);
+      add(cases, prefix + "/children-length", Op.LENGTH, row, 6, "", 2);
+      add(cases, prefix + "/nested", Op.PROTO_NESTED, row, 6, "", "first");
+      add(cases, prefix + "/member", Op.MEMBER, row, 3, "name", "graph");
+      add(cases, prefix + "/ordinal", Op.ORDINAL, row, 0, "", 42L);
+      add(cases, prefix + "/has", Op.PROTO_HAS, row, 0, "", true);
+      add(cases, prefix + "/absent", Op.PROTO_HAS, absent, 5, "", false);
+      add(cases, prefix + "/absent-readable", Op.PRESENT, absent, 5, "", false);
+      add(cases, prefix + "/missing", Op.READ, absent, 5, "", Missing.INSTANCE);
+      add(cases, prefix + "/wrong-long", Op.DATA_LONG, row, 3, "", Failure.UNEXPECTED);
+      add(cases, prefix + "/wrong-double", Op.DATA_DOUBLE, row, 0, "", Failure.UNEXPECTED);
+      add(cases, prefix + "/wrong-boolean", Op.DATA_BOOLEAN, row, 0, "", Failure.UNEXPECTED);
+      add(cases, prefix + "/invalid", Op.ORDINAL, row, -1, "", Failure.INDEX);
+    }
     // Reuse one adopted accessor across more schema identities than its PIC can hold.
     List<Field> fields = new ArrayList<>();
     for (int i = 0; i < schema.size(); i++) fields.add(schema.field(i));
@@ -442,8 +552,11 @@ public final class JitMatrix {
 
   private static final class Access extends RootNode {
     private final Op op;
+    private final @org.jspecify.annotations.Nullable StaticLayout createLayout;
     private final int index;
     private final String member;
+    private final com.oracle.truffle.api.profiles.ValueProfile protoClass =
+        com.oracle.truffle.api.profiles.ValueProfile.createClassProfile();
     @Child private DataLibrary data = DataLibrary.factory().createDispatched(3);
     @Child private InteropLibrary interop = InteropLibrary.getFactory().createDispatched(3);
     @Child private InteropLibrary nested = InteropLibrary.getFactory().createDispatched(3);
@@ -458,6 +571,19 @@ public final class JitMatrix {
       this.op = op;
       this.index = index;
       this.member = member;
+      createLayout =
+          op == Op.CREATE_LONG
+              ? new StaticLayout(
+                  BenchmarkLanguage.current().language(),
+                  Schema.of(
+                      Field.integer(
+                          "value",
+                          index,
+                          true,
+                          Boolean.parseBoolean(member),
+                          Boolean.parseBoolean(member))),
+                  Limits.DEFAULT)
+              : null;
     }
 
     @Override
@@ -476,8 +602,11 @@ public final class JitMatrix {
               case INVOCABLE -> interop.isMemberInvocable(receiver, member);
               case PROTO_NESTED ->
                   nested.readMember(nested.readArrayElement(data.read(receiver, index), 0), "name");
-              case PROTO_HAS -> ((ProtoRow) receiver).has(index);
+              case PROTO_HAS -> ((ProtoAccess) protoClass.profile(receiver)).has(index);
               case READ -> data.read(receiver, index);
+              case CREATE_LONG ->
+                  integer.execute(
+                      Objects.requireNonNull(createLayout).createLong((Long) receiver), 0);
               case DATA_LONG -> data.readLong(receiver, index);
               case DATA_DOUBLE -> data.readDouble(receiver, index);
               case DATA_BOOLEAN -> data.readBoolean(receiver, index);

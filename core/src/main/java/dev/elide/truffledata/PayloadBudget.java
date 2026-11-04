@@ -1,9 +1,13 @@
 package dev.elide.truffledata;
 
+import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
+import java.util.Objects;
 import org.jspecify.annotations.Nullable;
 
 /** Per-snapshot/batch accounting, including nested array elements and UTF-16 string payloads. */
 public final class PayloadBudget {
+  private static final boolean STRICT =
+      PayloadBudget.class.desiredAssertionStatus() && Boolean.getBoolean("truffledata.strict");
   private final Limits limits;
   private final @Nullable PayloadBudget parent;
   private long cells;
@@ -37,7 +41,7 @@ public final class PayloadBudget {
     stringBytes += count;
   }
 
-  private void accept(Object value, int depth) {
+  void accept(Object value, int depth) {
     if (depth > 128) throw new ContractViolation("Value nesting budget exceeded");
     if (value instanceof String text) {
       long bytes = 2L * text.length();
@@ -48,8 +52,28 @@ public final class PayloadBudget {
         for (int i = 0; i < array.size(); i++) accept(array.get(i), depth + 1);
     } else if (value instanceof AbstractRow row) {
       cells(row.schema().size());
+      SnapshotStorage storage =
+          row instanceof SnapshotStorage snapshot ? snapshot : row.payloadStorage();
+      if (storage != null) {
+        if (depth == 128 && row.schema().size() != 0)
+          throw new ContractViolation("Value nesting budget exceeded");
+        if (storage.schema() != row.schema())
+          throw new ContractViolation("Payload storage schema differs from row schema");
+        if (STRICT && storage != row) checkStorage(row, storage);
+        if (storage instanceof StaticLayout.Record record) record.acceptPayload(this, depth + 1);
+        else ((Batch.Row) storage).acceptPayload(this, depth + 1);
+        return;
+      }
       DataLibrary data = DataLibrary.factory().getUncached();
       for (int i = 0; i < row.schema().size(); i++) accept(data.read(row, i), depth + 1);
     }
+  }
+
+  @TruffleBoundary
+  private static void checkStorage(AbstractRow row, SnapshotStorage storage) {
+    DataLibrary data = DataLibrary.factory().getUncached();
+    for (int i = 0; i < row.schema().size(); i++)
+      if (!Objects.equals(data.read(row, i), data.read(storage, i)))
+        throw new AssertionError("Payload storage differs from DataLibrary values");
   }
 }

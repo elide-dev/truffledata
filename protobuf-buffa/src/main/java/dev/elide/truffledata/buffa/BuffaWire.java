@@ -43,8 +43,36 @@ public final class BuffaWire implements AutoCloseable {
         ProtoPlan plan,
         int nativeBytes);
 
+    Scalars scalars(WireInput schema, WireInput input, ProtoPlan plan);
+
     @Override
     void close();
+  }
+
+  /** Thread-confined backend scratch, consumed synchronously and never retained by a message. */
+  static final class Scalars {
+    private long first;
+    private long second;
+    private long present;
+
+    Scalars set(long first, long second, long present) {
+      this.first = first;
+      this.second = second;
+      this.present = present;
+      return this;
+    }
+
+    long first() {
+      return first;
+    }
+
+    long second() {
+      return second;
+    }
+
+    long present() {
+      return present;
+    }
   }
 
   interface NativeFactory {

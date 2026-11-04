@@ -59,7 +59,11 @@ final class TypedAcceptance {
           Acceptance.check(
               access.get_text(row).equals("hello") && access.size_blob(row) == 3,
               "generated reference getters");
+          Acceptance.check(
+              Arrays.equals(p.encode(parsed.snapshot()), parsed.encode()),
+              "text view semantic serialization");
           parsed.close();
+          Acceptance.rejects(parsed::encode, IllegalStateException.class);
           Acceptance.rejects(() -> access.get_count(row), IllegalStateException.class);
           Acceptance.rejects(() -> access.has_count(row), IllegalStateException.class);
         }
@@ -110,14 +114,34 @@ final class TypedAcceptance {
                   65536)
               .type("Compact");
       try (var compiled = decoder.compile(p, 65536)) {
+        try (var leftInput = decoder.allocate(2).put(new byte[] {8, 1});
+            var rightInput = decoder.allocate(2).put(new byte[] {8, 2});
+            var left = compiled.decode(leftInput, 0);
+            var right = compiled.decode(rightInput, 0);
+            var sibling = compiled.decode(leftInput, 0)) {
+          Acceptance.check(
+              left.row().getLong(0) == 1 && right.row().getLong(0) == 2,
+              "native scalar scratch is not retained by messages");
+          var leftRow = left.row();
+          leftInput.close();
+          left.close();
+          Acceptance.rejects(() -> leftRow.getLong(0), IllegalStateException.class);
+          Acceptance.check(
+              sibling.row().getLong(0) == 1 && right.row().getLong(0) == 2,
+              "closing one message preserves sibling and separate-input views");
+        }
         for (byte[] wire :
             List.of(new byte[] {8, 7}, new byte[] {8, 1, 8, 0}, new byte[] {8, 2, 16, 99, 24, 7})) {
           var expected = p.decode(wire);
           try (var input = decoder.allocate(wire.length).put(wire);
-              var parsed = compiled.decode(input, NATIVE)) {
+              var parsed = compiled.decode(input, 0)) {
+            Acceptance.check(
+                parsed.nativeIndexBytes() == 0, "scalar decode allocates no native index");
             var row = parsed.row();
             equal(expected, row);
             equal(expected, parsed.snapshot());
+            Acceptance.check(
+                Arrays.equals(wire, parsed.encode()), "binary forwarding preserves unknowns");
             Acceptance.check(
                 row.has(0) == expected.has(0) && row.getLong(0) == expected.getLong(0),
                 "compact presence and primitive");
@@ -156,7 +180,7 @@ final class TypedAcceptance {
         }
         // A failed native parse must release the reusable result slot.
         try (var input = decoder.allocate(2).put(new byte[] {8, 9});
-            var parsed = compiled.decode(input, NATIVE)) {
+            var parsed = compiled.decode(input, 0)) {
           Acceptance.check(parsed.row().getLong(0) == 9, "reuse after failure");
         }
       }
@@ -279,7 +303,166 @@ final class TypedAcceptance {
     }
   }
 
+  private static void scopedRowsRequireDetachmentBeforeEnteringOwnedContainers(BuffaWire decoder) {
+    var p = plan("Sample");
+    ProtoRow detached;
+    Batch retained;
+    try (var compiled = decoder.compile(p, 65536);
+        var message = compiled.parseText("child { a: 7 b: 'owned later' }", NATIVE)) {
+      var row = message.row();
+      var child = (TypedRow) DATA.read(row, p.schema().indexOf("child"));
+      for (Object scoped : List.of(row, child)) {
+        for (Field.Kind kind : List.of(Field.Kind.RECORD, Field.Kind.ANY)) {
+          var field = new Field("row", kind, false, false);
+          // Guest-side contract checking accepts valid scoped values; host ownership does not.
+          Acceptance.check(Values.validate(field, scoped) == scoped, "scoped field validation");
+          Acceptance.rejects(() -> Values.normalize(scoped), ContractViolation.class);
+          Acceptance.rejects(() -> Values.requireInterop(scoped), ContractViolation.class);
+          Acceptance.rejects(() -> new DataArray(new Object[] {scoped}), ContractViolation.class);
+          Acceptance.rejects(() -> DataArray.copyOf(List.of(scoped)), ContractViolation.class);
+          Acceptance.rejects(
+              () ->
+                  Batch.copyOf(
+                      Schema.of(field),
+                      Collections.singletonList(new Object[] {scoped}),
+                      Limits.DEFAULT),
+              ContractViolation.class);
+        }
+      }
+      int ordinal = p.schema().indexOf("child");
+      Acceptance.rejects(() -> p.newBuilder().set(ordinal, child), ContractViolation.class);
+      detached = message.snapshot();
+      retained =
+          Batch.copyOf(
+              Schema.of(new Field("row", Field.Kind.RECORD, false, false)),
+              Collections.singletonList(new Object[] {detached}),
+              Limits.DEFAULT);
+      // Snapshot storage accepts nested detached rows through the same ownership paths.
+      Values.requireInterop(detached);
+      new DataArray(new Object[] {detached});
+    }
+    Acceptance.check(
+        DATA.read(retained.row(0), 0) == detached, "detached ownership survives close");
+    var child = (ProtoRow) detached.get(p.schema().indexOf("child"));
+    Acceptance.check(
+        child.getLong(0) == 7 && child.get(1).equals("owned later"),
+        "nested detached contents survive close");
+  }
+
+  static TypedMessage retainedUnicode(BuffaWire decoder) {
+    var p = plan("Sample");
+    byte[] wire =
+        p.encode(p.newBuilder().set(p.schema().indexOf("text"), "é中😀".repeat(1024)).build());
+    try (var compiled = decoder.compile(p, 65536);
+        var input = decoder.allocate(wire.length).put(wire)) {
+      return compiled.decode(input, NATIVE);
+    }
+  }
+
+  private static void textRejectsMalformedUtf16BeforeEncoding(BuffaWire decoder) {
+    var p = plan("Sample");
+    try (var compiled = decoder.compile(p, 65536)) {
+      for (String malformed :
+          List.of(
+              String.valueOf((char) 0xd800),
+              String.valueOf((char) 0xdc00),
+              "prefix" + (char) 0xd800 + "suffix")) {
+        Acceptance.rejects(
+            () -> compiled.parseText("text: '" + malformed + "'", NATIVE), ContractViolation.class);
+        Acceptance.rejects(
+            () -> compiled.parseJson("{\"text\":\"" + malformed + "\"}", NATIVE),
+            ContractViolation.class);
+      }
+      Acceptance.rejects(() -> compiled.parseText("text: 'valid'", -1), ContractViolation.class);
+      Acceptance.rejects(
+          () -> compiled.parseJson("{\"text\":\"valid\"}", -1), ContractViolation.class);
+      try (var parsed = compiled.parseJson("{\"text\":\"é中😀\"}", NATIVE)) {
+        Acceptance.check(
+            parsed.row().get(p.schema().indexOf("text")).equals("é中😀"),
+            "failed text parsing leaves the plan reusable");
+      }
+    }
+    // Three-byte BMP characters can exceed the wire limit despite satisfying the UTF-16 limit.
+    var tiny =
+        TruffleDataContracts.create(null, Limits.DEFAULT, 32, 32)
+            .type("truffledata.lossless.Sample");
+    try (var compiled = decoder.compile(tiny, 65536)) {
+      Acceptance.rejects(
+          () -> compiled.parseText("text:'" + "中".repeat(9) + "'", NATIVE),
+          ContractViolation.class);
+    }
+    var jsonTiny =
+        TruffleDataContracts.create(null, Limits.DEFAULT, 32, 64)
+            .type("truffledata.lossless.Sample");
+    try (var compiled = decoder.compile(jsonTiny, 65536)) {
+      Acceptance.rejects(
+          () -> compiled.parseJson("{\"text\":\"" + "中".repeat(21) + "\"}", NATIVE),
+          ContractViolation.class);
+    }
+  }
+
+  private static void unicode(BuffaWire decoder) {
+    var field =
+        new ProtoPlan.FieldPlan(
+            "text", 1, ProtoPlan.Kind.STRING, false, false, false, false, false, -1, "", null, "");
+    var p =
+        new ProtoPlan.Model(
+                null,
+                List.of(new ProtoPlan.Type("Unicode", false, List.of(field))),
+                Limits.DEFAULT,
+                8,
+                1000000)
+            .type("Unicode");
+    try (var compiled = decoder.compile(p, 65536)) {
+      for (int length : new int[] {0, 1, 63, 64, 65, 255, 256, 257, 4096}) {
+        for (String pattern : List.of("a\u0000", "é", "中", "😀", "aé中😀")) {
+          String text = pattern.repeat(length);
+          byte[] wire = p.encode(p.newBuilder().set(0, text).build());
+          // The first read trains lazy materialization; subsequent decodes use the eager route.
+          for (int attempt = 0; attempt < 2; attempt++) {
+            var input = decoder.allocate(wire.length).put(wire);
+            try (var parsed = compiled.decode(input, NATIVE)) {
+              input.close();
+              Acceptance.check(
+                  parsed.row().get(0).equals(text), "Unicode input ownership and content");
+              Acceptance.check(parsed.row().get(0).equals(text), "cached Unicode content");
+              Acceptance.check(parsed.snapshot().get(0).equals(text), "Unicode snapshot");
+              var row = parsed.row();
+              parsed.close();
+              Acceptance.rejects(() -> row.get(0), IllegalStateException.class);
+            } finally {
+              input.close();
+            }
+          }
+        }
+      }
+    }
+    String text = "中😀".repeat(64);
+    byte[] wire = p.encode(p.newBuilder().set(0, text).build());
+    for (long bytes : new long[] {2L * text.length(), 2L * text.length() - 1}) {
+      var bounded =
+          new ProtoPlan.Model(
+                  null,
+                  List.of(new ProtoPlan.Type("Unicode", false, List.of(field))),
+                  new Limits(1, 1, 2, bytes),
+                  8,
+                  1000000)
+              .type("Unicode");
+      try (var compiled = decoder.compile(bounded, 65536);
+          var input = decoder.allocate(wire.length).put(wire)) {
+        if (bytes == 2L * text.length()) {
+          try (var parsed = compiled.decode(input, NATIVE)) {
+            Acceptance.check(parsed.row().get(0).equals(text), "exact UTF-16 payload budget");
+          }
+        } else Acceptance.rejects(() -> compiled.decode(input, NATIVE), ContractViolation.class);
+      }
+    }
+  }
+
   static void run(BuffaWire decoder) throws Exception {
+    scopedRowsRequireDetachmentBeforeEnteringOwnedContainers(decoder);
+    textRejectsMalformedUtf16BeforeEncoding(decoder);
+    unicode(decoder);
     compactScalars(decoder);
     generatedGetters(decoder);
     mergedRepeated(decoder);
@@ -470,8 +653,24 @@ final class TypedAcceptance {
       }
     }
     if (decoder.selected() != BuffaWire.Selected.JAVA) {
+      // This is a data-budget test. Unrelated generated fixtures must not exhaust the
+      // descriptor budget before any data is decoded.
+      Map<String, ProtoPlan.Type> definitions = new LinkedHashMap<>();
+      var pending = new ArrayDeque<ProtoPlan>();
+      pending.add(plan("Sample"));
+      while (!pending.isEmpty()) {
+        var current = pending.removeFirst();
+        if (definitions.putIfAbsent(current.name(), current.definition()) != null) continue;
+        for (int i = 0; i < current.size(); i++)
+          if (current.field(i).kind().message()) pending.add(current.nested(i));
+      }
       var limited =
-          TruffleDataContracts.create(null, new Limits(1024, 256, 70, 10000), 32, 10000)
+          new ProtoPlan.Model(
+                  null,
+                  List.copyOf(definitions.values()),
+                  new Limits(1024, 256, 70, 10000),
+                  32,
+                  10000)
               .type("truffledata.lossless.Sample");
       byte[] wire = new byte[50];
       StringBuilder text = new StringBuilder();
@@ -486,6 +685,9 @@ final class TypedAcceptance {
       }
       try (var compiled = decoder.compile(limited, 65536);
           var input = decoder.allocate(wire.length).put(wire)) {
+        try (var accepted = compiled.parseText("children {key: 'a'}", NATIVE)) {
+          Acceptance.check(accepted.row().getSize(6) == 1, "small map fits retained data budget");
+        }
         Acceptance.rejects(() -> compiled.decode(input, NATIVE), ContractViolation.class);
         Acceptance.rejects(
             () -> compiled.parseText(text.toString(), NATIVE), ContractViolation.class);

@@ -385,3 +385,343 @@ checks the materialization cost when consumers read the whole message. Compiled-
 and warmup remain excluded; adaptive native string hints have seen the projection before
 measured samples. It is not a first-message or cold-plan measurement. Existing schemas and
 all prior comparison cells remain supported.
+
+## Development: generated records and parse/project fusion
+
+Schema 7 adds generated owned scalar records and matching binary serialization cases.
+Schema 8 adds scalar parse-and-project without retaining the message, but used an explicit
+boundary for stock parsing. Schema 9 removes that stock parser boundary: both engines can
+inline parsing and projection into the guest compilation. Only invalid-input exception
+construction crosses a cold boundary. The isolated `//tests/jit-negative:stock_parse_test`
+probe verifies that stock parsing actually executes at the last compiled tier in SVM with
+fatal performance warnings and a 10,000 graph-size budget. The full SVM comparison uses
+that same budget and requires every peak cell to compile. On HotSpot, the full stock
+parse/project root exceeded even an experimental 200,000 budget. The JVM smoke test reports
+that specific graph-size bailout as an unsupported capability; it does not substitute a
+boundary score. Other failures still fail the test, and SVM does not permit this exception.
+Do not interpret schema 8 results as stock's best fused JIT result.
+
+Generated records and generic owned rows are separate engines. Buffa's binary scalar path
+uses a fixed native output slot and has a dedicated zero-native-allocation test. Benchmark
+Java allocation counters still exclude native allocations in other workloads; they do not
+imply that all Buffa ingestion is allocation-free.
+
+Schema 10 gives concrete generated records the same direct getter loops as stock records
+for retained AOT/interpreter/JIT reads, without the generic projection adapter used in
+schemas 7–9. Schema-bound generic and borrowed getter measurements remain separate cases.
+Removing an explicit parser boundary allows inlining; a compiled root alone does not prove
+that every stock parser helper was inlined. The measurements report the resulting operation,
+including any calls the SVM compiler elects to retain.
+
+## Measured independent-runtime development snapshot
+
+Revision `4b4661c` is unreleased. The [first run](../benchmarks/results/svm-comparison-4b4661c/comparison.json)
+and [one repeat](../benchmarks/results/svm-comparison-4b4661c-repeat/comparison.json) each cover
+111 cells with three timing processes and three separate allocation processes per cell.
+The repeat followed concurrent CI work; timing remained variable, so both runs are retained.
+Charts below use the first run consistently, rather than selecting the better result per case.
+
+| Scalar operation | Stock ns, first / repeat | Generated record ns, first / repeat | Stock / generated Java bytes |
+| --- | ---: | ---: | ---: |
+| Retained ingestion | 92.47 / 105.07 | 33.29 / 33.88 | 136 / 80 |
+| Interpreter reads | 2.83 / 4.38 | 1.64 / 2.13 | 2 / 2 |
+| Peak reads | 1.18 / 1.52 | 1.98 / 1.55 | 1 / 1 |
+| Binary serialization | 22.28 / 27.14 | 39.81 / 38.98 | 56 / 40 |
+| Fused parse/project, peak | 80.96 / 64.62 | 14.28 / 13.45 | 137 / 1 |
+
+The generated records improve ingestion and whole-operation projection here; they do not
+win every operation. Stock still leads scalar serialization and general nested ingestion.
+The small retained-read differences should be read with the process ranges, not as a
+universal ranking. Parse/project heap counts include guest-call overhead; the separate
+compiled allocation test records 32 bytes across 100,000 generated projections.
+
+Buffa scalar ingestion now uses **112 Java bytes**, or **80** with generated access, compared
+with **240 / 208** at `7b4eb4a`. Both current runs report those same allocation counts.
+The fixed scalar native decoder also passes an allocator-instrumented zero-allocation test.
+Other Buffa shapes may still allocate a native index; Java heap counters do not include it.
+Native input/schema and reusable decoder scratch are not per-message index allocations.
+
+Generic 64 KiB byte serialization now uses a bulk copy: approximately 5.3 / 6.7 µs in the two
+current runs, versus approximately 417 µs in the earlier `7b4eb4a` run. Large byte timings
+have wide ranges on shared runners. Binary Buffa serialization forwards input, whereas
+owned engines serialize message storage; these remain explicitly different operations.
+
+![Development interpreter reads](images/independent/comparison-interpreter.svg)
+![Development peak reads](images/independent/comparison-peak.svg)
+![Development ingestion allocations](images/independent/comparison-allocations.svg)
+![Development parse/project peak](images/independent/comparison-projection-peak.svg)
+![Development binary serialization](images/independent/comparison-serialization.svg)
+
+The [chart manifest](images/independent/comparison-manifest.json) records the source-data
+hash, executable hash and implementation revision. The [validation and measurement run](https://app.buildbuddy.io/invocation/6156aff1-0dc2-4795-a235-80cbc6764654)
+passed native/fallback tests, both published native consumers, comparison smoke and the full
+matrix; the [repeat](https://app.buildbuddy.io/invocation/591882d2-8724-4140-ae77-4373b7b52dfe)
+uses the same executable revision. Release 0.4.0 charts above remain unchanged.
+
+## Generated graph decoding and scalar serialization
+
+The unreleased [`9e0736a` run](../benchmarks/results/svm-comparison-9e0736a/comparison.json)
+adds schema 11: 120 cells, including concrete generated nested/repeated decoding, full
+consumption of the mixed message, and matched mixed-message serialization for every engine.
+Each cell has three timing forks and three separate allocation forks. This is one complete
+run on shared hardware; the process ranges overlap in some cases, so the small differences
+need repeat measurements. Earlier raw results and charts remain available above.
+
+| Operation | Stock | Generated owned | Stock / generated Java bytes |
+| --- | ---: | ---: | ---: |
+| Scalar ingestion | 95.90 ns | 39.40 ns | 136 / 88 |
+| Scalar interpreter reads | 2.71 ns | 2.03 ns | 2 / 2 |
+| Scalar peak reads | 1.83 ns | 1.80 ns | 1 / 1 |
+| Scalar serialization | 33.44 ns | 21.93 ns | 56 / 24 |
+| Scalar parse/project, peak | 67.97 ns | 13.81 ns | 137 / 1 |
+| Nested ingestion, full consumption | 1.30 µs | 1.08 µs | 1776.75 / 1895 |
+| Nested serialization | 0.96 µs | 4.07 µs | 436.50 / 1130.50 |
+
+Concrete generated decoders remove the generic row construction path for nested/repeated
+messages. In this run, generic owned full-consumption ingestion takes 17.67 µs and Buffa
+takes 7.24 µs; the generated path takes 1.08 µs. It is close to stock in time, but allocates
+6.7% more Java heap. It does not establish a win for generic decoding or borrowed views.
+Nested generated records still use the generic serializer, which remains a clear gap.
+
+The specialized scalar serializer now caches encoded size and writes directly into an
+exact-size output array. Serialization allocation falls from 40 to 24 bytes per message.
+The size cache adds eight bytes to the retained scalar record on this SVM layout, so
+scalar ingestion rises from 80 to 88 bytes. Peak retained reads are effectively tied.
+
+[Validation and measurement](https://app.buildbuddy.io/invocation/0b656af7-5f01-4e01-9c2e-371b437dec75)
+passes JVM tests, comparison smoke, the 120-cell SVM measurement, and the full native
+access matrix (511 cases). Generated guest reads pass fatal performance warnings,
+blocklist checks, the 10,000 graph-size budget, and the retained-read allocation gate.
+Shape-specific comparison roots and class-profiled interface receivers are required for
+SVM compilation; the failed preceding run is not presented as a completed matrix.
+The separate protobuf-free native consumer also passed before this measurement.
+
+SQL decoder wrappers and stock's aliased-byte decoder still expose overhead to address;
+the objective of matching stock across the supported contexts is not complete. Native
+allocation remains outside the Java heap counters. See the raw report for every case,
+process range, and borrowing/copying distinction.
+
+The next [`2fae8de` run](../benchmarks/results/svm-comparison-2fae8de/comparison.json)
+keeps the same 120 cells and adds direct generated graph serializers and narrow decode-state
+fields. Generated nested serialization moves from 4.07 µs / 1130.50 bytes to 1.45 µs /
+192.50 bytes. Stock in that run measures 0.67 µs / 436.50 bytes: the generated writer now
+allocates less, but is still slower. Nested decode allocation drops from 1895 to 1800.50
+bytes, versus stock's 1776.75. Full-consumption generated decoding measures 0.97 µs versus
+stock's 1.15 µs, with overlapping process ranges. Generic serialization also avoids temporary
+UTF-8 arrays; its nested serialization allocation falls from 1130.50 to 556 bytes.
+[The complete native run](https://app.buildbuddy.io/invocation/d7d680e7-ccd7-4b6c-b5e0-a06e0a6fa1a4)
+passes the comparison, both native access gates, and the protobuf-free native consumer.
+
+## Decoder size proof comparison
+
+The [`8fc6670` measurement](../benchmarks/results/svm-comparison-8fc6670/comparison.json)
+reuses decoder-proven encoded sizes for eligible generated graphs. All 120 cells remain in
+the matrix. This is a separate shared-runner run; compare engines within each run and keep
+the process ranges. Scalar code was unchanged, but its timings also shifted, illustrating
+why cross-run timing differences alone cannot establish an optimization's effect.
+
+| Operation | Stock | Generated owned | Stock / generated Java bytes |
+| --- | ---: | ---: | ---: |
+| Scalar ingestion | 58.82 ns | 22.09 ns | 136 / 88 |
+| Scalar interpreter reads | 2.04 ns | 1.22 ns | 2 / 2 |
+| Scalar peak reads | 1.05 ns | 1.31 ns | 1 / 1 |
+| Scalar serialization | 17.80 ns | 17.87 ns | 56 / 24 |
+| Scalar parse/project, peak | 54.07 ns | 10.61 ns | 137 / 1 |
+| Nested ingestion, projection | 758.37 ns | 801.80 ns | 1776.75 / 1800.50 |
+| Nested ingestion, full consumption | 844.77 ns | 909.58 ns | 1776.75 / 1800.50 |
+| Nested serialization | 537.77 ns | 1139.49 ns | 436.50 / 192.50 |
+
+Generated nested decoding is close to stock here, with 1.3% more Java heap allocation.
+Generated nested serialization uses 56% less Java heap, but is about 2.1 times slower.
+Its per-process medians range from 652.84 to 1306.07 ns, versus 506.59 to 719.78 ns for stock.
+Generic owned nested full-consumption decoding still takes 9.69 µs and 3339.50 bytes; this
+work has not closed the generic, borrowed, aliased-byte, or SQL-wrapper gaps.
+
+The size proof stays immutable in spare presence bits for schemas with at most 32 fields.
+No cache field or per-message cache object is added. Duplicate/merged singular fields,
+oneof replacement, maps, known groups, packed/unpacked conversions, omitted defaults,
+truncating varints and nonminimal varints conservatively disable reuse. Wider schemas
+retain all presence bits and use generated sizing. The decoder's nonnegative work counter
+uses its sign bit for proof validity while retaining its full Long.MAX_VALUE budget range.
+Tests exercise these conditions, presence above bit 31, canonical-expansion limits, and
+4096 deterministic wire mutations. Graph bindings validate reachable schemas at setup.
+
+[The complete SVM cycle](https://app.buildbuddy.io/invocation/14c55ec3-9859-4b7f-9482-bb5219a8a228)
+passes the full benchmark, comparison/native access gates, and the protobuf-free native
+consumer. CI also passed on implementation revision `8fc6670`, including native/fallback
+acceptance, real driver acceptance, coverage, JUnit reporting, and CodSpeed reporting.
+
+## Generic immutable storage comparison
+
+The [`0faad26` run](../benchmarks/results/svm-comparison-0faad26/comparison.json)
+keeps every one of the 120 comparison cells. Generic snapshot accounting now traverses
+validated static/column storage directly, with strict-mode checks for transparent
+facades. The decoder also owns its state arrays directly instead of allocating a public
+builder for each message. Required fields, normalization, ownership and all existing
+budgets remain enforced.
+
+| Operation | Stock | Generated owned | Stock / generated Java bytes |
+| --- | ---: | ---: | ---: |
+| Scalar ingestion | 157.34 ns | 69.45 ns | 136 / 88 |
+| Scalar interpreter reads | 3.17 ns | 3.20 ns | 2 / 2 |
+| Scalar peak reads | 3.05 ns | 2.53 ns | 1 / 1 |
+| Scalar serialization | 32.82 ns | 43.62 ns | 56 / 24 |
+| Scalar parse/project, peak | 81.80 ns | 15.55 ns | 137 / 1 |
+| Nested ingestion, projection | 1474.16 ns | 2308.47 ns | 1776.75 / 1800.50 |
+| Nested ingestion, full consumption | 1429.60 ns | 1985.01 ns | 1776.75 / 1800.50 |
+| Nested serialization | 1022.12 ns | 1768.83 ns | 436.50 / 192.50 |
+
+Generic nested full-consumption decoding measures 9.80 µs and 3086.50 Java bytes,
+versus stock's 1.43 µs and 1776.75 bytes. Its allocation falls from 3339.50 bytes in
+`8fc6670` to 3213 bytes in the preceding
+[`0105fcb` run](../benchmarks/results/svm-comparison-0105fcb/comparison.json), then to
+3086.50 here: a 7.6% total reduction. Owned byte-message ingestion saves another 16 bytes
+in this batch. Those are allocation results, not proof of an isolated timing improvement.
+The latest two runs used Intel Xeon workers; `8fc6670` used AMD EPYC. Even on the same
+reported CPU model, process timing ranges remain broad. All raw results are retained.
+
+Generated nested decoding allocates 1.3% more than stock and is 39% slower in this run.
+Generated nested serialization allocates 56% less, but is 73% slower. Scalar retained
+interpreter/peak read ranges overlap. This does not establish parity across contexts:
+generic decoding, Buffa borrowing, aliased bytes, and SQL wrappers still have gaps.
+
+[The complete SVM cycle](https://app.buildbuddy.io/invocation/87da3b8e-daca-4062-a526-63392b00d824)
+passes the 120-cell comparison, both native access gates (including the 511-case matrix),
+and the protobuf-free native consumer. The
+[JVM coverage cycle](https://app.buildbuddy.io/invocation/f7b31a8f-aab0-486f-afee-9c81ebbff773)
+passes the correctness suite, native-enabled JVM acceptance and disabled-native-access
+fallback. Access-method coverage passes; PayloadBudget has 48/48 covered lines and
+5/5 covered methods. Exact cell, string, parent and depth boundaries, compact scalar
+fallback, facade/schema mismatches, merges, defaults and map deduplication are exercised.
+The [Gazelle drift gate](https://app.buildbuddy.io/invocation/6603031e-78e7-4bb9-ae2e-06e82306d0f0)
+also passes. CI on this implementation revision is tracked separately from these local
+RBE results.
+
+## Packed presence comparison (`fa89f1f`)
+
+The [`fa89f1f` run](../benchmarks/results/svm-comparison-fa89f1f/comparison.json)
+packs generic protobuf presence into one inline word, with spill words only above
+64 fields. Compact integer rows use that word for their first value and reuse their
+boxed second value for generic reads. The same 120 measurement cells remain.
+
+| Operation | Stock | Generated owned | Stock / generated Java bytes |
+| --- | ---: | ---: | ---: |
+| Scalar ingestion | 119.28 ns | 40.71 ns | 136 / 88 |
+| Scalar interpreter reads | 3.72 ns | 2.64 ns | 2 / 2 |
+| Scalar peak reads | 1.63 ns | 2.66 ns | 1 / 1 |
+| Scalar serialization | 32.82 ns | 52.00 ns | 56 / 24 |
+| Scalar parse/project, peak | 81.45 ns | 20.52 ns | 137 / 1 |
+| Nested ingestion, projection | 1307.37 ns | 1638.80 ns | 1776.75 / 1800.50 |
+| Nested ingestion, full consumption | 2120.11 ns | 1591.31 ns | 1776.75 / 1800.50 |
+| Nested serialization | 968.58 ns | 1365.33 ns | 436.50 / 192.50 |
+
+Generic scalar ingestion now allocates 64 bytes (previously 88); primitive projection
+allocates 48 (previously 56). Generic scalar serialization drops from 136 to 104 bytes,
+but still takes 156.17 ns versus stock's 32.82 ns. Generic nested ingestion falls from
+3086.50 to 2976 bytes, a 3.6% reduction in this batch and 10.9% from the earlier 3339.50
+baseline. Its full-consumption time is 11.30 µs versus stock's 2.12 µs. Owned byte-message
+ingestion drops another eight bytes. Timestamp ProtoJSON ingestion allocates 3655.75
+bytes versus stock's 6439.75.
+
+Generated-code allocation is unchanged by this generic representation change. Stock
+still has faster scalar peak reads and scalar/nested serialization in this run. Generated
+nested full parsing is faster here, but process ranges overlap. The last three runs
+report the same Intel Xeon model; process timing ranges are still broad, and earlier
+AMD runs are kept separately. Compare engines within a run and retain those ranges;
+the allocation changes do not prove isolated timing improvements or universal parity.
+Generic decoding, several Buffa paths, aliased bytes and SQL wrappers remain behind.
+
+[All six validation targets pass](https://app.buildbuddy.io/invocation/276b73c0-b8ab-4e3c-bb31-6f9c63f9a02c):
+the full comparison, comparison/native access gates, protobuf-free native consumer,
+compiled JVM allocation gate and Gazelle drift. The native matrix now has **603 cases**:
+all previous 511 plus 92 for presence/read access across word boundaries and wide oneof
+transitions. Every success case executes compiled code under unchanged warning, graph
+and allocation limits. The
+[coverage cycle](https://app.buildbuddy.io/invocation/edebd856-2684-4be7-b5d5-614e5c12071c)
+passes correctness and both Buffa JVM routes, with 37/37 ProtoRow methods covered.
+Stock-oracle tests cover empty through 256-field schemas, defaults, required fields,
+unknown fields, text/JSON, buffer input and retained builder snapshots. The compiled
+JVM gate measures compact integer decoding at 40 bytes for one integer or a cached
+second integer, and 64 bytes for a noncached second integer; limits are 48/72 bytes.
+
+## Compact integer serialization comparison (`f564926`)
+
+The [intermediate run](../benchmarks/results/svm-comparison-f564926/comparison.json)
+measures direct INT32/INT64 serialization at 29.95 ns / 24 bytes, versus stock's
+35.21 ns / 56 bytes. The previous generic encoder allocated 104 bytes. This path
+writes one exact-sized output array, including preserved unknown bytes, and checks
+canonical output budgets before allocation. It also writes compact nested integers
+directly into their parent's output. Stock timing had a large process outlier;
+allocation is the stronger evidence for this change.
+
+## Current generated graph comparison
+
+The [`7fe13fc` repeat](../benchmarks/results/svm-comparison-7fe13fc-repeat/comparison.json)
+measures the primitive static-row factory, bound compact getters, scoped-row ownership
+checks, and Myna **0.7.2** with native SIMD Unicode support. The 120 measurement cells,
+three timing processes and separate allocation processes per cell remain unchanged.
+
+| Operation | Stock | TruffleData | Stock / TruffleData Java bytes |
+| --- | ---: | ---: | ---: |
+| Scalar ingestion, generated records | 152.26 ns | 82.50 ns | 136 / 88 |
+| Scalar interpreter reads, generated records | 4.78 ns | 2.36 ns | 2 / 2 |
+| Scalar peak reads, generated records | 1.85 ns | 3.48 ns | 1 / 1 |
+| Scalar serialization, compact runtime | 38.49 ns | 37.60 ns | 56 / 24 |
+| Scalar serialization, generated records | 38.49 ns | 46.68 ns | 56 / 24 |
+| Scalar parse/project, generated peak | 115.11 ns | 24.86 ns | 137 / 1 |
+| Nested ingestion, generated projection | 2008.56 ns | 2749.02 ns | 1776.75 / 1800.50 |
+| Nested ingestion, generated full consumption | 2121.08 ns | 3399.59 ns | 1776.75 / 1800.50 |
+| Nested serialization, generated records | 1189.31 ns | 1545.24 ns | 436.50 / 192.50 |
+| Timestamp ProtoJSON, Buffa | 10264.59 ns | 1182.60 ns | 6439.75 / 688 |
+| MySQL INT4 fixture, static rows | 129.13 ns | 284.40 ns | 16 / 80 |
+| PostgreSQL INT4 fixture, static rows | 74.41 ns | 242.05 ns | 16 / 80 |
+
+The static-row fixtures allocate **80 bytes**, down from **128**: `createLong` avoids
+boxing, varargs and generic staging while keeping width/range checks and presence
+states. This measures driver decoder functions plus retained named rows, not complete
+JDBC queries; normal JDBC cursors still use their general field-source path.
+Compact scalar serialization stays at **24 bytes**, versus the earlier **104**.
+Generic scalar ingestion remains 64 bytes, or 48 with primitive projection. Generic
+nested ingestion remains **2976 bytes** and takes **14.54 µs**, versus stock's
+**2.12 µs / 1776.75 bytes**. Generic nested serialization and several borrowed/SQL
+paths also remain behind stock.
+
+The [first run](../benchmarks/results/svm-comparison-7fe13fc/comparison.json) and repeat
+have **identical executable hashes**. The first used AMD EPYC; the repeat used Intel
+Xeon 3.10 GHz. Shared-worker timing ranges are broad and results disagree: generated
+nested full ingestion was 1.82 µs versus stock's 1.81 µs in the first run, and
+3.40 µs versus 2.12 µs in the repeat. Generated scalar peak reads ranged from
+3.06–8.95 ns in the first run and 1.97–3.64 ns in the repeat. The charts use the
+latest repeat, including its slower results; both complete reports are retained.
+Compare engines within each run, inspect process ranges, and use the stable allocation
+changes without treating these timings as universal parity or isolated speedups.
+
+[All eight SVM targets pass](https://app.buildbuddy.io/invocation/f0a47a85-8946-4033-85c0-c6c922943eac):
+the comparison and access gates, native-enabled/native-free Buffa acceptance, published
+native consumers with/without protobuf-java, and Gazelle drift. The checked native
+inventory has **617 cases**, including all previous 603 plus signed-width, nullable
+construction and overflow cases. Every success case executes compiled code under the
+existing fatal warnings, graph and allocation budgets. The
+[repeat comparison](https://app.buildbuddy.io/invocation/e77c77de-a03d-4939-8163-1a4f749fa0f3)
+also passes with the same binary. The
+[compiled JVM/release-consumer cycle](https://app.buildbuddy.io/invocation/d403e358-1cdc-4059-a727-d38859754bb4)
+passes; temporary constructed-and-read static rows measure **0.00112 bytes/row**
+against the 0.05-byte ceiling.
+
+The [coverage cycle](https://app.buildbuddy.io/invocation/bb427397-c46b-433c-a025-0f344e09beba)
+covers all methods in ProtoCodec (34/34), ProtoRow (38/38), TypedRow (17/17),
+ViewOwner (7/7), AbstractRow (13/13), and Values (13/13). Shared JVM/SVM tests enforce
+explicit detachment before scoped rows enter owned containers, decoder-independent
+message lifetimes, exact UTF-16 payload limits, malformed Unicode rejection, and
+native-disabled fallback. SIMD Unicode has functional/ownership coverage here; these
+comparison workloads do not separately establish a bulk transcoding speedup.
+
+![Current generated interpreter reads](images/independent-latest/comparison-generated-interpreter.svg)
+![Current generated peak reads](images/independent-latest/comparison-generated-peak.svg)
+![Current ingestion allocations](images/independent-latest/comparison-allocations.svg)
+![Current binary serialization](images/independent-latest/comparison-serialization.svg)
+
+The [chart manifest](images/independent-latest/comparison-manifest.json) identifies the
+repeat data, executable and implementation revision. Released 0.4.0 graphics and earlier
+development evidence remain above. General and typed simdjson decoding is the next
+integration; the Myna value readers and C++ headers are prepared as separate Bazel targets.

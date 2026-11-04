@@ -8,14 +8,14 @@ import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.profiles.InlinedExactClassProfile;
 import dev.elide.truffledata.DataArray;
 
-/** Read-only, zero-copy payload view. Its enclosing WireMessage must remain open. */
+/** Read-only, zero-copy payload view. Its enclosing ViewOwner must remain open. */
 @ExportLibrary(InteropLibrary.class)
 public final class BorrowedBytes implements dev.elide.truffledata.BorrowedBinary {
-  private final WireMessage message;
+  private final ViewOwner message;
   private final int offset;
   private final int length;
 
-  BorrowedBytes(WireMessage message, int offset, int length) {
+  BorrowedBytes(ViewOwner message, int offset, int length) {
     this.message = message;
     this.offset = offset;
     this.length = length;

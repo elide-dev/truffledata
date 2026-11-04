@@ -16,3 +16,16 @@ message Required {
   required int32 count = 1;
   optional Required child = 2;
 }
+message FlatDefaults {
+  required int32 count = 1;
+  optional string text = 2 [default = "hello"];
+  enum Status { FIRST = 1; SECOND = 2; }
+  optional Status status = 3 [default = SECOND];
+  optional bytes blob = 4 [default = "\001\377"];
+  optional uint64 big = 5 [default = 18446744073709551615];
+}
+message DefaultGraph {
+  optional FlatDefaults child = 1;
+  repeated FlatDefaults children = 2;
+  optional string text = 3 [default = "root"];
+}

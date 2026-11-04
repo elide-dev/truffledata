@@ -9,3 +9,13 @@ message Native {
   enum Status { ZERO = 0; }
   Status f4 = 5;
 }
+
+message Graph {
+  int32 number = 1;
+  double score = 2;
+  bool active = 3;
+  string name = 4;
+  bytes payload = 5;
+  Graph child = 6;
+  repeated Graph children = 7;
+}

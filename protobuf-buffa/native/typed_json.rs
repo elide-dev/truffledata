@@ -253,7 +253,7 @@ impl<'a, 'b> Decoder<'a, 'b> {
         Ok(())
     }
     pub(super) fn json(&mut self) -> Result<()> {
-        let text = std::str::from_utf8(self.input).map_err(|_| MALFORMED)?;
+        let text = crate::unicode::validated(self.input).map_err(|_| MALFORMED)?;
         let mut json = Json { text, at: 0 };
         self.json_object(0, &mut json, 1, false)?;
         json.space();

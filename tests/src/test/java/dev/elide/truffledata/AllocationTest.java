@@ -9,6 +9,8 @@ import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.object.*;
 import com.oracle.truffle.runtime.OptimizedCallTarget;
 import com.sun.management.ThreadMXBean;
+import dev.elide.truffledata.protobuf.ProtoPlan;
+import dev.elide.truffledata.protobuf.ProtoRow;
 import java.lang.management.ManagementFactory;
 import java.util.*;
 import org.graalvm.polyglot.Context;
@@ -18,6 +20,134 @@ import org.junit.jupiter.api.Test;
  * Measures retained primitive reads, including dispatch. Ingestion and row creation are separate.
  */
 class AllocationTest {
+  @Test
+  void compactIntegerDecodingDoesNotAllocatePresenceOrScalarTuples() {
+    ThreadMXBean bean = (ThreadMXBean) ManagementFactory.getThreadMXBean();
+    bean.setThreadAllocatedMemoryEnabled(true);
+    for (int width : new int[] {1, 2}) {
+      List<ProtoPlan.FieldPlan> fields = new ArrayList<>();
+      for (int i = 0; i < width; i++)
+        fields.add(
+            new ProtoPlan.FieldPlan(
+                "f" + i,
+                i + 1,
+                i == 0 ? ProtoPlan.Kind.INT64 : ProtoPlan.Kind.INT32,
+                false,
+                false,
+                false,
+                false,
+                false,
+                -1,
+                "",
+                null,
+                0L));
+      var plan =
+          new ProtoPlan.Model(
+                  null,
+                  List.of(new ProtoPlan.Type("allocation.Scalar", false, fields)),
+                  Limits.DEFAULT,
+                  8,
+                  32)
+              .type("allocation.Scalar");
+      for (long second : width == 1 ? new long[] {0} : new long[] {0, 1000}) {
+        long first = 1L << 40;
+        var builder = plan.newBuilder().set(0, first);
+        if (width == 2) builder.set(1, second);
+        byte[] wire = plan.encode(builder.build());
+        for (int i = 0; i < 20000; i++) retained = plan.decode(wire);
+        long before = bean.getThreadAllocatedBytes(Thread.currentThread().threadId());
+        for (int i = 0; i < 100000; i++) retained = plan.decode(wire);
+        double bytes =
+            (bean.getThreadAllocatedBytes(Thread.currentThread().threadId()) - before) / 100000.0;
+        var row = (ProtoRow) retained;
+        assertEquals(first, row.getLong(0));
+        if (width == 2) assertEquals(second, row.getLong(1));
+        System.out.printf(
+            "ALLOCATION compact-integer width=%d second=%d %.3f bytes/message%n",
+            width, second, bytes);
+        // Cached/absent second values need only the row. A noncached second gets one Long.
+        assertTrue(
+            bytes <= (second == 0 ? 48 : 72), "Compact integer ingestion allocated extra state");
+        for (int i = 0; i < 10000; i++) retained = plan.encode(row);
+        before = bean.getThreadAllocatedBytes(Thread.currentThread().threadId());
+        for (int i = 0; i < 100000; i++) retained = plan.encode(row);
+        bytes =
+            (bean.getThreadAllocatedBytes(Thread.currentThread().threadId()) - before) / 100000.0;
+        assertArrayEquals(wire, (byte[]) retained);
+        System.out.printf(
+            "ALLOCATION compact-integer-encode width=%d second=%d %.3f bytes/message%n",
+            width, second, bytes);
+        assertTrue(bytes <= 32, "Compact integer encoding allocated temporary state");
+      }
+    }
+  }
+
+  @Test
+  void temporaryPrimitiveStaticRowsAreEliminatedInCompiledGuests() {
+    try (Context context = Context.newBuilder("td-test").allowExperimentalOptions(true).build()) {
+      context.initialize("td-test");
+      context.enter();
+      try {
+        for (boolean nullable : new boolean[] {false, true}) {
+          var layout =
+              new StaticLayout(
+                  TestLanguage.current().language(),
+                  Schema.of(Field.integer("n", 32, true, nullable, nullable)),
+                  Limits.DEFAULT);
+          var root = new CreateLongRoot(layout);
+          var target = (OptimizedCallTarget) root.getCallTarget();
+          int count = 100000;
+          for (int i = 0; i < 20; i++) assertEquals(5099950000L, target.call(1000L, count));
+          target.compile(true);
+          target.waitForCompilation();
+          assertEquals(5099950000L, target.call(1000L, count));
+          assertTrue(target.isValidLastTier());
+          ThreadMXBean bean = (ThreadMXBean) ManagementFactory.getThreadMXBean();
+          bean.setThreadAllocatedMemoryEnabled(true);
+          root.compiled = false;
+          long before = bean.getThreadAllocatedBytes(Thread.currentThread().threadId());
+          assertEquals(5199950000L, target.call(2000L, count));
+          double bytes =
+              (bean.getThreadAllocatedBytes(Thread.currentThread().threadId()) - before)
+                  / (double) count;
+          System.out.printf(
+              "ALLOCATION static-create-long nullable=%s %.6f bytes/row compiled=%s%n",
+              nullable, bytes, root.compiled);
+          assertTrue(root.compiled && target.isValidLastTier());
+          assertTrue(bytes <= 0.05, "Temporary primitive static rows were not eliminated");
+          assertTrue(com.oracle.truffle.api.nodes.NodeUtil.countNodes(root) <= 256);
+          assertThrows(
+              ContractViolation.class,
+              () -> root.getCallTarget().call((long) Integer.MAX_VALUE, 2));
+        }
+      } finally {
+        context.leave();
+      }
+    }
+  }
+
+  private static final class CreateLongRoot extends RootNode {
+    private final StaticLayout layout;
+    @Child private ReadLongNode read = ReadLongNode.create();
+    boolean compiled;
+
+    CreateLongRoot(StaticLayout layout) {
+      super(null);
+      this.layout = layout;
+    }
+
+    @Override
+    public Object execute(VirtualFrame frame) {
+      long base = (Long) frame.getArguments()[0];
+      int count = (Integer) frame.getArguments()[1];
+      long sum = 0;
+      for (int i = 0; i < count; i++) sum += read.execute(layout.createLong(base + i), 0);
+      if (CompilerDirectives.inInterpreter()) LoopNode.reportLoopCount(this, count);
+      compiled |= CompilerDirectives.inCompiledCode();
+      return sum;
+    }
+  }
+
   @Test
   void nestedAccessAndDynamicMutationRemainCorrectAfterCompilation() {
     try (Context context = Context.newBuilder("td-test").allowExperimentalOptions(true).build()) {

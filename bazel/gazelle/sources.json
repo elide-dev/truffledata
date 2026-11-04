@@ -60,15 +60,27 @@
     "plugins": []
   },
   {
+    "directory": "protobuf-runtime",
+    "root": "src/main/java",
+    "name": "protobuf-runtime",
+    "deps": [
+      "//core:core",
+      "@maven//:org_graalvm_truffle_truffle_api",
+      "@maven//:com_google_code_gson_gson"
+    ],
+    "testonly": false,
+    "plugins": []
+  },
+  {
     "directory": "protobuf",
     "root": "src/main/java",
     "name": "protobuf",
     "deps": [
       "//core:core",
+      "//protobuf-runtime:protobuf-runtime",
       "@maven//:org_graalvm_truffle_truffle_api",
       "@maven//:com_google_protobuf_protobuf_java",
-      "@maven//:com_google_protobuf_protobuf_java_util",
-      "@maven//:com_google_code_gson_gson"
+      "@maven//:com_google_protobuf_protobuf_java_util"
     ],
     "testonly": false,
     "plugins": []
@@ -146,7 +158,7 @@
     "deps": [
       ":bindings",
       "//core",
-      "//protobuf",
+      "//protobuf-runtime",
       "@maven//:org_graalvm_sdk_nativeimage",
       "@maven//:org_graalvm_sdk_word",
       "@maven//:org_graalvm_truffle_truffle_api"

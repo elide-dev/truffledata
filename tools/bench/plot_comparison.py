@@ -19,9 +19,9 @@ LABELS = {
 }
 ENGINES = {'stock': 'Stock', 'stock-aliased': 'Stock · aliased',
            'owned': 'TruffleData · owned', 'buffa': 'TruffleData · Buffa',
-           'static': 'TruffleData · static'}
+           'generated-owned': 'TruffleData · generated records', 'static': 'TruffleData · static'}
 COLORS = {'stock': '#626d78', 'stock-aliased': '#a0aab4', 'owned': '#7866ae',
-          'buffa': '#087e8b', 'static': '#7866ae'}
+          'generated-owned': '#d57525', 'buffa': '#087e8b', 'static': '#7866ae'}
 
 
 def render(data, output, label):
@@ -39,13 +39,21 @@ def render(data, output, label):
     if data['schema'] >= 6:
         charts += [('generated-' + name, title + ' · generated getters', stage + '-generated', metric, unit)
                    for name, title, stage, metric, unit in list(charts)]
+    if data['schema'] >= 7:
+        charts += [('serialization', 'Binary serialization', 'serialize', 'ns_per_row', 'ns / message')]
+    if data['schema'] >= 9:
+        charts += [('projection-' + tier, 'Parse and project · ' + title, 'project-' + tier,
+                    'ns_per_row', 'ns / message')
+                   for tier, title in [('aot', 'SVM AOT'), ('interpret', 'interpreter'), ('peak', 'peak JIT')]]
+        charts += [('projection-allocations', 'Parse and project · peak allocations', 'project-peak',
+                    'allocated_bytes_per_row', 'Java heap bytes / message')]
     for name, title, stage, metric, unit in charts:
         generated = stage.endswith('-generated')
         base = stage.removesuffix('-generated')
         if generated:
             supported = {r['workload'] for r in data['results'] if r['stage'] == stage}
             selected = [r for r in data['results'] if r['workload'] in supported and
-                        (r['stage'] == stage or (r['engine'].startswith('stock') and
+                        (r['stage'] == stage or ((r['engine'].startswith('stock') or r['engine'] == 'generated-owned') and
                          r['stage'] in (base, base + '-boundary')))]
         else:
             selected = [r for r in data['results'] if r['stage'] in (stage, stage + '-boundary')]
@@ -61,7 +69,7 @@ def render(data, output, label):
                 medians.append(statistics.median(forks))
                 lows.append(min(forks))
                 highs.append(max(forks))
-                boundary = base != 'ingest' and workload == 'proto-mixed' and engine == 'stock'
+                boundary = base in ('interpret', 'peak') and workload == 'proto-mixed' and engine == 'stock'
                 names.append(ENGINES[engine] + (' *' if boundary else ''))
             ax.barh(names, medians, color=[COLORS[e] for e in engines], height=0.58,
                     xerr=[[m - lo for m, lo in zip(medians, lows)],
@@ -72,7 +80,9 @@ def render(data, output, label):
             ax.set_xlim(min(v for v in lows if v > 0) * 0.65, max(highs) * 2.5)
             for y, (median, high) in enumerate(zip(medians, highs)):
                 ax.text(high * 1.07, y, f'{median:,.2f}', va='center', fontsize=9)
-            ax.set_title(LABELS[workload], loc='left', fontweight='bold', fontsize=11)
+            workload_label = ('Nested protobuf · full message' if base == 'serialize' and workload == 'proto-mixed'
+                              else LABELS[workload])
+            ax.set_title(workload_label, loc='left', fontweight='bold', fontsize=11)
             ax.set_xlabel(unit + ' · log scale · lower is better', fontsize=9)
             ax.grid(axis='x', alpha=0.15)
             ax.set_axisbelow(True)
@@ -82,8 +92,17 @@ def render(data, output, label):
         fig.suptitle(f'TruffleData {label}  |  {title}', x=0.025, ha='left', fontsize=18, fontweight='bold')
         footer = ('Median of three process medians; whiskers show min–max process medians, not confidence intervals.\n'
                   'Shared Linux x86-64 SVM runner. SQL: decoder functions only; no server or transport.\n')
-        footer += ('Current-thread Java heap only; native allocations are excluded. Generic ingestion projection. '
-                   if base == 'ingest' else '* Stock nested-protobuf reads cross an explicitly measured Truffle boundary. ')
+        if metric == 'allocated_bytes_per_row':
+            footer += 'Current-thread Java heap only; native allocations are excluded. '
+        if base == 'ingest':
+            footer += 'Generic ingestion projection. '
+        elif base.startswith('project-'):
+            footer += 'Both parsers can inline; no stock parser boundary. '
+        elif base == 'serialize':
+            footer += 'Buffa forwards borrowed binary input; owned engines serialize retained messages. '
+        else:
+            footer += '* Stock nested-protobuf reads cross an explicitly measured Truffle boundary. '
+
         if generated:
             footer = footer.replace('Generic ingestion projection.', 'Generated getter projection.')
         footer += f'Revision: {data["revision"][:12]}.'
@@ -91,7 +110,10 @@ def render(data, output, label):
         fig.tight_layout(rect=(0, 0.075, 1, 0.955), h_pad=1.7)
         for extension in ('svg', 'png'):
             fig.savefig(output / f'comparison-{name}.{extension}', dpi=160,
-                        facecolor=fig.get_facecolor(), metadata={'Creator': 'TruffleData comparison renderer'} if extension == 'svg' else None)
+                        facecolor=fig.get_facecolor(), metadata={'Creator': 'TruffleData comparison renderer', 'Date': None} if extension == 'svg' else None)
+            if extension == 'svg':
+                path = output / f'comparison-{name}.svg'
+                path.write_text('\n'.join(line.rstrip() for line in path.read_text().splitlines()) + '\n')
         plt.close(fig)
     return matplotlib.__version__
 

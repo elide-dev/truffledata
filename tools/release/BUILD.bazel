@@ -27,9 +27,11 @@ COMMON = [
     dependencies = COMMON + ([] if module == "core" else ["dev.elide:truffledata-core:{version}"]) + ([
         "com.google.protobuf:protobuf-java:4.36.1",
         "com.google.protobuf:protobuf-java-util:4.36.1",
-        "com.google.code.gson:gson:2.8.9",
+        "dev.elide:truffledata-protobuf-runtime:{version}",
     ] if module == "protobuf" else []) + ([
-        "dev.elide:truffledata-protobuf:{version}",
+        "com.google.code.gson:gson:2.8.9",
+    ] if module == "protobuf-runtime" else []) + ([
+        "dev.elide:truffledata-protobuf-runtime:{version}",
         "dev.elide:truffledata-protobuf-buffa-bindings:{version}",
     ] if module == "protobuf-buffa" else []) + ([
         "org.graalvm.sdk:nativeimage:25.5.5-elide.24",
@@ -56,6 +58,7 @@ COMMON = [
     "jdbc-mysql",
     "jdbc-postgresql",
     "protobuf",
+    "protobuf-runtime",
     "protobuf-buffa",
     "protobuf-buffa-bindings",
 ]]
@@ -69,6 +72,7 @@ maven_bom(
         "jdbc-mysql",
         "jdbc-postgresql",
         "protobuf",
+        "protobuf-runtime",
         "protobuf-buffa",
         "protobuf-buffa-bindings",
     ]] + [
@@ -98,6 +102,7 @@ filegroup(
         ":protobuf",
         ":protobuf-buffa",
         ":protobuf-buffa-bindings",
+        ":protobuf-runtime",
     ],
 )
 
@@ -125,6 +130,7 @@ sh_test(
     "jdbc-mysql",
     "jdbc-postgresql",
     "protobuf",
+    "protobuf-runtime",
     "protobuf-buffa",
     "protobuf-buffa-bindings",
 ]]
@@ -138,8 +144,11 @@ sh_test(
     ] + ([] if module == "core" else [":core_import"]) + ([
         "@maven//:com_google_protobuf_protobuf_java",
         "@maven//:com_google_protobuf_protobuf_java_util",
+        ":protobuf-runtime_import",
     ] if module == "protobuf" else []) + ([
-        ":protobuf_import",
+        "@maven//:com_google_code_gson_gson",
+    ] if module == "protobuf-runtime" else []) + ([
+        ":protobuf-runtime_import",
         ":protobuf-buffa-bindings_import",
     ] if module == "protobuf-buffa" else []) + ([
         "@maven//:org_graalvm_sdk_nativeimage",
@@ -164,6 +173,7 @@ sh_test(
     "jdbc-mysql",
     "jdbc-postgresql",
     "protobuf",
+    "protobuf-runtime",
     "protobuf-buffa",
     "protobuf-buffa-bindings",
 ]]
@@ -181,6 +191,7 @@ java_test(
         ":jdbc-sqlite_import",
         ":jdbc_import",
         ":protobuf-buffa_import",
+        ":protobuf-runtime_import",
         ":protobuf_import",
         "@maven//:com_google_protobuf_protobuf_java",
         "@maven//:org_graalvm_truffle_truffle_api",
@@ -202,6 +213,7 @@ filegroup(
 cc_import(
     name = "published_native",
     static_library = ":buffa_static",
+    deps = ["//protobuf-buffa/native:cpp_runtime"],
 )
 
 java_library(
@@ -211,6 +223,7 @@ java_library(
     deps = [
         ":core_import",
         ":protobuf-buffa_import",
+        ":protobuf-runtime_import",
         ":protobuf_import",
         "@maven//:org_graalvm_sdk_nativeimage",
     ],
@@ -262,6 +275,76 @@ sh_test(
     srcs = ["native_consumer.sh"],
     args = ["$(location :buffa_native)"],
     data = [":buffa_native"],
+    tags = ["manual"],
+    target_compatible_with = [
+        "@platforms//os:linux",
+        "@platforms//cpu:x86_64",
+    ],
+)
+
+java_library(
+    name = "stock_free_consumer_lib",
+    testonly = True,
+    srcs = ["StockFreeConsumer.java"],
+    deps = [
+        ":core_import",
+        ":protobuf-buffa_import",
+        ":protobuf-runtime_import",
+        "//tests:wkt_contracts",
+    ],
+)
+
+java_test(
+    name = "stock_free_consumer",
+    data = ["//tests:native_descriptors"],
+    jvm_flags = ["--enable-native-access=ALL-UNNAMED"],
+    main_class = "StockFreeConsumer",
+    use_testrunner = False,
+    runtime_deps = [":stock_free_consumer_lib"],
+)
+
+native_image(
+    name = "stock_free_native",
+    testonly = True,
+    cc_deps = [":published_native"],
+    exec_properties = {
+        "EstimatedCPU": "4",
+        "EstimatedMemory": "16GB",
+    },
+    executable_name = "stock-free-published-consumer",
+    extra_args = [
+        "--gc=serial",
+        "--parallelism=4",
+        "-march=compatibility",
+        "--features=dev.elide.truffledata.buffa.BuffaFeature",
+        "--initialize-at-build-time=dev.elide.truffledata",
+        "-H:+UnlockExperimentalVMOptions",
+    ] + TRUFFLE_JIT_CHECKS + ["-H:-UnlockExperimentalVMOptions"],
+    graalvm_sdk = "@graalvm_linux_amd64//:gvm",
+    main_class = "StockFreeConsumer",
+    optimization_mode = "2",
+    tags = ["manual"],
+    target_compatible_with = [
+        "@platforms//os:linux",
+        "@platforms//cpu:x86_64",
+    ],
+    deps = [
+        ":stock_free_consumer_lib",
+        "@maven//:org_graalvm_truffle_truffle_runtime",
+    ],
+)
+
+sh_test(
+    name = "stock_free_native_test",
+    srcs = ["native_consumer.sh"],
+    args = [
+        "$(location :stock_free_native)",
+        "native",
+    ],
+    data = [
+        ":stock_free_native",
+        "//tests:native_descriptors",
+    ],
     tags = ["manual"],
     target_compatible_with = [
         "@platforms//os:linux",

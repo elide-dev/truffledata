@@ -30,8 +30,11 @@ public final class Values {
         || value instanceof ExactNumber
         || value instanceof DataNull
         || value instanceof Missing
-        || value instanceof AbstractRow
-        || value instanceof DataArray)) {
+        || value instanceof DataArray
+        || value instanceof AbstractRow row && !row.scoped())) {
+      if (value instanceof AbstractRow)
+        throw new ContractViolation(
+            "Scoped rows require an explicit snapshot before ownership transfer");
       throw new ContractViolation(
           "Unsupported value representation: " + value.getClass().getName());
     }
@@ -60,11 +63,12 @@ public final class Values {
             case ANY -> true;
           };
       if (!valid) throw violation(field, "type mismatch");
-      // Scoped adapter results may carry borrowed arrays under ANY or ARRAY.
-      // normalize/requireInterop
-      // still reject them, so immutable snapshots cannot silently retain a foreign lease.
-      if (!((field.kind() == Field.Kind.ANY || field.kind() == Field.Kind.ARRAY)
-          && value instanceof BorrowedArray)) requireInterop(value);
+      // Known kinds already prove a supported representation above. ANY still needs that check,
+      // allowing scoped rows/arrays for guest validation; ownership transfer goes through
+      // normalize.
+      if (field.kind() == Field.Kind.ANY
+          && !(value instanceof BorrowedArray)
+          && !(value instanceof AbstractRow)) requireInterop(value);
       validateConstraints(field, value, depth);
     }
     return value;

@@ -190,11 +190,13 @@ public final class ProtoPlan {
       }
       types = Map.copyOf(built);
       for (ProtoPlan plan : types.values()) {
-        for (FieldPlan field : plan.fields) {
+        for (int ordinal = 0; ordinal < plan.fields.length; ordinal++) {
+          FieldPlan field = plan.fields[ordinal];
           if (field.kind().message()) {
             ProtoPlan nested = type(field.typeName());
             if (field.map() != nested.definition.mapEntry())
               throw new ContractViolation("Invalid map entry reference");
+            plan.nestedTypes[ordinal] = nested;
           }
         }
         if (plan.jsonType() == ProtoJsonType.STRUCT) {
@@ -245,6 +247,9 @@ public final class ProtoPlan {
   @CompilationFinal(dimensions = 1)
   private final FieldPlan[] fields;
 
+  @CompilationFinal(dimensions = 1)
+  private final @Nullable ProtoPlan[] nestedTypes;
+
   private final Schema schema;
   private final ProtoJsonType jsonType;
   private final @Nullable StaticLayout layout;
@@ -257,6 +262,7 @@ public final class ProtoPlan {
     this.model = model;
     this.definition = definition;
     fields = definition.fields().toArray(FieldPlan[]::new);
+    nestedTypes = new ProtoPlan[fields.length];
     model.limits.check(1, fields.length);
     boolean compact = fields.length > 0 && fields.length <= 2;
     for (var field : fields) {
@@ -334,7 +340,9 @@ public final class ProtoPlan {
   }
 
   public ProtoPlan nested(int ordinal) {
-    return model.type(field(ordinal).typeName());
+    ProtoPlan nested = nestedTypes[ordinal];
+    if (nested == null) throw new ContractViolation("Expected message field");
+    return nested;
   }
 
   @TruffleBoundary
@@ -426,8 +434,13 @@ public final class ProtoPlan {
 
   public long getLong(ProtoAccess row, int ordinal) {
     if (row.plan() != this) throw new ContractViolation("Generated plan mismatch");
-    if (row instanceof ProtoRow owned)
-      return compactScalars ? owned.scalar(ordinal) : directLong(owned.storage, ordinal);
+    if (row instanceof ProtoRow owned) {
+      if (compactScalars) {
+        Objects.checkIndex(ordinal, fields.length);
+        return owned.scalarUnchecked(ordinal);
+      }
+      return directLong(owned.storage, ordinal);
+    }
     return row.getLong(ordinal);
   }
 

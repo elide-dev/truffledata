@@ -1,26 +1,19 @@
 package dev.elide.truffledata.buffa;
 
-import com.oracle.truffle.api.Assumption;
 import com.oracle.truffle.api.CompilerDirectives;
-import com.oracle.truffle.api.dsl.*;
-import com.oracle.truffle.api.nodes.Node;
 import dev.elide.truffledata.*;
-import org.jspecify.annotations.Nullable;
 
 /**
  * A decoded view owns a lease, not the payload. Snapshot to detach; close after guest consumption.
  */
-public final class WireMessage implements AutoCloseable {
+public final class WireMessage extends ViewOwner implements AutoCloseable {
   private static final DataArray EMPTY_FIELDS = new DataArray(new Object[0]);
-  final WireInput.Lease lease;
-  private @Nullable Assumption alive;
-  private boolean open = true;
   private DataArray fields = EMPTY_FIELDS;
   private final long nativeBytes;
   private final Limits limits;
 
   WireMessage(WireInput.Lease lease, long nativeBytes, Limits limits) {
-    this.lease = lease;
+    super(lease);
     this.nativeBytes = nativeBytes;
     this.limits = limits;
   }
@@ -66,52 +59,9 @@ public final class WireMessage implements AutoCloseable {
     return nativeBytes;
   }
 
-  void check() {
-    lease.check();
-    if (!open) throw new IllegalStateException("Wire view closed");
-  }
-
-  @CompilerDirectives.TruffleBoundary
-  Assumption assumption() {
-    check();
-    if (alive == null)
-      alive = com.oracle.truffle.api.Truffle.getRuntime().createAssumption("wire view alive");
-    return alive;
-  }
-
-  /** Cache only retained owners; uncached ingestion and megamorphic sites use ordinary checks. */
-  @GenerateUncached
-  @GenerateInline(false)
-  abstract static class CheckOpenNode extends Node {
-    abstract void execute(WireMessage owner);
-
-    @NeverDefault
-    static CheckOpenNode create() {
-      return WireMessageFactory.CheckOpenNodeGen.create();
-    }
-
-    @Specialization(guards = "owner == cachedOwner", assumptions = "alive", limit = "3")
-    static void cached(
-        WireMessage owner,
-        @Cached("owner") WireMessage cachedOwner,
-        @Cached("cachedOwner.assumption()") Assumption alive) {
-      owner.lease.check();
-    }
-
-    @Specialization(replaces = "cached")
-    static void generic(WireMessage owner) {
-      owner.check();
-    }
-  }
-
   @Override
   @CompilerDirectives.TruffleBoundary
   public void close() {
-    lease.thread();
-    if (open) {
-      if (alive != null) alive.invalidate();
-      open = false;
-      lease.release();
-    }
+    closeOwner();
   }
 }

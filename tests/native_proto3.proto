@@ -28,3 +28,101 @@ message Sample {
   map<uint64, int32> counts = 24;
   int32 custom_value = 25 [json_name = "customAlias"];
 }
+
+// Independent generated owned codecs exercise every scalar wire representation.
+message Flat {
+  int32 i32 = 1;
+  int64 i64 = 2;
+  uint32 u32 = 3;
+  uint64 u64 = 4;
+  sint32 s32 = 5;
+  sint64 s64 = 6;
+  fixed32 f32 = 7;
+  fixed64 f64 = 8;
+  sfixed32 sf32 = 9;
+  sfixed64 sf64 = 10;
+  bool flag = 11;
+  float single = 12;
+  double real = 13;
+  string text = 14;
+  bytes blob = 15;
+  enum Status { ZERO = 0; YES = 1; }
+  Status status = 16;
+  optional int32 present = 17;
+  oneof choice { int32 selected = 18; string selected_text = 19; }
+}
+message Empty {}
+
+// Direct primitive writers include multi-byte tags, signed/unsigned values and fixed widths.
+message PrimitiveWrites {
+  int32 i32 = 1;
+  uint32 u32 = 16;
+  sint32 s32 = 17;
+  sint64 s64 = 18;
+  fixed32 f32 = 19;
+  sfixed64 sf64 = 20;
+  float single = 21;
+  double real = 22;
+}
+message PrimitiveFlag { bool flag = 1; }
+
+message RepeatedScalars {
+  repeated int32 i32 = 1;
+  repeated int64 i64 = 2;
+  repeated uint32 u32 = 3;
+  repeated uint64 u64 = 4;
+  repeated sint32 s32 = 5;
+  repeated sint64 s64 = 6;
+  repeated fixed32 f32 = 7;
+  repeated fixed64 f64 = 8;
+  repeated sfixed32 sf32 = 9;
+  repeated sfixed64 sf64 = 10;
+  repeated bool flag = 11;
+  repeated float single = 12;
+  repeated double real = 13;
+  repeated string text = 14;
+  repeated bytes blob = 15;
+}
+
+// Exercise presence above bit 31 without borrowing those bits for wire sizes.
+message WideGraph {
+  int32 f1 = 1;
+  int32 f2 = 2;
+  int32 f3 = 3;
+  int32 f4 = 4;
+  int32 f5 = 5;
+  int32 f6 = 6;
+  int32 f7 = 7;
+  int32 f8 = 8;
+  int32 f9 = 9;
+  int32 f10 = 10;
+  int32 f11 = 11;
+  int32 f12 = 12;
+  int32 f13 = 13;
+  int32 f14 = 14;
+  int32 f15 = 15;
+  int32 f16 = 16;
+  int32 f17 = 17;
+  int32 f18 = 18;
+  int32 f19 = 19;
+  int32 f20 = 20;
+  int32 f21 = 21;
+  int32 f22 = 22;
+  int32 f23 = 23;
+  int32 f24 = 24;
+  int32 f25 = 25;
+  int32 f26 = 26;
+  int32 f27 = 27;
+  int32 f28 = 28;
+  int32 f29 = 29;
+  int32 f30 = 30;
+  int32 f31 = 31;
+  int32 f32 = 32;
+  int32 f33 = 33;
+  int32 f34 = 34;
+  Sample.Child child = 35;
+}
+message WireSizing {
+  repeated int32 unpacked = 1 [packed = false];
+  repeated bool flags = 2;
+}

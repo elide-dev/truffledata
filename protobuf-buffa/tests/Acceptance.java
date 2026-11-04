@@ -46,8 +46,15 @@ public final class Acceptance {
       randomized(decoder);
       if (nativeExpected) adoption(decoder);
       try (var input = decoder.allocate(SAMPLE.length).put(SAMPLE);
-          var message = decoder.decode(input, LIMITS, 16, 100, 4096)) {
+          var message = decoder.decode(input, LIMITS, 16, 100, 4096);
+          var unicode = TypedAcceptance.retainedUnicode(decoder)) {
         decoder.close();
+        check(
+            unicode
+                .row()
+                .get(unicode.row().plan().schema().indexOf("text"))
+                .equals("é中😀".repeat(1024)),
+            "bulk Unicode remains readable after input, plan and decoder closure");
         equal(ProtoWire.decode(SAMPLE, LIMITS, 16, 100), message.snapshot());
         rejects(() -> decoder.allocate(1), IllegalStateException.class);
       }

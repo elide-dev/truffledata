@@ -76,7 +76,12 @@ public final class BuffaPlan implements AutoCloseable {
 
   private TypedMessage text(String text, int format, int nativeBytes) {
     check();
-    if (text.length() > plan.maxWireBytes() / 2) throw new ContractViolation("Text input budget");
+    if (nativeBytes < 0 || text.length() > plan.maxWireBytes() / 2)
+      throw new ContractViolation("Text input budget");
+    // String.getBytes replaces malformed UTF-16. Validate scalar values and bound the exact
+    // UTF-8 expansion first, before allocating either heap or native input/payload storage.
+    if (GeneratedOutput.utf8Length(text) > plan.maxWireBytes())
+      throw new ContractViolation("Text wire byte budget");
     byte[] utf8 = text.getBytes(StandardCharsets.UTF_8);
     try (var input = decoder.allocate(utf8.length).put(utf8);
         var payload = decoder.allocate(Math.multiplyExact(utf8.length, 2))) {
@@ -88,9 +93,9 @@ public final class BuffaPlan implements AutoCloseable {
     if (nativeBytes < 0 || input.size() > plan.maxWireBytes())
       throw new ContractViolation("Typed input budget");
     WireInput.Lease source = input.retain();
-    WireMessage owner = null;
+    TypedMessage owner = null;
     try {
-      owner = new WireMessage((format == 0 ? input : payload).retain(), 0, plan.limits());
+      owner = new TypedMessage((format == 0 ? input : payload).retain(), format == 0);
       var backend = decoder.backend;
       if (backend == null) {
         ProtoRow owned =
@@ -102,14 +107,15 @@ public final class BuffaPlan implements AutoCloseable {
                     : plan.parseJson(
                         StandardCharsets.UTF_8.decode(source.bytes.duplicate()).toString(),
                         anyTypes);
-        return new TypedMessage(owner, fromJava(owner, owned), format == 0, 0);
+        return owner.finish(fromJava(owner, owned), 0);
       }
+      if (format == 0 && compactScalars)
+        return compact(owner, backend.scalars(schema, input, plan));
       try (var tape = backend.typed(schema, input, format, payload, plan, nativeBytes)) {
-        if (format == 0 && compactScalars) return compact(owner, tape);
         State state =
             new State(plan, new DecodeContext(owner, format, plan.limits().maxCells(), profile));
         state.consume(tape, 0, tape.count);
-        return new TypedMessage(owner, state.finish(1), format == 0, tape.allocated);
+        return owner.finish(state.finish(1), tape.allocated);
       }
     } catch (RuntimeException | Error failure) {
       if (owner != null) owner.close();
@@ -119,29 +125,14 @@ public final class BuffaPlan implements AutoCloseable {
     }
   }
 
-  /** Binary scalar views consume the validated native index without object staging or boxing. */
-  private TypedMessage compact(WireMessage owner, BuffaWire.Tape tape) {
-    if ((long) plan.size() + tape.count > plan.limits().maxCells())
-      throw new ContractViolation("Typed materialization cell budget");
-    long first = (Long) plan.field(0).defaultValue();
-    long second = plan.size() == 2 ? (Long) plan.field(1).defaultValue() : 0;
-    long present = 0;
-    for (int index = 0; index < tape.count; index++) {
-      int at = index * Buffa.Field.SIZE;
-      int ordinal = tape.bytes.getInt(at + (int) BuffaFFM.Field_number_OFFSET) - 1;
-      if (ordinal < 0 || ordinal >= plan.size())
-        throw new IllegalStateException("Invalid scalar ordinal");
-      var field = plan.field(ordinal);
-      if (tape.bytes.getInt(at + (int) BuffaFFM.Field_wire_OFFSET) != field.kind().ordinal() + 1
-          || tape.bytes.getLong(at + (int) BuffaFFM.Field_length_OFFSET) != 0
-          || tape.bytes.getLong(at + (int) BuffaFFM.Field_end_OFFSET) != index + 1L)
-        throw new IllegalStateException("Invalid scalar tape");
-      long value = tape.bytes.getLong(at + (int) BuffaFFM.Field_value_OFFSET);
-      if (field.kind() == ProtoPlan.Kind.INT32) value = (int) value;
-      if (ordinal == 0) first = value;
-      else second = value;
-      present |= 1L << ordinal;
-    }
+  /** Fixed native scalar output avoids allocating or materializing an index. */
+  private TypedMessage compact(TypedMessage owner, BuffaWire.Scalars values) {
+    long present = values.present();
+    long first = (present & 1) != 0 ? values.first() : (Long) plan.field(0).defaultValue();
+    long second =
+        plan.size() == 2
+            ? ((present & 2) != 0 ? values.second() : (Long) plan.field(1).defaultValue())
+            : 0;
     for (int i = 0; i < plan.size(); i++) {
       var field = plan.field(i);
       if (field.required() && (present & (1L << i)) == 0)
@@ -152,11 +143,10 @@ public final class BuffaPlan implements AutoCloseable {
         else present |= 1L << i;
       }
     }
-    return new TypedMessage(
-        owner, new ScalarRow(owner, plan, first, second, present), true, tape.allocated);
+    return owner.finish(new ScalarRow(owner, plan, first, second, present), 0);
   }
 
-  private static TypedRow fromJava(WireMessage owner, ProtoRow row) {
+  private static TypedRow fromJava(ViewOwner owner, ProtoRow row) {
     Object[] values = new Object[row.plan().size()];
     boolean[] present =
         values.length > Long.SIZE ? new boolean[values.length] : State.NO_SEEN_FIELDS;
@@ -172,7 +162,7 @@ public final class BuffaPlan implements AutoCloseable {
     return new TypedRow(owner, row.plan(), values, presenceBits, present);
   }
 
-  private static Object javaValue(WireMessage owner, Object value) {
+  private static Object javaValue(ViewOwner owner, Object value) {
     if (value instanceof ProtoRow row) return fromJava(owner, row);
     if (value instanceof DataArray array && !array.isBytes()) {
       Object[] items = new Object[array.size()];
@@ -222,13 +212,13 @@ public final class BuffaPlan implements AutoCloseable {
 
   /** Shared per-decode state; nested messages must charge one cumulative cell budget. */
   private static final class DecodeContext {
-    final WireMessage owner;
+    final ViewOwner owner;
     final int format;
     final ReadProfile profile;
     long cells;
     private @Nullable TypedArray emptyArray;
 
-    DecodeContext(WireMessage owner, int format, long cells, ReadProfile profile) {
+    DecodeContext(ViewOwner owner, int format, long cells, ReadProfile profile) {
       this.owner = owner;
       this.format = format;
       this.cells = cells;
@@ -419,12 +409,7 @@ public final class BuffaPlan implements AutoCloseable {
                             length,
                             hints.stringReads,
                             ordinal);
-                  context.owner.lease.check();
-                  int offset = Math.toIntExact(value);
-                  Objects.checkFromIndexSize(offset, length, context.owner.lease.bytes.capacity());
-                  byte[] utf8 = new byte[length];
-                  context.owner.lease.bytes.get(offset, utf8);
-                  yield new String(utf8, StandardCharsets.UTF_8);
+                  yield context.owner.utf8(Math.toIntExact(value), length);
                 }
                 case BYTES -> new BorrowedBytes(context.owner, Math.toIntExact(value), length);
                 case DOUBLE -> Double.longBitsToDouble(value);

@@ -14,8 +14,11 @@ final class FfmBackend implements BuffaWire.Backend {
   private final MethodHandle decode;
   private final MethodHandle release;
   private final MethodHandle typed;
+  private final MethodHandle scalars;
+  private final MemorySegment scalarResult;
   private final MemorySegment result;
   private boolean busy;
+  private final BuffaWire.Scalars scalarValues = new BuffaWire.Scalars();
   private final Runnable releaseAction = this::releaseResult;
 
   private MemorySegment acquireResult() {
@@ -52,6 +55,8 @@ final class FfmBackend implements BuffaWire.Backend {
       decode = BuffaFFM.decode(symbols);
       release = BuffaFFM.release(symbols);
       typed = BuffaFFM.typed(symbols);
+      scalars = BuffaFFM.scalars(symbols);
+      scalarResult = libraryArena.allocate(BuffaFFM.Scalars_LAYOUT);
       result = libraryArena.allocate(BuffaFFM.Result_LAYOUT);
     } catch (RuntimeException | Error failure) {
       libraryArena.close();
@@ -162,6 +167,39 @@ final class FfmBackend implements BuffaWire.Backend {
     } catch (RuntimeException | Error failure) {
       releaseResult();
       throw failure;
+    }
+  }
+
+  @Override
+  public BuffaWire.Scalars scalars(
+      WireInput schema, WireInput input, dev.elide.truffledata.protobuf.ProtoPlan plan) {
+    if (!(schema.lease.attachment instanceof MemorySegment schemaMemory)
+        || !(input.lease.attachment instanceof MemorySegment inputMemory))
+      throw new IllegalArgumentException("Inputs are not JVM native memory");
+    acquireResult();
+    try {
+      int status;
+      try {
+        status =
+            (int)
+                scalars.invokeExact(
+                    schemaMemory,
+                    (long) schema.size(),
+                    inputMemory,
+                    (long) input.size(),
+                    plan.limits().maxCells(),
+                    plan.maxDepth(),
+                    scalarResult);
+      } catch (Throwable failure) {
+        throw callFailure(failure);
+      }
+      BuffaWire.status(status);
+      return scalarValues.set(
+          scalarResult.get(ValueLayout.JAVA_LONG, BuffaFFM.Scalars_first_OFFSET),
+          scalarResult.get(ValueLayout.JAVA_LONG, BuffaFFM.Scalars_second_OFFSET),
+          scalarResult.get(ValueLayout.JAVA_LONG, BuffaFFM.Scalars_present_OFFSET));
+    } finally {
+      busy = false;
     }
   }
 

@@ -12,12 +12,15 @@ data_java_library(
         "src/test/java/dev/elide/truffledata/AllocationTest.java",
         "src/test/java/dev/elide/truffledata/ContractsTest.java",
         "src/test/java/dev/elide/truffledata/CoreTest.java",
+        "src/test/java/dev/elide/truffledata/GeneratedCodecTest.java",
+        "src/test/java/dev/elide/truffledata/GeneratedGraphTest.java",
         "src/test/java/dev/elide/truffledata/IntegrationTest.java",
         "src/test/java/dev/elide/truffledata/JdbcLifecycleTest.java",
         "src/test/java/dev/elide/truffledata/JdbcTest.java",
         "src/test/java/dev/elide/truffledata/JitMatrixTest.java",
         "src/test/java/dev/elide/truffledata/PolicyTest.java",
         "src/test/java/dev/elide/truffledata/PolyglotTest.java",
+        "src/test/java/dev/elide/truffledata/ProtoDescriptorsTest.java",
         "src/test/java/dev/elide/truffledata/ProtoNativeTest.java",
         "src/test/java/dev/elide/truffledata/ProtobufTest.java",
         "src/test/java/dev/elide/truffledata/RealDriversTest.java",
@@ -52,7 +55,7 @@ java_test(
         "--package",
         "dev.elide.truffledata",
         "--include-class",
-        "dev.elide.truffledata.(Core|ProtoNative|Jdbc|JdbcLifecycle|Protobuf|Polyglot|Policy|Contracts|Integration|JitMatrix)Test",
+        "dev.elide.truffledata.(Core|GeneratedCodec|GeneratedGraph|ProtoDescriptors|ProtoNative|Jdbc|JdbcLifecycle|Protobuf|Polyglot|Policy|Contracts|Integration|JitMatrix)Test",
     ],
     data = [
         ":native_descriptors",
@@ -64,6 +67,7 @@ java_test(
         "//jdbc-postgresql:sources",
         "//jdbc-sqlite:sources",
         "//protobuf:sources",
+        "//protobuf-runtime:sources",
     ],
     exec_properties = {
         "EstimatedCPU": "4",
@@ -127,9 +131,7 @@ java_test(
     name = "compiled",
     size = "medium",
     args = [
-        "--package",
-        "dev.elide.truffledata",
-        "--include-class",
+        "--class",
         "dev.elide.truffledata.AllocationTest",
     ],
     exec_properties = {
@@ -189,6 +191,7 @@ java_test(
         "//jdbc-postgresql:sources",
         "//jdbc-sqlite:sources",
         "//protobuf:sources",
+        "//protobuf-runtime:sources",
     ],
     exec_properties = {
         "EstimatedCPU": "4",

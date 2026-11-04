@@ -4,6 +4,7 @@ import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.dsl.*;
 import com.oracle.truffle.api.interop.*;
 import com.oracle.truffle.api.library.*;
+import org.jspecify.annotations.Nullable;
 
 /** Shared interop facade. Concrete representations export DataLibrary. */
 @ExportLibrary(InteropLibrary.class)
@@ -16,6 +17,25 @@ public abstract class AbstractRow implements TruffleObject {
 
   public final Schema schema() {
     return descriptor;
+  }
+
+  /**
+   * Whether this row borrows a closable owner. Scoped adapters override this constant predicate;
+   * owned containers reject such rows until the adapter explicitly detaches them. Field validation
+   * can still accept a scoped RECORD/ANY value for guest reads within its owner's lifetime.
+   */
+  protected boolean scoped() {
+    return false;
+  }
+
+  /**
+   * Optional transparent immutable backing for host-side payload accounting. The returned storage
+   * must have the identical schema and values that DataLibrary reads from this row, including null
+   * and missing states. Strict mode checks this cooperation contract. Mutable or transforming
+   * adapters must retain the default; their values are read through DataLibrary as usual.
+   */
+  protected @Nullable SnapshotStorage payloadStorage() {
+    return null;
   }
 
   @ExportMessage

@@ -230,3 +230,73 @@ Repeated native fields materialize into privately owned arrays which transfer to
 view after merges and validation. The decoder sizes the current contiguous run from the
 native index; interleaved fields and later message merges grow storage geometrically, bounded
 by index cardinality. Empty views still share storage only within their owning message.
+
+## Development: fixed scalar native results
+
+The unreleased ABI 4 adds a schema-directed path for one or two singular `int32`/`int64`
+fields without oneofs or contract overrides, including binary Timestamp and Duration.
+The native decoder reads borrowed input directly into a reusable 24-byte output slot.
+It allocates no per-message native index and creates no Java tape wrapper. Presence,
+required fields, declared defaults and unknown-field forwarding retain their usual semantics.
+Unknown groups still obey the depth limit; recognized field occurrences consume the cell budget.
+
+Both static SVM and JVM FFM use this path. The Java fallback remains available. The backend
+owns the fixed output slot and Java scalar scratch until closure; each decoded message owns independent scalar values
+and an input lease, so reusing or closing the decoder cannot invalidate a live message.
+`nativeIndexBytes()` is zero for this path, and a zero per-message native-index budget is valid.
+This excludes the fixed decoder/schema storage and caller-owned wire input. Rust tests instrument
+the allocator to assert zero allocations during scalar decoding, and shared JVM/SVM acceptance
+tests exercise lifetime, presence, unknown fields and zero-index-budget behavior.
+
+ABI fingerprints prevent mixing these bindings with released native libraries. Publish the
+bindings and native attachments together in the next release.
+
+Typed messages now hold their own lease and invalidation assumption, avoiding a separate
+lifetime-wrapper allocation. Construction completes once before any message or row is
+exposed. Closing one message invalidates its rows but preserves sibling messages, including
+messages borrowing the same input. Shared backend scalar scratch is copied into immutable
+row fields before the next decode can reuse it.
+
+## SIMD Unicode and Myna values foundation
+
+Myna is pinned to the `0.7.2` source commit `7401c446ef9ad80d7bd14a9bf92f360a04956b80`.
+Its generator, Java value readers (`@myna//:values`) and C++ ABI headers
+(`@myna//:values_headers`) are separate Bazel targets. The value ABI is v3; it is
+independent of the Buffa seam ABI, now v5 after adding Unicode conversion.
+
+The native protobuf backend uses the same `simdutf` 0.7.0 Rust binding as Myna.
+It validates text at 64 bytes and above with CPU dispatch and measures UTF-16
+payload budgets with SIMD; shorter strings use Rust's UTF-8 validator. Malformed
+UTF-8 is rejected, never repaired. SVM materializes strings of at least 256 UTF-8
+bytes directly into a pinned Java `char[]` through the generated Myna C binding,
+using an ordinary VM transition. Static consumers must link the C++ runtime
+(`-lc++ -lc++abi` on Linux, `-lc++` on macOS, matching the pinned Elide LLVM toolchain).
+The Bazel archive target propagates this through `CcInfo` to Native Image. Consumers
+of the published raw archive must also supply those libraries, for example
+`-H:NativeLinkerOption=-lc++ -H:NativeLinkerOption=-lc++abi` on Linux. The release
+consumer test imports the published archive with that explicit link contract. No temporary UTF-8 Java array is needed for that
+route. This conservative crossover matches Myna and is not a universal speedup
+claim. JVM materialization and native-disabled images keep their JDK path.
+
+Native string reads depend on the retained input lease, not a live decoder.
+Borrowed views still invalidate on message close; snapshots own their contents.
+Rust tests cover malformed text and caller-buffer extents; the shared JVM/SVM
+acceptance corpus covers ASCII, NUL, Latin, CJK and supplementary characters around
+both dispatch thresholds, eager/lazy reads, input closure and detachment.
+
+The simdjson adapter is a separate general-JSON integration. Myna's value ABI is
+its foundation; ProtoJSON mappings remain in the protobuf backend. This change
+does not implement the general-JSON parser or the JEP 540 facade.
+
+Scoped rows and arrays must be detached before entering `Batch`, `DataArray`,
+`StaticLayout`, or an owned protobuf builder. `Values.validate` can check scoped
+RECORD/ANY fields during guest execution, while `Values.normalize` and
+`Values.requireInterop` reject ownership transfer. Use the enclosing message's
+`snapshot()` to retain values independently of message closure. Shared JVM/SVM
+tests cover both top-level and nested borrowed rows, rejection by owned containers,
+and detached nested values surviving all source owners.
+
+Protobuf text/ProtoJSON entry points reject unpaired Java UTF-16 surrogates before
+UTF-8 encoding can replace them. They also reject negative native budgets and
+check the exact UTF-8 expansion before allocating input/payload buffers. This is
+separate from the future general-JSON facade's Java UTF-16 factory semantics.

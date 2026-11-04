@@ -61,7 +61,7 @@ final class ProtoCodec {
     Reader input = new Reader(wire, new ProtoRow.Budget(plan.model.limits), plan.model.maxDepth);
     State state = new State(plan, input.budget);
     input.message(state, wire.remaining(), 0, 1);
-    return state.finish();
+    return state.finish(1);
   }
 
   static DataArray inspect(byte[] wire, Limits limits, int maxDepth, int maxWireBytes) {
@@ -81,8 +81,10 @@ final class ProtoCodec {
   }
 
   private static final class State {
-    final ProtoRow.Builder builder;
+    final ProtoPlan plan;
     final Object[] values;
+    long presence;
+    final long @Nullable [] spill;
     @Nullable ByteArrayOutputStream unknown;
 
     ByteArrayOutputStream unknown() {
@@ -91,16 +93,48 @@ final class ProtoCodec {
     }
 
     boolean invalidMapEnum;
+    long retainedCells;
+    long retainedBytes;
+
+    private void cells(long count) {
+      if (count < 0 || count > plan.limits().maxCells() - retainedCells)
+        throw bad("Protobuf cell budget exceeded");
+      retainedCells += count;
+    }
+
+    private void bytes(long count) {
+      if (count < 0 || count > plan.limits().maxStringBytes() - retainedBytes)
+        throw bad("Protobuf payload budget exceeded");
+      retainedBytes += count;
+    }
+
+    private void retained(Object value, int depth) {
+      if (value instanceof String text) bytes(2L * text.length());
+      else if (value instanceof DataArray array) {
+        cells(array.size());
+        if (!array.isBytes()) for (int i = 0; i < array.size(); i++) retained(array.get(i), depth);
+      } else if (value instanceof ProtoAccess) {
+        // Only deduplicated map entries need a retained traversal. Ordinary children pass
+        // their already checked totals directly to their parent before their state is released.
+        var budget = new ProtoRow.Budget(plan.limits());
+        budget.value(value, depth, plan.maxDepth());
+        cells(budget.cellCount());
+        bytes(budget.byteCount());
+      }
+    }
 
     State(ProtoPlan plan, ProtoRow.Budget budget) {
       budget.cells(plan.size());
-      builder = new ProtoRow.Builder(plan);
-      values = builder.values;
+      this.plan = plan;
+      values = new Object[plan.size()];
+      spill = plan.size() > 64 ? new long[(plan.size() - 1) >>> 6] : null;
+      for (int i = 0; i < values.length; i++)
+        values[i] = ProtoRow.Builder.defaultValue(plan.field(i));
     }
 
     void select(int ordinal) {
-      builder.select(ordinal);
-      builder.present[ordinal] = true;
+      presence = ProtoRow.selectOneof(plan, values, presence, spill, ordinal);
+      presence = ProtoRow.withPresence(presence, spill, ordinal, true);
     }
 
     @SuppressWarnings("unchecked")
@@ -113,39 +147,65 @@ final class ProtoCodec {
         values[ordinal] = list;
       }
       list.add(value);
-      builder.present[ordinal] = true;
+      presence = ProtoRow.withPresence(presence, spill, ordinal, true);
     }
 
-    ProtoRow finish() {
+    ProtoRow finish(int depth) {
+      if (plan.definition().mapEntry()
+          && plan.field(1).kind().message()
+          && values[1] == Missing.INSTANCE) {
+        if (depth >= plan.maxDepth()) throw bad("Map value nesting budget exceeded");
+        values[1] = plan.nested(1).newBuilder().build();
+        presence = ProtoRow.withPresence(presence, spill, 1, true);
+      }
+      retainedCells = 0;
+      retainedBytes = 0;
+      cells(values.length);
       for (int i = 0; i < values.length; i++) {
-        var field = builder.plan.field(i);
-        if (values[i] instanceof State nested) values[i] = nested.finish();
-        else if (values[i] instanceof List<?> items) {
+        var field = plan.field(i);
+        if (values[i] instanceof State nested) {
+          values[i] = nested.finish(depth + 1);
+          cells(nested.retainedCells);
+          bytes(nested.retainedBytes);
+        } else if (values[i] instanceof List<?> items) {
           // This list belongs only to this decoder. Finish nested values in place, then
           // copy directly into the immutable sequence instead of cloning a staging array.
           @SuppressWarnings("unchecked")
           List<Object> finished = (List<Object>) items;
+          if (!field.map()) cells(finished.size());
           for (int j = 0; j < finished.size(); j++) {
             Object item = finished.get(j);
-            if (item instanceof State nested) finished.set(j, nested.finish());
+            if (item instanceof State nested) {
+              finished.set(j, nested.finish(depth + 1));
+              if (!field.map()) {
+                cells(nested.retainedCells);
+                bytes(nested.retainedBytes);
+              }
+            } else if (!field.map()) retained(item, depth);
           }
           if (field.map()) {
             Map<Object, Object> entries = new LinkedHashMap<>();
             var data = DataLibrary.factory().getUncached();
             for (Object entry : finished) entries.put(ProtoRow.mapKey(data.read(entry, 0)), entry);
             values[i] = DataArray.copyOf(entries.values());
+            retained(values[i], depth);
           } else {
             values[i] = DataArray.copyOf(finished);
           }
-        }
-        if (!field.explicitPresence()) builder.present[i] = ProtoRow.nonDefault(field, values[i]);
-        if (field.required() && !builder.present[i])
+        } else retained(values[i], depth);
+        if (!field.explicitPresence())
+          presence =
+              ProtoRow.withPresence(presence, spill, i, ProtoRow.nonDefault(field, values[i]));
+        if (field.required() && !ProtoRow.present(presence, spill, i))
           throw bad("Missing required field: " + field.name());
       }
-      if (unknown != null) builder.unknown = unknown.toByteArray();
-      // The reader has charged allocations and depth before materialization; validate aggregate
-      // too.
-      return builder.buildDecoded();
+      if (unknown != null) {
+        bytes(unknown.size());
+      }
+      // Parsing work, required fields and retained totals have all been checked. Static/batch
+      // storage still validates normalized field contracts while constructing its final layout.
+      return ProtoRow.decoded(
+          plan, values, presence, spill, unknown == null ? null : unknown.toByteArray());
     }
   }
 
@@ -202,8 +262,8 @@ final class ProtoCodec {
           if (group != number) throw bad("Unexpected end group");
           return;
         }
-        int ordinal = state.builder.plan.ordinal(number);
-        var field = ordinal < 0 ? null : state.builder.plan.field(ordinal);
+        int ordinal = state.plan.ordinal(number);
+        var field = ordinal < 0 ? null : state.plan.field(ordinal);
         boolean packed =
             field != null && field.repeated() && field.kind().packable() && wireType == 2;
         if (field == null || (!packed && wireType != field.kind().wire)) {
@@ -239,7 +299,7 @@ final class ProtoCodec {
           State nested;
           if (!field.repeated() && state.values[ordinal] instanceof State existing)
             nested = existing;
-          else nested = new State(state.builder.plan.nested(ordinal), budget);
+          else nested = new State(state.plan.nested(ordinal), budget);
           if (!field.repeated()) state.select(ordinal);
           if (field.kind() == ProtoPlan.Kind.GROUP) message(nested, end, number, depth + 1);
           else {
@@ -254,7 +314,7 @@ final class ProtoCodec {
         } else {
           value = scalar(field.kind(), end);
           var enumeration = field.enumType();
-          if (state.builder.plan.definition().mapEntry() && ordinal == 1 && enumeration != null)
+          if (state.plan.definition().mapEntry() && ordinal == 1 && enumeration != null)
             state.invalidMapEnum = !enumeration.accepts(((Long) value).intValue());
           if (enumeration != null && !enumeration.accepts(((Long) value).intValue())) {
             retain(state, start);
@@ -270,12 +330,12 @@ final class ProtoCodec {
         }
       }
       if (group != 0) throw bad("Unterminated group");
-      if (state.builder.plan.definition().mapEntry()
-          && state.builder.plan.field(1).kind().message()
+      if (state.plan.definition().mapEntry()
+          && state.plan.field(1).kind().message()
           && state.values[1] == Missing.INSTANCE) {
         if (depth >= maxDepth) throw bad("Protobuf nesting budget exceeded");
-        state.values[1] = new State(state.builder.plan.nested(1), budget);
-        state.builder.present[1] = true;
+        state.values[1] = new State(state.plan.nested(1), budget);
+        state.presence = ProtoRow.withPresence(state.presence, state.spill, 1, true);
       }
     }
 
@@ -436,11 +496,38 @@ final class ProtoCodec {
             : BigInteger.valueOf(value & Long.MAX_VALUE).setBit(63));
   }
 
-  static byte[] encode(ProtoRow row) {
-    Writer sizing = new Writer(null, row.plan().model.maxWireBytes);
+  static byte[] encode(ProtoAccess row) {
+    if (row instanceof ProtoRow owned && owned.plan().compactScalars) return encodeScalars(owned);
+    Writer sizing = new Writer(null, row.plan().maxWireBytes());
     sizing.message(row);
     byte[] result = new byte[sizing.position];
     new Writer(result, result.length).message(row);
+    return result;
+  }
+
+  private static byte[] encodeScalars(ProtoRow row) {
+    ProtoPlan plan = row.plan();
+    long first = row.scalarUnchecked(0);
+    long second = plan.size() == 2 ? row.scalarUnchecked(1) : 0;
+    byte[] unknown = row.unknown();
+    // Compact plans prove implicit zero defaults and one-byte tags for INT32/INT64 fields.
+    // Use long arithmetic: canonical negative INT32 values can expand beyond their input size.
+    long size = unknown.length;
+    if (first != 0) size += 1 + GeneratedOutput.varintSize(first);
+    if (second != 0) size += 1 + GeneratedOutput.varintSize(second);
+    if (size > plan.maxWireBytes()) throw bad("Encoded wire budget exceeded");
+    byte[] result = new byte[(int) size];
+    int position = 0;
+    if (first != 0) {
+      result[position++] = (byte) (plan.field(0).number() << 3);
+      position = GeneratedOutput.varint(result, position, first);
+    }
+    if (second != 0) {
+      result[position++] = (byte) (plan.field(1).number() << 3);
+      position = GeneratedOutput.varint(result, position, second);
+    }
+    if (unknown.length != 0) System.arraycopy(unknown, 0, result, position, unknown.length);
+    assert position + unknown.length == result.length;
     return result;
   }
 
@@ -475,12 +562,22 @@ final class ProtoCodec {
       }
     }
 
-    void message(ProtoRow row) {
-      var data = DataLibrary.factory().getUncached();
+    void message(ProtoAccess row) {
+      if (row instanceof ProtoRow owned && owned.plan().compactScalars) {
+        ProtoPlan plan = owned.plan();
+        for (int i = 0; i < plan.size(); i++) {
+          long value = owned.scalarUnchecked(i);
+          if (value == 0) continue;
+          varint((long) plan.field(i).number() << 3);
+          varint(value);
+        }
+        raw(owned.unknown());
+        return;
+      }
       for (int i = 0; i < row.plan().size(); i++) {
         if (!row.has(i)) continue;
         var field = row.plan().field(i);
-        Object value = data.read(row, i);
+        Object value = row.get(i);
         if (field.repeated()) {
           DataArray array = (DataArray) value;
           if (field.packed()) {
@@ -492,13 +589,21 @@ final class ProtoCodec {
           } else for (int j = 0; j < array.size(); j++) field(field, array.get(j));
         } else field(field, value);
       }
-      for (byte b : row.unknown) octet(b);
+      byte[] unknown =
+          row instanceof ProtoRow owned ? owned.unknown() : ((GeneratedMessage) row).unknown;
+      raw(unknown);
+    }
+
+    void raw(byte[] bytes) {
+      if (bytes.length > limit - position) throw bad("Encoded wire budget exceeded");
+      if (target != null) System.arraycopy(bytes, 0, target, position, bytes.length);
+      position += bytes.length;
     }
 
     void field(ProtoPlan.FieldPlan field, Object value) {
       varint((long) field.number() << 3 | field.kind().wire);
       if (field.kind().message()) {
-        ProtoRow row = (ProtoRow) value;
+        ProtoAccess row = (ProtoAccess) value;
         if (field.kind() == ProtoPlan.Kind.MESSAGE) {
           Writer size = new Writer(null, limit);
           size.message(row);
@@ -542,14 +647,22 @@ final class ProtoCodec {
         case FLOAT -> fixed(Float.floatToRawIntBits(((Double) value).floatValue()), 4);
         case DOUBLE -> fixed(Double.doubleToRawLongBits((Double) value), 8);
         case STRING -> {
-          byte[] bytes = ((String) value).getBytes(StandardCharsets.UTF_8);
-          varint(bytes.length);
-          for (byte b : bytes) octet(b);
+          String text = (String) value;
+          int length = GeneratedOutput.utf8Length(text);
+          varint(length);
+          if (length > limit - position) throw bad("Encoded wire budget exceeded");
+          position =
+              target == null
+                  ? position + length
+                  : GeneratedOutput.utf8Contents(target, position, text, length);
         }
         case BYTES -> {
           DataArray bytes = (DataArray) value;
           varint(bytes.size());
-          for (int i = 0; i < bytes.size(); i++) octet(((Long) bytes.get(i)).intValue());
+          int length = bytes.size();
+          if (length > limit - position) throw bad("Encoded wire budget exceeded");
+          if (target != null) bytes.copyBytesTo(target, position);
+          position += length;
         }
         default -> throw bad("Message must use structured encoder");
       }

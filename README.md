@@ -135,6 +135,38 @@ Large owned-byte ingestion was noisy. See the [full results and methodology](doc
 [measurement run](https://github.com/elide-dev/truffledata/actions/runs/41776420028).
 Earlier runs remain available; these are workload-specific measurements, not performance guarantees.
 
+### In development: independent protobuf runtime
+
+Development code separates the descriptor-free runtime from the optional protobuf-java
+bridge, adds a bounded descriptor-set compiler, and generates concrete scalar records,
+builders and codecs. Buffa scalar decoding uses fixed native results without allocating
+an index, and typed messages own their lifetimes directly.
+
+The latest development batch adopts **Myna 0.7.2**, adds native SIMD Unicode support,
+and enforces detachment before scoped rows enter owned containers. Measured allocation
+improvements are **128 → 80 bytes** for static-row fixtures and **104 → 24 bytes** for
+compact scalar serialization (stock: **56 bytes**).
+
+In the latest repeat, generated scalar parse/project at peak measures **24.9 ns versus
+stock’s 115.1 ns**; Buffa Timestamp ProtoJSON measures **1.18 µs versus 10.26 µs**.
+Generated nested full ingestion is **3.40 µs versus 2.12 µs**, and serialization is
+**1.55 µs versus 1.19 µs**. Generic nested decoding remains behind at **14.54 µs**.
+Shared-runner timings vary substantially between runs; both reports and their ranges
+are retained. These changes are **unreleased** and are not included in 0.4.0.
+
+<details>
+<summary>Development measurements and remaining gaps</summary>
+
+![Current development parse/project peak](docs/images/independent-latest/comparison-projection-peak.svg)
+![Current development binary serialization](docs/images/independent-latest/comparison-serialization.svg)
+
+See the [current 120-cell run and caveats](docs/COMPARISON_BENCHMARKS.md#current-generated-graph-comparison)
+and the [independent runtime API and limits](docs/CONTRACTS.md#independent-protobuf-runtime-unreleased).
+Concrete generated binary decoders and serializers cover nested/repeated schemas when every
+reachable message has at most 64 fields. Editions, extensions and MessageSet remain unsupported.
+
+</details>
+
 ## Protobuf and generated access
 
 Provide schemas at build time with the Bazel/protoc contract generator, or compile

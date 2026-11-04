@@ -12,6 +12,7 @@ import org.graalvm.word.*;
 final class SvmBackend implements BuffaWire.Backend {
   private final long resultAddress;
   private boolean busy;
+  private final BuffaWire.Scalars scalarValues = new BuffaWire.Scalars();
   private final Runnable releaseAction = this::releaseResult;
   private boolean closed;
 
@@ -39,7 +40,7 @@ final class SvmBackend implements BuffaWire.Backend {
     CTypeConversion.asByteBuffer(Buffa.fingerprint(), 64).get(fingerprint);
     if (!new String(fingerprint, StandardCharsets.US_ASCII).equals(Buffa.ABI_FINGERPRINT))
       throw new IllegalStateException("Myna/Buffa ABI fingerprint mismatch");
-    VoidPointer result = UnmanagedMemory.calloc(Buffa.Result.SIZE);
+    VoidPointer result = UnmanagedMemory.calloc(Buffa.Result.SIZE + Buffa.Scalars.SIZE);
     if (result.isNull()) throw new OutOfMemoryError("Native result allocation");
     resultAddress = result.rawValue();
   }
@@ -121,6 +122,45 @@ final class SvmBackend implements BuffaWire.Backend {
       releaseResult();
       throw failure;
     }
+  }
+
+  @Override
+  public BuffaWire.Scalars scalars(
+      WireInput schema, WireInput input, dev.elide.truffledata.protobuf.ProtoPlan plan) {
+    if (!(schema.lease.attachment instanceof BuffaSvm.Address schemaAddress)
+        || !(input.lease.attachment instanceof BuffaSvm.Address inputAddress))
+      throw new IllegalArgumentException("Inputs are not SVM native memory");
+    acquireResult();
+    VoidPointer output = WordFactory.pointer(resultAddress + Buffa.Result.SIZE);
+    try {
+      BuffaWire.status(
+          Buffa.scalars(
+              WordFactory.pointer(schemaAddress.value()),
+              schema.size(),
+              WordFactory.pointer(inputAddress.value()),
+              input.size(),
+              plan.limits().maxCells(),
+              plan.maxDepth(),
+              output));
+      return scalarValues.set(
+          Buffa.Scalars.first(output), Buffa.Scalars.second(output), Buffa.Scalars.present(output));
+    } finally {
+      busy = false;
+    }
+  }
+
+  /** Ordinary VM transition: input length is unbounded and must not delay safepoints. */
+  static String utf8(long address, int length) {
+    char[] characters = new char[length];
+    long written;
+    try (var pinned = PinnedObject.create(characters)) {
+      written =
+          Buffa.utf8_to_utf16(
+              WordFactory.pointer(address), length, pinned.addressOfArrayElement(0), length);
+    }
+    if (written < 0 || written > length)
+      throw new dev.elide.truffledata.ContractViolation("Invalid native UTF-8 or output extent");
+    return new String(characters, 0, (int) written);
   }
 
   @Override

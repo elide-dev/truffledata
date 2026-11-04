@@ -5,6 +5,7 @@ import com.google.protobuf.BytesValue;
 import com.google.protobuf.Timestamp;
 import com.google.protobuf.util.JsonFormat;
 import com.mysql.cj.protocol.a.MysqlTextValueDecoder;
+import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.RootNode;
@@ -46,7 +47,19 @@ public final class Comparison {
     if (args.length == 1 && args[0].equals("--smoke")) {
       for (String workload : WORKLOADS) {
         for (String engine : engines(workload)) {
-          for (String stage : stages(workload, engine)) run(workload, engine, stage, true, false);
+          for (String stage : stages(workload, engine)) {
+            try {
+              run(workload, engine, stage, true, false);
+            } catch (com.oracle.truffle.api.OptimizationFailedException failure) {
+              // A capability result for HotSpot only. Every SVM comparison must compile.
+              if (ImageInfo.inImageRuntimeCode()
+                  || !engine.equals("stock")
+                  || !stage.equals("project-peak")
+                  || !failure.toString().contains("GraphTooBigBailoutException")) throw failure;
+              System.out.println(
+                  "JVM_CAPABILITY stock/project-peak supported=false graph-budget=10000");
+            }
+          }
         }
       }
     } else {
@@ -57,20 +70,35 @@ public final class Comparison {
   }
 
   static List<String> engines(String workload) {
-    if (workload.equals("proto-bytes")) return List.of("stock", "stock-aliased", "owned", "buffa");
+    if (workload.equals("proto-bytes"))
+      return List.of("stock", "stock-aliased", "owned", "buffa", "generated-owned");
+    if (workload.equals("proto-scalar") || workload.startsWith("proto-mixed"))
+      return List.of("stock", "owned", "buffa", "generated-owned");
     return workload.startsWith("proto-") || workload.equals("timestamp-json")
         ? List.of("stock", "owned", "buffa")
         : List.of("stock", "static");
   }
 
   static List<String> stages(String workload, String engine) {
+    if (engine.equals("generated-owned")) {
+      if (workload.equals("proto-mixed-full")) return List.of("ingest");
+      var result = new ArrayList<>(List.of("ingest", "read-aot", "interpret", "peak", "serialize"));
+      if (workload.equals("proto-scalar"))
+        result.addAll(List.of("project-aot", "project-interpret", "project-peak"));
+      return result;
+    }
     List<String> result = new ArrayList<>(baseStages(workload, engine));
+    if (engine.equals("stock") && workload.equals("proto-scalar"))
+      result.addAll(List.of("project-aot", "project-interpret", "project-peak"));
     if ((engine.equals("owned") || engine.equals("buffa"))
         && !workload.equals("proto-mixed-full")) {
       result.add("ingest-generated");
       if (!workload.equals("timestamp-json"))
         result.addAll(List.of("read-generated-aot", "interpret-generated", "peak-generated"));
     }
+    if (workload.equals("proto-scalar")
+        || workload.equals("proto-bytes")
+        || workload.equals("proto-mixed")) result.add("serialize");
     return result;
   }
 
@@ -94,7 +122,7 @@ public final class Comparison {
         || !engines(workload).contains(engine)
         || !stages(workload, engine).contains(stage))
       throw new IllegalArgumentException("Unknown comparison cell");
-    boolean peak = stage.startsWith("peak");
+    boolean peak = stage.contains("peak");
     try (Context context =
         Context.newBuilder("td-compare")
             .allowExperimentalOptions(true)
@@ -110,13 +138,19 @@ public final class Comparison {
           new Fixture(
               workload,
               engine,
-              stage.startsWith("interpret") || peak,
-              stage.contains("generated"))) {
+              stage.contains("interpret") || peak,
+              stage.contains("generated"),
+              stage.equals("serialize"),
+              stage.startsWith("project-"))) {
         boolean ingest = stage.startsWith("ingest");
         Operation operation =
-            stage.equals("ingest-typed")
-                ? fixture::ingestTyped
-                : ingest ? fixture::ingest : fixture::read;
+            stage.startsWith("project-")
+                ? fixture::project
+                : stage.equals("serialize")
+                    ? fixture::serialize
+                    : stage.equals("ingest-typed")
+                        ? fixture::ingestTyped
+                        : ingest ? fixture::ingest : fixture::read;
         for (int i = 0; i < 4; i++) fixture.check(operation.run(i));
         // Calibrate before warmup: initialization must not disturb measured guest code.
         ThreadMXBean bean = memory || smoke ? allocationCounter() : null;
@@ -148,7 +182,7 @@ public final class Comparison {
             double bytes = (counter.getThreadAllocatedBytes(thread) - before) / (8.0 * ROWS);
             double budget =
                 engine.equals("buffa")
-                    ? (stage.equals("ingest") ? 272 : 240)
+                    ? (stage.equals("ingest") ? 128 : 96)
                     : (stage.equals("ingest") ? 96 : 64);
             if (bytes < 0 || bytes > budget)
               throw new AssertionError(
@@ -156,7 +190,10 @@ public final class Comparison {
             System.out.println(
                 "ALLOCATION compact-scalar " + engine + " " + stage + " bytes/message=" + bytes);
           }
-          if (ImageInfo.inImageRuntimeCode() && !ingest) {
+          if (ImageInfo.inImageRuntimeCode()
+              && !ingest
+              && !stage.equals("serialize")
+              && (!stage.startsWith("project-") || (engine.equals("generated-owned") && peak))) {
             var counter = Objects.requireNonNull(bean);
             long thread = Thread.currentThread().threadId();
             long before = counter.getThreadAllocatedBytes(thread);
@@ -274,14 +311,21 @@ public final class Comparison {
     final @Nullable BuffaWire decoder;
     final @Nullable BuffaPlan nativePlan;
     final OptimizedCallTarget target;
+    final @Nullable ProjectRoot projectRoot;
     final long expected;
-    final @Nullable GeneratedProjection generated;
+    final @Nullable Projection generated;
 
     Fixture(String workload, String engine, boolean guestRead) throws Exception {
-      this(workload, engine, guestRead, false);
+      this(workload, engine, guestRead, false, false, false);
     }
 
-    Fixture(String workload, String engine, boolean guestRead, boolean generatedReads)
+    Fixture(
+        String workload,
+        String engine,
+        boolean guestRead,
+        boolean generatedReads,
+        boolean serialize,
+        boolean project)
         throws Exception {
       this.guestRead = guestRead;
       this.workload = workload;
@@ -302,11 +346,19 @@ public final class Comparison {
       decoder = engine.equals("buffa") ? BuffaWire.open(BuffaWire.Mode.NATIVE, library()) : null;
       nativePlan = decoder == null ? null : decoder.compile(plan, 65536);
       int kind = mixed ? 3 : bytes ? 1 : jdbc ? 2 : 0;
-      generated = generatedReads ? new GeneratedProjection(plan, kind) : null;
+      generated =
+          engine.equals("generated-owned")
+              ? new OwnedProjection(plan, kind)
+              : generatedReads ? new GeneratedProjection(plan, kind) : null;
+      projectRoot = project ? new ProjectRoot(plan, engine.equals("stock")) : null;
       RootNode root =
-          generated != null
-              ? new GeneratedReadRoot(generated)
-              : engine.startsWith("stock") ? new StockReadRoot(kind) : new ReadRoot(kind);
+          projectRoot != null
+              ? projectRoot
+              : engine.equals("generated-owned")
+                  ? ownedReadRoot(kind)
+                  : generated != null
+                      ? new GeneratedReadRoot(generated)
+                      : engine.startsWith("stock") ? new StockReadRoot(kind) : new ReadRoot(kind);
       target = (OptimizedCallTarget) root.getCallTarget();
       long sum = 0;
       for (int i = 0; i < ROWS; i++) {
@@ -367,8 +419,8 @@ public final class Comparison {
           rows[i] = Objects.requireNonNull(messages[i]).row();
         } else rows[i] = parse(i);
       }
-      expected = sum;
-      check(read(0));
+      expected = serialize ? Arrays.stream(wire).mapToLong(w -> w.length).sum() : sum;
+      check(project ? project(0) : serialize ? serialize(0) : read(0));
     }
 
     Object parse(int i) throws Exception {
@@ -377,8 +429,9 @@ public final class Comparison {
             workload.equals("mysql-int4")
                 ? MysqlTextValueDecoder.getInt(wire[i], 0, wire[i].length)
                 : ByteConverter.int4(wire[i], 0);
-        return engine.startsWith("stock") ? value : layout.create(value);
+        return engine.startsWith("stock") ? value : layout.createLong(value);
       }
+      if (generated instanceof OwnedProjection owned) return owned.decode(wire[i]);
       if (engine.equals("owned"))
         return workload.equals("timestamp-json") ? plan.parseJson(json[i]) : plan.decode(wire[i]);
       if (workload.equals("proto-bytes")) {
@@ -402,6 +455,28 @@ public final class Comparison {
       return workload.equals("timestamp-json")
           ? Objects.requireNonNull(nativePlan).parseJson(json[i], 1 << 20)
           : Objects.requireNonNull(nativePlan).decode(Objects.requireNonNull(inputs[i]), 1 << 20);
+    }
+
+    long project(int rotation) {
+      return guestRead
+          ? (Long) target.call(wire, rotation)
+          : Objects.requireNonNull(projectRoot).project(wire, rotation);
+    }
+
+    long serialize(int rotation) {
+      long sum = 0;
+      for (int n = 0; n < ROWS; n++) {
+        int i = (n + rotation) & (ROWS - 1);
+        byte[] encoded;
+        if (nativePlan != null) encoded = Objects.requireNonNull(messages[i]).encode();
+        else if (rows[i] instanceof dev.elide.truffledata.protobuf.GeneratedMessage message)
+          encoded = message.encode();
+        else if (rows[i] instanceof ProtoRow row) encoded = plan.encode(row);
+        else encoded = ((com.google.protobuf.MessageLite) rows[i]).toByteArray();
+        retained = encoded;
+        sum += encoded.length;
+      }
+      return sum;
     }
 
     long ingest(int rotation) throws Exception {
@@ -432,8 +507,8 @@ public final class Comparison {
 
     long readOne(Object row, boolean typed)
         throws com.oracle.truffle.api.nodes.UnexpectedResultException {
-      if (generated != null) return generated.read((ProtoAccess) row);
       if (workload.equals("proto-mixed-full")) return readAll(row);
+      if (generated != null) return generated.read((ProtoAccess) row);
       if (engine.startsWith("stock")) {
         if (row instanceof com.google.protobuf.Type t)
           return t.getName().length()
@@ -488,6 +563,30 @@ public final class Comparison {
         for (int i = 0; i < oneofs; i++) sum += value.getOneofs(i).length();
         return sum;
       }
+      if (engine.equals("generated-owned")) {
+        var value = (ComparisonContracts.Message_google$protobuf$Type) row;
+        var fields = value.get_fields();
+        var oneofs = value.get_oneofs();
+        var source =
+            (ComparisonContracts.Message_google$protobuf$SourceContext) value.get_source_context();
+        long sum =
+            value.get_name().length()
+                + fields.size()
+                + oneofs.size()
+                + value.get_syntax()
+                + source.get_file_name().length();
+        for (int i = 0; i < fields.size(); i++) {
+          var field = (ComparisonContracts.Message_google$protobuf$Field) fields.get(i);
+          sum +=
+              field.get_name().length()
+                  + field.get_number()
+                  + field.get_kind()
+                  + field.get_cardinality()
+                  + (field.get_packed() ? 1 : 0);
+        }
+        for (int i = 0; i < oneofs.size(); i++) sum += ((String) oneofs.get(i)).length();
+        return sum;
+      }
       var data = DataLibrary.factory().getUncached();
       Object fields = data.read(row, 1), oneofs = data.read(row, 2);
       int count = Math.toIntExact(arraySize(fields)), groups = Math.toIntExact(arraySize(oneofs));
@@ -528,6 +627,33 @@ public final class Comparison {
     }
 
     long read(int rotation) {
+      if (engine.equals("generated-owned") && !guestRead) {
+        long sum = 0;
+        if (workload.equals("proto-bytes")) {
+          for (int n = 0; n < ROWS; n++)
+            sum +=
+                ((ComparisonContracts.Message_google$protobuf$BytesValue)
+                        rows[(n + rotation) & (ROWS - 1)])
+                    .get_value()
+                    .size();
+        } else if (workload.startsWith("proto-mixed")) {
+          for (int n = 0; n < ROWS; n++) {
+            Object row = rows[(n + rotation) & (ROWS - 1)];
+            sum +=
+                workload.equals("proto-mixed-full")
+                    ? readAll(row)
+                    : ownedMixedProjection((ComparisonContracts.Message_google$protobuf$Type) row);
+          }
+        } else {
+          for (int n = 0; n < ROWS; n++) {
+            var row =
+                (ComparisonContracts.Message_google$protobuf$Timestamp)
+                    rows[(n + rotation) & (ROWS - 1)];
+            sum += row.get_seconds() + row.get_nanos();
+          }
+        }
+        return sum;
+      }
       if (generated != null && !guestRead) {
         long sum = 0;
         for (int n = 0; n < ROWS; n++)
@@ -626,7 +752,88 @@ public final class Comparison {
     }
   }
 
-  private static final class GeneratedProjection {
+  private static final class ProjectRoot extends RootNode {
+    private final boolean stock;
+    private final ComparisonContracts.Access_google$protobuf$Timestamp access;
+
+    ProjectRoot(ProtoPlan plan, boolean stock) {
+      super(ComparisonLanguage.current());
+      this.stock = stock;
+      access = new ComparisonContracts.Access_google$protobuf$Timestamp(plan);
+    }
+
+    @Override
+    public Object execute(VirtualFrame frame) {
+      return project((byte[][]) frame.getArguments()[0], (Integer) frame.getArguments()[1]);
+    }
+
+    long project(byte[][] wire, int rotation) {
+      long sum = 0;
+      for (int n = 0; n < ROWS; n++) {
+        byte[] input = wire[(n + rotation) & (ROWS - 1)];
+        if (stock) sum += stockProject(input);
+        else {
+          var row = access.decodeForProjection(input);
+          sum += row.get_seconds() + row.get_nanos();
+        }
+      }
+      return sum;
+    }
+
+    private static long stockProject(byte[] wire) {
+      try {
+        var row = Timestamp.parseFrom(wire);
+        return row.getSeconds() + row.getNanos();
+      } catch (com.google.protobuf.InvalidProtocolBufferException invalid) {
+        CompilerDirectives.transferToInterpreterAndInvalidate();
+        throw invalidStockInput(invalid);
+      }
+    }
+
+    @TruffleBoundary
+    private static AssertionError invalidStockInput(
+        com.google.protobuf.InvalidProtocolBufferException invalid) {
+      return new AssertionError(invalid);
+    }
+  }
+
+  private interface Projection {
+    long read(ProtoAccess row);
+  }
+
+  private static final class OwnedProjection implements Projection {
+    private final int kind;
+    private final ComparisonContracts.@Nullable Access_google$protobuf$Timestamp timestamp;
+    private final ComparisonContracts.@Nullable Access_google$protobuf$BytesValue bytes;
+    private final ComparisonContracts.@Nullable Access_google$protobuf$Type mixed;
+
+    OwnedProjection(ProtoPlan plan, int kind) {
+      this.kind = kind;
+      timestamp = kind == 0 ? new ComparisonContracts.Access_google$protobuf$Timestamp(plan) : null;
+      bytes = kind == 1 ? new ComparisonContracts.Access_google$protobuf$BytesValue(plan) : null;
+      mixed = kind == 3 ? new ComparisonContracts.Access_google$protobuf$Type(plan) : null;
+    }
+
+    ProtoAccess decode(byte[] wire) {
+      if (kind == 3) return Objects.requireNonNull(mixed).decode(wire);
+      return kind == 0
+          ? Objects.requireNonNull(timestamp).decode(wire)
+          : Objects.requireNonNull(bytes).decode(wire);
+    }
+
+    @Override
+    public long read(ProtoAccess row) {
+      if (kind == 0) {
+        var value = (ComparisonContracts.Message_google$protobuf$Timestamp) row;
+        return value.get_seconds() + value.get_nanos();
+      }
+      if (kind == 3)
+        return ownedMixedProjection((ComparisonContracts.Message_google$protobuf$Type) row);
+      return ((ComparisonContracts.Message_google$protobuf$BytesValue) row).get_value().size();
+    }
+  }
+
+  private static final class GeneratedProjection implements Projection {
     private final int kind;
     private final ComparisonContracts.@Nullable Access_google$protobuf$Timestamp timestamp;
     private final ComparisonContracts.@Nullable Access_google$protobuf$BytesValue bytes;
@@ -639,7 +846,7 @@ public final class Comparison {
       mixed = kind == 3 ? new ComparisonContracts.Access_google$protobuf$Type(plan) : null;
     }
 
-    long read(ProtoAccess row) {
+    public long read(ProtoAccess row) {
       if (kind == 0) {
         var access = Objects.requireNonNull(timestamp);
         return access.get_seconds(row) + access.get_nanos(row);
@@ -653,12 +860,92 @@ public final class Comparison {
     }
   }
 
+  private static long ownedMixedProjection(ComparisonContracts.Message_google$protobuf$Type value) {
+    return value.get_name().length()
+        + value.get_fields().size()
+        + value.get_oneofs().size()
+        + value.get_syntax();
+  }
+
+  /** Small shape-specific roots keep frame-bearing entry points eligible for SVM inlining. */
+  private static RootNode ownedReadRoot(int kind) {
+    return switch (kind) {
+      case 0 -> new OwnedScalarReadRoot();
+      case 1 -> new OwnedBytesReadRoot();
+      case 3 -> new OwnedMixedReadRoot();
+      default -> throw new IllegalArgumentException("Unknown generated shape");
+    };
+  }
+
+  private static final class OwnedScalarReadRoot extends RootNode {
+    OwnedScalarReadRoot() {
+      super(ComparisonLanguage.current());
+    }
+
+    @Override
+    public Object execute(VirtualFrame frame) {
+      Object[] rows = (Object[]) frame.getArguments()[0];
+      int rotation = (Integer) frame.getArguments()[1];
+      long sum = 0;
+      for (int n = 0; n < ROWS; n++) {
+        var value =
+            (ComparisonContracts.Message_google$protobuf$Timestamp)
+                rows[(n + rotation) & (ROWS - 1)];
+        sum += value.get_seconds() + value.get_nanos();
+      }
+      return sum;
+    }
+  }
+
+  private static final class OwnedBytesReadRoot extends RootNode {
+    OwnedBytesReadRoot() {
+      super(ComparisonLanguage.current());
+    }
+
+    @Override
+    public Object execute(VirtualFrame frame) {
+      Object[] rows = (Object[]) frame.getArguments()[0];
+      int rotation = (Integer) frame.getArguments()[1];
+      long sum = 0;
+      for (int n = 0; n < ROWS; n++) {
+        var value =
+            (ComparisonContracts.Message_google$protobuf$BytesValue)
+                rows[(n + rotation) & (ROWS - 1)];
+        sum += value.get_value().size();
+      }
+      return sum;
+    }
+  }
+
+  private static final class OwnedMixedReadRoot extends RootNode {
+    OwnedMixedReadRoot() {
+      super(ComparisonLanguage.current());
+    }
+
+    @Override
+    public Object execute(VirtualFrame frame) {
+      Object[] rows = (Object[]) frame.getArguments()[0];
+      int rotation = (Integer) frame.getArguments()[1];
+      long sum = 0;
+      for (int n = 0; n < ROWS; n++) {
+        var value =
+            (ComparisonContracts.Message_google$protobuf$Type) rows[(n + rotation) & (ROWS - 1)];
+        sum +=
+            value.get_name().length()
+                + value.get_fields().size()
+                + value.get_oneofs().size()
+                + value.get_syntax();
+      }
+      return sum;
+    }
+  }
+
   private static final class GeneratedReadRoot extends RootNode {
-    private final GeneratedProjection projection;
+    private final Projection projection;
     private final com.oracle.truffle.api.profiles.ValueProfile rowClass =
         com.oracle.truffle.api.profiles.ValueProfile.createClassProfile();
 
-    GeneratedReadRoot(GeneratedProjection projection) {
+    GeneratedReadRoot(Projection projection) {
       super(ComparisonLanguage.current());
       this.projection = projection;
     }

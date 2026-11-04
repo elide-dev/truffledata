@@ -6,17 +6,23 @@ import sys
 
 ACCESS_CLASSES = {
     'AbstractRow', 'DataArray', 'DataLibrary', 'DynamicRecord', 'ExactNumber',
-    'Missing', 'ReadBooleanNode', 'ReadDoubleNode', 'ReadLengthNode', 'ReadLongNode',
+    'Missing', 'PayloadBudget', 'ReadBooleanNode', 'ReadDoubleNode', 'ReadLengthNode', 'ReadLongNode',
 }
 
 
 ACCESS_SOURCES = {f'core/src/main/java/dev/elide/truffledata/{name}.java' for name in ACCESS_CLASSES} | {
-    'protobuf/src/main/java/dev/elide/truffledata/protobuf/ProtoRow.java',
-    'protobuf/src/main/java/dev/elide/truffledata/protobuf/ProtoAccess.java',
+    'protobuf-runtime/src/main/java/dev/elide/truffledata/protobuf/ProtoRow.java',
+    'protobuf-runtime/src/main/java/dev/elide/truffledata/protobuf/ProtoAccess.java',
+    'protobuf-runtime/src/main/java/dev/elide/truffledata/protobuf/ProtoCodec.java',
+    'protobuf-runtime/src/main/java/dev/elide/truffledata/protobuf/GeneratedMessage.java',
+    'protobuf-runtime/src/main/java/dev/elide/truffledata/protobuf/GeneratedInput.java',
+    'protobuf-runtime/src/main/java/dev/elide/truffledata/protobuf/GeneratedGraphInput.java',
+    'protobuf-runtime/src/main/java/dev/elide/truffledata/protobuf/GeneratedOutput.java',
     'protobuf-buffa/src/main/java/dev/elide/truffledata/buffa/BorrowedBytes.java',
     'protobuf-buffa/src/main/java/dev/elide/truffledata/buffa/WireField.java',
     'protobuf-buffa/src/main/java/dev/elide/truffledata/buffa/WireInput.java',
     'protobuf-buffa/src/main/java/dev/elide/truffledata/buffa/WireMessage.java',
+    'protobuf-buffa/src/main/java/dev/elide/truffledata/buffa/ViewOwner.java',
     'protobuf-buffa/src/main/java/dev/elide/truffledata/buffa/TypedRow.java',
     'protobuf-buffa/src/main/java/dev/elide/truffledata/buffa/ScalarRow.java',
     'protobuf-buffa/src/main/java/dev/elide/truffledata/buffa/TypedArray.java',

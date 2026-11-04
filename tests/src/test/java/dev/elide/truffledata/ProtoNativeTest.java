@@ -14,6 +14,155 @@ class ProtoNativeTest {
   private static final DataLibrary DATA = DataLibrary.factory().getUncached();
   private static final int WIRE_LIMIT = 1024 * 1024;
 
+  private static Descriptor presenceDescriptor(int size, boolean required) throws Exception {
+    var message = DescriptorProtos.DescriptorProto.newBuilder().setName("Presence");
+    if (size > 1)
+      message.addOneofDecl(DescriptorProtos.OneofDescriptorProto.newBuilder().setName("choice"));
+    for (int i = 0; i < size; i++) {
+      var field =
+          DescriptorProtos.FieldDescriptorProto.newBuilder()
+              .setName("f" + i)
+              .setNumber(i + 1)
+              .setType(DescriptorProtos.FieldDescriptorProto.Type.TYPE_INT64)
+              .setLabel(DescriptorProtos.FieldDescriptorProto.Label.LABEL_OPTIONAL);
+      if (size > 1 && (i == 0 || i == size - 1)) field.setOneofIndex(0);
+      else {
+        field.setDefaultValue("7");
+        if (required && (i == size - 2 || Set.of(31, 32, 63, 64, 127, 128).contains(i)))
+          field.setLabel(DescriptorProtos.FieldDescriptorProto.Label.LABEL_REQUIRED);
+      }
+      message.addField(field);
+    }
+    return FileDescriptor.buildFrom(
+            DescriptorProtos.FileDescriptorProto.newBuilder()
+                .setName("presence.proto")
+                .setPackage("presence")
+                .setSyntax("proto2")
+                .addMessageType(message)
+                .build(),
+            new FileDescriptor[0])
+        .getMessageTypes()
+        .getFirst();
+  }
+
+  private static void assertPresence(DynamicMessage expected, ProtoRow actual) throws Exception {
+    var fields = expected.getDescriptorForType().getFields();
+    for (int i = 0; i < fields.size(); i++) {
+      assertEquals(expected.hasField(fields.get(i)), actual.has(i), "Presence ordinal " + i);
+      assertEquals(
+          expected.getField(fields.get(i)), DATA.readLong(actual, i), "Value ordinal " + i);
+    }
+    assertEquals(
+        expected,
+        DynamicMessage.parseFrom(expected.getDescriptorForType(), actual.plan().encode(actual)));
+    assertThrows(IndexOutOfBoundsException.class, () -> actual.has(-1));
+    assertThrows(IndexOutOfBoundsException.class, () -> actual.has(fields.size()));
+    assertThrows(IndexOutOfBoundsException.class, () -> actual.has(Integer.MAX_VALUE));
+  }
+
+  @Test
+  void packedPresenceMatchesStockAcrossWordsOneofsDefaultsAndRetainedBuilders() throws Exception {
+    try (var context = org.graalvm.polyglot.Context.newBuilder("td-test").build()) {
+      context.initialize("td-test");
+      context.enter();
+      try {
+        for (int size : new int[] {0, 1, 32, 64, 65, 128, 129, 256}) {
+          var descriptor = presenceDescriptor(size, false);
+          for (boolean useStatic : new boolean[] {false, true}) {
+            var plan =
+                ProtoCompiler.compile(
+                    useStatic ? TestLanguage.current().language() : null,
+                    descriptor,
+                    Limits.DEFAULT,
+                    8,
+                    WIRE_LIMIT);
+            var stock = DynamicMessage.newBuilder(descriptor);
+            var builder = plan.newBuilder();
+            List<ProtoRow> retained = new ArrayList<>();
+            List<DynamicMessage> expected = new ArrayList<>();
+            retained.add(builder.build());
+            expected.add(stock.build());
+            var random = new Random(77591 + size);
+            for (int iteration = 0; size != 0 && iteration < 48; iteration++) {
+              int[] boundaries = {0, 31, 32, 63, 64, 127, 128, size - 1};
+              int ordinal =
+                  iteration < boundaries.length
+                      ? boundaries[iteration] % size
+                      : random.nextInt(size);
+              if (iteration >= boundaries.length && iteration % 3 == 0) {
+                builder.clear(ordinal);
+                stock.clearField(descriptor.getFields().get(ordinal));
+              } else {
+                long value = iteration < boundaries.length ? 0 : random.nextLong();
+                builder.set(ordinal, value);
+                stock.setField(descriptor.getFields().get(ordinal), value);
+              }
+              retained.add(builder.build());
+              expected.add(stock.build());
+            }
+            // Revisit every snapshot after the mutable builder has changed all its presence words.
+            for (int i = 0; i < retained.size(); i++) {
+              var message = expected.get(i);
+              assertPresence(message, retained.get(i));
+              byte[] wire = message.toByteArray();
+              assertPresence(message, plan.decode(wire));
+              assertPresence(
+                  message, plan.decode(java.nio.ByteBuffer.wrap(wire).asReadOnlyBuffer()));
+            }
+            var withUnknown =
+                stock
+                    .clone()
+                    .setUnknownFields(
+                        UnknownFieldSet.newBuilder()
+                            .addField(
+                                1000, UnknownFieldSet.Field.newBuilder().addVarint(991).build())
+                            .build())
+                    .build();
+            assertPresence(withUnknown, plan.decode(withUnknown.toByteArray()));
+            if (size > 1) {
+              var last = descriptor.getFields().get(size - 1);
+              var textExpected = DynamicMessage.newBuilder(descriptor).setField(last, 0L).build();
+              assertPresence(textExpected, plan.parseText("f" + (size - 1) + ": 0"));
+              assertPresence(textExpected, plan.parseJson("{\"f" + (size - 1) + "\":0}"));
+              assertThrows(
+                  ContractViolation.class,
+                  () -> plan.parseJson("{\"f0\":0,\"f" + (size - 1) + "\":0}"));
+            }
+          }
+        }
+      } finally {
+        context.leave();
+      }
+    }
+  }
+
+  @Test
+  void packedRequiredPresenceRemainsDistinctFromReadableDefaultsAcrossWords() throws Exception {
+    for (int size : new int[] {64, 65, 128, 129, 256}) {
+      var descriptor = presenceDescriptor(size, true);
+      var plan = ProtoCompiler.compile(null, descriptor, Limits.DEFAULT, 8, WIRE_LIMIT);
+      var stock = DynamicMessage.newBuilder(descriptor);
+      var builder = plan.newBuilder();
+      assertThrows(ContractViolation.class, builder::build);
+      assertThrows(ContractViolation.class, () -> plan.decode(new byte[0]));
+      for (var field : descriptor.getFields()) {
+        if (!field.isRequired()) continue;
+        builder.set(field.getIndex(), field.getDefaultValue());
+        stock.setField(field, field.getDefaultValue());
+      }
+      assertPresence(stock.build(), builder.build());
+      for (var field : descriptor.getFields()) {
+        if (!field.isRequired()) continue;
+        builder.clear(field.getIndex());
+        assertThrows(ContractViolation.class, builder::build);
+        var partial = stock.clone().clearField(field).buildPartial();
+        assertThrows(ContractViolation.class, () -> plan.decode(partial.toByteArray()));
+        builder.set(field.getIndex(), field.getDefaultValue());
+      }
+      assertPresence(stock.build(), plan.decode(stock.build().toByteArray()));
+    }
+  }
+
   private static Descriptor descriptor(String name) throws Exception {
     Path path =
         Path.of(
@@ -31,6 +180,20 @@ class ProtoNativeTest {
 
   private static ProtoPlan plan(String name) {
     return TruffleDataContracts.create(null, Limits.DEFAULT, 32, WIRE_LIMIT).type(name);
+  }
+
+  private static ProtoPlan boundedPlan(String name, Limits limits, int depth, int wire) {
+    Map<String, ProtoPlan.Type> definitions = new LinkedHashMap<>();
+    var pending = new ArrayDeque<ProtoPlan>();
+    pending.add(plan(name));
+    while (!pending.isEmpty()) {
+      var current = pending.removeFirst();
+      if (definitions.putIfAbsent(current.name(), current.definition()) != null) continue;
+      for (int i = 0; i < current.size(); i++)
+        if (current.field(i).kind().message()) pending.add(current.nested(i));
+    }
+    return new ProtoPlan.Model(null, List.copyOf(definitions.values()), limits, depth, wire)
+        .type(name);
   }
 
   private static Object get(ProtoRow row, String field) {
@@ -226,6 +389,192 @@ class ProtoNativeTest {
   }
 
   @Test
+  void compactIntegerSerializationMatchesStockWithReorderedTagsAndUnknownBytes() throws Exception {
+    byte[] unknown = {(byte) 0xa0, 6, (byte) 0x81, 0}; // Nonminimal unknown field 100 = 1.
+    long[] edges = {
+      0,
+      1,
+      127,
+      128,
+      16383,
+      16384,
+      -1,
+      Integer.MIN_VALUE,
+      Integer.MAX_VALUE,
+      Long.MIN_VALUE,
+      Long.MAX_VALUE
+    };
+    var random = new Random(52771);
+    for (int width : new int[] {1, 2}) {
+      for (boolean firstInt32 : new boolean[] {false, true}) {
+        var descriptor = compactDescriptor(width, firstInt32);
+        var plan = ProtoCompiler.compile(null, descriptor, Limits.DEFAULT, 8, WIRE_LIMIT);
+        for (int iteration = 0; iteration < 128; iteration++) {
+          var stock = DynamicMessage.newBuilder(descriptor);
+          var builder = plan.newBuilder();
+          for (int i = 0; i < width; i++) {
+            long value =
+                iteration < edges.length
+                    ? edges[(iteration + i * 3) % edges.length]
+                    : random.nextLong();
+            if (iteration == 0 || iteration == 1 && i == 1 || iteration == 2 && i == 0) value = 0;
+            var field = descriptor.getFields().get(i);
+            if (field.getType() == FieldDescriptor.Type.INT32) value = (int) value;
+            builder.set(i, value);
+            if (value != 0) {
+              if (field.getType() == FieldDescriptor.Type.INT32) stock.setField(field, (int) value);
+              else stock.setField(field, value);
+            }
+          }
+          var expected = stock.build();
+          assertArrayEquals(compactReference(expected, new byte[0]), plan.encode(builder.build()));
+          var input = new java.io.ByteArrayOutputStream();
+          input.writeBytes(expected.toByteArray());
+          input.writeBytes(unknown);
+          var expectedWithUnknown =
+              stock
+                  .clone()
+                  .setUnknownFields(
+                      UnknownFieldSet.newBuilder()
+                          .addField(100, UnknownFieldSet.Field.newBuilder().addVarint(1).build())
+                          .build())
+                  .build();
+          byte[] reference = compactReference(expected, unknown);
+          byte[] wire = input.toByteArray();
+          for (var row : List.of(plan.decode(wire), plan.decode(java.nio.ByteBuffer.wrap(wire)))) {
+            byte[] encoded = plan.encode(row);
+            assertArrayEquals(reference, encoded);
+            assertEquals(expectedWithUnknown, DynamicMessage.parseFrom(descriptor, encoded));
+          }
+        }
+      }
+    }
+  }
+
+  private static Descriptor compactDescriptor(int width, boolean firstInt32) throws Exception {
+    var message = DescriptorProtos.DescriptorProto.newBuilder().setName("Compact");
+    for (int i = 0; i < width; i++) {
+      boolean int32 = i == 0 ? firstInt32 : !firstInt32;
+      message.addField(
+          DescriptorProtos.FieldDescriptorProto.newBuilder()
+              .setName("f" + i)
+              .setNumber(i == 0 ? 15 : 7)
+              .setLabel(DescriptorProtos.FieldDescriptorProto.Label.LABEL_OPTIONAL)
+              .setType(
+                  int32
+                      ? DescriptorProtos.FieldDescriptorProto.Type.TYPE_INT32
+                      : DescriptorProtos.FieldDescriptorProto.Type.TYPE_INT64));
+    }
+    return FileDescriptor.buildFrom(
+            DescriptorProtos.FileDescriptorProto.newBuilder()
+                .setName("compact.proto")
+                .setPackage("compact")
+                .setSyntax("proto3")
+                .addMessageType(message)
+                .build(),
+            new FileDescriptor[0])
+        .getMessageTypes()
+        .getFirst();
+  }
+
+  private static byte[] compactReference(DynamicMessage message, byte[] unknown) throws Exception {
+    var bytes = new java.io.ByteArrayOutputStream();
+    var output = CodedOutputStream.newInstance(bytes);
+    // Preserve declaration order, as the generic writer does; stock messages sort by tag.
+    for (var field : message.getDescriptorForType().getFields()) {
+      long value = ((Number) message.getField(field)).longValue();
+      if (value == 0) continue;
+      if (field.getType() == FieldDescriptor.Type.INT32)
+        output.writeInt32(field.getNumber(), (int) value);
+      else output.writeInt64(field.getNumber(), value);
+    }
+    output.flush();
+    bytes.writeBytes(unknown);
+    return bytes.toByteArray();
+  }
+
+  @Test
+  void nestedCompactSerializationWritesIntoItsParentsOutputAndKeepsUnknowns() throws Exception {
+    var child = compactDescriptor(2, true);
+    var root =
+        FileDescriptor.buildFrom(
+                DescriptorProtos.FileDescriptorProto.newBuilder()
+                    .setName("container.proto")
+                    .setPackage("compact")
+                    .setSyntax("proto3")
+                    .addDependency(child.getFile().getName())
+                    .addMessageType(
+                        DescriptorProtos.DescriptorProto.newBuilder()
+                            .setName("Container")
+                            .addField(
+                                DescriptorProtos.FieldDescriptorProto.newBuilder()
+                                    .setName("child")
+                                    .setNumber(1)
+                                    .setType(
+                                        DescriptorProtos.FieldDescriptorProto.Type.TYPE_MESSAGE)
+                                    .setTypeName("." + child.getFullName())
+                                    .setLabel(
+                                        DescriptorProtos.FieldDescriptorProto.Label.LABEL_OPTIONAL))
+                            .addField(
+                                DescriptorProtos.FieldDescriptorProto.newBuilder()
+                                    .setName("children")
+                                    .setNumber(2)
+                                    .setType(
+                                        DescriptorProtos.FieldDescriptorProto.Type.TYPE_MESSAGE)
+                                    .setTypeName("." + child.getFullName())
+                                    .setLabel(
+                                        DescriptorProtos.FieldDescriptorProto.Label
+                                            .LABEL_REPEATED)))
+                    .build(),
+                new FileDescriptor[] {child.getFile()})
+            .getMessageTypes()
+            .getFirst();
+    byte[] unknown = {(byte) 0xa0, 6, (byte) 0x81, 0};
+    var populated =
+        DynamicMessage.newBuilder(child)
+            .setField(child.getFields().get(0), -1)
+            .setField(child.getFields().get(1), Long.MIN_VALUE)
+            .build();
+    var empty = DynamicMessage.newBuilder(child).build();
+    var reference = new java.io.ByteArrayOutputStream();
+    var output = CodedOutputStream.newInstance(reference);
+    output.writeByteArray(1, compactReference(populated, unknown));
+    output.writeByteArray(2, compactReference(empty, unknown));
+    output.writeByteArray(2, compactReference(populated, new byte[0]));
+    output.flush();
+    byte[] wire = reference.toByteArray();
+    var plan = ProtoCompiler.compile(null, root, Limits.DEFAULT, 8, wire.length);
+    assertArrayEquals(wire, plan.encode(plan.decode(wire)));
+    assertArrayEquals(wire, plan.encode(plan.decode(java.nio.ByteBuffer.wrap(wire))));
+    assertEquals(
+        DynamicMessage.parseFrom(root, wire),
+        DynamicMessage.parseFrom(root, plan.encode(plan.decode(wire))));
+    // An accepted five-byte INT32 -1 expands by five bytes inside its length-delimited parent.
+    byte[] shortChild = {10, 6, 120, -1, -1, -1, -1, 15};
+    var bounded = ProtoCompiler.compile(null, root, Limits.DEFAULT, 8, shortChild.length);
+    assertThrows(ContractViolation.class, () -> bounded.encode(bounded.decode(shortChild)));
+  }
+
+  @Test
+  void compactIntegerSerializationEnforcesCanonicalOutputBudgets() throws Exception {
+    var descriptor = compactDescriptor(1, true);
+    byte[] shortNegative = {120, -1, -1, -1, -1, 15}; // INT32 -1 in five bytes; output needs ten.
+    for (byte[] wire :
+        List.of(
+            shortNegative, new byte[] {120, -1, -1, -1, -1, 15, (byte) 0xa0, 6, (byte) 0x81, 0})) {
+      var bounded = ProtoCompiler.compile(null, descriptor, Limits.DEFAULT, 8, wire.length);
+      var row = bounded.decode(wire);
+      assertEquals(-1L, row.getLong(0));
+      assertThrows(ContractViolation.class, () -> bounded.encode(row));
+    }
+    var exact = ProtoCompiler.compile(null, descriptor, Limits.DEFAULT, 8, 11);
+    assertEquals(11, exact.encode(exact.decode(shortNegative)).length);
+    var tiny = ProtoCompiler.compile(null, descriptor, Limits.DEFAULT, 8, 1);
+    assertEquals(0, tiny.encode(tiny.newBuilder().build()).length);
+    assertThrows(ContractViolation.class, () -> tiny.encode(tiny.newBuilder().set(0, 1L).build()));
+  }
+
+  @Test
   void compactIntegerRowsMatchGeneralDecoderAndGeneratedMessages() throws Exception {
     var descriptor = Timestamp.getDescriptor();
     var plan = ProtoCompiler.compile(null, descriptor, Limits.DEFAULT, 8, WIRE_LIMIT);
@@ -238,8 +587,21 @@ class ProtoNativeTest {
       var expected = Timestamp.newBuilder().setSeconds(seconds).setNanos(nanos).build();
       byte[] wire = expected.toByteArray();
       for (var row : List.of(plan.decode(wire), plan.decode(java.nio.ByteBuffer.wrap(wire)))) {
+        if (i == 0) {
+          new PayloadBudget(new Limits(1, 2, 2, 0)).accept(row);
+          assertThrows(
+              ContractViolation.class, () -> new PayloadBudget(new Limits(1, 2, 1, 0)).accept(row));
+        }
         assertEquals(seconds, DATA.readLong(row, 0));
         assertEquals((long) nanos, DATA.readLong(row, 1));
+        assertEquals(seconds, plan.getLong(row, 0));
+        assertEquals((long) nanos, plan.getLong(row, 1));
+        if (i == 0) {
+          assertThrows(IndexOutOfBoundsException.class, () -> plan.getLong(row, -1));
+          assertThrows(IndexOutOfBoundsException.class, () -> plan.getLong(row, 2));
+          var foreign = ProtoCompiler.compile(null, descriptor, Limits.DEFAULT, 8, WIRE_LIMIT);
+          assertThrows(ContractViolation.class, () -> foreign.getLong(row, 0));
+        }
         assertEquals(seconds != 0, row.has(0));
         assertEquals(nanos != 0, row.has(1));
         assertEquals(expected, Timestamp.parseFrom(plan.encode(row)));
@@ -385,9 +747,7 @@ class ProtoNativeTest {
 
   @Test
   void textPayloadAndCellBudgetsAreSharedAcrossFields() {
-    var small =
-        TruffleDataContracts.create(null, new Limits(10, 256, 100, 2), 16, 10000)
-            .type("truffledata.lossless.Sample");
+    var small = boundedPlan("truffledata.lossless.Sample", new Limits(10, 256, 100, 2), 16, 10000);
     assertEquals("中", get(small.parseText("text: '中'"), "text"));
     assertEquals("中", get(small.parseJson("{\"text\":\"中\"}"), "text"));
     assertThrows(ContractViolation.class, () -> small.parseText("text: 'ab'"));
@@ -397,6 +757,75 @@ class ProtoNativeTest {
     assertThrows(
         ContractViolation.class,
         () -> small.parseJson("{\"numbers\":[" + "1,".repeat(100) + "1]}"));
+  }
+
+  @Test
+  void retainedMapBudgetsDeduplicateDefaultsWithoutCombiningThemWithParsingWork() {
+    var defaults = plan("truffledata.lossless.FlatDefaults").definition();
+    var key =
+        new ProtoPlan.FieldPlan(
+            "key",
+            1,
+            ProtoPlan.Kind.STRING,
+            false,
+            false,
+            false,
+            false,
+            false,
+            -1,
+            "",
+            null,
+            "",
+            "key");
+    var value =
+        new ProtoPlan.FieldPlan(
+            "value",
+            2,
+            ProtoPlan.Kind.MESSAGE,
+            false,
+            false,
+            true,
+            false,
+            false,
+            -1,
+            defaults.name(),
+            null,
+            Missing.INSTANCE,
+            "value");
+    var entry = new ProtoPlan.Type("budget.Root.Entry", true, List.of(key, value));
+    var items =
+        new ProtoPlan.FieldPlan(
+            "items",
+            1,
+            ProtoPlan.Kind.MESSAGE,
+            true,
+            true,
+            false,
+            false,
+            false,
+            -1,
+            entry.name(),
+            null,
+            Missing.INSTANCE,
+            "items");
+    var root = new ProtoPlan.Type("budget.Root", false, List.of(items));
+    var model =
+        new ProtoPlan.Model(
+            null, List.of(root, entry, defaults), new Limits(1024, 256, 1000, 17), 16, 10000);
+    var p = model.type(root.name());
+    // Each retained entry contributes two key bytes plus ten declared-default string bytes.
+    // Parsing both entries contributes only the four key bytes: 12 and 4 both fit 17.
+    byte[] duplicate = {10, 7, 10, 1, 97, 18, 2, 8, 1, 10, 7, 10, 1, 97, 18, 2, 8, 2};
+    var row = p.decode(duplicate);
+    var entries = (DataArray) row.get(0);
+    assertEquals(1, entries.size());
+    var child = (ProtoAccess) ((ProtoAccess) entries.get(0)).get(1);
+    assertEquals(2L, child.get(0));
+    assertEquals("hello", child.get(1));
+    assertEquals(2, ((DataArray) child.get(3)).size());
+    byte[] distinct = duplicate.clone();
+    distinct[13] = 98;
+    assertThrows(ContractViolation.class, () -> p.decode(distinct));
   }
 
   @Test
@@ -435,6 +864,29 @@ class ProtoNativeTest {
             "{count:1}",
             "{\"counts\":{\"1\":1,\"1.0\":2}}"))
       assertThrows(ContractViolation.class, () -> plan.parseJson(json), json);
+  }
+
+  @Test
+  void independentTextEscapesMatchStock() throws Exception {
+    var descriptor = descriptor("truffledata.lossless.Sample");
+    var plan = plan(descriptor.getFullName());
+    for (String literal :
+        List.of(
+            "\\a\\b\\f\\n\\r\\t\\v\\?",
+            "\\x41\\x4a\\x4",
+            "\\101\\12\\1",
+            "\\u20ac\\U0001f600",
+            "中",
+            "\\\\\\'\\\"",
+            "a' 'b")) {
+      String text = "text: '" + literal + "'";
+      var expected = DynamicMessage.newBuilder(descriptor);
+      TextFormat.getParser().merge(text, expected);
+      assertEquals(
+          expected.build(),
+          DynamicMessage.parseFrom(descriptor, plan.encode(plan.parseText(text))),
+          text);
+    }
   }
 
   @Test
@@ -830,9 +1282,7 @@ class ProtoNativeTest {
 
   @Test
   void resourceLimitsAndInvalidPlansAreEnforced() {
-    var small =
-        TruffleDataContracts.create(null, new Limits(10, 256, 100, 2), 16, 1024)
-            .type("truffledata.lossless.Sample");
+    var small = boundedPlan("truffledata.lossless.Sample", new Limits(10, 256, 100, 2), 16, 1024);
     assertThrows(ContractViolation.class, () -> small.decode(new byte[] {122, 2, 97, 98}));
     // One CJK code point consumes two UTF-16 bytes, despite requiring three wire bytes.
     assertEquals(

@@ -1,0 +1,120 @@
+package dev.elide.truffledata.protobuf;
+
+import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
+import com.oracle.truffle.api.library.ExportLibrary;
+import com.oracle.truffle.api.library.ExportMessage;
+import com.oracle.truffle.api.nodes.UnexpectedResultException;
+import dev.elide.truffledata.*;
+import java.util.Objects;
+
+/** Immutable base for concrete schema-generated records. Field storage belongs to each subtype. */
+@ExportLibrary(DataLibrary.class)
+public abstract class GeneratedMessage extends AbstractRow implements ProtoAccess {
+  private static final byte[] EMPTY = new byte[0];
+  private final ProtoPlan plan;
+  // For <=32 fields, the high bits can hold a decoder-proven encoded size plus one.
+  // Zero means unknown; wider messages use every bit for presence and have no size cache.
+  private final long presence;
+  final byte[] unknown;
+
+  protected GeneratedMessage(ProtoPlan plan, long presence, byte[] unknown) {
+    super(plan.schema());
+    if (plan.size() > 64) throw new ContractViolation("Generated presence bitmap overflow");
+    this.plan = plan;
+    this.presence = presence;
+    this.unknown = unknown.length == 0 ? EMPTY : unknown.clone();
+  }
+
+  @Override
+  public final ProtoPlan plan() {
+    return plan;
+  }
+
+  @Override
+  public final boolean has(int ordinal) {
+    Objects.checkIndex(ordinal, plan.size());
+    return (presence & (1L << ordinal)) != 0;
+  }
+
+  /** Validation shared by generated builders; never called by immutable field readers. */
+  @TruffleBoundary
+  public static void validateField(ProtoPlan plan, int ordinal, Object value) {
+    var field = plan.field(ordinal);
+    Values.validate(field.contract(), value);
+    if (value instanceof String text) ProtoPlan.validateString(text);
+    if (field.kind() == ProtoPlan.Kind.BYTES && !((DataArray) value).isBytes())
+      throw new ContractViolation("Expected byte storage");
+    var enumeration = field.enumType();
+    if (enumeration != null && !enumeration.accepts(((Long) value).intValue()))
+      throw new ContractViolation("Unknown closed enum value");
+  }
+
+  /** Implemented by the schema-generated codec behind its own Truffle boundary. */
+  public abstract byte[] encode();
+
+  protected final boolean isSet(long mask) {
+    return (presence & mask) != 0;
+  }
+
+  /** Generated decoders can retain a proven wire size in spare, immutable presence bits. */
+  protected final int decodedWireSize() {
+    return plan.size() <= 32 ? (int) ((presence >>> 32) - 1) : -1;
+  }
+
+  protected final int unknownSize() {
+    return unknown.length;
+  }
+
+  protected final byte[] allocateOutput(long size) {
+    int count = checkedSize(size);
+    return count == 0 ? EMPTY : new byte[count];
+  }
+
+  protected final int checkedSize(long size) {
+    if (size < 0 || size > plan.maxWireBytes())
+      throw new ContractViolation("Encoded wire budget exceeded");
+    return (int) size;
+  }
+
+  /** Complete a schema-generated direct writer, copying unknown bytes only once. */
+  protected final byte[] finishEncoded(byte[] target, int position) {
+    if (position < 0 || unknown.length != target.length - position)
+      throw new ContractViolation("Generated output size mismatch");
+    System.arraycopy(unknown, 0, target, position, unknown.length);
+    return target;
+  }
+
+  protected final void writeUnknown(GeneratedOutput output) {
+    if (unknown.length != 0) output.raw(unknown);
+  }
+
+  @ExportMessage
+  final Schema getSchema() {
+    return descriptor;
+  }
+
+  @ExportMessage
+  static Object read(GeneratedMessage row, int index) {
+    return row.get(index);
+  }
+
+  @ExportMessage
+  static long readLong(GeneratedMessage row, int index) throws UnexpectedResultException {
+    if (row.descriptor.field(index).kind() == Field.Kind.INT64) return row.getLong(index);
+    Object value = row.get(index);
+    if (value instanceof Long number) return number;
+    throw new UnexpectedResultException(value);
+  }
+
+  @ExportMessage
+  static double readDouble(GeneratedMessage row, int index) throws UnexpectedResultException {
+    if (row.descriptor.field(index).kind() == Field.Kind.FLOAT64) return row.getDouble(index);
+    throw new UnexpectedResultException(row.get(index));
+  }
+
+  @ExportMessage
+  static boolean readBoolean(GeneratedMessage row, int index) throws UnexpectedResultException {
+    if (row.descriptor.field(index).kind() == Field.Kind.BOOLEAN) return row.getBoolean(index);
+    throw new UnexpectedResultException(row.get(index));
+  }
+}

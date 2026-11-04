@@ -21,6 +21,13 @@ A `StaticLayout` belongs to an initialized Truffle language. Build it once for a
 
 `ReadLongNode`, `ReadDoubleNode`, `ReadBooleanNode` and `ReadLengthNode` have bounded three-entry specialization caches. Exact validated lengths can fold to constants. Property handles, schema identity, width and presence are stable compiler inputs; data contents are never marked compilation-final merely because a schema is known. All externally supplied values still pass validation. Length/width declarations are contracts, not unchecked compiler assumptions.
 
+For a single `INT64` contract, `layout.createLong(value)` avoids varargs and boxing while enforcing
+width and range bounds before allocation. It also accepts nullable/optional fields as present values.
+A layout captured by a guest node can inline construction and eliminate temporary rows; dynamic
+host layout calls use a boundary. The existing `create(Object...)` API retains its null semantics.
+The compiled allocation gate varies the input to each temporary row, requires final-tier execution,
+and enforces 0.05 bytes per constructed-and-read row under the same graph and AST budgets.
+
 ## Protobuf
 
 Generated Java messages supply descriptors directly:
@@ -93,6 +100,19 @@ Truffle does not install the wrapper; without the property, its diagnostic work
 is disabled. Native Image embeddings must configure assertion support and the
 property at the appropriate initialization stage; runtime toggling of a setting
 captured during image construction is not supported.
+
+Payload accounting traverses validated `StaticLayout.Record` and `Batch.Row` storage
+directly, skipping primitive properties that cannot contain nested payloads. This adds
+no per-row metadata or copies. Transparent host adapters can override the protected
+`AbstractRow.payloadStorage()` hook to return their existing `SnapshotStorage`.
+Only the two immutable core representations implement this sealed interface. The
+backing must have the identical schema and field values as the adapter, including
+null and missing states; mutable or transforming adapters must use the default
+library traversal. Schema identity is always checked. Strict mode also compares
+the facade's field values with its backing and raises `AssertionError` on a
+contradiction. Cell, string, parent and nesting budgets are unchanged. `ProtoRow`
+uses this hook for its static/column backing; compact scalar rows retain the
+ordinary traversal.
 
 Strict mode supplements the mandatory ingestion validation and mutable-source
 checks; disabling it does not authorize invalid inputs. It currently audits field
@@ -204,6 +224,22 @@ For runtime schemas, the `ProtoCompiler.compile` overload accepts a `FileDescrip
 
 Read values using cached `DataLibrary` dispatch, as with other rows. `row.has(ordinal)` reports protobuf presence separately: explicit fields retain their set bit, implicit fields use non-default values, and repeated/map fields use non-emptiness. Absent scalar fields remain readable with declared defaults (including proto2 defaults); an absent message reads `Missing.INSTANCE`. Thus `DataLibrary.isPresent` describes readability, while `ProtoRow.has` describes protobuf presence. Closed-enum unknown numbers remain unknown wire fields; open-enum numbers are returned as signed INT32 values without losing unknown numbers. `FieldPlan.kind() == BYTES` and `DataArray.isBytes()` distinguish binary payloads from numeric repeated fields. Maps remain sequences of typed entry rows with last-key-wins decoding; map construction rejects duplicate keys. Nested message plans are available through `plan.nested(ordinal)`.
 
+Generic rows, builders and decoder states keep their first 64 protobuf presence bits
+inline, allocating spill words only for wider schemas. Host-built snapshots detach
+those spill words from mutable builders; decoder-owned words transfer after validation.
+This supports schemas wider than the concrete generator's 64-field limit. Compact
+integer rows use the inline word for their first value and retain a boxed second value,
+which generic reads can reuse. No separate scalar tuple or presence array is needed
+on that path. Required/default/oneof behavior and ordinal bounds remain checked.
+
+Eligible one/two-field implicit INT32/INT64 messages serialize primitive values
+directly into one exact-size output array. Nested messages use the same primitive
+path in their parent's writer without a child byte-array copy. Canonical size is
+checked against `maxWireBytes` before output allocation, including unknown fields
+and negative INT32 values whose ten-byte canonical spelling can exceed the input
+length. Unknown bytes retain their original spelling. Other shapes use the bounded
+general writer.
+
 The direct binary codec handles proto2/proto3 scalar encodings, packed/unpacked repeated fields, groups, oneofs, recursive messages, singular-message merging, unknown fields, required-field checks, and malformed wire input. Serialization preserves semantics and unknown fields, not the original byte ordering or noncanonical varint spelling. Input is bounded by `maxWireBytes`; depth, cells, and payload budgets are checked before expanding input. UTF-8 strings are validated strictly. Editions, extension ranges, and MessageSet currently fail explicitly when compiling lossless plans. ProtoJSON/text compatibility parsing uses protobuf-java and temporary dynamic builders on the host; input length and lexical nesting are checked first, then the resulting graph receives the same native-row validation. This path does not claim the binary decoder's allocation bound or descriptor-free parsing.
 
 ### Compile contracts with protoc and Bazel
@@ -304,3 +340,63 @@ rows retain their lifetime and thread checks.
 Keep the bound accessor in a final guest-node field so partial evaluation can fold
 its plan and ordinal. Static-object access with a nonconstant layout uses a boundary
 fallback. Generated getters do not perform native calls or descriptor lookup.
+
+## Independent protobuf runtime (unreleased)
+
+The development `truffledata-protobuf-runtime` artifact has no `protobuf-java` dependency.
+The existing `truffledata-protobuf` artifact remains the optional compatibility bridge and
+build-time generator. Buffa and generated contracts depend on the independent runtime.
+
+Runtime schemas can come from `protoc --descriptor_set_out --include_imports` bytes:
+
+```java
+var plan = ProtoDescriptors.compile(language, descriptorBytes, "example.Order",
+    Limits.DEFAULT, 32, 1_000_000);
+var row = plan.parseText("id: 123");
+byte[] wire = plan.encode(row);
+```
+
+This reader supports proto2/proto3 types, imports, maps, oneofs, explicit presence and defaults.
+It budgets descriptor bytes, cells and decoded strings before allocating their storage, and
+caps descriptor nesting at 128. The supplied depth limit controls data nesting. Editions,
+extension-bearing message types and MessageSet need another backend. Custom options do not
+become assertions through this API; the explicit compatibility adapter remains available for
+Protovalidate refinements. Imported option declarations do not themselves require an extension
+runtime. This is a contract compiler for descriptor sets, not a `.proto` source compiler.
+
+For flat scalar schemas with up to 64 fields, the generator now emits immutable `Message_*`
+records, direct getters, concrete builders, wire-tag parsers and exact-size serializers. Presence
+and oneof state are independent of values; unknown wire fields survive encoding. Strings and
+bytes are owned, and unsigned 64-bit values retain the schema's `ExactNumber` representation.
+Build and decode enforce budgets; reads do not repeat ingestion validation.
+
+```java
+var access = new Contracts.Access_example$Point(plan);
+var point = access.newBuilder().set_x(123).set_y(456).build();
+long x = point.get_x();
+byte[] encoded = point.encode();
+var decoded = access.decode(encoded);
+```
+
+Small primitive-only schemas (up to eight fields) also expose `decodeForProjection`. Call it
+inside a Truffle operation and consume the result immediately to let partial evaluation and
+escape analysis remove temporary storage. Unknown fields use the ordinary bounded decoder.
+The optimization is measured with a compiled allocation gate; it is not a blanket promise that
+every caller eliminates allocations.
+
+Generated binary decoders also emit concrete immutable records for nested/repeated schemas
+when every reachable message has at most 64 fields. They support recursive message merges,
+packed/unpacked repeated values, oneofs, groups, required fields, closed-enum unknowns and
+last-key-wins maps. Each graph shares one bounded input cursor. Completed subtrees propagate
+retained cell/payload totals, including declared defaults, without revisiting ordinary child
+graphs; maps account for their deduplicated retained entries. Parsing limits also count
+discarded input. Final scalar fields use their declared widths. Read these records through
+direct getters, generated accessors, DataLibrary or interop. Generated encoders size and write nested children directly into one bounded output array,
+without intermediate child buffers. Accessor construction checks every reachable generated
+schema before decoding. Concrete builders and fused projection decoding remain flat-only.
+Wider schemas retain generic getters and the generic plan codec. Generated nested children
+can be installed in a generic builder when they belong to the exact same model.
+
+Borrowed `TypedMessage.encode()` forwards validated binary wire bytes into an owned output
+array, preserving unknown fields. Text/JSON views encode their semantic snapshot. Both paths
+check the view's lifetime, including after owner closure.

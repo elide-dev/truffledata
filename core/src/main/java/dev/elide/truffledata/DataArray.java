@@ -30,11 +30,26 @@ public final class DataArray implements TruffleObject {
     return new DataArray(bytes.clone());
   }
 
+  /** Snapshot a byte region once, without temporary buffer wrappers. */
+  public static DataArray copyOfBytes(byte[] bytes, int offset, int length) {
+    java.util.Objects.checkFromIndexSize(offset, length, bytes.length);
+    byte[] owned = new byte[length];
+    System.arraycopy(bytes, offset, owned, 0, length);
+    return new DataArray(owned);
+  }
+
   /** Copies remaining bytes without changing the caller's position or retaining mutable storage. */
   public static DataArray copyOfBytes(java.nio.ByteBuffer bytes) {
     byte[] owned = new byte[bytes.remaining()];
     bytes.duplicate().get(owned);
     return new DataArray(owned);
+  }
+
+  /** Copy primitive bytes directly into caller-owned output, without element boxing. */
+  public void copyBytesTo(byte[] target, int offset) {
+    if (!(values instanceof byte[] bytes)) throw new ContractViolation("Expected byte storage");
+    java.util.Objects.checkFromIndexSize(offset, bytes.length, target.length);
+    System.arraycopy(bytes, 0, target, offset, bytes.length);
   }
 
   public boolean isBytes() {

@@ -29,7 +29,7 @@ impl<'a> Schema<'a> {
     fn text(self, at: usize) -> Result<&'a str> {
         let start = self.word(at)? as usize;
         let len = self.word(at + 4)? as usize;
-        std::str::from_utf8(
+        super::unicode::validated(
             self.0
                 .get(start..start.checked_add(len).ok_or(MALFORMED)?)
                 .ok_or(MALFORMED)?,
@@ -171,8 +171,7 @@ impl<'a, 'b> Decoder<'a, 'b> {
     }
     fn bytes(&mut self, kind: u32, bytes: &[u8]) -> Result<()> {
         if kind == 9 {
-            let text = std::str::from_utf8(bytes).map_err(|_| MALFORMED)?;
-            let n = text.chars().map(|c| c.len_utf16() as u64 * 2).sum();
+            let n = 2 * super::unicode::utf16_length(bytes)? as u64;
             self.strings = self.strings.checked_sub(n).ok_or(BUDGET)?;
         } else {
             self.charge(bytes.len() as u64)?;
@@ -511,13 +510,80 @@ pub fn decode(
             decoder.binary(0, &mut &input[..], 0, 1)?;
         }
         1 => {
-            let text = std::str::from_utf8(input).map_err(|_| MALFORMED)?;
+            let text = super::unicode::validated(input).map_err(|_| MALFORMED)?;
             decoder.text(0, &mut Tokenizer::new(text), 1, false)?;
         }
         2 => decoder.json()?,
         _ => return Err(MALFORMED),
     }
     Ok(decoder.fields)
+}
+
+/// Fixed scalar output: no index allocation, input copying, or heap-backed staging.
+/// Only singular int32/int64 schemas with at most two fields are accepted.
+pub fn scalars(
+    schema: &[u8],
+    input: &[u8],
+    cells: u64,
+    depth: u32,
+) -> Result<super::seam::Scalars> {
+    let schema = Schema(schema);
+    let count = schema.word(schema.ty(0)?)?;
+    if count == 0 || count > 2 {
+        return Err(MALFORMED);
+    }
+    if depth == 0 {
+        return Err(BUDGET);
+    }
+    for i in 0..count {
+        let field = schema.field(0, i)?;
+        if field.repeated()? || ![3, 5].contains(&field.kind()?) {
+            return Err(MALFORMED);
+        }
+    }
+    let mut decoder = Decoder {
+        schema,
+        input,
+        payload: &mut [],
+        used: 0,
+        fields: Vec::new(),
+        cells,
+        strings: 0,
+        depth,
+        native: 0,
+    };
+    decoder.charge(count as u64)?;
+    let mut result = super::seam::Scalars {
+        first: 0,
+        second: 0,
+        present: 0,
+    };
+    let mut remaining = input;
+    while !remaining.is_empty() {
+        let tag = Tag::decode(&mut remaining).map_err(|_| MALFORMED)?;
+        let number = tag.field_number();
+        let wt = tag.wire_type() as u32;
+        if let Some(field) = schema.find(0, number)? {
+            if wt == 0 {
+                decoder.charge(1)?;
+                let value = varint(&mut remaining)?;
+                let value = if field.kind()? == 5 {
+                    value as i32 as i64 as u64
+                } else {
+                    value
+                };
+                if field.ordinal == 0 {
+                    result.first = value;
+                } else {
+                    result.second = value;
+                }
+                result.present |= 1 << field.ordinal;
+                continue;
+            }
+        }
+        decoder.skip(&mut remaining, number, wt, 1)?;
+    }
+    Ok(result)
 }
 
 #[cfg(test)]
@@ -550,6 +616,44 @@ mod tests {
         bytes.push(b'x');
         bytes
     }
+    #[test]
+    fn scalar_output_matches_index_without_native_allocation() {
+        for kind in [3, 5] {
+            let s = schema(kind);
+            for input in [
+                &[][..],
+                &[8, 1],
+                &[8, 1, 8, 0],
+                &[8, 255, 255, 255, 255, 15],
+                &[24, 7, 8, 2],
+                &[27, 8, 9, 28, 8, 2],
+            ] {
+                let result = super::super::allocation_probe::without_allocation(|| {
+                    scalars(&s, input, 100, 4)
+                })
+                .unwrap();
+                let index = decode(&s, input, 0, &mut [], 100, 0, 4, 1024).unwrap();
+                assert_eq!(result.present, u64::from(!index.is_empty()));
+                if let Some(last) = index.last() {
+                    let expected = if kind == 5 {
+                        last.value as i32 as i64 as u64
+                    } else {
+                        last.value
+                    };
+                    assert_eq!(result.first, expected);
+                }
+                assert_eq!(result.second, 0);
+            }
+            assert_eq!(scalars(&s, &[8, 1], 1, 4).err(), Some(BUDGET));
+            assert_eq!(scalars(&s, &[], 100, 0).err(), Some(BUDGET));
+            assert_eq!(scalars(&s, &[27, 28], 100, 1).err(), Some(BUDGET));
+            for input in [&[8, 128][..], &[0], &[12], &[27, 36], &[27]] {
+                assert_eq!(scalars(&s, input, 100, 4).err(), Some(MALFORMED));
+            }
+        }
+        assert_eq!(scalars(&schema(9), &[], 100, 4).err(), Some(MALFORMED));
+    }
+
     #[test]
     fn typed_binary_borrows_and_enforces_budgets() {
         let s = schema(12);

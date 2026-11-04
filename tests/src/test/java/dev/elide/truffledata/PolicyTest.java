@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Objects;
@@ -22,18 +23,21 @@ class PolicyTest {
         Map.ofEntries(
             Map.entry("Values.java", 6),
             Map.entry("DataLibrary.java", 1),
+            Map.entry("PayloadBudget.java", 1), // Strict-only immutable-backing diagnostics.
             Map.entry("Schema.java", 1),
             Map.entry("Batch.java", 2),
             Map.entry("AbstractRow.java", 1),
             Map.entry("ExactNumber.java", 12),
-            Map.entry("StaticLayout.java", 11), // Nonconstant-layout direct access fallbacks.
+            Map.entry("StaticLayout.java", 12), // Nonconstant-layout direct access fallbacks.
             Map.entry("JdbcCursor.java", 7),
             Map.entry("JdbcSource.java", 6),
             Map.entry("ProtobufAdapter.java", 5),
             Map.entry("ProtoPlan.java", 11), // Generated contract binding, outside reads.
             Map.entry("ProtoRow.java", 3),
             Map.entry("ProtoCompiler.java", 8),
+            Map.entry("ProtoDescriptors.java", 1),
             Map.entry("ProtoWire.java", 1),
+            Map.entry("GeneratedMessage.java", 1),
             Map.entry("NativeMetadata.java", 1),
             Map.entry("JdbcContracts.java", 1),
             Map.entry("JdbcContract.java", 1),
@@ -44,32 +48,42 @@ class PolicyTest {
             Map.entry("JdbcValues.java", 1));
     Pattern limit = Pattern.compile("limit\\s*=\\s*\"(\\d+)\"");
     Map<String, Integer> exportedMessages =
-        Map.of(
-            "ProtoRow.java",
-            5,
-            "AbstractRow.java",
-            8,
-            "Batch.java",
-            4,
-            "StaticLayout.java",
-            5,
-            "DataArray.java",
-            4,
-            "DataNull.java",
-            1,
-            "Missing.java",
-            1,
-            "ExactNumber.java",
-            16,
-            "DynamicRecord.java",
-            4,
-            "JdbcCursor.java",
-            9);
+        new HashMap<>(
+            Map.of(
+                "ProtoRow.java",
+                5,
+                "AbstractRow.java",
+                8,
+                "Batch.java",
+                4,
+                "StaticLayout.java",
+                5,
+                "DataArray.java",
+                4,
+                "DataNull.java",
+                1,
+                "Missing.java",
+                1,
+                "ExactNumber.java",
+                16,
+                "DynamicRecord.java",
+                4,
+                "JdbcCursor.java",
+                9));
+    exportedMessages.put("GeneratedMessage.java", 5);
     Set<String> accessSurfaces = exportedMessages.keySet();
     Set<String> seenSurfaces = new HashSet<>();
     int checked = 0;
     for (String module :
-        new String[] {"core", "jdbc", "jdbc-sqlite", "jdbc-mysql", "jdbc-postgresql", "protobuf"}) {
+        new String[] {
+          "core",
+          "jdbc",
+          "jdbc-sqlite",
+          "jdbc-mysql",
+          "jdbc-postgresql",
+          "protobuf",
+          "protobuf-runtime"
+        }) {
       try (var paths = Files.walk(root.resolve(module + "/src/main/java"))) {
         for (Path path : paths.filter(p -> p.toString().endsWith(".java")).toList()) {
           String source = Files.readString(path);

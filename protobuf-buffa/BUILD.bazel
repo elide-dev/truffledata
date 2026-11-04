@@ -29,6 +29,7 @@ data_java_library(
         "src/main/java/dev/elide/truffledata/buffa/TypedArray.java",
         "src/main/java/dev/elide/truffledata/buffa/TypedMessage.java",
         "src/main/java/dev/elide/truffledata/buffa/TypedRow.java",
+        "src/main/java/dev/elide/truffledata/buffa/ViewOwner.java",
         "src/main/java/dev/elide/truffledata/buffa/WireField.java",
         "src/main/java/dev/elide/truffledata/buffa/WireInput.java",
         "src/main/java/dev/elide/truffledata/buffa/WireMessage.java",
@@ -37,7 +38,7 @@ data_java_library(
     deps = [
         ":bindings",
         "//core",
-        "//protobuf",
+        "//protobuf-runtime",
         "@maven//:org_graalvm_sdk_nativeimage",
         "@maven//:org_graalvm_sdk_word",
         "@maven//:org_graalvm_truffle_truffle_api",
