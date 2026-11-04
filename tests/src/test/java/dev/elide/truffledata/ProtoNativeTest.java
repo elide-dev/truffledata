@@ -412,6 +412,75 @@ class ProtoNativeTest {
   }
 
   @Test
+  void retainedMapBudgetsDeduplicateDefaultsWithoutCombiningThemWithParsingWork() {
+    var defaults = plan("truffledata.lossless.FlatDefaults").definition();
+    var key =
+        new ProtoPlan.FieldPlan(
+            "key",
+            1,
+            ProtoPlan.Kind.STRING,
+            false,
+            false,
+            false,
+            false,
+            false,
+            -1,
+            "",
+            null,
+            "",
+            "key");
+    var value =
+        new ProtoPlan.FieldPlan(
+            "value",
+            2,
+            ProtoPlan.Kind.MESSAGE,
+            false,
+            false,
+            true,
+            false,
+            false,
+            -1,
+            defaults.name(),
+            null,
+            Missing.INSTANCE,
+            "value");
+    var entry = new ProtoPlan.Type("budget.Root.Entry", true, List.of(key, value));
+    var items =
+        new ProtoPlan.FieldPlan(
+            "items",
+            1,
+            ProtoPlan.Kind.MESSAGE,
+            true,
+            true,
+            false,
+            false,
+            false,
+            -1,
+            entry.name(),
+            null,
+            Missing.INSTANCE,
+            "items");
+    var root = new ProtoPlan.Type("budget.Root", false, List.of(items));
+    var model =
+        new ProtoPlan.Model(
+            null, List.of(root, entry, defaults), new Limits(1024, 256, 1000, 17), 16, 10000);
+    var p = model.type(root.name());
+    // Each retained entry contributes two key bytes plus ten declared-default string bytes.
+    // Parsing both entries contributes only the four key bytes: 12 and 4 both fit 17.
+    byte[] duplicate = {10, 7, 10, 1, 97, 18, 2, 8, 1, 10, 7, 10, 1, 97, 18, 2, 8, 2};
+    var row = p.decode(duplicate);
+    var entries = (DataArray) row.get(0);
+    assertEquals(1, entries.size());
+    var child = (ProtoAccess) ((ProtoAccess) entries.get(0)).get(1);
+    assertEquals(2L, child.get(0));
+    assertEquals("hello", child.get(1));
+    assertEquals(2, ((DataArray) child.get(3)).size());
+    byte[] distinct = duplicate.clone();
+    distinct[13] = 98;
+    assertThrows(ContractViolation.class, () -> p.decode(distinct));
+  }
+
+  @Test
   void descriptorFreeJsonMatchesProtobufJava() throws Exception {
     var d = descriptor("truffledata.lossless.Sample");
     var plan = plan(d.getFullName());

@@ -61,7 +61,7 @@ final class ProtoCodec {
     Reader input = new Reader(wire, new ProtoRow.Budget(plan.model.limits), plan.model.maxDepth);
     State state = new State(plan, input.budget);
     input.message(state, wire.remaining(), 0, 1);
-    return state.finish();
+    return state.finish(1);
   }
 
   static DataArray inspect(byte[] wire, Limits limits, int maxDepth, int maxWireBytes) {
@@ -91,6 +91,35 @@ final class ProtoCodec {
     }
 
     boolean invalidMapEnum;
+    long retainedCells;
+    long retainedBytes;
+
+    private void cells(long count) {
+      if (count < 0 || count > builder.plan.limits().maxCells() - retainedCells)
+        throw bad("Protobuf cell budget exceeded");
+      retainedCells += count;
+    }
+
+    private void bytes(long count) {
+      if (count < 0 || count > builder.plan.limits().maxStringBytes() - retainedBytes)
+        throw bad("Protobuf payload budget exceeded");
+      retainedBytes += count;
+    }
+
+    private void retained(Object value, int depth) {
+      if (value instanceof String text) bytes(2L * text.length());
+      else if (value instanceof DataArray array) {
+        cells(array.size());
+        if (!array.isBytes()) for (int i = 0; i < array.size(); i++) retained(array.get(i), depth);
+      } else if (value instanceof ProtoAccess) {
+        // Only deduplicated map entries need a retained traversal. Ordinary children pass
+        // their already checked totals directly to their parent before their state is released.
+        var budget = new ProtoRow.Budget(builder.plan.limits());
+        budget.value(value, depth, builder.plan.maxDepth());
+        cells(budget.cellCount());
+        bytes(budget.byteCount());
+      }
+    }
 
     State(ProtoPlan plan, ProtoRow.Budget budget) {
       budget.cells(plan.size());
@@ -116,35 +145,59 @@ final class ProtoCodec {
       builder.present[ordinal] = true;
     }
 
-    ProtoRow finish() {
+    ProtoRow finish(int depth) {
+      if (builder.plan.definition().mapEntry()
+          && builder.plan.field(1).kind().message()
+          && values[1] == Missing.INSTANCE) {
+        if (depth >= builder.plan.maxDepth()) throw bad("Map value nesting budget exceeded");
+        values[1] = builder.plan.nested(1).newBuilder().build();
+        builder.present[1] = true;
+      }
+      retainedCells = 0;
+      retainedBytes = 0;
+      cells(values.length);
       for (int i = 0; i < values.length; i++) {
         var field = builder.plan.field(i);
-        if (values[i] instanceof State nested) values[i] = nested.finish();
-        else if (values[i] instanceof List<?> items) {
+        if (values[i] instanceof State nested) {
+          values[i] = nested.finish(depth + 1);
+          cells(nested.retainedCells);
+          bytes(nested.retainedBytes);
+        } else if (values[i] instanceof List<?> items) {
           // This list belongs only to this decoder. Finish nested values in place, then
           // copy directly into the immutable sequence instead of cloning a staging array.
           @SuppressWarnings("unchecked")
           List<Object> finished = (List<Object>) items;
+          if (!field.map()) cells(finished.size());
           for (int j = 0; j < finished.size(); j++) {
             Object item = finished.get(j);
-            if (item instanceof State nested) finished.set(j, nested.finish());
+            if (item instanceof State nested) {
+              finished.set(j, nested.finish(depth + 1));
+              if (!field.map()) {
+                cells(nested.retainedCells);
+                bytes(nested.retainedBytes);
+              }
+            } else if (!field.map()) retained(item, depth);
           }
           if (field.map()) {
             Map<Object, Object> entries = new LinkedHashMap<>();
             var data = DataLibrary.factory().getUncached();
             for (Object entry : finished) entries.put(ProtoRow.mapKey(data.read(entry, 0)), entry);
             values[i] = DataArray.copyOf(entries.values());
+            retained(values[i], depth);
           } else {
             values[i] = DataArray.copyOf(finished);
           }
-        }
+        } else retained(values[i], depth);
         if (!field.explicitPresence()) builder.present[i] = ProtoRow.nonDefault(field, values[i]);
         if (field.required() && !builder.present[i])
           throw bad("Missing required field: " + field.name());
       }
-      if (unknown != null) builder.unknown = unknown.toByteArray();
-      // The reader has charged allocations and depth before materialization; validate aggregate
-      // too.
+      if (unknown != null) {
+        bytes(unknown.size());
+        builder.unknown = unknown.toByteArray();
+      }
+      // Parsing work, required fields and retained totals have all been checked. Static/batch
+      // storage still validates normalized field contracts while constructing its final layout.
       return builder.buildDecoded();
     }
   }
@@ -556,7 +609,7 @@ final class ProtoCodec {
           position =
               target == null
                   ? position + length
-                  : GeneratedOutput.utf8Contents(target, position, text);
+                  : GeneratedOutput.utf8Contents(target, position, text, length);
         }
         case BYTES -> {
           DataArray bytes = (DataArray) value;

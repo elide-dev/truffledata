@@ -72,11 +72,18 @@ public final class GeneratedOutput {
   public void utf8(String value, int length) {
     varint(length);
     reserve(length);
-    position = utf8Contents(target, position, value);
+    position = utf8Contents(target, position, value, length);
   }
 
   /** Package-private: callers first validate Unicode and reserve its exact encoded length. */
-  static int utf8Contents(byte[] target, int position, String value) {
+  @SuppressWarnings("deprecation")
+  static int utf8Contents(byte[] target, int position, String value, int length) {
+    if (length == value.length()) {
+      // A checked UTF-8 length equals UTF-16 length only for ASCII. Under that proof,
+      // String's low-byte bulk copy is exact and avoids another character loop or buffer.
+      value.getBytes(0, length, target, position);
+      return position + length;
+    }
     for (int i = 0; i < value.length(); i++) {
       int c = value.charAt(i);
       if (c < 128) target[position++] = (byte) c;

@@ -212,9 +212,12 @@ public final class ProtoRow extends AbstractRow implements ProtoAccess {
       return build(false);
     }
 
-    /** Internal decoder-only transfer: the caller must never reuse or expose this builder. */
+    /**
+     * Internal decoder-only transfer, after State.finish checks required fields and aggregate
+     * retained budgets. The caller must never reuse or expose this builder.
+     */
     ProtoRow buildDecoded() {
-      return build(true);
+      return new ProtoRow(plan, values, present, unknown, true);
     }
 
     @TruffleBoundary

@@ -14,6 +14,44 @@ class GeneratedCodecTest {
   }
 
   @Test
+  void directUtf8WritesMatchJdkAcrossAsciiAndUnicodeWithoutChangingSlices() throws Exception {
+    var random = new Random(0xaff11);
+    var texts =
+        new ArrayList<String>(
+            List.of(
+                "", "ascii", "a\u0000z", "é", "中", "😀", "prefix é suffix", "ascii".repeat(1000)));
+    for (int sample = 0; sample < 128; sample++) {
+      var text = new StringBuilder();
+      for (int i = 0; i < sample; i++) {
+        int code =
+            switch (i % 4) {
+              case 0 -> random.nextInt(128);
+              case 1 -> 128 + random.nextInt(1920);
+              case 2 -> 2048 + random.nextInt(0xd800 - 2048);
+              default -> 0x10000 + random.nextInt(0x100000);
+            };
+        text.appendCodePoint(code);
+      }
+      texts.add(text.toString());
+    }
+    for (String text : texts) {
+      byte[] utf8 = text.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+      byte[] expected =
+          new byte[com.google.protobuf.CodedOutputStream.computeByteArraySizeNoTag(utf8) + 2];
+      var stock = com.google.protobuf.CodedOutputStream.newInstance(expected);
+      stock.writeRawByte(42);
+      stock.writeByteArrayNoTag(utf8);
+      stock.writeRawByte(43);
+      stock.checkNoSpaceLeft();
+      var actual = new GeneratedOutput(new byte[expected.length]);
+      actual.varint(42);
+      actual.utf8(text, GeneratedOutput.utf8Length(text));
+      actual.varint(43);
+      assertArrayEquals(expected, actual.finish());
+    }
+  }
+
+  @Test
   void directPrimitiveWritersMatchGenericWireAndKeepCachedResultsOwned() {
     var plan = model(Limits.DEFAULT, 32, 1000000).type("truffledata.lossless.PrimitiveWrites");
     var access = new TruffleDataContracts.Access_truffledata$lossless$PrimitiveWrites(plan);
