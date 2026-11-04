@@ -253,10 +253,16 @@ public final class BuffaPlan implements AutoCloseable {
         else
           decoded =
               switch (f.kind()) {
-                case STRING ->
-                    StandardCharsets.UTF_8
-                        .decode(owner.lease.slice(Math.toIntExact(value), length))
-                        .toString();
+                case STRING -> {
+                  // Native decoding has validated UTF-8. Materialize once without CharsetDecoder,
+                  // sliced buffers, or an intermediate UTF-16 character buffer.
+                  owner.lease.check();
+                  int offset = Math.toIntExact(value);
+                  Objects.checkFromIndexSize(offset, length, owner.lease.bytes.capacity());
+                  byte[] utf8 = new byte[length];
+                  owner.lease.bytes.get(offset, utf8);
+                  yield new String(utf8, StandardCharsets.UTF_8);
+                }
                 case BYTES -> new BorrowedBytes(owner, Math.toIntExact(value), length);
                 case DOUBLE -> Double.longBitsToDouble(value);
                 case FLOAT -> (double) Float.intBitsToFloat((int) value);
