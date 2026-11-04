@@ -118,7 +118,9 @@ final class TypedAcceptance {
             List.of(new byte[] {8, 7}, new byte[] {8, 1, 8, 0}, new byte[] {8, 2, 16, 99, 24, 7})) {
           var expected = p.decode(wire);
           try (var input = decoder.allocate(wire.length).put(wire);
-              var parsed = compiled.decode(input, NATIVE)) {
+              var parsed = compiled.decode(input, 0)) {
+            Acceptance.check(
+                parsed.nativeIndexBytes() == 0, "scalar decode allocates no native index");
             var row = parsed.row();
             equal(expected, row);
             equal(expected, parsed.snapshot());
@@ -162,7 +164,7 @@ final class TypedAcceptance {
         }
         // A failed native parse must release the reusable result slot.
         try (var input = decoder.allocate(2).put(new byte[] {8, 9});
-            var parsed = compiled.decode(input, NATIVE)) {
+            var parsed = compiled.decode(input, 0)) {
           Acceptance.check(parsed.row().getLong(0) == 9, "reuse after failure");
         }
       }

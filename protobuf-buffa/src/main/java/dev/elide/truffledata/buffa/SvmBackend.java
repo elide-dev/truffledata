@@ -39,7 +39,7 @@ final class SvmBackend implements BuffaWire.Backend {
     CTypeConversion.asByteBuffer(Buffa.fingerprint(), 64).get(fingerprint);
     if (!new String(fingerprint, StandardCharsets.US_ASCII).equals(Buffa.ABI_FINGERPRINT))
       throw new IllegalStateException("Myna/Buffa ABI fingerprint mismatch");
-    VoidPointer result = UnmanagedMemory.calloc(Buffa.Result.SIZE);
+    VoidPointer result = UnmanagedMemory.calloc(Buffa.Result.SIZE + Buffa.Scalars.SIZE);
     if (result.isNull()) throw new OutOfMemoryError("Native result allocation");
     resultAddress = result.rawValue();
   }
@@ -120,6 +120,31 @@ final class SvmBackend implements BuffaWire.Backend {
     } catch (RuntimeException | Error failure) {
       releaseResult();
       throw failure;
+    }
+  }
+
+  @Override
+  public BuffaWire.Scalars scalars(
+      WireInput schema, WireInput input, dev.elide.truffledata.protobuf.ProtoPlan plan) {
+    if (!(schema.lease.attachment instanceof BuffaSvm.Address schemaAddress)
+        || !(input.lease.attachment instanceof BuffaSvm.Address inputAddress))
+      throw new IllegalArgumentException("Inputs are not SVM native memory");
+    acquireResult();
+    VoidPointer output = WordFactory.pointer(resultAddress + Buffa.Result.SIZE);
+    try {
+      BuffaWire.status(
+          Buffa.scalars(
+              WordFactory.pointer(schemaAddress.value()),
+              schema.size(),
+              WordFactory.pointer(inputAddress.value()),
+              input.size(),
+              plan.limits().maxCells(),
+              plan.maxDepth(),
+              output));
+      return new BuffaWire.Scalars(
+          Buffa.Scalars.first(output), Buffa.Scalars.second(output), Buffa.Scalars.present(output));
+    } finally {
+      busy = false;
     }
   }
 

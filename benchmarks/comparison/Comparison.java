@@ -5,6 +5,7 @@ import com.google.protobuf.BytesValue;
 import com.google.protobuf.Timestamp;
 import com.google.protobuf.util.JsonFormat;
 import com.mysql.cj.protocol.a.MysqlTextValueDecoder;
+import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.RootNode;
@@ -46,7 +47,17 @@ public final class Comparison {
     if (args.length == 1 && args[0].equals("--smoke")) {
       for (String workload : WORKLOADS) {
         for (String engine : engines(workload)) {
-          for (String stage : stages(workload, engine)) run(workload, engine, stage, true, false);
+          for (String stage : stages(workload, engine)) {
+            try {
+              run(workload, engine, stage, true, false);
+            } catch (com.oracle.truffle.api.OptimizationFailedException failure) {
+              // A capability result for HotSpot only. Every SVM comparison must compile.
+              if (ImageInfo.inImageRuntimeCode() || !engine.equals("stock")
+                  || !stage.equals("project-peak")
+                  || !failure.toString().contains("GraphTooBigBailoutException")) throw failure;
+              System.out.println("JVM_CAPABILITY stock/project-peak supported=false graph-budget=10000");
+            }
+          }
         }
       }
     } else {
@@ -711,14 +722,20 @@ public final class Comparison {
       return sum;
     }
 
-    @TruffleBoundary
     private static long stockProject(byte[] wire) {
       try {
         var row = Timestamp.parseFrom(wire);
         return row.getSeconds() + row.getNanos();
       } catch (com.google.protobuf.InvalidProtocolBufferException invalid) {
-        throw new AssertionError(invalid);
+        CompilerDirectives.transferToInterpreterAndInvalidate();
+        throw invalidStockInput(invalid);
       }
+    }
+
+    @TruffleBoundary
+    private static AssertionError invalidStockInput(
+        com.google.protobuf.InvalidProtocolBufferException invalid) {
+      return new AssertionError(invalid);
     }
   }
 

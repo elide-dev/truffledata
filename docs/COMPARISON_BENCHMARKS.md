@@ -385,3 +385,23 @@ checks the materialization cost when consumers read the whole message. Compiled-
 and warmup remain excluded; adaptive native string hints have seen the projection before
 measured samples. It is not a first-message or cold-plan measurement. Existing schemas and
 all prior comparison cells remain supported.
+
+## Development: generated records and parse/project fusion
+
+Schema 7 adds generated owned scalar records and matching binary serialization cases.
+Schema 8 adds scalar parse-and-project without retaining the message, but used an explicit
+boundary for stock parsing. Schema 9 removes that stock parser boundary: both engines can
+inline parsing and projection into the guest compilation. Only invalid-input exception
+construction crosses a cold boundary. The isolated `//tests/jit-negative:stock_parse_test`
+probe verifies that stock parsing actually executes at the last compiled tier in SVM with
+fatal performance warnings and a 10,000 graph-size budget. The full SVM comparison uses
+that same budget and requires every peak cell to compile. On HotSpot, the full stock
+parse/project root exceeded even an experimental 200,000 budget. The JVM smoke test reports
+that specific graph-size bailout as an unsupported capability; it does not substitute a
+boundary score. Other failures still fail the test, and SVM does not permit this exception.
+Do not interpret schema 8 results as stock's best fused JIT result.
+
+Generated records and generic owned rows are separate engines. Buffa's binary scalar path
+uses a fixed native output slot and has a dedicated zero-native-allocation test. Benchmark
+Java allocation counters still exclude native allocations in other workloads; they do not
+imply that all Buffa ingestion is allocation-free.

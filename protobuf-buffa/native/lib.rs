@@ -244,6 +244,56 @@ pub unsafe extern "C" fn td_buffa_typed(
 }
 
 /// # Safety
+/// Schema/input must be valid immutable regions; result must be a disjoint, aligned
+/// writable Scalars region. No returned value owns native memory; never call release on it.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn td_buffa_scalars(
+    schema: *const u8,
+    schema_length: u64,
+    data: *const u8,
+    length: u64,
+    max_cells: u64,
+    max_depth: u32,
+    result: *mut std::ffi::c_void,
+) -> i32 {
+    if result.is_null() {
+        return MALFORMED;
+    }
+    let result = result.cast::<seam::Scalars>();
+    unsafe {
+        result.write(seam::Scalars {
+            first: 0,
+            second: 0,
+            present: 0,
+        });
+    }
+    if schema.is_null()
+        || data.is_null()
+        || schema_length > i32::MAX as u64
+        || length > i32::MAX as u64
+    {
+        return MALFORMED;
+    }
+    match catch_unwind(AssertUnwindSafe(|| unsafe {
+        typed::scalars(
+            slice::from_raw_parts(schema, schema_length as usize),
+            slice::from_raw_parts(data, length as usize),
+            max_cells,
+            max_depth,
+        )
+    })) {
+        Ok(Ok(value)) => {
+            unsafe {
+                result.write(value);
+            }
+            0
+        }
+        Ok(Err(code)) => code,
+        Err(_) => PANIC,
+    }
+}
+
+/// # Safety
 /// result is a live, aligned result of td_buffa_decode, released exactly once.
 /// Its fields must not have been modified. Zero/error results may also be released.
 #[unsafe(no_mangle)]
@@ -326,5 +376,58 @@ mod tests {
             assert_eq!(td_buffa_decode([0].as_ptr(), 1, 4, 1, 32, p), MALFORMED);
             assert!(out.data.is_null());
         }
+    }
+}
+
+#[cfg(test)]
+mod allocation_probe {
+    use std::alloc::{GlobalAlloc, Layout, System};
+    use std::cell::Cell;
+    thread_local! {
+        static COUNT: Cell<Option<u64>> = const { Cell::new(None) };
+    }
+    struct Counting;
+    #[global_allocator]
+    static ALLOCATOR: Counting = Counting;
+    fn charge() {
+        let _ = COUNT.try_with(|count| {
+            if let Some(value) = count.get() {
+                count.set(Some(value + 1));
+            }
+        });
+    }
+    unsafe impl GlobalAlloc for Counting {
+        unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
+            charge();
+            unsafe { System.alloc(layout) }
+        }
+        unsafe fn alloc_zeroed(&self, layout: Layout) -> *mut u8 {
+            charge();
+            unsafe { System.alloc_zeroed(layout) }
+        }
+        unsafe fn realloc(&self, ptr: *mut u8, layout: Layout, size: usize) -> *mut u8 {
+            charge();
+            unsafe { System.realloc(ptr, layout, size) }
+        }
+        unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
+            unsafe { System.dealloc(ptr, layout) }
+        }
+    }
+    pub fn without_allocation<T>(action: impl FnOnce() -> T) -> T {
+        struct Reset;
+        impl Drop for Reset {
+            fn drop(&mut self) {
+                COUNT.with(|count| count.set(None));
+            }
+        }
+        COUNT.with(|count| {
+            assert!(count.get().is_none());
+            count.set(Some(0));
+        });
+        let _reset = Reset;
+        let result = action();
+        let allocations = COUNT.with(|count| count.get().unwrap());
+        assert_eq!(allocations, 0, "Native scalar decoder allocated");
+        result
     }
 }

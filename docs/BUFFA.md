@@ -230,3 +230,23 @@ Repeated native fields materialize into privately owned arrays which transfer to
 view after merges and validation. The decoder sizes the current contiguous run from the
 native index; interleaved fields and later message merges grow storage geometrically, bounded
 by index cardinality. Empty views still share storage only within their owning message.
+
+## Development: fixed scalar native results
+
+The unreleased ABI 4 adds a schema-directed path for one or two singular `int32`/`int64`
+fields without oneofs or contract overrides, including binary Timestamp and Duration.
+The native decoder reads borrowed input directly into a reusable 24-byte output slot.
+It allocates no per-message native index and creates no Java tape wrapper. Presence,
+required fields, declared defaults and unknown-field forwarding retain their usual semantics.
+Unknown groups still obey the depth limit; recognized field occurrences consume the cell budget.
+
+Both static SVM and JVM FFM use this path. The Java fallback remains available. The backend
+owns the fixed output slot until closure; each decoded message owns independent scalar values
+and an input lease, so reusing or closing the decoder cannot invalidate a live message.
+`nativeIndexBytes()` is zero for this path, and a zero per-message native-index budget is valid.
+This excludes the fixed decoder/schema storage and caller-owned wire input. Rust tests instrument
+the allocator to assert zero allocations during scalar decoding, and shared JVM/SVM acceptance
+tests exercise lifetime, presence, unknown fields and zero-index-budget behavior.
+
+ABI fingerprints prevent mixing these bindings with released native libraries. Publish the
+bindings and native attachments together in the next release.

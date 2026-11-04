@@ -43,9 +43,13 @@ public final class BuffaWire implements AutoCloseable {
         ProtoPlan plan,
         int nativeBytes);
 
+    Scalars scalars(WireInput schema, WireInput input, ProtoPlan plan);
+
     @Override
     void close();
   }
+
+  record Scalars(long first, long second, long present) {}
 
   interface NativeFactory {
     Backend create();
