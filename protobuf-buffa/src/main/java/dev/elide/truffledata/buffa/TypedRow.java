@@ -6,7 +6,6 @@ import com.oracle.truffle.api.library.*;
 import com.oracle.truffle.api.nodes.UnexpectedResultException;
 import dev.elide.truffledata.*;
 import dev.elide.truffledata.protobuf.*;
-import java.nio.charset.StandardCharsets;
 import java.util.Objects;
 import org.jspecify.annotations.Nullable;
 
@@ -152,10 +151,7 @@ public sealed class TypedRow extends AbstractRow implements ProtoAccess permits 
 
     @TruffleBoundary
     private String decode(ViewOwner owner) {
-      owner.check();
-      byte[] bytes = new byte[length];
-      owner.lease.bytes.get(offset, bytes);
-      String result = new String(bytes, StandardCharsets.UTF_8);
+      String result = owner.utf8(offset, length);
       readProfile[ordinal] = true;
       cached = result;
       return result;

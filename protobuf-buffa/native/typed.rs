@@ -29,7 +29,7 @@ impl<'a> Schema<'a> {
     fn text(self, at: usize) -> Result<&'a str> {
         let start = self.word(at)? as usize;
         let len = self.word(at + 4)? as usize;
-        std::str::from_utf8(
+        super::unicode::validated(
             self.0
                 .get(start..start.checked_add(len).ok_or(MALFORMED)?)
                 .ok_or(MALFORMED)?,
@@ -171,8 +171,7 @@ impl<'a, 'b> Decoder<'a, 'b> {
     }
     fn bytes(&mut self, kind: u32, bytes: &[u8]) -> Result<()> {
         if kind == 9 {
-            let text = std::str::from_utf8(bytes).map_err(|_| MALFORMED)?;
-            let n = text.chars().map(|c| c.len_utf16() as u64 * 2).sum();
+            let n = 2 * super::unicode::utf16_length(bytes)? as u64;
             self.strings = self.strings.checked_sub(n).ok_or(BUDGET)?;
         } else {
             self.charge(bytes.len() as u64)?;
@@ -511,7 +510,7 @@ pub fn decode(
             decoder.binary(0, &mut &input[..], 0, 1)?;
         }
         1 => {
-            let text = std::str::from_utf8(input).map_err(|_| MALFORMED)?;
+            let text = super::unicode::validated(input).map_err(|_| MALFORMED)?;
             decoder.text(0, &mut Tokenizer::new(text), 1, false)?;
         }
         2 => decoder.json()?,

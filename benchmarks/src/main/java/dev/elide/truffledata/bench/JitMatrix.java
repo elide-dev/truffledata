@@ -35,6 +35,7 @@ public final class JitMatrix {
 
   enum Op {
     READ,
+    CREATE_LONG,
     ITERATOR,
     IS_ITERATOR,
     HAS_ITERATOR,
@@ -135,6 +136,21 @@ public final class JitMatrix {
 
   private static List<Case> cases(boolean requireCompiled) throws Exception {
     List<Case> cases = new ArrayList<>();
+    for (int bits : new int[] {8, 16, 32, 64}) {
+      for (boolean nullable : new boolean[] {false, true}) {
+        String prefix = nullable ? "static-create-nullable/" : "static-create/";
+        add(cases, prefix + "i" + bits, Op.CREATE_LONG, 42L, bits, Boolean.toString(nullable), 42L);
+        if (bits != 64)
+          add(
+              cases,
+              prefix + "overflow-i" + bits,
+              Op.CREATE_LONG,
+              1L << (bits - 1),
+              bits,
+              Boolean.toString(nullable),
+              Failure.CONTRACT);
+      }
+    }
     Schema childSchema = Schema.of(Field.requiredLong("child"));
     AbstractRow child =
         Batch.copyOf(childSchema, Collections.singletonList(new Object[] {42L}), Limits.DEFAULT)
@@ -536,6 +552,7 @@ public final class JitMatrix {
 
   private static final class Access extends RootNode {
     private final Op op;
+    private final @org.jspecify.annotations.Nullable StaticLayout createLayout;
     private final int index;
     private final String member;
     private final com.oracle.truffle.api.profiles.ValueProfile protoClass =
@@ -554,6 +571,19 @@ public final class JitMatrix {
       this.op = op;
       this.index = index;
       this.member = member;
+      createLayout =
+          op == Op.CREATE_LONG
+              ? new StaticLayout(
+                  BenchmarkLanguage.current().language(),
+                  Schema.of(
+                      Field.integer(
+                          "value",
+                          index,
+                          true,
+                          Boolean.parseBoolean(member),
+                          Boolean.parseBoolean(member))),
+                  Limits.DEFAULT)
+              : null;
     }
 
     @Override
@@ -574,6 +604,9 @@ public final class JitMatrix {
                   nested.readMember(nested.readArrayElement(data.read(receiver, index), 0), "name");
               case PROTO_HAS -> ((ProtoAccess) protoClass.profile(receiver)).has(index);
               case READ -> data.read(receiver, index);
+              case CREATE_LONG ->
+                  integer.execute(
+                      Objects.requireNonNull(createLayout).createLong((Long) receiver), 0);
               case DATA_LONG -> data.readLong(receiver, index);
               case DATA_DOUBLE -> data.readDouble(receiver, index);
               case DATA_BOOLEAN -> data.readBoolean(receiver, index);

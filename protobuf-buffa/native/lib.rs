@@ -13,6 +13,8 @@ mod seam {
 }
 
 mod typed;
+mod unicode;
+use unicode::td_buffa_utf8_to_utf16;
 
 const MALFORMED: i32 = 1;
 const BUDGET: i32 = 2;

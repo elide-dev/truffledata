@@ -109,6 +109,12 @@ public final class ProtoRow extends AbstractRow implements ProtoAccess {
 
   long scalar(int index) {
     Objects.checkIndex(index, descriptor.size());
+    return scalarUnchecked(index);
+  }
+
+  /** Internal primitive access after the caller proves compact shape and ordinal bounds. */
+  long scalarUnchecked(int index) {
+    assert plan.compactScalars && index >= 0 && index < plan.size();
     return index == 0 ? presence : (Long) storage;
   }
 

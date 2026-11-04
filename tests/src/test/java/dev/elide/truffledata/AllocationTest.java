@@ -83,6 +83,72 @@ class AllocationTest {
   }
 
   @Test
+  void temporaryPrimitiveStaticRowsAreEliminatedInCompiledGuests() {
+    try (Context context = Context.newBuilder("td-test").allowExperimentalOptions(true).build()) {
+      context.initialize("td-test");
+      context.enter();
+      try {
+        for (boolean nullable : new boolean[] {false, true}) {
+          var layout =
+              new StaticLayout(
+                  TestLanguage.current().language(),
+                  Schema.of(Field.integer("n", 32, true, nullable, nullable)),
+                  Limits.DEFAULT);
+          var root = new CreateLongRoot(layout);
+          var target = (OptimizedCallTarget) root.getCallTarget();
+          int count = 100000;
+          for (int i = 0; i < 20; i++) assertEquals(5099950000L, target.call(1000L, count));
+          target.compile(true);
+          target.waitForCompilation();
+          assertEquals(5099950000L, target.call(1000L, count));
+          assertTrue(target.isValidLastTier());
+          ThreadMXBean bean = (ThreadMXBean) ManagementFactory.getThreadMXBean();
+          bean.setThreadAllocatedMemoryEnabled(true);
+          root.compiled = false;
+          long before = bean.getThreadAllocatedBytes(Thread.currentThread().threadId());
+          assertEquals(5199950000L, target.call(2000L, count));
+          double bytes =
+              (bean.getThreadAllocatedBytes(Thread.currentThread().threadId()) - before)
+                  / (double) count;
+          System.out.printf(
+              "ALLOCATION static-create-long nullable=%s %.6f bytes/row compiled=%s%n",
+              nullable, bytes, root.compiled);
+          assertTrue(root.compiled && target.isValidLastTier());
+          assertTrue(bytes <= 0.05, "Temporary primitive static rows were not eliminated");
+          assertTrue(com.oracle.truffle.api.nodes.NodeUtil.countNodes(root) <= 256);
+          assertThrows(
+              ContractViolation.class,
+              () -> root.getCallTarget().call((long) Integer.MAX_VALUE, 2));
+        }
+      } finally {
+        context.leave();
+      }
+    }
+  }
+
+  private static final class CreateLongRoot extends RootNode {
+    private final StaticLayout layout;
+    @Child private ReadLongNode read = ReadLongNode.create();
+    boolean compiled;
+
+    CreateLongRoot(StaticLayout layout) {
+      super(null);
+      this.layout = layout;
+    }
+
+    @Override
+    public Object execute(VirtualFrame frame) {
+      long base = (Long) frame.getArguments()[0];
+      int count = (Integer) frame.getArguments()[1];
+      long sum = 0;
+      for (int i = 0; i < count; i++) sum += read.execute(layout.createLong(base + i), 0);
+      if (CompilerDirectives.inInterpreter()) LoopNode.reportLoopCount(this, count);
+      compiled |= CompilerDirectives.inCompiledCode();
+      return sum;
+    }
+  }
+
+  @Test
   void nestedAccessAndDynamicMutationRemainCorrectAfterCompilation() {
     try (Context context = Context.newBuilder("td-test").allowExperimentalOptions(true).build()) {
       context.initialize("td-test");

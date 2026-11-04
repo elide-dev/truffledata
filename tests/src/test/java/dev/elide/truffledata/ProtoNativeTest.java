@@ -594,6 +594,14 @@ class ProtoNativeTest {
         }
         assertEquals(seconds, DATA.readLong(row, 0));
         assertEquals((long) nanos, DATA.readLong(row, 1));
+        assertEquals(seconds, plan.getLong(row, 0));
+        assertEquals((long) nanos, plan.getLong(row, 1));
+        if (i == 0) {
+          assertThrows(IndexOutOfBoundsException.class, () -> plan.getLong(row, -1));
+          assertThrows(IndexOutOfBoundsException.class, () -> plan.getLong(row, 2));
+          var foreign = ProtoCompiler.compile(null, descriptor, Limits.DEFAULT, 8, WIRE_LIMIT);
+          assertThrows(ContractViolation.class, () -> foreign.getLong(row, 0));
+        }
         assertEquals(seconds != 0, row.has(0));
         assertEquals(nanos != 0, row.has(1));
         assertEquals(expected, Timestamp.parseFrom(plan.encode(row)));

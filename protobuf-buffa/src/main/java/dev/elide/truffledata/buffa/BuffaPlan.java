@@ -404,12 +404,7 @@ public final class BuffaPlan implements AutoCloseable {
                             length,
                             hints.stringReads,
                             ordinal);
-                  context.owner.lease.check();
-                  int offset = Math.toIntExact(value);
-                  Objects.checkFromIndexSize(offset, length, context.owner.lease.bytes.capacity());
-                  byte[] utf8 = new byte[length];
-                  context.owner.lease.bytes.get(offset, utf8);
-                  yield new String(utf8, StandardCharsets.UTF_8);
+                  yield context.owner.utf8(Math.toIntExact(value), length);
                 }
                 case BYTES -> new BorrowedBytes(context.owner, Math.toIntExact(value), length);
                 case DOUBLE -> Double.longBitsToDouble(value);

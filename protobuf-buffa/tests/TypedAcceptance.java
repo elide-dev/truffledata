@@ -303,7 +303,56 @@ final class TypedAcceptance {
     }
   }
 
+  static TypedMessage retainedUnicode(BuffaWire decoder) {
+    var p = plan("Sample");
+    byte[] wire =
+        p.encode(p.newBuilder().set(p.schema().indexOf("text"), "é中😀".repeat(1024)).build());
+    try (var compiled = decoder.compile(p, 65536);
+        var input = decoder.allocate(wire.length).put(wire)) {
+      return compiled.decode(input, NATIVE);
+    }
+  }
+
+  private static void unicode(BuffaWire decoder) {
+    var field =
+        new ProtoPlan.FieldPlan(
+            "text", 1, ProtoPlan.Kind.STRING, false, false, false, false, false, -1, "", null, "");
+    var p =
+        new ProtoPlan.Model(
+                null,
+                List.of(new ProtoPlan.Type("Unicode", false, List.of(field))),
+                Limits.DEFAULT,
+                8,
+                1000000)
+            .type("Unicode");
+    try (var compiled = decoder.compile(p, 65536)) {
+      for (int length : new int[] {0, 1, 63, 64, 65, 255, 256, 257, 4096}) {
+        for (String pattern : List.of("a\u0000", "é", "中", "😀", "aé中😀")) {
+          String text = pattern.repeat(length);
+          byte[] wire = p.encode(p.newBuilder().set(0, text).build());
+          // The first read trains lazy materialization; subsequent decodes use the eager route.
+          for (int attempt = 0; attempt < 2; attempt++) {
+            var input = decoder.allocate(wire.length).put(wire);
+            try (var parsed = compiled.decode(input, NATIVE)) {
+              input.close();
+              Acceptance.check(
+                  parsed.row().get(0).equals(text), "Unicode input ownership and content");
+              Acceptance.check(parsed.row().get(0).equals(text), "cached Unicode content");
+              Acceptance.check(parsed.snapshot().get(0).equals(text), "Unicode snapshot");
+              var row = parsed.row();
+              parsed.close();
+              Acceptance.rejects(() -> row.get(0), IllegalStateException.class);
+            } finally {
+              input.close();
+            }
+          }
+        }
+      }
+    }
+  }
+
   static void run(BuffaWire decoder) throws Exception {
+    unicode(decoder);
     compactScalars(decoder);
     generatedGetters(decoder);
     mergedRepeated(decoder);

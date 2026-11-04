@@ -434,8 +434,13 @@ public final class ProtoPlan {
 
   public long getLong(ProtoAccess row, int ordinal) {
     if (row.plan() != this) throw new ContractViolation("Generated plan mismatch");
-    if (row instanceof ProtoRow owned)
-      return compactScalars ? owned.scalar(ordinal) : directLong(owned.storage, ordinal);
+    if (row instanceof ProtoRow owned) {
+      if (compactScalars) {
+        Objects.checkIndex(ordinal, fields.length);
+        return owned.scalarUnchecked(ordinal);
+      }
+      return directLong(owned.storage, ordinal);
+    }
     return row.getLong(ordinal);
   }
 

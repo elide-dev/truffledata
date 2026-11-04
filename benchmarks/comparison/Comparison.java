@@ -429,7 +429,7 @@ public final class Comparison {
             workload.equals("mysql-int4")
                 ? MysqlTextValueDecoder.getInt(wire[i], 0, wire[i].length)
                 : ByteConverter.int4(wire[i], 0);
-        return engine.startsWith("stock") ? value : layout.create(value);
+        return engine.startsWith("stock") ? value : layout.createLong(value);
       }
       if (generated instanceof OwnedProjection owned) return owned.decode(wire[i]);
       if (engine.equals("owned"))

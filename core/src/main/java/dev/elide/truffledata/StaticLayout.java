@@ -137,10 +137,43 @@ public final class StaticLayout {
   }
 
   @TruffleBoundary
-  public Record create(Object... values) {
+  public Record create(@Nullable Object... values) {
     if (values.length != schema.size())
       throw new ContractViolation("Static record width differs from contract");
     return read(index -> values[index], null);
+  }
+
+  /**
+   * Construct a single INT64 field without boxing or a varargs array. Keep the layout constant in
+   * compiled guest code to allow temporary storage to be eliminated. Width and range contracts are
+   * enforced before allocation; nullable and optional fields receive a present, non-null value.
+   */
+  public Record createLong(long value) {
+    if (!CompilerDirectives.isPartialEvaluationConstant(this)) return genericCreateLong(value);
+    return directCreateLong(value);
+  }
+
+  @TruffleBoundary
+  private Record genericCreateLong(long value) {
+    return directCreateLong(value);
+  }
+
+  private Record directCreateLong(long value) {
+    if (schema.size() != 1 || !longField(0))
+      throw new ContractViolation("Expected a single INT64 field");
+    Values.validateLong(schema.field(0), value);
+    Object storage = shape.getFactory().create();
+    StaticProperty state = states[0];
+    if (state != null) state.setByte(storage, (byte) 0);
+    StaticProperty property = properties[0];
+    switch (storageKinds[0]) {
+      case BYTE, UBYTE -> property.setByte(storage, (byte) value);
+      case SHORT, USHORT -> property.setShort(storage, (short) value);
+      case INT, UINT -> property.setInt(storage, (int) value);
+      case LONG -> property.setLong(storage, value);
+      default -> throw new IllegalStateException("Not integer storage");
+    }
+    return new Record(this, storage);
   }
 
   /** Synchronous field source; each ordinal is read once, in order, and is never retained. */

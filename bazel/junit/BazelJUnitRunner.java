@@ -28,11 +28,12 @@ import org.junit.platform.reporting.legacy.xml.LegacyXmlReportGeneratingListener
  * JUnit Platform test runner for Bazel's java_test (Gradle's useJUnitPlatform in a test task).
  *
  * <p>Arguments, in order: {@code --package <name>} selects every test class of a package
- * (repeatable), {@code --include-tag}/{@code --exclude-tag <tag>}, {@code --include-class}/{@code
- * --exclude-class <regex>} (fully qualified names; Gradle's filter patterns), and {@code
- * -D<key>=<value>} system properties set before discovery, where {@code ${NAME}} reads the
- * environment (TEST_UNDECLARED_OUTPUTS_DIR, for reports). Later properties win, so {@code
- * --test_arg=-D...} overrides a target's defaults (Gradle's -P properties).
+ * (repeatable), {@code --class <name>} selects one class explicitly, {@code --include-tag}/{@code
+ * --exclude-tag <tag>}, {@code --include-class}/{@code --exclude-class <regex>} (fully qualified
+ * names; Gradle's filter patterns), and {@code -D<key>=<value>} system properties set before
+ * discovery, where {@code ${NAME}} reads the environment (TEST_UNDECLARED_OUTPUTS_DIR, for
+ * reports). Later properties win, so {@code --test_arg=-D...} overrides a target's defaults
+ * (Gradle's -P properties).
  *
  * <p>Bazel sharding distributes whole test classes (Gradle's forks): each shard runs the classes
  * whose sorted position modulo TEST_TOTAL_SHARDS is TEST_SHARD_INDEX. A test that shards its own
@@ -48,6 +49,7 @@ public final class BazelJUnitRunner {
 
   public static void main(String[] args) throws IOException {
     var packages = new ArrayList<String>();
+    var explicitClasses = new ArrayList<String>();
     var filters = new ArrayList<Filter<?>>();
     String[] shardProperties = null;
     for (int i = 0; i < args.length; i++) {
@@ -62,6 +64,7 @@ public final class BazelJUnitRunner {
       var value = args[++i];
       switch (arg) {
         case "--package" -> packages.add(value);
+        case "--class" -> explicitClasses.add(value);
         case "--include-tag" -> filters.add(TagFilter.includeTags(value));
         case "--exclude-tag" -> filters.add(TagFilter.excludeTags(value));
         case "--include-class" -> filters.add(ClassNameFilter.includeClassNamePatterns(value));
@@ -74,10 +77,12 @@ public final class BazelJUnitRunner {
         default -> throw new IllegalArgumentException("Unknown argument: " + arg);
       }
     }
-    if (packages.isEmpty()) throw new IllegalArgumentException("No --package selected");
+    if (packages.isEmpty() && explicitClasses.isEmpty())
+      throw new IllegalArgumentException("No --package or --class selected");
     var launcher = LauncherFactory.create();
     var selectors = new ArrayList<DiscoverySelector>();
     for (var name : packages) selectors.add(selectPackage(name));
+    for (var name : explicitClasses) selectors.add(selectClass(name));
     var request = request(selectors, filters);
     var shards = System.getenv("TEST_TOTAL_SHARDS");
     if (shards != null && shardProperties != null) {

@@ -149,6 +149,20 @@ final class SvmBackend implements BuffaWire.Backend {
     }
   }
 
+  /** Ordinary VM transition: input length is unbounded and must not delay safepoints. */
+  static String utf8(long address, int length) {
+    char[] characters = new char[length];
+    long written;
+    try (var pinned = PinnedObject.create(characters)) {
+      written =
+          Buffa.utf8_to_utf16(
+              WordFactory.pointer(address), length, pinned.addressOfArrayElement(0), length);
+    }
+    if (written < 0 || written > length)
+      throw new dev.elide.truffledata.ContractViolation("Invalid native UTF-8 or output extent");
+    return new String(characters, 0, (int) written);
+  }
+
   @Override
   public void close() {
     if (busy) throw new IllegalStateException("Native result still in use");

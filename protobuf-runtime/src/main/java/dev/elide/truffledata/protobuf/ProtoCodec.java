@@ -507,8 +507,8 @@ final class ProtoCodec {
 
   private static byte[] encodeScalars(ProtoRow row) {
     ProtoPlan plan = row.plan();
-    long first = row.scalar(0);
-    long second = plan.size() == 2 ? row.scalar(1) : 0;
+    long first = row.scalarUnchecked(0);
+    long second = plan.size() == 2 ? row.scalarUnchecked(1) : 0;
     byte[] unknown = row.unknown();
     // Compact plans prove implicit zero defaults and one-byte tags for INT32/INT64 fields.
     // Use long arithmetic: canonical negative INT32 values can expand beyond their input size.
@@ -566,7 +566,7 @@ final class ProtoCodec {
       if (row instanceof ProtoRow owned && owned.plan().compactScalars) {
         ProtoPlan plan = owned.plan();
         for (int i = 0; i < plan.size(); i++) {
-          long value = owned.scalar(i);
+          long value = owned.scalarUnchecked(i);
           if (value == 0) continue;
           varint((long) plan.field(i).number() << 3);
           varint(value);

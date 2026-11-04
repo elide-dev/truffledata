@@ -21,6 +21,13 @@ A `StaticLayout` belongs to an initialized Truffle language. Build it once for a
 
 `ReadLongNode`, `ReadDoubleNode`, `ReadBooleanNode` and `ReadLengthNode` have bounded three-entry specialization caches. Exact validated lengths can fold to constants. Property handles, schema identity, width and presence are stable compiler inputs; data contents are never marked compilation-final merely because a schema is known. All externally supplied values still pass validation. Length/width declarations are contracts, not unchecked compiler assumptions.
 
+For a single `INT64` contract, `layout.createLong(value)` avoids varargs and boxing while enforcing
+width and range bounds before allocation. It also accepts nullable/optional fields as present values.
+A layout captured by a guest node can inline construction and eliminate temporary rows; dynamic
+host layout calls use a boundary. The existing `create(Object...)` API retains its null semantics.
+The compiled allocation gate varies the input to each temporary row, requires final-tier execution,
+and enforces 0.05 bytes per constructed-and-read row under the same graph and AST budgets.
+
 ## Protobuf
 
 Generated Java messages supply descriptors directly:

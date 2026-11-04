@@ -131,9 +131,7 @@ java_test(
     name = "compiled",
     size = "medium",
     args = [
-        "--package",
-        "dev.elide.truffledata",
-        "--include-class",
+        "--class",
         "dev.elide.truffledata.AllocationTest",
     ],
     exec_properties = {

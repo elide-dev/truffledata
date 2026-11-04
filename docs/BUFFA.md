@@ -256,3 +256,32 @@ lifetime-wrapper allocation. Construction completes once before any message or r
 exposed. Closing one message invalidates its rows but preserves sibling messages, including
 messages borrowing the same input. Shared backend scalar scratch is copied into immutable
 row fields before the next decode can reuse it.
+
+## SIMD Unicode and Myna values foundation
+
+Myna is pinned to the `0.7.2` source commit `7401c446ef9ad80d7bd14a9bf92f360a04956b80`.
+Its generator, Java value readers (`@myna//:values`) and C++ ABI headers
+(`@myna//:values_headers`) are separate Bazel targets. The value ABI is v3; it is
+independent of the Buffa seam ABI, now v5 after adding Unicode conversion.
+
+The native protobuf backend uses the same `simdutf` 0.7.0 Rust binding as Myna.
+It validates text at 64 bytes and above with CPU dispatch and measures UTF-16
+payload budgets with SIMD; shorter strings use Rust's UTF-8 validator. Malformed
+UTF-8 is rejected, never repaired. SVM materializes strings of at least 256 UTF-8
+bytes directly into a pinned Java `char[]` through the generated Myna C binding,
+using an ordinary VM transition. Static consumers must link the C++ runtime
+(`-lstdc++` on Linux, `-lc++` on macOS); the Bazel archive target propagates this
+through `CcInfo` to Native Image. For direct `native-image` commands, add the
+corresponding `-H:NativeLinkerOption=-lstdc++` or `-H:NativeLinkerOption=-lc++` option. No temporary UTF-8 Java array is needed for that
+route. This conservative crossover matches Myna and is not a universal speedup
+claim. JVM materialization and native-disabled images keep their JDK path.
+
+Native string reads depend on the retained input lease, not a live decoder.
+Borrowed views still invalidate on message close; snapshots own their contents.
+Rust tests cover malformed text and caller-buffer extents; the shared JVM/SVM
+acceptance corpus covers ASCII, NUL, Latin, CJK and supplementary characters around
+both dispatch thresholds, eager/lazy reads, input closure and detachment.
+
+The simdjson adapter is a separate general-JSON integration. Myna's value ABI is
+its foundation; ProtoJSON mappings remain in the protobuf backend. This change
+does not implement the general-JSON parser or the JEP 540 facade.

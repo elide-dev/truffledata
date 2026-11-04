@@ -291,13 +291,20 @@ crate.from_cargo(
         "x86_64-unknown-linux-gnu",
     ],
 )
+
+# Cargo's C++ build must stay optimized even in Bazel fastbuild/test configurations.
+crate.annotation(
+    build_script_env = {"CXXFLAGS": "-O3"},
+    crate = "simdutf",
+    rustc_flags = ["-Copt-level=3"],
+)
 use_repo(crate, "crates")
 
 http_archive(
     name = "myna",
     build_file = "//bazel:myna.BUILD",
-    sha256 = "c72df655cb6c8742c466bd8efb552d21dac0d74b992bbaf10a8833e5547e1393",
-    strip_prefix = "myna-66ee758fa3073cfac1dc386510105e41f219bad3",
+    sha256 = "20852660cc80ed370779fdc27099bc7f23b511405511323a8344f2ce7502300d",
+    strip_prefix = "myna-7401c446ef9ad80d7bd14a9bf92f360a04956b80",
     type = "tar.gz",
-    urls = ["https://codeload.github.com/elide-dev/myna/tar.gz/66ee758fa3073cfac1dc386510105e41f219bad3"],
+    urls = ["https://codeload.github.com/elide-dev/myna/tar.gz/7401c446ef9ad80d7bd14a9bf92f360a04956b80"],
 )

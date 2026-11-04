@@ -1,3 +1,4 @@
+load("@rules_cc//cc:defs.bzl", "cc_library")
 load("@rules_rust//rust:defs.bzl", "rust_library", "rust_shared_library", "rust_static_library", "rust_test")
 
 package(default_visibility = ["//visibility:public"])
@@ -52,6 +53,7 @@ rust_library(
         "typed.rs",
         "typed_json.rs",
         "typed_wkt.rs",
+        "unicode.rs",
     ],
     crate_name = "truffledata_buffa",
     crate_root = "lib.rs",
@@ -61,6 +63,7 @@ rust_library(
         "@crates//:buffa",
         "@crates//:bytes",
         "@crates//:serde_json",
+        "@crates//:simdutf",
     ],
 )
 
@@ -72,15 +75,18 @@ rust_static_library(
         "typed.rs",
         "typed_json.rs",
         "typed_wkt.rs",
+        "unicode.rs",
     ],
     crate_name = "truffledata_buffa",
     crate_root = "lib.rs",
     edition = "2024",
+    link_deps = [":cpp_runtime"],
     rustc_flags = ["-Copt-level=3"],
     deps = [
         "@crates//:buffa",
         "@crates//:bytes",
         "@crates//:serde_json",
+        "@crates//:simdutf",
     ],
 )
 
@@ -92,6 +98,7 @@ rust_shared_library(
         "typed.rs",
         "typed_json.rs",
         "typed_wkt.rs",
+        "unicode.rs",
     ],
     crate_name = "truffledata_buffa",
     crate_root = "lib.rs",
@@ -101,6 +108,7 @@ rust_shared_library(
         "@crates//:buffa",
         "@crates//:bytes",
         "@crates//:serde_json",
+        "@crates//:simdutf",
     ],
 )
 
@@ -110,3 +118,13 @@ rust_test(
 )
 
 exports_files(["Cargo.toml"])
+
+# Rust bundles simdutf's native objects; its final consumers still need the C++ runtime.
+# Preserve that requirement in CcInfo for Native Image's cc_deps, not just Cargo linkage.
+cc_library(
+    name = "cpp_runtime",
+    linkopts = select({
+        "@platforms//os:macos": ["-lc++"],
+        "//conditions:default": ["-lstdc++"],
+    }),
+)
