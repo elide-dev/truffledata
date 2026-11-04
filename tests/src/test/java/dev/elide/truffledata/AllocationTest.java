@@ -68,6 +68,16 @@ class AllocationTest {
         // Cached/absent second values need only the row. A noncached second gets one Long.
         assertTrue(
             bytes <= (second == 0 ? 48 : 72), "Compact integer ingestion allocated extra state");
+        for (int i = 0; i < 10000; i++) retained = plan.encode(row);
+        before = bean.getThreadAllocatedBytes(Thread.currentThread().threadId());
+        for (int i = 0; i < 100000; i++) retained = plan.encode(row);
+        bytes =
+            (bean.getThreadAllocatedBytes(Thread.currentThread().threadId()) - before) / 100000.0;
+        assertArrayEquals(wire, (byte[]) retained);
+        System.out.printf(
+            "ALLOCATION compact-integer-encode width=%d second=%d %.3f bytes/message%n",
+            width, second, bytes);
+        assertTrue(bytes <= 32, "Compact integer encoding allocated temporary state");
       }
     }
   }

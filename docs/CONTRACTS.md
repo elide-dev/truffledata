@@ -225,6 +225,14 @@ integer rows use the inline word for their first value and retain a boxed second
 which generic reads can reuse. No separate scalar tuple or presence array is needed
 on that path. Required/default/oneof behavior and ordinal bounds remain checked.
 
+Eligible one/two-field implicit INT32/INT64 messages serialize primitive values
+directly into one exact-size output array. Nested messages use the same primitive
+path in their parent's writer without a child byte-array copy. Canonical size is
+checked against `maxWireBytes` before output allocation, including unknown fields
+and negative INT32 values whose ten-byte canonical spelling can exceed the input
+length. Unknown bytes retain their original spelling. Other shapes use the bounded
+general writer.
+
 The direct binary codec handles proto2/proto3 scalar encodings, packed/unpacked repeated fields, groups, oneofs, recursive messages, singular-message merging, unknown fields, required-field checks, and malformed wire input. Serialization preserves semantics and unknown fields, not the original byte ordering or noncanonical varint spelling. Input is bounded by `maxWireBytes`; depth, cells, and payload budgets are checked before expanding input. UTF-8 strings are validated strictly. Editions, extension ranges, and MessageSet currently fail explicitly when compiling lossless plans. ProtoJSON/text compatibility parsing uses protobuf-java and temporary dynamic builders on the host; input length and lexical nesting are checked first, then the resulting graph receives the same native-row validation. This path does not claim the binary decoder's allocation bound or descriptor-free parsing.
 
 ### Compile contracts with protoc and Bazel

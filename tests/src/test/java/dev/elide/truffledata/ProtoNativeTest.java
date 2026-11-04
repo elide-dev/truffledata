@@ -389,6 +389,192 @@ class ProtoNativeTest {
   }
 
   @Test
+  void compactIntegerSerializationMatchesStockWithReorderedTagsAndUnknownBytes() throws Exception {
+    byte[] unknown = {(byte) 0xa0, 6, (byte) 0x81, 0}; // Nonminimal unknown field 100 = 1.
+    long[] edges = {
+      0,
+      1,
+      127,
+      128,
+      16383,
+      16384,
+      -1,
+      Integer.MIN_VALUE,
+      Integer.MAX_VALUE,
+      Long.MIN_VALUE,
+      Long.MAX_VALUE
+    };
+    var random = new Random(52771);
+    for (int width : new int[] {1, 2}) {
+      for (boolean firstInt32 : new boolean[] {false, true}) {
+        var descriptor = compactDescriptor(width, firstInt32);
+        var plan = ProtoCompiler.compile(null, descriptor, Limits.DEFAULT, 8, WIRE_LIMIT);
+        for (int iteration = 0; iteration < 128; iteration++) {
+          var stock = DynamicMessage.newBuilder(descriptor);
+          var builder = plan.newBuilder();
+          for (int i = 0; i < width; i++) {
+            long value =
+                iteration < edges.length
+                    ? edges[(iteration + i * 3) % edges.length]
+                    : random.nextLong();
+            if (iteration == 0 || iteration == 1 && i == 1 || iteration == 2 && i == 0) value = 0;
+            var field = descriptor.getFields().get(i);
+            if (field.getType() == FieldDescriptor.Type.INT32) value = (int) value;
+            builder.set(i, value);
+            if (value != 0) {
+              if (field.getType() == FieldDescriptor.Type.INT32) stock.setField(field, (int) value);
+              else stock.setField(field, value);
+            }
+          }
+          var expected = stock.build();
+          assertArrayEquals(compactReference(expected, new byte[0]), plan.encode(builder.build()));
+          var input = new java.io.ByteArrayOutputStream();
+          input.writeBytes(expected.toByteArray());
+          input.writeBytes(unknown);
+          var expectedWithUnknown =
+              stock
+                  .clone()
+                  .setUnknownFields(
+                      UnknownFieldSet.newBuilder()
+                          .addField(100, UnknownFieldSet.Field.newBuilder().addVarint(1).build())
+                          .build())
+                  .build();
+          byte[] reference = compactReference(expected, unknown);
+          byte[] wire = input.toByteArray();
+          for (var row : List.of(plan.decode(wire), plan.decode(java.nio.ByteBuffer.wrap(wire)))) {
+            byte[] encoded = plan.encode(row);
+            assertArrayEquals(reference, encoded);
+            assertEquals(expectedWithUnknown, DynamicMessage.parseFrom(descriptor, encoded));
+          }
+        }
+      }
+    }
+  }
+
+  private static Descriptor compactDescriptor(int width, boolean firstInt32) throws Exception {
+    var message = DescriptorProtos.DescriptorProto.newBuilder().setName("Compact");
+    for (int i = 0; i < width; i++) {
+      boolean int32 = i == 0 ? firstInt32 : !firstInt32;
+      message.addField(
+          DescriptorProtos.FieldDescriptorProto.newBuilder()
+              .setName("f" + i)
+              .setNumber(i == 0 ? 15 : 7)
+              .setLabel(DescriptorProtos.FieldDescriptorProto.Label.LABEL_OPTIONAL)
+              .setType(
+                  int32
+                      ? DescriptorProtos.FieldDescriptorProto.Type.TYPE_INT32
+                      : DescriptorProtos.FieldDescriptorProto.Type.TYPE_INT64));
+    }
+    return FileDescriptor.buildFrom(
+            DescriptorProtos.FileDescriptorProto.newBuilder()
+                .setName("compact.proto")
+                .setPackage("compact")
+                .setSyntax("proto3")
+                .addMessageType(message)
+                .build(),
+            new FileDescriptor[0])
+        .getMessageTypes()
+        .getFirst();
+  }
+
+  private static byte[] compactReference(DynamicMessage message, byte[] unknown) throws Exception {
+    var bytes = new java.io.ByteArrayOutputStream();
+    var output = CodedOutputStream.newInstance(bytes);
+    // Preserve declaration order, as the generic writer does; stock messages sort by tag.
+    for (var field : message.getDescriptorForType().getFields()) {
+      long value = ((Number) message.getField(field)).longValue();
+      if (value == 0) continue;
+      if (field.getType() == FieldDescriptor.Type.INT32)
+        output.writeInt32(field.getNumber(), (int) value);
+      else output.writeInt64(field.getNumber(), value);
+    }
+    output.flush();
+    bytes.writeBytes(unknown);
+    return bytes.toByteArray();
+  }
+
+  @Test
+  void nestedCompactSerializationWritesIntoItsParentsOutputAndKeepsUnknowns() throws Exception {
+    var child = compactDescriptor(2, true);
+    var root =
+        FileDescriptor.buildFrom(
+                DescriptorProtos.FileDescriptorProto.newBuilder()
+                    .setName("container.proto")
+                    .setPackage("compact")
+                    .setSyntax("proto3")
+                    .addDependency(child.getFile().getName())
+                    .addMessageType(
+                        DescriptorProtos.DescriptorProto.newBuilder()
+                            .setName("Container")
+                            .addField(
+                                DescriptorProtos.FieldDescriptorProto.newBuilder()
+                                    .setName("child")
+                                    .setNumber(1)
+                                    .setType(
+                                        DescriptorProtos.FieldDescriptorProto.Type.TYPE_MESSAGE)
+                                    .setTypeName("." + child.getFullName())
+                                    .setLabel(
+                                        DescriptorProtos.FieldDescriptorProto.Label.LABEL_OPTIONAL))
+                            .addField(
+                                DescriptorProtos.FieldDescriptorProto.newBuilder()
+                                    .setName("children")
+                                    .setNumber(2)
+                                    .setType(
+                                        DescriptorProtos.FieldDescriptorProto.Type.TYPE_MESSAGE)
+                                    .setTypeName("." + child.getFullName())
+                                    .setLabel(
+                                        DescriptorProtos.FieldDescriptorProto.Label
+                                            .LABEL_REPEATED)))
+                    .build(),
+                new FileDescriptor[] {child.getFile()})
+            .getMessageTypes()
+            .getFirst();
+    byte[] unknown = {(byte) 0xa0, 6, (byte) 0x81, 0};
+    var populated =
+        DynamicMessage.newBuilder(child)
+            .setField(child.getFields().get(0), -1)
+            .setField(child.getFields().get(1), Long.MIN_VALUE)
+            .build();
+    var empty = DynamicMessage.newBuilder(child).build();
+    var reference = new java.io.ByteArrayOutputStream();
+    var output = CodedOutputStream.newInstance(reference);
+    output.writeByteArray(1, compactReference(populated, unknown));
+    output.writeByteArray(2, compactReference(empty, unknown));
+    output.writeByteArray(2, compactReference(populated, new byte[0]));
+    output.flush();
+    byte[] wire = reference.toByteArray();
+    var plan = ProtoCompiler.compile(null, root, Limits.DEFAULT, 8, wire.length);
+    assertArrayEquals(wire, plan.encode(plan.decode(wire)));
+    assertArrayEquals(wire, plan.encode(plan.decode(java.nio.ByteBuffer.wrap(wire))));
+    assertEquals(
+        DynamicMessage.parseFrom(root, wire),
+        DynamicMessage.parseFrom(root, plan.encode(plan.decode(wire))));
+    // An accepted five-byte INT32 -1 expands by five bytes inside its length-delimited parent.
+    byte[] shortChild = {10, 6, 120, -1, -1, -1, -1, 15};
+    var bounded = ProtoCompiler.compile(null, root, Limits.DEFAULT, 8, shortChild.length);
+    assertThrows(ContractViolation.class, () -> bounded.encode(bounded.decode(shortChild)));
+  }
+
+  @Test
+  void compactIntegerSerializationEnforcesCanonicalOutputBudgets() throws Exception {
+    var descriptor = compactDescriptor(1, true);
+    byte[] shortNegative = {120, -1, -1, -1, -1, 15}; // INT32 -1 in five bytes; output needs ten.
+    for (byte[] wire :
+        List.of(
+            shortNegative, new byte[] {120, -1, -1, -1, -1, 15, (byte) 0xa0, 6, (byte) 0x81, 0})) {
+      var bounded = ProtoCompiler.compile(null, descriptor, Limits.DEFAULT, 8, wire.length);
+      var row = bounded.decode(wire);
+      assertEquals(-1L, row.getLong(0));
+      assertThrows(ContractViolation.class, () -> bounded.encode(row));
+    }
+    var exact = ProtoCompiler.compile(null, descriptor, Limits.DEFAULT, 8, 11);
+    assertEquals(11, exact.encode(exact.decode(shortNegative)).length);
+    var tiny = ProtoCompiler.compile(null, descriptor, Limits.DEFAULT, 8, 1);
+    assertEquals(0, tiny.encode(tiny.newBuilder().build()).length);
+    assertThrows(ContractViolation.class, () -> tiny.encode(tiny.newBuilder().set(0, 1L).build()));
+  }
+
+  @Test
   void compactIntegerRowsMatchGeneralDecoderAndGeneratedMessages() throws Exception {
     var descriptor = Timestamp.getDescriptor();
     var plan = ProtoCompiler.compile(null, descriptor, Limits.DEFAULT, 8, WIRE_LIMIT);

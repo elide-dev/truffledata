@@ -497,10 +497,37 @@ final class ProtoCodec {
   }
 
   static byte[] encode(ProtoAccess row) {
+    if (row instanceof ProtoRow owned && owned.plan().compactScalars) return encodeScalars(owned);
     Writer sizing = new Writer(null, row.plan().maxWireBytes());
     sizing.message(row);
     byte[] result = new byte[sizing.position];
     new Writer(result, result.length).message(row);
+    return result;
+  }
+
+  private static byte[] encodeScalars(ProtoRow row) {
+    ProtoPlan plan = row.plan();
+    long first = row.scalar(0);
+    long second = plan.size() == 2 ? row.scalar(1) : 0;
+    byte[] unknown = row.unknown();
+    // Compact plans prove implicit zero defaults and one-byte tags for INT32/INT64 fields.
+    // Use long arithmetic: canonical negative INT32 values can expand beyond their input size.
+    long size = unknown.length;
+    if (first != 0) size += 1 + GeneratedOutput.varintSize(first);
+    if (second != 0) size += 1 + GeneratedOutput.varintSize(second);
+    if (size > plan.maxWireBytes()) throw bad("Encoded wire budget exceeded");
+    byte[] result = new byte[(int) size];
+    int position = 0;
+    if (first != 0) {
+      result[position++] = (byte) (plan.field(0).number() << 3);
+      position = GeneratedOutput.varint(result, position, first);
+    }
+    if (second != 0) {
+      result[position++] = (byte) (plan.field(1).number() << 3);
+      position = GeneratedOutput.varint(result, position, second);
+    }
+    if (unknown.length != 0) System.arraycopy(unknown, 0, result, position, unknown.length);
+    assert position + unknown.length == result.length;
     return result;
   }
 
@@ -536,6 +563,17 @@ final class ProtoCodec {
     }
 
     void message(ProtoAccess row) {
+      if (row instanceof ProtoRow owned && owned.plan().compactScalars) {
+        ProtoPlan plan = owned.plan();
+        for (int i = 0; i < plan.size(); i++) {
+          long value = owned.scalar(i);
+          if (value == 0) continue;
+          varint((long) plan.field(i).number() << 3);
+          varint(value);
+        }
+        raw(owned.unknown());
+        return;
+      }
       for (int i = 0; i < row.plan().size(); i++) {
         if (!row.has(i)) continue;
         var field = row.plan().field(i);

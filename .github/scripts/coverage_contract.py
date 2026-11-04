@@ -13,6 +13,7 @@ ACCESS_CLASSES = {
 ACCESS_SOURCES = {f'core/src/main/java/dev/elide/truffledata/{name}.java' for name in ACCESS_CLASSES} | {
     'protobuf-runtime/src/main/java/dev/elide/truffledata/protobuf/ProtoRow.java',
     'protobuf-runtime/src/main/java/dev/elide/truffledata/protobuf/ProtoAccess.java',
+    'protobuf-runtime/src/main/java/dev/elide/truffledata/protobuf/ProtoCodec.java',
     'protobuf-runtime/src/main/java/dev/elide/truffledata/protobuf/GeneratedMessage.java',
     'protobuf-runtime/src/main/java/dev/elide/truffledata/protobuf/GeneratedInput.java',
     'protobuf-runtime/src/main/java/dev/elide/truffledata/protobuf/GeneratedGraphInput.java',
