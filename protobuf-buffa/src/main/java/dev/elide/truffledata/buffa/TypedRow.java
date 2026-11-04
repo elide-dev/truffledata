@@ -51,35 +51,39 @@ public final class TypedRow extends AbstractRow {
 
   private Object resolved(int index) {
     Object value = values[index];
-    return value instanceof Utf8 text ? text.value() : value;
+    return value instanceof Utf8 text ? text.value(owner) : value;
   }
 
   /** Internal placeholder: never exported, and only backed by sealed, native-validated UTF-8. */
   static final class Utf8 {
-    final WireMessage owner;
+    final boolean[] readProfile;
+    final int ordinal;
     final int offset;
     final int length;
     private @Nullable String cached;
 
-    Utf8(WireMessage owner, int offset, int length) {
+    Utf8(WireMessage owner, int offset, int length, boolean[] readProfile, int ordinal) {
       owner.lease.check();
       Objects.checkFromIndexSize(offset, length, owner.lease.bytes.capacity());
-      this.owner = owner;
+      Objects.checkIndex(ordinal, readProfile.length);
+      this.readProfile = readProfile;
+      this.ordinal = ordinal;
       this.offset = offset;
       this.length = length;
     }
 
-    String value() {
+    String value(WireMessage owner) {
       String result = cached;
-      return result == null ? decode() : result;
+      return result == null ? decode(owner) : result;
     }
 
     @TruffleBoundary
-    private String decode() {
+    private String decode(WireMessage owner) {
       owner.check();
       byte[] bytes = new byte[length];
       owner.lease.bytes.get(offset, bytes);
       String result = new String(bytes, StandardCharsets.UTF_8);
+      readProfile[ordinal] = true;
       cached = result;
       return result;
     }

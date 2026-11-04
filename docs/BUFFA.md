@@ -114,6 +114,10 @@ On a native backend, these three methods parse in Rust. Binary byte fields borro
 sealed input, including nested and repeated payloads. Text unescaping/base64 decoding
 writes into a retained native payload region. Singular strings with empty defaults defer
 Java materialization until first access; subsequent reads return the same Java String.
+Each compiled plan remembers which string fields have been read and eagerly materializes
+those fields on later messages. These bounded, thread-confined flags guide allocation only;
+values and validation remain message-specific. The first encounter may allocate a deferred
+holder, while stable projections avoid holders for fields they consistently read.
 Native parsing still validates UTF-8 and cumulative payload budgets before returning.
 Repeated strings and nonempty defaults materialize during ingestion, and any richer string
 contract forces validation before returning. The deferred holder memoizes without mutating

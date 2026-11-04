@@ -20,6 +20,7 @@ final class TypedAcceptance {
 
   static void run(BuffaWire decoder) throws Exception {
     unreadStrings(decoder);
+    stringsRemainFreshAfterProfileWarmup(decoder);
     ProtoPlan plan = plan("Sample");
     Acceptance.rejects(() -> decoder.compile(plan, 1), ContractViolation.class);
     Acceptance.rejects(() -> decoder.compile(plan, 64), ContractViolation.class);
@@ -265,6 +266,26 @@ final class TypedAcceptance {
           equal(expected, detached);
         }
       }
+    }
+  }
+
+  private static void stringsRemainFreshAfterProfileWarmup(BuffaWire decoder) {
+    var plan = plan("Sample");
+    int ordinal = plan.schema().indexOf("text");
+    try (var compiled = decoder.compile(plan, 65536)) {
+      for (String value : List.of("first", "second", "", "third 🦊")) {
+        try (var parsed = compiled.parseJson("{\"text\":\"" + value + "\"}", NATIVE)) {
+          Acceptance.check(
+              DATA.read(parsed.row(), ordinal).equals(value), "profile does not cache data");
+        }
+      }
+    }
+    try (var compiled = decoder.compile(plan, 65536);
+        var parsed = compiled.parseText("text: 'still alive €'", NATIVE)) {
+      var row = parsed.row();
+      compiled.close();
+      Acceptance.check(
+          DATA.read(row, ordinal).equals("still alive €"), "unread string outlives plan");
     }
   }
 
