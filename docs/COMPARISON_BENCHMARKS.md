@@ -412,3 +412,48 @@ schemas 7–9. Schema-bound generic and borrowed getter measurements remain sepa
 Removing an explicit parser boundary allows inlining; a compiled root alone does not prove
 that every stock parser helper was inlined. The measurements report the resulting operation,
 including any calls the SVM compiler elects to retain.
+
+## Measured independent-runtime development snapshot
+
+Revision `4b4661c` is unreleased. The [first run](../benchmarks/results/svm-comparison-4b4661c/comparison.json)
+and [one repeat](../benchmarks/results/svm-comparison-4b4661c-repeat/comparison.json) each cover
+111 cells with three timing processes and three separate allocation processes per cell.
+The repeat followed concurrent CI work; timing remained variable, so both runs are retained.
+Charts below use the first run consistently, rather than selecting the better result per case.
+
+| Scalar operation | Stock ns, first / repeat | Generated record ns, first / repeat | Stock / generated Java bytes |
+| --- | ---: | ---: | ---: |
+| Retained ingestion | 92.47 / 105.07 | 33.29 / 33.88 | 136 / 80 |
+| Interpreter reads | 2.83 / 4.38 | 1.64 / 2.13 | 2 / 2 |
+| Peak reads | 1.18 / 1.52 | 1.98 / 1.55 | 1 / 1 |
+| Binary serialization | 22.28 / 27.14 | 39.81 / 38.98 | 56 / 40 |
+| Fused parse/project, peak | 80.96 / 64.62 | 14.28 / 13.45 | 137 / 1 |
+
+The generated records improve ingestion and whole-operation projection here; they do not
+win every operation. Stock still leads scalar serialization and general nested ingestion.
+The small retained-read differences should be read with the process ranges, not as a
+universal ranking. Parse/project heap counts include guest-call overhead; the separate
+compiled allocation test records 32 bytes across 100,000 generated projections.
+
+Buffa scalar ingestion now uses **112 Java bytes**, or **80** with generated access, compared
+with **240 / 208** at `7b4eb4a`. Both current runs report those same allocation counts.
+The fixed scalar native decoder also passes an allocator-instrumented zero-allocation test.
+Other Buffa shapes may still allocate a native index; Java heap counters do not include it.
+Native input/schema and reusable decoder scratch are not per-message index allocations.
+
+Generic 64 KiB byte serialization now uses a bulk copy: approximately 5.3 / 6.7 µs in the two
+current runs, versus approximately 417 µs in the earlier `7b4eb4a` run. Large byte timings
+have wide ranges on shared runners. Binary Buffa serialization forwards input, whereas
+owned engines serialize message storage; these remain explicitly different operations.
+
+![Development interpreter reads](images/independent/comparison-interpreter.svg)
+![Development peak reads](images/independent/comparison-peak.svg)
+![Development ingestion allocations](images/independent/comparison-allocations.svg)
+![Development parse/project peak](images/independent/comparison-projection-peak.svg)
+![Development binary serialization](images/independent/comparison-serialization.svg)
+
+The [chart manifest](images/independent/comparison-manifest.json) records the source-data
+hash, executable hash and implementation revision. The [validation and measurement run](https://app.buildbuddy.io/invocation/6156aff1-0dc2-4795-a235-80cbc6764654)
+passed native/fallback tests, both published native consumers, comparison smoke and the full
+matrix; the [repeat](https://app.buildbuddy.io/invocation/591882d2-8724-4140-ae77-4373b7b52dfe)
+uses the same executable revision. Release 0.4.0 charts above remain unchanged.

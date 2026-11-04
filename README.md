@@ -135,6 +135,30 @@ Large owned-byte ingestion was noisy. See the [full results and methodology](doc
 [measurement run](https://github.com/elide-dev/truffledata/actions/runs/41776420028).
 Earlier runs remain available; these are workload-specific measurements, not performance guarantees.
 
+### In development: independent protobuf runtime
+
+The next batch separates the descriptor-free runtime from the optional protobuf-java
+bridge, adds a bounded descriptor-set compiler, and generates concrete scalar records,
+builders and codecs. Buffa scalar decoding uses fixed native results without allocating
+an index, and typed messages own their lifetimes directly.
+
+The development comparison adds direct generated-record reads, serialization and fused
+parse/project cases. In two runs, generated scalar ingestion used **80 Java bytes** versus
+stock's **136**; Buffa used **112**, or **80** through generated access. Stock still leads
+some operations. These changes are **unreleased** and are not included in the 0.4.0 artifacts.
+
+<details>
+<summary>Development parse/project results and implementation scope</summary>
+
+![Development parse/project peak](docs/images/independent/comparison-projection-peak.svg)
+
+See [both full runs and caveats](docs/COMPARISON_BENCHMARKS.md#measured-independent-runtime-development-snapshot)
+and the [independent runtime API and current limits](docs/CONTRACTS.md#independent-protobuf-runtime-unreleased).
+Concrete generated codecs currently cover flat scalar schemas; nested/repeated messages
+continue to use the generic runtime. Editions, extensions and MessageSet remain unsupported.
+
+</details>
+
 ## Protobuf and generated access
 
 Provide schemas at build time with the Bazel/protoc contract generator, or compile
