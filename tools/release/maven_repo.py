@@ -9,8 +9,15 @@ import sys
 import xml.etree.ElementTree as ET
 import zipfile
 
-MODULES = ('core', 'jdbc', 'jdbc-sqlite', 'jdbc-mysql', 'jdbc-postgresql', 'protobuf', 'bom')
+MODULES = ('core', 'jdbc', 'jdbc-sqlite', 'jdbc-mysql', 'jdbc-postgresql', 'protobuf', 'protobuf-buffa', 'protobuf-buffa-bindings', 'bom')
 NAMESPACE = {'m': 'http://maven.apache.org/POM/4.0.0'}
+
+
+def artifact_suffixes(module):
+    if module == 'bom':
+        return ('.pom',)
+    common = ('.pom', '.jar', '-sources.jar')
+    return common + (('-linux-x86_64.a', '-linux-x86_64.so', '-native.h') if module == 'protobuf-buffa' else ())
 
 
 def validate_version(version):
@@ -32,7 +39,7 @@ def stage(publications, repository, version):
         source = publications / module / relative / version
         target = repository / relative / version
         target.mkdir(parents=True, exist_ok=True)
-        for suffix in (('.pom',) if module == 'bom' else ('.pom', '.jar', '-sources.jar')):
+        for suffix in artifact_suffixes(module):
             name = artifact + '-' + version + suffix
             path = source / name
             if suffix == '.pom':
@@ -40,13 +47,22 @@ def stage(publications, repository, version):
                 for key, expected in [('groupId', 'dev.elide'), ('artifactId', artifact), ('version', version)]:
                     if root.findtext('m:' + key, namespaces=NAMESPACE) != expected:
                         raise ValueError('Incorrect POM coordinates: ' + str(path))
-            else:
+            elif suffix in ('.jar', '-sources.jar'):
                 with zipfile.ZipFile(path) as jar:
                     names = jar.namelist()
                     if not any(n.endswith('.java' if suffix == '-sources.jar' else '.class') for n in names):
                         raise ValueError('Empty artifact: ' + str(path))
                     if any(n.startswith(('org/', 'com/')) for n in names):
                         raise ValueError('Bundled third-party classes: ' + str(path))
+            elif suffix.endswith('.a'):
+                if not path.read_bytes().startswith(b'!<arch>\n'):
+                    raise ValueError('Invalid static archive: ' + str(path))
+            elif suffix.endswith('.so'):
+                header = path.read_bytes()[:20]
+                if header[:6] != b'\x7fELF\x02\x01' or header[18:20] != b'\x3e\x00':
+                    raise ValueError('Expected Linux x86_64 shared library: ' + str(path))
+            elif not path.read_bytes():
+                raise ValueError('Empty native header')
             shutil.copyfile(path, target / name)
             checksums(target / name)
         metadata = target.parent / 'maven-metadata.xml'

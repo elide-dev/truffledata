@@ -1,11 +1,14 @@
-load("@rules_java//java:defs.bzl", "java_import", "java_test")
+load("@rules_cc//cc:defs.bzl", "cc_import")
+load("@rules_graalvm//graalvm:defs.bzl", "native_image")
+load("@rules_java//java:defs.bzl", "java_import", "java_library", "java_test")
 load("@rules_shell//shell:sh_test.bzl", "sh_test")
+load("//bazel:jit.bzl", "TRUFFLE_JIT_CHECKS")
 load("//bazel:maven.bzl", "maven_publication", "release_version")
 load("//bazel:maven_bom.bzl", "maven_bom")
 
 release_version(
     name = "version",
-    build_setting_default = "0.1.0-SNAPSHOT",
+    build_setting_default = "0.2.0-SNAPSHOT",
     visibility = ["//visibility:public"],
 )
 
@@ -16,11 +19,25 @@ COMMON = [
 
 [maven_publication(
     name = module,
+    attachments = {
+        "//protobuf-buffa/native:truffledata_buffa": "-linux-x86_64.a",
+        "//protobuf-buffa/native:shared": "-linux-x86_64.so",
+        "//protobuf-buffa/native:header": "-native.h",
+    } if module == "protobuf-buffa" else {},
     dependencies = COMMON + ([] if module == "core" else ["dev.elide:truffledata-core:{version}"]) + ([
         "com.google.protobuf:protobuf-java:4.36.1",
         "com.google.protobuf:protobuf-java-util:4.36.1",
         "com.google.code.gson:gson:2.8.9",
     ] if module == "protobuf" else []) + ([
+        "dev.elide:truffledata-protobuf:{version}",
+        "dev.elide:truffledata-protobuf-buffa-bindings:{version}",
+    ] if module == "protobuf-buffa" else []) + ([
+        "org.graalvm.sdk:nativeimage:25.5.5-elide.5",
+        "org.graalvm.sdk:word:25.5.5-elide.5",
+    ] if module in [
+        "protobuf-buffa",
+        "protobuf-buffa-bindings",
+    ] else []) + ([
         "dev.elide:truffledata-jdbc:{version}",
         "org.xerial:sqlite-jdbc:3.53.4.0",
     ] if module == "jdbc-sqlite" else []) + ([
@@ -30,7 +47,7 @@ COMMON = [
         "dev.elide:truffledata-jdbc:{version}",
         "org.postgresql:postgresql:42.7.14",
     ] if module == "jdbc-postgresql" else []),
-    library = "//%s" % module,
+    library = "//protobuf-buffa:bindings" if module == "protobuf-buffa-bindings" else "//%s" % module,
     module = module,
 ) for module in [
     "core",
@@ -39,6 +56,8 @@ COMMON = [
     "jdbc-mysql",
     "jdbc-postgresql",
     "protobuf",
+    "protobuf-buffa",
+    "protobuf-buffa-bindings",
 ]]
 
 maven_bom(
@@ -50,6 +69,8 @@ maven_bom(
         "jdbc-mysql",
         "jdbc-postgresql",
         "protobuf",
+        "protobuf-buffa",
+        "protobuf-buffa-bindings",
     ]] + [
         "com.mysql:mysql-connector-j:26.10.0",
         "org.postgresql:postgresql:42.7.14",
@@ -75,6 +96,8 @@ filegroup(
         ":jdbc-postgresql",
         ":jdbc-sqlite",
         ":protobuf",
+        ":protobuf-buffa",
+        ":protobuf-buffa-bindings",
     ],
 )
 
@@ -102,6 +125,8 @@ sh_test(
     "jdbc-mysql",
     "jdbc-postgresql",
     "protobuf",
+    "protobuf-buffa",
+    "protobuf-buffa-bindings",
 ]]
 
 [java_import(
@@ -114,6 +139,15 @@ sh_test(
         "@maven//:com_google_protobuf_protobuf_java",
         "@maven//:com_google_protobuf_protobuf_java_util",
     ] if module == "protobuf" else []) + ([
+        ":protobuf_import",
+        ":protobuf-buffa-bindings_import",
+    ] if module == "protobuf-buffa" else []) + ([
+        "@maven//:org_graalvm_sdk_nativeimage",
+        "@maven//:org_graalvm_sdk_word",
+    ] if module in [
+        "protobuf-buffa",
+        "protobuf-buffa-bindings",
+    ] else []) + ([
         ":jdbc_import",
         "@maven//:org_xerial_sqlite_jdbc",
     ] if module == "jdbc-sqlite" else []) + ([
@@ -130,6 +164,8 @@ sh_test(
     "jdbc-mysql",
     "jdbc-postgresql",
     "protobuf",
+    "protobuf-buffa",
+    "protobuf-buffa-bindings",
 ]]
 
 java_test(
@@ -144,8 +180,91 @@ java_test(
         ":jdbc-postgresql_import",
         ":jdbc-sqlite_import",
         ":jdbc_import",
+        ":protobuf-buffa_import",
         ":protobuf_import",
         "@maven//:com_google_protobuf_protobuf_java",
         "@maven//:org_graalvm_truffle_truffle_api",
+    ],
+)
+
+filegroup(
+    name = "buffa_static",
+    srcs = [":protobuf-buffa"],
+    output_group = "native_static",
+)
+
+filegroup(
+    name = "buffa_shared",
+    srcs = [":protobuf-buffa"],
+    output_group = "native_shared",
+)
+
+cc_import(
+    name = "published_native",
+    static_library = ":buffa_static",
+)
+
+java_library(
+    name = "buffa_consumer_lib",
+    testonly = True,
+    srcs = ["BuffaConsumer.java"],
+    deps = [
+        ":core_import",
+        ":protobuf-buffa_import",
+        ":protobuf_import",
+        "@maven//:org_graalvm_sdk_nativeimage",
+    ],
+)
+
+java_test(
+    name = "buffa_consumer",
+    args = ["$(location :buffa_shared)"],
+    data = [":buffa_shared"],
+    jvm_flags = ["--enable-native-access=ALL-UNNAMED"],
+    main_class = "BuffaConsumer",
+    use_testrunner = False,
+    runtime_deps = [":buffa_consumer_lib"],
+)
+
+native_image(
+    name = "buffa_native",
+    testonly = True,
+    cc_deps = [":published_native"],
+    exec_properties = {
+        "EstimatedCPU": "4",
+        "EstimatedMemory": "16GB",
+    },
+    executable_name = "buffa-published-consumer",
+    extra_args = [
+        "--gc=serial",
+        "--parallelism=4",
+        "-march=compatibility",
+        "--features=dev.elide.truffledata.buffa.BuffaFeature",
+        "--initialize-at-build-time=dev.elide.truffledata",
+        "-H:+UnlockExperimentalVMOptions",
+    ] + TRUFFLE_JIT_CHECKS + ["-H:-UnlockExperimentalVMOptions"],
+    graalvm_sdk = "@graalvm_linux_amd64//:gvm",
+    main_class = "BuffaConsumer",
+    optimization_mode = "2",
+    tags = ["manual"],
+    target_compatible_with = [
+        "@platforms//os:linux",
+        "@platforms//cpu:x86_64",
+    ],
+    deps = [
+        ":buffa_consumer_lib",
+        "@maven//:org_graalvm_truffle_truffle_runtime",
+    ],
+)
+
+sh_test(
+    name = "buffa_native_test",
+    srcs = ["native_consumer.sh"],
+    args = ["$(location :buffa_native)"],
+    data = [":buffa_native"],
+    tags = ["manual"],
+    target_compatible_with = [
+        "@platforms//os:linux",
+        "@platforms//cpu:x86_64",
     ],
 )

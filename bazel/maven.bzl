@@ -42,7 +42,20 @@ def _publication_impl(ctx):
         output = ctx.actions.declare_file(prefix + suffix)
         ctx.actions.symlink(output = output, target_file = source)
         outputs.append(output)
-    return [DefaultInfo(files = depset(outputs)), OutputGroupInfo(binary = depset([outputs[1]]))]
+    native_static = []
+    native_shared = []
+    for target, suffix in ctx.attr.attachments.items():
+        files = target[DefaultInfo].files.to_list()
+        if len(files) != 1:
+            fail("Publication attachment must contain exactly one file")
+        output = ctx.actions.declare_file(prefix + suffix)
+        ctx.actions.symlink(output = output, target_file = files[0])
+        outputs.append(output)
+        if suffix.endswith(".a"):
+            native_static.append(output)
+        elif suffix.endswith(".so"):
+            native_shared.append(output)
+    return [DefaultInfo(files = depset(outputs)), OutputGroupInfo(binary = depset([outputs[1]]), native_static = depset(native_static), native_shared = depset(native_shared))]
 
 maven_publication = rule(
     implementation = _publication_impl,
@@ -50,6 +63,7 @@ maven_publication = rule(
         "library": attr.label(providers = [JavaInfo], mandatory = True),
         "module": attr.string(mandatory = True),
         "dependencies": attr.string_list(),
+        "attachments": attr.label_keyed_string_dict(),
         "_version": attr.label(default = "//tools/release:version"),
     },
 )
