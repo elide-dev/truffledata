@@ -113,7 +113,7 @@ def measure(args):
             'host': {'system': platform.system(), 'machine': platform.machine(), 'cpu': cpu,
                      'kernel': platform.release(), 'logical_cpus': os.cpu_count()},
             'allocation_scope': 'current-thread Java heap; excludes native heap and compiler/background threads',
-            'versions': {'graalvm': '25.5.5-elide.5', 'protobuf-java': '4.36.1',
+            'versions': {'graalvm': '25.5.5-elide.24', 'protobuf-java': '4.36.1',
                          'mysql-connector-j': '26.10.0', 'postgresql': '42.7.14'},
             'results': []}
     jobs = list(itertools.product(cells(data['schema']), range(3)))
