@@ -166,8 +166,10 @@ JSON null; use an enclosing message when that distinction matters.
 
 ## Build and validation
 
-The optional `//protobuf-buffa` target is not part of the 0.1.0 Maven artifacts. This PR
-does not publish 0.2.0. Builds use pinned Myna sources, Buffa crates, Rust toolchains and
+The optional `//protobuf-buffa` target ships as `dev.elide:truffledata-protobuf-buffa:0.2.0`,
+with generated bindings in `truffledata-protobuf-buffa-bindings`. The release includes Linux
+x86-64 native attachments; see [publishing](PUBLISHING.md#buffa-native-distribution).
+Builds use pinned Myna sources, Buffa crates, Rust toolchains and
 Cargo/Bazel lockfiles. Cargo records dependencies; Bazel compiles and links everything
 under the existing BuildBuddy remote execution/cache configuration.
 

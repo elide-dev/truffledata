@@ -7,7 +7,7 @@ import unittest
 import xml.etree.ElementTree as ET
 import zipfile
 
-from maven_repo import MODULES, NAMESPACE, stage, validate_version
+from maven_repo import artifact_suffixes, MODULES, NAMESPACE, stage, validate_version
 
 
 class PublicationTest(unittest.TestCase):
@@ -29,6 +29,10 @@ class PublicationTest(unittest.TestCase):
                     expected.add('dev.elide:truffledata-core')
                 if module == 'protobuf':
                     expected.update(('com.google.protobuf:protobuf-java', 'com.google.protobuf:protobuf-java-util', 'com.google.code.gson:gson'))
+                if module in ('protobuf-buffa', 'protobuf-buffa-bindings'):
+                    expected.update(('org.graalvm.sdk:nativeimage', 'org.graalvm.sdk:word'))
+                if module == 'protobuf-buffa':
+                    expected.update(('dev.elide:truffledata-protobuf', 'dev.elide:truffledata-protobuf-buffa-bindings'))
                 if module == 'jdbc-sqlite':
                     expected.update(('dev.elide:truffledata-jdbc', 'org.xerial:sqlite-jdbc'))
                 if module in ('jdbc-mysql', 'jdbc-postgresql'):
@@ -59,6 +63,12 @@ class PublicationTest(unittest.TestCase):
                         self.assertTrue(any(n.endswith('.class') for n in names))
                         if module == 'core':
                             self.assertTrue(any(n.endswith('ReadLongNodeGen.class') for n in names))
+                for suffix in artifact_suffixes(module):
+                    self.assertTrue(Path(str(prefix) + suffix).is_file())
+                if module == 'protobuf-buffa-bindings':
+                    with zipfile.ZipFile(str(prefix) + '.jar') as jar:
+                        self.assertIn('dev/elide/truffledata/buffa/generated/Buffa.class', jar.namelist())
+                        self.assertIn('dev/elide/truffledata/buffa/generated/BuffaFFM.class', jar.namelist())
                 for path in (directory / version).iterdir():
                     if path.suffix in ('.pom', '.jar'):
                         self.assertEqual(Path(str(path) + '.sha256').read_text().strip(), hashlib.sha256(path.read_bytes()).hexdigest())

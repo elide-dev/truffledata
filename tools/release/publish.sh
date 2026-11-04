@@ -15,7 +15,7 @@ if 'SNAPSHOT' in sys.argv[1].upper():
 PY
 bucket=${MAVEN_BUCKET:-elide:elide-maven}
 public=https://maven.elide.dev
-modules=(core jdbc jdbc-sqlite jdbc-mysql jdbc-postgresql protobuf bom)
+modules=(core jdbc jdbc-sqlite jdbc-mysql jdbc-postgresql protobuf protobuf-buffa protobuf-buffa-bindings bom)
 bazel=${BAZEL:-$(command -v bazelisk || command -v bazel)}
 mkdir -p build
 repo=$(mktemp -d "$PWD/build/release-repo.XXXXXX")
@@ -37,7 +37,7 @@ if [[ $mode == --publish ]]; then
     fi
   done
 fi
-"$bazel" test //... //benchmarks:native_smoke "--//tools/release:version=$version"
+"$bazel" test //... //benchmarks:native_smoke //protobuf-buffa/tests:native_test //protobuf-buffa/tests:fallback_test //tools/release:buffa_native_test "--//tools/release:version=$version"
 BAZEL="$bazel" python3 .github/scripts/jit_gate.py --probes-only
 "$bazel" build //tools/release:publications "--//tools/release:version=$version"
 python3 tools/release/maven_repo.py bazel-bin/tools/release "$repo" "$version"
@@ -52,6 +52,7 @@ for module in "${modules[@]}"; do
   rclone check "$repo/$path" "$bucket/$path" --one-way
   suffixes=(.pom .jar -sources.jar)
   [[ $module != bom ]] || suffixes=(.pom)
+  [[ $module != protobuf-buffa ]] || suffixes+=(-linux-x86_64.a -linux-x86_64.so -native.h)
   for suffix in "${suffixes[@]}"; do
     file=$artifact-$version$suffix
     curl --fail --silent --show-error "$public/$path/$file" -o "$repo/public-check"
@@ -64,4 +65,4 @@ for module in "${modules[@]}"; do
   rclone check "$repo/$path" "$bucket/$path" --include 'maven-metadata.xml*' --one-way
 done
 rm -f "$repo/public-check"
-echo "Published dev.elide:truffledata-{core,jdbc,jdbc-sqlite,jdbc-mysql,jdbc-postgresql,protobuf,bom}:$version at $public"
+echo "Published dev.elide:truffledata-{core,jdbc,jdbc-sqlite,jdbc-mysql,jdbc-postgresql,protobuf,protobuf-buffa,protobuf-buffa-bindings,bom}:$version at $public"

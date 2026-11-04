@@ -31,6 +31,15 @@ public final class Consumer {
       throw new AssertionError("ProtoJSON publication dependencies");
     if (!interop.readMember(source.parseText("value: 'hello'"), "value").equals("hello"))
       throw new AssertionError("protobuf text publication");
+    try (var decoder =
+            dev.elide.truffledata.buffa.BuffaWire.open(
+                dev.elide.truffledata.buffa.BuffaWire.Mode.JAVA, null);
+        var compiled = decoder.compile(plan, 65536);
+        var message = compiled.parseText("value: 'hello'", 65536)) {
+      if (!interop.readMember(message.row(), "value").equals("hello"))
+        throw new AssertionError("Buffa publication fallback and generated bindings");
+    }
+    Class.forName("dev.elide.truffledata.buffa.generated.BuffaFFM");
     Class.forName("org.sqlite.JDBC");
     Class.forName("org.postgresql.Driver");
     Class.forName("com.mysql.cj.jdbc.Driver");
