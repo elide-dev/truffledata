@@ -21,12 +21,16 @@ public final class TypedRow extends AbstractRow {
   @CompilationFinal(dimensions = 1)
   private final boolean[] present;
 
-  TypedRow(WireMessage owner, ProtoPlan plan, Object[] values, boolean[] present) {
+  private final long presenceBits;
+
+  TypedRow(
+      WireMessage owner, ProtoPlan plan, Object[] values, long presenceBits, boolean[] present) {
     super(plan.schema());
     this.owner = owner;
     this.plan = plan;
     this.values = values;
     this.present = present;
+    this.presenceBits = presenceBits;
   }
 
   public ProtoPlan plan() {
@@ -35,7 +39,12 @@ public final class TypedRow extends AbstractRow {
 
   public boolean has(int ordinal) {
     owner.check();
-    return present[ordinal];
+    Objects.checkIndex(ordinal, values.length);
+    return present(ordinal);
+  }
+
+  private boolean present(int ordinal) {
+    return present.length == 0 ? (presenceBits & (1L << ordinal)) != 0 : present[ordinal];
   }
 
   @ExportMessage
@@ -93,7 +102,7 @@ public final class TypedRow extends AbstractRow {
   ProtoRow snapshot() {
     owner.check();
     var builder = plan.newBuilder();
-    for (int i = 0; i < values.length; i++) if (present[i]) builder.set(i, detach(resolved(i)));
+    for (int i = 0; i < values.length; i++) if (present(i)) builder.set(i, detach(resolved(i)));
     return builder.build();
   }
 

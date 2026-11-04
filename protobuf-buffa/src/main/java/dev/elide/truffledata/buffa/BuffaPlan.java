@@ -108,13 +108,18 @@ public final class BuffaPlan implements AutoCloseable {
 
   private static TypedRow fromJava(WireMessage owner, ProtoRow row) {
     Object[] values = new Object[row.plan().size()];
-    boolean[] present = new boolean[values.length];
+    boolean[] present =
+        values.length > Long.SIZE ? new boolean[values.length] : State.NO_SEEN_FIELDS;
+    long presenceBits = 0;
     var data = DataLibrary.factory().getUncached();
     for (int i = 0; i < values.length; i++) {
       values[i] = javaValue(owner, data.read(row, i));
-      present[i] = row.has(i);
+      if (row.has(i)) {
+        if (present.length == 0) presenceBits |= 1L << i;
+        else present[i] = true;
+      }
     }
-    return new TypedRow(owner, row.plan(), values, present);
+    return new TypedRow(owner, row.plan(), values, presenceBits, present);
   }
 
   private static Object javaValue(WireMessage owner, Object value) {
@@ -187,6 +192,7 @@ public final class BuffaPlan implements AutoCloseable {
     final boolean[] stringReads;
     final Object[] values;
     final boolean[] present;
+    long presenceBits;
     final boolean[] seen;
 
     State(ProtoPlan plan, DecodeContext context) {
@@ -195,10 +201,20 @@ public final class BuffaPlan implements AutoCloseable {
       stringReads = Objects.requireNonNull(context.profile.stringReads.get(plan.name()));
       context.charge(plan.size());
       values = new Object[plan.size()];
-      present = new boolean[values.length];
+      present = values.length > Long.SIZE ? new boolean[values.length] : NO_SEEN_FIELDS;
       // Binary protobuf permits duplicate fields; only text formats track duplicates.
       seen = context.format == 0 ? NO_SEEN_FIELDS : new boolean[values.length];
       for (int i = 0; i < values.length; i++) values[i] = initial(plan.field(i));
+    }
+
+    boolean present(int ordinal) {
+      return present.length == 0 ? (presenceBits & (1L << ordinal)) != 0 : present[ordinal];
+    }
+
+    void present(int ordinal, boolean value) {
+      if (present.length != 0) present[ordinal] = value;
+      else if (value) presenceBits |= 1L << ordinal;
+      else presenceBits &= ~(1L << ordinal);
     }
 
     static Object initial(ProtoPlan.FieldPlan field) {
@@ -210,10 +226,10 @@ public final class BuffaPlan implements AutoCloseable {
       if (field.oneof() >= 0)
         for (int i = 0; i < values.length; i++) {
           if (i != ordinal && plan.field(i).oneof() == field.oneof()) {
-            if (context.format != 0 && present[i])
+            if (context.format != 0 && present(i))
               throw new ContractViolation("Multiple oneof members");
             values[i] = initial(plan.field(i));
-            present[i] = false;
+            present(i, false);
           }
         }
     }
@@ -266,7 +282,7 @@ public final class BuffaPlan implements AutoCloseable {
           byte[] encoded = target.encode(payload.finish(1).snapshot());
           context.charge(encoded.length);
           values[ordinal] = DataArray.copyOfBytes(encoded);
-          present[ordinal] = encoded.length != 0;
+          present(ordinal, encoded.length != 0);
           index = next;
           continue;
         }
@@ -332,7 +348,7 @@ public final class BuffaPlan implements AutoCloseable {
           select(ordinal);
           values[ordinal] = decoded;
         }
-        present[ordinal] = true;
+        present(ordinal, true);
         index = next;
       }
     }
@@ -343,7 +359,7 @@ public final class BuffaPlan implements AutoCloseable {
           && plan.field(1).kind().message()
           && values[1] == Missing.INSTANCE) {
         values[1] = new State(plan.nested(1), context);
-        present[1] = true;
+        present(1, true);
       }
       for (int i = 0; i < values.length; i++) {
         var field = plan.field(i);
@@ -366,8 +382,8 @@ public final class BuffaPlan implements AutoCloseable {
                   ? context.emptyArray()
                   : new TypedArray(context.owner, keys != null ? keys.values().toArray() : items);
         }
-        if (!field.explicitPresence()) present[i] = nonDefault(field, values[i]);
-        if (field.required() && !present[i]) throw new ContractViolation("Missing required field");
+        if (!field.explicitPresence()) present(i, nonDefault(field, values[i]));
+        if (field.required() && !present(i)) throw new ContractViolation("Missing required field");
         if (values[i] instanceof TypedRow.Utf8 text) {
           // FieldPlan supplies the standard STRING contract, and native parsing has already
           // validated its type, UTF-8 and cumulative payload budget. Never bypass richer facts.
@@ -379,7 +395,7 @@ public final class BuffaPlan implements AutoCloseable {
           Values.validate(plan.schema().field(i), values[i]);
         }
       }
-      return new TypedRow(context.owner, plan, values, present);
+      return new TypedRow(context.owner, plan, values, presenceBits, present);
     }
 
     private static boolean nonDefault(ProtoPlan.FieldPlan field, Object value) {

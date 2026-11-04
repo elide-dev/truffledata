@@ -214,3 +214,7 @@ Empty repeated-field views share one immutable view per decoded native message, 
 its nested rows. This avoids a wrapper allocation for each empty field. Views from different
 messages retain independent leases; closing a message invalidates all its empty views, while
 detached snapshots remain readable.
+
+Typed rows with at most 64 fields store protobuf presence in a primitive bit mask. Wider
+schemas retain an indexed presence array. Explicit default values, oneof clearing, snapshots,
+and bounds checks have the same semantics in both representations and in the Java fallback.

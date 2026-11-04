@@ -18,7 +18,68 @@ final class TypedAcceptance {
         .type("truffledata.lossless." + name);
   }
 
+  /** Exercise both sides of the packed presence boundary, including the sign bit. */
+  private static void presenceWidths(BuffaWire decoder) {
+    for (int size : new int[] {0, 1, 63, 64, 65, 129}) {
+      var fields = new ArrayList<ProtoPlan.FieldPlan>();
+      for (int i = 0; i < size; i++) {
+        fields.add(
+            new ProtoPlan.FieldPlan(
+                "f" + i,
+                i + 1,
+                ProtoPlan.Kind.INT32,
+                false,
+                true,
+                false,
+                false,
+                false,
+                size == 64 && i >= 62 ? 0 : -1,
+                "",
+                null,
+                0L));
+      }
+      var plan =
+          new ProtoPlan.Model(
+                  null,
+                  List.of(new ProtoPlan.Type("Presence", false, fields)),
+                  Limits.DEFAULT,
+                  16,
+                  65536)
+              .type("Presence");
+      var builder = plan.newBuilder();
+      // Explicitly present defaults must remain distinguishable from absent defaults.
+      for (int i = 0; i < size; i++) if (i % 3 != 1) builder.set(i, 0L);
+      var expected = builder.build();
+      byte[] wire = plan.encode(expected);
+      try (var compiled = decoder.compile(plan, 65536);
+          var input = decoder.allocate(wire.length).put(wire);
+          var parsed = compiled.decode(input, NATIVE)) {
+        equal(expected, parsed.row());
+        equal(expected, parsed.snapshot());
+        for (int i = 0; i < size; i++) {
+          Acceptance.check(parsed.row().has(i) == expected.has(i), "presence width " + size);
+        }
+        Acceptance.rejects(() -> parsed.row().has(-1), IndexOutOfBoundsException.class);
+        Acceptance.rejects(() -> parsed.row().has(size), IndexOutOfBoundsException.class);
+        if (size == 64) {
+          byte[] first = plan.encode(plan.newBuilder().set(62, 1L).build());
+          byte[] second = plan.encode(plan.newBuilder().set(63, 0L).build());
+          byte[] merged = Arrays.copyOf(first, first.length + second.length);
+          System.arraycopy(second, 0, merged, first.length, second.length);
+          try (var switchedInput = decoder.allocate(merged.length).put(merged);
+              var switched = compiled.decode(switchedInput, NATIVE)) {
+            Acceptance.check(
+                !switched.row().has(62) && switched.row().has(63),
+                "oneof clears and sets top presence bits");
+            equal(plan.decode(merged), switched.snapshot());
+          }
+        }
+      }
+    }
+  }
+
   static void run(BuffaWire decoder) throws Exception {
+    presenceWidths(decoder);
     unreadStrings(decoder);
     stringsRemainFreshAfterProfileWarmup(decoder);
     ProtoPlan plan = plan("Sample");
