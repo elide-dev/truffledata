@@ -218,3 +218,8 @@ detached snapshots remain readable.
 Typed rows with at most 64 fields store protobuf presence in a primitive bit mask. Wider
 schemas retain an indexed presence array. Explicit default values, oneof clearing, snapshots,
 and bounds checks have the same semantics in both representations and in the Java fallback.
+
+Native materialization reuses the plan validation of standard absent/default values instead
+of validating them for every message. The shortcut requires exact equality with the standard
+field contract; richer contracts retain value validation. Required-field, wire, UTF-8, depth,
+and cumulative budget checks still run before a result is returned.

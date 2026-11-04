@@ -95,6 +95,7 @@ final class TypedAcceptance {
     try (var nativePlan = decoder.compile(plan, 65536)) {
       for (String text :
           List.of(
+              "",
               "count: -2147483648 explicit_count: 0 u32: 4294967295 u64: 18446744073709551615",
               "text: 'hello' ' €' blob: '\\001\\377' blobs: ['x','y']",
               "numbers: [1,-2,03,0x4] numbers: 5 statuses: [READY,999] flag: True",
@@ -119,6 +120,7 @@ final class TypedAcceptance {
       }
       for (String json :
           List.of(
+              "{}",
               "{\"explicitCount\":0,\"u64\":\"18446744073709551615\",\"count\":-2147483648}",
               "{\"text\":\"hello €\",\"blob\":\"Af8=\",\"blobs\":[\"eA\",\"_w\"]}",
               "{\"numbers\":[1,-2,3e0,\"4\"],\"statuses\":[\"READY\",999],\"flag\":true}",

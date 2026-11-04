@@ -146,13 +146,27 @@ public final class BuffaPlan implements AutoCloseable {
   /** Thread-confined, bounded hints: reading a string makes later values eager for that field. */
   private static final class ReadProfile {
     final List<ProtoPlan> types;
-    final Map<String, boolean[]> stringReads;
+    final Map<String, TypeProfile> byType;
 
     ReadProfile(List<ProtoPlan> types) {
       this.types = types;
-      Map<String, boolean[]> reads = new HashMap<>();
-      for (ProtoPlan type : types) reads.put(type.name(), new boolean[type.size()]);
-      stringReads = Map.copyOf(reads);
+      Map<String, TypeProfile> profiles = new HashMap<>();
+      for (ProtoPlan type : types) profiles.put(type.name(), new TypeProfile(type));
+      byType = Map.copyOf(profiles);
+    }
+  }
+
+  /** Defaults are validated by FieldPlan; richer contracts keep the general validation route. */
+  private static final class TypeProfile {
+    final boolean[] stringReads;
+    final boolean[] standardDefaults;
+
+    TypeProfile(ProtoPlan plan) {
+      stringReads = new boolean[plan.size()];
+      standardDefaults = new boolean[plan.size()];
+      for (int i = 0; i < plan.size(); i++) {
+        standardDefaults[i] = plan.schema().field(i).equals(plan.field(i).contract());
+      }
     }
   }
 
@@ -189,7 +203,7 @@ public final class BuffaPlan implements AutoCloseable {
     private static final Object[] EMPTY_ITEMS = new Object[0];
     final ProtoPlan plan;
     final DecodeContext context;
-    final boolean[] stringReads;
+    final TypeProfile hints;
     final Object[] values;
     final boolean[] present;
     long presenceBits;
@@ -198,7 +212,7 @@ public final class BuffaPlan implements AutoCloseable {
     State(ProtoPlan plan, DecodeContext context) {
       this.plan = plan;
       this.context = context;
-      stringReads = Objects.requireNonNull(context.profile.stringReads.get(plan.name()));
+      hints = Objects.requireNonNull(context.profile.byType.get(plan.name()));
       context.charge(plan.size());
       values = new Object[plan.size()];
       present = values.length > Long.SIZE ? new boolean[values.length] : NO_SEEN_FIELDS;
@@ -311,11 +325,15 @@ public final class BuffaPlan implements AutoCloseable {
                   // Repeated strings still materialize for element-contract validation below.
                   if (!f.repeated()
                       && ((String) f.defaultValue()).isEmpty()
-                      && !stringReads[ordinal])
+                      && !hints.stringReads[ordinal])
                     yield length == 0
                         ? ""
                         : new TypedRow.Utf8(
-                            context.owner, Math.toIntExact(value), length, stringReads, ordinal);
+                            context.owner,
+                            Math.toIntExact(value),
+                            length,
+                            hints.stringReads,
+                            ordinal);
                   context.owner.lease.check();
                   int offset = Math.toIntExact(value);
                   Objects.checkFromIndexSize(offset, length, context.owner.lease.bytes.capacity());
@@ -384,6 +402,9 @@ public final class BuffaPlan implements AutoCloseable {
         }
         if (!field.explicitPresence()) present(i, nonDefault(field, values[i]));
         if (field.required() && !present(i)) throw new ContractViolation("Missing required field");
+        // Absent scalars carry validated defaults; absent repeated fields are empty typed arrays.
+        // Required-field and native input checks remain above this shortcut.
+        if (!present(i) && hints.standardDefaults[i]) continue;
         if (values[i] instanceof TypedRow.Utf8 text) {
           // FieldPlan supplies the standard STRING contract, and native parsing has already
           // validated its type, UTF-8 and cumulative payload budget. Never bypass richer facts.
