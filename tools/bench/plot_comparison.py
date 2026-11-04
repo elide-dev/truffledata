@@ -19,9 +19,9 @@ LABELS = {
 }
 ENGINES = {'stock': 'Stock', 'stock-aliased': 'Stock · aliased',
            'owned': 'TruffleData · owned', 'buffa': 'TruffleData · Buffa',
-           'static': 'TruffleData · static'}
+           'generated-owned': 'TruffleData · generated records', 'static': 'TruffleData · static'}
 COLORS = {'stock': '#626d78', 'stock-aliased': '#a0aab4', 'owned': '#7866ae',
-          'buffa': '#087e8b', 'static': '#7866ae'}
+          'generated-owned': '#d57525', 'buffa': '#087e8b', 'static': '#7866ae'}
 
 
 def render(data, output, label):
@@ -45,7 +45,7 @@ def render(data, output, label):
         if generated:
             supported = {r['workload'] for r in data['results'] if r['stage'] == stage}
             selected = [r for r in data['results'] if r['workload'] in supported and
-                        (r['stage'] == stage or (r['engine'].startswith('stock') and
+                        (r['stage'] == stage or ((r['engine'].startswith('stock') or r['engine'] == 'generated-owned') and
                          r['stage'] in (base, base + '-boundary')))]
         else:
             selected = [r for r in data['results'] if r['stage'] in (stage, stage + '-boundary')]

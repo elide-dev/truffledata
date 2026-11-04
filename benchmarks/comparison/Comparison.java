@@ -57,13 +57,17 @@ public final class Comparison {
   }
 
   static List<String> engines(String workload) {
-    if (workload.equals("proto-bytes")) return List.of("stock", "stock-aliased", "owned", "buffa");
+    if (workload.equals("proto-bytes"))
+      return List.of("stock", "stock-aliased", "owned", "buffa", "generated-owned");
+    if (workload.equals("proto-scalar"))
+      return List.of("stock", "owned", "buffa", "generated-owned");
     return workload.startsWith("proto-") || workload.equals("timestamp-json")
         ? List.of("stock", "owned", "buffa")
         : List.of("stock", "static");
   }
 
   static List<String> stages(String workload, String engine) {
+    if (engine.equals("generated-owned")) return List.of("ingest", "read-aot", "interpret", "peak");
     List<String> result = new ArrayList<>(baseStages(workload, engine));
     if ((engine.equals("owned") || engine.equals("buffa"))
         && !workload.equals("proto-mixed-full")) {
@@ -275,7 +279,7 @@ public final class Comparison {
     final @Nullable BuffaPlan nativePlan;
     final OptimizedCallTarget target;
     final long expected;
-    final @Nullable GeneratedProjection generated;
+    final @Nullable Projection generated;
 
     Fixture(String workload, String engine, boolean guestRead) throws Exception {
       this(workload, engine, guestRead, false);
@@ -302,7 +306,10 @@ public final class Comparison {
       decoder = engine.equals("buffa") ? BuffaWire.open(BuffaWire.Mode.NATIVE, library()) : null;
       nativePlan = decoder == null ? null : decoder.compile(plan, 65536);
       int kind = mixed ? 3 : bytes ? 1 : jdbc ? 2 : 0;
-      generated = generatedReads ? new GeneratedProjection(plan, kind) : null;
+      generated =
+          engine.equals("generated-owned")
+              ? new OwnedProjection(plan, kind)
+              : generatedReads ? new GeneratedProjection(plan, kind) : null;
       RootNode root =
           generated != null
               ? new GeneratedReadRoot(generated)
@@ -379,6 +386,7 @@ public final class Comparison {
                 : ByteConverter.int4(wire[i], 0);
         return engine.startsWith("stock") ? value : layout.create(value);
       }
+      if (generated instanceof OwnedProjection owned) return owned.decode(wire[i]);
       if (engine.equals("owned"))
         return workload.equals("timestamp-json") ? plan.parseJson(json[i]) : plan.decode(wire[i]);
       if (workload.equals("proto-bytes")) {
@@ -626,7 +634,38 @@ public final class Comparison {
     }
   }
 
-  private static final class GeneratedProjection {
+  private interface Projection {
+    long read(ProtoAccess row);
+  }
+
+  private static final class OwnedProjection implements Projection {
+    private final int kind;
+    private final ComparisonContracts.@Nullable Access_google$protobuf$Timestamp timestamp;
+    private final ComparisonContracts.@Nullable Access_google$protobuf$BytesValue bytes;
+
+    OwnedProjection(ProtoPlan plan, int kind) {
+      this.kind = kind;
+      timestamp = kind == 0 ? new ComparisonContracts.Access_google$protobuf$Timestamp(plan) : null;
+      bytes = kind == 1 ? new ComparisonContracts.Access_google$protobuf$BytesValue(plan) : null;
+    }
+
+    ProtoAccess decode(byte[] wire) {
+      return kind == 0
+          ? Objects.requireNonNull(timestamp).decode(wire)
+          : Objects.requireNonNull(bytes).decode(wire);
+    }
+
+    @Override
+    public long read(ProtoAccess row) {
+      if (kind == 0) {
+        var value = (ComparisonContracts.Message_google$protobuf$Timestamp) row;
+        return value.get_seconds() + value.get_nanos();
+      }
+      return ((ComparisonContracts.Message_google$protobuf$BytesValue) row).get_value().size();
+    }
+  }
+
+  private static final class GeneratedProjection implements Projection {
     private final int kind;
     private final ComparisonContracts.@Nullable Access_google$protobuf$Timestamp timestamp;
     private final ComparisonContracts.@Nullable Access_google$protobuf$BytesValue bytes;
@@ -639,7 +678,7 @@ public final class Comparison {
       mixed = kind == 3 ? new ComparisonContracts.Access_google$protobuf$Type(plan) : null;
     }
 
-    long read(ProtoAccess row) {
+    public long read(ProtoAccess row) {
       if (kind == 0) {
         var access = Objects.requireNonNull(timestamp);
         return access.get_seconds(row) + access.get_nanos(row);
@@ -654,11 +693,11 @@ public final class Comparison {
   }
 
   private static final class GeneratedReadRoot extends RootNode {
-    private final GeneratedProjection projection;
+    private final Projection projection;
     private final com.oracle.truffle.api.profiles.ValueProfile rowClass =
         com.oracle.truffle.api.profiles.ValueProfile.createClassProfile();
 
-    GeneratedReadRoot(GeneratedProjection projection) {
+    GeneratedReadRoot(Projection projection) {
       super(ComparisonLanguage.current());
       this.projection = projection;
     }

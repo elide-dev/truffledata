@@ -5,7 +5,7 @@ import compare
 
 
 class ComparisonTest(unittest.TestCase):
-    def dataset(self, schema=6):
+    def dataset(self, schema=7):
         rows = []
         for cell, fork in itertools.product(compare.cells(schema), range(3)):
             workload, engine, stage = cell
@@ -16,7 +16,7 @@ class ComparisonTest(unittest.TestCase):
         return dict(schema=schema, forks=3, results=rows)
 
     def test_complete(self):
-        self.assertEqual(len(list(compare.cells())), 88)
+        self.assertEqual(len(list(compare.cells())), 96)
         self.assertEqual(len(list(compare.cells(1))), 31)
         self.assertEqual(len(list(compare.cells(2))), 37)
         self.assertEqual(len(list(compare.cells(3))), 47)

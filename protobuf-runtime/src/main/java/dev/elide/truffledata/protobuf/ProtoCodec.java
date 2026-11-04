@@ -436,8 +436,8 @@ final class ProtoCodec {
             : BigInteger.valueOf(value & Long.MAX_VALUE).setBit(63));
   }
 
-  static byte[] encode(ProtoRow row) {
-    Writer sizing = new Writer(null, row.plan().model.maxWireBytes);
+  static byte[] encode(ProtoAccess row) {
+    Writer sizing = new Writer(null, row.plan().maxWireBytes());
     sizing.message(row);
     byte[] result = new byte[sizing.position];
     new Writer(result, result.length).message(row);
@@ -475,12 +475,11 @@ final class ProtoCodec {
       }
     }
 
-    void message(ProtoRow row) {
-      var data = DataLibrary.factory().getUncached();
+    void message(ProtoAccess row) {
       for (int i = 0; i < row.plan().size(); i++) {
         if (!row.has(i)) continue;
         var field = row.plan().field(i);
-        Object value = data.read(row, i);
+        Object value = row.get(i);
         if (field.repeated()) {
           DataArray array = (DataArray) value;
           if (field.packed()) {
@@ -492,13 +491,15 @@ final class ProtoCodec {
           } else for (int j = 0; j < array.size(); j++) field(field, array.get(j));
         } else field(field, value);
       }
-      for (byte b : row.unknown) octet(b);
+      byte[] unknown =
+          row instanceof ProtoRow owned ? owned.unknown : ((GeneratedMessage) row).unknown;
+      for (byte b : unknown) octet(b);
     }
 
     void field(ProtoPlan.FieldPlan field, Object value) {
       varint((long) field.number() << 3 | field.kind().wire);
       if (field.kind().message()) {
-        ProtoRow row = (ProtoRow) value;
+        ProtoAccess row = (ProtoAccess) value;
         if (field.kind() == ProtoPlan.Kind.MESSAGE) {
           Writer size = new Writer(null, limit);
           size.message(row);

@@ -27,6 +27,13 @@ public final class StockFreeConsumer {
     var getters = new WellKnownContracts.Access_google$protobuf$Timestamp(timestamp);
     var value = timestamp.parseText("seconds: 123 nanos: 456");
     byte[] wire = timestamp.encode(value);
+    var generated = getters.decode(wire);
+    check(
+        generated.get_seconds() == 123 && generated.get_nanos() == 456, "generated inline fields");
+    check(Arrays.equals(wire, generated.encode()), "generated serialization");
+    check(
+        DataLibrary.factory().getUncached().readLong(generated, 0) == 123,
+        "generated library export");
     check(getters.get_seconds(timestamp.decode(wire)) == 123, "binary scalar");
     check(
         getters.get_nanos(timestamp.parseJson("\"1970-01-01T00:02:03.000000456Z\"")) == 456,

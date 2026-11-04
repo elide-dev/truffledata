@@ -28,3 +28,27 @@ message Sample {
   map<uint64, int32> counts = 24;
   int32 custom_value = 25 [json_name = "customAlias"];
 }
+
+// Independent generated owned codecs exercise every scalar wire representation.
+message Flat {
+  int32 i32 = 1;
+  int64 i64 = 2;
+  uint32 u32 = 3;
+  uint64 u64 = 4;
+  sint32 s32 = 5;
+  sint64 s64 = 6;
+  fixed32 f32 = 7;
+  fixed64 f64 = 8;
+  sfixed32 sf32 = 9;
+  sfixed64 sf64 = 10;
+  bool flag = 11;
+  float single = 12;
+  double real = 13;
+  string text = 14;
+  bytes blob = 15;
+  enum Status { ZERO = 0; YES = 1; }
+  Status status = 16;
+  optional int32 present = 17;
+  oneof choice { int32 selected = 18; string selected_text = 19; }
+}
+message Empty {}

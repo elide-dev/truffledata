@@ -147,6 +147,8 @@ public final class ContractPlugin {
             .append("); }\n");
       }
     }
+    for (int i = 0; i < definitions.size(); i++)
+      OwnedGenerator.append(source, definitions.get(i), i);
     // Schema-bound generated getters contain literal ordinals and no library dispatch.
     for (int i = 0; i < definitions.size(); i++) {
       var type = definitions.get(i);
@@ -165,6 +167,15 @@ public final class ContractPlugin {
           .append(
               " private void check(dev.elide.truffledata.protobuf.ProtoAccess row) { if (row.plan()"
                   + " != plan) throw new ContractViolation(\"Generated plan mismatch\"); }\n");
+      if (OwnedGenerator.supports(type)) {
+        String message = OwnedGenerator.name(type);
+        source
+            .append(" @com.oracle.truffle.api.CompilerDirectives.TruffleBoundary public ")
+            .append(message)
+            .append(" decode(byte[] wire) { return ")
+            .append(message)
+            .append(".decode(plan, wire); }\n");
+      }
       for (int j = 0; j < type.fields().size(); j++) {
         var field = type.fields().get(j);
         String result = "Object", read = "get";
@@ -227,7 +238,7 @@ public final class ContractPlugin {
         .build();
   }
 
-  private static String literal(Object value) throws Exception {
+  static String literal(Object value) throws Exception {
     if (value == Missing.INSTANCE) return "Missing.INSTANCE";
     if (value instanceof String s) return quote(s);
     if (value instanceof Boolean b) return b.toString();
