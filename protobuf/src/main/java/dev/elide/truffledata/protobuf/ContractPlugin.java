@@ -174,7 +174,23 @@ public final class ContractPlugin {
             .append(message)
             .append(" decode(byte[] wire) { return ")
             .append(message)
-            .append(".decode(plan, wire); }\n");
+            .append(".decode(plan, wire); }\n")
+            .append(" public ")
+            .append(OwnedGenerator.builderName(type))
+            .append(" newBuilder() { return new ")
+            .append(OwnedGenerator.builderName(type))
+            .append("(plan); }\n");
+      }
+      if (OwnedGenerator.inlineSupported(type)) {
+        source
+            .append(
+                " /** Inline decode for a nonescaping projection; unknowns use the bounded slow"
+                    + " path. */\n")
+            .append(" public ")
+            .append(OwnedGenerator.name(type))
+            .append(" decodeForProjection(byte[] wire) { return ")
+            .append(OwnedGenerator.name(type))
+            .append(".decodeInput(plan,wire,true); }\n");
       }
       for (int j = 0; j < type.fields().size(); j++) {
         var field = type.fields().get(j);

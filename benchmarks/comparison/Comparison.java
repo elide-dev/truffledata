@@ -67,7 +67,8 @@ public final class Comparison {
   }
 
   static List<String> stages(String workload, String engine) {
-    if (engine.equals("generated-owned")) return List.of("ingest", "read-aot", "interpret", "peak");
+    if (engine.equals("generated-owned"))
+      return List.of("ingest", "read-aot", "interpret", "peak", "serialize");
     List<String> result = new ArrayList<>(baseStages(workload, engine));
     if ((engine.equals("owned") || engine.equals("buffa"))
         && !workload.equals("proto-mixed-full")) {
@@ -75,6 +76,7 @@ public final class Comparison {
       if (!workload.equals("timestamp-json"))
         result.addAll(List.of("read-generated-aot", "interpret-generated", "peak-generated"));
     }
+    if (workload.equals("proto-scalar") || workload.equals("proto-bytes")) result.add("serialize");
     return result;
   }
 
@@ -115,12 +117,15 @@ public final class Comparison {
               workload,
               engine,
               stage.startsWith("interpret") || peak,
-              stage.contains("generated"))) {
+              stage.contains("generated"),
+              stage.equals("serialize"))) {
         boolean ingest = stage.startsWith("ingest");
         Operation operation =
-            stage.equals("ingest-typed")
-                ? fixture::ingestTyped
-                : ingest ? fixture::ingest : fixture::read;
+            stage.equals("serialize")
+                ? fixture::serialize
+                : stage.equals("ingest-typed")
+                    ? fixture::ingestTyped
+                    : ingest ? fixture::ingest : fixture::read;
         for (int i = 0; i < 4; i++) fixture.check(operation.run(i));
         // Calibrate before warmup: initialization must not disturb measured guest code.
         ThreadMXBean bean = memory || smoke ? allocationCounter() : null;
@@ -160,7 +165,7 @@ public final class Comparison {
             System.out.println(
                 "ALLOCATION compact-scalar " + engine + " " + stage + " bytes/message=" + bytes);
           }
-          if (ImageInfo.inImageRuntimeCode() && !ingest) {
+          if (ImageInfo.inImageRuntimeCode() && !ingest && !stage.equals("serialize")) {
             var counter = Objects.requireNonNull(bean);
             long thread = Thread.currentThread().threadId();
             long before = counter.getThreadAllocatedBytes(thread);
@@ -282,10 +287,15 @@ public final class Comparison {
     final @Nullable Projection generated;
 
     Fixture(String workload, String engine, boolean guestRead) throws Exception {
-      this(workload, engine, guestRead, false);
+      this(workload, engine, guestRead, false, false);
     }
 
-    Fixture(String workload, String engine, boolean guestRead, boolean generatedReads)
+    Fixture(
+        String workload,
+        String engine,
+        boolean guestRead,
+        boolean generatedReads,
+        boolean serialize)
         throws Exception {
       this.guestRead = guestRead;
       this.workload = workload;
@@ -374,8 +384,8 @@ public final class Comparison {
           rows[i] = Objects.requireNonNull(messages[i]).row();
         } else rows[i] = parse(i);
       }
-      expected = sum;
-      check(read(0));
+      expected = serialize ? Arrays.stream(wire).mapToLong(w -> w.length).sum() : sum;
+      check(serialize ? serialize(0) : read(0));
     }
 
     Object parse(int i) throws Exception {
@@ -410,6 +420,22 @@ public final class Comparison {
       return workload.equals("timestamp-json")
           ? Objects.requireNonNull(nativePlan).parseJson(json[i], 1 << 20)
           : Objects.requireNonNull(nativePlan).decode(Objects.requireNonNull(inputs[i]), 1 << 20);
+    }
+
+    long serialize(int rotation) {
+      long sum = 0;
+      for (int n = 0; n < ROWS; n++) {
+        int i = (n + rotation) & (ROWS - 1);
+        byte[] encoded;
+        if (nativePlan != null) encoded = Objects.requireNonNull(messages[i]).encode();
+        else if (rows[i] instanceof dev.elide.truffledata.protobuf.GeneratedMessage message)
+          encoded = message.encode();
+        else if (rows[i] instanceof ProtoRow row) encoded = plan.encode(row);
+        else encoded = ((com.google.protobuf.MessageLite) rows[i]).toByteArray();
+        retained = encoded;
+        sum += encoded.length;
+      }
+      return sum;
     }
 
     long ingest(int rotation) throws Exception {

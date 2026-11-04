@@ -11,6 +11,13 @@ final class OwnedGenerator {
         && type.fields().stream().noneMatch(f -> f.repeated() || f.kind().message());
   }
 
+  static boolean inlineSupported(ProtoPlan.Type schema) {
+    return supports(schema)
+        && schema.fields().size() <= 8
+        && schema.fields().stream()
+            .allMatch(f -> Set.of("long", "double", "boolean").contains(type(f)));
+  }
+
   static String name(ProtoPlan.Type type) {
     return "Message_" + type.name().replace('.', '$');
   }
@@ -48,8 +55,137 @@ final class OwnedGenerator {
     };
   }
 
+  private static String write(ProtoPlan.FieldPlan field, String value) {
+    return switch (field.kind()) {
+      case INT32, INT64, UINT32, ENUM -> "output.varint(" + value + ");";
+      case UINT64 ->
+          "output.varint(dev.elide.truffledata.protobuf.GeneratedOutput.integer(" + value + "));";
+      case SINT32 ->
+          "output.varint(Integer.toUnsignedLong(((int)"
+              + value
+              + " << 1) ^ ((int)"
+              + value
+              + " >> 31)));";
+      case SINT64 -> "output.varint((" + value + " << 1) ^ (" + value + " >> 63));";
+      case FIXED32, SFIXED32 -> "output.fixed(" + value + ",4);";
+      case SFIXED64 -> "output.fixed(" + value + ",8);";
+      case FIXED64 ->
+          "output.fixed(dev.elide.truffledata.protobuf.GeneratedOutput.integer(" + value + "),8);";
+      case FLOAT -> "output.fixed(Float.floatToRawIntBits((float)" + value + "),4);";
+      case DOUBLE -> "output.fixed(Double.doubleToRawLongBits(" + value + "),8);";
+      case BOOL -> "output.varint(" + value + " ? 1 : 0);";
+      case STRING -> "output.string(" + value + ");";
+      case BYTES -> "output.bytes(" + value + ");";
+      default -> throw new IllegalArgumentException("Not a scalar schema");
+    };
+  }
+
+  static String builderName(ProtoPlan.Type schema) {
+    return "Builder_" + schema.name().replace('.', '$');
+  }
+
+  private static String fallback(ProtoPlan.FieldPlan field, int ordinal) throws Exception {
+    String kind = type(field);
+    return kind.equals("Object") || kind.equals("String") || kind.equals("DataArray")
+        ? "(" + kind + ")plan.field(" + ordinal + ").defaultValue()"
+        : ContractPlugin.literal(field.defaultValue());
+  }
+
+  private static String zero(ProtoPlan.FieldPlan field, int ordinal) {
+    String value = "f" + ordinal;
+    return switch (type(field)) {
+      case "long" -> value + "==0";
+      case "double" -> "Double.doubleToRawLongBits(" + value + ")==0";
+      case "boolean" -> "!" + value;
+      case "String" -> value + ".isEmpty()";
+      case "DataArray" -> value + ".size()==0";
+      default -> "((ExactNumber)" + value + ").decimal().signum()==0";
+    };
+  }
+
+  private static void builder(StringBuilder out, ProtoPlan.Type schema) throws Exception {
+    String builder = builderName(schema);
+    var fields = schema.fields();
+    out.append(" public static final class ")
+        .append(builder)
+        .append(" { private final ProtoPlan plan; private long presence;\n");
+    for (int i = 0; i < fields.size(); i++)
+      out.append(" private ").append(type(fields.get(i))).append(" f").append(i).append(";\n");
+    out.append(" private ").append(builder).append("(ProtoPlan plan) { this.plan=plan;");
+    for (int i = 0; i < fields.size(); i++)
+      out.append(" f").append(i).append('=').append(fallback(fields.get(i), i)).append(';');
+    out.append(" }\n");
+    for (int i = 0; i < fields.size(); i++) {
+      var field = fields.get(i);
+      out.append(" public ")
+          .append(builder)
+          .append(" set_")
+          .append(field.name())
+          .append('(')
+          .append(type(field))
+          .append(" value) {")
+          .append(" dev.elide.truffledata.protobuf.GeneratedMessage.validateField(plan,")
+          .append(i)
+          .append(",value);");
+      if (field.oneof() >= 0) {
+        for (int j = 0; j < fields.size(); j++)
+          if (j != i && fields.get(j).oneof() == field.oneof())
+            out.append(" clear_").append(fields.get(j).name()).append("();");
+      }
+      out.append(" f")
+          .append(i)
+          .append("=value; presence |= ")
+          .append(1L << i)
+          .append("L; return this; }\n");
+      out.append(" public ")
+          .append(builder)
+          .append(" clear_")
+          .append(field.name())
+          .append("() { f")
+          .append(i)
+          .append('=')
+          .append(fallback(field, i))
+          .append("; presence &= ~")
+          .append(1L << i)
+          .append("L; return this; }\n");
+    }
+    out.append(" @com.oracle.truffle.api.CompilerDirectives.TruffleBoundary public ")
+        .append(name(schema))
+        .append(" build() { long bits=presence; long cells=")
+        .append(fields.size())
+        .append("L; long payload=0;\n");
+    for (int i = 0; i < fields.size(); i++) {
+      var field = fields.get(i);
+      if (field.required())
+        out.append(" if ((bits & ")
+            .append(1L << i)
+            .append(
+                "L)==0) {"
+                    + " com.oracle.truffle.api.CompilerDirectives.transferToInterpreterAndInvalidate();"
+                    + " throw new ContractViolation(\"Missing required field\"); }\n");
+      if (!field.explicitPresence())
+        out.append(" if (")
+            .append(zero(field, i))
+            .append(") bits &= ~")
+            .append(1L << i)
+            .append("L;\n");
+      if (field.kind() == ProtoPlan.Kind.STRING)
+        out.append(" payload += 2L * f").append(i).append(".length();\n");
+      if (field.kind() == ProtoPlan.Kind.BYTES)
+        out.append(" cells += f").append(i).append(".size();\n");
+    }
+    out.append(" if (cells > plan.limits().maxCells() || payload > plan.limits().maxStringBytes())")
+        .append(" throw new ContractViolation(\"Generated build budget\");\n")
+        .append(" return new ")
+        .append(name(schema))
+        .append("(plan,bits,new byte[0]");
+    for (int i = 0; i < fields.size(); i++) out.append(",f").append(i);
+    out.append("); }\n }\n");
+  }
+
   static void append(StringBuilder out, ProtoPlan.Type schema, int index) throws Exception {
     if (!supports(schema)) return;
+    builder(out, schema);
     String name = name(schema);
     var fields = schema.fields();
     out.append(" public static final class ")
@@ -113,9 +249,36 @@ final class OwnedGenerator {
                   : "super." + method + "(ordinal)")
           .append("; }; }\n");
     }
+    out.append(
+        " @Override protected void writeFields(dev.elide.truffledata.protobuf.GeneratedOutput"
+            + " output) {\n");
+    for (int i = 0; i < fields.size(); i++) {
+      var field = fields.get(i);
+      out.append(" if (has(")
+          .append(i)
+          .append(")) { output.varint(")
+          .append(((long) field.number() << 3) | field.kind().wire)
+          .append("L);")
+          .append(write(field, "f" + i))
+          .append(" }\n");
+    }
+    out.append(" }\n");
+    if (inlineSupported(schema)) {
+      out.append(" @com.oracle.truffle.api.CompilerDirectives.TruffleBoundary private static ")
+          .append(name)
+          .append(
+              " slowDecode(ProtoPlan plan, byte[] wire) { return decodeInput(plan,wire,false); }\n")
+          .append(" private static ")
+          .append(name)
+          .append(
+              " decode(ProtoPlan plan, byte[] wire) { return decodeInput(plan,wire,false); }\n");
+    }
     out.append(" private static ")
         .append(name)
-        .append(" decode(ProtoPlan plan, byte[] wire) {\n")
+        .append(
+            inlineSupported(schema)
+                ? " decodeInput(ProtoPlan plan, byte[] wire, boolean inline) {\n"
+                : " decode(ProtoPlan plan, byte[] wire) {\n")
         .append(
             " var input = new dev.elide.truffledata.protobuf.GeneratedInput(plan, wire); long"
                 + " presence=0;\n");
@@ -150,7 +313,9 @@ final class OwnedGenerator {
                         .distinct()
                         .map(Object::toString)
                         .toList()))
-            .append(" -> true; default -> false; })) { input.retain(start); continue; }");
+            .append(" -> true; default -> false; })) { ")
+            .append(inlineSupported(schema) ? "if (inline) return slowDecode(plan,wire); " : "")
+            .append("input.retain(start); continue; }");
       }
       if (f.oneof() >= 0) {
         for (int j = 0; j < fields.size(); j++) {
@@ -160,20 +325,25 @@ final class OwnedGenerator {
                 .append("L; f")
                 .append(j)
                 .append('=')
-                .append(ContractPlugin.literal(fields.get(j).defaultValue()))
+                .append(fallback(fields.get(j), j))
                 .append(';');
           }
         }
       }
       out.append(" f").append(i).append("=value; presence |= ").append(1L << i).append("L; }\n");
     }
-    out.append(" default -> input.unknown(start,tag); } }\n");
+    out.append(" default -> { ")
+        .append(inlineSupported(schema) ? "if (inline) return slowDecode(plan,wire); " : "")
+        .append("input.unknown(start,tag); } } }\n");
     for (int i = 0; i < fields.size(); i++) {
       var field = fields.get(i);
       if (field.required())
         out.append(" if ((presence & ")
             .append(1L << i)
-            .append("L)==0) throw new ContractViolation(\"Missing required field\");\n");
+            .append(
+                "L)==0) {"
+                    + " com.oracle.truffle.api.CompilerDirectives.transferToInterpreterAndInvalidate();"
+                    + " throw new ContractViolation(\"Missing required field\"); }\n");
       if (!field.explicitPresence()) {
         String zero =
             switch (type(field)) {
@@ -182,7 +352,7 @@ final class OwnedGenerator {
               case "boolean" -> "!f" + i;
               case "String" -> "f" + i + ".isEmpty()";
               case "DataArray" -> "f" + i + ".size()==0";
-              default -> "f" + i + ".equals(0L)";
+              default -> "((ExactNumber)f" + i + ").decimal().signum()==0";
             };
         out.append(" if (").append(zero).append(") presence &= ~").append(1L << i).append("L;\n");
       }

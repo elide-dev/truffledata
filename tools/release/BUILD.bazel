@@ -295,6 +295,7 @@ java_library(
 
 java_test(
     name = "stock_free_consumer",
+    data = ["//tests:native_descriptors"],
     jvm_flags = ["--enable-native-access=ALL-UNNAMED"],
     main_class = "StockFreeConsumer",
     use_testrunner = False,
@@ -339,7 +340,10 @@ sh_test(
         "$(location :stock_free_native)",
         "native",
     ],
-    data = [":stock_free_native"],
+    data = [
+        ":stock_free_native",
+        "//tests:native_descriptors",
+    ],
     tags = ["manual"],
     target_compatible_with = [
         "@platforms//os:linux",

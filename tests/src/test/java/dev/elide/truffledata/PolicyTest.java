@@ -34,8 +34,9 @@ class PolicyTest {
             Map.entry("ProtoPlan.java", 11), // Generated contract binding, outside reads.
             Map.entry("ProtoRow.java", 3),
             Map.entry("ProtoCompiler.java", 8),
+            Map.entry("ProtoDescriptors.java", 1),
             Map.entry("ProtoWire.java", 1),
-            Map.entry("GeneratedMessage.java", 1),
+            Map.entry("GeneratedMessage.java", 2),
             Map.entry("NativeMetadata.java", 1),
             Map.entry("JdbcContracts.java", 1),
             Map.entry("JdbcContract.java", 1),

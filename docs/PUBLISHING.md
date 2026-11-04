@@ -1,6 +1,6 @@
 # Maven publishing
 
-Bazel produces eight thin libraries and a dependency-management BOM, with source jars and POMs:
+The development branch produces nine thin libraries and a dependency-management BOM, with source jars and POMs. The runtime split below is unreleased; 0.4.0 contains eight libraries.
 
 | Coordinate | Contents |
 | --- | --- |
@@ -12,7 +12,8 @@ Bazel produces eight thin libraries and a dependency-management BOM, with source
 | `dev.elide:truffledata-protobuf-buffa:<version>` | Optional native protobuf decoder and typed views; includes Linux x86-64 native attachments |
 | `dev.elide:truffledata-protobuf-buffa-bindings:<version>` | Generated Myna bindings for JVM FFM and static SVM |
 | `dev.elide:truffledata-bom:<version>` | POM-only dependency management for the tested libraries, drivers and runtime |
-| `dev.elide:truffledata-protobuf:<version>` | Tabular and lossless protobuf APIs, wire codec, and contract generator; depends on core, protobuf-java and protobuf-java-util |
+| `dev.elide:truffledata-protobuf-runtime:<version>` | Stock-free plans, codecs, runtime descriptor compilation and generated-record support; core, Gson and Truffle dependencies |
+| `dev.elide:truffledata-protobuf:<version>` | Optional Message/descriptor compatibility bridge and build-time contract generator; depends on protobuf-runtime, protobuf-java and protobuf-java-util |
 
 All artifacts require Java 25 and currently target Elide GraalVM `25.5.5-elide.24`. They do not bundle GraalVM, guest languages, JDBC drivers, annotation processors, or test libraries. Select the runtime and guest languages in the embedding application. The driver integration artifacts declare their upstream drivers transitively; generic JDBC remains driver independent. JSpecify annotations and the Truffle API are compile dependencies. Release dependencies are checked against `maven_install.json` by `//tools/release:test`.
 

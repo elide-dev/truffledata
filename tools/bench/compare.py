@@ -14,6 +14,7 @@ import statistics
 import subprocess
 
 WORKLOADS = ('proto-scalar', 'proto-bytes', 'timestamp-json', 'mysql-int4', 'postgres-int4', 'proto-mixed', 'proto-mixed-full')
+SERIALIZE_CHECKSUMS = {'proto-scalar': 288, 'proto-bytes': 2097776}
 CHECKSUMS = {'proto-scalar': 54400032992, 'proto-bytes': 2097648, 'timestamp-json': 54400032992,
              'mysql-int4': 35472, 'postgres-int4': 35472, 'proto-mixed': 563, 'proto-mixed-full': 4866}
 
@@ -30,7 +31,7 @@ def cells(schema=7):
             engines += ('generated-owned',)
         for engine in engines:
             if engine == 'generated-owned':
-                for stage in ('ingest', 'read-aot', 'interpret', 'peak'):
+                for stage in ('ingest', 'read-aot', 'interpret', 'peak', 'serialize'):
                     yield workload, engine, stage
                 continue
             if workload in ('timestamp-json', 'proto-mixed-full'):
@@ -48,6 +49,8 @@ def cells(schema=7):
                 stages += ('ingest-generated',)
                 if workload != 'timestamp-json':
                     stages += ('read-generated-aot', 'interpret-generated', 'peak-generated')
+            if schema >= 7 and workload in SERIALIZE_CHECKSUMS:
+                stages += ('serialize',)
             for stage in stages:
                 yield workload, engine, stage
 
@@ -60,7 +63,7 @@ def validate_row(row, cell, metric):
         raise ValueError('Wrong guest execution tier')
     if row['backend'] != ('SVM_STATIC' if engine == 'buffa' else 'none'):
         raise ValueError('Wrong backend')
-    if row['rows'] != 32 or row['checksum'] != CHECKSUMS[workload]:
+    if row['rows'] != 32 or row['checksum'] != (SERIALIZE_CHECKSUMS if stage == 'serialize' else CHECKSUMS)[workload]:
         raise ValueError('Wrong dataset/checksum')
     samples = row[metric]
     if len(samples) != 3 or any(type(n) not in (int, float) or not math.isfinite(n)
@@ -102,6 +105,7 @@ def render(data, path):
              'Ingest includes parsing/materialization and an uncached projected read. Setup is excluded.',
              'ingest-typed uses primitive readLong projections; ingest retains generic read projections.',
              'Generated stages use schema-bound generated getters; read-generated-aot excludes guest calls. Original library-dispatch stages remain.',
+             'Schema 7 adds generated-owned concrete scalar/bytes records and serialization. Serialization emits a fresh byte array; Buffa binary views forward the validated original wire, while owned and stock messages encode fields. These operations have equivalent wire semantics, but differ in work performed.',
              'Buffa binary input is already in unmanaged memory; owned engines start with Java byte arrays.',
              'Buffa results are scoped borrowed views; stock-aliased borrows immutable ByteString input; stock/owned copy payloads.',
              'The direct stock AOT baseline excludes guest interop and contract enforcement.',

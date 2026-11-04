@@ -73,6 +73,7 @@ final class CompiledReads {
       try {
         generatedReads(decoder);
         generatedOwnedReads();
+        generatedProjection();
         nonconstantLayouts();
         try (var plan = decoder.compile(TypedAcceptance.plan("Sample"), 65536)) {
           for (int format = 0; format < 3; format++) {
@@ -251,6 +252,71 @@ final class CompiledReads {
           Acceptance.rejects(() -> target.call(row, 1), IllegalStateException.class);
         }
       }
+    }
+  }
+
+  private static void generatedProjection() {
+    var model =
+        dev.elide.truffledata.generated.WellKnownContracts.create(
+            TestLanguage.current(), Limits.DEFAULT, 16, 65536);
+    var access =
+        new dev.elide.truffledata.generated.WellKnownContracts.Access_google$protobuf$Timestamp(
+            model.type("google.protobuf.Timestamp"));
+    byte[][] wire = {
+      access.newBuilder().set_seconds(1000).set_nanos(1).build().encode(),
+      access.newBuilder().set_seconds(1002).set_nanos(3).build().encode()
+    };
+    var root = new ProjectionRoot(access);
+    var target = root.getCallTarget();
+    for (int i = 0; i < 10; i++) target.call(wire, 100000);
+    Acceptance.check(root.compiled, "parse/project compiled");
+    Acceptance.check(((Long) target.call(wire, 1000000)) == 1003000000L, "parse/project checksum");
+    Acceptance.check(NodeUtil.countNodes(root) <= 192, "parse/project AST budget");
+    var bean =
+        (com.sun.management.ThreadMXBean) java.lang.management.ManagementFactory.getThreadMXBean();
+    Acceptance.check(bean.isThreadAllocatedMemorySupported(), "projection allocation counter");
+    bean.setThreadAllocatedMemoryEnabled(true);
+    long thread = Thread.currentThread().threadId();
+    target.call(wire, 100000);
+    long before = bean.getThreadAllocatedBytes(thread);
+    target.call(wire, 100000);
+    double allocated = (bean.getThreadAllocatedBytes(thread) - before) / 100000.0;
+    System.out.println("ALLOCATION parse-project bytes/message=" + allocated);
+    Acceptance.check(allocated >= 0 && allocated <= 1, "parse/project allocation budget");
+    byte[] unknown = java.util.Arrays.copyOf(wire[0], wire[0].length + 2);
+    unknown[wire[0].length] = 120;
+    unknown[wire[0].length + 1] = 7;
+    Acceptance.check(
+        java.util.Arrays.equals(unknown, access.decodeForProjection(unknown).encode()),
+        "projection unknown fallback preserves wire");
+    Acceptance.rejects(() -> access.decodeForProjection(new byte[] {8}), ContractViolation.class);
+  }
+
+  private static final class ProjectionRoot extends RootNode {
+    private final dev.elide.truffledata.generated.WellKnownContracts
+            .Access_google$protobuf$Timestamp
+        access;
+    boolean compiled;
+
+    ProjectionRoot(
+        dev.elide.truffledata.generated.WellKnownContracts.Access_google$protobuf$Timestamp
+            access) {
+      super(TestLanguage.current());
+      this.access = access;
+    }
+
+    @Override
+    public Object execute(VirtualFrame frame) {
+      byte[][] wire = (byte[][]) frame.getArguments()[0];
+      int count = (Integer) frame.getArguments()[1];
+      long sum = 0;
+      for (int i = 0; i < count; i++) {
+        var row = access.decodeForProjection(wire[i & 1]);
+        sum += row.get_seconds() + row.get_nanos();
+      }
+      if (CompilerDirectives.inInterpreter()) LoopNode.reportLoopCount(this, count);
+      compiled |= CompilerDirectives.inCompiledCode();
+      return sum;
     }
   }
 

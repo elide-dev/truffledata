@@ -27,6 +27,17 @@ public final class TypedMessage implements AutoCloseable {
     return nativeBytes;
   }
 
+  /** Encode an immutable view; binary input can be copied verbatim, including unknown fields. */
+  @TruffleBoundary
+  public byte[] encode() {
+    owner.check();
+    if (!binary) return row.plan().encode(row.snapshot());
+    var wire = owner.lease.bytes;
+    byte[] bytes = new byte[wire.remaining()];
+    wire.get(wire.position(), bytes);
+    return bytes;
+  }
+
   /** Binary detachment also preserves unknown wire fields through the bounded owned codec. */
   @TruffleBoundary
   public ProtoRow snapshot() {

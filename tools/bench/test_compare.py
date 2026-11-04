@@ -11,12 +11,12 @@ class ComparisonTest(unittest.TestCase):
             workload, engine, stage = cell
             rows.append(dict(workload=workload, engine=engine, stage=stage, fork=fork,
                              runtime='svm', backend='SVM_STATIC' if engine == 'buffa' else 'none',
-                             guest_compiled=stage.startswith('peak'), rows=32, checksum=compare.CHECKSUMS[workload],
+                             guest_compiled=stage.startswith('peak'), rows=32, checksum=(compare.SERIALIZE_CHECKSUMS if stage == 'serialize' else compare.CHECKSUMS)[workload],
                              ns_per_row=[1., 2., 3.], allocated_bytes_per_row=[0., 0., 0.]))
         return dict(schema=schema, forks=3, results=rows)
 
     def test_complete(self):
-        self.assertEqual(len(list(compare.cells())), 96)
+        self.assertEqual(len(list(compare.cells())), 105)
         self.assertEqual(len(list(compare.cells(1))), 31)
         self.assertEqual(len(list(compare.cells(2))), 37)
         self.assertEqual(len(list(compare.cells(3))), 47)

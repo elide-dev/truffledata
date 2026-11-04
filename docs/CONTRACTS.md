@@ -304,3 +304,51 @@ rows retain their lifetime and thread checks.
 Keep the bound accessor in a final guest-node field so partial evaluation can fold
 its plan and ordinal. Static-object access with a nonconstant layout uses a boundary
 fallback. Generated getters do not perform native calls or descriptor lookup.
+
+## Independent protobuf runtime (unreleased)
+
+The development `truffledata-protobuf-runtime` artifact has no `protobuf-java` dependency.
+The existing `truffledata-protobuf` artifact remains the optional compatibility bridge and
+build-time generator. Buffa and generated contracts depend on the independent runtime.
+
+Runtime schemas can come from `protoc --descriptor_set_out --include_imports` bytes:
+
+```java
+var plan = ProtoDescriptors.compile(language, descriptorBytes, "example.Order",
+    Limits.DEFAULT, 32, 1_000_000);
+var row = plan.parseText("id: 123");
+byte[] wire = plan.encode(row);
+```
+
+This reader supports proto2/proto3 types, imports, maps, oneofs, explicit presence and defaults.
+It budgets descriptor bytes, cells and decoded strings before allocating their storage, and
+caps descriptor nesting at 128. The supplied depth limit controls data nesting. Editions,
+extension-bearing message types and MessageSet need another backend. Custom options do not
+become assertions through this API; the explicit compatibility adapter remains available for
+Protovalidate refinements. Imported option declarations do not themselves require an extension
+runtime. This is a contract compiler for descriptor sets, not a `.proto` source compiler.
+
+For flat scalar schemas with up to 64 fields, the generator now emits immutable `Message_*`
+records, direct getters, concrete builders, wire-tag parsers and exact-size serializers. Presence
+and oneof state are independent of values; unknown wire fields survive encoding. Strings and
+bytes are owned, and unsigned 64-bit values retain the schema's `ExactNumber` representation.
+Build and decode enforce budgets; reads do not repeat ingestion validation.
+
+```java
+var access = new Contracts.Access_example$Point(plan);
+var point = access.newBuilder().set_x(123).set_y(456).build();
+long x = point.get_x();
+byte[] encoded = point.encode();
+var decoded = access.decode(encoded);
+```
+
+Small primitive-only schemas (up to eight fields) also expose `decodeForProjection`. Call it
+inside a Truffle operation and consume the result immediately to let partial evaluation and
+escape analysis remove temporary storage. Unknown fields use the ordinary bounded decoder.
+The optimization is measured with a compiled allocation gate; it is not a blanket promise that
+every caller eliminates allocations. Nested/repeated generated codecs still use the generic
+plan path and are not emitted as concrete owned records yet.
+
+Borrowed `TypedMessage.encode()` forwards validated binary wire bytes into an owned output
+array, preserving unknown fields. Text/JSON views encode their semantic snapshot. Both paths
+check the view's lifetime, including after owner closure.

@@ -14,6 +14,56 @@ class GeneratedCodecTest {
   }
 
   @Test
+  void generatedBuildersValidateAndKeepSnapshotsIndependent() {
+    var plan = model(Limits.DEFAULT, 32, 1000000).type("truffledata.lossless.Flat");
+    var access = new TruffleDataContracts.Access_truffledata$lossless$Flat(plan);
+    var builder = access.newBuilder().set_i32(123).set_text("hello €").set_selected(7);
+    var first = builder.build();
+    var second = builder.set_i32(456).set_selected_text("second").build();
+    assertEquals(123, first.get_i32());
+    assertEquals(456, second.get_i32());
+    assertEquals(7, first.get_selected());
+    assertEquals(0, second.get_selected());
+    assertFalse(second.has(17));
+    assertTrue(second.has(18));
+    assertArrayEquals(
+        plan.encode(plan.parseText("i32: 123 text: 'hello €' selected: 7")), first.encode());
+    assertThrows(ContractViolation.class, () -> builder.set_i32(Long.MAX_VALUE));
+    assertThrows(ContractViolation.class, () -> builder.set_u32(-1));
+    assertThrows(ContractViolation.class, () -> builder.set_text("\uD800"));
+    assertEquals("", builder.clear_text().build().get_text());
+    var required =
+        new TruffleDataContracts.Access_truffledata$lossless$FlatDefaults(
+                model(Limits.DEFAULT, 32, 1000).type("truffledata.lossless.FlatDefaults"))
+            .newBuilder();
+    assertThrows(ContractViolation.class, required::build);
+    assertThrows(ContractViolation.class, () -> required.set_status(999));
+    assertEquals("hello", required.set_count(0).build().get_text());
+    assertThrows(ContractViolation.class, () -> required.clear_count().build());
+    var tiny =
+        new TruffleDataContracts.Access_truffledata$lossless$Flat(
+                model(new Limits(1024, 256, 262144, 2), 32, 1000).type(plan.name()))
+            .newBuilder();
+    assertThrows(ContractViolation.class, () -> tiny.set_text("long").build());
+  }
+
+  @Test
+  void primitiveByteCopiesDoNotExposeStorage() {
+    byte[] source = {1, 2, (byte) 255};
+    var bytes = DataArray.copyOfBytes(source);
+    byte[] output = new byte[5];
+    bytes.copyBytesTo(output, 1);
+    assertArrayEquals(new byte[] {0, 1, 2, (byte) 255, 0}, output);
+    output[1] = 9;
+    source[0] = 8;
+    assertEquals(1L, bytes.get(0));
+    assertThrows(IndexOutOfBoundsException.class, () -> bytes.copyBytesTo(output, 3));
+    assertThrows(IndexOutOfBoundsException.class, () -> bytes.copyBytesTo(output, -1));
+    assertThrows(
+        ContractViolation.class, () -> new DataArray(new Object[] {1L}).copyBytesTo(output, 0));
+  }
+
+  @Test
   void scalarWireKindsAndOneofMatchOwnedCodec() throws Exception {
     var model = model(Limits.DEFAULT, 32, 1000000);
     var plan = model.type("truffledata.lossless.Flat");
@@ -64,8 +114,15 @@ class GeneratedCodecTest {
     var defaults = access.decode(new byte[0]);
     for (int i = 0; i < plan.size(); i++) assertFalse(defaults.has(i));
     assertArrayEquals(new byte[0], defaults.encode());
-    assertEquals(0L, defaults.getLong(3));
-    assertEquals(0L, data.readLong(defaults, 3));
+    assertThrows(ContractViolation.class, () -> defaults.getLong(3));
+    assertThrows(UnexpectedResultException.class, () -> data.readLong(defaults, 3));
+    var zero = access.decode(new byte[] {32, 0});
+    assertEquals(java.math.BigDecimal.ZERO, ((ExactNumber) zero.get_u64()).decimal());
+    assertFalse(zero.has(3));
+    assertArrayEquals(new byte[0], zero.encode());
+    var low = access.decode(new byte[] {32, 123});
+    assertEquals(java.math.BigDecimal.valueOf(123), ((ExactNumber) low.get_u64()).decimal());
+    assertArrayEquals(new byte[] {32, 123}, low.encode());
   }
 
   @Test

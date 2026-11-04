@@ -19,6 +19,7 @@ data_java_library(
         "src/test/java/dev/elide/truffledata/JitMatrixTest.java",
         "src/test/java/dev/elide/truffledata/PolicyTest.java",
         "src/test/java/dev/elide/truffledata/PolyglotTest.java",
+        "src/test/java/dev/elide/truffledata/ProtoDescriptorsTest.java",
         "src/test/java/dev/elide/truffledata/ProtoNativeTest.java",
         "src/test/java/dev/elide/truffledata/ProtobufTest.java",
         "src/test/java/dev/elide/truffledata/RealDriversTest.java",
@@ -53,7 +54,7 @@ java_test(
         "--package",
         "dev.elide.truffledata",
         "--include-class",
-        "dev.elide.truffledata.(Core|ProtoNative|Jdbc|JdbcLifecycle|Protobuf|Polyglot|Policy|Contracts|Integration|JitMatrix)Test",
+        "dev.elide.truffledata.(Core|GeneratedCodec|ProtoDescriptors|ProtoNative|Jdbc|JdbcLifecycle|Protobuf|Polyglot|Policy|Contracts|Integration|JitMatrix)Test",
     ],
     data = [
         ":native_descriptors",

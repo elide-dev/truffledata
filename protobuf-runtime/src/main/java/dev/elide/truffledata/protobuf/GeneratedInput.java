@@ -1,8 +1,8 @@
 package dev.elide.truffledata.protobuf;
 
+import com.oracle.truffle.api.CompilerDirectives;
 import dev.elide.truffledata.*;
 import java.io.ByteArrayOutputStream;
-import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import org.jspecify.annotations.Nullable;
 
@@ -17,12 +17,16 @@ public final class GeneratedInput {
   private @Nullable ByteArrayOutputStream unknown;
 
   public GeneratedInput(ProtoPlan plan, byte[] source) {
-    if (source.length > plan.maxWireBytes())
-      throw new ContractViolation("Wire byte budget exceeded");
+    if (source.length > plan.maxWireBytes()) throw bad("Wire byte budget exceeded");
     this.source = source;
     this.plan = plan;
     cells = plan.size();
     chargeCells(0);
+  }
+
+  private static ContractViolation bad(String reason) {
+    CompilerDirectives.transferToInterpreterAndInvalidate();
+    return new ContractViolation(reason);
   }
 
   public static int zigzag32(long value) {
@@ -35,9 +39,10 @@ public final class GeneratedInput {
   }
 
   public static Object unsigned(long value) {
-    return value >= 0
-        ? value
-        : Values.normalize(java.math.BigInteger.valueOf(value & Long.MAX_VALUE).setBit(63));
+    return Values.normalize(
+        value >= 0
+            ? java.math.BigInteger.valueOf(value)
+            : java.math.BigInteger.valueOf(value & Long.MAX_VALUE).setBit(63));
   }
 
   public boolean remaining() {
@@ -51,25 +56,25 @@ public final class GeneratedInput {
   public int tag() {
     long value = varint();
     if (value < 0 || value > 0xffffffffL || (value >>> 3) == 0 || (value & 7) > 5)
-      throw new ContractViolation("Invalid wire tag");
+      throw bad("Invalid wire tag");
     return (int) value;
   }
 
   public long varint() {
     long value = 0;
     for (int shift = 0; shift < 64; shift += 7) {
-      if (!remaining()) throw new ContractViolation("Truncated varint");
+      if (!remaining()) throw bad("Truncated varint");
       int next = source[position++] & 255;
-      if (shift == 63 && (next & 254) != 0) throw new ContractViolation("Varint overflow");
+      if (shift == 63 && (next & 254) != 0) throw bad("Varint overflow");
       value |= (long) (next & 127) << shift;
       if ((next & 128) == 0) return value;
     }
-    throw new ContractViolation("Malformed varint");
+    throw bad("Malformed varint");
   }
 
   public long fixed(int width) {
     if ((width != 4 && width != 8) || width > source.length - position)
-      throw new ContractViolation("Truncated fixed field");
+      throw bad("Truncated fixed field");
     long value = 0;
     for (int i = 0; i < width; i++) value |= (long) (source[position++] & 255) << (i * 8);
     return value;
@@ -78,19 +83,19 @@ public final class GeneratedInput {
   private int length() {
     long count = varint();
     if (count < 0 || count > source.length - position)
-      throw new ContractViolation("Truncated length-delimited field");
+      throw bad("Truncated length-delimited field");
     return (int) count;
   }
 
   public String string() {
     int length = length();
-    chargeBytes(2L * utf16Length(position, length));
+    chargeBytes(2L * utf16Length(source, position, length));
     String value = new String(source, position, length, StandardCharsets.UTF_8);
     position += length;
     return value;
   }
 
-  private int utf16Length(int start, int count) {
+  static int utf16Length(byte[] source, int start, int count) {
     int cursor = start, end = start + count, units = 0;
     while (cursor < end) {
       int first = source[cursor++] & 255;
@@ -111,15 +116,15 @@ public final class GeneratedInput {
         tails = 3;
         code = first & 7;
         minimum = 0x10000;
-      } else throw new ContractViolation("Invalid UTF-8 leading byte");
-      if (tails > end - cursor) throw new ContractViolation("Truncated UTF-8");
+      } else throw bad("Invalid UTF-8 leading byte");
+      if (tails > end - cursor) throw bad("Truncated UTF-8");
       for (int i = 0; i < tails; i++) {
         int next = source[cursor++] & 255;
-        if ((next & 0xc0) != 0x80) throw new ContractViolation("Invalid UTF-8 continuation");
+        if ((next & 0xc0) != 0x80) throw bad("Invalid UTF-8 continuation");
         code = code << 6 | next & 63;
       }
       if (code < minimum || code > 0x10ffff || (code >= 0xd800 && code <= 0xdfff))
-        throw new ContractViolation("Invalid Unicode scalar");
+        throw bad("Invalid Unicode scalar");
       units += code >= 0x10000 ? 2 : 1;
     }
     return units;
@@ -128,20 +133,19 @@ public final class GeneratedInput {
   public DataArray bytes() {
     int length = length();
     chargeCells(length);
-    DataArray result = DataArray.copyOfBytes(ByteBuffer.wrap(source, position, length));
+    DataArray result = DataArray.copyOfBytes(source, position, length);
     position += length;
     return result;
   }
 
   private void chargeCells(long count) {
-    if (count > plan.limits().maxCells() - cells)
-      throw new ContractViolation("Generated cell budget exceeded");
+    if (count > plan.limits().maxCells() - cells) throw bad("Generated cell budget exceeded");
     cells += count;
   }
 
   private void chargeBytes(long count) {
     if (count > plan.limits().maxStringBytes() - stringBytes)
-      throw new ContractViolation("Generated payload budget exceeded");
+      throw bad("Generated payload budget exceeded");
     stringBytes += count;
   }
 
@@ -167,19 +171,19 @@ public final class GeneratedInput {
         position += count;
       }
       case 3 -> {
-        if (depth >= plan.maxDepth()) throw new ContractViolation("Unknown group depth exceeded");
+        if (depth >= plan.maxDepth()) throw bad("Unknown group depth exceeded");
         while (remaining()) {
           int child = tag();
           if ((child & 7) == 4) {
-            if ((child >>> 3) != (tag >>> 3)) throw new ContractViolation("Mismatched group");
+            if ((child >>> 3) != (tag >>> 3)) throw bad("Mismatched group");
             return;
           }
           skip(child, depth + 1);
         }
-        throw new ContractViolation("Unterminated group");
+        throw bad("Unterminated group");
       }
       case 5 -> fixed(4);
-      default -> throw new ContractViolation("Unexpected end group");
+      default -> throw bad("Unexpected end group");
     }
   }
 

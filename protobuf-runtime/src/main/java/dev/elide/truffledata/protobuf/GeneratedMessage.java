@@ -17,6 +17,7 @@ public abstract class GeneratedMessage extends AbstractRow implements ProtoAcces
 
   protected GeneratedMessage(ProtoPlan plan, long presence, byte[] unknown) {
     super(plan.schema());
+    if (plan.size() > 64) throw new ContractViolation("Generated presence bitmap overflow");
     this.plan = plan;
     this.presence = presence;
     this.unknown = unknown.length == 0 ? EMPTY : unknown.clone();
@@ -33,9 +34,31 @@ public abstract class GeneratedMessage extends AbstractRow implements ProtoAcces
     return (presence & (1L << ordinal)) != 0;
   }
 
+  /** Validation shared by generated builders; never called by immutable field readers. */
+  @TruffleBoundary
+  public static void validateField(ProtoPlan plan, int ordinal, Object value) {
+    var field = plan.field(ordinal);
+    Values.validate(field.contract(), value);
+    if (value instanceof String text) ProtoPlan.validateString(text);
+    if (field.kind() == ProtoPlan.Kind.BYTES && !((DataArray) value).isBytes())
+      throw new ContractViolation("Expected byte storage");
+    var enumeration = field.enumType();
+    if (enumeration != null && !enumeration.accepts(((Long) value).intValue()))
+      throw new ContractViolation("Unknown closed enum value");
+  }
+
+  protected abstract void writeFields(GeneratedOutput output);
+
   @TruffleBoundary
   public final byte[] encode() {
-    return ProtoCodec.encode(this);
+    var sizing = new GeneratedOutput(null, plan.maxWireBytes());
+    writeFields(sizing);
+    sizing.raw(unknown);
+    byte[] bytes = new byte[sizing.size()];
+    var output = new GeneratedOutput(bytes, bytes.length);
+    writeFields(output);
+    output.raw(unknown);
+    return bytes;
   }
 
   @ExportMessage

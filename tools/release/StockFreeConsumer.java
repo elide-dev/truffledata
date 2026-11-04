@@ -22,6 +22,26 @@ public final class StockFreeConsumer {
         // The standalone consumer must resolve neither stock nor our compatibility bridge.
       }
     }
+    var descriptorPath =
+        java.nio.file.Path.of(
+            java.util.Objects.requireNonNull(System.getenv("TEST_SRCDIR")),
+            java.util.Objects.requireNonNull(System.getenv("TEST_WORKSPACE")),
+            "tests/native.pb");
+    var runtimePlan =
+        ProtoDescriptors.compile(
+            null,
+            java.nio.file.Files.readAllBytes(descriptorPath),
+            "truffledata.lossless.Flat",
+            Limits.DEFAULT,
+            32,
+            1_000_000);
+    var runtimeRow = runtimePlan.parseText("i32: 123 text: 'stock-free'");
+    check(
+        runtimePlan
+            .decode(runtimePlan.encode(runtimeRow))
+            .get(runtimePlan.schema().indexOf("text"))
+            .equals("stock-free"),
+        "independent runtime descriptors");
     var model = WellKnownContracts.create(null, Limits.DEFAULT, 32, 1_000_000);
     var timestamp = model.type("google.protobuf.Timestamp");
     var getters = new WellKnownContracts.Access_google$protobuf$Timestamp(timestamp);
@@ -74,10 +94,13 @@ public final class StockFreeConsumer {
         check(getters.get_seconds(borrowed) == 123, "borrowed scalar");
         check(getters.get_nanos(borrowed) == 456, "borrowed nanos");
         check(Arrays.equals(wire, timestamp.encode(message.snapshot())), "detach");
+        check(Arrays.equals(wire, message.encode()), "borrowed serialization");
       }
       rejects(() -> getters.get_seconds(borrowed), IllegalStateException.class);
       try (var text = plan.parseText("seconds: 123 nanos: 456", 4096);
           var json = plan.parseJson("\"1970-01-01T00:02:03.000000456Z\"", 4096)) {
+        check(Arrays.equals(wire, text.encode()), "text serialization");
+        check(Arrays.equals(wire, json.encode()), "JSON serialization");
         check(getters.get_seconds(text.row()) == 123, "backend text");
         check(getters.get_nanos(json.row()) == 456, "backend JSON");
       }

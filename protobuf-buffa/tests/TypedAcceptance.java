@@ -59,7 +59,11 @@ final class TypedAcceptance {
           Acceptance.check(
               access.get_text(row).equals("hello") && access.size_blob(row) == 3,
               "generated reference getters");
+          Acceptance.check(
+              Arrays.equals(p.encode(parsed.snapshot()), parsed.encode()),
+              "text view semantic serialization");
           parsed.close();
+          Acceptance.rejects(parsed::encode, IllegalStateException.class);
           Acceptance.rejects(() -> access.get_count(row), IllegalStateException.class);
           Acceptance.rejects(() -> access.has_count(row), IllegalStateException.class);
         }
