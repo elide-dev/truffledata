@@ -139,18 +139,33 @@ public final class Comparison {
           fixture.tier(peak);
           if (ImageInfo.inImageRuntimeCode()
               && workload.equals("proto-scalar")
-              && engine.equals("owned")
+              && (engine.equals("owned") || engine.equals("buffa"))
               && ingest) {
             var counter = Objects.requireNonNull(bean);
             long thread = Thread.currentThread().threadId();
             long before = counter.getThreadAllocatedBytes(thread);
             measure(operation, 8, fixture.expected);
             double bytes = (counter.getThreadAllocatedBytes(thread) - before) / (8.0 * ROWS);
-            double budget = stage.equals("ingest-typed") ? 64 : 96;
+            double budget =
+                engine.equals("buffa")
+                    ? (stage.equals("ingest") ? 272 : 240)
+                    : (stage.equals("ingest") ? 96 : 64);
             if (bytes < 0 || bytes > budget)
               throw new AssertionError(
                   "Compact scalar allocation budget: " + bytes + " > " + budget);
-            System.out.println("ALLOCATION compact-scalar " + stage + " bytes/message=" + bytes);
+            System.out.println(
+                "ALLOCATION compact-scalar " + engine + " " + stage + " bytes/message=" + bytes);
+          }
+          if (ImageInfo.inImageRuntimeCode() && !ingest) {
+            var counter = Objects.requireNonNull(bean);
+            long thread = Thread.currentThread().threadId();
+            long before = counter.getThreadAllocatedBytes(thread);
+            measure(operation, 128, fixture.expected);
+            double bytes = (counter.getThreadAllocatedBytes(thread) - before) / (128.0 * ROWS);
+            // Includes the boxed per-batch checksum and guest call arguments. Primitive
+            // field boxing would exceed this allowance by at least 16 bytes per row.
+            if (bytes < 0 || bytes > 4)
+              throw new AssertionError("Retained-read allocation budget: " + bytes);
           }
           return;
         }

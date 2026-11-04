@@ -49,6 +49,29 @@ class ProtoNativeTest {
         p.parseText(
             "count: 1234 explicit_count: 0 text: 'hello' blob: 'abc' numbers: [1,2] f: 1.5 d: 2.5"
                 + " flag: true");
+    // A cooperating external adapter can implement only the object protocol.
+    ProtoAccess generic =
+        new ProtoAccess() {
+          public ProtoPlan plan() {
+            return p;
+          }
+
+          public boolean has(int ordinal) {
+            return row.has(ordinal);
+          }
+
+          public Object get(int ordinal) {
+            return row.get(ordinal);
+          }
+        };
+    assertEquals(1234L, generic.getLong(0));
+    assertEquals(1.5, generic.getDouble(p.schema().indexOf("f")));
+    assertTrue(generic.getBoolean(p.schema().indexOf("flag")));
+    assertEquals(3, generic.getSize(p.schema().indexOf("blob")));
+    assertThrows(ContractViolation.class, () -> generic.getLong(p.schema().indexOf("text")));
+    assertThrows(ContractViolation.class, () -> generic.getDouble(0));
+    assertThrows(ContractViolation.class, () -> generic.getBoolean(0));
+    assertThrows(ContractViolation.class, () -> generic.getSize(0));
     assertEquals(1234L, access.get_count(row));
     assertTrue(access.has_explicit_count(row));
     assertEquals("hello", access.get_text(row));

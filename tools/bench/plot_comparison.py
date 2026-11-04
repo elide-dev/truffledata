@@ -36,8 +36,19 @@ def render(data, output, label):
     charts = [('interpreter', 'Interpreter reads', 'interpret', 'ns_per_row', 'ns / row'),
               ('peak', 'Peak JIT reads', 'peak', 'ns_per_row', 'ns / row'),
               ('allocations', 'Ingestion allocations', 'ingest', 'allocated_bytes_per_row', 'Java heap bytes / message')]
+    if data['schema'] >= 6:
+        charts += [('generated-' + name, title + ' · generated getters', stage + '-generated', metric, unit)
+                   for name, title, stage, metric, unit in list(charts)]
     for name, title, stage, metric, unit in charts:
-        selected = [r for r in data['results'] if r['stage'] in (stage, stage + '-boundary')]
+        generated = stage.endswith('-generated')
+        base = stage.removesuffix('-generated')
+        if generated:
+            supported = {r['workload'] for r in data['results'] if r['stage'] == stage}
+            selected = [r for r in data['results'] if r['workload'] in supported and
+                        (r['stage'] == stage or (r['engine'].startswith('stock') and
+                         r['stage'] in (base, base + '-boundary')))]
+        else:
+            selected = [r for r in data['results'] if r['stage'] in (stage, stage + '-boundary')]
         workloads = [w for w in LABELS if any(r['workload'] == w for r in selected)]
         fig, axes = plt.subplots(len(workloads), 1, figsize=(10, 1.9 * len(workloads) + 1.3), squeeze=False)
         fig.patch.set_facecolor('#fafbfc')
@@ -50,7 +61,7 @@ def render(data, output, label):
                 medians.append(statistics.median(forks))
                 lows.append(min(forks))
                 highs.append(max(forks))
-                boundary = stage != 'ingest' and workload == 'proto-mixed' and engine == 'stock'
+                boundary = base != 'ingest' and workload == 'proto-mixed' and engine == 'stock'
                 names.append(ENGINES[engine] + (' *' if boundary else ''))
             ax.barh(names, medians, color=[COLORS[e] for e in engines], height=0.58,
                     xerr=[[m - lo for m, lo in zip(medians, lows)],
@@ -72,7 +83,9 @@ def render(data, output, label):
         footer = ('Median of three process medians; whiskers show min–max process medians, not confidence intervals.\n'
                   'Shared Linux x86-64 SVM runner. SQL: decoder functions only; no server or transport.\n')
         footer += ('Current-thread Java heap only; native allocations are excluded. Generic ingestion projection. '
-                   if name == 'allocations' else '* Stock nested-protobuf reads cross an explicitly measured Truffle boundary. ')
+                   if base == 'ingest' else '* Stock nested-protobuf reads cross an explicitly measured Truffle boundary. ')
+        if generated:
+            footer = footer.replace('Generic ingestion projection.', 'Generated getter projection.')
         footer += f'Revision: {data["revision"][:12]}.'
         fig.text(0.025, 0.018, footer, fontsize=8, color='#465361')
         fig.tight_layout(rect=(0, 0.075, 1, 0.955), h_pad=1.7)

@@ -18,7 +18,7 @@ final class TypedAcceptance {
         .type("truffledata.lossless." + name);
   }
 
-  private static void generatedGetters(BuffaWire decoder) {
+  private static void generatedGetters(BuffaWire decoder) throws Exception {
     var p = plan("Sample");
     var access = new TruffleDataContracts.Access_truffledata$lossless$Sample(p);
     try (var compiled = decoder.compile(p, 65536)) {
@@ -26,6 +26,24 @@ final class TypedAcceptance {
         try (var parsed =
             compiled.parseText("count: 1234 text: 'hello' blob: 'abc' f: 1.5 flag: true", NATIVE)) {
           var row = parsed.row();
+          Acceptance.check(
+              DATA.readDouble(row, p.schema().indexOf("f")) == 1.5, "primitive double export");
+          Acceptance.check(
+              DATA.readBoolean(row, p.schema().indexOf("flag")), "primitive boolean export");
+          try {
+            DATA.readDouble(row, 0);
+            throw new AssertionError("Expected double type rejection");
+          } catch (com.oracle.truffle.api.nodes.UnexpectedResultException failure) {
+            Acceptance.check(
+                failure.getResult().equals(1234L), "wrong-type double preserves result");
+          }
+          try {
+            DATA.readBoolean(row, 0);
+            throw new AssertionError("Expected boolean type rejection");
+          } catch (com.oracle.truffle.api.nodes.UnexpectedResultException failure) {
+            Acceptance.check(
+                failure.getResult().equals(1234L), "wrong-type boolean preserves result");
+          }
           Acceptance.check(
               access.get_count(row) == 1234 && access.get_f(row) == 1.5 && access.get_flag(row),
               "generated primitive getters");

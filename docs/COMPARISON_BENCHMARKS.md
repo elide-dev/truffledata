@@ -1,5 +1,48 @@
 # SVM comparison benchmarks
 
+## Generated-access measurements
+
+The [88-cell SVM run](https://github.com/elide-dev/truffledata/actions/runs/41771793142)
+on implementation commit `8fceec43b47f` compares our generated getters with stock
+protobuf Java. It uses three fresh timing forks and three separate allocation forks
+per cell. [Raw JSON](../benchmarks/results/svm-comparison-8fceec4/comparison.json) and
+[full results](../benchmarks/results/svm-comparison-8fceec4/comparison.md) retain the
+original generic and typed API cases as well as the new generated cases.
+
+| Ingestion projection | Stock ns/message | TruffleData ns/message | Stock / TruffleData Java heap bytes |
+|---|---:|---:|---:|
+| Scalar, owned generated getters | 69.15 | 29.08 | 136 / 56 |
+| Scalar, Buffa generated getters | 69.15 | 153.25 | 136 / 224 |
+| Timestamp JSON, Buffa generated getters | 3260.99 | 475.33 | 6439.75 / 728 |
+| Nested protobuf, Buffa generated getters | 862.85 | 3314.17 | 1776.75 / 1767.75 |
+
+Generated getters reduce Buffa nested interpreted reads from 51.54 to 22.54 ns/row,
+and peak reads from 12.98 to 10.52 ns/row in the same run. They do not erase every
+performance gap: stock scalar peak reads remain 1.10 ns versus owned 1.83 and Buffa
+4.44; stock nested guest reads cross the marked boundary. The aliased stock bytes
+baseline remains faster than Buffa (50.10 versus 166.99 ns ingestion). General
+nested messages still materialize a native index into rows and arrays; these results
+do not establish that the remaining cost is in Buffa's parser itself.
+
+The scalar native path skips general materialization state, temporary arrays and
+boxed integers; both native backends reuse their result slot. Existing generic
+Buffa scalar ingestion now uses 256 Java heap bytes versus 320 in the 0.3.0 report.
+Primitive-only static rows avoid a payload tracker, reducing the SQL fixtures from
+160 to 128 bytes. Native memory is excluded from these Java heap counts. Timing
+ranges remain visible in the full report, including noisy large-payload copies.
+
+![Generated interpreter reads](images/generated-access/comparison-generated-interpreter.svg)
+
+![Generated peak reads](images/generated-access/comparison-generated-peak.svg)
+
+![Generated ingestion allocations](images/generated-access/comparison-generated-allocations.svg)
+
+The same directory also contains generic-API charts and a provenance manifest.
+The subsequent smoke-only allocation gates allow at most 240 Java heap bytes for
+Buffa typed/generated scalar ingestion, 272 for generic scalar ingestion, and
+4 bytes per retained read including guest arguments and the boxed batch checksum.
+They do not change the timed measurement loop.
+
 ## Release 0.3.0 measurements
 
 The [0.3.0 run](https://github.com/elide-dev/truffledata/actions/runs/41766750084)
