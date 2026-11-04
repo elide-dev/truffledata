@@ -3,7 +3,11 @@ set -euo pipefail
 cd "${TEST_SRCDIR}/${TEST_WORKSPACE}"
 binary="$1"
 settings="$2"
-workload="${3:-proto-mixed}"
+gc="$3"
+workload="${4:-proto-mixed}"
+rounds=8
+[[ "$gc" != epsilon ]] || rounds=1
+printf '%s\n' "$gc" > "${TEST_UNDECLARED_OUTPUTS_DIR}/gc.txt"
 case "$workload" in
   mysql-int4|postgres-int4) engines=(stock static) ;;
   proto-bytes) engines=(stock stock-aliased owned buffa) ;;
@@ -14,7 +18,7 @@ printf '%s\n' "${TRUFFLEDATA_BENCH_REVISION:-unknown}" > "${TEST_UNDECLARED_OUTP
 for engine in "${engines[@]}"; do
   for fork in 0 1 2; do
     output="${TEST_UNDECLARED_OUTPUTS_DIR}/${workload}-${engine}-${fork}"
-    "$binary" "-XX:StartFlightRecording=filename=${output}.jfr,settings=${settings},dumponexit=true" \
+    "$binary" -Xmx1g "-Dtruffledata.profile.rounds=${rounds}" "-XX:StartFlightRecording=filename=${output}.jfr,settings=${settings},dumponexit=true" \
       "$workload" "$engine" ingest time > "${output}.jsonl"
     test -s "${output}.jfr"
   done

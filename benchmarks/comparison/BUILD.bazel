@@ -136,6 +136,38 @@ native_image(
     deps = [":profiling"],
 )
 
+native_image(
+    name = "svm_profile_epsilon",
+    testonly = True,
+    cc_deps = ["//protobuf-buffa/native:truffledata_buffa"],
+    exec_properties = {
+        "EstimatedCPU": "4",
+        "EstimatedMemory": "16GB",
+    },
+    executable_name = "truffledata-comparison-profile-epsilon",
+    extra_args = [
+        "--gc=epsilon",
+        "--enable-monitoring=jfr",
+        "--add-exports=org.graalvm.truffle.runtime/com.oracle.truffle.runtime=ALL-UNNAMED",
+        "--parallelism=4",
+        "-march=compatibility",
+        "--initialize-at-build-time=dev.elide.truffledata",
+        "--initialize-at-run-time=dev.elide.truffledata.comparison.Comparison",
+        "--features=dev.elide.truffledata.buffa.BuffaFeature",
+        "-H:+UnlockExperimentalVMOptions",
+        "-H:+SignalHandlerBasedExecutionSampler",
+    ] + TRUFFLE_JIT_CHECKS + ["-H:-UnlockExperimentalVMOptions"],
+    graalvm_sdk = "@graalvm_linux_amd64//:gvm",
+    main_class = "dev.elide.truffledata.comparison.Profile",
+    optimization_mode = "2",
+    tags = ["manual"],
+    target_compatible_with = [
+        "@platforms//os:linux",
+        "@platforms//cpu:x86_64",
+    ],
+    deps = [":profiling"],
+)
+
 sh_test(
     name = "native_smoke",
     size = "large",
@@ -176,10 +208,31 @@ sh_test(
     args = [
         "$(rootpath :svm_profile)",
         "$(rootpath :profile.jfc)",
+        "serial",
     ],
     data = [
         "profile.jfc",
         ":svm_profile",
+    ],
+    tags = ["manual"],
+    target_compatible_with = [
+        "@platforms//os:linux",
+        "@platforms//cpu:x86_64",
+    ],
+)
+
+sh_test(
+    name = "profile_epsilon",
+    size = "large",
+    srcs = ["profile.sh"],
+    args = [
+        "$(rootpath :svm_profile_epsilon)",
+        "$(rootpath :profile.jfc)",
+        "epsilon",
+    ],
+    data = [
+        "profile.jfc",
+        ":svm_profile_epsilon",
     ],
     tags = ["manual"],
     target_compatible_with = [
