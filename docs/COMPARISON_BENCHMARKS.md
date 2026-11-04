@@ -226,7 +226,9 @@ before/after evidence.
 ### Optional SVM profiling
 
 Use `bazel test //benchmarks/comparison:profile --nocache_test_results` to capture
-three fresh JFR processes per engine for mixed-message ingestion. Select another
+three fresh JFR processes per engine for mixed-message ingestion. Each process
+runs eight diagnostic rounds, and the image explicitly enables asynchronous
+signal-handler sampling to avoid the safepoint callback sampler. Select another
 workload with `--test_arg=proto-scalar` (or another comparison workload). Raw
 recordings and diagnostic output are under the test's `test.outputs` directory.
 Pass `--test_env=TRUFFLEDATA_BENCH_REVISION` with the current commit in the environment
@@ -237,7 +239,7 @@ The separate manual `svm_profile` image enables
 Normal comparison images and scores remain uninstrumented. The custom configuration
 collects CPU and sampled Java allocations; profile timings are diagnostic, and
 allocation samples are not exact byte counters or native allocation measurements.
-Use `jfr print --json --events jdk.ExecutionSample,jdk.ObjectAllocationSample FILE.jfr`
+Use `jfr print --json --stack-depth 128 --events jdk.ExecutionSample,jdk.ObjectAllocationSample FILE.jfr`
 to inspect a recording, filtering stacks to `Comparison$Fixture.ingest` when
 attributing ingestion costs rather than setup. Native Rust internals may not be
 resolved by the Java stack sampler.

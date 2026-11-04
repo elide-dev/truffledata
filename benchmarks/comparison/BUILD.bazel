@@ -97,6 +97,13 @@ native_image(
 )
 
 # Optional diagnostics: do not use this instrumented image for comparison scores.
+data_java_library(
+    name = "profiling",
+    testonly = True,
+    srcs = ["Profile.java"],
+    deps = [":comparison"],
+)
+
 native_image(
     name = "svm_profile",
     testonly = True,
@@ -116,16 +123,17 @@ native_image(
         "--initialize-at-run-time=dev.elide.truffledata.comparison.Comparison",
         "--features=dev.elide.truffledata.buffa.BuffaFeature",
         "-H:+UnlockExperimentalVMOptions",
+        "-H:+SignalHandlerBasedExecutionSampler",
     ] + TRUFFLE_JIT_CHECKS + ["-H:-UnlockExperimentalVMOptions"],
     graalvm_sdk = "@graalvm_linux_amd64//:gvm",
-    main_class = "dev.elide.truffledata.comparison.Comparison",
+    main_class = "dev.elide.truffledata.comparison.Profile",
     optimization_mode = "2",
     tags = ["manual"],
     target_compatible_with = [
         "@platforms//os:linux",
         "@platforms//cpu:x86_64",
     ],
-    deps = [":comparison"],
+    deps = [":profiling"],
 )
 
 sh_test(
