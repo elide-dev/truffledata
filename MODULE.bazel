@@ -308,3 +308,13 @@ http_archive(
     type = "tar.gz",
     urls = ["https://codeload.github.com/elide-dev/myna/tar.gz/7401c446ef9ad80d7bd14a9bf92f360a04956b80"],
 )
+
+# Production JSON adapter: match the parser qualified by Myna's value ABI tests.
+http_archive(
+    name = "simdjson",
+    build_file = "//bazel:simdjson.BUILD",
+    sha256 = "d669fa399613c20bbf7705f057a72984331b223cd5e8d20666ef063dbf97f3e6",
+    strip_prefix = "simdjson-5.1.1",
+    type = "tar.gz",
+    urls = ["https://codeload.github.com/simdjson/simdjson/tar.gz/refs/tags/v5.1.1"],
+)
