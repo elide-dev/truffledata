@@ -87,6 +87,58 @@ final class OwnedGenerator {
     };
   }
 
+  /** Primitive records mirror stock's memoized sizing and need no output cursor allocation. */
+  private static void primitiveEncoder(StringBuilder out, ProtoPlan.Type schema) {
+    var fields = schema.fields();
+    out.append(
+        " private int memoizedSize=-1;\n"
+            + " private int encodedSize() { int cached=memoizedSize; if(cached>=0) return cached;"
+            + " long size=unknownSize();\n");
+    for (int i = 0; i < fields.size(); i++) {
+      var field = fields.get(i);
+      long tag = ((long) field.number() << 3) | field.kind().wire;
+      int tagSize = (70 - Long.numberOfLeadingZeros(tag)) / 7;
+      out.append(" if(isSet(")
+          .append(1L << i)
+          .append("L)) size += ")
+          .append(tagSize)
+          .append("L + ");
+      if (field.kind().wire == 1 || field.kind().wire == 5)
+        out.append(field.kind().wire == 1 ? 8 : 4);
+      else
+        out.append("dev.elide.truffledata.protobuf.GeneratedOutput.varintSize(")
+            .append(wireValue(field, "(" + storedValue(field, i) + ")"))
+            .append(')');
+      out.append(";\n");
+    }
+    out.append(" return memoizedSize=checkedSize(size); }\n")
+        .append(
+            " @Override @com.oracle.truffle.api.CompilerDirectives.TruffleBoundary public byte[]"
+                + " encode() { byte[] output=allocateOutput(encodedSize()); int position=0;\n");
+    for (int i = 0; i < fields.size(); i++) {
+      var field = fields.get(i);
+      out.append(" if(isSet(").append(1L << i).append("L)) {\n");
+      long tag = ((long) field.number() << 3) | field.kind().wire;
+      while ((tag & ~127L) != 0) {
+        out.append(" output[position++]=(byte)").append((tag & 127) | 128).append(";\n");
+        tag >>>= 7;
+      }
+      out.append(" output[position++]=(byte)").append(tag).append(";\n");
+      String value = wireValue(field, "(" + storedValue(field, i) + ")");
+      if (field.kind().wire == 1 || field.kind().wire == 5) {
+        out.append(" long bits=").append(value).append(";\n");
+        for (int octet = 0; octet < (field.kind().wire == 1 ? 8 : 4); octet++)
+          out.append(" output[position++]=(byte)(bits >>> ").append(octet * 8).append(");\n");
+      } else
+        out.append(
+                " position=dev.elide.truffledata.protobuf.GeneratedOutput.varint(output,position,")
+            .append(value)
+            .append(");\n");
+      out.append(" }\n");
+    }
+    out.append(" return finishEncoded(output,position); }\n");
+  }
+
   private static void encoder(StringBuilder out, ProtoPlan.Type schema) {
     var fields = schema.fields();
     out.append(
@@ -333,7 +385,8 @@ final class OwnedGenerator {
                   : "super." + method + "(ordinal)")
           .append("; }; }\n");
     }
-    encoder(out, schema);
+    if (inlineSupported(schema)) primitiveEncoder(out, schema);
+    else encoder(out, schema);
     if (inlineSupported(schema)) {
       out.append(" @com.oracle.truffle.api.CompilerDirectives.TruffleBoundary private static ")
           .append(name)

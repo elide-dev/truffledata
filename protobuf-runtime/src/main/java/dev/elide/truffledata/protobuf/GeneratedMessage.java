@@ -59,9 +59,22 @@ public abstract class GeneratedMessage extends AbstractRow implements ProtoAcces
   }
 
   protected final byte[] allocateOutput(long size) {
+    int count = checkedSize(size);
+    return count == 0 ? EMPTY : new byte[count];
+  }
+
+  protected final int checkedSize(long size) {
     if (size < 0 || size > plan.maxWireBytes())
       throw new ContractViolation("Encoded wire budget exceeded");
-    return size == 0 ? EMPTY : new byte[(int) size];
+    return (int) size;
+  }
+
+  /** Complete a schema-generated direct writer, copying unknown bytes only once. */
+  protected final byte[] finishEncoded(byte[] target, int position) {
+    if (position < 0 || unknown.length != target.length - position)
+      throw new ContractViolation("Generated output size mismatch");
+    System.arraycopy(unknown, 0, target, position, unknown.length);
+    return target;
   }
 
   protected final void writeUnknown(GeneratedOutput output) {

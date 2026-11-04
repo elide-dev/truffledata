@@ -52,3 +52,16 @@ message Flat {
   oneof choice { int32 selected = 18; string selected_text = 19; }
 }
 message Empty {}
+
+// Direct primitive writers include multi-byte tags, signed/unsigned values and fixed widths.
+message PrimitiveWrites {
+  int32 i32 = 1;
+  uint32 u32 = 16;
+  sint32 s32 = 17;
+  sint64 s64 = 18;
+  fixed32 f32 = 19;
+  sfixed64 sf64 = 20;
+  float single = 21;
+  double real = 22;
+}
+message PrimitiveFlag { bool flag = 1; }

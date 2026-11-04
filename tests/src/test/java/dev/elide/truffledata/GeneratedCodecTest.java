@@ -14,6 +14,50 @@ class GeneratedCodecTest {
   }
 
   @Test
+  void directPrimitiveWritersMatchGenericWireAndKeepCachedResultsOwned() {
+    var plan = model(Limits.DEFAULT, 32, 1000000).type("truffledata.lossless.PrimitiveWrites");
+    var access = new TruffleDataContracts.Access_truffledata$lossless$PrimitiveWrites(plan);
+    var random = new Random(0xcedec);
+    for (int sample = 0; sample < 256; sample++) {
+      var expected =
+          plan.newBuilder()
+              .set(0, (long) random.nextInt())
+              .set(1, Integer.toUnsignedLong(random.nextInt()))
+              .set(2, (long) random.nextInt())
+              .set(3, random.nextLong())
+              .set(4, Integer.toUnsignedLong(random.nextInt()))
+              .set(5, random.nextLong())
+              .set(6, (double) Float.intBitsToFloat(random.nextInt()))
+              .set(7, Double.longBitsToDouble(random.nextLong()))
+              .build();
+      byte[] wire = plan.encode(expected);
+      var row = access.decode(wire);
+      byte[] first = row.encode();
+      assertArrayEquals(wire, first);
+      first[0] ^= 1;
+      assertArrayEquals(wire, row.encode());
+    }
+    assertArrayEquals(new byte[0], access.newBuilder().build().encode());
+    byte[] withUnknown = {8, 1, (byte) 0xf8, 1, 7};
+    var unknown = access.decode(withUnknown);
+    assertArrayEquals(withUnknown, unknown.encode());
+    assertArrayEquals(withUnknown, unknown.encode());
+    var tiny =
+        new TruffleDataContracts.Access_truffledata$lossless$PrimitiveWrites(
+                model(Limits.DEFAULT, 32, 1).type(plan.name()))
+            .newBuilder()
+            .set_i32(-1)
+            .build();
+    assertThrows(ContractViolation.class, tiny::encode);
+    assertThrows(ContractViolation.class, tiny::encode);
+    var flag =
+        new TruffleDataContracts.Access_truffledata$lossless$PrimitiveFlag(
+            model(Limits.DEFAULT, 32, 100).type("truffledata.lossless.PrimitiveFlag"));
+    assertArrayEquals(new byte[] {8, 1}, flag.newBuilder().set_flag(true).build().encode());
+    assertArrayEquals(new byte[0], flag.newBuilder().build().encode());
+  }
+
+  @Test
   void boundedOutputRejectsOverflowAndUnfinishedWrites() {
     byte[] target = new byte[1];
     var output = new GeneratedOutput(target);

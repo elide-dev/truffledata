@@ -29,6 +29,16 @@ public final class GeneratedOutput {
     target[position++] = (byte) value;
   }
 
+  /** Generated callers have already bounded the exact destination size. */
+  public static int varint(byte[] target, int position, long value) {
+    while ((value & ~127L) != 0) {
+      target[position++] = (byte) (((int) value & 127) | 128);
+      value >>>= 7;
+    }
+    target[position++] = (byte) value;
+    return position;
+  }
+
   public void fixed(long value, int width) {
     if (width != 4 && width != 8) throw new IllegalArgumentException("Invalid fixed width");
     reserve(width);
