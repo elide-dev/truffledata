@@ -14,6 +14,25 @@ class GeneratedCodecTest {
   }
 
   @Test
+  void boundedOutputRejectsOverflowAndUnfinishedWrites() {
+    byte[] target = new byte[1];
+    var output = new GeneratedOutput(target);
+    assertThrows(ContractViolation.class, () -> output.varint(128));
+    assertArrayEquals(new byte[1], target);
+    assertThrows(ContractViolation.class, output::finish);
+    assertThrows(IllegalArgumentException.class, () -> output.fixed(1, 3));
+    assertThrows(ContractViolation.class, () -> GeneratedOutput.utf8Length("\uD800"));
+    assertThrows(ContractViolation.class, () -> GeneratedOutput.utf8Length("\uDC00"));
+    assertThrows(ContractViolation.class, () -> GeneratedOutput.integer("not a number"));
+    byte[] input = {1, 2, 3};
+    var slice = DataArray.copyOfBytes(input, 1, 2);
+    input[1] = 9;
+    assertEquals(2L, slice.get(0));
+    assertThrows(
+        IndexOutOfBoundsException.class, () -> DataArray.copyOfBytes(input, 1, Integer.MAX_VALUE));
+  }
+
+  @Test
   void generatedStorageUsesDeclaredWidths() throws Exception {
     var type = TruffleDataContracts.Message_truffledata$lossless$Flat.class;
     assertEquals(int.class, type.getDeclaredField("f0").getType());

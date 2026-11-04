@@ -73,29 +73,81 @@ final class OwnedGenerator {
     };
   }
 
-  private static String write(ProtoPlan.FieldPlan field, String value) {
+  private static String wireValue(ProtoPlan.FieldPlan field, String value) {
     return switch (field.kind()) {
-      case INT32, INT64, UINT32, ENUM -> "output.varint(" + value + ");";
-      case UINT64 ->
-          "output.varint(dev.elide.truffledata.protobuf.GeneratedOutput.integer(" + value + "));";
+      case UINT64, FIXED64 ->
+          "dev.elide.truffledata.protobuf.GeneratedOutput.integer(" + value + ")";
       case SINT32 ->
-          "output.varint(Integer.toUnsignedLong(((int)"
-              + value
-              + " << 1) ^ ((int)"
-              + value
-              + " >> 31)));";
-      case SINT64 -> "output.varint((" + value + " << 1) ^ (" + value + " >> 63));";
-      case FIXED32, SFIXED32 -> "output.fixed(" + value + ",4);";
-      case SFIXED64 -> "output.fixed(" + value + ",8);";
-      case FIXED64 ->
-          "output.fixed(dev.elide.truffledata.protobuf.GeneratedOutput.integer(" + value + "),8);";
-      case FLOAT -> "output.fixed(Float.floatToRawIntBits((float)" + value + "),4);";
-      case DOUBLE -> "output.fixed(Double.doubleToRawLongBits(" + value + "),8);";
-      case BOOL -> "output.varint(" + value + " ? 1 : 0);";
-      case STRING -> "output.string(" + value + ");";
-      case BYTES -> "output.bytes(" + value + ");";
-      default -> throw new IllegalArgumentException("Not a scalar schema");
+          "Integer.toUnsignedLong(((int)(" + value + ") << 1) ^ ((int)(" + value + ") >> 31))";
+      case SINT64 -> "((" + value + " << 1) ^ (" + value + " >> 63))";
+      case FLOAT -> "Float.floatToRawIntBits((float)(" + value + "))";
+      case DOUBLE -> "Double.doubleToRawLongBits(" + value + ")";
+      case BOOL -> "(" + value + " ? 1L : 0L)";
+      default -> value;
     };
+  }
+
+  private static void encoder(StringBuilder out, ProtoPlan.Type schema) {
+    var fields = schema.fields();
+    out.append(
+        " @Override @com.oracle.truffle.api.CompilerDirectives.TruffleBoundary public byte[]"
+            + " encode() { long size=unknownSize();\n");
+    for (int i = 0; i < fields.size(); i++) {
+      var field = fields.get(i);
+      boolean string = field.kind() == ProtoPlan.Kind.STRING,
+          bytes = field.kind() == ProtoPlan.Kind.BYTES;
+      out.append(string || bytes ? " int" : " long")
+          .append(" wire")
+          .append(i)
+          .append("=0;\n")
+          .append(" if (isSet(")
+          .append(1L << i)
+          .append("L)) { wire")
+          .append(i)
+          .append('=');
+      if (string)
+        out.append("dev.elide.truffledata.protobuf.GeneratedOutput.utf8Length(f")
+            .append(i)
+            .append(')');
+      else if (bytes) out.append("f").append(i).append(".size()");
+      else out.append(wireValue(field, "(" + storedValue(field, i) + ")"));
+      long tag = ((long) field.number() << 3) | field.kind().wire;
+      int tagSize = (70 - Long.numberOfLeadingZeros(tag)) / 7;
+      out.append("; size += ").append(tagSize).append("L + ");
+      if (field.kind().wire == 1) out.append('8');
+      else if (field.kind().wire == 5) out.append('4');
+      else {
+        out.append("dev.elide.truffledata.protobuf.GeneratedOutput.varintSize(wire")
+            .append(i)
+            .append(')');
+        if (string || bytes) out.append(" + (long)wire").append(i);
+      }
+      out.append("; }\n");
+    }
+    out.append(
+        " var output = new"
+            + " dev.elide.truffledata.protobuf.GeneratedOutput(allocateOutput(size));\n");
+    for (int i = 0; i < fields.size(); i++) {
+      var field = fields.get(i);
+      out.append(" if (isSet(")
+          .append(1L << i)
+          .append("L)) { output.varint(")
+          .append(((long) field.number() << 3) | field.kind().wire)
+          .append("L); ");
+      if (field.kind() == ProtoPlan.Kind.STRING)
+        out.append("output.utf8(f").append(i).append(",wire").append(i).append(");");
+      else if (field.kind() == ProtoPlan.Kind.BYTES)
+        out.append("output.bytes(f").append(i).append(");");
+      else if (field.kind().wire == 1 || field.kind().wire == 5)
+        out.append("output.fixed(wire")
+            .append(i)
+            .append(',')
+            .append(field.kind().wire == 1 ? 8 : 4)
+            .append(");");
+      else out.append("output.varint(wire").append(i).append(");");
+      out.append(" }\n");
+    }
+    out.append(" writeUnknown(output); return output.finish(); }\n");
   }
 
   static String builderName(ProtoPlan.Type schema) {
@@ -281,20 +333,7 @@ final class OwnedGenerator {
                   : "super." + method + "(ordinal)")
           .append("; }; }\n");
     }
-    out.append(
-        " @Override protected void writeFields(dev.elide.truffledata.protobuf.GeneratedOutput"
-            + " output) {\n");
-    for (int i = 0; i < fields.size(); i++) {
-      var field = fields.get(i);
-      out.append(" if (has(")
-          .append(i)
-          .append(")) { output.varint(")
-          .append(((long) field.number() << 3) | field.kind().wire)
-          .append("L);")
-          .append(write(field, "(" + storedValue(field, i) + ")"))
-          .append(" }\n");
-    }
-    out.append(" }\n");
+    encoder(out, schema);
     if (inlineSupported(schema)) {
       out.append(" @com.oracle.truffle.api.CompilerDirectives.TruffleBoundary private static ")
           .append(name)

@@ -1,54 +1,44 @@
 package dev.elide.truffledata.protobuf;
 
 import dev.elide.truffledata.*;
-import org.jspecify.annotations.Nullable;
 
-/** Exact-size output for generated codecs; string sizing and UTF-8 writes allocate no scratch. */
+/** Bounded output cursor for generated codecs; no scratch buffer or sizing cursor is allocated. */
 public final class GeneratedOutput {
-  private final byte @Nullable [] target;
-  private final int limit;
+  private final byte[] target;
   private int position;
 
-  GeneratedOutput(byte @Nullable [] target, int limit) {
-    if (limit < 0 || (target != null && limit > target.length))
-      throw new IllegalArgumentException("Invalid output limit");
+  public GeneratedOutput(byte[] target) {
     this.target = target;
-    this.limit = limit;
-  }
-
-  int size() {
-    return position;
   }
 
   private void reserve(int count) {
-    if (count < 0 || count > limit - position)
+    if (count < 0 || count > target.length - position)
       throw new ContractViolation("Encoded wire budget exceeded");
   }
 
-  private void octet(int value) {
-    reserve(1);
-    if (target != null) target[position] = (byte) value;
-    position++;
+  public static int varintSize(long value) {
+    return value == 0 ? 1 : (70 - Long.numberOfLeadingZeros(value)) / 7;
   }
 
   public void varint(long value) {
+    reserve(varintSize(value));
     while ((value & ~127L) != 0) {
-      octet(((int) value & 127) | 128);
+      target[position++] = (byte) (((int) value & 127) | 128);
       value >>>= 7;
     }
-    octet((int) value);
+    target[position++] = (byte) value;
   }
 
   public void fixed(long value, int width) {
     if (width != 4 && width != 8) throw new IllegalArgumentException("Invalid fixed width");
     reserve(width);
     for (int i = 0; i < width; i++) {
-      octet((int) value);
+      target[position++] = (byte) value;
       value >>>= 8;
     }
   }
 
-  public void string(String value) {
+  public static int utf8Length(String value) {
     long length = 0;
     for (int i = 0; i < value.length(); i++) {
       int c = value.charAt(i);
@@ -65,28 +55,29 @@ public final class GeneratedOutput {
       }
     }
     if (length > Integer.MAX_VALUE) throw new ContractViolation("Encoded string too large");
+    return (int) length;
+  }
+
+  /** Generated callers supply the previously checked UTF-8 length of this immutable string. */
+  public void utf8(String value, int length) {
     varint(length);
-    reserve((int) length);
-    if (target == null) {
-      position += (int) length;
-      return;
-    }
+    reserve(length);
     for (int i = 0; i < value.length(); i++) {
       int c = value.charAt(i);
-      if (c < 128) octet(c);
+      if (c < 128) target[position++] = (byte) c;
       else if (c < 2048) {
-        octet(0xc0 | (c >>> 6));
-        octet(0x80 | (c & 63));
+        target[position++] = (byte) (0xc0 | (c >>> 6));
+        target[position++] = (byte) (0x80 | (c & 63));
       } else if (Character.isHighSurrogate((char) c)) {
         c = Character.toCodePoint((char) c, value.charAt(++i));
-        octet(0xf0 | (c >>> 18));
-        octet(0x80 | ((c >>> 12) & 63));
-        octet(0x80 | ((c >>> 6) & 63));
-        octet(0x80 | (c & 63));
+        target[position++] = (byte) (0xf0 | (c >>> 18));
+        target[position++] = (byte) (0x80 | ((c >>> 12) & 63));
+        target[position++] = (byte) (0x80 | ((c >>> 6) & 63));
+        target[position++] = (byte) (0x80 | (c & 63));
       } else {
-        octet(0xe0 | (c >>> 12));
-        octet(0x80 | ((c >>> 6) & 63));
-        octet(0x80 | (c & 63));
+        target[position++] = (byte) (0xe0 | (c >>> 12));
+        target[position++] = (byte) (0x80 | ((c >>> 6) & 63));
+        target[position++] = (byte) (0x80 | (c & 63));
       }
     }
   }
@@ -96,14 +87,19 @@ public final class GeneratedOutput {
     int length = value.size();
     varint(length);
     reserve(length);
-    if (target != null) value.copyBytesTo(target, position);
+    value.copyBytesTo(target, position);
     position += length;
   }
 
   void raw(byte[] value) {
     reserve(value.length);
-    if (target != null) System.arraycopy(value, 0, target, position, value.length);
+    System.arraycopy(value, 0, target, position, value.length);
     position += value.length;
+  }
+
+  public byte[] finish() {
+    if (position != target.length) throw new ContractViolation("Generated output size mismatch");
+    return target;
   }
 
   public static long integer(Object value) {

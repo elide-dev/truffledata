@@ -47,18 +47,25 @@ public abstract class GeneratedMessage extends AbstractRow implements ProtoAcces
       throw new ContractViolation("Unknown closed enum value");
   }
 
-  protected abstract void writeFields(GeneratedOutput output);
+  /** Implemented by the schema-generated codec behind its own Truffle boundary. */
+  public abstract byte[] encode();
 
-  @TruffleBoundary
-  public final byte[] encode() {
-    var sizing = new GeneratedOutput(null, plan.maxWireBytes());
-    writeFields(sizing);
-    sizing.raw(unknown);
-    byte[] bytes = new byte[sizing.size()];
-    var output = new GeneratedOutput(bytes, bytes.length);
-    writeFields(output);
-    output.raw(unknown);
-    return bytes;
+  protected final boolean isSet(long mask) {
+    return (presence & mask) != 0;
+  }
+
+  protected final int unknownSize() {
+    return unknown.length;
+  }
+
+  protected final byte[] allocateOutput(long size) {
+    if (size < 0 || size > plan.maxWireBytes())
+      throw new ContractViolation("Encoded wire budget exceeded");
+    return size == 0 ? EMPTY : new byte[(int) size];
+  }
+
+  protected final void writeUnknown(GeneratedOutput output) {
+    if (unknown.length != 0) output.raw(unknown);
   }
 
   @ExportMessage

@@ -493,7 +493,13 @@ final class ProtoCodec {
       }
       byte[] unknown =
           row instanceof ProtoRow owned ? owned.unknown : ((GeneratedMessage) row).unknown;
-      for (byte b : unknown) octet(b);
+      raw(unknown);
+    }
+
+    void raw(byte[] bytes) {
+      if (bytes.length > limit - position) throw bad("Encoded wire budget exceeded");
+      if (target != null) System.arraycopy(bytes, 0, target, position, bytes.length);
+      position += bytes.length;
     }
 
     void field(ProtoPlan.FieldPlan field, Object value) {
@@ -545,12 +551,15 @@ final class ProtoCodec {
         case STRING -> {
           byte[] bytes = ((String) value).getBytes(StandardCharsets.UTF_8);
           varint(bytes.length);
-          for (byte b : bytes) octet(b);
+          raw(bytes);
         }
         case BYTES -> {
           DataArray bytes = (DataArray) value;
           varint(bytes.size());
-          for (int i = 0; i < bytes.size(); i++) octet(((Long) bytes.get(i)).intValue());
+          int length = bytes.size();
+          if (length > limit - position) throw bad("Encoded wire budget exceeded");
+          if (target != null) bytes.copyBytesTo(target, position);
+          position += length;
         }
         default -> throw bad("Message must use structured encoder");
       }

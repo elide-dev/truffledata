@@ -36,7 +36,7 @@ class PolicyTest {
             Map.entry("ProtoCompiler.java", 8),
             Map.entry("ProtoDescriptors.java", 1),
             Map.entry("ProtoWire.java", 1),
-            Map.entry("GeneratedMessage.java", 2),
+            Map.entry("GeneratedMessage.java", 1),
             Map.entry("NativeMetadata.java", 1),
             Map.entry("JdbcContracts.java", 1),
             Map.entry("JdbcContract.java", 1),

@@ -33,7 +33,9 @@ public final class DataArray implements TruffleObject {
   /** Snapshot a byte region once, without temporary buffer wrappers. */
   public static DataArray copyOfBytes(byte[] bytes, int offset, int length) {
     java.util.Objects.checkFromIndexSize(offset, length, bytes.length);
-    return new DataArray(java.util.Arrays.copyOfRange(bytes, offset, offset + length));
+    byte[] owned = new byte[length];
+    System.arraycopy(bytes, offset, owned, 0, length);
+    return new DataArray(owned);
   }
 
   /** Copies remaining bytes without changing the caller's position or retaining mutable storage. */

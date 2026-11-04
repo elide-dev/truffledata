@@ -14,6 +14,8 @@ ACCESS_SOURCES = {f'core/src/main/java/dev/elide/truffledata/{name}.java' for na
     'protobuf-runtime/src/main/java/dev/elide/truffledata/protobuf/ProtoRow.java',
     'protobuf-runtime/src/main/java/dev/elide/truffledata/protobuf/ProtoAccess.java',
     'protobuf-runtime/src/main/java/dev/elide/truffledata/protobuf/GeneratedMessage.java',
+    'protobuf-runtime/src/main/java/dev/elide/truffledata/protobuf/GeneratedInput.java',
+    'protobuf-runtime/src/main/java/dev/elide/truffledata/protobuf/GeneratedOutput.java',
     'protobuf-buffa/src/main/java/dev/elide/truffledata/buffa/BorrowedBytes.java',
     'protobuf-buffa/src/main/java/dev/elide/truffledata/buffa/WireField.java',
     'protobuf-buffa/src/main/java/dev/elide/truffledata/buffa/WireInput.java',
