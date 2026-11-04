@@ -29,8 +29,8 @@ final class TypedAcceptance {
                 i + 1,
                 ProtoPlan.Kind.INT32,
                 false,
-                true,
                 false,
+                true,
                 false,
                 false,
                 size == 64 && i >= 62 ? 0 : -1,
@@ -56,6 +56,13 @@ final class TypedAcceptance {
           var parsed = compiled.decode(input, NATIVE)) {
         equal(expected, parsed.row());
         equal(expected, parsed.snapshot());
+        var text = new StringBuilder();
+        for (int i = 0; i < size; i++)
+          if (expected.has(i)) text.append("f").append(i).append(": 0 ");
+        try (var textual = compiled.parseText(text.toString(), NATIVE)) {
+          equal(expected, textual.row());
+          equal(expected, textual.snapshot());
+        }
         for (int i = 0; i < size; i++) {
           Acceptance.check(parsed.row().has(i) == expected.has(i), "presence width " + size);
         }
@@ -370,6 +377,8 @@ final class TypedAcceptance {
         equal(DATA.read(a, i), DATA.read(b, i));
         if (a instanceof ProtoRow proto && b instanceof TypedRow typed)
           Acceptance.check(proto.has(i) == typed.has(i), "typed presence " + i);
+        if (a instanceof ProtoRow proto && b instanceof ProtoRow snapshot)
+          Acceptance.check(proto.has(i) == snapshot.has(i), "snapshot presence " + i);
       }
     } else if (expected instanceof DataArray a) {
       int size = actual instanceof DataArray b ? b.size() : ((BorrowedArray) actual).size();
