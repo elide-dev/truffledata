@@ -28,6 +28,7 @@ public final class Acceptance {
     try (var decoder =
         BuffaWire.open(nativeExpected ? BuffaWire.Mode.NATIVE : BuffaWire.Mode.AUTO, library)) {
       allocation(decoder);
+      CompiledReads.cachedLifetimes(decoder);
       CompiledReads.run(decoder);
     }
   }

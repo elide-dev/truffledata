@@ -1,6 +1,7 @@
 package dev.elide.truffledata.buffa;
 
 import com.oracle.truffle.api.CompilerDirectives.*;
+import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.library.*;
 import dev.elide.truffledata.*;
 import dev.elide.truffledata.protobuf.*;
@@ -40,8 +41,8 @@ public final class TypedRow extends AbstractRow {
   }
 
   @ExportMessage
-  Object read(int index) {
-    owner.check();
+  Object read(int index, @Cached("create()") WireMessage.CheckOpenNode check) {
+    check.execute(owner);
     return values[index];
   }
 

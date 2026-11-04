@@ -12,6 +12,51 @@ import org.graalvm.polyglot.Context;
 final class CompiledReads {
   private CompiledReads() {}
 
+  static void cachedLifetimes(BuffaWire decoder) {
+    try (var context =
+            Context.newBuilder("buffa-test")
+                .allowExperimentalOptions(true)
+                .option("engine.Compilation", "false")
+                .build();
+        var plan =
+            decoder.compile(
+                WellKnownAcceptance.model().type("google.protobuf.Int64Value"), 65536)) {
+      context.initialize("buffa-test");
+      context.enter();
+      try {
+        var cachedRoot = new WktRoot(false);
+        var cachedTarget = cachedRoot.getCallTarget();
+        try (var message = plan.parseJson("7", 4096)) {
+          Object row = message.row();
+          Acceptance.check(((Long) cachedTarget.call(row, 1)) == 7, "cached owner value");
+          message.close();
+          Acceptance.rejects(() -> cachedTarget.call(row, 1), IllegalStateException.class);
+        }
+        var root = new WktRoot(false);
+        var target = root.getCallTarget();
+        var messages = new java.util.ArrayList<TypedMessage>();
+        try {
+          // Keep all owners alive so invalidated entries cannot be reclaimed before saturation.
+          for (int i = 1; i <= 8; i++) {
+            var message = plan.parseJson(Integer.toString(i), 4096);
+            messages.add(message);
+            Acceptance.check(((Long) target.call(message.row(), 1)) == i, "saturated owner value");
+          }
+          for (var message : messages) {
+            Object row = message.row();
+            message.close();
+            Acceptance.rejects(() -> target.call(row, 1), IllegalStateException.class);
+          }
+          Acceptance.check(NodeUtil.countNodes(root) <= 192, "owner cache AST budget");
+        } finally {
+          for (var message : messages) message.close();
+        }
+      } finally {
+        context.leave();
+      }
+    }
+  }
+
   static void run(BuffaWire decoder) {
     try (var context =
             Context.newBuilder("buffa-test")
@@ -78,8 +123,18 @@ final class CompiledReads {
               double bytes = (bean.getThreadAllocatedBytes(thread) - before) / 1000000.0;
               Acceptance.check(bytes <= 0.05, "WKT compiled allocation budget");
             }
+            // Constant receivers may fold scalar values, but must still invalidate on close.
+            var constantRoot = new ConstantWktRoot(row);
+            var constantTarget = constantRoot.getCallTarget();
+            for (int i = 0; i < 200 && !constantRoot.compiled; i++) constantTarget.call(100000);
+            Acceptance.check(constantRoot.compiled, "constant WKT reads compiled " + type);
+            long firstValue = type.equals("Timestamp") ? 1 : type.equals("Duration") ? -1 : 7;
+            Acceptance.check(
+                ((Long) constantTarget.call(1000000)) == firstValue * 1000000,
+                "constant WKT value");
             typed.close();
             Acceptance.rejects(() -> typedTarget.call(row, 1), IllegalStateException.class);
+            Acceptance.rejects(() -> constantTarget.call(1), IllegalStateException.class);
           }
         }
         var root = new ReadRoot();
@@ -101,14 +156,44 @@ final class CompiledReads {
           System.out.println("BUFFA compiled bytes/read=" + bytes);
           Acceptance.check(bytes <= 0.05, "compiled allocation budget");
         }
+        var constantBytes = new ReadRoot(row);
+        var constantByteTarget = constantBytes.getCallTarget();
+        for (int i = 0; i < 200 && !constantBytes.compiled; i++)
+          constantByteTarget.call(row, 100_000);
+        Acceptance.check(constantBytes.compiled, "constant byte reads compiled");
+        Acceptance.check(
+            ((Long) constantByteTarget.call(row, 1_000_000)) == 255_000_000L,
+            "constant borrowed byte value");
         if (decoder.selected() != BuffaWire.Selected.JAVA) {
           message.close();
           Acceptance.rejects(() -> target.call(row, 1), IllegalStateException.class);
+          Acceptance.rejects(() -> constantByteTarget.call(row, 1), IllegalStateException.class);
         }
         System.out.println("BUFFA JIT compiled=true nodes=" + NodeUtil.countNodes(root));
       } finally {
         context.leave();
       }
+    }
+  }
+
+  private static final class ConstantWktRoot extends RootNode {
+    private final Object row;
+    @Child private ReadLongNode read = ReadLongNode.create();
+    boolean compiled;
+
+    ConstantWktRoot(Object row) {
+      super(null);
+      this.row = row;
+    }
+
+    @Override
+    public Object execute(VirtualFrame frame) {
+      int count = (Integer) frame.getArguments()[0];
+      long sum = 0;
+      for (int i = 0; i < count; i++) sum += read.execute(row, 0);
+      if (CompilerDirectives.inInterpreter()) LoopNode.reportLoopCount(this, count);
+      compiled |= CompilerDirectives.inCompiledCode();
+      return sum;
     }
   }
 
@@ -137,6 +222,7 @@ final class CompiledReads {
   }
 
   private static final class ReadRoot extends RootNode {
+    private final @org.jspecify.annotations.Nullable Object constantRow;
     @Child private ReadLengthNode length = ReadLengthNode.create();
     @Child private DataLibrary rows = DataLibrary.factory().createDispatched(3);
     @Child private InteropLibrary bytes = InteropLibrary.getFactory().createDispatched(3);
@@ -144,14 +230,19 @@ final class CompiledReads {
     boolean compiled;
 
     ReadRoot() {
+      this(null);
+    }
+
+    ReadRoot(@org.jspecify.annotations.Nullable Object constantRow) {
       super(null);
+      this.constantRow = constantRow;
     }
 
     @Override
     public Object execute(VirtualFrame frame) {
-      Object value = rows.read(frame.getArguments()[0], 2);
-      if (length.execute(frame.getArguments()[0], 2) != 1)
-        throw new AssertionError("compiled length");
+      Object row = constantRow == null ? frame.getArguments()[0] : constantRow;
+      Object value = rows.read(row, 2);
+      if (length.execute(row, 2) != 1) throw new AssertionError("compiled length");
       int count = (Integer) frame.getArguments()[1];
       long sum = 0;
       try {
