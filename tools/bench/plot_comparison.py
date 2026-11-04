@@ -69,7 +69,7 @@ def render(data, output, label):
                 medians.append(statistics.median(forks))
                 lows.append(min(forks))
                 highs.append(max(forks))
-                boundary = base != 'ingest' and workload == 'proto-mixed' and engine == 'stock'
+                boundary = base in ('interpret', 'peak') and workload == 'proto-mixed' and engine == 'stock'
                 names.append(ENGINES[engine] + (' *' if boundary else ''))
             ax.barh(names, medians, color=[COLORS[e] for e in engines], height=0.58,
                     xerr=[[m - lo for m, lo in zip(medians, lows)],
@@ -80,7 +80,9 @@ def render(data, output, label):
             ax.set_xlim(min(v for v in lows if v > 0) * 0.65, max(highs) * 2.5)
             for y, (median, high) in enumerate(zip(medians, highs)):
                 ax.text(high * 1.07, y, f'{median:,.2f}', va='center', fontsize=9)
-            ax.set_title(LABELS[workload], loc='left', fontweight='bold', fontsize=11)
+            workload_label = ('Nested protobuf · full message' if base == 'serialize' and workload == 'proto-mixed'
+                              else LABELS[workload])
+            ax.set_title(workload_label, loc='left', fontweight='bold', fontsize=11)
             ax.set_xlabel(unit + ' · log scale · lower is better', fontsize=9)
             ax.grid(axis='x', alpha=0.15)
             ax.set_axisbelow(True)

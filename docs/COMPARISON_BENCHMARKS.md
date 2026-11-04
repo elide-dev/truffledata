@@ -511,3 +511,51 @@ stock's 1.15 µs, with overlapping process ranges. Generic serialization also av
 UTF-8 arrays; its nested serialization allocation falls from 1130.50 to 556 bytes.
 [The complete native run](https://app.buildbuddy.io/invocation/d7d680e7-ccd7-4b6c-b5e0-a06e0a6fa1a4)
 passes the comparison, both native access gates, and the protobuf-free native consumer.
+
+## Current generated graph comparison
+
+The [`8fc6670` measurement](../benchmarks/results/svm-comparison-8fc6670/comparison.json)
+reuses decoder-proven encoded sizes for eligible generated graphs. All 120 cells remain in
+the matrix. This is a separate shared-runner run; compare engines within each run and keep
+the process ranges. Scalar code was unchanged, but its timings also shifted, illustrating
+why cross-run timing differences alone cannot establish an optimization's effect.
+
+| Operation | Stock | Generated owned | Stock / generated Java bytes |
+| --- | ---: | ---: | ---: |
+| Scalar ingestion | 58.82 ns | 22.09 ns | 136 / 88 |
+| Scalar interpreter reads | 2.04 ns | 1.22 ns | 2 / 2 |
+| Scalar peak reads | 1.05 ns | 1.31 ns | 1 / 1 |
+| Scalar serialization | 17.80 ns | 17.87 ns | 56 / 24 |
+| Scalar parse/project, peak | 54.07 ns | 10.61 ns | 137 / 1 |
+| Nested ingestion, projection | 758.37 ns | 801.80 ns | 1776.75 / 1800.50 |
+| Nested ingestion, full consumption | 844.77 ns | 909.58 ns | 1776.75 / 1800.50 |
+| Nested serialization | 537.77 ns | 1139.49 ns | 436.50 / 192.50 |
+
+Generated nested decoding is close to stock here, with 1.3% more Java heap allocation.
+Generated nested serialization uses 56% less Java heap, but is about 2.1 times slower.
+Its per-process medians range from 652.84 to 1306.07 ns, versus 506.59 to 719.78 ns for stock.
+Generic owned nested full-consumption decoding still takes 9.69 µs and 3339.50 bytes; this
+work has not closed the generic, borrowed, aliased-byte, or SQL-wrapper gaps.
+
+The size proof stays immutable in spare presence bits for schemas with at most 32 fields.
+No cache field or per-message cache object is added. Duplicate/merged singular fields,
+oneof replacement, maps, known groups, packed/unpacked conversions, omitted defaults,
+truncating varints and nonminimal varints conservatively disable reuse. Wider schemas
+retain all presence bits and use generated sizing. The decoder's nonnegative work counter
+uses its sign bit for proof validity while retaining its full Long.MAX_VALUE budget range.
+Tests exercise these conditions, presence above bit 31, canonical-expansion limits, and
+4096 deterministic wire mutations. Graph bindings validate reachable schemas at setup.
+
+[The complete SVM cycle](https://app.buildbuddy.io/invocation/14c55ec3-9859-4b7f-9482-bb5219a8a228)
+passes the full benchmark, comparison/native access gates, and the protobuf-free native
+consumer. CI also passed on implementation revision `8fc6670`, including native/fallback
+acceptance, real driver acceptance, coverage, JUnit reporting, and CodSpeed reporting.
+
+![Current generated interpreter reads](images/independent-latest/comparison-generated-interpreter.svg)
+![Current generated peak reads](images/independent-latest/comparison-generated-peak.svg)
+![Current ingestion allocations](images/independent-latest/comparison-allocations.svg)
+![Current binary serialization](images/independent-latest/comparison-serialization.svg)
+
+The [current chart manifest](images/independent-latest/comparison-manifest.json) identifies
+the raw data, executable and implementation revision. Earlier development evidence and
+released 0.4.0 graphics remain available above.

@@ -1,0 +1,7583 @@
+{
+  "schema": 11,
+  "forks": 3,
+  "captured_at": "2026-11-04T20:19:35.469725+00:00",
+  "revision": "8fc66702d7f42014aa615845450d18bad41ad3b0",
+  "binary_sha256": "f011a7cd9542d99050b4cc2702d106803a3629f78020d4e99bf7eb0455e7748b",
+  "host": {
+    "system": "Linux",
+    "machine": "x86_64",
+    "cpu": "AMD EPYC",
+    "kernel": "5.15.0",
+    "logical_cpus": 5
+  },
+  "allocation_scope": "current-thread Java heap; excludes native heap and compiler/background threads",
+  "versions": {
+    "graalvm": "25.5.5-elide.24",
+    "protobuf-java": "4.36.1",
+    "mysql-connector-j": "26.10.0",
+    "postgresql": "42.7.14"
+  },
+  "results": [
+    {
+      "workload": "proto-scalar",
+      "engine": "stock",
+      "stage": "serialize",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 288,
+      "ns_per_row": [
+        883.2380022321429,
+        1016.3748873197115,
+        807.7129974365234
+      ],
+      "allocated_bytes_per_row": [
+        56.0,
+        56.0,
+        56.0
+      ],
+      "fork": 2
+    },
+    {
+      "workload": "proto-scalar",
+      "engine": "generated-owned",
+      "stage": "peak",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": true,
+      "rows": 32,
+      "checksum": 54400032992,
+      "ns_per_row": [
+        16.180612324089402,
+        18.76974612338771,
+        1.1539883301704277
+      ],
+      "allocated_bytes_per_row": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "fork": 0
+    },
+    {
+      "workload": "mysql-int4",
+      "engine": "stock",
+      "stage": "interpret",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 35472,
+      "ns_per_row": [
+        2.4783975196184787,
+        1.9321488203446096,
+        3.1841292801659495
+      ],
+      "allocated_bytes_per_row": [
+        2.0,
+        2.0,
+        2.0
+      ],
+      "fork": 1
+    },
+    {
+      "workload": "proto-scalar",
+      "engine": "owned",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 54400032992,
+      "ns_per_row": [
+        93.67496479506232,
+        80.06981621413935,
+        72.64903019245072
+      ],
+      "allocated_bytes_per_row": [
+        88.0,
+        88.0,
+        88.0
+      ],
+      "fork": 1
+    },
+    {
+      "workload": "proto-scalar",
+      "engine": "stock",
+      "stage": "interpret",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 54400032992,
+      "ns_per_row": [
+        1.7124856988182073,
+        1.833542296391559,
+        2.4067673547786868
+      ],
+      "allocated_bytes_per_row": [
+        2.0,
+        2.0,
+        2.0
+      ],
+      "fork": 1
+    },
+    {
+      "workload": "proto-bytes",
+      "engine": "stock-aliased",
+      "stage": "interpret",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 2097648,
+      "ns_per_row": [
+        6.624808184685295,
+        5.409971278591604,
+        7.611193542966675
+      ],
+      "allocated_bytes_per_row": [
+        2.0,
+        2.0,
+        2.0
+      ],
+      "fork": 0
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "owned",
+      "stage": "ingest-generated",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        8248.076171875,
+        7610.829326923077,
+        7711.131310096154
+      ],
+      "allocated_bytes_per_row": [
+        3339.5,
+        3339.5,
+        3339.5
+      ],
+      "fork": 1
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "owned",
+      "stage": "peak-generated",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": true,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        12.755531303062957,
+        8.39403793492268,
+        7.386067216312727
+      ],
+      "allocated_bytes_per_row": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "fork": 1
+    },
+    {
+      "workload": "proto-bytes",
+      "engine": "generated-owned",
+      "stage": "peak",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": true,
+      "rows": 32,
+      "checksum": 2097648,
+      "ns_per_row": [
+        2.4881407460006115,
+        2.7322996954034244,
+        3.0947095998759306
+      ],
+      "allocated_bytes_per_row": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "fork": 1
+    },
+    {
+      "workload": "proto-bytes",
+      "engine": "stock-aliased",
+      "stage": "read-aot",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 2097648,
+      "ns_per_row": [
+        2.5544465778013183,
+        2.5761111875857248,
+        2.6209528633533705
+      ],
+      "allocated_bytes_per_row": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "fork": 0
+    },
+    {
+      "workload": "timestamp-json",
+      "engine": "owned",
+      "stage": "ingest-generated",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 54400032992,
+      "ns_per_row": [
+        1407.0211330935251,
+        1404.312779017857,
+        1525.0178657945737
+      ],
+      "allocated_bytes_per_row": [
+        3671.75,
+        3671.75,
+        3671.75
+      ],
+      "fork": 1
+    },
+    {
+      "workload": "proto-bytes",
+      "engine": "owned",
+      "stage": "interpret",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 2097648,
+      "ns_per_row": [
+        21.30439691726658,
+        23.768951772251945,
+        21.76095020749777
+      ],
+      "allocated_bytes_per_row": [
+        2.0,
+        2.0,
+        2.0
+      ],
+      "fork": 0
+    },
+    {
+      "workload": "mysql-int4",
+      "engine": "static",
+      "stage": "interpret",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 35472,
+      "ns_per_row": [
+        13.617012763900501,
+        13.990865840671535,
+        14.552237374441964
+      ],
+      "allocated_bytes_per_row": [
+        2.0,
+        2.0,
+        2.0
+      ],
+      "fork": 2
+    },
+    {
+      "workload": "proto-bytes",
+      "engine": "generated-owned",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 2097648,
+      "ns_per_row": [
+        84216.044921875,
+        28153.571428571428,
+        16921.234879032258
+      ],
+      "allocated_bytes_per_row": [
+        65651.0,
+        65651.0,
+        65651.0
+      ],
+      "fork": 2
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "owned",
+      "stage": "ingest-typed",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        14646.040736607143,
+        14281.03794642857,
+        10948.743489583334
+      ],
+      "allocated_bytes_per_row": [
+        3339.5,
+        3339.5,
+        3339.5
+      ],
+      "fork": 1
+    },
+    {
+      "workload": "proto-bytes",
+      "engine": "generated-owned",
+      "stage": "peak",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": true,
+      "rows": 32,
+      "checksum": 2097648,
+      "ns_per_row": [
+        1.9000052277855586,
+        1.7988187833425313,
+        1.7758980823863637
+      ],
+      "allocated_bytes_per_row": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "fork": 2
+    },
+    {
+      "workload": "proto-scalar",
+      "engine": "buffa",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 54400032992,
+      "ns_per_row": [
+        114.90289522058823,
+        115.87784048784104,
+        115.54805311206387
+      ],
+      "allocated_bytes_per_row": [
+        112.0,
+        112.0,
+        112.0
+      ],
+      "fork": 0
+    },
+    {
+      "workload": "proto-bytes",
+      "engine": "owned",
+      "stage": "peak-generated",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": true,
+      "rows": 32,
+      "checksum": 2097648,
+      "ns_per_row": [
+        5.686634420848859,
+        4.172252308238637,
+        3.379200867526986
+      ],
+      "allocated_bytes_per_row": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "fork": 0
+    },
+    {
+      "workload": "proto-bytes",
+      "engine": "owned",
+      "stage": "read-generated-aot",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 2097648,
+      "ns_per_row": [
+        12.099031083529484,
+        12.032926512469212,
+        12.180867066768444
+      ],
+      "allocated_bytes_per_row": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "fork": 2
+    },
+    {
+      "workload": "proto-bytes",
+      "engine": "buffa",
+      "stage": "read-generated-aot",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 2097648,
+      "ns_per_row": [
+        7.552681228741497,
+        7.551246732712972,
+        7.557510527053682
+      ],
+      "allocated_bytes_per_row": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "fork": 1
+    },
+    {
+      "workload": "proto-bytes",
+      "engine": "buffa",
+      "stage": "peak-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": true,
+      "rows": 32,
+      "checksum": 2097648,
+      "ns_per_row": [
+        4.009882684215928,
+        3.79486434979212,
+        3.7208922019058597
+      ],
+      "allocated_bytes_per_row": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "fork": 1
+    },
+    {
+      "workload": "proto-bytes",
+      "engine": "stock-aliased",
+      "stage": "read-aot",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 2097648,
+      "ns_per_row": [
+        2.547048898621688,
+        2.5034943753524916,
+        2.9973000072888536
+      ],
+      "allocated_bytes_per_row": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "fork": 1
+    },
+    {
+      "workload": "proto-scalar",
+      "engine": "stock",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 54400032992,
+      "ns_per_row": [
+        75.58812932359723,
+        58.81714962548931,
+        58.60919521443515
+      ],
+      "allocated_bytes_per_row": [
+        136.0,
+        136.0,
+        136.0
+      ],
+      "fork": 2
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "owned",
+      "stage": "peak",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": true,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        10.55543574775821,
+        8.185750434609584,
+        8.005958632172131
+      ],
+      "allocated_bytes_per_row": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "fork": 1
+    },
+    {
+      "workload": "proto-bytes",
+      "engine": "buffa",
+      "stage": "ingest-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 2097648,
+      "ns_per_row": [
+        181.89765915968343,
+        190.6888578687926,
+        196.41963724874373
+      ],
+      "allocated_bytes_per_row": [
+        272.0,
+        272.0,
+        272.0
+      ],
+      "fork": 2
+    },
+    {
+      "workload": "postgres-int4",
+      "engine": "stock",
+      "stage": "read-aot",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 35472,
+      "ns_per_row": [
+        1.2937295290311044,
+        1.789651716092765,
+        1.2193068513096783
+      ],
+      "allocated_bytes_per_row": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "fork": 1
+    },
+    {
+      "workload": "proto-scalar",
+      "engine": "generated-owned",
+      "stage": "read-aot",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 54400032992,
+      "ns_per_row": [
+        1.0463019276458172,
+        1.028288355413473,
+        1.1032674024937867
+      ],
+      "allocated_bytes_per_row": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "fork": 1
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "generated-owned",
+      "stage": "peak",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": true,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        4.319148190164043,
+        4.221212511075812,
+        3.549126203670058
+      ],
+      "allocated_bytes_per_row": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "fork": 2
+    },
+    {
+      "workload": "mysql-int4",
+      "engine": "stock",
+      "stage": "interpret",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 35472,
+      "ns_per_row": [
+        1.7054979186312518,
+        1.6867152285463871,
+        1.700787399432293
+      ],
+      "allocated_bytes_per_row": [
+        2.0,
+        2.0,
+        2.0
+      ],
+      "fork": 2
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "stock",
+      "stage": "interpret-boundary",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        6.88032295334507,
+        6.721371454922262,
+        8.191808729984071
+      ],
+      "allocated_bytes_per_row": [
+        2.0,
+        2.0,
+        2.0
+      ],
+      "fork": 2
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "owned",
+      "stage": "ingest-generated",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        7243.02806712963,
+        6975.668247767857,
+        6846.429148706897
+      ],
+      "allocated_bytes_per_row": [
+        3339.5,
+        3339.5,
+        3339.5
+      ],
+      "fork": 2
+    },
+    {
+      "workload": "mysql-int4",
+      "engine": "static",
+      "stage": "peak",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": true,
+      "rows": 32,
+      "checksum": 35472,
+      "ns_per_row": [
+        2.004770224739284,
+        2.0004265960388334,
+        2.0311748485596923
+      ],
+      "allocated_bytes_per_row": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "fork": 0
+    },
+    {
+      "workload": "proto-scalar",
+      "engine": "owned",
+      "stage": "read-generated-aot",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 54400032992,
+      "ns_per_row": [
+        8.264054439064614,
+        8.29327968537848,
+        8.561349149171633
+      ],
+      "allocated_bytes_per_row": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "fork": 0
+    },
+    {
+      "workload": "postgres-int4",
+      "engine": "static",
+      "stage": "interpret",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 35472,
+      "ns_per_row": [
+        12.530050580929487,
+        13.08587731528001,
+        12.522821514423077
+      ],
+      "allocated_bytes_per_row": [
+        2.0,
+        2.0,
+        2.0
+      ],
+      "fork": 1
+    },
+    {
+      "workload": "proto-scalar",
+      "engine": "generated-owned",
+      "stage": "project-peak",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": true,
+      "rows": 32,
+      "checksum": 54400032992,
+      "ns_per_row": [
+        9.383951822916666,
+        9.428256590854247,
+        9.324151657919847
+      ],
+      "allocated_bytes_per_row": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "fork": 2
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "stock",
+      "stage": "peak-boundary",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": true,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        6.162365716494195,
+        6.282263233828447,
+        6.2297873983577805
+      ],
+      "allocated_bytes_per_row": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "fork": 0
+    },
+    {
+      "workload": "proto-scalar",
+      "engine": "buffa",
+      "stage": "ingest-typed",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 54400032992,
+      "ns_per_row": [
+        115.06786476737338,
+        107.83805329564258,
+        140.8171863734679
+      ],
+      "allocated_bytes_per_row": [
+        80.0,
+        80.0,
+        80.0
+      ],
+      "fork": 0
+    },
+    {
+      "workload": "proto-mixed-full",
+      "engine": "stock",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 4866,
+      "ns_per_row": [
+        844.7659617456897,
+        824.9904404008439,
+        1238.9245450949368
+      ],
+      "allocated_bytes_per_row": [
+        1776.75,
+        1776.75,
+        1776.75
+      ],
+      "fork": 0
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "owned",
+      "stage": "read-generated-aot",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        42.55558239873693,
+        50.62689662964876,
+        46.724182594823475
+      ],
+      "allocated_bytes_per_row": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "fork": 0
+    },
+    {
+      "workload": "proto-scalar",
+      "engine": "generated-owned",
+      "stage": "project-aot",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 54400032992,
+      "ns_per_row": [
+        8.205528669459845,
+        8.95477921382423,
+        11.42576297942002
+      ],
+      "allocated_bytes_per_row": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "fork": 1
+    },
+    {
+      "workload": "proto-scalar",
+      "engine": "stock",
+      "stage": "serialize",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 288,
+      "ns_per_row": [
+        17.339702952991832,
+        17.149311880047403,
+        16.880277349145373
+      ],
+      "allocated_bytes_per_row": [
+        56.0,
+        56.0,
+        56.0
+      ],
+      "fork": 0
+    },
+    {
+      "workload": "proto-bytes",
+      "engine": "generated-owned",
+      "stage": "read-aot",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 2097648,
+      "ns_per_row": [
+        1.0867526423609566,
+        1.0889113945706226,
+        1.067814756891292
+      ],
+      "allocated_bytes_per_row": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "fork": 1
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "stock",
+      "stage": "serialize",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 5257,
+      "ns_per_row": [
+        635.6388061523437,
+        719.7778176700367,
+        723.347900390625
+      ],
+      "allocated_bytes_per_row": [
+        436.5,
+        436.5,
+        436.5
+      ],
+      "fork": 2
+    },
+    {
+      "workload": "proto-bytes",
+      "engine": "buffa",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 2097648,
+      "ns_per_row": [
+        227.7340972829254,
+        362.7622767857143,
+        268.35052691449175
+      ],
+      "allocated_bytes_per_row": [
+        272.0,
+        272.0,
+        272.0
+      ],
+      "fork": 2
+    },
+    {
+      "workload": "proto-scalar",
+      "engine": "buffa",
+      "stage": "serialize",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 288,
+      "ns_per_row": [
+        14.466587735578347,
+        14.38160531231596,
+        14.732882473235826
+      ],
+      "allocated_bytes_per_row": [
+        24.0,
+        24.0,
+        24.0
+      ],
+      "fork": 2
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "owned",
+      "stage": "ingest-typed",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        7649.866286057692,
+        7030.509207589285,
+        7152.752511160715
+      ],
+      "allocated_bytes_per_row": [
+        3339.5,
+        3339.5,
+        3339.5
+      ],
+      "fork": 0
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "buffa",
+      "stage": "peak-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": true,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        7.768464454864424,
+        7.89433997757757,
+        7.743713340202917
+      ],
+      "allocated_bytes_per_row": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "fork": 1
+    },
+    {
+      "workload": "timestamp-json",
+      "engine": "buffa",
+      "stage": "ingest-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 54400032992,
+      "ns_per_row": [
+        444.6907848011364,
+        429.74819711538464,
+        416.6445395788913
+      ],
+      "allocated_bytes_per_row": [
+        688.0,
+        688.0,
+        688.0
+      ],
+      "fork": 0
+    },
+    {
+      "workload": "proto-bytes",
+      "engine": "buffa",
+      "stage": "serialize",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 2097776,
+      "ns_per_row": [
+        29142.04345703125,
+        28058.93310546875,
+        30557.07275390625
+      ],
+      "allocated_bytes_per_row": [
+        65567.0,
+        65567.0,
+        65567.0
+      ],
+      "fork": 1
+    },
+    {
+      "workload": "proto-scalar",
+      "engine": "owned",
+      "stage": "peak",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": true,
+      "rows": 32,
+      "checksum": 54400032992,
+      "ns_per_row": [
+        2.8545210710997777,
+        1.6436525146845968,
+        2.3088818054603273
+      ],
+      "allocated_bytes_per_row": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "fork": 0
+    },
+    {
+      "workload": "postgres-int4",
+      "engine": "stock",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 35472,
+      "ns_per_row": [
+        20.847146340324475,
+        20.184340930815335,
+        20.267572247587424
+      ],
+      "allocated_bytes_per_row": [
+        16.0,
+        16.0,
+        16.0
+      ],
+      "fork": 1
+    },
+    {
+      "workload": "proto-scalar",
+      "engine": "owned",
+      "stage": "peak-generated",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": true,
+      "rows": 32,
+      "checksum": 54400032992,
+      "ns_per_row": [
+        1.7394539459915574,
+        1.8868866674314142,
+        2.437469488514424
+      ],
+      "allocated_bytes_per_row": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "fork": 2
+    },
+    {
+      "workload": "timestamp-json",
+      "engine": "buffa",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 54400032992,
+      "ns_per_row": [
+        501.82862580128204,
+        492.91561712846345,
+        497.47038008905855
+      ],
+      "allocated_bytes_per_row": [
+        688.0,
+        688.0,
+        688.0
+      ],
+      "fork": 1
+    },
+    {
+      "workload": "proto-scalar",
+      "engine": "buffa",
+      "stage": "ingest-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 54400032992,
+      "ns_per_row": [
+        68.47203053803014,
+        68.8816637649859,
+        93.06408929847547
+      ],
+      "allocated_bytes_per_row": [
+        80.0,
+        80.0,
+        80.0
+      ],
+      "fork": 2
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "buffa",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        3085.1654052734375,
+        2972.188683712121,
+        3857.7757352941176
+      ],
+      "allocated_bytes_per_row": [
+        1727.75,
+        1727.75,
+        1727.75
+      ],
+      "fork": 2
+    },
+    {
+      "workload": "proto-bytes",
+      "engine": "owned",
+      "stage": "interpret-generated",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 2097648,
+      "ns_per_row": [
+        19.13520262906544,
+        20.694220074152543,
+        17.03500234266039
+      ],
+      "allocated_bytes_per_row": [
+        2.0,
+        2.0,
+        2.0
+      ],
+      "fork": 1
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "owned",
+      "stage": "ingest-generated",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        7652.838040865385,
+        6881.135506465517,
+        9807.134765625
+      ],
+      "allocated_bytes_per_row": [
+        3339.5,
+        3339.5,
+        3339.5
+      ],
+      "fork": 0
+    },
+    {
+      "workload": "proto-scalar",
+      "engine": "generated-owned",
+      "stage": "project-aot",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 54400032992,
+      "ns_per_row": [
+        8.261041499281124,
+        8.292192406016632,
+        8.421301917319951
+      ],
+      "allocated_bytes_per_row": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "fork": 0
+    },
+    {
+      "workload": "proto-bytes",
+      "engine": "buffa",
+      "stage": "interpret-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 2097648,
+      "ns_per_row": [
+        8.994893901302467,
+        8.939736735323702,
+        8.68860862433274
+      ],
+      "allocated_bytes_per_row": [
+        2.0,
+        2.0,
+        2.0
+      ],
+      "fork": 0
+    },
+    {
+      "workload": "mysql-int4",
+      "engine": "static",
+      "stage": "interpret",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 35472,
+      "ns_per_row": [
+        11.811518715244198,
+        11.69789047533525,
+        12.104792221568385
+      ],
+      "allocated_bytes_per_row": [
+        2.0,
+        2.0,
+        2.0
+      ],
+      "fork": 1
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "buffa",
+      "stage": "interpret",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        44.945319680606616,
+        45.31092664930556,
+        45.41895983387546
+      ],
+      "allocated_bytes_per_row": [
+        2.0,
+        2.0,
+        2.0
+      ],
+      "fork": 2
+    },
+    {
+      "workload": "timestamp-json",
+      "engine": "stock",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 54400032992,
+      "ns_per_row": [
+        3191.7174899193546,
+        4000.351640625,
+        4774.537919207317
+      ],
+      "allocated_bytes_per_row": [
+        6439.75,
+        6439.75,
+        6439.75
+      ],
+      "fork": 0
+    },
+    {
+      "workload": "mysql-int4",
+      "engine": "stock",
+      "stage": "read-aot",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 35472,
+      "ns_per_row": [
+        0.9643184397587685,
+        0.96127251807475,
+        0.9744730678609204
+      ],
+      "allocated_bytes_per_row": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "fork": 0
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "buffa",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        3052.0947265625,
+        2877.0502068014707,
+        2921.8901585820895
+      ],
+      "allocated_bytes_per_row": [
+        1727.75,
+        1727.75,
+        1727.75
+      ],
+      "fork": 1
+    },
+    {
+      "workload": "timestamp-json",
+      "engine": "owned",
+      "stage": "ingest-generated",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 54400032992,
+      "ns_per_row": [
+        1250.90042794586,
+        1207.0421006944443,
+        1233.5252063679245
+      ],
+      "allocated_bytes_per_row": [
+        3671.75,
+        3671.75,
+        3671.75
+      ],
+      "fork": 2
+    },
+    {
+      "workload": "proto-scalar",
+      "engine": "stock",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 54400032992,
+      "ns_per_row": [
+        57.33361461696507,
+        56.60490165893944,
+        56.14119987783846
+      ],
+      "allocated_bytes_per_row": [
+        136.0,
+        136.0,
+        136.0
+      ],
+      "fork": 1
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "stock",
+      "stage": "read-aot",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        5.82193428297866,
+        5.843924836943514,
+        5.844354917125419
+      ],
+      "allocated_bytes_per_row": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "fork": 2
+    },
+    {
+      "workload": "proto-scalar",
+      "engine": "stock",
+      "stage": "read-aot",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 54400032992,
+      "ns_per_row": [
+        1.1483437110514063,
+        1.137231549937698,
+        1.1324057499420224
+      ],
+      "allocated_bytes_per_row": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "fork": 2
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "buffa",
+      "stage": "serialize",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 5257,
+      "ns_per_row": [
+        23.70897489381068,
+        33.50294174382716,
+        1649.306640625
+      ],
+      "allocated_bytes_per_row": [
+        176.5,
+        176.5,
+        176.5
+      ],
+      "fork": 1
+    },
+    {
+      "workload": "timestamp-json",
+      "engine": "stock",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 54400032992,
+      "ns_per_row": [
+        3102.739783653846,
+        3017.536658653846,
+        3851.6230085784314
+      ],
+      "allocated_bytes_per_row": [
+        6439.75,
+        6439.75,
+        6439.75
+      ],
+      "fork": 1
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "buffa",
+      "stage": "read-generated-aot",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        30.005650625767814,
+        20.106430053710938,
+        19.705133253528224
+      ],
+      "allocated_bytes_per_row": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "fork": 2
+    },
+    {
+      "workload": "proto-scalar",
+      "engine": "generated-owned",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 54400032992,
+      "ns_per_row": [
+        24.057823469639118,
+        21.653716567350333,
+        22.094713305995477
+      ],
+      "allocated_bytes_per_row": [
+        88.0,
+        88.0,
+        88.0
+      ],
+      "fork": 1
+    },
+    {
+      "workload": "mysql-int4",
+      "engine": "stock",
+      "stage": "read-aot",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 35472,
+      "ns_per_row": [
+        0.9663002064285997,
+        0.9669314665841584,
+        0.9615102382147921
+      ],
+      "allocated_bytes_per_row": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "fork": 1
+    },
+    {
+      "workload": "proto-scalar",
+      "engine": "owned",
+      "stage": "interpret",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 54400032992,
+      "ns_per_row": [
+        17.54132851786997,
+        18.37711833294173,
+        17.771692623044032
+      ],
+      "allocated_bytes_per_row": [
+        2.0,
+        2.0,
+        2.0
+      ],
+      "fork": 1
+    },
+    {
+      "workload": "proto-bytes",
+      "engine": "owned",
+      "stage": "serialize",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 2097776,
+      "ns_per_row": [
+        37299.71435546875,
+        21593.521728515625,
+        40218.115234375
+      ],
+      "allocated_bytes_per_row": [
+        65615.0,
+        65615.0,
+        65615.0
+      ],
+      "fork": 2
+    },
+    {
+      "workload": "proto-bytes",
+      "engine": "generated-owned",
+      "stage": "peak",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": true,
+      "rows": 32,
+      "checksum": 2097648,
+      "ns_per_row": [
+        1.3658725604511637,
+        1.350265079308843,
+        1.3407412114737782
+      ],
+      "allocated_bytes_per_row": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "fork": 0
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "buffa",
+      "stage": "ingest-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        2803.9581473214284,
+        10725.20282451923,
+        9780.923828125
+      ],
+      "allocated_bytes_per_row": [
+        1727.75,
+        1727.75,
+        1727.75
+      ],
+      "fork": 2
+    },
+    {
+      "workload": "proto-bytes",
+      "engine": "stock",
+      "stage": "read-aot",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 2097648,
+      "ns_per_row": [
+        2.5681308462281764,
+        2.6292583425317684,
+        2.75379612793189
+      ],
+      "allocated_bytes_per_row": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "fork": 0
+    },
+    {
+      "workload": "proto-bytes",
+      "engine": "owned",
+      "stage": "ingest-generated",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 2097648,
+      "ns_per_row": [
+        5186.923314144737,
+        302067.03125,
+        7089.116908482143
+      ],
+      "allocated_bytes_per_row": [
+        66035.0,
+        66035.0,
+        66035.0
+      ],
+      "fork": 0
+    },
+    {
+      "workload": "mysql-int4",
+      "engine": "static",
+      "stage": "ingest-typed",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 35472,
+      "ns_per_row": [
+        88.56049026268116,
+        87.37009447674419,
+        87.43226135854968
+      ],
+      "allocated_bytes_per_row": [
+        128.0,
+        128.0,
+        128.0
+      ],
+      "fork": 2
+    },
+    {
+      "workload": "timestamp-json",
+      "engine": "owned",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 54400032992,
+      "ns_per_row": [
+        1461.96533931903,
+        1323.0854096283783,
+        1284.5131484885621
+      ],
+      "allocated_bytes_per_row": [
+        3703.75,
+        3703.75,
+        3703.75
+      ],
+      "fork": 2
+    },
+    {
+      "workload": "timestamp-json",
+      "engine": "buffa",
+      "stage": "ingest-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 54400032992,
+      "ns_per_row": [
+        641.0540471311475,
+        632.7590260922331,
+        425.06479279891306
+      ],
+      "allocated_bytes_per_row": [
+        688.0,
+        688.0,
+        688.0
+      ],
+      "fork": 1
+    },
+    {
+      "workload": "timestamp-json",
+      "engine": "buffa",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 54400032992,
+      "ns_per_row": [
+        510.3076044386423,
+        503.19699951799487,
+        548.4757965686274
+      ],
+      "allocated_bytes_per_row": [
+        688.0,
+        688.0,
+        688.0
+      ],
+      "fork": 2
+    },
+    {
+      "workload": "mysql-int4",
+      "engine": "static",
+      "stage": "peak",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": true,
+      "rows": 32,
+      "checksum": 35472,
+      "ns_per_row": [
+        2.0516663110556723,
+        1.9235434801874902,
+        1.9874942522412284
+      ],
+      "allocated_bytes_per_row": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "fork": 2
+    },
+    {
+      "workload": "proto-bytes",
+      "engine": "owned",
+      "stage": "peak-generated",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": true,
+      "rows": 32,
+      "checksum": 2097648,
+      "ns_per_row": [
+        3.63464264615585,
+        3.2234769286787035,
+        3.2348147636377185
+      ],
+      "allocated_bytes_per_row": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "fork": 1
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "generated-owned",
+      "stage": "serialize",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 5257,
+      "ns_per_row": [
+        652.8440969366776,
+        658.4779759457236,
+        640.6336669921875
+      ],
+      "allocated_bytes_per_row": [
+        192.5,
+        192.5,
+        192.5
+      ],
+      "fork": 2
+    },
+    {
+      "workload": "proto-scalar",
+      "engine": "generated-owned",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 54400032992,
+      "ns_per_row": [
+        22.708683492471806,
+        21.8379115887746,
+        20.941126903077087
+      ],
+      "allocated_bytes_per_row": [
+        88.0,
+        88.0,
+        88.0
+      ],
+      "fork": 2
+    },
+    {
+      "workload": "proto-scalar",
+      "engine": "stock",
+      "stage": "interpret",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 54400032992,
+      "ns_per_row": [
+        1.9038601480865955,
+        2.043888252343881,
+        2.0659998585314776
+      ],
+      "allocated_bytes_per_row": [
+        2.0,
+        2.0,
+        2.0
+      ],
+      "fork": 0
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "buffa",
+      "stage": "ingest-typed",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        2833.9096467391305,
+        2961.4595170454545,
+        2968.3587831439395
+      ],
+      "allocated_bytes_per_row": [
+        1727.75,
+        1727.75,
+        1727.75
+      ],
+      "fork": 1
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "stock",
+      "stage": "peak-boundary",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": true,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        6.226407205657492,
+        6.959681323450854,
+        6.311235767926356
+      ],
+      "allocated_bytes_per_row": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "fork": 2
+    },
+    {
+      "workload": "proto-scalar",
+      "engine": "stock",
+      "stage": "serialize",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 288,
+      "ns_per_row": [
+        17.959626095585534,
+        17.800236026330175,
+        17.105733406643907
+      ],
+      "allocated_bytes_per_row": [
+        56.0,
+        56.0,
+        56.0
+      ],
+      "fork": 1
+    },
+    {
+      "workload": "timestamp-json",
+      "engine": "owned",
+      "stage": "ingest-generated",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 54400032992,
+      "ns_per_row": [
+        1273.9430296266235,
+        1358.3626302083333,
+        1268.5221774193549
+      ],
+      "allocated_bytes_per_row": [
+        3671.75,
+        3671.75,
+        3671.75
+      ],
+      "fork": 0
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "generated-owned",
+      "stage": "interpret",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        3.923164112708869,
+        3.3070461153338297,
+        4.753099875475364
+      ],
+      "allocated_bytes_per_row": [
+        2.0,
+        2.0,
+        2.0
+      ],
+      "fork": 1
+    },
+    {
+      "workload": "proto-scalar",
+      "engine": "owned",
+      "stage": "ingest-generated",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 54400032992,
+      "ns_per_row": [
+        24.755307351077313,
+        43.03021384115444,
+        32.46835911527593
+      ],
+      "allocated_bytes_per_row": [
+        56.0,
+        56.0,
+        56.0
+      ],
+      "fork": 2
+    },
+    {
+      "workload": "proto-scalar",
+      "engine": "owned",
+      "stage": "interpret",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 54400032992,
+      "ns_per_row": [
+        19.494811914374004,
+        18.09353298611111,
+        18.90738377999226
+      ],
+      "allocated_bytes_per_row": [
+        2.0,
+        2.0,
+        2.0
+      ],
+      "fork": 2
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "generated-owned",
+      "stage": "peak",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": true,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        3.370304033941883,
+        3.321484056209195,
+        3.2408958295311256
+      ],
+      "allocated_bytes_per_row": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "fork": 1
+    },
+    {
+      "workload": "proto-mixed-full",
+      "engine": "generated-owned",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 4866,
+      "ns_per_row": [
+        1020.6488037109375,
+        885.5276088800905,
+        909.5775799418604
+      ],
+      "allocated_bytes_per_row": [
+        1800.5,
+        1800.5,
+        1800.5
+      ],
+      "fork": 1
+    },
+    {
+      "workload": "proto-bytes",
+      "engine": "owned",
+      "stage": "ingest-generated",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 2097648,
+      "ns_per_row": [
+        6418.582409274193,
+        24705.36644345238,
+        242840.8203125
+      ],
+      "allocated_bytes_per_row": [
+        66035.0,
+        66035.0,
+        66035.0
+      ],
+      "fork": 1
+    },
+    {
+      "workload": "proto-mixed-full",
+      "engine": "buffa",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 4866,
+      "ns_per_row": [
+        3953.45703125,
+        3617.162181712963,
+        3591.575284090909
+      ],
+      "allocated_bytes_per_row": [
+        1854.25,
+        1854.25,
+        1854.25
+      ],
+      "fork": 0
+    },
+    {
+      "workload": "proto-scalar",
+      "engine": "buffa",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 54400032992,
+      "ns_per_row": [
+        124.25443304707379,
+        588.8921210106383,
+        129.82604373757457
+      ],
+      "allocated_bytes_per_row": [
+        112.0,
+        112.0,
+        112.0
+      ],
+      "fork": 1
+    },
+    {
+      "workload": "mysql-int4",
+      "engine": "stock",
+      "stage": "peak",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": true,
+      "rows": 32,
+      "checksum": 35472,
+      "ns_per_row": [
+        0.883696630512976,
+        0.872966670335294,
+        0.8558227744452819
+      ],
+      "allocated_bytes_per_row": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "fork": 1
+    },
+    {
+      "workload": "proto-bytes",
+      "engine": "stock",
+      "stage": "read-aot",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 2097648,
+      "ns_per_row": [
+        2.5665415358287786,
+        2.5399621018160894,
+        2.4291909609095206
+      ],
+      "allocated_bytes_per_row": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "fork": 1
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "generated-owned",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        801.795434170082,
+        773.3993638833992,
+        910.1714409722222
+      ],
+      "allocated_bytes_per_row": [
+        1800.5,
+        1800.5,
+        1800.5
+      ],
+      "fork": 1
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "buffa",
+      "stage": "interpret-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        21.17564923635182,
+        40.29348523231229,
+        69.18087274135824
+      ],
+      "allocated_bytes_per_row": [
+        2.0,
+        2.0,
+        2.0
+      ],
+      "fork": 1
+    },
+    {
+      "workload": "proto-scalar",
+      "engine": "stock",
+      "stage": "peak",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": true,
+      "rows": 32,
+      "checksum": 54400032992,
+      "ns_per_row": [
+        3.1453426366890223,
+        2.930945425045018,
+        2.5079083210586104
+      ],
+      "allocated_bytes_per_row": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "fork": 0
+    },
+    {
+      "workload": "proto-scalar",
+      "engine": "buffa",
+      "stage": "read-generated-aot",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 54400032992,
+      "ns_per_row": [
+        24.063754558563232,
+        19.36802361393126,
+        22.99242842219868
+      ],
+      "allocated_bytes_per_row": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "fork": 1
+    },
+    {
+      "workload": "proto-bytes",
+      "engine": "stock-aliased",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 2097648,
+      "ns_per_row": [
+        548.6765822507023,
+        146.53498628563392,
+        89.1051782761177
+      ],
+      "allocated_bytes_per_row": [
+        144.0,
+        144.0,
+        144.0
+      ],
+      "fork": 0
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "generated-owned",
+      "stage": "read-aot",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        14.63975047950973,
+        9.776216052827381,
+        14.312745571695487
+      ],
+      "allocated_bytes_per_row": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "fork": 2
+    },
+    {
+      "workload": "proto-scalar",
+      "engine": "buffa",
+      "stage": "interpret-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 54400032992,
+      "ns_per_row": [
+        17.298362667094548,
+        19.91560106153612,
+        17.647006525469653
+      ],
+      "allocated_bytes_per_row": [
+        2.0,
+        2.0,
+        2.0
+      ],
+      "fork": 2
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "stock",
+      "stage": "peak-boundary",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": true,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        18.754927815380185,
+        15.592378458399681,
+        10.105679745705713
+      ],
+      "allocated_bytes_per_row": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "fork": 1
+    },
+    {
+      "workload": "mysql-int4",
+      "engine": "stock",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 35472,
+      "ns_per_row": [
+        54.75631346288515,
+        36.76268704121965,
+        27.8777397229749
+      ],
+      "allocated_bytes_per_row": [
+        16.0,
+        16.0,
+        16.0
+      ],
+      "fork": 0
+    },
+    {
+      "workload": "proto-scalar",
+      "engine": "stock",
+      "stage": "peak",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": true,
+      "rows": 32,
+      "checksum": 54400032992,
+      "ns_per_row": [
+        1.0005299418336613,
+        1.0061982579644742,
+        1.0299088640534042
+      ],
+      "allocated_bytes_per_row": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "fork": 1
+    },
+    {
+      "workload": "proto-mixed-full",
+      "engine": "owned",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 4866,
+      "ns_per_row": [
+        8766.866508152174,
+        8164.611002604167,
+        8257.897135416666
+      ],
+      "allocated_bytes_per_row": [
+        3339.5,
+        3339.5,
+        3339.5
+      ],
+      "fork": 2
+    },
+    {
+      "workload": "proto-bytes",
+      "engine": "owned",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 2097648,
+      "ns_per_row": [
+        11088.899739583334,
+        10329.477796052632,
+        10560.997023809523
+      ],
+      "allocated_bytes_per_row": [
+        66035.0,
+        66035.0,
+        66035.0
+      ],
+      "fork": 1
+    },
+    {
+      "workload": "proto-bytes",
+      "engine": "stock",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 2097648,
+      "ns_per_row": [
+        22126.22829861111,
+        23742.816840277777,
+        17689.817708333332
+      ],
+      "allocated_bytes_per_row": [
+        65699.0,
+        65699.0,
+        65699.0
+      ],
+      "fork": 0
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "stock",
+      "stage": "serialize",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 5257,
+      "ns_per_row": [
+        537.772800611413,
+        533.2846069335938,
+        733.7876263786765
+      ],
+      "allocated_bytes_per_row": [
+        436.5,
+        436.5,
+        436.5
+      ],
+      "fork": 0
+    },
+    {
+      "workload": "proto-bytes",
+      "engine": "owned",
+      "stage": "interpret",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 2097648,
+      "ns_per_row": [
+        15.266998291015625,
+        15.270928955078125,
+        17.058003175192038
+      ],
+      "allocated_bytes_per_row": [
+        2.0,
+        2.0,
+        2.0
+      ],
+      "fork": 2
+    },
+    {
+      "workload": "proto-bytes",
+      "engine": "stock-aliased",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 2097648,
+      "ns_per_row": [
+        44.97117072398711,
+        48.68508731617647,
+        43.53128656396256
+      ],
+      "allocated_bytes_per_row": [
+        144.0,
+        144.0,
+        144.0
+      ],
+      "fork": 2
+    },
+    {
+      "workload": "mysql-int4",
+      "engine": "stock",
+      "stage": "peak",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": true,
+      "rows": 32,
+      "checksum": 35472,
+      "ns_per_row": [
+        1.1595357877505224,
+        1.11057064939274,
+        0.9950066685472533
+      ],
+      "allocated_bytes_per_row": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "fork": 0
+    },
+    {
+      "workload": "postgres-int4",
+      "engine": "stock",
+      "stage": "peak",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": true,
+      "rows": 32,
+      "checksum": 35472,
+      "ns_per_row": [
+        0.8959744122706422,
+        0.9078857385560761,
+        0.9139849219217955
+      ],
+      "allocated_bytes_per_row": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "fork": 0
+    },
+    {
+      "workload": "proto-bytes",
+      "engine": "owned",
+      "stage": "interpret-generated",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 2097648,
+      "ns_per_row": [
+        13.923526359392817,
+        15.19941794931592,
+        14.290918539839181
+      ],
+      "allocated_bytes_per_row": [
+        2.0,
+        2.0,
+        2.0
+      ],
+      "fork": 2
+    },
+    {
+      "workload": "proto-scalar",
+      "engine": "owned",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 54400032992,
+      "ns_per_row": [
+        69.42966528962332,
+        69.90323121645795,
+        71.23528389405543
+      ],
+      "allocated_bytes_per_row": [
+        88.0,
+        88.0,
+        88.0
+      ],
+      "fork": 0
+    },
+    {
+      "workload": "proto-scalar",
+      "engine": "buffa",
+      "stage": "interpret",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 54400032992,
+      "ns_per_row": [
+        16.61272653592687,
+        14.704807543152075,
+        15.182417022515528
+      ],
+      "allocated_bytes_per_row": [
+        2.0,
+        2.0,
+        2.0
+      ],
+      "fork": 2
+    },
+    {
+      "workload": "proto-scalar",
+      "engine": "owned",
+      "stage": "peak",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": true,
+      "rows": 32,
+      "checksum": 54400032992,
+      "ns_per_row": [
+        1.6258062265385704,
+        1.9641967282406476,
+        1.579031203515069
+      ],
+      "allocated_bytes_per_row": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "fork": 1
+    },
+    {
+      "workload": "proto-mixed-full",
+      "engine": "generated-owned",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 4866,
+      "ns_per_row": [
+        811.3628112033196,
+        801.9771228227459,
+        825.5058346518987
+      ],
+      "allocated_bytes_per_row": [
+        1800.5,
+        1800.5,
+        1800.5
+      ],
+      "fork": 2
+    },
+    {
+      "workload": "proto-scalar",
+      "engine": "buffa",
+      "stage": "interpret-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 54400032992,
+      "ns_per_row": [
+        9.929322281504065,
+        10.001919533169533,
+        10.461768875187447
+      ],
+      "allocated_bytes_per_row": [
+        2.0,
+        2.0,
+        2.0
+      ],
+      "fork": 0
+    },
+    {
+      "workload": "proto-scalar",
+      "engine": "generated-owned",
+      "stage": "project-interpret",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 54400032992,
+      "ns_per_row": [
+        8.939482436173133,
+        8.613451700788964,
+        9.364582834068251
+      ],
+      "allocated_bytes_per_row": [
+        2.0,
+        2.0,
+        2.0
+      ],
+      "fork": 1
+    },
+    {
+      "workload": "proto-scalar",
+      "engine": "stock",
+      "stage": "read-aot",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 54400032992,
+      "ns_per_row": [
+        1.297347454918305,
+        1.1561957285426336,
+        1.1244277750313738
+      ],
+      "allocated_bytes_per_row": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "fork": 0
+    },
+    {
+      "workload": "proto-bytes",
+      "engine": "stock-aliased",
+      "stage": "serialize",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 2097776,
+      "ns_per_row": [
+        6511.912434895833,
+        7353.812255859375,
+        13865.8447265625
+      ],
+      "allocated_bytes_per_row": [
+        65599.0,
+        65599.0,
+        65599.0
+      ],
+      "fork": 0
+    },
+    {
+      "workload": "proto-bytes",
+      "engine": "stock",
+      "stage": "interpret",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 2097648,
+      "ns_per_row": [
+        3.8102853610720975,
+        3.8642282899552867,
+        3.6597894535933753
+      ],
+      "allocated_bytes_per_row": [
+        2.0,
+        2.0,
+        2.0
+      ],
+      "fork": 1
+    },
+    {
+      "workload": "proto-scalar",
+      "engine": "buffa",
+      "stage": "ingest-typed",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 54400032992,
+      "ns_per_row": [
+        107.122802734375,
+        104.62964900241029,
+        108.79101997494432
+      ],
+      "allocated_bytes_per_row": [
+        80.0,
+        80.0,
+        80.0
+      ],
+      "fork": 2
+    },
+    {
+      "workload": "postgres-int4",
+      "engine": "static",
+      "stage": "ingest-typed",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 35472,
+      "ns_per_row": [
+        81.24774139455074,
+        82.15578019869638,
+        82.50412399704392
+      ],
+      "allocated_bytes_per_row": [
+        128.0,
+        128.0,
+        128.0
+      ],
+      "fork": 2
+    },
+    {
+      "workload": "proto-bytes",
+      "engine": "stock",
+      "stage": "peak",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": true,
+      "rows": 32,
+      "checksum": 2097648,
+      "ns_per_row": [
+        3.843994140625,
+        2.681207788820558,
+        2.6883415082718565
+      ],
+      "allocated_bytes_per_row": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "fork": 1
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "buffa",
+      "stage": "peak",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": true,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        9.084930419921875,
+        9.000772182433677,
+        9.158551844992498
+      ],
+      "allocated_bytes_per_row": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "fork": 1
+    },
+    {
+      "workload": "proto-scalar",
+      "engine": "owned",
+      "stage": "read-generated-aot",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 54400032992,
+      "ns_per_row": [
+        12.058230792664116,
+        12.5386313687115,
+        11.704134333053691
+      ],
+      "allocated_bytes_per_row": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "fork": 2
+    },
+    {
+      "workload": "proto-mixed-full",
+      "engine": "buffa",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 4866,
+      "ns_per_row": [
+        5685.917410714285,
+        3964.9296875,
+        3778.9483173076924
+      ],
+      "allocated_bytes_per_row": [
+        1854.25,
+        1854.25,
+        1854.25
+      ],
+      "fork": 2
+    },
+    {
+      "workload": "proto-bytes",
+      "engine": "stock-aliased",
+      "stage": "peak",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": true,
+      "rows": 32,
+      "checksum": 2097648,
+      "ns_per_row": [
+        2.8686919248193727,
+        2.5225512291774277,
+        2.6067629090593636
+      ],
+      "allocated_bytes_per_row": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "fork": 0
+    },
+    {
+      "workload": "proto-bytes",
+      "engine": "buffa",
+      "stage": "peak",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": true,
+      "rows": 32,
+      "checksum": 2097648,
+      "ns_per_row": [
+        3.5230232007575757,
+        3.8427918806067045,
+        3.0649094099140095
+      ],
+      "allocated_bytes_per_row": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "fork": 1
+    },
+    {
+      "workload": "timestamp-json",
+      "engine": "stock",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 54400032992,
+      "ns_per_row": [
+        5082.108373397436,
+        4101.26953125,
+        4005.1593137254904
+      ],
+      "allocated_bytes_per_row": [
+        6439.75,
+        6439.75,
+        6439.75
+      ],
+      "fork": 2
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "owned",
+      "stage": "interpret",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        82.98653267525337,
+        86.66954094636525,
+        86.88022911125887
+      ],
+      "allocated_bytes_per_row": [
+        2.0,
+        2.0,
+        2.0
+      ],
+      "fork": 0
+    },
+    {
+      "workload": "postgres-int4",
+      "engine": "static",
+      "stage": "peak",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": true,
+      "rows": 32,
+      "checksum": 35472,
+      "ns_per_row": [
+        2.083746693121693,
+        2.0854330372394942,
+        2.0252291066170374
+      ],
+      "allocated_bytes_per_row": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "fork": 2
+    },
+    {
+      "workload": "proto-scalar",
+      "engine": "buffa",
+      "stage": "interpret",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 54400032992,
+      "ns_per_row": [
+        27.715441645408163,
+        26.116343441172543,
+        18.60545165644026
+      ],
+      "allocated_bytes_per_row": [
+        2.0,
+        2.0,
+        2.0
+      ],
+      "fork": 0
+    },
+    {
+      "workload": "proto-scalar",
+      "engine": "generated-owned",
+      "stage": "project-aot",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 54400032992,
+      "ns_per_row": [
+        13.083700460125268,
+        13.348629877476093,
+        11.973530129825368
+      ],
+      "allocated_bytes_per_row": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "fork": 2
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "stock",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        824.2742945675105,
+        832.7867353723404,
+        873.2300347222222
+      ],
+      "allocated_bytes_per_row": [
+        1776.75,
+        1776.75,
+        1776.75
+      ],
+      "fork": 1
+    },
+    {
+      "workload": "timestamp-json",
+      "engine": "buffa",
+      "stage": "ingest-typed",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 54400032992,
+      "ns_per_row": [
+        488.35419921875,
+        508.25802556818184,
+        493.37801846590907
+      ],
+      "allocated_bytes_per_row": [
+        688.0,
+        688.0,
+        688.0
+      ],
+      "fork": 1
+    },
+    {
+      "workload": "proto-scalar",
+      "engine": "generated-owned",
+      "stage": "read-aot",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 54400032992,
+      "ns_per_row": [
+        0.9235802164307195,
+        0.9379366956396465,
+        0.9525843280579399
+      ],
+      "allocated_bytes_per_row": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "fork": 0
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "buffa",
+      "stage": "peak-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": true,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        7.954667777890879,
+        8.385734138907967,
+        8.295709361200748
+      ],
+      "allocated_bytes_per_row": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "fork": 0
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "owned",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        13160.104166666666,
+        13282.1015625,
+        7769.0549879807695
+      ],
+      "allocated_bytes_per_row": [
+        3339.5,
+        3339.5,
+        3339.5
+      ],
+      "fork": 0
+    },
+    {
+      "workload": "postgres-int4",
+      "engine": "static",
+      "stage": "peak",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": true,
+      "rows": 32,
+      "checksum": 35472,
+      "ns_per_row": [
+        3.722537901343369,
+        3.374771109729132,
+        3.2862478181779946
+      ],
+      "allocated_bytes_per_row": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "fork": 0
+    },
+    {
+      "workload": "proto-bytes",
+      "engine": "owned",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 2097648,
+      "ns_per_row": [
+        5403.0252878289475,
+        5438.745659722223,
+        39704.56676136364
+      ],
+      "allocated_bytes_per_row": [
+        66035.0,
+        66035.0,
+        66035.0
+      ],
+      "fork": 0
+    },
+    {
+      "workload": "proto-mixed-full",
+      "engine": "owned",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 4866,
+      "ns_per_row": [
+        16750.260416666668,
+        17216.018880208332,
+        17457.265625
+      ],
+      "allocated_bytes_per_row": [
+        3339.5,
+        3339.5,
+        3339.5
+      ],
+      "fork": 0
+    },
+    {
+      "workload": "proto-bytes",
+      "engine": "buffa",
+      "stage": "serialize",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 2097776,
+      "ns_per_row": [
+        5916.493326822917,
+        5321.611328125,
+        21895.3564453125
+      ],
+      "allocated_bytes_per_row": [
+        65567.0,
+        65567.0,
+        65567.0
+      ],
+      "fork": 0
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "buffa",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        4189.063331117021,
+        3277.0859375,
+        3010.0775240384614
+      ],
+      "allocated_bytes_per_row": [
+        1727.75,
+        1727.75,
+        1727.75
+      ],
+      "fork": 0
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "buffa",
+      "stage": "interpret-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        22.42814650229358,
+        22.29507723721591,
+        23.98498894891945
+      ],
+      "allocated_bytes_per_row": [
+        2.0,
+        2.0,
+        2.0
+      ],
+      "fork": 0
+    },
+    {
+      "workload": "proto-scalar",
+      "engine": "stock",
+      "stage": "project-peak",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": true,
+      "rows": 32,
+      "checksum": 54400032992,
+      "ns_per_row": [
+        42.389628092447914,
+        42.9196563185307,
+        42.21853953394397
+      ],
+      "allocated_bytes_per_row": [
+        137.0,
+        137.0,
+        137.0
+      ],
+      "fork": 0
+    },
+    {
+      "workload": "proto-scalar",
+      "engine": "stock",
+      "stage": "project-peak",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": true,
+      "rows": 32,
+      "checksum": 54400032992,
+      "ns_per_row": [
+        60.207687904094826,
+        65.89822748655914,
+        67.13050255408653
+      ],
+      "allocated_bytes_per_row": [
+        137.0,
+        137.0,
+        137.0
+      ],
+      "fork": 1
+    },
+    {
+      "workload": "proto-scalar",
+      "engine": "stock",
+      "stage": "project-interpret",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 54400032992,
+      "ns_per_row": [
+        42.34448495620675,
+        41.973486831507735,
+        56.668441207320605
+      ],
+      "allocated_bytes_per_row": [
+        138.0,
+        138.0,
+        138.0
+      ],
+      "fork": 0
+    },
+    {
+      "workload": "proto-scalar",
+      "engine": "generated-owned",
+      "stage": "interpret",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 54400032992,
+      "ns_per_row": [
+        1.3299054524934633,
+        1.193780091418321,
+        1.220042632623551
+      ],
+      "allocated_bytes_per_row": [
+        2.0,
+        2.0,
+        2.0
+      ],
+      "fork": 1
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "buffa",
+      "stage": "read-generated-aot",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        24.752044059969634,
+        23.486417330228367,
+        20.702193955243644
+      ],
+      "allocated_bytes_per_row": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "fork": 0
+    },
+    {
+      "workload": "postgres-int4",
+      "engine": "stock",
+      "stage": "peak",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": true,
+      "rows": 32,
+      "checksum": 35472,
+      "ns_per_row": [
+        1.2235759434198656,
+        1.131794379722557,
+        1.2914021487060985
+      ],
+      "allocated_bytes_per_row": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "fork": 2
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "generated-owned",
+      "stage": "interpret",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        4.158617897969176,
+        3.2714575535487005,
+        3.2716910964295285
+      ],
+      "allocated_bytes_per_row": [
+        2.0,
+        2.0,
+        2.0
+      ],
+      "fork": 0
+    },
+    {
+      "workload": "proto-scalar",
+      "engine": "owned",
+      "stage": "ingest-generated",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 54400032992,
+      "ns_per_row": [
+        26.964858848702374,
+        38.91105888944223,
+        30.523164630215657
+      ],
+      "allocated_bytes_per_row": [
+        56.0,
+        56.0,
+        56.0
+      ],
+      "fork": 0
+    },
+    {
+      "workload": "proto-scalar",
+      "engine": "generated-owned",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 54400032992,
+      "ns_per_row": [
+        25.218164440768238,
+        27.269420546558706,
+        25.243993452727157
+      ],
+      "allocated_bytes_per_row": [
+        88.0,
+        88.0,
+        88.0
+      ],
+      "fork": 0
+    },
+    {
+      "workload": "proto-bytes",
+      "engine": "owned",
+      "stage": "serialize",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 2097776,
+      "ns_per_row": [
+        6213.8782958984375,
+        4976.79931640625,
+        16441.199829101562
+      ],
+      "allocated_bytes_per_row": [
+        65615.0,
+        65615.0,
+        65615.0
+      ],
+      "fork": 1
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "stock",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        751.0915050287356,
+        751.7357121394231,
+        989.3844696969697
+      ],
+      "allocated_bytes_per_row": [
+        1776.75,
+        1776.75,
+        1776.75
+      ],
+      "fork": 2
+    },
+    {
+      "workload": "proto-scalar",
+      "engine": "owned",
+      "stage": "peak-generated",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": true,
+      "rows": 32,
+      "checksum": 54400032992,
+      "ns_per_row": [
+        1.9580555834001603,
+        1.8257665197684527,
+        1.8288561417368914
+      ],
+      "allocated_bytes_per_row": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "fork": 1
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "owned",
+      "stage": "ingest-typed",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        13909.591145833334,
+        15440.772235576924,
+        7611.700721153846
+      ],
+      "allocated_bytes_per_row": [
+        3339.5,
+        3339.5,
+        3339.5
+      ],
+      "fork": 2
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "owned",
+      "stage": "serialize",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 5257,
+      "ns_per_row": [
+        3061.7388916015625,
+        3012.3564453125,
+        3049.7421875
+      ],
+      "allocated_bytes_per_row": [
+        556.0,
+        556.0,
+        556.0
+      ],
+      "fork": 2
+    },
+    {
+      "workload": "postgres-int4",
+      "engine": "stock",
+      "stage": "peak",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": true,
+      "rows": 32,
+      "checksum": 35472,
+      "ns_per_row": [
+        0.9339998415981254,
+        0.9066216957157445,
+        0.9078779309948126
+      ],
+      "allocated_bytes_per_row": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "fork": 1
+    },
+    {
+      "workload": "postgres-int4",
+      "engine": "stock",
+      "stage": "read-aot",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 35472,
+      "ns_per_row": [
+        1.1444916967466716,
+        1.088728493503634,
+        1.059474749731492
+      ],
+      "allocated_bytes_per_row": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "fork": 0
+    },
+    {
+      "workload": "proto-scalar",
+      "engine": "stock",
+      "stage": "read-aot",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 54400032992,
+      "ns_per_row": [
+        1.6197838061397107,
+        1.8640649305953199,
+        1.733547861824588
+      ],
+      "allocated_bytes_per_row": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "fork": 1
+    },
+    {
+      "workload": "proto-bytes",
+      "engine": "generated-owned",
+      "stage": "serialize",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 2097776,
+      "ns_per_row": [
+        5196.871744791667,
+        9903.07861328125,
+        12707.816162109375
+      ],
+      "allocated_bytes_per_row": [
+        65583.0,
+        65583.0,
+        65583.0
+      ],
+      "fork": 1
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "stock",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        750.3196839080459,
+        758.3736070736434,
+        775.4642547123016
+      ],
+      "allocated_bytes_per_row": [
+        1776.75,
+        1776.75,
+        1776.75
+      ],
+      "fork": 0
+    },
+    {
+      "workload": "proto-bytes",
+      "engine": "owned",
+      "stage": "peak",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": true,
+      "rows": 32,
+      "checksum": 2097648,
+      "ns_per_row": [
+        3.7130353284099544,
+        3.787670224266987,
+        3.885353178193605
+      ],
+      "allocated_bytes_per_row": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "fork": 0
+    },
+    {
+      "workload": "proto-bytes",
+      "engine": "stock",
+      "stage": "interpret",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 2097648,
+      "ns_per_row": [
+        4.341985450191145,
+        4.524713944646497,
+        3.8034645151869158
+      ],
+      "allocated_bytes_per_row": [
+        2.0,
+        2.0,
+        2.0
+      ],
+      "fork": 0
+    },
+    {
+      "workload": "proto-scalar",
+      "engine": "buffa",
+      "stage": "serialize",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 288,
+      "ns_per_row": [
+        16.44619311490579,
+        22.47695025275735,
+        19.23400590551181
+      ],
+      "allocated_bytes_per_row": [
+        24.0,
+        24.0,
+        24.0
+      ],
+      "fork": 1
+    },
+    {
+      "workload": "proto-scalar",
+      "engine": "buffa",
+      "stage": "peak-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": true,
+      "rows": 32,
+      "checksum": 54400032992,
+      "ns_per_row": [
+        1.8306900143408817,
+        1.8234533262929424,
+        1.932200150958419
+      ],
+      "allocated_bytes_per_row": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "fork": 0
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "stock",
+      "stage": "serialize",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 5257,
+      "ns_per_row": [
+        506.5947265625,
+        503.2380859375,
+        512.8980509440104
+      ],
+      "allocated_bytes_per_row": [
+        436.5,
+        436.5,
+        436.5
+      ],
+      "fork": 1
+    },
+    {
+      "workload": "proto-scalar",
+      "engine": "buffa",
+      "stage": "ingest-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 54400032992,
+      "ns_per_row": [
+        69.37013105912642,
+        75.4790891856646,
+        77.50604538690476
+      ],
+      "allocated_bytes_per_row": [
+        80.0,
+        80.0,
+        80.0
+      ],
+      "fork": 0
+    },
+    {
+      "workload": "proto-scalar",
+      "engine": "stock",
+      "stage": "project-aot",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 54400032992,
+      "ns_per_row": [
+        57.026526162790695,
+        67.01506734545765,
+        60.61168104115099
+      ],
+      "allocated_bytes_per_row": [
+        136.0,
+        136.0,
+        136.0
+      ],
+      "fork": 2
+    },
+    {
+      "workload": "timestamp-json",
+      "engine": "owned",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 54400032992,
+      "ns_per_row": [
+        1979.7060053661617,
+        1992.489346590909,
+        1900.6652002427184
+      ],
+      "allocated_bytes_per_row": [
+        3703.75,
+        3703.75,
+        3703.75
+      ],
+      "fork": 1
+    },
+    {
+      "workload": "proto-bytes",
+      "engine": "owned",
+      "stage": "interpret-generated",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 2097648,
+      "ns_per_row": [
+        20.887449502537393,
+        18.669411195527523,
+        15.987318428399051
+      ],
+      "allocated_bytes_per_row": [
+        2.0,
+        2.0,
+        2.0
+      ],
+      "fork": 0
+    },
+    {
+      "workload": "mysql-int4",
+      "engine": "static",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 35472,
+      "ns_per_row": [
+        97.09262200236084,
+        94.90672831632654,
+        93.44902446496891
+      ],
+      "allocated_bytes_per_row": [
+        128.0,
+        128.0,
+        128.0
+      ],
+      "fork": 1
+    },
+    {
+      "workload": "proto-bytes",
+      "engine": "buffa",
+      "stage": "interpret",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 2097648,
+      "ns_per_row": [
+        20.13445793541495,
+        16.851744342672415,
+        16.51150100295608
+      ],
+      "allocated_bytes_per_row": [
+        2.0,
+        2.0,
+        2.0
+      ],
+      "fork": 2
+    },
+    {
+      "workload": "proto-scalar",
+      "engine": "buffa",
+      "stage": "serialize",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 288,
+      "ns_per_row": [
+        20.525329076943276,
+        15.499236595812183,
+        16.32452490495488
+      ],
+      "allocated_bytes_per_row": [
+        24.0,
+        24.0,
+        24.0
+      ],
+      "fork": 0
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "generated-owned",
+      "stage": "interpret",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        4.039785712069821,
+        4.9484821733817865,
+        3.6611167072713644
+      ],
+      "allocated_bytes_per_row": [
+        2.0,
+        2.0,
+        2.0
+      ],
+      "fork": 2
+    },
+    {
+      "workload": "proto-mixed-full",
+      "engine": "stock",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 4866,
+      "ns_per_row": [
+        845.5355940193965,
+        827.998046875,
+        804.4372106481482
+      ],
+      "allocated_bytes_per_row": [
+        1776.75,
+        1776.75,
+        1776.75
+      ],
+      "fork": 1
+    },
+    {
+      "workload": "proto-bytes",
+      "engine": "stock-aliased",
+      "stage": "read-aot",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 2097648,
+      "ns_per_row": [
+        2.4803526815191996,
+        2.579903429278054,
+        2.790284095778108
+      ],
+      "allocated_bytes_per_row": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "fork": 2
+    },
+    {
+      "workload": "mysql-int4",
+      "engine": "stock",
+      "stage": "read-aot",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 35472,
+      "ns_per_row": [
+        1.1015489733492374,
+        1.1058327382603723,
+        1.0063915331306679
+      ],
+      "allocated_bytes_per_row": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "fork": 2
+    },
+    {
+      "workload": "timestamp-json",
+      "engine": "buffa",
+      "stage": "ingest-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 54400032992,
+      "ns_per_row": [
+        469.2470398681055,
+        445.4223021070615,
+        445.67402833143507
+      ],
+      "allocated_bytes_per_row": [
+        688.0,
+        688.0,
+        688.0
+      ],
+      "fork": 2
+    },
+    {
+      "workload": "proto-scalar",
+      "engine": "owned",
+      "stage": "read-generated-aot",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 54400032992,
+      "ns_per_row": [
+        9.086568923223586,
+        8.754480286738351,
+        8.80724367170602
+      ],
+      "allocated_bytes_per_row": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "fork": 1
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "buffa",
+      "stage": "interpret",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        81.22230378207782,
+        49.576529684337046,
+        66.98152802681011
+      ],
+      "allocated_bytes_per_row": [
+        2.0,
+        2.0,
+        2.0
+      ],
+      "fork": 0
+    },
+    {
+      "workload": "proto-scalar",
+      "engine": "buffa",
+      "stage": "peak-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": true,
+      "rows": 32,
+      "checksum": 54400032992,
+      "ns_per_row": [
+        2.054579769148645,
+        1.904744091560696,
+        2.057580899661906
+      ],
+      "allocated_bytes_per_row": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "fork": 2
+    },
+    {
+      "workload": "proto-scalar",
+      "engine": "owned",
+      "stage": "interpret",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 54400032992,
+      "ns_per_row": [
+        22.509783609576427,
+        20.117770702481465,
+        22.975780515742482
+      ],
+      "allocated_bytes_per_row": [
+        2.0,
+        2.0,
+        2.0
+      ],
+      "fork": 0
+    },
+    {
+      "workload": "proto-bytes",
+      "engine": "stock-aliased",
+      "stage": "peak",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": true,
+      "rows": 32,
+      "checksum": 2097648,
+      "ns_per_row": [
+        4.258671718314004,
+        3.2693698844235404,
+        3.6716121358082705
+      ],
+      "allocated_bytes_per_row": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "fork": 1
+    },
+    {
+      "workload": "proto-bytes",
+      "engine": "generated-owned",
+      "stage": "interpret",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 2097648,
+      "ns_per_row": [
+        1.4696313397210183,
+        1.4969556059189553,
+        1.4569635934143395
+      ],
+      "allocated_bytes_per_row": [
+        2.0,
+        2.0,
+        2.0
+      ],
+      "fork": 1
+    },
+    {
+      "workload": "proto-bytes",
+      "engine": "generated-owned",
+      "stage": "read-aot",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 2097648,
+      "ns_per_row": [
+        1.2256663372238956,
+        1.1307240981179372,
+        1.1266105260387829
+      ],
+      "allocated_bytes_per_row": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "fork": 0
+    },
+    {
+      "workload": "proto-bytes",
+      "engine": "stock-aliased",
+      "stage": "serialize",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 2097776,
+      "ns_per_row": [
+        4916.346842447917,
+        5387.47314453125,
+        32934.42138671875
+      ],
+      "allocated_bytes_per_row": [
+        65599.0,
+        65599.0,
+        65599.0
+      ],
+      "fork": 2
+    },
+    {
+      "workload": "proto-scalar",
+      "engine": "stock",
+      "stage": "project-aot",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 54400032992,
+      "ns_per_row": [
+        43.813450310819896,
+        54.881170298486545,
+        42.20819302262931
+      ],
+      "allocated_bytes_per_row": [
+        136.0,
+        136.0,
+        136.0
+      ],
+      "fork": 1
+    },
+    {
+      "workload": "proto-bytes",
+      "engine": "owned",
+      "stage": "ingest-generated",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 2097648,
+      "ns_per_row": [
+        5973.366183035714,
+        5581.858147321429,
+        5838.793772977941
+      ],
+      "allocated_bytes_per_row": [
+        66035.0,
+        66035.0,
+        66035.0
+      ],
+      "fork": 2
+    },
+    {
+      "workload": "proto-scalar",
+      "engine": "owned",
+      "stage": "ingest-typed",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 54400032992,
+      "ns_per_row": [
+        76.20413272539408,
+        76.48400945820282,
+        85.58872596680543
+      ],
+      "allocated_bytes_per_row": [
+        56.0,
+        56.0,
+        56.0
+      ],
+      "fork": 1
+    },
+    {
+      "workload": "proto-scalar",
+      "engine": "owned",
+      "stage": "interpret-generated",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 54400032992,
+      "ns_per_row": [
+        15.968252144607844,
+        15.81578071870952,
+        16.280488606770835
+      ],
+      "allocated_bytes_per_row": [
+        2.0,
+        2.0,
+        2.0
+      ],
+      "fork": 0
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "buffa",
+      "stage": "interpret-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        37.0397734670928,
+        33.35832773010588,
+        35.02525351450573
+      ],
+      "allocated_bytes_per_row": [
+        2.0,
+        2.0,
+        2.0
+      ],
+      "fork": 2
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "generated-owned",
+      "stage": "peak",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": true,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        3.645007867320469,
+        3.959936468004987,
+        3.580323697534824
+      ],
+      "allocated_bytes_per_row": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "fork": 0
+    },
+    {
+      "workload": "postgres-int4",
+      "engine": "stock",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 35472,
+      "ns_per_row": [
+        39.055088201109776,
+        35.003521225358426,
+        35.23642572839618
+      ],
+      "allocated_bytes_per_row": [
+        16.0,
+        16.0,
+        16.0
+      ],
+      "fork": 0
+    },
+    {
+      "workload": "proto-bytes",
+      "engine": "owned",
+      "stage": "peak",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": true,
+      "rows": 32,
+      "checksum": 2097648,
+      "ns_per_row": [
+        3.7941774661086076,
+        3.8204440426020807,
+        3.4787854390050583
+      ],
+      "allocated_bytes_per_row": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "fork": 1
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "owned",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        9120.80078125,
+        11664.40487132353,
+        11531.645220588236
+      ],
+      "allocated_bytes_per_row": [
+        3339.5,
+        3339.5,
+        3339.5
+      ],
+      "fork": 2
+    },
+    {
+      "workload": "proto-bytes",
+      "engine": "owned",
+      "stage": "peak-generated",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": true,
+      "rows": 32,
+      "checksum": 2097648,
+      "ns_per_row": [
+        6.376806513136423,
+        6.408282582841207,
+        6.440232675286788
+      ],
+      "allocated_bytes_per_row": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "fork": 2
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "buffa",
+      "stage": "ingest-typed",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        3930.02265625,
+        3628.390480324074,
+        4673.995535714285
+      ],
+      "allocated_bytes_per_row": [
+        1727.75,
+        1727.75,
+        1727.75
+      ],
+      "fork": 2
+    },
+    {
+      "workload": "proto-bytes",
+      "engine": "buffa",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 2097648,
+      "ns_per_row": [
+        427.66590878008753,
+        345.2655147707231,
+        354.17190330615944
+      ],
+      "allocated_bytes_per_row": [
+        272.0,
+        272.0,
+        272.0
+      ],
+      "fork": 0
+    },
+    {
+      "workload": "proto-scalar",
+      "engine": "generated-owned",
+      "stage": "project-interpret",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 54400032992,
+      "ns_per_row": [
+        14.83419499449423,
+        14.32259133664273,
+        13.568839518229167
+      ],
+      "allocated_bytes_per_row": [
+        2.0,
+        2.0,
+        2.0
+      ],
+      "fork": 2
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "owned",
+      "stage": "read-generated-aot",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        60.97323441386816,
+        55.172636014921174,
+        42.305007408405174
+      ],
+      "allocated_bytes_per_row": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "fork": 2
+    },
+    {
+      "workload": "proto-mixed-full",
+      "engine": "buffa",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 4866,
+      "ns_per_row": [
+        6685.147135416667,
+        6418.272429435484,
+        5101.047676282052
+      ],
+      "allocated_bytes_per_row": [
+        1854.25,
+        1854.25,
+        1854.25
+      ],
+      "fork": 1
+    },
+    {
+      "workload": "timestamp-json",
+      "engine": "owned",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 54400032992,
+      "ns_per_row": [
+        1322.060546875,
+        1273.783482142857,
+        1268.1267641129032
+      ],
+      "allocated_bytes_per_row": [
+        3703.75,
+        3703.75,
+        3703.75
+      ],
+      "fork": 0
+    },
+    {
+      "workload": "mysql-int4",
+      "engine": "static",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 35472,
+      "ns_per_row": [
+        87.65577683378197,
+        88.79454900568182,
+        88.20705770316027
+      ],
+      "allocated_bytes_per_row": [
+        128.0,
+        128.0,
+        128.0
+      ],
+      "fork": 2
+    },
+    {
+      "workload": "proto-bytes",
+      "engine": "stock",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 2097648,
+      "ns_per_row": [
+        19848.0390625,
+        18943.078835227272,
+        19168.508522727272
+      ],
+      "allocated_bytes_per_row": [
+        65699.0,
+        65699.0,
+        65699.0
+      ],
+      "fork": 1
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "buffa",
+      "stage": "interpret",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        48.126220703125,
+        60.5338461092203,
+        45.672270362056906
+      ],
+      "allocated_bytes_per_row": [
+        2.0,
+        2.0,
+        2.0
+      ],
+      "fork": 1
+    },
+    {
+      "workload": "postgres-int4",
+      "engine": "stock",
+      "stage": "interpret",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 35472,
+      "ns_per_row": [
+        1.7542263447064952,
+        1.7667344089182344,
+        1.7826026845201153
+      ],
+      "allocated_bytes_per_row": [
+        2.0,
+        2.0,
+        2.0
+      ],
+      "fork": 0
+    },
+    {
+      "workload": "proto-scalar",
+      "engine": "stock",
+      "stage": "project-interpret",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 54400032992,
+      "ns_per_row": [
+        42.85341282894737,
+        42.62741248366725,
+        40.59238573245432
+      ],
+      "allocated_bytes_per_row": [
+        138.0,
+        138.0,
+        138.0
+      ],
+      "fork": 1
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "owned",
+      "stage": "interpret",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        59.19257859676932,
+        59.43055858426881,
+        58.74712547889123
+      ],
+      "allocated_bytes_per_row": [
+        2.0,
+        2.0,
+        2.0
+      ],
+      "fork": 1
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "buffa",
+      "stage": "read-generated-aot",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        21.133800889381487,
+        20.650556409681165,
+        21.411167445408275
+      ],
+      "allocated_bytes_per_row": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "fork": 1
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "buffa",
+      "stage": "serialize",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 5257,
+      "ns_per_row": [
+        25.127299744405864,
+        25.109602597215094,
+        22.969057470335997
+      ],
+      "allocated_bytes_per_row": [
+        176.5,
+        176.5,
+        176.5
+      ],
+      "fork": 2
+    },
+    {
+      "workload": "timestamp-json",
+      "engine": "owned",
+      "stage": "ingest-typed",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 54400032992,
+      "ns_per_row": [
+        1374.0685096153845,
+        1317.3369075083892,
+        1279.3706597222222
+      ],
+      "allocated_bytes_per_row": [
+        3671.75,
+        3671.75,
+        3671.75
+      ],
+      "fork": 1
+    },
+    {
+      "workload": "proto-scalar",
+      "engine": "stock",
+      "stage": "peak",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": true,
+      "rows": 32,
+      "checksum": 54400032992,
+      "ns_per_row": [
+        1.433133465879474,
+        1.0534783844952753,
+        1.0478276723444206
+      ],
+      "allocated_bytes_per_row": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "fork": 2
+    },
+    {
+      "workload": "proto-bytes",
+      "engine": "buffa",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 2097648,
+      "ns_per_row": [
+        336.06689620919246,
+        230.78922852715468,
+        224.07388277666286
+      ],
+      "allocated_bytes_per_row": [
+        272.0,
+        272.0,
+        272.0
+      ],
+      "fork": 1
+    },
+    {
+      "workload": "proto-scalar",
+      "engine": "generated-owned",
+      "stage": "serialize",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 288,
+      "ns_per_row": [
+        26.372882356911447,
+        17.139493666725105,
+        17.20824511445203
+      ],
+      "allocated_bytes_per_row": [
+        24.0,
+        24.0,
+        24.0
+      ],
+      "fork": 2
+    },
+    {
+      "workload": "proto-bytes",
+      "engine": "generated-owned",
+      "stage": "serialize",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 2097776,
+      "ns_per_row": [
+        4717.530110677083,
+        8731.805826822916,
+        19661.021321614582
+      ],
+      "allocated_bytes_per_row": [
+        65583.0,
+        65583.0,
+        65583.0
+      ],
+      "fork": 2
+    },
+    {
+      "workload": "postgres-int4",
+      "engine": "stock",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 35472,
+      "ns_per_row": [
+        21.995284346846848,
+        20.35189626315515,
+        21.336606254704808
+      ],
+      "allocated_bytes_per_row": [
+        16.0,
+        16.0,
+        16.0
+      ],
+      "fork": 2
+    },
+    {
+      "workload": "proto-bytes",
+      "engine": "stock",
+      "stage": "peak",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": true,
+      "rows": 32,
+      "checksum": 2097648,
+      "ns_per_row": [
+        2.8084124557884746,
+        2.6884210784381195,
+        3.0196880120733365
+      ],
+      "allocated_bytes_per_row": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "fork": 2
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "owned",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        9054.26669034091,
+        7708.022836538462,
+        6859.651131465517
+      ],
+      "allocated_bytes_per_row": [
+        3339.5,
+        3339.5,
+        3339.5
+      ],
+      "fork": 1
+    },
+    {
+      "workload": "proto-scalar",
+      "engine": "owned",
+      "stage": "serialize",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 288,
+      "ns_per_row": [
+        121.03003408394608,
+        142.8288233557413,
+        99.99579204776423
+      ],
+      "allocated_bytes_per_row": [
+        136.0,
+        136.0,
+        136.0
+      ],
+      "fork": 2
+    },
+    {
+      "workload": "mysql-int4",
+      "engine": "static",
+      "stage": "peak",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": true,
+      "rows": 32,
+      "checksum": 35472,
+      "ns_per_row": [
+        1.8939926710847812,
+        1.8770157367101015,
+        1.8822022613610083
+      ],
+      "allocated_bytes_per_row": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "fork": 1
+    },
+    {
+      "workload": "postgres-int4",
+      "engine": "static",
+      "stage": "ingest-typed",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 35472,
+      "ns_per_row": [
+        79.44032126880846,
+        83.08040461505742,
+        79.7279655612245
+      ],
+      "allocated_bytes_per_row": [
+        128.0,
+        128.0,
+        128.0
+      ],
+      "fork": 0
+    },
+    {
+      "workload": "proto-scalar",
+      "engine": "owned",
+      "stage": "serialize",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 288,
+      "ns_per_row": [
+        103.69339247881356,
+        101.5472866089876,
+        102.88682047526042
+      ],
+      "allocated_bytes_per_row": [
+        136.0,
+        136.0,
+        136.0
+      ],
+      "fork": 1
+    },
+    {
+      "workload": "proto-bytes",
+      "engine": "buffa",
+      "stage": "peak-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": true,
+      "rows": 32,
+      "checksum": 2097648,
+      "ns_per_row": [
+        3.643021818347135,
+        3.733458912700688,
+        3.8499845141570774
+      ],
+      "allocated_bytes_per_row": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "fork": 0
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "owned",
+      "stage": "serialize",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 5257,
+      "ns_per_row": [
+        3273.7103271484375,
+        3195.3692626953125,
+        4577.265625
+      ],
+      "allocated_bytes_per_row": [
+        556.0,
+        556.0,
+        556.0
+      ],
+      "fork": 0
+    },
+    {
+      "workload": "mysql-int4",
+      "engine": "stock",
+      "stage": "peak",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": true,
+      "rows": 32,
+      "checksum": 35472,
+      "ns_per_row": [
+        0.880103542380137,
+        0.9036960663935261,
+        0.9022365663109756
+      ],
+      "allocated_bytes_per_row": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "fork": 2
+    },
+    {
+      "workload": "proto-bytes",
+      "engine": "stock",
+      "stage": "serialize",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 2097776,
+      "ns_per_row": [
+        5089.68505859375,
+        4755.51025390625,
+        4333.050944010417
+      ],
+      "allocated_bytes_per_row": [
+        65599.0,
+        65599.0,
+        65599.0
+      ],
+      "fork": 1
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "generated-owned",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        792.1906629554655,
+        840.8628788894849,
+        786.452999497992
+      ],
+      "allocated_bytes_per_row": [
+        1800.5,
+        1800.5,
+        1800.5
+      ],
+      "fork": 0
+    },
+    {
+      "workload": "proto-scalar",
+      "engine": "generated-owned",
+      "stage": "interpret",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 54400032992,
+      "ns_per_row": [
+        1.1954930889864483,
+        1.1883910942671827,
+        1.2315635896671964
+      ],
+      "allocated_bytes_per_row": [
+        2.0,
+        2.0,
+        2.0
+      ],
+      "fork": 2
+    },
+    {
+      "workload": "timestamp-json",
+      "engine": "buffa",
+      "stage": "ingest-typed",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 54400032992,
+      "ns_per_row": [
+        555.7257634943181,
+        519.7258352726063,
+        509.60154215494794
+      ],
+      "allocated_bytes_per_row": [
+        688.0,
+        688.0,
+        688.0
+      ],
+      "fork": 0
+    },
+    {
+      "workload": "proto-bytes",
+      "engine": "buffa",
+      "stage": "peak",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": true,
+      "rows": 32,
+      "checksum": 2097648,
+      "ns_per_row": [
+        3.708695588975167,
+        3.535468054273458,
+        5.045402085485537
+      ],
+      "allocated_bytes_per_row": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "fork": 0
+    },
+    {
+      "workload": "proto-scalar",
+      "engine": "owned",
+      "stage": "interpret-generated",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 54400032992,
+      "ns_per_row": [
+        9.970386240433674,
+        10.61716459193093,
+        11.182898187722024
+      ],
+      "allocated_bytes_per_row": [
+        2.0,
+        2.0,
+        2.0
+      ],
+      "fork": 2
+    },
+    {
+      "workload": "proto-bytes",
+      "engine": "buffa",
+      "stage": "interpret-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 2097648,
+      "ns_per_row": [
+        9.408329521379045,
+        9.7366454688746,
+        9.759286320943245
+      ],
+      "allocated_bytes_per_row": [
+        2.0,
+        2.0,
+        2.0
+      ],
+      "fork": 1
+    },
+    {
+      "workload": "proto-scalar",
+      "engine": "buffa",
+      "stage": "interpret-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 54400032992,
+      "ns_per_row": [
+        12.798337796449161,
+        17.10077878807773,
+        14.040019419001437
+      ],
+      "allocated_bytes_per_row": [
+        2.0,
+        2.0,
+        2.0
+      ],
+      "fork": 1
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "buffa",
+      "stage": "ingest-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        2915.602845149254,
+        2936.2097714552237,
+        2842.9483695652175
+      ],
+      "allocated_bytes_per_row": [
+        1727.75,
+        1727.75,
+        1727.75
+      ],
+      "fork": 0
+    },
+    {
+      "workload": "mysql-int4",
+      "engine": "static",
+      "stage": "interpret",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 35472,
+      "ns_per_row": [
+        11.333349790555427,
+        11.12331591885815,
+        11.321427537071362
+      ],
+      "allocated_bytes_per_row": [
+        2.0,
+        2.0,
+        2.0
+      ],
+      "fork": 0
+    },
+    {
+      "workload": "proto-scalar",
+      "engine": "buffa",
+      "stage": "peak",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": true,
+      "rows": 32,
+      "checksum": 54400032992,
+      "ns_per_row": [
+        1.66689878471037,
+        1.696533745961298,
+        1.662214358128234
+      ],
+      "allocated_bytes_per_row": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "fork": 1
+    },
+    {
+      "workload": "mysql-int4",
+      "engine": "stock",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 35472,
+      "ns_per_row": [
+        28.76005170764022,
+        34.22450636280007,
+        33.49792595609672
+      ],
+      "allocated_bytes_per_row": [
+        16.0,
+        16.0,
+        16.0
+      ],
+      "fork": 1
+    },
+    {
+      "workload": "proto-scalar",
+      "engine": "generated-owned",
+      "stage": "peak",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": true,
+      "rows": 32,
+      "checksum": 54400032992,
+      "ns_per_row": [
+        1.1277783401613313,
+        1.1045847895177343,
+        1.1135244330361216
+      ],
+      "allocated_bytes_per_row": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "fork": 1
+    },
+    {
+      "workload": "proto-bytes",
+      "engine": "owned",
+      "stage": "interpret",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 2097648,
+      "ns_per_row": [
+        18.993609059097977,
+        20.508922602506292,
+        21.350477525404283
+      ],
+      "allocated_bytes_per_row": [
+        2.0,
+        2.0,
+        2.0
+      ],
+      "fork": 1
+    },
+    {
+      "workload": "postgres-int4",
+      "engine": "static",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 35472,
+      "ns_per_row": [
+        123.10878955447103,
+        120.01624404944718,
+        139.66295679949965
+      ],
+      "allocated_bytes_per_row": [
+        128.0,
+        128.0,
+        128.0
+      ],
+      "fork": 2
+    },
+    {
+      "workload": "proto-bytes",
+      "engine": "generated-owned",
+      "stage": "serialize",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 2097776,
+      "ns_per_row": [
+        16542.88330078125,
+        9994.244384765625,
+        16382.95166015625
+      ],
+      "allocated_bytes_per_row": [
+        65583.0,
+        65583.0,
+        65583.0
+      ],
+      "fork": 0
+    },
+    {
+      "workload": "proto-bytes",
+      "engine": "buffa",
+      "stage": "peak-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": true,
+      "rows": 32,
+      "checksum": 2097648,
+      "ns_per_row": [
+        4.407387853959838,
+        3.8839021610523385,
+        4.995573702498466
+      ],
+      "allocated_bytes_per_row": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "fork": 2
+    },
+    {
+      "workload": "proto-scalar",
+      "engine": "generated-owned",
+      "stage": "peak",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": true,
+      "rows": 32,
+      "checksum": 54400032992,
+      "ns_per_row": [
+        1.031634542632363,
+        1.3123579564542571,
+        1.7351194970508812
+      ],
+      "allocated_bytes_per_row": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "fork": 2
+    },
+    {
+      "workload": "proto-scalar",
+      "engine": "stock",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 54400032992,
+      "ns_per_row": [
+        59.368374810030396,
+        59.154618948562785,
+        59.86885391127797
+      ],
+      "allocated_bytes_per_row": [
+        136.0,
+        136.0,
+        136.0
+      ],
+      "fork": 0
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "owned",
+      "stage": "interpret-generated",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        67.7788463613605,
+        74.97793747603528,
+        65.213623046875
+      ],
+      "allocated_bytes_per_row": [
+        2.0,
+        2.0,
+        2.0
+      ],
+      "fork": 2
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "owned",
+      "stage": "interpret-generated",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        44.44151278409091,
+        47.46495919634206,
+        44.16626417249549
+      ],
+      "allocated_bytes_per_row": [
+        2.0,
+        2.0,
+        2.0
+      ],
+      "fork": 1
+    },
+    {
+      "workload": "proto-bytes",
+      "engine": "owned",
+      "stage": "peak",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": true,
+      "rows": 32,
+      "checksum": 2097648,
+      "ns_per_row": [
+        6.738647865143832,
+        6.7009553375411635,
+        5.673863293956203
+      ],
+      "allocated_bytes_per_row": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "fork": 2
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "buffa",
+      "stage": "serialize",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 5257,
+      "ns_per_row": [
+        46.83355054890799,
+        44.483149857954544,
+        40.488783274265316
+      ],
+      "allocated_bytes_per_row": [
+        176.5,
+        176.5,
+        176.5
+      ],
+      "fork": 0
+    },
+    {
+      "workload": "postgres-int4",
+      "engine": "static",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 35472,
+      "ns_per_row": [
+        87.0758132798574,
+        84.56212797619048,
+        84.88841468383312
+      ],
+      "allocated_bytes_per_row": [
+        128.0,
+        128.0,
+        128.0
+      ],
+      "fork": 0
+    },
+    {
+      "workload": "proto-bytes",
+      "engine": "buffa",
+      "stage": "read-generated-aot",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 2097648,
+      "ns_per_row": [
+        9.920359781173842,
+        10.107979679739238,
+        8.165230980531417
+      ],
+      "allocated_bytes_per_row": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "fork": 2
+    },
+    {
+      "workload": "proto-bytes",
+      "engine": "owned",
+      "stage": "read-generated-aot",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 2097648,
+      "ns_per_row": [
+        12.290090641505282,
+        12.703459234098883,
+        12.888966234424446
+      ],
+      "allocated_bytes_per_row": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "fork": 0
+    },
+    {
+      "workload": "proto-bytes",
+      "engine": "generated-owned",
+      "stage": "interpret",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 2097648,
+      "ns_per_row": [
+        1.4179032488567074,
+        1.3538562901151991,
+        1.414285258522069
+      ],
+      "allocated_bytes_per_row": [
+        2.0,
+        2.0,
+        2.0
+      ],
+      "fork": 2
+    },
+    {
+      "workload": "proto-bytes",
+      "engine": "generated-owned",
+      "stage": "read-aot",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 2097648,
+      "ns_per_row": [
+        1.0848926336706808,
+        1.1154380039862024,
+        1.1276613267538795
+      ],
+      "allocated_bytes_per_row": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "fork": 2
+    },
+    {
+      "workload": "proto-bytes",
+      "engine": "buffa",
+      "stage": "ingest-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 2097648,
+      "ns_per_row": [
+        224.57242277298852,
+        214.4162493139407,
+        230.84269973466982
+      ],
+      "allocated_bytes_per_row": [
+        272.0,
+        272.0,
+        272.0
+      ],
+      "fork": 0
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "owned",
+      "stage": "interpret",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        62.721504407051285,
+        56.730606644241895,
+        71.86620522660819
+      ],
+      "allocated_bytes_per_row": [
+        2.0,
+        2.0,
+        2.0
+      ],
+      "fork": 2
+    },
+    {
+      "workload": "timestamp-json",
+      "engine": "owned",
+      "stage": "ingest-typed",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 54400032992,
+      "ns_per_row": [
+        1667.8406382415253,
+        1774.3799268018017,
+        1567.4296875
+      ],
+      "allocated_bytes_per_row": [
+        3671.75,
+        3671.75,
+        3671.75
+      ],
+      "fork": 0
+    },
+    {
+      "workload": "proto-bytes",
+      "engine": "owned",
+      "stage": "serialize",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 2097776,
+      "ns_per_row": [
+        15253.2177734375,
+        6287.640380859375,
+        6639.84130859375
+      ],
+      "allocated_bytes_per_row": [
+        65615.0,
+        65615.0,
+        65615.0
+      ],
+      "fork": 0
+    },
+    {
+      "workload": "proto-scalar",
+      "engine": "buffa",
+      "stage": "peak",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": true,
+      "rows": 32,
+      "checksum": 54400032992,
+      "ns_per_row": [
+        2.555130407270301,
+        2.083998628344785,
+        2.180116925920759
+      ],
+      "allocated_bytes_per_row": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "fork": 2
+    },
+    {
+      "workload": "proto-scalar",
+      "engine": "owned",
+      "stage": "serialize",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 288,
+      "ns_per_row": [
+        148.87564522879464,
+        138.5329342959972,
+        136.77970377604166
+      ],
+      "allocated_bytes_per_row": [
+        136.0,
+        136.0,
+        136.0
+      ],
+      "fork": 0
+    },
+    {
+      "workload": "proto-scalar",
+      "engine": "owned",
+      "stage": "peak",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": true,
+      "rows": 32,
+      "checksum": 54400032992,
+      "ns_per_row": [
+        1.9733777001495312,
+        1.6670547312406119,
+        1.756093120684695
+      ],
+      "allocated_bytes_per_row": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "fork": 2
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "owned",
+      "stage": "serialize",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 5257,
+      "ns_per_row": [
+        5288.871256510417,
+        5310.76171875,
+        5709.380696614583
+      ],
+      "allocated_bytes_per_row": [
+        556.0,
+        556.0,
+        556.0
+      ],
+      "fork": 1
+    },
+    {
+      "workload": "proto-bytes",
+      "engine": "stock-aliased",
+      "stage": "interpret",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 2097648,
+      "ns_per_row": [
+        4.6014369787740295,
+        5.843755376002274,
+        6.1789749584936695
+      ],
+      "allocated_bytes_per_row": [
+        2.0,
+        2.0,
+        2.0
+      ],
+      "fork": 2
+    },
+    {
+      "workload": "timestamp-json",
+      "engine": "buffa",
+      "stage": "ingest-typed",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 54400032992,
+      "ns_per_row": [
+        639.6271190767974,
+        610.5799560546875,
+        616.159675670347
+      ],
+      "allocated_bytes_per_row": [
+        688.0,
+        688.0,
+        688.0
+      ],
+      "fork": 2
+    },
+    {
+      "workload": "proto-bytes",
+      "engine": "generated-owned",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 2097648,
+      "ns_per_row": [
+        5386.226773648648,
+        5871.038602941177,
+        6878.748653017241
+      ],
+      "allocated_bytes_per_row": [
+        65651.0,
+        65651.0,
+        65651.0
+      ],
+      "fork": 0
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "owned",
+      "stage": "peak-generated",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": true,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        10.761097652811399,
+        10.702498065704425,
+        8.263236782708898
+      ],
+      "allocated_bytes_per_row": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "fork": 2
+    },
+    {
+      "workload": "mysql-int4",
+      "engine": "static",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 35472,
+      "ns_per_row": [
+        91.97019185499059,
+        105.32106596848061,
+        151.70388926630434
+      ],
+      "allocated_bytes_per_row": [
+        128.0,
+        128.0,
+        128.0
+      ],
+      "fork": 0
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "generated-owned",
+      "stage": "read-aot",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        5.550777809836648,
+        6.675051764753622,
+        5.3263953510171245
+      ],
+      "allocated_bytes_per_row": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "fork": 1
+    },
+    {
+      "workload": "proto-bytes",
+      "engine": "stock",
+      "stage": "serialize",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 2097776,
+      "ns_per_row": [
+        11101.44775390625,
+        5903.502604166667,
+        5169.020182291667
+      ],
+      "allocated_bytes_per_row": [
+        65599.0,
+        65599.0,
+        65599.0
+      ],
+      "fork": 0
+    },
+    {
+      "workload": "proto-bytes",
+      "engine": "stock-aliased",
+      "stage": "peak",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": true,
+      "rows": 32,
+      "checksum": 2097648,
+      "ns_per_row": [
+        3.2937580743567914,
+        3.5779545595050557,
+        3.2031839371228026
+      ],
+      "allocated_bytes_per_row": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "fork": 2
+    },
+    {
+      "workload": "proto-bytes",
+      "engine": "generated-owned",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 2097648,
+      "ns_per_row": [
+        6794.311691810345,
+        6350.386844758064,
+        5598.800223214285
+      ],
+      "allocated_bytes_per_row": [
+        65651.0,
+        65651.0,
+        65651.0
+      ],
+      "fork": 1
+    },
+    {
+      "workload": "proto-scalar",
+      "engine": "owned",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 54400032992,
+      "ns_per_row": [
+        89.32140510740402,
+        101.43174406152647,
+        102.30466704842932
+      ],
+      "allocated_bytes_per_row": [
+        88.0,
+        88.0,
+        88.0
+      ],
+      "fork": 2
+    },
+    {
+      "workload": "mysql-int4",
+      "engine": "stock",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 35472,
+      "ns_per_row": [
+        63.99704184408778,
+        88.12889095802522,
+        78.49677623184138
+      ],
+      "allocated_bytes_per_row": [
+        16.0,
+        16.0,
+        16.0
+      ],
+      "fork": 2
+    },
+    {
+      "workload": "postgres-int4",
+      "engine": "static",
+      "stage": "peak",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": true,
+      "rows": 32,
+      "checksum": 35472,
+      "ns_per_row": [
+        2.226591887709739,
+        1.9616148009400611,
+        2.6504056783950283
+      ],
+      "allocated_bytes_per_row": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "fork": 1
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "owned",
+      "stage": "peak",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": true,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        8.045340677495059,
+        8.342346858457137,
+        8.141923828125
+      ],
+      "allocated_bytes_per_row": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "fork": 2
+    },
+    {
+      "workload": "proto-bytes",
+      "engine": "stock",
+      "stage": "interpret",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 2097648,
+      "ns_per_row": [
+        4.001209580362996,
+        4.2545530575247135,
+        3.949570546293675
+      ],
+      "allocated_bytes_per_row": [
+        2.0,
+        2.0,
+        2.0
+      ],
+      "fork": 2
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "owned",
+      "stage": "peak",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": true,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        9.625472120641254,
+        9.70458790766257,
+        8.722788783482143
+      ],
+      "allocated_bytes_per_row": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "fork": 0
+    },
+    {
+      "workload": "proto-scalar",
+      "engine": "owned",
+      "stage": "ingest-typed",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 54400032992,
+      "ns_per_row": [
+        133.65458810704516,
+        112.14913264207807,
+        85.53264557793345
+      ],
+      "allocated_bytes_per_row": [
+        56.0,
+        56.0,
+        56.0
+      ],
+      "fork": 2
+    },
+    {
+      "workload": "proto-bytes",
+      "engine": "buffa",
+      "stage": "read-generated-aot",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 2097648,
+      "ns_per_row": [
+        9.067170752714365,
+        9.307625002977325,
+        7.983981245401406
+      ],
+      "allocated_bytes_per_row": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "fork": 0
+    },
+    {
+      "workload": "proto-scalar",
+      "engine": "generated-owned",
+      "stage": "serialize",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 288,
+      "ns_per_row": [
+        17.755584716796875,
+        17.998906221235274,
+        17.866989046509502
+      ],
+      "allocated_bytes_per_row": [
+        24.0,
+        24.0,
+        24.0
+      ],
+      "fork": 0
+    },
+    {
+      "workload": "proto-scalar",
+      "engine": "buffa",
+      "stage": "ingest-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 54400032992,
+      "ns_per_row": [
+        68.96928517831921,
+        68.2364434159972,
+        68.96659549346751
+      ],
+      "allocated_bytes_per_row": [
+        80.0,
+        80.0,
+        80.0
+      ],
+      "fork": 1
+    },
+    {
+      "workload": "proto-bytes",
+      "engine": "buffa",
+      "stage": "serialize",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 2097776,
+      "ns_per_row": [
+        6136.337890625,
+        6459.54345703125,
+        7590.858154296875
+      ],
+      "allocated_bytes_per_row": [
+        65567.0,
+        65567.0,
+        65567.0
+      ],
+      "fork": 2
+    },
+    {
+      "workload": "proto-scalar",
+      "engine": "buffa",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 54400032992,
+      "ns_per_row": [
+        125.1275724695708,
+        122.38724252036342,
+        146.91843867481202
+      ],
+      "allocated_bytes_per_row": [
+        112.0,
+        112.0,
+        112.0
+      ],
+      "fork": 2
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "stock",
+      "stage": "read-aot",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        6.619943217445092,
+        6.56377189390121,
+        6.207272287668403
+      ],
+      "allocated_bytes_per_row": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "fork": 1
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "owned",
+      "stage": "interpret-generated",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        47.346067443374515,
+        45.722958911224254,
+        51.62316430973101
+      ],
+      "allocated_bytes_per_row": [
+        2.0,
+        2.0,
+        2.0
+      ],
+      "fork": 0
+    },
+    {
+      "workload": "timestamp-json",
+      "engine": "buffa",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 54400032992,
+      "ns_per_row": [
+        541.441053025266,
+        533.8388645265668,
+        561.556326329023
+      ],
+      "allocated_bytes_per_row": [
+        688.0,
+        688.0,
+        688.0
+      ],
+      "fork": 0
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "buffa",
+      "stage": "ingest-typed",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        3140.0310639880954,
+        2946.358442164179,
+        2990.635653409091
+      ],
+      "allocated_bytes_per_row": [
+        1727.75,
+        1727.75,
+        1727.75
+      ],
+      "fork": 0
+    },
+    {
+      "workload": "postgres-int4",
+      "engine": "static",
+      "stage": "interpret",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 35472,
+      "ns_per_row": [
+        14.731610232584439,
+        13.826004045600934,
+        12.155807874689055
+      ],
+      "allocated_bytes_per_row": [
+        2.0,
+        2.0,
+        2.0
+      ],
+      "fork": 0
+    },
+    {
+      "workload": "proto-mixed-full",
+      "engine": "owned",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 4866,
+      "ns_per_row": [
+        10666.106291118422,
+        9690.626860119048,
+        8856.630264945652
+      ],
+      "allocated_bytes_per_row": [
+        3339.5,
+        3339.5,
+        3339.5
+      ],
+      "fork": 1
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "buffa",
+      "stage": "ingest-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        2829.7472098214284,
+        2845.821388134058,
+        2945.97364738806
+      ],
+      "allocated_bytes_per_row": [
+        1727.75,
+        1727.75,
+        1727.75
+      ],
+      "fork": 1
+    },
+    {
+      "workload": "proto-scalar",
+      "engine": "generated-owned",
+      "stage": "interpret",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 54400032992,
+      "ns_per_row": [
+        1.2575520866867982,
+        1.8459205737042568,
+        1.8079448537238967
+      ],
+      "allocated_bytes_per_row": [
+        2.0,
+        2.0,
+        2.0
+      ],
+      "fork": 0
+    },
+    {
+      "workload": "postgres-int4",
+      "engine": "static",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 35472,
+      "ns_per_row": [
+        137.5821963028169,
+        141.3827050922576,
+        157.20267875100564
+      ],
+      "allocated_bytes_per_row": [
+        128.0,
+        128.0,
+        128.0
+      ],
+      "fork": 1
+    },
+    {
+      "workload": "proto-scalar",
+      "engine": "stock",
+      "stage": "interpret",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 54400032992,
+      "ns_per_row": [
+        5.604943029370409,
+        3.1112400253249235,
+        1.827051292539267
+      ],
+      "allocated_bytes_per_row": [
+        2.0,
+        2.0,
+        2.0
+      ],
+      "fork": 2
+    },
+    {
+      "workload": "postgres-int4",
+      "engine": "stock",
+      "stage": "read-aot",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 35472,
+      "ns_per_row": [
+        1.2750232665454617,
+        1.1245259767783944,
+        1.2062493727612402
+      ],
+      "allocated_bytes_per_row": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "fork": 2
+    },
+    {
+      "workload": "proto-bytes",
+      "engine": "stock-aliased",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 2097648,
+      "ns_per_row": [
+        50.3282618848235,
+        46.20627994144783,
+        43.72517384430267
+      ],
+      "allocated_bytes_per_row": [
+        144.0,
+        144.0,
+        144.0
+      ],
+      "fork": 1
+    },
+    {
+      "workload": "mysql-int4",
+      "engine": "stock",
+      "stage": "interpret",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 35472,
+      "ns_per_row": [
+        2.8043176715411784,
+        1.7203226702323493,
+        1.85476399887952
+      ],
+      "allocated_bytes_per_row": [
+        2.0,
+        2.0,
+        2.0
+      ],
+      "fork": 0
+    },
+    {
+      "workload": "proto-bytes",
+      "engine": "stock",
+      "stage": "read-aot",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 2097648,
+      "ns_per_row": [
+        3.228934428515935,
+        3.4493138123852076,
+        3.3433226870550383
+      ],
+      "allocated_bytes_per_row": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "fork": 2
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "generated-owned",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        1301.5694846854306,
+        1319.9504509228188,
+        1442.6516544117646
+      ],
+      "allocated_bytes_per_row": [
+        1800.5,
+        1800.5,
+        1800.5
+      ],
+      "fork": 2
+    },
+    {
+      "workload": "proto-scalar",
+      "engine": "buffa",
+      "stage": "ingest-typed",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 54400032992,
+      "ns_per_row": [
+        119.35001622632865,
+        123.3547881155303,
+        120.5442001465145
+      ],
+      "allocated_bytes_per_row": [
+        80.0,
+        80.0,
+        80.0
+      ],
+      "fork": 1
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "owned",
+      "stage": "read-generated-aot",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        52.56113993763412,
+        61.80001923532197,
+        65.94171339465726
+      ],
+      "allocated_bytes_per_row": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "fork": 1
+    },
+    {
+      "workload": "proto-scalar",
+      "engine": "stock",
+      "stage": "project-peak",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": true,
+      "rows": 32,
+      "checksum": 54400032992,
+      "ns_per_row": [
+        58.291329520089285,
+        54.07061281457411,
+        44.61771498631387
+      ],
+      "allocated_bytes_per_row": [
+        137.0,
+        137.0,
+        137.0
+      ],
+      "fork": 2
+    },
+    {
+      "workload": "proto-bytes",
+      "engine": "owned",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 2097648,
+      "ns_per_row": [
+        6354.736643145161,
+        5457.883029513889,
+        5792.103630514706
+      ],
+      "allocated_bytes_per_row": [
+        66035.0,
+        66035.0,
+        66035.0
+      ],
+      "fork": 2
+    },
+    {
+      "workload": "proto-bytes",
+      "engine": "owned",
+      "stage": "read-generated-aot",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 2097648,
+      "ns_per_row": [
+        13.65607670375279,
+        13.1543021366514,
+        13.09891991349249
+      ],
+      "allocated_bytes_per_row": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "fork": 1
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "owned",
+      "stage": "peak-generated",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": true,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        9.300113486372718,
+        8.322199722009202,
+        7.853452823553055
+      ],
+      "allocated_bytes_per_row": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "fork": 0
+    },
+    {
+      "workload": "proto-scalar",
+      "engine": "generated-owned",
+      "stage": "project-peak",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": true,
+      "rows": 32,
+      "checksum": 54400032992,
+      "ns_per_row": [
+        10.609074649761077,
+        11.968080049402573,
+        10.236554461572716
+      ],
+      "allocated_bytes_per_row": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "fork": 1
+    },
+    {
+      "workload": "proto-scalar",
+      "engine": "buffa",
+      "stage": "read-generated-aot",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 54400032992,
+      "ns_per_row": [
+        12.21284423828125,
+        11.783958641258446,
+        13.155614918675916
+      ],
+      "allocated_bytes_per_row": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "fork": 0
+    },
+    {
+      "workload": "postgres-int4",
+      "engine": "stock",
+      "stage": "interpret",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 35472,
+      "ns_per_row": [
+        3.1074441204425427,
+        2.4092778158451313,
+        2.957275154054627
+      ],
+      "allocated_bytes_per_row": [
+        2.0,
+        2.0,
+        2.0
+      ],
+      "fork": 2
+    },
+    {
+      "workload": "proto-scalar",
+      "engine": "owned",
+      "stage": "interpret-generated",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 54400032992,
+      "ns_per_row": [
+        14.735615729135253,
+        16.062685110565866,
+        17.586397678732013
+      ],
+      "allocated_bytes_per_row": [
+        2.0,
+        2.0,
+        2.0
+      ],
+      "fork": 1
+    },
+    {
+      "workload": "proto-scalar",
+      "engine": "stock",
+      "stage": "project-interpret",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 54400032992,
+      "ns_per_row": [
+        66.82920162013319,
+        71.72170538651316,
+        78.58074481670673
+      ],
+      "allocated_bytes_per_row": [
+        138.0,
+        138.0,
+        138.0
+      ],
+      "fork": 2
+    },
+    {
+      "workload": "proto-bytes",
+      "engine": "generated-owned",
+      "stage": "interpret",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 2097648,
+      "ns_per_row": [
+        2.8626899889177904,
+        3.0826829081833966,
+        2.9310362817001803
+      ],
+      "allocated_bytes_per_row": [
+        2.0,
+        2.0,
+        2.0
+      ],
+      "fork": 0
+    },
+    {
+      "workload": "timestamp-json",
+      "engine": "owned",
+      "stage": "ingest-typed",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 54400032992,
+      "ns_per_row": [
+        2129.2166270380435,
+        1525.9552001953125,
+        1673.248530982906
+      ],
+      "allocated_bytes_per_row": [
+        3671.75,
+        3671.75,
+        3671.75
+      ],
+      "fork": 2
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "generated-owned",
+      "stage": "serialize",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 5257,
+      "ns_per_row": [
+        2468.6455078125,
+        1075.3369140625,
+        1139.48974609375
+      ],
+      "allocated_bytes_per_row": [
+        192.5,
+        192.5,
+        192.5
+      ],
+      "fork": 1
+    },
+    {
+      "workload": "proto-bytes",
+      "engine": "stock",
+      "stage": "serialize",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 2097776,
+      "ns_per_row": [
+        5165.72509765625,
+        5324.624837239583,
+        6575.09765625
+      ],
+      "allocated_bytes_per_row": [
+        65599.0,
+        65599.0,
+        65599.0
+      ],
+      "fork": 2
+    },
+    {
+      "workload": "postgres-int4",
+      "engine": "stock",
+      "stage": "interpret",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 35472,
+      "ns_per_row": [
+        2.332377916626863,
+        2.00717152047024,
+        2.4998145451026312
+      ],
+      "allocated_bytes_per_row": [
+        2.0,
+        2.0,
+        2.0
+      ],
+      "fork": 1
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "stock",
+      "stage": "read-aot",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        7.055862929213605,
+        8.018267425517072,
+        6.930193516777809
+      ],
+      "allocated_bytes_per_row": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "fork": 0
+    },
+    {
+      "workload": "proto-bytes",
+      "engine": "stock",
+      "stage": "peak",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": true,
+      "rows": 32,
+      "checksum": 2097648,
+      "ns_per_row": [
+        4.087303459525976,
+        3.4796843551848817,
+        2.960256582088082
+      ],
+      "allocated_bytes_per_row": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "fork": 0
+    },
+    {
+      "workload": "proto-bytes",
+      "engine": "buffa",
+      "stage": "interpret",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 2097648,
+      "ns_per_row": [
+        18.101396122685184,
+        18.410721744399474,
+        19.098365783691406
+      ],
+      "allocated_bytes_per_row": [
+        2.0,
+        2.0,
+        2.0
+      ],
+      "fork": 0
+    },
+    {
+      "workload": "proto-scalar",
+      "engine": "owned",
+      "stage": "ingest-generated",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 54400032992,
+      "ns_per_row": [
+        27.821806949188726,
+        28.5577942251462,
+        28.927586270734597
+      ],
+      "allocated_bytes_per_row": [
+        56.0,
+        56.0,
+        56.0
+      ],
+      "fork": 1
+    },
+    {
+      "workload": "proto-scalar",
+      "engine": "stock",
+      "stage": "project-aot",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 54400032992,
+      "ns_per_row": [
+        46.19206036261792,
+        50.24837038644547,
+        48.10277743602362
+      ],
+      "allocated_bytes_per_row": [
+        136.0,
+        136.0,
+        136.0
+      ],
+      "fork": 0
+    },
+    {
+      "workload": "proto-scalar",
+      "engine": "buffa",
+      "stage": "peak",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": true,
+      "rows": 32,
+      "checksum": 54400032992,
+      "ns_per_row": [
+        2.4924494851214782,
+        1.9960136737910807,
+        2.155697482562246
+      ],
+      "allocated_bytes_per_row": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "fork": 0
+    },
+    {
+      "workload": "proto-mixed-full",
+      "engine": "stock",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 4866,
+      "ns_per_row": [
+        951.1622041868932,
+        908.0085358796297,
+        900.6195996543779
+      ],
+      "allocated_bytes_per_row": [
+        1776.75,
+        1776.75,
+        1776.75
+      ],
+      "fork": 2
+    },
+    {
+      "workload": "proto-bytes",
+      "engine": "stock-aliased",
+      "stage": "interpret",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 2097648,
+      "ns_per_row": [
+        3.8997991044694187,
+        3.9050378823829126,
+        3.7850537805622286
+      ],
+      "allocated_bytes_per_row": [
+        2.0,
+        2.0,
+        2.0
+      ],
+      "fork": 1
+    },
+    {
+      "workload": "proto-bytes",
+      "engine": "stock",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 2097648,
+      "ns_per_row": [
+        19674.2890625,
+        18830.110085227272,
+        19710.25390625
+      ],
+      "allocated_bytes_per_row": [
+        65699.0,
+        65699.0,
+        65699.0
+      ],
+      "fork": 2
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "generated-owned",
+      "stage": "read-aot",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        5.474251375070067,
+        5.561068731144695,
+        5.831135601346108
+      ],
+      "allocated_bytes_per_row": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "fork": 0
+    },
+    {
+      "workload": "proto-bytes",
+      "engine": "buffa",
+      "stage": "interpret-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 2097648,
+      "ns_per_row": [
+        16.529694635910012,
+        16.369661632875335,
+        16.434587070470222
+      ],
+      "allocated_bytes_per_row": [
+        2.0,
+        2.0,
+        2.0
+      ],
+      "fork": 2
+    },
+    {
+      "workload": "mysql-int4",
+      "engine": "static",
+      "stage": "ingest-typed",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 35472,
+      "ns_per_row": [
+        110.68094900849859,
+        109.8113845559303,
+        110.49884226527149
+      ],
+      "allocated_bytes_per_row": [
+        128.0,
+        128.0,
+        128.0
+      ],
+      "fork": 1
+    },
+    {
+      "workload": "proto-bytes",
+      "engine": "buffa",
+      "stage": "peak",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": true,
+      "rows": 32,
+      "checksum": 2097648,
+      "ns_per_row": [
+        4.142480700712589,
+        4.903409634632279,
+        4.140740819848889
+      ],
+      "allocated_bytes_per_row": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "fork": 2
+    },
+    {
+      "workload": "proto-bytes",
+      "engine": "buffa",
+      "stage": "interpret",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 2097648,
+      "ns_per_row": [
+        28.398477243822676,
+        25.38058071969205,
+        26.724359357904813
+      ],
+      "allocated_bytes_per_row": [
+        2.0,
+        2.0,
+        2.0
+      ],
+      "fork": 1
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "generated-owned",
+      "stage": "serialize",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 5257,
+      "ns_per_row": [
+        1329.7280029296876,
+        1300.660888671875,
+        1306.065185546875
+      ],
+      "allocated_bytes_per_row": [
+        192.5,
+        192.5,
+        192.5
+      ],
+      "fork": 0
+    },
+    {
+      "workload": "postgres-int4",
+      "engine": "static",
+      "stage": "ingest-typed",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 35472,
+      "ns_per_row": [
+        92.18963839075036,
+        90.76785403113382,
+        90.36556501503237
+      ],
+      "allocated_bytes_per_row": [
+        128.0,
+        128.0,
+        128.0
+      ],
+      "fork": 1
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "buffa",
+      "stage": "peak-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": true,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        9.086352757045201,
+        8.787664399730216,
+        9.273717789009112
+      ],
+      "allocated_bytes_per_row": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "fork": 2
+    },
+    {
+      "workload": "proto-bytes",
+      "engine": "buffa",
+      "stage": "ingest-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 2097648,
+      "ns_per_row": [
+        197.8453947368421,
+        185.8444710394862,
+        181.20727765538032
+      ],
+      "allocated_bytes_per_row": [
+        272.0,
+        272.0,
+        272.0
+      ],
+      "fork": 1
+    },
+    {
+      "workload": "proto-scalar",
+      "engine": "generated-owned",
+      "stage": "project-interpret",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 54400032992,
+      "ns_per_row": [
+        9.345180099942617,
+        9.619442199178796,
+        9.864588723621768
+      ],
+      "allocated_bytes_per_row": [
+        2.0,
+        2.0,
+        2.0
+      ],
+      "fork": 0
+    },
+    {
+      "workload": "mysql-int4",
+      "engine": "static",
+      "stage": "ingest-typed",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 35472,
+      "ns_per_row": [
+        97.47526431511976,
+        97.58040787337663,
+        99.25126238567073
+      ],
+      "allocated_bytes_per_row": [
+        128.0,
+        128.0,
+        128.0
+      ],
+      "fork": 0
+    },
+    {
+      "workload": "proto-scalar",
+      "engine": "generated-owned",
+      "stage": "serialize",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 288,
+      "ns_per_row": [
+        19.19516125565055,
+        18.26010077662722,
+        19.031050732573988
+      ],
+      "allocated_bytes_per_row": [
+        24.0,
+        24.0,
+        24.0
+      ],
+      "fork": 1
+    },
+    {
+      "workload": "proto-scalar",
+      "engine": "buffa",
+      "stage": "interpret",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 54400032992,
+      "ns_per_row": [
+        16.751580048653977,
+        15.38894922366971,
+        15.600916447158365
+      ],
+      "allocated_bytes_per_row": [
+        2.0,
+        2.0,
+        2.0
+      ],
+      "fork": 1
+    },
+    {
+      "workload": "postgres-int4",
+      "engine": "static",
+      "stage": "interpret",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 35472,
+      "ns_per_row": [
+        14.925310279454463,
+        13.943141432113299,
+        14.52451798918698
+      ],
+      "allocated_bytes_per_row": [
+        2.0,
+        2.0,
+        2.0
+      ],
+      "fork": 2
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "stock",
+      "stage": "interpret-boundary",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        8.178727289852645,
+        8.279060182733051,
+        8.744389662428366
+      ],
+      "allocated_bytes_per_row": [
+        2.0,
+        2.0,
+        2.0
+      ],
+      "fork": 1
+    },
+    {
+      "workload": "proto-bytes",
+      "engine": "stock-aliased",
+      "stage": "serialize",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 2097776,
+      "ns_per_row": [
+        8071.064453125,
+        5110.255533854167,
+        8821.075032552084
+      ],
+      "allocated_bytes_per_row": [
+        65599.0,
+        65599.0,
+        65599.0
+      ],
+      "fork": 1
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "stock",
+      "stage": "interpret-boundary",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        9.179742569313909,
+        9.562919455388606,
+        8.573253503006496
+      ],
+      "allocated_bytes_per_row": [
+        2.0,
+        2.0,
+        2.0
+      ],
+      "fork": 0
+    },
+    {
+      "workload": "proto-scalar",
+      "engine": "owned",
+      "stage": "ingest-typed",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 54400032992,
+      "ns_per_row": [
+        85.05596634196779,
+        80.25318405916187,
+        78.04055445964842
+      ],
+      "allocated_bytes_per_row": [
+        56.0,
+        56.0,
+        56.0
+      ],
+      "fork": 0
+    },
+    {
+      "workload": "proto-scalar",
+      "engine": "buffa",
+      "stage": "read-generated-aot",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 54400032992,
+      "ns_per_row": [
+        10.642247216626743,
+        13.510609854639103,
+        11.364321402616278
+      ],
+      "allocated_bytes_per_row": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "fork": 2
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "buffa",
+      "stage": "peak",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": true,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        9.090029900409531,
+        9.110075561614467,
+        9.115888453241604
+      ],
+      "allocated_bytes_per_row": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "fork": 0
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "buffa",
+      "stage": "peak",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": true,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        8.996285176400148,
+        9.050772563009637,
+        8.812685659609487
+      ],
+      "allocated_bytes_per_row": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "fork": 2
+    },
+    {
+      "workload": "proto-scalar",
+      "engine": "generated-owned",
+      "stage": "project-peak",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": true,
+      "rows": 32,
+      "checksum": 54400032992,
+      "ns_per_row": [
+        10.440592447916666,
+        11.01957355595668,
+        11.283134982237755
+      ],
+      "allocated_bytes_per_row": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "fork": 0
+    },
+    {
+      "workload": "proto-mixed-full",
+      "engine": "generated-owned",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 4866,
+      "ns_per_row": [
+        928.4345564277252,
+        918.6516835387324,
+        1019.4708251953125
+      ],
+      "allocated_bytes_per_row": [
+        1800.5,
+        1800.5,
+        1800.5
+      ],
+      "fork": 0
+    },
+    {
+      "workload": "proto-scalar",
+      "engine": "generated-owned",
+      "stage": "read-aot",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 54400032992,
+      "ns_per_row": [
+        1.7629985051895307,
+        1.7851231219842083,
+        1.8693560937739244
+      ],
+      "allocated_bytes_per_row": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "fork": 2
+    },
+    {
+      "workload": "proto-scalar",
+      "engine": "buffa",
+      "stage": "peak-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": true,
+      "rows": 32,
+      "checksum": 54400032992,
+      "ns_per_row": [
+        2.7382824548213884,
+        2.178174786393287,
+        1.9481872110522063
+      ],
+      "allocated_bytes_per_row": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "fork": 1
+    },
+    {
+      "workload": "proto-scalar",
+      "engine": "owned",
+      "stage": "peak-generated",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": true,
+      "rows": 32,
+      "checksum": 54400032992,
+      "ns_per_row": [
+        2.0685015076986613,
+        1.8294558645848944,
+        2.40368053889176
+      ],
+      "allocated_bytes_per_row": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "fork": 0
+    }
+  ]
+}
