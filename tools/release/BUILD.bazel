@@ -213,6 +213,7 @@ filegroup(
 cc_import(
     name = "published_native",
     static_library = ":buffa_static",
+    deps = ["//protobuf-buffa/native:cpp_runtime"],
 )
 
 java_library(

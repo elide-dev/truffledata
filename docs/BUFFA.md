@@ -270,9 +270,11 @@ payload budgets with SIMD; shorter strings use Rust's UTF-8 validator. Malformed
 UTF-8 is rejected, never repaired. SVM materializes strings of at least 256 UTF-8
 bytes directly into a pinned Java `char[]` through the generated Myna C binding,
 using an ordinary VM transition. Static consumers must link the C++ runtime
-(`-lstdc++` on Linux, `-lc++` on macOS); the Bazel archive target propagates this
-through `CcInfo` to Native Image. For direct `native-image` commands, add the
-corresponding `-H:NativeLinkerOption=-lstdc++` or `-H:NativeLinkerOption=-lc++` option. No temporary UTF-8 Java array is needed for that
+(`-lc++ -lc++abi` on Linux, `-lc++` on macOS, matching the pinned Elide LLVM toolchain).
+The Bazel archive target propagates this through `CcInfo` to Native Image. Consumers
+of the published raw archive must also supply those libraries, for example
+`-H:NativeLinkerOption=-lc++ -H:NativeLinkerOption=-lc++abi` on Linux. The release
+consumer test imports the published archive with that explicit link contract. No temporary UTF-8 Java array is needed for that
 route. This conservative crossover matches Myna and is not a universal speedup
 claim. JVM materialization and native-disabled images keep their JDK path.
 
