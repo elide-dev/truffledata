@@ -96,6 +96,38 @@ native_image(
     deps = [":comparison"],
 )
 
+# Optional diagnostics: do not use this instrumented image for comparison scores.
+native_image(
+    name = "svm_profile",
+    testonly = True,
+    cc_deps = ["//protobuf-buffa/native:truffledata_buffa"],
+    exec_properties = {
+        "EstimatedCPU": "4",
+        "EstimatedMemory": "16GB",
+    },
+    executable_name = "truffledata-comparison-profile",
+    extra_args = [
+        "--gc=serial",
+        "--enable-monitoring=jfr",
+        "--add-exports=org.graalvm.truffle.runtime/com.oracle.truffle.runtime=ALL-UNNAMED",
+        "--parallelism=4",
+        "-march=compatibility",
+        "--initialize-at-build-time=dev.elide.truffledata",
+        "--initialize-at-run-time=dev.elide.truffledata.comparison.Comparison",
+        "--features=dev.elide.truffledata.buffa.BuffaFeature",
+        "-H:+UnlockExperimentalVMOptions",
+    ] + TRUFFLE_JIT_CHECKS + ["-H:-UnlockExperimentalVMOptions"],
+    graalvm_sdk = "@graalvm_linux_amd64//:gvm",
+    main_class = "dev.elide.truffledata.comparison.Comparison",
+    optimization_mode = "2",
+    tags = ["manual"],
+    target_compatible_with = [
+        "@platforms//os:linux",
+        "@platforms//cpu:x86_64",
+    ],
+    deps = [":comparison"],
+)
+
 sh_test(
     name = "native_smoke",
     size = "large",
@@ -123,6 +155,25 @@ sh_test(
         "benchmark",
         "manual",
     ],
+    target_compatible_with = [
+        "@platforms//os:linux",
+        "@platforms//cpu:x86_64",
+    ],
+)
+
+sh_test(
+    name = "profile",
+    size = "large",
+    srcs = ["profile.sh"],
+    args = [
+        "$(rootpath :svm_profile)",
+        "$(rootpath :profile.jfc)",
+    ],
+    data = [
+        "profile.jfc",
+        ":svm_profile",
+    ],
+    tags = ["manual"],
     target_compatible_with = [
         "@platforms//os:linux",
         "@platforms//cpu:x86_64",

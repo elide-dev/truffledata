@@ -209,3 +209,35 @@ with a Unicode name, 4–8 repeated nested field records, two oneof names, an en
 and a nested source context. It uses the existing generated protobuf-java classes
 without another Java code-generation toolchain. Report schema 3 adds ten cells;
 the validator continues to accept complete schema 1 and 2 reports.
+
+### Mixed-message materialization
+
+Reports `fc91750` and `7285095` isolate empty repeated-field storage and UTF-8
+materialization changes. Shared immutable defaults and lazy repeated-field lists
+reduce owned mixed-message allocation from 3,847.50 to 3,562.50 B/message and
+Buffa from 4,204.50 to 3,983.50 B/message. Avoiding sliced buffers, a charset
+decoder, and an intermediate character buffer then reduces Buffa to 2,195.25 B.
+The native parser still validates UTF-8 and budgets; Java materialization retains
+bounds and lease checks. Empty borrowed arrays retain owner lifetime enforcement.
+Stock remains lower at 1,776.75 B/message and faster at ingestion. Timings vary
+across these short shared-machine runs, so allocation savings are the stronger
+before/after evidence.
+
+### Optional SVM profiling
+
+Use `bazel test //benchmarks/comparison:profile --nocache_test_results` to capture
+three fresh JFR processes per engine for mixed-message ingestion. Select another
+workload with `--test_arg=proto-scalar` (or another comparison workload). Raw
+recordings and diagnostic output are under the test's `test.outputs` directory.
+Pass `--test_env=TRUFFLEDATA_BENCH_REVISION` with the current commit in the environment
+to preserve revision provenance; the binary SHA-256 is recorded automatically.
+
+The separate manual `svm_profile` image enables
+[GraalVM JFR](https://www.graalvm.org/latest/reference-manual/native-image/debugging-and-diagnostics/JFR/).
+Normal comparison images and scores remain uninstrumented. The custom configuration
+collects CPU and sampled Java allocations; profile timings are diagnostic, and
+allocation samples are not exact byte counters or native allocation measurements.
+Use `jfr print --json --events jdk.ExecutionSample,jdk.ObjectAllocationSample FILE.jfr`
+to inspect a recording, filtering stacks to `Comparison$Fixture.ingest` when
+attributing ingestion costs rather than setup. Native Rust internals may not be
+resolved by the Java stack sampler.
