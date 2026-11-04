@@ -137,6 +137,7 @@ public final class BuffaPlan implements AutoCloseable {
 
   private static final class State {
     private static final boolean[] NO_SEEN_FIELDS = new boolean[0];
+    private static final Object[] EMPTY_ITEMS = new Object[0];
     final ProtoPlan plan;
     final WireMessage owner;
     final int format;
@@ -166,7 +167,7 @@ public final class BuffaPlan implements AutoCloseable {
     }
 
     static Object initial(ProtoPlan.FieldPlan field) {
-      return field.repeated() ? new ArrayList<Object>() : field.defaultValue();
+      return field.repeated() ? List.of() : field.defaultValue();
     }
 
     void select(int ordinal) {
@@ -252,10 +253,16 @@ public final class BuffaPlan implements AutoCloseable {
         else
           decoded =
               switch (f.kind()) {
-                case STRING ->
-                    StandardCharsets.UTF_8
-                        .decode(owner.lease.slice(Math.toIntExact(value), length))
-                        .toString();
+                case STRING -> {
+                  // Native decoding has validated UTF-8. Materialize once without CharsetDecoder,
+                  // sliced buffers, or an intermediate UTF-16 character buffer.
+                  owner.lease.check();
+                  int offset = Math.toIntExact(value);
+                  Objects.checkFromIndexSize(offset, length, owner.lease.bytes.capacity());
+                  byte[] utf8 = new byte[length];
+                  owner.lease.bytes.get(offset, utf8);
+                  yield new String(utf8, StandardCharsets.UTF_8);
+                }
                 case BYTES -> new BorrowedBytes(owner, Math.toIntExact(value), length);
                 case DOUBLE -> Double.longBitsToDouble(value);
                 case FLOAT -> (double) Float.intBitsToFloat((int) value);
@@ -269,8 +276,15 @@ public final class BuffaPlan implements AutoCloseable {
                             : BigInteger.valueOf(value & Long.MAX_VALUE).setBit(63));
                 default -> value;
               };
-        if (f.repeated()) ((List<Object>) values[ordinal]).add(decoded);
-        else {
+        if (f.repeated()) {
+          List<Object> items;
+          if (values[ordinal] instanceof ArrayList<?>) items = (List<Object>) values[ordinal];
+          else {
+            items = new ArrayList<>();
+            values[ordinal] = items;
+          }
+          items.add(decoded);
+        } else {
           select(ordinal);
           values[ordinal] = decoded;
         }
@@ -291,8 +305,8 @@ public final class BuffaPlan implements AutoCloseable {
         var field = plan.field(i);
         if (values[i] instanceof State child) values[i] = child.finish(depth + 1);
         else if (values[i] instanceof List<?> list) {
-          Object[] items = new Object[list.size()];
-          Map<Object, Object> keys = field.map() ? new LinkedHashMap<>() : null;
+          Object[] items = list.isEmpty() ? EMPTY_ITEMS : new Object[list.size()];
+          Map<Object, Object> keys = field.map() && !list.isEmpty() ? new LinkedHashMap<>() : null;
           for (int j = 0; j < items.length; j++) {
             Object item = list.get(j);
             items[j] = item instanceof State child ? child.finish(depth + 1) : item;

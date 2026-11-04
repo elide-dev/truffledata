@@ -12,6 +12,7 @@ import org.jspecify.annotations.Nullable;
 @ExportLibrary(DataLibrary.class)
 public final class ProtoRow extends AbstractRow {
   private static final byte[] NO_UNKNOWN_FIELDS = new byte[0];
+  private static final DataArray EMPTY_REPEATED = new DataArray(new Object[0]);
   private final ProtoPlan plan;
   final Object storage;
   private final boolean @Nullable [] present;
@@ -134,7 +135,7 @@ public final class ProtoRow extends AbstractRow {
     }
 
     static Object defaultValue(ProtoPlan.FieldPlan f) {
-      return f.repeated() ? new DataArray(new Object[0]) : f.defaultValue();
+      return f.repeated() ? EMPTY_REPEATED : f.defaultValue();
     }
 
     @TruffleBoundary
