@@ -137,19 +137,22 @@ Earlier runs remain available; these are workload-specific measurements, not per
 
 ### In development: independent protobuf runtime
 
-The next batch separates the descriptor-free runtime from the optional protobuf-java
+Development code separates the descriptor-free runtime from the optional protobuf-java
 bridge, adds a bounded descriptor-set compiler, and generates concrete scalar records,
 builders and codecs. Buffa scalar decoding uses fixed native results without allocating
 an index, and typed messages own their lifetimes directly.
 
-The latest development run has generated nested full-consumption decoding at
-**1.59 µs versus stock’s 2.12 µs**, with **1,801 versus 1,777 Java bytes**. Nested serialization
-uses **193 versus 437 bytes**, but takes **1.37 µs versus stock’s 0.97 µs**. Scalar parse/project
-at peak measures **20.5 ns versus stock’s 81.5 ns**. Generic nested decoding now allocates
-**2,976 bytes**, down from **3,340** before the recent accounting/state changes, and still
-takes **11.30 µs versus stock’s 2.12 µs**. These are short shared-runner measurements;
-generic decoding and several borrowed/SQL paths still lag stock. These changes are **unreleased**
-and are not included in the 0.4.0 artifacts.
+The latest development batch adopts **Myna 0.7.2**, adds native SIMD Unicode support,
+and enforces detachment before scoped rows enter owned containers. Measured allocation
+improvements are **128 → 80 bytes** for static-row fixtures and **104 → 24 bytes** for
+compact scalar serialization (stock: **56 bytes**).
+
+In the latest repeat, generated scalar parse/project at peak measures **24.9 ns versus
+stock’s 115.1 ns**; Buffa Timestamp ProtoJSON measures **1.18 µs versus 10.26 µs**.
+Generated nested full ingestion is **3.40 µs versus 2.12 µs**, and serialization is
+**1.55 µs versus 1.19 µs**. Generic nested decoding remains behind at **14.54 µs**.
+Shared-runner timings vary substantially between runs; both reports and their ranges
+are retained. These changes are **unreleased** and are not included in 0.4.0.
 
 <details>
 <summary>Development measurements and remaining gaps</summary>

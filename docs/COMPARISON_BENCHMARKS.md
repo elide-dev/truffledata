@@ -597,7 +597,7 @@ The [Gazelle drift gate](https://app.buildbuddy.io/invocation/6603031e-78e7-4bb9
 also passes. CI on this implementation revision is tracked separately from these local
 RBE results.
 
-## Current generated graph comparison
+## Packed presence comparison (`fa89f1f`)
 
 The [`fa89f1f` run](../benchmarks/results/svm-comparison-fa89f1f/comparison.json)
 packs generic protobuf presence into one inline word, with spill words only above
@@ -644,11 +644,84 @@ unknown fields, text/JSON, buffer input and retained builder snapshots. The comp
 JVM gate measures compact integer decoding at 40 bytes for one integer or a cached
 second integer, and 64 bytes for a noncached second integer; limits are 48/72 bytes.
 
+## Compact integer serialization comparison (`f564926`)
+
+The [intermediate run](../benchmarks/results/svm-comparison-f564926/comparison.json)
+measures direct INT32/INT64 serialization at 29.95 ns / 24 bytes, versus stock's
+35.21 ns / 56 bytes. The previous generic encoder allocated 104 bytes. This path
+writes one exact-sized output array, including preserved unknown bytes, and checks
+canonical output budgets before allocation. It also writes compact nested integers
+directly into their parent's output. Stock timing had a large process outlier;
+allocation is the stronger evidence for this change.
+
+## Current generated graph comparison
+
+The [`7fe13fc` repeat](../benchmarks/results/svm-comparison-7fe13fc-repeat/comparison.json)
+measures the primitive static-row factory, bound compact getters, scoped-row ownership
+checks, and Myna **0.7.2** with native SIMD Unicode support. The 120 measurement cells,
+three timing processes and separate allocation processes per cell remain unchanged.
+
+| Operation | Stock | TruffleData | Stock / TruffleData Java bytes |
+| --- | ---: | ---: | ---: |
+| Scalar ingestion, generated records | 152.26 ns | 82.50 ns | 136 / 88 |
+| Scalar interpreter reads, generated records | 4.78 ns | 2.36 ns | 2 / 2 |
+| Scalar peak reads, generated records | 1.85 ns | 3.48 ns | 1 / 1 |
+| Scalar serialization, compact runtime | 38.49 ns | 37.60 ns | 56 / 24 |
+| Scalar serialization, generated records | 38.49 ns | 46.68 ns | 56 / 24 |
+| Scalar parse/project, generated peak | 115.11 ns | 24.86 ns | 137 / 1 |
+| Nested ingestion, generated projection | 2008.56 ns | 2749.02 ns | 1776.75 / 1800.50 |
+| Nested ingestion, generated full consumption | 2121.08 ns | 3399.59 ns | 1776.75 / 1800.50 |
+| Nested serialization, generated records | 1189.31 ns | 1545.24 ns | 436.50 / 192.50 |
+| Timestamp ProtoJSON, Buffa | 10264.59 ns | 1182.60 ns | 6439.75 / 688 |
+| MySQL INT4 fixture, static rows | 129.13 ns | 284.40 ns | 16 / 80 |
+| PostgreSQL INT4 fixture, static rows | 74.41 ns | 242.05 ns | 16 / 80 |
+
+The static-row fixtures allocate **80 bytes**, down from **128**: `createLong` avoids
+boxing, varargs and generic staging while keeping width/range checks and presence
+states. This measures driver decoder functions plus retained named rows, not complete
+JDBC queries; normal JDBC cursors still use their general field-source path.
+Compact scalar serialization stays at **24 bytes**, versus the earlier **104**.
+Generic scalar ingestion remains 64 bytes, or 48 with primitive projection. Generic
+nested ingestion remains **2976 bytes** and takes **14.54 µs**, versus stock's
+**2.12 µs / 1776.75 bytes**. Generic nested serialization and several borrowed/SQL
+paths also remain behind stock.
+
+The [first run](../benchmarks/results/svm-comparison-7fe13fc/comparison.json) and repeat
+have **identical executable hashes**. The first used AMD EPYC; the repeat used Intel
+Xeon 3.10 GHz. Shared-worker timing ranges are broad and results disagree: generated
+nested full ingestion was 1.82 µs versus stock's 1.81 µs in the first run, and
+3.40 µs versus 2.12 µs in the repeat. Generated scalar peak reads ranged from
+3.06–8.95 ns in the first run and 1.97–3.64 ns in the repeat. The charts use the
+latest repeat, including its slower results; both complete reports are retained.
+Compare engines within each run, inspect process ranges, and use the stable allocation
+changes without treating these timings as universal parity or isolated speedups.
+
+[All eight SVM targets pass](https://app.buildbuddy.io/invocation/f0a47a85-8946-4033-85c0-c6c922943eac):
+the comparison and access gates, native-enabled/native-free Buffa acceptance, published
+native consumers with/without protobuf-java, and Gazelle drift. The checked native
+inventory has **617 cases**, including all previous 603 plus signed-width, nullable
+construction and overflow cases. Every success case executes compiled code under the
+existing fatal warnings, graph and allocation budgets. The
+[repeat comparison](https://app.buildbuddy.io/invocation/e77c77de-a03d-4939-8163-1a4f749fa0f3)
+also passes with the same binary. The
+[compiled JVM/release-consumer cycle](https://app.buildbuddy.io/invocation/d403e358-1cdc-4059-a727-d38859754bb4)
+passes; temporary constructed-and-read static rows measure **0.00112 bytes/row**
+against the 0.05-byte ceiling.
+
+The [coverage cycle](https://app.buildbuddy.io/invocation/bb427397-c46b-433c-a025-0f344e09beba)
+covers all methods in ProtoCodec (34/34), ProtoRow (38/38), TypedRow (17/17),
+ViewOwner (7/7), AbstractRow (13/13), and Values (13/13). Shared JVM/SVM tests enforce
+explicit detachment before scoped rows enter owned containers, decoder-independent
+message lifetimes, exact UTF-16 payload limits, malformed Unicode rejection, and
+native-disabled fallback. SIMD Unicode has functional/ownership coverage here; these
+comparison workloads do not separately establish a bulk transcoding speedup.
+
 ![Current generated interpreter reads](images/independent-latest/comparison-generated-interpreter.svg)
 ![Current generated peak reads](images/independent-latest/comparison-generated-peak.svg)
 ![Current ingestion allocations](images/independent-latest/comparison-allocations.svg)
 ![Current binary serialization](images/independent-latest/comparison-serialization.svg)
 
-The [current chart manifest](images/independent-latest/comparison-manifest.json) identifies
-the raw data, executable and implementation revision. Earlier development evidence and
-released 0.4.0 graphics remain available above.
+The [chart manifest](images/independent-latest/comparison-manifest.json) identifies the
+repeat data, executable and implementation revision. Released 0.4.0 graphics and earlier
+development evidence remain above. General and typed simdjson decoding is the next
+integration; the Myna value readers and C++ headers are prepared as separate Bazel targets.
