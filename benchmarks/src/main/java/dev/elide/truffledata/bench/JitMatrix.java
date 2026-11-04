@@ -482,6 +482,8 @@ public final class JitMatrix {
     private final Op op;
     private final int index;
     private final String member;
+    private final com.oracle.truffle.api.profiles.ValueProfile protoClass =
+        com.oracle.truffle.api.profiles.ValueProfile.createClassProfile();
     @Child private DataLibrary data = DataLibrary.factory().createDispatched(3);
     @Child private InteropLibrary interop = InteropLibrary.getFactory().createDispatched(3);
     @Child private InteropLibrary nested = InteropLibrary.getFactory().createDispatched(3);
@@ -514,7 +516,7 @@ public final class JitMatrix {
               case INVOCABLE -> interop.isMemberInvocable(receiver, member);
               case PROTO_NESTED ->
                   nested.readMember(nested.readArrayElement(data.read(receiver, index), 0), "name");
-              case PROTO_HAS -> ((ProtoAccess) receiver).has(index);
+              case PROTO_HAS -> ((ProtoAccess) protoClass.profile(receiver)).has(index);
               case READ -> data.read(receiver, index);
               case DATA_LONG -> data.readLong(receiver, index);
               case DATA_DOUBLE -> data.readDouble(receiver, index);

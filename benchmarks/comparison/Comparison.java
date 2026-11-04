@@ -355,7 +355,7 @@ public final class Comparison {
           projectRoot != null
               ? projectRoot
               : engine.equals("generated-owned")
-                  ? new OwnedReadRoot(kind)
+                  ? ownedReadRoot(kind)
                   : generated != null
                       ? new GeneratedReadRoot(generated)
                       : engine.startsWith("stock") ? new StockReadRoot(kind) : new ReadRoot(kind);
@@ -867,13 +867,19 @@ public final class Comparison {
         + value.get_syntax();
   }
 
-  /** Concrete generated getter loop mirrors the stock root without an adapter interface. */
-  private static final class OwnedReadRoot extends RootNode {
-    private final int kind;
+  /** Small shape-specific roots keep frame-bearing entry points eligible for SVM inlining. */
+  private static RootNode ownedReadRoot(int kind) {
+    return switch (kind) {
+      case 0 -> new OwnedScalarReadRoot();
+      case 1 -> new OwnedBytesReadRoot();
+      case 3 -> new OwnedMixedReadRoot();
+      default -> throw new IllegalArgumentException("Unknown generated shape");
+    };
+  }
 
-    OwnedReadRoot(int kind) {
+  private static final class OwnedScalarReadRoot extends RootNode {
+    OwnedScalarReadRoot() {
       super(ComparisonLanguage.current());
-      this.kind = kind;
     }
 
     @Override
@@ -882,15 +888,53 @@ public final class Comparison {
       int rotation = (Integer) frame.getArguments()[1];
       long sum = 0;
       for (int n = 0; n < ROWS; n++) {
-        Object row = rows[(n + rotation) & (ROWS - 1)];
-        if (kind == 1) {
-          sum += ((ComparisonContracts.Message_google$protobuf$BytesValue) row).get_value().size();
-        } else if (kind == 3) {
-          sum += ownedMixedProjection((ComparisonContracts.Message_google$protobuf$Type) row);
-        } else {
-          var value = (ComparisonContracts.Message_google$protobuf$Timestamp) row;
-          sum += value.get_seconds() + value.get_nanos();
-        }
+        var value =
+            (ComparisonContracts.Message_google$protobuf$Timestamp)
+                rows[(n + rotation) & (ROWS - 1)];
+        sum += value.get_seconds() + value.get_nanos();
+      }
+      return sum;
+    }
+  }
+
+  private static final class OwnedBytesReadRoot extends RootNode {
+    OwnedBytesReadRoot() {
+      super(ComparisonLanguage.current());
+    }
+
+    @Override
+    public Object execute(VirtualFrame frame) {
+      Object[] rows = (Object[]) frame.getArguments()[0];
+      int rotation = (Integer) frame.getArguments()[1];
+      long sum = 0;
+      for (int n = 0; n < ROWS; n++) {
+        var value =
+            (ComparisonContracts.Message_google$protobuf$BytesValue)
+                rows[(n + rotation) & (ROWS - 1)];
+        sum += value.get_value().size();
+      }
+      return sum;
+    }
+  }
+
+  private static final class OwnedMixedReadRoot extends RootNode {
+    OwnedMixedReadRoot() {
+      super(ComparisonLanguage.current());
+    }
+
+    @Override
+    public Object execute(VirtualFrame frame) {
+      Object[] rows = (Object[]) frame.getArguments()[0];
+      int rotation = (Integer) frame.getArguments()[1];
+      long sum = 0;
+      for (int n = 0; n < ROWS; n++) {
+        var value =
+            (ComparisonContracts.Message_google$protobuf$Type) rows[(n + rotation) & (ROWS - 1)];
+        sum +=
+            value.get_name().length()
+                + value.get_fields().size()
+                + value.get_oneofs().size()
+                + value.get_syntax();
       }
       return sum;
     }
