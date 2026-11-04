@@ -69,7 +69,15 @@ class PolicyTest {
     Set<String> seenSurfaces = new HashSet<>();
     int checked = 0;
     for (String module :
-        new String[] {"core", "jdbc", "jdbc-sqlite", "jdbc-mysql", "jdbc-postgresql", "protobuf"}) {
+        new String[] {
+          "core",
+          "jdbc",
+          "jdbc-sqlite",
+          "jdbc-mysql",
+          "jdbc-postgresql",
+          "protobuf",
+          "protobuf-runtime"
+        }) {
       try (var paths = Files.walk(root.resolve(module + "/src/main/java"))) {
         for (Path path : paths.filter(p -> p.toString().endsWith(".java")).toList()) {
           String source = Files.readString(path);

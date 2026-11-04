@@ -24,7 +24,7 @@ def digest(path):
 def inputs():
     names = run(["git", "ls-files", "-z", "--cached", "--others", "--exclude-standard", "--",
                  "MODULE.bazel", "MODULE.bazel.lock", "maven_install.json", ".bazelversion", ".bazelrc",
-                 "bazel", "core", "jdbc", "protobuf", "benchmarks", "tools/bench"],
+                 "bazel", "core", "jdbc", "protobuf", "protobuf-runtime", "benchmarks", "tools/bench"],
                 capture_output=True).stdout.split(b"\0")
     result = hashlib.sha256()
     for name in sorted(set(names) - {b""}):

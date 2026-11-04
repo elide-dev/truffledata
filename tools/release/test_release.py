@@ -28,11 +28,13 @@ class PublicationTest(unittest.TestCase):
                 if module != 'core':
                     expected.add('dev.elide:truffledata-core')
                 if module == 'protobuf':
-                    expected.update(('com.google.protobuf:protobuf-java', 'com.google.protobuf:protobuf-java-util', 'com.google.code.gson:gson'))
+                    expected.update(('com.google.protobuf:protobuf-java', 'com.google.protobuf:protobuf-java-util', 'dev.elide:truffledata-protobuf-runtime'))
+                if module == 'protobuf-runtime':
+                    expected.add('com.google.code.gson:gson')
                 if module in ('protobuf-buffa', 'protobuf-buffa-bindings'):
                     expected.update(('org.graalvm.sdk:nativeimage', 'org.graalvm.sdk:word'))
                 if module == 'protobuf-buffa':
-                    expected.update(('dev.elide:truffledata-protobuf', 'dev.elide:truffledata-protobuf-buffa-bindings'))
+                    expected.update(('dev.elide:truffledata-protobuf-runtime', 'dev.elide:truffledata-protobuf-buffa-bindings'))
                 if module == 'jdbc-sqlite':
                     expected.update(('dev.elide:truffledata-jdbc', 'org.xerial:sqlite-jdbc'))
                 if module in ('jdbc-mysql', 'jdbc-postgresql'):

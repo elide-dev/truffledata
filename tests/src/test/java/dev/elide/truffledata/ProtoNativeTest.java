@@ -438,6 +438,29 @@ class ProtoNativeTest {
   }
 
   @Test
+  void independentTextEscapesMatchStock() throws Exception {
+    var descriptor = descriptor("truffledata.lossless.Sample");
+    var plan = plan(descriptor.getFullName());
+    for (String literal :
+        List.of(
+            "\\a\\b\\f\\n\\r\\t\\v\\?",
+            "\\x41\\x4a\\x4",
+            "\\101\\12\\1",
+            "\\u20ac\\U0001f600",
+            "中",
+            "\\\\\\'\\\"",
+            "a' 'b")) {
+      String text = "text: '" + literal + "'";
+      var expected = DynamicMessage.newBuilder(descriptor);
+      TextFormat.getParser().merge(text, expected);
+      assertEquals(
+          expected.build(),
+          DynamicMessage.parseFrom(descriptor, plan.encode(plan.parseText(text))),
+          text);
+    }
+  }
+
+  @Test
   void descriptorFreeTextMatchesProtobufJava() throws Exception {
     var d = descriptor("truffledata.lossless.Sample");
     var plan = plan(d.getFullName());

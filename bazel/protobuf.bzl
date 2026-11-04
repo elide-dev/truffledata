@@ -69,7 +69,7 @@ def proto_contract_library(name, srcs = [], proto_path = "", java_package = "dev
         srcs = [":" + name + "_generate"],
         deps = [
             Label("//core"),
-            Label("//protobuf"),
+            Label("//protobuf-runtime"),
             Label("@maven//:org_graalvm_truffle_truffle_api"),
             Label("@maven//:org_jspecify_jspecify"),
             Label("//bazel:truffle_processor"),

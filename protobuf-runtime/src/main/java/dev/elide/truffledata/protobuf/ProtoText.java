@@ -1,9 +1,12 @@
 package dev.elide.truffledata.protobuf;
 
-import com.google.protobuf.ByteString;
-import com.google.protobuf.TextFormat;
 import dev.elide.truffledata.*;
+import java.io.ByteArrayOutputStream;
 import java.math.BigInteger;
+import java.nio.ByteBuffer;
+import java.nio.charset.CharacterCodingException;
+import java.nio.charset.CodingErrorAction;
+import java.nio.charset.StandardCharsets;
 import java.util.*;
 
 /** Descriptor-free, bounded text-format parser. Parsing is confined to ProtoPlan's boundary. */
@@ -152,13 +155,23 @@ final class ProtoText {
       return message(plan.nested(ordinal), close, depth + 1);
     }
     if (field.kind() == ProtoPlan.Kind.STRING || field.kind() == ProtoPlan.Kind.BYTES) {
-      ByteString bytes = quoted();
+      byte[] bytes = quoted();
       if (field.kind() == ProtoPlan.Kind.BYTES) {
-        budget.cells(bytes.size());
-        return DataArray.copyOfBytes(bytes.asReadOnlyByteBuffer());
+        budget.cells(bytes.length);
+        return DataArray.copyOfBytes(ByteBuffer.wrap(bytes));
       }
-      if (!bytes.isValidUtf8()) throw bad("Invalid UTF-8 string");
-      String text = bytes.toStringUtf8();
+      String text;
+      try {
+        text =
+            StandardCharsets.UTF_8
+                .newDecoder()
+                .onMalformedInput(CodingErrorAction.REPORT)
+                .onUnmappableCharacter(CodingErrorAction.REPORT)
+                .decode(ByteBuffer.wrap(bytes))
+                .toString();
+      } catch (CharacterCodingException invalid) {
+        throw bad("Invalid UTF-8 string");
+      }
       budget.bytes(2L * text.length());
       return text;
     }
@@ -215,8 +228,8 @@ final class ProtoText {
     return single ? (double) (float) value : value;
   }
 
-  private ByteString quoted() {
-    ByteString result = ByteString.EMPTY;
+  private byte[] quoted() {
+    ByteArrayOutputStream result = new ByteArrayOutputStream();
     boolean any = false;
     while (true) {
       space();
@@ -242,13 +255,69 @@ final class ProtoText {
       if (!closed) throw bad("Unterminated string literal");
       String raw = input.substring(start, position - 1);
       ProtoPlan.validateString(raw);
-      try {
-        result = result.concat(TextFormat.unescapeBytes(raw));
-      } catch (TextFormat.InvalidEscapeSequenceException e) {
-        throw bad("Invalid string escape");
-      }
+      unescape(raw, result);
     }
     if (!any) throw bad("Expected quoted string");
-    return result;
+    return result.toByteArray();
+  }
+
+  /** Text-format byte escapes, with Unicode escapes encoded as UTF-8. */
+  private void unescape(String raw, ByteArrayOutputStream output) {
+    byte[] bytes = raw.getBytes(StandardCharsets.UTF_8);
+    for (int i = 0; i < bytes.length; i++) {
+      int c = bytes[i] & 255;
+      if (c != '\\') {
+        output.write(c);
+        continue;
+      }
+      if (++i == bytes.length) throw bad("Unterminated escape");
+      c = bytes[i] & 255;
+      if (c >= '0' && c <= '7') {
+        int value = c - '0';
+        for (int count = 1;
+            count < 3 && i + 1 < bytes.length && bytes[i + 1] >= '0' && bytes[i + 1] <= '7';
+            count++) value = (value << 3) | (bytes[++i] - '0');
+        output.write(value);
+        continue;
+      }
+      switch (c) {
+        case 'a' -> output.write(7);
+        case 'b' -> output.write(8);
+        case 'f' -> output.write(12);
+        case 'n' -> output.write(10);
+        case 'r' -> output.write(13);
+        case 't' -> output.write(9);
+        case 'v' -> output.write(11);
+        case '\\', '\'', '"', '?' -> output.write(c);
+        case 'x', 'X' -> {
+          if (i + 1 == bytes.length || hex(bytes[i + 1]) < 0)
+            throw bad("Expected hexadecimal escape");
+          int value = hex(bytes[++i]);
+          if (i + 1 < bytes.length && hex(bytes[i + 1]) >= 0)
+            value = (value << 4) | hex(bytes[++i]);
+          output.write(value);
+        }
+        case 'u', 'U' -> {
+          int digits = c == 'u' ? 4 : 8;
+          long value = 0;
+          for (int j = 0; j < digits; j++) {
+            if (++i == bytes.length || hex(bytes[i]) < 0) throw bad("Invalid Unicode escape");
+            value = (value << 4) | hex(bytes[i]);
+          }
+          if (value > 0x10ffff || (value >= 0xd800 && value <= 0xdfff))
+            throw bad("Invalid Unicode scalar");
+          output.writeBytes(
+              new String(Character.toChars((int) value)).getBytes(StandardCharsets.UTF_8));
+        }
+        default -> throw bad("Invalid string escape");
+      }
+    }
+  }
+
+  private static int hex(int c) {
+    if (c >= '0' && c <= '9') return c - '0';
+    if (c >= 'a' && c <= 'f') return c - 'a' + 10;
+    if (c >= 'A' && c <= 'F') return c - 'A' + 10;
+    return -1;
   }
 }
