@@ -14,6 +14,16 @@ class GeneratedCodecTest {
   }
 
   @Test
+  void generatedStorageUsesDeclaredWidths() throws Exception {
+    var type = TruffleDataContracts.Message_truffledata$lossless$Flat.class;
+    assertEquals(int.class, type.getDeclaredField("f0").getType());
+    assertEquals(long.class, type.getDeclaredField("f1").getType());
+    assertEquals(int.class, type.getDeclaredField("f2").getType());
+    assertEquals(float.class, type.getDeclaredField("f11").getType());
+    assertEquals(double.class, type.getDeclaredField("f12").getType());
+  }
+
+  @Test
   void generatedBuildersValidateAndKeepSnapshotsIndependent() {
     var plan = model(Limits.DEFAULT, 32, 1000000).type("truffledata.lossless.Flat");
     var access = new TruffleDataContracts.Access_truffledata$lossless$Flat(plan);
@@ -77,6 +87,12 @@ class GeneratedCodecTest {
     byte[] wire = plan.encode(generic);
     var actual = access.decode(wire);
     assertArrayEquals(wire, actual.encode());
+    assertSame(plan, actual.plan());
+    assertEquals(-123, access.get_i32(actual));
+    var other =
+        new TruffleDataContracts.Access_truffledata$lossless$Flat(
+            model(Limits.DEFAULT, 32, 1000000).type(plan.name()));
+    assertThrows(ContractViolation.class, () -> other.get_i32(actual));
     assertEquals(-123, actual.get_i32());
     assertEquals(Long.MIN_VALUE, actual.get_i64());
     assertEquals(4294967295L, actual.get_u32());
@@ -165,6 +181,7 @@ class GeneratedCodecTest {
             new byte[] {35},
             new byte[] {35, 44},
             new byte[] {4},
+            new byte[] {12},
             new byte[] {45},
             new byte[] {14},
             new byte[] {8, -1, -1, -1, -1, -1, -1, -1, -1, -1, 2},
@@ -216,7 +233,15 @@ class GeneratedCodecTest {
     for (String text : List.of("", "ascii", "é", "中", "😀")) {
       byte[] wire = plan.encode(plan.newBuilder().set(13, text).build());
       assertEquals(text, access.decode(wire).get_text());
+      assertArrayEquals(wire, access.decode(wire).encode());
     }
+    var shortOutput =
+        new TruffleDataContracts.Access_truffledata$lossless$Flat(
+                model(Limits.DEFAULT, 8, 1).type(plan.name()))
+            .newBuilder()
+            .set_text("é")
+            .build();
+    assertThrows(ContractViolation.class, shortOutput::encode);
     var small = model(new Limits(1024, 256, 262144, 0), 8, 1000).type(plan.name());
     assertThrows(
         ContractViolation.class,

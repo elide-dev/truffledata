@@ -132,6 +132,162 @@ class ProtoDescriptorsTest {
   }
 
   @Test
+  void expandedNamesAndFieldCollectionsHaveBudgets() {
+    var file =
+        FileDescriptorProto.newBuilder()
+            .setName("schema.proto")
+            .setSyntax("proto3")
+            .setPackage("p".repeat(100));
+    for (int i = 0; i < 10; i++) file.addMessageType(message("Type" + i));
+    byte[] descriptors = set(file.build()).toByteArray();
+    assertThrows(
+        ContractViolation.class,
+        () ->
+            ProtoDescriptors.compile(
+                null,
+                descriptors,
+                "p".repeat(100) + ".Type0",
+                new Limits(1, 256, 1000, 1024),
+                32,
+                WIRE));
+    var many = DescriptorProto.newBuilder().setName("Root");
+    for (int i = 0; i < 257; i++)
+      many.addField(
+          FieldDescriptorProto.newBuilder()
+              .setName("field" + i)
+              .setNumber(i + 1)
+              .setType(FieldDescriptorProto.Type.TYPE_INT64));
+    assertThrows(
+        ContractViolation.class,
+        () -> compile(set(file("fields.proto", "sample", many.build())), "sample.Root"));
+  }
+
+  private static byte[] append(byte[] prefix, byte[] suffix) {
+    byte[] joined = Arrays.copyOf(prefix, prefix.length + suffix.length);
+    System.arraycopy(suffix, 0, joined, prefix.length, suffix.length);
+    return joined;
+  }
+
+  @Test
+  void unknownMetadataWireKindsAndMalformedGroups() {
+    byte[] base = set(file("schema.proto", "sample", message("Root"))).toByteArray();
+    byte[] unknown = {
+      24, 1, 33, 0, 0, 0, 0, 0, 0, 0, 0, 42, 2, 1, 2, 51, 8, 1, 17, 0, 0, 0, 0, 0, 0, 0, 0, 26, 1,
+      9, 37, 0, 0, 0, 0, 52, 61, 0, 0, 0, 0
+    };
+    assertEquals(
+        "sample.Root",
+        ProtoDescriptors.compile(
+                null, append(base, unknown), "sample.Root", Limits.DEFAULT, 32, WIRE)
+            .name());
+    for (byte[] invalid :
+        new byte[][] {
+          {33},
+          {61},
+          {51},
+          {51, 60},
+          {51, 26, 3, 1},
+          {51, 8},
+          {24, -1, -1, -1, -1, -1, -1, -1, -1, -1, 2}
+        })
+      assertThrows(
+          ContractViolation.class,
+          () ->
+              ProtoDescriptors.compile(
+                  null, append(base, invalid), "sample.Root", Limits.DEFAULT, 32, WIRE));
+    byte[] deep = new byte[258];
+    Arrays.fill(deep, 0, 129, (byte) 27);
+    Arrays.fill(deep, 129, 258, (byte) 28);
+    assertThrows(
+        ContractViolation.class,
+        () ->
+            ProtoDescriptors.compile(
+                null, append(base, deep), "sample.Root", Limits.DEFAULT, 32, WIRE));
+    assertThrows(
+        ContractViolation.class,
+        () ->
+            ProtoDescriptors.compile(
+                null, new byte[] {10, 3, 10, 1, -1}, "sample.Root", Limits.DEFAULT, 32, WIRE));
+  }
+
+  @Test
+  void rejectsInconsistentSchemaDeclarations() {
+    var field =
+        FieldDescriptorProto.newBuilder()
+            .setName("value")
+            .setNumber(1)
+            .setType(FieldDescriptorProto.Type.TYPE_INT32)
+            .build();
+    var root = DescriptorProto.newBuilder().setName("Root").addField(field).build();
+    for (var invalid :
+        List.of(
+            root.toBuilder().addReservedName("value").build(),
+            root.toBuilder()
+                .addReservedRange(DescriptorProto.ReservedRange.newBuilder().setStart(1).setEnd(2))
+                .build(),
+            root.toBuilder().setField(0, field.toBuilder().setNumber(0)).build(),
+            root.toBuilder().setField(0, field.toBuilder().setOneofIndex(0)).build(),
+            root.toBuilder().setField(0, field.toBuilder().setProto3Optional(true)).build(),
+            root.toBuilder().setField(0, field.toBuilder().setDefaultValue("1")).build(),
+            root.toBuilder()
+                .setField(0, field.toBuilder().setLabel(FieldDescriptorProto.Label.LABEL_REQUIRED))
+                .build(),
+            root.toBuilder()
+                .addOneofDecl(OneofDescriptorProto.newBuilder().setName("same"))
+                .addOneofDecl(OneofDescriptorProto.newBuilder().setName("same"))
+                .build())) {
+      assertThrows(
+          ContractViolation.class,
+          () -> compile(set(file("schema.proto", "sample", invalid)), "sample.Root"));
+    }
+    assertThrows(
+        ContractViolation.class,
+        () -> compile(set(file("schema.proto", "sample", root, root)), "sample.Root"));
+    var weak = file("schema.proto", "sample", root).toBuilder().addWeakDependency(7).build();
+    assertThrows(ContractViolation.class, () -> compile(set(weak), "sample.Root"));
+    var bool =
+        field.toBuilder().setType(FieldDescriptorProto.Type.TYPE_BOOL).setDefaultValue("invalid");
+    var legacy =
+        file("schema.proto", "sample", root.toBuilder().setField(0, bool).build()).toBuilder()
+            .setSyntax("proto2")
+            .build();
+    assertThrows(ContractViolation.class, () -> compile(set(legacy), "sample.Root"));
+  }
+
+  @Test
+  void descriptorStringDefaultsEscapeWithoutStockAndPackedImportsResolve() {
+    String value = "slash\\ quote\" line\n return\r tab\t é";
+    var field =
+        FieldDescriptorProto.newBuilder()
+            .setName("value")
+            .setNumber(1)
+            .setType(FieldDescriptorProto.Type.TYPE_STRING)
+            .setDefaultValue(value);
+    var root = DescriptorProto.newBuilder().setName("Root").addField(field).build();
+    var legacy = file("schema.proto", "sample", root).toBuilder().setSyntax("proto2").build();
+    assertEquals(value, compile(set(legacy), "sample.Root").decode(new byte[0]).get(0));
+    var leaf = file("leaf.proto", "dep", message("Leaf"));
+    var packed =
+        com.google.protobuf.UnknownFieldSet.newBuilder()
+            .addField(
+                10,
+                com.google.protobuf.UnknownFieldSet.Field.newBuilder()
+                    .addLengthDelimited(com.google.protobuf.ByteString.copyFrom(new byte[] {0}))
+                    .build())
+            .build();
+    var middle =
+        file("middle.proto", "dep").toBuilder()
+            .addDependency("leaf.proto")
+            .setUnknownFields(packed)
+            .build();
+    var top =
+        file("root.proto", "dep", reference("Leaf")).toBuilder()
+            .addDependency("middle.proto")
+            .build();
+    assertEquals("dep.Leaf", compile(set(top, middle, leaf), "dep.Root").field(0).typeName());
+  }
+
+  @Test
   void rejectsInvalidDescriptorsAndBudgets() {
     var base = file("schema.proto", "sample", message("Root"));
     var valid = set(base);

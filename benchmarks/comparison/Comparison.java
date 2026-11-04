@@ -67,9 +67,15 @@ public final class Comparison {
   }
 
   static List<String> stages(String workload, String engine) {
-    if (engine.equals("generated-owned"))
-      return List.of("ingest", "read-aot", "interpret", "peak", "serialize");
+    if (engine.equals("generated-owned")) {
+      var result = new ArrayList<>(List.of("ingest", "read-aot", "interpret", "peak", "serialize"));
+      if (workload.equals("proto-scalar"))
+        result.addAll(List.of("project-aot", "project-interpret", "project-peak"));
+      return result;
+    }
     List<String> result = new ArrayList<>(baseStages(workload, engine));
+    if (engine.equals("stock") && workload.equals("proto-scalar"))
+      result.addAll(List.of("project-aot", "project-interpret", "project-peak"));
     if ((engine.equals("owned") || engine.equals("buffa"))
         && !workload.equals("proto-mixed-full")) {
       result.add("ingest-generated");
@@ -100,7 +106,7 @@ public final class Comparison {
         || !engines(workload).contains(engine)
         || !stages(workload, engine).contains(stage))
       throw new IllegalArgumentException("Unknown comparison cell");
-    boolean peak = stage.startsWith("peak");
+    boolean peak = stage.contains("peak");
     try (Context context =
         Context.newBuilder("td-compare")
             .allowExperimentalOptions(true)
@@ -116,16 +122,19 @@ public final class Comparison {
           new Fixture(
               workload,
               engine,
-              stage.startsWith("interpret") || peak,
+              stage.contains("interpret") || peak,
               stage.contains("generated"),
-              stage.equals("serialize"))) {
+              stage.equals("serialize"),
+              stage.startsWith("project-"))) {
         boolean ingest = stage.startsWith("ingest");
         Operation operation =
-            stage.equals("serialize")
-                ? fixture::serialize
-                : stage.equals("ingest-typed")
-                    ? fixture::ingestTyped
-                    : ingest ? fixture::ingest : fixture::read;
+            stage.startsWith("project-")
+                ? fixture::project
+                : stage.equals("serialize")
+                    ? fixture::serialize
+                    : stage.equals("ingest-typed")
+                        ? fixture::ingestTyped
+                        : ingest ? fixture::ingest : fixture::read;
         for (int i = 0; i < 4; i++) fixture.check(operation.run(i));
         // Calibrate before warmup: initialization must not disturb measured guest code.
         ThreadMXBean bean = memory || smoke ? allocationCounter() : null;
@@ -165,7 +174,10 @@ public final class Comparison {
             System.out.println(
                 "ALLOCATION compact-scalar " + engine + " " + stage + " bytes/message=" + bytes);
           }
-          if (ImageInfo.inImageRuntimeCode() && !ingest && !stage.equals("serialize")) {
+          if (ImageInfo.inImageRuntimeCode()
+              && !ingest
+              && !stage.equals("serialize")
+              && (!stage.startsWith("project-") || (engine.equals("generated-owned") && peak))) {
             var counter = Objects.requireNonNull(bean);
             long thread = Thread.currentThread().threadId();
             long before = counter.getThreadAllocatedBytes(thread);
@@ -283,11 +295,12 @@ public final class Comparison {
     final @Nullable BuffaWire decoder;
     final @Nullable BuffaPlan nativePlan;
     final OptimizedCallTarget target;
+    final @Nullable ProjectRoot projectRoot;
     final long expected;
     final @Nullable Projection generated;
 
     Fixture(String workload, String engine, boolean guestRead) throws Exception {
-      this(workload, engine, guestRead, false, false);
+      this(workload, engine, guestRead, false, false, false);
     }
 
     Fixture(
@@ -295,7 +308,8 @@ public final class Comparison {
         String engine,
         boolean guestRead,
         boolean generatedReads,
-        boolean serialize)
+        boolean serialize,
+        boolean project)
         throws Exception {
       this.guestRead = guestRead;
       this.workload = workload;
@@ -320,10 +334,13 @@ public final class Comparison {
           engine.equals("generated-owned")
               ? new OwnedProjection(plan, kind)
               : generatedReads ? new GeneratedProjection(plan, kind) : null;
+      projectRoot = project ? new ProjectRoot(plan, engine.equals("stock")) : null;
       RootNode root =
-          generated != null
-              ? new GeneratedReadRoot(generated)
-              : engine.startsWith("stock") ? new StockReadRoot(kind) : new ReadRoot(kind);
+          projectRoot != null
+              ? projectRoot
+              : generated != null
+                  ? new GeneratedReadRoot(generated)
+                  : engine.startsWith("stock") ? new StockReadRoot(kind) : new ReadRoot(kind);
       target = (OptimizedCallTarget) root.getCallTarget();
       long sum = 0;
       for (int i = 0; i < ROWS; i++) {
@@ -385,7 +402,7 @@ public final class Comparison {
         } else rows[i] = parse(i);
       }
       expected = serialize ? Arrays.stream(wire).mapToLong(w -> w.length).sum() : sum;
-      check(serialize ? serialize(0) : read(0));
+      check(project ? project(0) : serialize ? serialize(0) : read(0));
     }
 
     Object parse(int i) throws Exception {
@@ -420,6 +437,12 @@ public final class Comparison {
       return workload.equals("timestamp-json")
           ? Objects.requireNonNull(nativePlan).parseJson(json[i], 1 << 20)
           : Objects.requireNonNull(nativePlan).decode(Objects.requireNonNull(inputs[i]), 1 << 20);
+    }
+
+    long project(int rotation) {
+      return guestRead
+          ? (Long) target.call(wire, rotation)
+          : Objects.requireNonNull(projectRoot).project(wire, rotation);
     }
 
     long serialize(int rotation) {
@@ -657,6 +680,45 @@ public final class Comparison {
         }
       }
       return sum;
+    }
+  }
+
+  private static final class ProjectRoot extends RootNode {
+    private final boolean stock;
+    private final ComparisonContracts.Access_google$protobuf$Timestamp access;
+
+    ProjectRoot(ProtoPlan plan, boolean stock) {
+      super(ComparisonLanguage.current());
+      this.stock = stock;
+      access = new ComparisonContracts.Access_google$protobuf$Timestamp(plan);
+    }
+
+    @Override
+    public Object execute(VirtualFrame frame) {
+      return project((byte[][]) frame.getArguments()[0], (Integer) frame.getArguments()[1]);
+    }
+
+    long project(byte[][] wire, int rotation) {
+      long sum = 0;
+      for (int n = 0; n < ROWS; n++) {
+        byte[] input = wire[(n + rotation) & (ROWS - 1)];
+        if (stock) sum += stockProject(input);
+        else {
+          var row = access.decodeForProjection(input);
+          sum += row.get_seconds() + row.get_nanos();
+        }
+      }
+      return sum;
+    }
+
+    @TruffleBoundary
+    private static long stockProject(byte[] wire) {
+      try {
+        var row = Timestamp.parseFrom(wire);
+        return row.getSeconds() + row.getNanos();
+      } catch (com.google.protobuf.InvalidProtocolBufferException invalid) {
+        throw new AssertionError(invalid);
+      }
     }
   }
 

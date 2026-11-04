@@ -43,10 +43,6 @@ public final class ProtoDescriptors {
     return value;
   }
 
-  private static String qualified(String scope, String name) {
-    return scope.isEmpty() ? identifier(name) : scope + "." + identifier(name);
-  }
-
   private record Slot(int number, int wire, int start, int end, long scalar) {}
 
   private record FileInfo(Node node, String name, String syntax, List<String> dependencies) {}
@@ -75,6 +71,15 @@ public final class ProtoDescriptors {
 
     void cell() {
       if (++cells > limits.maxCells()) throw bad("Descriptor cell budget");
+    }
+
+    String concatenate(String scope, String name) {
+      if (scope.isEmpty()) return name;
+      long charge = 2L * ((long) scope.length() + 1 + name.length());
+      if (charge > limits.maxStringBytes() - stringBytes)
+        throw bad("Qualified descriptor name budget");
+      stringBytes += charge;
+      return scope + "." + name;
     }
 
     ProtoPlan compile(@Nullable TruffleLanguage<?> language, String name) {
@@ -127,12 +132,15 @@ public final class ProtoDescriptors {
         if (node.has(5, 2) || node.has(6, 2) || node.message(7).number(1, 0) != 0)
           throw bad("Extensions/MessageSet require an explicit backend");
         List<ProtoPlan.FieldPlan> fields = new ArrayList<>();
+        var fieldSlots = info.node().slots(2, 2);
         int oneofs = info.node().slots(8, 2).size();
+        if (fieldSlots.size() > limits.maxColumns() || oneofs > limits.maxColumns())
+          throw bad("Descriptor field/oneof budget");
         Set<String> oneofNames = new HashSet<>();
         for (var slot : info.node().slots(8, 2))
           if (!oneofNames.add(identifier(info.node().child(slot).text(1, ""))))
             throw bad("Duplicate oneof name");
-        for (var slot : info.node().slots(2, 2)) {
+        for (var slot : fieldSlots) {
           Node field = info.node().child(slot);
           String fieldName = identifier(field.text(1, ""));
           int number = Math.toIntExact(field.number(3, 0));
@@ -237,7 +245,7 @@ public final class ProtoDescriptors {
     }
 
     void register(Node node, FileInfo file, String scope) {
-      String name = qualified(scope, node.text(1, ""));
+      String name = concatenate(scope, identifier(node.text(1, "")));
       if (messages.containsKey(name) || enums.containsKey(name))
         throw bad("Duplicate descriptor type");
       messages.put(name, new TypeInfo(node, file, name));
@@ -246,7 +254,7 @@ public final class ProtoDescriptors {
     }
 
     void registerEnum(Node node, FileInfo file, String scope) {
-      String name = qualified(scope, node.text(1, ""));
+      String name = concatenate(scope, identifier(node.text(1, "")));
       if (messages.containsKey(name) || enums.containsKey(name))
         throw bad("Duplicate descriptor type");
       enums.put(name, new TypeInfo(node, file, name));
@@ -260,12 +268,14 @@ public final class ProtoDescriptors {
       var symbols = message ? messages : enums;
       if (name.startsWith(".")) {
         String full = name.substring(1);
-        if (symbols.containsKey(full)) return full;
+        var target = symbols.get(full);
+        if (target != null) return target.name();
       } else {
         String prefix = scope;
         while (true) {
-          String candidate = prefix.isEmpty() ? name : prefix + "." + name;
-          if (symbols.containsKey(candidate)) return candidate;
+          String candidate = concatenate(prefix, name);
+          var target = symbols.get(candidate);
+          if (target != null) return target.name();
           if (prefix.isEmpty()) break;
           int dot = prefix.lastIndexOf('.');
           prefix = dot < 0 ? "" : prefix.substring(0, dot);

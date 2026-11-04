@@ -33,6 +33,24 @@ final class OwnedGenerator {
     };
   }
 
+  private static String storage(ProtoPlan.FieldPlan field) {
+    return switch (field.kind()) {
+      case INT32, UINT32, SINT32, FIXED32, SFIXED32, ENUM -> "int";
+      case FLOAT -> "float";
+      default -> type(field);
+    };
+  }
+
+  private static String storedValue(ProtoPlan.FieldPlan field, int ordinal) {
+    String value = "f" + ordinal;
+    return switch (field.kind()) {
+      case UINT32, FIXED32 -> "Integer.toUnsignedLong(" + value + ")";
+      case INT32, SINT32, SFIXED32, ENUM -> "(long)" + value;
+      case FLOAT -> "(double)" + value;
+      default -> value;
+    };
+  }
+
   private static String read(ProtoPlan.FieldPlan field) {
     return switch (field.kind()) {
       case INT32, ENUM -> "(long) (int) input.varint()";
@@ -178,7 +196,9 @@ final class OwnedGenerator {
         .append(" throw new ContractViolation(\"Generated build budget\");\n")
         .append(" return new ")
         .append(name(schema))
-        .append("(plan,bits,new byte[0]");
+        .append("(plan,bits,")
+        .append(name(schema))
+        .append(".EMPTY");
     for (int i = 0; i < fields.size(); i++) out.append(",f").append(i);
     out.append("); }\n }\n");
   }
@@ -190,10 +210,12 @@ final class OwnedGenerator {
     var fields = schema.fields();
     out.append(" public static final class ")
         .append(name)
-        .append(" extends dev.elide.truffledata.protobuf.GeneratedMessage {\n");
+        .append(
+            " extends dev.elide.truffledata.protobuf.GeneratedMessage {\n"
+                + " private static final byte[] EMPTY = new byte[0];\n");
     for (int i = 0; i < fields.size(); i++)
       out.append(" private final ")
-          .append(type(fields.get(i)))
+          .append(storage(fields.get(i)))
           .append(" f")
           .append(i)
           .append(";\n");
@@ -202,15 +224,21 @@ final class OwnedGenerator {
       out.append(", ").append(type(fields.get(i))).append(" f").append(i);
     out.append(") { super(plan, presence, unknown);");
     for (int i = 0; i < fields.size(); i++)
-      out.append(" this.f").append(i).append("=f").append(i).append(";");
+      out.append(" this.f")
+          .append(i)
+          .append("=(")
+          .append(storage(fields.get(i)))
+          .append(")f")
+          .append(i)
+          .append(";");
     out.append(" }\n");
     for (int i = 0; i < fields.size(); i++)
       out.append(" public ")
           .append(type(fields.get(i)))
           .append(" get_")
           .append(fields.get(i).name())
-          .append("() { return f")
-          .append(i)
+          .append("() { return ")
+          .append(storedValue(fields.get(i), i))
           .append("; }\n");
     for (String returnType : List.of("Object", "long", "double", "boolean")) {
       String method =
@@ -241,7 +269,11 @@ final class OwnedGenerator {
           .append("(int ordinal) { return switch (ordinal) {");
       for (int i = 0; i < fields.size(); i++)
         if (returnType.equals("Object") || type(fields.get(i)).equals(returnType))
-          out.append(" case ").append(i).append(" -> f").append(i).append(';');
+          out.append(" case ")
+              .append(i)
+              .append(" -> ")
+              .append(storedValue(fields.get(i), i))
+              .append(';');
       out.append(" default -> ")
           .append(
               returnType.equals("Object")
@@ -259,7 +291,7 @@ final class OwnedGenerator {
           .append(")) { output.varint(")
           .append(((long) field.number() << 3) | field.kind().wire)
           .append("L);")
-          .append(write(field, "f" + i))
+          .append(write(field, "(" + storedValue(field, i) + ")"))
           .append(" }\n");
     }
     out.append(" }\n");

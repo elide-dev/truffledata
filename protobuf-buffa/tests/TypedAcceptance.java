@@ -123,6 +123,8 @@ final class TypedAcceptance {
             equal(expected, row);
             equal(expected, parsed.snapshot());
             Acceptance.check(
+                Arrays.equals(wire, parsed.encode()), "binary forwarding preserves unknowns");
+            Acceptance.check(
                 row.has(0) == expected.has(0) && row.getLong(0) == expected.getLong(0),
                 "compact presence and primitive");
             Acceptance.check(
