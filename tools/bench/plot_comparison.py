@@ -108,7 +108,10 @@ def render(data, output, label):
         fig.tight_layout(rect=(0, 0.075, 1, 0.955), h_pad=1.7)
         for extension in ('svg', 'png'):
             fig.savefig(output / f'comparison-{name}.{extension}', dpi=160,
-                        facecolor=fig.get_facecolor(), metadata={'Creator': 'TruffleData comparison renderer'} if extension == 'svg' else None)
+                        facecolor=fig.get_facecolor(), metadata={'Creator': 'TruffleData comparison renderer', 'Date': None} if extension == 'svg' else None)
+            if extension == 'svg':
+                path = output / f'comparison-{name}.svg'
+                path.write_text('\n'.join(line.rstrip() for line in path.read_text().splitlines()) + '\n')
         plt.close(fig)
     return matplotlib.__version__
 
