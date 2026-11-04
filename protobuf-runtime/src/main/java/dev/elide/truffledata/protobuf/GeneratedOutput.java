@@ -72,6 +72,11 @@ public final class GeneratedOutput {
   public void utf8(String value, int length) {
     varint(length);
     reserve(length);
+    position = utf8Contents(target, position, value);
+  }
+
+  /** Package-private: callers first validate Unicode and reserve its exact encoded length. */
+  static int utf8Contents(byte[] target, int position, String value) {
     for (int i = 0; i < value.length(); i++) {
       int c = value.charAt(i);
       if (c < 128) target[position++] = (byte) c;
@@ -90,6 +95,7 @@ public final class GeneratedOutput {
         target[position++] = (byte) (0x80 | (c & 63));
       }
     }
+    return position;
   }
 
   public void bytes(DataArray value) {

@@ -73,7 +73,7 @@ final class OwnedGenerator {
     };
   }
 
-  private static String wireValue(ProtoPlan.FieldPlan field, String value) {
+  static String wireValue(ProtoPlan.FieldPlan field, String value) {
     return switch (field.kind()) {
       case UINT64, FIXED64 ->
           "dev.elide.truffledata.protobuf.GeneratedOutput.integer(" + value + ")";
@@ -387,6 +387,7 @@ final class OwnedGenerator {
     }
     if (inlineSupported(schema)) primitiveEncoder(out, schema);
     else encoder(out, schema);
+    EncoderGenerator.append(out, schema, false);
     if (inlineSupported(schema)) {
       out.append(" @com.oracle.truffle.api.CompilerDirectives.TruffleBoundary private static ")
           .append(name)

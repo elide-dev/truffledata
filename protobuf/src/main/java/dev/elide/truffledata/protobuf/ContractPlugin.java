@@ -150,7 +150,7 @@ public final class ContractPlugin {
     }
     for (int i = 0; i < definitions.size(); i++)
       OwnedGenerator.append(source, definitions.get(i), i);
-    GraphGenerator.header(source);
+    GraphGenerator.header(source, definitions);
     for (var definition : definitions) graph.append(source, definition);
     // Schema-bound generated getters contain literal ordinals and no library dispatch.
     for (int i = 0; i < definitions.size(); i++) {
@@ -164,9 +164,10 @@ public final class ContractPlugin {
           .append(name)
           .append("(ProtoPlan plan) { if (!plan.matchesDefinition(type")
           .append(i)
-          .append(
-              "())) throw new ContractViolation(\"Generated contract mismatch\"); this.plan = plan;"
-                  + " }\n")
+          .append("())) throw new ContractViolation(\"Generated contract mismatch\"); ");
+      if (graph.supports(type)) source.append("checkGraph(plan);");
+      source
+          .append(" this.plan = plan; }\n")
           .append(
               " private void check(dev.elide.truffledata.protobuf.ProtoAccess row) { if (row.plan()"
                   + " != plan) throw new ContractViolation(\"Generated plan mismatch\"); }\n");
@@ -281,7 +282,7 @@ public final class ContractPlugin {
         + "))";
   }
 
-  private static String quote(String value) {
+  static String quote(String value) {
     StringBuilder out = new StringBuilder("\"");
     for (char c : value.toCharArray()) {
       switch (c) {

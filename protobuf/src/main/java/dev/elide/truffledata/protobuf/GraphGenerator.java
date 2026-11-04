@@ -53,15 +53,17 @@ final class GraphGenerator {
         ? "java.util.@org.jspecify.annotations.Nullable ArrayList<Object>"
         : f.kind().message()
             ? "@org.jspecify.annotations.Nullable " + state(f.typeName())
-            : type(f);
+            : storage(f);
   }
 
   private static String fallback(ProtoPlan.FieldPlan f, int i) throws Exception {
     if (f.repeated() || f.kind().message()) return "null";
     String type = type(f);
-    return type.equals("Object") || type.equals("DataArray") || type.equals("String")
-        ? "(" + type + ")plan.field(" + i + ").defaultValue()"
-        : ContractPlugin.literal(f.defaultValue());
+    String value =
+        type.equals("Object") || type.equals("DataArray") || type.equals("String")
+            ? "(" + type + ")plan.field(" + i + ").defaultValue()"
+            : ContractPlugin.literal(f.defaultValue());
+    return storage(f).equals(type) ? value : "(" + storage(f) + ")(" + value + ")";
   }
 
   private static String read(ProtoPlan.FieldPlan f) {
@@ -111,7 +113,9 @@ final class GraphGenerator {
           .append(".add(value);\n");
     else {
       select(out, type, i);
-      out.append(" f").append(i).append("=value;\n");
+      out.append(" f").append(i).append('=');
+      if (!field.kind().message()) out.append('(').append(storage(field)).append(')');
+      out.append("value;\n");
     }
     out.append(" presence |= ").append(1L << i).append("L;\n");
   }
@@ -332,8 +336,10 @@ final class GraphGenerator {
             "(plan,presence,dev.elide.truffledata.protobuf.GeneratedGraphInput.unknownBytes(unknown)");
     for (int i = 0; i < fields.size(); i++)
       out.append(',')
-          .append(fields.get(i).repeated() || fields.get(i).kind().message() ? "value" : "f")
-          .append(i);
+          .append(
+              fields.get(i).repeated() || fields.get(i).kind().message()
+                  ? "value" + i
+                  : storedValue(fields.get(i), i));
     out.append("); } }\n");
   }
 
@@ -418,10 +424,8 @@ final class GraphGenerator {
                   : "super." + method + "(ordinal)")
           .append("; }; }\n");
     }
-    out.append(
-            " @Override @com.oracle.truffle.api.CompilerDirectives.TruffleBoundary public byte[]"
-                + " encode() { return encodeGraph(); }\n")
-        .append(" private static ")
+    EncoderGenerator.append(out, schema, true);
+    out.append(" private static ")
         .append(name)
         .append(
             " decode(ProtoPlan plan,byte[] wire) { var input=new"
@@ -430,8 +434,25 @@ final class GraphGenerator {
         .append("(plan,input,1); state.consume(input,0,1); return state.finish(input,1); }\n }\n");
   }
 
-  static void header(StringBuilder out) {
+  static void header(StringBuilder out, List<ProtoPlan.Type> definitions) {
     out.append(" private static final DataArray EMPTY_REPEATED=new DataArray(new Object[0]);\n");
+    out.append(
+        " @com.oracle.truffle.api.CompilerDirectives.TruffleBoundary private static void"
+            + " checkGraph(ProtoPlan root) { var seen=new HashSet<String>(); var pending=new"
+            + " ArrayDeque<ProtoPlan>(); pending.add(root); while(!pending.isEmpty()) { var"
+            + " plan=pending.removeFirst(); if(!seen.add(plan.name())) continue; ProtoPlan.Type"
+            + " expected=switch(plan.name()) {\n");
+    for (int i = 0; i < definitions.size(); i++)
+      out.append(" case ")
+          .append(ContractPlugin.quote(definitions.get(i).name()))
+          .append(" -> type")
+          .append(i)
+          .append("();\n");
+    out.append(
+        " default -> throw new ContractViolation(\"Unknown generated nested type\"); };"
+            + " if(!plan.matchesDefinition(expected)) throw new ContractViolation(\"Generated"
+            + " nested contract mismatch\"); for(int i=0;i<plan.size();i++)"
+            + " if(plan.field(i).kind().message()) pending.add(plan.nested(i)); } }\n");
   }
 
   private static String storage(ProtoPlan.FieldPlan field) {

@@ -549,9 +549,14 @@ final class ProtoCodec {
         case FLOAT -> fixed(Float.floatToRawIntBits(((Double) value).floatValue()), 4);
         case DOUBLE -> fixed(Double.doubleToRawLongBits((Double) value), 8);
         case STRING -> {
-          byte[] bytes = ((String) value).getBytes(StandardCharsets.UTF_8);
-          varint(bytes.length);
-          raw(bytes);
+          String text = (String) value;
+          int length = GeneratedOutput.utf8Length(text);
+          varint(length);
+          if (length > limit - position) throw bad("Encoded wire budget exceeded");
+          position =
+              target == null
+                  ? position + length
+                  : GeneratedOutput.utf8Contents(target, position, text);
         }
         case BYTES -> {
           DataArray bytes = (DataArray) value;

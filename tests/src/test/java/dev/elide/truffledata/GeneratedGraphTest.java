@@ -24,6 +24,81 @@ class GeneratedGraphTest {
   }
 
   @Test
+  void graphEncodingBudgetsCheckCanonicalExpansionAndReturnIndependentOutputs() {
+    var full = model().type(PREFIX + "Sample");
+    var access = new TruffleDataContracts.Access_truffledata$lossless$Sample(full);
+    byte[] wire = full.encode(full.parseText("child {a: 3 b: '€😀'} numbers: [1,2]"));
+    var row = access.decode(wire);
+    byte[] first = row.encode();
+    first[0] ^= 1;
+    assertArrayEquals(wire, row.encode());
+    // Five-byte INT32 -1 input is legal but needs ten bytes when encoded canonically.
+    byte[] negative = {8, -1, -1, -1, -1, 15};
+    var narrow = model(Limits.DEFAULT, 32, negative.length).type(full.name());
+    var direct =
+        new TruffleDataContracts.Access_truffledata$lossless$Sample(narrow).decode(negative);
+    assertThrows(ContractViolation.class, direct::encode);
+    assertThrows(ContractViolation.class, () -> narrow.encode(narrow.decode(negative)));
+    byte[] nested = region(8, negative);
+    var nestedPlan = model(Limits.DEFAULT, 32, nested.length).type(full.name());
+    var child =
+        new TruffleDataContracts.Access_truffledata$lossless$Sample(nestedPlan).decode(nested);
+    assertThrows(ContractViolation.class, child::encode);
+    byte[] packed = region(1, new byte[] {-1, -1, -1, -1, 15});
+    var repeated = model(Limits.DEFAULT, 32, packed.length).type(PREFIX + "RepeatedScalars");
+    var list =
+        new TruffleDataContracts.Access_truffledata$lossless$RepeatedScalars(repeated)
+            .decode(packed);
+    assertThrows(ContractViolation.class, list::encode);
+  }
+
+  @Test
+  void generatedGraphBindingChecksReachableContractsBeforeDecoding() {
+    var root = model().type(PREFIX + "Sample");
+    Map<String, ProtoPlan.Type> definitions = new LinkedHashMap<>();
+    var pending = new ArrayDeque<ProtoPlan>();
+    pending.add(root);
+    while (!pending.isEmpty()) {
+      var plan = pending.removeFirst();
+      if (definitions.putIfAbsent(plan.name(), plan.definition()) != null) continue;
+      for (int i = 0; i < plan.size(); i++)
+        if (plan.field(i).kind().message()) pending.add(plan.nested(i));
+    }
+    var child = Objects.requireNonNull(definitions.get(PREFIX + "Sample.Child"));
+    var fields = new ArrayList<>(child.fields());
+    var f = fields.get(0);
+    fields.set(
+        0,
+        new ProtoPlan.FieldPlan(
+            f.name(),
+            27,
+            f.kind(),
+            f.repeated(),
+            f.map(),
+            f.explicitPresence(),
+            f.required(),
+            f.packed(),
+            f.oneof(),
+            f.typeName(),
+            f.enumType(),
+            f.defaultValue(),
+            f.jsonName()));
+    definitions.put(child.name(), new ProtoPlan.Type(child.name(), child.mapEntry(), fields));
+    var changed =
+        new ProtoPlan.Model(null, List.copyOf(definitions.values()), Limits.DEFAULT, 32, 1000000)
+            .type(root.name());
+    assertTrue(changed.matchesDefinition(root.definition()));
+    assertThrows(
+        ContractViolation.class,
+        () -> new TruffleDataContracts.Access_truffledata$lossless$Sample(changed));
+    // The unchanged recursive graph is accepted and preserves shared child plan identity.
+    var valid =
+        new TruffleDataContracts.Access_truffledata$lossless$Sample(root)
+            .decode(new byte[] {66, 0});
+    assertSame(root.nested(7), ((ProtoAccess) valid.get_child()).plan());
+  }
+
+  @Test
   void concreteGraphStorageRetainsDeclaredScalarWidths() throws Exception {
     var type = TruffleDataContracts.Message_truffledata$lossless$Sample.class;
     assertEquals(int.class, type.getDeclaredField("f0").getType());

@@ -355,8 +355,9 @@ last-key-wins maps. Each graph shares one bounded input cursor. Completed subtre
 retained cell/payload totals, including declared defaults, without revisiting ordinary child
 graphs; maps account for their deduplicated retained entries. Parsing limits also count
 discarded input. Final scalar fields use their declared widths. Read these records through
-direct getters, generated accessors, DataLibrary or interop. Complex records currently use
-the generic encoder; concrete builders and fused projection decoding remain flat-only.
+direct getters, generated accessors, DataLibrary or interop. Generated encoders size and write nested children directly into one bounded output array,
+without intermediate child buffers. Accessor construction checks every reachable generated
+schema before decoding. Concrete builders and fused projection decoding remain flat-only.
 Wider schemas retain generic getters and the generic plan codec. Generated nested children
 can be installed in a generic builder when they belong to the exact same model.
 
