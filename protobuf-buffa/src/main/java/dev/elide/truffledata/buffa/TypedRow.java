@@ -33,6 +33,11 @@ public sealed class TypedRow extends AbstractRow implements ProtoAccess permits 
   }
 
   @Override
+  protected final boolean scoped() {
+    return true;
+  }
+
+  @Override
   public final long getLong(int ordinal) {
     owner.check();
     if (this instanceof ScalarRow scalar) return scalar.scalar(ordinal);

@@ -23,6 +23,9 @@ public final class Values {
   }
 
   public static void requireInterop(Object value) {
+    if (value instanceof AbstractRow row && row.scoped())
+      throw new ContractViolation(
+          "Scoped rows require an explicit snapshot before ownership transfer");
     if (!(value instanceof String
         || value instanceof Long
         || value instanceof Double
@@ -60,11 +63,16 @@ public final class Values {
             case ANY -> true;
           };
       if (!valid) throw violation(field, "type mismatch");
-      // Scoped adapter results may carry borrowed arrays under ANY or ARRAY.
-      // normalize/requireInterop
-      // still reject them, so immutable snapshots cannot silently retain a foreign lease.
-      if (!((field.kind() == Field.Kind.ANY || field.kind() == Field.Kind.ARRAY)
-          && value instanceof BorrowedArray)) requireInterop(value);
+      // Scoped adapters may expose borrowed arrays and rows while their owner is live.
+      // normalize/requireInterop reject ownership transfer without explicit detachment.
+      boolean scopedArray =
+          (field.kind() == Field.Kind.ANY || field.kind() == Field.Kind.ARRAY)
+              && value instanceof BorrowedArray;
+      boolean scopedRow =
+          (field.kind() == Field.Kind.ANY || field.kind() == Field.Kind.RECORD)
+              && value instanceof AbstractRow row
+              && row.scoped();
+      if (!scopedArray && !scopedRow) requireInterop(value);
       validateConstraints(field, value, depth);
     }
     return value;

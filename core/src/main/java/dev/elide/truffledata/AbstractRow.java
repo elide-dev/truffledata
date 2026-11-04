@@ -20,6 +20,15 @@ public abstract class AbstractRow implements TruffleObject {
   }
 
   /**
+   * Whether this row borrows a closable owner. Scoped adapters override this constant predicate;
+   * owned containers reject such rows until the adapter explicitly detaches them. Field validation
+   * can still accept a scoped RECORD/ANY value for guest reads within its owner's lifetime.
+   */
+  protected boolean scoped() {
+    return false;
+  }
+
+  /**
    * Optional transparent immutable backing for host-side payload accounting. The returned storage
    * must have the identical schema and values that DataLibrary reads from this row, including null
    * and missing states. Strict mode checks this cooperation contract. Mutable or transforming

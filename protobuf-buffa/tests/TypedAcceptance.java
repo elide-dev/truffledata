@@ -303,6 +303,52 @@ final class TypedAcceptance {
     }
   }
 
+  private static void scopedRowsRequireDetachmentBeforeEnteringOwnedContainers(BuffaWire decoder) {
+    var p = plan("Sample");
+    ProtoRow detached;
+    Batch retained;
+    try (var compiled = decoder.compile(p, 65536);
+        var message = compiled.parseText("child { a: 7 b: 'owned later' }", NATIVE)) {
+      var row = message.row();
+      var child = (TypedRow) DATA.read(row, p.schema().indexOf("child"));
+      for (Object scoped : List.of(row, child)) {
+        for (Field.Kind kind : List.of(Field.Kind.RECORD, Field.Kind.ANY)) {
+          var field = new Field("row", kind, false, false);
+          // Guest-side contract checking accepts valid scoped values; host ownership does not.
+          Acceptance.check(Values.validate(field, scoped) == scoped, "scoped field validation");
+          Acceptance.rejects(() -> Values.normalize(scoped), ContractViolation.class);
+          Acceptance.rejects(() -> Values.requireInterop(scoped), ContractViolation.class);
+          Acceptance.rejects(() -> new DataArray(new Object[] {scoped}), ContractViolation.class);
+          Acceptance.rejects(() -> DataArray.copyOf(List.of(scoped)), ContractViolation.class);
+          Acceptance.rejects(
+              () ->
+                  Batch.copyOf(
+                      Schema.of(field),
+                      Collections.singletonList(new Object[] {scoped}),
+                      Limits.DEFAULT),
+              ContractViolation.class);
+        }
+      }
+      int ordinal = p.schema().indexOf("child");
+      Acceptance.rejects(() -> p.newBuilder().set(ordinal, child), ContractViolation.class);
+      detached = message.snapshot();
+      retained =
+          Batch.copyOf(
+              Schema.of(new Field("row", Field.Kind.RECORD, false, false)),
+              Collections.singletonList(new Object[] {detached}),
+              Limits.DEFAULT);
+      // Snapshot storage accepts nested detached rows through the same ownership paths.
+      Values.requireInterop(detached);
+      new DataArray(new Object[] {detached});
+    }
+    Acceptance.check(
+        DATA.read(retained.row(0), 0) == detached, "detached ownership survives close");
+    var child = (ProtoRow) detached.get(p.schema().indexOf("child"));
+    Acceptance.check(
+        child.getLong(0) == 7 && child.get(1).equals("owned later"),
+        "nested detached contents survive close");
+  }
+
   static TypedMessage retainedUnicode(BuffaWire decoder) {
     var p = plan("Sample");
     byte[] wire =
@@ -352,6 +398,7 @@ final class TypedAcceptance {
   }
 
   static void run(BuffaWire decoder) throws Exception {
+    scopedRowsRequireDetachmentBeforeEnteringOwnedContainers(decoder);
     unicode(decoder);
     compactScalars(decoder);
     generatedGetters(decoder);

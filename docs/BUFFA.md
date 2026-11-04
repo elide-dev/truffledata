@@ -287,3 +287,11 @@ both dispatch thresholds, eager/lazy reads, input closure and detachment.
 The simdjson adapter is a separate general-JSON integration. Myna's value ABI is
 its foundation; ProtoJSON mappings remain in the protobuf backend. This change
 does not implement the general-JSON parser or the JEP 540 facade.
+
+Scoped rows and arrays must be detached before entering `Batch`, `DataArray`,
+`StaticLayout`, or an owned protobuf builder. `Values.validate` can check scoped
+RECORD/ANY fields during guest execution, while `Values.normalize` and
+`Values.requireInterop` reject ownership transfer. Use the enclosing message's
+`snapshot()` to retain values independently of message closure. Shared JVM/SVM
+tests cover both top-level and nested borrowed rows, rejection by owned containers,
+and detached nested values surviving all source owners.
