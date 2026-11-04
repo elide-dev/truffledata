@@ -12,6 +12,19 @@ import org.junit.jupiter.api.Test;
 
 class CoreTest {
   @Test
+  void listSnapshotsOwnAndValidateTheirElements() {
+    var source = new java.util.ArrayList<Object>(java.util.List.of(7L, "value"));
+    var snapshot = DataArray.copyOf(source);
+    source.set(0, 9L);
+    source.clear();
+    assertEquals(2, snapshot.size());
+    assertEquals(7L, snapshot.get(0));
+    assertEquals("value", snapshot.get(1));
+    assertEquals(0, DataArray.copyOf(java.util.List.of()).size());
+    assertThrows(ContractViolation.class, () -> DataArray.copyOf(java.util.List.of(new Object())));
+  }
+
+  @Test
   void cachedNullableStaticIntegersKeepAbsenceDistinct() {
     try (var context = org.graalvm.polyglot.Context.newBuilder("td-test").build()) {
       context.initialize("td-test");
