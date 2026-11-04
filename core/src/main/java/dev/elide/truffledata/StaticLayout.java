@@ -114,6 +114,11 @@ public final class StaticLayout {
     return storageKinds[index];
   }
 
+  @Idempotent
+  boolean longField(int index) {
+    return schema.field(index).kind() == Field.Kind.INT64;
+  }
+
   StaticProperty property(int index) {
     return properties[index];
   }
@@ -251,20 +256,27 @@ public final class StaticLayout {
           guards = {
             "row.layout() == layout",
             "index == cachedIndex",
-            "layout.schema().requiredLong(cachedIndex)"
+            "layout.longField(cachedIndex)"
           },
           limit = "3")
-      static long required(
+      static long cached(
           Record row,
           int index,
           @Cached("row.layout()") StaticLayout layout,
           @Cached("index") int cachedIndex,
           @Cached("layout.property(cachedIndex)") StaticProperty property,
-          @Cached("layout.storageKind(cachedIndex)") Storage kind) {
+          @Cached("layout.storageKind(cachedIndex)") Storage kind,
+          @Cached("layout.state(cachedIndex)") @Nullable StaticProperty state)
+          throws UnexpectedResultException {
+        if (state != null) {
+          byte status = state.getByte(row.storage);
+          if (status != 0)
+            throw new UnexpectedResultException(status == 1 ? DataNull.INSTANCE : Missing.INSTANCE);
+        }
         return integer(row.storage, property, kind);
       }
 
-      @Specialization(replaces = "required")
+      @Specialization(replaces = "cached")
       @TruffleBoundary
       static long generic(Record row, int index) throws UnexpectedResultException {
         Object value = Read.generic(row, index);

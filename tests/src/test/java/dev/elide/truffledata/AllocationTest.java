@@ -7,6 +7,7 @@ import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.LoopNode;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.object.*;
+import com.oracle.truffle.runtime.OptimizedCallTarget;
 import com.sun.management.ThreadMXBean;
 import java.lang.management.ManagementFactory;
 import java.util.*;
@@ -237,6 +238,7 @@ class AllocationTest {
         assertThrows(
             ContractViolation.class, () -> target.call(layout.create(Missing.INSTANCE), 1));
         assertEquals(1000000L, target.call(row, 1000));
+        check("nullable-static-after-null-and-missing", row, root);
       } finally {
         context.leave();
       }
@@ -473,17 +475,33 @@ class AllocationTest {
   }
 
   private static void check(String label, Object row) {
+    check(label, row, new LoopRoot());
+  }
+
+  private static void check(String label, Object row, LoopRoot root) {
     ThreadMXBean bean = (ThreadMXBean) ManagementFactory.getThreadMXBean();
     assertTrue(
         bean.isThreadAllocatedMemorySupported(),
         "Allocation counters required for this acceptance check");
     bean.setThreadAllocatedMemoryEnabled(true);
-    LoopRoot root = new LoopRoot();
-    var target = root.getCallTarget();
-    for (int i = 0; i < 20; i++) target.call(row, 100000);
+    var target = (OptimizedCallTarget) root.getCallTarget();
+    // Exercise the exact measurement loop before requiring stable final-tier code.
+    // A sticky "compiled once" flag does not detect later deoptimization or tier changes.
+    boolean stable = false;
+    for (int attempt = 0; attempt < 8 && !stable; attempt++) {
+      assertEquals(1000000000L, target.call(row, 1000000));
+      target.compile(true);
+      target.waitForCompilation();
+      assertEquals(1000000000L, target.call(row, 1000000));
+      stable = target.isValidLastTier();
+    }
+    assertTrue(stable, "Allocation warmup must stabilize in the final tier: " + label);
+    root.compiled = false;
     long before = bean.getThreadAllocatedBytes(Thread.currentThread().threadId());
     long result = (Long) target.call(row, 1000000);
     long bytes = bean.getThreadAllocatedBytes(Thread.currentThread().threadId()) - before;
+    assertTrue(target.isValidLastTier(), "Measured allocation sample deoptimized: " + label);
+    assertTrue(root.compiled, "Measured allocation sample must execute compiled code: " + label);
     assertEquals(1000000000L, result);
     double perRead = bytes / 1000000.0;
     System.out.printf("ALLOCATION %s %.6f bytes/read compiled=%s%n", label, perRead, root.compiled);
