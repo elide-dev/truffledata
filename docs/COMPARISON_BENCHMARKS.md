@@ -457,3 +457,46 @@ hash, executable hash and implementation revision. The [validation and measureme
 passed native/fallback tests, both published native consumers, comparison smoke and the full
 matrix; the [repeat](https://app.buildbuddy.io/invocation/591882d2-8724-4140-ae77-4373b7b52dfe)
 uses the same executable revision. Release 0.4.0 charts above remain unchanged.
+
+## Generated graph decoding and scalar serialization
+
+The unreleased [`9e0736a` run](../benchmarks/results/svm-comparison-9e0736a/comparison.json)
+adds schema 11: 120 cells, including concrete generated nested/repeated decoding, full
+consumption of the mixed message, and matched mixed-message serialization for every engine.
+Each cell has three timing forks and three separate allocation forks. This is one complete
+run on shared hardware; the process ranges overlap in some cases, so the small differences
+need repeat measurements. Earlier raw results and charts remain available above.
+
+| Operation | Stock | Generated owned | Stock / generated Java bytes |
+| --- | ---: | ---: | ---: |
+| Scalar ingestion | 95.90 ns | 39.40 ns | 136 / 88 |
+| Scalar interpreter reads | 2.71 ns | 2.03 ns | 2 / 2 |
+| Scalar peak reads | 1.83 ns | 1.80 ns | 1 / 1 |
+| Scalar serialization | 33.44 ns | 21.93 ns | 56 / 24 |
+| Scalar parse/project, peak | 67.97 ns | 13.81 ns | 137 / 1 |
+| Nested ingestion, full consumption | 1.30 µs | 1.08 µs | 1776.75 / 1895 |
+| Nested serialization | 0.96 µs | 4.07 µs | 436.50 / 1130.50 |
+
+Concrete generated decoders remove the generic row construction path for nested/repeated
+messages. In this run, generic owned full-consumption ingestion takes 17.67 µs and Buffa
+takes 7.24 µs; the generated path takes 1.08 µs. It is close to stock in time, but allocates
+6.7% more Java heap. It does not establish a win for generic decoding or borrowed views.
+Nested generated records still use the generic serializer, which remains a clear gap.
+
+The specialized scalar serializer now caches encoded size and writes directly into an
+exact-size output array. Serialization allocation falls from 40 to 24 bytes per message.
+The size cache adds eight bytes to the retained scalar record on this SVM layout, so
+scalar ingestion rises from 80 to 88 bytes. Peak retained reads are effectively tied.
+
+[Validation and measurement](https://app.buildbuddy.io/invocation/0b656af7-5f01-4e01-9c2e-371b437dec75)
+passes JVM tests, comparison smoke, the 120-cell SVM measurement, and the full native
+access matrix (511 cases). Generated guest reads pass fatal performance warnings,
+blocklist checks, the 10,000 graph-size budget, and the retained-read allocation gate.
+Shape-specific comparison roots and class-profiled interface receivers are required for
+SVM compilation; the failed preceding run is not presented as a completed matrix.
+The separate protobuf-free native consumer also passed before this measurement.
+
+SQL decoder wrappers and stock's aliased-byte decoder still expose overhead to address;
+the objective of matching stock across the supported contexts is not complete. Native
+allocation remains outside the Java heap counters. See the raw report for every case,
+process range, and borrowing/copying distinction.

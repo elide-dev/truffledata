@@ -81,7 +81,24 @@ public final class GeneratedGraphInput {
     return new Footprint(budget.cellCount(), budget.byteCount());
   }
 
-  public record Footprint(long cells, long bytes) {}
+  /** A validated retained footprint; only this cursor can construct one. */
+  public static final class Footprint {
+    private final long cells;
+    private final long bytes;
+
+    private Footprint(long cells, long bytes) {
+      this.cells = cells;
+      this.bytes = bytes;
+    }
+
+    public long cells() {
+      return cells;
+    }
+
+    public long bytes() {
+      return bytes;
+    }
+  }
 
   public int tag() {
     long tag = varint();

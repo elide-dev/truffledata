@@ -143,9 +143,11 @@ builders and codecs. Buffa scalar decoding uses fixed native results without all
 an index, and typed messages own their lifetimes directly.
 
 The development comparison adds direct generated-record reads, serialization and fused
-parse/project cases. In two runs, generated scalar ingestion used **80 Java bytes** versus
-stock's **136**; Buffa used **112**, or **80** through generated access. Stock still leads
-some operations. These changes are **unreleased** and are not included in the 0.4.0 artifacts.
+parse/project cases. The latest run puts generated nested full-consumption decoding at
+**1.08 µs versus stock’s 1.30 µs**, with **1,895 versus 1,777 Java bytes**. Generated scalar
+serialization measures **21.9 ns / 24 bytes versus stock’s 33.4 ns / 56 bytes**. These are
+short shared-runner measurements; generic decoding and nested serialization still lag stock.
+These changes are **unreleased** and are not included in the 0.4.0 artifacts.
 
 <details>
 <summary>Development parse/project results and implementation scope</summary>
@@ -155,8 +157,9 @@ some operations. These changes are **unreleased** and are not included in the 0.
 See [both full runs and caveats](docs/COMPARISON_BENCHMARKS.md#measured-independent-runtime-development-snapshot)
 and the [independent runtime API and current limits](docs/CONTRACTS.md#independent-protobuf-runtime-unreleased).
 Concrete generated binary decoders now cover nested/repeated schemas when every reachable
-message has at most 64 fields. Their performance is not included in the charts above yet.
-Editions, extensions and MessageSet remain unsupported.
+message has at most 64 fields. See the [new 120-cell graph/serialization run and remaining gaps](docs/COMPARISON_BENCHMARKS.md#generated-graph-decoding-and-scalar-serialization);
+the graphics above retain their earlier measured revisions. Editions, extensions and
+MessageSet remain unsupported.
 
 </details>
 

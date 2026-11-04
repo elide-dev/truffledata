@@ -494,8 +494,24 @@ final class TypedAcceptance {
       }
     }
     if (decoder.selected() != BuffaWire.Selected.JAVA) {
+      // This is a data-budget test. Unrelated generated fixtures must not exhaust the
+      // descriptor budget before any data is decoded.
+      Map<String, ProtoPlan.Type> definitions = new LinkedHashMap<>();
+      var pending = new ArrayDeque<ProtoPlan>();
+      pending.add(plan("Sample"));
+      while (!pending.isEmpty()) {
+        var current = pending.removeFirst();
+        if (definitions.putIfAbsent(current.name(), current.definition()) != null) continue;
+        for (int i = 0; i < current.size(); i++)
+          if (current.field(i).kind().message()) pending.add(current.nested(i));
+      }
       var limited =
-          TruffleDataContracts.create(null, new Limits(1024, 256, 70, 10000), 32, 10000)
+          new ProtoPlan.Model(
+                  null,
+                  List.copyOf(definitions.values()),
+                  new Limits(1024, 256, 70, 10000),
+                  32,
+                  10000)
               .type("truffledata.lossless.Sample");
       byte[] wire = new byte[50];
       StringBuilder text = new StringBuilder();
@@ -510,6 +526,9 @@ final class TypedAcceptance {
       }
       try (var compiled = decoder.compile(limited, 65536);
           var input = decoder.allocate(wire.length).put(wire)) {
+        try (var accepted = compiled.parseText("children {key: 'a'}", NATIVE)) {
+          Acceptance.check(accepted.row().getSize(6) == 1, "small map fits retained data budget");
+        }
         Acceptance.rejects(() -> compiled.decode(input, NATIVE), ContractViolation.class);
         Acceptance.rejects(
             () -> compiled.parseText(text.toString(), NATIVE), ContractViolation.class);
