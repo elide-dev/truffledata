@@ -72,6 +72,7 @@ final class CompiledReads {
       context.enter();
       try {
         generatedReads(decoder);
+        nonconstantLayouts();
         try (var plan = decoder.compile(TypedAcceptance.plan("Sample"), 65536)) {
           for (int format = 0; format < 3; format++) {
             try (var typedInput = decoder.allocate(3).put(new byte[] {26, 1, (byte) 255});
@@ -174,6 +175,56 @@ final class CompiledReads {
       } finally {
         context.leave();
       }
+    }
+  }
+
+  private static void nonconstantLayouts() {
+    var schema =
+        Schema.of(
+            Field.integer("n", 32, true, false, false),
+            new Field("d", Field.Kind.FLOAT64, false, false),
+            new Field("b", Field.Kind.BOOLEAN, false, false));
+    var first = new StaticLayout(TestLanguage.current(), schema, Limits.DEFAULT);
+    var second = new StaticLayout(TestLanguage.current(), schema, Limits.DEFAULT);
+    var firstRow = first.create(1000L, 1.5, true);
+    var secondRow = second.create(2000L, 2.5, false);
+    var root = new LayoutRoot();
+    var target = root.getCallTarget();
+    for (int i = 0; i < 200 && !root.compiled; i++) {
+      target.call(first, firstRow, 100000);
+      target.call(second, secondRow, 100000);
+    }
+    Acceptance.check(root.compiled, "nonconstant static layouts compiled");
+    Acceptance.check(
+        ((Long) target.call(first, firstRow, 1000)) == 2002000L, "first runtime layout");
+    Acceptance.check(
+        ((Long) target.call(second, secondRow, 1000)) == 4002000L, "second runtime layout");
+    Acceptance.rejects(() -> target.call(first, secondRow, 1), ContractViolation.class);
+    Acceptance.check(NodeUtil.countNodes(root) <= 192, "runtime layout AST budget");
+  }
+
+  private static final class LayoutRoot extends RootNode {
+    boolean compiled;
+
+    LayoutRoot() {
+      super(TestLanguage.current());
+    }
+
+    @Override
+    public Object execute(VirtualFrame frame) {
+      var layout = (StaticLayout) frame.getArguments()[0];
+      var row = (StaticLayout.Record) frame.getArguments()[1];
+      int count = (Integer) frame.getArguments()[2];
+      long sum = 0;
+      for (int i = 0; i < count; i++)
+        sum +=
+            (Long) layout.get(row, 0)
+                + layout.getLong(row, 0)
+                + (long) layout.getDouble(row, 1)
+                + (layout.getBoolean(row, 2) ? 1 : 0);
+      if (CompilerDirectives.inInterpreter()) LoopNode.reportLoopCount(this, count);
+      compiled |= CompilerDirectives.inCompiledCode();
+      return sum;
     }
   }
 
