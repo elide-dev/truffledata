@@ -1,0 +1,322 @@
+{
+  "revision": "ed52cde",
+  "diagnostic_only": true,
+  "invocation": "https://app.buildbuddy.io/invocation/ce705726-9b7c-4f28-8b99-9736a3453944",
+  "notes": [
+    "Recording off for these timings; one fresh process per fork, three samples per process.",
+    "Independent shared RBE executions; CPU model not captured. Do not infer isolated GC pause cost.",
+    "JFR profiles are safepoint-biased; allocation samples are not exact byte counters."
+  ],
+  "collectors": {
+    "serial": {
+      "binary_sha256": "bf45c189e1e2cc737237f4e7cb8efe462ab272b77e548a59c3df6669750c0f1f",
+      "engines": {
+        "stock": {
+          "forks": [
+            {
+              "workload": "proto-mixed",
+              "engine": "stock",
+              "stage": "ingest",
+              "runtime": "svm",
+              "backend": "none",
+              "guest_compiled": false,
+              "rows": 32,
+              "checksum": 563,
+              "ns_per_row": [
+                24475.9453125,
+                24288.026909722223,
+                25900.89208984375
+              ]
+            },
+            {
+              "workload": "proto-mixed",
+              "engine": "stock",
+              "stage": "ingest",
+              "runtime": "svm",
+              "backend": "none",
+              "guest_compiled": false,
+              "rows": 32,
+              "checksum": 563,
+              "ns_per_row": [
+                1117.90390625,
+                983.2806218592965,
+                991.2371172664141
+              ]
+            },
+            {
+              "workload": "proto-mixed",
+              "engine": "stock",
+              "stage": "ingest",
+              "runtime": "svm",
+              "backend": "none",
+              "guest_compiled": false,
+              "rows": 32,
+              "checksum": 563,
+              "ns_per_row": [
+                1575.1775768649193,
+                1684.5739156788793,
+                1635.6831705729167
+              ]
+            }
+          ],
+          "median_ns_per_row": 1635.6831705729167
+        },
+        "owned": {
+          "forks": [
+            {
+              "workload": "proto-mixed",
+              "engine": "owned",
+              "stage": "ingest",
+              "runtime": "svm",
+              "backend": "none",
+              "guest_compiled": false,
+              "rows": 32,
+              "checksum": 563,
+              "ns_per_row": [
+                14481.05943080357,
+                12050.323759191177,
+                11201.1953125
+              ]
+            },
+            {
+              "workload": "proto-mixed",
+              "engine": "owned",
+              "stage": "ingest",
+              "runtime": "svm",
+              "backend": "none",
+              "guest_compiled": false,
+              "rows": 32,
+              "checksum": 563,
+              "ns_per_row": [
+                15560.279146634615,
+                18434.413707386364,
+                19393.709517045456
+              ]
+            },
+            {
+              "workload": "proto-mixed",
+              "engine": "owned",
+              "stage": "ingest",
+              "runtime": "svm",
+              "backend": "none",
+              "guest_compiled": false,
+              "rows": 32,
+              "checksum": 563,
+              "ns_per_row": [
+                17506.934244791668,
+                16978.519205729168,
+                18920.83984375
+              ]
+            }
+          ],
+          "median_ns_per_row": 17506.934244791668
+        },
+        "buffa": {
+          "forks": [
+            {
+              "workload": "proto-mixed",
+              "engine": "buffa",
+              "stage": "ingest",
+              "runtime": "svm",
+              "backend": "SVM_STATIC",
+              "guest_compiled": false,
+              "rows": 32,
+              "checksum": 563,
+              "ns_per_row": [
+                7393.012731481482,
+                4739.210193452381,
+                7019.437779017857
+              ]
+            },
+            {
+              "workload": "proto-mixed",
+              "engine": "buffa",
+              "stage": "ingest",
+              "runtime": "svm",
+              "backend": "SVM_STATIC",
+              "guest_compiled": false,
+              "rows": 32,
+              "checksum": 563,
+              "ns_per_row": [
+                5304.422402871622,
+                3838.841375612745,
+                3724.681235259434
+              ]
+            },
+            {
+              "workload": "proto-mixed",
+              "engine": "buffa",
+              "stage": "ingest",
+              "runtime": "svm",
+              "backend": "SVM_STATIC",
+              "guest_compiled": false,
+              "rows": 32,
+              "checksum": 563,
+              "ns_per_row": [
+                8670.21824048913,
+                5245.887129934211,
+                4245.699551196809
+              ]
+            }
+          ],
+          "median_ns_per_row": 5245.887129934211
+        }
+      }
+    },
+    "epsilon": {
+      "binary_sha256": "6a4907782471e5add787fe328d505c2720ed4cbc5c7248ac1d9cd50c27b91d68",
+      "engines": {
+        "stock": {
+          "forks": [
+            {
+              "workload": "proto-mixed",
+              "engine": "stock",
+              "stage": "ingest",
+              "runtime": "svm",
+              "backend": "none",
+              "guest_compiled": false,
+              "rows": 32,
+              "checksum": 563,
+              "ns_per_row": [
+                26792.60595703125,
+                23374.6171875,
+                23245.55295138889
+              ]
+            },
+            {
+              "workload": "proto-mixed",
+              "engine": "stock",
+              "stage": "ingest",
+              "runtime": "svm",
+              "backend": "none",
+              "guest_compiled": false,
+              "rows": 32,
+              "checksum": 563,
+              "ns_per_row": [
+                25355.525390625,
+                27275.509765625,
+                32769.096354166664
+              ]
+            },
+            {
+              "workload": "proto-mixed",
+              "engine": "stock",
+              "stage": "ingest",
+              "runtime": "svm",
+              "backend": "none",
+              "guest_compiled": false,
+              "rows": 32,
+              "checksum": 563,
+              "ns_per_row": [
+                22424.947916666668,
+                24082.222222222223,
+                24308.394097222223
+              ]
+            }
+          ],
+          "median_ns_per_row": 24082.222222222223
+        },
+        "owned": {
+          "forks": [
+            {
+              "workload": "proto-mixed",
+              "engine": "owned",
+              "stage": "ingest",
+              "runtime": "svm",
+              "backend": "none",
+              "guest_compiled": false,
+              "rows": 32,
+              "checksum": 563,
+              "ns_per_row": [
+                24327.28342013889,
+                28369.35770089286,
+                16912.079427083332
+              ]
+            },
+            {
+              "workload": "proto-mixed",
+              "engine": "owned",
+              "stage": "ingest",
+              "runtime": "svm",
+              "backend": "none",
+              "guest_compiled": false,
+              "rows": 32,
+              "checksum": 563,
+              "ns_per_row": [
+                14136.13560267857,
+                16934.967447916668,
+                18143.549360795456
+              ]
+            },
+            {
+              "workload": "proto-mixed",
+              "engine": "owned",
+              "stage": "ingest",
+              "runtime": "svm",
+              "backend": "none",
+              "guest_compiled": false,
+              "rows": 32,
+              "checksum": 563,
+              "ns_per_row": [
+                13603.041145833333,
+                12179.286994485294,
+                12084.284696691177
+              ]
+            }
+          ],
+          "median_ns_per_row": 16934.967447916668
+        },
+        "buffa": {
+          "forks": [
+            {
+              "workload": "proto-mixed",
+              "engine": "buffa",
+              "stage": "ingest",
+              "runtime": "svm",
+              "backend": "SVM_STATIC",
+              "guest_compiled": false,
+              "rows": 32,
+              "checksum": 563,
+              "ns_per_row": [
+                7161.544921875,
+                4795.650724085366,
+                5812.664508928571
+              ]
+            },
+            {
+              "workload": "proto-mixed",
+              "engine": "buffa",
+              "stage": "ingest",
+              "runtime": "svm",
+              "backend": "SVM_STATIC",
+              "guest_compiled": false,
+              "rows": 32,
+              "checksum": 563,
+              "ns_per_row": [
+                4746.228329613095,
+                4315.166355298913,
+                7537.2536057692305
+              ]
+            },
+            {
+              "workload": "proto-mixed",
+              "engine": "buffa",
+              "stage": "ingest",
+              "runtime": "svm",
+              "backend": "SVM_STATIC",
+              "guest_compiled": false,
+              "rows": 32,
+              "checksum": 563,
+              "ns_per_row": [
+                6225.11962890625,
+                4384.548611111111,
+                9785.08984375
+              ]
+            }
+          ],
+          "median_ns_per_row": 5812.664508928571
+        }
+      }
+    }
+  }
+}

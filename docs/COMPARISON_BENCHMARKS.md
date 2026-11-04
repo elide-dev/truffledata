@@ -251,3 +251,16 @@ Use `jfr print --json --stack-depth 128 --events jdk.ExecutionSample,jdk.ObjectA
 to inspect a recording, filtering stacks to `Comparison$Fixture.ingest` when
 attributing ingestion costs rather than setup. Native Rust internals may not be
 resolved by the Java stack sampler.
+
+The first paired GC probe is recorded in `benchmarks/results/svm-gc-probe-ed52cde`.
+Both targets pass. Recording-off median ingestion times (Serial / Epsilon) were
+1.64 / 24.08 µs for stock, 17.51 / 16.93 µs for owned, and 5.25 / 5.81 µs for Buffa.
+Stock's Serial forks ranged from 0.99 to 24.48 µs, so this is diagnostic evidence,
+not an isolated measurement of collector pause cost or a production win under Epsilon.
+The profiler cannot provide unbiased CPU percentages with this Truffle runtime.
+
+Run `python3 tools/bench/profile_summary.py RECORDING_DIRECTORY` to reproduce
+summaries with source recording hashes, sample counts, ingestion filtering, and a
+safepoint-dominance flag. The raw JFR files remain test artifacts in the linked
+BuildBuddy invocation; the repository stores summaries and full recording-off timing
+samples. No recording's absence of allocation samples is interpreted as zero allocation.
