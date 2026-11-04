@@ -42,6 +42,34 @@ class ProtoNativeTest {
   }
 
   @Test
+  void decodedOwnershipDoesNotAliasInputsOrPublicBuilders() {
+    var plan = plan("truffledata.lossless.Sample");
+    int ordinal = plan.schema().indexOf("explicit_count");
+    var builder = plan.newBuilder().set(ordinal, 0L);
+    var first = builder.build();
+    builder.clear(ordinal);
+    var second = builder.build();
+    assertTrue(first.has(ordinal));
+    assertFalse(second.has(ordinal));
+
+    byte[] known = plan.encode(first);
+    byte[] wire = Arrays.copyOf(known, known.length + 3);
+    // Unknown varint field 100 is owned by the decoded result, just like known values.
+    wire[known.length] = (byte) 0xa0;
+    wire[known.length + 1] = 6;
+    wire[known.length + 2] = 42;
+    for (boolean buffer : List.of(false, true)) {
+      byte[] input = wire.clone();
+      ProtoRow decoded = buffer ? plan.decode(java.nio.ByteBuffer.wrap(input)) : plan.decode(input);
+      byte[] encoded = plan.encode(decoded);
+      Arrays.fill(input, (byte) 0);
+      assertTrue(decoded.has(ordinal));
+      assertArrayEquals(wire, encoded);
+      assertArrayEquals(encoded, plan.encode(decoded));
+    }
+  }
+
+  @Test
   void compactIntegerRowsMatchGeneralDecoderAndGeneratedMessages() throws Exception {
     var descriptor = Timestamp.getDescriptor();
     var plan = ProtoCompiler.compile(null, descriptor, Limits.DEFAULT, 8, WIRE_LIMIT);

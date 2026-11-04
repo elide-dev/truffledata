@@ -141,7 +141,7 @@ final class ProtoCodec {
       if (unknown != null) builder.unknown = unknown.toByteArray();
       // The reader has charged allocations and depth before materialization; validate aggregate
       // too.
-      return builder.build();
+      return builder.buildDecoded();
     }
   }
 
