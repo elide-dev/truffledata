@@ -395,6 +395,26 @@ final class TypedAcceptance {
         }
       }
     }
+    String text = "中😀".repeat(64);
+    byte[] wire = p.encode(p.newBuilder().set(0, text).build());
+    for (long bytes : new long[] {2L * text.length(), 2L * text.length() - 1}) {
+      var bounded =
+          new ProtoPlan.Model(
+                  null,
+                  List.of(new ProtoPlan.Type("Unicode", false, List.of(field))),
+                  new Limits(1, 1, 2, bytes),
+                  8,
+                  1000000)
+              .type("Unicode");
+      try (var compiled = decoder.compile(bounded, 65536);
+          var input = decoder.allocate(wire.length).put(wire)) {
+        if (bytes == 2L * text.length()) {
+          try (var parsed = compiled.decode(input, NATIVE)) {
+            Acceptance.check(parsed.row().get(0).equals(text), "exact UTF-16 payload budget");
+          }
+        } else Acceptance.rejects(() -> compiled.decode(input, NATIVE), ContractViolation.class);
+      }
+    }
   }
 
   static void run(BuffaWire decoder) throws Exception {
