@@ -21,53 +21,46 @@ final class ScalarRow extends TypedRow {
     this.second = second;
   }
 
-  private long scalar(int index) {
+  long scalar(int index) {
     Objects.checkIndex(index, descriptor.size());
     return index == 0 ? first : second;
   }
 
-  @Override
-  public Object get(int ordinal) {
-    return getLong(ordinal);
-  }
-
-  @Override
-  public long getLong(int ordinal) {
-    owner.check();
-    return scalar(ordinal);
-  }
-
-  @Override
   @ExportMessage
-  Object read(
-      int index, @Cached.Shared("owner") @Cached("create()") WireMessage.CheckOpenNode check) {
-    check.execute(owner);
-    return scalar(index);
+  static Object read(
+      ScalarRow row,
+      int index,
+      @Cached.Shared("owner") @Cached("create()") WireMessage.CheckOpenNode check) {
+    check.execute(row.owner);
+    return row.scalar(index);
   }
 
-  @Override
   @ExportMessage
-  long readLong(
-      int index, @Cached.Shared("owner") @Cached("create()") WireMessage.CheckOpenNode check) {
-    check.execute(owner);
-    return scalar(index);
+  static long readLong(
+      ScalarRow row,
+      int index,
+      @Cached.Shared("owner") @Cached("create()") WireMessage.CheckOpenNode check) {
+    check.execute(row.owner);
+    return row.scalar(index);
   }
 
-  @Override
   @ExportMessage
-  double readDouble(
-      int index, @Cached.Shared("owner") @Cached("create()") WireMessage.CheckOpenNode check)
+  static double readDouble(
+      ScalarRow row,
+      int index,
+      @Cached.Shared("owner") @Cached("create()") WireMessage.CheckOpenNode check)
       throws UnexpectedResultException {
-    check.execute(owner);
-    throw new UnexpectedResultException(scalar(index));
+    check.execute(row.owner);
+    throw new UnexpectedResultException(row.scalar(index));
   }
 
-  @Override
   @ExportMessage
-  boolean readBoolean(
-      int index, @Cached.Shared("owner") @Cached("create()") WireMessage.CheckOpenNode check)
+  static boolean readBoolean(
+      ScalarRow row,
+      int index,
+      @Cached.Shared("owner") @Cached("create()") WireMessage.CheckOpenNode check)
       throws UnexpectedResultException {
-    check.execute(owner);
-    throw new UnexpectedResultException(scalar(index));
+    check.execute(row.owner);
+    throw new UnexpectedResultException(row.scalar(index));
   }
 }

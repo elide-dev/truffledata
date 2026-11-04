@@ -35,32 +35,33 @@ public sealed class TypedRow extends AbstractRow implements ProtoAccess permits 
   }
 
   @Override
-  public long getLong(int ordinal) {
+  public final long getLong(int ordinal) {
     owner.check();
+    if (this instanceof ScalarRow scalar) return scalar.scalar(ordinal);
     Object value = values[ordinal];
     if (value instanceof Long number) return number;
     throw new ContractViolation("Expected INT64");
   }
 
-  public ProtoPlan plan() {
+  public final ProtoPlan plan() {
     return plan;
   }
 
-  public boolean has(int ordinal) {
+  public final boolean has(int ordinal) {
     owner.check();
     Objects.checkIndex(ordinal, descriptor.size());
     return present(ordinal);
   }
 
   @Override
-  public Object get(int ordinal) {
+  public final Object get(int ordinal) {
     owner.check();
     Objects.checkIndex(ordinal, descriptor.size());
-    return resolved(ordinal);
+    return this instanceof ScalarRow scalar ? scalar.scalar(ordinal) : resolved(ordinal);
   }
 
   @Override
-  public int getSize(int ordinal) {
+  public final int getSize(int ordinal) {
     Object value = get(ordinal);
     if (value instanceof TypedArray array) return array.size();
     if (value instanceof BorrowedBytes bytes) return bytes.size();
@@ -78,38 +79,46 @@ public sealed class TypedRow extends AbstractRow implements ProtoAccess permits 
   }
 
   @ExportMessage
-  Object read(
-      int index, @Cached.Shared("owner") @Cached("create()") WireMessage.CheckOpenNode check) {
-    check.execute(owner);
-    return resolved(index);
+  static Object read(
+      TypedRow row,
+      int index,
+      @Cached.Shared("owner") @Cached("create()") WireMessage.CheckOpenNode check) {
+    check.execute(row.owner);
+    return row.resolved(index);
   }
 
   @ExportMessage
-  long readLong(
-      int index, @Cached.Shared("owner") @Cached("create()") WireMessage.CheckOpenNode check)
+  static long readLong(
+      TypedRow row,
+      int index,
+      @Cached.Shared("owner") @Cached("create()") WireMessage.CheckOpenNode check)
       throws UnexpectedResultException {
-    check.execute(owner);
-    Object value = values[index];
+    check.execute(row.owner);
+    Object value = row.values[index];
     if (value instanceof Long number) return number;
-    throw new UnexpectedResultException(resolved(index));
+    throw new UnexpectedResultException(row.resolved(index));
   }
 
   @ExportMessage
-  double readDouble(
-      int index, @Cached.Shared("owner") @Cached("create()") WireMessage.CheckOpenNode check)
+  static double readDouble(
+      TypedRow row,
+      int index,
+      @Cached.Shared("owner") @Cached("create()") WireMessage.CheckOpenNode check)
       throws UnexpectedResultException {
-    check.execute(owner);
-    Object value = resolved(index);
+    check.execute(row.owner);
+    Object value = row.resolved(index);
     if (value instanceof Double number) return number;
     throw new UnexpectedResultException(value);
   }
 
   @ExportMessage
-  boolean readBoolean(
-      int index, @Cached.Shared("owner") @Cached("create()") WireMessage.CheckOpenNode check)
+  static boolean readBoolean(
+      TypedRow row,
+      int index,
+      @Cached.Shared("owner") @Cached("create()") WireMessage.CheckOpenNode check)
       throws UnexpectedResultException {
-    check.execute(owner);
-    Object value = resolved(index);
+    check.execute(row.owner);
+    Object value = row.resolved(index);
     if (value instanceof Boolean flag) return flag;
     throw new UnexpectedResultException(value);
   }
