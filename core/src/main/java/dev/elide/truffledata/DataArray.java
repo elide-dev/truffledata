@@ -13,7 +13,15 @@ public final class DataArray implements TruffleObject {
     for (Object v : (Object[]) this.values) Values.requireInterop(v);
   }
 
-  private DataArray(byte[] owned) {
+  /** Copy normalized collection elements into owned storage without an intermediate array. */
+  public static DataArray copyOf(java.util.Collection<?> source) {
+    // Collection.toArray guarantees a fresh array owned by its caller.
+    Object[] owned = source.toArray();
+    for (Object value : owned) Values.requireInterop(value);
+    return new DataArray((Object) owned);
+  }
+
+  private DataArray(Object owned) {
     values = owned;
   }
 

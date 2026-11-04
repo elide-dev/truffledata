@@ -121,18 +121,22 @@ final class ProtoCodec {
         var field = builder.plan.field(i);
         if (values[i] instanceof State nested) values[i] = nested.finish();
         else if (values[i] instanceof List<?> items) {
-          Object[] frozen = new Object[items.size()];
-          for (int j = 0; j < frozen.length; j++) {
-            Object item = items.get(j);
-            frozen[j] = item instanceof State nested ? nested.finish() : item;
+          // This list belongs only to this decoder. Finish nested values in place, then
+          // copy directly into the immutable sequence instead of cloning a staging array.
+          @SuppressWarnings("unchecked")
+          List<Object> finished = (List<Object>) items;
+          for (int j = 0; j < finished.size(); j++) {
+            Object item = finished.get(j);
+            if (item instanceof State nested) finished.set(j, nested.finish());
           }
           if (field.map()) {
             Map<Object, Object> entries = new LinkedHashMap<>();
             var data = DataLibrary.factory().getUncached();
-            for (Object entry : frozen) entries.put(ProtoRow.mapKey(data.read(entry, 0)), entry);
-            frozen = entries.values().toArray();
+            for (Object entry : finished) entries.put(ProtoRow.mapKey(data.read(entry, 0)), entry);
+            values[i] = DataArray.copyOf(entries.values());
+          } else {
+            values[i] = DataArray.copyOf(finished);
           }
-          values[i] = new DataArray(frozen);
         }
         if (!field.explicitPresence()) builder.present[i] = ProtoRow.nonDefault(field, values[i]);
         if (field.required() && !builder.present[i])
