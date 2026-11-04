@@ -12,6 +12,25 @@ import org.junit.jupiter.api.Test;
 
 class CoreTest {
   @Test
+  void cachedNullableStaticIntegersKeepAbsenceDistinct() {
+    try (var context = org.graalvm.polyglot.Context.newBuilder("td-test").build()) {
+      context.initialize("td-test");
+      context.enter();
+      try {
+        var schema = Schema.of(Field.integer("n", 32, true, true, true));
+        var layout = new StaticLayout(TestLanguage.current().language(), schema, Limits.DEFAULT);
+        var target = new ReadRoot().getCallTarget();
+        assertEquals(1000L, target.call(layout.create(1000L)));
+        assertThrows(ContractViolation.class, () -> target.call(layout.create(DataNull.INSTANCE)));
+        assertThrows(ContractViolation.class, () -> target.call(layout.create(Missing.INSTANCE)));
+        assertEquals(-1000L, target.call(layout.create(-1000L)));
+      } finally {
+        context.leave();
+      }
+    }
+  }
+
+  @Test
   void cumulativeBudgetSharesThePayloadWalkAndDoesNotReset() {
     var nested = new UncheckedRow(new Field("s", Field.Kind.STRING, false, false), "abc");
     var schema = Schema.of(new Field("row", Field.Kind.RECORD, false, false));

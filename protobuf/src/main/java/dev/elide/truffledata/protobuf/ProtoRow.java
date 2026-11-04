@@ -29,7 +29,8 @@ public final class ProtoRow extends AbstractRow {
 
   final byte[] unknown;
 
-  ProtoRow(ProtoPlan plan, Object[] values, boolean[] present, byte[] unknown) {
+  private ProtoRow(
+      ProtoPlan plan, Object[] values, boolean[] present, byte[] unknown, boolean owned) {
     super(plan.schema());
     this.plan = plan;
     if (plan.compactScalars) {
@@ -40,9 +41,9 @@ public final class ProtoRow extends AbstractRow {
       this.present = null;
     } else {
       storage = plan.storage(values);
-      this.present = present.clone();
+      this.present = owned ? present : present.clone();
     }
-    this.unknown = unknown.length == 0 ? NO_UNKNOWN_FIELDS : unknown.clone();
+    this.unknown = unknown.length == 0 ? NO_UNKNOWN_FIELDS : owned ? unknown : unknown.clone();
   }
 
   /** Only the bounded scalar decoder calls this constructor after validating wire values. */
@@ -193,8 +194,17 @@ public final class ProtoRow extends AbstractRow {
       return this;
     }
 
-    @TruffleBoundary
     public ProtoRow build() {
+      return build(false);
+    }
+
+    /** Internal decoder-only transfer: the caller must never reuse or expose this builder. */
+    ProtoRow buildDecoded() {
+      return build(true);
+    }
+
+    @TruffleBoundary
+    private ProtoRow build(boolean owned) {
       if (plan.definition().mapEntry()
           && plan.field(1).kind().message()
           && values[1] == Missing.INSTANCE) {
@@ -204,7 +214,7 @@ public final class ProtoRow extends AbstractRow {
         present[1] = true;
       }
       check(new Budget(plan.model.limits), 1);
-      return new ProtoRow(plan, values, present, unknown);
+      return new ProtoRow(plan, values, present, unknown, owned);
     }
 
     private void check(Budget budget, int depth) {
@@ -264,8 +274,15 @@ public final class ProtoRow extends AbstractRow {
         if (depth >= maxDepth) throw new ContractViolation("Protobuf nesting budget exceeded");
         cells(row.plan.size());
         bytes(row.unknown.length);
-        var data = DataLibrary.factory().getUncached();
-        for (int i = 0; i < row.plan.size(); i++) value(data.read(row, i), depth + 1, maxDepth);
+        // Owned storage is immutable and has a fixed export class. Avoid redispatching through
+        // the guest-facing ProtoRow facade for each field in this host-side accounting walk.
+        // Compact rows contain only primitive integers, so have no nested or string payload.
+        if (!row.compact()) {
+          Object storage = row.storage;
+          var data = DataLibrary.factory().getUncached(storage);
+          for (int i = 0; i < row.plan.size(); i++)
+            value(data.read(storage, i), depth + 1, maxDepth);
+        }
       }
     }
   }
