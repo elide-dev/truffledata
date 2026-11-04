@@ -1,30 +1,151 @@
-# TruffleData
+![TruffleData — Schema-aware data access for GraalVM Truffle](docs/images/truffledata-banner.svg)
 
-An embeddable, query-informed data runtime for Elide. Databases execute SQL; this project does not parse SQL, plan queries, or translate guest callbacks into queries.
+[![CI](https://github.com/elide-dev/truffledata/actions/workflows/ci.yml/badge.svg)](https://github.com/elide-dev/truffledata/actions/workflows/ci.yml)
+[![Codecov](https://codecov.io/gh/elide-dev/truffledata/graph/badge.svg)](https://app.codecov.io/gh/elide-dev/truffledata)
+[![CodSpeed](https://img.shields.io/endpoint?url=https://codspeed.io/badge.json%3Frepository%3Delide-dev/truffledata)](https://codspeed.io/elide-dev/truffledata)
+[![Release](https://img.shields.io/github/v/release/elide-dev/truffledata)](https://github.com/elide-dev/truffledata/releases)
+[![Java 25](https://img.shields.io/badge/Java-25-blue)](https://www.graalvm.org/)
 
-The adapter supplies a result schema, optionally refined by an application contract. Ingestion validates that contract before exposing immutable batch rows. Truffle specializes access to the resulting representation. A separate live adapter supports Truffle dynamic objects, and a language-owned static layout supports immutable records.
+**Bring data contracts into compiled guest code.** TruffleData gives Java and Elide
+embedders schema-aware access to database results, protobuf messages, objects, and
+sequences through GraalVM Truffle. Known types, presence, nullity, numeric widths,
+and length constraints inform validation and specialized access.
 
-## Build
+[Get started](#choose-an-artifact) · [Architecture](#architecture) ·
+[Contracts and samples](docs/CONTRACTS.md) · [Performance](#performance) ·
+[Native Buffa integration](docs/BUFFA.md)
 
-Use Bazelisk; `.bazelversion` pins Bazel. **Bazel is the only build system.** Maven coordinates are resolved by `rules_jvm_external`, not a Maven build.
-
-```sh
-bazel test //...
-bazel build //core:core //jdbc:jdbc //protobuf:protobuf
-bazel test //tests:compiled --nocache_test_results
+```java
+Schema result = Schema.of(Field.requiredLong("a"));
+try (JdbcCursor rows = JdbcSource.execute(
+    connection, "SELECT a FROM t WHERE a > ?", List.of(100L), result, Limits.DEFAULT)) {
+  Batch batch;
+  while ((batch = rows.nextBatch()) != null) {
+    consume(batch); // Immutable rows can outlive the cursor.
+  }
+}
 ```
 
-The default configuration uses BuildBuddy remote execution and remote caching on Linux amd64. JDKs, Java compilation toolchains, native helper toolchains, Go, and the remote executor image are pinned. It follows Komodo's setup, including a case-sensitive output cache on macOS. It does not use `JAVA_HOME` to select the compilation or test JDK.
+Adapters supply contracts, optionally informed by a known query or protobuf schema.
+Ingestion validates the data; Truffle specializes reads. The database executes and
+plans SQL. TruffleData neither parses SQL nor translates guest callbacks into queries.
 
-BuildBuddy credentials belong in your user Bazel configuration, never in source control. The profiles are `remote` (default), `buildbuddy` (cache/BES settings), `local` (explicit host execution without remote services), `ci`, `workflows`, and `untrusted` (separate PR cache namespace). See [build details](docs/BAZEL.md).
+## Architecture
 
-## Maven artifacts
+```mermaid
+flowchart LR
+    JDBC["JDBC results"] --> Adapt["Adapters + contracts"]
+    Proto["Protobuf messages / binary / text"] --> Adapt
+    Objects["Objects + sequences"] --> Adapt
+    Schema["Build-time or runtime schema"] --> Adapt
+    Adapt --> Owned["Immutable batches / static rows"]
+    Adapt --> Borrowed["Scoped Buffa views"]
+    Adapt --> Dynamic["Live dynamic records"]
+    Owned --> Access["Interop / DataLibrary / generated getters"]
+    Borrowed --> Access
+    Dynamic --> Access
+    Access --> Guest["Truffle guest execution"]
+    Guest -. "Partial evaluation" .-> Code["Compiled specialized reads"]
+```
 
-[Version 0.3.0](https://github.com/elide-dev/truffledata/releases/tag/v0.3.0) is published at `https://maven.elide.dev`: `dev.elide:truffledata-{core,jdbc,jdbc-sqlite,jdbc-mysql,jdbc-postgresql,protobuf,protobuf-buffa,protobuf-buffa-bindings}`, plus `truffledata-bom`. Libraries include source jars and consumer POMs. See [publishing and consumption](docs/PUBLISHING.md) for the staging command, explicit upload command and repository setup.
+Owned rows retain validated facts. Live objects validate mutable values, and borrowed
+views enforce ownership, thread confinement, and lifetime. Java null stays at annotated
+ingestion boundaries; present null and missing fields have distinct representations.
 
-## Known schemas and static data
+Use the JVM or Native Image. The optional Myna/Buffa backend supports JVM FFM and
+static SVM linkage, with Java fallback. Prebuilt native attachments target Linux x86-64.
+See [representation and compilation guarantees](docs/TRUFFLE.md) and
+[ownership and native setup](docs/BUFFA.md).
 
-See [contracts and executable integration samples](docs/CONTRACTS.md) for Protobuf descriptor graphs, static query contracts, width/length facts, and native SQLite support.
+## Choose an artifact
+
+| Maven coordinate | Purpose |
+| --- | --- |
+| `dev.elide:truffledata-core` | Schemas, batches, static/dynamic objects, sequences and interop |
+| `dev.elide:truffledata-jdbc` | Driver-independent JDBC ingestion and query contracts |
+| `dev.elide:truffledata-jdbc-sqlite` | Native SQLite integration |
+| `dev.elide:truffledata-jdbc-mysql` | MySQL Connector/J integration |
+| `dev.elide:truffledata-jdbc-postgresql` | pgJDBC integration |
+| `dev.elide:truffledata-protobuf` | Protobuf contracts, Java codec, runtime schemas and generated getters |
+| `dev.elide:truffledata-protobuf-buffa` | Optional native parsing and borrowed typed views |
+| `dev.elide:truffledata-protobuf-buffa-bindings` | Myna bindings, pulled in by the Buffa adapter |
+| `dev.elide:truffledata-bom` | Aligned libraries, drivers and runtime dependencies |
+
+The runtime baseline is **Java 25** and **Elide GraalVM `25.5.5-elide.24`**.
+Libraries are thin JARs; choose the adapters and guest runtimes your application needs.
+Driver-specific artifacts bring their upstream drivers transitively.
+
+```kotlin
+repositories {
+    mavenCentral()
+    maven("https://maven.elide.dev")
+    maven("https://maven.elide.dev/gvm-elide/25.5.5-elide.24")
+}
+dependencies {
+    implementation(platform("dev.elide:truffledata-bom:0.4.0"))
+    implementation("dev.elide:truffledata-core")
+    implementation("dev.elide:truffledata-protobuf")
+    // Add JDBC integrations or protobuf-buffa as needed.
+}
+```
+
+[Release 0.4.0](https://github.com/elide-dev/truffledata/releases/tag/v0.4.0) includes
+source JARs, consumer POMs, checksums, and Buffa native attachments. See
+[publishing and consumption](docs/PUBLISHING.md) for Maven, Bazel and native linking.
+
+## Performance
+
+The comparison suite measures **AOT, interpreter, peak guest JIT, and Java heap
+allocation** on SVM. It compares our generic and generated access APIs with protobuf
+Java, plus MySQL/Postgres INT4 decoder functions. All engines share one native executable.
+
+![Generated getters: interpreter reads against stock protobuf](docs/images/generated-access/comparison-generated-interpreter.svg)
+
+![Generated getters: peak JIT reads against stock protobuf](docs/images/generated-access/comparison-generated-peak.svg)
+
+![Generated getters: ingestion Java heap allocation](docs/images/generated-access/comparison-generated-allocations.svg)
+
+<details>
+<summary>Generic API comparisons, including MySQL and PostgreSQL</summary>
+
+![Generic interpreter reads](docs/images/generated-access/comparison-interpreter.svg)
+
+![Generic peak JIT reads](docs/images/generated-access/comparison-peak.svg)
+
+![Generic ingestion allocations](docs/images/generated-access/comparison-allocations.svg)
+
+</details>
+
+Measured implementation **`c8ef96a`**, included in **0.4.0**, on Elide GraalVM
+`25.5.5-elide.24`. The 88-cell run uses three fresh timing processes and three separate
+allocation processes per cell. Bars show medians; whiskers show minimum/maximum process
+medians, not confidence intervals. Lower is better.
+
+- Buffa nested interpreted reads: **51.79 → 22.58 ns/row** with generated getters.
+- Owned generated scalar ingestion: **29.82 ns / 56 bytes**, versus stock **67.01 ns / 136 bytes**.
+- Buffa scalar ingestion: **232 Java heap bytes** through the generic API, **200** through generated getters; the 0.3.0 generic baseline used **320**.
+- Primitive-only SQL fixture ingestion: **128 bytes**, down from **160**.
+
+Stock remains faster in several binary paths. General nested Buffa messages still
+materialize rows and arrays. Java heap counts exclude native memory and compiler threads;
+SQL cases measure decoder functions, not servers or complete queries. Buffa binary input
+starts in unmanaged memory, and stock nested guest reads cross an explicit Truffle boundary.
+Large owned-byte ingestion was noisy. See the [full results and methodology](docs/COMPARISON_BENCHMARKS.md),
+[raw measurements](benchmarks/results/svm-comparison-c8ef96a/comparison.json), and
+[measurement run](https://github.com/elide-dev/truffledata/actions/runs/41776420028).
+Earlier runs remain available; these are workload-specific measurements, not performance guarantees.
+
+## Protobuf and generated access
+
+Provide schemas at build time with the Bazel/protoc contract generator, or compile
+descriptors at runtime. Sources accept `MessageOrBuilder`, binary protobuf, ProtoJSON,
+and protobuf text format; schemaless wire inspection is also available.
+
+Generated `Access_` classes bind to a `ProtoPlan` and expose primitive getters, presence
+checks, and array/bytes lengths for both owned and borrowed rows. Keep the accessor in
+a final guest-node field so partial evaluation can fold its plan and field ordinals.
+Reads retain contract and lifetime checks. See [generated getters](docs/CONTRACTS.md#generated-protobuf-getters)
+and [executable integration samples](docs/CONTRACTS.md).
 
 ## Embedding JDBC
 
@@ -44,7 +165,7 @@ The supplied connection remains owned by the caller. The cursor owns its prepare
 
 The extended overload accepts a `Decoder` and `StatementConfigurer`. These are the driver-cooperation points for Elide: configure fetch behavior, implement exact conversions, or supply a result-specific schema. PostgreSQL cursor fetching and MySQL streaming have driver/transaction requirements; the adapter never changes transaction policy on a borrowed connection. Local batching does not bound a driver's internal buffering.
 
-Every contract is validated in this prototype. There is no unchecked “trusted” escape hatch. A null, missing field, unsupported value, or incompatible numeric conversion fails rather than manufacturing a default. Cursors are single-pass and thread-confined; batch and iterator consumption cannot be mixed. Closing a cursor releases pending rows, but already returned rows remain usable.
+Ingestion validates every contract. There is no unchecked “trusted” escape hatch. A null, missing field, unsupported value, or incompatible numeric conversion fails rather than manufacturing a default. Cursors are single-pass and thread-confined; batch and iterator consumption cannot be mixed. Closing a cursor releases pending rows, but already returned rows remain usable.
 
 ## Guest access
 
@@ -65,39 +186,60 @@ for row in rows:
 
 The internal `DataLibrary` is for cooperating implementations. `ReadLongNode` provides a primitive read with a bounded schema/ordinal cache. It belongs beneath an adopted Truffle root or parent node; it is not a host-side replacement for the public interop API.
 
-## Representations
+## Representations and semantics
 
-- **Batches:** validated snapshots with primitive `long[]` columns for INT64, optional state arrays for null/missing values, and object storage for other kinds. Creating a row view allocates; reading a retained INT64 row does not allocate per element in the compiled acceptance workload.
-- **DynamicRecord:** a live view over a `DynamicObject`. Cached `GetNode`/`ContainsKeyNode` operations track shape changes. Reads validate mutable values; a schema assertion is never permission to assume an arbitrary mutable object remains non-null. The owner must confine access to its language/context thread. Values should use core canonical representations.
-- **StaticLayout:** built with the embedding language's `TruffleLanguage` instance. Validated widths/ranges select final narrow integer properties; float32/64 and boolean fields also use primitive storage, with independent presence bytes for optional/null values. Other fields use final object properties. Storage is private and initialized once. Property handles are cached by layout and ordinal.
-- **ProtoPlan / ProtoRow:** lossless protobuf contracts and native messages, with separate protobuf presence, numeric enums, compact bytes, direct binary decoding/encoding, runtime descriptor compilation, and a Bazel/protoc contract generator. Bound sources accept `MessageOrBuilder`, ProtoJSON, and protobuf text format; schemaless wire inspection is also available. See [lossless protobuf contracts](docs/CONTRACTS.md#lossless-native-protobuf-messages).
-- **ProtobufAdapter:** snapshots immutable `Message` values through descriptors. Explicit absence stays distinct from null; implicit scalar fields expose their default values. Repeated fields become sequences, maps become sequences of entry records, and `oneof` presence is retained. Enum values expose their descriptor names. UINT32/FIXED32 widen to long; UINT64/FIXED64 use an exact numeric wrapper. With a language owner, the descriptor graph selects static layouts for every message type. Nested values have depth, cell, and string budgets.
-- **DataArray:** a sequence with no column schema, usable for positional or scalar data.
+| Representation | Ownership and specialization |
+| --- | --- |
+| `Batch` | Immutable snapshots; primitive INT64 columns, independent null/missing state |
+| `StaticLayout` | Language-owned immutable records; final narrow integer, floating point and boolean properties |
+| `DynamicRecord` | Live `DynamicObject` view; cached shape-aware access and validation of mutable values |
+| `ProtoPlan` / `ProtoRow` | Lossless protobuf contracts, separate presence, compact scalars and generated access |
+| Buffa `TypedRow` | Scoped borrowed typed views; inline small integer records and borrowed bytes |
+| `DataArray` | Sequences without a column schema |
 
-Java null is confined to annotated ingestion boundaries. `DataNull` is the interop null object; `Missing` is an internal presence marker. Reading a missing field through interop raises the appropriate unknown-member/index exception. A present null remains readable.
+`DataNull` is the interop null object; `Missing` is an internal presence marker.
+Missing fields raise the appropriate interop access error. `ExactNumber` preserves
+unsigned 64-bit integers and exact decimal values without silently rounding.
 
-`ExactNumber` preserves BigInteger/BigDecimal values and only advertises conversions that are exact. This avoids unsigned overflow and decimal rounding; guest arithmetic support is language-dependent. Date/time, binary JDBC objects, LOBs, vendor types, and RPC execution need explicit adapter policies. Unsupported JDBC objects fail rather than being leaked as arbitrary host objects.
+LOBs, vendor-specific JDBC values, dates/times and arbitrary host objects require
+explicit adapter policies. Unsupported objects are rejected. RPC execution and general
+CSV/JSON adapters remain extension work; protobuf text/JSON parsing is supported.
 
-## Acceptance checks
+## Build and verify
 
-- JSpecify package defaults and NullAway in JSpecify mode on owned Java libraries, with compiler warnings treated as errors.
-- Positive and negative compiler probes for nullness enforcement.
-- Contract, presence, numeric precision, cursor lifetime, budget, shape-mutation, and cache-fallback tests.
-- GraalJS and GraalPy interoperability without host access.
-- Compiled Truffle acceptance with synchronous compilation, compilation failures and performance warnings treated as errors, and a 10,000-node graph budget.
-- Allocation limits for retained reads, ingestion, and retained row creation. See [budgets and scope](docs/TRUFFLE.md).
-- [Continuous CodSpeed simulation](docs/BENCHMARKS.md): 20 fixed-work Native Image workloads, independently checked alongside JVM JIT/allocation gates.
-- Gazelle generation for source-set targets. Source membership is generated; dependency boundaries are explicit in `bazel/gazelle/sources.json`.
+Bazelisk selects the pinned Bazel version. **Bazel is the only build system.**
+Builds default to BuildBuddy Linux amd64 remote execution and caching, with pinned
+JDKs, native toolchains and executor images. Keep credentials outside source control.
 
-This is a foundation, not an Elide production integration. The database tests use H2, native SQLite, and MySQL/PostgreSQL-shaped JDBC fixtures; real MySQL/PostgreSQL driver matrices, broader Native Image deployment integration, cancellation, asynchronous/RPC execution, and JSON/CSV adapters remain production follow-ups. There is no SQL planner dependency.
+```sh
+bazel build //core:core //jdbc:jdbc //protobuf:protobuf
+bazel test //...
+bazel test //tests:compiled --nocache_test_results
+```
 
-## Optional native wire backend
+Gazelle generates source membership; dependency boundaries remain explicit. See
+[Bazel setup](docs/BAZEL.md) for configuration, local execution and target generation.
 
-[The Myna/Buffa integration](docs/BUFFA.md) adds borrowed wire and typed decoding, native schema-aware text parsing, explicit off-heap ownership, JVM FFM and static SVM linkage, with Java fallback. Build it with `//protobuf-buffa`; version 0.2.0 includes Maven artifacts and Linux x86-64 native attachments.
+Reusable CI workflows use pinned actions and runner hardening. They check:
 
-## Release performance results
+- JSpecify/NullAway nullness, compiler warnings and positive/negative compiler probes.
+- Contracts, presence, numeric precision, lifetimes, budgets, shape mutation and cache fallback.
+- GraalJS/GraalPy interop, real MySQL/PostgreSQL servers, and native SQLite.
+- JVM and SVM guest compilation, blocklist rejection controls, graph/AST budgets and allocation ceilings.
+- Static native linking, Java fallback, publication consumers, Codecov coverage and JUnit reports.
+- [Twenty CodSpeed simulation workloads](docs/BENCHMARKS.md), separate from the guest-JIT timing suite.
 
-[0.3.0 comparison results and graphics](docs/COMPARISON_BENCHMARKS.md#release-030-measurements)
-cover interpreter reads, peak JIT reads, and ingestion allocations across protobuf,
-MySQL, and PostgreSQL cases. Raw measurements and the 0.2.0 baseline are included;
-Java heap counts exclude native memory and SQL cases cover decoder functions only.
+These gates exercise supported paths and enforce regression budgets. They do not certify
+arbitrary downstream guest code or every deployment configuration. See [Truffle checks and scope](docs/TRUFFLE.md).
+
+## Reference shelf
+
+| Reference | What it covers |
+| --- | --- |
+| [Contracts and samples](docs/CONTRACTS.md) | Schemas, nullity, protobuf presence, generated access and integration examples |
+| [Myna/Buffa](docs/BUFFA.md) | Native parsing, borrowed views, ownership, JVM and SVM setup |
+| [Truffle guarantees](docs/TRUFFLE.md) | Specialization, boundaries, compilation and allocation gates |
+| [Comparison benchmarks](docs/COMPARISON_BENCHMARKS.md) | Raw results, charts, caveats and reproduction |
+| [Continuous benchmarks](docs/BENCHMARKS.md) | CodSpeed simulation cases and methodology |
+| [Build](docs/BAZEL.md) / [Publishing](docs/PUBLISHING.md) | Bazel, BuildBuddy, Maven artifacts and release operations |
+| [TruffleCEL](https://github.com/elide-dev/trufflecel) | CEL evaluation with native TruffleData integration |
