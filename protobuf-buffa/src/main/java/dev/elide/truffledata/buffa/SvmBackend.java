@@ -12,6 +12,7 @@ import org.graalvm.word.*;
 final class SvmBackend implements BuffaWire.Backend {
   private final long resultAddress;
   private boolean busy;
+  private final Runnable releaseAction = this::releaseResult;
   private boolean closed;
 
   private VoidPointer acquireResult() {
@@ -73,7 +74,7 @@ final class SvmBackend implements BuffaWire.Backend {
               : CTypeConversion.asByteBuffer(
                   Buffa.Result.data(result),
                   Math.toIntExact(Math.multiplyExact(count, Buffa.Field.SIZE)));
-      return new BuffaWire.Tape(bytes, count, capacity, this::releaseResult);
+      return new BuffaWire.Tape(bytes, count, capacity, releaseAction);
     } catch (RuntimeException | Error failure) {
       releaseResult();
       throw failure;
@@ -115,7 +116,7 @@ final class SvmBackend implements BuffaWire.Backend {
               : CTypeConversion.asByteBuffer(
                   Buffa.Result.data(result),
                   Math.toIntExact(Math.multiplyExact(count, Buffa.Field.SIZE)));
-      return new BuffaWire.Tape(bytes, count, capacity, this::releaseResult);
+      return new BuffaWire.Tape(bytes, count, capacity, releaseAction);
     } catch (RuntimeException | Error failure) {
       releaseResult();
       throw failure;

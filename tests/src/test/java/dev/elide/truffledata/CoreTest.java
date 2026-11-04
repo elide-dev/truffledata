@@ -32,6 +32,10 @@ class CoreTest {
         assertThrows(IndexOutOfBoundsException.class, () -> layout.getLong(row, -1));
         var other = new StaticLayout(TestLanguage.current().language(), schema, Limits.DEFAULT);
         assertThrows(ContractViolation.class, () -> other.getLong(row, 0));
+        assertThrows(ContractViolation.class, () -> other.get(row, 0));
+        assertThrows(ContractViolation.class, () -> other.getDouble(row, 1));
+        assertThrows(ContractViolation.class, () -> other.getBoolean(row, 2));
+        assertThrows(ContractViolation.class, () -> layout.getLong(row, 1));
         for (Object absent : List.of(DataNull.INSTANCE, Missing.INSTANCE)) {
           var empty = layout.create(absent, absent, absent);
           assertSame(absent, layout.get(empty, 0));

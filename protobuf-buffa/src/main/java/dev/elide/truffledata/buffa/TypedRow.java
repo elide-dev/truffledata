@@ -12,21 +12,12 @@ import org.jspecify.annotations.Nullable;
 
 /** Schema-stable native typed view. The enclosing message owns every borrowed payload. */
 @ExportLibrary(DataLibrary.class)
-public final class TypedRow extends AbstractRow implements ProtoAccess {
-  private final WireMessage owner;
+public sealed class TypedRow extends AbstractRow implements ProtoAccess permits ScalarRow {
+  final WireMessage owner;
   private final ProtoPlan plan;
 
-  private final Object storage;
-
-  private static final class Scalars {
-    final long first;
-    final long second;
-
-    Scalars(long first, long second) {
-      this.first = first;
-      this.second = second;
-    }
-  }
+  @CompilationFinal(dimensions = 1)
+  private final Object[] values;
 
   @CompilationFinal(dimensions = 1)
   private final boolean[] present;
@@ -38,32 +29,15 @@ public final class TypedRow extends AbstractRow implements ProtoAccess {
     super(plan.schema());
     this.owner = owner;
     this.plan = plan;
-    this.storage = values;
+    this.values = values;
     this.present = present;
     this.presenceBits = presenceBits;
-  }
-
-  TypedRow(WireMessage owner, ProtoPlan plan, long first, long second, long presenceBits) {
-    super(plan.schema());
-    this.owner = owner;
-    this.plan = plan;
-    storage = new Scalars(first, second);
-    this.presenceBits = presenceBits;
-    present = NO_PRESENCE_ARRAY;
-  }
-
-  private static final boolean[] NO_PRESENCE_ARRAY = new boolean[0];
-
-  private long scalar(Scalars values, int ordinal) {
-    Objects.checkIndex(ordinal, descriptor.size());
-    return ordinal == 0 ? values.first : values.second;
   }
 
   @Override
   public long getLong(int ordinal) {
     owner.check();
-    if (storage instanceof Scalars scalars) return scalar(scalars, ordinal);
-    Object value = ((Object[]) storage)[ordinal];
+    Object value = values[ordinal];
     if (value instanceof Long number) return number;
     throw new ContractViolation("Expected INT64");
   }
@@ -115,8 +89,7 @@ public final class TypedRow extends AbstractRow implements ProtoAccess {
       int index, @Cached.Shared("owner") @Cached("create()") WireMessage.CheckOpenNode check)
       throws UnexpectedResultException {
     check.execute(owner);
-    if (storage instanceof Scalars scalars) return scalar(scalars, index);
-    Object value = ((Object[]) storage)[index];
+    Object value = values[index];
     if (value instanceof Long number) return number;
     throw new UnexpectedResultException(resolved(index));
   }
@@ -142,8 +115,7 @@ public final class TypedRow extends AbstractRow implements ProtoAccess {
   }
 
   private Object resolved(int index) {
-    if (storage instanceof Scalars scalars) return scalar(scalars, index);
-    Object value = ((Object[]) storage)[index];
+    Object value = values[index];
     return value instanceof Utf8 text ? text.value(owner) : value;
   }
 
@@ -186,7 +158,7 @@ public final class TypedRow extends AbstractRow implements ProtoAccess {
   ProtoRow snapshot() {
     owner.check();
     var builder = plan.newBuilder();
-    for (int i = 0; i < descriptor.size(); i++) if (present(i)) builder.set(i, detach(resolved(i)));
+    for (int i = 0; i < descriptor.size(); i++) if (present(i)) builder.set(i, detach(get(i)));
     return builder.build();
   }
 

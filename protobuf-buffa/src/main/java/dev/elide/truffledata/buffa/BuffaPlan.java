@@ -153,7 +153,7 @@ public final class BuffaPlan implements AutoCloseable {
       }
     }
     return new TypedMessage(
-        owner, new TypedRow(owner, plan, first, second, present), true, tape.allocated);
+        owner, new ScalarRow(owner, plan, first, second, present), true, tape.allocated);
   }
 
   private static TypedRow fromJava(WireMessage owner, ProtoRow row) {

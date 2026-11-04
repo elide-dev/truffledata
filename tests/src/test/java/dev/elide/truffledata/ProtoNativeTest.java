@@ -42,6 +42,108 @@ class ProtoNativeTest {
   }
 
   @Test
+  void generatedBindingRejectsChangedDefaultsAndMetadata() {
+    var p = plan("truffledata.lossless.Legacy");
+    var access = new TruffleDataContracts.Access_truffledata$lossless$Legacy(p);
+    var row = p.decode(new byte[0]);
+    assertEquals(42, access.get_count(row));
+    assertEquals(2, access.size_blob(row));
+    assertFalse(access.has_count(row));
+    var definition = p.definition();
+    assertFalse(
+        p.matchesDefinition(new ProtoPlan.Type(definition.name(), true, definition.fields())));
+    assertFalse(
+        p.matchesDefinition(
+            new ProtoPlan.Type(
+                definition.name(),
+                false,
+                definition.fields().subList(1, definition.fields().size()))));
+    for (Object[] change :
+        List.of(
+            new Object[] {"blob", DataArray.copyOfBytes(new byte[] {1})},
+            new Object[] {"blob", DataArray.copyOfBytes(new byte[] {1, 0})},
+            new Object[] {"big", Values.normalize(java.math.BigInteger.ZERO)},
+            new Object[] {"count", 43L})) {
+      var fields = new ArrayList<>(definition.fields());
+      int ordinal = p.schema().indexOf((String) change[0]);
+      var f = fields.get(ordinal);
+      fields.set(
+          ordinal,
+          new ProtoPlan.FieldPlan(
+              f.name(),
+              f.number(),
+              f.kind(),
+              f.repeated(),
+              f.map(),
+              f.explicitPresence(),
+              f.required(),
+              f.packed(),
+              f.oneof(),
+              f.typeName(),
+              f.enumType(),
+              change[1],
+              f.jsonName()));
+      assertFalse(p.matchesDefinition(new ProtoPlan.Type(definition.name(), false, fields)));
+    }
+    var fields = new ArrayList<>(definition.fields());
+    var f = fields.get(0);
+    fields.set(
+        0,
+        new ProtoPlan.FieldPlan(
+            f.name(),
+            f.number(),
+            f.kind(),
+            f.repeated(),
+            f.map(),
+            f.explicitPresence(),
+            f.required(),
+            f.packed(),
+            f.oneof(),
+            f.typeName(),
+            f.enumType(),
+            f.defaultValue(),
+            "differentJsonName"));
+    assertFalse(p.matchesDefinition(new ProtoPlan.Type(definition.name(), false, fields)));
+    var foreign = plan("truffledata.lossless.Legacy").decode(new byte[0]);
+    assertThrows(ContractViolation.class, () -> p.get(foreign, 0));
+    assertThrows(ContractViolation.class, () -> p.getLong(foreign, 0));
+    assertThrows(ContractViolation.class, () -> p.getDouble(foreign, 0));
+    assertThrows(ContractViolation.class, () -> p.getBoolean(foreign, 0));
+    assertThrows(ContractViolation.class, () -> p.getSize(foreign, 0));
+    var scalar =
+        ProtoCompiler.compile(null, Timestamp.getDescriptor(), Limits.DEFAULT, 16, WIRE_LIMIT);
+    var scalarRow = scalar.decode(new byte[] {8, 7});
+    assertEquals(7L, scalar.get(scalarRow, 0));
+    assertThrows(ContractViolation.class, () -> scalar.getDouble(scalarRow, 0));
+    assertThrows(ContractViolation.class, () -> scalar.getBoolean(scalarRow, 0));
+  }
+
+  @Test
+  void generatedPrimitiveGettersUseStaticStorageWithRuntimeContracts() {
+    try (var context = org.graalvm.polyglot.Context.newBuilder("td-test").build()) {
+      context.initialize("td-test");
+      context.enter();
+      try {
+        var p =
+            TruffleDataContracts.create(
+                    TestLanguage.current().language(), Limits.DEFAULT, 16, WIRE_LIMIT)
+                .type("truffledata.lossless.Sample");
+        var access = new TruffleDataContracts.Access_truffledata$lossless$Sample(p);
+        var row = p.parseText("count: 1000 f: 1.5 d: 2.5 flag: true");
+        assertEquals(1000L, access.get_count(row));
+        assertEquals(1.5, access.get_f(row));
+        assertEquals(2.5, access.get_d(row));
+        assertTrue(access.get_flag(row));
+        assertThrows(ContractViolation.class, () -> p.getDouble(row, 0));
+        assertThrows(ContractViolation.class, () -> p.getBoolean(row, 0));
+        assertThrows(ContractViolation.class, () -> p.getSize(row, 0));
+      } finally {
+        context.leave();
+      }
+    }
+  }
+
+  @Test
   void generatedGettersCheckContractsAndPreserveNormalizedTypes() {
     var p = plan("truffledata.lossless.Sample");
     var access = new TruffleDataContracts.Access_truffledata$lossless$Sample(p);
@@ -65,6 +167,9 @@ class ProtoNativeTest {
           }
         };
     assertEquals(1234L, generic.getLong(0));
+    assertThrows(ContractViolation.class, () -> row.getLong(p.schema().indexOf("text")));
+    assertThrows(ContractViolation.class, () -> p.getDouble(row, 0));
+    assertThrows(ContractViolation.class, () -> p.getSize(row, 0));
     assertEquals(1.5, generic.getDouble(p.schema().indexOf("f")));
     assertTrue(generic.getBoolean(p.schema().indexOf("flag")));
     assertEquals(3, generic.getSize(p.schema().indexOf("blob")));

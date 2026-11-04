@@ -28,6 +28,15 @@ final class TypedAcceptance {
           var row = parsed.row();
           Acceptance.check(
               DATA.readDouble(row, p.schema().indexOf("f")) == 1.5, "primitive double export");
+          Acceptance.rejects(
+              () -> row.getLong(p.schema().indexOf("text")), ContractViolation.class);
+          try {
+            DATA.readLong(row, p.schema().indexOf("f"));
+            throw new AssertionError("Expected integer type rejection");
+          } catch (com.oracle.truffle.api.nodes.UnexpectedResultException failure) {
+            Acceptance.check(
+                failure.getResult().equals(1.5), "wrong-type integer preserves result");
+          }
           Acceptance.check(
               DATA.readBoolean(row, p.schema().indexOf("flag")), "primitive boolean export");
           try {
@@ -77,14 +86,32 @@ final class TypedAcceptance {
       var p =
           new ProtoPlan.Model(
                   null,
-                  List.of(new ProtoPlan.Type("Compact", false, List.of(field))),
+                  List.of(
+                      new ProtoPlan.Type(
+                          "Compact",
+                          false,
+                          List.of(
+                              field,
+                              new ProtoPlan.FieldPlan(
+                                  "second",
+                                  2,
+                                  ProtoPlan.Kind.INT64,
+                                  false,
+                                  false,
+                                  false,
+                                  false,
+                                  false,
+                                  -1,
+                                  "",
+                                  null,
+                                  0L)))),
                   Limits.DEFAULT,
                   16,
                   65536)
               .type("Compact");
       try (var compiled = decoder.compile(p, 65536)) {
         for (byte[] wire :
-            List.of(new byte[] {8, 7}, new byte[] {8, 1, 8, 0}, new byte[] {8, 2, 16, 99})) {
+            List.of(new byte[] {8, 7}, new byte[] {8, 1, 8, 0}, new byte[] {8, 2, 16, 99, 24, 7})) {
           var expected = p.decode(wire);
           try (var input = decoder.allocate(wire.length).put(wire);
               var parsed = compiled.decode(input, NATIVE)) {
@@ -96,7 +123,22 @@ final class TypedAcceptance {
                 "compact presence and primitive");
             Acceptance.check(
                 DATA.readLong(row, 0) == expected.getLong(0), "primitive library export");
-            Acceptance.rejects(() -> row.getLong(1), IndexOutOfBoundsException.class);
+            Acceptance.check(row.get(0).equals(expected.get(0)), "scalar object protocol");
+            Acceptance.rejects(() -> row.getSize(0), ContractViolation.class);
+            try {
+              DATA.readDouble(row, 0);
+              throw new AssertionError("Expected scalar double rejection");
+            } catch (com.oracle.truffle.api.nodes.UnexpectedResultException failure) {
+              Acceptance.check(failure.getResult().equals(expected.get(0)), "scalar double result");
+            }
+            try {
+              DATA.readBoolean(row, 0);
+              throw new AssertionError("Expected scalar boolean rejection");
+            } catch (com.oracle.truffle.api.nodes.UnexpectedResultException failure) {
+              Acceptance.check(
+                  failure.getResult().equals(expected.get(0)), "scalar boolean result");
+            }
+            Acceptance.rejects(() -> row.getLong(2), IndexOutOfBoundsException.class);
             parsed.close();
             Acceptance.rejects(() -> row.getLong(0), IllegalStateException.class);
           }

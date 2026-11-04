@@ -16,6 +16,7 @@ final class FfmBackend implements BuffaWire.Backend {
   private final MethodHandle typed;
   private final MemorySegment result;
   private boolean busy;
+  private final Runnable releaseAction = this::releaseResult;
 
   private MemorySegment acquireResult() {
     if (busy || !libraryArena.scope().isAlive())
@@ -103,7 +104,7 @@ final class FfmBackend implements BuffaWire.Backend {
                       libraryArena,
                       null)
                   .asByteBuffer();
-      return new BuffaWire.Tape(tape, count, capacity, this::releaseResult);
+      return new BuffaWire.Tape(tape, count, capacity, releaseAction);
     } catch (RuntimeException | Error failure) {
       releaseResult();
       throw failure;
@@ -157,7 +158,7 @@ final class FfmBackend implements BuffaWire.Backend {
                       libraryArena,
                       null)
                   .asByteBuffer();
-      return new BuffaWire.Tape(tape, count, capacity, this::releaseResult);
+      return new BuffaWire.Tape(tape, count, capacity, releaseAction);
     } catch (RuntimeException | Error failure) {
       releaseResult();
       throw failure;
