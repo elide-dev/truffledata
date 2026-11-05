@@ -68,3 +68,15 @@ graphs with class-initialization checks. Both benchmark images now use build-tim
 initialization for this class (its initial state contains no native resources).
 The smoke test now passes with the helper-level compiled marker. Historical results
 remain unchanged for provenance; use new measurements for peak comparisons.
+
+The `23f969a` unclemax cycle measures specialized peak reads at 1.497 ns/record,
+generic native reads at 2.568 ns, and stock record reads at 0.948 ns. Native
+ingestion is 175–178 ns versus 894 ns for this Gson fixture. These are medians of
+three fresh-process fork medians on one host, not general parser rankings.
+Compiler expansion traces now show one loop, zero calls, and zero graph allocations
+for all three engines; specialized last-tier IR has 147 nodes versus 367 generic
+and 64 stock. Hardware samples move from AOT accessors into JIT code.
+The smoke test now enforces those loop/call/allocation properties and a 1,000-node
+budget, retaining its compiler trace as a test artifact. Java call/return boxing
+still accounts for 1 byte/record in the peak harness allocation counter.
+Raw results and traces: [`json-unclemax-23f969a`](../results/json-unclemax-23f969a/).

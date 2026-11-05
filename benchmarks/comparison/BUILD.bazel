@@ -288,9 +288,12 @@ native_image(
 sh_test(
     name = "json_native_smoke",
     size = "large",
-    srcs = ["native_smoke.sh"],
+    srcs = ["json_smoke.sh"],
     args = ["$(rootpath :json_svm)"],
-    data = [":json_svm"],
+    data = [
+        "json_smoke.py",
+        ":json_svm",
+    ],
     tags = ["manual"],
     target_compatible_with = [
         "@platforms//os:linux",

@@ -1,0 +1,17 @@
+[To redirect Truffle log output to a file use one of the following options:
+* '--log.file=<path>' if the option is passed using a guest language launcher.
+* '-Dpolyglot.log.file=<path>' if the option is passed using the host Java launcher.
+* Configure logging using the polyglot embedding API.]
+Dumping IGV graphs in /tmp/truffledata-json-fixed.2OWIDG/graphs/simdjson-typed
+[engine] Expansion tree for JsonComparison.Reads@1f97a7d after truffleTier:
+Name                                                                       Frequency | Count    Size  Cycles   Ifs Loops Invokes Allocs | Self Count  Size Cycles   Ifs Loops Invokes Allocs | IRNode ASTNode Lang:File:Line:Chars 
+<root>                                                                          1.00 |   424     435     383    14     1       0      0 |        243   185    105     0     0       0      0 |  -  
+ SubstrateOptimizedCallTarget.JsonComparison.Reads@1f97a7d_J_AI(...3)           2.00 |   181     250     278    14     1       0      0 |        181   250    278    14     1       0      0 |      5                
+
+[engine] opt done   engine=1  id=1     JsonComparison.Reads@1f97a7d                       |Tier 1|Time    17(   8+9   )ms|AST    1|Inlined   0Y   0N|IR    424/   742|CodeSize    2455|Addr 0x51f8a834b000|CompId 1141   |UTC 2026-11-05T02:37:09.843|Src n/a
+[engine] Expansion tree for JsonComparison.Reads@1f97a7d after truffleTier:
+Name                                                                       Frequency | Count    Size  Cycles   Ifs Loops Invokes Allocs | Self Count  Size Cycles   Ifs Loops Invokes Allocs | IRNode ASTNode Lang:File:Line:Chars 
+<root>                                                                          1.00 |   367     383     339    10     1       0      0 |        216   162     89     0     0       0      0 |  -  
+ SubstrateOptimizedCallTarget.JsonComparison.Reads@1f97a7d_J_AI(...3)           2.00 |   151     221     250    10     1       0      0 |        151   221    250    10     1       0      0 |      5                
+
+[engine] opt done   engine=1  id=1     JsonComparison.Reads@1f97a7d                       |Tier 2|Time    12(   3+9   )ms|AST    1|Inlined   0Y   0N|IR    367/   345|CodeSize    1231|Addr 0x28b490a9d000|CompId 1142   |UTC 2026-11-05T02:37:09.855|Src n/a

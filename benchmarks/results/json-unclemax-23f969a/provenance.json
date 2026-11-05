@@ -1,0 +1,15 @@
+{
+  "source_commit": "23f969a73e58acf442ca9771bd8d9a5344011ff9",
+  "host": "unclemax",
+  "cpu_affinity": "2-9",
+  "measurement_command": "taskset -c 2-9 env TEST_UNDECLARED_OUTPUTS_DIR=measurement python3 json_measure.py ./json-comparison",
+  "profile_command": "taskset -c 2-9 perf record -F 997 --call-graph fp -o CELL.perf -- ./json-comparison-profile -Xmx1g ENGINE peak time CELL.jfr",
+  "remote_artifacts": "/tmp/truffledata-json-fixed.2OWIDG",
+  "notes": [
+    "Uninstrumented timing completed before hardware profiling began.",
+    "Peak checks require a compiled read-helper marker in addition to last-tier target validity.",
+    "Compiler trace and BGV dumps show a loop and zero invokes after partial evaluation for all three engines.",
+    "Java allocation excludes native memory. JFR allocation samples are counts, not bytes.",
+    "Raw JFR, perf, and BGV artifacts retained on unclemax; hashes recorded."
+  ]
+}
