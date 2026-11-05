@@ -197,10 +197,98 @@ pub unsafe extern "C" fn td_buffa_typed(
     max_native_bytes: u64,
     result: *mut std::ffi::c_void,
 ) -> i32 {
+    unsafe {
+        typed_impl(
+            false,
+            schema,
+            schema_length,
+            data,
+            length,
+            format,
+            payload,
+            payload_length,
+            max_cells,
+            max_string_bytes,
+            max_depth,
+            max_native_bytes,
+            result,
+        )
+    }
+}
+
+/// # Safety
+/// Same regions as typed; result is zero-initialized or a still-owned result from typed.
+/// No view into the old index may remain live. Ownership is consumed even on failure.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn td_buffa_typed_reuse(
+    schema: *const u8,
+    schema_length: u64,
+    data: *const u8,
+    length: u64,
+    format: u32,
+    payload: *mut u8,
+    payload_length: u64,
+    max_cells: u64,
+    max_string_bytes: u64,
+    max_depth: u32,
+    max_native_bytes: u64,
+    result: *mut std::ffi::c_void,
+) -> i32 {
+    unsafe {
+        typed_impl(
+            true,
+            schema,
+            schema_length,
+            data,
+            length,
+            format,
+            payload,
+            payload_length,
+            max_cells,
+            max_string_bytes,
+            max_depth,
+            max_native_bytes,
+            result,
+        )
+    }
+}
+
+unsafe fn typed_impl(
+    reuse: bool,
+    schema: *const u8,
+    schema_length: u64,
+    data: *const u8,
+    length: u64,
+    format: u32,
+    payload: *mut u8,
+    payload_length: u64,
+    max_cells: u64,
+    max_string_bytes: u64,
+    max_depth: u32,
+    max_native_bytes: u64,
+    result: *mut std::ffi::c_void,
+) -> i32 {
     if result.is_null() {
         return MALFORMED;
     }
     let result = result.cast::<seam::Result>();
+    let fields = if reuse {
+        let previous = unsafe { &*result };
+        if previous.capacity == 0 {
+            Vec::new()
+        } else {
+            // Result provenance and exclusive ownership are part of this unsafe ABI contract.
+            unsafe {
+                Vec::from_raw_parts(
+                    previous.data.cast::<Field>(),
+                    previous.count as usize,
+                    previous.capacity as usize,
+                )
+            }
+        }
+    } else {
+        Vec::new()
+    };
     unsafe {
         result.write(seam::Result {
             data: std::ptr::null_mut(),
@@ -218,7 +306,7 @@ pub unsafe extern "C" fn td_buffa_typed(
         return MALFORMED;
     }
     match catch_unwind(AssertUnwindSafe(|| unsafe {
-        typed::decode(
+        typed::decode_reusing(
             slice::from_raw_parts(schema, schema_length as usize),
             slice::from_raw_parts(data, length as usize),
             format,
@@ -227,6 +315,7 @@ pub unsafe extern "C" fn td_buffa_typed(
             max_string_bytes,
             max_depth,
             max_native_bytes,
+            fields,
         )
     })) {
         Ok(Ok(mut fields)) => {

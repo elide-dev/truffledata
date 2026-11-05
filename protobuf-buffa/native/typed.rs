@@ -483,6 +483,32 @@ pub fn decode(
     depth: u32,
     native: u64,
 ) -> Result<Vec<Field>> {
+    decode_reusing(
+        schema,
+        input,
+        format,
+        payload,
+        cells,
+        strings,
+        depth,
+        native,
+        Vec::new(),
+    )
+}
+
+/// Reuse only scratch index storage. No field value or source region survives a decode.
+/// On failure the owned scratch allocation is dropped, just like the fresh-buffer route.
+pub fn decode_reusing(
+    schema: &[u8],
+    input: &[u8],
+    format: u32,
+    payload: &mut [u8],
+    cells: u64,
+    strings: u64,
+    depth: u32,
+    native: u64,
+    mut fields: Vec<Field>,
+) -> Result<Vec<Field>> {
     if depth == 0 || depth > 128 || native > i32::MAX as u64 {
         return Err(BUDGET);
     }
@@ -494,12 +520,23 @@ pub fn decode(
         (input.len() as u64).checked_mul(4).ok_or(BUDGET)?
     };
     let native = native.checked_sub(reserve).ok_or(BUDGET)?;
+    fields.clear();
+    // A smaller per-call budget must not inherit a larger retained allocation. Release it
+    // before allocating again, so growth's existing old-plus-new peak accounting still holds.
+    let maximum = native / size_of::<Field>() as u64;
+    let capacity = fields.capacity() as u64;
+    // A previously budget-truncated capacity can require a relocation that a fresh decode
+    // would avoid. Restart such growth from the canonical 4, 8, 16... sequence so reuse
+    // cannot reject an input which fits through the fresh-buffer route at this budget.
+    if capacity > maximum || (capacity < maximum && (capacity < 4 || !capacity.is_power_of_two())) {
+        fields = Vec::new();
+    }
     let mut decoder = Decoder {
         schema: Schema(schema),
         input,
         payload,
         used: 0,
-        fields: Vec::new(),
+        fields,
         cells,
         strings,
         depth,
@@ -652,6 +689,122 @@ mod tests {
             }
         }
         assert_eq!(scalars(&schema(9), &[], 100, 4).err(), Some(MALFORMED));
+    }
+
+    #[test]
+    fn reused_index_is_allocation_free_and_respects_smaller_budgets() {
+        let s = schema(3);
+        let input = [8, 1].repeat(32);
+        let fields = decode(&s, &input, 0, &mut [], 1000, 0, 4, 8192).unwrap();
+        let pointer = fields.as_ptr();
+        let capacity = fields.capacity();
+        let fields = super::super::allocation_probe::without_allocation(|| {
+            decode_reusing(&s, &[8, 9], 0, &mut [], 1000, 0, 4, 8192, fields)
+        })
+        .unwrap();
+        assert_eq!(fields.as_ptr(), pointer);
+        assert_eq!(fields.capacity(), capacity);
+        assert_eq!(fields.len(), 1);
+        assert_eq!(fields[0].value, 9);
+        // A retained large buffer cannot quietly exceed the next call's smaller budget.
+        let fields = decode_reusing(
+            &s,
+            &[8, 7],
+            0,
+            &mut [],
+            1000,
+            0,
+            4,
+            size_of::<Field>() as u64,
+            fields,
+        )
+        .unwrap();
+        assert_eq!(fields.capacity(), 1);
+        assert_eq!(fields[0].value, 7);
+        let fields = decode_reusing(&s, &[], 0, &mut [], 1000, 0, 4, 0, fields).unwrap();
+        assert_eq!(fields.capacity(), 0);
+        assert!(fields.is_empty());
+    }
+
+    #[test]
+    fn retained_capacity_cannot_make_a_fresh_valid_budget_fail() {
+        let s = schema(3);
+        for count in 0..=32 {
+            let input = [8, 1].repeat(count);
+            for budget in 0..=64 {
+                let bytes = budget * size_of::<Field>() as u64;
+                if let Ok(expected) = decode(&s, &input, 0, &mut [], 1000, 0, 4, bytes) {
+                    for previous in [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 12, 16, 32, 64] {
+                        let reused = decode_reusing(
+                            &s,
+                            &input,
+                            0,
+                            &mut [],
+                            1000,
+                            0,
+                            4,
+                            bytes,
+                            Vec::with_capacity(previous),
+                        )
+                        .unwrap();
+                        assert_eq!(reused.len(), expected.len());
+                        assert!(reused.capacity() as u64 * size_of::<Field>() as u64 <= bytes);
+                        for (a, b) in reused.iter().zip(&expected) {
+                            assert_eq!(
+                                (a.number, a.wire, a.value, a.length, a.end),
+                                (b.number, b.wire, b.value, b.length, b.end)
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn reusable_ffi_result_transfers_ownership_and_recovers_after_failure() {
+        let s = schema(3);
+        let mut result = super::super::seam::Result {
+            data: std::ptr::null_mut(),
+            count: 0,
+            capacity: 0,
+        };
+        let call = |result: &mut super::super::seam::Result, input: &[u8], budget| unsafe {
+            super::super::td_buffa_typed_reuse(
+                s.as_ptr(),
+                s.len() as u64,
+                input.as_ptr(),
+                input.len() as u64,
+                0,
+                [].as_mut_ptr(),
+                0,
+                1000,
+                0,
+                4,
+                budget,
+                (result as *mut super::super::seam::Result).cast(),
+            )
+        };
+        assert_eq!(call(&mut result, &[8, 1], 8192), 0);
+        let pointer = result.data;
+        let status =
+            super::super::allocation_probe::without_allocation(|| call(&mut result, &[8, 2], 8192));
+        assert_eq!(status, 0);
+        assert_eq!(result.data, pointer);
+        assert_eq!(result.count, 1);
+        assert_eq!(unsafe { (*result.data.cast::<Field>()).value }, 2);
+        assert_eq!(call(&mut result, &[8, 128], 8192), MALFORMED);
+        assert!(result.data.is_null());
+        assert_eq!((result.count, result.capacity), (0, 0));
+        assert_eq!(call(&mut result, &[8, 3], 8192), 0);
+        assert_eq!(call(&mut result, &[], 0), 0);
+        assert_eq!((result.count, result.capacity), (0, 0));
+        assert_eq!(call(&mut result, &[8, 4], 8192), 0);
+        unsafe {
+            super::super::td_buffa_release((&mut result as *mut super::super::seam::Result).cast())
+        };
+        assert!(result.data.is_null());
+        assert_eq!((result.count, result.capacity), (0, 0));
     }
 
     #[test]

@@ -12,8 +12,10 @@ import org.graalvm.word.*;
 final class SvmBackend implements BuffaWire.Backend {
   private final long resultAddress;
   private boolean busy;
+  private boolean cached;
   private final BuffaWire.Scalars scalarValues = new BuffaWire.Scalars();
   private final Runnable releaseAction = this::releaseResult;
+  private final Runnable retainAction = this::retainResult;
   private boolean closed;
 
   private VoidPointer acquireResult() {
@@ -25,6 +27,13 @@ final class SvmBackend implements BuffaWire.Backend {
   private void releaseResult() {
     if (!busy) throw new IllegalStateException("Native result already released");
     Buffa.release(WordFactory.pointer(resultAddress));
+    cached = false;
+    busy = false;
+  }
+
+  private void retainResult() {
+    if (!busy) throw new IllegalStateException("Native result already released");
+    cached = true;
     busy = false;
   }
 
@@ -60,6 +69,10 @@ final class SvmBackend implements BuffaWire.Backend {
       throw new IllegalArgumentException("Input is not SVM native memory");
     VoidPointer result = acquireResult();
     try {
+      if (cached) {
+        Buffa.release(result);
+        cached = false;
+      }
       BuffaWire.status(
           Buffa.decode(
               WordFactory.pointer(address.value()),
@@ -97,7 +110,7 @@ final class SvmBackend implements BuffaWire.Backend {
     VoidPointer result = acquireResult();
     try {
       BuffaWire.status(
-          Buffa.typed(
+          Buffa.typedReuse(
               WordFactory.pointer(schemaAddress.value()),
               schema.size(),
               WordFactory.pointer(inputAddress.value()),
@@ -117,7 +130,7 @@ final class SvmBackend implements BuffaWire.Backend {
               : CTypeConversion.asByteBuffer(
                   Buffa.Result.data(result),
                   Math.toIntExact(Math.multiplyExact(count, Buffa.Field.SIZE)));
-      return new BuffaWire.Tape(bytes, count, capacity, releaseAction);
+      return new BuffaWire.Tape(bytes, count, capacity, retainAction);
     } catch (RuntimeException | Error failure) {
       releaseResult();
       throw failure;
@@ -168,6 +181,7 @@ final class SvmBackend implements BuffaWire.Backend {
     if (busy) throw new IllegalStateException("Native result still in use");
     if (!closed) {
       closed = true;
+      Buffa.release(WordFactory.pointer(resultAddress));
       UnmanagedMemory.free(WordFactory.pointer(resultAddress));
     }
   }

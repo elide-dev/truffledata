@@ -18,8 +18,10 @@ final class FfmBackend implements BuffaWire.Backend {
   private final MemorySegment scalarResult;
   private final MemorySegment result;
   private boolean busy;
+  private boolean cached;
   private final BuffaWire.Scalars scalarValues = new BuffaWire.Scalars();
   private final Runnable releaseAction = this::releaseResult;
+  private final Runnable retainAction = this::retainResult;
 
   private MemorySegment acquireResult() {
     if (busy || !libraryArena.scope().isAlive())
@@ -32,9 +34,16 @@ final class FfmBackend implements BuffaWire.Backend {
     if (!busy) throw new IllegalStateException("Native result already released");
     try {
       free(result);
+      cached = false;
     } finally {
       busy = false;
     }
+  }
+
+  private void retainResult() {
+    if (!busy) throw new IllegalStateException("Native result already released");
+    cached = true;
+    busy = false;
   }
 
   FfmBackend(Path library) {
@@ -54,7 +63,7 @@ final class FfmBackend implements BuffaWire.Backend {
         throw new IllegalStateException("Myna/Buffa ABI fingerprint mismatch");
       decode = BuffaFFM.decode(symbols);
       release = BuffaFFM.release(symbols);
-      typed = BuffaFFM.typed(symbols);
+      typed = BuffaFFM.typedReuse(symbols);
       scalars = BuffaFFM.scalars(symbols);
       scalarResult = libraryArena.allocate(BuffaFFM.Scalars_LAYOUT);
       result = libraryArena.allocate(BuffaFFM.Result_LAYOUT);
@@ -82,6 +91,10 @@ final class FfmBackend implements BuffaWire.Backend {
       throw new IllegalArgumentException("Input is not JVM native memory");
     MemorySegment result = acquireResult();
     try {
+      if (cached) {
+        free(result);
+        cached = false;
+      }
       int status;
       try {
         status =
@@ -163,7 +176,7 @@ final class FfmBackend implements BuffaWire.Backend {
                       libraryArena,
                       null)
                   .asByteBuffer();
-      return new BuffaWire.Tape(tape, count, capacity, releaseAction);
+      return new BuffaWire.Tape(tape, count, capacity, retainAction);
     } catch (RuntimeException | Error failure) {
       releaseResult();
       throw failure;
@@ -220,6 +233,7 @@ final class FfmBackend implements BuffaWire.Backend {
   @Override
   public void close() {
     if (busy) throw new IllegalStateException("Native result still in use");
+    if (libraryArena.scope().isAlive()) free(result);
     libraryArena.close();
   }
 }
