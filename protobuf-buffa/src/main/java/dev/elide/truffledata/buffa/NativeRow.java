@@ -1,6 +1,5 @@
 package dev.elide.truffledata.buffa;
 
-import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.*;
 import com.oracle.truffle.api.interop.*;
 import com.oracle.truffle.api.library.*;
@@ -25,14 +24,14 @@ final class NativeRow extends TypedRow {
   private final int start;
   private final int end;
 
-  @CompilationFinal(dimensions = 1)
   private int @Nullable [] offsets;
 
-  @CompilationFinal private long packedOffsets;
+  private long packedOffsets;
 
-  // Cache contents are mutable and must not be treated as compilation-final.
-  @CompilationFinal(dimensions = 0)
+  // Host code can populate these after guest compilation; references and contents are mutable.
   private Object @Nullable [] cache;
+  private int firstOrdinal = -1;
+  private @Nullable Object firstValue;
 
   NativeRow(ViewOwner owner, ProtoPlan plan, BuffaWire.Tape tape, int start, int end) {
     super(owner, plan, NO_VALUES, 0, NO_PRESENCE);
@@ -171,7 +170,6 @@ final class NativeRow extends TypedRow {
 
   @TruffleBoundary
   private int[] index() {
-    CompilerDirectives.transferToInterpreterAndInvalidate();
     // Four-bit relative positions cover up to sixteen schema fields and fifteen index entries.
     // Zero denotes absence; later occurrences overwrite their nibble. Larger spans use the full
     // directory, including messages whose descendants make an immediate child's offset large.
@@ -227,7 +225,8 @@ final class NativeRow extends TypedRow {
     // Already materialized strings, arrays and children need neither schema dispatch nor index
     // access. Cache contents stay mutable: warming another field must not freeze existing reads.
     var values = cache;
-    Object cached = values == null ? null : values[ordinal];
+    Object cached =
+        values == null ? (firstOrdinal == ordinal ? firstValue : null) : values[ordinal];
     if (cached != null) return cached;
     var field = plan().field(ordinal);
     int index = offset(ordinal);
@@ -243,13 +242,22 @@ final class NativeRow extends TypedRow {
 
   @TruffleBoundary
   private Object materialize(int ordinal, int index) {
-    var values = cache;
-    if (values == null) {
-      CompilerDirectives.transferToInterpreterAndInvalidate();
-      cache = values = new Object[plan().size()];
-    }
     var field = plan().field(ordinal);
     Object result = field.repeated() ? new NativeArray(this, ordinal) : decode(ordinal, index);
+    var values = cache;
+    if (values == null) {
+      Object first = firstValue;
+      if (first == null) {
+        firstOrdinal = ordinal;
+        firstValue = result;
+        return result;
+      }
+      values = new Object[plan().size()];
+      values[firstOrdinal] = first;
+      cache = values;
+      firstValue = null;
+      firstOrdinal = -1;
+    }
     values[ordinal] = result;
     return result;
   }
@@ -308,10 +316,8 @@ final class NativeRow extends TypedRow {
     private final int ordinal;
     private final int count;
 
-    @CompilationFinal(dimensions = 1)
     private int @Nullable [] entries;
 
-    @CompilationFinal(dimensions = 0)
     private Object @Nullable [] cache;
 
     NativeArray(NativeRow row, int ordinal) {
@@ -341,7 +347,6 @@ final class NativeRow extends TypedRow {
       var positions = entries;
       var values = cache;
       if (positions == null || values == null) {
-        CompilerDirectives.transferToInterpreterAndInvalidate();
         entries = positions = new int[count];
         cache = values = new Object[count];
         int n = 0;

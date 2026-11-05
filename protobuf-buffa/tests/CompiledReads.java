@@ -435,7 +435,8 @@ final class CompiledReads {
 
   private static void nativeViewReads(BuffaWire decoder) {
     var sample = TypedAcceptance.plan("Sample");
-    var fields = java.util.List.of(sample.field(0), sample.field(1), sample.field(2));
+    var fields =
+        java.util.List.of(sample.field(0), sample.field(1), sample.field(2), sample.field(22));
     var contract =
         new dev.elide.truffledata.protobuf.ProtoPlan.Model(
                 null,
@@ -452,6 +453,18 @@ final class CompiledReads {
           message.nativeBacked() == (decoder.selected() != BuffaWire.Selected.JAVA),
           "compiled native view selected");
       Object row = message.row();
+      Object originalBytes = message.row().get(2);
+      var constant = new ConstantValueRoot(row);
+      var constantTarget = constant.getCallTarget();
+      for (int i = 0; i < 200 && !constant.compiled; i++) constantTarget.call(100_000);
+      Acceptance.check(constant.compiled, "constant native value reader compiled");
+      // Host access promotes the single-value cache after the guest captured this row.
+      Acceptance.check(message.row().getSize(3) == 0, "empty repeated field promotes cache");
+      constant.compiled = false;
+      Acceptance.check(
+          constantTarget.call(1000) == originalBytes,
+          "host cache growth preserves compiled value identity");
+      Acceptance.check(constant.compiled, "host cache growth remains compiled");
       var bytes = new ReadRoot();
       var byteTarget = bytes.getCallTarget();
       var integer = new WktRoot(false);
@@ -468,8 +481,30 @@ final class CompiledReads {
           NodeUtil.countNodes(bytes) <= 192 && NodeUtil.countNodes(integer) <= 192,
           "native view AST budget");
       message.close();
+      Acceptance.rejects(() -> constantTarget.call(1), IllegalStateException.class);
       Acceptance.rejects(() -> byteTarget.call(row, 1), IllegalStateException.class);
       Acceptance.rejects(() -> integerTarget.call(row, 1), IllegalStateException.class);
+    }
+  }
+
+  private static final class ConstantValueRoot extends RootNode {
+    private final Object row;
+    @Child private DataLibrary data = DataLibrary.factory().createDispatched(3);
+    boolean compiled;
+
+    ConstantValueRoot(Object row) {
+      super(null);
+      this.row = row;
+    }
+
+    @Override
+    public Object execute(VirtualFrame frame) {
+      int count = (Integer) frame.getArguments()[0];
+      Object value = Missing.INSTANCE;
+      for (int i = 0; i < count; i++) value = data.read(row, 2);
+      if (CompilerDirectives.inInterpreter()) LoopNode.reportLoopCount(this, count);
+      compiled |= CompilerDirectives.inCompiledCode();
+      return value;
     }
   }
 
