@@ -632,7 +632,8 @@ pub fn scalars(
     depth: u32,
 ) -> Result<super::seam::Scalars> {
     let schema = Schema(schema);
-    let count = schema.word(schema.ty(0)?)?;
+    let base = schema.ty(0)?;
+    let count = schema.word(base)?;
     if count == 0 || count > 2 {
         return Err(MALFORMED);
     }
@@ -663,12 +664,13 @@ pub fn scalars(
         second: 0,
         present: 0,
     };
+    let table = schema.table(base, count)?;
     let mut remaining = input;
     while !remaining.is_empty() {
         let tag = Tag::decode(&mut remaining).map_err(|_| MALFORMED)?;
         let number = tag.field_number();
         let wt = tag.wire_type() as u32;
-        if let Some(field) = schema.find(0, number)? {
+        if let Some(field) = schema.find_in(base, table, number) {
             if wt == 0 {
                 decoder.charge(1)?;
                 let value = varint(&mut remaining)?;
