@@ -11,6 +11,7 @@ import org.jspecify.annotations.Nullable;
 
 /** Reusable schema program shared by native binary, textproto and ProtoJSON ingestion. */
 public final class BuffaPlan implements AutoCloseable {
+  private static final boolean STRICT = Boolean.getBoolean("truffledata.strict");
   private final BuffaWire decoder;
   private final ProtoPlan plan;
   private final ReadProfile profile;
@@ -196,16 +197,18 @@ public final class BuffaPlan implements AutoCloseable {
     }
   }
 
-  /** Defaults are validated by FieldPlan; richer contracts keep the general validation route. */
+  /**
+   * Exact standard contracts are established by schema-directed decoding; richer facts revalidate.
+   */
   private static final class TypeProfile {
     final boolean[] stringReads;
-    final boolean[] standardDefaults;
+    final boolean[] standardContracts;
 
     TypeProfile(ProtoPlan plan) {
       stringReads = new boolean[plan.size()];
-      standardDefaults = new boolean[plan.size()];
+      standardContracts = new boolean[plan.size()];
       for (int i = 0; i < plan.size(); i++) {
-        standardDefaults[i] = plan.schema().field(i).equals(plan.field(i).contract());
+        standardContracts[i] = plan.schema().field(i).equals(plan.field(i).contract());
       }
     }
   }
@@ -473,9 +476,19 @@ public final class BuffaPlan implements AutoCloseable {
         }
         if (!field.explicitPresence()) present(i, nonDefault(field, values[i]));
         if (field.required() && !present(i)) throw new ContractViolation("Missing required field");
-        // Absent scalars carry validated defaults; absent repeated fields are empty typed arrays.
-        // Required-field and native input checks remain above this shortcut.
-        if (!present(i) && hints.standardDefaults[i]) continue;
+        // consume checks native kind/ordinal/bounds and converts to the exact Java scalar
+        // representation; children finish recursively and every repeated element takes that
+        // same route. FieldPlan validated defaults. Rewalking a completed standard array adds
+        // no new contract facts. Keep richer schemas on the full validator and audit the
+        // native/Java cooperation in strict mode, including deferred strings.
+        if (hints.standardContracts[i]) {
+          if (STRICT) {
+            Object value = values[i];
+            if (value instanceof TypedRow.Utf8 text) value = text.value(context.owner);
+            Values.validate(plan.schema().field(i), value);
+          }
+          continue;
+        }
         if (values[i] instanceof TypedRow.Utf8 text) {
           // FieldPlan supplies the standard STRING contract, and native parsing has already
           // validated its type, UTF-8 and cumulative payload budget. Never bypass richer facts.
