@@ -939,3 +939,59 @@ recursive, merged-message, map-default, and registered Any cases.
 
 The coverage cycle and access-method gate pass: 315/333 BuffaPlan lines and
 22/22 methods, with 65/65 TypedRow lines and 17/17 methods covered.
+
+## Compact native index extents (unreleased ABI 7)
+
+Revision `b325755` reduces native index entries from 32 to 24 bytes by storing
+payload lengths and subtree ends as 32-bit values. Input regions and native
+allocation budgets already cap these at Java-indexable sizes; scalar values
+remain 64-bit. Rust checks length conversion, Java checks lengths/subtree bounds,
+and generated ABI fingerprints reject old layouts. Native boundary/budget tests,
+strict/non-strict JVM acceptance, SVM/fallback acceptance, and static published
+consumer tests pass. The change is not part of release 0.5.0.
+
+Two randomized five-fork cycles retain identical binaries:
+[first](../benchmarks/results/buffa-compact-index-b325755/paired.md) and
+[repeat](../benchmarks/results/buffa-compact-index-b325755/repeat/paired.md).
+The first run's mixed ingestion medians regress roughly 2–6%; the repeat is flat
+within 1%. Fork ranges overlap, and unchanged controls vary. There is **no
+demonstrated throughput improvement**. Projected Java allocation remains
+1727.75 bytes/op and full consumption 1854.25. The verified benefit is 25% less
+storage per native index entry (and per retained capacity slot), not a reduction
+in total message memory or Java allocations. The change is retained for that
+bounded native-memory saving; the raw results include the unfavorable first run.
+
+### Rejected separate binary materialization loop
+
+A follow-up experiment split binary traversal from text/JSON-specific handling,
+while sharing scalar conversion and finalization. JVM strict/non-strict, SVM,
+comparison smoke, and drift checks passed. Two paired five-fork cycles showed
+only 1–2% lower generic-ingestion medians with overlapping ranges; generated
+projection and full consumption changed direction between cycles. The unchanged
+stock control also shifted substantially in the second cycle. Java allocation
+was unchanged. This did not justify duplicated traversal code, so the experiment
+was reverted. The [first run](../benchmarks/results/buffa-binary-loop-rejected/paired.md),
+[repeat](../benchmarks/results/buffa-binary-loop-rejected/repeat/paired.md), and
+[exact patch](../benchmarks/results/buffa-binary-loop-rejected/experiment.patch)
+remain available for reproduction.
+
+### Rejected dense field lookup; tighter CPU affinity
+
+A native lookup experiment checked the likely ordinal for consecutive field
+numbers before falling back to the existing scan. Rust dense/sparse/reordered
+lookup and no-allocation tests plus both JVM acceptance modes passed. The
+[CPUs 2–9 run](../benchmarks/results/buffa-dense-lookup-rejected/paired.md) was
+mostly flat with overlapping ranges. A second paired cycle on **CPU 2 only**
+substantially narrowed the ranges:
+[single-CPU results](../benchmarks/results/buffa-dense-lookup-rejected/single-cpu/paired.md).
+Projected ingestion was flat, full consumption was 1.4% faster by median, and
+the scalar case slightly slower. Scalar Buffa also uses this lookup, so only
+stock and generated-owned are unchanged controls for this experiment. Java
+allocation was unchanged. The shortcut was reverted rather than retained as
+a generally useful throughput improvement.
+
+Use CPU 2 for subsequent serial ingestion experiments on unclemax, and record
+the affinity with each result. Compare variants within the same affinity
+condition; do not combine the absolute timings from these two conditions.
+The prior experiments remain recorded with their original CPU 2–9 affinity,
+ranges, and uncertainty. The saved patch and binary hashes allow reproduction.

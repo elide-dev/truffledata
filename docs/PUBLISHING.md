@@ -1,6 +1,6 @@
 # Maven publishing
 
-Version 0.5.0 publishes nine thin libraries and a dependency-management BOM, with source jars and POMs. The protobuf runtime can now be consumed without protobuf-java. Experimental JSON modules remain source-only.
+Version 0.6.0 publishes nine thin libraries and a dependency-management BOM, with source jars and POMs. The protobuf runtime can now be consumed without protobuf-java. Experimental JSON modules remain source-only.
 
 | Coordinate | Contents |
 | --- | --- |
@@ -21,21 +21,21 @@ All artifacts require Java 25 and currently target Elide GraalVM `25.5.5-elide.2
 
 ```sh
 # Build publication outputs only, with the normal remote execution/cache configuration:
-bazel build //tools/release:publications --//tools/release:version=0.5.0
+bazel build //tools/release:publications --//tools/release:version=0.6.0
 
 # Run all checks and stage jars, POMs, metadata and checksums without network writes:
-tools/release/publish.sh 0.5.0
+tools/release/publish.sh 0.6.0
 ```
 
-The staging command prints a unique directory under `build/release-repo.*`. Each library artifact includes its binary jar (including generated Truffle implementations), source jar, POM, and MD5/SHA-1/SHA-256/SHA-512 checksums. Source jars come from the library's JavaInfo, rather than an independently maintained source list. The default Bazel version is `0.5.0-SNAPSHOT` for checks; the release script requires an explicit immutable version and refuses snapshots.
+The staging command prints a unique directory under `build/release-repo.*`. Each library artifact includes its binary jar (including generated Truffle implementations), source jar, POM, and MD5/SHA-1/SHA-256/SHA-512 checksums. Source jars come from the library's JavaInfo, rather than an independently maintained source list. The default Bazel version is `0.6.0-SNAPSHOT` for checks; the release script requires an explicit immutable version and refuses snapshots.
 
 ## Upload
 
-The publisher follows Komodo's deployment: `rclone` remote `elide:`, bucket `elide-maven`, public URL `https://maven.elide.dev`. Provision rclone credentials outside the repository. If your configured remote has a different name, set `MAVEN_BUCKET`, for example `MAVEN_BUCKET=r2:elide-maven tools/release/publish.sh 0.5.1 --publish`. The publishing host needs Bash, Python 3, curl, rclone and Bazelisk; compilation and tests retain the normal hermetic Bazel toolchains and RBE settings. The small repository-layout check runs with Python 3 from the pinned remote executor image.
+The publisher follows Komodo's deployment: `rclone` remote `elide:`, bucket `elide-maven`, public URL `https://maven.elide.dev`. Provision rclone credentials outside the repository. If your configured remote has a different name, set `MAVEN_BUCKET`, for example `MAVEN_BUCKET=r2:elide-maven tools/release/publish.sh 0.6.1 --publish`. The publishing host needs Bash, Python 3, curl, rclone and Bazelisk; compilation and tests retain the normal hermetic Bazel toolchains and RBE settings. The small repository-layout check runs with Python 3 from the pinned remote executor image.
 
 ```sh
 # Run from a clean, committed checkout. This command writes to the public repository.
-tools/release/publish.sh 0.5.1 --publish
+tools/release/publish.sh 0.6.1 --publish
 ```
 
 The command runs the full test suite, the explicit native JIT smoke target, and both expected-failure native safety controls before staging artifacts. Native checks use the normal Linux RBE platform. It then merges existing metadata, uploads immutable payloads, verifies bucket contents and public payload bytes, and uploads metadata and checksums. Missing credentials, failed listings and malformed existing metadata fail the release; they are never interpreted as an empty repository. It neither tags nor pushes Git history. CI already exercises publication validation through `bazel test //...`; uploading is an explicit release operation, not a pull-request action.
@@ -44,7 +44,7 @@ The command runs the full test suite, the explicit native JIT smoke target, and 
 
 ## Consume
 
-For version `0.5.0`, Gradle consumers can use:
+For version `0.6.0`, Gradle consumers can use:
 
 ```kotlin
 repositories {
@@ -53,7 +53,7 @@ repositories {
     maven("https://maven.elide.dev/gvm-elide/25.5.5-elide.24")
 }
 dependencies {
-    implementation(platform("dev.elide:truffledata-bom:0.5.0"))
+    implementation(platform("dev.elide:truffledata-bom:0.6.0"))
     implementation("dev.elide:truffledata-jdbc-sqlite")
     implementation("dev.elide:truffledata-protobuf")
     // Select truffledata-jdbc-mysql or truffledata-jdbc-postgresql as needed.
@@ -96,7 +96,7 @@ The Buffa artifact publishes these additional files, each with the normal checks
 | `native` | `h` | Generated C ABI declarations |
 
 Resolve an attachment with Maven's dependency plugin using
-`dev.elide:truffledata-protobuf-buffa:0.5.0:a:linux-x86_64` (or `so`), or use the
+`dev.elide:truffledata-protobuf-buffa:0.6.0:a:linux-x86_64` (or `so`), or use the
 matching classifier/type in your build. For a standalone native-image build, stage the
 archive as `libtruffledata_buffa.a`, add its directory to `-H:CLibraryPath`, and enable
 `--features=dev.elide.truffledata.buffa.BuffaFeature`. Keep the release's Java jars and

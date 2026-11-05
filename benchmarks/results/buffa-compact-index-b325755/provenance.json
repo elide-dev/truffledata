@@ -1,0 +1,25 @@
+{
+  "baseline_commit": "a39d4934064dc3f18e3114ced1f0a31fb8d49922",
+  "candidate_commit": "b3257553298438c5b66716bf5a5cccb0946a1b0a",
+  "binary_build_base": "673952d",
+  "binary_build_patch_sha256": "460ebc2279676fc62bf2284116c3556c87c088b07d44b25e2dd7d7fa5c760836",
+  "host": "unclemax",
+  "cpu_affinity": "2-9",
+  "seeds": [
+    20261105,
+    20261106
+  ],
+  "remote_artifacts": "/tmp/truffledata-buffa-compact-index.URAdLE",
+  "validation": [
+    "https://app.buildbuddy.io/invocation/9aa4b7c1-1ccd-44b6-93d8-3f1ca8563fb7",
+    "https://app.buildbuddy.io/invocation/bce5a0c6-b365-4ea6-add1-2e42822e91a2"
+  ],
+  "notes": [
+    "Five randomized fresh processes per variant/cell/metric; timing and allocation separate. No concurrent profiling.",
+    "Binary built before the 0.5.0 release preparation; tested implementation carried unchanged onto the released main branch.",
+    "Same binary hashes across runs; baseline matches previous profile-links candidate.",
+    "First run mixed medians regress 2\u20136%; repeat flat within 1%. Ranges overlap and unchanged controls vary. No demonstrated throughput improvement.",
+    "Native index entry storage shrinks from 32 to 24 bytes, verified by generated layout and native size/budget tests. Java allocation unchanged.",
+    "ABI 7 not part of released 0.5.0 (ABI 6)."
+  ]
+}

@@ -1,0 +1,139 @@
+diff --git a/protobuf-buffa/src/main/java/dev/elide/truffledata/buffa/BuffaPlan.java b/protobuf-buffa/src/main/java/dev/elide/truffledata/buffa/BuffaPlan.java
+index 4bf4961..ea53b5e 100644
+--- a/protobuf-buffa/src/main/java/dev/elide/truffledata/buffa/BuffaPlan.java
++++ b/protobuf-buffa/src/main/java/dev/elide/truffledata/buffa/BuffaPlan.java
+@@ -349,6 +349,10 @@ public final class BuffaPlan implements AutoCloseable {
+     }
+ 
+     void consume(BuffaWire.Tape tape, int start, int end) {
++      if (context.format == 0) {
++        consumeBinary(tape, start, end);
++        return;
++      }
+       for (int index = start; index < end; ) {
+         context.charge(1);
+         int at = index * Buffa.Field.SIZE;
+@@ -419,38 +423,7 @@ public final class BuffaPlan implements AutoCloseable {
+           child.consume(tape, index + 1, next);
+           decoded = child;
+         } else if (kind == 0) decoded = 0L;
+-        else
+-          decoded =
+-              switch (f.kind()) {
+-                case STRING -> {
+-                  // Singular unconstrained strings can remain in sealed source memory until read.
+-                  // Repeated strings still materialize for element-contract validation below.
+-                  if (!f.repeated()
+-                      && ((String) f.defaultValue()).isEmpty()
+-                      && !hints.stringReads[ordinal])
+-                    yield length == 0
+-                        ? ""
+-                        : new TypedRow.Utf8(
+-                            context.owner,
+-                            Math.toIntExact(value),
+-                            length,
+-                            hints.stringReads,
+-                            ordinal);
+-                  yield context.owner.utf8(Math.toIntExact(value), length);
+-                }
+-                case BYTES -> new BorrowedBytes(context.owner, Math.toIntExact(value), length);
+-                case DOUBLE -> Double.longBitsToDouble(value);
+-                case FLOAT -> (double) Float.intBitsToFloat((int) value);
+-                case BOOL -> value != 0;
+-                case INT32, SINT32, SFIXED32, ENUM -> (long) (int) value;
+-                case UINT32, FIXED32 -> value & 0xffffffffL;
+-                case UINT64, FIXED64 ->
+-                    Values.normalize(
+-                        value >= 0
+-                            ? BigInteger.valueOf(value)
+-                            : BigInteger.valueOf(value & Long.MAX_VALUE).setBit(63));
+-                default -> value;
+-              };
++        else decoded = scalar(f, ordinal, value, length);
+         if (f.repeated()) {
+           Repeated items;
+           if (values[ordinal] instanceof Repeated existing) items = existing;
+@@ -468,6 +441,83 @@ public final class BuffaPlan implements AutoCloseable {
+       }
+     }
+ 
++    /** Binary traversal excludes text duplicate/null/Any handling from the hot loop. */
++    private void consumeBinary(BuffaWire.Tape tape, int start, int end) {
++      for (int index = start; index < end; ) {
++        context.charge(1);
++        int at = index * Buffa.Field.SIZE;
++        int ordinal = tape.bytes.getInt(at + (int) BuffaFFM.Field_number_OFFSET) - 1;
++        int kind = tape.bytes.getInt(at + (int) BuffaFFM.Field_wire_OFFSET);
++        long value = tape.bytes.getLong(at + (int) BuffaFFM.Field_value_OFFSET);
++        int length = tape.bytes.getInt(at + (int) BuffaFFM.Field_length_OFFSET);
++        int next = tape.bytes.getInt(at + (int) BuffaFFM.Field_end_OFFSET);
++        if (ordinal < 0 || ordinal >= plan.size() || next <= index || next > end || length < 0)
++          throw new IllegalStateException("Invalid native typed index");
++        var f = plan.field(ordinal);
++        if (kind != f.kind().ordinal() + 1) throw new IllegalStateException("Native kind mismatch");
++        // A closed-enum map value can invalidate its entire entry in binary protobuf.
++        if (f.map() && length != 0) {
++          index = next;
++          continue;
++        }
++        if (f.kind() == ProtoPlan.Kind.BYTES) context.charge(length);
++        Object decoded;
++        if (f.kind().message()) {
++          if (!f.repeated()) select(ordinal);
++          State child =
++              !f.repeated() && values[ordinal] instanceof State old
++                  ? old
++                  : new State(
++                      plan.nested(ordinal),
++                      Objects.requireNonNull(hints.children[ordinal]),
++                      context);
++          child.consumeBinary(tape, index + 1, next);
++          decoded = child;
++        } else decoded = scalar(f, ordinal, value, length);
++        if (f.repeated()) {
++          Repeated items;
++          if (values[ordinal] instanceof Repeated existing) items = existing;
++          else {
++            items = new Repeated();
++            values[ordinal] = items;
++          }
++          items.add(decoded, tape, index, end, ordinal);
++        } else {
++          select(ordinal);
++          values[ordinal] = decoded;
++        }
++        present(ordinal, true);
++        index = next;
++      }
++    }
++
++    private Object scalar(ProtoPlan.FieldPlan f, int ordinal, long value, int length) {
++      return switch (f.kind()) {
++        case STRING -> {
++          // Singular unconstrained strings can remain in sealed source memory until read.
++          // Repeated strings still materialize for element-contract validation below.
++          if (!f.repeated() && ((String) f.defaultValue()).isEmpty() && !hints.stringReads[ordinal])
++            yield length == 0
++                ? ""
++                : new TypedRow.Utf8(
++                    context.owner, Math.toIntExact(value), length, hints.stringReads, ordinal);
++          yield context.owner.utf8(Math.toIntExact(value), length);
++        }
++        case BYTES -> new BorrowedBytes(context.owner, Math.toIntExact(value), length);
++        case DOUBLE -> Double.longBitsToDouble(value);
++        case FLOAT -> (double) Float.intBitsToFloat((int) value);
++        case BOOL -> value != 0;
++        case INT32, SINT32, SFIXED32, ENUM -> (long) (int) value;
++        case UINT32, FIXED32 -> value & 0xffffffffL;
++        case UINT64, FIXED64 ->
++            Values.normalize(
++                value >= 0
++                    ? BigInteger.valueOf(value)
++                    : BigInteger.valueOf(value & Long.MAX_VALUE).setBit(63));
++        default -> value;
++      };
++    }
++
+     TypedRow finish(int depth) {
+       if (depth > plan.maxDepth()) throw new ContractViolation("Typed nesting budget");
+       if (plan.definition().mapEntry()

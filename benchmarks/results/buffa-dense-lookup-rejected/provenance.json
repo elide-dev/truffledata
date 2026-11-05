@@ -1,0 +1,28 @@
+{
+  "base_commit": "b1674fd",
+  "candidate_patch_sha256": "e73d1f9ec55c19fd4b731e06d4329773f871e88b1b9281cf2aade62086ccb05b",
+  "retained": false,
+  "host": "unclemax",
+  "runs": [
+    {
+      "directory": ".",
+      "cpu_affinity": "2-9",
+      "seed": 20261105
+    },
+    {
+      "directory": "single-cpu",
+      "cpu_affinity": "2",
+      "seed": 20261106
+    }
+  ],
+  "remote_artifacts": "/tmp/truffledata-buffa-dense-lookup.XQw5g9",
+  "validation": "https://app.buildbuddy.io/invocation/4a9270bc-131d-4059-96c3-4d340290fb68",
+  "notes": [
+    "Five randomized fresh processes per variant/cell/metric; no concurrent profiling. Same binaries across affinity conditions.",
+    "Candidate binary built before a test-only u32 annotation fix; production code identical to saved patch.",
+    "Single-CPU condition tightens ranges: projected ingestion flat, full consumption median 1.4% lower, scalar slightly higher. No Java allocation change.",
+    "Scalar Buffa is also affected by this lookup change; only stock and generated-owned are unchanged controls.",
+    "Do not combine absolute results across different CPU affinity conditions.",
+    "Rejected: no sufficient generally useful throughput gain. Future ingestion experiments should use CPU 2 to reduce scheduling variation."
+  ]
+}

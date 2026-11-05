@@ -70,7 +70,7 @@ impl<'a, 'b> Decoder<'a, 'b> {
                         let f = self.numbered(ty, 1)?;
                         let i = self.push(f, 0, 0)?;
                         self.json_object(f.word(12)?, json, depth + 1, false)?;
-                        self.fields[i].end = self.fields.len() as u64;
+                        self.fields[i].end = self.fields.len() as u32;
                         if json.eat(b']') {
                             break;
                         }
@@ -201,7 +201,7 @@ impl<'a, 'b> Decoder<'a, 'b> {
                 return Err(MALFORMED);
             }
         }
-        self.fields[i].end = self.fields.len() as u64;
+        self.fields[i].end = self.fields.len() as u32;
         Ok(())
     }
 }

@@ -82,16 +82,20 @@ repositories {
     maven("https://maven.elide.dev/gvm-elide/25.5.5-elide.24")
 }
 dependencies {
-    implementation(platform("dev.elide:truffledata-bom:0.5.0"))
+    implementation(platform("dev.elide:truffledata-bom:0.6.0"))
     implementation("dev.elide:truffledata-core")
     implementation("dev.elide:truffledata-protobuf")
     // Add JDBC integrations or protobuf-buffa as needed.
 }
 ```
 
-[Release 0.5.0](https://github.com/elide-dev/truffledata/releases/tag/v0.5.0) includes
+[Release 0.6.0](https://github.com/elide-dev/truffledata/releases/tag/v0.6.0) includes
 source JARs, consumer POMs, checksums, and Buffa native attachments. See
 [publishing and consumption](docs/PUBLISHING.md) for Maven, Bazel and native linking.
+
+Release **0.6.0** reduces Buffa native index entries from 32 to 24 bytes, saving 25%
+of index storage. Native ABI 7 requires matching bindings and native libraries;
+this change does not establish a throughput improvement.
 
 ## Performance
 

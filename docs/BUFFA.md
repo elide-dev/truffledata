@@ -262,8 +262,16 @@ row fields before the next decode can reuse it.
 Myna is pinned to the `0.8.0` source commit `42d7ab484bef7a944b374a4683922c0a10c4ec1c`.
 Its generator, Java value readers (`@myna//:values`) and C++ ABI headers
 (`@myna//:values_headers`) are separate Bazel targets. The value ABI is v3; it is
-independent of the Buffa seam ABI, now v6 after adding reusable typed index storage
-(v5 added Unicode conversion).
+independent of the Buffa seam ABI, now v7 with compact index entries
+(v5 added Unicode conversion; v6 added reusable typed index storage).
+
+An index entry is 24 bytes: field number/kind and payload length/subtree end are
+32-bit, while the scalar value or source offset remains 64-bit. Input regions and
+native allocation budgets are already limited to `Integer.MAX_VALUE`; therefore
+lengths and entry counts remain Java-indexable. Native length conversion checks
+this bound, and Java still checks nonnegative lengths and subtree extents. This
+reduces entry storage by 25% without narrowing accepted inputs or scalar values.
+Generated fingerprints reject libraries with the previous 32-byte layout.
 
 Typed decoding reuses a backend-owned native index allocation between calls. Java
 materialization completes before the index becomes reusable; returned messages retain
