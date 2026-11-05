@@ -10,15 +10,19 @@ import java.util.Objects;
 /** Small integer view with inline primitive storage; ordinary typed rows retain a plain array. */
 @ExportLibrary(DataLibrary.class)
 final class ScalarRow extends TypedRow {
-  private static final Object[] NO_VALUES = new Object[0];
-  private static final boolean[] NO_PRESENCE = new boolean[0];
   private final long first;
   private final long second;
+  private final long presence;
 
   ScalarRow(ViewOwner owner, ProtoPlan plan, long first, long second, long presence) {
-    super(owner, plan, NO_VALUES, presence, NO_PRESENCE);
+    super(owner, plan);
+    this.presence = presence;
     this.first = first;
     this.second = second;
+  }
+
+  boolean present(int index) {
+    return (presence & (1L << index)) != 0;
   }
 
   long scalar(int index) {

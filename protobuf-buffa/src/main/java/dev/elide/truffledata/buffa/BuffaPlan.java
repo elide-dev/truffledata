@@ -210,7 +210,7 @@ public final class BuffaPlan implements AutoCloseable {
         else present[i] = true;
       }
     }
-    return new TypedRow(owner, row.plan(), values, presenceBits, present);
+    return new TypedRow.ArrayRow(owner, row.plan(), values, presenceBits, present);
   }
 
   private static Object javaValue(ViewOwner owner, Object value) {
@@ -597,7 +597,7 @@ public final class BuffaPlan implements AutoCloseable {
           Values.validate(plan.schema().field(i), values[i]);
         }
       }
-      return new TypedRow(context.owner, plan, values, presenceBits, present);
+      return new TypedRow.ArrayRow(context.owner, plan, values, presenceBits, present);
     }
 
     private static boolean nonDefault(ProtoPlan.FieldPlan field, Object value) {

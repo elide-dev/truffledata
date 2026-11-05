@@ -14,26 +14,34 @@ import org.jspecify.annotations.Nullable;
 
 /** Schema-stable native typed view. The enclosing message owns every borrowed payload. */
 @ExportLibrary(DataLibrary.class)
-public sealed class TypedRow extends AbstractRow implements ProtoAccess
-    permits ScalarRow, NativeRow {
+public abstract sealed class TypedRow extends AbstractRow implements ProtoAccess
+    permits ScalarRow, NativeRow, TypedRow.ArrayRow {
   final ViewOwner owner;
   private final ProtoPlan plan;
 
-  @CompilationFinal(dimensions = 1)
-  private final Object[] values;
-
-  @CompilationFinal(dimensions = 1)
-  private final boolean[] present;
-
-  private final long presenceBits;
-
-  TypedRow(ViewOwner owner, ProtoPlan plan, Object[] values, long presenceBits, boolean[] present) {
+  TypedRow(ViewOwner owner, ProtoPlan plan) {
     super(plan.schema());
     this.owner = owner;
     this.plan = plan;
-    this.values = values;
-    this.present = present;
-    this.presenceBits = presenceBits;
+  }
+
+  /** Eager storage is not carried by native-index or compact scalar views. */
+  static final class ArrayRow extends TypedRow {
+    @CompilationFinal(dimensions = 1)
+    private final Object[] values;
+
+    @CompilationFinal(dimensions = 1)
+    private final boolean[] present;
+
+    private final long presenceBits;
+
+    ArrayRow(
+        ViewOwner owner, ProtoPlan plan, Object[] values, long presenceBits, boolean[] present) {
+      super(owner, plan);
+      this.values = values;
+      this.present = present;
+      this.presenceBits = presenceBits;
+    }
   }
 
   @Override
@@ -49,7 +57,7 @@ public sealed class TypedRow extends AbstractRow implements ProtoAccess
       if (nativeRow.integer(ordinal)) return nativeRow.integerValue(ordinal);
       throw new ContractViolation("Expected INT64");
     }
-    Object value = values[ordinal];
+    Object value = ((ArrayRow) this).values[ordinal];
     if (value instanceof Long number) return number;
     throw new ContractViolation("Expected INT64");
   }
@@ -83,7 +91,11 @@ public sealed class TypedRow extends AbstractRow implements ProtoAccess
 
   private boolean present(int ordinal) {
     if (this instanceof NativeRow nativeRow) return nativeRow.present(ordinal);
-    return present.length == 0 ? (presenceBits & (1L << ordinal)) != 0 : present[ordinal];
+    if (this instanceof ScalarRow scalar) return scalar.present(ordinal);
+    var row = (ArrayRow) this;
+    return row.present.length == 0
+        ? (row.presenceBits & (1L << ordinal)) != 0
+        : row.present[ordinal];
   }
 
   @ExportMessage
@@ -118,7 +130,7 @@ public sealed class TypedRow extends AbstractRow implements ProtoAccess
       if (nativeRow.integer(index)) return nativeRow.integerValue(index, buffer);
       throw new UnexpectedResultException(nativeRow.value(index, buffer));
     }
-    Object value = row.values[index];
+    Object value = ((ArrayRow) row).values[index];
     if (value instanceof Long number) return number;
     throw new UnexpectedResultException(row.resolved(index));
   }
@@ -159,7 +171,7 @@ public sealed class TypedRow extends AbstractRow implements ProtoAccess
 
   private Object resolved(int index) {
     if (this instanceof NativeRow nativeRow) return nativeRow.value(index);
-    Object value = values[index];
+    Object value = ((ArrayRow) this).values[index];
     return value instanceof Utf8 text ? text.value(owner) : value;
   }
 

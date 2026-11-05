@@ -17,9 +17,7 @@ import org.jspecify.annotations.Nullable;
 
 /** Binary view over an owned native index. Java child objects are created only when accessed. */
 final class NativeRow extends TypedRow {
-  private static final Object[] NO_VALUES = new Object[0];
   private static final int[] PACKED_OFFSETS = new int[0];
-  private static final boolean[] NO_PRESENCE = new boolean[0];
   private final BuffaWire.Tape tape;
   private final int start;
   private final int end;
@@ -34,7 +32,7 @@ final class NativeRow extends TypedRow {
   private @Nullable Object firstValue;
 
   NativeRow(ViewOwner owner, ProtoPlan plan, BuffaWire.Tape tape, int start, int end) {
-    super(owner, plan, NO_VALUES, 0, NO_PRESENCE);
+    super(owner, plan);
     this.tape = tape;
     this.start = start;
     this.end = end;
