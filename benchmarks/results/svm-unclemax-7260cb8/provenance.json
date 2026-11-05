@@ -1,0 +1,17 @@
+{
+  "source_commit": "7260cb87be5e92240034580e5d1c8d76b786297e",
+  "host": "unclemax",
+  "cpu_affinity": "2-9",
+  "measurement_command": "taskset -c 2-9 python3 compare.py run --binary ./truffledata-comparison --revision 7260cb87be5e92240034580e5d1c8d76b786297e --output measurement",
+  "profile_source_patch_sha256": "85d2bb6441262e54739843e31a8587efdc477773ef6a246211776502ffa4ffd1",
+  "profile_command": "taskset -c 2-9 perf record -F 997 --call-graph fp -o CELL.perf -- ./truffledata-comparison-profile -Xmx1g WORKLOAD ENGINE STAGE time CELL.jfr",
+  "remote_artifacts": "/tmp/truffledata-proto-baseline.jYvgKj",
+  "notes": [
+    "All uninstrumented timing finished before compiler tracing or hardware profiling.",
+    "JFR starts after warmup and records three one-second samples; perf includes process startup.",
+    "Profiles use a separate symbolized binary; do not compare its timing output as benchmark scores.",
+    "Java allocation excludes native memory. JFR allocation samples are counts, not bytes.",
+    "Raw JFR, perf, and call-chain reports retained on unclemax.",
+    "SQL profiles contain substantial per-row harness dispatch; fixtures are not complete driver queries."
+  ]
+}

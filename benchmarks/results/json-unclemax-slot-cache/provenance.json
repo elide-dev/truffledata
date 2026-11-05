@@ -1,0 +1,10 @@
+{
+  "base_commit": "7260cb87be5e92240034580e5d1c8d76b786297e",
+  "source_patch_sha256": "a77344323c591d4e438fa9714e4cd081a8401cc3e05cd6ad9a9c8e9165cae24a",
+  "host": "unclemax",
+  "cpu_affinity": "2-9",
+  "remote_artifacts": "/tmp/truffledata-json-slots.YSQ4wj",
+  "command": "taskset -c 2-9 env TEST_UNDECLARED_OUTPUTS_DIR=measurement python3 json_measure.py ./json-comparison",
+  "decision": "Rejected: specialized peak fork ranges overlap baseline; generic/AOT results do not improve, while ingestion gains 8 Java bytes per record.",
+  "validation": "https://app.buildbuddy.io/invocation/c2438d77-63a2-48c4-a5a0-7959e4a49963"
+}

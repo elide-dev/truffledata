@@ -11,6 +11,7 @@ import org.jspecify.annotations.Nullable;
 
 /** Reusable schema program shared by native binary, textproto and ProtoJSON ingestion. */
 public final class BuffaPlan implements AutoCloseable {
+  private static final boolean STRICT = Boolean.getBoolean("truffledata.strict");
   private final BuffaWire decoder;
   private final ProtoPlan plan;
   private final ReadProfile profile;
@@ -113,7 +114,10 @@ public final class BuffaPlan implements AutoCloseable {
         return compact(owner, backend.scalars(schema, input, plan));
       try (var tape = backend.typed(schema, input, format, payload, plan, nativeBytes)) {
         State state =
-            new State(plan, new DecodeContext(owner, format, plan.limits().maxCells(), profile));
+            new State(
+                plan,
+                profile.hints[0],
+                new DecodeContext(owner, format, plan.limits().maxCells(), profile));
         state.consume(tape, 0, tape.count);
         return owner.finish(state.finish(1), tape.allocated);
       }
@@ -186,26 +190,46 @@ public final class BuffaPlan implements AutoCloseable {
   /** Thread-confined, bounded hints: reading a string makes later values eager for that field. */
   private static final class ReadProfile {
     final List<ProtoPlan> types;
-    final Map<String, TypeProfile> byType;
+    final TypeProfile[] hints;
 
     ReadProfile(List<ProtoPlan> types) {
       this.types = types;
+      hints = new TypeProfile[types.size()];
       Map<String, TypeProfile> profiles = new HashMap<>();
-      for (ProtoPlan type : types) profiles.put(type.name(), new TypeProfile(type));
-      byType = Map.copyOf(profiles);
+      for (int i = 0; i < types.size(); i++) {
+        var type = types.get(i);
+        hints[i] = new TypeProfile(type);
+        profiles.put(type.name(), hints[i]);
+      }
+      // Link only after every type exists: recursive schemas must not recursively construct
+      // profiles. Resolve names once here, never while materializing nested messages.
+      for (int i = 0; i < types.size(); i++) {
+        var type = types.get(i);
+        for (int field = 0; field < type.size(); field++)
+          if (type.field(field).kind().message())
+            hints[i].children[field] =
+                Objects.requireNonNull(profiles.get(type.nested(field).name()));
+      }
     }
   }
 
-  /** Defaults are validated by FieldPlan; richer contracts keep the general validation route. */
+  /**
+   * Exact standard contracts are established by schema-directed decoding; richer facts revalidate.
+   */
   private static final class TypeProfile {
     final boolean[] stringReads;
-    final boolean[] standardDefaults;
+    final boolean[] standardContracts;
+    final Object[] defaults;
+    final @Nullable TypeProfile[] children;
 
     TypeProfile(ProtoPlan plan) {
       stringReads = new boolean[plan.size()];
-      standardDefaults = new boolean[plan.size()];
+      standardContracts = new boolean[plan.size()];
+      defaults = new Object[plan.size()];
+      children = new TypeProfile[plan.size()];
       for (int i = 0; i < plan.size(); i++) {
-        standardDefaults[i] = plan.schema().field(i).equals(plan.field(i).contract());
+        standardContracts[i] = plan.schema().field(i).equals(plan.field(i).contract());
+        defaults[i] = State.initial(plan.field(i));
       }
     }
   }
@@ -285,16 +309,16 @@ public final class BuffaPlan implements AutoCloseable {
     long presenceBits;
     final boolean[] seen;
 
-    State(ProtoPlan plan, DecodeContext context) {
+    State(ProtoPlan plan, TypeProfile hints, DecodeContext context) {
       this.plan = plan;
       this.context = context;
-      hints = Objects.requireNonNull(context.profile.byType.get(plan.name()));
+      this.hints = hints;
       context.charge(plan.size());
-      values = new Object[plan.size()];
+      // Copy immutable defaults, not payloads. Repeated placeholders are replaced per owner.
+      values = Arrays.copyOf(hints.defaults, hints.defaults.length, Object[].class);
       present = values.length > Long.SIZE ? new boolean[values.length] : NO_SEEN_FIELDS;
       // Binary protobuf permits duplicate fields; only text formats track duplicates.
       seen = context.format == 0 ? NO_SEEN_FIELDS : new boolean[values.length];
-      for (int i = 0; i < values.length; i++) values[i] = initial(plan.field(i));
     }
 
     boolean present(int ordinal) {
@@ -318,7 +342,7 @@ public final class BuffaPlan implements AutoCloseable {
           if (i != ordinal && plan.field(i).oneof() == field.oneof()) {
             if (context.format != 0 && present(i))
               throw new ContractViolation("Multiple oneof members");
-            values[i] = initial(plan.field(i));
+            values[i] = hints.defaults[i];
             present(i, false);
           }
         }
@@ -366,7 +390,7 @@ public final class BuffaPlan implements AutoCloseable {
               || value >= context.profile.types.size())
             throw new IllegalStateException("Invalid Any index");
           ProtoPlan target = context.profile.types.get((int) value);
-          State payload = new State(target, context);
+          State payload = new State(target, context.profile.hints[(int) value], context);
           payload.consume(tape, index + 1, next);
           byte[] encoded = target.encode(payload.finish(1).snapshot());
           context.charge(encoded.length);
@@ -388,7 +412,10 @@ public final class BuffaPlan implements AutoCloseable {
           State child =
               !f.repeated() && values[ordinal] instanceof State old
                   ? old
-                  : new State(plan.nested(ordinal), context);
+                  : new State(
+                      plan.nested(ordinal),
+                      Objects.requireNonNull(hints.children[ordinal]),
+                      context);
           child.consume(tape, index + 1, next);
           decoded = child;
         } else if (kind == 0) decoded = 0L;
@@ -446,11 +473,18 @@ public final class BuffaPlan implements AutoCloseable {
       if (plan.definition().mapEntry()
           && plan.field(1).kind().message()
           && values[1] == Missing.INSTANCE) {
-        values[1] = new State(plan.nested(1), context);
+        values[1] = new State(plan.nested(1), Objects.requireNonNull(hints.children[1]), context);
         present(1, true);
       }
       for (int i = 0; i < values.length; i++) {
         var field = plan.field(i);
+        if (!STRICT && !present(i) && hints.standardContracts[i]) {
+          if (field.required()) throw new ContractViolation("Missing required field");
+          // Defaults are already validated and absent by definition. Repeated defaults must
+          // nevertheless be bound to this decode's owner, never shared across messages.
+          if (field.repeated()) values[i] = context.emptyArray();
+          continue;
+        }
         if (values[i] instanceof State child) values[i] = child.finish(depth + 1);
         else if (field.repeated()) {
           Object[] items = values[i] instanceof Repeated repeated ? repeated.finish() : EMPTY_ITEMS;
@@ -473,9 +507,19 @@ public final class BuffaPlan implements AutoCloseable {
         }
         if (!field.explicitPresence()) present(i, nonDefault(field, values[i]));
         if (field.required() && !present(i)) throw new ContractViolation("Missing required field");
-        // Absent scalars carry validated defaults; absent repeated fields are empty typed arrays.
-        // Required-field and native input checks remain above this shortcut.
-        if (!present(i) && hints.standardDefaults[i]) continue;
+        // consume checks native kind/ordinal/bounds and converts to the exact Java scalar
+        // representation; children finish recursively and every repeated element takes that
+        // same route. FieldPlan validated defaults. Rewalking a completed standard array adds
+        // no new contract facts. Keep richer schemas on the full validator and audit the
+        // native/Java cooperation in strict mode, including deferred strings.
+        if (hints.standardContracts[i]) {
+          if (STRICT) {
+            Object value = values[i];
+            if (value instanceof TypedRow.Utf8 text) value = text.value(context.owner);
+            Values.validate(plan.schema().field(i), value);
+          }
+          continue;
+        }
         if (values[i] instanceof TypedRow.Utf8 text) {
           // FieldPlan supplies the standard STRING contract, and native parsing has already
           // validated its type, UTF-8 and cumulative payload budget. Never bypass richer facts.

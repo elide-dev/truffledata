@@ -725,3 +725,217 @@ The [chart manifest](images/independent-latest/comparison-manifest.json) identif
 repeat data, executable and implementation revision. Released 0.4.0 graphics and earlier
 development evidence remain above. General and typed simdjson decoding is the next
 integration; the Myna value readers and C++ headers are prepared as separate Bazel targets.
+
+## Stable-host profiling cycle: Myna 0.8.0
+
+The [`7260cb8` unclemax cycle](../benchmarks/results/svm-unclemax-7260cb8/comparison.md)
+runs all 120 cells with three fresh timing processes and three separate allocation
+processes per cell, pinned to CPUs 2–9 on a Threadripper PRO 9965WX. No profiling
+process ran concurrently with timing. Native memory is excluded from Java counters.
+
+| Operation | Stock | TruffleData | Stock / TruffleData Java bytes |
+| --- | ---: | ---: | ---: |
+| Scalar generated ingestion | 47.61 ns | 17.68 ns | 136 / 88 |
+| Scalar generated peak reads | 0.80 ns | 0.82 ns | 1 / 1 |
+| Scalar generated parse/project peak | 33.79 ns | 7.77 ns | 137 / 1 |
+| Nested generic owned ingestion | 633.47 ns | 3126.00 ns | 1776.75 / 2976 |
+| Nested Buffa ingestion | 633.47 ns | 2464.89 ns | 1776.75 / 1727.75 |
+| Nested generated ingestion | 633.47 ns | 688.59 ns | 1776.75 / 1800.50 |
+| Nested generated full consumption | 693.03 ns | 729.18 ns | 1776.75 / 1800.50 |
+| Nested generated serialization | 428.96 ns | 469.84 ns | 436.50 / 192.50 |
+
+Scalar peak traces show one loop and zero calls for stock, generated-owned,
+compact-owned generated access, and Buffa generated access. Stock and generated-owned
+last-tier code both occupy 655 bytes (58 versus 57 IR nodes). This is evidence of
+comparable compilation for this fixture, not proof that all paths match stock.
+
+Post-warmup JFR plus symbolized hardware profiles identify the next costs:
+
+- Generic owned nested ingestion: static storage filling, field validation, and
+  repeated payload accounting. `StaticLayout.read` accounts for 8.52% of hardware
+  samples, `State.finish` 6.75%, and `PayloadBudget.accept` 4.68%.
+- Buffa nested ingestion: Java `State.consume` (13.19%) and `State.finish` (10.91%)
+  together exceed native `Decoder.binary` (9.47%). Optimizing only the native parser
+  would leave substantial Java materialization work.
+- Generated nested ingestion: varint decoding (11.36%) and UTF-8 validation/counting
+  (8.81%) are prominent, followed by generated consume/finish methods.
+- SQL fixtures: per-row benchmark dispatch (`startsWith`) and uncached library lookup
+  are visible costs alongside storage construction; do not attribute the entire
+  measured difference to driver decoding or static storage.
+
+Hardware percentages are sampled self time for the whole diagnostic process;
+JFR records only the post-warmup interval. Raw counts, fork ranges, binary hashes,
+compiler traces, and the exact profiling patch are retained in the result directory.
+
+To record a single steady-state cell with the separate profiling executable:
+
+```sh
+bazel build //benchmarks/comparison:svm_profile --remote_download_outputs=toplevel
+# Run the Linux amd64 executable on the measurement host:
+./truffledata-comparison-profile -Xmx1g proto-mixed owned ingest time owned.jfr
+python3 tools/bench/json_profile_summary.py recordings dev.elide.truffledata.comparison.Comparison
+```
+
+The optional fifth argument selects post-warmup recording; the original repeated
+profiling mode remains available without it. Record a `binary.sha256` file in the
+recordings directory for the summary tool. Never use instrumented timings as scores.
+
+## Buffa standard-contract proof reuse
+
+Revision `8b05d0b` removes the second field/element validation walk when the
+completed native-decoded value has exactly its standard protobuf contract. Native
+kind/index checks, required fields, depth/work budgets, duplicate handling, map
+semantics, and scoped ownership remain enforced. Strict mode rechecks completed
+values, including deferred UTF-8 strings, with the general field validator.
+
+The [paired unclemax cycle](../benchmarks/results/buffa-contracts-8b05d0b/paired.md)
+randomizes five fresh forks per binary/cell/metric, with stock and generated-owned
+controls. Baseline and candidate processes never overlap.
+
+| Buffa operation | Baseline | Candidate | Java bytes, unchanged |
+| --- | ---: | ---: | ---: |
+| Nested ingestion | 2496.95 ns | 2115.37 ns | 1727.75 |
+| Nested ingestion with generated getters | 2303.79 ns | 1979.80 ns | 1727.75 |
+| Nested full consumption | 3098.03 ns | 2941.41 ns | 1854.25 |
+
+The first two cases improve roughly 15% and 14%, with disjoint fork-median ranges.
+The stock control also improves about 2%, and generated-owned control ranges overlap;
+these controls bound how confidently to attribute timing changes to this patch.
+The unchanged compact-scalar control has overlapping ranges and a slightly higher
+candidate median. This is not a universal speedup or parity claim: nested Buffa
+ingestion still trails the stock control (651.23 ns).
+
+Strict JVM/native/fallback acceptance, the shipping-mode comparison smoke, and a new
+full non-strict JVM acceptance target all pass. CI runs both strict and non-strict
+variants in its Codecov cycle. That cycle covers 299/317 BuffaPlan lines and 22/22
+methods; the shortcut and strict audit lines are exercised. Future richer-contract
+fallback branches remain unexercised because current ProtoPlan schemas derive their
+contracts directly from FieldPlan.
+
+## Reusing validated defaults during materialization
+
+Revision `8f2e21e` caches immutable protobuf defaults once per compiled schema.
+A message copies those references into its existing values array, and absent
+standard fields skip unnecessary finalization work. Required fields still fail
+when absent; empty repeated values still bind to each message owner. Strict mode
+retains the full finalization/audit route. The per-schema template adds no
+per-message allocation and copies no payload.
+
+Two randomized five-fork cycles use identical baseline/candidate binaries:
+[first](../benchmarks/results/buffa-defaults-8f2e21e/paired.md) and
+[repeat](../benchmarks/results/buffa-defaults-8f2e21e/repeat/paired.md).
+
+| Buffa operation | First baseline → candidate | Repeat baseline → candidate |
+| --- | ---: | ---: |
+| Nested ingestion | 2194.74 → 2100.54 ns | 2105.18 → 2008.56 ns |
+| Nested ingestion with generated getters | 2089.92 → 1969.48 ns | 2037.68 → 1888.43 ns |
+| Nested full consumption | 2786.65 → 2859.04 ns | 2868.67 → 2718.39 ns |
+
+Projected ingestion improves roughly 4–7% across the two runs. Generic projection
+ranges overlap; generated-getter projection ranges are narrowly disjoint.
+Full-consumption and unchanged control ranges overlap, with medians moving in
+different directions; this does not establish a full-consumption speedup. Java
+allocations remain 1727.75 bytes for projected ingestion and 1854.25 for full
+consumption. Native memory and the per-schema template are outside these
+per-message Java measurements.
+
+Strict/non-strict JVM acceptance, SVM acceptance, native comparison smoke, and
+Gazelle drift pass. The coverage cycle and access-method gate also pass, with
+303/321 BuffaPlan lines and 22/22 methods covered; the new absent-field route is
+exercised by the non-strict corpus. Existing tests include custom proto2 defaults,
+explicit default presence, wide presence masks, oneof switching, and independently
+closed empty repeated arrays.
+
+## Reusing the native Buffa index
+
+Revision `10592bd` retains the temporary typed index in each native backend instead
+of allocating, growing, and freeing it for every message. Materialized messages
+remain independent of that scratch allocation. Native tests check allocation-free
+warmed reuse, failure/recovery ownership, and smaller-budget enforcement; JVM and
+SVM acceptance exercise live messages across reuse and typed/generic transitions.
+This retains native memory until an incompatible budget, native parse failure,
+generic decode, or backend close releases it. Java allocation is unchanged.
+
+Two randomized five-fork cycles on unclemax compare identical binaries against
+the preceding default-template optimization:
+[first](../benchmarks/results/buffa-reuse-10592bd/paired.md) and
+[repeat](../benchmarks/results/buffa-reuse-10592bd/repeat/paired.md).
+
+| Buffa operation | First baseline → candidate | Repeat baseline → candidate |
+| --- | ---: | ---: |
+| Nested ingestion | 2013.80 → 1980.76 ns | 2001.10 → 1983.04 ns |
+| Nested ingestion with generated getters | 1971.90 → 1865.86 ns | 1982.52 → 1795.42 ns |
+| Nested full consumption | 2877.50 → 2723.85 ns | 2729.04 → 2744.00 ns |
+
+Generated-getter ingestion improves 5–9% by median, but fork ranges overlap.
+Generic ingestion moves only 1–2%; full consumption is inconsistent across runs.
+Unchanged stock and generated-owned controls also have overlapping ranges.
+The robust result is eliminating warmed native index allocations, not a universal
+throughput gain. Projected Java allocation stays at 1727.75 bytes/op, excluding
+native memory. Stock ingestion remains around 665–668 ns in the candidate runs,
+so mixed-message Buffa ingestion still has a substantial performance gap.
+
+A refreshed symbolized SVM profile of this revision records four cells sequentially
+on unclemax. In the generic nested ingestion case, hardware self samples attribute
+16.31% to `State.consume`, 10.87% to `State.finish`, 11.35% to native binary parsing,
+and 6.23% to SVM's general object-clone routine. Direct buffer reads and checked
+long-to-int conversion account for another 9.48%. This supports targeting Java
+materialization next. Post-warmup JFR also places consume/finish first; its Java
+stacks cannot separate native work from the calling Java frame. Full consumption
+additionally spends substantial time in uncached library dispatch. These profiles
+are diagnostic, not timing scores; allocation sample counts are not byte totals.
+See the [hardware summary](../benchmarks/results/buffa-reuse-10592bd/perf-summary.json),
+[JFR summary](../benchmarks/results/buffa-reuse-10592bd/profile-summary.json), and
+[artifact hashes](../benchmarks/results/buffa-reuse-10592bd/profile-artifacts.sha256).
+
+## Copying defaults with a known array type
+
+Revision `cb2e5e6` replaces the default-template `clone()` with an explicitly
+`Object[]`-typed `Arrays.copyOf`, targeting the general clone routine observed in
+the preceding profile. Ownership, array contents, and per-message allocation are
+unchanged. Strict/non-strict JVM acceptance, SVM acceptance, comparison smoke,
+and Gazelle drift pass.
+
+Three randomized five-fork cycles retain identical baseline/candidate binaries:
+[first](../benchmarks/results/buffa-arraycopy-cb2e5e6/paired.md),
+[second](../benchmarks/results/buffa-arraycopy-cb2e5e6/repeat/paired.md), and
+[third](../benchmarks/results/buffa-arraycopy-cb2e5e6/repeat2/paired.md).
+Generated-getter ingestion medians move 1797.53 → 1708.20 ns,
+1862.47 → 1788.47 ns, and 1879.16 → 1726.29 ns, respectively (4–8%).
+Fork ranges overlap. Generic projection is flat in the first cycle and improves
+in the others; full consumption improves in the first two and regresses in the
+third. Unchanged controls also move: the compact-scalar candidate is slower in
+the second cycle and faster in the third, while stock favors the candidate in
+all three. Consequently these results do not isolate a general causal speedup.
+The targeted change is retained, with no new allocation or correctness tradeoff;
+the raw controls and inconsistent cases remain part of the evidence.
+
+## Linking nested profiles at schema compilation
+
+Revision `a39d493` resolves nested materialization profiles once per compiled plan.
+It replaces a name-map lookup for every nested message with a direct profile link,
+including root and registered Any types. Linking happens after all profiles exist
+so recursive schemas retain their cycles. Each message still uses its original
+ProtoPlan, budgets, and ownership; only profile lookup changes. Links add
+per-schema references but no per-message allocation.
+
+Two randomized five-fork cycles compare identical binaries:
+[first](../benchmarks/results/buffa-links-a39d493/paired.md) and
+[repeat](../benchmarks/results/buffa-links-a39d493/repeat/paired.md).
+
+| Buffa operation | First baseline → candidate | Repeat baseline → candidate |
+| --- | ---: | ---: |
+| Nested ingestion | 1994.44 → 1813.03 ns | 1891.64 → 1822.11 ns |
+| Nested ingestion with generated getters | 1801.96 → 1662.64 ns | 1781.07 → 1706.15 ns |
+| Nested full consumption | 2655.30 → 2554.12 ns | 2506.32 → 2462.35 ns |
+
+Projected ingestion improves roughly 4–9% by median. Its first-cycle ranges are
+disjoint, while repeat ranges overlap. Full-consumption ranges overlap in both.
+Unchanged controls vary in both directions, so these are bounded experimental
+results, not a universal speedup. Java allocation remains 1727.75 bytes/op for
+projection and 1854.25 for full consumption. Strict/non-strict JVM acceptance,
+SVM acceptance, comparison smoke, and Gazelle drift pass, including the existing
+recursive, merged-message, map-default, and registered Any cases.
+
+The coverage cycle and access-method gate pass: 315/333 BuffaPlan lines and
+22/22 methods, with 65/65 TypedRow lines and 17/17 methods covered.

@@ -1,0 +1,150 @@
+load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_library", "cc_test")
+
+cc_library(
+    name = "decoder",
+    hdrs = [
+        "decoder.h",
+        "index_memory.h",
+    ],
+    copts = ["-std=c++17"],
+    deps = [
+        "@myna//:values_headers",
+        "@simdjson",
+    ],
+)
+
+cc_test(
+    name = "test",
+    srcs = ["decoder_test.cc"],
+    copts = ["-std=c++17"],
+    deps = [":decoder"],
+)
+
+config_setting(
+    name = "linux_arm64",
+    constraint_values = [
+        "@platforms//os:linux",
+        "@platforms//cpu:aarch64",
+    ],
+)
+
+genrule(
+    name = "bindings",
+    srcs = ["json.seam"],
+    outs = [
+        "generated/JsonFFM.java",
+        "generated/Json.java",
+        "generated/JsonForeignFeature.java",
+        "generated/seam.rs",
+        "generated/seam.h",
+        "generated/seam.json",
+        "generated/seam.abi",
+        "generated/seam.ll",
+        "generated/META-INF/native-image/dev.elide.myna/dev.elide.truffledata.json.generated.Json/native-image.properties",
+    ],
+    cmd = "$(location @myna//:generator) generate $(location json.seam) --out $(RULEDIR)/generated --target " + select({
+        "@platforms//os:macos": "aarch64-apple-darwin",
+        ":linux_arm64": "aarch64-unknown-linux-gnu",
+        "//conditions:default": "x86_64-unknown-linux-gnu",
+    }),
+    tools = ["@myna//:generator"],
+)
+
+cc_library(
+    name = "truffledata_json",
+    srcs = ["api.cc"],
+    hdrs = [
+        "api.h",
+        "generated/seam.h",
+    ],
+    copts = [
+        "-std=c++17",
+        "-O3",
+    ],
+    linkopts = select({
+        "@platforms//os:macos": ["-lc++"],
+        "//conditions:default": [
+            "-lc++",
+            "-lc++abi",
+        ],
+    }),
+    visibility = ["//visibility:public"],
+    deps = [
+        ":decoder",
+        ":typed",
+    ],
+)
+
+cc_test(
+    name = "api_test",
+    srcs = ["api_test.cc"],
+    copts = ["-std=c++17"],
+    deps = [
+        ":truffledata_json",
+        "@myna//:values_headers",
+    ],
+)
+
+filegroup(
+    name = "java_bindings",
+    srcs = [
+        "generated/Json.java",
+        "generated/JsonFFM.java",
+    ],
+    visibility = ["//visibility:public"],
+)
+
+cc_binary(
+    name = "json_shared.so",
+    srcs = ["api.cc"],
+    copts = [
+        "-std=c++17",
+        "-O3",
+    ],
+    linkshared = True,
+    linkstatic = True,
+    visibility = ["//visibility:public"],
+    deps = [":truffledata_json"],
+)
+
+filegroup(
+    name = "native_resources",
+    srcs = ["generated/META-INF/native-image/dev.elide.myna/dev.elide.truffledata.json.generated.Json/native-image.properties"],
+    visibility = ["//visibility:public"],
+)
+
+filegroup(
+    name = "descriptor",
+    srcs = ["generated/seam.json"],
+    visibility = ["//visibility:public"],
+)
+
+cc_library(
+    name = "typed",
+    hdrs = [
+        "generated/seam.h",
+        "typed.h",
+    ],
+    copts = ["-std=c++17"],
+    deps = [
+        ":decoder",
+        "//bazel:unicode",
+    ],
+)
+
+cc_test(
+    name = "typed_test",
+    srcs = ["typed_test.cc"],
+    copts = ["-std=c++17"],
+    deps = [":typed"],
+)
+
+cc_test(
+    name = "unicode_test",
+    srcs = ["unicode_test.cc"],
+    copts = ["-std=c++17"],
+    deps = [
+        ":typed",
+        "//protobuf-buffa/native:truffledata_buffa",
+    ],
+)

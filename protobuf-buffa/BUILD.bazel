@@ -7,7 +7,10 @@ package(default_visibility = ["//visibility:public"])
 java_library(
     name = "bindings",
     srcs = ["//protobuf-buffa/native:java_bindings"],
+    resource_strip_prefix = "protobuf-buffa/native/generated",
+    resources = ["//protobuf-buffa/native:native_resources"],
     deps = [
+        "//bazel:myna_compiler_sdk",
         "@maven//:org_graalvm_sdk_nativeimage",
         "@maven//:org_graalvm_sdk_word",
     ],

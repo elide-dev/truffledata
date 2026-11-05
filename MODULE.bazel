@@ -1,6 +1,6 @@
 module(
     name = "truffledata",
-    version = "0.4.0",
+    version = "0.5.0",
 )
 
 bazel_dep(name = "platforms", version = "1.1.0")
@@ -292,19 +292,45 @@ crate.from_cargo(
     ],
 )
 
-# Cargo's C++ build must stay optimized even in Bazel fastbuild/test configurations.
+# One optimized C++ simdutf library serves both Rust protobuf and C++ JSON.
 crate.annotation(
-    build_script_env = {"CXXFLAGS": "-O3"},
-    crate = "simdutf",
-    rustc_flags = ["-Copt-level=3"],
+    additive_build_file_content = """
+load("@rules_cc//cc:defs.bzl", "cc_library")
+cc_library(
+    name = "native",
+    srcs = ["cpp/simdutfrs.cpp"],
+    hdrs = ["cpp/simdutf.h", "cpp/simdutf.cpp", "cpp/simdutfrs_extra.cpp"],
+    includes = ["cpp"],
+    copts = ["-std=c++17", "-O3"],
+    linkopts = select({
+        "@platforms//os:macos": ["-lc++"],
+        "//conditions:default": ["-lc++", "-lc++abi"],
+    }),
+    visibility = ["//visibility:public"],
 )
-use_repo(crate, "crates")
+""",
+    crate = "simdutf",
+    gen_build_script = "off",
+    rustc_flags = ["-Copt-level=3"],
+    deps = [":native"],
+)
+use_repo(crate, "crates", simdutf_src = "crates__simdutf-0.7.0")
 
 http_archive(
     name = "myna",
     build_file = "//bazel:myna.BUILD",
-    sha256 = "20852660cc80ed370779fdc27099bc7f23b511405511323a8344f2ce7502300d",
-    strip_prefix = "myna-7401c446ef9ad80d7bd14a9bf92f360a04956b80",
+    sha256 = "71a53cd56ca815ae37f07a7a64fdbb0a24358032f12368021d9ea25238afef97",
+    strip_prefix = "myna-42d7ab484bef7a944b374a4683922c0a10c4ec1c",
     type = "tar.gz",
-    urls = ["https://codeload.github.com/elide-dev/myna/tar.gz/7401c446ef9ad80d7bd14a9bf92f360a04956b80"],
+    urls = ["https://codeload.github.com/elide-dev/myna/tar.gz/42d7ab484bef7a944b374a4683922c0a10c4ec1c"],
+)
+
+# Production JSON adapter: match the parser qualified by Myna's value ABI tests.
+http_archive(
+    name = "simdjson",
+    build_file = "//bazel:simdjson.BUILD",
+    sha256 = "d669fa399613c20bbf7705f057a72984331b223cd5e8d20666ef063dbf97f3e6",
+    strip_prefix = "simdjson-5.1.1",
+    type = "tar.gz",
+    urls = ["https://codeload.github.com/simdjson/simdjson/tar.gz/refs/tags/v5.1.1"],
 )

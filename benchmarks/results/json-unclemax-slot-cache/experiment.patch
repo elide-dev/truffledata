@@ -1,0 +1,40 @@
+diff --git a/json/src/main/java/dev/elide/truffledata/json/JsonScalarRecord.java b/json/src/main/java/dev/elide/truffledata/json/JsonScalarRecord.java
+index 08ba8bd..14cac25 100644
+--- a/json/src/main/java/dev/elide/truffledata/json/JsonScalarRecord.java
++++ b/json/src/main/java/dev/elide/truffledata/json/JsonScalarRecord.java
+@@ -14,12 +14,14 @@ import org.graalvm.word.Pointer;
+ public final class JsonScalarRecord implements AutoCloseable {
+   private final Schema schema;
+   private final VoidPointer result;
++  private final Pointer slots;
+   private final Thread thread = Thread.currentThread();
+   private boolean open = true;
+ 
+   JsonScalarRecord(Schema schema, VoidPointer result) {
+     this.schema = schema;
+     this.result = result;
++    this.slots = (Pointer) Json.JsonTypedResult.slots(result);
+   }
+ 
+   private void check(int index) {
+@@ -49,8 +51,7 @@ public final class JsonScalarRecord implements AutoCloseable {
+       throw new IllegalArgumentException("JSON scalar kind mismatch");
+     if (!isPresent(index) || isNull(index))
+       throw new IllegalStateException("JSON scalar missing or null");
+-    return (VoidPointer)
+-        ((Pointer) Json.JsonTypedResult.slots(result)).add(index * Json.JsonScalarSlot.SIZE);
++    return (VoidPointer) slots.add(index * Json.JsonScalarSlot.SIZE);
+   }
+ 
+   long bits(JsonScalarAccess access) {
+@@ -63,9 +64,7 @@ public final class JsonScalarRecord implements AutoCloseable {
+         || (access.nullable && (Json.JsonTypedResult.nulls(result) & bit) != 0))
+       throw new IllegalStateException("JSON scalar missing or null");
+     return Json.JsonScalarSlot.bits(
+-        (VoidPointer)
+-            ((Pointer) Json.JsonTypedResult.slots(result))
+-                .add(access.index * Json.JsonScalarSlot.SIZE));
++        (VoidPointer) slots.add(access.index * Json.JsonScalarSlot.SIZE));
+   }
+ 
+   public long longValue(int index) {

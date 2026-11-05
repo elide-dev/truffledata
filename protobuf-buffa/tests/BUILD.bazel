@@ -33,37 +33,44 @@ data_java_library(
     ],
 )
 
-java_test(
-    name = "jvm",
-    size = "large",
-    srcs = ["AcceptanceTest.java"],
-    args = [
-        "--package",
-        "dev.elide.truffledata.buffa.tests",
-        "--include-class",
-        "dev.elide.truffledata.buffa.tests.AcceptanceTest",
-    ],
-    data = [
-        ":wrong_abi.so",
-        "//protobuf-buffa/native:shared",
-    ],
-    jvm_flags = [
-        "--enable-native-access=ALL-UNNAMED",
-        "-Dtruffledata.strict=true",
-        "-ea",
-    ],
-    main_class = "dev.elide.bazel.junit.BazelJUnitRunner",
-    use_testrunner = False,
-    runtime_deps = [
-        "//bazel/junit:runner",
-        "@maven//:org_graalvm_truffle_truffle_runtime",
-    ],
-    deps = [
-        ":acceptance",
-        "//protobuf-buffa",
-        "@maven//:org_junit_jupiter_junit_jupiter_api",
-    ],
-)
+# Exercise both contract auditing and the shipping native-proof shortcut.
+[
+    java_test(
+        name = name,
+        size = "large",
+        srcs = ["AcceptanceTest.java"],
+        args = [
+            "--package",
+            "dev.elide.truffledata.buffa.tests",
+            "--include-class",
+            "dev.elide.truffledata.buffa.tests.AcceptanceTest",
+        ],
+        data = [
+            ":wrong_abi.so",
+            "//protobuf-buffa/native:shared",
+        ],
+        jvm_flags = [
+            "--enable-native-access=ALL-UNNAMED",
+            "-Dtruffledata.strict=" + strict,
+            "-ea",
+        ],
+        main_class = "dev.elide.bazel.junit.BazelJUnitRunner",
+        use_testrunner = False,
+        runtime_deps = [
+            "//bazel/junit:runner",
+            "@maven//:org_graalvm_truffle_truffle_runtime",
+        ],
+        deps = [
+            ":acceptance",
+            "//protobuf-buffa",
+            "@maven//:org_junit_jupiter_junit_jupiter_api",
+        ],
+    )
+    for name, strict in [
+        ("jvm", "true"),
+        ("jvm_non_strict", "false"),
+    ]
+]
 
 [
     native_image(

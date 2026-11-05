@@ -1,0 +1,14 @@
+{
+  "source_commit": "ea4c5736cf094276d9a04017cea55399d8992f22",
+  "host": "unclemax",
+  "cpu_affinity": "2-9",
+  "measurement_command": "taskset -c 2-9 env TEST_UNDECLARED_OUTPUTS_DIR=measurement-isolated python3 json_measure.py ./json-comparison",
+  "profile_command": "taskset -c 2-9 perf record -F 997 --call-graph fp -o CELL.perf -- ./json-profile-symbols -Xmx1g ENGINE peak time CELL.jfr",
+  "remote_artifacts": "/tmp/truffledata-json-profile.BPU3zh",
+  "notes": [
+    "Timing was repeated after all profiling processes exited; overlapping first pass discarded.",
+    "Uninstrumented and diagnostic executable hashes differ intentionally.",
+    "CPU samples include wrapper/AOT calls; peak is not yet proof of a fully guest-compiled hot loop.",
+    "Native allocations are not included in Java heap measurements."
+  ]
+}

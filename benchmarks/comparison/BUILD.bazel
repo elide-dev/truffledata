@@ -123,6 +123,8 @@ native_image(
         "--initialize-at-run-time=dev.elide.truffledata.comparison.Comparison",
         "--features=dev.elide.truffledata.buffa.BuffaFeature",
         "-H:+UnlockExperimentalVMOptions",
+        "-H:-DeleteLocalSymbols",
+        "-H:+PreserveFramePointer",
     ] + TRUFFLE_JIT_CHECKS + ["-H:-UnlockExperimentalVMOptions"],
     graalvm_sdk = "@graalvm_linux_amd64//:gvm",
     main_class = "dev.elide.truffledata.comparison.Profile",
@@ -232,6 +234,142 @@ sh_test(
         "profile.jfc",
         ":svm_profile_epsilon",
     ],
+    tags = ["manual"],
+    target_compatible_with = [
+        "@platforms//os:linux",
+        "@platforms//cpu:x86_64",
+    ],
+)
+
+data_java_library(
+    name = "json_comparison",
+    testonly = True,
+    srcs = [
+        "ComparisonLanguage.java",
+        "JsonComparison.java",
+    ],
+    deps = [
+        "//core",
+        "//json",
+        "@maven//:com_google_code_gson_gson",
+        "@maven//:org_graalvm_polyglot_polyglot",
+        "@maven//:org_graalvm_truffle_truffle_api",
+        "@maven//:org_graalvm_truffle_truffle_runtime",
+    ],
+)
+
+native_image(
+    # Keep JsonComparison build-time initialized: its static helpers must be JIT eligible.
+    name = "json_svm",
+    testonly = True,
+    cc_deps = ["//json/native:truffledata_json"],
+    exec_properties = {
+        "EstimatedCPU": "8",
+        "EstimatedMemory": "24GB",
+    },
+    executable_name = "json-comparison",
+    extra_args = [
+        "--gc=serial",
+        "--parallelism=8",
+        "-march=compatibility",
+        "--initialize-at-build-time=dev.elide.truffledata",
+        "--add-exports=org.graalvm.truffle.runtime/com.oracle.truffle.runtime=ALL-UNNAMED",
+        "-H:+UnlockExperimentalVMOptions",
+    ] + TRUFFLE_JIT_CHECKS + ["-H:-UnlockExperimentalVMOptions"],
+    graalvm_sdk = "@graalvm_linux_amd64//:gvm",
+    main_class = "dev.elide.truffledata.comparison.JsonComparison",
+    optimization_mode = "2",
+    tags = ["manual"],
+    target_compatible_with = [
+        "@platforms//os:linux",
+        "@platforms//cpu:x86_64",
+    ],
+    deps = [":json_comparison"],
+)
+
+sh_test(
+    name = "json_native_smoke",
+    size = "large",
+    srcs = ["json_smoke.sh"],
+    args = ["$(rootpath :json_svm)"],
+    data = [
+        "json_smoke.py",
+        ":json_svm",
+    ],
+    tags = ["manual"],
+    target_compatible_with = [
+        "@platforms//os:linux",
+        "@platforms//cpu:x86_64",
+    ],
+)
+
+sh_test(
+    name = "json_measure",
+    size = "large",
+    timeout = "long",
+    srcs = ["json_measure.sh"],
+    args = ["$(rootpath :json_svm)"],
+    data = [
+        "json_measure.py",
+        ":json_svm",
+    ],
+    tags = [
+        "benchmark",
+        "manual",
+    ],
+    target_compatible_with = [
+        "@platforms//os:linux",
+        "@platforms//cpu:x86_64",
+    ],
+)
+
+data_java_library(
+    name = "json_profiling",
+    testonly = True,
+    srcs = ["JsonProfile.java"],
+    deps = [":json_comparison"],
+)
+
+native_image(
+    name = "json_svm_profile",
+    testonly = True,
+    cc_deps = ["//json/native:truffledata_json"],
+    exec_properties = {
+        "EstimatedCPU": "8",
+        "EstimatedMemory": "24GB",
+    },
+    executable_name = "json-comparison-profile",
+    extra_args = [
+        "--gc=serial",
+        "--enable-monitoring=jfr",
+        "--parallelism=8",
+        "-march=compatibility",
+        "--initialize-at-build-time=dev.elide.truffledata",
+        "--add-exports=org.graalvm.truffle.runtime/com.oracle.truffle.runtime=ALL-UNNAMED",
+        "-H:+UnlockExperimentalVMOptions",
+        "-H:-DeleteLocalSymbols",
+        "-H:+PreserveFramePointer",
+        "-H:+PrintRuntimeCompileMethods",
+        "-H:+PrintRuntimeCompilationCallTree",
+    ] + TRUFFLE_JIT_CHECKS + ["-H:-UnlockExperimentalVMOptions"],
+    graalvm_sdk = "@graalvm_linux_amd64//:gvm",
+    main_class = "dev.elide.truffledata.comparison.JsonProfile",
+    optimization_mode = "2",
+    tags = ["manual"],
+    target_compatible_with = [
+        "@platforms//os:linux",
+        "@platforms//cpu:x86_64",
+    ],
+    deps = [":json_profiling"],
+)
+
+sh_test(
+    name = "json_profile",
+    size = "large",
+    timeout = "long",
+    srcs = ["json_profile.sh"],
+    args = ["$(rootpath :json_svm_profile)"],
+    data = [":json_svm_profile"],
     tags = ["manual"],
     target_compatible_with = [
         "@platforms//os:linux",

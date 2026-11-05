@@ -1,0 +1,21 @@
+{
+  "baseline_commit": "8b05d0b22fe9055e407cdfdf9845111b545fd61d",
+  "candidate_commit": "8f2e21e9257a0dd36d2700a04680afbb3f47b536",
+  "host": "unclemax",
+  "cpu_affinity": "2-9",
+  "seeds": [
+    20261105,
+    20261106
+  ],
+  "remote_artifacts": "/tmp/truffledata-buffa-defaults.HSUjb4",
+  "command": "taskset -c 2-9 env BENCH_SEED=SEED python3 truffledata-buffa-repeat.py",
+  "validation": "https://app.buildbuddy.io/invocation/339eb2d5-933b-4e5a-a8e3-d983d7075a88",
+  "notes": [
+    "Each run randomizes five fresh processes per variant/cell/metric.",
+    "Identical baseline/candidate binaries in both runs. Baseline is the previous experiment candidate.",
+    "Timing and allocation use separate processes; no concurrent profiling.",
+    "Java heap excludes native memory. Defaults add a per-schema template, not a per-message allocation.",
+    "Projected ingestion improves in both runs; full-consumption and control ranges overlap."
+  ],
+  "coverage": "https://app.buildbuddy.io/invocation/38a17885-4778-47bf-979d-a53c667a6dd0"
+}

@@ -459,7 +459,49 @@ final class TypedAcceptance {
     }
   }
 
+  private static void indexReusePreservesMessagesAndBudgets(BuffaWire decoder) {
+    var plan = plan("Sample");
+    var expected = plan.parseText("count: 7 text: 'unread €' numbers: [1, 2, 3] child { a: 42 }");
+    byte[] wire = plan.encode(expected);
+    try (var compiled = decoder.compile(plan, 65536);
+        var input = decoder.allocate(wire.length).put(wire);
+        var first = compiled.decode(input, NATIVE)) {
+      input.close(); // First message now owns its input independently.
+      try (var other =
+          compiled.parseJson("{\"count\":9,\"text\":\"other\",\"numbers\":[8]}", NATIVE)) {
+        Acceptance.check(other.row().getLong(0) == 9, "reused index has fresh values");
+      }
+      try (var malformed = decoder.allocate(2).put(new byte[] {8, (byte) 128})) {
+        Acceptance.rejects(() -> compiled.decode(malformed, NATIVE), ContractViolation.class);
+      }
+      try (var valid = decoder.allocate(wire.length).put(wire)) {
+        if (decoder.selected() != BuffaWire.Selected.JAVA)
+          Acceptance.rejects(() -> compiled.decode(valid, 1), ContractViolation.class);
+        try (var recovered = compiled.decode(valid, NATIVE)) {
+          Acceptance.check(recovered.row().getLong(0) == 7, "reuse recovers after failure");
+        }
+        // Switching to the generic API must release any cached typed index before publishing
+        // another native result into the shared result slot.
+        try (var generic = decoder.decode(valid, Limits.DEFAULT, 16, NATIVE, NATIVE)) {
+          Acceptance.check(generic.fields().size() > 0, "generic decode after typed reuse");
+        }
+        try (var again = compiled.decode(valid, NATIVE)) {
+          Acceptance.check(again.row().getLong(0) == 7, "typed decode after generic result");
+        }
+      }
+      try (var emptyInput = decoder.allocate(0);
+          var empty = compiled.decode(emptyInput, 0)) {
+        Acceptance.check(empty.nativeIndexBytes() == 0, "zero budget discards cached capacity");
+        Acceptance.check(!empty.row().has(0), "empty decode does not inherit presence");
+      }
+      compiled.close();
+      equal(expected, first.row());
+      equal(expected, first.snapshot());
+    }
+  }
+
   static void run(BuffaWire decoder) throws Exception {
+    indexReusePreservesMessagesAndBudgets(decoder);
     scopedRowsRequireDetachmentBeforeEnteringOwnedContainers(decoder);
     textRejectsMalformedUtf16BeforeEncoding(decoder);
     unicode(decoder);
