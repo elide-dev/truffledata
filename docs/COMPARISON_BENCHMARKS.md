@@ -887,3 +887,25 @@ are diagnostic, not timing scores; allocation sample counts are not byte totals.
 See the [hardware summary](../benchmarks/results/buffa-reuse-10592bd/perf-summary.json),
 [JFR summary](../benchmarks/results/buffa-reuse-10592bd/profile-summary.json), and
 [artifact hashes](../benchmarks/results/buffa-reuse-10592bd/profile-artifacts.sha256).
+
+## Copying defaults with a known array type
+
+Revision `cb2e5e6` replaces the default-template `clone()` with an explicitly
+`Object[]`-typed `Arrays.copyOf`, targeting the general clone routine observed in
+the preceding profile. Ownership, array contents, and per-message allocation are
+unchanged. Strict/non-strict JVM acceptance, SVM acceptance, comparison smoke,
+and Gazelle drift pass.
+
+Three randomized five-fork cycles retain identical baseline/candidate binaries:
+[first](../benchmarks/results/buffa-arraycopy-cb2e5e6/paired.md),
+[second](../benchmarks/results/buffa-arraycopy-cb2e5e6/repeat/paired.md), and
+[third](../benchmarks/results/buffa-arraycopy-cb2e5e6/repeat2/paired.md).
+Generated-getter ingestion medians move 1797.53 → 1708.20 ns,
+1862.47 → 1788.47 ns, and 1879.16 → 1726.29 ns, respectively (4–8%).
+Fork ranges overlap. Generic projection is flat in the first cycle and improves
+in the others; full consumption improves in the first two and regresses in the
+third. Unchanged controls also move: the compact-scalar candidate is slower in
+the second cycle and faster in the third, while stock favors the candidate in
+all three. Consequently these results do not isolate a general causal speedup.
+The targeted change is retained, with no new allocation or correctness tradeoff;
+the raw controls and inconsistent cases remain part of the evidence.

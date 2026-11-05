@@ -1,0 +1,21 @@
+{
+  "baseline_commit": "10592bd9ab4136bb67a8665ae9015b9813a16459",
+  "candidate_commit": "cb2e5e61a93fde8fcd1af7c5bcfd7c78a274bb58",
+  "host": "unclemax",
+  "cpu_affinity": "2-9",
+  "seeds": [
+    20261105,
+    20261106,
+    20261107
+  ],
+  "remote_artifacts": "/tmp/truffledata-buffa-arraycopy.dm9XEz",
+  "command": "taskset -c 2-9 env BENCH_SEED=SEED python3 truffledata-buffa-repeat.py",
+  "validation": "https://app.buildbuddy.io/invocation/114aaaa5-fa99-4b30-9bd4-6e9642465097",
+  "notes": [
+    "Five randomized fresh forks per variant/cell/metric per cycle. Same binary hashes across all three cycles. No concurrent profiling.",
+    "Generated-getter ingestion median improves in all three cycles, but ranges overlap.",
+    "Full-consumption improvement does not reproduce in third cycle; generic projection inconsistent.",
+    "Unchanged controls move substantially, including a scalar candidate slowdown in second cycle which reverses in third. Results do not isolate a causal speedup across all cases.",
+    "Java allocation unchanged; retained native storage excluded."
+  ]
+}
