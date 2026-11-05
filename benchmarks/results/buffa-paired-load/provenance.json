@@ -1,0 +1,27 @@
+{
+  "base_commit": "14eb284",
+  "candidate_patch_sha256": "25267ed151a9065fa0d63c8d0010635268884de7bf282d35161f338acb0ff06e",
+  "host": "unclemax",
+  "cpu_affinity": [
+    2
+  ],
+  "seeds": [
+    20261105,
+    20261106
+  ],
+  "remote_artifacts": "/tmp/truffledata-buffa-paired-load.jAnHWJ",
+  "candidate_build": "https://app.buildbuddy.io/invocation/41548977-78b5-4d6e-839d-d59840a322b9",
+  "matching_baseline_build": "https://app.buildbuddy.io/invocation/4a99a80e-1d62-4f51-8de3-5de7e0be855d",
+  "validation": {
+    "jvm_strict_and_non_strict": "https://app.buildbuddy.io/invocation/8e7930bc-c639-4819-b3d5-e7648d4c33de",
+    "svm_strict_and_non_strict": "https://app.buildbuddy.io/invocation/edf5b978-9497-4787-9273-4be4ff195b35"
+  },
+  "notes": [
+    "Initial runs used the prior sparse-finalization binary built before release-only metadata changes. Rebuilt baseline at 14eb284 to match candidate inputs except the production patch.",
+    "Five randomized fresh forks per variant/cell/metric. Java allocations exclude native storage.",
+    "Unchanged stock/generated-owned/scalar controls vary across binaries. Do not attribute their changes to the index load implementation, or claim the entire observed Buffa improvement is isolated causal benefit.",
+    "No ABI change or unchecked memory access. Adjacent number/kind and length/end pairs share a checked 64-bit load with native byte-order extraction. All existing semantic and subtree checks remain."
+  ],
+  "retained": true,
+  "decision": "Retain the three checked loads: mixed Buffa ranges improve in both matched runs with unchanged allocations and acceptance passing. Unchanged-engine variation limits causal attribution; no universal 5% speedup claim."
+}

@@ -1039,3 +1039,28 @@ adjacent index integer fields into checked 64-bit loads, preserving validation.
 [hardware summary](../benchmarks/results/buffa-sparse-finish/perf-summary.json), and
 artifact hashes are retained alongside the paired data. Diagnostic image timings
 are not comparison scores.
+
+### Paired native index loads
+
+ABI 7's adjacent `number/kind` and `length/end` fields can each share one checked
+64-bit load. Native byte-order extraction preserves signed bounds checks and all
+kind/subtree validation. This reduces the main consumption loop from five buffer
+loads to three without an ABI change, unchecked access, copying, or new allocation.
+
+Two five-fork CPU-2 runs with matching release/build inputs measured mixed generic
+Buffa ingestion at **1671 → 1597 ns** and **1670 → 1581 ns**; generated-getter
+consumption at **1545 → 1467 ns** and **1551 → 1471 ns**; and full consumption at
+**2379 → 2301 ns** and **2375 → 2305 ns**. All these fork-median ranges are disjoint.
+Java allocation is unchanged. Strict/non-strict JVM and SVM acceptance pass.
+
+These are observed binary-to-binary improvements, not an isolated universal 5%
+causal speedup: unchanged stock controls also improve roughly 2–3%, and generated
+owned controls move more. Code layout and build variation remain material. Stock
+in the candidate image is **621–623 ns**, versus **1467–1471 ns** for Buffa with
+generated getters: about **2.36× slower**, so parity is still unfinished. The
+three-load implementation is retained, with this attribution limitation explicit.
+
+[Matched run](../benchmarks/results/buffa-paired-load/paired.md),
+[repeat](../benchmarks/results/buffa-paired-load/repeat/paired.md), exact hashes,
+patch, acceptance links and initial runs using older release metadata are retained
+in the result directory. No profile-image timing is used in these comparisons.
