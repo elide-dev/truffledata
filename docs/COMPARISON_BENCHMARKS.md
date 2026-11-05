@@ -811,3 +811,37 @@ variants in its Codecov cycle. That cycle covers 299/317 BuffaPlan lines and 22/
 methods; the shortcut and strict audit lines are exercised. Future richer-contract
 fallback branches remain unexercised because current ProtoPlan schemas derive their
 contracts directly from FieldPlan.
+
+## Reusing validated defaults during materialization
+
+Revision `8f2e21e` caches immutable protobuf defaults once per compiled schema.
+A message copies those references into its existing values array, and absent
+standard fields skip unnecessary finalization work. Required fields still fail
+when absent; empty repeated values still bind to each message owner. Strict mode
+retains the full finalization/audit route. The per-schema template adds no
+per-message allocation and copies no payload.
+
+Two randomized five-fork cycles use identical baseline/candidate binaries:
+[first](../benchmarks/results/buffa-defaults-8f2e21e/paired.md) and
+[repeat](../benchmarks/results/buffa-defaults-8f2e21e/repeat/paired.md).
+
+| Buffa operation | First baseline → candidate | Repeat baseline → candidate |
+| --- | ---: | ---: |
+| Nested ingestion | 2194.74 → 2100.54 ns | 2105.18 → 2008.56 ns |
+| Nested ingestion with generated getters | 2089.92 → 1969.48 ns | 2037.68 → 1888.43 ns |
+| Nested full consumption | 2786.65 → 2859.04 ns | 2868.67 → 2718.39 ns |
+
+Projected ingestion improves roughly 4–7% across the two runs. Generic projection
+ranges overlap; generated-getter projection ranges are narrowly disjoint.
+Full-consumption and unchanged control ranges overlap, with medians moving in
+different directions; this does not establish a full-consumption speedup. Java
+allocations remain 1727.75 bytes for projected ingestion and 1854.25 for full
+consumption. Native memory and the per-schema template are outside these
+per-message Java measurements.
+
+Strict/non-strict JVM acceptance, SVM acceptance, native comparison smoke, and
+Gazelle drift pass. The coverage cycle and access-method gate also pass, with
+303/321 BuffaPlan lines and 22/22 methods covered; the new absent-field route is
+exercised by the non-strict corpus. Existing tests include custom proto2 defaults,
+explicit default presence, wide presence masks, oneof switching, and independently
+closed empty repeated arrays.
