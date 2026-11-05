@@ -1,0 +1,51 @@
+diff --git a/protobuf-buffa/native/typed.rs b/protobuf-buffa/native/typed.rs
+index 3ba9d4e..be3ed42 100644
+--- a/protobuf-buffa/native/typed.rs
++++ b/protobuf-buffa/native/typed.rs
+@@ -60,7 +60,16 @@ impl<'a> Schema<'a> {
+         })
+     }
+     fn find(self, ty: u32, number: u32) -> Result<Option<Contract<'a>>> {
+-        for i in 0..self.word(self.ty(ty)?)? {
++        let count = self.word(self.ty(ty)?)?;
++        // Common schemas use consecutive field numbers in declaration order. Verify
++        // the number before using the ordinal; sparse/reordered schemas still scan.
++        if number != 0 && number <= count {
++            let f = self.field(ty, number - 1)?;
++            if f.word(0)? == number {
++                return Ok(Some(f));
++            }
++        }
++        for i in 0..count {
+             let f = self.field(ty, i)?;
+             if f.word(0)? == number {
+                 return Ok(Some(f));
+@@ -627,6 +636,28 @@ pub fn scalars(
+ mod tests {
+     use super::*;
+ 
++    #[test]
++    fn direct_field_lookup_preserves_sparse_and_reordered_ordinals() {
++        for numbers in [[1u32, 2, 3], [3, 1, 2], [100, 2, 900], [2, 7, 1]] {
++            let mut bytes = vec![0u8; 28 + 40 * numbers.len()];
++            for (at, value) in [(0, 0x54444233u32), (4, 1), (8, 12), (12, 3)] {
++                bytes[at..at + 4].copy_from_slice(&value.to_le_bytes());
++            }
++            for (ordinal, number) in numbers.into_iter().enumerate() {
++                let at = 28 + ordinal * 40;
++                bytes[at..at + 4].copy_from_slice(&number.to_le_bytes());
++            }
++            let s = Schema(&bytes);
++            for number in [0, 1, 2, 3, 7, 100, 900, u32::MAX] {
++                let expected = numbers.iter().position(|n| *n == number).map(|n| n as u32);
++                let found = super::super::allocation_probe::without_allocation(|| {
++                    s.find(0, number).unwrap().map(|f| f.ordinal)
++                });
++                assert_eq!(found, expected);
++            }
++        }
++    }
++
+     fn schema(kind: u32) -> Vec<u8> {
+         let mut bytes = Vec::new();
+         for word in [

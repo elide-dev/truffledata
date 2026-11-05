@@ -974,3 +974,24 @@ was reverted. The [first run](../benchmarks/results/buffa-binary-loop-rejected/p
 [repeat](../benchmarks/results/buffa-binary-loop-rejected/repeat/paired.md), and
 [exact patch](../benchmarks/results/buffa-binary-loop-rejected/experiment.patch)
 remain available for reproduction.
+
+### Rejected dense field lookup; tighter CPU affinity
+
+A native lookup experiment checked the likely ordinal for consecutive field
+numbers before falling back to the existing scan. Rust dense/sparse/reordered
+lookup and no-allocation tests plus both JVM acceptance modes passed. The
+[CPUs 2–9 run](../benchmarks/results/buffa-dense-lookup-rejected/paired.md) was
+mostly flat with overlapping ranges. A second paired cycle on **CPU 2 only**
+substantially narrowed the ranges:
+[single-CPU results](../benchmarks/results/buffa-dense-lookup-rejected/single-cpu/paired.md).
+Projected ingestion was flat, full consumption was 1.4% faster by median, and
+the scalar case slightly slower. Scalar Buffa also uses this lookup, so only
+stock and generated-owned are unchanged controls for this experiment. Java
+allocation was unchanged. The shortcut was reverted rather than retained as
+a generally useful throughput improvement.
+
+Use CPU 2 for subsequent serial ingestion experiments on unclemax, and record
+the affinity with each result. Compare variants within the same affinity
+condition; do not combine the absolute timings from these two conditions.
+The prior experiments remain recorded with their original CPU 2–9 affinity,
+ranges, and uncertainty. The saved patch and binary hashes allow reproduction.
