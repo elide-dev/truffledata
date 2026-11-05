@@ -36,7 +36,7 @@ Both the adapter and simdjson are instrumented by this invocation.
 
 This is an internal foundation, not yet a published Java API. Remaining work includes
 parser scratch accounting,
-native input leases, actual JVM/SVM consumer qualification, scoped
+native input leases, scoped
 views and snapshots, typed fixed slots, and compiled access/allocation gates.
 Myna's current node/text/depth limits do not constitute a total native-memory budget.
 
@@ -60,5 +60,11 @@ The ABI currently accepts a maximum requested nesting depth of 128. Failures map
 to argument, limit, allocation, syntax, or internal-error statuses; exceptions do
 not cross C. Statistics additionally report the fixed control allocation separately
 from input and index storage. Parser scratch remains excluded from byte totals.
-Generated bindings compile, and native ownership/error tests pass under ASan/UBSan;
-actual Java-to-native execution is the next qualification step.
+Native ownership/error tests pass under ASan/UBSan. Real consumer tests run with
+`bazel test //json/tests:native_test //json/tests:jvm`: the first statically links
+the parser into SVM and reads through Myna's `NativeValueTape`; the second calls the
+shared library through generated JVM FFM handles. Both check the binding fingerprint,
+retained input lifetime, exact numeric text, and release behavior. These are ABI
+integration tests, not yet scoped guest/JIT acceptance or performance comparisons.
+The existing native CI job explicitly includes the SVM target; JVM acceptance runs
+with the ordinary `//...` test suite.

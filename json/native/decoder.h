@@ -1,6 +1,6 @@
 #ifndef TRUFFLEDATA_JSON_DECODER_H
 #define TRUFFLEDATA_JSON_DECODER_H
-#include "json/native/memory.h"
+#include "json/native/index_memory.h"
 #include <myna/values.hpp>
 #include <simdjson.h>
 #include <unordered_set>

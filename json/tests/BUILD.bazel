@@ -1,0 +1,75 @@
+load("@rules_graalvm//graalvm:defs.bzl", "native_image")
+load("@rules_java//java:defs.bzl", "java_library", "java_test")
+load("@rules_shell//shell:sh_test.bzl", "sh_test")
+
+java_library(
+    name = "acceptance",
+    testonly = True,
+    srcs = ["SvmAcceptance.java"],
+    deps = [
+        "//json:bindings",
+        "@maven//:org_graalvm_sdk_nativeimage",
+        "@maven//:org_graalvm_sdk_word",
+        "@myna//:values",
+    ],
+)
+
+native_image(
+    name = "native",
+    testonly = True,
+    cc_deps = ["//json/native:truffledata_json"],
+    exec_properties = {
+        "EstimatedCPU": "8",
+        "EstimatedMemory": "12GB",
+    },
+    executable_name = "json_acceptance",
+    extra_args = [
+        "--gc=serial",
+        "-ea",
+        "--parallelism=8",
+        "-march=compatibility",
+    ],
+    graalvm_sdk = "@graalvm_linux_amd64//:gvm",
+    main_class = "dev.elide.truffledata.json.tests.SvmAcceptance",
+    optimization_mode = "2",
+    tags = ["manual"],
+    target_compatible_with = [
+        "@platforms//os:linux",
+        "@platforms//cpu:x86_64",
+    ],
+    deps = [":acceptance"],
+)
+
+sh_test(
+    name = "native_test",
+    size = "large",
+    srcs = ["native_test.sh"],
+    args = ["$(rootpath :native)"],
+    data = [":native"],
+    tags = ["manual"],
+    target_compatible_with = [
+        "@platforms//os:linux",
+        "@platforms//cpu:x86_64",
+    ],
+)
+
+java_test(
+    name = "jvm",
+    srcs = ["FfmAcceptanceTest.java"],
+    args = [
+        "--class",
+        "dev.elide.truffledata.json.tests.FfmAcceptanceTest",
+    ],
+    data = ["//json/native:json_shared.so"],
+    jvm_flags = [
+        "--enable-native-access=ALL-UNNAMED",
+        "-ea",
+    ],
+    main_class = "dev.elide.bazel.junit.BazelJUnitRunner",
+    use_testrunner = False,
+    runtime_deps = ["//bazel/junit:runner"],
+    deps = [
+        "//json:bindings",
+        "@maven//:org_junit_jupiter_junit_jupiter_api",
+    ],
+)

@@ -1,10 +1,10 @@
-load("@rules_cc//cc:defs.bzl", "cc_library", "cc_test")
+load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_library", "cc_test")
 
 cc_library(
     name = "decoder",
     hdrs = [
         "decoder.h",
-        "memory.h",
+        "index_memory.h",
     ],
     copts = ["-std=c++17"],
     deps = [
@@ -60,6 +60,13 @@ cc_library(
         "-std=c++17",
         "-O3",
     ],
+    linkopts = select({
+        "@platforms//os:macos": ["-lc++"],
+        "//conditions:default": [
+            "-lc++",
+            "-lc++abi",
+        ],
+    }),
     visibility = ["//visibility:public"],
     deps = [":decoder"],
 )
@@ -81,4 +88,17 @@ filegroup(
         "generated/JsonFFM.java",
     ],
     visibility = ["//visibility:public"],
+)
+
+cc_binary(
+    name = "json_shared.so",
+    srcs = ["api.cc"],
+    copts = [
+        "-std=c++17",
+        "-O3",
+    ],
+    linkshared = True,
+    linkstatic = True,
+    visibility = ["//visibility:public"],
+    deps = [":truffledata_json"],
 )
