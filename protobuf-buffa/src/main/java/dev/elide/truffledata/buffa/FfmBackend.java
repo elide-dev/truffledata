@@ -197,7 +197,7 @@ final class FfmBackend implements BuffaWire.Backend {
       } catch (Throwable failure) {
         throw callFailure(failure);
       }
-      BuffaWire.status(status);
+      boolean viewReady = BuffaWire.typedStatus(status, format);
       long count = result.get(ValueLayout.JAVA_LONG, BuffaFFM.Result_count_OFFSET);
       long capacity = result.get(ValueLayout.JAVA_LONG, BuffaFFM.Result_capacity_OFFSET);
       ByteBuffer tape =
@@ -210,7 +210,7 @@ final class FfmBackend implements BuffaWire.Backend {
                       libraryArena,
                       null)
                   .asByteBuffer();
-      return new BuffaWire.Tape(tape, count, capacity, retainAction, detachAction);
+      return new BuffaWire.Tape(tape, count, capacity, retainAction, detachAction, viewReady);
     } catch (RuntimeException | Error failure) {
       releaseResult();
       throw failure;

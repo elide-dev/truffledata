@@ -135,13 +135,14 @@ public final class BuffaPlan implements AutoCloseable {
           backend.typed(
               schema,
               input,
-              format,
+              useView ? 3 : format,
               payload,
               plan,
               useView ? nativeBytes - Buffa.Result.SIZE : nativeBytes);
       boolean retained = false;
       try {
-        if (useView && NativeRow.validate(Objects.requireNonNull(nativeViews), tape)) {
+        if (useView
+            && (tape.viewReady || NativeRow.validate(Objects.requireNonNull(nativeViews), tape))) {
           if (STRICT) {
             var audit =
                 new State(

@@ -145,7 +145,7 @@ final class SvmBackend implements BuffaWire.Backend {
       throw new IllegalArgumentException("Inputs are not SVM native memory");
     VoidPointer result = acquireResult();
     try {
-      BuffaWire.status(
+      int status =
           Buffa.typedReuse(
               WordFactory.pointer(schemaAddress.value()),
               schema.size(),
@@ -158,7 +158,8 @@ final class SvmBackend implements BuffaWire.Backend {
               plan.limits().maxStringBytes(),
               plan.maxDepth(),
               nativeBytes,
-              result));
+              result);
+      boolean viewReady = BuffaWire.typedStatus(status, format);
       long count = Buffa.Result.count(result), capacity = Buffa.Result.capacity(result);
       ByteBuffer bytes =
           count == 0
@@ -166,7 +167,7 @@ final class SvmBackend implements BuffaWire.Backend {
               : CTypeConversion.asByteBuffer(
                   Buffa.Result.data(result),
                   Math.toIntExact(Math.multiplyExact(count, Buffa.Field.SIZE)));
-      return new BuffaWire.Tape(bytes, count, capacity, retainAction, detachAction);
+      return new BuffaWire.Tape(bytes, count, capacity, retainAction, detachAction, viewReady);
     } catch (RuntimeException | Error failure) {
       releaseResult();
       throw failure;

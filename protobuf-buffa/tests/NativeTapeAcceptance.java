@@ -62,6 +62,9 @@ public final class NativeTapeAcceptance {
         var first = decoder.allocate(2).put(new byte[] {8, 42});
         var second = decoder.allocate(2).put(new byte[] {8, 99})) {
       var backend = Objects.requireNonNull(decoder.backend);
+      try (var proof = backend.typed(schema, first, 3, empty, plan, 65536)) {
+        if (!proof.viewReady) throw new AssertionError("native binary view proof");
+      }
       try (var compiled = decoder.compile(plan, 65536);
           var view = compiled.decodeView(first, 65536);
           var retained = backend.typed(schema, first, 0, empty, plan, 65536).detach()) {

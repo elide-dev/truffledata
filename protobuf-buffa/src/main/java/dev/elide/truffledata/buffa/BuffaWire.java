@@ -249,6 +249,12 @@ public final class BuffaWire implements AutoCloseable {
     }
   }
 
+  static boolean typedStatus(int code, int format) {
+    if (format == 3 && code == 5) return true;
+    status(code);
+    return false;
+  }
+
   static void status(int code) {
     if (code == 1) throw new ContractViolation("Malformed protobuf input");
     if (code == 2)
@@ -260,6 +266,7 @@ public final class BuffaWire implements AutoCloseable {
     final ByteBuffer bytes;
     final int count;
     final long allocated;
+    final boolean viewReady;
     private @Nullable Runnable release;
     private @Nullable Supplier<Runnable> detacher;
 
@@ -273,6 +280,17 @@ public final class BuffaWire implements AutoCloseable {
         long capacity,
         Runnable release,
         @Nullable Supplier<Runnable> detacher) {
+      this(bytes, count, capacity, release, detacher, false);
+    }
+
+    Tape(
+        ByteBuffer bytes,
+        long count,
+        long capacity,
+        Runnable release,
+        @Nullable Supplier<Runnable> detacher,
+        boolean viewReady) {
+      this.viewReady = viewReady;
       this.detacher = detacher;
       this.bytes = bytes.order(ByteOrder.nativeOrder());
       this.count = Math.toIntExact(count);
