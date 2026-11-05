@@ -4,6 +4,19 @@ Schema identity is stable adapter-owned state, not a global interning cache. Fie
 
 `ReadLongNode`, `ReadDoubleNode`, `ReadBooleanNode`, `ReadLengthNode`, and row member access have three-entry polymorphic caches and a generic fallback. The standalone accessor deliberately owns its cache as an adopted child; node object inlining is explicitly disabled for that API. Immutable schema predicates are marked idempotent. Dynamic-object getter caches are explicitly shared between generic and primitive reads. Static-object property handles are cached by layout and ordinal. The primitive batch specialization bypasses state-array reads only for a validated required, non-null INT64 field.
 
+Native protobuf primitive exports also bind immutable field descriptors by plan identity and ordinal,
+with a three-entry limit and generic fallback. Mutable row directories and materialization caches
+remain mutable to the compiler. The shared-consumer experiment records a rejected count-capability
+prototype: its read/allocation improvements came with cross-workload regressions, so it does not
+change the common access API.
+
+The [shared consumer experiment](../benchmarks/comparison/CONSUMER.md) exercises nested protobuf
+work through common nodes on JVM and SVM with the same graph budget. Its native smoke test runs in
+the reusable native-backend CI job and contributes JUnit to the existing Codecov upload. Typed JSON
+scalar records now export `DataLibrary` and ordinary row interop over their native slots. They
+remain scoped and SVM-only; shared compiled reads, schema-cache saturation, null/presence,
+close/thread checks and allocation budgets are exercised by `//json/tests:native_test`.
+
 Ingestion, JDBC execution, Protobuf reflection, exact numeric conversion, Unicode code-point traversal, recursive array-element validation, and name lookup live behind Truffle boundaries. Primitive batch/dynamic reads do not cross a boundary. Static-record access uses cached property handles; megamorphic fallback has an explicit boundary. Immutable descriptor/property arrays use `@CompilationFinal`; mutable payload arrays are never declared compilation-final by contents. There is no speculative database-schema assumption requiring an external invalidation notification.
 
 Java null is represented with JSpecify `@Nullable` only where it can occur (driver return values, end-of-stream, optional storage arrays). SQL/data null and missing are explicit non-null sentinel objects. Generated DSL sources are excluded from NullAway; handwritten production packages are NullMarked, and there are no NullAway suppressions. A source-policy test guards annotation coverage, cache limits, and reviewed boundary counts. Compiler warnings are errors.
@@ -86,7 +99,7 @@ This includes branches the runtime fixtures do not execute: reachability analysi
 than line coverage for this check. It is not proof about arbitrary third-party implementations,
 new guest compositions, driver internals behind boundaries, or different GraalVM versions.
 
-`JitMatrix` contains 387 cases shared by three gates:
+`JitMatrix` currently contains 617 cases (550 successful operations and 67 expected rejections) shared by three gates:
 
 - `//tests:test` runs instrumented correctness coverage with strict contract assertions.
 - `//tests:jit_matrix` runs without coverage instrumentation, with strict assertions and
@@ -124,6 +137,12 @@ GitHub OIDC when that token is unavailable; target-qualified JVM test identities
 keep correctness and compiled runs distinct. The source-policy test requires review when a
 new exported interop surface or message is introduced. The native gate also compares every
 case and its expected outcome against `benchmarks/jit-cases.json`.
+
+The access inventory includes `NativeRow` and its nested arrays. The exact SVM-only
+`NativeRow.entry(Tape,int)` pointer helper remains visible as uncovered in JVM LCOV and is the
+sole named platform exception for that source; native-view acceptance and the shared consumer
+exercise its pointer loads under SVM's JIT checks. JSON's scoped Java API currently requires SVM,
+so its compiled acceptance must not be represented as JVM line-coverage evidence.
 
 The initial expanded run covers 603/638 core lines (94.5%). All four typed accessors,
 DynamicRecord, and ExactNumber have 100% line coverage. DataLibrary covers 55/59 lines

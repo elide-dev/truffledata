@@ -1,0 +1,413 @@
+# To display the perf.data header info, please use --header/--header-only options.
+#
+#
+# Total Lost Samples: 0
+#
+# Samples: 3K of event 'cpu/cycles/P'
+# Event count (approx.): 15977922315
+#
+# Overhead  Command          Shared Object                 Symbol                                                                                             
+# ........  ...............  ............................  ...................................................................................................
+#
+     9.19%  truffledata-con  truffledata-consumer-profile  [.] CodedInputStream$ArrayDecoder_readRawVarint32Old_033OZaAnxAGaOzp82SlMYE
+            |          
+            |--1.88%--Field$Builder_buildPartial_q87EIu17nKFWAcry1lMT6F
+            |          |          
+            |           --1.85%--Field$1_parsePartialFrom_ei1ezL3FhL5XesAarp0n45
+            |                     Field$1_parsePartialFrom_jyU07ssgQ30E36Re8S3aJG
+            |                     CodedInputStream$ArrayDecoder_readMessage_QmdsE3iYF69PoLAVJown1D
+            |                     Type$Builder_mergeFrom_FQrd8OBiLaJe3IzQVHc7FI
+            |                     Type$1_parsePartialFrom_bySOyu8GicBJf7e8Z5jMLI
+            |                     Type$1_parsePartialFrom_pKqJDelZVhDbwPGboTZxn3
+            |                     AbstractParser_parsePartialFrom_v3v8VvRzJr4PdwgDq4Yba8
+            |                     AbstractParser_parseFrom_enevrhb5pU0jdPbMtHsJyE
+            |                     Type_parseFrom_75jT302T8eBWUfhi4EjHvJ
+            |                     ConsumerComparison$Fixture_prepare_tNdJ9X7uqL20t1GNVM9PGH
+            |                     ConsumerComparison$Fixture_operation_jfZW8CvPybIiSC95J8Vot1
+            |                     ConsumerComparison_run_bSSxaU43AC8xy8WN40MkX3
+            |                     ConsumerComparison_main_DeVUWCzmT14wreQVaWlcTJ
+            |                     ConsumerProfile_main_Fnz54astF2JbLLVluScaEC
+            |                     JavaMainWrapper_runCore0_DxjyYWWswBIqpGm74uwTlD
+            |                     JavaMainWrapper_doRun_F09BQfnF3iKa8bUp7D6GY0
+            |                     JavaMainWrapper_run_iTUBl8UzFfAz1VYmMX6I32
+            |                     IsolateEnterStub__JavaMainWrapper__run__cXbfAhOWcF90761nQYco7L
+            |                     __libc_start_call_main
+            |                     call_init (inlined)
+            |                     __libc_start_main@@GLIBC_2.34
+            |                     _start
+            |          
+             --1.61%--String_ANiVZ8cr6wIGG2iZqvkdVA
+                       |          
+                        --1.49%--String_GRTqt8j8XU4EIN8dP1HPGD
+                                  Utf8$ServerProcessor_decodeUtf8_Wna9pJiq7WH9SZkDtfbjvF
+                                  Utf8_decodeUtf8_JIcYCpSjsB3hYXsIsrdpbA
+                                  CodedInputStream$ArrayDecoder_readStringRequireUtf8_4k7jXzDLS73lAuhyy4YqVD
+                                  |          
+                                   --1.03%--Field$Builder_mergeFrom_cxtl4cZp5ZG2w7bf2npTG4
+                                             Field$1_parsePartialFrom_ei1ezL3FhL5XesAarp0n45
+                                             Field$1_parsePartialFrom_jyU07ssgQ30E36Re8S3aJG
+                                             CodedInputStream$ArrayDecoder_readMessage_QmdsE3iYF69PoLAVJown1D
+                                             Type$Builder_mergeFrom_FQrd8OBiLaJe3IzQVHc7FI
+                                             Type$1_parsePartialFrom_bySOyu8GicBJf7e8Z5jMLI
+                                             Type$1_parsePartialFrom_pKqJDelZVhDbwPGboTZxn3
+                                             AbstractParser_parsePartialFrom_v3v8VvRzJr4PdwgDq4Yba8
+                                             AbstractParser_parseFrom_enevrhb5pU0jdPbMtHsJyE
+                                             Type_parseFrom_75jT302T8eBWUfhi4EjHvJ
+                                             ConsumerComparison$Fixture_prepare_tNdJ9X7uqL20t1GNVM9PGH
+                                             ConsumerComparison$Fixture_operation_jfZW8CvPybIiSC95J8Vot1
+                                             ConsumerComparison_run_bSSxaU43AC8xy8WN40MkX3
+                                             ConsumerComparison_main_DeVUWCzmT14wreQVaWlcTJ
+                                             ConsumerProfile_main_Fnz54astF2JbLLVluScaEC
+                                             JavaMainWrapper_runCore0_DxjyYWWswBIqpGm74uwTlD
+                                             JavaMainWrapper_doRun_F09BQfnF3iKa8bUp7D6GY0
+                                             JavaMainWrapper_run_iTUBl8UzFfAz1VYmMX6I32
+                                             IsolateEnterStub__JavaMainWrapper__run__cXbfAhOWcF90761nQYco7L
+                                             __libc_start_call_main
+                                             call_init (inlined)
+                                             __libc_start_main@@GLIBC_2.34
+                                             _start
+
+     8.29%  truffledata-con  truffledata-consumer-profile  [.] Field$Builder_mergeFrom_cxtl4cZp5ZG2w7bf2npTG4
+            |          
+             --5.52%--Field$Builder_buildPartial_q87EIu17nKFWAcry1lMT6F
+                       |          
+                        --5.24%--Field$1_parsePartialFrom_ei1ezL3FhL5XesAarp0n45
+                                  Field$1_parsePartialFrom_jyU07ssgQ30E36Re8S3aJG
+                                  CodedInputStream$ArrayDecoder_readMessage_QmdsE3iYF69PoLAVJown1D
+                                  Type$Builder_mergeFrom_FQrd8OBiLaJe3IzQVHc7FI
+                                  Type$1_parsePartialFrom_bySOyu8GicBJf7e8Z5jMLI
+                                  Type$1_parsePartialFrom_pKqJDelZVhDbwPGboTZxn3
+                                  AbstractParser_parsePartialFrom_v3v8VvRzJr4PdwgDq4Yba8
+                                  AbstractParser_parseFrom_enevrhb5pU0jdPbMtHsJyE
+                                  Type_parseFrom_75jT302T8eBWUfhi4EjHvJ
+                                  ConsumerComparison$Fixture_prepare_tNdJ9X7uqL20t1GNVM9PGH
+                                  ConsumerComparison$Fixture_operation_jfZW8CvPybIiSC95J8Vot1
+                                  ConsumerComparison_run_bSSxaU43AC8xy8WN40MkX3
+                                  ConsumerComparison_main_DeVUWCzmT14wreQVaWlcTJ
+                                  ConsumerProfile_main_Fnz54astF2JbLLVluScaEC
+                                  JavaMainWrapper_runCore0_DxjyYWWswBIqpGm74uwTlD
+                                  JavaMainWrapper_doRun_F09BQfnF3iKa8bUp7D6GY0
+                                  JavaMainWrapper_run_iTUBl8UzFfAz1VYmMX6I32
+                                  IsolateEnterStub__JavaMainWrapper__run__cXbfAhOWcF90761nQYco7L
+                                  __libc_start_call_main
+                                  call_init (inlined)
+                                  __libc_start_main@@GLIBC_2.34
+                                  _start
+
+     7.43%  truffledata-con  truffledata-consumer-profile  [.] String_ANiVZ8cr6wIGG2iZqvkdVA
+            |          
+            |--2.30%--Field$Builder_buildPartial_q87EIu17nKFWAcry1lMT6F
+            |          Field$1_parsePartialFrom_ei1ezL3FhL5XesAarp0n45
+            |          Field$1_parsePartialFrom_jyU07ssgQ30E36Re8S3aJG
+            |          CodedInputStream$ArrayDecoder_readMessage_QmdsE3iYF69PoLAVJown1D
+            |          Type$Builder_mergeFrom_FQrd8OBiLaJe3IzQVHc7FI
+            |          Type$1_parsePartialFrom_bySOyu8GicBJf7e8Z5jMLI
+            |          Type$1_parsePartialFrom_pKqJDelZVhDbwPGboTZxn3
+            |          AbstractParser_parsePartialFrom_v3v8VvRzJr4PdwgDq4Yba8
+            |          AbstractParser_parseFrom_enevrhb5pU0jdPbMtHsJyE
+            |          Type_parseFrom_75jT302T8eBWUfhi4EjHvJ
+            |          ConsumerComparison$Fixture_prepare_tNdJ9X7uqL20t1GNVM9PGH
+            |          ConsumerComparison$Fixture_operation_jfZW8CvPybIiSC95J8Vot1
+            |          ConsumerComparison_run_bSSxaU43AC8xy8WN40MkX3
+            |          ConsumerComparison_main_DeVUWCzmT14wreQVaWlcTJ
+            |          ConsumerProfile_main_Fnz54astF2JbLLVluScaEC
+            |          JavaMainWrapper_runCore0_DxjyYWWswBIqpGm74uwTlD
+            |          JavaMainWrapper_doRun_F09BQfnF3iKa8bUp7D6GY0
+            |          JavaMainWrapper_run_iTUBl8UzFfAz1VYmMX6I32
+            |          IsolateEnterStub__JavaMainWrapper__run__cXbfAhOWcF90761nQYco7L
+            |          __libc_start_call_main
+            |          call_init (inlined)
+            |          __libc_start_main@@GLIBC_2.34
+            |          _start
+            |          
+            |--1.06%--SVMIntrinsicStubsGen_indexOf1S2_goQ2mXFmbM1EKe5xWYwiL0
+            |          |          
+            |           --1.03%--String_indexOf_y0iFXQL9qAGR82y22oR02D
+            |                     Utf8$ServerProcessor_decodeUtf8_Wna9pJiq7WH9SZkDtfbjvF
+            |                     Utf8_decodeUtf8_JIcYCpSjsB3hYXsIsrdpbA
+            |                     CodedInputStream$ArrayDecoder_readStringRequireUtf8_4k7jXzDLS73lAuhyy4YqVD
+            |                     Type$Builder_mergeFrom_FQrd8OBiLaJe3IzQVHc7FI
+            |                     Type$1_parsePartialFrom_bySOyu8GicBJf7e8Z5jMLI
+            |                     Type$1_parsePartialFrom_pKqJDelZVhDbwPGboTZxn3
+            |                     AbstractParser_parsePartialFrom_v3v8VvRzJr4PdwgDq4Yba8
+            |                     AbstractParser_parseFrom_enevrhb5pU0jdPbMtHsJyE
+            |                     Type_parseFrom_75jT302T8eBWUfhi4EjHvJ
+            |                     ConsumerComparison$Fixture_prepare_tNdJ9X7uqL20t1GNVM9PGH
+            |                     ConsumerComparison$Fixture_operation_jfZW8CvPybIiSC95J8Vot1
+            |                     ConsumerComparison_run_bSSxaU43AC8xy8WN40MkX3
+            |                     ConsumerComparison_main_DeVUWCzmT14wreQVaWlcTJ
+            |                     ConsumerProfile_main_Fnz54astF2JbLLVluScaEC
+            |                     JavaMainWrapper_runCore0_DxjyYWWswBIqpGm74uwTlD
+            |                     JavaMainWrapper_doRun_F09BQfnF3iKa8bUp7D6GY0
+            |                     JavaMainWrapper_run_iTUBl8UzFfAz1VYmMX6I32
+            |                     IsolateEnterStub__JavaMainWrapper__run__cXbfAhOWcF90761nQYco7L
+            |                     __libc_start_call_main
+            |                     call_init (inlined)
+            |                     __libc_start_main@@GLIBC_2.34
+            |                     _start
+            |          
+             --1.01%--CodedInputStream$ArrayDecoder_readRawVarint32Old_033OZaAnxAGaOzp82SlMYE
+
+     7.06%  truffledata-con  truffledata-consumer-profile  [.] CodedInputStream$ArrayDecoder_readTag_xPbUXeriKh4O1SzRvN4Jo6
+            |          
+            |--2.94%--Field$Builder_buildPartial_q87EIu17nKFWAcry1lMT6F
+            |          |          
+            |           --2.84%--Field$1_parsePartialFrom_ei1ezL3FhL5XesAarp0n45
+            |                     Field$1_parsePartialFrom_jyU07ssgQ30E36Re8S3aJG
+            |                     CodedInputStream$ArrayDecoder_readMessage_QmdsE3iYF69PoLAVJown1D
+            |                     Type$Builder_mergeFrom_FQrd8OBiLaJe3IzQVHc7FI
+            |                     Type$1_parsePartialFrom_bySOyu8GicBJf7e8Z5jMLI
+            |                     Type$1_parsePartialFrom_pKqJDelZVhDbwPGboTZxn3
+            |                     AbstractParser_parsePartialFrom_v3v8VvRzJr4PdwgDq4Yba8
+            |                     AbstractParser_parseFrom_enevrhb5pU0jdPbMtHsJyE
+            |                     Type_parseFrom_75jT302T8eBWUfhi4EjHvJ
+            |                     ConsumerComparison$Fixture_prepare_tNdJ9X7uqL20t1GNVM9PGH
+            |                     ConsumerComparison$Fixture_operation_jfZW8CvPybIiSC95J8Vot1
+            |                     ConsumerComparison_run_bSSxaU43AC8xy8WN40MkX3
+            |                     ConsumerComparison_main_DeVUWCzmT14wreQVaWlcTJ
+            |                     ConsumerProfile_main_Fnz54astF2JbLLVluScaEC
+            |                     JavaMainWrapper_runCore0_DxjyYWWswBIqpGm74uwTlD
+            |                     JavaMainWrapper_doRun_F09BQfnF3iKa8bUp7D6GY0
+            |                     JavaMainWrapper_run_iTUBl8UzFfAz1VYmMX6I32
+            |                     IsolateEnterStub__JavaMainWrapper__run__cXbfAhOWcF90761nQYco7L
+            |                     __libc_start_call_main
+            |                     call_init (inlined)
+            |                     __libc_start_main@@GLIBC_2.34
+            |                     _start
+            |          
+             --1.13%--String_ANiVZ8cr6wIGG2iZqvkdVA
+                       |          
+                        --1.09%--String_GRTqt8j8XU4EIN8dP1HPGD
+                                  Utf8$ServerProcessor_decodeUtf8_Wna9pJiq7WH9SZkDtfbjvF
+                                  Utf8_decodeUtf8_JIcYCpSjsB3hYXsIsrdpbA
+                                  CodedInputStream$ArrayDecoder_readStringRequireUtf8_4k7jXzDLS73lAuhyy4YqVD
+
+     4.69%  truffledata-con  truffledata-consumer-profile  [.] ArrayList_grow_8Gymmc4HlX2jVQQSuI2GFL
+            |          
+             --2.96%--CodedInputStream$ArrayDecoder_readRawVarint32Old_033OZaAnxAGaOzp82SlMYE
+                       |          
+                       |--1.51%--CodedInputStream$ArrayDecoderOldVarint_readRawVarint32Expected10BytesMax_YUn4ymi4166VboGd0r5eXI
+                       |          CodedInputStream$ArrayDecoder_readEnum_RgLNvEo0jm0B2hkxk4xy2A
+                       |          Field$Builder_mergeFrom_cxtl4cZp5ZG2w7bf2npTG4
+                       |          Field$1_parsePartialFrom_ei1ezL3FhL5XesAarp0n45
+                       |          Field$1_parsePartialFrom_jyU07ssgQ30E36Re8S3aJG
+                       |          CodedInputStream$ArrayDecoder_readMessage_QmdsE3iYF69PoLAVJown1D
+                       |          Type$Builder_mergeFrom_FQrd8OBiLaJe3IzQVHc7FI
+                       |          Type$1_parsePartialFrom_bySOyu8GicBJf7e8Z5jMLI
+                       |          Type$1_parsePartialFrom_pKqJDelZVhDbwPGboTZxn3
+                       |          AbstractParser_parsePartialFrom_v3v8VvRzJr4PdwgDq4Yba8
+                       |          AbstractParser_parseFrom_enevrhb5pU0jdPbMtHsJyE
+                       |          Type_parseFrom_75jT302T8eBWUfhi4EjHvJ
+                       |          ConsumerComparison$Fixture_prepare_tNdJ9X7uqL20t1GNVM9PGH
+                       |          ConsumerComparison$Fixture_operation_jfZW8CvPybIiSC95J8Vot1
+                       |          ConsumerComparison_run_bSSxaU43AC8xy8WN40MkX3
+                       |          ConsumerComparison_main_DeVUWCzmT14wreQVaWlcTJ
+                       |          ConsumerProfile_main_Fnz54astF2JbLLVluScaEC
+                       |          JavaMainWrapper_runCore0_DxjyYWWswBIqpGm74uwTlD
+                       |          JavaMainWrapper_doRun_F09BQfnF3iKa8bUp7D6GY0
+                       |          JavaMainWrapper_run_iTUBl8UzFfAz1VYmMX6I32
+                       |          IsolateEnterStub__JavaMainWrapper__run__cXbfAhOWcF90761nQYco7L
+                       |          __libc_start_call_main
+                       |          call_init (inlined)
+                       |          __libc_start_main@@GLIBC_2.34
+                       |          _start
+                       |          
+                        --1.10%--CodedInputStream$ArrayDecoder_readEnum_RgLNvEo0jm0B2hkxk4xy2A
+                                  Field$Builder_mergeFrom_cxtl4cZp5ZG2w7bf2npTG4
+                                  Field$1_parsePartialFrom_ei1ezL3FhL5XesAarp0n45
+                                  Field$1_parsePartialFrom_jyU07ssgQ30E36Re8S3aJG
+                                  CodedInputStream$ArrayDecoder_readMessage_QmdsE3iYF69PoLAVJown1D
+                                  Type$Builder_mergeFrom_FQrd8OBiLaJe3IzQVHc7FI
+                                  Type$1_parsePartialFrom_bySOyu8GicBJf7e8Z5jMLI
+                                  Type$1_parsePartialFrom_pKqJDelZVhDbwPGboTZxn3
+                                  AbstractParser_parsePartialFrom_v3v8VvRzJr4PdwgDq4Yba8
+                                  AbstractParser_parseFrom_enevrhb5pU0jdPbMtHsJyE
+                                  Type_parseFrom_75jT302T8eBWUfhi4EjHvJ
+                                  ConsumerComparison$Fixture_prepare_tNdJ9X7uqL20t1GNVM9PGH
+                                  ConsumerComparison$Fixture_operation_jfZW8CvPybIiSC95J8Vot1
+                                  ConsumerComparison_run_bSSxaU43AC8xy8WN40MkX3
+                                  ConsumerComparison_main_DeVUWCzmT14wreQVaWlcTJ
+                                  ConsumerProfile_main_Fnz54astF2JbLLVluScaEC
+                                  JavaMainWrapper_runCore0_DxjyYWWswBIqpGm74uwTlD
+                                  JavaMainWrapper_doRun_F09BQfnF3iKa8bUp7D6GY0
+                                  JavaMainWrapper_run_iTUBl8UzFfAz1VYmMX6I32
+                                  IsolateEnterStub__JavaMainWrapper__run__cXbfAhOWcF90761nQYco7L
+                                  __libc_start_call_main
+                                  call_init (inlined)
+                                  __libc_start_main@@GLIBC_2.34
+                                  _start
+
+     4.54%  truffledata-con  truffledata-consumer-profile  [.] Type$Builder_mergeFrom_FQrd8OBiLaJe3IzQVHc7FI
+     2.98%  truffledata-con  truffledata-consumer-profile  [.] CodedInputStream$ArrayDecoderOldVarint_readRawVarint32Expected5BytesMax_8XFqXadpm27H3SLjqkpIjJ
+     2.70%  truffledata-con  truffledata-consumer-profile  [.] Field$Builder_buildPartial_q87EIu17nKFWAcry1lMT6F
+            |          
+            |--1.28%--Field$Builder_buildPartial_q87EIu17nKFWAcry1lMT6F
+            |          Field$1_parsePartialFrom_ei1ezL3FhL5XesAarp0n45
+            |          Field$1_parsePartialFrom_jyU07ssgQ30E36Re8S3aJG
+            |          CodedInputStream$ArrayDecoder_readMessage_QmdsE3iYF69PoLAVJown1D
+            |          Type$Builder_mergeFrom_FQrd8OBiLaJe3IzQVHc7FI
+            |          Type$1_parsePartialFrom_bySOyu8GicBJf7e8Z5jMLI
+            |          Type$1_parsePartialFrom_pKqJDelZVhDbwPGboTZxn3
+            |          AbstractParser_parsePartialFrom_v3v8VvRzJr4PdwgDq4Yba8
+            |          AbstractParser_parseFrom_enevrhb5pU0jdPbMtHsJyE
+            |          Type_parseFrom_75jT302T8eBWUfhi4EjHvJ
+            |          ConsumerComparison$Fixture_prepare_tNdJ9X7uqL20t1GNVM9PGH
+            |          ConsumerComparison$Fixture_operation_jfZW8CvPybIiSC95J8Vot1
+            |          ConsumerComparison_run_bSSxaU43AC8xy8WN40MkX3
+            |          ConsumerComparison_main_DeVUWCzmT14wreQVaWlcTJ
+            |          ConsumerProfile_main_Fnz54astF2JbLLVluScaEC
+            |          JavaMainWrapper_runCore0_DxjyYWWswBIqpGm74uwTlD
+            |          JavaMainWrapper_doRun_F09BQfnF3iKa8bUp7D6GY0
+            |          JavaMainWrapper_run_iTUBl8UzFfAz1VYmMX6I32
+            |          IsolateEnterStub__JavaMainWrapper__run__cXbfAhOWcF90761nQYco7L
+            |          __libc_start_call_main
+            |          call_init (inlined)
+            |          __libc_start_main@@GLIBC_2.34
+            |          _start
+            |          
+             --1.02%--Field$Builder_buildPartial0_rGxzMbF8LaAmpAclr4CcVK
+                       Field$Builder_buildPartial_q87EIu17nKFWAcry1lMT6F
+                       Field$1_parsePartialFrom_ei1ezL3FhL5XesAarp0n45
+                       Field$1_parsePartialFrom_jyU07ssgQ30E36Re8S3aJG
+                       CodedInputStream$ArrayDecoder_readMessage_QmdsE3iYF69PoLAVJown1D
+                       Type$Builder_mergeFrom_FQrd8OBiLaJe3IzQVHc7FI
+                       Type$1_parsePartialFrom_bySOyu8GicBJf7e8Z5jMLI
+                       Type$1_parsePartialFrom_pKqJDelZVhDbwPGboTZxn3
+                       AbstractParser_parsePartialFrom_v3v8VvRzJr4PdwgDq4Yba8
+                       AbstractParser_parseFrom_enevrhb5pU0jdPbMtHsJyE
+                       Type_parseFrom_75jT302T8eBWUfhi4EjHvJ
+                       ConsumerComparison$Fixture_prepare_tNdJ9X7uqL20t1GNVM9PGH
+                       ConsumerComparison$Fixture_operation_jfZW8CvPybIiSC95J8Vot1
+                       ConsumerComparison_run_bSSxaU43AC8xy8WN40MkX3
+                       ConsumerComparison_main_DeVUWCzmT14wreQVaWlcTJ
+                       ConsumerProfile_main_Fnz54astF2JbLLVluScaEC
+                       JavaMainWrapper_runCore0_DxjyYWWswBIqpGm74uwTlD
+                       JavaMainWrapper_doRun_F09BQfnF3iKa8bUp7D6GY0
+                       JavaMainWrapper_run_iTUBl8UzFfAz1VYmMX6I32
+                       IsolateEnterStub__JavaMainWrapper__run__cXbfAhOWcF90761nQYco7L
+                       __libc_start_call_main
+                       call_init (inlined)
+                       __libc_start_main@@GLIBC_2.34
+                       _start
+
+     2.42%  truffledata-con  truffledata-consumer-profile  [.] Utf8$ServerProcessor_decodeUtf8_Wna9pJiq7WH9SZkDtfbjvF
+            |          
+             --1.44%--Field$Builder_buildPartial_q87EIu17nKFWAcry1lMT6F
+                       Field$1_parsePartialFrom_ei1ezL3FhL5XesAarp0n45
+                       Field$1_parsePartialFrom_jyU07ssgQ30E36Re8S3aJG
+                       CodedInputStream$ArrayDecoder_readMessage_QmdsE3iYF69PoLAVJown1D
+                       Type$Builder_mergeFrom_FQrd8OBiLaJe3IzQVHc7FI
+                       Type$1_parsePartialFrom_bySOyu8GicBJf7e8Z5jMLI
+                       Type$1_parsePartialFrom_pKqJDelZVhDbwPGboTZxn3
+                       AbstractParser_parsePartialFrom_v3v8VvRzJr4PdwgDq4Yba8
+                       AbstractParser_parseFrom_enevrhb5pU0jdPbMtHsJyE
+                       Type_parseFrom_75jT302T8eBWUfhi4EjHvJ
+                       ConsumerComparison$Fixture_prepare_tNdJ9X7uqL20t1GNVM9PGH
+                       ConsumerComparison$Fixture_operation_jfZW8CvPybIiSC95J8Vot1
+                       ConsumerComparison_run_bSSxaU43AC8xy8WN40MkX3
+                       ConsumerComparison_main_DeVUWCzmT14wreQVaWlcTJ
+                       ConsumerProfile_main_Fnz54astF2JbLLVluScaEC
+                       JavaMainWrapper_runCore0_DxjyYWWswBIqpGm74uwTlD
+                       JavaMainWrapper_doRun_F09BQfnF3iKa8bUp7D6GY0
+                       JavaMainWrapper_run_iTUBl8UzFfAz1VYmMX6I32
+                       IsolateEnterStub__JavaMainWrapper__run__cXbfAhOWcF90761nQYco7L
+                       __libc_start_call_main
+                       call_init (inlined)
+                       __libc_start_main@@GLIBC_2.34
+                       _start
+
+     2.39%  truffledata-con  truffledata-consumer-profile  [.] CodedInputStream$ArrayDecoder_readStringRequireUtf8_4k7jXzDLS73lAuhyy4YqVD
+            |          
+             --1.34%--Field$Builder_buildPartial_q87EIu17nKFWAcry1lMT6F
+                       Field$1_parsePartialFrom_ei1ezL3FhL5XesAarp0n45
+                       Field$1_parsePartialFrom_jyU07ssgQ30E36Re8S3aJG
+                       CodedInputStream$ArrayDecoder_readMessage_QmdsE3iYF69PoLAVJown1D
+                       Type$Builder_mergeFrom_FQrd8OBiLaJe3IzQVHc7FI
+                       Type$1_parsePartialFrom_bySOyu8GicBJf7e8Z5jMLI
+                       Type$1_parsePartialFrom_pKqJDelZVhDbwPGboTZxn3
+                       AbstractParser_parsePartialFrom_v3v8VvRzJr4PdwgDq4Yba8
+                       AbstractParser_parseFrom_enevrhb5pU0jdPbMtHsJyE
+                       Type_parseFrom_75jT302T8eBWUfhi4EjHvJ
+                       ConsumerComparison$Fixture_prepare_tNdJ9X7uqL20t1GNVM9PGH
+                       ConsumerComparison$Fixture_operation_jfZW8CvPybIiSC95J8Vot1
+                       ConsumerComparison_run_bSSxaU43AC8xy8WN40MkX3
+                       ConsumerComparison_main_DeVUWCzmT14wreQVaWlcTJ
+                       ConsumerProfile_main_Fnz54astF2JbLLVluScaEC
+                       JavaMainWrapper_runCore0_DxjyYWWswBIqpGm74uwTlD
+                       JavaMainWrapper_doRun_F09BQfnF3iKa8bUp7D6GY0
+                       JavaMainWrapper_run_iTUBl8UzFfAz1VYmMX6I32
+                       IsolateEnterStub__JavaMainWrapper__run__cXbfAhOWcF90761nQYco7L
+                       __libc_start_call_main
+                       call_init (inlined)
+                       __libc_start_main@@GLIBC_2.34
+                       _start
+
+     2.11%  truffledata-con  truffledata-consumer-profile  [.] ArrayList_add_2Vl5PgBEiYKtbLFZTnjfUI
+     2.03%  truffledata-con  truffledata-consumer-profile  [.] ConsumerComparison_expected_Wx3OZDLrkF3oqS5Okb6Ay7
+            |          
+             --1.18%--ConsumerComparison_expected_Wx3OZDLrkF3oqS5Okb6Ay7
+                       |          
+                        --1.15%--0x48c3d40660b6
+                                  0x594b82ff006a
+                                  SubstrateOptimizedCallTarget_invokeCompiledAdapterOrCallBoundary_syCudCrLg5GXeTyp1CHfnB
+                                  OptimizedCallTarget_callDirect_i1peoeM9uw7UzoIILZyAP0
+                                  OptimizedCallTarget_call_WMt8na5yWf9rRyW8r8xYkE
+                                  ConsumerComparison$Fixture_consume_BGPd53q5LxDWeNamkn1RSG
+                                  ConsumerComparison$Fixture_operation_jfZW8CvPybIiSC95J8Vot1
+                                  ConsumerComparison_run_bSSxaU43AC8xy8WN40MkX3
+                                  ConsumerComparison_main_DeVUWCzmT14wreQVaWlcTJ
+                                  ConsumerProfile_main_Fnz54astF2JbLLVluScaEC
+                                  JavaMainWrapper_runCore0_DxjyYWWswBIqpGm74uwTlD
+                                  JavaMainWrapper_doRun_F09BQfnF3iKa8bUp7D6GY0
+                                  JavaMainWrapper_run_iTUBl8UzFfAz1VYmMX6I32
+                                  IsolateEnterStub__JavaMainWrapper__run__cXbfAhOWcF90761nQYco7L
+                                  __libc_start_call_main
+                                  call_init (inlined)
+                                  __libc_start_main@@GLIBC_2.34
+                                  _start
+
+     1.77%  truffledata-con  truffledata-consumer-profile  [.] String_GRTqt8j8XU4EIN8dP1HPGD
+     1.60%  truffledata-con  truffledata-consumer-profile  [.] String_indexOf_y0iFXQL9qAGR82y22oR02D
+            |          
+             --1.24%--Field$Builder_buildPartial_q87EIu17nKFWAcry1lMT6F
+                       Field$1_parsePartialFrom_ei1ezL3FhL5XesAarp0n45
+                       Field$1_parsePartialFrom_jyU07ssgQ30E36Re8S3aJG
+                       CodedInputStream$ArrayDecoder_readMessage_QmdsE3iYF69PoLAVJown1D
+                       Type$Builder_mergeFrom_FQrd8OBiLaJe3IzQVHc7FI
+                       Type$1_parsePartialFrom_bySOyu8GicBJf7e8Z5jMLI
+                       Type$1_parsePartialFrom_pKqJDelZVhDbwPGboTZxn3
+                       AbstractParser_parsePartialFrom_v3v8VvRzJr4PdwgDq4Yba8
+                       AbstractParser_parseFrom_enevrhb5pU0jdPbMtHsJyE
+                       Type_parseFrom_75jT302T8eBWUfhi4EjHvJ
+                       ConsumerComparison$Fixture_prepare_tNdJ9X7uqL20t1GNVM9PGH
+                       ConsumerComparison$Fixture_operation_jfZW8CvPybIiSC95J8Vot1
+                       ConsumerComparison_run_bSSxaU43AC8xy8WN40MkX3
+                       ConsumerComparison_main_DeVUWCzmT14wreQVaWlcTJ
+                       ConsumerProfile_main_Fnz54astF2JbLLVluScaEC
+                       JavaMainWrapper_runCore0_DxjyYWWswBIqpGm74uwTlD
+                       JavaMainWrapper_doRun_F09BQfnF3iKa8bUp7D6GY0
+                       JavaMainWrapper_run_iTUBl8UzFfAz1VYmMX6I32
+                       IsolateEnterStub__JavaMainWrapper__run__cXbfAhOWcF90761nQYco7L
+                       __libc_start_call_main
+                       call_init (inlined)
+                       __libc_start_main@@GLIBC_2.34
+                       _start
+
+     1.57%  truffledata-con  truffledata-consumer-profile  [.] Field_toBuilder_TQ5T6ddeCRK8qwJVkvV4QF
+     1.49%  truffledata-con  truffledata-consumer-profile  [.] SVMIntrinsicStubsGen_stringCodingCountPositives_pJXvyEBdEyALRGGEsnbJx8
+     1.41%  truffledata-con  truffledata-consumer-profile  [.] Field$Builder_buildPartial0_rGxzMbF8LaAmpAclr4CcVK
+     1.36%  truffledata-con  truffledata-consumer-profile  [.] Collections$UnmodifiableCollection_size_noonwRU4c17GwsoOGFZyL2
+     1.23%  truffledata-con  truffledata-consumer-profile  [.] Utf8_decodeUtf8_JIcYCpSjsB3hYXsIsrdpbA
+     1.20%  truffledata-con  truffledata-consumer-profile  [.] CodedInputStream$ArrayDecoder_readEnum_RgLNvEo0jm0B2hkxk4xy2A
+     1.14%  truffledata-con  truffledata-consumer-profile  [.] GeneratedMessage_fFzORL1R976yWNrwj3MQr2
+     1.10%  truffledata-con  truffledata-consumer-profile  [.] Field$1_parsePartialFrom_ei1ezL3FhL5XesAarp0n45
+     1.09%  truffledata-con  truffledata-consumer-profile  [.] ArrayList_add_NYBsUhezcALaRyNoGDeS92
+     1.06%  truffledata-con  truffledata-consumer-profile  [.] ArrayList_size_fSy2Y51Bg0951mYo2MzqxA
+     1.04%  truffledata-con  truffledata-consumer-profile  [.] CodedInputStream$ArrayDecoder_pushLimit_OUiTgNiCRy6Usd75Yc8eXJ
+     1.04%  truffledata-con  truffledata-consumer-profile  [.] CodedInputStream$ArrayDecoderOldVarint_readRawVarint32Expected10BytesMax_YUn4ymi4166VboGd0r5eXI
+     1.02%  truffledata-con  truffledata-consumer-profile  [.] Collections$UnmodifiableList_get_9TnFuuOejAF5Bw5uCeHkKL
+
+
+#
+# (Cannot load tips.txt file, please install perf!)
+#

@@ -1,0 +1,33 @@
+Final accepted state (count-capability experiment removed):
+
+bazel test //benchmarks/comparison:consumer_svm //benchmarks/comparison:consumer_native_smoke //protobuf-buffa/tests:native_views_test //json/tests:native_test //tests:jit_matrix --remote_download_outputs=toplevel --test_output=errors
+https://app.buildbuddy.io/invocation/6970c518-89b3-4bfa-bccf-439f950538ef
+All four test targets passed; consumer_native_smoke reused its identical cached baseline result.
+JVM JIT matrix: 617 cases, 550 successful compiled operations, 67 expected rejections.
+JSON SVM: common primitive roots compiled for constant/dynamic receivers; schema churn compiled;
+0.000032 Java B/read in each million-read allocation check (invocation overhead included).
+Native-view SVM: lifetime, thread, bounds, arrays/snapshots, plan/ordinal caches and compiled access.
+Rebuilt consumer SHA-256 matches the measured baseline exactly:
+c74f7cfbacda7cf01d20817462afe719a5ce07056c2f16ae46894ecf768a8cad
+
+bazel coverage //tests:test //protobuf-buffa/tests:jvm //protobuf-buffa/tests:jvm_non_strict //protobuf-buffa/tests:jvm_views //protobuf-buffa/tests:jvm_views_strict //protobuf-buffa/tests:jvm_no_native_access --config=codecov
+https://app.buildbuddy.io/invocation/c2327659-d4ab-4af7-8bc9-c4eaaed31a0e
+All six test targets passed (core correctness reused its unchanged cached result).
+python3 .github/scripts/reports.py coverage
+Validated 83 production source files across 8 modules.
+python3 .github/scripts/coverage_contract.py
+Passed the extended method gate. NativeRow: 218/231 JVM lines, 36/37 methods;
+sole named platform exception is NativeRow.entry(Tape,int), exercised on SVM.
+TypedRow: 97/102 lines, 20/20 methods. See coverage.json for remaining branches/lines.
+This is not native line coverage or a claim of complete branch coverage.
+
+python3 -m unittest discover -s .github/scripts -p 'test_*.py'
+11 tests passed.
+python3 -m unittest discover -s tools/bench -p 'test_*.py'
+9 tests passed.
+Google Java Format dry-run, Buildifier checks and git diff --check passed.
+
+The pinned compiler/toolchain and native ABI were unchanged. No pushes, release or
+remote CI result are implied. Complete release/platform/publication qualification,
+actual Elide/TruffleCEL application integration, total native memory accounting and
+the direct schema-specific native result prototype remain outside this completed cycle.

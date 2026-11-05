@@ -1,0 +1,60 @@
+# To display the perf.data header info, please use --header/--header-only options.
+#
+#
+# Total Lost Samples: 0
+#
+# Samples: 3K of event 'cpu/cycles/P'
+# Event count (approx.): 17617955652
+#
+# Overhead  Command          Shared Object                 Symbol                                                                                   
+# ........  ...............  ............................  .........................................................................................
+#
+    15.55%  truffledata-con  truffledata-consumer-profile  [.] <truffledata_buffa::typed::Decoder>::binary
+            |          
+            |--4.82%--<truffledata_buffa::typed::Decoder>::binary
+            |          
+            |--3.19%--realloc
+            |          |          
+            |           --3.13%--<alloc::raw_vec::RawVecInner>::finish_grow
+            |          
+             --2.31%--<truffledata_buffa::typed::Decoder>::push
+
+     5.73%  truffledata-con  truffledata-consumer-profile  [.] <truffledata_buffa::typed::Decoder>::push
+            |          
+            |--1.46%--realloc
+            |          <alloc::raw_vec::RawVecInner>::finish_grow
+            |          
+             --1.38%--<truffledata_buffa::typed::Decoder>::binary
+
+     4.22%  truffledata-con  truffledata-consumer-profile  [.] NativeRow_index_pT19hGM38bLi4m2wscAEb7
+     4.00%  truffledata-con  truffledata-consumer-profile  [.] String_ANiVZ8cr6wIGG2iZqvkdVA
+     3.07%  truffledata-con  truffledata-consumer-profile  [.] NativeRow_decode_sp1hChdVRYLlN0dlTwaXRD
+     3.01%  truffledata-con  truffledata-consumer-profile  [.] NativeRow_link_mx3GkqQvHUAby0XDRDodU6
+     2.87%  truffledata-con  truffledata-consumer-profile  [.] <truffledata_buffa::typed::Decoder>::bytes
+            |          
+             --1.31%--<truffledata_buffa::typed::Decoder>::binary
+
+     2.84%  truffledata-con  truffledata-consumer-profile  [.] NativeRow_entry_0qAygVWzJK0Yy4gfIXcD20
+     2.71%  truffledata-con  truffledata-consumer-profile  [.] core::str::converts::from_utf8
+            |          
+             --1.09%--<truffledata_buffa::typed::Decoder>::binary
+
+     2.58%  truffledata-con  libc.so.6                     [.] _int_malloc
+            |          
+             --1.04%--realloc
+                       <alloc::raw_vec::RawVecInner>::finish_grow
+
+     2.37%  truffledata-con  truffledata-consumer-profile  [.] NativeRow$NativeArray_materialize_6d8lwUSj26FO3Mn3h7nmf7
+     2.18%  truffledata-con  truffledata-consumer-profile  [.] buffa::encoding::decode_varint::<&[u8]>
+     2.18%  truffledata-con  truffledata-consumer-profile  [.] NativeRow_materialize_uxG98lR1ti1NGjsk5QlIJ8
+     2.00%  truffledata-con  truffledata-consumer-profile  [.] ViewOwner_utf8_vdhpZc0Kb47RYc9YWkd98G
+     1.92%  truffledata-con  truffledata-consumer-profile  [.] truffledata_buffa::typed::scalar
+     1.44%  truffledata-con  truffledata-consumer-profile  [.] ByteBuffer_getArray_zSREGQgzRMABUncEZL4yFG
+     1.44%  truffledata-con  truffledata-consumer-profile  [.] Preconditions_checkFromIndexSize_mfoc1kMqT59E4u10aLwUg0
+     1.42%  truffledata-con  truffledata-consumer-profile  [.] truffledata_buffa::typed::take_bytes
+     1.07%  truffledata-con  truffledata-consumer-profile  [.] ByteBuffer_get_9LdNwcKqu55pJ71WeML94L
+
+
+#
+# (Cannot load tips.txt file, please install perf!)
+#

@@ -5,7 +5,11 @@ import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.LoopNode;
 import com.oracle.truffle.api.nodes.NodeUtil;
 import com.oracle.truffle.api.nodes.RootNode;
+import dev.elide.truffledata.DataLibrary;
 import dev.elide.truffledata.Field;
+import dev.elide.truffledata.ReadBooleanNode;
+import dev.elide.truffledata.ReadDoubleNode;
+import dev.elide.truffledata.ReadLongNode;
 import dev.elide.truffledata.Schema;
 import dev.elide.truffledata.json.JsonScalarAccess;
 import dev.elide.truffledata.json.JsonScalarPlan;
@@ -42,11 +46,31 @@ final class CompiledReads {
       try {
         plan.close();
         var rows = new JsonScalarRecord[] {first, second};
-        var dynamic = new Reads(null, schema, false);
-        var constant = new Reads(rows, schema, false);
-        var specialized = new Reads(null, schema, true);
-        var specializedConstant = new Reads(rows, schema, true);
-        for (var root : new Reads[] {dynamic, constant, specialized, specializedConstant}) {
+        var data = DataLibrary.factory().getUncached();
+        try {
+          check(
+              data.readDouble(first, 1) == 1.5 && data.readBoolean(first, 2),
+              "shared uncached primitives");
+          try {
+            data.readDouble(first, 0);
+            throw new AssertionError("Shared wrong-type read");
+          } catch (com.oracle.truffle.api.nodes.UnexpectedResultException expected) {
+            check(expected.getResult().equals(1000L), "shared rejected value preserved");
+          }
+        } catch (com.oracle.truffle.api.nodes.UnexpectedResultException failure) {
+          throw new AssertionError(failure);
+        }
+        var dynamic = new Reads(null, schema, false, false);
+        var constant = new Reads(rows, schema, false, false);
+        var specialized = new Reads(null, schema, true, false);
+        var specializedConstant = new Reads(rows, schema, true, false);
+        var shared = new Reads(null, schema, false, true);
+        var sharedConstant = new Reads(rows, schema, false, true);
+        var roots =
+            new Reads[] {
+              dynamic, constant, specialized, specializedConstant, shared, sharedConstant
+            };
+        for (var root : roots) {
           var target = root.getCallTarget();
           for (int i = 0; i < 200 && !root.compiled; i++) target.call(rows, 100000);
           check(root.compiled, "JSON reads must execute compiled code");
@@ -67,11 +91,13 @@ final class CompiledReads {
                   + (root.constant != null)
                   + " specialized="
                   + root.specialized
+                  + " shared="
+                  + root.shared
                   + " bytes/read="
                   + bytes);
         }
         first.close();
-        for (var root : new Reads[] {dynamic, constant, specialized, specializedConstant}) {
+        for (var root : roots) {
           try {
             root.getCallTarget().call(rows, 1);
             throw new AssertionError("Compiled closed read");
@@ -79,6 +105,30 @@ final class CompiledReads {
           }
         }
         check(second.longValue(0) == 2000, "Sibling survives owner close");
+        // A single call site sees more schema identities than either bounded PIC can retain.
+        var churn = new Reads(null, schema, false, true);
+        var churnTarget = churn.getCallTarget();
+        for (int i = 0; i < 8; i++) {
+          var nextSchema =
+              Schema.of(
+                  Field.integer("n", (i & 1) == 0 ? 32 : 64, true, false, false),
+                  new Field("d", Field.Kind.FLOAT64, false, false),
+                  new Field("b", Field.Kind.BOOLEAN, false, false));
+          try (var nextPlan = JsonScalarPlan.compile(nextSchema);
+              var next =
+                  nextPlan.decode(
+                      ("{\"n\":" + (1000 + i) + ",\"d\":1.5,\"b\":true}")
+                          .getBytes(StandardCharsets.UTF_8))) {
+            var nextRows = new JsonScalarRecord[] {next, next};
+            churn.compiled = false;
+            for (int warmup = 0; warmup < 200 && !churn.compiled; warmup++)
+              churnTarget.call(nextRows, 100000);
+            check(churn.compiled, "Shared JSON schema churn remains compilable");
+            check(
+                (Long) churnTarget.call(nextRows, 1) == 1002 + i, "Shared JSON schema churn value");
+          }
+        }
+        check(NodeUtil.countNodes(churn) <= 192, "Shared JSON schema cache remains bounded");
       } finally {
         context.leave();
       }
@@ -90,16 +140,21 @@ final class CompiledReads {
     final JsonScalarRecord @org.jspecify.annotations.Nullable [] constant;
 
     boolean compiled;
-    final boolean specialized;
+    final boolean specialized, shared;
+    @Child private ReadLongNode sharedLong = ReadLongNode.create();
+    @Child private ReadDoubleNode sharedDouble = ReadDoubleNode.create();
+    @Child private ReadBooleanNode sharedBoolean = ReadBooleanNode.create();
     final JsonScalarAccess n, d, b;
 
     Reads(
         JsonScalarRecord @org.jspecify.annotations.Nullable [] constant,
         Schema schema,
-        boolean specialized) {
+        boolean specialized,
+        boolean shared) {
       super(TestLanguage.current());
       this.constant = constant;
       this.specialized = specialized;
+      this.shared = shared;
       n = new JsonScalarAccess(schema, 0);
       d = new JsonScalarAccess(schema, 1);
       b = new JsonScalarAccess(schema, 2);
@@ -113,9 +168,13 @@ final class CompiledReads {
       for (int i = 0; i < count; i++) {
         var row = rows[i & 1];
         sum +=
-            specialized
-                ? n.longValue(row) + (long) d.doubleValue(row) + (b.booleanValue(row) ? 1 : 0)
-                : row.longValue(0) + (long) row.doubleValue(1) + (row.booleanValue(2) ? 1 : 0);
+            shared
+                ? sharedLong.execute(row, 0)
+                    + (long) sharedDouble.execute(row, 1)
+                    + (sharedBoolean.execute(row, 2) ? 1 : 0)
+                : specialized
+                    ? n.longValue(row) + (long) d.doubleValue(row) + (b.booleanValue(row) ? 1 : 0)
+                    : row.longValue(0) + (long) row.doubleValue(1) + (row.booleanValue(2) ? 1 : 0);
       }
       if (CompilerDirectives.inInterpreter()) LoopNode.reportLoopCount(this, count);
       compiled |= CompilerDirectives.inCompiledCode();

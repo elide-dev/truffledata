@@ -1,0 +1,101 @@
+# To display the perf.data header info, please use --header/--header-only options.
+#
+#
+# Total Lost Samples: 0
+#
+# Samples: 3K of event 'cpu/cycles/P'
+# Event count (approx.): 16300064245
+#
+# Overhead  Command          Shared Object                 Symbol                                                                                   
+# ........  ...............  ............................  .........................................................................................
+#
+    25.72%  truffledata-con  truffledata-consumer-profile  [.] <truffledata_buffa::typed::Decoder>::binary
+            |          
+            |--7.74%--<truffledata_buffa::typed::Decoder>::binary
+            |          
+            |--5.09%--realloc
+            |          |          
+            |           --4.80%--<alloc::raw_vec::RawVecInner>::finish_grow
+            |          
+            |--4.39%--<truffledata_buffa::typed::Decoder>::push
+            |          
+            |--1.64%--buffa::encoding::decode_varint::<&[u8]>
+            |          
+            |--1.34%--SvmBackend_typed_m5ZAy5gBUdD7mhPOcay3hB
+            |          BuffaPlan_parse_CdgW7hksxZFlQDePGBwO0J
+            |          BuffaPlan_decodeView_NETFxZv9N59QiBmqAhTnrC
+            |          ConsumerComparison$Fixture_prepare_tNdJ9X7uqL20t1GNVM9PGH
+            |          ConsumerComparison$Fixture_operation_jfZW8CvPybIiSC95J8Vot1
+            |          ConsumerComparison_run_bSSxaU43AC8xy8WN40MkX3
+            |          ConsumerComparison_main_DeVUWCzmT14wreQVaWlcTJ
+            |          ConsumerProfile_main_Fnz54astF2JbLLVluScaEC
+            |          JavaMainWrapper_runCore0_DxjyYWWswBIqpGm74uwTlD
+            |          JavaMainWrapper_doRun_F09BQfnF3iKa8bUp7D6GY0
+            |          JavaMainWrapper_run_iTUBl8UzFfAz1VYmMX6I32
+            |          IsolateEnterStub__JavaMainWrapper__run__cXbfAhOWcF90761nQYco7L
+            |          __libc_start_call_main
+            |          call_init (inlined)
+            |          __libc_start_main@@GLIBC_2.34
+            |          _start
+            |          
+            |--1.33%--core::str::converts::from_utf8
+            |          
+             --1.06%--<truffledata_buffa::typed::Decoder>::bytes
+
+     8.47%  truffledata-con  truffledata-consumer-profile  [.] <truffledata_buffa::typed::Decoder>::push
+            |          
+            |--2.52%--realloc
+            |          |          
+            |           --2.49%--<alloc::raw_vec::RawVecInner>::finish_grow
+            |          
+             --2.22%--<truffledata_buffa::typed::Decoder>::binary
+
+     5.16%  truffledata-con  libc.so.6                     [.] _int_malloc
+            |          
+            |--2.59%--realloc
+            |          <alloc::raw_vec::RawVecInner>::finish_grow
+            |          
+             --1.16%--__libc_malloc2
+                       <alloc::raw_vec::RawVecInner>::finish_grow
+
+     4.88%  truffledata-con  truffledata-consumer-profile  [.] core::str::converts::from_utf8
+            |          
+             --2.09%--<truffledata_buffa::typed::Decoder>::binary
+
+     4.44%  truffledata-con  truffledata-consumer-profile  [.] <truffledata_buffa::typed::Decoder>::bytes
+            |          
+             --1.98%--<truffledata_buffa::typed::Decoder>::binary
+
+     4.40%  truffledata-con  truffledata-consumer-profile  [.] buffa::encoding::decode_varint::<&[u8]>
+            |          
+            |--1.39%--<truffledata_buffa::typed::Decoder>::binary
+            |          
+             --1.34%--realloc
+                       <alloc::raw_vec::RawVecInner>::finish_grow
+
+     3.02%  truffledata-con  truffledata-consumer-profile  [.] String_ANiVZ8cr6wIGG2iZqvkdVA
+     2.86%  truffledata-con  truffledata-consumer-profile  [.] truffledata_buffa::typed::scalar
+            |          
+             --1.01%--realloc
+                       <alloc::raw_vec::RawVecInner>::finish_grow
+
+     1.98%  truffledata-con  truffledata-consumer-profile  [.] NativeRow_index_pT19hGM38bLi4m2wscAEb7
+     1.56%  truffledata-con  truffledata-consumer-profile  [.] truffledata_buffa::typed::take_bytes
+     1.54%  truffledata-con  libc.so.6                     [.] _int_realloc
+            |          
+             --1.13%--realloc
+                       <alloc::raw_vec::RawVecInner>::finish_grow
+
+     1.51%  truffledata-con  truffledata-consumer-profile  [.] NativeRow_materialize_uxG98lR1ti1NGjsk5QlIJ8
+     1.49%  truffledata-con  truffledata-consumer-profile  [.] <alloc::raw_vec::RawVecInner>::finish_grow
+     1.42%  truffledata-con  truffledata-consumer-profile  [.] <truffledata_buffa::typed::Contract>::enumeration
+     1.36%  truffledata-con  libc.so.6                     [.] _int_free_merge_chunk
+     1.34%  truffledata-con  truffledata-consumer-profile  [.] NativeRow_entry_0qAygVWzJK0Yy4gfIXcD20
+     1.34%  truffledata-con  libc.so.6                     [.] realloc
+     1.26%  truffledata-con  truffledata-consumer-profile  [.] NativeRow_link_mx3GkqQvHUAby0XDRDodU6
+     1.17%  truffledata-con  truffledata-consumer-profile  [.] ConsumerComparison$Fixture_prepare_tNdJ9X7uqL20t1GNVM9PGH
+
+
+#
+# (Cannot load tips.txt file, please install perf!)
+#

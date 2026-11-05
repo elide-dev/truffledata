@@ -3,6 +3,8 @@ package dev.elide.truffledata.buffa;
 import com.oracle.truffle.api.CompilerDirectives.*;
 import com.oracle.truffle.api.dsl.Bind;
 import com.oracle.truffle.api.dsl.Cached;
+import com.oracle.truffle.api.dsl.Idempotent;
+import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.library.*;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.UnexpectedResultException;
@@ -44,6 +46,11 @@ public abstract sealed class TypedRow extends AbstractRow implements ProtoAccess
     }
   }
 
+  @Idempotent
+  final boolean nativeIndex() {
+    return this instanceof NativeRow;
+  }
+
   @Override
   protected final boolean scoped() {
     return true;
@@ -62,6 +69,7 @@ public abstract sealed class TypedRow extends AbstractRow implements ProtoAccess
     throw new ContractViolation("Expected INT64");
   }
 
+  @Idempotent
   public final ProtoPlan plan() {
     return plan;
   }
@@ -121,22 +129,49 @@ public abstract sealed class TypedRow extends AbstractRow implements ProtoAccess
   }
 
   @ExportMessage
-  static long readLong(
-      TypedRow row,
-      int index,
-      @Cached.Shared("owner") @Cached("create()") ViewOwner.CheckOpenNode check,
-      @Bind Node node,
-      @Cached.Shared("indexType") @Cached InlinedExactClassProfile indexType)
-      throws UnexpectedResultException {
-    check.execute(row.owner);
-    if (row instanceof NativeRow nativeRow) {
-      var buffer = indexType.profile(node, nativeRow.indexBuffer());
-      if (nativeRow.integer(index)) return nativeRow.integerValue(index, buffer);
-      throw new UnexpectedResultException(nativeRow.value(index, buffer));
+  static class ReadLong {
+    @Specialization(
+        guards = {
+          "row.nativeIndex()",
+          "row.plan() == cachedPlan",
+          "index == cachedIndex",
+          "integer"
+        },
+        limit = "3")
+    static long nativeInteger(
+        TypedRow row,
+        int index,
+        @Cached("row.plan()") ProtoPlan cachedPlan,
+        @Cached("index") int cachedIndex,
+        @Cached("cachedPlan.field(cachedIndex)") ProtoPlan.FieldPlan field,
+        @Cached("cachedPlan.schema().requiredLong(cachedIndex)") boolean integer,
+        @Cached.Shared("owner") @Cached("create()") ViewOwner.CheckOpenNode check,
+        @Bind Node node,
+        @Cached.Shared("indexType") @Cached InlinedExactClassProfile indexType) {
+      check.execute(row.owner);
+      var nativeRow = (NativeRow) row;
+      return nativeRow.integerValue(
+          cachedIndex, field, indexType.profile(node, nativeRow.indexBuffer()));
     }
-    Object value = ((ArrayRow) row).values[index];
-    if (value instanceof Long number) return number;
-    throw new UnexpectedResultException(row.resolved(index));
+
+    @Specialization(replaces = "nativeInteger")
+    static long generic(
+        TypedRow row,
+        int index,
+        @Cached.Shared("owner") @Cached("create()") ViewOwner.CheckOpenNode check,
+        @Bind Node node,
+        @Cached.Shared("indexType") @Cached InlinedExactClassProfile indexType)
+        throws UnexpectedResultException {
+      check.execute(row.owner);
+      if (row instanceof NativeRow nativeRow) {
+        var buffer = indexType.profile(node, nativeRow.indexBuffer());
+        if (nativeRow.integer(index)) return nativeRow.integerValue(index, buffer);
+        throw new UnexpectedResultException(nativeRow.value(index, buffer));
+      }
+      Object value = ((ArrayRow) row).values[index];
+      if (value instanceof Long number) return number;
+      throw new UnexpectedResultException(row.resolved(index));
+    }
   }
 
   @ExportMessage
@@ -157,20 +192,42 @@ public abstract sealed class TypedRow extends AbstractRow implements ProtoAccess
   }
 
   @ExportMessage
-  static boolean readBoolean(
-      TypedRow row,
-      int index,
-      @Cached.Shared("owner") @Cached("create()") ViewOwner.CheckOpenNode check,
-      @Bind Node node,
-      @Cached.Shared("indexType") @Cached InlinedExactClassProfile indexType)
-      throws UnexpectedResultException {
-    check.execute(row.owner);
-    Object value =
-        row instanceof NativeRow nativeRow
-            ? nativeRow.value(index, indexType.profile(node, nativeRow.indexBuffer()))
-            : row.resolved(index);
-    if (value instanceof Boolean flag) return flag;
-    throw new UnexpectedResultException(value);
+  static class ReadBoolean {
+    @Specialization(
+        guards = {"row.nativeIndex()", "row.plan() == cachedPlan", "index == cachedIndex", "bool"},
+        limit = "3")
+    static boolean nativeBoolean(
+        TypedRow row,
+        int index,
+        @Cached("row.plan()") ProtoPlan cachedPlan,
+        @Cached("index") int cachedIndex,
+        @Cached("cachedPlan.field(cachedIndex)") ProtoPlan.FieldPlan field,
+        @Cached("cachedPlan.schema().requiredBoolean(cachedIndex)") boolean bool,
+        @Cached.Shared("owner") @Cached("create()") ViewOwner.CheckOpenNode check,
+        @Bind Node node,
+        @Cached.Shared("indexType") @Cached InlinedExactClassProfile indexType) {
+      check.execute(row.owner);
+      var nativeRow = (NativeRow) row;
+      return nativeRow.booleanValue(
+          cachedIndex, field, indexType.profile(node, nativeRow.indexBuffer()));
+    }
+
+    @Specialization(replaces = "nativeBoolean")
+    static boolean generic(
+        TypedRow row,
+        int index,
+        @Cached.Shared("owner") @Cached("create()") ViewOwner.CheckOpenNode check,
+        @Bind Node node,
+        @Cached.Shared("indexType") @Cached InlinedExactClassProfile indexType)
+        throws UnexpectedResultException {
+      check.execute(row.owner);
+      Object value =
+          row instanceof NativeRow nativeRow
+              ? nativeRow.value(index, indexType.profile(node, nativeRow.indexBuffer()))
+              : row.resolved(index);
+      if (value instanceof Boolean flag) return flag;
+      throw new UnexpectedResultException(value);
+    }
   }
 
   private Object resolved(int index) {

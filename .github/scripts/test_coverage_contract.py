@@ -1,5 +1,5 @@
 import unittest
-from coverage_contract import ACCESS_SOURCES, analyze, enforce
+from coverage_contract import ACCESS_SOURCES, SVM_ONLY_METHODS, analyze, enforce
 
 
 class CoverageContractTest(unittest.TestCase):
@@ -24,3 +24,13 @@ class CoverageContractTest(unittest.TestCase):
         for text in ['', self.report().replace('FNDA:1,', 'FNDA:0,', 1)]:
             with self.assertRaises(ValueError):
                 enforce(analyze(text))
+
+    def test_platform_exception_does_not_exempt_native_array_access(self):
+        source, methods = next(iter(SVM_ONLY_METHODS.items()))
+        summary = analyze(self.report())
+        summary[source]['uncovered_methods'] = list(methods)
+        enforce(summary)
+        summary[source]['uncovered_methods'].append(
+            'dev/elide/truffledata/buffa/NativeRow$NativeArray::getArraySize ()J')
+        with self.assertRaises(ValueError):
+            enforce(summary)

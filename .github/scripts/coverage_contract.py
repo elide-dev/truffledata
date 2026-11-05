@@ -24,10 +24,20 @@ ACCESS_SOURCES = {f'core/src/main/java/dev/elide/truffledata/{name}.java' for na
     'protobuf-buffa/src/main/java/dev/elide/truffledata/buffa/WireMessage.java',
     'protobuf-buffa/src/main/java/dev/elide/truffledata/buffa/ViewOwner.java',
     'protobuf-buffa/src/main/java/dev/elide/truffledata/buffa/TypedRow.java',
+    'protobuf-buffa/src/main/java/dev/elide/truffledata/buffa/NativeRow.java',
     'protobuf-buffa/src/main/java/dev/elide/truffledata/buffa/ScalarRow.java',
     'protobuf-buffa/src/main/java/dev/elide/truffledata/buffa/TypedArray.java',
     'protobuf-buffa/src/main/java/dev/elide/truffledata/buffa/TypedMessage.java',
 
+}
+
+# JVM LCOV cannot execute an SVM pointer intrinsic. Keep the exact method visible in gap reports;
+# native_views_test and consumer_native_smoke exercise these loads under SVM's JIT checks.
+SVM_ONLY_METHODS = {
+    'protobuf-buffa/src/main/java/dev/elide/truffledata/buffa/NativeRow.java': {
+        'dev/elide/truffledata/buffa/NativeRow::entry '
+        '(Ldev/elide/truffledata/buffa/BuffaWire$Tape;I)Lorg/graalvm/word/Pointer;',
+    },
 }
 
 def analyze(text):
@@ -67,8 +77,9 @@ def enforce(summary):
         entry = summary.get(source)
         if not entry or not entry['methods_total']:
             raise ValueError('Missing access-method coverage: ' + source)
-        if entry['uncovered_methods']:
-            raise ValueError('Uncovered access methods in ' + source + ': ' + ', '.join(entry['uncovered_methods']))
+        missing = set(entry['uncovered_methods']) - SVM_ONLY_METHODS.get(source, set())
+        if missing:
+            raise ValueError('Uncovered access methods in ' + source + ': ' + ', '.join(sorted(missing)))
 
 
 def main():

@@ -239,8 +239,12 @@ final class NativeRow extends TypedRow {
   }
 
   long integerValue(int ordinal, ByteBuffer buffer) {
+    return integerValue(ordinal, plan().field(ordinal), buffer);
+  }
+
+  // Exported access can bind the immutable field descriptor once per plan/ordinal cache entry.
+  long integerValue(int ordinal, ProtoPlan.FieldPlan field, ByteBuffer buffer) {
     int index = offset(ordinal);
-    var field = plan().field(ordinal);
     if (index < 0) return (Long) field.defaultValue();
     long value = bits(tape, index, buffer);
     return switch (field.kind()) {
@@ -248,6 +252,11 @@ final class NativeRow extends TypedRow {
       case UINT32, FIXED32 -> value & 0xffffffffL;
       default -> value;
     };
+  }
+
+  boolean booleanValue(int ordinal, ProtoPlan.FieldPlan field, ByteBuffer buffer) {
+    int index = offset(ordinal);
+    return index < 0 ? (Boolean) field.defaultValue() : bits(tape, index, buffer) != 0;
   }
 
   private @Nullable Object cachedValue(int ordinal) {

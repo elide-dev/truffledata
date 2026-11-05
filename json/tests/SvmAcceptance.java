@@ -1,7 +1,10 @@
 package dev.elide.truffledata.json.tests;
 
+import com.oracle.truffle.api.interop.InteropLibrary;
+import com.oracle.truffle.api.nodes.UnexpectedResultException;
 import dev.elide.myna.values.NativeValueTape;
 import dev.elide.myna.values.ValueTape;
+import dev.elide.truffledata.*;
 import dev.elide.truffledata.json.generated.Json;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
@@ -88,7 +91,8 @@ public final class SvmAcceptance {
     }
   }
 
-  private static void schemaTyped() throws InterruptedException {
+  private static void schemaTyped() throws Exception {
+    var data = DataLibrary.factory().getUncached();
     var schema =
         dev.elide.truffledata.Schema.of(
             dev.elide.truffledata.Field.integer("n", 8, true, false, false),
@@ -115,14 +119,34 @@ public final class SvmAcceptance {
     }
     try (var missing = plan.decode("{\"n\":0,\"u\":0}".getBytes(StandardCharsets.UTF_8))) {
       require(!missing.isPresent(1));
+      require(data.read(missing, 1) == Missing.INSTANCE);
+      require(!data.isPresent(missing, 1));
       require(missing.unsignedValue(2).signum() == 0);
     }
     try (var nullable =
         plan.decode("{\"n\":0,\"s\":null,\"u\":1}".getBytes(StandardCharsets.UTF_8))) {
       require(nullable.isPresent(1) && nullable.isNull(1));
+      require(data.read(nullable, 1) == DataNull.INSTANCE);
+      require(data.isPresent(nullable, 1));
     }
     plan.close();
     require(record.longValue(0) == 127);
+    require(data.getSchema(record) == schema);
+    require(data.readLong(record, 0) == 127);
+    require(InteropLibrary.getUncached().readMember(record, "s").equals("😀"));
+    require(data.read(record, 2) instanceof ExactNumber);
+    try {
+      new DataArray(new Object[] {record});
+      throw new AssertionError("Scoped JSON record escaped into owned storage");
+    } catch (ContractViolation expected) {
+      /* explicit ownership */
+    }
+    try {
+      data.readLong(record, 1);
+      throw new AssertionError("Wrong shared primitive type");
+    } catch (UnexpectedResultException expected) {
+      require(expected.getResult().equals("😀"));
+    }
     require(record.stringValue(1).equals("😀"));
     require(record.unsignedValue(2).toString().equals("18446744073709551615"));
     var rejected = new java.util.concurrent.atomic.AtomicInteger();
@@ -157,7 +181,8 @@ public final class SvmAcceptance {
     }
   }
 
-  private static void accessorContracts() throws InterruptedException {
+  private static void accessorContracts() throws Exception {
+    var data = DataLibrary.factory().getUncached();
     var schema =
         dev.elide.truffledata.Schema.of(
             new dev.elide.truffledata.Field(
@@ -169,6 +194,14 @@ public final class SvmAcceptance {
     try (var plan = dev.elide.truffledata.json.JsonScalarPlan.compile(schema)) {
       for (String input : new String[] {"{}", "{\"n\":null}"}) {
         try (var record = plan.decode(input.getBytes(StandardCharsets.UTF_8))) {
+          require(
+              data.read(record, 0) == (input.equals("{}") ? Missing.INSTANCE : DataNull.INSTANCE));
+          try {
+            data.readLong(record, 0);
+            throw new AssertionError("Missing/null shared primitive");
+          } catch (UnexpectedResultException expected) {
+            /* null and absence preserved */
+          }
           try {
             access.longValue(record);
             throw new AssertionError("Missing/null accessor");
@@ -178,6 +211,7 @@ public final class SvmAcceptance {
       }
       try (var record = plan.decode("{\"n\":7}".getBytes(StandardCharsets.UTF_8))) {
         require(access.longValue(record) == 7);
+        require(data.readLong(record, 0) == 7);
         try {
           wrong.longValue(record);
           throw new AssertionError("Wrong schema accessor");
@@ -193,7 +227,7 @@ public final class SvmAcceptance {
             new Thread(
                 () -> {
                   try {
-                    access.longValue(record);
+                    data.read(record, 0);
                   } catch (IllegalStateException expected) {
                     rejected.incrementAndGet();
                   }
@@ -203,8 +237,8 @@ public final class SvmAcceptance {
         require(rejected.get() == 1);
         record.close();
         try {
-          access.longValue(record);
-          throw new AssertionError("Closed accessor");
+          data.read(record, 0);
+          throw new AssertionError("Closed shared accessor");
         } catch (IllegalStateException expected) {
         }
       }
@@ -256,7 +290,7 @@ public final class SvmAcceptance {
     }
   }
 
-  public static void main(String[] args) throws InterruptedException {
+  public static void main(String[] args) throws Exception {
     typed();
     schemaTyped();
     accessorContracts();

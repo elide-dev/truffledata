@@ -6,6 +6,8 @@ import com.oracle.truffle.api.interop.*;
 import com.oracle.truffle.api.nodes.*;
 import dev.elide.truffledata.*;
 import dev.elide.truffledata.buffa.*;
+import dev.elide.truffledata.protobuf.ProtoPlan;
+import java.util.List;
 import org.graalvm.nativeimage.ImageInfo;
 import org.graalvm.polyglot.Context;
 
@@ -24,6 +26,8 @@ final class CompiledReads {
       context.initialize("buffa-test");
       context.enter();
       try {
+        cachedPlans(decoder);
+        arrayViews(decoder);
         var cachedRoot = new WktRoot(false);
         var cachedTarget = cachedRoot.getCallTarget();
         try (var message = plan.parseJson("7", 4096)) {
@@ -54,6 +58,168 @@ final class CompiledReads {
       } finally {
         context.leave();
       }
+    }
+  }
+
+  private static void arrayViews(BuffaWire decoder) {
+    var contract = TypedAcceptance.plan("RepeatedScalars");
+    var root = new ArrayLengthRoot();
+    var target = root.getCallTarget();
+    var interop = InteropLibrary.getUncached();
+    var data = DataLibrary.factory().getUncached();
+    byte[] wire =
+        contract.encode(
+            contract
+                .newBuilder()
+                .set(0, new DataArray(new Object[] {1L, -2L}))
+                .set(14, new DataArray(new Object[] {DataArray.copyOfBytes(new byte[] {7})}))
+                .build());
+    try (var plan = decoder.compile(contract, 65536);
+        var input = decoder.allocate(wire.length).put(wire);
+        var emptyInput = decoder.allocate(0);
+        var message = plan.decodeView(input, 65536);
+        var empty = plan.decodeView(emptyInput, 65536)) {
+      Acceptance.check((Integer) target.call(message.row()) == 2, "shared native array length");
+      Acceptance.check((Integer) target.call(empty.row()) == 0, "empty native array length");
+      var rejected = new java.util.concurrent.atomic.AtomicInteger();
+      Object countedRow = message.row();
+      var other =
+          new Thread(
+              () -> {
+                try {
+                  ((BorrowedArray) data.read(countedRow, 0)).size();
+                } catch (IllegalStateException expected) {
+                  rejected.incrementAndGet();
+                }
+              });
+      other.start();
+      try {
+        other.join();
+      } catch (InterruptedException failure) {
+        Thread.currentThread().interrupt();
+        throw new AssertionError(failure);
+      }
+      Acceptance.check(rejected.get() == 1, "array access enforces thread ownership");
+      Acceptance.rejects(() -> message.row().get(-1), IndexOutOfBoundsException.class);
+      Acceptance.rejects(() -> message.row().get(contract.size()), IndexOutOfBoundsException.class);
+      Object array = data.read(message.row(), 0);
+      try {
+        Acceptance.check(interop.hasArrayElements(array), "native array interop");
+        Acceptance.check(interop.getArraySize(array) == 2, "native interop count");
+        Acceptance.check(
+            !interop.isArrayElementReadable(array, -1)
+                && interop.isArrayElementReadable(array, 1)
+                && !interop.isArrayElementReadable(array, 2),
+            "native array bounds");
+        Acceptance.check(interop.readArrayElement(array, 1).equals(-2L), "native array element");
+        try {
+          interop.readArrayElement(array, 2);
+          throw new AssertionError("Expected native array bounds rejection");
+        } catch (InvalidArrayIndexException expected) {
+          /* bounds */
+        }
+      } catch (UnsupportedMessageException failure) {
+        throw new AssertionError(failure);
+      } catch (InvalidArrayIndexException failure) {
+        throw new AssertionError(failure);
+      }
+      DataArray detached = ((BorrowedArray) data.read(message.row(), 14)).snapshot();
+      Object row = message.row();
+      message.close();
+      Acceptance.rejects(() -> target.call(row), IllegalStateException.class);
+      Acceptance.rejects(() -> ((BorrowedArray) array).size(), IllegalStateException.class);
+      Acceptance.rejects(() -> ((BorrowedArray) array).snapshot(), IllegalStateException.class);
+      Acceptance.check(
+          ((DataArray) detached.get(0)).get(0).equals(7L), "nested array snapshot survives close");
+    }
+  }
+
+  private static final class ArrayLengthRoot extends RootNode {
+    @Child private ReadLengthNode length = ReadLengthNode.create();
+
+    ArrayLengthRoot() {
+      super(null);
+    }
+
+    @Override
+    public Object execute(VirtualFrame frame) {
+      return length.execute(frame.getArguments()[0], 0);
+    }
+  }
+
+  private static void cachedPlans(BuffaWire decoder) {
+    var root = new PlanFieldsRoot();
+    var target = root.getCallTarget();
+    for (int i = 0; i < 8; i++) {
+      var kind = (i & 1) == 0 ? ProtoPlan.Kind.INT32 : ProtoPlan.Kind.UINT32;
+      long fallback = 10L + i;
+      boolean flag = (i & 1) == 0;
+      var contract =
+          new ProtoPlan.Model(
+                  null,
+                  List.of(
+                      new ProtoPlan.Type(
+                          "Guard" + i,
+                          false,
+                          List.of(
+                              new ProtoPlan.FieldPlan(
+                                  "n", 1, kind, false, false, true, false, false, -1, "", null,
+                                  fallback),
+                              new ProtoPlan.FieldPlan(
+                                  "b",
+                                  2,
+                                  ProtoPlan.Kind.BOOL,
+                                  false,
+                                  false,
+                                  true,
+                                  false,
+                                  false,
+                                  -1,
+                                  "",
+                                  null,
+                                  flag)))),
+                  Limits.DEFAULT,
+                  16,
+                  65536)
+              .type("Guard" + i);
+      long value = kind == ProtoPlan.Kind.UINT32 ? 4294967295L : -123;
+      byte[] wire = contract.encode(contract.newBuilder().set(0, value).set(1, !flag).build());
+      try (var plan = decoder.compile(contract, 65536);
+          var empty = decoder.allocate(0);
+          var input = decoder.allocate(wire.length).put(wire);
+          var defaults = plan.decodeView(empty, 65536);
+          var message = plan.decodeView(input, 65536)) {
+        for (int repeat = 0; repeat < 4; repeat++) {
+          Acceptance.check(
+              (Long) target.call(defaults.row()) == fallback + (flag ? 100 : 0),
+              "cached plan defaults");
+          Acceptance.check(
+              (Long) target.call(message.row()) == value + (!flag ? 100 : 0),
+              "cached plan integer kind");
+        }
+        Object closed = message.row();
+        message.close();
+        Acceptance.rejects(() -> target.call(closed), IllegalStateException.class);
+        Acceptance.check(
+            (Long) target.call(defaults.row()) == fallback + (flag ? 100 : 0),
+            "independent owner after close");
+      }
+    }
+    Acceptance.check(NodeUtil.countNodes(root) <= 192, "plan cache AST budget");
+  }
+
+  private static final class PlanFieldsRoot extends RootNode {
+    @Child private ReadLongNode number = ReadLongNode.create();
+    @Child private ReadBooleanNode flag = ReadBooleanNode.create();
+
+    PlanFieldsRoot() {
+      super(null);
+    }
+
+    @Override
+    public Object execute(VirtualFrame frame) {
+      Object row = frame.getArguments()[0];
+      return number.execute(row, 0) + (flag.execute(row, 1) ? 100 : 0);
     }
   }
 
