@@ -51,69 +51,78 @@ final class NativeRow extends TypedRow {
     return true;
   }
 
-  /** Validate without constructing rows, values, repeated arrays, or deferred-string objects. */
-  static boolean validate(ProtoPlan plan, BuffaWire.Tape tape, ViewOwner owner) {
-    return validate(plan, tape, owner, 0, tape.count, 1, new long[] {plan.limits().maxCells()});
+  /** Immutable schema facts, linked once even for recursive message graphs. */
+  static final class Validation {
+    final long required;
+    final long singularMessages;
+    final @Nullable Validation[] children;
+
+    Validation(ProtoPlan plan) {
+      children = new Validation[plan.size()];
+      long required = 0, singular = 0;
+      for (int i = 0; i < plan.size(); i++) {
+        var field = plan.field(i);
+        if (field.required()) required |= 1L << i;
+        if (field.kind().message() && !field.repeated()) singular |= 1L << i;
+      }
+      this.required = required;
+      singularMessages = singular;
+    }
   }
 
-  private static boolean validate(
-      ProtoPlan plan,
-      BuffaWire.Tape tape,
-      ViewOwner owner,
-      int start,
-      int end,
-      int depth,
-      long[] cells) {
-    if (depth > plan.maxDepth()) throw new ContractViolation("Typed nesting budget");
-    long seen = 0;
-    // Detect singular-message merges before validating a potentially incomplete first fragment.
-    for (int i = start; i < end; ) {
-      int ordinal = ordinal(tape, i), next = next(tape, i), length = length(tape, i);
-      if (ordinal < 0 || ordinal >= plan.size() || next <= i || next > end || length < 0)
-        throw new IllegalStateException("Invalid native typed index");
-      var field = plan.field(ordinal);
-      if (kind(tape, i) != field.kind().ordinal() + 1)
-        throw new IllegalStateException("Native kind mismatch");
-      if (!field.kind().message() && next != i + 1)
-        throw new IllegalStateException("Invalid scalar subtree");
-      long bit = 1L << ordinal;
-      if (field.kind().message() && !field.repeated() && (seen & bit) != 0) return false;
-      seen |= bit;
-      i = next;
+  static @Nullable Validation validation(List<ProtoPlan> types) {
+    if (!supports(types)) return null;
+    Map<String, Validation> profiles = new HashMap<>();
+    for (var plan : types) profiles.put(plan.name(), new Validation(plan));
+    for (var plan : types) {
+      var profile = Objects.requireNonNull(profiles.get(plan.name()));
+      for (int i = 0; i < plan.size(); i++)
+        if (plan.field(i).kind().message())
+          profile.children[i] = Objects.requireNonNull(profiles.get(plan.nested(i).name()));
     }
-    charge(cells, plan.size());
-    for (int i = 0; i < plan.size(); i++)
-      if (plan.field(i).required() && (seen & (1L << i)) == 0)
-        throw new ContractViolation("Missing required field");
-    for (int i = start; i < end; ) {
-      charge(cells, 1);
-      int ordinal = ordinal(tape, i), next = next(tape, i);
-      var field = plan.field(ordinal);
-      if (field.kind().message()) {
-        if (!validate(plan.nested(ordinal), tape, owner, i + 1, next, depth + 1, cells))
-          return false;
-      } else if (field.kind() == ProtoPlan.Kind.STRING || field.kind() == ProtoPlan.Kind.BYTES) {
-        Objects.checkFromIndexSize(
-            Math.toIntExact(bits(tape, i)), length(tape, i), owner.lease.bytes.capacity());
-        if (field.kind() == ProtoPlan.Kind.BYTES) charge(cells, length(tape, i));
-      }
-      i = next;
-    }
+    return Objects.requireNonNull(profiles.get(types.getFirst().name()));
+  }
+
+  private static final int MERGE = 1;
+  private static final int MISSING = 2;
+
+  /**
+   * The native binary decoder already checks depth, cells, strings, bytes and index construction.
+   * Check the remaining view semantics once, without allocating a second budget or row tree.
+   * Missing required fields are deferred: incomplete fragments may merge into a valid message.
+   * Strict mode independently audits the index through the eager decoder before exposing a view.
+   */
+  static boolean validate(Validation profile, BuffaWire.Tape tape) {
+    int result = validate(profile, tape, 0, tape.count);
+    if (result == MERGE) return false;
+    if (result == MISSING) throw new ContractViolation("Missing required field");
     return true;
   }
 
-  private static void charge(long[] cells, long count) {
-    if (count < 0 || count > cells[0])
-      throw new ContractViolation("Typed materialization cell budget");
-    cells[0] -= count;
+  private static int validate(Validation profile, BuffaWire.Tape tape, int start, int end) {
+    long seen = 0;
+    int result = 0;
+    for (int i = start; i < end; ) {
+      int ordinal = ordinal(tape, i), next = next(tape, i);
+      if (ordinal < 0 || ordinal >= profile.children.length || next <= i || next > end)
+        throw new IllegalStateException("Invalid native typed index");
+      long bit = 1L << ordinal;
+      if ((seen & bit & profile.singularMessages) != 0) return MERGE;
+      seen |= bit;
+      var child = profile.children[ordinal];
+      if (child != null) {
+        int nested = validate(child, tape, i + 1, next);
+        if (nested == MERGE) return MERGE;
+        result |= nested;
+      }
+      i = next;
+    }
+    if ((seen & profile.required) != profile.required) result |= MISSING;
+    return result;
   }
 
   private static int ordinal(BuffaWire.Tape tape, int index) {
     return tape.bytes.getInt(index * Buffa.Field.SIZE + (int) BuffaFFM.Field_number_OFFSET) - 1;
-  }
-
-  private static int kind(BuffaWire.Tape tape, int index) {
-    return tape.bytes.getInt(index * Buffa.Field.SIZE + (int) BuffaFFM.Field_wire_OFFSET);
   }
 
   private static long bits(BuffaWire.Tape tape, int index) {

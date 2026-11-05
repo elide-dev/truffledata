@@ -18,7 +18,7 @@ public final class BuffaPlan implements AutoCloseable {
   private final ProtoPlan plan;
   private final ReadProfile profile;
   private final boolean compactScalars;
-  private final boolean nativeViews;
+  private final NativeRow.@Nullable Validation nativeViews;
   private final List<ProtoPlan> anyTypes;
   private final WireInput schema;
   private final WireInput empty;
@@ -31,7 +31,7 @@ public final class BuffaPlan implements AutoCloseable {
     var types = NativeSchema.types(plan, this.anyTypes, maxSchemaBytes);
     byte[] program = NativeSchema.encode(types, this.anyTypes, maxSchemaBytes);
     profile = new ReadProfile(types);
-    nativeViews = NativeRow.supports(types);
+    nativeViews = NativeRow.validation(types);
     boolean compact = plan.size() > 0 && plan.size() <= 2;
     for (int i = 0; i < plan.size(); i++) {
       var field = plan.field(i);
@@ -129,7 +129,8 @@ public final class BuffaPlan implements AutoCloseable {
       }
       if (format == 0 && compactScalars)
         return compact(owner, backend.scalars(schema, input, plan));
-      boolean useView = view && nativeViews && format == 0 && nativeBytes >= Buffa.Result.SIZE;
+      boolean useView =
+          view && nativeViews != null && format == 0 && nativeBytes >= Buffa.Result.SIZE;
       var tape =
           backend.typed(
               schema,
@@ -140,7 +141,7 @@ public final class BuffaPlan implements AutoCloseable {
               useView ? nativeBytes - Buffa.Result.SIZE : nativeBytes);
       boolean retained = false;
       try {
-        if (useView && NativeRow.validate(plan, tape, owner)) {
+        if (useView && NativeRow.validate(Objects.requireNonNull(nativeViews), tape)) {
           if (STRICT) {
             var audit =
                 new State(

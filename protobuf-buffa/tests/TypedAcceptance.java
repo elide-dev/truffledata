@@ -563,6 +563,38 @@ final class TypedAcceptance {
     }
   }
 
+  private static void nativeViewBudgets(BuffaWire decoder) {
+    if (decoder.selected() == BuffaWire.Selected.JAVA) return;
+    var sample = plan("Sample");
+    // Three schema cells + one index entry + three byte cells: native decoding must charge all
+    // seven even though the Java view never materializes the byte field.
+    for (int cells : new int[] {6, 7}) {
+      var contract =
+          new ProtoPlan.Model(
+                  null,
+                  List.of(
+                      new ProtoPlan.Type(
+                          "BudgetView",
+                          false,
+                          List.of(sample.field(0), sample.field(1), sample.field(2)))),
+                  new Limits(1024, 256, cells, 1000),
+                  16,
+                  4096)
+              .type("BudgetView");
+      try (var compiled = decoder.compile(contract, 65536);
+          var input = decoder.allocate(5).put(new byte[] {26, 3, 1, 2, 3})) {
+        if (cells == 6) {
+          Acceptance.rejects(() -> compiled.decodeView(input, NATIVE), ContractViolation.class);
+        } else {
+          try (var view = compiled.decodeView(input, NATIVE)) {
+            Acceptance.check(view.nativeBacked(), "exact cell budget retains native view");
+            Acceptance.check(view.row().getSize(2) == 3, "byte cells charged by native decoder");
+          }
+        }
+      }
+    }
+  }
+
   private static void nativeViews(BuffaWire decoder) {
     var contract = plan("DefaultGraph");
     var expected =
@@ -592,11 +624,16 @@ final class TypedAcceptance {
       Acceptance.check(!view.nativeBacked(), "singular message merge uses eager path");
       equal(required.decode(merged), view.row());
     }
+    try (var compiled = decoder.compile(required, 65536);
+        var input = decoder.allocate(4).put(new byte[] {8, 0, 18, 0})) {
+      Acceptance.rejects(() -> compiled.decodeView(input, NATIVE), ContractViolation.class);
+    }
   }
 
   static void run(BuffaWire decoder) throws Exception {
     nativeViews(decoder);
     nativeScalarViews(decoder);
+    nativeViewBudgets(decoder);
     indexReusePreservesMessagesAndBudgets(decoder);
     scopedRowsRequireDetachmentBeforeEnteringOwnedContainers(decoder);
     textRejectsMalformedUtf16BeforeEncoding(decoder);
