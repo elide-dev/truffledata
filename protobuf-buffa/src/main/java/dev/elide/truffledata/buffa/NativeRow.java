@@ -181,6 +181,11 @@ final class NativeRow extends TypedRow {
   }
 
   Object value(int ordinal, ByteBuffer buffer) {
+    // Already materialized strings, arrays and children need neither schema dispatch nor index
+    // access. Cache contents stay mutable: warming another field must not freeze existing reads.
+    var values = cache;
+    Object cached = values == null ? null : values[ordinal];
+    if (cached != null) return cached;
     var field = plan().field(ordinal);
     int index = offsets()[ordinal];
     if (!field.repeated() && index < 0) return field.defaultValue();
@@ -192,9 +197,7 @@ final class NativeRow extends TypedRow {
         && field.kind() != ProtoPlan.Kind.BYTES)
       return scalar(
           field, buffer.getLong(index * Buffa.Field.SIZE + (int) BuffaFFM.Field_value_OFFSET));
-    var values = cache;
-    Object result = values == null ? null : values[ordinal];
-    return result == null ? materialize(ordinal, index) : result;
+    return materialize(ordinal, index);
   }
 
   @TruffleBoundary
