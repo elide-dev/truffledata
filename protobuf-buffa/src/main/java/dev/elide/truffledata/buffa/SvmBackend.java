@@ -167,7 +167,14 @@ final class SvmBackend implements BuffaWire.Backend {
               : CTypeConversion.asByteBuffer(
                   Buffa.Result.data(result),
                   Math.toIntExact(Math.multiplyExact(count, Buffa.Field.SIZE)));
-      return new BuffaWire.Tape(bytes, count, capacity, retainAction, detachAction, viewReady);
+      return new BuffaWire.Tape(
+          bytes,
+          count,
+          capacity,
+          retainAction,
+          detachAction,
+          viewReady,
+          Buffa.Result.data(result).rawValue());
     } catch (RuntimeException | Error failure) {
       releaseResult();
       throw failure;

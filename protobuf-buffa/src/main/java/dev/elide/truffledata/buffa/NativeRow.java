@@ -11,6 +11,9 @@ import dev.elide.truffledata.protobuf.*;
 import java.math.BigInteger;
 import java.nio.ByteBuffer;
 import java.util.*;
+import org.graalvm.nativeimage.ImageInfo;
+import org.graalvm.word.Pointer;
+import org.graalvm.word.WordFactory;
 import org.jspecify.annotations.Nullable;
 
 /** Binary view over an owned native index. Java child objects are created only when accessed. */
@@ -124,19 +127,37 @@ final class NativeRow extends TypedRow {
     return result;
   }
 
+  /** Callers check the scoped owner before accessing a row; each native load also checks bounds. */
+  private static Pointer entry(BuffaWire.Tape tape, int index) {
+    Objects.checkIndex(index, tape.count());
+    return WordFactory.pointer(tape.nativeAddress + (long) index * Buffa.Field.SIZE);
+  }
+
   private static int ordinal(BuffaWire.Tape tape, int index) {
+    if (ImageInfo.inImageCode() && tape.nativeAddress != 0)
+      return Buffa.Field.number(entry(tape, index)) - 1;
     return tape.bytes.getInt(index * Buffa.Field.SIZE + (int) BuffaFFM.Field_number_OFFSET) - 1;
   }
 
   private static long bits(BuffaWire.Tape tape, int index) {
-    return tape.bytes.getLong(index * Buffa.Field.SIZE + (int) BuffaFFM.Field_value_OFFSET);
+    return bits(tape, index, tape.bytes);
+  }
+
+  private static long bits(BuffaWire.Tape tape, int index, ByteBuffer buffer) {
+    if (ImageInfo.inImageCode() && tape.nativeAddress != 0)
+      return Buffa.Field.value(entry(tape, index));
+    return buffer.getLong(index * Buffa.Field.SIZE + (int) BuffaFFM.Field_value_OFFSET);
   }
 
   private static int length(BuffaWire.Tape tape, int index) {
+    if (ImageInfo.inImageCode() && tape.nativeAddress != 0)
+      return Buffa.Field.length(entry(tape, index));
     return tape.bytes.getInt(index * Buffa.Field.SIZE + (int) BuffaFFM.Field_length_OFFSET);
   }
 
   private static int next(BuffaWire.Tape tape, int index) {
+    if (ImageInfo.inImageCode() && tape.nativeAddress != 0)
+      return Buffa.Field.end(entry(tape, index));
     return tape.bytes.getInt(index * Buffa.Field.SIZE + (int) BuffaFFM.Field_end_OFFSET);
   }
 
@@ -190,7 +211,7 @@ final class NativeRow extends TypedRow {
     int index = offset(ordinal);
     var field = plan().field(ordinal);
     if (index < 0) return (Long) field.defaultValue();
-    long value = buffer.getLong(index * Buffa.Field.SIZE + (int) BuffaFFM.Field_value_OFFSET);
+    long value = bits(tape, index, buffer);
     return switch (field.kind()) {
       case INT32, SINT32, SFIXED32, ENUM -> (long) (int) value;
       case UINT32, FIXED32 -> value & 0xffffffffL;
@@ -216,9 +237,7 @@ final class NativeRow extends TypedRow {
         && field.kind() != ProtoPlan.Kind.STRING
         && field.kind() != ProtoPlan.Kind.UINT64
         && field.kind() != ProtoPlan.Kind.FIXED64
-        && field.kind() != ProtoPlan.Kind.BYTES)
-      return scalar(
-          field, buffer.getLong(index * Buffa.Field.SIZE + (int) BuffaFFM.Field_value_OFFSET));
+        && field.kind() != ProtoPlan.Kind.BYTES) return scalar(field, bits(tape, index, buffer));
     return materialize(ordinal, index);
   }
 

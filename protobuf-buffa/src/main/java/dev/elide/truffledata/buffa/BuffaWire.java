@@ -264,6 +264,7 @@ public final class BuffaWire implements AutoCloseable {
 
   static final class Tape implements AutoCloseable {
     final ByteBuffer bytes;
+    final long nativeAddress;
     private final int countAndFlags;
     final long allocated;
     private @Nullable Runnable release;
@@ -289,6 +290,18 @@ public final class BuffaWire implements AutoCloseable {
         Runnable release,
         @Nullable Supplier<Runnable> detacher,
         boolean viewReady) {
+      this(bytes, count, capacity, release, detacher, viewReady, 0);
+    }
+
+    Tape(
+        ByteBuffer bytes,
+        long count,
+        long capacity,
+        Runnable release,
+        @Nullable Supplier<Runnable> detacher,
+        boolean viewReady,
+        long nativeAddress) {
+      this.nativeAddress = nativeAddress;
       this.detacher = detacher;
       this.bytes = bytes.order(ByteOrder.nativeOrder());
       int entries = Math.toIntExact(count);
