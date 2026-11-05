@@ -23,6 +23,13 @@ const PANIC: i32 = 4;
 use seam::Field;
 const FIELD_BYTES: usize = mem::size_of::<Field>();
 
+// Both native memory and input regions are bounded by i32::MAX at the ABI. Keep
+// lengths Java-indexable even for internal callers; subtree ends are bounded by
+// the maximum index allocation (i32::MAX / FIELD_BYTES entries).
+fn index_length(length: u64) -> Result<u32, i32> {
+    i32::try_from(length).map(|n| n as u32).map_err(|_| BUDGET)
+}
+
 struct Parser<'a> {
     input: &'a [u8],
     remaining: &'a [u8],
@@ -101,14 +108,14 @@ impl<'a> Parser<'a> {
                     }
                     self.charge(length)?;
                     self.fields[index].value = (self.input.len() - self.remaining.len()) as u64;
-                    self.fields[index].length = length;
+                    self.fields[index].length = index_length(length)?;
                     // Borrow; never allocate/copy the payload.
                     let _borrow = self.take(length as usize)?;
                 }
                 WireType::StartGroup => self.group(tag.field_number(), depth + 1)?,
                 _ => return Err(MALFORMED),
             }
-            self.fields[index].end = self.fields.len() as u64;
+            self.fields[index].end = self.fields.len() as u32;
         }
         if number != 0 { Err(MALFORMED) } else { Ok(()) }
     }
@@ -412,6 +419,21 @@ seam::assert_implementations!(seam);
 mod tests {
     use super::*;
     #[test]
+    fn compact_index_extents_are_java_indexable() {
+        assert_eq!(FIELD_BYTES, 24);
+        assert_eq!(index_length(0), Ok(0));
+        assert_eq!(index_length(i32::MAX as u64), Ok(i32::MAX as u32));
+        for length in [i32::MAX as u64 + 1, u32::MAX as u64, u64::MAX] {
+            assert_eq!(index_length(length), Err(BUDGET));
+        }
+        // A precisely one-entry budget accepts one scalar, and never its successor.
+        let bytes = FIELD_BYTES as u64;
+        assert_eq!(parse(&[8, 1], 100, 8, bytes).unwrap().capacity(), 1);
+        assert_eq!(parse(&[8, 1, 8, 2], 100, 8, bytes).err(), Some(BUDGET));
+        assert!(i32::MAX as usize / FIELD_BYTES < i32::MAX as usize);
+    }
+
+    #[test]
     fn borrowed_payload_and_unsigned_values() {
         let input = [8, 150, 1, 18, 3, 1, 2, 3, 29, 255, 255, 255, 255];
         let fields = parse(&input, 100, 8, 1024).unwrap();
@@ -422,7 +444,7 @@ mod tests {
             &[1, 2, 3]
         );
         assert_eq!(fields[2].value, u32::MAX as u64);
-        assert!(fields.capacity() * 32 <= 1024);
+        assert!(fields.capacity() * FIELD_BYTES <= 1024);
     }
     #[test]
     fn groups_and_budgets() {
@@ -431,7 +453,10 @@ mod tests {
         assert_eq!(fields[2].number, 3);
         assert_eq!(parse(&[11, 16, 1, 12], 100, 1, 1024).err().unwrap(), BUDGET);
         assert_eq!(parse(&[8, 1], 3, 1, 1024).err().unwrap(), BUDGET);
-        assert_eq!(parse(&[8, 1], 4, 1, 31).err().unwrap(), BUDGET);
+        assert_eq!(
+            parse(&[8, 1], 4, 1, FIELD_BYTES as u64 - 1).err().unwrap(),
+            BUDGET
+        );
         assert_eq!(parse(&[18, 2, 0, 0], 5, 1, 1024).err().unwrap(), BUDGET);
     }
     #[test]

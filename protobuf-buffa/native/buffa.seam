@@ -1,10 +1,10 @@
-module truffledata_buffa abi=6 target=x86_64-unknown-linux-gnu java_package=dev.elide.truffledata.buffa.generated java_class=Buffa c_library=truffledata_buffa c_library_static=true
-struct Field size=32 align=8
+module truffledata_buffa abi=7 target=x86_64-unknown-linux-gnu java_package=dev.elide.truffledata.buffa.generated java_class=Buffa c_library=truffledata_buffa c_library_static=true
+struct Field size=24 align=8
   field number type=u32 offset=0
   field wire type=u32 offset=4
   field value type=u64 offset=8
-  field length type=u64 offset=16
-  field end type=u64 offset=24
+  field length type=u32 offset=16
+  field end type=u32 offset=20
 end
 struct Result size=24 align=8
   field data type=ptr<u8> offset=0

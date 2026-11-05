@@ -210,10 +210,10 @@ public final class BuffaWire implements AutoCloseable {
       int offset = index * Buffa.Field.SIZE;
       int number = tape.bytes.getInt(offset + (int) BuffaFFM.Field_number_OFFSET),
           wire = tape.bytes.getInt(offset + (int) BuffaFFM.Field_wire_OFFSET);
-      long value = tape.bytes.getLong(offset + (int) BuffaFFM.Field_value_OFFSET),
-          length = tape.bytes.getLong(offset + (int) BuffaFFM.Field_length_OFFSET);
-      int next = Math.toIntExact(tape.bytes.getLong(offset + (int) BuffaFFM.Field_end_OFFSET));
-      if (next <= index || next > end)
+      long value = tape.bytes.getLong(offset + (int) BuffaFFM.Field_value_OFFSET);
+      int length = tape.bytes.getInt(offset + (int) BuffaFFM.Field_length_OFFSET);
+      int next = tape.bytes.getInt(offset + (int) BuffaFFM.Field_end_OFFSET);
+      if (next <= index || next > end || length < 0)
         throw new IllegalStateException("Invalid native field index");
       Object decoded =
           switch (wire) {
@@ -222,7 +222,7 @@ public final class BuffaWire implements AutoCloseable {
                     ? value
                     : Values.normalize(BigInteger.valueOf(value & Long.MAX_VALUE).setBit(63));
             case 5 -> value;
-            case 2 -> new BorrowedBytes(message, Math.toIntExact(value), Math.toIntExact(length));
+            case 2 -> new BorrowedBytes(message, Math.toIntExact(value), length);
             case 3 -> materialize(message, tape, index + 1, next, limits);
             default -> throw new IllegalStateException("Invalid native wire type");
           };

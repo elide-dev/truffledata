@@ -164,8 +164,8 @@ impl<'a, 'b> Decoder<'a, 'b> {
             number: f.ordinal + 1,
             wire: f.kind()?,
             value,
-            length,
-            end: (i + 1) as u64,
+            length: super::index_length(length)?,
+            end: (i + 1) as u32,
         });
         Ok(i)
     }
@@ -233,8 +233,8 @@ impl<'a, 'b> Decoder<'a, 'b> {
                 } else {
                     self.binary(f.word(12)?, input, number, depth + 1)?
                 };
-                self.fields[i].length = invalid as u64;
-                self.fields[i].end = self.fields.len() as u64;
+                self.fields[i].length = invalid as u32;
+                self.fields[i].end = self.fields.len() as u32;
             } else if kind == 9 || kind == 12 {
                 let bytes = take_bytes(input)?;
                 self.bytes(kind, bytes)?;
@@ -347,7 +347,7 @@ impl<'a, 'b> Decoder<'a, 'b> {
             }
             let i = self.push(f, 0, 0)?;
             self.text(f.word(12)?, tokens, depth + 1, true)?;
-            self.fields[i].end = self.fields.len() as u64;
+            self.fields[i].end = self.fields.len() as u32;
         } else {
             if token.kind != TokenKind::Scalar {
                 return Err(MALFORMED);

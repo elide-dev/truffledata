@@ -159,7 +159,7 @@ impl<'a, 'b> Decoder<'a, 'b> {
         if kind == 10 || kind == 11 {
             let i = self.push(f, 0, 0)?;
             self.json_object(f.word(12)?, json, depth + 1, false)?;
-            self.fields[i].end = self.fields.len() as u64;
+            self.fields[i].end = self.fields.len() as u32;
             return Ok(());
         }
         let quoted = json.text.as_bytes().get(json.at) == Some(&b'"');
@@ -244,7 +244,7 @@ impl<'a, 'b> Decoder<'a, 'b> {
             }
             json.need(b':')?;
             self.json_value(self.schema.field(ty, 1)?, json, depth + 1, true)?;
-            self.fields[i].end = self.fields.len() as u64;
+            self.fields[i].end = self.fields.len() as u32;
             if json.eat(b'}') {
                 break;
             }

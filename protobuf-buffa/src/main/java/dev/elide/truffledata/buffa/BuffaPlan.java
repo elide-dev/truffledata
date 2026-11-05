@@ -273,7 +273,7 @@ public final class BuffaPlan implements AutoCloseable {
         for (int cursor = index; cursor < end; ) {
           int at = Math.multiplyExact(cursor, Buffa.Field.SIZE);
           int number = tape.bytes.getInt(at + (int) BuffaFFM.Field_number_OFFSET);
-          int next = Math.toIntExact(tape.bytes.getLong(at + (int) BuffaFFM.Field_end_OFFSET));
+          int next = tape.bytes.getInt(at + (int) BuffaFFM.Field_end_OFFSET);
           if (next <= cursor || next > end)
             throw new IllegalStateException("Invalid repeated index");
           if (number != ordinal + 1) break;
@@ -355,8 +355,8 @@ public final class BuffaPlan implements AutoCloseable {
         int ordinal = tape.bytes.getInt(at + (int) BuffaFFM.Field_number_OFFSET) - 1;
         int kind = tape.bytes.getInt(at + (int) BuffaFFM.Field_wire_OFFSET);
         long value = tape.bytes.getLong(at + (int) BuffaFFM.Field_value_OFFSET);
-        int length = Math.toIntExact(tape.bytes.getLong(at + (int) BuffaFFM.Field_length_OFFSET));
-        int next = Math.toIntExact(tape.bytes.getLong(at + (int) BuffaFFM.Field_end_OFFSET));
+        int length = tape.bytes.getInt(at + (int) BuffaFFM.Field_length_OFFSET);
+        int next = tape.bytes.getInt(at + (int) BuffaFFM.Field_end_OFFSET);
         if (ordinal < 0 || ordinal >= plan.size() || next <= index || next > end || length < 0)
           throw new IllegalStateException("Invalid native typed index");
         var f = plan.field(ordinal);
