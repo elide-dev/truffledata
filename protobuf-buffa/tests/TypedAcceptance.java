@@ -244,7 +244,7 @@ final class TypedAcceptance {
 
   /** Exercise both sides of the packed presence boundary, including the sign bit. */
   private static void presenceWidths(BuffaWire decoder) {
-    for (int size : new int[] {0, 1, 63, 64, 65, 129}) {
+    for (int size : new int[] {0, 1, 15, 16, 17, 63, 64, 65, 129}) {
       var fields = new ArrayList<ProtoPlan.FieldPlan>();
       for (int i = 0; i < size; i++) {
         fields.add(
@@ -563,6 +563,42 @@ final class TypedAcceptance {
     }
   }
 
+  private static void nativeViewOffsets(BuffaWire decoder) {
+    var sample = plan("Sample");
+    var contract =
+        new ProtoPlan.Model(
+                null,
+                List.of(
+                    new ProtoPlan.Type(
+                        "Offsets",
+                        false,
+                        List.of(sample.field(0), sample.field(1), sample.field(2)))),
+                Limits.DEFAULT,
+                16,
+                4096)
+            .type("Offsets");
+    try (var compiled = decoder.compile(contract, 65536)) {
+      for (int duplicates : new int[] {0, 13, 14, 15, 16, 64}) {
+        var wire = new java.io.ByteArrayOutputStream();
+        wire.writeBytes(new byte[] {26, 1, 42});
+        for (int i = 1; i <= duplicates; i++) {
+          wire.write(8);
+          wire.write(i);
+        }
+        byte[] payload = wire.toByteArray();
+        try (var input = decoder.allocate(payload.length).put(payload);
+            var view = compiled.decodeView(input, NATIVE)) {
+          Acceptance.check(
+              view.nativeBacked() == (decoder.selected() != BuffaWire.Selected.JAVA),
+              "duplicate scalars retain native backing");
+          equal(contract.decode(payload), view.row());
+          Acceptance.check(
+              view.row().getLong(0) == duplicates, "last scalar wins across index spans");
+        }
+      }
+    }
+  }
+
   private static void nativeViewBudgets(BuffaWire decoder) {
     if (decoder.selected() == BuffaWire.Selected.JAVA) return;
     var sample = plan("Sample");
@@ -634,6 +670,7 @@ final class TypedAcceptance {
     nativeViews(decoder);
     nativeScalarViews(decoder);
     nativeViewBudgets(decoder);
+    nativeViewOffsets(decoder);
     indexReusePreservesMessagesAndBudgets(decoder);
     scopedRowsRequireDetachmentBeforeEnteringOwnedContainers(decoder);
     textRejectsMalformedUtf16BeforeEncoding(decoder);

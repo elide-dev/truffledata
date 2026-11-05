@@ -16,6 +16,7 @@ import org.jspecify.annotations.Nullable;
 /** Binary view over an owned native index. Java child objects are created only when accessed. */
 final class NativeRow extends TypedRow {
   private static final Object[] NO_VALUES = new Object[0];
+  private static final int[] PACKED_OFFSETS = new int[0];
   private static final boolean[] NO_PRESENCE = new boolean[0];
   private final BuffaWire.Tape tape;
   private final int start;
@@ -23,6 +24,8 @@ final class NativeRow extends TypedRow {
 
   @CompilationFinal(dimensions = 1)
   private int @Nullable [] offsets;
+
+  @CompilationFinal private long packedOffsets;
 
   // Cache contents are mutable and must not be treated as compilation-final.
   @CompilationFinal(dimensions = 0)
@@ -137,14 +140,33 @@ final class NativeRow extends TypedRow {
     return tape.bytes.getInt(index * Buffa.Field.SIZE + (int) BuffaFFM.Field_end_OFFSET);
   }
 
-  private int[] offsets() {
+  private int offset(int ordinal) {
     var result = offsets;
-    return result == null ? index() : result;
+    if (result == null) result = index();
+    if (result.length != 0) return result[ordinal];
+    int position = (int) (packedOffsets >>> (ordinal * 4)) & 15;
+    return position == 0 ? -1 : start + position - 1;
   }
 
   @TruffleBoundary
   private int[] index() {
     CompilerDirectives.transferToInterpreterAndInvalidate();
+    // Four-bit relative positions cover up to sixteen schema fields and fifteen index entries.
+    // Zero denotes absence; later occurrences overwrite their nibble. Larger spans use the full
+    // directory, including messages whose descendants make an immediate child's offset large.
+    if (plan().size() <= 16) {
+      long packed = 0;
+      int i = start;
+      for (; i < end && i - start < 15; i = next(tape, i)) {
+        int shift = ordinal(tape, i) * 4;
+        packed = (packed & ~(15L << shift)) | ((long) (i - start + 1) << shift);
+      }
+      if (i == end) {
+        packedOffsets = packed;
+        offsets = PACKED_OFFSETS;
+        return PACKED_OFFSETS;
+      }
+    }
     int[] result = new int[plan().size()];
     Arrays.fill(result, -1);
     for (int i = start; i < end; i = next(tape, i)) result[ordinal(tape, i)] = i;
@@ -165,7 +187,7 @@ final class NativeRow extends TypedRow {
   }
 
   long integerValue(int ordinal, ByteBuffer buffer) {
-    int index = offsets()[ordinal];
+    int index = offset(ordinal);
     var field = plan().field(ordinal);
     if (index < 0) return (Long) field.defaultValue();
     long value = buffer.getLong(index * Buffa.Field.SIZE + (int) BuffaFFM.Field_value_OFFSET);
@@ -187,7 +209,7 @@ final class NativeRow extends TypedRow {
     Object cached = values == null ? null : values[ordinal];
     if (cached != null) return cached;
     var field = plan().field(ordinal);
-    int index = offsets()[ordinal];
+    int index = offset(ordinal);
     if (!field.repeated() && index < 0) return field.defaultValue();
     if (!field.repeated()
         && !field.kind().message()
@@ -246,7 +268,7 @@ final class NativeRow extends TypedRow {
   }
 
   boolean present(int ordinal) {
-    int index = offsets()[ordinal];
+    int index = offset(ordinal);
     if (index < 0) return false;
     var field = plan().field(ordinal);
     if (field.explicitPresence() || field.repeated() || field.kind().message()) return true;
