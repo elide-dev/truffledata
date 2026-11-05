@@ -2,7 +2,10 @@ load("@rules_cc//cc:defs.bzl", "cc_library", "cc_test")
 
 cc_library(
     name = "decoder",
-    hdrs = ["decoder.h"],
+    hdrs = [
+        "decoder.h",
+        "memory.h",
+    ],
     copts = ["-std=c++17"],
     deps = [
         "@myna//:values_headers",

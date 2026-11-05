@@ -1,5 +1,6 @@
 #ifndef TRUFFLEDATA_JSON_DECODER_H
 #define TRUFFLEDATA_JSON_DECODER_H
+#include "json/native/memory.h"
 #include <myna/values.hpp>
 #include <simdjson.h>
 #include <unordered_set>
@@ -40,11 +41,12 @@ inline bool number(std::string_view s) {
 class document final {
   simdjson::padded_string input_;
   simdjson::ondemand::parser parser_;
+  index_memory memory_;
   myna::value_builder builder_;
   uint32_t input_region_;
   uint64_t count_ = 0;
   myna::value_limits limits_;
-  std::vector<std::string_view> lexical_;
+  std::pmr::vector<std::string_view> lexical_;
 
   void lexical(std::string_view raw = {}) {
     if (count_ >= limits_.nodes) throw std::length_error("JSON node limit");
@@ -68,7 +70,7 @@ class document final {
       case json_type::object: {
         lexical();
         builder_.begin_object();
-        std::unordered_set<std::string_view> keys;
+        std::pmr::unordered_set<std::string_view> keys(&memory_);
         for (auto entry : value.get_object()) {
           auto raw = entry.key_raw_json_token().value();
           auto key = entry.unescaped_key().value();
@@ -116,9 +118,14 @@ class document final {
     }
   }
 public:
-  explicit document(std::string_view input, myna::value_limits limits = {})
-      : input_(checked(input)), builder_(std::pmr::get_default_resource(), limits),
-        input_region_(builder_.region(std::string_view(input_.data(), input_.size()))), limits_(limits) {
+  explicit document(std::string_view input, myna::value_limits limits = {},
+                    storage_limits storage = {},
+                    std::pmr::memory_resource* upstream = std::pmr::get_default_resource())
+      : input_(checked(input, storage)), memory_(storage.index_bytes, upstream),
+        builder_(&memory_, limits),
+        input_region_(builder_.region(std::string_view(input_.data(), input_.size()))),
+        limits_(limits), lexical_(&memory_) {
+    if (!input_.data()) throw std::bad_alloc();
     auto root = parser_.iterate(input_).value();
     visit(root, 0);
     // Numeric tokens are checked lexically, not through a lossy numeric getter.
@@ -130,10 +137,14 @@ public:
   document(const document&) = delete;
   document& operator=(const document&) = delete;
   myna_value_view view() const { return builder_.view(); }
-  const std::vector<std::string_view>& lexical_tokens() const { return lexical_; }
+  const std::pmr::vector<std::string_view>& lexical_tokens() const { return lexical_; }
+  allocation_stats allocations() const {
+    return {input_.size(), input_.size() + simdjson::SIMDJSON_PADDING,
+            memory_.current(), memory_.peak(), memory_.allocations(), parser_.capacity()};
+  }
 private:
-  static std::string_view checked(std::string_view input) {
-    if (input.size() > UINT32_MAX) throw std::length_error("JSON input limit");
+  static std::string_view checked(std::string_view input, storage_limits storage) {
+    if (input.size() > UINT32_MAX || input.size() > storage.input_bytes) throw std::length_error("JSON input limit");
     return input;
   }
 };
