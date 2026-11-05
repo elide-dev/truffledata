@@ -2,6 +2,12 @@
 #include <iostream>
 #include <memory>
 using namespace truffledata::json;
+std::string_view slot_text(const scalar_slot& slot) {
+  return {reinterpret_cast<const char*>(slot.text), slot.text_length};
+}
+std::string_view lexical(const scalar_slot& slot) {
+  return {reinterpret_cast<const char*>(slot.lexical), slot.lexical_length};
+}
 void check(bool value) { if (!value) throw std::runtime_error("typed JSON check"); }
 template<class F> void rejects(F operation) {
   bool rejected = false;
@@ -17,8 +23,8 @@ int main() {
   scalar_document first(plan, R"({"s":"\u4e2d😀", "n":-128,"b":true})");
   check(first.present() == 7 && first.nulls() == 0);
   check(first.slot(0).bits == static_cast<uint64_t>(-128));
-  check(first.slot(1).text == "中😀");
-  check(first.slot(1).lexical == R"("\u4e2d😀")");
+  check(slot_text(first.slot(1)) == "中😀");
+  check(lexical(first.slot(1)) == R"("\u4e2d😀")");
   check(first.slot(2).bits == 1);
   scalar_document missing(plan, R"({"n":127})");
   scalar_document null(plan, R"({"s":null,"n":0})");
@@ -42,7 +48,7 @@ int main() {
     retained = std::make_unique<scalar_document>(temporary, input);
     input.assign(input.size(), 'x');
   }
-  check(retained->slot(0).text == "retained long string with 中");
+  check(slot_text(retained->slot(0)) == "retained long string with 中");
   scalar_plan numbers({{"u", scalar_kind::uint64}, {"f", scalar_kind::float64}});
   scalar_document number(numbers, R"({"u":18446744073709551615,"f":-0.0})");
   check(number.slot(0).bits == UINT64_MAX);

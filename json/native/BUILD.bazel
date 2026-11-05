@@ -69,7 +69,10 @@ cc_library(
         ],
     }),
     visibility = ["//visibility:public"],
-    deps = [":decoder"],
+    deps = [
+        ":decoder",
+        ":typed",
+    ],
 )
 
 cc_test(
@@ -118,7 +121,10 @@ filegroup(
 
 cc_library(
     name = "typed",
-    hdrs = ["typed.h"],
+    hdrs = [
+        "generated/seam.h",
+        "typed.h",
+    ],
     copts = ["-std=c++17"],
     deps = [":decoder"],
 )

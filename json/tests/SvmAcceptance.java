@@ -88,7 +88,53 @@ public final class SvmAcceptance {
     }
   }
 
+  private static void typed() {
+    VoidPointer fields = UnmanagedMemory.calloc(Json.JsonScalarField.SIZE);
+    VoidPointer plan = UnmanagedMemory.calloc(Json.JsonPlan.SIZE);
+    VoidPointer result = UnmanagedMemory.calloc(Json.JsonTypedResult.SIZE);
+    if (fields.isNull() || plan.isNull() || result.isNull()) {
+      if (fields.isNonNull()) UnmanagedMemory.free(fields);
+      if (plan.isNonNull()) UnmanagedMemory.free(plan);
+      if (result.isNonNull()) UnmanagedMemory.free(result);
+      throw new OutOfMemoryError();
+    }
+    try {
+      try (var name = CTypeConversion.toCString("n")) {
+        Json.JsonScalarField.name(fields, name.get());
+        Json.JsonScalarField.name_length(fields, 1);
+        Json.JsonScalarField.kind(fields, 1);
+        Json.JsonScalarField.flags(fields, 1);
+        Json.JsonScalarField.minimum(fields, -128);
+        Json.JsonScalarField.maximum(fields, 127);
+        require(Json.plan_create(fields, 1, 1, plan) == 0);
+      }
+      byte[] input = "{\"n\":127}".getBytes(StandardCharsets.UTF_8);
+      try (var pinned = PinnedObject.create(input)) {
+        require(
+            Json.typed_decode(
+                    plan, pinned.addressOfArrayElement(0), input.length, 1024, 1024, result)
+                == 0);
+      }
+      Json.plan_release(plan);
+      require(Json.JsonTypedResult.present(result) == 1);
+      require(Json.JsonTypedResult.nulls(result) == 0);
+      require(Json.JsonTypedResult.count(result) == 1);
+      require(Json.JsonScalarSlot.bits(Json.JsonTypedResult.slots(result)) == 127);
+      require(Json.JsonTypedResult.index_allocations(result) == 1);
+      Json.typed_release(result);
+      Json.typed_release(result);
+      require(Json.JsonTypedResult.owner(result).isNull());
+    } finally {
+      Json.typed_release(result);
+      Json.plan_release(plan);
+      UnmanagedMemory.free(result);
+      UnmanagedMemory.free(plan);
+      UnmanagedMemory.free(fields);
+    }
+  }
+
   public static void main(String[] args) throws InterruptedException {
+    typed();
     scoped();
     require(CTypeConversion.toJavaString(Json.fingerprint()).equals(Json.ABI_FINGERPRINT));
     VoidPointer first = UnmanagedMemory.calloc(Json.JsonResult.SIZE);

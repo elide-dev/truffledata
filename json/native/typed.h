@@ -1,6 +1,7 @@
 #ifndef TRUFFLEDATA_JSON_TYPED_H
 #define TRUFFLEDATA_JSON_TYPED_H
 #include "json/native/decoder.h"
+#include "json/native/generated/seam.h"
 #include <cstring>
 #include <string>
 #include <unordered_map>
@@ -55,11 +56,7 @@ public:
   }
 };
 
-struct scalar_slot {
-  uint64_t bits = 0;
-  std::string_view text;
-  std::string_view lexical;
-};
+using scalar_slot = JsonScalarSlot;
 
 // Fixed scalar slots: no Myna builder, nodes, regions, or generic traversal tape.
 // Input/parser resources live with the result, independently of the plan.
@@ -89,7 +86,9 @@ public:
       const auto& field = plan.field(ordinal);
       auto value = entry.value().value();
       auto& slot = slots_[ordinal];
-      slot.lexical = trim(value.raw_json_token());
+      auto lexical = trim(value.raw_json_token());
+      slot.lexical = reinterpret_cast<uint8_t*>(const_cast<char*>(lexical.data()));
+      slot.lexical_length = lexical.size();
       if (value.type().value() == simdjson::ondemand::json_type::null) {
         if (!value.is_null().value() || !field.nullable)
           throw std::invalid_argument("Unexpected JSON null");
@@ -118,11 +117,14 @@ public:
           std::memcpy(&slot.bits, &number, sizeof(number));
           break;
         }
-        case scalar_kind::string:
-          slot.text = value.get_string().value();
-          if (slot.text.size() > field.max_utf8_bytes)
+        case scalar_kind::string: {
+          auto text = value.get_string().value();
+          if (text.size() > field.max_utf8_bytes)
             throw std::length_error("JSON string byte limit");
+          slot.text = reinterpret_cast<uint8_t*>(const_cast<char*>(text.data()));
+          slot.text_length = text.size();
           break;
+        }
       }
     }
     if (!root.at_end()) throw std::invalid_argument("Trailing JSON input");
@@ -131,6 +133,8 @@ public:
   }
   scalar_document(const scalar_document&) = delete;
   scalar_document& operator=(const scalar_document&) = delete;
+  const scalar_slot* slots() const { return slots_.data(); }
+  size_t size() const { return slots_.size(); }
   uint64_t present() const { return present_; }
   uint64_t nulls() const { return nulls_; }
   const scalar_slot& slot(size_t index) const { return slots_.at(index); }

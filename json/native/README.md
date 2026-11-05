@@ -103,6 +103,14 @@ only during decoding, not during later result access.
 
 `//json/native:typed_test` exercises these contracts, integer boundaries, all 64
 presence bits, resource limits, and retained lifetimes; it also passes ASan/UBSan.
-This is currently an internal C++ path. Connecting core Java schemas, generated
-getters, the C ABI and scoped JVM/SVM views remains outstanding, as do nested and
-repeated typed values and performance comparisons.
+JSON application ABI 2 exposes reusable plan creation/release and typed decode/release,
+with Myna-generated 56-byte field descriptors and 40-byte scalar slots. The result
+publishes masks, slot count, and allocation metrics without copying a second slot
+array. Plans copy field names under a name-byte limit. Completed results can outlive
+their plans. These operations explicitly retain normal VM transitions.
+
+Native ABI tests and ASan/UBSan cover malformed schemas, bounds, ownership, result
+reuse, and release order. Actual SVM acceptance calls generated typed bindings,
+closes the plan, and reads a slot through generated direct accessors. Connecting
+core Java schemas, generated schema-specific getters, and scoped JVM/SVM typed
+views remains outstanding, as do nested/repeated values and performance comparisons.
