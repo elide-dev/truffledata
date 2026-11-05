@@ -58,7 +58,40 @@ void typed() {
   td_json_plan_release(&plan);
   td_json_typed_release(&result);
 }
+void scalar_contracts() {
+  uint8_t name[] = {'v'};
+  JsonScalarField field{name, 1, 4, 1, INT64_MIN, INT64_MAX, UINT64_MAX, 100};
+  field.length_unit = 1;
+  field.minimum_length = field.maximum_length = 2;
+  JsonPlan plan{};
+  JsonTypedResult result{};
+  auto parse = [&](const std::string& source) {
+    auto status = td_json_typed_decode(&plan, reinterpret_cast<const uint8_t*>(source.data()),
+        source.size(), 10000, 10000, &result);
+    if (status != TD_JSON_OK) require(!result.owner && !result.slots);
+    td_json_typed_release(&result);
+    return status;
+  };
+  require(td_json_plan_create(&field, 1, 1, &plan) == TD_JSON_OK);
+  require(parse(R"({"v":"\ud83d\ude00"})") == TD_JSON_OK);
+  require(parse(R"({"v":"a"})") == TD_JSON_CONTRACT);
+  td_json_plan_release(&plan);
+  field.length_unit = 2;
+  field.minimum_length = field.maximum_length = 1;
+  require(td_json_plan_create(&field, 1, 1, &plan) == TD_JSON_OK);
+  require(parse(R"({"v":"\ud83d\ude00"})") == TD_JSON_OK);
+  require(parse(R"({"v":"ab"})") == TD_JSON_CONTRACT);
+  td_json_plan_release(&plan);
+  field.kind = 3;
+  field.length_unit = 0;
+  field.float_bits = 32;
+  require(td_json_plan_create(&field, 1, 1, &plan) == TD_JSON_OK);
+  require(parse(R"({"v":1.5})") == TD_JSON_OK);
+  require(parse(R"({"v":0.1})") == TD_JSON_CONTRACT);
+  td_json_plan_release(&plan);
+}
 int main() {
+  scalar_contracts();
   typed();
   require(std::strcmp(reinterpret_cast<const char*>(td_json_fingerprint()), TRUFFLEDATA_JSON_SEAM_ABI) == 0);
   struct guarded { uint64_t before = 91; JsonResult result{}; uint64_t after = 92; } buffer;

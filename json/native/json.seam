@@ -1,4 +1,4 @@
-module truffledata_json abi=2 target=x86_64-unknown-linux-gnu java_package=dev.elide.truffledata.json.generated java_class=Json c_library=truffledata_json c_library_static=true
+module truffledata_json abi=3 target=x86_64-unknown-linux-gnu java_package=dev.elide.truffledata.json.generated java_class=Json c_library=truffledata_json c_library_static=true
 struct JsonResult size=72 align=8
   field owner type=ptr<void> offset=0
   field view type=ptr<void> offset=8
@@ -26,7 +26,7 @@ import release symbol=td_json_release return=void error=no_failure native_leaf=f
   param result type=ptr<void> nullable=false ownership=borrowed access=read_write
 end
 
-struct JsonScalarField size=56 align=8
+struct JsonScalarField size=80 align=8
   field name type=ptr<u8> offset=0
   field name_length type=u64 offset=8
   field kind type=u32 offset=16
@@ -35,6 +35,10 @@ struct JsonScalarField size=56 align=8
   field maximum type=i64 offset=32
   field unsigned_maximum type=u64 offset=40
   field max_utf8_bytes type=u64 offset=48
+  field float_bits type=u32 offset=56
+  field length_unit type=u32 offset=60
+  field minimum_length type=u64 offset=64
+  field maximum_length type=u64 offset=72
 end
 struct JsonPlan size=8 align=8
   field owner type=ptr<void> offset=0

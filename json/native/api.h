@@ -14,6 +14,8 @@ enum td_json_status {
 };
 
 // Scalar field kinds: 0 boolean, 1 int64, 2 uint64, 3 float64, 4 string.
+// Length units: 0 unconstrained, 1 UTF-16 units, 2 Unicode scalar values.
+// Floating widths: 0/64 binary64; 32 requires an exactly representable binary32 value.
 // Field flags: bit 0 required, bit 1 nullable; all other bits must be zero.
 // Plans copy schema names. The caller keeps each plan alive during typed_decode;
 // completed typed results retain no plan pointers. Names must be valid UTF-8.

@@ -126,7 +126,10 @@ cc_library(
         "typed.h",
     ],
     copts = ["-std=c++17"],
-    deps = [":decoder"],
+    deps = [
+        ":decoder",
+        "//bazel:unicode",
+    ],
 )
 
 cc_test(
@@ -134,4 +137,14 @@ cc_test(
     srcs = ["typed_test.cc"],
     copts = ["-std=c++17"],
     deps = [":typed"],
+)
+
+cc_test(
+    name = "unicode_test",
+    srcs = ["unicode_test.cc"],
+    copts = ["-std=c++17"],
+    deps = [
+        ":typed",
+        "//protobuf-buffa/native:truffledata_buffa",
+    ],
 )

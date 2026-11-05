@@ -1,5 +1,5 @@
 {
-  "checksum": "a721fe819d4ed20711f40bb36e2885b37c6288d4989e5bc9c8f89a55a8b1348e",
+  "checksum": "2e7233950c7d1bdd84fffd6d7e8332cdee70c3d52e4ef02c0b5b59b3ba0ec315",
   "conditions": {
     "aarch64-apple-darwin": [
       "aarch64-apple-darwin"
@@ -749,17 +749,7 @@
       "version": "2.0.1"
     },
     "simdutf 0.7.0": {
-      "build_script_attrs": {
-        "build_script_env": {
-          "CXXFLAGS": "-O3"
-        },
-        "deps": [
-          {
-            "id": "cc 1.11.0",
-            "target": "cc"
-          }
-        ]
-      },
+      "additive_build_file_content": "\nload(\"@rules_cc//cc:defs.bzl\", \"cc_library\")\ncc_library(\n    name = \"native\",\n    srcs = [\"cpp/simdutfrs.cpp\"],\n    hdrs = [\"cpp/simdutf.h\", \"cpp/simdutf.cpp\", \"cpp/simdutfrs_extra.cpp\"],\n    includes = [\"cpp\"],\n    copts = [\"-std=c++17\", \"-O3\"],\n    linkopts = select({\n        \"@platforms//os:macos\": [\"-lc++\"],\n        \"//conditions:default\": [\"-lc++\", \"-lc++abi\"],\n    }),\n    visibility = [\"//visibility:public\"],\n)\n",
       "common_attrs": {
         "deps": [
           {
@@ -769,7 +759,7 @@
         ],
         "edition": "2021",
         "extra_deps": [
-          ":build_script_build"
+          ":native"
         ],
         "rustc_flags": [
           "-Copt-level=3"
@@ -794,12 +784,6 @@
           "Library": {
             "crate_name": "simdutf",
             "crate_root": "src/lib.rs"
-          }
-        },
-        {
-          "BuildScript": {
-            "crate_name": "build_script_build",
-            "crate_root": "build.rs"
           }
         }
       ],

@@ -90,7 +90,8 @@ interop exports, configurable Java limits, and the JVM scoped backend remain pen
 `typed.h` adds reusable closed-record scalar plans and directly populated slots.
 It does not construct a generic Myna tape. Plans own their field names and support
 up to 64 fields with separate presence/null masks, required/nullable contracts,
-signed integer ranges, unsigned maxima, and decoded UTF-8 byte limits. Integer
+signed integer ranges, unsigned maxima, decoded UTF-8 byte limits, UTF-16/code-point
+length bounds, and exact binary32 representability. Integer
 kinds require integer JSON syntax; float64 explicitly uses checked finite binary64
 conversion. The generic path remains the lossless arbitrary-number route.
 
@@ -103,8 +104,8 @@ only during decoding, not during later result access.
 
 `//json/native:typed_test` exercises these contracts, integer boundaries, all 64
 presence bits, resource limits, and retained lifetimes; it also passes ASan/UBSan.
-JSON application ABI 2 exposes reusable plan creation/release and typed decode/release,
-with Myna-generated 56-byte field descriptors and 40-byte scalar slots. The result
+JSON application ABI 3 exposes reusable plan creation/release and typed decode/release,
+with Myna-generated 80-byte field descriptors and 40-byte scalar slots. The result
 publishes masks, slot count, and allocation metrics without copying a second slot
 array. Plans copy field names under a name-byte limit. Completed results can outlive
 their plans. These operations explicitly retain normal VM transitions.
@@ -114,3 +115,10 @@ reuse, and release order. Actual SVM acceptance calls generated typed bindings,
 closes the plan, and reads a slot through generated direct accessors. Connecting
 core Java schemas, generated schema-specific getters, and scoped JVM/SVM typed
 views remains outstanding, as do nested/repeated values and performance comparisons.
+
+The shared `//bazel:unicode` simdutf library serves Rust Buffa conversion and C++
+JSON contracts. Counting decoded UTF-8 requires no intermediate UTF-16 buffer or
+Java string. `//json/native:unicode_test` links both consumers and exercises raw
+and escaped supplementary characters, long strings, length boundaries, and
+float narrowing under ASan/UBSan. Typed slot allocation remains one buffer; this
+is not a claim about parser scratch or total process allocation.

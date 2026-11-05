@@ -90,7 +90,8 @@ extern "C" int32_t td_json_plan_create(const void* fields, uint64_t count,
       if (field.name_length) name.assign(reinterpret_cast<const char*>(field.name), field.name_length);
       schema.push_back({std::move(name), static_cast<truffledata::json::scalar_kind>(field.kind),
           bool(field.flags & 1), bool(field.flags & 2), field.minimum, field.maximum,
-          field.unsigned_maximum, size_t(field.max_utf8_bytes)});
+          field.unsigned_maximum, size_t(field.max_utf8_bytes), field.float_bits, field.length_unit,
+          field.minimum_length, field.maximum_length});
     }
     auto owned = std::make_unique<truffledata::json::scalar_plan>(std::move(schema));
     result.owner = owned.release();

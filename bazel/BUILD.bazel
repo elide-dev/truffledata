@@ -95,3 +95,9 @@ sh_test(
         "//protobuf-buffa/native:descriptor",
     ],
 )
+
+# Same pinned source/object implementation for Rust and native C++ consumers.
+alias(
+    name = "unicode",
+    actual = "@simdutf_src//:native",
+)

@@ -3,6 +3,7 @@
 #include "json/native/decoder.h"
 #include "json/native/generated/seam.h"
 #include <cstring>
+#include <simdutf.h>
 #include <string>
 #include <unordered_map>
 
@@ -18,6 +19,10 @@ struct scalar_field {
   int64_t maximum = INT64_MAX;
   uint64_t unsigned_maximum = UINT64_MAX;
   size_t max_utf8_bytes = UINT32_MAX;
+  uint32_t float_bits = 0;
+  uint32_t length_unit = 0; // 0 unknown, 1 UTF-16 units, 2 Unicode scalar values
+  uint64_t minimum_length = 0;
+  uint64_t maximum_length = UINT64_MAX;
 };
 
 // Immutable, reusable closed-record plan. Names are owned; lookup views cannot
@@ -31,7 +36,7 @@ public:
     if (fields_.size() > 64) throw std::invalid_argument("JSON scalar plan field limit");
     for (size_t i = 0; i < fields_.size(); ++i) {
       const auto& field = fields_[i];
-      if (!simdjson::validate_utf8(field.name.data(), field.name.size()))
+      if (!simdutf::validate_utf8(field.name.data(), field.name.size()))
         throw std::invalid_argument("Invalid UTF-8 schema name");
       if (!ordinals_.emplace(field.name, i).second)
         throw std::invalid_argument("Duplicate JSON schema field");
@@ -41,6 +46,12 @@ public:
         case scalar_kind::float64: case scalar_kind::string: break;
         default: throw std::invalid_argument("Unknown JSON scalar kind");
       }
+      if ((field.float_bits != 0 && field.float_bits != 32 && field.float_bits != 64)
+          || (field.float_bits && field.kind != scalar_kind::float64))
+        throw std::invalid_argument("Invalid JSON floating width");
+      if (field.length_unit > 2 || field.minimum_length > field.maximum_length
+          || (field.length_unit && field.kind != scalar_kind::string))
+        throw std::invalid_argument("Invalid JSON string length contract");
       if (field.required) required_ |= uint64_t(1) << i;
     }
   }
@@ -114,6 +125,8 @@ public:
         case scalar_kind::float64: {
           double number = value.get_double().value();
           if (!std::isfinite(number)) throw std::invalid_argument("Nonfinite JSON float");
+          if (field.float_bits == 32 && static_cast<double>(static_cast<float>(number)) != number)
+            throw std::invalid_argument("JSON floating width");
           std::memcpy(&slot.bits, &number, sizeof(number));
           break;
         }
@@ -121,6 +134,15 @@ public:
           auto text = value.get_string().value();
           if (text.size() > field.max_utf8_bytes)
             throw std::length_error("JSON string byte limit");
+          // get_string has already validated/decoded UTF-8. Count with SIMD,
+          // without a Java String, temporary UTF-16 buffer, or duplicate validation.
+          if (field.length_unit) {
+            uint64_t length = field.length_unit == 1
+                ? simdutf::utf16_length_from_utf8(text.data(), text.size())
+                : simdutf::count_utf8(text.data(), text.size());
+            if (length < field.minimum_length || length > field.maximum_length)
+              throw std::invalid_argument("JSON string length contract");
+          }
           slot.text = reinterpret_cast<uint8_t*>(const_cast<char*>(text.data()));
           slot.text_length = text.size();
           break;

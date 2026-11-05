@@ -292,13 +292,29 @@ crate.from_cargo(
     ],
 )
 
-# Cargo's C++ build must stay optimized even in Bazel fastbuild/test configurations.
+# One optimized C++ simdutf library serves both Rust protobuf and C++ JSON.
 crate.annotation(
-    build_script_env = {"CXXFLAGS": "-O3"},
-    crate = "simdutf",
-    rustc_flags = ["-Copt-level=3"],
+    additive_build_file_content = """
+load("@rules_cc//cc:defs.bzl", "cc_library")
+cc_library(
+    name = "native",
+    srcs = ["cpp/simdutfrs.cpp"],
+    hdrs = ["cpp/simdutf.h", "cpp/simdutf.cpp", "cpp/simdutfrs_extra.cpp"],
+    includes = ["cpp"],
+    copts = ["-std=c++17", "-O3"],
+    linkopts = select({
+        "@platforms//os:macos": ["-lc++"],
+        "//conditions:default": ["-lc++", "-lc++abi"],
+    }),
+    visibility = ["//visibility:public"],
 )
-use_repo(crate, "crates")
+""",
+    crate = "simdutf",
+    gen_build_script = "off",
+    rustc_flags = ["-Copt-level=3"],
+    deps = [":native"],
+)
+use_repo(crate, "crates", simdutf_src = "crates__simdutf-0.7.0")
 
 http_archive(
     name = "myna",
