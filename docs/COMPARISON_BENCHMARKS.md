@@ -845,3 +845,32 @@ Gazelle drift pass. The coverage cycle and access-method gate also pass, with
 exercised by the non-strict corpus. Existing tests include custom proto2 defaults,
 explicit default presence, wide presence masks, oneof switching, and independently
 closed empty repeated arrays.
+
+## Reusing the native Buffa index
+
+Revision `10592bd` retains the temporary typed index in each native backend instead
+of allocating, growing, and freeing it for every message. Materialized messages
+remain independent of that scratch allocation. Native tests check allocation-free
+warmed reuse, failure/recovery ownership, and smaller-budget enforcement; JVM and
+SVM acceptance exercise live messages across reuse and typed/generic transitions.
+This retains native memory until an incompatible budget, native parse failure,
+generic decode, or backend close releases it. Java allocation is unchanged.
+
+Two randomized five-fork cycles on unclemax compare identical binaries against
+the preceding default-template optimization:
+[first](../benchmarks/results/buffa-reuse-10592bd/paired.md) and
+[repeat](../benchmarks/results/buffa-reuse-10592bd/repeat/paired.md).
+
+| Buffa operation | First baseline → candidate | Repeat baseline → candidate |
+| --- | ---: | ---: |
+| Nested ingestion | 2013.80 → 1980.76 ns | 2001.10 → 1983.04 ns |
+| Nested ingestion with generated getters | 1971.90 → 1865.86 ns | 1982.52 → 1795.42 ns |
+| Nested full consumption | 2877.50 → 2723.85 ns | 2729.04 → 2744.00 ns |
+
+Generated-getter ingestion improves 5–9% by median, but fork ranges overlap.
+Generic ingestion moves only 1–2%; full consumption is inconsistent across runs.
+Unchanged stock and generated-owned controls also have overlapping ranges.
+The robust result is eliminating warmed native index allocations, not a universal
+throughput gain. Projected Java allocation stays at 1727.75 bytes/op, excluding
+native memory. Stock ingestion remains around 665–668 ns in the candidate runs,
+so mixed-message Buffa ingestion still has a substantial performance gap.
