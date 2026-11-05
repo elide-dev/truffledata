@@ -94,10 +94,9 @@ public final class Comparison {
     List<String> result = new ArrayList<>(baseStages(workload, engine));
     if (engine.equals("stock") && workload.equals("proto-scalar"))
       result.addAll(List.of("project-aot", "project-interpret", "project-peak"));
-    if ((engine.equals("owned") || engine.equals("buffa"))
-        && !workload.equals("proto-mixed-full")) {
+    if (engine.equals("owned") || engine.equals("buffa")) {
       result.add("ingest-generated");
-      if (!workload.equals("timestamp-json"))
+      if (!workload.equals("timestamp-json") && !workload.equals("proto-mixed-full"))
         result.addAll(List.of("read-generated-aot", "interpret-generated", "peak-generated"));
     }
     if (workload.equals("proto-scalar")
@@ -519,7 +518,10 @@ public final class Comparison {
 
     long readOne(Object row, boolean typed)
         throws com.oracle.truffle.api.nodes.UnexpectedResultException {
-      if (workload.equals("proto-mixed-full")) return readAll(row);
+      if (workload.equals("proto-mixed-full"))
+        return generated instanceof GeneratedProjection access
+            ? access.readAll((ProtoAccess) row)
+            : readAll(row);
       if (generated != null) return generated.read((ProtoAccess) row);
       if (engine.startsWith("stock")) {
         if (row instanceof com.google.protobuf.Type t)
@@ -666,15 +668,21 @@ public final class Comparison {
         }
         return sum;
       }
+      if (workload.equals("proto-mixed-full")) {
+        long sum = 0;
+        for (int n = 0; n < ROWS; n++) {
+          Object row = rows[(n + rotation) & (ROWS - 1)];
+          sum +=
+              generated instanceof GeneratedProjection access
+                  ? access.readAll((ProtoAccess) row)
+                  : readAll(row);
+        }
+        return sum;
+      }
       if (generated != null && !guestRead) {
         long sum = 0;
         for (int n = 0; n < ROWS; n++)
           sum += generated.read((ProtoAccess) rows[(n + rotation) & (ROWS - 1)]);
-        return sum;
-      }
-      if (workload.equals("proto-mixed-full")) {
-        long sum = 0;
-        for (int n = 0; n < ROWS; n++) sum += readAll(rows[(n + rotation) & (ROWS - 1)]);
         return sum;
       }
       if (guestRead || !engine.startsWith("stock")) return (Long) target.call(rows, rotation);
@@ -850,12 +858,52 @@ public final class Comparison {
     private final ComparisonContracts.@Nullable Access_google$protobuf$Timestamp timestamp;
     private final ComparisonContracts.@Nullable Access_google$protobuf$BytesValue bytes;
     private final ComparisonContracts.@Nullable Access_google$protobuf$Type mixed;
+    private final ComparisonContracts.@Nullable Access_google$protobuf$Field field;
+    private final ComparisonContracts.@Nullable Access_google$protobuf$SourceContext source;
 
     GeneratedProjection(ProtoPlan plan, int kind) {
       this.kind = kind;
       timestamp = kind == 0 ? new ComparisonContracts.Access_google$protobuf$Timestamp(plan) : null;
       bytes = kind == 1 ? new ComparisonContracts.Access_google$protobuf$BytesValue(plan) : null;
       mixed = kind == 3 ? new ComparisonContracts.Access_google$protobuf$Type(plan) : null;
+      field =
+          kind == 3 ? new ComparisonContracts.Access_google$protobuf$Field(plan.nested(1)) : null;
+      source =
+          kind == 3
+              ? new ComparisonContracts.Access_google$protobuf$SourceContext(plan.nested(4))
+              : null;
+    }
+
+    long readAll(ProtoAccess row) {
+      var access = Objects.requireNonNull(mixed);
+      var fieldAccess = Objects.requireNonNull(field);
+      Object fields = access.get_fields(row), oneofs = access.get_oneofs(row);
+      int count = access.size_fields(row), groups = access.size_oneofs(row);
+      long sum =
+          access.get_name(row).length()
+              + count
+              + groups
+              + access.get_syntax(row)
+              + Objects.requireNonNull(source)
+                  .get_file_name((ProtoAccess) access.get_source_context(row))
+                  .length();
+      for (int i = 0; i < count; i++) {
+        var value = (ProtoAccess) element(fields, i);
+        sum +=
+            fieldAccess.get_name(value).length()
+                + fieldAccess.get_number(value)
+                + fieldAccess.get_kind(value)
+                + fieldAccess.get_cardinality(value)
+                + (fieldAccess.get_packed(value) ? 1 : 0);
+      }
+      for (int i = 0; i < groups; i++) sum += ((String) element(oneofs, i)).length();
+      return sum;
+    }
+
+    private static Object element(Object array, int index) {
+      return array instanceof BorrowedArray borrowed
+          ? borrowed.element(index)
+          : ((DataArray) array).get(index);
     }
 
     public long read(ProtoAccess row) {
