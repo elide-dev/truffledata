@@ -779,3 +779,35 @@ python3 tools/bench/json_profile_summary.py recordings dev.elide.truffledata.com
 The optional fifth argument selects post-warmup recording; the original repeated
 profiling mode remains available without it. Record a `binary.sha256` file in the
 recordings directory for the summary tool. Never use instrumented timings as scores.
+
+## Buffa standard-contract proof reuse
+
+Revision `8b05d0b` removes the second field/element validation walk when the
+completed native-decoded value has exactly its standard protobuf contract. Native
+kind/index checks, required fields, depth/work budgets, duplicate handling, map
+semantics, and scoped ownership remain enforced. Strict mode rechecks completed
+values, including deferred UTF-8 strings, with the general field validator.
+
+The [paired unclemax cycle](../benchmarks/results/buffa-contracts-8b05d0b/paired.md)
+randomizes five fresh forks per binary/cell/metric, with stock and generated-owned
+controls. Baseline and candidate processes never overlap.
+
+| Buffa operation | Baseline | Candidate | Java bytes, unchanged |
+| --- | ---: | ---: | ---: |
+| Nested ingestion | 2496.95 ns | 2115.37 ns | 1727.75 |
+| Nested ingestion with generated getters | 2303.79 ns | 1979.80 ns | 1727.75 |
+| Nested full consumption | 3098.03 ns | 2941.41 ns | 1854.25 |
+
+The first two cases improve roughly 15% and 14%, with disjoint fork-median ranges.
+The stock control also improves about 2%, and generated-owned control ranges overlap;
+these controls bound how confidently to attribute timing changes to this patch.
+The unchanged compact-scalar control has overlapping ranges and a slightly higher
+candidate median. This is not a universal speedup or parity claim: nested Buffa
+ingestion still trails the stock control (651.23 ns).
+
+Strict JVM/native/fallback acceptance, the shipping-mode comparison smoke, and a new
+full non-strict JVM acceptance target all pass. CI runs both strict and non-strict
+variants in its Codecov cycle. That cycle covers 299/317 BuffaPlan lines and 22/22
+methods; the shortcut and strict audit lines are exercised. Future richer-contract
+fallback branches remain unexercised because current ProtoPlan schemas derive their
+contracts directly from FieldPlan.

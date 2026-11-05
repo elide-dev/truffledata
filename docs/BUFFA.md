@@ -321,3 +321,18 @@ builder exports and symbolic/build-time versus address/runtime initialization ru
 JVM acceptance checks that compiler-private classes are absent from the application
 classpath. Actual static SVM, native-free fallback, and published-artifact acceptance
 exercise the rebuilt consumers.
+
+### Standard contract proofs
+
+Typed native decoding establishes standard protobuf field types, widths, child
+types, and repeated-element representations while consuming the schema-directed
+index. Finalization reuses those facts when the schema field exactly matches its
+FieldPlan contract, instead of walking completed arrays again. Richer contracts
+retain the general validator. Required fields, duplicate rules, budgets and owner
+checks are independent of this shortcut.
+
+`-Dtruffledata.strict=true` revalidates these completed values, including resolving
+deferred strings, to audit the native/Java cooperation. Strict mode may therefore
+materialize strings earlier. The acceptance corpus runs with strict mode both on
+and off; performance measurements use the shipping, non-strict path. For SVM, set
+the property at image build time with the other strict-test options.

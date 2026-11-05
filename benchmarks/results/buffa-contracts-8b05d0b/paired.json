@@ -1,0 +1,2058 @@
+{
+  "binary_sha256": {
+    "baseline": "eaefeea3e6f75489db22f19619b4ed1be933abcd93fe6909168fe6df0e47aa9a",
+    "candidate": "caab58c1d7a7b841d276e502d86935b406e34629635ecc829d9dceeadd22820d"
+  },
+  "cpu_affinity": [
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9
+  ],
+  "measurements": [
+    {
+      "workload": "proto-scalar",
+      "engine": "buffa",
+      "stage": "ingest-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 54400032992,
+      "ns_per_row": [
+        56.866649608806405,
+        55.76854325756494,
+        56.526595504195605
+      ],
+      "variant": "baseline",
+      "fork": 3
+    },
+    {
+      "workload": "proto-mixed-full",
+      "engine": "buffa",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 4866,
+      "ns_per_row": [
+        3047.715144230769,
+        3069.0211791992188,
+        3049.816286057692
+      ],
+      "variant": "baseline",
+      "fork": 2
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "generated-owned",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        703.3737634892086,
+        689.8588935959507,
+        691.0634800132509
+      ],
+      "variant": "candidate",
+      "fork": 3
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "buffa",
+      "stage": "ingest-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        1977.6957859848485,
+        1979.7980587121212,
+        1983.8228377525252
+      ],
+      "variant": "candidate",
+      "fork": 0
+    },
+    {
+      "workload": "proto-scalar",
+      "engine": "buffa",
+      "stage": "ingest-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 54400032992,
+      "allocated_bytes_per_row": [
+        80.0,
+        80.0,
+        80.0
+      ],
+      "variant": "baseline",
+      "fork": 3
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "stock",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "allocated_bytes_per_row": [
+        1776.75,
+        1776.75,
+        1776.75
+      ],
+      "variant": "candidate",
+      "fork": 2
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "buffa",
+      "stage": "ingest-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "allocated_bytes_per_row": [
+        1727.75,
+        1727.75,
+        1727.75
+      ],
+      "variant": "baseline",
+      "fork": 0
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "buffa",
+      "stage": "ingest-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "allocated_bytes_per_row": [
+        1727.75,
+        1727.75,
+        1727.75
+      ],
+      "variant": "baseline",
+      "fork": 2
+    },
+    {
+      "workload": "proto-scalar",
+      "engine": "buffa",
+      "stage": "ingest-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 54400032992,
+      "ns_per_row": [
+        60.09058991464165,
+        61.00563124609619,
+        60.22830543670984
+      ],
+      "variant": "candidate",
+      "fork": 1
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "buffa",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        2086.0895113031916,
+        2084.1421625664893,
+        2085.4273188164893
+      ],
+      "variant": "candidate",
+      "fork": 4
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "stock",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        660.380859375,
+        658.9873211279461,
+        664.1639830508475
+      ],
+      "variant": "candidate",
+      "fork": 3
+    },
+    {
+      "workload": "proto-mixed-full",
+      "engine": "buffa",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 4866,
+      "allocated_bytes_per_row": [
+        1854.25,
+        1854.25,
+        1854.25
+      ],
+      "variant": "candidate",
+      "fork": 2
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "buffa",
+      "stage": "ingest-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        1972.1530859375,
+        1966.5137890625,
+        2000.8651147959183
+      ],
+      "variant": "candidate",
+      "fork": 2
+    },
+    {
+      "workload": "proto-mixed-full",
+      "engine": "buffa",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 4866,
+      "ns_per_row": [
+        2956.4361590485073,
+        2979.7975260416665,
+        2978.457859848485
+      ],
+      "variant": "candidate",
+      "fork": 3
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "buffa",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        2370.708207831325,
+        2350.1136532738096,
+        2361.9464420180725
+      ],
+      "variant": "baseline",
+      "fork": 0
+    },
+    {
+      "workload": "proto-mixed-full",
+      "engine": "buffa",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 4866,
+      "ns_per_row": [
+        3098.027099609375,
+        3120.605902777778,
+        3096.88037109375
+      ],
+      "variant": "baseline",
+      "fork": 1
+    },
+    {
+      "workload": "proto-scalar",
+      "engine": "buffa",
+      "stage": "ingest-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 54400032992,
+      "ns_per_row": [
+        63.71534827544031,
+        57.786566198224854,
+        56.88815430256261
+      ],
+      "variant": "candidate",
+      "fork": 3
+    },
+    {
+      "workload": "proto-mixed-full",
+      "engine": "buffa",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 4866,
+      "ns_per_row": [
+        3251.5934938524592,
+        3270.6845703125,
+        3242.9618980532787
+      ],
+      "variant": "baseline",
+      "fork": 3
+    },
+    {
+      "workload": "proto-scalar",
+      "engine": "buffa",
+      "stage": "ingest-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 54400032992,
+      "ns_per_row": [
+        54.38024712033686,
+        53.58214267347778,
+        54.383264894209354
+      ],
+      "variant": "baseline",
+      "fork": 0
+    },
+    {
+      "workload": "proto-scalar",
+      "engine": "buffa",
+      "stage": "ingest-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 54400032992,
+      "ns_per_row": [
+        59.44876345671029,
+        60.175533348736906,
+        59.25516686571125
+      ],
+      "variant": "candidate",
+      "fork": 0
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "buffa",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "allocated_bytes_per_row": [
+        1727.75,
+        1727.75,
+        1727.75
+      ],
+      "variant": "candidate",
+      "fork": 2
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "buffa",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        2211.3203563904494,
+        2211.8390098314608,
+        2193.231640625
+      ],
+      "variant": "candidate",
+      "fork": 2
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "buffa",
+      "stage": "ingest-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        2313.051332720588,
+        2291.6869095203488,
+        2303.7901654411767
+      ],
+      "variant": "baseline",
+      "fork": 0
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "generated-owned",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "allocated_bytes_per_row": [
+        1800.5,
+        1800.5,
+        1800.5
+      ],
+      "variant": "candidate",
+      "fork": 4
+    },
+    {
+      "workload": "proto-mixed-full",
+      "engine": "buffa",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 4866,
+      "allocated_bytes_per_row": [
+        1854.25,
+        1854.25,
+        1854.25
+      ],
+      "variant": "candidate",
+      "fork": 4
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "stock",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        684.8432036713286,
+        678.9694146050347,
+        667.3816926194539
+      ],
+      "variant": "candidate",
+      "fork": 2
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "stock",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        654.9030753553511,
+        649.8759733181063,
+        651.2253645833333
+      ],
+      "variant": "candidate",
+      "fork": 0
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "generated-owned",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "allocated_bytes_per_row": [
+        1800.5,
+        1800.5,
+        1800.5
+      ],
+      "variant": "baseline",
+      "fork": 0
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "buffa",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "allocated_bytes_per_row": [
+        1727.75,
+        1727.75,
+        1727.75
+      ],
+      "variant": "baseline",
+      "fork": 3
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "buffa",
+      "stage": "ingest-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "allocated_bytes_per_row": [
+        1727.75,
+        1727.75,
+        1727.75
+      ],
+      "variant": "candidate",
+      "fork": 2
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "buffa",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "allocated_bytes_per_row": [
+        1727.75,
+        1727.75,
+        1727.75
+      ],
+      "variant": "baseline",
+      "fork": 0
+    },
+    {
+      "workload": "proto-mixed-full",
+      "engine": "buffa",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 4866,
+      "allocated_bytes_per_row": [
+        1854.25,
+        1854.25,
+        1854.25
+      ],
+      "variant": "baseline",
+      "fork": 3
+    },
+    {
+      "workload": "proto-scalar",
+      "engine": "buffa",
+      "stage": "ingest-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 54400032992,
+      "allocated_bytes_per_row": [
+        80.0,
+        80.0,
+        80.0
+      ],
+      "variant": "baseline",
+      "fork": 2
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "stock",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "allocated_bytes_per_row": [
+        1776.75,
+        1776.75,
+        1776.75
+      ],
+      "variant": "baseline",
+      "fork": 4
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "stock",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "allocated_bytes_per_row": [
+        1776.75,
+        1776.75,
+        1776.75
+      ],
+      "variant": "baseline",
+      "fork": 1
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "buffa",
+      "stage": "ingest-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        2060.821011513158,
+        2053.8603515625,
+        2053.221394856771
+      ],
+      "variant": "candidate",
+      "fork": 3
+    },
+    {
+      "workload": "proto-scalar",
+      "engine": "buffa",
+      "stage": "ingest-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 54400032992,
+      "ns_per_row": [
+        60.6601222826087,
+        60.940972357644306,
+        60.15520576686172
+      ],
+      "variant": "candidate",
+      "fork": 4
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "generated-owned",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "allocated_bytes_per_row": [
+        1800.5,
+        1800.5,
+        1800.5
+      ],
+      "variant": "baseline",
+      "fork": 3
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "generated-owned",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        696.2026106539146,
+        693.8191212322695,
+        693.5315408909574
+      ],
+      "variant": "baseline",
+      "fork": 1
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "generated-owned",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        640.7400230532787,
+        634.9989853896104,
+        636.6663528094463
+      ],
+      "variant": "candidate",
+      "fork": 2
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "buffa",
+      "stage": "ingest-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "allocated_bytes_per_row": [
+        1727.75,
+        1727.75,
+        1727.75
+      ],
+      "variant": "baseline",
+      "fork": 3
+    },
+    {
+      "workload": "proto-scalar",
+      "engine": "buffa",
+      "stage": "ingest-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 54400032992,
+      "allocated_bytes_per_row": [
+        80.0,
+        80.0,
+        80.0
+      ],
+      "variant": "baseline",
+      "fork": 1
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "buffa",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "allocated_bytes_per_row": [
+        1727.75,
+        1727.75,
+        1727.75
+      ],
+      "variant": "candidate",
+      "fork": 3
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "buffa",
+      "stage": "ingest-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "allocated_bytes_per_row": [
+        1727.75,
+        1727.75,
+        1727.75
+      ],
+      "variant": "candidate",
+      "fork": 4
+    },
+    {
+      "workload": "proto-mixed-full",
+      "engine": "buffa",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 4866,
+      "ns_per_row": [
+        3281.6404947916667,
+        3307.156640625,
+        3283.75625
+      ],
+      "variant": "baseline",
+      "fork": 4
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "buffa",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "allocated_bytes_per_row": [
+        1727.75,
+        1727.75,
+        1727.75
+      ],
+      "variant": "baseline",
+      "fork": 4
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "buffa",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        2552.4684963474024,
+        2580.7912726151317,
+        2576.814812911184
+      ],
+      "variant": "baseline",
+      "fork": 1
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "stock",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        687.9392055457746,
+        665.1647799744898,
+        662.6457717483108
+      ],
+      "variant": "baseline",
+      "fork": 0
+    },
+    {
+      "workload": "proto-mixed-full",
+      "engine": "buffa",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 4866,
+      "ns_per_row": [
+        2909.740234375,
+        2917.817630597015,
+        2906.3257697610293
+      ],
+      "variant": "candidate",
+      "fork": 1
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "buffa",
+      "stage": "ingest-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        2272.0735374273254,
+        2243.4414506392045,
+        2254.774380387931
+      ],
+      "variant": "baseline",
+      "fork": 4
+    },
+    {
+      "workload": "proto-mixed-full",
+      "engine": "buffa",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 4866,
+      "allocated_bytes_per_row": [
+        1854.25,
+        1854.25,
+        1854.25
+      ],
+      "variant": "baseline",
+      "fork": 2
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "buffa",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        2435.841194058642,
+        2404.620617378049,
+        2416.014419367284
+      ],
+      "variant": "baseline",
+      "fork": 2
+    },
+    {
+      "workload": "proto-mixed-full",
+      "engine": "buffa",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 4866,
+      "allocated_bytes_per_row": [
+        1854.25,
+        1854.25,
+        1854.25
+      ],
+      "variant": "candidate",
+      "fork": 1
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "stock",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        642.0433401639344,
+        636.3002595684039,
+        637.765968546417
+      ],
+      "variant": "candidate",
+      "fork": 1
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "generated-owned",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "allocated_bytes_per_row": [
+        1800.5,
+        1800.5,
+        1800.5
+      ],
+      "variant": "baseline",
+      "fork": 4
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "stock",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        668.6298261518772,
+        665.4167995323129,
+        666.8602949018772
+      ],
+      "variant": "baseline",
+      "fork": 3
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "generated-owned",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        711.66234375,
+        710.5581392045455,
+        708.1689028532609
+      ],
+      "variant": "baseline",
+      "fork": 3
+    },
+    {
+      "workload": "proto-mixed-full",
+      "engine": "buffa",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 4866,
+      "ns_per_row": [
+        2797.2174665178572,
+        2819.5417410714285,
+        2815.97890625
+      ],
+      "variant": "candidate",
+      "fork": 0
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "stock",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "allocated_bytes_per_row": [
+        1776.75,
+        1776.75,
+        1776.75
+      ],
+      "variant": "candidate",
+      "fork": 0
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "stock",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "allocated_bytes_per_row": [
+        1776.75,
+        1776.75,
+        1776.75
+      ],
+      "variant": "baseline",
+      "fork": 0
+    },
+    {
+      "workload": "proto-scalar",
+      "engine": "buffa",
+      "stage": "ingest-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 54400032992,
+      "ns_per_row": [
+        57.166680384840504,
+        56.23166176417674,
+        56.901374299082434
+      ],
+      "variant": "baseline",
+      "fork": 1
+    },
+    {
+      "workload": "proto-scalar",
+      "engine": "buffa",
+      "stage": "ingest-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 54400032992,
+      "ns_per_row": [
+        58.18530309800417,
+        56.653537829901396,
+        57.40601468373494
+      ],
+      "variant": "candidate",
+      "fork": 2
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "generated-owned",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "allocated_bytes_per_row": [
+        1800.5,
+        1800.5,
+        1800.5
+      ],
+      "variant": "baseline",
+      "fork": 2
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "stock",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        641.3279969262295,
+        637.784570948697,
+        637.9582654723127
+      ],
+      "variant": "candidate",
+      "fork": 4
+    },
+    {
+      "workload": "proto-scalar",
+      "engine": "buffa",
+      "stage": "ingest-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 54400032992,
+      "allocated_bytes_per_row": [
+        80.0,
+        80.0,
+        80.0
+      ],
+      "variant": "baseline",
+      "fork": 0
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "buffa",
+      "stage": "ingest-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "allocated_bytes_per_row": [
+        1727.75,
+        1727.75,
+        1727.75
+      ],
+      "variant": "baseline",
+      "fork": 1
+    },
+    {
+      "workload": "proto-mixed-full",
+      "engine": "buffa",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 4866,
+      "allocated_bytes_per_row": [
+        1854.25,
+        1854.25,
+        1854.25
+      ],
+      "variant": "baseline",
+      "fork": 4
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "stock",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "allocated_bytes_per_row": [
+        1776.75,
+        1776.75,
+        1776.75
+      ],
+      "variant": "candidate",
+      "fork": 4
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "generated-owned",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        692.9576130319149,
+        688.8917391065141,
+        689.0272887323944
+      ],
+      "variant": "baseline",
+      "fork": 2
+    },
+    {
+      "workload": "proto-scalar",
+      "engine": "buffa",
+      "stage": "ingest-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 54400032992,
+      "allocated_bytes_per_row": [
+        80.0,
+        80.0,
+        80.0
+      ],
+      "variant": "candidate",
+      "fork": 4
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "stock",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "allocated_bytes_per_row": [
+        1776.75,
+        1776.75,
+        1776.75
+      ],
+      "variant": "baseline",
+      "fork": 3
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "buffa",
+      "stage": "ingest-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "allocated_bytes_per_row": [
+        1727.75,
+        1727.75,
+        1727.75
+      ],
+      "variant": "candidate",
+      "fork": 1
+    },
+    {
+      "workload": "proto-scalar",
+      "engine": "buffa",
+      "stage": "ingest-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 54400032992,
+      "allocated_bytes_per_row": [
+        80.0,
+        80.0,
+        80.0
+      ],
+      "variant": "candidate",
+      "fork": 0
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "buffa",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        2115.3777301747314,
+        2115.3713877688174,
+        2115.251512096774
+      ],
+      "variant": "candidate",
+      "fork": 0
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "stock",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "allocated_bytes_per_row": [
+        1776.75,
+        1776.75,
+        1776.75
+      ],
+      "variant": "candidate",
+      "fork": 3
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "buffa",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        2259.9910201149423,
+        2251.4124644886365,
+        2252.78277658046
+      ],
+      "variant": "candidate",
+      "fork": 3
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "buffa",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "allocated_bytes_per_row": [
+        1727.75,
+        1727.75,
+        1727.75
+      ],
+      "variant": "baseline",
+      "fork": 2
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "stock",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "allocated_bytes_per_row": [
+        1776.75,
+        1776.75,
+        1776.75
+      ],
+      "variant": "baseline",
+      "fork": 2
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "buffa",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "allocated_bytes_per_row": [
+        1727.75,
+        1727.75,
+        1727.75
+      ],
+      "variant": "candidate",
+      "fork": 4
+    },
+    {
+      "workload": "proto-scalar",
+      "engine": "buffa",
+      "stage": "ingest-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 54400032992,
+      "allocated_bytes_per_row": [
+        80.0,
+        80.0,
+        80.0
+      ],
+      "variant": "candidate",
+      "fork": 1
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "buffa",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "allocated_bytes_per_row": [
+        1727.75,
+        1727.75,
+        1727.75
+      ],
+      "variant": "candidate",
+      "fork": 1
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "buffa",
+      "stage": "ingest-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        2385.261290015244,
+        2377.652908509036,
+        2368.4396178463853
+      ],
+      "variant": "baseline",
+      "fork": 2
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "generated-owned",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        660.5239785684122,
+        657.5310795931208,
+        658.682646780303
+      ],
+      "variant": "baseline",
+      "fork": 4
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "buffa",
+      "stage": "ingest-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "allocated_bytes_per_row": [
+        1727.75,
+        1727.75,
+        1727.75
+      ],
+      "variant": "candidate",
+      "fork": 0
+    },
+    {
+      "workload": "proto-mixed-full",
+      "engine": "buffa",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 4866,
+      "ns_per_row": [
+        3086.9068603515625,
+        3108.8763640873017,
+        3087.3965454101562
+      ],
+      "variant": "baseline",
+      "fork": 0
+    },
+    {
+      "workload": "proto-mixed-full",
+      "engine": "buffa",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 4866,
+      "ns_per_row": [
+        2925.1584071828356,
+        2945.952775186567,
+        2941.4129547574626
+      ],
+      "variant": "candidate",
+      "fork": 4
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "generated-owned",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "allocated_bytes_per_row": [
+        1800.5,
+        1800.5,
+        1800.5
+      ],
+      "variant": "candidate",
+      "fork": 0
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "buffa",
+      "stage": "ingest-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        2081.156457779255,
+        2077.2292763157893,
+        2079.971160239362
+      ],
+      "variant": "candidate",
+      "fork": 1
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "buffa",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "allocated_bytes_per_row": [
+        1727.75,
+        1727.75,
+        1727.75
+      ],
+      "variant": "candidate",
+      "fork": 0
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "buffa",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        2552.600091314935,
+        2581.8836348684213,
+        2573.0906147203946
+      ],
+      "variant": "baseline",
+      "fork": 4
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "buffa",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        2096.454537898936,
+        2092.725108045213,
+        2095.01288231383
+      ],
+      "variant": "candidate",
+      "fork": 1
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "buffa",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        2481.994214794304,
+        2497.2995945411394,
+        2496.94551028481
+      ],
+      "variant": "baseline",
+      "fork": 3
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "generated-owned",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "allocated_bytes_per_row": [
+        1800.5,
+        1800.5,
+        1800.5
+      ],
+      "variant": "baseline",
+      "fork": 1
+    },
+    {
+      "workload": "proto-scalar",
+      "engine": "buffa",
+      "stage": "ingest-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 54400032992,
+      "ns_per_row": [
+        57.448083639705885,
+        56.63939275877066,
+        57.37157213656388
+      ],
+      "variant": "baseline",
+      "fork": 2
+    },
+    {
+      "workload": "proto-scalar",
+      "engine": "buffa",
+      "stage": "ingest-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 54400032992,
+      "allocated_bytes_per_row": [
+        80.0,
+        80.0,
+        80.0
+      ],
+      "variant": "baseline",
+      "fork": 4
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "buffa",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "allocated_bytes_per_row": [
+        1727.75,
+        1727.75,
+        1727.75
+      ],
+      "variant": "baseline",
+      "fork": 1
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "generated-owned",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "allocated_bytes_per_row": [
+        1800.5,
+        1800.5,
+        1800.5
+      ],
+      "variant": "candidate",
+      "fork": 2
+    },
+    {
+      "workload": "proto-mixed-full",
+      "engine": "buffa",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 4866,
+      "allocated_bytes_per_row": [
+        1854.25,
+        1854.25,
+        1854.25
+      ],
+      "variant": "baseline",
+      "fork": 1
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "generated-owned",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        669.1451332405821,
+        666.8390704991467,
+        664.3603813559322
+      ],
+      "variant": "baseline",
+      "fork": 0
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "stock",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "allocated_bytes_per_row": [
+        1776.75,
+        1776.75,
+        1776.75
+      ],
+      "variant": "candidate",
+      "fork": 1
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "stock",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        696.671221641459,
+        693.9640957446809,
+        693.4151429521277
+      ],
+      "variant": "baseline",
+      "fork": 4
+    },
+    {
+      "workload": "proto-scalar",
+      "engine": "buffa",
+      "stage": "ingest-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 54400032992,
+      "allocated_bytes_per_row": [
+        80.0,
+        80.0,
+        80.0
+      ],
+      "variant": "candidate",
+      "fork": 3
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "generated-owned",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "allocated_bytes_per_row": [
+        1800.5,
+        1800.5,
+        1800.5
+      ],
+      "variant": "candidate",
+      "fork": 1
+    },
+    {
+      "workload": "proto-scalar",
+      "engine": "buffa",
+      "stage": "ingest-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 54400032992,
+      "allocated_bytes_per_row": [
+        80.0,
+        80.0,
+        80.0
+      ],
+      "variant": "candidate",
+      "fork": 2
+    },
+    {
+      "workload": "proto-mixed-full",
+      "engine": "buffa",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 4866,
+      "ns_per_row": [
+        2933.6050606343283,
+        2949.902285447761,
+        2942.6479127798507
+      ],
+      "variant": "candidate",
+      "fork": 2
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "generated-owned",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        648.0038674461921,
+        641.6194159836066,
+        647.8260037251656
+      ],
+      "variant": "candidate",
+      "fork": 4
+    },
+    {
+      "workload": "proto-scalar",
+      "engine": "buffa",
+      "stage": "ingest-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 54400032992,
+      "ns_per_row": [
+        58.44452470451825,
+        57.59299569759729,
+        58.19581285373846
+      ],
+      "variant": "baseline",
+      "fork": 4
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "stock",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        667.9853348976109,
+        667.1548501493174,
+        664.1891816737289
+      ],
+      "variant": "baseline",
+      "fork": 2
+    },
+    {
+      "workload": "proto-mixed-full",
+      "engine": "buffa",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 4866,
+      "allocated_bytes_per_row": [
+        1854.25,
+        1854.25,
+        1854.25
+      ],
+      "variant": "baseline",
+      "fork": 0
+    },
+    {
+      "workload": "proto-mixed-full",
+      "engine": "buffa",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 4866,
+      "allocated_bytes_per_row": [
+        1854.25,
+        1854.25,
+        1854.25
+      ],
+      "variant": "candidate",
+      "fork": 0
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "buffa",
+      "stage": "ingest-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        1975.3599668560605,
+        1972.8901515151515,
+        1972.6534375
+      ],
+      "variant": "candidate",
+      "fork": 4
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "stock",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        699.0395926339286,
+        704.4262308902878,
+        696.6322425489324
+      ],
+      "variant": "baseline",
+      "fork": 1
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "buffa",
+      "stage": "ingest-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        2260.9744522270116,
+        2245.5696390086205,
+        2259.8547952586205
+      ],
+      "variant": "baseline",
+      "fork": 1
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "buffa",
+      "stage": "ingest-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "allocated_bytes_per_row": [
+        1727.75,
+        1727.75,
+        1727.75
+      ],
+      "variant": "candidate",
+      "fork": 3
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "generated-owned",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "allocated_bytes_per_row": [
+        1800.5,
+        1800.5,
+        1800.5
+      ],
+      "variant": "candidate",
+      "fork": 3
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "buffa",
+      "stage": "ingest-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "allocated_bytes_per_row": [
+        1727.75,
+        1727.75,
+        1727.75
+      ],
+      "variant": "baseline",
+      "fork": 4
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "generated-owned",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        644.853650990099,
+        636.3494376017916,
+        636.9983204397394
+      ],
+      "variant": "candidate",
+      "fork": 0
+    },
+    {
+      "workload": "proto-mixed-full",
+      "engine": "buffa",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 4866,
+      "allocated_bytes_per_row": [
+        1854.25,
+        1854.25,
+        1854.25
+      ],
+      "variant": "candidate",
+      "fork": 3
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "generated-owned",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        645.8875825082508,
+        639.3639578227125,
+        640.6761526639344
+      ],
+      "variant": "candidate",
+      "fork": 1
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "buffa",
+      "stage": "ingest-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        2420.5684799382716,
+        2395.960461128049,
+        2416.011043595679
+      ],
+      "variant": "baseline",
+      "fork": 3
+    }
+  ]
+}

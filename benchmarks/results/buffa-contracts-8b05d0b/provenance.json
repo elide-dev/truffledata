@@ -1,0 +1,21 @@
+{
+  "baseline_commit": "7260cb87be5e92240034580e5d1c8d76b786297e",
+  "candidate_commit": "8b05d0b22fe9055e407cdfdf9845111b545fd61d",
+  "host": "unclemax",
+  "cpu_affinity": "2-9",
+  "remote_artifacts": "/tmp/truffledata-buffa-contracts.HjSWpK",
+  "command": "taskset -c 2-9 python3 truffledata-buffa-elision-compare.py",
+  "notes": [
+    "Five fresh forks per binary, workload and metric in randomized order.",
+    "Timing and allocation measurements use separate processes.",
+    "No profiling process overlapped timing.",
+    "Candidate includes the default-inactive profiling hooks from e414f32; stock/generated controls expose other binary differences.",
+    "Java allocation excludes native memory.",
+    "The compact scalar control is unchanged by the contract shortcut; its ranges overlap but its median increased."
+  ],
+  "validation": {
+    "native_jvm_fallback_smoke": "https://app.buildbuddy.io/invocation/0592c895-b9a2-407e-9e80-943aac143ade",
+    "non_strict_corpus": "https://app.buildbuddy.io/invocation/f280079b-a348-4b11-91e9-4857f96b7667",
+    "coverage": "https://app.buildbuddy.io/invocation/07d179c4-6352-4a99-bb1b-f1ac5dc623ec"
+  }
+}
