@@ -59,14 +59,29 @@ impl<'a> Schema<'a> {
             ordinal,
         })
     }
-    fn find(self, ty: u32, number: u32) -> Result<Option<Contract<'a>>> {
-        for i in 0..self.word(self.ty(ty)?)? {
-            let f = self.field(ty, i)?;
-            if f.word(0)? == number {
-                return Ok(Some(f));
+    fn table(self, base: usize, count: u32) -> Result<&'a [u8]> {
+        let start = base.checked_add(16).ok_or(MALFORMED)?;
+        let length = (count as usize).checked_mul(40).ok_or(MALFORMED)?;
+        self.0
+            .get(start..start.checked_add(length).ok_or(MALFORMED)?)
+            .ok_or(MALFORMED)
+    }
+    fn find_in(self, base: usize, table: &[u8], number: u32) -> Option<Contract<'a>> {
+        for (ordinal, field) in table.chunks_exact(40).enumerate() {
+            if u32::from_le_bytes(field[..4].try_into().unwrap()) == number {
+                return Some(Contract {
+                    schema: self,
+                    at: base + 16 + ordinal * 40,
+                    ordinal: ordinal as u32,
+                });
             }
         }
-        Ok(None)
+        None
+    }
+    fn find(self, ty: u32, number: u32) -> Result<Option<Contract<'a>>> {
+        let base = self.ty(ty)?;
+        let table = self.table(base, self.word(base)?)?;
+        Ok(self.find_in(base, table, number))
     }
     fn name(self, ty: u32, name: &str, json: bool) -> Result<Contract<'a>> {
         let mut found = None;
@@ -197,9 +212,11 @@ impl<'a, 'b> Decoder<'a, 'b> {
         let base = self.schema.ty(ty)?;
         let count = self.schema.word(base)?;
         self.charge(count as u64)?;
+        let table = self.schema.table(base, count)?;
+        let flags = self.schema.word(base + 4)?;
         // Bit 9 is a compiler-established fact: this type has no required fields. Java retains
         // its semantic fallback for required-field graphs and unsupported schema shapes.
-        if self.view_ready && (count > 64 || self.schema.word(base + 4)? & 512 == 0) {
+        if self.view_ready && (count > 64 || flags & 512 == 0) {
             self.view_ready = false;
         }
         let mut seen_messages = 0u64;
@@ -215,7 +232,7 @@ impl<'a, 'b> Decoder<'a, 'b> {
                     Err(MALFORMED)
                 };
             }
-            let Some(f) = self.schema.find(ty, number)? else {
+            let Some(f) = self.schema.find_in(base, table, number) else {
                 self.skip(input, number, wt, depth)?;
                 continue;
             };
@@ -262,8 +279,7 @@ impl<'a, 'b> Decoder<'a, 'b> {
             } else {
                 let value = scalar(kind, input)?;
                 let accepted = f.enumeration(value as i32)?;
-                if self.schema.word(self.schema.ty(ty)? + 4)? & 1 != 0 && number == 2 && kind == 14
-                {
+                if flags & 1 != 0 && number == 2 && kind == 14 {
                     invalid_map = !accepted;
                 }
                 if accepted {
@@ -705,6 +721,54 @@ mod tests {
         bytes.push(b'x');
         bytes
     }
+    #[test]
+    fn checked_field_table_preserves_sparse_order_and_rejects_truncation() {
+        let mut bytes = schema(5);
+        let field = bytes[28..68].to_vec();
+        bytes.truncate(28);
+        bytes[12..16].copy_from_slice(&3u32.to_le_bytes());
+        for number in [42u32, 3, 100] {
+            let start = bytes.len();
+            bytes.extend_from_slice(&field);
+            bytes[start..start + 4].copy_from_slice(&number.to_le_bytes());
+        }
+        let contract = Schema(&bytes);
+        for (ordinal, number) in [42, 3, 100].into_iter().enumerate() {
+            assert_eq!(
+                contract.find(0, number).unwrap().unwrap().ordinal,
+                ordinal as u32
+            );
+        }
+        assert!(contract.find(0, 1).unwrap().is_none());
+        let fields = decode(
+            &bytes,
+            &[0xd0, 2, 7, 24, 8, 0xa0, 6, 9, 8, 1],
+            0,
+            &mut [],
+            100,
+            100,
+            4,
+            4096,
+        )
+        .unwrap();
+        assert_eq!(
+            fields
+                .iter()
+                .map(|f| (f.number, f.value))
+                .collect::<Vec<_>>(),
+            vec![(1, 7), (2, 8), (3, 9)]
+        );
+        for end in 28..bytes.len() {
+            assert!(matches!(Schema(&bytes[..end]).find(0, 42), Err(MALFORMED)));
+            assert!(matches!(
+                decode(&bytes[..end], &[], 0, &mut [], 100, 100, 4, 4096),
+                Err(MALFORMED)
+            ));
+        }
+        bytes[12..16].copy_from_slice(&u32::MAX.to_le_bytes());
+        assert!(matches!(Schema(&bytes).find(0, 42), Err(MALFORMED)));
+    }
+
     #[test]
     fn binary_view_proof_requires_compiler_facts_and_no_message_merges() {
         fn run(schema: &[u8], input: &[u8], cells: u64) -> (Result<Vec<Field>>, i32) {
