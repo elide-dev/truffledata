@@ -18,6 +18,8 @@ data_java_library(
     name = "json",
     srcs = [
         "src/main/java/dev/elide/truffledata/json/JsonMessage.java",
+        "src/main/java/dev/elide/truffledata/json/JsonScalarPlan.java",
+        "src/main/java/dev/elide/truffledata/json/JsonScalarRecord.java",
         "src/main/java/dev/elide/truffledata/json/JsonSvm.java",
         "src/main/java/dev/elide/truffledata/json/JsonValue.java",
         "src/main/java/dev/elide/truffledata/json/package-info.java",
@@ -25,6 +27,7 @@ data_java_library(
     visibility = ["//visibility:public"],
     deps = [
         ":bindings",
+        "//core",
         "@maven//:org_graalvm_sdk_nativeimage",
         "@maven//:org_graalvm_sdk_word",
         "@maven//:org_graalvm_truffle_truffle_api",

@@ -112,9 +112,14 @@ their plans. These operations explicitly retain normal VM transitions.
 
 Native ABI tests and ASan/UBSan cover malformed schemas, bounds, ownership, result
 reuse, and release order. Actual SVM acceptance calls generated typed bindings,
-closes the plan, and reads a slot through generated direct accessors. Connecting
-core Java schemas, generated schema-specific getters, and scoped JVM/SVM typed
-views remains outstanding, as do nested/repeated values and performance comparisons.
+closes the plan, and reads a slot through generated direct accessors. Core Java schemas now compile through `JsonScalarPlan.compile(schema)` into a
+reusable thread-confined SVM plan. `plan.decode(utf8)` returns a scoped
+`JsonScalarRecord`: primitive getters read native slots directly, while strings
+and unsigned `BigInteger` values materialize on request. Results outlive their
+plans and reject cross-thread and post-close reads. Unsupported nested, repeated,
+and general exact/decimal contracts are rejected explicitly. Generated
+schema-specific getters, JVM typed views, compiled guest acceptance, and
+performance comparisons remain outstanding.
 
 The shared `//bazel:unicode` simdutf library serves Rust Buffa conversion and C++
 JSON contracts. Counting decoded UTF-8 requires no intermediate UTF-16 buffer or

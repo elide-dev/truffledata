@@ -88,6 +88,75 @@ public final class SvmAcceptance {
     }
   }
 
+  private static void schemaTyped() throws InterruptedException {
+    var schema =
+        dev.elide.truffledata.Schema.of(
+            dev.elide.truffledata.Field.integer("n", 8, true, false, false),
+            new dev.elide.truffledata.Field(
+                "s",
+                dev.elide.truffledata.Field.Kind.STRING,
+                true,
+                true,
+                dev.elide.truffledata.Constraints.NONE.withLength(
+                    new dev.elide.truffledata.Constraints.Length(
+                        1, 1, dev.elide.truffledata.Constraints.LengthUnit.CODE_POINTS))),
+            dev.elide.truffledata.Field.integer("u", 64, false, false, false));
+    var plan = dev.elide.truffledata.json.JsonScalarPlan.compile(schema);
+    byte[] input =
+        "{\"n\":127,\"s\":\"😀\",\"u\":18446744073709551615}".getBytes(StandardCharsets.UTF_8);
+    var record = plan.decode(input);
+    Arrays.fill(input, (byte) 'x');
+    for (String bad :
+        new String[] {"{\"n\":128,\"u\":0}", "{\"n\":0,\"s\":\"ab\",\"u\":0}", "{\"n\":0}"}) {
+      try (var unexpected = plan.decode(bad.getBytes(StandardCharsets.UTF_8))) {
+        throw new AssertionError("Expected contract rejection");
+      } catch (IllegalArgumentException expected) {
+      }
+    }
+    try (var missing = plan.decode("{\"n\":0,\"u\":0}".getBytes(StandardCharsets.UTF_8))) {
+      require(!missing.isPresent(1));
+      require(missing.unsignedValue(2).signum() == 0);
+    }
+    try (var nullable =
+        plan.decode("{\"n\":0,\"s\":null,\"u\":1}".getBytes(StandardCharsets.UTF_8))) {
+      require(nullable.isPresent(1) && nullable.isNull(1));
+    }
+    plan.close();
+    require(record.longValue(0) == 127);
+    require(record.stringValue(1).equals("😀"));
+    require(record.unsignedValue(2).toString().equals("18446744073709551615"));
+    var rejected = new java.util.concurrent.atomic.AtomicInteger();
+    Thread other =
+        new Thread(
+            () -> {
+              try {
+                record.longValue(0);
+              } catch (IllegalStateException expected) {
+                rejected.incrementAndGet();
+              }
+              try {
+                record.close();
+              } catch (IllegalStateException expected) {
+                rejected.incrementAndGet();
+              }
+            });
+    other.start();
+    other.join();
+    require(rejected.get() == 2);
+    record.close();
+    record.close();
+    try {
+      record.longValue(0);
+      throw new AssertionError("Closed read");
+    } catch (IllegalStateException expected) {
+    }
+    try {
+      plan.decode(new byte[] {'0'});
+      throw new AssertionError("Closed plan");
+    } catch (IllegalStateException expected) {
+    }
+  }
+
   private static void typed() {
     VoidPointer fields = UnmanagedMemory.calloc(Json.JsonScalarField.SIZE);
     VoidPointer plan = UnmanagedMemory.calloc(Json.JsonPlan.SIZE);
@@ -135,6 +204,7 @@ public final class SvmAcceptance {
 
   public static void main(String[] args) throws InterruptedException {
     typed();
+    schemaTyped();
     scoped();
     require(CTypeConversion.toJavaString(Json.fingerprint()).equals(Json.ABI_FINGERPRINT));
     VoidPointer first = UnmanagedMemory.calloc(Json.JsonResult.SIZE);

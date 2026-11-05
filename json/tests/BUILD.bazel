@@ -7,6 +7,7 @@ java_library(
     testonly = True,
     srcs = ["SvmAcceptance.java"],
     deps = [
+        "//core",
         "//json",
         "//json:bindings",
         "@maven//:org_graalvm_sdk_nativeimage",
@@ -70,6 +71,7 @@ java_test(
     use_testrunner = False,
     runtime_deps = ["//bazel/junit:runner"],
     deps = [
+        "//core",
         "//json",
         "//json:bindings",
         "@maven//:org_junit_jupiter_junit_jupiter_api",

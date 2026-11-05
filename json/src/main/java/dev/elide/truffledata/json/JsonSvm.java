@@ -28,6 +28,23 @@ public final class JsonSvm {
     }
   }
 
+  static void requireRuntime() {
+    if (!ImageInfo.inImageRuntimeCode())
+      throw new UnsupportedOperationException("Static JSON requires SVM");
+    verifyAbi();
+  }
+
+  static void checkStatus(int status) {
+    switch (status) {
+      case 0 -> {}
+      case 1, 4, 6 ->
+          throw new IllegalArgumentException("Invalid JSON input or contract: " + status);
+      case 2 -> throw new IllegalArgumentException("JSON resource limit");
+      case 3 -> throw new OutOfMemoryError("JSON native allocation");
+      default -> throw new IllegalStateException("JSON native status " + status);
+    }
+  }
+
   /** Copies UTF-8 input into retained padded storage. Input must not mutate during this call. */
   @TruffleBoundary
   public static JsonMessage decode(byte[] utf8) {
