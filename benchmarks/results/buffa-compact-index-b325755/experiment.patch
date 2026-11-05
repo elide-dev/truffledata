@@ -1,0 +1,251 @@
+diff --git a/docs/BUFFA.md b/docs/BUFFA.md
+index b1c14fd..2be34bc 100644
+--- a/docs/BUFFA.md
++++ b/docs/BUFFA.md
+@@ -262,8 +262,16 @@ row fields before the next decode can reuse it.
+ Myna is pinned to the `0.8.0` source commit `42d7ab484bef7a944b374a4683922c0a10c4ec1c`.
+ Its generator, Java value readers (`@myna//:values`) and C++ ABI headers
+ (`@myna//:values_headers`) are separate Bazel targets. The value ABI is v3; it is
+-independent of the Buffa seam ABI, now v6 after adding reusable typed index storage
+-(v5 added Unicode conversion).
++independent of the Buffa seam ABI, now v7 with compact index entries
++(v5 added Unicode conversion; v6 added reusable typed index storage).
++
++An index entry is 24 bytes: field number/kind and payload length/subtree end are
++32-bit, while the scalar value or source offset remains 64-bit. Input regions and
++native allocation budgets are already limited to `Integer.MAX_VALUE`; therefore
++lengths and entry counts remain Java-indexable. Native length conversion checks
++this bound, and Java still checks nonnegative lengths and subtree extents. This
++reduces entry storage by 25% without narrowing accepted inputs or scalar values.
++Generated fingerprints reject libraries with the previous 32-byte layout.
+ 
+ Typed decoding reuses a backend-owned native index allocation between calls. Java
+ materialization completes before the index becomes reusable; returned messages retain
+diff --git a/protobuf-buffa/native/buffa.seam b/protobuf-buffa/native/buffa.seam
+index 5d72b9f..9016a8a 100644
+--- a/protobuf-buffa/native/buffa.seam
++++ b/protobuf-buffa/native/buffa.seam
+@@ -1,10 +1,10 @@
+-module truffledata_buffa abi=6 target=x86_64-unknown-linux-gnu java_package=dev.elide.truffledata.buffa.generated java_class=Buffa c_library=truffledata_buffa c_library_static=true
+-struct Field size=32 align=8
++module truffledata_buffa abi=7 target=x86_64-unknown-linux-gnu java_package=dev.elide.truffledata.buffa.generated java_class=Buffa c_library=truffledata_buffa c_library_static=true
++struct Field size=24 align=8
+   field number type=u32 offset=0
+   field wire type=u32 offset=4
+   field value type=u64 offset=8
+-  field length type=u64 offset=16
+-  field end type=u64 offset=24
++  field length type=u32 offset=16
++  field end type=u32 offset=20
+ end
+ struct Result size=24 align=8
+   field data type=ptr<u8> offset=0
+diff --git a/protobuf-buffa/native/lib.rs b/protobuf-buffa/native/lib.rs
+index 29aa467..1946fd4 100644
+--- a/protobuf-buffa/native/lib.rs
++++ b/protobuf-buffa/native/lib.rs
+@@ -23,6 +23,13 @@ const PANIC: i32 = 4;
+ use seam::Field;
+ const FIELD_BYTES: usize = mem::size_of::<Field>();
+ 
++// Both native memory and input regions are bounded by i32::MAX at the ABI. Keep
++// lengths Java-indexable even for internal callers; subtree ends are bounded by
++// the maximum index allocation (i32::MAX / FIELD_BYTES entries).
++fn index_length(length: u64) -> Result<u32, i32> {
++    i32::try_from(length).map(|n| n as u32).map_err(|_| BUDGET)
++}
++
+ struct Parser<'a> {
+     input: &'a [u8],
+     remaining: &'a [u8],
+@@ -101,14 +108,14 @@ impl<'a> Parser<'a> {
+                     }
+                     self.charge(length)?;
+                     self.fields[index].value = (self.input.len() - self.remaining.len()) as u64;
+-                    self.fields[index].length = length;
++                    self.fields[index].length = index_length(length)?;
+                     // Borrow; never allocate/copy the payload.
+                     let _borrow = self.take(length as usize)?;
+                 }
+                 WireType::StartGroup => self.group(tag.field_number(), depth + 1)?,
+                 _ => return Err(MALFORMED),
+             }
+-            self.fields[index].end = self.fields.len() as u64;
++            self.fields[index].end = self.fields.len() as u32;
+         }
+         if number != 0 { Err(MALFORMED) } else { Ok(()) }
+     }
+@@ -411,6 +418,21 @@ seam::assert_implementations!(seam);
+ #[cfg(test)]
+ mod tests {
+     use super::*;
++    #[test]
++    fn compact_index_extents_are_java_indexable() {
++        assert_eq!(FIELD_BYTES, 24);
++        assert_eq!(index_length(0), Ok(0));
++        assert_eq!(index_length(i32::MAX as u64), Ok(i32::MAX as u32));
++        for length in [i32::MAX as u64 + 1, u32::MAX as u64, u64::MAX] {
++            assert_eq!(index_length(length), Err(BUDGET));
++        }
++        // A precisely one-entry budget accepts one scalar, and never its successor.
++        let bytes = FIELD_BYTES as u64;
++        assert_eq!(parse(&[8, 1], 100, 8, bytes).unwrap().capacity(), 1);
++        assert_eq!(parse(&[8, 1, 8, 2], 100, 8, bytes).err(), Some(BUDGET));
++        assert!(i32::MAX as usize / FIELD_BYTES < i32::MAX as usize);
++    }
++
+     #[test]
+     fn borrowed_payload_and_unsigned_values() {
+         let input = [8, 150, 1, 18, 3, 1, 2, 3, 29, 255, 255, 255, 255];
+@@ -422,7 +444,7 @@ mod tests {
+             &[1, 2, 3]
+         );
+         assert_eq!(fields[2].value, u32::MAX as u64);
+-        assert!(fields.capacity() * 32 <= 1024);
++        assert!(fields.capacity() * FIELD_BYTES <= 1024);
+     }
+     #[test]
+     fn groups_and_budgets() {
+@@ -431,7 +453,10 @@ mod tests {
+         assert_eq!(fields[2].number, 3);
+         assert_eq!(parse(&[11, 16, 1, 12], 100, 1, 1024).err().unwrap(), BUDGET);
+         assert_eq!(parse(&[8, 1], 3, 1, 1024).err().unwrap(), BUDGET);
+-        assert_eq!(parse(&[8, 1], 4, 1, 31).err().unwrap(), BUDGET);
++        assert_eq!(
++            parse(&[8, 1], 4, 1, FIELD_BYTES as u64 - 1).err().unwrap(),
++            BUDGET
++        );
+         assert_eq!(parse(&[18, 2, 0, 0], 5, 1, 1024).err().unwrap(), BUDGET);
+     }
+     #[test]
+diff --git a/protobuf-buffa/native/typed.rs b/protobuf-buffa/native/typed.rs
+index 76ff808..3ba9d4e 100644
+--- a/protobuf-buffa/native/typed.rs
++++ b/protobuf-buffa/native/typed.rs
+@@ -164,8 +164,8 @@ impl<'a, 'b> Decoder<'a, 'b> {
+             number: f.ordinal + 1,
+             wire: f.kind()?,
+             value,
+-            length,
+-            end: (i + 1) as u64,
++            length: super::index_length(length)?,
++            end: (i + 1) as u32,
+         });
+         Ok(i)
+     }
+@@ -233,8 +233,8 @@ impl<'a, 'b> Decoder<'a, 'b> {
+                 } else {
+                     self.binary(f.word(12)?, input, number, depth + 1)?
+                 };
+-                self.fields[i].length = invalid as u64;
+-                self.fields[i].end = self.fields.len() as u64;
++                self.fields[i].length = invalid as u32;
++                self.fields[i].end = self.fields.len() as u32;
+             } else if kind == 9 || kind == 12 {
+                 let bytes = take_bytes(input)?;
+                 self.bytes(kind, bytes)?;
+@@ -347,7 +347,7 @@ impl<'a, 'b> Decoder<'a, 'b> {
+             }
+             let i = self.push(f, 0, 0)?;
+             self.text(f.word(12)?, tokens, depth + 1, true)?;
+-            self.fields[i].end = self.fields.len() as u64;
++            self.fields[i].end = self.fields.len() as u32;
+         } else {
+             if token.kind != TokenKind::Scalar {
+                 return Err(MALFORMED);
+diff --git a/protobuf-buffa/native/typed_json.rs b/protobuf-buffa/native/typed_json.rs
+index 051fd60..f609b7e 100644
+--- a/protobuf-buffa/native/typed_json.rs
++++ b/protobuf-buffa/native/typed_json.rs
+@@ -159,7 +159,7 @@ impl<'a, 'b> Decoder<'a, 'b> {
+         if kind == 10 || kind == 11 {
+             let i = self.push(f, 0, 0)?;
+             self.json_object(f.word(12)?, json, depth + 1, false)?;
+-            self.fields[i].end = self.fields.len() as u64;
++            self.fields[i].end = self.fields.len() as u32;
+             return Ok(());
+         }
+         let quoted = json.text.as_bytes().get(json.at) == Some(&b'"');
+@@ -244,7 +244,7 @@ impl<'a, 'b> Decoder<'a, 'b> {
+             }
+             json.need(b':')?;
+             self.json_value(self.schema.field(ty, 1)?, json, depth + 1, true)?;
+-            self.fields[i].end = self.fields.len() as u64;
++            self.fields[i].end = self.fields.len() as u32;
+             if json.eat(b'}') {
+                 break;
+             }
+diff --git a/protobuf-buffa/native/typed_wkt.rs b/protobuf-buffa/native/typed_wkt.rs
+index 4453973..e486bf1 100644
+--- a/protobuf-buffa/native/typed_wkt.rs
++++ b/protobuf-buffa/native/typed_wkt.rs
+@@ -70,7 +70,7 @@ impl<'a, 'b> Decoder<'a, 'b> {
+                         let f = self.numbered(ty, 1)?;
+                         let i = self.push(f, 0, 0)?;
+                         self.json_object(f.word(12)?, json, depth + 1, false)?;
+-                        self.fields[i].end = self.fields.len() as u64;
++                        self.fields[i].end = self.fields.len() as u32;
+                         if json.eat(b']') {
+                             break;
+                         }
+@@ -201,7 +201,7 @@ impl<'a, 'b> Decoder<'a, 'b> {
+                 return Err(MALFORMED);
+             }
+         }
+-        self.fields[i].end = self.fields.len() as u64;
++        self.fields[i].end = self.fields.len() as u32;
+         Ok(())
+     }
+ }
+diff --git a/protobuf-buffa/src/main/java/dev/elide/truffledata/buffa/BuffaPlan.java b/protobuf-buffa/src/main/java/dev/elide/truffledata/buffa/BuffaPlan.java
+index 770cd99..4bf4961 100644
+--- a/protobuf-buffa/src/main/java/dev/elide/truffledata/buffa/BuffaPlan.java
++++ b/protobuf-buffa/src/main/java/dev/elide/truffledata/buffa/BuffaPlan.java
+@@ -273,7 +273,7 @@ public final class BuffaPlan implements AutoCloseable {
+         for (int cursor = index; cursor < end; ) {
+           int at = Math.multiplyExact(cursor, Buffa.Field.SIZE);
+           int number = tape.bytes.getInt(at + (int) BuffaFFM.Field_number_OFFSET);
+-          int next = Math.toIntExact(tape.bytes.getLong(at + (int) BuffaFFM.Field_end_OFFSET));
++          int next = tape.bytes.getInt(at + (int) BuffaFFM.Field_end_OFFSET);
+           if (next <= cursor || next > end)
+             throw new IllegalStateException("Invalid repeated index");
+           if (number != ordinal + 1) break;
+@@ -355,8 +355,8 @@ public final class BuffaPlan implements AutoCloseable {
+         int ordinal = tape.bytes.getInt(at + (int) BuffaFFM.Field_number_OFFSET) - 1;
+         int kind = tape.bytes.getInt(at + (int) BuffaFFM.Field_wire_OFFSET);
+         long value = tape.bytes.getLong(at + (int) BuffaFFM.Field_value_OFFSET);
+-        int length = Math.toIntExact(tape.bytes.getLong(at + (int) BuffaFFM.Field_length_OFFSET));
+-        int next = Math.toIntExact(tape.bytes.getLong(at + (int) BuffaFFM.Field_end_OFFSET));
++        int length = tape.bytes.getInt(at + (int) BuffaFFM.Field_length_OFFSET);
++        int next = tape.bytes.getInt(at + (int) BuffaFFM.Field_end_OFFSET);
+         if (ordinal < 0 || ordinal >= plan.size() || next <= index || next > end || length < 0)
+           throw new IllegalStateException("Invalid native typed index");
+         var f = plan.field(ordinal);
+diff --git a/protobuf-buffa/src/main/java/dev/elide/truffledata/buffa/BuffaWire.java b/protobuf-buffa/src/main/java/dev/elide/truffledata/buffa/BuffaWire.java
+index 446eb63..374159c 100644
+--- a/protobuf-buffa/src/main/java/dev/elide/truffledata/buffa/BuffaWire.java
++++ b/protobuf-buffa/src/main/java/dev/elide/truffledata/buffa/BuffaWire.java
+@@ -210,10 +210,10 @@ public final class BuffaWire implements AutoCloseable {
+       int offset = index * Buffa.Field.SIZE;
+       int number = tape.bytes.getInt(offset + (int) BuffaFFM.Field_number_OFFSET),
+           wire = tape.bytes.getInt(offset + (int) BuffaFFM.Field_wire_OFFSET);
+-      long value = tape.bytes.getLong(offset + (int) BuffaFFM.Field_value_OFFSET),
+-          length = tape.bytes.getLong(offset + (int) BuffaFFM.Field_length_OFFSET);
+-      int next = Math.toIntExact(tape.bytes.getLong(offset + (int) BuffaFFM.Field_end_OFFSET));
+-      if (next <= index || next > end)
++      long value = tape.bytes.getLong(offset + (int) BuffaFFM.Field_value_OFFSET);
++      int length = tape.bytes.getInt(offset + (int) BuffaFFM.Field_length_OFFSET);
++      int next = tape.bytes.getInt(offset + (int) BuffaFFM.Field_end_OFFSET);
++      if (next <= index || next > end || length < 0)
+         throw new IllegalStateException("Invalid native field index");
+       Object decoded =
+           switch (wire) {
+@@ -222,7 +222,7 @@ public final class BuffaWire implements AutoCloseable {
+                     ? value
+                     : Values.normalize(BigInteger.valueOf(value & Long.MAX_VALUE).setBit(63));
+             case 5 -> value;
+-            case 2 -> new BorrowedBytes(message, Math.toIntExact(value), Math.toIntExact(length));
++            case 2 -> new BorrowedBytes(message, Math.toIntExact(value), length);
+             case 3 -> materialize(message, tape, index + 1, next, limits);
+             default -> throw new IllegalStateException("Invalid native wire type");
+           };

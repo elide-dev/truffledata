@@ -939,3 +939,24 @@ recursive, merged-message, map-default, and registered Any cases.
 
 The coverage cycle and access-method gate pass: 315/333 BuffaPlan lines and
 22/22 methods, with 65/65 TypedRow lines and 17/17 methods covered.
+
+## Compact native index extents (unreleased ABI 7)
+
+Revision `b325755` reduces native index entries from 32 to 24 bytes by storing
+payload lengths and subtree ends as 32-bit values. Input regions and native
+allocation budgets already cap these at Java-indexable sizes; scalar values
+remain 64-bit. Rust checks length conversion, Java checks lengths/subtree bounds,
+and generated ABI fingerprints reject old layouts. Native boundary/budget tests,
+strict/non-strict JVM acceptance, SVM/fallback acceptance, and static published
+consumer tests pass. The change is not part of release 0.5.0.
+
+Two randomized five-fork cycles retain identical binaries:
+[first](../benchmarks/results/buffa-compact-index-b325755/paired.md) and
+[repeat](../benchmarks/results/buffa-compact-index-b325755/repeat/paired.md).
+The first run's mixed ingestion medians regress roughly 2–6%; the repeat is flat
+within 1%. Fork ranges overlap, and unchanged controls vary. There is **no
+demonstrated throughput improvement**. Projected Java allocation remains
+1727.75 bytes/op and full consumption 1854.25. The verified benefit is 25% less
+storage per native index entry (and per retained capacity slot), not a reduction
+in total message memory or Java allocations. The change is retained for that
+bounded native-memory saving; the raw results include the unfavorable first run.
