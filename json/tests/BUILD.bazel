@@ -7,6 +7,7 @@ java_library(
     testonly = True,
     srcs = ["SvmAcceptance.java"],
     deps = [
+        "//json",
         "//json:bindings",
         "@maven//:org_graalvm_sdk_nativeimage",
         "@maven//:org_graalvm_sdk_word",
@@ -69,6 +70,7 @@ java_test(
     use_testrunner = False,
     runtime_deps = ["//bazel/junit:runner"],
     deps = [
+        "//json",
         "//json:bindings",
         "@maven//:org_junit_jupiter_junit_jupiter_api",
     ],

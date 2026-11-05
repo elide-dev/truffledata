@@ -43,7 +43,53 @@ public final class SvmAcceptance {
     return tape;
   }
 
-  public static void main(String[] args) {
+  private static void scoped() throws InterruptedException {
+    byte[] input =
+        "{\"a\":[true, null, {\"s\":\"retained child\"}],\"n\":1e9999999999999999}"
+            .getBytes(StandardCharsets.UTF_8);
+    var message = dev.elide.truffledata.json.JsonSvm.decode(input);
+    var root = message.root();
+    var child = root.member("a").element(2).member("s");
+    Arrays.fill(input, (byte) 'x');
+    require(child.stringValue().equals("retained child"));
+    require(root.member("a").element(0).booleanValue());
+    require(root.member("n").numberText().equals("1e9999999999999999"));
+    java.util.concurrent.atomic.AtomicInteger rejected =
+        new java.util.concurrent.atomic.AtomicInteger();
+    Thread other =
+        new Thread(
+            () -> {
+              try {
+                child.stringValue();
+              } catch (IllegalStateException expected) {
+                rejected.incrementAndGet();
+              }
+              try {
+                message.close();
+              } catch (IllegalStateException expected) {
+                rejected.incrementAndGet();
+              }
+            });
+    other.start();
+    other.join();
+    require(rejected.get() == 2);
+    require(child.stringValue().equals("retained child"));
+    message.close();
+    message.close();
+    try {
+      child.stringValue();
+      throw new AssertionError("closed child readable");
+    } catch (IllegalStateException expected) {
+    }
+    try {
+      root.member("a");
+      throw new AssertionError("closed root readable");
+    } catch (IllegalStateException expected) {
+    }
+  }
+
+  public static void main(String[] args) throws InterruptedException {
+    scoped();
     require(CTypeConversion.toJavaString(Json.fingerprint()).equals(Json.ABI_FINGERPRINT));
     VoidPointer first = UnmanagedMemory.calloc(Json.JsonResult.SIZE);
     if (first.isNull()) throw new OutOfMemoryError();

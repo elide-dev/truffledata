@@ -14,6 +14,13 @@ import org.junit.jupiter.api.Test;
 
 final class FfmAcceptanceTest {
   @Test
+  void staticBackendRejectsJvmBeforeNativeAccess() {
+    assertThrows(
+        UnsupportedOperationException.class,
+        () -> dev.elide.truffledata.json.JsonSvm.decode(new byte[] {'{', '}'}));
+  }
+
+  @Test
   void generatedBindingsRetainNativeResultAfterInputCloses() throws Throwable {
     Path library =
         Path.of(

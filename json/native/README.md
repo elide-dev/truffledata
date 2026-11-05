@@ -36,8 +36,8 @@ Both the adapter and simdjson are instrumented by this invocation.
 
 This is an internal foundation, not yet a published Java API. Remaining work includes
 parser scratch accounting,
-native input leases, scoped
-views and snapshots, typed fixed slots, and compiled access/allocation gates.
+native input leases, JVM scoped views, snapshots, typed fixed slots, guest interop,
+and compiled access/allocation gates.
 Myna's current node/text/depth limits do not constitute a total native-memory budget.
 
 
@@ -68,3 +68,19 @@ retained input lifetime, exact numeric text, and release behavior. These are ABI
 integration tests, not yet scoped guest/JIT acceptance or performance comparisons.
 The existing native CI job explicitly includes the SVM target; JVM acceptance runs
 with the ordinary `//...` test suite.
+
+
+## Initial scoped SVM API
+
+`JsonSvm.decode(byte[])` copies UTF-8 input into a retained native document and
+returns a thread-confined `JsonMessage`. Its root and descendant `JsonValue` views
+check the message before each native read. Close is idempotent on the owning thread;
+cross-thread access and closure fail. Exact number text is preserved, including
+exponents beyond bounded decimal representations. The SVM integration test covers
+retained children, input mutation, thread rejection, and invalidation after close.
+The API compiles with the repository's NullAway/JSpecify and Truffle processors.
+
+This initial API uses ordinary lifetime checks; compiled guest specialization and
+assumption-based guards still need their own tests. Array lookup currently walks
+child subtrees and should not be treated as constant-time random access. Snapshots,
+interop exports, configurable Java limits, and the JVM scoped backend remain pending.

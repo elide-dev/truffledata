@@ -1,4 +1,5 @@
 load("@rules_java//java:defs.bzl", "java_library")
+load("//bazel:java.bzl", "data_java_library")
 
 java_library(
     name = "bindings",
@@ -7,5 +8,23 @@ java_library(
     deps = [
         "@maven//:org_graalvm_sdk_nativeimage",
         "@maven//:org_graalvm_sdk_word",
+    ],
+)
+
+data_java_library(
+    name = "json",
+    srcs = [
+        "src/main/java/dev/elide/truffledata/json/JsonMessage.java",
+        "src/main/java/dev/elide/truffledata/json/JsonSvm.java",
+        "src/main/java/dev/elide/truffledata/json/JsonValue.java",
+        "src/main/java/dev/elide/truffledata/json/package-info.java",
+    ],
+    visibility = ["//visibility:public"],
+    deps = [
+        ":bindings",
+        "@maven//:org_graalvm_sdk_nativeimage",
+        "@maven//:org_graalvm_sdk_word",
+        "@maven//:org_graalvm_truffle_truffle_api",
+        "@myna//:values",
     ],
 )
