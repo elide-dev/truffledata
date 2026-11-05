@@ -221,16 +221,23 @@ public final class BuffaPlan implements AutoCloseable {
     final boolean[] standardContracts;
     final Object[] defaults;
     final @Nullable TypeProfile[] children;
+    final long finishMask;
 
     TypeProfile(ProtoPlan plan) {
       stringReads = new boolean[plan.size()];
       standardContracts = new boolean[plan.size()];
       defaults = new Object[plan.size()];
       children = new TypeProfile[plan.size()];
+      long mask = 0;
       for (int i = 0; i < plan.size(); i++) {
         standardContracts[i] = plan.schema().field(i).equals(plan.field(i).contract());
         defaults[i] = State.initial(plan.field(i));
+        // These fields need work even when absent. Other standard defaults are already valid.
+        if (i < Long.SIZE
+            && (plan.field(i).required() || plan.field(i).repeated() || !standardContracts[i]))
+          mask |= 1L << i;
       }
+      finishMask = mask;
     }
   }
 
@@ -476,7 +483,16 @@ public final class BuffaPlan implements AutoCloseable {
         values[1] = new State(plan.nested(1), Objects.requireNonNull(hints.children[1]), context);
         present(1, true);
       }
-      for (int i = 0; i < values.length; i++) {
+      boolean sparse = !STRICT && values.length <= Long.SIZE;
+      long pending = presenceBits | hints.finishMask;
+      for (int cursor = 0; cursor < values.length; ) {
+        int i;
+        if (sparse) {
+          if (pending == 0) break;
+          i = Long.numberOfTrailingZeros(pending);
+          pending &= pending - 1;
+          cursor = i + 1;
+        } else i = cursor++;
         var field = plan.field(i);
         if (!STRICT && !present(i) && hints.standardContracts[i]) {
           if (field.required()) throw new ContractViolation("Missing required field");

@@ -995,3 +995,33 @@ the affinity with each result. Compare variants within the same affinity
 condition; do not combine the absolute timings from these two conditions.
 The prior experiments remain recorded with their original CPU 2–9 affinity,
 ranges, and uncertainty. The saved patch and binary hashes allow reproduction.
+
+### Sparse Buffa finalization
+
+The next experiment uses the existing presence bits to visit only present fields,
+plus absent required/repeated/nonstandard-contract fields, when a schema has at
+most 64 fields. Strict mode and larger schemas retain full traversal. A per-schema
+mask adds one `long`; per-message Java allocation is unchanged. Absent standard
+defaults were already validated at plan construction. Empty repeated values still
+receive the current message owner, and required fields still fail when absent.
+
+Two five-fork paired runs on unclemax pinned to CPU 2 measured mixed ingestion
+at **1723 → 1677 ns** and **1714 → 1666 ns**, with disjoint fork-median ranges.
+Generated-getter ingestion measured **1599 → 1568 ns** and **1607 → 1557 ns**;
+the first run's ranges overlap. Full consumption measured **2440 → 2387 ns** and
+**2421 → 2373 ns**, with disjoint ranges. Java allocation remains **1727.75 B**
+for projected ingestion and **1854.25 B** for full consumption; native storage is
+excluded. Stock remains around **642–655 ns**: the performance gap is still large.
+
+Unchanged controls retain some variation. Scalar ingestion bypasses this finish
+loop, so its observed improvement is not evidence of a direct benefit from the
+mask. These are small measured improvements, not universal speedup guarantees.
+Raw rows, exact binary hashes, candidate patch and provenance are retained in
+[`buffa-sparse-finish`](../benchmarks/results/buffa-sparse-finish/paired.md) and
+[its repeat](../benchmarks/results/buffa-sparse-finish/repeat/paired.md).
+
+Validation includes strict/non-strict JVM acceptance, strict SVM acceptance, and a
+new non-strict SVM image that executes the optimized path. Required empty binary
+input rejection is explicit; existing tests cover presence widths 0/1/63/64/65/129,
+oneofs, empty repeated ownership, nested merges and map defaults. CI and the full
+release publisher now run both strict and non-strict native acceptance.

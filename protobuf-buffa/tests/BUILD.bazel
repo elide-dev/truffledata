@@ -85,7 +85,7 @@ data_java_library(
         extra_args = [
             "--gc=serial",
             "-ea",
-            "-Dtruffledata.strict=true",
+            "-Dtruffledata.strict=" + strict,
             "--initialize-at-build-time=dev.elide.truffledata",
             "--parallelism=8",
             "-march=compatibility",
@@ -104,9 +104,10 @@ data_java_library(
             "@maven//:org_graalvm_truffle_truffle_runtime",
         ],
     )
-    for name, enabled in [
-        ("native", True),
-        ("fallback", False),
+    for name, enabled, strict in [
+        ("native", True, "true"),
+        ("native_non_strict", True, "false"),
+        ("fallback", False, "true"),
     ]
 ]
 
@@ -128,6 +129,7 @@ data_java_library(
     )
     for name, mode in [
         ("native", "native"),
+        ("native_non_strict", "native"),
         ("fallback", "java"),
     ]
 ]

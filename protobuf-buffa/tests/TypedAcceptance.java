@@ -745,8 +745,12 @@ final class TypedAcceptance {
         try (var parsed = compiled.parseText(text, NATIVE)) {
           equal(contract.parseText(text), parsed.row());
         }
-        if (name.equals("Required"))
+        if (name.equals("Required")) {
           Acceptance.rejects(() -> compiled.parseText("", NATIVE), ContractViolation.class);
+          try (var empty = decoder.allocate(0)) {
+            Acceptance.rejects(() -> compiled.decode(empty, NATIVE), ContractViolation.class);
+          }
+        }
         if (name.equals("Legacy")) {
           byte[] unknown = {24, 99, 34, 3, 1, 99, 2};
           try (var input = decoder.allocate(unknown.length).put(unknown);
