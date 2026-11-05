@@ -874,3 +874,16 @@ The robust result is eliminating warmed native index allocations, not a universa
 throughput gain. Projected Java allocation stays at 1727.75 bytes/op, excluding
 native memory. Stock ingestion remains around 665–668 ns in the candidate runs,
 so mixed-message Buffa ingestion still has a substantial performance gap.
+
+A refreshed symbolized SVM profile of this revision records four cells sequentially
+on unclemax. In the generic nested ingestion case, hardware self samples attribute
+16.31% to `State.consume`, 10.87% to `State.finish`, 11.35% to native binary parsing,
+and 6.23% to SVM's general object-clone routine. Direct buffer reads and checked
+long-to-int conversion account for another 9.48%. This supports targeting Java
+materialization next. Post-warmup JFR also places consume/finish first; its Java
+stacks cannot separate native work from the calling Java frame. Full consumption
+additionally spends substantial time in uncached library dispatch. These profiles
+are diagnostic, not timing scores; allocation sample counts are not byte totals.
+See the [hardware summary](../benchmarks/results/buffa-reuse-10592bd/perf-summary.json),
+[JFR summary](../benchmarks/results/buffa-reuse-10592bd/profile-summary.json), and
+[artifact hashes](../benchmarks/results/buffa-reuse-10592bd/profile-artifacts.sha256).

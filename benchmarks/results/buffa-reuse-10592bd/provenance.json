@@ -18,5 +18,13 @@
     "Native allocation-probe tests establish allocation-free warmed index reuse, not allocation-free full Java message decoding.",
     "Generated-getter ingestion medians improve 5\u20139%, but fork ranges overlap; generic ingestion and full consumption do not establish a consistent substantial speedup."
   ],
-  "coverage": "https://app.buildbuddy.io/invocation/69347451-19b8-4c0d-9b7a-e5e2e4e9bd5a"
+  "coverage": "https://app.buildbuddy.io/invocation/69347451-19b8-4c0d-9b7a-e5e2e4e9bd5a",
+  "profile_build": "https://app.buildbuddy.io/invocation/50fc6681-4f82-4616-865b-39f32b4d4fa5",
+  "profile_source_commit": "a495a4c",
+  "profile_notes": [
+    "Separate symbolized SVM image; profile timings are not benchmark scores.",
+    "JFR begins after warmup; perf includes process startup. Four cells run sequentially on CPUs 2-9.",
+    "All hardware recordings report zero lost samples. Allocation event counts are not allocated-byte estimates.",
+    "Raw recordings and reports remain in remote_artifacts/profiles; local hashes identify every artifact."
+  ]
 }
