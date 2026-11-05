@@ -16,6 +16,7 @@ final class SvmBackend implements BuffaWire.Backend {
   private final BuffaWire.Scalars scalarValues = new BuffaWire.Scalars();
   private final Runnable releaseAction = this::releaseResult;
   private final Runnable retainAction = this::retainResult;
+  private final java.util.function.Supplier<Runnable> detachAction = this::detachResult;
   private boolean closed;
 
   private VoidPointer acquireResult() {
@@ -35,6 +36,35 @@ final class SvmBackend implements BuffaWire.Backend {
     if (!busy) throw new IllegalStateException("Native result already released");
     cached = true;
     busy = false;
+  }
+
+  private Runnable detachResult() {
+    if (!busy || closed) throw new IllegalStateException("Native result unavailable");
+    VoidPointer owned = UnmanagedMemory.calloc(Buffa.Result.SIZE);
+    if (owned.isNull()) throw new OutOfMemoryError("Native result ownership allocation");
+    long address = owned.rawValue();
+    Runnable cleanup;
+    try {
+      cleanup =
+          () -> {
+            VoidPointer result = WordFactory.pointer(address);
+            Buffa.release(result);
+            UnmanagedMemory.free(result);
+          };
+    } catch (RuntimeException | Error failure) {
+      UnmanagedMemory.free(owned);
+      throw failure;
+    }
+    VoidPointer source = WordFactory.pointer(resultAddress);
+    Buffa.Result.data(owned, Buffa.Result.data(source));
+    Buffa.Result.count(owned, Buffa.Result.count(source));
+    Buffa.Result.capacity(owned, Buffa.Result.capacity(source));
+    Buffa.Result.data(source, WordFactory.nullPointer());
+    Buffa.Result.count(source, 0);
+    Buffa.Result.capacity(source, 0);
+    cached = false;
+    busy = false;
+    return cleanup;
   }
 
   static final class Factory implements BuffaWire.NativeFactory {
@@ -130,7 +160,7 @@ final class SvmBackend implements BuffaWire.Backend {
               : CTypeConversion.asByteBuffer(
                   Buffa.Result.data(result),
                   Math.toIntExact(Math.multiplyExact(count, Buffa.Field.SIZE)));
-      return new BuffaWire.Tape(bytes, count, capacity, retainAction);
+      return new BuffaWire.Tape(bytes, count, capacity, retainAction, detachAction);
     } catch (RuntimeException | Error failure) {
       releaseResult();
       throw failure;

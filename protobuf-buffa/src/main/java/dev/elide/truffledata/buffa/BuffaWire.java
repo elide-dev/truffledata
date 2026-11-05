@@ -11,6 +11,7 @@ import java.math.BigInteger;
 import java.nio.*;
 import java.nio.file.*;
 import java.util.*;
+import java.util.function.Supplier;
 import org.graalvm.nativeimage.*;
 import org.jspecify.annotations.Nullable;
 
@@ -259,18 +260,44 @@ public final class BuffaWire implements AutoCloseable {
     final ByteBuffer bytes;
     final int count;
     final long allocated;
-    private final Runnable release;
+    private @Nullable Runnable release;
+    private @Nullable Supplier<Runnable> detacher;
 
     Tape(ByteBuffer bytes, long count, long capacity, Runnable release) {
+      this(bytes, count, capacity, release, null);
+    }
+
+    Tape(
+        ByteBuffer bytes,
+        long count,
+        long capacity,
+        Runnable release,
+        @Nullable Supplier<Runnable> detacher) {
+      this.detacher = detacher;
       this.bytes = bytes.order(ByteOrder.nativeOrder());
       this.count = Math.toIntExact(count);
       allocated = Math.multiplyExact(capacity, Buffa.Field.SIZE);
       this.release = release;
     }
 
+    /** Transfer the native allocation out of decoder scratch without copying index entries. */
+    Tape detach() {
+      if (release == null) throw new IllegalStateException("Native index closed");
+      var transfer = detacher;
+      if (transfer == null) throw new IllegalStateException("Native index cannot be transferred");
+      release = transfer.get();
+      detacher = null;
+      return this;
+    }
+
     @Override
     public void close() {
-      release.run();
+      var action = release;
+      if (action != null) {
+        release = null;
+        detacher = null;
+        action.run();
+      }
     }
   }
 }

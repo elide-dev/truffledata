@@ -19,12 +19,15 @@ final class FfmBackend implements BuffaWire.Backend {
   private final MemorySegment result;
   private boolean busy;
   private boolean cached;
+  private boolean closed;
+  private int detached;
+  private final java.util.function.Supplier<Runnable> detachAction = this::detachResult;
   private final BuffaWire.Scalars scalarValues = new BuffaWire.Scalars();
   private final Runnable releaseAction = this::releaseResult;
   private final Runnable retainAction = this::retainResult;
 
   private MemorySegment acquireResult() {
-    if (busy || !libraryArena.scope().isAlive())
+    if (closed || busy || !libraryArena.scope().isAlive())
       throw new IllegalStateException("Native backend unavailable");
     busy = true;
     return result;
@@ -44,6 +47,33 @@ final class FfmBackend implements BuffaWire.Backend {
     if (!busy) throw new IllegalStateException("Native result already released");
     cached = true;
     busy = false;
+  }
+
+  private Runnable detachResult() {
+    if (!busy || closed) throw new IllegalStateException("Native result unavailable");
+    Arena owner = Arena.ofConfined();
+    try {
+      MemorySegment owned = owner.allocate(BuffaFFM.Result_LAYOUT);
+      owned.copyFrom(result);
+      Runnable cleanup =
+          () -> {
+            try {
+              free(owned);
+            } finally {
+              owner.close();
+              detached--;
+              if (closed && detached == 0) libraryArena.close();
+            }
+          };
+      result.fill((byte) 0);
+      detached++;
+      cached = false;
+      busy = false;
+      return cleanup;
+    } catch (RuntimeException | Error failure) {
+      owner.close();
+      throw failure;
+    }
   }
 
   FfmBackend(Path library) {
@@ -176,7 +206,7 @@ final class FfmBackend implements BuffaWire.Backend {
                       libraryArena,
                       null)
                   .asByteBuffer();
-      return new BuffaWire.Tape(tape, count, capacity, retainAction);
+      return new BuffaWire.Tape(tape, count, capacity, retainAction, detachAction);
     } catch (RuntimeException | Error failure) {
       releaseResult();
       throw failure;
@@ -233,7 +263,10 @@ final class FfmBackend implements BuffaWire.Backend {
   @Override
   public void close() {
     if (busy) throw new IllegalStateException("Native result still in use");
-    if (libraryArena.scope().isAlive()) free(result);
-    libraryArena.close();
+    if (!closed) {
+      free(result);
+      closed = true;
+      if (detached == 0) libraryArena.close();
+    }
   }
 }
