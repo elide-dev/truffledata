@@ -58,7 +58,11 @@ final class FfmBackend implements BuffaWire.Backend {
       Runnable cleanup =
           () -> {
             try {
-              free(owned);
+              if (!closed && !busy && !cached) {
+                result.copyFrom(owned);
+                owned.fill((byte) 0);
+                cached = true;
+              } else free(owned);
             } finally {
               owner.close();
               detached--;

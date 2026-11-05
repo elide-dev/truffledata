@@ -48,7 +48,13 @@ final class SvmBackend implements BuffaWire.Backend {
       cleanup =
           () -> {
             VoidPointer result = WordFactory.pointer(address);
-            Buffa.release(result);
+            if (!closed && !busy && !cached) {
+              VoidPointer scratch = WordFactory.pointer(resultAddress);
+              Buffa.Result.data(scratch, Buffa.Result.data(result));
+              Buffa.Result.count(scratch, Buffa.Result.count(result));
+              Buffa.Result.capacity(scratch, Buffa.Result.capacity(result));
+              cached = true;
+            } else Buffa.release(result);
             UnmanagedMemory.free(result);
           };
     } catch (RuntimeException | Error failure) {

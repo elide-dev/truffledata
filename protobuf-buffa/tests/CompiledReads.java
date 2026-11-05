@@ -71,6 +71,7 @@ final class CompiledReads {
       context.initialize("buffa-test");
       context.enter();
       try {
+        nativeViewReads(decoder);
         generatedReads(decoder);
         generatedOwnedReads();
         generatedProjection();
@@ -80,7 +81,7 @@ final class CompiledReads {
             try (var typedInput = decoder.allocate(3).put(new byte[] {26, 1, (byte) 255});
                 var typed =
                     format == 0
-                        ? plan.decode(typedInput, 4096)
+                        ? TypedAcceptance.decode(plan, typedInput, 4096)
                         : format == 1
                             ? plan.parseText("blob: '\\377'", 4096)
                             : plan.parseJson("{\"blob\":\"/w==\"}", 4096)) {
@@ -429,6 +430,46 @@ final class CompiledReads {
       if (CompilerDirectives.inInterpreter()) LoopNode.reportLoopCount(this, count);
       compiled |= CompilerDirectives.inCompiledCode();
       return sum;
+    }
+  }
+
+  private static void nativeViewReads(BuffaWire decoder) {
+    var sample = TypedAcceptance.plan("Sample");
+    var fields = java.util.List.of(sample.field(0), sample.field(1), sample.field(2));
+    var contract =
+        new dev.elide.truffledata.protobuf.ProtoPlan.Model(
+                null,
+                java.util.List.of(
+                    new dev.elide.truffledata.protobuf.ProtoPlan.Type("ViewBytes", false, fields)),
+                Limits.DEFAULT,
+                16,
+                4096)
+            .type("ViewBytes");
+    try (var plan = decoder.compile(contract, 65536);
+        var input = decoder.allocate(6).put(new byte[] {8, (byte) 0xe8, 7, 26, 1, (byte) 255});
+        var message = plan.decodeView(input, 4096)) {
+      Acceptance.check(
+          message.nativeBacked() == (decoder.selected() != BuffaWire.Selected.JAVA),
+          "compiled native view selected");
+      Object row = message.row();
+      var bytes = new ReadRoot();
+      var byteTarget = bytes.getCallTarget();
+      var integer = new WktRoot(false);
+      var integerTarget = integer.getCallTarget();
+      for (int i = 0; i < 200 && (!bytes.compiled || !integer.compiled); i++) {
+        byteTarget.call(row, 100_000);
+        integerTarget.call(row, 100_000);
+      }
+      Acceptance.check(bytes.compiled && integer.compiled, "native view reads compiled");
+      Acceptance.check((Long) byteTarget.call(row, 1000) == 255_000L, "native view byte value");
+      Acceptance.check(
+          (Long) integerTarget.call(row, 1000) == 1_000_000L, "native view primitive value");
+      Acceptance.check(
+          NodeUtil.countNodes(bytes) <= 192 && NodeUtil.countNodes(integer) <= 192,
+          "native view AST budget");
+      message.close();
+      Acceptance.rejects(() -> byteTarget.call(row, 1), IllegalStateException.class);
+      Acceptance.rejects(() -> integerTarget.call(row, 1), IllegalStateException.class);
     }
   }
 

@@ -71,6 +71,8 @@ public final class Comparison {
     }
   }
 
+  private static final boolean NATIVE_VIEWS = Boolean.getBoolean("truffledata.buffa.views");
+
   static List<String> engines(String workload) {
     if (workload.equals("proto-bytes"))
       return List.of("stock", "stock-aliased", "owned", "buffa", "generated-owned");
@@ -241,12 +243,13 @@ public final class Comparison {
         fixture.tier(peak);
         System.out.printf(
             Locale.ROOT,
-            "{\"workload\":\"%s\",\"engine\":\"%s\",\"stage\":\"%s\",\"runtime\":\"%s\",\"backend\":\"%s\",\"guest_compiled\":%s,\"rows\":%d,\"checksum\":%d,\"%s\":%s}%n",
+            "{\"workload\":\"%s\",\"engine\":\"%s\",\"stage\":\"%s\",\"runtime\":\"%s\",\"backend\":\"%s\",\"native_views_requested\":%s,\"guest_compiled\":%s,\"rows\":%d,\"checksum\":%d,\"%s\":%s}%n",
             workload,
             engine,
             stage,
             ImageInfo.inImageRuntimeCode() ? "svm" : "jvm",
             fixture.decoder == null ? "none" : fixture.decoder.selected(),
+            NATIVE_VIEWS,
             peak,
             ROWS,
             fixture.expected,
@@ -419,6 +422,8 @@ public final class Comparison {
         if (decoder != null) {
           inputs[i] = decoder.allocate(wire[i].length).put(wire[i]);
           messages[i] = parseNative(i);
+          if (NATIVE_VIEWS && mixed && !Objects.requireNonNull(messages[i]).nativeBacked())
+            throw new AssertionError("Mixed native-view benchmark fell back to eager decoding");
           rows[i] = Objects.requireNonNull(messages[i]).row();
         } else rows[i] = parse(i);
       }
@@ -457,7 +462,11 @@ public final class Comparison {
     TypedMessage parseNative(int i) {
       return workload.equals("timestamp-json")
           ? Objects.requireNonNull(nativePlan).parseJson(json[i], 1 << 20)
-          : Objects.requireNonNull(nativePlan).decode(Objects.requireNonNull(inputs[i]), 1 << 20);
+          : NATIVE_VIEWS
+              ? Objects.requireNonNull(nativePlan)
+                  .decodeView(Objects.requireNonNull(inputs[i]), 1 << 20)
+              : Objects.requireNonNull(nativePlan)
+                  .decode(Objects.requireNonNull(inputs[i]), 1 << 20);
     }
 
     long project(int rotation) {

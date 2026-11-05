@@ -18,7 +18,38 @@ public final class NativeTapeAcceptance {
     var plan =
         new ProtoPlan.Model(
                 null,
-                List.of(new ProtoPlan.Type("Retained", false, List.of(field))),
+                List.of(
+                    new ProtoPlan.Type(
+                        "Retained",
+                        false,
+                        List.of(
+                            field,
+                            new ProtoPlan.FieldPlan(
+                                "second",
+                                2,
+                                ProtoPlan.Kind.INT32,
+                                false,
+                                false,
+                                true,
+                                false,
+                                false,
+                                -1,
+                                "",
+                                null,
+                                0L),
+                            new ProtoPlan.FieldPlan(
+                                "third",
+                                3,
+                                ProtoPlan.Kind.INT32,
+                                false,
+                                false,
+                                true,
+                                false,
+                                false,
+                                -1,
+                                "",
+                                null,
+                                0L)))),
                 Limits.DEFAULT,
                 16,
                 65536)
@@ -31,7 +62,10 @@ public final class NativeTapeAcceptance {
         var first = decoder.allocate(2).put(new byte[] {8, 42});
         var second = decoder.allocate(2).put(new byte[] {8, 99})) {
       var backend = Objects.requireNonNull(decoder.backend);
-      try (var retained = backend.typed(schema, first, 0, empty, plan, 65536).detach()) {
+      try (var compiled = decoder.compile(plan, 65536);
+          var view = compiled.decodeView(first, 65536);
+          var retained = backend.typed(schema, first, 0, empty, plan, 65536).detach()) {
+        if (!view.nativeBacked()) throw new AssertionError("native view selected");
         byte[] expected = new byte[retained.bytes.capacity()];
         retained.bytes.get(0, expected);
         for (int i = 0; i < 8; i++) {
@@ -41,6 +75,7 @@ public final class NativeTapeAcceptance {
         }
         try (var other = backend.typed(schema, second, 0, empty, plan, 65536).detach()) {
           decoder.close();
+          if (view.row().getLong(0) != 42) throw new AssertionError("view after decoder close");
           for (int i = 0; i < expected.length; i++)
             if (retained.bytes.get(i) != expected[i])
               throw new AssertionError("retained index changed");

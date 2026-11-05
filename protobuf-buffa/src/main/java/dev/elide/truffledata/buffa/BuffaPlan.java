@@ -18,6 +18,7 @@ public final class BuffaPlan implements AutoCloseable {
   private final ProtoPlan plan;
   private final ReadProfile profile;
   private final boolean compactScalars;
+  private final boolean nativeViews;
   private final List<ProtoPlan> anyTypes;
   private final WireInput schema;
   private final WireInput empty;
@@ -30,6 +31,7 @@ public final class BuffaPlan implements AutoCloseable {
     var types = NativeSchema.types(plan, this.anyTypes, maxSchemaBytes);
     byte[] program = NativeSchema.encode(types, this.anyTypes, maxSchemaBytes);
     profile = new ReadProfile(types);
+    nativeViews = NativeRow.supports(types);
     boolean compact = plan.size() > 0 && plan.size() <= 2;
     for (int i = 0; i < plan.size(); i++) {
       var field = plan.field(i);
@@ -64,7 +66,19 @@ public final class BuffaPlan implements AutoCloseable {
   @TruffleBoundary
   public TypedMessage decode(WireInput input, int maxNativeBytes) {
     check();
-    return parse(input, empty, 0, maxNativeBytes);
+    return parse(input, empty, 0, maxNativeBytes, false);
+  }
+
+  /**
+   * Request an owned native-index view. Binary standard schemas use lazy Java wrappers; unsupported
+   * shapes and singular-message merges retain the eager semantics-preserving path. The native
+   * budget includes the detached result header. Scalar-only plans retain their smaller inline
+   * representation.
+   */
+  @TruffleBoundary
+  public TypedMessage decodeView(WireInput input, int maxNativeBytes) {
+    check();
+    return parse(input, empty, 0, maxNativeBytes, true);
   }
 
   @TruffleBoundary
@@ -88,11 +102,12 @@ public final class BuffaPlan implements AutoCloseable {
     byte[] utf8 = text.getBytes(StandardCharsets.UTF_8);
     try (var input = decoder.allocate(utf8.length).put(utf8);
         var payload = decoder.allocate(Math.multiplyExact(utf8.length, 2))) {
-      return parse(input, payload, format, nativeBytes);
+      return parse(input, payload, format, nativeBytes, false);
     }
   }
 
-  private TypedMessage parse(WireInput input, WireInput payload, int format, int nativeBytes) {
+  private TypedMessage parse(
+      WireInput input, WireInput payload, int format, int nativeBytes, boolean view) {
     if (nativeBytes < 0 || input.size() > plan.maxWireBytes())
       throw new ContractViolation("Typed input budget");
     WireInput.Lease source = input.retain();
@@ -114,7 +129,32 @@ public final class BuffaPlan implements AutoCloseable {
       }
       if (format == 0 && compactScalars)
         return compact(owner, backend.scalars(schema, input, plan));
-      try (var tape = backend.typed(schema, input, format, payload, plan, nativeBytes)) {
+      boolean useView = view && nativeViews && format == 0 && nativeBytes >= Buffa.Result.SIZE;
+      var tape =
+          backend.typed(
+              schema,
+              input,
+              format,
+              payload,
+              plan,
+              useView ? nativeBytes - Buffa.Result.SIZE : nativeBytes);
+      boolean retained = false;
+      try {
+        if (useView && NativeRow.validate(plan, tape, owner)) {
+          if (STRICT) {
+            var audit =
+                new State(
+                    plan,
+                    profile.hints[0],
+                    new DecodeContext(owner, format, plan.limits().maxCells(), profile));
+            audit.consume(tape, 0, tape.count);
+            audit.finish(1);
+          }
+          var row = new NativeRow(owner, plan, tape, 0, tape.count);
+          owner.retainIndex(tape.detach());
+          retained = true;
+          return owner.finish(row, tape.allocated);
+        }
         State state =
             new State(
                 plan,
@@ -122,6 +162,8 @@ public final class BuffaPlan implements AutoCloseable {
                 new DecodeContext(owner, format, plan.limits().maxCells(), profile));
         state.consume(tape, 0, tape.count);
         return owner.finish(state.finish(1), tape.allocated);
+      } finally {
+        if (!retained) tape.close();
       }
     } catch (RuntimeException | Error failure) {
       if (owner != null) owner.close();
