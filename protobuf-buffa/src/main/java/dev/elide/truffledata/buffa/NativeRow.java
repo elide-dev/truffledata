@@ -108,7 +108,8 @@ final class NativeRow extends TypedRow {
     long seen = 0;
     int result = 0;
     for (int i = start; i < end; ) {
-      int ordinal = ordinal(tape, i), next = next(tape, i);
+      long link = link(tape, i);
+      int ordinal = (int) link, next = (int) (link >>> 32);
       if (ordinal < 0 || ordinal >= profile.children.length || next <= i || next > end)
         throw new IllegalStateException("Invalid native typed index");
       long bit = 1L << ordinal;
@@ -132,10 +133,19 @@ final class NativeRow extends TypedRow {
     return WordFactory.pointer(tape.nativeAddress + (long) index * Buffa.Field.SIZE);
   }
 
-  private static int ordinal(BuffaWire.Tape tape, int index) {
-    if (ImageInfo.inImageCode() && tape.nativeAddress != 0)
-      return Buffa.Field.number(entry(tape, index)) - 1;
-    return tape.bytes.getInt(index * Buffa.Field.SIZE + (int) BuffaFFM.Field_number_OFFSET) - 1;
+  /** Read the two traversal fields under one native-entry bounds check. */
+  private static long link(BuffaWire.Tape tape, int index) {
+    int ordinal, next;
+    if (ImageInfo.inImageCode() && tape.nativeAddress != 0) {
+      var entry = entry(tape, index);
+      ordinal = Buffa.Field.number(entry) - 1;
+      next = Buffa.Field.end(entry);
+    } else {
+      int offset = index * Buffa.Field.SIZE;
+      ordinal = tape.bytes.getInt(offset + (int) BuffaFFM.Field_number_OFFSET) - 1;
+      next = tape.bytes.getInt(offset + (int) BuffaFFM.Field_end_OFFSET);
+    }
+    return ((long) next << 32) | Integer.toUnsignedLong(ordinal);
   }
 
   private static long bits(BuffaWire.Tape tape, int index) {
@@ -176,9 +186,11 @@ final class NativeRow extends TypedRow {
     if (plan().size() <= 16 && end - start <= 15) {
       long packed = 0;
       int i = start;
-      for (; i < end; i = next(tape, i)) {
-        int shift = ordinal(tape, i) * 4;
+      for (; i < end; ) {
+        long link = link(tape, i);
+        int shift = (int) link * 4;
         packed = (packed & ~(15L << shift)) | ((long) (i - start + 1) << shift);
+        i = (int) (link >>> 32);
       }
       if (i == end) {
         packedOffsets = packed;
@@ -188,7 +200,11 @@ final class NativeRow extends TypedRow {
     }
     int[] result = new int[plan().size()];
     Arrays.fill(result, -1);
-    for (int i = start; i < end; i = next(tape, i)) result[ordinal(tape, i)] = i;
+    for (int i = start; i < end; ) {
+      long link = link(tape, i);
+      result[(int) link] = i;
+      i = (int) (link >>> 32);
+    }
     offsets = result;
     return result;
   }
@@ -324,8 +340,11 @@ final class NativeRow extends TypedRow {
       this.row = row;
       this.ordinal = ordinal;
       int n = 0;
-      for (int i = row.start; i < row.end; i = next(row.tape, i))
-        if (ordinal(row.tape, i) == ordinal) n++;
+      for (int i = row.start; i < row.end; ) {
+        long link = link(row.tape, i);
+        if ((int) link == ordinal) n++;
+        i = (int) (link >>> 32);
+      }
       count = n;
     }
 
@@ -350,8 +369,11 @@ final class NativeRow extends TypedRow {
         entries = positions = new int[count];
         cache = values = new Object[count];
         int n = 0;
-        for (int i = row.start; i < row.end; i = next(row.tape, i))
-          if (ordinal(row.tape, i) == ordinal) positions[n++] = i;
+        for (int i = row.start; i < row.end; ) {
+          long link = link(row.tape, i);
+          if ((int) link == ordinal) positions[n++] = i;
+          i = (int) (link >>> 32);
+        }
       }
       Object result = row.decode(ordinal, positions[index]);
       values[index] = result;
