@@ -24,6 +24,8 @@ import org.jspecify.annotations.NullMarked;
 @NullMarked
 public final class JsonComparison {
   private static final int ROWS = 32;
+  static Runnable beforeSamples = () -> {};
+  static long sampleNanos = 50_000_000L;
   private static volatile long sink;
   private static volatile Object retained = new Object();
 
@@ -169,6 +171,7 @@ public final class JsonComparison {
         do {
           measure(operation, batch, expected);
         } while (System.nanoTime() < until);
+        beforeSamples.run();
         double[] samples = new double[3];
         for (int s = 0; s < samples.length; s++) {
           tier(target, peak);
@@ -183,7 +186,7 @@ public final class JsonComparison {
               measure(operation, batch, expected);
               count += batch;
               elapsed = System.nanoTime() - start;
-            } while (elapsed < 50_000_000);
+            } while (elapsed < sampleNanos);
             samples[s] = elapsed / (double) (count * ROWS);
           }
           tier(target, peak);

@@ -34,3 +34,28 @@ An experiment caching the native slot address and presence/null masks in the Jav
 record raised ingestion allocation to 80 bytes. Its timing ranges overlapped the
 baseline and peak reads remained well behind stock. That change was reverted;
 schema-specialized access remains the next optimization to investigate.
+
+## Profile before further tuning
+
+`bazel test //benchmarks/comparison:json_profile` builds a separate SVM executable
+with JFR, local symbols, and frame pointers. Recording begins only after benchmark
+warmup and last-tier stabilization. Each cell records three seconds of work.
+`python3 tools/bench/json_profile_summary.py <recording-directory>` summarizes
+application stacks, total versus selected samples, and sampled allocation counts.
+Sampled counts are not allocation bytes, and Java-visible stacks do not account
+for native parser allocations.
+
+The diagnostic executable also accepts `engine stage time recording-path` directly,
+so it can run under Linux `perf record`. Use a dedicated Linux host, record the
+binary hash, CPU model, affinity, and source commit, and serialize profiling and
+uninstrumented timing runs. Never use recorded timings as comparison scores.
+
+The first symbolized hardware profiles on unclemax expose a weakness in the peak
+check: a valid last-tier target still calls the AOT `Reads.read` helper, for stock
+as well as native records. Native generic profiles concentrate in `check`, `slot`,
+and `checkThread`; specialized profiles concentrate in `bits`, `nativeValue`, and
+`checkThread`. These are observations from the diagnostic image, not proof of a
+parser bottleneck. Existing `peak` results mean a compiled wrapper, and must not
+be presented as fully compiled guest scalar reads. The next compiler investigation
+must verify the hot loop and accesses themselves are compiled before using that
+stage to claim peak JIT performance.
