@@ -960,3 +960,17 @@ demonstrated throughput improvement**. Projected Java allocation remains
 storage per native index entry (and per retained capacity slot), not a reduction
 in total message memory or Java allocations. The change is retained for that
 bounded native-memory saving; the raw results include the unfavorable first run.
+
+### Rejected separate binary materialization loop
+
+A follow-up experiment split binary traversal from text/JSON-specific handling,
+while sharing scalar conversion and finalization. JVM strict/non-strict, SVM,
+comparison smoke, and drift checks passed. Two paired five-fork cycles showed
+only 1–2% lower generic-ingestion medians with overlapping ranges; generated
+projection and full consumption changed direction between cycles. The unchanged
+stock control also shifted substantially in the second cycle. Java allocation
+was unchanged. This did not justify duplicated traversal code, so the experiment
+was reverted. The [first run](../benchmarks/results/buffa-binary-loop-rejected/paired.md),
+[repeat](../benchmarks/results/buffa-binary-loop-rejected/repeat/paired.md), and
+[exact patch](../benchmarks/results/buffa-binary-loop-rejected/experiment.patch)
+remain available for reproduction.

@@ -1,0 +1,21 @@
+{
+  "base_commit": "9a435b0",
+  "candidate_patch_sha256": "b6f9381a5bff935a10d4700300b1679eac014a6b09fbb7057e2693f9195bab5c",
+  "retained": false,
+  "host": "unclemax",
+  "cpu_affinity": "2-9",
+  "seeds": [
+    20261105,
+    20261106
+  ],
+  "remote_artifacts": "/tmp/truffledata-buffa-binary-loop.5Yb5VN",
+  "validation": "https://app.buildbuddy.io/invocation/a9802528-5811-44f7-8ad6-e56063997129",
+  "notes": [
+    "Five randomized fresh processes per variant/cell/metric; no concurrent profiling. Same binaries across cycles.",
+    "Patch extracts binary traversal and shares scalar conversion; existing semantic gates pass.",
+    "Generic projection medians improve 1\u20132% with overlapping ranges. Generated projection and full consumption change direction across cycles.",
+    "Unchanged stock control moves substantially in second cycle. Java allocation unchanged.",
+    "No demonstrated gain sufficient to justify duplicated traversal. Patch reverted and retained only as evidence.",
+    "Build refreshed GraalVM module usage digest, subsequently committed in 894b3da; dependency versions unchanged."
+  ]
+}
