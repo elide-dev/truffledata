@@ -257,6 +257,7 @@ data_java_library(
 )
 
 native_image(
+    # Keep JsonComparison build-time initialized: its static helpers must be JIT eligible.
     name = "json_svm",
     testonly = True,
     cc_deps = ["//json/native:truffledata_json"],
@@ -270,7 +271,6 @@ native_image(
         "--parallelism=8",
         "-march=compatibility",
         "--initialize-at-build-time=dev.elide.truffledata",
-        "--initialize-at-run-time=dev.elide.truffledata.comparison.JsonComparison",
         "--add-exports=org.graalvm.truffle.runtime/com.oracle.truffle.runtime=ALL-UNNAMED",
         "-H:+UnlockExperimentalVMOptions",
     ] + TRUFFLE_JIT_CHECKS + ["-H:-UnlockExperimentalVMOptions"],
@@ -340,11 +340,12 @@ native_image(
         "--parallelism=8",
         "-march=compatibility",
         "--initialize-at-build-time=dev.elide.truffledata",
-        "--initialize-at-run-time=dev.elide.truffledata.comparison.JsonComparison",
         "--add-exports=org.graalvm.truffle.runtime/com.oracle.truffle.runtime=ALL-UNNAMED",
         "-H:+UnlockExperimentalVMOptions",
         "-H:-DeleteLocalSymbols",
         "-H:+PreserveFramePointer",
+        "-H:+PrintRuntimeCompileMethods",
+        "-H:+PrintRuntimeCompilationCallTree",
     ] + TRUFFLE_JIT_CHECKS + ["-H:-UnlockExperimentalVMOptions"],
     graalvm_sdk = "@graalvm_linux_amd64//:gvm",
     main_class = "dev.elide.truffledata.comparison.JsonProfile",

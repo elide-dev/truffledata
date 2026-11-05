@@ -19,7 +19,9 @@ Ingestion includes parsing, three-field consumption, escape of the returned reco
 and native result release. Plan compilation is excluded. Retained-read cases reuse
 32 live records and rotate the starting index. Both use the same guest loop for
 interpreter and peak tests; direct AOT reads bypass the guest call. Peak requires a
-stable last-tier target before and after sampling. Allocation counters are calibrated
+stable last-tier target before and after sampling, plus an `inCompiledCode()`
+marker returned from the read helper itself. The marker is masked from the checksum;
+a compiled wrapper calling an AOT helper fails the probe. Allocation counters are calibrated
 with an escaped megabyte array. Java allocation excludes all native memory; native
 input padding, slot buffers, parser scratch, and allocator overhead are not included.
 
@@ -59,3 +61,10 @@ parser bottleneck. Existing `peak` results mean a compiled wrapper, and must not
 be presented as fully compiled guest scalar reads. The next compiler investigation
 must verify the hot loop and accesses themselves are compiled before using that
 stage to claim peak JIT performance.
+
+The cause was the benchmark's explicit runtime initialization of `JsonComparison`.
+Its read helper calls static methods on that class; SVM rejects runtime compilation
+graphs with class-initialization checks. Both benchmark images now use build-time
+initialization for this class (its initial state contains no native resources).
+The smoke test now passes with the helper-level compiled marker. Historical results
+remain unchanged for provenance; use new measurements for peak comparisons.

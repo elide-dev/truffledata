@@ -2,6 +2,7 @@ package dev.elide.truffledata.comparison;
 
 import com.google.gson.stream.JsonReader;
 import com.google.gson.stream.JsonToken;
+import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.runtime.OptimizedCallTarget;
@@ -24,6 +25,8 @@ import org.jspecify.annotations.NullMarked;
 @NullMarked
 public final class JsonComparison {
   private static final int ROWS = 32;
+  // Emitted in the read helper itself; a compiled wrapper cannot satisfy this probe.
+  private static final long COMPILED_READ = 1L << 48;
   static Runnable beforeSamples = () -> {};
   static long sampleNanos = 50_000_000L;
   private static volatile long sink;
@@ -130,7 +133,9 @@ public final class JsonComparison {
         Operation operation =
             rotation -> {
               if (!ingest)
-                return guest ? (Long) target.call(rows, rotation) : root.read(rows, rotation);
+                return guest
+                    ? ((Long) target.call(rows, rotation)) & ~COMPILED_READ
+                    : root.read(rows, rotation);
               long sum = 0;
               for (int i = 0; i < ROWS; i++) {
                 byte[] input = inputs[(i + rotation) & (ROWS - 1)];
@@ -165,7 +170,7 @@ public final class JsonComparison {
             if (target.isValidLastTier()) break;
           }
         }
-        tier(target, peak);
+        tier(target, peak, rows);
         int batch = ingest ? 8 : 128;
         long until = System.nanoTime() + (smoke ? 1_000_000 : 100_000_000);
         do {
@@ -174,7 +179,7 @@ public final class JsonComparison {
         beforeSamples.run();
         double[] samples = new double[3];
         for (int s = 0; s < samples.length; s++) {
-          tier(target, peak);
+          tier(target, peak, rows);
           if (memory) {
             long before = counter.getThreadAllocatedBytes(thread);
             measure(operation, batch, expected);
@@ -189,7 +194,7 @@ public final class JsonComparison {
             } while (elapsed < sampleNanos);
             samples[s] = elapsed / (double) (count * ROWS);
           }
-          tier(target, peak);
+          tier(target, peak, rows);
         }
         System.out.printf(
             Locale.ROOT,
@@ -218,9 +223,11 @@ public final class JsonComparison {
     sink = sum;
   }
 
-  private static void tier(OptimizedCallTarget target, boolean peak) {
+  private static void tier(OptimizedCallTarget target, boolean peak, Object[] rows) {
     if (peak ? !target.isValidLastTier() : target.isValid())
       throw new AssertionError("Execution tier");
+    if (peak && (((Long) target.call(rows, 0)) & COMPILED_READ) == 0)
+      throw new AssertionError("Read helper did not execute as compiled guest code");
   }
 
   private static long nativeRead(JsonScalarRecord r) {
@@ -263,7 +270,7 @@ public final class JsonComparison {
         Object row = rows[(i + rotation) & (ROWS - 1)];
         sum += nativeEngine ? nativeValue((JsonScalarRecord) row) : stockRead((Stock) row);
       }
-      return sum;
+      return sum | (CompilerDirectives.inCompiledCode() ? COMPILED_READ : 0);
     }
   }
 }
