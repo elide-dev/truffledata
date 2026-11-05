@@ -37,7 +37,7 @@ if [[ $mode == --publish ]]; then
     fi
   done
 fi
-"$bazel" test //... //benchmarks:native_smoke //protobuf-buffa/tests:native_test //protobuf-buffa/tests:native_non_strict_test //protobuf-buffa/tests:native_views_test //protobuf-buffa/tests:fallback_test //tools/release:buffa_native_test //tools/release:stock_free_native_test "--//tools/release:version=$version"
+"$bazel" test //... //benchmarks:native_smoke //benchmarks/comparison:consumer_native_smoke //protobuf-buffa/tests:native_test //protobuf-buffa/tests:native_non_strict_test //protobuf-buffa/tests:native_views_test //protobuf-buffa/tests:fallback_test //tools/release:buffa_native_test //tools/release:stock_free_native_test "--//tools/release:version=$version"
 BAZEL="$bazel" python3 .github/scripts/jit_gate.py --probes-only
 "$bazel" build //tools/release:publications "--//tools/release:version=$version"
 python3 tools/release/maven_repo.py bazel-bin/tools/release "$repo" "$version"
