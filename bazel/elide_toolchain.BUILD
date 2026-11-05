@@ -16,7 +16,10 @@ TRIPLE = "arm64-apple-darwin" if DARWIN else [t for t in TRIPLES if t.endswith("
 
 filegroup(
     name = "all_files",
-    srcs = glob(["**"], exclude = ["**/* *"]),
+    srcs = glob(
+        ["**"],
+        exclude = ["**/* *"],
+    ),
 )
 
 # `cc` (bin/clang behind the macOS SDK lookup) for host commands: Cargo's linker, CC for build scripts.
@@ -33,7 +36,7 @@ filegroup(
 
 cc_toolchain_config(
     name = "config",
-    abi_libc_version = "darwin" if DARWIN else "glibc_2.34",
+    abi_libc_version = "darwin" if DARWIN else "glibc_2.17",
     abi_version = "clang",
     compile_flags = [
         "-fstack-protector",
@@ -70,7 +73,7 @@ cc_toolchain_config(
     ],
     opt_link_flags = [] if DARWIN else ["-Wl,--gc-sections"],
     supports_start_end_lib = not DARWIN,
-    target_libc = "macosx" if DARWIN else "glibc_2.34",
+    target_libc = "macosx" if DARWIN else "glibc_2.17",
     target_system_name = TRIPLE,
     tool_paths = {
         "ar": "bin/llvm-ar",

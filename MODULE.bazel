@@ -180,12 +180,12 @@ go_sdk = use_extension("@rules_go//go:extensions.bzl", "go_sdk", dev_dependency 
 http_archive = use_repo_rule("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
 
 # ---- C/C++: elide-dev/toolchain (LLVM 23, libc++, lld, ThinLTO bitcode sysroots).
-ELIDE_TOOLCHAIN = "2026.10.0"
+ELIDE_TOOLCHAIN = "2026.11.1"
 
 ELIDE_TOOLCHAIN_BUNDLES = {
-    "darwin_arm64": ("darwin-arm64", "e39b6430f36b3d3d20439a42e9047b6edb64d0c2a9277e69afd35e290dc93064"),
-    "linux_amd64": ("linux-amd64", "e966f3a9e8fa210e5018ae6e4a834874577e2288b27a6c9edfe5e264de0fd035"),
-    "linux_arm64": ("linux-arm64", "2dbe94d4db07cd59e09a4f5536c6591c131f7ca8ba167eb7926f4b93545d271e"),
+    "darwin_arm64": ("darwin-arm64", "37e56bad391f8397c99951a529ef84bdc99c9d19bdf91edbc153b5bdecb69e88"),
+    "linux_amd64": ("linux-amd64", "4610627acc96f647776fd4256b3c1fce04c14b2757df692d8923ec299aed0e58"),
+    "linux_arm64": ("linux-arm64", "b6c73becf52e8491c0aad2d1bb5ac6185a7e0c931e1206c62652b1e47fb26785"),
 }
 
 [http_archive(
@@ -233,38 +233,42 @@ http_file(
 # Optional Buffa backend: reproducible Rust compilation under the same RBE toolchain.
 bazel_dep(name = "rules_rust", version = "0.74.0")
 
+# Match elide-dev/toolchain v2026.11.1 rustversion (LLVM 23.1.3).
+RUST_VERSION = "nightly/2026-10-09"
+
 RUST_SHA256S = {
-    "cargo-1.99.1-aarch64-apple-darwin.tar.xz": "685e563d94db1f003ffa5f5831439eec02569b9950b69867953c8213269c1eaf",
-    "cargo-1.99.1-aarch64-unknown-linux-gnu.tar.xz": "5156832e0c1254e9b49a79edabdc6d4c35f32f8fc1cf3ca700f268ff96087ab0",
-    "cargo-1.99.1-x86_64-unknown-linux-gnu.tar.xz": "53f3521949404d595efb06a55c12c5658d4ed1c75566f33d3d514eaebe70bd8a",
-    "clippy-1.99.1-aarch64-apple-darwin.tar.xz": "c463f31831196702fc544900a0dc4c1837905327507fbec751fe46e59ca098bf",
-    "clippy-1.99.1-aarch64-unknown-linux-gnu.tar.xz": "3bea76c26dcf30c176c0a8a8cc283eb59fabd754e24a68b4ca0701e5f3245f6b",
-    "clippy-1.99.1-x86_64-unknown-linux-gnu.tar.xz": "458339712a058e52cc4522ff9ef8b59cd1ea1340312216cd94194c464a3f6dc5",
-    "llvm-tools-1.99.1-aarch64-apple-darwin.tar.xz": "b348db9d79666aee4b5e2ff4269029fffd16815cbd47f47018cd0b06e4f815f5",
-    "llvm-tools-1.99.1-aarch64-unknown-linux-gnu.tar.xz": "cd1818058908c1c4e99bd2843fe103df255157454e16186ec9cc3b5b5823b39c",
-    "llvm-tools-1.99.1-x86_64-unknown-linux-gnu.tar.xz": "8429c5117debfb45c22cf2f97712ef00e0e94976c96cf92f661974a458ca7e84",
-    "rust-analyzer-1.99.1-aarch64-apple-darwin.tar.xz": "c1ee8a54e685e13414e53fc46029d46db12613bc45c081f1a49020f1674ad6b4",
-    "rust-analyzer-1.99.1-aarch64-unknown-linux-gnu.tar.xz": "b626351402eb9ea16af2ebc2b2cd02ec6f6ca6f0c18fa74b41243eb42996e2b1",
-    "rust-analyzer-1.99.1-x86_64-unknown-linux-gnu.tar.xz": "5f2613d62003fc8cbe788d4ae409359c91c241ba248adbefe032df8bb77357bf",
-    "rust-std-1.99.1-aarch64-apple-darwin.tar.xz": "fe79d6ab5a0321de26463999d8c112b8ad3eafbcbcf822d66a2300b45dde1031",
-    "rust-std-1.99.1-aarch64-unknown-linux-gnu.tar.xz": "e25668477083d6a9ddb87b9beb9c00742225f38233ccb4bfba3afa7a07427f52",
-    "rust-std-1.99.1-x86_64-unknown-linux-gnu.tar.xz": "109b074225bf5b9ea3820890876bfdf4ed161adbfaf94b2b4b5984c85ee5d958",
-    "rustc-1.99.1-aarch64-apple-darwin.tar.xz": "23948a0a9c162fd2952defb3fb0462c44e8fcfd1a4ab8a274a1e1bdb2cf810a3",
-    "rustc-1.99.1-aarch64-unknown-linux-gnu.tar.xz": "acdcdfe09ae1f103aa9a2b7f88903a9588bc2e99288af10e6fbf5514e2e49f25",
-    "rustc-1.99.1-x86_64-unknown-linux-gnu.tar.xz": "2ff05ff9c08a90861e7f6e4065b40a8b87463b4576186fd613871c3e37f2091f",
-    "rustfmt-1.99.1-aarch64-apple-darwin.tar.xz": "8b80dda570f140ee9ced8799294e812bba847a025f185bae4cba85a2ba235570",
-    "rustfmt-1.99.1-aarch64-unknown-linux-gnu.tar.xz": "26b3200b1461921415927abf7fe410202a6eda2db3e419abde59e0abfcd93fc2",
-    "rustfmt-1.99.1-x86_64-unknown-linux-gnu.tar.xz": "e3b36c4c7ec3486c059d8067ff48787676612007123aad7a4e8ec12c48ee9ba2",
+    "2026-10-09/cargo-nightly-aarch64-apple-darwin.tar.xz": "644b67b12cd2791fade4a5654b16164742bac61b03482aeab4288c8bae00b052",
+    "2026-10-09/cargo-nightly-aarch64-unknown-linux-gnu.tar.xz": "46560aa59d2244a2074d823ac5174dadd75e7cee663ff9869817bb12ef3a3891",
+    "2026-10-09/cargo-nightly-x86_64-unknown-linux-gnu.tar.xz": "0858c8861196f25c344bcc44f5017a804b865175e2997b1a234ddc65983fbc73",
+    "2026-10-09/clippy-nightly-aarch64-apple-darwin.tar.xz": "5270f065be55286068bab9690d1e9822776a92b2c12b616be12e9205ce5ea94f",
+    "2026-10-09/clippy-nightly-aarch64-unknown-linux-gnu.tar.xz": "ab22441f2d8ef144d605b9ad155d734fea31def40c57648eb76cf6c548cd15b4",
+    "2026-10-09/clippy-nightly-x86_64-unknown-linux-gnu.tar.xz": "e83761c4174eb47203452a3e84ba068ce9af92b2d13f00518c1c98fbc39b0b63",
+    "2026-10-09/llvm-tools-nightly-aarch64-apple-darwin.tar.xz": "869704b7b6cb6f529b86302f0e5def5e5aab4c15b4f4f13644a3d0d0888bfc9b",
+    "2026-10-09/llvm-tools-nightly-aarch64-unknown-linux-gnu.tar.xz": "98f4edb11df8a8eed3145ded640648d48c1ccb79a935408907f2560da6f9d15e",
+    "2026-10-09/llvm-tools-nightly-x86_64-unknown-linux-gnu.tar.xz": "06e04697e94a4b8a65464b5ac2f2e0c51800520d2b292aac306e639365552482",
+    "2026-10-09/rust-analyzer-nightly-aarch64-apple-darwin.tar.xz": "aa15b4ae0c188cd8b585e4a505d99c13520334003dff192366a1d77503199dd4",
+    "2026-10-09/rust-analyzer-nightly-aarch64-unknown-linux-gnu.tar.xz": "1dc612e43aaa2d68bbef2c8d2558f8394fbf10f83714872289d7291675b4507d",
+    "2026-10-09/rust-analyzer-nightly-x86_64-unknown-linux-gnu.tar.xz": "69be84aef0c0d35d865c18602d0c99da2d8a0bff472097385b0752f7d49b2d39",
+    "2026-10-09/rust-src-nightly.tar.xz": "206367bac84218dcf2bae4d2f510cc45b47505208ceeec28de2b0550d7ce5deb",
+    "2026-10-09/rust-std-nightly-aarch64-apple-darwin.tar.xz": "6863d666bec77991e738ba9bec74f7384772ba5116fb36c72e0a305342f09ddc",
+    "2026-10-09/rust-std-nightly-aarch64-unknown-linux-gnu.tar.xz": "4adf6e6c15457b4a8d607426a4fc5da9c537db080c9c1ab412f082d9727729cc",
+    "2026-10-09/rust-std-nightly-x86_64-unknown-linux-gnu.tar.xz": "64a6839b7efee919bbd0a05886bca1ac3dff1fd0972eba5a7726abc78cd83784",
+    "2026-10-09/rustc-nightly-aarch64-apple-darwin.tar.xz": "486f1ab17e836c295dcb10103c1fafd96e7cc05fdd6222d4dbf2b2e52704238d",
+    "2026-10-09/rustc-nightly-aarch64-unknown-linux-gnu.tar.xz": "f940603d9f6cba96d7fd36ef91b43e95f8cd2f80a5cf8e1ef41b68306c5b537a",
+    "2026-10-09/rustc-nightly-x86_64-unknown-linux-gnu.tar.xz": "97700bc6499c6bdc52efb0c814f5f031262bf027d56287fb931364a18e9535f5",
+    "2026-10-09/rustfmt-nightly-aarch64-apple-darwin.tar.xz": "dc0f058c80782b933119f7e56b8d324e62a1e789eaf93c01c4d468a117d622c5",
+    "2026-10-09/rustfmt-nightly-aarch64-unknown-linux-gnu.tar.xz": "83df473eb96e88033268ad1d4836b46b811420e0805eeaa0b22677a2157d13da",
+    "2026-10-09/rustfmt-nightly-x86_64-unknown-linux-gnu.tar.xz": "852635d690cfdfe26e14089947c01e046316f6683bfafcf06605eb22260d31c4",
 }
 
 rust = use_extension("@rules_rust//rust:extensions.bzl", "rust")
 rust.toolchain(
     edition = "2024",
     extra_target_triples = [],
-    rust_analyzer_version = "1.99.1",
-    rustfmt_version = "1.99.1",
+    rust_analyzer_version = RUST_VERSION,
+    rustfmt_version = RUST_VERSION,
     sha256s = RUST_SHA256S,
-    versions = ["1.99.1"],
+    versions = [RUST_VERSION],
 )
 use_repo(rust, "rust_toolchains")
 
@@ -274,7 +278,7 @@ rust_host = use_extension("@rules_rust//rust:extensions.bzl", "rust_host_tools")
 rust_host.host_tools(
     name = "truffledata_rust_host_tools",
     sha256s = RUST_SHA256S,
-    version = "1.99.1",
+    version = RUST_VERSION,
 )
 use_repo(rust_host, "truffledata_rust_host_tools")
 

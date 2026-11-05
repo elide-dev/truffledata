@@ -12,6 +12,7 @@ build:macos --host_features=-macos_minimum_os
 # Optimize linked native dependencies as well as adapter sources (not just leaf rustc flags).
 build --compilation_mode=opt
 # Preserve dependency bitcode and run cross-crate Rust ThinLTO at static/shared library links.
+build --@rules_rust//rust/toolchain/channel=nightly
 build --@rules_rust//rust/settings:lto=thin
 # Elide LLVM toolchains supply clang/lld and the Bazel ThinLTO backend tools.
 build --features=thin_lto
