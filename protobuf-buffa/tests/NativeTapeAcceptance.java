@@ -63,7 +63,7 @@ public final class NativeTapeAcceptance {
         var second = decoder.allocate(2).put(new byte[] {8, 99})) {
       var backend = Objects.requireNonNull(decoder.backend);
       try (var proof = backend.typed(schema, first, 3, empty, plan, 65536)) {
-        if (!proof.viewReady) throw new AssertionError("native binary view proof");
+        if (!proof.viewReady()) throw new AssertionError("native binary view proof");
       }
       try (var compiled = decoder.compile(plan, 65536);
           var view = compiled.decodeView(first, 65536);
@@ -73,7 +73,7 @@ public final class NativeTapeAcceptance {
         retained.bytes.get(0, expected);
         for (int i = 0; i < 8; i++) {
           try (var scratch = backend.typed(schema, second, 0, empty, plan, 65536)) {
-            if (scratch.count != 1) throw new AssertionError("scratch count");
+            if (scratch.count() != 1) throw new AssertionError("scratch count");
           }
         }
         try (var other = backend.typed(schema, second, 0, empty, plan, 65536).detach()) {
@@ -82,7 +82,7 @@ public final class NativeTapeAcceptance {
           for (int i = 0; i < expected.length; i++)
             if (retained.bytes.get(i) != expected[i])
               throw new AssertionError("retained index changed");
-          if (other.count != 1 || other.bytes.getLong(8) != 99)
+          if (other.count() != 1 || other.bytes.getLong(8) != 99)
             throw new AssertionError("second retained index");
           retained.close();
           retained.close();

@@ -163,7 +163,7 @@ public final class BuffaWire implements AutoCloseable {
       }
       try (Tape tape = backend.decode(input, limits, maxDepth, maxNativeBytes)) {
         message = new WireMessage(lease, tape.allocated, limits);
-        message.fields(materialize(message, tape, 0, tape.count, limits));
+        message.fields(materialize(message, tape, 0, tape.count(), limits));
         return message;
       }
     } catch (RuntimeException | Error failure) {
@@ -264,9 +264,8 @@ public final class BuffaWire implements AutoCloseable {
 
   static final class Tape implements AutoCloseable {
     final ByteBuffer bytes;
-    final int count;
+    private final int countAndFlags;
     final long allocated;
-    final boolean viewReady;
     private @Nullable Runnable release;
     private @Nullable Supplier<Runnable> detacher;
 
@@ -290,12 +289,23 @@ public final class BuffaWire implements AutoCloseable {
         Runnable release,
         @Nullable Supplier<Runnable> detacher,
         boolean viewReady) {
-      this.viewReady = viewReady;
       this.detacher = detacher;
       this.bytes = bytes.order(ByteOrder.nativeOrder());
-      this.count = Math.toIntExact(count);
+      int entries = Math.toIntExact(count);
+      if (entries < 0) throw new IllegalArgumentException("Negative index count");
+      countAndFlags = entries | (viewReady ? Integer.MIN_VALUE : 0);
       allocated = Math.multiplyExact(capacity, Buffa.Field.SIZE);
       this.release = release;
+    }
+
+    // Counts are nonnegative Java indices. Reuse the sign bit for the optional certificate
+    // instead of adding a padded boolean to every tape, including eager decodes.
+    int count() {
+      return countAndFlags & Integer.MAX_VALUE;
+    }
+
+    boolean viewReady() {
+      return countAndFlags < 0;
     }
 
     /** Transfer the native allocation out of decoder scratch without copying index entries. */

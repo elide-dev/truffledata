@@ -96,7 +96,7 @@ final class NativeRow extends TypedRow {
    * Strict mode independently audits the index through the eager decoder before exposing a view.
    */
   static boolean validate(Validation profile, BuffaWire.Tape tape) {
-    int result = validate(profile, tape, 0, tape.count);
+    int result = validate(profile, tape, 0, tape.count());
     if (result == MERGE) return false;
     if (result == MISSING) throw new ContractViolation("Missing required field");
     return true;

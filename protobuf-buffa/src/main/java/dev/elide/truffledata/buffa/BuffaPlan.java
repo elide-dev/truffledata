@@ -142,17 +142,18 @@ public final class BuffaPlan implements AutoCloseable {
       boolean retained = false;
       try {
         if (useView
-            && (tape.viewReady || NativeRow.validate(Objects.requireNonNull(nativeViews), tape))) {
+            && (tape.viewReady()
+                || NativeRow.validate(Objects.requireNonNull(nativeViews), tape))) {
           if (STRICT) {
             var audit =
                 new State(
                     plan,
                     profile.hints[0],
                     new DecodeContext(owner, format, plan.limits().maxCells(), profile));
-            audit.consume(tape, 0, tape.count);
+            audit.consume(tape, 0, tape.count());
             audit.finish(1);
           }
-          var row = new NativeRow(owner, plan, tape, 0, tape.count);
+          var row = new NativeRow(owner, plan, tape, 0, tape.count());
           owner.retainIndex(tape.detach());
           retained = true;
           return owner.finish(row, tape.allocated);
@@ -162,7 +163,7 @@ public final class BuffaPlan implements AutoCloseable {
                 plan,
                 profile.hints[0],
                 new DecodeContext(owner, format, plan.limits().maxCells(), profile));
-        state.consume(tape, 0, tape.count);
+        state.consume(tape, 0, tape.count());
         return owner.finish(state.finish(1), tape.allocated);
       } finally {
         if (!retained) tape.close();
@@ -339,7 +340,7 @@ public final class BuffaPlan implements AutoCloseable {
         int capacity =
             items.length == 0
                 ? required
-                : Math.max(required, (int) Math.min(tape.count, 2L * items.length));
+                : Math.max(required, (int) Math.min(tape.count(), 2L * items.length));
         items = Arrays.copyOf(items, capacity);
       }
       items[size++] = value;
