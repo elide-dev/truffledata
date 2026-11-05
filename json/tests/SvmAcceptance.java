@@ -205,6 +205,7 @@ public final class SvmAcceptance {
   public static void main(String[] args) throws InterruptedException {
     typed();
     schemaTyped();
+    CompiledReads.run();
     scoped();
     require(CTypeConversion.toJavaString(Json.fingerprint()).equals(Json.ABI_FINGERPRINT));
     VoidPointer first = UnmanagedMemory.calloc(Json.JsonResult.SIZE);

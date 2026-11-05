@@ -118,8 +118,8 @@ reusable thread-confined SVM plan. `plan.decode(utf8)` returns a scoped
 and unsigned `BigInteger` values materialize on request. Results outlive their
 plans and reject cross-thread and post-close reads. Unsupported nested, repeated,
 and general exact/decimal contracts are rejected explicitly. Generated
-schema-specific getters, JVM typed views, compiled guest acceptance, and
-performance comparisons remain outstanding.
+schema-specific getters, JVM typed views, and performance comparisons remain
+outstanding.
 
 The shared `//bazel:unicode` simdutf library serves Rust Buffa conversion and C++
 JSON contracts. Counting decoded UTF-8 requires no intermediate UTF-16 buffer or
@@ -127,3 +127,19 @@ Java string. `//json/native:unicode_test` links both consumers and exercises raw
 and escaped supplementary characters, long strings, length boundaries, and
 float narrowing under ASan/UBSan. Typed slot allocation remains one buffer; this
 is not a claim about parser scratch or total process allocation.
+
+## Compiled scalar reads
+
+`//json/tests:native_test` includes a Truffle runtime and enables both Native Image
+JIT blocklist checks. Its compiled read gate alternates two native records and
+checks long/double/boolean values with argument-supplied and compilation-final
+record arrays. It requires observed compiled execution, treats compiler performance
+warnings as errors, limits Graal graphs to 10,000 nodes and ASTs to 192 nodes, and
+enforces at most 0.05 Java bytes per three-field read iteration. Both compiled
+paths must reject reads after close; a sibling remains valid.
+
+The initial SVM gate measured 0.000032 Java bytes per iteration (32 bytes over
+one million iterations) on each path. This measures retained primitive reads,
+not parse-time allocation, native memory, interpreter throughput, or parity with
+a stock implementation. Strings and exact-number materialization are outside
+this primitive allocation gate.
