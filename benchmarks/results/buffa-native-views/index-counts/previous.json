@@ -1,0 +1,5411 @@
+{
+  "binary_sha256": {
+    "previous": "a5a498225c1f9c91994dcb7c621d556b9ec88e38d0492d41981b4262d7c8d40e",
+    "candidate": "245d52a1a9419983e8c9b3a5daf9aa6ecf8a53a0bb52ab740476f6ec1bcd7a44"
+  },
+  "cpu_affinity": [
+    2
+  ],
+  "measurements": [
+    {
+      "workload": "proto-mixed-full",
+      "engine": "stock",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 4866,
+      "ns_per_row": [
+        688.5905039612676,
+        685.1905321241259,
+        685.128974541084
+      ],
+      "variant": "previous",
+      "fork": 0
+    },
+    {
+      "workload": "proto-mixed-full",
+      "engine": "generated-owned",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 4866,
+      "ns_per_row": [
+        682.6875136106272,
+        679.0255126953125,
+        680.1891004774305
+      ],
+      "variant": "candidate",
+      "fork": 2
+    },
+    {
+      "workload": "proto-mixed-full",
+      "engine": "owned",
+      "stage": "ingest-generated",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 4866,
+      "ns_per_row": [
+        3300.1951171875,
+        3293.5940755208335,
+        3250.2551869877047
+      ],
+      "variant": "candidate",
+      "fork": 1
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "generated-owned",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "allocated_bytes_per_row": [
+        1800.5,
+        1800.5,
+        1800.5
+      ],
+      "variant": "previous",
+      "fork": 1
+    },
+    {
+      "workload": "proto-mixed-full",
+      "engine": "buffa",
+      "stage": "ingest-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 4866,
+      "ns_per_row": [
+        1331.152981505102,
+        1337.4400775935374,
+        1333.8358843537414
+      ],
+      "variant": "previous",
+      "fork": 2
+    },
+    {
+      "workload": "proto-mixed-full",
+      "engine": "buffa",
+      "stage": "ingest-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 4866,
+      "ns_per_row": [
+        1333.4872448979593,
+        1336.0035076530612,
+        1332.7029655612246
+      ],
+      "variant": "previous",
+      "fork": 1
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "generated-owned",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        671.6158988402062,
+        664.2366790254238,
+        665.6303943452381
+      ],
+      "variant": "previous",
+      "fork": 2
+    },
+    {
+      "workload": "proto-mixed-full",
+      "engine": "buffa",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 4866,
+      "allocated_bytes_per_row": [
+        1406.25,
+        1406.25,
+        1406.25
+      ],
+      "variant": "candidate",
+      "fork": 4
+    },
+    {
+      "workload": "proto-mixed-full",
+      "engine": "owned",
+      "stage": "ingest-generated",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 4866,
+      "ns_per_row": [
+        3253.82287397541,
+        3245.3438140368853,
+        3249.2540343237706
+      ],
+      "variant": "previous",
+      "fork": 0
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "stock",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        645.1084081064356,
+        640.89921875,
+        640.4289959016394
+      ],
+      "variant": "candidate",
+      "fork": 3
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "stock",
+      "stage": "interpret-boundary",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        5.662311164700255,
+        5.390193738790011,
+        5.396345960319542
+      ],
+      "variant": "candidate",
+      "fork": 3
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "generated-owned",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "allocated_bytes_per_row": [
+        1800.5,
+        1800.5,
+        1800.5
+      ],
+      "variant": "candidate",
+      "fork": 0
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "buffa",
+      "stage": "ingest-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        699.5695731026785,
+        701.7264364919355,
+        698.2320452008929
+      ],
+      "variant": "previous",
+      "fork": 1
+    },
+    {
+      "workload": "proto-mixed-full",
+      "engine": "buffa",
+      "stage": "ingest-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 4866,
+      "ns_per_row": [
+        1337.0456792091836,
+        1344.644825556507,
+        1337.571561437075
+      ],
+      "variant": "previous",
+      "fork": 0
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "buffa",
+      "stage": "peak-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "native_views_requested": true,
+      "guest_compiled": true,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        8.478188069661458,
+        8.443451898556363,
+        8.430344218048601
+      ],
+      "variant": "candidate",
+      "fork": 2
+    },
+    {
+      "workload": "proto-scalar",
+      "engine": "buffa",
+      "stage": "ingest-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 54400032992,
+      "allocated_bytes_per_row": [
+        80.0,
+        80.0,
+        80.0
+      ],
+      "variant": "candidate",
+      "fork": 4
+    },
+    {
+      "workload": "proto-mixed-full",
+      "engine": "buffa",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 4866,
+      "allocated_bytes_per_row": [
+        1382.25,
+        1382.25,
+        1382.25
+      ],
+      "variant": "previous",
+      "fork": 2
+    },
+    {
+      "workload": "proto-mixed-full",
+      "engine": "generated-owned",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 4866,
+      "allocated_bytes_per_row": [
+        1800.5,
+        1800.5,
+        1800.5
+      ],
+      "variant": "previous",
+      "fork": 1
+    },
+    {
+      "workload": "proto-mixed-full",
+      "engine": "buffa",
+      "stage": "ingest-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 4866,
+      "ns_per_row": [
+        1284.5314797794117,
+        1283.1351102941176,
+        1282.9752859477123
+      ],
+      "variant": "candidate",
+      "fork": 3
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "buffa",
+      "stage": "peak-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "native_views_requested": true,
+      "guest_compiled": true,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        9.310725514481707,
+        9.31224170629529,
+        9.326010171469155
+      ],
+      "variant": "previous",
+      "fork": 0
+    },
+    {
+      "workload": "proto-mixed-full",
+      "engine": "generated-owned",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 4866,
+      "ns_per_row": [
+        699.2011300223214,
+        705.9541403429603,
+        697.5878069196428
+      ],
+      "variant": "previous",
+      "fork": 0
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "generated-owned",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "allocated_bytes_per_row": [
+        1800.5,
+        1800.5,
+        1800.5
+      ],
+      "variant": "previous",
+      "fork": 2
+    },
+    {
+      "workload": "proto-mixed-full",
+      "engine": "generated-owned",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 4866,
+      "ns_per_row": [
+        700.1031165994624,
+        700.6875560035842,
+        699.0340262276786
+      ],
+      "variant": "previous",
+      "fork": 3
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "buffa",
+      "stage": "interpret-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        16.92285697281856,
+        16.954739379882813,
+        16.921556467494806
+      ],
+      "variant": "previous",
+      "fork": 1
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "buffa",
+      "stage": "peak-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "native_views_requested": true,
+      "guest_compiled": true,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        9.418790018733134,
+        9.41627896558163,
+        9.452210606436243
+      ],
+      "variant": "previous",
+      "fork": 2
+    },
+    {
+      "workload": "proto-mixed-full",
+      "engine": "owned",
+      "stage": "ingest-generated",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 4866,
+      "allocated_bytes_per_row": [
+        2976.0,
+        2976.0,
+        2976.0
+      ],
+      "variant": "candidate",
+      "fork": 0
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "generated-owned",
+      "stage": "peak",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": true,
+      "rows": 32,
+      "checksum": 563,
+      "allocated_bytes_per_row": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "variant": "previous",
+      "fork": 2
+    },
+    {
+      "workload": "proto-mixed-full",
+      "engine": "generated-owned",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 4866,
+      "allocated_bytes_per_row": [
+        1800.5,
+        1800.5,
+        1800.5
+      ],
+      "variant": "previous",
+      "fork": 4
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "stock",
+      "stage": "interpret-boundary",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "allocated_bytes_per_row": [
+        2.0,
+        2.0,
+        2.0
+      ],
+      "variant": "candidate",
+      "fork": 1
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "buffa",
+      "stage": "ingest-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "allocated_bytes_per_row": [
+        341.5,
+        341.5,
+        341.5
+      ],
+      "variant": "candidate",
+      "fork": 4
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "stock",
+      "stage": "peak-boundary",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": true,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        5.295616288859226,
+        5.293750084697528,
+        5.302614371879071
+      ],
+      "variant": "previous",
+      "fork": 3
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "generated-owned",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        676.5309796712803,
+        669.9192663741438,
+        663.9040783898305
+      ],
+      "variant": "previous",
+      "fork": 4
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "buffa",
+      "stage": "ingest-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "allocated_bytes_per_row": [
+        341.5,
+        341.5,
+        341.5
+      ],
+      "variant": "candidate",
+      "fork": 3
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "buffa",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        744.6188807034221,
+        748.3077140982824,
+        745.5200978053435
+      ],
+      "variant": "candidate",
+      "fork": 2
+    },
+    {
+      "workload": "proto-mixed-full",
+      "engine": "stock",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 4866,
+      "ns_per_row": [
+        694.260430518617,
+        691.6928969743816,
+        687.602384868421
+      ],
+      "variant": "previous",
+      "fork": 3
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "generated-owned",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "allocated_bytes_per_row": [
+        1800.5,
+        1800.5,
+        1800.5
+      ],
+      "variant": "previous",
+      "fork": 4
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "generated-owned",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "allocated_bytes_per_row": [
+        1800.5,
+        1800.5,
+        1800.5
+      ],
+      "variant": "candidate",
+      "fork": 4
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "generated-owned",
+      "stage": "peak",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": true,
+      "rows": 32,
+      "checksum": 563,
+      "allocated_bytes_per_row": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "variant": "candidate",
+      "fork": 4
+    },
+    {
+      "workload": "proto-mixed-full",
+      "engine": "generated-owned",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 4866,
+      "allocated_bytes_per_row": [
+        1800.5,
+        1800.5,
+        1800.5
+      ],
+      "variant": "previous",
+      "fork": 2
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "generated-owned",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "allocated_bytes_per_row": [
+        1800.5,
+        1800.5,
+        1800.5
+      ],
+      "variant": "previous",
+      "fork": 0
+    },
+    {
+      "workload": "proto-mixed-full",
+      "engine": "buffa",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 4866,
+      "allocated_bytes_per_row": [
+        1406.25,
+        1406.25,
+        1406.25
+      ],
+      "variant": "candidate",
+      "fork": 1
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "buffa",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "allocated_bytes_per_row": [
+        421.5,
+        421.5,
+        421.5
+      ],
+      "variant": "previous",
+      "fork": 2
+    },
+    {
+      "workload": "proto-scalar",
+      "engine": "buffa",
+      "stage": "ingest-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 54400032992,
+      "ns_per_row": [
+        50.28562982625483,
+        50.19721994667181,
+        50.217485740681234
+      ],
+      "variant": "candidate",
+      "fork": 3
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "buffa",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "allocated_bytes_per_row": [
+        445.5,
+        445.5,
+        445.5
+      ],
+      "variant": "candidate",
+      "fork": 2
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "buffa",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "allocated_bytes_per_row": [
+        421.5,
+        421.5,
+        421.5
+      ],
+      "variant": "previous",
+      "fork": 1
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "buffa",
+      "stage": "peak-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "native_views_requested": true,
+      "guest_compiled": true,
+      "rows": 32,
+      "checksum": 563,
+      "allocated_bytes_per_row": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "variant": "previous",
+      "fork": 4
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "generated-owned",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        669.7651969178082,
+        658.4001210016835,
+        649.0360746067881
+      ],
+      "variant": "candidate",
+      "fork": 4
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "buffa",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "allocated_bytes_per_row": [
+        421.5,
+        421.5,
+        421.5
+      ],
+      "variant": "previous",
+      "fork": 0
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "buffa",
+      "stage": "ingest-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        614.4809355345911,
+        618.4789977254746,
+        614.6099891902516
+      ],
+      "variant": "candidate",
+      "fork": 3
+    },
+    {
+      "workload": "proto-mixed-full",
+      "engine": "stock",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 4866,
+      "ns_per_row": [
+        689.6261141065141,
+        687.4040296052632,
+        687.200740131579
+      ],
+      "variant": "candidate",
+      "fork": 2
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "buffa",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        813.5658713692947,
+        810.7124448910788,
+        806.808191872428
+      ],
+      "variant": "previous",
+      "fork": 3
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "buffa",
+      "stage": "peak-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "native_views_requested": true,
+      "guest_compiled": true,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        8.351360274078745,
+        8.316653550483226,
+        8.399329436038514
+      ],
+      "variant": "candidate",
+      "fork": 1
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "generated-owned",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        658.057383733165,
+        650.0255787998339,
+        645.6164526608911
+      ],
+      "variant": "candidate",
+      "fork": 2
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "stock",
+      "stage": "interpret-boundary",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        6.066879128438587,
+        5.629794228511122,
+        5.601655116649943
+      ],
+      "variant": "previous",
+      "fork": 3
+    },
+    {
+      "workload": "proto-mixed-full",
+      "engine": "generated-owned",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 4866,
+      "ns_per_row": [
+        692.173531360424,
+        679.3390299479166,
+        676.7131812283737
+      ],
+      "variant": "candidate",
+      "fork": 3
+    },
+    {
+      "workload": "proto-mixed-full",
+      "engine": "buffa",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 4866,
+      "ns_per_row": [
+        1920.026118259804,
+        1904.9356416868932,
+        1911.873786407767
+      ],
+      "variant": "previous",
+      "fork": 0
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "buffa",
+      "stage": "peak-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "native_views_requested": true,
+      "guest_compiled": true,
+      "rows": 32,
+      "checksum": 563,
+      "allocated_bytes_per_row": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "variant": "candidate",
+      "fork": 0
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "buffa",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "allocated_bytes_per_row": [
+        421.5,
+        421.5,
+        421.5
+      ],
+      "variant": "previous",
+      "fork": 3
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "stock",
+      "stage": "interpret-boundary",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "allocated_bytes_per_row": [
+        2.0,
+        2.0,
+        2.0
+      ],
+      "variant": "previous",
+      "fork": 4
+    },
+    {
+      "workload": "proto-mixed-full",
+      "engine": "stock",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 4866,
+      "allocated_bytes_per_row": [
+        1776.75,
+        1776.75,
+        1776.75
+      ],
+      "variant": "candidate",
+      "fork": 4
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "stock",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        646.3076010726072,
+        642.1142930327869,
+        642.051050204918
+      ],
+      "variant": "candidate",
+      "fork": 1
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "generated-owned",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "allocated_bytes_per_row": [
+        1800.5,
+        1800.5,
+        1800.5
+      ],
+      "variant": "previous",
+      "fork": 3
+    },
+    {
+      "workload": "proto-mixed-full",
+      "engine": "generated-owned",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 4866,
+      "allocated_bytes_per_row": [
+        1800.5,
+        1800.5,
+        1800.5
+      ],
+      "variant": "previous",
+      "fork": 0
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "buffa",
+      "stage": "ingest-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        699.7661551339286,
+        704.880929631295,
+        700.9038978494624
+      ],
+      "variant": "previous",
+      "fork": 2
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "stock",
+      "stage": "interpret-boundary",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        5.660042046063688,
+        5.404415108662572,
+        5.394543656615941
+      ],
+      "variant": "previous",
+      "fork": 4
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "generated-owned",
+      "stage": "peak",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": true,
+      "rows": 32,
+      "checksum": 563,
+      "allocated_bytes_per_row": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "variant": "previous",
+      "fork": 1
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "stock",
+      "stage": "interpret-boundary",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "allocated_bytes_per_row": [
+        2.0,
+        2.0,
+        2.0
+      ],
+      "variant": "candidate",
+      "fork": 0
+    },
+    {
+      "workload": "proto-scalar",
+      "engine": "buffa",
+      "stage": "ingest-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 54400032992,
+      "allocated_bytes_per_row": [
+        80.0,
+        80.0,
+        80.0
+      ],
+      "variant": "candidate",
+      "fork": 3
+    },
+    {
+      "workload": "proto-mixed-full",
+      "engine": "buffa",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 4866,
+      "ns_per_row": [
+        1912.6680066747572,
+        1899.482213288835,
+        1910.117870145631
+      ],
+      "variant": "previous",
+      "fork": 3
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "stock",
+      "stage": "peak-boundary",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": true,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        5.269149918570619,
+        5.276924575106688,
+        5.2733576665429265
+      ],
+      "variant": "candidate",
+      "fork": 4
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "generated-owned",
+      "stage": "peak",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": true,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        2.852480765369451,
+        2.7041227051321983,
+        2.706559042739276
+      ],
+      "variant": "candidate",
+      "fork": 4
+    },
+    {
+      "workload": "proto-mixed-full",
+      "engine": "buffa",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 4866,
+      "allocated_bytes_per_row": [
+        1406.25,
+        1406.25,
+        1406.25
+      ],
+      "variant": "candidate",
+      "fork": 2
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "stock",
+      "stage": "interpret-boundary",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        5.692429364255536,
+        5.434974605898142,
+        5.4248778971498774
+      ],
+      "variant": "previous",
+      "fork": 0
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "stock",
+      "stage": "peak-boundary",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": true,
+      "rows": 32,
+      "checksum": 563,
+      "allocated_bytes_per_row": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "variant": "candidate",
+      "fork": 2
+    },
+    {
+      "workload": "proto-mixed-full",
+      "engine": "owned",
+      "stage": "ingest-generated",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 4866,
+      "allocated_bytes_per_row": [
+        2976.0,
+        2976.0,
+        2976.0
+      ],
+      "variant": "candidate",
+      "fork": 1
+    },
+    {
+      "workload": "proto-mixed-full",
+      "engine": "generated-owned",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 4866,
+      "ns_per_row": [
+        695.8150300266904,
+        690.6243098498234,
+        691.0922454726149
+      ],
+      "variant": "candidate",
+      "fork": 0
+    },
+    {
+      "workload": "proto-mixed-full",
+      "engine": "generated-owned",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 4866,
+      "allocated_bytes_per_row": [
+        1800.5,
+        1800.5,
+        1800.5
+      ],
+      "variant": "candidate",
+      "fork": 2
+    },
+    {
+      "workload": "proto-mixed-full",
+      "engine": "buffa",
+      "stage": "ingest-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 4866,
+      "allocated_bytes_per_row": [
+        1382.25,
+        1382.25,
+        1382.25
+      ],
+      "variant": "previous",
+      "fork": 4
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "buffa",
+      "stage": "peak-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "native_views_requested": true,
+      "guest_compiled": true,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        8.449129372567041,
+        8.380640536526252,
+        8.440861109461386
+      ],
+      "variant": "candidate",
+      "fork": 4
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "buffa",
+      "stage": "ingest-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        723.3169972324723,
+        727.7183869656134,
+        723.6234664351852
+      ],
+      "variant": "previous",
+      "fork": 3
+    },
+    {
+      "workload": "proto-mixed-full",
+      "engine": "owned",
+      "stage": "ingest-generated",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 4866,
+      "allocated_bytes_per_row": [
+        2976.0,
+        2976.0,
+        2976.0
+      ],
+      "variant": "previous",
+      "fork": 1
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "stock",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        650.4088584925249,
+        645.3571962665017,
+        645.5561571782179
+      ],
+      "variant": "previous",
+      "fork": 2
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "buffa",
+      "stage": "interpret-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "allocated_bytes_per_row": [
+        2.0,
+        2.0,
+        2.0
+      ],
+      "variant": "candidate",
+      "fork": 3
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "stock",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "allocated_bytes_per_row": [
+        1776.75,
+        1776.75,
+        1776.75
+      ],
+      "variant": "previous",
+      "fork": 4
+    },
+    {
+      "workload": "proto-mixed-full",
+      "engine": "owned",
+      "stage": "ingest-generated",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 4866,
+      "allocated_bytes_per_row": [
+        2976.0,
+        2976.0,
+        2976.0
+      ],
+      "variant": "previous",
+      "fork": 0
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "generated-owned",
+      "stage": "peak",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": true,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        2.854271165171265,
+        2.701216382051991,
+        2.7011812193203815
+      ],
+      "variant": "previous",
+      "fork": 1
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "generated-owned",
+      "stage": "peak",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": true,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        2.8629015838451277,
+        2.7370528832679373,
+        2.7368596959237
+      ],
+      "variant": "candidate",
+      "fork": 1
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "buffa",
+      "stage": "ingest-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "allocated_bytes_per_row": [
+        341.5,
+        341.5,
+        341.5
+      ],
+      "variant": "candidate",
+      "fork": 2
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "stock",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        644.4791067023026,
+        638.6248851102941,
+        639.4967958537582
+      ],
+      "variant": "candidate",
+      "fork": 4
+    },
+    {
+      "workload": "proto-mixed-full",
+      "engine": "buffa",
+      "stage": "ingest-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 4866,
+      "allocated_bytes_per_row": [
+        1382.25,
+        1382.25,
+        1382.25
+      ],
+      "variant": "previous",
+      "fork": 0
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "buffa",
+      "stage": "peak-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "native_views_requested": true,
+      "guest_compiled": true,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        8.399193261315768,
+        8.35302099809764,
+        8.37314181857639
+      ],
+      "variant": "candidate",
+      "fork": 0
+    },
+    {
+      "workload": "proto-mixed-full",
+      "engine": "stock",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 4866,
+      "allocated_bytes_per_row": [
+        1776.75,
+        1776.75,
+        1776.75
+      ],
+      "variant": "candidate",
+      "fork": 2
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "stock",
+      "stage": "interpret-boundary",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "allocated_bytes_per_row": [
+        2.0,
+        2.0,
+        2.0
+      ],
+      "variant": "previous",
+      "fork": 0
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "buffa",
+      "stage": "peak-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "native_views_requested": true,
+      "guest_compiled": true,
+      "rows": 32,
+      "checksum": 563,
+      "allocated_bytes_per_row": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "variant": "previous",
+      "fork": 0
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "stock",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        644.8399597772277,
+        641.5286116803279,
+        647.8615221440398
+      ],
+      "variant": "previous",
+      "fork": 1
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "buffa",
+      "stage": "interpret-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        16.81592065900482,
+        16.8099225869369,
+        16.797831749161794
+      ],
+      "variant": "previous",
+      "fork": 4
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "buffa",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "allocated_bytes_per_row": [
+        421.5,
+        421.5,
+        421.5
+      ],
+      "variant": "previous",
+      "fork": 4
+    },
+    {
+      "workload": "proto-mixed-full",
+      "engine": "owned",
+      "stage": "ingest-generated",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 4866,
+      "ns_per_row": [
+        3271.019140625,
+        3268.866731770833,
+        3268.8322265625
+      ],
+      "variant": "candidate",
+      "fork": 3
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "buffa",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        736.6556479088346,
+        742.7716997385932,
+        738.1657429245283
+      ],
+      "variant": "candidate",
+      "fork": 3
+    },
+    {
+      "workload": "proto-scalar",
+      "engine": "buffa",
+      "stage": "ingest-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 54400032992,
+      "allocated_bytes_per_row": [
+        80.0,
+        80.0,
+        80.0
+      ],
+      "variant": "candidate",
+      "fork": 1
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "stock",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "allocated_bytes_per_row": [
+        1776.75,
+        1776.75,
+        1776.75
+      ],
+      "variant": "previous",
+      "fork": 3
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "buffa",
+      "stage": "interpret-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "allocated_bytes_per_row": [
+        2.0,
+        2.0,
+        2.0
+      ],
+      "variant": "previous",
+      "fork": 0
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "generated-owned",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "allocated_bytes_per_row": [
+        1800.5,
+        1800.5,
+        1800.5
+      ],
+      "variant": "candidate",
+      "fork": 2
+    },
+    {
+      "workload": "proto-scalar",
+      "engine": "buffa",
+      "stage": "ingest-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 54400032992,
+      "allocated_bytes_per_row": [
+        80.0,
+        80.0,
+        80.0
+      ],
+      "variant": "previous",
+      "fork": 3
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "stock",
+      "stage": "interpret-boundary",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        5.792515445253202,
+        5.496532455643573,
+        5.4975056105076545
+      ],
+      "variant": "previous",
+      "fork": 1
+    },
+    {
+      "workload": "proto-mixed-full",
+      "engine": "stock",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 4866,
+      "allocated_bytes_per_row": [
+        1776.75,
+        1776.75,
+        1776.75
+      ],
+      "variant": "candidate",
+      "fork": 0
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "buffa",
+      "stage": "interpret-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        16.89520255229945,
+        16.939939374566574,
+        16.888513504387102
+      ],
+      "variant": "previous",
+      "fork": 2
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "stock",
+      "stage": "peak-boundary",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": true,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        5.283155902646311,
+        5.303354377647155,
+        5.304322031453627
+      ],
+      "variant": "candidate",
+      "fork": 0
+    },
+    {
+      "workload": "proto-mixed-full",
+      "engine": "stock",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 4866,
+      "allocated_bytes_per_row": [
+        1776.75,
+        1776.75,
+        1776.75
+      ],
+      "variant": "candidate",
+      "fork": 3
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "generated-owned",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "allocated_bytes_per_row": [
+        1800.5,
+        1800.5,
+        1800.5
+      ],
+      "variant": "candidate",
+      "fork": 3
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "stock",
+      "stage": "interpret-boundary",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "allocated_bytes_per_row": [
+        2.0,
+        2.0,
+        2.0
+      ],
+      "variant": "candidate",
+      "fork": 3
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "buffa",
+      "stage": "ingest-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "allocated_bytes_per_row": [
+        341.5,
+        341.5,
+        341.5
+      ],
+      "variant": "candidate",
+      "fork": 0
+    },
+    {
+      "workload": "proto-mixed-full",
+      "engine": "buffa",
+      "stage": "ingest-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 4866,
+      "allocated_bytes_per_row": [
+        1406.25,
+        1406.25,
+        1406.25
+      ],
+      "variant": "candidate",
+      "fork": 2
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "generated-owned",
+      "stage": "peak",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": true,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        2.877609824729702,
+        2.7229962388293276,
+        2.7226555966352586
+      ],
+      "variant": "candidate",
+      "fork": 0
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "generated-owned",
+      "stage": "peak",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": true,
+      "rows": 32,
+      "checksum": 563,
+      "allocated_bytes_per_row": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "variant": "candidate",
+      "fork": 0
+    },
+    {
+      "workload": "proto-scalar",
+      "engine": "buffa",
+      "stage": "ingest-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 54400032992,
+      "ns_per_row": [
+        54.070365477096594,
+        53.20454980761373,
+        53.9171924596329
+      ],
+      "variant": "previous",
+      "fork": 4
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "buffa",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "allocated_bytes_per_row": [
+        445.5,
+        445.5,
+        445.5
+      ],
+      "variant": "candidate",
+      "fork": 0
+    },
+    {
+      "workload": "proto-scalar",
+      "engine": "buffa",
+      "stage": "ingest-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 54400032992,
+      "allocated_bytes_per_row": [
+        80.0,
+        80.0,
+        80.0
+      ],
+      "variant": "previous",
+      "fork": 1
+    },
+    {
+      "workload": "proto-scalar",
+      "engine": "buffa",
+      "stage": "ingest-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 54400032992,
+      "ns_per_row": [
+        51.24002328174187,
+        51.19375552771226,
+        51.14820326819848
+      ],
+      "variant": "candidate",
+      "fork": 4
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "generated-owned",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        664.3923389668367,
+        659.690064709596,
+        662.8578787076272
+      ],
+      "variant": "previous",
+      "fork": 1
+    },
+    {
+      "workload": "proto-mixed-full",
+      "engine": "generated-owned",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 4866,
+      "ns_per_row": [
+        709.176856884058,
+        700.4491627464158,
+        702.1360491071429
+      ],
+      "variant": "previous",
+      "fork": 1
+    },
+    {
+      "workload": "proto-scalar",
+      "engine": "buffa",
+      "stage": "ingest-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 54400032992,
+      "ns_per_row": [
+        50.9910638540851,
+        50.899886822563836,
+        50.95934361140099
+      ],
+      "variant": "candidate",
+      "fork": 1
+    },
+    {
+      "workload": "proto-mixed-full",
+      "engine": "buffa",
+      "stage": "ingest-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 4866,
+      "allocated_bytes_per_row": [
+        1382.25,
+        1382.25,
+        1382.25
+      ],
+      "variant": "previous",
+      "fork": 1
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "buffa",
+      "stage": "interpret-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "allocated_bytes_per_row": [
+        2.0,
+        2.0,
+        2.0
+      ],
+      "variant": "candidate",
+      "fork": 2
+    },
+    {
+      "workload": "proto-mixed-full",
+      "engine": "buffa",
+      "stage": "ingest-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 4866,
+      "allocated_bytes_per_row": [
+        1406.25,
+        1406.25,
+        1406.25
+      ],
+      "variant": "candidate",
+      "fork": 0
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "stock",
+      "stage": "peak-boundary",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": true,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        5.2852154356060606,
+        5.337532950447989,
+        5.332686591668941
+      ],
+      "variant": "previous",
+      "fork": 2
+    },
+    {
+      "workload": "proto-scalar",
+      "engine": "buffa",
+      "stage": "ingest-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 54400032992,
+      "allocated_bytes_per_row": [
+        80.0,
+        80.0,
+        80.0
+      ],
+      "variant": "previous",
+      "fork": 0
+    },
+    {
+      "workload": "proto-mixed-full",
+      "engine": "buffa",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 4866,
+      "ns_per_row": [
+        1923.2267922794117,
+        1895.8406325120193,
+        1922.817133884804
+      ],
+      "variant": "candidate",
+      "fork": 4
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "stock",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "allocated_bytes_per_row": [
+        1776.75,
+        1776.75,
+        1776.75
+      ],
+      "variant": "candidate",
+      "fork": 1
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "stock",
+      "stage": "interpret-boundary",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "allocated_bytes_per_row": [
+        2.0,
+        2.0,
+        2.0
+      ],
+      "variant": "previous",
+      "fork": 3
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "stock",
+      "stage": "peak-boundary",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": true,
+      "rows": 32,
+      "checksum": 563,
+      "allocated_bytes_per_row": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "variant": "candidate",
+      "fork": 4
+    },
+    {
+      "workload": "proto-mixed-full",
+      "engine": "owned",
+      "stage": "ingest-generated",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 4866,
+      "ns_per_row": [
+        3339.1439353813557,
+        3340.560315148305,
+        3344.752913135593
+      ],
+      "variant": "previous",
+      "fork": 4
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "generated-owned",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        669.0520387414383,
+        664.4422433035714,
+        667.3467230162116
+      ],
+      "variant": "previous",
+      "fork": 3
+    },
+    {
+      "workload": "proto-mixed-full",
+      "engine": "generated-owned",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 4866,
+      "allocated_bytes_per_row": [
+        1800.5,
+        1800.5,
+        1800.5
+      ],
+      "variant": "candidate",
+      "fork": 3
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "stock",
+      "stage": "peak-boundary",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": true,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        5.455243612635445,
+        5.4352368620603295,
+        5.4300717853768345
+      ],
+      "variant": "previous",
+      "fork": 4
+    },
+    {
+      "workload": "proto-scalar",
+      "engine": "buffa",
+      "stage": "ingest-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 54400032992,
+      "ns_per_row": [
+        54.31072660376703,
+        53.509556457135034,
+        54.192655599861304
+      ],
+      "variant": "previous",
+      "fork": 0
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "buffa",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        816.156005859375,
+        813.5643963952282,
+        806.2137988683128
+      ],
+      "variant": "previous",
+      "fork": 0
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "buffa",
+      "stage": "interpret-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        16.2895869140625,
+        16.249937666223403,
+        16.280161783854165
+      ],
+      "variant": "candidate",
+      "fork": 2
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "buffa",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        750.3808219588122,
+        746.8197608540077,
+        736.7840401785714
+      ],
+      "variant": "candidate",
+      "fork": 0
+    },
+    {
+      "workload": "proto-mixed-full",
+      "engine": "stock",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 4866,
+      "allocated_bytes_per_row": [
+        1776.75,
+        1776.75,
+        1776.75
+      ],
+      "variant": "previous",
+      "fork": 1
+    },
+    {
+      "workload": "proto-mixed-full",
+      "engine": "generated-owned",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 4866,
+      "allocated_bytes_per_row": [
+        1800.5,
+        1800.5,
+        1800.5
+      ],
+      "variant": "candidate",
+      "fork": 0
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "stock",
+      "stage": "peak-boundary",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": true,
+      "rows": 32,
+      "checksum": 563,
+      "allocated_bytes_per_row": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "variant": "candidate",
+      "fork": 0
+    },
+    {
+      "workload": "proto-scalar",
+      "engine": "buffa",
+      "stage": "ingest-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 54400032992,
+      "allocated_bytes_per_row": [
+        80.0,
+        80.0,
+        80.0
+      ],
+      "variant": "previous",
+      "fork": 2
+    },
+    {
+      "workload": "proto-mixed-full",
+      "engine": "generated-owned",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 4866,
+      "ns_per_row": [
+        690.991593970848,
+        685.2438538024476,
+        689.8080710827464
+      ],
+      "variant": "candidate",
+      "fork": 4
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "buffa",
+      "stage": "interpret-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        16.754688571673526,
+        16.718959406527873,
+        16.718206945750683
+      ],
+      "variant": "previous",
+      "fork": 3
+    },
+    {
+      "workload": "proto-mixed-full",
+      "engine": "owned",
+      "stage": "ingest-generated",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 4866,
+      "allocated_bytes_per_row": [
+        2976.0,
+        2976.0,
+        2976.0
+      ],
+      "variant": "previous",
+      "fork": 2
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "stock",
+      "stage": "interpret-boundary",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "allocated_bytes_per_row": [
+        2.0,
+        2.0,
+        2.0
+      ],
+      "variant": "previous",
+      "fork": 1
+    },
+    {
+      "workload": "proto-mixed-full",
+      "engine": "owned",
+      "stage": "ingest-generated",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 4866,
+      "ns_per_row": [
+        3337.4644465042375,
+        3326.6152012711864,
+        3325.6816737288136
+      ],
+      "variant": "previous",
+      "fork": 2
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "stock",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        649.1038205980067,
+        644.0357858758224,
+        646.6019750412541
+      ],
+      "variant": "previous",
+      "fork": 4
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "stock",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "allocated_bytes_per_row": [
+        1776.75,
+        1776.75,
+        1776.75
+      ],
+      "variant": "candidate",
+      "fork": 0
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "buffa",
+      "stage": "peak-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "native_views_requested": true,
+      "guest_compiled": true,
+      "rows": 32,
+      "checksum": 563,
+      "allocated_bytes_per_row": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "variant": "previous",
+      "fork": 2
+    },
+    {
+      "workload": "proto-mixed-full",
+      "engine": "buffa",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 4866,
+      "allocated_bytes_per_row": [
+        1406.25,
+        1406.25,
+        1406.25
+      ],
+      "variant": "candidate",
+      "fork": 0
+    },
+    {
+      "workload": "proto-mixed-full",
+      "engine": "buffa",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 4866,
+      "ns_per_row": [
+        1861.4017857142858,
+        1857.9431014150944,
+        1851.1219781839623
+      ],
+      "variant": "candidate",
+      "fork": 3
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "buffa",
+      "stage": "peak-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "native_views_requested": true,
+      "guest_compiled": true,
+      "rows": 32,
+      "checksum": 563,
+      "allocated_bytes_per_row": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "variant": "candidate",
+      "fork": 4
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "stock",
+      "stage": "interpret-boundary",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "allocated_bytes_per_row": [
+        2.0,
+        2.0,
+        2.0
+      ],
+      "variant": "candidate",
+      "fork": 4
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "buffa",
+      "stage": "interpret-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "allocated_bytes_per_row": [
+        2.0,
+        2.0,
+        2.0
+      ],
+      "variant": "previous",
+      "fork": 1
+    },
+    {
+      "workload": "proto-mixed-full",
+      "engine": "buffa",
+      "stage": "ingest-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 4866,
+      "allocated_bytes_per_row": [
+        1406.25,
+        1406.25,
+        1406.25
+      ],
+      "variant": "candidate",
+      "fork": 1
+    },
+    {
+      "workload": "proto-mixed-full",
+      "engine": "generated-owned",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 4866,
+      "ns_per_row": [
+        711.0990056818182,
+        715.6414692078755,
+        708.6743992554152
+      ],
+      "variant": "previous",
+      "fork": 2
+    },
+    {
+      "workload": "proto-mixed-full",
+      "engine": "buffa",
+      "stage": "ingest-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 4866,
+      "ns_per_row": [
+        1286.3934518914473,
+        1286.6140522203948,
+        1287.901187294408
+      ],
+      "variant": "candidate",
+      "fork": 4
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "stock",
+      "stage": "peak-boundary",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": true,
+      "rows": 32,
+      "checksum": 563,
+      "allocated_bytes_per_row": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "variant": "previous",
+      "fork": 4
+    },
+    {
+      "workload": "proto-mixed-full",
+      "engine": "owned",
+      "stage": "ingest-generated",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 4866,
+      "ns_per_row": [
+        3290.3345703125,
+        3271.6182942708333,
+        3351.8166048728813
+      ],
+      "variant": "candidate",
+      "fork": 0
+    },
+    {
+      "workload": "proto-mixed-full",
+      "engine": "buffa",
+      "stage": "ingest-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 4866,
+      "ns_per_row": [
+        1343.1649186643835,
+        1347.0488146551725,
+        1340.728408604452
+      ],
+      "variant": "previous",
+      "fork": 4
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "buffa",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        821.5899914653361,
+        812.3693270228216,
+        815.4827962239583
+      ],
+      "variant": "previous",
+      "fork": 4
+    },
+    {
+      "workload": "proto-mixed-full",
+      "engine": "owned",
+      "stage": "ingest-generated",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 4866,
+      "allocated_bytes_per_row": [
+        2976.0,
+        2976.0,
+        2976.0
+      ],
+      "variant": "candidate",
+      "fork": 3
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "buffa",
+      "stage": "interpret-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        16.321942824093416,
+        16.30000449818508,
+        16.306771333131675
+      ],
+      "variant": "candidate",
+      "fork": 1
+    },
+    {
+      "workload": "proto-mixed-full",
+      "engine": "buffa",
+      "stage": "ingest-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 4866,
+      "allocated_bytes_per_row": [
+        1406.25,
+        1406.25,
+        1406.25
+      ],
+      "variant": "candidate",
+      "fork": 4
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "buffa",
+      "stage": "interpret-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        16.184746223096028,
+        16.208141215600133,
+        16.253257264482215
+      ],
+      "variant": "candidate",
+      "fork": 4
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "stock",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "allocated_bytes_per_row": [
+        1776.75,
+        1776.75,
+        1776.75
+      ],
+      "variant": "previous",
+      "fork": 1
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "buffa",
+      "stage": "ingest-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        617.2996475749211,
+        625.4024435902556,
+        623.3302274084394
+      ],
+      "variant": "candidate",
+      "fork": 4
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "stock",
+      "stage": "peak-boundary",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": true,
+      "rows": 32,
+      "checksum": 563,
+      "allocated_bytes_per_row": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "variant": "previous",
+      "fork": 0
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "stock",
+      "stage": "peak-boundary",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": true,
+      "rows": 32,
+      "checksum": 563,
+      "allocated_bytes_per_row": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "variant": "previous",
+      "fork": 2
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "generated-owned",
+      "stage": "peak",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": true,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        2.8903503995953184,
+        2.7207856659690495,
+        2.7226932195549454
+      ],
+      "variant": "previous",
+      "fork": 3
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "buffa",
+      "stage": "peak-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "native_views_requested": true,
+      "guest_compiled": true,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        9.311253225412376,
+        9.272005467860193,
+        9.281180431052906
+      ],
+      "variant": "previous",
+      "fork": 4
+    },
+    {
+      "workload": "proto-scalar",
+      "engine": "buffa",
+      "stage": "ingest-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 54400032992,
+      "allocated_bytes_per_row": [
+        80.0,
+        80.0,
+        80.0
+      ],
+      "variant": "candidate",
+      "fork": 0
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "stock",
+      "stage": "peak-boundary",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": true,
+      "rows": 32,
+      "checksum": 563,
+      "allocated_bytes_per_row": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "variant": "previous",
+      "fork": 3
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "buffa",
+      "stage": "interpret-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        16.71996636136286,
+        16.739239752782535,
+        16.772460266783998
+      ],
+      "variant": "previous",
+      "fork": 0
+    },
+    {
+      "workload": "proto-mixed-full",
+      "engine": "owned",
+      "stage": "ingest-generated",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 4866,
+      "allocated_bytes_per_row": [
+        2976.0,
+        2976.0,
+        2976.0
+      ],
+      "variant": "previous",
+      "fork": 4
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "buffa",
+      "stage": "interpret-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "allocated_bytes_per_row": [
+        2.0,
+        2.0,
+        2.0
+      ],
+      "variant": "previous",
+      "fork": 4
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "generated-owned",
+      "stage": "peak",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": true,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        2.89087156873446,
+        2.7084928435974596,
+        2.70907012485786
+      ],
+      "variant": "previous",
+      "fork": 4
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "stock",
+      "stage": "peak-boundary",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": true,
+      "rows": 32,
+      "checksum": 563,
+      "allocated_bytes_per_row": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "variant": "candidate",
+      "fork": 1
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "generated-owned",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        664.6069701318028,
+        661.1704233530405,
+        661.0650865709459
+      ],
+      "variant": "previous",
+      "fork": 0
+    },
+    {
+      "workload": "proto-mixed-full",
+      "engine": "stock",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 4866,
+      "allocated_bytes_per_row": [
+        1776.75,
+        1776.75,
+        1776.75
+      ],
+      "variant": "previous",
+      "fork": 3
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "buffa",
+      "stage": "interpret-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        16.326274035448698,
+        16.296716471354166,
+        16.318801044621996
+      ],
+      "variant": "candidate",
+      "fork": 3
+    },
+    {
+      "workload": "proto-mixed-full",
+      "engine": "generated-owned",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 4866,
+      "allocated_bytes_per_row": [
+        1800.5,
+        1800.5,
+        1800.5
+      ],
+      "variant": "previous",
+      "fork": 3
+    },
+    {
+      "workload": "proto-mixed-full",
+      "engine": "stock",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 4866,
+      "ns_per_row": [
+        679.0824245876736,
+        675.5485856681034,
+        674.558822737069
+      ],
+      "variant": "candidate",
+      "fork": 1
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "buffa",
+      "stage": "ingest-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "allocated_bytes_per_row": [
+        341.5,
+        341.5,
+        341.5
+      ],
+      "variant": "candidate",
+      "fork": 1
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "stock",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        646.7356813948676,
+        640.5455814549181,
+        641.5425973360656
+      ],
+      "variant": "candidate",
+      "fork": 2
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "generated-owned",
+      "stage": "peak",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": true,
+      "rows": 32,
+      "checksum": 563,
+      "allocated_bytes_per_row": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "variant": "candidate",
+      "fork": 2
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "generated-owned",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        652.567890625,
+        647.7115066225166,
+        650.6928467607974
+      ],
+      "variant": "candidate",
+      "fork": 3
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "stock",
+      "stage": "peak-boundary",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": true,
+      "rows": 32,
+      "checksum": 563,
+      "allocated_bytes_per_row": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "variant": "candidate",
+      "fork": 3
+    },
+    {
+      "workload": "proto-mixed-full",
+      "engine": "buffa",
+      "stage": "ingest-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 4866,
+      "allocated_bytes_per_row": [
+        1382.25,
+        1382.25,
+        1382.25
+      ],
+      "variant": "previous",
+      "fork": 3
+    },
+    {
+      "workload": "proto-mixed-full",
+      "engine": "stock",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 4866,
+      "ns_per_row": [
+        675.4979929956896,
+        673.0531437929553,
+        669.6659219820206
+      ],
+      "variant": "previous",
+      "fork": 1
+    },
+    {
+      "workload": "proto-mixed-full",
+      "engine": "buffa",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 4866,
+      "ns_per_row": [
+        1869.682068452381,
+        1856.032834610849,
+        1868.4271949404763
+      ],
+      "variant": "candidate",
+      "fork": 0
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "generated-owned",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        657.1451211199665,
+        655.5190986786913,
+        657.381685192953
+      ],
+      "variant": "candidate",
+      "fork": 0
+    },
+    {
+      "workload": "proto-mixed-full",
+      "engine": "buffa",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 4866,
+      "allocated_bytes_per_row": [
+        1382.25,
+        1382.25,
+        1382.25
+      ],
+      "variant": "previous",
+      "fork": 4
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "stock",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        643.0515779194079,
+        638.3044960171569,
+        647.9185120033112
+      ],
+      "variant": "candidate",
+      "fork": 0
+    },
+    {
+      "workload": "proto-mixed-full",
+      "engine": "generated-owned",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 4866,
+      "allocated_bytes_per_row": [
+        1800.5,
+        1800.5,
+        1800.5
+      ],
+      "variant": "candidate",
+      "fork": 1
+    },
+    {
+      "workload": "proto-scalar",
+      "engine": "buffa",
+      "stage": "ingest-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 54400032992,
+      "ns_per_row": [
+        49.816537753443,
+        50.34028773356959,
+        50.42352562758131
+      ],
+      "variant": "candidate",
+      "fork": 2
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "generated-owned",
+      "stage": "peak",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": true,
+      "rows": 32,
+      "checksum": 563,
+      "allocated_bytes_per_row": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "variant": "previous",
+      "fork": 0
+    },
+    {
+      "workload": "proto-mixed-full",
+      "engine": "buffa",
+      "stage": "ingest-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 4866,
+      "ns_per_row": [
+        1344.2707352311643,
+        1347.278421336207,
+        1340.65793557363
+      ],
+      "variant": "previous",
+      "fork": 3
+    },
+    {
+      "workload": "proto-mixed-full",
+      "engine": "owned",
+      "stage": "ingest-generated",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 4866,
+      "allocated_bytes_per_row": [
+        2976.0,
+        2976.0,
+        2976.0
+      ],
+      "variant": "candidate",
+      "fork": 4
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "buffa",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        814.7958821614583,
+        812.8139425570539,
+        808.9369350464876
+      ],
+      "variant": "previous",
+      "fork": 2
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "stock",
+      "stage": "peak-boundary",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": true,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        5.325008134471762,
+        5.329040926962843,
+        5.334527158591361
+      ],
+      "variant": "candidate",
+      "fork": 1
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "buffa",
+      "stage": "peak-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "native_views_requested": true,
+      "guest_compiled": true,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        8.411148113324295,
+        8.49808951890875,
+        8.623882229045286
+      ],
+      "variant": "candidate",
+      "fork": 3
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "buffa",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        822.1322708771008,
+        811.4088271524896,
+        814.6415201822916
+      ],
+      "variant": "previous",
+      "fork": 1
+    },
+    {
+      "workload": "proto-mixed-full",
+      "engine": "owned",
+      "stage": "ingest-generated",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 4866,
+      "ns_per_row": [
+        3245.7144595286886,
+        3244.2631915983607,
+        3243.3883196721313
+      ],
+      "variant": "candidate",
+      "fork": 4
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "generated-owned",
+      "stage": "peak",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": true,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        2.8605793431862114,
+        2.7014775505158775,
+        2.702415868211183
+      ],
+      "variant": "candidate",
+      "fork": 3
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "generated-owned",
+      "stage": "peak",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": true,
+      "rows": 32,
+      "checksum": 563,
+      "allocated_bytes_per_row": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "variant": "candidate",
+      "fork": 3
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "buffa",
+      "stage": "ingest-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "allocated_bytes_per_row": [
+        421.5,
+        421.5,
+        421.5
+      ],
+      "variant": "previous",
+      "fork": 4
+    },
+    {
+      "workload": "proto-mixed-full",
+      "engine": "buffa",
+      "stage": "ingest-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 4866,
+      "ns_per_row": [
+        1280.70703125,
+        1275.4051085633116,
+        1275.561333198052
+      ],
+      "variant": "candidate",
+      "fork": 1
+    },
+    {
+      "workload": "proto-mixed-full",
+      "engine": "buffa",
+      "stage": "ingest-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 4866,
+      "ns_per_row": [
+        1288.6694592927631,
+        1285.5420435855262,
+        1286.0503700657894
+      ],
+      "variant": "candidate",
+      "fork": 2
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "buffa",
+      "stage": "interpret-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "allocated_bytes_per_row": [
+        2.0,
+        2.0,
+        2.0
+      ],
+      "variant": "candidate",
+      "fork": 0
+    },
+    {
+      "workload": "proto-scalar",
+      "engine": "buffa",
+      "stage": "ingest-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 54400032992,
+      "ns_per_row": [
+        53.65673492859105,
+        53.51479559075342,
+        52.92883661270658
+      ],
+      "variant": "previous",
+      "fork": 1
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "buffa",
+      "stage": "peak-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "native_views_requested": true,
+      "guest_compiled": true,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        9.39782837008035,
+        9.390990459735576,
+        9.410845975479102
+      ],
+      "variant": "previous",
+      "fork": 1
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "generated-owned",
+      "stage": "peak",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": true,
+      "rows": 32,
+      "checksum": 563,
+      "allocated_bytes_per_row": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "variant": "previous",
+      "fork": 4
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "buffa",
+      "stage": "peak-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "native_views_requested": true,
+      "guest_compiled": true,
+      "rows": 32,
+      "checksum": 563,
+      "allocated_bytes_per_row": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "variant": "candidate",
+      "fork": 2
+    },
+    {
+      "workload": "proto-mixed-full",
+      "engine": "generated-owned",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 4866,
+      "ns_per_row": [
+        700.6732003348214,
+        699.2096540178571,
+        695.9879337188612
+      ],
+      "variant": "previous",
+      "fork": 4
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "buffa",
+      "stage": "ingest-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "allocated_bytes_per_row": [
+        421.5,
+        421.5,
+        421.5
+      ],
+      "variant": "previous",
+      "fork": 3
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "stock",
+      "stage": "peak-boundary",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": true,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        5.237092072541292,
+        5.245720932164143,
+        5.247594789932048
+      ],
+      "variant": "candidate",
+      "fork": 3
+    },
+    {
+      "workload": "proto-mixed-full",
+      "engine": "stock",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 4866,
+      "allocated_bytes_per_row": [
+        1776.75,
+        1776.75,
+        1776.75
+      ],
+      "variant": "previous",
+      "fork": 0
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "buffa",
+      "stage": "ingest-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "allocated_bytes_per_row": [
+        421.5,
+        421.5,
+        421.5
+      ],
+      "variant": "previous",
+      "fork": 0
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "generated-owned",
+      "stage": "peak",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": true,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        2.8524550393363026,
+        2.7035395957602137,
+        2.702442400536742
+      ],
+      "variant": "previous",
+      "fork": 0
+    },
+    {
+      "workload": "proto-mixed-full",
+      "engine": "buffa",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 4866,
+      "ns_per_row": [
+        1956.187734375,
+        1956.2350390625,
+        1952.0167852722773
+      ],
+      "variant": "previous",
+      "fork": 1
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "buffa",
+      "stage": "ingest-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        702.951171875,
+        705.9411383122743,
+        701.921889000896
+      ],
+      "variant": "previous",
+      "fork": 4
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "stock",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "allocated_bytes_per_row": [
+        1776.75,
+        1776.75,
+        1776.75
+      ],
+      "variant": "previous",
+      "fork": 0
+    },
+    {
+      "workload": "proto-scalar",
+      "engine": "buffa",
+      "stage": "ingest-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 54400032992,
+      "ns_per_row": [
+        49.60952184404369,
+        50.19755124004112,
+        50.18739863020298
+      ],
+      "variant": "candidate",
+      "fork": 0
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "buffa",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "allocated_bytes_per_row": [
+        445.5,
+        445.5,
+        445.5
+      ],
+      "variant": "candidate",
+      "fork": 1
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "buffa",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "allocated_bytes_per_row": [
+        445.5,
+        445.5,
+        445.5
+      ],
+      "variant": "candidate",
+      "fork": 4
+    },
+    {
+      "workload": "proto-mixed-full",
+      "engine": "stock",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 4866,
+      "allocated_bytes_per_row": [
+        1776.75,
+        1776.75,
+        1776.75
+      ],
+      "variant": "candidate",
+      "fork": 1
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "buffa",
+      "stage": "ingest-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        616.6983808162461,
+        628.2706742363345,
+        618.8970653678797
+      ],
+      "variant": "candidate",
+      "fork": 1
+    },
+    {
+      "workload": "proto-mixed-full",
+      "engine": "buffa",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 4866,
+      "allocated_bytes_per_row": [
+        1382.25,
+        1382.25,
+        1382.25
+      ],
+      "variant": "previous",
+      "fork": 0
+    },
+    {
+      "workload": "proto-scalar",
+      "engine": "buffa",
+      "stage": "ingest-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 54400032992,
+      "allocated_bytes_per_row": [
+        80.0,
+        80.0,
+        80.0
+      ],
+      "variant": "candidate",
+      "fork": 2
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "buffa",
+      "stage": "ingest-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        615.5512234669811,
+        618.5838607594936,
+        616.1101120283018
+      ],
+      "variant": "candidate",
+      "fork": 2
+    },
+    {
+      "workload": "proto-mixed-full",
+      "engine": "stock",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 4866,
+      "ns_per_row": [
+        678.3497178819445,
+        674.3624057112069,
+        675.4826239224138
+      ],
+      "variant": "previous",
+      "fork": 4
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "stock",
+      "stage": "peak-boundary",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": true,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        5.263269884832974,
+        5.277823270475302,
+        5.283454238053062
+      ],
+      "variant": "previous",
+      "fork": 1
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "generated-owned",
+      "stage": "peak",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": true,
+      "rows": 32,
+      "checksum": 563,
+      "allocated_bytes_per_row": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "variant": "candidate",
+      "fork": 1
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "stock",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "allocated_bytes_per_row": [
+        1776.75,
+        1776.75,
+        1776.75
+      ],
+      "variant": "candidate",
+      "fork": 4
+    },
+    {
+      "workload": "proto-mixed-full",
+      "engine": "stock",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 4866,
+      "ns_per_row": [
+        684.2811407342657,
+        681.0664743031359,
+        680.0755343967014
+      ],
+      "variant": "candidate",
+      "fork": 4
+    },
+    {
+      "workload": "proto-mixed-full",
+      "engine": "buffa",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 4866,
+      "ns_per_row": [
+        1866.729724702381,
+        1854.8440448113208,
+        1864.6525669642858
+      ],
+      "variant": "candidate",
+      "fork": 2
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "buffa",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        738.5810141509434,
+        741.3591086647727,
+        737.4862028301886
+      ],
+      "variant": "candidate",
+      "fork": 4
+    },
+    {
+      "workload": "proto-mixed-full",
+      "engine": "buffa",
+      "stage": "ingest-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 4866,
+      "allocated_bytes_per_row": [
+        1406.25,
+        1406.25,
+        1406.25
+      ],
+      "variant": "candidate",
+      "fork": 3
+    },
+    {
+      "workload": "proto-mixed-full",
+      "engine": "stock",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 4866,
+      "allocated_bytes_per_row": [
+        1776.75,
+        1776.75,
+        1776.75
+      ],
+      "variant": "previous",
+      "fork": 4
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "buffa",
+      "stage": "peak-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "native_views_requested": true,
+      "guest_compiled": true,
+      "rows": 32,
+      "checksum": 563,
+      "allocated_bytes_per_row": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "variant": "candidate",
+      "fork": 3
+    },
+    {
+      "workload": "proto-mixed-full",
+      "engine": "owned",
+      "stage": "ingest-generated",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 4866,
+      "ns_per_row": [
+        3259.0290364583334,
+        3251.870581454918,
+        3257.0997395833333
+      ],
+      "variant": "candidate",
+      "fork": 2
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "stock",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "allocated_bytes_per_row": [
+        1776.75,
+        1776.75,
+        1776.75
+      ],
+      "variant": "candidate",
+      "fork": 3
+    },
+    {
+      "workload": "proto-mixed-full",
+      "engine": "owned",
+      "stage": "ingest-generated",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 4866,
+      "ns_per_row": [
+        3272.5401692708333,
+        3265.2486328125,
+        3279.1263020833335
+      ],
+      "variant": "previous",
+      "fork": 1
+    },
+    {
+      "workload": "proto-mixed-full",
+      "engine": "stock",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 4866,
+      "ns_per_row": [
+        679.1612141927084,
+        678.884779188368,
+        680.5801393728223
+      ],
+      "variant": "previous",
+      "fork": 2
+    },
+    {
+      "workload": "proto-mixed-full",
+      "engine": "buffa",
+      "stage": "ingest-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 4866,
+      "ns_per_row": [
+        1285.2486379523027,
+        1283.1473651960785,
+        1284.4907832924837
+      ],
+      "variant": "candidate",
+      "fork": 0
+    },
+    {
+      "workload": "proto-mixed-full",
+      "engine": "owned",
+      "stage": "ingest-generated",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 4866,
+      "ns_per_row": [
+        3331.767280190678,
+        3326.2359639830506,
+        3312.7271583686443
+      ],
+      "variant": "previous",
+      "fork": 3
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "generated-owned",
+      "stage": "peak",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": true,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        2.8897114228920118,
+        2.7077372490262532,
+        2.705799238056156
+      ],
+      "variant": "previous",
+      "fork": 2
+    },
+    {
+      "workload": "proto-scalar",
+      "engine": "buffa",
+      "stage": "ingest-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 54400032992,
+      "allocated_bytes_per_row": [
+        80.0,
+        80.0,
+        80.0
+      ],
+      "variant": "previous",
+      "fork": 4
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "buffa",
+      "stage": "ingest-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        709.6212211277174,
+        711.1823579545454,
+        706.443070284296
+      ],
+      "variant": "previous",
+      "fork": 0
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "stock",
+      "stage": "peak-boundary",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": true,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        5.259109326213932,
+        5.267960977101758,
+        5.275260908814795
+      ],
+      "variant": "previous",
+      "fork": 0
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "generated-owned",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        654.6823526337793,
+        652.3434635416667,
+        647.9628000827814
+      ],
+      "variant": "candidate",
+      "fork": 1
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "buffa",
+      "stage": "interpret-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "allocated_bytes_per_row": [
+        2.0,
+        2.0,
+        2.0
+      ],
+      "variant": "previous",
+      "fork": 2
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "stock",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "allocated_bytes_per_row": [
+        1776.75,
+        1776.75,
+        1776.75
+      ],
+      "variant": "candidate",
+      "fork": 2
+    },
+    {
+      "workload": "proto-scalar",
+      "engine": "buffa",
+      "stage": "ingest-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 54400032992,
+      "ns_per_row": [
+        53.93693811257592,
+        54.11187683974534,
+        53.31471645571779
+      ],
+      "variant": "previous",
+      "fork": 3
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "stock",
+      "stage": "peak-boundary",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": true,
+      "rows": 32,
+      "checksum": 563,
+      "allocated_bytes_per_row": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "variant": "previous",
+      "fork": 1
+    },
+    {
+      "workload": "proto-mixed-full",
+      "engine": "buffa",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 4866,
+      "ns_per_row": [
+        1941.338219368812,
+        1929.123353247549,
+        1942.515354269802
+      ],
+      "variant": "previous",
+      "fork": 4
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "buffa",
+      "stage": "ingest-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "allocated_bytes_per_row": [
+        421.5,
+        421.5,
+        421.5
+      ],
+      "variant": "previous",
+      "fork": 2
+    },
+    {
+      "workload": "proto-mixed-full",
+      "engine": "buffa",
+      "stage": "ingest-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 4866,
+      "allocated_bytes_per_row": [
+        1382.25,
+        1382.25,
+        1382.25
+      ],
+      "variant": "previous",
+      "fork": 2
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "stock",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "allocated_bytes_per_row": [
+        1776.75,
+        1776.75,
+        1776.75
+      ],
+      "variant": "previous",
+      "fork": 2
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "generated-owned",
+      "stage": "peak",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": true,
+      "rows": 32,
+      "checksum": 563,
+      "allocated_bytes_per_row": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "variant": "previous",
+      "fork": 3
+    },
+    {
+      "workload": "proto-mixed-full",
+      "engine": "generated-owned",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 4866,
+      "allocated_bytes_per_row": [
+        1800.5,
+        1800.5,
+        1800.5
+      ],
+      "variant": "candidate",
+      "fork": 4
+    },
+    {
+      "workload": "proto-mixed-full",
+      "engine": "buffa",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 4866,
+      "allocated_bytes_per_row": [
+        1406.25,
+        1406.25,
+        1406.25
+      ],
+      "variant": "candidate",
+      "fork": 3
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "buffa",
+      "stage": "interpret-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "allocated_bytes_per_row": [
+        2.0,
+        2.0,
+        2.0
+      ],
+      "variant": "candidate",
+      "fork": 1
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "buffa",
+      "stage": "interpret-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "allocated_bytes_per_row": [
+        2.0,
+        2.0,
+        2.0
+      ],
+      "variant": "candidate",
+      "fork": 4
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "stock",
+      "stage": "interpret-boundary",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        5.753034960201166,
+        5.442032485934715,
+        5.446057118016838
+      ],
+      "variant": "candidate",
+      "fork": 1
+    },
+    {
+      "workload": "proto-mixed-full",
+      "engine": "buffa",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 4866,
+      "allocated_bytes_per_row": [
+        1382.25,
+        1382.25,
+        1382.25
+      ],
+      "variant": "previous",
+      "fork": 3
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "stock",
+      "stage": "interpret-boundary",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        5.667399428570392,
+        5.416009776023181,
+        5.427967985771454
+      ],
+      "variant": "candidate",
+      "fork": 0
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "generated-owned",
+      "stage": "peak",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": true,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        2.876758284213743,
+        2.707289901533738,
+        2.7169754296614177
+      ],
+      "variant": "candidate",
+      "fork": 2
+    },
+    {
+      "workload": "proto-mixed-full",
+      "engine": "buffa",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 4866,
+      "allocated_bytes_per_row": [
+        1382.25,
+        1382.25,
+        1382.25
+      ],
+      "variant": "previous",
+      "fork": 1
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "buffa",
+      "stage": "interpret-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        16.210868208098475,
+        16.180341667528975,
+        16.185057300289735
+      ],
+      "variant": "candidate",
+      "fork": 0
+    },
+    {
+      "workload": "proto-mixed-full",
+      "engine": "owned",
+      "stage": "ingest-generated",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 4866,
+      "allocated_bytes_per_row": [
+        2976.0,
+        2976.0,
+        2976.0
+      ],
+      "variant": "candidate",
+      "fork": 2
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "stock",
+      "stage": "peak-boundary",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": true,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        5.226692617756047,
+        5.23780103345533,
+        5.2366045106132075
+      ],
+      "variant": "candidate",
+      "fork": 2
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "stock",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        643.4682488692434,
+        638.1451928949512,
+        640.5070952868853
+      ],
+      "variant": "previous",
+      "fork": 3
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "generated-owned",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "allocated_bytes_per_row": [
+        1800.5,
+        1800.5,
+        1800.5
+      ],
+      "variant": "candidate",
+      "fork": 1
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "buffa",
+      "stage": "peak-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "native_views_requested": true,
+      "guest_compiled": true,
+      "rows": 32,
+      "checksum": 563,
+      "allocated_bytes_per_row": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "variant": "previous",
+      "fork": 1
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "stock",
+      "stage": "interpret-boundary",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "allocated_bytes_per_row": [
+        2.0,
+        2.0,
+        2.0
+      ],
+      "variant": "candidate",
+      "fork": 2
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "stock",
+      "stage": "interpret-boundary",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "allocated_bytes_per_row": [
+        2.0,
+        2.0,
+        2.0
+      ],
+      "variant": "previous",
+      "fork": 2
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "stock",
+      "stage": "interpret-boundary",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        5.68280997793305,
+        5.422424424816829,
+        5.425554470486111
+      ],
+      "variant": "candidate",
+      "fork": 2
+    },
+    {
+      "workload": "proto-scalar",
+      "engine": "buffa",
+      "stage": "ingest-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 54400032992,
+      "ns_per_row": [
+        53.898072097475165,
+        54.05990520343205,
+        53.1817666502178
+      ],
+      "variant": "previous",
+      "fork": 2
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "stock",
+      "stage": "interpret-boundary",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        5.791209385562441,
+        5.63769666507964,
+        5.4453482172725245
+      ],
+      "variant": "candidate",
+      "fork": 4
+    },
+    {
+      "workload": "proto-mixed-full",
+      "engine": "buffa",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 4866,
+      "ns_per_row": [
+        1907.3542930825242,
+        1896.0313626802886,
+        1906.798619538835
+      ],
+      "variant": "previous",
+      "fork": 2
+    },
+    {
+      "workload": "proto-mixed-full",
+      "engine": "buffa",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 4866,
+      "ns_per_row": [
+        1911.8243704490292,
+        1897.1607630461165,
+        1911.441140776699
+      ],
+      "variant": "candidate",
+      "fork": 1
+    },
+    {
+      "workload": "proto-mixed-full",
+      "engine": "owned",
+      "stage": "ingest-generated",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 4866,
+      "allocated_bytes_per_row": [
+        2976.0,
+        2976.0,
+        2976.0
+      ],
+      "variant": "previous",
+      "fork": 3
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "buffa",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "allocated_bytes_per_row": [
+        445.5,
+        445.5,
+        445.5
+      ],
+      "variant": "candidate",
+      "fork": 3
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "buffa",
+      "stage": "ingest-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "allocated_bytes_per_row": [
+        421.5,
+        421.5,
+        421.5
+      ],
+      "variant": "previous",
+      "fork": 1
+    },
+    {
+      "workload": "proto-mixed-full",
+      "engine": "generated-owned",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 4866,
+      "ns_per_row": [
+        686.747615131579,
+        683.6035019667833,
+        681.4270198170732
+      ],
+      "variant": "candidate",
+      "fork": 1
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "stock",
+      "stage": "interpret-boundary",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        5.799187551031769,
+        5.4242184680072745,
+        5.429633656625167
+      ],
+      "variant": "previous",
+      "fork": 2
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "buffa",
+      "stage": "ingest-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        614.0205353644201,
+        619.7654148536392,
+        616.1533911671925
+      ],
+      "variant": "candidate",
+      "fork": 0
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "buffa",
+      "stage": "peak-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "native_views_requested": true,
+      "guest_compiled": true,
+      "rows": 32,
+      "checksum": 563,
+      "allocated_bytes_per_row": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "variant": "candidate",
+      "fork": 1
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "buffa",
+      "stage": "peak-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "native_views_requested": true,
+      "guest_compiled": true,
+      "rows": 32,
+      "checksum": 563,
+      "allocated_bytes_per_row": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "variant": "previous",
+      "fork": 3
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "buffa",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        739.7413620283019,
+        744.5803380465779,
+        740.2687470407197
+      ],
+      "variant": "candidate",
+      "fork": 1
+    },
+    {
+      "workload": "proto-mixed-full",
+      "engine": "stock",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 4866,
+      "ns_per_row": [
+        683.371913243007,
+        678.8336995442709,
+        681.4799107142857
+      ],
+      "variant": "candidate",
+      "fork": 3
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "buffa",
+      "stage": "peak-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "native_views_requested": true,
+      "guest_compiled": true,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        9.350233559951665,
+        9.340851507208779,
+        9.302917155071878
+      ],
+      "variant": "previous",
+      "fork": 3
+    },
+    {
+      "workload": "proto-mixed-full",
+      "engine": "stock",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 4866,
+      "ns_per_row": [
+        680.4273546006945,
+        685.2111696896853,
+        679.120591905382
+      ],
+      "variant": "candidate",
+      "fork": 0
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "stock",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "ns_per_row": [
+        645.3446653259076,
+        639.5364328022875,
+        640.820837602459
+      ],
+      "variant": "previous",
+      "fork": 0
+    },
+    {
+      "workload": "proto-mixed",
+      "engine": "buffa",
+      "stage": "interpret-generated",
+      "runtime": "svm",
+      "backend": "SVM_STATIC",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 563,
+      "allocated_bytes_per_row": [
+        2.0,
+        2.0,
+        2.0
+      ],
+      "variant": "previous",
+      "fork": 3
+    },
+    {
+      "workload": "proto-mixed-full",
+      "engine": "stock",
+      "stage": "ingest",
+      "runtime": "svm",
+      "backend": "none",
+      "native_views_requested": true,
+      "guest_compiled": false,
+      "rows": 32,
+      "checksum": 4866,
+      "allocated_bytes_per_row": [
+        1776.75,
+        1776.75,
+        1776.75
+      ],
+      "variant": "previous",
+      "fork": 2
+    }
+  ]
+}

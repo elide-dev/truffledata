@@ -563,6 +563,48 @@ final class TypedAcceptance {
     }
   }
 
+  private static void nativeRepeatedSizes(BuffaWire decoder) {
+    var field = plan("RepeatedScalars").field(0);
+    var contract =
+        new ProtoPlan.Model(
+                null,
+                List.of(new ProtoPlan.Type("RepeatedSizes", false, List.of(field))),
+                Limits.DEFAULT,
+                16,
+                4096)
+            .type("RepeatedSizes");
+    try (var compiled = decoder.compile(contract, 65536)) {
+      for (int count : new int[] {0, 1, 2, 14, 15, 16, 64, 129}) {
+        var wire = new java.io.ByteArrayOutputStream();
+        for (int i = 0; i < count; i++) {
+          wire.write(8);
+          wire.write(i % 100);
+        }
+        byte[] unpacked = wire.toByteArray();
+        for (byte[] payload : List.of(unpacked, contract.encode(contract.decode(unpacked)))) {
+          try (var input = decoder.allocate(payload.length).put(payload);
+              var view = compiled.decodeView(input, NATIVE)) {
+            var row = view.row();
+            Acceptance.check(row.getSize(0) == count, "size before array materialization");
+            Acceptance.check(row.getSize(0) == count, "cached repeated count");
+            Object value = row.get(0);
+            int size =
+                value instanceof BorrowedArray array ? array.size() : ((DataArray) value).size();
+            Acceptance.check(size == count, "materialized repeated size");
+            equal(contract.decode(payload), row);
+            Acceptance.check(row.getSize(0) == count, "size after element materialization");
+            Acceptance.rejects(() -> row.getSize(-1), IndexOutOfBoundsException.class);
+            Acceptance.rejects(() -> row.getSize(1), IndexOutOfBoundsException.class);
+            view.close();
+            Acceptance.rejects(() -> row.getSize(0), IllegalStateException.class);
+            if (value instanceof BorrowedArray array)
+              Acceptance.rejects(array::size, IllegalStateException.class);
+          }
+        }
+      }
+    }
+  }
+
   private static void nativeViewOffsets(BuffaWire decoder) {
     var sample = plan("Sample");
     var contract =
@@ -671,6 +713,7 @@ final class TypedAcceptance {
     nativeScalarViews(decoder);
     nativeViewBudgets(decoder);
     nativeViewOffsets(decoder);
+    nativeRepeatedSizes(decoder);
     indexReusePreservesMessagesAndBudgets(decoder);
     scopedRowsRequireDetachmentBeforeEnteringOwnedContainers(decoder);
     textRejectsMalformedUtf16BeforeEncoding(decoder);

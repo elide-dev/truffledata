@@ -459,7 +459,9 @@ final class CompiledReads {
       for (int i = 0; i < 200 && !constant.compiled; i++) constantTarget.call(100_000);
       Acceptance.check(constant.compiled, "constant native value reader compiled");
       // Host access promotes the single-value cache after the guest captured this row.
-      Acceptance.check(message.row().getSize(3) == 0, "empty repeated field promotes cache");
+      Acceptance.check(
+          ((BorrowedArray) message.row().get(3)).size() == 0,
+          "empty repeated field promotes cache");
       constant.compiled = false;
       Acceptance.check(
           constantTarget.call(1000) == originalBytes,

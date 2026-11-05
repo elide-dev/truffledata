@@ -18,12 +18,12 @@ import org.jspecify.annotations.Nullable;
 /** Binary view over an owned native index. Java child objects are created only when accessed. */
 final class NativeRow extends TypedRow {
   private static final ByteBuffer POINTER_PROFILE = ByteBuffer.allocate(0);
-  private static final int[] PACKED_OFFSETS = new int[0];
+  private static final long[] PACKED_OFFSETS = new long[0];
   private final BuffaWire.Tape tape;
   private final int start;
   private final int end;
 
-  private int @Nullable [] offsets;
+  private long @Nullable [] offsets;
 
   private long packedOffsets;
 
@@ -174,23 +174,24 @@ final class NativeRow extends TypedRow {
   private int offset(int ordinal) {
     var result = offsets;
     if (result == null) result = index();
-    if (result.length != 0) return result[ordinal];
+    if (result.length != 0) return (int) result[ordinal] - 1;
     int position = (int) (packedOffsets >>> (ordinal * 4)) & 15;
     return position == 0 ? -1 : start + position - 1;
   }
 
   @TruffleBoundary
-  private int[] index() {
+  private long[] index() {
     // Four-bit relative positions cover up to sixteen schema fields and fifteen index entries.
-    // Zero denotes absence; later occurrences overwrite their nibble. Larger spans use the full
-    // directory, including messages whose descendants make an immediate child's offset large.
+    // Zero denotes absence. Unique occurrences also imply a count of one. Duplicates and larger
+    // spans use a directory containing both the last position and the occurrence count.
     if (plan().size() <= 16 && end - start <= 15) {
       long packed = 0;
       int i = start;
       for (; i < end; ) {
         long link = link(tape, i);
         int shift = (int) link * 4;
-        packed = (packed & ~(15L << shift)) | ((long) (i - start + 1) << shift);
+        if ((packed & (15L << shift)) != 0) break;
+        packed |= (long) (i - start + 1) << shift;
         i = (int) (link >>> 32);
       }
       if (i == end) {
@@ -199,15 +200,24 @@ final class NativeRow extends TypedRow {
         return PACKED_OFFSETS;
       }
     }
-    int[] result = new int[plan().size()];
-    Arrays.fill(result, -1);
+    long[] result = new long[plan().size()];
     for (int i = start; i < end; ) {
       long link = link(tape, i);
-      result[(int) link] = i;
+      int ordinal = (int) link;
+      long count = (result[ordinal] >>> 32) + 1;
+      result[ordinal] = (count << 32) | (i + 1L);
       i = (int) (link >>> 32);
     }
     offsets = result;
     return result;
+  }
+
+  /** Caller checks owner and ordinal; counts come from the same traversal as field positions. */
+  int repeatedSize(int ordinal) {
+    var directory = offsets;
+    if (directory == null) directory = index();
+    if (directory.length != 0) return (int) (directory[ordinal] >>> 32);
+    return ((packedOffsets >>> (ordinal * 4)) & 15) == 0 ? 0 : 1;
   }
 
   boolean integer(int ordinal) {
@@ -351,13 +361,7 @@ final class NativeRow extends TypedRow {
     NativeArray(NativeRow row, int ordinal) {
       this.row = row;
       this.ordinal = ordinal;
-      int n = 0;
-      for (int i = row.start; i < row.end; ) {
-        long link = link(row.tape, i);
-        if ((int) link == ordinal) n++;
-        i = (int) (link >>> 32);
-      }
-      count = n;
+      count = row.repeatedSize(ordinal);
     }
 
     public int size() {

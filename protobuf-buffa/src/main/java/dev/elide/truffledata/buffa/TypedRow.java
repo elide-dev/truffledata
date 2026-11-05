@@ -81,7 +81,11 @@ public abstract sealed class TypedRow extends AbstractRow implements ProtoAccess
 
   @Override
   public final int getSize(int ordinal) {
-    Object value = get(ordinal);
+    owner.check();
+    Objects.checkIndex(ordinal, descriptor.size());
+    if (this instanceof NativeRow nativeRow && plan.field(ordinal).repeated())
+      return nativeRow.repeatedSize(ordinal);
+    Object value = this instanceof ScalarRow scalar ? scalar.scalar(ordinal) : resolved(ordinal);
     if (value instanceof TypedArray array) return array.size();
     if (value instanceof NativeRow.NativeArray array) return array.size();
     if (value instanceof BorrowedBytes bytes) return bytes.size();
