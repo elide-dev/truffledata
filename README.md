@@ -82,14 +82,14 @@ repositories {
     maven("https://maven.elide.dev/gvm-elide/25.5.5-elide.24")
 }
 dependencies {
-    implementation(platform("dev.elide:truffledata-bom:0.4.0"))
+    implementation(platform("dev.elide:truffledata-bom:0.5.0"))
     implementation("dev.elide:truffledata-core")
     implementation("dev.elide:truffledata-protobuf")
     // Add JDBC integrations or protobuf-buffa as needed.
 }
 ```
 
-[Release 0.4.0](https://github.com/elide-dev/truffledata/releases/tag/v0.4.0) includes
+[Release 0.5.0](https://github.com/elide-dev/truffledata/releases/tag/v0.5.0) includes
 source JARs, consumer POMs, checksums, and Buffa native attachments. See
 [publishing and consumption](docs/PUBLISHING.md) for Maven, Bazel and native linking.
 
@@ -142,7 +142,7 @@ bridge, adds a bounded descriptor-set compiler, and generates concrete scalar re
 builders and codecs. Buffa scalar decoding uses fixed native results without allocating
 an index, and typed messages own their lifetimes directly.
 
-The latest development batch adopts **Myna 0.7.2**, adds native SIMD Unicode support,
+Release **0.5.0** adopts **Myna 0.8.0**, adds native SIMD Unicode support,
 and enforces detachment before scoped rows enter owned containers. Measured allocation
 improvements are **128 → 80 bytes** for static-row fixtures and **104 → 24 bytes** for
 compact scalar serialization (stock: **56 bytes**).
@@ -152,7 +152,8 @@ stock’s 115.1 ns**; Buffa Timestamp ProtoJSON measures **1.18 µs versus 10.26
 Generated nested full ingestion is **3.40 µs versus 2.12 µs**, and serialization is
 **1.55 µs versus 1.19 µs**. Generic nested decoding remains behind at **14.54 µs**.
 Shared-runner timings vary substantially between runs; both reports and their ranges
-are retained. These changes are **unreleased** and are not included in 0.4.0.
+are retained. These changes ship in **0.5.0**. These shared-runner measurements predate the latest
+[dedicated-host profiles and paired optimization results](docs/COMPARISON_BENCHMARKS.md#reusing-the-native-buffa-index); they are not new release measurements.
 
 <details>
 <summary>Development measurements and remaining gaps</summary>
