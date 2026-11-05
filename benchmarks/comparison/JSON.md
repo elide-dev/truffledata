@@ -80,3 +80,11 @@ The smoke test now enforces those loop/call/allocation properties and a 1,000-no
 budget, retaining its compiler trace as a test artifact. Java call/return boxing
 still accounts for 1 byte/record in the peak harness allocation counter.
 Raw results and traces: [`json-unclemax-23f969a`](../results/json-unclemax-23f969a/).
+
+A follow-up [slot-pointer-only cache experiment](../results/json-unclemax-slot-cache/)
+ran against the corrected compiled harness. Specialized peak reads measured
+1.429 ns (fork medians 1.429–1.520), overlapping the 1.497 ns baseline
+(1.487–1.581); generic peak and AOT reads did not improve. It added 8 Java bytes
+per ingested record (64 versus 56). The experiment passed ownership, JIT graph,
+and allocation gates but was reverted: the measured benefit does not justify
+the permanent memory cost. Its exact source patch and samples are retained.

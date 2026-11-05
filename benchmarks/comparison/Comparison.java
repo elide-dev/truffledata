@@ -29,6 +29,8 @@ import org.postgresql.util.ByteConverter;
 @NullMarked
 public final class Comparison {
   static final int ROWS = 32;
+  static Runnable beforeSamples = () -> {};
+  static long sampleNanos = 50_000_000L;
   static final String[] WORKLOADS = {
     "proto-scalar",
     "proto-bytes",
@@ -223,6 +225,7 @@ public final class Comparison {
         } else {
           long until = System.nanoTime() + 100_000_000;
           while (System.nanoTime() < until) measure(operation, batch, fixture.expected);
+          beforeSamples.run();
           for (int s = 0; s < samples.length; s++) {
             fixture.tier(peak);
             long count = 0, start = System.nanoTime(), elapsed;
@@ -230,7 +233,7 @@ public final class Comparison {
               measure(operation, batch, fixture.expected);
               count += batch;
               elapsed = System.nanoTime() - start;
-            } while (elapsed < 50_000_000);
+            } while (elapsed < sampleNanos);
             samples[s] = (double) elapsed / (count * ROWS);
             fixture.tier(peak);
           }

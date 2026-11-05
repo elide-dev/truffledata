@@ -1,0 +1,111 @@
+diff --git a/benchmarks/comparison/BUILD.bazel b/benchmarks/comparison/BUILD.bazel
+index 5c7122d..ce6c633 100644
+--- a/benchmarks/comparison/BUILD.bazel
++++ b/benchmarks/comparison/BUILD.bazel
+@@ -123,6 +123,8 @@ native_image(
+         "--initialize-at-run-time=dev.elide.truffledata.comparison.Comparison",
+         "--features=dev.elide.truffledata.buffa.BuffaFeature",
+         "-H:+UnlockExperimentalVMOptions",
++        "-H:-DeleteLocalSymbols",
++        "-H:+PreserveFramePointer",
+     ] + TRUFFLE_JIT_CHECKS + ["-H:-UnlockExperimentalVMOptions"],
+     graalvm_sdk = "@graalvm_linux_amd64//:gvm",
+     main_class = "dev.elide.truffledata.comparison.Profile",
+diff --git a/benchmarks/comparison/Comparison.java b/benchmarks/comparison/Comparison.java
+index 82dce04..5d462dd 100644
+--- a/benchmarks/comparison/Comparison.java
++++ b/benchmarks/comparison/Comparison.java
+@@ -29,6 +29,8 @@ import org.postgresql.util.ByteConverter;
+ @NullMarked
+ public final class Comparison {
+   static final int ROWS = 32;
++  static Runnable beforeSamples = () -> {};
++  static long sampleNanos = 50_000_000L;
+   static final String[] WORKLOADS = {
+     "proto-scalar",
+     "proto-bytes",
+@@ -223,6 +225,7 @@ public final class Comparison {
+         } else {
+           long until = System.nanoTime() + 100_000_000;
+           while (System.nanoTime() < until) measure(operation, batch, fixture.expected);
++          beforeSamples.run();
+           for (int s = 0; s < samples.length; s++) {
+             fixture.tier(peak);
+             long count = 0, start = System.nanoTime(), elapsed;
+@@ -230,7 +233,7 @@ public final class Comparison {
+               measure(operation, batch, fixture.expected);
+               count += batch;
+               elapsed = System.nanoTime() - start;
+-            } while (elapsed < 50_000_000);
++            } while (elapsed < sampleNanos);
+             samples[s] = (double) elapsed / (count * ROWS);
+             fixture.tier(peak);
+           }
+diff --git a/benchmarks/comparison/Profile.java b/benchmarks/comparison/Profile.java
+index 66f1461..5cf137f 100644
+--- a/benchmarks/comparison/Profile.java
++++ b/benchmarks/comparison/Profile.java
+@@ -1,11 +1,35 @@
+ package dev.elide.truffledata.comparison;
+ 
++import java.nio.file.Path;
++import java.time.Duration;
++import java.util.Arrays;
++import jdk.jfr.Recording;
++
+ /** Longer diagnostic sessions without changing the ordinary comparison image or scoring loop. */
+ @org.jspecify.annotations.NullMarked
+ public final class Profile {
+   private Profile() {}
+ 
+   public static void main(String[] args) throws Exception {
++    if (args.length == 5) {
++      if (!args[3].equals("time"))
++        throw new IllegalArgumentException("Steady-state profile requires time mode");
++      try (var recording = new Recording()) {
++        recording.enable("jdk.ExecutionSample").withPeriod(Duration.ofMillis(1));
++        recording.enable("jdk.ObjectAllocationSample").withStackTrace().with("throttle", "150/s");
++        recording.setDestination(Path.of(args[4]));
++        Comparison.beforeSamples = recording::start;
++        Comparison.sampleNanos = 1_000_000_000L;
++        try {
++          Comparison.main(Arrays.copyOf(args, 4));
++        } finally {
++          Comparison.beforeSamples = () -> {};
++          Comparison.sampleNanos = 50_000_000L;
++          if (recording.getState() == jdk.jfr.RecordingState.RUNNING) recording.stop();
++        }
++      }
++      return;
++    }
+     int rounds = Integer.parseInt(System.getProperty("truffledata.profile.rounds", "8"));
+     if (rounds < 1 || rounds > 8) throw new IllegalArgumentException("Profile rounds must be 1..8");
+     for (int round = 0; round < rounds; round++) Comparison.main(args);
+diff --git a/tools/bench/json_profile_summary.py b/tools/bench/json_profile_summary.py
+index 40cbae7..0ebfd3c 100644
+--- a/tools/bench/json_profile_summary.py
++++ b/tools/bench/json_profile_summary.py
+@@ -1,5 +1,5 @@
+ #!/usr/bin/env python3
+-"""Summarize post-warmup JSON JFR stacks; diagnostic samples are not benchmark scores."""
++"""Summarize post-warmup JFR stacks; optional second argument selects the main class."""
+ import collections
+ import hashlib
+ import json
+@@ -8,6 +8,7 @@ import subprocess
+ import sys
+ 
+ root = Path(sys.argv[1])
++main_class = sys.argv[2] if len(sys.argv) > 2 else 'dev.elide.truffledata.comparison.JsonComparison'
+ report = {'diagnostic_only': True, 'scope': 'Java-visible stacks after warmup; allocation samples are counts, not bytes; no native allocation accounting',
+           'binary_sha256': (root / 'binary.sha256').read_text().split()[0], 'cells': {}}
+ for path in sorted(root.glob('*.jfr')):
+@@ -19,7 +20,7 @@ for path in sorted(root.glob('*.jfr')):
+         frames = [f['method']['type']['name'].replace('/', '.') + '.' + f['method']['name']
+                   for f in (values.get('stackTrace') or {}).get('frames', [])]
+         counts[kind + ' total'] += 1
+-        if not any('dev.elide.truffledata.comparison.JsonComparison' in f for f in frames):
++        if not any(main_class in f for f in frames):
+             continue
+         counts[kind + ' application'] += 1
+         if kind == 'jdk.ExecutionSample':

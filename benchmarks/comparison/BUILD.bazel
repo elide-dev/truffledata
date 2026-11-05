@@ -123,6 +123,8 @@ native_image(
         "--initialize-at-run-time=dev.elide.truffledata.comparison.Comparison",
         "--features=dev.elide.truffledata.buffa.BuffaFeature",
         "-H:+UnlockExperimentalVMOptions",
+        "-H:-DeleteLocalSymbols",
+        "-H:+PreserveFramePointer",
     ] + TRUFFLE_JIT_CHECKS + ["-H:-UnlockExperimentalVMOptions"],
     graalvm_sdk = "@graalvm_linux_amd64//:gvm",
     main_class = "dev.elide.truffledata.comparison.Profile",

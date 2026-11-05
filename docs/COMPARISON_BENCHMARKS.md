@@ -725,3 +725,57 @@ The [chart manifest](images/independent-latest/comparison-manifest.json) identif
 repeat data, executable and implementation revision. Released 0.4.0 graphics and earlier
 development evidence remain above. General and typed simdjson decoding is the next
 integration; the Myna value readers and C++ headers are prepared as separate Bazel targets.
+
+## Stable-host profiling cycle: Myna 0.8.0
+
+The [`7260cb8` unclemax cycle](../benchmarks/results/svm-unclemax-7260cb8/comparison.md)
+runs all 120 cells with three fresh timing processes and three separate allocation
+processes per cell, pinned to CPUs 2–9 on a Threadripper PRO 9965WX. No profiling
+process ran concurrently with timing. Native memory is excluded from Java counters.
+
+| Operation | Stock | TruffleData | Stock / TruffleData Java bytes |
+| --- | ---: | ---: | ---: |
+| Scalar generated ingestion | 47.61 ns | 17.68 ns | 136 / 88 |
+| Scalar generated peak reads | 0.80 ns | 0.82 ns | 1 / 1 |
+| Scalar generated parse/project peak | 33.79 ns | 7.77 ns | 137 / 1 |
+| Nested generic owned ingestion | 633.47 ns | 3126.00 ns | 1776.75 / 2976 |
+| Nested Buffa ingestion | 633.47 ns | 2464.89 ns | 1776.75 / 1727.75 |
+| Nested generated ingestion | 633.47 ns | 688.59 ns | 1776.75 / 1800.50 |
+| Nested generated full consumption | 693.03 ns | 729.18 ns | 1776.75 / 1800.50 |
+| Nested generated serialization | 428.96 ns | 469.84 ns | 436.50 / 192.50 |
+
+Scalar peak traces show one loop and zero calls for stock, generated-owned,
+compact-owned generated access, and Buffa generated access. Stock and generated-owned
+last-tier code both occupy 655 bytes (58 versus 57 IR nodes). This is evidence of
+comparable compilation for this fixture, not proof that all paths match stock.
+
+Post-warmup JFR plus symbolized hardware profiles identify the next costs:
+
+- Generic owned nested ingestion: static storage filling, field validation, and
+  repeated payload accounting. `StaticLayout.read` accounts for 8.52% of hardware
+  samples, `State.finish` 6.75%, and `PayloadBudget.accept` 4.68%.
+- Buffa nested ingestion: Java `State.consume` (13.19%) and `State.finish` (10.91%)
+  together exceed native `Decoder.binary` (9.47%). Optimizing only the native parser
+  would leave substantial Java materialization work.
+- Generated nested ingestion: varint decoding (11.36%) and UTF-8 validation/counting
+  (8.81%) are prominent, followed by generated consume/finish methods.
+- SQL fixtures: per-row benchmark dispatch (`startsWith`) and uncached library lookup
+  are visible costs alongside storage construction; do not attribute the entire
+  measured difference to driver decoding or static storage.
+
+Hardware percentages are sampled self time for the whole diagnostic process;
+JFR records only the post-warmup interval. Raw counts, fork ranges, binary hashes,
+compiler traces, and the exact profiling patch are retained in the result directory.
+
+To record a single steady-state cell with the separate profiling executable:
+
+```sh
+bazel build //benchmarks/comparison:svm_profile --remote_download_outputs=toplevel
+# Run the Linux amd64 executable on the measurement host:
+./truffledata-comparison-profile -Xmx1g proto-mixed owned ingest time owned.jfr
+python3 tools/bench/json_profile_summary.py recordings dev.elide.truffledata.comparison.Comparison
+```
+
+The optional fifth argument selects post-warmup recording; the original repeated
+profiling mode remains available without it. Record a `binary.sha256` file in the
+recordings directory for the summary tool. Never use instrumented timings as scores.
