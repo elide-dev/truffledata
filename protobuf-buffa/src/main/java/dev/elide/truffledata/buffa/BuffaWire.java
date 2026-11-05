@@ -206,14 +206,15 @@ public final class BuffaWire implements AutoCloseable {
 
   private static DataArray materialize(
       WireMessage message, Tape tape, int start, int end, Limits limits) {
+    var buffer = tape.bytes();
     List<Object> rows = new ArrayList<>();
     for (int index = start; index < end; ) {
       int offset = index * Buffa.Field.SIZE;
-      int number = tape.bytes.getInt(offset + (int) BuffaFFM.Field_number_OFFSET),
-          wire = tape.bytes.getInt(offset + (int) BuffaFFM.Field_wire_OFFSET);
-      long value = tape.bytes.getLong(offset + (int) BuffaFFM.Field_value_OFFSET);
-      int length = tape.bytes.getInt(offset + (int) BuffaFFM.Field_length_OFFSET);
-      int next = tape.bytes.getInt(offset + (int) BuffaFFM.Field_end_OFFSET);
+      int number = buffer.getInt(offset + (int) BuffaFFM.Field_number_OFFSET),
+          wire = buffer.getInt(offset + (int) BuffaFFM.Field_wire_OFFSET);
+      long value = buffer.getLong(offset + (int) BuffaFFM.Field_value_OFFSET);
+      int length = buffer.getInt(offset + (int) BuffaFFM.Field_length_OFFSET);
+      int next = buffer.getInt(offset + (int) BuffaFFM.Field_end_OFFSET);
       if (next <= index || next > end || length < 0)
         throw new IllegalStateException("Invalid native field index");
       Object decoded =
@@ -263,7 +264,8 @@ public final class BuffaWire implements AutoCloseable {
   }
 
   static final class Tape implements AutoCloseable {
-    final ByteBuffer bytes;
+    private static final ByteBuffer EMPTY = ByteBuffer.allocate(0).order(ByteOrder.nativeOrder());
+    private @Nullable ByteBuffer bytes;
     final long nativeAddress;
     private final int countAndFlags;
     final long allocated;
@@ -294,7 +296,7 @@ public final class BuffaWire implements AutoCloseable {
     }
 
     Tape(
-        ByteBuffer bytes,
+        @Nullable ByteBuffer bytes,
         long count,
         long capacity,
         Runnable release,
@@ -303,12 +305,26 @@ public final class BuffaWire implements AutoCloseable {
         long nativeAddress) {
       this.nativeAddress = nativeAddress;
       this.detacher = detacher;
-      this.bytes = bytes.order(ByteOrder.nativeOrder());
+      this.bytes = bytes == null ? null : bytes.order(ByteOrder.nativeOrder());
       int entries = Math.toIntExact(count);
       if (entries < 0) throw new IllegalArgumentException("Negative index count");
       countAndFlags = entries | (viewReady ? Integer.MIN_VALUE : 0);
       allocated = Math.multiplyExact(capacity, Buffa.Field.SIZE);
       this.release = release;
+    }
+
+    ByteBuffer bytes() {
+      var result = bytes;
+      return result == null ? materializeBuffer() : result;
+    }
+
+    @TruffleBoundary
+    private ByteBuffer materializeBuffer() {
+      if (release == null) throw new IllegalStateException("Native index closed");
+      if (count() == 0) return bytes = EMPTY;
+      if (!ImageInfo.inImageCode() || nativeAddress == 0)
+        throw new IllegalStateException("Native index has no buffer or address");
+      return bytes = SvmBackend.indexBuffer(nativeAddress, count()).order(ByteOrder.nativeOrder());
     }
 
     // Counts are nonnegative Java indices. Reuse the sign bit for the optional certificate

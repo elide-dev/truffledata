@@ -69,24 +69,25 @@ public final class NativeTapeAcceptance {
           var view = compiled.decodeView(first, 65536);
           var retained = backend.typed(schema, first, 0, empty, plan, 65536).detach()) {
         if (!view.nativeBacked()) throw new AssertionError("native view selected");
-        byte[] expected = new byte[retained.bytes.capacity()];
-        retained.bytes.get(0, expected);
+        byte[] expected = new byte[retained.bytes().capacity()];
+        retained.bytes().get(0, expected);
         for (int i = 0; i < 8; i++) {
           try (var scratch = backend.typed(schema, second, 0, empty, plan, 65536)) {
             if (scratch.count() != 1) throw new AssertionError("scratch count");
           }
         }
-        try (var other = backend.typed(schema, second, 0, empty, plan, 65536).detach()) {
+        try (var other = backend.typed(schema, second, 3, empty, plan, 65536).detach()) {
           decoder.close();
           if (view.row().getLong(0) != 42) throw new AssertionError("view after decoder close");
           for (int i = 0; i < expected.length; i++)
-            if (retained.bytes.get(i) != expected[i])
+            if (retained.bytes().get(i) != expected[i])
               throw new AssertionError("retained index changed");
-          if (other.count() != 1 || other.bytes.getLong(8) != 99)
+          if (other.count() != 1 || other.bytes().getLong(8) != 99)
             throw new AssertionError("second retained index");
           retained.close();
           retained.close();
-          if (other.bytes.getLong(8) != 99) throw new AssertionError("independent index ownership");
+          if (other.bytes().getLong(8) != 99)
+            throw new AssertionError("independent index ownership");
         }
       }
     }

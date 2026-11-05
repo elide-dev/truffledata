@@ -1,5 +1,6 @@
 package dev.elide.truffledata.buffa;
 
+import com.oracle.truffle.api.CompilerDirectives;
 import dev.elide.truffledata.Limits;
 import dev.elide.truffledata.buffa.generated.BuffaFFM;
 import java.lang.foreign.*;
@@ -10,6 +11,21 @@ import java.nio.file.Path;
 
 /** JVM-only adapter. Its arena owns the library, not input buffers or returned views. */
 final class FfmBackend implements BuffaWire.Backend {
+  // Derive the JVM's concrete FFM buffer class without retaining an arena or native allocation.
+  private static final Class<? extends ByteBuffer> INDEX_BUFFER_TYPE =
+      MemorySegment.NULL.asByteBuffer().getClass();
+
+  static long readIndexLong(ByteBuffer buffer, int offset) {
+    if (buffer.getClass() == INDEX_BUFFER_TYPE)
+      return CompilerDirectives.castExact(buffer, INDEX_BUFFER_TYPE).getLong(offset);
+    return readOtherIndexLong(buffer, offset);
+  }
+
+  @CompilerDirectives.TruffleBoundary
+  private static long readOtherIndexLong(ByteBuffer buffer, int offset) {
+    return buffer.getLong(offset);
+  }
+
   private final Arena libraryArena = Arena.ofConfined();
   private final MethodHandle decode;
   private final MethodHandle release;

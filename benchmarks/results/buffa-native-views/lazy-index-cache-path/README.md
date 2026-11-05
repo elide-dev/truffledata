@@ -1,0 +1,9 @@
+# Lazy index buffer with a cache-first value path
+
+On SVM, typed native views retain the native index address without allocating an unused DirectByteBuffer. The buffer wrapper is created only if requested by an audit or fallback path. Cached Java values bypass index-buffer selection. JVM paths retain exact-class buffer specialization rather than merging nullable buffers into the hot accessor.
+
+The five-fork comparison uses the same protocol as `../full/run.py`, with both eager/view variants of the candidate, pinned to unclemax CPU 2. Raw measurements and executable hashes are in `paired.json`. Generated projected ingestion is 781.604 ns/row and full ingestion 1446.416 ns/row; retained generated view reads are 16.760 ns interpreter / 9.264 ns peak. Java allocation is 421.5 bytes/row projected and 1382.25 full, excluding native memory. The wrapper removal saves 64 Java bytes per decode relative to row-storage.
+
+The `profile` directory contains perf summaries and JFR allocation sample summaries from the corresponding profiling executable. Samples are counts, not allocated-byte totals; native perf includes startup. At this stage Buffa dependencies still compiled with Bazel fastbuild's opt-level=0, despite opt-level=3 on the adapter. These profiles are historical evidence and must not be treated as profiles of the later opt/ThinLTO binary.
+
+Validation of the cache-first path: [JVM view tests](https://app.buildbuddy.io/invocation/027cbc6f-ade6-45ae-9270-07a38cd75d22) and [SVM view/fallback tests and profiling build](https://app.buildbuddy.io/invocation/2edc317c-0c45-455f-8073-c8b73ca930ff). A subsequent JVM-only exact buffer-class specialization fixes generated-getter compilation warnings and adds the permanent smoke_views target: [smoke_views plus ordinary and strict JVM view tests](https://app.buildbuddy.io/invocation/1a5ad2a3-30b1-47ff-add6-9a1b9ac77842). The later optimized-dependencies run includes this JVM-only specialization.

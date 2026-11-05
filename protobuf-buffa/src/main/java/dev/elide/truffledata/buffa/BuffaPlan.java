@@ -323,11 +323,12 @@ public final class BuffaPlan implements AutoCloseable {
 
     void add(Object value, BuffaWire.Tape tape, int index, int end, int ordinal) {
       if (size == items.length) {
+        var buffer = tape.bytes();
         int count = 0;
         for (int cursor = index; cursor < end; ) {
           int at = Math.multiplyExact(cursor, Buffa.Field.SIZE);
-          int number = tape.bytes.getInt(at + (int) BuffaFFM.Field_number_OFFSET);
-          int next = tape.bytes.getInt(at + (int) BuffaFFM.Field_end_OFFSET);
+          int number = buffer.getInt(at + (int) BuffaFFM.Field_number_OFFSET);
+          int next = buffer.getInt(at + (int) BuffaFFM.Field_end_OFFSET);
           if (next <= cursor || next > end)
             throw new IllegalStateException("Invalid repeated index");
           if (number != ordinal + 1) break;
@@ -403,13 +404,14 @@ public final class BuffaPlan implements AutoCloseable {
     }
 
     void consume(BuffaWire.Tape tape, int start, int end) {
+      var buffer = tape.bytes();
       for (int index = start; index < end; ) {
         context.charge(1);
         int at = index * Buffa.Field.SIZE;
         // ABI 7 stores two adjacent int pairs; retain checked loads while reading each pair once.
-        long tag = tape.bytes.getLong(at + (int) BuffaFFM.Field_number_OFFSET);
-        long value = tape.bytes.getLong(at + (int) BuffaFFM.Field_value_OFFSET);
-        long extent = tape.bytes.getLong(at + (int) BuffaFFM.Field_length_OFFSET);
+        long tag = buffer.getLong(at + (int) BuffaFFM.Field_number_OFFSET);
+        long value = buffer.getLong(at + (int) BuffaFFM.Field_value_OFFSET);
+        long extent = buffer.getLong(at + (int) BuffaFFM.Field_length_OFFSET);
         int ordinal = (int) (LITTLE_ENDIAN ? tag : tag >>> 32) - 1;
         int kind = (int) (LITTLE_ENDIAN ? tag >>> 32 : tag);
         int length = (int) (LITTLE_ENDIAN ? extent : extent >>> 32);

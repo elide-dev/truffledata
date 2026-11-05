@@ -131,6 +131,11 @@ final class SvmBackend implements BuffaWire.Backend {
     }
   }
 
+  static ByteBuffer indexBuffer(long address, int count) {
+    return CTypeConversion.asByteBuffer(
+        WordFactory.pointer(address), Math.multiplyExact(count, Buffa.Field.SIZE));
+  }
+
   @Override
   public BuffaWire.Tape typed(
       WireInput schema,
@@ -162,11 +167,13 @@ final class SvmBackend implements BuffaWire.Backend {
       boolean viewReady = BuffaWire.typedStatus(status, format);
       long count = Buffa.Result.count(result), capacity = Buffa.Result.capacity(result);
       ByteBuffer bytes =
-          count == 0
-              ? ByteBuffer.allocate(0)
-              : CTypeConversion.asByteBuffer(
-                  Buffa.Result.data(result),
-                  Math.toIntExact(Math.multiplyExact(count, Buffa.Field.SIZE)));
+          format == 3
+              ? null
+              : count == 0
+                  ? ByteBuffer.allocate(0)
+                  : CTypeConversion.asByteBuffer(
+                      Buffa.Result.data(result),
+                      Math.toIntExact(Math.multiplyExact(count, Buffa.Field.SIZE)));
       return new BuffaWire.Tape(
           bytes,
           count,

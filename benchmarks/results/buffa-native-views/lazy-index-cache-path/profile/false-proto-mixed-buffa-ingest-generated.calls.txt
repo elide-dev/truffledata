@@ -1,0 +1,1381 @@
+# To display the perf.data header info, please use --header/--header-only options.
+#
+#
+# Total Lost Samples: 0
+#
+# Samples: 3K of event 'cpu/cycles/P'
+# Event count (approx.): 16190626495
+#
+# Children      Self  Command          Shared Object                   Symbol                                                                                      
+# ........  ........  ...............  ..............................  ............................................................................................
+#
+    69.24%     0.00%  truffledata-com  truffledata-comparison-profile  [.] _start
+            |
+            ---_start
+               __libc_start_main@@GLIBC_2.34
+               call_init (inlined)
+               __libc_start_call_main
+               IsolateEnterStub__JavaMainWrapper__run__cXbfAhOWcF90761nQYco7L
+               JavaMainWrapper_run_iTUBl8UzFfAz1VYmMX6I32
+               JavaMainWrapper_doRun_F09BQfnF3iKa8bUp7D6GY0
+               JavaMainWrapper_runCore0_DxjyYWWswBIqpGm74uwTlD
+               Profile_main_QLbiWA5uQ36iHGzuY4KzH1
+               |          
+                --69.21%--Comparison_main_Tdm8knqZbgFKmi8P01KlkC
+                          Comparison_run_Q5rf1SKn3YJHnF3ZUK1v3H
+                          |          
+                           --68.94%--Comparison_measure_rBHXAV3t9KEP8Sb58Nxs99
+                                     |          
+                                      --68.91%--Comparison$$Laf51eff2_run_Qm1e9AMT80I7oHp0l0OLt6
+                                                Comparison$Fixture_ingest_nKtS7SZyoUBnHzb7kJPIbK
+                                                |          
+                                                 --66.51%--Comparison$Fixture_parseNative_LgVvYd8rZW7zJc7biagwL4
+                                                           |          
+                                                            --65.96%--BuffaPlan_decode_sfEOgdpMiABSAaIXhzJ1r3
+                                                                      |          
+                                                                       --65.67%--BuffaPlan_parse_CdgW7hksxZFlQDePGBwO0J
+                                                                                 |          
+                                                                                 |--39.90%--BuffaPlan$State_consume_KhV6sjwd6PEHn5yPln6YT4
+                                                                                 |          |          
+                                                                                 |          |--17.59%--BuffaPlan$State_consume_KhV6sjwd6PEHn5yPln6YT4
+                                                                                 |          |          |          
+                                                                                 |          |          |--1.55%--TypedRow$Utf8_uvVx9dT93tD4QoMO5KVva9
+                                                                                 |          |          |          
+                                                                                 |          |          |--1.55%--DirectByteBuffer_getLong_qql9RATsK0437ObPOcNrY2
+                                                                                 |          |          |          
+                                                                                 |          |           --1.26%--BuffaPlan$State_select_0sziQ0uftx4lC3kthIbEXA
+                                                                                 |          |          
+                                                                                 |          |--6.39%--ViewOwner_utf8_vdhpZc0Kb47RYc9YWkd98G
+                                                                                 |          |          |          
+                                                                                 |          |          |--3.28%--String_1Wsq2sHvwOLEAD1FMOeIqB
+                                                                                 |          |          |          |          
+                                                                                 |          |          |           --3.18%--String_ANiVZ8cr6wIGG2iZqvkdVA
+                                                                                 |          |          |                     |          
+                                                                                 |          |          |                      --2.50%--SVMIntrinsicStubsGen_stringCodingCountPositives_pJXvyEBdEyALRGGEsnbJx8
+                                                                                 |          |          |          
+                                                                                 |          |           --1.65%--ByteBuffer_get_9LdNwcKqu55pJ71WeML94L
+                                                                                 |          |          
+                                                                                 |          |--2.62%--DirectByteBuffer_getLong_qql9RATsK0437ObPOcNrY2
+                                                                                 |          |          
+                                                                                 |          |--2.55%--BuffaPlan$Repeated_add_lvBSoXwfHmArLR0AmytvNC
+                                                                                 |          |          
+                                                                                 |          |--2.20%--BuffaPlan$State_1sNRne88jxCdzp2hXsSsm6
+                                                                                 |          |          
+                                                                                 |           --1.01%--BuffaPlan$State_present_pEiJaztu4Y3MeA9E02xVSH
+                                                                                 |          
+                                                                                 |--17.52%--BuffaPlan$State_finish_csXZqUZdV57wsjt3nqU4ED
+                                                                                 |          |          
+                                                                                 |           --12.52%--BuffaPlan$State_finish_csXZqUZdV57wsjt3nqU4ED
+                                                                                 |                     |          
+                                                                                 |                      --3.68%--BuffaPlan$State_nonDefault_SblvpHzlR5FDB7QLpyT9iA
+                                                                                 |          
+                                                                                 |--2.39%--SvmBackend_typed_m5ZAy5gBUdD7mhPOcay3hB
+                                                                                 |          
+                                                                                 |--1.36%--td_buffa_typed_reuse
+                                                                                 |          
+                                                                                  --1.31%--DirectByteBuffer_getLong_qql9RATsK0437ObPOcNrY2
+
+    69.24%     0.00%  truffledata-com  libc.so.6                       [.] __libc_start_main@@GLIBC_2.34
+            |
+            ---__libc_start_main@@GLIBC_2.34
+               call_init (inlined)
+               __libc_start_call_main
+               IsolateEnterStub__JavaMainWrapper__run__cXbfAhOWcF90761nQYco7L
+               JavaMainWrapper_run_iTUBl8UzFfAz1VYmMX6I32
+               JavaMainWrapper_doRun_F09BQfnF3iKa8bUp7D6GY0
+               JavaMainWrapper_runCore0_DxjyYWWswBIqpGm74uwTlD
+               Profile_main_QLbiWA5uQ36iHGzuY4KzH1
+               |          
+                --69.21%--Comparison_main_Tdm8knqZbgFKmi8P01KlkC
+                          Comparison_run_Q5rf1SKn3YJHnF3ZUK1v3H
+                          |          
+                           --68.94%--Comparison_measure_rBHXAV3t9KEP8Sb58Nxs99
+                                     |          
+                                      --68.91%--Comparison$$Laf51eff2_run_Qm1e9AMT80I7oHp0l0OLt6
+                                                Comparison$Fixture_ingest_nKtS7SZyoUBnHzb7kJPIbK
+                                                |          
+                                                 --66.51%--Comparison$Fixture_parseNative_LgVvYd8rZW7zJc7biagwL4
+                                                           |          
+                                                            --65.96%--BuffaPlan_decode_sfEOgdpMiABSAaIXhzJ1r3
+                                                                      |          
+                                                                       --65.67%--BuffaPlan_parse_CdgW7hksxZFlQDePGBwO0J
+                                                                                 |          
+                                                                                 |--39.90%--BuffaPlan$State_consume_KhV6sjwd6PEHn5yPln6YT4
+                                                                                 |          |          
+                                                                                 |          |--17.59%--BuffaPlan$State_consume_KhV6sjwd6PEHn5yPln6YT4
+                                                                                 |          |          |          
+                                                                                 |          |          |--1.55%--TypedRow$Utf8_uvVx9dT93tD4QoMO5KVva9
+                                                                                 |          |          |          
+                                                                                 |          |          |--1.55%--DirectByteBuffer_getLong_qql9RATsK0437ObPOcNrY2
+                                                                                 |          |          |          
+                                                                                 |          |           --1.26%--BuffaPlan$State_select_0sziQ0uftx4lC3kthIbEXA
+                                                                                 |          |          
+                                                                                 |          |--6.39%--ViewOwner_utf8_vdhpZc0Kb47RYc9YWkd98G
+                                                                                 |          |          |          
+                                                                                 |          |          |--3.28%--String_1Wsq2sHvwOLEAD1FMOeIqB
+                                                                                 |          |          |          |          
+                                                                                 |          |          |           --3.18%--String_ANiVZ8cr6wIGG2iZqvkdVA
+                                                                                 |          |          |                     |          
+                                                                                 |          |          |                      --2.50%--SVMIntrinsicStubsGen_stringCodingCountPositives_pJXvyEBdEyALRGGEsnbJx8
+                                                                                 |          |          |          
+                                                                                 |          |           --1.65%--ByteBuffer_get_9LdNwcKqu55pJ71WeML94L
+                                                                                 |          |          
+                                                                                 |          |--2.62%--DirectByteBuffer_getLong_qql9RATsK0437ObPOcNrY2
+                                                                                 |          |          
+                                                                                 |          |--2.55%--BuffaPlan$Repeated_add_lvBSoXwfHmArLR0AmytvNC
+                                                                                 |          |          
+                                                                                 |          |--2.20%--BuffaPlan$State_1sNRne88jxCdzp2hXsSsm6
+                                                                                 |          |          
+                                                                                 |           --1.01%--BuffaPlan$State_present_pEiJaztu4Y3MeA9E02xVSH
+                                                                                 |          
+                                                                                 |--17.52%--BuffaPlan$State_finish_csXZqUZdV57wsjt3nqU4ED
+                                                                                 |          |          
+                                                                                 |           --12.52%--BuffaPlan$State_finish_csXZqUZdV57wsjt3nqU4ED
+                                                                                 |                     |          
+                                                                                 |                      --3.68%--BuffaPlan$State_nonDefault_SblvpHzlR5FDB7QLpyT9iA
+                                                                                 |          
+                                                                                 |--2.39%--SvmBackend_typed_m5ZAy5gBUdD7mhPOcay3hB
+                                                                                 |          
+                                                                                 |--1.36%--td_buffa_typed_reuse
+                                                                                 |          
+                                                                                  --1.31%--DirectByteBuffer_getLong_qql9RATsK0437ObPOcNrY2
+
+    69.24%     0.00%  truffledata-com  libc.so.6                       [.] call_init (inlined)
+            |
+            ---call_init (inlined)
+               __libc_start_call_main
+               IsolateEnterStub__JavaMainWrapper__run__cXbfAhOWcF90761nQYco7L
+               JavaMainWrapper_run_iTUBl8UzFfAz1VYmMX6I32
+               JavaMainWrapper_doRun_F09BQfnF3iKa8bUp7D6GY0
+               JavaMainWrapper_runCore0_DxjyYWWswBIqpGm74uwTlD
+               Profile_main_QLbiWA5uQ36iHGzuY4KzH1
+               |          
+                --69.21%--Comparison_main_Tdm8knqZbgFKmi8P01KlkC
+                          Comparison_run_Q5rf1SKn3YJHnF3ZUK1v3H
+                          |          
+                           --68.94%--Comparison_measure_rBHXAV3t9KEP8Sb58Nxs99
+                                     |          
+                                      --68.91%--Comparison$$Laf51eff2_run_Qm1e9AMT80I7oHp0l0OLt6
+                                                Comparison$Fixture_ingest_nKtS7SZyoUBnHzb7kJPIbK
+                                                |          
+                                                 --66.51%--Comparison$Fixture_parseNative_LgVvYd8rZW7zJc7biagwL4
+                                                           |          
+                                                            --65.96%--BuffaPlan_decode_sfEOgdpMiABSAaIXhzJ1r3
+                                                                      |          
+                                                                       --65.67%--BuffaPlan_parse_CdgW7hksxZFlQDePGBwO0J
+                                                                                 |          
+                                                                                 |--39.90%--BuffaPlan$State_consume_KhV6sjwd6PEHn5yPln6YT4
+                                                                                 |          |          
+                                                                                 |          |--17.59%--BuffaPlan$State_consume_KhV6sjwd6PEHn5yPln6YT4
+                                                                                 |          |          |          
+                                                                                 |          |          |--1.55%--TypedRow$Utf8_uvVx9dT93tD4QoMO5KVva9
+                                                                                 |          |          |          
+                                                                                 |          |          |--1.55%--DirectByteBuffer_getLong_qql9RATsK0437ObPOcNrY2
+                                                                                 |          |          |          
+                                                                                 |          |           --1.26%--BuffaPlan$State_select_0sziQ0uftx4lC3kthIbEXA
+                                                                                 |          |          
+                                                                                 |          |--6.39%--ViewOwner_utf8_vdhpZc0Kb47RYc9YWkd98G
+                                                                                 |          |          |          
+                                                                                 |          |          |--3.28%--String_1Wsq2sHvwOLEAD1FMOeIqB
+                                                                                 |          |          |          |          
+                                                                                 |          |          |           --3.18%--String_ANiVZ8cr6wIGG2iZqvkdVA
+                                                                                 |          |          |                     |          
+                                                                                 |          |          |                      --2.50%--SVMIntrinsicStubsGen_stringCodingCountPositives_pJXvyEBdEyALRGGEsnbJx8
+                                                                                 |          |          |          
+                                                                                 |          |           --1.65%--ByteBuffer_get_9LdNwcKqu55pJ71WeML94L
+                                                                                 |          |          
+                                                                                 |          |--2.62%--DirectByteBuffer_getLong_qql9RATsK0437ObPOcNrY2
+                                                                                 |          |          
+                                                                                 |          |--2.55%--BuffaPlan$Repeated_add_lvBSoXwfHmArLR0AmytvNC
+                                                                                 |          |          
+                                                                                 |          |--2.20%--BuffaPlan$State_1sNRne88jxCdzp2hXsSsm6
+                                                                                 |          |          
+                                                                                 |           --1.01%--BuffaPlan$State_present_pEiJaztu4Y3MeA9E02xVSH
+                                                                                 |          
+                                                                                 |--17.52%--BuffaPlan$State_finish_csXZqUZdV57wsjt3nqU4ED
+                                                                                 |          |          
+                                                                                 |           --12.52%--BuffaPlan$State_finish_csXZqUZdV57wsjt3nqU4ED
+                                                                                 |                     |          
+                                                                                 |                      --3.68%--BuffaPlan$State_nonDefault_SblvpHzlR5FDB7QLpyT9iA
+                                                                                 |          
+                                                                                 |--2.39%--SvmBackend_typed_m5ZAy5gBUdD7mhPOcay3hB
+                                                                                 |          
+                                                                                 |--1.36%--td_buffa_typed_reuse
+                                                                                 |          
+                                                                                  --1.31%--DirectByteBuffer_getLong_qql9RATsK0437ObPOcNrY2
+
+    69.24%     0.00%  truffledata-com  libc.so.6                       [.] __libc_start_call_main
+            |
+            ---__libc_start_call_main
+               IsolateEnterStub__JavaMainWrapper__run__cXbfAhOWcF90761nQYco7L
+               JavaMainWrapper_run_iTUBl8UzFfAz1VYmMX6I32
+               JavaMainWrapper_doRun_F09BQfnF3iKa8bUp7D6GY0
+               JavaMainWrapper_runCore0_DxjyYWWswBIqpGm74uwTlD
+               Profile_main_QLbiWA5uQ36iHGzuY4KzH1
+               |          
+                --69.21%--Comparison_main_Tdm8knqZbgFKmi8P01KlkC
+                          Comparison_run_Q5rf1SKn3YJHnF3ZUK1v3H
+                          |          
+                           --68.94%--Comparison_measure_rBHXAV3t9KEP8Sb58Nxs99
+                                     |          
+                                      --68.91%--Comparison$$Laf51eff2_run_Qm1e9AMT80I7oHp0l0OLt6
+                                                Comparison$Fixture_ingest_nKtS7SZyoUBnHzb7kJPIbK
+                                                |          
+                                                 --66.51%--Comparison$Fixture_parseNative_LgVvYd8rZW7zJc7biagwL4
+                                                           |          
+                                                            --65.96%--BuffaPlan_decode_sfEOgdpMiABSAaIXhzJ1r3
+                                                                      |          
+                                                                       --65.67%--BuffaPlan_parse_CdgW7hksxZFlQDePGBwO0J
+                                                                                 |          
+                                                                                 |--39.90%--BuffaPlan$State_consume_KhV6sjwd6PEHn5yPln6YT4
+                                                                                 |          |          
+                                                                                 |          |--17.59%--BuffaPlan$State_consume_KhV6sjwd6PEHn5yPln6YT4
+                                                                                 |          |          |          
+                                                                                 |          |          |--1.55%--TypedRow$Utf8_uvVx9dT93tD4QoMO5KVva9
+                                                                                 |          |          |          
+                                                                                 |          |          |--1.55%--DirectByteBuffer_getLong_qql9RATsK0437ObPOcNrY2
+                                                                                 |          |          |          
+                                                                                 |          |           --1.26%--BuffaPlan$State_select_0sziQ0uftx4lC3kthIbEXA
+                                                                                 |          |          
+                                                                                 |          |--6.39%--ViewOwner_utf8_vdhpZc0Kb47RYc9YWkd98G
+                                                                                 |          |          |          
+                                                                                 |          |          |--3.28%--String_1Wsq2sHvwOLEAD1FMOeIqB
+                                                                                 |          |          |          |          
+                                                                                 |          |          |           --3.18%--String_ANiVZ8cr6wIGG2iZqvkdVA
+                                                                                 |          |          |                     |          
+                                                                                 |          |          |                      --2.50%--SVMIntrinsicStubsGen_stringCodingCountPositives_pJXvyEBdEyALRGGEsnbJx8
+                                                                                 |          |          |          
+                                                                                 |          |           --1.65%--ByteBuffer_get_9LdNwcKqu55pJ71WeML94L
+                                                                                 |          |          
+                                                                                 |          |--2.62%--DirectByteBuffer_getLong_qql9RATsK0437ObPOcNrY2
+                                                                                 |          |          
+                                                                                 |          |--2.55%--BuffaPlan$Repeated_add_lvBSoXwfHmArLR0AmytvNC
+                                                                                 |          |          
+                                                                                 |          |--2.20%--BuffaPlan$State_1sNRne88jxCdzp2hXsSsm6
+                                                                                 |          |          
+                                                                                 |           --1.01%--BuffaPlan$State_present_pEiJaztu4Y3MeA9E02xVSH
+                                                                                 |          
+                                                                                 |--17.52%--BuffaPlan$State_finish_csXZqUZdV57wsjt3nqU4ED
+                                                                                 |          |          
+                                                                                 |           --12.52%--BuffaPlan$State_finish_csXZqUZdV57wsjt3nqU4ED
+                                                                                 |                     |          
+                                                                                 |                      --3.68%--BuffaPlan$State_nonDefault_SblvpHzlR5FDB7QLpyT9iA
+                                                                                 |          
+                                                                                 |--2.39%--SvmBackend_typed_m5ZAy5gBUdD7mhPOcay3hB
+                                                                                 |          
+                                                                                 |--1.36%--td_buffa_typed_reuse
+                                                                                 |          
+                                                                                  --1.31%--DirectByteBuffer_getLong_qql9RATsK0437ObPOcNrY2
+
+    69.24%     0.00%  truffledata-com  truffledata-comparison-profile  [.] IsolateEnterStub__JavaMainWrapper__run__cXbfAhOWcF90761nQYco7L
+            |
+            ---IsolateEnterStub__JavaMainWrapper__run__cXbfAhOWcF90761nQYco7L
+               JavaMainWrapper_run_iTUBl8UzFfAz1VYmMX6I32
+               JavaMainWrapper_doRun_F09BQfnF3iKa8bUp7D6GY0
+               JavaMainWrapper_runCore0_DxjyYWWswBIqpGm74uwTlD
+               Profile_main_QLbiWA5uQ36iHGzuY4KzH1
+               |          
+                --69.21%--Comparison_main_Tdm8knqZbgFKmi8P01KlkC
+                          Comparison_run_Q5rf1SKn3YJHnF3ZUK1v3H
+                          |          
+                           --68.94%--Comparison_measure_rBHXAV3t9KEP8Sb58Nxs99
+                                     |          
+                                      --68.91%--Comparison$$Laf51eff2_run_Qm1e9AMT80I7oHp0l0OLt6
+                                                Comparison$Fixture_ingest_nKtS7SZyoUBnHzb7kJPIbK
+                                                |          
+                                                 --66.51%--Comparison$Fixture_parseNative_LgVvYd8rZW7zJc7biagwL4
+                                                           |          
+                                                            --65.96%--BuffaPlan_decode_sfEOgdpMiABSAaIXhzJ1r3
+                                                                      |          
+                                                                       --65.67%--BuffaPlan_parse_CdgW7hksxZFlQDePGBwO0J
+                                                                                 |          
+                                                                                 |--39.90%--BuffaPlan$State_consume_KhV6sjwd6PEHn5yPln6YT4
+                                                                                 |          |          
+                                                                                 |          |--17.59%--BuffaPlan$State_consume_KhV6sjwd6PEHn5yPln6YT4
+                                                                                 |          |          |          
+                                                                                 |          |          |--1.55%--TypedRow$Utf8_uvVx9dT93tD4QoMO5KVva9
+                                                                                 |          |          |          
+                                                                                 |          |          |--1.55%--DirectByteBuffer_getLong_qql9RATsK0437ObPOcNrY2
+                                                                                 |          |          |          
+                                                                                 |          |           --1.26%--BuffaPlan$State_select_0sziQ0uftx4lC3kthIbEXA
+                                                                                 |          |          
+                                                                                 |          |--6.39%--ViewOwner_utf8_vdhpZc0Kb47RYc9YWkd98G
+                                                                                 |          |          |          
+                                                                                 |          |          |--3.28%--String_1Wsq2sHvwOLEAD1FMOeIqB
+                                                                                 |          |          |          |          
+                                                                                 |          |          |           --3.18%--String_ANiVZ8cr6wIGG2iZqvkdVA
+                                                                                 |          |          |                     |          
+                                                                                 |          |          |                      --2.50%--SVMIntrinsicStubsGen_stringCodingCountPositives_pJXvyEBdEyALRGGEsnbJx8
+                                                                                 |          |          |          
+                                                                                 |          |           --1.65%--ByteBuffer_get_9LdNwcKqu55pJ71WeML94L
+                                                                                 |          |          
+                                                                                 |          |--2.62%--DirectByteBuffer_getLong_qql9RATsK0437ObPOcNrY2
+                                                                                 |          |          
+                                                                                 |          |--2.55%--BuffaPlan$Repeated_add_lvBSoXwfHmArLR0AmytvNC
+                                                                                 |          |          
+                                                                                 |          |--2.20%--BuffaPlan$State_1sNRne88jxCdzp2hXsSsm6
+                                                                                 |          |          
+                                                                                 |           --1.01%--BuffaPlan$State_present_pEiJaztu4Y3MeA9E02xVSH
+                                                                                 |          
+                                                                                 |--17.52%--BuffaPlan$State_finish_csXZqUZdV57wsjt3nqU4ED
+                                                                                 |          |          
+                                                                                 |           --12.52%--BuffaPlan$State_finish_csXZqUZdV57wsjt3nqU4ED
+                                                                                 |                     |          
+                                                                                 |                      --3.68%--BuffaPlan$State_nonDefault_SblvpHzlR5FDB7QLpyT9iA
+                                                                                 |          
+                                                                                 |--2.39%--SvmBackend_typed_m5ZAy5gBUdD7mhPOcay3hB
+                                                                                 |          
+                                                                                 |--1.36%--td_buffa_typed_reuse
+                                                                                 |          
+                                                                                  --1.31%--DirectByteBuffer_getLong_qql9RATsK0437ObPOcNrY2
+
+    69.24%     0.00%  truffledata-com  truffledata-comparison-profile  [.] JavaMainWrapper_run_iTUBl8UzFfAz1VYmMX6I32
+            |
+            ---JavaMainWrapper_run_iTUBl8UzFfAz1VYmMX6I32
+               JavaMainWrapper_doRun_F09BQfnF3iKa8bUp7D6GY0
+               JavaMainWrapper_runCore0_DxjyYWWswBIqpGm74uwTlD
+               Profile_main_QLbiWA5uQ36iHGzuY4KzH1
+               |          
+                --69.21%--Comparison_main_Tdm8knqZbgFKmi8P01KlkC
+                          Comparison_run_Q5rf1SKn3YJHnF3ZUK1v3H
+                          |          
+                           --68.94%--Comparison_measure_rBHXAV3t9KEP8Sb58Nxs99
+                                     |          
+                                      --68.91%--Comparison$$Laf51eff2_run_Qm1e9AMT80I7oHp0l0OLt6
+                                                Comparison$Fixture_ingest_nKtS7SZyoUBnHzb7kJPIbK
+                                                |          
+                                                 --66.51%--Comparison$Fixture_parseNative_LgVvYd8rZW7zJc7biagwL4
+                                                           |          
+                                                            --65.96%--BuffaPlan_decode_sfEOgdpMiABSAaIXhzJ1r3
+                                                                      |          
+                                                                       --65.67%--BuffaPlan_parse_CdgW7hksxZFlQDePGBwO0J
+                                                                                 |          
+                                                                                 |--39.90%--BuffaPlan$State_consume_KhV6sjwd6PEHn5yPln6YT4
+                                                                                 |          |          
+                                                                                 |          |--17.59%--BuffaPlan$State_consume_KhV6sjwd6PEHn5yPln6YT4
+                                                                                 |          |          |          
+                                                                                 |          |          |--1.55%--TypedRow$Utf8_uvVx9dT93tD4QoMO5KVva9
+                                                                                 |          |          |          
+                                                                                 |          |          |--1.55%--DirectByteBuffer_getLong_qql9RATsK0437ObPOcNrY2
+                                                                                 |          |          |          
+                                                                                 |          |           --1.26%--BuffaPlan$State_select_0sziQ0uftx4lC3kthIbEXA
+                                                                                 |          |          
+                                                                                 |          |--6.39%--ViewOwner_utf8_vdhpZc0Kb47RYc9YWkd98G
+                                                                                 |          |          |          
+                                                                                 |          |          |--3.28%--String_1Wsq2sHvwOLEAD1FMOeIqB
+                                                                                 |          |          |          |          
+                                                                                 |          |          |           --3.18%--String_ANiVZ8cr6wIGG2iZqvkdVA
+                                                                                 |          |          |                     |          
+                                                                                 |          |          |                      --2.50%--SVMIntrinsicStubsGen_stringCodingCountPositives_pJXvyEBdEyALRGGEsnbJx8
+                                                                                 |          |          |          
+                                                                                 |          |           --1.65%--ByteBuffer_get_9LdNwcKqu55pJ71WeML94L
+                                                                                 |          |          
+                                                                                 |          |--2.62%--DirectByteBuffer_getLong_qql9RATsK0437ObPOcNrY2
+                                                                                 |          |          
+                                                                                 |          |--2.55%--BuffaPlan$Repeated_add_lvBSoXwfHmArLR0AmytvNC
+                                                                                 |          |          
+                                                                                 |          |--2.20%--BuffaPlan$State_1sNRne88jxCdzp2hXsSsm6
+                                                                                 |          |          
+                                                                                 |           --1.01%--BuffaPlan$State_present_pEiJaztu4Y3MeA9E02xVSH
+                                                                                 |          
+                                                                                 |--17.52%--BuffaPlan$State_finish_csXZqUZdV57wsjt3nqU4ED
+                                                                                 |          |          
+                                                                                 |           --12.52%--BuffaPlan$State_finish_csXZqUZdV57wsjt3nqU4ED
+                                                                                 |                     |          
+                                                                                 |                      --3.68%--BuffaPlan$State_nonDefault_SblvpHzlR5FDB7QLpyT9iA
+                                                                                 |          
+                                                                                 |--2.39%--SvmBackend_typed_m5ZAy5gBUdD7mhPOcay3hB
+                                                                                 |          
+                                                                                 |--1.36%--td_buffa_typed_reuse
+                                                                                 |          
+                                                                                  --1.31%--DirectByteBuffer_getLong_qql9RATsK0437ObPOcNrY2
+
+    69.24%     0.00%  truffledata-com  truffledata-comparison-profile  [.] JavaMainWrapper_doRun_F09BQfnF3iKa8bUp7D6GY0
+            |
+            ---JavaMainWrapper_doRun_F09BQfnF3iKa8bUp7D6GY0
+               JavaMainWrapper_runCore0_DxjyYWWswBIqpGm74uwTlD
+               Profile_main_QLbiWA5uQ36iHGzuY4KzH1
+               |          
+                --69.21%--Comparison_main_Tdm8knqZbgFKmi8P01KlkC
+                          Comparison_run_Q5rf1SKn3YJHnF3ZUK1v3H
+                          |          
+                           --68.94%--Comparison_measure_rBHXAV3t9KEP8Sb58Nxs99
+                                     |          
+                                      --68.91%--Comparison$$Laf51eff2_run_Qm1e9AMT80I7oHp0l0OLt6
+                                                Comparison$Fixture_ingest_nKtS7SZyoUBnHzb7kJPIbK
+                                                |          
+                                                 --66.51%--Comparison$Fixture_parseNative_LgVvYd8rZW7zJc7biagwL4
+                                                           |          
+                                                            --65.96%--BuffaPlan_decode_sfEOgdpMiABSAaIXhzJ1r3
+                                                                      |          
+                                                                       --65.67%--BuffaPlan_parse_CdgW7hksxZFlQDePGBwO0J
+                                                                                 |          
+                                                                                 |--39.90%--BuffaPlan$State_consume_KhV6sjwd6PEHn5yPln6YT4
+                                                                                 |          |          
+                                                                                 |          |--17.59%--BuffaPlan$State_consume_KhV6sjwd6PEHn5yPln6YT4
+                                                                                 |          |          |          
+                                                                                 |          |          |--1.55%--TypedRow$Utf8_uvVx9dT93tD4QoMO5KVva9
+                                                                                 |          |          |          
+                                                                                 |          |          |--1.55%--DirectByteBuffer_getLong_qql9RATsK0437ObPOcNrY2
+                                                                                 |          |          |          
+                                                                                 |          |           --1.26%--BuffaPlan$State_select_0sziQ0uftx4lC3kthIbEXA
+                                                                                 |          |          
+                                                                                 |          |--6.39%--ViewOwner_utf8_vdhpZc0Kb47RYc9YWkd98G
+                                                                                 |          |          |          
+                                                                                 |          |          |--3.28%--String_1Wsq2sHvwOLEAD1FMOeIqB
+                                                                                 |          |          |          |          
+                                                                                 |          |          |           --3.18%--String_ANiVZ8cr6wIGG2iZqvkdVA
+                                                                                 |          |          |                     |          
+                                                                                 |          |          |                      --2.50%--SVMIntrinsicStubsGen_stringCodingCountPositives_pJXvyEBdEyALRGGEsnbJx8
+                                                                                 |          |          |          
+                                                                                 |          |           --1.65%--ByteBuffer_get_9LdNwcKqu55pJ71WeML94L
+                                                                                 |          |          
+                                                                                 |          |--2.62%--DirectByteBuffer_getLong_qql9RATsK0437ObPOcNrY2
+                                                                                 |          |          
+                                                                                 |          |--2.55%--BuffaPlan$Repeated_add_lvBSoXwfHmArLR0AmytvNC
+                                                                                 |          |          
+                                                                                 |          |--2.20%--BuffaPlan$State_1sNRne88jxCdzp2hXsSsm6
+                                                                                 |          |          
+                                                                                 |           --1.01%--BuffaPlan$State_present_pEiJaztu4Y3MeA9E02xVSH
+                                                                                 |          
+                                                                                 |--17.52%--BuffaPlan$State_finish_csXZqUZdV57wsjt3nqU4ED
+                                                                                 |          |          
+                                                                                 |           --12.52%--BuffaPlan$State_finish_csXZqUZdV57wsjt3nqU4ED
+                                                                                 |                     |          
+                                                                                 |                      --3.68%--BuffaPlan$State_nonDefault_SblvpHzlR5FDB7QLpyT9iA
+                                                                                 |          
+                                                                                 |--2.39%--SvmBackend_typed_m5ZAy5gBUdD7mhPOcay3hB
+                                                                                 |          
+                                                                                 |--1.36%--td_buffa_typed_reuse
+                                                                                 |          
+                                                                                  --1.31%--DirectByteBuffer_getLong_qql9RATsK0437ObPOcNrY2
+
+    69.24%     0.00%  truffledata-com  truffledata-comparison-profile  [.] JavaMainWrapper_runCore0_DxjyYWWswBIqpGm74uwTlD
+            |
+            ---JavaMainWrapper_runCore0_DxjyYWWswBIqpGm74uwTlD
+               Profile_main_QLbiWA5uQ36iHGzuY4KzH1
+               |          
+                --69.21%--Comparison_main_Tdm8knqZbgFKmi8P01KlkC
+                          Comparison_run_Q5rf1SKn3YJHnF3ZUK1v3H
+                          |          
+                           --68.94%--Comparison_measure_rBHXAV3t9KEP8Sb58Nxs99
+                                     |          
+                                      --68.91%--Comparison$$Laf51eff2_run_Qm1e9AMT80I7oHp0l0OLt6
+                                                Comparison$Fixture_ingest_nKtS7SZyoUBnHzb7kJPIbK
+                                                |          
+                                                 --66.51%--Comparison$Fixture_parseNative_LgVvYd8rZW7zJc7biagwL4
+                                                           |          
+                                                            --65.96%--BuffaPlan_decode_sfEOgdpMiABSAaIXhzJ1r3
+                                                                      |          
+                                                                       --65.67%--BuffaPlan_parse_CdgW7hksxZFlQDePGBwO0J
+                                                                                 |          
+                                                                                 |--39.90%--BuffaPlan$State_consume_KhV6sjwd6PEHn5yPln6YT4
+                                                                                 |          |          
+                                                                                 |          |--17.59%--BuffaPlan$State_consume_KhV6sjwd6PEHn5yPln6YT4
+                                                                                 |          |          |          
+                                                                                 |          |          |--1.55%--TypedRow$Utf8_uvVx9dT93tD4QoMO5KVva9
+                                                                                 |          |          |          
+                                                                                 |          |          |--1.55%--DirectByteBuffer_getLong_qql9RATsK0437ObPOcNrY2
+                                                                                 |          |          |          
+                                                                                 |          |           --1.26%--BuffaPlan$State_select_0sziQ0uftx4lC3kthIbEXA
+                                                                                 |          |          
+                                                                                 |          |--6.39%--ViewOwner_utf8_vdhpZc0Kb47RYc9YWkd98G
+                                                                                 |          |          |          
+                                                                                 |          |          |--3.28%--String_1Wsq2sHvwOLEAD1FMOeIqB
+                                                                                 |          |          |          |          
+                                                                                 |          |          |           --3.18%--String_ANiVZ8cr6wIGG2iZqvkdVA
+                                                                                 |          |          |                     |          
+                                                                                 |          |          |                      --2.50%--SVMIntrinsicStubsGen_stringCodingCountPositives_pJXvyEBdEyALRGGEsnbJx8
+                                                                                 |          |          |          
+                                                                                 |          |           --1.65%--ByteBuffer_get_9LdNwcKqu55pJ71WeML94L
+                                                                                 |          |          
+                                                                                 |          |--2.62%--DirectByteBuffer_getLong_qql9RATsK0437ObPOcNrY2
+                                                                                 |          |          
+                                                                                 |          |--2.55%--BuffaPlan$Repeated_add_lvBSoXwfHmArLR0AmytvNC
+                                                                                 |          |          
+                                                                                 |          |--2.20%--BuffaPlan$State_1sNRne88jxCdzp2hXsSsm6
+                                                                                 |          |          
+                                                                                 |           --1.01%--BuffaPlan$State_present_pEiJaztu4Y3MeA9E02xVSH
+                                                                                 |          
+                                                                                 |--17.52%--BuffaPlan$State_finish_csXZqUZdV57wsjt3nqU4ED
+                                                                                 |          |          
+                                                                                 |           --12.52%--BuffaPlan$State_finish_csXZqUZdV57wsjt3nqU4ED
+                                                                                 |                     |          
+                                                                                 |                      --3.68%--BuffaPlan$State_nonDefault_SblvpHzlR5FDB7QLpyT9iA
+                                                                                 |          
+                                                                                 |--2.39%--SvmBackend_typed_m5ZAy5gBUdD7mhPOcay3hB
+                                                                                 |          
+                                                                                 |--1.36%--td_buffa_typed_reuse
+                                                                                 |          
+                                                                                  --1.31%--DirectByteBuffer_getLong_qql9RATsK0437ObPOcNrY2
+
+    69.24%     0.00%  truffledata-com  truffledata-comparison-profile  [.] Profile_main_QLbiWA5uQ36iHGzuY4KzH1
+            |
+            ---Profile_main_QLbiWA5uQ36iHGzuY4KzH1
+               |          
+                --69.21%--Comparison_main_Tdm8knqZbgFKmi8P01KlkC
+                          Comparison_run_Q5rf1SKn3YJHnF3ZUK1v3H
+                          |          
+                           --68.94%--Comparison_measure_rBHXAV3t9KEP8Sb58Nxs99
+                                     |          
+                                      --68.91%--Comparison$$Laf51eff2_run_Qm1e9AMT80I7oHp0l0OLt6
+                                                Comparison$Fixture_ingest_nKtS7SZyoUBnHzb7kJPIbK
+                                                |          
+                                                 --66.51%--Comparison$Fixture_parseNative_LgVvYd8rZW7zJc7biagwL4
+                                                           |          
+                                                            --65.96%--BuffaPlan_decode_sfEOgdpMiABSAaIXhzJ1r3
+                                                                      |          
+                                                                       --65.67%--BuffaPlan_parse_CdgW7hksxZFlQDePGBwO0J
+                                                                                 |          
+                                                                                 |--39.90%--BuffaPlan$State_consume_KhV6sjwd6PEHn5yPln6YT4
+                                                                                 |          |          
+                                                                                 |          |--17.59%--BuffaPlan$State_consume_KhV6sjwd6PEHn5yPln6YT4
+                                                                                 |          |          |          
+                                                                                 |          |          |--1.55%--TypedRow$Utf8_uvVx9dT93tD4QoMO5KVva9
+                                                                                 |          |          |          
+                                                                                 |          |          |--1.55%--DirectByteBuffer_getLong_qql9RATsK0437ObPOcNrY2
+                                                                                 |          |          |          
+                                                                                 |          |           --1.26%--BuffaPlan$State_select_0sziQ0uftx4lC3kthIbEXA
+                                                                                 |          |          
+                                                                                 |          |--6.39%--ViewOwner_utf8_vdhpZc0Kb47RYc9YWkd98G
+                                                                                 |          |          |          
+                                                                                 |          |          |--3.28%--String_1Wsq2sHvwOLEAD1FMOeIqB
+                                                                                 |          |          |          |          
+                                                                                 |          |          |           --3.18%--String_ANiVZ8cr6wIGG2iZqvkdVA
+                                                                                 |          |          |                     |          
+                                                                                 |          |          |                      --2.50%--SVMIntrinsicStubsGen_stringCodingCountPositives_pJXvyEBdEyALRGGEsnbJx8
+                                                                                 |          |          |          
+                                                                                 |          |           --1.65%--ByteBuffer_get_9LdNwcKqu55pJ71WeML94L
+                                                                                 |          |          
+                                                                                 |          |--2.62%--DirectByteBuffer_getLong_qql9RATsK0437ObPOcNrY2
+                                                                                 |          |          
+                                                                                 |          |--2.55%--BuffaPlan$Repeated_add_lvBSoXwfHmArLR0AmytvNC
+                                                                                 |          |          
+                                                                                 |          |--2.20%--BuffaPlan$State_1sNRne88jxCdzp2hXsSsm6
+                                                                                 |          |          
+                                                                                 |           --1.01%--BuffaPlan$State_present_pEiJaztu4Y3MeA9E02xVSH
+                                                                                 |          
+                                                                                 |--17.52%--BuffaPlan$State_finish_csXZqUZdV57wsjt3nqU4ED
+                                                                                 |          |          
+                                                                                 |           --12.52%--BuffaPlan$State_finish_csXZqUZdV57wsjt3nqU4ED
+                                                                                 |                     |          
+                                                                                 |                      --3.68%--BuffaPlan$State_nonDefault_SblvpHzlR5FDB7QLpyT9iA
+                                                                                 |          
+                                                                                 |--2.39%--SvmBackend_typed_m5ZAy5gBUdD7mhPOcay3hB
+                                                                                 |          
+                                                                                 |--1.36%--td_buffa_typed_reuse
+                                                                                 |          
+                                                                                  --1.31%--DirectByteBuffer_getLong_qql9RATsK0437ObPOcNrY2
+
+    69.21%     0.00%  truffledata-com  truffledata-comparison-profile  [.] Comparison_main_Tdm8knqZbgFKmi8P01KlkC
+            |
+            ---Comparison_main_Tdm8knqZbgFKmi8P01KlkC
+               Comparison_run_Q5rf1SKn3YJHnF3ZUK1v3H
+               |          
+                --68.94%--Comparison_measure_rBHXAV3t9KEP8Sb58Nxs99
+                          |          
+                           --68.91%--Comparison$$Laf51eff2_run_Qm1e9AMT80I7oHp0l0OLt6
+                                     Comparison$Fixture_ingest_nKtS7SZyoUBnHzb7kJPIbK
+                                     |          
+                                      --66.51%--Comparison$Fixture_parseNative_LgVvYd8rZW7zJc7biagwL4
+                                                |          
+                                                 --65.96%--BuffaPlan_decode_sfEOgdpMiABSAaIXhzJ1r3
+                                                           |          
+                                                            --65.67%--BuffaPlan_parse_CdgW7hksxZFlQDePGBwO0J
+                                                                      |          
+                                                                      |--39.90%--BuffaPlan$State_consume_KhV6sjwd6PEHn5yPln6YT4
+                                                                      |          |          
+                                                                      |          |--17.59%--BuffaPlan$State_consume_KhV6sjwd6PEHn5yPln6YT4
+                                                                      |          |          |          
+                                                                      |          |          |--1.55%--TypedRow$Utf8_uvVx9dT93tD4QoMO5KVva9
+                                                                      |          |          |          
+                                                                      |          |          |--1.55%--DirectByteBuffer_getLong_qql9RATsK0437ObPOcNrY2
+                                                                      |          |          |          
+                                                                      |          |           --1.26%--BuffaPlan$State_select_0sziQ0uftx4lC3kthIbEXA
+                                                                      |          |          
+                                                                      |          |--6.39%--ViewOwner_utf8_vdhpZc0Kb47RYc9YWkd98G
+                                                                      |          |          |          
+                                                                      |          |          |--3.28%--String_1Wsq2sHvwOLEAD1FMOeIqB
+                                                                      |          |          |          |          
+                                                                      |          |          |           --3.18%--String_ANiVZ8cr6wIGG2iZqvkdVA
+                                                                      |          |          |                     |          
+                                                                      |          |          |                      --2.50%--SVMIntrinsicStubsGen_stringCodingCountPositives_pJXvyEBdEyALRGGEsnbJx8
+                                                                      |          |          |          
+                                                                      |          |           --1.65%--ByteBuffer_get_9LdNwcKqu55pJ71WeML94L
+                                                                      |          |          
+                                                                      |          |--2.62%--DirectByteBuffer_getLong_qql9RATsK0437ObPOcNrY2
+                                                                      |          |          
+                                                                      |          |--2.55%--BuffaPlan$Repeated_add_lvBSoXwfHmArLR0AmytvNC
+                                                                      |          |          
+                                                                      |          |--2.20%--BuffaPlan$State_1sNRne88jxCdzp2hXsSsm6
+                                                                      |          |          
+                                                                      |           --1.01%--BuffaPlan$State_present_pEiJaztu4Y3MeA9E02xVSH
+                                                                      |          
+                                                                      |--17.52%--BuffaPlan$State_finish_csXZqUZdV57wsjt3nqU4ED
+                                                                      |          |          
+                                                                      |           --12.52%--BuffaPlan$State_finish_csXZqUZdV57wsjt3nqU4ED
+                                                                      |                     |          
+                                                                      |                      --3.68%--BuffaPlan$State_nonDefault_SblvpHzlR5FDB7QLpyT9iA
+                                                                      |          
+                                                                      |--2.39%--SvmBackend_typed_m5ZAy5gBUdD7mhPOcay3hB
+                                                                      |          
+                                                                      |--1.36%--td_buffa_typed_reuse
+                                                                      |          
+                                                                       --1.31%--DirectByteBuffer_getLong_qql9RATsK0437ObPOcNrY2
+
+    69.21%     0.00%  truffledata-com  truffledata-comparison-profile  [.] Comparison_run_Q5rf1SKn3YJHnF3ZUK1v3H
+            |
+            ---Comparison_run_Q5rf1SKn3YJHnF3ZUK1v3H
+               |          
+                --68.94%--Comparison_measure_rBHXAV3t9KEP8Sb58Nxs99
+                          |          
+                           --68.91%--Comparison$$Laf51eff2_run_Qm1e9AMT80I7oHp0l0OLt6
+                                     Comparison$Fixture_ingest_nKtS7SZyoUBnHzb7kJPIbK
+                                     |          
+                                      --66.51%--Comparison$Fixture_parseNative_LgVvYd8rZW7zJc7biagwL4
+                                                |          
+                                                 --65.96%--BuffaPlan_decode_sfEOgdpMiABSAaIXhzJ1r3
+                                                           |          
+                                                            --65.67%--BuffaPlan_parse_CdgW7hksxZFlQDePGBwO0J
+                                                                      |          
+                                                                      |--39.90%--BuffaPlan$State_consume_KhV6sjwd6PEHn5yPln6YT4
+                                                                      |          |          
+                                                                      |          |--17.59%--BuffaPlan$State_consume_KhV6sjwd6PEHn5yPln6YT4
+                                                                      |          |          |          
+                                                                      |          |          |--1.55%--TypedRow$Utf8_uvVx9dT93tD4QoMO5KVva9
+                                                                      |          |          |          
+                                                                      |          |          |--1.55%--DirectByteBuffer_getLong_qql9RATsK0437ObPOcNrY2
+                                                                      |          |          |          
+                                                                      |          |           --1.26%--BuffaPlan$State_select_0sziQ0uftx4lC3kthIbEXA
+                                                                      |          |          
+                                                                      |          |--6.39%--ViewOwner_utf8_vdhpZc0Kb47RYc9YWkd98G
+                                                                      |          |          |          
+                                                                      |          |          |--3.28%--String_1Wsq2sHvwOLEAD1FMOeIqB
+                                                                      |          |          |          |          
+                                                                      |          |          |           --3.18%--String_ANiVZ8cr6wIGG2iZqvkdVA
+                                                                      |          |          |                     |          
+                                                                      |          |          |                      --2.50%--SVMIntrinsicStubsGen_stringCodingCountPositives_pJXvyEBdEyALRGGEsnbJx8
+                                                                      |          |          |          
+                                                                      |          |           --1.65%--ByteBuffer_get_9LdNwcKqu55pJ71WeML94L
+                                                                      |          |          
+                                                                      |          |--2.62%--DirectByteBuffer_getLong_qql9RATsK0437ObPOcNrY2
+                                                                      |          |          
+                                                                      |          |--2.55%--BuffaPlan$Repeated_add_lvBSoXwfHmArLR0AmytvNC
+                                                                      |          |          
+                                                                      |          |--2.20%--BuffaPlan$State_1sNRne88jxCdzp2hXsSsm6
+                                                                      |          |          
+                                                                      |           --1.01%--BuffaPlan$State_present_pEiJaztu4Y3MeA9E02xVSH
+                                                                      |          
+                                                                      |--17.52%--BuffaPlan$State_finish_csXZqUZdV57wsjt3nqU4ED
+                                                                      |          |          
+                                                                      |           --12.52%--BuffaPlan$State_finish_csXZqUZdV57wsjt3nqU4ED
+                                                                      |                     |          
+                                                                      |                      --3.68%--BuffaPlan$State_nonDefault_SblvpHzlR5FDB7QLpyT9iA
+                                                                      |          
+                                                                      |--2.39%--SvmBackend_typed_m5ZAy5gBUdD7mhPOcay3hB
+                                                                      |          
+                                                                      |--1.36%--td_buffa_typed_reuse
+                                                                      |          
+                                                                       --1.31%--DirectByteBuffer_getLong_qql9RATsK0437ObPOcNrY2
+
+    68.94%     0.00%  truffledata-com  truffledata-comparison-profile  [.] Comparison_measure_rBHXAV3t9KEP8Sb58Nxs99
+            |
+            ---Comparison_measure_rBHXAV3t9KEP8Sb58Nxs99
+               |          
+                --68.91%--Comparison$$Laf51eff2_run_Qm1e9AMT80I7oHp0l0OLt6
+                          Comparison$Fixture_ingest_nKtS7SZyoUBnHzb7kJPIbK
+                          |          
+                           --66.51%--Comparison$Fixture_parseNative_LgVvYd8rZW7zJc7biagwL4
+                                     |          
+                                      --65.96%--BuffaPlan_decode_sfEOgdpMiABSAaIXhzJ1r3
+                                                |          
+                                                 --65.67%--BuffaPlan_parse_CdgW7hksxZFlQDePGBwO0J
+                                                           |          
+                                                           |--39.90%--BuffaPlan$State_consume_KhV6sjwd6PEHn5yPln6YT4
+                                                           |          |          
+                                                           |          |--17.59%--BuffaPlan$State_consume_KhV6sjwd6PEHn5yPln6YT4
+                                                           |          |          |          
+                                                           |          |          |--1.55%--TypedRow$Utf8_uvVx9dT93tD4QoMO5KVva9
+                                                           |          |          |          
+                                                           |          |          |--1.55%--DirectByteBuffer_getLong_qql9RATsK0437ObPOcNrY2
+                                                           |          |          |          
+                                                           |          |           --1.26%--BuffaPlan$State_select_0sziQ0uftx4lC3kthIbEXA
+                                                           |          |          
+                                                           |          |--6.39%--ViewOwner_utf8_vdhpZc0Kb47RYc9YWkd98G
+                                                           |          |          |          
+                                                           |          |          |--3.28%--String_1Wsq2sHvwOLEAD1FMOeIqB
+                                                           |          |          |          |          
+                                                           |          |          |           --3.18%--String_ANiVZ8cr6wIGG2iZqvkdVA
+                                                           |          |          |                     |          
+                                                           |          |          |                      --2.50%--SVMIntrinsicStubsGen_stringCodingCountPositives_pJXvyEBdEyALRGGEsnbJx8
+                                                           |          |          |          
+                                                           |          |           --1.65%--ByteBuffer_get_9LdNwcKqu55pJ71WeML94L
+                                                           |          |          
+                                                           |          |--2.62%--DirectByteBuffer_getLong_qql9RATsK0437ObPOcNrY2
+                                                           |          |          
+                                                           |          |--2.55%--BuffaPlan$Repeated_add_lvBSoXwfHmArLR0AmytvNC
+                                                           |          |          
+                                                           |          |--2.20%--BuffaPlan$State_1sNRne88jxCdzp2hXsSsm6
+                                                           |          |          
+                                                           |           --1.01%--BuffaPlan$State_present_pEiJaztu4Y3MeA9E02xVSH
+                                                           |          
+                                                           |--17.52%--BuffaPlan$State_finish_csXZqUZdV57wsjt3nqU4ED
+                                                           |          |          
+                                                           |           --12.52%--BuffaPlan$State_finish_csXZqUZdV57wsjt3nqU4ED
+                                                           |                     |          
+                                                           |                      --3.68%--BuffaPlan$State_nonDefault_SblvpHzlR5FDB7QLpyT9iA
+                                                           |          
+                                                           |--2.39%--SvmBackend_typed_m5ZAy5gBUdD7mhPOcay3hB
+                                                           |          
+                                                           |--1.36%--td_buffa_typed_reuse
+                                                           |          
+                                                            --1.31%--DirectByteBuffer_getLong_qql9RATsK0437ObPOcNrY2
+
+    68.94%     0.00%  truffledata-com  truffledata-comparison-profile  [.] Comparison$$Laf51eff2_run_Qm1e9AMT80I7oHp0l0OLt6
+            |
+            ---Comparison$$Laf51eff2_run_Qm1e9AMT80I7oHp0l0OLt6
+               |          
+                --68.91%--Comparison$Fixture_ingest_nKtS7SZyoUBnHzb7kJPIbK
+                          |          
+                           --66.51%--Comparison$Fixture_parseNative_LgVvYd8rZW7zJc7biagwL4
+                                     |          
+                                      --65.96%--BuffaPlan_decode_sfEOgdpMiABSAaIXhzJ1r3
+                                                |          
+                                                 --65.67%--BuffaPlan_parse_CdgW7hksxZFlQDePGBwO0J
+                                                           |          
+                                                           |--39.90%--BuffaPlan$State_consume_KhV6sjwd6PEHn5yPln6YT4
+                                                           |          |          
+                                                           |          |--17.59%--BuffaPlan$State_consume_KhV6sjwd6PEHn5yPln6YT4
+                                                           |          |          |          
+                                                           |          |          |--1.55%--TypedRow$Utf8_uvVx9dT93tD4QoMO5KVva9
+                                                           |          |          |          
+                                                           |          |          |--1.55%--DirectByteBuffer_getLong_qql9RATsK0437ObPOcNrY2
+                                                           |          |          |          
+                                                           |          |           --1.26%--BuffaPlan$State_select_0sziQ0uftx4lC3kthIbEXA
+                                                           |          |          
+                                                           |          |--6.39%--ViewOwner_utf8_vdhpZc0Kb47RYc9YWkd98G
+                                                           |          |          |          
+                                                           |          |          |--3.28%--String_1Wsq2sHvwOLEAD1FMOeIqB
+                                                           |          |          |          |          
+                                                           |          |          |           --3.18%--String_ANiVZ8cr6wIGG2iZqvkdVA
+                                                           |          |          |                     |          
+                                                           |          |          |                      --2.50%--SVMIntrinsicStubsGen_stringCodingCountPositives_pJXvyEBdEyALRGGEsnbJx8
+                                                           |          |          |          
+                                                           |          |           --1.65%--ByteBuffer_get_9LdNwcKqu55pJ71WeML94L
+                                                           |          |          
+                                                           |          |--2.62%--DirectByteBuffer_getLong_qql9RATsK0437ObPOcNrY2
+                                                           |          |          
+                                                           |          |--2.55%--BuffaPlan$Repeated_add_lvBSoXwfHmArLR0AmytvNC
+                                                           |          |          
+                                                           |          |--2.20%--BuffaPlan$State_1sNRne88jxCdzp2hXsSsm6
+                                                           |          |          
+                                                           |           --1.01%--BuffaPlan$State_present_pEiJaztu4Y3MeA9E02xVSH
+                                                           |          
+                                                           |--17.52%--BuffaPlan$State_finish_csXZqUZdV57wsjt3nqU4ED
+                                                           |          |          
+                                                           |           --12.52%--BuffaPlan$State_finish_csXZqUZdV57wsjt3nqU4ED
+                                                           |                     |          
+                                                           |                      --3.68%--BuffaPlan$State_nonDefault_SblvpHzlR5FDB7QLpyT9iA
+                                                           |          
+                                                           |--2.39%--SvmBackend_typed_m5ZAy5gBUdD7mhPOcay3hB
+                                                           |          
+                                                           |--1.36%--td_buffa_typed_reuse
+                                                           |          
+                                                            --1.31%--DirectByteBuffer_getLong_qql9RATsK0437ObPOcNrY2
+
+    68.91%     0.23%  truffledata-com  truffledata-comparison-profile  [.] Comparison$Fixture_ingest_nKtS7SZyoUBnHzb7kJPIbK
+            |          
+             --68.69%--Comparison$Fixture_ingest_nKtS7SZyoUBnHzb7kJPIbK
+                       |          
+                        --66.45%--Comparison$Fixture_parseNative_LgVvYd8rZW7zJc7biagwL4
+                                  |          
+                                   --65.90%--BuffaPlan_decode_sfEOgdpMiABSAaIXhzJ1r3
+                                             |          
+                                              --65.61%--BuffaPlan_parse_CdgW7hksxZFlQDePGBwO0J
+                                                        |          
+                                                        |--39.90%--BuffaPlan$State_consume_KhV6sjwd6PEHn5yPln6YT4
+                                                        |          |          
+                                                        |          |--17.59%--BuffaPlan$State_consume_KhV6sjwd6PEHn5yPln6YT4
+                                                        |          |          |          
+                                                        |          |          |--1.55%--TypedRow$Utf8_uvVx9dT93tD4QoMO5KVva9
+                                                        |          |          |          
+                                                        |          |          |--1.55%--DirectByteBuffer_getLong_qql9RATsK0437ObPOcNrY2
+                                                        |          |          |          
+                                                        |          |           --1.26%--BuffaPlan$State_select_0sziQ0uftx4lC3kthIbEXA
+                                                        |          |          
+                                                        |          |--6.39%--ViewOwner_utf8_vdhpZc0Kb47RYc9YWkd98G
+                                                        |          |          |          
+                                                        |          |          |--3.28%--String_1Wsq2sHvwOLEAD1FMOeIqB
+                                                        |          |          |          |          
+                                                        |          |          |           --3.18%--String_ANiVZ8cr6wIGG2iZqvkdVA
+                                                        |          |          |                     |          
+                                                        |          |          |                      --2.50%--SVMIntrinsicStubsGen_stringCodingCountPositives_pJXvyEBdEyALRGGEsnbJx8
+                                                        |          |          |          
+                                                        |          |           --1.65%--ByteBuffer_get_9LdNwcKqu55pJ71WeML94L
+                                                        |          |          
+                                                        |          |--2.62%--DirectByteBuffer_getLong_qql9RATsK0437ObPOcNrY2
+                                                        |          |          
+                                                        |          |--2.55%--BuffaPlan$Repeated_add_lvBSoXwfHmArLR0AmytvNC
+                                                        |          |          
+                                                        |          |--2.20%--BuffaPlan$State_1sNRne88jxCdzp2hXsSsm6
+                                                        |          |          
+                                                        |           --1.01%--BuffaPlan$State_present_pEiJaztu4Y3MeA9E02xVSH
+                                                        |          
+                                                        |--17.52%--BuffaPlan$State_finish_csXZqUZdV57wsjt3nqU4ED
+                                                        |          |          
+                                                        |           --12.52%--BuffaPlan$State_finish_csXZqUZdV57wsjt3nqU4ED
+                                                        |                     |          
+                                                        |                      --3.68%--BuffaPlan$State_nonDefault_SblvpHzlR5FDB7QLpyT9iA
+                                                        |          
+                                                        |--2.36%--SvmBackend_typed_m5ZAy5gBUdD7mhPOcay3hB
+                                                        |          
+                                                        |--1.36%--td_buffa_typed_reuse
+                                                        |          
+                                                         --1.31%--DirectByteBuffer_getLong_qql9RATsK0437ObPOcNrY2
+
+    66.54%     0.07%  truffledata-com  truffledata-comparison-profile  [.] Comparison$Fixture_parseNative_LgVvYd8rZW7zJc7biagwL4
+            |          
+             --66.48%--Comparison$Fixture_parseNative_LgVvYd8rZW7zJc7biagwL4
+                       |          
+                        --65.93%--BuffaPlan_decode_sfEOgdpMiABSAaIXhzJ1r3
+                                  |          
+                                   --65.63%--BuffaPlan_parse_CdgW7hksxZFlQDePGBwO0J
+                                             |          
+                                             |--39.90%--BuffaPlan$State_consume_KhV6sjwd6PEHn5yPln6YT4
+                                             |          |          
+                                             |          |--17.59%--BuffaPlan$State_consume_KhV6sjwd6PEHn5yPln6YT4
+                                             |          |          |          
+                                             |          |          |--1.55%--TypedRow$Utf8_uvVx9dT93tD4QoMO5KVva9
+                                             |          |          |          
+                                             |          |          |--1.55%--DirectByteBuffer_getLong_qql9RATsK0437ObPOcNrY2
+                                             |          |          |          
+                                             |          |           --1.26%--BuffaPlan$State_select_0sziQ0uftx4lC3kthIbEXA
+                                             |          |          
+                                             |          |--6.39%--ViewOwner_utf8_vdhpZc0Kb47RYc9YWkd98G
+                                             |          |          |          
+                                             |          |          |--3.28%--String_1Wsq2sHvwOLEAD1FMOeIqB
+                                             |          |          |          |          
+                                             |          |          |           --3.18%--String_ANiVZ8cr6wIGG2iZqvkdVA
+                                             |          |          |                     |          
+                                             |          |          |                      --2.50%--SVMIntrinsicStubsGen_stringCodingCountPositives_pJXvyEBdEyALRGGEsnbJx8
+                                             |          |          |          
+                                             |          |           --1.65%--ByteBuffer_get_9LdNwcKqu55pJ71WeML94L
+                                             |          |          
+                                             |          |--2.62%--DirectByteBuffer_getLong_qql9RATsK0437ObPOcNrY2
+                                             |          |          
+                                             |          |--2.55%--BuffaPlan$Repeated_add_lvBSoXwfHmArLR0AmytvNC
+                                             |          |          
+                                             |          |--2.20%--BuffaPlan$State_1sNRne88jxCdzp2hXsSsm6
+                                             |          |          
+                                             |           --1.01%--BuffaPlan$State_present_pEiJaztu4Y3MeA9E02xVSH
+                                             |          
+                                             |--17.52%--BuffaPlan$State_finish_csXZqUZdV57wsjt3nqU4ED
+                                             |          |          
+                                             |           --12.52%--BuffaPlan$State_finish_csXZqUZdV57wsjt3nqU4ED
+                                             |                     |          
+                                             |                      --3.68%--BuffaPlan$State_nonDefault_SblvpHzlR5FDB7QLpyT9iA
+                                             |          
+                                             |--2.39%--SvmBackend_typed_m5ZAy5gBUdD7mhPOcay3hB
+                                             |          
+                                             |--1.36%--td_buffa_typed_reuse
+                                             |          
+                                              --1.31%--DirectByteBuffer_getLong_qql9RATsK0437ObPOcNrY2
+
+    66.09%     0.98%  truffledata-com  truffledata-comparison-profile  [.] BuffaPlan_parse_CdgW7hksxZFlQDePGBwO0J
+            |          
+             --65.11%--BuffaPlan_parse_CdgW7hksxZFlQDePGBwO0J
+                       |          
+                       |--39.78%--BuffaPlan$State_consume_KhV6sjwd6PEHn5yPln6YT4
+                       |          |          
+                       |          |--17.59%--BuffaPlan$State_consume_KhV6sjwd6PEHn5yPln6YT4
+                       |          |          |          
+                       |          |          |--1.55%--TypedRow$Utf8_uvVx9dT93tD4QoMO5KVva9
+                       |          |          |          
+                       |          |          |--1.55%--DirectByteBuffer_getLong_qql9RATsK0437ObPOcNrY2
+                       |          |          |          
+                       |          |           --1.26%--BuffaPlan$State_select_0sziQ0uftx4lC3kthIbEXA
+                       |          |          
+                       |          |--6.27%--ViewOwner_utf8_vdhpZc0Kb47RYc9YWkd98G
+                       |          |          |          
+                       |          |          |--3.28%--String_1Wsq2sHvwOLEAD1FMOeIqB
+                       |          |          |          |          
+                       |          |          |           --3.18%--String_ANiVZ8cr6wIGG2iZqvkdVA
+                       |          |          |                     |          
+                       |          |          |                      --2.50%--SVMIntrinsicStubsGen_stringCodingCountPositives_pJXvyEBdEyALRGGEsnbJx8
+                       |          |          |          
+                       |          |           --1.59%--ByteBuffer_get_9LdNwcKqu55pJ71WeML94L
+                       |          |          
+                       |          |--2.62%--DirectByteBuffer_getLong_qql9RATsK0437ObPOcNrY2
+                       |          |          
+                       |          |--2.55%--BuffaPlan$Repeated_add_lvBSoXwfHmArLR0AmytvNC
+                       |          |          
+                       |          |--2.20%--BuffaPlan$State_1sNRne88jxCdzp2hXsSsm6
+                       |          |          
+                       |           --1.01%--BuffaPlan$State_present_pEiJaztu4Y3MeA9E02xVSH
+                       |          
+                       |--17.46%--BuffaPlan$State_finish_csXZqUZdV57wsjt3nqU4ED
+                       |          |          
+                       |           --12.46%--BuffaPlan$State_finish_csXZqUZdV57wsjt3nqU4ED
+                       |                     |          
+                       |                      --3.65%--BuffaPlan$State_nonDefault_SblvpHzlR5FDB7QLpyT9iA
+                       |          
+                       |--2.10%--SvmBackend_typed_m5ZAy5gBUdD7mhPOcay3hB
+                       |          
+                        --1.31%--DirectByteBuffer_getLong_qql9RATsK0437ObPOcNrY2
+
+    65.99%     0.13%  truffledata-com  truffledata-comparison-profile  [.] BuffaPlan_decode_sfEOgdpMiABSAaIXhzJ1r3
+            |          
+             --65.86%--BuffaPlan_decode_sfEOgdpMiABSAaIXhzJ1r3
+                       |          
+                        --65.57%--BuffaPlan_parse_CdgW7hksxZFlQDePGBwO0J
+                                  |          
+                                  |--39.90%--BuffaPlan$State_consume_KhV6sjwd6PEHn5yPln6YT4
+                                  |          |          
+                                  |          |--17.59%--BuffaPlan$State_consume_KhV6sjwd6PEHn5yPln6YT4
+                                  |          |          |          
+                                  |          |          |--1.55%--TypedRow$Utf8_uvVx9dT93tD4QoMO5KVva9
+                                  |          |          |          
+                                  |          |          |--1.55%--DirectByteBuffer_getLong_qql9RATsK0437ObPOcNrY2
+                                  |          |          |          
+                                  |          |           --1.26%--BuffaPlan$State_select_0sziQ0uftx4lC3kthIbEXA
+                                  |          |          
+                                  |          |--6.39%--ViewOwner_utf8_vdhpZc0Kb47RYc9YWkd98G
+                                  |          |          |          
+                                  |          |          |--3.28%--String_1Wsq2sHvwOLEAD1FMOeIqB
+                                  |          |          |          |          
+                                  |          |          |           --3.18%--String_ANiVZ8cr6wIGG2iZqvkdVA
+                                  |          |          |                     |          
+                                  |          |          |                      --2.50%--SVMIntrinsicStubsGen_stringCodingCountPositives_pJXvyEBdEyALRGGEsnbJx8
+                                  |          |          |          
+                                  |          |           --1.65%--ByteBuffer_get_9LdNwcKqu55pJ71WeML94L
+                                  |          |          
+                                  |          |--2.62%--DirectByteBuffer_getLong_qql9RATsK0437ObPOcNrY2
+                                  |          |          
+                                  |          |--2.55%--BuffaPlan$Repeated_add_lvBSoXwfHmArLR0AmytvNC
+                                  |          |          
+                                  |          |--2.20%--BuffaPlan$State_1sNRne88jxCdzp2hXsSsm6
+                                  |          |          
+                                  |           --1.01%--BuffaPlan$State_present_pEiJaztu4Y3MeA9E02xVSH
+                                  |          
+                                  |--17.52%--BuffaPlan$State_finish_csXZqUZdV57wsjt3nqU4ED
+                                  |          |          
+                                  |           --12.52%--BuffaPlan$State_finish_csXZqUZdV57wsjt3nqU4ED
+                                  |                     |          
+                                  |                      --3.68%--BuffaPlan$State_nonDefault_SblvpHzlR5FDB7QLpyT9iA
+                                  |          
+                                  |--2.33%--SvmBackend_typed_m5ZAy5gBUdD7mhPOcay3hB
+                                  |          
+                                  |--1.32%--td_buffa_typed_reuse
+                                  |          
+                                   --1.31%--DirectByteBuffer_getLong_qql9RATsK0437ObPOcNrY2
+
+    41.65%    17.40%  truffledata-com  truffledata-comparison-profile  [.] BuffaPlan$State_consume_KhV6sjwd6PEHn5yPln6YT4
+            |          
+            |--24.25%--BuffaPlan$State_consume_KhV6sjwd6PEHn5yPln6YT4
+            |          |          
+            |          |--9.34%--BuffaPlan$State_consume_KhV6sjwd6PEHn5yPln6YT4
+            |          |          
+            |          |--4.61%--ViewOwner_utf8_vdhpZc0Kb47RYc9YWkd98G
+            |          |          |          
+            |          |          |--2.08%--String_1Wsq2sHvwOLEAD1FMOeIqB
+            |          |          |          |          
+            |          |          |           --1.98%--String_ANiVZ8cr6wIGG2iZqvkdVA
+            |          |          |                     |          
+            |          |          |                      --1.30%--SVMIntrinsicStubsGen_stringCodingCountPositives_pJXvyEBdEyALRGGEsnbJx8
+            |          |          |          
+            |          |           --1.29%--ByteBuffer_get_9LdNwcKqu55pJ71WeML94L
+            |          |          
+            |          |--1.68%--DirectByteBuffer_getLong_qql9RATsK0437ObPOcNrY2
+            |          |          
+            |          |--1.65%--BuffaPlan$State_1sNRne88jxCdzp2hXsSsm6
+            |          |          
+            |           --1.28%--BuffaPlan$Repeated_add_lvBSoXwfHmArLR0AmytvNC
+            |          
+             --17.40%--_start
+                       __libc_start_main@@GLIBC_2.34
+                       call_init (inlined)
+                       __libc_start_call_main
+                       IsolateEnterStub__JavaMainWrapper__run__cXbfAhOWcF90761nQYco7L
+                       JavaMainWrapper_run_iTUBl8UzFfAz1VYmMX6I32
+                       JavaMainWrapper_doRun_F09BQfnF3iKa8bUp7D6GY0
+                       JavaMainWrapper_runCore0_DxjyYWWswBIqpGm74uwTlD
+                       Profile_main_QLbiWA5uQ36iHGzuY4KzH1
+                       Comparison_main_Tdm8knqZbgFKmi8P01KlkC
+                       Comparison_run_Q5rf1SKn3YJHnF3ZUK1v3H
+                       Comparison_measure_rBHXAV3t9KEP8Sb58Nxs99
+                       Comparison$$Laf51eff2_run_Qm1e9AMT80I7oHp0l0OLt6
+                       Comparison$Fixture_ingest_nKtS7SZyoUBnHzb7kJPIbK
+                       Comparison$Fixture_parseNative_LgVvYd8rZW7zJc7biagwL4
+                       BuffaPlan_decode_sfEOgdpMiABSAaIXhzJ1r3
+                       |          
+                        --17.37%--BuffaPlan_parse_CdgW7hksxZFlQDePGBwO0J
+                                  |          
+                                   --15.69%--BuffaPlan$State_consume_KhV6sjwd6PEHn5yPln6YT4
+                                             |          
+                                             |--8.25%--BuffaPlan$State_consume_KhV6sjwd6PEHn5yPln6YT4
+                                             |          
+                                             |--1.78%--ViewOwner_utf8_vdhpZc0Kb47RYc9YWkd98G
+                                             |          |          
+                                             |           --1.20%--String_1Wsq2sHvwOLEAD1FMOeIqB
+                                             |                     String_ANiVZ8cr6wIGG2iZqvkdVA
+                                             |                     SVMIntrinsicStubsGen_stringCodingCountPositives_pJXvyEBdEyALRGGEsnbJx8
+                                             |          
+                                              --1.27%--BuffaPlan$Repeated_add_lvBSoXwfHmArLR0AmytvNC
+
+    22.98%    16.22%  truffledata-com  truffledata-comparison-profile  [.] <truffledata_buffa::typed::Decoder>::binary
+            |          
+            |--13.74%--<truffledata_buffa::typed::Decoder>::binary
+            |          
+            |--2.76%--<truffledata_buffa::typed::Decoder>::push
+            |          
+             --2.27%--<buffa::encoding::WireType>::from_u32
+
+    18.54%    11.42%  truffledata-com  truffledata-comparison-profile  [.] BuffaPlan$State_finish_csXZqUZdV57wsjt3nqU4ED
+            |          
+            |--11.42%--_start
+            |          __libc_start_main@@GLIBC_2.34
+            |          call_init (inlined)
+            |          __libc_start_call_main
+            |          IsolateEnterStub__JavaMainWrapper__run__cXbfAhOWcF90761nQYco7L
+            |          JavaMainWrapper_run_iTUBl8UzFfAz1VYmMX6I32
+            |          JavaMainWrapper_doRun_F09BQfnF3iKa8bUp7D6GY0
+            |          JavaMainWrapper_runCore0_DxjyYWWswBIqpGm74uwTlD
+            |          Profile_main_QLbiWA5uQ36iHGzuY4KzH1
+            |          Comparison_main_Tdm8knqZbgFKmi8P01KlkC
+            |          Comparison_run_Q5rf1SKn3YJHnF3ZUK1v3H
+            |          Comparison_measure_rBHXAV3t9KEP8Sb58Nxs99
+            |          Comparison$$Laf51eff2_run_Qm1e9AMT80I7oHp0l0OLt6
+            |          Comparison$Fixture_ingest_nKtS7SZyoUBnHzb7kJPIbK
+            |          |          
+            |           --10.57%--Comparison$Fixture_parseNative_LgVvYd8rZW7zJc7biagwL4
+            |                     BuffaPlan_decode_sfEOgdpMiABSAaIXhzJ1r3
+            |                     BuffaPlan_parse_CdgW7hksxZFlQDePGBwO0J
+            |                     |          
+            |                      --10.44%--BuffaPlan$State_finish_csXZqUZdV57wsjt3nqU4ED
+            |                                |          
+            |                                 --7.69%--BuffaPlan$State_finish_csXZqUZdV57wsjt3nqU4ED
+            |                                           |          
+            |                                            --1.81%--BuffaPlan$State_nonDefault_SblvpHzlR5FDB7QLpyT9iA
+            |          
+             --7.12%--BuffaPlan$State_finish_csXZqUZdV57wsjt3nqU4ED
+                       |          
+                        --4.83%--BuffaPlan$State_finish_csXZqUZdV57wsjt3nqU4ED
+                                  |          
+                                   --1.87%--BuffaPlan$State_nonDefault_SblvpHzlR5FDB7QLpyT9iA
+
+    11.02%     6.60%  truffledata-com  truffledata-comparison-profile  [.] DirectByteBuffer_getLong_qql9RATsK0437ObPOcNrY2
+            |          
+            |--6.60%--_start
+            |          __libc_start_main@@GLIBC_2.34
+            |          call_init (inlined)
+            |          __libc_start_call_main
+            |          IsolateEnterStub__JavaMainWrapper__run__cXbfAhOWcF90761nQYco7L
+            |          JavaMainWrapper_run_iTUBl8UzFfAz1VYmMX6I32
+            |          JavaMainWrapper_doRun_F09BQfnF3iKa8bUp7D6GY0
+            |          JavaMainWrapper_runCore0_DxjyYWWswBIqpGm74uwTlD
+            |          Profile_main_QLbiWA5uQ36iHGzuY4KzH1
+            |          Comparison_main_Tdm8knqZbgFKmi8P01KlkC
+            |          Comparison_run_Q5rf1SKn3YJHnF3ZUK1v3H
+            |          Comparison_measure_rBHXAV3t9KEP8Sb58Nxs99
+            |          Comparison$$Laf51eff2_run_Qm1e9AMT80I7oHp0l0OLt6
+            |          Comparison$Fixture_ingest_nKtS7SZyoUBnHzb7kJPIbK
+            |          Comparison$Fixture_parseNative_LgVvYd8rZW7zJc7biagwL4
+            |          BuffaPlan_decode_sfEOgdpMiABSAaIXhzJ1r3
+            |          BuffaPlan_parse_CdgW7hksxZFlQDePGBwO0J
+            |          |          
+            |           --5.89%--BuffaPlan$State_consume_KhV6sjwd6PEHn5yPln6YT4
+            |                     |          
+            |                      --3.49%--BuffaPlan$State_consume_KhV6sjwd6PEHn5yPln6YT4
+            |          
+             --4.42%--DirectByteBuffer_getLong_qql9RATsK0437ObPOcNrY2
+
+     8.09%     3.84%  truffledata-com  truffledata-comparison-profile  [.] <truffledata_buffa::typed::Decoder>::push
+            |          
+            |--4.75%--<truffledata_buffa::typed::Decoder>::push
+            |          
+             --1.41%--<truffledata_buffa::typed::Decoder>::binary
+
+     6.75%     0.84%  truffledata-com  truffledata-comparison-profile  [.] ViewOwner_utf8_vdhpZc0Kb47RYc9YWkd98G
+            |          
+             --5.90%--ViewOwner_utf8_vdhpZc0Kb47RYc9YWkd98G
+                       |          
+                       |--2.75%--String_1Wsq2sHvwOLEAD1FMOeIqB
+                       |          |          
+                       |           --2.65%--String_ANiVZ8cr6wIGG2iZqvkdVA
+                       |                     |          
+                       |                      --2.01%--SVMIntrinsicStubsGen_stringCodingCountPositives_pJXvyEBdEyALRGGEsnbJx8
+                       |          
+                        --1.59%--ByteBuffer_get_9LdNwcKqu55pJ71WeML94L
+
+     6.70%     2.93%  truffledata-com  truffledata-comparison-profile  [.] BuffaPlan$State_nonDefault_SblvpHzlR5FDB7QLpyT9iA
+            |          
+            |--3.77%--BuffaPlan$State_nonDefault_SblvpHzlR5FDB7QLpyT9iA
+            |          
+             --2.93%--_start
+                       __libc_start_main@@GLIBC_2.34
+                       call_init (inlined)
+                       __libc_start_call_main
+                       IsolateEnterStub__JavaMainWrapper__run__cXbfAhOWcF90761nQYco7L
+                       JavaMainWrapper_run_iTUBl8UzFfAz1VYmMX6I32
+                       JavaMainWrapper_doRun_F09BQfnF3iKa8bUp7D6GY0
+                       JavaMainWrapper_runCore0_DxjyYWWswBIqpGm74uwTlD
+                       Profile_main_QLbiWA5uQ36iHGzuY4KzH1
+                       Comparison_main_Tdm8knqZbgFKmi8P01KlkC
+                       Comparison_run_Q5rf1SKn3YJHnF3ZUK1v3H
+                       Comparison_measure_rBHXAV3t9KEP8Sb58Nxs99
+                       Comparison$$Laf51eff2_run_Qm1e9AMT80I7oHp0l0OLt6
+                       Comparison$Fixture_ingest_nKtS7SZyoUBnHzb7kJPIbK
+                       |          
+                        --2.86%--Comparison$Fixture_parseNative_LgVvYd8rZW7zJc7biagwL4
+                                  BuffaPlan_decode_sfEOgdpMiABSAaIXhzJ1r3
+                                  |          
+                                   --2.83%--BuffaPlan_parse_CdgW7hksxZFlQDePGBwO0J
+                                             BuffaPlan$State_finish_csXZqUZdV57wsjt3nqU4ED
+                                             |          
+                                              --1.96%--BuffaPlan$State_finish_csXZqUZdV57wsjt3nqU4ED
+
+     6.30%     3.28%  truffledata-com  truffledata-comparison-profile  [.] BuffaPlan$State_present_pEiJaztu4Y3MeA9E02xVSH
+            |          
+            |--3.28%--_start
+            |          __libc_start_main@@GLIBC_2.34
+            |          call_init (inlined)
+            |          __libc_start_call_main
+            |          IsolateEnterStub__JavaMainWrapper__run__cXbfAhOWcF90761nQYco7L
+            |          JavaMainWrapper_run_iTUBl8UzFfAz1VYmMX6I32
+            |          JavaMainWrapper_doRun_F09BQfnF3iKa8bUp7D6GY0
+            |          JavaMainWrapper_runCore0_DxjyYWWswBIqpGm74uwTlD
+            |          Profile_main_QLbiWA5uQ36iHGzuY4KzH1
+            |          Comparison_main_Tdm8knqZbgFKmi8P01KlkC
+            |          Comparison_run_Q5rf1SKn3YJHnF3ZUK1v3H
+            |          Comparison_measure_rBHXAV3t9KEP8Sb58Nxs99
+            |          Comparison$$Laf51eff2_run_Qm1e9AMT80I7oHp0l0OLt6
+            |          Comparison$Fixture_ingest_nKtS7SZyoUBnHzb7kJPIbK
+            |          |          
+            |           --3.19%--Comparison$Fixture_parseNative_LgVvYd8rZW7zJc7biagwL4
+            |                     BuffaPlan_decode_sfEOgdpMiABSAaIXhzJ1r3
+            |                     BuffaPlan_parse_CdgW7hksxZFlQDePGBwO0J
+            |                     |          
+            |                     |--1.66%--BuffaPlan$State_finish_csXZqUZdV57wsjt3nqU4ED
+            |                     |          |          
+            |                     |           --1.31%--BuffaPlan$State_finish_csXZqUZdV57wsjt3nqU4ED
+            |                     |          
+            |                      --1.42%--BuffaPlan$State_consume_KhV6sjwd6PEHn5yPln6YT4
+            |          
+             --3.02%--BuffaPlan$State_present_pEiJaztu4Y3MeA9E02xVSH
+
+     5.20%     2.66%  truffledata-com  truffledata-comparison-profile  [.] BuffaPlan$Repeated_add_lvBSoXwfHmArLR0AmytvNC
+            |          
+            |--2.66%--_start
+            |          __libc_start_main@@GLIBC_2.34
+            |          call_init (inlined)
+            |          __libc_start_call_main
+            |          IsolateEnterStub__JavaMainWrapper__run__cXbfAhOWcF90761nQYco7L
+            |          JavaMainWrapper_run_iTUBl8UzFfAz1VYmMX6I32
+            |          JavaMainWrapper_doRun_F09BQfnF3iKa8bUp7D6GY0
+            |          JavaMainWrapper_runCore0_DxjyYWWswBIqpGm74uwTlD
+            |          Profile_main_QLbiWA5uQ36iHGzuY4KzH1
+            |          Comparison_main_Tdm8knqZbgFKmi8P01KlkC
+            |          Comparison_run_Q5rf1SKn3YJHnF3ZUK1v3H
+            |          Comparison_measure_rBHXAV3t9KEP8Sb58Nxs99
+            |          Comparison$$Laf51eff2_run_Qm1e9AMT80I7oHp0l0OLt6
+            |          Comparison$Fixture_ingest_nKtS7SZyoUBnHzb7kJPIbK
+            |          Comparison$Fixture_parseNative_LgVvYd8rZW7zJc7biagwL4
+            |          BuffaPlan_decode_sfEOgdpMiABSAaIXhzJ1r3
+            |          BuffaPlan_parse_CdgW7hksxZFlQDePGBwO0J
+            |          |          
+            |           --2.46%--BuffaPlan$State_consume_KhV6sjwd6PEHn5yPln6YT4
+            |          
+             --2.55%--BuffaPlan$Repeated_add_lvBSoXwfHmArLR0AmytvNC
+
+     5.14%     1.06%  truffledata-com  truffledata-comparison-profile  [.] <buffa::encoding::WireType>::from_u32
+            |          
+             --4.37%--<buffa::encoding::WireType>::from_u32
+
+     4.93%     1.71%  truffledata-com  truffledata-comparison-profile  [.] String_ANiVZ8cr6wIGG2iZqvkdVA
+            |          
+            |--3.21%--String_ANiVZ8cr6wIGG2iZqvkdVA
+            |          |          
+            |           --2.50%--SVMIntrinsicStubsGen_stringCodingCountPositives_pJXvyEBdEyALRGGEsnbJx8
+            |          
+             --1.71%--_start
+                       __libc_start_main@@GLIBC_2.34
+                       call_init (inlined)
+                       __libc_start_call_main
+                       IsolateEnterStub__JavaMainWrapper__run__cXbfAhOWcF90761nQYco7L
+                       JavaMainWrapper_run_iTUBl8UzFfAz1VYmMX6I32
+                       JavaMainWrapper_doRun_F09BQfnF3iKa8bUp7D6GY0
+                       JavaMainWrapper_runCore0_DxjyYWWswBIqpGm74uwTlD
+                       Profile_main_QLbiWA5uQ36iHGzuY4KzH1
+                       Comparison_main_Tdm8knqZbgFKmi8P01KlkC
+                       Comparison_run_Q5rf1SKn3YJHnF3ZUK1v3H
+                       Comparison_measure_rBHXAV3t9KEP8Sb58Nxs99
+                       Comparison$$Laf51eff2_run_Qm1e9AMT80I7oHp0l0OLt6
+                       Comparison$Fixture_ingest_nKtS7SZyoUBnHzb7kJPIbK
+                       Comparison$Fixture_parseNative_LgVvYd8rZW7zJc7biagwL4
+                       BuffaPlan_decode_sfEOgdpMiABSAaIXhzJ1r3
+                       BuffaPlan_parse_CdgW7hksxZFlQDePGBwO0J
+                       |          
+                        --1.49%--BuffaPlan$State_consume_KhV6sjwd6PEHn5yPln6YT4
+
+     4.64%     1.95%  truffledata-com  truffledata-comparison-profile  [.] BuffaPlan$State_1sNRne88jxCdzp2hXsSsm6
+            |          
+            |--2.69%--BuffaPlan$State_1sNRne88jxCdzp2hXsSsm6
+            |          
+             --1.95%--_start
+                       __libc_start_main@@GLIBC_2.34
+                       call_init (inlined)
+                       __libc_start_call_main
+                       IsolateEnterStub__JavaMainWrapper__run__cXbfAhOWcF90761nQYco7L
+                       JavaMainWrapper_run_iTUBl8UzFfAz1VYmMX6I32
+                       JavaMainWrapper_doRun_F09BQfnF3iKa8bUp7D6GY0
+                       JavaMainWrapper_runCore0_DxjyYWWswBIqpGm74uwTlD
+                       Profile_main_QLbiWA5uQ36iHGzuY4KzH1
+                       Comparison_main_Tdm8knqZbgFKmi8P01KlkC
+                       Comparison_run_Q5rf1SKn3YJHnF3ZUK1v3H
+                       Comparison_measure_rBHXAV3t9KEP8Sb58Nxs99
+                       Comparison$$Laf51eff2_run_Qm1e9AMT80I7oHp0l0OLt6
+                       Comparison$Fixture_ingest_nKtS7SZyoUBnHzb7kJPIbK
+                       Comparison$Fixture_parseNative_LgVvYd8rZW7zJc7biagwL4
+                       BuffaPlan_decode_sfEOgdpMiABSAaIXhzJ1r3
+                       BuffaPlan_parse_CdgW7hksxZFlQDePGBwO0J
+                       |          
+                        --1.91%--BuffaPlan$State_consume_KhV6sjwd6PEHn5yPln6YT4
+                                  |          
+                                   --1.40%--BuffaPlan$State_consume_KhV6sjwd6PEHn5yPln6YT4
+
+     4.36%     2.93%  truffledata-com  truffledata-comparison-profile  [.] core::str::converts::from_utf8
+            |          
+            |--1.53%--<truffledata_buffa::typed::Decoder>::binary
+            |          
+             --1.50%--core::str::converts::from_utf8
+
+     3.86%     1.92%  truffledata-com  truffledata-comparison-profile  [.] BuffaPlan$DecodeContext_charge_s2QBZxGaOyJZCYVS2TrLd7
+            |          
+            |--1.95%--BuffaPlan$DecodeContext_charge_s2QBZxGaOyJZCYVS2TrLd7
+            |          
+             --1.92%--_start
+                       __libc_start_main@@GLIBC_2.34
+                       call_init (inlined)
+                       __libc_start_call_main
+                       IsolateEnterStub__JavaMainWrapper__run__cXbfAhOWcF90761nQYco7L
+                       JavaMainWrapper_run_iTUBl8UzFfAz1VYmMX6I32
+                       JavaMainWrapper_doRun_F09BQfnF3iKa8bUp7D6GY0
+                       JavaMainWrapper_runCore0_DxjyYWWswBIqpGm74uwTlD
+                       Profile_main_QLbiWA5uQ36iHGzuY4KzH1
+                       Comparison_main_Tdm8knqZbgFKmi8P01KlkC
+                       Comparison_run_Q5rf1SKn3YJHnF3ZUK1v3H
+                       Comparison_measure_rBHXAV3t9KEP8Sb58Nxs99
+                       Comparison$$Laf51eff2_run_Qm1e9AMT80I7oHp0l0OLt6
+                       Comparison$Fixture_ingest_nKtS7SZyoUBnHzb7kJPIbK
+                       Comparison$Fixture_parseNative_LgVvYd8rZW7zJc7biagwL4
+                       BuffaPlan_decode_sfEOgdpMiABSAaIXhzJ1r3
+                       |          
+                        --1.88%--BuffaPlan_parse_CdgW7hksxZFlQDePGBwO0J
+                                  |          
+                                   --1.75%--BuffaPlan$State_consume_KhV6sjwd6PEHn5yPln6YT4
+                                             |          
+                                              --1.10%--BuffaPlan$State_consume_KhV6sjwd6PEHn5yPln6YT4
+
+     3.61%     1.99%  truffledata-com  truffledata-comparison-profile  [.] <truffledata_buffa::typed::Decoder>::bytes
+            |          
+            |--1.65%--<truffledata_buffa::typed::Decoder>::bytes
+            |          
+             --1.14%--<truffledata_buffa::typed::Decoder>::binary
+
+     3.54%     1.54%  truffledata-com  truffledata-comparison-profile  [.] BuffaPlan$State_select_0sziQ0uftx4lC3kthIbEXA
+            |          
+            |--2.00%--BuffaPlan$State_select_0sziQ0uftx4lC3kthIbEXA
+            |          
+             --1.54%--_start
+                       __libc_start_main@@GLIBC_2.34
+                       call_init (inlined)
+                       __libc_start_call_main
+                       IsolateEnterStub__JavaMainWrapper__run__cXbfAhOWcF90761nQYco7L
+                       JavaMainWrapper_run_iTUBl8UzFfAz1VYmMX6I32
+                       JavaMainWrapper_doRun_F09BQfnF3iKa8bUp7D6GY0
+                       JavaMainWrapper_runCore0_DxjyYWWswBIqpGm74uwTlD
+                       Profile_main_QLbiWA5uQ36iHGzuY4KzH1
+                       Comparison_main_Tdm8knqZbgFKmi8P01KlkC
+                       Comparison_run_Q5rf1SKn3YJHnF3ZUK1v3H
+                       Comparison_measure_rBHXAV3t9KEP8Sb58Nxs99
+                       Comparison$$Laf51eff2_run_Qm1e9AMT80I7oHp0l0OLt6
+                       Comparison$Fixture_ingest_nKtS7SZyoUBnHzb7kJPIbK
+                       Comparison$Fixture_parseNative_LgVvYd8rZW7zJc7biagwL4
+                       BuffaPlan_decode_sfEOgdpMiABSAaIXhzJ1r3
+                       BuffaPlan_parse_CdgW7hksxZFlQDePGBwO0J
+                       BuffaPlan$State_consume_KhV6sjwd6PEHn5yPln6YT4
+
+     3.54%     1.91%  truffledata-com  truffledata-comparison-profile  [.] buffa::encoding::decode_varint::<&[u8]>
+            |          
+             --1.69%--buffa::encoding::decode_varint::<&[u8]>
+
+     3.38%     0.06%  truffledata-com  truffledata-comparison-profile  [.] String_1Wsq2sHvwOLEAD1FMOeIqB
+            |          
+             --3.31%--String_1Wsq2sHvwOLEAD1FMOeIqB
+                       |          
+                        --3.15%--String_ANiVZ8cr6wIGG2iZqvkdVA
+                                  |          
+                                   --2.50%--SVMIntrinsicStubsGen_stringCodingCountPositives_pJXvyEBdEyALRGGEsnbJx8
+
+     2.87%     0.48%  truffledata-com  truffledata-comparison-profile  [.] SvmBackend_typed_m5ZAy5gBUdD7mhPOcay3hB
+            |          
+             --2.39%--SvmBackend_typed_m5ZAy5gBUdD7mhPOcay3hB
+
+     2.82%     1.10%  truffledata-com  truffledata-comparison-profile  [.] TypedRow$Utf8_uvVx9dT93tD4QoMO5KVva9
+            |          
+            |--1.72%--TypedRow$Utf8_uvVx9dT93tD4QoMO5KVva9
+            |          
+             --1.10%--_start
+                       __libc_start_main@@GLIBC_2.34
+                       call_init (inlined)
+                       __libc_start_call_main
+                       IsolateEnterStub__JavaMainWrapper__run__cXbfAhOWcF90761nQYco7L
+                       JavaMainWrapper_run_iTUBl8UzFfAz1VYmMX6I32
+                       JavaMainWrapper_doRun_F09BQfnF3iKa8bUp7D6GY0
+                       JavaMainWrapper_runCore0_DxjyYWWswBIqpGm74uwTlD
+                       Profile_main_QLbiWA5uQ36iHGzuY4KzH1
+                       Comparison_main_Tdm8knqZbgFKmi8P01KlkC
+                       Comparison_run_Q5rf1SKn3YJHnF3ZUK1v3H
+                       Comparison_measure_rBHXAV3t9KEP8Sb58Nxs99
+                       Comparison$$Laf51eff2_run_Qm1e9AMT80I7oHp0l0OLt6
+                       Comparison$Fixture_ingest_nKtS7SZyoUBnHzb7kJPIbK
+                       Comparison$Fixture_parseNative_LgVvYd8rZW7zJc7biagwL4
+                       BuffaPlan_decode_sfEOgdpMiABSAaIXhzJ1r3
+                       BuffaPlan_parse_CdgW7hksxZFlQDePGBwO0J
+
+     2.73%     0.23%  truffledata-com  truffledata-comparison-profile  [.] SVMIntrinsicStubsGen_stringCodingCountPositives_pJXvyEBdEyALRGGEsnbJx8
+            |          
+             --2.50%--SVMIntrinsicStubsGen_stringCodingCountPositives_pJXvyEBdEyALRGGEsnbJx8
+
+     2.17%     1.10%  truffledata-com  truffledata-comparison-profile  [.] truffledata_buffa::typed::scalar
+            |          
+             --1.10%--truffledata_buffa::typed::scalar
+
+     1.98%     0.29%  truffledata-com  truffledata-comparison-profile  [.] ByteBuffer_get_9LdNwcKqu55pJ71WeML94L
+            |          
+             --1.68%--ByteBuffer_get_9LdNwcKqu55pJ71WeML94L
+
+     1.90%     0.84%  truffledata-com  truffledata-comparison-profile  [.] truffledata_buffa::typed::take_bytes
+            |          
+             --1.13%--truffledata_buffa::typed::take_bytes
+
+     1.58%     0.75%  truffledata-com  truffledata-comparison-profile  [.] Long_equals_BZWXApJYQQ6JGpNFsd4CqD
+     1.48%     0.60%  truffledata-com  truffledata-comparison-profile  [.] WireInput$Lease_check_8r2ZBkm6FxJp2ASLqaIDpF
+     1.42%     0.84%  truffledata-com  truffledata-comparison-profile  [.] DirectByteBuffer_getInt_a3qgPNl3wW8e1LatVnjXIK
+     1.42%     0.07%  truffledata-com  truffledata-comparison-profile  [.] td_buffa_typed_reuse
+            |          
+             --1.36%--td_buffa_typed_reuse
+
+     1.39%     0.61%  truffledata-com  truffledata-comparison-profile  [.] Preconditions_checkFromIndexSize_mfoc1kMqT59E4u10aLwUg0
+     1.32%     0.87%  truffledata-com  truffledata-comparison-profile  [.] <truffledata_buffa::typed::Contract>::enumeration
+     1.23%     0.23%  truffledata-com  truffledata-comparison-profile  [.] ByteBuffer_getArray_zSREGQgzRMABUncEZL4yFG
+            |          
+             --1.00%--ByteBuffer_getArray_zSREGQgzRMABUncEZL4yFG
+
+     1.18%     0.20%  truffledata-com  truffledata-comparison-profile  [.] WireInput_size_fNFujRXYpvKr9dY8CsaZcJ
+     1.07%     0.39%  truffledata-com  truffledata-comparison-profile  [.] WireInput_check_891Oe7KsdsHmedJ1zZ9I8B
+
+
+#
+# (Cannot load tips.txt file, please install perf!)
+#

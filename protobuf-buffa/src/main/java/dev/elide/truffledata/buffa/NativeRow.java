@@ -17,6 +17,7 @@ import org.jspecify.annotations.Nullable;
 
 /** Binary view over an owned native index. Java child objects are created only when accessed. */
 final class NativeRow extends TypedRow {
+  private static final ByteBuffer POINTER_PROFILE = ByteBuffer.allocate(0);
   private static final int[] PACKED_OFFSETS = new int[0];
   private final BuffaWire.Tape tape;
   private final int start;
@@ -140,32 +141,34 @@ final class NativeRow extends TypedRow {
       next = Buffa.Field.end(entry);
     } else {
       int offset = index * Buffa.Field.SIZE;
-      ordinal = tape.bytes.getInt(offset + (int) BuffaFFM.Field_number_OFFSET) - 1;
-      next = tape.bytes.getInt(offset + (int) BuffaFFM.Field_end_OFFSET);
+      ordinal = tape.bytes().getInt(offset + (int) BuffaFFM.Field_number_OFFSET) - 1;
+      next = tape.bytes().getInt(offset + (int) BuffaFFM.Field_end_OFFSET);
     }
     return ((long) next << 32) | Integer.toUnsignedLong(ordinal);
   }
 
   private static long bits(BuffaWire.Tape tape, int index) {
-    return bits(tape, index, tape.bytes);
+    return bits(tape, index, profileBuffer(tape));
   }
 
   private static long bits(BuffaWire.Tape tape, int index, ByteBuffer buffer) {
     if (ImageInfo.inImageCode() && tape.nativeAddress != 0)
       return Buffa.Field.value(entry(tape, index));
-    return buffer.getLong(index * Buffa.Field.SIZE + (int) BuffaFFM.Field_value_OFFSET);
+    int offset = index * Buffa.Field.SIZE + (int) BuffaFFM.Field_value_OFFSET;
+    if (!ImageInfo.inImageCode()) return FfmBackend.readIndexLong(buffer, offset);
+    return buffer.getLong(offset);
   }
 
   private static int length(BuffaWire.Tape tape, int index) {
     if (ImageInfo.inImageCode() && tape.nativeAddress != 0)
       return Buffa.Field.length(entry(tape, index));
-    return tape.bytes.getInt(index * Buffa.Field.SIZE + (int) BuffaFFM.Field_length_OFFSET);
+    return tape.bytes().getInt(index * Buffa.Field.SIZE + (int) BuffaFFM.Field_length_OFFSET);
   }
 
   private static int next(BuffaWire.Tape tape, int index) {
     if (ImageInfo.inImageCode() && tape.nativeAddress != 0)
       return Buffa.Field.end(entry(tape, index));
-    return tape.bytes.getInt(index * Buffa.Field.SIZE + (int) BuffaFFM.Field_end_OFFSET);
+    return tape.bytes().getInt(index * Buffa.Field.SIZE + (int) BuffaFFM.Field_end_OFFSET);
   }
 
   private int offset(int ordinal) {
@@ -211,12 +214,18 @@ final class NativeRow extends TypedRow {
     return descriptor.field(ordinal).kind() == Field.Kind.INT64;
   }
 
+  private static ByteBuffer profileBuffer(BuffaWire.Tape tape) {
+    // SVM pointer loads do not use a buffer. Keep JVM exact-class profiling without allocating
+    // an unused DirectByteBuffer solely to supply this argument on SVM.
+    return ImageInfo.inImageCode() && tape.nativeAddress != 0 ? POINTER_PROFILE : tape.bytes();
+  }
+
   ByteBuffer indexBuffer() {
-    return tape.bytes;
+    return profileBuffer(tape);
   }
 
   long integerValue(int ordinal) {
-    return integerValue(ordinal, tape.bytes);
+    return integerValue(ordinal, profileBuffer(tape));
   }
 
   long integerValue(int ordinal, ByteBuffer buffer) {
@@ -231,17 +240,22 @@ final class NativeRow extends TypedRow {
     };
   }
 
+  private @Nullable Object cachedValue(int ordinal) {
+    var values = cache;
+    return values == null ? (firstOrdinal == ordinal ? firstValue : null) : values[ordinal];
+  }
+
   Object value(int ordinal) {
-    return value(ordinal, tape.bytes);
+    Object cached = cachedValue(ordinal);
+    return cached != null ? cached : uncachedValue(ordinal, profileBuffer(tape));
   }
 
   Object value(int ordinal, ByteBuffer buffer) {
-    // Already materialized strings, arrays and children need neither schema dispatch nor index
-    // access. Cache contents stay mutable: warming another field must not freeze existing reads.
-    var values = cache;
-    Object cached =
-        values == null ? (firstOrdinal == ordinal ? firstValue : null) : values[ordinal];
-    if (cached != null) return cached;
+    Object cached = cachedValue(ordinal);
+    return cached != null ? cached : uncachedValue(ordinal, buffer);
+  }
+
+  private Object uncachedValue(int ordinal, ByteBuffer buffer) {
     var field = plan().field(ordinal);
     int index = offset(ordinal);
     if (!field.repeated() && index < 0) return field.defaultValue();
