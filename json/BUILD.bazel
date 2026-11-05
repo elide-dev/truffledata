@@ -4,8 +4,11 @@ load("//bazel:java.bzl", "data_java_library")
 java_library(
     name = "bindings",
     srcs = ["//json/native:java_bindings"],
+    resource_strip_prefix = "json/native/generated",
+    resources = ["//json/native:native_resources"],
     visibility = ["//visibility:public"],
     deps = [
+        "//bazel:myna_compiler_sdk",
         "@maven//:org_graalvm_sdk_nativeimage",
         "@maven//:org_graalvm_sdk_word",
     ],

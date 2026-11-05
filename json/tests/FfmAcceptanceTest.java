@@ -14,6 +14,15 @@ import org.junit.jupiter.api.Test;
 
 final class FfmAcceptanceTest {
   @Test
+  void compilerInternalsAreNotOnTheApplicationClasspath() {
+    assertThrows(
+        ClassNotFoundException.class, () -> Class.forName("com.oracle.svm.shared.AlwaysInline"));
+    assertThrows(
+        ClassNotFoundException.class,
+        () -> Class.forName("com.oracle.svm.guest.staging.c.CGlobalData"));
+  }
+
+  @Test
   void staticBackendRejectsJvmBeforeNativeAccess() {
     assertThrows(
         UnsupportedOperationException.class,

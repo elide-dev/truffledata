@@ -10,9 +10,9 @@ struct JsonResult size=72 align=8
   field parser_input_capacity type=u64 offset=56
   field control_bytes type=u64 offset=64
 end
-import fingerprint symbol=td_json_fingerprint return=ptr<u8> error=no_failure
+import fingerprint symbol=td_json_fingerprint return=ptr<u8> error=no_failure native_leaf=true@explicit_contract
 end
-import decode symbol=td_json_decode return=i32 error=no_failure
+import decode symbol=td_json_decode return=i32 error=no_failure native_leaf=false@explicit_contract
   param data type=ptr<u8> nullable=false ownership=borrowed access=read
   param length type=u64
   param max_input_bytes type=u64
@@ -22,6 +22,6 @@ import decode symbol=td_json_decode return=i32 error=no_failure
   param max_depth type=u32
   param result type=ptr<void> nullable=false ownership=borrowed access=read_write
 end
-import release symbol=td_json_release return=void error=no_failure
+import release symbol=td_json_release return=void error=no_failure native_leaf=false@explicit_contract
   param result type=ptr<void> nullable=false ownership=borrowed access=read_write
 end

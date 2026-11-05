@@ -259,7 +259,7 @@ row fields before the next decode can reuse it.
 
 ## SIMD Unicode and Myna values foundation
 
-Myna is pinned to the `0.7.2` source commit `7401c446ef9ad80d7bd14a9bf92f360a04956b80`.
+Myna is pinned to the `0.8.0` source commit `42d7ab484bef7a944b374a4683922c0a10c4ec1c`.
 Its generator, Java value readers (`@myna//:values`) and C++ ABI headers
 (`@myna//:values_headers`) are separate Bazel targets. The value ABI is v3; it is
 independent of the Buffa seam ABI, now v5 after adding Unicode conversion.
@@ -300,3 +300,24 @@ Protobuf text/ProtoJSON entry points reject unpaired Java UTF-16 surrogates befo
 UTF-8 encoding can replace them. They also reject negative native budgets and
 check the exact UTF-8 expansion before allocating input/payload buffers. This is
 separate from the future general-JSON facade's Java UTF-16 factory semantics.
+
+
+### Myna 0.8.0 / binding ABI 2
+
+Both protobuf and JSON regenerate their bindings with explicit native call policies.
+Only the fingerprint-address functions are short bounded leaves. Decode, typed
+parsing, scalar parsing, UTF conversion, and release explicitly retain normal VM
+transitions (`native_leaf=false@explicit_contract`), including their allocation and
+cleanup paths. Value-tape ABI v3 and the application protocol versions are unchanged;
+the binding fingerprints change, so native attachments and Java bindings must be
+rebuilt and distributed together.
+
+Generated bindings compile against the pinned Graal SDK's `svm-shared.jar`,
+`svm-guest-staging.jar`, and `svm-guest.jar` through a Bazel `neverlink` import. These
+compiler-private jars are not runtime dependencies or bundled classes. Generated
+`META-INF/native-image` metadata is packaged in each bindings JAR, preserving Myna's
+builder exports and symbolic/build-time versus address/runtime initialization rules.
+`//bazel:myna_contract` checks the generated policies and packaged metadata;
+JVM acceptance checks that compiler-private classes are absent from the application
+classpath. Actual static SVM, native-free fallback, and published-artifact acceptance
+exercise the rebuilt consumers.

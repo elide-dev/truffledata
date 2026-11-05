@@ -1,4 +1,5 @@
-load("@rules_java//java:defs.bzl", "java_binary", "java_library", "java_plugin")
+load("@rules_java//java:defs.bzl", "java_binary", "java_import", "java_library", "java_plugin")
+load("@rules_shell//shell:sh_test.bzl", "sh_test")
 
 package(default_visibility = ["//visibility:public"])
 
@@ -54,3 +55,43 @@ exports_files([
     "protobuf.bzl",
     "elide_toolchain.BUILD",
 ])
+
+# Myna binding ABI 2 compiler intrinsics: compile only, never application/runtime jars.
+java_import(
+    name = "myna_compiler_sdk",
+    jars = select({
+        "//bazel/platforms:macos_arm64": ["@graalvm_macos_aarch64//:lib/svm/" + jar for jar in [
+            "svm-shared.jar",
+            "svm-guest-staging.jar",
+            "svm-guest.jar",
+        ]],
+        "//bazel/platforms:linux_arm64": ["@graalvm_linux_aarch64//:lib/svm/" + jar for jar in [
+            "svm-shared.jar",
+            "svm-guest-staging.jar",
+            "svm-guest.jar",
+        ]],
+        "//conditions:default": ["@graalvm_linux_amd64//:lib/svm/" + jar for jar in [
+            "svm-shared.jar",
+            "svm-guest-staging.jar",
+            "svm-guest.jar",
+        ]],
+    }),
+    neverlink = True,
+)
+
+sh_test(
+    name = "myna_contract",
+    srcs = ["myna_contract.py"],
+    args = [
+        "$(rootpath //json/native:descriptor)",
+        "$(rootpath //json:libbindings.jar)",
+        "$(rootpath //protobuf-buffa/native:descriptor)",
+        "$(rootpath //protobuf-buffa:libbindings.jar)",
+    ],
+    data = [
+        "//json:libbindings.jar",
+        "//json/native:descriptor",
+        "//protobuf-buffa:libbindings.jar",
+        "//protobuf-buffa/native:descriptor",
+    ],
+)

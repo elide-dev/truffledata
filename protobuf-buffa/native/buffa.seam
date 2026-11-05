@@ -11,9 +11,9 @@ struct Result size=24 align=8
   field count type=u64 offset=8
   field capacity type=u64 offset=16
 end
-import fingerprint symbol=td_buffa_fingerprint return=ptr<u8> error=no_failure
+import fingerprint symbol=td_buffa_fingerprint return=ptr<u8> error=no_failure native_leaf=true@explicit_contract
 end
-import decode symbol=td_buffa_decode return=i32 error=no_failure
+import decode symbol=td_buffa_decode return=i32 error=no_failure native_leaf=false@explicit_contract
   param data type=ptr<u8> nullable=false ownership=borrowed access=read
   param length type=u64
   param max_cells type=u64
@@ -21,10 +21,10 @@ import decode symbol=td_buffa_decode return=i32 error=no_failure
   param max_native_bytes type=u64
   param result type=ptr<void> nullable=false ownership=borrowed access=write
 end
-import release symbol=td_buffa_release return=void error=no_failure
+import release symbol=td_buffa_release return=void error=no_failure native_leaf=false@explicit_contract
   param result type=ptr<void> nullable=false ownership=borrowed access=read_write
 end
-import typed symbol=td_buffa_typed return=i32 error=no_failure
+import typed symbol=td_buffa_typed return=i32 error=no_failure native_leaf=false@explicit_contract
   param schema type=ptr<u8> nullable=false ownership=borrowed access=read
   param schema_length type=u64
   param data type=ptr<u8> nullable=false ownership=borrowed access=read
@@ -43,7 +43,7 @@ struct Scalars size=24 align=8
   field second type=u64 offset=8
   field present type=u64 offset=16
 end
-import scalars symbol=td_buffa_scalars return=i32 error=no_failure
+import scalars symbol=td_buffa_scalars return=i32 error=no_failure native_leaf=false@explicit_contract
   param schema type=ptr<u8> nullable=false ownership=borrowed access=read
   param schema_length type=u64
   param data type=ptr<u8> nullable=false ownership=borrowed access=read
@@ -53,7 +53,7 @@ import scalars symbol=td_buffa_scalars return=i32 error=no_failure
   param result type=ptr<void> nullable=false ownership=borrowed access=write
 end
 
-import utf8_to_utf16 symbol=td_buffa_utf8_to_utf16 return=i64 error=no_failure
+import utf8_to_utf16 symbol=td_buffa_utf8_to_utf16 return=i64 error=no_failure native_leaf=false@explicit_contract
   param data type=ptr<u8> nullable=false ownership=borrowed access=read
   param length type=u64
   param output type=ptr<u16> nullable=false ownership=borrowed access=write

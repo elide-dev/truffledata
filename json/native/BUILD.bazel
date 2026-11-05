@@ -40,6 +40,7 @@ genrule(
         "generated/seam.json",
         "generated/seam.abi",
         "generated/seam.ll",
+        "generated/META-INF/native-image/dev.elide.myna/dev.elide.truffledata.json.generated.Json/native-image.properties",
     ],
     cmd = "$(location @myna//:generator) generate $(location json.seam) --out $(RULEDIR)/generated --target " + select({
         "@platforms//os:macos": "aarch64-apple-darwin",
@@ -101,4 +102,16 @@ cc_binary(
     linkstatic = True,
     visibility = ["//visibility:public"],
     deps = [":truffledata_json"],
+)
+
+filegroup(
+    name = "native_resources",
+    srcs = ["generated/META-INF/native-image/dev.elide.myna/dev.elide.truffledata.json.generated.Json/native-image.properties"],
+    visibility = ["//visibility:public"],
+)
+
+filegroup(
+    name = "descriptor",
+    srcs = ["generated/seam.json"],
+    visibility = ["//visibility:public"],
 )
