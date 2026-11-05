@@ -115,3 +115,17 @@ filegroup(
     srcs = ["generated/seam.json"],
     visibility = ["//visibility:public"],
 )
+
+cc_library(
+    name = "typed",
+    hdrs = ["typed.h"],
+    copts = ["-std=c++17"],
+    deps = [":decoder"],
+)
+
+cc_test(
+    name = "typed_test",
+    srcs = ["typed_test.cc"],
+    copts = ["-std=c++17"],
+    deps = [":typed"],
+)

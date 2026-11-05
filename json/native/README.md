@@ -84,3 +84,25 @@ This initial API uses ordinary lifetime checks; compiled guest specialization an
 assumption-based guards still need their own tests. Array lookup currently walks
 child subtrees and should not be treated as constant-time random access. Snapshots,
 interop exports, configurable Java limits, and the JVM scoped backend remain pending.
+
+## Typed scalar foundation
+
+`typed.h` adds reusable closed-record scalar plans and directly populated slots.
+It does not construct a generic Myna tape. Plans own their field names and support
+up to 64 fields with separate presence/null masks, required/nullable contracts,
+signed integer ranges, unsigned maxima, and decoded UTF-8 byte limits. Integer
+kinds require integer JSON syntax; float64 explicitly uses checked finite binary64
+conversion. The generic path remains the lossless arbitrary-number route.
+
+Every accepted field is consumed and validated, escaped duplicates and unknown
+fields are rejected, and trailing input is rejected. Typed strings retain their
+raw lexical spelling. Results retain their own input/parser independently of the
+plan. Index accounting covers the single slot-buffer allocation; parser scratch
+and plan construction allocations are separate. The caller must keep a plan alive
+only during decoding, not during later result access.
+
+`//json/native:typed_test` exercises these contracts, integer boundaries, all 64
+presence bits, resource limits, and retained lifetimes; it also passes ASan/UBSan.
+This is currently an internal C++ path. Connecting core Java schemas, generated
+getters, the C ABI and scoped JVM/SVM views remains outstanding, as do nested and
+repeated typed values and performance comparisons.
