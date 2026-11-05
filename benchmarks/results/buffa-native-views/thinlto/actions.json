@@ -1,0 +1,807 @@
+[
+  {
+    "mnemonic": "Rustc",
+    "crate": [
+      "--crate-name=truffledata_buffa"
+    ],
+    "flags": [
+      "--codegen=opt-level=3",
+      "-Clto=thin",
+      "--codegen=linker=external/+http_archive+elide_toolchain_linux_amd64/cc",
+      "-Copt-level=3"
+    ]
+  },
+  {
+    "mnemonic": "Rustc",
+    "crate": [
+      "--crate-name=simdutf"
+    ],
+    "flags": [
+      "--codegen=opt-level=3",
+      "-Clto=thin",
+      "-Clinker-plugin-lto",
+      "-Copt-level=3"
+    ]
+  },
+  {
+    "mnemonic": "Rustc",
+    "crate": [
+      "--crate-name=buffa"
+    ],
+    "flags": [
+      "--codegen=opt-level=3",
+      "-Clto=thin",
+      "-Clinker-plugin-lto"
+    ]
+  },
+  {
+    "mnemonic": "CppCompile",
+    "crate": [],
+    "flags": [
+      "external/+http_archive+elide_toolchain_linux_amd64/cc",
+      "-O2",
+      "-flto=thin",
+      "-O3"
+    ]
+  },
+  {
+    "mnemonic": "CppCompile",
+    "crate": [],
+    "flags": [
+      "external/+http_archive+elide_toolchain_linux_amd64/cc",
+      "-O2",
+      "-flto=thin",
+      "-O3"
+    ]
+  },
+  {
+    "mnemonic": "CppLTOIndexing",
+    "crate": [],
+    "flags": [
+      "external/+http_archive+elide_toolchain_linux_amd64/cc",
+      "-flto=thin",
+      "-flto=thin",
+      "-Wl,-plugin-opt,thinlto-index-only=bazel-out/rbe_linux_amd64-opt/bin/external/rules_rust++crate+crates__simdutf-0.7.0/libnative.so-lto-final.params",
+      "-Wl,-plugin-opt,thinlto-emit-imports-files",
+      "-Wl,-plugin-opt,thinlto-prefix-replace=;bazel-out/rbe_linux_amd64-opt/bin/external/rules_rust++crate+crates__simdutf-0.7.0/libnative.so.lto/",
+      "-Wl,-plugin-opt,thinlto-object-suffix-replace=.indexing.o;.o",
+      "-Wl,-plugin-opt,obj-path=bazel-out/rbe_linux_amd64-opt/bin/external/rules_rust++crate+crates__simdutf-0.7.0/libnative.so.lto.merged.o"
+    ]
+  },
+  {
+    "mnemonic": "CppLink",
+    "crate": [],
+    "flags": [
+      "external/+http_archive+elide_toolchain_linux_amd64/cc",
+      "-flto=thin",
+      "bazel-out/rbe_linux_amd64-opt/bin/external/rules_rust++crate+crates__simdutf-0.7.0/libnative.so.lto.merged.o",
+      "-Wl,@bazel-out/rbe_linux_amd64-opt/bin/external/rules_rust++crate+crates__simdutf-0.7.0/libnative.so-lto-final.params"
+    ]
+  },
+  {
+    "mnemonic": "CppCompile",
+    "crate": [],
+    "flags": [
+      "external/+http_archive+elide_toolchain_linux_amd64/cc",
+      "-O2",
+      "bazel-out/rbe_linux_amd64-opt/bin/external/rules_rust+/ffi/cc/allocator_library/_objs/cc_allocator_library/allocator_library.pic.d",
+      "-frandom-seed=bazel-out/rbe_linux_amd64-opt/bin/external/rules_rust+/ffi/cc/allocator_library/_objs/cc_allocator_library/allocator_library.pic.o",
+      "-flto=thin",
+      "-fthin-link-bitcode=bazel-out/rbe_linux_amd64-opt/bin/external/rules_rust+/ffi/cc/allocator_library/_objs/cc_allocator_library/allocator_library.pic.indexing.o",
+      "external/rules_rust+/ffi/cc/allocator_library/allocator_library.cc",
+      "bazel-out/rbe_linux_amd64-opt/bin/external/rules_rust+/ffi/cc/allocator_library/_objs/cc_allocator_library/allocator_library.pic.o"
+    ]
+  },
+  {
+    "mnemonic": "CppCompile",
+    "crate": [],
+    "flags": [
+      "external/+http_archive+elide_toolchain_linux_amd64/cc",
+      "-O2",
+      "bazel-out/rbe_linux_amd64-opt/bin/external/rules_rust+/ffi/cc/allocator_library/_objs/cc_allocator_library/allocator_library.d",
+      "-frandom-seed=bazel-out/rbe_linux_amd64-opt/bin/external/rules_rust+/ffi/cc/allocator_library/_objs/cc_allocator_library/allocator_library.o",
+      "-flto=thin",
+      "-fthin-link-bitcode=bazel-out/rbe_linux_amd64-opt/bin/external/rules_rust+/ffi/cc/allocator_library/_objs/cc_allocator_library/allocator_library.indexing.o",
+      "external/rules_rust+/ffi/cc/allocator_library/allocator_library.cc",
+      "bazel-out/rbe_linux_amd64-opt/bin/external/rules_rust+/ffi/cc/allocator_library/_objs/cc_allocator_library/allocator_library.o"
+    ]
+  },
+  {
+    "mnemonic": "CppLTOIndexing",
+    "crate": [],
+    "flags": [
+      "external/+http_archive+elide_toolchain_linux_amd64/cc",
+      "-flto=thin",
+      "-flto=thin",
+      "-Wl,-plugin-opt,thinlto-index-only=bazel-out/rbe_linux_amd64-opt/bin/external/rules_rust+/ffi/cc/allocator_library/libcc_allocator_library.so-lto-final.params",
+      "-Wl,-plugin-opt,thinlto-emit-imports-files",
+      "-Wl,-plugin-opt,thinlto-prefix-replace=;bazel-out/rbe_linux_amd64-opt/bin/external/rules_rust+/ffi/cc/allocator_library/libcc_allocator_library.so.lto/",
+      "-Wl,-plugin-opt,thinlto-object-suffix-replace=.indexing.o;.o",
+      "-Wl,-plugin-opt,obj-path=bazel-out/rbe_linux_amd64-opt/bin/external/rules_rust+/ffi/cc/allocator_library/libcc_allocator_library.so.lto.merged.o",
+      "bazel-out/rbe_linux_amd64-opt/bin/external/rules_rust+/ffi/cc/allocator_library/_objs/cc_allocator_library/allocator_library.pic.indexing.o"
+    ]
+  },
+  {
+    "mnemonic": "CppLink",
+    "crate": [],
+    "flags": [
+      "external/+http_archive+elide_toolchain_linux_amd64/cc",
+      "-flto=thin",
+      "bazel-out/rbe_linux_amd64-opt/bin/external/rules_rust+/ffi/cc/allocator_library/libcc_allocator_library.so",
+      "bazel-out/rbe_linux_amd64-opt/bin/external/rules_rust+/ffi/cc/allocator_library/libcc_allocator_library.so.lto.merged.o",
+      "-Wl,@bazel-out/rbe_linux_amd64-opt/bin/external/rules_rust+/ffi/cc/allocator_library/libcc_allocator_library.so-lto-final.params"
+    ]
+  },
+  {
+    "mnemonic": "CppCompile",
+    "crate": [],
+    "flags": [
+      "external/+http_archive+elide_toolchain_linux_amd64/cc",
+      "-O2",
+      "bazel-out/rbe_linux_amd64-opt-exec/bin/external/rules_rust+/ffi/cc/allocator_library/_objs/cc_allocator_library/allocator_library.pic.d",
+      "-frandom-seed=bazel-out/rbe_linux_amd64-opt-exec/bin/external/rules_rust+/ffi/cc/allocator_library/_objs/cc_allocator_library/allocator_library.pic.o",
+      "external/rules_rust+/ffi/cc/allocator_library/allocator_library.cc",
+      "bazel-out/rbe_linux_amd64-opt-exec/bin/external/rules_rust+/ffi/cc/allocator_library/_objs/cc_allocator_library/allocator_library.pic.o"
+    ]
+  },
+  {
+    "mnemonic": "CppCompile",
+    "crate": [],
+    "flags": [
+      "external/+http_archive+elide_toolchain_linux_amd64/cc",
+      "-O2",
+      "bazel-out/rbe_linux_amd64-opt-exec/bin/external/rules_rust+/ffi/cc/allocator_library/_objs/cc_allocator_library/allocator_library.d",
+      "-frandom-seed=bazel-out/rbe_linux_amd64-opt-exec/bin/external/rules_rust+/ffi/cc/allocator_library/_objs/cc_allocator_library/allocator_library.o",
+      "external/rules_rust+/ffi/cc/allocator_library/allocator_library.cc",
+      "bazel-out/rbe_linux_amd64-opt-exec/bin/external/rules_rust+/ffi/cc/allocator_library/_objs/cc_allocator_library/allocator_library.o"
+    ]
+  },
+  {
+    "mnemonic": "CppLink",
+    "crate": [],
+    "flags": [
+      "external/+http_archive+elide_toolchain_linux_amd64/cc",
+      "bazel-out/rbe_linux_amd64-opt-exec/bin/external/rules_rust+/ffi/cc/allocator_library/libcc_allocator_library.so",
+      "bazel-out/rbe_linux_amd64-opt-exec/bin/external/rules_rust+/ffi/cc/allocator_library/_objs/cc_allocator_library/allocator_library.pic.o"
+    ]
+  },
+  {
+    "mnemonic": "CppCompile",
+    "crate": [],
+    "flags": [
+      "external/+http_archive+elide_toolchain_linux_amd64/cc",
+      "-O2"
+    ]
+  },
+  {
+    "mnemonic": "CppCompile",
+    "crate": [],
+    "flags": [
+      "external/+http_archive+elide_toolchain_linux_amd64/cc",
+      "-O2"
+    ]
+  },
+  {
+    "mnemonic": "CppLink",
+    "crate": [],
+    "flags": [
+      "external/+http_archive+elide_toolchain_linux_amd64/cc"
+    ]
+  },
+  {
+    "mnemonic": "CppCompile",
+    "crate": [],
+    "flags": [
+      "external/+http_archive+elide_toolchain_linux_amd64/cc",
+      "-O2"
+    ]
+  },
+  {
+    "mnemonic": "CppCompile",
+    "crate": [],
+    "flags": [
+      "external/+http_archive+elide_toolchain_linux_amd64/cc",
+      "-O2"
+    ]
+  },
+  {
+    "mnemonic": "CppLink",
+    "crate": [],
+    "flags": [
+      "external/+http_archive+elide_toolchain_linux_amd64/cc"
+    ]
+  },
+  {
+    "mnemonic": "CppCompile",
+    "crate": [],
+    "flags": [
+      "external/+http_archive+elide_toolchain_linux_amd64/cc",
+      "-O2"
+    ]
+  },
+  {
+    "mnemonic": "CppCompile",
+    "crate": [],
+    "flags": [
+      "external/+http_archive+elide_toolchain_linux_amd64/cc",
+      "-O2"
+    ]
+  },
+  {
+    "mnemonic": "CppCompile",
+    "crate": [],
+    "flags": [
+      "external/+http_archive+elide_toolchain_linux_amd64/cc",
+      "-O2"
+    ]
+  },
+  {
+    "mnemonic": "CppCompile",
+    "crate": [],
+    "flags": [
+      "external/+http_archive+elide_toolchain_linux_amd64/cc",
+      "-O2"
+    ]
+  },
+  {
+    "mnemonic": "CppLink",
+    "crate": [],
+    "flags": [
+      "external/+http_archive+elide_toolchain_linux_amd64/cc"
+    ]
+  },
+  {
+    "mnemonic": "CppCompile",
+    "crate": [],
+    "flags": [
+      "external/+http_archive+elide_toolchain_linux_amd64/cc",
+      "-O2"
+    ]
+  },
+  {
+    "mnemonic": "CppCompile",
+    "crate": [],
+    "flags": [
+      "external/+http_archive+elide_toolchain_linux_amd64/cc",
+      "-O2"
+    ]
+  },
+  {
+    "mnemonic": "CppLink",
+    "crate": [],
+    "flags": [
+      "external/+http_archive+elide_toolchain_linux_amd64/cc"
+    ]
+  },
+  {
+    "mnemonic": "CppCompile",
+    "crate": [],
+    "flags": [
+      "external/+http_archive+elide_toolchain_linux_amd64/cc",
+      "-O2"
+    ]
+  },
+  {
+    "mnemonic": "CppCompile",
+    "crate": [],
+    "flags": [
+      "external/+http_archive+elide_toolchain_linux_amd64/cc",
+      "-O2"
+    ]
+  },
+  {
+    "mnemonic": "CppLink",
+    "crate": [],
+    "flags": [
+      "external/+http_archive+elide_toolchain_linux_amd64/cc"
+    ]
+  },
+  {
+    "mnemonic": "CppCompile",
+    "crate": [],
+    "flags": [
+      "external/+http_archive+elide_toolchain_linux_amd64/cc",
+      "-O2"
+    ]
+  },
+  {
+    "mnemonic": "CppCompile",
+    "crate": [],
+    "flags": [
+      "external/+http_archive+elide_toolchain_linux_amd64/cc",
+      "-O2"
+    ]
+  },
+  {
+    "mnemonic": "CppLink",
+    "crate": [],
+    "flags": [
+      "external/+http_archive+elide_toolchain_linux_amd64/cc"
+    ]
+  },
+  {
+    "mnemonic": "CppCompile",
+    "crate": [],
+    "flags": [
+      "external/+http_archive+elide_toolchain_linux_amd64/cc",
+      "-O2"
+    ]
+  },
+  {
+    "mnemonic": "CppCompile",
+    "crate": [],
+    "flags": [
+      "external/+http_archive+elide_toolchain_linux_amd64/cc",
+      "-O2"
+    ]
+  },
+  {
+    "mnemonic": "CppLink",
+    "crate": [],
+    "flags": [
+      "external/+http_archive+elide_toolchain_linux_amd64/cc"
+    ]
+  },
+  {
+    "mnemonic": "CppCompile",
+    "crate": [],
+    "flags": [
+      "external/+http_archive+elide_toolchain_linux_amd64/cc",
+      "-O2"
+    ]
+  },
+  {
+    "mnemonic": "CppCompile",
+    "crate": [],
+    "flags": [
+      "external/+http_archive+elide_toolchain_linux_amd64/cc",
+      "-O2"
+    ]
+  },
+  {
+    "mnemonic": "CppCompile",
+    "crate": [],
+    "flags": [
+      "external/+http_archive+elide_toolchain_linux_amd64/cc",
+      "-O2"
+    ]
+  },
+  {
+    "mnemonic": "CppCompile",
+    "crate": [],
+    "flags": [
+      "external/+http_archive+elide_toolchain_linux_amd64/cc",
+      "-O2"
+    ]
+  },
+  {
+    "mnemonic": "CppCompile",
+    "crate": [],
+    "flags": [
+      "external/+http_archive+elide_toolchain_linux_amd64/cc",
+      "-O2"
+    ]
+  },
+  {
+    "mnemonic": "CppCompile",
+    "crate": [],
+    "flags": [
+      "external/+http_archive+elide_toolchain_linux_amd64/cc",
+      "-O2"
+    ]
+  },
+  {
+    "mnemonic": "CppCompile",
+    "crate": [],
+    "flags": [
+      "external/+http_archive+elide_toolchain_linux_amd64/cc",
+      "-O2"
+    ]
+  },
+  {
+    "mnemonic": "CppCompile",
+    "crate": [],
+    "flags": [
+      "external/+http_archive+elide_toolchain_linux_amd64/cc",
+      "-O2"
+    ]
+  },
+  {
+    "mnemonic": "CppLink",
+    "crate": [],
+    "flags": [
+      "external/+http_archive+elide_toolchain_linux_amd64/cc"
+    ]
+  },
+  {
+    "mnemonic": "CppCompile",
+    "crate": [],
+    "flags": [
+      "external/+http_archive+elide_toolchain_linux_amd64/cc",
+      "-O2"
+    ]
+  },
+  {
+    "mnemonic": "CppCompile",
+    "crate": [],
+    "flags": [
+      "external/+http_archive+elide_toolchain_linux_amd64/cc",
+      "-O2"
+    ]
+  },
+  {
+    "mnemonic": "CppLink",
+    "crate": [],
+    "flags": [
+      "external/+http_archive+elide_toolchain_linux_amd64/cc"
+    ]
+  },
+  {
+    "mnemonic": "CppCompile",
+    "crate": [],
+    "flags": [
+      "external/+http_archive+elide_toolchain_linux_amd64/cc",
+      "-O2"
+    ]
+  },
+  {
+    "mnemonic": "CppCompile",
+    "crate": [],
+    "flags": [
+      "external/+http_archive+elide_toolchain_linux_amd64/cc",
+      "-O2"
+    ]
+  },
+  {
+    "mnemonic": "CppCompile",
+    "crate": [],
+    "flags": [
+      "external/+http_archive+elide_toolchain_linux_amd64/cc",
+      "-O2"
+    ]
+  },
+  {
+    "mnemonic": "CppCompile",
+    "crate": [],
+    "flags": [
+      "external/+http_archive+elide_toolchain_linux_amd64/cc",
+      "-O2"
+    ]
+  },
+  {
+    "mnemonic": "CppCompile",
+    "crate": [],
+    "flags": [
+      "external/+http_archive+elide_toolchain_linux_amd64/cc",
+      "-O2"
+    ]
+  },
+  {
+    "mnemonic": "CppCompile",
+    "crate": [],
+    "flags": [
+      "external/+http_archive+elide_toolchain_linux_amd64/cc",
+      "-O2"
+    ]
+  },
+  {
+    "mnemonic": "CppCompile",
+    "crate": [],
+    "flags": [
+      "external/+http_archive+elide_toolchain_linux_amd64/cc",
+      "-O2"
+    ]
+  },
+  {
+    "mnemonic": "CppCompile",
+    "crate": [],
+    "flags": [
+      "external/+http_archive+elide_toolchain_linux_amd64/cc",
+      "-O2"
+    ]
+  },
+  {
+    "mnemonic": "CppCompile",
+    "crate": [],
+    "flags": [
+      "external/+http_archive+elide_toolchain_linux_amd64/cc",
+      "-O2"
+    ]
+  },
+  {
+    "mnemonic": "CppCompile",
+    "crate": [],
+    "flags": [
+      "external/+http_archive+elide_toolchain_linux_amd64/cc",
+      "-O2"
+    ]
+  },
+  {
+    "mnemonic": "CppCompile",
+    "crate": [],
+    "flags": [
+      "external/+http_archive+elide_toolchain_linux_amd64/cc",
+      "-O2"
+    ]
+  },
+  {
+    "mnemonic": "CppCompile",
+    "crate": [],
+    "flags": [
+      "external/+http_archive+elide_toolchain_linux_amd64/cc",
+      "-O2"
+    ]
+  },
+  {
+    "mnemonic": "CppCompile",
+    "crate": [],
+    "flags": [
+      "external/+http_archive+elide_toolchain_linux_amd64/cc",
+      "-O2"
+    ]
+  },
+  {
+    "mnemonic": "CppCompile",
+    "crate": [],
+    "flags": [
+      "external/+http_archive+elide_toolchain_linux_amd64/cc",
+      "-O2"
+    ]
+  },
+  {
+    "mnemonic": "CppCompile",
+    "crate": [],
+    "flags": [
+      "external/+http_archive+elide_toolchain_linux_amd64/cc",
+      "-O2"
+    ]
+  },
+  {
+    "mnemonic": "CppCompile",
+    "crate": [],
+    "flags": [
+      "external/+http_archive+elide_toolchain_linux_amd64/cc",
+      "-O2"
+    ]
+  },
+  {
+    "mnemonic": "CppCompile",
+    "crate": [],
+    "flags": [
+      "external/+http_archive+elide_toolchain_linux_amd64/cc",
+      "-O2"
+    ]
+  },
+  {
+    "mnemonic": "CppCompile",
+    "crate": [],
+    "flags": [
+      "external/+http_archive+elide_toolchain_linux_amd64/cc",
+      "-O2"
+    ]
+  },
+  {
+    "mnemonic": "CppCompile",
+    "crate": [],
+    "flags": [
+      "external/+http_archive+elide_toolchain_linux_amd64/cc",
+      "-O2"
+    ]
+  },
+  {
+    "mnemonic": "CppCompile",
+    "crate": [],
+    "flags": [
+      "external/+http_archive+elide_toolchain_linux_amd64/cc",
+      "-O2"
+    ]
+  },
+  {
+    "mnemonic": "CppCompile",
+    "crate": [],
+    "flags": [
+      "external/+http_archive+elide_toolchain_linux_amd64/cc",
+      "-O2"
+    ]
+  },
+  {
+    "mnemonic": "CppCompile",
+    "crate": [],
+    "flags": [
+      "external/+http_archive+elide_toolchain_linux_amd64/cc",
+      "-O2"
+    ]
+  },
+  {
+    "mnemonic": "CppCompile",
+    "crate": [],
+    "flags": [
+      "external/+http_archive+elide_toolchain_linux_amd64/cc",
+      "-O2"
+    ]
+  },
+  {
+    "mnemonic": "CppCompile",
+    "crate": [],
+    "flags": [
+      "external/+http_archive+elide_toolchain_linux_amd64/cc",
+      "-O2"
+    ]
+  },
+  {
+    "mnemonic": "CppCompile",
+    "crate": [],
+    "flags": [
+      "external/+http_archive+elide_toolchain_linux_amd64/cc",
+      "-O2"
+    ]
+  },
+  {
+    "mnemonic": "CppCompile",
+    "crate": [],
+    "flags": [
+      "external/+http_archive+elide_toolchain_linux_amd64/cc",
+      "-O2"
+    ]
+  },
+  {
+    "mnemonic": "CppCompile",
+    "crate": [],
+    "flags": [
+      "external/+http_archive+elide_toolchain_linux_amd64/cc",
+      "-O2"
+    ]
+  },
+  {
+    "mnemonic": "CppCompile",
+    "crate": [],
+    "flags": [
+      "external/+http_archive+elide_toolchain_linux_amd64/cc",
+      "-O2"
+    ]
+  },
+  {
+    "mnemonic": "CppCompile",
+    "crate": [],
+    "flags": [
+      "external/+http_archive+elide_toolchain_linux_amd64/cc",
+      "-O2"
+    ]
+  },
+  {
+    "mnemonic": "CppCompile",
+    "crate": [],
+    "flags": [
+      "external/+http_archive+elide_toolchain_linux_amd64/cc",
+      "-O2"
+    ]
+  },
+  {
+    "mnemonic": "CppLink",
+    "crate": [],
+    "flags": [
+      "external/+http_archive+elide_toolchain_linux_amd64/cc"
+    ]
+  },
+  {
+    "mnemonic": "CppCompile",
+    "crate": [],
+    "flags": [
+      "external/+http_archive+elide_toolchain_linux_amd64/cc",
+      "-O2"
+    ]
+  },
+  {
+    "mnemonic": "CppCompile",
+    "crate": [],
+    "flags": [
+      "external/+http_archive+elide_toolchain_linux_amd64/cc",
+      "-O2"
+    ]
+  },
+  {
+    "mnemonic": "CppLink",
+    "crate": [],
+    "flags": [
+      "external/+http_archive+elide_toolchain_linux_amd64/cc"
+    ]
+  },
+  {
+    "mnemonic": "Rustc",
+    "crate": [
+      "--crate-name=truffledata_buffa"
+    ],
+    "flags": [
+      "--codegen=opt-level=3",
+      "-Clto=thin",
+      "--codegen=linker=external/+http_archive+elide_toolchain_linux_amd64/bin/llvm-ar",
+      "-Copt-level=3"
+    ]
+  },
+  {
+    "mnemonic": "CppCompile",
+    "crate": [],
+    "flags": [
+      "external/+http_archive+elide_toolchain_linux_amd64/cc",
+      "-O2",
+      "-flto=thin"
+    ]
+  },
+  {
+    "mnemonic": "CppCompile",
+    "crate": [],
+    "flags": [
+      "external/+http_archive+elide_toolchain_linux_amd64/cc",
+      "-O2",
+      "-flto=thin"
+    ]
+  },
+  {
+    "mnemonic": "CppLTOIndexing",
+    "crate": [],
+    "flags": [
+      "external/+http_archive+elide_toolchain_linux_amd64/cc",
+      "-flto=thin",
+      "-flto=thin",
+      "-Wl,-plugin-opt,thinlto-index-only=bazel-out/rbe_linux_amd64-opt/bin/json/native/test-lto-final.params",
+      "-Wl,-plugin-opt,thinlto-emit-imports-files",
+      "-Wl,-plugin-opt,thinlto-prefix-replace=;bazel-out/rbe_linux_amd64-opt/bin/json/native/test.lto/",
+      "-Wl,-plugin-opt,thinlto-object-suffix-replace=.indexing.o;.o",
+      "-Wl,-plugin-opt,obj-path=bazel-out/rbe_linux_amd64-opt/bin/json/native/test.lto.merged.o"
+    ]
+  },
+  {
+    "mnemonic": "CppLink",
+    "crate": [],
+    "flags": [
+      "external/+http_archive+elide_toolchain_linux_amd64/cc",
+      "-flto=thin",
+      "bazel-out/rbe_linux_amd64-opt/bin/json/native/test.lto.merged.o",
+      "-Wl,@bazel-out/rbe_linux_amd64-opt/bin/json/native/test-lto-final.params"
+    ]
+  },
+  {
+    "mnemonic": "CppCompile",
+    "crate": [],
+    "flags": [
+      "external/+http_archive+elide_toolchain_linux_amd64/cc",
+      "-O2",
+      "-flto=thin",
+      "-O3"
+    ]
+  },
+  {
+    "mnemonic": "CppCompile",
+    "crate": [],
+    "flags": [
+      "external/+http_archive+elide_toolchain_linux_amd64/cc",
+      "-O2",
+      "-flto=thin",
+      "-O3"
+    ]
+  },
+  {
+    "mnemonic": "CppLTOIndexing",
+    "crate": [],
+    "flags": [
+      "external/+http_archive+elide_toolchain_linux_amd64/cc",
+      "-flto=thin",
+      "-flto=thin",
+      "-Wl,-plugin-opt,thinlto-index-only=bazel-out/rbe_linux_amd64-opt/bin/external/+http_archive+simdjson/libsimdjson.so-lto-final.params",
+      "-Wl,-plugin-opt,thinlto-emit-imports-files",
+      "-Wl,-plugin-opt,thinlto-prefix-replace=;bazel-out/rbe_linux_amd64-opt/bin/external/+http_archive+simdjson/libsimdjson.so.lto/",
+      "-Wl,-plugin-opt,thinlto-object-suffix-replace=.indexing.o;.o",
+      "-Wl,-plugin-opt,obj-path=bazel-out/rbe_linux_amd64-opt/bin/external/+http_archive+simdjson/libsimdjson.so.lto.merged.o"
+    ]
+  },
+  {
+    "mnemonic": "CppLink",
+    "crate": [],
+    "flags": [
+      "external/+http_archive+elide_toolchain_linux_amd64/cc",
+      "-flto=thin",
+      "bazel-out/rbe_linux_amd64-opt/bin/external/+http_archive+simdjson/libsimdjson.so.lto.merged.o",
+      "-Wl,@bazel-out/rbe_linux_amd64-opt/bin/external/+http_archive+simdjson/libsimdjson.so-lto-final.params"
+    ]
+  }
+]
