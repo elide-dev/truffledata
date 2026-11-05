@@ -12,7 +12,7 @@ def verify(descriptor, archive):
     assert module["bindingAbiVersion"] == 2
     expected = {
         "truffledata_json": {"fingerprint", "decode", "release", "plan_create", "plan_release", "typed_decode", "typed_release"},
-        "truffledata_buffa": {"fingerprint", "decode", "release", "typed", "scalars", "utf8_to_utf16"},
+        "truffledata_buffa": {"fingerprint", "decode", "release", "typed", "typedReuse", "scalars", "utf8_to_utf16"},
     }[module["name"]]
     functions = module["functions"]
     assert {f["logicalName"] for f in functions} == expected
