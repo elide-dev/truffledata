@@ -1,0 +1,1518 @@
+# To display the perf.data header info, please use --header/--header-only options.
+#
+#
+# Total Lost Samples: 0
+#
+# Samples: 3K of event 'cpu/cycles/P'
+# Event count (approx.): 15934305482
+#
+# Children      Self  Command          Shared Object                   Symbol                                                                                      
+# ........  ........  ...............  ..............................  ............................................................................................
+#
+    41.64%     0.00%  truffledata-com  truffledata-comparison-profile  [.] _start
+            |
+            ---_start
+               __libc_start_main@@GLIBC_2.34
+               call_init (inlined)
+               __libc_start_call_main
+               IsolateEnterStub__JavaMainWrapper__run__cXbfAhOWcF90761nQYco7L
+               JavaMainWrapper_run_iTUBl8UzFfAz1VYmMX6I32
+               JavaMainWrapper_doRun_F09BQfnF3iKa8bUp7D6GY0
+               JavaMainWrapper_runCore0_DxjyYWWswBIqpGm74uwTlD
+               Profile_main_QLbiWA5uQ36iHGzuY4KzH1
+               |          
+                --41.61%--Comparison_main_Tdm8knqZbgFKmi8P01KlkC
+                          Comparison_run_Q5rf1SKn3YJHnF3ZUK1v3H
+                          |          
+                           --41.38%--Comparison_measure_rBHXAV3t9KEP8Sb58Nxs99
+                                     |          
+                                      --41.29%--Comparison$$Laf51eff2_run_Qm1e9AMT80I7oHp0l0OLt6
+                                                Comparison$Fixture_ingest_nKtS7SZyoUBnHzb7kJPIbK
+                                                |          
+                                                |--25.33%--Comparison$Fixture_readOne_2sOK6j44wCEdKZsmKj0iC0
+                                                |          |          
+                                                |           --24.90%--Comparison$GeneratedProjection_read_9C7s0YezpBFjTpOmcB5dLK
+                                                |                     |          
+                                                |                     |--12.60%--TypedRow_getSize_xTAAGXoQu89rPgzsOvk7X0
+                                                |                     |          |          
+                                                |                     |           --11.06%--NativeRow_materialize_uxG98lR1ti1NGjsk5QlIJ8
+                                                |                     |                     |          
+                                                |                     |                      --9.28%--NativeRow$NativeArray_ChiwXB5RyIIYxgcnWoQjFJ
+                                                |                     |                                |          
+                                                |                     |                                |--2.19%--NativeRow_next_zNtbsEgLHHGYOItUHHOzk3
+                                                |                     |                                |          
+                                                |                     |                                |--1.77%--NativeRow_ordinal_YqsLVaicXW63tqS7yfEXtJ
+                                                |                     |                                |          
+                                                |                     |                                 --1.31%--NativeRow_entry_0qAygVWzJK0Yy4gfIXcD20
+                                                |                     |          
+                                                |                      --10.92%--TypedRow_get_6NkaIg1Mp2E1NMxmo5iN8F
+                                                |                                |          
+                                                |                                |--7.60%--NativeRow_materialize_uxG98lR1ti1NGjsk5QlIJ8
+                                                |                                |          |          
+                                                |                                |           --7.18%--NativeRow_decode_sp1hChdVRYLlN0dlTwaXRD
+                                                |                                |                     |          
+                                                |                                |                      --6.34%--ViewOwner_utf8_vdhpZc0Kb47RYc9YWkd98G
+                                                |                                |                                |          
+                                                |                                |                                |--3.78%--String_1Wsq2sHvwOLEAD1FMOeIqB
+                                                |                                |                                |          |          
+                                                |                                |                                |           --3.46%--String_ANiVZ8cr6wIGG2iZqvkdVA
+                                                |                                |                                |                     |          
+                                                |                                |                                |                      --2.03%--SVMIntrinsicStubsGen_stringCodingCountPositives_pJXvyEBdEyALRGGEsnbJx8
+                                                |                                |                                |          
+                                                |                                |                                 --1.47%--ByteBuffer_get_9LdNwcKqu55pJ71WeML94L
+                                                |                                |                                           |          
+                                                |                                |                                            --1.17%--ByteBuffer_getArray_zSREGQgzRMABUncEZL4yFG
+                                                |                                |                                                      |          
+                                                |                                |                                                       --1.07%--JavaMemoryUtil_copyOnHeap_dcEUns6b0r3KoxJJkjMiJJ
+                                                |                                |          
+                                                |                                 --2.70%--NativeRow_index_K37PGviU9t0btuxR9Y4LJD
+                                                |          
+                                                |--11.86%--Comparison$Fixture_parseNative_LgVvYd8rZW7zJc7biagwL4
+                                                |          |          
+                                                |           --11.50%--BuffaPlan_decodeView_NETFxZv9N59QiBmqAhTnrC
+                                                |                     |          
+                                                |                      --10.81%--BuffaPlan_parse_CdgW7hksxZFlQDePGBwO0J
+                                                |                                |          
+                                                |                                |--4.70%--SvmBackend_typed_m5ZAy5gBUdD7mhPOcay3hB
+                                                |                                |          
+                                                |                                |--1.93%--td_buffa_typed_reuse
+                                                |                                |          
+                                                |                                 --1.38%--WireInput_retain_V7Ny4L3qBt9yWZBYzJYFpL
+                                                |          
+                                                 --1.13%--TypedMessage_close_VMRxLrL1dG7wQhw3ZqTjKH
+
+    41.64%     0.00%  truffledata-com  libc.so.6                       [.] __libc_start_main@@GLIBC_2.34
+            |
+            ---__libc_start_main@@GLIBC_2.34
+               call_init (inlined)
+               __libc_start_call_main
+               IsolateEnterStub__JavaMainWrapper__run__cXbfAhOWcF90761nQYco7L
+               JavaMainWrapper_run_iTUBl8UzFfAz1VYmMX6I32
+               JavaMainWrapper_doRun_F09BQfnF3iKa8bUp7D6GY0
+               JavaMainWrapper_runCore0_DxjyYWWswBIqpGm74uwTlD
+               Profile_main_QLbiWA5uQ36iHGzuY4KzH1
+               |          
+                --41.61%--Comparison_main_Tdm8knqZbgFKmi8P01KlkC
+                          Comparison_run_Q5rf1SKn3YJHnF3ZUK1v3H
+                          |          
+                           --41.38%--Comparison_measure_rBHXAV3t9KEP8Sb58Nxs99
+                                     |          
+                                      --41.29%--Comparison$$Laf51eff2_run_Qm1e9AMT80I7oHp0l0OLt6
+                                                Comparison$Fixture_ingest_nKtS7SZyoUBnHzb7kJPIbK
+                                                |          
+                                                |--25.33%--Comparison$Fixture_readOne_2sOK6j44wCEdKZsmKj0iC0
+                                                |          |          
+                                                |           --24.90%--Comparison$GeneratedProjection_read_9C7s0YezpBFjTpOmcB5dLK
+                                                |                     |          
+                                                |                     |--12.60%--TypedRow_getSize_xTAAGXoQu89rPgzsOvk7X0
+                                                |                     |          |          
+                                                |                     |           --11.06%--NativeRow_materialize_uxG98lR1ti1NGjsk5QlIJ8
+                                                |                     |                     |          
+                                                |                     |                      --9.28%--NativeRow$NativeArray_ChiwXB5RyIIYxgcnWoQjFJ
+                                                |                     |                                |          
+                                                |                     |                                |--2.19%--NativeRow_next_zNtbsEgLHHGYOItUHHOzk3
+                                                |                     |                                |          
+                                                |                     |                                |--1.77%--NativeRow_ordinal_YqsLVaicXW63tqS7yfEXtJ
+                                                |                     |                                |          
+                                                |                     |                                 --1.31%--NativeRow_entry_0qAygVWzJK0Yy4gfIXcD20
+                                                |                     |          
+                                                |                      --10.92%--TypedRow_get_6NkaIg1Mp2E1NMxmo5iN8F
+                                                |                                |          
+                                                |                                |--7.60%--NativeRow_materialize_uxG98lR1ti1NGjsk5QlIJ8
+                                                |                                |          |          
+                                                |                                |           --7.18%--NativeRow_decode_sp1hChdVRYLlN0dlTwaXRD
+                                                |                                |                     |          
+                                                |                                |                      --6.34%--ViewOwner_utf8_vdhpZc0Kb47RYc9YWkd98G
+                                                |                                |                                |          
+                                                |                                |                                |--3.78%--String_1Wsq2sHvwOLEAD1FMOeIqB
+                                                |                                |                                |          |          
+                                                |                                |                                |           --3.46%--String_ANiVZ8cr6wIGG2iZqvkdVA
+                                                |                                |                                |                     |          
+                                                |                                |                                |                      --2.03%--SVMIntrinsicStubsGen_stringCodingCountPositives_pJXvyEBdEyALRGGEsnbJx8
+                                                |                                |                                |          
+                                                |                                |                                 --1.47%--ByteBuffer_get_9LdNwcKqu55pJ71WeML94L
+                                                |                                |                                           |          
+                                                |                                |                                            --1.17%--ByteBuffer_getArray_zSREGQgzRMABUncEZL4yFG
+                                                |                                |                                                      |          
+                                                |                                |                                                       --1.07%--JavaMemoryUtil_copyOnHeap_dcEUns6b0r3KoxJJkjMiJJ
+                                                |                                |          
+                                                |                                 --2.70%--NativeRow_index_K37PGviU9t0btuxR9Y4LJD
+                                                |          
+                                                |--11.86%--Comparison$Fixture_parseNative_LgVvYd8rZW7zJc7biagwL4
+                                                |          |          
+                                                |           --11.50%--BuffaPlan_decodeView_NETFxZv9N59QiBmqAhTnrC
+                                                |                     |          
+                                                |                      --10.81%--BuffaPlan_parse_CdgW7hksxZFlQDePGBwO0J
+                                                |                                |          
+                                                |                                |--4.70%--SvmBackend_typed_m5ZAy5gBUdD7mhPOcay3hB
+                                                |                                |          
+                                                |                                |--1.93%--td_buffa_typed_reuse
+                                                |                                |          
+                                                |                                 --1.38%--WireInput_retain_V7Ny4L3qBt9yWZBYzJYFpL
+                                                |          
+                                                 --1.13%--TypedMessage_close_VMRxLrL1dG7wQhw3ZqTjKH
+
+    41.64%     0.00%  truffledata-com  libc.so.6                       [.] call_init (inlined)
+            |
+            ---call_init (inlined)
+               __libc_start_call_main
+               IsolateEnterStub__JavaMainWrapper__run__cXbfAhOWcF90761nQYco7L
+               JavaMainWrapper_run_iTUBl8UzFfAz1VYmMX6I32
+               JavaMainWrapper_doRun_F09BQfnF3iKa8bUp7D6GY0
+               JavaMainWrapper_runCore0_DxjyYWWswBIqpGm74uwTlD
+               Profile_main_QLbiWA5uQ36iHGzuY4KzH1
+               |          
+                --41.61%--Comparison_main_Tdm8knqZbgFKmi8P01KlkC
+                          Comparison_run_Q5rf1SKn3YJHnF3ZUK1v3H
+                          |          
+                           --41.38%--Comparison_measure_rBHXAV3t9KEP8Sb58Nxs99
+                                     |          
+                                      --41.29%--Comparison$$Laf51eff2_run_Qm1e9AMT80I7oHp0l0OLt6
+                                                Comparison$Fixture_ingest_nKtS7SZyoUBnHzb7kJPIbK
+                                                |          
+                                                |--25.33%--Comparison$Fixture_readOne_2sOK6j44wCEdKZsmKj0iC0
+                                                |          |          
+                                                |           --24.90%--Comparison$GeneratedProjection_read_9C7s0YezpBFjTpOmcB5dLK
+                                                |                     |          
+                                                |                     |--12.60%--TypedRow_getSize_xTAAGXoQu89rPgzsOvk7X0
+                                                |                     |          |          
+                                                |                     |           --11.06%--NativeRow_materialize_uxG98lR1ti1NGjsk5QlIJ8
+                                                |                     |                     |          
+                                                |                     |                      --9.28%--NativeRow$NativeArray_ChiwXB5RyIIYxgcnWoQjFJ
+                                                |                     |                                |          
+                                                |                     |                                |--2.19%--NativeRow_next_zNtbsEgLHHGYOItUHHOzk3
+                                                |                     |                                |          
+                                                |                     |                                |--1.77%--NativeRow_ordinal_YqsLVaicXW63tqS7yfEXtJ
+                                                |                     |                                |          
+                                                |                     |                                 --1.31%--NativeRow_entry_0qAygVWzJK0Yy4gfIXcD20
+                                                |                     |          
+                                                |                      --10.92%--TypedRow_get_6NkaIg1Mp2E1NMxmo5iN8F
+                                                |                                |          
+                                                |                                |--7.60%--NativeRow_materialize_uxG98lR1ti1NGjsk5QlIJ8
+                                                |                                |          |          
+                                                |                                |           --7.18%--NativeRow_decode_sp1hChdVRYLlN0dlTwaXRD
+                                                |                                |                     |          
+                                                |                                |                      --6.34%--ViewOwner_utf8_vdhpZc0Kb47RYc9YWkd98G
+                                                |                                |                                |          
+                                                |                                |                                |--3.78%--String_1Wsq2sHvwOLEAD1FMOeIqB
+                                                |                                |                                |          |          
+                                                |                                |                                |           --3.46%--String_ANiVZ8cr6wIGG2iZqvkdVA
+                                                |                                |                                |                     |          
+                                                |                                |                                |                      --2.03%--SVMIntrinsicStubsGen_stringCodingCountPositives_pJXvyEBdEyALRGGEsnbJx8
+                                                |                                |                                |          
+                                                |                                |                                 --1.47%--ByteBuffer_get_9LdNwcKqu55pJ71WeML94L
+                                                |                                |                                           |          
+                                                |                                |                                            --1.17%--ByteBuffer_getArray_zSREGQgzRMABUncEZL4yFG
+                                                |                                |                                                      |          
+                                                |                                |                                                       --1.07%--JavaMemoryUtil_copyOnHeap_dcEUns6b0r3KoxJJkjMiJJ
+                                                |                                |          
+                                                |                                 --2.70%--NativeRow_index_K37PGviU9t0btuxR9Y4LJD
+                                                |          
+                                                |--11.86%--Comparison$Fixture_parseNative_LgVvYd8rZW7zJc7biagwL4
+                                                |          |          
+                                                |           --11.50%--BuffaPlan_decodeView_NETFxZv9N59QiBmqAhTnrC
+                                                |                     |          
+                                                |                      --10.81%--BuffaPlan_parse_CdgW7hksxZFlQDePGBwO0J
+                                                |                                |          
+                                                |                                |--4.70%--SvmBackend_typed_m5ZAy5gBUdD7mhPOcay3hB
+                                                |                                |          
+                                                |                                |--1.93%--td_buffa_typed_reuse
+                                                |                                |          
+                                                |                                 --1.38%--WireInput_retain_V7Ny4L3qBt9yWZBYzJYFpL
+                                                |          
+                                                 --1.13%--TypedMessage_close_VMRxLrL1dG7wQhw3ZqTjKH
+
+    41.64%     0.00%  truffledata-com  libc.so.6                       [.] __libc_start_call_main
+            |
+            ---__libc_start_call_main
+               IsolateEnterStub__JavaMainWrapper__run__cXbfAhOWcF90761nQYco7L
+               JavaMainWrapper_run_iTUBl8UzFfAz1VYmMX6I32
+               JavaMainWrapper_doRun_F09BQfnF3iKa8bUp7D6GY0
+               JavaMainWrapper_runCore0_DxjyYWWswBIqpGm74uwTlD
+               Profile_main_QLbiWA5uQ36iHGzuY4KzH1
+               |          
+                --41.61%--Comparison_main_Tdm8knqZbgFKmi8P01KlkC
+                          Comparison_run_Q5rf1SKn3YJHnF3ZUK1v3H
+                          |          
+                           --41.38%--Comparison_measure_rBHXAV3t9KEP8Sb58Nxs99
+                                     |          
+                                      --41.29%--Comparison$$Laf51eff2_run_Qm1e9AMT80I7oHp0l0OLt6
+                                                Comparison$Fixture_ingest_nKtS7SZyoUBnHzb7kJPIbK
+                                                |          
+                                                |--25.33%--Comparison$Fixture_readOne_2sOK6j44wCEdKZsmKj0iC0
+                                                |          |          
+                                                |           --24.90%--Comparison$GeneratedProjection_read_9C7s0YezpBFjTpOmcB5dLK
+                                                |                     |          
+                                                |                     |--12.60%--TypedRow_getSize_xTAAGXoQu89rPgzsOvk7X0
+                                                |                     |          |          
+                                                |                     |           --11.06%--NativeRow_materialize_uxG98lR1ti1NGjsk5QlIJ8
+                                                |                     |                     |          
+                                                |                     |                      --9.28%--NativeRow$NativeArray_ChiwXB5RyIIYxgcnWoQjFJ
+                                                |                     |                                |          
+                                                |                     |                                |--2.19%--NativeRow_next_zNtbsEgLHHGYOItUHHOzk3
+                                                |                     |                                |          
+                                                |                     |                                |--1.77%--NativeRow_ordinal_YqsLVaicXW63tqS7yfEXtJ
+                                                |                     |                                |          
+                                                |                     |                                 --1.31%--NativeRow_entry_0qAygVWzJK0Yy4gfIXcD20
+                                                |                     |          
+                                                |                      --10.92%--TypedRow_get_6NkaIg1Mp2E1NMxmo5iN8F
+                                                |                                |          
+                                                |                                |--7.60%--NativeRow_materialize_uxG98lR1ti1NGjsk5QlIJ8
+                                                |                                |          |          
+                                                |                                |           --7.18%--NativeRow_decode_sp1hChdVRYLlN0dlTwaXRD
+                                                |                                |                     |          
+                                                |                                |                      --6.34%--ViewOwner_utf8_vdhpZc0Kb47RYc9YWkd98G
+                                                |                                |                                |          
+                                                |                                |                                |--3.78%--String_1Wsq2sHvwOLEAD1FMOeIqB
+                                                |                                |                                |          |          
+                                                |                                |                                |           --3.46%--String_ANiVZ8cr6wIGG2iZqvkdVA
+                                                |                                |                                |                     |          
+                                                |                                |                                |                      --2.03%--SVMIntrinsicStubsGen_stringCodingCountPositives_pJXvyEBdEyALRGGEsnbJx8
+                                                |                                |                                |          
+                                                |                                |                                 --1.47%--ByteBuffer_get_9LdNwcKqu55pJ71WeML94L
+                                                |                                |                                           |          
+                                                |                                |                                            --1.17%--ByteBuffer_getArray_zSREGQgzRMABUncEZL4yFG
+                                                |                                |                                                      |          
+                                                |                                |                                                       --1.07%--JavaMemoryUtil_copyOnHeap_dcEUns6b0r3KoxJJkjMiJJ
+                                                |                                |          
+                                                |                                 --2.70%--NativeRow_index_K37PGviU9t0btuxR9Y4LJD
+                                                |          
+                                                |--11.86%--Comparison$Fixture_parseNative_LgVvYd8rZW7zJc7biagwL4
+                                                |          |          
+                                                |           --11.50%--BuffaPlan_decodeView_NETFxZv9N59QiBmqAhTnrC
+                                                |                     |          
+                                                |                      --10.81%--BuffaPlan_parse_CdgW7hksxZFlQDePGBwO0J
+                                                |                                |          
+                                                |                                |--4.70%--SvmBackend_typed_m5ZAy5gBUdD7mhPOcay3hB
+                                                |                                |          
+                                                |                                |--1.93%--td_buffa_typed_reuse
+                                                |                                |          
+                                                |                                 --1.38%--WireInput_retain_V7Ny4L3qBt9yWZBYzJYFpL
+                                                |          
+                                                 --1.13%--TypedMessage_close_VMRxLrL1dG7wQhw3ZqTjKH
+
+    41.64%     0.00%  truffledata-com  truffledata-comparison-profile  [.] IsolateEnterStub__JavaMainWrapper__run__cXbfAhOWcF90761nQYco7L
+            |
+            ---IsolateEnterStub__JavaMainWrapper__run__cXbfAhOWcF90761nQYco7L
+               JavaMainWrapper_run_iTUBl8UzFfAz1VYmMX6I32
+               JavaMainWrapper_doRun_F09BQfnF3iKa8bUp7D6GY0
+               JavaMainWrapper_runCore0_DxjyYWWswBIqpGm74uwTlD
+               Profile_main_QLbiWA5uQ36iHGzuY4KzH1
+               |          
+                --41.61%--Comparison_main_Tdm8knqZbgFKmi8P01KlkC
+                          Comparison_run_Q5rf1SKn3YJHnF3ZUK1v3H
+                          |          
+                           --41.38%--Comparison_measure_rBHXAV3t9KEP8Sb58Nxs99
+                                     |          
+                                      --41.29%--Comparison$$Laf51eff2_run_Qm1e9AMT80I7oHp0l0OLt6
+                                                Comparison$Fixture_ingest_nKtS7SZyoUBnHzb7kJPIbK
+                                                |          
+                                                |--25.33%--Comparison$Fixture_readOne_2sOK6j44wCEdKZsmKj0iC0
+                                                |          |          
+                                                |           --24.90%--Comparison$GeneratedProjection_read_9C7s0YezpBFjTpOmcB5dLK
+                                                |                     |          
+                                                |                     |--12.60%--TypedRow_getSize_xTAAGXoQu89rPgzsOvk7X0
+                                                |                     |          |          
+                                                |                     |           --11.06%--NativeRow_materialize_uxG98lR1ti1NGjsk5QlIJ8
+                                                |                     |                     |          
+                                                |                     |                      --9.28%--NativeRow$NativeArray_ChiwXB5RyIIYxgcnWoQjFJ
+                                                |                     |                                |          
+                                                |                     |                                |--2.19%--NativeRow_next_zNtbsEgLHHGYOItUHHOzk3
+                                                |                     |                                |          
+                                                |                     |                                |--1.77%--NativeRow_ordinal_YqsLVaicXW63tqS7yfEXtJ
+                                                |                     |                                |          
+                                                |                     |                                 --1.31%--NativeRow_entry_0qAygVWzJK0Yy4gfIXcD20
+                                                |                     |          
+                                                |                      --10.92%--TypedRow_get_6NkaIg1Mp2E1NMxmo5iN8F
+                                                |                                |          
+                                                |                                |--7.60%--NativeRow_materialize_uxG98lR1ti1NGjsk5QlIJ8
+                                                |                                |          |          
+                                                |                                |           --7.18%--NativeRow_decode_sp1hChdVRYLlN0dlTwaXRD
+                                                |                                |                     |          
+                                                |                                |                      --6.34%--ViewOwner_utf8_vdhpZc0Kb47RYc9YWkd98G
+                                                |                                |                                |          
+                                                |                                |                                |--3.78%--String_1Wsq2sHvwOLEAD1FMOeIqB
+                                                |                                |                                |          |          
+                                                |                                |                                |           --3.46%--String_ANiVZ8cr6wIGG2iZqvkdVA
+                                                |                                |                                |                     |          
+                                                |                                |                                |                      --2.03%--SVMIntrinsicStubsGen_stringCodingCountPositives_pJXvyEBdEyALRGGEsnbJx8
+                                                |                                |                                |          
+                                                |                                |                                 --1.47%--ByteBuffer_get_9LdNwcKqu55pJ71WeML94L
+                                                |                                |                                           |          
+                                                |                                |                                            --1.17%--ByteBuffer_getArray_zSREGQgzRMABUncEZL4yFG
+                                                |                                |                                                      |          
+                                                |                                |                                                       --1.07%--JavaMemoryUtil_copyOnHeap_dcEUns6b0r3KoxJJkjMiJJ
+                                                |                                |          
+                                                |                                 --2.70%--NativeRow_index_K37PGviU9t0btuxR9Y4LJD
+                                                |          
+                                                |--11.86%--Comparison$Fixture_parseNative_LgVvYd8rZW7zJc7biagwL4
+                                                |          |          
+                                                |           --11.50%--BuffaPlan_decodeView_NETFxZv9N59QiBmqAhTnrC
+                                                |                     |          
+                                                |                      --10.81%--BuffaPlan_parse_CdgW7hksxZFlQDePGBwO0J
+                                                |                                |          
+                                                |                                |--4.70%--SvmBackend_typed_m5ZAy5gBUdD7mhPOcay3hB
+                                                |                                |          
+                                                |                                |--1.93%--td_buffa_typed_reuse
+                                                |                                |          
+                                                |                                 --1.38%--WireInput_retain_V7Ny4L3qBt9yWZBYzJYFpL
+                                                |          
+                                                 --1.13%--TypedMessage_close_VMRxLrL1dG7wQhw3ZqTjKH
+
+    41.64%     0.00%  truffledata-com  truffledata-comparison-profile  [.] JavaMainWrapper_run_iTUBl8UzFfAz1VYmMX6I32
+            |
+            ---JavaMainWrapper_run_iTUBl8UzFfAz1VYmMX6I32
+               JavaMainWrapper_doRun_F09BQfnF3iKa8bUp7D6GY0
+               JavaMainWrapper_runCore0_DxjyYWWswBIqpGm74uwTlD
+               Profile_main_QLbiWA5uQ36iHGzuY4KzH1
+               |          
+                --41.61%--Comparison_main_Tdm8knqZbgFKmi8P01KlkC
+                          Comparison_run_Q5rf1SKn3YJHnF3ZUK1v3H
+                          |          
+                           --41.38%--Comparison_measure_rBHXAV3t9KEP8Sb58Nxs99
+                                     |          
+                                      --41.29%--Comparison$$Laf51eff2_run_Qm1e9AMT80I7oHp0l0OLt6
+                                                Comparison$Fixture_ingest_nKtS7SZyoUBnHzb7kJPIbK
+                                                |          
+                                                |--25.33%--Comparison$Fixture_readOne_2sOK6j44wCEdKZsmKj0iC0
+                                                |          |          
+                                                |           --24.90%--Comparison$GeneratedProjection_read_9C7s0YezpBFjTpOmcB5dLK
+                                                |                     |          
+                                                |                     |--12.60%--TypedRow_getSize_xTAAGXoQu89rPgzsOvk7X0
+                                                |                     |          |          
+                                                |                     |           --11.06%--NativeRow_materialize_uxG98lR1ti1NGjsk5QlIJ8
+                                                |                     |                     |          
+                                                |                     |                      --9.28%--NativeRow$NativeArray_ChiwXB5RyIIYxgcnWoQjFJ
+                                                |                     |                                |          
+                                                |                     |                                |--2.19%--NativeRow_next_zNtbsEgLHHGYOItUHHOzk3
+                                                |                     |                                |          
+                                                |                     |                                |--1.77%--NativeRow_ordinal_YqsLVaicXW63tqS7yfEXtJ
+                                                |                     |                                |          
+                                                |                     |                                 --1.31%--NativeRow_entry_0qAygVWzJK0Yy4gfIXcD20
+                                                |                     |          
+                                                |                      --10.92%--TypedRow_get_6NkaIg1Mp2E1NMxmo5iN8F
+                                                |                                |          
+                                                |                                |--7.60%--NativeRow_materialize_uxG98lR1ti1NGjsk5QlIJ8
+                                                |                                |          |          
+                                                |                                |           --7.18%--NativeRow_decode_sp1hChdVRYLlN0dlTwaXRD
+                                                |                                |                     |          
+                                                |                                |                      --6.34%--ViewOwner_utf8_vdhpZc0Kb47RYc9YWkd98G
+                                                |                                |                                |          
+                                                |                                |                                |--3.78%--String_1Wsq2sHvwOLEAD1FMOeIqB
+                                                |                                |                                |          |          
+                                                |                                |                                |           --3.46%--String_ANiVZ8cr6wIGG2iZqvkdVA
+                                                |                                |                                |                     |          
+                                                |                                |                                |                      --2.03%--SVMIntrinsicStubsGen_stringCodingCountPositives_pJXvyEBdEyALRGGEsnbJx8
+                                                |                                |                                |          
+                                                |                                |                                 --1.47%--ByteBuffer_get_9LdNwcKqu55pJ71WeML94L
+                                                |                                |                                           |          
+                                                |                                |                                            --1.17%--ByteBuffer_getArray_zSREGQgzRMABUncEZL4yFG
+                                                |                                |                                                      |          
+                                                |                                |                                                       --1.07%--JavaMemoryUtil_copyOnHeap_dcEUns6b0r3KoxJJkjMiJJ
+                                                |                                |          
+                                                |                                 --2.70%--NativeRow_index_K37PGviU9t0btuxR9Y4LJD
+                                                |          
+                                                |--11.86%--Comparison$Fixture_parseNative_LgVvYd8rZW7zJc7biagwL4
+                                                |          |          
+                                                |           --11.50%--BuffaPlan_decodeView_NETFxZv9N59QiBmqAhTnrC
+                                                |                     |          
+                                                |                      --10.81%--BuffaPlan_parse_CdgW7hksxZFlQDePGBwO0J
+                                                |                                |          
+                                                |                                |--4.70%--SvmBackend_typed_m5ZAy5gBUdD7mhPOcay3hB
+                                                |                                |          
+                                                |                                |--1.93%--td_buffa_typed_reuse
+                                                |                                |          
+                                                |                                 --1.38%--WireInput_retain_V7Ny4L3qBt9yWZBYzJYFpL
+                                                |          
+                                                 --1.13%--TypedMessage_close_VMRxLrL1dG7wQhw3ZqTjKH
+
+    41.64%     0.00%  truffledata-com  truffledata-comparison-profile  [.] JavaMainWrapper_doRun_F09BQfnF3iKa8bUp7D6GY0
+            |
+            ---JavaMainWrapper_doRun_F09BQfnF3iKa8bUp7D6GY0
+               JavaMainWrapper_runCore0_DxjyYWWswBIqpGm74uwTlD
+               Profile_main_QLbiWA5uQ36iHGzuY4KzH1
+               |          
+                --41.61%--Comparison_main_Tdm8knqZbgFKmi8P01KlkC
+                          Comparison_run_Q5rf1SKn3YJHnF3ZUK1v3H
+                          |          
+                           --41.38%--Comparison_measure_rBHXAV3t9KEP8Sb58Nxs99
+                                     |          
+                                      --41.29%--Comparison$$Laf51eff2_run_Qm1e9AMT80I7oHp0l0OLt6
+                                                Comparison$Fixture_ingest_nKtS7SZyoUBnHzb7kJPIbK
+                                                |          
+                                                |--25.33%--Comparison$Fixture_readOne_2sOK6j44wCEdKZsmKj0iC0
+                                                |          |          
+                                                |           --24.90%--Comparison$GeneratedProjection_read_9C7s0YezpBFjTpOmcB5dLK
+                                                |                     |          
+                                                |                     |--12.60%--TypedRow_getSize_xTAAGXoQu89rPgzsOvk7X0
+                                                |                     |          |          
+                                                |                     |           --11.06%--NativeRow_materialize_uxG98lR1ti1NGjsk5QlIJ8
+                                                |                     |                     |          
+                                                |                     |                      --9.28%--NativeRow$NativeArray_ChiwXB5RyIIYxgcnWoQjFJ
+                                                |                     |                                |          
+                                                |                     |                                |--2.19%--NativeRow_next_zNtbsEgLHHGYOItUHHOzk3
+                                                |                     |                                |          
+                                                |                     |                                |--1.77%--NativeRow_ordinal_YqsLVaicXW63tqS7yfEXtJ
+                                                |                     |                                |          
+                                                |                     |                                 --1.31%--NativeRow_entry_0qAygVWzJK0Yy4gfIXcD20
+                                                |                     |          
+                                                |                      --10.92%--TypedRow_get_6NkaIg1Mp2E1NMxmo5iN8F
+                                                |                                |          
+                                                |                                |--7.60%--NativeRow_materialize_uxG98lR1ti1NGjsk5QlIJ8
+                                                |                                |          |          
+                                                |                                |           --7.18%--NativeRow_decode_sp1hChdVRYLlN0dlTwaXRD
+                                                |                                |                     |          
+                                                |                                |                      --6.34%--ViewOwner_utf8_vdhpZc0Kb47RYc9YWkd98G
+                                                |                                |                                |          
+                                                |                                |                                |--3.78%--String_1Wsq2sHvwOLEAD1FMOeIqB
+                                                |                                |                                |          |          
+                                                |                                |                                |           --3.46%--String_ANiVZ8cr6wIGG2iZqvkdVA
+                                                |                                |                                |                     |          
+                                                |                                |                                |                      --2.03%--SVMIntrinsicStubsGen_stringCodingCountPositives_pJXvyEBdEyALRGGEsnbJx8
+                                                |                                |                                |          
+                                                |                                |                                 --1.47%--ByteBuffer_get_9LdNwcKqu55pJ71WeML94L
+                                                |                                |                                           |          
+                                                |                                |                                            --1.17%--ByteBuffer_getArray_zSREGQgzRMABUncEZL4yFG
+                                                |                                |                                                      |          
+                                                |                                |                                                       --1.07%--JavaMemoryUtil_copyOnHeap_dcEUns6b0r3KoxJJkjMiJJ
+                                                |                                |          
+                                                |                                 --2.70%--NativeRow_index_K37PGviU9t0btuxR9Y4LJD
+                                                |          
+                                                |--11.86%--Comparison$Fixture_parseNative_LgVvYd8rZW7zJc7biagwL4
+                                                |          |          
+                                                |           --11.50%--BuffaPlan_decodeView_NETFxZv9N59QiBmqAhTnrC
+                                                |                     |          
+                                                |                      --10.81%--BuffaPlan_parse_CdgW7hksxZFlQDePGBwO0J
+                                                |                                |          
+                                                |                                |--4.70%--SvmBackend_typed_m5ZAy5gBUdD7mhPOcay3hB
+                                                |                                |          
+                                                |                                |--1.93%--td_buffa_typed_reuse
+                                                |                                |          
+                                                |                                 --1.38%--WireInput_retain_V7Ny4L3qBt9yWZBYzJYFpL
+                                                |          
+                                                 --1.13%--TypedMessage_close_VMRxLrL1dG7wQhw3ZqTjKH
+
+    41.64%     0.00%  truffledata-com  truffledata-comparison-profile  [.] JavaMainWrapper_runCore0_DxjyYWWswBIqpGm74uwTlD
+            |
+            ---JavaMainWrapper_runCore0_DxjyYWWswBIqpGm74uwTlD
+               Profile_main_QLbiWA5uQ36iHGzuY4KzH1
+               |          
+                --41.61%--Comparison_main_Tdm8knqZbgFKmi8P01KlkC
+                          Comparison_run_Q5rf1SKn3YJHnF3ZUK1v3H
+                          |          
+                           --41.38%--Comparison_measure_rBHXAV3t9KEP8Sb58Nxs99
+                                     |          
+                                      --41.29%--Comparison$$Laf51eff2_run_Qm1e9AMT80I7oHp0l0OLt6
+                                                Comparison$Fixture_ingest_nKtS7SZyoUBnHzb7kJPIbK
+                                                |          
+                                                |--25.33%--Comparison$Fixture_readOne_2sOK6j44wCEdKZsmKj0iC0
+                                                |          |          
+                                                |           --24.90%--Comparison$GeneratedProjection_read_9C7s0YezpBFjTpOmcB5dLK
+                                                |                     |          
+                                                |                     |--12.60%--TypedRow_getSize_xTAAGXoQu89rPgzsOvk7X0
+                                                |                     |          |          
+                                                |                     |           --11.06%--NativeRow_materialize_uxG98lR1ti1NGjsk5QlIJ8
+                                                |                     |                     |          
+                                                |                     |                      --9.28%--NativeRow$NativeArray_ChiwXB5RyIIYxgcnWoQjFJ
+                                                |                     |                                |          
+                                                |                     |                                |--2.19%--NativeRow_next_zNtbsEgLHHGYOItUHHOzk3
+                                                |                     |                                |          
+                                                |                     |                                |--1.77%--NativeRow_ordinal_YqsLVaicXW63tqS7yfEXtJ
+                                                |                     |                                |          
+                                                |                     |                                 --1.31%--NativeRow_entry_0qAygVWzJK0Yy4gfIXcD20
+                                                |                     |          
+                                                |                      --10.92%--TypedRow_get_6NkaIg1Mp2E1NMxmo5iN8F
+                                                |                                |          
+                                                |                                |--7.60%--NativeRow_materialize_uxG98lR1ti1NGjsk5QlIJ8
+                                                |                                |          |          
+                                                |                                |           --7.18%--NativeRow_decode_sp1hChdVRYLlN0dlTwaXRD
+                                                |                                |                     |          
+                                                |                                |                      --6.34%--ViewOwner_utf8_vdhpZc0Kb47RYc9YWkd98G
+                                                |                                |                                |          
+                                                |                                |                                |--3.78%--String_1Wsq2sHvwOLEAD1FMOeIqB
+                                                |                                |                                |          |          
+                                                |                                |                                |           --3.46%--String_ANiVZ8cr6wIGG2iZqvkdVA
+                                                |                                |                                |                     |          
+                                                |                                |                                |                      --2.03%--SVMIntrinsicStubsGen_stringCodingCountPositives_pJXvyEBdEyALRGGEsnbJx8
+                                                |                                |                                |          
+                                                |                                |                                 --1.47%--ByteBuffer_get_9LdNwcKqu55pJ71WeML94L
+                                                |                                |                                           |          
+                                                |                                |                                            --1.17%--ByteBuffer_getArray_zSREGQgzRMABUncEZL4yFG
+                                                |                                |                                                      |          
+                                                |                                |                                                       --1.07%--JavaMemoryUtil_copyOnHeap_dcEUns6b0r3KoxJJkjMiJJ
+                                                |                                |          
+                                                |                                 --2.70%--NativeRow_index_K37PGviU9t0btuxR9Y4LJD
+                                                |          
+                                                |--11.86%--Comparison$Fixture_parseNative_LgVvYd8rZW7zJc7biagwL4
+                                                |          |          
+                                                |           --11.50%--BuffaPlan_decodeView_NETFxZv9N59QiBmqAhTnrC
+                                                |                     |          
+                                                |                      --10.81%--BuffaPlan_parse_CdgW7hksxZFlQDePGBwO0J
+                                                |                                |          
+                                                |                                |--4.70%--SvmBackend_typed_m5ZAy5gBUdD7mhPOcay3hB
+                                                |                                |          
+                                                |                                |--1.93%--td_buffa_typed_reuse
+                                                |                                |          
+                                                |                                 --1.38%--WireInput_retain_V7Ny4L3qBt9yWZBYzJYFpL
+                                                |          
+                                                 --1.13%--TypedMessage_close_VMRxLrL1dG7wQhw3ZqTjKH
+
+    41.64%     0.00%  truffledata-com  truffledata-comparison-profile  [.] Profile_main_QLbiWA5uQ36iHGzuY4KzH1
+            |
+            ---Profile_main_QLbiWA5uQ36iHGzuY4KzH1
+               |          
+                --41.61%--Comparison_main_Tdm8knqZbgFKmi8P01KlkC
+                          Comparison_run_Q5rf1SKn3YJHnF3ZUK1v3H
+                          |          
+                           --41.38%--Comparison_measure_rBHXAV3t9KEP8Sb58Nxs99
+                                     |          
+                                      --41.29%--Comparison$$Laf51eff2_run_Qm1e9AMT80I7oHp0l0OLt6
+                                                Comparison$Fixture_ingest_nKtS7SZyoUBnHzb7kJPIbK
+                                                |          
+                                                |--25.33%--Comparison$Fixture_readOne_2sOK6j44wCEdKZsmKj0iC0
+                                                |          |          
+                                                |           --24.90%--Comparison$GeneratedProjection_read_9C7s0YezpBFjTpOmcB5dLK
+                                                |                     |          
+                                                |                     |--12.60%--TypedRow_getSize_xTAAGXoQu89rPgzsOvk7X0
+                                                |                     |          |          
+                                                |                     |           --11.06%--NativeRow_materialize_uxG98lR1ti1NGjsk5QlIJ8
+                                                |                     |                     |          
+                                                |                     |                      --9.28%--NativeRow$NativeArray_ChiwXB5RyIIYxgcnWoQjFJ
+                                                |                     |                                |          
+                                                |                     |                                |--2.19%--NativeRow_next_zNtbsEgLHHGYOItUHHOzk3
+                                                |                     |                                |          
+                                                |                     |                                |--1.77%--NativeRow_ordinal_YqsLVaicXW63tqS7yfEXtJ
+                                                |                     |                                |          
+                                                |                     |                                 --1.31%--NativeRow_entry_0qAygVWzJK0Yy4gfIXcD20
+                                                |                     |          
+                                                |                      --10.92%--TypedRow_get_6NkaIg1Mp2E1NMxmo5iN8F
+                                                |                                |          
+                                                |                                |--7.60%--NativeRow_materialize_uxG98lR1ti1NGjsk5QlIJ8
+                                                |                                |          |          
+                                                |                                |           --7.18%--NativeRow_decode_sp1hChdVRYLlN0dlTwaXRD
+                                                |                                |                     |          
+                                                |                                |                      --6.34%--ViewOwner_utf8_vdhpZc0Kb47RYc9YWkd98G
+                                                |                                |                                |          
+                                                |                                |                                |--3.78%--String_1Wsq2sHvwOLEAD1FMOeIqB
+                                                |                                |                                |          |          
+                                                |                                |                                |           --3.46%--String_ANiVZ8cr6wIGG2iZqvkdVA
+                                                |                                |                                |                     |          
+                                                |                                |                                |                      --2.03%--SVMIntrinsicStubsGen_stringCodingCountPositives_pJXvyEBdEyALRGGEsnbJx8
+                                                |                                |                                |          
+                                                |                                |                                 --1.47%--ByteBuffer_get_9LdNwcKqu55pJ71WeML94L
+                                                |                                |                                           |          
+                                                |                                |                                            --1.17%--ByteBuffer_getArray_zSREGQgzRMABUncEZL4yFG
+                                                |                                |                                                      |          
+                                                |                                |                                                       --1.07%--JavaMemoryUtil_copyOnHeap_dcEUns6b0r3KoxJJkjMiJJ
+                                                |                                |          
+                                                |                                 --2.70%--NativeRow_index_K37PGviU9t0btuxR9Y4LJD
+                                                |          
+                                                |--11.86%--Comparison$Fixture_parseNative_LgVvYd8rZW7zJc7biagwL4
+                                                |          |          
+                                                |           --11.50%--BuffaPlan_decodeView_NETFxZv9N59QiBmqAhTnrC
+                                                |                     |          
+                                                |                      --10.81%--BuffaPlan_parse_CdgW7hksxZFlQDePGBwO0J
+                                                |                                |          
+                                                |                                |--4.70%--SvmBackend_typed_m5ZAy5gBUdD7mhPOcay3hB
+                                                |                                |          
+                                                |                                |--1.93%--td_buffa_typed_reuse
+                                                |                                |          
+                                                |                                 --1.38%--WireInput_retain_V7Ny4L3qBt9yWZBYzJYFpL
+                                                |          
+                                                 --1.13%--TypedMessage_close_VMRxLrL1dG7wQhw3ZqTjKH
+
+    41.61%     0.00%  truffledata-com  truffledata-comparison-profile  [.] Comparison_main_Tdm8knqZbgFKmi8P01KlkC
+            |
+            ---Comparison_main_Tdm8knqZbgFKmi8P01KlkC
+               Comparison_run_Q5rf1SKn3YJHnF3ZUK1v3H
+               |          
+                --41.38%--Comparison_measure_rBHXAV3t9KEP8Sb58Nxs99
+                          |          
+                           --41.29%--Comparison$$Laf51eff2_run_Qm1e9AMT80I7oHp0l0OLt6
+                                     Comparison$Fixture_ingest_nKtS7SZyoUBnHzb7kJPIbK
+                                     |          
+                                     |--25.33%--Comparison$Fixture_readOne_2sOK6j44wCEdKZsmKj0iC0
+                                     |          |          
+                                     |           --24.90%--Comparison$GeneratedProjection_read_9C7s0YezpBFjTpOmcB5dLK
+                                     |                     |          
+                                     |                     |--12.60%--TypedRow_getSize_xTAAGXoQu89rPgzsOvk7X0
+                                     |                     |          |          
+                                     |                     |           --11.06%--NativeRow_materialize_uxG98lR1ti1NGjsk5QlIJ8
+                                     |                     |                     |          
+                                     |                     |                      --9.28%--NativeRow$NativeArray_ChiwXB5RyIIYxgcnWoQjFJ
+                                     |                     |                                |          
+                                     |                     |                                |--2.19%--NativeRow_next_zNtbsEgLHHGYOItUHHOzk3
+                                     |                     |                                |          
+                                     |                     |                                |--1.77%--NativeRow_ordinal_YqsLVaicXW63tqS7yfEXtJ
+                                     |                     |                                |          
+                                     |                     |                                 --1.31%--NativeRow_entry_0qAygVWzJK0Yy4gfIXcD20
+                                     |                     |          
+                                     |                      --10.92%--TypedRow_get_6NkaIg1Mp2E1NMxmo5iN8F
+                                     |                                |          
+                                     |                                |--7.60%--NativeRow_materialize_uxG98lR1ti1NGjsk5QlIJ8
+                                     |                                |          |          
+                                     |                                |           --7.18%--NativeRow_decode_sp1hChdVRYLlN0dlTwaXRD
+                                     |                                |                     |          
+                                     |                                |                      --6.34%--ViewOwner_utf8_vdhpZc0Kb47RYc9YWkd98G
+                                     |                                |                                |          
+                                     |                                |                                |--3.78%--String_1Wsq2sHvwOLEAD1FMOeIqB
+                                     |                                |                                |          |          
+                                     |                                |                                |           --3.46%--String_ANiVZ8cr6wIGG2iZqvkdVA
+                                     |                                |                                |                     |          
+                                     |                                |                                |                      --2.03%--SVMIntrinsicStubsGen_stringCodingCountPositives_pJXvyEBdEyALRGGEsnbJx8
+                                     |                                |                                |          
+                                     |                                |                                 --1.47%--ByteBuffer_get_9LdNwcKqu55pJ71WeML94L
+                                     |                                |                                           |          
+                                     |                                |                                            --1.17%--ByteBuffer_getArray_zSREGQgzRMABUncEZL4yFG
+                                     |                                |                                                      |          
+                                     |                                |                                                       --1.07%--JavaMemoryUtil_copyOnHeap_dcEUns6b0r3KoxJJkjMiJJ
+                                     |                                |          
+                                     |                                 --2.70%--NativeRow_index_K37PGviU9t0btuxR9Y4LJD
+                                     |          
+                                     |--11.86%--Comparison$Fixture_parseNative_LgVvYd8rZW7zJc7biagwL4
+                                     |          |          
+                                     |           --11.50%--BuffaPlan_decodeView_NETFxZv9N59QiBmqAhTnrC
+                                     |                     |          
+                                     |                      --10.81%--BuffaPlan_parse_CdgW7hksxZFlQDePGBwO0J
+                                     |                                |          
+                                     |                                |--4.70%--SvmBackend_typed_m5ZAy5gBUdD7mhPOcay3hB
+                                     |                                |          
+                                     |                                |--1.93%--td_buffa_typed_reuse
+                                     |                                |          
+                                     |                                 --1.38%--WireInput_retain_V7Ny4L3qBt9yWZBYzJYFpL
+                                     |          
+                                      --1.13%--TypedMessage_close_VMRxLrL1dG7wQhw3ZqTjKH
+
+    41.61%     0.00%  truffledata-com  truffledata-comparison-profile  [.] Comparison_run_Q5rf1SKn3YJHnF3ZUK1v3H
+            |
+            ---Comparison_run_Q5rf1SKn3YJHnF3ZUK1v3H
+               |          
+                --41.38%--Comparison_measure_rBHXAV3t9KEP8Sb58Nxs99
+                          |          
+                           --41.29%--Comparison$$Laf51eff2_run_Qm1e9AMT80I7oHp0l0OLt6
+                                     Comparison$Fixture_ingest_nKtS7SZyoUBnHzb7kJPIbK
+                                     |          
+                                     |--25.33%--Comparison$Fixture_readOne_2sOK6j44wCEdKZsmKj0iC0
+                                     |          |          
+                                     |           --24.90%--Comparison$GeneratedProjection_read_9C7s0YezpBFjTpOmcB5dLK
+                                     |                     |          
+                                     |                     |--12.60%--TypedRow_getSize_xTAAGXoQu89rPgzsOvk7X0
+                                     |                     |          |          
+                                     |                     |           --11.06%--NativeRow_materialize_uxG98lR1ti1NGjsk5QlIJ8
+                                     |                     |                     |          
+                                     |                     |                      --9.28%--NativeRow$NativeArray_ChiwXB5RyIIYxgcnWoQjFJ
+                                     |                     |                                |          
+                                     |                     |                                |--2.19%--NativeRow_next_zNtbsEgLHHGYOItUHHOzk3
+                                     |                     |                                |          
+                                     |                     |                                |--1.77%--NativeRow_ordinal_YqsLVaicXW63tqS7yfEXtJ
+                                     |                     |                                |          
+                                     |                     |                                 --1.31%--NativeRow_entry_0qAygVWzJK0Yy4gfIXcD20
+                                     |                     |          
+                                     |                      --10.92%--TypedRow_get_6NkaIg1Mp2E1NMxmo5iN8F
+                                     |                                |          
+                                     |                                |--7.60%--NativeRow_materialize_uxG98lR1ti1NGjsk5QlIJ8
+                                     |                                |          |          
+                                     |                                |           --7.18%--NativeRow_decode_sp1hChdVRYLlN0dlTwaXRD
+                                     |                                |                     |          
+                                     |                                |                      --6.34%--ViewOwner_utf8_vdhpZc0Kb47RYc9YWkd98G
+                                     |                                |                                |          
+                                     |                                |                                |--3.78%--String_1Wsq2sHvwOLEAD1FMOeIqB
+                                     |                                |                                |          |          
+                                     |                                |                                |           --3.46%--String_ANiVZ8cr6wIGG2iZqvkdVA
+                                     |                                |                                |                     |          
+                                     |                                |                                |                      --2.03%--SVMIntrinsicStubsGen_stringCodingCountPositives_pJXvyEBdEyALRGGEsnbJx8
+                                     |                                |                                |          
+                                     |                                |                                 --1.47%--ByteBuffer_get_9LdNwcKqu55pJ71WeML94L
+                                     |                                |                                           |          
+                                     |                                |                                            --1.17%--ByteBuffer_getArray_zSREGQgzRMABUncEZL4yFG
+                                     |                                |                                                      |          
+                                     |                                |                                                       --1.07%--JavaMemoryUtil_copyOnHeap_dcEUns6b0r3KoxJJkjMiJJ
+                                     |                                |          
+                                     |                                 --2.70%--NativeRow_index_K37PGviU9t0btuxR9Y4LJD
+                                     |          
+                                     |--11.86%--Comparison$Fixture_parseNative_LgVvYd8rZW7zJc7biagwL4
+                                     |          |          
+                                     |           --11.50%--BuffaPlan_decodeView_NETFxZv9N59QiBmqAhTnrC
+                                     |                     |          
+                                     |                      --10.81%--BuffaPlan_parse_CdgW7hksxZFlQDePGBwO0J
+                                     |                                |          
+                                     |                                |--4.70%--SvmBackend_typed_m5ZAy5gBUdD7mhPOcay3hB
+                                     |                                |          
+                                     |                                |--1.93%--td_buffa_typed_reuse
+                                     |                                |          
+                                     |                                 --1.38%--WireInput_retain_V7Ny4L3qBt9yWZBYzJYFpL
+                                     |          
+                                      --1.13%--TypedMessage_close_VMRxLrL1dG7wQhw3ZqTjKH
+
+    41.38%     0.06%  truffledata-com  truffledata-comparison-profile  [.] Comparison_measure_rBHXAV3t9KEP8Sb58Nxs99
+            |          
+             --41.32%--Comparison_measure_rBHXAV3t9KEP8Sb58Nxs99
+                       |          
+                        --41.25%--Comparison$$Laf51eff2_run_Qm1e9AMT80I7oHp0l0OLt6
+                                  Comparison$Fixture_ingest_nKtS7SZyoUBnHzb7kJPIbK
+                                  |          
+                                  |--25.33%--Comparison$Fixture_readOne_2sOK6j44wCEdKZsmKj0iC0
+                                  |          |          
+                                  |           --24.90%--Comparison$GeneratedProjection_read_9C7s0YezpBFjTpOmcB5dLK
+                                  |                     |          
+                                  |                     |--12.60%--TypedRow_getSize_xTAAGXoQu89rPgzsOvk7X0
+                                  |                     |          |          
+                                  |                     |           --11.06%--NativeRow_materialize_uxG98lR1ti1NGjsk5QlIJ8
+                                  |                     |                     |          
+                                  |                     |                      --9.28%--NativeRow$NativeArray_ChiwXB5RyIIYxgcnWoQjFJ
+                                  |                     |                                |          
+                                  |                     |                                |--2.19%--NativeRow_next_zNtbsEgLHHGYOItUHHOzk3
+                                  |                     |                                |          
+                                  |                     |                                |--1.77%--NativeRow_ordinal_YqsLVaicXW63tqS7yfEXtJ
+                                  |                     |                                |          
+                                  |                     |                                 --1.31%--NativeRow_entry_0qAygVWzJK0Yy4gfIXcD20
+                                  |                     |          
+                                  |                      --10.92%--TypedRow_get_6NkaIg1Mp2E1NMxmo5iN8F
+                                  |                                |          
+                                  |                                |--7.60%--NativeRow_materialize_uxG98lR1ti1NGjsk5QlIJ8
+                                  |                                |          |          
+                                  |                                |           --7.18%--NativeRow_decode_sp1hChdVRYLlN0dlTwaXRD
+                                  |                                |                     |          
+                                  |                                |                      --6.34%--ViewOwner_utf8_vdhpZc0Kb47RYc9YWkd98G
+                                  |                                |                                |          
+                                  |                                |                                |--3.78%--String_1Wsq2sHvwOLEAD1FMOeIqB
+                                  |                                |                                |          |          
+                                  |                                |                                |           --3.46%--String_ANiVZ8cr6wIGG2iZqvkdVA
+                                  |                                |                                |                     |          
+                                  |                                |                                |                      --2.03%--SVMIntrinsicStubsGen_stringCodingCountPositives_pJXvyEBdEyALRGGEsnbJx8
+                                  |                                |                                |          
+                                  |                                |                                 --1.47%--ByteBuffer_get_9LdNwcKqu55pJ71WeML94L
+                                  |                                |                                           |          
+                                  |                                |                                            --1.17%--ByteBuffer_getArray_zSREGQgzRMABUncEZL4yFG
+                                  |                                |                                                      |          
+                                  |                                |                                                       --1.07%--JavaMemoryUtil_copyOnHeap_dcEUns6b0r3KoxJJkjMiJJ
+                                  |                                |          
+                                  |                                 --2.70%--NativeRow_index_K37PGviU9t0btuxR9Y4LJD
+                                  |          
+                                  |--11.82%--Comparison$Fixture_parseNative_LgVvYd8rZW7zJc7biagwL4
+                                  |          |          
+                                  |           --11.46%--BuffaPlan_decodeView_NETFxZv9N59QiBmqAhTnrC
+                                  |                     |          
+                                  |                      --10.78%--BuffaPlan_parse_CdgW7hksxZFlQDePGBwO0J
+                                  |                                |          
+                                  |                                |--4.66%--SvmBackend_typed_m5ZAy5gBUdD7mhPOcay3hB
+                                  |                                |          
+                                  |                                |--1.93%--td_buffa_typed_reuse
+                                  |                                |          
+                                  |                                 --1.38%--WireInput_retain_V7Ny4L3qBt9yWZBYzJYFpL
+                                  |          
+                                   --1.13%--TypedMessage_close_VMRxLrL1dG7wQhw3ZqTjKH
+
+    41.32%     0.03%  truffledata-com  truffledata-comparison-profile  [.] Comparison$$Laf51eff2_run_Qm1e9AMT80I7oHp0l0OLt6
+            |          
+             --41.29%--Comparison$$Laf51eff2_run_Qm1e9AMT80I7oHp0l0OLt6
+                       |          
+                        --41.25%--Comparison$Fixture_ingest_nKtS7SZyoUBnHzb7kJPIbK
+                                  |          
+                                  |--25.33%--Comparison$Fixture_readOne_2sOK6j44wCEdKZsmKj0iC0
+                                  |          |          
+                                  |           --24.90%--Comparison$GeneratedProjection_read_9C7s0YezpBFjTpOmcB5dLK
+                                  |                     |          
+                                  |                     |--12.60%--TypedRow_getSize_xTAAGXoQu89rPgzsOvk7X0
+                                  |                     |          |          
+                                  |                     |           --11.06%--NativeRow_materialize_uxG98lR1ti1NGjsk5QlIJ8
+                                  |                     |                     |          
+                                  |                     |                      --9.28%--NativeRow$NativeArray_ChiwXB5RyIIYxgcnWoQjFJ
+                                  |                     |                                |          
+                                  |                     |                                |--2.19%--NativeRow_next_zNtbsEgLHHGYOItUHHOzk3
+                                  |                     |                                |          
+                                  |                     |                                |--1.77%--NativeRow_ordinal_YqsLVaicXW63tqS7yfEXtJ
+                                  |                     |                                |          
+                                  |                     |                                 --1.31%--NativeRow_entry_0qAygVWzJK0Yy4gfIXcD20
+                                  |                     |          
+                                  |                      --10.92%--TypedRow_get_6NkaIg1Mp2E1NMxmo5iN8F
+                                  |                                |          
+                                  |                                |--7.60%--NativeRow_materialize_uxG98lR1ti1NGjsk5QlIJ8
+                                  |                                |          |          
+                                  |                                |           --7.18%--NativeRow_decode_sp1hChdVRYLlN0dlTwaXRD
+                                  |                                |                     |          
+                                  |                                |                      --6.34%--ViewOwner_utf8_vdhpZc0Kb47RYc9YWkd98G
+                                  |                                |                                |          
+                                  |                                |                                |--3.78%--String_1Wsq2sHvwOLEAD1FMOeIqB
+                                  |                                |                                |          |          
+                                  |                                |                                |           --3.46%--String_ANiVZ8cr6wIGG2iZqvkdVA
+                                  |                                |                                |                     |          
+                                  |                                |                                |                      --2.03%--SVMIntrinsicStubsGen_stringCodingCountPositives_pJXvyEBdEyALRGGEsnbJx8
+                                  |                                |                                |          
+                                  |                                |                                 --1.47%--ByteBuffer_get_9LdNwcKqu55pJ71WeML94L
+                                  |                                |                                           |          
+                                  |                                |                                            --1.17%--ByteBuffer_getArray_zSREGQgzRMABUncEZL4yFG
+                                  |                                |                                                      |          
+                                  |                                |                                                       --1.07%--JavaMemoryUtil_copyOnHeap_dcEUns6b0r3KoxJJkjMiJJ
+                                  |                                |          
+                                  |                                 --2.70%--NativeRow_index_K37PGviU9t0btuxR9Y4LJD
+                                  |          
+                                  |--11.82%--Comparison$Fixture_parseNative_LgVvYd8rZW7zJc7biagwL4
+                                  |          |          
+                                  |           --11.46%--BuffaPlan_decodeView_NETFxZv9N59QiBmqAhTnrC
+                                  |                     |          
+                                  |                      --10.78%--BuffaPlan_parse_CdgW7hksxZFlQDePGBwO0J
+                                  |                                |          
+                                  |                                |--4.66%--SvmBackend_typed_m5ZAy5gBUdD7mhPOcay3hB
+                                  |                                |          
+                                  |                                |--1.93%--td_buffa_typed_reuse
+                                  |                                |          
+                                  |                                 --1.38%--WireInput_retain_V7Ny4L3qBt9yWZBYzJYFpL
+                                  |          
+                                   --1.13%--TypedMessage_close_VMRxLrL1dG7wQhw3ZqTjKH
+
+    41.32%     0.42%  truffledata-com  truffledata-comparison-profile  [.] Comparison$Fixture_ingest_nKtS7SZyoUBnHzb7kJPIbK
+            |          
+             --40.90%--Comparison$Fixture_ingest_nKtS7SZyoUBnHzb7kJPIbK
+                       |          
+                       |--25.11%--Comparison$Fixture_readOne_2sOK6j44wCEdKZsmKj0iC0
+                       |          |          
+                       |           --24.68%--Comparison$GeneratedProjection_read_9C7s0YezpBFjTpOmcB5dLK
+                       |                     |          
+                       |                     |--12.60%--TypedRow_getSize_xTAAGXoQu89rPgzsOvk7X0
+                       |                     |          |          
+                       |                     |           --11.06%--NativeRow_materialize_uxG98lR1ti1NGjsk5QlIJ8
+                       |                     |                     |          
+                       |                     |                      --9.28%--NativeRow$NativeArray_ChiwXB5RyIIYxgcnWoQjFJ
+                       |                     |                                |          
+                       |                     |                                |--2.19%--NativeRow_next_zNtbsEgLHHGYOItUHHOzk3
+                       |                     |                                |          
+                       |                     |                                |--1.77%--NativeRow_ordinal_YqsLVaicXW63tqS7yfEXtJ
+                       |                     |                                |          
+                       |                     |                                 --1.31%--NativeRow_entry_0qAygVWzJK0Yy4gfIXcD20
+                       |                     |          
+                       |                      --10.70%--TypedRow_get_6NkaIg1Mp2E1NMxmo5iN8F
+                       |                                |          
+                       |                                |--7.60%--NativeRow_materialize_uxG98lR1ti1NGjsk5QlIJ8
+                       |                                |          |          
+                       |                                |           --7.18%--NativeRow_decode_sp1hChdVRYLlN0dlTwaXRD
+                       |                                |                     |          
+                       |                                |                      --6.34%--ViewOwner_utf8_vdhpZc0Kb47RYc9YWkd98G
+                       |                                |                                |          
+                       |                                |                                |--3.78%--String_1Wsq2sHvwOLEAD1FMOeIqB
+                       |                                |                                |          |          
+                       |                                |                                |           --3.46%--String_ANiVZ8cr6wIGG2iZqvkdVA
+                       |                                |                                |                     |          
+                       |                                |                                |                      --2.03%--SVMIntrinsicStubsGen_stringCodingCountPositives_pJXvyEBdEyALRGGEsnbJx8
+                       |                                |                                |          
+                       |                                |                                 --1.47%--ByteBuffer_get_9LdNwcKqu55pJ71WeML94L
+                       |                                |                                           |          
+                       |                                |                                            --1.17%--ByteBuffer_getArray_zSREGQgzRMABUncEZL4yFG
+                       |                                |                                                      |          
+                       |                                |                                                       --1.07%--JavaMemoryUtil_copyOnHeap_dcEUns6b0r3KoxJJkjMiJJ
+                       |                                |          
+                       |                                 --2.51%--NativeRow_index_K37PGviU9t0btuxR9Y4LJD
+                       |          
+                       |--11.66%--Comparison$Fixture_parseNative_LgVvYd8rZW7zJc7biagwL4
+                       |          |          
+                       |           --11.30%--BuffaPlan_decodeView_NETFxZv9N59QiBmqAhTnrC
+                       |                     |          
+                       |                      --10.61%--BuffaPlan_parse_CdgW7hksxZFlQDePGBwO0J
+                       |                                |          
+                       |                                |--4.56%--SvmBackend_typed_m5ZAy5gBUdD7mhPOcay3hB
+                       |                                |          
+                       |                                |--1.93%--td_buffa_typed_reuse
+                       |                                |          
+                       |                                 --1.34%--WireInput_retain_V7Ny4L3qBt9yWZBYzJYFpL
+                       |          
+                        --1.13%--TypedMessage_close_VMRxLrL1dG7wQhw3ZqTjKH
+
+    38.76%    27.39%  truffledata-com  truffledata-comparison-profile  [.] <truffledata_buffa::typed::Decoder>::binary
+            |          
+            |--21.02%--<truffledata_buffa::typed::Decoder>::binary
+            |          
+            |--5.22%--<truffledata_buffa::typed::Decoder>::push
+            |          
+            |--2.24%--<buffa::encoding::WireType>::from_u32
+            |          
+            |--2.08%--buffa::encoding::decode_varint::<&[u8]>
+            |          
+            |--1.98%--<truffledata_buffa::typed::Decoder>::bytes
+            |          
+            |--1.95%--truffledata_buffa::typed::scalar
+            |          
+            |--1.62%--core::str::converts::from_utf8
+            |          
+            |--1.11%--truffledata_buffa::typed::take_bytes
+            |          
+             --1.10%--_start
+                       __libc_start_main@@GLIBC_2.34
+                       call_init (inlined)
+                       __libc_start_call_main
+                       IsolateEnterStub__JavaMainWrapper__run__cXbfAhOWcF90761nQYco7L
+                       JavaMainWrapper_run_iTUBl8UzFfAz1VYmMX6I32
+                       JavaMainWrapper_doRun_F09BQfnF3iKa8bUp7D6GY0
+                       JavaMainWrapper_runCore0_DxjyYWWswBIqpGm74uwTlD
+                       Profile_main_QLbiWA5uQ36iHGzuY4KzH1
+                       Comparison_main_Tdm8knqZbgFKmi8P01KlkC
+                       Comparison_run_Q5rf1SKn3YJHnF3ZUK1v3H
+                       Comparison_measure_rBHXAV3t9KEP8Sb58Nxs99
+                       Comparison$$Laf51eff2_run_Qm1e9AMT80I7oHp0l0OLt6
+                       Comparison$Fixture_ingest_nKtS7SZyoUBnHzb7kJPIbK
+                       Comparison$Fixture_parseNative_LgVvYd8rZW7zJc7biagwL4
+                       BuffaPlan_decodeView_NETFxZv9N59QiBmqAhTnrC
+                       BuffaPlan_parse_CdgW7hksxZFlQDePGBwO0J
+                       SvmBackend_typed_m5ZAy5gBUdD7mhPOcay3hB
+
+    25.39%     0.33%  truffledata-com  truffledata-comparison-profile  [.] Comparison$Fixture_readOne_2sOK6j44wCEdKZsmKj0iC0
+            |          
+             --25.06%--Comparison$Fixture_readOne_2sOK6j44wCEdKZsmKj0iC0
+                       |          
+                        --24.64%--Comparison$GeneratedProjection_read_9C7s0YezpBFjTpOmcB5dLK
+                                  |          
+                                  |--12.60%--TypedRow_getSize_xTAAGXoQu89rPgzsOvk7X0
+                                  |          |          
+                                  |           --11.06%--NativeRow_materialize_uxG98lR1ti1NGjsk5QlIJ8
+                                  |                     |          
+                                  |                      --9.28%--NativeRow$NativeArray_ChiwXB5RyIIYxgcnWoQjFJ
+                                  |                                |          
+                                  |                                |--2.19%--NativeRow_next_zNtbsEgLHHGYOItUHHOzk3
+                                  |                                |          
+                                  |                                |--1.77%--NativeRow_ordinal_YqsLVaicXW63tqS7yfEXtJ
+                                  |                                |          
+                                  |                                 --1.31%--NativeRow_entry_0qAygVWzJK0Yy4gfIXcD20
+                                  |          
+                                   --10.66%--TypedRow_get_6NkaIg1Mp2E1NMxmo5iN8F
+                                             |          
+                                             |--7.60%--NativeRow_materialize_uxG98lR1ti1NGjsk5QlIJ8
+                                             |          |          
+                                             |           --7.18%--NativeRow_decode_sp1hChdVRYLlN0dlTwaXRD
+                                             |                     |          
+                                             |                      --6.34%--ViewOwner_utf8_vdhpZc0Kb47RYc9YWkd98G
+                                             |                                |          
+                                             |                                |--3.78%--String_1Wsq2sHvwOLEAD1FMOeIqB
+                                             |                                |          |          
+                                             |                                |           --3.46%--String_ANiVZ8cr6wIGG2iZqvkdVA
+                                             |                                |                     |          
+                                             |                                |                      --2.03%--SVMIntrinsicStubsGen_stringCodingCountPositives_pJXvyEBdEyALRGGEsnbJx8
+                                             |                                |          
+                                             |                                 --1.47%--ByteBuffer_get_9LdNwcKqu55pJ71WeML94L
+                                             |                                           |          
+                                             |                                            --1.17%--ByteBuffer_getArray_zSREGQgzRMABUncEZL4yFG
+                                             |                                                      |          
+                                             |                                                       --1.07%--JavaMemoryUtil_copyOnHeap_dcEUns6b0r3KoxJJkjMiJJ
+                                             |          
+                                              --2.47%--NativeRow_index_K37PGviU9t0btuxR9Y4LJD
+
+    25.17%     0.88%  truffledata-com  truffledata-comparison-profile  [.] Comparison$GeneratedProjection_read_9C7s0YezpBFjTpOmcB5dLK
+            |          
+             --24.29%--Comparison$GeneratedProjection_read_9C7s0YezpBFjTpOmcB5dLK
+                       |          
+                       |--12.33%--TypedRow_getSize_xTAAGXoQu89rPgzsOvk7X0
+                       |          |          
+                       |           --10.79%--NativeRow_materialize_uxG98lR1ti1NGjsk5QlIJ8
+                       |                     |          
+                       |                      --9.01%--NativeRow$NativeArray_ChiwXB5RyIIYxgcnWoQjFJ
+                       |                                |          
+                       |                                |--2.16%--NativeRow_next_zNtbsEgLHHGYOItUHHOzk3
+                       |                                |          
+                       |                                |--1.74%--NativeRow_ordinal_YqsLVaicXW63tqS7yfEXtJ
+                       |                                |          
+                       |                                 --1.25%--NativeRow_entry_0qAygVWzJK0Yy4gfIXcD20
+                       |          
+                        --10.57%--TypedRow_get_6NkaIg1Mp2E1NMxmo5iN8F
+                                  |          
+                                  |--7.60%--NativeRow_materialize_uxG98lR1ti1NGjsk5QlIJ8
+                                  |          |          
+                                  |           --7.18%--NativeRow_decode_sp1hChdVRYLlN0dlTwaXRD
+                                  |                     |          
+                                  |                      --6.34%--ViewOwner_utf8_vdhpZc0Kb47RYc9YWkd98G
+                                  |                                |          
+                                  |                                |--3.78%--String_1Wsq2sHvwOLEAD1FMOeIqB
+                                  |                                |          |          
+                                  |                                |           --3.46%--String_ANiVZ8cr6wIGG2iZqvkdVA
+                                  |                                |                     |          
+                                  |                                |                      --2.03%--SVMIntrinsicStubsGen_stringCodingCountPositives_pJXvyEBdEyALRGGEsnbJx8
+                                  |                                |          
+                                  |                                 --1.47%--ByteBuffer_get_9LdNwcKqu55pJ71WeML94L
+                                  |                                           |          
+                                  |                                            --1.17%--ByteBuffer_getArray_zSREGQgzRMABUncEZL4yFG
+                                  |                                                      |          
+                                  |                                                       --1.07%--JavaMemoryUtil_copyOnHeap_dcEUns6b0r3KoxJJkjMiJJ
+                                  |          
+                                   --2.34%--NativeRow_index_K37PGviU9t0btuxR9Y4LJD
+
+    19.02%     1.63%  truffledata-com  truffledata-comparison-profile  [.] NativeRow_materialize_uxG98lR1ti1NGjsk5QlIJ8
+            |          
+            |--17.39%--NativeRow_materialize_uxG98lR1ti1NGjsk5QlIJ8
+            |          |          
+            |          |--8.17%--NativeRow$NativeArray_ChiwXB5RyIIYxgcnWoQjFJ
+            |          |          |          
+            |          |          |--2.03%--NativeRow_next_zNtbsEgLHHGYOItUHHOzk3
+            |          |          |          
+            |          |          |--1.47%--NativeRow_ordinal_YqsLVaicXW63tqS7yfEXtJ
+            |          |          |          
+            |          |           --1.18%--NativeRow_entry_0qAygVWzJK0Yy4gfIXcD20
+            |          |          
+            |           --6.89%--NativeRow_decode_sp1hChdVRYLlN0dlTwaXRD
+            |                     |          
+            |                      --6.05%--ViewOwner_utf8_vdhpZc0Kb47RYc9YWkd98G
+            |                                |          
+            |                                |--3.59%--String_1Wsq2sHvwOLEAD1FMOeIqB
+            |                                |          |          
+            |                                |           --3.30%--String_ANiVZ8cr6wIGG2iZqvkdVA
+            |                                |                     |          
+            |                                |                      --1.87%--SVMIntrinsicStubsGen_stringCodingCountPositives_pJXvyEBdEyALRGGEsnbJx8
+            |                                |          
+            |                                 --1.43%--ByteBuffer_get_9LdNwcKqu55pJ71WeML94L
+            |                                           |          
+            |                                            --1.14%--ByteBuffer_getArray_zSREGQgzRMABUncEZL4yFG
+            |                                                      |          
+            |                                                       --1.04%--JavaMemoryUtil_copyOnHeap_dcEUns6b0r3KoxJJkjMiJJ
+            |          
+             --1.63%--_start
+                       __libc_start_main@@GLIBC_2.34
+                       call_init (inlined)
+                       __libc_start_call_main
+                       IsolateEnterStub__JavaMainWrapper__run__cXbfAhOWcF90761nQYco7L
+                       JavaMainWrapper_run_iTUBl8UzFfAz1VYmMX6I32
+                       JavaMainWrapper_doRun_F09BQfnF3iKa8bUp7D6GY0
+                       JavaMainWrapper_runCore0_DxjyYWWswBIqpGm74uwTlD
+                       Profile_main_QLbiWA5uQ36iHGzuY4KzH1
+                       Comparison_main_Tdm8knqZbgFKmi8P01KlkC
+                       Comparison_run_Q5rf1SKn3YJHnF3ZUK1v3H
+                       Comparison_measure_rBHXAV3t9KEP8Sb58Nxs99
+                       |          
+                        --1.60%--Comparison$$Laf51eff2_run_Qm1e9AMT80I7oHp0l0OLt6
+                                  Comparison$Fixture_ingest_nKtS7SZyoUBnHzb7kJPIbK
+                                  |          
+                                   --1.40%--Comparison$Fixture_readOne_2sOK6j44wCEdKZsmKj0iC0
+                                             Comparison$GeneratedProjection_read_9C7s0YezpBFjTpOmcB5dLK
+                                             |          
+                                              --1.11%--TypedRow_getSize_xTAAGXoQu89rPgzsOvk7X0
+                                                        NativeRow_materialize_uxG98lR1ti1NGjsk5QlIJ8
+                                                        NativeRow$NativeArray_ChiwXB5RyIIYxgcnWoQjFJ
+
+    16.59%     8.77%  truffledata-com  truffledata-comparison-profile  [.] <truffledata_buffa::typed::Decoder>::push
+            |          
+            |--8.44%--<truffledata_buffa::typed::Decoder>::push
+            |          
+            |--2.53%--<truffledata_buffa::typed::Decoder>::binary
+            |          
+            |--1.52%--<buffa::encoding::WireType>::from_u32
+            |          
+             --1.25%--buffa::encoding::decode_varint::<&[u8]>
+
+    12.92%     1.47%  truffledata-com  truffledata-comparison-profile  [.] TypedRow_getSize_xTAAGXoQu89rPgzsOvk7X0
+            |          
+            |--11.46%--TypedRow_getSize_xTAAGXoQu89rPgzsOvk7X0
+            |          |          
+            |           --9.79%--NativeRow_materialize_uxG98lR1ti1NGjsk5QlIJ8
+            |                     |          
+            |                      --8.04%--NativeRow$NativeArray_ChiwXB5RyIIYxgcnWoQjFJ
+            |                                |          
+            |                                |--1.96%--NativeRow_next_zNtbsEgLHHGYOItUHHOzk3
+            |                                |          
+            |                                |--1.74%--NativeRow_ordinal_YqsLVaicXW63tqS7yfEXtJ
+            |                                |          
+            |                                 --1.18%--NativeRow_entry_0qAygVWzJK0Yy4gfIXcD20
+            |          
+             --1.47%--_start
+                       __libc_start_main@@GLIBC_2.34
+                       call_init (inlined)
+                       __libc_start_call_main
+                       IsolateEnterStub__JavaMainWrapper__run__cXbfAhOWcF90761nQYco7L
+                       JavaMainWrapper_run_iTUBl8UzFfAz1VYmMX6I32
+                       JavaMainWrapper_doRun_F09BQfnF3iKa8bUp7D6GY0
+                       JavaMainWrapper_runCore0_DxjyYWWswBIqpGm74uwTlD
+                       Profile_main_QLbiWA5uQ36iHGzuY4KzH1
+                       Comparison_main_Tdm8knqZbgFKmi8P01KlkC
+                       Comparison_run_Q5rf1SKn3YJHnF3ZUK1v3H
+                       Comparison_measure_rBHXAV3t9KEP8Sb58Nxs99
+                       Comparison$$Laf51eff2_run_Qm1e9AMT80I7oHp0l0OLt6
+                       Comparison$Fixture_ingest_nKtS7SZyoUBnHzb7kJPIbK
+                       |          
+                        --1.27%--Comparison$Fixture_readOne_2sOK6j44wCEdKZsmKj0iC0
+                                  Comparison$GeneratedProjection_read_9C7s0YezpBFjTpOmcB5dLK
+                                  TypedRow_getSize_xTAAGXoQu89rPgzsOvk7X0
+                                  NativeRow_materialize_uxG98lR1ti1NGjsk5QlIJ8
+                                  |          
+                                   --1.24%--NativeRow$NativeArray_ChiwXB5RyIIYxgcnWoQjFJ
+
+    11.99%     0.29%  truffledata-com  truffledata-comparison-profile  [.] Comparison$Fixture_parseNative_LgVvYd8rZW7zJc7biagwL4
+            |          
+             --11.70%--Comparison$Fixture_parseNative_LgVvYd8rZW7zJc7biagwL4
+                       |          
+                        --11.34%--BuffaPlan_decodeView_NETFxZv9N59QiBmqAhTnrC
+                                  |          
+                                   --10.65%--BuffaPlan_parse_CdgW7hksxZFlQDePGBwO0J
+                                             |          
+                                             |--4.63%--SvmBackend_typed_m5ZAy5gBUdD7mhPOcay3hB
+                                             |          
+                                             |--1.83%--td_buffa_typed_reuse
+                                             |          
+                                              --1.38%--WireInput_retain_V7Ny4L3qBt9yWZBYzJYFpL
+
+    11.60%     0.03%  truffledata-com  truffledata-comparison-profile  [.] BuffaPlan_decodeView_NETFxZv9N59QiBmqAhTnrC
+            |          
+             --11.56%--BuffaPlan_decodeView_NETFxZv9N59QiBmqAhTnrC
+                       |          
+                        --10.81%--BuffaPlan_parse_CdgW7hksxZFlQDePGBwO0J
+                                  |          
+                                  |--4.70%--SvmBackend_typed_m5ZAy5gBUdD7mhPOcay3hB
+                                  |          
+                                  |--1.93%--td_buffa_typed_reuse
+                                  |          
+                                   --1.38%--WireInput_retain_V7Ny4L3qBt9yWZBYzJYFpL
+
+    11.41%     3.37%  truffledata-com  truffledata-comparison-profile  [.] NativeRow$NativeArray_ChiwXB5RyIIYxgcnWoQjFJ
+            |          
+            |--8.04%--NativeRow$NativeArray_ChiwXB5RyIIYxgcnWoQjFJ
+            |          |          
+            |          |--1.97%--NativeRow_next_zNtbsEgLHHGYOItUHHOzk3
+            |          |          
+            |          |--1.52%--NativeRow_ordinal_YqsLVaicXW63tqS7yfEXtJ
+            |          |          
+            |           --1.24%--NativeRow_entry_0qAygVWzJK0Yy4gfIXcD20
+            |          
+             --3.37%--_start
+                       __libc_start_main@@GLIBC_2.34
+                       call_init (inlined)
+                       __libc_start_call_main
+                       IsolateEnterStub__JavaMainWrapper__run__cXbfAhOWcF90761nQYco7L
+                       JavaMainWrapper_run_iTUBl8UzFfAz1VYmMX6I32
+                       JavaMainWrapper_doRun_F09BQfnF3iKa8bUp7D6GY0
+                       JavaMainWrapper_runCore0_DxjyYWWswBIqpGm74uwTlD
+                       Profile_main_QLbiWA5uQ36iHGzuY4KzH1
+                       Comparison_main_Tdm8knqZbgFKmi8P01KlkC
+                       Comparison_run_Q5rf1SKn3YJHnF3ZUK1v3H
+                       Comparison_measure_rBHXAV3t9KEP8Sb58Nxs99
+                       Comparison$$Laf51eff2_run_Qm1e9AMT80I7oHp0l0OLt6
+                       Comparison$Fixture_ingest_nKtS7SZyoUBnHzb7kJPIbK
+                       |          
+                        --2.49%--Comparison$Fixture_readOne_2sOK6j44wCEdKZsmKj0iC0
+                                  |          
+                                   --2.46%--Comparison$GeneratedProjection_read_9C7s0YezpBFjTpOmcB5dLK
+                                             |          
+                                              --2.20%--TypedRow_getSize_xTAAGXoQu89rPgzsOvk7X0
+                                                        |          
+                                                         --1.91%--NativeRow_materialize_uxG98lR1ti1NGjsk5QlIJ8
+                                                                   |          
+                                                                    --1.33%--NativeRow$NativeArray_ChiwXB5RyIIYxgcnWoQjFJ
+
+    11.39%     1.13%  truffledata-com  truffledata-comparison-profile  [.] BuffaPlan_parse_CdgW7hksxZFlQDePGBwO0J
+            |          
+            |--10.26%--BuffaPlan_parse_CdgW7hksxZFlQDePGBwO0J
+            |          |          
+            |          |--4.70%--SvmBackend_typed_m5ZAy5gBUdD7mhPOcay3hB
+            |          |          
+            |          |--1.38%--WireInput_retain_V7Ny4L3qBt9yWZBYzJYFpL
+            |          |          
+            |           --1.38%--td_buffa_typed_reuse
+            |          
+             --1.13%--_start
+                       __libc_start_main@@GLIBC_2.34
+                       call_init (inlined)
+                       __libc_start_call_main
+                       IsolateEnterStub__JavaMainWrapper__run__cXbfAhOWcF90761nQYco7L
+                       JavaMainWrapper_run_iTUBl8UzFfAz1VYmMX6I32
+                       JavaMainWrapper_doRun_F09BQfnF3iKa8bUp7D6GY0
+                       JavaMainWrapper_runCore0_DxjyYWWswBIqpGm74uwTlD
+                       Profile_main_QLbiWA5uQ36iHGzuY4KzH1
+                       Comparison_main_Tdm8knqZbgFKmi8P01KlkC
+                       Comparison_run_Q5rf1SKn3YJHnF3ZUK1v3H
+                       Comparison_measure_rBHXAV3t9KEP8Sb58Nxs99
+                       Comparison$$Laf51eff2_run_Qm1e9AMT80I7oHp0l0OLt6
+                       Comparison$Fixture_ingest_nKtS7SZyoUBnHzb7kJPIbK
+
+    11.05%     0.78%  truffledata-com  truffledata-comparison-profile  [.] TypedRow_get_6NkaIg1Mp2E1NMxmo5iN8F
+            |          
+             --10.27%--TypedRow_get_6NkaIg1Mp2E1NMxmo5iN8F
+                       |          
+                       |--7.21%--NativeRow_materialize_uxG98lR1ti1NGjsk5QlIJ8
+                       |          |          
+                       |           --6.79%--NativeRow_decode_sp1hChdVRYLlN0dlTwaXRD
+                       |                     |          
+                       |                      --5.95%--ViewOwner_utf8_vdhpZc0Kb47RYc9YWkd98G
+                       |                                |          
+                       |                                |--3.72%--String_1Wsq2sHvwOLEAD1FMOeIqB
+                       |                                |          |          
+                       |                                |           --3.39%--String_ANiVZ8cr6wIGG2iZqvkdVA
+                       |                                |                     |          
+                       |                                |                      --1.99%--SVMIntrinsicStubsGen_stringCodingCountPositives_pJXvyEBdEyALRGGEsnbJx8
+                       |                                |          
+                       |                                 --1.14%--ByteBuffer_get_9LdNwcKqu55pJ71WeML94L
+                       |          
+                        --2.44%--NativeRow_index_K37PGviU9t0btuxR9Y4LJD
+
+    10.67%     6.67%  truffledata-com  truffledata-comparison-profile  [.] core::str::converts::from_utf8
+            |          
+            |--4.39%--core::str::converts::from_utf8
+            |          
+            |--2.42%--<truffledata_buffa::typed::Decoder>::binary
+            |          
+             --1.65%--<buffa::encoding::WireType>::from_u32
+
+     9.97%     2.65%  truffledata-com  truffledata-comparison-profile  [.] <buffa::encoding::WireType>::from_u32
+            |          
+             --7.46%--<buffa::encoding::WireType>::from_u32
+
+     8.46%     4.04%  truffledata-com  truffledata-comparison-profile  [.] <truffledata_buffa::typed::Decoder>::bytes
+            |          
+            |--4.68%--<truffledata_buffa::typed::Decoder>::bytes
+            |          
+             --1.59%--<truffledata_buffa::typed::Decoder>::binary
+
+     8.01%     5.10%  truffledata-com  truffledata-comparison-profile  [.] NativeRow_entry_0qAygVWzJK0Yy4gfIXcD20
+            |          
+            |--5.10%--_start
+            |          __libc_start_main@@GLIBC_2.34
+            |          call_init (inlined)
+            |          __libc_start_call_main
+            |          IsolateEnterStub__JavaMainWrapper__run__cXbfAhOWcF90761nQYco7L
+            |          JavaMainWrapper_run_iTUBl8UzFfAz1VYmMX6I32
+            |          JavaMainWrapper_doRun_F09BQfnF3iKa8bUp7D6GY0
+            |          JavaMainWrapper_runCore0_DxjyYWWswBIqpGm74uwTlD
+            |          Profile_main_QLbiWA5uQ36iHGzuY4KzH1
+            |          Comparison_main_Tdm8knqZbgFKmi8P01KlkC
+            |          Comparison_run_Q5rf1SKn3YJHnF3ZUK1v3H
+            |          Comparison_measure_rBHXAV3t9KEP8Sb58Nxs99
+            |          |          
+            |           --5.07%--Comparison$$Laf51eff2_run_Qm1e9AMT80I7oHp0l0OLt6
+            |                     Comparison$Fixture_ingest_nKtS7SZyoUBnHzb7kJPIbK
+            |                     |          
+            |                      --4.11%--Comparison$Fixture_readOne_2sOK6j44wCEdKZsmKj0iC0
+            |                                |          
+            |                                 --4.08%--Comparison$GeneratedProjection_read_9C7s0YezpBFjTpOmcB5dLK
+            |                                           |          
+            |                                           |--2.11%--TypedRow_getSize_xTAAGXoQu89rPgzsOvk7X0
+            |                                           |          |          
+            |                                           |           --1.68%--NativeRow_materialize_uxG98lR1ti1NGjsk5QlIJ8
+            |                                           |                     |          
+            |                                           |                      --1.40%--NativeRow$NativeArray_ChiwXB5RyIIYxgcnWoQjFJ
+            |                                           |          
+            |                                            --1.75%--TypedRow_get_6NkaIg1Mp2E1NMxmo5iN8F
+            |                                                      |          
+            |                                                       --1.49%--NativeRow_materialize_uxG98lR1ti1NGjsk5QlIJ8
+            |                                                                 |          
+            |                                                                  --1.36%--NativeRow_decode_sp1hChdVRYLlN0dlTwaXRD
+            |          
+             --2.91%--NativeRow_entry_0qAygVWzJK0Yy4gfIXcD20
+
+     7.92%     3.52%  truffledata-com  truffledata-comparison-profile  [.] buffa::encoding::decode_varint::<&[u8]>
+            |          
+            |--4.53%--buffa::encoding::decode_varint::<&[u8]>
+            |          
+             --1.34%--<truffledata_buffa::typed::Decoder>::binary
+
+     7.48%     0.81%  truffledata-com  truffledata-comparison-profile  [.] NativeRow_decode_sp1hChdVRYLlN0dlTwaXRD
+            |          
+             --6.67%--NativeRow_decode_sp1hChdVRYLlN0dlTwaXRD
+                       |          
+                        --5.73%--ViewOwner_utf8_vdhpZc0Kb47RYc9YWkd98G
+                                  |          
+                                  |--3.21%--String_1Wsq2sHvwOLEAD1FMOeIqB
+                                  |          |          
+                                  |           --2.94%--String_ANiVZ8cr6wIGG2iZqvkdVA
+                                  |                     |          
+                                  |                      --1.54%--SVMIntrinsicStubsGen_stringCodingCountPositives_pJXvyEBdEyALRGGEsnbJx8
+                                  |          
+                                   --1.47%--ByteBuffer_get_9LdNwcKqu55pJ71WeML94L
+                                             |          
+                                              --1.17%--ByteBuffer_getArray_zSREGQgzRMABUncEZL4yFG
+                                                        |          
+                                                         --1.07%--JavaMemoryUtil_copyOnHeap_dcEUns6b0r3KoxJJkjMiJJ
+
+     6.40%     0.40%  truffledata-com  truffledata-comparison-profile  [.] ViewOwner_utf8_vdhpZc0Kb47RYc9YWkd98G
+            |          
+             --6.01%--ViewOwner_utf8_vdhpZc0Kb47RYc9YWkd98G
+                       |          
+                       |--3.45%--String_1Wsq2sHvwOLEAD1FMOeIqB
+                       |          |          
+                       |           --3.16%--String_ANiVZ8cr6wIGG2iZqvkdVA
+                       |                     |          
+                       |                      --1.73%--SVMIntrinsicStubsGen_stringCodingCountPositives_pJXvyEBdEyALRGGEsnbJx8
+                       |          
+                        --1.43%--ByteBuffer_get_9LdNwcKqu55pJ71WeML94L
+                                  |          
+                                   --1.14%--ByteBuffer_getArray_zSREGQgzRMABUncEZL4yFG
+                                             |          
+                                              --1.04%--JavaMemoryUtil_copyOnHeap_dcEUns6b0r3KoxJJkjMiJJ
+
+     6.09%     1.39%  truffledata-com  truffledata-comparison-profile  [.] SvmBackend_typed_m5ZAy5gBUdD7mhPOcay3hB
+            |          
+             --4.70%--SvmBackend_typed_m5ZAy5gBUdD7mhPOcay3hB
+
+     5.73%     2.70%  truffledata-com  truffledata-comparison-profile  [.] truffledata_buffa::typed::scalar
+            |          
+             --3.07%--truffledata_buffa::typed::scalar
+
+     5.59%     2.52%  truffledata-com  truffledata-comparison-profile  [.] String_ANiVZ8cr6wIGG2iZqvkdVA
+            |          
+            |--3.07%--String_ANiVZ8cr6wIGG2iZqvkdVA
+            |          |          
+            |           --2.03%--SVMIntrinsicStubsGen_stringCodingCountPositives_pJXvyEBdEyALRGGEsnbJx8
+            |          
+             --2.52%--_start
+                       __libc_start_main@@GLIBC_2.34
+                       call_init (inlined)
+                       __libc_start_call_main
+                       IsolateEnterStub__JavaMainWrapper__run__cXbfAhOWcF90761nQYco7L
+                       JavaMainWrapper_run_iTUBl8UzFfAz1VYmMX6I32
+                       JavaMainWrapper_doRun_F09BQfnF3iKa8bUp7D6GY0
+                       JavaMainWrapper_runCore0_DxjyYWWswBIqpGm74uwTlD
+                       Profile_main_QLbiWA5uQ36iHGzuY4KzH1
+                       Comparison_main_Tdm8knqZbgFKmi8P01KlkC
+                       Comparison_run_Q5rf1SKn3YJHnF3ZUK1v3H
+                       Comparison_measure_rBHXAV3t9KEP8Sb58Nxs99
+                       Comparison$$Laf51eff2_run_Qm1e9AMT80I7oHp0l0OLt6
+                       Comparison$Fixture_ingest_nKtS7SZyoUBnHzb7kJPIbK
+                       Comparison$Fixture_readOne_2sOK6j44wCEdKZsmKj0iC0
+                       |          
+                        --2.39%--Comparison$GeneratedProjection_read_9C7s0YezpBFjTpOmcB5dLK
+                                  |          
+                                   --1.77%--TypedRow_getSize_xTAAGXoQu89rPgzsOvk7X0
+                                             |          
+                                              --1.34%--NativeRow_materialize_uxG98lR1ti1NGjsk5QlIJ8
+                                                        |          
+                                                         --1.18%--NativeRow$NativeArray_ChiwXB5RyIIYxgcnWoQjFJ
+
+     5.52%     2.14%  truffledata-com  truffledata-comparison-profile  [.] NativeRow_next_zNtbsEgLHHGYOItUHHOzk3
+            |          
+            |--3.38%--NativeRow_next_zNtbsEgLHHGYOItUHHOzk3
+            |          
+             --2.14%--_start
+                       __libc_start_main@@GLIBC_2.34
+                       call_init (inlined)
+                       __libc_start_call_main
+                       IsolateEnterStub__JavaMainWrapper__run__cXbfAhOWcF90761nQYco7L
+                       JavaMainWrapper_run_iTUBl8UzFfAz1VYmMX6I32
+                       JavaMainWrapper_doRun_F09BQfnF3iKa8bUp7D6GY0
+                       JavaMainWrapper_runCore0_DxjyYWWswBIqpGm74uwTlD
+                       Profile_main_QLbiWA5uQ36iHGzuY4KzH1
+                       Comparison_main_Tdm8knqZbgFKmi8P01KlkC
+                       Comparison_run_Q5rf1SKn3YJHnF3ZUK1v3H
+                       Comparison_measure_rBHXAV3t9KEP8Sb58Nxs99
+                       Comparison$$Laf51eff2_run_Qm1e9AMT80I7oHp0l0OLt6
+                       Comparison$Fixture_ingest_nKtS7SZyoUBnHzb7kJPIbK
+                       |          
+                        --1.88%--Comparison$Fixture_readOne_2sOK6j44wCEdKZsmKj0iC0
+                                  Comparison$GeneratedProjection_read_9C7s0YezpBFjTpOmcB5dLK
+
+     5.24%     1.64%  truffledata-com  truffledata-comparison-profile  [.] truffledata_buffa::typed::take_bytes
+            |          
+             --3.70%--truffledata_buffa::typed::take_bytes
+
+     5.03%     2.64%  truffledata-com  truffledata-comparison-profile  [.] NativeRow_ordinal_YqsLVaicXW63tqS7yfEXtJ
+            |          
+            |--2.64%--_start
+            |          __libc_start_main@@GLIBC_2.34
+            |          call_init (inlined)
+            |          __libc_start_call_main
+            |          IsolateEnterStub__JavaMainWrapper__run__cXbfAhOWcF90761nQYco7L
+            |          JavaMainWrapper_run_iTUBl8UzFfAz1VYmMX6I32
+            |          JavaMainWrapper_doRun_F09BQfnF3iKa8bUp7D6GY0
+            |          JavaMainWrapper_runCore0_DxjyYWWswBIqpGm74uwTlD
+            |          Profile_main_QLbiWA5uQ36iHGzuY4KzH1
+            |          Comparison_main_Tdm8knqZbgFKmi8P01KlkC
+            |          Comparison_run_Q5rf1SKn3YJHnF3ZUK1v3H
+            |          |          
+            |           --2.60%--Comparison_measure_rBHXAV3t9KEP8Sb58Nxs99
+            |                     Comparison$$Laf51eff2_run_Qm1e9AMT80I7oHp0l0OLt6
+            |                     Comparison$Fixture_ingest_nKtS7SZyoUBnHzb7kJPIbK
+            |                     |          
+            |                      --2.12%--Comparison$Fixture_readOne_2sOK6j44wCEdKZsmKj0iC0
+            |                                |          
+            |                                 --1.99%--Comparison$GeneratedProjection_read_9C7s0YezpBFjTpOmcB5dLK
+            |                                           |          
+            |                                            --1.04%--TypedRow_getSize_xTAAGXoQu89rPgzsOvk7X0
+            |                                                      |          
+            |                                                       --1.01%--NativeRow_materialize_uxG98lR1ti1NGjsk5QlIJ8
+            |          
+             --2.39%--NativeRow_ordinal_YqsLVaicXW63tqS7yfEXtJ
+
+     3.87%     0.09%  truffledata-com  truffledata-comparison-profile  [.] String_1Wsq2sHvwOLEAD1FMOeIqB
+            |          
+             --3.78%--String_1Wsq2sHvwOLEAD1FMOeIqB
+                       |          
+                        --3.46%--String_ANiVZ8cr6wIGG2iZqvkdVA
+                                  |          
+                                   --2.03%--SVMIntrinsicStubsGen_stringCodingCountPositives_pJXvyEBdEyALRGGEsnbJx8
+
+     3.57%     1.80%  truffledata-com  truffledata-comparison-profile  [.] NativeRow_index_K37PGviU9t0btuxR9Y4LJD
+            |          
+            |--1.80%--_start
+            |          __libc_start_main@@GLIBC_2.34
+            |          call_init (inlined)
+            |          __libc_start_call_main
+            |          IsolateEnterStub__JavaMainWrapper__run__cXbfAhOWcF90761nQYco7L
+            |          JavaMainWrapper_run_iTUBl8UzFfAz1VYmMX6I32
+            |          JavaMainWrapper_doRun_F09BQfnF3iKa8bUp7D6GY0
+            |          JavaMainWrapper_runCore0_DxjyYWWswBIqpGm74uwTlD
+            |          Profile_main_QLbiWA5uQ36iHGzuY4KzH1
+            |          Comparison_main_Tdm8knqZbgFKmi8P01KlkC
+            |          Comparison_run_Q5rf1SKn3YJHnF3ZUK1v3H
+            |          Comparison_measure_rBHXAV3t9KEP8Sb58Nxs99
+            |          Comparison$$Laf51eff2_run_Qm1e9AMT80I7oHp0l0OLt6
+            |          Comparison$Fixture_ingest_nKtS7SZyoUBnHzb7kJPIbK
+            |          Comparison$Fixture_readOne_2sOK6j44wCEdKZsmKj0iC0
+            |          Comparison$GeneratedProjection_read_9C7s0YezpBFjTpOmcB5dLK
+            |          TypedRow_get_6NkaIg1Mp2E1NMxmo5iN8F
+            |          
+             --1.78%--NativeRow_index_K37PGviU9t0btuxR9Y4LJD
+
+     2.75%     2.03%  truffledata-com  truffledata-comparison-profile  [.] <truffledata_buffa::typed::Contract>::enumeration
+     2.35%     0.20%  truffledata-com  truffledata-comparison-profile  [.] SVMIntrinsicStubsGen_stringCodingCountPositives_pJXvyEBdEyALRGGEsnbJx8
+            |          
+             --2.15%--SVMIntrinsicStubsGen_stringCodingCountPositives_pJXvyEBdEyALRGGEsnbJx8
+
+     1.96%     0.03%  truffledata-com  truffledata-comparison-profile  [.] td_buffa_typed_reuse
+            |          
+             --1.93%--td_buffa_typed_reuse
+
+     1.92%     0.46%  truffledata-com  truffledata-comparison-profile  [.] ByteBuffer_get_9LdNwcKqu55pJ71WeML94L
+            |          
+             --1.47%--ByteBuffer_get_9LdNwcKqu55pJ71WeML94L
+                       |          
+                        --1.17%--ByteBuffer_getArray_zSREGQgzRMABUncEZL4yFG
+                                  |          
+                                   --1.07%--JavaMemoryUtil_copyOnHeap_dcEUns6b0r3KoxJJkjMiJJ
+
+     1.87%     0.30%  truffledata-com  truffledata-comparison-profile  [.] WireInput_retain_V7Ny4L3qBt9yWZBYzJYFpL
+            |          
+             --1.57%--WireInput_retain_V7Ny4L3qBt9yWZBYzJYFpL
+
+     1.72%     0.36%  truffledata-com  truffledata-comparison-profile  [.] ByteBuffer_getArray_zSREGQgzRMABUncEZL4yFG
+            |          
+             --1.37%--ByteBuffer_getArray_zSREGQgzRMABUncEZL4yFG
+                       |          
+                        --1.07%--JavaMemoryUtil_copyOnHeap_dcEUns6b0r3KoxJJkjMiJJ
+
+     1.60%     1.12%  truffledata-com  truffledata-comparison-profile  [.] TypedRow_getLong_5lm6jcX4NtDZgQdwvu8FEC
+            |          
+             --1.12%--_start
+                       __libc_start_main@@GLIBC_2.34
+                       call_init (inlined)
+                       __libc_start_call_main
+                       IsolateEnterStub__JavaMainWrapper__run__cXbfAhOWcF90761nQYco7L
+                       JavaMainWrapper_run_iTUBl8UzFfAz1VYmMX6I32
+                       JavaMainWrapper_doRun_F09BQfnF3iKa8bUp7D6GY0
+                       JavaMainWrapper_runCore0_DxjyYWWswBIqpGm74uwTlD
+                       Profile_main_QLbiWA5uQ36iHGzuY4KzH1
+                       Comparison_main_Tdm8knqZbgFKmi8P01KlkC
+                       Comparison_run_Q5rf1SKn3YJHnF3ZUK1v3H
+                       Comparison_measure_rBHXAV3t9KEP8Sb58Nxs99
+                       Comparison$$Laf51eff2_run_Qm1e9AMT80I7oHp0l0OLt6
+                       Comparison$Fixture_ingest_nKtS7SZyoUBnHzb7kJPIbK
+                       Comparison$Fixture_parseNative_LgVvYd8rZW7zJc7biagwL4
+                       BuffaPlan_decodeView_NETFxZv9N59QiBmqAhTnrC
+                       BuffaPlan_parse_CdgW7hksxZFlQDePGBwO0J
+
+     1.32%     0.32%  truffledata-com  truffledata-comparison-profile  [.] WireInput_size_fNFujRXYpvKr9dY8CsaZcJ
+     1.30%     0.13%  truffledata-com  truffledata-comparison-profile  [.] JavaMemoryUtil_copyOnHeap_dcEUns6b0r3KoxJJkjMiJJ
+            |          
+             --1.17%--JavaMemoryUtil_copyOnHeap_dcEUns6b0r3KoxJJkjMiJJ
+
+     1.27%     0.13%  truffledata-com  truffledata-comparison-profile  [.] TypedMessage_close_VMRxLrL1dG7wQhw3ZqTjKH
+            |          
+             --1.13%--TypedMessage_close_VMRxLrL1dG7wQhw3ZqTjKH
+
+     1.27%     0.46%  truffledata-com  truffledata-comparison-profile  [.] UnmanagedMemoryUtil_copyBackward_JcqQTZQh8lLLqUaU4SpvqH
+     1.19%     0.33%  truffledata-com  truffledata-comparison-profile  [.] WireInput$Lease_check_8r2ZBkm6FxJp2ASLqaIDpF
+     1.16%     0.52%  truffledata-com  truffledata-comparison-profile  [.] TypedRow_plan_CDbgD8tEes2fjFuDVN2LjB
+     1.01%     0.03%  truffledata-com  truffledata-comparison-profile  [.] UnmanagedMemoryUtil_copy_75OMTpZ9A0LZ0MtZScOZT2
+
+
+#
+# (Cannot load tips.txt file, please install perf!)
+#

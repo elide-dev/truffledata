@@ -1,0 +1,87 @@
+# To display the perf.data header info, please use --header/--header-only options.
+#
+#
+# Total Lost Samples: 0
+#
+# Samples: 3K of event 'cpu/cycles/P'
+# Event count (approx.): 16031627319
+#
+# Overhead  Command          Shared Object                   Symbol                                                                                
+# ........  ...............  ..............................  ......................................................................................
+#
+    12.23%  truffledata-com  truffledata-comparison-profile  [.] <truffledata_buffa::typed::Decoder>::binary
+            |          
+            |--3.82%--<truffledata_buffa::typed::Decoder>::binary
+            |          
+            |--2.33%--<truffledata_buffa::typed::Decoder>::push
+            |          
+            |--1.37%--buffa::encoding::decode_varint::<&[u8]>
+            |          
+             --1.04%--core::str::converts::from_utf8
+
+     5.98%  truffledata-com  truffledata-comparison-profile  [.] NativeRow_entry_0qAygVWzJK0Yy4gfIXcD20
+            |          
+             --1.02%--SVMIntrinsicStubsGen_stringCodingCountPositives_pJXvyEBdEyALRGGEsnbJx8
+                       String_ANiVZ8cr6wIGG2iZqvkdVA
+                       String_1Wsq2sHvwOLEAD1FMOeIqB
+                       ViewOwner_utf8_vdhpZc0Kb47RYc9YWkd98G
+                       NativeRow_decode_sp1hChdVRYLlN0dlTwaXRD
+
+     4.60%  truffledata-com  truffledata-comparison-profile  [.] NativeRow_index_K37PGviU9t0btuxR9Y4LJD
+     4.09%  truffledata-com  truffledata-comparison-profile  [.] String_ANiVZ8cr6wIGG2iZqvkdVA
+            |          
+             --1.24%--TypedRow_getLong_5lm6jcX4NtDZgQdwvu8FEC
+
+     3.91%  truffledata-com  truffledata-comparison-profile  [.] <truffledata_buffa::typed::Decoder>::push
+            |          
+             --1.71%--<truffledata_buffa::typed::Decoder>::binary
+
+     3.90%  truffledata-com  truffledata-comparison-profile  [.] TypedRow_getLong_5lm6jcX4NtDZgQdwvu8FEC
+     3.85%  truffledata-com  truffledata-comparison-profile  [.] TypedRow_get_6NkaIg1Mp2E1NMxmo5iN8F
+     3.81%  truffledata-com  truffledata-comparison-profile  [.] core::str::converts::from_utf8
+            |          
+             --1.85%--<truffledata_buffa::typed::Decoder>::binary
+
+     3.34%  truffledata-com  truffledata-comparison-profile  [.] NativeRow_ordinal_YqsLVaicXW63tqS7yfEXtJ
+     3.14%  truffledata-com  truffledata-comparison-profile  [.] NativeRow$NativeArray_materialize_6d8lwUSj26FO3Mn3h7nmf7
+     3.01%  truffledata-com  truffledata-comparison-profile  [.] NativeRow_decode_sp1hChdVRYLlN0dlTwaXRD
+            |          
+             --1.38%--SVMIntrinsicStubsGen_stringCodingCountPositives_pJXvyEBdEyALRGGEsnbJx8
+                       String_ANiVZ8cr6wIGG2iZqvkdVA
+                       String_1Wsq2sHvwOLEAD1FMOeIqB
+                       ViewOwner_utf8_vdhpZc0Kb47RYc9YWkd98G
+                       NativeRow_decode_sp1hChdVRYLlN0dlTwaXRD
+
+     2.70%  truffledata-com  truffledata-comparison-profile  [.] NativeRow_next_zNtbsEgLHHGYOItUHHOzk3
+     2.45%  truffledata-com  truffledata-comparison-profile  [.] Comparison$GeneratedProjection_readAll_JIlhEjiAF0BdEsoeIuUvDG
+     2.39%  truffledata-com  truffledata-comparison-profile  [.] TypedRow_plan_CDbgD8tEes2fjFuDVN2LjB
+     1.86%  truffledata-com  truffledata-comparison-profile  [.] ViewOwner_utf8_vdhpZc0Kb47RYc9YWkd98G
+            |          
+             --1.60%--SVMIntrinsicStubsGen_stringCodingCountPositives_pJXvyEBdEyALRGGEsnbJx8
+                       String_ANiVZ8cr6wIGG2iZqvkdVA
+                       String_1Wsq2sHvwOLEAD1FMOeIqB
+                       ViewOwner_utf8_vdhpZc0Kb47RYc9YWkd98G
+                       NativeRow_decode_sp1hChdVRYLlN0dlTwaXRD
+                       |          
+                        --1.27%--NativeRow_materialize_uxG98lR1ti1NGjsk5QlIJ8
+                                  TypedRow_get_6NkaIg1Mp2E1NMxmo5iN8F
+                                  |          
+                                   --1.02%--ProtoPlan_get_VhH6ruxCIDEVp1r4O1D1AH
+
+     1.75%  truffledata-com  truffledata-comparison-profile  [.] NativeRow$NativeArray_ChiwXB5RyIIYxgcnWoQjFJ
+     1.75%  truffledata-com  truffledata-comparison-profile  [.] <truffledata_buffa::typed::Decoder>::bytes
+     1.69%  truffledata-com  truffledata-comparison-profile  [.] onContracts$Access_google$protobuf$Field_check_tcWpKo0wNBCnMVYpKIVTVD
+     1.66%  truffledata-com  truffledata-comparison-profile  [.] buffa::encoding::decode_varint::<&[u8]>
+     1.63%  truffledata-com  truffledata-comparison-profile  [.] <buffa::encoding::WireType>::from_u32
+     1.34%  truffledata-com  truffledata-comparison-profile  [.] NativeRow_materialize_uxG98lR1ti1NGjsk5QlIJ8
+     1.26%  truffledata-com  truffledata-comparison-profile  [.] ProtoPlan_get_VhH6ruxCIDEVp1r4O1D1AH
+     1.26%  truffledata-com  truffledata-comparison-profile  [.] Preconditions_checkFromIndexSize_mfoc1kMqT59E4u10aLwUg0
+     1.16%  truffledata-com  truffledata-comparison-profile  [.] ProtoPlan_getLong_5fGemNrG5f9OQtcy7LGWZG
+     1.10%  truffledata-com  truffledata-comparison-profile  [.] UnmanagedMemoryUtil_copyBackward_JcqQTZQh8lLLqUaU4SpvqH
+     1.06%  truffledata-com  truffledata-comparison-profile  [.] truffledata_buffa::typed::scalar
+     1.03%  truffledata-com  truffledata-comparison-profile  [.] <truffledata_buffa::typed::Contract>::enumeration
+
+
+#
+# (Cannot load tips.txt file, please install perf!)
+#
