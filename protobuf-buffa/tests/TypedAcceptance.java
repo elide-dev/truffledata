@@ -605,6 +605,82 @@ final class TypedAcceptance {
     }
   }
 
+  private static void nativeWideCounts(BuffaWire decoder) {
+    var child =
+        new ProtoPlan.Type(
+            "CountBound",
+            false,
+            List.of(
+                plan("RepeatedScalars").field(0),
+                new ProtoPlan.FieldPlan(
+                    "tail",
+                    2,
+                    ProtoPlan.Kind.STRING,
+                    false,
+                    false,
+                    false,
+                    false,
+                    false,
+                    -1,
+                    "",
+                    null,
+                    "")));
+    var childField =
+        new ProtoPlan.FieldPlan(
+            "child",
+            1,
+            ProtoPlan.Kind.MESSAGE,
+            false,
+            false,
+            true,
+            false,
+            false,
+            -1,
+            child.name(),
+            null,
+            Missing.INSTANCE);
+    var parent = new ProtoPlan.Type("CountParent", false, List.of(childField));
+    var contract =
+        new ProtoPlan.Model(null, List.of(parent, child), Limits.DEFAULT, 16, 1_000_000)
+            .type(parent.name());
+    try (var compiled = decoder.compile(contract, 65536)) {
+      for (int count : new int[] {65534, 65535, 65536}) {
+        // Nested rows start at a nonzero index. The trailing text exercises the last position
+        // on either side of the 16-bit span limit, independently of the repeated count.
+        var wire = new java.io.ByteArrayOutputStream();
+        wire.write(10);
+        int length = count * 2 + 3;
+        for (int n = length; ; n >>>= 7) {
+          wire.write((n & 127) | (n >= 128 ? 128 : 0));
+          if (n < 128) break;
+        }
+        for (int i = 0; i < count; i++) {
+          wire.write(8);
+          wire.write(i % 100);
+        }
+        wire.writeBytes(new byte[] {18, 1, 'x'});
+        byte[] payload = wire.toByteArray();
+        try (var input = decoder.allocate(payload.length).put(payload);
+            var view = compiled.decodeView(input, 4_000_000)) {
+          Acceptance.check(
+              view.nativeBacked() == (decoder.selected() != BuffaWire.Selected.JAVA),
+              "wide counts retain native backing");
+          var row = (ProtoAccess) view.row().get(0);
+          Acceptance.check(row.getSize(0) == count, "wide nested count");
+          Acceptance.check(row.get(1).equals("x"), "wide nested trailing position");
+          Object values = row.get(0);
+          Object last =
+              values instanceof BorrowedArray array
+                  ? array.element(count - 1)
+                  : ((DataArray) values).get(count - 1);
+          Acceptance.check(last.equals((long) ((count - 1) % 100)), "wide last element");
+          view.close();
+          Acceptance.rejects(() -> row.getSize(0), IllegalStateException.class);
+        }
+      }
+    }
+  }
+
   private static void nativeViewOffsets(BuffaWire decoder) {
     var sample = plan("Sample");
     var contract =
@@ -714,6 +790,7 @@ final class TypedAcceptance {
     nativeViewBudgets(decoder);
     nativeViewOffsets(decoder);
     nativeRepeatedSizes(decoder);
+    nativeWideCounts(decoder);
     indexReusePreservesMessagesAndBudgets(decoder);
     scopedRowsRequireDetachmentBeforeEnteringOwnedContainers(decoder);
     textRejectsMalformedUtf16BeforeEncoding(decoder);
