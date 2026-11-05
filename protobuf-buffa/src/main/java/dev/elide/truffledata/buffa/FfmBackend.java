@@ -1,5 +1,6 @@
 package dev.elide.truffledata.buffa;
 
+import com.oracle.truffle.api.CompilerDirectives;
 import dev.elide.truffledata.Limits;
 import dev.elide.truffledata.buffa.generated.BuffaFFM;
 import java.lang.foreign.*;
@@ -10,6 +11,21 @@ import java.nio.file.Path;
 
 /** JVM-only adapter. Its arena owns the library, not input buffers or returned views. */
 final class FfmBackend implements BuffaWire.Backend {
+  // Derive the JVM's concrete FFM buffer class without retaining an arena or native allocation.
+  private static final Class<? extends ByteBuffer> INDEX_BUFFER_TYPE =
+      MemorySegment.NULL.asByteBuffer().getClass();
+
+  static long readIndexLong(ByteBuffer buffer, int offset) {
+    if (buffer.getClass() == INDEX_BUFFER_TYPE)
+      return CompilerDirectives.castExact(buffer, INDEX_BUFFER_TYPE).getLong(offset);
+    return readOtherIndexLong(buffer, offset);
+  }
+
+  @CompilerDirectives.TruffleBoundary
+  private static long readOtherIndexLong(ByteBuffer buffer, int offset) {
+    return buffer.getLong(offset);
+  }
+
   private final Arena libraryArena = Arena.ofConfined();
   private final MethodHandle decode;
   private final MethodHandle release;
@@ -19,12 +35,15 @@ final class FfmBackend implements BuffaWire.Backend {
   private final MemorySegment result;
   private boolean busy;
   private boolean cached;
+  private boolean closed;
+  private int detached;
+  private final java.util.function.Supplier<Runnable> detachAction = this::detachResult;
   private final BuffaWire.Scalars scalarValues = new BuffaWire.Scalars();
   private final Runnable releaseAction = this::releaseResult;
   private final Runnable retainAction = this::retainResult;
 
   private MemorySegment acquireResult() {
-    if (busy || !libraryArena.scope().isAlive())
+    if (closed || busy || !libraryArena.scope().isAlive())
       throw new IllegalStateException("Native backend unavailable");
     busy = true;
     return result;
@@ -44,6 +63,37 @@ final class FfmBackend implements BuffaWire.Backend {
     if (!busy) throw new IllegalStateException("Native result already released");
     cached = true;
     busy = false;
+  }
+
+  private Runnable detachResult() {
+    if (!busy || closed) throw new IllegalStateException("Native result unavailable");
+    Arena owner = Arena.ofConfined();
+    try {
+      MemorySegment owned = owner.allocate(BuffaFFM.Result_LAYOUT);
+      owned.copyFrom(result);
+      Runnable cleanup =
+          () -> {
+            try {
+              if (!closed && !busy && !cached) {
+                result.copyFrom(owned);
+                owned.fill((byte) 0);
+                cached = true;
+              } else free(owned);
+            } finally {
+              owner.close();
+              detached--;
+              if (closed && detached == 0) libraryArena.close();
+            }
+          };
+      result.fill((byte) 0);
+      detached++;
+      cached = false;
+      busy = false;
+      return cleanup;
+    } catch (RuntimeException | Error failure) {
+      owner.close();
+      throw failure;
+    }
   }
 
   FfmBackend(Path library) {
@@ -163,7 +213,7 @@ final class FfmBackend implements BuffaWire.Backend {
       } catch (Throwable failure) {
         throw callFailure(failure);
       }
-      BuffaWire.status(status);
+      boolean viewReady = BuffaWire.typedStatus(status, format);
       long count = result.get(ValueLayout.JAVA_LONG, BuffaFFM.Result_count_OFFSET);
       long capacity = result.get(ValueLayout.JAVA_LONG, BuffaFFM.Result_capacity_OFFSET);
       ByteBuffer tape =
@@ -176,7 +226,7 @@ final class FfmBackend implements BuffaWire.Backend {
                       libraryArena,
                       null)
                   .asByteBuffer();
-      return new BuffaWire.Tape(tape, count, capacity, retainAction);
+      return new BuffaWire.Tape(tape, count, capacity, retainAction, detachAction, viewReady);
     } catch (RuntimeException | Error failure) {
       releaseResult();
       throw failure;
@@ -233,7 +283,10 @@ final class FfmBackend implements BuffaWire.Backend {
   @Override
   public void close() {
     if (busy) throw new IllegalStateException("Native result still in use");
-    if (libraryArena.scope().isAlive()) free(result);
-    libraryArena.close();
+    if (!closed) {
+      free(result);
+      closed = true;
+      if (detached == 0) libraryArena.close();
+    }
   }
 }

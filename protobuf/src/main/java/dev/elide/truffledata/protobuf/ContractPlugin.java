@@ -224,7 +224,7 @@ public final class ContractPlugin {
             .append(result)
             .append(" get_")
             .append(field.name())
-            .append("(dev.elide.truffledata.protobuf.ProtoAccess row) { check(row); return ")
+            .append("(dev.elide.truffledata.protobuf.ProtoAccess row) { return ")
             .append(result.equals("String") ? "(String) " : "")
             .append("plan.")
             .append(read)
@@ -243,7 +243,7 @@ public final class ContractPlugin {
               .append(" public int size_")
               .append(field.name())
               .append(
-                  "(dev.elide.truffledata.protobuf.ProtoAccess row) { check(row); return"
+                  "(dev.elide.truffledata.protobuf.ProtoAccess row) { return"
                       + " plan.getSize(row,")
               .append(j)
               .append("); }\n");

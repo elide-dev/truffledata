@@ -1,0 +1,11 @@
+# Profile after optimized dependencies and ThinLTO
+
+Source state: local commits a61130a and 490f0cc (committed after the build, with no intervening application-source change). [Profiling executable build and fallback test](https://app.buildbuddy.io/invocation/26307e41-b730-4b68-975d-fdb59d43cdc1). The fallback test was cached. Executable/JFR hashes are in profile-summary.json. Raw perf and JFR recordings remain on unclemax under `/tmp/truffledata-native-views.G2ATYf/thinlto/profiles`.
+
+Four serial CPU-2 runs: eager projected, view projected, view full, and stock full. `run.sh` records perf at 997 Hz with frame-pointer stacks and JFR after warmup. All perf reports show zero lost samples. Perf includes startup; JFR allocation samples count sampled events rather than bytes. Native allocation is not accounted for. These diagnostic runs are distinct from the interleaved timing/allocation comparison.
+
+Native `Decoder::binary` accounts for 31.42% of projected and 14.48% of full-view perf self samples. For full views, TypedRow.get/getLong contribute 5.35%/5.03%; NativeRow.link/entry/index contribute 4.58%/4.41%/3.51%; NativeArray.materialize contributes 3.35%, and NativeRow.decode 3.33%. String construction contributes 4.38%. This supports removing repeated Java index traversal and materialization work in addition to native decoding improvements.
+
+Projected JFR allocation samples include 79 NativeArray, 65 NativeRow, 46 int[], and 40 Object[] events. The generated projected operation requests repeated-field sizes without reading their elements, yet the current implementation creates wrappers and scans siblings for counts. Full-view samples include 152 byte[], 138 NativeRow, 48 String, 39 Object[], and 21 NativeArray events. Stock full reads instead show generated builder/parser work among the top leaf samples, with 98 Field.Builder, 83 byte[], 81 Field, 60 Object[], and 39 String allocation events. Comparing sample counts across runs does not establish byte savings.
+
+Next candidate: retain repeated counts during field indexing and answer size-only reads without materializing wrappers, while preserving close/thread/bounds checks and ordinary array access. Evaluate both projected and full reads, retained interpreter/JIT reads, and Java allocation; do not optimize only the projected fixture.

@@ -66,6 +66,7 @@ public final class Acceptance {
     if (!nativeExpected)
       rejects(
           () -> BuffaWire.open(BuffaWire.Mode.NATIVE, null), UnsupportedOperationException.class);
+    if (nativeExpected) NativeTapeAcceptance.run(library);
     System.out.println(
         "BUFFA acceptance passed native=" + nativeExpected + " svm=" + ImageInfo.inImageCode());
   }

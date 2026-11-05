@@ -1,0 +1,217 @@
+# To display the perf.data header info, please use --header/--header-only options.
+#
+#
+# Total Lost Samples: 0
+#
+# Samples: 3K of event 'cpu/cycles/P'
+# Event count (approx.): 16242187212
+#
+# Overhead  Command          Shared Object                   Symbol                                                                      
+# ........  ...............  ..............................  ............................................................................
+#
+    19.00%  truffledata-com  truffledata-comparison-profile  [.] BuffaPlan$State_consume_KhV6sjwd6PEHn5yPln6YT4
+            |          
+            |--8.21%--BuffaPlan$State_consume_KhV6sjwd6PEHn5yPln6YT4
+            |          |          
+            |          |--6.07%--BuffaPlan$State_consume_KhV6sjwd6PEHn5yPln6YT4
+            |          |          BuffaPlan_parse_CdgW7hksxZFlQDePGBwO0J
+            |          |          BuffaPlan_decode_sfEOgdpMiABSAaIXhzJ1r3
+            |          |          Comparison$Fixture_parseNative_LgVvYd8rZW7zJc7biagwL4
+            |          |          Comparison$Fixture_ingest_nKtS7SZyoUBnHzb7kJPIbK
+            |          |          Comparison$$Laf51eff2_run_Qm1e9AMT80I7oHp0l0OLt6
+            |          |          Comparison_measure_rBHXAV3t9KEP8Sb58Nxs99
+            |          |          Comparison_run_Q5rf1SKn3YJHnF3ZUK1v3H
+            |          |          Comparison_main_Tdm8knqZbgFKmi8P01KlkC
+            |          |          Profile_main_QLbiWA5uQ36iHGzuY4KzH1
+            |          |          JavaMainWrapper_runCore0_DxjyYWWswBIqpGm74uwTlD
+            |          |          JavaMainWrapper_doRun_F09BQfnF3iKa8bUp7D6GY0
+            |          |          JavaMainWrapper_run_iTUBl8UzFfAz1VYmMX6I32
+            |          |          IsolateEnterStub__JavaMainWrapper__run__cXbfAhOWcF90761nQYco7L
+            |          |          __libc_start_call_main
+            |          |          call_init (inlined)
+            |          |          __libc_start_main@@GLIBC_2.34
+            |          |          _start
+            |          |          
+            |           --2.14%--BuffaPlan_parse_CdgW7hksxZFlQDePGBwO0J
+            |                     BuffaPlan_decode_sfEOgdpMiABSAaIXhzJ1r3
+            |                     Comparison$Fixture_parseNative_LgVvYd8rZW7zJc7biagwL4
+            |                     Comparison$Fixture_ingest_nKtS7SZyoUBnHzb7kJPIbK
+            |                     Comparison$$Laf51eff2_run_Qm1e9AMT80I7oHp0l0OLt6
+            |                     Comparison_measure_rBHXAV3t9KEP8Sb58Nxs99
+            |                     Comparison_run_Q5rf1SKn3YJHnF3ZUK1v3H
+            |                     Comparison_main_Tdm8knqZbgFKmi8P01KlkC
+            |                     Profile_main_QLbiWA5uQ36iHGzuY4KzH1
+            |                     JavaMainWrapper_runCore0_DxjyYWWswBIqpGm74uwTlD
+            |                     JavaMainWrapper_doRun_F09BQfnF3iKa8bUp7D6GY0
+            |                     JavaMainWrapper_run_iTUBl8UzFfAz1VYmMX6I32
+            |                     IsolateEnterStub__JavaMainWrapper__run__cXbfAhOWcF90761nQYco7L
+            |                     __libc_start_call_main
+            |                     call_init (inlined)
+            |                     __libc_start_main@@GLIBC_2.34
+            |                     _start
+            |          
+            |--1.85%--DirectByteBuffer_getLong_qql9RATsK0437ObPOcNrY2
+            |          |          
+            |           --1.63%--BuffaPlan$State_consume_KhV6sjwd6PEHn5yPln6YT4
+            |          
+            |--1.34%--SVMIntrinsicStubsGen_stringCodingCountPositives_pJXvyEBdEyALRGGEsnbJx8
+            |          String_ANiVZ8cr6wIGG2iZqvkdVA
+            |          String_1Wsq2sHvwOLEAD1FMOeIqB
+            |          ViewOwner_utf8_vdhpZc0Kb47RYc9YWkd98G
+            |          BuffaPlan$State_consume_KhV6sjwd6PEHn5yPln6YT4
+            |          BuffaPlan_parse_CdgW7hksxZFlQDePGBwO0J
+            |          BuffaPlan_decode_sfEOgdpMiABSAaIXhzJ1r3
+            |          Comparison$Fixture_parseNative_LgVvYd8rZW7zJc7biagwL4
+            |          Comparison$Fixture_ingest_nKtS7SZyoUBnHzb7kJPIbK
+            |          Comparison$$Laf51eff2_run_Qm1e9AMT80I7oHp0l0OLt6
+            |          Comparison_measure_rBHXAV3t9KEP8Sb58Nxs99
+            |          Comparison_run_Q5rf1SKn3YJHnF3ZUK1v3H
+            |          Comparison_main_Tdm8knqZbgFKmi8P01KlkC
+            |          Profile_main_QLbiWA5uQ36iHGzuY4KzH1
+            |          JavaMainWrapper_runCore0_DxjyYWWswBIqpGm74uwTlD
+            |          JavaMainWrapper_doRun_F09BQfnF3iKa8bUp7D6GY0
+            |          JavaMainWrapper_run_iTUBl8UzFfAz1VYmMX6I32
+            |          IsolateEnterStub__JavaMainWrapper__run__cXbfAhOWcF90761nQYco7L
+            |          __libc_start_call_main
+            |          call_init (inlined)
+            |          __libc_start_main@@GLIBC_2.34
+            |          _start
+            |          
+            |--1.07%--BuffaPlan$State_present_pEiJaztu4Y3MeA9E02xVSH
+            |          
+            |--1.06%--BuffaPlan$DecodeContext_charge_s2QBZxGaOyJZCYVS2TrLd7
+            |          
+             --1.03%--BuffaPlan$State_select_0sziQ0uftx4lC3kthIbEXA
+                       BuffaPlan$State_consume_KhV6sjwd6PEHn5yPln6YT4
+
+    14.74%  truffledata-com  truffledata-comparison-profile  [.] <truffledata_buffa::typed::Decoder>::binary
+            |          
+            |--6.29%--<truffledata_buffa::typed::Decoder>::binary
+            |          
+            |--2.51%--<truffledata_buffa::typed::Decoder>::push
+            |          
+             --1.42%--<buffa::encoding::WireType>::from_u32
+
+    12.41%  truffledata-com  truffledata-comparison-profile  [.] BuffaPlan$State_finish_csXZqUZdV57wsjt3nqU4ED
+            |          
+            |--7.49%--BuffaPlan$State_finish_csXZqUZdV57wsjt3nqU4ED
+            |          |          
+            |          |--5.69%--BuffaPlan$State_finish_csXZqUZdV57wsjt3nqU4ED
+            |          |          BuffaPlan_parse_CdgW7hksxZFlQDePGBwO0J
+            |          |          BuffaPlan_decode_sfEOgdpMiABSAaIXhzJ1r3
+            |          |          Comparison$Fixture_parseNative_LgVvYd8rZW7zJc7biagwL4
+            |          |          Comparison$Fixture_ingest_nKtS7SZyoUBnHzb7kJPIbK
+            |          |          Comparison$$Laf51eff2_run_Qm1e9AMT80I7oHp0l0OLt6
+            |          |          Comparison_measure_rBHXAV3t9KEP8Sb58Nxs99
+            |          |          Comparison_run_Q5rf1SKn3YJHnF3ZUK1v3H
+            |          |          Comparison_main_Tdm8knqZbgFKmi8P01KlkC
+            |          |          Profile_main_QLbiWA5uQ36iHGzuY4KzH1
+            |          |          JavaMainWrapper_runCore0_DxjyYWWswBIqpGm74uwTlD
+            |          |          JavaMainWrapper_doRun_F09BQfnF3iKa8bUp7D6GY0
+            |          |          JavaMainWrapper_run_iTUBl8UzFfAz1VYmMX6I32
+            |          |          IsolateEnterStub__JavaMainWrapper__run__cXbfAhOWcF90761nQYco7L
+            |          |          __libc_start_call_main
+            |          |          call_init (inlined)
+            |          |          __libc_start_main@@GLIBC_2.34
+            |          |          _start
+            |          |          
+            |           --1.80%--BuffaPlan_parse_CdgW7hksxZFlQDePGBwO0J
+            |                     BuffaPlan_decode_sfEOgdpMiABSAaIXhzJ1r3
+            |                     Comparison$Fixture_parseNative_LgVvYd8rZW7zJc7biagwL4
+            |                     Comparison$Fixture_ingest_nKtS7SZyoUBnHzb7kJPIbK
+            |                     Comparison$$Laf51eff2_run_Qm1e9AMT80I7oHp0l0OLt6
+            |                     Comparison_measure_rBHXAV3t9KEP8Sb58Nxs99
+            |                     Comparison_run_Q5rf1SKn3YJHnF3ZUK1v3H
+            |                     Comparison_main_Tdm8knqZbgFKmi8P01KlkC
+            |                     Profile_main_QLbiWA5uQ36iHGzuY4KzH1
+            |                     JavaMainWrapper_runCore0_DxjyYWWswBIqpGm74uwTlD
+            |                     JavaMainWrapper_doRun_F09BQfnF3iKa8bUp7D6GY0
+            |                     JavaMainWrapper_run_iTUBl8UzFfAz1VYmMX6I32
+            |                     IsolateEnterStub__JavaMainWrapper__run__cXbfAhOWcF90761nQYco7L
+            |                     __libc_start_call_main
+            |                     call_init (inlined)
+            |                     __libc_start_main@@GLIBC_2.34
+            |                     _start
+            |          
+             --2.01%--BuffaPlan$State_nonDefault_SblvpHzlR5FDB7QLpyT9iA
+                       |          
+                        --1.91%--BuffaPlan$State_finish_csXZqUZdV57wsjt3nqU4ED
+                                  |          
+                                   --1.46%--BuffaPlan$State_finish_csXZqUZdV57wsjt3nqU4ED
+                                             BuffaPlan_parse_CdgW7hksxZFlQDePGBwO0J
+                                             BuffaPlan_decode_sfEOgdpMiABSAaIXhzJ1r3
+                                             Comparison$Fixture_parseNative_LgVvYd8rZW7zJc7biagwL4
+                                             Comparison$Fixture_ingest_nKtS7SZyoUBnHzb7kJPIbK
+                                             Comparison$$Laf51eff2_run_Qm1e9AMT80I7oHp0l0OLt6
+                                             Comparison_measure_rBHXAV3t9KEP8Sb58Nxs99
+                                             Comparison_run_Q5rf1SKn3YJHnF3ZUK1v3H
+                                             Comparison_main_Tdm8knqZbgFKmi8P01KlkC
+                                             Profile_main_QLbiWA5uQ36iHGzuY4KzH1
+                                             JavaMainWrapper_runCore0_DxjyYWWswBIqpGm74uwTlD
+                                             JavaMainWrapper_doRun_F09BQfnF3iKa8bUp7D6GY0
+                                             JavaMainWrapper_run_iTUBl8UzFfAz1VYmMX6I32
+                                             IsolateEnterStub__JavaMainWrapper__run__cXbfAhOWcF90761nQYco7L
+                                             __libc_start_call_main
+                                             call_init (inlined)
+                                             __libc_start_main@@GLIBC_2.34
+                                             _start
+
+     5.17%  truffledata-com  truffledata-comparison-profile  [.] DirectByteBuffer_getLong_qql9RATsK0437ObPOcNrY2
+            |          
+             --2.33%--BuffaPlan$State_consume_KhV6sjwd6PEHn5yPln6YT4
+                       |          
+                        --1.93%--BuffaPlan$State_consume_KhV6sjwd6PEHn5yPln6YT4
+                                  BuffaPlan_parse_CdgW7hksxZFlQDePGBwO0J
+                                  BuffaPlan_decode_sfEOgdpMiABSAaIXhzJ1r3
+                                  Comparison$Fixture_parseNative_LgVvYd8rZW7zJc7biagwL4
+                                  Comparison$Fixture_ingest_nKtS7SZyoUBnHzb7kJPIbK
+                                  Comparison$$Laf51eff2_run_Qm1e9AMT80I7oHp0l0OLt6
+                                  Comparison_measure_rBHXAV3t9KEP8Sb58Nxs99
+                                  Comparison_run_Q5rf1SKn3YJHnF3ZUK1v3H
+                                  Comparison_main_Tdm8knqZbgFKmi8P01KlkC
+                                  Profile_main_QLbiWA5uQ36iHGzuY4KzH1
+                                  JavaMainWrapper_runCore0_DxjyYWWswBIqpGm74uwTlD
+                                  JavaMainWrapper_doRun_F09BQfnF3iKa8bUp7D6GY0
+                                  JavaMainWrapper_run_iTUBl8UzFfAz1VYmMX6I32
+                                  IsolateEnterStub__JavaMainWrapper__run__cXbfAhOWcF90761nQYco7L
+                                  __libc_start_call_main
+                                  call_init (inlined)
+                                  __libc_start_main@@GLIBC_2.34
+                                  _start
+
+     4.00%  truffledata-com  truffledata-comparison-profile  [.] <truffledata_buffa::typed::Decoder>::push
+            |          
+             --2.27%--<truffledata_buffa::typed::Decoder>::binary
+
+     3.43%  truffledata-com  truffledata-comparison-profile  [.] BuffaPlan$State_present_pEiJaztu4Y3MeA9E02xVSH
+            |          
+             --1.01%--BuffaPlan$State_finish_csXZqUZdV57wsjt3nqU4ED
+
+     3.18%  truffledata-com  truffledata-comparison-profile  [.] core::str::converts::from_utf8
+            |          
+             --1.78%--<truffledata_buffa::typed::Decoder>::binary
+
+     2.52%  truffledata-com  truffledata-comparison-profile  [.] BuffaPlan$State_select_0sziQ0uftx4lC3kthIbEXA
+     2.23%  truffledata-com  truffledata-comparison-profile  [.] String_ANiVZ8cr6wIGG2iZqvkdVA
+     2.20%  truffledata-com  truffledata-comparison-profile  [.] BuffaPlan$Repeated_add_lvBSoXwfHmArLR0AmytvNC
+     2.18%  truffledata-com  truffledata-comparison-profile  [.] BuffaPlan$State_nonDefault_SblvpHzlR5FDB7QLpyT9iA
+            |          
+             --1.22%--BuffaPlan$State_finish_csXZqUZdV57wsjt3nqU4ED
+
+     2.16%  truffledata-com  truffledata-comparison-profile  [.] <truffledata_buffa::typed::Decoder>::bytes
+            |          
+             --1.48%--<truffledata_buffa::typed::Decoder>::binary
+
+     2.10%  truffledata-com  truffledata-comparison-profile  [.] BuffaPlan$State_1sNRne88jxCdzp2hXsSsm6
+     2.04%  truffledata-com  truffledata-comparison-profile  [.] buffa::encoding::decode_varint::<&[u8]>
+     1.85%  truffledata-com  truffledata-comparison-profile  [.] BuffaPlan$DecodeContext_charge_s2QBZxGaOyJZCYVS2TrLd7
+     1.65%  truffledata-com  truffledata-comparison-profile  [.] <buffa::encoding::WireType>::from_u32
+     1.33%  truffledata-com  truffledata-comparison-profile  [.] <truffledata_buffa::typed::Contract>::enumeration
+     1.15%  truffledata-com  truffledata-comparison-profile  [.] truffledata_buffa::typed::scalar
+     1.07%  truffledata-com  truffledata-comparison-profile  [.] truffledata_buffa::typed::take_bytes
+     1.00%  truffledata-com  truffledata-comparison-profile  [.] DirectByteBuffer_getInt_a3qgPNl3wW8e1LatVnjXIK
+
+
+#
+# (Cannot load tips.txt file, please install perf!)
+#

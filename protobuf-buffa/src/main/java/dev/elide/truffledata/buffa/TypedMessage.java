@@ -10,6 +10,7 @@ import org.jspecify.annotations.Nullable;
 public final class TypedMessage extends ViewOwner implements AutoCloseable {
   @CompilationFinal private @Nullable TypedRow row;
   private final boolean binary;
+  private BuffaWire.@Nullable Tape index;
   @CompilationFinal private long nativeBytes;
 
   TypedMessage(WireInput.Lease lease, boolean binary) {
@@ -23,6 +24,17 @@ public final class TypedMessage extends ViewOwner implements AutoCloseable {
     this.row = row;
     this.nativeBytes = nativeBytes;
     return this;
+  }
+
+  void retainIndex(BuffaWire.Tape index) {
+    if (this.index != null) throw new IllegalStateException("Native index already retained");
+    this.index = index;
+  }
+
+  /** Whether this message retains a native index rather than an eagerly materialized Java tree. */
+  public boolean nativeBacked() {
+    check();
+    return index != null;
   }
 
   public TypedRow row() {
@@ -56,6 +68,12 @@ public final class TypedMessage extends ViewOwner implements AutoCloseable {
   @Override
   @TruffleBoundary
   public void close() {
+    // Invalidate compiled readers before releasing either native allocation.
     closeOwner();
+    var retained = index;
+    if (retained != null) {
+      index = null;
+      retained.close();
+    }
   }
 }

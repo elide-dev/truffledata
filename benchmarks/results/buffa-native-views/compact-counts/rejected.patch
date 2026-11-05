@@ -1,0 +1,73 @@
+diff --git a/protobuf-buffa/src/main/java/dev/elide/truffledata/buffa/NativeRow.java b/protobuf-buffa/src/main/java/dev/elide/truffledata/buffa/NativeRow.java
+index 00ca0bc..1ec6c19 100644
+--- a/protobuf-buffa/src/main/java/dev/elide/truffledata/buffa/NativeRow.java
++++ b/protobuf-buffa/src/main/java/dev/elide/truffledata/buffa/NativeRow.java
+@@ -18,12 +18,12 @@ import org.jspecify.annotations.Nullable;
+ /** Binary view over an owned native index. Java child objects are created only when accessed. */
+ final class NativeRow extends TypedRow {
+   private static final ByteBuffer POINTER_PROFILE = ByteBuffer.allocate(0);
+-  private static final long[] PACKED_OFFSETS = new long[0];
++  private static final int[] PACKED_OFFSETS = new int[0];
+   private final BuffaWire.Tape tape;
+   private final int start;
+   private final int end;
+ 
+-  private long @Nullable [] offsets;
++  private int @Nullable [] offsets;
+ 
+   private long packedOffsets;
+ 
+@@ -174,13 +174,17 @@ final class NativeRow extends TypedRow {
+   private int offset(int ordinal) {
+     var result = offsets;
+     if (result == null) result = index();
+-    if (result.length != 0) return (int) result[ordinal] - 1;
++    if (result.length != 0) {
++      if (end - start > 0xffff) return result[ordinal * 2] - 1;
++      int position = result[ordinal] & 0xffff;
++      return position == 0 ? -1 : start + position - 1;
++    }
+     int position = (int) (packedOffsets >>> (ordinal * 4)) & 15;
+     return position == 0 ? -1 : start + position - 1;
+   }
+ 
+   @TruffleBoundary
+-  private long[] index() {
++  private int[] index() {
+     // Four-bit relative positions cover up to sixteen schema fields and fifteen index entries.
+     // Zero denotes absence. Unique occurrences also imply a count of one. Duplicates and larger
+     // spans use a directory containing both the last position and the occurrence count.
+@@ -200,12 +204,20 @@ final class NativeRow extends TypedRow {
+         return PACKED_OFFSETS;
+       }
+     }
+-    long[] result = new long[plan().size()];
++    // A span of at most 65535 entries bounds both relative positions and occurrence counts.
++    // Larger spans use two full-width integers per field, without truncating either value.
++    boolean wide = end - start > 0xffff;
++    int[] result = new int[plan().size() * (wide ? 2 : 1)];
+     for (int i = start; i < end; ) {
+       long link = link(tape, i);
+       int ordinal = (int) link;
+-      long count = (result[ordinal] >>> 32) + 1;
+-      result[ordinal] = (count << 32) | (i + 1L);
++      if (wide) {
++        result[ordinal * 2] = i + 1;
++        result[ordinal * 2 + 1]++;
++      } else {
++        int count = (result[ordinal] >>> 16) + 1;
++        result[ordinal] = (count << 16) | (i - start + 1);
++      }
+       i = (int) (link >>> 32);
+     }
+     offsets = result;
+@@ -216,7 +228,8 @@ final class NativeRow extends TypedRow {
+   int repeatedSize(int ordinal) {
+     var directory = offsets;
+     if (directory == null) directory = index();
+-    if (directory.length != 0) return (int) (directory[ordinal] >>> 32);
++    if (directory.length != 0)
++      return end - start > 0xffff ? directory[ordinal * 2 + 1] : directory[ordinal] >>> 16;
+     return ((packedOffsets >>> (ordinal * 4)) & 15) == 0 ? 0 : 1;
+   }
+ 

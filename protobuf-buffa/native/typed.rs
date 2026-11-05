@@ -59,14 +59,29 @@ impl<'a> Schema<'a> {
             ordinal,
         })
     }
-    fn find(self, ty: u32, number: u32) -> Result<Option<Contract<'a>>> {
-        for i in 0..self.word(self.ty(ty)?)? {
-            let f = self.field(ty, i)?;
-            if f.word(0)? == number {
-                return Ok(Some(f));
+    fn table(self, base: usize, count: u32) -> Result<&'a [u8]> {
+        let start = base.checked_add(16).ok_or(MALFORMED)?;
+        let length = (count as usize).checked_mul(40).ok_or(MALFORMED)?;
+        self.0
+            .get(start..start.checked_add(length).ok_or(MALFORMED)?)
+            .ok_or(MALFORMED)
+    }
+    fn find_in(self, base: usize, table: &[u8], number: u32) -> Option<Contract<'a>> {
+        for (ordinal, field) in table.chunks_exact(40).enumerate() {
+            if u32::from_le_bytes(field[..4].try_into().unwrap()) == number {
+                return Some(Contract {
+                    schema: self,
+                    at: base + 16 + ordinal * 40,
+                    ordinal: ordinal as u32,
+                });
             }
         }
-        Ok(None)
+        None
+    }
+    fn find(self, ty: u32, number: u32) -> Result<Option<Contract<'a>>> {
+        let base = self.ty(ty)?;
+        let table = self.table(base, self.word(base)?)?;
+        Ok(self.find_in(base, table, number))
     }
     fn name(self, ty: u32, name: &str, json: bool) -> Result<Contract<'a>> {
         let mut found = None;
@@ -134,6 +149,7 @@ pub struct Decoder<'a, 'b> {
     strings: u64,
     depth: u32,
     native: u64,
+    view_ready: bool,
 }
 impl<'a, 'b> Decoder<'a, 'b> {
     fn charge(&mut self, n: u64) -> Result<()> {
@@ -193,7 +209,17 @@ impl<'a, 'b> Decoder<'a, 'b> {
         if depth > self.depth {
             return Err(BUDGET);
         }
-        self.charge(self.schema.word(self.schema.ty(ty)?)? as u64)?;
+        let base = self.schema.ty(ty)?;
+        let count = self.schema.word(base)?;
+        self.charge(count as u64)?;
+        let table = self.schema.table(base, count)?;
+        let flags = self.schema.word(base + 4)?;
+        // Bit 9 is a compiler-established fact: this type has no required fields. Java retains
+        // its semantic fallback for required-field graphs and unsupported schema shapes.
+        if self.view_ready && (count > 64 || flags & 512 == 0) {
+            self.view_ready = false;
+        }
+        let mut seen_messages = 0u64;
         let mut invalid_map = false;
         while !input.is_empty() {
             let tag = Tag::decode(input).map_err(|_| MALFORMED)?;
@@ -206,7 +232,7 @@ impl<'a, 'b> Decoder<'a, 'b> {
                     Err(MALFORMED)
                 };
             }
-            let Some(f) = self.schema.find(ty, number)? else {
+            let Some(f) = self.schema.find_in(base, table, number) else {
                 self.skip(input, number, wt, depth)?;
                 continue;
             };
@@ -226,6 +252,13 @@ impl<'a, 'b> Decoder<'a, 'b> {
                 continue;
             }
             if kind == 10 || kind == 11 {
+                if self.view_ready && !f.repeated()? {
+                    let bit = 1u64 << f.ordinal;
+                    if seen_messages & bit != 0 {
+                        self.view_ready = false;
+                    }
+                    seen_messages |= bit;
+                }
                 let i = self.push(f, 0, 0)?;
                 let invalid = if kind == 11 {
                     let mut nested = take_bytes(input)?;
@@ -246,8 +279,7 @@ impl<'a, 'b> Decoder<'a, 'b> {
             } else {
                 let value = scalar(kind, input)?;
                 let accepted = f.enumeration(value as i32)?;
-                if self.schema.word(self.schema.ty(ty)? + 4)? & 1 != 0 && number == 2 && kind == 14
-                {
+                if flags & 1 != 0 && number == 2 && kind == 14 {
                     invalid_map = !accepted;
                 }
                 if accepted {
@@ -507,14 +539,45 @@ pub fn decode_reusing(
     strings: u64,
     depth: u32,
     native: u64,
-    mut fields: Vec<Field>,
+    fields: Vec<Field>,
 ) -> Result<Vec<Field>> {
+    let mut status = 0;
+    decode_reusing_with_status(
+        schema,
+        input,
+        format,
+        payload,
+        cells,
+        strings,
+        depth,
+        native,
+        fields,
+        &mut status,
+    )
+}
+
+/// ABI 8: format 3 requests binary view certification; status 5 proves that visited types
+/// have no required fields and no singular-message fragments require merging. Status 0
+/// retains the ordinary Java semantic check. Schema facts come from the trusted compiler.
+pub fn decode_reusing_with_status(
+    schema: &[u8],
+    input: &[u8],
+    format: u32,
+    payload: &mut [u8],
+    cells: u64,
+    strings: u64,
+    depth: u32,
+    native: u64,
+    mut fields: Vec<Field>,
+    status: &mut i32,
+) -> Result<Vec<Field>> {
+    *status = 0;
     if depth == 0 || depth > 128 || native > i32::MAX as u64 {
         return Err(BUDGET);
     }
     // Reserve scratch headroom independently of index growth (including overlapping reallocations).
     // Text token/escape scratch is bounded by input length; the caller owns the payload region.
-    let reserve = if format == 0 {
+    let reserve = if format == 0 || format == 3 {
         0
     } else {
         (input.len() as u64).checked_mul(4).ok_or(BUDGET)?
@@ -541,9 +604,10 @@ pub fn decode_reusing(
         strings,
         depth,
         native,
+        view_ready: format == 3,
     };
     match format {
-        0 => {
+        0 | 3 => {
             decoder.binary(0, &mut &input[..], 0, 1)?;
         }
         1 => {
@@ -552,6 +616,9 @@ pub fn decode_reusing(
         }
         2 => decoder.json()?,
         _ => return Err(MALFORMED),
+    }
+    if decoder.view_ready {
+        *status = 5;
     }
     Ok(decoder.fields)
 }
@@ -565,7 +632,8 @@ pub fn scalars(
     depth: u32,
 ) -> Result<super::seam::Scalars> {
     let schema = Schema(schema);
-    let count = schema.word(schema.ty(0)?)?;
+    let base = schema.ty(0)?;
+    let count = schema.word(base)?;
     if count == 0 || count > 2 {
         return Err(MALFORMED);
     }
@@ -588,6 +656,7 @@ pub fn scalars(
         strings: 0,
         depth,
         native: 0,
+        view_ready: false,
     };
     decoder.charge(count as u64)?;
     let mut result = super::seam::Scalars {
@@ -595,12 +664,13 @@ pub fn scalars(
         second: 0,
         present: 0,
     };
+    let table = schema.table(base, count)?;
     let mut remaining = input;
     while !remaining.is_empty() {
         let tag = Tag::decode(&mut remaining).map_err(|_| MALFORMED)?;
         let number = tag.field_number();
         let wt = tag.wire_type() as u32;
-        if let Some(field) = schema.find(0, number)? {
+        if let Some(field) = schema.find_in(base, table, number) {
             if wt == 0 {
                 decoder.charge(1)?;
                 let value = varint(&mut remaining)?;
@@ -653,6 +723,96 @@ mod tests {
         bytes.push(b'x');
         bytes
     }
+    #[test]
+    fn checked_field_table_preserves_sparse_order_and_rejects_truncation() {
+        let mut bytes = schema(5);
+        let field = bytes[28..68].to_vec();
+        bytes.truncate(28);
+        bytes[12..16].copy_from_slice(&3u32.to_le_bytes());
+        for number in [42u32, 3, 100] {
+            let start = bytes.len();
+            bytes.extend_from_slice(&field);
+            bytes[start..start + 4].copy_from_slice(&number.to_le_bytes());
+        }
+        let contract = Schema(&bytes);
+        for (ordinal, number) in [42, 3, 100].into_iter().enumerate() {
+            assert_eq!(
+                contract.find(0, number).unwrap().unwrap().ordinal,
+                ordinal as u32
+            );
+        }
+        assert!(contract.find(0, 1).unwrap().is_none());
+        let fields = decode(
+            &bytes,
+            &[0xd0, 2, 7, 24, 8, 0xa0, 6, 9, 8, 1],
+            0,
+            &mut [],
+            100,
+            100,
+            4,
+            4096,
+        )
+        .unwrap();
+        assert_eq!(
+            fields
+                .iter()
+                .map(|f| (f.number, f.value))
+                .collect::<Vec<_>>(),
+            vec![(1, 7), (2, 8), (3, 9)]
+        );
+        for end in 28..bytes.len() {
+            assert!(matches!(Schema(&bytes[..end]).find(0, 42), Err(MALFORMED)));
+            assert!(matches!(
+                decode(&bytes[..end], &[], 0, &mut [], 100, 100, 4, 4096),
+                Err(MALFORMED)
+            ));
+        }
+        bytes[12..16].copy_from_slice(&u32::MAX.to_le_bytes());
+        assert!(matches!(Schema(&bytes).find(0, 42), Err(MALFORMED)));
+    }
+
+    #[test]
+    fn binary_view_proof_requires_compiler_facts_and_no_message_merges() {
+        fn run(schema: &[u8], input: &[u8], cells: u64) -> (Result<Vec<Field>>, i32) {
+            let mut status = -1;
+            let result = decode_reusing_with_status(
+                schema,
+                input,
+                3,
+                &mut [],
+                cells,
+                1000,
+                16,
+                4096,
+                Vec::new(),
+                &mut status,
+            );
+            (result, status)
+        }
+        let mut scalar = schema(5);
+        assert_eq!(run(&scalar, &[8, 42], 100).1, 0);
+        scalar[16..20].copy_from_slice(&512u32.to_le_bytes());
+        let (fields, status) = run(&scalar, &[8, 42, 8, 7], 100);
+        assert_eq!(fields.unwrap().len(), 2);
+        assert_eq!(status, 5); // Duplicate scalars still use last-value semantics.
+        assert_eq!(run(&scalar, &[], 100).1, 5);
+        let (result, status) = run(&scalar, &[8, 128], 100);
+        assert!(result.is_err());
+        assert_eq!(status, 0);
+        let (result, status) = run(&scalar, &[8, 42], 1);
+        assert!(matches!(result, Err(BUDGET)));
+        assert_eq!(status, 0);
+        let mut message = schema(11);
+        message[16..20].copy_from_slice(&512u32.to_le_bytes());
+        message[40..44].copy_from_slice(&0u32.to_le_bytes());
+        assert_eq!(run(&message, &[10, 0], 100).1, 5);
+        assert_eq!(run(&message, &[10, 2, 10, 0], 100).1, 5);
+        assert_eq!(run(&message, &[10, 0, 10, 0], 100).1, 0);
+        assert_eq!(run(&message, &[10, 4, 10, 0, 10, 0], 100).1, 0);
+        message[36..40].copy_from_slice(&1u32.to_le_bytes()); // repeated messages do not merge
+        assert_eq!(run(&message, &[10, 0, 10, 0], 100).1, 5);
+    }
+
     #[test]
     fn scalar_output_matches_index_without_native_allocation() {
         for kind in [3, 5] {

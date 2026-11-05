@@ -1,0 +1,38 @@
+diff --git a/protobuf-buffa/src/main/java/dev/elide/truffledata/buffa/BuffaPlan.java b/protobuf-buffa/src/main/java/dev/elide/truffledata/buffa/BuffaPlan.java
+index 04f4e9c..79b7e70 100644
+--- a/protobuf-buffa/src/main/java/dev/elide/truffledata/buffa/BuffaPlan.java
++++ b/protobuf-buffa/src/main/java/dev/elide/truffledata/buffa/BuffaPlan.java
+@@ -5,12 +5,14 @@ import dev.elide.truffledata.*;
+ import dev.elide.truffledata.buffa.generated.*;
+ import dev.elide.truffledata.protobuf.*;
+ import java.math.BigInteger;
++import java.nio.ByteOrder;
+ import java.nio.charset.StandardCharsets;
+ import java.util.*;
+ import org.jspecify.annotations.Nullable;
+ 
+ /** Reusable schema program shared by native binary, textproto and ProtoJSON ingestion. */
+ public final class BuffaPlan implements AutoCloseable {
++  private static final boolean LITTLE_ENDIAN = ByteOrder.nativeOrder() == ByteOrder.LITTLE_ENDIAN;
+   private static final boolean STRICT = Boolean.getBoolean("truffledata.strict");
+   private final BuffaWire decoder;
+   private final ProtoPlan plan;
+@@ -359,11 +361,14 @@ public final class BuffaPlan implements AutoCloseable {
+       for (int index = start; index < end; ) {
+         context.charge(1);
+         int at = index * Buffa.Field.SIZE;
+-        int ordinal = tape.bytes.getInt(at + (int) BuffaFFM.Field_number_OFFSET) - 1;
+-        int kind = tape.bytes.getInt(at + (int) BuffaFFM.Field_wire_OFFSET);
++        // ABI 7 stores two adjacent int pairs; retain checked loads while reading each pair once.
++        long tag = tape.bytes.getLong(at + (int) BuffaFFM.Field_number_OFFSET);
+         long value = tape.bytes.getLong(at + (int) BuffaFFM.Field_value_OFFSET);
+-        int length = tape.bytes.getInt(at + (int) BuffaFFM.Field_length_OFFSET);
+-        int next = tape.bytes.getInt(at + (int) BuffaFFM.Field_end_OFFSET);
++        long extent = tape.bytes.getLong(at + (int) BuffaFFM.Field_length_OFFSET);
++        int ordinal = (int) (LITTLE_ENDIAN ? tag : tag >>> 32) - 1;
++        int kind = (int) (LITTLE_ENDIAN ? tag >>> 32 : tag);
++        int length = (int) (LITTLE_ENDIAN ? extent : extent >>> 32);
++        int next = (int) (LITTLE_ENDIAN ? extent >>> 32 : extent);
+         if (ordinal < 0 || ordinal >= plan.size() || next <= index || next > end || length < 0)
+           throw new IllegalStateException("Invalid native typed index");
+         var f = plan.field(ordinal);

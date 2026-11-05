@@ -5,17 +5,20 @@ import dev.elide.truffledata.*;
 import dev.elide.truffledata.buffa.generated.*;
 import dev.elide.truffledata.protobuf.*;
 import java.math.BigInteger;
+import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
 import org.jspecify.annotations.Nullable;
 
 /** Reusable schema program shared by native binary, textproto and ProtoJSON ingestion. */
 public final class BuffaPlan implements AutoCloseable {
+  private static final boolean LITTLE_ENDIAN = ByteOrder.nativeOrder() == ByteOrder.LITTLE_ENDIAN;
   private static final boolean STRICT = Boolean.getBoolean("truffledata.strict");
   private final BuffaWire decoder;
   private final ProtoPlan plan;
   private final ReadProfile profile;
   private final boolean compactScalars;
+  private final NativeRow.@Nullable Validation nativeViews;
   private final List<ProtoPlan> anyTypes;
   private final WireInput schema;
   private final WireInput empty;
@@ -28,6 +31,7 @@ public final class BuffaPlan implements AutoCloseable {
     var types = NativeSchema.types(plan, this.anyTypes, maxSchemaBytes);
     byte[] program = NativeSchema.encode(types, this.anyTypes, maxSchemaBytes);
     profile = new ReadProfile(types);
+    nativeViews = NativeRow.validation(types);
     boolean compact = plan.size() > 0 && plan.size() <= 2;
     for (int i = 0; i < plan.size(); i++) {
       var field = plan.field(i);
@@ -62,7 +66,19 @@ public final class BuffaPlan implements AutoCloseable {
   @TruffleBoundary
   public TypedMessage decode(WireInput input, int maxNativeBytes) {
     check();
-    return parse(input, empty, 0, maxNativeBytes);
+    return parse(input, empty, 0, maxNativeBytes, false);
+  }
+
+  /**
+   * Request an owned native-index view. Binary standard schemas use lazy Java wrappers; unsupported
+   * shapes and singular-message merges retain the eager semantics-preserving path. The native
+   * budget includes the detached result header. Scalar-only plans retain their smaller inline
+   * representation.
+   */
+  @TruffleBoundary
+  public TypedMessage decodeView(WireInput input, int maxNativeBytes) {
+    check();
+    return parse(input, empty, 0, maxNativeBytes, true);
   }
 
   @TruffleBoundary
@@ -86,11 +102,12 @@ public final class BuffaPlan implements AutoCloseable {
     byte[] utf8 = text.getBytes(StandardCharsets.UTF_8);
     try (var input = decoder.allocate(utf8.length).put(utf8);
         var payload = decoder.allocate(Math.multiplyExact(utf8.length, 2))) {
-      return parse(input, payload, format, nativeBytes);
+      return parse(input, payload, format, nativeBytes, false);
     }
   }
 
-  private TypedMessage parse(WireInput input, WireInput payload, int format, int nativeBytes) {
+  private TypedMessage parse(
+      WireInput input, WireInput payload, int format, int nativeBytes, boolean view) {
     if (nativeBytes < 0 || input.size() > plan.maxWireBytes())
       throw new ContractViolation("Typed input budget");
     WireInput.Lease source = input.retain();
@@ -112,14 +129,44 @@ public final class BuffaPlan implements AutoCloseable {
       }
       if (format == 0 && compactScalars)
         return compact(owner, backend.scalars(schema, input, plan));
-      try (var tape = backend.typed(schema, input, format, payload, plan, nativeBytes)) {
+      boolean useView =
+          view && nativeViews != null && format == 0 && nativeBytes >= Buffa.Result.SIZE;
+      var tape =
+          backend.typed(
+              schema,
+              input,
+              useView ? 3 : format,
+              payload,
+              plan,
+              useView ? nativeBytes - Buffa.Result.SIZE : nativeBytes);
+      boolean retained = false;
+      try {
+        if (useView
+            && (tape.viewReady()
+                || NativeRow.validate(Objects.requireNonNull(nativeViews), tape))) {
+          if (STRICT) {
+            var audit =
+                new State(
+                    plan,
+                    profile.hints[0],
+                    new DecodeContext(owner, format, plan.limits().maxCells(), profile));
+            audit.consume(tape, 0, tape.count());
+            audit.finish(1);
+          }
+          var row = new NativeRow(owner, plan, tape, 0, tape.count());
+          owner.retainIndex(tape.detach());
+          retained = true;
+          return owner.finish(row, tape.allocated);
+        }
         State state =
             new State(
                 plan,
                 profile.hints[0],
                 new DecodeContext(owner, format, plan.limits().maxCells(), profile));
-        state.consume(tape, 0, tape.count);
+        state.consume(tape, 0, tape.count());
         return owner.finish(state.finish(1), tape.allocated);
+      } finally {
+        if (!retained) tape.close();
       }
     } catch (RuntimeException | Error failure) {
       if (owner != null) owner.close();
@@ -163,7 +210,7 @@ public final class BuffaPlan implements AutoCloseable {
         else present[i] = true;
       }
     }
-    return new TypedRow(owner, row.plan(), values, presenceBits, present);
+    return new TypedRow.ArrayRow(owner, row.plan(), values, presenceBits, present);
   }
 
   private static Object javaValue(ViewOwner owner, Object value) {
@@ -221,16 +268,23 @@ public final class BuffaPlan implements AutoCloseable {
     final boolean[] standardContracts;
     final Object[] defaults;
     final @Nullable TypeProfile[] children;
+    final long finishMask;
 
     TypeProfile(ProtoPlan plan) {
       stringReads = new boolean[plan.size()];
       standardContracts = new boolean[plan.size()];
       defaults = new Object[plan.size()];
       children = new TypeProfile[plan.size()];
+      long mask = 0;
       for (int i = 0; i < plan.size(); i++) {
         standardContracts[i] = plan.schema().field(i).equals(plan.field(i).contract());
         defaults[i] = State.initial(plan.field(i));
+        // These fields need work even when absent. Other standard defaults are already valid.
+        if (i < Long.SIZE
+            && (plan.field(i).required() || plan.field(i).repeated() || !standardContracts[i]))
+          mask |= 1L << i;
       }
+      finishMask = mask;
     }
   }
 
@@ -269,11 +323,12 @@ public final class BuffaPlan implements AutoCloseable {
 
     void add(Object value, BuffaWire.Tape tape, int index, int end, int ordinal) {
       if (size == items.length) {
+        var buffer = tape.bytes();
         int count = 0;
         for (int cursor = index; cursor < end; ) {
           int at = Math.multiplyExact(cursor, Buffa.Field.SIZE);
-          int number = tape.bytes.getInt(at + (int) BuffaFFM.Field_number_OFFSET);
-          int next = tape.bytes.getInt(at + (int) BuffaFFM.Field_end_OFFSET);
+          int number = buffer.getInt(at + (int) BuffaFFM.Field_number_OFFSET);
+          int next = buffer.getInt(at + (int) BuffaFFM.Field_end_OFFSET);
           if (next <= cursor || next > end)
             throw new IllegalStateException("Invalid repeated index");
           if (number != ordinal + 1) break;
@@ -286,7 +341,7 @@ public final class BuffaPlan implements AutoCloseable {
         int capacity =
             items.length == 0
                 ? required
-                : Math.max(required, (int) Math.min(tape.count, 2L * items.length));
+                : Math.max(required, (int) Math.min(tape.count(), 2L * items.length));
         items = Arrays.copyOf(items, capacity);
       }
       items[size++] = value;
@@ -349,14 +404,18 @@ public final class BuffaPlan implements AutoCloseable {
     }
 
     void consume(BuffaWire.Tape tape, int start, int end) {
+      var buffer = tape.bytes();
       for (int index = start; index < end; ) {
         context.charge(1);
         int at = index * Buffa.Field.SIZE;
-        int ordinal = tape.bytes.getInt(at + (int) BuffaFFM.Field_number_OFFSET) - 1;
-        int kind = tape.bytes.getInt(at + (int) BuffaFFM.Field_wire_OFFSET);
-        long value = tape.bytes.getLong(at + (int) BuffaFFM.Field_value_OFFSET);
-        int length = tape.bytes.getInt(at + (int) BuffaFFM.Field_length_OFFSET);
-        int next = tape.bytes.getInt(at + (int) BuffaFFM.Field_end_OFFSET);
+        // ABI 7 stores two adjacent int pairs; retain checked loads while reading each pair once.
+        long tag = buffer.getLong(at + (int) BuffaFFM.Field_number_OFFSET);
+        long value = buffer.getLong(at + (int) BuffaFFM.Field_value_OFFSET);
+        long extent = buffer.getLong(at + (int) BuffaFFM.Field_length_OFFSET);
+        int ordinal = (int) (LITTLE_ENDIAN ? tag : tag >>> 32) - 1;
+        int kind = (int) (LITTLE_ENDIAN ? tag >>> 32 : tag);
+        int length = (int) (LITTLE_ENDIAN ? extent : extent >>> 32);
+        int next = (int) (LITTLE_ENDIAN ? extent >>> 32 : extent);
         if (ordinal < 0 || ordinal >= plan.size() || next <= index || next > end || length < 0)
           throw new IllegalStateException("Invalid native typed index");
         var f = plan.field(ordinal);
@@ -476,7 +535,16 @@ public final class BuffaPlan implements AutoCloseable {
         values[1] = new State(plan.nested(1), Objects.requireNonNull(hints.children[1]), context);
         present(1, true);
       }
-      for (int i = 0; i < values.length; i++) {
+      boolean sparse = !STRICT && values.length <= Long.SIZE;
+      long pending = presenceBits | hints.finishMask;
+      for (int cursor = 0; cursor < values.length; ) {
+        int i;
+        if (sparse) {
+          if (pending == 0) break;
+          i = Long.numberOfTrailingZeros(pending);
+          pending &= pending - 1;
+          cursor = i + 1;
+        } else i = cursor++;
         var field = plan.field(i);
         if (!STRICT && !present(i) && hints.standardContracts[i]) {
           if (field.required()) throw new ContractViolation("Missing required field");
@@ -531,7 +599,7 @@ public final class BuffaPlan implements AutoCloseable {
           Values.validate(plan.schema().field(i), values[i]);
         }
       }
-      return new TypedRow(context.owner, plan, values, presenceBits, present);
+      return new TypedRow.ArrayRow(context.owner, plan, values, presenceBits, present);
     }
 
     private static boolean nonDefault(ProtoPlan.FieldPlan field, Object value) {

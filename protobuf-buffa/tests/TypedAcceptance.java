@@ -13,6 +13,12 @@ final class TypedAcceptance {
 
   private TypedAcceptance() {}
 
+  static TypedMessage decode(BuffaPlan plan, WireInput input, int budget) {
+    return Boolean.getBoolean("truffledata.tests.nativeViews")
+        ? plan.decodeView(input, budget)
+        : plan.decode(input, budget);
+  }
+
   static ProtoPlan plan(String name) {
     return TruffleDataContracts.create(null, Limits.DEFAULT, 32, 1_000_000)
         .type("truffledata.lossless." + name);
@@ -116,9 +122,9 @@ final class TypedAcceptance {
       try (var compiled = decoder.compile(p, 65536)) {
         try (var leftInput = decoder.allocate(2).put(new byte[] {8, 1});
             var rightInput = decoder.allocate(2).put(new byte[] {8, 2});
-            var left = compiled.decode(leftInput, 0);
-            var right = compiled.decode(rightInput, 0);
-            var sibling = compiled.decode(leftInput, 0)) {
+            var left = decode(compiled, leftInput, 0);
+            var right = decode(compiled, rightInput, 0);
+            var sibling = decode(compiled, leftInput, 0)) {
           Acceptance.check(
               left.row().getLong(0) == 1 && right.row().getLong(0) == 2,
               "native scalar scratch is not retained by messages");
@@ -134,7 +140,7 @@ final class TypedAcceptance {
             List.of(new byte[] {8, 7}, new byte[] {8, 1, 8, 0}, new byte[] {8, 2, 16, 99, 24, 7})) {
           var expected = p.decode(wire);
           try (var input = decoder.allocate(wire.length).put(wire);
-              var parsed = compiled.decode(input, 0)) {
+              var parsed = decode(compiled, input, 0)) {
             Acceptance.check(
                 parsed.nativeIndexBytes() == 0, "scalar decode allocates no native index");
             var row = parsed.row();
@@ -169,18 +175,18 @@ final class TypedAcceptance {
         }
         try (var empty = decoder.allocate(0);
             var malformed = decoder.allocate(1).put(new byte[] {8})) {
-          Acceptance.rejects(() -> compiled.decode(malformed, NATIVE), ContractViolation.class);
+          Acceptance.rejects(() -> decode(compiled, malformed, NATIVE), ContractViolation.class);
           if (explicit)
-            Acceptance.rejects(() -> compiled.decode(empty, NATIVE), ContractViolation.class);
+            Acceptance.rejects(() -> decode(compiled, empty, NATIVE), ContractViolation.class);
           else
-            try (var parsed = compiled.decode(empty, NATIVE)) {
+            try (var parsed = decode(compiled, empty, NATIVE)) {
               Acceptance.check(
                   !parsed.row().has(0) && parsed.row().getLong(0) == 0, "implicit default");
             }
         }
         // A failed native parse must release the reusable result slot.
         try (var input = decoder.allocate(2).put(new byte[] {8, 9});
-            var parsed = compiled.decode(input, 0)) {
+            var parsed = decode(compiled, input, 0)) {
           Acceptance.check(parsed.row().getLong(0) == 9, "reuse after failure");
         }
       }
@@ -226,7 +232,7 @@ final class TypedAcceptance {
       for (byte[] wire : List.of(merged, interleaved.toByteArray())) {
         var expected = plan.decode(wire);
         try (var input = decoder.allocate(wire.length).put(wire);
-            var parsed = compiled.decode(input, NATIVE)) {
+            var parsed = decode(compiled, input, NATIVE)) {
           equal(expected, parsed.row());
           equal(expected, parsed.snapshot());
           input.close();
@@ -238,7 +244,7 @@ final class TypedAcceptance {
 
   /** Exercise both sides of the packed presence boundary, including the sign bit. */
   private static void presenceWidths(BuffaWire decoder) {
-    for (int size : new int[] {0, 1, 63, 64, 65, 129}) {
+    for (int size : new int[] {0, 1, 15, 16, 17, 63, 64, 65, 129}) {
       var fields = new ArrayList<ProtoPlan.FieldPlan>();
       for (int i = 0; i < size; i++) {
         fields.add(
@@ -271,7 +277,7 @@ final class TypedAcceptance {
       byte[] wire = plan.encode(expected);
       try (var compiled = decoder.compile(plan, 65536);
           var input = decoder.allocate(wire.length).put(wire);
-          var parsed = compiled.decode(input, NATIVE)) {
+          var parsed = decode(compiled, input, NATIVE)) {
         equal(expected, parsed.row());
         equal(expected, parsed.snapshot());
         var text = new StringBuilder();
@@ -292,7 +298,7 @@ final class TypedAcceptance {
           byte[] merged = Arrays.copyOf(first, first.length + second.length);
           System.arraycopy(second, 0, merged, first.length, second.length);
           try (var switchedInput = decoder.allocate(merged.length).put(merged);
-              var switched = compiled.decode(switchedInput, NATIVE)) {
+              var switched = decode(compiled, switchedInput, NATIVE)) {
             Acceptance.check(
                 !switched.row().has(62) && switched.row().has(63),
                 "oneof clears and sets top presence bits");
@@ -355,7 +361,7 @@ final class TypedAcceptance {
         p.encode(p.newBuilder().set(p.schema().indexOf("text"), "é中😀".repeat(1024)).build());
     try (var compiled = decoder.compile(p, 65536);
         var input = decoder.allocate(wire.length).put(wire)) {
-      return compiled.decode(input, NATIVE);
+      return decode(compiled, input, NATIVE);
     }
   }
 
@@ -421,7 +427,7 @@ final class TypedAcceptance {
           // The first read trains lazy materialization; subsequent decodes use the eager route.
           for (int attempt = 0; attempt < 2; attempt++) {
             var input = decoder.allocate(wire.length).put(wire);
-            try (var parsed = compiled.decode(input, NATIVE)) {
+            try (var parsed = decode(compiled, input, NATIVE)) {
               input.close();
               Acceptance.check(
                   parsed.row().get(0).equals(text), "Unicode input ownership and content");
@@ -451,10 +457,10 @@ final class TypedAcceptance {
       try (var compiled = decoder.compile(bounded, 65536);
           var input = decoder.allocate(wire.length).put(wire)) {
         if (bytes == 2L * text.length()) {
-          try (var parsed = compiled.decode(input, NATIVE)) {
+          try (var parsed = decode(compiled, input, NATIVE)) {
             Acceptance.check(parsed.row().get(0).equals(text), "exact UTF-16 payload budget");
           }
-        } else Acceptance.rejects(() -> compiled.decode(input, NATIVE), ContractViolation.class);
+        } else Acceptance.rejects(() -> decode(compiled, input, NATIVE), ContractViolation.class);
       }
     }
   }
@@ -465,19 +471,19 @@ final class TypedAcceptance {
     byte[] wire = plan.encode(expected);
     try (var compiled = decoder.compile(plan, 65536);
         var input = decoder.allocate(wire.length).put(wire);
-        var first = compiled.decode(input, NATIVE)) {
+        var first = decode(compiled, input, NATIVE)) {
       input.close(); // First message now owns its input independently.
       try (var other =
           compiled.parseJson("{\"count\":9,\"text\":\"other\",\"numbers\":[8]}", NATIVE)) {
         Acceptance.check(other.row().getLong(0) == 9, "reused index has fresh values");
       }
       try (var malformed = decoder.allocate(2).put(new byte[] {8, (byte) 128})) {
-        Acceptance.rejects(() -> compiled.decode(malformed, NATIVE), ContractViolation.class);
+        Acceptance.rejects(() -> decode(compiled, malformed, NATIVE), ContractViolation.class);
       }
       try (var valid = decoder.allocate(wire.length).put(wire)) {
         if (decoder.selected() != BuffaWire.Selected.JAVA)
-          Acceptance.rejects(() -> compiled.decode(valid, 1), ContractViolation.class);
-        try (var recovered = compiled.decode(valid, NATIVE)) {
+          Acceptance.rejects(() -> decode(compiled, valid, 1), ContractViolation.class);
+        try (var recovered = decode(compiled, valid, NATIVE)) {
           Acceptance.check(recovered.row().getLong(0) == 7, "reuse recovers after failure");
         }
         // Switching to the generic API must release any cached typed index before publishing
@@ -485,12 +491,12 @@ final class TypedAcceptance {
         try (var generic = decoder.decode(valid, Limits.DEFAULT, 16, NATIVE, NATIVE)) {
           Acceptance.check(generic.fields().size() > 0, "generic decode after typed reuse");
         }
-        try (var again = compiled.decode(valid, NATIVE)) {
+        try (var again = decode(compiled, valid, NATIVE)) {
           Acceptance.check(again.row().getLong(0) == 7, "typed decode after generic result");
         }
       }
       try (var emptyInput = decoder.allocate(0);
-          var empty = compiled.decode(emptyInput, 0)) {
+          var empty = decode(compiled, emptyInput, 0)) {
         Acceptance.check(empty.nativeIndexBytes() == 0, "zero budget discards cached capacity");
         Acceptance.check(!empty.row().has(0), "empty decode does not inherit presence");
       }
@@ -500,7 +506,291 @@ final class TypedAcceptance {
     }
   }
 
+  private static void nativeScalarViews(BuffaWire decoder) {
+    var flat = plan("Flat");
+    var contract =
+        new ProtoPlan.Model(
+                null,
+                List.of(
+                    new ProtoPlan.Type(
+                        "FlatView", false, flat.definition().fields().subList(0, 17))),
+                Limits.DEFAULT,
+                32,
+                1_000_000)
+            .type("FlatView");
+    for (var p : List.of(contract, plan("RepeatedScalars"))) {
+      var texts =
+          p == contract
+              ? List.of(
+                  "",
+                  "i32: -2147483648 i64: -9223372036854775808 u32: 4294967295 "
+                      + "u64: 18446744073709551615 s32: -7 s64: -9 f32: 4294967295 "
+                      + "f64: 18446744073709551615 sf32: -1 sf64: -2 flag: true "
+                      + "single: -inf real: nan text: 'λ' blob: '\\377' status: YES present: 0")
+              : List.of(
+                  "",
+                  "i32: [-1,0,1] i64: [-9223372036854775808,42] u32: [0,4294967295] "
+                      + "u64: [0,18446744073709551615] s32: [-1,1] s64: [-2,2] "
+                      + "f32: [0,4294967295] f64: [0,18446744073709551615] "
+                      + "sf32: [-1,1] sf64: [-2,2] flag: [true,false] "
+                      + "single: [-inf,1.5] real: [nan,2.5] text: ['','λ'] blob: ['','\\377']");
+      try (var compiled = decoder.compile(p, 65536)) {
+        for (var text : texts) {
+          byte[] wire = p.encode(p.parseText(text));
+          // Duplicate singular values select the last value; repeated values concatenate.
+          for (int copies : new int[] {1, 2}) {
+            byte[] payload = new byte[wire.length * copies];
+            for (int i = 0; i < copies; i++)
+              System.arraycopy(wire, 0, payload, i * wire.length, wire.length);
+            var expected = p.decode(payload);
+            try (var input = decoder.allocate(payload.length).put(payload);
+                var view = compiled.decodeView(input, NATIVE)) {
+              Acceptance.check(
+                  view.nativeBacked() == (decoder.selected() != BuffaWire.Selected.JAVA),
+                  "scalar contract selects native backing");
+              equal(expected, view.row());
+              equal(expected, view.row());
+              if (view.nativeBacked() && p == contract && !text.isEmpty()) {
+                int ordinal = p.schema().indexOf("u64");
+                Acceptance.check(
+                    view.row().get(ordinal) == view.row().get(ordinal),
+                    "unsigned scalar is materialized once");
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  private static void nativeRepeatedSizes(BuffaWire decoder) {
+    var field = plan("RepeatedScalars").field(0);
+    var contract =
+        new ProtoPlan.Model(
+                null,
+                List.of(new ProtoPlan.Type("RepeatedSizes", false, List.of(field))),
+                Limits.DEFAULT,
+                16,
+                4096)
+            .type("RepeatedSizes");
+    try (var compiled = decoder.compile(contract, 65536)) {
+      for (int count : new int[] {0, 1, 2, 14, 15, 16, 64, 129}) {
+        var wire = new java.io.ByteArrayOutputStream();
+        for (int i = 0; i < count; i++) {
+          wire.write(8);
+          wire.write(i % 100);
+        }
+        byte[] unpacked = wire.toByteArray();
+        for (byte[] payload : List.of(unpacked, contract.encode(contract.decode(unpacked)))) {
+          try (var input = decoder.allocate(payload.length).put(payload);
+              var view = compiled.decodeView(input, NATIVE)) {
+            var row = view.row();
+            Acceptance.check(row.getSize(0) == count, "size before array materialization");
+            Acceptance.check(row.getSize(0) == count, "cached repeated count");
+            Object value = row.get(0);
+            int size =
+                value instanceof BorrowedArray array ? array.size() : ((DataArray) value).size();
+            Acceptance.check(size == count, "materialized repeated size");
+            equal(contract.decode(payload), row);
+            Acceptance.check(row.getSize(0) == count, "size after element materialization");
+            Acceptance.rejects(() -> row.getSize(-1), IndexOutOfBoundsException.class);
+            Acceptance.rejects(() -> row.getSize(1), IndexOutOfBoundsException.class);
+            view.close();
+            Acceptance.rejects(() -> row.getSize(0), IllegalStateException.class);
+            if (value instanceof BorrowedArray array)
+              Acceptance.rejects(array::size, IllegalStateException.class);
+          }
+        }
+      }
+    }
+  }
+
+  private static void nativeWideCounts(BuffaWire decoder) {
+    var child =
+        new ProtoPlan.Type(
+            "CountBound",
+            false,
+            List.of(
+                plan("RepeatedScalars").field(0),
+                new ProtoPlan.FieldPlan(
+                    "tail",
+                    2,
+                    ProtoPlan.Kind.STRING,
+                    false,
+                    false,
+                    false,
+                    false,
+                    false,
+                    -1,
+                    "",
+                    null,
+                    "")));
+    var childField =
+        new ProtoPlan.FieldPlan(
+            "child",
+            1,
+            ProtoPlan.Kind.MESSAGE,
+            false,
+            false,
+            true,
+            false,
+            false,
+            -1,
+            child.name(),
+            null,
+            Missing.INSTANCE);
+    var parent = new ProtoPlan.Type("CountParent", false, List.of(childField));
+    var contract =
+        new ProtoPlan.Model(null, List.of(parent, child), Limits.DEFAULT, 16, 1_000_000)
+            .type(parent.name());
+    try (var compiled = decoder.compile(contract, 65536)) {
+      for (int count : new int[] {65534, 65535, 65536}) {
+        // Nested rows start at a nonzero index. The trailing text exercises the last position
+        // on either side of the 16-bit span limit, independently of the repeated count.
+        var wire = new java.io.ByteArrayOutputStream();
+        wire.write(10);
+        int length = count * 2 + 3;
+        for (int n = length; ; n >>>= 7) {
+          wire.write((n & 127) | (n >= 128 ? 128 : 0));
+          if (n < 128) break;
+        }
+        for (int i = 0; i < count; i++) {
+          wire.write(8);
+          wire.write(i % 100);
+        }
+        wire.writeBytes(new byte[] {18, 1, 'x'});
+        byte[] payload = wire.toByteArray();
+        try (var input = decoder.allocate(payload.length).put(payload);
+            var view = compiled.decodeView(input, 4_000_000)) {
+          Acceptance.check(
+              view.nativeBacked() == (decoder.selected() != BuffaWire.Selected.JAVA),
+              "wide counts retain native backing");
+          var row = (ProtoAccess) view.row().get(0);
+          Acceptance.check(row.getSize(0) == count, "wide nested count");
+          Acceptance.check(row.get(1).equals("x"), "wide nested trailing position");
+          Object values = row.get(0);
+          Object last =
+              values instanceof BorrowedArray array
+                  ? array.element(count - 1)
+                  : ((DataArray) values).get(count - 1);
+          Acceptance.check(last.equals((long) ((count - 1) % 100)), "wide last element");
+          view.close();
+          Acceptance.rejects(() -> row.getSize(0), IllegalStateException.class);
+        }
+      }
+    }
+  }
+
+  private static void nativeViewOffsets(BuffaWire decoder) {
+    var sample = plan("Sample");
+    var contract =
+        new ProtoPlan.Model(
+                null,
+                List.of(
+                    new ProtoPlan.Type(
+                        "Offsets",
+                        false,
+                        List.of(sample.field(0), sample.field(1), sample.field(2)))),
+                Limits.DEFAULT,
+                16,
+                4096)
+            .type("Offsets");
+    try (var compiled = decoder.compile(contract, 65536)) {
+      for (int duplicates : new int[] {0, 13, 14, 15, 16, 64}) {
+        var wire = new java.io.ByteArrayOutputStream();
+        wire.writeBytes(new byte[] {26, 1, 42});
+        for (int i = 1; i <= duplicates; i++) {
+          wire.write(8);
+          wire.write(i);
+        }
+        byte[] payload = wire.toByteArray();
+        try (var input = decoder.allocate(payload.length).put(payload);
+            var view = compiled.decodeView(input, NATIVE)) {
+          Acceptance.check(
+              view.nativeBacked() == (decoder.selected() != BuffaWire.Selected.JAVA),
+              "duplicate scalars retain native backing");
+          equal(contract.decode(payload), view.row());
+          Acceptance.check(
+              view.row().getLong(0) == duplicates, "last scalar wins across index spans");
+        }
+      }
+    }
+  }
+
+  private static void nativeViewBudgets(BuffaWire decoder) {
+    if (decoder.selected() == BuffaWire.Selected.JAVA) return;
+    var sample = plan("Sample");
+    // Three schema cells + one index entry + three byte cells: native decoding must charge all
+    // seven even though the Java view never materializes the byte field.
+    for (int cells : new int[] {6, 7}) {
+      var contract =
+          new ProtoPlan.Model(
+                  null,
+                  List.of(
+                      new ProtoPlan.Type(
+                          "BudgetView",
+                          false,
+                          List.of(sample.field(0), sample.field(1), sample.field(2)))),
+                  new Limits(1024, 256, cells, 1000),
+                  16,
+                  4096)
+              .type("BudgetView");
+      try (var compiled = decoder.compile(contract, 65536);
+          var input = decoder.allocate(5).put(new byte[] {26, 3, 1, 2, 3})) {
+        if (cells == 6) {
+          Acceptance.rejects(() -> compiled.decodeView(input, NATIVE), ContractViolation.class);
+        } else {
+          try (var view = compiled.decodeView(input, NATIVE)) {
+            Acceptance.check(view.nativeBacked(), "exact cell budget retains native view");
+            Acceptance.check(view.row().getSize(2) == 3, "byte cells charged by native decoder");
+          }
+        }
+      }
+    }
+  }
+
+  private static void nativeViews(BuffaWire decoder) {
+    var contract = plan("DefaultGraph");
+    var expected =
+        contract.parseText("child { count: 0 text: 'first' } children { count: 7 } text: 'root'");
+    byte[] wire = contract.encode(expected);
+    try (var compiled = decoder.compile(contract, 65536);
+        var input = decoder.allocate(wire.length).put(wire);
+        var view = compiled.decodeView(input, NATIVE);
+        var sibling = compiled.decodeView(input, NATIVE)) {
+      Acceptance.check(
+          view.nativeBacked() == (decoder.selected() != BuffaWire.Selected.JAVA),
+          "eligible graph uses native backing");
+      input.close();
+      compiled.close();
+      equal(expected, view.row());
+      equal(expected, view.snapshot());
+      view.close();
+      equal(expected, sibling.row());
+    }
+    var required = plan("Required");
+    // Two incomplete fragments merge into one valid required message; neither may be rejected
+    // early.
+    byte[] merged = {8, 0, 18, 0, 18, 2, 8, 42};
+    try (var compiled = decoder.compile(required, 65536);
+        var input = decoder.allocate(merged.length).put(merged);
+        var view = compiled.decodeView(input, NATIVE)) {
+      Acceptance.check(!view.nativeBacked(), "singular message merge uses eager path");
+      equal(required.decode(merged), view.row());
+    }
+    try (var compiled = decoder.compile(required, 65536);
+        var input = decoder.allocate(4).put(new byte[] {8, 0, 18, 0})) {
+      Acceptance.rejects(() -> compiled.decodeView(input, NATIVE), ContractViolation.class);
+    }
+  }
+
   static void run(BuffaWire decoder) throws Exception {
+    nativeViews(decoder);
+    nativeScalarViews(decoder);
+    nativeViewBudgets(decoder);
+    nativeViewOffsets(decoder);
+    nativeRepeatedSizes(decoder);
+    nativeWideCounts(decoder);
     indexReusePreservesMessagesAndBudgets(decoder);
     scopedRowsRequireDetachmentBeforeEnteringOwnedContainers(decoder);
     textRejectsMalformedUtf16BeforeEncoding(decoder);
@@ -730,7 +1020,7 @@ final class TypedAcceptance {
         try (var accepted = compiled.parseText("children {key: 'a'}", NATIVE)) {
           Acceptance.check(accepted.row().getSize(6) == 1, "small map fits retained data budget");
         }
-        Acceptance.rejects(() -> compiled.decode(input, NATIVE), ContractViolation.class);
+        Acceptance.rejects(() -> decode(compiled, input, NATIVE), ContractViolation.class);
         Acceptance.rejects(
             () -> compiled.parseText(text.toString(), NATIVE), ContractViolation.class);
       }
@@ -745,12 +1035,16 @@ final class TypedAcceptance {
         try (var parsed = compiled.parseText(text, NATIVE)) {
           equal(contract.parseText(text), parsed.row());
         }
-        if (name.equals("Required"))
+        if (name.equals("Required")) {
           Acceptance.rejects(() -> compiled.parseText("", NATIVE), ContractViolation.class);
+          try (var empty = decoder.allocate(0)) {
+            Acceptance.rejects(() -> decode(compiled, empty, NATIVE), ContractViolation.class);
+          }
+        }
         if (name.equals("Legacy")) {
           byte[] unknown = {24, 99, 34, 3, 1, 99, 2};
           try (var input = decoder.allocate(unknown.length).put(unknown);
-              var parsed = compiled.decode(input, NATIVE)) {
+              var parsed = decode(compiled, input, NATIVE)) {
             equal(contract.decode(unknown), parsed.row());
             Acceptance.check(
                 Arrays.equals(

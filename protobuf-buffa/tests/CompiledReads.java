@@ -6,6 +6,8 @@ import com.oracle.truffle.api.interop.*;
 import com.oracle.truffle.api.nodes.*;
 import dev.elide.truffledata.*;
 import dev.elide.truffledata.buffa.*;
+import dev.elide.truffledata.protobuf.ProtoPlan;
+import java.util.List;
 import org.graalvm.nativeimage.ImageInfo;
 import org.graalvm.polyglot.Context;
 
@@ -24,6 +26,8 @@ final class CompiledReads {
       context.initialize("buffa-test");
       context.enter();
       try {
+        cachedPlans(decoder);
+        arrayViews(decoder);
         var cachedRoot = new WktRoot(false);
         var cachedTarget = cachedRoot.getCallTarget();
         try (var message = plan.parseJson("7", 4096)) {
@@ -57,6 +61,168 @@ final class CompiledReads {
     }
   }
 
+  private static void arrayViews(BuffaWire decoder) {
+    var contract = TypedAcceptance.plan("RepeatedScalars");
+    var root = new ArrayLengthRoot();
+    var target = root.getCallTarget();
+    var interop = InteropLibrary.getUncached();
+    var data = DataLibrary.factory().getUncached();
+    byte[] wire =
+        contract.encode(
+            contract
+                .newBuilder()
+                .set(0, new DataArray(new Object[] {1L, -2L}))
+                .set(14, new DataArray(new Object[] {DataArray.copyOfBytes(new byte[] {7})}))
+                .build());
+    try (var plan = decoder.compile(contract, 65536);
+        var input = decoder.allocate(wire.length).put(wire);
+        var emptyInput = decoder.allocate(0);
+        var message = plan.decodeView(input, 65536);
+        var empty = plan.decodeView(emptyInput, 65536)) {
+      Acceptance.check((Integer) target.call(message.row()) == 2, "shared native array length");
+      Acceptance.check((Integer) target.call(empty.row()) == 0, "empty native array length");
+      var rejected = new java.util.concurrent.atomic.AtomicInteger();
+      Object countedRow = message.row();
+      var other =
+          new Thread(
+              () -> {
+                try {
+                  ((BorrowedArray) data.read(countedRow, 0)).size();
+                } catch (IllegalStateException expected) {
+                  rejected.incrementAndGet();
+                }
+              });
+      other.start();
+      try {
+        other.join();
+      } catch (InterruptedException failure) {
+        Thread.currentThread().interrupt();
+        throw new AssertionError(failure);
+      }
+      Acceptance.check(rejected.get() == 1, "array access enforces thread ownership");
+      Acceptance.rejects(() -> message.row().get(-1), IndexOutOfBoundsException.class);
+      Acceptance.rejects(() -> message.row().get(contract.size()), IndexOutOfBoundsException.class);
+      Object array = data.read(message.row(), 0);
+      try {
+        Acceptance.check(interop.hasArrayElements(array), "native array interop");
+        Acceptance.check(interop.getArraySize(array) == 2, "native interop count");
+        Acceptance.check(
+            !interop.isArrayElementReadable(array, -1)
+                && interop.isArrayElementReadable(array, 1)
+                && !interop.isArrayElementReadable(array, 2),
+            "native array bounds");
+        Acceptance.check(interop.readArrayElement(array, 1).equals(-2L), "native array element");
+        try {
+          interop.readArrayElement(array, 2);
+          throw new AssertionError("Expected native array bounds rejection");
+        } catch (InvalidArrayIndexException expected) {
+          /* bounds */
+        }
+      } catch (UnsupportedMessageException failure) {
+        throw new AssertionError(failure);
+      } catch (InvalidArrayIndexException failure) {
+        throw new AssertionError(failure);
+      }
+      DataArray detached = ((BorrowedArray) data.read(message.row(), 14)).snapshot();
+      Object row = message.row();
+      message.close();
+      Acceptance.rejects(() -> target.call(row), IllegalStateException.class);
+      Acceptance.rejects(() -> ((BorrowedArray) array).size(), IllegalStateException.class);
+      Acceptance.rejects(() -> ((BorrowedArray) array).snapshot(), IllegalStateException.class);
+      Acceptance.check(
+          ((DataArray) detached.get(0)).get(0).equals(7L), "nested array snapshot survives close");
+    }
+  }
+
+  private static final class ArrayLengthRoot extends RootNode {
+    @Child private ReadLengthNode length = ReadLengthNode.create();
+
+    ArrayLengthRoot() {
+      super(null);
+    }
+
+    @Override
+    public Object execute(VirtualFrame frame) {
+      return length.execute(frame.getArguments()[0], 0);
+    }
+  }
+
+  private static void cachedPlans(BuffaWire decoder) {
+    var root = new PlanFieldsRoot();
+    var target = root.getCallTarget();
+    for (int i = 0; i < 8; i++) {
+      var kind = (i & 1) == 0 ? ProtoPlan.Kind.INT32 : ProtoPlan.Kind.UINT32;
+      long fallback = 10L + i;
+      boolean flag = (i & 1) == 0;
+      var contract =
+          new ProtoPlan.Model(
+                  null,
+                  List.of(
+                      new ProtoPlan.Type(
+                          "Guard" + i,
+                          false,
+                          List.of(
+                              new ProtoPlan.FieldPlan(
+                                  "n", 1, kind, false, false, true, false, false, -1, "", null,
+                                  fallback),
+                              new ProtoPlan.FieldPlan(
+                                  "b",
+                                  2,
+                                  ProtoPlan.Kind.BOOL,
+                                  false,
+                                  false,
+                                  true,
+                                  false,
+                                  false,
+                                  -1,
+                                  "",
+                                  null,
+                                  flag)))),
+                  Limits.DEFAULT,
+                  16,
+                  65536)
+              .type("Guard" + i);
+      long value = kind == ProtoPlan.Kind.UINT32 ? 4294967295L : -123;
+      byte[] wire = contract.encode(contract.newBuilder().set(0, value).set(1, !flag).build());
+      try (var plan = decoder.compile(contract, 65536);
+          var empty = decoder.allocate(0);
+          var input = decoder.allocate(wire.length).put(wire);
+          var defaults = plan.decodeView(empty, 65536);
+          var message = plan.decodeView(input, 65536)) {
+        for (int repeat = 0; repeat < 4; repeat++) {
+          Acceptance.check(
+              (Long) target.call(defaults.row()) == fallback + (flag ? 100 : 0),
+              "cached plan defaults");
+          Acceptance.check(
+              (Long) target.call(message.row()) == value + (!flag ? 100 : 0),
+              "cached plan integer kind");
+        }
+        Object closed = message.row();
+        message.close();
+        Acceptance.rejects(() -> target.call(closed), IllegalStateException.class);
+        Acceptance.check(
+            (Long) target.call(defaults.row()) == fallback + (flag ? 100 : 0),
+            "independent owner after close");
+      }
+    }
+    Acceptance.check(NodeUtil.countNodes(root) <= 192, "plan cache AST budget");
+  }
+
+  private static final class PlanFieldsRoot extends RootNode {
+    @Child private ReadLongNode number = ReadLongNode.create();
+    @Child private ReadBooleanNode flag = ReadBooleanNode.create();
+
+    PlanFieldsRoot() {
+      super(null);
+    }
+
+    @Override
+    public Object execute(VirtualFrame frame) {
+      Object row = frame.getArguments()[0];
+      return number.execute(row, 0) + (flag.execute(row, 1) ? 100 : 0);
+    }
+  }
+
   static void run(BuffaWire decoder) {
     try (var context =
             Context.newBuilder("buffa-test")
@@ -71,6 +237,7 @@ final class CompiledReads {
       context.initialize("buffa-test");
       context.enter();
       try {
+        nativeViewReads(decoder);
         generatedReads(decoder);
         generatedOwnedReads();
         generatedProjection();
@@ -80,7 +247,7 @@ final class CompiledReads {
             try (var typedInput = decoder.allocate(3).put(new byte[] {26, 1, (byte) 255});
                 var typed =
                     format == 0
-                        ? plan.decode(typedInput, 4096)
+                        ? TypedAcceptance.decode(plan, typedInput, 4096)
                         : format == 1
                             ? plan.parseText("blob: '\\377'", 4096)
                             : plan.parseJson("{\"blob\":\"/w==\"}", 4096)) {
@@ -429,6 +596,83 @@ final class CompiledReads {
       if (CompilerDirectives.inInterpreter()) LoopNode.reportLoopCount(this, count);
       compiled |= CompilerDirectives.inCompiledCode();
       return sum;
+    }
+  }
+
+  private static void nativeViewReads(BuffaWire decoder) {
+    var sample = TypedAcceptance.plan("Sample");
+    var fields =
+        java.util.List.of(sample.field(0), sample.field(1), sample.field(2), sample.field(22));
+    var contract =
+        new dev.elide.truffledata.protobuf.ProtoPlan.Model(
+                null,
+                java.util.List.of(
+                    new dev.elide.truffledata.protobuf.ProtoPlan.Type("ViewBytes", false, fields)),
+                Limits.DEFAULT,
+                16,
+                4096)
+            .type("ViewBytes");
+    try (var plan = decoder.compile(contract, 65536);
+        var input = decoder.allocate(6).put(new byte[] {8, (byte) 0xe8, 7, 26, 1, (byte) 255});
+        var message = plan.decodeView(input, 4096)) {
+      Acceptance.check(
+          message.nativeBacked() == (decoder.selected() != BuffaWire.Selected.JAVA),
+          "compiled native view selected");
+      Object row = message.row();
+      Object originalBytes = message.row().get(2);
+      var constant = new ConstantValueRoot(row);
+      var constantTarget = constant.getCallTarget();
+      for (int i = 0; i < 200 && !constant.compiled; i++) constantTarget.call(100_000);
+      Acceptance.check(constant.compiled, "constant native value reader compiled");
+      // Host access promotes the single-value cache after the guest captured this row.
+      Acceptance.check(
+          ((BorrowedArray) message.row().get(3)).size() == 0,
+          "empty repeated field promotes cache");
+      constant.compiled = false;
+      Acceptance.check(
+          constantTarget.call(1000) == originalBytes,
+          "host cache growth preserves compiled value identity");
+      Acceptance.check(constant.compiled, "host cache growth remains compiled");
+      var bytes = new ReadRoot();
+      var byteTarget = bytes.getCallTarget();
+      var integer = new WktRoot(false);
+      var integerTarget = integer.getCallTarget();
+      for (int i = 0; i < 200 && (!bytes.compiled || !integer.compiled); i++) {
+        byteTarget.call(row, 100_000);
+        integerTarget.call(row, 100_000);
+      }
+      Acceptance.check(bytes.compiled && integer.compiled, "native view reads compiled");
+      Acceptance.check((Long) byteTarget.call(row, 1000) == 255_000L, "native view byte value");
+      Acceptance.check(
+          (Long) integerTarget.call(row, 1000) == 1_000_000L, "native view primitive value");
+      Acceptance.check(
+          NodeUtil.countNodes(bytes) <= 192 && NodeUtil.countNodes(integer) <= 192,
+          "native view AST budget");
+      message.close();
+      Acceptance.rejects(() -> constantTarget.call(1), IllegalStateException.class);
+      Acceptance.rejects(() -> byteTarget.call(row, 1), IllegalStateException.class);
+      Acceptance.rejects(() -> integerTarget.call(row, 1), IllegalStateException.class);
+    }
+  }
+
+  private static final class ConstantValueRoot extends RootNode {
+    private final Object row;
+    @Child private DataLibrary data = DataLibrary.factory().createDispatched(3);
+    boolean compiled;
+
+    ConstantValueRoot(Object row) {
+      super(null);
+      this.row = row;
+    }
+
+    @Override
+    public Object execute(VirtualFrame frame) {
+      int count = (Integer) frame.getArguments()[0];
+      Object value = Missing.INSTANCE;
+      for (int i = 0; i < count; i++) value = data.read(row, 2);
+      if (CompilerDirectives.inInterpreter()) LoopNode.reportLoopCount(this, count);
+      compiled |= CompilerDirectives.inCompiledCode();
+      return value;
     }
   }
 

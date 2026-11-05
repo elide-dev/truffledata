@@ -1,0 +1,90 @@
+# To display the perf.data header info, please use --header/--header-only options.
+#
+#
+# Total Lost Samples: 0
+#
+# Samples: 3K of event 'cpu/cycles/P'
+# Event count (approx.): 16094931778
+#
+# Overhead  Command          Shared Object                   Symbol                                                                    
+# ........  ...............  ..............................  ..........................................................................
+#
+    34.15%  truffledata-com  truffledata-comparison-profile  [.] <truffledata_buffa::typed::Decoder>::binary
+            |          
+            |--15.47%--<truffledata_buffa::typed::Decoder>::binary
+            |          
+            |--6.04%--<truffledata_buffa::typed::Decoder>::push
+            |          
+            |--3.32%--<buffa::encoding::WireType>::from_u32
+            |          
+            |--1.87%--buffa::encoding::decode_varint::<&[u8]>
+            |          
+            |--1.55%--<truffledata_buffa::typed::Decoder>::bytes
+            |          
+            |--1.33%--truffledata_buffa::typed::take_bytes
+            |          
+            |--1.27%--SvmBackend_typed_m5ZAy5gBUdD7mhPOcay3hB
+            |          BuffaPlan_parse_CdgW7hksxZFlQDePGBwO0J
+            |          BuffaPlan_decodeView_NETFxZv9N59QiBmqAhTnrC
+            |          Comparison$Fixture_parseNative_LgVvYd8rZW7zJc7biagwL4
+            |          Comparison$Fixture_ingest_nKtS7SZyoUBnHzb7kJPIbK
+            |          Comparison$$Laf51eff2_run_Qm1e9AMT80I7oHp0l0OLt6
+            |          Comparison_measure_rBHXAV3t9KEP8Sb58Nxs99
+            |          Comparison_run_Q5rf1SKn3YJHnF3ZUK1v3H
+            |          Comparison_main_Tdm8knqZbgFKmi8P01KlkC
+            |          Profile_main_QLbiWA5uQ36iHGzuY4KzH1
+            |          JavaMainWrapper_runCore0_DxjyYWWswBIqpGm74uwTlD
+            |          JavaMainWrapper_doRun_F09BQfnF3iKa8bUp7D6GY0
+            |          JavaMainWrapper_run_iTUBl8UzFfAz1VYmMX6I32
+            |          IsolateEnterStub__JavaMainWrapper__run__cXbfAhOWcF90761nQYco7L
+            |          __libc_start_call_main
+            |          call_init (inlined)
+            |          __libc_start_main@@GLIBC_2.34
+            |          _start
+            |          
+            |--1.25%--truffledata_buffa::typed::scalar
+            |          
+             --1.22%--core::str::converts::from_utf8
+
+     7.81%  truffledata-com  truffledata-comparison-profile  [.] <truffledata_buffa::typed::Decoder>::push
+            |          
+            |--3.60%--<truffledata_buffa::typed::Decoder>::binary
+            |          
+             --1.38%--<buffa::encoding::WireType>::from_u32
+
+     5.78%  truffledata-com  truffledata-comparison-profile  [.] core::str::converts::from_utf8
+            |          
+             --3.38%--<truffledata_buffa::typed::Decoder>::binary
+
+     4.36%  truffledata-com  truffledata-comparison-profile  [.] <truffledata_buffa::typed::Decoder>::bytes
+            |          
+             --2.38%--<truffledata_buffa::typed::Decoder>::binary
+
+     3.87%  truffledata-com  truffledata-comparison-profile  [.] buffa::encoding::decode_varint::<&[u8]>
+            |          
+             --1.20%--<truffledata_buffa::typed::Decoder>::binary
+
+     3.38%  truffledata-com  truffledata-comparison-profile  [.] NativeRow_entry_0qAygVWzJK0Yy4gfIXcD20
+     3.24%  truffledata-com  truffledata-comparison-profile  [.] NativeRow_link_mx3GkqQvHUAby0XDRDodU6
+     3.07%  truffledata-com  truffledata-comparison-profile  [.] truffledata_buffa::typed::scalar
+            |          
+             --1.56%--<truffledata_buffa::typed::Decoder>::binary
+
+     2.83%  truffledata-com  truffledata-comparison-profile  [.] <buffa::encoding::WireType>::from_u32
+            |          
+             --1.54%--<truffledata_buffa::typed::Decoder>::binary
+
+     2.10%  truffledata-com  truffledata-comparison-profile  [.] NativeRow$NativeArray_ChiwXB5RyIIYxgcnWoQjFJ
+     1.93%  truffledata-com  truffledata-comparison-profile  [.] <truffledata_buffa::typed::Contract>::enumeration
+     1.91%  truffledata-com  truffledata-comparison-profile  [.] String_ANiVZ8cr6wIGG2iZqvkdVA
+     1.81%  truffledata-com  truffledata-comparison-profile  [.] NativeRow_index_K37PGviU9t0btuxR9Y4LJD
+     1.59%  truffledata-com  truffledata-comparison-profile  [.] BuffaPlan_parse_CdgW7hksxZFlQDePGBwO0J
+     1.55%  truffledata-com  truffledata-comparison-profile  [.] truffledata_buffa::typed::take_bytes
+     1.23%  truffledata-com  truffledata-comparison-profile  [.] SvmBackend_typed_m5ZAy5gBUdD7mhPOcay3hB
+     1.14%  truffledata-com  truffledata-comparison-profile  [.] NativeRow_materialize_uxG98lR1ti1NGjsk5QlIJ8
+     1.14%  truffledata-com  truffledata-comparison-profile  [.] TypedRow_getSize_xTAAGXoQu89rPgzsOvk7X0
+
+
+#
+# (Cannot load tips.txt file, please install perf!)
+#

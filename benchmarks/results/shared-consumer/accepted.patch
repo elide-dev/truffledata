@@ -1,0 +1,1756 @@
+diff --git a/.github/scripts/coverage_contract.py b/.github/scripts/coverage_contract.py
+index cc2ab6d..74990aa 100644
+--- a/.github/scripts/coverage_contract.py
++++ b/.github/scripts/coverage_contract.py
+@@ -24,12 +24,22 @@ ACCESS_SOURCES = {f'core/src/main/java/dev/elide/truffledata/{name}.java' for na
+     'protobuf-buffa/src/main/java/dev/elide/truffledata/buffa/WireMessage.java',
+     'protobuf-buffa/src/main/java/dev/elide/truffledata/buffa/ViewOwner.java',
+     'protobuf-buffa/src/main/java/dev/elide/truffledata/buffa/TypedRow.java',
++    'protobuf-buffa/src/main/java/dev/elide/truffledata/buffa/NativeRow.java',
+     'protobuf-buffa/src/main/java/dev/elide/truffledata/buffa/ScalarRow.java',
+     'protobuf-buffa/src/main/java/dev/elide/truffledata/buffa/TypedArray.java',
+     'protobuf-buffa/src/main/java/dev/elide/truffledata/buffa/TypedMessage.java',
+ 
+ }
+ 
++# JVM LCOV cannot execute an SVM pointer intrinsic. Keep the exact method visible in gap reports;
++# native_views_test and consumer_native_smoke exercise these loads under SVM's JIT checks.
++SVM_ONLY_METHODS = {
++    'protobuf-buffa/src/main/java/dev/elide/truffledata/buffa/NativeRow.java': {
++        'dev/elide/truffledata/buffa/NativeRow::entry '
++        '(Ldev/elide/truffledata/buffa/BuffaWire$Tape;I)Lorg/graalvm/word/Pointer;',
++    },
++}
++
+ def analyze(text):
+     summary = {}
+     for record in text.split('end_of_record'):
+@@ -67,8 +77,9 @@ def enforce(summary):
+         entry = summary.get(source)
+         if not entry or not entry['methods_total']:
+             raise ValueError('Missing access-method coverage: ' + source)
+-        if entry['uncovered_methods']:
+-            raise ValueError('Uncovered access methods in ' + source + ': ' + ', '.join(entry['uncovered_methods']))
++        missing = set(entry['uncovered_methods']) - SVM_ONLY_METHODS.get(source, set())
++        if missing:
++            raise ValueError('Uncovered access methods in ' + source + ': ' + ', '.join(sorted(missing)))
+ 
+ 
+ def main():
+diff --git a/.github/scripts/test_coverage_contract.py b/.github/scripts/test_coverage_contract.py
+index 18a4db9..613b878 100644
+--- a/.github/scripts/test_coverage_contract.py
++++ b/.github/scripts/test_coverage_contract.py
+@@ -1,5 +1,5 @@
+ import unittest
+-from coverage_contract import ACCESS_SOURCES, analyze, enforce
++from coverage_contract import ACCESS_SOURCES, SVM_ONLY_METHODS, analyze, enforce
+ 
+ 
+ class CoverageContractTest(unittest.TestCase):
+@@ -24,3 +24,13 @@ class CoverageContractTest(unittest.TestCase):
+         for text in ['', self.report().replace('FNDA:1,', 'FNDA:0,', 1)]:
+             with self.assertRaises(ValueError):
+                 enforce(analyze(text))
++
++    def test_platform_exception_does_not_exempt_native_array_access(self):
++        source, methods = next(iter(SVM_ONLY_METHODS.items()))
++        summary = analyze(self.report())
++        summary[source]['uncovered_methods'] = list(methods)
++        enforce(summary)
++        summary[source]['uncovered_methods'].append(
++            'dev/elide/truffledata/buffa/NativeRow$NativeArray::getArraySize ()J')
++        with self.assertRaises(ValueError):
++            enforce(summary)
+diff --git a/.github/workflows/check.buffa.yml b/.github/workflows/check.buffa.yml
+index a5ee708..22e7b51 100644
+--- a/.github/workflows/check.buffa.yml
++++ b/.github/workflows/check.buffa.yml
+@@ -34,7 +34,7 @@ jobs:
+       - name: Install Bazelisk
+         run: .github/scripts/install-bazelisk.sh
+       - name: Test static linkage and native-free fallback
+-        run: bazel test //protobuf-buffa/tests:native_test //protobuf-buffa/tests:native_non_strict_test //protobuf-buffa/tests:native_views_test //protobuf-buffa/tests:fallback_test //json/tests:native_test //benchmarks/comparison:native_smoke //benchmarks/comparison:json_native_smoke //tools/release:buffa_native_test //tools/release:stock_free_native_test
++        run: bazel test //protobuf-buffa/tests:native_test //protobuf-buffa/tests:native_non_strict_test //protobuf-buffa/tests:native_views_test //protobuf-buffa/tests:fallback_test //json/tests:native_test //benchmarks/comparison:native_smoke //benchmarks/comparison:consumer_native_smoke //benchmarks/comparison:json_native_smoke //tools/release:buffa_native_test //tools/release:stock_free_native_test
+       - name: Preserve JUnit
+         if: ${{ !cancelled() }}
+         run: python3 .github/scripts/reports.py junit
+diff --git a/benchmarks/comparison/BUILD.bazel b/benchmarks/comparison/BUILD.bazel
+index 3a325f1..960cd66 100644
+--- a/benchmarks/comparison/BUILD.bazel
++++ b/benchmarks/comparison/BUILD.bazel
+@@ -390,3 +390,90 @@ sh_test(
+         "@platforms//cpu:x86_64",
+     ],
+ )
++
++# Small consumer-level experiment; intentionally separate from the historical comparison matrix.
++data_java_library(
++    name = "consumer",
++    testonly = True,
++    srcs = [
++        "ConsumerComparison.java",
++        "ConsumerProfile.java",
++    ],
++    deps = [
++        ":comparison",
++        ":contracts",
++        "//core",
++        "//protobuf-buffa",
++        "//protobuf-buffa:bindings",
++        "//protobuf-runtime",
++        "@maven//:com_google_protobuf_protobuf_java",
++        "@maven//:org_graalvm_polyglot_polyglot",
++        "@maven//:org_graalvm_sdk_nativeimage",
++        "@maven//:org_graalvm_truffle_truffle_api",
++        "@maven//:org_graalvm_truffle_truffle_runtime",
++    ],
++)
++
++java_test(
++    name = "consumer_smoke",
++    size = "large",
++    args = ["--smoke"],
++    data = ["//protobuf-buffa/native:shared"],
++    jvm_flags = ["--enable-native-access=ALL-UNNAMED"],
++    main_class = "dev.elide.truffledata.comparison.ConsumerComparison",
++    use_testrunner = False,
++    runtime_deps = [":consumer"],
++)
++
++[
++    native_image(
++        name = name,
++        testonly = True,
++        cc_deps = ["//protobuf-buffa/native:truffledata_buffa"],
++        exec_properties = {
++            "EstimatedCPU": "4",
++            "EstimatedMemory": "16GB",
++        },
++        executable_name = executable,
++        extra_args = [
++            "--gc=serial",
++            "--add-exports=org.graalvm.truffle.runtime/com.oracle.truffle.runtime=ALL-UNNAMED",
++            "--parallelism=4",
++            "-march=compatibility",
++            "--initialize-at-build-time=dev.elide.truffledata",
++            "--initialize-at-run-time=dev.elide.truffledata.comparison.Comparison",
++            "--features=dev.elide.truffledata.buffa.BuffaFeature",
++            "-H:+UnlockExperimentalVMOptions",
++        ] + TRUFFLE_JIT_CHECKS + ([
++            "--enable-monitoring=jfr",
++            "-H:-DeleteLocalSymbols",
++            "-H:+PreserveFramePointer",
++        ] if profile else []) + ["-H:-UnlockExperimentalVMOptions"],
++        graalvm_sdk = "@graalvm_linux_amd64//:gvm",
++        main_class = "dev.elide.truffledata.comparison." + main,
++        optimization_mode = "2",
++        tags = ["manual"],
++        target_compatible_with = [
++            "@platforms//os:linux",
++            "@platforms//cpu:x86_64",
++        ],
++        deps = [":consumer"],
++    )
++    for name, executable, main, profile in [
++        ("consumer_svm", "truffledata-consumer", "ConsumerComparison", False),
++        ("consumer_profile", "truffledata-consumer-profile", "ConsumerProfile", True),
++    ]
++]
++
++sh_test(
++    name = "consumer_native_smoke",
++    size = "large",
++    srcs = ["native_smoke.sh"],
++    args = ["$(rootpath :consumer_svm)"],
++    data = [":consumer_svm"],
++    tags = ["manual"],
++    target_compatible_with = [
++        "@platforms//os:linux",
++        "@platforms//cpu:x86_64",
++    ],
++)
+diff --git a/docs/TRUFFLE.md b/docs/TRUFFLE.md
+index dc4a211..be4957e 100644
+--- a/docs/TRUFFLE.md
++++ b/docs/TRUFFLE.md
+@@ -4,6 +4,19 @@ Schema identity is stable adapter-owned state, not a global interning cache. Fie
+ 
+ `ReadLongNode`, `ReadDoubleNode`, `ReadBooleanNode`, `ReadLengthNode`, and row member access have three-entry polymorphic caches and a generic fallback. The standalone accessor deliberately owns its cache as an adopted child; node object inlining is explicitly disabled for that API. Immutable schema predicates are marked idempotent. Dynamic-object getter caches are explicitly shared between generic and primitive reads. Static-object property handles are cached by layout and ordinal. The primitive batch specialization bypasses state-array reads only for a validated required, non-null INT64 field.
+ 
++Native protobuf primitive exports also bind immutable field descriptors by plan identity and ordinal,
++with a three-entry limit and generic fallback. Mutable row directories and materialization caches
++remain mutable to the compiler. The shared-consumer experiment records a rejected count-capability
++prototype: its read/allocation improvements came with cross-workload regressions, so it does not
++change the common access API.
++
++The [shared consumer experiment](../benchmarks/comparison/CONSUMER.md) exercises nested protobuf
++work through common nodes on JVM and SVM with the same graph budget. Its native smoke test runs in
++the reusable native-backend CI job and contributes JUnit to the existing Codecov upload. Typed JSON
++scalar records now export `DataLibrary` and ordinary row interop over their native slots. They
++remain scoped and SVM-only; shared compiled reads, schema-cache saturation, null/presence,
++close/thread checks and allocation budgets are exercised by `//json/tests:native_test`.
++
+ Ingestion, JDBC execution, Protobuf reflection, exact numeric conversion, Unicode code-point traversal, recursive array-element validation, and name lookup live behind Truffle boundaries. Primitive batch/dynamic reads do not cross a boundary. Static-record access uses cached property handles; megamorphic fallback has an explicit boundary. Immutable descriptor/property arrays use `@CompilationFinal`; mutable payload arrays are never declared compilation-final by contents. There is no speculative database-schema assumption requiring an external invalidation notification.
+ 
+ Java null is represented with JSpecify `@Nullable` only where it can occur (driver return values, end-of-stream, optional storage arrays). SQL/data null and missing are explicit non-null sentinel objects. Generated DSL sources are excluded from NullAway; handwritten production packages are NullMarked, and there are no NullAway suppressions. A source-policy test guards annotation coverage, cache limits, and reviewed boundary counts. Compiler warnings are errors.
+@@ -86,7 +99,7 @@ This includes branches the runtime fixtures do not execute: reachability analysi
+ than line coverage for this check. It is not proof about arbitrary third-party implementations,
+ new guest compositions, driver internals behind boundaries, or different GraalVM versions.
+ 
+-`JitMatrix` contains 387 cases shared by three gates:
++`JitMatrix` currently contains 617 cases (550 successful operations and 67 expected rejections) shared by three gates:
+ 
+ - `//tests:test` runs instrumented correctness coverage with strict contract assertions.
+ - `//tests:jit_matrix` runs without coverage instrumentation, with strict assertions and
+@@ -125,6 +138,12 @@ keep correctness and compiled runs distinct. The source-policy test requires rev
+ new exported interop surface or message is introduced. The native gate also compares every
+ case and its expected outcome against `benchmarks/jit-cases.json`.
+ 
++The access inventory includes `NativeRow` and its nested arrays. The exact SVM-only
++`NativeRow.entry(Tape,int)` pointer helper remains visible as uncovered in JVM LCOV and is the
++sole named platform exception for that source; native-view acceptance and the shared consumer
++exercise its pointer loads under SVM's JIT checks. JSON's scoped Java API currently requires SVM,
++so its compiled acceptance must not be represented as JVM line-coverage evidence.
++
+ The initial expanded run covers 603/638 core lines (94.5%). All four typed accessors,
+ DynamicRecord, and ExactNumber have 100% line coverage. DataLibrary covers 55/59 lines
+ (93.2%) and every executable method. The 387-case matrix consists of 340 successful
+diff --git a/json/src/main/java/dev/elide/truffledata/json/JsonScalarRecord.java b/json/src/main/java/dev/elide/truffledata/json/JsonScalarRecord.java
+index 08ba8bd..98dd6e5 100644
+--- a/json/src/main/java/dev/elide/truffledata/json/JsonScalarRecord.java
++++ b/json/src/main/java/dev/elide/truffledata/json/JsonScalarRecord.java
+@@ -1,8 +1,10 @@
+ package dev.elide.truffledata.json;
+ 
+ import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
+-import dev.elide.truffledata.Field;
+-import dev.elide.truffledata.Schema;
++import com.oracle.truffle.api.dsl.*;
++import com.oracle.truffle.api.library.*;
++import com.oracle.truffle.api.nodes.UnexpectedResultException;
++import dev.elide.truffledata.*;
+ import dev.elide.truffledata.json.generated.Json;
+ import java.math.BigInteger;
+ import java.nio.charset.StandardCharsets;
+@@ -11,21 +13,128 @@ import org.graalvm.nativeimage.c.type.VoidPointer;
+ import org.graalvm.word.Pointer;
+ 
+ /** Validated scalar slots with allocation-free primitive reads and explicit scoped ownership. */
+-public final class JsonScalarRecord implements AutoCloseable {
+-  private final Schema schema;
++@ExportLibrary(DataLibrary.class)
++public final class JsonScalarRecord extends AbstractRow implements AutoCloseable {
+   private final VoidPointer result;
+   private final Thread thread = Thread.currentThread();
+   private boolean open = true;
+ 
+   JsonScalarRecord(Schema schema, VoidPointer result) {
+-    this.schema = schema;
++    super(schema);
+     this.result = result;
+   }
+ 
++  @Override
++  protected boolean scoped() {
++    return true;
++  }
++
++  @ExportMessage
++  @Idempotent
++  Schema getSchema() {
++    return descriptor;
++  }
++
++  @ExportMessage
++  Object read(int index) {
++    if (!isPresent(index)) return Missing.INSTANCE;
++    if (isNull(index)) return DataNull.INSTANCE;
++    return switch (descriptor.field(index).kind()) {
++      case INT64 -> longValue(index);
++      case FLOAT64 -> doubleValue(index);
++      case BOOLEAN -> booleanValue(index);
++      case STRING -> stringValue(index);
++      case EXACT -> Values.normalize(unsignedValue(index));
++      default -> throw new IllegalStateException("Unsupported JSON scalar kind");
++    };
++  }
++
++  static JsonScalarAccess access(Schema schema, int index) {
++    return new JsonScalarAccess(schema, index);
++  }
++
++  @ExportMessage
++  static class ReadLong {
++    @Specialization(
++        guards = {
++          "row.getSchema() == schema",
++          "index == cachedIndex",
++          "schema.requiredLong(cachedIndex)"
++        },
++        limit = "3")
++    static long cached(
++        JsonScalarRecord row,
++        int index,
++        @Cached("row.getSchema()") Schema schema,
++        @Cached("index") int cachedIndex,
++        @Cached("access(schema, cachedIndex)") JsonScalarAccess binding) {
++      return binding.longValue(row);
++    }
++
++    @Specialization(replaces = "cached")
++    static long generic(JsonScalarRecord row, int index) throws UnexpectedResultException {
++      Object value = row.read(index);
++      if (value instanceof Long result) return result;
++      throw new UnexpectedResultException(value);
++    }
++  }
++
++  @ExportMessage
++  static class ReadDouble {
++    @Specialization(
++        guards = {
++          "row.getSchema() == schema",
++          "index == cachedIndex",
++          "schema.requiredDouble(cachedIndex)"
++        },
++        limit = "3")
++    static double cached(
++        JsonScalarRecord row,
++        int index,
++        @Cached("row.getSchema()") Schema schema,
++        @Cached("index") int cachedIndex,
++        @Cached("access(schema, cachedIndex)") JsonScalarAccess binding) {
++      return binding.doubleValue(row);
++    }
++
++    @Specialization(replaces = "cached")
++    static double generic(JsonScalarRecord row, int index) throws UnexpectedResultException {
++      Object value = row.read(index);
++      if (value instanceof Double result) return result;
++      throw new UnexpectedResultException(value);
++    }
++  }
++
++  @ExportMessage
++  static class ReadBoolean {
++    @Specialization(
++        guards = {
++          "row.getSchema() == schema",
++          "index == cachedIndex",
++          "schema.requiredBoolean(cachedIndex)"
++        },
++        limit = "3")
++    static boolean cached(
++        JsonScalarRecord row,
++        int index,
++        @Cached("row.getSchema()") Schema schema,
++        @Cached("index") int cachedIndex,
++        @Cached("access(schema, cachedIndex)") JsonScalarAccess binding) {
++      return binding.booleanValue(row);
++    }
++
++    @Specialization(replaces = "cached")
++    static boolean generic(JsonScalarRecord row, int index) throws UnexpectedResultException {
++      Object value = row.read(index);
++      if (value instanceof Boolean result) return result;
++      throw new UnexpectedResultException(value);
++    }
++  }
++
+   private void check(int index) {
+     checkThread();
+     if (!open) throw new IllegalStateException("JSON record closed");
+-    if (index < 0 || index >= schema.size()) throw new IndexOutOfBoundsException(index);
++    if (index < 0 || index >= descriptor.size()) throw new IndexOutOfBoundsException(index);
+   }
+ 
+   private void checkThread() {
+@@ -33,6 +142,7 @@ public final class JsonScalarRecord implements AutoCloseable {
+       throw new IllegalStateException("JSON record thread mismatch");
+   }
+ 
++  @ExportMessage
+   public boolean isPresent(int index) {
+     check(index);
+     return (Json.JsonTypedResult.present(result) & (1L << index)) != 0;
+@@ -45,7 +155,7 @@ public final class JsonScalarRecord implements AutoCloseable {
+ 
+   private VoidPointer slot(int index, Field.Kind kind) {
+     check(index);
+-    if (schema.field(index).kind() != kind)
++    if (descriptor.field(index).kind() != kind)
+       throw new IllegalArgumentException("JSON scalar kind mismatch");
+     if (!isPresent(index) || isNull(index))
+       throw new IllegalStateException("JSON scalar missing or null");
+@@ -56,7 +166,7 @@ public final class JsonScalarRecord implements AutoCloseable {
+   long bits(JsonScalarAccess access) {
+     checkThread();
+     if (!open) throw new IllegalStateException("JSON record closed");
+-    if (schema != access.schema)
++    if (descriptor != access.schema)
+       throw new IllegalArgumentException("JSON accessor schema mismatch");
+     long bit = 1L << access.index;
+     if ((access.optional && (Json.JsonTypedResult.present(result) & bit) == 0)
+diff --git a/json/tests/CompiledReads.java b/json/tests/CompiledReads.java
+index d775aa2..438a69a 100644
+--- a/json/tests/CompiledReads.java
++++ b/json/tests/CompiledReads.java
+@@ -5,7 +5,11 @@ import com.oracle.truffle.api.frame.VirtualFrame;
+ import com.oracle.truffle.api.nodes.LoopNode;
+ import com.oracle.truffle.api.nodes.NodeUtil;
+ import com.oracle.truffle.api.nodes.RootNode;
++import dev.elide.truffledata.DataLibrary;
+ import dev.elide.truffledata.Field;
++import dev.elide.truffledata.ReadBooleanNode;
++import dev.elide.truffledata.ReadDoubleNode;
++import dev.elide.truffledata.ReadLongNode;
+ import dev.elide.truffledata.Schema;
+ import dev.elide.truffledata.json.JsonScalarAccess;
+ import dev.elide.truffledata.json.JsonScalarPlan;
+@@ -42,11 +46,31 @@ final class CompiledReads {
+       try {
+         plan.close();
+         var rows = new JsonScalarRecord[] {first, second};
+-        var dynamic = new Reads(null, schema, false);
+-        var constant = new Reads(rows, schema, false);
+-        var specialized = new Reads(null, schema, true);
+-        var specializedConstant = new Reads(rows, schema, true);
+-        for (var root : new Reads[] {dynamic, constant, specialized, specializedConstant}) {
++        var data = DataLibrary.factory().getUncached();
++        try {
++          check(
++              data.readDouble(first, 1) == 1.5 && data.readBoolean(first, 2),
++              "shared uncached primitives");
++          try {
++            data.readDouble(first, 0);
++            throw new AssertionError("Shared wrong-type read");
++          } catch (com.oracle.truffle.api.nodes.UnexpectedResultException expected) {
++            check(expected.getResult().equals(1000L), "shared rejected value preserved");
++          }
++        } catch (com.oracle.truffle.api.nodes.UnexpectedResultException failure) {
++          throw new AssertionError(failure);
++        }
++        var dynamic = new Reads(null, schema, false, false);
++        var constant = new Reads(rows, schema, false, false);
++        var specialized = new Reads(null, schema, true, false);
++        var specializedConstant = new Reads(rows, schema, true, false);
++        var shared = new Reads(null, schema, false, true);
++        var sharedConstant = new Reads(rows, schema, false, true);
++        var roots =
++            new Reads[] {
++              dynamic, constant, specialized, specializedConstant, shared, sharedConstant
++            };
++        for (var root : roots) {
+           var target = root.getCallTarget();
+           for (int i = 0; i < 200 && !root.compiled; i++) target.call(rows, 100000);
+           check(root.compiled, "JSON reads must execute compiled code");
+@@ -67,11 +91,13 @@ final class CompiledReads {
+                   + (root.constant != null)
+                   + " specialized="
+                   + root.specialized
++                  + " shared="
++                  + root.shared
+                   + " bytes/read="
+                   + bytes);
+         }
+         first.close();
+-        for (var root : new Reads[] {dynamic, constant, specialized, specializedConstant}) {
++        for (var root : roots) {
+           try {
+             root.getCallTarget().call(rows, 1);
+             throw new AssertionError("Compiled closed read");
+@@ -79,6 +105,30 @@ final class CompiledReads {
+           }
+         }
+         check(second.longValue(0) == 2000, "Sibling survives owner close");
++        // A single call site sees more schema identities than either bounded PIC can retain.
++        var churn = new Reads(null, schema, false, true);
++        var churnTarget = churn.getCallTarget();
++        for (int i = 0; i < 8; i++) {
++          var nextSchema =
++              Schema.of(
++                  Field.integer("n", (i & 1) == 0 ? 32 : 64, true, false, false),
++                  new Field("d", Field.Kind.FLOAT64, false, false),
++                  new Field("b", Field.Kind.BOOLEAN, false, false));
++          try (var nextPlan = JsonScalarPlan.compile(nextSchema);
++              var next =
++                  nextPlan.decode(
++                      ("{\"n\":" + (1000 + i) + ",\"d\":1.5,\"b\":true}")
++                          .getBytes(StandardCharsets.UTF_8))) {
++            var nextRows = new JsonScalarRecord[] {next, next};
++            churn.compiled = false;
++            for (int warmup = 0; warmup < 200 && !churn.compiled; warmup++)
++              churnTarget.call(nextRows, 100000);
++            check(churn.compiled, "Shared JSON schema churn remains compilable");
++            check(
++                (Long) churnTarget.call(nextRows, 1) == 1002 + i, "Shared JSON schema churn value");
++          }
++        }
++        check(NodeUtil.countNodes(churn) <= 192, "Shared JSON schema cache remains bounded");
+       } finally {
+         context.leave();
+       }
+@@ -90,16 +140,21 @@ final class CompiledReads {
+     final JsonScalarRecord @org.jspecify.annotations.Nullable [] constant;
+ 
+     boolean compiled;
+-    final boolean specialized;
++    final boolean specialized, shared;
++    @Child private ReadLongNode sharedLong = ReadLongNode.create();
++    @Child private ReadDoubleNode sharedDouble = ReadDoubleNode.create();
++    @Child private ReadBooleanNode sharedBoolean = ReadBooleanNode.create();
+     final JsonScalarAccess n, d, b;
+ 
+     Reads(
+         JsonScalarRecord @org.jspecify.annotations.Nullable [] constant,
+         Schema schema,
+-        boolean specialized) {
++        boolean specialized,
++        boolean shared) {
+       super(TestLanguage.current());
+       this.constant = constant;
+       this.specialized = specialized;
++      this.shared = shared;
+       n = new JsonScalarAccess(schema, 0);
+       d = new JsonScalarAccess(schema, 1);
+       b = new JsonScalarAccess(schema, 2);
+@@ -113,9 +168,13 @@ final class CompiledReads {
+       for (int i = 0; i < count; i++) {
+         var row = rows[i & 1];
+         sum +=
+-            specialized
+-                ? n.longValue(row) + (long) d.doubleValue(row) + (b.booleanValue(row) ? 1 : 0)
+-                : row.longValue(0) + (long) row.doubleValue(1) + (row.booleanValue(2) ? 1 : 0);
++            shared
++                ? sharedLong.execute(row, 0)
++                    + (long) sharedDouble.execute(row, 1)
++                    + (sharedBoolean.execute(row, 2) ? 1 : 0)
++                : specialized
++                    ? n.longValue(row) + (long) d.doubleValue(row) + (b.booleanValue(row) ? 1 : 0)
++                    : row.longValue(0) + (long) row.doubleValue(1) + (row.booleanValue(2) ? 1 : 0);
+       }
+       if (CompilerDirectives.inInterpreter()) LoopNode.reportLoopCount(this, count);
+       compiled |= CompilerDirectives.inCompiledCode();
+diff --git a/json/tests/SvmAcceptance.java b/json/tests/SvmAcceptance.java
+index e4dc972..26cb9d4 100644
+--- a/json/tests/SvmAcceptance.java
++++ b/json/tests/SvmAcceptance.java
+@@ -1,7 +1,10 @@
+ package dev.elide.truffledata.json.tests;
+ 
++import com.oracle.truffle.api.interop.InteropLibrary;
++import com.oracle.truffle.api.nodes.UnexpectedResultException;
+ import dev.elide.myna.values.NativeValueTape;
+ import dev.elide.myna.values.ValueTape;
++import dev.elide.truffledata.*;
+ import dev.elide.truffledata.json.generated.Json;
+ import java.nio.charset.StandardCharsets;
+ import java.util.Arrays;
+@@ -88,7 +91,8 @@ public final class SvmAcceptance {
+     }
+   }
+ 
+-  private static void schemaTyped() throws InterruptedException {
++  private static void schemaTyped() throws Exception {
++    var data = DataLibrary.factory().getUncached();
+     var schema =
+         dev.elide.truffledata.Schema.of(
+             dev.elide.truffledata.Field.integer("n", 8, true, false, false),
+@@ -115,14 +119,34 @@ public final class SvmAcceptance {
+     }
+     try (var missing = plan.decode("{\"n\":0,\"u\":0}".getBytes(StandardCharsets.UTF_8))) {
+       require(!missing.isPresent(1));
++      require(data.read(missing, 1) == Missing.INSTANCE);
++      require(!data.isPresent(missing, 1));
+       require(missing.unsignedValue(2).signum() == 0);
+     }
+     try (var nullable =
+         plan.decode("{\"n\":0,\"s\":null,\"u\":1}".getBytes(StandardCharsets.UTF_8))) {
+       require(nullable.isPresent(1) && nullable.isNull(1));
++      require(data.read(nullable, 1) == DataNull.INSTANCE);
++      require(data.isPresent(nullable, 1));
+     }
+     plan.close();
+     require(record.longValue(0) == 127);
++    require(data.getSchema(record) == schema);
++    require(data.readLong(record, 0) == 127);
++    require(InteropLibrary.getUncached().readMember(record, "s").equals("😀"));
++    require(data.read(record, 2) instanceof ExactNumber);
++    try {
++      new DataArray(new Object[] {record});
++      throw new AssertionError("Scoped JSON record escaped into owned storage");
++    } catch (ContractViolation expected) {
++      /* explicit ownership */
++    }
++    try {
++      data.readLong(record, 1);
++      throw new AssertionError("Wrong shared primitive type");
++    } catch (UnexpectedResultException expected) {
++      require(expected.getResult().equals("😀"));
++    }
+     require(record.stringValue(1).equals("😀"));
+     require(record.unsignedValue(2).toString().equals("18446744073709551615"));
+     var rejected = new java.util.concurrent.atomic.AtomicInteger();
+@@ -157,7 +181,8 @@ public final class SvmAcceptance {
+     }
+   }
+ 
+-  private static void accessorContracts() throws InterruptedException {
++  private static void accessorContracts() throws Exception {
++    var data = DataLibrary.factory().getUncached();
+     var schema =
+         dev.elide.truffledata.Schema.of(
+             new dev.elide.truffledata.Field(
+@@ -169,6 +194,14 @@ public final class SvmAcceptance {
+     try (var plan = dev.elide.truffledata.json.JsonScalarPlan.compile(schema)) {
+       for (String input : new String[] {"{}", "{\"n\":null}"}) {
+         try (var record = plan.decode(input.getBytes(StandardCharsets.UTF_8))) {
++          require(
++              data.read(record, 0) == (input.equals("{}") ? Missing.INSTANCE : DataNull.INSTANCE));
++          try {
++            data.readLong(record, 0);
++            throw new AssertionError("Missing/null shared primitive");
++          } catch (UnexpectedResultException expected) {
++            /* null and absence preserved */
++          }
+           try {
+             access.longValue(record);
+             throw new AssertionError("Missing/null accessor");
+@@ -178,6 +211,7 @@ public final class SvmAcceptance {
+       }
+       try (var record = plan.decode("{\"n\":7}".getBytes(StandardCharsets.UTF_8))) {
+         require(access.longValue(record) == 7);
++        require(data.readLong(record, 0) == 7);
+         try {
+           wrong.longValue(record);
+           throw new AssertionError("Wrong schema accessor");
+@@ -193,7 +227,7 @@ public final class SvmAcceptance {
+             new Thread(
+                 () -> {
+                   try {
+-                    access.longValue(record);
++                    data.read(record, 0);
+                   } catch (IllegalStateException expected) {
+                     rejected.incrementAndGet();
+                   }
+@@ -203,8 +237,8 @@ public final class SvmAcceptance {
+         require(rejected.get() == 1);
+         record.close();
+         try {
+-          access.longValue(record);
+-          throw new AssertionError("Closed accessor");
++          data.read(record, 0);
++          throw new AssertionError("Closed shared accessor");
+         } catch (IllegalStateException expected) {
+         }
+       }
+@@ -256,7 +290,7 @@ public final class SvmAcceptance {
+     }
+   }
+ 
+-  public static void main(String[] args) throws InterruptedException {
++  public static void main(String[] args) throws Exception {
+     typed();
+     schemaTyped();
+     accessorContracts();
+diff --git a/protobuf-buffa/src/main/java/dev/elide/truffledata/buffa/NativeRow.java b/protobuf-buffa/src/main/java/dev/elide/truffledata/buffa/NativeRow.java
+index 00ca0bc..b7ebdd1 100644
+--- a/protobuf-buffa/src/main/java/dev/elide/truffledata/buffa/NativeRow.java
++++ b/protobuf-buffa/src/main/java/dev/elide/truffledata/buffa/NativeRow.java
+@@ -239,8 +239,12 @@ final class NativeRow extends TypedRow {
+   }
+ 
+   long integerValue(int ordinal, ByteBuffer buffer) {
++    return integerValue(ordinal, plan().field(ordinal), buffer);
++  }
++
++  // Exported access can bind the immutable field descriptor once per plan/ordinal cache entry.
++  long integerValue(int ordinal, ProtoPlan.FieldPlan field, ByteBuffer buffer) {
+     int index = offset(ordinal);
+-    var field = plan().field(ordinal);
+     if (index < 0) return (Long) field.defaultValue();
+     long value = bits(tape, index, buffer);
+     return switch (field.kind()) {
+@@ -250,6 +254,11 @@ final class NativeRow extends TypedRow {
+     };
+   }
+ 
++  boolean booleanValue(int ordinal, ProtoPlan.FieldPlan field, ByteBuffer buffer) {
++    int index = offset(ordinal);
++    return index < 0 ? (Boolean) field.defaultValue() : bits(tape, index, buffer) != 0;
++  }
++
+   private @Nullable Object cachedValue(int ordinal) {
+     var values = cache;
+     return values == null ? (firstOrdinal == ordinal ? firstValue : null) : values[ordinal];
+diff --git a/protobuf-buffa/src/main/java/dev/elide/truffledata/buffa/TypedRow.java b/protobuf-buffa/src/main/java/dev/elide/truffledata/buffa/TypedRow.java
+index cfaf592..f9a45f5 100644
+--- a/protobuf-buffa/src/main/java/dev/elide/truffledata/buffa/TypedRow.java
++++ b/protobuf-buffa/src/main/java/dev/elide/truffledata/buffa/TypedRow.java
+@@ -3,6 +3,8 @@ package dev.elide.truffledata.buffa;
+ import com.oracle.truffle.api.CompilerDirectives.*;
+ import com.oracle.truffle.api.dsl.Bind;
+ import com.oracle.truffle.api.dsl.Cached;
++import com.oracle.truffle.api.dsl.Idempotent;
++import com.oracle.truffle.api.dsl.Specialization;
+ import com.oracle.truffle.api.library.*;
+ import com.oracle.truffle.api.nodes.Node;
+ import com.oracle.truffle.api.nodes.UnexpectedResultException;
+@@ -44,6 +46,11 @@ public abstract sealed class TypedRow extends AbstractRow implements ProtoAccess
+     }
+   }
+ 
++  @Idempotent
++  final boolean nativeIndex() {
++    return this instanceof NativeRow;
++  }
++
+   @Override
+   protected final boolean scoped() {
+     return true;
+@@ -62,6 +69,7 @@ public abstract sealed class TypedRow extends AbstractRow implements ProtoAccess
+     throw new ContractViolation("Expected INT64");
+   }
+ 
++  @Idempotent
+   public final ProtoPlan plan() {
+     return plan;
+   }
+@@ -121,22 +129,49 @@ public abstract sealed class TypedRow extends AbstractRow implements ProtoAccess
+   }
+ 
+   @ExportMessage
+-  static long readLong(
+-      TypedRow row,
+-      int index,
+-      @Cached.Shared("owner") @Cached("create()") ViewOwner.CheckOpenNode check,
+-      @Bind Node node,
+-      @Cached.Shared("indexType") @Cached InlinedExactClassProfile indexType)
+-      throws UnexpectedResultException {
+-    check.execute(row.owner);
+-    if (row instanceof NativeRow nativeRow) {
+-      var buffer = indexType.profile(node, nativeRow.indexBuffer());
+-      if (nativeRow.integer(index)) return nativeRow.integerValue(index, buffer);
+-      throw new UnexpectedResultException(nativeRow.value(index, buffer));
++  static class ReadLong {
++    @Specialization(
++        guards = {
++          "row.nativeIndex()",
++          "row.plan() == cachedPlan",
++          "index == cachedIndex",
++          "integer"
++        },
++        limit = "3")
++    static long nativeInteger(
++        TypedRow row,
++        int index,
++        @Cached("row.plan()") ProtoPlan cachedPlan,
++        @Cached("index") int cachedIndex,
++        @Cached("cachedPlan.field(cachedIndex)") ProtoPlan.FieldPlan field,
++        @Cached("cachedPlan.schema().requiredLong(cachedIndex)") boolean integer,
++        @Cached.Shared("owner") @Cached("create()") ViewOwner.CheckOpenNode check,
++        @Bind Node node,
++        @Cached.Shared("indexType") @Cached InlinedExactClassProfile indexType) {
++      check.execute(row.owner);
++      var nativeRow = (NativeRow) row;
++      return nativeRow.integerValue(
++          cachedIndex, field, indexType.profile(node, nativeRow.indexBuffer()));
++    }
++
++    @Specialization(replaces = "nativeInteger")
++    static long generic(
++        TypedRow row,
++        int index,
++        @Cached.Shared("owner") @Cached("create()") ViewOwner.CheckOpenNode check,
++        @Bind Node node,
++        @Cached.Shared("indexType") @Cached InlinedExactClassProfile indexType)
++        throws UnexpectedResultException {
++      check.execute(row.owner);
++      if (row instanceof NativeRow nativeRow) {
++        var buffer = indexType.profile(node, nativeRow.indexBuffer());
++        if (nativeRow.integer(index)) return nativeRow.integerValue(index, buffer);
++        throw new UnexpectedResultException(nativeRow.value(index, buffer));
++      }
++      Object value = ((ArrayRow) row).values[index];
++      if (value instanceof Long number) return number;
++      throw new UnexpectedResultException(row.resolved(index));
+     }
+-    Object value = ((ArrayRow) row).values[index];
+-    if (value instanceof Long number) return number;
+-    throw new UnexpectedResultException(row.resolved(index));
+   }
+ 
+   @ExportMessage
+@@ -157,20 +192,42 @@ public abstract sealed class TypedRow extends AbstractRow implements ProtoAccess
+   }
+ 
+   @ExportMessage
+-  static boolean readBoolean(
+-      TypedRow row,
+-      int index,
+-      @Cached.Shared("owner") @Cached("create()") ViewOwner.CheckOpenNode check,
+-      @Bind Node node,
+-      @Cached.Shared("indexType") @Cached InlinedExactClassProfile indexType)
+-      throws UnexpectedResultException {
+-    check.execute(row.owner);
+-    Object value =
+-        row instanceof NativeRow nativeRow
+-            ? nativeRow.value(index, indexType.profile(node, nativeRow.indexBuffer()))
+-            : row.resolved(index);
+-    if (value instanceof Boolean flag) return flag;
+-    throw new UnexpectedResultException(value);
++  static class ReadBoolean {
++    @Specialization(
++        guards = {"row.nativeIndex()", "row.plan() == cachedPlan", "index == cachedIndex", "bool"},
++        limit = "3")
++    static boolean nativeBoolean(
++        TypedRow row,
++        int index,
++        @Cached("row.plan()") ProtoPlan cachedPlan,
++        @Cached("index") int cachedIndex,
++        @Cached("cachedPlan.field(cachedIndex)") ProtoPlan.FieldPlan field,
++        @Cached("cachedPlan.schema().requiredBoolean(cachedIndex)") boolean bool,
++        @Cached.Shared("owner") @Cached("create()") ViewOwner.CheckOpenNode check,
++        @Bind Node node,
++        @Cached.Shared("indexType") @Cached InlinedExactClassProfile indexType) {
++      check.execute(row.owner);
++      var nativeRow = (NativeRow) row;
++      return nativeRow.booleanValue(
++          cachedIndex, field, indexType.profile(node, nativeRow.indexBuffer()));
++    }
++
++    @Specialization(replaces = "nativeBoolean")
++    static boolean generic(
++        TypedRow row,
++        int index,
++        @Cached.Shared("owner") @Cached("create()") ViewOwner.CheckOpenNode check,
++        @Bind Node node,
++        @Cached.Shared("indexType") @Cached InlinedExactClassProfile indexType)
++        throws UnexpectedResultException {
++      check.execute(row.owner);
++      Object value =
++          row instanceof NativeRow nativeRow
++              ? nativeRow.value(index, indexType.profile(node, nativeRow.indexBuffer()))
++              : row.resolved(index);
++      if (value instanceof Boolean flag) return flag;
++      throw new UnexpectedResultException(value);
++    }
+   }
+ 
+   private Object resolved(int index) {
+diff --git a/protobuf-buffa/tests/CompiledReads.java b/protobuf-buffa/tests/CompiledReads.java
+index f5dcead..24f26e2 100644
+--- a/protobuf-buffa/tests/CompiledReads.java
++++ b/protobuf-buffa/tests/CompiledReads.java
+@@ -6,6 +6,8 @@ import com.oracle.truffle.api.interop.*;
+ import com.oracle.truffle.api.nodes.*;
+ import dev.elide.truffledata.*;
+ import dev.elide.truffledata.buffa.*;
++import dev.elide.truffledata.protobuf.ProtoPlan;
++import java.util.List;
+ import org.graalvm.nativeimage.ImageInfo;
+ import org.graalvm.polyglot.Context;
+ 
+@@ -24,6 +26,8 @@ final class CompiledReads {
+       context.initialize("buffa-test");
+       context.enter();
+       try {
++        cachedPlans(decoder);
++        arrayViews(decoder);
+         var cachedRoot = new WktRoot(false);
+         var cachedTarget = cachedRoot.getCallTarget();
+         try (var message = plan.parseJson("7", 4096)) {
+@@ -57,6 +61,168 @@ final class CompiledReads {
+     }
+   }
+ 
++  private static void arrayViews(BuffaWire decoder) {
++    var contract = TypedAcceptance.plan("RepeatedScalars");
++    var root = new ArrayLengthRoot();
++    var target = root.getCallTarget();
++    var interop = InteropLibrary.getUncached();
++    var data = DataLibrary.factory().getUncached();
++    byte[] wire =
++        contract.encode(
++            contract
++                .newBuilder()
++                .set(0, new DataArray(new Object[] {1L, -2L}))
++                .set(14, new DataArray(new Object[] {DataArray.copyOfBytes(new byte[] {7})}))
++                .build());
++    try (var plan = decoder.compile(contract, 65536);
++        var input = decoder.allocate(wire.length).put(wire);
++        var emptyInput = decoder.allocate(0);
++        var message = plan.decodeView(input, 65536);
++        var empty = plan.decodeView(emptyInput, 65536)) {
++      Acceptance.check((Integer) target.call(message.row()) == 2, "shared native array length");
++      Acceptance.check((Integer) target.call(empty.row()) == 0, "empty native array length");
++      var rejected = new java.util.concurrent.atomic.AtomicInteger();
++      Object countedRow = message.row();
++      var other =
++          new Thread(
++              () -> {
++                try {
++                  ((BorrowedArray) data.read(countedRow, 0)).size();
++                } catch (IllegalStateException expected) {
++                  rejected.incrementAndGet();
++                }
++              });
++      other.start();
++      try {
++        other.join();
++      } catch (InterruptedException failure) {
++        Thread.currentThread().interrupt();
++        throw new AssertionError(failure);
++      }
++      Acceptance.check(rejected.get() == 1, "array access enforces thread ownership");
++      Acceptance.rejects(() -> message.row().get(-1), IndexOutOfBoundsException.class);
++      Acceptance.rejects(() -> message.row().get(contract.size()), IndexOutOfBoundsException.class);
++      Object array = data.read(message.row(), 0);
++      try {
++        Acceptance.check(interop.hasArrayElements(array), "native array interop");
++        Acceptance.check(interop.getArraySize(array) == 2, "native interop count");
++        Acceptance.check(
++            !interop.isArrayElementReadable(array, -1)
++                && interop.isArrayElementReadable(array, 1)
++                && !interop.isArrayElementReadable(array, 2),
++            "native array bounds");
++        Acceptance.check(interop.readArrayElement(array, 1).equals(-2L), "native array element");
++        try {
++          interop.readArrayElement(array, 2);
++          throw new AssertionError("Expected native array bounds rejection");
++        } catch (InvalidArrayIndexException expected) {
++          /* bounds */
++        }
++      } catch (UnsupportedMessageException failure) {
++        throw new AssertionError(failure);
++      } catch (InvalidArrayIndexException failure) {
++        throw new AssertionError(failure);
++      }
++      DataArray detached = ((BorrowedArray) data.read(message.row(), 14)).snapshot();
++      Object row = message.row();
++      message.close();
++      Acceptance.rejects(() -> target.call(row), IllegalStateException.class);
++      Acceptance.rejects(() -> ((BorrowedArray) array).size(), IllegalStateException.class);
++      Acceptance.rejects(() -> ((BorrowedArray) array).snapshot(), IllegalStateException.class);
++      Acceptance.check(
++          ((DataArray) detached.get(0)).get(0).equals(7L), "nested array snapshot survives close");
++    }
++  }
++
++  private static final class ArrayLengthRoot extends RootNode {
++    @Child private ReadLengthNode length = ReadLengthNode.create();
++
++    ArrayLengthRoot() {
++      super(null);
++    }
++
++    @Override
++    public Object execute(VirtualFrame frame) {
++      return length.execute(frame.getArguments()[0], 0);
++    }
++  }
++
++  private static void cachedPlans(BuffaWire decoder) {
++    var root = new PlanFieldsRoot();
++    var target = root.getCallTarget();
++    for (int i = 0; i < 8; i++) {
++      var kind = (i & 1) == 0 ? ProtoPlan.Kind.INT32 : ProtoPlan.Kind.UINT32;
++      long fallback = 10L + i;
++      boolean flag = (i & 1) == 0;
++      var contract =
++          new ProtoPlan.Model(
++                  null,
++                  List.of(
++                      new ProtoPlan.Type(
++                          "Guard" + i,
++                          false,
++                          List.of(
++                              new ProtoPlan.FieldPlan(
++                                  "n", 1, kind, false, false, true, false, false, -1, "", null,
++                                  fallback),
++                              new ProtoPlan.FieldPlan(
++                                  "b",
++                                  2,
++                                  ProtoPlan.Kind.BOOL,
++                                  false,
++                                  false,
++                                  true,
++                                  false,
++                                  false,
++                                  -1,
++                                  "",
++                                  null,
++                                  flag)))),
++                  Limits.DEFAULT,
++                  16,
++                  65536)
++              .type("Guard" + i);
++      long value = kind == ProtoPlan.Kind.UINT32 ? 4294967295L : -123;
++      byte[] wire = contract.encode(contract.newBuilder().set(0, value).set(1, !flag).build());
++      try (var plan = decoder.compile(contract, 65536);
++          var empty = decoder.allocate(0);
++          var input = decoder.allocate(wire.length).put(wire);
++          var defaults = plan.decodeView(empty, 65536);
++          var message = plan.decodeView(input, 65536)) {
++        for (int repeat = 0; repeat < 4; repeat++) {
++          Acceptance.check(
++              (Long) target.call(defaults.row()) == fallback + (flag ? 100 : 0),
++              "cached plan defaults");
++          Acceptance.check(
++              (Long) target.call(message.row()) == value + (!flag ? 100 : 0),
++              "cached plan integer kind");
++        }
++        Object closed = message.row();
++        message.close();
++        Acceptance.rejects(() -> target.call(closed), IllegalStateException.class);
++        Acceptance.check(
++            (Long) target.call(defaults.row()) == fallback + (flag ? 100 : 0),
++            "independent owner after close");
++      }
++    }
++    Acceptance.check(NodeUtil.countNodes(root) <= 192, "plan cache AST budget");
++  }
++
++  private static final class PlanFieldsRoot extends RootNode {
++    @Child private ReadLongNode number = ReadLongNode.create();
++    @Child private ReadBooleanNode flag = ReadBooleanNode.create();
++
++    PlanFieldsRoot() {
++      super(null);
++    }
++
++    @Override
++    public Object execute(VirtualFrame frame) {
++      Object row = frame.getArguments()[0];
++      return number.execute(row, 0) + (flag.execute(row, 1) ? 100 : 0);
++    }
++  }
++
+   static void run(BuffaWire decoder) {
+     try (var context =
+             Context.newBuilder("buffa-test")
+diff --git a/tools/bench/BUILD.bazel b/tools/bench/BUILD.bazel
+index a58163a..2d692b8 100644
+--- a/tools/bench/BUILD.bazel
++++ b/tools/bench/BUILD.bazel
+@@ -6,12 +6,17 @@ sh_test(
+     data = [
+         "bench.py",
+         "compare.py",
++        "consumer.py",
+         "profile_summary.py",
+         "test_bench.py",
+         "test_compare.py",
++        "test_consumer.py",
+         "test_profile_summary.py",
+         "//benchmarks:cases.json",
+     ],
+ )
+ 
+-exports_files(["compare.py"])
++exports_files([
++    "compare.py",
++    "consumer.py",
++])
+diff --git a/benchmarks/comparison/CONSUMER.md b/benchmarks/comparison/CONSUMER.md
+new file mode 100644
+index 0000000..bb4397d
+--- /dev/null
++++ b/benchmarks/comparison/CONSUMER.md
+@@ -0,0 +1,64 @@
++# Shared consumer experiment
++
++This small comparison asks whether representation improvements reach a guest using the common access API. It complements the historical generated-getter microbenchmarks; it is not an Elide or TruffleCEL application integration test.
++
++`ConsumerComparison` audits 32 varied `google.protobuf.Type` messages. Sparse work reads string lengths, repeated counts, syntax and an optional source context. Full work also visits every field and oneof, reads names, and conditionally combines field number, kind and cardinality. Both generated-owned and native-view records execute the **same** `SharedRoot`, through `DataLibrary`, the common typed nodes and `InteropLibrary`. No format-specific getters participate in that computation. Protobuf-java supplies an independent decode and reference computation.
++
++The holdout changes nested cardinality from 3–8 to 12–24 and uses longer supplementary-Unicode names. It is a data-distribution holdout on the same schema, not proof across unrelated schemas, maps, real oneofs, constraints or fallback routes. Every native-view cell rejects eager fallback.
++
++| Stage | Measured work |
++|---|---|
++| resident | Decode existing unmanaged input (native) or existing heap bytes (owned/stock), run compiled guest, close |
++| heap | Same, including native input allocation and heap-to-native copy |
++| detach | Decode, produce durable snapshot, close the native owner, then consume; owned/stock need no snapshot |
++| first | First compiled guest access to fresh decoded rows; preparation/release are outside the measured window |
++| interpret | Repeated warm access; guest compilation disabled |
++| peak | Repeated warm access; guest helper confirmed compiled and target stable in last tier |
++
++Unlike the historical ingestion comparison, ingestion here includes a compiled shared guest computation. Stock's computation has an explicit boundary because stock collection traversal cannot enter the pinned SVM JIT. Its helper is AOT in every stage; this is a guest-integration comparison, not fully inlined stock versus TD. The shared helper itself emits the compiled marker; checking only its caller is insufficient.
++
++Plan creation, fixture creation, context startup and compilation are outside the measured work. All fixtures prepare the same native plan/input setup, including controls that do not use it. No total process-memory claim is made. Read-only cells warm 32 retained rows; larger working sets and fresh schemas remain separate questions. The caller rotates row order and verifies a reference checksum on every batch.
++
++## Run and preserve evidence
++
++```sh
++bazel test //benchmarks/comparison:consumer_smoke \
++  //benchmarks/comparison:consumer_native_smoke
++bazel build //benchmarks/comparison:consumer_svm --remote_download_outputs=toplevel
++```
++
++Preserve the baseline executable before rebuilding. On a quiet Linux host, run the comparison **serially**, with both executables and all cells interleaved:
++
++```sh
++taskset -c 2 python3 tools/bench/consumer.py \
++  --binary baseline=/absolute/baseline --binary candidate=/absolute/candidate \
++  --source 'commit + saved source patch hashes' --output /new/result/directory
++```
++
++The 42-cell matrix uses three fresh forks per binary and separate timing/allocation processes. Each process warms for 100 ms and records three 50 ms timing samples, or three allocation batches. The runner uses a 1 GiB maximum heap and Serial GC, preserves raw samples and hashes, rejects wrong checksums/tiers/counters, and reports medians of fork medians. Ranges are observed ranges, not confidence intervals. The execution is deterministic by seed; timing/profiling jobs must not overlap. Failed runs leave `partial.json` and never produce a completed summary.
++
++Current-thread Java allocation is calibrated and includes call/harness allocations. The result also records input bytes, copied input bytes, native index capacity and native result-header bytes. These **do not** measure native transient peaks, allocation counts, allocator overhead, plan storage or total retained memory. The native index and header observations describe the decoded view before detachment, not the detached result. No GC disabling is needed.
++
++`consumer_smoke` and `consumer_native_smoke` cover all 54 engine/mode/stage combinations, including additional holdout stages. They require helper-level compiled execution, correct checksums, closed-view rejection, an AST ceiling of 256 and the unchanged 10,000-node graph budget. Native image construction uses the repository's blocklist/reachability checks. These are scoped acceptance checks, not a universal JIT guarantee for arbitrary guests.
++
++## Profile separately
++
++```sh
++bazel build //benchmarks/comparison:consumer_profile --remote_download_outputs=toplevel
++# On the measurement host, after all timing runs finish:
++taskset -c 2 perf record -F 997 --call-graph fp -o full.perf -- \
++  /absolute/truffledata-consumer-profile -Xmx1g \
++  native-view full resident time full.jfr
++```
++
++The diagnostic executable enables JFR only after warmup and takes three one-second samples. Do not use its timing output for comparisons. Hardware sampling includes startup and may not resolve compiled guest addresses. JFR sees Java-visible stacks; sampled allocation-event counts are not bytes. The existing `tools/bench/json_profile_summary.py` accepts `dev.elide.truffledata.comparison.ConsumerComparison` as its class filter. Inspect runtime stack-walker/safepoint artifacts before attributing compiled costs.
++
++## Architectural decisions from this cycle
++
++* Bind immutable field descriptors to the plan and ordinal at shared primitive call sites; never mark mutable row caches as compilation-final. The original nested native consumer exceeded the graph budget before this specialization.
++* A checked array-count capability was tested and rejected: it reduced sparse read latency and Java allocation, but regressed sparse ingestion and generated-owned interpreter reads. The current API retains ordinary value access for lengths. Any future count/length optimization must preserve UTF-16/code-point units, lifetime checks and performance on representations without native metadata.
++* Keep storage specialized. JSON scalar records now export the common primitive API and ordinary interop while retaining native slots and explicit scoped ownership. The JSON compiled tests cover required primitives, constant/dynamic receivers, cache saturation, close/thread checks, null/presence and the existing allocation/graph budgets. This does not complete the scoped JVM JSON API or nested typed JSON.
++* Keep generated-owned records as a first-class dense/durable control. Native view plus reparsing snapshot is not an efficient substitute for decoding directly into an owned result.
++* A direct schema-specific native result remains the next representation experiment: construct scalar slots, presence, child spans and repeated locations/counts while decoding; avoid rediscovering those facts in Java. First use this consumer and preserve the generic path as control. Require a full-consumption improvement without sparse/heap-input/holdout regressions and account for native storage before expanding eligibility or changing defaults.
++
++Still required for broader production claims: unrelated-schema/fallback holdouts, complete native allocation/retention accounting, an actual Elide/TruffleCEL consumer integration, and full release qualification. The experiments here keep the pinned compiler/toolchain unchanged.
+diff --git a/benchmarks/comparison/ConsumerComparison.java b/benchmarks/comparison/ConsumerComparison.java
+new file mode 100644
+index 0000000..a389179
+--- /dev/null
++++ b/benchmarks/comparison/ConsumerComparison.java
+@@ -0,0 +1,437 @@
++package dev.elide.truffledata.comparison;
++
++import com.google.protobuf.SourceContext;
++import com.google.protobuf.Syntax;
++import com.google.protobuf.Type;
++import com.oracle.truffle.api.CompilerDirectives;
++import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
++import com.oracle.truffle.api.frame.VirtualFrame;
++import com.oracle.truffle.api.interop.InteropLibrary;
++import com.oracle.truffle.api.nodes.Node;
++import com.oracle.truffle.api.nodes.NodeUtil;
++import com.oracle.truffle.api.nodes.RootNode;
++import com.oracle.truffle.runtime.OptimizedCallTarget;
++import com.sun.management.ThreadMXBean;
++import dev.elide.truffledata.*;
++import dev.elide.truffledata.buffa.*;
++import dev.elide.truffledata.buffa.generated.Buffa;
++import dev.elide.truffledata.generated.ComparisonContracts;
++import dev.elide.truffledata.protobuf.ProtoPlan;
++import java.lang.management.ManagementFactory;
++import java.nio.file.Files;
++import java.nio.file.Path;
++import java.util.Arrays;
++import java.util.Locale;
++import org.graalvm.nativeimage.ImageInfo;
++import org.graalvm.polyglot.Context;
++import org.jspecify.annotations.NullMarked;
++import org.jspecify.annotations.Nullable;
++
++/** Consumer-level schema audit; all TD representations execute identical shared access nodes. */
++@NullMarked
++public final class ConsumerComparison {
++  private static final int ROWS = 32;
++  private static final long COMPILED = 1L << 60;
++  private static volatile Object retained = new Object();
++  private static volatile long sink;
++  static Runnable beforeSamples = () -> {};
++  static long sampleNanos = 50_000_000;
++
++  public static void main(String[] args) throws Exception {
++    if (args.length == 1 && args[0].equals("--smoke")) {
++      for (String engine : new String[] {"stock", "generated-owned", "native-view"})
++        for (String mode : new String[] {"sparse", "full", "holdout"})
++          for (String stage :
++              new String[] {"resident", "heap", "detach", "first", "interpret", "peak"}) {
++            System.out.println("SMOKE " + engine + " " + mode + " " + stage);
++            run(engine, mode, stage, "time", true);
++          }
++      return;
++    }
++    if (args.length != 4)
++      throw new IllegalArgumentException("engine sparse|full|holdout stage time|memory");
++    run(args[0], args[1], args[2], args[3], false);
++  }
++
++  private static void run(String engine, String mode, String stage, String metric, boolean smoke)
++      throws Exception {
++    if (!Arrays.asList("stock", "generated-owned", "native-view").contains(engine)
++        || !Arrays.asList("sparse", "full", "holdout").contains(mode)
++        || !Arrays.asList("resident", "heap", "detach", "first", "interpret", "peak")
++            .contains(stage)
++        || !Arrays.asList("time", "memory").contains(metric))
++      throw new IllegalArgumentException("Unknown consumer cell");
++    boolean peak = !stage.equals("interpret");
++    try (var context =
++        Context.newBuilder("td-compare")
++            .allowExperimentalOptions(true)
++            .option("engine.Compilation", Boolean.toString(peak))
++            .option("engine.BackgroundCompilation", "false")
++            .option("engine.CompilationFailureAction", "Throw")
++            .option("compiler.TreatPerformanceWarningsAsErrors", "all")
++            .option("compiler.MaximumGraalGraphSize", "10000")
++            .build()) {
++      context.initialize("td-compare");
++      context.enter();
++      try (var fixture = new Fixture(engine, mode, stage)) {
++        var counter = (ThreadMXBean) ManagementFactory.getThreadMXBean();
++        if (!counter.isThreadAllocatedMemorySupported())
++          throw new AssertionError("Allocation counter");
++        counter.setThreadAllocatedMemoryEnabled(true);
++        long thread = Thread.currentThread().threadId();
++        long before = counter.getThreadAllocatedBytes(thread);
++        retained = new byte[1 << 20];
++        if (before < 0 || counter.getThreadAllocatedBytes(thread) - before < 1 << 20)
++          throw new AssertionError("Allocation calibration");
++        for (int i = 0; i < 128; i++) fixture.operation();
++        if (peak) {
++          for (int attempt = 0; attempt < 8; attempt++) {
++            fixture.target.compile(true);
++            fixture.target.waitForCompilation();
++            for (int i = 0; i < 128; i++) fixture.operation();
++            if (fixture.target.isValidLastTier()) break;
++          }
++        }
++        fixture.tier(peak);
++        if (NodeUtil.countNodes(fixture.root) > 256)
++          throw new AssertionError("Consumer AST budget");
++        if (smoke) {
++          fixture.operation();
++          fixture.tier(peak);
++          fixture.closedReadCheck();
++          return;
++        }
++        long until = System.nanoTime() + 100_000_000;
++        while (System.nanoTime() < until) fixture.operation();
++        fixture.tier(peak);
++        beforeSamples.run();
++        double[] samples = new double[3];
++        for (int s = 0; s < samples.length; s++) {
++          long count = 0, total = 0, start = System.nanoTime();
++          do {
++            // First-access preparation and release deliberately live outside its timed/counted
++            // window.
++            if (stage.equals("first")) fixture.prepare();
++            long from =
++                metric.equals("memory")
++                    ? counter.getThreadAllocatedBytes(thread)
++                    : System.nanoTime();
++            if (stage.equals("first")) fixture.consume();
++            else fixture.operation();
++            total +=
++                (metric.equals("memory")
++                        ? counter.getThreadAllocatedBytes(thread)
++                        : System.nanoTime())
++                    - from;
++            if (stage.equals("first")) fixture.release();
++            count++;
++          } while (metric.equals("memory") ? count < 64 : System.nanoTime() - start < sampleNanos);
++          samples[s] = (double) total / (count * ROWS);
++          fixture.tier(peak);
++        }
++        System.out.printf(
++            Locale.ROOT,
++            "{\"engine\":\"%s\",\"mode\":\"%s\",\"stage\":\"%s\",\"runtime\":\"%s\",\"rows\":%d,\"checksum\":%d,\"guest_compiled\":%s,\"shared_access\":%s,\"stock_boundary\":%s,\"input_bytes_per_row\":%.3f,\"copied_input_bytes_per_row\":%.3f,\"decoded_native_index_capacity_bytes_per_row\":%.3f,\"decoded_native_result_header_bytes_per_row\":%d,\"native_transient_peak_bytes\":null,\"native_allocation_count\":null,\"%s\":%s}%n",
++            engine,
++            mode,
++            stage,
++            ImageInfo.inImageRuntimeCode() ? "svm" : "jvm",
++            ROWS,
++            fixture.expected,
++            peak,
++            !engine.equals("stock"),
++            engine.equals("stock"),
++            fixture.inputBytes / (double) ROWS,
++            engine.equals("native-view") && stage.equals("heap")
++                ? fixture.inputBytes / (double) ROWS
++                : 0,
++            fixture.indexBytes / (double) ROWS,
++            engine.equals("native-view") ? Buffa.Result.SIZE : 0,
++            metric.equals("memory") ? "java_bytes_per_row" : "ns_per_row",
++            Arrays.toString(samples));
++      } finally {
++        context.leave();
++      }
++    }
++  }
++
++  private static @Nullable Path library() throws Exception {
++    if (ImageInfo.inImageCode()) return null;
++    String explicit = System.getenv("TRUFFLEDATA_BUFFA_LIBRARY");
++    if (explicit != null) return Path.of(explicit);
++    var path =
++        Path.of(
++            java.util.Objects.requireNonNull(System.getenv("TEST_SRCDIR")),
++            java.util.Objects.requireNonNull(System.getenv("TEST_WORKSPACE")),
++            "protobuf-buffa/native");
++    try (var files = Files.list(path)) {
++      return files
++          .filter(p -> p.toString().endsWith(".so") || p.toString().endsWith(".dylib"))
++          .findFirst()
++          .orElseThrow();
++    }
++  }
++
++  private static final class Fixture implements AutoCloseable {
++    final String engine, stage;
++    final byte[][] wires = new byte[ROWS][];
++    final @Nullable WireInput[] inputs;
++    final @Nullable TypedMessage[] messages;
++    final Object[] rows = new Object[ROWS];
++    final BuffaWire decoder;
++    final BuffaPlan nativePlan;
++    final ComparisonContracts.Access_google$protobuf$Type generated;
++    final ConsumerRoot root;
++    final OptimizedCallTarget target;
++    final long expected;
++    long inputBytes, indexBytes;
++    int rotation;
++
++    Fixture(String engine, String mode, String stage) throws Exception {
++      this.engine = engine;
++      this.stage = stage;
++      var model =
++          ComparisonContracts.create(ComparisonLanguage.current(), Limits.DEFAULT, 16, 1 << 20);
++      ProtoPlan plan = model.type("google.protobuf.Type");
++      generated = new ComparisonContracts.Access_google$protobuf$Type(plan);
++      // Native setup is excluded for every engine; keeping it identical also controls image
++      // reachability.
++      decoder = BuffaWire.open(BuffaWire.Mode.NATIVE, library());
++      nativePlan = decoder.compile(plan, 65536);
++      inputs = new WireInput[ROWS];
++      messages = new TypedMessage[ROWS];
++      root =
++          engine.equals("stock")
++              ? new StockRoot(!mode.equals("sparse"))
++              : new SharedRoot(!mode.equals("sparse"));
++      target = (OptimizedCallTarget) root.getCallTarget();
++      long sum = 0;
++      for (int i = 0; i < ROWS; i++) {
++        var b = Type.newBuilder().setName("catalog-" + i + "-λ").setSyntax(Syntax.SYNTAX_PROTO3);
++        int count = mode.equals("holdout") ? 12 + i % 13 : 3 + i % 6;
++        // Missing source_context is a real absent record, represented as Missing by both TD routes.
++        if (i % 3 != 0)
++          b.setSourceContext(SourceContext.newBuilder().setFileName("schema-" + i + ".proto"));
++        b.addOneofs("identity");
++        if ((i & 1) == 0) b.addOneofs("contact-😀");
++        for (int j = 0; j < count; j++) {
++          b.addFields(
++              com.google.protobuf.Field.newBuilder()
++                  .setName("column-" + j + (mode.equals("holdout") ? "-λ😀" : ""))
++                  .setNumber(j + 1)
++                  .setKind(com.google.protobuf.Field.Kind.TYPE_INT64)
++                  .setCardinality(com.google.protobuf.Field.Cardinality.CARDINALITY_REPEATED)
++                  .setPacked((i + j) % 3 != 0));
++        }
++        Type value = b.build();
++        wires[i] = value.toByteArray();
++        inputBytes += wires[i].length;
++        inputs[i] = decoder.allocate(wires[i].length).put(wires[i]);
++        sum += expected(value, !mode.equals("sparse"));
++      }
++      expected = sum;
++      // Observe representative native capacity outside measured operations, including detach cells.
++      if (engine.equals("native-view"))
++        for (var input : inputs)
++          try (var message =
++              nativePlan.decodeView(java.util.Objects.requireNonNull(input), 1 << 20)) {
++            indexBytes += message.nativeIndexBytes();
++          }
++      prepare();
++      if (!stage.equals("interpret") && !stage.equals("peak")) release();
++    }
++
++    void prepare() throws Exception {
++      for (int i = 0; i < ROWS; i++) {
++        if (engine.equals("native-view")) {
++          if (stage.equals("heap")) {
++            try (var input = decoder.allocate(wires[i].length).put(wires[i])) {
++              messages[i] = nativePlan.decodeView(input, 1 << 20);
++            }
++          } else
++            messages[i] =
++                nativePlan.decodeView(java.util.Objects.requireNonNull(inputs[i]), 1 << 20);
++          var message = java.util.Objects.requireNonNull(messages[i]);
++          if (!message.nativeBacked()) throw new AssertionError("Unexpected eager fallback");
++          rows[i] = stage.equals("detach") ? message.snapshot() : message.row();
++          if (stage.equals("detach")) {
++            message.close();
++            messages[i] = null;
++          }
++        } else
++          rows[i] = engine.equals("stock") ? Type.parseFrom(wires[i]) : generated.decode(wires[i]);
++      }
++    }
++
++    void consume() {
++      long result = (Long) target.call(rows, rotation++ & (ROWS - 1));
++      if ((result & ~COMPILED) != expected) throw new AssertionError("Consumer result mismatch");
++      sink = result;
++      retained = rows[0];
++    }
++
++    void operation() throws Exception {
++      if (stage.equals("interpret") || stage.equals("peak")) consume();
++      else {
++        prepare();
++        try {
++          consume();
++        } finally {
++          release();
++        }
++      }
++    }
++
++    void tier(boolean peak) {
++      if (target.isValidLastTier() != peak) throw new AssertionError("Wrong guest tier");
++      // SharedRoot returns this bit inside the actual shared-access helper, not its caller.
++      if (!engine.equals("stock") && ((sink & COMPILED) != 0) != peak)
++        throw new AssertionError("Shared-access helper did not execute in the requested tier");
++    }
++
++    void release() {
++      for (int i = 0; i < ROWS; i++) {
++        var message = messages[i];
++        if (message != null) {
++          message.close();
++          messages[i] = null;
++        }
++        rows[i] = Missing.INSTANCE;
++      }
++    }
++
++    void closedReadCheck() throws Exception {
++      if (!engine.equals("native-view") || stage.equals("detach")) return;
++      release();
++      prepare();
++      for (var message : messages) java.util.Objects.requireNonNull(message).close();
++      try {
++        consume();
++        throw new AssertionError("Closed view was readable");
++      } catch (IllegalStateException expected) {
++        /* owner rejection */
++      }
++    }
++
++    @Override
++    public void close() {
++      release();
++      for (var input : inputs) if (input != null) input.close();
++      nativePlan.close();
++      decoder.close();
++    }
++  }
++
++  // Independent reference implementation; stock uses it at the required SVM collection boundary.
++  @TruffleBoundary
++  private static long expected(Type row, boolean full) {
++    long sum =
++        row.getName().length()
++            + row.getFieldsCount() * 17L
++            + row.getOneofsCount() * 3L
++            + row.getSyntaxValue()
++            + (row.hasSourceContext() ? row.getSourceContext().getFileName().length() : 7);
++    if (full) {
++      for (int i = 0; i < row.getFieldsCount(); i++) {
++        var f = row.getFields(i);
++        sum += f.getName().length();
++        if (f.getPacked()) sum += f.getNumber() * 31L + f.getKindValue() + f.getCardinalityValue();
++      }
++      for (int i = 0; i < row.getOneofsCount(); i++) sum += row.getOneofs(i).length();
++    }
++    return sum;
++  }
++
++  private abstract static class ConsumerRoot extends RootNode {
++    final boolean full;
++
++    ConsumerRoot(boolean full) {
++      super(ComparisonLanguage.current());
++      this.full = full;
++    }
++  }
++
++  private static final class StockRoot extends ConsumerRoot {
++    StockRoot(boolean full) {
++      super(full);
++    }
++
++    @Override
++    public Object execute(VirtualFrame frame) {
++      var rows = (Object[]) frame.getArguments()[0];
++      int rotation = (Integer) frame.getArguments()[1];
++      long sum = 0;
++      for (int i = 0; i < ROWS; i++)
++        sum += expected((Type) rows[(i + rotation) & (ROWS - 1)], full);
++      return sum;
++    }
++  }
++
++  private static final class SharedRoot extends ConsumerRoot {
++    @Child private DataLibrary data = DataLibrary.factory().createDispatched(3);
++    @Child private DataLibrary source = DataLibrary.factory().createDispatched(3);
++    @Child private ReadLengthNode names = ReadLengthNode.create();
++    @Child private ReadLengthNode fieldsCount = ReadLengthNode.create();
++    @Child private ReadLengthNode groupsCount = ReadLengthNode.create();
++    @Child private ReadLongNode syntax = ReadLongNode.create();
++    @Child private FieldAudit field = new FieldAudit();
++    @Child private InteropLibrary arrays = InteropLibrary.getFactory().createDispatched(3);
++
++    SharedRoot(boolean full) {
++      super(full);
++    }
++
++    long score(Object row) throws Exception {
++      long sum =
++          names.execute(row, 0)
++              + fieldsCount.execute(row, 1) * 17L
++              + groupsCount.execute(row, 2) * 3L
++              + syntax.execute(row, 5);
++      Object context = data.read(row, 4);
++      sum += context == Missing.INSTANCE ? 7 : ((String) source.read(context, 0)).length();
++      if (full) {
++        Object fields = data.read(row, 1), groups = data.read(row, 2);
++        int n = Math.toIntExact(arrays.getArraySize(fields));
++        for (int i = 0; i < n; i++) sum += field.score(arrays.readArrayElement(fields, i));
++        int m = Math.toIntExact(arrays.getArraySize(groups));
++        for (int i = 0; i < m; i++) sum += ((String) arrays.readArrayElement(groups, i)).length();
++      }
++      return sum | (CompilerDirectives.inCompiledCode() ? COMPILED : 0);
++    }
++
++    @Override
++    public Object execute(VirtualFrame frame) {
++      var rows = (Object[]) frame.getArguments()[0];
++      int rotation = (Integer) frame.getArguments()[1];
++      long sum = 0, compiled = COMPILED;
++      try {
++        for (int i = 0; i < ROWS; i++) {
++          long score = score(rows[(i + rotation) & (ROWS - 1)]);
++          sum += score & ~COMPILED;
++          compiled &= score;
++        }
++      } catch (RuntimeException failure) {
++        throw failure;
++      } catch (Exception failure) {
++        CompilerDirectives.transferToInterpreterAndInvalidate();
++        throw new IllegalStateException("Consumer access failed", failure);
++      }
++      return sum | compiled;
++    }
++  }
++
++  private static final class FieldAudit extends Node {
++    @Child private ReadLengthNode name = ReadLengthNode.create();
++    @Child private ReadBooleanNode packed = ReadBooleanNode.create();
++    @Child private ReadLongNode number = ReadLongNode.create();
++    @Child private ReadLongNode kind = ReadLongNode.create();
++    @Child private ReadLongNode cardinality = ReadLongNode.create();
++
++    long score(Object row) {
++      long sum = name.execute(row, 3);
++      if (packed.execute(row, 6))
++        sum += number.execute(row, 2) * 31L + kind.execute(row, 0) + cardinality.execute(row, 1);
++      return sum;
++    }
++  }
++}
+diff --git a/benchmarks/comparison/ConsumerProfile.java b/benchmarks/comparison/ConsumerProfile.java
+new file mode 100644
+index 0000000..93c6a98
+--- /dev/null
++++ b/benchmarks/comparison/ConsumerProfile.java
+@@ -0,0 +1,29 @@
++package dev.elide.truffledata.comparison;
++
++import java.nio.file.Path;
++import java.time.Duration;
++import java.util.Arrays;
++import jdk.jfr.Recording;
++
++/** Diagnostic-only steady-state recording; never use this executable for comparison scores. */
++@org.jspecify.annotations.NullMarked
++public final class ConsumerProfile {
++  public static void main(String[] args) throws Exception {
++    if (args.length != 5 || !args[3].equals("time"))
++      throw new IllegalArgumentException("engine mode stage time recording.jfr");
++    try (var recording = new Recording()) {
++      recording.enable("jdk.ExecutionSample").withPeriod(Duration.ofMillis(1));
++      recording.enable("jdk.ObjectAllocationSample").withStackTrace().with("throttle", "150/s");
++      recording.setDestination(Path.of(args[4]));
++      ConsumerComparison.beforeSamples = recording::start;
++      ConsumerComparison.sampleNanos = 1_000_000_000L;
++      try {
++        ConsumerComparison.main(Arrays.copyOf(args, 4));
++      } finally {
++        ConsumerComparison.beforeSamples = () -> {};
++        ConsumerComparison.sampleNanos = 50_000_000L;
++        if (recording.getState() == jdk.jfr.RecordingState.RUNNING) recording.stop();
++      }
++    }
++  }
++}
+diff --git a/tools/bench/consumer.py b/tools/bench/consumer.py
+new file mode 100644
+index 0000000..1eb16ed
+--- /dev/null
++++ b/tools/bench/consumer.py
+@@ -0,0 +1,118 @@
++#!/usr/bin/env python3
++"""Run serialized, interleaved SVM consumer comparisons and retain validated samples."""
++import argparse
++import hashlib
++import itertools
++import json
++import math
++import os
++from pathlib import Path
++import platform
++import random
++import statistics
++import subprocess
++
++ENGINES = ('stock', 'generated-owned', 'native-view')
++STAGES = ('resident', 'heap', 'detach', 'first', 'interpret', 'peak')
++CELLS = [(e, m, s) for e in ENGINES for m in ('sparse', 'full') for s in STAGES]
++CELLS += [(e, 'holdout', s) for e in ENGINES for s in ('resident', 'peak')]
++SEED = 20261105
++
++
++def validate(record, cell, metric, checksums):
++    """Reject wrong work, tiers or counters before a sample can enter a comparison."""
++    engine, mode, stage = cell
++    expected = dict(zip(('engine', 'mode', 'stage'), cell))
++    expected.update(runtime='svm', rows=32, guest_compiled=stage != 'interpret',
++                    shared_access=engine != 'stock', stock_boundary=engine == 'stock')
++    for key, value in expected.items():
++        if record.get(key) != value:
++            raise ValueError(f'{cell}: expected {key}={value!r}, got {record.get(key)!r}')
++    checksum = record.get('checksum')
++    if not isinstance(checksum, int) or (mode in checksums and checksums[mode] != checksum):
++        raise ValueError(f'{cell}: inconsistent consumer checksum')
++    key = 'ns_per_row' if metric == 'time' else 'java_bytes_per_row'
++    values = record.get(key, [])
++    if len(values) != 3 or not all(isinstance(v, (float, int)) and math.isfinite(v)
++                                   and v >= 0 for v in values):
++        raise ValueError(f'{cell}: invalid {key} samples')
++    for name in ('input_bytes_per_row', 'copied_input_bytes_per_row',
++                 'decoded_native_index_capacity_bytes_per_row',
++                 'decoded_native_result_header_bytes_per_row'):
++        value = record.get(name)
++        if not isinstance(value, (float, int)) or not math.isfinite(value) or value < 0:
++            raise ValueError(f'{cell}: invalid memory observation {name}')
++    checksums[mode] = checksum
++
++
++def markdown(rows, labels):
++    lines = ['# Consumer comparison', '',
++             'Fresh-process fork medians; ranges are not confidence intervals. Java allocation '
++             'excludes native storage. Stock guest projection has an explicit boundary. Native '
++             'transient allocation peaks are not measured.', '',
++             '| Binary | Mode | Stage | Engine | ns/row (fork range) | Java B/row |',
++             '|---|---|---|---|---:|---:|']
++    for label in labels:
++        for mode, stage in dict.fromkeys((m, s) for _, m, s in CELLS):
++            for engine in ENGINES:
++                chosen = [r for r in rows if (r['binary'], r['engine'], r['mode'], r['stage'])
++                          == (label, engine, mode, stage)]
++                times = [statistics.median(r['ns_per_row']) for r in chosen if r['metric'] == 'time']
++                memory = [statistics.median(r['java_bytes_per_row']) for r in chosen
++                          if r['metric'] == 'memory']
++                lines.append(f'| {label} | {mode} | {stage} | {engine} | '
++                             f'{statistics.median(times):.3f} ({min(times):.3f}–{max(times):.3f}) | '
++                             f'{statistics.median(memory):.3f} |')
++    return '\n'.join(lines) + '\n'
++
++
++def run():
++    parser = argparse.ArgumentParser(description=__doc__)
++    parser.add_argument('--binary', action='append', required=True, help='label=/absolute/executable')
++    parser.add_argument('--output', type=Path, required=True)
++    parser.add_argument('--forks', type=int, default=3)
++    parser.add_argument('--source', required=True, help='Source commit plus saved patch hash(es)')
++    args = parser.parse_args()
++    binaries = {}
++    for spec in args.binary:
++        label, path = spec.split('=', 1)
++        if not label or label in binaries:
++            parser.error('Binary labels must be nonempty and unique')
++        binaries[label] = Path(path).resolve(strict=True)
++    if args.forks < 3:
++        parser.error('At least three fresh forks are required')
++    affinity = sorted(os.sched_getaffinity(0))
++    if len(affinity) != 1:
++        parser.error('Pin the runner to one CPU with taskset')
++    args.output.mkdir(parents=True, exist_ok=False)
++    cpu_info = Path('/proc/cpuinfo').read_text()
++    report = dict(schema=1, source=args.source, seed=SEED, forks=args.forks,
++                  binary_sha256={k: hashlib.sha256(v.read_bytes()).hexdigest()
++                                 for k, v in binaries.items()},
++                  host=platform.uname()._asdict(), affinity=affinity,
++                  cpu_model=next(line.split(':', 1)[1].strip() for line in cpu_info.splitlines()
++                                 if line.startswith('model name')), measurements=[])
++    jobs = list(itertools.product(binaries, CELLS, range(args.forks), ('time', 'memory')))
++    random.Random(SEED).shuffle(jobs)
++    checksums = {}
++    for label, cell, fork, metric in jobs:
++        result = subprocess.run([str(binaries[label]), '-Xmx1g', *cell, metric],
++                                capture_output=True, text=True, timeout=90, check=False)
++        if result.returncode:
++            raise RuntimeError(f'{label} {cell} failed:\n{result.stdout}\n{result.stderr}')
++        records = [json.loads(line) for line in result.stdout.splitlines() if line.startswith('{')]
++        if len(records) != 1:
++            raise ValueError(f'{label} {cell}: expected one result record')
++        record = records[0]
++        validate(record, cell, metric, checksums)
++        record.update(binary=label, fork=fork, metric=metric)
++        report['measurements'].append(record)
++        # Preserve completed cells even if a later process fails; never summarize a partial run.
++        (args.output / 'partial.json').write_text(json.dumps(report, indent=2) + '\n')
++        print(label, *cell, fork, metric, flush=True)
++    (args.output / 'partial.json').rename(args.output / 'results.json')
++    (args.output / 'results.md').write_text(markdown(report['measurements'], binaries))
++
++
++if __name__ == '__main__':
++    run()
+diff --git a/tools/bench/test_consumer.py b/tools/bench/test_consumer.py
+new file mode 100644
+index 0000000..43d2562
+--- /dev/null
++++ b/tools/bench/test_consumer.py
+@@ -0,0 +1,23 @@
++import copy
++import unittest
++from consumer import validate
++
++
++class ConsumerValidationTest(unittest.TestCase):
++    def test_rejects_misleading_measurements(self):
++        cell = ('native-view', 'full', 'peak')
++        valid = dict(engine='native-view', mode='full', stage='peak', runtime='svm', rows=32,
++                     guest_compiled=True, shared_access=True, stock_boundary=False, checksum=123,
++                     ns_per_row=[1, 2, 3], input_bytes_per_row=100, copied_input_bytes_per_row=0,
++                     decoded_native_index_capacity_bytes_per_row=128,
++                     decoded_native_result_header_bytes_per_row=24)
++        checksums = {}
++        validate(valid, cell, 'time', checksums)
++        for change in ({'guest_compiled': False}, {'checksum': 124}, {'runtime': 'jvm'},
++                       {'ns_per_row': [1, float('nan'), 3]}, {'ns_per_row': [1, -1, 3]},
++                       {'ns_per_row': [1, 2]}, {'stock_boundary': True}, {'shared_access': False},
++                       {'decoded_native_index_capacity_bytes_per_row': -1}):
++            with self.subTest(change=change), self.assertRaises(ValueError):
++                record = copy.deepcopy(valid)
++                record.update(change)
++                validate(record, cell, 'time', checksums)

@@ -348,9 +348,15 @@ class ProtoNativeTest {
     assertEquals(1.5, access.get_f(row));
     assertEquals(2.5, access.get_d(row));
     assertTrue(access.get_flag(row));
-    assertThrows(
-        ContractViolation.class,
-        () -> access.get_count(plan("truffledata.lossless.Sample").decode(new byte[0])));
+    var foreign = plan("truffledata.lossless.Sample").decode(new byte[0]);
+    assertThrows(ContractViolation.class, () -> access.get_count(foreign));
+    assertThrows(ContractViolation.class, () -> access.get_text(foreign));
+    assertThrows(ContractViolation.class, () -> access.get_f(foreign));
+    assertThrows(ContractViolation.class, () -> access.get_d(foreign));
+    assertThrows(ContractViolation.class, () -> access.get_flag(foreign));
+    assertThrows(ContractViolation.class, () -> access.size_blob(foreign));
+    assertThrows(ContractViolation.class, () -> access.size_numbers(foreign));
+    assertThrows(ContractViolation.class, () -> access.has_explicit_count(foreign));
     assertThrows(
         ContractViolation.class,
         () ->

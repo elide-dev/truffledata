@@ -1,0 +1,36 @@
+{
+  "base_commit": "44dda06",
+  "release_equivalent_production_commit": "0ff30dac1b83e9d468cd7118dda838058f5aa83a",
+  "candidate_patch_sha256": "7e30afb8abe34cc7e23ba531f11f7297f40d5c03aac872a1e7b60d014a303f16",
+  "host": "unclemax",
+  "cpu_affinity": [
+    2
+  ],
+  "seeds": [
+    20261105,
+    20261106
+  ],
+  "remote_artifacts": "/tmp/truffledata-buffa-sparse-finish.HKhA1S",
+  "build": "https://app.buildbuddy.io/invocation/ad873c0c-9dd6-42c3-ad7f-eabcdddc490a",
+  "notes": [
+    "Baseline is retained compact-index binary; rejected binary-loop and dense-lookup experiments are absent.",
+    "Binary predates release-only version/docs changes and subsequent empty-required-binary test.",
+    "Five fresh randomized forks per variant/cell/metric. Java heap allocation excludes native storage.",
+    "Scalar bypasses State.finish; its timing difference cannot establish a direct sparse-finalization benefit. Code layout/build differences can affect unchanged paths.",
+    "Both mixed generic and full-consumption time ranges are disjoint in both runs; generated getter ranges overlap in first run only. Stock and generated-owned controls retain some variation."
+  ],
+  "validation": {
+    "strict_jvm_and_non_strict_jvm_before_binary_required_test": "https://app.buildbuddy.io/invocation/43754d85-1359-4f3b-bd16-5429eff53a82",
+    "non_strict_jvm_and_strict_svm_with_binary_required_test": "https://app.buildbuddy.io/invocation/87e4237d-7280-41a7-b8bf-4bd8c4eb9149",
+    "non_strict_svm_and_gazelle": "https://app.buildbuddy.io/invocation/7804b156-228d-445c-a750-946f07dc5132"
+  },
+  "profile": {
+    "build": "https://app.buildbuddy.io/invocation/d453979e-3556-43b2-99bb-2928c66c3d6b",
+    "remote_artifacts": "/tmp/truffledata-buffa-sparse-profile.kwdveA",
+    "production_commit": "db4ab57",
+    "cpu_affinity": [
+      2
+    ],
+    "scope": "Diagnostic instrumented image. JFR after warmup; perf includes process startup. Samples are not throughput or native allocation measurements."
+  }
+}

@@ -16,6 +16,7 @@ final class SvmBackend implements BuffaWire.Backend {
   private final BuffaWire.Scalars scalarValues = new BuffaWire.Scalars();
   private final Runnable releaseAction = this::releaseResult;
   private final Runnable retainAction = this::retainResult;
+  private final java.util.function.Supplier<Runnable> detachAction = this::detachResult;
   private boolean closed;
 
   private VoidPointer acquireResult() {
@@ -35,6 +36,41 @@ final class SvmBackend implements BuffaWire.Backend {
     if (!busy) throw new IllegalStateException("Native result already released");
     cached = true;
     busy = false;
+  }
+
+  private Runnable detachResult() {
+    if (!busy || closed) throw new IllegalStateException("Native result unavailable");
+    VoidPointer owned = UnmanagedMemory.calloc(Buffa.Result.SIZE);
+    if (owned.isNull()) throw new OutOfMemoryError("Native result ownership allocation");
+    long address = owned.rawValue();
+    Runnable cleanup;
+    try {
+      cleanup =
+          () -> {
+            VoidPointer result = WordFactory.pointer(address);
+            if (!closed && !busy && !cached) {
+              VoidPointer scratch = WordFactory.pointer(resultAddress);
+              Buffa.Result.data(scratch, Buffa.Result.data(result));
+              Buffa.Result.count(scratch, Buffa.Result.count(result));
+              Buffa.Result.capacity(scratch, Buffa.Result.capacity(result));
+              cached = true;
+            } else Buffa.release(result);
+            UnmanagedMemory.free(result);
+          };
+    } catch (RuntimeException | Error failure) {
+      UnmanagedMemory.free(owned);
+      throw failure;
+    }
+    VoidPointer source = WordFactory.pointer(resultAddress);
+    Buffa.Result.data(owned, Buffa.Result.data(source));
+    Buffa.Result.count(owned, Buffa.Result.count(source));
+    Buffa.Result.capacity(owned, Buffa.Result.capacity(source));
+    Buffa.Result.data(source, WordFactory.nullPointer());
+    Buffa.Result.count(source, 0);
+    Buffa.Result.capacity(source, 0);
+    cached = false;
+    busy = false;
+    return cleanup;
   }
 
   static final class Factory implements BuffaWire.NativeFactory {
@@ -95,6 +131,11 @@ final class SvmBackend implements BuffaWire.Backend {
     }
   }
 
+  static ByteBuffer indexBuffer(long address, int count) {
+    return CTypeConversion.asByteBuffer(
+        WordFactory.pointer(address), Math.multiplyExact(count, Buffa.Field.SIZE));
+  }
+
   @Override
   public BuffaWire.Tape typed(
       WireInput schema,
@@ -109,7 +150,7 @@ final class SvmBackend implements BuffaWire.Backend {
       throw new IllegalArgumentException("Inputs are not SVM native memory");
     VoidPointer result = acquireResult();
     try {
-      BuffaWire.status(
+      int status =
           Buffa.typedReuse(
               WordFactory.pointer(schemaAddress.value()),
               schema.size(),
@@ -122,15 +163,25 @@ final class SvmBackend implements BuffaWire.Backend {
               plan.limits().maxStringBytes(),
               plan.maxDepth(),
               nativeBytes,
-              result));
+              result);
+      boolean viewReady = BuffaWire.typedStatus(status, format);
       long count = Buffa.Result.count(result), capacity = Buffa.Result.capacity(result);
       ByteBuffer bytes =
-          count == 0
-              ? ByteBuffer.allocate(0)
-              : CTypeConversion.asByteBuffer(
-                  Buffa.Result.data(result),
-                  Math.toIntExact(Math.multiplyExact(count, Buffa.Field.SIZE)));
-      return new BuffaWire.Tape(bytes, count, capacity, retainAction);
+          format == 3
+              ? null
+              : count == 0
+                  ? ByteBuffer.allocate(0)
+                  : CTypeConversion.asByteBuffer(
+                      Buffa.Result.data(result),
+                      Math.toIntExact(Math.multiplyExact(count, Buffa.Field.SIZE)));
+      return new BuffaWire.Tape(
+          bytes,
+          count,
+          capacity,
+          retainAction,
+          detachAction,
+          viewReady,
+          Buffa.Result.data(result).rawValue());
     } catch (RuntimeException | Error failure) {
       releaseResult();
       throw failure;

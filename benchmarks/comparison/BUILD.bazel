@@ -66,6 +66,20 @@ java_test(
     runtime_deps = [":comparison"],
 )
 
+java_test(
+    name = "smoke_views",
+    size = "large",
+    args = ["--smoke"],
+    data = ["//protobuf-buffa/native:shared"],
+    jvm_flags = [
+        "--enable-native-access=ALL-UNNAMED",
+        "-Dtruffledata.buffa.views=true",
+    ],
+    main_class = "dev.elide.truffledata.comparison.Comparison",
+    use_testrunner = False,
+    runtime_deps = [":comparison"],
+)
+
 native_image(
     name = "svm",
     testonly = True,
@@ -370,6 +384,93 @@ sh_test(
     srcs = ["json_profile.sh"],
     args = ["$(rootpath :json_svm_profile)"],
     data = [":json_svm_profile"],
+    tags = ["manual"],
+    target_compatible_with = [
+        "@platforms//os:linux",
+        "@platforms//cpu:x86_64",
+    ],
+)
+
+# Small consumer-level experiment; intentionally separate from the historical comparison matrix.
+data_java_library(
+    name = "consumer",
+    testonly = True,
+    srcs = [
+        "ConsumerComparison.java",
+        "ConsumerProfile.java",
+    ],
+    deps = [
+        ":comparison",
+        ":contracts",
+        "//core",
+        "//protobuf-buffa",
+        "//protobuf-buffa:bindings",
+        "//protobuf-runtime",
+        "@maven//:com_google_protobuf_protobuf_java",
+        "@maven//:org_graalvm_polyglot_polyglot",
+        "@maven//:org_graalvm_sdk_nativeimage",
+        "@maven//:org_graalvm_truffle_truffle_api",
+        "@maven//:org_graalvm_truffle_truffle_runtime",
+    ],
+)
+
+java_test(
+    name = "consumer_smoke",
+    size = "large",
+    args = ["--smoke"],
+    data = ["//protobuf-buffa/native:shared"],
+    jvm_flags = ["--enable-native-access=ALL-UNNAMED"],
+    main_class = "dev.elide.truffledata.comparison.ConsumerComparison",
+    use_testrunner = False,
+    runtime_deps = [":consumer"],
+)
+
+[
+    native_image(
+        name = name,
+        testonly = True,
+        cc_deps = ["//protobuf-buffa/native:truffledata_buffa"],
+        exec_properties = {
+            "EstimatedCPU": "4",
+            "EstimatedMemory": "16GB",
+        },
+        executable_name = executable,
+        extra_args = [
+            "--gc=serial",
+            "--add-exports=org.graalvm.truffle.runtime/com.oracle.truffle.runtime=ALL-UNNAMED",
+            "--parallelism=4",
+            "-march=compatibility",
+            "--initialize-at-build-time=dev.elide.truffledata",
+            "--initialize-at-run-time=dev.elide.truffledata.comparison.Comparison",
+            "--features=dev.elide.truffledata.buffa.BuffaFeature",
+            "-H:+UnlockExperimentalVMOptions",
+        ] + TRUFFLE_JIT_CHECKS + ([
+            "--enable-monitoring=jfr",
+            "-H:-DeleteLocalSymbols",
+            "-H:+PreserveFramePointer",
+        ] if profile else []) + ["-H:-UnlockExperimentalVMOptions"],
+        graalvm_sdk = "@graalvm_linux_amd64//:gvm",
+        main_class = "dev.elide.truffledata.comparison." + main,
+        optimization_mode = "2",
+        tags = ["manual"],
+        target_compatible_with = [
+            "@platforms//os:linux",
+            "@platforms//cpu:x86_64",
+        ],
+        deps = [":consumer"],
+    )
+    for name, executable, main, profile in [
+        ("consumer_svm", "truffledata-consumer", "ConsumerComparison", False),
+        ("consumer_profile", "truffledata-consumer-profile", "ConsumerProfile", True),
+    ]
+]
+
+sh_test(
+    name = "consumer_native_smoke",
+    size = "large",
+    srcs = ["native_smoke.sh"],
+    args = ["$(rootpath :consumer_svm)"],
+    data = [":consumer_svm"],
     tags = ["manual"],
     target_compatible_with = [
         "@platforms//os:linux",

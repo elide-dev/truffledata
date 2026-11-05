@@ -13,6 +13,7 @@ data_java_library(
     srcs = [
         "Acceptance.java",
         "CompiledReads.java",
+        "NativeTapeAcceptance.java",
         "TestLanguage.java",
         "TypedAcceptance.java",
         "WellKnownAcceptance.java",
@@ -52,6 +53,7 @@ data_java_library(
         jvm_flags = [
             "--enable-native-access=ALL-UNNAMED",
             "-Dtruffledata.strict=" + strict,
+            "-Dtruffledata.tests.nativeViews=" + ("true" if "views" in name else "false"),
             "-ea",
         ],
         main_class = "dev.elide.bazel.junit.BazelJUnitRunner",
@@ -69,6 +71,8 @@ data_java_library(
     for name, strict in [
         ("jvm", "true"),
         ("jvm_non_strict", "false"),
+        ("jvm_views", "false"),
+        ("jvm_views_strict", "true"),
     ]
 ]
 
@@ -85,7 +89,8 @@ data_java_library(
         extra_args = [
             "--gc=serial",
             "-ea",
-            "-Dtruffledata.strict=true",
+            "-Dtruffledata.strict=" + strict,
+            "-Dtruffledata.tests.nativeViews=" + ("true" if "views" in name else "false"),
             "--initialize-at-build-time=dev.elide.truffledata",
             "--parallelism=8",
             "-march=compatibility",
@@ -104,9 +109,11 @@ data_java_library(
             "@maven//:org_graalvm_truffle_truffle_runtime",
         ],
     )
-    for name, enabled in [
-        ("native", True),
-        ("fallback", False),
+    for name, enabled, strict in [
+        ("native", True, "true"),
+        ("native_non_strict", True, "false"),
+        ("native_views", True, "false"),
+        ("fallback", False, "true"),
     ]
 ]
 
@@ -128,6 +135,8 @@ data_java_library(
     )
     for name, mode in [
         ("native", "native"),
+        ("native_non_strict", "native"),
+        ("native_views", "native"),
         ("fallback", "java"),
     ]
 ]

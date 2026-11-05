@@ -12,6 +12,20 @@ The remote downloader affects repository fetching, which necessarily happens bef
 
 The pinned GraalVM fork version is shared by the SDK toolchains and Maven artifacts. This prevents the compiler/runtime mismatch that can occur when a developer's `JAVA_HOME` points to a different GraalVM release. The pin is in `MODULE.bazel`.
 
+## Native optimization
+
+The Elide toolchain is pinned to v2026.11.1. Rust target compilation, host Cargo tooling, rustfmt, and rust-analyzer use its `rustversion` recommendation, `nightly-2026-10-09` (Rust LLVM 23.1.3). `rust-toolchain.toml` gives local tools the same dated pin; Bazel downloads have explicit SHA256 checksums.
+
+Default builds use `--compilation_mode=opt`, including transitive Rust crates. An adapter's explicit `-Copt-level=3` does not optimize its dependencies in `fastbuild`.
+
+`--@rules_rust//rust/settings:lto=thin` preserves Rust dependency bitcode and performs cross-crate ThinLTO when producing static/shared libraries. `--features=thin_lto` enables C/C++ ThinLTO indexing and backend actions with the pinned Elide LLVM toolchain. Rust host tools and procedural macros follow rules_rust's separate execution-configuration policy.
+
+The Linux amd64 JVM shared-library and SVM static-library paths are tested with these defaults. Native Image consumes the native archives through the pinned Elide clang/lld toolchain; this is not Java-to-Rust LTO. Static archives can contain LLVM bitcode and must be consumed with a compatible LLVM linker. Other platform configurations still require their own verification.
+
+The Linux sysroot fat-bitcode final-link integration is tracked in [toolchain#13](https://github.com/elide-dev/toolchain/issues/13). The current ThinLTO action checks establish Rust cross-crate and C++ target LTO; they do not prove every shipped sysroot archive participates in cross-module optimization.
+
+For an explicit diagnostic comparison, disable both LTO paths with `--@rules_rust//rust/settings:lto=off --features=-thin_lto`. Keep `-c opt` when measuring production performance. Compiler-action evidence and the optimized baseline measurements live under `benchmarks/results/buffa-native-views/`.
+
 ## Credentials
 
 Use your existing `~/.bazelrc`, or an untracked `user.bazelrc`, with BuildBuddy's `x-buildbuddy-api-key` remote header. No credential is checked in or copied from another project. BuildBuddy workflow activation and repository secrets are external setup; `buildbuddy.yaml` defines main and isolated PR builds but does not register the repository with BuildBuddy.

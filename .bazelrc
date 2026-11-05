@@ -9,6 +9,13 @@ common --repo_env=BAZEL_DO_NOT_DETECT_CPP_TOOLCHAIN=1
 build --macos_minimum_os=12.0
 build:macos --features=-macos_minimum_os
 build:macos --host_features=-macos_minimum_os
+# Optimize linked native dependencies as well as adapter sources (not just leaf rustc flags).
+build --compilation_mode=opt
+# Preserve dependency bitcode and run cross-crate Rust ThinLTO at static/shared library links.
+build --@rules_rust//rust/toolchain/channel=nightly
+build --@rules_rust//rust/settings:lto=thin
+# Elide LLVM toolchains supply clang/lld and the Bazel ThinLTO backend tools.
+build --features=thin_lto
 build --incompatible_strict_action_env
 build --nojava_header_compilation
 build --experimental_java_classpath=off

@@ -312,8 +312,9 @@ unsafe fn typed_impl(
     {
         return MALFORMED;
     }
+    let mut view_status = 0;
     match catch_unwind(AssertUnwindSafe(|| unsafe {
-        typed::decode_reusing(
+        typed::decode_reusing_with_status(
             slice::from_raw_parts(schema, schema_length as usize),
             slice::from_raw_parts(data, length as usize),
             format,
@@ -323,6 +324,7 @@ unsafe fn typed_impl(
             max_depth,
             max_native_bytes,
             fields,
+            &mut view_status,
         )
     })) {
         Ok(Ok(mut fields)) => {
@@ -334,7 +336,7 @@ unsafe fn typed_impl(
                 });
             }
             mem::forget(fields);
-            0
+            view_status
         }
         Ok(Err(code)) => code,
         Err(_) => PANIC,

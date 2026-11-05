@@ -6,12 +6,17 @@ sh_test(
     data = [
         "bench.py",
         "compare.py",
+        "consumer.py",
         "profile_summary.py",
         "test_bench.py",
         "test_compare.py",
+        "test_consumer.py",
         "test_profile_summary.py",
         "//benchmarks:cases.json",
     ],
 )
 
-exports_files(["compare.py"])
+exports_files([
+    "compare.py",
+    "consumer.py",
+])

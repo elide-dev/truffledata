@@ -69,15 +69,22 @@ class AllocationTest {
         assertTrue(
             bytes <= (second == 0 ? 48 : 72), "Compact integer ingestion allocated extra state");
         for (int i = 0; i < 10000; i++) retained = plan.encode(row);
-        before = bean.getThreadAllocatedBytes(Thread.currentThread().threadId());
-        for (int i = 0; i < 100000; i++) retained = plan.encode(row);
-        bytes =
-            (bean.getThreadAllocatedBytes(Thread.currentThread().threadId()) - before) / 100000.0;
-        assertArrayEquals(wire, (byte[]) retained);
-        System.out.printf(
-            "ALLOCATION compact-integer-encode width=%d second=%d %.3f bytes/message%n",
-            width, second, bytes);
-        assertTrue(bytes <= 32, "Compact integer encoding allocated temporary state");
+        // Warm the measurement loop itself: its host JVM compilation can otherwise add a
+        // one-time allocation to the first sample. Require three consecutive steady batches
+        // within the unchanged budget; persistent temporary state must still fail.
+        int consecutive = 0;
+        for (int attempt = 0; attempt < 8 && consecutive < 3; attempt++) {
+          before = bean.getThreadAllocatedBytes(Thread.currentThread().threadId());
+          for (int i = 0; i < 100000; i++) retained = plan.encode(row);
+          bytes =
+              (bean.getThreadAllocatedBytes(Thread.currentThread().threadId()) - before) / 100000.0;
+          assertArrayEquals(wire, (byte[]) retained);
+          System.out.printf(
+              "ALLOCATION compact-integer-encode width=%d second=%d attempt=%d %.3f bytes/message%n",
+              width, second, attempt, bytes);
+          consecutive = bytes <= 32 ? consecutive + 1 : 0;
+        }
+        assertEquals(3, consecutive, "Compact integer encoding allocated temporary state");
       }
     }
   }

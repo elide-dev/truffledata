@@ -1,8 +1,10 @@
 package dev.elide.truffledata.json;
 
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
-import dev.elide.truffledata.Field;
-import dev.elide.truffledata.Schema;
+import com.oracle.truffle.api.dsl.*;
+import com.oracle.truffle.api.library.*;
+import com.oracle.truffle.api.nodes.UnexpectedResultException;
+import dev.elide.truffledata.*;
 import dev.elide.truffledata.json.generated.Json;
 import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
@@ -11,21 +13,128 @@ import org.graalvm.nativeimage.c.type.VoidPointer;
 import org.graalvm.word.Pointer;
 
 /** Validated scalar slots with allocation-free primitive reads and explicit scoped ownership. */
-public final class JsonScalarRecord implements AutoCloseable {
-  private final Schema schema;
+@ExportLibrary(DataLibrary.class)
+public final class JsonScalarRecord extends AbstractRow implements AutoCloseable {
   private final VoidPointer result;
   private final Thread thread = Thread.currentThread();
   private boolean open = true;
 
   JsonScalarRecord(Schema schema, VoidPointer result) {
-    this.schema = schema;
+    super(schema);
     this.result = result;
+  }
+
+  @Override
+  protected boolean scoped() {
+    return true;
+  }
+
+  @ExportMessage
+  @Idempotent
+  Schema getSchema() {
+    return descriptor;
+  }
+
+  @ExportMessage
+  Object read(int index) {
+    if (!isPresent(index)) return Missing.INSTANCE;
+    if (isNull(index)) return DataNull.INSTANCE;
+    return switch (descriptor.field(index).kind()) {
+      case INT64 -> longValue(index);
+      case FLOAT64 -> doubleValue(index);
+      case BOOLEAN -> booleanValue(index);
+      case STRING -> stringValue(index);
+      case EXACT -> Values.normalize(unsignedValue(index));
+      default -> throw new IllegalStateException("Unsupported JSON scalar kind");
+    };
+  }
+
+  static JsonScalarAccess access(Schema schema, int index) {
+    return new JsonScalarAccess(schema, index);
+  }
+
+  @ExportMessage
+  static class ReadLong {
+    @Specialization(
+        guards = {
+          "row.getSchema() == schema",
+          "index == cachedIndex",
+          "schema.requiredLong(cachedIndex)"
+        },
+        limit = "3")
+    static long cached(
+        JsonScalarRecord row,
+        int index,
+        @Cached("row.getSchema()") Schema schema,
+        @Cached("index") int cachedIndex,
+        @Cached("access(schema, cachedIndex)") JsonScalarAccess binding) {
+      return binding.longValue(row);
+    }
+
+    @Specialization(replaces = "cached")
+    static long generic(JsonScalarRecord row, int index) throws UnexpectedResultException {
+      Object value = row.read(index);
+      if (value instanceof Long result) return result;
+      throw new UnexpectedResultException(value);
+    }
+  }
+
+  @ExportMessage
+  static class ReadDouble {
+    @Specialization(
+        guards = {
+          "row.getSchema() == schema",
+          "index == cachedIndex",
+          "schema.requiredDouble(cachedIndex)"
+        },
+        limit = "3")
+    static double cached(
+        JsonScalarRecord row,
+        int index,
+        @Cached("row.getSchema()") Schema schema,
+        @Cached("index") int cachedIndex,
+        @Cached("access(schema, cachedIndex)") JsonScalarAccess binding) {
+      return binding.doubleValue(row);
+    }
+
+    @Specialization(replaces = "cached")
+    static double generic(JsonScalarRecord row, int index) throws UnexpectedResultException {
+      Object value = row.read(index);
+      if (value instanceof Double result) return result;
+      throw new UnexpectedResultException(value);
+    }
+  }
+
+  @ExportMessage
+  static class ReadBoolean {
+    @Specialization(
+        guards = {
+          "row.getSchema() == schema",
+          "index == cachedIndex",
+          "schema.requiredBoolean(cachedIndex)"
+        },
+        limit = "3")
+    static boolean cached(
+        JsonScalarRecord row,
+        int index,
+        @Cached("row.getSchema()") Schema schema,
+        @Cached("index") int cachedIndex,
+        @Cached("access(schema, cachedIndex)") JsonScalarAccess binding) {
+      return binding.booleanValue(row);
+    }
+
+    @Specialization(replaces = "cached")
+    static boolean generic(JsonScalarRecord row, int index) throws UnexpectedResultException {
+      Object value = row.read(index);
+      if (value instanceof Boolean result) return result;
+      throw new UnexpectedResultException(value);
+    }
   }
 
   private void check(int index) {
     checkThread();
     if (!open) throw new IllegalStateException("JSON record closed");
-    if (index < 0 || index >= schema.size()) throw new IndexOutOfBoundsException(index);
+    if (index < 0 || index >= descriptor.size()) throw new IndexOutOfBoundsException(index);
   }
 
   private void checkThread() {
@@ -33,6 +142,7 @@ public final class JsonScalarRecord implements AutoCloseable {
       throw new IllegalStateException("JSON record thread mismatch");
   }
 
+  @ExportMessage
   public boolean isPresent(int index) {
     check(index);
     return (Json.JsonTypedResult.present(result) & (1L << index)) != 0;
@@ -45,7 +155,7 @@ public final class JsonScalarRecord implements AutoCloseable {
 
   private VoidPointer slot(int index, Field.Kind kind) {
     check(index);
-    if (schema.field(index).kind() != kind)
+    if (descriptor.field(index).kind() != kind)
       throw new IllegalArgumentException("JSON scalar kind mismatch");
     if (!isPresent(index) || isNull(index))
       throw new IllegalStateException("JSON scalar missing or null");
@@ -56,7 +166,7 @@ public final class JsonScalarRecord implements AutoCloseable {
   long bits(JsonScalarAccess access) {
     checkThread();
     if (!open) throw new IllegalStateException("JSON record closed");
-    if (schema != access.schema)
+    if (descriptor != access.schema)
       throw new IllegalArgumentException("JSON accessor schema mismatch");
     long bit = 1L << access.index;
     if ((access.optional && (Json.JsonTypedResult.present(result) & bit) == 0)

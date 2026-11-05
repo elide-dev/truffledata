@@ -70,7 +70,10 @@ final class NativeSchema {
                 base + 4,
                 (plan.definition().mapEntry() ? 1 : 0)
                     | (plan.jsonType().ordinal() << 1)
-                    | (allowed.contains(plan.name()) ? 256 : 0));
+                    | (allowed.contains(plan.name()) ? 256 : 0)
+                    | (plan.definition().fields().stream().noneMatch(ProtoPlan.FieldPlan::required)
+                        ? 512
+                        : 0));
         string(out, base + 8, plan.name());
         for (int j = 0; j < plan.size(); j++) {
           var f = plan.field(j);

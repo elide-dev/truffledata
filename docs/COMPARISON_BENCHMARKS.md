@@ -995,3 +995,72 @@ the affinity with each result. Compare variants within the same affinity
 condition; do not combine the absolute timings from these two conditions.
 The prior experiments remain recorded with their original CPU 2–9 affinity,
 ranges, and uncertainty. The saved patch and binary hashes allow reproduction.
+
+### Sparse Buffa finalization
+
+The next experiment uses the existing presence bits to visit only present fields,
+plus absent required/repeated/nonstandard-contract fields, when a schema has at
+most 64 fields. Strict mode and larger schemas retain full traversal. A per-schema
+mask adds one `long`; per-message Java allocation is unchanged. Absent standard
+defaults were already validated at plan construction. Empty repeated values still
+receive the current message owner, and required fields still fail when absent.
+
+Two five-fork paired runs on unclemax pinned to CPU 2 measured mixed ingestion
+at **1723 → 1677 ns** and **1714 → 1666 ns**, with disjoint fork-median ranges.
+Generated-getter ingestion measured **1599 → 1568 ns** and **1607 → 1557 ns**;
+the first run's ranges overlap. Full consumption measured **2440 → 2387 ns** and
+**2421 → 2373 ns**, with disjoint ranges. Java allocation remains **1727.75 B**
+for projected ingestion and **1854.25 B** for full consumption; native storage is
+excluded. Stock remains around **642–655 ns**: the performance gap is still large.
+
+Unchanged controls retain some variation. Scalar ingestion bypasses this finish
+loop, so its observed improvement is not evidence of a direct benefit from the
+mask. These are small measured improvements, not universal speedup guarantees.
+Raw rows, exact binary hashes, candidate patch and provenance are retained in
+[`buffa-sparse-finish`](../benchmarks/results/buffa-sparse-finish/paired.md) and
+[its repeat](../benchmarks/results/buffa-sparse-finish/repeat/paired.md).
+
+Validation includes strict/non-strict JVM acceptance, strict SVM acceptance, and a
+new non-strict SVM image that executes the optimized path. Required empty binary
+input rejection is explicit; existing tests cover presence widths 0/1/63/64/65/129,
+oneofs, empty repeated ownership, nested merges and map defaults. CI and the full
+release publisher now run both strict and non-strict native acceptance.
+
+A refreshed diagnostic profile after sparse finalization confirms that Java index
+consumption remains the main hot path. For mixed generic ingestion, hardware
+samples attribute 19.02% self time to `State.consume`, 12.50% to native binary
+parsing, 10.51% to `State.finish`, and 8.67% combined to direct-buffer integer/long
+reads. All four recordings report zero lost perf samples. JFR allocation samples
+remain dominated by object arrays, staging states, typed rows and deferred strings;
+these counts are not allocated bytes. Full consumption also spends substantial
+Java-visible time in uncached library lookup/dispatch. The next experiment combines
+adjacent index integer fields into checked 64-bit loads, preserving validation.
+[Profile summary](../benchmarks/results/buffa-sparse-finish/profile-summary.json),
+[hardware summary](../benchmarks/results/buffa-sparse-finish/perf-summary.json), and
+artifact hashes are retained alongside the paired data. Diagnostic image timings
+are not comparison scores.
+
+### Paired native index loads
+
+ABI 7's adjacent `number/kind` and `length/end` fields can each share one checked
+64-bit load. Native byte-order extraction preserves signed bounds checks and all
+kind/subtree validation. This reduces the main consumption loop from five buffer
+loads to three without an ABI change, unchecked access, copying, or new allocation.
+
+Two five-fork CPU-2 runs with matching release/build inputs measured mixed generic
+Buffa ingestion at **1671 → 1597 ns** and **1670 → 1581 ns**; generated-getter
+consumption at **1545 → 1467 ns** and **1551 → 1471 ns**; and full consumption at
+**2379 → 2301 ns** and **2375 → 2305 ns**. All these fork-median ranges are disjoint.
+Java allocation is unchanged. Strict/non-strict JVM and SVM acceptance pass.
+
+These are observed binary-to-binary improvements, not an isolated universal 5%
+causal speedup: unchanged stock controls also improve roughly 2–3%, and generated
+owned controls move more. Code layout and build variation remain material. Stock
+in the candidate image is **621–623 ns**, versus **1467–1471 ns** for Buffa with
+generated getters: about **2.36× slower**, so parity is still unfinished. The
+three-load implementation is retained, with this attribution limitation explicit.
+
+[Matched run](../benchmarks/results/buffa-paired-load/paired.md),
+[repeat](../benchmarks/results/buffa-paired-load/repeat/paired.md), exact hashes,
+patch, acceptance links and initial runs using older release metadata are retained
+in the result directory. No profile-image timing is used in these comparisons.
