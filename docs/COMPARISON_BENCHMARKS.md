@@ -1025,3 +1025,17 @@ new non-strict SVM image that executes the optimized path. Required empty binary
 input rejection is explicit; existing tests cover presence widths 0/1/63/64/65/129,
 oneofs, empty repeated ownership, nested merges and map defaults. CI and the full
 release publisher now run both strict and non-strict native acceptance.
+
+A refreshed diagnostic profile after sparse finalization confirms that Java index
+consumption remains the main hot path. For mixed generic ingestion, hardware
+samples attribute 19.02% self time to `State.consume`, 12.50% to native binary
+parsing, 10.51% to `State.finish`, and 8.67% combined to direct-buffer integer/long
+reads. All four recordings report zero lost perf samples. JFR allocation samples
+remain dominated by object arrays, staging states, typed rows and deferred strings;
+these counts are not allocated bytes. Full consumption also spends substantial
+Java-visible time in uncached library lookup/dispatch. The next experiment combines
+adjacent index integer fields into checked 64-bit loads, preserving validation.
+[Profile summary](../benchmarks/results/buffa-sparse-finish/profile-summary.json),
+[hardware summary](../benchmarks/results/buffa-sparse-finish/perf-summary.json), and
+artifact hashes are retained alongside the paired data. Diagnostic image timings
+are not comparison scores.
