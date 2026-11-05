@@ -203,12 +203,15 @@ public final class BuffaPlan implements AutoCloseable {
   private static final class TypeProfile {
     final boolean[] stringReads;
     final boolean[] standardContracts;
+    final Object[] defaults;
 
     TypeProfile(ProtoPlan plan) {
       stringReads = new boolean[plan.size()];
       standardContracts = new boolean[plan.size()];
+      defaults = new Object[plan.size()];
       for (int i = 0; i < plan.size(); i++) {
         standardContracts[i] = plan.schema().field(i).equals(plan.field(i).contract());
+        defaults[i] = State.initial(plan.field(i));
       }
     }
   }
@@ -293,11 +296,11 @@ public final class BuffaPlan implements AutoCloseable {
       this.context = context;
       hints = Objects.requireNonNull(context.profile.byType.get(plan.name()));
       context.charge(plan.size());
-      values = new Object[plan.size()];
+      // Copy immutable defaults, not payloads. Repeated placeholders are replaced per owner.
+      values = hints.defaults.clone();
       present = values.length > Long.SIZE ? new boolean[values.length] : NO_SEEN_FIELDS;
       // Binary protobuf permits duplicate fields; only text formats track duplicates.
       seen = context.format == 0 ? NO_SEEN_FIELDS : new boolean[values.length];
-      for (int i = 0; i < values.length; i++) values[i] = initial(plan.field(i));
     }
 
     boolean present(int ordinal) {
@@ -321,7 +324,7 @@ public final class BuffaPlan implements AutoCloseable {
           if (i != ordinal && plan.field(i).oneof() == field.oneof()) {
             if (context.format != 0 && present(i))
               throw new ContractViolation("Multiple oneof members");
-            values[i] = initial(plan.field(i));
+            values[i] = hints.defaults[i];
             present(i, false);
           }
         }
@@ -454,6 +457,13 @@ public final class BuffaPlan implements AutoCloseable {
       }
       for (int i = 0; i < values.length; i++) {
         var field = plan.field(i);
+        if (!STRICT && !present(i) && hints.standardContracts[i]) {
+          if (field.required()) throw new ContractViolation("Missing required field");
+          // Defaults are already validated and absent by definition. Repeated defaults must
+          // nevertheless be bound to this decode's owner, never shared across messages.
+          if (field.repeated()) values[i] = context.emptyArray();
+          continue;
+        }
         if (values[i] instanceof State child) values[i] = child.finish(depth + 1);
         else if (field.repeated()) {
           Object[] items = values[i] instanceof Repeated repeated ? repeated.finish() : EMPTY_ITEMS;
