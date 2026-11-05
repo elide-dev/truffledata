@@ -154,10 +154,10 @@ final class NativeRow extends TypedRow {
     // Four-bit relative positions cover up to sixteen schema fields and fifteen index entries.
     // Zero denotes absence; later occurrences overwrite their nibble. Larger spans use the full
     // directory, including messages whose descendants make an immediate child's offset large.
-    if (plan().size() <= 16) {
+    if (plan().size() <= 16 && end - start <= 15) {
       long packed = 0;
       int i = start;
-      for (; i < end && i - start < 15; i = next(tape, i)) {
+      for (; i < end; i = next(tape, i)) {
         int shift = ordinal(tape, i) * 4;
         packed = (packed & ~(15L << shift)) | ((long) (i - start + 1) << shift);
       }
