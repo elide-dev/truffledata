@@ -297,7 +297,7 @@ public final class BuffaPlan implements AutoCloseable {
       hints = Objects.requireNonNull(context.profile.byType.get(plan.name()));
       context.charge(plan.size());
       // Copy immutable defaults, not payloads. Repeated placeholders are replaced per owner.
-      values = hints.defaults.clone();
+      values = Arrays.copyOf(hints.defaults, hints.defaults.length, Object[].class);
       present = values.length > Long.SIZE ? new boolean[values.length] : NO_SEEN_FIELDS;
       // Binary protobuf permits duplicate fields; only text formats track duplicates.
       seen = context.format == 0 ? NO_SEEN_FIELDS : new boolean[values.length];
