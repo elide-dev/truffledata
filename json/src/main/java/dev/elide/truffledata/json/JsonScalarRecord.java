@@ -14,12 +14,18 @@ import org.graalvm.word.Pointer;
 public final class JsonScalarRecord implements AutoCloseable {
   private final Schema schema;
   private final VoidPointer result;
+  private final Pointer slots;
+  private final long present;
+  private final long nulls;
   private final Thread thread = Thread.currentThread();
   private boolean open = true;
 
   JsonScalarRecord(Schema schema, VoidPointer result) {
     this.schema = schema;
     this.result = result;
+    this.slots = (Pointer) Json.JsonTypedResult.slots(result);
+    this.present = Json.JsonTypedResult.present(result);
+    this.nulls = Json.JsonTypedResult.nulls(result);
   }
 
   private void check(int index) {
@@ -35,22 +41,22 @@ public final class JsonScalarRecord implements AutoCloseable {
 
   public boolean isPresent(int index) {
     check(index);
-    return (Json.JsonTypedResult.present(result) & (1L << index)) != 0;
+    return (present & (1L << index)) != 0;
   }
 
   public boolean isNull(int index) {
     check(index);
-    return (Json.JsonTypedResult.nulls(result) & (1L << index)) != 0;
+    return (nulls & (1L << index)) != 0;
   }
 
   private VoidPointer slot(int index, Field.Kind kind) {
     check(index);
     if (schema.field(index).kind() != kind)
       throw new IllegalArgumentException("JSON scalar kind mismatch");
-    if (!isPresent(index) || isNull(index))
+    long bit = 1L << index;
+    if ((present & bit) == 0 || (nulls & bit) != 0)
       throw new IllegalStateException("JSON scalar missing or null");
-    return (VoidPointer)
-        ((Pointer) Json.JsonTypedResult.slots(result)).add(index * Json.JsonScalarSlot.SIZE);
+    return (VoidPointer) slots.add(index * Json.JsonScalarSlot.SIZE);
   }
 
   public long longValue(int index) {
