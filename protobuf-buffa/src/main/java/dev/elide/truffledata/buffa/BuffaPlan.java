@@ -114,7 +114,10 @@ public final class BuffaPlan implements AutoCloseable {
         return compact(owner, backend.scalars(schema, input, plan));
       try (var tape = backend.typed(schema, input, format, payload, plan, nativeBytes)) {
         State state =
-            new State(plan, new DecodeContext(owner, format, plan.limits().maxCells(), profile));
+            new State(
+                plan,
+                profile.hints[0],
+                new DecodeContext(owner, format, plan.limits().maxCells(), profile));
         state.consume(tape, 0, tape.count);
         return owner.finish(state.finish(1), tape.allocated);
       }
@@ -187,13 +190,26 @@ public final class BuffaPlan implements AutoCloseable {
   /** Thread-confined, bounded hints: reading a string makes later values eager for that field. */
   private static final class ReadProfile {
     final List<ProtoPlan> types;
-    final Map<String, TypeProfile> byType;
+    final TypeProfile[] hints;
 
     ReadProfile(List<ProtoPlan> types) {
       this.types = types;
+      hints = new TypeProfile[types.size()];
       Map<String, TypeProfile> profiles = new HashMap<>();
-      for (ProtoPlan type : types) profiles.put(type.name(), new TypeProfile(type));
-      byType = Map.copyOf(profiles);
+      for (int i = 0; i < types.size(); i++) {
+        var type = types.get(i);
+        hints[i] = new TypeProfile(type);
+        profiles.put(type.name(), hints[i]);
+      }
+      // Link only after every type exists: recursive schemas must not recursively construct
+      // profiles. Resolve names once here, never while materializing nested messages.
+      for (int i = 0; i < types.size(); i++) {
+        var type = types.get(i);
+        for (int field = 0; field < type.size(); field++)
+          if (type.field(field).kind().message())
+            hints[i].children[field] =
+                Objects.requireNonNull(profiles.get(type.nested(field).name()));
+      }
     }
   }
 
@@ -204,11 +220,13 @@ public final class BuffaPlan implements AutoCloseable {
     final boolean[] stringReads;
     final boolean[] standardContracts;
     final Object[] defaults;
+    final @Nullable TypeProfile[] children;
 
     TypeProfile(ProtoPlan plan) {
       stringReads = new boolean[plan.size()];
       standardContracts = new boolean[plan.size()];
       defaults = new Object[plan.size()];
+      children = new TypeProfile[plan.size()];
       for (int i = 0; i < plan.size(); i++) {
         standardContracts[i] = plan.schema().field(i).equals(plan.field(i).contract());
         defaults[i] = State.initial(plan.field(i));
@@ -291,10 +309,10 @@ public final class BuffaPlan implements AutoCloseable {
     long presenceBits;
     final boolean[] seen;
 
-    State(ProtoPlan plan, DecodeContext context) {
+    State(ProtoPlan plan, TypeProfile hints, DecodeContext context) {
       this.plan = plan;
       this.context = context;
-      hints = Objects.requireNonNull(context.profile.byType.get(plan.name()));
+      this.hints = hints;
       context.charge(plan.size());
       // Copy immutable defaults, not payloads. Repeated placeholders are replaced per owner.
       values = Arrays.copyOf(hints.defaults, hints.defaults.length, Object[].class);
@@ -372,7 +390,7 @@ public final class BuffaPlan implements AutoCloseable {
               || value >= context.profile.types.size())
             throw new IllegalStateException("Invalid Any index");
           ProtoPlan target = context.profile.types.get((int) value);
-          State payload = new State(target, context);
+          State payload = new State(target, context.profile.hints[(int) value], context);
           payload.consume(tape, index + 1, next);
           byte[] encoded = target.encode(payload.finish(1).snapshot());
           context.charge(encoded.length);
@@ -394,7 +412,10 @@ public final class BuffaPlan implements AutoCloseable {
           State child =
               !f.repeated() && values[ordinal] instanceof State old
                   ? old
-                  : new State(plan.nested(ordinal), context);
+                  : new State(
+                      plan.nested(ordinal),
+                      Objects.requireNonNull(hints.children[ordinal]),
+                      context);
           child.consume(tape, index + 1, next);
           decoded = child;
         } else if (kind == 0) decoded = 0L;
@@ -452,7 +473,7 @@ public final class BuffaPlan implements AutoCloseable {
       if (plan.definition().mapEntry()
           && plan.field(1).kind().message()
           && values[1] == Missing.INSTANCE) {
-        values[1] = new State(plan.nested(1), context);
+        values[1] = new State(plan.nested(1), Objects.requireNonNull(hints.children[1]), context);
         present(1, true);
       }
       for (int i = 0; i < values.length; i++) {
