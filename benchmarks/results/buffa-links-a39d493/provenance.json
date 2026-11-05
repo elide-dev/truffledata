@@ -1,0 +1,20 @@
+{
+  "baseline_commit": "cb2e5e61a93fde8fcd1af7c5bcfd7c78a274bb58",
+  "candidate_commit": "a39d4934064dc3f18e3114ced1f0a31fb8d49922",
+  "host": "unclemax",
+  "cpu_affinity": "2-9",
+  "seeds": [
+    20261105,
+    20261106
+  ],
+  "remote_artifacts": "/tmp/truffledata-buffa-profile-links.aSO8Ni",
+  "command": "taskset -c 2-9 env BENCH_SEED=SEED python3 truffledata-buffa-repeat.py",
+  "validation": "https://app.buildbuddy.io/invocation/97d2af0c-5409-4d35-b839-44dbb355109a",
+  "notes": [
+    "Five randomized fresh processes per variant/cell/metric in each cycle. Timing and allocation separate; no concurrent profiling.",
+    "Identical binary hashes across cycles; baseline matches previous array-copy candidate.",
+    "Projected ingestion medians improve 4\u20139%; first ranges disjoint, repeat ranges overlap. Full-consumption ranges overlap.",
+    "Unchanged controls vary in both directions. Java allocation unchanged; additional per-schema profile links excluded."
+  ],
+  "coverage": "https://app.buildbuddy.io/invocation/c66c3d49-0489-48ac-b84d-d0224bc32b00"
+}

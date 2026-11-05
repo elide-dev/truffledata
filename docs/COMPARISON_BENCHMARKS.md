@@ -909,3 +909,33 @@ the second cycle and faster in the third, while stock favors the candidate in
 all three. Consequently these results do not isolate a general causal speedup.
 The targeted change is retained, with no new allocation or correctness tradeoff;
 the raw controls and inconsistent cases remain part of the evidence.
+
+## Linking nested profiles at schema compilation
+
+Revision `a39d493` resolves nested materialization profiles once per compiled plan.
+It replaces a name-map lookup for every nested message with a direct profile link,
+including root and registered Any types. Linking happens after all profiles exist
+so recursive schemas retain their cycles. Each message still uses its original
+ProtoPlan, budgets, and ownership; only profile lookup changes. Links add
+per-schema references but no per-message allocation.
+
+Two randomized five-fork cycles compare identical binaries:
+[first](../benchmarks/results/buffa-links-a39d493/paired.md) and
+[repeat](../benchmarks/results/buffa-links-a39d493/repeat/paired.md).
+
+| Buffa operation | First baseline → candidate | Repeat baseline → candidate |
+| --- | ---: | ---: |
+| Nested ingestion | 1994.44 → 1813.03 ns | 1891.64 → 1822.11 ns |
+| Nested ingestion with generated getters | 1801.96 → 1662.64 ns | 1781.07 → 1706.15 ns |
+| Nested full consumption | 2655.30 → 2554.12 ns | 2506.32 → 2462.35 ns |
+
+Projected ingestion improves roughly 4–9% by median. Its first-cycle ranges are
+disjoint, while repeat ranges overlap. Full-consumption ranges overlap in both.
+Unchanged controls vary in both directions, so these are bounded experimental
+results, not a universal speedup. Java allocation remains 1727.75 bytes/op for
+projection and 1854.25 for full consumption. Strict/non-strict JVM acceptance,
+SVM acceptance, comparison smoke, and Gazelle drift pass, including the existing
+recursive, merged-message, map-default, and registered Any cases.
+
+The coverage cycle and access-method gate pass: 315/333 BuffaPlan lines and
+22/22 methods, with 65/65 TypedRow lines and 17/17 methods covered.
