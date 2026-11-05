@@ -157,6 +157,60 @@ public final class SvmAcceptance {
     }
   }
 
+  private static void accessorContracts() throws InterruptedException {
+    var schema =
+        dev.elide.truffledata.Schema.of(
+            new dev.elide.truffledata.Field(
+                "n", dev.elide.truffledata.Field.Kind.INT64, true, true));
+    var access = new dev.elide.truffledata.json.JsonScalarAccess(schema, 0);
+    var wrong =
+        new dev.elide.truffledata.json.JsonScalarAccess(
+            dev.elide.truffledata.Schema.of(dev.elide.truffledata.Field.requiredLong("n")), 0);
+    try (var plan = dev.elide.truffledata.json.JsonScalarPlan.compile(schema)) {
+      for (String input : new String[] {"{}", "{\"n\":null}"}) {
+        try (var record = plan.decode(input.getBytes(StandardCharsets.UTF_8))) {
+          try {
+            access.longValue(record);
+            throw new AssertionError("Missing/null accessor");
+          } catch (IllegalStateException expected) {
+          }
+        }
+      }
+      try (var record = plan.decode("{\"n\":7}".getBytes(StandardCharsets.UTF_8))) {
+        require(access.longValue(record) == 7);
+        try {
+          wrong.longValue(record);
+          throw new AssertionError("Wrong schema accessor");
+        } catch (IllegalArgumentException expected) {
+        }
+        try {
+          access.doubleValue(record);
+          throw new AssertionError("Wrong accessor kind");
+        } catch (IllegalArgumentException expected) {
+        }
+        var rejected = new java.util.concurrent.atomic.AtomicInteger();
+        var thread =
+            new Thread(
+                () -> {
+                  try {
+                    access.longValue(record);
+                  } catch (IllegalStateException expected) {
+                    rejected.incrementAndGet();
+                  }
+                });
+        thread.start();
+        thread.join();
+        require(rejected.get() == 1);
+        record.close();
+        try {
+          access.longValue(record);
+          throw new AssertionError("Closed accessor");
+        } catch (IllegalStateException expected) {
+        }
+      }
+    }
+  }
+
   private static void typed() {
     VoidPointer fields = UnmanagedMemory.calloc(Json.JsonScalarField.SIZE);
     VoidPointer plan = UnmanagedMemory.calloc(Json.JsonPlan.SIZE);
@@ -205,6 +259,7 @@ public final class SvmAcceptance {
   public static void main(String[] args) throws InterruptedException {
     typed();
     schemaTyped();
+    accessorContracts();
     CompiledReads.run();
     scoped();
     require(CTypeConversion.toJavaString(Json.fingerprint()).equals(Json.ABI_FINGERPRINT));

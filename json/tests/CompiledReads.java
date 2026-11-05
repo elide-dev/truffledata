@@ -7,6 +7,7 @@ import com.oracle.truffle.api.nodes.NodeUtil;
 import com.oracle.truffle.api.nodes.RootNode;
 import dev.elide.truffledata.Field;
 import dev.elide.truffledata.Schema;
+import dev.elide.truffledata.json.JsonScalarAccess;
 import dev.elide.truffledata.json.JsonScalarPlan;
 import dev.elide.truffledata.json.JsonScalarRecord;
 import java.nio.charset.StandardCharsets;
@@ -41,9 +42,11 @@ final class CompiledReads {
       try {
         plan.close();
         var rows = new JsonScalarRecord[] {first, second};
-        var dynamic = new Reads(null);
-        var constant = new Reads(rows);
-        for (var root : new Reads[] {dynamic, constant}) {
+        var dynamic = new Reads(null, schema, false);
+        var constant = new Reads(rows, schema, false);
+        var specialized = new Reads(null, schema, true);
+        var specializedConstant = new Reads(rows, schema, true);
+        for (var root : new Reads[] {dynamic, constant, specialized, specializedConstant}) {
           var target = root.getCallTarget();
           for (int i = 0; i < 200 && !root.compiled; i++) target.call(rows, 100000);
           check(root.compiled, "JSON reads must execute compiled code");
@@ -60,10 +63,15 @@ final class CompiledReads {
           double bytes = (bean.getThreadAllocatedBytes(thread) - before) / 1000000.0;
           check(bytes >= 0 && bytes <= 0.05, "JSON compiled bytes/read budget: " + bytes);
           System.out.println(
-              "JSON compiled=true constant=" + (root.constant != null) + " bytes/read=" + bytes);
+              "JSON compiled=true constant="
+                  + (root.constant != null)
+                  + " specialized="
+                  + root.specialized
+                  + " bytes/read="
+                  + bytes);
         }
         first.close();
-        for (var root : new Reads[] {dynamic, constant}) {
+        for (var root : new Reads[] {dynamic, constant, specialized, specializedConstant}) {
           try {
             root.getCallTarget().call(rows, 1);
             throw new AssertionError("Compiled closed read");
@@ -80,11 +88,21 @@ final class CompiledReads {
   private static final class Reads extends RootNode {
     @CompilerDirectives.CompilationFinal(dimensions = 1)
     final JsonScalarRecord @org.jspecify.annotations.Nullable [] constant;
-    boolean compiled;
 
-    Reads(JsonScalarRecord @org.jspecify.annotations.Nullable [] constant) {
+    boolean compiled;
+    final boolean specialized;
+    final JsonScalarAccess n, d, b;
+
+    Reads(
+        JsonScalarRecord @org.jspecify.annotations.Nullable [] constant,
+        Schema schema,
+        boolean specialized) {
       super(TestLanguage.current());
       this.constant = constant;
+      this.specialized = specialized;
+      n = new JsonScalarAccess(schema, 0);
+      d = new JsonScalarAccess(schema, 1);
+      b = new JsonScalarAccess(schema, 2);
     }
 
     @Override
@@ -94,7 +112,10 @@ final class CompiledReads {
       long sum = 0;
       for (int i = 0; i < count; i++) {
         var row = rows[i & 1];
-        sum += row.longValue(0) + (long) row.doubleValue(1) + (row.booleanValue(2) ? 1 : 0);
+        sum +=
+            specialized
+                ? n.longValue(row) + (long) d.doubleValue(row) + (b.booleanValue(row) ? 1 : 0)
+                : row.longValue(0) + (long) row.doubleValue(1) + (row.booleanValue(2) ? 1 : 0);
       }
       if (CompilerDirectives.inInterpreter()) LoopNode.reportLoopCount(this, count);
       compiled |= CompilerDirectives.inCompiledCode();

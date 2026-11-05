@@ -14,7 +14,7 @@ import sys
 binary = Path(sys.argv[1]).resolve()
 output = Path(os.environ['TEST_UNDECLARED_OUTPUTS_DIR'])
 output.mkdir(parents=True, exist_ok=True)
-jobs = list(itertools.product(('gson-stream', 'simdjson-typed'),
+jobs = list(itertools.product(('gson-stream', 'simdjson-typed', 'simdjson-specialized'),
     ('ingest', 'read-aot', 'interpret', 'peak'), ('time', 'memory'), range(3)))
 random.Random(20261105).shuffle(jobs)
 results = []
@@ -42,7 +42,7 @@ lines = ['# SVM scalar JSON comparison', '',
     'Medians of three fresh-process fork medians; ranges are fork medians. Java heap excludes native memory.', '',
     '| Stage | Engine | ns/record (range) | Java bytes/record (range) |', '|---|---|---:|---:|']
 for stage in ('ingest', 'read-aot', 'interpret', 'peak'):
-    for engine in ('gson-stream', 'simdjson-typed'):
+    for engine in ('gson-stream', 'simdjson-typed', 'simdjson-specialized'):
         cells = []
         for metric in ('ns_per_row', 'allocated_bytes_per_row'):
             values = [statistics.median(r[metric]) for r in results if r['engine'] == engine and r['stage'] == stage and metric in r]

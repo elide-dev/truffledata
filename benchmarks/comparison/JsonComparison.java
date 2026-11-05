@@ -8,6 +8,7 @@ import com.oracle.truffle.runtime.OptimizedCallTarget;
 import com.sun.management.ThreadMXBean;
 import dev.elide.truffledata.Field;
 import dev.elide.truffledata.Schema;
+import dev.elide.truffledata.json.JsonScalarAccess;
 import dev.elide.truffledata.json.JsonScalarPlan;
 import dev.elide.truffledata.json.JsonScalarRecord;
 import java.io.ByteArrayInputStream;
@@ -70,7 +71,7 @@ public final class JsonComparison {
 
   public static void main(String[] args) throws Exception {
     if (args.length == 1 && args[0].equals("--smoke")) {
-      for (String engine : new String[] {"gson-stream", "simdjson-typed"})
+      for (String engine : new String[] {"gson-stream", "simdjson-typed", "simdjson-specialized"})
         for (String stage : new String[] {"ingest", "read-aot", "interpret", "peak"})
           run(engine, stage, true, true);
     } else {
@@ -81,13 +82,19 @@ public final class JsonComparison {
 
   private static void run(String engine, String stage, boolean memory, boolean smoke)
       throws Exception {
-    boolean nativeEngine = engine.equals("simdjson-typed");
+    boolean specialized = engine.equals("simdjson-specialized");
+    boolean nativeEngine = engine.equals("simdjson-typed") || specialized;
     if (!nativeEngine && !engine.equals("gson-stream"))
       throw new IllegalArgumentException("engine");
     if (!Arrays.asList("ingest", "read-aot", "interpret", "peak").contains(stage))
       throw new IllegalArgumentException("stage");
     boolean peak = stage.equals("peak"), ingest = stage.equals("ingest");
     boolean guest = peak || stage.equals("interpret");
+    var schema =
+        Schema.of(
+            Field.requiredLong("n"),
+            new Field("d", Field.Kind.FLOAT64, false, false),
+            new Field("b", Field.Kind.BOOLEAN, false, false));
     try (var context =
             Context.newBuilder("td-compare")
                 .allowExperimentalOptions(true)
@@ -97,12 +104,7 @@ public final class JsonComparison {
                 .option("compiler.TreatPerformanceWarningsAsErrors", "all")
                 .option("compiler.MaximumGraalGraphSize", "10000")
                 .build();
-        var plan =
-            JsonScalarPlan.compile(
-                Schema.of(
-                    Field.requiredLong("n"),
-                    new Field("d", Field.Kind.FLOAT64, false, false),
-                    new Field("b", Field.Kind.BOOLEAN, false, false)))) {
+        var plan = JsonScalarPlan.compile(schema)) {
       context.initialize("td-compare");
       context.enter();
       Object[] rows = new Object[ROWS];
@@ -121,7 +123,7 @@ public final class JsonComparison {
           rows[i] = nativeEngine ? plan.decode(inputs[i]) : parse(inputs[i]);
           expected += n + (long) d + (b ? 1 : 0);
         }
-        var root = new Reads(nativeEngine);
+        var root = new Reads(nativeEngine, specialized, schema);
         var target = (OptimizedCallTarget) root.getCallTarget();
         Operation operation =
             rotation -> {
@@ -133,7 +135,7 @@ public final class JsonComparison {
                 if (nativeEngine) {
                   try (var record = plan.decode(input)) {
                     retained = record;
-                    sum += nativeRead(record);
+                    sum += root.nativeValue(record);
                   }
                 } else {
                   var record = parse(input);
@@ -229,9 +231,16 @@ public final class JsonComparison {
   private static final class Reads extends RootNode {
     private final boolean nativeEngine;
 
-    Reads(boolean nativeEngine) {
+    private final boolean specialized;
+    private final JsonScalarAccess n, d, b;
+
+    Reads(boolean nativeEngine, boolean specialized, Schema schema) {
       super(ComparisonLanguage.current());
       this.nativeEngine = nativeEngine;
+      this.specialized = specialized;
+      n = new JsonScalarAccess(schema, 0);
+      d = new JsonScalarAccess(schema, 1);
+      b = new JsonScalarAccess(schema, 2);
     }
 
     @Override
@@ -239,11 +248,17 @@ public final class JsonComparison {
       return read((Object[]) frame.getArguments()[0], (Integer) frame.getArguments()[1]);
     }
 
+    long nativeValue(JsonScalarRecord row) {
+      return specialized
+          ? n.longValue(row) + (long) d.doubleValue(row) + (b.booleanValue(row) ? 1 : 0)
+          : nativeRead(row);
+    }
+
     long read(Object[] rows, int rotation) {
       long sum = 0;
       for (int i = 0; i < ROWS; i++) {
         Object row = rows[(i + rotation) & (ROWS - 1)];
-        sum += nativeEngine ? nativeRead((JsonScalarRecord) row) : stockRead((Stock) row);
+        sum += nativeEngine ? nativeValue((JsonScalarRecord) row) : stockRead((Stock) row);
       }
       return sum;
     }

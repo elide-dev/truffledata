@@ -53,6 +53,21 @@ public final class JsonScalarRecord implements AutoCloseable {
         ((Pointer) Json.JsonTypedResult.slots(result)).add(index * Json.JsonScalarSlot.SIZE);
   }
 
+  long bits(JsonScalarAccess access) {
+    checkThread();
+    if (!open) throw new IllegalStateException("JSON record closed");
+    if (schema != access.schema)
+      throw new IllegalArgumentException("JSON accessor schema mismatch");
+    long bit = 1L << access.index;
+    if ((access.optional && (Json.JsonTypedResult.present(result) & bit) == 0)
+        || (access.nullable && (Json.JsonTypedResult.nulls(result) & bit) != 0))
+      throw new IllegalStateException("JSON scalar missing or null");
+    return Json.JsonScalarSlot.bits(
+        (VoidPointer)
+            ((Pointer) Json.JsonTypedResult.slots(result))
+                .add(access.index * Json.JsonScalarSlot.SIZE));
+  }
+
   public long longValue(int index) {
     return Json.JsonScalarSlot.bits(slot(index, Field.Kind.INT64));
   }
