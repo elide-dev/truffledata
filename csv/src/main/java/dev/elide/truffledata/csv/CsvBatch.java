@@ -17,6 +17,8 @@ import java.util.Objects;
  */
 @ExportLibrary(InteropLibrary.class)
 public final class CsvBatch implements TruffleObject {
+  private static final byte[] NO_BYTES = new byte[0];
+
   final Schema schema;
   final byte[] input;
 
@@ -82,6 +84,49 @@ public final class CsvBatch implements TruffleObject {
     byte[] text = new byte[CsvScanner.length(span)];
     int length = CsvScanner.unescape(input, span, quote, text, 0);
     return new String(text, 0, length, StandardCharsets.UTF_8);
+  }
+
+  /**
+   * One pass over the batch: rows in order, columns in schema order. Allocates one {@link CsvText}
+   * and, only when the batch has escaped fields, one scratch buffer that grows to the longest
+   * escaped field; nothing per row or per field.
+   */
+  @TruffleBoundary
+  public void export(CsvSink sink) {
+    Objects.requireNonNull(sink);
+    CsvText text = new CsvText();
+    byte[] scratch = NO_BYTES;
+    Column[] cols = columns;
+    int fields = cols.length;
+    for (int r = 0; r < size; r++) {
+      sink.beginRow(firstRecord + r, fields);
+      for (int c = 0; c < fields; c++) {
+        Column column = cols[c];
+        byte[] states = column.states;
+        if (states != null && states[r] != Column.PRESENT) {
+          if (states[r] == Column.NULL) sink.nullValue(c);
+          else sink.missing(c);
+          continue;
+        }
+        long[] spans = column.spans;
+        long[] longs = column.longs;
+        double[] doubles = column.doubles;
+        boolean[] booleans = column.booleans;
+        if (spans != null) {
+          long span = spans[r];
+          int length = CsvScanner.length(span);
+          if (CsvScanner.escaped(span)) {
+            if (scratch.length < length)
+              scratch = new byte[Math.max(length, Math.min(scratch.length * 2, input.length))];
+            text.set(scratch, 0, CsvScanner.unescape(input, span, quote, scratch, 0));
+          } else text.set(input, CsvScanner.offset(span), length);
+          sink.text(c, text);
+        } else if (longs != null) sink.longValue(c, longs[r]);
+        else if (doubles != null) sink.doubleValue(c, doubles[r]);
+        else if (booleans != null) sink.booleanValue(c, booleans[r]);
+      }
+      sink.endRow();
+    }
   }
 
   @ExportMessage
