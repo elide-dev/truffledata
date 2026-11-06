@@ -118,9 +118,22 @@ public abstract sealed class JsonOwner permits JsonMessage, JsonSnapshot {
     return arrayIndexes.size();
   }
 
+  private record ArrayIndex(long array, long[] children) {}
+
+  // Most recently used index: repeated reads of one array skip the map and its key boxing.
+  private volatile @Nullable ArrayIndex lastIndex;
+
   /** Child node offsets of an array, built once and cached while the owner lives. */
   @TruffleBoundary
   final long[] arrayIndex(long array) {
+    ArrayIndex last = lastIndex;
+    if (last != null && last.array() == array) return last.children();
+    long[] children = buildArrayIndex(array);
+    lastIndex = new ArrayIndex(array, children);
+    return children;
+  }
+
+  private long[] buildArrayIndex(long array) {
     return arrayIndexes.computeIfAbsent(
         array,
         key -> {

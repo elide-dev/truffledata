@@ -155,12 +155,18 @@ public final class JsonValue implements TruffleObject {
   @TruffleBoundary
   public JsonValue element(long index) {
     if (kind() != Kind.ARRAY) throw new IllegalStateException("Not a JSON array");
-    long count = owner.tape.length(node);
+    return new JsonValue(owner, elementNode(owner, node, index));
+  }
+
+  /** Child node of an array; static so compiled interop reads never pass a fresh view to a boundary. */
+  @TruffleBoundary
+  private static long elementNode(JsonOwner owner, long array, long index) {
+    long count = owner.tape.length(array);
     if (index < 0 || index >= count) throw new IndexOutOfBoundsException("JSON array index");
-    if (count > JsonOwner.INDEX_THRESHOLD) return new JsonValue(owner, owner.arrayIndex(node)[(int) index]);
-    long child = owner.tape.first(node);
+    if (count > JsonOwner.INDEX_THRESHOLD) return owner.arrayIndex(array)[(int) index];
+    long child = owner.tape.first(array);
     for (long i = 0; i < index; ++i) child = owner.tape.next(child);
-    return new JsonValue(owner, child);
+    return child;
   }
 
   /** Sequential traversal in source order without building an index. */
@@ -304,7 +310,7 @@ public final class JsonValue implements TruffleObject {
   Object readArrayElement(long index) throws InvalidArrayIndexException, UnsupportedMessageException {
     if (tag() != ValueTape.ARRAY) throw UnsupportedMessageException.create();
     if (index < 0 || index >= owner.tape.length(node)) throw InvalidArrayIndexException.create(index);
-    return element(index);
+    return new JsonValue(owner, elementNode(owner, node, index));
   }
 
   // ---- InteropLibrary: scalars ----

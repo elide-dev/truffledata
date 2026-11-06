@@ -1,22 +1,20 @@
 package dev.elide.truffledata.json;
 
 import dev.elide.myna.values.ValueTape;
-import java.lang.invoke.MethodHandles;
-import java.lang.invoke.VarHandle;
-import java.nio.ByteOrder;
 
-/** Immutable heap copy of a tape: nodes, bytes and every region, with offsets preserved. */
+/**
+ * Immutable heap copy of a tape: nodes, bytes and every region, with offsets preserved. Nodes are
+ * three words each ({@code tag | length << 32}, bits, next), so reads are plain array loads with
+ * no VarHandle dispatch or boxing in AOT-compiled boundaries.
+ */
 final class HeapValueTape extends ValueTape implements TapeSource {
-  private static final VarHandle INT =
-      MethodHandles.byteArrayViewVarHandle(int[].class, ByteOrder.nativeOrder());
-  private static final VarHandle LONG =
-      MethodHandles.byteArrayViewVarHandle(long[].class, ByteOrder.nativeOrder());
-  private final byte[] nodes;
+  private static final int WORDS = NODE_SIZE / Long.BYTES;
+  private final long[] nodes;
   private final byte[] bytes;
   private final byte[][] regions;
 
-  private HeapValueTape(byte[] nodes, byte[] bytes, byte[][] regions) {
-    super(nodes.length / NODE_SIZE, bytes.length);
+  private HeapValueTape(long[] nodes, byte[] bytes, byte[][] regions) {
+    super(nodes.length / WORDS, bytes.length);
     this.nodes = nodes;
     this.bytes = bytes;
     this.regions = regions;
@@ -26,14 +24,14 @@ final class HeapValueTape extends ValueTape implements TapeSource {
   static HeapValueTape copy(ValueTape tape, TapeSource source, long root) {
     long end = tape.next(root);
     long count = end - root;
-    byte[] nodes = new byte[Math.toIntExact(count * NODE_SIZE)];
+    long[] nodes = new long[Math.toIntExact(count * WORDS)];
     for (long node = root; node < end; node++) {
-      long from = node * NODE_SIZE, to = (node - root) * NODE_SIZE;
-      INT.set(nodes, (int) to, source.nodeInt(from));
-      INT.set(nodes, (int) to + 4, source.nodeInt(from + 4));
-      LONG.set(nodes, (int) to + 8, source.nodeLong(from + 8));
+      long from = node * NODE_SIZE;
+      int to = (int) ((node - root) * WORDS);
+      nodes[to] = (source.nodeInt(from) & 0xffffffffL) | ((long) source.nodeInt(from + 4) << 32);
+      nodes[to + 1] = source.nodeLong(from + 8);
       long next = source.nodeLong(from + 16);
-      LONG.set(nodes, (int) to + 16, tape.isInlineText(node) ? next : next - root);
+      nodes[to + 2] = tape.isInlineText(node) ? next : next - root;
     }
     byte[] bytes = new byte[Math.toIntExact(source.regionSize(0))];
     source.copyRegion(0, 0, bytes, 0, bytes.length);
@@ -73,12 +71,14 @@ final class HeapValueTape extends ValueTape implements TapeSource {
 
   @Override
   protected int readInt(long offset) {
-    return (int) INT.get(nodes, (int) offset);
+    long word = nodes[(int) (offset >>> 3)];
+    return (offset & 4) == 0 ? (int) word : (int) (word >>> 32);
   }
 
   @Override
   protected long readLong(long offset) {
-    return (long) LONG.get(nodes, (int) offset);
+    if ((offset & 7) != 0) throw new IllegalArgumentException("Unaligned node word");
+    return nodes[(int) (offset >>> 3)];
   }
 
   @Override

@@ -170,6 +170,7 @@ final class CompiledReads {
     interop(second);
     export(second);
     second.close();
+    CompiledArrayReads.run();
   }
 
   /** Guest-style reads through a cached InteropLibrary compile with the same budgets. */
