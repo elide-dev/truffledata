@@ -155,6 +155,42 @@ final class JvmScopedTest {
   }
 
   @Test
+  void indexesLargeArraysOnceForRandomAccess() {
+    StringBuilder source = new StringBuilder("[");
+    for (int i = 0; i < 10_000; i++) source.append(i == 0 ? "" : ",").append(i);
+    source.append(",[\"nested\"]]");
+    try (JsonDecoder decoder = JsonJvm.open(library());
+        JsonMessage message = decoder.decode(utf8(source.toString()))) {
+      JsonValue array = message.root();
+      assertEquals(0, message.indexedArrays());
+      assertEquals("9999", array.element(9_999).numberText());
+      assertEquals(1, message.indexedArrays());
+      assertEquals("9999", array.element(9_999).numberText());
+      assertEquals("nested", array.element(10_000).element(0).stringValue());
+      assertEquals(1, message.indexedArrays(), "small arrays are walked, not indexed");
+      assertThrows(IndexOutOfBoundsException.class, () -> array.element(10_001));
+      long count = 0;
+      for (JsonValue element : array.elements()) count++;
+      assertEquals(10_001, count);
+      assertEquals(1, message.indexedArrays(), "sequential traversal needs no index");
+    }
+  }
+
+  @Test
+  void ordersObjectMembersBySource() {
+    try (JsonDecoder decoder = JsonJvm.open(library());
+        JsonMessage message = decoder.decode(utf8("{\"z\":1,\"a\":[2],\"m\":3}"))) {
+      JsonValue root = message.root();
+      assertEquals("z", root.keyAt(0).stringValue());
+      assertEquals("a", root.keyAt(1).stringValue());
+      assertEquals("m", root.keyAt(2).stringValue());
+      assertEquals("3", root.memberAt(2).numberText());
+      assertEquals(JsonValue.Kind.ARRAY, root.memberAt(1).kind());
+      assertThrows(IndexOutOfBoundsException.class, () -> root.keyAt(3));
+    }
+  }
+
+  @Test
   void staticBackendIsUnavailableOnTheJvm() {
     assertThrows(UnsupportedOperationException.class, dev.elide.truffledata.json.JsonSvm::open);
   }

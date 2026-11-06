@@ -105,13 +105,38 @@ public final class JsonValue {
     return new JsonValue(owner, key.node + 1);
   }
 
-  /** Sequential traversal of child subtrees; a future array index will accelerate random access. */
+  /** Random access: small arrays are walked; larger ones use an index cached by the owner. */
   public JsonValue element(long index) {
     if (kind() != Kind.ARRAY) throw new IllegalStateException("Not a JSON array");
     long count = owner.tape.length(node);
     if (index < 0 || index >= count) throw new IndexOutOfBoundsException("JSON array index");
+    if (count > JsonOwner.INDEX_THRESHOLD) return new JsonValue(owner, owner.arrayIndex(node)[(int) index]);
     long child = owner.tape.first(node);
     for (long i = 0; i < index; ++i) child = owner.tape.next(child);
     return new JsonValue(owner, child);
+  }
+
+  /** Sequential traversal in source order without building an index. */
+  public Iterable<JsonValue> elements() {
+    if (kind() != Kind.ARRAY) throw new IllegalStateException("Not a JSON array");
+    return () ->
+        new java.util.Iterator<>() {
+          private long remaining = owner.tape.length(node);
+          private long child = remaining == 0 ? -1 : owner.tape.first(node);
+
+          @Override
+          public boolean hasNext() {
+            return remaining > 0;
+          }
+
+          @Override
+          public JsonValue next() {
+            owner.check();
+            if (remaining == 0) throw new java.util.NoSuchElementException();
+            JsonValue value = new JsonValue(owner, child);
+            if (--remaining > 0) child = owner.tape.next(child);
+            return value;
+          }
+        };
   }
 }

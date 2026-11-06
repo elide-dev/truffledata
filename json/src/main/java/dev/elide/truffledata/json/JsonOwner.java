@@ -43,6 +43,35 @@ public abstract sealed class JsonOwner permits JsonMessage, JsonSnapshot {
     return new String(bytes, StandardCharsets.UTF_8);
   }
 
+  /** Arrays with more elements than this get a child-offset index on first random access. */
+  static final int INDEX_THRESHOLD = 8;
+
+  private final java.util.HashMap<Long, long[]> arrayIndexes = new java.util.HashMap<>();
+
+  /** Diagnostic: number of arrays indexed for random access within this owner's lifetime. */
+  @TruffleBoundary
+  public final int indexedArrays() {
+    check();
+    return arrayIndexes.size();
+  }
+
+  /** Child node offsets of an array, built once and cached while the owner lives. */
+  @TruffleBoundary
+  final long[] arrayIndex(long array) {
+    long[] cached = arrayIndexes.get(array);
+    if (cached == null) {
+      long count = tape.length(array);
+      cached = new long[Math.toIntExact(count)];
+      long child = tape.first(array);
+      for (int i = 0; i < cached.length; i++) {
+        cached[i] = child;
+        child = tape.next(child);
+      }
+      arrayIndexes.put(array, cached);
+    }
+    return cached;
+  }
+
   public final JsonValue root() {
     check();
     return new JsonValue(this, 0);
