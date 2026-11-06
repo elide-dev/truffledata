@@ -3,8 +3,10 @@ load("@rules_java//java:defs.bzl", "java_test")
 java_test(
     name = "jvm",
     srcs = [
+        "ChunkedInput.java",
         "CsvBatchTest.java",
         "CsvInteropTest.java",
+        "CsvReaderTest.java",
         "CsvScannerTest.java",
         "RecordGenerator.java",
         "Utf8Test.java",
@@ -14,6 +16,8 @@ java_test(
         "dev.elide.truffledata.csv.CsvBatchTest",
         "--class",
         "dev.elide.truffledata.csv.CsvInteropTest",
+        "--class",
+        "dev.elide.truffledata.csv.CsvReaderTest",
         "--class",
         "dev.elide.truffledata.csv.CsvScannerTest",
         "--class",

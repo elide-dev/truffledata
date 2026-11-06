@@ -2,6 +2,7 @@ package dev.elide.truffledata.csv;
 
 import dev.elide.truffledata.Field;
 import dev.elide.truffledata.Schema;
+import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -44,6 +45,10 @@ public final class CsvPlan {
     scanner.scan(input, binder.end, input.length, true, builder);
     if (builder.full()) throw CsvScanner.limit("maxBatchRows");
     return builder.build();
+  }
+
+  CsvReader open(InputStream input, CsvLimits limits, int batchBytes) {
+    return new CsvReader(input, this, limits, batchBytes);
   }
 
   static boolean hasBom(byte[] input, int length) {
@@ -114,7 +119,10 @@ public final class CsvPlan {
 
     @Nullable Binding binding;
 
-    /** Offset after the bytes the binding consumed (the header and any empty lines). */
+    /**
+     * Offset after the bytes the binding consumed (the header and any empty lines); without a
+     * binding, the offset scanning can resume from.
+     */
     int end;
 
     Binder(CsvPlan plan) {
@@ -129,6 +137,7 @@ public final class CsvPlan {
       byteBase = scanner.byteBase;
       int stop = scanner.scan(input, from, to, eof, this);
       boolean header = plan.format.header();
+      end = stop;
       if (count < 0) {
         if (!eof) return false;
         if (header) throw new IllegalArgumentException("CSV header missing");
@@ -141,7 +150,6 @@ public final class CsvPlan {
       } else {
         binding = plan.positional(count);
       }
-      end = stop;
       return true;
     }
 
