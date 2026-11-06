@@ -89,8 +89,8 @@ construction are separate. The ABI exposes plan creation/release and typed
 decode/release, with 80-byte field descriptors and 40-byte slots, published
 without copying a second slot array.
 
-The Java side is `JsonPlan`, `JsonRecord` and `JsonAccess` on SVM. Plans are
-scalar-only today; nested and repeated records are in progress.
+The Java side is `JsonPlan`, `JsonRecord`, `JsonArray` and `JsonAccess`, on SVM
+through the static bindings and on the JVM through FFM (`JsonDecoder.compile`).
 
 Character-length contracts use the shared `//bazel:unicode` simdutf library, also
 used by Rust Buffa conversion. Counting decoded UTF-8 needs no intermediate UTF-16

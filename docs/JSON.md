@@ -68,7 +68,8 @@ currently always uses `JsonLimits.DEFAULT`.
 
 The SVM decoder handle holds no state; closing it is a no-op. The JVM decoder is
 confined to the thread that opened it. Closing it never invalidates returned
-messages: the library stays loaded until the last message closes.
+messages or typed records: the library stays loaded until the last message, typed
+plan and typed record close.
 
 ## Limits
 
@@ -278,8 +279,10 @@ rounds integers above 2^53 and DECIMAL tokens to `double`.
 
 ## Typed records
 
-Known-schema JSON compiles through `JsonPlan.compile(schema)` or
-`JsonPlan.compile(root, recordTypes)` into a reusable, thread-confined native plan.
+Known-schema JSON compiles through `decoder.compile(schema)` or
+`decoder.compile(root, recordTypes)` on either backend's `JsonDecoder` into a
+reusable, thread-confined native plan (`JsonPlan.compile(...)` is the static SVM
+shortcut, and `JsonSvm.open().compile(...)` returns the same plan).
 `plan.decode(utf8)` returns the scoped root `JsonRecord`: validated slots with
 separate presence and null masks, read with primitive getters or through
 `DataLibrary`. Strings and unsigned `BigInteger`s materialize on request.
@@ -306,8 +309,13 @@ owned immutable `Batch` rows and `DataArray`s that survive close.
 `JsonAccess` binds a schema and an ordinal path (`new JsonAccess(root, recordTypes,
 1, 0, 2)`: RECORD hops, then an INT64/FLOAT64/BOOLEAN leaf) for allocation-free
 compiled primitive reads that walk the record table without intermediate
-`JsonRecord`s; keep it in a final node field. Records outlive their plans. The
-typed path is SVM-only today; the JVM typed backend is not yet implemented.
+`JsonRecord`s; keep it in a final node field. Records outlive their plans.
+
+On the JVM the plan table is written through the generated FFM layouts from the
+same backend-neutral layout the SVM plan uses, and slot and record-entry reads go
+through bounded `MemorySegment`s with an exact-class cast. A JVM plan rejects
+decoding once its decoder closes; records it returned stay valid, the plan must
+still be closed, and the library stays loaded until the last plan and record close.
 
 ## Remaining for facades
 

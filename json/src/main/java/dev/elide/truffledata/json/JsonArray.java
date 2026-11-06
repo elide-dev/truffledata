@@ -44,23 +44,23 @@ public final class JsonArray implements BorrowedArray {
     owner.check();
     if (index < 0 || index >= count) throw new IndexOutOfBoundsException(index);
     if (element.kind() != kind) throw new IllegalArgumentException("JSON element kind mismatch");
-    return owner.slot(first + index);
+    return first + index;
   }
 
   public long longValue(int index) {
-    return JsonTypedOwner.bits(slot(index, Field.Kind.INT64));
+    return owner.bits(slot(index, Field.Kind.INT64));
   }
 
   public double doubleValue(int index) {
-    return Double.longBitsToDouble(JsonTypedOwner.bits(slot(index, Field.Kind.FLOAT64)));
+    return Double.longBitsToDouble(owner.bits(slot(index, Field.Kind.FLOAT64)));
   }
 
   public boolean booleanValue(int index) {
-    return JsonTypedOwner.bits(slot(index, Field.Kind.BOOLEAN)) != 0;
+    return owner.bits(slot(index, Field.Kind.BOOLEAN)) != 0;
   }
 
   public String stringValue(int index) {
-    return JsonTypedOwner.text(slot(index, Field.Kind.STRING));
+    return owner.text(slot(index, Field.Kind.STRING));
   }
 
   /** Record element; shares this array's owner. */
@@ -81,7 +81,7 @@ public final class JsonArray implements BorrowedArray {
       case BOOLEAN -> booleanValue(index);
       case STRING -> stringValue(index);
       case EXACT ->
-          Values.normalize(JsonTypedOwner.unsigned(JsonTypedOwner.bits(slot(index, Field.Kind.EXACT))));
+          Values.normalize(JsonTypedOwner.unsigned(owner.bits(slot(index, Field.Kind.EXACT))));
       case RECORD -> record(index);
       default -> throw new IllegalStateException("Unsupported JSON element kind");
     };

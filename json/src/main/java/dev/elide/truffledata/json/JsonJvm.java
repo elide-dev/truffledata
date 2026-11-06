@@ -1,6 +1,7 @@
 package dev.elide.truffledata.json;
 
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
+import dev.elide.truffledata.Schema;
 import dev.elide.truffledata.json.generated.JsonFFM;
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
@@ -8,9 +9,13 @@ import java.lang.foreign.SymbolLookup;
 import java.lang.foreign.ValueLayout;
 import java.lang.invoke.MethodHandle;
 import java.nio.file.Path;
+import java.util.Map;
 import java.util.Objects;
 
-/** JVM FFM backend. Its arena owns only the library; every message owns its native result. */
+/**
+ * JVM FFM backend. Its arena owns only the library; every message, typed plan and typed result owns
+ * its native storage and keeps the library loaded until it closes.
+ */
 public final class JsonJvm implements JsonDecoder {
   private static final long PADDING = 64;
   private final Arena libraryArena = Arena.ofConfined();
@@ -18,7 +23,12 @@ public final class JsonJvm implements JsonDecoder {
   private final MethodHandle decode;
   private final MethodHandle decodeAdopted;
   private final MethodHandle release;
+  private final MethodHandle planCreate;
+  private final MethodHandle planRelease;
+  private final MethodHandle typedDecode;
+  private final MethodHandle typedRelease;
   private boolean open = true;
+  // Messages, typed plans and typed results not yet closed.
   private int live;
 
   private JsonJvm(Path library) {
@@ -36,6 +46,10 @@ public final class JsonJvm implements JsonDecoder {
       decode = JsonFFM.decode(symbols);
       decodeAdopted = JsonFFM.decode_adopted(symbols);
       release = JsonFFM.release(symbols);
+      planCreate = JsonFFM.plan_create(symbols);
+      planRelease = JsonFFM.plan_release(symbols);
+      typedDecode = JsonFFM.typed_decode(symbols);
+      typedRelease = JsonFFM.typed_release(symbols);
     } catch (RuntimeException | Error failure) {
       libraryArena.close();
       throw failure;
@@ -161,13 +175,204 @@ public final class JsonJvm implements JsonDecoder {
     }
   }
 
+  /** Releases native storage, then unloads the library if the decoder closed and it was last. */
+  private void retire(MethodHandle free, MemorySegment storage, Arena arena) {
+    try {
+      try {
+        free.invokeExact(storage);
+      } catch (Throwable failure) {
+        throw callFailure(failure);
+      }
+    } finally {
+      try {
+        arena.close();
+      } finally {
+        live--;
+        if (!open && live == 0) libraryArena.close();
+      }
+    }
+  }
+
+  /**
+   * Writes the shared {@link JsonPlan.Layout} into FFM memory and creates the native plan. Plan
+   * decodes require this decoder to be open; returned records do not.
+   */
+  @Override
+  @TruffleBoundary
+  public JsonPlan compile(Schema root, Map<String, Schema> recordTypes) {
+    check();
+    JsonPlan.Layout layout = new JsonPlan.Layout(root, recordTypes);
+    long fieldSize = JsonFFM.JsonScalarField_LAYOUT.byteSize();
+    long recordSize = JsonFFM.JsonRecordPlan_LAYOUT.byteSize();
+    Arena planArena = Arena.ofConfined();
+    MemorySegment handle;
+    try {
+      handle = planArena.allocate(JsonFFM.JsonPlan_LAYOUT);
+    } catch (RuntimeException | Error failure) {
+      planArena.close();
+      throw failure;
+    }
+    // Counted before creation so a failed plan retires through the same path.
+    live++;
+    boolean published = false;
+    // The native plan copies names and tables; scratch storage ends with this call.
+    try (Arena scratch = Arena.ofConfined()) {
+      MemorySegment fields =
+          scratch.allocate(
+              Math.max(1, layout.fieldCount) * fieldSize,
+              JsonFFM.JsonScalarField_LAYOUT.byteAlignment());
+      MemorySegment records =
+          scratch.allocate(
+              layout.records.length * recordSize, JsonFFM.JsonRecordPlan_LAYOUT.byteAlignment());
+      for (int r = 0; r < layout.records.length; r++) {
+        long at = r * recordSize;
+        records.set(
+            ValueLayout.JAVA_INT,
+            at + JsonFFM.JsonRecordPlan_fields_offset_OFFSET,
+            layout.fieldsOffset[r]);
+        records.set(
+            ValueLayout.JAVA_INT,
+            at + JsonFFM.JsonRecordPlan_field_count_OFFSET,
+            layout.records[r].size());
+      }
+      for (int i = 0; i < layout.fieldCount; i++) {
+        long at = i * fieldSize;
+        byte[] name = layout.names[i];
+        // An empty key still needs an addressable backing allocation.
+        MemorySegment bytes = scratch.allocate(Math.max(1, name.length));
+        MemorySegment.copy(name, 0, bytes, ValueLayout.JAVA_BYTE, 0, name.length);
+        fields.set(ValueLayout.ADDRESS, at + JsonFFM.JsonScalarField_name_OFFSET, bytes);
+        fields.set(
+            ValueLayout.JAVA_LONG, at + JsonFFM.JsonScalarField_name_length_OFFSET, name.length);
+        fields.set(ValueLayout.JAVA_INT, at + JsonFFM.JsonScalarField_kind_OFFSET, layout.kinds[i]);
+        fields.set(
+            ValueLayout.JAVA_INT, at + JsonFFM.JsonScalarField_flags_OFFSET, layout.flags[i]);
+        fields.set(
+            ValueLayout.JAVA_INT, at + JsonFFM.JsonScalarField_child_OFFSET, layout.children[i]);
+        fields.set(
+            ValueLayout.JAVA_LONG, at + JsonFFM.JsonScalarField_minimum_OFFSET, layout.minimums[i]);
+        fields.set(
+            ValueLayout.JAVA_LONG, at + JsonFFM.JsonScalarField_maximum_OFFSET, layout.maximums[i]);
+        fields.set(
+            ValueLayout.JAVA_LONG,
+            at + JsonFFM.JsonScalarField_unsigned_maximum_OFFSET,
+            JsonPlan.Layout.UNSIGNED_MAXIMUM);
+        fields.set(
+            ValueLayout.JAVA_LONG,
+            at + JsonFFM.JsonScalarField_max_utf8_bytes_OFFSET,
+            JsonPlan.Layout.MAX_UTF8_BYTES);
+        fields.set(
+            ValueLayout.JAVA_INT,
+            at + JsonFFM.JsonScalarField_float_bits_OFFSET,
+            layout.floatBits[i]);
+        fields.set(
+            ValueLayout.JAVA_INT,
+            at + JsonFFM.JsonScalarField_length_unit_OFFSET,
+            layout.lengthUnits[i]);
+        fields.set(
+            ValueLayout.JAVA_LONG,
+            at + JsonFFM.JsonScalarField_minimum_length_OFFSET,
+            layout.minimumLengths[i]);
+        fields.set(
+            ValueLayout.JAVA_LONG,
+            at + JsonFFM.JsonScalarField_maximum_length_OFFSET,
+            layout.maximumLengths[i]);
+      }
+      int status;
+      try {
+        status =
+            (int)
+                planCreate.invokeExact(
+                    records,
+                    (long) layout.records.length,
+                    fields,
+                    (long) layout.fieldCount,
+                    JsonPlan.MAX_NAME_BYTES,
+                    handle);
+      } catch (Throwable failure) {
+        throw callFailure(failure);
+      }
+      JsonSvm.checkStatus(status);
+      JsonPlan plan = new JsonPlan(layout.records, new Plan(handle, planArena));
+      published = true;
+      return plan;
+    } finally {
+      if (!published) {
+        // Releasing a zeroed or failed plan is harmless; the arena still owns the handle.
+        retire(planRelease, handle, planArena);
+      }
+    }
+  }
+
+  /** FFM typed plan: its arena owns only the plan handle storage. */
+  private final class Plan extends JsonPlan.Backend {
+    private final MemorySegment handle;
+    private final Arena arena;
+
+    Plan(MemorySegment handle, Arena arena) {
+      this.handle = handle;
+      this.arena = arena;
+    }
+
+    @Override
+    JsonTypedOwner decode(byte[] utf8, Schema[] schemas) {
+      if (!open) throw new IllegalStateException("JSON decoder closed");
+      Arena resultArena = Arena.ofConfined();
+      MemorySegment result;
+      try {
+        result = resultArena.allocate(JsonFFM.JsonTypedResult_LAYOUT);
+      } catch (RuntimeException | Error failure) {
+        resultArena.close();
+        throw failure;
+      }
+      // Counted before decoding so a failed decode retires through the same path.
+      live++;
+      boolean published = false;
+      // The native result retains its own copy of the input.
+      try (Arena input = Arena.ofConfined()) {
+        MemorySegment data = input.allocate(utf8.length);
+        MemorySegment.copy(utf8, 0, data, ValueLayout.JAVA_BYTE, 0, utf8.length);
+        int status;
+        try {
+          status =
+              (int)
+                  typedDecode.invokeExact(
+                      handle,
+                      data,
+                      (long) utf8.length,
+                      JsonPlan.MAX_INPUT_BYTES,
+                      JsonPlan.MAX_INDEX_BYTES,
+                      result);
+        } catch (Throwable failure) {
+          throw callFailure(failure);
+        }
+        JsonSvm.checkStatus(status);
+        JsonTypedOwner owner =
+            new JvmTypedOwner(
+                result, schemas, () -> retire(typedRelease, result, resultArena));
+        published = true;
+        return owner;
+      } finally {
+        if (!published) retire(typedRelease, result, resultArena);
+      }
+    }
+
+    @Override
+    void release() {
+      retire(planRelease, handle, arena);
+    }
+  }
+
   static RuntimeException callFailure(Throwable failure) {
     if (failure instanceof RuntimeException exception) return exception;
     if (failure instanceof Error error) throw error;
     return new IllegalStateException("Native invocation failed", failure);
   }
 
-  /** Messages already returned stay valid; the library unloads once the last one closes. */
+  /**
+   * Messages and typed records already returned stay valid, and plans can still be closed but no
+   * longer decode; the library unloads once the last of them closes.
+   */
   @Override
   @TruffleBoundary
   public void close() {

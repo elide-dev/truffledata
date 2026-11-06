@@ -28,13 +28,12 @@ public final class JsonRecord extends AbstractRow implements AutoCloseable {
   private final long nulls;
 
   JsonRecord(JsonTypedOwner owner, int entry) {
-    super(owner.schemas[JsonTypedOwner.plan(owner.entry(entry))]);
-    long address = owner.entry(entry);
+    super(owner.schemas[owner.plan(entry)]);
     this.owner = owner;
     this.entry = entry;
-    this.base = Integer.toUnsignedLong(JsonTypedOwner.slotBase(address));
-    this.present = JsonTypedOwner.present(address);
-    this.nulls = JsonTypedOwner.nulls(address);
+    this.base = Integer.toUnsignedLong(owner.slotBase(entry));
+    this.present = owner.present(entry);
+    this.nulls = owner.nulls(entry);
   }
 
   /** The result owner shared by every record and array of this decode. */
@@ -169,7 +168,7 @@ public final class JsonRecord extends AbstractRow implements AutoCloseable {
 
   /** Slot payload of a present, non-null field of the given kind. */
   private long slotBits(int index, Field.Kind kind) {
-    return JsonTypedOwner.bits(slot(index, kind));
+    return owner.bits(slot(index, kind));
   }
 
   private long slot(int index, Field.Kind kind) {
@@ -179,7 +178,7 @@ public final class JsonRecord extends AbstractRow implements AutoCloseable {
     long bit = 1L << index;
     if ((present & bit) == 0 || (nulls & bit) != 0)
       throw new IllegalStateException("JSON field missing or null");
-    return owner.slot(base + index);
+    return base + index;
   }
 
   long bits(JsonAccess access) {
@@ -197,7 +196,7 @@ public final class JsonRecord extends AbstractRow implements AutoCloseable {
     long bit = 1L << access.index;
     if ((access.optional && (present & bit) == 0) || (access.nullable && (nulls & bit) != 0))
       throw new IllegalStateException("JSON scalar missing or null");
-    return JsonTypedOwner.bits(owner.slot(base + access.index));
+    return owner.bits(base + access.index);
   }
 
   // Constant accessors unroll the hop walk; each hop is one slot load and one entry load.
@@ -210,10 +209,10 @@ public final class JsonRecord extends AbstractRow implements AutoCloseable {
       byte checks = access.hopChecks[i];
       if (((checks & 1) != 0 && (present & bit) == 0) || ((checks & 2) != 0 && (nulls & bit) != 0))
         throw new IllegalStateException("JSON record missing or null");
-      long child = owner.entry(JsonTypedOwner.bits(owner.slot(base + ordinal)));
-      base = Integer.toUnsignedLong(JsonTypedOwner.slotBase(child));
-      present = JsonTypedOwner.present(child);
-      nulls = JsonTypedOwner.nulls(child);
+      long child = owner.bits(base + ordinal);
+      base = Integer.toUnsignedLong(owner.slotBase(child));
+      present = owner.present(child);
+      nulls = owner.nulls(child);
     }
     return leaf(owner, base, present, nulls, access);
   }
@@ -226,10 +225,10 @@ public final class JsonRecord extends AbstractRow implements AutoCloseable {
       byte checks = access.hopChecks[i];
       if (((checks & 1) != 0 && (present & bit) == 0) || ((checks & 2) != 0 && (nulls & bit) != 0))
         throw new IllegalStateException("JSON record missing or null");
-      long child = owner.entry(JsonTypedOwner.bits(owner.slot(base + ordinal)));
-      base = Integer.toUnsignedLong(JsonTypedOwner.slotBase(child));
-      present = JsonTypedOwner.present(child);
-      nulls = JsonTypedOwner.nulls(child);
+      long child = owner.bits(base + ordinal);
+      base = Integer.toUnsignedLong(owner.slotBase(child));
+      present = owner.present(child);
+      nulls = owner.nulls(child);
     }
     return leaf(owner, base, present, nulls, access);
   }
@@ -252,7 +251,7 @@ public final class JsonRecord extends AbstractRow implements AutoCloseable {
   }
 
   public String stringValue(int index) {
-    return JsonTypedOwner.text(slot(index, Field.Kind.STRING));
+    return owner.text(slot(index, Field.Kind.STRING));
   }
 
   /** Nested record of a present, non-null RECORD field; shares this record's owner. */

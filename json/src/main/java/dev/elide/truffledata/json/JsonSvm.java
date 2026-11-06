@@ -60,6 +60,12 @@ public final class JsonSvm {
       }
 
       @Override
+      public JsonPlan compile(
+          dev.elide.truffledata.Schema root, java.util.Map<String, dev.elide.truffledata.Schema> types) {
+        return JsonPlan.compile(root, types);
+      }
+
+      @Override
       public void close() {}
     };
   }

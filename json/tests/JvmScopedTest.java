@@ -2,17 +2,42 @@ package dev.elide.truffledata.json.tests;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import com.oracle.truffle.api.interop.InteropLibrary;
+import com.oracle.truffle.api.interop.InvalidArrayIndexException;
+import com.oracle.truffle.api.nodes.UnexpectedResultException;
+import dev.elide.truffledata.AbstractRow;
+import dev.elide.truffledata.Constraints;
+import dev.elide.truffledata.ContractViolation;
+import dev.elide.truffledata.DataArray;
+import dev.elide.truffledata.DataLibrary;
+import dev.elide.truffledata.DataNull;
+import dev.elide.truffledata.ExactNumber;
+import dev.elide.truffledata.Field;
+import dev.elide.truffledata.Missing;
+import dev.elide.truffledata.Schema;
+import dev.elide.truffledata.json.JsonAccess;
+import dev.elide.truffledata.json.JsonArray;
 import dev.elide.truffledata.json.JsonDecoder;
 import dev.elide.truffledata.json.JsonJvm;
 import dev.elide.truffledata.json.JsonMessage;
+import dev.elide.truffledata.json.JsonPlan;
+import dev.elide.truffledata.json.JsonRecord;
 import dev.elide.truffledata.json.JsonValue;
+import dev.elide.truffledata.json.generated.JsonFFM;
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
+import java.lang.foreign.SymbolLookup;
+import java.lang.foreign.ValueLayout;
+import java.lang.invoke.MethodHandle;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.Arrays;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.function.Executable;
 
 final class JvmScopedTest {
   static Path library() {
@@ -215,5 +240,400 @@ final class JvmScopedTest {
   @Test
   void staticBackendIsUnavailableOnTheJvm() {
     assertThrows(UnsupportedOperationException.class, dev.elide.truffledata.json.JsonSvm::open);
+    assertThrows(
+        UnsupportedOperationException.class,
+        () -> JsonPlan.compile(Schema.of(Field.requiredLong("n"))));
+  }
+
+  // Typed plans: mirrors SvmAcceptance.typed(), schemaTyped(), accessorContracts() and nested().
+
+  /** Generated FFM layouts and handles drive the raw typed ABI exactly as the SVM bindings do. */
+  @Test
+  void generatedTypedBindingsDecodeAFlatPlan() throws Throwable {
+    try (Arena arena = Arena.ofConfined()) {
+      SymbolLookup symbols = SymbolLookup.libraryLookup(library().toAbsolutePath(), arena);
+      MethodHandle create = JsonFFM.plan_create(symbols);
+      MethodHandle planRelease = JsonFFM.plan_release(symbols);
+      MethodHandle decode = JsonFFM.typed_decode(symbols);
+      MethodHandle release = JsonFFM.typed_release(symbols);
+      MemorySegment fields = arena.allocate(JsonFFM.JsonScalarField_LAYOUT);
+      MemorySegment records = arena.allocate(JsonFFM.JsonRecordPlan_LAYOUT);
+      MemorySegment plan = arena.allocate(JsonFFM.JsonPlan_LAYOUT);
+      MemorySegment result = arena.allocate(JsonFFM.JsonTypedResult_LAYOUT);
+      assertEquals(88, JsonFFM.JsonScalarField_LAYOUT.byteSize());
+      assertEquals(112, JsonFFM.JsonTypedResult_LAYOUT.byteSize());
+      try {
+        fields.set(ValueLayout.ADDRESS, JsonFFM.JsonScalarField_name_OFFSET, arena.allocateFrom("n"));
+        fields.set(ValueLayout.JAVA_LONG, JsonFFM.JsonScalarField_name_length_OFFSET, 1);
+        fields.set(ValueLayout.JAVA_INT, JsonFFM.JsonScalarField_kind_OFFSET, 1);
+        fields.set(ValueLayout.JAVA_INT, JsonFFM.JsonScalarField_flags_OFFSET, 1);
+        fields.set(ValueLayout.JAVA_LONG, JsonFFM.JsonScalarField_minimum_OFFSET, -128);
+        fields.set(ValueLayout.JAVA_LONG, JsonFFM.JsonScalarField_maximum_OFFSET, 127);
+        fields.set(ValueLayout.JAVA_INT, JsonFFM.JsonScalarField_child_OFFSET, -1);
+        records.set(ValueLayout.JAVA_INT, JsonFFM.JsonRecordPlan_field_count_OFFSET, 1);
+        assertEquals(0, (int) create.invokeExact(records, 1L, fields, 1L, 1L, plan));
+        byte[] input = utf8("{\"n\":127}");
+        MemorySegment data = arena.allocate(input.length);
+        MemorySegment.copy(input, 0, data, ValueLayout.JAVA_BYTE, 0, input.length);
+        assertEquals(
+            0, (int) decode.invokeExact(plan, data, (long) input.length, 1024L, 1024L, result));
+        planRelease.invokeExact(plan);
+        assertEquals(1, result.get(ValueLayout.JAVA_LONG, JsonFFM.JsonTypedResult_present_OFFSET));
+        assertEquals(0, result.get(ValueLayout.JAVA_LONG, JsonFFM.JsonTypedResult_nulls_OFFSET));
+        assertEquals(1, result.get(ValueLayout.JAVA_LONG, JsonFFM.JsonTypedResult_count_OFFSET));
+        MemorySegment slots =
+            result
+                .get(ValueLayout.ADDRESS, JsonFFM.JsonTypedResult_slots_OFFSET)
+                .reinterpret(JsonFFM.JsonScalarSlot_LAYOUT.byteSize());
+        assertEquals(127, slots.get(ValueLayout.JAVA_LONG, JsonFFM.JsonScalarSlot_bits_OFFSET));
+        assertEquals(
+            1, result.get(ValueLayout.JAVA_LONG, JsonFFM.JsonTypedResult_index_allocations_OFFSET));
+        release.invokeExact(result);
+        release.invokeExact(result);
+        assertEquals(
+            0, result.get(ValueLayout.ADDRESS, JsonFFM.JsonTypedResult_owner_OFFSET).address());
+      } finally {
+        release.invokeExact(result);
+        planRelease.invokeExact(plan);
+      }
+    }
+  }
+
+  @Test
+  void typedScalarPlanEnforcesContractsAndOwnership() throws Exception {
+    DataLibrary data = DataLibrary.factory().getUncached();
+    Schema schema =
+        Schema.of(
+            Field.integer("n", 8, true, false, false),
+            new Field(
+                "s",
+                Field.Kind.STRING,
+                true,
+                true,
+                Constraints.NONE.withLength(
+                    new Constraints.Length(1, 1, Constraints.LengthUnit.CODE_POINTS))),
+            Field.integer("u", 64, false, false, false));
+    try (JsonDecoder decoder = JsonJvm.open(library())) {
+      JsonPlan plan = decoder.compile(schema);
+      byte[] input = utf8("{\"n\":127,\"s\":\"😀\",\"u\":18446744073709551615}");
+      JsonRecord record = plan.decode(input);
+      Arrays.fill(input, (byte) 'x');
+      for (String bad : new String[] {"{\"n\":128,\"u\":0}", "{\"n\":0,\"s\":\"ab\",\"u\":0}", "{\"n\":0}"})
+        assertThrows(IllegalArgumentException.class, () -> plan.decode(utf8(bad)), bad);
+      try (JsonRecord missing = plan.decode(utf8("{\"n\":0,\"u\":0}"))) {
+        assertFalse(missing.isPresent(1));
+        assertSame(Missing.INSTANCE, data.read(missing, 1));
+        assertFalse(data.isPresent(missing, 1));
+        assertEquals(0, missing.unsignedValue(2).signum());
+      }
+      try (JsonRecord nullable = plan.decode(utf8("{\"n\":0,\"s\":null,\"u\":1}"))) {
+        assertTrue(nullable.isPresent(1) && nullable.isNull(1));
+        assertSame(DataNull.INSTANCE, data.read(nullable, 1));
+        assertTrue(data.isPresent(nullable, 1));
+      }
+      plan.close();
+      // Records outlive their plan.
+      assertEquals(127, record.longValue(0));
+      assertSame(schema, data.getSchema(record));
+      assertEquals(127, data.readLong(record, 0));
+      assertEquals("😀", InteropLibrary.getUncached().readMember(record, "s"));
+      assertInstanceOf(ExactNumber.class, data.read(record, 2));
+      assertThrows(ContractViolation.class, () -> new DataArray(new Object[] {record}));
+      UnexpectedResultException wrong =
+          assertThrows(UnexpectedResultException.class, () -> data.readLong(record, 1));
+      assertEquals("😀", wrong.getResult());
+      assertEquals("😀", record.stringValue(1));
+      assertEquals("18446744073709551615", record.unsignedValue(2).toString());
+      assertEquals(2, rejectedOnOtherThread(() -> record.longValue(0), record::close));
+      record.close();
+      record.close();
+      assertThrows(IllegalStateException.class, () -> record.longValue(0));
+      assertThrows(IllegalStateException.class, () -> plan.decode(new byte[] {'0'}));
+    }
+  }
+
+  @Test
+  void typedAccessorsPreserveMissingAndNull() throws Exception {
+    DataLibrary data = DataLibrary.factory().getUncached();
+    Schema schema = Schema.of(new Field("n", Field.Kind.INT64, true, true));
+    JsonAccess access = new JsonAccess(schema, 0);
+    JsonAccess wrong = new JsonAccess(Schema.of(Field.requiredLong("n")), 0);
+    try (JsonDecoder decoder = JsonJvm.open(library());
+        JsonPlan plan = decoder.compile(schema)) {
+      for (String input : new String[] {"{}", "{\"n\":null}"}) {
+        try (JsonRecord record = plan.decode(utf8(input))) {
+          assertSame(
+              input.equals("{}") ? Missing.INSTANCE : DataNull.INSTANCE, data.read(record, 0));
+          assertThrows(UnexpectedResultException.class, () -> data.readLong(record, 0));
+          assertThrows(IllegalStateException.class, () -> access.longValue(record));
+        }
+      }
+      try (JsonRecord record = plan.decode(utf8("{\"n\":7}"))) {
+        assertEquals(7, access.longValue(record));
+        assertEquals(7, data.readLong(record, 0));
+        assertThrows(IllegalArgumentException.class, () -> wrong.longValue(record));
+        assertThrows(IllegalArgumentException.class, () -> access.doubleValue(record));
+        assertEquals(1, rejectedOnOtherThread(() -> data.read(record, 0)));
+        record.close();
+        assertThrows(IllegalStateException.class, () -> data.read(record, 0));
+      }
+    }
+  }
+
+  private static Field record(String name, String type, boolean nullable, boolean optional) {
+    return new Field(
+        name, Field.Kind.RECORD, nullable, optional, Constraints.NONE.withRecordType(type));
+  }
+
+  private static Field array(String name, Field element, boolean nullable, boolean optional) {
+    return new Field(
+        name, Field.Kind.ARRAY, nullable, optional, Constraints.NONE.withElement(element));
+  }
+
+  @Test
+  void typedNestedAndRepeatedRecords() throws Exception {
+    DataLibrary data = DataLibrary.factory().getUncached();
+    InteropLibrary interop = InteropLibrary.getUncached();
+    Schema point =
+        new Schema(
+            "Point",
+            List.of(
+                Field.requiredLong("x"),
+                new Field("y", Field.Kind.FLOAT64, false, false),
+                new Field("tag", Field.Kind.STRING, true, true)));
+    Schema line =
+        new Schema(
+            "Line", List.of(record("a", "Point", false, false), record("b", "Point", true, true)));
+    Schema root =
+        Schema.of(
+            Field.requiredLong("id"),
+            record("line", "Line", false, false),
+            array("points", record("p", "Point", false, false), false, false),
+            array(
+                "scores",
+                new Field(
+                    "s",
+                    Field.Kind.INT64,
+                    false,
+                    false,
+                    Constraints.NONE.withIntegerRange(new Constraints.IntegerRange(0, 100))),
+                true,
+                true),
+            array("names", new Field("n", Field.Kind.STRING, false, false), false, true));
+    Map<String, Schema> types = Map.of("Point", point, "Line", line);
+    try (JsonDecoder decoder = JsonJvm.open(library())) {
+      JsonPlan plan = decoder.compile(root, types);
+      byte[] input =
+          utf8(
+              "{\"id\":7,\"line\":{\"a\":{\"x\":1,\"y\":2.5},\"b\":null},"
+                  + "\"points\":[{\"x\":10,\"y\":0.5,\"tag\":\"p0\"},{\"x\":20,\"y\":1.5},"
+                  + "{\"x\":30,\"y\":2.5,\"tag\":null}],\"scores\":[1,2,100],\"names\":[]}");
+      JsonRecord record = plan.decode(input);
+      Arrays.fill(input, (byte) 'x');
+      for (String bad :
+          new String[] {
+            "{\"id\":0,\"line\":{\"a\":{\"x\":1,\"y\":1}},\"points\":[],\"scores\":[101]}",
+            "{\"id\":0,\"line\":{\"a\":{\"x\":1,\"y\":1}},\"points\":[null]}",
+            "{\"id\":0,\"line\":{\"a\":{\"x\":1,\"y\":1}},\"points\":null}",
+            "{\"id\":0,\"line\":{\"a\":{\"x\":1,\"y\":1,\"z\":0}},\"points\":[]}",
+            "{\"id\":0,\"line\":{\"a\":{\"x\":1}},\"points\":[]}",
+            "{\"id\":0,\"line\":{\"a\":{\"x\":1,\"y\":1}},\"points\":{}}",
+            "{\"id\":0,\"line\":{},\"points\":[]}"
+          })
+        assertThrows(IllegalArgumentException.class, () -> plan.decode(utf8(bad)), bad);
+      try (JsonRecord nullable =
+          plan.decode(
+              utf8("{\"id\":0,\"line\":{\"a\":{\"x\":1,\"y\":1}},\"points\":[],\"scores\":null}"))) {
+        assertTrue(nullable.isNull(3) && !nullable.isPresent(4));
+        assertSame(DataNull.INSTANCE, data.read(nullable, 3));
+        assertSame(Missing.INSTANCE, data.read(nullable, 4));
+        assertEquals(0, nullable.array(2).size());
+      }
+      plan.close();
+
+      // Nested primitives through JsonAccess paths: no intermediate JsonRecord.
+      JsonAccess x = new JsonAccess(root, types, 1, 0, 0);
+      JsonAccess y = new JsonAccess(root, types, 1, 0, 1);
+      JsonAccess bx = new JsonAccess(root, types, 1, 1, 0);
+      assertEquals(1, x.longValue(record));
+      assertEquals(2.5, y.doubleValue(record));
+      assertThrows(IllegalStateException.class, () -> bx.longValue(record));
+      assertThrows(IllegalArgumentException.class, () -> new JsonAccess(root, types, 2, 0));
+      assertThrows(IllegalArgumentException.class, () -> x.longValue(record.record(1)));
+
+      // Records and arrays through Java, DataLibrary and interop.
+      JsonRecord lineRecord = record.record(1);
+      assertSame(line, lineRecord.schema());
+      assertSame(point, lineRecord.record(0).schema());
+      assertEquals(1, lineRecord.record(0).longValue(0));
+      assertTrue(lineRecord.isNull(1));
+      assertInstanceOf(JsonRecord.class, data.read(record, 1));
+      assertInstanceOf(JsonArray.class, data.read(record, 2));
+      JsonArray points = record.array(2);
+      assertEquals(3, points.size());
+      long xs = 0;
+      for (int i = 0; i < points.size(); i++) xs += points.record(i).longValue(0);
+      assertEquals(60, xs);
+      assertEquals("p0", points.record(0).stringValue(2));
+      assertTrue(!points.record(1).isPresent(2) && points.record(2).isNull(2));
+      assertInstanceOf(JsonRecord.class, points.element(1));
+      JsonArray scores = record.array(3);
+      assertEquals(3, scores.size());
+      assertEquals(100, scores.longValue(2));
+      assertEquals(1L, scores.element(0));
+      JsonArray names = (JsonArray) data.read(record, 4);
+      assertEquals(0, names.size());
+      assertEquals(0, names.snapshot().size());
+      Object guestPoints = interop.readMember(record, "points");
+      assertTrue(interop.hasArrayElements(guestPoints));
+      assertEquals(3, interop.getArraySize(guestPoints));
+      assertEquals(20L, interop.readMember(interop.readArrayElement(guestPoints, 1), "x"));
+      assertEquals(2L, interop.readArrayElement(interop.readMember(record, "scores"), 1));
+      assertEquals(
+          2.5,
+          interop.readMember(interop.readMember(interop.readMember(record, "line"), "a"), "y"));
+      assertThrows(InvalidArrayIndexException.class, () -> interop.readArrayElement(guestPoints, 3));
+      assertThrows(ContractViolation.class, () -> new DataArray(new Object[] {points}));
+      assertEquals(2, rejectedOnOtherThread(points::size, () -> x.longValue(record)));
+
+      // Snapshots are owned rows and arrays that outlive the owner.
+      var owner = record.owner();
+      var alive = owner.assumption();
+      AbstractRow snapshot = record.snapshot();
+      DataArray pointsSnapshot = points.snapshot();
+      record.close();
+      record.close();
+      assertTrue(!alive.isValid() && !owner.isOpen());
+      assertEquals(7L, data.read(snapshot, 0));
+      AbstractRow snapLine = (AbstractRow) data.read(snapshot, 1);
+      assertSame(line, snapLine.schema());
+      assertSame(DataNull.INSTANCE, data.read(snapLine, 1));
+      assertEquals(2.5, data.read(data.read(snapLine, 0), 1));
+      DataArray snapPoints = (DataArray) data.read(snapshot, 2);
+      assertEquals(3, snapPoints.size());
+      assertEquals(3, pointsSnapshot.size());
+      assertEquals("p0", data.read(snapPoints.get(0), 2));
+      assertSame(Missing.INSTANCE, data.read(pointsSnapshot.get(1), 2));
+      assertSame(DataNull.INSTANCE, data.read(pointsSnapshot.get(2), 2));
+      assertEquals(100L, ((DataArray) data.read(snapshot, 3)).get(2));
+      assertEquals(0, ((DataArray) data.read(snapshot, 4)).size());
+      assertEquals(30L, interop.readMember(interop.readArrayElement(snapPoints, 2), "x"));
+      assertEquals(1, new DataArray(new Object[] {snapshot}).size());
+      for (Executable closed :
+          new Executable[] {
+            points::snapshot,
+            points::size,
+            () -> points.record(0),
+            () -> record.record(1),
+            record::snapshot,
+            () -> x.longValue(record),
+            () -> lineRecord.isNull(1)
+          }) assertThrows(IllegalStateException.class, closed);
+
+      // Plan contracts: recursion, unknown or misnamed types, nullable and nested-array elements.
+      Schema node = new Schema("Node", List.of(record("next", "Node", true, true)));
+      rejectsPlan(decoder, Schema.of(record("head", "Node", false, false)), Map.of("Node", node));
+      rejectsPlan(decoder, Schema.of(record("p", "Missing", false, false)), types);
+      rejectsPlan(
+          decoder,
+          Schema.of(record("p", "Point", false, false)),
+          Map.of("Point", new Schema("Other", List.of(Field.requiredLong("x")))));
+      rejectsPlan(
+          decoder,
+          Schema.of(array("a", new Field("e", Field.Kind.INT64, true, false), false, false)),
+          Map.of());
+      rejectsPlan(
+          decoder,
+          Schema.of(
+              array(
+                  "a",
+                  array("e", new Field("i", Field.Kind.INT64, false, false), false, false),
+                  false,
+                  false)),
+          Map.of());
+      // Depth 32 (the root plus 31 nested records) compiles and reads; depth 33 is rejected.
+      for (int depth : new int[] {32, 33}) {
+        var chain = new HashMap<String, Schema>();
+        for (int i = 1; i < depth; i++)
+          chain.put(
+              "T" + i,
+              new Schema(
+                  "T" + i,
+                  i + 1 < depth
+                      ? List.of(record("c", "T" + (i + 1), false, false))
+                      : List.of(Field.requiredLong("leaf"))));
+        Schema chainRoot = Schema.of(record("c", "T1", false, false));
+        if (depth == 33) {
+          rejectsPlan(decoder, chainRoot, chain);
+          continue;
+        }
+        try (JsonPlan deep = decoder.compile(chainRoot, chain)) {
+          String json = "{\"c\":".repeat(depth - 1) + "{\"leaf\":5}" + "}".repeat(depth - 1);
+          try (JsonRecord deepRecord = deep.decode(utf8(json))) {
+            assertEquals(5, new JsonAccess(chainRoot, chain, new int[depth]).longValue(deepRecord));
+          }
+        }
+      }
+    }
+  }
+
+  @Test
+  void plansRejectDecodingAfterTheirDecoderCloses() {
+    Schema schema = Schema.of(Field.requiredLong("n"));
+    JsonDecoder decoder = JsonJvm.open(library());
+    JsonPlan plan = decoder.compile(schema);
+    JsonRecord record = plan.decode(utf8("{\"n\":5}"));
+    decoder.close();
+    assertThrows(IllegalStateException.class, () -> plan.decode(utf8("{\"n\":6}")));
+    assertThrows(IllegalStateException.class, () -> decoder.compile(schema));
+    // Records already returned, and the plan's own close, outlive the decoder.
+    assertEquals(5, record.longValue(0));
+    plan.close();
+    assertEquals(5, record.longValue(0));
+    record.close();
+    assertThrows(IllegalStateException.class, () -> record.longValue(0));
+    // A sibling decoder's plan is independent of the closed one.
+    try (JsonDecoder other = JsonJvm.open(library());
+        JsonPlan sibling = other.compile(schema);
+        JsonRecord fresh = sibling.decode(utf8("{\"n\":7}"))) {
+      assertEquals(7, fresh.longValue(0));
+    }
+  }
+
+  @Test
+  void plansAreConfinedToTheirThread() throws Exception {
+    try (JsonDecoder decoder = JsonJvm.open(library());
+        JsonPlan plan = decoder.compile(Schema.of(Field.requiredLong("n")))) {
+      assertEquals(
+          2, rejectedOnOtherThread(() -> plan.decode(utf8("{\"n\":1}")), plan::close));
+      try (JsonRecord record = plan.decode(utf8("{\"n\":1}"))) {
+        assertEquals(1, record.longValue(0));
+      }
+    }
+  }
+
+  private static void rejectsPlan(JsonDecoder decoder, Schema root, Map<String, Schema> types) {
+    assertThrows(IllegalArgumentException.class, () -> decoder.compile(root, types).close());
+  }
+
+  /** Runs each action on a fresh thread and counts thread-confinement rejections. */
+  private static int rejectedOnOtherThread(Executable... actions) throws InterruptedException {
+    AtomicInteger rejected = new AtomicInteger();
+    Thread other =
+        new Thread(
+            () -> {
+              for (Executable action : actions) {
+                try {
+                  action.execute();
+                } catch (IllegalStateException expected) {
+                  rejected.incrementAndGet();
+                } catch (Throwable unexpected) {
+                  throw new AssertionError(unexpected);
+                }
+              }
+            });
+    other.start();
+    other.join();
+    return rejected.get();
   }
 }
