@@ -1,5 +1,5 @@
-module truffledata_json abi=3 target=x86_64-unknown-linux-gnu java_package=dev.elide.truffledata.json.generated java_class=Json c_library=truffledata_json c_library_static=true
-struct JsonResult size=72 align=8
+module truffledata_json abi=4 target=x86_64-unknown-linux-gnu java_package=dev.elide.truffledata.json.generated java_class=Json c_library=truffledata_json c_library_static=true
+struct JsonResult size=88 align=8
   field owner type=ptr<void> offset=0
   field view type=ptr<void> offset=8
   field copied_input_bytes type=u64 offset=16
@@ -9,6 +9,8 @@ struct JsonResult size=72 align=8
   field index_allocations type=u64 offset=48
   field parser_input_capacity type=u64 offset=56
   field control_bytes type=u64 offset=64
+  field lexical type=ptr<void> offset=72
+  field lexical_count type=u64 offset=80
 end
 import fingerprint symbol=td_json_fingerprint return=ptr<u8> error=no_failure native_leaf=true@explicit_contract
 end

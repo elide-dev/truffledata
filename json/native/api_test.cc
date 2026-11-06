@@ -103,10 +103,14 @@ int main() {
   }
   auto* view = static_cast<const myna_value_view*>(first.view);
   require(view->version == MYNA_VALUE_ABI && view->node_count == 5);
+  static_assert(sizeof(JsonResult) == 88, "ABI 4 publishes lexical spans");
+  require(first.lexical_count == 5 && first.lexical);
+  require(static_cast<const uint64_t*>(first.lexical)[2] == ((uint64_t(5) << 32) | 3));
   require(first.control_bytes > 0 && first.index_peak_bytes >= first.index_retained_bytes);
   auto number = view->nodes[2];
-  const auto& region = view->regions[(number.payload >> 32) - 1];
-  require(std::memcmp(region.data + uint32_t(number.payload), "123", 3) == 0);
+  require(number.tag == MYNA_VALUE_I64 && number.payload == 123);
+  const auto span = static_cast<const uint64_t*>(first.lexical)[2];
+  require(std::memcmp(view->regions[0].data + (span >> 32), "123", uint32_t(span)) == 0);
   auto saved = first;
   require(decode("[]", first) == TD_JSON_ARGUMENT);
   require(std::memcmp(&first, &saved, sizeof(first)) == 0);
@@ -116,6 +120,7 @@ int main() {
   require(view->node_count == 5);
   td_json_release(&first);
   td_json_release(&first);
+  require(!first.lexical && first.lexical_count == 0);
   JsonResult empty{};
   require(std::memcmp(&first, &empty, sizeof(first)) == 0);
   for (auto source : {"[1,]", "{\"a\":1,\"a\":2}", "{} true", "[undefined]"}) {

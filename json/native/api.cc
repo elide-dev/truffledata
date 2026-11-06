@@ -37,10 +37,12 @@ extern "C" int32_t td_json_decode(const uint8_t* data, uint64_t length,
         truffledata::json::storage_limits{size_t(max_input_bytes), size_t(max_index_bytes)});
     auto stats = owned->document.allocations();
     // Publish only after parsing and validation have completed successfully.
+    const auto& spans = owned->document.lexical_spans();
     result = {owned.get(), &owned->view, stats.copied_input_bytes,
               stats.padded_input_bytes, stats.index_retained_bytes,
               stats.index_peak_bytes, stats.index_allocations,
-              stats.parser_input_capacity, sizeof(handle)};
+              stats.parser_input_capacity, sizeof(handle),
+              const_cast<uint64_t*>(spans.data()), spans.size()};
     (void)owned.release();
     return TD_JSON_OK;
   } catch (const std::bad_alloc&) {

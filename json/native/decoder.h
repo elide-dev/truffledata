@@ -4,6 +4,7 @@
 #include "json/native/parser_pool.h"
 #include <myna/values.hpp>
 #include <simdjson.h>
+#include <cmath>
 #include <unordered_set>
 
 namespace truffledata::json {
@@ -47,13 +48,16 @@ class document final {
   uint32_t input_region_;
   uint64_t count_ = 0;
   myna::value_limits limits_;
-  std::pmr::vector<std::string_view> lexical_;
+  std::pmr::vector<uint64_t> lexical_;
   size_t parser_capacity_ = 0;
 
+  // Packed span into the retained input region: offset << 32 | length; zero when absent.
   void lexical(std::string_view raw = {}) {
     if (count_ >= limits_.nodes) throw std::length_error("JSON node limit");
     ++count_;
-    lexical_.push_back(trim(raw));
+    raw = trim(raw);
+    if (raw.empty()) lexical_.push_back(0);
+    else lexical_.push_back((uint64_t(raw.data() - input_.data()) << 32) | raw.size());
   }
   void text(std::string_view decoded, std::string_view raw) {
     raw = trim(raw);
@@ -105,9 +109,31 @@ class document final {
         raw = trim(raw);
         if (!number(raw)) throw std::invalid_argument("invalid JSON number");
         lexical(raw);
-        builder_.validated_number_ref(input_region_,
-            static_cast<uint32_t>(raw.data() - input_.data()),
-            static_cast<uint32_t>(raw.size()));
+        // Typed nodes when the value is exactly representable; the exact token
+        // always remains readable through the lexical span.
+        auto parsed = value.get_number();
+        bool typed = false;
+        if (!parsed.error()) {
+          using simdjson::ondemand::number_type;
+          auto n = parsed.value();
+          switch (n.get_number_type()) {
+            case number_type::signed_integer:
+              // simdjson folds -0 into integer zero; JSON.parse-style consumers need negative zero.
+              if (n.get_int64() == 0 && raw[0] == '-') builder_.floating(-0.0);
+              else builder_.integer(n.get_int64());
+              typed = true; break;
+            case number_type::unsigned_integer:
+              builder_.unsigned_integer(n.get_uint64()); typed = true; break;
+            case number_type::floating_point_number:
+              if (std::isfinite(n.get_double())) { builder_.floating(n.get_double()); typed = true; }
+              break;
+            default: break;
+          }
+        }
+        if (!typed)
+          builder_.validated_number_ref(input_region_,
+              static_cast<uint32_t>(raw.data() - input_.data()),
+              static_cast<uint32_t>(raw.size()));
         break;
       }
       case json_type::boolean:
@@ -144,7 +170,7 @@ public:
   document(const document&) = delete;
   document& operator=(const document&) = delete;
   myna_value_view view() const { return builder_.view(); }
-  const std::pmr::vector<std::string_view>& lexical_tokens() const { return lexical_; }
+  const std::pmr::vector<uint64_t>& lexical_spans() const { return lexical_; }
   allocation_stats allocations() const {
     return {input_.size(), input_.size() + simdjson::SIMDJSON_PADDING,
             memory_.current(), memory_.peak(), memory_.allocations(), parser_capacity_};

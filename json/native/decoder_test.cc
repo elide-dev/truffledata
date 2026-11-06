@@ -3,8 +3,10 @@
 #include <vector>
 #include <iostream>
 #include <stdexcept>
+#include <string>
 using truffledata::json::document;
-void require(bool condition) { if (!condition) throw std::runtime_error("check failed"); }
+void require_at(bool condition, int line) { if (!condition) throw std::runtime_error("check failed at line " + std::to_string(line)); }
+#define require(condition) require_at((condition), __LINE__)
 std::string text(const myna_value_view& view, size_t index) {
   const auto& node = view.nodes[index];
   if ((node.tag & MYNA_VALUE_REGION_TEXT) != 0) {
@@ -16,6 +18,30 @@ std::string text(const myna_value_view& view, size_t index) {
   std::string result;
   for (uint32_t i = 0; i < node.length; ++i) result += char(myna_value_inline_byte(&node, i));
   return result;
+}
+std::string lexical_text(const document& parsed, size_t index) {
+  uint64_t span = parsed.lexical_spans().at(index);
+  const auto& region = parsed.view().regions[0];
+  return std::string(reinterpret_cast<const char*>(region.data + (span >> 32)), uint32_t(span));
+}
+void number_checks() {
+  document parsed(R"([1, -0, 18446744073709551615, 1.5, 1E400, 12345678901234567890, {"k\u0041":"v"}])");
+  const auto* n = parsed.view().nodes;
+  require(n[1].tag == MYNA_VALUE_I64 && n[1].payload == 1);
+  require(n[2].tag == MYNA_VALUE_F64 && n[2].payload == 0x8000000000000000ull);
+  require(n[3].tag == MYNA_VALUE_U64 && n[3].payload == UINT64_MAX);
+  require(n[4].tag == MYNA_VALUE_F64);
+  require((n[5].tag & 0xff) == MYNA_VALUE_DECIMAL);
+  require(n[6].tag == MYNA_VALUE_U64 && n[6].payload == 12345678901234567890ull);
+  require(lexical_text(parsed, 1) == "1");
+  require(lexical_text(parsed, 2) == "-0");
+  require(lexical_text(parsed, 5) == "1E400");
+  require(lexical_text(parsed, 6) == "12345678901234567890");
+  // Containers, booleans and nulls carry no span; keys and strings keep their quotes.
+  require(parsed.lexical_spans().at(0) == 0 && parsed.lexical_spans().at(7) == 0);
+  require(lexical_text(parsed, 8) == "\"k\\u0041\"");
+  require(lexical_text(parsed, 9) == "\"v\"");
+  require(parsed.lexical_spans().size() == parsed.view().node_count);
 }
 class fault_memory final : public std::pmr::memory_resource {
 public:
@@ -99,7 +125,13 @@ void retained_text_checks() {
   require(parser_pool::retained() >= 1);
 }
 
+int checks();
 int main() {
+  try { return checks(); }
+  catch (const std::exception& e) { std::cerr << "decoder test failure: " << e.what() << '\n'; return 1; }
+}
+int checks() {
+  number_checks();
   retained_text_checks();
   allocation_checks();
   for (auto source : {"null", "true", "false", "0", "-0", "1e999999999999999999999999", "[]", "{}", "\"hi\"", "[1,2,3]", "{\"a\":null,\"b\":[true,\"x\"]}"}) {
@@ -113,7 +145,7 @@ int main() {
   }
   document first("{\"long\":\"escaped string with \\u4e2d content\",\"n\":1e9999999999999999999}");
   { document second("[false]"); }
-  require(first.lexical_tokens().at(2) == "\"escaped string with \\u4e2d content\"");
+  require(lexical_text(first, 2) == "\"escaped string with \\u4e2d content\"");
   require(first.view().node_count == 5);
   require(text(first.view(), 2) == "escaped string with 中 content");
   require(text(first.view(), 4) == "1e9999999999999999999");
@@ -124,4 +156,5 @@ int main() {
     require(rejected);
   }
   std::cout << "JSON parser-to-index compatibility checks passed\n";
+  return 0;
 }
