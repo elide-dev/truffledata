@@ -218,6 +218,254 @@ public final class SvmAcceptance {
     }
   }
 
+  private static Field record(String name, String type, boolean nullable, boolean optional) {
+    return new Field(
+        name, Field.Kind.RECORD, nullable, optional, Constraints.NONE.withRecordType(type));
+  }
+
+  private static Field array(String name, Field element, boolean nullable, boolean optional) {
+    return new Field(
+        name, Field.Kind.ARRAY, nullable, optional, Constraints.NONE.withElement(element));
+  }
+
+  private static void rejectsPlan(Schema root, java.util.Map<String, Schema> types) {
+    try (var unexpected = dev.elide.truffledata.json.JsonPlan.compile(root, types)) {
+      throw new AssertionError("Expected plan rejection");
+    } catch (IllegalArgumentException expected) {
+    }
+  }
+
+  private static void nested() throws Exception {
+    var data = DataLibrary.factory().getUncached();
+    var interop = InteropLibrary.getUncached();
+    var point =
+        new Schema(
+            "Point",
+            java.util.List.of(
+                Field.requiredLong("x"),
+                new Field("y", Field.Kind.FLOAT64, false, false),
+                new Field("tag", Field.Kind.STRING, true, true)));
+    var line =
+        new Schema(
+            "Line",
+            java.util.List.of(record("a", "Point", false, false), record("b", "Point", true, true)));
+    var root =
+        Schema.of(
+            Field.requiredLong("id"),
+            record("line", "Line", false, false),
+            array("points", record("p", "Point", false, false), false, false),
+            array(
+                "scores",
+                new Field(
+                    "s",
+                    Field.Kind.INT64,
+                    false,
+                    false,
+                    Constraints.NONE.withIntegerRange(new Constraints.IntegerRange(0, 100))),
+                true,
+                true),
+            array("names", new Field("n", Field.Kind.STRING, false, false), false, true));
+    var types = java.util.Map.of("Point", point, "Line", line);
+    var plan = dev.elide.truffledata.json.JsonPlan.compile(root, types);
+    byte[] input =
+        ("{\"id\":7,\"line\":{\"a\":{\"x\":1,\"y\":2.5},\"b\":null},"
+                + "\"points\":[{\"x\":10,\"y\":0.5,\"tag\":\"p0\"},{\"x\":20,\"y\":1.5},"
+                + "{\"x\":30,\"y\":2.5,\"tag\":null}],\"scores\":[1,2,100],\"names\":[]}")
+            .getBytes(StandardCharsets.UTF_8);
+    var record = plan.decode(input);
+    Arrays.fill(input, (byte) 'x');
+    for (String bad :
+        new String[] {
+          // out-of-range repeated element
+          "{\"id\":0,\"line\":{\"a\":{\"x\":1,\"y\":1}},\"points\":[],\"scores\":[101]}",
+          // null element
+          "{\"id\":0,\"line\":{\"a\":{\"x\":1,\"y\":1}},\"points\":[null]}",
+          // null non-nullable array
+          "{\"id\":0,\"line\":{\"a\":{\"x\":1,\"y\":1}},\"points\":null}",
+          // unknown nested field
+          "{\"id\":0,\"line\":{\"a\":{\"x\":1,\"y\":1,\"z\":0}},\"points\":[]}",
+          // missing required nested field
+          "{\"id\":0,\"line\":{\"a\":{\"x\":1}},\"points\":[]}",
+          // object where an array is required
+          "{\"id\":0,\"line\":{\"a\":{\"x\":1,\"y\":1}},\"points\":{}}",
+          // missing required nested record
+          "{\"id\":0,\"line\":{},\"points\":[]}"
+        }) {
+      try (var unexpected = plan.decode(bad.getBytes(StandardCharsets.UTF_8))) {
+        throw new AssertionError("Expected nested contract rejection: " + bad);
+      } catch (IllegalArgumentException expected) {
+      }
+    }
+    try (var nullable =
+        plan.decode(
+            "{\"id\":0,\"line\":{\"a\":{\"x\":1,\"y\":1}},\"points\":[],\"scores\":null}"
+                .getBytes(StandardCharsets.UTF_8))) {
+      require(nullable.isNull(3) && !nullable.isPresent(4));
+      require(data.read(nullable, 3) == DataNull.INSTANCE);
+      require(data.read(nullable, 4) == Missing.INSTANCE);
+      require(nullable.array(2).size() == 0);
+    }
+    plan.close();
+
+    // Nested primitives through JsonAccess paths: no intermediate JsonRecord.
+    var x = new dev.elide.truffledata.json.JsonAccess(root, types, 1, 0, 0);
+    var y = new dev.elide.truffledata.json.JsonAccess(root, types, 1, 0, 1);
+    var bx = new dev.elide.truffledata.json.JsonAccess(root, types, 1, 1, 0);
+    require(x.longValue(record) == 1 && y.doubleValue(record) == 2.5);
+    try {
+      bx.longValue(record);
+      throw new AssertionError("Path through a null record");
+    } catch (IllegalStateException expected) {
+    }
+    try {
+      new dev.elide.truffledata.json.JsonAccess(root, types, 2, 0);
+      throw new AssertionError("Path hop through an array");
+    } catch (IllegalArgumentException expected) {
+    }
+    try {
+      x.longValue(record.record(1));
+      throw new AssertionError("Path applied to a nested record");
+    } catch (IllegalArgumentException expected) {
+    }
+
+    // Records and arrays through Java, DataLibrary and interop.
+    var lineRecord = record.record(1);
+    require(lineRecord.schema() == line && lineRecord.record(0).schema() == point);
+    require(lineRecord.record(0).longValue(0) == 1 && lineRecord.isNull(1));
+    require(data.read(record, 1) instanceof dev.elide.truffledata.json.JsonRecord);
+    require(data.read(record, 2) instanceof dev.elide.truffledata.json.JsonArray);
+    var points = record.array(2);
+    require(points.size() == 3);
+    long xs = 0;
+    for (int i = 0; i < points.size(); i++) xs += points.record(i).longValue(0);
+    require(xs == 60);
+    require(points.record(0).stringValue(2).equals("p0"));
+    require(!points.record(1).isPresent(2) && points.record(2).isNull(2));
+    require(points.element(1) instanceof dev.elide.truffledata.json.JsonRecord);
+    var scores = record.array(3);
+    require(scores.size() == 3 && scores.longValue(2) == 100 && scores.element(0).equals(1L));
+    var names = (dev.elide.truffledata.json.JsonArray) data.read(record, 4);
+    require(names.size() == 0 && names.snapshot().size() == 0);
+    var guestPoints = interop.readMember(record, "points");
+    require(interop.hasArrayElements(guestPoints) && interop.getArraySize(guestPoints) == 3);
+    require(interop.readMember(interop.readArrayElement(guestPoints, 1), "x").equals(20L));
+    require(interop.readArrayElement(interop.readMember(record, "scores"), 1).equals(2L));
+    require(
+        interop
+            .readMember(interop.readMember(interop.readMember(record, "line"), "a"), "y")
+            .equals(2.5));
+    try {
+      interop.readArrayElement(guestPoints, 3);
+      throw new AssertionError("Out-of-range array element");
+    } catch (com.oracle.truffle.api.interop.InvalidArrayIndexException expected) {
+    }
+    try {
+      new DataArray(new Object[] {points});
+      throw new AssertionError("Scoped JSON array escaped into owned storage");
+    } catch (ContractViolation expected) {
+    }
+
+    var rejected = new java.util.concurrent.atomic.AtomicInteger();
+    Thread other =
+        new Thread(
+            () -> {
+              try {
+                points.size();
+              } catch (IllegalStateException expected) {
+                rejected.incrementAndGet();
+              }
+              try {
+                x.longValue(record);
+              } catch (IllegalStateException expected) {
+                rejected.incrementAndGet();
+              }
+            });
+    other.start();
+    other.join();
+    require(rejected.get() == 2);
+
+    // Snapshots are owned rows and arrays that outlive the owner.
+    var owner = record.owner();
+    var alive = owner.assumption();
+    var snapshot = record.snapshot();
+    var pointsSnapshot = points.snapshot();
+    record.close();
+    record.close();
+    require(!alive.isValid() && !owner.isOpen());
+    require(data.read(snapshot, 0).equals(7L));
+    var snapLine = (AbstractRow) data.read(snapshot, 1);
+    require(snapLine.schema() == line && data.read(snapLine, 1) == DataNull.INSTANCE);
+    require(data.read(data.read(snapLine, 0), 1).equals(2.5));
+    var snapPoints = (DataArray) data.read(snapshot, 2);
+    require(snapPoints.size() == 3 && pointsSnapshot.size() == 3);
+    require(data.read(snapPoints.get(0), 2).equals("p0"));
+    require(data.read(pointsSnapshot.get(1), 2) == Missing.INSTANCE);
+    require(data.read(pointsSnapshot.get(2), 2) == DataNull.INSTANCE);
+    require(((DataArray) data.read(snapshot, 3)).get(2).equals(100L));
+    require(((DataArray) data.read(snapshot, 4)).size() == 0);
+    require(interop.readMember(interop.readArrayElement(snapPoints, 2), "x").equals(30L));
+    require(new DataArray(new Object[] {snapshot}).size() == 1);
+    for (Runnable closed :
+        new Runnable[] {
+          points::snapshot,
+          points::size,
+          () -> points.record(0),
+          () -> record.record(1),
+          record::snapshot,
+          () -> x.longValue(record),
+          () -> lineRecord.isNull(1)
+        }) {
+      try {
+        closed.run();
+        throw new AssertionError("Closed nested read");
+      } catch (IllegalStateException expected) {
+      }
+    }
+
+    // Plan contracts: recursion, unknown or misnamed types, nullable and nested-array elements.
+    var node = new Schema("Node", java.util.List.of(record("next", "Node", true, true)));
+    rejectsPlan(Schema.of(record("head", "Node", false, false)), java.util.Map.of("Node", node));
+    rejectsPlan(Schema.of(record("p", "Missing", false, false)), types);
+    rejectsPlan(
+        Schema.of(record("p", "Point", false, false)),
+        java.util.Map.of("Point", new Schema("Other", java.util.List.of(Field.requiredLong("x")))));
+    rejectsPlan(
+        Schema.of(array("a", new Field("e", Field.Kind.INT64, true, false), false, false)),
+        java.util.Map.of());
+    rejectsPlan(
+        Schema.of(
+            array(
+                "a",
+                array("e", new Field("i", Field.Kind.INT64, false, false), false, false),
+                false,
+                false)),
+        java.util.Map.of());
+    // Depth 32 (the root plus 31 nested records) compiles and reads; depth 33 is rejected.
+    for (int depth : new int[] {32, 33}) {
+      var chain = new java.util.HashMap<String, Schema>();
+      for (int i = 1; i < depth; i++)
+        chain.put(
+            "T" + i,
+            new Schema(
+                "T" + i,
+                i + 1 < depth
+                    ? java.util.List.of(record("c", "T" + (i + 1), false, false))
+                    : java.util.List.of(Field.requiredLong("leaf"))));
+      var chainRoot = Schema.of(record("c", "T1", false, false));
+      if (depth == 33) {
+        rejectsPlan(chainRoot, chain);
+        continue;
+      }
+      try (var deep = dev.elide.truffledata.json.JsonPlan.compile(chainRoot, chain)) {
+        String json = "{\"c\":".repeat(depth - 1) + "{\"leaf\":5}" + "}".repeat(depth - 1);
+        try (var deepRecord = deep.decode(json.getBytes(StandardCharsets.UTF_8))) {
+          var leaf = new dev.elide.truffledata.json.JsonAccess(chainRoot, chain, new int[depth]);
+          require(leaf.longValue(deepRecord) == 5);
+        }
+      }
+    }
+  }
+
   private static void accessorContracts() throws Exception {
     var data = DataLibrary.factory().getUncached();
     var schema =
@@ -335,6 +583,7 @@ public final class SvmAcceptance {
     typed();
     schemaTyped();
     accessorContracts();
+    nested();
     CompiledReads.run();
     scoped();
     require(CTypeConversion.toJavaString(Json.fingerprint()).equals(Json.ABI_FINGERPRINT));

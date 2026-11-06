@@ -276,22 +276,38 @@ Presized arrays, one property write per member, and no intermediate Java tree ar
 the point. The sink controls number coercion: this one follows `JSON.parse`, which
 rounds integers above 2^53 and DECIMAL tokens to `double`.
 
-## Typed scalar records
+## Typed records
 
-Known-schema JSON compiles through `JsonPlan.compile(schema)` into a reusable,
-thread-confined native plan. `plan.decode(utf8)` returns a scoped `JsonRecord`:
-validated slots with separate presence and null masks, read with primitive getters
-or through `DataLibrary`. `JsonAccess` binds a schema and ordinal for allocation-free
-compiled primitive reads; keep it in a final node field. Strings and unsigned
-`BigInteger`s materialize on request.
+Known-schema JSON compiles through `JsonPlan.compile(schema)` or
+`JsonPlan.compile(root, recordTypes)` into a reusable, thread-confined native plan.
+`plan.decode(utf8)` returns the scoped root `JsonRecord`: validated slots with
+separate presence and null masks, read with primitive getters or through
+`DataLibrary`. Strings and unsigned `BigInteger`s materialize on request.
 
-Plans support closed records of up to 64 fields of INT64, FLOAT64, BOOLEAN, STRING
-and unsigned 64-bit EXACT, with required/nullable, integer range, UTF-8/UTF-16/code
-point length and binary32 representability contracts. Unknown fields, escaped
-duplicates, missing required fields, type mismatches and trailing input are
-rejected. Records outlive their plans and are closed like messages. The typed path
-is SVM-only and scalar-only today; nested and repeated records are in progress, and
-the JVM typed backend and record snapshots are not yet implemented.
+Records hold up to 64 fields of INT64, FLOAT64, BOOLEAN, STRING, unsigned 64-bit
+EXACT, RECORD and ARRAY, with required/nullable, integer range, UTF-8/UTF-16/code
+point length and binary32 representability contracts. A RECORD field names its
+schema with `Constraints.recordType()`, a key of `recordTypes` whose schema has that
+same `typeName`. An ARRAY field takes its element contract from
+`Constraints.element()`: a scalar or RECORD that is neither nullable nor optional
+(JSON array elements are never null; nullability applies to the array). Element
+counts (`Length` on ARRAY) and arrays of arrays are not supported. Recursive record
+types and nesting deeper than 32 records (the root counts as 1) are rejected when
+the plan compiles. Unknown fields, escaped duplicates, missing required fields, type
+mismatches and trailing input are rejected at every level.
+
+Every record and array of one decode shares a `JsonTypedOwner` (thread guard,
+assumption, close). `record(i)` returns a nested `JsonRecord`, `array(i)` a
+`JsonArray` (`BorrowedArray` with interop array exports), and `DataLibrary.read`
+returns those for RECORD and ARRAY fields. Closing any record closes the owner and
+invalidates all of them. `JsonRecord.snapshot()` and `JsonArray.snapshot()` copy into
+owned immutable `Batch` rows and `DataArray`s that survive close.
+
+`JsonAccess` binds a schema and an ordinal path (`new JsonAccess(root, recordTypes,
+1, 0, 2)`: RECORD hops, then an INT64/FLOAT64/BOOLEAN leaf) for allocation-free
+compiled primitive reads that walk the record table without intermediate
+`JsonRecord`s; keep it in a final node field. Records outlive their plans. The
+typed path is SVM-only today; the JVM typed backend is not yet implemented.
 
 ## Remaining for facades
 

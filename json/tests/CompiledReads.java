@@ -130,9 +130,101 @@ final class CompiledReads {
         }
         check(NodeUtil.countNodes(churn) <= 192, "Shared JSON schema cache remains bounded");
         generic();
+        nested();
       } finally {
         context.leave();
       }
+    }
+  }
+
+  /** Nested primitives read through constant JsonAccess paths, with no intermediate records. */
+  private static void nested() {
+    var inner =
+        new Schema(
+            "Inner",
+            java.util.List.of(
+                Field.requiredLong("n"),
+                new Field("d", Field.Kind.FLOAT64, false, false),
+                new Field("b", Field.Kind.BOOLEAN, false, false)));
+    var mid =
+        new Schema(
+            "Mid",
+            java.util.List.of(
+                new Field(
+                    "inner",
+                    Field.Kind.RECORD,
+                    false,
+                    false,
+                    dev.elide.truffledata.Constraints.NONE.withRecordType("Inner"))));
+    var schema =
+        Schema.of(
+            Field.requiredLong("id"),
+            new Field(
+                "mid",
+                Field.Kind.RECORD,
+                false,
+                false,
+                dev.elide.truffledata.Constraints.NONE.withRecordType("Mid")));
+    var types = java.util.Map.of("Inner", inner, "Mid", mid);
+    try (var plan = JsonPlan.compile(schema, types);
+        var first =
+            plan.decode(
+                "{\"id\":1,\"mid\":{\"inner\":{\"n\":1000,\"d\":1.5,\"b\":true}}}"
+                    .getBytes(StandardCharsets.UTF_8));
+        var second =
+            plan.decode(
+                "{\"mid\":{\"inner\":{\"b\":false,\"d\":2.5,\"n\":2000}},\"id\":2}"
+                    .getBytes(StandardCharsets.UTF_8))) {
+      var rows = new JsonRecord[] {first, second};
+      var root = new NestedReads(schema, types);
+      var target = root.getCallTarget();
+      for (int i = 0; i < 200 && !root.compiled; i++) target.call(rows, 100000);
+      check(root.compiled, "Nested JSON reads must execute compiled code");
+      check(((Long) target.call(rows, 1000000)) == 1502000000L, "Nested JSON compiled checksum");
+      check(NodeUtil.countNodes(root) <= 192, "Nested JSON AST budget");
+      var bean =
+          (com.sun.management.ThreadMXBean)
+              java.lang.management.ManagementFactory.getThreadMXBean();
+      bean.setThreadAllocatedMemoryEnabled(true);
+      long thread = Thread.currentThread().threadId();
+      long before = bean.getThreadAllocatedBytes(thread);
+      target.call(rows, 1000000);
+      double bytes = (bean.getThreadAllocatedBytes(thread) - before) / 1000000.0;
+      check(bytes >= 0 && bytes <= 0.05, "Nested JSON compiled bytes/read budget: " + bytes);
+      System.out.println("JSON nested compiled=true bytes/read=" + bytes);
+      first.close();
+      try {
+        target.call(rows, 1);
+        throw new AssertionError("Compiled closed nested read");
+      } catch (IllegalStateException expected) {
+      }
+      check(second.record(1).record(0).longValue(0) == 2000, "Nested sibling survives close");
+    }
+  }
+
+  private static final class NestedReads extends RootNode {
+    final JsonAccess n, d, b;
+    boolean compiled;
+
+    NestedReads(Schema schema, java.util.Map<String, Schema> types) {
+      super(TestLanguage.current());
+      n = new JsonAccess(schema, types, 1, 0, 0);
+      d = new JsonAccess(schema, types, 1, 0, 1);
+      b = new JsonAccess(schema, types, 1, 0, 2);
+    }
+
+    @Override
+    public Object execute(VirtualFrame frame) {
+      var rows = (JsonRecord[]) frame.getArguments()[0];
+      int count = (Integer) frame.getArguments()[1];
+      long sum = 0;
+      for (int i = 0; i < count; i++) {
+        var row = rows[i & 1];
+        sum += n.longValue(row) + (long) d.doubleValue(row) + (b.booleanValue(row) ? 1 : 0);
+      }
+      if (CompilerDirectives.inInterpreter()) LoopNode.reportLoopCount(this, count);
+      compiled |= CompilerDirectives.inCompiledCode();
+      return sum;
     }
   }
 
