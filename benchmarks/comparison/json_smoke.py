@@ -1,4 +1,5 @@
-"""Require JSON read loops and their getters to survive partial evaluation as one graph."""
+"""Require JSON read and export loops to survive partial evaluation within fixed graph budgets."""
+import json
 import os
 from pathlib import Path
 import re
@@ -14,21 +15,69 @@ output = Path(os.environ['TEST_UNDECLARED_OUTPUTS_DIR'])
 output.mkdir(parents=True, exist_ok=True)
 (output / 'json-compilation.log').write_text(process.stderr)
 process.check_returncode()
+
+# Per root: (max nodes, loops, max graph allocations). Every rule requires zero invokes.
+# The trace's Invokes column counts unresolved Java calls only; @TruffleBoundary calls (Gson
+# reads, JavaSink events, member lookup) do not appear there. Generic rules are in JSON.md.
+SCALAR = (1000, 1, 0)
+RULES = {
+    'GenericReads[simdjson-generic-interop]': (2000, 1, 0),
+    'GenericReads[simdjson-snapshot]': (2000, 1, 0),
+    # Document loop plus the tape walk. The two allocation sites are the container stack for
+    # nested or unconfined exports; the runtime budget below proves they never run here.
+    'GenericReads[simdjson-export-walk]': (1000, 2, 2),
+    # JavaSink events are boundaries that receive fresh views and build host objects; their
+    # allocations are bounded at runtime instead of in the graph.
+    'GenericReads[simdjson-generic-java]': (1000, 2, None),
+    # Stock baseline: one boundary call per document into Gson's tree API.
+    'GenericReads[gson-tree]': (1000, 1, 0),
+}
+# Java bytes per document in the compiled read loop. 1.0 is the harness's own per-call boxing,
+# identical for every peak cell. The JavaSink budget is fixed in JSON.md (measured 2,357).
+ALLOCATION = {
+    ('simdjson-generic-interop', 'peak'): 1.0,
+    ('simdjson-export-walk', 'peak'): 1.0,
+    ('simdjson-generic-java', 'peak'): 2400.0,
+    ('simdjson-generic-java', 'read-aot'): 2400.0,
+}
+
 # Columns: Count Size Cycles Ifs Loops Invokes Allocs. Fail closed if trace format changes.
-graphs = []
+seen = {}
+name = None
 for line in process.stderr.splitlines():
+    header = re.match(r'^\[engine\] Expansion tree for (\S+) after truffleTier:', line)
+    if header:
+        name = header.group(1)
     if re.match(r'^<root>\s', line):
         columns = line.split('|')
-        if len(columns) < 3:
+        if len(columns) < 3 or name is None:
             raise AssertionError('Malformed compiler expansion row: ' + line)
         values = tuple(map(int, columns[1].split()))
         if len(values) != 7:
             raise AssertionError('Unexpected compiler expansion columns: ' + line)
-        graphs.append(values)
+        if name.startswith('JsonComparison.Reads@'):
+            key, rule = 'scalar', SCALAR
+        elif name in RULES:
+            key, rule = name, RULES[name]
+        else:
+            raise AssertionError('Unexpected compiled JSON root: ' + name)
         nodes, _, _, _, loops, invokes, allocations = values
-        if not (0 < nodes <= 1000 and loops == 1 and invokes == 0 and allocations == 0):
-            raise AssertionError('JSON read graph exceeded budget or retained calls: ' + line)
+        limit, expected_loops, max_allocations = rule
+        if not (0 < nodes <= limit and loops == expected_loops and invokes == 0
+                and (max_allocations is None or allocations <= max_allocations)):
+            raise AssertionError(f'JSON graph {name} exceeded {rule} or retained calls: {line}')
+        seen[key] = seen.get(key, 0) + 1
+        name = None
 # Each engine must compile; smoke's helper-level marker also checks the actual executed tier.
-if len(graphs) < 3:
-    raise AssertionError('Missing compiler expansion evidence for JSON engines')
-print(f'JSON graph checks passed: {len(graphs)} compilations, one loop, no calls or allocations')
+if seen.get('scalar', 0) < 3 or any(root not in seen for root in RULES):
+    raise AssertionError(f'Missing compiler expansion evidence for JSON engines: {seen}')
+
+records = [json.loads(line) for line in process.stdout.splitlines() if line.startswith('{')]
+for (engine, stage), budget in ALLOCATION.items():
+    rows = [r for r in records if r['engine'] == engine and r['stage'] == stage]
+    if len(rows) != 1 or len(rows[0]['allocated_bytes_per_row']) != 3:
+        raise AssertionError(f'Missing allocation record for {engine} {stage}')
+    if max(rows[0]['allocated_bytes_per_row']) > budget:
+        raise AssertionError(f'{engine} {stage} exceeded {budget} Java B/document: {rows[0]}')
+print(f'JSON graph checks passed: {sum(seen.values())} compilations; '
+      f'allocation budgets passed for {len(ALLOCATION)} cells')

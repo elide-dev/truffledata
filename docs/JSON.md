@@ -324,4 +324,9 @@ The SVM compiled gates cover typed and generic member reads, interop reads and t
 export loop, bound Java allocation per iteration, and require compiled reads to
 fail after close. They measure
 retained reads, not parse cost or native memory. Comparison results against Gson
-are in [`benchmarks/comparison/JSON.md`](../benchmarks/comparison/JSON.md).
+are in [`benchmarks/comparison/JSON.md`](../benchmarks/comparison/JSON.md). Its
+generic cells (Gson trees, `JavaSink` export, interop reads, snapshots) gate the
+compiled interop and export loops on graph shape and a fixed per-document allocation
+budget. The first measurement found generic reads slower than reading Gson trees
+and snapshot reads allocating heavily; see that page before relying on either path
+for speed.

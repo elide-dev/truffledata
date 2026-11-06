@@ -255,6 +255,18 @@ sh_test(
     ],
 )
 
+# Shared with the CodSpeed simulation cases in //benchmarks, so both measure one fixture.
+data_java_library(
+    name = "json_fixture",
+    srcs = ["JsonFixture.java"],
+    visibility = ["//benchmarks:__pkg__"],
+    deps = [
+        "//json",
+        "@maven//:com_google_code_gson_gson",
+        "@maven//:org_graalvm_truffle_truffle_api",
+    ],
+)
+
 data_java_library(
     name = "json_comparison",
     testonly = True,
@@ -263,6 +275,7 @@ data_java_library(
         "JsonComparison.java",
     ],
     deps = [
+        ":json_fixture",
         "//core",
         "//json",
         "@maven//:com_google_code_gson_gson",

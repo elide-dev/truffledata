@@ -1,10 +1,14 @@
-# Scalar JSON comparison
+# JSON comparison
 
 Run `bazel test //benchmarks/comparison:json_native_smoke` for correctness and tier
 checks; run `bazel test //benchmarks/comparison:json_measure` for three fresh forks
 per timing/allocation cell. Reports are in that test's undeclared outputs. The
 reusable native CI job runs the smoke target. No Jackson or protobuf dependency
-is needed by this separate JSON executable.
+is needed by this separate JSON executable. The executable has two workloads:
+scalar records (typed plans) and generic documents (the index, export, interop and
+snapshots). They are described below.
+
+## Scalar records
 
 The fixture contains 32 varying UTF-8 objects with shuffled keys and three required
 non-null fields: long, double, boolean. Native simdjson decodes through a reusable
@@ -88,3 +92,90 @@ ran against the corrected compiled harness. Specialized peak reads measured
 per ingested record (64 versus 56). The experiment passed ownership, JIT graph,
 and allocation gates but was reverted: the measured benefit does not justify
 the permanent memory cost. Its exact source patch and samples are retained.
+
+## Generic documents
+
+The `json-generic` workload ([`JsonFixture`](JsonFixture.java)) has 32 mixed UTF-8
+documents. Each has nine members: I64 `id`, a short string, an F64 `price`, a
+boolean, a string array of one to four tags, a nested object (`w`, `h`, a short
+string), an integer array of three or four elements, a long string and null. Every
+`note` exceeds Myna's 16-byte inline text. Odd notes carry quote, backslash,
+control, two-byte and surrogate-pair escapes, and odd documents reverse member
+order. Every engine reads the same ten members per document: eight top-level
+members, plus `w` and `h` inside the nested object. It sums `id`, `(long) price`,
+`active`, `w`, `(long) h`, the two array sizes, and one each for the note being a
+string and `parent` being null. The checksum is 38,219.
+
+| Engine | Ingest (per document) | Retained form and read |
+| --- | --- | --- |
+| `gson-tree` | `JsonParser.parseReader` over `InputStreamReader` from UTF-8 bytes, then read | `JsonElement` trees, read in one `@TruffleBoundary` call per document |
+| `simdjson-generic-java` | `JsonSvm.decode`, `export(JavaSink)`, read the Java tree, close | Live messages; the guest exports each into a fresh `JavaSink` through an adopted `JsonExportNode` and reads the tree behind a boundary |
+| `simdjson-generic-interop` | Decode, read through cached `InteropLibrary`, close | Live messages, read by the guest through cached interop, one library per member site |
+| `simdjson-snapshot` | Decode, `snapshot()`, close, read the snapshot through interop | Snapshots, read like `simdjson-generic-interop` |
+
+Stages match the scalar workload. Ingestion includes parsing, consumption, escape
+of the retained result, and native release. Retained reads rotate over 32 live
+values. Peak uses the same tier and in-helper compiled marker checks.
+
+Caveats:
+
+- Gson's tree parser is lenient (it accepts comments, unquoted names and similar);
+  it still rejects trailing input. This is a valid-input performance fixture, not a
+  conformance comparison. Gson stores numbers as `LazilyParsedNumber`, so its reads
+  parse number text on every access.
+- Array elements are counted but not read. `JsonValue.readArrayElement` calls the
+  instance boundary `element(index)`. In compiled code, that would materialize the
+  freshly read array view on every access. Reading elements needs a static
+  `(owner, node)` element path like `memberNode`. Until then, element reads are not
+  in this fixture.
+- Strings are type-checked, not materialized, in the interop reads. Materializing
+  needs a boundary that receives the view (`asString` or `asTruffleString`).
+- Native memory is not counted. A live message retains its padded input, index,
+  decoded text and lexical spans. A snapshot copies all of them onto the Java heap,
+  so its retained form and its ingestion allocation include that copy.
+
+### Smoke gates
+
+`json_native_smoke` attributes each Truffle-tier expansion trace to its root and
+applies per-root budgets. Every rule requires zero invokes in the graph. That trace
+column counts unresolved Java calls only, not `@TruffleBoundary` calls. The
+`gson-tree` root makes one boundary call per document and still reports zero.
+
+| Root | Graph nodes | Loops | Graph allocations | Java B/document (counter) |
+| --- | ---: | ---: | ---: | ---: |
+| Scalar engines (unchanged) | ≤ 1,000 | 1 | 0 | — |
+| `simdjson-generic-interop`, peak | ≤ 2,000 | 1 | 0 | ≤ 1.0 |
+| `simdjson-snapshot`, peak | ≤ 2,000 | 1 | 0 | not gated (see results) |
+| `simdjson-export-walk`, peak (smoke-only, constant counting sink) | ≤ 1,000 | 2 | ≤ 2 | ≤ 1.0 |
+| `simdjson-generic-java`, peak and read-aot | ≤ 1,000 (peak) | 2 (peak) | not gated | ≤ 2,400 |
+| `gson-tree`, peak | ≤ 1,000 | 1 | 0 | — |
+
+The interop loop measured 1,754–1,810 nodes: ten inlined member reads and their
+owner checks. The export loops have two loops, the document loop and the tape walk.
+Neither has a per-member loop or recursion. The walk's two graph allocation sites
+are `JsonOwner.exportStack`'s container stacks for nested or unconfined exports. The
+counter's 1.0 B/document shows they never run for the outermost export on a
+confined message. 1.0 B/document is the harness's own per-call boxing; all three
+scalar peak cells measure exactly that.
+
+**`JavaSink` budget: 2,400 Java bytes per document.** The measured value is 2,357 B
+(2,356 B when the export runs directly from AOT code). It covers only what the sink
+needs: the `JavaSink` and its stack, two `LinkedHashMap`s with their tables and
+entries, two `ArrayList`s, the key and value `String`s, boxed numbers, and the 16–19
+key and string views per document. Those views escape because `JavaSink`'s event
+methods are boundaries. The budget leaves 43 B of headroom. That is less than two
+additional 24-byte objects per document. Any per-node allocation in the walk (at
+least 16 B × ~40 nodes) or an escaping view per scalar fails it.
+
+### Results
+
+The first run is [`json-generic-c6e7abc`](../results/json-generic-c6e7abc/), one
+`json_measure` invocation on a shared RBE worker. **Its timings are advisory.** At
+peak, interop reads of ten members took about 2.7 µs per document against about
+0.53 µs for Gson trees. Ingestion was 5.6 µs (decode and interop read) and 5.9 µs
+(decode and `JavaSink`) against Gson's 4.7 µs. Java allocation was 528 and 3,660
+B/document against Gson's 13,404, excluding native memory. Snapshot reads allocated
+22,749 B and took about 28 µs per document. That is a defect behind `HeapValueTape`'s
+boundaries; the graph itself has none. These figures do not support a speedup claim
+for the generic path. The read cost and the snapshot allocation are the next things
+to investigate.

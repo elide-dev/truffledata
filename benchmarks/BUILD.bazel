@@ -20,10 +20,13 @@ data_java_library(
     ],
     plugins = ["//bazel:jmh_processor"],
     deps = [
+        "//benchmarks/comparison:json_fixture",
         "//benchmarks/fixtures:contracts",
         "//core",
         "//jdbc",
+        "//json",
         "//protobuf",
+        "@maven//:com_google_code_gson_gson",
         "@maven//:com_google_protobuf_protobuf_java",
         "@maven//:org_graalvm_polyglot_polyglot",
         "@maven//:org_graalvm_sdk_nativeimage",
@@ -105,7 +108,10 @@ genrule(
 
 native_image(
     name = "native",
-    cc_deps = ["//benchmarks/native:hooks"],
+    cc_deps = [
+        "//benchmarks/native:hooks",
+        "//json/native:truffledata_json",
+    ],
     data = [
         "proxy-config.json",
         ":protobuf_reflection",

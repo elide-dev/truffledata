@@ -1,4 +1,4 @@
-"""Fresh-process SVM scalar JSON comparisons; keep raw samples and fork identity."""
+"""Fresh-process SVM JSON comparisons; keep raw samples and fork identity."""
 import hashlib
 import itertools
 import json
@@ -14,8 +14,14 @@ import sys
 binary = Path(sys.argv[1]).resolve()
 output = Path(os.environ['TEST_UNDECLARED_OUTPUTS_DIR'])
 output.mkdir(parents=True, exist_ok=True)
-jobs = list(itertools.product(('gson-stream', 'simdjson-typed', 'simdjson-specialized'),
-    ('ingest', 'read-aot', 'interpret', 'peak'), ('time', 'memory'), range(3)))
+# Workload per engine and its 32-document checksum (JsonComparison and JsonFixture).
+WORKLOADS = {
+    'json-scalar': (('gson-stream', 'simdjson-typed', 'simdjson-specialized'), 35984),
+    'json-generic': (('gson-tree', 'simdjson-generic-java', 'simdjson-generic-interop', 'simdjson-snapshot'), 38219),
+}
+STAGES = ('ingest', 'read-aot', 'interpret', 'peak')
+workload_of = {engine: (name, checksum) for name, (engines, checksum) in WORKLOADS.items() for engine in engines}
+jobs = list(itertools.product(workload_of, STAGES, ('time', 'memory'), range(3)))
 random.Random(20261105).shuffle(jobs)
 results = []
 for engine, stage, mode, fork in jobs:
@@ -25,7 +31,9 @@ for engine, stage, mode, fork in jobs:
         raise ValueError('Expected one measurement record')
     row = json.loads(lines[0])
     metric = 'ns_per_row' if mode == 'time' else 'allocated_bytes_per_row'
-    if (row['engine'], row['stage'], row['runtime'], row['checksum'], row['rows']) != (engine, stage, 'svm', 35984, 32):
+    workload, checksum = workload_of[engine]
+    if (row['workload'], row['engine'], row['stage'], row['runtime'], row['checksum'], row['rows']) != (
+            workload, engine, stage, 'svm', checksum, 32):
         raise ValueError('Mislabeled fixture')
     if row['guest_compiled'] != (stage == 'peak'):
         raise ValueError('Wrong execution tier')
@@ -38,14 +46,17 @@ for engine, stage, mode, fork in jobs:
 report = {'schema': 1, 'binary_sha256': hashlib.sha256(binary.read_bytes()).hexdigest(),
     'platform': platform.platform(), 'cpu': Path('/proc/cpuinfo').read_text(), 'measurements': results}
 (output / 'json-comparison.json').write_text(json.dumps(report, indent=2) + '\n')
-lines = ['# SVM scalar JSON comparison', '',
-    'Medians of three fresh-process fork medians; ranges are fork medians. Java heap excludes native memory.', '',
-    '| Stage | Engine | ns/record (range) | Java bytes/record (range) |', '|---|---|---:|---:|']
-for stage in ('ingest', 'read-aot', 'interpret', 'peak'):
-    for engine in ('gson-stream', 'simdjson-typed', 'simdjson-specialized'):
-        cells = []
-        for metric in ('ns_per_row', 'allocated_bytes_per_row'):
-            values = [statistics.median(r[metric]) for r in results if r['engine'] == engine and r['stage'] == stage and metric in r]
-            cells.append(f'{statistics.median(values):.3f} ({min(values):.3f}–{max(values):.3f})')
-        lines.append(f'| {stage} | {engine} | ' + ' | '.join(cells) + ' |')
+lines = ['# SVM JSON comparison', '',
+    'Medians of three fresh-process fork medians; ranges are fork medians. Java heap excludes native memory.']
+for workload, (engines, _) in WORKLOADS.items():
+    unit = 'record' if workload == 'json-scalar' else 'document'
+    lines += ['', f'## {workload}', '',
+        f'| Stage | Engine | ns/{unit} (range) | Java bytes/{unit} (range) |', '|---|---|---:|---:|']
+    for stage in STAGES:
+        for engine in engines:
+            cells = []
+            for metric in ('ns_per_row', 'allocated_bytes_per_row'):
+                values = [statistics.median(r[metric]) for r in results if r['engine'] == engine and r['stage'] == stage and metric in r]
+                cells.append(f'{statistics.median(values):.3f} ({min(values):.3f}–{max(values):.3f})')
+            lines.append(f'| {stage} | {engine} | ' + ' | '.join(cells) + ' |')
 (output / 'json-comparison.md').write_text('\n'.join(lines) + '\n')
