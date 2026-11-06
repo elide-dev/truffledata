@@ -118,6 +118,23 @@ final class CsvScannerTest {
   }
 
   @Test
+  void wideRecordsGrowTheSpanTableUpToMaxColumns() {
+    List<String> wide = new ArrayList<>();
+    for (int i = 0; i < 40; i++) wide.add("f" + i);
+    assertEquals(List.of(wide, wide), records(String.join(",", wide) + "\n" + String.join(",", wide)));
+    // The table grows 16 -> 20 (capped at maxColumns), then the 21st field fails.
+    CsvLimits twenty = new CsvLimits(1 << 20, 1 << 10, 20, 1 << 10);
+    assertEquals(
+        List.of(wide.subList(0, 20)),
+        scan(String.join(",", wide.subList(0, 20)) + "\n", CsvFormat.RFC4180, twenty, true).records);
+    rejects(
+        String.join(",", wide.subList(0, 21)) + "\n",
+        CsvFormat.RFC4180,
+        twenty,
+        "CSV resource limit: maxColumns");
+  }
+
+  @Test
   void trimAndUnquoted() {
     CsvFormat trim = CsvFormat.RFC4180.withTrim(true);
     assertEquals(
@@ -211,5 +228,19 @@ final class CsvScannerTest {
     assertThrows(IllegalArgumentException.class, () -> new CsvLimits(Integer.MAX_VALUE, 1, 1, 1));
     assertThrows(IllegalArgumentException.class, () -> new CsvLimits(1 << 30, 1 << 30, 1, 1));
     assertEquals(64 << 20, CsvLimits.DEFAULT.maxBatchBytes());
+    assertThrows(
+        IllegalArgumentException.class, () -> CsvFormat.RFC4180.withQuote(' ').withTrim(true));
+    assertEquals((byte) ' ', CsvFormat.RFC4180.withoutQuoting().withQuote(' ').withTrim(true).quote());
+    // Formats and limits are values: equal options are interchangeable.
+    CsvFormat tab = CsvFormat.RFC4180.withDelimiter('\t');
+    assertEquals(tab, CsvFormat.RFC4180.withDelimiter('\t'));
+    assertEquals(tab.hashCode(), CsvFormat.RFC4180.withDelimiter('\t').hashCode());
+    assertNotEquals(tab, CsvFormat.RFC4180);
+    assertTrue(tab.toString().startsWith("CsvFormat["), tab.toString());
+    CsvLimits limits = new CsvLimits(64 << 20, 1 << 20, 4096, 1 << 20);
+    assertEquals(CsvLimits.DEFAULT, limits);
+    assertEquals(CsvLimits.DEFAULT.hashCode(), limits.hashCode());
+    assertNotEquals(CsvLimits.DEFAULT, new CsvLimits(1, 1, 1, 1));
+    assertTrue(limits.toString().startsWith("CsvLimits["), limits.toString());
   }
 }

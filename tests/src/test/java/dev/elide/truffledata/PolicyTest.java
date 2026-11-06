@@ -59,7 +59,13 @@ class PolicyTest {
             Map.entry("JsonTypedOwner.java", 3),
             Map.entry("JsonValue.java", 24), // Static (owner, node) slow paths per interop message.
             Map.entry("JvmTypedOwner.java", 3),
-            Map.entry("SvmTypedOwner.java", 1));
+            Map.entry("SvmTypedOwner.java", 1),
+            // CSV: diagnostics, materialization and the export walk stay out of compiled reads.
+            Map.entry("CsvScanner.java", 2), // Static syntax and limit failures.
+            Map.entry("CsvBatch.java", 2), // Static STRING materialization and the export walk.
+            Map.entry("CsvRow.java", 1), // Static typed-read contract failure.
+            Map.entry("CsvText.java", 2), // Sink-side String and TruffleString copies.
+            Map.entry("Numbers.java", 1)); // Static Double.parseDouble fallback.
     Pattern limit = Pattern.compile("limit\\s*=\\s*\"(\\d+)\"");
     Map<String, Integer> exportedMessages =
         new HashMap<>(
@@ -88,6 +94,8 @@ class PolicyTest {
     exportedMessages.put("JsonValue.java", 29);
     exportedMessages.put("JsonArray.java", 4);
     exportedMessages.put("JsonRecord.java", 6);
+    exportedMessages.put("CsvBatch.java", 4);
+    exportedMessages.put("CsvRow.java", 6);
     Set<String> accessSurfaces = exportedMessages.keySet();
     Set<String> seenSurfaces = new HashSet<>();
     int checked = 0;
@@ -100,7 +108,8 @@ class PolicyTest {
           "jdbc-postgresql",
           "protobuf",
           "protobuf-runtime",
-          "json"
+          "json",
+          "csv"
         }) {
       try (var paths = Files.walk(root.resolve(module + "/src/main/java"))) {
         for (Path path : paths.filter(p -> p.toString().endsWith(".java")).toList()) {

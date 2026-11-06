@@ -36,6 +36,13 @@ ACCESS_SOURCES = {f'core/src/main/java/dev/elide/truffledata/{name}.java' for na
         'JsonSnapshot', 'JsonSvm', 'JsonTypedOwner', 'JsonValue', 'JvmTypedOwner', 'SegmentValueTape',
         'SvmTypedOwner', 'SvmValueTape', 'TapeSource',
     )
+} | {
+    # Every CSV source: the scanner, ingest and typed conversions run on every read path, and the
+    # batch, row and text views are the guest and embedder access surfaces.
+    f'csv/src/main/java/dev/elide/truffledata/csv/{name}.java' for name in (
+        'BatchBuilder', 'Column', 'Csv', 'CsvBatch', 'CsvFormat', 'CsvLimits', 'CsvPlan', 'CsvReader',
+        'CsvRow', 'CsvScanner', 'CsvSink', 'CsvText', 'Numbers', 'Utf8',
+    )
 }
 
 # Interfaces with only abstract methods have an LCOV record but no executable method. Any method
@@ -43,6 +50,7 @@ ACCESS_SOURCES = {f'core/src/main/java/dev/elide/truffledata/{name}.java' for na
 DECLARATION_ONLY_SOURCES = {
     'json/src/main/java/dev/elide/truffledata/json/JsonSink.java',
     'json/src/main/java/dev/elide/truffledata/json/TapeSource.java',
+    'csv/src/main/java/dev/elide/truffledata/csv/CsvSink.java',
 }
 
 JSON = 'json/src/main/java/dev/elide/truffledata/json/'

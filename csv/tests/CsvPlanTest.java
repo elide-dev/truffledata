@@ -266,6 +266,9 @@ final class CsvPlanTest {
     CsvPlan bool = CsvPlan.compile(Schema.of(new Field("flag", Field.Kind.BOOLEAN, false, false)), CsvFormat.RFC4180);
     var b = assertThrows(ContractViolation.class, () -> bool.parse(utf8("flag\nhunter2\n")));
     assertFalse(b.getMessage().contains("hunter2"), b.getMessage());
+    CsvBatch flags = bool.parse(utf8("flag\nTRUE\nfalse\n"));
+    assertTrue(flags.row(0).getBoolean(0));
+    assertFalse(flags.row(1).getBoolean(0));
   }
 
   /** Adopts a cached, dispatched DataLibrary so it can run outside a call. */

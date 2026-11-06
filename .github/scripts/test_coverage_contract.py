@@ -48,13 +48,14 @@ class CoverageContractTest(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     enforce(summary)
 
-    def test_json_sources_are_inventoried(self):
+    def test_json_and_csv_sources_are_inventoried(self):
         repo = Path(__file__).resolve().parents[2]
-        root = repo / 'json/src/main/java'
-        sources = {str(path.relative_to(repo)) for path in root.rglob('*.java')
-                   if path.name != 'package-info.java'}
-        self.assertTrue(sources)
-        self.assertEqual(sources, {s for s in ACCESS_SOURCES if s.startswith('json/')})
+        for module in ('json', 'csv'):
+            root = repo / module / 'src/main/java'
+            sources = {str(path.relative_to(repo)) for path in root.rglob('*.java')
+                       if path.name != 'package-info.java'}
+            self.assertTrue(sources)
+            self.assertEqual(sources, {s for s in ACCESS_SOURCES if s.startswith(module + '/')})
 
     def test_only_declaration_sources_may_have_no_methods(self):
         summary = analyze(self.report())
