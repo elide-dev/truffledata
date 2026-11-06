@@ -39,7 +39,7 @@ import release symbol=td_json_release return=void error=no_failure native_leaf=f
   param result type=ptr<void> nullable=false ownership=borrowed access=read_write
 end
 
-struct JsonScalarField size=80 align=8
+struct JsonScalarField size=88 align=8
   field name type=ptr<u8> offset=0
   field name_length type=u64 offset=8
   field kind type=u32 offset=16
@@ -52,6 +52,17 @@ struct JsonScalarField size=80 align=8
   field length_unit type=u32 offset=60
   field minimum_length type=u64 offset=64
   field maximum_length type=u64 offset=72
+  field child type=u32 offset=80
+end
+struct JsonRecordPlan size=8 align=4
+  field fields_offset type=u32 offset=0
+  field field_count type=u32 offset=4
+end
+struct JsonRecordEntry size=24 align=8
+  field present type=u64 offset=0
+  field nulls type=u64 offset=8
+  field slots type=u32 offset=16
+  field plan type=u32 offset=20
 end
 struct JsonPlan size=8 align=8
   field owner type=ptr<void> offset=0
@@ -63,7 +74,7 @@ struct JsonScalarSlot size=40 align=8
   field lexical type=ptr<u8> offset=24
   field lexical_length type=u64 offset=32
 end
-struct JsonTypedResult size=96 align=8
+struct JsonTypedResult size=112 align=8
   field owner type=ptr<void> offset=0
   field slots type=ptr<void> offset=8
   field count type=u64 offset=16
@@ -76,10 +87,14 @@ struct JsonTypedResult size=96 align=8
   field index_allocations type=u64 offset=72
   field parser_input_capacity type=u64 offset=80
   field control_bytes type=u64 offset=88
+  field records type=ptr<void> offset=96
+  field record_count type=u64 offset=104
 end
 import plan_create symbol=td_json_plan_create return=i32 error=no_failure native_leaf=false@explicit_contract
+  param records type=ptr<void> nullable=false ownership=borrowed access=read
+  param record_count type=u64
   param fields type=ptr<void> nullable=true ownership=borrowed access=read
-  param count type=u64
+  param field_count type=u64
   param max_name_bytes type=u64
   param result type=ptr<void> nullable=false ownership=borrowed access=read_write
 end

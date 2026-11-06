@@ -283,7 +283,8 @@ public final class SvmAcceptance {
   }
 
   private static void typed() {
-    VoidPointer fields = UnmanagedMemory.calloc(Json.JsonScalarField.SIZE);
+    VoidPointer fields =
+        UnmanagedMemory.calloc(Json.JsonScalarField.SIZE + Json.JsonRecordPlan.SIZE);
     VoidPointer plan = UnmanagedMemory.calloc(Json.JsonPlan.SIZE);
     VoidPointer result = UnmanagedMemory.calloc(Json.JsonTypedResult.SIZE);
     if (fields.isNull() || plan.isNull() || result.isNull()) {
@@ -300,7 +301,10 @@ public final class SvmAcceptance {
         Json.JsonScalarField.flags(fields, 1);
         Json.JsonScalarField.minimum(fields, -128);
         Json.JsonScalarField.maximum(fields, 127);
-        require(Json.plan_create(fields, 1, 1, plan) == 0);
+        Json.JsonScalarField.child(fields, -1);
+        VoidPointer root = (VoidPointer) ((Pointer) fields).add(Json.JsonScalarField.SIZE);
+        Json.JsonRecordPlan.field_count(root, 1);
+        require(Json.plan_create(root, 1, fields, 1, 1, plan) == 0);
       }
       byte[] input = "{\"n\":127}".getBytes(StandardCharsets.UTF_8);
       try (var pinned = PinnedObject.create(input)) {

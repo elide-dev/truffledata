@@ -96,6 +96,28 @@ Character-length contracts use the shared `//bazel:unicode` simdutf library, als
 used by Rust Buffa conversion. Counting decoded UTF-8 needs no intermediate UTF-16
 buffer or Java string.
 
+## Nested and repeated typed plans
+
+A `typed_plan` is a table of closed records (record 0 is the root). A field of
+kind 5 (`record`) links to another record by `JsonScalarField.child`; flag bit 2
+marks a repeated field, decoded from a JSON array whose elements each satisfy the
+field's scalar contract (elements are never null; `nullable` applies to the array
+itself). Plans that are recursive or nest deeper than 32 records are rejected at
+creation, so decoding recursion is bounded by the plan, not the input. Field
+descriptors are 88 bytes; `td_json_plan_create` takes `JsonRecordPlan` entries
+that partition the field table in order.
+
+`typed_document` writes one slot arena and one record table of
+`JsonRecordEntry {present, nulls, slots, plan}`, both charged to `index_memory`.
+Root slots start at 0. A record slot holds its child entry index; a repeated slot
+holds `(first << 32) | count`, indexing the slot arena for scalar elements or the
+record table for record elements, whose entries are reserved contiguously before
+any element decodes. Unknown, duplicate, missing, null, type-mismatched and
+trailing input are rejected at every level. Plans without a record field publish
+the root entry from result control storage, so flat results still make exactly one
+index allocation. `//json/native:typed_test` injects a failure at every arena
+growth and checks that each unwinds with no retained bytes under ASan/UBSan.
+
 ## Tests
 
 ```sh

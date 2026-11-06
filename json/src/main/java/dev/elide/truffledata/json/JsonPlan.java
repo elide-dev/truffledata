@@ -46,7 +46,10 @@ public final class JsonPlan implements AutoCloseable {
     PinnedObject[] pins = new PinnedObject[schema.size()];
     VoidPointer handle = UnmanagedMemory.calloc(Json.JsonPlan.SIZE);
     if (handle.isNull()) throw new OutOfMemoryError("JSON plan allocation");
-    Pointer fields = UnmanagedMemory.calloc(Math.max(1, schema.size()) * Json.JsonScalarField.SIZE);
+    // One root JsonRecordPlan follows the field table in the same allocation.
+    Pointer fields =
+        UnmanagedMemory.calloc(
+            Math.max(1, schema.size()) * Json.JsonScalarField.SIZE + Json.JsonRecordPlan.SIZE);
     if (fields.isNull()) {
       UnmanagedMemory.free(handle);
       throw new OutOfMemoryError("JSON schema allocation");
@@ -66,6 +69,7 @@ public final class JsonPlan implements AutoCloseable {
         Json.JsonScalarField.name_length(field, name.length);
         Json.JsonScalarField.kind(field, kind(f));
         Json.JsonScalarField.flags(field, (f.optional() ? 0 : 1) | (f.nullable() ? 2 : 0));
+        Json.JsonScalarField.child(field, -1);
         long min = Long.MIN_VALUE, max = Long.MAX_VALUE;
         var width = c.integer();
         if (width != null && f.kind() == Field.Kind.INT64) {
@@ -90,7 +94,10 @@ public final class JsonPlan implements AutoCloseable {
           Json.JsonScalarField.maximum_length(field, length.max());
         }
       }
-      JsonSvm.checkStatus(Json.plan_create((VoidPointer) fields, schema.size(), 1 << 20, handle));
+      VoidPointer root = (VoidPointer) fields.add(schema.size() * Json.JsonScalarField.SIZE);
+      Json.JsonRecordPlan.field_count(root, schema.size());
+      JsonSvm.checkStatus(
+          Json.plan_create(root, 1, (VoidPointer) fields, schema.size(), 1 << 20, handle));
       return new JsonPlan(schema, handle);
     } catch (RuntimeException | Error failure) {
       Json.plan_release(handle);
