@@ -35,6 +35,12 @@ class PublicationTest(unittest.TestCase):
                     expected.update(('org.graalvm.sdk:nativeimage', 'org.graalvm.sdk:word'))
                 if module == 'protobuf-buffa':
                     expected.update(('dev.elide:truffledata-protobuf-runtime', 'dev.elide:truffledata-protobuf-buffa-bindings'))
+                if module in ('json', 'json-bindings'):
+                    expected.update(('org.graalvm.sdk:nativeimage', 'org.graalvm.sdk:word'))
+                if module == 'json':
+                    expected.add('dev.elide:truffledata-json-bindings')
+                if module == 'json-jvm':
+                    expected.update(('dev.elide:truffledata-json', 'dev.elide:truffledata-json-bindings'))
                 if module == 'jdbc-sqlite':
                     expected.update(('dev.elide:truffledata-jdbc', 'org.xerial:sqlite-jdbc'))
                 if module in ('jdbc-mysql', 'jdbc-postgresql'):
@@ -71,6 +77,33 @@ class PublicationTest(unittest.TestCase):
                     with zipfile.ZipFile(str(prefix) + '.jar') as jar:
                         self.assertIn('dev/elide/truffledata/buffa/generated/Buffa.class', jar.namelist())
                         self.assertIn('dev/elide/truffledata/buffa/generated/BuffaFFM.class', jar.namelist())
+                if module.startswith('json'):
+                    with zipfile.ZipFile(str(prefix) + '.jar') as jar:
+                        names = {n for n in jar.namelist() if not n.endswith('/')}
+                    myna = {n for n in names if n.startswith('dev/elide/myna/')}
+                    generated = {n for n in names if n.startswith('dev/elide/truffledata/json/generated/')}
+                    backend = {n for n in names if n.startswith('dev/elide/truffledata/json/') and n not in generated}
+                    jvm = {'dev/elide/truffledata/json/JsonJvm.class', 'dev/elide/truffledata/json/SegmentValueTape.class'}
+                    if module == 'json-bindings':
+                        # Generated bindings travel with the exact Myna value ABI they were generated against.
+                        self.assertIn('dev/elide/truffledata/json/generated/Json.class', names)
+                        self.assertIn('dev/elide/truffledata/json/generated/JsonFFM.class', names)
+                        self.assertIn('dev/elide/myna/values/ValueTape.class', names)
+                        self.assertIn('META-INF/native-image/dev.elide.myna/dev.elide.truffledata.json.generated.Json/native-image.properties', names)
+                        self.assertFalse(backend)
+                    else:
+                        self.assertFalse(myna)
+                        self.assertFalse(generated)
+                    if module == 'json':
+                        # Static images take this jar: the FFM backend must stay out of it.
+                        self.assertIn('dev/elide/truffledata/json/JsonSvm.class', names)
+                        self.assertIn('dev/elide/truffledata/json/JsonValue.class', names)
+                        self.assertFalse(jvm & names)
+                    if module == 'json-jvm':
+                        self.assertTrue(jvm <= names)
+                        self.assertNotIn('dev/elide/truffledata/json/JsonSvm.class', names)
+                if module == 'json':
+                    self.assertTrue(Path(str(prefix) + '-linux-x86_64.a').read_bytes().startswith(b'!<arch>\n'))
                 for path in (directory / version).iterdir():
                     if path.suffix in ('.pom', '.jar'):
                         self.assertEqual(Path(str(path) + '.sha256').read_text().strip(), hashlib.sha256(path.read_bytes()).hexdigest())

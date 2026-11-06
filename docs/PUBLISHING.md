@@ -1,6 +1,6 @@
 # Maven publishing
 
-Version 0.7.0 publishes nine thin libraries and a dependency-management BOM, with source jars and POMs. The protobuf runtime can now be consumed without protobuf-java. Experimental JSON modules remain source-only.
+The release publishes twelve thin libraries and a dependency-management BOM, with source jars and POMs. The protobuf runtime can be consumed without protobuf-java. Version 0.7.0 shipped the first nine libraries; the three JSON artifacts publish from the next release, which also adds them to the BOM.
 
 | Coordinate | Contents |
 | --- | --- |
@@ -11,6 +11,9 @@ Version 0.7.0 publishes nine thin libraries and a dependency-management BOM, wit
 | `dev.elide:truffledata-jdbc-postgresql:<version>` | pgJDBC integration; depends on JDBC, core and postgresql |
 | `dev.elide:truffledata-protobuf-buffa:<version>` | Optional native protobuf decoder and typed views; includes Linux x86-64 native attachments |
 | `dev.elide:truffledata-protobuf-buffa-bindings:<version>` | Generated Myna bindings for JVM FFM and static SVM |
+| `dev.elide:truffledata-json:<version>` | Native simdjson JSON values, export, snapshots and typed plans, with the static SVM backend; includes Linux x86-64 native attachments |
+| `dev.elide:truffledata-json-bindings:<version>` | Generated Myna JSON bindings and the Myna value ABI runtime they were generated against |
+| `dev.elide:truffledata-json-jvm:<version>` | JVM FFM backend (`JsonJvm`); depends on truffledata-json. Keep it out of native-image classpaths |
 | `dev.elide:truffledata-bom:<version>` | POM-only dependency management for the tested libraries, drivers and runtime |
 | `dev.elide:truffledata-protobuf-runtime:<version>` | Stock-free plans, codecs, runtime descriptor compilation and generated-record support; core, Gson and Truffle dependencies |
 | `dev.elide:truffledata-protobuf:<version>` | Optional Message/descriptor compatibility bridge and build-time contract generator; depends on protobuf-runtime, protobuf-java and protobuf-java-util |
@@ -60,7 +63,7 @@ dependencies {
 }
 ```
 
-For Maven, declare `https://maven.elide.dev` in `<repositories>` and the same coordinates in `<dependencies>`. Published POMs also declare the fork repository; Gradle and Bazel consumers must explicitly configure it. For Bazel, add the two repositories and desired coordinates to `maven.install`, then repin. Use core alone if neither adapter is needed. The release contains nine libraries and the BOM. Publishing verifies public artifact bytes and metadata; isolated consumers check Maven resolution and JVM/static SVM execution. The staging examples can reproduce that version locally. Choose a new version for the next upload: published versions are immutable.
+For Maven, declare `https://maven.elide.dev` in `<repositories>` and the same coordinates in `<dependencies>`. Published POMs also declare the fork repository; Gradle and Bazel consumers must explicitly configure it. For Bazel, add the two repositories and desired coordinates to `maven.install`, then repin. Use core alone if neither adapter is needed. The release contains twelve libraries and the BOM. Publishing verifies public artifact bytes and metadata; isolated consumers check Maven resolution and JVM/static SVM execution. The staging examples can reproduce that version locally. Choose a new version for the next upload: published versions are immutable.
 
 
 ## BOM and consumer acceptance
@@ -108,4 +111,36 @@ No native library is automatically extracted or loaded. JVM native use requires
 using publication jars and the published shared-library attachment. The explicit
 `//tools/release:buffa_native_test` links the publication's static archive into SVM and
 runs the same consumer. Both release publishing and native CI require this static check.
-The publisher includes all nine Java libraries and the BOM, plus Buffa native attachments.
+## JSON native distribution
+
+The JSON backend publishes as three artifacts, all managed by the BOM:
+
+- `truffledata-json`: the shared API (`JsonMessage`, `JsonValue`, `JavaSink`,
+  snapshots, typed plans) and the static SVM backend `JsonSvm`.
+- `truffledata-json-bindings`: the generated Myna bindings and Myna's value ABI classes
+  (`dev.elide.myna.values`), pinned to the same Myna source as the native library. Myna is
+  not published separately, and the bindings are only valid against that exact value ABI.
+- `truffledata-json-jvm`: the JVM FFM backend `JsonJvm`. It is a separate artifact because
+  static images link the parser directly and must not carry the FFM backend; this mirrors
+  the source split between `//json` and `//json:jvm`. JVM applications add it explicitly.
+
+`truffledata-json` carries the native attachments, each with the normal checksums:
+
+| Classifier | Extension | Use |
+|---|---|---|
+| `linux-x86_64` | `so` | Explicit JVM FFM loading through `JsonJvm.open(Path)` |
+| `linux-x86_64` | `a` | Static linking into an SVM executable (decoder, simdjson and C ABI in one archive) |
+
+For a standalone native-image build, stage the archive as `libtruffledata_json.a`, add
+its directory to `-H:CLibraryPath`, and link libc++ (`-lc++ -lc++abi`). No native-image
+feature is required. Keep the Java jars and native attachments from the same release: both
+backends verify the generated ABI fingerprint before the first decode. Nothing is extracted
+or loaded automatically; JVM use requires `--enable-native-access=ALL-UNNAMED`.
+
+`//tools/release:json_consumer` decodes through `JsonJvm` using only publication jars and
+the published shared library, then reads members and exports through `JavaSink`. The
+explicit `//tools/release:json_native_test` links the publication's static archive into SVM
+and runs the same consumer through `JsonSvm`, without `truffledata-json-jvm` on the image
+classpath.
+
+The publisher includes all twelve Java libraries and the BOM, plus Buffa and JSON native attachments.

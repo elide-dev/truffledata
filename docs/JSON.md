@@ -8,8 +8,10 @@ immutable heap storage. Known-schema scalar records decode into fixed native slo
 instead. Native details and ABI notes are in [`json/native/README.md`](../json/native/README.md);
 the delivery plan is [`JSON_PLAN.md`](../JSON_PLAN.md).
 
-This module is not yet published as a Maven artifact. Build it from source with
-`//json:json` (shared API, SVM backend, typed plans) and `//json:jvm` (FFM backend).
+The module publishes (from the release after 0.7.0) as `dev.elide:truffledata-json`
+(`//json:json`: shared API, SVM backend, typed plans, plus Linux x86-64 `.so`/`.a`
+attachments), `truffledata-json-jvm` (`//json:jvm`: FFM backend) and
+`truffledata-json-bindings`; see [publishing](PUBLISHING.md#json-native-distribution).
 
 ```java
 try (JsonDecoder decoder = JsonJvm.open(libraryPath);

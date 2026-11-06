@@ -71,7 +71,9 @@ See [representation and compilation guarantees](docs/TRUFFLE.md),
 | `dev.elide:truffledata-protobuf` | Protobuf contracts, Java codec, runtime schemas and generated getters |
 | `dev.elide:truffledata-protobuf-buffa` | Optional native parsing and borrowed typed views |
 | `dev.elide:truffledata-protobuf-buffa-bindings` | Myna bindings, pulled in by the Buffa adapter |
-| `dev.elide:truffledata-json` (unreleased) | Native simdjson JSON values, export, snapshots and typed plans; build `//json` from source |
+| `dev.elide:truffledata-json` | Native simdjson JSON values, export, snapshots, typed plans and the static SVM backend |
+| `dev.elide:truffledata-json-jvm` | JVM FFM backend for JSON; keep it off native-image classpaths |
+| `dev.elide:truffledata-json-bindings` | Myna JSON bindings and value ABI, pulled in by the JSON adapter |
 | `dev.elide:truffledata-bom` | Aligned libraries, drivers and runtime dependencies |
 
 The runtime baseline is **Java 25** and **Elide GraalVM `25.5.5-elide.24`**.
