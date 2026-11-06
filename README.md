@@ -36,10 +36,11 @@ plans SQL. TruffleData neither parses SQL nor translates guest callbacks into qu
 flowchart LR
     JDBC["JDBC results"] --> Adapt["Adapters + contracts"]
     Proto["Protobuf messages / binary / text"] --> Adapt
+    Json["JSON text (simdjson)"] --> Adapt
     Objects["Objects + sequences"] --> Adapt
     Schema["Build-time or runtime schema"] --> Adapt
     Adapt --> Owned["Immutable batches / static rows"]
-    Adapt --> Borrowed["Scoped Buffa views"]
+    Adapt --> Borrowed["Scoped Buffa and JSON views"]
     Adapt --> Dynamic["Live dynamic records"]
     Owned --> Access["Interop / DataLibrary / generated getters"]
     Borrowed --> Access
@@ -53,9 +54,10 @@ views enforce ownership, thread confinement, and lifetime. Java null stays at an
 ingestion boundaries; present null and missing fields have distinct representations.
 
 Use the JVM or Native Image. The optional Myna/Buffa backend supports JVM FFM and
-static SVM linkage, with Java fallback. Prebuilt native attachments target Linux x86-64.
-See [representation and compilation guarantees](docs/TRUFFLE.md) and
-[ownership and native setup](docs/BUFFA.md).
+static SVM linkage, with Java fallback. The unreleased simdjson JSON backend supports
+the same linkage without a Java fallback. Prebuilt native attachments target Linux x86-64.
+See [representation and compilation guarantees](docs/TRUFFLE.md),
+[ownership and native setup](docs/BUFFA.md), and the [JSON backend](docs/JSON.md).
 
 ## Choose an artifact
 
@@ -69,6 +71,7 @@ See [representation and compilation guarantees](docs/TRUFFLE.md) and
 | `dev.elide:truffledata-protobuf` | Protobuf contracts, Java codec, runtime schemas and generated getters |
 | `dev.elide:truffledata-protobuf-buffa` | Optional native parsing and borrowed typed views |
 | `dev.elide:truffledata-protobuf-buffa-bindings` | Myna bindings, pulled in by the Buffa adapter |
+| `dev.elide:truffledata-json` (unreleased) | Native simdjson JSON values, export, snapshots and typed plans; build `//json` from source |
 | `dev.elide:truffledata-bom` | Aligned libraries, drivers and runtime dependencies |
 
 The runtime baseline is **Java 25** and **Elide GraalVM `25.5.5-elide.24`**.
@@ -236,6 +239,7 @@ The internal `DataLibrary` is for cooperating implementations. `ReadLongNode` pr
 | `DynamicRecord` | Live `DynamicObject` view; cached shape-aware access and validation of mutable values |
 | `ProtoPlan` / `ProtoRow` | Lossless protobuf contracts, separate presence, compact scalars and generated access |
 | Buffa `TypedRow` | Scoped borrowed typed views; inline small integer records and borrowed bytes |
+| `JsonMessage` / `JsonSnapshot` | Scoped native JSON index or its immutable heap copy; ordered members, exact number tokens |
 | `DataArray` | Sequences without a column schema |
 
 `DataNull` is the interop null object; `Missing` is an internal presence marker.
@@ -243,8 +247,9 @@ Missing fields raise the appropriate interop access error. `ExactNumber` preserv
 unsigned 64-bit integers and exact decimal values without silently rounding.
 
 LOBs, vendor-specific JDBC values, dates/times and arbitrary host objects require
-explicit adapter policies. Unsupported objects are rejected. RPC execution and general
-CSV/JSON adapters remain extension work; protobuf text/JSON parsing is supported.
+explicit adapter policies. Unsupported objects are rejected. RPC execution and CSV
+adapters remain extension work; protobuf text/JSON parsing is supported, and general
+JSON is in development ([JSON backend](docs/JSON.md)).
 
 ## Build and verify
 
@@ -279,6 +284,7 @@ arbitrary downstream guest code or every deployment configuration. See [Truffle 
 | --- | --- |
 | [Contracts and samples](docs/CONTRACTS.md) | Schemas, nullity, protobuf presence, generated access and integration examples |
 | [Myna/Buffa](docs/BUFFA.md) | Native parsing, borrowed views, ownership, JVM and SVM setup |
+| [JSON](docs/JSON.md) | simdjson backend, ownership, number policy, interop and embedder export |
 | [Truffle guarantees](docs/TRUFFLE.md) | Specialization, boundaries, compilation and allocation gates |
 | [Comparison benchmarks](docs/COMPARISON_BENCHMARKS.md) | Raw results, charts, caveats and reproduction |
 | [Continuous benchmarks](docs/BENCHMARKS.md) | CodSpeed simulation cases and methodology |

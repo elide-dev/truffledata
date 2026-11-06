@@ -1,156 +1,127 @@
-# Native JSON decoder foundation
+# Native JSON decoder
 
-The initial C++ decoder traverses simdjson On-Demand directly into Myna ABI v3,
-without an intermediate DOM. It accepts all root kinds, rejects decoded duplicate
-keys, validates number grammar without restricting numeric range, and retains raw
-string/key spellings alongside the index. Every field is visited before publication.
+The C++ decoder traverses simdjson 5.1.1 On-Demand directly into a Myna ABI v3
+value index, without an intermediate DOM. Typed plans write fixed scalar slots
+instead. Both sit behind one versioned C ABI, `json.seam` (application ABI 4),
+which generates the direct SVM `@CFunction` bindings and JVM FFM handles. The Java
+owners, guest interop, export and snapshot contracts are described in
+[docs/JSON.md](../../docs/JSON.md).
 
-Each document retains its input: either a padded copy, or caller memory adopted
-through `td_json_decode_adopted` when the caller proves `SIMDJSON_PADDING` readable
-bytes past the logical length (otherwise the input is copied once and
-`copied_input_bytes` says so). Parsers are leased from a bounded process-wide pool
-(at most 8 idle) and returned before decode completes: unescaped strings longer
-than 16 bytes reference the retained input region, escaped strings are copied into
-message-owned bytes, and short strings are inline, so no retained document depends
-on parser scratch. The document cannot be copied or reparsed. Returned descriptors
-and lexical views are valid only while the document lives.
+## Generic documents
 
-Numbers become I64, U64 or F64 nodes when exactly representable (`-0` is F64
-negative zero); tokens simdjson cannot represent, such as `1E400`, remain DECIMAL
-references to the input. Every node has a packed lexical span (`offset << 32 |
-length`, into region 1, the retained input): quotes and escapes are preserved for
-strings and keys, numbers keep their exact spelling, and containers, booleans and
-null carry zero. `JsonResult.lexical`/`lexical_count` publish that array (ABI 4).
+The decoder accepts every root kind, rejects decoded duplicate keys and trailing
+input, and validates number grammar without restricting numeric range. Every value
+is visited before a result is published.
 
-Run `bazel test //json/native:test //json/native:api_test //json:bindings`. Tests check malformed values, trailing input,
-escaped duplicate keys, exact huge exponents, decoded Unicode, raw lexical text,
-independent documents, container offsets, and node/text/depth limits. Allocation
-checks inject failure at every index allocation and verify cleanup, including
-constructor failure and invalid input.
+Each document retains its input. `td_json_decode` copies it once into padded
+storage. `td_json_decode_adopted` parses caller memory in place when `capacity`
+leaves `SIMDJSON_PADDING` readable bytes past `length`; otherwise it copies once
+and `copied_input_bytes` equals `length`. The library never frees adopted memory;
+the caller keeps it valid until `td_json_release` returns.
 
-`storage_limits` caps logical input bytes before copying and index allocations
-before requesting memory. Myna nodes, regions, lexical spans, traversal storage,
-and duplicate-key sets share the index budget. Reallocation overlap contributes
-to the peak. Statistics distinguish copied/padded input, retained/peak requested
-index bytes, index allocation count, and the parser's public input capacity.
-These counts exclude allocator metadata. The parser owns its scratch allocations;
-its input capacity is explicitly not presented as scratch bytes.
+Parsers are leased from a bounded process-wide pool (at most eight idle) and
+returned before decode completes. `get_string()` output is treated as parser
+scratch: unescaped strings longer than 16 bytes reference the retained input
+region, escaped strings are copied into message-owned bytes, and short strings are
+inline. No retained document depends on parser scratch, so parser reuse cannot
+overwrite a live document. A document cannot be copied or reparsed.
 
-Run the native memory checks under both sanitizers with:
+Numbers are classified once:
 
-```sh
-bazel test //json/native:test //json/native:api_test --copt=-fsanitize=address,undefined \
-  --copt=-fno-sanitize-recover=all --linkopt=-fsanitize=address,undefined
-```
+| Token | Node |
+| --- | --- |
+| Integer within `int64` | I64 |
+| `-0` | F64 `-0.0` (simdjson folds it into integer zero) |
+| Integer above `int64` within `uint64` | U64 |
+| Other token with a finite `get_double()` | F64, simdjson's nearest binary64 |
+| Anything else, such as `1E400` | DECIMAL, referencing the token in the input |
 
-Both the adapter and simdjson are instrumented by this invocation.
+Every node has a packed lexical span, `offset << 32 | length`, into region 1, the
+retained input. Strings and keys keep their quotes and escapes, numbers keep their
+exact spelling, and containers, booleans and null carry zero.
+`JsonResult.lexical`/`lexical_count` publish that array, one entry per node.
 
-This is an internal foundation, not yet a published Java API. Remaining work includes
-parser scratch accounting,
-native input leases, JVM scoped views, snapshots, typed fixed slots, guest interop,
-and compiled access/allocation gates.
-Myna's current node/text/depth limits do not constitute a total native-memory budget.
+## Limits and accounting
 
+`storage_limits` caps logical input bytes before copying, and index allocations
+before requesting memory. Myna nodes, regions, lexical spans, traversal storage and
+duplicate-key sets share the index budget, and reallocation overlap counts toward
+the peak. Myna's node, text and depth limits apply separately; requested depth is
+at most 128.
+
+`JsonResult` reports copied and padded input bytes, retained and peak requested
+index bytes, the index allocation count, the fixed control allocation, and the
+parser's public input capacity. Counts exclude allocator metadata. The parser owns
+its scratch allocations; they are not counted, and its input capacity is not
+presented as scratch. These limits are not a total native-memory budget.
 
 ## Native interface
 
-`json.seam` defines the versioned C layout and generates JVM FFM and direct SVM
-bindings. `api.h` documents status codes and caller obligations. Decode publishes
-an owning `JsonResult` only after validation, including a pointer to the immutable
-Myna descriptor. Reads need no further native calls. The caller must validate the
-binding fingerprint and Myna view version before reading their layouts.
+`api.h` documents status codes and caller obligations. Decode publishes an owning
+`JsonResult` only after validation, including a pointer to the immutable Myna
+descriptor; reads need no further native calls. Callers must check the binding
+fingerprint and Myna view version before reading those layouts.
 
 Initialize results to zero, never copy their ownership, and release each result on
-the same storage. Releasing that storage again is harmless. A live result cannot
-be overwritten by another decode. Input can be discarded after decode returns;
-the result retains its own padded copy, index, and parser scratch. Returned raw
-views are invalid after release. Thread confinement and invalidation checks belong
-to the forthcoming Java owner, not the raw C pointer interface.
+the same storage; releasing it again is harmless. A live result cannot be
+overwritten by another decode. With `td_json_decode`, the input can be discarded
+when decode returns. Returned views are invalid after release. Failures map to
+argument, limit, allocation, syntax or internal-error statuses; exceptions do not
+cross C. Every import uses normal VM transitions (`native_leaf=false`) except the
+fingerprint query. Thread confinement and invalidation belong to the Java owners,
+not to this pointer interface.
 
-The ABI currently accepts a maximum requested nesting depth of 128. Failures map
-to argument, limit, allocation, syntax, or internal-error statuses; exceptions do
-not cross C. Statistics additionally report the fixed control allocation separately
-from input and index storage. Parser scratch remains excluded from byte totals.
-Native ownership/error tests pass under ASan/UBSan. Real consumer tests run with
-`bazel test //json/tests:native_test //json/tests:jvm`: the first statically links
-the parser into SVM and reads through Myna's `NativeValueTape`; the second calls the
-shared library through generated JVM FFM handles. Both check the binding fingerprint,
-retained input lifetime, exact numeric text, and release behavior. These are ABI
-integration tests, not yet scoped guest/JIT acceptance or performance comparisons.
-The existing native CI job explicitly includes the SVM target; JVM acceptance runs
-with the ordinary `//...` test suite.
+## Typed scalar plans
 
+`typed.h` compiles reusable closed-record plans and populates slots directly,
+without a generic Myna tape. Plans copy their field names under a name-byte limit
+and support up to 64 fields with separate presence and null masks,
+required/nullable contracts, signed integer ranges, unsigned maxima, decoded UTF-8
+byte limits, UTF-16/code-point length bounds, and exact binary32 representability.
+Integer kinds require integer JSON syntax; float64 uses checked finite binary64
+conversion. Arbitrary-precision numbers belong on the generic path.
 
-## Initial scoped SVM API
+Every field is consumed and validated. Escaped duplicates, unknown fields and
+trailing input are rejected. Typed strings retain their raw spelling. Results
+retain their own input and outlive their plans; a plan must stay alive only during
+decoding. Index accounting covers the single slot buffer; parser scratch and plan
+construction are separate. The ABI exposes plan creation/release and typed
+decode/release, with 80-byte field descriptors and 40-byte slots, published
+without copying a second slot array.
 
-`JsonSvm.decode(byte[])` copies UTF-8 input into a retained native document and
-returns a thread-confined `JsonMessage`. Its root and descendant `JsonValue` views
-check the message before each native read. Close is idempotent on the owning thread;
-cross-thread access and closure fail. Exact number text is preserved, including
-exponents beyond bounded decimal representations. The SVM integration test covers
-retained children, input mutation, thread rejection, and invalidation after close.
-The API compiles with the repository's NullAway/JSpecify and Truffle processors.
+The Java side is `JsonPlan`, `JsonRecord` and `JsonAccess` on SVM. Plans are
+scalar-only today; nested and repeated records are in progress.
 
-This initial API uses ordinary lifetime checks; compiled guest specialization and
-assumption-based guards still need their own tests. Array lookup currently walks
-child subtrees and should not be treated as constant-time random access. Snapshots,
-interop exports, configurable Java limits, and the JVM scoped backend remain pending.
+Character-length contracts use the shared `//bazel:unicode` simdutf library, also
+used by Rust Buffa conversion. Counting decoded UTF-8 needs no intermediate UTF-16
+buffer or Java string.
 
-## Typed scalar foundation
+## Tests
 
-`typed.h` adds reusable closed-record scalar plans and directly populated slots.
-It does not construct a generic Myna tape. Plans own their field names and support
-up to 64 fields with separate presence/null masks, required/nullable contracts,
-signed integer ranges, unsigned maxima, decoded UTF-8 byte limits, UTF-16/code-point
-length bounds, and exact binary32 representability. Integer
-kinds require integer JSON syntax; float64 explicitly uses checked finite binary64
-conversion. The generic path remains the lossless arbitrary-number route.
+```sh
+bazel test //json/native:test //json/native:api_test //json/native:typed_test //json/native:unicode_test
+bazel test //json/tests:jvm          # JVM FFM backend
+bazel test //json/tests:native_test  # SVM, manual, Linux x86-64 via RBE
+```
 
-Every accepted field is consumed and validated, escaped duplicates and unknown
-fields are rejected, and trailing input is rejected. Typed strings retain their
-raw lexical spelling. Results retain their own input/parser independently of the
-plan. Index accounting covers the single slot-buffer allocation; parser scratch
-and plan construction allocations are separate. The caller must keep a plan alive
-only during decoding, not during later result access.
+Native tests cover malformed values, trailing input, escaped duplicate keys, exact
+huge exponents, number classification, decoded Unicode, raw lexical text, adopted
+and copied input, independent documents, container offsets, node/text/depth
+limits, integer and length boundaries, all 64 presence bits, and result/plan
+release order. Allocation checks inject failure at every index allocation,
+including the adopted path, constructor failure and invalid input. Run them under
+both sanitizers, which instrument the adapter and simdjson:
 
-`//json/native:typed_test` exercises these contracts, integer boundaries, all 64
-presence bits, resource limits, and retained lifetimes; it also passes ASan/UBSan.
-JSON application ABI 3 exposes reusable plan creation/release and typed decode/release,
-with Myna-generated 80-byte field descriptors and 40-byte scalar slots. The result
-publishes masks, slot count, and allocation metrics without copying a second slot
-array. Plans copy field names under a name-byte limit. Completed results can outlive
-their plans. These operations explicitly retain normal VM transitions.
+```sh
+bazel test //json/native:test //json/native:api_test //json/native:typed_test //json/native:unicode_test \
+  --copt=-fsanitize=address,undefined --copt=-fno-sanitize-recover=all \
+  --linkopt=-fsanitize=address,undefined
+```
 
-Native ABI tests and ASan/UBSan cover malformed schemas, bounds, ownership, result
-reuse, and release order. Actual SVM acceptance calls generated typed bindings,
-closes the plan, and reads a slot through generated direct accessors. Core Java schemas now compile through `JsonScalarPlan.compile(schema)` into a
-reusable thread-confined SVM plan. `plan.decode(utf8)` returns a scoped
-`JsonScalarRecord`: primitive getters read native slots directly, while strings
-and unsigned `BigInteger` values materialize on request. Results outlive their
-plans and reject cross-thread and post-close reads. Unsupported nested, repeated,
-and general exact/decimal contracts are rejected explicitly. Generated
-schema-specific getters, JVM typed views, and performance comparisons remain
-outstanding.
-
-The shared `//bazel:unicode` simdutf library serves Rust Buffa conversion and C++
-JSON contracts. Counting decoded UTF-8 requires no intermediate UTF-16 buffer or
-Java string. `//json/native:unicode_test` links both consumers and exercises raw
-and escaped supplementary characters, long strings, length boundaries, and
-float narrowing under ASan/UBSan. Typed slot allocation remains one buffer; this
-is not a claim about parser scratch or total process allocation.
-
-## Compiled scalar reads
-
-`//json/tests:native_test` includes a Truffle runtime and enables both Native Image
-JIT blocklist checks. Its compiled read gate alternates two native records and
-checks long/double/boolean values with argument-supplied and compilation-final
-record arrays. It requires observed compiled execution, treats compiler performance
-warnings as errors, limits Graal graphs to 10,000 nodes and ASTs to 192 nodes, and
-enforces at most 0.05 Java bytes per three-field read iteration. Both compiled
-paths must reject reads after close; a sibling remains valid.
-
-The initial SVM gate measured 0.000032 Java bytes per iteration (32 bytes over
-one million iterations) on each path. This measures retained primitive reads,
-not parse-time allocation, native memory, interpreter throughput, or parity with
-a stock implementation. Strings and exact-number materialization are outside
-this primitive allocation gate.
+The SVM target links the parser statically and adds compiled-read gates: typed
+primitive reads, generic member reads, interop reads and export loops each require
+observed compiled execution with performance warnings as errors, Graal graphs of at
+most 10,000 nodes, ASTs of at most 192 nodes, and at most 0.05 Java bytes per
+iteration. The typed and generic gates also require compiled reads to fail after
+close while a sibling stays valid. These measure retained reads, not parse-time
+allocation, native memory, interpreter throughput or parity with a stock parser.
