@@ -11,9 +11,9 @@ import dev.elide.truffledata.ReadBooleanNode;
 import dev.elide.truffledata.ReadDoubleNode;
 import dev.elide.truffledata.ReadLongNode;
 import dev.elide.truffledata.Schema;
-import dev.elide.truffledata.json.JsonScalarAccess;
-import dev.elide.truffledata.json.JsonScalarPlan;
-import dev.elide.truffledata.json.JsonScalarRecord;
+import dev.elide.truffledata.json.JsonAccess;
+import dev.elide.truffledata.json.JsonPlan;
+import dev.elide.truffledata.json.JsonRecord;
 import java.nio.charset.StandardCharsets;
 import org.graalvm.polyglot.Context;
 
@@ -36,7 +36,7 @@ final class CompiledReads {
                 .option("compiler.TreatPerformanceWarningsAsErrors", "all")
                 .option("compiler.MaximumGraalGraphSize", "10000")
                 .build();
-        var plan = JsonScalarPlan.compile(schema);
+        var plan = JsonPlan.compile(schema);
         var first =
             plan.decode("{\"n\":1000,\"d\":1.5,\"b\":true}".getBytes(StandardCharsets.UTF_8));
         var second =
@@ -45,7 +45,7 @@ final class CompiledReads {
       context.enter();
       try {
         plan.close();
-        var rows = new JsonScalarRecord[] {first, second};
+        var rows = new JsonRecord[] {first, second};
         var data = DataLibrary.factory().getUncached();
         try {
           check(
@@ -114,12 +114,12 @@ final class CompiledReads {
                   Field.integer("n", (i & 1) == 0 ? 32 : 64, true, false, false),
                   new Field("d", Field.Kind.FLOAT64, false, false),
                   new Field("b", Field.Kind.BOOLEAN, false, false));
-          try (var nextPlan = JsonScalarPlan.compile(nextSchema);
+          try (var nextPlan = JsonPlan.compile(nextSchema);
               var next =
                   nextPlan.decode(
                       ("{\"n\":" + (1000 + i) + ",\"d\":1.5,\"b\":true}")
                           .getBytes(StandardCharsets.UTF_8))) {
-            var nextRows = new JsonScalarRecord[] {next, next};
+            var nextRows = new JsonRecord[] {next, next};
             churn.compiled = false;
             for (int warmup = 0; warmup < 200 && !churn.compiled; warmup++)
               churnTarget.call(nextRows, 100000);
@@ -359,17 +359,17 @@ final class CompiledReads {
 
   private static final class Reads extends RootNode {
     @CompilerDirectives.CompilationFinal(dimensions = 1)
-    final JsonScalarRecord @org.jspecify.annotations.Nullable [] constant;
+    final JsonRecord @org.jspecify.annotations.Nullable [] constant;
 
     boolean compiled;
     final boolean specialized, shared;
     @Child private ReadLongNode sharedLong = ReadLongNode.create();
     @Child private ReadDoubleNode sharedDouble = ReadDoubleNode.create();
     @Child private ReadBooleanNode sharedBoolean = ReadBooleanNode.create();
-    final JsonScalarAccess n, d, b;
+    final JsonAccess n, d, b;
 
     Reads(
-        JsonScalarRecord @org.jspecify.annotations.Nullable [] constant,
+        JsonRecord @org.jspecify.annotations.Nullable [] constant,
         Schema schema,
         boolean specialized,
         boolean shared) {
@@ -377,14 +377,14 @@ final class CompiledReads {
       this.constant = constant;
       this.specialized = specialized;
       this.shared = shared;
-      n = new JsonScalarAccess(schema, 0);
-      d = new JsonScalarAccess(schema, 1);
-      b = new JsonScalarAccess(schema, 2);
+      n = new JsonAccess(schema, 0);
+      d = new JsonAccess(schema, 1);
+      b = new JsonAccess(schema, 2);
     }
 
     @Override
     public Object execute(VirtualFrame frame) {
-      var rows = constant == null ? (JsonScalarRecord[]) frame.getArguments()[0] : constant;
+      var rows = constant == null ? (JsonRecord[]) frame.getArguments()[0] : constant;
       int count = (Integer) frame.getArguments()[1];
       long sum = 0;
       for (int i = 0; i < count; i++) {

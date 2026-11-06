@@ -8,7 +8,7 @@ import dev.elide.truffledata.Schema;
  * Immutable schema/ordinal specialization. Keep as a final AST field to expose validated facts to
  * partial evaluation. Contains no native addresses and can be prepared at image build time.
  */
-public final class JsonScalarAccess {
+public final class JsonAccess {
   final Schema schema;
   final int index;
   final Field.Kind kind;
@@ -16,7 +16,7 @@ public final class JsonScalarAccess {
   final boolean nullable;
 
   @TruffleBoundary
-  public JsonScalarAccess(Schema schema, int index) {
+  public JsonAccess(Schema schema, int index) {
     Field field = schema.field(index);
     if (field.kind() != Field.Kind.INT64
         && field.kind() != Field.Kind.FLOAT64
@@ -30,17 +30,17 @@ public final class JsonScalarAccess {
     this.nullable = field.nullable();
   }
 
-  public long longValue(JsonScalarRecord row) {
+  public long longValue(JsonRecord row) {
     requireKind(Field.Kind.INT64);
     return row.bits(this);
   }
 
-  public double doubleValue(JsonScalarRecord row) {
+  public double doubleValue(JsonRecord row) {
     requireKind(Field.Kind.FLOAT64);
     return Double.longBitsToDouble(row.bits(this));
   }
 
-  public boolean booleanValue(JsonScalarRecord row) {
+  public boolean booleanValue(JsonRecord row) {
     requireKind(Field.Kind.BOOLEAN);
     return row.bits(this) != 0;
   }

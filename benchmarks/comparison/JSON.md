@@ -8,7 +8,7 @@ is needed by this separate JSON executable.
 
 The fixture contains 32 varying UTF-8 objects with shuffled keys and three required
 non-null fields: long, double, boolean. Native simdjson decodes through a reusable
-`JsonScalarPlan`. Stock uses a hand-written Gson streaming decoder from UTF-8 bytes
+`JsonPlan`. Stock uses a hand-written Gson streaming decoder from UTF-8 bytes
 through `InputStreamReader`, producing an owned Java record. It checks duplicate,
 unknown, missing, and trailing fields. This is a valid-input performance fixture,
 not proof of identical malformed-number semantics or general JSON compliance.

@@ -142,7 +142,7 @@ public final class SvmAcceptance {
                     new dev.elide.truffledata.Constraints.Length(
                         1, 1, dev.elide.truffledata.Constraints.LengthUnit.CODE_POINTS))),
             dev.elide.truffledata.Field.integer("u", 64, false, false, false));
-    var plan = dev.elide.truffledata.json.JsonScalarPlan.compile(schema);
+    var plan = dev.elide.truffledata.json.JsonPlan.compile(schema);
     byte[] input =
         "{\"n\":127,\"s\":\"😀\",\"u\":18446744073709551615}".getBytes(StandardCharsets.UTF_8);
     var record = plan.decode(input);
@@ -224,11 +224,11 @@ public final class SvmAcceptance {
         dev.elide.truffledata.Schema.of(
             new dev.elide.truffledata.Field(
                 "n", dev.elide.truffledata.Field.Kind.INT64, true, true));
-    var access = new dev.elide.truffledata.json.JsonScalarAccess(schema, 0);
+    var access = new dev.elide.truffledata.json.JsonAccess(schema, 0);
     var wrong =
-        new dev.elide.truffledata.json.JsonScalarAccess(
+        new dev.elide.truffledata.json.JsonAccess(
             dev.elide.truffledata.Schema.of(dev.elide.truffledata.Field.requiredLong("n")), 0);
-    try (var plan = dev.elide.truffledata.json.JsonScalarPlan.compile(schema)) {
+    try (var plan = dev.elide.truffledata.json.JsonPlan.compile(schema)) {
       for (String input : new String[] {"{}", "{\"n\":null}"}) {
         try (var record = plan.decode(input.getBytes(StandardCharsets.UTF_8))) {
           require(

@@ -12,20 +12,20 @@ import org.graalvm.nativeimage.c.type.VoidPointer;
 import org.graalvm.word.Pointer;
 
 /** Reusable, thread-confined native scalar plan. Results own their storage independently. */
-public final class JsonScalarPlan implements AutoCloseable {
+public final class JsonPlan implements AutoCloseable {
   private final Schema schema;
   private final VoidPointer handle;
   private final Thread thread = Thread.currentThread();
   private boolean open = true;
 
-  private JsonScalarPlan(Schema schema, VoidPointer handle) {
+  private JsonPlan(Schema schema, VoidPointer handle) {
     this.schema = schema;
     this.handle = handle;
   }
 
   /** Compiles a closed scalar schema; unsupported contracts fail before native allocation. */
   @TruffleBoundary
-  public static JsonScalarPlan compile(Schema schema) {
+  public static JsonPlan compile(Schema schema) {
     JsonSvm.requireRuntime();
     if (schema.size() > 64) throw new IllegalArgumentException("JSON scalar field limit");
     var names = new HashSet<String>();
@@ -91,7 +91,7 @@ public final class JsonScalarPlan implements AutoCloseable {
         }
       }
       JsonSvm.checkStatus(Json.plan_create((VoidPointer) fields, schema.size(), 1 << 20, handle));
-      return new JsonScalarPlan(schema, handle);
+      return new JsonPlan(schema, handle);
     } catch (RuntimeException | Error failure) {
       Json.plan_release(handle);
       UnmanagedMemory.free(handle);
@@ -128,7 +128,7 @@ public final class JsonScalarPlan implements AutoCloseable {
   }
 
   @TruffleBoundary
-  public JsonScalarRecord decode(byte[] utf8) {
+  public JsonRecord decode(byte[] utf8) {
     checkThread();
     if (!open) throw new IllegalStateException("JSON plan closed");
     if (utf8.length == 0 || utf8.length > 64 * 1024 * 1024)
@@ -146,7 +146,7 @@ public final class JsonScalarPlan implements AutoCloseable {
                 64 * 1024 * 1024,
                 result));
       }
-      return new JsonScalarRecord(schema, result);
+      return new JsonRecord(schema, result);
     } catch (RuntimeException | Error failure) {
       Json.typed_release(result);
       UnmanagedMemory.free(result);

@@ -14,12 +14,12 @@ import org.graalvm.word.Pointer;
 
 /** Validated scalar slots with allocation-free primitive reads and explicit scoped ownership. */
 @ExportLibrary(DataLibrary.class)
-public final class JsonScalarRecord extends AbstractRow implements AutoCloseable {
+public final class JsonRecord extends AbstractRow implements AutoCloseable {
   private final VoidPointer result;
   private final Thread thread = Thread.currentThread();
   private boolean open = true;
 
-  JsonScalarRecord(Schema schema, VoidPointer result) {
+  JsonRecord(Schema schema, VoidPointer result) {
     super(schema);
     this.result = result;
   }
@@ -49,8 +49,8 @@ public final class JsonScalarRecord extends AbstractRow implements AutoCloseable
     };
   }
 
-  static JsonScalarAccess access(Schema schema, int index) {
-    return new JsonScalarAccess(schema, index);
+  static JsonAccess access(Schema schema, int index) {
+    return new JsonAccess(schema, index);
   }
 
   @ExportMessage
@@ -63,16 +63,16 @@ public final class JsonScalarRecord extends AbstractRow implements AutoCloseable
         },
         limit = "3")
     static long cached(
-        JsonScalarRecord row,
+        JsonRecord row,
         int index,
         @Cached("row.getSchema()") Schema schema,
         @Cached("index") int cachedIndex,
-        @Cached("access(schema, cachedIndex)") JsonScalarAccess binding) {
+        @Cached("access(schema, cachedIndex)") JsonAccess binding) {
       return binding.longValue(row);
     }
 
     @Specialization(replaces = "cached")
-    static long generic(JsonScalarRecord row, int index) throws UnexpectedResultException {
+    static long generic(JsonRecord row, int index) throws UnexpectedResultException {
       Object value = row.read(index);
       if (value instanceof Long result) return result;
       throw new UnexpectedResultException(value);
@@ -89,16 +89,16 @@ public final class JsonScalarRecord extends AbstractRow implements AutoCloseable
         },
         limit = "3")
     static double cached(
-        JsonScalarRecord row,
+        JsonRecord row,
         int index,
         @Cached("row.getSchema()") Schema schema,
         @Cached("index") int cachedIndex,
-        @Cached("access(schema, cachedIndex)") JsonScalarAccess binding) {
+        @Cached("access(schema, cachedIndex)") JsonAccess binding) {
       return binding.doubleValue(row);
     }
 
     @Specialization(replaces = "cached")
-    static double generic(JsonScalarRecord row, int index) throws UnexpectedResultException {
+    static double generic(JsonRecord row, int index) throws UnexpectedResultException {
       Object value = row.read(index);
       if (value instanceof Double result) return result;
       throw new UnexpectedResultException(value);
@@ -115,16 +115,16 @@ public final class JsonScalarRecord extends AbstractRow implements AutoCloseable
         },
         limit = "3")
     static boolean cached(
-        JsonScalarRecord row,
+        JsonRecord row,
         int index,
         @Cached("row.getSchema()") Schema schema,
         @Cached("index") int cachedIndex,
-        @Cached("access(schema, cachedIndex)") JsonScalarAccess binding) {
+        @Cached("access(schema, cachedIndex)") JsonAccess binding) {
       return binding.booleanValue(row);
     }
 
     @Specialization(replaces = "cached")
-    static boolean generic(JsonScalarRecord row, int index) throws UnexpectedResultException {
+    static boolean generic(JsonRecord row, int index) throws UnexpectedResultException {
       Object value = row.read(index);
       if (value instanceof Boolean result) return result;
       throw new UnexpectedResultException(value);
@@ -163,7 +163,7 @@ public final class JsonScalarRecord extends AbstractRow implements AutoCloseable
         ((Pointer) Json.JsonTypedResult.slots(result)).add(index * Json.JsonScalarSlot.SIZE);
   }
 
-  long bits(JsonScalarAccess access) {
+  long bits(JsonAccess access) {
     checkThread();
     if (!open) throw new IllegalStateException("JSON record closed");
     if (descriptor != access.schema)
