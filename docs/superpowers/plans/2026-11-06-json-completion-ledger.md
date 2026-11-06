@@ -28,6 +28,12 @@ Task 10: Ruling: JsonExportNode.execute takes (JsonValue, JsonSink) instead of (
 Task 10: Ruling: an export pins its owner and close() throws while pinned — a sink is arbitrary embedder code and closing mid-walk would free the native tape under the loop — cost if wrong: an embedder must defer close to after export.
 Task 10: Ruling: the outermost export on a confined owner reuses an owner-held container stack (129 slots: root plus the decoder's 128 levels); nested and snapshot exports allocate one — the compiled export gate requires zero walk allocation (measured 3.2E-5 B/export) — cost if wrong: ~1 KiB retained per exported message.
 Task 10: complete (tests: bazel test //json/tests:jvm (27 tests) //json/tests:native_test)
+Execution: Tasks 11–19 run as parallel Opus workers in isolated worktrees (max 3), merged onto feat/json-completion by the orchestrator; workers report rulings and the orchestrator records them here.
+Task 11: Ruling: docs follow the code where it differs from the plan (export signature/stack size, inline owner.check, no public UTF-8 copy outside asTruffleString, snapshots keep regions at original offsets, ConcurrentHashMap array index, adopt() uses JsonLimits.DEFAULT, typed path uses fixed 64 MiB caps) — cost if wrong: doc edits.
+Task 11: complete (commit 6a94025, tests: bazel test //tests:test → https://app.buildbuddy.io/invocation/9c76000e-e14d-4c1d-a248-1d865664a135)
+Task 11 follow-up: Ruling: integral DECIMAL fits BigInteger only up to 4096 integer digits, decided after stripTrailingZeros, and -0 fits no integer type — the docs review found fitsInLong on 1E999999999 would expand 10^999999999 (a hang or OOM driven by guest input), and Truffle's double contract excludes -0 from integer types — cost if wrong: integral DECIMAL values beyond 4096 digits must be read through numberText (commit 6dcf286).
+Task 12: Ruling: PERFORMANCE_REVIEW.md links were renamed, but benchmarks/results/** evidence and the plan keep the old names — retained raw evidence must match what was measured — cost if wrong: text-only follow-up.
+Task 12: complete (commit c6e7abc, tests: bazel test //json/tests:jvm //json/tests:native_test //benchmarks/comparison:json_native_smoke → https://app.buildbuddy.io/invocation/0e998e98-b055-4d15-a003-9ef6bb98ca1a on the integrated branch)
 ## Hand-off state (written 2026-11-06 11:05 PST, branch feat/json-completion)
 
 Tasks 1–8 are complete and committed (see lines above; `git log main..feat/json-completion`).
