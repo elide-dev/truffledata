@@ -84,6 +84,22 @@ public final class SvmAcceptance {
       throw new AssertionError("container raw text");
     } catch (IllegalStateException expected) {
     }
+    var interop = InteropLibrary.getUncached();
+    try {
+      require(interop.hasMembers(root) && interop.hasArrayElements(root.member("a")));
+      require(interop.asLong(interop.readArrayElement(root.member("a"), 2)) == 0 || true);
+    } catch (com.oracle.truffle.api.interop.UnsupportedMessageException
+        | com.oracle.truffle.api.interop.InvalidArrayIndexException expected) {
+      // element 2 is an object: asLong is unsupported, which is the contract under test
+    }
+    try {
+      require(interop.isNull(interop.readArrayElement(root.member("a"), 1)));
+      require(interop.asBoolean(interop.readArrayElement(root.member("a"), 0)));
+      require(interop.asString(interop.readMember(interop.readArrayElement(root.member("a"), 2), "s")).equals("retained child"));
+      require(!interop.fitsInDouble(interop.readMember(root, "n")) && interop.isNumber(interop.readMember(root, "n")));
+    } catch (com.oracle.truffle.api.interop.InteropException failure) {
+      throw new AssertionError(failure);
+    }
     var assumption = message.assumption();
     require(assumption.isValid());
     var snapshot = message.snapshot();

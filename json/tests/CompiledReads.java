@@ -167,7 +167,64 @@ final class CompiledReads {
     } catch (IllegalStateException expected) {
     }
     check(second.root().member("n").longValue() == 2000, "Sibling message survives close");
+    interop(second);
     second.close();
+  }
+
+  /** Guest-style reads through a cached InteropLibrary compile with the same budgets. */
+  private static void interop(dev.elide.truffledata.json.JsonMessage message) {
+    var root = new InteropReads(message.root());
+    var target = root.getCallTarget();
+    for (int i = 0; i < 200 && !root.compiled; i++) target.call(100000);
+    check(root.compiled, "Interop JSON reads must execute compiled code");
+    check(((Long) target.call(1000000)) == 2003000000L, "Interop JSON compiled checksum");
+    check(NodeUtil.countNodes(root) <= 192, "Interop JSON AST budget");
+    var bean =
+        (com.sun.management.ThreadMXBean) java.lang.management.ManagementFactory.getThreadMXBean();
+    bean.setThreadAllocatedMemoryEnabled(true);
+    long thread = Thread.currentThread().threadId();
+    long before = bean.getThreadAllocatedBytes(thread);
+    target.call(1000000);
+    double bytes = (bean.getThreadAllocatedBytes(thread) - before) / 1000000.0;
+    check(bytes >= 0 && bytes <= 0.05, "Interop JSON compiled bytes/read budget: " + bytes);
+    System.out.println("JSON interop compiled=true bytes/read=" + bytes);
+  }
+
+  private static final class InteropReads extends RootNode {
+    private final Object value;
+    @Child private com.oracle.truffle.api.interop.InteropLibrary objects =
+        com.oracle.truffle.api.interop.InteropLibrary.getFactory().createDispatched(3);
+    @Child private com.oracle.truffle.api.interop.InteropLibrary numbers =
+        com.oracle.truffle.api.interop.InteropLibrary.getFactory().createDispatched(3);
+    boolean compiled;
+
+    InteropReads(Object value) {
+      super(TestLanguage.current());
+      this.value = value;
+    }
+
+    @Override
+    public Object execute(VirtualFrame frame) {
+      int count = (Integer) frame.getArguments()[0];
+      long sum = 0;
+      try {
+        for (int i = 0; i < count; i++) {
+          Object n = objects.readMember(value, "n");
+          Object d = objects.readMember(value, "d");
+          Object b = objects.readMember(value, "b");
+          sum +=
+              numbers.asLong(n)
+                  + (long) numbers.asDouble(d)
+                  + (numbers.asBoolean(b) ? 1 : 0)
+                  + (objects.isNull(value) ? 1 : 0);
+        }
+      } catch (com.oracle.truffle.api.interop.InteropException failure) {
+        throw CompilerDirectives.shouldNotReachHere(failure);
+      }
+      if (CompilerDirectives.inInterpreter()) LoopNode.reportLoopCount(this, count);
+      compiled |= CompilerDirectives.inCompiledCode();
+      return sum;
+    }
   }
 
   private static final class GenericReads extends RootNode {

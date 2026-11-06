@@ -19,12 +19,10 @@ data_java_library(
     srcs = [
         "src/main/java/dev/elide/truffledata/json/HeapValueTape.java",
         "src/main/java/dev/elide/truffledata/json/JsonDecoder.java",
-        "src/main/java/dev/elide/truffledata/json/JsonJvm.java",
         "src/main/java/dev/elide/truffledata/json/JsonLimits.java",
         "src/main/java/dev/elide/truffledata/json/JsonMessage.java",
         "src/main/java/dev/elide/truffledata/json/JsonOwner.java",
         "src/main/java/dev/elide/truffledata/json/JsonSnapshot.java",
-        "src/main/java/dev/elide/truffledata/json/SegmentValueTape.java",
         "src/main/java/dev/elide/truffledata/json/SvmValueTape.java",
         "src/main/java/dev/elide/truffledata/json/TapeSource.java",
         "src/main/java/dev/elide/truffledata/json/JsonScalarAccess.java",
@@ -40,6 +38,23 @@ data_java_library(
         "//core",
         "@maven//:org_graalvm_sdk_nativeimage",
         "@maven//:org_graalvm_sdk_word",
+        "@maven//:org_graalvm_truffle_truffle_api",
+        "@myna//:values",
+    ],
+)
+
+# JVM-only FFM backend; kept out of static images, which link the parser directly.
+data_java_library(
+    name = "jvm",
+    srcs = [
+        "src/main/java/dev/elide/truffledata/json/JsonJvm.java",
+        "src/main/java/dev/elide/truffledata/json/SegmentValueTape.java",
+    ],
+    visibility = ["//visibility:public"],
+    deps = [
+        ":bindings",
+        ":json",
+        "//core",
         "@maven//:org_graalvm_truffle_truffle_api",
         "@myna//:values",
     ],
