@@ -83,7 +83,7 @@ class PublicationTest(unittest.TestCase):
                     myna = {n for n in names if n.startswith('dev/elide/myna/')}
                     generated = {n for n in names if n.startswith('dev/elide/truffledata/json/generated/')}
                     backend = {n for n in names if n.startswith('dev/elide/truffledata/json/') and n not in generated}
-                    jvm = {'dev/elide/truffledata/json/JsonJvm.class', 'dev/elide/truffledata/json/SegmentValueTape.class'}
+                    jvm = {'dev/elide/truffledata/json/JsonJvm.class', 'dev/elide/truffledata/json/SegmentValueTape.class', 'dev/elide/truffledata/json/JvmTypedOwner.class'}
                     if module == 'json-bindings':
                         # Generated bindings travel with the exact Myna value ABI they were generated against.
                         self.assertIn('dev/elide/truffledata/json/generated/Json.class', names)
