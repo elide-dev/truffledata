@@ -109,9 +109,15 @@ string and `parent` being null. The checksum is 38,219.
 | Engine | Ingest (per document) | Retained form and read |
 | --- | --- | --- |
 | `gson-tree` | `JsonParser.parseReader` over `InputStreamReader` from UTF-8 bytes, then read | `JsonElement` trees, read in one `@TruffleBoundary` call per document |
-| `simdjson-generic-java` | `JsonSvm.decode`, `export(JavaSink)`, read the Java tree, close | Live messages; the guest exports each into a fresh `JavaSink` through an adopted `JsonExportNode` and reads the tree behind a boundary |
+| `simdjson-generic-java` | `JsonSession.decode`, `export(JavaSink)`, read the Java tree, close | Live messages; the guest exports each into a fresh `JavaSink` through an adopted `JsonExportNode` and reads the tree behind a boundary |
 | `simdjson-generic-interop` | Decode, read through cached `InteropLibrary`, close | Live messages, read by the guest through cached interop, one library per member site |
 | `simdjson-snapshot` | Decode, `snapshot()`, close, read the snapshot through interop | Snapshots, read like `simdjson-generic-interop` |
+| `simdjson-session-java` (ingest only) | Borrowed `JsonSession.parse(input, JavaSink)`, read the Java tree | Nothing native is retained, so there is no read stage |
+
+Since performance plan Task B2 every simdjson ingest decodes through one explicit
+`JsonSession` per run (`decode` moves the session's storage into the message);
+the retained rows are still built with `JsonSvm.decode`. Earlier results used
+`JsonSvm.decode` for ingest too.
 
 Stages match the scalar workload. Ingestion includes parsing, consumption, escape
 of the retained result, and native release. Retained reads rotate over 32 live
@@ -149,6 +155,8 @@ column counts unresolved Java calls only, not `@TruffleBoundary` calls. The
 | `simdjson-export-walk`, peak (smoke-only, constant counting sink) | ≤ 1,000 | 2 | ≤ 2 | ≤ 1.0 |
 | `simdjson-generic-java`, peak and read-aot | ≤ 1,000 (peak) | 2 (peak) | not gated | ≤ 2,400 |
 | `gson-tree`, peak | ≤ 1,000 | 1 | 0 | — |
+| `simdjson-generic-interop`, ingest | — | — | — | ≤ 480 |
+| `simdjson-session-java`, ingest | — | — | — | ≤ 3,600 |
 
 The interop loop measured 1,754–1,810 nodes: ten inlined member reads and their
 owner checks. The export loops have two loops, the document loop and the tape walk.
@@ -166,6 +174,14 @@ key and string views per document. Those views escape because `JavaSink`'s event
 methods are boundaries. The budget leaves 43 B of headroom. That is less than two
 additional 24-byte objects per document. Any per-node allocation in the walk (at
 least 16 B × ~40 nodes) or an escaping view per scalar fails it.
+
+**Session ingest budgets (Task B2).** Interop ingest measured 472 B/document: the
+session decode's Java objects (tape reader, side-table accessor, message, pinned
+input) plus the same 240 B of ten AOT interop views that `read-aot` shows, against
+544 B through `JsonSvm.decode` before sessions. The borrowed `JavaSink` parse
+measured 3,596 B/document: the host tree, the key and value `String`s and the views
+the sink receives. The plan's targets (160 B of decode overhead, 1,900 B for the
+sink) depend on the reusable text cursor of Task D1 and are not met yet.
 
 ### Results
 

@@ -579,7 +579,141 @@ public final class SvmAcceptance {
     }
   }
 
+  private static boolean throwsState(Runnable action) {
+    try {
+      action.run();
+      return false;
+    } catch (IllegalStateException expected) {
+      return true;
+    }
+  }
+
+  /** Plan Task B2: explicit sessions with borrowed parse, scoped reads and retained decode. */
+  private static void sessions() throws Exception {
+    byte[] first =
+        "{\"id\":1,\"note\":\"retained text longer than inline storage\",\"a\":[1,2]}"
+            .getBytes(StandardCharsets.UTF_8);
+    byte[] second = "{\"id\":2,\"note\":\"second\"}".getBytes(StandardCharsets.UTF_8);
+    dev.elide.truffledata.json.JsonMessage kept;
+    var session = dev.elide.truffledata.json.JsonSession.open();
+    try {
+      // borrow_invalidated_by_next_parse: a captured view throws once the borrow ends and after
+      // the next parse; the session itself stays usable.
+      var escaped = new dev.elide.truffledata.json.JsonValue[1];
+      long id =
+          session.with(
+              first,
+              root -> {
+                escaped[0] = root.member("note");
+                return root.member("id").longValue();
+              });
+      require(id == 1);
+      require(throwsState(() -> escaped[0].stringValue()));
+      var sink = new dev.elide.truffledata.json.JavaSink();
+      session.parse(second, sink);
+      require(throwsState(() -> escaped[0].kind()));
+      require("second".equals(((java.util.Map<?, ?>) java.util.Objects.requireNonNull(sink.result())).get("note")));
+      // Offsets select a slice of a larger buffer.
+      byte[] framed = ("xx" + new String(second, StandardCharsets.UTF_8) + "yy").getBytes(StandardCharsets.UTF_8);
+      var slice = new dev.elide.truffledata.json.JavaSink();
+      session.parse(framed, 2, second.length, slice);
+      require(Long.valueOf(2).equals(((java.util.Map<?, ?>) java.util.Objects.requireNonNull(slice.result())).get("id")));
+      // Re-entering the session from a sink event or a reader is rejected; the session survives.
+      var reentrant =
+          new dev.elide.truffledata.json.JsonSink() {
+            @Override
+            public void beginObject(long members) {
+              session.parse(second, new dev.elide.truffledata.json.JavaSink());
+            }
+
+            @Override
+            public void beginArray(long elements) {}
+
+            @Override
+            public void key(dev.elide.truffledata.json.JsonValue name) {}
+
+            @Override
+            public void end() {}
+
+            @Override
+            public void nullValue() {}
+
+            @Override
+            public void booleanValue(boolean value) {}
+
+            @Override
+            public void longValue(long value) {}
+
+            @Override
+            public void doubleValue(double value) {}
+
+            @Override
+            public void unsignedValue(long bits) {}
+
+            @Override
+            public void decimalValue(dev.elide.truffledata.json.JsonValue token) {}
+
+            @Override
+            public void stringValue(dev.elide.truffledata.json.JsonValue text) {}
+          };
+      require(throwsState(() -> session.parse(first, reentrant)));
+      require(throwsState(() -> session.with(first, root -> session.decode(second))));
+      require(throwsState(() -> session.with(first, root -> {
+        session.close();
+        return Boolean.TRUE;
+      })));
+      // Invalid input publishes nothing and leaves the session reusable.
+      for (String bad : new String[] {"{\"a\":1,\"a\":2}", "[1,]", "01", "{\"k\\u0041\":1,\"kA\":2}"}) {
+        try {
+          session.validate(bad.getBytes(StandardCharsets.UTF_8));
+          throw new AssertionError("accepted " + bad);
+        } catch (IllegalArgumentException expected) {
+        }
+      }
+      session.validate(first);
+      // A retained message outlives the session's next decodes and the session itself.
+      kept = session.decode(first);
+      for (int i = 0; i < 1000; i++) session.validate(second);
+      require(session.decode(second).root().member("id").longValue() == 2);
+      require(kept.root().member("note").stringValue().equals("retained text longer than inline storage"));
+      // Confinement: another thread can neither decode through the session nor close it.
+      var failure = new java.util.concurrent.atomic.AtomicReference<Throwable>();
+      Thread other =
+          new Thread(
+              () -> {
+                if (!throwsState(() -> session.validate(second)))
+                  failure.set(new AssertionError("cross-thread session decode"));
+                if (!throwsState(session::close)) failure.set(new AssertionError("cross-thread close"));
+              });
+      other.start();
+      other.join();
+      require(failure.get() == null);
+    } finally {
+      session.close();
+    }
+    session.close();
+    require(throwsState(() -> session.validate(second)));
+    require(kept.root().member("note").stringValue().equals("retained text longer than inline storage"));
+    require(kept.root().member("a").element(1).longValue() == 2);
+    var limited =
+        dev.elide.truffledata.json.JsonSession.open(
+            new dev.elide.truffledata.json.JsonLimits(8, 1 << 20, 1000, 1 << 20, 128));
+    try {
+      limited.validate("[1,2]".getBytes(StandardCharsets.UTF_8));
+      try {
+        limited.validate("[1,2,3,4]".getBytes(StandardCharsets.UTF_8));
+        throw new AssertionError("session input limit");
+      } catch (IllegalArgumentException expected) {
+      }
+    } finally {
+      limited.close();
+    }
+    kept.close();
+    require(throwsState(() -> kept.root()));
+  }
+
   public static void main(String[] args) throws Exception {
+    sessions();
     typed();
     schemaTyped();
     accessorContracts();

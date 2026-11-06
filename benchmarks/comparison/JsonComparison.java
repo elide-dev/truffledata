@@ -15,6 +15,7 @@ import dev.elide.truffledata.json.JsonExportNode;
 import dev.elide.truffledata.json.JsonMessage;
 import dev.elide.truffledata.json.JsonPlan;
 import dev.elide.truffledata.json.JsonRecord;
+import dev.elide.truffledata.json.JsonSession;
 import dev.elide.truffledata.json.JsonSnapshot;
 import dev.elide.truffledata.json.JsonSvm;
 import dev.elide.truffledata.json.JsonValue;
@@ -29,6 +30,7 @@ import java.util.Locale;
 import java.util.Objects;
 import org.graalvm.polyglot.Context;
 import org.jspecify.annotations.NullMarked;
+import org.jspecify.annotations.Nullable;
 
 /**
  * SVM JSON fixtures, with separate ingestion and retained-read measurements: a three-field scalar
@@ -93,6 +95,8 @@ public final class JsonComparison {
       List.of("gson-tree", "simdjson-generic-java", "simdjson-generic-interop", "simdjson-snapshot");
   // Smoke-only: export into a constant non-materializing sink, so the graph holds only the walk.
   static final String WALK = "simdjson-export-walk";
+  // Ingest-only: borrowed JsonSession.parse straight into a JavaSink (nothing retained natively).
+  static final String SESSION_JAVA = "simdjson-session-java";
   static final List<String> STAGES = List.of("ingest", "read-aot", "interpret", "peak");
 
   public static void main(String[] args) throws Exception {
@@ -100,6 +104,7 @@ public final class JsonComparison {
       for (String engine : SCALAR) for (String stage : STAGES) run(engine, stage, true, true);
       for (String engine : GENERIC) for (String stage : STAGES) run(engine, stage, true, true);
       run(WALK, "peak", true, true);
+      run(SESSION_JAVA, "ingest", true, true);
     } else {
       if (args.length != 3) throw new IllegalArgumentException("engine stage time|memory");
       run(args[0], args[1], args[2].equals("memory"), false);
@@ -108,7 +113,7 @@ public final class JsonComparison {
 
   private static void run(String engine, String stage, boolean memory, boolean smoke)
       throws Exception {
-    if (GENERIC.contains(engine) || engine.equals(WALK)) {
+    if (GENERIC.contains(engine) || engine.equals(WALK) || engine.equals(SESSION_JAVA)) {
       generic(engine, stage, memory, smoke);
       return;
     }
@@ -183,12 +188,20 @@ public final class JsonComparison {
     if (!STAGES.contains(stage)) throw new IllegalArgumentException("stage");
     boolean peak = stage.equals("peak"), ingest = stage.equals("ingest");
     boolean guest = peak || stage.equals("interpret");
-    int mode = engine.equals(WALK) ? GenericReads.WALK : GENERIC.indexOf(engine);
+    int mode =
+        engine.equals(WALK)
+            ? GenericReads.WALK
+            : engine.equals(SESSION_JAVA) ? GenericReads.SESSION_JAVA : GENERIC.indexOf(engine);
     if (mode < 0) throw new IllegalArgumentException("engine");
+    if (mode == GenericReads.SESSION_JAVA && !ingest)
+      throw new IllegalArgumentException("simdjson-session-java measures ingest only");
     try (var context = context(peak)) {
       context.initialize("td-compare");
       context.enter();
       List<JsonMessage> messages = new ArrayList<>();
+      // Every simdjson ingest decodes through one explicit session, the documented decode path.
+      var root =
+          new GenericReads(engine, mode, mode == GenericReads.GSON ? null : JsonSession.open());
       try {
         byte[][] inputs = new byte[ROWS][];
         Object[] rows = new Object[ROWS];
@@ -196,7 +209,8 @@ public final class JsonComparison {
         for (int i = 0; i < ROWS; i++) {
           inputs[i] = JsonFixture.document(i);
           expected += mode == GenericReads.WALK ? JsonFixture.walkChecksum(i) : JsonFixture.checksum(i);
-          if (mode == GenericReads.GSON) {
+          if (mode == GenericReads.GSON || mode == GenericReads.SESSION_JAVA) {
+            // The session cell measures ingest only; rows exist for the shared sampler.
             rows[i] = JsonFixture.gsonParse(inputs[i]);
           } else if (mode == GenericReads.SNAPSHOT) {
             try (JsonMessage message = JsonSvm.decode(inputs[i])) {
@@ -208,7 +222,6 @@ public final class JsonComparison {
             rows[i] = message.root();
           }
         }
-        var root = new GenericReads(engine, mode);
         var target = (OptimizedCallTarget) root.getCallTarget();
         Operation operation =
             rotation -> {
@@ -223,6 +236,7 @@ public final class JsonComparison {
         sample("json-generic", engine, stage, memory, smoke, target, rows, operation, expected);
       } finally {
         for (JsonMessage message : messages) message.close();
+        root.close();
         context.leave();
       }
     }
@@ -374,17 +388,23 @@ public final class JsonComparison {
    * the measured read for interpret and peak, and the same method runs directly for read-aot.
    */
   private static final class GenericReads extends RootNode {
-    static final int GSON = 0, JAVA = 1, INTEROP = 2, SNAPSHOT = 3, WALK = 4;
+    static final int GSON = 0, JAVA = 1, INTEROP = 2, SNAPSHOT = 3, WALK = 4, SESSION_JAVA = 5;
     private final String name;
     private final int mode;
+    private final @Nullable JsonSession session;
     private final JsonFixture.CountingSink counting = new JsonFixture.CountingSink();
     @Child private JsonFixture.InteropReader reader = new JsonFixture.InteropReader();
     @Child private JsonExportNode export = JsonExportNode.create();
 
-    GenericReads(String engine, int mode) {
+    GenericReads(String engine, int mode, @Nullable JsonSession session) {
       super(ComparisonLanguage.current());
       this.name = "GenericReads[" + engine + "]";
       this.mode = mode;
+      this.session = session;
+    }
+
+    void close() {
+      if (session != null) session.close();
     }
 
     @Override
@@ -436,7 +456,15 @@ public final class JsonComparison {
         retained = tree;
         return JsonFixture.gsonRead(tree);
       }
-      JsonMessage message = JsonSvm.decode(input);
+      JsonSession session = Objects.requireNonNull(this.session);
+      if (mode == SESSION_JAVA) {
+        JavaSink sink = new JavaSink();
+        session.parse(input, sink);
+        Object tree = Objects.requireNonNull(sink.result());
+        retained = tree;
+        return JsonFixture.javaRead(tree);
+      }
+      JsonMessage message = session.decode(input);
       if (mode == SNAPSHOT) {
         JsonSnapshot snapshot;
         try {

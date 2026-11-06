@@ -17,11 +17,15 @@ output.mkdir(parents=True, exist_ok=True)
 # Workload per engine and its 32-document checksum (JsonComparison and JsonFixture).
 WORKLOADS = {
     'json-scalar': (('gson-stream', 'simdjson-typed', 'simdjson-specialized'), 35984),
-    'json-generic': (('gson-tree', 'simdjson-generic-java', 'simdjson-generic-interop', 'simdjson-snapshot'), 38219),
+    'json-generic': (('gson-tree', 'simdjson-generic-java', 'simdjson-generic-interop', 'simdjson-snapshot',
+                      'simdjson-session-java'), 38219),
 }
 STAGES = ('ingest', 'read-aot', 'interpret', 'peak')
+# Borrowed session parse retains nothing to read later: it has an ingest cell only.
+INGEST_ONLY = {'simdjson-session-java'}
 workload_of = {engine: (name, checksum) for name, (engines, checksum) in WORKLOADS.items() for engine in engines}
-jobs = list(itertools.product(workload_of, STAGES, ('time', 'memory'), range(3)))
+jobs = [job for job in itertools.product(workload_of, STAGES, ('time', 'memory'), range(3))
+        if job[0] not in INGEST_ONLY or job[1] == 'ingest']
 random.Random(20261105).shuffle(jobs)
 results = []
 for engine, stage, mode, fork in jobs:
@@ -57,6 +61,9 @@ for workload, (engines, _) in WORKLOADS.items():
             cells = []
             for metric in ('ns_per_row', 'allocated_bytes_per_row'):
                 values = [statistics.median(r[metric]) for r in results if r['engine'] == engine and r['stage'] == stage and metric in r]
+                if not values:
+                    break
                 cells.append(f'{statistics.median(values):.3f} ({min(values):.3f}–{max(values):.3f})')
-            lines.append(f'| {stage} | {engine} | ' + ' | '.join(cells) + ' |')
+            if len(cells) == 2:
+                lines.append(f'| {stage} | {engine} | ' + ' | '.join(cells) + ' |')
 (output / 'json-comparison.md').write_text('\n'.join(lines) + '\n')

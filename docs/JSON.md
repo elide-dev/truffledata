@@ -71,6 +71,38 @@ confined to the thread that opened it. Closing it never invalidates returned
 messages or typed records: the library stays loaded until the last message, typed
 plan and typed record close.
 
+## Sessions (SVM)
+
+A `JsonSession` is an explicit, thread-confined decode context: one native
+simdjson parser, a padded input buffer and a block arena reused across documents,
+so a small document makes no native allocation in steady state. Nothing opens a
+session implicitly: `JsonSvm.decode` keeps decoding each call independently (no
+hidden per-thread state); embedders that decode repeatedly open a session per
+thread and close it when done. JVM sessions are not available yet
+(`JsonSession.open()` throws `UnsupportedOperationException` outside an image).
+
+```java
+try (JsonSession session = JsonSession.open()) {            // or open(JsonLimits)
+  session.parse(utf8, sink);                                // borrowed: decode, export, done
+  long id = session.with(utf8, root -> root.member("id").longValue());
+  JsonMessage kept = session.decode(utf8);                  // retained: outlives the session
+  session.validate(utf8);                                   // strict check, nothing retained
+}
+```
+
+- `parse(byte[], JsonSink)` and `parse(byte[], offset, length, JsonSink)` decode
+  into session storage and export through the sink. Nothing is retained.
+- `with(byte[], Function<JsonValue, R>)` lends the root to a reader. The root and
+  every view derived from it belong to a borrowed owner that is closed (and its
+  assumption invalidated, so cached compiled reads fail too) when the call
+  returns; a view that escapes throws `IllegalStateException` afterwards.
+- `decode(...)` moves the decoded storage (tape, side tables and input) into a
+  `JsonMessage` without copying the tape. The message has the ownership rules
+  below and survives the session's later decodes and its `close()`.
+- While a borrow is in progress (inside a sink event or a reader), every other call
+  on the session, including `close()`, throws `IllegalStateException`.
+- Limits apply per document. Parsing semantics are identical to `JsonSvm.decode`.
+
 ## Limits
 
 `JsonLimits(maxInputBytes, maxIndexBytes, maxNodes, maxTextBytes, maxDepth)` bounds
@@ -84,8 +116,10 @@ one decode. All values must be positive and `maxDepth` must be within 1..128.
 | `maxTextBytes` | 64 MiB | Myna text bytes for strings and keys |
 | `maxDepth` | 128 | Container nesting |
 
-Parser scratch is owned by a bounded process-wide pool (at most eight idle parsers)
-and is not counted. These limits are not a total native-memory budget. The typed
+The index budget is charged per arena block and large allocation (see the native
+README), so it also counts unused block tails. Parser scratch is owned by a bounded
+process-wide pool (at most eight idle parsers), or by the session, and is not
+counted. These limits are not a total native-memory budget. The typed
 scalar path does not take `JsonLimits`; it uses fixed 64 MiB input and index caps.
 
 ## Ownership

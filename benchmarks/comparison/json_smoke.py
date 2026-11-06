@@ -39,6 +39,12 @@ ALLOCATION = {
     ('simdjson-export-walk', 'peak'): 1.0,
     ('simdjson-generic-java', 'peak'): 2400.0,
     ('simdjson-generic-java', 'read-aot'): 2400.0,
+    # Ingest through an explicit JsonSession (performance plan Task B2), fixed in JSON.md. Interop:
+    # session decode + ten AOT interop reads (240 B of views, as read-aot) + close; measured 472
+    # (544 before sessions). Session JavaSink: borrowed parse into a JavaSink; measured 3,596. The
+    # plan's 160 B decode / 1,900 B JavaSink targets need the text cursor (Task D1).
+    ('simdjson-generic-interop', 'ingest'): 480.0,
+    ('simdjson-session-java', 'ingest'): 3600.0,
 }
 
 # Columns: Count Size Cycles Ifs Loops Invokes Allocs. Fail closed if trace format changes.

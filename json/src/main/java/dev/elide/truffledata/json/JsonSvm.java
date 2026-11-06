@@ -11,7 +11,11 @@ import org.graalvm.nativeimage.c.type.VoidPointer;
 import org.graalvm.word.Pointer;
 import org.graalvm.word.WordFactory;
 
-/** Explicit static SVM backend; requires the matching truffledata_json C library at image build. */
+/**
+ * Explicit static SVM backend; requires the matching truffledata_json C library at image build.
+ * {@link #decode} decodes each call independently and keeps no per-thread state; open a {@link
+ * JsonSession} to reuse native parser and arena storage across documents.
+ */
 public final class JsonSvm {
   private JsonSvm() {}
 
@@ -98,7 +102,7 @@ public final class JsonSvm {
                 result);
       }
       checkStatus(status);
-      return publish(result, () -> {});
+      return publish(result, NO_CLOSE);
     } catch (RuntimeException | Error failure) {
       release(result.rawValue());
       throw failure;
@@ -140,57 +144,102 @@ public final class JsonSvm {
     }
   }
 
-  private static JsonMessage publish(VoidPointer result, Runnable onClose) {
-    {
-      Pointer descriptor = (Pointer) Json.JsonResult.view(result);
-      if (descriptor.isNull() || descriptor.readInt(0) != ValueTape.ABI_VERSION)
-        throw new IllegalStateException("Unsupported Myna value ABI");
-      SvmValueTape tape = new SvmValueTape(descriptor);
-      long address = result.rawValue();
-      Pointer spans = (Pointer) Json.JsonResult.lexical(result);
-      long spanCount = Json.JsonResult.lexical_count(result);
-      Pointer hashes = (Pointer) Json.JsonResult.key_hashes(result);
-      if (spanCount != tape.nodeCount() || (spanCount > 0 && (spans.isNull() || hashes.isNull())))
-        throw new IllegalStateException("JSON lexical table mismatch");
-      // Region table entry 0 (region 1) is the retained input: {data, length}.
-      Pointer regions = (Pointer) descriptor.readWord(40);
-      if (regions.isNull() || descriptor.readLong(48) < 1)
-        throw new IllegalStateException("JSON input region missing");
-      Pointer inputData = regions.readWord(0);
-      long inputLength = regions.readLong(8);
-      JsonMessage.Lexical lexical =
-          new JsonMessage.Lexical() {
-            @Override
-            public long span(long node) {
-              return spans.readLong(WordFactory.signed(node * 8));
-            }
+  /**
+   * Native side tables and retained input of one published result, plus its release. One object
+   * per message serves as both the lexical accessor and the close action.
+   */
+  static final class SvmResult implements JsonMessage.Lexical, Runnable {
+    private final Pointer spans;
+    private final Pointer hashes;
+    private final Pointer inputData;
+    private final long inputLength;
+    // Owned JsonResult storage released on close; 0 for a borrowed session result.
+    private final long address;
+    private final Runnable onClose;
 
-            @Override
-            public int meta(long node) {
-              return hashes.readInt(WordFactory.signed(node * 4));
-            }
+    SvmResult(Pointer spans, Pointer hashes, Pointer inputData, long inputLength, long address, Runnable onClose) {
+      this.spans = spans;
+      this.hashes = hashes;
+      this.inputData = inputData;
+      this.inputLength = inputLength;
+      this.address = address;
+      this.onClose = onClose;
+    }
 
-            @Override
-            public byte inputByte(long offset) {
-              if (offset < 0 || offset >= inputLength)
-                throw new IndexOutOfBoundsException("JSON lexical offset");
-              return inputData.readByte(WordFactory.signed(offset));
-            }
-          };
-      return new JsonMessage(
-          tape,
-          lexical,
-          () -> {
-            try {
-              release(address);
-            } finally {
-              onClose.run();
-            }
-          });
+    @Override
+    public long span(long node) {
+      return spans.readLong(WordFactory.signed(node * 8));
+    }
+
+    @Override
+    public int meta(long node) {
+      return hashes.readInt(WordFactory.signed(node * 4));
+    }
+
+    @Override
+    public byte inputByte(long offset) {
+      if (offset < 0 || offset >= inputLength) throw new IndexOutOfBoundsException("JSON lexical offset");
+      return inputData.readByte(WordFactory.signed(offset));
+    }
+
+    @Override
+    public void run() {
+      try {
+        release(address);
+      } finally {
+        onClose.run();
+      }
     }
   }
 
+  /** Validates a published result and builds its tape reader. */
+  private static SvmValueTape tape(VoidPointer result) {
+    Pointer descriptor = (Pointer) Json.JsonResult.view(result);
+    if (descriptor.isNull() || descriptor.readInt(0) != ValueTape.ABI_VERSION)
+      throw new IllegalStateException("Unsupported Myna value ABI");
+    return new SvmValueTape(descriptor);
+  }
+
+  private static SvmResult tables(VoidPointer result, SvmValueTape tape, long address, Runnable onClose) {
+    Pointer spans = (Pointer) Json.JsonResult.lexical(result);
+    long spanCount = Json.JsonResult.lexical_count(result);
+    Pointer hashes = (Pointer) Json.JsonResult.key_hashes(result);
+    if (spanCount != tape.nodeCount() || (spanCount > 0 && (spans.isNull() || hashes.isNull())))
+      throw new IllegalStateException("JSON lexical table mismatch");
+    // Region table entry 0 (region 1) is the retained input: {data, length}.
+    Pointer descriptor = (Pointer) Json.JsonResult.view(result);
+    Pointer regions = (Pointer) descriptor.readWord(40);
+    if (regions.isNull() || descriptor.readLong(48) < 1)
+      throw new IllegalStateException("JSON input region missing");
+    return new SvmResult(spans, hashes, regions.readWord(0), regions.readLong(8), address, onClose);
+  }
+
+  private static JsonMessage publish(VoidPointer result, Runnable onClose) {
+    SvmValueTape tape = tape(result);
+    SvmResult owned = tables(result, tape, result.rawValue(), onClose);
+    return new JsonMessage(tape, owned, owned);
+  }
+
+  /** Message owning a retained session result; the result storage is released on failure too. */
+  static JsonMessage adoptResult(VoidPointer result) {
+    try {
+      return publish(result, NO_CLOSE);
+    } catch (RuntimeException | Error failure) {
+      release(result.rawValue());
+      throw failure;
+    }
+  }
+
+  /** Borrowed owner over a session's current result; the session ends it before its next call. */
+  static JsonBorrow borrow(VoidPointer result) {
+    SvmValueTape tape = tape(result);
+    return new JsonBorrow(tape, tables(result, tape, 0, NO_CLOSE));
+  }
+
+  private static final Runnable NO_CLOSE = () -> {};
+
   private static void release(long address) {
+    if (address == 0) return;
     VoidPointer result = WordFactory.pointer(address);
     Json.release(result);
     UnmanagedMemory.free(result);

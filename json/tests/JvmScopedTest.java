@@ -330,6 +330,9 @@ final class JvmScopedTest {
   @Test
   void staticBackendIsUnavailableOnTheJvm() {
     assertThrows(UnsupportedOperationException.class, dev.elide.truffledata.json.JsonSvm::open);
+    // JVM sessions arrive with Task E1; until then a session needs the static image.
+    assertThrows(
+        UnsupportedOperationException.class, () -> dev.elide.truffledata.json.JsonSession.open());
     assertThrows(
         UnsupportedOperationException.class,
         () -> JsonPlan.compile(Schema.of(Field.requiredLong("n"))));

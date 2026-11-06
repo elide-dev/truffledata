@@ -31,9 +31,9 @@ ACCESS_SOURCES = {f'core/src/main/java/dev/elide/truffledata/{name}.java' for na
 } | {
     # Every hand-written JSON source (//json and //json:jvm); generated bindings live in //json:bindings.
     f'json/src/main/java/dev/elide/truffledata/json/{name}.java' for name in (
-        'HeapValueTape', 'JavaSink', 'JsonAccess', 'JsonArray', 'JsonDecoder', 'JsonExportNode',
+        'HeapValueTape', 'JavaSink', 'JsonAccess', 'JsonArray', 'JsonBorrow', 'JsonDecoder', 'JsonExportNode',
         'JsonJvm', 'JsonLimits', 'JsonMessage', 'JsonOwner', 'JsonPlan', 'JsonRecord', 'JsonSink',
-        'JsonSnapshot', 'JsonSvm', 'JsonTypedOwner', 'JsonValue', 'JvmTypedOwner', 'SegmentValueTape',
+        'JsonSession', 'JsonSnapshot', 'JsonSvm', 'JsonTypedOwner', 'JsonValue', 'JvmTypedOwner', 'SegmentValueTape',
         'SvmTypedOwner', 'SvmValueTape', 'TapeSource',
     )
 } | {
@@ -85,16 +85,52 @@ SVM_ONLY_METHODS = {
         'JsonSvm::publish (Lorg/graalvm/nativeimage/c/type/VoidPointer;Ljava/lang/Runnable;)'
         'Ldev/elide/truffledata/json/JsonMessage;',
         'JsonSvm::release (J)V',
-        'JsonSvm::lambda$decode$0 ()V',
-        'JsonSvm::lambda$publish$0 (JLjava/lang/Runnable;)V',
+        'JsonSvm::lambda$static$0 ()V',
+        'JsonSvm::tape (Lorg/graalvm/nativeimage/c/type/VoidPointer;)Ldev/elide/truffledata/json/SvmValueTape;',
+        'JsonSvm::tables (Lorg/graalvm/nativeimage/c/type/VoidPointer;Ldev/elide/truffledata/json/SvmValueTape;'
+        'JLjava/lang/Runnable;)Ldev/elide/truffledata/json/JsonSvm$SvmResult;',
+        'JsonSvm::adoptResult (Lorg/graalvm/nativeimage/c/type/VoidPointer;)Ldev/elide/truffledata/json/JsonMessage;',
+        'JsonSvm::borrow (Lorg/graalvm/nativeimage/c/type/VoidPointer;)Ldev/elide/truffledata/json/JsonBorrow;',
         # The decoder handle returned by open() and the lexical table built by publish().
         'JsonSvm$1::decode ([BLdev/elide/truffledata/json/JsonLimits;)Ldev/elide/truffledata/json/JsonMessage;',
         'JsonSvm$1::adopt (Ljava/lang/foreign/MemorySegment;JLjava/lang/Runnable;)'
         'Ldev/elide/truffledata/json/JsonMessage;',
         'JsonSvm$1::compile (Ldev/elide/truffledata/Schema;Ljava/util/Map;)Ldev/elide/truffledata/json/JsonPlan;',
         'JsonSvm$1::close ()V',
-        'JsonSvm$2::span (J)J',
-        'JsonSvm$2::inputByte (J)B',
+        # The side tables and release of one published result (lexical accessor and close action).
+        'JsonSvm$SvmResult::span (J)J',
+        'JsonSvm$SvmResult::meta (J)I',
+        'JsonSvm$SvmResult::inputByte (J)B',
+        'JsonSvm$SvmResult::run ()V',
+    ),
+    # Sessions are static-image only (JVM sessions are performance plan Task E1): open() throws from
+    # requireRuntime on the JVM (JvmScopedTest asserts it), so nothing else is reachable there.
+    # SvmAcceptance.sessions() and CompiledReads.borrowed() exercise them in //json/tests:native_test.
+    **_json_methods(
+        'JsonSession',
+        'JsonSession::open ()Ldev/elide/truffledata/json/JsonSession;',
+        'JsonSession::open (Ldev/elide/truffledata/json/JsonLimits;)Ldev/elide/truffledata/json/JsonSession;',
+        'JsonSession::check ()V',
+        'JsonSession::handle ()Lorg/graalvm/nativeimage/c/type/VoidPointer;',
+        'JsonSession::decodeInto ([BII)V',
+        'JsonSession::lend ()Ldev/elide/truffledata/json/JsonBorrow;',
+        'JsonSession::giveBack (Ldev/elide/truffledata/json/JsonBorrow;)V',
+        'JsonSession::parse ([BLdev/elide/truffledata/json/JsonSink;)V',
+        'JsonSession::parse ([BIILdev/elide/truffledata/json/JsonSink;)V',
+        'JsonSession::with ([BLjava/util/function/Function;)Ljava/lang/Object;',
+        'JsonSession::decode ([B)Ldev/elide/truffledata/json/JsonMessage;',
+        'JsonSession::decode ([BII)Ldev/elide/truffledata/json/JsonMessage;',
+        'JsonSession::validate ([B)V',
+        'JsonSession::close ()V',
+    ),
+    # Borrowed session documents; constructed only by JsonSvm.borrow.
+    **_json_methods(
+        'JsonBorrow',
+        'JsonBorrow::assumption ()Lcom/oracle/truffle/api/Assumption;',
+        'JsonBorrow::lexical (J)J',
+        'JsonBorrow::meta (J)I',
+        'JsonBorrow::lexicalByte (J)B',
+        'JsonBorrow::end ()V',
     ),
     # Static typed plans: compile throws from requireRuntime on the JVM (JvmScopedTest asserts it);
     # JVM plans compile through JsonJvm and its own backend instead.

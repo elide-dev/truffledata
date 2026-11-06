@@ -12,7 +12,7 @@ import org.jspecify.annotations.Nullable;
  * Owner of a validated JSON index. Views read the tape only after {@link #check()}; owners that
  * can close expose an {@link Assumption} so compiled reads cache liveness without a field load.
  */
-public abstract sealed class JsonOwner permits JsonMessage, JsonSnapshot {
+public abstract sealed class JsonOwner permits JsonMessage, JsonSnapshot, JsonBorrow {
   final ValueTape tape;
   // Same object as tape; raw node reads keep ValueTape.tag (a trivially inlined one-liner whose
   // deopt target SVM runtime compilation cannot resolve) out of partially evaluated code.
@@ -123,15 +123,26 @@ public abstract sealed class JsonOwner permits JsonMessage, JsonSnapshot {
   /** Arrays with more elements than this get a child-offset index on first random access. */
   static final int INDEX_THRESHOLD = 8;
 
-  // Snapshots are shared across threads; computeIfAbsent publishes each fully built index.
-  private final java.util.concurrent.ConcurrentHashMap<Long, long[]> arrayIndexes =
-      new java.util.concurrent.ConcurrentHashMap<>();
+  // Snapshots are shared across threads; computeIfAbsent publishes each fully built index. Created
+  // on first random access to a large array, so owners that never index pay nothing for it.
+  private volatile java.util.concurrent.@Nullable ConcurrentHashMap<Long, long[]> arrayIndexes;
+
+  private java.util.concurrent.ConcurrentHashMap<Long, long[]> arrayIndexes() {
+    var indexes = arrayIndexes;
+    if (indexes != null) return indexes;
+    synchronized (this) {
+      indexes = arrayIndexes;
+      if (indexes == null) arrayIndexes = indexes = new java.util.concurrent.ConcurrentHashMap<>();
+      return indexes;
+    }
+  }
 
   /** Diagnostic: number of arrays indexed for random access within this owner's lifetime. */
   @TruffleBoundary
   public final int indexedArrays() {
     check();
-    return arrayIndexes.size();
+    var indexes = arrayIndexes;
+    return indexes == null ? 0 : indexes.size();
   }
 
   // A plain holder, not a record: identity is all the cache needs, so no equals/hashCode/toString.
@@ -159,7 +170,7 @@ public abstract sealed class JsonOwner permits JsonMessage, JsonSnapshot {
   }
 
   private long[] buildArrayIndex(long array) {
-    return arrayIndexes.computeIfAbsent(
+    return arrayIndexes().computeIfAbsent(
         array,
         key -> {
           long[] built = new long[Math.toIntExact(tape.length(key))];

@@ -277,6 +277,7 @@ final class CompiledReads {
     }
     check(second.root().member("n").longValue() == 2000, "Sibling message survives close");
     interop(second);
+    borrowed();
     export(second);
     second.close();
     CompiledArrayReads.run();
@@ -284,12 +285,41 @@ final class CompiledReads {
 
   /** Guest-style reads through a cached InteropLibrary compile with the same budgets. */
   private static void interop(dev.elide.truffledata.json.JsonMessage message) {
-    var root = new InteropReads(message.root());
+    interop(message.root(), "Interop");
+  }
+
+  /**
+   * The interop gate over a root borrowed from a JsonSession: same checksum, graph and allocation
+   * budgets, and the compiled read fails once the borrow ends.
+   */
+  private static void borrowed() {
+    byte[] input = "{\"n\":2000,\"d\":2.5,\"b\":false}".getBytes(StandardCharsets.UTF_8);
+    var compiled = new InteropReads[1];
+    try (var session = dev.elide.truffledata.json.JsonSession.open()) {
+      session.with(
+          input,
+          root -> {
+            compiled[0] = interop(root, "Borrowed interop");
+            return Boolean.TRUE;
+          });
+      try {
+        compiled[0].getCallTarget().call(1);
+        throw new AssertionError("Compiled read after the borrow ended");
+      } catch (IllegalStateException expected) {
+      }
+      check(
+          session.with(input, root -> root.member("n").longValue()) == 2000,
+          "Session reusable after borrowed compiled reads");
+    }
+  }
+
+  private static InteropReads interop(Object value, String label) {
+    var root = new InteropReads(value);
     var target = root.getCallTarget();
     for (int i = 0; i < 200 && !root.compiled; i++) target.call(100000);
-    check(root.compiled, "Interop JSON reads must execute compiled code");
-    check(((Long) target.call(1000000)) == 2002000000L, "Interop JSON compiled checksum");
-    check(NodeUtil.countNodes(root) <= 192, "Interop JSON AST budget");
+    check(root.compiled, label + " JSON reads must execute compiled code");
+    check(((Long) target.call(1000000)) == 2002000000L, label + " JSON compiled checksum");
+    check(NodeUtil.countNodes(root) <= 192, label + " JSON AST budget");
     var bean =
         (com.sun.management.ThreadMXBean) java.lang.management.ManagementFactory.getThreadMXBean();
     bean.setThreadAllocatedMemoryEnabled(true);
@@ -297,8 +327,9 @@ final class CompiledReads {
     long before = bean.getThreadAllocatedBytes(thread);
     target.call(1000000);
     double bytes = (bean.getThreadAllocatedBytes(thread) - before) / 1000000.0;
-    check(bytes >= 0 && bytes <= 0.05, "Interop JSON compiled bytes/read budget: " + bytes);
-    System.out.println("JSON interop compiled=true bytes/read=" + bytes);
+    check(bytes >= 0 && bytes <= 0.05, label + " JSON compiled bytes/read budget: " + bytes);
+    System.out.println("JSON " + label.toLowerCase(java.util.Locale.ROOT) + " compiled=true bytes/read=" + bytes);
+    return root;
   }
 
   /** Single-pass export into a constant, non-materializing sink: the walk itself must not allocate. */
