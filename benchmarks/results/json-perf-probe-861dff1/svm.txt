@@ -1,0 +1,28 @@
+PerfProbe small=210 B big=228485 B
+JsonSvm.decode+close small                                   2341.4 ns      296.0 B
+JsonSvm.decode+close {}                                       299.6 ns      296.0 B
+JsonSvm.decode+close big (per doc)                        2070513.8 ns        0.0 B
+raw ABI decode+release small (pin per call)                  2138.6 ns       24.0 B
+raw ABI decode+release small (pin hoisted)                   2158.9 ns        0.0 B
+raw ABI decode+release {} (pin hoisted)                       180.9 ns        0.0 B
+Json.fingerprint() leaf call                                    2.3 ns        0.0 B
+UnmanagedMemory.calloc(88)+free                                43.0 ns        0.0 B
+PinnedObject.create+close                                      31.7 ns        0.0 B
+member(id).longValue()  [first key]                           116.2 ns       24.0 B
+member(parent).kind()   [last key, 9th]                       536.5 ns        0.0 B
+interop readMember(id)+asLong (uncached)                      273.2 ns      272.0 B
+interop readMember(parent)+isNull (uncached)                  745.9 ns        0.0 B
+(reference) tape.find(parent) direct                          517.9 ns        0.0 B
+(reference) tape.find(id) direct                               93.7 ns        0.0 B
+prototype cachedFind(parent) hit                               55.6 ns        0.0 B
+stringValue() note (region, ~60 B)                            815.4 ns      464.0 B
+stringValue() name (inline)                                   246.6 ns       72.0 B
+asTruffleString() note                                        697.5 ns      120.0 B
+export CountingSink small                                     622.4 ns      408.0 B
+export Strings sink small (keys+strings -> String)           2214.8 ns     1616.0 B
+export JavaSink small                                        2680.0 ns     2456.0 B
+snapshot() small                                              975.6 ns     1456.0 B
+export CountingSink big (per 1000-doc array)               603225.0 ns        0.0 B
+export JavaSink big                                       2965873.7 ns  2328352.0 B
+element(999) random access (indexed)                           32.0 ns        0.0 B
+PerfProbe done 900000

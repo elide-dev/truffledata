@@ -1,0 +1,165 @@
+INFO: Invocation ID: 881c529f-503c-46ba-9cd8-d0faeddb64f8
+INFO: Streaming build results to: https://app.buildbuddy.io/invocation/881c529f-503c-46ba-9cd8-d0faeddb64f8
+Computing main repo mapping: 
+Loading: 
+Loading: 0 packages loaded
+Analyzing: target //json/tests:probe_test (0 packages loaded, 0 targets configured)
+Analyzing: target //json/tests:probe_test (0 packages loaded, 0 targets configured)
+
+INFO: Analyzed target //json/tests:probe_test (0 packages loaded, 0 targets configured).
+[4 / 7] Building json/tests/libprobe.jar (1 source file) and running annotation processors (TruffleProcessor, VerifyTruffleProcessor, LanguageRegistrationProcessor, VerifyCompilationFinalProcessor); 0s remote, remote-cache
+[4 / 7] Building json/tests/libprobe.jar (1 source file) and running annotation processors (TruffleProcessor, VerifyTruffleProcessor, LanguageRegistrationProcessor, VerifyCompilationFinalProcessor); 10s remote, remote-cache
+[5 / 7] [Prepa] Native Image [executable] (opt) //json/tests:probe_image
+[5 / 7] Native Image [executable] (opt) //json/tests:probe_image; 1s remote, remote-cache
+[5 / 7] [Sched] Native Image [executable] (opt) //json/tests:probe_image
+[5 / 7] Native Image [executable] (opt) //json/tests:probe_image; 0s remote, remote-cache
+[5 / 7] Native Image [executable] (opt) //json/tests:probe_image; 8s remote, remote-cache
+[5 / 7] Native Image [executable] (opt) //json/tests:probe_image; 38s remote, remote-cache
+INFO: From Native Image [executable] (opt) //json/tests:probe_image:
+WARNING: A restricted method in java.lang.System has been called
+WARNING: java.lang.System::load has been called by com.oracle.truffle.polyglot.JDKSupport in module org.graalvm.truffle (file:/workspace/bazel-out/rbe_linux_amd64-opt/bin/external/rules_jvm_external++maven+maven/org/graalvm/truffle/truffle-api/25.5.5-elide.24/processed_truffle-api-25.5.5-elide.24.jar)
+WARNING: Use --enable-native-access=org.graalvm.truffle to avoid a warning for callers in this module
+WARNING: Restricted methods will be blocked in a future release unless native access is enabled
+
+WARNING: A restricted method in java.lang.System has been called
+WARNING: java.lang.System::loadLibrary has been called by com.github.luben.zstd.util.Native$1 in an unnamed module (file:/workspace/external/rules_graalvm++graalvm+graalvm_linux_amd64/lib/svm/builder/lib/zstd-jni.jar)
+WARNING: Use --enable-native-access=ALL-UNNAMED to avoid a warning for callers in this module
+WARNING: Restricted methods will be blocked in a future release unless native access is enabled
+
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by com.oracle.truffle.api.object.DynamicObject (file:/workspace/bazel-out/rbe_linux_amd64-opt/bin/external/rules_jvm_external++maven+maven/org/graalvm/truffle/truffle-api/25.5.5-elide.24/processed_truffle-api-25.5.5-elide.24.jar)
+WARNING: Please consider reporting this to the maintainers of class com.oracle.truffle.api.object.DynamicObject
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+Warning: Using a deprecated option --no-fallback from command line. No effect, no replacement available
+Warning: The option '-H:Name=json_perf_probe' is experimental and must be enabled via '-H:+UnlockExperimentalVMOptions' in the future.
+Warning: The option '-H:Path=bazel-out/rbe_linux_amd64-opt/bin/json/tests' is experimental and must be enabled via '-H:+UnlockExperimentalVMOptions' in the future.
+Warning: The option '-H:-CheckToolchain' is experimental and must be enabled via '-H:+UnlockExperimentalVMOptions' in the future.
+Warning: The option '-H:IncludeResources=' is experimental and must be enabled via '-H:+UnlockExperimentalVMOptions' in the future.
+Warning: Please re-evaluate whether any experimental option is required, and either remove or unlock it. The build output lists all active experimental options, including where they come from and possible alternatives. If you think an experimental option should be considered as stable, please file an issue.
+Warning: Option 'FallbackThreshold' is deprecated and might be removed in a future release: It no longer has any effect, and no replacement is available. Please refer to the GraalVM release notes.
+========================================================================================================================
+GraalVM Native Image: Generating 'json_perf_probe' (executable)...
+========================================================================================================================
+For detailed information and explanations on the build output, visit:
+https://github.com/oracle/graal/blob/master/docs/reference-manual/native-image/BuildOutput.md
+------------------------------------------------------------------------------------------------------------------------
+[1/8] Initializing...                                                                                   (7.2s @ 0.23GiB)
+ Builder configuration:
+ - Java version: 25.0.4.1.1+1, vendor version: GraalVM CE 25.5.5-dev+1.1
+ - Graal compiler: optimization level: 2, target machine: compatibility
+ - C compiler: cc (null, null, 0.0.0)
+ - Assertions: disabled, system assertions: disabled
+ - 6 user-specific feature(s):
+   - com.oracle.svm.truffle.TruffleBaseFeature: Provides internal support for Truffle
+   - com.oracle.svm.truffle.TruffleFeature: Provides internal support for Truffle runtime compilation
+   - com.oracle.truffle.api.impl.TruffleAPIFeature: Provides basic support for Truffle
+   - com.oracle.truffle.api.object.DynamicObjectFeature: Provides support for DynamicObject
+   - com.oracle.truffle.polyglot.PolyglotProxyFeature
+   - org.graalvm.home.HomeFinderFeature: Finds GraalVM paths and its version number
+ Image configuration:
+ - Garbage collector: Serial GC (max heap size: 80% of RAM)
+ - Assertions: disabled (class-specific config may apply), system assertions: disabled
+------------------------------------------------------------------------------------------------------------------------
+ 5 experimental option(s) unlocked:
+ - '-H:Name' (alternative API option(s): -o json_perf_probe; origin(s): command line)
+ - '-H:CCompilerOption' (alternative API option(s): --native-compiler-options=-I/workspace/external/+http_archive+myna/include, --native-compiler-options=-I/workspace/bazel-out/rbe_linux_amd64-opt/bin/external/+http_archive+myna/include, --native-compiler-options=-I/workspace/external/+http_archive+simdjson/singleheader, --native-compiler-options=-I/workspace/bazel-out/rbe_linux_amd64-opt/bin/external/+http_archive+simdjson/singleheader, --native-compiler-options=-I/workspace/external/rules_rust++crate+crates__simdutf-0.7.0/cpp, --native-compiler-options=-I/workspace/bazel-out/rbe_linux_amd64-opt/bin/external/rules_rust++crate+crates__simdutf-0.7.0/cpp, --native-compiler-options=-I/workspace/., --native-compiler-options=-I/workspace/bazel-out/rbe_linux_amd64-opt/bin, --native-compiler-options=-I/workspace/external/+http_archive+myna, --native-compiler-options=-I/workspace/bazel-out/rbe_linux_amd64-opt/bin/external/+http_archive+myna, --native-compiler-options=-I/workspace/external/+http_archive+simdjson, --native-compiler-options=-I/workspace/bazel-out/rbe_linux_amd64-opt/bin/external/+http_archive+simdjson, --native-compiler-options=-I/workspace/external/rules_rust++crate+crates__simdutf-0.7.0, --native-compiler-options=-I/workspace/bazel-out/rbe_linux_amd64-opt/bin/external/rules_rust++crate+crates__simdutf-0.7.0, --native-compiler-options=-I/workspace/external/+http_archive+myna/include/myna, --native-compiler-options=-I/workspace/json/native, --native-compiler-options=-I/workspace/bazel-out/rbe_linux_amd64-opt/bin/json/native/generated; origin(s): command line)
+ - '-H:Path': Use the '-o' option instead. (origin(s): command line)
+ - '-H:-CheckToolchain' (origin(s): command line)
+ - '-H:IncludeResources': Use a resource-config.json in your META-INF/native-image/<groupID>/<artifactID> directory instead. (origin(s): command line)
+------------------------------------------------------------------------------------------------------------------------
+Build resources:
+ - 24.26GiB of memory (98.5% of system memory, using all available memory)
+ - 8 thread(s) (72.7% of 11 available processor(s), set via '--parallelism=8')
+[2/8] Performing analysis...  [********]                                                               (15.7s @ 0.63GiB)
+    5,836 types,   6,486 fields, and  23,444 methods found reachable
+      264 types,      40 fields, and     541 methods registered for reflection
+       58 types,      59 fields, and      52 methods registered for JNI access
+       60 resource accesses registered with 171.56KiB total size
+        5 native libraries: dl, m, pthread, rt, z
+       38 runtime compiled methods (0.2% of all reachable methods)
+[3/8] Building universe...                                                                              (2.6s @ 0.71GiB)
+[4/8] Parsing methods...      [**]                                                                      (2.2s @ 0.57GiB)
+[5/8] Inlining methods...     [****]                                                                    (1.2s @ 0.61GiB)
+[6/8] Compiling methods...    [****]                                                                   (20.7s @ 0.60GiB)
+[7/8] Laying out methods...   [**]                                                                      (2.5s @ 0.69GiB)
+[8/8] Creating image...       [***]                                                                     (9.8s @ 0.80GiB)
+   6.29MiB (33.56%) for code area:    13,978 compilation units
+   8.75MiB (46.70%) for image heap:  158,721 objects and 9 resources
+   3.70MiB (19.73%) for other data
+  18.74MiB in total image size, 16.50MiB in total file size
+------------------------------------------------------------------------------------------------------------------------
+Top 10 origins of code area:                                Top 10 object types in image heap:
+ 693.36KiB java.base/java.util                                 1.94MiB byte[] for string data
+ 329.12KiB java.base/java.lang                                 1.24MiB byte[] for code metadata
+ 291.98KiB java.base/com.sun.crypto.provider                   1.11MiB java.base/java.lang.String
+ 264.44KiB o.g.n.runtime/com.oracle.svm.core.code            699.73KiB java.base/java.lang.Class
+ 226.21KiB java.base/java.text                               513.48KiB heap alignment
+ 199.78KiB o.g.n.runtime/com.oracle.svm.graal.stubs          455.94KiB o.g.n.runtime/c.o.s.core.hub.DynamicHubCompanion
+ 196.68KiB o.g.truffle/com.oracle.truffle.polyglot           391.02KiB byte[] for general heap data
+ 189.99KiB java.base/java.util.concurrent                    369.90KiB java.base/java.lang.Object[]
+ 167.80KiB o.g.n.runtime/com.oracle.svm.core.genscavenge     317.44KiB java.base/j.u.concurrent.ConcurrentHashMap$Node
+ 162.49KiB java.base/java.util.stream                        165.64KiB java.base/java.lang.String[]
+   3.63MiB for 222 more packages                               1.61MiB for 1534 more object types
+------------------------------------------------------------------------------------------------------------------------
+Recommendations:
+ FUTR: Use '--future-defaults=all' to prepare for future releases.
+ HEAP: Set max heap for improved and more predictable memory usage.
+------------------------------------------------------------------------------------------------------------------------
+                       4.8s (7.1% of total time) in 667 GCs | Peak RSS: 1.49GiB | CPU load: 6.60
+------------------------------------------------------------------------------------------------------------------------
+Build artifacts:
+ /workspace/bazel-out/rbe_linux_amd64-opt/bin/json/tests/json_perf_probe (executable, 16.50MiB)
+========================================================================================================================
+Finished generating 'json_perf_probe' in 1m 4s.
+
+The build process encountered 7 warnings.
+
+[6 / 7] [Prepa] runfiles for //json/tests:probe_test
+[7 / 8] Testing //json/tests:probe_test; 0s remote
+[7 / 8] Testing //json/tests:probe_test; 10s remote
+[7 / 8] Testing //json/tests:probe_test; 26s remote
+[7 / 8] Testing //json/tests:probe_test; 27s remote, remote-cache
+[7 / 8] 1 / 1 tests; Testing //json/tests:probe_test; 32s remote, remote-cache
+INFO: From Testing //json/tests:probe_test:
+==================== Test output for //json/tests:probe_test:
+PerfProbe small=210 B big=228485 B
+JsonSvm.decode+close small                                   2341.4 ns      296.0 B
+JsonSvm.decode+close {}                                       299.6 ns      296.0 B
+JsonSvm.decode+close big (per doc)                        2070513.8 ns        0.0 B
+raw ABI decode+release small (pin per call)                  2138.6 ns       24.0 B
+raw ABI decode+release small (pin hoisted)                   2158.9 ns        0.0 B
+raw ABI decode+release {} (pin hoisted)                       180.9 ns        0.0 B
+Json.fingerprint() leaf call                                    2.3 ns        0.0 B
+UnmanagedMemory.calloc(88)+free                                43.0 ns        0.0 B
+PinnedObject.create+close                                      31.7 ns        0.0 B
+member(id).longValue()  [first key]                           116.2 ns       24.0 B
+member(parent).kind()   [last key, 9th]                       536.5 ns        0.0 B
+interop readMember(id)+asLong (uncached)                      273.2 ns      272.0 B
+interop readMember(parent)+isNull (uncached)                  745.9 ns        0.0 B
+(reference) tape.find(parent) direct                          517.9 ns        0.0 B
+(reference) tape.find(id) direct                               93.7 ns        0.0 B
+prototype cachedFind(parent) hit                               55.6 ns        0.0 B
+stringValue() note (region, ~60 B)                            815.4 ns      464.0 B
+stringValue() name (inline)                                   246.6 ns       72.0 B
+asTruffleString() note                                        697.5 ns      120.0 B
+export CountingSink small                                     622.4 ns      408.0 B
+export Strings sink small (keys+strings -> String)           2214.8 ns     1616.0 B
+export JavaSink small                                        2680.0 ns     2456.0 B
+snapshot() small                                              975.6 ns     1456.0 B
+export CountingSink big (per 1000-doc array)               603225.0 ns        0.0 B
+export JavaSink big                                       2965873.7 ns  2328352.0 B
+element(999) random access (indexed)                           32.0 ns        0.0 B
+PerfProbe done 900000
+================================================================================
+INFO: Found 1 test target...
+Target //json/tests:probe_test up-to-date:
+  bazel-bin/json/tests/probe_test
+INFO: Elapsed time: 146.715s, Critical Path: 146.59s
+INFO: 5 processes: 3 action cache hit, 2 internal, 4 remote.
+INFO: Build completed successfully, 5 total actions
+INFO: 
+//json/tests:probe_test                                                  PASSED in 26.3s
+
+Executed 1 out of 1 test: 1 test passes.
+There were tests whose specified size is too big. Use the --test_verbose_timeout_warnings command line option to see which ones these are.
+INFO: Streaming build results to: https://app.buildbuddy.io/invocation/881c529f-503c-46ba-9cd8-d0faeddb64f8

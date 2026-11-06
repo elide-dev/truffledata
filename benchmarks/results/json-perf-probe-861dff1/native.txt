@@ -1,0 +1,52 @@
+simdjson 5.1.1 active implementation: icelake (Intel/AMD AVX512)
+SIMDJSON_THREADS_ENABLED not defined (document_stream is single-threaded)
+small       210 B | iterate only (stage 1)                               43 ns     4894 MB/s
+small       210 B | W0 bare walk                                        674 ns      312 MB/s
+small       210 B | W1 bare walk + pmr set                             1237 ns      170 MB/s
+small       210 B | W2 lean walk, no dups                               528 ns      398 MB/s
+small       210 B | W3 lean walk + linear/OA dups                       611 ns      344 MB/s
+small       210 B | current document: nodes=31 index_allocations=33 index_peak=1784 retained=1113
+small       210 B | D0 current document (default resource)             2235 ns       94 MB/s
+small       210 B | D1 current document (monotonic arena)              2077 ns      101 MB/s
+small       210 B | D2 lean decode -> builder, arena, spans            1659 ns      127 MB/s
+small       210 B | D3 lean decode -> builder, arena, no spans         1604 ns      131 MB/s
+small       210 B | D4 DOM parse only                                   258 ns      815 MB/s
+small       210 B | D5 DOM parse + walk -> builder, arena              1320 ns      159 MB/s
+small       210 B | A0 C ABI decode+release                            2314 ns       91 MB/s
+small       210 B | A1 C ABI decode only (release excluded)            2812 ns       75 MB/s
+medium     4330 B | iterate only (stage 1)                              454 ns     9529 MB/s
+medium     4330 B | W0 bare walk                                      12024 ns      360 MB/s
+medium     4330 B | W1 bare walk + pmr set                            23877 ns      181 MB/s
+medium     4330 B | W2 lean walk, no dups                             10122 ns      428 MB/s
+medium     4330 B | W3 lean walk + linear/OA dups                     11406 ns      380 MB/s
+medium     4330 B | current document: nodes=621 index_allocations=371 index_peak=46120 retained=33504
+medium     4330 B | D0 current document (default resource)            44034 ns       98 MB/s
+medium     4330 B | D1 current document (monotonic arena)             34330 ns      126 MB/s
+medium     4330 B | D2 lean decode -> builder, arena, spans           28445 ns      152 MB/s
+medium     4330 B | D3 lean decode -> builder, arena, no spans        27708 ns      156 MB/s
+medium     4330 B | D4 DOM parse only                                  4509 ns      960 MB/s
+medium     4330 B | D5 DOM parse + walk -> builder, arena             22671 ns      191 MB/s
+medium     4330 B | A0 C ABI decode+release                           38869 ns      111 MB/s
+medium     4330 B | A1 C ABI decode only (release excluded)           42317 ns      102 MB/s
+big      228485 B | iterate only (stage 1)                            35190 ns     6493 MB/s
+big      228485 B | W0 bare walk                                     766446 ns      298 MB/s
+big      228485 B | W1 bare walk + pmr set                          1607471 ns      142 MB/s
+big      228485 B | W2 lean walk, no dups                            749654 ns      305 MB/s
+big      228485 B | W3 lean walk + linear/OA dups                    657892 ns      347 MB/s
+big      228485 B | current document: nodes=31001 index_allocations=17047 index_peak=1463192 retained=1090640
+big      228485 B | D0 current document (default resource)          2547709 ns       90 MB/s
+big      228485 B | D1 current document (monotonic arena)           1714418 ns      133 MB/s
+big      228485 B | D2 lean decode -> builder, arena, spans         1367792 ns      167 MB/s
+big      228485 B | D3 lean decode -> builder, arena, no spans      1391875 ns      164 MB/s
+big      228485 B | D4 DOM parse only                                221767 ns     1030 MB/s
+big      228485 B | D5 DOM parse + walk -> builder, arena           1120886 ns      204 MB/s
+big      228485 B | A0 C ABI decode+release                         2376204 ns       96 MB/s
+big      228485 B | A1 C ABI decode only (release excluded)         2454371 ns       93 MB/s
+ndjson   228484 B | per-document iterate + lean walk                    625 ns/doc      366 MB/s
+ndjson   228484 B | iterate_many(batch=  65536) + lean walk                 590 ns/doc      366 MB/s
+ndjson   228484 B | iterate_many(batch=1048576) + lean walk                 604 ns/doc      390 MB/s
+ndjson   228484 B | iterate_many(batch=4194304) + lean walk                 593 ns/doc      382 MB/s
+big      228485 B | at_pointer(/999/id) fresh iterate                   71492 ns
+big      228485 B | at_pointer(/0/id) fresh iterate                     27304 ns
+big      228485 B | top-level frame index by raw_json() skipping        73727 ns     3099 MB/s
+big      228485 B | materialize one element from its frame              1716 ns
