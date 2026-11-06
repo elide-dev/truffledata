@@ -1,0 +1,14 @@
+[package]
+name = "truffledata-csv-probe"
+version = "0.1.0"
+edition = "2024"
+publish = false
+description = "Native reference probe for the CSV comparison (benchmark only, not shipped)"
+
+[[bin]]
+name = "csv_probe_rs"
+path = "main.rs"
+
+[dependencies]
+csv = "=1.4.0"
+csv-core = "=0.1.13"

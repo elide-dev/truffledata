@@ -149,6 +149,11 @@ maven.install(
         "org.openjdk.jmh:jmh-core:1.37",
         "org.openjdk.jmh:jmh-generator-annprocess:1.37",
         "com.google.googlejavaformat:google-java-format:1.28.0",
+        # Benchmark-only CSV competitors (//benchmarks/comparison); no library depends on them.
+        # commons-csv is declared below as a test-only artifact (also the differential-test oracle).
+        "de.siegmar:fastcsv:4.4.0",
+        "com.univocity:univocity-parsers:2.9.1",
+        "com.fasterxml.jackson.dataformat:jackson-dataformat-csv:2.22.4",
     ],
     fail_if_repin_required = True,
     fetch_sources = False,

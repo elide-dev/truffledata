@@ -254,7 +254,13 @@ final class KernelDifferentialTest {
       Fmt f = FORMATS[iteration % 5]; // CsvFormat bytes are ASCII
       boolean trim = iteration % 5 == 1 && f.delimiter != '\t';
       CsvFormat format =
-          new CsvFormat(f.delimiter, f.quoting ? f.quote : (byte) '"', f.quoting, false, trim, false);
+          CsvFormat.builder()
+              .setDelimiter((char) f.delimiter)
+              .setQuote(f.quoting ? Character.valueOf((char) f.quote) : null)
+              .setHeader(false)
+              .setTrim(trim)
+              .setFlexible(false)
+              .build();
       CsvLimits limits =
           iteration % 7 == 0 ? new CsvLimits(1 << 20, 24, 3, 1 << 20) : CsvLimits.DEFAULT;
       byte[] input = input(random, f, iteration);

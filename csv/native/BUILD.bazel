@@ -73,6 +73,7 @@ cc_library(
         "utf8.h",
     ],
     copts = COPTS,
+    visibility = ["//benchmarks/comparison:__pkg__"],
     deps = [
         ":avx2",
         ":avx512",
