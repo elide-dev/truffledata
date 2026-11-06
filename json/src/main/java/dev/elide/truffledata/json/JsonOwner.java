@@ -92,6 +92,22 @@ public abstract sealed class JsonOwner permits JsonMessage, JsonSnapshot {
   /** Reads the raw UTF-8 bytes of a lexical span from the retained input region. */
   abstract byte lexicalByte(long offset);
 
+  /**
+   * Native side-table entry of a node: bits 0-30 hold the FNV-1a hash of a key node's decoded
+   * bytes (0 for other nodes), bit 31 marks string and key nodes whose bytes are all ASCII.
+   */
+  abstract int meta(long node);
+
+  /** 31-bit FNV-1a hash of a key node's decoded UTF-8 bytes; 0 for nodes that are not keys. */
+  final int keyHash(long node) {
+    return meta(node) & 0x7fffffff;
+  }
+
+  /** True when a string or key node's decoded bytes are all ASCII; false for other nodes. */
+  final boolean ascii(long node) {
+    return meta(node) < 0;
+  }
+
   @TruffleBoundary
   final String lexicalText(long node) {
     check();

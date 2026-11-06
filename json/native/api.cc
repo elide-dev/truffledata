@@ -17,12 +17,14 @@ struct handle {
 int32_t publish(std::unique_ptr<handle> owned, JsonResult& result) {
   auto stats = owned->document.allocations();
   const auto& spans = owned->document.lexical_spans();
+  const auto& hashes = owned->document.key_hashes();
   // Publish only after parsing and validation have completed successfully.
   result = {owned.get(), &owned->view, stats.copied_input_bytes,
             stats.padded_input_bytes, stats.index_retained_bytes,
             stats.index_peak_bytes, stats.index_allocations,
             stats.parser_input_capacity, sizeof(handle),
-            const_cast<uint64_t*>(spans.data()), spans.size()};
+            const_cast<uint64_t*>(spans.data()), spans.size(),
+            const_cast<uint32_t*>(hashes.data())};
   (void)owned.release();
   return TD_JSON_OK;
 }

@@ -2,7 +2,7 @@
 
 The C++ decoder traverses simdjson 5.1.1 On-Demand directly into a Myna ABI v3
 value index, without an intermediate DOM. Typed plans write fixed scalar slots
-instead. Both sit behind one versioned C ABI, `json.seam` (application ABI 4),
+instead. Both sit behind one versioned C ABI, `json.seam` (application ABI 5),
 which generates the direct SVM `@CFunction` bindings and JVM FFM handles. The Java
 owners, guest interop, export and snapshot contracts are described in
 [docs/JSON.md](../../docs/JSON.md).
@@ -40,6 +40,29 @@ Every node has a packed lexical span, `offset << 32 | length`, into region 1, th
 retained input. Strings and keys keep their quotes and escapes, numbers keep their
 exact spelling, and containers, booleans and null carry zero.
 `JsonResult.lexical`/`lexical_count` publish that array, one entry per node.
+
+`JsonResult.key_hashes` publishes a second side table with the same count: one
+`uint32_t` per node whose bits 0–30 are the 31-bit FNV-1a hash of a key node's
+decoded bytes (0 for other nodes) and whose bit 31 marks string and key nodes whose
+decoded bytes are all ASCII. The duplicate-key check computes the same hash, so it
+costs nothing extra; Java readers use it for member lookup. It is a JSON side
+table, not a Myna layout change (container directories are requested upstream as
+elide-dev/myna#45).
+
+### The lean walk
+
+- Numbers call `get_number()` first. Its success is simdjson's full grammar
+  validation; the RFC 8259 check runs only for tokens it does not type (big
+  integers, overflowing doubles) or rejects, before a DECIMAL reference is written.
+  `-0` still reads the raw token's sign. Rejected spellings (`01`, `1.`, `.5`, `1e`,
+  `-`) and the I64/U64/F64/DECIMAL classification are unchanged.
+- String and key bodies with no backslash and no byte below 0x20 are referenced
+  in the input (or inlined) without `get_string()`/`unescaped_key()`. Stage 1 has
+  validated UTF-8 for the whole buffer before the walk, and rejects raw control
+  bytes; bodies failing the scan still go through simdjson's unescaping.
+- Duplicate keys are checked per object after escape decoding: a linear
+  `(hash, length, bytes)` compare over up to 16 keys on the stack, then an
+  open-addressing table in counted index memory.
 
 ## Limits and accounting
 

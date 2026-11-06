@@ -126,12 +126,20 @@ public final class JsonJvm implements JsonDecoder {
       if (spanCount != tape.nodeCount()) throw new IllegalStateException("JSON lexical table mismatch");
       MemorySegment spans =
           result.get(ValueLayout.ADDRESS, JsonFFM.JsonResult_lexical_OFFSET).reinterpret(spanCount * 8);
+      MemorySegment hashes =
+          result.get(ValueLayout.ADDRESS, JsonFFM.JsonResult_key_hashes_OFFSET).reinterpret(spanCount * 4);
+      if (hashes.address() == 0) throw new IllegalStateException("JSON key-hash table missing");
       MemorySegment input = tape.region(1);
       JsonMessage.Lexical lexical =
           new JsonMessage.Lexical() {
             @Override
             public long span(long node) {
               return spans.get(ValueLayout.JAVA_LONG, node * 8);
+            }
+
+            @Override
+            public int meta(long node) {
+              return hashes.get(ValueLayout.JAVA_INT, node * 4);
             }
 
             @Override

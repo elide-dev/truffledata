@@ -12,9 +12,12 @@ public final class JsonMessage extends JsonOwner implements AutoCloseable {
   private final Lexical lexical;
   private @Nullable Assumption alive;
 
-  /** Backend-specific access to the native lexical span table and retained input. */
+  /** Backend-specific access to the native lexical span and key-hash tables and retained input. */
   interface Lexical {
     long span(long node);
+
+    /** Key-hash side-table entry of a node (see {@link JsonOwner#keyHash}). */
+    int meta(long node);
 
     byte inputByte(long offset);
   }
@@ -37,6 +40,12 @@ public final class JsonMessage extends JsonOwner implements AutoCloseable {
   long lexical(long node) {
     if (node < 0 || node >= tape.nodeCount()) throw new IndexOutOfBoundsException("Node index");
     return lexical.span(node);
+  }
+
+  @Override
+  int meta(long node) {
+    if (node < 0 || node >= tape.nodeCount()) throw new IndexOutOfBoundsException("Node index");
+    return lexical.meta(node);
   }
 
   @Override

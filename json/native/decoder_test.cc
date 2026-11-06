@@ -151,6 +151,116 @@ void retained_text_checks() {
   }
 }
 
+template<class F> bool throws(F f) {
+  try { f(); } catch (const std::exception&) { return true; }
+  return false;
+}
+uint32_t fnv(const std::string& s) {
+  uint32_t h = 2166136261u;
+  for (unsigned char c : s) { h ^= c; h *= 16777619u; }
+  return h & 0x7fffffffu;
+}
+std::string object_with_keys(size_t count, size_t duplicate_at, const std::string& spelling) {
+  std::string source = "{";
+  for (size_t i = 0; i < count; ++i) {
+    if (i) source += ',';
+    std::string key = i == duplicate_at ? spelling : (i == 0 ? "kA" : "k" + std::to_string(i));
+    source += "\"" + key + "\":" + std::to_string(i);
+  }
+  return source + "}";
+}
+// Plan Task A1: number-first typing, deferred unescaping, hashed duplicate table, side table.
+void lean_checks() {
+  using truffledata::json::ascii_flag;
+  // Review focus 2: a raw control byte or invalid UTF-8 never reaches the referenced path.
+  require(throws([] { document d("[\"a\x01" "bcdefghijklmnopqrstuvwxyz\"]"); }));
+  require(throws([] { document d("[\"a\x01" "b\"]"); }));
+  require(throws([] { document d("{\"a\x01" "b\":1}"); }));
+  bool utf8 = false;
+  try { document d("[\"\xff\"]"); } catch (const simdjson::simdjson_error&) { utf8 = true; }
+  require(utf8);
+  utf8 = false;
+  try { document d("{\"\xc3\":1}"); } catch (const simdjson::simdjson_error&) { utf8 = true; }
+  require(utf8);
+  // Review focus 3: number classification and rejection are unchanged.
+  {
+    document d(R"([1, -0, 18446744073709551615, 1.5, 1E400, 12345678901234567890123, -0.0, 9223372036854775807, -9223372036854775808, 9223372036854775808])");
+    const auto* n = d.view().nodes;
+    require(n[1].tag == MYNA_VALUE_I64 && n[1].payload == 1);
+    require(n[2].tag == MYNA_VALUE_F64 && n[2].payload == 0x8000000000000000ull);
+    require(n[3].tag == MYNA_VALUE_U64 && n[3].payload == UINT64_MAX);
+    require(n[4].tag == MYNA_VALUE_F64);
+    require((n[5].tag & 0xff) == MYNA_VALUE_DECIMAL);
+    require((n[6].tag & 0xff) == MYNA_VALUE_DECIMAL);
+    require(n[7].tag == MYNA_VALUE_F64 && n[7].payload == 0x8000000000000000ull);
+    require(n[8].tag == MYNA_VALUE_I64 && n[8].payload == uint64_t(INT64_MAX));
+    require(n[9].tag == MYNA_VALUE_I64 && n[9].payload == uint64_t(INT64_MIN));
+    require(n[10].tag == MYNA_VALUE_U64 && n[10].payload == 9223372036854775808ull);
+    require(lexical_text(d, 6) == "12345678901234567890123");
+  }
+  for (auto bad : {"[01]", "[1.]", "[.5]", "[1e]", "[-]", "[+1]", "[1e+]", "[-01]", "[0x1]", "[1.e5]", "[Infinity]", "[1 2]"})
+    require(throws([&] { document d(bad); }));
+  // A clean key longer than 16 bytes references the retained input instead of being copied.
+  {
+    document d(R"({"abcdefghijklmnopqrst":1})");
+    const auto& key = d.view().nodes[1];
+    require((key.tag & MYNA_VALUE_REGION_TEXT) != 0 && (key.payload >> 32) == 1);
+    require(uint32_t(key.payload) == 2 && key.length == 20);
+    require(d.allocations().index_retained_bytes > 0);
+    require(d.view().byte_count == 0);
+  }
+  // An escaped long key is decoded into owned bytes (region 0).
+  {
+    document d("{\"abcdefghij\\" "u006blmnopqrst\":1}");
+    const auto& key = d.view().nodes[1];
+    require((key.tag & MYNA_VALUE_REGION_TEXT) != 0 && (key.payload >> 32) == 0);
+    require(text(d.view(), 1) == "abcdefghijklmnopqrst");
+  }
+  // Duplicates after escape decoding are rejected at every object size, including the
+  // open-addressing table beyond 16 keys; distinct keys are accepted.
+  for (size_t count : {2, 16, 17, 40, 1000}) {
+    require(!throws([&] { document d(object_with_keys(count, SIZE_MAX, "")); }));
+    require(throws([&] { document d(object_with_keys(count, count - 1, "k\\u0041")); }));
+    require(throws([&] { document d(object_with_keys(count, count - 1, "kA")); }));
+  }
+  // Every allocation of an object above 16 keys (the open-addressing table and its growth) can
+  // fail without leaking.
+  {
+    const std::string wide = "[" + object_with_keys(200, SIZE_MAX, "") + "," + object_with_keys(40, SIZE_MAX, "") + "]";
+    document baseline(wide);
+    size_t total = baseline.allocations().index_allocations;
+    for (size_t i = 0; i <= total; ++i) {
+      fault_memory memory(i);
+      bool rejected = false;
+      try { document parsed(wide, {}, {}, &memory); } catch (const std::bad_alloc&) { rejected = true; }
+      require(rejected == (i < total));
+      require(memory.live == 0);
+    }
+  }
+  require(throws([] { document d(R"({"":1,"":2})"); }));
+  require(!throws([] { document d(R"({"":1,"a":{"":2}})"); }));
+  // Key hashes and ASCII flags are published per node.
+  {
+    // Keys 8 and 10 are an escaped and a raw non-ASCII key; string 9 is escaped non-ASCII.
+    const std::string u = "\\" "u00e9";
+    document even("{\"id\":1,\"note\":\"plain\",\"x\":[true],\"" + u + "\":\"" + u + "t" + u
+                  + "\",\"\xc3\xa9" "2\":\"ok\"}");
+    const auto& h = even.key_hashes();
+    require(h.size() == even.view().node_count && even.lexical_spans().size() == h.size());
+    require(h[0] == 0);
+    require(h[1] == (fnv("id") | ascii_flag));
+    require(h[2] == 0);
+    require(h[3] == (fnv("note") | ascii_flag));
+    require(h[4] == ascii_flag);  // "plain" string: no hash, ASCII
+    require(h[5] == (fnv("x") | ascii_flag));
+    require(h[6] == 0 && h[7] == 0);  // array and boolean
+    require(h[8] == fnv("\xc3\xa9"));  // escaped non-ASCII key: hash of decoded bytes, no flag
+    require(h[9] == 0);  // escaped non-ASCII string
+    require(h[10] == fnv("\xc3\xa9" "2"));  // raw non-ASCII key
+    require(h[11] == ascii_flag);
+  }
+}
+
 int checks();
 int main() {
   try { return checks(); }
@@ -158,6 +268,7 @@ int main() {
 }
 int checks() {
   number_checks();
+  lean_checks();
   retained_text_checks();
   allocation_checks();
   for (auto source : {"null", "true", "false", "0", "-0", "1e999999999999999999999999", "[]", "{}", "\"hi\"", "[1,2,3]", "{\"a\":null,\"b\":[true,\"x\"]}"}) {

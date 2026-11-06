@@ -251,9 +251,23 @@ int main() {
   }
   auto* view = static_cast<const myna_value_view*>(first.view);
   require(view->version == MYNA_VALUE_ABI && view->node_count == 5);
-  static_assert(sizeof(JsonResult) == 88, "ABI 4 publishes lexical spans");
+  static_assert(sizeof(JsonResult) == 96 && offsetof(JsonResult, key_hashes) == 88,
+                "ABI 5 publishes lexical spans and key hashes");
   require(first.lexical_count == 5 && first.lexical);
   require(static_cast<const uint64_t*>(first.lexical)[2] == ((uint64_t(5) << 32) | 3));
+  {
+    // One side-table entry per node: FNV-1a key hash (31 bits) | ASCII flag on keys and strings.
+    auto* hashes = static_cast<const uint32_t*>(first.key_hashes);
+    require(hashes != nullptr);
+    auto fnv = [](const char* s) {
+      uint32_t h = 2166136261u;
+      for (; *s; ++s) { h ^= uint8_t(*s); h *= 16777619u; }
+      return h & 0x7fffffffu;
+    };
+    require(hashes[0] == 0 && hashes[2] == 0);
+    require(hashes[1] == (fnv("a") | 0x80000000u) && hashes[3] == (fnv("b") | 0x80000000u));
+    require(hashes[4] == 0x80000000u);
+  }
   require(first.control_bytes > 0 && first.index_peak_bytes >= first.index_retained_bytes);
   auto number = view->nodes[2];
   require(number.tag == MYNA_VALUE_I64 && number.payload == 123);
@@ -268,7 +282,7 @@ int main() {
   require(view->node_count == 5);
   td_json_release(&first);
   td_json_release(&first);
-  require(!first.lexical && first.lexical_count == 0);
+  require(!first.lexical && first.lexical_count == 0 && !first.key_hashes);
   JsonResult empty{};
   require(std::memcmp(&first, &empty, sizeof(first)) == 0);
   for (auto source : {"[1,]", "{\"a\":1,\"a\":2}", "{} true", "[undefined]"}) {

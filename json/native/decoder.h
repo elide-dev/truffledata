@@ -5,7 +5,7 @@
 #include <myna/values.hpp>
 #include <simdjson.h>
 #include <cmath>
-#include <unordered_set>
+#include <cstring>
 
 namespace truffledata::json {
 
@@ -37,6 +37,92 @@ inline bool number(std::string_view s) {
   return i == s.size();
 }
 
+// Side-table entry per node: bits 0-30 hold the key hash (key nodes only), bit 31 marks string and
+// key nodes whose decoded bytes are all ASCII. The hash is 32-bit FNV-1a over the decoded key
+// bytes, masked to 31 bits; Java's JsonKey computes the same function.
+inline constexpr uint32_t hash_mask = 0x7fffffffu;
+inline constexpr uint32_t ascii_flag = 0x80000000u;
+inline uint32_t key_hash(std::string_view s) {
+  uint32_t h = 2166136261u;
+  for (unsigned char c : s) { h ^= c; h *= 16777619u; }
+  return h & hash_mask;
+}
+inline bool ascii(std::string_view s) {
+  unsigned char any = 0;
+  for (unsigned char c : s) any |= c;
+  return any < 0x80;
+}
+// A string body is "clean" when it has no backslash and no raw byte below 0x20: it is then
+// referenced without get_string(). Stage 1 validated UTF-8 for the whole buffer before any body is
+// referenced, and stage 1 also rejects raw control bytes; bodies failing this scan still go through
+// get_string()/unescaped_key() so simdjson validates their escapes.
+struct body_scan { bool clean; bool ascii; };
+inline body_scan scan(std::string_view body) {
+  unsigned char any = 0;
+  for (unsigned char c : body) {
+    if (c == '\\' || c < 0x20) return {false, false};
+    any |= c;
+  }
+  return {true, any < 0x80};
+}
+
+// Per-object duplicate-key table: a linear (hash, length, bytes) compare for up to 16 keys on the
+// stack, then open addressing in counted index memory. Keys are compared after escape decoding.
+class key_table final {
+  struct entry { uint32_t hash; uint32_t length; const char* data; };
+  static constexpr size_t inline_keys = 16;
+  entry small_[inline_keys];
+  size_t count_ = 0;
+  entry* table_ = nullptr;
+  size_t capacity_ = 0, used_ = 0;
+  std::pmr::memory_resource* memory_;
+  static bool same(const entry& e, uint32_t hash, std::string_view key) {
+    return e.hash == hash && e.length == key.size()
+        && (key.empty() || std::memcmp(e.data, key.data(), key.size()) == 0);
+  }
+  // Empty slots have a null data pointer; empty keys carry a static non-null pointer.
+  static void put(entry* table, size_t mask, const entry& e) {
+    for (size_t i = e.hash & mask;; i = (i + 1) & mask)
+      if (!table[i].data) { table[i] = e; return; }
+  }
+  void grow() {
+    size_t capacity = capacity_ ? capacity_ * 2 : 64;
+    auto* table = static_cast<entry*>(memory_->allocate(capacity * sizeof(entry), alignof(entry)));
+    for (size_t i = 0; i < capacity; ++i) table[i] = {0, 0, nullptr};
+    if (table_) {
+      for (size_t i = 0; i < capacity_; ++i) if (table_[i].data) put(table, capacity - 1, table_[i]);
+      memory_->deallocate(table_, capacity_ * sizeof(entry), alignof(entry));
+    } else {
+      for (size_t i = 0; i < count_; ++i) put(table, capacity - 1, small_[i]);
+    }
+    table_ = table;
+    capacity_ = capacity;
+  }
+public:
+  explicit key_table(std::pmr::memory_resource* memory) : memory_(memory) {}
+  key_table(const key_table&) = delete;
+  key_table& operator=(const key_table&) = delete;
+  ~key_table() { if (table_) memory_->deallocate(table_, capacity_ * sizeof(entry), alignof(entry)); }
+  // False when an equal decoded key is already present.
+  bool insert(uint32_t hash, std::string_view key) {
+    static const char empty = 0;
+    entry e{hash, static_cast<uint32_t>(key.size()), key.empty() ? &empty : key.data()};
+    if (!table_) {
+      for (size_t i = 0; i < count_; ++i) if (same(small_[i], hash, key)) return false;
+      if (count_ < inline_keys) { small_[count_++] = e; return true; }
+      grow();
+      used_ = count_;
+    }
+    size_t mask = capacity_ - 1;
+    for (size_t i = hash & mask; table_[i].data; i = (i + 1) & mask)
+      if (same(table_[i], hash, key)) return false;
+    if ((used_ + 1) * 2 > capacity_) { grow(); mask = capacity_ - 1; }
+    put(table_, mask, e);
+    ++used_;
+    return true;
+  }
+};
+
 // The input is retained; the parser is pooled and released before construction
 // completes. Unescaped text references the retained input; escaped text is
 // copied into message-owned storage, so parser scratch never outlives the lease.
@@ -51,23 +137,25 @@ class document final {
   uint64_t count_ = 0;
   myna::value_limits limits_;
   std::pmr::vector<uint64_t> lexical_;
+  std::pmr::vector<uint32_t> hashes_;
   size_t parser_capacity_ = 0;
 
   // Packed span into the retained input region: offset << 32 | length; zero when absent.
-  void lexical(std::string_view raw = {}) {
+  void lexical(std::string_view raw = {}, uint32_t meta = 0) {
     if (count_ >= limits_.nodes) throw std::length_error("JSON node limit");
     ++count_;
-    raw = trim(raw);
     if (raw.empty()) lexical_.push_back(0);
     else lexical_.push_back((uint64_t(raw.data() - input_.data()) << 32) | raw.size());
+    hashes_.push_back(meta);
   }
-  void text(std::string_view decoded, std::string_view raw) {
-    raw = trim(raw);
-    lexical(raw);
+  // `raw` is the trimmed token including quotes; `decoded` either is the body inside `raw`
+  // (clean, referenced) or decoded scratch text (copied).
+  void text(std::string_view decoded, std::string_view raw, bool referenced, uint32_t meta) {
+    lexical(raw, meta);
     if (decoded.size() <= 16) builder_.string(decoded);
-    else if (raw.size() == decoded.size() + 2 && raw.find('\\') == std::string_view::npos)
+    else if (referenced)
       builder_.string_ref(input_region_,
-          static_cast<uint32_t>(raw.data() + 1 - input_.data()),
+          static_cast<uint32_t>(decoded.data() - input_.data()),
           static_cast<uint32_t>(decoded.size()));
     else builder_.string(decoded);
   }
@@ -80,12 +168,16 @@ class document final {
       case json_type::object: {
         lexical();
         builder_.begin_object();
-        std::pmr::unordered_set<std::string_view> keys(&memory_);
+        key_table keys(&memory_);
         for (auto entry : value.get_object()) {
-          auto raw = entry.key_raw_json_token().value();
-          auto key = entry.unescaped_key().value();
-          if (!keys.insert(key).second) throw std::invalid_argument("duplicate JSON key");
-          text(key, raw);
+          std::string_view raw = json::trim(entry.key_raw_json_token().value());
+          std::string_view body = raw.substr(1, raw.size() - 2);
+          body_scan s = scan(body);
+          std::string_view key = s.clean ? body : entry.unescaped_key().value();
+          bool plain = s.clean ? s.ascii : ascii(key);
+          uint32_t hash = key_hash(key);
+          if (!keys.insert(hash, key)) throw std::invalid_argument("duplicate JSON key");
+          text(key, raw, s.clean, hash | (plain ? ascii_flag : 0));
           auto child = entry.value().value();
           visit(child, depth + 1);
         }
@@ -102,17 +194,21 @@ class document final {
         builder_.end();
         break;
       case json_type::string: {
-        std::string_view raw = value.raw_json_token();
-        text(value.get_string().value(), raw);
+        std::string_view raw = json::trim(value.raw_json_token());
+        std::string_view body = raw.substr(1, raw.size() - 2);
+        body_scan s = scan(body);
+        if (s.clean) {
+          text(body, raw, true, s.ascii ? ascii_flag : 0);
+        } else {
+          std::string_view decoded = value.get_string().value();
+          text(decoded, raw, false, ascii(decoded) ? ascii_flag : 0);
+        }
         break;
       }
       case json_type::number: {
-        std::string_view raw = value.raw_json_token();
-        raw = trim(raw);
-        if (!number(raw)) throw std::invalid_argument("invalid JSON number");
-        lexical(raw);
-        // Typed nodes when the value is exactly representable; the exact token
-        // always remains readable through the lexical span.
+        std::string_view raw = json::trim(value.raw_json_token());
+        // get_number() succeeding is simdjson's full grammar validation; the RFC 8259 check runs
+        // only for tokens it does not type (overflowing doubles, big integers) and for errors.
         auto parsed = value.get_number();
         bool typed = false;
         if (!parsed.error()) {
@@ -120,22 +216,31 @@ class document final {
           auto n = parsed.value();
           switch (n.get_number_type()) {
             case number_type::signed_integer:
+              lexical(raw);
               // simdjson folds -0 into integer zero; JSON.parse-style consumers need negative zero.
               if (n.get_int64() == 0 && raw[0] == '-') builder_.floating(-0.0);
               else builder_.integer(n.get_int64());
               typed = true; break;
             case number_type::unsigned_integer:
+              lexical(raw);
               builder_.unsigned_integer(n.get_uint64()); typed = true; break;
             case number_type::floating_point_number:
-              if (std::isfinite(n.get_double())) { builder_.floating(n.get_double()); typed = true; }
+              if (std::isfinite(n.get_double())) {
+                lexical(raw);
+                builder_.floating(n.get_double());
+                typed = true;
+              }
               break;
             default: break;
           }
         }
-        if (!typed)
+        if (!typed) {
+          if (!number(raw)) throw std::invalid_argument("invalid JSON number");
+          lexical(raw);
           builder_.validated_number_ref(input_region_,
               static_cast<uint32_t>(raw.data() - input_.data()),
               static_cast<uint32_t>(raw.size()));
+        }
         break;
       }
       case json_type::boolean:
@@ -157,7 +262,7 @@ class document final {
         memory_(storage.index_bytes, upstream),
         builder_(&memory_, limits),
         input_region_(builder_.region(std::string_view(input_.data(), input_.size()))),
-        limits_(limits), lexical_(&memory_) {
+        limits_(limits), lexical_(&memory_), hashes_(&memory_) {
     parse();
   }
   void parse() {
@@ -166,7 +271,6 @@ class document final {
     auto& parser = lease.get();
     auto root = parser.iterate(input_).value();
     visit(root, 0);
-    // Numeric tokens are checked lexically, not through a lossy numeric getter.
     // raw_json consumes scalar roots; at_end rejects a second root/trailing tokens.
     if (root.is_scalar().value()) (void)root.raw_json().value();
     if (!root.at_end()) throw std::invalid_argument("trailing JSON input");
@@ -197,6 +301,8 @@ public:
   document& operator=(const document&) = delete;
   myna_value_view view() const { return builder_.view(); }
   const std::pmr::vector<uint64_t>& lexical_spans() const { return lexical_; }
+  // One entry per node; see key_hash and ascii_flag.
+  const std::pmr::vector<uint32_t>& key_hashes() const { return hashes_; }
   allocation_stats allocations() const {
     return {adopted() ? 0 : input_.size(),
             adopted() ? input_.capacity() : input_.size() + simdjson::SIMDJSON_PADDING,

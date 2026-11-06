@@ -149,7 +149,8 @@ public final class JsonSvm {
       long address = result.rawValue();
       Pointer spans = (Pointer) Json.JsonResult.lexical(result);
       long spanCount = Json.JsonResult.lexical_count(result);
-      if (spanCount != tape.nodeCount() || (spanCount > 0 && spans.isNull()))
+      Pointer hashes = (Pointer) Json.JsonResult.key_hashes(result);
+      if (spanCount != tape.nodeCount() || (spanCount > 0 && (spans.isNull() || hashes.isNull())))
         throw new IllegalStateException("JSON lexical table mismatch");
       // Region table entry 0 (region 1) is the retained input: {data, length}.
       Pointer regions = (Pointer) descriptor.readWord(40);
@@ -162,6 +163,11 @@ public final class JsonSvm {
             @Override
             public long span(long node) {
               return spans.readLong(WordFactory.signed(node * 8));
+            }
+
+            @Override
+            public int meta(long node) {
+              return hashes.readInt(WordFactory.signed(node * 4));
             }
 
             @Override
