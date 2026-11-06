@@ -102,6 +102,15 @@ class PublicationTest(unittest.TestCase):
                     if module == 'json-jvm':
                         self.assertTrue(jvm <= names)
                         self.assertNotIn('dev/elide/truffledata/json/JsonSvm.class', names)
+                if module == 'csv':
+                    # Pure Java: one jar for the JVM and SVM, only CSV classes, no native attachments.
+                    with zipfile.ZipFile(str(prefix) + '.jar') as jar:
+                        names = {n for n in jar.namelist() if n.endswith('.class')}
+                    self.assertIn('dev/elide/truffledata/csv/CsvBatch.class', names)
+                    self.assertIn('dev/elide/truffledata/csv/CsvRowGen.class', names)
+                    self.assertTrue(all(n.startswith('dev/elide/truffledata/csv/') for n in names))
+                    self.assertEqual(artifact_suffixes(module), ('.pom', '.jar', '-sources.jar'))
+                    self.assertFalse([p for p in (base / module).rglob('*') if p.suffix in ('.a', '.so', '.h')])
                 if module == 'json':
                     self.assertTrue(Path(str(prefix) + '-linux-x86_64.a').read_bytes().startswith(b'!<arch>\n'))
                 for path in (directory / version).iterdir():

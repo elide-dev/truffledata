@@ -37,9 +37,10 @@ flowchart LR
     JDBC["JDBC results"] --> Adapt["Adapters + contracts"]
     Proto["Protobuf messages / binary / text"] --> Adapt
     Json["JSON text (simdjson)"] --> Adapt
+    Csv["CSV text (strict RFC 4180)"] --> Adapt
     Objects["Objects + sequences"] --> Adapt
     Schema["Build-time or runtime schema"] --> Adapt
-    Adapt --> Owned["Immutable batches / static rows"]
+    Adapt --> Owned["Immutable batches (incl. CSV) / static rows"]
     Adapt --> Borrowed["Scoped Buffa and JSON views"]
     Adapt --> Dynamic["Live dynamic records"]
     Owned --> Access["Interop / DataLibrary / generated getters"]
@@ -55,9 +56,11 @@ ingestion boundaries; present null and missing fields have distinct representati
 
 Use the JVM or Native Image. The optional Myna/Buffa backend supports JVM FFM and
 static SVM linkage, with Java fallback. The unreleased simdjson JSON backend supports
-the same linkage without a Java fallback. Prebuilt native attachments target Linux x86-64.
+the same linkage without a Java fallback. The unreleased CSV backend is pure Java and
+runs identically on both. Prebuilt native attachments target Linux x86-64.
 See [representation and compilation guarantees](docs/TRUFFLE.md),
-[ownership and native setup](docs/BUFFA.md), and the [JSON backend](docs/JSON.md).
+[ownership and native setup](docs/BUFFA.md), the [JSON backend](docs/JSON.md) and the
+[CSV backend](docs/CSV.md).
 
 ## Choose an artifact
 
@@ -74,6 +77,7 @@ See [representation and compilation guarantees](docs/TRUFFLE.md),
 | `dev.elide:truffledata-json` | Native simdjson JSON values, export, snapshots, typed plans and the static SVM backend |
 | `dev.elide:truffledata-json-jvm` | JVM FFM backend for JSON; keep it off native-image classpaths |
 | `dev.elide:truffledata-json-bindings` | Myna JSON bindings and value ABI, pulled in by the JSON adapter |
+| `dev.elide:truffledata-csv` | Strict streaming CSV into immutable string and primitive column batches, typed plans and one-pass export; pure Java |
 | `dev.elide:truffledata-bom` | Aligned libraries, drivers and runtime dependencies |
 
 The runtime baseline is **Java 25** and **Elide GraalVM `25.5.5-elide.24`**.
@@ -242,6 +246,7 @@ The internal `DataLibrary` is for cooperating implementations. `ReadLongNode` pr
 | `ProtoPlan` / `ProtoRow` | Lossless protobuf contracts, separate presence, compact scalars and generated access |
 | Buffa `TypedRow` | Scoped borrowed typed views; inline small integer records and borrowed bytes |
 | `JsonMessage` / `JsonSnapshot` | Scoped native JSON index or its immutable heap copy; ordered members, exact number tokens |
+| `CsvBatch` / `CsvRow` | Immutable, unconfined CSV batches over retained input; string spans unescaped on read, primitive INT64/FLOAT64/BOOLEAN columns |
 | `DataArray` | Sequences without a column schema |
 
 `DataNull` is the interop null object; `Missing` is an internal presence marker.
@@ -249,9 +254,9 @@ Missing fields raise the appropriate interop access error. `ExactNumber` preserv
 unsigned 64-bit integers and exact decimal values without silently rounding.
 
 LOBs, vendor-specific JDBC values, dates/times and arbitrary host objects require
-explicit adapter policies. Unsupported objects are rejected. RPC execution and CSV
-adapters remain extension work; protobuf text/JSON parsing is supported, and general
-JSON is in development ([JSON backend](docs/JSON.md)).
+explicit adapter policies. Unsupported objects are rejected. RPC execution remains
+extension work; protobuf text/JSON parsing is supported, and general JSON
+([JSON backend](docs/JSON.md)) and CSV ([CSV backend](docs/CSV.md)) are in development.
 
 ## Build and verify
 
@@ -287,6 +292,7 @@ arbitrary downstream guest code or every deployment configuration. See [Truffle 
 | [Contracts and samples](docs/CONTRACTS.md) | Schemas, nullity, protobuf presence, generated access and integration examples |
 | [Myna/Buffa](docs/BUFFA.md) | Native parsing, borrowed views, ownership, JVM and SVM setup |
 | [JSON](docs/JSON.md) | simdjson backend, ownership, number policy, interop and embedder export |
+| [CSV](docs/CSV.md) | Strict CSV contract, limits, typed plans, streaming, interop and export |
 | [Truffle guarantees](docs/TRUFFLE.md) | Specialization, boundaries, compilation and allocation gates |
 | [Comparison benchmarks](docs/COMPARISON_BENCHMARKS.md) | Raw results, charts, caveats and reproduction |
 | [Continuous benchmarks](docs/BENCHMARKS.md) | CodSpeed simulation cases and methodology |

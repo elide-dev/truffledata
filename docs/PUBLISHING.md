@@ -1,6 +1,6 @@
 # Maven publishing
 
-The release publishes twelve thin libraries and a dependency-management BOM, with source jars and POMs. The protobuf runtime can be consumed without protobuf-java. Version 0.7.0 shipped the first nine libraries; the three JSON artifacts publish from the next release, which also adds them to the BOM.
+The release publishes thirteen thin libraries and a dependency-management BOM, with source jars and POMs. The protobuf runtime can be consumed without protobuf-java. Version 0.7.0 shipped the first nine libraries; the three JSON artifacts and the CSV artifact publish from the next release, which also adds them to the BOM.
 
 | Coordinate | Contents |
 | --- | --- |
@@ -14,6 +14,7 @@ The release publishes twelve thin libraries and a dependency-management BOM, wit
 | `dev.elide:truffledata-json:<version>` | Native simdjson JSON values, export, snapshots and typed plans, with the static SVM backend; includes Linux x86-64 native attachments |
 | `dev.elide:truffledata-json-bindings:<version>` | Generated Myna JSON bindings and the Myna value ABI runtime they were generated against |
 | `dev.elide:truffledata-json-jvm:<version>` | JVM FFM backend (`JsonJvm`); depends on truffledata-json. Keep it out of native-image classpaths |
+| `dev.elide:truffledata-csv:<version>` | Strict streaming CSV batches, typed plans and export; pure Java for JVM and SVM, no native attachments; depends on core |
 | `dev.elide:truffledata-bom:<version>` | POM-only dependency management for the tested libraries, drivers and runtime |
 | `dev.elide:truffledata-protobuf-runtime:<version>` | Stock-free plans, codecs, runtime descriptor compilation and generated-record support; core, Gson and Truffle dependencies |
 | `dev.elide:truffledata-protobuf:<version>` | Optional Message/descriptor compatibility bridge and build-time contract generator; depends on protobuf-runtime, protobuf-java and protobuf-java-util |
@@ -63,7 +64,7 @@ dependencies {
 }
 ```
 
-For Maven, declare `https://maven.elide.dev` in `<repositories>` and the same coordinates in `<dependencies>`. Published POMs also declare the fork repository; Gradle and Bazel consumers must explicitly configure it. For Bazel, add the two repositories and desired coordinates to `maven.install`, then repin. Use core alone if neither adapter is needed. The release contains twelve libraries and the BOM. Publishing verifies public artifact bytes and metadata; isolated consumers check Maven resolution and JVM/static SVM execution. The staging examples can reproduce that version locally. Choose a new version for the next upload: published versions are immutable.
+For Maven, declare `https://maven.elide.dev` in `<repositories>` and the same coordinates in `<dependencies>`. Published POMs also declare the fork repository; Gradle and Bazel consumers must explicitly configure it. For Bazel, add the two repositories and desired coordinates to `maven.install`, then repin. Use core alone if neither adapter is needed. The release contains thirteen libraries and the BOM. Publishing verifies public artifact bytes and metadata; isolated consumers check Maven resolution and JVM/static SVM execution. The staging examples can reproduce that version locally. Choose a new version for the next upload: published versions are immutable.
 
 
 ## BOM and consumer acceptance
@@ -143,4 +144,17 @@ explicit `//tools/release:json_native_test` links the publication's static archi
 and runs the same consumer through `JsonSvm`, without `truffledata-json-jvm` on the image
 classpath.
 
-The publisher includes all twelve Java libraries and the BOM, plus Buffa and JSON native attachments.
+## CSV distribution
+
+`dev.elide:truffledata-csv` is a single pure-Java artifact (jar, sources jar and POM)
+managed by the BOM. It has no native attachments, no classifier variants and no
+native-image feature: the same jar serves the JVM and static SVM images. Its POM depends
+only on `truffledata-core`, `truffle-api` and `jspecify`. See the [CSV backend](CSV.md).
+
+`//tools/release:csv_consumer` parses, streams, compiles a typed plan, reads typed values
+and exports using only the publication jars on the JVM. The explicit
+`//tools/release:csv_native_test` builds the same consumer into a static image (Linux
+x86-64, through RBE) with the Truffle JIT checks and runs it. Release publishing and
+native CI both require it.
+
+The publisher includes all thirteen Java libraries and the BOM, plus Buffa and JSON native attachments.

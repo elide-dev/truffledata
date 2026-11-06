@@ -31,6 +31,7 @@ MODULES = [
     "json",
     "json-bindings",
     "json-jvm",
+    "csv",
 ]
 
 # Publication libraries that are not the module's own //<module> target.
@@ -450,6 +451,66 @@ sh_test(
     srcs = ["native_consumer.sh"],
     args = ["$(location :json_native)"],
     data = [":json_native"],
+    tags = ["manual"],
+    target_compatible_with = [
+        "@platforms//os:linux",
+        "@platforms//cpu:x86_64",
+    ],
+)
+
+# CSV is pure Java: one jar serves the JVM and SVM, with no native attachments or cc_deps.
+java_library(
+    name = "csv_consumer_lib",
+    testonly = True,
+    srcs = ["CsvConsumer.java"],
+    deps = [
+        ":core_import",
+        ":csv_import",
+        "@maven//:org_graalvm_sdk_nativeimage",
+    ],
+)
+
+java_test(
+    name = "csv_consumer",
+    main_class = "CsvConsumer",
+    use_testrunner = False,
+    runtime_deps = [":csv_consumer_lib"],
+)
+
+native_image(
+    name = "csv_native",
+    testonly = True,
+    exec_properties = {
+        "EstimatedCPU": "4",
+        "EstimatedMemory": "16GB",
+    },
+    executable_name = "csv-published-consumer",
+    extra_args = [
+        "--gc=serial",
+        "--parallelism=4",
+        "-march=compatibility",
+        "--initialize-at-build-time=dev.elide.truffledata",
+        "-H:+UnlockExperimentalVMOptions",
+    ] + TRUFFLE_JIT_CHECKS + ["-H:-UnlockExperimentalVMOptions"],
+    graalvm_sdk = "@graalvm_linux_amd64//:gvm",
+    main_class = "CsvConsumer",
+    optimization_mode = "2",
+    tags = ["manual"],
+    target_compatible_with = [
+        "@platforms//os:linux",
+        "@platforms//cpu:x86_64",
+    ],
+    deps = [
+        ":csv_consumer_lib",
+        "@maven//:org_graalvm_truffle_truffle_runtime",
+    ],
+)
+
+sh_test(
+    name = "csv_native_test",
+    srcs = ["native_consumer.sh"],
+    args = ["$(location :csv_native)"],
+    data = [":csv_native"],
     tags = ["manual"],
     target_compatible_with = [
         "@platforms//os:linux",
