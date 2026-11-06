@@ -30,6 +30,7 @@ final class Dialect {
   final boolean trailingData;
   final boolean trailingDelimiter;
   final boolean lenientEof;
+  final Nulls nulls;
 
   private Dialect(CsvFormat f) {
     format = f;
@@ -46,6 +47,7 @@ final class Dialect {
     trailingData = f.trailingData();
     trailingDelimiter = f.trailingDelimiter();
     lenientEof = f.lenientEof();
+    nulls = Nulls.of(f);
   }
 
   static Dialect of(CsvFormat format) {

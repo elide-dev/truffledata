@@ -24,6 +24,9 @@ final class BatchBuilder implements CsvScanner.Records {
   private final boolean flexible;
   private final Dialect dialect;
   private final @Nullable CommonsScanner decoder;
+  private final Nulls nulls;
+  private final boolean nullsActive;
+  private final boolean nullsLegacy;
   private byte[] scratch = NO_BYTES;
 
   /** The current conversion view (see {@link #view}). */
@@ -63,6 +66,9 @@ final class BatchBuilder implements CsvScanner.Records {
     this.flexible = dialect.format.flexible();
     this.dialect = dialect;
     this.decoder = dialect.decoder();
+    this.nulls = dialect.nulls;
+    this.nullsActive = nulls.active();
+    this.nullsLegacy = nulls.legacy();
     this.firstRecord = firstRecord;
     this.recordBase = recordBase;
     this.byteBase = byteBase;
@@ -82,12 +88,15 @@ final class BatchBuilder implements CsvScanner.Records {
     }
   }
 
-  /**
-   * The null rule, in one place: the only null token is an unquoted, empty field (after trimming),
-   * and it is null only in a nullable column. Strict formats only; Commons formats have no nulls.
-   */
-  static boolean nullToken(long span) {
-    return !CsvScanner.quoted(span) && CsvScanner.length(span) == 0;
+  /** Whether a field is a null token ({@link Nulls}, the one null rule, on its final value). */
+  private boolean nullToken(long span) {
+    if (nullsLegacy) return !CsvScanner.quoted(span) && CsvScanner.length(span) == 0;
+    boolean quoted = CsvScanner.quoted(span);
+    if (!CsvScanner.escaped(span))
+      return nulls.isNull(input, CsvScanner.offset(span), CsvScanner.length(span), quoted);
+    int length = CsvScanner.length(span);
+    if (scratch.length < length) scratch = new byte[Math.max(length, scratch.length * 2)];
+    return nulls.isNull(scratch, 0, dialect.decode(input, span, scratch, 0, decoder), quoted);
   }
 
   /**
@@ -142,11 +151,13 @@ final class BatchBuilder implements CsvScanner.Records {
         continue;
       }
       long span = spans[column];
-      if (dialect.strict && nullToken(span)) {
+      if (nullsActive && nullToken(span)) {
         if (b.nullable[f]) {
           states[f][row] = Column.NULL;
           continue;
         }
+        // Unconfigured strict formats read an empty field as "" in a non-nullable STRING column.
+        if (!nullsLegacy) throw violation(number, f, "null token in a non-nullable field");
         if (b.kinds[f] != CsvPlan.STRING) throw violation(number, f, "null");
       }
       switch (b.kinds[f]) {

@@ -217,7 +217,8 @@ public final class CsvPlan {
   private Binding genericBinding(String[] names) {
     List<Field> fields = new ArrayList<>(names.length);
     for (String name : names)
-      fields.add(new Field(name, Field.Kind.STRING, false, format.flexible()));
+      fields.add(
+          new Field(name, Field.Kind.STRING, dialect.nulls.configured(), format.flexible()));
     return new Binding(new Schema(fields), names.length, identity(names.length));
   }
 
@@ -323,8 +324,14 @@ public final class CsvPlan {
       }
       if (format.consumesFirstRecord()) consumed = 1;
       if (format.header()) {
-        String[] names = new String[count];
-        for (int i = 0; i < count; i++) names[i] = plan.dialect.string(input, first[i]);
+        @Nullable String[] names = new String[count];
+        Nulls nulls = plan.dialect.nulls;
+        for (int i = 0; i < count; i++) {
+          String name = plan.dialect.string(input, first[i]);
+          // Commons passes header values through the null rule too; a null name is blank.
+          names[i] =
+              nulls.configured() && nulls.isNull(name, CsvScanner.quoted(first[i])) ? null : name;
+        }
         binding = plan.named(names);
       } else binding = plan.positional(count);
       return true;

@@ -107,18 +107,38 @@ final class Differential {
     }
   }
 
+  /** Commons' first record without a header (nulls included), or null; later records are not read. */
+  private static @Nullable List<@Nullable String> firstRecord(String text, CSVFormat commonsFormat) {
+    CSVFormat raw =
+        commonsFormat.builder().setHeader((String[]) null).setSkipHeaderRecord(false).setMaxRows(0).get();
+    try (CSVParser parser = CSVParser.parse(text, raw)) {
+      java.util.Iterator<CSVRecord> it = parser.iterator();
+      if (!it.hasNext()) return null;
+      CSVRecord record = it.next();
+      List<@Nullable String> values = new ArrayList<>();
+      for (int i = 0; i < record.size(); i++) values.add(record.get(i));
+      return values;
+    } catch (IOException | RuntimeException e) {
+      return null;
+    }
+  }
+
+  /** The header record as Commons reads it, with null names as "". */
+  private static List<String> rawHeader(String text, CSVFormat commonsFormat) {
+    List<String> names = new ArrayList<>();
+    List<@Nullable String> first = firstRecord(text, commonsFormat);
+    if (first != null) for (String name : first) names.add(name == null ? "" : name);
+    return names;
+  }
+
   /** Our expected width: explicit names, the header record, or the first data record. */
   private static int width(String text, Result theirs, CsvFormat format, CSVFormat commonsFormat) {
     List<String> names = format.headerNames();
     if (names != null) return names.size();
     if (format.header()) {
       // The raw header record (Commons header names omit null names).
-      Result raw =
-          commons(
-              text,
-              commonsFormat.builder().setHeader((String[]) null).setSkipHeaderRecord(false).setMaxRows(0).get());
-      List<List<@Nullable String>> records = raw.records;
-      return records == null || records.isEmpty() ? 0 : records.get(0).size();
+      List<@Nullable String> first = firstRecord(text, commonsFormat);
+      return first == null ? 0 : first.size();
     }
     List<List<@Nullable String>> records = theirs.records;
     return records == null || records.isEmpty() ? 0 : records.get(0).size();
@@ -149,7 +169,7 @@ final class Differential {
     } else {
       assertEquals(theirs.records, ours.records, context);
       if (theirs.header != null && format.header())
-        assertEquals(theirs.header, ours.header, context);
+        assertEquals(rawHeader(text, commonsFormat), ours.header, context);
       label = theirs.records.isEmpty() ? "both-empty" : "equal";
     }
     // Streaming in small buffers equals the whole parse.

@@ -2,6 +2,11 @@ package dev.elide.truffledata.csv;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import dev.elide.truffledata.ContractViolation;
+import dev.elide.truffledata.Field;
+import dev.elide.truffledata.Schema;
+import java.nio.charset.StandardCharsets;
+import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.TreeMap;
@@ -20,10 +25,7 @@ final class CommonsDifferentialTest {
   private static final String[] DELIMITERS = {",", ";", "\t", "|", "||", "::"};
   private static final String[] NAMES = {"a", "b", "A", "", " ", "c"};
 
-  /** Formats under test; Task 12 lifts this to keep the format's null strings and quote mode. */
-  static CsvFormat.Builder withoutNulls(CsvFormat.Builder b) {
-    return b.setNullString(null).setQuoteMode(null);
-  }
+  private static final String[] NULL_STRINGS = {"", "\\N", "NULL", "N", "a"};
 
   private static CsvFormat.Builder header(Random r, CsvFormat.Builder b) {
     switch (r.nextInt(4)) {
@@ -54,6 +56,12 @@ final class CommonsDifferentialTest {
     if (r.nextInt(4) == 0) b.setEscape(r.nextBoolean() ? Character.valueOf('\\') : null);
     if (r.nextInt(5) == 0) b.setDelimiter(DELIMITERS[r.nextInt(DELIMITERS.length)]);
     if (r.nextInt(6) == 0) b.setQuote(r.nextBoolean() ? Character.valueOf('\'') : null);
+    if (r.nextInt(3) == 0)
+      b.setNullString(r.nextInt(4) == 0 ? null : NULL_STRINGS[r.nextInt(NULL_STRINGS.length)]);
+    if (r.nextInt(3) == 0) {
+      CsvFormat.QuoteMode[] modes = CsvFormat.QuoteMode.values();
+      b.setQuoteMode(r.nextInt(5) == 0 ? null : modes[r.nextInt(modes.length)]);
+    }
     return b;
   }
 
@@ -82,13 +90,117 @@ final class CommonsDifferentialTest {
     for (CsvFormat.Predefined p : CsvFormat.Predefined.values()) {
       Differential d = new Differential();
       Random r = new Random(p.ordinal() * 7919L + 11);
-      CsvFormat plain = withoutNulls(p.format().toBuilder()).build();
+      CsvFormat plain = (p.format().toBuilder()).build();
       run(d, r, plain, INPUTS_PER_FORMAT);
-      CsvFormat named = withoutNulls(p.format().toBuilder().setHeader(true)).build();
+      CsvFormat named = (p.format().toBuilder().setHeader(true)).build();
       run(d, r, named, INPUTS_PER_FORMAT / 3);
       report(p.name(), d);
       assertTrue(d.count("equal", 0) > INPUTS_PER_FORMAT / 4, () -> p + " " + summary(d));
     }
+  }
+
+  private static final String[] TYPED_TOKENS = {
+    "", "\"\"", "42", "-7", "007", "+1", "x", "\"5\"", " 3", "9223372036854775808", "\\N", "NULL",
+    "\"\\N\"", "N"
+  };
+
+  private static final String[] GOOD_INTS = {"42", "-7", "007", "0"};
+  private static final String[] GOOD_TEXT = {"x", "y z", "\"q\"", "é"};
+
+  private static boolean int64(String v) {
+    if (!v.matches("-?[0-9]+")) return false;
+    try {
+      Long.parseLong(v);
+      return true;
+    } catch (NumberFormatException e) {
+      return false;
+    }
+  }
+
+  /**
+   * Typed plans over Commons formats: nullable and non-nullable INT64 and STRING columns read exactly
+   * Commons' values passed through our grammar, and fail (naming the record and field) exactly where
+   * Commons yields null in a non-nullable field or a value outside the grammar.
+   */
+  @Test
+  void typedPlans() {
+    Schema schema =
+        Schema.of(
+            new Field("c0", Field.Kind.INT64, true, false),
+            new Field("c1", Field.Kind.INT64, false, false),
+            new Field("c2", Field.Kind.STRING, true, false),
+            new Field("c3", Field.Kind.STRING, false, false));
+    Random r = new Random(4242);
+    Differential d = new Differential();
+    for (CsvFormat.Predefined p : CsvFormat.Predefined.values()) {
+      for (String nullString : new String[] {null, "NULL", ""}) {
+        CsvFormat.Builder b = p.format().toBuilder();
+        if (nullString != null) b.setNullString(nullString);
+        CsvFormat format = b.build();
+        CSVFormat commons = CommonsFormats.toCommons(format);
+        CsvPlan plan = CsvPlan.compile(schema, format);
+        for (int i = 0; i < 400; i++) {
+          StringBuilder sb = new StringBuilder();
+          int records = 1 + r.nextInt(4);
+          for (int rec = 0; rec < records; rec++) {
+            for (int f = 0; f < 4; f++) {
+              if (f > 0) sb.append(format.delimiterString());
+              if (r.nextInt(3) == 0) sb.append(TYPED_TOKENS[r.nextInt(TYPED_TOKENS.length)]);
+              else sb.append(f < 2 ? GOOD_INTS[r.nextInt(GOOD_INTS.length)] : GOOD_TEXT[r.nextInt(GOOD_TEXT.length)]);
+            }
+            sb.append('\n');
+          }
+          String text = sb.toString();
+          Differential.Result theirs = Differential.commons(text, commons);
+          if (!theirs.ok() || theirs.records().stream().anyMatch(rec -> rec.size() != 4)) {
+            d.count("skipped");
+            continue;
+          }
+          String violation = null;
+          outer:
+          for (int rec = 0; rec < theirs.records().size(); rec++) {
+            List<String> values = theirs.records().get(rec);
+            for (int f = 0; f < 4; f++) {
+              String v = values.get(f);
+              String reason =
+                  v == null
+                      ? (schema.field(f).nullable() ? null : "null token in a non-nullable field")
+                      : (f < 2 && !int64(v) ? "invalid INT64" : null);
+              if (reason != null) {
+                violation = "CSV record " + (rec + 1) + ": Field 'c" + f + "': " + reason;
+                break outer;
+              }
+            }
+          }
+          String context = p + " null=" + nullString + " input " + Differential.escape(text);
+          if (violation != null) {
+            String expected = violation;
+            ContractViolation e =
+                assertThrows(ContractViolation.class, () -> plan.parse(text.getBytes(StandardCharsets.UTF_8)), context);
+            assertEquals(expected, e.getMessage(), context);
+            d.count("violation");
+            continue;
+          }
+          CsvBatch batch = plan.parse(text.getBytes(StandardCharsets.UTF_8));
+          assertSame(schema, batch.schema());
+          assertEquals(theirs.records().size(), batch.size(), context);
+          for (int rec = 0; rec < batch.size(); rec++) {
+            CsvRow row = batch.row(rec);
+            List<String> values = theirs.records().get(rec);
+            for (int f = 0; f < 4; f++) {
+              String v = values.get(f);
+              if (v == null) assertTrue(row.isNull(f), context);
+              else if (f < 2) assertEquals(Long.parseLong(v), row.getLong(f), context);
+              else assertEquals(v, row.getString(f), context);
+            }
+          }
+          d.count("equal");
+        }
+      }
+    }
+    report("typed", d);
+    assertTrue(d.count("equal", 0) > 2_000, () -> summary(d).toString());
+    assertTrue(d.count("violation", 0) > 500, () -> summary(d).toString());
   }
 
   @Test
@@ -100,7 +212,7 @@ final class CommonsDifferentialTest {
       CsvFormat.Predefined p = CsvFormat.Predefined.values()[r.nextInt(CsvFormat.Predefined.values().length)];
       CsvFormat format;
       try {
-        format = withoutNulls(header(r, options(r, p.format().toBuilder()))).build();
+        format = (header(r, options(r, p.format().toBuilder()))).build();
       } catch (IllegalArgumentException invalid) {
         d.count("invalid-format");
         continue;
