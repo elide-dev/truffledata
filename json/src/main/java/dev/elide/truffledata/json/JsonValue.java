@@ -16,8 +16,9 @@ import java.util.NoSuchElementException;
 /**
  * Reusable scoped index view. Every operation checks its message before touching native memory.
  * Guests see objects as ordered members, arrays as elements, and scalars with exact number
- * contracts: integers only fit where representable, DECIMAL tokens fit a BigInteger when
- * integral, and tokens outside binary64 fit nothing.
+ * contracts: integers fit only where representable, -0 fits no integer type, DECIMAL tokens
+ * (integers beyond 64 bits, magnitudes beyond binary64) fit a BigInteger when integral and at most
+ * {@value #MAX_INTEGER_DIGITS} digits long, and fit no primitive type otherwise.
  */
 @ExportLibrary(InteropLibrary.class)
 public final class JsonValue implements TruffleObject {
@@ -359,6 +360,21 @@ public final class JsonValue implements TruffleObject {
   // every other kind to static boundaries over (owner, node), so a view created by readMember or
   // readArrayElement never escapes into a boundary call and compiled guest reads do not allocate.
 
+  private static final long NEGATIVE_ZERO = Double.doubleToRawLongBits(-0.0);
+
+  /** Integral DECIMAL tokens longer than this fit no BigInteger; short tokens like 1E999999999 stay cheap. */
+  static final int MAX_INTEGER_DIGITS = 4096;
+
+  /** Exact integer of an integral decimal within the digit bound; never expands a large exponent. */
+  private static @org.jspecify.annotations.Nullable BigInteger boundedInteger(BigDecimal value) {
+    if (value.signum() == 0) return BigInteger.ZERO;
+    // Cost is proportional to the token's significant digits, not to its exponent.
+    BigDecimal stripped = value.stripTrailingZeros();
+    if (stripped.scale() > 0) return null;
+    if ((long) stripped.precision() - stripped.scale() > MAX_INTEGER_DIGITS) return null;
+    return stripped.toBigIntegerExact();
+  }
+
   /** Exact decimal of a DECIMAL token; null for tokens no bounded decimal can hold. */
   @TruffleBoundary
   private static @org.jspecify.annotations.Nullable BigDecimal decimal(JsonOwner owner, long node) {
@@ -380,16 +396,13 @@ public final class JsonValue implements TruffleObject {
       }
       case ValueTape.F64 -> {
         double d = owner.tape.doubleValue(node);
-        yield Double.isFinite(d) && d == Math.rint(d) ? new BigDecimal(d).toBigInteger() : null;
+        // -0.0 fits no integer type: converting it would lose the sign (Truffle's double contract).
+        boolean integral = Double.isFinite(d) && d == Math.rint(d) && Double.doubleToRawLongBits(d) != NEGATIVE_ZERO;
+        yield integral ? new BigDecimal(d).toBigInteger() : null;
       }
       case ValueTape.DECIMAL -> {
         BigDecimal d = decimal(owner, node);
-        if (d == null) yield null;
-        try {
-          yield d.toBigIntegerExact();
-        } catch (ArithmeticException fraction) {
-          yield null;
-        }
+        yield d == null ? null : boundedInteger(d);
       }
       default -> null;
     };

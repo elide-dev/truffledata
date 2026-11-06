@@ -152,10 +152,10 @@ token, whatever its node kind.
 | Token | Node | `JsonSink` event | `JavaSink` | Interop |
 | --- | --- | --- | --- | --- |
 | Integer in `int64` (`-42`) | I64 | `longValue` | `Long` | Integer types by range; `BigInteger`; `double` when \|v\| ≤ 2^53; `float` when also exact |
-| `-0` | F64 `-0.0` | `doubleValue(-0.0)` | `Double` `-0.0` | `asDouble` is `-0.0`; integer types also fit, as `0` |
+| `-0` | F64 `-0.0` | `doubleValue(-0.0)` | `Double` `-0.0` | `asDouble` is `-0.0`; no integer type fits (the sign would be lost) |
 | Integer above `int64` within `uint64` | U64 | `unsignedValue(bits)` | `BigInteger` | `BigInteger` only |
 | Other token simdjson converts to a finite binary64 (`1.5`, `1e2`) | F64 | `doubleValue` | `Double` | `double`; `float` when exact; integer types when integral and in range |
-| Anything else (`1E400`, integers beyond `uint64`) | DECIMAL, referencing the input | `decimalValue(token)` | `BigDecimal` | `BigInteger` when the token parses as an integral `BigDecimal`; never `long` or `double` |
+| Anything else (`1E400`, integers beyond `uint64`) | DECIMAL, referencing the input | `decimalValue(token)` | `BigDecimal` | `BigInteger` when integral with at most 4096 integer digits (huge exponents such as `1E999999999` fit nothing and are never expanded); `double` only when exactly representable (`1180591620717411303424`, 2^70); never `long` |
 
 F64 holds simdjson's nearest binary64, so a token such as
 `1.0000000000000000001` reads as `1.0`. Interop `fits*` contracts describe the

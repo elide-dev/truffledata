@@ -33,7 +33,11 @@ public interface JsonSink {
   /** U64 token above {@link Long#MAX_VALUE}; {@code bits} is the unsigned two's-complement value. */
   void unsignedValue(long bits);
 
-  /** Number token no binary64 or 64-bit integer holds exactly; read it with {@link JsonValue#numberText}. */
+  /**
+   * Integer token beyond the 64-bit ranges, or a token whose magnitude overflows binary64. Tokens
+   * that round to a finite binary64 arrive as {@link #doubleValue} instead; their exact spelling
+   * remains available through {@link JsonValue#numberText}.
+   */
   void decimalValue(JsonValue token);
 
   void stringValue(JsonValue text);

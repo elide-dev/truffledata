@@ -109,4 +109,40 @@ final class JsonInteropTest {
         for (int i = 0; i < 8; i++) assertEquals(i, root.getMember("k" + i).asLong());
     }
   }
+  @Test
+  void negativeZeroAndExtremeDecimalsKeepExactContracts() {
+    try (Context context = context();
+        JsonDecoder decoder = JsonJvm.open(JvmScopedTest.library());
+        JsonMessage message =
+            decoder.decode(
+                "[-0,1E999999999,1E-999999999,1180591620717411303424,1E400,-0.0]"
+                    .getBytes(StandardCharsets.UTF_8))) {
+      Value array = context.asValue(message.root());
+      Value negativeZero = array.getArrayElement(0);
+      assertTrue(negativeZero.fitsInDouble());
+      assertFalse(negativeZero.fitsInInt(), "-0 loses its sign as an int");
+      assertFalse(negativeZero.fitsInLong());
+      assertFalse(negativeZero.fitsInBigInteger());
+      assertFalse(array.getArrayElement(5).fitsInLong());
+      long start = System.nanoTime();
+      Value hugeExponent = array.getArrayElement(1);
+      assertTrue(hugeExponent.isNumber());
+      assertFalse(hugeExponent.fitsInLong());
+      assertFalse(hugeExponent.fitsInBigInteger());
+      assertFalse(hugeExponent.fitsInDouble());
+      // Underflow rounds to a finite binary64, so the token is F64 0.0, not DECIMAL.
+      Value tinyExponent = array.getArrayElement(2);
+      assertEquals(0.0, tinyExponent.asDouble());
+      assertEquals("1E-999999999", message.root().element(2).numberText());
+      assertTrue(System.nanoTime() - start < 5_000_000_000L, "exponent size must not drive cost");
+      Value twoToSeventy = array.getArrayElement(3);
+      assertFalse(twoToSeventy.fitsInLong());
+      assertTrue(twoToSeventy.fitsInDouble());
+      assertEquals(new BigInteger("1180591620717411303424"), twoToSeventy.asBigInteger());
+      Value overflow = array.getArrayElement(4);
+      assertTrue(overflow.fitsInBigInteger());
+      assertEquals(BigInteger.TEN.pow(400), overflow.asBigInteger());
+      assertFalse(overflow.fitsInDouble());
+    }
+  }
 }
