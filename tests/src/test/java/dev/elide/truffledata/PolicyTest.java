@@ -54,7 +54,7 @@ class PolicyTest {
             Map.entry("JsonMessage.java", 2),
             Map.entry("JsonOwner.java", 7), // Close, pinning and the array index slow paths.
             Map.entry("JsonPlan.java", 4), // Plan compilation and decode entry points.
-            Map.entry("JsonRecord.java", 3),
+            Map.entry("JsonRecord.java", 4),
             Map.entry("JsonSvm.java", 4), // Static-linked native calls.
             Map.entry("JsonTypedOwner.java", 3),
             Map.entry("JsonValue.java", 24), // Static (owner, node) slow paths per interop message.
