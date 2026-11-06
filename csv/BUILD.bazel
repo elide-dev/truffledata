@@ -1,0 +1,17 @@
+load("//bazel:java.bzl", "data_java_library")
+
+data_java_library(
+    name = "csv",
+    srcs = [
+        "src/main/java/dev/elide/truffledata/csv/CsvFormat.java",
+        "src/main/java/dev/elide/truffledata/csv/CsvLimits.java",
+        "src/main/java/dev/elide/truffledata/csv/CsvScanner.java",
+        "src/main/java/dev/elide/truffledata/csv/Utf8.java",
+        "src/main/java/dev/elide/truffledata/csv/package-info.java",
+    ],
+    visibility = ["//visibility:public"],
+    deps = [
+        "//core",
+        "@maven//:org_graalvm_truffle_truffle_api",
+    ],
+)

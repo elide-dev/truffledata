@@ -1,0 +1,26 @@
+load("@rules_java//java:defs.bzl", "java_test")
+
+java_test(
+    name = "jvm",
+    srcs = [
+        "CsvScannerTest.java",
+        "RecordGenerator.java",
+        "Utf8Test.java",
+    ],
+    args = [
+        "--class",
+        "dev.elide.truffledata.csv.CsvScannerTest",
+        "--class",
+        "dev.elide.truffledata.csv.Utf8Test",
+    ],
+    jvm_flags = ["-ea"],
+    main_class = "dev.elide.bazel.junit.BazelJUnitRunner",
+    use_testrunner = False,
+    runtime_deps = ["//bazel/junit:runner"],
+    deps = [
+        "//core",
+        "//csv",
+        "@maven//:org_graalvm_truffle_truffle_api",
+        "@maven//:org_junit_jupiter_junit_jupiter_api",
+    ],
+)
