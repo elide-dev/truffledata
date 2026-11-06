@@ -1,12 +1,23 @@
 # CSV backend (unreleased)
 
-The `//csv` module reads strict RFC 4180 CSV from UTF-8 bytes into immutable column
-batches. Generic CSV reads every column as a string named by the header; known-schema
-CSV converts INT64, FLOAT64 and BOOLEAN columns into primitive arrays during the same
-pass. Guests read rows through `InteropLibrary` and `DataLibrary` (the core row model,
-so `ReadLongNode` and the other read nodes work unchanged), embedders export rows in
-one pass, and `CsvReader` streams an `InputStream` in bounded batches. The delivery
-plan is [`docs/superpowers/plans/2026-11-06-csv.md`](superpowers/plans/2026-11-06-csv.md).
+The `//csv` module reads UTF-8 CSV into immutable column batches and writes CSV.
+
+- **Dialects.** Strict RFC 4180 is the default. The Apache Commons CSV 1.14.1 dialects
+  (every predefined format and option) are also supported, differential-tested against
+  Commons itself.
+- **Generic and typed reads.** Generic CSV reads every column as a string named by the
+  header. Known-schema CSV converts INT64, FLOAT64 and BOOLEAN columns into primitive
+  arrays during the same pass.
+- **Guest and embedder access.** Guests read rows through `InteropLibrary` and
+  `DataLibrary`, the core row model, so `ReadLongNode` and the other read nodes work
+  unchanged. Embedders export rows in one pass.
+- **Input.** `CsvReader` streams an `InputStream` in bounded batches. Files can also be
+  memory-mapped, so STRING cells are never copied onto the heap.
+- **Output.** `CsvWriter` writes with Commons `CSVPrinter` rules.
+
+The delivery plan is
+[`docs/superpowers/plans/2026-11-06-csv.md`](superpowers/plans/2026-11-06-csv.md)
+(Tasks 9–15 cover the Commons scope).
 
 The module publishes (from the release after 0.7.0) as `dev.elide:truffledata-csv`:
 one pure-Java jar for the JVM and Native Image, with no native attachments; see
@@ -29,21 +40,21 @@ try (CsvReader reader = plan.open(input)) {
 }
 ```
 
-## Current defaults (open decisions)
+## Decisions in force
 
-These defaults are in force today but are still open decisions and may change before
-the first release:
-
-| Decision | Current default |
+| Decision | Current rule |
 | --- | --- |
-| Implementation | Pure Java. No native code, seam, FFM or `@CFunction`; one jar serves JVM and SVM |
-| Dialect | Strict RFC 4180 with four leniencies: lone CR terminators, skipped empty lines, flexible rows that may only be shorter, and ASCII case-insensitive `true`/`false` |
-| Null | Only an unquoted empty field is null, and only in a nullable column |
-| Header | On by default (`CsvFormat.RFC4180.header() == true`) |
-| Input | Heap `byte[]` (or an `InputStream` read into heap buffers) only; no off-heap or mmap adoption |
+| Implementation | Pure Java, with no native code, seam or `@CFunction`. FFM is used only for mapped files. One jar serves JVM and SVM |
+| Behaviour scope | Apache Commons CSV 1.14.1 parsing and printing (feature matrix below). Commons formats get Commons behaviour; our own default format stays strict |
+| Strict dialect | RFC 4180 with four leniencies: lone CR terminators, skipped empty lines, flexible rows that may only be shorter, and ASCII case-insensitive `true`/`false` |
+| Null | One rule (`Nulls`, below). An unconfigured strict format keeps the v1 rule: only an unquoted empty field is null, and only in a nullable typed column |
+| Header | `CsvFormat.RFC4180.header() == true`. Commons presets have no header, as in Commons |
+| Input | Heap `byte[]`, an `InputStream`, or a memory-mapped file (`CsvMapping`) |
 
-## Format and strictness contract
+## Strict format and strictness contract
 
+This section is the contract of **strict** formats (`CsvFormat.strict() == true`), which
+is the default. Commons formats follow Commons instead ([Commons formats](#commons-formats)).
 Records follow RFC 4180: a delimiter, a quote, and a doubled quote (`""`) as the escape
 inside quoted fields. Quoted fields may contain the delimiter, CR and LF.
 
@@ -74,10 +85,21 @@ inside quoted fields. Quoted fields may contain the delimiter, CR and LF.
 
 ### Options
 
-`CsvFormat(delimiter, quote, quoting, header, trim, flexible)` is an immutable record.
-`CsvFormat.RFC4180` is `,`, `"`, quoting on, header on, trim off, flexible off; derive
-others with `withDelimiter(char)`, `withQuote(char)`, `withoutQuoting()`,
-`withHeader(boolean)`, `withTrim(boolean)` and `withFlexible(boolean)`.
+`CsvFormat` is an immutable class with a `Builder` (`CsvFormat.builder()`,
+`format.toBuilder()`). The setter names follow Commons `CSVFormat.Builder`.
+
+`CsvFormat.RFC4180` is strict:
+
+- `,` delimiter and `"` quote, with quoting on;
+- header on, trim off, flexible off;
+- CRLF record separator when writing.
+
+Derive other formats with these methods:
+
+- `withDelimiter(char)`, `withQuote(char)`, `withoutQuoting()`;
+- `withHeader(boolean)`, or `withHeader(String...)` for explicit names;
+- `withTrim(boolean)`, `withFlexible(boolean)`;
+- `withNullStrings(String...)`, `withQuoteMode(QuoteMode)`.
 
 | Option | Default | Meaning |
 | --- | --- | --- |
@@ -87,9 +109,99 @@ others with `withDelimiter(char)`, `withQuote(char)`, `withoutQuoting()`,
 | `header` | on | Take field names from the first record |
 | `trim` | off | Strip ASCII space and tab around unquoted content and outside the quotes of quoted fields. Forbids a space or tab delimiter, and a space or tab quote while quoting is on |
 | `flexible` | off | Accept rows shorter than the header or schema; absent trailing fields are missing |
+| `headerNames` / `skipHeaderRecord` | none / off | Explicit column names; `skipHeaderRecord` drops the first record |
+| `allowMissingColumnNames` | on | Off rejects a blank header name (`CSV header: missing name at column N`) |
+| `duplicateHeaderMode` | `ALLOW_ALL` | `ALLOW_EMPTY` or `DISALLOW` reject duplicate names (`CSV header: duplicate name at column N`) |
+| `ignoreHeaderCase` | off | Duplicate detection and typed binding ignore case |
+| `nullStrings` / `quoteMode` | unset | The [null rule](#null-and-missing) |
+| `maxRows` | 0 (all) | Data records to read; a header record does not count. Reading stops there, and later bytes are not scanned |
+| `recordSeparator`, `headerComments`, `autoFlush` | CRLF, none, off | Writer options |
 
-Not supported: backslash escapes, comment lines, multi-byte delimiters, null tokens
-(`NA`, `\N`), encodings other than UTF-8, and type inference.
+Strict formats reject these Commons-only options, naming the option: escape, comment
+marker, multi-byte delimiter, `ignoreSurroundingSpaces`, `trailingDelimiter`,
+`trailingData`, `lenientEof` and `ignoreEmptyLines(false)`. Encodings other than UTF-8
+and type inference are not supported in either family.
+
+## Commons formats
+
+`CsvFormat.Predefined` mirrors Commons `CSVFormat.Predefined`, and
+`CsvFormat.Predefined.X.format()` equals Commons' `X` option for option (asserted by
+`CsvFormatTest`). Any format built with `setStrict(false)` is parsed by `CommonsScanner`,
+a byte-level port of the Commons `Lexer` and `CSVParser`. Presets are `flexible` (Commons
+records may be short) and have no header unless one is set.
+
+| Format | Delimiter | Quote | Escape | Empty lines | Null string | Quote mode | Other |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `DEFAULT` | `,` | `"` | — | skipped | — | — | |
+| `EXCEL` | `,` | `"` | — | records | — | — | `allowMissingColumnNames`, `trailingData`, `lenientEof` |
+| `INFORMIX_UNLOAD` | `\|` | `"` | `\` | skipped | — | — | LF separator |
+| `INFORMIX_UNLOAD_CSV` | `,` | `"` | — | skipped | — | — | LF separator |
+| `MONGODB_CSV` | `,` | `"` | `"` | skipped | — | `MINIMAL` | escape equals quote: `a""b` unquoted reads `a"b` |
+| `MONGODB_TSV` | tab | `"` | `"` | skipped | — | `MINIMAL` | |
+| `MYSQL` | tab | none | `\` | records | `\N` | `ALL_NON_NULL` | LF separator |
+| `ORACLE` | `,` | `"` | `\` | records | `\N` | `MINIMAL` | `trim`; platform line separator |
+| `POSTGRESQL_CSV` | `,` | `"` | — | records | (empty) | `ALL_NON_NULL` | unquoted empty is null, `""` is empty |
+| `POSTGRESQL_TEXT` | tab | none | `\` | records | `\N` | `ALL_NON_NULL` | LF separator |
+| `RFC4180` | `,` | `"` | — | records | — | — | CRLF separator |
+| `TDF` | tab | `"` | — | skipped | — | — | `ignoreSurroundingSpaces` |
+
+Commons parsing rules, all reproduced:
+
+- **Quotes.**
+  - A quote is special only at the start of a token. `a"b` is the text `a"b`.
+  - Whitespace (`Character.isWhitespace`, including U+3000 and the other multi-byte
+    spaces) after a closing quote is skipped. Any other byte is an error, unless
+    `trailingData` appends it.
+  - An unterminated quote is an error, unless `lenientEof` ends the token at end of
+    input.
+- **Escapes.**
+  - `\r`, `\n`, `\t`, `\b` and `\f` map to control characters.
+  - An escaped meta character (escape, quote or comment marker) or an escaped line break
+    reads as itself.
+  - An escaped delimiter, written with an escape before each delimiter byte, reads as the
+    delimiter.
+  - An unknown escape keeps both bytes.
+  - An escape at end of input is an error.
+- **Comments.** A comment marker is recognized only at the first byte of a line. The
+  line is skipped; it is not retained.
+- **`ignoreEmptyLines(false)`.** An empty line is a record of one empty value.
+- **`ignoreSurroundingSpaces`.** Whitespace before a token is skipped. For unquoted
+  tokens, trailing whitespace is trimmed after unescaping.
+- **`trim`.** `String.trim` is applied to every value, quoted or not.
+- **`trailingDelimiter`.** A final empty value of a record is dropped.
+- **Multi-byte delimiters.** Delimiters of up to 16 ASCII bytes are supported.
+- **Headers.**
+  - The header comes from the first record, from explicit names, or from explicit names
+    with `skipHeaderRecord`.
+  - Blank names (`String.trim` empty) and null names need `allowMissingColumnNames`.
+  - Duplicates follow `DuplicateHeaderMode`, case-insensitively with `ignoreHeaderCase`.
+  - An empty input with a first-record header gives an empty batch with no fields.
+
+### Feature matrix versus Commons CSV 1.14.1
+
+| Commons feature | Status |
+| --- | --- |
+| Delimiter (string), quote, escape, comment marker | Supported; ASCII meta characters only |
+| `ignoreEmptyLines`, `ignoreSurroundingSpaces`, `trim`, `nullString` | Supported |
+| Quote-mode-dependent nulls (`ALL_NON_NULL`, `NON_NUMERIC`) | Supported |
+| Explicit header, first-record header, `skipHeaderRecord`, `allowMissingColumnNames`, `DuplicateHeaderMode`, `ignoreHeaderCase` | Supported |
+| `trailingDelimiter`, `trailingData`, `lenientEof`, `maxRows` | Supported |
+| CR, LF and CRLF terminators | Supported |
+| The 12 predefined formats | Supported, option for option |
+| `CSVPrinter`: quote modes `ALL`, `ALL_NON_NULL`, `MINIMAL`, `NON_NUMERIC`, `NONE`, escapes, null string, record separator, trailing delimiter, `trim`, header records, header comments, comments | Supported, character-for-character output |
+| Several null strings | Extension (Commons has one); the writer prints the first |
+| Input encoding | **Different:** strict UTF-8 only, and a UTF-8 BOM is skipped. Commons decodes with replacement and keeps the BOM. Input is bytes, so an invalid byte is a located error, not a silent U+FFFD |
+| Non-ASCII meta characters | **Different:** rejected. ASCII keeps the scanner byte-level |
+| Records wider than the header or first record | **Different:** rejected (`record has N fields, expected W`). Batches are columnar with one schema, and a wider row has no columns to land in. Shorter rows read as missing (`flexible`) |
+| A record that `trailingDelimiter` empties (`ignoreEmptyLines(false)` and an empty line) | **Different:** a syntax error, `empty record with a trailing delimiter`. Commons silently stops parsing there and drops the rest of the input |
+| Record comments, header and trailer comments | **Different:** skipped, not retained. Columnar batches carry no per-record text |
+| Header map lookups for duplicates, `ignoreHeaderCase` member access | **Different:** core `Schema` reads duplicate names by ordinal only, and guest member names are exact. `ignoreHeaderCase` applies to duplicate detection and typed binding |
+| Null header names | **Different:** read as `""` names. Commons omits them from `getHeaderNames()` |
+| Header from the first record, when writing | **Different:** nothing is printed until `printBatch` supplies names. Commons prints an empty record |
+| `QuoteMode.ALL` with a null string and no quote | **Different:** the writer rejects it. Commons prints `null` around the null string, a `String` concatenation of a null `Character` |
+| Stale peek buffers at end of input with delimiters of 3 or more characters, and an escaped multi-byte delimiter near end of input | **Different:** not ported (Commons bugs). The differential suite ends such inputs with LF |
+| `Reader`/`InputStream`/`ResultSet` values, `CSVParser` record numbers and character offsets, `getFirstEndOfLine` | Not in scope (Java I/O conveniences); batches report record indexes and byte offsets instead |
+
 
 ## Limits
 
@@ -104,6 +216,9 @@ Integer.MAX_VALUE - 64`, and `maxRecordBytes < 2^30` (the packed span length fie
 | `maxColumns` | 4096 | Fields per record |
 | `maxBatchRows` | 1,048,576 | Rows per batch. `parse` fails past it; a stream starts a new batch |
 
+Commons formats apply the same limits. A comment line counts toward `maxRecordBytes`
+while it is incomplete in a stream.
+
 A stream holds at most one batch buffer and one incomplete record. An unterminated
 quote in an endless stream therefore fails at `maxRecordBytes` (plus two bytes of slack
 for a pending CRLF) instead of growing memory.
@@ -113,10 +228,11 @@ for a pending CRLF) instead of growing memory.
 ### Generic
 
 `Csv.parse(byte[] utf8, CsvFormat format[, CsvLimits limits])` copies the input once,
-after checking `maxBatchBytes`, and returns a `CsvBatch` whose schema has one
-non-nullable STRING field per column (optional when `flexible`). Quoted fields are
-never copied at ingest: STRING columns hold packed spans into the retained input, and
-doubled quotes are unescaped only when a field is read.
+after checking `maxBatchBytes`, and returns a `CsvBatch` whose schema has one STRING
+field per column. Fields are optional when `flexible`, and nullable when the format
+configures null strings. Quoted fields are never copied at ingest: STRING columns hold
+packed spans into the retained input. Doubled quotes, Commons escapes and trailing data
+are decoded only when a field is read.
 
 ### Typed
 
@@ -166,17 +282,19 @@ as in the whole input.
 
 ### Batches and rows
 
-`CsvBatch` and `CsvRow` are immutable and unconfined, need no closing, and are their own
-snapshot; share them across threads freely. The batch keeps its input `byte[]`; its
-arrays are never exposed.
+Heap `CsvBatch`es and their `CsvRow`s are immutable and unconfined, need no closing, and
+are their own snapshot; share them across threads freely. The batch keeps its input
+`byte[]`, and its arrays are never exposed. Mapped batches are scoped to their mapping
+([Mapped input](#mapped-input)).
 
 | `CsvBatch` | Behavior |
 | --- | --- |
 | `schema()`, `size()` | The batch schema and row count |
 | `row(i)` | A new `CsvRow` view |
 | `firstRecord()` | Stream data-record index of row 0 (the header is not a data record) |
-| `inputBytes()` | Retained input length |
+| `inputBytes()` | Retained input length (mapped: the file bytes the batch addresses) |
 | `export(CsvSink)` | One-pass export (below) |
+| `mapped()`, `snapshot()`, `close()` | Mapped input (below). Heap batches: `false`, `this`, no-op |
 
 | `CsvRow` | Behavior |
 | --- | --- |
@@ -217,6 +335,34 @@ per row or per field. Exceptions from the sink propagate unchanged.
 
 ## Null and missing
 
+`Nulls` holds the one null rule. It is applied to a field's final value (after unescaping
+and trimming) and to whether the field was quoted, as Commons `CSVParser.handleNull`
+applies it:
+
+- a value equal to one of `nullStrings` is null, unless the quote mode is `ALL_NON_NULL`
+  or `NON_NUMERIC` and the field was quoted;
+- with no null strings, an unquoted empty value is null only under those two quote
+  modes.
+
+A format **configures** nulls when it sets null strings or one of those quote modes. A
+configured format behaves as follows:
+
+- generic columns are nullable STRINGs;
+- header values pass through the rule, and a null name is blank (`""`);
+- in typed plans, a null token in a nullable field is null;
+- a null token in a non-nullable field of any kind fails with `ContractViolation("CSV
+  record R: Field 'x': null token in a non-nullable field")`. The message never contains
+  the token.
+
+| Format | `\N` | `"\N"` | (empty) | `""` |
+| --- | --- | --- | --- | --- |
+| `MYSQL`, `POSTGRESQL_TEXT` (`\N`, `ALL_NON_NULL`, no quote) | null | (no quoting) | `""` | (no quoting) |
+| `ORACLE` (`\N`, `MINIMAL`) | null | null | `""` | `""` |
+| `POSTGRESQL_CSV` (empty, `ALL_NON_NULL`) | `\N` | `\N` | null | `""` |
+| `DEFAULT` and other unconfigured Commons formats | text | text | `""` | `""` |
+
+Unconfigured strict formats keep the v1 rule, shown in this table:
+
 | Input | Nullable column | Non-nullable STRING | Non-nullable INT64 / FLOAT64 / BOOLEAN |
 | --- | --- | --- | --- |
 | Unquoted empty field (`a,,b`; with `trim`, a field of blanks) | null (`DataNull`) | `""` | `ContractViolation` (`null`) |
@@ -224,11 +370,84 @@ per row or per field. Exceptions from the sink propagate unchanged.
 | Absent trailing field of a flexible short row | missing if optional; `ContractViolation` (`missing`) otherwise | — | — |
 | Optional schema field absent from the header | missing in every row | — | — |
 
-Generic fields are non-nullable STRINGs, so generic CSV has no nulls: an empty field is
-`""`. With `flexible`, generic fields are optional and absent ones are missing. Missing
+Under the v1 rule generic fields are non-nullable STRINGs, so generic CSV has no nulls:
+an empty field is `""`. With `flexible`, generic fields are optional and absent ones are missing. Missing
 and null stay distinct on every path: `isNull` is false for missing,
 `DataLibrary.isPresent` is false only for missing, and export sends `nullValue` or
 `missing`.
+
+## Writing
+
+`CsvWriter` follows the Commons `CSVPrinter` rules for every format, strict or Commons.
+
+```java
+try (CsvWriter writer = CsvWriter.open(out, CsvFormat.Predefined.POSTGRESQL_CSV.format())) {
+  writer.printRecord("a,b", null, 42L);   // "a,b",,"42" (ALL_NON_NULL, null string "")
+  writer.printComment("ignored without a comment marker");
+  writer.printBatch(batch);               // one record per row; trailing missing fields omitted
+}
+```
+
+| Method | Behaviour |
+| --- | --- |
+| `new CsvWriter(Appendable, format)`, `CsvWriter.open(OutputStream, format)` (UTF-8) | Prints the header comments, then the explicit header names unless `skipHeaderRecord` |
+| `print(value)`, `println()`, `printRecord(values…)` | Values are `CharSequence`, `Number` (unquoted under `NON_NUMERIC`), other objects (`toString()`) or null (the first null string; `ALL` quotes it) |
+| `printComment(text)` | One `marker + space` line per comment line; nothing without a comment marker |
+| `printBatch(batch)` | Rows in order. When the format names columns from the first record and nothing was printed yet, the schema names print first as the header record |
+| `recordCount()`, `flush()`, `close()` | As in Commons; `close()` closes a closeable target |
+
+The quote modes work as in Commons:
+
+- **`MINIMAL`** (also when the quote mode is unset) quotes a value when any of these
+  holds:
+  - it is empty and starts a record;
+  - its first character is at most `#`;
+  - it contains CR, LF, the quote, the escape or the delimiter;
+  - its last character is at most a space.
+- **`ALL`** and **`ALL_NON_NULL`** quote every non-null value.
+- **`NON_NUMERIC`** quotes every value except numbers.
+- **`NONE`** escapes CR (`\r`), LF (`\n`), the escape and each delimiter byte instead of
+  quoting.
+
+Inside quotes, the quote and the escape are preceded by the escape. The quote itself
+serves as the escape when none is set.
+
+Output equals Commons, character for character (`CommonsRoundTripTest`).
+
+## Mapped input
+
+`CsvMapping` is the owner of one read-only file mapping:
+
+- `CsvMapping.map(path)` maps the file into a confined `Arena`;
+- `CsvMapping.map(path, true)` maps it into a shared one.
+
+| Entry point | Owner of the mapping | Batches valid until |
+| --- | --- | --- |
+| `Csv.parse(mapping, format[, limits])`, `plan.parse(mapping[, limits])` | The caller | `mapping.close()` |
+| `Csv.open(mapping, format[, limits, batchBytes])`, `plan.open(mapping, …)` | The caller | `mapping.close()` |
+| `Csv.parse(path, format[, limits])`, `plan.parse(path[, limits])` | The returned batch | `batch.close()` |
+| `Csv.open(path, format[, limits, batchBytes])`, `plan.open(path, …)` | The reader | `reader.close()` |
+
+- **Zero-copy retention.** STRING cells stay spans into the mapping: a mapped batch holds
+  no heap copy of the input. Typed cells are decoded at ingest into heap arrays, as for
+  heap input.
+- **Scanning.** The file is scanned through one reusable heap window (about 1 MiB for
+  `parse`, `batchBytes` for streams). This costs one memcpy per byte and keeps a single
+  `byte[]` scanner kernel. A whole-file `parse` still checks `maxBatchBytes`.
+- **Lifetime.**
+  - After the mapping closes, every read of its batches throws `IllegalStateException("CSV
+    mapping closed")`: typed and STRING reads, `DataLibrary` and interop messages, `row`,
+    `export` and `snapshot`.
+  - The check is one null test and one field load on each read path, with no boundary.
+    Heap batches pay only the null test.
+- **Threads.** A confined mapping serves STRING reads and `close()` only on its own thread;
+  other threads get `WrongThreadException`. A shared mapping serves any thread.
+- **`snapshot()`.** Copies the bytes a mapped batch addresses into a heap batch that
+  shares the primitive columns. The copy outlives the mapping.
+- **Export.** Copies each STRING cell into a reusable scratch buffer before handing the
+  sink a `CsvText`, so the export allocates nothing per cell.
+
+Heap batches are unchanged: immutable, shareable, never closed (`close()` is a no-op).
 
 ## Guest interop
 
@@ -263,16 +482,18 @@ Nothing falls back to another parser, and nothing is accepted silently.
 
 | Failure | Exception and message |
 | --- | --- |
-| Syntax | `IllegalArgumentException("CSV syntax at record R, byte B: <reason>")`, reasons `quote in an unquoted field`, `unexpected byte after a closing quote`, `unterminated quoted field`, `record has N fields, expected W` |
+| Syntax | `IllegalArgumentException("CSV syntax at record R, byte B: <reason>")`, reasons `quote in an unquoted field` (strict), `unexpected byte after a closing quote`, `unterminated quoted field`, `record has N fields, expected W`, `escape at end of input` and `empty record with a trailing delimiter` (Commons) |
 | Invalid UTF-8 | `IllegalArgumentException("CSV syntax at record R, byte B: invalid UTF-8")`, `B` being the first invalid byte |
 | Limit | `IllegalArgumentException("CSV resource limit: <name>")`, name `maxBatchBytes`, `maxRecordBytes`, `maxColumns` or `maxBatchRows` |
-| No header | `IllegalArgumentException("CSV header missing")` |
+| No header | `IllegalArgumentException("CSV header missing")` (strict formats; Commons formats give an empty batch) |
+| Header names | `IllegalArgumentException("CSV header: missing name at column N")` or `"... duplicate name at column N"` |
+| Mapping closed | `IllegalStateException("CSV mapping closed")` |
 | Header mapping | `ContractViolation("CSV header: Field 'x': missing")` or `"... matched by two columns"` |
-| Conversion | `ContractViolation("CSV record R: Field 'x': <reason>")`, reasons `invalid INT64`, `invalid FLOAT64`, `invalid BOOLEAN`, `null`, `missing`, `floating width`, `integer width`, `integer range` |
+| Conversion | `ContractViolation("CSV record R: Field 'x': <reason>")`, reasons `invalid INT64`, `invalid FLOAT64`, `invalid BOOLEAN`, `null`, `null token in a non-nullable field`, `missing`, `floating width`, `integer width`, `integer range` |
 | Unsupported plan | `IllegalArgumentException("CSV plan: Field 'x': <reason>")` |
 | Wrong getter | `ContractViolation("Field 'x': expected a present, non-null INT64")` (or the requested kind) |
 | Stream I/O | `IOException` from `CsvReader.next()` and `schema()`, unchanged |
-| Invalid options | `IllegalArgumentException` from the `CsvFormat` and `CsvLimits` constructors and from `open` (`batchBytes` outside `1..maxBatchBytes`) |
+| Invalid options | `IllegalArgumentException` from `CsvFormat.Builder.build()` (the Commons `validate()` rules plus ours), the `CsvLimits` constructor and `open` (`batchBytes` outside `1..maxBatchBytes`) |
 
 `R` counts physical records from 1, the header included and empty lines excluded: the
 record a person counts in the file. `B` is the 0-based byte offset from the start of the
@@ -281,10 +502,33 @@ and its messages name the record and field but never include field text.
 
 ## Threading
 
-Formats, limits, plans, batches and rows are immutable and safe to share across threads.
-A `CsvReader` is single-threaded. A `CsvText` belongs to the export that passes it.
+Formats, limits, plans, and heap batches and rows are immutable and safe to share across
+threads. Mapped batches are as thread-safe as their arena: confined arenas serve one
+thread, shared arenas serve any. A `CsvReader` and a `CsvWriter` are single-threaded. A
+`CsvText` belongs to the export that passes it.
 
 ## Performance
+
+### Scanner seam for a faster kernel
+
+`CsvKernel` (package-private, final) is the only code a SWAR, Vector API or native fast
+path needs to replace. It has two methods over `(byte[] input, int from, int to)`:
+
+- `skipUnquoted` returns the first index whose byte is structural outside quotes: the
+  delimiter's first byte, CR, LF, the quote (strict formats, while quoting) or the escape.
+  It returns `to` when there is none.
+- `skipQuoted` returns the first index holding the quote or the escape, or `to`.
+
+Both scanners make every run skip through these two calls. The strict scanner and the
+Commons lexer keep their record framing, quoting rules and spans. `CsvKernelTest` is the
+contract: a replacement must match the byte-by-byte reference at every offset.
+
+The strict RFC 4180 loop keeps its v1 shape. Per record, it adds one comparison for
+`maxRows` and one add per STRING cell for windowed spans. Commons-only work (escapes,
+comments, Unicode space trimming, trailing data, null strings) is paid only by Commons
+formats and by formats that configure null strings.
+
+### Gates
 
 The pure-Java producer rests on a throughput probe recorded in the plan (decision D1),
 which found a Java span scanner within the range of Rust `csv-core` and a C++ scalar
@@ -309,19 +553,19 @@ The gates below are enforced; they bound shape and allocation, not throughput:
 
 ## Deferred
 
-- A SWAR or SIMD unquoted-run skip in the scanner (the comparison decides; Java first).
-- Off-heap and mmap input, and buffer recycling across batches. Either makes batches
-  scoped and needs a shared owner.
-- More options: null tokens, wider boolean spellings, STRING length constraints,
-  comments, backslash escapes, other encodings, type inference.
+- A SWAR or SIMD kernel behind `CsvKernel`, and a `MemorySegment`-native kernel that drops
+  the mapped-window copy (the comparison decides).
+- Buffer recycling across heap batches.
+- Wider boolean spellings, STRING length constraints, other encodings, type inference.
 - Primitive and text columns in core `Batch`, so CSV and JDBC share column storage.
 - A tree-shaped sink and a backend-neutral UTF-8 text view shared with JSON and YAML.
-- CSV writing, and CodSpeed simulation cases.
+- CodSpeed simulation cases.
 
 ## Verification
 
 ```sh
-bazel test //csv/tests:jvm                      # scanner, UTF-8, batches, interop, reader, plans, export
+bazel test //csv/tests:jvm                      # scanner, UTF-8, batches, interop, reader, plans, export,
+                                                # Commons differential and round-trip suites, nulls, writer, mapped input
 bazel test //csv/tests:native_test              # SVM compiled read and export gates (Linux x86-64, RBE)
 bazel test //tools/release:csv_consumer         # published jars on the JVM
 bazel test //tools/release:csv_native_test      # published jars in a static image (Linux x86-64, RBE)
