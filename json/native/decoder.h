@@ -1,7 +1,9 @@
 #ifndef TRUFFLEDATA_JSON_DECODER_H
 #define TRUFFLEDATA_JSON_DECODER_H
+#include "json/native/arena.h"
 #include "json/native/index_memory.h"
 #include "json/native/parser_pool.h"
+#include "json/native/tape_writer.h"
 #include <myna/values.hpp>
 #include <simdjson.h>
 #include <cmath>
@@ -123,41 +125,70 @@ public:
   }
 };
 
-// The input is retained; the parser is pooled and released before construction
-// completes. Unescaped text references the retained input; escaped text is
-// copied into message-owned storage, so parser scratch never outlives the lease.
-// One instance is immutable after construction and must not be reused to parse.
-class document final {
-  simdjson::padded_string owned_;
-  // Either owned_ or caller memory adopted with sufficient padding; never copied twice.
-  simdjson::padded_string_view input_;
-  index_memory memory_;
-  myna::value_builder builder_;
-  uint32_t input_region_;
-  uint64_t count_ = 0;
+
+// Read-only view of a side table published with a document.
+template<class T> class table_view {
+  const T* data_;
+  size_t size_;
+public:
+  table_view(const T* data, size_t size) : data_(data), size_(size) {}
+  const T* data() const { return data_; }
+  size_t size() const { return size_; }
+  const T& operator[](size_t index) const { return data_[index]; }
+  const T& at(size_t index) const {
+    if (index >= size_) throw std::out_of_range("JSON side-table index");
+    return data_[index];
+  }
+};
+
+// Storage presizing from the input length. Typical JSON has one node per 5-8 input bytes; the
+// worst case (`[1,1,...]`) has one per 2, which grows the arrays once or twice. Hints never exceed
+// the Myna node limit or a fixed share of the index budget, and depend only on the configuration,
+// so a document's allocation sequence (and its exact index peak) is reproducible.
+struct decode_hint {
+  size_t nodes;
+  size_t bytes;
+  size_t block;  // First arena block: the presized arrays that are not large allocations.
+};
+inline decode_hint hint_for(size_t input, const myna::value_limits& limits, const storage_limits& storage) {
+  size_t cap = storage.index_bytes / 72 > 4096 ? storage.index_bytes / 72 : 4096;
+  size_t nodes = input / 4 + 8;
+  if (nodes > cap) nodes = cap;
+  if (nodes > limits.nodes) nodes = static_cast<size_t>(limits.nodes);
+  size_t bytes = input / 8 + 64;
+  if (bytes > cap * 8) bytes = cap * 8;
+  size_t block = 4 * sizeof(myna_value_region) + 256;
+  for (size_t part : {nodes * sizeof(myna_value_node), nodes * sizeof(uint64_t), nodes * sizeof(uint32_t), bytes})
+    if (part <= block_arena::large_threshold) block += part + alignof(std::max_align_t);
+  return {nodes, bytes, block};
+}
+
+// Lean On-Demand visitor writing nodes, lexical spans and the key-hash side table into arena
+// storage. Shared by documents and sessions; one instance decodes one document.
+template<class Writer> class tape_decoder final {
+  std::pmr::memory_resource* memory_;
+  Writer writer_;
+  arena_vec<uint64_t> lexical_;
+  arena_vec<uint32_t> hashes_;
+  const char* base_ = nullptr;
+  uint32_t region_ = 0;
   myna::value_limits limits_;
-  std::pmr::vector<uint64_t> lexical_;
-  std::pmr::vector<uint32_t> hashes_;
-  size_t parser_capacity_ = 0;
 
   // Packed span into the retained input region: offset << 32 | length; zero when absent.
   void lexical(std::string_view raw = {}, uint32_t meta = 0) {
-    if (count_ >= limits_.nodes) throw std::length_error("JSON node limit");
-    ++count_;
-    if (raw.empty()) lexical_.push_back(0);
-    else lexical_.push_back((uint64_t(raw.data() - input_.data()) << 32) | raw.size());
-    hashes_.push_back(meta);
+    if (lexical_.size() >= limits_.nodes) throw std::length_error("JSON node limit");
+    lexical_.push(memory_, raw.empty() ? 0 : (uint64_t(raw.data() - base_) << 32) | raw.size());
+    hashes_.push(memory_, meta);
   }
   // `raw` is the trimmed token including quotes; `decoded` either is the body inside `raw`
   // (clean, referenced) or decoded scratch text (copied).
   void text(std::string_view decoded, std::string_view raw, bool referenced, uint32_t meta) {
     lexical(raw, meta);
-    if (decoded.size() <= 16) builder_.string(decoded);
+    if (decoded.size() <= MYNA_VALUE_INLINE_BYTES) writer_.string(decoded);
     else if (referenced)
-      builder_.string_ref(input_region_,
-          static_cast<uint32_t>(decoded.data() - input_.data()),
-          static_cast<uint32_t>(decoded.size()));
-    else builder_.string(decoded);
+      writer_.string_ref(region_, static_cast<uint32_t>(decoded.data() - base_),
+                         static_cast<uint32_t>(decoded.size()));
+    else writer_.string(decoded);
   }
   template<class Value> void visit(Value& value, uint32_t depth) {
     if (depth > limits_.depth) throw std::length_error("JSON depth limit");
@@ -167,8 +198,9 @@ class document final {
         throw std::invalid_argument("unknown JSON token");
       case json_type::object: {
         lexical();
-        builder_.begin_object();
-        key_table keys(&memory_);
+        size_t index = writer_.begin(MYNA_VALUE_OBJECT, depth);
+        uint64_t members = 0;
+        key_table keys(memory_);
         for (auto entry : value.get_object()) {
           std::string_view raw = json::trim(entry.key_raw_json_token().value());
           std::string_view body = raw.substr(1, raw.size() - 2);
@@ -180,19 +212,23 @@ class document final {
           text(key, raw, s.clean, hash | (plain ? ascii_flag : 0));
           auto child = entry.value().value();
           visit(child, depth + 1);
+          ++members;
         }
-        builder_.end();
+        writer_.end(index, members);
         break;
       }
-      case json_type::array:
+      case json_type::array: {
         lexical();
-        builder_.begin_array();
+        size_t index = writer_.begin(MYNA_VALUE_ARRAY, depth);
+        uint64_t elements = 0;
         for (auto entry : value.get_array()) {
           auto child = entry.value();
           visit(child, depth + 1);
+          ++elements;
         }
-        builder_.end();
+        writer_.end(index, elements);
         break;
+      }
       case json_type::string: {
         std::string_view raw = json::trim(value.raw_json_token());
         std::string_view body = raw.substr(1, raw.size() - 2);
@@ -210,7 +246,6 @@ class document final {
         // get_number() succeeding is simdjson's full grammar validation; the RFC 8259 check runs
         // only for tokens it does not type (overflowing doubles, big integers) and for errors.
         auto parsed = value.get_number();
-        bool typed = false;
         if (!parsed.error()) {
           using simdjson::ondemand::number_type;
           auto n = parsed.value();
@@ -218,91 +253,128 @@ class document final {
             case number_type::signed_integer:
               lexical(raw);
               // simdjson folds -0 into integer zero; JSON.parse-style consumers need negative zero.
-              if (n.get_int64() == 0 && raw[0] == '-') builder_.floating(-0.0);
-              else builder_.integer(n.get_int64());
-              typed = true; break;
+              if (n.get_int64() == 0 && raw[0] == '-') writer_.floating(-0.0);
+              else writer_.integer(n.get_int64());
+              return;
             case number_type::unsigned_integer:
               lexical(raw);
-              builder_.unsigned_integer(n.get_uint64()); typed = true; break;
+              writer_.unsigned_integer(n.get_uint64());
+              return;
             case number_type::floating_point_number:
               if (std::isfinite(n.get_double())) {
                 lexical(raw);
-                builder_.floating(n.get_double());
-                typed = true;
+                writer_.floating(n.get_double());
+                return;
               }
               break;
             default: break;
           }
         }
-        if (!typed) {
-          if (!number(raw)) throw std::invalid_argument("invalid JSON number");
-          lexical(raw);
-          builder_.validated_number_ref(input_region_,
-              static_cast<uint32_t>(raw.data() - input_.data()),
-              static_cast<uint32_t>(raw.size()));
-        }
+        if (!number(raw)) throw std::invalid_argument("invalid JSON number");
+        lexical(raw);
+        writer_.number_ref(region_, static_cast<uint32_t>(raw.data() - base_),
+                           static_cast<uint32_t>(raw.size()));
         break;
       }
       case json_type::boolean:
         lexical();
-        builder_.boolean(value.get_bool().value());
+        writer_.boolean(value.get_bool().value());
         break;
       case json_type::null:
         lexical();
         if (!value.is_null().value()) throw std::invalid_argument("invalid JSON null");
-        builder_.null();
+        writer_.null();
         break;
     }
   }
-  struct adopted_tag {};
-  document(adopted_tag, simdjson::padded_string owned, simdjson::padded_string_view input,
-           myna::value_limits limits, storage_limits storage, std::pmr::memory_resource* upstream)
-      : owned_(std::move(owned)),
-        input_(owned_.data() ? simdjson::padded_string_view(owned_.data(), owned_.size(), owned_.size() + simdjson::SIMDJSON_PADDING) : input),
-        memory_(storage.index_bytes, upstream),
-        builder_(&memory_, limits),
-        input_region_(builder_.region(std::string_view(input_.data(), input_.size()))),
-        limits_(limits), lexical_(&memory_), hashes_(&memory_) {
-    parse();
+
+public:
+  tape_decoder(std::pmr::memory_resource* memory, myna::value_limits limits)
+      : memory_(memory), writer_(memory, limits), limits_(limits) {}
+  tape_decoder(const tape_decoder&) = delete;
+  tape_decoder& operator=(const tape_decoder&) = delete;
+
+  // Presizes storage and registers `input` (the retained, padded input) as region 1.
+  void start(std::string_view input, const decode_hint& hint) {
+    writer_.reserve(hint.nodes, hint.bytes);
+    lexical_.reserve(memory_, hint.nodes);
+    hashes_.reserve(memory_, hint.nodes);
+    base_ = input.data();
+    region_ = writer_.region(input);
   }
-  void parse() {
-    if (!input_.data()) throw std::bad_alloc();
-    parser_lease lease = parser_pool::acquire();
-    auto& parser = lease.get();
-    auto root = parser.iterate(input_).value();
+  // Walks one document; trailing input, a second root or any invalid value throws.
+  void decode(simdjson::ondemand::document& root) {
     visit(root, 0);
     // raw_json consumes scalar roots; at_end rejects a second root/trailing tokens.
     if (root.is_scalar().value()) (void)root.raw_json().value();
     if (!root.at_end()) throw std::invalid_argument("trailing JSON input");
+  }
+  myna_value_view view() const { return writer_.view(); }
+  table_view<uint64_t> lexical_spans() const { return {lexical_.data(), lexical_.size()}; }
+  table_view<uint32_t> key_hashes() const { return {hashes_.data(), hashes_.size()}; }
+};
+
+// The input is retained; the parser is pooled and released before construction completes.
+// Unescaped text references the retained input; escaped text is copied into message-owned
+// storage, so parser scratch never outlives the lease. Nodes, owned text, lexical spans and key
+// hashes live in one block arena charged to index_memory. One instance is immutable after
+// construction and must not be reused to parse.
+template<class Writer> class basic_document final {
+  simdjson::padded_string owned_;
+  // Either owned_ or caller memory adopted with sufficient padding; never copied twice.
+  simdjson::padded_string_view input_;
+  index_memory memory_;
+  block_arena arena_;
+  tape_decoder<Writer> decoder_;
+  myna_value_view view_{};
+  size_t parser_capacity_ = 0;
+
+  struct adopted_tag {};
+  basic_document(adopted_tag, simdjson::padded_string owned, simdjson::padded_string_view input,
+                 myna::value_limits limits, storage_limits storage, std::pmr::memory_resource* upstream)
+      : owned_(std::move(owned)),
+        input_(owned_.data() ? simdjson::padded_string_view(owned_.data(), owned_.size(), owned_.size() + simdjson::SIMDJSON_PADDING) : input),
+        memory_(storage.index_bytes, upstream),
+        arena_(&memory_),
+        decoder_(&arena_, limits) {
+    if (!input_.data()) throw std::bad_alloc();
+    decode_hint hint = hint_for(input_.size(), limits, storage);
+    arena_.hint(hint.block);
+    decoder_.start(std::string_view(input_.data(), input_.size()), hint);
+    parser_lease lease = parser_pool::acquire();
+    auto& parser = lease.get();
+    auto root = parser.iterate(input_).value();
+    decoder_.decode(root);
     parser_capacity_ = parser.capacity();
-    (void)builder_.view();
+    view_ = decoder_.view();
   }
 public:
-  explicit document(std::string_view input, myna::value_limits limits = {},
-                    storage_limits storage = {},
-                    std::pmr::memory_resource* upstream = std::pmr::get_default_resource())
-      : document(adopted_tag{}, simdjson::padded_string(checked(input, storage)),
-                 simdjson::padded_string_view(), limits, storage, upstream) {}
+  explicit basic_document(std::string_view input, myna::value_limits limits = {},
+                          storage_limits storage = {},
+                          std::pmr::memory_resource* upstream = std::pmr::get_default_resource())
+      : basic_document(adopted_tag{}, simdjson::padded_string(checked(input, storage)),
+                       simdjson::padded_string_view(), limits, storage, upstream) {}
   // Adopt caller memory when it carries SIMDJSON_PADDING readable bytes past `length`;
   // otherwise copy once. The caller keeps adopted memory valid for the document's life.
-  document(const char* data, size_t length, size_t capacity, myna::value_limits limits = {},
-           storage_limits storage = {},
-           std::pmr::memory_resource* upstream = std::pmr::get_default_resource())
-      : document(adopted_tag{},
-                 capacity >= length + simdjson::SIMDJSON_PADDING
-                     ? simdjson::padded_string()
-                     : simdjson::padded_string(checked(std::string_view(data, length), storage)),
-                 capacity >= length + simdjson::SIMDJSON_PADDING
-                     ? simdjson::padded_string_view(data, checked(std::string_view(data, length), storage).size(), capacity)
-                     : simdjson::padded_string_view(),
-                 limits, storage, upstream) {}
+  basic_document(const char* data, size_t length, size_t capacity, myna::value_limits limits = {},
+                 storage_limits storage = {},
+                 std::pmr::memory_resource* upstream = std::pmr::get_default_resource())
+      : basic_document(adopted_tag{},
+                       capacity >= length + simdjson::SIMDJSON_PADDING
+                           ? simdjson::padded_string()
+                           : simdjson::padded_string(checked(std::string_view(data, length), storage)),
+                       capacity >= length + simdjson::SIMDJSON_PADDING
+                           ? simdjson::padded_string_view(data, checked(std::string_view(data, length), storage).size(), capacity)
+                           : simdjson::padded_string_view(),
+                       limits, storage, upstream) {}
   bool adopted() const { return !owned_.data(); }
-  document(const document&) = delete;
-  document& operator=(const document&) = delete;
-  myna_value_view view() const { return builder_.view(); }
-  const std::pmr::vector<uint64_t>& lexical_spans() const { return lexical_; }
+  basic_document(const basic_document&) = delete;
+  basic_document& operator=(const basic_document&) = delete;
+  myna_value_view view() const { return view_; }
+  table_view<uint64_t> lexical_spans() const { return decoder_.lexical_spans(); }
   // One entry per node; see key_hash and ascii_flag.
-  const std::pmr::vector<uint32_t>& key_hashes() const { return hashes_; }
+  table_view<uint32_t> key_hashes() const { return decoder_.key_hashes(); }
+  // Index accounting counts arena blocks and large allocations, not individual nodes.
   allocation_stats allocations() const {
     return {adopted() ? 0 : input_.size(),
             adopted() ? input_.capacity() : input_.size() + simdjson::SIMDJSON_PADDING,
@@ -314,5 +386,9 @@ private:
     return input;
   }
 };
+// Production documents write through the presized tape writer; builder_document runs the same
+// visitor through myna::value_builder and exists to prove byte-for-byte parity in tests.
+using document = basic_document<tape_writer>;
+using builder_document = basic_document<builder_writer>;
 } // namespace truffledata::json
 #endif

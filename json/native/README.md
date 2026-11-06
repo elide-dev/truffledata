@@ -64,12 +64,29 @@ elide-dev/myna#45).
   `(hash, length, bytes)` compare over up to 16 keys on the stack, then an
   open-addressing table in counted index memory.
 
+### Arena storage and the tape writer
+
+Nodes, owned text, the region table, lexical spans and key hashes are written by
+`tape_writer.h` into a `block_arena` (`arena.h`) rather than through Myna's
+`value_builder`. The decoder presizes every array from the input length (one node
+per four input bytes, never more than the Myna node limit or a fixed share of the
+index budget), so a typical document makes one upstream allocation: a single arena
+block. Arrays above 32 KiB are allocated upstream directly and freed on growth,
+so big tapes do not strand arena space. The writer enforces the builder's node,
+text, depth and container limits and produces byte-identical nodes, bytes and
+regions; `//json/native:test` runs both writers over a 200-document corpus. Until
+Myna can reserve builder storage (elide-dev/myna#46) the writer is the JSON-side
+substitute.
+
 ## Limits and accounting
 
 `storage_limits` caps logical input bytes before copying, and index allocations
-before requesting memory. Myna nodes, regions, lexical spans, traversal storage and
-duplicate-key sets share the index budget, and reallocation overlap counts toward
-the peak. Myna's node, text and depth limits apply separately; requested depth is
+before requesting memory. The budget is charged per arena block and per large
+allocation, not per node: Myna nodes, regions, lexical spans, key hashes, owned text
+and duplicate-key tables share it, unused block tails count, and the overlap of a
+large array and its grown replacement counts toward the peak. Presizing depends
+only on the input length and the configured limits, so a document's allocation
+sequence (and its exact peak) is reproducible. Myna's node, text and depth limits apply separately; requested depth is
 at most 128.
 
 `JsonResult` reports copied and padded input bytes, retained and peak requested

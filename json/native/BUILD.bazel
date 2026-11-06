@@ -3,9 +3,11 @@ load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_library", "cc_test")
 cc_library(
     name = "decoder",
     hdrs = [
+        "arena.h",
         "decoder.h",
         "index_memory.h",
         "parser_pool.h",
+        "tape_writer.h",
     ],
     copts = ["-std=c++17"],
     deps = [
