@@ -3,6 +3,7 @@ package dev.elide.truffledata.csv;
 import dev.elide.truffledata.ContractViolation;
 import dev.elide.truffledata.Values;
 import java.util.Arrays;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Fills one batch's columns as the scanner reports records: validates each record's UTF-8 and
@@ -15,12 +16,20 @@ final class BatchBuilder implements CsvScanner.Records {
   private static final double[] NO_DOUBLES = new double[0];
   private static final boolean[] NO_BOOLEANS = new boolean[0];
   private static final byte[] NO_STATES = new byte[0];
+  private static final byte[] NO_BYTES = new byte[0];
 
   private final CsvPlan.Binding binding;
   private final byte[] input;
   private final int maxRows;
   private final boolean flexible;
-  private final byte quote;
+  private final Dialect dialect;
+  private final @Nullable CommonsScanner decoder;
+  private byte[] scratch = NO_BYTES;
+
+  /** The current conversion view (see {@link #view}). */
+  private byte[] viewBytes = NO_BYTES;
+
+  private int viewOffset;
   private final long firstRecord;
   private final long recordBase;
   private final long byteBase;
@@ -43,7 +52,7 @@ final class BatchBuilder implements CsvScanner.Records {
       CsvPlan.Binding binding,
       byte[] input,
       CsvLimits limits,
-      CsvFormat format,
+      Dialect dialect,
       long firstRecord,
       long recordBase,
       long byteBase,
@@ -51,8 +60,9 @@ final class BatchBuilder implements CsvScanner.Records {
     this.binding = binding;
     this.input = input;
     this.maxRows = limits.maxBatchRows();
-    this.flexible = format.flexible();
-    this.quote = format.quote();
+    this.flexible = dialect.format.flexible();
+    this.dialect = dialect;
+    this.decoder = dialect.decoder();
     this.firstRecord = firstRecord;
     this.recordBase = recordBase;
     this.byteBase = byteBase;
@@ -74,10 +84,29 @@ final class BatchBuilder implements CsvScanner.Records {
 
   /**
    * The null rule, in one place: the only null token is an unquoted, empty field (after trimming),
-   * and it is null only in a nullable column.
+   * and it is null only in a nullable column. Strict formats only; Commons formats have no nulls.
    */
   static boolean nullToken(long span) {
     return !CsvScanner.quoted(span) && CsvScanner.length(span) == 0;
+  }
+
+  /**
+   * Points {@link #viewBytes} and {@link #viewOffset} at a span's value and returns its length.
+   * Complex Commons spans decode into the scratch buffer; strict escaped spans stay raw (their
+   * doubled quotes fail every typed grammar).
+   */
+  private int view(long span) {
+    CommonsScanner d = decoder;
+    if (d != null && CsvScanner.escaped(span)) {
+      int length = CsvScanner.length(span);
+      if (scratch.length < length) scratch = new byte[Math.max(length, scratch.length * 2)];
+      viewBytes = scratch;
+      viewOffset = 0;
+      return d.decode(input, span, scratch, 0);
+    }
+    viewBytes = input;
+    viewOffset = CsvScanner.offset(span);
+    return CsvScanner.length(span);
   }
 
   int rows() {
@@ -113,7 +142,7 @@ final class BatchBuilder implements CsvScanner.Records {
         continue;
       }
       long span = spans[column];
-      if (nullToken(span)) {
+      if (dialect.strict && nullToken(span)) {
         if (b.nullable[f]) {
           states[f][row] = Column.NULL;
           continue;
@@ -135,7 +164,8 @@ final class BatchBuilder implements CsvScanner.Records {
   private long toLong(long number, int field, long span) {
     long value;
     try {
-      value = Numbers.parseLong(input, CsvScanner.offset(span), CsvScanner.length(span));
+      int length = view(span);
+      value = Numbers.parseLong(viewBytes, viewOffset, length);
     } catch (NumberFormatException e) {
       throw violation(number, field, "invalid INT64");
     }
@@ -152,7 +182,8 @@ final class BatchBuilder implements CsvScanner.Records {
   private double toDouble(long number, int field, long span) {
     double value;
     try {
-      value = Numbers.parseDouble(input, CsvScanner.offset(span), CsvScanner.length(span));
+      int length = view(span);
+      value = Numbers.parseDouble(viewBytes, viewOffset, length);
     } catch (NumberFormatException e) {
       throw violation(number, field, "invalid FLOAT64");
     }
@@ -162,8 +193,8 @@ final class BatchBuilder implements CsvScanner.Records {
   }
 
   private boolean toBoolean(long number, int field, long span) {
-    int offset = CsvScanner.offset(span);
-    int length = CsvScanner.length(span);
+    int length = view(span);
+    int offset = viewOffset;
     if (length == 4 && matches(offset, "true")) return true;
     if (length == 5 && matches(offset, "false")) return false;
     throw violation(number, field, "invalid BOOLEAN");
@@ -172,7 +203,7 @@ final class BatchBuilder implements CsvScanner.Records {
   /** ASCII case-insensitive match of a lower-case word of letters. */
   private boolean matches(int offset, String word) {
     for (int i = 0; i < word.length(); i++)
-      if ((input[offset + i] | 0x20) != word.charAt(i)) return false;
+      if ((viewBytes[offset + i] | 0x20) != word.charAt(i)) return false;
     return true;
   }
 
@@ -208,6 +239,6 @@ final class BatchBuilder implements CsvScanner.Records {
               kind == CsvPlan.BOOLEAN ? booleans[f] : null,
               binding.stateful[f] ? states[f] : null);
     }
-    return new CsvBatch(binding.schema, input, columns, rows, firstRecord, quote, 0);
+    return new CsvBatch(binding.schema, input, columns, rows, firstRecord, dialect, 0);
   }
 }

@@ -51,7 +51,7 @@ public final class CsvRow extends AbstractRow {
     Column c = batch.columns[column];
     long[] spans = c.spans;
     if (spans == null || c.state(index) != Column.PRESENT) throw expected(descriptor, column, "STRING");
-    return CsvBatch.string(batch.input, spans[index], batch.quote);
+    return CsvBatch.string(batch, spans[index]);
   }
 
   public long getLong(int column) {
@@ -85,7 +85,7 @@ public final class CsvRow extends AbstractRow {
     byte state = column.state(row);
     if (state != Column.PRESENT) return state == Column.NULL ? DataNull.INSTANCE : Missing.INSTANCE;
     long[] spans = column.spans;
-    if (spans != null) return CsvBatch.string(batch.input, spans[row], batch.quote);
+    if (spans != null) return CsvBatch.string(batch, spans[row]);
     long[] longs = column.longs;
     if (longs != null) return longs[row];
     double[] doubles = column.doubles;

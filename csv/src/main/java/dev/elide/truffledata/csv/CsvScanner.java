@@ -1,9 +1,11 @@
 package dev.elide.truffledata.csv;
 
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
+import org.jspecify.annotations.Nullable;
 
 /**
- * Strict RFC 4180 record scanner over a byte range. It reports field spans into the input and never
+ * Record scanner over a byte range: the strict RFC 4180 loop below, or, for Commons formats, {@link
+ * CommonsScanner}. Strict scanning: It reports field spans into the input and never
  * copies field bytes. A span packs {@code (long) offset << 32 | (long) length << 2 | quoted << 1 |
  * escaped}: {@code offset} and {@code length} delimit the content with quotes and trimmed blanks
  * excluded, and {@code escaped} marks quoted content containing doubled quotes.
@@ -43,6 +45,15 @@ final class CsvScanner {
   /** Stream offset of input index 0, for diagnostics. */
   long byteBase;
 
+  /** Stop before the record whose physical number would exceed this (format maxRows). */
+  long stopAfter = Long.MAX_VALUE;
+
+  /** Whether the last scan stopped at {@link #stopAfter}. */
+  boolean stopped;
+
+  /** The Commons lexer, for Commons formats. */
+  private final @Nullable CommonsScanner commons;
+
   CsvScanner(CsvFormat format, CsvLimits limits) {
     delimiter = format.delimiter();
     quote = format.quote();
@@ -56,6 +67,10 @@ final class CsvScanner {
     if (quoting) classes[quote & 0xFF] = QUOTE;
     kernel = new CsvKernel(delimiter, quote, quoting, -1);
     spans = new long[Math.min(16, maxColumns)];
+    commons =
+        format.strict()
+            ? null
+            : new CommonsScanner(Dialect.of(format), maxColumns, maxRecordBytes);
   }
 
   /**
@@ -66,12 +81,26 @@ final class CsvScanner {
    * maxColumns fields throws the columns limit.
    */
   int scan(byte[] input, int from, int to, boolean eof, Records records) {
+    CommonsScanner c = commons;
+    if (c != null) {
+      c.recordBase = recordBase;
+      c.byteBase = byteBase;
+      c.stopAfter = stopAfter;
+      int end = c.scan(input, from, to, eof, records);
+      stopped = c.stopped;
+      return end;
+    }
+    stopped = false;
     final byte[] cls = classes;
     final CsvKernel k = kernel;
     final byte q = quote;
     int pos = from;
     long ordinal = 0;
     while (pos < to) {
+      if (recordBase + ordinal >= stopAfter) {
+        stopped = true;
+        return pos;
+      }
       final int start = pos;
       byte first = input[pos];
       // Completely empty lines are skipped. A lone final CR is consumed even without eof: whether

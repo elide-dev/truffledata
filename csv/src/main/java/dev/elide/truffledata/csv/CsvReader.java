@@ -33,6 +33,12 @@ public final class CsvReader implements AutoCloseable {
   private boolean eof;
   private boolean bomChecked;
   private boolean closed;
+
+  /** The format's maxRows was reached: no further batches. */
+  private boolean finished;
+
+  /** Physical records the binding consumed (a header or skipped record). */
+  private long consumed;
   private CsvPlan.@Nullable Binding binding;
   private long physical;
   private long records;
@@ -58,15 +64,19 @@ public final class CsvReader implements AutoCloseable {
     CsvPlan.Binding b = bind();
     int size = carryLength + batchBytes;
     for (; ; ) {
+      long stop = plan.stopAfter(consumed);
+      if (finished || physical >= stop) return null;
       if (eof && carryLength == 0) return null;
       byte[] buffer = fill(size);
       scanner.recordBase = physical;
       scanner.byteBase = carryOffset;
+      scanner.stopAfter = stop;
       BatchBuilder builder =
           new BatchBuilder(
-              b, buffer, limits, plan.format(), records, physical, carryOffset, rowHint);
+              b, buffer, limits, plan.dialect, records, physical, carryOffset, rowHint);
       int end = scanner.scan(buffer, 0, filled, eof, builder);
-      if (!builder.full()) checkIncomplete(end);
+      if (scanner.stopped) finished = true;
+      else if (!builder.full()) checkIncomplete(end);
       consume(buffer, end);
       int rows = builder.rows();
       if (rows > 0) {
@@ -126,7 +136,7 @@ public final class CsvReader implements AutoCloseable {
       if (bound) {
         b = Objects.requireNonNull(binder.binding);
         binding = b;
-        physical = plan.format().header() ? 1 : 0;
+        physical = consumed = binder.consumed;
         return b;
       }
       size = next(size, end - from);

@@ -8,7 +8,6 @@ import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.library.ExportLibrary;
 import com.oracle.truffle.api.library.ExportMessage;
 import dev.elide.truffledata.Schema;
-import java.nio.charset.StandardCharsets;
 import java.util.Objects;
 
 /**
@@ -27,7 +26,7 @@ public final class CsvBatch implements TruffleObject {
 
   final int size;
   final long firstRecord;
-  final byte quote;
+  final Dialect dialect;
   private final int copiedBytes;
 
   CsvBatch(
@@ -36,14 +35,14 @@ public final class CsvBatch implements TruffleObject {
       Column[] columns,
       int size,
       long firstRecord,
-      byte quote,
+      Dialect dialect,
       int copiedBytes) {
     this.schema = schema;
     this.input = input;
     this.columns = columns;
     this.size = size;
     this.firstRecord = firstRecord;
-    this.quote = quote;
+    this.dialect = dialect;
     this.copiedBytes = copiedBytes;
   }
 
@@ -75,15 +74,10 @@ public final class CsvBatch implements TruffleObject {
     return copiedBytes;
   }
 
-  /** Materializes one STRING span, unescaping doubled quotes. */
+  /** Materializes one STRING span of this batch, decoding escaped or complex fields. */
   @TruffleBoundary
-  static String string(byte[] input, long span, byte quote) {
-    if (!CsvScanner.escaped(span))
-      return new String(
-          input, CsvScanner.offset(span), CsvScanner.length(span), StandardCharsets.UTF_8);
-    byte[] text = new byte[CsvScanner.length(span)];
-    int length = CsvScanner.unescape(input, span, quote, text, 0);
-    return new String(text, 0, length, StandardCharsets.UTF_8);
+  static String string(CsvBatch batch, long span) {
+    return batch.dialect.string(batch.input, span);
   }
 
   /**
@@ -96,6 +90,8 @@ public final class CsvBatch implements TruffleObject {
     Objects.requireNonNull(sink);
     CsvText text = new CsvText();
     byte[] scratch = NO_BYTES;
+    Dialect d = dialect;
+    CommonsScanner decoder = d.decoder();
     Column[] cols = columns;
     int fields = cols.length;
     for (int r = 0; r < size; r++) {
@@ -118,7 +114,7 @@ public final class CsvBatch implements TruffleObject {
           if (CsvScanner.escaped(span)) {
             if (scratch.length < length)
               scratch = new byte[Math.max(length, Math.min(scratch.length * 2, input.length))];
-            text.set(scratch, 0, CsvScanner.unescape(input, span, quote, scratch, 0));
+            text.set(scratch, 0, d.decode(input, span, scratch, 0, decoder));
           } else text.set(input, CsvScanner.offset(span), length);
           sink.text(c, text);
         } else if (longs != null) sink.longValue(c, longs[r]);

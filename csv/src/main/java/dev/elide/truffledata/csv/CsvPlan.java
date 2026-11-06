@@ -7,9 +7,13 @@ import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
+import java.util.TreeMap;
+import java.util.TreeSet;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -26,20 +30,24 @@ public final class CsvPlan {
 
   private final @Nullable Schema schema; // null: generic
   private final CsvFormat format;
-  /** Typed plans with a header: field index by name. */
+  final Dialect dialect;
+
+  /** Typed plans with named columns: field index by name (case-insensitive with ignoreHeaderCase). */
   private final Map<String, Integer> byName;
 
-  /** Typed plans without a header: the one positional binding. */
-  private final @Nullable Binding positional;
+  /** The binding fixed by the plan (typed positional, or explicit header names), or null. */
+  private final @Nullable Binding fixed;
 
   private CsvPlan(@Nullable Schema schema, CsvFormat format, Map<String, Integer> byName) {
     this.schema = schema;
     this.format = format;
+    this.dialect = Dialect.of(format);
     this.byName = byName;
-    if (schema != null && !format.header()) {
-      int[] identity = identity(schema.size());
-      this.positional = new Binding(schema, schema.size(), identity);
-    } else this.positional = null;
+    List<String> explicit = format.headerNames();
+    if (explicit != null) this.fixed = named(explicit.toArray(new String[0]));
+    else if (schema != null && !format.header())
+      this.fixed = new Binding(schema, schema.size(), identity(schema.size()));
+    else this.fixed = null;
   }
 
   static CsvPlan generic(CsvFormat format) {
@@ -48,12 +56,14 @@ public final class CsvPlan {
 
   /**
    * A known-schema plan. Supports INT64 (with integer width and range constraints), FLOAT64 (with
-   * {@code floatBits}), BOOLEAN and STRING (without length constraints); rejects other kinds. With a
-   * header, field names must be unique: header names map to fields by exact name.
+   * {@code floatBits}), BOOLEAN and STRING (without length constraints); rejects other kinds. With
+   * named columns, field names must be unique (ignoring case with {@code ignoreHeaderCase}): header
+   * names map to fields by name.
    */
   public static CsvPlan compile(Schema schema, CsvFormat format) {
     Objects.requireNonNull(format);
-    Map<String, Integer> byName = new HashMap<>();
+    Map<String, Integer> byName =
+        format.ignoreHeaderCase() ? new TreeMap<>(String.CASE_INSENSITIVE_ORDER) : new HashMap<>();
     for (int f = 0; f < schema.size(); f++) {
       Field field = schema.field(f);
       switch (field.kind()) {
@@ -64,10 +74,13 @@ public final class CsvPlan {
         }
         default -> throw unsupported(field, field.kind() + " is not supported");
       }
-      if (format.header() && byName.put(field.name(), f) != null)
+      if (format.named() && byName.put(field.name(), f) != null)
         throw unsupported(field, "duplicate field name with a header");
     }
-    return new CsvPlan(schema, format, Map.copyOf(byName));
+    return new CsvPlan(
+        schema,
+        format,
+        format.ignoreHeaderCase() ? java.util.Collections.unmodifiableMap(byName) : Map.copyOf(byName));
   }
 
   private static IllegalArgumentException unsupported(Field field, String reason) {
@@ -96,14 +109,24 @@ public final class CsvPlan {
     CsvScanner scanner = new CsvScanner(format, limits);
     Binder binder = new Binder(this);
     binder.bind(scanner, input, from, input.length, true);
-    long base = format.header() ? 1 : 0;
+    long base = binder.consumed;
     scanner.recordBase = base;
+    scanner.stopAfter = stopAfter(base);
     BatchBuilder builder =
         new BatchBuilder(
-            Objects.requireNonNull(binder.binding), input, limits, format, 0, base, 0, 16);
+            Objects.requireNonNull(binder.binding), input, limits, dialect, 0, base, 0, 16);
     scanner.scan(input, binder.end, input.length, true, builder);
     if (builder.full()) throw CsvScanner.limit("maxBatchRows");
     return builder.build();
+  }
+
+  /**
+   * The scanner's stop bound in physical records: {@code maxRows} data records after the {@code
+   * consumed} header record (Commons restarts its record count after the header).
+   */
+  long stopAfter(long consumed) {
+    long max = format.maxRows();
+    return max > 0 ? consumed + max : Long.MAX_VALUE;
   }
 
   /** Streams batches of about 1 MiB of input each. The reader owns the stream. */
@@ -128,39 +151,67 @@ public final class CsvPlan {
     return identity;
   }
 
-  /** Binding for header names (already unescaped, trimmed and UTF-8 validated). */
-  Binding named(String[] names) {
+  /**
+   * Commons {@code CSVParser.createHeaders} checks: a blank name needs {@code
+   * allowMissingColumnNames}, and duplicates follow the duplicate-header mode (ignoring case with
+   * {@code ignoreHeaderCase}). Null names (null tokens) count as blank.
+   */
+  private void checkHeader(@Nullable String[] names) {
+    Set<String> seen =
+        format.ignoreHeaderCase() ? new TreeSet<>(String.CASE_INSENSITIVE_ORDER) : new HashSet<>();
+    boolean observedMissing = false;
+    CsvFormat.DuplicateHeaderMode mode = format.duplicateHeaderMode();
+    for (int i = 0; i < names.length; i++) {
+      String name = names[i];
+      boolean blank = CsvFormat.blank(name);
+      if (blank && !format.allowMissingColumnNames())
+        throw new IllegalArgumentException("CSV header: missing name at column " + i);
+      boolean duplicate = blank ? observedMissing : seen.contains(name);
+      if (duplicate
+          && mode != CsvFormat.DuplicateHeaderMode.ALLOW_ALL
+          && !(blank && mode == CsvFormat.DuplicateHeaderMode.ALLOW_EMPTY))
+        throw new IllegalArgumentException("CSV header: duplicate name at column " + i);
+      observedMissing |= blank;
+      if (name != null) seen.add(name);
+    }
+  }
+
+  /** Binding for header names (decoded and UTF-8 validated); a null name reads as "". */
+  Binding named(@Nullable String[] names) {
+    checkHeader(names);
+    String[] plain = new String[names.length];
+    for (int i = 0; i < names.length; i++) plain[i] = names[i] == null ? "" : names[i];
     Schema s = schema;
-    if (s == null) return genericBinding(names);
+    if (s == null) return genericBinding(plain);
     int[] fieldToColumn = new int[s.size()];
     Arrays.fill(fieldToColumn, -1);
-    for (int column = 0; column < names.length; column++) {
-      Integer field = byName.get(names[column]);
+    for (int column = 0; column < plain.length; column++) {
+      Integer field = byName.get(plain[column]);
       if (field == null) continue; // projection: columns outside the schema are skipped
       if (fieldToColumn[field] >= 0) throw header(s.field(field), "matched by two columns");
       fieldToColumn[field] = column;
     }
     for (int f = 0; f < fieldToColumn.length; f++)
       if (fieldToColumn[f] < 0 && !s.field(f).optional()) throw header(s.field(f), "missing");
-    return new Binding(s, names.length, fieldToColumn);
+    return new Binding(s, plain.length, fieldToColumn);
   }
 
   private static ContractViolation header(Field field, String reason) {
     return new ContractViolation("CSV header: Field '" + field.name() + "': " + reason);
   }
 
-  /** Binding without a header: generic plans take the first record's width. */
+  /** Binding without names: generic plans take the first record's width. */
   Binding positional(int width) {
-    Binding typed = positional;
-    if (typed != null) return typed;
+    Binding f = fixed;
+    if (f != null) return f;
     String[] names = new String[width];
     for (int i = 0; i < width; i++) names[i] = Integer.toString(i);
     return genericBinding(names);
   }
 
-  /** Whether binding needs the first record (a header, or a generic width). */
+  /** Whether binding reads the first record (a header, a skipped record, or a generic width). */
   boolean needsFirstRecord() {
-    return positional == null;
+    return fixed == null || format.consumesFirstRecord();
   }
 
   private Binding genericBinding(String[] names) {
@@ -223,7 +274,7 @@ public final class CsvPlan {
     }
   }
 
-  /** Captures (and with a header, consumes) the first record of an input to bind the plan. */
+  /** Captures (and with a header or a skipped record, consumes) the first record to bind the plan. */
   static final class Binder implements CsvScanner.Records {
     private final CsvPlan plan;
     private byte[] input = new byte[0];
@@ -240,14 +291,18 @@ public final class CsvPlan {
      */
     int end;
 
+    /** Physical records the binding consumed (0 or 1). */
+    long consumed;
+
     Binder(CsvPlan plan) {
       this.plan = plan;
     }
 
     /** False when more input is needed (only without eof). */
     boolean bind(CsvScanner scanner, byte[] input, int from, int to, boolean eof) {
+      CsvFormat format = plan.format;
       if (!plan.needsFirstRecord()) {
-        binding = plan.positional(0);
+        binding = Objects.requireNonNull(plan.fixed);
         end = from;
         return true;
       }
@@ -257,26 +312,28 @@ public final class CsvPlan {
       byteBase = scanner.byteBase;
       int stop = scanner.scan(input, from, to, eof, this);
       end = stop;
-      boolean header = plan.format.header();
       if (count < 0) {
         if (!eof) return false;
-        if (header) throw new IllegalArgumentException("CSV header missing");
-        binding = plan.positional(0);
-      } else if (header) {
-        String[] names = new String[count];
-        for (int i = 0; i < count; i++)
-          names[i] = CsvBatch.string(input, first[i], plan.format.quote());
-        binding = plan.named(names);
-      } else {
-        binding = plan.positional(count);
+        if (format.header()) {
+          // Commons yields no header names and no records; the strict contract needs a header.
+          if (format.strict()) throw new IllegalArgumentException("CSV header missing");
+          binding = plan.named(new String[0]);
+        } else binding = plan.positional(0);
+        return true;
       }
+      if (format.consumesFirstRecord()) consumed = 1;
+      if (format.header()) {
+        String[] names = new String[count];
+        for (int i = 0; i < count; i++) names[i] = plan.dialect.string(input, first[i]);
+        binding = plan.named(names);
+      } else binding = plan.positional(count);
       return true;
     }
 
     @Override
     public boolean record(long[] spans, int count, int start, int end) {
       if (this.count >= 0) return false;
-      boolean consume = plan.format.header();
+      boolean consume = plan.format.consumesFirstRecord();
       if (consume) {
         int bad = Utf8.invalidOffset(input, start, end);
         if (bad >= 0) throw CsvScanner.syntax(recordBase + 1, byteBase + bad, "invalid UTF-8");

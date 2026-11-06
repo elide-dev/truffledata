@@ -405,7 +405,7 @@ public final class CsvFormat {
     return lenientEof;
   }
 
-  /** Physical records to read, the header record included (Commons semantics); 0 or less: all. */
+  /** Data records to read (a header record does not count, as in Commons); 0 or less: all. */
   public long maxRows() {
     return maxRows;
   }
