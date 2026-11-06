@@ -34,7 +34,7 @@ def main(paths):
             if row['workload'] == 'typed-reads':
                 reads[(binary, row['engine'], row['stage'])].append(row)
             elif report['group'][0] == 'sweep':
-                sweep[(binary, row['workload'], row['dataset'], row['bytes'], row['engine'])].append(row)
+                sweep[(binary, row['workload'], row['dataset'], row['target'], row['engine'])].append(row)
             else:
                 cells[(binary, row['workload'], row['dataset'], row['bytes'], row['engine'])].append(row)
         for row in report['native']:
@@ -67,20 +67,18 @@ def main(paths):
             for _, engine, kernel, rate, memory in sorted(rows, reverse=True):
                 out.append(f'| {workload} | {engine} | {kernel} | {rate} | {memory} |')
     if sweep:
-        out += ['', '## Size sweep (kernel crossovers)', '',
-                '| Binary | Workload | Dataset | Engine | ' + ' | '.join(
-                    f'{s // 1024} KiB' for s in sorted({k[3] for k in sweep})) + ' |']
         sizes = sorted({k[3] for k in sweep})
-        out.append('|---|---|---|---|' + '---:|' * len(sizes))
+        out += ['', '## Size sweep (kernel crossovers; GB/s, one fork)', '',
+                '| Binary | Workload | Dataset | Engine | ' + ' | '.join(f'{s // 1024} KiB' for s in sizes) + ' |',
+                '|---|---|---|---|' + '---:|' * len(sizes)]
         for binary, workload, dataset, engine in sorted({(k[0], k[1], k[2], k[4]) for k in sweep}):
             values = []
             for size in sizes:
-                runs = [r for (b, w, d, n, e), rs in sweep.items() for r in rs
-                        if (b, w, d, e) == (binary, workload, dataset, engine) and abs(n - size) < 65536 and n >= size]
+                runs = sweep.get((binary, workload, dataset, size, engine), [])
                 values.append(f'{gbps(runs[0]["ns_per_byte"]):.2f}' if runs else '—')
             out.append(f'| {binary} | {workload} | {dataset} | {engine} | ' + ' | '.join(values) + ' |')
     if reads:
-        out += ['', '## Retained typed reads (32 numeric rows, 6 typed columns read per row)', '',
+        out += ['', '## Retained typed reads (32 numeric rows, 8 typed columns read per row)', '',
                 '| Binary | Engine | Stage | ns/row (range) | Java B/row |', '|---|---|---|---:|---:|']
         for (binary, engine, stage), runs in sorted(reads.items()):
             forks = [statistics.median(r['ns_per_row']) for r in runs]

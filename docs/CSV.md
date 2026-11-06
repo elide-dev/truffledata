@@ -545,16 +545,35 @@ The gates below are enforced; they bound shape and allocation, not throughput:
   (per row for the export walk).
 - `//tools/release:csv_native_test` runs the published-jar consumer in a static image.
 
-> **Comparison results: pending (Task 7).** Measurements against FastCSV and Apache
-> Commons CSV will come from `//benchmarks/comparison:csv_measure`, with raw samples
-> under `benchmarks/results/csv-<sha>/` and the write-up in
-> `benchmarks/comparison/CSV.md`. Until then, this page makes no throughput or
-> allocation claim relative to other parsers.
+### Comparison results
+
+`//benchmarks/comparison:csv_measure` compares truffledata with FastCSV 4.4.0, Jackson
+dataformat-csv 2.22.4, univocity-parsers 2.9.1 and Commons CSV 1.14.1. It runs on SVM (portable
+and x86-64-v3 images) and on the JVM, over four synthetic fixtures at 1 MiB and 128 MiB, with Rust
+`csv` and `csv-core` and a C++ consumer of the native index measured on the same worker. The raw
+samples and the shared-host caveats are in `benchmarks/results/csv-f5daec1/`. The write-up,
+hypotheses H1–H5 and the per-runtime kernel choice are in `benchmarks/comparison/CSV.md`.
+Shared-host timings are advisory, and only figures from one shard compare.
+
+- **Shipped paths.** `CsvScanner` scans 1.03–2.7× faster than the best Java competitor, with no
+  Java allocation per row. `Csv.parse` with `getString` reaches 0.5–1.4× of the best competitor
+  on string materialization. `CsvPlan` typed decode is 1.4–2.6× the best competitor on SVM, but
+  slower on the JVM's numeric fixture.
+- **Structural-index kernels** (`csv/native`, `csv/kernel`, not yet wired into `Csv.parse` or
+  `CsvPlan`):
+  - The native AVX-512/AVX2 indexer indexes at 2.4–12 GB/s. With the index consumer, scans run
+    at 0.7–13.6 GB/s. That is 2.4–21× the best Java competitor and 1.25–11× Rust `csv-core`.
+  - Typed decode over the index runs 2.6–5.6× the best competitor, with no Java allocation per
+    row, and at 83–250% of Rust `csv`.
+  - String materialization trails Rust's reused `StringRecord` on short fields, because Java
+    allocates one `String` per cell.
 
 ## Deferred
 
-- A SWAR or SIMD kernel behind `CsvKernel`, and a `MemorySegment`-native kernel that drops
-  the mapped-window copy (the comparison decides).
+- Adopting the structural-index kernels behind the scanner seam (`csv/native/README.md` describes
+  the contract and how a scanner consumes it). The comparison chose the native kernel on SVM and
+  the JVM, with Java SWAR (portable SVM) or the Vector API (JVM, x86-64-v3 images) as fallbacks; a
+  `MemorySegment`-native kernel would also drop the mapped-window copy.
 - Buffer recycling across heap batches.
 - Wider boolean spellings, STRING length constraints, other encodings, type inference.
 - Primitive and text columns in core `Batch`, so CSV and JDBC share column storage.

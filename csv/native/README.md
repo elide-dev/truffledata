@@ -116,6 +116,21 @@ comment lines and null tokens are per-record and per-field checks on the consume
 character other than the quote is not representable in the quote-parity mask and keeps the
 strict per-byte scanner; memory-mapped input is the JVM `MemorySegment` path.
 
+## Measured choice
+
+The CSV comparison (`benchmarks/comparison/CSV.md`, raw samples in
+`benchmarks/results/csv-f5daec1/`) chose these defaults:
+
+- **SVM:** the native kernel, as a leaf call for chunks of at most 1 MiB and a normal transition
+  above that. It beats Java SWAR from 4 KiB up. Fallback without the library: `java-swar`.
+  The Vector API is not intrinsified in `-march=compatibility` images (0.05 GB/s), so it is used
+  only in x86-64-v3 images.
+- **JVM:** the native kernel through the critical heap call. Fallback: `java-vector`.
+- **Below 4 KiB:** not measured yet. The strict scanner stays a candidate there.
+
+`IndexedScanner` should read the index in calls of up to 1 Mi entries for native kernels and
+64 Ki entries for Java kernels, the capacities the measurements used.
+
 ## Tests
 
 ```sh
