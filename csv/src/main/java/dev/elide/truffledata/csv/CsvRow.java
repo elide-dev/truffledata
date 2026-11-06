@@ -16,7 +16,8 @@ import java.util.Objects;
 
 /**
  * A view of one batch row. Rows are immutable and unconfined; members are named by the schema (the
- * header), elements by ordinal. Absent fields of flexible short rows read as {@link Missing}.
+ * header), elements by ordinal. Absent fields of flexible short rows read as {@link Missing}. Rows of
+ * a mapped batch throw {@code IllegalStateException} on every read once its mapping is closed.
  */
 @ExportLibrary(DataLibrary.class)
 public final class CsvRow extends AbstractRow {
@@ -43,11 +44,13 @@ public final class CsvRow extends AbstractRow {
   }
 
   public boolean isNull(int column) {
+    batch.checkLive();
     return batch.columns[column].state(index) == Column.NULL;
   }
 
   /** Throws {@link ContractViolation} on null, missing or non-STRING. */
   public String getString(int column) {
+    batch.checkLive();
     Column c = batch.columns[column];
     long[] spans = c.spans;
     if (spans == null || c.state(index) != Column.PRESENT) throw expected(descriptor, column, "STRING");
@@ -55,6 +58,7 @@ public final class CsvRow extends AbstractRow {
   }
 
   public long getLong(int column) {
+    batch.checkLive();
     Column c = batch.columns[column];
     long[] longs = c.longs;
     if (longs == null || c.state(index) != Column.PRESENT) throw expected(descriptor, column, "INT64");
@@ -62,6 +66,7 @@ public final class CsvRow extends AbstractRow {
   }
 
   public double getDouble(int column) {
+    batch.checkLive();
     Column c = batch.columns[column];
     double[] doubles = c.doubles;
     if (doubles == null || c.state(index) != Column.PRESENT) throw expected(descriptor, column, "FLOAT64");
@@ -69,6 +74,7 @@ public final class CsvRow extends AbstractRow {
   }
 
   public boolean getBoolean(int column) {
+    batch.checkLive();
     Column c = batch.columns[column];
     boolean[] booleans = c.booleans;
     if (booleans == null || c.state(index) != Column.PRESENT) throw expected(descriptor, column, "BOOLEAN");
@@ -100,11 +106,13 @@ public final class CsvRow extends AbstractRow {
 
   @ExportMessage
   Object read(int field) {
+    batch.checkLive();
     return value(batch, batch.columns[field], index);
   }
 
   @ExportMessage
   boolean isPresent(int field) {
+    batch.checkLive();
     return batch.columns[field].state(index) != Column.MISSING;
   }
 
@@ -122,11 +130,13 @@ public final class CsvRow extends AbstractRow {
         int field,
         @Cached("row.schema()") Schema schema,
         @Cached("field") int cachedField) {
+      row.batch.checkLive();
       return Objects.requireNonNull(row.batch.columns[cachedField].longs)[row.index];
     }
 
     @Specialization(replaces = "required")
     static long generic(CsvRow row, int field) throws UnexpectedResultException {
+      row.batch.checkLive();
       Column column = row.batch.columns[field];
       long[] longs = column.longs;
       if (longs != null && column.state(row.index) == Column.PRESENT) return longs[row.index];
@@ -148,11 +158,13 @@ public final class CsvRow extends AbstractRow {
         int field,
         @Cached("row.schema()") Schema schema,
         @Cached("field") int cachedField) {
+      row.batch.checkLive();
       return Objects.requireNonNull(row.batch.columns[cachedField].doubles)[row.index];
     }
 
     @Specialization(replaces = "required")
     static double generic(CsvRow row, int field) throws UnexpectedResultException {
+      row.batch.checkLive();
       Column column = row.batch.columns[field];
       double[] doubles = column.doubles;
       if (doubles != null && column.state(row.index) == Column.PRESENT) return doubles[row.index];
@@ -174,11 +186,13 @@ public final class CsvRow extends AbstractRow {
         int field,
         @Cached("row.schema()") Schema schema,
         @Cached("field") int cachedField) {
+      row.batch.checkLive();
       return Objects.requireNonNull(row.batch.columns[cachedField].booleans)[row.index];
     }
 
     @Specialization(replaces = "required")
     static boolean generic(CsvRow row, int field) throws UnexpectedResultException {
+      row.batch.checkLive();
       Column column = row.batch.columns[field];
       boolean[] booleans = column.booleans;
       if (booleans != null && column.state(row.index) == Column.PRESENT)

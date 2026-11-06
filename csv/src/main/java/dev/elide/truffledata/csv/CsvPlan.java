@@ -3,7 +3,10 @@ package dev.elide.truffledata.csv;
 import dev.elide.truffledata.ContractViolation;
 import dev.elide.truffledata.Field;
 import dev.elide.truffledata.Schema;
+import java.io.IOException;
 import java.io.InputStream;
+import java.io.UncheckedIOException;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -136,6 +139,64 @@ public final class CsvPlan {
 
   public CsvReader open(InputStream input, CsvLimits limits, int batchBytes) {
     return new CsvReader(input, this, limits, batchBytes);
+  }
+
+  /** One batch over a caller-owned mapping; valid while the mapping is open. */
+  public CsvBatch parse(CsvMapping mapping) {
+    return parse(mapping, CsvLimits.DEFAULT);
+  }
+
+  /** Checks maxBatchBytes, then scans the mapping in windows; spans address the mapping. */
+  public CsvBatch parse(CsvMapping mapping, CsvLimits limits) {
+    return mapped(mapping, limits, false);
+  }
+
+  /** One batch over a private confined mapping of {@code path}; {@link CsvBatch#close()} unmaps it. */
+  public CsvBatch parse(Path path) throws IOException {
+    return parse(path, CsvLimits.DEFAULT);
+  }
+
+  public CsvBatch parse(Path path, CsvLimits limits) throws IOException {
+    CsvMapping mapping = CsvMapping.map(path);
+    try {
+      return mapped(mapping, limits, true);
+    } catch (RuntimeException e) {
+      mapping.close();
+      throw e;
+    }
+  }
+
+  private CsvBatch mapped(CsvMapping mapping, CsvLimits limits, boolean owns) {
+    int window = Math.min(Csv.DEFAULT_BATCH_BYTES, limits.maxBatchBytes());
+    try (CsvReader reader = new CsvReader(mapping, false, this, limits, window)) {
+      return reader.whole(owns);
+    } catch (IOException e) {
+      throw new UncheckedIOException(e); // mapped reads do no I/O
+    }
+  }
+
+  /** Streams mapped batches of about 1 MiB of the file each, valid while the mapping is open. */
+  public CsvReader open(CsvMapping mapping) {
+    return open(mapping, CsvLimits.DEFAULT, Csv.DEFAULT_BATCH_BYTES);
+  }
+
+  public CsvReader open(CsvMapping mapping, CsvLimits limits, int batchBytes) {
+    return new CsvReader(mapping, false, this, limits, batchBytes);
+  }
+
+  /** Streams a private confined mapping of {@code path}; closing the reader unmaps it. */
+  public CsvReader open(Path path) throws IOException {
+    return open(path, CsvLimits.DEFAULT, Csv.DEFAULT_BATCH_BYTES);
+  }
+
+  public CsvReader open(Path path, CsvLimits limits, int batchBytes) throws IOException {
+    CsvMapping mapping = CsvMapping.map(path);
+    try {
+      return new CsvReader(mapping, true, this, limits, batchBytes);
+    } catch (RuntimeException e) {
+      mapping.close();
+      throw e;
+    }
   }
 
   static boolean hasBom(byte[] input, int length) {

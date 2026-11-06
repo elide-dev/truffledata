@@ -19,7 +19,12 @@ final class BatchBuilder implements CsvScanner.Records {
   private static final byte[] NO_BYTES = new byte[0];
 
   private final CsvPlan.Binding binding;
-  private final byte[] input;
+
+  /** The scanned window; spans stored for STRING fields are shifted to batch offsets. */
+  private byte[] input;
+
+  /** Batch offset of {@code input[0]} (windowed mapped parses), applied to stored spans. */
+  private long spanShift;
   private final int maxRows;
   private final boolean flexible;
   private final Dialect dialect;
@@ -35,7 +40,7 @@ final class BatchBuilder implements CsvScanner.Records {
   private int viewOffset;
   private final long firstRecord;
   private final long recordBase;
-  private final long byteBase;
+  private long byteBase;
 
   // Per field; the arrays a field's kind does not use stay empty.
   private final long[][] words; // spans (STRING) or values (INT64)
@@ -161,7 +166,7 @@ final class BatchBuilder implements CsvScanner.Records {
         if (b.kinds[f] != CsvPlan.STRING) throw violation(number, f, "null");
       }
       switch (b.kinds[f]) {
-        case CsvPlan.STRING -> words[f][row] = span;
+        case CsvPlan.STRING -> words[f][row] = span + spanShift;
         case CsvPlan.INT64 -> words[f][row] = toLong(number, f, span);
         case CsvPlan.FLOAT64 -> doubles[f][row] = toDouble(number, f, span);
         default -> booleans[f][row] = toBoolean(number, f, span);
@@ -237,8 +242,30 @@ final class BatchBuilder implements CsvScanner.Records {
     capacity = size;
   }
 
-  CsvBatch build() {
+  /** Continues the batch over the next window: {@code shift} is its batch offset. */
+  void window(byte[] input, int shift, long byteBase) {
+    this.input = input;
+    this.spanShift = (long) shift << 32;
+    this.byteBase = byteBase;
+  }
+
+  /** A batch over {@code length} mapped bytes at file offset {@code base}. */
+  CsvBatch buildMapped(CsvMapping mapping, long base, int length, boolean owns) {
+    trim();
+    return new CsvBatch(
+        binding.schema, NO_BYTES, columns(), rows, firstRecord, dialect, 0, mapping, base, length, owns);
+  }
+
+  private void trim() {
     if (capacity - rows > capacity / 8) resize(rows);
+  }
+
+  CsvBatch build() {
+    trim();
+    return new CsvBatch(binding.schema, input, columns(), rows, firstRecord, dialect, 0);
+  }
+
+  private Column[] columns() {
     Column[] columns = new Column[words.length];
     for (int f = 0; f < columns.length; f++) {
       byte kind = binding.kinds[f];
@@ -250,6 +277,6 @@ final class BatchBuilder implements CsvScanner.Records {
               kind == CsvPlan.BOOLEAN ? booleans[f] : null,
               binding.stateful[f] ? states[f] : null);
     }
-    return new CsvBatch(binding.schema, input, columns, rows, firstRecord, dialect, 0);
+    return columns;
   }
 }

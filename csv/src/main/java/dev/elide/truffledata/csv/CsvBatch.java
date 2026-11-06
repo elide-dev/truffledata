@@ -9,16 +9,24 @@ import com.oracle.truffle.api.library.ExportLibrary;
 import com.oracle.truffle.api.library.ExportMessage;
 import dev.elide.truffledata.Schema;
 import java.util.Objects;
+import org.jspecify.annotations.Nullable;
 
 /**
- * Immutable rows of one CSV batch over its retained input bytes. Batches need no closing, are safe
- * to share across threads, and are their own snapshot. Guests see an array of {@link CsvRow}s.
+ * Immutable rows of one CSV batch. Guests see an array of {@link CsvRow}s.
+ *
+ * <p>A <b>heap</b> batch retains its input {@code byte[]}: it needs no closing, is safe to share
+ * across threads, and is its own snapshot ({@link #close()} does nothing). A <b>mapped</b> batch
+ * ({@link #mapped()}) keeps its STRING cells as spans into a {@link CsvMapping} and must not outlive
+ * it: once the mapping closes, every read throws {@code IllegalStateException}. {@link #snapshot()}
+ * copies a mapped batch into a heap batch.
  */
 @ExportLibrary(InteropLibrary.class)
-public final class CsvBatch implements TruffleObject {
+public final class CsvBatch implements TruffleObject, AutoCloseable {
   private static final byte[] NO_BYTES = new byte[0];
 
   final Schema schema;
+
+  /** Heap input; empty for mapped batches. */
   final byte[] input;
 
   @CompilationFinal(dimensions = 1)
@@ -29,6 +37,18 @@ public final class CsvBatch implements TruffleObject {
   final Dialect dialect;
   private final int copiedBytes;
 
+  /** The mapping holding this batch's input, or null for heap batches. */
+  final @Nullable CsvMapping mapping;
+
+  /** File offset of span offset 0 (mapped batches). */
+  private final long base;
+
+  /** Input bytes the spans address (mapped batches). */
+  private final int mappedLength;
+
+  /** Whether {@link #close()} closes the mapping ({@code Csv.parse(Path, …)}). */
+  private final boolean ownsMapping;
+
   CsvBatch(
       Schema schema,
       byte[] input,
@@ -37,6 +57,21 @@ public final class CsvBatch implements TruffleObject {
       long firstRecord,
       Dialect dialect,
       int copiedBytes) {
+    this(schema, input, columns, size, firstRecord, dialect, copiedBytes, null, 0, 0, false);
+  }
+
+  CsvBatch(
+      Schema schema,
+      byte[] input,
+      Column[] columns,
+      int size,
+      long firstRecord,
+      Dialect dialect,
+      int copiedBytes,
+      @Nullable CsvMapping mapping,
+      long base,
+      int mappedLength,
+      boolean ownsMapping) {
     this.schema = schema;
     this.input = input;
     this.columns = columns;
@@ -44,6 +79,16 @@ public final class CsvBatch implements TruffleObject {
     this.firstRecord = firstRecord;
     this.dialect = dialect;
     this.copiedBytes = copiedBytes;
+    this.mapping = mapping;
+    this.base = base;
+    this.mappedLength = mappedLength;
+    this.ownsMapping = ownsMapping;
+  }
+
+  /** Throws once a mapped batch's mapping is closed. Inline: a null test and one load. */
+  void checkLive() {
+    CsvMapping m = mapping;
+    if (m != null && !m.open) throw CsvMapping.closed();
   }
 
   public Schema schema() {
@@ -55,6 +100,7 @@ public final class CsvBatch implements TruffleObject {
   }
 
   public CsvRow row(int index) {
+    checkLive();
     Objects.checkIndex(index, size);
     return new CsvRow(this, index);
   }
@@ -64,9 +110,36 @@ public final class CsvBatch implements TruffleObject {
     return firstRecord;
   }
 
-  /** Retained input length. */
+  /** Retained input length (for mapped batches, the mapped bytes the batch addresses). */
   public int inputBytes() {
-    return input.length;
+    return mapping != null ? mappedLength : input.length;
+  }
+
+  /** Whether the batch reads its input from a {@link CsvMapping}. */
+  public boolean mapped() {
+    return mapping != null;
+  }
+
+  /**
+   * A heap batch with the same rows: this batch when it is already on the heap, else a copy of the
+   * mapped bytes it addresses (one copy; the primitive columns are shared).
+   */
+  public CsvBatch snapshot() {
+    CsvMapping m = mapping;
+    if (m == null) return this;
+    byte[] copy = new byte[mappedLength];
+    m.copy(base, copy, 0, mappedLength);
+    return new CsvBatch(schema, copy, columns, size, firstRecord, dialect, copiedBytes);
+  }
+
+  /**
+   * Releases the mapping when this batch owns it ({@code Csv.parse(Path, …)}); otherwise nothing:
+   * heap batches are never closed, and a borrowed mapping is closed by its owner.
+   */
+  @Override
+  public void close() {
+    CsvMapping m = mapping;
+    if (ownsMapping && m != null) m.close();
   }
 
   /** Field bytes ingest copied out of the retained input; spans reference the input instead. */
@@ -77,21 +150,35 @@ public final class CsvBatch implements TruffleObject {
   /** Materializes one STRING span of this batch, decoding escaped or complex fields. */
   @TruffleBoundary
   static String string(CsvBatch batch, long span) {
-    return batch.dialect.string(batch.input, span);
+    CsvMapping m = batch.mapping;
+    if (m == null) return batch.dialect.string(batch.input, span);
+    int length = CsvScanner.length(span);
+    byte[] region = new byte[length];
+    m.copy(batch.base + CsvScanner.offset(span), region, 0, length);
+    return batch.dialect.string(region, rebase(span));
+  }
+
+  /** The span relative to a copy of its own bytes. */
+  private static long rebase(long span) {
+    return CsvScanner.span(
+        0, CsvScanner.length(span), CsvScanner.quoted(span), CsvScanner.escaped(span));
   }
 
   /**
    * One pass over the batch: rows in order, columns in schema order. Allocates one {@link CsvText}
-   * and, only when the batch has escaped fields, one scratch buffer that grows to the longest
-   * escaped field; nothing per row or per field.
+   * and, only when the batch has escaped fields (or is mapped), scratch buffers that grow to the
+   * longest such field; nothing per row or per field.
    */
   @TruffleBoundary
   public void export(CsvSink sink) {
     Objects.requireNonNull(sink);
+    checkLive();
     CsvText text = new CsvText();
     byte[] scratch = NO_BYTES;
+    byte[] raw = NO_BYTES;
     Dialect d = dialect;
     CommonsScanner decoder = d.decoder();
+    CsvMapping m = mapping;
     Column[] cols = columns;
     int fields = cols.length;
     for (int r = 0; r < size; r++) {
@@ -111,11 +198,19 @@ public final class CsvBatch implements TruffleObject {
         if (spans != null) {
           long span = spans[r];
           int length = CsvScanner.length(span);
+          byte[] source = input;
+          if (m != null) {
+            // Mapped: copy the cell's bytes into a scratch buffer (no allocation per cell).
+            if (raw.length < length) raw = new byte[Math.max(length, raw.length * 2)];
+            m.copy(base + CsvScanner.offset(span), raw, 0, length);
+            source = raw;
+            span = rebase(span);
+          }
           if (CsvScanner.escaped(span)) {
             if (scratch.length < length)
-              scratch = new byte[Math.max(length, Math.min(scratch.length * 2, input.length))];
-            text.set(scratch, 0, d.decode(input, span, scratch, 0, decoder));
-          } else text.set(input, CsvScanner.offset(span), length);
+              scratch = new byte[Math.max(length, Math.min(scratch.length * 2, inputBytes()))];
+            text.set(scratch, 0, d.decode(source, span, scratch, 0, decoder));
+          } else text.set(source, CsvScanner.offset(span), length);
           sink.text(c, text);
         } else if (longs != null) sink.longValue(c, longs[r]);
         else if (doubles != null) sink.doubleValue(c, doubles[r]);
@@ -143,6 +238,7 @@ public final class CsvBatch implements TruffleObject {
   // Inline, without a boundary, so a compiled loop can virtualize the row.
   @ExportMessage
   Object readArrayElement(long index) throws InvalidArrayIndexException {
+    checkLive();
     if (index < 0 || index >= size) throw InvalidArrayIndexException.create(index);
     return new CsvRow(this, (int) index);
   }
