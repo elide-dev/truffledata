@@ -24,6 +24,17 @@ import decode symbol=td_json_decode return=i32 error=no_failure native_leaf=fals
   param max_depth type=u32
   param result type=ptr<void> nullable=false ownership=borrowed access=read_write
 end
+import decode_adopted symbol=td_json_decode_adopted return=i32 error=no_failure native_leaf=false@explicit_contract
+  param data type=ptr<u8> nullable=false ownership=borrowed access=read
+  param length type=u64
+  param capacity type=u64
+  param max_input_bytes type=u64
+  param max_index_bytes type=u64
+  param max_nodes type=u64
+  param max_text_bytes type=u64
+  param max_depth type=u32
+  param result type=ptr<void> nullable=false ownership=borrowed access=read_write
+end
 import release symbol=td_json_release return=void error=no_failure native_leaf=false@explicit_contract
   param result type=ptr<void> nullable=false ownership=borrowed access=read_write
 end

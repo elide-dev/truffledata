@@ -3,6 +3,8 @@
 #include <cstring>
 #include <stdexcept>
 #include <string>
+#include <simdjson.h>
+#include <vector>
 
 void require(bool condition) { if (!condition) throw std::runtime_error("ABI check failed"); }
 int32_t decode(const std::string& source, JsonResult& result, uint64_t budget = 1024 * 1024) {
@@ -90,7 +92,35 @@ void scalar_contracts() {
   require(parse(R"({"v":0.1})") == TD_JSON_CONTRACT);
   td_json_plan_release(&plan);
 }
+void adopted() {
+  const std::string source = R"({"s":"abcdefghijklmnopqrstuvwxyz0123456789"})";
+  JsonResult result{};
+  auto decode_adopted = [&](std::vector<uint8_t>& buffer, uint64_t capacity) {
+    return td_json_decode_adopted(buffer.data(), source.size(), capacity,
+        1024 * 1024, 1024 * 1024, 10000, 1024 * 1024, 128, &result);
+  };
+  std::vector<uint8_t> padded(source.size() + simdjson::SIMDJSON_PADDING, 0);
+  std::memcpy(padded.data(), source.data(), source.size());
+  require(decode_adopted(padded, padded.size()) == TD_JSON_OK);
+  require(result.copied_input_bytes == 0 && result.padded_input_bytes == padded.size());
+  auto* view = static_cast<const myna_value_view*>(result.view);
+  // Region 1 is the adopted memory itself: the string references the caller's buffer.
+  require(view->regions[0].data == padded.data());
+  require(view->nodes[2].payload >> 32 == 1);
+  td_json_release(&result);
+  std::vector<uint8_t> unpadded(source.size() + simdjson::SIMDJSON_PADDING - 1, 0);
+  std::memcpy(unpadded.data(), source.data(), source.size());
+  require(decode_adopted(unpadded, unpadded.size()) == TD_JSON_OK);
+  require(result.copied_input_bytes == source.size());
+  view = static_cast<const myna_value_view*>(result.view);
+  require(view->regions[0].data != unpadded.data());
+  td_json_release(&result);
+  require(decode_adopted(padded, source.size() - 1) == TD_JSON_ARGUMENT);
+  require(!result.owner);
+  require(td_json_decode_adopted(nullptr, 1, 100, 1024, 1024, 10, 1024, 128, &result) == TD_JSON_ARGUMENT);
+}
 int main() {
+  adopted();
   scalar_contracts();
   typed();
   require(std::strcmp(reinterpret_cast<const char*>(td_json_fingerprint()), TRUFFLEDATA_JSON_SEAM_ABI) == 0);

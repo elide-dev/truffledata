@@ -42,7 +42,9 @@ inline bool number(std::string_view s) {
 // copied into message-owned storage, so parser scratch never outlives the lease.
 // One instance is immutable after construction and must not be reused to parse.
 class document final {
-  simdjson::padded_string input_;
+  simdjson::padded_string owned_;
+  // Either owned_ or caller memory adopted with sufficient padding; never copied twice.
+  simdjson::padded_string_view input_;
   index_memory memory_;
   myna::value_builder builder_;
   uint32_t input_region_;
@@ -147,14 +149,18 @@ class document final {
         break;
     }
   }
-public:
-  explicit document(std::string_view input, myna::value_limits limits = {},
-                    storage_limits storage = {},
-                    std::pmr::memory_resource* upstream = std::pmr::get_default_resource())
-      : input_(checked(input, storage)), memory_(storage.index_bytes, upstream),
+  struct adopted_tag {};
+  document(adopted_tag, simdjson::padded_string owned, simdjson::padded_string_view input,
+           myna::value_limits limits, storage_limits storage, std::pmr::memory_resource* upstream)
+      : owned_(std::move(owned)),
+        input_(owned_.data() ? simdjson::padded_string_view(owned_.data(), owned_.size(), owned_.size() + simdjson::SIMDJSON_PADDING) : input),
+        memory_(storage.index_bytes, upstream),
         builder_(&memory_, limits),
         input_region_(builder_.region(std::string_view(input_.data(), input_.size()))),
         limits_(limits), lexical_(&memory_) {
+    parse();
+  }
+  void parse() {
     if (!input_.data()) throw std::bad_alloc();
     parser_lease lease = parser_pool::acquire();
     auto& parser = lease.get();
@@ -167,12 +173,33 @@ public:
     parser_capacity_ = parser.capacity();
     (void)builder_.view();
   }
+public:
+  explicit document(std::string_view input, myna::value_limits limits = {},
+                    storage_limits storage = {},
+                    std::pmr::memory_resource* upstream = std::pmr::get_default_resource())
+      : document(adopted_tag{}, simdjson::padded_string(checked(input, storage)),
+                 simdjson::padded_string_view(), limits, storage, upstream) {}
+  // Adopt caller memory when it carries SIMDJSON_PADDING readable bytes past `length`;
+  // otherwise copy once. The caller keeps adopted memory valid for the document's life.
+  document(const char* data, size_t length, size_t capacity, myna::value_limits limits = {},
+           storage_limits storage = {},
+           std::pmr::memory_resource* upstream = std::pmr::get_default_resource())
+      : document(adopted_tag{},
+                 capacity >= length + simdjson::SIMDJSON_PADDING
+                     ? simdjson::padded_string()
+                     : simdjson::padded_string(checked(std::string_view(data, length), storage)),
+                 capacity >= length + simdjson::SIMDJSON_PADDING
+                     ? simdjson::padded_string_view(data, checked(std::string_view(data, length), storage).size(), capacity)
+                     : simdjson::padded_string_view(),
+                 limits, storage, upstream) {}
+  bool adopted() const { return !owned_.data(); }
   document(const document&) = delete;
   document& operator=(const document&) = delete;
   myna_value_view view() const { return builder_.view(); }
   const std::pmr::vector<uint64_t>& lexical_spans() const { return lexical_; }
   allocation_stats allocations() const {
-    return {input_.size(), input_.size() + simdjson::SIMDJSON_PADDING,
+    return {adopted() ? 0 : input_.size(),
+            adopted() ? input_.capacity() : input_.size() + simdjson::SIMDJSON_PADDING,
             memory_.current(), memory_.peak(), memory_.allocations(), parser_capacity_};
   }
 private:

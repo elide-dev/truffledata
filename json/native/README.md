@@ -5,11 +5,22 @@ without an intermediate DOM. It accepts all root kinds, rejects decoded duplicat
 keys, validates number grammar without restricting numeric range, and retains raw
 string/key spellings alongside the index. Every field is visited before publication.
 
-Each document currently copies input into a padded allocation and retains its own
-parser. Long decoded strings borrow that parser's scratch; numeric tokens borrow
-the retained input. The document cannot be copied or reparsed. This establishes
-correct retained-region lifetimes before adding parser pooling or adopted inputs.
-Returned descriptors and lexical views are valid only while the document lives.
+Each document retains its input: either a padded copy, or caller memory adopted
+through `td_json_decode_adopted` when the caller proves `SIMDJSON_PADDING` readable
+bytes past the logical length (otherwise the input is copied once and
+`copied_input_bytes` says so). Parsers are leased from a bounded process-wide pool
+(at most 8 idle) and returned before decode completes: unescaped strings longer
+than 16 bytes reference the retained input region, escaped strings are copied into
+message-owned bytes, and short strings are inline, so no retained document depends
+on parser scratch. The document cannot be copied or reparsed. Returned descriptors
+and lexical views are valid only while the document lives.
+
+Numbers become I64, U64 or F64 nodes when exactly representable (`-0` is F64
+negative zero); tokens simdjson cannot represent, such as `1E400`, remain DECIMAL
+references to the input. Every node has a packed lexical span (`offset << 32 |
+length`, into region 1, the retained input): quotes and escapes are preserved for
+strings and keys, numbers keep their exact spelling, and containers, booleans and
+null carry zero. `JsonResult.lexical`/`lexical_count` publish that array (ABI 4).
 
 Run `bazel test //json/native:test //json/native:api_test //json:bindings`. Tests check malformed values, trailing input,
 escaped duplicate keys, exact huge exponents, decoded Unicode, raw lexical text,

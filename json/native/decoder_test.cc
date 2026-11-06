@@ -1,5 +1,6 @@
 #include "json/native/decoder.h"
 #include "json/native/parser_pool.h"
+#include <cstring>
 #include <vector>
 #include <iostream>
 #include <stdexcept>
@@ -94,6 +95,20 @@ void allocation_checks() {
     bool rejected = false;
     try { document parsed(source, {}, {}, &memory); }
     catch (const std::bad_alloc&) { rejected = true; }
+    require(rejected == (i < stats.index_allocations));
+    require(memory.live == 0);
+  }
+  // Adopted input: every index allocation can still fail without leaking, and the
+  // caller's buffer is never copied when it carries the parser padding.
+  std::vector<char> padded(source.size() + simdjson::SIMDJSON_PADDING, '\0');
+  std::memcpy(padded.data(), source.data(), source.size());
+  for (size_t i = 0; i <= stats.index_allocations; ++i) {
+    fault_memory memory(i);
+    bool rejected = false;
+    try {
+      document parsed(padded.data(), source.size(), padded.size(), {}, {}, &memory);
+      require(parsed.adopted() && parsed.allocations().copied_input_bytes == 0);
+    } catch (const std::bad_alloc&) { rejected = true; }
     require(rejected == (i < stats.index_allocations));
     require(memory.live == 0);
   }
