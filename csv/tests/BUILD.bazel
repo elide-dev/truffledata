@@ -69,6 +69,7 @@ java_test(
     srcs = [
         "ChunkedInput.java",
         "CommonsDifferentialTest.java",
+        "CsvApiSurfaceTest.java",
         "CommonsFormats.java",
         "CommonsRoundTripTest.java",
         "CommonsScannerTest.java",
@@ -92,6 +93,8 @@ java_test(
     args = [
         "--class",
         "dev.elide.truffledata.csv.CommonsDifferentialTest",
+        "--class",
+        "dev.elide.truffledata.csv.CsvApiSurfaceTest",
         "--class",
         "dev.elide.truffledata.csv.CommonsRoundTripTest",
         "--class",

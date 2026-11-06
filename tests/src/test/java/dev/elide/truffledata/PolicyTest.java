@@ -65,7 +65,8 @@ class PolicyTest {
             Map.entry("CsvBatch.java", 2), // Static STRING materialization and the export walk.
             Map.entry("CsvRow.java", 1), // Static typed-read contract failure.
             Map.entry("CsvText.java", 2), // Sink-side String and TruffleString copies.
-            Map.entry("Numbers.java", 1)); // Static Double.parseDouble fallback.
+            Map.entry("Numbers.java", 1), // Static Double.parseDouble fallback.
+            Map.entry("CsvMapping.java", 1)); // Static closed-mapping failure.
     Pattern limit = Pattern.compile("limit\\s*=\\s*\"(\\d+)\"");
     Map<String, Integer> exportedMessages =
         new HashMap<>(

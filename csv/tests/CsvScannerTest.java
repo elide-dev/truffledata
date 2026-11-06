@@ -230,7 +230,12 @@ final class CsvScannerTest {
     assertEquals(64 << 20, CsvLimits.DEFAULT.maxBatchBytes());
     assertThrows(
         IllegalArgumentException.class, () -> CsvFormat.RFC4180.withQuote(' ').withTrim(true));
-    assertEquals((byte) ' ', CsvFormat.RFC4180.withoutQuoting().withQuote(' ').withTrim(true).quote());
+    // Setting a quote character enables quoting (Commons semantics), so a blank quote stays rejected;
+    // trim is fine once quoting is off.
+    assertThrows(
+        IllegalArgumentException.class,
+        () -> CsvFormat.RFC4180.withoutQuoting().withQuote(' ').withTrim(true));
+    assertFalse(CsvFormat.RFC4180.withoutQuoting().withTrim(true).quoting());
     // Formats and limits are values: equal options are interchangeable.
     CsvFormat tab = CsvFormat.RFC4180.withDelimiter('\t');
     assertEquals(tab, CsvFormat.RFC4180.withDelimiter('\t'));
