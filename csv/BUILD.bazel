@@ -3,8 +3,14 @@ load("//bazel:java.bzl", "data_java_library")
 data_java_library(
     name = "csv",
     srcs = [
+        "src/main/java/dev/elide/truffledata/csv/BatchBuilder.java",
+        "src/main/java/dev/elide/truffledata/csv/Column.java",
+        "src/main/java/dev/elide/truffledata/csv/Csv.java",
+        "src/main/java/dev/elide/truffledata/csv/CsvBatch.java",
         "src/main/java/dev/elide/truffledata/csv/CsvFormat.java",
         "src/main/java/dev/elide/truffledata/csv/CsvLimits.java",
+        "src/main/java/dev/elide/truffledata/csv/CsvPlan.java",
+        "src/main/java/dev/elide/truffledata/csv/CsvRow.java",
         "src/main/java/dev/elide/truffledata/csv/CsvScanner.java",
         "src/main/java/dev/elide/truffledata/csv/Utf8.java",
         "src/main/java/dev/elide/truffledata/csv/package-info.java",

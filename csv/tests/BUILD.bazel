@@ -3,23 +3,36 @@ load("@rules_java//java:defs.bzl", "java_test")
 java_test(
     name = "jvm",
     srcs = [
+        "CsvBatchTest.java",
+        "CsvInteropTest.java",
         "CsvScannerTest.java",
         "RecordGenerator.java",
         "Utf8Test.java",
     ],
     args = [
         "--class",
+        "dev.elide.truffledata.csv.CsvBatchTest",
+        "--class",
+        "dev.elide.truffledata.csv.CsvInteropTest",
+        "--class",
         "dev.elide.truffledata.csv.CsvScannerTest",
         "--class",
         "dev.elide.truffledata.csv.Utf8Test",
     ],
-    jvm_flags = ["-ea"],
+    jvm_flags = [
+        "-Dpolyglot.engine.WarnInterpreterOnly=false",
+        "-ea",
+    ],
     main_class = "dev.elide.bazel.junit.BazelJUnitRunner",
     use_testrunner = False,
-    runtime_deps = ["//bazel/junit:runner"],
+    runtime_deps = [
+        "//bazel/junit:runner",
+        "@maven//:org_graalvm_truffle_truffle_runtime",
+    ],
     deps = [
         "//core",
         "//csv",
+        "@maven//:org_graalvm_polyglot_polyglot",
         "@maven//:org_graalvm_truffle_truffle_api",
         "@maven//:org_junit_jupiter_junit_jupiter_api",
     ],
