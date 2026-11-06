@@ -13,6 +13,28 @@ enum td_json_status {
   TD_JSON_CONTRACT = 6
 };
 
+// Sessions (td_json_session_*). A session is a thread-confined decode context: one simdjson
+// On-Demand parser, a padded input buffer and a block arena reused across documents. Callers
+// serialize every call on one session. session_create copies JsonLimitsStruct (max_depth ≤ 128)
+// and returns null on invalid limits or allocation failure.
+// session_decode copies `data` into the session and writes a *borrowed* JsonResult: owner is
+// null, and every pointer stays valid only until the next call on the session (decode, retain,
+// reset or release). Never td_json_release a borrowed result (doing so is a harmless no-op). A
+// failed decode zeroes the result, keeps nothing and leaves the session reusable. `flags`,
+// `text_out` and `text_capacity` are reserved for text arenas, UTF-16 input and frame mode; until
+// then any nonzero value is TD_JSON_ARGUMENT. index_allocations counts upstream allocations made
+// by this decode (0 in steady state).
+// session_retain moves the live document's arena blocks and input into a zero-initialized
+// `result` that owns them (release with td_json_release), without copying nodes; the session then
+// holds no document. Retaining twice, with no document, or into a live result is TD_JSON_ARGUMENT.
+// session_reset invalidates the borrowed document in O(1) without freeing (a native leaf call);
+// storage is recycled by the next decode. session_release frees the session; retained results
+// stay valid.
+// session_decode_small is session_decode restricted to length ≤ TD_JSON_CRITICAL_LIMIT
+// (TD_JSON_ARGUMENT above it), declared a native leaf for the JVM's bounded critical path:
+// bounded input (≈ 30 µs at 150 MB/s), no locks, no exception escapes.
+#define TD_JSON_CRITICAL_LIMIT 4096u
+
 // Typed plans hold at most this many records (each at most 64 fields).
 #define TD_JSON_MAX_PLAN_RECORDS 65536u
 // Maximum record nesting of a typed plan; the root record alone has depth 1.

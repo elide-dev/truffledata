@@ -40,6 +40,45 @@ import release symbol=td_json_release return=void error=no_failure native_leaf=f
   param result type=ptr<void> nullable=false ownership=borrowed access=read_write
 end
 
+struct JsonLimitsStruct size=40 align=8
+  field max_input_bytes type=u64 offset=0
+  field max_index_bytes type=u64 offset=8
+  field max_nodes type=u64 offset=16
+  field max_text_bytes type=u64 offset=24
+  field max_depth type=u32 offset=32
+end
+import session_create symbol=td_json_session_create return=ptr<void> error=no_failure native_leaf=false@explicit_contract
+  param limits type=ptr<void> nullable=false ownership=borrowed access=read
+end
+import session_decode symbol=td_json_session_decode return=i32 error=no_failure native_leaf=false@explicit_contract
+  param session type=ptr<void> nullable=false ownership=borrowed access=read_write
+  param data type=ptr<u8> nullable=false ownership=borrowed access=read
+  param length type=u64
+  param flags type=u32
+  param text_out type=ptr<u8> nullable=true ownership=borrowed access=read_write
+  param text_capacity type=u64
+  param result type=ptr<void> nullable=false ownership=borrowed access=read_write
+end
+import session_decode_small symbol=td_json_session_decode_small return=i32 error=no_failure native_leaf=true@explicit_contract
+  param session type=ptr<void> nullable=false ownership=borrowed access=read_write
+  param data type=ptr<u8> nullable=false ownership=borrowed access=read
+  param length type=u64
+  param flags type=u32
+  param text_out type=ptr<u8> nullable=true ownership=borrowed access=read_write
+  param text_capacity type=u64
+  param result type=ptr<void> nullable=false ownership=borrowed access=read_write
+end
+import session_retain symbol=td_json_session_retain return=i32 error=no_failure native_leaf=false@explicit_contract
+  param session type=ptr<void> nullable=false ownership=borrowed access=read_write
+  param result type=ptr<void> nullable=false ownership=borrowed access=read_write
+end
+import session_reset symbol=td_json_session_reset return=void error=no_failure native_leaf=true@explicit_contract
+  param session type=ptr<void> nullable=false ownership=borrowed access=read_write
+end
+import session_release symbol=td_json_session_release return=void error=no_failure native_leaf=false@explicit_contract
+  param session type=ptr<void> nullable=false ownership=borrowed access=read_write
+end
+
 struct JsonScalarField size=88 align=8
   field name type=ptr<u8> offset=0
   field name_length type=u64 offset=8

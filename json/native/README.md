@@ -78,6 +78,24 @@ regions; `//json/native:test` runs both writers over a 200-document corpus. Unti
 Myna can reserve builder storage (elide-dev/myna#46) the writer is the JSON-side
 substitute.
 
+## Sessions
+
+`session.h` keeps one On-Demand parser, a padded input buffer and a block arena per
+thread-confined session, so a small document costs no native allocation in steady
+state (`//json/native:api_test` decodes 10,000 documents with zero index
+allocations after warm-up). `td_json_session_decode` copies the input into the
+session and writes a *borrowed* `JsonResult` (null owner) that stays valid until
+the next call on the session. `td_json_session_retain` moves the document's arena
+blocks, large allocations and input buffer into a new owner in O(blocks): node
+pointers are unchanged and nothing is copied. `td_json_session_reset` is an O(1)
+native leaf that only invalidates the borrow; the next decode recycles storage,
+keeps at most four arena blocks, and drops parsers and input buffers that grew past
+1 MiB. `td_json_session_decode_small` is the same decode bounded by
+`TD_JSON_CRITICAL_LIMIT` (4 KiB) and declared a leaf for the JVM's critical path.
+A failed decode publishes nothing and leaves the session reusable. `api.h`
+documents the contract; `td_json_decode` does not use a session (no hidden
+per-thread state).
+
 ## Limits and accounting
 
 `storage_limits` caps logical input bytes before copying, and index allocations
@@ -108,7 +126,8 @@ overwritten by another decode. With `td_json_decode`, the input can be discarded
 when decode returns. Returned views are invalid after release. Failures map to
 argument, limit, allocation, syntax or internal-error statuses; exceptions do not
 cross C. Every import uses normal VM transitions (`native_leaf=false`) except the
-fingerprint query. Thread confinement and invalidation belong to the Java owners,
+fingerprint query, the O(1) session reset and the 4 KiB-bounded small session
+decode (`bazel/myna_contract.py` pins this set). Thread confinement and invalidation belong to the Java owners,
 not to this pointer interface.
 
 ## Typed scalar plans

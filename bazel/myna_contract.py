@@ -11,14 +11,18 @@ def verify(descriptor, archive):
     assert module["schemaVersion"] == 2
     assert module["bindingAbiVersion"] == 2
     expected = {
-        "truffledata_json": {"fingerprint", "decode", "decode_adopted", "release", "plan_create", "plan_release", "typed_decode", "typed_release"},
+        "truffledata_json": {"fingerprint", "decode", "decode_adopted", "release", "plan_create", "plan_release", "typed_decode", "typed_release",
+                             "session_create", "session_decode", "session_decode_small", "session_retain", "session_reset", "session_release"},
         "truffledata_buffa": {"fingerprint", "decode", "release", "typed", "typedReuse", "scalars", "utf8_to_utf16"},
     }[module["name"]]
     functions = module["functions"]
     assert {f["logicalName"] for f in functions} == expected
     for function in functions:
         assert function["direction"] == "IMPORT"
-        policy = "INLINE_LEAF" if function["logicalName"] == "fingerprint" else "TRANSITION"
+        # Leaf calls need an explicit bound (json/native/api.h): the ABI query, the O(1) session
+        # reset and the TD_JSON_CRITICAL_LIMIT-bounded small decode.
+        leaves = {"fingerprint", "session_reset", "session_decode_small"} if module["name"] == "truffledata_json" else {"fingerprint"}
+        policy = "INLINE_LEAF" if function["logicalName"] in leaves else "TRANSITION"
         assert function["nativeCallPolicy"] == policy, function
     name = module["java"]["package"] + "." + module["java"]["class"]
     with zipfile.ZipFile(archive) as jar:

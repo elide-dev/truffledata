@@ -1,4 +1,6 @@
 #include "json/native/api.h"
+#include "json/native/session.h"
+#include <memory_resource>
 #include <myna/values.h>
 #include <cstddef>
 #include <cstring>
@@ -236,7 +238,165 @@ void adopted() {
   require(!result.owner);
   require(td_json_decode_adopted(nullptr, 1, 100, 1024, 1024, 10, 1024, 128, &result) == TD_JSON_ARGUMENT);
 }
+
+// ---- Sessions (plan Task B1) ----------------------------------------------------------------
+class fault_memory final : public std::pmr::memory_resource {
+public:
+  size_t fail_at, calls = 0, live = 0;
+  explicit fault_memory(size_t fail) : fail_at(fail) {}
+private:
+  void* do_allocate(size_t bytes, size_t alignment) override {
+    if (calls++ == fail_at) throw std::bad_alloc();
+    live += bytes;
+    return std::pmr::new_delete_resource()->allocate(bytes, alignment);
+  }
+  void do_deallocate(void* pointer, size_t bytes, size_t alignment) override {
+    live -= bytes;
+    std::pmr::new_delete_resource()->deallocate(pointer, bytes, alignment);
+  }
+  bool do_is_equal(const std::pmr::memory_resource& other) const noexcept override { return this == &other; }
+};
+std::string text_of(const myna_value_view* view, size_t index) {
+  const auto& node = view->nodes[index];
+  if ((node.tag & MYNA_VALUE_REGION_TEXT) == 0) {
+    std::string out;
+    for (uint32_t i = 0; i < node.length; ++i) out += char(myna_value_inline_byte(&node, i));
+    return out;
+  }
+  auto region = node.payload >> 32;
+  const uint8_t* data = region == 0 ? view->bytes : view->regions[region - 1].data;
+  return std::string(reinterpret_cast<const char*>(data + uint32_t(node.payload)), node.length);
+}
+void sessions() {
+  static_assert(sizeof(JsonLimitsStruct) == 40, "session limits");
+  JsonLimitsStruct limits{1024 * 1024, 1024 * 1024, 100000, 1024 * 1024, 128};
+  void* s = td_json_session_create(&limits);
+  require(s != nullptr);
+  auto run = [&](const std::string& source, JsonResult& out, uint32_t flags = 0) {
+    return td_json_session_decode(s, reinterpret_cast<const uint8_t*>(source.data()), source.size(),
+                                  flags, nullptr, 0, &out);
+  };
+  JsonResult borrowed{}, kept{};
+  const std::string first = R"({"s":"first document text beyond inline","n":1})";
+  require(run(first, borrowed) == TD_JSON_OK);
+  // Borrowed results have no owner: td_json_release on them is a harmless no-op.
+  require(!borrowed.owner && borrowed.view && borrowed.lexical_count == 5 && borrowed.key_hashes);
+  auto* view = static_cast<const myna_value_view*>(borrowed.view);
+  const myna_value_node* nodes = view->nodes;
+  require(text_of(view, 2) == "first document text beyond inline");
+  // Retain moves storage: the retained descriptor points at the very same nodes.
+  require(td_json_session_retain(s, &kept) == TD_JSON_OK);
+  require(kept.owner && static_cast<const myna_value_view*>(kept.view)->nodes == nodes);
+  require(td_json_session_retain(s, &kept) == TD_JSON_ARGUMENT);  // live result, and no document
+  JsonResult other{};
+  require(td_json_session_retain(s, &other) == TD_JSON_ARGUMENT);  // nothing borrowed any more
+  // The next decode reuses the session; the retained document is untouched.
+  require(run(R"({"s":"second document overwrites session storage","n":2})", borrowed) == TD_JSON_OK);
+  auto* retained = static_cast<const myna_value_view*>(kept.view);
+  require(text_of(retained, 2) == "first document text beyond inline");
+  require(static_cast<const uint64_t*>(kept.lexical)[4] == ((uint64_t(45) << 32) | 1));
+  // A failed decode publishes nothing and leaves the session reusable.
+  for (auto bad : {"[1,]", "{\"a\":1,\"a\":2}", "[\"\\q\"]", "01"}) {
+    require(run(bad, borrowed) == TD_JSON_SYNTAX);
+    JsonResult empty{};
+    require(std::memcmp(&borrowed, &empty, sizeof(empty)) == 0);
+    require(td_json_session_retain(s, &other) == TD_JSON_ARGUMENT);
+  }
+  require(run("[true]", borrowed) == TD_JSON_OK);
+  // Reset invalidates the borrow (O(1), leaf contract); there is nothing left to retain.
+  td_json_session_reset(s);
+  require(td_json_session_retain(s, &other) == TD_JSON_ARGUMENT);
+  // Unknown flags and text buffers are rejected until their tasks define them.
+  require(run("[]", borrowed, 1) == TD_JSON_ARGUMENT);
+  uint8_t text[8];
+  require(td_json_session_decode(s, reinterpret_cast<const uint8_t*>("[]"), 2, 0, text, 8, &borrowed) == TD_JSON_ARGUMENT);
+  // The leaf decode is bounded by TD_JSON_CRITICAL_LIMIT.
+  std::string critical = "[" + std::string(TD_JSON_CRITICAL_LIMIT - 2, ' ') + "]";
+  require(critical.size() == TD_JSON_CRITICAL_LIMIT);
+  require(td_json_session_decode_small(s, reinterpret_cast<const uint8_t*>(critical.data()), critical.size(), 0, nullptr, 0, &borrowed) == TD_JSON_OK);
+  critical += " ";
+  require(td_json_session_decode_small(s, reinterpret_cast<const uint8_t*>(critical.data()), critical.size(), 0, nullptr, 0, &borrowed) == TD_JSON_ARGUMENT);
+  require(!borrowed.view);
+  // Session limits apply per document.
+  require(run(std::string(2 * 1024 * 1024, ' '), borrowed) == TD_JSON_LIMIT);
+  td_json_session_release(s);
+  // The retained result outlives its session.
+  require(text_of(retained, 2) == "first document text beyond inline");
+  td_json_release(&kept);
+  td_json_release(&kept);
+  require(!kept.owner && !kept.view);
+  JsonLimitsStruct deep = limits;
+  deep.max_depth = 129;
+  require(td_json_session_create(&deep) == nullptr);
+  require(td_json_session_create(nullptr) == nullptr);
+}
+void session_allocations() {
+  using truffledata::json::session;
+  const std::string doc = R"({"id":1007,"name":"item-1","note":"line \"1\" with \\ escapes\n and tail","tags":["t0","t1"],"dims":{"w":3,"h":1.5}})";
+  std::string wide = "{";
+  for (int i = 0; i < 40; ++i) wide += (i ? ",\"k" : "\"k") + std::to_string(i) + "\":[" + std::to_string(i) + "]";
+  wide += "}";
+  std::string big = "[";
+  for (int i = 0; i < 3000; ++i) big += (i ? "," : "") + doc;
+  big += "]";
+  // Every upstream allocation of a decode/retain/decode sequence can fail; the session stays
+  // consistent and everything is freed once the session and retained owner are destroyed.
+  auto sequence = [&](std::pmr::memory_resource* memory, size_t* calls) {
+    session::retained* owner = nullptr;
+    {
+      session s(myna::value_limits{}, truffledata::json::storage_limits{}, memory);
+      try {
+        s.decode(doc.data(), doc.size());
+        s.decode(wide.data(), wide.size());
+        owner = s.retain();
+        s.decode(big.data(), big.size());
+        s.decode(doc.data(), doc.size());
+      } catch (...) {
+        if (owner) owner->destroy();
+        throw;
+      }
+    }
+    if (calls) *calls = static_cast<fault_memory*>(memory)->calls;
+    require(text_of(&owner->view, 1) == "k0");
+    owner->destroy();
+  };
+  fault_memory counting(SIZE_MAX);
+  size_t total = 0;
+  sequence(&counting, &total);
+  require(counting.live == 0 && total > 3);
+  for (size_t i = 0; i < total; ++i) {
+    fault_memory memory(i);
+    bool rejected = false;
+    try { sequence(&memory, nullptr); } catch (const std::bad_alloc&) { rejected = true; }
+    require(rejected && memory.live == 0);
+  }
+  // Steady state: after warm-up a session decodes without any upstream allocation, and keeps a
+  // bounded number of blocks.
+  session s(myna::value_limits{}, truffledata::json::storage_limits{});
+  for (int i = 0; i < 3; ++i) s.decode(doc.data(), doc.size());
+  size_t blocks = s.arena_blocks(), allocations = s.memory().allocations();
+  for (int i = 0; i < 10000; ++i) {
+    auto d = s.decode(doc.data(), doc.size());
+    require(d.index_allocations == 0);
+  }
+  require(s.memory().allocations() == allocations && s.arena_blocks() == blocks);
+  // Big documents use large allocations that are released before the next decode; a parser and
+  // input buffer that grew past 1 MiB are not kept.
+  std::string huge = "[";
+  for (int i = 0; i < 12000; ++i) huge += (i ? "," : "") + doc;
+  huge += "]";
+  s.decode(huge.data(), huge.size());
+  require(s.input_capacity() > session::retained_input_limit);
+  auto d = s.decode(doc.data(), doc.size());
+  require(s.input_capacity() <= session::retained_input_limit);
+  require(s.parser_capacity() <= session::retained_input_limit);
+  require(s.memory().current() <= truffledata::json::block_arena::retained_blocks * truffledata::json::block_arena::max_block);
+  (void)d;
+}
+
 int main() {
+  sessions();
+  session_allocations();
   adopted();
   scalar_contracts();
   typed();

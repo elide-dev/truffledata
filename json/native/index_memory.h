@@ -36,6 +36,10 @@ public:
       : upstream_(upstream), limit_(limit) {
     if (!upstream) throw std::invalid_argument("null JSON allocator");
   }
+  // Stops accounting for bytes whose ownership moved elsewhere (a retained session document);
+  // their new owner frees them through upstream().
+  void forget(size_t bytes) { current_ -= bytes < current_ ? bytes : current_; }
+  std::pmr::memory_resource* upstream() const { return upstream_; }
   size_t current() const { return current_; }
   size_t peak() const { return peak_; }
   size_t allocations() const { return allocations_; }

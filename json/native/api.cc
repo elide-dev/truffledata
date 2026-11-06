@@ -1,10 +1,12 @@
 #include "json/native/api.h"
 #include "json/native/decoder.h"
+#include "json/native/session.h"
 #include "json/native/typed.h"
 #include <memory>
 
 namespace {
-struct handle {
+// Owner of a td_json_decode result; retained session results are the other result_owner.
+struct handle final : truffledata::json::result_owner {
   truffledata::json::document document;
   myna_value_view view;
   handle(std::string_view input, myna::value_limits values,
@@ -13,13 +15,14 @@ struct handle {
   handle(const char* data, size_t length, size_t capacity, myna::value_limits values,
          truffledata::json::storage_limits storage)
       : document(data, length, capacity, values, storage), view(document.view()) {}
+  void destroy() noexcept override { delete this; }
 };
 int32_t publish(std::unique_ptr<handle> owned, JsonResult& result) {
   auto stats = owned->document.allocations();
   const auto& spans = owned->document.lexical_spans();
   const auto& hashes = owned->document.key_hashes();
   // Publish only after parsing and validation have completed successfully.
-  result = {owned.get(), &owned->view, stats.copied_input_bytes,
+  result = {static_cast<truffledata::json::result_owner*>(owned.get()), &owned->view, stats.copied_input_bytes,
             stats.padded_input_bytes, stats.index_retained_bytes,
             stats.index_peak_bytes, stats.index_allocations,
             stats.parser_input_capacity, sizeof(handle),
@@ -88,9 +91,9 @@ extern "C" int32_t td_json_decode_adopted(const uint8_t* data, uint64_t length,
 extern "C" void td_json_release(void* output) {
   if (!aligned(output)) return;
   auto& result = *static_cast<JsonResult*>(output);
-  auto* owned = static_cast<handle*>(result.owner);
+  auto* owned = static_cast<truffledata::json::result_owner*>(result.owner);
   result = {};
-  delete owned;
+  if (owned) owned->destroy();
 }
 
 extern "C" int32_t td_json_plan_create(const void* records, uint64_t record_count,
@@ -195,4 +198,85 @@ extern "C" void td_json_typed_release(void* output) {
   auto* owned = static_cast<truffledata::json::typed_document*>(result.owner);
   result = {};
   delete owned;
+}
+
+// ---- Sessions (plan Task B1) ----------------------------------------------------------------
+
+namespace {
+using truffledata::json::session;
+// The 4 KiB bound of the leaf decode: at the probe's ≈ 150 MB/s worst case this is ≈ 30 µs.
+constexpr uint64_t critical_limit = TD_JSON_CRITICAL_LIMIT;
+
+int32_t session_decode(session& s, const uint8_t* data, uint64_t length, uint32_t flags,
+                       const uint8_t* text_out, uint64_t text_capacity, JsonResult& result) {
+  result = {};
+  if (!data || flags != 0 || text_out || text_capacity) return TD_JSON_ARGUMENT;
+  if (length > UINT32_MAX) return TD_JSON_LIMIT;
+  try {
+    auto d = s.decode(reinterpret_cast<const char*>(data), size_t(length));
+    const auto& memory = s.memory();
+    // Borrowed: no owner, so td_json_release never frees session storage.
+    result = {nullptr, const_cast<myna_value_view*>(&s.view()), length, s.input_capacity(),
+              memory.current(), memory.peak(), d.index_allocations, s.parser_capacity(),
+              sizeof(session), const_cast<uint64_t*>(d.lexical.data()), d.lexical.size(),
+              const_cast<uint32_t*>(d.hashes.data())};
+    return TD_JSON_OK;
+  } catch (...) { return translate(); }
+}
+}
+
+extern "C" void* td_json_session_create(const void* limits) {
+  if (!aligned(limits)) return nullptr;
+  const auto& l = *static_cast<const JsonLimitsStruct*>(limits);
+  if (l.max_depth > 128 || l.max_input_bytes == 0) return nullptr;
+  try {
+    return new session(myna::value_limits{l.max_nodes, l.max_text_bytes, l.max_depth},
+        truffledata::json::storage_limits{size_t(l.max_input_bytes), size_t(l.max_index_bytes)});
+  } catch (...) { return nullptr; }
+}
+
+extern "C" int32_t td_json_session_decode(void* handle, const uint8_t* data, uint64_t length,
+    uint32_t flags, uint8_t* text_out, uint64_t text_capacity, void* output) {
+  if (!handle || !aligned(output)) return TD_JSON_ARGUMENT;
+  return session_decode(*static_cast<session*>(handle), data, length, flags, text_out,
+                        text_capacity, *static_cast<JsonResult*>(output));
+}
+
+extern "C" int32_t td_json_session_decode_small(void* handle, const uint8_t* data, uint64_t length,
+    uint32_t flags, uint8_t* text_out, uint64_t text_capacity, void* output) {
+  if (!handle || !aligned(output)) return TD_JSON_ARGUMENT;
+  if (length > critical_limit) {
+    *static_cast<JsonResult*>(output) = {};
+    return TD_JSON_ARGUMENT;
+  }
+  return session_decode(*static_cast<session*>(handle), data, length, flags, text_out,
+                        text_capacity, *static_cast<JsonResult*>(output));
+}
+
+extern "C" int32_t td_json_session_retain(void* handle, void* output) {
+  if (!handle || !aligned(output)) return TD_JSON_ARGUMENT;
+  auto& result = *static_cast<JsonResult*>(output);
+  if (result.owner || result.view) return TD_JSON_ARGUMENT;
+  auto& s = *static_cast<session*>(handle);
+  if (!s.live()) return TD_JSON_ARGUMENT;
+  // Read before retain: the session forgets the document once its storage moves.
+  auto lexical = s.lexical_spans();
+  auto hashes = s.key_hashes();
+  size_t input = s.input_length();
+  try {
+    auto* owner = s.retain();
+    result = {static_cast<truffledata::json::result_owner*>(owner), &owner->view, input,
+              input + simdjson::SIMDJSON_PADDING, owner->bytes(), owner->bytes(), 0, 0,
+              sizeof(session::retained), const_cast<uint64_t*>(lexical.data()), lexical.size(),
+              const_cast<uint32_t*>(hashes.data())};
+    return TD_JSON_OK;
+  } catch (...) { return translate(); }
+}
+
+extern "C" void td_json_session_reset(void* handle) {
+  if (handle) static_cast<session*>(handle)->reset();
+}
+
+extern "C" void td_json_session_release(void* handle) {
+  delete static_cast<session*>(handle);
 }
