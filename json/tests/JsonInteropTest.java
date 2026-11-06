@@ -2,9 +2,12 @@ package dev.elide.truffledata.json.tests;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import com.oracle.truffle.api.interop.InteropLibrary;
+import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import dev.elide.truffledata.json.JsonDecoder;
 import dev.elide.truffledata.json.JsonJvm;
 import dev.elide.truffledata.json.JsonMessage;
+import dev.elide.truffledata.json.JsonValue;
 import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
@@ -143,6 +146,45 @@ final class JsonInteropTest {
       assertTrue(overflow.fitsInBigInteger());
       assertEquals(BigInteger.TEN.pow(400), overflow.asBigInteger());
       assertFalse(overflow.fitsInDouble());
+    }
+  }
+
+  @Test
+  void narrowNumbersAndTruffleStringsFollowExactContracts() throws Exception {
+    InteropLibrary interop = InteropLibrary.getUncached();
+    try (JsonDecoder decoder = JsonJvm.open(JvmScopedTest.library());
+        JsonMessage message =
+            decoder.decode("[1,300,70000,2.0,0.1,\"text\"]".getBytes(StandardCharsets.UTF_8))) {
+      JsonValue root = message.root();
+      JsonValue one = root.element(0);
+      assertEquals(1, one.longValue());
+      assertTrue(interop.fitsInByte(one));
+      assertEquals((byte) 1, interop.asByte(one));
+      assertTrue(interop.fitsInShort(one));
+      assertEquals((short) 1, interop.asShort(one));
+      assertEquals(1, interop.asInt(one));
+      JsonValue beyondByte = root.element(1);
+      assertFalse(interop.fitsInByte(beyondByte));
+      assertThrows(UnsupportedMessageException.class, () -> interop.asByte(beyondByte));
+      assertEquals((short) 300, interop.asShort(beyondByte));
+      JsonValue beyondShort = root.element(2);
+      assertFalse(interop.fitsInShort(beyondShort));
+      assertThrows(UnsupportedMessageException.class, () -> interop.asShort(beyondShort));
+      assertEquals(70000, interop.asInt(beyondShort));
+      // An integral binary64 converts exactly to integer and float types.
+      JsonValue two = root.element(3);
+      assertEquals(2.0, two.doubleValue());
+      assertEquals(2L, interop.asLong(two));
+      assertTrue(interop.fitsInFloat(two));
+      assertEquals(2.0f, interop.asFloat(two));
+      JsonValue tenth = root.element(4);
+      assertFalse(interop.fitsInFloat(tenth), "0.1 is not exact in binary32");
+      assertThrows(UnsupportedMessageException.class, () -> interop.asFloat(tenth));
+      assertThrows(UnsupportedMessageException.class, () -> interop.asLong(tenth));
+      assertEquals("text", interop.asTruffleString(root.element(5)).toJavaStringUncached());
+      assertThrows(UnsupportedMessageException.class, () -> interop.asTruffleString(one));
+      assertEquals(JsonValue.Kind.NUMBER, JsonValue.Kind.valueOf("NUMBER"));
+      assertEquals(6, JsonValue.Kind.values().length);
     }
   }
 }

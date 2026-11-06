@@ -45,7 +45,21 @@ class PolicyTest {
             Map.entry("SqliteAdapter.java", 1),
             Map.entry("MysqlAdapter.java", 1),
             Map.entry("PostgresqlAdapter.java", 1),
-            Map.entry("JdbcValues.java", 1));
+            Map.entry("JdbcValues.java", 1),
+            // JSON: native downcalls, slow-path conversions and allocation stay out of compiled reads.
+            Map.entry("JavaSink.java", 8), // Embedder tree building, outside the tape walk.
+            Map.entry("JsonAccess.java", 2),
+            Map.entry("JsonArray.java", 1),
+            Map.entry("JsonJvm.java", 5), // FFM downcalls and arena management.
+            Map.entry("JsonMessage.java", 2),
+            Map.entry("JsonOwner.java", 7), // Close, pinning and the array index slow paths.
+            Map.entry("JsonPlan.java", 4), // Plan compilation and decode entry points.
+            Map.entry("JsonRecord.java", 3),
+            Map.entry("JsonSvm.java", 4), // Static-linked native calls.
+            Map.entry("JsonTypedOwner.java", 3),
+            Map.entry("JsonValue.java", 24), // Static (owner, node) slow paths per interop message.
+            Map.entry("JvmTypedOwner.java", 3),
+            Map.entry("SvmTypedOwner.java", 1));
     Pattern limit = Pattern.compile("limit\\s*=\\s*\"(\\d+)\"");
     Map<String, Integer> exportedMessages =
         new HashMap<>(
@@ -71,6 +85,9 @@ class PolicyTest {
                 "JdbcCursor.java",
                 9));
     exportedMessages.put("GeneratedMessage.java", 5);
+    exportedMessages.put("JsonValue.java", 29);
+    exportedMessages.put("JsonArray.java", 4);
+    exportedMessages.put("JsonRecord.java", 6);
     Set<String> accessSurfaces = exportedMessages.keySet();
     Set<String> seenSurfaces = new HashSet<>();
     int checked = 0;
@@ -82,7 +99,8 @@ class PolicyTest {
           "jdbc-mysql",
           "jdbc-postgresql",
           "protobuf",
-          "protobuf-runtime"
+          "protobuf-runtime",
+          "json"
         }) {
       try (var paths = Files.walk(root.resolve(module + "/src/main/java"))) {
         for (Path path : paths.filter(p -> p.toString().endsWith(".java")).toList()) {

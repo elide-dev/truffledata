@@ -1,5 +1,7 @@
+from pathlib import Path
 import unittest
-from coverage_contract import ACCESS_SOURCES, SVM_ONLY_METHODS, analyze, enforce
+from coverage_contract import (ACCESS_SOURCES, DECLARATION_ONLY_SOURCES, JVM_UNREACHABLE_METHODS,
+                               SVM_ONLY_METHODS, analyze, enforce)
 
 
 class CoverageContractTest(unittest.TestCase):
@@ -32,5 +34,34 @@ class CoverageContractTest(unittest.TestCase):
         enforce(summary)
         summary[source]['uncovered_methods'].append(
             'dev/elide/truffledata/buffa/NativeRow$NativeArray::getArraySize ()J')
+        with self.assertRaises(ValueError):
+            enforce(summary)
+
+    def test_exemptions_name_inventoried_sources_and_cover_only_their_methods(self):
+        for exemptions in (SVM_ONLY_METHODS, JVM_UNREACHABLE_METHODS):
+            self.assertLessEqual(set(exemptions), ACCESS_SOURCES)
+            for source, methods in exemptions.items():
+                summary = analyze(self.report())
+                summary[source]['uncovered_methods'] = list(methods)
+                enforce(summary)
+                summary[source]['uncovered_methods'].append('Example::other ()V')
+                with self.assertRaises(ValueError):
+                    enforce(summary)
+
+    def test_json_sources_are_inventoried(self):
+        repo = Path(__file__).resolve().parents[2]
+        root = repo / 'json/src/main/java'
+        sources = {str(path.relative_to(repo)) for path in root.rglob('*.java')
+                   if path.name != 'package-info.java'}
+        self.assertTrue(sources)
+        self.assertEqual(sources, {s for s in ACCESS_SOURCES if s.startswith('json/')})
+
+    def test_only_declaration_sources_may_have_no_methods(self):
+        summary = analyze(self.report())
+        for source in DECLARATION_ONLY_SOURCES:
+            summary[source].update(methods_total=0, uncovered_methods=[])
+        enforce(summary)
+        other = next(iter(ACCESS_SOURCES - DECLARATION_ONLY_SOURCES))
+        summary[other].update(methods_total=0, uncovered_methods=[])
         with self.assertRaises(ValueError):
             enforce(summary)

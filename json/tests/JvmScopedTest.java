@@ -147,6 +147,96 @@ final class JvmScopedTest {
   }
 
   @Test
+  void adoptingAnotherThreadsConfinedSegmentFailsInTheDowncall() throws Exception {
+    byte[] source = utf8("{\"a\":1}");
+    MemorySegment[] foreign = new MemorySegment[1];
+    // The owning thread ends without closing its arena, so the segment stays alive but confined
+    // to a dead thread (a deliberate, test-only leak of a few bytes).
+    Thread owner =
+        new Thread(
+            () -> {
+              MemorySegment segment = Arena.ofConfined().allocate(source.length + 64);
+              MemorySegment.copy(source, 0, segment, ValueLayout.JAVA_BYTE, 0, source.length);
+              foreign[0] = segment;
+            });
+    owner.start();
+    owner.join();
+    AtomicInteger released = new AtomicInteger();
+    try (JsonDecoder decoder = JsonJvm.open(library())) {
+      // Passes the adopt checks; the FFM downcall itself rejects the foreign confined scope.
+      assertThrows(
+          WrongThreadException.class,
+          () -> decoder.adopt(foreign[0], source.length, released::incrementAndGet));
+      assertEquals(0, released.get());
+      try (JsonMessage message = decoder.decode(source)) {
+        assertEquals(1, message.root().member("a").longValue());
+      }
+    }
+  }
+
+  @Test
+  void longKeysAndNestedSnapshotsReadEveryTextRegion() {
+    String plain = "a plain member name longer than sixteen bytes";
+    String escaped = "an escaped \u00e9 member name, also long";
+    byte[] input =
+        utf8(
+            "{\""
+                + plain
+                + "\":{\"an escaped \\u00e9 member name, also long\":[1,2]},\"d\":2.5}");
+    try (JsonDecoder decoder = JsonJvm.open(library());
+        JsonMessage message = decoder.decode(input)) {
+      dev.elide.truffledata.json.JsonSnapshot snapshot = message.snapshot();
+      assertSame(snapshot, snapshot.snapshot());
+      // Message reads go through the FFM tape, snapshot reads through the heap tape.
+      for (JsonValue root : new JsonValue[] {message.root(), snapshot.root()}) {
+        assertEquals(2.5, root.member("d").doubleValue());
+        JsonValue inner = root.member(plain);
+        assertEquals(2, inner.member(escaped).element(1).longValue());
+        // A subtree snapshot copies from the owner's own tape, including a snapshot's heap tape.
+        dev.elide.truffledata.json.JsonSnapshot nested = inner.snapshot();
+        assertEquals(5, nested.nodeCount());
+        assertEquals(1, nested.root().member(escaped).element(0).longValue());
+        assertEquals(escaped, nested.root().keyAt(0).stringValue());
+      }
+    }
+  }
+
+  @Test
+  void checkOpenNodeCachesLiveOwnersThenChecksGenerically() {
+    var check = dev.elide.truffledata.json.JsonOwner.CheckOpenNode.create();
+    try (JsonDecoder decoder = JsonJvm.open(library())) {
+      JsonMessage[] messages = new JsonMessage[4];
+      for (int i = 0; i < messages.length; i++) messages[i] = decoder.decode(utf8("[" + i + "]"));
+      // Three owners fill the cache; the fourth replaces it with the generic check.
+      for (JsonMessage message : messages) check.execute(message);
+      check.execute(messages[0].snapshot());
+      messages[0].close();
+      assertThrows(IllegalStateException.class, () -> check.execute(messages[0]));
+      var fresh = dev.elide.truffledata.json.JsonOwner.CheckOpenNode.create();
+      fresh.execute(messages[1]);
+      messages[1].close();
+      assertThrows(IllegalStateException.class, () -> fresh.execute(messages[1]));
+      for (int i = 2; i < messages.length; i++) messages[i].close();
+    }
+  }
+
+  @Test
+  void limitsAreValueRecords() {
+    var same =
+        new dev.elide.truffledata.json.JsonLimits(64 << 20, 64 << 20, 1_000_000, 64 << 20, 128);
+    assertEquals(dev.elide.truffledata.json.JsonLimits.DEFAULT, same);
+    assertEquals(dev.elide.truffledata.json.JsonLimits.DEFAULT.hashCode(), same.hashCode());
+    assertNotEquals(same, new dev.elide.truffledata.json.JsonLimits(1, 1, 1, 1, 1));
+    assertTrue(same.toString().contains("maxDepth=128"), same.toString());
+    assertThrows(
+        IllegalArgumentException.class,
+        () -> new dev.elide.truffledata.json.JsonLimits(0, 1, 1, 1, 1));
+    assertThrows(
+        IllegalArgumentException.class,
+        () -> new dev.elide.truffledata.json.JsonLimits(1, 1, 1, 1, 129));
+  }
+
+  @Test
   void snapshotsOutliveMessageAndDecoderAndCrossThreads() throws Exception {
     dev.elide.truffledata.json.JsonSnapshot snapshot;
     dev.elide.truffledata.json.JsonSnapshot subtree;
@@ -574,6 +664,63 @@ final class JvmScopedTest {
           }
         }
       }
+    }
+  }
+
+  @Test
+  void typedScalarArraysAndCachedLibraryReads() throws Exception {
+    Schema schema =
+        Schema.of(
+            Field.requiredLong("n"),
+            new Field("d", Field.Kind.FLOAT64, false, false),
+            new Field("b", Field.Kind.BOOLEAN, false, false),
+            array("ds", new Field("e", Field.Kind.FLOAT64, false, false), false, false),
+            array("bs", new Field("e", Field.Kind.BOOLEAN, false, false), false, false),
+            array("ss", new Field("e", Field.Kind.STRING, false, false), false, false));
+    try (JsonDecoder decoder = JsonJvm.open(library());
+        JsonPlan plan = decoder.compile(schema);
+        JsonRecord record =
+            plan.decode(
+                utf8(
+                    "{\"n\":3,\"d\":1.5,\"b\":true,\"ds\":[0.5,2.0],\"bs\":[true,false],"
+                        + "\"ss\":[\"x\",\"a string longer than sixteen\"]}"))) {
+      assertTrue(record.booleanValue(2));
+      assertTrue(new JsonAccess(schema, 2).booleanValue(record));
+      // A cached library binds JsonAccess per (schema, index); the uncached one reads generically.
+      DataLibrary cached = DataLibrary.factory().create(record);
+      new com.oracle.truffle.api.nodes.RootNode(null) {
+        @Child DataLibrary library = cached;
+
+        {
+          adoptChildren();
+        }
+
+        @Override
+        public Object execute(com.oracle.truffle.api.frame.VirtualFrame frame) {
+          return library;
+        }
+      };
+      assertEquals(3, cached.readLong(record, 0));
+      assertEquals(1.5, cached.readDouble(record, 1));
+      assertTrue(cached.readBoolean(record, 2));
+      DataLibrary uncached = DataLibrary.factory().getUncached();
+      assertEquals(1.5, uncached.readDouble(record, 1));
+      assertTrue(uncached.readBoolean(record, 2));
+      assertThrows(UnexpectedResultException.class, () -> uncached.readDouble(record, 0));
+      assertThrows(UnexpectedResultException.class, () -> uncached.readBoolean(record, 0));
+      JsonArray doubles = record.array(3);
+      assertEquals(Field.Kind.FLOAT64, doubles.elementField().kind());
+      assertEquals(2.0, doubles.doubleValue(1));
+      assertEquals(0.5, doubles.element(0));
+      JsonArray booleans = record.array(4);
+      assertFalse(booleans.booleanValue(1));
+      assertEquals(true, booleans.element(0));
+      JsonArray strings = record.array(5);
+      assertEquals("a string longer than sixteen", strings.stringValue(1));
+      assertEquals("x", strings.element(0));
+      assertThrows(IllegalArgumentException.class, () -> strings.longValue(0));
+      DataArray copied = doubles.snapshot();
+      assertEquals(List.of(0.5, 2.0), List.of(copied.get(0), copied.get(1)));
     }
   }
 

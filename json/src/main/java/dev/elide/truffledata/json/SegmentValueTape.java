@@ -51,6 +51,7 @@ final class SegmentValueTape extends ValueTape implements TapeSource {
 
   @Override
   protected byte readRegionByte(long region, long offset) {
+    if (region == 0) return readByte(offset);
     return region(region).get(ValueLayout.JAVA_BYTE, offset);
   }
 

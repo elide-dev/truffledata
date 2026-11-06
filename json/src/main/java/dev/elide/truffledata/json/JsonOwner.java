@@ -118,7 +118,16 @@ public abstract sealed class JsonOwner permits JsonMessage, JsonSnapshot {
     return arrayIndexes.size();
   }
 
-  private record ArrayIndex(long array, long[] children) {}
+  // A plain holder, not a record: identity is all the cache needs, so no equals/hashCode/toString.
+  private static final class ArrayIndex {
+    final long array;
+    final long[] children;
+
+    ArrayIndex(long array, long[] children) {
+      this.array = array;
+      this.children = children;
+    }
+  }
 
   // Most recently used index: repeated reads of one array skip the map and its key boxing.
   private volatile @Nullable ArrayIndex lastIndex;
@@ -127,7 +136,7 @@ public abstract sealed class JsonOwner permits JsonMessage, JsonSnapshot {
   @TruffleBoundary
   final long[] arrayIndex(long array) {
     ArrayIndex last = lastIndex;
-    if (last != null && last.array() == array) return last.children();
+    if (last != null && last.array == array) return last.children;
     long[] children = buildArrayIndex(array);
     lastIndex = new ArrayIndex(array, children);
     return children;
