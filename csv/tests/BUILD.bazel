@@ -68,8 +68,10 @@ java_test(
     name = "jvm",
     srcs = [
         "ChunkedInput.java",
+        "CommonsFormats.java",
         "CsvBatchTest.java",
         "CsvExportTest.java",
+        "CsvFormatTest.java",
         "CsvInteropTest.java",
         "CsvKernelTest.java",
         "CsvPlanTest.java",
@@ -84,6 +86,8 @@ java_test(
         "dev.elide.truffledata.csv.CsvBatchTest",
         "--class",
         "dev.elide.truffledata.csv.CsvExportTest",
+        "--class",
+        "dev.elide.truffledata.csv.CsvFormatTest",
         "--class",
         "dev.elide.truffledata.csv.CsvInteropTest",
         "--class",
@@ -110,6 +114,7 @@ java_test(
     deps = [
         "//core",
         "//csv",
+        "@maven//:org_apache_commons_commons_csv",
         "@maven//:org_graalvm_polyglot_polyglot",
         "@maven//:org_graalvm_truffle_truffle_api",
         "@maven//:org_junit_jupiter_junit_jupiter_api",

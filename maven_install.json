@@ -14,6 +14,7 @@
     "com.h2database:h2": 2037113602,
     "com.mysql:mysql-connector-j": -644338065,
     "com.uber.nullaway:nullaway": 590882514,
+    "org.apache.commons:commons-csv": -2093480307,
     "org.graalvm.js:js-language": -709793300,
     "org.graalvm.polyglot:polyglot": -389905015,
     "org.graalvm.python:python-language": -1687946414,
@@ -54,10 +55,13 @@
     "com.h2database:h2": -1401264984,
     "com.mysql:mysql-connector-j": 149885885,
     "com.uber.nullaway:nullaway": 2093849653,
+    "commons-codec:commons-codec": -835030550,
+    "commons-io:commons-io": -1021273518,
     "io.github.eisop:dataflow-errorprone": -2128745085,
     "io.github.java-diff-utils:java-diff-utils": 900549404,
     "javax.inject:javax.inject": -1284481446,
     "net.sf.jopt-simple:jopt-simple": 19860810,
+    "org.apache.commons:commons-csv": -911781871,
     "org.apache.commons:commons-math3": -1540896879,
     "org.apiguardian:apiguardian-api": -1579303244,
     "org.checkerframework:checker-qual": 2021908800,
@@ -230,6 +234,18 @@
       },
       "version": "0.14.2"
     },
+    "commons-codec:commons-codec": {
+      "shasums": {
+        "jar": "5c3881e4f556855e9c532927ee0c9dfde94cc66760d5805c031a59887070af5f"
+      },
+      "version": "1.19.0"
+    },
+    "commons-io:commons-io": {
+      "shasums": {
+        "jar": "df90bba0fe3cb586b7f164e78fe8f8f4da3f2dd5c27fa645f888100ccc25dd72"
+      },
+      "version": "2.20.0"
+    },
     "io.github.eisop:dataflow-errorprone": {
       "shasums": {
         "jar": "10434fba4e53f55fa9c76904cde414b918932548c9dfc4e2d634ac05ff7a7d10"
@@ -253,6 +269,12 @@
         "jar": "df26cc58f235f477db07f753ba5a3ab243ebe5789d9f89ecf68dd62ea9a66c28"
       },
       "version": "5.0.4"
+    },
+    "org.apache.commons:commons-csv": {
+      "shasums": {
+        "jar": "32be0e1e76673092f5d12cb790bd2acb6c2ab04c4ea6efc69ea5ee17911c24fe"
+      },
+      "version": "1.14.1"
     },
     "org.apache.commons:commons-math3": {
       "shasums": {
@@ -537,6 +559,10 @@
       "com.google.guava:guava",
       "org.checkerframework:dataflow-nullaway",
       "org.jspecify:jspecify"
+    ],
+    "org.apache.commons:commons-csv": [
+      "commons-codec:commons-codec",
+      "commons-io:commons-io"
     ],
     "org.checkerframework:dataflow-nullaway": [
       "org.checkerframework:checker-qual"
@@ -881,6 +907,32 @@
       "com.uber.nullaway.libmodel",
       "com.uber.nullaway.librarymodel"
     ],
+    "commons-codec:commons-codec": [
+      "org.apache.commons.codec",
+      "org.apache.commons.codec.binary",
+      "org.apache.commons.codec.cli",
+      "org.apache.commons.codec.digest",
+      "org.apache.commons.codec.language",
+      "org.apache.commons.codec.language.bm",
+      "org.apache.commons.codec.net"
+    ],
+    "commons-io:commons-io": [
+      "org.apache.commons.io",
+      "org.apache.commons.io.build",
+      "org.apache.commons.io.channels",
+      "org.apache.commons.io.charset",
+      "org.apache.commons.io.comparator",
+      "org.apache.commons.io.file",
+      "org.apache.commons.io.file.attribute",
+      "org.apache.commons.io.file.spi",
+      "org.apache.commons.io.filefilter",
+      "org.apache.commons.io.function",
+      "org.apache.commons.io.input",
+      "org.apache.commons.io.input.buffer",
+      "org.apache.commons.io.monitor",
+      "org.apache.commons.io.output",
+      "org.apache.commons.io.serialization"
+    ],
     "io.github.eisop:dataflow-errorprone": [
       "org.checkerframework.dataflow.qual",
       "org.checkerframework.errorprone.checker.builder.qual",
@@ -965,6 +1017,9 @@
       "joptsimple",
       "joptsimple.internal",
       "joptsimple.util"
+    ],
+    "org.apache.commons:commons-csv": [
+      "org.apache.commons.csv"
     ],
     "org.apache.commons:commons-math3": [
       "org.apache.commons.math3",
@@ -1698,10 +1753,13 @@
       "com.h2database:h2",
       "com.mysql:mysql-connector-j",
       "com.uber.nullaway:nullaway",
+      "commons-codec:commons-codec",
+      "commons-io:commons-io",
       "io.github.eisop:dataflow-errorprone",
       "io.github.java-diff-utils:java-diff-utils",
       "javax.inject:javax.inject",
       "net.sf.jopt-simple:jopt-simple",
+      "org.apache.commons:commons-csv",
       "org.apache.commons:commons-math3",
       "org.apiguardian:apiguardian-api",
       "org.checkerframework:checker-qual",
@@ -1762,10 +1820,13 @@
       "com.h2database:h2",
       "com.mysql:mysql-connector-j",
       "com.uber.nullaway:nullaway",
+      "commons-codec:commons-codec",
+      "commons-io:commons-io",
       "io.github.eisop:dataflow-errorprone",
       "io.github.java-diff-utils:java-diff-utils",
       "javax.inject:javax.inject",
       "net.sf.jopt-simple:jopt-simple",
+      "org.apache.commons:commons-csv",
       "org.apache.commons:commons-math3",
       "org.apiguardian:apiguardian-api",
       "org.checkerframework:checker-qual",

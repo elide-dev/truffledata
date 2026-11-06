@@ -159,6 +159,15 @@ maven.install(
         "https://maven.elide.dev/gvm-elide/" + GRAALVM,
     ],
 )
+
+# Test-only oracle for the CSV differential suite (//csv/tests); no library depends on it.
+maven.artifact(
+    name = "maven",
+    artifact = "commons-csv",
+    group = "org.apache.commons",
+    testonly = True,
+    version = "1.14.1",
+)
 use_repo(maven, "maven")
 
 go_sdk = use_extension("@rules_go//go:extensions.bzl", "go_sdk", dev_dependency = True)
