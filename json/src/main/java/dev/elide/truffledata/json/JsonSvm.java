@@ -45,14 +45,37 @@ public final class JsonSvm {
     }
   }
 
+  /** Static backend handle. Decoding never depends on it, so closing it is a no-op. */
+  @TruffleBoundary
+  public static JsonDecoder open() {
+    requireRuntime();
+    return new JsonDecoder() {
+      @Override
+      public JsonMessage decode(byte[] utf8, JsonLimits limits) {
+        return JsonSvm.decode(utf8, limits);
+      }
+
+      @Override
+      public JsonMessage adopt(java.lang.foreign.MemorySegment data, long length, Runnable release) {
+        throw new UnsupportedOperationException("Use JsonSvm.adopt(address, length, capacity, release)");
+      }
+
+      @Override
+      public void close() {}
+    };
+  }
+
   /** Copies UTF-8 input into retained padded storage. Input must not mutate during this call. */
   @TruffleBoundary
   public static JsonMessage decode(byte[] utf8) {
-    if (!ImageInfo.inImageRuntimeCode())
-      throw new UnsupportedOperationException("Static JSON requires SVM");
+    return decode(utf8, JsonLimits.DEFAULT);
+  }
+
+  @TruffleBoundary
+  public static JsonMessage decode(byte[] utf8, JsonLimits limits) {
+    requireRuntime();
     if (utf8.length == 0) throw new IllegalArgumentException("Empty JSON input");
-    if (utf8.length > 64 * 1024 * 1024) throw new IllegalArgumentException("JSON input limit");
-    verifyAbi();
+    if (utf8.length > limits.maxInputBytes()) throw new IllegalArgumentException("JSON input limit");
     VoidPointer result = UnmanagedMemory.calloc(Json.JsonResult.SIZE);
     if (result.isNull()) throw new OutOfMemoryError("JSON result allocation");
     try {
@@ -62,20 +85,58 @@ public final class JsonSvm {
             Json.decode(
                 pinned.addressOfArrayElement(0),
                 utf8.length,
-                64 * 1024 * 1024,
-                64 * 1024 * 1024,
-                1_000_000,
-                64 * 1024 * 1024,
-                128,
+                limits.maxInputBytes(),
+                limits.maxIndexBytes(),
+                limits.maxNodes(),
+                limits.maxTextBytes(),
+                limits.maxDepth(),
                 result);
       }
-      switch (status) {
-        case 0 -> {}
-        case 2 -> throw new IllegalArgumentException("JSON resource limit");
-        case 3 -> throw new OutOfMemoryError("JSON native allocation");
-        case 4 -> throw new IllegalArgumentException("Invalid JSON");
-        default -> throw new IllegalStateException("JSON native status " + status);
-      }
+      checkStatus(status);
+      return publish(result, () -> {});
+    } catch (RuntimeException | Error failure) {
+      release(result.rawValue());
+      throw failure;
+    }
+  }
+
+  /**
+   * Adopts unmanaged memory at {@code address} holding {@code length} logical bytes within
+   * {@code capacity}. Parsed in place when capacity leaves 64 padding bytes, else copied once.
+   * The pointer API is explicitly unsafe: validity, exclusive ownership and keeping the region
+   * alive until {@code release} runs (on close, exactly once) are caller obligations.
+   */
+  @TruffleBoundary
+  public static JsonMessage adopt(long address, long length, long capacity, Runnable release) {
+    requireRuntime();
+    java.util.Objects.requireNonNull(release);
+    if (address == 0 || length <= 0 || capacity < length)
+      throw new IllegalArgumentException("Invalid adopted JSON region");
+    JsonLimits limits = JsonLimits.DEFAULT;
+    if (length > limits.maxInputBytes()) throw new IllegalArgumentException("JSON input limit");
+    VoidPointer result = UnmanagedMemory.calloc(Json.JsonResult.SIZE);
+    if (result.isNull()) throw new OutOfMemoryError("JSON result allocation");
+    try {
+      checkStatus(
+          Json.decode_adopted(
+              (org.graalvm.nativeimage.c.type.CCharPointer) WordFactory.pointer(address),
+              length,
+              capacity,
+              limits.maxInputBytes(),
+              limits.maxIndexBytes(),
+              limits.maxNodes(),
+              limits.maxTextBytes(),
+              limits.maxDepth(),
+              result));
+      return publish(result, release);
+    } catch (RuntimeException | Error failure) {
+      release(result.rawValue());
+      throw failure;
+    }
+  }
+
+  private static JsonMessage publish(VoidPointer result, Runnable onClose) {
+    {
       Pointer descriptor = (Pointer) Json.JsonResult.view(result);
       if (descriptor.isNull() || descriptor.readInt(0) != ValueTape.ABI_VERSION)
         throw new IllegalStateException("Unsupported Myna value ABI");
@@ -105,10 +166,16 @@ public final class JsonSvm {
               return inputData.readByte(WordFactory.signed(offset));
             }
           };
-      return new JsonMessage(tape, lexical, () -> release(address));
-    } catch (RuntimeException | Error failure) {
-      release(result.rawValue());
-      throw failure;
+      return new JsonMessage(
+          tape,
+          lexical,
+          () -> {
+            try {
+              release(address);
+            } finally {
+              onClose.run();
+            }
+          });
     }
   }
 

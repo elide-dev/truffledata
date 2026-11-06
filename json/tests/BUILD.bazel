@@ -71,10 +71,15 @@ sh_test(
 
 java_test(
     name = "jvm",
-    srcs = ["FfmAcceptanceTest.java"],
+    srcs = [
+        "FfmAcceptanceTest.java",
+        "JvmScopedTest.java",
+    ],
     args = [
         "--class",
         "dev.elide.truffledata.json.tests.FfmAcceptanceTest",
+        "--class",
+        "dev.elide.truffledata.json.tests.JvmScopedTest",
     ],
     data = ["//json/native:json_shared.so"],
     jvm_flags = [
