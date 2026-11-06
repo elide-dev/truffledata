@@ -783,4 +783,46 @@ final class JvmScopedTest {
     other.join();
     return rejected.get();
   }
+  @Test
+  void elementIterablesCheckTheOwnerWhenIterated() throws Exception {
+    try (JsonDecoder decoder = JsonJvm.open(library())) {
+      JsonMessage message = decoder.decode(utf8("[1,2,3]"));
+      Iterable<JsonValue> elements = message.root().elements();
+      var crossThread = new java.util.concurrent.atomic.AtomicReference<Throwable>();
+      Thread other = new Thread(() -> {
+        try {
+          assertNotNull(elements.iterator());
+        } catch (Throwable failure) {
+          crossThread.set(failure);
+        }
+      });
+      other.start();
+      other.join();
+      assertInstanceOf(IllegalStateException.class, crossThread.get(), "iterator() on another thread");
+      message.close();
+      assertThrows(
+          IllegalStateException.class, () -> assertNotNull(elements.iterator()), "iterator() after close");
+    }
+  }
+
+  @Test
+  void nestedAccessorsRejectRecordTypesFromAnotherPlan() throws Exception {
+    Schema root = Schema.of(record("t", "T", false, false));
+    Schema narrow = new Schema("T", List.of(Field.requiredLong("a")));
+    Schema wide =
+        new Schema(
+            "T", List.of(new Field("b", Field.Kind.FLOAT64, false, false), Field.requiredLong("a")));
+    try (JsonDecoder decoder = JsonJvm.open(library());
+        JsonPlan narrowPlan = decoder.compile(root, Map.of("T", narrow));
+        JsonPlan widePlan = decoder.compile(root, Map.of("T", wide))) {
+      var access = new JsonAccess(root, Map.of("T", narrow), 0, 0);
+      try (JsonRecord ok = narrowPlan.decode(utf8("{\"t\":{\"a\":5}}"));
+          JsonRecord other = widePlan.decode(utf8("{\"t\":{\"b\":1.5,\"a\":6}}"))) {
+        assertEquals(5, access.longValue(ok));
+        // Same root Schema object, different record layout: the hop must not index the wrong slots.
+        assertThrows(IllegalArgumentException.class, () -> access.longValue(other));
+        assertEquals(6, new JsonAccess(root, Map.of("T", wide), 0, 1).longValue(other));
+      }
+    }
+  }
 }

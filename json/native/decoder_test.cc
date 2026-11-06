@@ -138,6 +138,17 @@ void retained_text_checks() {
   { std::vector<parser_lease> leases; for (int i = 0; i < 10; ++i) leases.push_back(parser_pool::acquire()); }
   require(parser_pool::retained() <= 8);
   require(parser_pool::retained() >= 1);
+  // A parser that grew past the retention limit is freed rather than pooled.
+  {
+    std::string big = "[" + std::string(parser_pool::retained_capacity_limit(), ' ') + "1]";
+    document grown(big);
+    (void)grown;
+  }
+  {
+    std::vector<parser_lease> idle;
+    for (size_t i = 0, n = parser_pool::retained(); i < n; ++i) idle.push_back(parser_pool::acquire());
+    for (auto& lease : idle) require(lease.get().capacity() <= parser_pool::retained_capacity_limit());
+  }
 }
 
 int checks();

@@ -187,4 +187,31 @@ final class JsonInteropTest {
       assertEquals(6, JsonValue.Kind.values().length);
     }
   }
+  @Test
+  void largeExactIntegersFitDoubleAndHugeDecimalsStayCheap() {
+    String huge = "9".repeat(20_000);
+    try (Context context = context();
+        JsonDecoder decoder = JsonJvm.open(JvmScopedTest.library());
+        JsonMessage message =
+            decoder.decode(
+                ("[1152921504606846976,9223372036854775807,9223372036854775808,"
+                        + "18446744073709551615,9007199254740993," + huge + "]")
+                    .getBytes(StandardCharsets.UTF_8))) {
+      Value array = context.asValue(message.root());
+      assertTrue(array.getArrayElement(0).fitsInDouble(), "2^60 is an exact double");
+      assertEquals(0x1p60, array.getArrayElement(0).asDouble());
+      assertFalse(array.getArrayElement(1).fitsInDouble(), "2^63-1 rounds");
+      assertTrue(array.getArrayElement(2).fitsInDouble(), "U64 2^63 is an exact double");
+      assertFalse(array.getArrayElement(3).fitsInDouble(), "2^64-1 rounds");
+      assertFalse(array.getArrayElement(4).fitsInDouble(), "2^53+1 rounds");
+      long start = System.nanoTime();
+      Value long20k = array.getArrayElement(5);
+      assertTrue(long20k.isNumber());
+      assertFalse(long20k.fitsInBigInteger());
+      assertFalse(long20k.fitsInLong());
+      assertFalse(long20k.fitsInDouble());
+      assertTrue(System.nanoTime() - start < 2_000_000_000L, "token length must bound conversion cost");
+      assertEquals(huge, message.root().element(5).numberText());
+    }
+  }
 }

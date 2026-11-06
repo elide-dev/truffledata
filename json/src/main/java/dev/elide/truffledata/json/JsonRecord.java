@@ -210,11 +210,17 @@ public final class JsonRecord extends AbstractRow implements AutoCloseable {
       if (((checks & 1) != 0 && (present & bit) == 0) || ((checks & 2) != 0 && (nulls & bit) != 0))
         throw new IllegalStateException("JSON record missing or null");
       long child = owner.bits(base + ordinal);
+      if (owner.schemas[owner.plan(child)] != access.hopSchemas[i]) throw hopMismatch();
       base = Integer.toUnsignedLong(owner.slotBase(child));
       present = owner.present(child);
       nulls = owner.nulls(child);
     }
     return leaf(owner, base, present, nulls, access);
+  }
+
+  @TruffleBoundary
+  private static IllegalArgumentException hopMismatch() {
+    return new IllegalArgumentException("JSON accessor record type mismatch");
   }
 
   private long walk(JsonAccess access) {
@@ -226,6 +232,7 @@ public final class JsonRecord extends AbstractRow implements AutoCloseable {
       if (((checks & 1) != 0 && (present & bit) == 0) || ((checks & 2) != 0 && (nulls & bit) != 0))
         throw new IllegalStateException("JSON record missing or null");
       long child = owner.bits(base + ordinal);
+      if (owner.schemas[owner.plan(child)] != access.hopSchemas[i]) throw hopMismatch();
       base = Integer.toUnsignedLong(owner.slotBase(child));
       present = owner.present(child);
       nulls = owner.nulls(child);

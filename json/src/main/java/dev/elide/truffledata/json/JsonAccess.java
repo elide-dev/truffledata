@@ -30,6 +30,11 @@ public final class JsonAccess {
   @CompilationFinal(dimensions = 1)
   final byte[] hopChecks;
 
+  // Record schema each hop must land in; checked against the decoded entry's plan so an accessor
+  // built from a different recordTypes map can never index another record's slots.
+  @CompilationFinal(dimensions = 1)
+  final Schema[] hopSchemas;
+
   /** Root-level primitive at {@code index}. */
   @TruffleBoundary
   public JsonAccess(Schema schema, int index) {
@@ -48,6 +53,7 @@ public final class JsonAccess {
       throw new IllegalArgumentException("JSON accessor path exceeds plan depth");
     int[] hops = new int[path.length - 1];
     byte[] checks = new byte[hops.length];
+    Schema[] targets = new Schema[hops.length];
     Schema current = schema;
     for (int i = 0; i < hops.length; i++) {
       Field hop = current.field(path[i]);
@@ -58,6 +64,7 @@ public final class JsonAccess {
       if (next == null) throw new IllegalArgumentException("Unknown JSON record type: " + type);
       hops[i] = path[i];
       checks[i] = (byte) ((hop.optional() ? 1 : 0) | (hop.nullable() ? 2 : 0));
+      targets[i] = next;
       current = next;
     }
     int leaf = path[path.length - 1];
@@ -74,6 +81,7 @@ public final class JsonAccess {
     this.nullable = field.nullable();
     this.hops = hops;
     this.hopChecks = checks;
+    this.hopSchemas = targets;
   }
 
   public long longValue(JsonRecord row) {

@@ -26,11 +26,15 @@ public:
 // Process-wide, mutex-guarded pool retaining at most `capacity` idle parsers.
 class parser_pool final {
   static constexpr size_t capacity = 8;
+  // Parsers keep buffers sized for the largest input they have seen; pooling one that grew past
+  // this would pin that memory indefinitely, so it is freed instead.
+  static constexpr size_t max_retained_capacity = size_t(1) << 20;
   std::mutex mutex_;
   std::vector<std::unique_ptr<simdjson::ondemand::parser>> idle_;
   static parser_pool& instance() { static parser_pool pool; return pool; }
   friend class parser_lease;
   void release(std::unique_ptr<simdjson::ondemand::parser> parser) {
+    if (parser->capacity() > max_retained_capacity) return;  // freed outside the lock
     std::lock_guard<std::mutex> lock(mutex_);
     if (idle_.size() < capacity) idle_.push_back(std::move(parser));
   }
@@ -45,6 +49,7 @@ public:
     }
     return parser_lease(std::make_unique<simdjson::ondemand::parser>());
   }
+  static constexpr size_t retained_capacity_limit() { return max_retained_capacity; }
   static size_t retained() {
     auto& pool = instance();
     std::lock_guard<std::mutex> lock(pool.mutex_);

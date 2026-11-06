@@ -173,8 +173,10 @@ public final class JsonValue implements TruffleObject {
   @TruffleBoundary
   public Iterable<JsonValue> elements() {
     if (kind() != Kind.ARRAY) throw new IllegalStateException("Not a JSON array");
-    return () ->
-        new java.util.Iterator<>() {
+    return () -> {
+      // The Iterable may outlive its owner or cross threads: check before touching the tape.
+      owner.check();
+      return new java.util.Iterator<>() {
           private long remaining = owner.tape.length(node);
           private long child = remaining == 0 ? -1 : owner.tape.first(node);
 
@@ -192,6 +194,7 @@ public final class JsonValue implements TruffleObject {
             return value;
           }
         };
+    };
   }
 
   // ---- InteropLibrary: containers ----
@@ -371,6 +374,9 @@ public final class JsonValue implements TruffleObject {
   /** Integral DECIMAL tokens longer than this fit no BigInteger; short tokens like 1E999999999 stay cheap. */
   static final int MAX_INTEGER_DIGITS = 4096;
 
+  /** DECIMAL tokens longer than this are not converted by interop at all. */
+  static final int MAX_DECIMAL_TOKEN_BYTES = 2 * MAX_INTEGER_DIGITS;
+
   /** Exact integer of an integral decimal within the digit bound; never expands a large exponent. */
   private static @org.jspecify.annotations.Nullable BigInteger boundedInteger(BigDecimal value) {
     if (value.signum() == 0) return BigInteger.ZERO;
@@ -384,6 +390,9 @@ public final class JsonValue implements TruffleObject {
   /** Exact decimal of a DECIMAL token; null for tokens no bounded decimal can hold. */
   @TruffleBoundary
   private static @org.jspecify.annotations.Nullable BigDecimal decimal(JsonOwner owner, long node) {
+    // BigDecimal parsing is superlinear in digits: tokens past the bound fit no type and are never
+    // parsed here (numberText still returns them exactly).
+    if ((int) owner.lexical(node) > MAX_DECIMAL_TOKEN_BYTES) return null;
     try {
       return new BigDecimal(owner.lexicalText(node));
     } catch (NumberFormatException | ArithmeticException overflow) {
@@ -437,11 +446,15 @@ public final class JsonValue implements TruffleObject {
       case ValueTape.F64 -> owner.tape.doubleValue(node);
       case ValueTape.I64 -> {
         long v = owner.tape.signedValue(node);
-        yield v >= -(1L << 53) && v <= (1L << 53) ? (double) v : Double.NaN;
+        double d = (double) v;
+        // Exact when the round trip is lossless; 2^63 saturates back to Long.MAX_VALUE, so exclude it.
+        yield v != Long.MAX_VALUE && (long) d == v ? d : Double.NaN;
       }
       case ValueTape.U64 -> {
         BigInteger exact = exactInteger(owner, node);
-        yield exact != null && exact.bitLength() <= 53 ? exact.doubleValue() : Double.NaN;
+        if (exact == null) yield Double.NaN;
+        double d = exact.doubleValue();
+        yield new BigDecimal(d).toBigIntegerExact().equals(exact) ? d : Double.NaN;
       }
       case ValueTape.DECIMAL -> {
         BigDecimal d = decimal(owner, node);
