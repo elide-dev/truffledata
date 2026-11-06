@@ -128,6 +128,7 @@ SVM_ONLY_METHODS = {
 JVM_UNREACHABLE_METHODS = {
     # Compiled-code fallback for a non-constant JsonAccess: the interpreter reports every value as a
     # partial-evaluation constant (so it takes walkExploded), and the coverage lane excludes JIT.
+    # Exercised on SVM by the dynamic NestedReads root in json/tests/CompiledReads.java.
     **_json_methods('JsonRecord', 'JsonRecord::walk (Ldev/elide/truffledata/json/JsonAccess;)J'),
     # Fallbacks for a segment that is not HotSpot's native segment class. Typed tables are always
     # reinterpreted native segments, so on HotSpot only the exact-class fast path runs.

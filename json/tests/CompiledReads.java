@@ -176,22 +176,27 @@ final class CompiledReads {
                 "{\"mid\":{\"inner\":{\"b\":false,\"d\":2.5,\"n\":2000}},\"id\":2}"
                     .getBytes(StandardCharsets.UTF_8))) {
       var rows = new JsonRecord[] {first, second};
-      var root = new NestedReads(schema, types);
-      var target = root.getCallTarget();
-      for (int i = 0; i < 200 && !root.compiled; i++) target.call(rows, 100000);
-      check(root.compiled, "Nested JSON reads must execute compiled code");
-      check(((Long) target.call(rows, 1000000)) == 1502000000L, "Nested JSON compiled checksum");
-      check(NodeUtil.countNodes(root) <= 192, "Nested JSON AST budget");
-      var bean =
-          (com.sun.management.ThreadMXBean)
-              java.lang.management.ManagementFactory.getThreadMXBean();
-      bean.setThreadAllocatedMemoryEnabled(true);
-      long thread = Thread.currentThread().threadId();
-      long before = bean.getThreadAllocatedBytes(thread);
-      target.call(rows, 1000000);
-      double bytes = (bean.getThreadAllocatedBytes(thread) - before) / 1000000.0;
-      check(bytes >= 0 && bytes <= 0.05, "Nested JSON compiled bytes/read budget: " + bytes);
-      System.out.println("JSON nested compiled=true bytes/read=" + bytes);
+      // Constant accessors take the exploded walk; dynamic ones (loaded from a mutable array) the loop.
+      var roots =
+          new NestedReads[] {new NestedReads(schema, types, false), new NestedReads(schema, types, true)};
+      for (var root : roots) {
+        var target = root.getCallTarget();
+        for (int i = 0; i < 200 && !root.compiled; i++) target.call(rows, 100000);
+        check(root.compiled, "Nested JSON reads must execute compiled code");
+        check(((Long) target.call(rows, 1000000)) == 1502000000L, "Nested JSON compiled checksum");
+        check(NodeUtil.countNodes(root) <= 192, "Nested JSON AST budget");
+        var bean =
+            (com.sun.management.ThreadMXBean)
+                java.lang.management.ManagementFactory.getThreadMXBean();
+        bean.setThreadAllocatedMemoryEnabled(true);
+        long thread = Thread.currentThread().threadId();
+        long before = bean.getThreadAllocatedBytes(thread);
+        target.call(rows, 1000000);
+        double bytes = (bean.getThreadAllocatedBytes(thread) - before) / 1000000.0;
+        check(bytes >= 0 && bytes <= 0.05, "Nested JSON compiled bytes/read budget: " + bytes);
+        System.out.println("JSON nested compiled=true dynamic=" + root.dynamic + " bytes/read=" + bytes);
+      }
+      var target = roots[1].getCallTarget();
       first.close();
       try {
         target.call(rows, 1);
@@ -204,13 +209,18 @@ final class CompiledReads {
 
   private static final class NestedReads extends RootNode {
     final JsonAccess n, d, b;
+    // Not compilation-final: loads from it are not partial-evaluation constants.
+    private final JsonAccess[] paths;
+    final boolean dynamic;
     boolean compiled;
 
-    NestedReads(Schema schema, java.util.Map<String, Schema> types) {
+    NestedReads(Schema schema, java.util.Map<String, Schema> types, boolean dynamic) {
       super(TestLanguage.current());
       n = new JsonAccess(schema, types, 1, 0, 0);
       d = new JsonAccess(schema, types, 1, 0, 1);
       b = new JsonAccess(schema, types, 1, 0, 2);
+      paths = new JsonAccess[] {n, d, b};
+      this.dynamic = dynamic;
     }
 
     @Override
@@ -220,7 +230,14 @@ final class CompiledReads {
       long sum = 0;
       for (int i = 0; i < count; i++) {
         var row = rows[i & 1];
-        sum += n.longValue(row) + (long) d.doubleValue(row) + (b.booleanValue(row) ? 1 : 0);
+        if (dynamic) {
+          sum +=
+              paths[0].longValue(row)
+                  + (long) paths[1].doubleValue(row)
+                  + (paths[2].booleanValue(row) ? 1 : 0);
+        } else {
+          sum += n.longValue(row) + (long) d.doubleValue(row) + (b.booleanValue(row) ? 1 : 0);
+        }
       }
       if (CompilerDirectives.inInterpreter()) LoopNode.reportLoopCount(this, count);
       compiled |= CompilerDirectives.inCompiledCode();
