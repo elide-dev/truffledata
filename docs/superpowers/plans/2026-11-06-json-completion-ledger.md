@@ -19,10 +19,15 @@ Task 8: Ruling: JsonValue primitive reads keep an inlined owner.check() (final f
 Task 8: Ruling: array-index cache is a ConcurrentHashMap (security review found the HashMap racy on shared snapshots) — cost if wrong: none; computeIfAbsent publishes complete arrays.
 Task 8: complete (commits f279a3d..eb79330, tests: bazel test //json/tests:jvm → INFO: Streaming build results to: https://app.buildbuddy.io/invocation/d1d99851-cb69-4cd1-8653-91426bfcbfb2)
 
+Task 9: Ruling: JsonOwner.tag reads the raw storage tag through TapeSource.nodeInt instead of ValueTape.tag — SVM runtime compilation could not resolve the deopt target of the trivially inlined ValueTape.tag one-liner (ValueTape.tag%%D not seen during parsing); masking with KIND_MASK equals tag() for ABI v2 and v3 — cost if wrong: one bounds check duplicated from ValueTape.
+Task 9: Ruling: interop number exports keep the I64/F64 fast paths inline and route every other kind through static (owner, node) boundaries; member reads cache Utf8Key per name identity (limit 3) — instance boundaries let fresh views escape and getBytes allocated per read (compiled interop gate measured 96 then 48 B/read, now 3.2E-5) — cost if wrong: none.
+Task 9: Ruling: member names with unpaired surrogates match nothing (previously getBytes encoded them lossily as "?", matching a real "?" key) — cost if wrong: none; strict JSON keys are valid UTF-8.
+Task 9: Fixed WIP test bugs: InteropReads checksum is 2002000000 (b is false), and the SvmAcceptance asLong-on-object check now fails if no exception is thrown.
+Task 9: complete (tests: bazel test //json/tests:jvm //json/tests:native_test → INFO: Streaming build results to: https://app.buildbuddy.io/invocation/ — see commit)
 ## Hand-off state (written 2026-11-06 11:05 PST, branch feat/json-completion)
 
 Tasks 1–8 are complete and committed (see lines above; `git log main..feat/json-completion`).
-Task 9 (InteropLibrary exports on JsonValue) is IN PROGRESS and committed as WIP:
+Task 9 has since completed (see the Task 9 lines above); the WIP notes below are historical:
 - JVM lane passes: `bazel test //json/tests:jvm` (JsonInteropTest, JvmScopedTest, FfmAcceptanceTest all green).
 - SVM lane FAILS TO BUILD: `bazel test //json/tests:native_test` → native-image error
   "The following method is reachable during compilation, but was not seen during Bytecode parsing:

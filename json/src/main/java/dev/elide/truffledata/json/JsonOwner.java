@@ -14,12 +14,16 @@ import org.jspecify.annotations.Nullable;
  */
 public abstract sealed class JsonOwner permits JsonMessage, JsonSnapshot {
   final ValueTape tape;
+  // Same object as tape; raw node reads keep ValueTape.tag (a trivially inlined one-liner whose
+  // deopt target SVM runtime compilation cannot resolve) out of partially evaluated code.
+  private final TapeSource source;
   // Null means unconfined (immutable snapshot). Final fields keep every check inlinable.
   private final @Nullable Thread thread;
   private boolean open = true;
 
   JsonOwner(ValueTape tape, @Nullable Thread thread) {
     this.tape = tape;
+    this.source = (TapeSource) tape;
     this.thread = thread;
   }
 
@@ -33,6 +37,12 @@ public abstract sealed class JsonOwner permits JsonMessage, JsonSnapshot {
   final void checkThread() {
     if (thread != null && Thread.currentThread() != thread)
       throw new IllegalStateException("JSON message thread mismatch");
+  }
+
+  /** Value kind of a node; equal to {@code tape.tag(node)} for ABI v2 and v3 storage tags. */
+  final int tag(long node) {
+    if (node < 0 || node >= tape.nodeCount()) throw new IndexOutOfBoundsException("Node index");
+    return source.nodeInt(node * ValueTape.NODE_SIZE) & ValueTape.KIND_MASK;
   }
 
   /** Marks the owner closed; returns false when it already was. */

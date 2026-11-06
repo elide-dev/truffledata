@@ -85,12 +85,14 @@ public final class SvmAcceptance {
     } catch (IllegalStateException expected) {
     }
     var interop = InteropLibrary.getUncached();
+    require(interop.hasMembers(root) && interop.hasArrayElements(root.member("a")));
     try {
-      require(interop.hasMembers(root) && interop.hasArrayElements(root.member("a")));
-      require(interop.asLong(interop.readArrayElement(root.member("a"), 2)) == 0 || true);
-    } catch (com.oracle.truffle.api.interop.UnsupportedMessageException
-        | com.oracle.truffle.api.interop.InvalidArrayIndexException expected) {
+      interop.asLong(interop.readArrayElement(root.member("a"), 2));
+      throw new AssertionError("asLong on a JSON object");
+    } catch (com.oracle.truffle.api.interop.UnsupportedMessageException expected) {
       // element 2 is an object: asLong is unsupported, which is the contract under test
+    } catch (com.oracle.truffle.api.interop.InvalidArrayIndexException failure) {
+      throw new AssertionError(failure);
     }
     try {
       require(interop.isNull(interop.readArrayElement(root.member("a"), 1)));

@@ -84,4 +84,29 @@ final class JsonInteropTest {
       assertTrue(String.valueOf(failure.getMessage()).contains("JSON message closed"), failure.getMessage());
     }
   }
+  @Test
+  void unencodableMemberNamesMatchNothing() {
+    try (Context context = context();
+        JsonDecoder decoder = JsonJvm.open(JvmScopedTest.library());
+        JsonMessage message = decoder.decode("{\"?\":1}".getBytes(StandardCharsets.UTF_8))) {
+      Value root = context.asValue(message.root());
+      assertEquals(1, root.getMember("?").asLong());
+      // A lone surrogate has no UTF-8 encoding; lossy encoding would turn it into "?".
+      assertFalse(root.hasMember("\uD800"));
+      assertNull(root.getMember("\uD800"));
+    }
+  }
+
+  @Test
+  void memberLookupsBeyondTheNameCacheStayCorrect() {
+    StringBuilder source = new StringBuilder("{");
+    for (int i = 0; i < 8; i++) source.append(i == 0 ? "" : ",").append("\"k").append(i).append("\":").append(i);
+    try (Context context = context();
+        JsonDecoder decoder = JsonJvm.open(JvmScopedTest.library());
+        JsonMessage message = decoder.decode(source.append('}').toString().getBytes(StandardCharsets.UTF_8))) {
+      Value root = context.asValue(message.root());
+      for (int round = 0; round < 3; round++)
+        for (int i = 0; i < 8; i++) assertEquals(i, root.getMember("k" + i).asLong());
+    }
+  }
 }

@@ -177,7 +177,7 @@ final class CompiledReads {
     var target = root.getCallTarget();
     for (int i = 0; i < 200 && !root.compiled; i++) target.call(100000);
     check(root.compiled, "Interop JSON reads must execute compiled code");
-    check(((Long) target.call(1000000)) == 2003000000L, "Interop JSON compiled checksum");
+    check(((Long) target.call(1000000)) == 2002000000L, "Interop JSON compiled checksum");
     check(NodeUtil.countNodes(root) <= 192, "Interop JSON AST budget");
     var bean =
         (com.sun.management.ThreadMXBean) java.lang.management.ManagementFactory.getThreadMXBean();

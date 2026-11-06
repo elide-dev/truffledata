@@ -1,6 +1,8 @@
 package dev.elide.truffledata.json;
 
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
+import com.oracle.truffle.api.dsl.Cached;
+import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.interop.*;
 import com.oracle.truffle.api.library.ExportLibrary;
 import com.oracle.truffle.api.library.ExportMessage;
@@ -9,7 +11,6 @@ import dev.elide.myna.values.ValueTape;
 import dev.elide.truffledata.DataArray;
 import java.math.BigDecimal;
 import java.math.BigInteger;
-import java.nio.charset.StandardCharsets;
 import java.util.NoSuchElementException;
 
 /**
@@ -39,7 +40,7 @@ public final class JsonValue implements TruffleObject {
 
   public Kind kind() {
     owner.check();
-    return switch (owner.tape.tag(node)) {
+    return switch (owner.tag(node)) {
       case ValueTape.NULL -> Kind.NULL;
       case ValueTape.BOOL -> Kind.BOOLEAN;
       case ValueTape.STRING -> Kind.STRING;
@@ -176,7 +177,7 @@ public final class JsonValue implements TruffleObject {
 
   private int tag() {
     owner.check();
-    return owner.tape.tag(node);
+    return owner.tag(node);
   }
 
   @ExportMessage
@@ -199,22 +200,73 @@ public final class JsonValue implements TruffleObject {
     return new DataArray(keys);
   }
 
+  /** Encoded member name, or null when the name has an unpaired surrogate and matches no key. */
   @TruffleBoundary
-  private long memberNode(String name) {
-    if (tag() != ValueTape.OBJECT) return -1;
-    return owner.tape.find(node, name.getBytes(StandardCharsets.UTF_8));
+  static ValueTape.@org.jspecify.annotations.Nullable Utf8Key keyOf(String name) {
+    try {
+      return ValueTape.Utf8Key.of(name);
+    } catch (IllegalArgumentException unpaired) {
+      return null;
+    }
+  }
+
+  /** Member value node, or -1; checks the receiver inline so the view itself never escapes. */
+  long memberNode(ValueTape.@org.jspecify.annotations.Nullable Utf8Key key) {
+    if (tag() != ValueTape.OBJECT || key == null) return -1;
+    return find(owner, node, key);
+  }
+
+  @TruffleBoundary
+  private static long find(JsonOwner owner, long object, ValueTape.Utf8Key key) {
+    return owner.tape.find(object, key);
+  }
+
+  // Guests usually read members by constant names: cache the encoded key per name identity so a
+  // compiled read neither re-encodes nor allocates.
+
+  @ExportMessage
+  static final class IsMemberReadable {
+    @Specialization(guards = "name == cachedName", limit = "3")
+    static boolean cached(
+        JsonValue receiver,
+        String name,
+        @Cached(value = "name", neverDefault = true) String cachedName,
+        @Cached("keyOf(name)") ValueTape.@org.jspecify.annotations.Nullable Utf8Key key) {
+      return receiver.memberNode(key) >= 0;
+    }
+
+    @Specialization(replaces = "cached")
+    static boolean generic(JsonValue receiver, String name) {
+      return receiver.memberNode(keyOf(name)) >= 0;
+    }
   }
 
   @ExportMessage
-  boolean isMemberReadable(String name) {
-    return memberNode(name) >= 0;
+  static final class ReadMember {
+    @Specialization(guards = "name == cachedName", limit = "3")
+    static Object cached(
+        JsonValue receiver,
+        String name,
+        @Cached(value = "name", neverDefault = true) String cachedName,
+        @Cached("keyOf(name)") ValueTape.@org.jspecify.annotations.Nullable Utf8Key key)
+        throws UnknownIdentifierException {
+      return receiver.readFound(receiver.memberNode(key), name);
+    }
+
+    @Specialization(replaces = "cached")
+    static Object generic(JsonValue receiver, String name) throws UnknownIdentifierException {
+      return receiver.readFound(receiver.memberNode(keyOf(name)), name);
+    }
   }
 
-  @ExportMessage
-  Object readMember(String name) throws UnknownIdentifierException {
-    long found = memberNode(name);
-    if (found < 0) throw UnknownIdentifierException.create(name);
+  private Object readFound(long found, String name) throws UnknownIdentifierException {
+    if (found < 0) throw unknown(name);
     return new JsonValue(owner, found);
+  }
+
+  @TruffleBoundary
+  private static UnknownIdentifierException unknown(String name) {
+    return UnknownIdentifierException.create(name);
   }
 
   @ExportMessage
@@ -280,15 +332,22 @@ public final class JsonValue implements TruffleObject {
     return TruffleString.fromByteArrayUncached(bytes, 0, bytes.length, TruffleString.Encoding.UTF_8, false);
   }
 
-  @ExportMessage
-  boolean isNumber() {
-    int tag = tag();
+  private static boolean isNumberTag(int tag) {
     return tag == ValueTape.I64 || tag == ValueTape.U64 || tag == ValueTape.F64 || tag == ValueTape.DECIMAL;
   }
 
+  @ExportMessage
+  boolean isNumber() {
+    return isNumberTag(tag());
+  }
+
+  // Number conversions keep the common kind (I64 for integers, F64 for doubles) inline and send
+  // every other kind to static boundaries over (owner, node), so a view created by readMember or
+  // readArrayElement never escapes into a boundary call and compiled guest reads do not allocate.
+
   /** Exact decimal of a DECIMAL token; null for tokens no bounded decimal can hold. */
   @TruffleBoundary
-  private @org.jspecify.annotations.Nullable BigDecimal decimal() {
+  private static @org.jspecify.annotations.Nullable BigDecimal decimal(JsonOwner owner, long node) {
     try {
       return new BigDecimal(owner.lexicalText(node));
     } catch (NumberFormatException | ArithmeticException overflow) {
@@ -296,10 +355,10 @@ public final class JsonValue implements TruffleObject {
     }
   }
 
-  /** Exact integer when the number is integral and in range, else null. */
+  /** Exact integer when the number is integral and in range, else null (also for non-numbers). */
   @TruffleBoundary
-  private @org.jspecify.annotations.Nullable BigInteger exactInteger() {
-    return switch (tag()) {
+  private static @org.jspecify.annotations.Nullable BigInteger exactInteger(JsonOwner owner, long node) {
+    return switch (owner.tag(node)) {
       case ValueTape.I64 -> BigInteger.valueOf(owner.tape.signedValue(node));
       case ValueTape.U64 -> {
         long bits = owner.tape.unsignedBits(node);
@@ -307,10 +366,10 @@ public final class JsonValue implements TruffleObject {
       }
       case ValueTape.F64 -> {
         double d = owner.tape.doubleValue(node);
-        yield d == Math.rint(d) ? new BigDecimal(d).toBigInteger() : null;
+        yield Double.isFinite(d) && d == Math.rint(d) ? new BigDecimal(d).toBigInteger() : null;
       }
       case ValueTape.DECIMAL -> {
-        BigDecimal d = decimal();
+        BigDecimal d = decimal(owner, node);
         if (d == null) yield null;
         try {
           yield d.toBigIntegerExact();
@@ -322,62 +381,37 @@ public final class JsonValue implements TruffleObject {
     };
   }
 
+  /** Signed value within [min, max] when the number is an exact integer there. */
   @TruffleBoundary
-  private boolean fitsSigned(long min, long max) {
-    if (tag() == ValueTape.I64) {
-      long v = owner.tape.signedValue(node);
-      return v >= min && v <= max;
-    }
-    BigInteger exact = exactInteger();
+  private static boolean fitsSigned(JsonOwner owner, long node, long min, long max) {
+    BigInteger exact = exactInteger(owner, node);
     return exact != null && exact.bitLength() < 64 && exact.longValue() >= min && exact.longValue() <= max;
   }
 
-  @ExportMessage
-  @TruffleBoundary
-  boolean fitsInByte() {
-    return isNumber() && fitsSigned(Byte.MIN_VALUE, Byte.MAX_VALUE);
+  private boolean fits(long min, long max) {
+    int tag = tag();
+    if (tag == ValueTape.I64) {
+      long v = owner.tape.signedValue(node);
+      return v >= min && v <= max;
+    }
+    return isNumberTag(tag) && fitsSigned(owner, node, min, max);
   }
 
-  @ExportMessage
+  /** Binary64 value when exactly representable, else NaN (also for non-numbers). */
   @TruffleBoundary
-  boolean fitsInShort() {
-    return isNumber() && fitsSigned(Short.MIN_VALUE, Short.MAX_VALUE);
-  }
-
-  @ExportMessage
-  @TruffleBoundary
-  boolean fitsInInt() {
-    return isNumber() && fitsSigned(Integer.MIN_VALUE, Integer.MAX_VALUE);
-  }
-
-  @ExportMessage
-  @TruffleBoundary
-  boolean fitsInLong() {
-    return isNumber() && fitsSigned(Long.MIN_VALUE, Long.MAX_VALUE);
-  }
-
-  @ExportMessage
-  @TruffleBoundary
-  boolean fitsInBigInteger() {
-    return isNumber() && exactInteger() != null;
-  }
-
-  /** Binary64 value when exactly representable, else NaN (never for valid tokens). */
-  @TruffleBoundary
-  private double exactDouble() {
-    return switch (tag()) {
+  private static double exactDouble(JsonOwner owner, long node) {
+    return switch (owner.tag(node)) {
       case ValueTape.F64 -> owner.tape.doubleValue(node);
       case ValueTape.I64 -> {
         long v = owner.tape.signedValue(node);
-        double d = (double) v;
-        yield (long) d == v && Math.abs(v) <= (1L << 53) ? d : Double.NaN;
+        yield v >= -(1L << 53) && v <= (1L << 53) ? (double) v : Double.NaN;
       }
       case ValueTape.U64 -> {
-        BigInteger exact = exactInteger();
+        BigInteger exact = exactInteger(owner, node);
         yield exact != null && exact.bitLength() <= 53 ? exact.doubleValue() : Double.NaN;
       }
       case ValueTape.DECIMAL -> {
-        BigDecimal d = decimal();
+        BigDecimal d = decimal(owner, node);
         if (d == null) yield Double.NaN;
         double v = d.doubleValue();
         yield Double.isFinite(v) && new BigDecimal(v).compareTo(d) == 0 ? v : Double.NaN;
@@ -386,70 +420,96 @@ public final class JsonValue implements TruffleObject {
     };
   }
 
-  @ExportMessage
-  @TruffleBoundary
-  boolean fitsInDouble() {
-    return isNumber() && !Double.isNaN(exactDouble());
+  private double doubleOrNaN() {
+    if (tag() == ValueTape.F64) return owner.tape.doubleValue(node);
+    return exactDouble(owner, node);
   }
 
   @ExportMessage
-  @TruffleBoundary
+  boolean fitsInByte() {
+    return fits(Byte.MIN_VALUE, Byte.MAX_VALUE);
+  }
+
+  @ExportMessage
+  boolean fitsInShort() {
+    return fits(Short.MIN_VALUE, Short.MAX_VALUE);
+  }
+
+  @ExportMessage
+  boolean fitsInInt() {
+    return fits(Integer.MIN_VALUE, Integer.MAX_VALUE);
+  }
+
+  @ExportMessage
+  boolean fitsInLong() {
+    return fits(Long.MIN_VALUE, Long.MAX_VALUE);
+  }
+
+  @ExportMessage
+  boolean fitsInBigInteger() {
+    int tag = tag();
+    return tag == ValueTape.I64 || (isNumberTag(tag) && exactInteger(owner, node) != null);
+  }
+
+  @ExportMessage
+  boolean fitsInDouble() {
+    return !Double.isNaN(doubleOrNaN());
+  }
+
+  @ExportMessage
   boolean fitsInFloat() {
-    if (!isNumber()) return false;
-    double d = exactDouble();
+    double d = doubleOrNaN();
     return !Double.isNaN(d) && (double) (float) d == d;
   }
 
   @ExportMessage
-  @TruffleBoundary
   byte asByte() throws UnsupportedMessageException {
     if (!fitsInByte()) throw UnsupportedMessageException.create();
     return (byte) asLong();
   }
 
   @ExportMessage
-  @TruffleBoundary
   short asShort() throws UnsupportedMessageException {
     if (!fitsInShort()) throw UnsupportedMessageException.create();
     return (short) asLong();
   }
 
   @ExportMessage
-  @TruffleBoundary
   int asInt() throws UnsupportedMessageException {
     if (!fitsInInt()) throw UnsupportedMessageException.create();
     return (int) asLong();
   }
 
   @ExportMessage
-  @TruffleBoundary
   long asLong() throws UnsupportedMessageException {
     if (tag() == ValueTape.I64) return owner.tape.signedValue(node);
-    BigInteger exact = isNumber() ? exactInteger() : null;
+    return exactLong(owner, node);
+  }
+
+  @TruffleBoundary
+  private static long exactLong(JsonOwner owner, long node) throws UnsupportedMessageException {
+    BigInteger exact = exactInteger(owner, node);
     if (exact == null || exact.bitLength() >= 64) throw UnsupportedMessageException.create();
     return exact.longValue();
   }
 
   @ExportMessage
-  @TruffleBoundary
   BigInteger asBigInteger() throws UnsupportedMessageException {
-    BigInteger exact = isNumber() ? exactInteger() : null;
+    tag(); // liveness and thread check before the static boundary reads the tape
+    BigInteger exact = exactInteger(owner, node);
     if (exact == null) throw UnsupportedMessageException.create();
     return exact;
   }
 
   @ExportMessage
-  @TruffleBoundary
   float asFloat() throws UnsupportedMessageException {
     if (!fitsInFloat()) throw UnsupportedMessageException.create();
-    return (float) exactDouble();
+    return (float) doubleOrNaN();
   }
 
   @ExportMessage
-  @TruffleBoundary
   double asDouble() throws UnsupportedMessageException {
-    if (!isNumber()) throw UnsupportedMessageException.create();
-    double d = exactDouble();
+    double d = doubleOrNaN();
     if (Double.isNaN(d)) throw UnsupportedMessageException.create();
     return d;
   }
