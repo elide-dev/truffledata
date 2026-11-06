@@ -129,9 +129,85 @@ final class CompiledReads {
           }
         }
         check(NodeUtil.countNodes(churn) <= 192, "Shared JSON schema cache remains bounded");
+        generic();
       } finally {
         context.leave();
       }
+    }
+  }
+
+  /** Retained generic values read through compiled code with an assumption-cached owner check. */
+  private static void generic() {
+    var first =
+        dev.elide.truffledata.json.JsonSvm.decode(
+            "{\"n\":1000,\"d\":1.5,\"b\":true}".getBytes(StandardCharsets.UTF_8));
+    var second =
+        dev.elide.truffledata.json.JsonSvm.decode(
+            "{\"n\":2000,\"d\":2.5,\"b\":false}".getBytes(StandardCharsets.UTF_8));
+    var messages = new dev.elide.truffledata.json.JsonMessage[] {first, second};
+    var root = new GenericReads(messages);
+    var target = root.getCallTarget();
+    for (int i = 0; i < 200 && !root.compiled; i++) target.call(100000);
+    check(root.compiled, "Generic JSON reads must execute compiled code");
+    check(((Long) target.call(1000000)) == 1502000000L, "Generic JSON compiled checksum");
+    check(NodeUtil.countNodes(root) <= 192, "Generic JSON AST budget");
+    var bean =
+        (com.sun.management.ThreadMXBean) java.lang.management.ManagementFactory.getThreadMXBean();
+    bean.setThreadAllocatedMemoryEnabled(true);
+    long thread = Thread.currentThread().threadId();
+    long before = bean.getThreadAllocatedBytes(thread);
+    target.call(1000000);
+    double bytes = (bean.getThreadAllocatedBytes(thread) - before) / 1000000.0;
+    check(bytes >= 0 && bytes <= 0.05, "Generic JSON compiled bytes/read budget: " + bytes);
+    System.out.println("JSON generic compiled=true bytes/read=" + bytes);
+    first.close();
+    try {
+      target.call(1);
+      throw new AssertionError("Compiled closed generic read");
+    } catch (IllegalStateException expected) {
+    }
+    check(second.root().member("n").longValue() == 2000, "Sibling message survives close");
+    second.close();
+  }
+
+  private static final class GenericReads extends RootNode {
+    @CompilerDirectives.CompilationFinal(dimensions = 1)
+    private final dev.elide.truffledata.json.JsonOwner[] owners;
+
+    @CompilerDirectives.CompilationFinal(dimensions = 1)
+    private final dev.elide.truffledata.json.JsonValue[] n, d, b;
+
+    @Child private dev.elide.truffledata.json.JsonOwner.CheckOpenNode check =
+        dev.elide.truffledata.json.JsonOwner.CheckOpenNode.create();
+
+    boolean compiled;
+
+    GenericReads(dev.elide.truffledata.json.JsonMessage[] messages) {
+      super(TestLanguage.current());
+      owners = messages;
+      n = new dev.elide.truffledata.json.JsonValue[messages.length];
+      d = new dev.elide.truffledata.json.JsonValue[messages.length];
+      b = new dev.elide.truffledata.json.JsonValue[messages.length];
+      for (int i = 0; i < messages.length; i++) {
+        var root = messages[i].root();
+        n[i] = root.member("n");
+        d[i] = root.member("d");
+        b[i] = root.member("b");
+      }
+    }
+
+    @Override
+    public Object execute(VirtualFrame frame) {
+      int count = (Integer) frame.getArguments()[0];
+      long sum = 0;
+      for (int i = 0; i < count; i++) {
+        int row = i & 1;
+        check.execute(owners[row]);
+        sum += n[row].longValue() + (long) d[row].doubleValue() + (b[row].booleanValue() ? 1 : 0);
+      }
+      if (CompilerDirectives.inInterpreter()) LoopNode.reportLoopCount(this, count);
+      compiled |= CompilerDirectives.inCompiledCode();
+      return sum;
     }
   }
 

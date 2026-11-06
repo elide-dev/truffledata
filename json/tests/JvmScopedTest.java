@@ -191,6 +191,28 @@ final class JvmScopedTest {
   }
 
   @Test
+  void snapshotArrayIndexIsSafeAcrossThreads() throws Exception {
+    StringBuilder source = new StringBuilder("[");
+    for (int i = 0; i < 1_000; i++) source.append(i == 0 ? "" : ",").append(i);
+    source.append("]");
+    dev.elide.truffledata.json.JsonSnapshot snapshot;
+    try (JsonDecoder decoder = JsonJvm.open(library());
+        JsonMessage message = decoder.decode(utf8(source.toString()))) {
+      snapshot = message.snapshot();
+    }
+    Thread[] readers = new Thread[8];
+    String[] seen = new String[readers.length];
+    for (int t = 0; t < readers.length; t++) {
+      int slot = t;
+      readers[t] = new Thread(() -> seen[slot] = snapshot.root().element(999 - slot).numberText());
+      readers[t].start();
+    }
+    for (Thread reader : readers) reader.join();
+    for (int t = 0; t < readers.length; t++) assertEquals(Integer.toString(999 - t), seen[t]);
+    assertEquals(1, snapshot.indexedArrays());
+  }
+
+  @Test
   void staticBackendIsUnavailableOnTheJvm() {
     assertThrows(UnsupportedOperationException.class, dev.elide.truffledata.json.JsonSvm::open);
   }

@@ -8,11 +8,9 @@ import org.jspecify.annotations.Nullable;
 
 /** Thread-confined owner of a validated JSON index. Closing invalidates every derived view. */
 public final class JsonMessage extends JsonOwner implements AutoCloseable {
-  private final Thread thread = Thread.currentThread();
   private final Runnable release;
   private final Lexical lexical;
   private @Nullable Assumption alive;
-  private boolean open = true;
 
   /** Backend-specific access to the native lexical span table and retained input. */
   interface Lexical {
@@ -22,21 +20,9 @@ public final class JsonMessage extends JsonOwner implements AutoCloseable {
   }
 
   JsonMessage(ValueTape tape, Lexical lexical, Runnable release) {
-    super(tape);
+    super(tape, Thread.currentThread());
     this.lexical = lexical;
     this.release = release;
-  }
-
-  @Override
-  void check() {
-    checkThread();
-    if (!open) throw new IllegalStateException("JSON message closed");
-  }
-
-  @Override
-  void checkThread() {
-    if (Thread.currentThread() != thread)
-      throw new IllegalStateException("JSON message thread mismatch");
   }
 
   @Override
@@ -61,9 +47,7 @@ public final class JsonMessage extends JsonOwner implements AutoCloseable {
   @Override
   @TruffleBoundary
   public void close() {
-    checkThread();
-    if (open) {
-      open = false;
+    if (markClosed()) {
       if (alive != null) alive.invalidate();
       release.run();
     }

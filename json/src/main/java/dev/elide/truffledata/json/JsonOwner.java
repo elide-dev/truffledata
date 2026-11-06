@@ -6,6 +6,7 @@ import com.oracle.truffle.api.dsl.*;
 import com.oracle.truffle.api.nodes.Node;
 import dev.elide.myna.values.ValueTape;
 import java.nio.charset.StandardCharsets;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Owner of a validated JSON index. Views read the tape only after {@link #check()}; owners that
@@ -13,13 +14,34 @@ import java.nio.charset.StandardCharsets;
  */
 public abstract sealed class JsonOwner permits JsonMessage, JsonSnapshot {
   final ValueTape tape;
+  // Null means unconfined (immutable snapshot). Final fields keep every check inlinable.
+  private final @Nullable Thread thread;
+  private boolean open = true;
 
-  JsonOwner(ValueTape tape) {
+  JsonOwner(ValueTape tape, @Nullable Thread thread) {
     this.tape = tape;
+    this.thread = thread;
   }
 
   /** Rejects closed or cross-thread access; immutable owners never fail. */
-  abstract void check();
+  final void check() {
+    checkThread();
+    if (!open) throw new IllegalStateException("JSON message closed");
+  }
+
+  /** Thread confinement only; liveness is covered by the assumption at cached sites. */
+  final void checkThread() {
+    if (thread != null && Thread.currentThread() != thread)
+      throw new IllegalStateException("JSON message thread mismatch");
+  }
+
+  /** Marks the owner closed; returns false when it already was. */
+  final boolean markClosed() {
+    checkThread();
+    if (!open) return false;
+    open = false;
+    return true;
+  }
 
   /** Valid while this owner is open; closing invalidates it. */
   @TruffleBoundary
@@ -46,7 +68,9 @@ public abstract sealed class JsonOwner permits JsonMessage, JsonSnapshot {
   /** Arrays with more elements than this get a child-offset index on first random access. */
   static final int INDEX_THRESHOLD = 8;
 
-  private final java.util.HashMap<Long, long[]> arrayIndexes = new java.util.HashMap<>();
+  // Snapshots are shared across threads; computeIfAbsent publishes each fully built index.
+  private final java.util.concurrent.ConcurrentHashMap<Long, long[]> arrayIndexes =
+      new java.util.concurrent.ConcurrentHashMap<>();
 
   /** Diagnostic: number of arrays indexed for random access within this owner's lifetime. */
   @TruffleBoundary
@@ -58,18 +82,17 @@ public abstract sealed class JsonOwner permits JsonMessage, JsonSnapshot {
   /** Child node offsets of an array, built once and cached while the owner lives. */
   @TruffleBoundary
   final long[] arrayIndex(long array) {
-    long[] cached = arrayIndexes.get(array);
-    if (cached == null) {
-      long count = tape.length(array);
-      cached = new long[Math.toIntExact(count)];
-      long child = tape.first(array);
-      for (int i = 0; i < cached.length; i++) {
-        cached[i] = child;
-        child = tape.next(child);
-      }
-      arrayIndexes.put(array, cached);
-    }
-    return cached;
+    return arrayIndexes.computeIfAbsent(
+        array,
+        key -> {
+          long[] built = new long[Math.toIntExact(tape.length(key))];
+          long child = built.length == 0 ? -1 : tape.first(key);
+          for (int i = 0; i < built.length; i++) {
+            built[i] = child;
+            child = tape.next(child);
+          }
+          return built;
+        });
   }
 
   public final JsonValue root() {
@@ -114,6 +137,4 @@ public abstract sealed class JsonOwner permits JsonMessage, JsonSnapshot {
     }
   }
 
-  /** Thread confinement only; liveness is covered by the assumption at cached sites. */
-  abstract void checkThread();
 }

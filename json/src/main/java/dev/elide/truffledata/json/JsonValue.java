@@ -41,6 +41,18 @@ public final class JsonValue {
     return owner.tape.booleanValue(node);
   }
 
+  /** Signed 64-bit integer node; other number kinds throw rather than convert. */
+  public long longValue() {
+    owner.check();
+    return owner.tape.signedValue(node);
+  }
+
+  /** Binary64 node; integer nodes throw rather than widen. */
+  public double doubleValue() {
+    owner.check();
+    return owner.tape.doubleValue(node);
+  }
+
   @TruffleBoundary
   public String stringValue() {
     owner.check();

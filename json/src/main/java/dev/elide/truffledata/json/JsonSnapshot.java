@@ -8,7 +8,7 @@ public final class JsonSnapshot extends JsonOwner {
   private final HeapValueTape heap;
 
   private JsonSnapshot(HeapValueTape tape, long[] spans) {
-    super(tape);
+    super(tape, null);
     this.heap = tape;
     this.spans = spans;
   }
@@ -25,12 +25,6 @@ public final class JsonSnapshot extends JsonOwner {
   public long nodeCount() {
     return heap.nodeCount();
   }
-
-  @Override
-  void check() {}
-
-  @Override
-  void checkThread() {}
 
   @Override
   public Assumption assumption() {
