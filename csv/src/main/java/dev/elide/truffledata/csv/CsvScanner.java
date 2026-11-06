@@ -20,7 +20,6 @@ final class CsvScanner {
 
   private static final byte CR = '\r';
   private static final byte LF = '\n';
-  private static final byte ORDINARY = 0;
   private static final byte QUOTE = 3;
   private static final int LENGTH_MASK = (1 << 30) - 1;
 
@@ -32,6 +31,9 @@ final class CsvScanner {
   private final int maxRecordBytes;
   /** Byte classes for unquoted runs: 0 ordinary, 1 delimiter, 2 CR or LF, 3 quote. */
   private final byte[] classes = new byte[256];
+
+  /** Run skips; the seam a faster kernel replaces. */
+  private final CsvKernel kernel;
 
   private long[] spans;
 
@@ -52,6 +54,7 @@ final class CsvScanner {
     classes[CR] = 2;
     classes[LF] = 2;
     if (quoting) classes[quote & 0xFF] = QUOTE;
+    kernel = new CsvKernel(delimiter, quote, quoting, -1);
     spans = new long[Math.min(16, maxColumns)];
   }
 
@@ -64,6 +67,7 @@ final class CsvScanner {
    */
   int scan(byte[] input, int from, int to, boolean eof, Records records) {
     final byte[] cls = classes;
+    final CsvKernel k = kernel;
     final byte q = quote;
     int pos = from;
     long ordinal = 0;
@@ -87,7 +91,7 @@ final class CsvScanner {
           final int contentStart = ++p;
           boolean escaped = false;
           for (; ; ) {
-            while (p < to && input[p] != q) p++;
+            p = k.skipQuoted(input, p, to);
             if (p >= to) {
               if (eof) throw syntax(ordinal, open, "unterminated quoted field");
               return start;
@@ -107,7 +111,7 @@ final class CsvScanner {
           span = span(contentStart, contentEnd - contentStart, true, escaped);
         } else {
           final int contentStart = p;
-          while (p < to && cls[input[p] & 0xFF] == ORDINARY) p++;
+          p = k.skipUnquoted(input, p, to);
           if (p < to && cls[input[p] & 0xFF] == QUOTE)
             throw syntax(ordinal, p, "quote in an unquoted field");
           int contentEnd = p;
