@@ -1,7 +1,6 @@
 package dev.elide.truffledata.json;
 
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
-import dev.elide.myna.values.NativeValueTape;
 import dev.elide.myna.values.ValueTape;
 import dev.elide.truffledata.json.generated.Json;
 import org.graalvm.nativeimage.ImageInfo;
@@ -140,7 +139,7 @@ public final class JsonSvm {
       Pointer descriptor = (Pointer) Json.JsonResult.view(result);
       if (descriptor.isNull() || descriptor.readInt(0) != ValueTape.ABI_VERSION)
         throw new IllegalStateException("Unsupported Myna value ABI");
-      NativeValueTape tape = new NativeValueTape(descriptor);
+      SvmValueTape tape = new SvmValueTape(descriptor);
       long address = result.rawValue();
       Pointer spans = (Pointer) Json.JsonResult.lexical(result);
       long spanCount = Json.JsonResult.lexical_count(result);

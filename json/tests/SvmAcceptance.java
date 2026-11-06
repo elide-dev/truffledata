@@ -86,9 +86,13 @@ public final class SvmAcceptance {
     }
     var assumption = message.assumption();
     require(assumption.isValid());
+    var snapshot = message.snapshot();
     message.close();
     message.close();
     require(!assumption.isValid());
+    require(snapshot.root().member("a").element(2).member("s").stringValue().equals("retained child"));
+    require(snapshot.root().member("n").numberText().equals("1e9999999999999999"));
+    require(snapshot.root().member("a").element(2).member("s").rawText().equals("\"retained child\""));
     try {
       child.kind();
       throw new AssertionError("closed child kind readable");

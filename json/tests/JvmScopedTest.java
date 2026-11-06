@@ -122,6 +122,39 @@ final class JvmScopedTest {
   }
 
   @Test
+  void snapshotsOutliveMessageAndDecoderAndCrossThreads() throws Exception {
+    dev.elide.truffledata.json.JsonSnapshot snapshot;
+    dev.elide.truffledata.json.JsonSnapshot subtree;
+    try (JsonDecoder decoder = JsonJvm.open(library());
+        JsonMessage message =
+            decoder.decode(
+                utf8("{\"k\\u0041\":[1,-0,\"escaped \\u4e2d text that is long\",\"plain text that is long enough\"],\"n\":1E400}"))) {
+      snapshot = message.snapshot();
+      subtree = message.root().member("kA").snapshot();
+    }
+    JsonValue root = snapshot.root();
+    assertEquals(JsonValue.Kind.OBJECT, root.kind());
+    assertEquals("\"k\\u0041\"", root.keyAt(0).rawText());
+    JsonValue array = root.member("kA");
+    assertEquals(4, array.size());
+    assertEquals("1", array.element(0).numberText());
+    assertEquals("-0", array.element(1).numberText());
+    assertEquals("escaped 中 text that is long", array.element(2).stringValue());
+    assertEquals("plain text that is long enough", array.element(3).stringValue());
+    assertEquals("\"plain text that is long enough\"", array.element(3).rawText());
+    assertEquals("1E400", root.member("n").numberText());
+    assertEquals(JsonValue.Kind.ARRAY, subtree.root().kind());
+    assertEquals(5, subtree.nodeCount());
+    assertEquals("plain text that is long enough", subtree.root().element(3).stringValue());
+    assertTrue(snapshot.assumption().isValid());
+    String[] fromOtherThread = new String[1];
+    Thread other = new Thread(() -> fromOtherThread[0] = snapshot.root().member("n").numberText());
+    other.start();
+    other.join();
+    assertEquals("1E400", fromOtherThread[0]);
+  }
+
+  @Test
   void staticBackendIsUnavailableOnTheJvm() {
     assertThrows(UnsupportedOperationException.class, dev.elide.truffledata.json.JsonSvm::open);
   }

@@ -5,7 +5,7 @@ import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
 
 /** JVM reader over a native Myna v3 descriptor; the owner keeps every referenced region alive. */
-final class SegmentValueTape extends ValueTape {
+final class SegmentValueTape extends ValueTape implements TapeSource {
   private static final long REGION_SIZE = 16;
   private final MemorySegment nodes;
   private final MemorySegment bytes;
@@ -57,6 +57,31 @@ final class SegmentValueTape extends ValueTape {
   @Override
   protected void copyRegionBytes(long region, long start, byte[] output, int offset, int len) {
     MemorySegment.copy(region(region), ValueLayout.JAVA_BYTE, start, output, offset, len);
+  }
+
+  @Override
+  public int nodeInt(long byteOffset) {
+    return readInt(byteOffset);
+  }
+
+  @Override
+  public long nodeLong(long byteOffset) {
+    return readLong(byteOffset);
+  }
+
+  @Override
+  public long regionCount() {
+    return regionCount;
+  }
+
+  @Override
+  public long regionSize(long region) {
+    return regionLength(region);
+  }
+
+  @Override
+  public void copyRegion(long region, long start, byte[] output, int offset, int length) {
+    copyRegionBytes(region, start, output, offset, length);
   }
 
   @Override

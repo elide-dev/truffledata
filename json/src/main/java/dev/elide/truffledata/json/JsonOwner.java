@@ -11,7 +11,7 @@ import java.nio.charset.StandardCharsets;
  * Owner of a validated JSON index. Views read the tape only after {@link #check()}; owners that
  * can close expose an {@link Assumption} so compiled reads cache liveness without a field load.
  */
-public abstract sealed class JsonOwner permits JsonMessage {
+public abstract sealed class JsonOwner permits JsonMessage, JsonSnapshot {
   final ValueTape tape;
 
   JsonOwner(ValueTape tape) {
@@ -46,6 +46,18 @@ public abstract sealed class JsonOwner permits JsonMessage {
   public final JsonValue root() {
     check();
     return new JsonValue(this, 0);
+  }
+
+  /** Independently owned immutable copy of the whole document. */
+  @TruffleBoundary
+  public JsonSnapshot snapshot() {
+    return snapshot(0);
+  }
+
+  @TruffleBoundary
+  final JsonSnapshot snapshot(long root) {
+    check();
+    return JsonSnapshot.copy(this, (TapeSource) tape, root);
   }
 
   /** Cache only retained owners; uncached ingestion and megamorphic sites use ordinary checks. */

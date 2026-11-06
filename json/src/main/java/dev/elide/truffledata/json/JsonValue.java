@@ -83,6 +83,28 @@ public final class JsonValue {
     return member(ValueTape.Utf8Key.of(key));
   }
 
+  /** Independently owned immutable copy of this subtree, re-based to node 0. */
+  @TruffleBoundary
+  public JsonSnapshot snapshot() {
+    return owner.snapshot(node);
+  }
+
+  /** Key of the i-th member in source order. */
+  public JsonValue keyAt(long index) {
+    if (kind() != Kind.OBJECT) throw new IllegalStateException("Not a JSON object");
+    long count = owner.tape.length(node);
+    if (index < 0 || index >= count) throw new IndexOutOfBoundsException("JSON member index");
+    long key = owner.tape.first(node);
+    for (long i = 0; i < index; ++i) key = owner.tape.next(key + 1);
+    return new JsonValue(owner, key);
+  }
+
+  /** Value of the i-th member in source order. */
+  public JsonValue memberAt(long index) {
+    JsonValue key = keyAt(index);
+    return new JsonValue(owner, key.node + 1);
+  }
+
   /** Sequential traversal of child subtrees; a future array index will accelerate random access. */
   public JsonValue element(long index) {
     if (kind() != Kind.ARRAY) throw new IllegalStateException("Not a JSON array");
