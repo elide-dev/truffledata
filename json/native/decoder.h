@@ -1,6 +1,7 @@
 #ifndef TRUFFLEDATA_JSON_DECODER_H
 #define TRUFFLEDATA_JSON_DECODER_H
 #include "json/native/index_memory.h"
+#include "json/native/parser_pool.h"
 #include <myna/values.hpp>
 #include <simdjson.h>
 #include <unordered_set>
@@ -35,18 +36,19 @@ inline bool number(std::string_view s) {
   return i == s.size();
 }
 
-// Compatibility implementation. The input and parser are retained together:
-// decoded strings may point into parser scratch, never assumed input-backed.
+// The input is retained; the parser is pooled and released before construction
+// completes. Unescaped text references the retained input; escaped text is
+// copied into message-owned storage, so parser scratch never outlives the lease.
 // One instance is immutable after construction and must not be reused to parse.
 class document final {
   simdjson::padded_string input_;
-  simdjson::ondemand::parser parser_;
   index_memory memory_;
   myna::value_builder builder_;
   uint32_t input_region_;
   uint64_t count_ = 0;
   myna::value_limits limits_;
   std::pmr::vector<std::string_view> lexical_;
+  size_t parser_capacity_ = 0;
 
   void lexical(std::string_view raw = {}) {
     if (count_ >= limits_.nodes) throw std::length_error("JSON node limit");
@@ -54,12 +56,14 @@ class document final {
     lexical_.push_back(trim(raw));
   }
   void text(std::string_view decoded, std::string_view raw) {
+    raw = trim(raw);
     lexical(raw);
     if (decoded.size() <= 16) builder_.string(decoded);
-    else {
-      auto region = builder_.region(decoded);
-      builder_.string_ref(region, 0, static_cast<uint32_t>(decoded.size()));
-    }
+    else if (raw.size() == decoded.size() + 2 && raw.find('\\') == std::string_view::npos)
+      builder_.string_ref(input_region_,
+          static_cast<uint32_t>(raw.data() + 1 - input_.data()),
+          static_cast<uint32_t>(decoded.size()));
+    else builder_.string(decoded);
   }
   template<class Value> void visit(Value& value, uint32_t depth) {
     if (depth > limits_.depth) throw std::length_error("JSON depth limit");
@@ -126,12 +130,15 @@ public:
         input_region_(builder_.region(std::string_view(input_.data(), input_.size()))),
         limits_(limits), lexical_(&memory_) {
     if (!input_.data()) throw std::bad_alloc();
-    auto root = parser_.iterate(input_).value();
+    parser_lease lease = parser_pool::acquire();
+    auto& parser = lease.get();
+    auto root = parser.iterate(input_).value();
     visit(root, 0);
     // Numeric tokens are checked lexically, not through a lossy numeric getter.
     // raw_json consumes scalar roots; at_end rejects a second root/trailing tokens.
     if (root.is_scalar().value()) (void)root.raw_json().value();
     if (!root.at_end()) throw std::invalid_argument("trailing JSON input");
+    parser_capacity_ = parser.capacity();
     (void)builder_.view();
   }
   document(const document&) = delete;
@@ -140,7 +147,7 @@ public:
   const std::pmr::vector<std::string_view>& lexical_tokens() const { return lexical_; }
   allocation_stats allocations() const {
     return {input_.size(), input_.size() + simdjson::SIMDJSON_PADDING,
-            memory_.current(), memory_.peak(), memory_.allocations(), parser_.capacity()};
+            memory_.current(), memory_.peak(), memory_.allocations(), parser_capacity_};
   }
 private:
   static std::string_view checked(std::string_view input, storage_limits storage) {

@@ -1,4 +1,6 @@
 #include "json/native/decoder.h"
+#include "json/native/parser_pool.h"
+#include <vector>
 #include <iostream>
 #include <stdexcept>
 using truffledata::json::document;
@@ -76,7 +78,29 @@ void allocation_checks() {
   require(rejected && memory.live == 0);
 }
 
+void retained_text_checks() {
+  using truffledata::json::parser_lease;
+  using truffledata::json::parser_pool;
+  // 14 escaped CJK characters: 42 decoded bytes, forcing region (non-inline) storage.
+  document a(R"({"s":"\u4e2d\u4e2d\u4e2d\u4e2d\u4e2d\u4e2d\u4e2d\u4e2d\u4e2d\u4e2d\u4e2d\u4e2d\u4e2d\u4e2d"})");
+  const std::string first = text(a.view(), 2);
+  require(first.size() == 42);
+  document b(R"({"s":"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"})");
+  require(text(a.view(), 2) == first);
+  // Unescaped long strings borrow the retained input region (region 1), skipping `["`.
+  document plain(R"(["abcdefghijklmnopqrstuvwxyz0123456789"])");
+  const auto& node = plain.view().nodes[1];
+  require((node.tag & MYNA_VALUE_REGION_TEXT) != 0);
+  require((node.payload >> 32) == 1 && uint32_t(node.payload) == 2);
+  require(text(plain.view(), 1) == "abcdefghijklmnopqrstuvwxyz0123456789");
+  // Documents do not retain parsers: the pool caps retained parsers at 8.
+  { std::vector<parser_lease> leases; for (int i = 0; i < 10; ++i) leases.push_back(parser_pool::acquire()); }
+  require(parser_pool::retained() <= 8);
+  require(parser_pool::retained() >= 1);
+}
+
 int main() {
+  retained_text_checks();
   allocation_checks();
   for (auto source : {"null", "true", "false", "0", "-0", "1e999999999999999999999999", "[]", "{}", "\"hi\"", "[1,2,3]", "{\"a\":null,\"b\":[true,\"x\"]}"}) {
     try { document parsed(source); require(parsed.view().node_count > 0); }
