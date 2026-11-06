@@ -1,0 +1,26 @@
+module truffledata_csv abi=1 target=x86_64-unknown-linux-gnu java_package=dev.elide.truffledata.csv.kernel.generated java_class=CsvNative c_library=truffledata_csv c_library_static=true
+import fingerprint symbol=td_csv_fingerprint return=ptr<u8> error=no_failure native_leaf=true@explicit_contract
+end
+import kernel symbol=td_csv_kernel return=i32 error=no_failure native_leaf=true@explicit_contract
+  param requested type=i32
+end
+import index symbol=td_csv_index return=i64 error=no_failure native_leaf=false@explicit_contract
+  param data type=ptr<u8> nullable=false ownership=borrowed access=read
+  param length type=u64
+  param out type=ptr<i32> nullable=false ownership=borrowed access=write
+  param format type=i32
+  param kernel type=i32
+  param carry type=i64
+end
+import index_leaf symbol=td_csv_index_leaf return=i64 error=no_failure native_leaf=true@explicit_contract
+  param data type=ptr<u8> nullable=false ownership=borrowed access=read
+  param length type=u64
+  param out type=ptr<i32> nullable=false ownership=borrowed access=write
+  param format type=i32
+  param kernel type=i32
+  param carry type=i64
+end
+import validate_utf8 symbol=td_csv_validate_utf8 return=i64 error=no_failure native_leaf=false@explicit_contract
+  param data type=ptr<u8> nullable=false ownership=borrowed access=read
+  param length type=u64
+end

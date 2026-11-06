@@ -1,0 +1,29 @@
+load("@rules_java//java:defs.bzl", "java_test")
+
+# Kernel differential tests. The test lives in package dev.elide.truffledata.csv so it can run the
+# strict CsvScanner and Utf8 as oracles; it adds no production code to that package.
+java_test(
+    name = "jvm",
+    size = "large",
+    srcs = ["KernelDifferentialTest.java"],
+    args = [
+        "--class",
+        "dev.elide.truffledata.csv.KernelDifferentialTest",
+    ],
+    data = ["//csv/native:csv_shared.so"],
+    jvm_flags = [
+        "--add-modules=jdk.incubator.vector",
+        "--enable-native-access=ALL-UNNAMED",
+        "-ea",
+    ],
+    main_class = "dev.elide.bazel.junit.BazelJUnitRunner",
+    use_testrunner = False,
+    runtime_deps = ["//bazel/junit:runner"],
+    deps = [
+        "//csv",
+        "//csv/kernel",
+        "//csv/kernel:jvm",
+        "//csv/kernel:vector",
+        "@maven//:org_junit_jupiter_junit_jupiter_api",
+    ],
+)
