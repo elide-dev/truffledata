@@ -123,6 +123,22 @@ Use facade-specific profiles instead of silently inheriting permissive parser de
 5. JEP 540 facade: durable values and differential conformance against the pinned JDK implementation, including generation.
 6. Jackson, then JSON-P; add Gson where consumer demand justifies it.
 
+### Delivery status (branch `feat/json-completion`)
+
+Steps 2–4 are delivered, executed through `docs/superpowers/plans/2026-11-06-json-completion.md`; every ruling is recorded in its ledger.
+
+| Step | Status | Commits |
+| --- | --- | --- |
+| 1. Myna foundation | Delivered upstream; now pinned to the Myna 0.9.0 release source | `82bc9a9` |
+| 2. Compatibility spike | Delivered: message-owned text and pooled parsers, lexical spans and number classification (ABI 4), adopted padded input | `d4a087e`, `ef737e5`, `74b7ed8` |
+| 3. Arbitrary JSON backend | Delivered: owners and assumptions, JVM FFM backend, snapshots, array index, compiled read gates, `InteropLibrary` exports, `JsonSink` export, allocation-free compiled interop/export/snapshot reads | `82d47bb`, `e6ae353`, `e496f75`, `f279a3d`, `eb79330`, `3992b10`, `83ca60f`, `6dcf286`, `500f983` |
+| 4. Known-schema backend | Delivered: `JsonPlan`/`JsonRecord`/`JsonAccess`, nested and repeated records natively and in Java, typed plans on SVM and JVM | `c6e7abc`, `c6bd959`, `7427b0c`, `3e2367b` |
+| Evidence and release | Generic comparison cells against Gson, coverage and policy inventories, `truffledata-json`, `-json-bindings` and `-json-jvm` artifacts | `c1de21c`, `a326d83`, `fb55da3` |
+| 5. JEP 540 facade | Planned (follow-on) | — |
+| 6. Jackson, JSON-P, Gson | Planned (follow-on) | — |
+
+Measured performance and the next architecture (sessions, streaming, large documents, faster reads) are in `benchmarks/results/json-generic-c6e7abc/`, `benchmarks/results/json-perf-probe-861dff1/` and `docs/superpowers/plans/2026-11-06-json-performance.md`.
+
 Pin simdjson and Myna in Bazel with checksums and explicit native C++ runtime dependencies. Use the existing native/Java fallback selection conventions; malformed input or ABI mismatch never triggers silent backend fallback. Publish bindings and native artifacts together. Do not claim JEP compliance until the target revision's contract corpus passes.
 
 ## Verification and performance
