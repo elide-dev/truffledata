@@ -20,6 +20,10 @@ public abstract sealed class JsonOwner permits JsonMessage, JsonSnapshot {
   // Null means unconfined (immutable snapshot). Final fields keep every check inlinable.
   private final @Nullable Thread thread;
   private boolean open = true;
+  // Exports in progress on the owning thread; close is refused while a walk reads the tape.
+  private int pins;
+  // Reused by the outermost export on the owning thread; nested and unconfined exports allocate.
+  private long @Nullable [] exportStack;
 
   JsonOwner(ValueTape tape, @Nullable Thread thread) {
     this.tape = tape;
@@ -45,9 +49,34 @@ public abstract sealed class JsonOwner permits JsonMessage, JsonSnapshot {
     return source.nodeInt(node * ValueTape.NODE_SIZE) & ValueTape.KIND_MASK;
   }
 
+  /** Holds a confined owner open for an export; immutable owners never close and are not counted. */
+  final void pin() {
+    check();
+    if (thread != null) pins++;
+  }
+
+  /** Container stack for an export that already holds a pin. */
+  final long[] exportStack() {
+    if (thread == null || pins != 1) return new long[JsonExportNode.MAX_DEPTH];
+    long[] stack = exportStack;
+    if (stack == null) exportStack = stack = new long[JsonExportNode.MAX_DEPTH];
+    return stack;
+  }
+
+  final void unpin() {
+    if (thread != null) pins--;
+  }
+
+  /** Single-pass export of the whole document; see {@link JsonSink}. */
+  @TruffleBoundary
+  public final void export(JsonSink sink) {
+    JsonExportNode.walk(this, 0, sink);
+  }
+
   /** Marks the owner closed; returns false when it already was. */
   final boolean markClosed() {
     checkThread();
+    if (pins != 0) throw new IllegalStateException("JSON message is being exported");
     if (!open) return false;
     open = false;
     return true;

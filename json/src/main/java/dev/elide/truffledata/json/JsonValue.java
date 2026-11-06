@@ -112,7 +112,21 @@ public final class JsonValue implements TruffleObject {
     return member(ValueTape.Utf8Key.of(key));
   }
 
-  /** Independently owned immutable copy of this subtree, re-based to node 0. */
+  /** Single-pass export of this subtree; see {@link JsonSink} and {@link JsonExportNode}. */
+  @TruffleBoundary
+  public void export(JsonSink sink) {
+    JsonExportNode.walk(owner, node, sink);
+  }
+
+  JsonOwner owner() {
+    return owner;
+  }
+
+  long node() {
+    return node;
+  }
+
+    /** Independently owned immutable copy of this subtree, re-based to node 0. */
   @TruffleBoundary
   public JsonSnapshot snapshot() {
     return owner.snapshot(node);

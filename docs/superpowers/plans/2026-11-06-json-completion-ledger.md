@@ -24,6 +24,10 @@ Task 9: Ruling: interop number exports keep the I64/F64 fast paths inline and ro
 Task 9: Ruling: member names with unpaired surrogates match nothing (previously getBytes encoded them lossily as "?", matching a real "?" key) — cost if wrong: none; strict JSON keys are valid UTF-8.
 Task 9: Fixed WIP test bugs: InteropReads checksum is 2002000000 (b is false), and the SvmAcceptance asLong-on-object check now fails if no exception is thrown.
 Task 9: complete (tests: bazel test //json/tests:jvm //json/tests:native_test → INFO: Streaming build results to: https://app.buildbuddy.io/invocation/ — see commit)
+Task 10: Ruling: JsonExportNode.execute takes (JsonValue, JsonSink) instead of (JsonOwner, long, JsonSink) — owner and node are package-private, so the planned signature was unusable outside the package — cost if wrong: one overload.
+Task 10: Ruling: an export pins its owner and close() throws while pinned — a sink is arbitrary embedder code and closing mid-walk would free the native tape under the loop — cost if wrong: an embedder must defer close to after export.
+Task 10: Ruling: the outermost export on a confined owner reuses an owner-held container stack (129 slots: root plus the decoder's 128 levels); nested and snapshot exports allocate one — the compiled export gate requires zero walk allocation (measured 3.2E-5 B/export) — cost if wrong: ~1 KiB retained per exported message.
+Task 10: complete (tests: bazel test //json/tests:jvm (27 tests) //json/tests:native_test)
 ## Hand-off state (written 2026-11-06 11:05 PST, branch feat/json-completion)
 
 Tasks 1–8 are complete and committed (see lines above; `git log main..feat/json-completion`).

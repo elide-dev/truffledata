@@ -74,12 +74,15 @@ java_test(
     name = "jvm",
     srcs = [
         "FfmAcceptanceTest.java",
+        "JsonExportTest.java",
         "JsonInteropTest.java",
         "JvmScopedTest.java",
     ],
     args = [
         "--class",
         "dev.elide.truffledata.json.tests.FfmAcceptanceTest",
+        "--class",
+        "dev.elide.truffledata.json.tests.JsonExportTest",
         "--class",
         "dev.elide.truffledata.json.tests.JsonInteropTest",
         "--class",
@@ -102,6 +105,7 @@ java_test(
         "//json",
         "//json:bindings",
         "//json:jvm",
+        "@maven//:com_google_code_gson_gson",
         "@maven//:org_graalvm_polyglot_polyglot",
         "@maven//:org_graalvm_truffle_truffle_api",
         "@maven//:org_junit_jupiter_junit_jupiter_api",

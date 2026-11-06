@@ -168,6 +168,7 @@ final class CompiledReads {
     }
     check(second.root().member("n").longValue() == 2000, "Sibling message survives close");
     interop(second);
+    export(second);
     second.close();
   }
 
@@ -188,6 +189,94 @@ final class CompiledReads {
     double bytes = (bean.getThreadAllocatedBytes(thread) - before) / 1000000.0;
     check(bytes >= 0 && bytes <= 0.05, "Interop JSON compiled bytes/read budget: " + bytes);
     System.out.println("JSON interop compiled=true bytes/read=" + bytes);
+  }
+
+  /** Single-pass export into a constant, non-materializing sink: the walk itself must not allocate. */
+  private static void export(dev.elide.truffledata.json.JsonMessage message) {
+    var root = new ExportReads(message.root());
+    var target = root.getCallTarget();
+    for (int i = 0; i < 200 && !root.compiled; i++) target.call(100000);
+    check(root.compiled, "Export JSON loop must execute compiled code");
+    // {"n":2000,"d":2.5,"b":false}: 2000 + 2 + 0 values, 3 keys at 1000 each, one object at 1.
+    check(((Long) target.call(1000000)) == 5003000000L, "Export JSON compiled checksum");
+    check(NodeUtil.countNodes(root) <= 192, "Export JSON AST budget");
+    var bean =
+        (com.sun.management.ThreadMXBean) java.lang.management.ManagementFactory.getThreadMXBean();
+    bean.setThreadAllocatedMemoryEnabled(true);
+    long thread = Thread.currentThread().threadId();
+    long before = bean.getThreadAllocatedBytes(thread);
+    target.call(1000000);
+    double bytes = (bean.getThreadAllocatedBytes(thread) - before) / 1000000.0;
+    check(bytes >= 0 && bytes <= 0.05, "Export JSON compiled bytes/export budget: " + bytes);
+    System.out.println("JSON export compiled=true bytes/export=" + bytes + " depth=" + root.export.maxDepthSeen());
+    check(root.export.maxDepthSeen() == 1, "Export JSON stack depth");
+  }
+
+  private static final class SummingSink implements dev.elide.truffledata.json.JsonSink {
+    long sum;
+
+    public void beginObject(long members) {
+      sum += 1;
+    }
+
+    public void key(dev.elide.truffledata.json.JsonValue key) {
+      sum += 1000;
+    }
+
+    public void beginArray(long elements) {
+      sum += 1;
+    }
+
+    public void end() {}
+
+    public void nullValue() {}
+
+    public void booleanValue(boolean value) {
+      sum += value ? 1 : 0;
+    }
+
+    public void longValue(long value) {
+      sum += value;
+    }
+
+    public void doubleValue(double value) {
+      sum += (long) value;
+    }
+
+    public void unsignedValue(long bits) {
+      sum += bits;
+    }
+
+    public void decimalValue(dev.elide.truffledata.json.JsonValue token) {
+      sum += 7;
+    }
+
+    public void stringValue(dev.elide.truffledata.json.JsonValue text) {
+      sum += 11;
+    }
+  }
+
+  private static final class ExportReads extends RootNode {
+    private final dev.elide.truffledata.json.JsonValue value;
+    private final SummingSink sink = new SummingSink();
+    @Child dev.elide.truffledata.json.JsonExportNode export =
+        dev.elide.truffledata.json.JsonExportNode.create();
+    boolean compiled;
+
+    ExportReads(dev.elide.truffledata.json.JsonValue value) {
+      super(TestLanguage.current());
+      this.value = value;
+    }
+
+    @Override
+    public Object execute(VirtualFrame frame) {
+      int count = (Integer) frame.getArguments()[0];
+      sink.sum = 0;
+      for (int i = 0; i < count; i++) export.execute(value, sink);
+      if (CompilerDirectives.inInterpreter()) LoopNode.reportLoopCount(this, count);
+      compiled |= CompilerDirectives.inCompiledCode();
+      return sink.sum;
+    }
   }
 
   private static final class InteropReads extends RootNode {
