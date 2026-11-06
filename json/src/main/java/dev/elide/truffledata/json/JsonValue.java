@@ -6,10 +6,10 @@ import java.util.NoSuchElementException;
 
 /** Reusable scoped index view. Every operation checks its message before touching native memory. */
 public final class JsonValue {
-  private final JsonMessage owner;
+  private final JsonOwner owner;
   private final long node;
 
-  JsonValue(JsonMessage owner, long node) {
+  JsonValue(JsonOwner owner, long node) {
     this.owner = owner;
     this.node = node;
   }
@@ -50,8 +50,17 @@ public final class JsonValue {
   /** Exact lexical token; no bounded decimal or floating-point conversion. */
   @TruffleBoundary
   public String numberText() {
-    owner.check();
-    return owner.tape.numberText(node);
+    if (kind() != Kind.NUMBER) throw new IllegalStateException("Not a JSON number");
+    return owner.lexicalText(node);
+  }
+
+  /** Source spelling of a string, key or number, including quotes and escapes. */
+  @TruffleBoundary
+  public String rawText() {
+    Kind kind = kind();
+    if (kind != Kind.NUMBER && kind != Kind.STRING)
+      throw new IllegalStateException("JSON containers, booleans and null have no raw text");
+    return owner.lexicalText(node);
   }
 
   public long size() {

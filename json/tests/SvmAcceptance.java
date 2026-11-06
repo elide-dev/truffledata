@@ -77,8 +77,23 @@ public final class SvmAcceptance {
     other.join();
     require(rejected.get() == 2);
     require(child.stringValue().equals("retained child"));
+    require(child.rawText().equals("\"retained child\""));
+    require(root.member("n").rawText().equals("1e9999999999999999"));
+    try {
+      root.member("a").rawText();
+      throw new AssertionError("container raw text");
+    } catch (IllegalStateException expected) {
+    }
+    var assumption = message.assumption();
+    require(assumption.isValid());
     message.close();
     message.close();
+    require(!assumption.isValid());
+    try {
+      child.kind();
+      throw new AssertionError("closed child kind readable");
+    } catch (IllegalStateException expected) {
+    }
     try {
       child.stringValue();
       throw new AssertionError("closed child readable");

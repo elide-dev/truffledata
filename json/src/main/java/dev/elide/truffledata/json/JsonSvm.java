@@ -81,7 +81,31 @@ public final class JsonSvm {
         throw new IllegalStateException("Unsupported Myna value ABI");
       NativeValueTape tape = new NativeValueTape(descriptor);
       long address = result.rawValue();
-      return new JsonMessage(tape, () -> release(address));
+      Pointer spans = (Pointer) Json.JsonResult.lexical(result);
+      long spanCount = Json.JsonResult.lexical_count(result);
+      if (spanCount != tape.nodeCount() || (spanCount > 0 && spans.isNull()))
+        throw new IllegalStateException("JSON lexical table mismatch");
+      // Region table entry 0 (region 1) is the retained input: {data, length}.
+      Pointer regions = (Pointer) descriptor.readWord(40);
+      if (regions.isNull() || descriptor.readLong(48) < 1)
+        throw new IllegalStateException("JSON input region missing");
+      Pointer inputData = regions.readWord(0);
+      long inputLength = regions.readLong(8);
+      JsonMessage.Lexical lexical =
+          new JsonMessage.Lexical() {
+            @Override
+            public long span(long node) {
+              return spans.readLong(WordFactory.signed(node * 8));
+            }
+
+            @Override
+            public byte inputByte(long offset) {
+              if (offset < 0 || offset >= inputLength)
+                throw new IndexOutOfBoundsException("JSON lexical offset");
+              return inputData.readByte(WordFactory.signed(offset));
+            }
+          };
+      return new JsonMessage(tape, lexical, () -> release(address));
     } catch (RuntimeException | Error failure) {
       release(result.rawValue());
       throw failure;
