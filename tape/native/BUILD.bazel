@@ -1,0 +1,28 @@
+load("@rules_cc//cc:defs.bzl", "cc_library", "cc_test")
+
+# Format-neutral native tape layer shared by the JSON and YAML producers: the block arena, index
+# accounting, the presized Myna tape writer, the key-hash side table with its duplicate table and
+# the per-document UTF-16/Latin-1 text arena.
+cc_library(
+    name = "tape",
+    hdrs = [
+        "arena.h",
+        "index_memory.h",
+        "key_table.h",
+        "tape_writer.h",
+        "text_arena.h",
+    ],
+    copts = ["-std=c++17"],
+    visibility = ["//visibility:public"],
+    deps = [
+        "//bazel:unicode",
+        "@myna//:values_headers",
+    ],
+)
+
+cc_test(
+    name = "tape_test",
+    srcs = ["tape_test.cc"],
+    copts = ["-std=c++17"],
+    deps = [":tape"],
+)

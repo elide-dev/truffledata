@@ -1,0 +1,46 @@
+load("//bazel:java.bzl", "data_java_library")
+
+data_java_library(
+    name = "csv",
+    srcs = [
+        "src/main/java/dev/elide/truffledata/csv/BatchBuilder.java",
+        "src/main/java/dev/elide/truffledata/csv/Column.java",
+        "src/main/java/dev/elide/truffledata/csv/CommonsScanner.java",
+        "src/main/java/dev/elide/truffledata/csv/Csv.java",
+        "src/main/java/dev/elide/truffledata/csv/CsvBatch.java",
+        "src/main/java/dev/elide/truffledata/csv/CsvFormat.java",
+        "src/main/java/dev/elide/truffledata/csv/CsvIndexing.java",
+        "src/main/java/dev/elide/truffledata/csv/CsvKernel.java",
+        "src/main/java/dev/elide/truffledata/csv/CsvLimits.java",
+        "src/main/java/dev/elide/truffledata/csv/CsvMapping.java",
+        "src/main/java/dev/elide/truffledata/csv/CsvPlan.java",
+        "src/main/java/dev/elide/truffledata/csv/CsvReader.java",
+        "src/main/java/dev/elide/truffledata/csv/CsvRow.java",
+        "src/main/java/dev/elide/truffledata/csv/CsvScanner.java",
+        "src/main/java/dev/elide/truffledata/csv/CsvSink.java",
+        "src/main/java/dev/elide/truffledata/csv/CsvText.java",
+        "src/main/java/dev/elide/truffledata/csv/CsvWriter.java",
+        "src/main/java/dev/elide/truffledata/csv/Dialect.java",
+        "src/main/java/dev/elide/truffledata/csv/IndexScan.java",
+        "src/main/java/dev/elide/truffledata/csv/Nulls.java",
+        "src/main/java/dev/elide/truffledata/csv/Numbers.java",
+        "src/main/java/dev/elide/truffledata/csv/Utf8.java",
+        "src/main/java/dev/elide/truffledata/csv/package-info.java",
+        "src/main/java/dev/elide/truffledata/csv/kernel/BlockStep.java",
+        "src/main/java/dev/elide/truffledata/csv/kernel/CsvIndex.java",
+        "src/main/java/dev/elide/truffledata/csv/kernel/CsvIndexer.java",
+        "src/main/java/dev/elide/truffledata/csv/kernel/SwarIndexer.java",
+        "src/main/java/dev/elide/truffledata/csv/kernel/package-info.java",
+    ],
+    visibility = ["//visibility:public"],
+    deps = [
+        "//core",
+        "@maven//:org_graalvm_truffle_truffle_api",
+    ],
+)
+
+filegroup(
+    name = "sources",
+    srcs = glob(["src/main/java/**/*.java"]),
+    visibility = ["//tests:__pkg__"],
+)

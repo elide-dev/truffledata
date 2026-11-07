@@ -1,0 +1,168 @@
+load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_library", "cc_test")
+
+# CSV structural indexer (simdjson stage-1 style) and its Myna seam. Not a dependency of //csv:
+# the scanner seam adopts it in a later step (csv/native/README.md).
+
+config_setting(
+    name = "linux_arm64",
+    constraint_values = [
+        "@platforms//os:linux",
+        "@platforms//cpu:aarch64",
+    ],
+)
+
+config_setting(
+    name = "x86_64",
+    constraint_values = ["@platforms//cpu:x86_64"],
+)
+
+COPTS = [
+    "-std=c++17",
+    "-O3",
+]
+
+AVX2 = [
+    "-mavx2",
+    "-mpclmul",
+    "-mbmi",
+    "-mbmi2",
+    "-mpopcnt",
+    "-mlzcnt",
+]
+
+# Each instruction set compiles in its own translation unit; dispatch.cc picks one at run time.
+cc_library(
+    name = "avx2",
+    srcs = ["index_avx2.cc"],
+    hdrs = [
+        "index.h",
+        "stage.h",
+    ],
+    copts = COPTS + select({
+        ":x86_64": AVX2,
+        "//conditions:default": [],
+    }),
+)
+
+cc_library(
+    name = "avx512",
+    srcs = ["index_avx512.cc"],
+    hdrs = [
+        "index.h",
+        "stage.h",
+    ],
+    copts = COPTS + select({
+        ":x86_64": AVX2 + [
+            "-mavx512f",
+            "-mavx512bw",
+        ],
+        "//conditions:default": [],
+    }),
+)
+
+cc_library(
+    name = "index",
+    srcs = [
+        "dispatch.cc",
+        "index_neon.cc",
+        "index_swar.cc",
+    ],
+    hdrs = [
+        "index.h",
+        "stage.h",
+        "utf8.h",
+    ],
+    copts = COPTS,
+    visibility = ["//benchmarks/comparison:__pkg__"],
+    deps = [
+        ":avx2",
+        ":avx512",
+    ],
+)
+
+genrule(
+    name = "bindings",
+    srcs = ["csv.seam"],
+    outs = [
+        "generated/CsvNativeFFM.java",
+        "generated/CsvNative.java",
+        "generated/CsvNativeForeignFeature.java",
+        "generated/seam.rs",
+        "generated/seam.h",
+        "generated/seam.json",
+        "generated/seam.abi",
+        "generated/seam.ll",
+        "generated/META-INF/native-image/dev.elide.myna/dev.elide.truffledata.csv.kernel.generated.CsvNative/native-image.properties",
+    ],
+    cmd = "$(location @myna//:generator) generate $(location csv.seam) --out $(RULEDIR)/generated --target " + select({
+        "@platforms//os:macos": "aarch64-apple-darwin",
+        ":linux_arm64": "aarch64-unknown-linux-gnu",
+        "//conditions:default": "x86_64-unknown-linux-gnu",
+    }),
+    tools = ["@myna//:generator"],
+)
+
+cc_library(
+    name = "truffledata_csv",
+    srcs = ["api.cc"],
+    hdrs = [
+        "api.h",
+        "generated/seam.h",
+    ],
+    copts = COPTS,
+    linkopts = select({
+        "@platforms//os:macos": ["-lc++"],
+        "//conditions:default": [
+            "-lc++",
+            "-lc++abi",
+        ],
+    }),
+    visibility = ["//visibility:public"],
+    deps = [
+        ":index",
+        "//bazel:unicode",
+    ],
+)
+
+cc_binary(
+    name = "csv_shared.so",
+    srcs = ["api.cc"],
+    copts = COPTS,
+    linkshared = True,
+    linkstatic = True,
+    visibility = ["//visibility:public"],
+    deps = [":truffledata_csv"],
+)
+
+filegroup(
+    name = "java_bindings",
+    srcs = [
+        "generated/CsvNative.java",
+        "generated/CsvNativeFFM.java",
+    ],
+    visibility = ["//visibility:public"],
+)
+
+filegroup(
+    name = "native_resources",
+    srcs = ["generated/META-INF/native-image/dev.elide.myna/dev.elide.truffledata.csv.kernel.generated.CsvNative/native-image.properties"],
+    visibility = ["//visibility:public"],
+)
+
+# Differential kernel tests: every kernel against the scalar oracle on a randomized corpus,
+# with calls cut at every offset and every capacity class.
+cc_test(
+    name = "index_test",
+    size = "medium",
+    srcs = ["index_test.cc"],
+    copts = COPTS,
+    deps = [":index"],
+)
+
+# The C ABI: argument validation, packed results, kernel selection and strict UTF-8 offsets.
+cc_test(
+    name = "api_test",
+    srcs = ["api_test.cc"],
+    copts = COPTS,
+    deps = [":truffledata_csv"],
+)

@@ -1,0 +1,1018 @@
+diff --git a/.github/workflows/benchmarks.yml b/.github/workflows/benchmarks.yml
+index 9d12f58..5a71bb9 100644
+--- a/.github/workflows/benchmarks.yml
++++ b/.github/workflows/benchmarks.yml
+@@ -52,7 +52,7 @@ jobs:
+           disable_search: true
+           flags: native-jit
+           fail_ci_if_error: true
+-      - name: Measure all 20 cases
++      - name: Measure all 24 cases
+         uses: CodSpeedHQ/action@373d6868929f444bc08d901fd0eb0ad52a8875ea # v5.2.1; shared with Komodo
+         with:
+           mode: simulation
+diff --git a/benchmarks/BUILD.bazel b/benchmarks/BUILD.bazel
+index 8e372a2..5c754f3 100644
+--- a/benchmarks/BUILD.bazel
++++ b/benchmarks/BUILD.bazel
+@@ -20,10 +20,13 @@ data_java_library(
+     ],
+     plugins = ["//bazel:jmh_processor"],
+     deps = [
++        "//benchmarks/comparison:json_fixture",
+         "//benchmarks/fixtures:contracts",
+         "//core",
+         "//jdbc",
++        "//json",
+         "//protobuf",
++        "@maven//:com_google_code_gson_gson",
+         "@maven//:com_google_protobuf_protobuf_java",
+         "@maven//:org_graalvm_polyglot_polyglot",
+         "@maven//:org_graalvm_sdk_nativeimage",
+@@ -105,7 +108,10 @@ genrule(
+ 
+ native_image(
+     name = "native",
+-    cc_deps = ["//benchmarks/native:hooks"],
++    cc_deps = [
++        "//benchmarks/native:hooks",
++        "//json/native:truffledata_json",
++    ],
+     data = [
+         "proxy-config.json",
+         ":protobuf_reflection",
+diff --git a/benchmarks/cases.json b/benchmarks/cases.json
+index 1c3cf64..30d0114 100644
+--- a/benchmarks/cases.json
++++ b/benchmarks/cases.json
+@@ -98,5 +98,25 @@
+     "name": "postgres-fixture-static",
+     "checksum": 32640,
+     "description": "Signed int32 JDBC contract with static retained rows"
++  },
++  {
++    "name": "json-generic-gson-tree",
++    "checksum": 649814,
++    "description": "Parse mixed JSON documents into Gson trees and read ten members"
++  },
++  {
++    "name": "json-generic-java-export",
++    "checksum": 649814,
++    "description": "Decode with simdjson, export through JavaSink, read the Java tree and release"
++  },
++  {
++    "name": "json-generic-interop-read",
++    "checksum": 649814,
++    "description": "Decode with simdjson, read ten members through cached interop and release"
++  },
++  {
++    "name": "json-generic-snapshot",
++    "checksum": 649814,
++    "description": "Decode with simdjson, snapshot, release, then read the snapshot through interop"
+   }
+ ]
+diff --git a/benchmarks/comparison/BUILD.bazel b/benchmarks/comparison/BUILD.bazel
+index 960cd66..3ab7755 100644
+--- a/benchmarks/comparison/BUILD.bazel
++++ b/benchmarks/comparison/BUILD.bazel
+@@ -255,6 +255,18 @@ sh_test(
+     ],
+ )
+ 
++# Shared with the CodSpeed simulation cases in //benchmarks, so both measure one fixture.
++data_java_library(
++    name = "json_fixture",
++    srcs = ["JsonFixture.java"],
++    visibility = ["//benchmarks:__pkg__"],
++    deps = [
++        "//json",
++        "@maven//:com_google_code_gson_gson",
++        "@maven//:org_graalvm_truffle_truffle_api",
++    ],
++)
++
+ data_java_library(
+     name = "json_comparison",
+     testonly = True,
+@@ -263,6 +275,7 @@ data_java_library(
+         "JsonComparison.java",
+     ],
+     deps = [
++        ":json_fixture",
+         "//core",
+         "//json",
+         "@maven//:com_google_code_gson_gson",
+diff --git a/benchmarks/comparison/JsonComparison.java b/benchmarks/comparison/JsonComparison.java
+index 09abcd4..1bfb309 100644
+--- a/benchmarks/comparison/JsonComparison.java
++++ b/benchmarks/comparison/JsonComparison.java
+@@ -9,19 +9,32 @@ import com.oracle.truffle.runtime.OptimizedCallTarget;
+ import com.sun.management.ThreadMXBean;
+ import dev.elide.truffledata.Field;
+ import dev.elide.truffledata.Schema;
++import dev.elide.truffledata.json.JavaSink;
+ import dev.elide.truffledata.json.JsonAccess;
++import dev.elide.truffledata.json.JsonExportNode;
++import dev.elide.truffledata.json.JsonMessage;
+ import dev.elide.truffledata.json.JsonPlan;
+ import dev.elide.truffledata.json.JsonRecord;
++import dev.elide.truffledata.json.JsonSnapshot;
++import dev.elide.truffledata.json.JsonSvm;
++import dev.elide.truffledata.json.JsonValue;
+ import java.io.ByteArrayInputStream;
+ import java.io.InputStreamReader;
+ import java.lang.management.ManagementFactory;
+ import java.nio.charset.StandardCharsets;
++import java.util.ArrayList;
+ import java.util.Arrays;
++import java.util.List;
+ import java.util.Locale;
++import java.util.Objects;
+ import org.graalvm.polyglot.Context;
+ import org.jspecify.annotations.NullMarked;
+ 
+-/** SVM scalar JSON fixture, with separate ingestion and retained-read measurements. */
++/**
++ * SVM JSON fixtures, with separate ingestion and retained-read measurements: a three-field scalar
++ * record (typed plans against Gson streaming) and a mixed generic document (index, export, interop
++ * and snapshots against Gson trees).
++ */
+ @NullMarked
+ public final class JsonComparison {
+   private static final int ROWS = 32;
+@@ -74,11 +87,19 @@ public final class JsonComparison {
+     }
+   }
+ 
++  static final List<String> SCALAR =
++      List.of("gson-stream", "simdjson-typed", "simdjson-specialized");
++  static final List<String> GENERIC =
++      List.of("gson-tree", "simdjson-generic-java", "simdjson-generic-interop", "simdjson-snapshot");
++  // Smoke-only: export into a constant non-materializing sink, so the graph holds only the walk.
++  static final String WALK = "simdjson-export-walk";
++  static final List<String> STAGES = List.of("ingest", "read-aot", "interpret", "peak");
++
+   public static void main(String[] args) throws Exception {
+     if (args.length == 1 && args[0].equals("--smoke")) {
+-      for (String engine : new String[] {"gson-stream", "simdjson-typed", "simdjson-specialized"})
+-        for (String stage : new String[] {"ingest", "read-aot", "interpret", "peak"})
+-          run(engine, stage, true, true);
++      for (String engine : SCALAR) for (String stage : STAGES) run(engine, stage, true, true);
++      for (String engine : GENERIC) for (String stage : STAGES) run(engine, stage, true, true);
++      run(WALK, "peak", true, true);
+     } else {
+       if (args.length != 3) throw new IllegalArgumentException("engine stage time|memory");
+       run(args[0], args[1], args[2].equals("memory"), false);
+@@ -87,6 +108,10 @@ public final class JsonComparison {
+ 
+   private static void run(String engine, String stage, boolean memory, boolean smoke)
+       throws Exception {
++    if (GENERIC.contains(engine) || engine.equals(WALK)) {
++      generic(engine, stage, memory, smoke);
++      return;
++    }
+     boolean specialized = engine.equals("simdjson-specialized");
+     boolean nativeEngine = engine.equals("simdjson-typed") || specialized;
+     if (!nativeEngine && !engine.equals("gson-stream"))
+@@ -100,15 +125,7 @@ public final class JsonComparison {
+             Field.requiredLong("n"),
+             new Field("d", Field.Kind.FLOAT64, false, false),
+             new Field("b", Field.Kind.BOOLEAN, false, false));
+-    try (var context =
+-            Context.newBuilder("td-compare")
+-                .allowExperimentalOptions(true)
+-                .option("engine.Compilation", Boolean.toString(peak))
+-                .option("engine.BackgroundCompilation", "false")
+-                .option("engine.CompilationFailureAction", "Throw")
+-                .option("compiler.TreatPerformanceWarningsAsErrors", "all")
+-                .option("compiler.MaximumGraalGraphSize", "10000")
+-                .build();
++    try (var context = context(peak);
+         var plan = JsonPlan.compile(schema)) {
+       context.initialize("td-compare");
+       context.enter();
+@@ -152,66 +169,144 @@ public final class JsonComparison {
+               }
+               return sum;
+             };
+-        ThreadMXBean counter = (ThreadMXBean) ManagementFactory.getThreadMXBean();
+-        if (!counter.isThreadAllocatedMemorySupported())
+-          throw new AssertionError("Allocation counter required");
+-        counter.setThreadAllocatedMemoryEnabled(true);
+-        long thread = Thread.currentThread().threadId();
+-        long calibration = counter.getThreadAllocatedBytes(thread);
+-        retained = new byte[1 << 20];
+-        if (calibration < 0 || counter.getThreadAllocatedBytes(thread) - calibration < 1 << 20)
+-          throw new AssertionError("Allocation calibration");
+-        if (peak) {
+-          for (int attempt = 0; attempt < 8; attempt++) {
+-            measure(operation, 1024, expected);
+-            target.compile(true);
+-            target.waitForCompilation();
+-            measure(operation, 1024, expected);
+-            if (target.isValidLastTier()) break;
+-          }
+-        }
+-        tier(target, peak, rows);
+-        int batch = ingest ? 8 : 128;
+-        long until = System.nanoTime() + (smoke ? 1_000_000 : 100_000_000);
+-        do {
+-          measure(operation, batch, expected);
+-        } while (System.nanoTime() < until);
+-        beforeSamples.run();
+-        double[] samples = new double[3];
+-        for (int s = 0; s < samples.length; s++) {
+-          tier(target, peak, rows);
+-          if (memory) {
+-            long before = counter.getThreadAllocatedBytes(thread);
+-            measure(operation, batch, expected);
+-            samples[s] =
+-                (counter.getThreadAllocatedBytes(thread) - before) / (double) (batch * ROWS);
++        sample("json-scalar", engine, stage, memory, smoke, target, rows, operation, expected);
++      } finally {
++        for (Object row : rows) if (row instanceof JsonRecord record) record.close();
++        context.leave();
++      }
++    }
++  }
++
++  /** Mixed generic documents: decode, export, interop reads and snapshots against Gson trees. */
++  private static void generic(String engine, String stage, boolean memory, boolean smoke)
++      throws Exception {
++    if (!STAGES.contains(stage)) throw new IllegalArgumentException("stage");
++    boolean peak = stage.equals("peak"), ingest = stage.equals("ingest");
++    boolean guest = peak || stage.equals("interpret");
++    int mode = engine.equals(WALK) ? GenericReads.WALK : GENERIC.indexOf(engine);
++    if (mode < 0) throw new IllegalArgumentException("engine");
++    try (var context = context(peak)) {
++      context.initialize("td-compare");
++      context.enter();
++      List<JsonMessage> messages = new ArrayList<>();
++      try {
++        byte[][] inputs = new byte[ROWS][];
++        Object[] rows = new Object[ROWS];
++        long expected = 0;
++        for (int i = 0; i < ROWS; i++) {
++          inputs[i] = JsonFixture.document(i);
++          expected += mode == GenericReads.WALK ? JsonFixture.walkChecksum(i) : JsonFixture.checksum(i);
++          if (mode == GenericReads.GSON) {
++            rows[i] = JsonFixture.gsonParse(inputs[i]);
++          } else if (mode == GenericReads.SNAPSHOT) {
++            try (JsonMessage message = JsonSvm.decode(inputs[i])) {
++              rows[i] = message.snapshot().root();
++            }
+           } else {
+-            long start = System.nanoTime(), elapsed, count = 0;
+-            do {
+-              measure(operation, batch, expected);
+-              count += batch;
+-              elapsed = System.nanoTime() - start;
+-            } while (elapsed < sampleNanos);
+-            samples[s] = elapsed / (double) (count * ROWS);
++            JsonMessage message = JsonSvm.decode(inputs[i]);
++            messages.add(message);
++            rows[i] = message.root();
+           }
+-          tier(target, peak, rows);
+         }
+-        System.out.printf(
+-            Locale.ROOT,
+-            "{\"workload\":\"json-scalar\",\"engine\":\"%s\",\"stage\":\"%s\",\"runtime\":\"svm\",\"guest_compiled\":%s,\"checksum\":%d,\"rows\":32,\"%s\":%s}%n",
+-            engine,
+-            stage,
+-            peak,
+-            expected,
+-            memory ? "allocated_bytes_per_row" : "ns_per_row",
+-            Arrays.toString(samples));
++        var root = new GenericReads(engine, mode);
++        var target = (OptimizedCallTarget) root.getCallTarget();
++        Operation operation =
++            rotation -> {
++              if (!ingest)
++                return guest
++                    ? ((Long) target.call(rows, rotation)) & ~COMPILED_READ
++                    : root.read(rows, rotation);
++              long sum = 0;
++              for (int i = 0; i < ROWS; i++) sum += root.ingest(inputs[(i + rotation) & (ROWS - 1)]);
++              return sum;
++            };
++        sample("json-generic", engine, stage, memory, smoke, target, rows, operation, expected);
+       } finally {
+-        for (Object row : rows) if (row instanceof JsonRecord record) record.close();
++        for (JsonMessage message : messages) message.close();
+         context.leave();
+       }
+     }
+   }
+ 
++  private static Context context(boolean peak) {
++    return Context.newBuilder("td-compare")
++        .allowExperimentalOptions(true)
++        .option("engine.Compilation", Boolean.toString(peak))
++        .option("engine.BackgroundCompilation", "false")
++        .option("engine.CompilationFailureAction", "Throw")
++        .option("compiler.TreatPerformanceWarningsAsErrors", "all")
++        .option("compiler.MaximumGraalGraphSize", "10000")
++        .build();
++  }
++
++  /** Calibrates the allocation counter, reaches the stage's tier, then prints three samples. */
++  private static void sample(
++      String workload,
++      String engine,
++      String stage,
++      boolean memory,
++      boolean smoke,
++      OptimizedCallTarget target,
++      Object[] rows,
++      Operation operation,
++      long expected)
++      throws Exception {
++    boolean peak = stage.equals("peak"), ingest = stage.equals("ingest");
++    ThreadMXBean counter = (ThreadMXBean) ManagementFactory.getThreadMXBean();
++    if (!counter.isThreadAllocatedMemorySupported())
++      throw new AssertionError("Allocation counter required");
++    counter.setThreadAllocatedMemoryEnabled(true);
++    long thread = Thread.currentThread().threadId();
++    long calibration = counter.getThreadAllocatedBytes(thread);
++    retained = new byte[1 << 20];
++    if (calibration < 0 || counter.getThreadAllocatedBytes(thread) - calibration < 1 << 20)
++      throw new AssertionError("Allocation calibration");
++    if (peak) {
++      for (int attempt = 0; attempt < 8; attempt++) {
++        measure(operation, 1024, expected);
++        target.compile(true);
++        target.waitForCompilation();
++        measure(operation, 1024, expected);
++        if (target.isValidLastTier()) break;
++      }
++    }
++    tier(target, peak, rows);
++    int batch = ingest ? 8 : 128;
++    long until = System.nanoTime() + (smoke ? 1_000_000 : 100_000_000);
++    do {
++      measure(operation, batch, expected);
++    } while (System.nanoTime() < until);
++    beforeSamples.run();
++    double[] samples = new double[3];
++    for (int s = 0; s < samples.length; s++) {
++      tier(target, peak, rows);
++      if (memory) {
++        long before = counter.getThreadAllocatedBytes(thread);
++        measure(operation, batch, expected);
++        samples[s] = (counter.getThreadAllocatedBytes(thread) - before) / (double) (batch * ROWS);
++      } else {
++        long start = System.nanoTime(), elapsed, count = 0;
++        do {
++          measure(operation, batch, expected);
++          count += batch;
++          elapsed = System.nanoTime() - start;
++        } while (elapsed < sampleNanos);
++        samples[s] = elapsed / (double) (count * ROWS);
++      }
++      tier(target, peak, rows);
++    }
++    System.out.printf(
++        Locale.ROOT,
++        "{\"workload\":\"%s\",\"engine\":\"%s\",\"stage\":\"%s\",\"runtime\":\"svm\",\"guest_compiled\":%s,\"checksum\":%d,\"rows\":32,\"%s\":%s}%n",
++        workload,
++        engine,
++        stage,
++        peak,
++        expected,
++        memory ? "allocated_bytes_per_row" : "ns_per_row",
++        Arrays.toString(samples));
++  }
++
+   private interface Operation {
+     long run(int rotation) throws Exception;
+   }
+@@ -273,4 +368,106 @@ public final class JsonComparison {
+       return sum | (CompilerDirectives.inCompiledCode() ? COMPILED_READ : 0);
+     }
+   }
++
++  /**
++   * Generic retained reads. Every engine consumes the same members per document; the guest loop is
++   * the measured read for interpret and peak, and the same method runs directly for read-aot.
++   */
++  private static final class GenericReads extends RootNode {
++    static final int GSON = 0, JAVA = 1, INTEROP = 2, SNAPSHOT = 3, WALK = 4;
++    private final String name;
++    private final int mode;
++    private final JsonFixture.CountingSink counting = new JsonFixture.CountingSink();
++    @Child private JsonFixture.InteropReader reader = new JsonFixture.InteropReader();
++    @Child private JsonExportNode export = JsonExportNode.create();
++
++    GenericReads(String engine, int mode) {
++      super(ComparisonLanguage.current());
++      this.name = "GenericReads[" + engine + "]";
++      this.mode = mode;
++    }
++
++    @Override
++    public String getName() {
++      return name;
++    }
++
++    @Override
++    public String toString() {
++      return name;
++    }
++
++    @Override
++    public Object execute(VirtualFrame frame) {
++      return read((Object[]) frame.getArguments()[0], (Integer) frame.getArguments()[1]);
++    }
++
++    long read(Object[] rows, int rotation) {
++      long sum = 0;
++      for (int i = 0; i < ROWS; i++) sum += value(rows[(i + rotation) & (ROWS - 1)]);
++      return sum | (CompilerDirectives.inCompiledCode() ? COMPILED_READ : 0);
++    }
++
++    /** One retained document: a Gson tree, or the root view of a message or snapshot. */
++    private long value(Object doc) {
++      switch (mode) {
++        case GSON:
++          return JsonFixture.gsonRead(doc);
++        case JAVA:
++          {
++            // Export the retained index into fresh host objects, as a JSON.parse sink would.
++            JavaSink sink = new JavaSink();
++            export.execute((JsonValue) doc, sink);
++            return JsonFixture.javaRead(Objects.requireNonNull(sink.result()));
++          }
++        case WALK:
++          counting.sum = 0;
++          export.execute((JsonValue) doc, counting);
++          return counting.sum;
++        default:
++          return reader.read(doc);
++      }
++    }
++
++    /** Parse or decode one document, consume it like {@link #value}, and release native storage. */
++    long ingest(byte[] input) {
++      if (mode == GSON) {
++        Object tree = JsonFixture.gsonParse(input);
++        retained = tree;
++        return JsonFixture.gsonRead(tree);
++      }
++      JsonMessage message = JsonSvm.decode(input);
++      if (mode == SNAPSHOT) {
++        JsonSnapshot snapshot;
++        try {
++          snapshot = message.snapshot();
++        } finally {
++          message.close();
++        }
++        retained = snapshot;
++        return reader.read(snapshot.root());
++      }
++      try {
++        switch (mode) {
++          case JAVA:
++            {
++              JavaSink sink = new JavaSink();
++              message.export(sink);
++              Object tree = Objects.requireNonNull(sink.result());
++              retained = tree;
++              return JsonFixture.javaRead(tree);
++            }
++          case WALK:
++            counting.sum = 0;
++            message.export(counting);
++            return counting.sum;
++          default:
++            retained = message;
++            return reader.read(message.root());
++        }
++      } finally {
++        message.close();
++      }
++    }
++  }
+ }
+diff --git a/benchmarks/comparison/JsonFixture.java b/benchmarks/comparison/JsonFixture.java
+new file mode 100644
+index 0000000..44dbd06
+--- /dev/null
++++ b/benchmarks/comparison/JsonFixture.java
+@@ -0,0 +1,225 @@
++package dev.elide.truffledata.comparison;
++
++import com.google.gson.JsonElement;
++import com.google.gson.JsonObject;
++import com.google.gson.JsonParser;
++import com.oracle.truffle.api.CompilerDirectives;
++import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
++import com.oracle.truffle.api.interop.InteropException;
++import com.oracle.truffle.api.interop.InteropLibrary;
++import com.oracle.truffle.api.nodes.Node;
++import dev.elide.truffledata.json.JsonSink;
++import dev.elide.truffledata.json.JsonValue;
++import java.io.ByteArrayInputStream;
++import java.io.InputStreamReader;
++import java.nio.charset.StandardCharsets;
++import java.util.List;
++import java.util.Map;
++import java.util.Objects;
++import org.jspecify.annotations.NullMarked;
++
++/**
++ * Mixed generic JSON fixture shared by the SVM comparison and the CodSpeed simulation cases. Every
++ * engine consumes the same eight top-level and two nested members, so one checksum per document
++ * holds for Gson trees, exported Java trees, interop views and snapshots alike.
++ */
++@NullMarked
++public final class JsonFixture {
++  private JsonFixture() {}
++
++  /**
++   * Document {@code i}: nested object, string and integer arrays, short, long and escaped strings,
++   * I64 and F64 numbers, and null. Odd documents reverse the member order.
++   */
++  public static byte[] document(int i) {
++    int tags = 1 + i % 4;
++    int scores = 3 + (i & 1);
++    StringBuilder tagList = new StringBuilder("[");
++    for (int k = 0; k < tags; k++) tagList.append(k == 0 ? "" : ",").append("\"t").append(k).append('"');
++    StringBuilder scoreList = new StringBuilder("[");
++    for (int k = 0; k < scores; k++) scoreList.append(k == 0 ? "" : ",").append(i + k);
++    // Odd notes carry quote, backslash, control, two-byte and surrogate-pair escapes; all exceed
++    // Myna's 16-byte inline text, so they live in the decoded text region.
++    String note =
++        (i & 1) == 1
++            ? "\"line \\\"" + i + "\\\" with \\\\ escapes\\n\\t\\u00e9 and \\ud83d\\ude00 tail\""
++            : "\"plain note for item " + i + " padded beyond the inline text limit\"";
++    String[] members = {
++      "\"id\":" + (1000 + 7 * i),
++      "\"name\":\"item-" + i + "\"",
++      "\"price\":" + (i + 0.25),
++      "\"active\":" + (i % 3 == 0),
++      "\"tags\":" + tagList.append(']'),
++      "\"dims\":{\"w\":" + 3 * i + ",\"h\":" + (i + 0.5) + ",\"unit\":\"cm\"}",
++      "\"scores\":" + scoreList.append(']'),
++      "\"note\":" + note,
++      "\"parent\":null",
++    };
++    StringBuilder json = new StringBuilder("{");
++    for (int k = 0; k < members.length; k++) {
++      json.append(k == 0 ? "" : ",");
++      json.append(members[(i & 1) == 0 ? k : members.length - 1 - k]);
++    }
++    return json.append('}').toString().getBytes(StandardCharsets.UTF_8);
++  }
++
++  /**
++   * Checksum every engine computes for document {@code i}: id + (long) price + active + dims.w +
++   * (long) dims.h + tag and score counts + one each for the note being a string and parent null.
++   */
++  public static long checksum(int i) {
++    return (1000 + 7 * i) + i + (i % 3 == 0 ? 1 : 0) + 3 * i + i + (1 + i % 4) + (3 + (i & 1)) + 2;
++  }
++
++  /** Sum a {@link CountingSink} reaches for document {@code i}. */
++  public static long walkChecksum(int i) {
++    int tags = 1 + i % 4;
++    int scores = 3 + (i & 1);
++    long scoreSum = 0;
++    for (int k = 0; k < scores; k++) scoreSum += i + k;
++    long containers = 9 + 3 + tags + scores; // member and element counts announced up front
++    long keys = 9 + 3;
++    long numbers = (1000 + 7 * i) + i + 3 * i + i + scoreSum;
++    long strings = 3 + tags; // name, unit, note, tags
++    return containers + keys + numbers + (i % 3 == 0 ? 1 : 0) + strings + 1;
++  }
++
++  /** Gson's tree parser from UTF-8 bytes, rejecting trailing input (Gson tree parsing is lenient). */
++  @TruffleBoundary
++  public static JsonElement gsonParse(byte[] input) {
++    return JsonParser.parseReader(
++        new InputStreamReader(new ByteArrayInputStream(input), StandardCharsets.UTF_8));
++  }
++
++  @TruffleBoundary
++  public static long gsonRead(Object tree) {
++    JsonObject o = ((JsonElement) tree).getAsJsonObject();
++    JsonObject dims = o.getAsJsonObject("dims");
++    return o.get("id").getAsLong()
++        + (long) o.get("price").getAsDouble()
++        + (o.get("active").getAsBoolean() ? 1 : 0)
++        + dims.get("w").getAsLong()
++        + (long) dims.get("h").getAsDouble()
++        + o.getAsJsonArray("tags").size()
++        + o.getAsJsonArray("scores").size()
++        + (o.get("note").getAsJsonPrimitive().isString() ? 1 : 0)
++        + (o.get("parent").isJsonNull() ? 1 : 0);
++  }
++
++  /** Reads the tree {@link dev.elide.truffledata.json.JavaSink} builds for a fixture document. */
++  @TruffleBoundary
++  public static long javaRead(Object tree) {
++    Map<?, ?> o = (Map<?, ?>) tree;
++    Map<?, ?> dims = (Map<?, ?>) member(o, "dims");
++    return (Long) member(o, "id")
++        + (long) (double) (Double) member(o, "price")
++        + ((Boolean) member(o, "active") ? 1 : 0)
++        + (Long) member(dims, "w")
++        + (long) (double) (Double) member(dims, "h")
++        + ((List<?>) member(o, "tags")).size()
++        + ((List<?>) member(o, "scores")).size()
++        + (member(o, "note") instanceof String ? 1 : 0)
++        + (o.containsKey("parent") && o.get("parent") == null ? 1 : 0);
++  }
++
++  private static Object member(Map<?, ?> map, String name) {
++    return Objects.requireNonNull(map.get(name), name);
++  }
++
++  /**
++   * Guest-style reads through cached interop. Each member site has its own library so the
++   * receiver's per-name key cache (three names per site) always hits.
++   */
++  public static final class InteropReader extends Node {
++    @Child private InteropLibrary id = create();
++    @Child private InteropLibrary price = create();
++    @Child private InteropLibrary active = create();
++    @Child private InteropLibrary dims = create();
++    @Child private InteropLibrary w = create();
++    @Child private InteropLibrary h = create();
++    @Child private InteropLibrary tags = create();
++    @Child private InteropLibrary scores = create();
++    @Child private InteropLibrary note = create();
++    @Child private InteropLibrary parent = create();
++    @Child private InteropLibrary values = create();
++
++    private static InteropLibrary create() {
++      return InteropLibrary.getFactory().createDispatched(1);
++    }
++
++    public long read(Object doc) {
++      try {
++        Object box = dims.readMember(doc, "dims");
++        return values.asLong(id.readMember(doc, "id"))
++            + (long) values.asDouble(price.readMember(doc, "price"))
++            + (values.asBoolean(active.readMember(doc, "active")) ? 1 : 0)
++            + values.asLong(w.readMember(box, "w"))
++            + (long) values.asDouble(h.readMember(box, "h"))
++            + values.getArraySize(tags.readMember(doc, "tags"))
++            + values.getArraySize(scores.readMember(doc, "scores"))
++            + (values.isString(note.readMember(doc, "note")) ? 1 : 0)
++            + (values.isNull(parent.readMember(doc, "parent")) ? 1 : 0);
++      } catch (InteropException failure) {
++        throw CompilerDirectives.shouldNotReachHere(failure);
++      }
++    }
++  }
++
++  /** Non-materializing sink: the export walk itself is all that runs. */
++  public static final class CountingSink implements JsonSink {
++    public long sum;
++
++    @Override
++    public void beginObject(long members) {
++      sum += members;
++    }
++
++    @Override
++    public void key(JsonValue key) {
++      sum += 1;
++    }
++
++    @Override
++    public void beginArray(long elements) {
++      sum += elements;
++    }
++
++    @Override
++    public void end() {}
++
++    @Override
++    public void nullValue() {
++      sum += 1;
++    }
++
++    @Override
++    public void booleanValue(boolean value) {
++      sum += value ? 1 : 0;
++    }
++
++    @Override
++    public void longValue(long value) {
++      sum += value;
++    }
++
++    @Override
++    public void doubleValue(double value) {
++      sum += (long) value;
++    }
++
++    @Override
++    public void unsignedValue(long bits) {
++      sum += bits;
++    }
++
++    @Override
++    public void decimalValue(JsonValue token) {
++      sum += 1;
++    }
++
++    @Override
++    public void stringValue(JsonValue text) {
++      sum += 1;
++    }
++  }
++}
+diff --git a/benchmarks/comparison/json_measure.py b/benchmarks/comparison/json_measure.py
+index 5230de3..c89606b 100644
+--- a/benchmarks/comparison/json_measure.py
++++ b/benchmarks/comparison/json_measure.py
+@@ -1,4 +1,4 @@
+-"""Fresh-process SVM scalar JSON comparisons; keep raw samples and fork identity."""
++"""Fresh-process SVM JSON comparisons; keep raw samples and fork identity."""
+ import hashlib
+ import itertools
+ import json
+@@ -14,8 +14,14 @@ import sys
+ binary = Path(sys.argv[1]).resolve()
+ output = Path(os.environ['TEST_UNDECLARED_OUTPUTS_DIR'])
+ output.mkdir(parents=True, exist_ok=True)
+-jobs = list(itertools.product(('gson-stream', 'simdjson-typed', 'simdjson-specialized'),
+-    ('ingest', 'read-aot', 'interpret', 'peak'), ('time', 'memory'), range(3)))
++# Workload per engine and its 32-document checksum (JsonComparison and JsonFixture).
++WORKLOADS = {
++    'json-scalar': (('gson-stream', 'simdjson-typed', 'simdjson-specialized'), 35984),
++    'json-generic': (('gson-tree', 'simdjson-generic-java', 'simdjson-generic-interop', 'simdjson-snapshot'), 38219),
++}
++STAGES = ('ingest', 'read-aot', 'interpret', 'peak')
++workload_of = {engine: (name, checksum) for name, (engines, checksum) in WORKLOADS.items() for engine in engines}
++jobs = list(itertools.product(workload_of, STAGES, ('time', 'memory'), range(3)))
+ random.Random(20261105).shuffle(jobs)
+ results = []
+ for engine, stage, mode, fork in jobs:
+@@ -25,7 +31,9 @@ for engine, stage, mode, fork in jobs:
+         raise ValueError('Expected one measurement record')
+     row = json.loads(lines[0])
+     metric = 'ns_per_row' if mode == 'time' else 'allocated_bytes_per_row'
+-    if (row['engine'], row['stage'], row['runtime'], row['checksum'], row['rows']) != (engine, stage, 'svm', 35984, 32):
++    workload, checksum = workload_of[engine]
++    if (row['workload'], row['engine'], row['stage'], row['runtime'], row['checksum'], row['rows']) != (
++            workload, engine, stage, 'svm', checksum, 32):
+         raise ValueError('Mislabeled fixture')
+     if row['guest_compiled'] != (stage == 'peak'):
+         raise ValueError('Wrong execution tier')
+@@ -38,14 +46,17 @@ for engine, stage, mode, fork in jobs:
+ report = {'schema': 1, 'binary_sha256': hashlib.sha256(binary.read_bytes()).hexdigest(),
+     'platform': platform.platform(), 'cpu': Path('/proc/cpuinfo').read_text(), 'measurements': results}
+ (output / 'json-comparison.json').write_text(json.dumps(report, indent=2) + '\n')
+-lines = ['# SVM scalar JSON comparison', '',
+-    'Medians of three fresh-process fork medians; ranges are fork medians. Java heap excludes native memory.', '',
+-    '| Stage | Engine | ns/record (range) | Java bytes/record (range) |', '|---|---|---:|---:|']
+-for stage in ('ingest', 'read-aot', 'interpret', 'peak'):
+-    for engine in ('gson-stream', 'simdjson-typed', 'simdjson-specialized'):
+-        cells = []
+-        for metric in ('ns_per_row', 'allocated_bytes_per_row'):
+-            values = [statistics.median(r[metric]) for r in results if r['engine'] == engine and r['stage'] == stage and metric in r]
+-            cells.append(f'{statistics.median(values):.3f} ({min(values):.3f}–{max(values):.3f})')
+-        lines.append(f'| {stage} | {engine} | ' + ' | '.join(cells) + ' |')
++lines = ['# SVM JSON comparison', '',
++    'Medians of three fresh-process fork medians; ranges are fork medians. Java heap excludes native memory.']
++for workload, (engines, _) in WORKLOADS.items():
++    unit = 'record' if workload == 'json-scalar' else 'document'
++    lines += ['', f'## {workload}', '',
++        f'| Stage | Engine | ns/{unit} (range) | Java bytes/{unit} (range) |', '|---|---|---:|---:|']
++    for stage in STAGES:
++        for engine in engines:
++            cells = []
++            for metric in ('ns_per_row', 'allocated_bytes_per_row'):
++                values = [statistics.median(r[metric]) for r in results if r['engine'] == engine and r['stage'] == stage and metric in r]
++                cells.append(f'{statistics.median(values):.3f} ({min(values):.3f}–{max(values):.3f})')
++            lines.append(f'| {stage} | {engine} | ' + ' | '.join(cells) + ' |')
+ (output / 'json-comparison.md').write_text('\n'.join(lines) + '\n')
+diff --git a/benchmarks/comparison/json_smoke.py b/benchmarks/comparison/json_smoke.py
+index 0defe9a..d697267 100644
+--- a/benchmarks/comparison/json_smoke.py
++++ b/benchmarks/comparison/json_smoke.py
+@@ -1,4 +1,5 @@
+-"""Require JSON read loops and their getters to survive partial evaluation as one graph."""
++"""Require JSON read and export loops to survive partial evaluation within fixed graph budgets."""
++import json
+ import os
+ from pathlib import Path
+ import re
+@@ -14,21 +15,69 @@ output = Path(os.environ['TEST_UNDECLARED_OUTPUTS_DIR'])
+ output.mkdir(parents=True, exist_ok=True)
+ (output / 'json-compilation.log').write_text(process.stderr)
+ process.check_returncode()
++
++# Per root: (max nodes, loops, max graph allocations). Every rule requires zero invokes.
++# The trace's Invokes column counts unresolved Java calls only; @TruffleBoundary calls (Gson
++# reads, JavaSink events, member lookup) do not appear there. Generic rules are in JSON.md.
++SCALAR = (1000, 1, 0)
++RULES = {
++    'GenericReads[simdjson-generic-interop]': (2000, 1, 0),
++    'GenericReads[simdjson-snapshot]': (2000, 1, 0),
++    # Document loop plus the tape walk. The two allocation sites are the container stack for
++    # nested or unconfined exports; the runtime budget below proves they never run here.
++    'GenericReads[simdjson-export-walk]': (1000, 2, 2),
++    # JavaSink events are boundaries that receive fresh views and build host objects; their
++    # allocations are bounded at runtime instead of in the graph.
++    'GenericReads[simdjson-generic-java]': (1000, 2, None),
++    # Stock baseline: one boundary call per document into Gson's tree API.
++    'GenericReads[gson-tree]': (1000, 1, 0),
++}
++# Java bytes per document in the compiled read loop. 1.0 is the harness's own per-call boxing,
++# identical for every peak cell. The JavaSink budget is fixed in JSON.md (measured 2,357).
++ALLOCATION = {
++    ('simdjson-generic-interop', 'peak'): 1.0,
++    ('simdjson-export-walk', 'peak'): 1.0,
++    ('simdjson-generic-java', 'peak'): 2400.0,
++    ('simdjson-generic-java', 'read-aot'): 2400.0,
++}
++
+ # Columns: Count Size Cycles Ifs Loops Invokes Allocs. Fail closed if trace format changes.
+-graphs = []
++seen = {}
++name = None
+ for line in process.stderr.splitlines():
++    header = re.match(r'^\[engine\] Expansion tree for (\S+) after truffleTier:', line)
++    if header:
++        name = header.group(1)
+     if re.match(r'^<root>\s', line):
+         columns = line.split('|')
+-        if len(columns) < 3:
++        if len(columns) < 3 or name is None:
+             raise AssertionError('Malformed compiler expansion row: ' + line)
+         values = tuple(map(int, columns[1].split()))
+         if len(values) != 7:
+             raise AssertionError('Unexpected compiler expansion columns: ' + line)
+-        graphs.append(values)
++        if name.startswith('JsonComparison.Reads@'):
++            key, rule = 'scalar', SCALAR
++        elif name in RULES:
++            key, rule = name, RULES[name]
++        else:
++            raise AssertionError('Unexpected compiled JSON root: ' + name)
+         nodes, _, _, _, loops, invokes, allocations = values
+-        if not (0 < nodes <= 1000 and loops == 1 and invokes == 0 and allocations == 0):
+-            raise AssertionError('JSON read graph exceeded budget or retained calls: ' + line)
++        limit, expected_loops, max_allocations = rule
++        if not (0 < nodes <= limit and loops == expected_loops and invokes == 0
++                and (max_allocations is None or allocations <= max_allocations)):
++            raise AssertionError(f'JSON graph {name} exceeded {rule} or retained calls: {line}')
++        seen[key] = seen.get(key, 0) + 1
++        name = None
+ # Each engine must compile; smoke's helper-level marker also checks the actual executed tier.
+-if len(graphs) < 3:
+-    raise AssertionError('Missing compiler expansion evidence for JSON engines')
+-print(f'JSON graph checks passed: {len(graphs)} compilations, one loop, no calls or allocations')
++if seen.get('scalar', 0) < 3 or any(root not in seen for root in RULES):
++    raise AssertionError(f'Missing compiler expansion evidence for JSON engines: {seen}')
++
++records = [json.loads(line) for line in process.stdout.splitlines() if line.startswith('{')]
++for (engine, stage), budget in ALLOCATION.items():
++    rows = [r for r in records if r['engine'] == engine and r['stage'] == stage]
++    if len(rows) != 1 or len(rows[0]['allocated_bytes_per_row']) != 3:
++        raise AssertionError(f'Missing allocation record for {engine} {stage}')
++    if max(rows[0]['allocated_bytes_per_row']) > budget:
++        raise AssertionError(f'{engine} {stage} exceeded {budget} Java B/document: {rows[0]}')
++print(f'JSON graph checks passed: {sum(seen.values())} compilations; '
++      f'allocation budgets passed for {len(ALLOCATION)} cells')
+diff --git a/benchmarks/src/main/java/dev/elide/truffledata/bench/SimulationBenchmark.java b/benchmarks/src/main/java/dev/elide/truffledata/bench/SimulationBenchmark.java
+index 0625b7e..5351391 100644
+--- a/benchmarks/src/main/java/dev/elide/truffledata/bench/SimulationBenchmark.java
++++ b/benchmarks/src/main/java/dev/elide/truffledata/bench/SimulationBenchmark.java
+@@ -8,10 +8,16 @@ import com.oracle.truffle.api.interop.InteropLibrary;
+ import com.oracle.truffle.api.nodes.RootNode;
+ import com.oracle.truffle.api.object.*;
+ import dev.elide.truffledata.*;
++import dev.elide.truffledata.comparison.JsonFixture;
+ import dev.elide.truffledata.jdbc.*;
++import dev.elide.truffledata.json.JavaSink;
++import dev.elide.truffledata.json.JsonMessage;
++import dev.elide.truffledata.json.JsonSnapshot;
++import dev.elide.truffledata.json.JsonSvm;
+ import dev.elide.truffledata.protobuf.ProtobufAdapter;
+ import java.sql.*;
+ import java.util.*;
++import org.graalvm.nativeimage.ImageInfo;
+ import org.graalvm.polyglot.Context;
+ 
+ /**
+@@ -92,7 +98,9 @@ public final class SimulationBenchmark {
+                   + "}");
+           count++;
+         }
+-        if (count != (smoke ? 20 : 1)) throw new AssertionError("Unexpected case count " + count);
++        // The JSON cases link the static simdjson backend, so the JVM smoke runs the other 20.
++        int all = ImageInfo.inImageRuntimeCode() ? 24 : 20;
++        if (count != (smoke ? all : 1)) throw new AssertionError("Unexpected case count " + count);
+       } finally {
+         context.leave();
+       }
+@@ -298,9 +306,75 @@ public final class SimulationBenchmark {
+                 }));
+       }
+     }
++    if (ImageInfo.inImageRuntimeCode()) json(cases);
+     return cases;
+   }
+ 
++  /** Mixed generic JSON documents, consumed the same way by each engine (see JsonFixture). */
++  private static void json(List<Case> cases) {
++    byte[][] inputs = new byte[ROWS][];
++    long expected = 0;
++    for (int i = 0; i < ROWS; i++) {
++      inputs[i] = JsonFixture.document(i);
++      expected += JsonFixture.checksum(i);
++    }
++    String[] names = {"gson-tree", "java-export", "interop-read", "snapshot"};
++    for (int mode = 0; mode < names.length; mode++) {
++      CallTarget target = new JsonIngestRoot(mode).getCallTarget();
++      cases.add(new Case("json-generic-" + names[mode], expected, () -> (Long) target.call((Object) inputs)));
++    }
++  }
++
++  /** Decode (or parse), consume and release each document; interop reads use adopted caches. */
++  private static final class JsonIngestRoot extends RootNode {
++    private final int mode;
++    @Child private JsonFixture.InteropReader reader = new JsonFixture.InteropReader();
++
++    JsonIngestRoot(int mode) {
++      super(BenchmarkLanguage.current().language());
++      this.mode = mode;
++    }
++
++    @Override
++    public Object execute(VirtualFrame frame) {
++      long sum = 0;
++      for (byte[] input : (byte[][]) frame.getArguments()[0]) sum += ingest(input);
++      return sum;
++    }
++
++    private long ingest(byte[] input) {
++      if (mode == 0) {
++        Object tree = JsonFixture.gsonParse(input);
++        retained = tree;
++        return JsonFixture.gsonRead(tree);
++      }
++      JsonMessage message = JsonSvm.decode(input);
++      if (mode == 3) {
++        JsonSnapshot snapshot;
++        try {
++          snapshot = message.snapshot();
++        } finally {
++          message.close();
++        }
++        retained = snapshot;
++        return reader.read(snapshot.root());
++      }
++      try {
++        if (mode == 1) {
++          JavaSink sink = new JavaSink();
++          message.export(sink);
++          Object tree = Objects.requireNonNull(sink.result());
++          retained = tree;
++          return JsonFixture.javaRead(tree);
++        }
++        retained = message;
++        return reader.read(message.root());
++      } finally {
++        message.close();
++      }
++    }
++  }
++
+   private static Case read(String name, AbstractRow[] rows, int mode, long expected) {
+     CallTarget target = new ScanRoot(mode).getCallTarget();
+     return new Case(name, expected, () -> (Long) target.call((Object) rows));
+diff --git a/tools/bench/bench.py b/tools/bench/bench.py
+index d3b4bd2..852a8f2 100644
+--- a/tools/bench/bench.py
++++ b/tools/bench/bench.py
+@@ -24,7 +24,7 @@ def digest(path):
+ def inputs():
+     names = run(["git", "ls-files", "-z", "--cached", "--others", "--exclude-standard", "--",
+                  "MODULE.bazel", "MODULE.bazel.lock", "maven_install.json", ".bazelversion", ".bazelrc",
+-                 "bazel", "core", "jdbc", "protobuf", "protobuf-runtime", "benchmarks", "tools/bench"],
++                 "bazel", "core", "jdbc", "json", "protobuf", "protobuf-runtime", "benchmarks", "tools/bench"],
+                 capture_output=True).stdout.split(b"\0")
+     result = hashlib.sha256()
+     for name in sorted(set(names) - {b""}):
+diff --git a/tools/bench/test_bench.py b/tools/bench/test_bench.py
+index 374818d..617da29 100644
+--- a/tools/bench/test_bench.py
++++ b/tools/bench/test_bench.py
+@@ -31,8 +31,8 @@ class MeasurementTest(unittest.TestCase):
+ 
+     def test_case_manifest(self):
+         cases = json.loads((ROOT / "benchmarks/cases.json").read_text())
+-        self.assertEqual(len(cases), 20)
+-        self.assertEqual(len({case["name"] for case in cases}), 20)
++        self.assertEqual(len(cases), 24)
++        self.assertEqual(len({case["name"] for case in cases}), 24)
+         for case in cases:
+             self.assertGreater(case["checksum"], 0)
+             self.assertRegex(case["name"], r"^[a-z0-9-]+$")

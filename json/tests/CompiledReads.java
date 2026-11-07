@@ -11,9 +11,9 @@ import dev.elide.truffledata.ReadBooleanNode;
 import dev.elide.truffledata.ReadDoubleNode;
 import dev.elide.truffledata.ReadLongNode;
 import dev.elide.truffledata.Schema;
-import dev.elide.truffledata.json.JsonScalarAccess;
-import dev.elide.truffledata.json.JsonScalarPlan;
-import dev.elide.truffledata.json.JsonScalarRecord;
+import dev.elide.truffledata.json.JsonPlan;
+import dev.elide.truffledata.tape.TypedAccess;
+import dev.elide.truffledata.tape.TypedRecord;
 import java.nio.charset.StandardCharsets;
 import org.graalvm.polyglot.Context;
 
@@ -36,7 +36,7 @@ final class CompiledReads {
                 .option("compiler.TreatPerformanceWarningsAsErrors", "all")
                 .option("compiler.MaximumGraalGraphSize", "10000")
                 .build();
-        var plan = JsonScalarPlan.compile(schema);
+        var plan = JsonPlan.compile(schema);
         var first =
             plan.decode("{\"n\":1000,\"d\":1.5,\"b\":true}".getBytes(StandardCharsets.UTF_8));
         var second =
@@ -45,7 +45,7 @@ final class CompiledReads {
       context.enter();
       try {
         plan.close();
-        var rows = new JsonScalarRecord[] {first, second};
+        var rows = new TypedRecord[] {first, second};
         var data = DataLibrary.factory().getUncached();
         try {
           check(
@@ -114,12 +114,12 @@ final class CompiledReads {
                   Field.integer("n", (i & 1) == 0 ? 32 : 64, true, false, false),
                   new Field("d", Field.Kind.FLOAT64, false, false),
                   new Field("b", Field.Kind.BOOLEAN, false, false));
-          try (var nextPlan = JsonScalarPlan.compile(nextSchema);
+          try (var nextPlan = JsonPlan.compile(nextSchema);
               var next =
                   nextPlan.decode(
                       ("{\"n\":" + (1000 + i) + ",\"d\":1.5,\"b\":true}")
                           .getBytes(StandardCharsets.UTF_8))) {
-            var nextRows = new JsonScalarRecord[] {next, next};
+            var nextRows = new TypedRecord[] {next, next};
             churn.compiled = false;
             for (int warmup = 0; warmup < 200 && !churn.compiled; warmup++)
               churnTarget.call(nextRows, 100000);
@@ -129,25 +129,388 @@ final class CompiledReads {
           }
         }
         check(NodeUtil.countNodes(churn) <= 192, "Shared JSON schema cache remains bounded");
+        generic();
+        nested();
       } finally {
         context.leave();
       }
     }
   }
 
+  /** Nested primitives read through constant TypedAccess paths, with no intermediate records. */
+  private static void nested() {
+    var inner =
+        new Schema(
+            "Inner",
+            java.util.List.of(
+                Field.requiredLong("n"),
+                new Field("d", Field.Kind.FLOAT64, false, false),
+                new Field("b", Field.Kind.BOOLEAN, false, false)));
+    var mid =
+        new Schema(
+            "Mid",
+            java.util.List.of(
+                new Field(
+                    "inner",
+                    Field.Kind.RECORD,
+                    false,
+                    false,
+                    dev.elide.truffledata.Constraints.NONE.withRecordType("Inner"))));
+    var schema =
+        Schema.of(
+            Field.requiredLong("id"),
+            new Field(
+                "mid",
+                Field.Kind.RECORD,
+                false,
+                false,
+                dev.elide.truffledata.Constraints.NONE.withRecordType("Mid")));
+    var types = java.util.Map.of("Inner", inner, "Mid", mid);
+    try (var plan = JsonPlan.compile(schema, types);
+        var first =
+            plan.decode(
+                "{\"id\":1,\"mid\":{\"inner\":{\"n\":1000,\"d\":1.5,\"b\":true}}}"
+                    .getBytes(StandardCharsets.UTF_8));
+        var second =
+            plan.decode(
+                "{\"mid\":{\"inner\":{\"b\":false,\"d\":2.5,\"n\":2000}},\"id\":2}"
+                    .getBytes(StandardCharsets.UTF_8))) {
+      var rows = new TypedRecord[] {first, second};
+      // Constant accessors take the exploded walk; dynamic ones (loaded from a mutable array) the loop.
+      var roots =
+          new NestedReads[] {new NestedReads(schema, types, false), new NestedReads(schema, types, true)};
+      for (var root : roots) {
+        var target = root.getCallTarget();
+        for (int i = 0; i < 200 && !root.compiled; i++) target.call(rows, 100000);
+        check(root.compiled, "Nested JSON reads must execute compiled code");
+        check(((Long) target.call(rows, 1000000)) == 1502000000L, "Nested JSON compiled checksum");
+        check(NodeUtil.countNodes(root) <= 192, "Nested JSON AST budget");
+        var bean =
+            (com.sun.management.ThreadMXBean)
+                java.lang.management.ManagementFactory.getThreadMXBean();
+        bean.setThreadAllocatedMemoryEnabled(true);
+        long thread = Thread.currentThread().threadId();
+        long before = bean.getThreadAllocatedBytes(thread);
+        target.call(rows, 1000000);
+        double bytes = (bean.getThreadAllocatedBytes(thread) - before) / 1000000.0;
+        check(bytes >= 0 && bytes <= 0.05, "Nested JSON compiled bytes/read budget: " + bytes);
+        System.out.println("JSON nested compiled=true dynamic=" + root.dynamic + " bytes/read=" + bytes);
+      }
+      var target = roots[1].getCallTarget();
+      first.close();
+      try {
+        target.call(rows, 1);
+        throw new AssertionError("Compiled closed nested read");
+      } catch (IllegalStateException expected) {
+      }
+      check(second.record(1).record(0).longValue(0) == 2000, "Nested sibling survives close");
+    }
+  }
+
+  private static final class NestedReads extends RootNode {
+    final TypedAccess n, d, b;
+    // Not compilation-final: loads from it are not partial-evaluation constants.
+    private final TypedAccess[] paths;
+    final boolean dynamic;
+    boolean compiled;
+
+    NestedReads(Schema schema, java.util.Map<String, Schema> types, boolean dynamic) {
+      super(TestLanguage.current());
+      n = new TypedAccess(schema, types, 1, 0, 0);
+      d = new TypedAccess(schema, types, 1, 0, 1);
+      b = new TypedAccess(schema, types, 1, 0, 2);
+      paths = new TypedAccess[] {n, d, b};
+      this.dynamic = dynamic;
+    }
+
+    @Override
+    public Object execute(VirtualFrame frame) {
+      var rows = (TypedRecord[]) frame.getArguments()[0];
+      int count = (Integer) frame.getArguments()[1];
+      long sum = 0;
+      for (int i = 0; i < count; i++) {
+        var row = rows[i & 1];
+        if (dynamic) {
+          sum +=
+              paths[0].longValue(row)
+                  + (long) paths[1].doubleValue(row)
+                  + (paths[2].booleanValue(row) ? 1 : 0);
+        } else {
+          sum += n.longValue(row) + (long) d.doubleValue(row) + (b.booleanValue(row) ? 1 : 0);
+        }
+      }
+      if (CompilerDirectives.inInterpreter()) LoopNode.reportLoopCount(this, count);
+      compiled |= CompilerDirectives.inCompiledCode();
+      return sum;
+    }
+  }
+
+  /** Retained generic values read through compiled code with an assumption-cached owner check. */
+  private static void generic() {
+    var first =
+        dev.elide.truffledata.json.JsonSvm.decode(
+            "{\"n\":1000,\"d\":1.5,\"b\":true}".getBytes(StandardCharsets.UTF_8));
+    var second =
+        dev.elide.truffledata.json.JsonSvm.decode(
+            "{\"n\":2000,\"d\":2.5,\"b\":false}".getBytes(StandardCharsets.UTF_8));
+    var messages = new dev.elide.truffledata.json.JsonMessage[] {first, second};
+    var root = new GenericReads(messages);
+    var target = root.getCallTarget();
+    for (int i = 0; i < 200 && !root.compiled; i++) target.call(100000);
+    check(root.compiled, "Generic JSON reads must execute compiled code");
+    check(((Long) target.call(1000000)) == 1502000000L, "Generic JSON compiled checksum");
+    check(NodeUtil.countNodes(root) <= 192, "Generic JSON AST budget");
+    var bean =
+        (com.sun.management.ThreadMXBean) java.lang.management.ManagementFactory.getThreadMXBean();
+    bean.setThreadAllocatedMemoryEnabled(true);
+    long thread = Thread.currentThread().threadId();
+    long before = bean.getThreadAllocatedBytes(thread);
+    target.call(1000000);
+    double bytes = (bean.getThreadAllocatedBytes(thread) - before) / 1000000.0;
+    check(bytes >= 0 && bytes <= 0.05, "Generic JSON compiled bytes/read budget: " + bytes);
+    System.out.println("JSON generic compiled=true bytes/read=" + bytes);
+    first.close();
+    try {
+      target.call(1);
+      throw new AssertionError("Compiled closed generic read");
+    } catch (IllegalStateException expected) {
+    }
+    check(second.root().member("n").longValue() == 2000, "Sibling message survives close");
+    interop(second);
+    borrowed();
+    export(second);
+    second.close();
+    CompiledArrayReads.run();
+  }
+
+  /** Guest-style reads through a cached InteropLibrary compile with the same budgets. */
+  private static void interop(dev.elide.truffledata.json.JsonMessage message) {
+    interop(message.root(), "Interop");
+  }
+
+  /**
+   * The interop gate over a root borrowed from a JsonSession: same checksum, graph and allocation
+   * budgets, and the compiled read fails once the borrow ends.
+   */
+  private static void borrowed() {
+    byte[] input = "{\"n\":2000,\"d\":2.5,\"b\":false}".getBytes(StandardCharsets.UTF_8);
+    var compiled = new InteropReads[1];
+    try (var session = dev.elide.truffledata.json.JsonSession.open()) {
+      session.with(
+          input,
+          root -> {
+            compiled[0] = interop(root, "Borrowed interop");
+            return Boolean.TRUE;
+          });
+      try {
+        compiled[0].getCallTarget().call(1);
+        throw new AssertionError("Compiled read after the borrow ended");
+      } catch (IllegalStateException expected) {
+      }
+      check(
+          session.with(input, root -> root.member("n").longValue()) == 2000,
+          "Session reusable after borrowed compiled reads");
+    }
+  }
+
+  private static InteropReads interop(Object value, String label) {
+    var root = new InteropReads(value);
+    var target = root.getCallTarget();
+    for (int i = 0; i < 200 && !root.compiled; i++) target.call(100000);
+    check(root.compiled, label + " JSON reads must execute compiled code");
+    check(((Long) target.call(1000000)) == 2002000000L, label + " JSON compiled checksum");
+    check(NodeUtil.countNodes(root) <= 192, label + " JSON AST budget");
+    var bean =
+        (com.sun.management.ThreadMXBean) java.lang.management.ManagementFactory.getThreadMXBean();
+    bean.setThreadAllocatedMemoryEnabled(true);
+    long thread = Thread.currentThread().threadId();
+    long before = bean.getThreadAllocatedBytes(thread);
+    target.call(1000000);
+    double bytes = (bean.getThreadAllocatedBytes(thread) - before) / 1000000.0;
+    check(bytes >= 0 && bytes <= 0.05, label + " JSON compiled bytes/read budget: " + bytes);
+    System.out.println("JSON " + label.toLowerCase(java.util.Locale.ROOT) + " compiled=true bytes/read=" + bytes);
+    return root;
+  }
+
+  /** Single-pass export into a constant, non-materializing sink: the walk itself must not allocate. */
+  private static void export(dev.elide.truffledata.json.JsonMessage message) {
+    var root = new ExportReads(message.root());
+    var target = root.getCallTarget();
+    for (int i = 0; i < 200 && !root.compiled; i++) target.call(100000);
+    check(root.compiled, "Export JSON loop must execute compiled code");
+    // {"n":2000,"d":2.5,"b":false}: 2000 + 2 + 0 values, 3 keys at 1000 each, one object at 1.
+    check(((Long) target.call(1000000)) == 5003000000L, "Export JSON compiled checksum");
+    check(NodeUtil.countNodes(root) <= 192, "Export JSON AST budget");
+    var bean =
+        (com.sun.management.ThreadMXBean) java.lang.management.ManagementFactory.getThreadMXBean();
+    bean.setThreadAllocatedMemoryEnabled(true);
+    long thread = Thread.currentThread().threadId();
+    long before = bean.getThreadAllocatedBytes(thread);
+    target.call(1000000);
+    double bytes = (bean.getThreadAllocatedBytes(thread) - before) / 1000000.0;
+    check(bytes >= 0 && bytes <= 0.05, "Export JSON compiled bytes/export budget: " + bytes);
+    System.out.println("JSON export compiled=true bytes/export=" + bytes + " depth=" + root.export.maxDepthSeen());
+    check(root.export.maxDepthSeen() == 1, "Export JSON stack depth");
+  }
+
+  private static final class SummingSink implements dev.elide.truffledata.tape.TapeSink {
+    long sum;
+
+    public void beginObject(long members) {
+      sum += 1;
+    }
+
+    public void key(dev.elide.truffledata.tape.TapeText key) {
+      sum += 1000;
+    }
+
+    public void beginArray(long elements) {
+      sum += 1;
+    }
+
+    public void end() {}
+
+    public void nullValue() {}
+
+    public void booleanValue(boolean value) {
+      sum += value ? 1 : 0;
+    }
+
+    public void longValue(long value) {
+      sum += value;
+    }
+
+    public void doubleValue(double value) {
+      sum += (long) value;
+    }
+
+    public void unsignedValue(long bits) {
+      sum += bits;
+    }
+
+    public void decimalValue(dev.elide.truffledata.tape.TapeText token) {
+      sum += 7;
+    }
+
+    public void stringValue(dev.elide.truffledata.tape.TapeText text) {
+      sum += 11;
+    }
+  }
+
+  private static final class ExportReads extends RootNode {
+    private final dev.elide.truffledata.tape.TapeValue value;
+    private final SummingSink sink = new SummingSink();
+    @Child dev.elide.truffledata.tape.TapeExportNode export =
+        dev.elide.truffledata.tape.TapeExportNode.create();
+    boolean compiled;
+
+    ExportReads(dev.elide.truffledata.tape.TapeValue value) {
+      super(TestLanguage.current());
+      this.value = value;
+    }
+
+    @Override
+    public Object execute(VirtualFrame frame) {
+      int count = (Integer) frame.getArguments()[0];
+      sink.sum = 0;
+      for (int i = 0; i < count; i++) export.execute(value, sink);
+      if (CompilerDirectives.inInterpreter()) LoopNode.reportLoopCount(this, count);
+      compiled |= CompilerDirectives.inCompiledCode();
+      return sink.sum;
+    }
+  }
+
+  private static final class InteropReads extends RootNode {
+    private final Object value;
+    @Child private com.oracle.truffle.api.interop.InteropLibrary objects =
+        com.oracle.truffle.api.interop.InteropLibrary.getFactory().createDispatched(3);
+    @Child private com.oracle.truffle.api.interop.InteropLibrary numbers =
+        com.oracle.truffle.api.interop.InteropLibrary.getFactory().createDispatched(3);
+    boolean compiled;
+
+    InteropReads(Object value) {
+      super(TestLanguage.current());
+      this.value = value;
+    }
+
+    @Override
+    public Object execute(VirtualFrame frame) {
+      int count = (Integer) frame.getArguments()[0];
+      long sum = 0;
+      try {
+        for (int i = 0; i < count; i++) {
+          Object n = objects.readMember(value, "n");
+          Object d = objects.readMember(value, "d");
+          Object b = objects.readMember(value, "b");
+          sum +=
+              numbers.asLong(n)
+                  + (long) numbers.asDouble(d)
+                  + (numbers.asBoolean(b) ? 1 : 0)
+                  + (objects.isNull(value) ? 1 : 0);
+        }
+      } catch (com.oracle.truffle.api.interop.InteropException failure) {
+        throw CompilerDirectives.shouldNotReachHere(failure);
+      }
+      if (CompilerDirectives.inInterpreter()) LoopNode.reportLoopCount(this, count);
+      compiled |= CompilerDirectives.inCompiledCode();
+      return sum;
+    }
+  }
+
+  private static final class GenericReads extends RootNode {
+    @CompilerDirectives.CompilationFinal(dimensions = 1)
+    private final dev.elide.truffledata.tape.TapeOwner[] owners;
+
+    @CompilerDirectives.CompilationFinal(dimensions = 1)
+    private final dev.elide.truffledata.tape.TapeValue[] n, d, b;
+
+    @Child private dev.elide.truffledata.tape.TapeOwner.CheckOpenNode check =
+        dev.elide.truffledata.tape.TapeOwner.CheckOpenNode.create();
+
+    boolean compiled;
+
+    GenericReads(dev.elide.truffledata.json.JsonMessage[] messages) {
+      super(TestLanguage.current());
+      owners = messages;
+      n = new dev.elide.truffledata.tape.TapeValue[messages.length];
+      d = new dev.elide.truffledata.tape.TapeValue[messages.length];
+      b = new dev.elide.truffledata.tape.TapeValue[messages.length];
+      for (int i = 0; i < messages.length; i++) {
+        var root = messages[i].root();
+        n[i] = root.member("n");
+        d[i] = root.member("d");
+        b[i] = root.member("b");
+      }
+    }
+
+    @Override
+    public Object execute(VirtualFrame frame) {
+      int count = (Integer) frame.getArguments()[0];
+      long sum = 0;
+      for (int i = 0; i < count; i++) {
+        int row = i & 1;
+        check.execute(owners[row]);
+        sum += n[row].longValue() + (long) d[row].doubleValue() + (b[row].booleanValue() ? 1 : 0);
+      }
+      if (CompilerDirectives.inInterpreter()) LoopNode.reportLoopCount(this, count);
+      compiled |= CompilerDirectives.inCompiledCode();
+      return sum;
+    }
+  }
+
   private static final class Reads extends RootNode {
     @CompilerDirectives.CompilationFinal(dimensions = 1)
-    final JsonScalarRecord @org.jspecify.annotations.Nullable [] constant;
+    final TypedRecord @org.jspecify.annotations.Nullable [] constant;
 
     boolean compiled;
     final boolean specialized, shared;
     @Child private ReadLongNode sharedLong = ReadLongNode.create();
     @Child private ReadDoubleNode sharedDouble = ReadDoubleNode.create();
     @Child private ReadBooleanNode sharedBoolean = ReadBooleanNode.create();
-    final JsonScalarAccess n, d, b;
+    final TypedAccess n, d, b;
 
     Reads(
-        JsonScalarRecord @org.jspecify.annotations.Nullable [] constant,
+        TypedRecord @org.jspecify.annotations.Nullable [] constant,
         Schema schema,
         boolean specialized,
         boolean shared) {
@@ -155,14 +518,14 @@ final class CompiledReads {
       this.constant = constant;
       this.specialized = specialized;
       this.shared = shared;
-      n = new JsonScalarAccess(schema, 0);
-      d = new JsonScalarAccess(schema, 1);
-      b = new JsonScalarAccess(schema, 2);
+      n = new TypedAccess(schema, 0);
+      d = new TypedAccess(schema, 1);
+      b = new TypedAccess(schema, 2);
     }
 
     @Override
     public Object execute(VirtualFrame frame) {
-      var rows = constant == null ? (JsonScalarRecord[]) frame.getArguments()[0] : constant;
+      var rows = constant == null ? (TypedRecord[]) frame.getArguments()[0] : constant;
       int count = (Integer) frame.getArguments()[1];
       long sum = 0;
       for (int i = 0; i < count; i++) {

@@ -1,3 +1,4 @@
+load("@rules_cc//cc:cc_static_library.bzl", "cc_static_library")
 load("@rules_cc//cc:defs.bzl", "cc_import")
 load("@rules_graalvm//graalvm:defs.bzl", "native_image")
 load("@rules_java//java:defs.bzl", "java_import", "java_library", "java_test")
@@ -5,10 +6,11 @@ load("@rules_shell//shell:sh_test.bzl", "sh_test")
 load("//bazel:jit.bzl", "TRUFFLE_JIT_CHECKS")
 load("//bazel:maven.bzl", "maven_publication", "release_version")
 load("//bazel:maven_bom.bzl", "maven_bom")
+load("//bazel:merge_archives.bzl", "merge_archives")
 
 release_version(
     name = "version",
-    build_setting_default = "0.7.0-SNAPSHOT",
+    build_setting_default = "0.8.0-SNAPSHOT",
     visibility = ["//visibility:public"],
 )
 
@@ -17,13 +19,116 @@ COMMON = [
     "org.jspecify:jspecify:1.0.1",
 ]
 
+MODULES = [
+    "core",
+    "jdbc",
+    "jdbc-sqlite",
+    "jdbc-mysql",
+    "jdbc-postgresql",
+    "protobuf",
+    "protobuf-runtime",
+    "protobuf-buffa",
+    "protobuf-buffa-bindings",
+    "tape",
+    "tape-jvm",
+    "json",
+    "json-bindings",
+    "json-jvm",
+    "csv",
+    "csv-bindings",
+    "csv-native",
+    "csv-jvm",
+]
+
+# Publication libraries that are not the module's own //<module> target.
+LIBRARIES = {
+    "protobuf-buffa-bindings": "//protobuf-buffa:bindings",
+    # The shared tape classes plus the exact Myna value ABI runtime they extend (YAML plan Task 4).
+    "tape": ":tape_library",
+    # JVM-only FFM tape reader, published separately like json-jvm.
+    "tape-jvm": "//tape:jvm",
+    "json-bindings": ":json_bindings_library",
+    # JVM-only FFM backend, published separately so static images never carry it.
+    "json-jvm": "//json:jvm",
+    # Optional native CSV kernel: generated bindings, the static-image backend (with the native
+    # attachments) and the JVM FFM backend; truffledata-csv itself stays pure Java.
+    "csv-bindings": "//csv/kernel:bindings",
+    "csv-native": "//csv/kernel:svm",
+    "csv-jvm": "//csv/kernel:jvm",
+}
+
+# The shared tape classes plus the exact Myna value ABI runtime they read and extend. Myna is not
+# published to Maven; its value classes ship in truffledata-tape, which every format depends on, so
+# JSON and YAML never carry two copies. //tape itself is NullAway-checked; this republishes it.
+java_library(
+    name = "tape_library",
+    srcs = [
+        "//tape:tape_sources",
+        "@myna//:values_sources",
+    ],
+    # //tape compiles the same sources under NullAway and the repository's checks.
+    javacopts = ["-XepDisableAllChecks"],
+    deps = [
+        "//bazel:myna_compiler_sdk",
+        "//bazel:truffle_processor",
+        "//core",
+        "@maven//:org_graalvm_sdk_nativeimage",
+        "@maven//:org_graalvm_sdk_word",
+        "@maven//:org_graalvm_truffle_truffle_api",
+        "@maven//:org_jspecify_jspecify",
+    ],
+)
+
+# The generated JSON bindings; the Myna value runtime they were generated against ships in
+# truffledata-tape from the same release.
+java_library(
+    name = "json_bindings_library",
+    srcs = ["//json/native:java_bindings"],
+    resource_strip_prefix = "json/native/generated",
+    resources = ["//json/native:native_resources"],
+    deps = [
+        "//bazel:myna_compiler_sdk",
+        "@maven//:org_graalvm_sdk_nativeimage",
+        "@maven//:org_graalvm_sdk_word",
+    ],
+)
+
+# The C ABI, decoder, simdjson and simdutf objects. cc_static_library collects object files only,
+# so the Rust myna-values bridge archive is merged in by json_archive below.
+cc_static_library(
+    name = "json_objects",
+    deps = ["//json/native:truffledata_json"],
+)
+
+# The CSV kernel C ABI, its ISA kernels and simdutf, for static SVM linking.
+cc_static_library(
+    name = "csv_archive",
+    deps = ["//csv/native:truffledata_csv"],
+)
+
+# One self-contained archive for static SVM linking: json_objects plus Myna's myna-values static
+# library (myna_utf8_to_utf16_v2 for SvmValueTape, performance plan Task D1).
+merge_archives(
+    name = "json_archive",
+    archives = [
+        ":json_objects",
+        "//json/native/bridge",
+    ],
+)
+
 [maven_publication(
     name = module,
     attachments = {
         "//protobuf-buffa/native:truffledata_buffa": "-linux-x86_64.a",
         "//protobuf-buffa/native:shared": "-linux-x86_64.so",
         "//protobuf-buffa/native:header": "-native.h",
-    } if module == "protobuf-buffa" else {},
+    } if module == "protobuf-buffa" else {
+        ":json_archive": "-linux-x86_64.a",
+        "//json/native:json_shared.so": "-linux-x86_64.so",
+    } if module == "json" else {
+        ":csv_archive": "-linux-x86_64.a",
+        "//csv/native:csv_shared.so": "-linux-x86_64.so",
+    } if module == "csv-native" else {},
     dependencies = COMMON + ([] if module == "core" else ["dev.elide:truffledata-core:{version}"]) + ([
         "com.google.protobuf:protobuf-java:4.36.1",
         "com.google.protobuf:protobuf-java-util:4.36.1",
@@ -34,11 +139,31 @@ COMMON = [
         "dev.elide:truffledata-protobuf-runtime:{version}",
         "dev.elide:truffledata-protobuf-buffa-bindings:{version}",
     ] if module == "protobuf-buffa" else []) + ([
+        "dev.elide:truffledata-tape:{version}",
+    ] if module == "tape-jvm" else []) + ([
+        "dev.elide:truffledata-json-bindings:{version}",
+        "dev.elide:truffledata-tape:{version}",
+    ] if module == "json" else []) + ([
+        "dev.elide:truffledata-json:{version}",
+        "dev.elide:truffledata-json-bindings:{version}",
+        "dev.elide:truffledata-tape-jvm:{version}",
+    ] if module == "json-jvm" else []) + ([
+        "dev.elide:truffledata-csv:{version}",
+        "dev.elide:truffledata-csv-bindings:{version}",
+    ] if module in [
+        "csv-native",
+        "csv-jvm",
+    ] else []) + ([
         "org.graalvm.sdk:nativeimage:25.5.5-elide.24",
         "org.graalvm.sdk:word:25.5.5-elide.24",
     ] if module in [
         "protobuf-buffa",
         "protobuf-buffa-bindings",
+        "tape",
+        "json",
+        "json-bindings",
+        "csv-bindings",
+        "csv-native",
     ] else []) + ([
         "dev.elide:truffledata-jdbc:{version}",
         "org.xerial:sqlite-jdbc:3.53.4.0",
@@ -49,33 +174,13 @@ COMMON = [
         "dev.elide:truffledata-jdbc:{version}",
         "org.postgresql:postgresql:42.7.14",
     ] if module == "jdbc-postgresql" else []),
-    library = "//protobuf-buffa:bindings" if module == "protobuf-buffa-bindings" else "//%s" % module,
+    library = LIBRARIES.get(module, "//%s" % module),
     module = module,
-) for module in [
-    "core",
-    "jdbc",
-    "jdbc-sqlite",
-    "jdbc-mysql",
-    "jdbc-postgresql",
-    "protobuf",
-    "protobuf-runtime",
-    "protobuf-buffa",
-    "protobuf-buffa-bindings",
-]]
+) for module in MODULES]
 
 maven_bom(
     name = "bom",
-    managed = COMMON + ["dev.elide:truffledata-" + module + ":{version}" for module in [
-        "core",
-        "jdbc",
-        "jdbc-sqlite",
-        "jdbc-mysql",
-        "jdbc-postgresql",
-        "protobuf",
-        "protobuf-runtime",
-        "protobuf-buffa",
-        "protobuf-buffa-bindings",
-    ]] + [
+    managed = COMMON + ["dev.elide:truffledata-" + module + ":{version}" for module in MODULES] + [
         "com.mysql:mysql-connector-j:26.10.0",
         "org.postgresql:postgresql:42.7.14",
         "org.xerial:sqlite-jdbc:3.53.4.0",
@@ -92,18 +197,7 @@ maven_bom(
 
 filegroup(
     name = "publications",
-    srcs = [
-        ":bom",
-        ":core",
-        ":jdbc",
-        ":jdbc-mysql",
-        ":jdbc-postgresql",
-        ":jdbc-sqlite",
-        ":protobuf",
-        ":protobuf-buffa",
-        ":protobuf-buffa-bindings",
-        ":protobuf-runtime",
-    ],
+    srcs = [":bom"] + [":" + module for module in MODULES],
 )
 
 sh_test(
@@ -123,17 +217,7 @@ sh_test(
     name = module + "_binary",
     srcs = [":" + module],
     output_group = "binary",
-) for module in [
-    "core",
-    "jdbc",
-    "jdbc-sqlite",
-    "jdbc-mysql",
-    "jdbc-postgresql",
-    "protobuf",
-    "protobuf-runtime",
-    "protobuf-buffa",
-    "protobuf-buffa-bindings",
-]]
+) for module in MODULES]
 
 [java_import(
     name = module + "_import",
@@ -151,11 +235,31 @@ sh_test(
         ":protobuf-runtime_import",
         ":protobuf-buffa-bindings_import",
     ] if module == "protobuf-buffa" else []) + ([
+        ":tape_import",
+    ] if module == "tape-jvm" else []) + ([
+        ":json-bindings_import",
+        ":tape_import",
+    ] if module == "json" else []) + ([
+        ":json-bindings_import",
+        ":json_import",
+        ":tape-jvm_import",
+    ] if module == "json-jvm" else []) + ([
+        ":csv-bindings_import",
+        ":csv_import",
+    ] if module in [
+        "csv-native",
+        "csv-jvm",
+    ] else []) + ([
         "@maven//:org_graalvm_sdk_nativeimage",
         "@maven//:org_graalvm_sdk_word",
     ] if module in [
         "protobuf-buffa",
         "protobuf-buffa-bindings",
+        "tape",
+        "json",
+        "json-bindings",
+        "csv-bindings",
+        "csv-native",
     ] else []) + ([
         ":jdbc_import",
         "@maven//:org_xerial_sqlite_jdbc",
@@ -166,17 +270,7 @@ sh_test(
         ":jdbc_import",
         "@maven//:org_postgresql_postgresql",
     ] if module == "jdbc-postgresql" else []),
-) for module in [
-    "core",
-    "jdbc",
-    "jdbc-sqlite",
-    "jdbc-mysql",
-    "jdbc-postgresql",
-    "protobuf",
-    "protobuf-runtime",
-    "protobuf-buffa",
-    "protobuf-buffa-bindings",
-]]
+) for module in MODULES]
 
 java_test(
     name = "consumer_test",
@@ -345,6 +439,250 @@ sh_test(
         ":stock_free_native",
         "//tests:native_descriptors",
     ],
+    tags = ["manual"],
+    target_compatible_with = [
+        "@platforms//os:linux",
+        "@platforms//cpu:x86_64",
+    ],
+)
+
+filegroup(
+    name = "json_static",
+    srcs = [":json"],
+    output_group = "native_static",
+)
+
+filegroup(
+    name = "json_shared",
+    srcs = [":json"],
+    output_group = "native_shared",
+)
+
+cc_import(
+    name = "published_json_native",
+    static_library = ":json_static",
+    deps = ["//protobuf-buffa/native:cpp_runtime"],
+)
+
+# Compile-only view of the JVM backend: the static image classpath never carries truffledata-json-jvm.
+java_import(
+    name = "json-jvm_compile",
+    jars = [":json-jvm_binary"],
+    neverlink = True,
+    deps = [
+        ":json_import",
+        ":tape-jvm_import",
+    ],
+)
+
+java_library(
+    name = "json_consumer_lib",
+    testonly = True,
+    srcs = ["JsonConsumer.java"],
+    deps = [
+        ":json-jvm_compile",
+        ":json_import",
+        ":tape_import",
+        "@maven//:org_graalvm_sdk_nativeimage",
+    ],
+)
+
+java_test(
+    name = "json_consumer",
+    args = ["$(location :json_shared)"],
+    data = [":json_shared"],
+    jvm_flags = ["--enable-native-access=ALL-UNNAMED"],
+    main_class = "JsonConsumer",
+    use_testrunner = False,
+    runtime_deps = [
+        ":json-jvm_import",
+        ":json_consumer_lib",
+    ],
+)
+
+native_image(
+    name = "json_native",
+    testonly = True,
+    cc_deps = [":published_json_native"],
+    exec_properties = {
+        "EstimatedCPU": "4",
+        "EstimatedMemory": "16GB",
+    },
+    executable_name = "json-published-consumer",
+    extra_args = [
+        "--gc=serial",
+        "--parallelism=4",
+        "-march=compatibility",
+        "--initialize-at-build-time=dev.elide.truffledata",
+        "-H:+UnlockExperimentalVMOptions",
+    ] + TRUFFLE_JIT_CHECKS + ["-H:-UnlockExperimentalVMOptions"],
+    graalvm_sdk = "@graalvm_linux_amd64//:gvm",
+    main_class = "JsonConsumer",
+    optimization_mode = "2",
+    tags = ["manual"],
+    target_compatible_with = [
+        "@platforms//os:linux",
+        "@platforms//cpu:x86_64",
+    ],
+    deps = [
+        ":json_consumer_lib",
+        "@maven//:org_graalvm_truffle_truffle_runtime",
+    ],
+)
+
+sh_test(
+    name = "json_native_test",
+    srcs = ["native_consumer.sh"],
+    args = ["$(location :json_native)"],
+    data = [":json_native"],
+    tags = ["manual"],
+    target_compatible_with = [
+        "@platforms//os:linux",
+        "@platforms//cpu:x86_64",
+    ],
+)
+
+# truffledata-csv is pure Java: one jar serves the JVM and SVM, with no native attachments or cc_deps.
+java_library(
+    name = "csv_consumer_lib",
+    testonly = True,
+    srcs = ["CsvConsumer.java"],
+    deps = [
+        ":core_import",
+        ":csv_import",
+        "@maven//:org_graalvm_sdk_nativeimage",
+    ],
+)
+
+java_test(
+    name = "csv_consumer",
+    main_class = "CsvConsumer",
+    use_testrunner = False,
+    runtime_deps = [":csv_consumer_lib"],
+)
+
+native_image(
+    name = "csv_native",
+    testonly = True,
+    exec_properties = {
+        "EstimatedCPU": "4",
+        "EstimatedMemory": "16GB",
+    },
+    executable_name = "csv-published-consumer",
+    extra_args = [
+        "--gc=serial",
+        "--parallelism=4",
+        "-march=compatibility",
+        "--initialize-at-build-time=dev.elide.truffledata",
+        "-H:+UnlockExperimentalVMOptions",
+    ] + TRUFFLE_JIT_CHECKS + ["-H:-UnlockExperimentalVMOptions"],
+    graalvm_sdk = "@graalvm_linux_amd64//:gvm",
+    main_class = "CsvConsumer",
+    optimization_mode = "2",
+    tags = ["manual"],
+    target_compatible_with = [
+        "@platforms//os:linux",
+        "@platforms//cpu:x86_64",
+    ],
+    deps = [
+        ":csv_consumer_lib",
+        "@maven//:org_graalvm_truffle_truffle_runtime",
+    ],
+)
+
+sh_test(
+    name = "csv_native_test",
+    srcs = ["native_consumer.sh"],
+    args = ["$(location :csv_native)"],
+    data = [":csv_native"],
+    tags = ["manual"],
+    target_compatible_with = [
+        "@platforms//os:linux",
+        "@platforms//cpu:x86_64",
+    ],
+)
+
+# The optional native CSV kernel from publication jars and attachments only: the JVM consumer
+# loads the published shared library through truffledata-csv-jvm, and the static image links the
+# published archive through truffledata-csv-native (never carrying truffledata-csv-jvm).
+filegroup(
+    name = "csv_kernel_static",
+    srcs = [":csv-native"],
+    output_group = "native_static",
+)
+
+filegroup(
+    name = "csv_kernel_shared",
+    srcs = [":csv-native"],
+    output_group = "native_shared",
+)
+
+cc_import(
+    name = "published_csv_kernel",
+    static_library = ":csv_kernel_static",
+    deps = ["//protobuf-buffa/native:cpp_runtime"],
+)
+
+java_library(
+    name = "csv_kernel_consumer_lib",
+    testonly = True,
+    srcs = ["CsvKernelConsumer.java"],
+    deps = [
+        ":core_import",
+        ":csv_import",
+        "@maven//:org_graalvm_sdk_nativeimage",
+    ],
+)
+
+java_test(
+    name = "csv_kernel_consumer",
+    args = ["$(location :csv_kernel_shared)"],
+    data = [":csv_kernel_shared"],
+    jvm_flags = ["--enable-native-access=ALL-UNNAMED"],
+    main_class = "CsvKernelConsumer",
+    use_testrunner = False,
+    runtime_deps = [
+        ":csv-jvm_import",
+        ":csv_kernel_consumer_lib",
+    ],
+)
+
+native_image(
+    name = "csv_kernel_native",
+    testonly = True,
+    cc_deps = [":published_csv_kernel"],
+    exec_properties = {
+        "EstimatedCPU": "4",
+        "EstimatedMemory": "16GB",
+    },
+    executable_name = "csv-kernel-published-consumer",
+    extra_args = [
+        "--gc=serial",
+        "--parallelism=4",
+        "-march=compatibility",
+        "--initialize-at-build-time=dev.elide.truffledata",
+        "-H:+UnlockExperimentalVMOptions",
+    ] + TRUFFLE_JIT_CHECKS + ["-H:-UnlockExperimentalVMOptions"],
+    graalvm_sdk = "@graalvm_linux_amd64//:gvm",
+    main_class = "CsvKernelConsumer",
+    optimization_mode = "2",
+    tags = ["manual"],
+    target_compatible_with = [
+        "@platforms//os:linux",
+        "@platforms//cpu:x86_64",
+    ],
+    deps = [
+        ":csv-native_import",
+        ":csv_kernel_consumer_lib",
+        "@maven//:org_graalvm_truffle_truffle_runtime",
+    ],
+)
+
+sh_test(
+    name = "csv_kernel_native_test",
+    srcs = ["native_consumer.sh"],
+    args = ["$(location :csv_kernel_native)"],
+    data = [":csv_kernel_native"],
     tags = ["manual"],
     target_compatible_with = [
         "@platforms//os:linux",

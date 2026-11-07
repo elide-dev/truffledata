@@ -1,6 +1,6 @@
 module(
     name = "truffledata",
-    version = "0.7.0",
+    version = "0.8.0",
 )
 
 bazel_dep(name = "platforms", version = "1.1.0")
@@ -149,6 +149,11 @@ maven.install(
         "org.openjdk.jmh:jmh-core:1.37",
         "org.openjdk.jmh:jmh-generator-annprocess:1.37",
         "com.google.googlejavaformat:google-java-format:1.28.0",
+        # Benchmark-only CSV competitors (//benchmarks/comparison); no library depends on them.
+        # commons-csv is declared below as a test-only artifact (also the differential-test oracle).
+        "de.siegmar:fastcsv:4.4.0",
+        "com.univocity:univocity-parsers:2.9.1",
+        "com.fasterxml.jackson.dataformat:jackson-dataformat-csv:2.22.4",
     ],
     fail_if_repin_required = True,
     fetch_sources = False,
@@ -158,6 +163,15 @@ maven.install(
         "https://repo.maven.apache.org/maven2",
         "https://maven.elide.dev/gvm-elide/" + GRAALVM,
     ],
+)
+
+# Test-only oracle for the CSV differential suite (//csv/tests); no library depends on it.
+maven.artifact(
+    name = "maven",
+    artifact = "commons-csv",
+    group = "org.apache.commons",
+    testonly = True,
+    version = "1.14.1",
 )
 use_repo(maven, "maven")
 
@@ -180,12 +194,12 @@ go_sdk = use_extension("@rules_go//go:extensions.bzl", "go_sdk", dev_dependency 
 http_archive = use_repo_rule("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
 
 # ---- C/C++: elide-dev/toolchain (LLVM 23, libc++, lld, ThinLTO bitcode sysroots).
-ELIDE_TOOLCHAIN = "2026.11.1"
+ELIDE_TOOLCHAIN = "2026.11.5"
 
 ELIDE_TOOLCHAIN_BUNDLES = {
-    "darwin_arm64": ("darwin-arm64", "37e56bad391f8397c99951a529ef84bdc99c9d19bdf91edbc153b5bdecb69e88"),
-    "linux_amd64": ("linux-amd64", "4610627acc96f647776fd4256b3c1fce04c14b2757df692d8923ec299aed0e58"),
-    "linux_arm64": ("linux-arm64", "b6c73becf52e8491c0aad2d1bb5ac6185a7e0c931e1206c62652b1e47fb26785"),
+    "darwin_arm64": ("darwin-arm64", "4b3b2353e3f50fb5dbd834183e1d1f5fe0a449b0e3110ef1bcc44b3aead50383"),
+    "linux_amd64": ("linux-amd64", "e3841f87b3d9d29a48fd0e12eb0834fcb361f62fd14c4cf40a1a6fc83cba2d4a"),
+    "linux_arm64": ("linux-arm64", "296a5ebb7d56953d24de184e336be903cb1cfe5b54cdf7ad814a5ff714c47ff5"),
 }
 
 [http_archive(
@@ -233,7 +247,7 @@ http_file(
 # Optional Buffa backend: reproducible Rust compilation under the same RBE toolchain.
 bazel_dep(name = "rules_rust", version = "0.74.0")
 
-# Match elide-dev/toolchain v2026.11.1 rustversion (LLVM 23.1.3).
+# Match elide-dev/toolchain v2026.11.5 rustversion (LLVM 23.1.3; unchanged since v2026.11.1).
 RUST_VERSION = "nightly/2026-10-09"
 
 RUST_SHA256S = {
@@ -323,10 +337,10 @@ use_repo(crate, "crates", simdutf_src = "crates__simdutf-0.7.0")
 http_archive(
     name = "myna",
     build_file = "//bazel:myna.BUILD",
-    sha256 = "71a53cd56ca815ae37f07a7a64fdbb0a24358032f12368021d9ea25238afef97",
-    strip_prefix = "myna-42d7ab484bef7a944b374a4683922c0a10c4ec1c",
+    sha256 = "ce1dc5ff7a7a57f1b8d0dda2e215a1806c9feae620f3d922b17d92a2ea4cfd42",
+    strip_prefix = "myna-0.11.0",
     type = "tar.gz",
-    urls = ["https://codeload.github.com/elide-dev/myna/tar.gz/42d7ab484bef7a944b374a4683922c0a10c4ec1c"],
+    urls = ["https://github.com/elide-dev/myna/releases/download/v0.11.0/myna-source-0.11.0.tar.gz"],
 )
 
 # Production JSON adapter: match the parser qualified by Myna's value ABI tests.
@@ -337,4 +351,36 @@ http_archive(
     strip_prefix = "simdjson-5.1.1",
     type = "tar.gz",
     urls = ["https://codeload.github.com/simdjson/simdjson/tar.gz/refs/tags/v5.1.1"],
+)
+
+# Production YAML parser (docs/superpowers/plans/2026-11-06-yaml.md D1). The overlay fixes the
+# configuration: assertions off, tab tokens, exception callbacks. No patches.
+http_archive(
+    name = "rapidyaml",
+    build_file = "//bazel:rapidyaml.BUILD",
+    sha256 = "a0ce80a8f4211580c8703e57acb813a28ca6ec80908f6eb926be94be8e98d39d",
+    strip_prefix = "rapidyaml.v0.16.0",
+    type = "tar.gz",
+    urls = ["https://github.com/biojppm/rapidyaml/releases/download/v0.16.0/rapidyaml.v0.16.0.src.tgz"],
+)
+
+# Benchmark only: libyaml 0.2.5, the reference C parser row of //yaml/native:bench (as in the YAML
+# probe, benchmarks/results/yaml-probe-b242abd). Never a production dependency.
+http_archive(
+    name = "libyaml",
+    build_file = "//bazel:libyaml.BUILD",
+    sha256 = "c642ae9b75fee120b2d96c712538bd2cf283228d2337df2cf2988e3c02678ef4",
+    strip_prefix = "yaml-0.2.5",
+    type = "tar.gz",
+    urls = ["https://github.com/yaml/libyaml/releases/download/0.2.5/yaml-0.2.5.tar.gz"],
+)
+
+# Test-only: the official yaml-test-suite data release (402 cases) for YAML conformance.
+http_archive(
+    name = "yaml_test_suite",
+    build_file = "//bazel:yaml_test_suite.BUILD",
+    sha256 = "ccae49c1d010d27c20d315969a97752f95b14642fc1e73755db4eb2df4bb0256",
+    strip_prefix = "yaml-test-suite-data-2022-01-17",
+    type = "tar.gz",
+    urls = ["https://github.com/yaml/yaml-test-suite/archive/refs/tags/data-2022-01-17.tar.gz"],
 )

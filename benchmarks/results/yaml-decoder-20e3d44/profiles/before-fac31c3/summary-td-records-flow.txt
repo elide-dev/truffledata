@@ -1,0 +1,88 @@
+9999 samples
+--- self
+  8.17%     817  _handle_map_flow
+  5.34%     534  tape::tape_writer::text
+  4.59%     459  Engine::_scan_scalar_dquot
+  4.19%     419  _line_progressed
+  4.00%     400  yaml::handler::value
+  3.86%     386  reset_with_next_line
+  3.08%     308  ??
+  2.84%     284  yaml::handler::resolve_now
+  2.76%     276  validate
+  2.40%     240  Engine::_scan_scalar_plain_map_flow
+  2.39%     239  equal
+  2.21%     221  yaml::handler::lexical
+  2.03%     203  yaml::handler::write_key
+  1.89%     189  addrem_flags
+  1.87%     187  extend
+  1.86%     186  _handle_flow_skip_whitespace
+  1.86%     186  Engine::_is_valid_start_scalar_plain_flow
+  1.80%     180  _maybe_filter_key_scalar_dquot
+  1.71%     171  sub
+  1.60%     160  yaml::handler::place_key
+  1.50%     150  yaml::handler::define_anchor
+  1.47%     147  yaml::detail::core_int
+  1.45%     145  yaml::handler::side
+  1.35%     135  empty
+  1.33%     133  tape::key_table::insert
+  1.32%     132  tape::tape_writer::push
+  1.28%     128  key_hash
+  1.26%     126  _handle_seq_flow
+  1.19%     119  _filter_dquoted<c4::yml::FilterProcessorInplaceMidExtending>
+  1.18%     118  std::__1::__from_chars_result<double> std::__1::__from_chars_floating_point_decimal[abi:fqe230104]<double>
+  1.16%     116  at_line_beginning
+  1.13%     113  __llvm_libc_common_utils::internal::FloatConvertReturn<double> __llvm_libc_common_utils::internal::decimal_exp_to_float<double, char>
+  1.05%     105  has_any
+  0.94%      94  write_value
+  0.94%      94  reset_before_pop
+  0.86%      86  resolve_plain
+  0.81%      81  ascii
+  0.79%      79  top
+  0.72%      72  begins_with
+  0.71%      71  c4::yml::EventHandlerStack<yaml::handler, yaml::handler_state>::_stack_push
+--- inclusive
+ 96.88%    9687  main
+ 96.76%    9675  
+ 96.76%    9675  operator
+ 96.76%    9675  __invoke<
+ 96.76%    9675  __invoke_r<unsigned long, 
+ 96.76%    9675  __call<
+ 96.76%    9675  std::__1::__function::__func<main::$_0, unsigned long 
+ 96.74%    9673  td_yaml_session_decode
+ 96.39%    9638  yaml::session::decode
+ 89.53%    8952  Engine::parse_in_place_ev
+ 67.43%    6742  _handle_map_flow
+ 19.33%    1933  yaml::handler::value
+ 18.11%    1811  set_key_scalar_dquoted
+ 18.07%    1807  key
+ 16.29%    1629  yaml::handler::write_key
+ 14.84%    1484  _handle_seq_flow
+ 13.16%    1316  set_val_scalar_plain
+ 12.60%    1260  yaml::handler::place_key
+  7.19%     719  tape::tape_writer::text
+  7.15%     715  set_val_scalar_dquoted
+  6.69%     669  yaml::handler::resolve_now
+  6.64%     664  Engine::_scan_scalar_dquot
+  6.63%     663  write_text
+  6.34%     634  string
+  5.87%     587  validate
+  5.44%     544  _line_progressed
+  5.05%     505  yaml::handler::open
+  4.57%     457  Engine::_scan_scalar_plain_map_flow
+  3.86%     386  _scan_line
+  3.86%     386  reset_with_next_line
+  3.85%     385  resolve
+  3.84%     384  write_value
+  3.48%     348  resolve_plain
+  3.08%     308  ??
+  2.84%     284  yaml::handler::side
+  2.79%     279  _push
+  2.72%     272  begin_map_val_flow
+  2.64%     264  _maybe_filter_val_scalar_dquot
+  2.43%     243  begin_seq_val_flow
+  2.42%     242  yaml::handler::lexical
+  2.39%     239  equal
+  2.26%     226  tape::tape_writer::push
+  2.20%     220  Engine::_filter_scalar_dquot
+  2.18%     218  filter_scalar_dquoted_in_place
+  2.17%     217  _filter_dquoted<c4::yml::FilterProcessorInplaceMidExtending>

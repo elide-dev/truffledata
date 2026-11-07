@@ -8,10 +8,16 @@ import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.object.*;
 import dev.elide.truffledata.*;
+import dev.elide.truffledata.comparison.JsonFixture;
 import dev.elide.truffledata.jdbc.*;
+import dev.elide.truffledata.json.JsonMessage;
+import dev.elide.truffledata.json.JsonSvm;
 import dev.elide.truffledata.protobuf.ProtobufAdapter;
+import dev.elide.truffledata.tape.JavaSink;
+import dev.elide.truffledata.tape.TapeSnapshot;
 import java.sql.*;
 import java.util.*;
+import org.graalvm.nativeimage.ImageInfo;
 import org.graalvm.polyglot.Context;
 
 /**
@@ -92,7 +98,9 @@ public final class SimulationBenchmark {
                   + "}");
           count++;
         }
-        if (count != (smoke ? 20 : 1)) throw new AssertionError("Unexpected case count " + count);
+        // The JSON cases link the static simdjson backend, so the JVM smoke runs the other 20.
+        int all = ImageInfo.inImageRuntimeCode() ? 24 : 20;
+        if (count != (smoke ? all : 1)) throw new AssertionError("Unexpected case count " + count);
       } finally {
         context.leave();
       }
@@ -298,7 +306,73 @@ public final class SimulationBenchmark {
                 }));
       }
     }
+    if (ImageInfo.inImageRuntimeCode()) json(cases);
     return cases;
+  }
+
+  /** Mixed generic JSON documents, consumed the same way by each engine (see JsonFixture). */
+  private static void json(List<Case> cases) {
+    byte[][] inputs = new byte[ROWS][];
+    long expected = 0;
+    for (int i = 0; i < ROWS; i++) {
+      inputs[i] = JsonFixture.document(i);
+      expected += JsonFixture.checksum(i);
+    }
+    String[] names = {"gson-tree", "java-export", "interop-read", "snapshot"};
+    for (int mode = 0; mode < names.length; mode++) {
+      CallTarget target = new JsonIngestRoot(mode).getCallTarget();
+      cases.add(new Case("json-generic-" + names[mode], expected, () -> (Long) target.call((Object) inputs)));
+    }
+  }
+
+  /** Decode (or parse), consume and release each document; interop reads use adopted caches. */
+  private static final class JsonIngestRoot extends RootNode {
+    private final int mode;
+    @Child private JsonFixture.InteropReader reader = new JsonFixture.InteropReader();
+
+    JsonIngestRoot(int mode) {
+      super(BenchmarkLanguage.current().language());
+      this.mode = mode;
+    }
+
+    @Override
+    public Object execute(VirtualFrame frame) {
+      long sum = 0;
+      for (byte[] input : (byte[][]) frame.getArguments()[0]) sum += ingest(input);
+      return sum;
+    }
+
+    private long ingest(byte[] input) {
+      if (mode == 0) {
+        Object tree = JsonFixture.gsonParse(input);
+        retained = tree;
+        return JsonFixture.gsonRead(tree);
+      }
+      JsonMessage message = JsonSvm.decode(input);
+      if (mode == 3) {
+        TapeSnapshot snapshot;
+        try {
+          snapshot = message.snapshot();
+        } finally {
+          message.close();
+        }
+        retained = snapshot;
+        return reader.read(snapshot.root());
+      }
+      try {
+        if (mode == 1) {
+          JavaSink sink = new JavaSink();
+          message.export(sink);
+          Object tree = Objects.requireNonNull(sink.result());
+          retained = tree;
+          return JsonFixture.javaRead(tree);
+        }
+        retained = message;
+        return reader.read(message.root());
+      } finally {
+        message.close();
+      }
+    }
   }
 
   private static Case read(String name, AbstractRow[] rows, int mode, long expected) {

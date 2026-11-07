@@ -2,7 +2,7 @@
 
 Every main push and pull request runs the reusable
 [CodSpeed workflow](../.github/workflows/benchmarks.yml). The initial suite has
-20 stable identities in [cases.json](../benchmarks/cases.json); executable
+24 stable identities in [cases.json](../benchmarks/cases.json); executable
 workloads live in [SimulationBenchmark.java](../benchmarks/src/main/java/dev/elide/truffledata/bench/SimulationBenchmark.java).
 Bazel builds a Linux amd64 Native Image with the library's pinned GraalVM and LLVM
 toolchains through BuildBuddy RBE/RBC. The CI client executes it under CodSpeed
@@ -31,6 +31,7 @@ JMH remains available for JVM diagnostics.
 | Generated Protobuf batch/static | Snapshot 256 nested generated messages with two repeated field records each; consume names |
 | Protobuf wire/static | Decode the same bytes as DynamicMessage, snapshot and consume names |
 | MySQL/Postgres fixture batch/static | Bind, execute fixture, normalize Java Integer/null, validate signed/unsigned int32 contracts, ingest four fields, sum IDs and close cursor resources |
+| JSON generic Gson tree/Java export/interop/snapshot | Parse 256 mixed documents with Gson's tree parser, or decode them with simdjson and export through `JavaSink`, read through adopted cached interop, or snapshot then read; consume ten members and release native storage. Image-only: the JVM smoke runs the other 20 |
 
 Each region performs **eight iterations of 256 rows/messages**. Schemas, layouts,
 input data, descriptors, call targets and four warmup iterations are prepared
@@ -104,8 +105,8 @@ throughput improvements across other workloads.
 `tools/integration/run.sh` also run `//benchmarks/jdbc:drivers_smoke` for MySQL and
 PostgreSQL. All smoke cases require compiled Truffle reads and correct outputs, but
 their one short, non-forked measurement is **not performance evidence** and does not
-gate noisy wall-clock scores. CodSpeed's 20 stable AOT/interpreter identities remain
-unchanged and separate from these elapsed-time experiments.
+gate noisy wall-clock scores. CodSpeed's 24 stable AOT/interpreter identities remain
+separate from these elapsed-time experiments.
 
 Changes to work size, dataset, representation or measured boundary need new
 benchmark identities. CodSpeed tracks instruction regressions; no absolute

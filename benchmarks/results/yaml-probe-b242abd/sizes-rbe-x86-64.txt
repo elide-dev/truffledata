@@ -1,0 +1,8 @@
+# RBE x86-64, --compilation_mode=opt, ThinLTO, linkstatic=True, unstripped ELF (Elide toolchain).
+# Invocation: https://app.buildbuddy.io/invocation/f49ba018-92b4-497a-aa14-ac60bb3b5237
+# ryml_min parses with rapidyaml's integer event handler (one ParseEngine instantiation) and links
+# libc++ statically; libyaml_min and empty_min are C programs (no libc++). The JSON archive already
+# carries libc++, so the marginal cost of rapidyaml in an image is below the ryml_min - empty_min delta.
+485248 ryml_min
+77016 libyaml_min
+6448 empty_min

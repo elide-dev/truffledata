@@ -8,6 +8,7 @@ data_java_library(
     name = "acceptance",
     testonly = True,
     srcs = [
+        "CompiledArrayReads.java",
         "CompiledReads.java",
         "SvmAcceptance.java",
         "TestLanguage.java",
@@ -17,6 +18,7 @@ data_java_library(
         "//core",
         "//json",
         "//json:bindings",
+        "//json:jvm",
         "@maven//:org_graalvm_polyglot_polyglot",
         "@maven//:org_graalvm_sdk_nativeimage",
         "@maven//:org_graalvm_sdk_word",
@@ -28,7 +30,7 @@ data_java_library(
 native_image(
     name = "native",
     testonly = True,
-    cc_deps = ["//json/native:truffledata_json"],
+    cc_deps = ["//json/native:svm"],
     exec_properties = {
         "EstimatedCPU": "8",
         "EstimatedMemory": "24GB",
@@ -71,23 +73,43 @@ sh_test(
 
 java_test(
     name = "jvm",
-    srcs = ["FfmAcceptanceTest.java"],
+    srcs = [
+        "FfmAcceptanceTest.java",
+        "JsonExportTest.java",
+        "JsonInteropTest.java",
+        "JvmScopedTest.java",
+    ],
     args = [
         "--class",
         "dev.elide.truffledata.json.tests.FfmAcceptanceTest",
+        "--class",
+        "dev.elide.truffledata.json.tests.JsonExportTest",
+        "--class",
+        "dev.elide.truffledata.json.tests.JsonInteropTest",
+        "--class",
+        "dev.elide.truffledata.json.tests.JvmScopedTest",
     ],
     data = ["//json/native:json_shared.so"],
     jvm_flags = [
         "--enable-native-access=ALL-UNNAMED",
+        "-Dpolyglot.engine.WarnInterpreterOnly=false",
         "-ea",
     ],
     main_class = "dev.elide.bazel.junit.BazelJUnitRunner",
     use_testrunner = False,
-    runtime_deps = ["//bazel/junit:runner"],
+    runtime_deps = [
+        "//bazel/junit:runner",
+        "@maven//:org_graalvm_truffle_truffle_runtime",
+    ],
     deps = [
         "//core",
         "//json",
         "//json:bindings",
+        "//json:jvm",
+        "@maven//:com_google_code_gson_gson",
+        "@maven//:org_graalvm_polyglot_polyglot",
+        "@maven//:org_graalvm_truffle_truffle_api",
         "@maven//:org_junit_jupiter_junit_jupiter_api",
+        "@myna//:values",
     ],
 )

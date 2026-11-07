@@ -1,0 +1,86 @@
+load("@rules_java//java:defs.bzl", "java_library")
+load("//bazel:java.bzl", "data_java_library")
+
+# CSV structural-index kernels (csv/native/README.md has the contract and the seam plan).
+# //csv holds the index contract (CsvIndex, CsvIndexer), the block step, the SWAR kernel and the
+# scanner integration (CsvIndexing); this package keeps the reference kernels, the Vector API kernel
+# and the native backends, each with a CsvIndexing provider.
+
+# Reference Java kernels (scalar oracle, branch-light table) and the reference index consumer.
+data_java_library(
+    name = "kernel",
+    srcs = [
+        "src/main/java/dev/elide/truffledata/csv/kernel/IndexedScanner.java",
+        "src/main/java/dev/elide/truffledata/csv/kernel/ScalarIndexer.java",
+        "src/main/java/dev/elide/truffledata/csv/kernel/TableIndexer.java",
+        "src/main/java/dev/elide/truffledata/csv/kernel/package-info.java",
+    ],
+    visibility = ["//visibility:public"],
+    exports = ["//csv"],
+    deps = ["//csv"],
+)
+
+# Java Vector API kernel: needs --add-modules=jdk.incubator.vector at compile and run time.
+java_library(
+    name = "vector",
+    srcs = [
+        "src/vector/java/dev/elide/truffledata/csv/kernel/vector/VectorIndexer.java",
+        "src/vector/java/dev/elide/truffledata/csv/kernel/vector/package-info.java",
+    ],
+    javacopts = ["--add-modules=jdk.incubator.vector"],
+    visibility = ["//visibility:public"],
+    deps = [
+        "//csv",
+        "@maven//:org_jspecify_jspecify",
+    ],
+)
+
+# Generated Myna bindings for csv/native (SVM @CFunction and JVM FFM).
+java_library(
+    name = "bindings",
+    srcs = ["//csv/native:java_bindings"],
+    resource_strip_prefix = "csv/native/generated",
+    resources = ["//csv/native:native_resources"],
+    visibility = ["//visibility:public"],
+    deps = [
+        "//bazel:myna_compiler_sdk",
+        "@maven//:org_graalvm_sdk_nativeimage",
+        "@maven//:org_graalvm_sdk_word",
+    ],
+)
+
+# JVM FFM backend of the native kernel (loads //csv/native:csv_shared.so).
+data_java_library(
+    name = "jvm",
+    srcs = [
+        "src/jvm/java/dev/elide/truffledata/csv/kernel/jvm/FfmIndexer.java",
+        "src/jvm/java/dev/elide/truffledata/csv/kernel/jvm/package-info.java",
+    ],
+    # CsvIndexing.loadNative finds the FFM backend as a service.
+    resource_strip_prefix = "csv/kernel/src/jvm/resources",
+    resources = ["src/jvm/resources/META-INF/services/dev.elide.truffledata.csv.CsvIndexing$NativeBackend"],
+    visibility = ["//visibility:public"],
+    deps = [
+        ":bindings",
+        "//csv",
+    ],
+)
+
+# Native Image backend of the native kernel (links //csv/native:truffledata_csv statically).
+data_java_library(
+    name = "svm",
+    srcs = [
+        "src/svm/java/dev/elide/truffledata/csv/kernel/svm/SvmIndexer.java",
+        "src/svm/java/dev/elide/truffledata/csv/kernel/svm/package-info.java",
+    ],
+    # CsvIndexing.loadNative finds the static-image backend as a service.
+    resource_strip_prefix = "csv/kernel/src/svm/resources",
+    resources = ["src/svm/resources/META-INF/services/dev.elide.truffledata.csv.CsvIndexing$NativeBackend"],
+    visibility = ["//visibility:public"],
+    deps = [
+        ":bindings",
+        "//csv",
+        "@maven//:org_graalvm_sdk_nativeimage",
+        "@maven//:org_graalvm_sdk_word",
+    ],
+)

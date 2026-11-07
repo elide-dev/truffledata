@@ -35,6 +35,18 @@ class PublicationTest(unittest.TestCase):
                     expected.update(('org.graalvm.sdk:nativeimage', 'org.graalvm.sdk:word'))
                 if module == 'protobuf-buffa':
                     expected.update(('dev.elide:truffledata-protobuf-runtime', 'dev.elide:truffledata-protobuf-buffa-bindings'))
+                if module in ('tape', 'json', 'json-bindings'):
+                    expected.update(('org.graalvm.sdk:nativeimage', 'org.graalvm.sdk:word'))
+                if module == 'tape-jvm':
+                    expected.add('dev.elide:truffledata-tape')
+                if module == 'json':
+                    expected.update(('dev.elide:truffledata-json-bindings', 'dev.elide:truffledata-tape'))
+                if module == 'json-jvm':
+                    expected.update(('dev.elide:truffledata-json', 'dev.elide:truffledata-json-bindings', 'dev.elide:truffledata-tape-jvm'))
+                if module in ('csv-bindings', 'csv-native'):
+                    expected.update(('org.graalvm.sdk:nativeimage', 'org.graalvm.sdk:word'))
+                if module in ('csv-native', 'csv-jvm'):
+                    expected.update(('dev.elide:truffledata-csv', 'dev.elide:truffledata-csv-bindings'))
                 if module == 'jdbc-sqlite':
                     expected.update(('dev.elide:truffledata-jdbc', 'org.xerial:sqlite-jdbc'))
                 if module in ('jdbc-mysql', 'jdbc-postgresql'):
@@ -71,6 +83,85 @@ class PublicationTest(unittest.TestCase):
                     with zipfile.ZipFile(str(prefix) + '.jar') as jar:
                         self.assertIn('dev/elide/truffledata/buffa/generated/Buffa.class', jar.namelist())
                         self.assertIn('dev/elide/truffledata/buffa/generated/BuffaFFM.class', jar.namelist())
+                if module.startswith('json') or module.startswith('tape'):
+                    with zipfile.ZipFile(str(prefix) + '.jar') as jar:
+                        names = {n for n in jar.namelist() if not n.endswith('/')}
+                    myna = {n for n in names if n.startswith('dev/elide/myna/')}
+                    generated = {n for n in names if n.startswith('dev/elide/truffledata/json/generated/')}
+                    backend = {n for n in names if n.startswith('dev/elide/truffledata/json/') and n not in generated}
+                    shared = {n for n in names if n.startswith('dev/elide/truffledata/tape/')}
+                    jvm = {'dev/elide/truffledata/json/JsonJvm.class', 'dev/elide/truffledata/json/JvmTypedOwner.class'}
+                    segment = 'dev/elide/truffledata/tape/SegmentValueTape.class'
+                    if module == 'tape':
+                        # The shared tape travels with the exact Myna value ABI its tapes extend; static
+                        # images take it, so the FFM tape reader stays out.
+                        self.assertIn('dev/elide/truffledata/tape/TapeValue.class', names)
+                        self.assertIn('dev/elide/truffledata/tape/TapeValueGen.class', names)
+                        self.assertIn('dev/elide/truffledata/tape/SvmValueTape.class', names)
+                        self.assertIn('dev/elide/myna/values/ValueTape.class', names)
+                        self.assertNotIn(segment, names)
+                        self.assertFalse(backend | generated)
+                    else:
+                        self.assertFalse(myna)
+                    if module == 'tape-jvm':
+                        self.assertEqual(shared, {segment})
+                        self.assertFalse(backend | generated)
+                    if module.startswith('json'):
+                        self.assertFalse(shared)
+                    if module == 'json-bindings':
+                        # Generated bindings; the Myna value ABI they were generated against ships in truffledata-tape.
+                        self.assertIn('dev/elide/truffledata/json/generated/Json.class', names)
+                        self.assertIn('dev/elide/truffledata/json/generated/JsonFFM.class', names)
+                        self.assertIn('META-INF/native-image/dev.elide.myna/dev.elide.truffledata.json.generated.Json/native-image.properties', names)
+                        self.assertFalse(backend)
+                    elif module.startswith('json'):
+                        self.assertFalse(generated)
+                    if module == 'json':
+                        # Static images take this jar: the FFM backend must stay out of it.
+                        self.assertIn('dev/elide/truffledata/json/JsonSvm.class', names)
+                        self.assertIn('dev/elide/truffledata/json/JsonSession.class', names)
+                        self.assertFalse(jvm & names)
+                    if module == 'json-jvm':
+                        self.assertTrue(jvm <= names)
+                        self.assertNotIn('dev/elide/truffledata/json/JsonSvm.class', names)
+                if module.startswith('csv'):
+                    with zipfile.ZipFile(str(prefix) + '.jar') as jar:
+                        names = {n for n in jar.namelist() if not n.endswith('/')}
+                    classes = {n for n in names if n.endswith('.class')}
+                    generated = {n for n in classes if n.startswith('dev/elide/truffledata/csv/kernel/generated/')}
+                    service = 'META-INF/services/dev.elide.truffledata.csv.CsvIndexing$NativeBackend'
+                    svm = 'dev/elide/truffledata/csv/kernel/svm/SvmIndexer.class'
+                    ffm = 'dev/elide/truffledata/csv/kernel/jvm/FfmIndexer.class'
+                    self.assertTrue(all(n.startswith('dev/elide/truffledata/csv/') for n in classes))
+                    if module == 'csv':
+                        # Pure Java: one jar for the JVM and SVM, no native code, bindings or attachments.
+                        self.assertIn('dev/elide/truffledata/csv/CsvBatch.class', classes)
+                        self.assertIn('dev/elide/truffledata/csv/CsvRowGen.class', classes)
+                        self.assertIn('dev/elide/truffledata/csv/CsvIndexing$NativeBackend.class', classes)
+                        self.assertFalse(generated or svm in classes or ffm in classes or service in names)
+                        self.assertEqual(artifact_suffixes(module), ('.pom', '.jar', '-sources.jar'))
+                        self.assertFalse([p for p in (base / module).rglob('*') if p.suffix in ('.a', '.so', '.h')])
+                    if module == 'csv-bindings':
+                        self.assertIn('dev/elide/truffledata/csv/kernel/generated/CsvNative.class', classes)
+                        self.assertIn('dev/elide/truffledata/csv/kernel/generated/CsvNativeFFM.class', classes)
+                        self.assertIn('META-INF/native-image/dev.elide.myna/dev.elide.truffledata.csv.kernel.generated.CsvNative/native-image.properties', names)
+                        self.assertEqual(classes, generated)
+                    if module == 'csv-native':
+                        # Static images take this jar: the FFM backend must stay out of it.
+                        self.assertIn(svm, classes)
+                        self.assertIn('dev/elide/truffledata/csv/kernel/svm/SvmIndexer$Backend', {n[:-6] for n in classes})
+                        self.assertFalse(generated or ffm in classes)
+                        with zipfile.ZipFile(str(prefix) + '.jar') as jar:
+                            self.assertEqual(jar.read(service).decode().split(), ['dev.elide.truffledata.csv.kernel.svm.SvmIndexer$Backend'])
+                        self.assertTrue(Path(str(prefix) + '-linux-x86_64.a').read_bytes().startswith(b'!<arch>\n'))
+                        self.assertTrue(Path(str(prefix) + '-linux-x86_64.so').read_bytes().startswith(b'\x7fELF'))
+                    if module == 'csv-jvm':
+                        self.assertIn(ffm, classes)
+                        self.assertFalse(generated or svm in classes)
+                        with zipfile.ZipFile(str(prefix) + '.jar') as jar:
+                            self.assertEqual(jar.read(service).decode().split(), ['dev.elide.truffledata.csv.kernel.jvm.FfmIndexer$Backend'])
+                if module == 'json':
+                    self.assertTrue(Path(str(prefix) + '-linux-x86_64.a').read_bytes().startswith(b'!<arch>\n'))
                 for path in (directory / version).iterdir():
                     if path.suffix in ('.pom', '.jar'):
                         self.assertEqual(Path(str(path) + '.sha256').read_text().strip(), hashlib.sha256(path.read_bytes()).hexdigest())

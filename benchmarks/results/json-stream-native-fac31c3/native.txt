@@ -1,0 +1,8 @@
+simdjson 5.1.1 active implementation: icelake
+ndjson   228484 B | N0 per-line session_decode + reset                              534 ns/doc      428 MB/s
+ndjson   228484 B | N1 stream: one feed, next() per document (batch 1 MiB)          577 ns/doc      396 MB/s
+ndjson   228484 B | N2 stream: 64 KiB feeds (batch 1 MiB)                           610 ns/doc      374 MB/s
+ndjson   228484 B | N3 stream: 64 KiB feeds (batch and max document 64 KiB)         623 ns/doc      367 MB/s
+ndjson   228484 B | N4 N1 + stream create/release per round                         576 ns/doc      396 MB/s
+ndjson   228484 B | I0 iterate_many(1 MiB) + source() per document, no decode        83 ns/doc     2751 MB/s
+ndjson   228484 B | steady state: index_allocations=0

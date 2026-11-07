@@ -1,0 +1,112 @@
+module truffledata_yaml abi=1 target=x86_64-unknown-linux-gnu java_package=dev.elide.truffledata.yaml.generated java_class=Yaml c_library=truffledata_yaml c_library_static=true
+struct YamlResult size=488 align=8
+  field owner type=ptr<void> offset=0
+  field view type=ptr<void> offset=8
+  field copied_input_bytes type=u64 offset=16
+  field padded_input_bytes type=u64 offset=24
+  field index_retained_bytes type=u64 offset=32
+  field index_peak_bytes type=u64 offset=40
+  field index_allocations type=u64 offset=48
+  field parser_input_capacity type=u64 offset=56
+  field control_bytes type=u64 offset=64
+  field lexical type=ptr<void> offset=72
+  field lexical_count type=u64 offset=80
+  field key_hashes type=ptr<void> offset=88
+  field yaml_meta type=ptr<void> offset=96
+  field tags type=ptr<void> offset=104
+  field tag_count type=u64 offset=112
+  field anchors type=ptr<void> offset=120
+  field anchor_count type=u64 offset=128
+  field alias_targets type=ptr<void> offset=136
+  field alias_count type=u64 offset=144
+  field strings type=ptr<u8> offset=152
+  field strings_length type=u64 offset=160
+  field directives type=ptr<void> offset=168
+  field directive_count type=u64 offset=176
+  field source type=ptr<u8> offset=184
+  field source_length type=u64 offset=192
+  field yaml_version type=u32 offset=200
+  field document_flags type=u32 offset=204
+  field error_line type=u64 offset=208
+  field error_column type=u64 offset=216
+  field error_message_length type=u32 offset=224
+  field error_message type=u8 offset=232
+end
+struct YamlOptionsStruct size=80 align=8
+  field max_input_bytes type=u64 offset=0
+  field max_index_bytes type=u64 offset=8
+  field max_nodes type=u64 offset=16
+  field max_text_bytes type=u64 offset=24
+  field max_aliases type=u64 offset=32
+  field max_alias_expansion type=u64 offset=40
+  field max_depth type=u32 offset=48
+  field schema type=u32 offset=52
+  field duplicate_keys type=u32 offset=56
+  field merge_keys type=u32 offset=60
+  field aliases type=u32 offset=64
+  field unknown_tags type=u32 offset=68
+  field version_directive type=u32 offset=72
+  field complex_keys type=u32 offset=76
+end
+struct YamlSpan size=8 align=4
+  field offset type=u32 offset=0
+  field length type=u32 offset=4
+end
+struct YamlAnchor size=16 align=8
+  field node type=u64 offset=0
+  field offset type=u32 offset=8
+  field length type=u32 offset=12
+end
+struct YamlTagDirective size=16 align=4
+  field handle_offset type=u32 offset=0
+  field handle_length type=u32 offset=4
+  field prefix_offset type=u32 offset=8
+  field prefix_length type=u32 offset=12
+end
+import fingerprint symbol=td_yaml_fingerprint return=ptr<u8> error=no_failure native_leaf=true@explicit_contract
+end
+import release symbol=td_yaml_release return=void error=no_failure native_leaf=false@explicit_contract
+  param result type=ptr<void> nullable=false ownership=borrowed access=read_write
+end
+import session_create symbol=td_yaml_session_create return=ptr<void> error=no_failure native_leaf=false@explicit_contract
+  param options type=ptr<void> nullable=false ownership=borrowed access=read
+end
+import session_decode symbol=td_yaml_session_decode return=i32 error=no_failure native_leaf=false@explicit_contract
+  param session type=ptr<void> nullable=false ownership=borrowed access=read_write
+  param data type=ptr<u8> nullable=false ownership=borrowed access=read
+  param length type=u64
+  param flags type=u32
+  param text_out type=ptr<u8> nullable=true ownership=borrowed access=read_write
+  param text_capacity type=u64
+  param result type=ptr<void> nullable=false ownership=borrowed access=read_write
+end
+import session_retain symbol=td_yaml_session_retain return=i32 error=no_failure native_leaf=false@explicit_contract
+  param session type=ptr<void> nullable=false ownership=borrowed access=read_write
+  param result type=ptr<void> nullable=false ownership=borrowed access=read_write
+end
+import session_reset symbol=td_yaml_session_reset return=void error=no_failure native_leaf=true@explicit_contract
+  param session type=ptr<void> nullable=false ownership=borrowed access=read_write
+end
+import session_release symbol=td_yaml_session_release return=void error=no_failure native_leaf=false@explicit_contract
+  param session type=ptr<void> nullable=false ownership=borrowed access=read_write
+end
+import stream_create symbol=td_yaml_stream_create return=ptr<void> error=no_failure native_leaf=false@explicit_contract
+  param session type=ptr<void> nullable=false ownership=borrowed access=read_write
+  param max_document_bytes type=u64
+  param buffer_bytes type=u64
+end
+import stream_feed symbol=td_yaml_stream_feed return=u64 error=no_failure native_leaf=false@explicit_contract
+  param stream type=ptr<void> nullable=false ownership=borrowed access=read_write
+  param data type=ptr<u8> nullable=false ownership=borrowed access=read
+  param length type=u64
+end
+import stream_finish symbol=td_yaml_stream_finish return=void error=no_failure native_leaf=false@explicit_contract
+  param stream type=ptr<void> nullable=false ownership=borrowed access=read_write
+end
+import stream_next symbol=td_yaml_stream_next return=i32 error=no_failure native_leaf=false@explicit_contract
+  param stream type=ptr<void> nullable=false ownership=borrowed access=read_write
+  param result type=ptr<void> nullable=false ownership=borrowed access=read_write
+end
+import stream_release symbol=td_yaml_stream_release return=void error=no_failure native_leaf=false@explicit_contract
+  param stream type=ptr<void> nullable=false ownership=borrowed access=read_write
+end

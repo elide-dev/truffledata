@@ -14,7 +14,7 @@ The pinned GraalVM fork version is shared by the SDK toolchains and Maven artifa
 
 ## Native optimization
 
-The Elide toolchain is pinned to v2026.11.1. Rust target compilation, host Cargo tooling, rustfmt, and rust-analyzer use its `rustversion` recommendation, `nightly-2026-10-09` (Rust LLVM 23.1.3). `rust-toolchain.toml` gives local tools the same dated pin; Bazel downloads have explicit SHA256 checksums.
+The Elide toolchain is pinned to v2026.11.5. Rust target compilation, host Cargo tooling, rustfmt, and rust-analyzer use its `rustversion` recommendation, `nightly-2026-10-09` (Rust LLVM 23.1.3). `rust-toolchain.toml` gives local tools the same dated pin; Bazel downloads have explicit SHA256 checksums.
 
 Default builds use `--compilation_mode=opt`, including transitive Rust crates. An adapter's explicit `-Copt-level=3` does not optimize its dependencies in `fastbuild`.
 
@@ -50,15 +50,16 @@ Gazelle owns the `data_java_library` declarations for core, JDBC, Protobuf, test
 
 `.github/workflows/ci.yml` calls the reusable `check.bazel.yml` workflow on pushes to main, pull requests and manual dispatch. Jobs use Elide's SHA-pinned harden-runner, checkout, artifact and Codecov actions; checkout credentials are not persisted. BuildBuddy uses the inherited `BUILDBUDDY_API_KEY` (or organization-wide `BUILDBUDDY_APIKEY`) in a temporary mode-0600 `user.bazelrc`, removed on every exit path. Fork PRs and runs without that key explicitly use local execution on the hosted Linux runner, without accessing the shared cache.
 
-The workflow runs Gazelle drift checks and `bazel test //...`, preserves JUnit XML, then runs `bazel coverage //tests:test --config=codecov`. Allocation/JIT gates run without instrumentation; only production core/JDBC/Protobuf sources contribute to LCOV. Reporting validates real source paths and covered lines in every module, and preserves testcase failure details in a combined JUnit report. Both reports go to Codecov using the inherited global `CODECOV_TOKEN`, with the current repository slug and `jvm` flag. Upload errors fail CI. Fork PRs receive no secrets and retain their reports as Actions artifacts without uploading to Codecov.
+The workflow runs Gazelle drift checks and `bazel test //...`, preserves JUnit XML, then runs `bazel coverage` over `//tests:test`, the Buffa JVM lanes, `//json/tests:jvm` and `//csv/tests:jvm` with `--config=codecov`. Allocation/JIT gates run without instrumentation; only production core/JDBC/Protobuf/Buffa/JSON/CSV sources contribute to LCOV (not generated bindings). `.github/scripts/coverage_contract.py` then requires every method of the listed access surfaces to be covered, except the exact SVM-only methods it names; the static SVM paths and compiled gates run in `check.buffa.yml` (`//json/tests:native_test`, `//csv/tests:native_test`, `//benchmarks/comparison:json_native_smoke`, `//tools/release:json_native_test`). Reporting validates real source paths and covered lines in every module, and preserves testcase failure details in a combined JUnit report. Both reports go to Codecov using the inherited global `CODECOV_TOKEN`, with the current repository slug and `jvm` flag. Upload errors fail CI. Fork PRs receive no secrets and retain their reports as Actions artifacts without uploading to Codecov.
 
 Local reproduction:
 
 ```sh
 bazel test //...
 python3 .github/scripts/reports.py junit
-bazel coverage //tests:test --config=codecov
+bazel coverage //tests:test //protobuf-buffa/tests:jvm //protobuf-buffa/tests:jvm_non_strict //protobuf-buffa/tests:jvm_views //protobuf-buffa/tests:jvm_views_strict //protobuf-buffa/tests:jvm_no_native_access //json/tests:jvm //csv/tests:jvm --config=codecov
 python3 .github/scripts/reports.py coverage
+python3 .github/scripts/coverage_contract.py
 ```
 
 JUnit is copied before the coverage invocation updates Bazel testlog symlinks. Reports are retained in the `bazel-reports` Actions artifact for 14 days, including logs on failure. The legacy BuildBuddy workflow remains usable, while GitHub Actions owns Codecov reporting.

@@ -36,10 +36,12 @@ plans SQL. TruffleData neither parses SQL nor translates guest callbacks into qu
 flowchart LR
     JDBC["JDBC results"] --> Adapt["Adapters + contracts"]
     Proto["Protobuf messages / binary / text"] --> Adapt
+    Json["JSON text (simdjson)"] --> Adapt
+    Csv["CSV text (strict RFC 4180)"] --> Adapt
     Objects["Objects + sequences"] --> Adapt
     Schema["Build-time or runtime schema"] --> Adapt
-    Adapt --> Owned["Immutable batches / static rows"]
-    Adapt --> Borrowed["Scoped Buffa views"]
+    Adapt --> Owned["Immutable batches (incl. CSV) / static rows"]
+    Adapt --> Borrowed["Scoped Buffa and JSON views"]
     Adapt --> Dynamic["Live dynamic records"]
     Owned --> Access["Interop / DataLibrary / generated getters"]
     Borrowed --> Access
@@ -53,9 +55,12 @@ views enforce ownership, thread confinement, and lifetime. Java null stays at an
 ingestion boundaries; present null and missing fields have distinct representations.
 
 Use the JVM or Native Image. The optional Myna/Buffa backend supports JVM FFM and
-static SVM linkage, with Java fallback. Prebuilt native attachments target Linux x86-64.
-See [representation and compilation guarantees](docs/TRUFFLE.md) and
-[ownership and native setup](docs/BUFFA.md).
+static SVM linkage, with Java fallback. The unreleased simdjson JSON backend supports
+the same linkage without a Java fallback. The unreleased CSV backend is pure Java and
+runs identically on both. Prebuilt native attachments target Linux x86-64.
+See [representation and compilation guarantees](docs/TRUFFLE.md),
+[ownership and native setup](docs/BUFFA.md), the [JSON backend](docs/JSON.md) and the
+[CSV backend](docs/CSV.md).
 
 ## Choose an artifact
 
@@ -69,6 +74,12 @@ See [representation and compilation guarantees](docs/TRUFFLE.md) and
 | `dev.elide:truffledata-protobuf` | Protobuf contracts, Java codec, runtime schemas and generated getters |
 | `dev.elide:truffledata-protobuf-buffa` | Optional native parsing and borrowed typed views |
 | `dev.elide:truffledata-protobuf-buffa-bindings` | Myna bindings, pulled in by the Buffa adapter |
+| `dev.elide:truffledata-tape` | Shared native-tape values, sinks, export, snapshots, sessions, streams and typed records, with the Myna value ABI; pulled in by the JSON adapter |
+| `dev.elide:truffledata-tape-jvm` | JVM FFM tape reader, pulled in by the JSON JVM backend; keep it off native-image classpaths |
+| `dev.elide:truffledata-json` | Native simdjson JSON sessions, messages, streams, typed plans and the static SVM backend |
+| `dev.elide:truffledata-json-jvm` | JVM FFM backend for JSON; keep it off native-image classpaths |
+| `dev.elide:truffledata-json-bindings` | Myna JSON bindings, pulled in by the JSON adapter |
+| `dev.elide:truffledata-csv` | Strict streaming CSV into immutable string and primitive column batches, typed plans and one-pass export; pure Java |
 | `dev.elide:truffledata-bom` | Aligned libraries, drivers and runtime dependencies |
 
 The runtime baseline is **Java 25** and **Elide GraalVM `25.5.5-elide.24`**.
@@ -82,18 +93,23 @@ repositories {
     maven("https://maven.elide.dev/gvm-elide/25.5.5-elide.24")
 }
 dependencies {
-    implementation(platform("dev.elide:truffledata-bom:0.7.0"))
+    implementation(platform("dev.elide:truffledata-bom:0.8.0"))
     implementation("dev.elide:truffledata-core")
     implementation("dev.elide:truffledata-protobuf")
     // Add JDBC integrations or protobuf-buffa as needed.
 }
 ```
 
-[Release 0.7.0](https://github.com/elide-dev/truffledata/releases/tag/v0.7.0) includes
-source JARs, consumer POMs, checksums, and Buffa native attachments. See
+[Release 0.8.0](https://github.com/elide-dev/truffledata/releases/tag/v0.8.0) includes
+source JARs, consumer POMs, checksums, and Buffa, JSON and CSV native attachments. See
 [publishing and consumption](docs/PUBLISHING.md) for Maven, Bazel and native linking.
 
-Release **0.7.0** adds opt-in native-index typed views and cached shared primitive
+Release **0.8.0** adds native JSON (simdjson, scoped guest values, typed plans,
+sessions and streams), CSV (Commons CSV scope with SIMD structural-index kernels)
+and a shared tape layer, on Myna 0.11.0 and Elide toolchain 2026.11.5. See the
+[0.8.0 notes](docs/RELEASE_0_8_0.md).
+
+Release **0.7.0** added opt-in native-index typed views and cached shared primitive
 access, with stronger compilation, lifetime and coverage checks. Native **ABI 8**
 requires matching bindings and native libraries. The new
 [shared-consumer measurements](benchmarks/results/shared-consumer/README.md)
@@ -236,6 +252,8 @@ The internal `DataLibrary` is for cooperating implementations. `ReadLongNode` pr
 | `DynamicRecord` | Live `DynamicObject` view; cached shape-aware access and validation of mutable values |
 | `ProtoPlan` / `ProtoRow` | Lossless protobuf contracts, separate presence, compact scalars and generated access |
 | Buffa `TypedRow` | Scoped borrowed typed views; inline small integer records and borrowed bytes |
+| `JsonMessage` / `TapeSnapshot` | Scoped native JSON index or its immutable heap copy; ordered members, exact number tokens |
+| `CsvBatch` / `CsvRow` | Immutable, unconfined CSV batches over retained input; string spans unescaped on read, primitive INT64/FLOAT64/BOOLEAN columns |
 | `DataArray` | Sequences without a column schema |
 
 `DataNull` is the interop null object; `Missing` is an internal presence marker.
@@ -243,8 +261,9 @@ Missing fields raise the appropriate interop access error. `ExactNumber` preserv
 unsigned 64-bit integers and exact decimal values without silently rounding.
 
 LOBs, vendor-specific JDBC values, dates/times and arbitrary host objects require
-explicit adapter policies. Unsupported objects are rejected. RPC execution and general
-CSV/JSON adapters remain extension work; protobuf text/JSON parsing is supported.
+explicit adapter policies. Unsupported objects are rejected. RPC execution remains
+extension work; protobuf text/JSON parsing is supported, and general JSON
+([JSON backend](docs/JSON.md)) and CSV ([CSV backend](docs/CSV.md)) are in development.
 
 ## Build and verify
 
@@ -279,6 +298,8 @@ arbitrary downstream guest code or every deployment configuration. See [Truffle 
 | --- | --- |
 | [Contracts and samples](docs/CONTRACTS.md) | Schemas, nullity, protobuf presence, generated access and integration examples |
 | [Myna/Buffa](docs/BUFFA.md) | Native parsing, borrowed views, ownership, JVM and SVM setup |
+| [JSON](docs/JSON.md) | simdjson backend, ownership, number policy, interop and embedder export |
+| [CSV](docs/CSV.md) | Strict CSV contract, limits, typed plans, streaming, interop and export |
 | [Truffle guarantees](docs/TRUFFLE.md) | Specialization, boundaries, compilation and allocation gates |
 | [Comparison benchmarks](docs/COMPARISON_BENCHMARKS.md) | Raw results, charts, caveats and reproduction |
 | [Continuous benchmarks](docs/BENCHMARKS.md) | CodSpeed simulation cases and methodology |

@@ -1,0 +1,69 @@
+INFO: Streaming build results to: https://app.buildbuddy.io/invocation/8e25d5ee-8bad-45f9-a5f4-52b4808c193c
+simdjson 5.1.1 active implementation: icelake (Intel/AMD AVX512)
+SIMDJSON_THREADS_ENABLED not defined (document_stream is single-threaded)
+small       210 B | iterate only (stage 1)                               37 ns     5690 MB/s
+small       210 B | W0 bare walk                                        671 ns      313 MB/s
+small       210 B | W1 bare walk + pmr set                             1165 ns      180 MB/s
+small       210 B | W2 lean walk, no dups                               532 ns      395 MB/s
+small       210 B | W3 lean walk + linear/OA dups                       629 ns      334 MB/s
+small       210 B | current document: nodes=31 index_allocations=1 index_peak=4096 retained=4096
+small       210 B | baseline document (861dff1): nodes=31 index_allocations=33 index_peak=1784 retained=1113
+small       210 B | B0 baseline document 861dff1 (default resource)       2145 ns       98 MB/s
+small       210 B | D0 current document (default resource)              807 ns      260 MB/s
+small       210 B | D1 current document (monotonic arena)               770 ns      273 MB/s
+small       210 B | D2 lean decode -> builder, arena, spans            1429 ns      147 MB/s
+small       210 B | D3 lean decode -> builder, arena, no spans         1472 ns      143 MB/s
+small       210 B | D4 DOM parse only                                   254 ns      827 MB/s
+small       210 B | D5 DOM parse + walk -> builder, arena              1063 ns      198 MB/s
+small       210 B | A0 C ABI decode+release                             862 ns      244 MB/s
+small       210 B | S0 session decode+reset (borrowed)                  745 ns      282 MB/s
+small       210 B | S1 session decode+retain+release                    899 ns      234 MB/s
+small       210 B | session steady state: index_allocations=1
+small       210 B | A1 C ABI decode only (release excluded)            1207 ns      174 MB/s
+medium     4330 B | iterate only (stage 1)                              428 ns    10111 MB/s
+medium     4330 B | W0 bare walk                                      13386 ns      323 MB/s
+medium     4330 B | W1 bare walk + pmr set                            24384 ns      178 MB/s
+medium     4330 B | W2 lean walk, no dups                             11699 ns      370 MB/s
+medium     4330 B | W3 lean walk + linear/OA dups                     12493 ns      347 MB/s
+medium     4330 B | current document: nodes=621 index_allocations=1 index_peak=40960 retained=40960
+medium     4330 B | baseline document (861dff1): nodes=621 index_allocations=371 index_peak=46120 retained=33504
+medium     4330 B | B0 baseline document 861dff1 (default resource)      38286 ns      113 MB/s
+medium     4330 B | D0 current document (default resource)            19248 ns      225 MB/s
+medium     4330 B | D1 current document (monotonic arena)             18969 ns      228 MB/s
+medium     4330 B | D2 lean decode -> builder, arena, spans           31540 ns      137 MB/s
+medium     4330 B | D3 lean decode -> builder, arena, no spans        30635 ns      141 MB/s
+medium     4330 B | D4 DOM parse only                                  4623 ns      937 MB/s
+medium     4330 B | D5 DOM parse + walk -> builder, arena             23037 ns      188 MB/s
+medium     4330 B | A0 C ABI decode+release                           20315 ns      213 MB/s
+medium     4330 B | S0 session decode+reset (borrowed)                18446 ns      235 MB/s
+medium     4330 B | S1 session decode+retain+release                  16191 ns      267 MB/s
+medium     4330 B | session steady state: index_allocations=1
+medium     4330 B | A1 C ABI decode only (release excluded)           14711 ns      294 MB/s
+big      228485 B | iterate only (stage 1)                            24175 ns     9451 MB/s
+big      228485 B | W0 bare walk                                     671461 ns      340 MB/s
+big      228485 B | W1 bare walk + pmr set                          1297319 ns      176 MB/s
+big      228485 B | W2 lean walk, no dups                            566428 ns      403 MB/s
+big      228485 B | W3 lean walk + linear/OA dups                    726134 ns      315 MB/s
+big      228485 B | current document: nodes=31001 index_allocations=4 index_peak=2089556 retained=2089556
+big      228485 B | baseline document (861dff1): nodes=31001 index_allocations=17047 index_peak=1463192 retained=1090640
+big      228485 B | B0 baseline document 861dff1 (default resource)    2196973 ns      104 MB/s
+big      228485 B | D0 current document (default resource)           882295 ns      259 MB/s
+big      228485 B | D1 current document (monotonic arena)            804120 ns      284 MB/s
+big      228485 B | D2 lean decode -> builder, arena, spans         1540523 ns      148 MB/s
+big      228485 B | D3 lean decode -> builder, arena, no spans      1508396 ns      151 MB/s
+big      228485 B | D4 DOM parse only                                226969 ns     1007 MB/s
+big      228485 B | D5 DOM parse + walk -> builder, arena           1213622 ns      188 MB/s
+big      228485 B | A0 C ABI decode+release                          983563 ns      232 MB/s
+big      228485 B | S0 session decode+reset (borrowed)              1044883 ns      219 MB/s
+big      228485 B | S1 session decode+retain+release                 877076 ns      261 MB/s
+big      228485 B | session steady state: index_allocations=4
+big      228485 B | A1 C ABI decode only (release excluded)          996817 ns      229 MB/s
+ndjson   228484 B | per-document iterate + lean walk                    783 ns/doc      292 MB/s
+ndjson   228484 B | iterate_many(batch=  65536) + lean walk                 660 ns/doc      349 MB/s
+ndjson   228484 B | iterate_many(batch=1048576) + lean walk                 646 ns/doc      389 MB/s
+ndjson   228484 B | iterate_many(batch=4194304) + lean walk                 577 ns/doc      403 MB/s
+big      228485 B | at_pointer(/999/id) fresh iterate                   51494 ns
+big      228485 B | at_pointer(/0/id) fresh iterate                     19759 ns
+big      228485 B | top-level frame index by raw_json() skipping        61030 ns     3744 MB/s
+big      228485 B | materialize one element from its frame              1570 ns
+INFO: Streaming build results to: https://app.buildbuddy.io/invocation/8e25d5ee-8bad-45f9-a5f4-52b4808c193c

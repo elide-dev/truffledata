@@ -1,0 +1,177 @@
+load("@rules_graalvm//graalvm:defs.bzl", "native_image")
+load("@rules_java//java:defs.bzl", "java_test")
+load("@rules_shell//shell:sh_test.bzl", "sh_test")
+load("//bazel:java.bzl", "data_java_library")
+load("//bazel:jit.bzl", "TRUFFLE_JIT_CHECKS")
+
+data_java_library(
+    name = "acceptance",
+    testonly = True,
+    srcs = [
+        "CompiledReads.java",
+        "SvmAcceptance.java",
+        "TestLanguage.java",
+        "package-info.java",
+    ],
+    deps = [
+        "//core",
+        "//csv",
+        "@maven//:org_graalvm_polyglot_polyglot",
+        "@maven//:org_graalvm_truffle_truffle_api",
+    ],
+)
+
+native_image(
+    name = "native",
+    testonly = True,
+    exec_properties = {
+        "EstimatedCPU": "8",
+        "EstimatedMemory": "24GB",
+    },
+    executable_name = "csv_acceptance",
+    extra_args = [
+        "--gc=serial",
+        "--initialize-at-build-time=dev.elide.truffledata",
+        "-ea",
+        "--parallelism=8",
+        "-march=compatibility",
+        "-H:+UnlockExperimentalVMOptions",
+    ] + TRUFFLE_JIT_CHECKS + ["-H:-UnlockExperimentalVMOptions"],
+    graalvm_sdk = "@graalvm_linux_amd64//:gvm",
+    main_class = "dev.elide.truffledata.csv.tests.SvmAcceptance",
+    optimization_mode = "2",
+    tags = ["manual"],
+    target_compatible_with = [
+        "@platforms//os:linux",
+        "@platforms//cpu:x86_64",
+    ],
+    deps = [
+        ":acceptance",
+        "@maven//:org_graalvm_truffle_truffle_runtime",
+    ],
+)
+
+sh_test(
+    name = "native_test",
+    size = "large",
+    srcs = ["native_test.sh"],
+    args = ["$(rootpath :native)"],
+    data = [":native"],
+    tags = ["manual"],
+    target_compatible_with = [
+        "@platforms//os:linux",
+        "@platforms//cpu:x86_64",
+    ],
+)
+
+JVM_SRCS = [
+    "ChunkedInput.java",
+    "CommonsDifferentialTest.java",
+    "CsvApiSurfaceTest.java",
+    "CommonsFormats.java",
+    "CommonsRoundTripTest.java",
+    "CommonsScannerTest.java",
+    "CsvBatchTest.java",
+    "CsvFuzz.java",
+    "CsvExportTest.java",
+    "CsvFormatTest.java",
+    "CsvFusedTest.java",
+    "CsvIndexTest.java",
+    "CsvInteropTest.java",
+    "CsvKernelTest.java",
+    "CsvMappingTest.java",
+    "CsvNullsTest.java",
+    "CsvPlanTest.java",
+    "CsvReaderTest.java",
+    "CsvScannerTest.java",
+    "Differential.java",
+    "IndexedDifferentialTest.java",
+    "ListSink.java",
+    "NumbersTest.java",
+    "RecordGenerator.java",
+    "CsvWriterTest.java",
+    "Utf8Test.java",
+]
+
+JVM_CLASSES = [
+    "CommonsDifferentialTest",
+    "CsvApiSurfaceTest",
+    "CommonsRoundTripTest",
+    "CommonsScannerTest",
+    "CsvBatchTest",
+    "CsvExportTest",
+    "CsvFormatTest",
+    "CsvFusedTest",
+    "CsvIndexTest",
+    "CsvInteropTest",
+    "CsvKernelTest",
+    "CsvMappingTest",
+    "CsvNullsTest",
+    "CsvPlanTest",
+    "CsvReaderTest",
+    "CsvScannerTest",
+    "CsvWriterTest",
+    "IndexedDifferentialTest",
+    "NumbersTest",
+    "Utf8Test",
+]
+
+JVM_ARGS = [
+    arg
+    for name in JVM_CLASSES
+    for arg in [
+        "--class",
+        "dev.elide.truffledata.csv." + name,
+    ]
+]
+
+JVM_DEPS = [
+    "//core",
+    "//csv",
+    "@maven//:org_apache_commons_commons_csv",
+    "@maven//:org_graalvm_polyglot_polyglot",
+    "@maven//:org_graalvm_truffle_truffle_api",
+    "@maven//:org_jspecify_jspecify",
+    "@maven//:org_junit_jupiter_junit_jupiter_api",
+]
+
+java_test(
+    name = "jvm",
+    srcs = JVM_SRCS,
+    args = JVM_ARGS,
+    jvm_flags = [
+        "-Dpolyglot.engine.WarnInterpreterOnly=false",
+        "-ea",
+    ],
+    main_class = "dev.elide.bazel.junit.BazelJUnitRunner",
+    use_testrunner = False,
+    runtime_deps = [
+        "//bazel/junit:runner",
+        "@maven//:org_graalvm_truffle_truffle_runtime",
+    ],
+    deps = JVM_DEPS,
+)
+
+# Every suite again with the index path forced at every input size over 64-byte kernel calls
+# (ForceIndex, registered by JUnit extension autodetection), so the unchanged scanner, reader,
+# plan, Commons differential and mapped-input suites also check the index path and its fallback.
+java_test(
+    name = "jvm_indexed",
+    size = "large",
+    srcs = JVM_SRCS + ["ForceIndex.java"],
+    args = JVM_ARGS,
+    jvm_flags = [
+        "-Dpolyglot.engine.WarnInterpreterOnly=false",
+        "-Djunit.jupiter.extensions.autodetection.enabled=true",
+        "-ea",
+    ],
+    main_class = "dev.elide.bazel.junit.BazelJUnitRunner",
+    resource_strip_prefix = "csv/tests/indexed",
+    resources = ["indexed/META-INF/services/org.junit.jupiter.api.extension.Extension"],
+    use_testrunner = False,
+    runtime_deps = [
+        "//bazel/junit:runner",
+        "@maven//:org_graalvm_truffle_truffle_runtime",
+    ],
+    deps = JVM_DEPS,
+)

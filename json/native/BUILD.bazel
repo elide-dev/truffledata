@@ -4,10 +4,15 @@ cc_library(
     name = "decoder",
     hdrs = [
         "decoder.h",
-        "index_memory.h",
+        "parser_pool.h",
+        "session.h",
+        "status.h",
+        "stream.h",
     ],
     copts = ["-std=c++17"],
     deps = [
+        "//bazel:unicode",
+        "//tape/native:tape",
         "@myna//:values_headers",
         "@simdjson",
     ],
@@ -75,9 +80,30 @@ cc_library(
     ],
 )
 
+# Everything a static (SVM) image links for JSON: the C ABI plus Myna's myna-values static library,
+# whose myna_utf8_to_utf16_v2 SvmValueTape calls for long strings. JVM builds use json_shared.so.
+cc_library(
+    name = "svm",
+    visibility = ["//visibility:public"],
+    deps = [
+        ":truffledata_json",
+        "//json/native/bridge",
+    ],
+)
+
 cc_test(
     name = "api_test",
     srcs = ["api_test.cc"],
+    copts = ["-std=c++17"],
+    deps = [
+        ":truffledata_json",
+        "@myna//:values_headers",
+    ],
+)
+
+cc_test(
+    name = "stream_test",
+    srcs = ["stream_test.cc"],
     copts = ["-std=c++17"],
     deps = [
         ":truffledata_json",

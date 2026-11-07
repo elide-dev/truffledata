@@ -1,6 +1,8 @@
 load("@protobuf//bazel:proto_library.bzl", "proto_library")
 load("@rules_graalvm//graalvm:defs.bzl", "native_image")
+load("@rules_cc//cc:defs.bzl", "cc_binary")
 load("@rules_java//java:defs.bzl", "java_binary", "java_test")
+load("@rules_rust//rust:defs.bzl", "rust_binary")
 load("@rules_shell//shell:sh_test.bzl", "sh_test")
 load("//bazel:java.bzl", "data_java_library")
 load("//bazel:jit.bzl", "TRUFFLE_JIT_CHECKS")
@@ -255,6 +257,18 @@ sh_test(
     ],
 )
 
+# Shared with the CodSpeed simulation cases in //benchmarks, so both measure one fixture.
+data_java_library(
+    name = "json_fixture",
+    srcs = ["JsonFixture.java"],
+    visibility = ["//benchmarks:__pkg__"],
+    deps = [
+        "//json",
+        "@maven//:com_google_code_gson_gson",
+        "@maven//:org_graalvm_truffle_truffle_api",
+    ],
+)
+
 data_java_library(
     name = "json_comparison",
     testonly = True,
@@ -263,6 +277,7 @@ data_java_library(
         "JsonComparison.java",
     ],
     deps = [
+        ":json_fixture",
         "//core",
         "//json",
         "@maven//:com_google_code_gson_gson",
@@ -276,7 +291,7 @@ native_image(
     # Keep JsonComparison build-time initialized: its static helpers must be JIT eligible.
     name = "json_svm",
     testonly = True,
-    cc_deps = ["//json/native:truffledata_json"],
+    cc_deps = ["//json/native:svm"],
     exec_properties = {
         "EstimatedCPU": "8",
         "EstimatedMemory": "24GB",
@@ -347,7 +362,7 @@ data_java_library(
 native_image(
     name = "json_svm_profile",
     testonly = True,
-    cc_deps = ["//json/native:truffledata_json"],
+    cc_deps = ["//json/native:svm"],
     exec_properties = {
         "EstimatedCPU": "8",
         "EstimatedMemory": "24GB",
@@ -477,3 +492,225 @@ sh_test(
         "@platforms//cpu:x86_64",
     ],
 )
+
+# ---- CSV comparison (benchmarks/comparison/CSV.md). Competitors are benchmark-only dependencies.
+
+# Benchmark-only access to package-private CSV internals (the strict scanner, UTF-8 validator and
+# number parsers); never part of a published artifact.
+data_java_library(
+    name = "csv_bench",
+    testonly = True,
+    srcs = ["csv/CsvBench.java"],
+    deps = ["//csv"],
+)
+
+CSV_COMPETITORS = [
+    "@maven//:com_fasterxml_jackson_core_jackson_core",
+    "@maven//:com_fasterxml_jackson_dataformat_jackson_dataformat_csv",
+    "@maven//:com_univocity_univocity_parsers",
+    "@maven//:de_siegmar_fastcsv",
+    "@maven//:org_apache_commons_commons_csv",
+]
+
+data_java_library(
+    name = "csv_comparison",
+    testonly = True,
+    srcs = [
+        "ComparisonLanguage.java",
+        "CsvComparison.java",
+        "CsvFixture.java",
+    ],
+    deps = CSV_COMPETITORS + [
+        ":csv_bench",
+        "//core",
+        "//csv",
+        "//csv/kernel",
+        "//csv/kernel:vector",
+        "@maven//:org_graalvm_polyglot_polyglot",
+        "@maven//:org_graalvm_truffle_truffle_api",
+        "@maven//:org_graalvm_truffle_truffle_runtime",
+    ],
+)
+
+data_java_library(
+    name = "csv_comparison_svm",
+    testonly = True,
+    srcs = ["CsvComparisonSvm.java"],
+    deps = [
+        ":csv_comparison",
+        "//csv/kernel",
+        "//csv/kernel:svm",
+    ],
+)
+
+data_java_library(
+    name = "csv_comparison_jvm",
+    testonly = True,
+    srcs = ["CsvComparisonJvm.java"],
+    deps = [
+        ":csv_comparison",
+        "//csv/kernel",
+        "//csv/kernel:jvm",
+    ],
+)
+
+CSV_SVM_ARGS = [
+    "--gc=serial",
+    "--parallelism=8",
+    "--add-modules=jdk.incubator.vector",
+    "--initialize-at-build-time=dev.elide.truffledata",
+    # Competitor singletons, and the vector species chosen for the CPU that runs the image.
+    "--initialize-at-run-time=dev.elide.truffledata.comparison.CsvComparison$$Competitors",
+    "--initialize-at-run-time=dev.elide.truffledata.csv.kernel.vector.VectorIndexer",
+    "--add-exports=org.graalvm.truffle.runtime/com.oracle.truffle.runtime=ALL-UNNAMED",
+    "-H:+UnlockExperimentalVMOptions",
+] + TRUFFLE_JIT_CHECKS + ["-H:-UnlockExperimentalVMOptions"]
+
+# The repository's portable image (-march=compatibility) and a variant for x86-64-v3 hosts, where
+# Java code may use AVX2, BMI2, POPCNT and LZCNT (the Java kernels' bit operations depend on it).
+[
+    native_image(
+        name = name,
+        testonly = True,
+        cc_deps = ["//csv/native:truffledata_csv"],
+        exec_properties = {
+            "EstimatedCPU": "8",
+            "EstimatedMemory": "24GB",
+        },
+        executable_name = executable,
+        extra_args = CSV_SVM_ARGS + [march],
+        graalvm_sdk = "@graalvm_linux_amd64//:gvm",
+        main_class = "dev.elide.truffledata.comparison.CsvComparisonSvm",
+        optimization_mode = "2",
+        tags = ["manual"],
+        target_compatible_with = [
+            "@platforms//os:linux",
+            "@platforms//cpu:x86_64",
+        ],
+        deps = [":csv_comparison_svm"],
+    )
+    for name, executable, march in [
+        ("csv_svm", "csv-comparison", "-march=compatibility"),
+        ("csv_svm_v3", "csv-comparison-v3", "-march=x86-64-v3"),
+    ]
+]
+
+CSV_JVM_FLAGS = [
+    "--add-modules=jdk.incubator.vector",
+    "--enable-native-access=ALL-UNNAMED",
+]
+
+java_binary(
+    name = "csv_jvm",
+    testonly = True,
+    data = ["//csv/native:csv_shared.so"],
+    jvm_flags = CSV_JVM_FLAGS + ["-Xmx8g"],
+    main_class = "dev.elide.truffledata.comparison.CsvComparisonJvm",
+    runtime_deps = [":csv_comparison_jvm"],
+)
+
+# JVM smoke: every engine on every fixture; checksums must agree within a workload.
+java_test(
+    name = "csv_jvm_smoke",
+    size = "large",
+    args = ["--smoke"],
+    data = ["//csv/native:csv_shared.so"],
+    jvm_flags = CSV_JVM_FLAGS,
+    main_class = "dev.elide.truffledata.comparison.CsvComparisonJvm",
+    use_testrunner = False,
+    runtime_deps = [":csv_comparison_jvm"],
+)
+
+sh_test(
+    name = "csv_native_smoke",
+    size = "large",
+    srcs = ["csv_smoke.sh"],
+    args = ["$(rootpath :csv_svm)"],
+    data = [
+        "csv_smoke.py",
+        ":csv_svm",
+    ],
+    tags = ["manual"],
+    target_compatible_with = [
+        "@platforms//os:linux",
+        "@platforms//cpu:x86_64",
+    ],
+)
+
+# Native reference probes, measured on the same worker as the Java cells (never shipped).
+cc_binary(
+    name = "csv_probe",
+    testonly = True,
+    srcs = ["csv_probe.cc"],
+    copts = [
+        "-std=c++17",
+        "-O3",
+    ],
+    deps = [
+        "//bazel:unicode",
+        "//csv/native:index",
+    ],
+)
+
+rust_binary(
+    name = "csv_probe_rs",
+    testonly = True,
+    srcs = ["csv-probe/main.rs"],
+    crate_root = "csv-probe/main.rs",
+    edition = "2024",
+    rustc_flags = ["-Copt-level=3"],
+    deps = [
+        "@crates//:csv",
+        "@crates//:csv-core",
+    ],
+)
+
+java_binary(
+    name = "csv_fixture",
+    testonly = True,
+    jvm_flags = CSV_JVM_FLAGS,
+    main_class = "dev.elide.truffledata.comparison.CsvComparisonJvm",
+    runtime_deps = [":csv_comparison_jvm"],
+)
+
+# Fresh-process measurements with raw samples, one shard per (dataset, size) plus a size sweep for
+# kernel crossovers; each shard also runs the native probes on its own worker.
+[
+    sh_test(
+        name = name,
+        size = "enormous",
+        srcs = ["csv_measure.sh"],
+        args = [
+            runtime,
+            "$(rootpath %s)" % binary,
+            "$(rootpath :csv_fixture)",
+            "$(rootpath :csv_probe)",
+            "$(rootpath :csv_probe_rs)",
+        ],
+        data = [
+            "csv_measure.py",
+            binary,
+            ":csv_fixture",
+            ":csv_probe",
+            ":csv_probe_rs",
+        ],
+        exec_properties = {
+            "EstimatedCPU": "4",
+            "EstimatedMemory": "16GB",
+        },
+        shard_count = 9,
+        tags = [
+            "benchmark",
+            "manual",
+        ],
+        target_compatible_with = [
+            "@platforms//os:linux",
+            "@platforms//cpu:x86_64",
+        ],
+    )
+    for name, runtime, binary in [
+        ("csv_measure", "svm", ":csv_svm"),
+        ("csv_measure_v3", "svm", ":csv_svm_v3"),
+        ("csv_measure_jvm", "jvm", ":csv_jvm"),
+    ]
+]

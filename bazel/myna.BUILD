@@ -9,9 +9,15 @@ java_binary(
 )
 
 # Myna's producer-neutral value ABI is separate from the code generator.
+filegroup(
+    name = "values_sources",
+    srcs = glob(["src/values/java/**/*.java"]),
+    visibility = ["//visibility:public"],
+)
+
 java_library(
     name = "values",
-    srcs = glob(["src/values/java/**/*.java"]),
+    srcs = [":values_sources"],
     visibility = ["//visibility:public"],
     deps = [
         "@maven//:org_graalvm_sdk_nativeimage",

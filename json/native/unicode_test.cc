@@ -25,32 +25,32 @@ int main() {
       scalar_field field{"s", scalar_kind::string};
       field.length_unit = unit;
       field.minimum_length = field.maximum_length = (unit == 1 ? 4 : 3) * repetitions;
-      scalar_plan exact({field});
+      typed_plan exact({field});
       for (const auto& encoded : {utf8, escaped}) {
-        scalar_document accepted(exact, "{\"s\":\"" + encoded + "\"}");
+        typed_document accepted(exact, "{\"s\":\"" + encoded + "\"}");
         check(accepted.slot(0).text_length == utf8.size());
         check(accepted.allocations().index_allocations == 1);
         ++field.minimum_length;
         ++field.maximum_length;
-        scalar_plan too_long({field});
-        rejects([&] { scalar_document invalid(too_long, "{\"s\":\"" + encoded + "\"}"); });
+        typed_plan too_long({field});
+        rejects([&] { typed_document invalid(too_long, "{\"s\":\"" + encoded + "\"}"); });
         --field.minimum_length;
         --field.maximum_length;
       }
       if (repetitions) {
         --field.minimum_length; --field.maximum_length;
-        scalar_plan too_short({field});
-        rejects([&] { scalar_document invalid(too_short, "{\"s\":\"" + utf8 + "\"}"); });
+        typed_plan too_short({field});
+        rejects([&] { typed_document invalid(too_short, "{\"s\":\"" + utf8 + "\"}"); });
       }
     }
   }
   scalar_field floating{"f", scalar_kind::float64};
   floating.float_bits = 32;
-  scalar_plan float32({floating});
-  scalar_document exact(float32, R"({"f":1.5})");
-  rejects([&] { scalar_document rounded(float32, R"({"f":0.1})"); });
-  rejects([&] { scalar_document overflow(float32, R"({"f":1e100})"); });
+  typed_plan float32({floating});
+  typed_document exact(float32, R"({"f":1.5})");
+  rejects([&] { typed_document rounded(float32, R"({"f":0.1})"); });
+  rejects([&] { typed_document overflow(float32, R"({"f":1e100})"); });
   floating.float_bits = 16;
-  rejects([&] { scalar_plan bad({floating}); });
+  rejects([&] { typed_plan bad({floating}); });
   std::cout << "Shared Rust/C++ simdutf and JSON Unicode contracts passed\n";
 }
