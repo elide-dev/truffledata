@@ -117,6 +117,23 @@ string and `parent` being null. The checksum is 38,219.
 | `gson-stream-lines` (ingest only) | The 32 documents as one NDJSON buffer: split at newlines, parse each line into a Gson tree, read it | No read stage (Gson's strict reader takes one top-level value, so lines are split by the caller) |
 | `simdjson-stream-java` (ingest only) | The same buffer fed to one `JsonStream` per run (never finished); `next(JavaSink)` per document, read the Java tree | No read stage (Task F2) |
 | `simdjson-stream-interop` (ingest only) | As above; `next()` lends each root, ten AOT interop reads | No read stage (Task F2) |
+| `jackson-tree` | Jackson databind `ObjectMapper.readTree(byte[])`, then read | `JsonNode` trees, read in one boundary call per document |
+| `jackson-stream` (ingest only) | Jackson's streaming `JsonParser` over the bytes, reading the ten members as their tokens pass | No retained form |
+| `fastjson2-tree` | fastjson2 `JSON.parseObject(byte[])`, then read | `JSONObject` trees, read like Gson's |
+| `dsljson-map` | DSL-JSON `DslJson.deserialize(Map.class, byte[], length)`, then read | `Map`/`List`/`Number` trees |
+| `jsoniter-any` | jsoniter `JsonIterator.deserialize(byte[])` (lazy `Any`), then read | `Any` trees over the input bytes |
+| `simdjson-java` (ingest only) | simdjson-java `SimdJsonParser.parse(byte[], length)` (Vector API), then read | No retained form: values live in the parser's reused tape |
+
+The six competitor engines (the JSON scoreboard, JSON performance ledger V3) are
+benchmark-only Maven dependencies (`MODULE.bazel`): Jackson 2.22.4 (streaming and
+databind), fastjson2 2.0.66, DSL-JSON 2.0.2, jsoniter 0.9.23 and simdjson-java
+0.4.0. They run in the same SVM image as every other cell, from `JsonCompetitors`
+(initialized at image run time; `--add-modules=jdk.incubator.vector` for
+simdjson-java), parse the same UTF-8 bytes and read the same ten members to the
+same checksum. Each library runs with its defaults: no schema binding, code
+generation or reflection-based object mapping, so these are tree (or streaming)
+parsers against our index, not data-binding results. Their compiled read roots are
+graph-gated like `gson-tree` (one boundary call per document).
 
 Since performance plan Task D1 the `JavaSink` cells (`simdjson-generic-java` and
 `simdjson-session-java`) share one `JavaSink.KeyCache` per run, as an embedder
@@ -164,17 +181,21 @@ column counts unresolved Java calls only, not `@TruffleBoundary` calls. The
 | `simdjson-generic-java`, peak and read-aot | ≤ 1,000 (peak) | 2 (peak) | not gated | ≤ 1,200 |
 | `gson-tree`, peak | ≤ 1,000 | 1 | 0 | — |
 | `simdjson-generic-interop`, ingest | — | — | — | ≤ 480 |
-| `simdjson-session-java`, ingest | — | — | — | ≤ 1,400 |
-| `simdjson-session-truffle`, ingest | — | — | — | ≤ 1,800 |
-| `simdjson-stream-java`, ingest | — | — | — | ≤ 1,400 |
-| `simdjson-stream-interop`, ingest | — | — | — | ≤ 440 |
+| `simdjson-session-java`, ingest | — | — | — | ≤ 1,280 (1,400 before ledger V1) |
+| `simdjson-session-truffle`, ingest | — | — | — | ≤ 1,680 (1,800 before V1) |
+| `simdjson-stream-java`, ingest | — | — | — | ≤ 1,280 (1,400 before V1) |
+| `simdjson-stream-interop`, ingest | — | — | — | ≤ 320 (440 before V1) |
+| Competitor tree engines, peak (`jackson-tree`, `fastjson2-tree`, `dsljson-map`, `jsoniter-any`) | ≤ 1,000 | 1 | 0 | — |
 
 The interop loop measured 1,754–1,810 nodes: ten inlined member reads and their
 owner checks. With position-hinted member lookup (performance plan Task C1) it
 measures 1,916–1,972: each read inlines its hint check (one tape call comparing the
 key's side-table entry and node words) and keeps one static boundary for misses.
 Earlier drafts that inlined the miss path and three separate tape reads per member
-measured 2,866–3,037 nodes and were rejected by this gate. The export loops have two loops, the document loop and the tape walk.
+measured 2,866–3,037 nodes and were rejected by this gate. Since Myna value ABI v4
+(ledger V1) each read checks a directory-rank hint through one tape call and the
+owner reads node kinds with Myna's checked `kindAt`: 1,621–1,678 nodes. An exact-type
+dispatch over the two image tapes measured 1,841–1,898 and was dropped. The export loops have two loops, the document loop and the tape walk.
 Neither has a per-member loop or recursion. Since Task D1 the walk has no graph
 allocation: the owner's reusable `TapeText` cursor carries the container stack, and a
 first, nested or unconfined export allocates its cursor behind a boundary
@@ -202,7 +223,7 @@ measured 3,596 B/document in B2 and 1,360 B/document after Task D1 (the host tre
 and value `String`s; the borrow's Java objects; the session lends its one text
 cursor to every borrow), under a 1,400 B gate. The plan's 1,900 B target is met;
 its 160 B decode-overhead target is not (the 240 B of AOT interop views are read
-cost, and a reusable borrow reader needs elide-dev/myna#47).
+cost; since ledger V1 borrows rebind one reader per session, elide-dev/myna#47).
 
 **Truffle session budget (Task D2).** The borrowed parse into a `TruffleSink` measured
 1,772.5 B/document under a 1,800 B gate: the host tree, one `TruffleString` per string
@@ -219,9 +240,25 @@ Task D1 budget). `next()` plus ten AOT interop reads measured 432.75 B/document 
 and the 240 B of interop views. The plan's 1.0 B/document and `(2000, 1, 0)` graph
 gate assumed a compiled read root over a reusable borrow; streamed documents are lent
 one at a time, so these cells are ingest-only (like the session cells) and the reusable
-borrow reader still needs elide-dev/myna#47.
+borrow reader came with Myna 0.11.0 (elide-dev/myna#47, ledger V1).
+
+**Myna value ABI v4 (ledger V1).** Sessions rebind one tape reader and lexical
+accessor for every borrow instead of allocating them, so every borrowed cell lost
+120 B/document (session `JavaSink` 1,360 → 1,240, `TruffleSink` 1,772.5 → 1,652.5,
+stream `JavaSink` 1,338.5 → 1,218.5, stream interop 432.75 → 312.75) and their gates
+tightened to match. Retained messages keep a reader each; interop ingest measures 480
+B/document (472 before: the reader's per-reader SIMD threshold) under its unchanged
+gate. Snapshots copy their subtree's directory (snapshot ingest 1,997.5 → 2,101.5 B,
+not gated).
 
 ### Results
+
+The v4 results, the gaps measured before and after on one host, native decode
+throughput against simdjson's ceiling and the competitor scoreboard are in
+[`json-v4-86a691a`](../results/json-v4-86a691a/). On that host compiled member reads
+of ten members take 90.9 ns per document against 223.8 ns for Gson trees (819.5 ns
+before v4 directories), and native decode with ten interop reads ingests a document in
+769.4 ns against Gson's 1,970.8 ns.
 
 The first run is [`json-generic-c6e7abc`](../results/json-generic-c6e7abc/), one
 `json_measure` invocation on a shared RBE worker. **Its timings are advisory.** At
