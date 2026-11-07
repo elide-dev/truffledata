@@ -1,8 +1,19 @@
 #include "json/native/api.h"
 #include "json/native/decoder.h"
 #include "json/native/session.h"
+#include "json/native/status.h"
+#include "json/native/stream.h"
 #include "json/native/typed.h"
 #include <memory>
+
+static_assert(TD_JSON_OK == truffledata::json::status_ok && TD_JSON_ARGUMENT == truffledata::json::status_argument
+              && TD_JSON_LIMIT == truffledata::json::status_limit && TD_JSON_ALLOCATION == truffledata::json::status_allocation
+              && TD_JSON_SYNTAX == truffledata::json::status_syntax && TD_JSON_INTERNAL == truffledata::json::status_internal
+              && TD_JSON_CONTRACT == truffledata::json::status_contract
+              && TD_JSON_TEXT_TOO_SMALL == truffledata::json::status_text_too_small
+              && TD_JSON_STREAM_EMPTY == truffledata::json::status_stream_empty
+              && TD_JSON_STREAM_TRUNCATED == truffledata::json::status_stream_truncated,
+              "api.h and status.h agree");
 
 namespace {
 // Owner of a td_json_decode result; retained session results are the other result_owner.
@@ -31,19 +42,7 @@ int32_t publish(std::unique_ptr<handle> owned, JsonResult& result) {
   (void)owned.release();
   return TD_JSON_OK;
 }
-int32_t translate() {
-  try { throw; }
-  catch (const std::bad_alloc&) { return TD_JSON_ALLOCATION; }
-  catch (const std::length_error&) { return TD_JSON_LIMIT; }
-  catch (const simdjson::simdjson_error& error) {
-    if (error.error() == simdjson::MEMALLOC) return TD_JSON_ALLOCATION;
-    if (error.error() == simdjson::CAPACITY || error.error() == simdjson::DEPTH_ERROR)
-      return TD_JSON_LIMIT;
-    return TD_JSON_SYNTAX;
-  }
-  catch (const std::invalid_argument&) { return TD_JSON_SYNTAX; }
-  catch (...) { return TD_JSON_INTERNAL; }
-}
+int32_t translate() { return truffledata::json::current_exception_status(); }
 bool aligned(const void* pointer) {
   return pointer && reinterpret_cast<uintptr_t>(pointer) % alignof(JsonResult) == 0;
 }
@@ -209,6 +208,16 @@ constexpr uint64_t critical_limit = TD_JSON_CRITICAL_LIMIT;
 
 constexpr uint32_t known_flags = TD_JSON_WANT_TEXT | TD_JSON_UTF16_INPUT | TD_JSON_LATIN1_INPUT;
 
+// Borrowed: no owner, so td_json_release never frees session storage.
+void publish_borrowed(const session& s, const session::document_view& d, JsonResult& result,
+                      const uint64_t* table = nullptr, size_t text_bytes = 0) {
+  const auto& memory = s.memory();
+  result = {nullptr, const_cast<myna_value_view*>(&s.view()), d.input_length, s.input_capacity(),
+            memory.current(), memory.peak(), d.index_allocations, s.parser_capacity(),
+            sizeof(session), const_cast<uint64_t*>(d.lexical.data()), d.lexical.size(),
+            const_cast<uint32_t*>(d.hashes.data()), const_cast<uint64_t*>(table), text_bytes};
+}
+
 int32_t session_decode(session& s, const uint8_t* data, uint64_t length, uint32_t flags,
                        uint8_t* text_out, uint64_t text_capacity, JsonResult& result) {
   result = {};
@@ -232,12 +241,7 @@ int32_t session_decode(session& s, const uint8_t* data, uint64_t length, uint32_
       text_bytes = s.write_text(text_out, size_t(text_capacity), table);
       if (text_bytes == truffledata::json::text_too_small) return TD_JSON_TEXT_TOO_SMALL;
     }
-    const auto& memory = s.memory();
-    // Borrowed: no owner, so td_json_release never frees session storage.
-    result = {nullptr, const_cast<myna_value_view*>(&s.view()), d.input_length, s.input_capacity(),
-              memory.current(), memory.peak(), d.index_allocations, s.parser_capacity(),
-              sizeof(session), const_cast<uint64_t*>(d.lexical.data()), d.lexical.size(),
-              const_cast<uint32_t*>(d.hashes.data()), const_cast<uint64_t*>(table), text_bytes};
+    publish_borrowed(s, d, result, table, text_bytes);
     return TD_JSON_OK;
   } catch (...) { return translate(); }
 }
@@ -297,4 +301,47 @@ extern "C" void td_json_session_reset(void* handle) {
 
 extern "C" void td_json_session_release(void* handle) {
   delete static_cast<session*>(handle);
+}
+
+// ---- Streams (plan Task F1) -----------------------------------------------------------------
+
+extern "C" void* td_json_stream_create(void* handle, uint64_t max_document_bytes, uint64_t batch_bytes) {
+  if (!handle) return nullptr;
+  try {
+    return new truffledata::json::stream(*static_cast<session*>(handle), size_t(max_document_bytes),
+                                         size_t(batch_bytes));
+  } catch (...) { return nullptr; }
+}
+
+extern "C" uint64_t td_json_stream_feed(void* handle, const uint8_t* data, uint64_t length) {
+  if (!handle) return 0;
+  return static_cast<truffledata::json::stream*>(handle)->feed(data, size_t(length));
+}
+
+extern "C" void td_json_stream_finish(void* handle) {
+  if (handle) static_cast<truffledata::json::stream*>(handle)->finish();
+}
+
+extern "C" int32_t td_json_stream_next(void* handle, void* output) {
+  if (!handle || !aligned(output)) return TD_JSON_ARGUMENT;
+  auto& result = *static_cast<JsonResult*>(output);
+  result = {};
+  auto& s = *static_cast<truffledata::json::stream*>(handle);
+  session::document_view d{};
+  int32_t status = s.next(d);
+  if (status == TD_JSON_OK) publish_borrowed(s.owner(), d, result);
+  return status;
+}
+
+extern "C" int32_t td_json_stream_skip(void* handle) {
+  if (!handle) return TD_JSON_ARGUMENT;
+  return static_cast<truffledata::json::stream*>(handle)->skip();
+}
+
+extern "C" uint64_t td_json_stream_truncated_bytes(void* handle) {
+  return handle ? static_cast<truffledata::json::stream*>(handle)->pending() : 0;
+}
+
+extern "C" void td_json_stream_release(void* handle) {
+  delete static_cast<truffledata::json::stream*>(handle);
 }

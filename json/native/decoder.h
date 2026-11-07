@@ -208,12 +208,14 @@ public:
   tape_decoder(const tape_decoder&) = delete;
   tape_decoder& operator=(const tape_decoder&) = delete;
 
-  // Presizes storage and registers `input` (the retained, padded input) as region 1.
-  void start(std::string_view input, const decode_hint& hint) {
+  // Presizes storage and registers `input` (the retained, padded input) as region 1. `walked`, when
+  // given, is where the parser reads the same bytes (a stream's carry-over buffer, stream.h):
+  // offsets of referenced text and lexical spans are taken relative to it, so they index `input`.
+  void start(std::string_view input, const decode_hint& hint, const char* walked = nullptr) {
     writer_.reserve(hint.nodes, hint.bytes);
     lexical_.reserve(memory_, hint.nodes);
     hashes_.reserve(memory_, hint.nodes);
-    base_ = input.data();
+    base_ = walked ? walked : input.data();
     region_ = writer_.region(input);
   }
   // Walks one document; trailing input, a second root or any invalid value throws.
@@ -222,6 +224,12 @@ public:
     // raw_json consumes scalar roots; at_end rejects a second root/trailing tokens.
     if (root.is_scalar().value()) (void)root.raw_json().value();
     if (!root.at_end()) throw std::invalid_argument("trailing JSON input");
+  }
+  // Walks one document of an iterate_many stream. What follows it is the next document (or the
+  // stream's truncated tail), which the stream judges, so there is no trailing-input check.
+  void decode(simdjson::ondemand::document_reference& root) {
+    visit(root, 0);
+    if (root.is_scalar().value()) (void)root.raw_json().value();
   }
   myna_value_view view() const { return writer_.view(); }
   table_view<uint64_t> lexical_spans() const { return {lexical_.data(), lexical_.size()}; }

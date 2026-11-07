@@ -12,7 +12,9 @@ def verify(descriptor, archive):
     assert module["bindingAbiVersion"] == 2
     expected = {
         "truffledata_json": {"fingerprint", "decode", "decode_adopted", "release", "plan_create", "plan_release", "typed_decode", "typed_release",
-                             "session_create", "session_decode", "session_decode_small", "session_retain", "session_reset", "session_release"},
+                             "session_create", "session_decode", "session_decode_small", "session_retain", "session_reset", "session_release",
+                             "stream_create", "stream_feed", "stream_finish", "stream_next", "stream_skip",
+                             "stream_truncated_bytes", "stream_release"},
         "truffledata_buffa": {"fingerprint", "decode", "release", "typed", "typedReuse", "scalars", "utf8_to_utf16"},
         "truffledata_yaml": {"fingerprint", "release", "session_create", "session_decode", "session_retain",
                              "session_reset", "session_release", "stream_create", "stream_feed", "stream_finish",

@@ -110,6 +110,22 @@ entry per node in `JsonResult.text_table` (session arena, valid like the borrowe
 leaves the session reusable. Java's `TruffleSink` builds `TruffleString`s over that array without
 copying.
 
+### Streams
+
+`stream.h` (`td_json_stream_*`) decodes whitespace-separated documents (NDJSON, JSON Lines,
+concatenated JSON) one at a time into a session, with the carry-over contract of YAML's
+`td_yaml_stream_*`. `stream_feed` copies into a carry-over buffer of at most
+`2 × max_document_bytes` and returns the bytes it accepted (fewer: drain with `stream_next`, then
+feed the rest). Each region of buffered bytes runs through the stream's own simdjson parser with
+`iterate_many` (batch at least the maximum document); when its documents are delivered, its
+`truncated_bytes()` tail moves to the front of the buffer. Until `stream_finish`, a region never ends
+inside a UTF-8 sequence and a root number or literal touching the end is held back. Each document's
+bytes are copied into the session's input buffer, which becomes its region, so a borrowed document
+survives later feeds and `session_retain` works as for `session_decode`. Only whitespace separates
+documents (simdjson's comma format accepts doubled and missing commas); a BOM is skipped only at the
+start of the stream. Document-level errors can be skipped with `stream_skip`; stage-1 errors
+(invalid UTF-8, raw control bytes) fail a whole batch and cannot.
+
 ## Limits and accounting
 
 `storage_limits` caps logical input bytes before copying, and index allocations
@@ -194,7 +210,7 @@ growth and checks that each unwinds with no retained bytes under ASan/UBSan.
 ## Tests
 
 ```sh
-bazel test //json/native:test //json/native:api_test //json/native:typed_test //json/native:unicode_test
+bazel test //json/native:test //json/native:api_test //json/native:stream_test //json/native:typed_test //json/native:unicode_test
 bazel test //json/tests:jvm          # JVM FFM backend
 bazel test //json/tests:native_test  # SVM, manual, Linux x86-64 via RBE
 ```
@@ -204,11 +220,14 @@ huge exponents, number classification, decoded Unicode, raw lexical text, adopte
 and copied input, independent documents, container offsets, node/text/depth
 limits, integer and length boundaries, all 64 presence bits, and result/plan
 release order. Allocation checks inject failure at every index allocation,
-including the adopted path, constructor failure and invalid input. Run them under
+including the adopted path, constructor failure and invalid input; `stream_test` checks that
+10,000 documents fed in chunks of 1, 7, 64, 4,096 and 1,000,000 bytes (and with batches smaller
+than the buffer) decode to exactly the tapes of per-document decodes, and injects failure at every
+stream and session allocation. Run them under
 both sanitizers, which instrument the adapter and simdjson:
 
 ```sh
-bazel test //json/native:test //json/native:api_test //json/native:typed_test //json/native:unicode_test \
+bazel test //json/native:all //tape/native:all \
   --copt=-fsanitize=address,undefined --copt=-fno-sanitize-recover=all \
   --linkopt=-fsanitize=address,undefined
 ```

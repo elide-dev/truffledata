@@ -73,6 +73,35 @@ private:
     input_ = nullptr;
     input_capacity_ = 0;
   }
+  // Ensures the input buffer holds `length` bytes plus simdjson's padding.
+  void reserve_input(size_t length) {
+    size_t need = length + simdjson::SIMDJSON_PADDING;
+    if (need > input_capacity_) {
+      free_input();
+      input_ = static_cast<char*>(upstream_->allocate(need, alignof(std::max_align_t)));
+      input_capacity_ = need;
+    }
+  }
+  // Decodes the document `open()` positions on the input buffer (`walked`: see tape_decoder::start)
+  // and publishes it. On any exception the session holds no document.
+  template<class Open> document_view walk(size_t length, const char* walked, Open&& open) {
+    size_t before = memory_.allocations();
+    try {
+      decode_hint hint = hint_for(length, values_, storage_);
+      arena_.hint(hint.block);
+      auto& decoder = decoder_.emplace(&arena_, values_);
+      decoder.start(std::string_view(input_, length), hint, walked);
+      auto&& root = open();
+      decoder.decode(root);
+      view_ = decoder.view();
+    } catch (...) {
+      recycle();
+      throw;
+    }
+    live_ = true;
+    return {view_, decoder_->lexical_spans(), decoder_->key_hashes(), length,
+            memory_.allocations() - before};
+  }
   // Drops the previous document and bounds what the session keeps between documents.
   void recycle() noexcept {
     live_ = false;
@@ -117,12 +146,7 @@ public:
       length = simdutf::utf8_length_from_latin1(data, bytes);
     }
     if (length > UINT32_MAX || length > storage_.input_bytes) throw std::length_error("JSON input limit");
-    size_t need = length + simdjson::SIMDJSON_PADDING;
-    if (need > input_capacity_) {
-      free_input();
-      input_ = static_cast<char*>(upstream_->allocate(need, alignof(std::max_align_t)));
-      input_capacity_ = need;
-    }
+    reserve_input(length);
     size_t written = length;
     if (input == encoding::utf16le) written = simdutf::convert_valid_utf16le_to_utf8(units, bytes / 2, input_);
     else if (input == encoding::latin1) written = simdutf::convert_latin1_to_utf8(data, bytes, input_);
@@ -130,22 +154,24 @@ public:
     if (written != length) throw std::logic_error("JSON input transcoding");
     std::memset(input_ + length, 0, simdjson::SIMDJSON_PADDING);
     input_length_ = length;
-    size_t before = memory_.allocations();
-    try {
-      decode_hint hint = hint_for(length, values_, storage_);
-      arena_.hint(hint.block);
-      auto& decoder = decoder_.emplace(&arena_, values_);
-      decoder.start(std::string_view(input_, length), hint);
-      auto root = parser_.iterate(simdjson::padded_string_view(input_, length, input_capacity_)).value();
-      decoder.decode(root);
-      view_ = decoder.view();
-    } catch (...) {
-      recycle();
-      throw;
-    }
-    live_ = true;
-    return {view_, decoder_->lexical_spans(), decoder_->key_hashes(), length,
-            memory_.allocations() - before};
+    return walk(length, nullptr, [&]() -> simdjson::ondemand::document {
+      return parser_.iterate(simdjson::padded_string_view(input_, length, input_capacity_)).value();
+    });
+  }
+
+  // Decodes one document of a stream (stream.h): `root` is the iterate_many document positioned on
+  // `data[0, length)` inside the stream's carry-over buffer. The bytes are copied into the session's
+  // input buffer, which becomes the document's region, so the borrowed (and retained) document never
+  // refers to the carry-over buffer; the walk itself reads the stream buffer in place. Same
+  // borrowing, failure and retain rules as decode().
+  document_view decode_streamed(const char* data, size_t length, simdjson::ondemand::document_reference& root) {
+    recycle();
+    if (length > UINT32_MAX || length > storage_.input_bytes) throw std::length_error("JSON input limit");
+    reserve_input(length);
+    std::memcpy(input_, data, length);
+    std::memset(input_ + length, 0, simdjson::SIMDJSON_PADDING);
+    input_length_ = length;
+    return walk(length, data, [&]() -> simdjson::ondemand::document_reference& { return root; });
   }
 
   // Writes the live document's text arena (Task D2, text_arena.h) into `out`; the per-node table
@@ -194,6 +220,8 @@ public:
   size_t parser_capacity() const { return parser_.capacity(); }
   size_t input_capacity() const { return input_capacity_; }
   const index_memory& memory() const { return memory_; }
+  // The allocator behind the session's input buffer and arena (streams buffer through it too).
+  std::pmr::memory_resource* upstream() const { return upstream_; }
   size_t arena_blocks() const { return arena_.blocks(); }
 };
 } // namespace truffledata::json

@@ -11,7 +11,10 @@ enum td_json_status {
   TD_JSON_SYNTAX = 4,
   TD_JSON_INTERNAL = 5,
   TD_JSON_CONTRACT = 6,
-  TD_JSON_TEXT_TOO_SMALL = 7
+  TD_JSON_TEXT_TOO_SMALL = 7,
+  // Streams (Task F1); the same values as TD_YAML_STREAM_EMPTY/TD_YAML_STREAM_TRUNCATED.
+  TD_JSON_STREAM_EMPTY = 8,
+  TD_JSON_STREAM_TRUNCATED = 9
 };
 
 // session_decode flags.
@@ -53,6 +56,28 @@ enum td_json_status {
 // (TD_JSON_ARGUMENT above it), declared a native leaf for the JVM's bounded critical path:
 // bounded input (≈ 30 µs at 150 MB/s), no locks, no exception escapes.
 #define TD_JSON_CRITICAL_LIMIT 4096u
+
+// Streams (td_json_stream_*, Task F1; json/native/stream.h): whitespace-separated documents
+// (NDJSON, JSON Lines, concatenated JSON) decoded one at a time into a session, with the carry-over
+// contract of td_yaml_stream_*. stream_create(session, max_document_bytes, batch_bytes) borrows the
+// session (which must outlive the stream) and returns null when max_document_bytes is 0 or above
+// UINT32_MAX / 2, batch_bytes (simdjson's iterate_many batch) is below max_document_bytes or above
+// UINT32_MAX, or allocation fails. The carry-over buffer holds at most 2 × max_document_bytes.
+// stream_feed copies up to `length` bytes and returns how many it accepted: fewer means the buffer
+// is full or still being read; call stream_next until TD_JSON_STREAM_EMPTY, then feed the rest. A
+// finished or failed stream accepts nothing. stream_finish marks the end of input. stream_next
+// writes the next document as a borrowed result (as session_decode does: owner null, valid until
+// the next stream_next/stream_skip or any call on the session; feeding does not invalidate it; no
+// text arena) and returns TD_JSON_OK, TD_JSON_STREAM_EMPTY (no complete document buffered yet, or
+// the finished stream is exhausted), TD_JSON_STREAM_TRUNCATED (the finished input ended inside a
+// document) or the failing status; a failed stream stays failed. stream_skip resumes a stream
+// failed by a document-level error (TD_JSON_SYNTAX, or TD_JSON_LIMIT for a complete document) after
+// that document and returns TD_JSON_OK, else TD_JSON_ARGUMENT: stage-1 errors (invalid UTF-8, raw
+// control bytes) fail a whole simdjson batch and cannot be skipped, nor can allocation failures,
+// truncation, or an incomplete document above max_document_bytes. stream_truncated_bytes is the
+// number of buffered bytes past the last delivered document (after TD_JSON_STREAM_TRUNCATED: the
+// incomplete document). A UTF-8 BOM is accepted only at the start of the stream. Session results
+// can be retained with session_retain as usual.
 
 // Typed plans hold at most this many records (each at most 64 fields).
 #define TD_JSON_MAX_PLAN_RECORDS 65536u

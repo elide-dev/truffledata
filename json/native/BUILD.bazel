@@ -6,6 +6,8 @@ cc_library(
         "decoder.h",
         "parser_pool.h",
         "session.h",
+        "status.h",
+        "stream.h",
         "text_arena.h",
     ],
     copts = ["-std=c++17"],
@@ -93,6 +95,16 @@ cc_library(
 cc_test(
     name = "api_test",
     srcs = ["api_test.cc"],
+    copts = ["-std=c++17"],
+    deps = [
+        ":truffledata_json",
+        "@myna//:values_headers",
+    ],
+)
+
+cc_test(
+    name = "stream_test",
+    srcs = ["stream_test.cc"],
     copts = ["-std=c++17"],
     deps = [
         ":truffledata_json",
