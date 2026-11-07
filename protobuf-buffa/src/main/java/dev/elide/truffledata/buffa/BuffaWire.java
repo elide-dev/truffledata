@@ -54,7 +54,8 @@ public final class BuffaWire implements AutoCloseable {
      * ABI 9: one owned native allocation holding the typed index and every message's field
      * directory. Decoder scratch is reused across calls and never retained by the result.
      */
-    Tape view(long compiled, WireInput input, ProtoPlan plan, int nativeBytes);
+    @Nullable Tape view(
+        long compiled, WireInput input, ProtoPlan plan, int nativeBytes, boolean budgetFallback);
 
     /** Release one view allocation; valid after the backend itself has closed. */
     void releaseView(long data, long bytes);

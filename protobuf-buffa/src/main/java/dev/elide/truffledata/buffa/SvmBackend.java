@@ -7,6 +7,7 @@ import java.nio.charset.StandardCharsets;
 import org.graalvm.nativeimage.*;
 import org.graalvm.nativeimage.c.type.*;
 import org.graalvm.word.*;
+import org.jspecify.annotations.Nullable;
 
 /** Direct static C bindings. No FFM downcalls or dynamic loading are reachable in this path. */
 final class SvmBackend implements BuffaWire.Backend {
@@ -199,11 +200,12 @@ final class SvmBackend implements BuffaWire.Backend {
   }
 
   @Override
-  public BuffaWire.Tape view(
+  public BuffaWire.@Nullable Tape view(
       long compiled,
       WireInput input,
       dev.elide.truffledata.protobuf.ProtoPlan plan,
-      int nativeBytes) {
+      int nativeBytes,
+      boolean budgetFallback) {
     if (!(input.lease.attachment instanceof BuffaSvm.Address inputAddress))
       throw new IllegalArgumentException("Input is not SVM native memory");
     VoidPointer scratch = acquireResult();
@@ -222,6 +224,7 @@ final class SvmBackend implements BuffaWire.Backend {
               output);
       // Scratch now holds the reusable index (or nothing after a failure).
       cached = true;
+      if (budgetFallback && status == 2) return null;
       boolean viewReady = BuffaWire.typedStatus(status, 3);
       return BuffaWire.Tape.view(
           null,

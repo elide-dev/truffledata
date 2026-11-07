@@ -180,7 +180,7 @@ final class NativeRow extends TypedRow {
    * native memory; the JVM adapter reads a once-copied array, keeping FFM buffer access (and its
    * scope checks) out of compiled guest code.
    */
-  private static int word(BuffaWire.Tape tape, int at) {
+  static int word(BuffaWire.Tape tape, int at) {
     if (ImageInfo.inImageCode() && tape.nativeAddress != 0) {
       Objects.checkIndex(at, tape.words);
       return WordFactory.<Pointer>pointer(tape.nativeAddress + tape.directory + 4L * at).readInt(0);

@@ -70,24 +70,33 @@ public final class NativeTapeAcceptance {
       long views = backend.compileView(schema);
       try (var compiled = decoder.compile(plan, 65536);
           var view = compiled.decodeView(first, 65536);
-          var retained = backend.view(views, first, plan, 65536)) {
+          var retained = Objects.requireNonNull(backend.view(views, first, plan, 65536, false))) {
         if (!view.nativeBacked()) throw new AssertionError("native view selected");
         if (!retained.viewReady() || retained.count() != 1 || retained.words != 3)
           throw new AssertionError("view directory extent");
         // One 24-byte entry plus three directory words, rounded up to whole entry slots.
         if (retained.allocated != 48)
           throw new AssertionError("exact view allocation");
+        // Default decodes ask for a budget fallback instead of a ContractViolation; views do not.
+        if (backend.view(views, second, plan, 1, true) != null)
+          throw new AssertionError("budget fallback signal");
+        try {
+          backend.view(views, second, plan, 1, false);
+          throw new AssertionError("strict view budget");
+        } catch (dev.elide.truffledata.ContractViolation expected) {
+          // The scoped view API keeps reporting native budget failures.
+        }
         byte[] expected = new byte[retained.bytes().capacity()];
         retained.bytes().get(0, expected);
         for (int i = 0; i < 8; i++) {
           try (var scratch = backend.typed(schema, second, 0, empty, plan, 65536)) {
             if (scratch.count() != 1) throw new AssertionError("scratch count");
           }
-          try (var again = backend.view(views, second, plan, 65536)) {
+          try (var again = Objects.requireNonNull(backend.view(views, second, plan, 65536, false))) {
             if (again.count() != 1) throw new AssertionError("view scratch count");
           }
         }
-        try (var other = backend.view(views, second, plan, 65536)) {
+        try (var other = Objects.requireNonNull(backend.view(views, second, plan, 65536, false))) {
           decoder.close();
           if (view.row().getLong(0) != 42) throw new AssertionError("view after decoder close");
           for (int i = 0; i < expected.length; i++)

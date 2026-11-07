@@ -8,6 +8,7 @@ import java.lang.invoke.MethodHandle;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
+import org.jspecify.annotations.Nullable;
 
 /** JVM-only adapter. Its arena owns the library, not input buffers or returned views. */
 final class FfmBackend implements BuffaWire.Backend {
@@ -279,11 +280,12 @@ final class FfmBackend implements BuffaWire.Backend {
   }
 
   @Override
-  public BuffaWire.Tape view(
+  public BuffaWire.@Nullable Tape view(
       long compiled,
       WireInput input,
       dev.elide.truffledata.protobuf.ProtoPlan plan,
-      int nativeBytes) {
+      int nativeBytes,
+      boolean budgetFallback) {
     if (!(input.lease.attachment instanceof MemorySegment inputMemory))
       throw new IllegalArgumentException("Input is not JVM native memory");
     MemorySegment scratch = acquireResult();
@@ -307,6 +309,7 @@ final class FfmBackend implements BuffaWire.Backend {
       }
       // Scratch now holds the reusable index (or nothing after a failure).
       cached = true;
+      if (budgetFallback && status == 2) return null;
       boolean viewReady = BuffaWire.typedStatus(status, 3);
       long count = viewResult.get(ValueLayout.JAVA_LONG, BuffaFFM.View_count_OFFSET);
       long words = viewResult.get(ValueLayout.JAVA_LONG, BuffaFFM.View_words_OFFSET);
