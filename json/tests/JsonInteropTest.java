@@ -214,4 +214,121 @@ final class JsonInteropTest {
       assertEquals(huge, message.root().element(5).numberText());
     }
   }
+
+  /** One cached, adopted InteropLibrary call site (member caches and position hints per name). */
+  private static final class Site extends com.oracle.truffle.api.nodes.RootNode {
+    @Child InteropLibrary library = InteropLibrary.getFactory().createDispatched(3);
+
+    Site() {
+      super(null);
+    }
+
+    @Override
+    public Object execute(com.oracle.truffle.api.frame.VirtualFrame frame) {
+      return 0;
+    }
+  }
+
+  private static InteropLibrary site() {
+    Site root = new Site();
+    root.adoptChildren();
+    return root.library;
+  }
+
+  private static JsonMessage message(JsonDecoder decoder, String source) {
+    return decoder.decode(source.getBytes(StandardCharsets.UTF_8));
+  }
+
+  // Plan Task C1: position hints are validated by hash, tag, length and bytes, never trusted.
+  @Test
+  void hintMissAfterShapeChange() throws Exception {
+    try (JsonDecoder decoder = JsonJvm.open(JvmScopedTest.library());
+        JsonMessage first = message(decoder, "{\"id\":1,\"a\":2,\"b\":3}");
+        JsonMessage last = message(decoder, "{\"a\":2,\"b\":3,\"x\":\"id\",\"id\":4}");
+        // Offset 7 (where `last` leaves the hint) is the *value* string "id" here, not a key.
+        JsonMessage trap = message(decoder, "{\"a\":[1],\"b\":2,\"c\":\"id\"}");
+        JsonMessage none = message(decoder, "{\"a\":2,\"b\":\"id\"}")) {
+      // One cached call site, so one hint per member name across all receivers.
+      InteropLibrary site = site();
+      for (int round = 0; round < 3; round++) {
+        assertEquals(1L, site.asLong(site.readMember(first.root(), "id")));
+        assertTrue(site.isMemberReadable(first.root(), "id"));
+        assertEquals(4L, site.asLong(site.readMember(last.root(), "id")));
+        assertFalse(site.isMemberReadable(trap.root(), "id"));
+        assertThrows(
+            com.oracle.truffle.api.interop.UnknownIdentifierException.class,
+            () -> site.readMember(trap.root(), "id"));
+        assertFalse(site.isMemberReadable(none.root(), "id"));
+        assertEquals("id", site.asString(site.readMember(none.root(), "b")));
+      }
+    }
+    // A hint learned at offset 5 must not match a nested object's "id" at the same distance.
+    try (JsonDecoder decoder = JsonJvm.open(JvmScopedTest.library());
+        JsonMessage outer = message(decoder, "{\"a\":{\"b\":1},\"id\":5}");
+        JsonMessage nested = message(decoder, "{\"c\":1,\"d\":{\"id\":7}}")) {
+      InteropLibrary site = site();
+      for (int round = 0; round < 3; round++) {
+        assertEquals(5L, site.asLong(site.readMember(outer.root(), "id")));
+        assertFalse(site.isMemberReadable(nested.root(), "id"));
+        assertThrows(
+            com.oracle.truffle.api.interop.UnknownIdentifierException.class,
+            () -> site.readMember(nested.root(), "id"));
+        assertTrue(site.isMemberReadable(outer.root(), "id"));
+      }
+    }
+  }
+
+  @Test
+  void escapedLongAndNonAsciiKeysMatchTheirDecodedBytes() throws Exception {
+    String longKey = "a_member_name_longer_than_sixteen_bytes";
+    try (JsonDecoder decoder = JsonJvm.open(JvmScopedTest.library());
+        JsonMessage message =
+            message(
+                decoder,
+                "{\"\\u0069d\":9,\"" + longKey + "\":7,\"\u00e9t\u00e9\":5,\"k\\u00e9y_long_escaped_name\":6,\"\":3}")) {
+      InteropLibrary site = site();
+      JsonValue root = message.root();
+      for (int round = 0; round < 2; round++) {
+        assertEquals(9L, site.asLong(site.readMember(root, "id")));
+        assertEquals(7L, site.asLong(site.readMember(root, longKey)));
+        assertEquals(5L, site.asLong(site.readMember(root, "\u00e9t\u00e9")));
+        assertEquals(6L, site.asLong(site.readMember(root, "k\u00e9y_long_escaped_name")));
+        assertEquals(3L, site.asLong(site.readMember(root, "")));
+        assertFalse(site.isMemberReadable(root, "\uD800"));
+      }
+      assertEquals(7L, root.member(dev.elide.truffledata.json.JsonKey.of(longKey)).longValue());
+      assertEquals(longKey.length(), dev.elide.truffledata.json.JsonKey.of(longKey).utf8Length());
+      assertThrows(IllegalArgumentException.class, () -> dev.elide.truffledata.json.JsonKey.of("\uD800"));
+      assertThrows(java.util.NoSuchElementException.class, () -> root.member("absent"));
+      assertThrows(IllegalStateException.class, () -> root.member("id").member("x"));
+    }
+  }
+
+  @Test
+  void wideObjectsResolveMembersThroughADirectory() throws Exception {
+    StringBuilder source = new StringBuilder("{");
+    for (int i = 0; i < 1000; i++) source.append(i == 0 ? "" : ",").append("\"k").append(i).append("\":").append(i);
+    source.append("}");
+    try (JsonDecoder decoder = JsonJvm.open(JvmScopedTest.library());
+        JsonMessage message = message(decoder, source.toString())) {
+      InteropLibrary site = site();
+      JsonValue root = message.root();
+      assertEquals(0, message.directories());
+      for (int i = 0; i < 1000; i += 37) assertEquals((long) i, root.member("k" + i).longValue());
+      assertEquals(999L, site.asLong(site.readMember(root, "k999")));
+      assertFalse(site.isMemberReadable(root, "k1000"));
+      assertEquals(1, message.directories());
+      // Snapshots carry the side table: the same reads, and their own directory.
+      var snapshot = message.snapshot();
+      assertEquals(998L, site.asLong(site.readMember(snapshot.root(), "k998")));
+      assertEquals(500L, snapshot.root().member("k500").longValue());
+      assertFalse(site.isMemberReadable(snapshot.root(), "absent"));
+      assertEquals(1, snapshot.directories());
+      // A small nested object never builds one.
+      try (JsonMessage small = message(decoder, "{\"o\":{\"a\":1,\"b\":2}}")) {
+        assertEquals(2L, small.root().member("o").member("b").longValue());
+        assertEquals(0, small.directories());
+      }
+    }
+  }
 }

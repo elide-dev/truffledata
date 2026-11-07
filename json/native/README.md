@@ -42,10 +42,14 @@ exact spelling, and containers, booleans and null carry zero.
 `JsonResult.lexical`/`lexical_count` publish that array, one entry per node.
 
 `JsonResult.key_hashes` publishes a second side table with the same count: one
-`uint32_t` per node whose bits 0–30 are the 31-bit FNV-1a hash of a key node's
-decoded bytes (0 for other nodes) and whose bit 31 marks string and key nodes whose
-decoded bytes are all ASCII. The duplicate-key check computes the same hash, so it
-costs nothing extra; Java readers use it for member lookup. It is a JSON side
+`uint32_t` per node. Bit 31 marks string and key nodes whose decoded bytes are all
+ASCII. Key nodes also carry the low 15 bits of the FNV-1a hash of their decoded
+bytes in bits 16–30 and their offset from their own object node in bits 0–15 (0
+when the offset exceeds 65,535); every other node has 0 in bits 0–30. The
+duplicate-key check computes the same hash, so it costs nothing extra. Java readers
+use the entry for member lookup: a nonzero low half identifies a direct member key
+of the object at exactly that offset, so a cached position hint is validated with
+one compare and can never match a value string or a nested object's key. It is a JSON side
 table, not a Myna layout change (container directories are requested upstream as
 elide-dev/myna#45).
 

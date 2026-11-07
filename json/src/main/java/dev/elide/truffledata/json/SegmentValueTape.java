@@ -11,6 +11,8 @@ final class SegmentValueTape extends ValueTape implements TapeSource {
   private final MemorySegment bytes;
   private final MemorySegment regions;
   private final long regionCount;
+  // One int per node: the native key-hash side table; sized by of(descriptor, hashes).
+  private MemorySegment hashes = MemorySegment.NULL;
 
   SegmentValueTape(MemorySegment descriptor) {
     super(descriptor.get(ValueLayout.JAVA_LONG, 16), descriptor.get(ValueLayout.JAVA_LONG, 32),
@@ -31,6 +33,28 @@ final class SegmentValueTape extends ValueTape implements TapeSource {
     if (descriptor.address() == 0 || (descriptor.address() & 7) != 0)
       throw new IllegalArgumentException("Invalid value descriptor pointer");
     return new SegmentValueTape(descriptor.reinterpret(56));
+  }
+
+  /** Reader over a JSON result: the descriptor plus its key-hash side table (one int per node). */
+  static SegmentValueTape of(MemorySegment descriptor, MemorySegment hashes) {
+    SegmentValueTape tape = of(descriptor);
+    if (hashes.address() == 0) throw new IllegalStateException("JSON key-hash table missing");
+    tape.hashes = hashes.reinterpret(tape.nodeCount() * 4);
+    return tape;
+  }
+
+  @Override
+  public int keyMeta(long node) {
+    return hashes.get(ValueLayout.JAVA_INT, node * 4);
+  }
+
+  @Override
+  public boolean keyNodeEquals(long k, int meta, long header, long low, long high, boolean wide) {
+    long at = k * NODE_SIZE;
+    return (hashes.get(ValueLayout.JAVA_INT, k * 4) & 0x7fffffff) == meta
+        && readLong(at) == header
+        && readLong(at + 8) == low
+        && (!wide || readLong(at + 16) == high);
   }
 
   /** Region 1 is the retained input for JSON documents: {data, length}. */

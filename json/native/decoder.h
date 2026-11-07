@@ -39,11 +39,19 @@ inline bool number(std::string_view s) {
   return i == s.size();
 }
 
-// Side-table entry per node: bits 0-30 hold the key hash (key nodes only), bit 31 marks string and
-// key nodes whose decoded bytes are all ASCII. The hash is 32-bit FNV-1a over the decoded key
-// bytes, masked to 31 bits; Java's JsonKey computes the same function.
+// Side-table entry per node. Bit 31 marks string and key nodes whose decoded bytes are all ASCII.
+// Key nodes also carry bits 16-30: the low 15 bits of the key hash, and bits 0-15: the key's offset
+// from its object node (1..65535; 0 when farther). Other nodes carry 0 there, so a nonzero low half
+// identifies a direct member key of the object at exactly that offset: Java readers validate a
+// position hint with one compare. key_hash is 32-bit FNV-1a over the decoded key bytes, masked to
+// 31 bits (the duplicate table uses all of it); Java's JsonKey computes the same function.
 inline constexpr uint32_t hash_mask = 0x7fffffffu;
 inline constexpr uint32_t ascii_flag = 0x80000000u;
+inline constexpr uint32_t key_offset_mask = 0xffffu;
+inline uint32_t key_meta(uint32_t hash, uint64_t offset, bool plain) {
+  return (plain ? ascii_flag : 0) | ((hash & 0x7fffu) << 16)
+      | (offset <= key_offset_mask ? uint32_t(offset) : 0);
+}
 inline uint32_t key_hash(std::string_view s) {
   uint32_t h = 2166136261u;
   for (unsigned char c : s) { h ^= c; h *= 16777619u; }
@@ -197,6 +205,7 @@ template<class Writer> class tape_decoder final {
       case json_type::unknown:
         throw std::invalid_argument("unknown JSON token");
       case json_type::object: {
+        size_t object = lexical_.size();
         lexical();
         size_t index = writer_.begin(MYNA_VALUE_OBJECT, depth);
         uint64_t members = 0;
@@ -209,7 +218,7 @@ template<class Writer> class tape_decoder final {
           bool plain = s.clean ? s.ascii : ascii(key);
           uint32_t hash = key_hash(key);
           if (!keys.insert(hash, key)) throw std::invalid_argument("duplicate JSON key");
-          text(key, raw, s.clean, hash | (plain ? ascii_flag : 0));
+          text(key, raw, s.clean, key_meta(hash, lexical_.size() - object, plain));
           auto child = entry.value().value();
           visit(child, depth + 1);
           ++members;

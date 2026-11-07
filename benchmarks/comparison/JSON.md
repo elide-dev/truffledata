@@ -159,7 +159,11 @@ column counts unresolved Java calls only, not `@TruffleBoundary` calls. The
 | `simdjson-session-java`, ingest | — | — | — | ≤ 3,600 |
 
 The interop loop measured 1,754–1,810 nodes: ten inlined member reads and their
-owner checks. The export loops have two loops, the document loop and the tape walk.
+owner checks. With position-hinted member lookup (performance plan Task C1) it
+measures 1,916–1,972: each read inlines its hint check (one tape call comparing the
+key's side-table entry and node words) and keeps one static boundary for misses.
+Earlier drafts that inlined the miss path and three separate tape reads per member
+measured 2,866–3,037 nodes and were rejected by this gate. The export loops have two loops, the document loop and the tape walk.
 Neither has a per-member loop or recursion. The walk's two graph allocation sites
 are `JsonOwner.exportStack`'s container stacks for nested or unconfined exports. The
 counter's 1.0 B/document shows they never run for the outermost export on a

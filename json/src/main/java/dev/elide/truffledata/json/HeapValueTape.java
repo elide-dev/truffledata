@@ -12,12 +12,28 @@ final class HeapValueTape extends ValueTape implements TapeSource {
   private final long[] nodes;
   private final byte[] bytes;
   private final byte[][] regions;
+  private final int[] meta;
 
-  private HeapValueTape(long[] nodes, byte[] bytes, byte[][] regions) {
+  private HeapValueTape(long[] nodes, byte[] bytes, byte[][] regions, int[] meta) {
     super(nodes.length / WORDS, bytes.length);
     this.nodes = nodes;
     this.bytes = bytes;
     this.regions = regions;
+    this.meta = meta;
+  }
+
+  @Override
+  public int keyMeta(long node) {
+    return meta[(int) node];
+  }
+
+  @Override
+  public boolean keyNodeEquals(long k, int meta, long header, long low, long high, boolean wide) {
+    int at = (int) k * WORDS;
+    return (this.meta[(int) k] & 0x7fffffff) == meta
+        && nodes[at] == header
+        && nodes[at + 1] == low
+        && (!wide || nodes[at + 2] == high);
   }
 
   /** Copies the subtree rooted at {@code root}, re-basing subtree extents to start at node 0. */
@@ -25,6 +41,7 @@ final class HeapValueTape extends ValueTape implements TapeSource {
     long end = tape.next(root);
     long count = end - root;
     long[] nodes = new long[Math.toIntExact(count * WORDS)];
+    int[] meta = new int[Math.toIntExact(count)];
     for (long node = root; node < end; node++) {
       long from = node * NODE_SIZE;
       int to = (int) ((node - root) * WORDS);
@@ -32,6 +49,7 @@ final class HeapValueTape extends ValueTape implements TapeSource {
       nodes[to + 1] = source.nodeLong(from + 8);
       long next = source.nodeLong(from + 16);
       nodes[to + 2] = tape.isInlineText(node) ? next : next - root;
+      meta[(int) (node - root)] = source.keyMeta(node);
     }
     byte[] bytes = new byte[Math.toIntExact(source.regionSize(0))];
     source.copyRegion(0, 0, bytes, 0, bytes.length);
@@ -40,7 +58,7 @@ final class HeapValueTape extends ValueTape implements TapeSource {
       regions[i] = new byte[Math.toIntExact(source.regionSize(i + 1))];
       source.copyRegion(i + 1, 0, regions[i], 0, regions[i].length);
     }
-    return new HeapValueTape(nodes, bytes, regions);
+    return new HeapValueTape(nodes, bytes, regions, meta);
   }
 
   /** Byte of region 1 (the retained input copy), used for lexical spans. */
@@ -94,7 +112,9 @@ final class HeapValueTape extends ValueTape implements TapeSource {
 
   @Override
   public long nodeLong(long byteOffset) {
-    return readLong(byteOffset);
+    // Raw node words are always 8-aligned here (compiled member hints read them); the array access
+    // is the bounds check, without readLong's alignment branch.
+    return nodes[(int) (byteOffset >>> 3)];
   }
 
   @Override

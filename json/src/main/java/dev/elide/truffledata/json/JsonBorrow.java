@@ -36,12 +36,6 @@ final class JsonBorrow extends JsonOwner {
   }
 
   @Override
-  int meta(long node) {
-    if (node < 0 || node >= tape.nodeCount()) throw new IndexOutOfBoundsException("Node index");
-    return lexical.meta(node);
-  }
-
-  @Override
   byte lexicalByte(long offset) {
     return lexical.inputByte(offset);
   }

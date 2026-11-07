@@ -110,7 +110,16 @@ public final class JsonValue implements TruffleObject {
 
   @TruffleBoundary
   public JsonValue member(String key) {
-    return member(ValueTape.Utf8Key.of(key));
+    return member(JsonKey.of(key));
+  }
+
+  /** Member by prepared key: hash-first lookup, a directory for objects above 32 members. */
+  @TruffleBoundary
+  public JsonValue member(JsonKey key) {
+    if (kind() != Kind.OBJECT) throw new IllegalStateException("Not a JSON object");
+    long found = scan(owner, node, key);
+    if (found < 0) throw new NoSuchElementException("Missing JSON member");
+    return new JsonValue(owner, found);
   }
 
   /** Single-pass export of this subtree; see {@link JsonSink} and {@link JsonExportNode}. */
@@ -226,23 +235,70 @@ public final class JsonValue implements TruffleObject {
 
   /** Encoded member name, or null when the name has an unpaired surrogate and matches no key. */
   @TruffleBoundary
-  static ValueTape.@org.jspecify.annotations.Nullable Utf8Key keyOf(String name) {
+  static @org.jspecify.annotations.Nullable JsonKey keyOf(String name) {
     try {
-      return ValueTape.Utf8Key.of(name);
+      return JsonKey.of(name);
     } catch (IllegalArgumentException unpaired) {
       return null;
     }
   }
 
-  /** Member value node, or -1; checks the receiver inline so the view itself never escapes. */
-  long memberNode(ValueTape.@org.jspecify.annotations.Nullable Utf8Key key) {
-    if (tag() != ValueTape.OBJECT || key == null) return -1;
-    return find(owner, node, key);
+  /**
+   * Member value node, or -1; checks the receiver inline so the view itself never escapes. A hinted
+   * hit needs no kind check: the side table names this node as the key's own object, so the
+   * receiver is an object. Everything else checks the kind first.
+   */
+  long memberNode(@org.jspecify.annotations.Nullable JsonKey key, int[] hint) {
+    owner.check();
+    if (key == null) return -1;
+    return memberNode(owner, node, key, hint);
   }
 
+  /**
+   * Position-hinted lookup over primitives. {@code hint[0]} is the offset of the key node from the
+   * object where this site last found its member (0: none). It is validated against the node's
+   * side-table entry (this object's own key at exactly that offset, with the key's hash), then by
+   * the node's tag, length and inline bytes; never by owner identity, so a stale hint only costs a
+   * miss. The hit path is four word loads and compares; misses (and keys longer than 16 bytes) scan
+   * behind a static boundary and update the hint.
+   */
+  static long memberNode(JsonOwner owner, long object, JsonKey key, int[] hint) {
+    int offset = hint[0];
+    if (offset != 0 && key.inline() && owner.keyMatches(object, offset, key))
+      return object + offset + 1;
+    return miss(owner, object, key, hint);
+  }
+
+  /** Kind check, scan and hint update of a missed lookup: one call in compiled code. */
   @TruffleBoundary
-  private static long find(JsonOwner owner, long object, ValueTape.Utf8Key key) {
-    return owner.tape.find(object, key);
+  private static long miss(JsonOwner owner, long object, JsonKey key, int[] hint) {
+    if (owner.tag(object) != ValueTape.OBJECT) return -1;
+    long found = scan(owner, object, key);
+    if (found >= 0 && found - 1 - object <= 0xffff) hint[0] = (int) (found - 1 - object);
+    return found;
+  }
+
+  /** A call site's member-position hint, cached with its key; 0 means no hint yet. */
+  static int[] newHint() {
+    return new int[1];
+  }
+
+  /** Value node of {@code key} in the object, or -1: hash-first scan, or the cached directory. */
+  @TruffleBoundary
+  static long scan(JsonOwner owner, long object, JsonKey key) {
+    long end = owner.tape.next(object);
+    if (owner.tape.length(object) > JsonOwner.DIRECTORY_THRESHOLD) {
+      int[] table = owner.directory(object, end);
+      int mask = table.length - 1;
+      for (int slot = key.hash & mask; table[slot] != 0; slot = (slot + 1) & mask) {
+        long k = object + table[slot];
+        if (owner.keyEquals(k, key)) return k + 1;
+      }
+      return -1;
+    }
+    for (long k = object + 1; k < end; k = owner.tape.next(k + 1))
+      if (owner.keyEquals(k, key)) return k + 1;
+    return -1;
   }
 
   // Guests usually read members by constant names: cache the encoded key per name identity so a
@@ -255,13 +311,14 @@ public final class JsonValue implements TruffleObject {
         JsonValue receiver,
         String name,
         @Cached(value = "name", neverDefault = true) String cachedName,
-        @Cached("keyOf(name)") ValueTape.@org.jspecify.annotations.Nullable Utf8Key key) {
-      return receiver.memberNode(key) >= 0;
+        @Cached("keyOf(name)") @org.jspecify.annotations.Nullable JsonKey key,
+        @Cached(value = "newHint()", dimensions = 0, neverDefault = true) int[] hint) {
+      return receiver.memberNode(key, hint) >= 0;
     }
 
     @Specialization(replaces = "cached")
     static boolean generic(JsonValue receiver, String name) {
-      return receiver.memberNode(keyOf(name)) >= 0;
+      return receiver.memberNode(keyOf(name), new int[1]) >= 0;
     }
   }
 
@@ -272,14 +329,15 @@ public final class JsonValue implements TruffleObject {
         JsonValue receiver,
         String name,
         @Cached(value = "name", neverDefault = true) String cachedName,
-        @Cached("keyOf(name)") ValueTape.@org.jspecify.annotations.Nullable Utf8Key key)
+        @Cached("keyOf(name)") @org.jspecify.annotations.Nullable JsonKey key,
+        @Cached(value = "newHint()", dimensions = 0, neverDefault = true) int[] hint)
         throws UnknownIdentifierException {
-      return receiver.readFound(receiver.memberNode(key), name);
+      return receiver.readFound(receiver.memberNode(key, hint), name);
     }
 
     @Specialization(replaces = "cached")
     static Object generic(JsonValue receiver, String name) throws UnknownIdentifierException {
-      return receiver.readFound(receiver.memberNode(keyOf(name)), name);
+      return receiver.readFound(receiver.memberNode(keyOf(name), new int[1]), name);
     }
   }
 

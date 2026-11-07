@@ -31,7 +31,7 @@ ACCESS_SOURCES = {f'core/src/main/java/dev/elide/truffledata/{name}.java' for na
 } | {
     # Every hand-written JSON source (//json and //json:jvm); generated bindings live in //json:bindings.
     f'json/src/main/java/dev/elide/truffledata/json/{name}.java' for name in (
-        'HeapValueTape', 'JavaSink', 'JsonAccess', 'JsonArray', 'JsonBorrow', 'JsonDecoder', 'JsonExportNode',
+        'HeapValueTape', 'JavaSink', 'JsonAccess', 'JsonArray', 'JsonBorrow', 'JsonDecoder', 'JsonExportNode', 'JsonKey',
         'JsonJvm', 'JsonLimits', 'JsonMessage', 'JsonOwner', 'JsonPlan', 'JsonRecord', 'JsonSink',
         'JsonSession', 'JsonSnapshot', 'JsonSvm', 'JsonTypedOwner', 'JsonValue', 'JvmTypedOwner', 'SegmentValueTape',
         'SvmTypedOwner', 'SvmValueTape', 'TapeSource',
@@ -88,7 +88,7 @@ SVM_ONLY_METHODS = {
         'JsonSvm::lambda$static$0 ()V',
         'JsonSvm::tape (Lorg/graalvm/nativeimage/c/type/VoidPointer;)Ldev/elide/truffledata/json/SvmValueTape;',
         'JsonSvm::tables (Lorg/graalvm/nativeimage/c/type/VoidPointer;Ldev/elide/truffledata/json/SvmValueTape;'
-        'JLjava/lang/Runnable;)Ldev/elide/truffledata/json/JsonSvm$SvmResult;',
+        'Ljava/lang/Runnable;)Ldev/elide/truffledata/json/JsonSvm$SvmLexical;',
         'JsonSvm::adoptResult (Lorg/graalvm/nativeimage/c/type/VoidPointer;)Ldev/elide/truffledata/json/JsonMessage;',
         'JsonSvm::borrow (Lorg/graalvm/nativeimage/c/type/VoidPointer;)Ldev/elide/truffledata/json/JsonBorrow;',
         # The decoder handle returned by open() and the lexical table built by publish().
@@ -98,9 +98,8 @@ SVM_ONLY_METHODS = {
         'JsonSvm$1::compile (Ldev/elide/truffledata/Schema;Ljava/util/Map;)Ldev/elide/truffledata/json/JsonPlan;',
         'JsonSvm$1::close ()V',
         # The side tables and release of one published result (lexical accessor and close action).
-        'JsonSvm$SvmResult::span (J)J',
-        'JsonSvm$SvmResult::meta (J)I',
-        'JsonSvm$SvmResult::inputByte (J)B',
+        'JsonSvm$SvmLexical::span (J)J',
+        'JsonSvm$SvmLexical::inputByte (J)B',
         'JsonSvm$SvmResult::run ()V',
     ),
     # Sessions are static-image only (JVM sessions are performance plan Task E1): open() throws from
@@ -128,7 +127,6 @@ SVM_ONLY_METHODS = {
         'JsonBorrow',
         'JsonBorrow::assumption ()Lcom/oracle/truffle/api/Assumption;',
         'JsonBorrow::lexical (J)J',
-        'JsonBorrow::meta (J)I',
         'JsonBorrow::lexicalByte (J)B',
         'JsonBorrow::end ()V',
     ),
@@ -148,6 +146,8 @@ SVM_ONLY_METHODS = {
         'SvmValueTape',
         'SvmValueTape::nodeInt (J)I',
         'SvmValueTape::nodeLong (J)J',
+        'SvmValueTape::keyMeta (J)I',
+        'SvmValueTape::keyNodeEquals (JIJJJZ)Z',
         'SvmValueTape::regionCount ()J',
         'SvmValueTape::regionSize (J)J',
         'SvmValueTape::copyRegion (JJ[BII)V',

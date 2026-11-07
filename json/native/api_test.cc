@@ -416,7 +416,8 @@ int main() {
   require(first.lexical_count == 5 && first.lexical);
   require(static_cast<const uint64_t*>(first.lexical)[2] == ((uint64_t(5) << 32) | 3));
   {
-    // One side-table entry per node: FNV-1a key hash (31 bits) | ASCII flag on keys and strings.
+    // One side-table entry per node: ASCII flag on keys and strings; keys add the low 15 bits of
+    // their FNV-1a hash (<< 16) and their offset from the object node.
     auto* hashes = static_cast<const uint32_t*>(first.key_hashes);
     require(hashes != nullptr);
     auto fnv = [](const char* s) {
@@ -425,7 +426,8 @@ int main() {
       return h & 0x7fffffffu;
     };
     require(hashes[0] == 0 && hashes[2] == 0);
-    require(hashes[1] == (fnv("a") | 0x80000000u) && hashes[3] == (fnv("b") | 0x80000000u));
+    require(hashes[1] == (0x80000000u | (fnv("a") & 0x7fffu) << 16 | 1));
+    require(hashes[3] == (0x80000000u | (fnv("b") & 0x7fffu) << 16 | 3));
     require(hashes[4] == 0x80000000u);
   }
   require(first.control_bytes > 0 && first.index_peak_bytes >= first.index_retained_bytes);

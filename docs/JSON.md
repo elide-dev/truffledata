@@ -222,6 +222,19 @@ is false and `readMember` throws `UnknownIdentifierException`. It is never encod
 lossily as `?`. Reads after close fail with `IllegalStateException`, which polyglot
 callers see as a `PolyglotException`.
 
+Member lookup is hash-first. The decoder publishes a key-hash side table (31-bit
+FNV-1a of each key's decoded bytes) that every owner keeps, snapshots included.
+Each cached `readMember`/`isMemberReadable` site also keeps a position hint: the
+offset of the key node where it last found its member. A hint is checked by the
+node's side-table hash (only keys carry one, so a value string with the same bytes
+never matches), tag, length and inline bytes before use, so a stale hint only costs
+a miss; for keys of at most 16 bytes the hit path is a few loads with no loop or
+call. Misses and longer keys scan key hashes behind a static boundary and update the
+hint. Objects with more than 32 members get an open-addressing directory on first
+lookup, cached by the owner (`directories()` counts them). `JsonKey.of(name)`
+prepares a key for repeated `member(JsonKey)` calls from Java. Native container
+directories are requested from Myna as elide-dev/myna#45.
+
 ## Exporting to host objects
 
 `JsonValue.export(JsonSink)` and `JsonOwner.export(JsonSink)` (the whole document)

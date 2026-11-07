@@ -250,17 +250,34 @@ void lean_checks() {
                   + "\",\"\xc3\xa9" "2\":\"ok\"}");
     const auto& h = even.key_hashes();
     require(h.size() == even.view().node_count && even.lexical_spans().size() == h.size());
+    // Key entries: ASCII flag | low 15 hash bits << 16 | offset from the object node.
+    auto key = [](const std::string& name, uint32_t offset, bool plain) {
+      return (plain ? ascii_flag : 0u) | ((fnv(name) & 0x7fffu) << 16) | offset;
+    };
     require(h[0] == 0);
-    require(h[1] == (fnv("id") | ascii_flag));
+    require(h[1] == key("id", 1, true));
     require(h[2] == 0);
-    require(h[3] == (fnv("note") | ascii_flag));
+    require(h[3] == key("note", 3, true));
     require(h[4] == ascii_flag);  // "plain" string: no hash, ASCII
-    require(h[5] == (fnv("x") | ascii_flag));
+    require(h[5] == key("x", 5, true));
     require(h[6] == 0 && h[7] == 0);  // array and boolean
-    require(h[8] == fnv("\xc3\xa9"));  // escaped non-ASCII key: hash of decoded bytes, no flag
+    require(h[8] == key("\xc3\xa9", 8, false));  // escaped non-ASCII key: hash of decoded bytes
     require(h[9] == 0);  // escaped non-ASCII string
-    require(h[10] == fnv("\xc3\xa9" "2"));  // raw non-ASCII key
+    require(h[10] == key("\xc3\xa9" "2", 10, false));  // raw non-ASCII key
     require(h[11] == ascii_flag);
+    // Offsets are relative to the key's own object, so a nested key never looks like a member of
+    // its ancestor at the same distance.
+    document nested(R"({"a":{"b":1},"id":5,"o":{"c":{"d":2}}})");
+    const auto& n = nested.key_hashes();
+    require(n[1] == key("a", 1, true) && n[3] == key("b", 1, true) && n[5] == key("id", 5, true));
+    require(n[7] == key("o", 7, true) && n[9] == key("c", 1, true) && n[11] == key("d", 1, true));
+    // Offsets beyond 16 bits are published as 0 (no position hint possible).
+    std::string wide = "{";
+    for (int i = 0; i < 40000; ++i) wide += (i ? ",\"k" : "\"k") + std::to_string(i) + "\":0";
+    wide += "}";
+    document far(wide);
+    require((far.key_hashes()[65535] & 0xffffu) == 65535 && (far.key_hashes()[65537] & 0xffffu) == 0);
+    require((far.key_hashes()[65537] >> 16 & 0x7fffu) == (fnv("k32768") & 0x7fffu));
   }
 }
 

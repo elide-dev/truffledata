@@ -93,10 +93,77 @@ public abstract sealed class JsonOwner permits JsonMessage, JsonSnapshot, JsonBo
   abstract byte lexicalByte(long offset);
 
   /**
-   * Native side-table entry of a node: bits 0-30 hold the FNV-1a hash of a key node's decoded
-   * bytes (0 for other nodes), bit 31 marks string and key nodes whose bytes are all ASCII.
+   * Native side-table entry of a node: bit 31 marks string and key nodes whose bytes are all ASCII;
+   * key nodes carry the low 15 bits of their FNV-1a hash in bits 16-30 and their offset from the
+   * object node in bits 0-15 (0 beyond 65535). Other nodes carry 0 in bits 0-30.
    */
-  abstract int meta(long node);
+  final int meta(long node) {
+    if (node < 0 || node >= tape.nodeCount()) throw new IndexOutOfBoundsException("Node index");
+    return source.keyMeta(node);
+  }
+
+  /**
+   * Whether the node at {@code offset} (1..65535) from {@code object} is that object's own key equal
+   * to {@code key}, which must be inline (at most 16 bytes). The side table publishes each key's
+   * offset from its object, so one compare rejects value strings, keys of nested objects and other
+   * positions; the inline node words are then compared exactly (Myna zero-pads inline text). No
+   * loop, no call beyond the tape's word reads, no allocation.
+   */
+  final boolean keyMatches(long object, int offset, JsonKey key) {
+    long k = object + offset;
+    // Keys of at most 8 bytes have an all-zero high word (zero padding); the site's key is a
+    // constant, so `wide` folds and short keys skip the third word.
+    return k < tape.nodeCount()
+        && source.keyNodeEquals(
+            k, (key.hash << 16) | offset, key.header, key.low, key.high, key.length > 8);
+  }
+
+  /** Whether key node {@code k} decodes to exactly {@code key}'s bytes (hash first). */
+  final boolean keyEquals(long k, JsonKey key) {
+    return ((meta(k) >>> 16) & 0x7fff) == key.hash && tape.stringEquals(k, key.bytes);
+  }
+
+  /** Objects with more members than this get a hash directory on first lookup. */
+  static final int DIRECTORY_THRESHOLD = 32;
+
+  private volatile java.util.concurrent.@Nullable ConcurrentHashMap<Long, int[]> directories;
+
+  /** Diagnostic: number of objects given a member directory within this owner's lifetime. */
+  @TruffleBoundary
+  public final int directories() {
+    check();
+    var built = directories;
+    return built == null ? 0 : built.size();
+  }
+
+  /**
+   * Open-addressing table of an object's key offsets (key node minus object, 0 = empty), probed by
+   * the native key hash. Built once per object and cached while the owner lives; a hash directory
+   * is what Myna ABI v4 container directories (elide-dev/myna#45) would publish natively.
+   */
+  @TruffleBoundary
+  final int[] directory(long object, long end) {
+    var built = directories;
+    if (built == null) {
+      synchronized (this) {
+        built = directories;
+        if (built == null) directories = built = new java.util.concurrent.ConcurrentHashMap<>();
+      }
+    }
+    return built.computeIfAbsent(
+        object,
+        key -> {
+          int members = Math.toIntExact(tape.length(key));
+          int[] table = new int[Integer.highestOneBit(Math.max(members, 1) * 2) * 2];
+          int mask = table.length - 1;
+          for (long k = key + 1; k < end; k = tape.next(k + 1)) {
+            int slot = ((meta(k) >>> 16) & 0x7fff) & mask;
+            while (table[slot] != 0) slot = (slot + 1) & mask;
+            table[slot] = Math.toIntExact(k - key);
+          }
+          return table;
+        });
+  }
 
   /** 31-bit FNV-1a hash of a key node's decoded UTF-8 bytes; 0 for nodes that are not keys. */
   final int keyHash(long node) {
