@@ -45,6 +45,21 @@ class ProtoNativeTest {
         .getFirst();
   }
 
+  @Test
+  void unknownWireAccessIsDefensiveAcrossPresenceLayouts() throws Exception {
+    for (int size : new int[] {1, 65}) {
+      var plan = ProtoCompiler.compile(null, presenceDescriptor(size, false), Limits.DEFAULT, 8, WIRE_LIMIT);
+      byte[] wire = {(byte) 0xa0, 6, (byte) 0x81, 0, 10, 1, 42};
+      var row = plan.decode(wire);
+      assertArrayEquals(wire, row.unknownFieldBytes());
+      byte[] exposed = row.unknownFieldBytes();
+      exposed[0] = 0;
+      wire[0] = 0;
+      assertEquals((byte) 0xa0, row.unknownFieldBytes()[0]);
+      assertArrayEquals(new byte[0], plan.newBuilder().build().unknownFieldBytes());
+    }
+  }
+
   private static void assertPresence(DynamicMessage expected, ProtoRow actual) throws Exception {
     var fields = expected.getDescriptorForType().getFields();
     for (int i = 0; i < fields.size(); i++) {
