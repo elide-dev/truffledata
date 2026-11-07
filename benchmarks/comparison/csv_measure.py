@@ -6,6 +6,9 @@ and shard 8 is the size sweep for kernel crossovers. Every fixture group also ru
 probes (csv/native kernels from C++, the Rust csv crate) on the same bytes, checked by SHA-256.
 
 usage: csv_measure.py <svm|jvm> <comparison binary> <fixture binary> <csv_probe> <csv_probe_rs>
+
+Probe runs (never a recorded result) may narrow a run with --test_env: CSV_MEASURE_ENGINES (a regex
+on workload/engine), CSV_MEASURE_SHARDS (comma-separated shard indices) and CSV_MEASURE_FORKS.
 """
 import hashlib
 import json
@@ -54,9 +57,14 @@ GROUPS = [('fixture', d, SMALL) for d in DATASETS] + [('fixture', d, LARGE) for 
 if shards != len(GROUPS):
     raise ValueError(f'expected {len(GROUPS)} shards, got {shards}')
 group = GROUPS[shard]
+SELECT = os.environ.get('CSV_MEASURE_ENGINES', '')
+SHARDS = os.environ.get('CSV_MEASURE_SHARDS', '')
+if SHARDS and str(shard) not in SHARDS.split(','):
+    print('shard not selected')
+    sys.exit(0)
 
 jobs = []
-forks = 2
+forks = int(os.environ.get('CSV_MEASURE_FORKS', '2'))
 if group[0] == 'fixture':
     _, dataset, size = group
     for workload, engines in ENGINES.items():
@@ -76,6 +84,9 @@ else:
             for workload, engines in SWEEP.items():
                 for engine in engines:
                     jobs.append((workload, engine, dataset, size, 'ingest', 0))
+if SELECT:
+    import re
+    jobs = [job for job in jobs if re.search(SELECT, f'{job[0]}/{job[1]}')]
 random.Random(20261106 + shard).shuffle(jobs)
 
 

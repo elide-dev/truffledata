@@ -44,7 +44,8 @@ public final class CsvComparisonJvm {
           public CsvIndexing.Provider provider() {
             if (library.isEmpty()) throw new IllegalStateException("truffledata.csv.library unset");
             CsvIndexing.Provider p = provider;
-            if (p == null) provider = p = FfmIndexer.Library.load(Path.of(library)).provider();
+            // The published opt-in path: the FFM backend found by CsvIndexing.loadNative.
+            if (p == null) provider = p = CsvIndexing.loadNative(Path.of(library));
             return p;
           }
 

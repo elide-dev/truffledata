@@ -29,9 +29,14 @@ public final class CsvComparisonSvm {
             return SvmIndexer.invalidUtf8(input, 0, input.length);
           }
 
+          private CsvIndexing.@org.jspecify.annotations.Nullable Provider provider;
+
+          /** The published opt-in path: the static backend found by CsvIndexing.loadNative. */
           @Override
           public CsvIndexing.Provider provider() {
-            return SvmIndexer.provider();
+            CsvIndexing.Provider p = provider;
+            if (p == null) provider = p = CsvIndexing.loadNative();
+            return p;
           }
         });
   }
