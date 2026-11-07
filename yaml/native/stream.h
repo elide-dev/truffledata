@@ -139,6 +139,19 @@ class stream final {
     while (!complete_ && scan_ < size_) {
       const char* line = data_ + scan_;
       size_t left = size_ - scan_;
+      // Inside an open document only `---`, `...` (perhaps after a BOM) can change anything, so a
+      // line starting with any other byte is skipped by an inline LF search instead of the full
+      // classification below (which reaches the same decision for it).
+      if (document_open_ && line[0] != '-' && line[0] != '.' && uint8_t(line[0]) != 0xEF) {
+        const char* lf = find_lf(line, left);
+        if (!lf) {
+          if (!finished_) return;
+          scan_ = size_;
+        } else {
+          scan_ += size_t(lf - line) + 1;
+        }
+        continue;
+      }
       const char* lf = static_cast<const char*>(std::memchr(line, '\n', left));
       if (!lf && !finished_) {
         // A partial line can only be judged once it is complete, except that it cannot be a
@@ -172,6 +185,21 @@ class stream final {
       }
       scan_ += length;
     }
+  }
+
+  // The first LF in p[0, n), or null: eight bytes per step (exact SWAR match), no library call
+  // per line.
+  static const char* find_lf(const char* p, size_t n) {
+    size_t i = 0;
+    for (; i + 8 <= n; i += 8) {
+      uint64_t x;
+      std::memcpy(&x, p + i, 8);
+      uint64_t hit = detail::equal(x, '\n');
+      if (hit) return p + i + size_t(__builtin_ctzll(hit) / 8);
+    }
+    for (; i < n; ++i)
+      if (p[i] == '\n') return p + i;
+    return nullptr;
   }
 
   static bool blank_or_comment(const char* p, size_t n) {
