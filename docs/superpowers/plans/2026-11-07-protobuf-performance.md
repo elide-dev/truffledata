@@ -117,7 +117,7 @@ Detach reparses the wire with the Java codec (`TypedMessage.java:62-66`): 6.6–
 | Projected / full ingestion | decode + child rows, arrays and Strings on access | decode + ~50–150 ns of offset reads | Java materialization; lengths from the slab |
 | First access | `NativeRow`/`NativeArray`/cache creation | one `Object[]` + flyweights | per-row discovery |
 | Peak reads | directory loads, lease, value cache, Strings | offset loads (generated-owned 0.42×) | indirection and lifetime checks |
-| Interpreter reads | five dispatch layers, AOT without profiles | one guard + one call | DSL layers; PGO as evidence task |
+| Interpreter reads | five dispatch layers, AOT without profiles | one guard + one call | DSL layers; Task B4 |
 | Detach | reparse | memcpy or identity | the reparse |
 | JVM | FFM view, `int[]` copy, `ByteBuffer` reads | 89 ns pure Java | the native hop |
 
@@ -205,7 +205,7 @@ public abstract class Schema { public Accessor accessor(int ordinal); ... }   //
 
 **Compiled reads over a slab** are `presenceWord & bit` and `ByteArraySupport.getInt/getLong(slab, base + constOffset)`, with no lifetime check for heap slabs (the owner is final and immutable). On SVM this is the same instruction count as generated-owned's field load. Target: peak full reads ≤ 0.5× stock (generated-owned measures 0.42×).
 
-**Interpreter reads**: the accessor path removes three of five dispatch layers (estimated ≤ 2.5× stock from 4.8–6.4×). Task F1 measures the remaining AOT gap with a PGO-instrumented consumer image (the EE toolchain profile is already configured in `MODULE.bazel`); if interpreter cells improve ≥ 1.5× the plan records how Elide builds images with profiles. The comparison stays honest: stock's interpreter cell is AOT code behind a boundary; Task G1 adds a `stock-interop` cell that reads stock messages through the same `SharedRoot` via host interop so the interpreter comparison is like for like.
+**Interpreter reads**: the accessor path removes three of five dispatch layers (estimated ≤ 2.5× stock from 4.8–6.4×). Task B4 closes the remaining AOT gap in the read path itself. The comparison stays honest: stock's interpreter cell is AOT code behind a boundary; Task G1 adds a `stock-interop` cell that reads stock messages through the same `SharedRoot` via host interop so the interpreter comparison is like for like.
 
 **Generated accessors at build time**: `ContractPlugin` emits `SlabAccess_<Type>` with constant offsets (`static long number(SlabRow row)`) next to the existing `Access_<Type>`; runtime plans use `Layout` objects, both PE-constant. Elide can call either.
 
@@ -373,13 +373,9 @@ Port `typed.rs` text/JSON walks to write slabs (`State` retired). Gate: text acc
 
 Only if Task A2's measurement shows the table-driven decoder ≥ 1.25 × the hand-written probe on the same run: emit Rust per contract type from `ContractPlugin` into the Bazel build (`rust_library` per contract set), selected by plan identity. **Commit** — `perf: generate native slab decoders per protobuf contract`
 
-### Phase F — SVM code quality
+### Phase F — removed
 
-#### Task F1: PGO evidence for interpreter and AOT paths
-
-**Files:** `benchmarks/comparison/BUILD.bazel` (`consumer_svm_pgo_instrument` and `consumer_svm_pgo` `native_image` targets on the EE toolchain profile; profile collected by running `--smoke` plus the interpreter cells), `docs/BENCHMARKS.md` (procedure), `tools/bench/consumer.py` (binary label `pgo`).
-
-- [ ] Measure interpreter and peak cells for `slab`, `generated-owned` and `stock` with and without profiles. Ruling: if interpreter cells improve ≥ 1.5×, document the profile workflow for Elide images and keep the targets; otherwise record and remove. Retain under `benchmarks/results/protobuf-pgo-<sha>/`. **Commit** — `bench: measure protobuf consumer images built with profiles`
+Profile-guided optimization is an application-level concern (Elide builds its own images); this repository neither builds nor measures profiled images, and no target depends on one.
 
 ### Phase G — evidence, retirement, docs
 
@@ -420,7 +416,7 @@ Only if Task A2's measurement shows the table-driven decoder ≥ 1.25 × the han
 
 **Risks**
 
-- *SVM AOT quality for the Java producer and the read path.* Native Image without profiles compiled a CSV fused path 50× larger than its plain loop (`csv-3f23d0c`). Mitigation: the Rust producer is the SVM default; hot methods stay small with cold paths out of line; Task F1 measures PGO; the consumer smoke checks graph size.
+- *SVM AOT quality for the Java producer and the read path.* Native Image without profiles compiled a CSV fused path 50× larger than its plain loop (`csv-3f23d0c`). Mitigation: the Rust producer is the SVM default; hot methods stay small with cold paths out of line; the consumer smoke checks graph size.
 - *Slab amplification.* ≈ 3.5× input for this schema (estimated from the probe's 488 B with 8-byte slots); wide schemas with many absent string fields cost 4 B per absent field. Mitigation: 4-byte slots, string headers only for present strings, `maxSlabBytes` budget, borrowing for large payloads; Task A2 gate ≤ 4× input.
 - *Merge scratch complexity.* Singular-message merges are rare but must be exact. Mitigation: concatenation semantics implemented once in both producers, differential corpus with forced merges, `BUDGET` on scratch overflow in the critical path with a normal-path retry.
 - *Pinned arrays and critical calls.* A pinned `byte[]` blocks compaction for the call; a critical downcall delays safepoints. Mitigation: 64 KiB bound, native scratch above it, GC stress tests, bound configurable to 0.
@@ -442,22 +438,22 @@ Only if Task A2's measurement shows the table-driven decoder ≥ 1.25 × the han
 ## 10. Open questions for the user
 
 1. **Owning by default?** Owning slabs copy payload bytes (≈ 10 ns per small message) so results have no input dependency and detach is free; borrowing keeps the view's lease model and avoids copies for large `bytes`. Proposed: owning by default, borrowing for `bytes` ≥ 4 KiB and for `decodeBorrowed`.
-2. **Rust or Java producer on SVM?** Both produce identical slabs. Proposed: Rust until Task F1 (PGO) shows the AOT Java producer within 1.1× on the decode cells; then the Java producer becomes the universal path and the native library optional.
+2. **Rust or Java producer on SVM?** Both produce identical slabs. Proposed: Rust until the AOT Java producer is within 1.1× on the decode cells; then the Java producer becomes the universal path and the native library optional.
 3. **Validation policy for projected-away strings** (Task E1 `LAX`): validate everything (today's contract) or defer validation to the read? Proposed: strict by default; `Projection.lax()` opt-in with on-read validation.
 4. **Core `Accessor`** (Task B2): change the shared API for every backend now, or protobuf-only first? Proposed: now, with the default wrapper so other backends are unaffected until adopted.
 5. **JVM critical bound**: 64 KiB proposed; 0 disables critical calls.
 6. **Retire ABI 9 views and the `typed`/`typedReuse` index** in this plan (Task G1), or keep them one release for consumers? Proposed: retire; bindings and attachments ship together as ABI 10 in 0.9.0.
-7. **PGO images for Elide** (Task F1): is a profile-build step acceptable in Elide's image pipeline if it pays ≥ 1.5× on interpreter cells?
+7. *(Withdrawn: PGO is out of scope for this repository.)*
 8. **upb fast table**: run a follow-up probe with `--@protobuf//upb:fasttable_enabled` to record the tail-call parser's number (not built here), or accept the mini-table figure as the competitor reference?
 
-**Decided (user, 2026-11-07): every proposed default.** Q1 owning slabs by default; borrowing for `bytes` ≥ 4 KiB and `decodeBorrowed`. Q2 Rust producer on SVM until F1 shows the AOT Java producer within 1.1 ×. Q3 strict by default, `Projection.lax()` opt-in with on-read validation. Q4 change the core `Accessor` now (additive, default wrapper). Q5 64 KiB critical bound. Q6 retire ABI 9 views; ABI 10 ships in 0.9.0. Q7 a PGO step is acceptable for Elide images if it pays ≥ 1.5 × on interpreter cells. Q8 run the upb fast-table probe as a follow-up record.
+**Decided (user, 2026-11-07): every proposed default.** Q1 owning slabs by default; borrowing for `bytes` ≥ 4 KiB and `decodeBorrowed`. Q2 Rust producer on SVM until the AOT Java producer is within 1.1 ×. Q3 strict by default, `Projection.lax()` opt-in with on-read validation. Q4 change the core `Accessor` now (additive, default wrapper). Q5 64 KiB critical bound. Q6 retire ABI 9 views; ABI 10 ships in 0.9.0. Q8 run the upb fast-table probe as a follow-up record.
 
 **Added (user, 2026-11-07):** a pure-Java protobuf path is required for consumers who cannot use Buffa. Task A3 (the Java slab producer) is therefore mandatory, the native-free consumer (`fallback_test`, `buffa_consumer` fallback mode) reads Java-produced slabs, and both are release gates for 0.9.0. See `2026-11-07-release-matrix.md`.
 
-**Revised (user, 2026-11-07): PGO is a final polish step, never load-bearing.** No target, gate or producer choice depends on profiles. Every hypothesis in §8 is measured on images built without PGO; the "(≤ 1.5× with PGO, F1)" note is withdrawn. Q2 now reads: Rust producer on SVM until the AOT Java producer, built **without** profiles, is within 1.1× on the decode cells. Q7 now reads: F1 runs last, after G1, as an optional measurement; its result changes no ruling. The interpreter gap is closed by design in Task B4.
+**Revised (user, 2026-11-07): PGO stays out of this repository.** It is an application-level concern for Elide's images. Nothing here builds, measures or depends on profiled images; every target is met by design and measured on ordinary images. Phase F and Q7 are withdrawn; the interpreter gap is closed in Task B4.
 
-#### Task B4: Interpreter reads by design (no PGO)
+#### Task B4: Interpreter reads by design
 
 After B1. B2 measured interpreter full reads at 4.18× (generated-owned) and 3.88× (native-eager) stock against ≤ 2.5×, and generated-owned peak 4–9 % slower (ledger, Task B2). Diagnose with evidence on the SVM consumer image (a sampling profile of the interpreter cells, the compiled-code size of the read nodes' `execute` paths, the dispatch layers left between `SharedRoot` and the slot load) and remove the cost structurally: e.g. inlined DSL nodes (`@GenerateInline`/`@GenerateCached(false)`), no exception-driven result paths on the hot accessor route, accessor calls that are monomorphic direct calls in AOT code, fewer node layers per read, cold paths out of line. Fix the generated-owned peak regression in the same task.
 
-- [ ] Gates (no PGO): interpreter full ≤ 2.5× stock for `slab` and `generated-owned`; peak unchanged or better than `f5e2d97` for every engine; every allocation and AST gate unchanged. Retain under `benchmarks/results/protobuf-interpreter-<sha>/`. **Commit** — `perf: read protobuf rows in the interpreter through one guard and one call`
+- [ ] Gates: interpreter full ≤ 2.5× stock for `slab` and `generated-owned`; peak unchanged or better than `f5e2d97` for every engine; every allocation and AST gate unchanged. Retain under `benchmarks/results/protobuf-interpreter-<sha>/`. **Commit** — `perf: read protobuf rows in the interpreter through one guard and one call`
