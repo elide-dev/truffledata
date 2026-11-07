@@ -143,8 +143,11 @@ The CSV comparison (`benchmarks/comparison/CSV.md`, raw samples in
 - **JVM:** the native kernel through the critical heap call. Fallback: `java-vector`.
 - **Below 4 KiB:** not measured yet. The strict scanner stays a candidate there.
 
-`IndexedScanner` should read the index in calls of up to 1 Mi entries for native kernels and
-64 Ki entries for Java kernels, the capacities the measurements used.
+The shipped integration (`benchmarks/results/csv-1d2e9ab/` and `csv-b5bd173/`) refined this:
+inputs below 16 KiB use the per-byte scanners (the sweep down to 256 B put the crossover between
+4 and 16 KiB on SVM), and every provider indexes 64 Ki entries per call into one buffer per
+thread (native index rates are flat from 16 KiB calls, and 1 Mi-entry buffers per scanner cost a
+4 MiB allocation per 1 MiB parse).
 
 ## Tests
 

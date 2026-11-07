@@ -44,7 +44,7 @@ try (CsvReader reader = plan.open(input)) {
 
 | Decision | Current rule |
 | --- | --- |
-| Implementation | Pure Java, with no native code, seam or `@CFunction`. FFM is used only for mapped files. One jar serves JVM and SVM |
+| Implementation | Pure Java, with no native code, seam or `@CFunction` in the jar. FFM is used only for mapped files. One jar serves JVM and SVM. Every parse path frames records over a structural index (built-in kernel: Java SWAR); an application may install the native AVX-512/AVX2/NEON kernel (`CsvIndexing`, [Structural index](#structural-index)), which the jar neither bundles nor loads |
 | Behaviour scope | Apache Commons CSV 1.14.1 parsing and printing (feature matrix below). Commons formats get Commons behaviour; our own default format stays strict |
 | Strict dialect | RFC 4180 with four leniencies: lone CR terminators, skipped empty lines, flexible rows that may only be shorter, and ASCII case-insensitive `true`/`false` |
 | Null | One rule (`Nulls`, below). An unconfigured strict format keeps the v1 rule: only an unquoted empty field is null, and only in a nullable typed column |
@@ -509,10 +509,39 @@ thread, shared arenas serve any. A `CsvReader` and a `CsvWriter` are single-thre
 
 ## Performance
 
-### Scanner seam for a faster kernel
+### Structural index
 
-`CsvKernel` (package-private, final) is the only code a SWAR, Vector API or native fast
-path needs to replace. It has two methods over `(byte[] input, int from, int to)`:
+Every entry point (`Csv.parse`, `Csv.open`, `CsvPlan.parse`/`open`, heap, stream and mapped
+input) scans through `CsvScanner`, which frames records over a structural index
+(`csv/native/README.md` has the contract): one 32-bit entry per delimiter, CR or LF outside
+quotes, with flags proving a field well-formed in O(1). The consumer (`IndexScan`) produces the
+same records, spans, return offsets and stops as the per-byte scanners.
+
+- **Formats.** Every strict format, and Commons formats with a one-byte delimiter, no comment
+  marker, no escape other than the quote, and none of `ignoreSurroundingSpaces`, Commons `trim`
+  or `trailingDelimiter`. That covers `DEFAULT`, `EXCEL`, `RFC4180`, `INFORMIX_UNLOAD_CSV`,
+  `POSTGRESQL_CSV`, `MONGODB_CSV` and `MONGODB_TSV`. The others (`INFORMIX_UNLOAD`, `MYSQL`,
+  `ORACLE`, `POSTGRESQL_TEXT`, `TDF`, and any format with a comment marker or multi-byte
+  delimiter) keep the per-byte Commons lexer.
+- **Fallback.** A record the index path cannot prove (malformed quotes, blanks around quotes
+  under `trim`, Commons trailing data or mid-token quotes, an open quote at end of input, a limit,
+  a quoted tail of a stream buffer) goes to the per-byte scanner of the same dialect, one record,
+  which reports the exact diagnostic or accepts it; indexing resumes after it.
+- **Kernels.** `CsvIndexing.install(provider)` selects the kernel for parses and readers started
+  afterwards; `CsvIndexing.JAVA` (Java SWAR) is the default, `null` turns the index path off. The
+  providers in `//csv/kernel` are `SvmIndexer.provider()` (static native library, leaf calls up to
+  1 MiB), `FfmIndexer.Library.load(path).provider()` (JVM, `csv_shared.so`, critical heap calls)
+  and `VectorIndexer.provider()` (Vector API). Inputs below `CsvIndexing.MIN_INDEX_BYTES` use the
+  per-byte scanners.
+- **UTF-8.** Each buffer is validated once ahead of the scan (simdutf with a native provider);
+  records in the valid prefix skip their own validation, so diagnostics are unchanged.
+- **Numbers.** INT64 and FLOAT64 conversions use eight-digit SWAR steps, Clinger's exact path and
+  the Eisel-Lemire algorithm; `Double.parseDouble` remains only for products too close to call.
+
+### Run-skip seam of the per-byte scanners
+
+`CsvKernel` (package-private, final) holds the run skips of the per-byte scanners. It has two
+methods over `(byte[] input, int from, int to)`:
 
 - `skipUnquoted` returns the first index whose byte is structural outside quotes: the
   delimiter's first byte, CR, LF, the quote (strict formats, while quoting) or the escape.
@@ -551,29 +580,30 @@ The gates below are enforced; they bound shape and allocation, not throughput:
 dataformat-csv 2.22.4, univocity-parsers 2.9.1 and Commons CSV 1.14.1. It runs on SVM (portable
 and x86-64-v3 images) and on the JVM, over four synthetic fixtures at 1 MiB and 128 MiB, with Rust
 `csv` and `csv-core` and a C++ consumer of the native index measured on the same worker. The raw
-samples and the shared-host caveats are in `benchmarks/results/csv-f5daec1/`. The write-up,
-hypotheses H1–H5 and the per-runtime kernel choice are in `benchmarks/comparison/CSV.md`.
-Shared-host timings are advisory, and only figures from one shard compare.
+samples and the shared-host caveats are in `benchmarks/results/csv-b5bd173/` (the shipped paths
+over the index) and `csv-f5daec1/` (kernels alone). The write-up, hypotheses H1–H5 and the
+per-runtime kernel choice are in `benchmarks/comparison/CSV.md`. Shared-host timings are
+advisory, and only figures from one shard compare. Shipped paths with the native kernel
+installed, against the same entry points with the index path off (same shard):
 
-- **Shipped paths.** `CsvScanner` scans 1.03–2.7× faster than the best Java competitor, with no
-  Java allocation per row. `Csv.parse` with `getString` reaches 0.5–1.4× of the best competitor
-  on string materialization. `CsvPlan` typed decode is 1.4–2.6× the best competitor on SVM, but
-  slower on the JVM's numeric fixture.
-- **Structural-index kernels** (`csv/native`, `csv/kernel`, not yet wired into `Csv.parse` or
-  `CsvPlan`):
-  - The native AVX-512/AVX2 indexer indexes at 2.4–12 GB/s. With the index consumer, scans run
-    at 0.7–13.6 GB/s. That is 2.4–21× the best Java competitor and 1.25–11× Rust `csv-core`.
-  - Typed decode over the index runs 2.6–5.6× the best competitor, with no Java allocation per
-    row, and at 83–250% of Rust `csv`.
-  - String materialization trails Rust's reused `StringRecord` on short fields, because Java
-    allocates one `String` per cell.
+- **Scan** (`CsvScanner`): 1.7–7.8× faster than before, at 0.75–1.15× of the reference kernel
+  consumer; 2.4–18× the best Java competitor and 1.3–9.8× Rust `csv-core` in every row; 0.6–1.2×
+  of a C++ consumer of the same index. The default `java-swar` kernel is 0.63–2.9× (faster in 21
+  of 24 rows).
+- **Typed** (`CsvPlan`): 1.1–2.7× faster than before; 1.2–3.1× the best Java competitor in every
+  row; 1.05–1.6× Rust `csv` on `mixed`, 0.50–0.65× on `numeric`.
+- **Strings** (`Csv.parse` + `getString`): 0.8–2.2× before; ahead of the best Java competitor in
+  11 of 24 rows (FastCSV leads on short-field `numeric` and `mixed`); one Java `String` per cell
+  bounds it.
+- Typed and strings stay at 0.26–0.87× of the reference kernel consumers, which retain no batch.
 
 ## Deferred
 
-- Adopting the structural-index kernels behind the scanner seam (`csv/native/README.md` describes
-  the contract and how a scanner consumes it). The comparison chose the native kernel on SVM and
-  the JVM, with Java SWAR (portable SVM) or the Vector API (JVM, x86-64-v3 images) as fallbacks; a
-  `MemorySegment`-native kernel would also drop the mapped-window copy.
+- Publishing the native CSV providers (`//csv/kernel:jvm`, `:svm` and the `csv_shared.so` /
+  static archive attachments). They are built and measured here but not yet release artifacts.
+- A `MemorySegment`-native index consumer for mapped input (the window copy stays; see the
+  comparison write-up for why it is not the mapped path's main cost).
+- Lazy text views for `getString` (a `String` per cell remains the API).
 - Buffer recycling across heap batches.
 - Wider boolean spellings, STRING length constraints, other encodings, type inference.
 - Primitive and text columns in core `Batch`, so CSV and JDBC share column storage.
@@ -584,7 +614,10 @@ Shared-host timings are advisory, and only figures from one shard compare.
 
 ```sh
 bazel test //csv/tests:jvm                      # scanner, UTF-8, batches, interop, reader, plans, export,
-                                                # Commons differential and round-trip suites, nulls, writer, mapped input
+                                                # Commons differential and round-trip suites, nulls, writer, mapped input,
+                                                # index-path differential (IndexedDifferentialTest), numbers
+bazel test //csv/tests:jvm_indexed              # every suite again with the index path forced at every size
+bazel test //csv/kernel/tests:jvm               # every kernel against the scalar oracle
 bazel test //csv/tests:native_test              # SVM compiled read and export gates (Linux x86-64, RBE)
 bazel test //tools/release:csv_consumer         # published jars on the JVM
 bazel test //tools/release:csv_native_test      # published jars in a static image (Linux x86-64, RBE)
