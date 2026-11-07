@@ -11,7 +11,7 @@ import subprocess
 import tempfile
 import xml.etree.ElementTree as ET
 
-from maven_repo import MODULES, stage, validate_version
+from maven_repo import built_classifiers, MODULES, stage, validate_version
 
 NS = 'http://maven.apache.org/POM/4.0.0'
 ET.register_namespace('', NS)
@@ -61,7 +61,8 @@ def main():
     work = Path(tempfile.mkdtemp(prefix='maven-consumer.', dir=root / 'build'))
     # Keep failures for diagnosis; successful isolated repositories are removed below.
     print('Maven consumer workspace:', work, flush=True)
-    stage(output / 'tools/release', work / 'repository', args.version)
+    stage(output / 'tools/release', work / 'repository', args.version,
+          classifiers=built_classifiers(output / 'tools/release'))
     source = work / 'consumer/src/main/java'
     source.mkdir(parents=True)
     shutil.copyfile(root / 'tools/release/Consumer.java', source / 'Consumer.java')

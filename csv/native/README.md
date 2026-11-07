@@ -154,8 +154,8 @@ thread (native index rates are flat from 16 KiB calls, and 1 Mi-entry buffers pe
 ## Publication
 
 The kernel ships outside the pure-Java `truffledata-csv` jar: `truffledata-csv-bindings` (the
-generated seam bindings), `truffledata-csv-native` (`SvmIndexer` plus the Linux x86-64
-`csv_shared.so` and `libtruffledata_csv.a` attachments) and `truffledata-csv-jvm` (`FfmIndexer`).
+generated seam bindings), `truffledata-csv-native` (`SvmIndexer` plus the static and
+shared library attachments for Linux x86-64, Linux AArch64 and macOS AArch64) and `truffledata-csv-jvm` (`FfmIndexer`).
 Applications opt in with `CsvIndexing.install(CsvIndexing.loadNative(...))`
 ([docs/PUBLISHING.md](../../docs/PUBLISHING.md#csv-distribution)).
 

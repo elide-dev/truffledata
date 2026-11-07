@@ -9,8 +9,8 @@ instead. Native details and ABI notes are in [`json/native/README.md`](../json/n
 the delivery plan is [`JSON_PLAN.md`](../JSON_PLAN.md).
 
 The module publishes (from 0.8.0) as `dev.elide:truffledata-json`
-(`//json:json`: the JSON entry points, SVM backend and typed plans, plus Linux x86-64
-`.so`/`.a` attachments), `truffledata-json-jvm` (`//json:jvm`: FFM backend) and
+(`//json:json`: the JSON entry points, SVM backend and typed plans, plus `.a` and `.so`/`.dylib`
+attachments for Linux x86-64, Linux AArch64 and macOS AArch64), `truffledata-json-jvm` (`//json:jvm`: FFM backend) and
 `truffledata-json-bindings`, on top of the shared `truffledata-tape` and
 `truffledata-tape-jvm`; see [publishing](PUBLISHING.md#json-native-distribution).
 

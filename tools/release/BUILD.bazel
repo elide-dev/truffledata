@@ -4,9 +4,10 @@ load("@rules_graalvm//graalvm:defs.bzl", "native_image")
 load("@rules_java//java:defs.bzl", "java_import", "java_library", "java_test")
 load("@rules_shell//shell:sh_test.bzl", "sh_test")
 load("//bazel:jit.bzl", "TRUFFLE_JIT_CHECKS")
-load("//bazel:maven.bzl", "maven_publication", "native_attachments", "release_version")
+load("//bazel:maven.bzl", "classifier_attachments", "maven_publication", "native_attachments", "release_version")
 load("//bazel:maven_bom.bzl", "maven_bom")
 load("//bazel:release_archive.bzl", "release_archive")
+load(":native_consumer.bzl", "native_consumers")
 
 release_version(
     name = "version",
@@ -139,15 +140,25 @@ release_archive(
     archives = [":yaml_objects"],
 )
 
-# Attachment classifiers per target platform: the static archive as -<classifier>.a, the shared library as
-# -<classifier>.so on Linux and -<classifier>.dylib (install name @rpath/libtruffledata_<name>.dylib) on macOS.
-CLASSIFIERS = {
-    "//bazel/platforms:linux_amd64": ("linux-x86_64", ".so"),
-    "//bazel/platforms:linux_arm64": ("linux-aarch64", ".so"),
-    "//bazel/platforms:macos_arm64": ("macos-aarch64", ".dylib"),
-}
+# Each release archive's member manifest (member kinds, for tools/release/check_natives.py) and, on macOS, its ThinLTO
+# bitcode twin and that twin's manifest.
+[filegroup(
+    name = "%s_%s" % (archive, group),
+    srcs = [":" + archive],
+    output_group = group,
+) for archive in [
+    "buffa_archive",
+    "csv_archive",
+    "json_archive",
+    "yaml_archive",
+] for group in [
+    "manifest",
+    "bitcode",
+    "bitcode_manifest",
+]]
 
-# Native modules: (static archive, shared library, platform-neutral attachments). YAML is built, not yet published.
+# Native modules: (static archive, shared library, platform-neutral attachments); classifiers per target platform are
+# CLASSIFIERS in //bazel:maven.bzl. YAML is built, not yet published.
 NATIVES = {
     "protobuf-buffa": (
         ":buffa_archive",
@@ -171,36 +182,62 @@ NATIVES = {
     ),
 }
 
-# The target platform's native attachments for each module, in the publication's Maven layout without jars or POMs.
-# Each platform builds :natives in its own invocation (--config=remote, --config=remote_arm64, --config=local on
-# macOS); the release stages every platform's set beside the publications.
+# The target platform's native attachments for each module, in the publication's Maven layout without jars or POMs,
+# plus the archives' member manifests for the release gate (never published). Each platform builds :natives in its own
+# invocation (--config=remote, --config=remote_arm64, --config=local on macOS); tools/release/publish.sh collects the
+# three sets and stages them beside the publications. Platform-neutral attachments (the Buffa header) come from the
+# publications alone.
 [native_attachments(
     name = module + "_natives",
-    attachments = select({
-        setting: {
-            static: "-%s.a" % classifier,
-            shared: "-%s%s" % (classifier, extension),
-        } | neutral
-        for setting, (classifier, extension) in CLASSIFIERS.items()
-    }),
+    attachments = classifier_attachments(static, shared, {}, manifests = True),
     module = module,
-) for module, (static, shared, neutral) in NATIVES.items()]
+) for module, (static, shared, _neutral) in NATIVES.items()]
 
 filegroup(
     name = "natives",
-    srcs = [":%s_natives" % module for module in NATIVES],
+    # YAML (unpublished) does not build for macOS yet: its scalars use floating-point std::from_chars, which the macOS
+    # SDK's libc++ marks available from macOS 26, above --macos_minimum_os=12.0.
+    srcs = [":%s_natives" % module for module in NATIVES if module != "yaml"] + select({
+        "@platforms//os:macos": [],
+        "//conditions:default": [":yaml_natives"],
+    }),
+)
+
+# C consumers of each published native on the target platform (tools/release/native_consumer.bzl): the release static
+# archive linked with LTO off and with ThinLTO (on macOS, the bitcode twin with ld64.lld), each checked by its LTO
+# witness, and the release shared library loaded with dlopen. Linux runs them on RBE (--config=remote and
+# --config=remote_arm64), macOS locally (--config=local).
+native_consumers(
+    name = "buffa_c",
+    archive = ":buffa_archive",
+    fingerprint = "td_buffa_fingerprint",
+    shared = "//protobuf-buffa/native:shared",
+)
+
+native_consumers(
+    name = "json_c",
+    archive = ":json_archive",
+    fingerprint = "td_json_fingerprint",
+    probe = "td_json_bridge_present",
+    shared = "//json/native:json_shared.so",
+)
+
+native_consumers(
+    name = "csv_c",
+    archive = ":csv_archive",
+    fingerprint = "td_csv_fingerprint",
+    shared = "//csv/native:csv_shared.so",
+)
+
+test_suite(
+    name = "native_consumers",
+    tags = ["native-consumer"],
 )
 
 [maven_publication(
     name = module,
     # This invocation's platform; the other platforms' attachments come from their :natives builds.
-    attachments = select({
-        setting: {
-            NATIVES[module][0]: "-%s.a" % classifier,
-            NATIVES[module][1]: "-%s%s" % (classifier, extension),
-        } | NATIVES[module][2]
-        for setting, (classifier, extension) in CLASSIFIERS.items()
-    }) if module in NATIVES else {},
+    attachments = classifier_attachments(NATIVES[module][0], NATIVES[module][1], NATIVES[module][2]) if module in NATIVES else {},
     dependencies = COMMON + ([] if module == "core" else ["dev.elide:truffledata-core:{version}"]) + ([
         "com.google.protobuf:protobuf-java:4.36.1",
         "com.google.protobuf:protobuf-java-util:4.36.1",

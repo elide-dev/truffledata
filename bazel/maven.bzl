@@ -9,6 +9,40 @@ def _version_impl(ctx):
 
 release_version = rule(implementation = _version_impl, build_setting = config.string(flag = True))
 
+# Attachment classifiers per target platform: (classifier, shared library extension, bitcode twin). The static archive
+# is -<classifier>.a, the shared library -<classifier>.so on Linux and -<classifier>.dylib (install name
+# @rpath/libtruffledata_<name>.dylib) on macOS, where -<classifier>-bitcode.a carries the static archive's members as
+# ThinLTO bitcode, since Mach-O has no fat objects. Keep in sync with tools/release/maven_repo.py.
+CLASSIFIERS = {
+    "//bazel/platforms:linux_amd64": ("linux-x86_64", ".so", False),
+    "//bazel/platforms:linux_arm64": ("linux-aarch64", ".so", False),
+    "//bazel/platforms:macos_arm64": ("macos-aarch64", ".dylib", True),
+}
+
+def classifier_attachments(static, shared, neutral = {}, manifests = False):
+    """A select() of the target platform's attachments for one native module.
+
+    Args:
+      static: a release_archive label (its `<label>_bitcode`, `<label>_manifest` and `<label>_bitcode_manifest`
+        filegroups must exist).
+      shared: the shared library label.
+      neutral: platform-independent attachments, label to suffix.
+      manifests: also attach the archives' member manifests (release gate input, never published).
+    """
+    return select({
+        setting: {
+            static: "-%s.a" % classifier,
+            shared: "-%s%s" % (classifier, extension),
+        } | ({
+            static + "_bitcode": "-%s-bitcode.a" % classifier,
+        } if bitcode else {}) | ({
+            static + "_manifest": "-%s.members.txt" % classifier,
+        } if manifests else {}) | ({
+            static + "_bitcode_manifest": "-%s-bitcode.members.txt" % classifier,
+        } if manifests and bitcode else {}) | neutral
+        for setting, (classifier, extension, bitcode) in CLASSIFIERS.items()
+    })
+
 def _publication_impl(ctx):
     version = ctx.attr._version[VersionInfo].value
     if not version or any([c not in "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ.-" for c in version.elems()]):
@@ -64,7 +98,7 @@ def _attachments(ctx, prefix):
             fail("Publication attachment must contain exactly one file")
         output = ctx.actions.declare_file(prefix + suffix)
         ctx.actions.symlink(output = output, target_file = files[0])
-        if suffix.endswith(".a"):
+        if suffix.endswith(".a") and not suffix.endswith("-bitcode.a"):
             native_static.append(output)
         elif suffix.endswith(".so") or suffix.endswith(".dylib"):
             native_shared.append(output)

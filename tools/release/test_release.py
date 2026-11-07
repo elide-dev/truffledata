@@ -7,7 +7,7 @@ import unittest
 import xml.etree.ElementTree as ET
 import zipfile
 
-from maven_repo import artifact_suffixes, MODULES, NAMESPACE, stage, validate_version
+from maven_repo import artifact_suffixes, built_classifiers, CLASSIFIERS, MODULES, NAMESPACE, stage, validate_version
 
 
 class PublicationTest(unittest.TestCase):
@@ -16,9 +16,16 @@ class PublicationTest(unittest.TestCase):
         pom = next((base / 'core/dev/elide/truffledata-core').glob('*/*.pom'))
         version = pom.parent.name
         lock = json.loads(Path('maven_install.json').read_text())
+        # One Bazel invocation builds one platform's attachments; publish.sh stages the others beside them.
+        classifiers = built_classifiers(base)
+        self.assertEqual(len(classifiers), 1)
+        classifier = classifiers[0]
+        extension, bitcode = CLASSIFIERS[classifier]
         with tempfile.TemporaryDirectory() as temporary:
             repo = Path(temporary)
-            stage(base, repo, version)
+            with self.assertRaisesRegex(ValueError, 'Missing artifact'):
+                stage(base, Path(temporary) / 'all-platforms', version)
+            stage(base, repo, version, classifiers=classifiers)
             for module in MODULES:
                 artifact = 'truffledata-' + module
                 directory = repo / 'dev/elide' / artifact
@@ -77,7 +84,7 @@ class PublicationTest(unittest.TestCase):
                         self.assertTrue(any(n.endswith('.class') for n in names))
                         if module == 'core':
                             self.assertTrue(any(n.endswith('ReadLongNodeGen.class') for n in names))
-                for suffix in artifact_suffixes(module):
+                for suffix in artifact_suffixes(module, classifiers):
                     self.assertTrue(Path(str(prefix) + suffix).is_file())
                 if module == 'protobuf-buffa-bindings':
                     with zipfile.ZipFile(str(prefix) + '.jar') as jar:
@@ -153,15 +160,16 @@ class PublicationTest(unittest.TestCase):
                         self.assertFalse(generated or ffm in classes)
                         with zipfile.ZipFile(str(prefix) + '.jar') as jar:
                             self.assertEqual(jar.read(service).decode().split(), ['dev.elide.truffledata.csv.kernel.svm.SvmIndexer$Backend'])
-                        self.assertTrue(Path(str(prefix) + '-linux-x86_64.a').read_bytes().startswith(b'!<arch>\n'))
-                        self.assertTrue(Path(str(prefix) + '-linux-x86_64.so').read_bytes().startswith(b'\x7fELF'))
+                        self.assertTrue(Path(str(prefix) + '-%s.a' % classifier).read_bytes().startswith(b'!<arch>\n'))
+                        self.assertTrue(Path(str(prefix) + '-%s%s' % (classifier, extension)).is_file())
                     if module == 'csv-jvm':
                         self.assertIn(ffm, classes)
                         self.assertFalse(generated or svm in classes)
                         with zipfile.ZipFile(str(prefix) + '.jar') as jar:
                             self.assertEqual(jar.read(service).decode().split(), ['dev.elide.truffledata.csv.kernel.jvm.FfmIndexer$Backend'])
                 if module == 'json':
-                    self.assertTrue(Path(str(prefix) + '-linux-x86_64.a').read_bytes().startswith(b'!<arch>\n'))
+                    self.assertTrue(Path(str(prefix) + '-%s.a' % classifier).read_bytes().startswith(b'!<arch>\n'))
+                    self.assertEqual(Path(str(prefix) + '-%s-bitcode.a' % classifier).is_file(), bitcode)
                 for path in (directory / version).iterdir():
                     if path.suffix in ('.pom', '.jar'):
                         self.assertEqual(Path(str(path) + '.sha256').read_text().strip(), hashlib.sha256(path.read_bytes()).hexdigest())
@@ -169,7 +177,7 @@ class PublicationTest(unittest.TestCase):
                 tree = ET.parse(metadata)
                 ET.SubElement(tree.getroot().find('versioning/versions'), 'version').text = '0.0.1'
                 tree.write(metadata)
-            stage(base, repo, version)
+            stage(base, repo, version, classifiers=classifiers)
             for module in MODULES:
                 versions = ET.parse(repo / 'dev/elide' / ('truffledata-' + module) / 'maven-metadata.xml').findall('versioning/versions/version')
                 self.assertEqual([v.text for v in versions], [version, '0.0.1'])

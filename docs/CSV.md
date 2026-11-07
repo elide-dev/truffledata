@@ -22,7 +22,7 @@ The delivery plan is
 The module publishes (from 0.8.0) as `dev.elide:truffledata-csv`:
 one pure-Java jar for the JVM and Native Image, with no native attachments. The optional
 native structural-index kernel publishes as `truffledata-csv-native` (static images, with
-the Linux x86-64 `.a` and `.so` attachments), `truffledata-csv-jvm` (FFM) and
+the `.a` and `.so`/`.dylib` attachments for Linux x86-64, Linux AArch64 and macOS AArch64), `truffledata-csv-jvm` (FFM) and
 `truffledata-csv-bindings`, and is opted into with `CsvIndexing.loadNative`; see
 [publishing](PUBLISHING.md#csv-distribution) and [Structural index](#structural-index).
 

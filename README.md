@@ -57,7 +57,14 @@ ingestion boundaries; present null and missing fields have distinct representati
 Use the JVM or Native Image. The optional Myna/Buffa backend supports JVM FFM and
 static SVM linkage, with Java fallback. The unreleased simdjson JSON backend supports
 the same linkage without a Java fallback. The unreleased CSV backend is pure Java and
-runs identically on both. Prebuilt native attachments target Linux x86-64.
+runs identically on both. Native attachments ship prebuilt for three platforms:
+
+| Platform | Static archive | Shared library | LTO |
+| --- | --- | --- | --- |
+| Linux x86-64 (`linux-x86_64`) | `.a`, fat objects | `.so` | ThinLTO with clang/lld from the same archive |
+| Linux AArch64 (`linux-aarch64`) | `.a`, fat objects | `.so` | ThinLTO with clang/lld from the same archive |
+| macOS AArch64 (`macos-aarch64`) | `.a`, machine code | `.dylib` (`@rpath`) | ThinLTO with ld64.lld from `-bitcode.a` |
+
 See [representation and compilation guarantees](docs/TRUFFLE.md),
 [ownership and native setup](docs/BUFFA.md), the [JSON backend](docs/JSON.md) and the
 [CSV backend](docs/CSV.md).

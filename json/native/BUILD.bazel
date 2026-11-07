@@ -144,7 +144,7 @@ cc_binary(
     ],
     linkopts = select({
         # The macos-aarch64 release attachment (tools/release) is loaded through @rpath.
-        "@platforms//os:macos": ["-Wl,-install_name,@rpath/libtruffledata_json.dylib"],
+        "@platforms//os:macos": ["-Wl,-install_name,@rpath/libtruffledata_json.dylib", "-Wl,-dead_strip_dylibs"],
         "//conditions:default": [],
     }),
     linkshared = True,
