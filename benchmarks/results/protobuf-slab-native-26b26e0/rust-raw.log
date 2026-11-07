@@ -1,0 +1,80 @@
+running 1 test
+PROBE host=model name	: AMD EPYC
+PROBE mode=small messages=32 bytes=4797 avg=149
+PROBE small/scan_flat                     487.1 ns/rep      15.2 ns/msg    9847.2 MB/s sink=0x4127b0
+PROBE small/scan_nested                  2036.9 ns/rep      63.7 ns/msg    2355.0 MB/s sink=0x2a4c200
+PROBE small/view                        14928.4 ns/rep     466.5 ns/msg     321.3 MB/s sink=0x1135c30
+PROBE small/hand                         3719.3 ns/rep     116.2 ns/msg    1289.8 MB/s sink=0x4ae6ce0
+PROBE small/hand_ascii                   2870.3 ns/rep      89.7 ns/msg    1671.3 MB/s sink=0x4ae6ce0
+PROBE small/hand_novf                    2078.6 ns/rep      65.0 ns/msg    2307.8 MB/s sink=0x4ae6ce0
+PROBE small/table                        5550.3 ns/rep     173.4 ns/msg     864.3 MB/s sink=0x4b542e0
+PROBE small/table_novf                   3840.3 ns/rep     120.0 ns/msg    1249.1 MB/s sink=0x4b542e0
+PROBE small/table_sparse                 4655.8 ns/rep     145.5 ns/msg    1030.3 MB/s sink=0x4ac4a00
+PROBE small/table_sparse_noskipv         4637.3 ns/rep     144.9 ns/msg    1034.4 MB/s sink=0x4ac4a00
+PROBE small/table_none                   2070.2 ns/rep      64.7 ns/msg    2317.2 MB/s sink=0x3181d40
+PROBE small/slab                         5837.3 ns/rep     182.4 ns/msg     821.8 MB/s sink=0x10892780
+PROBE small/slab_prev                    7378.1 ns/rep     230.6 ns/msg     650.2 MB/s sink=0x10892780
+PROBE small/slab_small                   5857.1 ns/rep     183.0 ns/msg     819.0 MB/s sink=0x10892780
+PROBE small/hand_slab                    3344.2 ns/rep     104.5 ns/msg    1434.4 MB/s sink=0x101bc780
+PROBE small/fast                         5449.7 ns/rep     170.3 ns/msg     880.2 MB/s sink=0x101bc780
+PROBE small/fast2                        4315.4 ns/rep     134.9 ns/msg    1111.6 MB/s sink=0x101bc780
+PROBE small/fast_tail                    4907.6 ns/rep     153.4 ns/msg     977.5 MB/s sink=0x101bc780
+PROBE small/sota_size message[1]=122 B hand_slab=440 B fast=440 fast2=440 fast_tail=440 all=17256 17256 17256 17256
+PROBE small/slab_size message[1]=122 B slab=448 B (3.67x) all=17512 B over 4797 B input (3.65x) max_ratio=3.86x
+PROBE small/size message[1]=122 B slab=488 B view=892 B (entries=28 words=55)
+PROBE mode=holdout messages=32 bytes=16321 avg=510
+PROBE holdout/scan_flat                  1285.5 ns/rep      40.2 ns/msg   12695.9 MB/s sink=0x497c80
+PROBE holdout/scan_nested                5357.1 ns/rep     167.4 ns/msg    3046.6 MB/s sink=0x1526100
+PROBE holdout/view                      45665.8 ns/rep    1427.1 ns/msg     357.4 MB/s sink=0x1717608
+PROBE holdout/hand                      12691.6 ns/rep     396.6 ns/msg    1286.0 MB/s sink=0x4421e50
+PROBE holdout/hand_ascii                13081.1 ns/rep     408.8 ns/msg    1247.7 MB/s sink=0x4421e50
+PROBE holdout/hand_novf                  5274.1 ns/rep     164.8 ns/msg    3094.6 MB/s sink=0x4421e50
+PROBE holdout/table                     17218.4 ns/rep     538.1 ns/msg     947.9 MB/s sink=0x4458950
+PROBE holdout/table_novf                10463.4 ns/rep     327.0 ns/msg    1559.8 MB/s sink=0x4458950
+PROBE holdout/table_sparse              15754.6 ns/rep     492.3 ns/msg    1036.0 MB/s sink=0x4410ce0
+PROBE holdout/table_sparse_noskipv      15929.0 ns/rep     497.8 ns/msg    1024.6 MB/s sink=0x4410ce0
+PROBE holdout/table_none                 5373.6 ns/rep     167.9 ns/msg    3037.3 MB/s sink=0x1b4f748
+PROBE holdout/slab                      17678.5 ns/rep     552.5 ns/msg     923.2 MB/s sink=0x16d66f80
+PROBE holdout/slab_prev                 20778.7 ns/rep     649.3 ns/msg     785.5 MB/s sink=0x16d66f80
+PROBE holdout/slab_small                17662.4 ns/rep     552.0 ns/msg     924.1 MB/s sink=0x16d66f80
+PROBE holdout/hand_slab                  9679.1 ns/rep     302.5 ns/msg    1686.2 MB/s sink=0x169fbf80
+PROBE holdout/fast                      16304.4 ns/rep     509.5 ns/msg    1001.0 MB/s sink=0x169fbf80
+PROBE holdout/fast2                     12568.8 ns/rep     392.8 ns/msg    1298.5 MB/s sink=0x169fbf80
+PROBE holdout/fast_tail                 14103.0 ns/rep     440.7 ns/msg    1157.3 MB/s sink=0x169fbf80
+PROBE holdout/sota_size message[1]=390 B hand_slab=1264 B fast=1264 fast2=1264 fast_tail=1264 all=52176 52176 52176 52176
+PROBE holdout/slab_size message[1]=390 B slab=1272 B (3.26x) all=52432 B over 16321 B input (3.21x) max_ratio=3.34x
+PROBE holdout/size message[1]=390 B slab=1352 B view=2512 B (entries=79 words=154)
+PROBE mode=large messages=32 bytes=1658313 avg=51822
+PROBE large/scan_flat                  106723.8 ns/rep    3335.1 ns/msg   15538.4 MB/s sink=0x3e3d18
+PROBE large/scan_nested                579375.4 ns/rep   18105.5 ns/msg    2862.2 MB/s sink=0x2b500
+PROBE large/view                      5124749.2 ns/rep  160148.4 ns/msg     323.6 MB/s sink=0x1604f48
+PROBE large/hand                      1107349.5 ns/rep   34604.7 ns/msg    1497.6 MB/s sink=0x2ec87b0
+PROBE large/hand_ascii                 667606.6 ns/rep   20862.7 ns/msg    2484.0 MB/s sink=0x2ec87b0
+PROBE large/hand_novf                  582999.1 ns/rep   18218.7 ns/msg    2844.5 MB/s sink=0x2ec87b0
+PROBE large/table                     1825693.6 ns/rep   57052.9 ns/msg     908.3 MB/s sink=0x2ec8eb0
+PROBE large/table_novf                1260383.2 ns/rep   39387.0 ns/msg    1315.7 MB/s sink=0x2ec8eb0
+PROBE large/table_sparse              1855811.1 ns/rep   57994.1 ns/msg     893.6 MB/s sink=0x2ec8580
+PROBE large/table_sparse_noskipv      1874156.1 ns/rep   58567.4 ns/msg     884.8 MB/s sink=0x2ec8580
+PROBE large/table_none                 597891.5 ns/rep   18684.1 ns/msg    2773.6 MB/s sink=0x412580
+PROBE large/slab                      1576096.0 ns/rep   49253.0 ns/msg    1052.2 MB/s sink=0x12763240
+PROBE large/slab_prev                 2254098.9 ns/rep   70440.6 ns/msg     735.7 MB/s sink=0x12763240
+PROBE large/hand_slab                  939541.8 ns/rep   29360.7 ns/msg    1765.0 MB/s sink=0x1275c240
+PROBE large/fast                      1699171.0 ns/rep   53099.1 ns/msg     976.0 MB/s sink=0x1275c240
+PROBE large/fast2                     1312820.9 ns/rep   41025.7 ns/msg    1263.2 MB/s sink=0x1275c240
+PROBE large/fast_tail                 1428403.4 ns/rep   44637.6 ns/msg    1161.0 MB/s sink=0x1275c240
+PROBE large/sota_size message[1]=48087 B hand_slab=160600 B fast=160600 fast2=160600 fast_tail=160600 all=5528440 5528440 5528440 5528440
+PROBE large/slab_size message[1]=48087 B slab=160608 B (3.34x) all=5528696 B over 1658313 B input (3.33x) max_ratio=3.34x
+PROBE large/size message[1]=48087 B slab=202856 B view=380324 B (entries=11973 words=23243)
+PROBE varints n=4096 bytes=9621 avg=2.35 B
+PROBE varint_byte_loop           0.618 ns/varint    3800.5 MB/s sink=0x0
+PROBE varint_buffa               0.824 ns/varint    2849.4 MB/s sink=0x0
+PROBE varint_wide8               2.182 ns/varint    1076.5 MB/s sink=0x0
+PROBE varint_pext                2.149 ns/varint    1093.1 MB/s sink=0x0
+PROBE varint_count_only          0.271 ns/varint    8655.9 MB/s sink=0x0
+PROBE utf8_ascii/production               161.6 ns/rep       5.0 ns/msg    1720.4 MB/s sink=0x3b6320
+PROBE utf8_ascii/ascii_fast                25.4 ns/rep       0.8 ns/msg   10940.6 MB/s sink=0x6d600
+PROBE utf8_unicode/production             221.5 ns/rep       6.9 ns/msg    1832.9 MB/s sink=0x4fe520
+PROBE utf8_unicode/ascii_fast             191.8 ns/rep       6.0 ns/msg    2117.0 MB/s sink=0x6d600
+test probe::probe ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 39 filtered out; finished in 4.71s

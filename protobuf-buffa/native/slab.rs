@@ -6,6 +6,14 @@
 //! caller-provided buffer with a bump cursor, in exactly the placement order docs/SLAB.md fixes,
 //! so that this producer and the Java producers agree byte for byte.
 //!
+//! The pass is one loop over an explicit record stack (`Decoder::run`; the stack index is the
+//! depth), not recursion: the read position and body end (pointers), the record base, its type
+//! and presence word 0 stay in locals, one-byte tags dispatch through a per-type 128-entry table
+//! straight to a 16-byte
+//! `Entry` (slot, child, handler), and plain scalars, strings, short ASCII strings and messages
+//! are handled inline. Everything rare (repeated scalars, oneofs, closed enums, map keys,
+//! groups, packed runs, unknown fields, merges, record close with lists) is out of line.
+//!
 //! Capacity: allocations that do not fit the caller's buffer are not written, but the walk goes
 //! on (records that do not fit are kept in decoder frames, because later fields read their
 //! presence and slots), so `NEEDS_CAPACITY` reports the exact slab length. Scratch (pending list
@@ -114,8 +122,55 @@ pub(crate) struct FieldDesc {
     values: Values,
 }
 
+// Hot handlers (`Entry::op`): the decode loop handles these inline.
+const H_V32: u8 = 0; // int32, uint32, open enum: the low 32 bits of a varint
+const H_V64: u8 = 1;
+const H_S32: u8 = 2;
+const H_S64: u8 = 3;
+const H_BOOL: u8 = 4;
+const H_F32: u8 = 5; // fixed32, sfixed32, float
+const H_F64: u8 = 6; // fixed64, sfixed64, double
+const H_STR: u8 = 7;
+const H_BYTES: u8 = 8;
+/// Singular, non-oneof, length-delimited message.
+const H_MSG: u8 = 9;
+/// Repeated length-delimited message or map entry.
+const H_RMSG: u8 = 10;
+/// Everything else goes through `Decoder::slow`.
+const H_SLOW: u8 = 11;
+
+// `Entry::flags`.
+const E_EXPLICIT: u8 = 1;
+const E_REPEATED: u8 = 2;
+const E_MAP: u8 = 4;
+
+/// The decode loop's per-field descriptor (16 bytes, indexed by ordinal like `fields`): the
+/// declared tag the wire-order prediction compares, the slot, the child type and a handler.
+#[derive(Clone, Copy)]
+#[repr(C)]
+pub(crate) struct Entry {
+    tag: u32,
+    slot: u32,
+    child: u32,
+    op: u8,
+    flags: u8,
+    /// Presence word (`ordinal / 32`); word 0 lives in a register while the record is on top.
+    word: u16,
+}
+
 pub(crate) struct TypeDesc {
     pub(crate) fields: Box<[FieldDesc]>,
+    entries: Box<[Entry]>,
+    /// One-byte tags (field numbers 1..=15 with their declared wire type) to ordinal + 1; 0 for
+    /// anything else (unknown numbers, other wire types, packed runs, end tags).
+    dispatch: [u16; 128],
+    /// Records of this type always run the record close (a map value default or required
+    /// fields to check).
+    closes: bool,
+    /// Neither `closes` nor a map entry: a record with no lists, unknown fields or merges
+    /// closes inline in the decode loop.
+    simple: bool,
+    has_map: bool,
     /// Ordinals of the repeated and map fields, ascending.
     lists: Box<[u32]>,
     lookup: Box<[u16]>,
@@ -496,7 +551,56 @@ pub fn compile(bytes: &[u8]) -> Result<Compiled> {
                 lists.push(ordinal as u32);
             }
         }
+        let mut entries = Vec::new();
+        entries.try_reserve_exact(n).map_err(|_| ALLOCATION)?;
+        for (ordinal, f) in descs.iter().enumerate() {
+            let word = ordinal >> 5;
+            let op = if word > u16::MAX as usize {
+                H_SLOW
+            } else if f.op == OP_MESSAGE && f.repeated && f.oneof == NONE {
+                H_RMSG
+            } else if f.special {
+                H_SLOW
+            } else {
+                match f.op {
+                    OP_VARINT32 => H_V32,
+                    OP_VARINT64 => H_V64,
+                    OP_SINT32 => H_S32,
+                    OP_SINT64 => H_S64,
+                    OP_BOOL => H_BOOL,
+                    OP_FIXED32 => H_F32,
+                    OP_FIXED64 => H_F64,
+                    OP_STRING => H_STR,
+                    OP_BYTES => H_BYTES,
+                    OP_MESSAGE => H_MSG,
+                    _ => H_SLOW,
+                }
+            };
+            entries.push(Entry {
+                tag: f.tag,
+                slot: f.slot,
+                child: f.child,
+                op,
+                flags: if f.explicit { E_EXPLICIT } else { 0 }
+                    | if f.repeated { E_REPEATED } else { 0 }
+                    | if f.map { E_MAP } else { 0 },
+                word: word.min(u16::MAX as usize) as u16,
+            });
+        }
+        let mut dispatch = [0u16; 128];
+        for (ordinal, f) in descs.iter().enumerate() {
+            if f.tag < 128 && ordinal < u16::MAX as usize {
+                dispatch[f.tag as usize] = ordinal as u16 + 1;
+            }
+        }
+        let closes = value_message || !required.is_empty();
+        let has_map = descs.iter().any(|f| f.map);
         types.push(TypeDesc {
+            entries: entries.into_boxed_slice(),
+            dispatch,
+            closes,
+            simple: !closes && !map_entry,
+            has_map,
             fields: descs.into_boxed_slice(),
             lists: lists.into_boxed_slice(),
             lookup: lookup.into_boxed_slice(),
@@ -671,8 +775,8 @@ pub(crate) struct Frames<'s> {
 #[derive(Clone, Copy)]
 enum Mark {
     Output,
-    Inline(usize),
-    Heap(usize),
+    Inline(u32),
+    Heap(u32),
 }
 
 impl<'s> Frames<'s> {
@@ -691,7 +795,7 @@ impl<'s> Frames<'s> {
         let words = bytes / 8;
         if self.heap.capacity() == 0 {
             if self.top + words <= self.inline.len() {
-                let mark = Mark::Inline(self.top);
+                let mark = Mark::Inline(self.top as u32);
                 for word in &mut self.inline[self.top..self.top + words] {
                     word.write(0);
                 }
@@ -709,7 +813,7 @@ impl<'s> Frames<'s> {
         if self.heap_top + words > self.heap.len() {
             return Err(BUDGET);
         }
-        let mark = Mark::Heap(self.heap_top);
+        let mark = Mark::Heap(self.heap_top as u32);
         self.heap[self.heap_top..self.heap_top + words].fill(0);
         let at = self.heap[self.heap_top..].as_mut_ptr().cast::<u8>();
         self.heap_top += words;
@@ -719,8 +823,8 @@ impl<'s> Frames<'s> {
     fn pop(&mut self, mark: Mark) {
         match mark {
             Mark::Output => {}
-            Mark::Inline(top) => self.top = top,
-            Mark::Heap(top) => self.heap_top = top,
+            Mark::Inline(top) => self.top = top as usize,
+            Mark::Heap(top) => self.heap_top = top as usize,
         }
     }
 }
@@ -749,6 +853,7 @@ pub(crate) struct Inline {
     unknown: [MaybeUninit<u8>; 2048],
     table: [MaybeUninit<(u32, u32)>; 128],
     frames: [MaybeUninit<u64>; 512],
+    stack: [MaybeUninit<Frame>; MAX_DEPTH as usize + 2],
 }
 
 impl Inline {
@@ -760,23 +865,58 @@ impl Inline {
             unknown: [const { MaybeUninit::uninit() }; 2048],
             table: [const { MaybeUninit::uninit() }; 128],
             frames: [const { MaybeUninit::uninit() }; 512],
+            stack: [const { MaybeUninit::uninit() }; MAX_DEPTH as usize + 2],
         }
     }
 }
 
 // ---- Decoder ----
 
-struct Open {
-    ty: usize,
-    at: u32,
+/// One open record on the explicit record stack; the stack index is the record's depth. The
+/// decode loop keeps the top record's hot state (base, body end, type, presence word 0) in
+/// locals and touches a frame only when it enters or closes a record. 64 bytes: input offsets
+/// fit `u32` (inputs are at most `i32::MAX` bytes), and so do the scratch marks (pending
+/// elements and merge payloads each take at least one input byte; unknown bytes are bounded by
+/// `UNKNOWN_LIMIT`).
+#[derive(Clone, Copy)]
+struct Frame {
     base: *mut u8,
+    /// Body end: the record's end, or the enclosing body's end for a group.
+    end: u32,
+    /// Error offset of failures charged to the record as a whole: its field's tag in the
+    /// parent (NO_START for the root).
+    start: u32,
+    pending: u32,
+    merges: u32,
+    unknown: u32,
+    ty: u32,
+    at: u32,
+    /// Group number; 0 for length-delimited bodies.
+    group: u32,
+    /// The parent's field that opened the record; NONE for records the decode loop does not
+    /// close itself (the root, walks, merged and default value records).
+    ordinal: u32,
+    /// Body start (a singular message's remembered payload).
+    body: u32,
+    key: (u32, u32),
     mark: Mark,
-    pending: usize,
-    merges: usize,
-    unknown: usize,
     invalid_map: bool,
     merged: bool,
-    key: (u32, u32),
+}
+
+/// `Frame::start` of the root: no field of a parent to charge.
+const NO_START: u32 = u32::MAX;
+
+/// Unknown bytes collected but not yet placed stay below this (frames record their length as
+/// `u32`); more is a budget failure, far beyond any slab `maxSlabBytes` admits.
+const UNKNOWN_LIMIT: usize = u32::MAX as usize - 64;
+
+impl Frame {
+    /// The error offset for failures of the record as a whole (usize::MAX: none).
+    #[inline(always)]
+    fn start(&self) -> usize {
+        if self.start == NO_START { usize::MAX } else { self.start as usize }
+    }
 }
 
 struct Closed {
@@ -788,42 +928,36 @@ struct Closed {
     end: usize,
 }
 
-/// Input reads at position `p`, returning the value and the next position (by value, so the
-/// position stays in a register). `end <= input.len()` is checked once per record body.
-#[inline(always)]
-fn get_varint(input: &[u8], p: usize, end: usize) -> Result<(u64, usize)> {
-    if p + 1 < end {
-        // SAFETY: p + 1 < end <= input.len().
-        let (b, c) = unsafe { (*input.get_unchecked(p), *input.get_unchecked(p + 1)) };
-        if b < 0x80 {
-            return Ok((b as u64, p + 1));
-        }
-        if c < 0x80 {
-            return Ok(((b & 0x7F) as u64 | (c as u64) << 7, p + 2));
-        }
-    } else if p < end && input[p] < 0x80 {
-        return Ok((input[p] as u64, p + 1));
-    }
-    get_varint_slow(input, p, end)
+/// What the out-of-line field path did: moved past the field, or entered a child record (whose
+/// frame it pushed) at its body start.
+enum Step {
+    Next(usize),
+    Enter(usize),
 }
 
-/// The reference rule: at most ten bytes; the tenth may only be 0 or 1.
-#[inline(never)]
-fn get_varint_slow(input: &[u8], mut p: usize, end: usize) -> Result<(u64, usize)> {
+/// Input reads at position `p`, returning the value and the next position (by value, so the
+/// position stays in a register). Callers guarantee `end <= input.len()`. Varints follow the
+/// reference rule: at most ten bytes, the tenth only 0 or 1. The loop is inline and makes no call,
+/// so the decode loop's hot handlers keep their registers (an out-of-line slow path forced
+/// spills on x86-64 around every varint).
+#[inline(always)]
+fn get_varint(input: &[u8], p: usize, end: usize) -> Result<(u64, usize)> {
+    let mut q = p;
     let mut value = 0u64;
     let mut shift = 0u32;
     loop {
-        if p >= end {
+        if q >= end {
             return Err(MALFORMED);
         }
-        let b = input[p];
-        p += 1;
-        if shift == 63 && b & 0xFE != 0 {
-            return Err(MALFORMED);
-        }
+        // SAFETY: q < end <= input.len().
+        let b = unsafe { *input.get_unchecked(q) };
+        q += 1;
         value |= ((b & 0x7F) as u64) << shift;
-        if b & 0x80 == 0 {
-            return Ok((value, p));
+        if b < 0x80 {
+            if shift == 63 && b > 1 {
+                return Err(MALFORMED);
+            }
+            return Ok((value, q));
         }
         shift += 7;
         if shift > 63 {
@@ -851,6 +985,37 @@ fn get_length(input: &[u8], p: usize, end: usize) -> Result<(usize, usize)> {
 }
 
 #[inline(always)]
+fn get_fixed32(input: &[u8], p: usize, end: usize) -> Result<(u32, usize)> {
+    if end - p < 4 {
+        return Err(MALFORMED);
+    }
+    // SAFETY: p + 4 <= end <= input.len().
+    let v = unsafe { input.as_ptr().add(p).cast::<[u8; 4]>().read_unaligned() };
+    Ok((u32::from_le_bytes(v), p + 4))
+}
+
+#[inline(always)]
+fn get_fixed64(input: &[u8], p: usize, end: usize) -> Result<(u64, usize)> {
+    if end - p < 8 {
+        return Err(MALFORMED);
+    }
+    // SAFETY: p + 8 <= end <= input.len().
+    let v = unsafe { input.as_ptr().add(p).cast::<[u8; 8]>().read_unaligned() };
+    Ok((u64::from_le_bytes(v), p + 8))
+}
+
+#[inline(always)]
+fn zigzag32(n: u64) -> u32 {
+    let n = n as u32;
+    ((n >> 1) as i32 ^ -((n & 1) as i32)) as u32
+}
+
+#[inline(always)]
+fn zigzag64(n: u64) -> u64 {
+    ((n >> 1) as i64 ^ -((n & 1) as i64)) as u64
+}
+
+#[inline(always)]
 fn get_scalar(op: u8, input: &[u8], p: usize, end: usize) -> Result<(u64, usize)> {
     Ok(match op {
         OP_VARINT32 => {
@@ -860,30 +1025,100 @@ fn get_scalar(op: u8, input: &[u8], p: usize, end: usize) -> Result<(u64, usize)
         OP_VARINT64 => get_varint(input, p, end)?,
         OP_SINT32 => {
             let (n, p) = get_varint(input, p, end)?;
-            let n = n as u32;
-            (((n >> 1) as i32 ^ -((n & 1) as i32)) as u32 as u64, p)
+            (zigzag32(n) as u64, p)
         }
         OP_SINT64 => {
             let (n, p) = get_varint(input, p, end)?;
-            (((n >> 1) as i64 ^ -((n & 1) as i64)) as u64, p)
+            (zigzag64(n), p)
         }
         OP_BOOL => {
             let (v, p) = get_varint(input, p, end)?;
             ((v != 0) as u64, p)
         }
         OP_FIXED32 => {
-            if end - p < 4 {
-                return Err(MALFORMED);
-            }
-            (u32::from_le_bytes(input[p..p + 4].try_into().unwrap()) as u64, p + 4)
+            let (v, p) = get_fixed32(input, p, end)?;
+            (v as u64, p)
         }
-        _ => {
-            if end - p < 8 {
-                return Err(MALFORMED);
-            }
-            (u64::from_le_bytes(input[p..p + 8].try_into().unwrap()), p + 8)
-        }
+        _ => get_fixed64(input, p, end)?,
     })
+}
+
+// Pointer forms of the readers for the decode loop: one register per position instead of an
+// (input, offset) pair. Callers guarantee `q <= end` and that `[q, end)` lies in the input.
+
+#[inline(always)]
+fn ptr_varint(mut q: *const u8, end: *const u8) -> Result<(u64, *const u8)> {
+    let mut value = 0u64;
+    let mut shift = 0u32;
+    loop {
+        if q >= end {
+            return Err(MALFORMED);
+        }
+        // SAFETY: q < end, inside the input.
+        let b = unsafe { *q };
+        q = unsafe { q.add(1) };
+        value |= ((b & 0x7F) as u64) << shift;
+        if b < 0x80 {
+            if shift == 63 && b > 1 {
+                return Err(MALFORMED);
+            }
+            return Ok((value, q));
+        }
+        shift += 7;
+        if shift > 63 {
+            return Err(MALFORMED);
+        }
+    }
+}
+
+#[inline(always)]
+fn ptr_length(q: *const u8, end: *const u8) -> Result<(usize, *const u8)> {
+    let (n, q) = ptr_varint(q, end)?;
+    if n > (end as usize - q as usize) as u64 {
+        return Err(MALFORMED);
+    }
+    Ok((n as usize, q))
+}
+
+#[inline(always)]
+fn ptr_fixed32(q: *const u8, end: *const u8) -> Result<(u32, *const u8)> {
+    if (end as usize - q as usize) < 4 {
+        return Err(MALFORMED);
+    }
+    // SAFETY: four bytes remain before `end`.
+    unsafe { Ok((u32::from_le_bytes(q.cast::<[u8; 4]>().read_unaligned()), q.add(4))) }
+}
+
+#[inline(always)]
+fn ptr_fixed64(q: *const u8, end: *const u8) -> Result<(u64, *const u8)> {
+    if (end as usize - q as usize) < 8 {
+        return Err(MALFORMED);
+    }
+    // SAFETY: eight bytes remain before `end`.
+    unsafe { Ok((u64::from_le_bytes(q.cast::<[u8; 8]>().read_unaligned()), q.add(8))) }
+}
+
+/// A short ASCII payload at `at` as two (possibly overlapping) little-endian words: `a` holds
+/// the first eight bytes (zero-extended below eight), `b` the last eight. None when the payload is
+/// longer than 16 bytes, not ASCII, or too close to `limit` (the input's end) for word loads,
+/// which may read past the record's end but never past the input.
+#[inline(always)]
+fn ptr_short_ascii(at: *const u8, n: usize, limit: *const u8) -> Option<(u64, u64)> {
+    if n > 16 || (limit as usize) < at as usize + 8 {
+        return None;
+    }
+    // SAFETY: at + 8 <= limit, and for n >= 8, at + n <= limit.
+    let load = |q: *const u8| u64::from_le_bytes(unsafe { q.cast::<[u8; 8]>().read_unaligned() });
+    let (a, b) = if n >= 8 {
+        (load(at), load(unsafe { at.add(n - 8) }))
+    } else {
+        let a = load(at) & ((1u64 << (8 * n)) - 1);
+        (a, a)
+    };
+    if (a | b) & 0x8080_8080_8080_8080 != 0 {
+        return None;
+    }
+    Some((a, b))
 }
 
 #[inline(always)]
@@ -911,19 +1146,19 @@ fn copy_bytes(dst: *mut u8, src: &[u8]) {
     let n = src.len();
     // SAFETY: the caller guarantees `n` writable bytes at `dst`, disjoint from `src`.
     unsafe {
-        if n >= 8 && n <= 16 {
+        if (8..=16).contains(&n) {
             let a = src.as_ptr().cast::<[u8; 8]>().read_unaligned();
             let b = src.as_ptr().add(n - 8).cast::<[u8; 8]>().read_unaligned();
             dst.cast::<[u8; 8]>().write_unaligned(a);
             dst.add(n - 8).cast::<[u8; 8]>().write_unaligned(b);
-        } else if n >= 4 && n < 8 {
+        } else if (4..8).contains(&n) {
             let a = src.as_ptr().cast::<[u8; 4]>().read_unaligned();
             let b = src.as_ptr().add(n - 4).cast::<[u8; 4]>().read_unaligned();
             dst.cast::<[u8; 4]>().write_unaligned(a);
             dst.add(n - 4).cast::<[u8; 4]>().write_unaligned(b);
         } else if n < 4 {
-            for i in 0..n {
-                *dst.add(i) = src[i];
+            for (i, &byte) in src.iter().enumerate() {
+                *dst.add(i) = byte;
             }
         } else {
             std::ptr::copy_nonoverlapping(src.as_ptr(), dst, n);
@@ -972,10 +1207,11 @@ pub(crate) struct Decoder<'a, 's> {
     records: u64,
     handles: u64,
     certified: bool,
-    walking: u32,
     /// Input offset of the field being decoded (the string payload for invalid UTF-8).
     pub(crate) error_at: usize,
     frame_bound: usize,
+    /// The record stack (`MAX_DEPTH + 2` frames of `Inline::stack`).
+    stack: *mut Frame,
     pending: Buf<'s, Pending>,
     merges: Buf<'s, Payload>,
     unknown: Buf<'s, u8>,
@@ -993,41 +1229,64 @@ pub struct Outcome {
 }
 
 impl<'a, 's> Decoder<'a, 's> {
-    #[inline]
+    #[inline(always)]
     fn alloc(&mut self, size: usize, alignment: usize) -> Result<usize> {
         let at = (self.cursor + alignment - 1) & !(alignment - 1);
         let end = at + size;
-        if end > self.max && self.walking == 0 {
+        if end > self.max {
             return Err(BUDGET);
         }
-        if at <= self.limit && self.cursor < at {
-            if self.cursor + 8 <= self.limit {
-                // At most 7 padding bytes: one 8-byte zero store from the old cursor. Bytes past
-                // `at` belong to this allocation, which its caller writes in full.
-                write64(unsafe { self.out.add(self.cursor) }, 0);
-            } else {
-                for i in self.cursor..at {
-                    // SAFETY: [cursor, at) lies inside the caller's `limit` writable bytes.
-                    unsafe { *self.out.add(i) = 0 };
-                }
-            }
+        if self.cursor < at && at <= self.limit {
+            self.pad(at);
         }
         self.cursor = end;
         Ok(at)
     }
 
-    #[inline]
+    /// Zero the alignment padding before `at` (at most 7 bytes).
+    #[inline(always)]
+    fn pad(&mut self, at: usize) {
+        if self.cursor + 8 <= self.limit {
+            // One 8-byte zero store from the old cursor. Bytes past `at` belong to this
+            // allocation, which its caller writes in full.
+            write64(unsafe { self.out.add(self.cursor) }, 0);
+        } else {
+            for i in self.cursor..at {
+                // SAFETY: [cursor, at) lies inside the caller's `limit` writable bytes.
+                unsafe { *self.out.add(i) = 0 };
+            }
+        }
+    }
+
+    #[inline(always)]
     fn fits(&self, at: usize, size: usize) -> bool {
         at + size <= self.limit
     }
 
     #[inline(always)]
-    fn open(&mut self, ty: usize, depth: u32) -> Result<Open> {
-        if depth > self.max_depth {
+    fn frame(&self, k: usize) -> *mut Frame {
+        // SAFETY: k <= max_depth + 1 < the stack's MAX_DEPTH + 2 frames.
+        unsafe { self.stack.add(k) }
+    }
+
+    /// Open a record of type `ty` as frame `k` (depth `k`): allocate it (or a decoder frame when
+    /// it does not fit), zero it and take a handle.
+    #[inline(always)]
+    #[allow(clippy::too_many_arguments)]
+    fn open(
+        &mut self,
+        k: usize,
+        ty: u32,
+        end: usize,
+        group: u32,
+        ordinal: u32,
+        start: usize,
+        body: usize,
+    ) -> Result<*mut u8> {
+        if k > self.max_depth as usize {
             return Err(BUDGET);
         }
-        let c = self.c;
-        let size = c.types[ty].record_bytes as usize;
+        let size = self.c.types[ty as usize].record_bytes as usize;
         let at = self.alloc(size, 8)?;
         let (base, mark) = if self.fits(at, size) {
             // SAFETY: the record lies inside the output's writable prefix.
@@ -1040,114 +1299,98 @@ impl<'a, 's> Decoder<'a, 's> {
         self.records += 1;
         write32(base, self.handles as u32);
         self.handles += 1;
-        Ok(Open {
-            ty,
-            at: offset(at),
-            base,
-            mark,
-            pending: self.pending.len(),
-            merges: self.merges.len(),
-            unknown: self.unknown.len(),
-            invalid_map: false,
-            merged: false,
-            key: (0, 0),
-        })
-    }
-
-    #[inline(always)]
-    fn record(&mut self, ty: usize, end: usize, group: u32, depth: u32) -> Result<Closed> {
-        let mut open = self.open(ty, depth)?;
-        let body_end = self.body(&mut open, end, group, depth)?;
-        self.finish(open, depth, body_end)
-    }
-
-    #[inline(always)]
-    fn finish(&mut self, mut open: Open, depth: u32, end: usize) -> Result<Closed> {
-        let t = &self.c.types[open.ty];
-        if open.merged
-            || t.value_message
-            || !t.required.is_empty()
-            || self.pending.len() > open.pending
-            || self.unknown.len() > open.unknown
-        {
-            self.close(&mut open, depth)?;
-        } else {
-            self.merges.truncate(open.merges);
-        }
-        let (klen, key) = if t.map_entry {
-            let f = &t.fields[0];
-            let present = read32(unsafe { open.base.add(4) }) & 1 != 0;
-            match f.op {
-                OP_STRING | OP_BYTES if present => (open.key.1, open.key.0 as u64),
-                OP_STRING | OP_BYTES => (0, 0),
-                _ if !present => (NONE, 0),
-                _ if f.width == 8 => (NONE, unsafe {
-                    u64::from_le_bytes(open.base.add(f.slot as usize).cast::<[u8; 8]>().read_unaligned())
-                }),
-                _ => (NONE, read32(unsafe { open.base.add(f.slot as usize) }) as u64),
-            }
-        } else {
-            (NONE, 0)
+        // SAFETY: frame `k` lies inside the stack (see `frame`).
+        unsafe {
+            self.frame(k).write(Frame {
+                base,
+                end: end as u32,
+                start: if start == usize::MAX { NO_START } else { start as u32 },
+                pending: self.pending.len() as u32,
+                merges: self.merges.len() as u32,
+                unknown: self.unknown.len() as u32,
+                ty,
+                at: offset(at),
+                group,
+                ordinal,
+                body: body as u32,
+                key: (0, 0),
+                mark,
+                invalid_map: false,
+                merged: false,
+            })
         };
-        self.frames.pop(open.mark);
+        Ok(base)
+    }
+
+    /// Close frame `k`, whose body ended at `end`: record close (docs/SLAB.md) when it has
+    /// anything to close, then the map key a parent list needs, then the frame is released.
+    #[inline(always)]
+    fn finish(&mut self, k: usize, end: usize) -> Result<Closed> {
+        let c = self.c;
+        let f = self.frame(k);
+        // SAFETY: frame `k` is open.
+        let (ty, merged, pending, merges, unknown) = unsafe {
+            let f = &*f;
+            (f.ty, f.merged, f.pending as usize, f.merges as usize, f.unknown as usize)
+        };
+        let t = &c.types[ty as usize];
+        if merged || t.closes || self.pending.len() > pending || self.unknown.len() > unknown {
+            self.close(k)?;
+        } else {
+            self.merges.truncate(merges);
+        }
+        let (klen, key) = if t.map_entry { self.entry_key(k) } else { (NONE, 0) };
+        // SAFETY: as above.
+        let (at, invalid_map, mark) = unsafe { ((*f).at, (*f).invalid_map, (*f).mark) };
+        self.frames.pop(mark);
         Ok(Closed {
-            at: open.at,
-            invalid_map: open.invalid_map,
+            at,
+            invalid_map,
             klen,
             key,
             end,
         })
     }
 
-    #[inline(always)]
-    fn varint(&mut self, end: usize) -> Result<u64> {
-        let (v, p) = get_varint(self.input, self.pos, end)?;
-        self.pos = p;
-        Ok(v)
+    /// A map entry's key, for deduplication at the parent's close: captured from the frame and
+    /// the input, never read back from the slab.
+    #[inline(never)]
+    fn entry_key(&self, k: usize) -> (u32, u64) {
+        // SAFETY: frame `k` is open.
+        let o = unsafe { *self.frame(k) };
+        let f = &self.c.types[o.ty as usize].fields[0];
+        let present = read32(unsafe { o.base.add(4) }) & 1 != 0;
+        match f.op {
+            OP_STRING | OP_BYTES if present => (o.key.1, o.key.0 as u64),
+            OP_STRING | OP_BYTES => (0, 0),
+            _ if !present => (NONE, 0),
+            _ if f.width == 8 => (NONE, unsafe {
+                u64::from_le_bytes(o.base.add(f.slot as usize).cast::<[u8; 8]>().read_unaligned())
+            }),
+            _ => (NONE, read32(unsafe { o.base.add(f.slot as usize) }) as u64),
+        }
     }
 
-    #[inline(always)]
-    fn tag(&mut self, end: usize) -> Result<u32> {
-        let (v, p) = get_tag(self.input, self.pos, end)?;
-        self.pos = p;
-        Ok(v)
-    }
-
-    #[inline(always)]
-    fn length(&mut self, end: usize) -> Result<usize> {
-        let (v, p) = get_length(self.input, self.pos, end)?;
-        self.pos = p;
-        Ok(v)
-    }
-
-    #[inline(always)]
-    fn fixed(&mut self, n: usize, end: usize) -> Result<u64> {
-        let (v, p) = get_scalar(if n == 4 { OP_FIXED32 } else { OP_FIXED64 }, self.input, self.pos, end)?;
-        self.pos = p;
-        Ok(v)
-    }
-
-    fn skip(&mut self, tag: u32, end: usize, depth: u32) -> Result<()> {
-        match tag & 7 {
-            0 => {
-                self.varint(end)?;
-            }
-            1 => {
-                self.fixed(8, end)?;
-            }
+    fn skip(&mut self, tag: u32, end: usize, depth: usize) -> Result<()> {
+        let input = self.input;
+        let p = self.pos;
+        self.pos = match tag & 7 {
+            0 => get_varint(input, p, end)?.1,
+            1 => get_fixed64(input, p, end)?.1,
             2 => {
-                let n = self.length(end)?;
-                self.pos += n;
+                let (n, p) = get_length(input, p, end)?;
+                p + n
             }
             3 => {
-                if depth >= self.max_depth {
+                if depth >= self.max_depth as usize {
                     return Err(BUDGET);
                 }
                 loop {
                     if self.pos >= end {
                         return Err(MALFORMED);
                     }
-                    let child = self.tag(end)?;
+                    let (child, p) = get_tag(input, self.pos, end)?;
+                    self.pos = p;
                     if child & 7 == 4 {
                         if child >> 3 != tag >> 3 {
                             return Err(MALFORMED);
@@ -1157,16 +1400,17 @@ impl<'a, 's> Decoder<'a, 's> {
                     self.skip(child, end, depth + 1)?;
                 }
             }
-            5 => {
-                self.fixed(4, end)?;
-            }
+            5 => get_fixed32(input, p, end)?.1,
             _ => return Err(MALFORMED),
-        }
+        };
         Ok(())
     }
 
     #[inline]
     fn keep_unknown(&mut self, start: usize, end: usize) -> Result<()> {
+        if self.unknown.len() + (end - start) > UNKNOWN_LIMIT {
+            return Err(BUDGET);
+        }
         let input = self.input;
         self.unknown.extend(&input[start..end])
     }
@@ -1180,6 +1424,9 @@ impl<'a, 's> Decoder<'a, 's> {
             n += 1;
         }
         bytes[n] = value as u8;
+        if self.unknown.len() + n + 1 > UNKNOWN_LIMIT {
+            return Err(BUDGET);
+        }
         self.unknown.extend(&bytes[..=n])
     }
 
@@ -1218,6 +1465,46 @@ impl<'a, 's> Decoder<'a, 's> {
         Ok(offset(at))
     }
 
+    /// Place a short ASCII string already checked by `short_ascii` (`a`, `b` its payload words).
+    #[inline(always)]
+    fn ascii(&mut self, n: usize, a: u64, b: u64) -> Result<u32> {
+        let at = self.alloc(8 + n, 4)?;
+        let handle = self.handles as u32;
+        self.handles += 1;
+        if self.fits(at, 8 + n.max(8)) {
+            // SAFETY: header and the payload words lie inside the output's writable prefix;
+            // below eight bytes the word's zero tail lands in bytes that later allocations or
+            // the final zero fill overwrite.
+            unsafe {
+                let p = self.out.add(at);
+                write64(p, (n as u64 | ASCII as u64) | (handle as u64) << 32);
+                write64(p.add(8), a);
+                if n >= 8 {
+                    write64(p.add(n), b);
+                }
+            }
+        } else if self.fits(at, 8 + n) {
+            self.ascii_exact(at, n, handle, a, b);
+        }
+        Ok(offset(at))
+    }
+
+    #[cold]
+    fn ascii_exact(&mut self, at: usize, n: usize, handle: u32, a: u64, b: u64) {
+        let mut bytes = [0u8; 16];
+        bytes[..8].copy_from_slice(&a.to_le_bytes());
+        if n >= 8 {
+            bytes[n - 8..n].copy_from_slice(&b.to_le_bytes());
+        }
+        // SAFETY: the header and payload lie inside the output's writable prefix.
+        unsafe {
+            let p = self.out.add(at);
+            write32(p, n as u32 | ASCII);
+            write32(p.add(4), handle);
+            copy_bytes(p.add(8), &bytes[..n]);
+        }
+    }
+
     #[inline(always)]
     fn set_presence(base: *mut u8, ordinal: usize, present: bool) {
         // SAFETY: presence words lie inside the record.
@@ -1234,30 +1521,32 @@ impl<'a, 's> Decoder<'a, 's> {
 
     /// Oneof last-wins: clear the other members' bits, slots and remembered payloads.
     #[inline]
-    fn select(&mut self, o: &Open, t: &TypeDesc, ordinal: usize) {
+    fn select(&mut self, k: usize, t: &TypeDesc, ordinal: usize) {
         let oneof = t.fields[ordinal].oneof;
         if oneof == NONE {
             return;
         }
-        self.select_slow(o, t, ordinal, oneof);
+        self.select_slow(k, t, ordinal, oneof);
     }
 
     #[inline(never)]
-    fn select_slow(&mut self, o: &Open, t: &TypeDesc, ordinal: usize, oneof: u32) {
+    fn select_slow(&mut self, k: usize, t: &TypeDesc, ordinal: usize, oneof: u32) {
+        // SAFETY: frame `k` is open.
+        let (base, merges) = unsafe { ((*self.frame(k)).base, (*self.frame(k)).merges as usize) };
         for &member in t.members[oneof as usize].iter() {
             let m = member as usize;
             if m == ordinal {
                 continue;
             }
-            Self::set_presence(o.base, m, false);
+            Self::set_presence(base, m, false);
             let f = &t.fields[m];
-            let slot = unsafe { o.base.add(f.slot as usize) };
+            let slot = unsafe { base.add(f.slot as usize) };
             if f.width == 8 {
                 write64(slot, 0);
             } else {
                 write32(slot, 0);
             }
-            for i in o.merges..self.merges.len() {
+            for i in merges..self.merges.len() {
                 let mut payload = self.merges.get(i);
                 if payload.ordinal == member {
                     payload.ordinal = NONE;
@@ -1265,7 +1554,7 @@ impl<'a, 's> Decoder<'a, 's> {
                 }
             }
         }
-        let case = unsafe { o.base.add(4 + 4 * t.words as usize + 2 * oneof as usize) };
+        let case = unsafe { base.add(4 + 4 * t.words as usize + 2 * oneof as usize) };
         // SAFETY: the case entry lies inside the record.
         unsafe { case.cast::<[u8; 2]>().write_unaligned((ordinal as u16 + 1).to_le_bytes()) };
     }
@@ -1279,162 +1568,387 @@ impl<'a, 's> Decoder<'a, 's> {
         code
     }
 
-    /// One record body: fields in wire order until `end` or the group's end tag. The read
-    /// position and the first presence word live in locals; both are synchronized with the
-    /// decoder and the record around every call that may read or change them.
-    fn body(&mut self, o: &mut Open, end: usize, group: u32, depth: u32) -> Result<usize> {
+    /// Decode frame `floor`'s body from `self.pos`, and every record nested in it, until that
+    /// body ends; returns the body end (a group's end tag offset) with `self.pos` after it.
+    /// Child records are entered and closed on the explicit stack (no recursion); `floor` stays
+    /// open. The top record's hot state lives in locals; presence word 0 is written back to the
+    /// record whenever anything else may read or change it.
+    fn run(&mut self, floor: usize) -> Result<usize> {
         let c = self.c;
-        let t = &c.types[o.ty];
-        let fields = &t.fields[..];
         let input = self.input;
-        assert!(end <= input.len());
-        let base = o.base;
-        // SAFETY: a record with fields has presence word 0 at offset 4 (a record without fields
-        // has none, and the word is then never read or written).
-        let word0 = unsafe { base.add(4) };
-        let mut presence = if fields.is_empty() { 0 } else { read32(word0) };
-        let mut pos = self.pos;
-        let mut next = 0usize;
-        macro_rules! sync {
-            () => {
-                if !fields.is_empty() {
-                    write32(word0, presence);
-                }
-                self.pos = pos;
+        let origin = input.as_ptr();
+        // SAFETY: one past the input's end.
+        let limit = unsafe { origin.add(input.len()) };
+        let mut k = floor;
+        // The top record's registers: the read position and body end as pointers, the record
+        // base, its type and presence word 0. Everything else (group, scratch marks, the parent's
+        // field) stays in its frame until the record closes; input offsets are computed only on
+        // the paths that need them.
+        // SAFETY: self.pos <= input.len().
+        let mut p: *const u8 = unsafe { origin.add(self.pos) };
+        let mut base: *mut u8;
+        let mut end: *const u8;
+        let mut t: &TypeDesc;
+        let mut presence: u32;
+        macro_rules! off {
+            ($q:expr) => {
+                $q as usize - origin as usize
             };
         }
-        macro_rules! resync {
-            () => {
-                if !fields.is_empty() {
-                    presence = read32(word0);
+        macro_rules! load {
+            () => {{
+                // SAFETY: frame `k` is open.
+                let f = unsafe { &*self.frame(k) };
+                base = f.base;
+                if f.end as usize > input.len() {
+                    return Err(crate::PANIC);
                 }
-                pos = self.pos;
+                // SAFETY: f.end <= input.len().
+                end = unsafe { origin.add(f.end as usize) };
+                t = &c.types[f.ty as usize];
+                // Every record has a word at offset 4 (presence word 0, or zero padding for a
+                // type without fields, which is never set).
+                presence = read32(unsafe { base.add(4) });
+            }};
+        }
+        macro_rules! bail {
+            ($code:expr, $at:expr) => {
+                return Err(self.fail($code, $at))
             };
         }
         macro_rules! tri {
             ($e:expr, $at:expr) => {
                 match $e {
                     Ok(value) => value,
-                    Err(code) => {
-                        sync!();
-                        return Err(self.fail(code, $at));
-                    }
+                    Err(code) => bail!(code, $at),
                 }
             };
         }
-        while pos < end {
-            let start = pos;
-            let (raw, after) = tri!(get_varint(input, pos, end), start);
-            pos = after;
-            // Wire-order prediction: writers emit fields in number order. A match with the next
-            // declared field's tag needs no further tag checks (declared tags are valid).
-            let ordinal = match fields.get(next) {
-                Some(f) if f.tag as u64 == raw => next,
-                _ => match {
+        macro_rules! flush {
+            () => {
+                write32(unsafe { base.add(4) }, presence)
+            };
+        }
+        // Presence of a singular field: explicit fields are always present, implicit ones when
+        // the value differs from the default.
+        macro_rules! mark {
+            ($ordinal:expr, $e:expr, $nonzero:expr) => {{
+                let set = $e.flags & E_EXPLICIT != 0 || $nonzero;
+                if $e.word == 0 {
+                    let bit = 1u32 << ($ordinal & 31);
+                    presence = if set { presence | bit } else { presence & !bit };
+                } else {
+                    Self::set_presence(base, $ordinal, set);
+                }
+            }};
+        }
+        load!();
+        'records: loop {
+            let body_end;
+            'field: {
+                if p >= end {
+                    // SAFETY: frame `k` is open.
+                    if unsafe { (*self.frame(k)).group } != 0 {
+                        bail!(MALFORMED, off!(p));
+                    }
+                    body_end = off!(end);
+                    break 'field;
+                }
+                let start = p;
+                // SAFETY: p < end.
+                let b = unsafe { *p };
+                // One-byte tags dispatch through the type's table: a hit is a declared field with
+                // its declared wire type and needs no further tag checks.
+                let hit = t.dispatch[(b & 0x7F) as usize];
+                let ordinal = if b < 0x80 && hit != 0 {
+                    p = unsafe { p.add(1) };
+                    hit as usize - 1
+                } else {
+                    let (raw, q) = tri!(ptr_varint(p, end), off!(start));
+                    p = q;
                     if raw > u32::MAX as u64 || raw >> 3 == 0 || raw & 7 > 5 {
-                        sync!();
-                        return Err(self.fail(MALFORMED, start));
+                        bail!(MALFORMED, off!(start));
                     }
                     let tag = raw as u32;
                     if tag & 7 == 4 {
-                        sync!();
-                        if tag >> 3 != group {
-                            return Err(self.fail(MALFORMED, start));
+                        // SAFETY: frame `k` is open.
+                        if tag >> 3 != unsafe { (*self.frame(k)).group } {
+                            bail!(MALFORMED, off!(start));
                         }
-                        return Ok(start);
+                        body_end = off!(start);
+                        break 'field;
                     }
-                    t.find(tag >> 3)
-                } {
-                    Some(ordinal) => ordinal,
-                    None => {
-                        sync!();
-                        tri!(self.skip(raw as u32, end, depth), start);
-                        tri!(self.keep_unknown(start, self.pos), start);
-                        resync!();
-                        continue;
-                    }
-                },
-            };
-            let tag = raw as u32;
-            let f = &fields[ordinal];
-            if f.tag != tag {
-                sync!();
-                if tag & 7 == 2 && f.packable {
-                    let after = tri!(self.packed(f, ordinal, pos, end), start);
-                    self.pos = after;
-                    next = ordinal;
-                } else {
-                    tri!(self.skip(tag, end, depth), start);
-                    tri!(self.keep_unknown(start, self.pos), start);
-                }
-                resync!();
-                continue;
-            }
-            next = ordinal + usize::from(!f.repeated);
-            match f.op {
-                OP_MESSAGE | OP_GROUP => {
-                    sync!();
-                    tri!(self.message(o, t, ordinal, start, end, depth), start);
-                    resync!();
-                }
-                OP_STRING | OP_BYTES => {
-                    let (n, at) = tri!(get_length(input, pos, end), start);
-                    pos = at + n;
-                    let header = tri!(self.string(at, n, f.op == OP_STRING), start);
-                    let present = f.explicit || n != 0;
-                    if f.special {
-                        sync!();
-                        tri!(self.string_special(o, t, ordinal, at, n, header), start);
-                        resync!();
-                    } else {
-                        write32(unsafe { base.add(f.slot as usize) }, header);
-                        if ordinal < 32 {
-                            let bit = 1u32 << ordinal;
-                            presence = if present { presence | bit } else { presence & !bit };
-                        } else {
-                            Self::set_presence(base, ordinal, present);
+                    match t.find(tag >> 3) {
+                        Some(ordinal) if t.entries[ordinal].tag == tag => ordinal,
+                        found => {
+                            flush!();
+                            let (s, q, e) = (off!(start), off!(p), off!(end));
+                            p = unsafe { origin.add(tri!(self.mismatch(k, found, tag, s, q, e), s)) };
+                            presence = read32(unsafe { base.add(4) });
+                            continue 'records;
                         }
                     }
-                }
-                op => {
-                    let (bits, after) = tri!(get_scalar(op, input, pos, end), start);
-                    pos = after;
-                    if f.special {
-                        sync!();
-                        tri!(self.scalar_special(o, t, ordinal, start, pos, bits), start);
-                        resync!();
-                    } else {
-                        let slot = unsafe { base.add(f.slot as usize) };
-                        let nonzero = if f.width == 8 {
-                            write64(slot, bits);
-                            bits != 0
-                        } else {
-                            write32(slot, bits as u32);
-                            bits as u32 != 0
+                };
+                // SAFETY: ordinal < entries.len() (a table hit or a lookup result).
+                let e = unsafe { t.entries.get_unchecked(ordinal) };
+                // SAFETY: slots lie inside the record.
+                let slot = unsafe { base.add(e.slot as usize) };
+                match e.op {
+                    H_V32 => {
+                        let (v, q) = tri!(ptr_varint(p, end), off!(start));
+                        p = q;
+                        write32(slot, v as u32);
+                        mark!(ordinal, e, v as u32 != 0);
+                    }
+                    H_V64 => {
+                        let (v, q) = tri!(ptr_varint(p, end), off!(start));
+                        p = q;
+                        write64(slot, v);
+                        mark!(ordinal, e, v != 0);
+                    }
+                    H_S32 => {
+                        let (v, q) = tri!(ptr_varint(p, end), off!(start));
+                        p = q;
+                        let v = zigzag32(v);
+                        write32(slot, v);
+                        mark!(ordinal, e, v != 0);
+                    }
+                    H_S64 => {
+                        let (v, q) = tri!(ptr_varint(p, end), off!(start));
+                        p = q;
+                        let v = zigzag64(v);
+                        write64(slot, v);
+                        mark!(ordinal, e, v != 0);
+                    }
+                    H_BOOL => {
+                        let (v, q) = tri!(ptr_varint(p, end), off!(start));
+                        p = q;
+                        write32(slot, (v != 0) as u32);
+                        mark!(ordinal, e, v != 0);
+                    }
+                    H_F32 => {
+                        let (v, q) = tri!(ptr_fixed32(p, end), off!(start));
+                        p = q;
+                        write32(slot, v);
+                        mark!(ordinal, e, v != 0);
+                    }
+                    H_F64 => {
+                        let (v, q) = tri!(ptr_fixed64(p, end), off!(start));
+                        p = q;
+                        write64(slot, v);
+                        mark!(ordinal, e, v != 0);
+                    }
+                    H_STR | H_BYTES => {
+                        let (n, at) = tri!(ptr_length(p, end), off!(start));
+                        p = unsafe { at.add(n) };
+                        let short = if e.op == H_STR { ptr_short_ascii(at, n, limit) } else { None };
+                        let header = match short {
+                            Some((a, b)) => tri!(self.ascii(n, a, b), off!(start)),
+                            None => tri!(self.string(off!(at), n, e.op == H_STR), off!(start)),
                         };
-                        let present = f.explicit || nonzero;
-                        if ordinal < 32 {
-                            let bit = 1u32 << ordinal;
-                            presence = if present { presence | bit } else { presence & !bit };
-                        } else {
-                            Self::set_presence(base, ordinal, present);
+                        write32(slot, header);
+                        mark!(ordinal, e, n != 0);
+                    }
+                    H_MSG | H_RMSG => {
+                        if k >= self.max_depth as usize {
+                            bail!(BUDGET, off!(start));
+                        }
+                        let (n, body) = tri!(ptr_length(p, end), off!(start));
+                        flush!();
+                        let (s, body, child_end) = (off!(start), off!(body), off!(body) + n);
+                        if e.op == H_MSG && read32(slot) != 0 {
+                            // A later occurrence of a singular message: a merge (cold).
+                            p = unsafe { origin.add(tri!(self.merge_walk(k, ordinal, s, body, child_end), s)) };
+                            continue 'records;
+                        }
+                        tri!(self.open(k + 1, e.child, child_end, 0, ordinal as u32, s, body), s);
+                        k += 1;
+                        p = unsafe { origin.add(body) };
+                        load!();
+                    }
+                    _ => {
+                        flush!();
+                        let s = off!(start);
+                        match tri!(self.slow(k, ordinal, s, off!(p), off!(end)), s) {
+                            Step::Next(q) => {
+                                p = unsafe { origin.add(q) };
+                                presence = read32(unsafe { base.add(4) });
+                            }
+                            Step::Enter(q) => {
+                                p = unsafe { origin.add(q) };
+                                k += 1;
+                                load!();
+                            }
                         }
                     }
                 }
+                continue 'records;
+            }
+            // The top record's body ended at `body_end`; `p` is after it.
+            flush!();
+            self.pos = off!(p);
+            if k == floor {
+                return Ok(body_end);
+            }
+            // SAFETY: frame `k` is open.
+            let f = unsafe { &*self.frame(k) };
+            let (cstart, cordinal, cbody) = (f.start(), f.ordinal as usize, f.body);
+            let closed = if t.simple
+                && !f.merged
+                && self.pending.len() == (f.pending as usize)
+                && self.unknown.len() == (f.unknown as usize)
+            {
+                // Nothing to close (docs/SLAB.md record close is empty).
+                self.merges.truncate(f.merges as usize);
+                if !matches!(f.mark, Mark::Output) {
+                    self.frames.pop(f.mark);
+                }
+                Closed {
+                    at: f.at,
+                    invalid_map: false,
+                    klen: NONE,
+                    key: 0,
+                    end: body_end,
+                }
+            } else {
+                let closed = tri!(self.finish(k, body_end), cstart);
+                p = unsafe { origin.add(self.pos) };
+                closed
+            };
+            k -= 1;
+            load!();
+            let e = &t.entries[cordinal];
+            if e.flags & E_REPEATED != 0 {
+                if e.flags & E_MAP != 0 && closed.invalid_map {
+                    tri!(self.keep_unknown(cstart, off!(p)), cstart);
+                } else {
+                    tri!(
+                        self.pending.push(Pending {
+                            ordinal: cordinal as u32,
+                            klen: closed.klen,
+                            value: closed.at as u64,
+                            key: closed.key,
+                        }),
+                        cstart
+                    );
+                }
+            } else {
+                write32(unsafe { base.add(e.slot as usize) }, closed.at);
+                mark!(cordinal, e, true);
+                tri!(
+                    self.merges.push(Payload {
+                        ordinal: cordinal as u32,
+                        start: cbody,
+                        end: closed.end as u32,
+                    }),
+                    cstart
+                );
             }
         }
-        sync!();
-        if group != 0 {
-            return Err(self.fail(MALFORMED, pos));
+    }
+
+    /// A tag that names no field, or a field with another wire type: a packed run of a
+    /// packable repeated field, or unknown bytes. Returns the position after the field.
+    #[inline(never)]
+    fn mismatch(
+        &mut self,
+        k: usize,
+        found: Option<usize>,
+        tag: u32,
+        start: usize,
+        pos: usize,
+        end: usize,
+    ) -> Result<usize> {
+        if let Some(ordinal) = found {
+            let c = self.c;
+            // SAFETY: frame `k` is open.
+            let f = &c.types[unsafe { (*self.frame(k)).ty } as usize].fields[ordinal];
+            if tag & 7 == 2 && f.packable {
+                return self.packed(f, ordinal, pos, end);
+            }
         }
-        Ok(end)
+        self.pos = pos;
+        self.skip(tag, end, k)?;
+        let after = self.pos;
+        self.keep_unknown(start, after)?;
+        Ok(after)
+    }
+
+    /// Every field the decode loop does not handle inline: repeated scalars and strings, oneof
+    /// members, closed enums, map entry keys, groups and fields past presence word 65,535.
+    #[inline(never)]
+    fn slow(&mut self, k: usize, ordinal: usize, start: usize, pos: usize, end: usize) -> Result<Step> {
+        let c = self.c;
+        let input = self.input;
+        // SAFETY: frame `k` is open.
+        let o = unsafe { *self.frame(k) };
+        let t = &c.types[o.ty as usize];
+        let f = &t.fields[ordinal];
+        match f.op {
+            OP_MESSAGE | OP_GROUP => {
+                if k >= self.max_depth as usize {
+                    return Err(BUDGET);
+                }
+                let (child_end, group, body) = if f.op == OP_MESSAGE {
+                    let (n, body) = get_length(input, pos, end)?;
+                    (body + n, 0, body)
+                } else {
+                    (end, f.tag >> 3, pos)
+                };
+                if !f.repeated {
+                    self.select(k, t, ordinal);
+                    if read32(unsafe { o.base.add(f.slot as usize) }) != 0 {
+                        self.pos = body;
+                        // SAFETY: frame `k` is open.
+                        unsafe { (*self.frame(k)).merged = true };
+                        let payload_end = self.walk(k + 1, f.child, child_end, group, start, body)?;
+                        self.merges.push(Payload {
+                            ordinal: ordinal as u32,
+                            start: body as u32,
+                            end: payload_end as u32,
+                        })?;
+                        return Ok(Step::Next(self.pos));
+                    }
+                }
+                self.open(k + 1, f.child, child_end, group, ordinal as u32, start, body)?;
+                Ok(Step::Enter(body))
+            }
+            OP_STRING | OP_BYTES => {
+                let (n, at) = get_length(input, pos, end)?;
+                let header = self.string(at, n, f.op == OP_STRING)?;
+                self.string_special(k, t, ordinal, at, n, header)?;
+                Ok(Step::Next(at + n))
+            }
+            op => {
+                let (bits, after) = get_scalar(op, input, pos, end)?;
+                self.scalar_special(k, t, ordinal, start, after, bits)?;
+                Ok(Step::Next(after))
+            }
+        }
+    }
+
+    /// A later occurrence of a singular, non-oneof message: validate it with a walk that writes
+    /// nothing and remember the payload for the merge at close.
+    #[inline(never)]
+    fn merge_walk(&mut self, k: usize, ordinal: usize, start: usize, body: usize, end: usize) -> Result<usize> {
+        let c = self.c;
+        // SAFETY: frame `k` is open.
+        let child = c.types[unsafe { (*self.frame(k)).ty } as usize].fields[ordinal].child;
+        unsafe { (*self.frame(k)).merged = true };
+        self.pos = body;
+        let payload_end = self.walk(k + 1, child, end, 0, start, body)?;
+        self.merges.push(Payload {
+            ordinal: ordinal as u32,
+            start: body as u32,
+            end: payload_end as u32,
+        })?;
+        Ok(self.pos)
     }
 
     /// A string or bytes field that is repeated, a oneof member or a map entry's key.
-    #[inline(never)]
     fn string_special(
         &mut self,
-        o: &mut Open,
+        k: usize,
         t: &TypeDesc,
         ordinal: usize,
         at: usize,
@@ -1443,7 +1957,8 @@ impl<'a, 's> Decoder<'a, 's> {
     ) -> Result<()> {
         let f = &t.fields[ordinal];
         if t.map_entry && ordinal == 0 {
-            o.key = (at as u32, n as u32);
+            // SAFETY: frame `k` is open.
+            unsafe { (*self.frame(k)).key = (at as u32, n as u32) };
         }
         if f.repeated {
             return self.pending.push(Pending {
@@ -1453,17 +1968,18 @@ impl<'a, 's> Decoder<'a, 's> {
                 key: 0,
             });
         }
-        self.select(o, t, ordinal);
-        write32(unsafe { o.base.add(f.slot as usize) }, header);
-        Self::set_presence(o.base, ordinal, f.explicit || n != 0);
+        self.select(k, t, ordinal);
+        // SAFETY: frame `k` is open.
+        let base = unsafe { (*self.frame(k)).base };
+        write32(unsafe { base.add(f.slot as usize) }, header);
+        Self::set_presence(base, ordinal, f.explicit || n != 0);
         Ok(())
     }
 
     /// A scalar that is repeated, a oneof member or a closed enum (or a map entry's enum value).
-    #[inline(never)]
     fn scalar_special(
         &mut self,
-        o: &mut Open,
+        k: usize,
         t: &TypeDesc,
         ordinal: usize,
         start: usize,
@@ -1471,14 +1987,16 @@ impl<'a, 's> Decoder<'a, 's> {
         bits: u64,
     ) -> Result<()> {
         let f = &t.fields[ordinal];
+        let o = self.frame(k);
         if f.closed && !f.values.accepts(bits as i32) {
             if f.map_value_enum {
-                o.invalid_map = true;
+                // SAFETY: frame `k` is open.
+                unsafe { (*o).invalid_map = true };
             }
             return self.keep_unknown(start, end);
         }
         if f.map_value_enum {
-            o.invalid_map = false;
+            unsafe { (*o).invalid_map = false };
         }
         if f.repeated {
             return self.pending.push(Pending {
@@ -1488,8 +2006,9 @@ impl<'a, 's> Decoder<'a, 's> {
                 key: 0,
             });
         }
-        self.select(o, t, ordinal);
-        let slot = unsafe { o.base.add(f.slot as usize) };
+        self.select(k, t, ordinal);
+        let base = unsafe { (*o).base };
+        let slot = unsafe { base.add(f.slot as usize) };
         let present = if f.width == 8 {
             write64(slot, bits);
             bits != 0
@@ -1497,7 +2016,7 @@ impl<'a, 's> Decoder<'a, 's> {
             write32(slot, bits as u32);
             bits as u32 != 0
         };
-        Self::set_presence(o.base, ordinal, f.explicit || present);
+        Self::set_presence(base, ordinal, f.explicit || present);
         Ok(())
     }
 
@@ -1526,60 +2045,11 @@ impl<'a, 's> Decoder<'a, 's> {
         Ok(p)
     }
 
+    /// Validate one record without writing it (a merged message's later payload): the decoder
+    /// with writes disabled, every record framed, and the cursor, counts, `CERTIFIED` and
+    /// unknown-table entries restored afterwards. Returns the body end; `self.pos` is after it.
     #[inline(never)]
-    fn message(
-        &mut self,
-        o: &mut Open,
-        t: &TypeDesc,
-        ordinal: usize,
-        start: usize,
-        end: usize,
-        depth: u32,
-    ) -> Result<()> {
-        let f = &t.fields[ordinal];
-        if depth >= self.max_depth {
-            return Err(BUDGET);
-        }
-        let (child_end, group) = if f.op == OP_MESSAGE {
-            let n = self.length(end)?;
-            (self.pos + n, 0)
-        } else {
-            (end, f.tag >> 3)
-        };
-        let body = self.pos;
-        let child = f.child as usize;
-        if f.repeated {
-            let closed = self.record(child, child_end, group, depth + 1)?;
-            if f.map && closed.invalid_map {
-                return self.keep_unknown(start, self.pos);
-            }
-            return self.pending.push(Pending {
-                ordinal: ordinal as u32,
-                klen: closed.klen,
-                value: closed.at as u64,
-                key: closed.key,
-            });
-        }
-        self.select(o, t, ordinal);
-        let slot = unsafe { o.base.add(f.slot as usize) };
-        let payload_end = if read32(slot) == 0 {
-            let closed = self.record(child, child_end, group, depth + 1)?;
-            write32(slot, closed.at);
-            Self::set_presence(o.base, ordinal, true);
-            closed.end
-        } else {
-            // A later occurrence: validate it with a walk that writes nothing (docs/SLAB.md).
-            o.merged = true;
-            self.walk(child, child_end, group, depth + 1)?
-        };
-        self.merges.push(Payload {
-            ordinal: ordinal as u32,
-            start: body as u32,
-            end: payload_end as u32,
-        })
-    }
-
-    fn walk(&mut self, ty: usize, end: usize, group: u32, depth: u32) -> Result<usize> {
+    fn walk(&mut self, k: usize, ty: u32, end: usize, group: u32, start: usize, body: usize) -> Result<usize> {
         let saved = (
             self.cursor,
             self.records,
@@ -1587,52 +2057,64 @@ impl<'a, 's> Decoder<'a, 's> {
             self.certified,
             self.limit,
             self.table.len(),
+            self.max,
         );
+        // Nothing is written and the walk's virtual cursor is not budgeted.
         self.limit = 0;
-        self.walking += 1;
-        let result = self.record(ty, end, group, depth);
-        self.walking -= 1;
+        self.max = usize::MAX;
+        let result = self.walk_record(k, ty, end, group, start, body);
         (
             self.cursor,
             self.records,
             self.handles,
             self.certified,
             self.limit,
-        ) = (saved.0, saved.1, saved.2, saved.3, saved.4);
+            self.max,
+        ) = (saved.0, saved.1, saved.2, saved.3, saved.4, saved.6);
         self.table.truncate(saved.5);
-        result.map(|closed| closed.end)
+        result
+    }
+
+    fn walk_record(&mut self, k: usize, ty: u32, end: usize, group: u32, start: usize, body: usize) -> Result<usize> {
+        self.open(k, ty, end, group, NONE, start, body)?;
+        self.pos = body;
+        let body_end = self.run(k)?;
+        Ok(self.finish(k, body_end)?.end)
     }
 
     /// Record close, in docs/SLAB.md order: merges, map value default, lists, unknown span,
     /// required fields.
-    fn close(&mut self, o: &mut Open, depth: u32) -> Result<()> {
+    #[inline(never)]
+    fn close(&mut self, k: usize) -> Result<()> {
         let c = self.c;
-        let t = &c.types[o.ty];
+        // SAFETY: frame `k` is open.
+        let o = unsafe { *self.frame(k) };
+        let t = &c.types[o.ty as usize];
         let resume = self.pos;
         if o.merged {
-            self.merge(o, t, depth)?;
+            self.merge(k, t)?;
         }
         if t.value_message {
             let f = &t.fields[1];
             let slot = unsafe { o.base.add(f.slot as usize) };
             if read32(slot) == 0 {
-                if depth >= self.max_depth {
+                if k >= self.max_depth as usize {
                     return Err(BUDGET);
                 }
-                let open = self.open(f.child as usize, depth + 1)?;
-                let closed = self.finish(open, depth + 1, self.pos)?;
+                self.open(k + 1, f.child, self.pos, 0, NONE, o.start(), self.pos)?;
+                let closed = self.finish(k + 1, self.pos)?;
                 write32(slot, closed.at);
                 Self::set_presence(o.base, 1, true);
             }
         }
-        if self.pending.len() > o.pending {
-            self.lists(o, t)?;
+        if self.pending.len() > (o.pending as usize) {
+            self.lists(&o, t)?;
         }
-        if self.unknown.len() > o.unknown {
-            let n = self.unknown.len() - o.unknown;
+        if self.unknown.len() > (o.unknown as usize) {
+            let n = self.unknown.len() - (o.unknown as usize);
             let at = self.alloc(4 + n, 4)?;
             if self.fits(at, 4 + n) {
-                let bytes = &self.unknown.as_slice()[o.unknown..];
+                let bytes = &self.unknown.as_slice()[(o.unknown as usize)..];
                 // SAFETY: the span lies inside the output's writable prefix.
                 unsafe {
                     let p = self.out.add(at);
@@ -1640,7 +2122,7 @@ impl<'a, 's> Decoder<'a, 's> {
                     std::ptr::copy_nonoverlapping(bytes.as_ptr(), p.add(4), n);
                 }
             }
-            self.unknown.truncate(o.unknown);
+            self.unknown.truncate(o.unknown as usize);
             self.table.push((o.at, offset(at)))?;
         }
         for &ordinal in t.required.iter() {
@@ -1648,8 +2130,8 @@ impl<'a, 's> Decoder<'a, 's> {
                 self.certified = false;
             }
         }
-        self.pending.truncate(o.pending);
-        self.merges.truncate(o.merges);
+        self.pending.truncate(o.pending as usize);
+        self.merges.truncate(o.merges as usize);
         self.pos = resume;
         Ok(())
     }
@@ -1657,8 +2139,10 @@ impl<'a, 's> Decoder<'a, 's> {
     /// Singular messages seen more than once (ordinal order): one record decoded from the
     /// concatenation of every payload since the last clear, here fed payload by payload.
     #[inline(never)]
-    fn merge(&mut self, o: &mut Open, t: &TypeDesc, depth: u32) -> Result<()> {
-        let (first, last) = (o.merges, self.merges.len());
+    fn merge(&mut self, k: usize, t: &TypeDesc) -> Result<()> {
+        // SAFETY: frame `k` is open.
+        let o = unsafe { *self.frame(k) };
+        let (first, last) = ((o.merges as usize), self.merges.len());
         let mut floor = 0u32;
         loop {
             let mut ordinal = NONE;
@@ -1682,15 +2166,19 @@ impl<'a, 's> Decoder<'a, 's> {
                 continue;
             }
             let f = &t.fields[ordinal as usize];
-            let mut open = self.open(f.child as usize, depth + 1)?;
+            self.open(k + 1, f.child, 0, 0, NONE, o.start(), 0)?;
             for i in first..last {
                 let p = self.merges.get(i);
                 if p.ordinal == ordinal {
                     self.pos = p.start as usize;
-                    self.body(&mut open, p.end as usize, 0, depth + 1)?;
+                    // SAFETY: frame `k + 1` is open.
+                    unsafe {
+                        (*self.frame(k + 1)).end = p.end;
+                    }
+                    self.run(k + 1)?;
                 }
             }
-            let closed = self.finish(open, depth + 1, self.pos)?;
+            let closed = self.finish(k + 1, self.pos)?;
             write32(unsafe { o.base.add(f.slot as usize) }, closed.at);
             self.certified = false;
         }
@@ -1709,15 +2197,17 @@ impl<'a, 's> Decoder<'a, 's> {
     /// Lists in ordinal order; maps keep first-key order with the last entry per key. One pass
     /// counts the elements of every list field, lists are allocated in ordinal order, and one
     /// pass scatters the elements (types with more list fields than `DENSE_LISTS` scan per field).
-    fn lists(&mut self, o: &mut Open, t: &TypeDesc) -> Result<()> {
+    fn lists(&mut self, o: &Frame, t: &TypeDesc) -> Result<()> {
         const DENSE_LISTS: usize = 16;
-        let (first, last) = (o.pending, self.pending.len());
+        let (first, last) = ((o.pending as usize), self.pending.len());
         if t.lists.len() > DENSE_LISTS {
             return self.lists_sparse(o, t);
         }
-        for &ordinal in t.lists.iter() {
-            if t.fields[ordinal as usize].map {
-                self.dedup(first, last, ordinal)?;
+        if t.has_map {
+            for &ordinal in t.lists.iter() {
+                if t.fields[ordinal as usize].map {
+                    self.dedup(first, last, ordinal)?;
+                }
             }
         }
         let mut counts = [0u32; DENSE_LISTS];
@@ -1770,8 +2260,8 @@ impl<'a, 's> Decoder<'a, 's> {
     }
 
     #[inline(never)]
-    fn lists_sparse(&mut self, o: &mut Open, t: &TypeDesc) -> Result<()> {
-        let (first, last) = (o.pending, self.pending.len());
+    fn lists_sparse(&mut self, o: &Frame, t: &TypeDesc) -> Result<()> {
+        let (first, last) = ((o.pending as usize), self.pending.len());
         let mut floor = 0u32;
         loop {
             let mut ordinal = NONE;
@@ -1822,6 +2312,7 @@ impl<'a, 's> Decoder<'a, 's> {
 
     /// Fold later entries with an equal key into the first entry of that key (which keeps its
     /// position and takes the later record); folded entries are dropped from the list.
+    #[inline(never)]
     fn dedup(&mut self, first: usize, last: usize, ordinal: u32) -> Result<()> {
         let count = (first..last)
             .filter(|&i| self.pending.get(i).ordinal == ordinal)
@@ -1962,9 +2453,9 @@ pub(crate) fn decode_with(
         records: 0,
         handles: 0,
         certified: true,
-        walking: 0,
         error_at: usize::MAX,
         frame_bound,
+        stack: inline.stack.as_mut_ptr().cast::<Frame>(),
         pending: Buf::new(&mut inline.pending, spill),
         merges: Buf::new(&mut inline.merges, spill),
         unknown: Buf::new(&mut inline.unknown, spill),
@@ -1981,7 +2472,10 @@ pub(crate) fn decode_with(
 }
 
 fn decode_root(d: &mut Decoder) -> Result<Outcome> {
-    let root = d.record(0, d.input.len(), 0, 0)?;
+    d.open(0, 0, d.input.len(), 0, NONE, usize::MAX, 0)?;
+    d.pos = 0;
+    let body_end = d.run(0)?;
+    let root = d.finish(0, body_end)?;
     if root.at as usize != HEADER_BYTES {
         return Err(crate::PANIC);
     }
