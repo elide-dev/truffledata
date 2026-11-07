@@ -169,8 +169,14 @@ final class TypedAcceptance {
                   failure.getResult().equals(expected.get(0)), "scalar boolean result");
             }
             Acceptance.rejects(() -> row.getLong(2), IndexOutOfBoundsException.class);
+            accessors(row);
+            var accessor = row.accessor(0);
+            Acceptance.check(!accessor.accepts(expected), "accessor rejects another layout");
+            Acceptance.rejects(() -> accessor.read(expected), ContractViolation.class);
             parsed.close();
             Acceptance.rejects(() -> row.getLong(0), IllegalStateException.class);
+            Acceptance.rejects(() -> accessor.present(row), IllegalStateException.class);
+            Acceptance.rejects(() -> accessor.read(row), IllegalStateException.class);
           }
         }
         try (var empty = decoder.allocate(0);
@@ -977,6 +983,7 @@ final class TypedAcceptance {
         try (var input = decoder.allocate(wire.length).put(wire);
             var parsed = nativePlan.decode(input, NATIVE)) {
           equal(expected, parsed.row());
+          accessors(parsed.row());
           input.close();
           equal(expected, parsed.row());
           equal(expected, parsed.snapshot());
@@ -1256,6 +1263,48 @@ final class TypedAcceptance {
       compiled.close();
       Acceptance.check(
           DATA.read(row, ordinal).equals("still alive €"), "unread string outlives plan");
+    }
+  }
+
+  private interface Read {
+    Object get() throws Exception;
+  }
+
+  /** A read's value, its UnexpectedResultException value (boxed in an array), or its exception. */
+  private static Object outcome(Read read) {
+    try {
+      return read.get();
+    } catch (com.oracle.truffle.api.nodes.UnexpectedResultException e) {
+      return new Object[] {e.getResult()};
+    } catch (RuntimeException e) {
+      return e.getClass();
+    } catch (Exception e) {
+      throw new AssertionError(e);
+    }
+  }
+
+  private static void same(Object expected, Object actual) {
+    if (expected instanceof Object[] a && actual instanceof Object[] b) equal(a[0], b[0]);
+    else equal(expected, actual);
+  }
+
+  /**
+   * Layout-bound accessors (Task B2) agree with the uncached library on every method: identity per
+   * layout, values, presence, primitive rejections and contract lengths.
+   */
+  static void accessors(AbstractRow row) {
+    for (int i = 0; i < row.schema().size(); i++) {
+      int ordinal = i;
+      Accessor accessor = row.accessor(i);
+      Acceptance.check(accessor == row.accessor(i) && accessor.accepts(row), "accessor identity");
+      equal(DATA.read(row, i), accessor.read(row));
+      Acceptance.check(DATA.isPresent(row, i) == accessor.present(row), "accessor presence");
+      same(outcome(() -> DATA.readLong(row, ordinal)), outcome(() -> accessor.readLong(row)));
+      same(outcome(() -> DATA.readDouble(row, ordinal)), outcome(() -> accessor.readDouble(row)));
+      same(outcome(() -> DATA.readBoolean(row, ordinal)), outcome(() -> accessor.readBoolean(row)));
+      same(
+          outcome(() -> ReadLengthNodeGen.getUncached().execute(row, ordinal)),
+          outcome(() -> accessor.length(row)));
     }
   }
 

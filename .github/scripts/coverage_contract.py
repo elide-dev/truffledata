@@ -7,6 +7,9 @@ import sys
 ACCESS_CLASSES = {
     'AbstractRow', 'DataArray', 'DataLibrary', 'DynamicRecord', 'ExactNumber',
     'Missing', 'PayloadBudget', 'ReadBooleanNode', 'ReadDoubleNode', 'ReadLengthNode', 'ReadLongNode',
+    # Layout-bound accessors (protobuf performance plan Task B2): AccessorTest and
+    # TypedAcceptance.accessors run every method against the uncached DataLibrary.
+    'Accessor', 'LibraryAccessor',
 }
 
 

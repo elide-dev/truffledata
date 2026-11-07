@@ -315,11 +315,11 @@ Task format follows the JSON performance plan. Every task ends with the standard
 - Modify: `Schema.java` (`accessor(int)`, overridable; cached array), `ReadLongNode.java`, `ReadDoubleNode.java`, `ReadBooleanNode.java`, `ReadLengthNode.java` (accessor specializations before the library ones), `AbstractRow.java` (`schema()` final accessor), `Batch.java`, `StaticLayout.java`, `protobuf-runtime/.../GeneratedMessage.java`, `ProtoRow.java`, `protobuf-buffa/.../SlabRow.java`, `ScalarRow.java` (accessor implementations), `docs/TRUFFLE.md`
 - Tests: `core/src/test/.../AccessorTest.java`, `tests/.../AllocationTest.java` (accessor roots), `tests/.../PolicyTest.java` inventory
 
-- [ ] **Step 1: Failing tests**: `accessor_rejects_foreign_layout` (two plans with equal schemas, one site; results exact, cache holds two entries), `accessor_is_pe_constant` (`CompilerAsserts.partialEvaluationConstant` in a compiled root), `length_accessor_counts_utf16` (ASCII, BMP, supplementary), existing schema-churn tests keep bounded fallback.
-- [ ] **Step 2: Gates**: every existing `AllocationTest`/`CompiledReads` budget unchanged; `consumer_smoke` AST ≤ 256.
-- [ ] **Step 3: Implement.**
-- [ ] **Step 4: Measure** (`consumer_measure`, `interpret` and `peak` cells for `slab`, `generated-owned`, `native-eager`): hypothesis interpreter full ≤ 2.5× stock for `slab` and `generated-owned` (from 4.8–6.4×), peak unchanged or better. Retain under `benchmarks/results/protobuf-accessor-<sha>/`.
-- [ ] **Step 5: Commit** — `perf: read rows through layout-bound accessors in every backend`
+- [x] **Step 1: Failing tests**: `accessor_rejects_foreign_layout` (two plans with equal schemas, one site; results exact, cache holds two entries), `accessor_is_pe_constant` (`CompilerAsserts.partialEvaluationConstant` in a compiled root), `length_accessor_counts_utf16` (ASCII, BMP, supplementary), existing schema-churn tests keep bounded fallback.
+- [x] **Step 2: Gates**: every existing `AllocationTest`/`CompiledReads` budget unchanged; `consumer_smoke` AST ≤ 256.
+- [x] **Step 3: Implement.**
+- [x] **Step 4: Measure** (`consumer_measure`, `interpret` and `peak` cells for `slab`, `generated-owned`, `native-eager`): hypothesis interpreter full ≤ 2.5× stock for `slab` and `generated-owned` (from 4.8–6.4×), peak unchanged or better. Retain under `benchmarks/results/protobuf-accessor-<sha>/`.
+- [x] **Step 5: Commit** — `perf: read rows through layout-bound accessors in every backend`
 
 #### Task B3: SVM pinned-array decode and ownership capabilities
 

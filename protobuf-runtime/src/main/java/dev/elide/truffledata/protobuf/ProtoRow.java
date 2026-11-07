@@ -163,6 +163,80 @@ public final class ProtoRow extends AbstractRow implements ProtoAccess {
     return plan.compactScalars;
   }
 
+  /**
+   * Bound per plan: compact rows read their inline scalars; stored rows delegate to the constant
+   * accessor of their storage layout (a static shape, or the plan schema's batch columns).
+   */
+  @Override
+  public Accessor accessor(int ordinal) {
+    Object rowStorage = storage;
+    return descriptor.accessor(
+        ProtoRow.class,
+        ordinal,
+        i ->
+            new Owned(
+                plan, i, plan.compactScalars ? null : ((AbstractRow) rowStorage).accessor(i)));
+  }
+
+  private static final class Owned extends Accessor {
+    private final ProtoPlan plan;
+    private final @Nullable Accessor stored;
+
+    Owned(ProtoPlan plan, int ordinal, @Nullable Accessor stored) {
+      super(plan.schema(), ordinal);
+      this.plan = plan;
+      this.stored = stored;
+    }
+
+    @Override
+    public boolean accepts(Object row) {
+      return row instanceof ProtoRow r && r.plan == plan;
+    }
+
+    private ProtoRow row(Object row) {
+      if (row instanceof ProtoRow r && r.plan == plan) return r;
+      throw mismatch();
+    }
+
+    @Override
+    public Object read(Object row) {
+      var r = row(row);
+      return stored == null ? r.boxedScalar(ordinal()) : stored.read(r.storage);
+    }
+
+    @Override
+    public boolean present(Object row) {
+      var r = row(row);
+      return stored == null || stored.present(r.storage);
+    }
+
+    @Override
+    public long readLong(Object row) throws UnexpectedResultException {
+      var r = row(row);
+      return stored == null ? r.scalarUnchecked(ordinal()) : stored.readLong(r.storage);
+    }
+
+    @Override
+    public double readDouble(Object row) throws UnexpectedResultException {
+      var r = row(row);
+      if (stored == null) throw new UnexpectedResultException(r.scalarUnchecked(ordinal()));
+      return stored.readDouble(r.storage);
+    }
+
+    @Override
+    public boolean readBoolean(Object row) throws UnexpectedResultException {
+      var r = row(row);
+      if (stored == null) throw new UnexpectedResultException(r.scalarUnchecked(ordinal()));
+      return stored.readBoolean(r.storage);
+    }
+
+    @Override
+    public int length(Object row) {
+      var r = row(row);
+      return stored == null ? lengthOf(r.boxedScalar(ordinal())) : stored.length(r.storage);
+    }
+  }
+
   @ExportMessage
   static class Read {
     @Specialization(guards = "row.compact()")

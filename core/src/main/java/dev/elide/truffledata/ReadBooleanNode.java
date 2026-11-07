@@ -9,11 +9,34 @@ import com.oracle.truffle.api.nodes.*;
 @GenerateInline(false)
 @Introspectable
 @GenerateUncached
+@ImportStatic(Accessor.class)
 public abstract class ReadBooleanNode extends Node {
   public abstract boolean execute(Object row, int index);
 
   public static ReadBooleanNode create() {
     return ReadBooleanNodeGen.create();
+  }
+
+  /**
+   * A layout-bound accessor: one identity guard and the representation's own loads. Rows that only
+   * offer the library-backed default accessor fall through to the library specializations.
+   */
+  @Specialization(
+      guards = {"index == cachedIndex", "bound(accessor, row)"},
+      limit = "3")
+  static boolean accessed(
+      Object row,
+      int index,
+      @Cached("index") int cachedIndex,
+      @Cached("bind(row, cachedIndex)") Accessor accessor) {
+    com.oracle.truffle.api.CompilerAsserts.partialEvaluationConstant(accessor);
+    try {
+      boolean value = accessor.readBoolean(row);
+      if (Accessor.STRICT) Accessor.audit(accessor, value);
+      return value;
+    } catch (UnexpectedResultException e) {
+      throw new ContractViolation("Expected a present, non-null BOOLEAN");
+    }
   }
 
   @Specialization(
@@ -34,7 +57,7 @@ public abstract class ReadBooleanNode extends Node {
     return checked(data, row, cachedIndex);
   }
 
-  @Specialization(replaces = "required")
+  @Specialization(replaces = {"accessed", "required"})
   static boolean generic(Object row, int index, @CachedLibrary(limit = "3") DataLibrary data) {
     return checked(data, row, index);
   }

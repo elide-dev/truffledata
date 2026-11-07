@@ -126,7 +126,51 @@ public final class Batch {
 
     long readLong(int index) throws UnexpectedResultException {
       if (longs != null && (states == null || states[index] == 0)) return longs[index];
-      throw new UnexpectedResultException(read(index));
+      // ANY columns keep boxed values; a Long there is still an INT64 read (DataLibrary contract).
+      Object value = read(index);
+      if (value instanceof Long n) return n;
+      throw new UnexpectedResultException(value);
+    }
+  }
+
+  /** Column reads of one schema's batches; the required INT64 path loads the long array alone. */
+  private static final class ColumnAccessor extends Accessor {
+    private final boolean requiredLong;
+
+    ColumnAccessor(Schema schema, int ordinal) {
+      super(schema, ordinal);
+      requiredLong = schema.requiredLong(ordinal);
+    }
+
+    @Override
+    public boolean accepts(Object row) {
+      return row instanceof Row r && r.descriptor == schema();
+    }
+
+    private Row row(Object row) {
+      if (row instanceof Row r && r.descriptor == schema()) return r;
+      throw mismatch();
+    }
+
+    @Override
+    public Object read(Object row) {
+      Row r = row(row);
+      return r.batch.columns[ordinal()].read(r.index);
+    }
+
+    @Override
+    public boolean present(Object row) {
+      Row r = row(row);
+      byte[] states = r.batch.columns[ordinal()].states;
+      return states == null || states[r.index] != 2;
+    }
+
+    @Override
+    public long readLong(Object row) throws UnexpectedResultException {
+      Row r = row(row);
+      Column column = r.batch.columns[ordinal()];
+      if (requiredLong) return Objects.requireNonNull(column.longs)[r.index];
+      return column.readLong(r.index);
     }
   }
 
@@ -152,6 +196,12 @@ public final class Batch {
     @ExportMessage
     Schema getSchema() {
       return descriptor;
+    }
+
+    /** Column accessors depend only on the schema: every batch of it has the same column kinds. */
+    @Override
+    public Accessor accessor(int ordinal) {
+      return descriptor.accessor(Row.class, ordinal, i -> new ColumnAccessor(descriptor, i));
     }
 
     @ExportMessage

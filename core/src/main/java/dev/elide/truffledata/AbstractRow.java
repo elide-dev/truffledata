@@ -20,6 +20,17 @@ public abstract class AbstractRow implements TruffleObject {
   }
 
   /**
+   * The accessor bound to this row's layout for {@code ordinal}: identity-stable for every row of
+   * the same layout, and rejecting rows of any other layout even when they share this schema.
+   * Representations override this to bind constant-offset reads; the default is the schema's
+   * library-backed accessor, which read nodes leave to their {@link DataLibrary} specializations.
+   * Called on slow paths only.
+   */
+  public Accessor accessor(int ordinal) {
+    return descriptor.accessor(ordinal);
+  }
+
+  /**
    * Whether this row borrows a closable owner. Scoped adapters override this constant predicate;
    * owned containers reject such rows until the adapter explicitly detaches them. Field validation
    * can still accept a scoped RECORD/ANY value for guest reads within its owner's lifetime.

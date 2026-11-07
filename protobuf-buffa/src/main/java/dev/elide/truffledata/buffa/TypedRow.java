@@ -44,6 +44,74 @@ public abstract sealed class TypedRow extends AbstractRow implements ProtoAccess
       this.present = present;
       this.presenceBits = presenceBits;
     }
+
+    /** Bound per plan: an owner check and one element load; strings resolve once per row. */
+    @Override
+    public Accessor accessor(int ordinal) {
+      ProtoPlan rowPlan = plan();
+      return descriptor.accessor(ArrayRow.class, ordinal, i -> new Eager(rowPlan, i));
+    }
+  }
+
+  private static final class Eager extends Accessor {
+    private final ProtoPlan plan;
+
+    Eager(ProtoPlan plan, int ordinal) {
+      super(plan.schema(), ordinal);
+      this.plan = plan;
+    }
+
+    @Override
+    public boolean accepts(Object row) {
+      return row instanceof ArrayRow r && r.plan() == plan;
+    }
+
+    private ArrayRow open(Object row) {
+      if (!(row instanceof ArrayRow r && r.plan() == plan)) throw mismatch();
+      r.owner.check();
+      return r;
+    }
+
+    private Object resolved(ArrayRow row) {
+      Object value = row.values[ordinal()];
+      return value instanceof Utf8 text ? text.value(row.owner) : value;
+    }
+
+    @Override
+    public Object read(Object row) {
+      return resolved(open(row));
+    }
+
+    @Override
+    public long readLong(Object row) throws UnexpectedResultException {
+      var r = open(row);
+      Object value = r.values[ordinal()];
+      if (value instanceof Long number) return number;
+      throw new UnexpectedResultException(resolved(r));
+    }
+
+    /** Scoped arrays and bytes report their size directly; strings resolve once per row. */
+    @Override
+    public int length(Object row) {
+      Object value = resolved(open(row));
+      if (value instanceof TypedArray array) return arrayLength(array.size());
+      if (value instanceof BorrowedBytes bytes) return arrayLength(bytes.size());
+      return lengthOf(value);
+    }
+
+    @Override
+    public double readDouble(Object row) throws UnexpectedResultException {
+      Object value = resolved(open(row));
+      if (value instanceof Double number) return number;
+      throw new UnexpectedResultException(value);
+    }
+
+    @Override
+    public boolean readBoolean(Object row) throws UnexpectedResultException {
+      Object value = resolved(open(row));
+      if (value instanceof Boolean flag) return flag;
+      throw new UnexpectedResultException(value);
+    }
   }
 
   @Idempotent

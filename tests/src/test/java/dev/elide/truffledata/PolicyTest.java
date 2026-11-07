@@ -24,7 +24,15 @@ class PolicyTest {
             Map.entry("Values.java", 6),
             Map.entry("DataLibrary.java", 1),
             Map.entry("PayloadBudget.java", 1), // Strict-only immutable-backing diagnostics.
-            Map.entry("Schema.java", 1),
+            // Name lookup, plus the two accessor-table lookups (Task B2), taken on specialization
+            // and host slow paths only.
+            Map.entry("Schema.java", 3),
+            // Node-side accessor binding, strict-mode audit and the uncached interop array length
+            // (Task B2); compiled accessor reads cross none of them.
+            Map.entry("Accessor.java", 3),
+            // The schema default reads through the uncached DataLibrary for host callers; read
+            // nodes never cache it (Task B2).
+            Map.entry("LibraryAccessor.java", 5),
             Map.entry("Batch.java", 2),
             Map.entry("AbstractRow.java", 1),
             Map.entry("ExactNumber.java", 12),
@@ -51,30 +59,44 @@ class PolicyTest {
             // Shared tape (//tape, YAML plan Task 4): the JSON budgets below moved here with their
             // classes (JsonOwner → TapeOwner, JsonValue → TapeValue, JsonText → TapeText, JsonKey →
             // TapeKey, JsonTextArena → TapeTextArena, JsonBorrow → TapeBorrow, JsonTypedOwner →
-            // TypedOwner, JsonRecord → TypedRecord, JsonArray → TypedArray, JsonAccess → TypedAccess).
-            Map.entry("JavaSink.java", 9), // Embedder tree building and key interning, outside the tape walk.
+            // TypedOwner, JsonRecord → TypedRecord, JsonArray → TypedArray, JsonAccess →
+            // TypedAccess).
+            Map.entry(
+                "JavaSink.java",
+                9), // Embedder tree building and key interning, outside the tape walk.
             Map.entry("TypedAccess.java", 2),
             Map.entry("TypedArray.java", 1),
-            // Close, pinning, array index, export cursors, the native-directory diagnostic (the Java
+            // Close, pinning, array index, export cursors, the native-directory diagnostic (the
+            // Java
             // member directories went with Myna ABI v4, JSON performance ledger V1: 10 -> 9).
             Map.entry("TapeOwner.java", 9),
             Map.entry("TypedRecord.java", 4),
             Map.entry("TypedOwner.java", 3),
-            // Static (owner, node) slow paths per interop message and hint misses; the scan boundary
+            // Static (owner, node) slow paths per interop message and hint misses; the scan
+            // boundary
             // folded into TapeOwner.find behind the miss boundary (V1: 26 -> 25).
             Map.entry("TapeValue.java", 25),
             Map.entry("TapeBorrow.java", 1), // Borrowed-result assumption.
             // Key preparation from a String or from Myna's prepared Utf8Key (V1: 1 -> 2).
             Map.entry("TapeKey.java", 2),
-            Map.entry("TapeText.java", 4), // Sink-side materialization: String, TruffleString, copy, compare.
-            Map.entry("TapeTextArena.java", 1), // TruffleString over a session text arena (sink side).
-            Map.entry("TruffleSink.java", 9), // Reference guest sink: tree building and key interning.
+            Map.entry(
+                "TapeText.java",
+                4), // Sink-side materialization: String, TruffleString, copy, compare.
+            Map.entry(
+                "TapeTextArena.java", 1), // TruffleString over a session text arena (sink side).
+            Map.entry(
+                "TruffleSink.java", 9), // Reference guest sink: tree building and key interning.
             // The session and stream entry points JsonSession (13) and JsonStream (10) held: the
             // shared bookkeeping moved here, the JSON-only ones stayed below.
-            Map.entry("TapeSession.java", 10), // parse ×4, with, decode ×2, validate, criticalDecodes, close.
-            Map.entry("TapeStream.java", 8), // feed ×3, finish, next ×2, retain, close: native calls.
-            Map.entry("TapeFormat.java", 1), // Alias-target failure, built outside compiled alias reads.
-            // JSON: native downcalls, slow-path conversions and allocation stay out of compiled reads.
+            Map.entry(
+                "TapeSession.java",
+                10), // parse ×4, with, decode ×2, validate, criticalDecodes, close.
+            Map.entry(
+                "TapeStream.java", 8), // feed ×3, finish, next ×2, retain, close: native calls.
+            Map.entry(
+                "TapeFormat.java", 1), // Alias-target failure, built outside compiled alias reads.
+            // JSON: native downcalls, slow-path conversions and allocation stay out of compiled
+            // reads.
             Map.entry("JsonJvm.java", 7), // FFM downcalls, arena management and openSession (×2).
             Map.entry("JsonMessage.java", 2),
             Map.entry("JsonPlan.java", 4), // Plan compilation and decode entry points.

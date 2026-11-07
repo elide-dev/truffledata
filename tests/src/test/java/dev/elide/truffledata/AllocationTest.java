@@ -80,7 +80,8 @@ class AllocationTest {
               (bean.getThreadAllocatedBytes(Thread.currentThread().threadId()) - before) / 100000.0;
           assertArrayEquals(wire, (byte[]) retained);
           System.out.printf(
-              "ALLOCATION compact-integer-encode width=%d second=%d attempt=%d %.3f bytes/message%n",
+              "ALLOCATION compact-integer-encode width=%d second=%d attempt=%d %.3f"
+                  + " bytes/message%n",
               width, second, attempt, bytes);
           consecutive = bytes <= 32 ? consecutive + 1 : 0;
         }
@@ -609,6 +610,117 @@ class AllocationTest {
         (bean.getThreadAllocatedBytes(Thread.currentThread().threadId()) - before) / 100000.0;
     System.out.printf("ALLOCATION row-view %.3f bytes/row%n", perRow);
     assertTrue(perRow <= 48.0, "Retained row allocation budget exceeded: " + perRow);
+  }
+
+  /**
+   * Accessor-bound reads (Task B2): an INT64 and a string length per iteration over every adopting
+   * representation, retained rows, ≤ 0.05 B/read in the final tier.
+   */
+  @Test
+  void accessorReadsStayWithinAllocationBudget() {
+    try (Context context = Context.newBuilder("td-test").allowExperimentalOptions(true).build()) {
+      context.initialize("td-test");
+      context.enter();
+      try {
+        var language = TestLanguage.current().language();
+        Schema schema =
+            Schema.of(Field.requiredLong("n"), new Field("s", Field.Kind.STRING, false, false));
+        Map<String, Object[]> rows = new LinkedHashMap<>();
+        rows.put(
+            "static",
+            new Object[] {
+              new StaticLayout(language, schema, Limits.DEFAULT).create(1000L, "ab😀"), 0, 1
+            });
+        rows.put(
+            "batch",
+            new Object[] {
+              Batch.copyOf(
+                      schema,
+                      Collections.singletonList(new Object[] {1000L, "ab😀"}),
+                      Limits.DEFAULT)
+                  .row(0),
+              0,
+              1
+            });
+        for (boolean useStatic : new boolean[] {false, true}) {
+          var plan =
+              dev.elide.truffledata.generated.TruffleDataContracts.create(
+                      useStatic ? language : null, Limits.DEFAULT, 16, 1 << 20)
+                  .type("truffledata.lossless.Flat");
+          rows.put(
+              "protobuf-owned-" + (useStatic ? "static" : "batch"),
+              new Object[] {plan.newBuilder().set(1, 1000L).set(13, "ab😀").build(), 1, 13});
+          rows.put(
+              "protobuf-generated-" + (useStatic ? "static" : "batch"),
+              new Object[] {
+                new dev.elide.truffledata.generated.TruffleDataContracts
+                        .Access_truffledata$lossless$Flat(plan)
+                    .newBuilder()
+                    .set_i64(1000L)
+                    .set_text("ab😀")
+                    .build(),
+                1,
+                13
+              });
+        }
+        for (var entry : rows.entrySet()) {
+          Object[] spec = entry.getValue();
+          var root = new AccessorRoot((Integer) spec[1], (Integer) spec[2]);
+          var target = (OptimizedCallTarget) root.getCallTarget();
+          long expected = 1004L * 1000000;
+          for (int attempt = 0; attempt < 8 && !target.isValidLastTier(); attempt++) {
+            assertEquals(expected, target.call(spec[0], 1000000));
+            target.compile(true);
+            target.waitForCompilation();
+          }
+          assertEquals(expected, target.call(spec[0], 1000000));
+          ThreadMXBean bean = (ThreadMXBean) ManagementFactory.getThreadMXBean();
+          bean.setThreadAllocatedMemoryEnabled(true);
+          root.compiled = false;
+          long before = bean.getThreadAllocatedBytes(Thread.currentThread().threadId());
+          assertEquals(expected, target.call(spec[0], 1000000));
+          double perRead =
+              (bean.getThreadAllocatedBytes(Thread.currentThread().threadId()) - before) / 2e6;
+          System.out.printf(
+              "ALLOCATION accessor-%s %.6f bytes/read compiled=%s%n",
+              entry.getKey(), perRead, root.compiled);
+          assertTrue(target.isValidLastTier(), "Accessor sample deoptimized: " + entry.getKey());
+          assertTrue(root.compiled, "Accessor sample must run compiled: " + entry.getKey());
+          assertTrue(perRead <= 0.05, entry.getKey() + " accessor allocation: " + perRead);
+          var accessed =
+              com.oracle.truffle.api.dsl.Introspection.getSpecialization(root.lengths, "accessed");
+          assertEquals(1, accessed.getInstances(), "Length read bound an accessor");
+          assertTrue(com.oracle.truffle.api.nodes.NodeUtil.countNodes(root) <= 256);
+        }
+      } finally {
+        context.leave();
+      }
+    }
+  }
+
+  private static final class AccessorRoot extends RootNode {
+    @Child private ReadLongNode longs = ReadLongNode.create();
+    @Child ReadLengthNode lengths = ReadLengthNode.create();
+    private final int number, text;
+    boolean compiled;
+
+    AccessorRoot(int number, int text) {
+      super(null);
+      this.number = number;
+      this.text = text;
+    }
+
+    @Override
+    public Object execute(VirtualFrame frame) {
+      Object row = frame.getArguments()[0];
+      int count = (Integer) frame.getArguments()[1];
+      long sum = 0;
+      for (int i = 0; i < count; i++)
+        sum += longs.execute(row, number) + lengths.execute(row, text);
+      if (CompilerDirectives.inInterpreter()) LoopNode.reportLoopCount(this, count);
+      compiled |= CompilerDirectives.inCompiledCode();
+      return sum;
+    }
   }
 
   private static void check(String label, Object row) {

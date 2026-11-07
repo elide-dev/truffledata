@@ -41,6 +41,9 @@ public final class StaticLayout {
   @CompilationFinal(dimensions = 1)
   private final Storage[] storageKinds;
 
+  @CompilationFinal(dimensions = 1)
+  private final Accessor[] accessors;
+
   @TruffleBoundary
   public StaticLayout(TruffleLanguage<?> language, Schema schema, Limits limits) {
     limits.check(1, schema.size());
@@ -80,6 +83,90 @@ public final class StaticLayout {
           kind == Field.Kind.INT64 || kind == Field.Kind.FLOAT64 || kind == Field.Kind.BOOLEAN;
     }
     primitivePayload = primitives;
+    accessors = new Accessor[schema.size()];
+    for (int i = 0; i < accessors.length; i++) accessors[i] = new Slot(this, i);
+  }
+
+  /** This layout's accessor for {@code ordinal}; it rejects records of every other layout. */
+  public Accessor accessor(int ordinal) {
+    return accessors[ordinal];
+  }
+
+  /** Constant property, storage kind and state of one field of this layout. */
+  private static final class Slot extends Accessor {
+    private final StaticLayout layout;
+    private final StaticProperty property;
+    private final Storage kind;
+    private final @Nullable StaticProperty state;
+
+    Slot(StaticLayout layout, int ordinal) {
+      super(layout.schema, ordinal);
+      this.layout = layout;
+      property = layout.properties[ordinal];
+      kind = layout.storageKinds[ordinal];
+      state = layout.states[ordinal];
+    }
+
+    @Override
+    public boolean accepts(Object row) {
+      return row instanceof Record r && r.layout == layout;
+    }
+
+    private Object storage(Object row) {
+      if (row instanceof Record r && r.layout == layout) return r.storage;
+      throw mismatch();
+    }
+
+    @Override
+    public Object read(Object row) {
+      return value(storage(row), property, kind, state);
+    }
+
+    @Override
+    public boolean present(Object row) {
+      Object storage = storage(row);
+      return state == null || state.getByte(storage) != 2;
+    }
+
+    /** Null or missing state as the rejected value, after the read of a present field. */
+    private void checkPresent(Object storage) throws UnexpectedResultException {
+      if (state != null) {
+        byte status = state.getByte(storage);
+        if (status != 0)
+          throw new UnexpectedResultException(status == 1 ? DataNull.INSTANCE : Missing.INSTANCE);
+      }
+    }
+
+    @Override
+    public long readLong(Object row) throws UnexpectedResultException {
+      Object storage = storage(row);
+      checkPresent(storage);
+      if (field().kind() == Field.Kind.INT64) return integer(storage, property, kind);
+      Object value = value(storage, property, kind, null);
+      if (value instanceof Long n) return n;
+      throw new UnexpectedResultException(value);
+    }
+
+    @Override
+    public double readDouble(Object row) throws UnexpectedResultException {
+      Object storage = storage(row);
+      checkPresent(storage);
+      if (kind == Storage.FLOAT) return property.getFloat(storage);
+      if (kind == Storage.DOUBLE) return property.getDouble(storage);
+      Object value = value(storage, property, kind, null);
+      if (value instanceof Double n) return n;
+      throw new UnexpectedResultException(value);
+    }
+
+    @Override
+    public boolean readBoolean(Object row) throws UnexpectedResultException {
+      Object storage = storage(row);
+      checkPresent(storage);
+      if (kind == Storage.BOOLEAN) return property.getBoolean(storage);
+      Object value = value(storage, property, kind, null);
+      if (value instanceof Boolean b) return b;
+      throw new UnexpectedResultException(value);
+    }
   }
 
   private static Storage storage(Field field) {
@@ -352,6 +439,11 @@ public final class StaticLayout {
     @Idempotent
     StaticLayout layout() {
       return layout;
+    }
+
+    @Override
+    public Accessor accessor(int ordinal) {
+      return layout.accessors[ordinal];
     }
 
     @ExportMessage
