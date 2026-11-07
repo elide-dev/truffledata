@@ -73,6 +73,13 @@ def _json_methods(source, *signatures):
 # //tools/release:json_native_test). On the JVM, JsonSvm.requireRuntime rejects every entry point
 # before native code runs, and the word-typed tapes and owners below exist only behind it.
 SVM_ONLY_METHODS = {
+    # The no-argument form is the static-image entry point (the kernel is linked; no library path).
+    # It delegates to loadNative(null), which on the JVM test class path always throws because no
+    # native backend is present, so JaCoCo records no probe although CsvFusedTest calls it.
+    # //tools/release:csv_kernel_native_test runs it in an image.
+    'csv/src/main/java/dev/elide/truffledata/csv/CsvIndexing.java': {
+        'dev/elide/truffledata/csv/CsvIndexing::loadNative ()Ldev/elide/truffledata/csv/CsvIndexing$Provider;',
+    },
     'protobuf-buffa/src/main/java/dev/elide/truffledata/buffa/NativeRow.java': {
         'dev/elide/truffledata/buffa/NativeRow::entry '
         '(Ldev/elide/truffledata/buffa/BuffaWire$Tape;I)Lorg/graalvm/word/Pointer;',
