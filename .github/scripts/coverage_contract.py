@@ -106,50 +106,30 @@ SVM_ONLY_METHODS = {
         'JsonSvm$SvmLexical::inputByte (J)B',
         'JsonSvm$SvmResult::run ()V',
     ),
-    # Sessions are static-image only (JVM sessions are performance plan Task E1): open() throws from
-    # requireRuntime on the JVM (JvmScopedTest asserts it), so nothing else is reachable there.
-    # SvmAcceptance.sessions() and CompiledReads.borrowed() exercise them in //json/tests:native_test.
+    # Static-image session backend: open() throws from requireRuntime on the JVM (JvmScopedTest
+    # asserts it), so the SVM backend and its text arenas run only in //json/tests:native_test
+    # (SvmAcceptance.sessions/textArenas/utf16Input, CompiledReads.borrowed). The backend-neutral
+    # session methods run on the JVM through JsonJvm.openSession (Task E1).
     **_json_methods(
         'JsonSession',
         'JsonSession::open ()Ldev/elide/truffledata/json/JsonSession;',
         'JsonSession::open (Ldev/elide/truffledata/json/JsonLimits;)Ldev/elide/truffledata/json/JsonSession;',
-        'JsonSession::check ()V',
-        'JsonSession::handle ()Lorg/graalvm/nativeimage/c/type/VoidPointer;',
-        'JsonSession::decodeInto ([BII)V',
-        'JsonSession::decodeInto ([BIIILdev/elide/truffledata/json/JsonSession$SvmTextArena;)V',
-        'JsonSession::parse (Lcom/oracle/truffle/api/strings/TruffleString;Ldev/elide/truffledata/json/JsonSink;)V',
-        'JsonSession::parse ([BIIILdev/elide/truffledata/json/JsonSink;)V',
-        'JsonSession::textArena (I)Ldev/elide/truffledata/json/JsonSession$SvmTextArena;',
+        'JsonSession$SvmBackend::create (Ldev/elide/truffledata/json/JsonLimits;)'
+        'Ldev/elide/truffledata/json/JsonSession$SvmBackend;',
+        'JsonSession$SvmBackend::decode ([BIIILdev/elide/truffledata/json/JsonTextArena;)V',
+        'JsonSession$SvmBackend::decode (Ljava/lang/foreign/MemorySegment;J)V',
+        'JsonSession$SvmBackend::textArena ([B)Ldev/elide/truffledata/json/JsonTextArena;',
+        'JsonSession$SvmBackend::borrow ()Ldev/elide/truffledata/json/JsonBorrow;',
+        'JsonSession$SvmBackend::retain ()Ldev/elide/truffledata/json/JsonMessage;',
+        'JsonSession$SvmBackend::reset ()V',
+        'JsonSession$SvmBackend::release ()V',
         'JsonSession$SvmTextArena::entry (J)J',
-        'JsonSession::lend (Ldev/elide/truffledata/json/JsonSession$SvmTextArena;)Ldev/elide/truffledata/json/JsonBorrow;',
-        'JsonSession::giveBack (Ldev/elide/truffledata/json/JsonBorrow;)V',
-        'JsonSession::parse ([BLdev/elide/truffledata/json/JsonSink;)V',
-        'JsonSession::parse ([BIILdev/elide/truffledata/json/JsonSink;)V',
-        'JsonSession::with ([BLjava/util/function/Function;)Ljava/lang/Object;',
-        'JsonSession::decode ([B)Ldev/elide/truffledata/json/JsonMessage;',
-        'JsonSession::decode ([BII)Ldev/elide/truffledata/json/JsonMessage;',
-        'JsonSession::validate ([B)V',
-        'JsonSession::close ()V',
     ),
-    # Borrowed session documents; constructed only by JsonSvm.borrow.
-    **_json_methods(
-        'JsonBorrow',
-        'JsonBorrow::assumption ()Lcom/oracle/truffle/api/Assumption;',
-        'JsonBorrow::lexical (J)J',
-        'JsonBorrow::lexicalByte (J)B',
-        'JsonBorrow::end ()V',
-    ),
-    # A session lends its one export cursor to each borrow (Task D1); only JsonSession.lend calls
-    # these, so they run only where sessions do.
-    **_json_methods('JsonOwner', 'JsonOwner::adoptCursor (Ldev/elide/truffledata/json/JsonText;)V'),
-    **_json_methods(
-        'JsonText',
-        'JsonText::rebind (Ldev/elide/truffledata/json/JsonOwner;)V',
-        # Attaches a session parse's text arena (Task D2).
-        'JsonText::arena (Ldev/elide/truffledata/json/JsonTextArena;)V',
-    ),
-    # Strings over a session text arena: written only by JsonSession parses whose sink asks for
-    # shared text (SvmAcceptance.textArenas).
+    # A borrow's assumption is requested only by cached compiled reads of a borrowed view
+    # (CompiledReads.borrowed on SVM); the JVM coverage lane runs no compiled code.
+    **_json_methods('JsonBorrow', 'JsonBorrow::assumption ()Lcom/oracle/truffle/api/Assumption;'),
+    # Strings over a session text arena: written only by static-image session parses whose sink
+    # asks for shared text (SvmAcceptance.textArenas); JVM sessions write no text arena.
     **_json_methods(
         'JsonTextArena',
         'JsonTextArena::string (JLcom/oracle/truffle/api/strings/TruffleString$Encoding;)'

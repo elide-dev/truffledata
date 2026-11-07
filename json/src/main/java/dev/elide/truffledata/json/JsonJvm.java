@@ -27,13 +27,14 @@ public final class JsonJvm implements JsonDecoder {
   private final MethodHandle planRelease;
   private final MethodHandle typedDecode;
   private final MethodHandle typedRelease;
+  private final SymbolLookup symbols;
   private boolean open = true;
   // Messages, typed plans and typed results not yet closed.
   private int live;
 
   private JsonJvm(Path library) {
     try {
-      SymbolLookup symbols = SymbolLookup.libraryLookup(library.toAbsolutePath(), libraryArena);
+      symbols = SymbolLookup.libraryLookup(library.toAbsolutePath(), libraryArena);
       MemorySegment fingerprint;
       try {
         fingerprint = (MemorySegment) JsonFFM.fingerprint(symbols).invokeExact();
@@ -120,36 +121,107 @@ public final class JsonJvm implements JsonDecoder {
         throw callFailure(failure);
       }
       JsonSvm.checkStatus(status);
-      MemorySegment descriptor = result.get(ValueLayout.ADDRESS, JsonFFM.JsonResult_view_OFFSET);
-      SegmentValueTape tape =
-          SegmentValueTape.of(
-              descriptor, result.get(ValueLayout.ADDRESS, JsonFFM.JsonResult_key_hashes_OFFSET));
-      long spanCount = result.get(ValueLayout.JAVA_LONG, JsonFFM.JsonResult_lexical_count_OFFSET);
-      if (spanCount != tape.nodeCount()) throw new IllegalStateException("JSON lexical table mismatch");
-      MemorySegment spans =
-          result.get(ValueLayout.ADDRESS, JsonFFM.JsonResult_lexical_OFFSET).reinterpret(spanCount * 8);
-      MemorySegment input = tape.region(1);
-      JsonMessage.Lexical lexical =
-          new JsonMessage.Lexical() {
-            @Override
-            public long span(long node) {
-              return spans.get(ValueLayout.JAVA_LONG, node * 8);
-            }
-
-            @Override
-            public byte inputByte(long offset) {
-              return input.get(ValueLayout.JAVA_BYTE, offset);
-            }
-          };
-      live++;
+      JsonMessage message = message(result, resultArena, onClose);
       published = true;
-      return new JsonMessage(tape, lexical, () -> releaseResult(result, resultArena, onClose));
+      return message;
     } finally {
       if (!published) {
         free(result);
         resultArena.close();
       }
     }
+  }
+
+  /** Reader over a published JsonResult: its descriptor and key-hash side table. */
+  static SegmentValueTape tape(MemorySegment result) {
+    MemorySegment descriptor = result.get(ValueLayout.ADDRESS, JsonFFM.JsonResult_view_OFFSET);
+    return SegmentValueTape.of(
+        descriptor, result.get(ValueLayout.ADDRESS, JsonFFM.JsonResult_key_hashes_OFFSET));
+  }
+
+  /** Lexical spans and retained input of a published JsonResult. */
+  static JsonMessage.Lexical lexical(MemorySegment result, SegmentValueTape tape) {
+    long spanCount = result.get(ValueLayout.JAVA_LONG, JsonFFM.JsonResult_lexical_count_OFFSET);
+    if (spanCount != tape.nodeCount()) throw new IllegalStateException("JSON lexical table mismatch");
+    MemorySegment spans =
+        result.get(ValueLayout.ADDRESS, JsonFFM.JsonResult_lexical_OFFSET).reinterpret(spanCount * 8);
+    MemorySegment input = tape.region(1);
+    return new JsonMessage.Lexical() {
+      @Override
+      public long span(long node) {
+        return spans.get(ValueLayout.JAVA_LONG, node * 8);
+      }
+
+      @Override
+      public byte inputByte(long offset) {
+        return input.get(ValueLayout.JAVA_BYTE, offset);
+      }
+    };
+  }
+
+  /** Message owning a published result (freed through td_json_release when it closes). */
+  private JsonMessage message(MemorySegment result, Arena resultArena, Runnable onClose) {
+    SegmentValueTape tape = tape(result);
+    JsonMessage.Lexical lexical = lexical(result, tape);
+    live++;
+    return new JsonMessage(tape, lexical, () -> releaseResult(result, resultArena, onClose));
+  }
+
+  // ---- Sessions (performance plan Task E1) ----
+
+  /**
+   * Opens a JVM {@link JsonSession} over the shared library at {@code library}, confined to the
+   * calling thread; {@code limits} apply to each document. The library stays loaded until the
+   * session and every message it retained are closed.
+   */
+  @TruffleBoundary
+  public static JsonSession openSession(Path library, JsonLimits limits) {
+    Objects.requireNonNull(limits);
+    JsonJvm jvm = new JsonJvm(library);
+    try {
+      return jvm.session(limits);
+    } finally {
+      // The session counts as live, so this only marks the decoder closed.
+      jvm.close();
+    }
+  }
+
+  private JsonSession session(JsonLimits limits) {
+    check();
+    JsonSession session =
+        new JsonSession(limits, new JvmSessionBackend(this, new JsonFFM.LibraryBinding(symbols), limits));
+    live++;
+    return session;
+  }
+
+  /** Retained session document: {@code retain} moves the session's storage into a fresh result. */
+  JsonMessage retain(java.util.function.ToIntFunction<MemorySegment> retain) {
+    Arena resultArena = Arena.ofConfined();
+    MemorySegment result;
+    try {
+      result = resultArena.allocate(JsonFFM.JsonResult_LAYOUT);
+    } catch (RuntimeException | Error failure) {
+      resultArena.close();
+      throw failure;
+    }
+    boolean published = false;
+    try {
+      JsonSvm.checkStatus(retain.applyAsInt(result));
+      JsonMessage message = message(result, resultArena, () -> {});
+      published = true;
+      return message;
+    } finally {
+      if (!published) {
+        free(result);
+        resultArena.close();
+      }
+    }
+  }
+
+  /** A session of this library closed; unload once nothing else uses it. */
+  void sessionClosed() {
+    live--;
+    if (!open && live == 0) libraryArena.close();
   }
 
   private void releaseResult(MemorySegment result, Arena resultArena, Runnable onClose) {

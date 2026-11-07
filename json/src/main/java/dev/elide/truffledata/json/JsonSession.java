@@ -4,20 +4,23 @@ import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import dev.elide.truffledata.json.generated.Json;
 import com.oracle.truffle.api.strings.InternalByteArray;
 import com.oracle.truffle.api.strings.TruffleString;
+import java.lang.foreign.MemorySegment;
 import java.util.Objects;
 import java.util.function.Function;
 import org.graalvm.nativeimage.PinnedObject;
 import org.graalvm.nativeimage.UnmanagedMemory;
 import org.graalvm.nativeimage.c.type.CCharPointer;
 import org.graalvm.nativeimage.c.type.VoidPointer;
+import org.graalvm.word.Pointer;
 import org.graalvm.word.WordFactory;
 import org.jspecify.annotations.Nullable;
 
 /**
- * Thread-confined decode context on SVM: one native parser, padded input buffer and arena, reused
- * across documents, so a small document costs no native allocation in steady state. Sessions are
- * explicit: open one per thread that decodes, and close it when done. {@link JsonSvm#decode} does
- * not use a session.
+ * Thread-confined decode context: one native parser, padded input buffer and arena, reused across
+ * documents, so a small document costs no native allocation in steady state. Sessions are explicit:
+ * open one per thread that decodes ({@link #open()} in a static image, {@code
+ * JsonJvm.openSession(Path, JsonLimits)} on the JVM), and close it when done. {@link
+ * JsonSvm#decode} does not use a session.
  *
  * <ul>
  *   <li>{@link #parse} decodes into the session and exports through a sink; nothing is retained.
@@ -31,132 +34,116 @@ import org.jspecify.annotations.Nullable;
  * session throws {@link IllegalStateException}.
  */
 public final class JsonSession implements AutoCloseable {
+  /**
+   * Inputs of at most this many bytes may decode through a bounded critical (native-leaf) call on
+   * the JVM (performance plan Task E2; {@code TD_JSON_CRITICAL_LIMIT}).
+   */
+  public static final int CRITICAL_LIMIT = 4096;
+
+  /** One runtime's native session calls: static bindings on SVM, Myna FFM bindings on the JVM. */
+  abstract static class Backend {
+    /**
+     * Decodes {@code length} bytes at {@code offset} into the session ({@code input}: 0 for UTF-8,
+     * else {@link #UTF16_INPUT} or {@link #LATIN1_INPUT}), and its text arena into {@code text}
+     * when given. Throws on failure, leaving the session with no document.
+     */
+    abstract void decode(
+        byte[] data, int offset, int length, int input, @Nullable JsonTextArena text);
+
+    /** Decodes {@code length} bytes of a native segment the caller keeps alive for the call. */
+    abstract void decode(MemorySegment data, long length);
+
+    /** A text arena over {@code array}, or null when this runtime writes none. */
+    abstract @Nullable JsonTextArena textArena(byte[] array);
+
+    /** Borrowed owner of the decoded document; the session ends it before its next call. */
+    abstract JsonBorrow borrow();
+
+    /** Moves the decoded document into an owned message; on failure the session holds none. */
+    abstract JsonMessage retain();
+
+    /** Ends the borrowed document (O(1), frees nothing). */
+    abstract void reset();
+
+    /** Frees the session; retained messages stay valid. */
+    abstract void release();
+
+    /** Decodes that took the bounded critical path (JVM, Task E2); 0 elsewhere. */
+    long criticalDecodes() {
+      return 0;
+    }
+  }
+
   private final Thread thread = Thread.currentThread();
   private final JsonLimits limits;
-  // td_json_session*, 0 once closed.
-  private long session;
-  // Reusable JsonResult for borrowed decodes.
-  private final long result;
+  // Null once closed.
+  private @Nullable Backend backend;
   private @Nullable JsonBorrow borrow;
   private @Nullable JsonText text;
   // Text array for shared-text parses; replaced once a string shares it.
-  private @Nullable SvmTextArena arena;
+  private @Nullable JsonTextArena arena;
 
-  private JsonSession(JsonLimits limits, long session, long result) {
-    this.limits = limits;
-    this.session = session;
-    this.result = result;
+  JsonSession(JsonLimits limits, Backend backend) {
+    this.limits = Objects.requireNonNull(limits);
+    this.backend = backend;
   }
 
-  /** Opens a session with {@link JsonLimits#DEFAULT}. */
+  /** Opens a static-image session with {@link JsonLimits#DEFAULT}. */
   @TruffleBoundary
   public static JsonSession open() {
     return open(JsonLimits.DEFAULT);
   }
 
-  /** Opens a session confined to the calling thread; {@code limits} apply to each document. */
+  /**
+   * Opens a static-image session confined to the calling thread; {@code limits} apply to each
+   * document. On the JVM use {@code JsonJvm.openSession}.
+   */
   @TruffleBoundary
   public static JsonSession open(JsonLimits limits) {
     JsonSvm.requireRuntime();
     Objects.requireNonNull(limits);
-    VoidPointer struct = UnmanagedMemory.calloc(Json.JsonLimitsStruct.SIZE);
-    if (struct.isNull()) throw new OutOfMemoryError("JSON session limits allocation");
-    VoidPointer result = WordFactory.nullPointer();
-    try {
-      result = UnmanagedMemory.calloc(Json.JsonResult.SIZE);
-      if (result.isNull()) throw new OutOfMemoryError("JSON session result allocation");
-      Json.JsonLimitsStruct.max_input_bytes(struct, limits.maxInputBytes());
-      Json.JsonLimitsStruct.max_index_bytes(struct, limits.maxIndexBytes());
-      Json.JsonLimitsStruct.max_nodes(struct, limits.maxNodes());
-      Json.JsonLimitsStruct.max_text_bytes(struct, limits.maxTextBytes());
-      Json.JsonLimitsStruct.max_depth(struct, limits.maxDepth());
-      VoidPointer created = Json.session_create(struct);
-      if (created.isNull()) throw new OutOfMemoryError("JSON session allocation");
-      return new JsonSession(limits, created.rawValue(), result.rawValue());
-    } catch (RuntimeException | Error failure) {
-      if (result.isNonNull()) UnmanagedMemory.free(result);
-      throw failure;
-    } finally {
-      UnmanagedMemory.free(struct);
-    }
+    return new JsonSession(limits, SvmBackend.create(limits));
   }
 
-  private void check() {
+  private Backend check() {
     if (Thread.currentThread() != thread)
       throw new IllegalStateException("JSON session thread mismatch");
-    if (session == 0) throw new IllegalStateException("JSON session closed");
+    Backend open = backend;
+    if (open == null) throw new IllegalStateException("JSON session closed");
     if (borrow != null) throw new IllegalStateException("JSON session is borrowed");
-  }
-
-  private VoidPointer handle() {
-    return WordFactory.pointer(session);
+    return open;
   }
 
   /** Decodes into the session; the borrowed result is valid until the next session call. */
-  private void decodeInto(byte[] utf8, int offset, int length) {
-    decodeInto(utf8, offset, length, 0, null);
-  }
-
-  /**
-   * Decodes into the session and, when {@code text} is given, writes the document's text arena
-   * into its array (Task D2).
-   */
-  private void decodeInto(
-      byte[] utf8, int offset, int length, int input, @Nullable SvmTextArena text) {
-    check();
-    Objects.checkFromIndexSize(offset, length, utf8.length);
+  private Backend decodeInto(
+      byte[] data, int offset, int length, int input, @Nullable JsonTextArena shared) {
+    Backend open = check();
+    Objects.checkFromIndexSize(offset, length, data.length);
     if (length == 0) throw new IllegalArgumentException("Empty JSON input");
     // UTF-16 input is at least half as long in UTF-8; the native side checks the exact length.
     if (length > (input == UTF16_INPUT ? 2L : 1L) * limits.maxInputBytes())
       throw new IllegalArgumentException("JSON input limit");
-    int status;
-    byte[] textArray = text == null ? null : text.array;
-    try (PinnedObject pinned = PinnedObject.create(utf8);
-        PinnedObject out = textArray == null ? null : PinnedObject.create(textArray)) {
-      status =
-          Json.session_decode(
-              handle(),
-              pinned.addressOfArrayElement(offset),
-              length,
-              input | (textArray == null ? 0 : TEXT),
-              out == null ? WordFactory.<CCharPointer>nullPointer() : out.addressOfArrayElement(0),
-              textArray == null ? 0 : textArray.length,
-              WordFactory.pointer(result));
-    }
-    JsonSvm.checkStatus(status);
-    if (text != null)
-      text.table = (org.graalvm.word.Pointer) Json.JsonResult.text_table(WordFactory.pointer(result));
+    open.decode(data, offset, length, input, shared);
+    return open;
   }
 
-  // TD_JSON_WANT_TEXT.
-  private static final int TEXT = 1;
-
-  /** The session's text arena for the next shared-text parse of {@code length} input bytes. */
-  private SvmTextArena textArena(int length) {
+  /** The text arena for the next shared-text parse of {@code length} input bytes, if any. */
+  private @Nullable JsonTextArena textArena(int length) {
+    Backend open = check();
+    // 2 × length + 16 bytes hold any document's text (json/native/text_arena.h).
     long need = 2L * length + 16;
     if (need > Integer.MAX_VALUE) throw new IllegalArgumentException("JSON input limit");
-    SvmTextArena text = arena;
+    JsonTextArena text = arena;
     // A string still references the previous array: never overwrite it.
-    if (text == null || text.shared || text.array.length < need) arena = text = new SvmTextArena(new byte[(int) need]);
+    if (text == null || text.shared || text.array.length < need) {
+      text = open.textArena(new byte[(int) need]);
+      arena = text;
+    }
     return text;
   }
 
-  /** Text arena whose per-node table lives in the session's native arena (Task D2). */
-  private static final class SvmTextArena extends JsonTextArena {
-    org.graalvm.word.Pointer table = WordFactory.nullPointer();
-
-    SvmTextArena(byte[] array) {
-      super(array);
-    }
-
-    @Override
-    long entry(long node) {
-      return table.readLong(WordFactory.signed(node * 8));
-    }
-  }
-
-  private JsonBorrow lend(@Nullable SvmTextArena shared) {
-    JsonBorrow lent = JsonSvm.borrow(WordFactory.pointer(result));
+  private JsonBorrow lend(Backend open, @Nullable JsonTextArena shared) {
+    JsonBorrow lent = open.borrow();
     // One text cursor (and export stack) per session, rebound to each borrow.
     JsonText cursor = text;
     if (cursor == null) text = cursor = new JsonText(lent);
@@ -166,14 +153,23 @@ public final class JsonSession implements AutoCloseable {
     return lent;
   }
 
-  private void giveBack(JsonBorrow lent) {
+  private void giveBack(Backend open, JsonBorrow lent) {
     borrow = null;
     JsonText cursor = text;
     if (cursor != null) cursor.arena(null);
     try {
       lent.end();
     } finally {
-      Json.session_reset(handle());
+      open.reset();
+    }
+  }
+
+  private void export(Backend open, @Nullable JsonTextArena shared, JsonSink sink) {
+    JsonBorrow lent = lend(open, shared);
+    try {
+      lent.export(sink);
+    } finally {
+      giveBack(open, lent);
     }
   }
 
@@ -185,8 +181,9 @@ public final class JsonSession implements AutoCloseable {
 
   /**
    * Decodes {@code length} bytes at {@code offset} and exports them through {@code sink}. When the
-   * sink asks for {@linkplain JsonSink#sharedText() shared text}, the decode also writes every
-   * string once into a per-document array that the sink's {@code TruffleString}s share.
+   * sink asks for {@linkplain JsonSink#sharedText() shared text} in a static image, the decode also
+   * writes every string once into a per-document array that the sink's {@code TruffleString}s
+   * share; on the JVM strings are copied.
    */
   @TruffleBoundary
   public void parse(byte[] utf8, int offset, int length, JsonSink sink) {
@@ -198,52 +195,63 @@ public final class JsonSession implements AutoCloseable {
 
   /**
    * Decodes a guest string and exports it through {@code sink}; nothing outlives the call. The
-   * string's own storage is passed without a Java copy: ASCII text as UTF-8, Latin-1 text as
-   * Latin-1 and other UTF-16 text as UTF-16, transcoded natively (Task D3); an unpaired surrogate
-   * is rejected like any other invalid JSON. Strings in other encodings are first transcoded to
-   * UTF-8 by {@code TruffleString}; invalid UTF-8 is rejected.
+   * string's own storage is passed without a Java copy (on the JVM, into the session's native
+   * staging buffer): ASCII text as UTF-8, Latin-1 text as Latin-1 and other UTF-16 text as UTF-16,
+   * transcoded natively (Task D3); an unpaired surrogate is rejected like any other invalid JSON.
+   * Strings in other encodings are first transcoded to UTF-8 by {@code TruffleString}; invalid
+   * UTF-8 is rejected.
    */
   @TruffleBoundary
   public void parse(TruffleString text, JsonSink sink) {
     Objects.requireNonNull(sink);
     TruffleString.Encoding stored;
-    int flags;
+    int input;
     if (text.isCompatibleToUncached(TruffleString.Encoding.UTF_16)) {
       TruffleString.CodeRange range = text.getCodeRangeUncached(TruffleString.Encoding.UTF_16);
       if (range == TruffleString.CodeRange.ASCII) {
         stored = TruffleString.Encoding.UTF_8;
-        flags = 0;
+        input = 0;
       } else if (range == TruffleString.CodeRange.LATIN_1) {
         stored = TruffleString.Encoding.ISO_8859_1;
-        flags = LATIN1_INPUT;
+        input = LATIN1_INPUT;
       } else {
         stored = TruffleString.Encoding.UTF_16;
-        flags = UTF16_INPUT;
+        input = UTF16_INPUT;
       }
     } else {
       stored = TruffleString.Encoding.UTF_8;
-      flags = 0;
+      input = 0;
     }
     // ASCII and Latin-1 UTF-16 strings are stored compactly, so switching to their byte encoding
     // shares the string's array; UTF-16 strings above Latin-1 are stored as UTF-16 already.
     TruffleString view = text.switchEncodingUncached(stored);
-    if (flags == 0 && !view.isValidUncached(TruffleString.Encoding.UTF_8))
+    if (input == 0 && !view.isValidUncached(TruffleString.Encoding.UTF_8))
       throw new IllegalArgumentException("Invalid UTF-8 JSON input");
     InternalByteArray bytes = view.getInternalByteArrayUncached(stored);
-    parse(bytes.getArray(), bytes.getOffset(), bytes.getLength(), flags, sink);
+    parse(bytes.getArray(), bytes.getOffset(), bytes.getLength(), input, sink);
   }
 
   private void parse(byte[] data, int offset, int length, int input, JsonSink sink) {
     Objects.requireNonNull(sink);
     Objects.checkFromIndexSize(offset, length, data.length);
-    SvmTextArena shared = sink.sharedText() ? textArena(length) : null;
-    decodeInto(data, offset, length, input, shared);
-    JsonBorrow lent = lend(shared);
-    try {
-      lent.export(sink);
-    } finally {
-      giveBack(lent);
-    }
+    JsonTextArena shared = sink.sharedText() ? textArena(length) : null;
+    export(decodeInto(data, offset, length, input, shared), shared, sink);
+  }
+
+  /**
+   * JVM: decodes {@code length} bytes of a live native segment the calling thread can access
+   * (copied into the session; nothing is retained) and exports them through {@code sink}. Heap
+   * segments are rejected; static images take byte arrays only.
+   */
+  @TruffleBoundary
+  public void parse(MemorySegment data, long length, JsonSink sink) {
+    Objects.requireNonNull(sink);
+    Backend open = check();
+    if (length <= 0) throw new IllegalArgumentException("Empty JSON input");
+    if (length > data.byteSize()) throw new IllegalArgumentException("JSON length exceeds the segment");
+    if (length > limits.maxInputBytes()) throw new IllegalArgumentException("JSON input limit");
+    open.decode(data, length);
+    export(open, null, sink);
   }
 
   /**
@@ -253,12 +261,12 @@ public final class JsonSession implements AutoCloseable {
   @TruffleBoundary
   public <R> R with(byte[] utf8, Function<JsonValue, R> reader) {
     Objects.requireNonNull(reader);
-    decodeInto(utf8, 0, utf8.length);
-    JsonBorrow lent = lend(null);
+    Backend open = decodeInto(utf8, 0, utf8.length, 0, null);
+    JsonBorrow lent = lend(open, null);
     try {
       return reader.apply(lent.root());
     } finally {
-      giveBack(lent);
+      giveBack(open, lent);
     }
   }
 
@@ -271,26 +279,19 @@ public final class JsonSession implements AutoCloseable {
   /** Decodes {@code length} bytes at {@code offset} into an independently owned message. */
   @TruffleBoundary
   public JsonMessage decode(byte[] utf8, int offset, int length) {
-    decodeInto(utf8, offset, length);
-    VoidPointer owned = UnmanagedMemory.calloc(Json.JsonResult.SIZE);
-    if (owned.isNull()) {
-      Json.session_reset(handle());
-      throw new OutOfMemoryError("JSON result allocation");
-    }
-    int status = Json.session_retain(handle(), owned);
-    if (status != 0) {
-      UnmanagedMemory.free(owned);
-      Json.session_reset(handle());
-      JsonSvm.checkStatus(status);
-    }
-    return JsonSvm.adoptResult(owned);
+    return decodeInto(utf8, offset, length, 0, null).retain();
   }
 
   /** Validates {@code utf8} under the session's limits and retains nothing. */
   @TruffleBoundary
   public void validate(byte[] utf8) {
-    decodeInto(utf8, 0, utf8.length);
-    Json.session_reset(handle());
+    decodeInto(utf8, 0, utf8.length, 0, null).reset();
+  }
+
+  /** Diagnostic: decodes that took the JVM's bounded critical path (Task E2); 0 on SVM. */
+  @TruffleBoundary
+  public long criticalDecodes() {
+    return check().criticalDecodes();
   }
 
   /** Frees the session. Messages it decoded stay valid. Closing during a borrow throws. */
@@ -300,10 +301,124 @@ public final class JsonSession implements AutoCloseable {
     if (Thread.currentThread() != thread)
       throw new IllegalStateException("JSON session thread mismatch");
     if (borrow != null) throw new IllegalStateException("JSON session is borrowed");
-    if (session != 0) {
-      Json.session_release(handle());
-      session = 0;
-      UnmanagedMemory.free(WordFactory.pointer(result));
+    Backend open = backend;
+    if (open != null) {
+      backend = null;
+      open.release();
+    }
+  }
+
+  /** Static-image backend: generated @CFunction bindings, pinned arrays, one unmanaged result. */
+  private static final class SvmBackend extends Backend {
+    // TD_JSON_WANT_TEXT.
+    private static final int TEXT = 1;
+    private final VoidPointer session;
+    // Reusable JsonResult for borrowed decodes.
+    private final VoidPointer result;
+
+    private SvmBackend(VoidPointer session, VoidPointer result) {
+      this.session = session;
+      this.result = result;
+    }
+
+    static SvmBackend create(JsonLimits limits) {
+      VoidPointer struct = UnmanagedMemory.calloc(Json.JsonLimitsStruct.SIZE);
+      if (struct.isNull()) throw new OutOfMemoryError("JSON session limits allocation");
+      VoidPointer result = WordFactory.nullPointer();
+      try {
+        result = UnmanagedMemory.calloc(Json.JsonResult.SIZE);
+        if (result.isNull()) throw new OutOfMemoryError("JSON session result allocation");
+        Json.JsonLimitsStruct.max_input_bytes(struct, limits.maxInputBytes());
+        Json.JsonLimitsStruct.max_index_bytes(struct, limits.maxIndexBytes());
+        Json.JsonLimitsStruct.max_nodes(struct, limits.maxNodes());
+        Json.JsonLimitsStruct.max_text_bytes(struct, limits.maxTextBytes());
+        Json.JsonLimitsStruct.max_depth(struct, limits.maxDepth());
+        VoidPointer created = Json.session_create(struct);
+        if (created.isNull()) throw new OutOfMemoryError("JSON session allocation");
+        return new SvmBackend(created, result);
+      } catch (RuntimeException | Error failure) {
+        if (result.isNonNull()) UnmanagedMemory.free(result);
+        throw failure;
+      } finally {
+        UnmanagedMemory.free(struct);
+      }
+    }
+
+    @Override
+    void decode(byte[] data, int offset, int length, int input, @Nullable JsonTextArena shared) {
+      SvmTextArena text = (SvmTextArena) shared;
+      byte[] textArray = text == null ? null : text.array;
+      int status;
+      try (PinnedObject pinned = PinnedObject.create(data);
+          PinnedObject out = textArray == null ? null : PinnedObject.create(textArray)) {
+        status =
+            Json.session_decode(
+                session,
+                pinned.addressOfArrayElement(offset),
+                length,
+                input | (textArray == null ? 0 : TEXT),
+                out == null ? WordFactory.<CCharPointer>nullPointer() : out.addressOfArrayElement(0),
+                textArray == null ? 0 : textArray.length,
+                result);
+      }
+      JsonSvm.checkStatus(status);
+      if (text != null) text.table = (Pointer) Json.JsonResult.text_table(result);
+    }
+
+    @Override
+    void decode(MemorySegment data, long length) {
+      throw new UnsupportedOperationException("Static-image sessions decode byte arrays");
+    }
+
+    @Override
+    JsonTextArena textArena(byte[] array) {
+      return new SvmTextArena(array);
+    }
+
+    @Override
+    JsonBorrow borrow() {
+      return JsonSvm.borrow(result);
+    }
+
+    @Override
+    JsonMessage retain() {
+      VoidPointer owned = UnmanagedMemory.calloc(Json.JsonResult.SIZE);
+      if (owned.isNull()) {
+        Json.session_reset(session);
+        throw new OutOfMemoryError("JSON result allocation");
+      }
+      int status = Json.session_retain(session, owned);
+      if (status != 0) {
+        UnmanagedMemory.free(owned);
+        Json.session_reset(session);
+        JsonSvm.checkStatus(status);
+      }
+      return JsonSvm.adoptResult(owned);
+    }
+
+    @Override
+    void reset() {
+      Json.session_reset(session);
+    }
+
+    @Override
+    void release() {
+      Json.session_release(session);
+      UnmanagedMemory.free(result);
+    }
+  }
+
+  /** Text arena whose per-node table lives in the session's native arena (Task D2). */
+  private static final class SvmTextArena extends JsonTextArena {
+    Pointer table = WordFactory.nullPointer();
+
+    SvmTextArena(byte[] array) {
+      super(array);
+    }
+
+    @Override
+    long entry(long node) {
+      return table.readLong(WordFactory.signed(node * 8));
     }
   }
 }

@@ -22,6 +22,7 @@ import dev.elide.truffledata.json.JsonJvm;
 import dev.elide.truffledata.json.JsonMessage;
 import dev.elide.truffledata.json.JsonPlan;
 import dev.elide.truffledata.json.JsonRecord;
+import dev.elide.truffledata.json.JsonSession;
 import dev.elide.truffledata.json.JsonValue;
 import dev.elide.truffledata.json.generated.JsonFFM;
 import java.lang.foreign.Arena;
@@ -827,5 +828,197 @@ final class JvmScopedTest {
         assertEquals(6, new JsonAccess(root, Map.of("T", wide), 0, 1).longValue(other));
       }
     }
+  }
+
+  // ---- JVM sessions (performance plan Task E1): mirrors SvmAcceptance.sessions() ----
+
+  private static Map<?, ?> tree(dev.elide.truffledata.json.JavaSink sink) {
+    return (Map<?, ?>) java.util.Objects.requireNonNull(sink.result());
+  }
+
+  @Test
+  void jvmSessionsBorrowRetainAndRejectMisuse() throws Exception {
+    byte[] first = utf8("{\"id\":1,\"note\":\"retained text longer than inline storage\",\"a\":[1,2]}");
+    byte[] second = utf8("{\"id\":2,\"note\":\"second\"}");
+    JsonMessage kept;
+    JsonSession session = JsonJvm.openSession(library(), dev.elide.truffledata.json.JsonLimits.DEFAULT);
+    try {
+      // borrow_invalidated_by_next_parse: a captured view throws once the borrow ends and after
+      // the next parse; the session itself stays usable.
+      var escaped = new JsonValue[1];
+      long id =
+          session.with(
+              first,
+              root -> {
+                escaped[0] = root.member("note");
+                assertEquals("1", root.member("id").numberText());
+                assertEquals("\"retained text longer than inline storage\"", escaped[0].rawText());
+                return root.member("id").longValue();
+              });
+      assertEquals(1, id);
+      assertThrows(IllegalStateException.class, () -> escaped[0].stringValue());
+      var sink = new dev.elide.truffledata.json.JavaSink();
+      session.parse(second, sink);
+      assertEquals(2L, tree(sink).get("id"));
+      assertThrows(IllegalStateException.class, () -> escaped[0].stringValue());
+      byte[] framed = utf8("xx{\"id\":3}yy");
+      var slice = new dev.elide.truffledata.json.JavaSink();
+      session.parse(framed, 2, framed.length - 4, slice);
+      assertEquals(3L, tree(slice).get("id"));
+      // Retained decodes outlive later decodes and the session.
+      kept = session.decode(first);
+      session.parse(second, new dev.elide.truffledata.json.JavaSink());
+      assertEquals("retained text longer than inline storage", kept.root().member("note").stringValue());
+      try (JsonMessage sliced = session.decode(framed, 2, framed.length - 4)) {
+        assertEquals(3L, sliced.root().member("id").longValue());
+      }
+      // Re-entering the session from a sink event or a reader is rejected; the session survives.
+      assertThrows(
+          IllegalStateException.class,
+          () ->
+              session.parse(
+                  first,
+                  new dev.elide.truffledata.json.JsonSink() {
+                    public void beginObject(long members) {
+                      session.parse(second, new dev.elide.truffledata.json.JavaSink());
+                    }
+
+                    public void beginArray(long elements) {}
+
+                    public void key(dev.elide.truffledata.json.JsonText name) {}
+
+                    public void end() {}
+
+                    public void nullValue() {}
+
+                    public void booleanValue(boolean value) {}
+
+                    public void longValue(long value) {}
+
+                    public void doubleValue(double value) {}
+
+                    public void unsignedValue(long bits) {}
+
+                    public void decimalValue(dev.elide.truffledata.json.JsonText token) {}
+
+                    public void stringValue(dev.elide.truffledata.json.JsonText text) {}
+                  }));
+      assertThrows(IllegalStateException.class, () -> session.with(first, root -> session.decode(second)));
+      assertThrows(
+          IllegalStateException.class,
+          () ->
+              session.with(
+                  first,
+                  root -> {
+                    session.close();
+                    return Boolean.TRUE;
+                  }));
+      // Shared-text sinks work on the JVM too; their strings are copied (no text arena).
+      var truffle = new dev.elide.truffledata.json.TruffleSink(new dev.elide.truffledata.json.TruffleSink.KeyCache());
+      session.parse(first, truffle);
+      assertEquals(
+          com.oracle.truffle.api.strings.TruffleString.fromJavaStringUncached(
+              "retained text longer than inline storage", com.oracle.truffle.api.strings.TruffleString.Encoding.UTF_16),
+          ((Map<?, ?>) java.util.Objects.requireNonNull(truffle.result()))
+              .get(
+                  com.oracle.truffle.api.strings.TruffleString.fromJavaStringUncached(
+                      "note", com.oracle.truffle.api.strings.TruffleString.Encoding.UTF_16)));
+      // Invalid input publishes nothing and leaves the session reusable.
+      for (String bad : new String[] {"[1,]", "{\"a\":1,\"a\":2}", "[\"\\q\"]", "01"}) {
+        assertThrows(IllegalArgumentException.class, () -> session.parse(utf8(bad), new dev.elide.truffledata.json.JavaSink()));
+        assertThrows(IllegalArgumentException.class, () -> session.decode(utf8(bad)));
+      }
+      assertThrows(IllegalArgumentException.class, () -> session.validate(new byte[0]));
+      session.validate(first);
+      // Guest strings (Task D3): ASCII, Latin-1 and UTF-16 storage, and UTF-8 TruffleStrings.
+      for (String source :
+          new String[] {"{\"id\":1}", "{\"café\":\"ÿ\"}", "{\"clé\":\"中 😀\"}"}) {
+        Object expected;
+        var fromBytes = new dev.elide.truffledata.json.JavaSink();
+        session.parse(utf8(source), fromBytes);
+        expected = tree(fromBytes);
+        for (var encoding :
+            new com.oracle.truffle.api.strings.TruffleString.Encoding[] {
+              com.oracle.truffle.api.strings.TruffleString.Encoding.UTF_16,
+              com.oracle.truffle.api.strings.TruffleString.Encoding.UTF_8
+            }) {
+          var guest = new dev.elide.truffledata.json.JavaSink();
+          session.parse(com.oracle.truffle.api.strings.TruffleString.fromJavaStringUncached(source, encoding), guest);
+          assertEquals(expected, tree(guest));
+        }
+      }
+      assertThrows(
+          IllegalArgumentException.class,
+          () ->
+              session.parse(
+                  com.oracle.truffle.api.strings.TruffleString.fromJavaStringUncached(
+                      "[\"\ud800\"]", com.oracle.truffle.api.strings.TruffleString.Encoding.UTF_16),
+                  new dev.elide.truffledata.json.JavaSink()));
+      assertThrows(
+          IllegalArgumentException.class,
+          () ->
+              session.parse(
+                  com.oracle.truffle.api.strings.TruffleString.fromByteArrayUncached(
+                      new byte[] {'[', '"', (byte) 0xff, '"', ']'},
+                      com.oracle.truffle.api.strings.TruffleString.Encoding.UTF_8,
+                      false),
+                  new dev.elide.truffledata.json.JavaSink()));
+      // Native segments: borrowed for the call and copied natively; heap, closed and other
+      // threads' segments are rejected before entry.
+      try (Arena arena = Arena.ofConfined()) {
+        MemorySegment native_ = arena.allocate(first.length + 8);
+        MemorySegment.copy(first, 0, native_, ValueLayout.JAVA_BYTE, 0, first.length);
+        var fromSegment = new dev.elide.truffledata.json.JavaSink();
+        session.parse(native_, first.length, fromSegment);
+        assertEquals(1L, tree(fromSegment).get("id"));
+        assertThrows(
+            IllegalArgumentException.class,
+            () -> session.parse(MemorySegment.ofArray(first), first.length, new dev.elide.truffledata.json.JavaSink()));
+        assertThrows(
+            IllegalArgumentException.class,
+            () -> session.parse(native_, native_.byteSize() + 1, new dev.elide.truffledata.json.JavaSink()));
+        assertThrows(
+            IllegalArgumentException.class, () -> session.parse(native_, 0, new dev.elide.truffledata.json.JavaSink()));
+      }
+      MemorySegment closed;
+      try (Arena arena = Arena.ofConfined()) {
+        closed = arena.allocate(8);
+      }
+      assertThrows(IllegalStateException.class, () -> session.parse(closed, 2, new dev.elide.truffledata.json.JavaSink()));
+      var other = new MemorySegment[1];
+      Thread allocator = new Thread(() -> other[0] = Arena.ofConfined().allocate(8));
+      allocator.start();
+      allocator.join();
+      assertThrows(IllegalStateException.class, () -> session.parse(other[0], 2, new dev.elide.truffledata.json.JavaSink()));
+      // Sessions are confined to their opening thread.
+      var failure = new Throwable[1];
+      Thread intruder =
+          new Thread(
+              () -> {
+                try {
+                  session.parse(first, new dev.elide.truffledata.json.JavaSink());
+                } catch (Throwable expected) {
+                  failure[0] = expected;
+                }
+              });
+      intruder.start();
+      intruder.join();
+      assertInstanceOf(IllegalStateException.class, failure[0]);
+      assertEquals(0, session.criticalDecodes());
+    } finally {
+      session.close();
+    }
+    session.close();
+    assertThrows(IllegalStateException.class, () -> session.parse(first, new dev.elide.truffledata.json.JavaSink()));
+    assertThrows(IllegalStateException.class, () -> session.criticalDecodes());
+    // Limits apply per document.
+    try (JsonSession limited =
+        JsonJvm.openSession(library(), new dev.elide.truffledata.json.JsonLimits(8, 1 << 20, 1000, 1 << 20, 128))) {
+      limited.validate(utf8("[1,2]"));
+      assertThrows(IllegalArgumentException.class, () -> limited.validate(utf8("[1,2,3,4]")));
+    }
+    assertEquals("retained text longer than inline storage", kept.root().member("note").stringValue());
+    kept.close();
+    assertThrows(IllegalStateException.class, () -> kept.root());
   }
 }

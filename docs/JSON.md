@@ -71,15 +71,17 @@ confined to the thread that opened it. Closing it never invalidates returned
 messages or typed records: the library stays loaded until the last message, typed
 plan and typed record close.
 
-## Sessions (SVM)
+## Sessions
 
 A `JsonSession` is an explicit, thread-confined decode context: one native
 simdjson parser, a padded input buffer and a block arena reused across documents,
 so a small document makes no native allocation in steady state. Nothing opens a
 session implicitly: `JsonSvm.decode` keeps decoding each call independently (no
 hidden per-thread state); embedders that decode repeatedly open a session per
-thread and close it when done. JVM sessions are not available yet
-(`JsonSession.open()` throws `UnsupportedOperationException` outside an image).
+thread and close it when done. In a static image open one with `JsonSession.open()`;
+on the JVM with `JsonJvm.openSession(libraryPath, limits)` (`JsonSession.open()` throws
+`UnsupportedOperationException` outside an image). Both run the same native session; see
+"JVM sessions" below for the differences.
 
 ```java
 try (JsonSession session = JsonSession.open()) {            // or open(JsonLimits)
@@ -118,6 +120,20 @@ try (JsonSession session = JsonSession.open()) {            // or open(JsonLimit
 - While a borrow is in progress (inside a sink event or a reader), every other call
   on the session, including `close()`, throws `IllegalStateException`.
 - Limits apply per document. Parsing semantics are identical to `JsonSvm.decode`.
+
+### JVM sessions
+
+`JsonJvm.openSession(Path library, JsonLimits limits)` opens the same native session
+through Myna's generated FFM `LibraryBinding`; the library stays loaded until the
+session and every message it retained are closed. Differences from static images:
+
+- Normal FFM downcalls take native memory only, so array input (and a guest string's
+  storage) is first copied into a reusable session-owned native staging buffer.
+- `parse(MemorySegment data, long length, JsonSink)` borrows a live native segment the
+  calling thread can access for the call (copied natively; nothing retained). Heap,
+  closed and other threads' segments are rejected before entry.
+- No text arenas: a Java array cannot be the target of a normal downcall, so a
+  `sharedText()` sink receives strings copied once each.
 
 ## Limits
 

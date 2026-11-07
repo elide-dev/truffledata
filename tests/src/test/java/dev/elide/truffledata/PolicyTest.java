@@ -50,7 +50,7 @@ class PolicyTest {
             Map.entry("JavaSink.java", 9), // Embedder tree building and key interning, outside the tape walk.
             Map.entry("JsonAccess.java", 2),
             Map.entry("JsonArray.java", 1),
-            Map.entry("JsonJvm.java", 5), // FFM downcalls and arena management.
+            Map.entry("JsonJvm.java", 6), // FFM downcalls, arena management and openSession.
             Map.entry("JsonMessage.java", 2),
             Map.entry("JsonOwner.java", 10), // Close, pinning, array index, member directories, export cursors.
             Map.entry("JsonPlan.java", 4), // Plan compilation and decode entry points.
@@ -60,7 +60,7 @@ class PolicyTest {
             Map.entry("JsonValue.java", 26), // Static (owner, node) slow paths per interop message and hint misses.
             Map.entry("JvmTypedOwner.java", 3),
             Map.entry("SvmTypedOwner.java", 1),
-            Map.entry("JsonSession.java", 10), // Session entry points (open, parse ×3, with, decode, validate, close).
+            Map.entry("JsonSession.java", 12), // Session entry points (open, parse ×4, with, decode, validate, close, criticalDecodes).
             Map.entry("JsonBorrow.java", 1), // Borrowed-result assumption.
             Map.entry("JsonKey.java", 1), // Key preparation (UTF-8 encode and hash).
             Map.entry("JsonText.java", 4), // Sink-side materialization: String, TruffleString, copy, compare.
