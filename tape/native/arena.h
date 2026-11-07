@@ -1,5 +1,5 @@
-#ifndef TRUFFLEDATA_JSON_ARENA_H
-#define TRUFFLEDATA_JSON_ARENA_H
+#ifndef TRUFFLEDATA_TAPE_ARENA_H
+#define TRUFFLEDATA_TAPE_ARENA_H
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -8,7 +8,7 @@
 #include <new>
 #include <utility>
 
-namespace truffledata::json {
+namespace truffledata::tape {
 
 // Bump allocator over a reusable list of blocks. Small allocations bump within the current block;
 // allocations above `large_threshold` go straight to the upstream resource (and are freed there
@@ -135,7 +135,7 @@ public:
   // `first_block` sizes the first upstream block (clamped to [min_block, max_block]).
   explicit block_arena(std::pmr::memory_resource* upstream, size_t first_block = min_block)
       : upstream_(upstream), next_size_(clamp(first_block)) {
-    if (!upstream) throw std::invalid_argument("null JSON arena upstream");
+    if (!upstream) throw std::invalid_argument("null tape arena upstream");
   }
   block_arena(const block_arena&) = delete;
   block_arena& operator=(const block_arena&) = delete;
@@ -278,6 +278,30 @@ public:
   T& operator[](size_t i) { return data_[i]; }
   const T& operator[](size_t i) const { return data_[i]; }
   T& back() { return data_[size_ - 1]; }
+  // Drops trailing elements (storage is kept).
+  void truncate(size_t size) { if (size < size_) size_ = size; }
 };
+
+// Read-only view of a side table published with a document.
+template<class T> class table_view {
+  const T* data_;
+  size_t size_;
+public:
+  table_view(const T* data, size_t size) : data_(data), size_(size) {}
+  const T* data() const { return data_; }
+  size_t size() const { return size_; }
+  const T& operator[](size_t index) const { return data_[index]; }
+  const T& at(size_t index) const {
+    if (index >= size_) throw std::out_of_range("tape side-table index");
+    return data_[index];
+  }
+};
+} // namespace truffledata::tape
+
+// JSON's names for the shared types until the Java/C++ rename (YAML plan Task 4) settles them.
+namespace truffledata::json {
+using tape::arena_vec;
+using tape::block_arena;
+using tape::table_view;
 } // namespace truffledata::json
 #endif

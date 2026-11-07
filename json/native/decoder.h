@@ -1,9 +1,10 @@
 #ifndef TRUFFLEDATA_JSON_DECODER_H
 #define TRUFFLEDATA_JSON_DECODER_H
-#include "json/native/arena.h"
-#include "json/native/index_memory.h"
 #include "json/native/parser_pool.h"
-#include "json/native/tape_writer.h"
+#include "tape/native/arena.h"
+#include "tape/native/index_memory.h"
+#include "tape/native/key_table.h"
+#include "tape/native/tape_writer.h"
 #include <myna/values.hpp>
 #include <simdjson.h>
 #include <cmath>
@@ -39,29 +40,6 @@ inline bool number(std::string_view s) {
   return i == s.size();
 }
 
-// Side-table entry per node. Bit 31 marks string and key nodes whose decoded bytes are all ASCII.
-// Key nodes also carry bits 16-30: the low 15 bits of the key hash, and bits 0-15: the key's offset
-// from its object node (1..65535; 0 when farther). Other nodes carry 0 there, so a nonzero low half
-// identifies a direct member key of the object at exactly that offset: Java readers validate a
-// position hint with one compare. key_hash is 32-bit FNV-1a over the decoded key bytes, masked to
-// 31 bits (the duplicate table uses all of it); Java's JsonKey computes the same function.
-inline constexpr uint32_t hash_mask = 0x7fffffffu;
-inline constexpr uint32_t ascii_flag = 0x80000000u;
-inline constexpr uint32_t key_offset_mask = 0xffffu;
-inline uint32_t key_meta(uint32_t hash, uint64_t offset, bool plain) {
-  return (plain ? ascii_flag : 0) | ((hash & 0x7fffu) << 16)
-      | (offset <= key_offset_mask ? uint32_t(offset) : 0);
-}
-inline uint32_t key_hash(std::string_view s) {
-  uint32_t h = 2166136261u;
-  for (unsigned char c : s) { h ^= c; h *= 16777619u; }
-  return h & hash_mask;
-}
-inline bool ascii(std::string_view s) {
-  unsigned char any = 0;
-  for (unsigned char c : s) any |= c;
-  return any < 0x80;
-}
 // A string body is "clean" when it has no backslash and no raw byte below 0x20: it is then
 // referenced without get_string(). Stage 1 validated UTF-8 for the whole buffer before any body is
 // referenced, and stage 1 also rejects raw control bytes; bodies failing this scan still go through
@@ -75,79 +53,6 @@ inline body_scan scan(std::string_view body) {
   }
   return {true, any < 0x80};
 }
-
-// Per-object duplicate-key table: a linear (hash, length, bytes) compare for up to 16 keys on the
-// stack, then open addressing in counted index memory. Keys are compared after escape decoding.
-class key_table final {
-  struct entry { uint32_t hash; uint32_t length; const char* data; };
-  static constexpr size_t inline_keys = 16;
-  entry small_[inline_keys];
-  size_t count_ = 0;
-  entry* table_ = nullptr;
-  size_t capacity_ = 0, used_ = 0;
-  std::pmr::memory_resource* memory_;
-  static bool same(const entry& e, uint32_t hash, std::string_view key) {
-    return e.hash == hash && e.length == key.size()
-        && (key.empty() || std::memcmp(e.data, key.data(), key.size()) == 0);
-  }
-  // Empty slots have a null data pointer; empty keys carry a static non-null pointer.
-  static void put(entry* table, size_t mask, const entry& e) {
-    for (size_t i = e.hash & mask;; i = (i + 1) & mask)
-      if (!table[i].data) { table[i] = e; return; }
-  }
-  void grow() {
-    size_t capacity = capacity_ ? capacity_ * 2 : 64;
-    auto* table = static_cast<entry*>(memory_->allocate(capacity * sizeof(entry), alignof(entry)));
-    for (size_t i = 0; i < capacity; ++i) table[i] = {0, 0, nullptr};
-    if (table_) {
-      for (size_t i = 0; i < capacity_; ++i) if (table_[i].data) put(table, capacity - 1, table_[i]);
-      memory_->deallocate(table_, capacity_ * sizeof(entry), alignof(entry));
-    } else {
-      for (size_t i = 0; i < count_; ++i) put(table, capacity - 1, small_[i]);
-    }
-    table_ = table;
-    capacity_ = capacity;
-  }
-public:
-  explicit key_table(std::pmr::memory_resource* memory) : memory_(memory) {}
-  key_table(const key_table&) = delete;
-  key_table& operator=(const key_table&) = delete;
-  ~key_table() { if (table_) memory_->deallocate(table_, capacity_ * sizeof(entry), alignof(entry)); }
-  // False when an equal decoded key is already present.
-  bool insert(uint32_t hash, std::string_view key) {
-    static const char empty = 0;
-    entry e{hash, static_cast<uint32_t>(key.size()), key.empty() ? &empty : key.data()};
-    if (!table_) {
-      for (size_t i = 0; i < count_; ++i) if (same(small_[i], hash, key)) return false;
-      if (count_ < inline_keys) { small_[count_++] = e; return true; }
-      grow();
-      used_ = count_;
-    }
-    size_t mask = capacity_ - 1;
-    for (size_t i = hash & mask; table_[i].data; i = (i + 1) & mask)
-      if (same(table_[i], hash, key)) return false;
-    if ((used_ + 1) * 2 > capacity_) { grow(); mask = capacity_ - 1; }
-    put(table_, mask, e);
-    ++used_;
-    return true;
-  }
-};
-
-
-// Read-only view of a side table published with a document.
-template<class T> class table_view {
-  const T* data_;
-  size_t size_;
-public:
-  table_view(const T* data, size_t size) : data_(data), size_(size) {}
-  const T* data() const { return data_; }
-  size_t size() const { return size_; }
-  const T& operator[](size_t index) const { return data_[index]; }
-  const T& at(size_t index) const {
-    if (index >= size_) throw std::out_of_range("JSON side-table index");
-    return data_[index];
-  }
-};
 
 // Storage presizing from the input length. Typical JSON has one node per 5-8 input bytes; the
 // worst case (`[1,1,...]`) has one per 2, which grows the arrays once or twice. Hints never exceed

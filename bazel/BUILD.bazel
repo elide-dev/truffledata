@@ -87,12 +87,15 @@ sh_test(
         "$(rootpath //json:libbindings.jar)",
         "$(rootpath //protobuf-buffa/native:descriptor)",
         "$(rootpath //protobuf-buffa:libbindings.jar)",
+        "$(rootpath //yaml/native:descriptor)",
+        "-",
     ],
     data = [
         "//json:libbindings.jar",
         "//json/native:descriptor",
         "//protobuf-buffa:libbindings.jar",
         "//protobuf-buffa/native:descriptor",
+        "//yaml/native:descriptor",
     ],
 )
 

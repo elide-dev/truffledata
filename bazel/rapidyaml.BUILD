@@ -66,3 +66,17 @@ cc_library(
     includes = _INCLUDES,
     visibility = ["//visibility:public"],
 )
+
+# Test and benchmark only: rapidyaml's integer event handler (src_extra). It is the YAML probe's
+# reference for tape parity (//yaml/native:decoder_test) and the `ryml-ints(scan)` benchmark row
+# (//yaml/native:bench). Never a production dependency.
+cc_library(
+    name = "ryml_ints",
+    testonly = True,
+    srcs = ["src_extra/c4/yml/extra/event_handler_ints.cpp"],
+    hdrs = glob(["src_extra/c4/yml/extra/*.hpp"]),
+    copts = _COPTS,
+    includes = ["src_extra"],
+    visibility = ["//visibility:public"],
+    deps = [":ryml"],
+)

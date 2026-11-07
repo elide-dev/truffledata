@@ -3,17 +3,15 @@ load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_library", "cc_test")
 cc_library(
     name = "decoder",
     hdrs = [
-        "arena.h",
         "decoder.h",
-        "index_memory.h",
         "parser_pool.h",
         "session.h",
-        "tape_writer.h",
         "text_arena.h",
     ],
     copts = ["-std=c++17"],
     deps = [
         "//bazel:unicode",
+        "//tape/native:tape",
         "@myna//:values_headers",
         "@simdjson",
     ],

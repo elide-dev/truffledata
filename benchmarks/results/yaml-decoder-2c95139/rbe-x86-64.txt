@@ -1,0 +1,26 @@
+variant                      fixture                   bytes        best ns       MB/s
+memcpy                       config.yaml                3788             30   124787.4
+ryml-ints(scan)              config.yaml                3788           9769      387.8
+ryml-tree                    config.yaml                3788          10913      347.1
+td-session(decode+reset)     config.yaml                3788          17397      217.7
+td-session(retain+release)   config.yaml                3788          17804      212.8
+memcpy                       records-block.yaml       242028           1880   128717.4
+ryml-ints(scan)              records-block.yaml       242028         814775      297.0
+ryml-tree                    records-block.yaml       242028         995044      243.2
+td-session(decode+reset)     records-block.yaml       242028        1472126      164.4
+td-session(retain+release)   records-block.yaml       242028        1460121      165.8
+memcpy                       records-flow.yaml        222485           1722   129220.9
+ryml-ints(scan)              records-flow.yaml        222485         615629      361.4
+ryml-tree                    records-flow.yaml        222485         764453      291.0
+td-session(decode+reset)     records-flow.yaml        222485        1236674      179.9
+td-session(retain+release)   records-flow.yaml        222485        1223926      181.8
+memcpy                       records-stream.yaml      216984           1671   129841.3
+ryml-ints(scan)              records-stream.yaml      216984         820175      264.6
+ryml-tree                    records-stream.yaml      216984        1008555      215.1
+td-session(decode+reset)     records-stream.yaml      216984              -          -  (status 7: multi-document input)
+memcpy                       text-heavy.yaml          345370           2649   130383.9
+ryml-ints(scan)              text-heavy.yaml          345370         446147      774.1
+ryml-tree                    text-heavy.yaml          345370         434968      794.0
+td-session(decode+reset)     text-heavy.yaml          345370         624076      553.4
+td-session(retain+release)   text-heavy.yaml          345370         621401      555.8
+acceptance: records-block td-session(decode+reset) / ryml-ints(scan) = 0.553 (hypothesis >= 0.8): MISSED

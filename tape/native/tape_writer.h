@@ -1,6 +1,6 @@
-#ifndef TRUFFLEDATA_JSON_TAPE_WRITER_H
-#define TRUFFLEDATA_JSON_TAPE_WRITER_H
-#include "json/native/arena.h"
+#ifndef TRUFFLEDATA_TAPE_TAPE_WRITER_H
+#define TRUFFLEDATA_TAPE_TAPE_WRITER_H
+#include "tape/native/arena.h"
 #include <myna/values.hpp>
 #include <cmath>
 #include <cstring>
@@ -11,15 +11,20 @@
 #error "tape_writer packs inline text with little-endian word stores"
 #endif
 
-namespace truffledata::json {
+namespace truffledata::tape {
 
 // Presized Myna ABI v3 tape writer: writes myna_value_node records, owned text and the region
 // table directly into arena storage. It produces the same nodes, bytes and regions as
 // myna::value_builder for the same call sequence (pinned by //json/native:test) and enforces the
 // same node, text, depth and container limits, without the builder's per-node try/catch, slot
 // bookkeeping or geometric growth from an empty vector. The caller keeps object keys and values
-// paired; the JSON decoder does so by construction. Until Myna exposes a reserving builder
-// (elide-dev/myna#46, request M2) this writer is the JSON-side substitute.
+// paired; the JSON and YAML decoders do so by construction. Until Myna exposes a reserving builder
+// (elide-dev/myna#46, request M2) this writer is the substitute for both formats.
+//
+// Non-finite F64 nodes (YAML .inf/.nan) are written only through nonfinite(): Myna ABI v3 builders
+// and ValueTape.validate() reject them, so floating() keeps refusing them, and a tape that holds
+// them reports it through has_nonfinite(). When Myna's descriptor flag lands (elide-dev/myna#52,
+// request M6), nonfinite_flag becomes that flag and view() publishes it; nothing else changes.
 class tape_writer final {
   static constexpr size_t max_regions = 4;
   std::pmr::memory_resource* memory_;
@@ -29,6 +34,7 @@ class tape_writer final {
   uint64_t region_count_ = 0;
   myna::value_limits limits_;
   uint64_t text_bytes_ = 0;
+  bool nonfinite_ = false;
 
   myna_value_node* push(uint32_t tag, uint32_t length, uint64_t payload) {
     if (nodes_.size() >= limits_.nodes) throw std::length_error("Myna node limit");
@@ -63,6 +69,9 @@ class tape_writer final {
   }
 
 public:
+  // Descriptor flag for tapes holding non-finite F64 nodes: 0 until elide-dev/myna#52 defines it.
+  static constexpr uint32_t nonfinite_flag = 0;
+
   tape_writer(std::pmr::memory_resource* memory, myna::value_limits limits)
       : memory_(memory), limits_(limits) {
     if (!memory) throw std::invalid_argument("null Myna allocator");
@@ -109,6 +118,15 @@ public:
     std::memcpy(&bits, &value, sizeof(bits));
     push(MYNA_VALUE_F64, 0, bits);
   }
+  // Raw IEEE bits of an infinity or NaN (see the class comment).
+  void nonfinite(double value) {
+    if (std::isfinite(value)) throw std::invalid_argument("finite value written as non-finite");
+    uint64_t bits;
+    std::memcpy(&bits, &value, sizeof(bits));
+    push(MYNA_VALUE_F64, 0, bits);
+    nonfinite_ = true;
+  }
+  bool has_nonfinite() const { return nonfinite_; }
   void string(std::string_view utf8) { text(MYNA_VALUE_STRING, utf8); }
   void string_ref(uint32_t region, uint32_t offset, uint32_t length) {
     reference(MYNA_VALUE_STRING, region, offset, length);
@@ -116,11 +134,52 @@ public:
   void number_ref(uint32_t region, uint32_t offset, uint32_t length) {
     reference(MYNA_VALUE_DECIMAL, region, offset, length);
   }
+  // DECIMAL text owned by the tape (inline up to 16 bytes), for normalized number spellings.
+  void decimal(std::string_view digits) { text(MYNA_VALUE_DECIMAL, digits); }
   size_t node_count() const { return nodes_.size(); }
+
+  // Direct node access for producers that rewrite closed subtrees (YAML merge keys, retroactive
+  // flow mappings, last-wins duplicate keys). Pointers are invalidated by any later write.
+  myna_value_node* nodes() { return nodes_.data(); }
+  const myna_value_node* nodes() const { return nodes_.data(); }
+  // Text of a STRING or DECIMAL node (inline, owned or region).
+  std::string_view text_of(size_t index) const {
+    const myna_value_node& node = nodes_[index];
+    if (node.tag & MYNA_VALUE_REGION_TEXT) {
+      uint32_t region = uint32_t(node.payload >> 32);
+      const uint8_t* base = region == 0 ? bytes_.data() : regions_[region - 1].data;
+      return {reinterpret_cast<const char*>(base + uint32_t(node.payload)), node.length};
+    }
+    return {reinterpret_cast<const char*>(&node.payload), node.length};
+  }
+  // Drops nodes [count, node_count()). Their owned text stays in the byte table.
+  void truncate(size_t count) { nodes_.truncate(count); }
+  // Removes the closed nodes [first, first + count): later nodes move down and every `next` beyond
+  // `first` is renumbered. Containers still open (their `next` is set by end()) must start before
+  // `first`. O(nodes after first).
+  void erase(size_t first, size_t count) {
+    size_t size = nodes_.size();
+    if (count == 0) return;
+    if (first > size || count > size - first) throw std::out_of_range("Myna erase range");
+    myna_value_node* n = nodes_.data();
+    std::memmove(n + first, n + first + count, (size - first - count) * sizeof(myna_value_node));
+    nodes_.truncate(size - count);
+    for (size_t i = first; i < size - count; ++i)
+      if (!myna_value_inline(&n[i]) && n[i].next > first) n[i].next -= count;
+  }
+  // Appends `count` closed nodes copied from `source` (which must not point into this tape),
+  // adding `shift` to every non-inline `next`. The caller keeps the copied structure well-formed.
+  void append(const myna_value_node* source, size_t count, int64_t shift) {
+    if (count > limits_.nodes - nodes_.size()) throw std::length_error("Myna node limit");
+    myna_value_node* out = nodes_.extend(memory_, count);
+    std::memcpy(out, source, count * sizeof(myna_value_node));
+    for (size_t i = 0; i < count; ++i)
+      if (!myna_value_inline(&out[i])) out[i].next = uint64_t(int64_t(out[i].next) + shift);
+  }
   myna_value_view view() const {
     if (nodes_.size() == 0) throw std::logic_error("incomplete Myna document");
-    return {MYNA_VALUE_ABI, 0, nodes_.data(), nodes_.size(), bytes_.data(), bytes_.size(),
-            regions_, region_count_};
+    return {MYNA_VALUE_ABI, nonfinite_ ? nonfinite_flag : 0, nodes_.data(), nodes_.size(),
+            bytes_.data(), bytes_.size(), regions_, region_count_};
   }
 };
 
@@ -149,5 +208,11 @@ public:
   }
   myna_value_view view() const { return builder_.view(); }
 };
+} // namespace truffledata::tape
+
+// JSON's names for the shared types until the Java/C++ rename (YAML plan Task 4) settles them.
+namespace truffledata::json {
+using tape::builder_writer;
+using tape::tape_writer;
 } // namespace truffledata::json
 #endif

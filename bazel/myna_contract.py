@@ -14,6 +14,8 @@ def verify(descriptor, archive):
         "truffledata_json": {"fingerprint", "decode", "decode_adopted", "release", "plan_create", "plan_release", "typed_decode", "typed_release",
                              "session_create", "session_decode", "session_decode_small", "session_retain", "session_reset", "session_release"},
         "truffledata_buffa": {"fingerprint", "decode", "release", "typed", "typedReuse", "scalars", "utf8_to_utf16"},
+        "truffledata_yaml": {"fingerprint", "release", "session_create", "session_decode", "session_retain",
+                             "session_reset", "session_release"},
     }[module["name"]]
     functions = module["functions"]
     assert {f["logicalName"] for f in functions} == expected
@@ -21,10 +23,17 @@ def verify(descriptor, archive):
         assert function["direction"] == "IMPORT"
         # Leaf calls need an explicit bound (json/native/api.h): the ABI query, the O(1) session
         # reset and the TD_JSON_CRITICAL_LIMIT-bounded small decode.
-        leaves = {"fingerprint", "session_reset", "session_decode_small"} if module["name"] == "truffledata_json" else {"fingerprint"}
+        leaves = {
+            "truffledata_json": {"fingerprint", "session_reset", "session_decode_small"},
+            # yaml/native/api.h: the ABI query and the O(1) session reset.
+            "truffledata_yaml": {"fingerprint", "session_reset"},
+        }.get(module["name"], {"fingerprint"})
         policy = "INLINE_LEAF" if function["logicalName"] in leaves else "TRANSITION"
         assert function["nativeCallPolicy"] == policy, function
     name = module["java"]["package"] + "." + module["java"]["class"]
+    if archive == "-":
+        # Native-only module (YAML until its Java bindings library lands, plan Task 5).
+        return name
     with zipfile.ZipFile(archive) as jar:
         resource = "META-INF/native-image/dev.elide.myna/" + name + "/native-image.properties"
         metadata = jar.read(resource).decode()
@@ -36,6 +45,7 @@ def verify(descriptor, archive):
 
 
 if __name__ == "__main__":
-    assert len(sys.argv) == 5
-    for start in (1, 3):
+    # Pairs of (descriptor, bindings jar or "-" for a descriptor-only check).
+    assert len(sys.argv) >= 3 and len(sys.argv) % 2 == 1
+    for start in range(1, len(sys.argv), 2):
         print("Verified binding ABI 2 policy and packaged metadata:", verify(*sys.argv[start:start + 2]))

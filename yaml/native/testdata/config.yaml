@@ -1,0 +1,173 @@
+# Build and deploy configuration
+name: ci
+on:
+  push:
+    branches: [main, 'release/**']
+  pull_request: {}
+env:
+  RUST_LOG: info  # verbosity
+  TIMEOUT: 30
+  RATIO: 0.75
+  ENABLED: true
+  EMPTY: ~
+jobs:
+  job-0:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    strategy:
+      matrix:
+        os: [linux, macos]
+        version: [21, 25]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build step 0
+        run: |
+          bazel build //... --config=ci
+          echo "done 0"
+      - name: Test
+        run: >-
+          bazel test //... --test_output=errors
+          --jobs=8
+        env:
+          SHARD: '0'
+          RETRIES: 3
+  job-1:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 11
+    strategy:
+      matrix:
+        os: [linux, macos]
+        version: [21, 25]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build step 1
+        run: |
+          bazel build //... --config=ci
+          echo "done 1"
+      - name: Test
+        run: >-
+          bazel test //... --test_output=errors
+          --jobs=8
+        env:
+          SHARD: '1'
+          RETRIES: 3
+  job-2:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    strategy:
+      matrix:
+        os: [linux, macos]
+        version: [21, 25]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build step 2
+        run: |
+          bazel build //... --config=ci
+          echo "done 2"
+      - name: Test
+        run: >-
+          bazel test //... --test_output=errors
+          --jobs=8
+        env:
+          SHARD: '2'
+          RETRIES: 3
+  job-3:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 13
+    strategy:
+      matrix:
+        os: [linux, macos]
+        version: [21, 25]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build step 3
+        run: |
+          bazel build //... --config=ci
+          echo "done 3"
+      - name: Test
+        run: >-
+          bazel test //... --test_output=errors
+          --jobs=8
+        env:
+          SHARD: '3'
+          RETRIES: 3
+  job-4:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 14
+    strategy:
+      matrix:
+        os: [linux, macos]
+        version: [21, 25]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build step 4
+        run: |
+          bazel build //... --config=ci
+          echo "done 4"
+      - name: Test
+        run: >-
+          bazel test //... --test_output=errors
+          --jobs=8
+        env:
+          SHARD: '4'
+          RETRIES: 3
+  job-5:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      matrix:
+        os: [linux, macos]
+        version: [21, 25]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build step 5
+        run: |
+          bazel build //... --config=ci
+          echo "done 5"
+      - name: Test
+        run: >-
+          bazel test //... --test_output=errors
+          --jobs=8
+        env:
+          SHARD: '5'
+          RETRIES: 3
+  job-6:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 16
+    strategy:
+      matrix:
+        os: [linux, macos]
+        version: [21, 25]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build step 6
+        run: |
+          bazel build //... --config=ci
+          echo "done 6"
+      - name: Test
+        run: >-
+          bazel test //... --test_output=errors
+          --jobs=8
+        env:
+          SHARD: '6'
+          RETRIES: 3
+  job-7:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 17
+    strategy:
+      matrix:
+        os: [linux, macos]
+        version: [21, 25]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build step 7
+        run: |
+          bazel build //... --config=ci
+          echo "done 7"
+      - name: Test
+        run: >-
+          bazel test //... --test_output=errors
+          --jobs=8
+        env:
+          SHARD: '7'
+          RETRIES: 3
