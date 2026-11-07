@@ -405,7 +405,7 @@ Profile-guided optimization is an application-level concern (Elide builds its ow
 | Full ingestion + consumption | 1.04× (owned) / 1.44× (view) | ≤ 0.7× | decode gain + no Strings for lengths + flyweights |
 | Full, heap input | 1.00× (owned) | ≤ 0.7× | pinned input, no copy |
 | First full access | 0.52× (owned) / 8.5× (view) | ≤ 1.2× (stretch 0.8×) | one `Object[]` + ≈ 8 flyweights (≈ 100 ns est.) |
-| Interpreter reads (full) | 4.77× (owned) | ≤ 2.5× (no PGO; Task B4) | dispatch layers 5 → 2; JVM shows 1.36× for the same code |
+| Interpreter reads (full) | 4.77× (owned) | ≤ 2.5× (Task B4) | dispatch layers 5 → 2; JVM shows 1.36× for the same code |
 | Peak reads (full) | 0.42× (owned) / 1.6–2.1× (view) | ≤ 0.5× | offset loads, no lifetime check |
 | Detach + consume | 1.01× (owned) / 6.6× (view) | ≤ 0.8× | identity snapshot |
 | Java B/row (full / sparse / decode) | 1,132 / 1,017 / 336 (view) | ≤ 700 / 450 / 560 | slab + handles + flyweights |
