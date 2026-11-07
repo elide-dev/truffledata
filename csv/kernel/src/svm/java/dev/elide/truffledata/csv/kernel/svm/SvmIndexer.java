@@ -76,8 +76,8 @@ public final class SvmIndexer extends CsvIndexer {
   /** Leaf calls up to this many bytes (the measured crossover: leaf calls win up to 1 MiB). */
   public static final int LEAF_BYTES = 1 << 20;
 
-  /** Index entries per call of {@link #provider()} indexers (the measured native capacity). */
-  public static final int PROVIDER_CAPACITY = 1 << 20;
+  /** Index entries per call of {@link #provider()} indexers (256 KiB, L2-resident; the sweep shows native rates flat from 16 KiB calls). */
+  public static final int PROVIDER_CAPACITY = 1 << 16;
 
   /**
    * The provider for {@link CsvIndexing#install}: the best kernel this CPU supports, as a leaf

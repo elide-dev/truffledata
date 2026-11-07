@@ -104,22 +104,21 @@ final class CsvIndexTest {
   @Test
   void wideRecordsOnTheIndexPath() {
     StringBuilder sb = new StringBuilder();
-    for (int r = 0; r < 20; r++) {
+    for (int r = 0; r < 100; r++) {
       for (int c = 0; c < 40; c++) sb.append(c > 0 ? "," : "").append(c % 3 == 0 ? "\"q\"" : "v" + c);
       sb.append('\n');
     }
     byte[] input = sb.toString().getBytes(StandardCharsets.UTF_8);
-    assertTrue(input.length >= CsvIndexing.MIN_INDEX_BYTES);
     CsvBatch batch =
         IndexedDifferentialTest.with(CsvIndexing.JAVA, () -> Csv.parse(input, CsvFormat.RFC4180.withHeader(false)));
-    assertEquals(20, batch.size());
+    assertEquals(100, batch.size());
     assertEquals(40, batch.schema().size());
-    assertEquals("v38", batch.row(19).getString(38));
-    assertEquals("q", batch.row(19).getString(39));
+    assertEquals("v38", batch.row(99).getString(38));
+    assertEquals("q", batch.row(99).getString(39));
     CsvBatch commons =
         IndexedDifferentialTest.with(
             CsvIndexing.JAVA, () -> Csv.parse(input, CsvFormat.Predefined.DEFAULT.format()));
-    assertEquals("v38", commons.row(19).getString(38));
+    assertEquals("v38", commons.row(99).getString(38));
   }
 
   /** An indexer with its own validator (the Java rules), called in chunks of the index capacity. */

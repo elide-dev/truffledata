@@ -1,9 +1,12 @@
 # CSV structural index kernels
 
 A simdjson stage-1 style structural indexer for CSV, in native code (`csv/native`, C++ over a
-Myna seam) and in pure Java (`csv/kernel`). Every kernel produces the same index, so a scanner
-can pick one per runtime and input size. `//csv` does not depend on any of this yet: the
-scanner seam adopts a kernel in a later step (see [Consuming the index](#consuming-the-index)).
+Myna seam) and in pure Java. Every kernel produces the same index, so a scanner can pick one per
+runtime and input size. Every `//csv` parse path frames records over this index (see
+[Consuming the index](#consuming-the-index)): the contract (`CsvIndex`, `CsvIndexer`), the block
+step and the SWAR kernel live in `//csv` (package `dev.elide.truffledata.csv.kernel`); the
+reference kernels, the Vector API kernel and the native backends live in `//csv/kernel`, each
+with a `CsvIndexing` provider.
 
 ## The index
 
@@ -84,6 +87,13 @@ calls. Results pack `count << 8 | carry`; negative results are argument errors.
 
 ## Consuming the index
 
+The shipped consumer is `IndexScan` in `//csv`, behind `CsvScanner.scan`; it serves every strict
+format and the Commons formats the index represents (one-byte delimiter, no comment marker, no
+escape other than the quote, none of the Commons trims or a trailing delimiter), and it reproduces
+the Commons lexer's framing (empty lines commit with the next record; `ignoreEmptyLines(false)`
+keeps them as one-field records; a doubled-quote field is one raw complex span). The reference
+consumer below is `IndexedScanner` in `//csv/kernel`.
+
 `IndexedScanner` is the reference consumer and has the strict scanner's contract
 (`CsvScanner.scan`): same records, same D2 spans (`offset << 32 | length << 2 | quoted << 1 |
 escaped`), same return offsets, empty lines skipped, incomplete tails left for the next buffer.
@@ -111,10 +121,15 @@ equals the strict scanner's on a randomized corpus, including malformed input.
 
 What a scanner seam over `(bytes, offsets) -> structural positions` needs from a kernel is
 therefore one method: `int index(byte[] input, int from, int length, int[] out)` plus the carry.
-Commons CSV features map onto it as follows: a custom delimiter or quote is a format byte;
-comment lines and null tokens are per-record and per-field checks on the consumer side; an escape
-character other than the quote is not representable in the quote-parity mask and keeps the
-strict per-byte scanner; memory-mapped input is the JVM `MemorySegment` path.
+Commons CSV features map onto it as follows: a custom one-byte delimiter or quote is a format
+byte; null tokens, quote modes, `trailingData` and `lenientEof` are consumer-side (the last two
+only affect `X` fields or an open quote at end of input, which go to the per-byte lexer); an
+escape equal to the quote changes nothing a `Q`-without-`X` field can hold. These keep the
+per-byte Commons lexer for the whole input: an escape other than the quote (not representable in
+the quote-parity mask), a comment marker (a quote inside a comment line would flip the mask),
+multi-byte delimiters, `ignoreSurroundingSpaces` and Commons `trim` (they change values per
+byte), and `trailingDelimiter`. Memory-mapped input is scanned through a reused heap window (see
+`docs/CSV.md`).
 
 ## Measured choice
 

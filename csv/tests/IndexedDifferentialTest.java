@@ -267,7 +267,7 @@ final class IndexedDifferentialTest {
       assertNull(CsvIndexing.provider());
       return null;
     });
-    assertEquals(256, CsvIndexing.MIN_INDEX_BYTES);
+    assertEquals(16 << 10, CsvIndexing.MIN_INDEX_BYTES);
   }
 
   // ---- batch level

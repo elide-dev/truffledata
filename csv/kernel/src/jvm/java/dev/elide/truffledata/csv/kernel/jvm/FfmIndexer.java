@@ -106,7 +106,7 @@ public final class FfmIndexer extends CsvIndexer implements AutoCloseable {
 
     /**
      * The provider for {@link CsvIndexing#install}: the best kernel, heap calls through the
-     * critical downcall (calls never exceed the provider's capacity of 1 Mi entries, 1 MiB of
+     * critical downcall (calls never exceed the provider's capacity of 64 Ki entries, 64 KiB of
      * input), and simdutf validation.
      */
     public CsvIndexing.Provider provider() {
@@ -130,8 +130,8 @@ public final class FfmIndexer extends CsvIndexer implements AutoCloseable {
     }
   }
 
-  /** Index entries per call of {@link Library#provider()} indexers (the measured native capacity). */
-  public static final int PROVIDER_CAPACITY = 1 << 20;
+  /** Index entries per call of {@link Library#provider()} indexers (256 KiB, L2-resident; the sweep shows native rates flat from 16 KiB calls). */
+  public static final int PROVIDER_CAPACITY = 1 << 16;
 
   private final Library library;
   private final boolean ownsLibrary;

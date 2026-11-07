@@ -58,8 +58,11 @@ public final class CsvIndexing {
         }
       };
 
-  /** Inputs (or stream buffers) below this many bytes use the per-byte scanners. */
-  public static final int MIN_INDEX_BYTES = 256;
+  /**
+   * Inputs (or stream buffers) below this many bytes use the per-byte scanners: the measured
+   * crossover (benchmarks/results/csv-1d2e9ab) lies between 4 and 16 KiB on SVM.
+   */
+  public static final int MIN_INDEX_BYTES = 16 << 10;
 
   private static volatile @Nullable Provider provider = JAVA;
 

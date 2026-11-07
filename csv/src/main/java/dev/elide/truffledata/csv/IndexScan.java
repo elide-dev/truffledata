@@ -2,6 +2,7 @@ package dev.elide.truffledata.csv;
 
 import dev.elide.truffledata.csv.kernel.CsvIndex;
 import dev.elide.truffledata.csv.kernel.CsvIndexer;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Record framing over a structural index ({@link CsvIndex}): the fast path of {@link CsvScanner} for
@@ -34,7 +35,8 @@ final class IndexScan {
   private final boolean emptyLineRecords; // Commons ignoreEmptyLines(false)
   private final int maxColumns;
   private final int maxRecordBytes;
-  private final int[] index;
+  /** Index entries per kernel call (the shared buffer holds at least this many). */
+  private final int capacity;
   private long[] spans;
 
   /** Set by {@link #scan}: whether it stopped before a record the per-byte scanner must handle. */
@@ -54,7 +56,7 @@ final class IndexScan {
     emptyLineRecords = commons && !dialect.ignoreEmptyLines;
     maxColumns = limits.maxColumns();
     maxRecordBytes = limits.maxRecordBytes();
-    index = new int[Math.max(64, Math.min(capacity, CsvIndex.MAX_CALL_BYTES))];
+    this.capacity = Math.max(64, Math.min(capacity, CsvIndex.MAX_CALL_BYTES));
     spans = new long[Math.min(16, maxColumns)];
   }
 
@@ -79,7 +81,7 @@ final class IndexScan {
 
   /** Index capacity (entries per kernel call). */
   int capacity() {
-    return index.length;
+    return capacity;
   }
 
   /**
@@ -102,8 +104,33 @@ final class IndexScan {
       stopped = true;
       return from;
     }
+    // The index is live only during this call, so one buffer per thread serves every scanner.
+    int[] idx = SHARED.get();
+    if (idx == null || idx.length < capacity) idx = new int[capacity];
+    SHARED.set(null); // a scan nested in a callback allocates its own
+    try {
+      return frame(idx, input, from, to, eof, records, recordBase, stopAfter);
+    } finally {
+      SHARED.set(idx);
+    }
+  }
+
+  /**
+   * Per-thread index buffer: at most the largest capacity a provider asked for (64 Ki entries,
+   * 256 KiB, for the shipped providers), kept for the thread's lifetime.
+   */
+  private static final ThreadLocal<int @Nullable []> SHARED = new ThreadLocal<>();
+
+  private int frame(
+      int[] idx,
+      byte[] input,
+      int from,
+      int to,
+      boolean eof,
+      CsvScanner.Records records,
+      long recordBase,
+      long stopAfter) {
     final CsvIndexer ix = indexer;
-    final int[] idx = index;
     final byte delim = delimiter;
     final boolean commonsFraming = commons;
     ix.carry(0);
