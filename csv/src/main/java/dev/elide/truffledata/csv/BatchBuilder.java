@@ -51,6 +51,23 @@ final class BatchBuilder implements CsvScanner.Records {
   private int rows;
   private boolean full;
 
+  // Fused ingest ({@link #fusable}): the index path writes each field into row {@link #rows} as
+  // it frames it ({@link #put}) and commits the record at its end ({@link #commit}); a record it
+  // cannot convert in place goes through {@link #record} instead, which rewrites the same row.
+  private static final byte SKIP = -1;
+
+  /** Whether {@link #put} and {@link #commit} may build this batch. */
+  private final boolean fusable;
+
+  /** Per record column: the field kind it fills, or {@link #SKIP} (projected away). */
+  private final byte[] fuseKind;
+
+  /** Per record column: the field it fills. */
+  private final int[] fuseField;
+
+  /** Whether row {@link #rows} has capacity (false once the batch reaches maxBatchRows). */
+  private boolean writable;
+
   /**
    * @param firstRecord data-record index of the first row
    * @param recordBase physical records (header included) before the scanned range
@@ -91,7 +108,91 @@ final class BatchBuilder implements CsvScanner.Records {
       booleans[f] = kind == CsvPlan.BOOLEAN ? new boolean[this.capacity] : NO_BOOLEANS;
       states[f] = binding.stateful[f] ? new byte[this.capacity] : NO_STATES;
     }
+    writable = rows < this.capacity;
+    fuseKind = new byte[binding.width];
+    fuseField = new int[binding.width];
+    Arrays.fill(fuseKind, SKIP);
+    // Fused records hold every field (no state arrays) and need no null-token decision beyond the
+    // strict legacy rule, which no typed grammar accepts and a STRING field stores as is.
+    boolean simple = !nullsActive || nullsLegacy;
+    for (int f = 0; f < fields; f++) {
+      int column = binding.fieldToColumn[f];
+      if (binding.stateful[f] || column < 0 || column >= binding.width) simple = false;
+      else {
+        fuseKind[column] = binding.kinds[f];
+        fuseField[column] = f;
+      }
+    }
+    fusable = simple;
   }
+
+  /** Whether the index path may fill this batch through {@link #put} and {@link #commit}. */
+  boolean fusable() {
+    return fusable;
+  }
+
+  /**
+   * Converts field {@code column} of the record being framed into row {@link #rows}. False when the
+   * record must go through {@link #record} (a value no grammar accepts, a constraint, a complex
+   * Commons span in a typed field, a column past the width, or no capacity): that path then
+   * reports the exact diagnostic, or accepts the record, rewriting the same row.
+   */
+  boolean put(int column, long span) {
+    byte[] kinds = fuseKind;
+    if (column >= kinds.length || !writable) return false;
+    byte kind = kinds[column];
+    if (kind == SKIP) return true;
+    int f = fuseField[column];
+    if (kind == CsvPlan.STRING) {
+      words[f][rows] = span + spanShift;
+      return true;
+    }
+    if (decoder != null && CsvScanner.escaped(span)) return false;
+    int offset = CsvScanner.offset(span);
+    int length = CsvScanner.length(span);
+    try {
+      switch (kind) {
+        case CsvPlan.INT64 -> {
+          long value = Numbers.parseLong(input, offset, length);
+          if (binding.constrained[f]) Values.validateLong(binding.fields[f], value);
+          words[f][rows] = value;
+        }
+        case CsvPlan.FLOAT64 -> {
+          double value = Numbers.parseDouble(input, offset, length);
+          if (binding.binary32[f] && (double) (float) value != value) return false;
+          doubles[f][rows] = value;
+        }
+        default -> {
+          int b = bool(input, offset, length);
+          if (b < 0) return false;
+          booleans[f][rows] = b != 0;
+        }
+      }
+    } catch (NumberFormatException | ContractViolation e) {
+      return false;
+    }
+    return true;
+  }
+
+  /**
+   * Commits the record of {@code count} fields that {@link #put} wrote, [start, end) of the input,
+   * after checking its width and, when the prevalidated range does not cover it, its UTF-8. False
+   * leaves the record to {@link #record} (which reports the error or handles a flexible width).
+   */
+  boolean commit(int count, int start, int end) {
+    if (count != binding.width) return false;
+    if ((start < validFrom || end > validTo) && Utf8.invalidOffset(input, start, end) >= 0)
+      return false;
+    advance(end);
+    return true;
+  }
+
+  /** Counts one row and keeps row {@link #rows} writable while maxBatchRows allows. */
+  private void advance(int consumed) {
+    if (++rows == capacity && rows < maxRows) grow(consumed);
+    writable = rows < capacity;
+  }
+
 
   /** Whether a field is a null token ({@link Nulls}, the one null rule, on its final value). */
   private boolean nullToken(long span) {
@@ -190,7 +291,7 @@ final class BatchBuilder implements CsvScanner.Records {
         default -> booleans[f][row] = toBoolean(number, f, span);
       }
     }
-    rows++;
+    advance(end);
     return true;
   }
 
@@ -238,20 +339,25 @@ final class BatchBuilder implements CsvScanner.Records {
   /** {@code true} or {@code false}, ASCII case-insensitive. */
   private boolean toBoolean(long number, int field, long span) {
     int length = view(span);
-    byte[] v = viewBytes;
-    int o = viewOffset;
+    int b = bool(viewBytes, viewOffset, length);
+    if (b < 0) throw violation(number, field, "invalid BOOLEAN");
+    return b != 0;
+  }
+
+  /** 1 for {@code true}, 0 for {@code false} (ASCII case-insensitive), else -1. */
+  private static int bool(byte[] v, int o, int length) {
     if (length == 4
         && (v[o] | 0x20) == 't'
         && (v[o + 1] | 0x20) == 'r'
         && (v[o + 2] | 0x20) == 'u'
-        && (v[o + 3] | 0x20) == 'e') return true;
+        && (v[o + 3] | 0x20) == 'e') return 1;
     if (length == 5
         && (v[o] | 0x20) == 'f'
         && (v[o + 1] | 0x20) == 'a'
         && (v[o + 2] | 0x20) == 'l'
         && (v[o + 3] | 0x20) == 's'
-        && (v[o + 4] | 0x20) == 'e') return false;
-    throw violation(number, field, "invalid BOOLEAN");
+        && (v[o + 4] | 0x20) == 'e') return 0;
+    return -1;
   }
 
   private ContractViolation violation(long number, int field, String reason) {
@@ -261,15 +367,16 @@ final class BatchBuilder implements CsvScanner.Records {
 
   /**
    * Doubles the row arrays, or, when the scanned range is known ({@link #expect}), grows them to
-   * the row count extrapolated from the bytes consumed so far (plus 1/16), so a uniform input
-   * grows once or twice instead of once per doubling.
+   * the row count extrapolated from the bytes consumed so far (plus 1/16, and at least 1/8 more),
+   * so a uniform input grows once or twice and is not doubled near its end.
    */
   private void grow(int consumed) {
     long size = (long) capacity * 2;
     long done = (long) consumed - expectFrom;
     if (expecting && done > 0) {
+      // Late in the range the estimate is close: grow by 1/8 at least instead of doubling.
       long estimate = rows * (expectTo - expectFrom) / done;
-      size = Math.max(size, estimate + (estimate >> 4) + 16);
+      size = Math.max(capacity + (capacity >> 3) + 16, estimate + (estimate >> 4) + 16);
     }
     resize((int) Math.min(size, maxRows));
   }
@@ -297,6 +404,7 @@ final class BatchBuilder implements CsvScanner.Records {
       if (states[f] != NO_STATES) states[f] = Arrays.copyOf(states[f], size);
     }
     capacity = size;
+    writable = rows < capacity;
   }
 
   /** Continues the batch over the next window: {@code shift} is its batch offset. */
@@ -316,6 +424,12 @@ final class BatchBuilder implements CsvScanner.Records {
 
   private void trim() {
     if (capacity - rows > capacity / 8) resize(rows);
+  }
+
+  /** A batch without STRING fields: every value is converted, so it retains no input. */
+  CsvBatch buildDetached() {
+    trim();
+    return new CsvBatch(binding.schema, NO_BYTES, columns(), rows, firstRecord, dialect, 0);
   }
 
   CsvBatch build() {

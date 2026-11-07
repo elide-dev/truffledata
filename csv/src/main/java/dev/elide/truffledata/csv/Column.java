@@ -19,6 +19,20 @@ final class Column {
   final boolean @Nullable [] booleans;
   final byte @Nullable [] states;
 
+  /**
+   * The value array when every row is present ({@code states} is null), else null: the one load a
+   * row read needs on its fast path ({@link CsvBatch#longAt} and siblings).
+   */
+  final long[] presentSpans;
+
+  final long[] presentLongs;
+  final double[] presentDoubles;
+  final boolean[] presentBooleans;
+
+  private static final long[] NO_LONGS = new long[0];
+  private static final double[] NO_DOUBLES = new double[0];
+  private static final boolean[] NO_BOOLEANS = new boolean[0];
+
   Column(
       long @Nullable [] spans,
       long @Nullable [] longs,
@@ -30,6 +44,11 @@ final class Column {
     this.doubles = doubles;
     this.booleans = booleans;
     this.states = states;
+    boolean dense = states == null;
+    presentSpans = dense && spans != null ? spans : NO_LONGS;
+    presentLongs = dense && longs != null ? longs : NO_LONGS;
+    presentDoubles = dense && doubles != null ? doubles : NO_DOUBLES;
+    presentBooleans = dense && booleans != null ? booleans : NO_BOOLEANS;
   }
 
   byte state(int row) {

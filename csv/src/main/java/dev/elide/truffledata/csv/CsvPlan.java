@@ -104,25 +104,29 @@ public final class CsvPlan {
     return parse(utf8, CsvLimits.DEFAULT);
   }
 
-  /** Checks maxBatchBytes, copies the input once, and retains the copy. */
+  /**
+   * Checks maxBatchBytes and parses {@code utf8}, which is read only during the call. A batch with
+   * STRING fields retains one copy of the input (its cells are spans into it); a batch of only
+   * INT64, FLOAT64 and BOOLEAN fields converts every value during the scan and retains no input.
+   */
   public CsvBatch parse(byte[] utf8, CsvLimits limits) {
     if (utf8.length > limits.maxBatchBytes()) throw CsvScanner.limit("maxBatchBytes");
-    byte[] input = utf8.clone();
-    int from = hasBom(input, input.length) ? 3 : 0;
+    int from = hasBom(utf8, utf8.length) ? 3 : 0;
     CsvScanner scanner = new CsvScanner(format, limits);
     Binder binder = new Binder(this);
-    binder.bind(scanner, input, from, input.length, true);
+    binder.bind(scanner, utf8, from, utf8.length, true);
+    Binding binding = Objects.requireNonNull(binder.binding);
+    // Header names are materialized by the binder, so only STRING cells need the input retained.
+    byte[] input = binding.strings ? utf8.clone() : utf8;
     long base = binder.consumed;
     scanner.recordBase = base;
     scanner.stopAfter = stopAfter(base);
-    BatchBuilder builder =
-        new BatchBuilder(
-            Objects.requireNonNull(binder.binding), input, limits, dialect, 0, base, 0, 16);
+    BatchBuilder builder = new BatchBuilder(binding, input, limits, dialect, 0, base, 0, 16);
     builder.expect(binder.end, input.length);
     if (format.maxRows() == 0) builder.prevalidate(scanner, binder.end, input.length);
     scanner.scan(input, binder.end, input.length, true, builder);
     if (builder.full()) throw CsvScanner.limit("maxBatchRows");
-    return builder.build();
+    return binding.strings ? builder.build() : builder.buildDetached();
   }
 
   /**
@@ -308,6 +312,9 @@ public final class CsvPlan {
     /** FLOAT64 fields that must be exact binary32 values. */
     final boolean[] binary32;
 
+    /** Whether any field is STRING (its cells are spans into the retained input). */
+    final boolean strings;
+
     Binding(Schema schema, int width, int[] fieldToColumn) {
       this.schema = schema;
       this.width = width;
@@ -335,6 +342,9 @@ public final class CsvPlan {
             field.constraints().integer() != null || field.constraints().integerRange() != null;
         binary32[f] = field.constraints().floatBits() == 32;
       }
+      boolean any = false;
+      for (byte kind : kinds) any |= kind == STRING;
+      strings = any;
     }
   }
 

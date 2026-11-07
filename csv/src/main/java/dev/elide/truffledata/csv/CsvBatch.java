@@ -147,6 +147,70 @@ public final class CsvBatch implements TruffleObject, AutoCloseable {
     return copiedBytes;
   }
 
+  // Row reads ({@link CsvRow} getters). Each fast path is one column load, a dense-array test and
+  // the heap test (at most 35 bytecodes, so HotSpot inlines it at any call site); nullable,
+  // optional and mapped columns, wrong kinds and closed mappings take the slow path.
+
+  long longAt(int row, int column) {
+    long[] v = columns[column].presentLongs;
+    if (row >= v.length || mapping != null) return longSlow(row, column);
+    return v[row];
+  }
+
+  private long longSlow(int row, int column) {
+    checkLive();
+    Column c = columns[column];
+    long[] longs = c.longs;
+    if (longs == null || c.state(row) != Column.PRESENT)
+      throw CsvRow.expected(schema, column, "INT64");
+    return longs[row];
+  }
+
+  double doubleAt(int row, int column) {
+    double[] v = columns[column].presentDoubles;
+    if (row >= v.length || mapping != null) return doubleSlow(row, column);
+    return v[row];
+  }
+
+  private double doubleSlow(int row, int column) {
+    checkLive();
+    Column c = columns[column];
+    double[] doubles = c.doubles;
+    if (doubles == null || c.state(row) != Column.PRESENT)
+      throw CsvRow.expected(schema, column, "FLOAT64");
+    return doubles[row];
+  }
+
+  boolean booleanAt(int row, int column) {
+    boolean[] v = columns[column].presentBooleans;
+    if (row >= v.length || mapping != null) return booleanSlow(row, column);
+    return v[row];
+  }
+
+  private boolean booleanSlow(int row, int column) {
+    checkLive();
+    Column c = columns[column];
+    boolean[] booleans = c.booleans;
+    if (booleans == null || c.state(row) != Column.PRESENT)
+      throw CsvRow.expected(schema, column, "BOOLEAN");
+    return booleans[row];
+  }
+
+  String stringAt(int row, int column) {
+    long[] v = columns[column].presentSpans;
+    if (row >= v.length || mapping != null) return stringSlow(row, column);
+    return string(this, v[row]);
+  }
+
+  private String stringSlow(int row, int column) {
+    checkLive();
+    Column c = columns[column];
+    long[] spans = c.spans;
+    if (spans == null || c.state(row) != Column.PRESENT)
+      throw CsvRow.expected(schema, column, "STRING");
+    return string(this, spans[row]);
+  }
+
   /** Materializes one STRING span of this batch, decoding escaped or complex fields. */
   @TruffleBoundary
   static String string(CsvBatch batch, long span) {

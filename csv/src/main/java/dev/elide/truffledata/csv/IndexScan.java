@@ -133,6 +133,10 @@ final class IndexScan {
     final CsvIndexer ix = indexer;
     final byte delim = delimiter;
     final boolean commonsFraming = commons;
+    // Fused: a batch builder takes each field as it is framed (no per-record pass over spans); a
+    // record it declines goes through records.record with the spans, as on the unfused path.
+    final BatchBuilder fused = records instanceof BatchBuilder b && b.fusable() ? b : null;
+    boolean converted = true; // every field of the current record so far was put
     ix.carry(0);
     int pos = from;
     int resume = from; // where a refused, incomplete or handed-over record restarts
@@ -195,7 +199,9 @@ final class IndexScan {
           span = (long) fieldStart << 32 | (long) (p - fieldStart) << 2;
         }
         if (count == spans.length) grow();
-        spans[count++] = span;
+        spans[count] = span;
+        if (fused != null && converted) converted = fused.put(count, span);
+        count++;
         if (b == delim) {
           fieldStart = p + 1;
           continue;
@@ -208,7 +214,9 @@ final class IndexScan {
           if (input[end] == LF) skip = end++;
         } else if (eof) end = p + 1;
         else return resume; // a final CR may be the first half of CRLF
-        if (!records.record(spans, count, recordStart, end)) return resume;
+        if (!(fused != null && converted && fused.commit(count, recordStart, end))
+            && !records.record(spans, count, recordStart, end)) return resume;
+        converted = true;
         reported++;
         if (recordBase + reported >= stopAfter && (commonsFraming || end < to)) {
           stopped = true;
@@ -245,8 +253,11 @@ final class IndexScan {
       span = CsvScanner.span(fieldStart, to - fieldStart, false, false);
     }
     if (count == spans.length) grow();
-    spans[count++] = span;
-    if (!records.record(spans, count, recordStart, to)) return resume;
+    spans[count] = span;
+    if (fused != null && converted) converted = fused.put(count, span);
+    count++;
+    if (!(fused != null && converted && fused.commit(count, recordStart, to))
+        && !records.record(spans, count, recordStart, to)) return resume;
     reported++;
     if (commonsFraming && recordBase + reported >= stopAfter) stopped = true;
     return to;

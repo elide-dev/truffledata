@@ -48,41 +48,28 @@ public final class CsvRow extends AbstractRow {
     return batch.columns[column].state(index) == Column.NULL;
   }
 
+  // The getters delegate to small batch methods with one load on their fast path, so a JIT inlines
+  // them into a caller's loop (and can then drop the row allocation).
+
   /** Throws {@link ContractViolation} on null, missing or non-STRING. */
   public String getString(int column) {
-    batch.checkLive();
-    Column c = batch.columns[column];
-    long[] spans = c.spans;
-    if (spans == null || c.state(index) != Column.PRESENT) throw expected(descriptor, column, "STRING");
-    return CsvBatch.string(batch, spans[index]);
+    return batch.stringAt(index, column);
   }
 
   public long getLong(int column) {
-    batch.checkLive();
-    Column c = batch.columns[column];
-    long[] longs = c.longs;
-    if (longs == null || c.state(index) != Column.PRESENT) throw expected(descriptor, column, "INT64");
-    return longs[index];
+    return batch.longAt(index, column);
   }
 
   public double getDouble(int column) {
-    batch.checkLive();
-    Column c = batch.columns[column];
-    double[] doubles = c.doubles;
-    if (doubles == null || c.state(index) != Column.PRESENT) throw expected(descriptor, column, "FLOAT64");
-    return doubles[index];
+    return batch.doubleAt(index, column);
   }
 
   public boolean getBoolean(int column) {
-    batch.checkLive();
-    Column c = batch.columns[column];
-    boolean[] booleans = c.booleans;
-    if (booleans == null || c.state(index) != Column.PRESENT) throw expected(descriptor, column, "BOOLEAN");
-    return booleans[index];
+    return batch.booleanAt(index, column);
   }
 
   @TruffleBoundary
-  private static ContractViolation expected(Schema schema, int column, String kind) {
+  static ContractViolation expected(Schema schema, int column, String kind) {
     return new ContractViolation(
         "Field '" + schema.field(column).name() + "': expected a present, non-null " + kind);
   }
