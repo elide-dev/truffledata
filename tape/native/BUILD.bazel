@@ -42,9 +42,5 @@ cc_test(
     name = "ctape_test",
     srcs = ["ctape_test.cc"],
     copts = ["-std=c++17"],
-    deps = [
-        ":tape",
-        ":testing",
-        "//json/native:decoder",
-    ],
+    deps = [":tape"],
 )

@@ -1,14 +1,13 @@
 // The compact tape (tape-gbps plan Task 1, §3): layout, directory-fused duplicate detection,
 // saturation, YAML rewrites, validation, the Myna converter and the text arena over words.
 //
-// Until the JSON decoder writes compact tapes (Task 2), the 200-document corpus reaches ctape_writer
-// through a transcoder from the shipped decoder's Myna tape plus its lexical spans and key meta:
-// every string, number and key carries its exact token, so the transcoded tape is the one the
-// decoder will write, and to_myna must give back the shipped decoder's tape node for node.
+// The 200-document corpus checks (the JSON decoder's tapes validate, convert back to the 0.8.0
+// decoder's Myna tapes node for node, and walk like them) live with the decoder in
+// //json/native:test (words_match_reference_corpus, walk_matches_reference); this test builds its
+// tapes by hand, so //tape stays independent of any format.
 #include "tape/native/ctape.h"
-#include "tape/native/testing.h"
+#include "tape/native/index_memory.h"
 #include "tape/native/text_arena.h"
-#include "json/native/decoder.h"
 
 #include <algorithm>
 #include <cmath>
@@ -66,124 +65,6 @@ c::span span_of(std::string_view input, std::string_view token) {
 struct scratch {
   index_memory memory{SIZE_MAX, std::pmr::new_delete_resource()};
   block_arena arena{&memory};
-};
-
-// ---- the transcoder: shipped decoder (Myna v4, directory threshold 2) -> ctape_writer --------
-struct reference {
-  scratch s;
-  simdjson::padded_string padded;
-  truffledata::json::tape_decoder<tape_writer> decoder{&s.arena, {}, 2};
-  myna_value_view_v4 view{};
-  explicit reference(const std::string& source) : padded(source) {
-    decoder.start(std::string_view(padded.data(), padded.size()),
-                  truffledata::json::hint_for(padded.size(), {}, {}));
-    simdjson::ondemand::parser parser;
-    auto root = parser.iterate(padded).value();
-    decoder.decode(root);
-    view = decoder.view();
-  }
-  std::string_view input() const { return {padded.data(), padded.size()}; }
-  std::string text(uint64_t i) const {
-    const myna_value_node& n = view.base.nodes[i];
-    if (n.tag & MYNA_VALUE_REGION_TEXT) {
-      uint32_t region = myna_value_region_id(&n);
-      const uint8_t* base = region == 0 ? view.base.bytes : view.base.regions[region - 1].data;
-      return std::string(reinterpret_cast<const char*>(base) + myna_value_offset(&n), n.length);
-    }
-    std::string out;
-    for (uint32_t b = 0; b < n.length; ++b) out += char(myna_value_inline_byte(&n, b));
-    return out;
-  }
-};
-
-uint64_t transcode(const reference& r, ctape_writer& w, uint64_t i, uint32_t depth, bool key) {
-  const myna_value_node& n = r.view.base.nodes[i];
-  uint64_t span = r.decoder.lexical_spans()[i];
-  c::span token{uint32_t(span >> 32), uint32_t(span)};
-  bool ascii = r.decoder.key_hashes()[i] & ascii_flag;
-  switch (n.tag & MYNA_VALUE_KIND_MASK) {
-    case MYNA_VALUE_NULL: w.null(); return i + 1;
-    case MYNA_VALUE_BOOL: w.boolean(n.payload != 0); return i + 1;
-    case MYNA_VALUE_I64: w.integer(int64_t(n.payload), token); return i + 1;
-    case MYNA_VALUE_U64: w.unsigned_integer(n.payload, token); return i + 1;
-    case MYNA_VALUE_F64: {
-      double d;
-      std::memcpy(&d, &n.payload, 8);
-      w.floating(d, token);
-      return i + 1;
-    }
-    case MYNA_VALUE_DECIMAL: w.decimal_ref(token); return i + 1;
-    case MYNA_VALUE_STRING: {
-      std::string decoded = r.text(i);
-      // A body without escapes is exactly the decoded text (every escape shortens it).
-      if (token.length == decoded.size() + 2) w.string_ref({token.offset + 1, uint32_t(decoded.size())}, ascii, key);
-      else w.string(decoded, token, ascii, key);
-      return myna_value_next(&n, i);
-    }
-    case MYNA_VALUE_ARRAY: {
-      size_t at = w.begin(c::kind_array, depth);
-      uint64_t k = i + 1;
-      for (uint32_t e = 0; e < n.length; ++e) k = transcode(r, w, k, depth + 1, false);
-      w.end(at, n.length);
-      return n.next;
-    }
-    case MYNA_VALUE_OBJECT: {
-      size_t at = w.begin(c::kind_object, depth);
-      uint64_t k = i + 1;
-      for (uint32_t m = 0; m < n.length; ++m) {
-        w.member_key(at, hash(r.text(k)));
-        k = transcode(r, w, k, depth + 1, true);
-        k = transcode(r, w, k, depth + 1, false);
-      }
-      w.end(at, n.length);
-      return n.next;
-    }
-  }
-  throw std::logic_error("unexpected Myna node");
-}
-
-// A canonical event trace, from either representation.
-void trace_myna(const reference& r, uint64_t& i, std::string& out, bool key) {
-  const myna_value_node& n = r.view.base.nodes[i];
-  switch (n.tag & MYNA_VALUE_KIND_MASK) {
-    case MYNA_VALUE_NULL: out += "n,"; ++i; return;
-    case MYNA_VALUE_BOOL: out += n.payload ? "t," : "f,"; ++i; return;
-    case MYNA_VALUE_I64: out += "i" + std::to_string(int64_t(n.payload)) + ","; ++i; return;
-    case MYNA_VALUE_U64: out += "u" + std::to_string(n.payload) + ","; ++i; return;
-    case MYNA_VALUE_F64: out += "f" + std::to_string(n.payload) + ","; ++i; return;
-    case MYNA_VALUE_DECIMAL: out += "d" + r.text(i) + ","; ++i; return;
-    case MYNA_VALUE_STRING: out += (key ? "k" : "s") + r.text(i) + ","; i = myna_value_next(&n, i); return;
-    default: {
-      bool object = (n.tag & MYNA_VALUE_KIND_MASK) == MYNA_VALUE_OBJECT;
-      out += (object ? "{" : "[") + std::to_string(n.length) + ",";
-      uint64_t children = object ? 2ull * n.length : n.length;
-      ++i;
-      for (uint64_t k = 0; k < children; ++k) trace_myna(r, i, out, object && k % 2 == 0);
-      out += object ? "}," : "],";
-    }
-  }
-}
-struct trace_visitor {
-  const td_tape_view& v;
-  std::string out;
-  std::vector<uint64_t> counts;
-  void open(uint64_t, uint64_t w) {
-    out += (c::kind(w) == c::kind_object ? "{" : "[") + std::to_string(c::field(w)) + ",";
-  }
-  void close(uint64_t i) { out += c::kind(v.words[i]) == c::kind_object ? "}," : "],"; }
-  void scalar(uint64_t i, uint64_t w) {
-    switch (c::kind(w)) {
-      case c::kind_null: out += "n,"; break;
-      case c::kind_false: out += "f,"; break;
-      case c::kind_true: out += "t,"; break;
-      case c::kind_i64: out += "i" + std::to_string(int64_t(v.words[i + 1])) + ","; break;
-      case c::kind_u64: out += "u" + std::to_string(v.words[i + 1]) + ","; break;
-      case c::kind_f64: out += "f" + std::to_string(v.words[i + 1]) + ","; break;
-      case c::kind_decimal: out += "d" + std::string(c::text(v, i)) + ","; break;
-      case c::kind_string: out += ((w & c::key_flag) ? "k" : "s") + std::string(c::text(v, i)) + ","; break;
-      default: out += "?,"; break;
-    }
-  }
 };
 
 // ---- tests ----------------------------------------------------------------------------------
@@ -567,43 +448,7 @@ void erase_append_truncate_renumber() {
   }
 }
 
-void to_myna_matches_tape_writer() {
-  auto documents = testing::corpus();
-  require(documents.size() == 200);
-  size_t compared = 0;
-  for (const auto& source : documents) {
-    reference r(source);
-    scratch s;
-    ctape_writer w(&s.arena, {});
-    w.input(r.input());
-    require(transcode(r, w, 0, 0, false) == r.view.base.node_count);
-    td_tape_view v = w.view();
-    const char* error = c::validate(v);
-    if (error) throw std::runtime_error(std::string("invalid transcoded tape: ") + error + " in " + source.substr(0, 60));
-    require(w.value_count() == r.view.base.node_count);
-    myna_value_view_v4 m = c::to_myna(v, &s.arena);
-    const myna_value_view& a = m.base;
-    const myna_value_view& b = r.view.base;
-    require(a.version == MYNA_VALUE_ABI_V4 && a.version == b.version && a.flags == b.flags);
-    require(a.node_count == b.node_count);
-    require(std::memcmp(a.nodes, b.nodes, a.node_count * sizeof(myna_value_node)) == 0);
-    require(a.byte_count == b.byte_count && (a.byte_count == 0 || std::memcmp(a.bytes, b.bytes, a.byte_count) == 0));
-    require(a.region_count == 1 && b.region_count == 1);
-    require(a.regions[0].data == b.regions[0].data && a.regions[0].length == b.regions[0].length);
-    require(m.directory_count == r.view.directory_count);
-    require(m.directory_count == 0
-            || std::memcmp(m.directory, r.view.directory, m.directory_count * sizeof(myna_value_directory_entry)) == 0);
-    require(m.metadata_count == 0);
-    // The v3 prefix: the same nodes without directories.
-    myna_value_view_v4 p = c::to_myna(v, &s.arena, MYNA_VALUE_ABI);
-    require(p.base.version == MYNA_VALUE_ABI && p.directory_count == 0 && p.base.node_count == b.node_count);
-    for (uint64_t i = 0; i < b.node_count; ++i) {
-      const myna_value_node& n = b.nodes[i];
-      require(p.base.nodes[i].payload == (n.tag == MYNA_VALUE_OBJECT ? 0 : n.payload));
-    }
-    ++compared;
-  }
-  require(compared == 200);
+void to_myna_refs_and_metadata() {
   // REF and metadata (YAML): a REF becomes a Myna REF to the target's node; metadata follows nodes.
   {
     const std::string input = "abc";
@@ -634,39 +479,6 @@ void to_myna_matches_tape_writer() {
     require(m.base.nodes[5].tag == MYNA_VALUE_DECIMAL && m.base.nodes[5].length == 5);
     require(m.metadata_count == 6 && m.metadata[2] == 0x77 && m.metadata[4] == 0x11 && m.metadata[1] == 0);
     require(throws([&] { c::to_myna(v, &s.arena, MYNA_VALUE_ABI); }));  // REF needs ABI 4
-  }
-}
-
-void walk_matches_reference() {
-  for (const auto& source : testing::corpus()) {
-    reference r(source);
-    scratch s;
-    ctape_writer w(&s.arena, {});
-    w.input(r.input());
-    transcode(r, w, 0, 0, false);
-    td_tape_view v = w.view();
-    std::string expected;
-    uint64_t i = 0;
-    trace_myna(r, i, expected, false);
-    trace_visitor t{v, {}, {}};
-    c::walk(v, t);
-    require(t.out == expected);
-    // The text arena over words writes the same bytes and entries as the Myna overload.
-    size_t capacity = text_capacity_bound(source.size());
-    std::vector<uint8_t> out_a(capacity + 2), out_b(capacity + 2);
-    std::vector<uint64_t> table_a(r.view.base.node_count), table_b(v.word_count);
-    size_t used_a = write_text_arena(r.view.base, r.decoder.key_hashes().data(), table_a.data(), out_a.data(), capacity);
-    size_t used_b = write_text_arena(v, table_b.data(), out_b.data(), capacity);
-    require(used_a == used_b && used_a != text_too_small);
-    require(std::memcmp(out_a.data(), out_b.data(), used_a) == 0);
-    std::vector<uint64_t> entries_a, entries_b;
-    for (uint64_t n = 0; n < r.view.base.node_count; ++n)
-      if ((r.view.base.nodes[n].tag & MYNA_VALUE_KIND_MASK) == MYNA_VALUE_STRING) entries_a.push_back(table_a[n]);
-    for (uint64_t n = 0; n < v.word_count; n = c::step(n, v.words[n])) {
-      if (c::kind(v.words[n]) == c::kind_string) entries_b.push_back(table_b[n]);
-      if (c::is_wide(v.words[n])) require(table_b[n + 1] == 0);
-    }
-    require(entries_a == entries_b);
   }
 }
 
@@ -830,8 +642,7 @@ int main() {
       {"singleton_objects_have_no_directory", singleton_objects_have_no_directory},
       {"counts_saturate_and_validate", counts_saturate_and_validate},
       {"erase_append_truncate_renumber", erase_append_truncate_renumber},
-      {"to_myna_matches_tape_writer", to_myna_matches_tape_writer},
-      {"walk_matches_reference", walk_matches_reference},
+      {"to_myna_refs_and_metadata", to_myna_refs_and_metadata},
       {"validate_rejects_corruption", validate_rejects_corruption},
       {"allocation_failure_at_every_growth", allocation_failure_at_every_growth},
   };

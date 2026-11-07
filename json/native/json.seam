@@ -1,4 +1,4 @@
-module truffledata_json abi=6 target=x86_64-unknown-linux-gnu java_package=dev.elide.truffledata.json.generated java_class=Json c_library=truffledata_json c_library_static=true
+module truffledata_json abi=7 target=x86_64-unknown-linux-gnu java_package=dev.elide.truffledata.json.generated java_class=Json c_library=truffledata_json c_library_static=true
 struct JsonResult size=112 align=8
   field owner type=ptr<void> offset=0
   field view type=ptr<void> offset=8
@@ -41,6 +41,24 @@ end
 import release symbol=td_json_release return=void error=no_failure native_leaf=false@explicit_contract
   param result type=ptr<void> nullable=false ownership=borrowed access=read_write
 end
+struct TapeView size=88 align=8
+  field version type=u32 offset=0
+  field flags type=u32 offset=4
+  field words type=ptr<void> offset=8
+  field word_count type=u64 offset=16
+  field pool type=ptr<u8> offset=24
+  field pool_bytes type=u64 offset=32
+  field input type=ptr<u8> offset=40
+  field input_bytes type=u64 offset=48
+  field directory type=ptr<void> offset=56
+  field directory_count type=u64 offset=64
+  field meta type=ptr<void> offset=72
+  field meta_count type=u64 offset=80
+end
+import result_myna symbol=td_json_result_myna return=i32 error=no_failure native_leaf=false@explicit_contract
+  param result type=ptr<void> nullable=false ownership=borrowed access=read
+  param output type=ptr<void> nullable=false ownership=borrowed access=read_write
+end
 
 struct JsonLimitsStruct size=40 align=8
   field max_input_bytes type=u64 offset=0
@@ -48,6 +66,7 @@ struct JsonLimitsStruct size=40 align=8
   field max_nodes type=u64 offset=16
   field max_text_bytes type=u64 offset=24
   field max_depth type=u32 offset=32
+  field flags type=u32 offset=36
 end
 import session_create symbol=td_json_session_create return=ptr<void> error=no_failure native_leaf=false@explicit_contract
   param limits type=ptr<void> nullable=false ownership=borrowed access=read

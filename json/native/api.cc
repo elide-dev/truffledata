@@ -4,6 +4,7 @@
 #include "json/native/status.h"
 #include "json/native/stream.h"
 #include "json/native/typed.h"
+#include <cstddef>
 #include <memory>
 
 static_assert(TD_JSON_OK == truffledata::json::status_ok && TD_JSON_ARGUMENT == truffledata::json::status_argument
@@ -14,11 +15,20 @@ static_assert(TD_JSON_OK == truffledata::json::status_ok && TD_JSON_ARGUMENT == 
               && TD_JSON_STREAM_EMPTY == truffledata::json::status_stream_empty
               && TD_JSON_STREAM_TRUNCATED == truffledata::json::status_stream_truncated,
               "api.h and status.h agree");
+static_assert(sizeof(TapeView) == sizeof(td_tape_view) && offsetof(TapeView, words) == offsetof(td_tape_view, words)
+              && offsetof(TapeView, pool) == offsetof(td_tape_view, pool)
+              && offsetof(TapeView, input) == offsetof(td_tape_view, input)
+              && offsetof(TapeView, directory) == offsetof(td_tape_view, directory)
+              && offsetof(TapeView, meta) == offsetof(td_tape_view, meta)
+              && offsetof(TapeView, meta_count) == offsetof(td_tape_view, meta_count),
+              "json.seam TapeView mirrors td_tape_view");
 
 namespace {
 // Owner of a td_json_decode result; retained session results are the other result_owner.
+// TRANSITIONAL (Task 2 -> Task 3): one-shot decodes publish the Myna tape until the Java readers
+// move to the compact tape.
 struct handle final : truffledata::json::result_owner {
-  truffledata::json::document document;
+  truffledata::json::legacy::document document;
   myna_value_view_v4 view;
   handle(std::string_view input, myna::value_limits values,
          truffledata::tape::storage_limits storage)
@@ -206,13 +216,16 @@ using truffledata::json::session;
 // The 4 KiB bound of the leaf decode: at the probe's ≈ 150 MB/s worst case this is ≈ 30 µs.
 constexpr uint64_t critical_limit = TD_JSON_CRITICAL_LIMIT;
 
-constexpr uint32_t known_flags = TD_JSON_WANT_TEXT | TD_JSON_UTF16_INPUT | TD_JSON_LATIN1_INPUT;
+constexpr uint32_t known_flags = TD_JSON_WANT_TEXT | TD_JSON_UTF16_INPUT | TD_JSON_LATIN1_INPUT | TD_JSON_VALIDATE_ONLY;
 
-// Borrowed: no owner, so td_json_release never frees session storage.
+// Borrowed: no owner, so td_json_release never frees session storage. A compact document publishes
+// its td_tape_view and no side tables; a Myna document (TRANSITIONAL) its v4 descriptor, lexical
+// spans and key meta; a validate-only decode publishes no view.
 void publish_borrowed(const session& s, const session::document_view& d, JsonResult& result,
                       const uint64_t* table = nullptr, size_t text_bytes = 0) {
   const auto& memory = s.memory();
-  result = {nullptr, const_cast<myna_value_view_v4*>(&s.view_v4()), d.input_length, s.input_capacity(),
+  void* view = d.tape ? const_cast<td_tape_view*>(d.tape) : static_cast<void*>(const_cast<myna_value_view_v4*>(d.myna));
+  result = {nullptr, view, d.input_length, s.input_capacity(),
             memory.current(), memory.peak(), d.index_allocations, s.parser_capacity(),
             sizeof(session), const_cast<uint64_t*>(d.lexical.data()), d.lexical.size(),
             const_cast<uint32_t*>(d.hashes.data()), const_cast<uint64_t*>(table), text_bytes};
@@ -223,6 +236,8 @@ int32_t session_decode(session& s, const uint8_t* data, uint64_t length, uint32_
   result = {};
   if (!data || (flags & ~known_flags)) return TD_JSON_ARGUMENT;
   bool text = flags & TD_JSON_WANT_TEXT;
+  bool validate_only = flags & TD_JSON_VALIDATE_ONLY;
+  if (validate_only && text) return TD_JSON_ARGUMENT;
   if (text ? !text_out || reinterpret_cast<uintptr_t>(text_out) % 2 || text_capacity > INT32_MAX
            : text_out || text_capacity)
     return TD_JSON_ARGUMENT;
@@ -234,7 +249,8 @@ int32_t session_decode(session& s, const uint8_t* data, uint64_t length, uint32_
     auto d = s.decode(reinterpret_cast<const char*>(data), size_t(length),
                       utf16    ? session::encoding::utf16le
                       : latin1 ? session::encoding::latin1
-                               : session::encoding::utf8);
+                               : session::encoding::utf8,
+                      validate_only);
     const uint64_t* table = nullptr;
     size_t text_bytes = 0;
     if (text) {
@@ -250,10 +266,13 @@ int32_t session_decode(session& s, const uint8_t* data, uint64_t length, uint32_
 extern "C" void* td_json_session_create(const void* limits) {
   if (!aligned(limits)) return nullptr;
   const auto& l = *static_cast<const JsonLimitsStruct*>(limits);
-  if (l.max_depth > 128 || l.max_input_bytes == 0) return nullptr;
+  if (l.max_depth > 128 || l.max_input_bytes == 0 || (l.flags & ~uint32_t(TD_JSON_SESSION_COMPACT_TAPE))) return nullptr;
   try {
     return new session(myna::value_limits{l.max_nodes, l.max_text_bytes, l.max_depth},
-        truffledata::tape::storage_limits{size_t(l.max_input_bytes), size_t(l.max_index_bytes)});
+        truffledata::tape::storage_limits{size_t(l.max_input_bytes), size_t(l.max_index_bytes)},
+        std::pmr::get_default_resource(),
+        (l.flags & TD_JSON_SESSION_COMPACT_TAPE) ? truffledata::json::tape_format::compact
+                                                 : truffledata::json::tape_format::myna);
   } catch (...) { return nullptr; }
 }
 
@@ -287,7 +306,7 @@ extern "C" int32_t td_json_session_retain(void* handle, void* output) {
   size_t input = s.input_length();
   try {
     auto* owner = s.retain();
-    result = {static_cast<truffledata::json::result_owner*>(owner), &owner->view, input,
+    result = {static_cast<truffledata::json::result_owner*>(owner), const_cast<void*>(owner->descriptor()), input,
               input + simdjson::SIMDJSON_PADDING, owner->bytes(), owner->bytes(), 0, 0,
               sizeof(session::retained), const_cast<uint64_t*>(lexical.data()), lexical.size(),
               const_cast<uint32_t*>(hashes.data())};
@@ -344,4 +363,43 @@ extern "C" uint64_t td_json_stream_truncated_bytes(void* handle) {
 
 extern "C" void td_json_stream_release(void* handle) {
   delete static_cast<truffledata::json::stream*>(handle);
+}
+
+// ---- Myna interchange (tape-gbps plan Task 2, §5) ---------------------------------------------
+
+namespace {
+// An owned Myna ABI v4 tape converted from a compact one, with its own copy of the input (region 1).
+struct myna_conversion final : truffledata::json::result_owner {
+  truffledata::tape::index_memory memory{SIZE_MAX, std::pmr::get_default_resource()};
+  truffledata::tape::block_arena arena{&memory};
+  myna_value_view_v4 view{};
+  void destroy() noexcept override { delete this; }
+};
+}
+
+extern "C" int32_t td_json_result_myna(const void* source, void* output) {
+  if (!aligned(source) || !aligned(output)) return TD_JSON_ARGUMENT;
+  auto& result = *static_cast<JsonResult*>(output);
+  if (result.owner || result.view) return TD_JSON_ARGUMENT;
+  result = {};
+  const auto& from = *static_cast<const JsonResult*>(source);
+  // Only a compact descriptor converts (a Myna descriptor's version is 3 or 4).
+  const auto* tape = static_cast<const td_tape_view*>(from.view);
+  if (!tape || tape->version != TD_TAPE_VIEW_VERSION) return TD_JSON_ARGUMENT;
+  try {
+    auto owned = std::make_unique<myna_conversion>();
+    td_tape_view copy = *tape;
+    size_t padded = size_t(tape->input_bytes) + simdjson::SIMDJSON_PADDING;
+    auto* input = static_cast<uint8_t*>(owned->arena.allocate(padded, alignof(std::max_align_t)));
+    if (tape->input_bytes) std::memcpy(input, tape->input, size_t(tape->input_bytes));
+    std::memset(input + tape->input_bytes, 0, simdjson::SIMDJSON_PADDING);
+    copy.input = input;
+    owned->view = truffledata::tape::ctape::to_myna(copy, &owned->arena);
+    const auto& memory = owned->memory;
+    result = {static_cast<truffledata::json::result_owner*>(owned.get()), &owned->view, tape->input_bytes, padded,
+              memory.current(), memory.peak(), memory.allocations(), 0, sizeof(myna_conversion),
+              nullptr, 0, nullptr, nullptr, 0};
+    (void)owned.release();
+    return TD_JSON_OK;
+  } catch (...) { return translate(); }
 }

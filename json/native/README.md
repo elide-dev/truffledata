@@ -2,12 +2,32 @@
 
 The C++ decoder traverses simdjson 5.1.1 On-Demand directly into a Myna value ABI
 v4 index (Myna 0.11.0), without an intermediate DOM. Typed plans write fixed scalar
-slots instead. Both sit behind one versioned C ABI, `json.seam` (application ABI 6),
+slots instead. Both sit behind one versioned C ABI, `json.seam` (application ABI 7),
 which generates the direct SVM `@CFunction` bindings and JVM FFM handles. The Java
 owners, guest interop, export and snapshot contracts are described in
 [docs/JSON.md](../../docs/JSON.md).
 
-## Generic documents
+## Compact tape (ABI 7, tape-gbps plan Task 2)
+
+`decoder.h` now walks On-Demand into the compact tape of `//tape/native:ctape.h` (plan
+`docs/superpowers/plans/2026-11-07-tape-gbps.md` §3): one 64-bit word per value, a second
+word for numbers, containers and escaped (pool-owned) text; number and string words carry
+their exact token or body span in the retained input, keys carry the `KEY` flag and strings
+the `ASCII` flag, so there are no lexical-span or key-meta side tables. Every object of at
+least two members gets a directory run of `key_offset << 32 | FNV-1a` entries, and the
+duplicate-key check happens while that run is sorted (equal hashes are byte-compared); one-member
+objects have none. `tape_decoder<null_writer>` is the validate-only walk
+(`TD_JSON_VALIDATE_ONLY`): the same limits and the same sorted-run duplicate check over a
+scratch key stack, nothing written. A session created with `TD_JSON_SESSION_COMPACT_TAPE`
+(`JsonLimitsStruct.flags`) publishes `td_tape_view` descriptors (`json.seam` `TapeView`, 88
+bytes) for decodes, retains and stream documents, with a text arena indexed by word;
+`td_json_result_myna` converts a compact result into an owned Myna ABI v4 result (its own input
+copy) for interchange. Until the Java readers move to the compact tape (plan Task 3), sessions
+without the flag and `td_json_decode`/`_adopted` still publish the 0.8.0 representation below,
+from `legacy_decoder.h`; `JsonResult` keeps its `lexical`, `lexical_count` and `key_hashes`
+fields (null for compact results) until then.
+
+## Generic documents (0.8.0 representation, until Task 3)
 
 The decoder accepts every root kind, rejects decoded duplicate keys and trailing
 input, and validates number grammar without restricting numeric range. Every value
@@ -219,7 +239,7 @@ growth and checks that each unwinds with no retained bytes under ASan/UBSan.
 ## Tests
 
 ```sh
-bazel test //json/native:test //json/native:api_test //json/native:stream_test //json/native:typed_test //json/native:unicode_test
+bazel test //json/native:test //json/native:legacy_test //json/native:api_test //json/native:stream_test //json/native:typed_test //json/native:unicode_test
 bazel test //json/tests:jvm          # JVM FFM backend
 bazel test //json/tests:native_test  # SVM, manual, Linux x86-64 via RBE
 ```

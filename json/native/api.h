@@ -27,6 +27,31 @@ enum td_json_status {
 // TD_JSON_LATIN1_INPUT (Task D3): `data` is ISO-8859-1, one code point per byte, transcoded to
 // UTF-8. Exclusive with TD_JSON_UTF16_INPUT.
 #define TD_JSON_LATIN1_INPUT 8u
+// TD_JSON_VALIDATE_ONLY (tape-gbps Task 2): run the decode walk and every check (grammar, UTF-8,
+// numbers, duplicate keys after unescaping, limits) and keep nothing: on success result.view is
+// null, the session holds no document (retain is TD_JSON_ARGUMENT) and only the accounting fields
+// are set. Exclusive with TD_JSON_WANT_TEXT.
+#define TD_JSON_VALIDATE_ONLY 16u
+
+// ABI 7 (tape-gbps plan §3): a session created with TD_JSON_SESSION_COMPACT_TAPE in
+// JsonLimitsStruct.flags publishes compact tapes: JsonResult.view is a td_tape_view (json.seam
+// TapeView; tape/native/ctape.h documents the words, directories and spans), lexical,
+// lexical_count and key_hashes are null/0 (spans and key flags live in the words), and text_table
+// has one entry per word (0 for second words). Session decodes, retains and stream documents all
+// follow the session's flag.
+// TRANSITIONAL (Task 2 -> Task 3): without the flag, sessions and td_json_decode/_adopted publish
+// the 0.8.0 representation (view: a Myna ABI v4 descriptor; lexical spans and key meta per node),
+// which the Java readers consume until Task 3 moves them to the compact tape; Task 3 makes the
+// compact tape the only representation and drops lexical, lexical_count and key_hashes (JsonResult
+// 112 -> 88 bytes). Other JsonLimitsStruct.flags bits make session_create return null.
+#define TD_JSON_SESSION_COMPACT_TAPE 1u
+
+// td_json_result_myna(result, output): converts the compact tape of `result` (borrowed or owned,
+// still valid) into an owned Myna ABI v4 result in the zero-initialized `output` (view: a
+// myna_value_view_v4 with directories on objects of at least two members; region 1 is the output's
+// own copy of the input, so it outlives the source; lexical and key_hashes null). Release it with
+// td_json_release. A result whose view is not a compact tape (a Myna descriptor, a validate-only
+// result) or a live `output` is TD_JSON_ARGUMENT.
 
 // Sessions (td_json_session_*). A session is a thread-confined decode context: one simdjson
 // On-Demand parser, a padded input buffer and a block arena reused across documents. Callers
