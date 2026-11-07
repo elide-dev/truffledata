@@ -4,7 +4,6 @@ cc_library(
     name = "decoder",
     hdrs = [
         "decoder.h",
-        "legacy_decoder.h",
         "parser_pool.h",
         "session.h",
         "status.h",
@@ -24,20 +23,30 @@ cc_test(
     srcs = ["decoder_test.cc"],
     copts = ["-std=c++17"],
     deps = [
+        ":myna_oracle",
         ":decoder",
         "//tape/native:testing",
     ],
 )
 
-# TRANSITIONAL (tape-gbps Task 2 -> Task 3): the 0.8.0 Myna-tape decoder the Java readers still use.
+# The previous Myna producer is a test-only differential oracle.
 cc_test(
-    name = "legacy_test",
-    srcs = ["legacy_decoder_test.cc"],
+    name = "myna_oracle_test",
+    srcs = ["testing/myna_oracle_test.cc"],
     copts = ["-std=c++17"],
     deps = [
+        ":myna_oracle",
         ":decoder",
         "//tape/native:testing",
     ],
+)
+
+cc_library(
+    name = "myna_oracle",
+    testonly = True,
+    hdrs = ["testing/myna_oracle.h"],
+    copts = ["-std=c++17"],
+    deps = [":decoder"],
 )
 
 config_setting(
@@ -62,7 +71,8 @@ genrule(
         "generated/seam.ll",
         "generated/META-INF/native-image/dev.elide.myna/dev.elide.truffledata.json.generated.Json/native-image.properties",
     ],
-    cmd = "$(location @myna//:generator) generate $(location json.seam) --out $(RULEDIR)/generated --target " + select({
+    cmd = "$(location @myna//:generator) validate $(location json.seam) --targets x86_64-unknown-linux-gnu,aarch64-unknown-linux-gnu,aarch64-apple-darwin && " +
+          "$(location @myna//:generator) generate $(location json.seam) --out $(RULEDIR)/generated --target " + select({
         "@platforms//os:macos": "aarch64-apple-darwin",
         ":linux_arm64": "aarch64-unknown-linux-gnu",
         "//conditions:default": "x86_64-unknown-linux-gnu",
@@ -95,14 +105,12 @@ cc_library(
     ],
 )
 
-# Everything a static (SVM) image links for JSON: the C ABI plus Myna's myna-values static library,
-# whose myna_utf8_to_utf16_v2 SvmValueTape calls for long strings. JVM builds use json_shared.so.
+# The C ABI and compact-tape simdutf transcoder for static images.
 cc_library(
     name = "svm",
     visibility = ["//visibility:public"],
     deps = [
         ":truffledata_json",
-        "//json/native/bridge",
     ],
 )
 
@@ -111,6 +119,7 @@ cc_test(
     srcs = ["api_test.cc"],
     copts = ["-std=c++17"],
     deps = [
+        ":myna_oracle",
         ":truffledata_json",
         "@myna//:values_headers",
     ],

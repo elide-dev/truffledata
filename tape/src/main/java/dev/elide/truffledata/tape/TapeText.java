@@ -79,7 +79,7 @@ public final class TapeText {
    * for strings and decimals. Equal keys have equal hashes in every document.
    */
   public int hash() {
-    return (owner.meta(node()) >>> 16) & 0x7fff;
+    return owner.tape.hash(node()) & 0x7fff;
   }
 
   /**
@@ -87,32 +87,18 @@ public final class TapeText {
    * inline string or key, and returns whether it was.
    */
   boolean inlineWords(long[] words, int offset) {
-    long at = node() * ValueTape.NODE_SIZE;
-    TapeSource source = owner.source();
-    long header = source.nodeLong(at);
-    if ((int) header != ValueTape.STRING || (header >>> 32) > TapeKey.INLINE_BYTES) return false;
-    words[offset] = header;
-    words[offset + 1] = source.nodeLong(at + 8);
-    words[offset + 2] = source.nodeLong(at + 16);
+    long at = node();
+    long length = owner.tape.length(at);
+    if (owner.tag(at) != ValueTape.STRING || length > TapeKey.INLINE_BYTES) return false;
+    words[offset] = ValueTape.STRING | (length << 32);
+    words[offset + 1] = owner.tape.textWord(at, 0);
+    words[offset + 2] = owner.tape.textWord(at, 8);
     return true;
   }
 
-  /**
-   * Copies an inline string's bytes (at most 16, no storage flag) from its two node words, or
-   * returns false for other nodes. Replaces Myna's per-byte checked reads for short text.
-   */
   private boolean copyInline(long at, int length, byte[] output, int offset) {
-    if (length > TapeKey.INLINE_BYTES) return false;
-    TapeSource source = owner.source();
-    long word = at * ValueTape.NODE_SIZE;
-    if (source.nodeInt(word) != ValueTape.STRING) return false;
-    java.util.Objects.checkFromIndexSize(offset, length, output.length);
-    long low = source.nodeLong(word + 8);
-    for (int i = 0; i < Math.min(length, 8); i++) output[offset + i] = (byte) (low >>> (8 * i));
-    if (length > 8) {
-      long high = source.nodeLong(word + 16);
-      for (int i = 8; i < length; i++) output[offset + i] = (byte) (high >>> (8 * (i - 8)));
-    }
+    if (length > TapeKey.INLINE_BYTES || owner.tag(at) != ValueTape.STRING) return false;
+    owner.tape.copyStringUtf8(at, output, offset);
     return true;
   }
 
@@ -120,7 +106,7 @@ public final class TapeText {
   @TruffleBoundary
   public String toJavaString() {
     long at = node();
-    if (owner.tag(at) == ValueTape.DECIMAL) return owner.lexicalText(at);
+    if (owner.tag(at) == ValueTape.DECIMAL) return owner.numberText(at);
     int length = Math.toIntExact(owner.tape.length(at));
     if (length == 0) return "";
     boolean ascii = owner.ascii(at);
@@ -152,7 +138,7 @@ public final class TapeText {
   public TruffleString toTruffleString(TruffleString.Encoding encoding) {
     long at = node();
     if (owner.tag(at) == ValueTape.DECIMAL)
-      return TruffleString.fromJavaStringUncached(owner.lexicalText(at), encoding);
+      return TruffleString.fromJavaStringUncached(owner.numberText(at), encoding);
     TapeTextArena text = arena;
     if (text != null) return text.string(at, encoding);
     byte[] bytes = new byte[Math.toIntExact(owner.tape.length(at))];

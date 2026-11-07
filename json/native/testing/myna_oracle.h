@@ -1,10 +1,8 @@
-#ifndef TRUFFLEDATA_JSON_LEGACY_DECODER_H
-#define TRUFFLEDATA_JSON_LEGACY_DECODER_H
-// TRANSITIONAL (tape-gbps plan Task 2 -> Task 3): the 0.8.0 decoder writing Myna ABI v4 tapes plus
-// the lexical-span and key-meta side tables, kept verbatim in json::legacy. Until the Java readers
-// move to the compact tape (Task 3), sessions created without TD_JSON_SESSION_COMPACT_TAPE and
-// td_json_decode/td_json_decode_adopted publish this decoder's tapes, and the native tests use it as
-// the parity reference for the compact decoder. Task 3 deletes this header.
+// Test-only reference for compact-tape differential checks. The previous decoder writes
+// Myna ABI v4 nodes, lexical spans and key metadata; production JSON uses compact words.
+#ifndef TRUFFLEDATA_JSON_TESTING_MYNA_ORACLE_H
+#define TRUFFLEDATA_JSON_TESTING_MYNA_ORACLE_H
+
 #include "json/native/decoder.h"
 #include "json/native/parser_pool.h"
 #include "tape/native/key_table.h"

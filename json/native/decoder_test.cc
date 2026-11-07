@@ -2,7 +2,7 @@
 // the 200-document corpus, directory-fused duplicate detection, number classification, exact
 // spans, strict input, validate-only parity and allocation failure at every growth step.
 #include "json/native/decoder.h"
-#include "json/native/legacy_decoder.h"
+#include "json/native/testing/myna_oracle.h"
 #include "json/native/session.h"
 #include "json/native/status.h"
 #include "tape/native/testing.h"
@@ -436,7 +436,7 @@ void validate_only_rejects_everything_decode_rejects() {
   }
   for (const auto& source : corpus()) {
     auto d = s.decode(source.data(), source.size(), json::session::encoding::utf8, true);
-    require(!d.tape && !d.myna && !s.live() && d.input_length == source.size());
+    require(!d.tape && !s.live() && d.input_length == source.size());
   }
   // Limits: the same values, text bytes, depth and input bounds.
   const std::string doc = "[\"xx\",[1],{\"k\":\"v\"}]";
@@ -586,11 +586,48 @@ void allocation_failure_at_every_growth() {
   fault_memory memory(SIZE_MAX);
   require(throws([&] { document d(object_with_keys(300, 299, "kA"), {}, {}, &memory); }) && memory.live == 0);
 }
+
+void templates_survive_documents_and_reject_escaped_duplicates() {
+  auto object = [](const std::vector<std::string>& keys) {
+    std::string text = "{";
+    for (size_t i = 0; i < keys.size(); ++i) {
+      if (i) text += ',';
+      text += '"' + keys[i] + "\":" + std::to_string(i);
+    }
+    return text + '}';
+  };
+  for (bool validate : {false, true}) {
+    json::session session({}, {});
+    auto decode = [&](const std::string& text) {
+      return status_of([&] { session.decode(text.data(), text.size(), json::session::encoding::utf8, validate); });
+    };
+    for (unsigned count = 2; count <= 32; ++count) {
+      std::vector<std::string> keys;
+      for (unsigned i = 0; i < count; ++i) keys.push_back("key" + std::to_string(i));
+      require(decode(object(keys)) == json::status_ok);
+      // Different encoded spelling of the exact same decoded template sequence is a hit.
+      keys[0] = "\\u006bey0";
+      require(decode(object(keys)) == json::status_ok);
+      for (unsigned position = 0; position <= count; ++position) {
+        auto duplicate = keys;
+        duplicate.insert(duplicate.begin() + position, "key0");
+        require(decode(object(duplicate)) == json::status_syntax);
+      }
+      keys.pop_back();
+      require(decode(object(keys)) == json::status_ok);
+      keys.push_back(std::string(40, 'x'));
+      require(decode(object(keys)) == json::status_ok);
+      keys.push_back(std::string(40, 'x'));
+      require(decode(object(keys)) == json::status_syntax);
+    }
+  }
+}
 }  // namespace
 
 int main() {
   struct test { const char* name; void (*run)(); };
   const test tests[] = {
+      {"templates_survive_documents_and_reject_escaped_duplicates", templates_survive_documents_and_reject_escaped_duplicates},
       {"words_match_reference_corpus", words_match_reference_corpus},
       {"walk_matches_reference", walk_matches_reference},
       {"duplicate_rejected_after_unescaping", duplicate_rejected_after_unescaping},

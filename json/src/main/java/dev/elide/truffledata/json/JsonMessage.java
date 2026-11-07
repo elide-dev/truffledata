@@ -3,7 +3,7 @@ package dev.elide.truffledata.json;
 import com.oracle.truffle.api.Assumption;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.Truffle;
-import dev.elide.myna.values.ValueTape;
+import dev.elide.truffledata.tape.TapeReader;
 import dev.elide.truffledata.tape.TapeFormat;
 import dev.elide.truffledata.tape.TapeLexical;
 import dev.elide.truffledata.tape.TapeOwner;
@@ -18,12 +18,12 @@ public final class JsonMessage extends TapeOwner implements AutoCloseable {
    * A published result's lexical tables and its release (run once, on close), as one object: a
    * message is allocated per retained document, so it carries a single reference for both.
    */
-  interface Storage extends TapeLexical, Runnable {}
+  interface Storage extends Runnable {}
 
   private final Storage storage;
   private @Nullable Assumption alive;
 
-  JsonMessage(ValueTape tape, Storage storage) {
+  JsonMessage(TapeReader tape, Storage storage) {
     super(tape, Thread.currentThread());
     this.storage = storage;
   }
@@ -44,12 +44,12 @@ public final class JsonMessage extends TapeOwner implements AutoCloseable {
   @Override
   protected long lexical(long node) {
     if (node < 0 || node >= tape.nodeCount()) throw new IndexOutOfBoundsException("Node index");
-    return storage.span(node);
+    return tape.span(node);
   }
 
   @Override
   protected byte lexicalByte(long offset) {
-    return storage.inputByte(offset);
+    return tape.inputByte(offset);
   }
 
   @Override

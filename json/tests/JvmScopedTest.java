@@ -1274,4 +1274,43 @@ final class JvmScopedTest {
       @Override public void stringValue(dev.elide.truffledata.tape.TapeText text) { action.run(); }
     };
   }
+  @Test
+  void compactSnapshotsAndMynaInterchangePreserveEverySubtree() {
+    try (JsonDecoder decoder = JsonJvm.open(library())) {
+      for (int i = 0; i < 200; i++) {
+        String source = "{\"k\":[" + i + ",-0.0,true,null,{\"e\\u0073caped\":\"line\\n中\"}],\"plain\":\"text-" + i + "\"}";
+        try (JsonMessage message = decoder.decode(utf8(source))) {
+          checkCompactSubtree(message.root());
+          message.toMyna().validate();
+        }
+      }
+    }
+  }
+
+  private static void checkCompactSubtree(TapeValue value) {
+    var snapshot = value.snapshot();
+    assertEquals(value.kind(), snapshot.root().kind());
+    snapshot.toMyna().validate();
+    var first = new dev.elide.truffledata.tape.JavaSink();
+    var second = new dev.elide.truffledata.tape.JavaSink();
+    value.export(first);
+    snapshot.export(second);
+    assertEquals(first.result(), second.result());
+    switch (value.kind()) {
+      case NUMBER, STRING -> assertEquals(value.rawText(), snapshot.root().rawText());
+      case ARRAY -> {
+        assertEquals(value.size(), snapshot.root().size());
+        for (TapeValue element : value.elements()) checkCompactSubtree(element);
+      }
+      case OBJECT -> {
+        assertEquals(value.size(), snapshot.root().size());
+        for (long i = 0; i < value.size(); i++) {
+          assertEquals(value.keyAt(i).rawText(), snapshot.root().keyAt(i).rawText());
+          checkCompactSubtree(value.memberAt(i));
+        }
+      }
+      default -> {}
+    }
+  }
+
 }

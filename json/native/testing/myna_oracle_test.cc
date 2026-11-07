@@ -1,6 +1,5 @@
-// TRANSITIONAL (tape-gbps Task 2 -> Task 3): the 0.8.0 decoder (legacy_decoder.h) that the Java
-// readers still consume; deleted with it in Task 3.
-#include "json/native/legacy_decoder.h"
+// Regression tests for the test-only Myna reference producer.
+#include "json/native/testing/myna_oracle.h"
 #include "json/native/parser_pool.h"
 #include "tape/native/testing.h"
 #include <cstring>

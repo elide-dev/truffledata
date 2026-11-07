@@ -6,7 +6,7 @@ import sys
 
 ACCESS_CLASSES = {
     'AbstractRow', 'DataArray', 'DataLibrary', 'DynamicRecord', 'ExactNumber',
-    'Missing', 'PayloadBudget', 'ReadBooleanNode', 'ReadDoubleNode', 'ReadLengthNode', 'ReadLongNode',
+    'Missing', 'OwnedArray', 'PayloadBudget', 'ReadBooleanNode', 'ReadDoubleNode', 'ReadLengthNode', 'ReadLongNode',
     # Layout-bound accessors (protobuf performance plan Task B2): AccessorTest and
     # TypedAcceptance.accessors run every method against the uncached DataLibrary.
     'Accessor', 'LibraryAccessor',
@@ -15,6 +15,10 @@ ACCESS_CLASSES = {
 
 ACCESS_SOURCES = {f'core/src/main/java/dev/elide/truffledata/{name}.java' for name in ACCESS_CLASSES} | {
     'protobuf-runtime/src/main/java/dev/elide/truffledata/protobuf/ProtoRow.java',
+    'protobuf-runtime/src/main/java/dev/elide/truffledata/protobuf/SlabRow.java',
+    'protobuf-runtime/src/main/java/dev/elide/truffledata/protobuf/SlabMessage.java',
+    'protobuf-runtime/src/main/java/dev/elide/truffledata/protobuf/SlabArray.java',
+    'protobuf-runtime/src/main/java/dev/elide/truffledata/protobuf/SlabBytes.java',
     'protobuf-runtime/src/main/java/dev/elide/truffledata/protobuf/ProtoAccess.java',
     'protobuf-runtime/src/main/java/dev/elide/truffledata/protobuf/ProtoCodec.java',
     'protobuf-runtime/src/main/java/dev/elide/truffledata/protobuf/GeneratedMessage.java',
@@ -49,10 +53,18 @@ ACCESS_SOURCES = {f'core/src/main/java/dev/elide/truffledata/{name}.java' for na
     # JsonMessage.Lexical → TapeLexical; JavaSink, TruffleSink and the tapes keep their names;
     # TapeSession, TapeStream and TapeFormat hold what JsonSession and JsonStream shared.
     f'tape/src/main/java/dev/elide/truffledata/tape/{name}.java' for name in (
-        'HeapValueTape', 'JavaSink', 'OwnerStateException', 'SegmentValueTape', 'SvmValueTape', 'TapeBorrow', 'TapeExportNode',
+        'HeapTape', 'TapeReader', 'LegacyTapeReader', 'SvmTape', 'SegmentTape', 'AliasExport', 'HeapValueTape', 'JavaSink', 'OwnerStateException', 'SegmentValueTape', 'SvmValueTape', 'TapeBorrow', 'TapeExportNode',
         'TapeFormat', 'TapeKey', 'TapeLexical', 'TapeOwner', 'TapeSession', 'TapeSink', 'TapeSnapshot',
         'TapeSource', 'TapeStream', 'TapeText', 'TapeTextArena', 'TapeValue', 'TruffleSink',
         'TypedAccess', 'TypedArray', 'TypedLayout', 'TypedOwner', 'TypedRecord',
+    )
+} | {
+    # Native YAML's JVM integration covers the common API; SVM intrinsics are tested in its image.
+    f'yaml/src/main/java/dev/elide/truffledata/yaml/{name}.java' for name in (
+        'Aliases', 'DuplicateKeys', 'KeyKind', 'Style', 'UnknownTags', 'VersionDirective',
+        'Yaml', 'YamlSchema', 'YamlOptions', 'YamlLimits', 'YamlDirectives', 'YamlMetadata',
+        'ResultMetadata', 'YamlSession', 'YamlMessage', 'YamlStream', 'YamlStreamOptions',
+        'YamlJvm', 'YamlSvm', 'JvmSessionBackend', 'SvmSessionBackend',
     )
 } | {
     # Every CSV source: the scanner, ingest and typed conversions run on every read path, and the
@@ -121,17 +133,10 @@ SVM_ONLY_METHODS = {
         'JsonSvm::publish (Lorg/graalvm/nativeimage/c/type/VoidPointer;Ljava/lang/Runnable;)'
         'Ldev/elide/truffledata/json/JsonMessage;',
         'JsonSvm::release (J)V',
-        'JsonSvm::tape (Lorg/graalvm/nativeimage/c/type/VoidPointer;)Ldev/elide/truffledata/tape/SvmValueTape;',
-        'JsonSvm::tables (Lorg/graalvm/nativeimage/c/type/VoidPointer;Ldev/elide/truffledata/tape/SvmValueTape;'
-        'Ljava/lang/Runnable;)Ldev/elide/truffledata/json/JsonSvm$SvmResult;',
         'JsonSvm::adoptResult (Lorg/graalvm/nativeimage/c/type/VoidPointer;)Ldev/elide/truffledata/json/JsonMessage;',
         # Result accessors (Myna v4 descriptor, side tables, retained input) and the session's
         # rebindable borrow reader (JSON performance ledger V1; was JsonSvm::borrow).
         'JsonSvm::descriptor (Lorg/graalvm/nativeimage/c/type/VoidPointer;)Lorg/graalvm/word/Pointer;',
-        'JsonSvm::hashes (Lorg/graalvm/nativeimage/c/type/VoidPointer;)Lorg/graalvm/word/Pointer;',
-        'JsonSvm::spans (Lorg/graalvm/nativeimage/c/type/VoidPointer;Ldev/elide/truffledata/tape/SvmValueTape;)'
-        'Lorg/graalvm/word/Pointer;',
-        'JsonSvm::inputRegion (Lorg/graalvm/nativeimage/c/type/VoidPointer;)Lorg/graalvm/word/Pointer;',
         'JsonSvm$Borrows::borrow (Lorg/graalvm/nativeimage/c/type/VoidPointer;)Ldev/elide/truffledata/tape/TapeBorrow;',
         # The decoder handle returned by open() and the lexical table built by publish().
         'JsonSvm$1::decode ([BLdev/elide/truffledata/json/JsonLimits;)Ldev/elide/truffledata/json/JsonMessage;',
@@ -140,9 +145,6 @@ SVM_ONLY_METHODS = {
         'JsonSvm$1::compile (Ldev/elide/truffledata/Schema;Ljava/util/Map;)Ldev/elide/truffledata/json/JsonPlan;',
         'JsonSvm$1::close ()V',
         # The side tables and release of one published result (lexical accessor and close action).
-        'JsonSvm$SvmLexical::span (J)J',
-        'JsonSvm$SvmLexical::inputByte (J)B',
-        'JsonSvm$SvmLexical::bind (Lorg/graalvm/word/Pointer;Lorg/graalvm/word/Pointer;J)V',
         'JsonSvm$SvmResult::run ()V',
         'JsonSvm$AdoptedResult::run ()V',
     ),
@@ -203,6 +205,17 @@ SVM_ONLY_METHODS = {
         'Ldev/elide/truffledata/json/JsonPlan$SvmBackend;',
         'JsonPlan$SvmBackend::decode ([B[Ldev/elide/truffledata/Schema;)Ldev/elide/truffledata/tape/TypedOwner;',
         'JsonPlan$SvmBackend::release ()V',
+    ),
+    # The compact reader's pointer operations and bulk transcoder execute only in native images.
+    **_tape_methods(
+        'SvmTape',
+        'SvmTape::rebind (Lorg/graalvm/word/Pointer;)V',
+        'SvmTape::readWord (J)J',
+        'SvmTape::textByte (ZJ)B',
+        'SvmTape::textWord (ZJI)J',
+        'SvmTape::directoryEntry (J)J',
+        'SvmTape::metadata (J)I',
+        'SvmTape::stringValue (J)Ljava/lang/String;',
     ),
     # Word-pointer tape over a native descriptor; constructed only by JsonSvm.publish and the
     # static-image session backend.

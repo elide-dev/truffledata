@@ -632,11 +632,82 @@ void allocation_failure_at_every_growth() {
     }
   }
 }
+// Build through the decoded-key API with optional cache. Separate writers and arenas ensure
+// templates cannot accidentally retain prior document pointers.
+struct shape_document { std::vector<uint64_t> words, directory; std::vector<uint8_t> pool; };
+shape_document write_shape(const std::vector<std::string>& keys, key_shape_cache* cache, bool wide = false, unsigned depth = 0) {
+  std::pmr::monotonic_buffer_resource memory;
+  ctape_writer writer(&memory, {});
+  writer.input({});
+  writer.shapes(cache);
+  std::vector<size_t> arrays;
+  for (unsigned d = 0; d < depth; ++d) arrays.push_back(writer.begin(c::kind_array, d));
+  size_t object = writer.begin(c::kind_object, depth);
+  for (size_t i = 0; i < keys.size(); ++i) {
+    const auto& key = keys[i];
+    writer.key_text(object, reinterpret_cast<const uint8_t*>(key.data()), uint32_t(key.size()));
+    writer.string(key, {}, true, true);
+    if (wide && i % 3 == 0) writer.integer(int64_t(i), {});
+    else if (wide && i % 3 == 1) {
+      size_t array = writer.begin(c::kind_array, depth + 1);
+      writer.null(); writer.string("owned", {}, true, false); writer.end(array, 2);
+    } else writer.boolean(i % 2);
+  }
+  writer.end(object, keys.size());
+  for (size_t i = arrays.size(); i > 0; --i) writer.end(arrays[i - 1], 1);
+  auto view = writer.view();
+  require(c::validate(view) == nullptr);
+  return {{view.words, view.words + view.word_count}, {view.directory, view.directory + view.directory_count},
+          {view.pool, view.pool + view.pool_bytes}};
+}
+
+void shape_cache_rejects_duplicates() {
+  key_shape_cache cache;
+  for (unsigned count = 2; count <= 32; ++count) {
+    std::vector<std::string> keys;
+    for (unsigned i = 0; i < count; ++i) keys.push_back("key" + std::to_string(i));
+    write_shape(keys, &cache);
+    require(cache.levels[0].count == count);
+    // Every insertion position, including a complete template match followed by an extra key.
+    for (unsigned position = 0; position <= count; ++position) {
+      auto duplicate = keys;
+      duplicate.insert(duplicate.begin() + position, keys.front());
+      require(throws_as<c::duplicate_key>([&] { write_shape(duplicate, &cache); }));
+    }
+    for (unsigned position = 1; position < count; ++position) {
+      auto duplicate = keys; duplicate[position] = keys.front();
+      require(throws_as<c::duplicate_key>([&] { write_shape(duplicate, &cache); }));
+    }
+    // A shorter prefix is valid but cannot inherit the longer template's count.
+    keys.pop_back();
+    write_shape(keys, &cache);
+  }
+  std::string long_key(40, 'x');
+  require(throws_as<c::duplicate_key>([&] { write_shape({long_key, "short", long_key}, &cache); }));
+  write_shape({"a", "b"}, &cache, false, 31);
+  require(throws_as<c::duplicate_key>([&] { write_shape({"a", "a"}, &cache, false, 31); }));
+  require(throws_as<c::duplicate_key>([&] { write_shape({"a", "a"}, &cache, false, 32); }));
+}
+
+void permuted_directories_match_sorted() {
+  key_shape_cache cache;
+  std::vector<std::string> keys;
+  for (unsigned i = 0; i < 32; ++i) keys.push_back("field" + std::to_string(i));
+  for (unsigned round = 0; round < 8; ++round) {
+    auto cached = write_shape(keys, &cache, round % 2);
+    auto sorted = write_shape(keys, nullptr, round % 2);
+    require(cached.words == sorted.words && cached.directory == sorted.directory && cached.pool == sorted.pool);
+    if (round % 2) std::reverse(keys.begin(), keys.end());
+  }
+  require(cache.levels[0].count == 32);
+}
 }  // namespace
 
 int main() {
   struct test { const char* name; void (*run)(); };
   const test tests[] = {
+      {"shape_cache_rejects_duplicates", shape_cache_rejects_duplicates},
+      {"permuted_directories_match_sorted", permuted_directories_match_sorted},
       {"words_follow_the_layout", words_follow_the_layout},
       {"duplicates_detected_in_sorted_directory", duplicates_detected_in_sorted_directory},
       {"singleton_objects_have_no_directory", singleton_objects_have_no_directory},

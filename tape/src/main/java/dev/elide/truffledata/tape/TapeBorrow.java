@@ -24,6 +24,12 @@ public final class TapeBorrow extends TapeOwner {
     this.format = checkFormat(tape, format);
   }
 
+  public TapeBorrow(TapeReader tape, TapeFormat format) {
+    super(tape, Thread.currentThread());
+    this.lexical = tape;
+    this.format = checkFormat(tape, format);
+  }
+
   @Override
   public TapeFormat format() {
     return format;

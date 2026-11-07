@@ -13,6 +13,7 @@ rust_static_library(
     rustc_flags = ["-Copt-level=3"],
     visibility = [
         "//json:__subpackages__",
+        "//yaml:__subpackages__",
         "//tools/release:__pkg__",
     ],
     deps = ["@crates//:myna-values"],

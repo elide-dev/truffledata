@@ -1,7 +1,7 @@
 # Native JSON backend (unreleased)
 
 The `//json` module parses general JSON with simdjson 5.1.1 On-Demand directly
-into a Myna ABI v4 value index, with no DOM, Serde value or Java object tree in
+into a compact word tape, with no DOM, Serde value or Java object tree in
 between. Guests read that index in place through `InteropLibrary`, embedders can
 export it into their own objects in one pass, and `snapshot()` detaches it into
 immutable heap storage. Known-schema scalar records decode into fixed native slots
@@ -68,7 +68,7 @@ is no fallback to another parser.
 | Empty input, syntax, duplicate key, invalid argument | `IllegalArgumentException` |
 | `JsonLimits` exceeded | `IllegalArgumentException("JSON resource limit")` |
 | Native allocation failure | `OutOfMemoryError` |
-| Binding fingerprint or Myna ABI mismatch | `IllegalStateException` |
+| Binding fingerprint or compact tape ABI mismatch | `IllegalStateException` |
 
 ## Backend selection
 
@@ -76,7 +76,7 @@ Choose the backend explicitly; nothing searches for a library or falls back to J
 
 | Runtime | Entry point | Notes |
 | --- | --- | --- |
-| Native Image (SVM) | `JsonSvm.open()`, `JsonSvm.decode(...)` | Links `//json/native:svm` statically (the C ABI plus Myna's `myna-values` static library). Throws `UnsupportedOperationException` outside image runtime code. |
+| Native Image (SVM) | `JsonSvm.open()`, `JsonSvm.decode(...)` | Links `//json/native:svm` statically (the C ABI and shared simdutf transcoder). Throws `UnsupportedOperationException` outside image runtime code. |
 | JVM | `JsonJvm.open(Path library)` | Loads `json_shared.so` through FFM. Keep `//json:jvm` out of static images. |
 
 Both check the generated binding fingerprint before the first decode. Both
@@ -221,9 +221,9 @@ one decode. All values must be positive and `maxDepth` must be within 1..128.
 | Limit | `DEFAULT` | Bounds |
 | --- | --- | --- |
 | `maxInputBytes` | 64 MiB | Logical input, checked before copying |
-| `maxIndexBytes` | 64 MiB | Myna nodes, regions, lexical spans, traversal and duplicate-key storage, including reallocation overlap |
+| `maxIndexBytes` | 64 MiB | Compact words, directories, traversal and duplicate-key storage, including reallocation overlap |
 | `maxNodes` | 1,000,000 | Index nodes (keys count) |
-| `maxTextBytes` | 64 MiB | Myna text bytes for strings and keys |
+| `maxTextBytes` | 64 MiB | Decoded text bytes for strings and keys |
 | `maxDepth` | 128 | Container nesting |
 
 The index budget is charged per arena block and large allocation (see the native
@@ -332,27 +332,18 @@ is false and `readMember` throws `UnknownIdentifierException`. It is never encod
 lossily as `?`. Reads after close fail with `IllegalStateException`, which polyglot
 callers see as a `PolyglotException`.
 
-Member lookup goes through Myna value ABI v4 object directories (Myna 0.11.0,
-elide-dev/myna#45). The decoder gives every object with at least one member a
-directory: one `(hash, key offset)` entry per member, the hash being 32-bit FNV-1a
-of the key's decoded bytes, sorted by unsigned hash and then offset. Snapshots copy
-the directories of their subtree. Each cached `readMember`/`isMemberReadable` site
-keeps a rank hint: the position of its key in the directory of the object where it
-last found it. Because entries are sorted by hash, that rank is the same for every
-member order of one key set, so documents that alternate member orders hit on every
-read. A hint is checked before use: the receiver must be an object whose directory
-has that many entries, and the entry's hash, the key node's tag, length and inline
-bytes must match. A directory lists only its own object's keys, so a value string or
-a nested object's key never matches, and a stale hint only costs a miss. For keys of
-at most 16 bytes the hit path is a few loads with no loop or call. Misses and longer
-keys binary-search the directory behind a static boundary and update the hint;
-equal hashes are confirmed in key order (first match, as Myna's own `find`).
-`directories()` counts the objects that carry a directory. `TapeKey.of(name)` (or
-`TapeKey.of(ValueTape.Utf8Key)`) prepares a key for repeated `member(TapeKey)`
-calls from Java. Before ABI v4 a native side table carried each key's offset from
-its object and a Java directory was built for objects above 32 members; both are
-gone from lookups (the side table still marks ASCII text and gives export cursors
-their 15-bit key hash).
+Member lookup uses compact object directories. Objects with at least two members carry
+one `(hash, key word offset)` entry per member, sorted by unsigned FNV-1a hash and then
+offset. Objects without directories are scanned. A cached member read remembers a rank
+in that directory, verifies the current key's kind, length and bytes before using it, and
+falls back to a binary search on a stale hint. Second words are skipped when moving from
+an escaped key to its value. `TapeKey.of(name)` prepares a key for repeated lookups.
+
+`JsonMessage.toMyna()` and `TapeSnapshot.toMyna()` create detached Myna ABI v4 tapes on
+demand. This copy is for interchange; ordinary reads, exports and snapshots read compact
+words directly. Snapshots copy the subtree's referenced input and pool ranges and rebase
+its spans and directories. `rawText()` therefore keeps the original spelling after the
+source owner closes.
 
 ## Exporting to host objects
 
@@ -375,8 +366,8 @@ Keys, strings and decimals arrive through one reusable `TapeText` cursor per exp
 rebound for each event, so an export creates no object per string. The sink chooses
 how to materialize: `toJavaString()` (a decimal gives its exact token),
 `toTruffleString(encoding)`, `copyUtf8(byte[], offset)`, `utf8Equals(byte[])`,
-`utf8Length()`, `isAscii()` (from the decoder's side table, no scan) and `hash()`
-(the decoder's 15-bit key hash; 0 for strings and decimals). The cursor is valid
+`utf8Length()`, `isAscii()` (from the word's ASCII flag, no scan) and `hash()`
+(the low 15 bits of the key's FNV-1a hash; 0 for strings and decimals). The cursor is valid
 only during the event that passed it: afterwards every method throws
 `IllegalStateException`. `view()` returns a `TapeValue` that lives as long as the
 owner. The owner cannot close until the export returns. An exception from the sink
@@ -384,10 +375,8 @@ ends the export and releases that hold.
 
 `toJavaString()` decodes ASCII text into a Latin-1 `String` from a reusable scratch
 buffer (one copy) and other short text with the JDK's UTF-8 decoder. Non-ASCII
-strings of 256 bytes or more go through the tape's bulk path: on SVM, Myna's
-simdutf transcoder (`myna_utf8_to_utf16_v2` from the `myna-values` Rust static
-library, which `//json/native:svm` links into every JSON image) writes straight
-into the `String`'s UTF-16 storage.
+strings of 256 bytes or more use the shared native simdutf transcoder
+(`td_tape_utf8_to_utf16`) on SVM, writing UTF-16 into a pinned character array.
 
 The outermost export on a confined message reuses one cursor (and its 129-slot
 container stack) held by the message; a session's borrowed parses share one cursor.

@@ -21,6 +21,8 @@ public final class JavaSink implements TapeSink {
   private @Nullable String key;
   private @Nullable Object result;
   private boolean done;
+  private @Nullable Map<Integer, @Nullable Object> anchors;
+  private int pendingAnchor = -1;
 
   /** A sink that materializes every key. */
   public JavaSink() {
@@ -88,6 +90,12 @@ public final class JavaSink implements TapeSink {
   @SuppressWarnings("unchecked")
   @TruffleBoundary
   private void add(@Nullable Object value) {
+    if (pendingAnchor >= 0) {
+      Map<Integer, @Nullable Object> table = anchors;
+      if (table == null) anchors = table = new LinkedHashMap<>();
+      table.put(pendingAnchor, value);
+      pendingAnchor = -1;
+    }
     if (open.isEmpty()) {
       if (done) throw new IllegalStateException("Sink already holds a value");
       result = value;
@@ -100,6 +108,18 @@ public final class JavaSink implements TapeSink {
     } else {
       ((List<@Nullable Object>) open.get(open.size() - 1)).add(value);
     }
+  }
+
+  @Override
+  public void anchor(int id) { pendingAnchor = id; }
+
+  @Override
+  @TruffleBoundary
+  public boolean alias(int id) {
+    Map<Integer, @Nullable Object> table = anchors;
+    if (table == null || !table.containsKey(id)) return false;
+    add(table.get(id));
+    return true;
   }
 
   private void push(Object container) {

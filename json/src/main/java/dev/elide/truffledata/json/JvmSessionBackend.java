@@ -1,7 +1,7 @@
 package dev.elide.truffledata.json;
 
 import dev.elide.truffledata.json.generated.JsonFFM;
-import dev.elide.truffledata.tape.SegmentValueTape;
+import dev.elide.truffledata.tape.SegmentTape;
 import dev.elide.truffledata.tape.TapeBorrow;
 import dev.elide.truffledata.tape.TapeTextArena;
 import java.lang.foreign.Arena;
@@ -35,6 +35,7 @@ final class JvmSessionBackend extends JsonSession.Backend {
   private final MemorySegment result;
   private Arena stagingArena = Arena.ofConfined();
   private MemorySegment staging = MemorySegment.NULL;
+  private @Nullable SegmentTape reader;
 
   JvmSessionBackend(
       JsonJvm library,
@@ -126,8 +127,11 @@ final class JvmSessionBackend extends JsonSession.Backend {
 
   @Override
   protected TapeBorrow borrow() {
-    SegmentValueTape tape = JsonJvm.tape(result);
-    return new TapeBorrow(tape, JsonJvm.lexical(result, tape), JsonMessage.FORMAT);
+    MemorySegment descriptor = result.get(ValueLayout.ADDRESS, JsonFFM.JsonResult_view_OFFSET);
+    SegmentTape tape = reader;
+    if (tape == null) reader = tape = new SegmentTape(descriptor);
+    else tape.rebind(descriptor);
+    return new TapeBorrow(tape, JsonMessage.FORMAT);
   }
 
   @Override

@@ -39,7 +39,7 @@ public final class TapeExportNode extends Node {
     owner.pin();
     TapeText text = owner.exportCursor();
     try {
-      return loop(owner, root, sink, text);
+      return owner.format().hasAliases() ? AliasExport.walk(owner, root, sink, text) : loop(owner, root, sink, text);
     } finally {
       text.unbind();
       owner.unpin();
@@ -52,7 +52,7 @@ public final class TapeExportNode extends Node {
    */
   private static int loop(TapeOwner owner, long root, TapeSink sink, TapeText text) {
     long[] ends = text.ends;
-    ValueTape tape = owner.tape;
+    TapeReader tape = owner.tape;
     int depth = 0;
     int deepest = 0;
     boolean expectKey = false;
@@ -69,7 +69,7 @@ public final class TapeExportNode extends Node {
         text.bind(cursor);
         sink.key(text);
         text.unbind();
-        cursor++;
+        cursor = tape.step(cursor);
         expectKey = false;
         continue;
       }
@@ -85,7 +85,7 @@ public final class TapeExportNode extends Node {
         else sink.beginArray(count);
         ends[depth++] = tape.next(cursor) | (object ? OBJECT_BIT : 0);
         if (depth > deepest) deepest = depth;
-        cursor++;
+        cursor = tape.step(cursor);
         expectKey = object;
         continue;
       }

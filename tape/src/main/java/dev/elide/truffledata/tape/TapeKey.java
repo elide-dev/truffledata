@@ -15,6 +15,7 @@ public final class TapeKey {
 
   final ValueTape.Utf8Key prepared;
   final int length;
+  final byte[] bytes;
   // Node word 0 of this key stored inline: tag STRING | length << 32.
   final long header;
   // Inline text words; Myna zero-pads bytes past the length.
@@ -26,6 +27,8 @@ public final class TapeKey {
   private TapeKey(ValueTape.Utf8Key prepared) {
     this.prepared = prepared;
     this.length = prepared.byteLength();
+    this.bytes = new byte[length];
+    for (int i = 0; i < length; i++) bytes[i] = prepared.byteAt(i);
     this.low = prepared.lowWord();
     this.high = prepared.highWord();
     this.header = ValueTape.STRING | ((long) length << 32);

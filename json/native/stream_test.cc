@@ -23,26 +23,13 @@ void require(bool condition, const char* what) {
 }
 #define REQUIRE(c) require((c), #c)
 
-std::string text_of(const myna_value_view* view, size_t index) {
-  const auto& node = view->nodes[index];
-  if ((node.tag & MYNA_VALUE_REGION_TEXT) == 0) {
-    std::string out;
-    for (uint32_t i = 0; i < node.length; ++i) out += char(myna_value_inline_byte(&node, i));
-    return out;
-  }
-  auto region = node.payload >> 32;
-  const uint8_t* data = region == 0 ? view->bytes : view->regions[region - 1].data;
-  return std::string(reinterpret_cast<const char*>(data + uint32_t(node.payload)), node.length);
-}
-
 namespace c = truffledata::tape::ctape;
 
 // Order-sensitive digest of a tape, so two decodes of one document agree exactly. A compact tape:
 // every word (kinds, flags, counts, `next`, values and the spans, which index the document's own
 // input), the directory, the pool and the input bytes, and the text of every span read through the
 // published input (a stream document's spans must index the session's copy, not the carry-over
-// buffer). A Myna tape (TRANSITIONAL): kinds, lengths, payloads and text plus lexical spans and key
-// meta.
+// buffer).
 uint64_t digest(const JsonResult& result) {
   uint64_t h = 1469598103934665603ull;
   auto mix = [&](uint64_t v) {
@@ -54,7 +41,6 @@ uint64_t digest(const JsonResult& result) {
   if (static_cast<const td_tape_view*>(result.view)->version == TD_TAPE_VIEW_VERSION) {
     const auto& t = *static_cast<const td_tape_view*>(result.view);
     REQUIRE(c::validate(t) == nullptr);
-    REQUIRE(!result.lexical && !result.key_hashes);
     for (uint64_t i = 0; i < t.word_count; ++i) mix(t.words[i]);
     for (uint64_t i = 0; i < t.directory_count; ++i) mix(t.directory[i]);
     for (uint64_t i = 0; i < t.pool_bytes; ++i) mix(t.pool[i]);
@@ -71,21 +57,7 @@ uint64_t digest(const JsonResult& result) {
     }
     return h;
   }
-  auto* view = static_cast<const myna_value_view*>(result.view);
-  for (size_t i = 0; i < view->node_count; ++i) {
-    const auto& node = view->nodes[i];
-    uint32_t kind = node.tag & MYNA_VALUE_KIND_MASK;
-    mix(kind);
-    mix(node.length);
-    if (kind == MYNA_VALUE_STRING || kind == MYNA_VALUE_DECIMAL) {
-      for (char c : text_of(view, i)) mix(uint8_t(c));
-    } else if (kind != MYNA_VALUE_ARRAY && kind != MYNA_VALUE_OBJECT) {
-      mix(node.payload);
-    }
-    mix(static_cast<const uint64_t*>(result.lexical)[i]);
-    mix(static_cast<const uint32_t*>(result.key_hashes)[i]);
-  }
-  return h;
+  throw std::runtime_error("Expected compact tape");
 }
 
 // Deterministic documents of every root kind, separated by assorted whitespace (or nothing
@@ -130,9 +102,8 @@ corpus make_corpus(size_t count) {
   return out;
 }
 
-const JsonLimitsStruct limits{1 << 20, 1 << 20, 100000, 1 << 20, 128, TD_JSON_SESSION_COMPACT_TAPE};
-// TRANSITIONAL (Task 2 -> Task 3): sessions publishing the 0.8.0 Myna tape, as the Java readers use.
-const JsonLimitsStruct myna_limits{1 << 20, 1 << 20, 100000, 1 << 20, 128, 0};
+const JsonLimitsStruct limits{1 << 20, 1 << 20, 100000, 1 << 20, 128, 0};
+
 
 std::vector<uint64_t> expected_digests(const corpus& c, const JsonLimitsStruct& with = limits) {
   void* s = td_json_session_create(&with);
@@ -197,13 +168,7 @@ void stream_boundary_exactness() {
       td_json_session_release(s);
     }
   }
-  // TRANSITIONAL: Myna-tape sessions stream the same documents as their own decodes.
-  std::vector<uint64_t> myna = expected_digests(c, myna_limits);
-  void* s = td_json_session_create(&myna_limits);
-  void* stream = td_json_stream_create(s, 512, 512);
-  REQUIRE(run_stream(stream, c.bytes, 4096) == myna);
-  td_json_stream_release(stream);
-  td_json_session_release(s);
+
 }
 
 struct harness {

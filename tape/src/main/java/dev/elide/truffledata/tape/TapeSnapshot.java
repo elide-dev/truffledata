@@ -7,9 +7,15 @@ public final class TapeSnapshot extends TapeOwner {
   private final long[] spans;
   // The heap tape is the owner's `tape`; holding the format instead keeps snapshots at their size.
   private final TapeFormat format;
+  private final byte @org.jspecify.annotations.Nullable [] lexicalInput;
 
-  private TapeSnapshot(HeapValueTape tape, long[] spans, TapeFormat format) {
+  private TapeSnapshot(TapeReader tape, long[] spans, TapeFormat format) {
+    this(tape, spans, format, null);
+  }
+
+  private TapeSnapshot(TapeReader tape, long[] spans, TapeFormat format, byte @org.jspecify.annotations.Nullable [] lexicalInput) {
     super(tape, null);
+    this.lexicalInput = lexicalInput;
     this.spans = spans;
     this.format = checkFormat(tape, format);
   }
@@ -20,27 +26,30 @@ public final class TapeSnapshot extends TapeOwner {
    * copied as references, never expanded: per-node words are sliced to the subtree and targets
    * re-based to it, so an alias whose target lies outside the subtree throws when read.
    */
-  static TapeSnapshot copy(TapeOwner owner, TapeSource source, long root) {
+  static TapeSnapshot copy(TapeOwner owner, long root) {
     owner.check();
-    HeapValueTape heap = HeapValueTape.copy(owner.tape, source, root);
+    if (!(owner.tape instanceof LegacyTapeReader legacy))
+      return new TapeSnapshot(HeapTape.copy(owner.tape, root), new long[0], owner.format());
+    TapeReader heap = new LegacyTapeReader(HeapValueTape.copy(legacy.value, legacy.source, root));
     int count = Math.toIntExact(heap.nodeCount());
     long[] spans = new long[count];
     for (int i = 0; i < count; i++) spans[i] = owner.lexical(root + i);
-    TapeFormat format = owner.format();
-    int[] meta = format.meta;
-    long[] targets = format.aliasTargets;
-    if (meta != null && targets != null) {
-      int[] slice = new int[count];
-      System.arraycopy(meta, Math.toIntExact(root), slice, 0, count);
-      long[] rebased = new long[targets.length];
-      for (int i = 0; i < targets.length; i++) rebased[i] = targets[i] - root;
-      format = format.withAliases(rebased, slice);
+    TapeFormat format = owner.format().slice(root, count);
+    byte[] source = null;
+    if (format.hasAliases()) {
+      long extent = 0;
+      for (long span : spans) extent = Math.max(extent, (span >>> 32) + (span & 0xffffffffL));
+      source = new byte[Math.toIntExact(extent)];
+      for (int i = 0; i < source.length; i++) source[i] = owner.lexicalByte(i);
     }
-    return new TapeSnapshot(heap, spans, format);
+    return new TapeSnapshot(heap, spans, format, source);
   }
 
   public long nodeCount() {
-    return tape.nodeCount();
+    if (tape instanceof LegacyTapeReader) return tape.nodeCount();
+    long count = 0;
+    for (long i = 0; i < tape.nodeCount(); i = tape.step(i)) count++;
+    return count;
   }
 
   @Override
@@ -55,12 +64,14 @@ public final class TapeSnapshot extends TapeOwner {
 
   @Override
   protected long lexical(long node) {
-    return spans[Math.toIntExact(node)];
+    return tape instanceof LegacyTapeReader ? spans[Math.toIntExact(node)] : tape.span(node);
   }
 
   @Override
   protected byte lexicalByte(long offset) {
-    return ((HeapValueTape) tape).inputByte(offset);
+    byte[] source = lexicalInput;
+    if (source != null) return source[Math.toIntExact(offset)];
+    return tape instanceof LegacyTapeReader legacy ? ((HeapValueTape) legacy.value).inputByte(offset) : tape.inputByte(offset);
   }
 
   /** A snapshot of a snapshot shares nothing mutable, so the same storage is returned. */

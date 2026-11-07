@@ -1,6 +1,12 @@
 load("//bazel:java.bzl", "data_java_library")
 
 TAPE_SRCS = [
+    "src/main/java/dev/elide/truffledata/tape/AliasExport.java",
+    "src/main/java/dev/elide/truffledata/tape/TapeReader.java",
+    "src/main/java/dev/elide/truffledata/tape/LegacyTapeReader.java",
+    "src/main/java/dev/elide/truffledata/tape/HeapTape.java",
+    "src/main/java/dev/elide/truffledata/tape/SvmTape.java",
+
     "src/main/java/dev/elide/truffledata/tape/HeapValueTape.java",
     "src/main/java/dev/elide/truffledata/tape/JavaSink.java",
     "src/main/java/dev/elide/truffledata/tape/OwnerStateException.java",
@@ -46,7 +52,7 @@ data_java_library(
 # JVM-only FFM tape reader; kept out of static images, like //json:jvm.
 data_java_library(
     name = "jvm",
-    srcs = ["src/main/java/dev/elide/truffledata/tape/SegmentValueTape.java"],
+    srcs = ["src/main/java/dev/elide/truffledata/tape/SegmentValueTape.java", "src/main/java/dev/elide/truffledata/tape/SegmentTape.java"],
     visibility = ["//visibility:public"],
     deps = [
         ":tape",

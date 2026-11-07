@@ -125,6 +125,9 @@ public abstract class TapeSession<M extends TapeOwner> implements AutoCloseable 
     this.backend = Objects.requireNonNull(backend);
   }
 
+  /** Whether empty input is a document in this format. */
+  protected boolean allowsEmptyInput() { return false; }
+
   /** Maps a native status to the format's exception; returns normally for status 0. */
   protected abstract void checkStatus(int status);
 
@@ -167,7 +170,7 @@ public abstract class TapeSession<M extends TapeOwner> implements AutoCloseable 
       byte[] data, int offset, int length, int encoding, @Nullable TapeTextArena shared) {
     Backend<M> open = check();
     Objects.checkFromIndexSize(offset, length, data.length);
-    if (length == 0) throw new IllegalArgumentException("Empty " + format + " input");
+    if (length == 0 && !allowsEmptyInput()) throw new IllegalArgumentException("Empty " + format + " input");
     // UTF-16 input is at least half as long in UTF-8; the native side checks the exact length.
     if (length > (encoding == UTF16 ? 2L : 1L) * maxInputBytes)
       throw new IllegalArgumentException(format + " input limit");
@@ -337,7 +340,8 @@ public abstract class TapeSession<M extends TapeOwner> implements AutoCloseable 
   public final void parse(MemorySegment data, long length, TapeSink sink) {
     Objects.requireNonNull(sink);
     Backend<M> open = check();
-    if (length <= 0) throw new IllegalArgumentException("Empty " + format + " input");
+    if (length < 0 || (length == 0 && !allowsEmptyInput()))
+      throw new IllegalArgumentException("Empty " + format + " input");
     if (length > data.byteSize())
       throw new IllegalArgumentException(format + " length exceeds the segment");
     if (length > maxInputBytes) throw new IllegalArgumentException(format + " input limit");

@@ -46,6 +46,11 @@
 #include <stdexcept>
 #include <string_view>
 #include <vector>
+#if defined(__x86_64__)
+#include <emmintrin.h>
+#elif defined(__aarch64__)
+#include <arm_neon.h>
+#endif
 
 #if !defined(__BYTE_ORDER__) || __BYTE_ORDER__ != __ORDER_LITTLE_ENDIAN__
 #error "the compact tape's directory entries mirror Myna's little-endian layout"
@@ -427,6 +432,57 @@ inline myna_value_view_v4 to_myna(const td_tape_view& v, std::pmr::memory_resour
 }
 }  // namespace ctape
 
+// A checked key sequence at each container depth. Templates own their bytes and survive the
+// input and arena from which they were learned. Active frames belong to one writer at a time.
+struct key_shape_cache {
+  static constexpr uint32_t depths = 32, max_keys = 32, max_bytes = 32;
+  struct key {
+    uint8_t bytes[max_bytes];
+    uint32_t length, hash;
+    bool equals(const uint8_t* text, uint32_t size, bool padded) const {
+      if (length != size) return false;
+      if (size == 0) return true;
+      if (!padded) return std::memcmp(bytes, text, size) == 0;
+      // JSON's clean keys live in input with at least 64 readable padding bytes. Other
+      // producers use the bounded fallback above; no padding is inferred from a pointer.
+      auto equal16 = [](const uint8_t* a, const uint8_t* b, uint32_t n) {
+#if defined(__x86_64__)
+        unsigned mask = unsigned(_mm_movemask_epi8(_mm_cmpeq_epi8(
+            _mm_loadu_si128(reinterpret_cast<const __m128i*>(a)),
+            _mm_loadu_si128(reinterpret_cast<const __m128i*>(b)))));
+        unsigned needed = n >= 16 ? 0xffffu : (1u << n) - 1;
+        return (mask & needed) == needed;
+#elif defined(__aarch64__)
+        static constexpr uint8_t positions[] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15};
+        uint8x16_t relevant = vcltq_u8(vld1q_u8(positions), vdupq_n_u8(uint8_t(n)));
+        uint8x16_t equal = vceqq_u8(vld1q_u8(a), vld1q_u8(b));
+        return vminvq_u8(vorrq_u8(equal, vmvnq_u8(relevant))) == 255;
+#else
+        return std::memcmp(a, b, n < 16 ? n : 16) == 0;
+#endif
+      };
+      return equal16(bytes, text, size) && (size <= 16 || equal16(bytes + 16, text + 16, size - 16));
+    }
+    void set(std::string_view text, uint32_t value) {
+      length = uint32_t(text.size()); hash = value;
+      std::memset(bytes, 0, sizeof bytes);
+      if (length) std::memcpy(bytes, text.data(), length);
+    }
+  };
+  struct level { uint32_t count = 0; key keys[max_keys]; uint8_t rank[max_keys]; };
+  struct frame { size_t object, first; uint32_t depth, count; bool matched; };
+  level levels[depths];
+  frame frames[depths];
+  uint32_t active = 0;
+  void start() { active = 0; }
+  void begin(size_t object, size_t first, uint32_t depth) {
+    if (depth < depths) frames[active++] = {object, first, depth, 0, true};
+  }
+  frame* current(size_t object) {
+    return active && frames[active - 1].object == object ? &frames[active - 1] : nullptr;
+  }
+};
+
 // Writes a compact tape into arena storage (§3.4). Producers announce each member key with
 // member_key(object, hash) before writing it (JSON), or close an object with end_rescan(), which
 // hashes its keys from their text (YAML, after merges and last-wins removals). Either way an object
@@ -448,6 +504,7 @@ class ctape_writer final {
   myna::value_limits limits_;
   uint64_t values_ = 0, text_bytes_ = 0;
   bool nonfinite_ = false;
+  key_shape_cache* shapes_ = nullptr;
 
   [[noreturn, gnu::noinline, gnu::cold]] static void limit(const char* what) { throw std::length_error(what); }
   [[noreturn, gnu::noinline, gnu::cold]] static void invalid(const char* what) { throw std::invalid_argument(what); }
@@ -501,14 +558,29 @@ class ctape_writer final {
   }
   // The object at `object` closes with `count` keys on top of pending_: at two or more they become
   // its directory run (sorted, then checked for duplicates within equal-hash runs).
+  void materialize(key_shape_cache::frame& frame) {
+    const auto& shape = shapes_->levels[frame.depth];
+    for (uint32_t i = 0; i < frame.count; ++i)
+      pending_[frame.first + i] |= uint64_t(shape.keys[i].hash) << 32;
+    frame.matched = false;
+  }
   void close_directory(size_t object, uint64_t count) {
     if (count > pending_.size()) misuse("object key not announced");
     size_t first = pending_.size() - count;
+    auto* frame = shapes_ ? shapes_->current(object) : nullptr;
+    auto* shape = frame ? &shapes_->levels[frame->depth] : nullptr;
+    if (frame && (frame->count != count || frame->first != first)) misuse("object key count mismatch");
+    bool hit = frame && frame->matched && count == shape->count;
+    if (frame && frame->matched && !hit) materialize(*frame);
     if (count >= 2) {
       size_t start = directory_.size();
       if (start >= UINT32_MAX - count) limit("tape directory limit");
       uint64_t* out = directory_.extend(memory_, count);
       const uint64_t* in = pending_.data() + first;
+      if (hit) {
+        for (size_t i = 0; i < count; ++i)
+          out[shape->rank[i]] = ctape::entry(shape->keys[i].hash, uint32_t(in[i]));
+      } else {
       // Keys arrive in offset order; (hash, offset) keys are unique, so any sort is stable here.
       if (count <= 24) {
         for (size_t i = 0; i < count; ++i) {
@@ -529,11 +601,28 @@ class ctape_writer final {
         for (size_t j = i; j > 0 && (out[j - 1] >> 32) == (out[i] >> 32); --j)
           if (text_of(object + uint32_t(out[j - 1])) == key) throw ctape::duplicate_key();
       }
+      // Install only after every duplicate check has succeeded. Hash collisions preserve the
+      // source-order tie break, so the rank permutation reproduces the sorted directory exactly.
+      if (shape && count <= key_shape_cache::max_keys) {
+        bool fits = true;
+        for (size_t i = 0; i < count; ++i)
+          fits &= text_of(object + uint32_t(in[i])).size() <= key_shape_cache::max_bytes;
+        if (fits) {
+          for (size_t i = 0; i < count; ++i) {
+            shape->keys[i].set(text_of(object + uint32_t(in[i])), uint32_t(in[i] >> 32));
+            for (size_t rank = 0; rank < count; ++rank)
+              if (uint32_t(out[rank]) == uint32_t(in[i])) shape->rank[i] = uint8_t(rank);
+          }
+          shape->count = uint32_t(count);
+        }
+      }
       for (size_t i = 0; i < count; ++i) out[i] = ctape::entry(uint32_t(out[i] >> 32), uint32_t(out[i]));
+      }
       uint64_t& second = words_[object + 1];
       second = uint64_t(start + 1) << 32 | uint32_t(second);
     }
     pending_.truncate(first);
+    if (frame) --shapes_->active;
   }
 
  public:
@@ -543,6 +632,7 @@ class ctape_writer final {
   ctape_writer(std::pmr::memory_resource* memory, myna::value_limits limits) : memory_(memory), limits_(limits) {
     if (!memory) throw std::invalid_argument("null tape allocator");
   }
+  void shapes(key_shape_cache* cache) { shapes_ = cache; if (cache) cache->start(); }
   ctape_writer(const ctape_writer&) = delete;
   ctape_writer& operator=(const ctape_writer&) = delete;
 
@@ -572,6 +662,7 @@ class ctape_writer final {
     uint64_t* w = push(2);
     w[0] = ctape::make(kind, ctape::wide_flag, 0, 0);  // next 0: open
     w[1] = raw_offset;
+    if (shapes_ && kind == ctape::kind_object) shapes_->begin(index, pending_.size(), depth);
     return index;
   }
   // Closes the container at `index`, the innermost open one: `count` is elements or members. An
@@ -604,6 +695,27 @@ class ctape_writer final {
   // myna_value_hash over the decoded key bytes.
   [[gnu::always_inline]] void member_key(size_t object, uint32_t hash) {
     pending_.push(memory_, uint64_t(hash) << 32 | (words_.size() - object));
+  }
+
+  // Announce decoded bytes before the key word. A hit skips hashing and sorting, but every
+  // position and the final count must match the independently checked template.
+  [[gnu::always_inline]] void key_text(size_t object, const uint8_t* text, uint32_t length, bool padded = false) {
+    uint64_t offset = words_.size() - object;
+    auto* frame = shapes_ ? shapes_->current(object) : nullptr;
+    if (frame) {
+      auto& shape = shapes_->levels[frame->depth];
+      uint32_t ordinal = frame->count;
+      if (frame->matched) {
+        if (ordinal < shape.count && shape.keys[ordinal].equals(text, length, padded)) {
+          pending_.push(memory_, offset);
+          ++frame->count;
+          return;
+        }
+        materialize(*frame);
+      }
+      ++frame->count;
+    }
+    pending_.push(memory_, uint64_t(myna_value_hash(text, length)) << 32 | offset);
   }
 
   void null() {

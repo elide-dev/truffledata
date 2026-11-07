@@ -25,7 +25,11 @@ final class HeapValueTape extends ValueTape implements TapeSource {
 
   /** An ABI v4 tape when {@code directory} is given (possibly empty), else v3. */
   HeapValueTape(long[] nodes, byte[] bytes, byte[][] regions, int[] meta, long @Nullable [] directory) {
-    super(nodes.length / WORDS, bytes.length, directory == null ? ABI_VERSION : ABI_VERSION_V4);
+    this(nodes, bytes, regions, meta, directory, 0);
+  }
+
+  HeapValueTape(long[] nodes, byte[] bytes, byte[][] regions, int[] meta, long @Nullable [] directory, int flags) {
+    super(nodes.length / WORDS, bytes.length, directory == null ? ABI_VERSION : ABI_VERSION_V4, flags);
     this.nodes = nodes;
     this.bytes = bytes;
     this.regions = regions;
@@ -123,7 +127,7 @@ final class HeapValueTape extends ValueTape implements TapeSource {
       regions[i] = new byte[Math.toIntExact(source.regionSize(i + 1))];
       source.copyRegion(i + 1, 0, regions[i], 0, regions[i].length);
     }
-    return new HeapValueTape(nodes, bytes, regions, meta, directory);
+    return new HeapValueTape(nodes, bytes, regions, meta, directory, tape.flags());
   }
 
   /** Byte of region 1 (the retained input copy), used for lexical spans. */

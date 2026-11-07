@@ -127,6 +127,7 @@ class null_writer final {
   const char* input_ = nullptr;
   myna::value_limits limits_;
   uint64_t values_ = 0, text_bytes_ = 0;
+  tape::key_shape_cache* shapes_ = nullptr;
 
   [[noreturn, gnu::noinline, gnu::cold]] static void limit(const char* what) { throw std::length_error(what); }
   [[gnu::always_inline]] void value() {
@@ -142,9 +143,23 @@ class null_writer final {
     if (token.length > tape::ctape::max_length) limit("tape text token limit");
     value();
   }
-  void close(uint64_t count) {
+  void materialize(tape::key_shape_cache::frame& frame) {
+    const auto& shape = shapes_->levels[frame.depth];
+    for (uint32_t i = 0; i < frame.count; ++i) {
+      pending_[frame.first + i] = uint64_t(shape.keys[i].hash) << 32;
+      keys_[frame.first + i] = {reinterpret_cast<const char*>(shape.keys[i].bytes), shape.keys[i].length};
+    }
+    frame.matched = false;
+  }
+  void close(size_t object, uint64_t count) {
     size_t first = pending_.size() - count;
-    if (count >= 2) {
+    auto* frame = shapes_ ? shapes_->current(object) : nullptr;
+    auto* shape = frame ? &shapes_->levels[frame->depth] : nullptr;
+    if (frame && (frame->count != count || frame->first != first))
+      throw std::logic_error("object key count mismatch");
+    bool hit = frame && frame->matched && count == shape->count;
+    if (frame && frame->matched && !hit) materialize(*frame);
+    if (count >= 2 && !hit) {
       uint64_t* e = pending_.data() + first;
       // Entry i names keys_[first + i]: hash << 32 | i sorts by (hash, position).
       for (size_t i = 0; i < count; ++i) e[i] |= i;
@@ -165,16 +180,29 @@ class null_writer final {
         for (size_t j = i; j > 0 && (e[j - 1] >> 32) == (e[i] >> 32); --j)
           if (k[uint32_t(e[j - 1])] == key) throw tape::ctape::duplicate_key();
       }
+      if (shape && count <= tape::key_shape_cache::max_keys) {
+        bool fits = true;
+        for (size_t i = 0; i < count; ++i) fits &= k[i].size() <= tape::key_shape_cache::max_bytes;
+        if (fits) {
+          for (size_t rank = 0; rank < count; ++rank) {
+            uint32_t ordinal = uint32_t(e[rank]);
+            // Copy keys in source order below: prefix views may refer to this template.
+            shape->rank[ordinal] = uint8_t(rank);
+          }
+          for (size_t i = 0; i < count; ++i)
+            shape->keys[i].set(k[i], uint32_t(e[shape->rank[i]] >> 32));
+          shape->count = uint32_t(count);
+        }
+      }
     }
+    if (frame) --shapes_->active;
     pending_.truncate(first);
     keys_.truncate(first);
-  }
-  [[gnu::always_inline]] void key_text(bool key, std::string_view text) {
-    if (key) *keys_.extend(memory_, 1) = text;
   }
 
  public:
   null_writer(std::pmr::memory_resource* memory, myna::value_limits limits) : memory_(memory), limits_(limits) {}
+  void shapes(tape::key_shape_cache* cache) { shapes_ = cache; if (cache) cache->start(); }
   null_writer(const null_writer&) = delete;
   null_writer& operator=(const null_writer&) = delete;
 
@@ -188,13 +216,33 @@ class null_writer final {
   size_t begin(uint32_t kind, uint32_t depth, uint32_t = 0) {
     if (depth >= limits_.depth) limit("tape depth limit");
     value();
-    return kind == tape::ctape::kind_object;
+    if (kind != tape::ctape::kind_object) return 0;
+    size_t object = values_;
+    if (shapes_) shapes_->begin(object, pending_.size(), depth);
+    return object;
   }
   void end(size_t object, uint64_t count) {
-    if (object) close(count);
+    if (object) close(object, count);
   }
-  // Keys of open objects stack in order; the innermost object's are on top when it closes.
-  [[gnu::always_inline]] void member_key(size_t, uint32_t hash) { pending_.push(memory_, uint64_t(hash) << 32); }
+  [[gnu::always_inline]] void key_text(size_t object, const uint8_t* text, uint32_t length, bool padded = false) {
+    auto* frame = shapes_ ? shapes_->current(object) : nullptr;
+    if (frame) {
+      auto& shape = shapes_->levels[frame->depth];
+      uint32_t ordinal = frame->count;
+      if (frame->matched) {
+        if (ordinal < shape.count && shape.keys[ordinal].equals(text, length, padded)) {
+          pending_.extend(memory_, 1);
+          keys_.extend(memory_, 1);
+          ++frame->count;
+          return;
+        }
+        materialize(*frame);
+      }
+      ++frame->count;
+    }
+    pending_.push(memory_, uint64_t(myna_value_hash(text, length)) << 32);
+    keys_.push(memory_, {reinterpret_cast<const char*>(text), length});
+  }
   void null() { value(); }
   void boolean(bool) { value(); }
   void integer(int64_t, tape::ctape::span token) { number(token); }
@@ -204,21 +252,16 @@ class null_writer final {
     charge(token.length);
     value();
   }
-  [[gnu::always_inline]] void string_ref(tape::ctape::span decoded, bool, bool key) {
+  [[gnu::always_inline]] void string_ref(tape::ctape::span decoded, bool, bool) {
     charge(decoded.length);
     value();
-    key_text(key, {input_ + decoded.offset, decoded.length});
   }
-  void string(std::string_view decoded, tape::ctape::span, bool, bool key) {
+  void string(std::string_view decoded, tape::ctape::span, bool, bool) {
     charge(decoded.size());
     value();
-    key_text(key, decoded);
   }
   uint64_t value_count() const { return values_; }
 };
-
-// Whether a writer's member_key needs myna_value_hash (it builds directories), or any hash.
-template<class Writer> inline constexpr bool directory_hash = !std::is_same_v<Writer, null_writer>;
 
 // The lean On-Demand visitor. Writer is tape::ctape_writer (a retained or borrowed document) or
 // null_writer (validate-only). One instance decodes one document.
@@ -245,12 +288,7 @@ template<class Writer> class tape_decoder final {
           std::string_view body = raw.substr(1, raw.size() - 2);
           body_scan s = scan(body);
           std::string_view key = s.clean ? body : entry.unescaped_key().value();
-          // Myna's directory hash (32-bit FNV-1a over the decoded bytes): the directory entry and
-          // the duplicate check's equal-hash runs (validate-only: scratch_hash, no directory).
-          if constexpr (directory_hash<Writer>)
-            writer_.member_key(index, myna_value_hash(reinterpret_cast<const uint8_t*>(key.data()), key.size()));
-          else
-            writer_.member_key(index, scratch_hash(key.data(), key.size(), s.clean));
+          writer_.key_text(index, reinterpret_cast<const uint8_t*>(key.data()), uint32_t(key.size()), s.clean);
           if (s.clean) writer_.string_ref(of(body), s.ascii, true);
           else writer_.string(key, of(raw), json::ascii(key), true);
           auto child = entry.value().value();
@@ -327,6 +365,7 @@ template<class Writer> class tape_decoder final {
  public:
   tape_decoder(std::pmr::memory_resource* memory, myna::value_limits limits)
       : writer_(memory, limits), limits_(limits) {}
+  void shapes(tape::key_shape_cache* cache) { writer_.shapes(cache); }
   tape_decoder(const tape_decoder&) = delete;
   tape_decoder& operator=(const tape_decoder&) = delete;
 
@@ -385,7 +424,10 @@ class document final {
     parser_lease lease = parser_pool::acquire();
     auto& parser = lease.get();
     auto root = parser.iterate(input_).value();
+    tape::key_shape_cache shapes;
+    decoder_.shapes(&shapes);
     decoder_.decode(root);
+    decoder_.shapes(nullptr);
     parser_capacity_ = parser.capacity();
     view_ = decoder_.view();
   }

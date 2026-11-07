@@ -386,7 +386,8 @@ final class JsonInteropTest {
         TapeValue inner = empty.root().member("e");
         assertFalse(site.isMemberReadable(inner, "id"));
         assertThrows(java.util.NoSuchElementException.class, () -> inner.member("id"));
-        assertEquals(1, empty.directories());
+        // Compact tapes omit directories for singleton objects as well as empty ones.
+        assertEquals(0, empty.directories());
       }
     }
   }

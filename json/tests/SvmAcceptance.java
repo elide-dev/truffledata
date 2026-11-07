@@ -38,10 +38,10 @@ public final class SvmAcceptance {
     }
   }
 
-  private static NativeValueTape tape(VoidPointer result) {
+  private static ValueTape tape(VoidPointer result) {
     Pointer descriptor = (Pointer) Json.JsonResult.view(result);
-    require(descriptor.readInt(0) == ValueTape.ABI_VERSION_V4);
-    NativeValueTape tape = new NativeValueTape(descriptor);
+    require(descriptor.readInt(0) == 1);
+    ValueTape tape = new dev.elide.truffledata.tape.TapeBorrow(new dev.elide.truffledata.tape.SvmTape(descriptor), dev.elide.truffledata.tape.TapeFormat.of("JSON")).toMyna();
     tape.validate();
     return tape;
   }
@@ -787,17 +787,8 @@ public final class SvmAcceptance {
     kept.close();
   }
 
-  // Link probe of //json/native/bridge (Myna's myna-values static library).
-  @org.graalvm.nativeimage.c.function.CFunction("td_json_bridge_present")
-  private static native int bridgePresent();
-
-  /**
-   * Task D1: the image links Myna's simdutf bridge, and strings of 256 or more non-ASCII bytes
-   * (transcoded by myna_utf8_to_utf16_v2) decode exactly like shorter ones (decoded locally),
-   * through views, the export cursor and a borrowed session parse.
-   */
+  /** Compact-tape bulk transcoding at the 256-byte crossover, through views and exports. */
   private static void textBridge() {
-    require(bridgePresent() == 1);
     for (int units : new int[] {125, 126, 150, 2000}) {
       // A 4-byte emoji, units × "é" (2 bytes) and "z": 255 bytes (local), 257, 305 and 4005
       // (bulk). The escaped spelling lands in the decoded text region; the raw one is referenced
@@ -998,7 +989,7 @@ public final class SvmAcceptance {
                       + " 😀\",\"n\":1e999999999999999999,\"a\":[true,null]}",
                   first)
               == 0);
-      NativeValueTape view = tape(first);
+      ValueTape view = tape(first);
       long text = view.find(0, ValueTape.Utf8Key.of("text"));
       long number = view.find(0, ValueTape.Utf8Key.of("n"));
       require(view.stringValue(text).equals("a long escaped string 中 😀"));

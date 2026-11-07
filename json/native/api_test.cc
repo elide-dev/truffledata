@@ -1,3 +1,4 @@
+#include "json/native/testing/myna_oracle.h"
 #include "json/native/api.h"
 #include "json/native/session.h"
 #include <memory_resource>
@@ -15,6 +16,9 @@ int32_t decode(const std::string& source, JsonResult& result, uint64_t budget = 
   return td_json_decode(reinterpret_cast<const uint8_t*>(source.data()), source.size(),
                         1024 * 1024, budget, 10000, 1024 * 1024, 128, &result);
 }
+namespace c = truffledata::tape::ctape;
+const td_tape_view& tape_of(const JsonResult& r) { return *static_cast<const td_tape_view*>(r.view); }
+std::string word_text(const JsonResult& r, uint64_t i) { return std::string(c::text(tape_of(r), i)); }
 void typed() {
   uint8_t n[] = {'n'}, s[] = {'s'};
   JsonScalarField fields[] = {
@@ -223,17 +227,17 @@ void adopted() {
   std::memcpy(padded.data(), source.data(), source.size());
   require(decode_adopted(padded, padded.size()) == TD_JSON_OK);
   require(result.copied_input_bytes == 0 && result.padded_input_bytes == padded.size());
-  auto* view = static_cast<const myna_value_view*>(result.view);
-  // Region 1 is the adopted memory itself: the string references the caller's buffer.
-  require(view->regions[0].data == padded.data());
-  require(view->nodes[2].payload >> 32 == 1);
+  auto* view = static_cast<const td_tape_view*>(result.view);
+  // Input is the adopted memory itself: the string references the caller's buffer.
+  require(view->input == padded.data());
+  require((view->words[3] & c::owned_flag) == 0);
   td_json_release(&result);
   std::vector<uint8_t> unpadded(source.size() + simdjson::SIMDJSON_PADDING - 1, 0);
   std::memcpy(unpadded.data(), source.data(), source.size());
   require(decode_adopted(unpadded, unpadded.size()) == TD_JSON_OK);
   require(result.copied_input_bytes == source.size());
-  view = static_cast<const myna_value_view*>(result.view);
-  require(view->regions[0].data != unpadded.data());
+  view = static_cast<const td_tape_view*>(result.view);
+  require(view->input != unpadded.data());
   td_json_release(&result);
   require(decode_adopted(padded, source.size() - 1) == TD_JSON_ARGUMENT);
   require(!result.owner);
@@ -268,8 +272,7 @@ std::string text_of(const myna_value_view* view, size_t index) {
   const uint8_t* data = region == 0 ? view->bytes : view->regions[region - 1].data;
   return std::string(reinterpret_cast<const char*>(data + uint32_t(node.payload)), node.length);
 }
-// TRANSITIONAL (Task 2 -> Task 3): sessions created without TD_JSON_SESSION_COMPACT_TAPE publish the
-// 0.8.0 Myna tape the Java readers consume.
+// Sessions publish compact tapes directly.
 void sessions() {
   static_assert(sizeof(JsonLimitsStruct) == 40, "session limits");
   JsonLimitsStruct limits{1024 * 1024, 1024 * 1024, 100000, 1024 * 1024, 128};
@@ -283,21 +286,21 @@ void sessions() {
   const std::string first = R"({"s":"first document text beyond inline","n":1})";
   require(run(first, borrowed) == TD_JSON_OK);
   // Borrowed results have no owner: td_json_release on them is a harmless no-op.
-  require(!borrowed.owner && borrowed.view && borrowed.lexical_count == 5 && borrowed.key_hashes);
-  auto* view = static_cast<const myna_value_view*>(borrowed.view);
-  const myna_value_node* nodes = view->nodes;
-  require(text_of(view, 2) == "first document text beyond inline");
+  require(!borrowed.owner && borrowed.view && tape_of(borrowed).word_count == 7);
+  auto* view = static_cast<const td_tape_view*>(borrowed.view);
+  const uint64_t* words = view->words;
+  require(std::string(c::text(*view, 3)) == "first document text beyond inline");
   // Retain moves storage: the retained descriptor points at the very same nodes.
   require(td_json_session_retain(s, &kept) == TD_JSON_OK);
-  require(kept.owner && static_cast<const myna_value_view*>(kept.view)->nodes == nodes);
+  require(kept.owner && tape_of(kept).words == words);
   require(td_json_session_retain(s, &kept) == TD_JSON_ARGUMENT);  // live result, and no document
   JsonResult other{};
   require(td_json_session_retain(s, &other) == TD_JSON_ARGUMENT);  // nothing borrowed any more
   // The next decode reuses the session; the retained document is untouched.
   require(run(R"({"s":"second document overwrites session storage","n":2})", borrowed) == TD_JSON_OK);
-  auto* retained = static_cast<const myna_value_view*>(kept.view);
-  require(text_of(retained, 2) == "first document text beyond inline");
-  require(static_cast<const uint64_t*>(kept.lexical)[4] == ((uint64_t(45) << 32) | 1));
+  auto* retained = static_cast<const td_tape_view*>(kept.view);
+  require(std::string(c::text(*retained, 3)) == "first document text beyond inline");
+  require(c::low(retained->words[5]) == 45 && c::field(retained->words[5]) == 1);
   // A failed decode publishes nothing and leaves the session reusable.
   for (auto bad : {"[1,]", "{\"a\":1,\"a\":2}", "[\"\\q\"]", "01"}) {
     require(run(bad, borrowed) == TD_JSON_SYNTAX);
@@ -324,7 +327,7 @@ void sessions() {
   require(run(std::string(2 * 1024 * 1024, ' '), borrowed) == TD_JSON_LIMIT);
   td_json_session_release(s);
   // The retained result outlives its session.
-  require(text_of(retained, 2) == "first document text beyond inline");
+  require(std::string(c::text(*retained, 3)) == "first document text beyond inline");
   td_json_release(&kept);
   td_json_release(&kept);
   require(!kept.owner && !kept.view);
@@ -345,12 +348,11 @@ void session_allocations() {
   // Every upstream allocation of a decode/retain/decode sequence can fail; the session stays
   // consistent and everything is freed once the session and retained owner are destroyed.
   // Compact sessions also fail cleanly inside validate-only walks.
-  using truffledata::json::tape_format;
-  for (tape_format format : {tape_format::compact, tape_format::myna}) {
+  {
   auto sequence = [&](std::pmr::memory_resource* memory, size_t* calls) {
     session::retained* owner = nullptr;
     {
-      session s(myna::value_limits{}, truffledata::tape::storage_limits{}, memory, format);
+      session s(myna::value_limits{}, truffledata::tape::storage_limits{}, memory);
       try {
         s.decode(doc.data(), doc.size());
         s.decode(wide.data(), wide.size(), session::encoding::utf8, true);
@@ -370,8 +372,7 @@ void session_allocations() {
       }
     }
     if (calls) *calls = static_cast<fault_memory*>(memory)->calls;
-    if (format == tape_format::compact) require(truffledata::tape::ctape::text(owner->tape, 2) == "k0");
-    else require(text_of(&owner->myna.base, 1) == "k0");
+    require(truffledata::tape::ctape::text(owner->tape, 2) == "k0");
     owner->destroy();
   };
   fault_memory counting(SIZE_MAX);
@@ -450,23 +451,20 @@ void text_arenas() {
       R"("":"","n":[1,"plain ascii string beyond sixteen bytes"],"ÿ":"Ā"})";
   require(run(doc, 2 * doc.size() + 16) == TD_JSON_OK);
   require(result.text_table && result.text_bytes > 0 && result.text_bytes <= 2 * doc.size());
-  auto* view = static_cast<const myna_value_view*>(result.view);
+  auto* view = static_cast<const td_tape_view*>(result.view);
   const auto* table = static_cast<const uint64_t*>(result.text_table);
   size_t strings = 0;
-  for (size_t i = 0; i < view->node_count; ++i) {
-    if ((view->nodes[i].tag & MYNA_VALUE_KIND_MASK) != MYNA_VALUE_STRING) {
-      require(table[i] == 0);
-      continue;
-    }
+  for (size_t i = 0; i < view->word_count; i = c::step(i, view->words[i])) {
+    if (c::kind(view->words[i]) != c::kind_string) { require(table[i] == 0); continue; }
     ++strings;
-    // Every key and string round-trips to the code units of its decoded UTF-8.
-    require(arena_text(result, arena, i) == utf16_of(text_of(view, i)));
+    const std::string decoded(c::text(*view, i));
+    require(arena_text(result, arena, i) == utf16_of(decoded));
+    if (decoded == "id" || decoded == "été" || decoded == "café au lait, long enough for a region") require((table[i] & 1) == 0);
+    if (decoded == "😀 中") require((table[i] & 1) == 1 && arena_text(result, arena, i).size() == 4);
+    if (decoded == "Ā") require((table[i] & 1) == 1);
+    if ((view->words[i] & c::wide_flag) != 0) require(table[i + 1] == 0);
   }
   require(strings == 12);
-  // Representation: Latin-1 whenever every code point is ≤ U+00FF, UTF-16 otherwise.
-  require((table[1] & 1) == 0 && (table[3] & 1) == 0 && (table[4] & 1) == 0);  // "id", "été", "café…"
-  require((table[6] & 1) == 1 && arena_text(result, arena, 6).size() == 4);     // 😀 is two units
-  require((table[view->node_count - 1] & 1) == 1 && (table[view->node_count - 2] & 1) == 0);
   // The bound holds by construction: "é" is 6 input bytes and 2 output bytes (or 1 as Latin-1).
   require(run(R"(["é"])", 2 * 10 + 16) == TD_JSON_OK && result.text_bytes == 1);
   require(run(R"(["Ā"])", 2 * 10 + 16) == TD_JSON_OK && result.text_bytes == 2);
@@ -502,16 +500,11 @@ void utf16_input() {
   const std::string utf8 = R"({"clé":"中文 😀","n":[1.5,-0,1E400],"é":"é"})";
   std::u16string units = utf16_of(utf8);
   auto same_tape = [&](const JsonResult& a, const JsonResult& b) {
-    auto* x = static_cast<const myna_value_view*>(a.view);
-    auto* y = static_cast<const myna_value_view*>(b.view);
-    require(x->node_count == y->node_count);
-    for (size_t i = 0; i < x->node_count; ++i) {
-      require(x->nodes[i].tag == y->nodes[i].tag && x->nodes[i].length == y->nodes[i].length);
-      uint32_t kind = x->nodes[i].tag & MYNA_VALUE_KIND_MASK;
-      if (kind == MYNA_VALUE_STRING || kind == MYNA_VALUE_DECIMAL) require(text_of(x, i) == text_of(y, i));
-      else if (kind != MYNA_VALUE_ARRAY && kind != MYNA_VALUE_OBJECT) require(x->nodes[i].payload == y->nodes[i].payload);
-      require(static_cast<const uint32_t*>(a.key_hashes)[i] == static_cast<const uint32_t*>(b.key_hashes)[i]);
-    }
+    const auto& x = tape_of(a); const auto& y = tape_of(b);
+    require(x.word_count == y.word_count && x.pool_bytes == y.pool_bytes && x.directory_count == y.directory_count);
+    require(std::memcmp(x.words, y.words, x.word_count * 8) == 0);
+    require(!x.pool_bytes || std::memcmp(x.pool, y.pool, x.pool_bytes) == 0);
+    require(!x.directory_count || std::memcmp(x.directory, y.directory, x.directory_count * 8) == 0);
   };
   void* reference = td_json_session_create(&limits);
   JsonResult expected{};
@@ -520,11 +513,11 @@ void utf16_input() {
   same_tape(result, expected);
   // Lexical spans and copied_input_bytes describe the transcoded UTF-8 input.
   require(result.copied_input_bytes == utf8.size());
-  require(std::memcmp(result.lexical, expected.lexical, 8 * expected.lexical_count) == 0);
+  require(tape_of(result).input_bytes == tape_of(expected).input_bytes);
   // UTF-16 input with a text arena.
   require(td_json_session_decode(s, reinterpret_cast<const uint8_t*>(units.data()), 2 * units.size(),
                                  TD_JSON_UTF16_INPUT | TD_JSON_WANT_TEXT, arena, 2 * 2 * units.size() + 16, &result) == TD_JSON_OK);
-  require(arena_text(result, arena, 1) == u"clé" && arena_text(result, arena, 2) == u"中文 😀");
+  require(arena_text(result, arena, 2) == u"clé" && arena_text(result, arena, 3) == u"中文 😀");
   // Unpaired surrogates, odd lengths and misaligned input are rejected; the session survives.
   for (std::u16string bad : {std::u16string(u"[\"") + char16_t(0xd800) + u"\"]", std::u16string(u"[\"") + char16_t(0xdc00) + u"x\"]"}) {
     require(td_json_session_decode(s, reinterpret_cast<const uint8_t*>(bad.data()), 2 * bad.size(), TD_JSON_UTF16_INPUT, nullptr, 0, &result) == TD_JSON_SYNTAX);
@@ -537,8 +530,8 @@ void utf16_input() {
   // Latin-1 input: every byte is one code point.
   const std::string latin1 = "{\"caf\xe9\":\"\xff\"}";
   require(td_json_session_decode(s, reinterpret_cast<const uint8_t*>(latin1.data()), latin1.size(), TD_JSON_LATIN1_INPUT, nullptr, 0, &result) == TD_JSON_OK);
-  require(text_of(static_cast<const myna_value_view*>(result.view), 1) == "café"
-          && text_of(static_cast<const myna_value_view*>(result.view), 2) == "ÿ");
+  require(word_text(result, 2) == "café"
+          && word_text(result, 3) == "ÿ");
   // Limits apply to the transcoded UTF-8 length.
   JsonLimitsStruct tight = limits;
   tight.max_input_bytes = 8;
@@ -554,16 +547,13 @@ void utf16_input() {
   td_json_session_release(s);
 }
 
-// ---- ABI 7: compact sessions, validate-only, td_json_result_myna (tape-gbps plan Task 2) ----------
-namespace c = truffledata::tape::ctape;
-const td_tape_view& tape_of(const JsonResult& r) { return *static_cast<const td_tape_view*>(r.view); }
-std::string word_text(const JsonResult& r, uint64_t i) { return std::string(c::text(tape_of(r), i)); }
+// ---- ABI 8: compact sessions, validate-only and explicit Myna interchange ----------------------
 void compact_sessions() {
-  static_assert(sizeof(TapeView) == 88 && offsetof(TapeView, meta_count) == 80, "ABI 7 TapeView");
-  // TRANSITIONAL: JsonResult keeps the 0.8.0 lexical/key_hashes fields until Task 3 (112 -> 88).
-  static_assert(sizeof(JsonResult) == 112 && offsetof(JsonResult, text_table) == 96, "ABI 7 JsonResult");
-  static_assert(sizeof(JsonLimitsStruct) == 40 && offsetof(JsonLimitsStruct, flags) == 36, "ABI 7 limits");
-  JsonLimitsStruct limits{1024 * 1024, 1024 * 1024, 100000, 1024 * 1024, 128, TD_JSON_SESSION_COMPACT_TAPE};
+  static_assert(sizeof(TapeView) == 88 && offsetof(TapeView, meta_count) == 80, "ABI 8 TapeView");
+  // Compact descriptors contain text spans; JsonResult needs no separate lexical/hash tables.
+  static_assert(sizeof(JsonResult) == 88 && offsetof(JsonResult, text_table) == 72, "ABI 8 JsonResult");
+  static_assert(sizeof(JsonLimitsStruct) == 40 && offsetof(JsonLimitsStruct, flags) == 36, "ABI 8 limits");
+  JsonLimitsStruct limits{1024 * 1024, 1024 * 1024, 100000, 1024 * 1024, 128, 0};
   JsonLimitsStruct unknown = limits;
   unknown.flags = 2;
   require(td_json_session_create(&unknown) == nullptr);
@@ -575,7 +565,7 @@ void compact_sessions() {
   JsonResult borrowed{}, kept{};
   const std::string first = R"({"s":"first document text beyond inline","n":1,"e":"\u00e9t\u00e9"})";
   require(run(first, borrowed) == TD_JSON_OK);
-  require(!borrowed.owner && borrowed.view && !borrowed.lexical && borrowed.lexical_count == 0 && !borrowed.key_hashes);
+  require(!borrowed.owner && borrowed.view);
   const td_tape_view& view = tape_of(borrowed);
   require(view.version == TD_TAPE_VIEW_VERSION && c::validate(view) == nullptr && view.directory_count == 3);
   require(view.input_bytes == first.size() && borrowed.copied_input_bytes == first.size());
@@ -588,7 +578,7 @@ void compact_sessions() {
   require(run(first, borrowed) == TD_JSON_OK);
   // Retain moves storage: the retained descriptor points at the very same words.
   require(td_json_session_retain(s, &kept) == TD_JSON_OK);
-  require(kept.owner && tape_of(kept).words == tape_of(borrowed).words && !kept.lexical && !kept.key_hashes);
+  require(kept.owner && tape_of(kept).words == tape_of(borrowed).words);
   require(td_json_session_retain(s, &kept) == TD_JSON_ARGUMENT);
   require(run(R"({"s":"second document overwrites session storage","n":2})", borrowed) == TD_JSON_OK);
   require(word_text(kept, 3) == "first document text beyond inline" && c::validate(tape_of(kept)) == nullptr);
@@ -654,7 +644,7 @@ void compact_sessions() {
     require(run(doc, borrowed) == TD_JSON_OK);
     JsonResult myna{};
     require(td_json_result_myna(&borrowed, &myna) == TD_JSON_OK);
-    require(myna.owner && myna.view && !myna.lexical && !myna.key_hashes && myna.copied_input_bytes == doc.size());
+    require(myna.owner && myna.view && myna.copied_input_bytes == doc.size());
     require(td_json_result_myna(&borrowed, &myna) == TD_JSON_ARGUMENT);  // live output
     auto* m = static_cast<const myna_value_view_v4*>(myna.view);
     require(m->base.version == MYNA_VALUE_ABI_V4 && m->base.region_count == 1);
@@ -720,57 +710,25 @@ int main() {
     require(decode(source, first) == TD_JSON_OK);
     source.assign(source.size(), 'x');
   }
-  auto* view = static_cast<const myna_value_view*>(first.view);
-  require(view->version == MYNA_VALUE_ABI_V4 && view->node_count == 5);
-  static_assert(sizeof(JsonResult) == 112 && offsetof(JsonResult, key_hashes) == 88
-                    && offsetof(JsonResult, text_table) == 96 && offsetof(JsonResult, text_bytes) == 104,
-                "the 0.8.0 representation (until Task 3) publishes lexical spans, key hashes and text arenas");
-  {
-    // td_json_decode (until Task 3): the view is a complete Myna v4 descriptor; every object with a member has a directory
-    // of (FNV-1a, key offset) entries sorted by unsigned hash, and its payload is start + 1.
-    auto* v4 = static_cast<const myna_value_view_v4*>(first.view);
-    require(v4->directory_count == 2 && v4->directory && v4->metadata_count == 0 && !v4->metadata);
-    require(view->nodes[0].payload == 1);
-    uint32_t ha = myna_value_hash(reinterpret_cast<const uint8_t*>("a"), 1);
-    uint32_t hb = myna_value_hash(reinterpret_cast<const uint8_t*>("b"), 1);
-    const auto& lo = v4->directory[0];
-    const auto& hi = v4->directory[1];
-    require(lo.hash <= hi.hash);
-    require((lo.hash == ha && lo.key_offset == 1 && hi.hash == hb && hi.key_offset == 3)
-            || (lo.hash == hb && lo.key_offset == 3 && hi.hash == ha && hi.key_offset == 1));
-  }
-  require(first.lexical_count == 5 && first.lexical);
-  require(static_cast<const uint64_t*>(first.lexical)[2] == ((uint64_t(5) << 32) | 3));
-  {
-    // One side-table entry per node: ASCII flag on keys and strings; keys add the low 15 bits of
-    // their FNV-1a hash (<< 16) and their offset from the object node.
-    auto* hashes = static_cast<const uint32_t*>(first.key_hashes);
-    require(hashes != nullptr);
-    auto fnv = [](const char* s) {
-      uint32_t h = 2166136261u;
-      for (; *s; ++s) { h ^= uint8_t(*s); h *= 16777619u; }
-      return h & 0x7fffffffu;
-    };
-    require(hashes[0] == 0 && hashes[2] == 0);
-    require(hashes[1] == (0x80000000u | (fnv("a") & 0x7fffu) << 16 | 1));
-    require(hashes[3] == (0x80000000u | (fnv("b") & 0x7fffu) << 16 | 3));
-    require(hashes[4] == 0x80000000u);
-  }
+  const auto* view = static_cast<const td_tape_view*>(first.view);
+  require(view->version == TD_TAPE_VIEW_VERSION && view->word_count == 7 && c::validate(*view) == nullptr);
+  static_assert(sizeof(JsonResult) == 88 && offsetof(JsonResult, text_table) == 72 && offsetof(JsonResult, text_bytes) == 80, "ABI 8");
+  require(view->directory_count == 2 && view->directory && view->meta_count == 0 && !view->meta);
+  require(c::directory_of(view->words[1]) == 1);
+  require(c::kind(view->words[3]) == c::kind_i64 && view->words[4] == 123);
+  require(c::text_at(view->input, c::low(view->words[3]), c::field(view->words[3])) == "123");
+  require((view->words[2] & (c::ascii_flag | c::key_flag)) == (c::ascii_flag | c::key_flag));
+  require((view->words[6] & c::ascii_flag) != 0);
   require(first.control_bytes > 0 && first.index_peak_bytes >= first.index_retained_bytes);
-  auto number = view->nodes[2];
-  require(number.tag == MYNA_VALUE_I64 && number.payload == 123);
-  const auto span = static_cast<const uint64_t*>(first.lexical)[2];
-  require(std::memcmp(view->regions[0].data + (span >> 32), "123", uint32_t(span)) == 0);
   auto saved = first;
   require(decode("[]", first) == TD_JSON_ARGUMENT);
   require(std::memcmp(&first, &saved, sizeof(first)) == 0);
   JsonResult sibling{};
   require(decode("[false]", sibling) == TD_JSON_OK);
   td_json_release(&sibling);
-  require(view->node_count == 5);
+  require(view->word_count == 7);
   td_json_release(&first);
   td_json_release(&first);
-  require(!first.lexical && first.lexical_count == 0 && !first.key_hashes);
   JsonResult empty{};
   require(std::memcmp(&first, &empty, sizeof(first)) == 0);
   for (auto source : {"[1,]", "{\"a\":1,\"a\":2}", "{} true", "[undefined]"}) {

@@ -22,8 +22,8 @@ public final class SegmentValueTape extends ValueTape implements TapeSource {
 
   SegmentValueTape(MemorySegment descriptor) {
     super(descriptor.get(ValueLayout.JAVA_LONG, 16), descriptor.get(ValueLayout.JAVA_LONG, 32),
-        descriptor.get(ValueLayout.JAVA_INT, 0));
-    if (descriptor.get(ValueLayout.JAVA_INT, 4) != 0)
+        descriptor.get(ValueLayout.JAVA_INT, 0), descriptor.get(ValueLayout.JAVA_INT, 4));
+    if ((descriptor.get(ValueLayout.JAVA_INT, 4) & ~1) != 0)
       throw new IllegalArgumentException("Unsupported value ABI flags");
     nodes = descriptor.get(ValueLayout.ADDRESS, 8).reinterpret(nodeCount() * NODE_SIZE);
     bytes = descriptor.get(ValueLayout.ADDRESS, 24).reinterpret(byteCount());
