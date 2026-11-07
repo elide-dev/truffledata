@@ -359,3 +359,42 @@ deferred strings, to audit the native/Java cooperation. Strict mode may therefor
 materialize strings earlier. The acceptance corpus runs with strict mode both on
 and off; performance measurements use the shipping, non-strict path. For SVM, set
 the property at image build time with the other strict-test options.
+
+## Seam ABI 9: schema-compiled views with native field directories
+
+ABI 9 replaces the ABI 8 view path (index decode, then a detached `Result` header and Java-built
+field directories). `BuffaPlan` compiles a view-eligible schema once (`compileView`) into checked
+native descriptors: per-type field tables, a direct number-to-ordinal table for numbers up to
+2,048, and closed-enum ranges or sorted value sets. Decoding (`decodeView`) reads no schema
+bytes. `releaseCompiled` frees the handle when the plan closes; it remains valid after the
+decoder closes.
+
+Each view is **one native allocation**: the 24-byte index entries followed by `u32` directory
+words. Every message instance owns one word per schema field, in pre-order with the root at word
+0. A singular word is the last occurrence's entry index plus one (zero: absent); a repeated word is
+zero or the offset of `[count, entry indices...]`. A message entry's `value` is its directory's
+word offset. Java therefore locates any field or repeated element with bounded loads; it no
+longer walks siblings, allocates position arrays or builds per-row directories. SVM reads words
+from native memory. The JVM adapter copies the words once per view into an `int[]`, keeping FFM
+buffer access out of compiled guest code.
+
+The decoder reuses its scratch index between calls. In the steady state, the result is copied
+into one exact allocation (one native allocation per message; Rust tests assert this). Only
+when scratch plus result would exceed the per-call native budget is the scratch itself
+transferred in place. If retained scratch capacity alone causes the budget failure, the decoder
+releases it and decodes once more from empty scratch, so reuse never rejects input that a fresh
+decoder accepts. A message with no fields needs no allocation and fits a zero budget. Views
+release with `releaseView`, which is also valid after the decoder closes. Certification (status
+5: no required fields, no singular-message merges) is unchanged from ABI 8. Uncertified views
+still use the general Java semantic check, and merges fall back to the eager path.
+
+Compilation rejects types with more than 64 fields or map entries. Java's view eligibility
+already excludes these. Rust tests compare compiled views with the interpreted decoder over
+8,000 generated inputs: entries, statuses, error codes, and every directory word must match a
+naive recomputation. They also enforce budgets against fresh decoders across retained
+capacities. A failure-injecting allocator fails every allocation from the *n*th onward in
+compilation, index growth, the exact copy and in-place transfer, and checks that nothing leaks.
+The ABI 8 `Result` detachment path was removed, and
+`NativeTapeAcceptance` now covers view ownership across scratch reuse and decoder closure.
+Bindings, native attachments and the Java JAR must be upgraded together. Measurements are in
+[the protobuf results](../benchmarks/results/protobuf-f26678a/README.md).

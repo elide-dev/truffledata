@@ -6,6 +6,8 @@ use std::mem::size_of;
 
 #[path = "typed_json.rs"]
 mod json;
+#[path = "typed_view.rs"]
+pub mod view;
 
 type Result<T> = std::result::Result<T, i32>;
 #[derive(Clone, Copy)]

@@ -22,6 +22,10 @@ public final class BuffaPlan implements AutoCloseable {
   private final List<ProtoPlan> anyTypes;
   private final WireInput schema;
   private final WireInput empty;
+
+  /** ABI 9 compiled view schema, owned by this plan; zero without a native view backend. */
+  private long views;
+
   private boolean open = true;
 
   BuffaPlan(BuffaWire decoder, ProtoPlan plan, int maxSchemaBytes, List<ProtoPlan> anyTypes) {
@@ -52,6 +56,16 @@ public final class BuffaPlan implements AutoCloseable {
     }
     // Schema input is immutable for the lifetime of this plan.
     schema.retain().release();
+    var backend = decoder.backend;
+    if (backend != null && nativeViews != null) {
+      try {
+        views = backend.compileView(schema);
+      } catch (RuntimeException | Error failure) {
+        empty.close();
+        schema.close();
+        throw failure;
+      }
+    }
   }
 
   public ProtoPlan contract() {
@@ -70,10 +84,11 @@ public final class BuffaPlan implements AutoCloseable {
   }
 
   /**
-   * Request an owned native-index view. Binary standard schemas use lazy Java wrappers; unsupported
-   * shapes and singular-message merges retain the eager semantics-preserving path. The native
-   * budget includes the detached result header. Scalar-only plans retain their smaller inline
-   * representation.
+   * Request an owned native view. Binary standard schemas decode into one native allocation with
+   * schema-directed field directories, read by lazy Java wrappers; unsupported shapes and
+   * singular-message merges retain the eager semantics-preserving path. The native budget bounds
+   * the retained view together with any decoder scratch growth. Scalar-only plans retain their
+   * smaller inline representation.
    */
   @TruffleBoundary
   public TypedMessage decodeView(WireInput input, int maxNativeBytes) {
@@ -129,16 +144,11 @@ public final class BuffaPlan implements AutoCloseable {
       }
       if (format == 0 && compactScalars)
         return compact(owner, backend.scalars(schema, input, plan));
-      boolean useView =
-          view && nativeViews != null && format == 0 && nativeBytes >= Buffa.Result.SIZE;
+      boolean useView = view && views != 0 && format == 0;
       var tape =
-          backend.typed(
-              schema,
-              input,
-              useView ? 3 : format,
-              payload,
-              plan,
-              useView ? nativeBytes - Buffa.Result.SIZE : nativeBytes);
+          useView
+              ? backend.view(views, input, plan, nativeBytes)
+              : backend.typed(schema, input, format, payload, plan, nativeBytes);
       boolean retained = false;
       try {
         if (useView
@@ -153,8 +163,8 @@ public final class BuffaPlan implements AutoCloseable {
             audit.consume(tape, 0, tape.count());
             audit.finish(1);
           }
-          var row = new NativeRow(owner, plan, tape, 0, tape.count());
-          owner.retainIndex(tape.detach());
+          var row = new NativeRow(owner, plan, tape, 0, tape.count(), 0);
+          owner.retainIndex(tape);
           retained = true;
           return owner.finish(row, tape.allocated);
         }
@@ -229,8 +239,14 @@ public final class BuffaPlan implements AutoCloseable {
     schema.lease.thread();
     if (open) {
       open = false;
-      empty.close();
-      schema.close();
+      long compiled = views;
+      views = 0;
+      try {
+        if (compiled != 0) Objects.requireNonNull(decoder.backend).releaseCompiled(compiled);
+      } finally {
+        empty.close();
+        schema.close();
+      }
     }
   }
 
