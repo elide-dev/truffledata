@@ -19,7 +19,7 @@ The delivery plan is
 [`docs/superpowers/plans/2026-11-06-csv.md`](superpowers/plans/2026-11-06-csv.md)
 (Tasks 9–15 cover the Commons scope).
 
-The module publishes (from the release after 0.7.0) as `dev.elide:truffledata-csv`:
+The module publishes (from 0.8.0) as `dev.elide:truffledata-csv`:
 one pure-Java jar for the JVM and Native Image, with no native attachments. The optional
 native structural-index kernel publishes as `truffledata-csv-native` (static images, with
 the Linux x86-64 `.a` and `.so` attachments), `truffledata-csv-jvm` (FFM) and

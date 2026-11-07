@@ -93,18 +93,23 @@ repositories {
     maven("https://maven.elide.dev/gvm-elide/25.5.5-elide.24")
 }
 dependencies {
-    implementation(platform("dev.elide:truffledata-bom:0.7.0"))
+    implementation(platform("dev.elide:truffledata-bom:0.8.0"))
     implementation("dev.elide:truffledata-core")
     implementation("dev.elide:truffledata-protobuf")
     // Add JDBC integrations or protobuf-buffa as needed.
 }
 ```
 
-[Release 0.7.0](https://github.com/elide-dev/truffledata/releases/tag/v0.7.0) includes
-source JARs, consumer POMs, checksums, and Buffa native attachments. See
+[Release 0.8.0](https://github.com/elide-dev/truffledata/releases/tag/v0.8.0) includes
+source JARs, consumer POMs, checksums, and Buffa, JSON and CSV native attachments. See
 [publishing and consumption](docs/PUBLISHING.md) for Maven, Bazel and native linking.
 
-Release **0.7.0** adds opt-in native-index typed views and cached shared primitive
+Release **0.8.0** adds native JSON (simdjson, scoped guest values, typed plans,
+sessions and streams), CSV (Commons CSV scope with SIMD structural-index kernels)
+and a shared tape layer, on Myna 0.11.0 and Elide toolchain 2026.11.5. See the
+[0.8.0 notes](docs/RELEASE_0_8_0.md).
+
+Release **0.7.0** added opt-in native-index typed views and cached shared primitive
 access, with stronger compilation, lifetime and coverage checks. Native **ABI 8**
 requires matching bindings and native libraries. The new
 [shared-consumer measurements](benchmarks/results/shared-consumer/README.md)

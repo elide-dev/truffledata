@@ -1,6 +1,6 @@
 # Maven publishing
 
-The release publishes eighteen thin libraries and a dependency-management BOM, with source jars and POMs. The protobuf runtime can be consumed without protobuf-java. Version 0.7.0 shipped the first nine libraries; the two shared tape artifacts, the three JSON artifacts and the four CSV artifacts publish from the next release, which also adds them to the BOM.
+The release publishes eighteen thin libraries and a dependency-management BOM, with source jars and POMs. The protobuf runtime can be consumed without protobuf-java. Version 0.7.0 shipped the first nine libraries; 0.8.0 adds the two shared tape artifacts, the three JSON artifacts and the four CSV artifacts, all in the BOM.
 
 | Coordinate | Contents |
 | --- | --- |
@@ -30,13 +30,13 @@ All artifacts require Java 25 and currently target Elide GraalVM `25.5.5-elide.2
 
 ```sh
 # Build publication outputs only, with the normal remote execution/cache configuration:
-bazel build //tools/release:publications --//tools/release:version=0.7.0
+bazel build //tools/release:publications --//tools/release:version=0.8.0
 
 # Run all checks and stage jars, POMs, metadata and checksums without network writes:
-tools/release/publish.sh 0.7.0
+tools/release/publish.sh 0.8.0
 ```
 
-The staging command prints a unique directory under `build/release-repo.*`. Each library artifact includes its binary jar (including generated Truffle implementations), source jar, POM, and MD5/SHA-1/SHA-256/SHA-512 checksums. Source jars come from the library's JavaInfo, rather than an independently maintained source list. The default Bazel version is `0.7.0-SNAPSHOT` for checks; the release script requires an explicit immutable version and refuses snapshots.
+The staging command prints a unique directory under `build/release-repo.*`. Each library artifact includes its binary jar (including generated Truffle implementations), source jar, POM, and MD5/SHA-1/SHA-256/SHA-512 checksums. Source jars come from the library's JavaInfo, rather than an independently maintained source list. The default Bazel version is `0.8.0-SNAPSHOT` for checks; the release script requires an explicit immutable version and refuses snapshots.
 
 ## Upload
 
@@ -53,7 +53,7 @@ The command runs the full test suite, the explicit native JIT smoke target, and 
 
 ## Consume
 
-For version `0.7.0`, Gradle consumers can use:
+For version `0.8.0`, Gradle consumers can use:
 
 ```kotlin
 repositories {
@@ -62,7 +62,7 @@ repositories {
     maven("https://maven.elide.dev/gvm-elide/25.5.5-elide.24")
 }
 dependencies {
-    implementation(platform("dev.elide:truffledata-bom:0.7.0"))
+    implementation(platform("dev.elide:truffledata-bom:0.8.0"))
     implementation("dev.elide:truffledata-jdbc-sqlite")
     implementation("dev.elide:truffledata-protobuf")
     // Select truffledata-jdbc-mysql or truffledata-jdbc-postgresql as needed.
@@ -105,7 +105,7 @@ The Buffa artifact publishes these additional files, each with the normal checks
 | `native` | `h` | Generated C ABI declarations |
 
 Resolve an attachment with Maven's dependency plugin using
-`dev.elide:truffledata-protobuf-buffa:0.7.0:a:linux-x86_64` (or `so`), or use the
+`dev.elide:truffledata-protobuf-buffa:0.8.0:a:linux-x86_64` (or `so`), or use the
 matching classifier/type in your build. For a standalone native-image build, stage the
 archive as `libtruffledata_buffa.a`, add its directory to `-H:CLibraryPath`, and enable
 `--features=dev.elide.truffledata.buffa.BuffaFeature`. Keep the release's Java jars and

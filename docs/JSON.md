@@ -8,7 +8,7 @@ immutable heap storage. Known-schema scalar records decode into fixed native slo
 instead. Native details and ABI notes are in [`json/native/README.md`](../json/native/README.md);
 the delivery plan is [`JSON_PLAN.md`](../JSON_PLAN.md).
 
-The module publishes (from the release after 0.7.0) as `dev.elide:truffledata-json`
+The module publishes (from 0.8.0) as `dev.elide:truffledata-json`
 (`//json:json`: the JSON entry points, SVM backend and typed plans, plus Linux x86-64
 `.so`/`.a` attachments), `truffledata-json-jvm` (`//json:jvm`: FFM backend) and
 `truffledata-json-bindings`, on top of the shared `truffledata-tape` and
