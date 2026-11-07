@@ -245,7 +245,9 @@ public:
 template<class T> class arena_vec {
   T* data_ = nullptr;
   size_t size_ = 0, capacity_ = 0;
-  void grow(std::pmr::memory_resource* memory, size_t minimum) {
+  // Out of line and cold: presized producers never take it, and keeping it out of push/extend lets
+  // their single capacity compare inline into every node write.
+  [[gnu::noinline, gnu::cold]] void grow(std::pmr::memory_resource* memory, size_t minimum) {
     size_t capacity = capacity_ ? capacity_ * 2 : 16;
     if (capacity < minimum) capacity = minimum;
     if (capacity > SIZE_MAX / sizeof(T)) throw std::bad_alloc();

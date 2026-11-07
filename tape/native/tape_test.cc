@@ -146,10 +146,51 @@ void arena_failures() {
     }
   }
 }
+// Inline text is packed with fixed overlapping loads (no variable memcpy): for every length 0-16
+// the node holds the bytes zero-padded, exactly as a memcpy into zeroed words, and string_words
+// (pre-packed words from a producer) writes the identical node and charges the same text bytes.
+void inline_text_packing() {
+  std::pmr::monotonic_buffer_resource memory;
+  myna::value_limits limits;
+  const char source[] = "\x01\x80\xFF" "abcdefghijklmnopqrstu";
+  for (size_t n = 0; n <= MYNA_VALUE_INLINE_BYTES; ++n) {
+    tape_writer w(&memory, limits);
+    w.begin(MYNA_VALUE_ARRAY, 0);
+    w.string(std::string_view(source + 1, n));
+    uint64_t words[2] = {0, 0};
+    std::memcpy(words, source + 1, n);
+    w.string_words(words[0], words[1], uint32_t(n));
+    w.end(0, 2);
+    const myna_value_node* nodes = w.view().nodes;
+    require(nodes[1].tag == MYNA_VALUE_STRING && nodes[1].length == n);
+    require(nodes[1].payload == words[0] && nodes[1].next == words[1]);
+    require(std::memcmp(&nodes[1], &nodes[2], sizeof(myna_value_node)) == 0);
+    require(w.text_of(1) == std::string_view(source + 1, n));
+  }
+  tape_writer w(&memory, limits);
+  bool rejected = false;
+  try {
+    w.string_words(0, 0, MYNA_VALUE_INLINE_BYTES + 1);
+  } catch (const std::invalid_argument&) {
+    rejected = true;
+  }
+  require(rejected);
+  myna::value_limits small = limits;
+  small.text_bytes = 3;
+  tape_writer limited(&memory, small);
+  bool charged = false;
+  try {
+    limited.string_words(0x6464646464ull, 0, 5);
+  } catch (const std::length_error&) {
+    charged = true;
+  }
+  require(charged);
+}
 }  // namespace
 
 int main() {
   try {
+    inline_text_packing();
     nonfinite_and_decimal();
     erase_and_append();
     arena_failures();

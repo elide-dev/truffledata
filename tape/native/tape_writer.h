@@ -48,11 +48,34 @@ class tape_writer final {
       throw std::length_error("Myna text limit");
     text_bytes_ += length;
   }
+  // Inline text words (zero-padded little-endian bytes) of n <= 16 bytes, with overlapping fixed-size
+  // loads inside [p, p + n) instead of a variable-length memcpy call.
+  static void pack_inline(const char* p, size_t n, uint64_t (&words)[2]) {
+    uint64_t lo = 0, hi = 0;
+    if (n >= 8) {
+      std::memcpy(&lo, p, 8);
+      if (n > 8) {
+        uint64_t tail;
+        std::memcpy(&tail, p + n - 8, 8);
+        hi = tail >> (8 * (16 - n));
+      }
+    } else if (n >= 4) {
+      uint32_t a, b;
+      std::memcpy(&a, p, 4);
+      std::memcpy(&b, p + n - 4, 4);
+      lo = uint64_t(a) | (uint64_t(b) << (8 * (n - 4)));
+    } else if (n) {
+      lo = uint64_t(uint8_t(p[0])) | (uint64_t(uint8_t(p[n / 2])) << (8 * (n / 2)))
+          | (uint64_t(uint8_t(p[n - 1])) << (8 * (n - 1)));
+    }
+    words[0] = lo;
+    words[1] = hi;
+  }
   void text(uint32_t kind, std::string_view value) {
     charge(value.size());
     if (value.size() <= MYNA_VALUE_INLINE_BYTES) {
-      uint64_t words[2] = {0, 0};
-      if (!value.empty()) std::memcpy(words, value.data(), value.size());
+      uint64_t words[2];
+      pack_inline(value.data(), value.size(), words);
       myna_value_node* node = push(kind, static_cast<uint32_t>(value.size()), words[0]);
       node->next = words[1];
     } else {
@@ -128,6 +151,13 @@ public:
   }
   bool has_nonfinite() const { return nonfinite_; }
   void string(std::string_view utf8) { text(MYNA_VALUE_STRING, utf8); }
+  // An inline STRING of `length` <= 16 bytes already packed as Myna's two little-endian payload
+  // words (bytes past `length` zero), for producers that loaded the words themselves.
+  void string_words(uint64_t lo, uint64_t hi, uint32_t length) {
+    if (length > MYNA_VALUE_INLINE_BYTES) throw std::invalid_argument("inline Myna text above 16 bytes");
+    charge(length);
+    push(MYNA_VALUE_STRING, length, lo)->next = hi;
+  }
   void string_ref(uint32_t region, uint32_t offset, uint32_t length) {
     reference(MYNA_VALUE_STRING, region, offset, length);
   }
