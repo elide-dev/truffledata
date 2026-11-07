@@ -35,7 +35,7 @@ ACCESS_SOURCES = {f'core/src/main/java/dev/elide/truffledata/{name}.java' for na
         'JsonJvm', 'JsonLimits', 'JsonMessage', 'JsonOwner', 'JsonPlan', 'JsonRecord', 'JsonSink',
         'JsonSession', 'JsonSnapshot', 'JsonStream', 'JsonStreamOptions', 'JsonSvm', 'JsonText', 'JsonTextArena',
         'JsonTypedOwner', 'JsonValue',
-        'JvmTypedOwner', 'TruffleSink',
+        'JvmSessionBackend', 'JvmTypedOwner', 'TruffleSink',
         'SegmentValueTape',
         'SvmTypedOwner', 'SvmValueTape', 'TapeSource',
     )
