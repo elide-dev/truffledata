@@ -1,5 +1,6 @@
 package dev.elide.truffledata.csv;
 
+import com.oracle.truffle.api.HostCompilerDirectives.InliningCutoff;
 import dev.elide.truffledata.ContractViolation;
 import dev.elide.truffledata.Values;
 import java.util.Arrays;
@@ -249,7 +250,13 @@ final class BatchBuilder implements CsvScanner.Records {
     return full;
   }
 
+  /**
+   * The per-record path: every record outside the fused path, and the fused path's declined
+   * records. An inlining cutoff, so the fused framing loop (a host-inlining root) calls it instead
+   * of inlining the whole builder.
+   */
   @Override
+  @InliningCutoff
   public boolean record(long[] spans, int count, int start, int end) {
     if (rows == maxRows) {
       full = true;
