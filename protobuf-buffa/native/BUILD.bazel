@@ -51,6 +51,8 @@ rust_library(
     srcs = [
         "generated/seam.rs",
         "lib.rs",
+        "slab.rs",
+        "slab_tests.rs",
         "typed.rs",
         "typed_json.rs",
         "typed_view.rs",
@@ -75,6 +77,8 @@ rust_static_library(
     srcs = [
         "generated/seam.rs",
         "lib.rs",
+        "slab.rs",
+        "slab_tests.rs",
         "typed.rs",
         "typed_json.rs",
         "typed_view.rs",
@@ -100,6 +104,8 @@ rust_shared_library(
     srcs = [
         "generated/seam.rs",
         "lib.rs",
+        "slab.rs",
+        "slab_tests.rs",
         "typed.rs",
         "typed_json.rs",
         "typed_view.rs",
@@ -125,7 +131,10 @@ rust_shared_library(
 
 rust_test(
     name = "test",
+    size = "medium",
     crate = ":lib",
+    # slab_tests.rs checks the Task A1 golden slabs.
+    data = ["//protobuf-runtime:golden_slabs"],
 )
 
 exports_files(["Cargo.toml"])

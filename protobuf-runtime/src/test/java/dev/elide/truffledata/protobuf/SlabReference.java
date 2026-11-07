@@ -27,6 +27,9 @@ final class SlabReference {
   private int records;
   private boolean certified = true;
 
+  /** (record, unknown span) pairs, in close order; sorted by record into the unknown table. */
+  private final List<int[]> unknowns = new ArrayList<>();
+
   private SlabReference(Layout layout, int maxDepth) {
     this.layout = layout;
     this.maxDepth = maxDepth;
@@ -41,6 +44,19 @@ final class SlabReference {
     var producer = new SlabReference(layout, maxDepth);
     var root = producer.record(0, new Reader(wire), wire.length, 0, 0);
     if (root.at != ROOT) throw new AssertionError("root placement");
+    int table = 0;
+    if (!producer.unknowns.isEmpty()) {
+      // The unknown table is the last allocation: ascending record offsets (= handle order).
+      producer.unknowns.sort(Comparator.comparingInt(pair -> pair[0]));
+      int count = producer.unknowns.size();
+      table = producer.alloc(UNKNOWN_TABLE_ENTRIES + UNKNOWN_TABLE_ENTRY_BYTES * count, 8);
+      putInt(producer.out, table + UNKNOWN_TABLE_COUNT, count);
+      for (int i = 0; i < count; i++) {
+        int entry = table + UNKNOWN_TABLE_ENTRIES + UNKNOWN_TABLE_ENTRY_BYTES * i;
+        putInt(producer.out, entry, producer.unknowns.get(i)[0]);
+        putInt(producer.out, entry + 4, producer.unknowns.get(i)[1]);
+      }
+    }
     int bytes = align8(producer.top);
     byte[] slab = Arrays.copyOf(producer.out, bytes);
     putInt(slab, HEADER_MAGIC, MAGIC);
@@ -50,6 +66,7 @@ final class SlabReference {
     putInt(slab, HEADER_HANDLES, producer.handles);
     putInt(slab, HEADER_ROOT, ROOT);
     putInt(slab, HEADER_LAYOUT, layout.fingerprint());
+    putInt(slab, HEADER_UNKNOWNS, table);
     return slab;
   }
 
@@ -153,13 +170,13 @@ final class SlabReference {
   }
 
   private void setPresence(Open r, int ordinal, boolean present) {
-    int word = r.at + 8 * (ordinal >>> 6);
-    long bits = getLong(out, word);
-    putLong(out, word, present ? bits | (1L << ordinal) : bits & ~(1L << ordinal));
+    int word = r.at + RECORD_PRESENCE + 4 * (ordinal >>> 5);
+    int bits = getInt(out, word);
+    putInt(out, word, present ? bits | (1 << ordinal) : bits & ~(1 << ordinal));
   }
 
   private boolean present(Open r, int ordinal) {
-    return (getLong(out, r.at + 8 * (ordinal >>> 6)) & (1L << ordinal)) != 0;
+    return SlabFormat.present(out, r.at, ordinal);
   }
 
   /** Oneof last-wins: clear every other member's bit and slot, record this member's case. */
@@ -182,7 +199,7 @@ final class SlabReference {
     ProtoPlan plan = layout.plan(type);
     var open = new Open(type, alloc(layout.recordBytes(type), 8), plan);
     records++;
-    putInt(out, open.at + layout.handleOffset(type), handles++);
+    putInt(out, open.at + RECORD_HANDLE, handles++);
     boolean closed = false;
     while (r.pos < end) {
       int start = r.pos;
@@ -329,7 +346,7 @@ final class SlabReference {
       int span = alloc(UNKNOWN_BYTES + bytes.length, 4);
       putInt(out, span + UNKNOWN_LENGTH, bytes.length);
       System.arraycopy(bytes, 0, out, span + UNKNOWN_BYTES, bytes.length);
-      putInt(out, r.at + layout.unknownOffset(r.type), span);
+      unknowns.add(new int[] {r.at, span});
     }
     for (int ordinal = 0; ordinal < r.plan.size(); ordinal++)
       if (r.plan.field(ordinal).required() && !present(r, ordinal)) certified = false;
@@ -360,7 +377,7 @@ final class SlabReference {
       case STRING -> {
         int header = getInt(out, slot);
         yield new String(
-            out, header + STRING_PAYLOAD, stringLength(out, header), StandardCharsets.UTF_8);
+            out, payload(out, header), stringLength(out, header), StandardCharsets.UTF_8);
       }
       case I64 -> getLong(out, slot);
       default -> (long) getInt(out, slot);
@@ -401,11 +418,13 @@ final class SlabReference {
       if (ascii) lengthWord |= ASCII;
       utf16 = utf16(in, at, count);
     }
-    int header = alloc(STRING_HEADER_BYTES + count, 4);
+    // ASCII strings omit the utf16 word (it equals the length); bytes keep it as 0.
+    int headerBytes = (lengthWord & ASCII) != 0 ? ASCII_HEADER_BYTES : STRING_HEADER_BYTES;
+    int header = alloc(headerBytes + count, 4);
     putInt(out, header + STRING_LENGTH, lengthWord);
-    putInt(out, header + STRING_UTF16, utf16);
     putInt(out, header + STRING_HANDLE, handles++);
-    System.arraycopy(in, at, out, header + STRING_PAYLOAD, count);
+    if (headerBytes == STRING_HEADER_BYTES) putInt(out, header + STRING_UTF16, utf16);
+    System.arraycopy(in, at, out, header + headerBytes, count);
     return header;
   }
 
@@ -467,8 +486,19 @@ final class SlabReference {
   /** Asserts that the slab's root equals {@code expected} field by field, including unknowns. */
   static void assertMatches(Layout layout, byte[] slab, ProtoRow expected) {
     SlabFormat.check(slab, layout);
-    assertEquals(0, getInt(slab, HEADER_RESERVED));
-    assertEquals(0, getInt(slab, ROOT + layout.handleOffset(0)), "root handle");
+    int table = getInt(slab, HEADER_UNKNOWNS);
+    if (table != 0) {
+      assertEquals(0, table % 8, "unknown table alignment");
+      int count = getInt(slab, table + UNKNOWN_TABLE_COUNT);
+      assertTrue(count > 0, "empty unknown table");
+      assertEquals(0, getInt(slab, table + 4));
+      for (int i = 1; i < count; i++)
+        assertTrue(
+            getInt(slab, table + UNKNOWN_TABLE_ENTRIES + UNKNOWN_TABLE_ENTRY_BYTES * (i - 1))
+                < getInt(slab, table + UNKNOWN_TABLE_ENTRIES + UNKNOWN_TABLE_ENTRY_BYTES * i),
+            "unknown table order");
+    }
+    assertEquals(0, getInt(slab, ROOT + RECORD_HANDLE), "root handle");
     assertRecord(layout, slab, 0, ROOT, expected, "$");
   }
 
@@ -519,7 +549,7 @@ final class SlabReference {
       }
     }
     byte[] unknown = row instanceof ProtoRow owned ? owned.unknown() : null;
-    int span = SlabFormat.unknown(slab, record, layout, type);
+    int span = SlabFormat.unknown(slab, record);
     if (unknown == null || unknown.length == 0) assertEquals(0, span, path + " unknown");
     else {
       assertNotEquals(0, span, path + " unknown");

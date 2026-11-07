@@ -25,7 +25,8 @@ public final class SlabFormat {
   public static final int HEADER_HANDLES = 16;
   public static final int HEADER_ROOT = 20;
   public static final int HEADER_LAYOUT = 24;
-  public static final int HEADER_RESERVED = 28;
+  /** Offset of the unknown table (records with unknown fields), 0 when no record has any. */
+  public static final int HEADER_UNKNOWNS = 28;
 
   // Header flags.
   /** No string or bytes header references input bytes. */
@@ -43,17 +44,22 @@ public final class SlabFormat {
   /** The root record always follows the header. */
   public static final int ROOT = HEADER_BYTES;
 
-  // String and bytes headers.
+  // Records.
+  public static final int RECORD_HANDLE = Layout.HANDLE_OFFSET;
+  public static final int RECORD_PRESENCE = Layout.PRESENCE_OFFSET;
+
+  // String and bytes headers: length · handle · utf16 (only when ASCII is clear) · payload.
   public static final int STRING_LENGTH = 0;
-  public static final int STRING_UTF16 = 4;
-  public static final int STRING_HANDLE = 8;
-  public static final int STRING_PAYLOAD = 12;
+  public static final int STRING_HANDLE = 4;
 
-  /** Header bytes before an owned payload. */
+  /** UTF-16 units of a non-ASCII string (0 for bytes); absent from ASCII headers. */
+  public static final int STRING_UTF16 = 8;
+
+  /** Header bytes before the payload (or input offset) of an ASCII string. */
+  public static final int ASCII_HEADER_BYTES = 8;
+
+  /** Header bytes before the payload (or input offset) of a non-ASCII string or of bytes. */
   public static final int STRING_HEADER_BYTES = 12;
-
-  /** Header bytes of an external (input-offset) string. */
-  public static final int EXTERNAL_STRING_BYTES = 16;
 
   /** Length-word bit: every byte is below 0x80 (strings only; never set for bytes). */
   public static final int ASCII = 0x8000_0000;
@@ -70,6 +76,11 @@ public final class SlabFormat {
   // Unknown spans.
   public static final int UNKNOWN_LENGTH = 0;
   public static final int UNKNOWN_BYTES = 4;
+
+  // Unknown table: count · 0 · count × (record offset, span offset), ascending by record.
+  public static final int UNKNOWN_TABLE_COUNT = 0;
+  public static final int UNKNOWN_TABLE_ENTRIES = 8;
+  public static final int UNKNOWN_TABLE_ENTRY_BYTES = 8;
 
   public static int getInt(byte[] slab, int offset) {
     return LE.getInt(slab, offset);
@@ -124,16 +135,27 @@ public final class SlabFormat {
 
   /** Presence bit {@code ordinal} of the record at {@code record}. */
   public static boolean present(byte[] slab, int record, int ordinal) {
-    return (getLong(slab, record + 8 * (ordinal >>> 6)) & (1L << ordinal)) != 0;
+    return (getInt(slab, record + RECORD_PRESENCE + 4 * (ordinal >>> 5)) & (1 << ordinal)) != 0;
   }
 
-  public static int handle(byte[] slab, int record, Layout layout, int type) {
-    return getInt(slab, record + layout.handleOffset(type));
+  public static int handle(byte[] slab, int record) {
+    return getInt(slab, record + RECORD_HANDLE);
   }
 
-  /** Offset of the record's unknown span, or 0. */
-  public static int unknown(byte[] slab, int record, Layout layout, int type) {
-    return getInt(slab, record + layout.unknownOffset(type));
+  /** Offset of the record's unknown span, or 0: a binary search of the slab's unknown table. */
+  public static int unknown(byte[] slab, int record) {
+    int table = getInt(slab, HEADER_UNKNOWNS);
+    if (table == 0) return 0;
+    int low = 0, high = getInt(slab, table + UNKNOWN_TABLE_COUNT) - 1;
+    while (low <= high) {
+      int middle = (low + high) >>> 1;
+      int entry = table + UNKNOWN_TABLE_ENTRIES + UNKNOWN_TABLE_ENTRY_BYTES * middle;
+      int at = getInt(slab, entry);
+      if (at == record) return getInt(slab, entry + 4);
+      if (Integer.compareUnsigned(at, record) < 0) low = middle + 1;
+      else high = middle - 1;
+    }
+    return 0;
   }
 
   /** Ordinal of the set member of a oneof, or -1. */
@@ -163,16 +185,21 @@ public final class SlabFormat {
     return getInt(slab, header + STRING_HANDLE);
   }
 
+  /** Header bytes before the payload: 8 for ASCII strings, 12 otherwise. */
+  public static int headerBytes(byte[] slab, int header) {
+    return ascii(slab, header) ? ASCII_HEADER_BYTES : STRING_HEADER_BYTES;
+  }
+
   /** Slab offset of an owned payload (not external). */
   public static int payload(byte[] slab, int header) {
     if (external(slab, header)) throw new ContractViolation("External slab string");
-    return header + STRING_PAYLOAD;
+    return header + headerBytes(slab, header);
   }
 
   /** Input offset of an external payload. */
   public static int inputOffset(byte[] slab, int header) {
     if (!external(slab, header)) throw new ContractViolation("Owned slab string");
-    return getInt(slab, header + STRING_PAYLOAD);
+    return getInt(slab, header + headerBytes(slab, header));
   }
 
   public static int listCount(byte[] slab, int list) {

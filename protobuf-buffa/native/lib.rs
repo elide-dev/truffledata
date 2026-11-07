@@ -1,4 +1,5 @@
-//! Borrowed wire decoding: Buffa reads the caller's slice; payloads stay in that slice.
+//! Borrowed wire decoding (ABI 8/9) and layout-compiled slabs (ABI 10, slab.rs): Buffa reads the
+//! caller's slice; index payloads stay in that slice, slabs copy them into the caller's buffer.
 //! The caller owns input memory and lends it immutably for the duration of the call.
 //! Only the bounded field index is allocated in Rust. No unwind may cross the ABI.
 use buffa::encoding::{Tag, WireType, decode_varint};
@@ -12,6 +13,7 @@ mod seam {
     include!("generated/seam.rs");
 }
 
+mod slab;
 mod typed;
 mod unicode;
 use unicode::td_buffa_utf8_to_utf16;
@@ -20,6 +22,8 @@ const MALFORMED: i32 = 1;
 const BUDGET: i32 = 2;
 const ALLOCATION: i32 = 3;
 const PANIC: i32 = 4;
+// 5 is ABI 9's certified view status. ABI 10: the slab did not fit; `SlabResult.bytes` is exact.
+const NEEDS_CAPACITY: i32 = slab::NEEDS_CAPACITY;
 use seam::Field;
 const FIELD_BYTES: usize = mem::size_of::<Field>();
 
@@ -582,6 +586,232 @@ pub unsafe extern "C" fn td_buffa_decode_view(
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn td_buffa_release_view(data: *mut u8, bytes: u64) {
     unsafe { typed::view::release(data.cast(), bytes as usize / FIELD_BYTES) };
+}
+/// ABI 10: compile a schema program (TDB3 tables and the TDL1 layout section) into slab
+/// descriptors once. On success `result.data` is an owned handle (released by
+/// td_buffa_release_layout) and `result.count` the number of types.
+///
+/// # Safety
+/// schema is a live immutable region; result is an aligned, writable seam::Result.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn td_buffa_compile_layout(
+    schema: *const u8,
+    schema_length: u64,
+    result: *mut std::ffi::c_void,
+) -> i32 {
+    if result.is_null() {
+        return MALFORMED;
+    }
+    let result = result.cast::<seam::Result>();
+    unsafe {
+        result.write(seam::Result {
+            data: std::ptr::null_mut(),
+            count: 0,
+            capacity: 0,
+        });
+    }
+    if schema.is_null() || schema_length > i32::MAX as u64 {
+        return MALFORMED;
+    }
+    match catch_unwind(AssertUnwindSafe(|| {
+        let compiled =
+            slab::compile(unsafe { slice::from_raw_parts(schema, schema_length as usize) })?;
+        let types = compiled.types.len();
+        // A fallible single-element allocation; Box::new would abort on exhaustion.
+        let mut owner = Vec::new();
+        owner.try_reserve_exact(1).map_err(|_| ALLOCATION)?;
+        owner.push(compiled);
+        Ok::<_, i32>((Box::into_raw(owner.into_boxed_slice()), types))
+    })) {
+        Ok(Ok((handle, types))) => {
+            unsafe {
+                result.write(seam::Result {
+                    data: handle.cast(),
+                    count: types as u64,
+                    capacity: 0,
+                });
+            }
+            0
+        }
+        Ok(Err(code)) => code,
+        Err(_) => PANIC,
+    }
+}
+
+/// # Safety
+/// compiled is null or a handle from td_buffa_compile_layout, released exactly once, with no
+/// concurrent or later use.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn td_buffa_release_layout(compiled: *mut u8) {
+    if !compiled.is_null() {
+        drop(unsafe {
+            Box::from_raw(std::ptr::slice_from_raw_parts_mut(
+                compiled.cast::<slab::Compiled>(),
+                1,
+            ))
+        });
+    }
+}
+
+/// Shared body of both slab entry points; `small` forbids heap allocation.
+#[allow(clippy::too_many_arguments)]
+unsafe fn decode_slab_impl(
+    small: bool,
+    compiled: *const u8,
+    data: *const u8,
+    length: u64,
+    flags: u32,
+    projection: *const u8,
+    out: *mut u8,
+    capacity: u64,
+    max_depth: u32,
+    max_slab_bytes: u64,
+    result: *mut std::ffi::c_void,
+) -> i32 {
+    if result.is_null() {
+        return MALFORMED;
+    }
+    let result = result.cast::<seam::SlabResult>();
+    unsafe {
+        result.write(seam::SlabResult {
+            bytes: 0,
+            records: 0,
+            handles: 0,
+            flags: 0,
+            error: 0,
+            reserved: 0,
+        });
+    }
+    if small && (length > slab::SMALL_LIMIT || capacity > slab::SMALL_LIMIT) {
+        return BUDGET;
+    }
+    // Projection is Phase E (Task E1); until then only a null projection is defined.
+    if compiled.is_null()
+        || data.is_null()
+        || !projection.is_null()
+        || length > i32::MAX as u64
+        || capacity > isize::MAX as u64
+        || (out.is_null() && capacity != 0)
+    {
+        return MALFORMED;
+    }
+    let mut error_at = 0usize;
+    let outcome = catch_unwind(AssertUnwindSafe(|| {
+        let compiled = unsafe { &*compiled.cast::<slab::Compiled>() }.checked()?;
+        slab::decode(
+            compiled,
+            unsafe { slice::from_raw_parts(data, length as usize) },
+            flags,
+            out,
+            capacity as usize,
+            max_depth,
+            max_slab_bytes,
+            !small,
+            &mut error_at,
+        )
+    }));
+    let write = |o: slab::Outcome, error: usize| unsafe {
+        result.write(seam::SlabResult {
+            bytes: o.bytes,
+            records: o.records,
+            handles: o.handles,
+            flags: o.flags,
+            error: error as u32,
+            reserved: 0,
+        });
+    };
+    match outcome {
+        Ok(Ok(o)) => {
+            write(o, 0);
+            if o.bytes > capacity || flags & slab::FLAG_SIZING_ONLY != 0 {
+                NEEDS_CAPACITY
+            } else {
+                0
+            }
+        }
+        Ok(Err(code)) => {
+            write(slab::Outcome::default(), error_at);
+            code
+        }
+        Err(_) => PANIC,
+    }
+}
+
+/// ABI 10: decode one protobuf message into a slab (docs/SLAB.md) written to `out[..capacity]`.
+/// Returns 0 with `result.bytes` the slab length, `NEEDS_CAPACITY` with the exact length when it
+/// did not fit (or under `SIZING_ONLY`), or an error status with `result.error` the input offset
+/// of the rejecting field (of the string payload for invalid UTF-8). Flags: `OWNING = 1`
+/// (required), `LAX = 2` (rejected until Phase E), `SIZING_ONLY = 4`.
+///
+/// # Safety
+/// compiled is a live handle from td_buffa_compile_layout; data a live immutable region of
+/// `length` bytes; out null (capacity 0) or `capacity` writable bytes disjoint from every other
+/// region; result an aligned, writable seam::SlabResult. No callback.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn td_buffa_decode_slab(
+    compiled: *const u8,
+    data: *const u8,
+    length: u64,
+    flags: u32,
+    projection: *const u8,
+    out: *mut u8,
+    capacity: u64,
+    max_depth: u32,
+    max_slab_bytes: u64,
+    result: *mut std::ffi::c_void,
+) -> i32 {
+    unsafe {
+        decode_slab_impl(
+            false,
+            compiled,
+            data,
+            length,
+            flags,
+            projection,
+            out,
+            capacity,
+            max_depth,
+            max_slab_bytes,
+            result,
+        )
+    }
+}
+
+/// ABI 10 bounded leaf: td_buffa_decode_slab for `length` and `capacity` at most 64 KiB (else
+/// `BUDGET` before any work). It performs no heap allocation and takes no lock: scratch is fixed
+/// stack storage, and an input that overflows it returns `BUDGET` (the caller retries through
+/// td_buffa_decode_slab). No panic escapes.
+///
+/// # Safety
+/// As td_buffa_decode_slab.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn td_buffa_decode_slab_small(
+    compiled: *const u8,
+    data: *const u8,
+    length: u64,
+    flags: u32,
+    projection: *const u8,
+    out: *mut u8,
+    capacity: u64,
+    max_depth: u32,
+    max_slab_bytes: u64,
+    result: *mut std::ffi::c_void,
+) -> i32 {
+    unsafe {
+        decode_slab_impl(
+            true,
+            compiled,
+            data,
+            length,
+            flags,
+            projection,
+            out,
+            capacity,
+            max_depth,
+            max_slab_bytes,
+            result,
+        )
+    }
 }
 seam::assert_implementations!(seam);
 

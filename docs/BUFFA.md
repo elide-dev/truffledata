@@ -405,3 +405,21 @@ The `TDB3` magic and every existing offset are unchanged and ABI 9 never reads p
 tables, so this library keeps working; a Rust test compiles programs with and without the
 section and compares the descriptors and decodes. The slab format and the section are specified
 in [SLAB.md](SLAB.md).
+
+## Seam ABI 10: layout-compiled slabs (native producer)
+
+ABI 10 (protobuf performance plan, Task A2) adds the native producer of the `TDSLAB1` slabs
+specified in [SLAB.md](SLAB.md): `compileLayout`/`releaseLayout` compile a schema program's
+`TDB3` tables and `TDL1` section once (recomputing the layout and rejecting any disagreement),
+`decodeSlab` decodes one message into a caller-provided buffer and reports the exact length
+(`NEEDS_CAPACITY = 6`) when it does not fit, and `decodeSlabSmall` is the same decode as a
+bounded native leaf (input and capacity at most 64 KiB, no heap allocation, no lock). The ABI 9
+imports are unchanged and the Java backends keep using views until Task B1 adopts slabs; the
+ABI 9 view imports are retired in Task G1. Bindings and native attachments must again be upgraded
+together (the fingerprint changed with the ABI).
+
+The slab decoder reproduces the ten Task A1 golden slabs byte for byte and is compared with the
+ABI 9 view decoder over 8,000 generated inputs; Rust tests also cover capacity retries, budgets,
+UTF-8 rejection offsets, merges, oneofs, maps, unknown fields, depth, allocation (the small
+entry point allocates nothing) and failure injection. Measurements against the decode probe are
+in [the slab results](../benchmarks/results/protobuf-slab-native-d3f778c/README.md).

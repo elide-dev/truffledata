@@ -8,9 +8,10 @@ decoders) and every reader follows. The architecture and the rationale are in
 `docs/superpowers/plans/2026-11-07-protobuf-performance.md` §2.
 
 Sources: `protobuf-runtime/.../Layout.java` (layout compiler and the `TDL1` program),
-`SlabFormat.java` (constants and accessors), and the executable model of this document,
+`SlabFormat.java` (constants and accessors), the executable model of this document,
 `protobuf-runtime/src/test/.../SlabReference.java`, which the golden slabs in
-`protobuf-runtime/src/test/resources/slab/` are checked against.
+`protobuf-runtime/src/test/resources/slab/` are checked against, and the native producer
+`protobuf-buffa/native/slab.rs` (seam ABI 10, below), which reproduces every golden byte for byte.
 
 ## Conventions
 
@@ -20,8 +21,8 @@ Sources: `protobuf-runtime/.../Layout.java` (layout compiler and the `TDL1` prog
   `0` in a reference slot means *absent*. Presence bits are authoritative: an implicit-presence
   string or bytes field that holds its default keeps the offset of its header with the bit clear.
 - Every byte the producer does not write explicitly is **zero**, including all padding.
-- Records and lists start at multiples of 8; string headers and unknown spans at multiples of 4.
-  The slab length is a multiple of 8.
+- Records, lists and the unknown table start at multiples of 8; string headers and unknown spans
+  at multiples of 4. The slab length is a multiple of 8.
 
 ## Layout of a type
 
@@ -34,18 +35,21 @@ For a type with `n` fields (ordinals `0..n-1`, declaration order) and `o` oneofs
 
 | Offset | Size | Content |
 |---:|---:|---|
-| 0 | `8 × W`, `W = ceil(n / 64)` | presence words: bit `i mod 64` of word `i / 64` is field `i` |
-| `8W` | 4 | `handle` (`u32`) |
-| `8W + 4` | 4 | `unknown`: offset of the record's unknown span, 0 if none |
-| `8W + 8` | `align8(2 × o)` | oneof case entries, `u16` each: ordinal + 1 of the set member, 0 if none |
+| 0 | 4 | `handle` (`u32`) |
+| 4 | `4 × W`, `W = ceil(n / 32)` | presence words (`u32`): bit `i mod 32` of word `i / 32` is field `i` |
+| `4 + 4W` | `2 × o` | oneof case entries, `u16` each: ordinal + 1 of the set member, 0 if none |
+| … | | padding to a multiple of 8 if the type has an 8-byte slot, else to a multiple of 4 |
 | … | 8 each | 8-byte slots, in ordinal order |
 | … | 4 each | 4-byte slots, in ordinal order |
 | | | padding to a multiple of 8 = `recordBytes` |
 
 `o` is `max(oneof index) + 1` over the type's fields (proto3 `optional` fields are synthetic
 oneofs and get entries too). Case entries are `u16` holding the member's **ordinal** plus one, so
-a oneof member's ordinal must be at most 65,534 (`Layout` rejects larger ones). The case area is
-padded to 8 so that 8-byte slots stay aligned.
+a oneof member's ordinal must be at most 65,534 (`Layout` rejects larger ones). Records have no
+unknown-field word: the slab's unknown table (below) maps the few records that have unknown
+fields to their spans. (Task A2 ruling: this record header and the ASCII string header below
+replaced the first `TDSLAB1` draft's `u64` presence words, `unknown` word and 12-byte ASCII
+headers, taking `Type` message 1 from 536 B to 448 B.)
 
 ### Slot kinds
 
@@ -76,7 +80,7 @@ header (32 B)
  16  handles  u32  handles assigned (records + string/bytes headers)
  20  root     u32  offset of the root record: always 32
  24  layout   u32  Layout.fingerprint() of the producing program
- 28  reserved u32  0
+ 28  unknowns u32  offset of the unknown table, 0 if no record has unknown fields
 32  root record, then every other allocation in decode order (below)
 ```
 
@@ -91,21 +95,28 @@ slab (producers never reject missing required fields themselves).
 
 ```
 0  length u32   bit 31 ASCII · bit 30 EXTERNAL · bits 0..29 byte length
-4  utf16  u32   UTF-16 units (strings); 0 for bytes
-8  handle u32
-12 payload      length bytes (owned), or input offset u32 (EXTERNAL)
+4  handle u32
+8  utf16  u32   only when ASCII is clear: UTF-16 units (strings); 0 for bytes
+then           length bytes (owned), or input offset u32 (EXTERNAL)
 ```
 
 `ASCII` is set exactly when every payload byte is below `0x80`; it is set for the empty string
-and never for `bytes`. Both `ASCII` and `utf16` are written only after strict UTF-8 validation
-(the same rule as `ProtoCodec`: no overlongs, surrogates or values above U+10FFFF). An owned
-header occupies `12 + length` bytes, an external one 16.
+and never for `bytes`. An ASCII header has no `utf16` word (its UTF-16 length is its byte length),
+so its payload starts at 8; every other header's at 12. Both `ASCII` and `utf16` are written only
+after strict UTF-8 validation (the same rule as `ProtoCodec`: no overlongs, surrogates or values
+above U+10FFFF). An owned header occupies `8 + length` (ASCII) or `12 + length` bytes, an external
+one 12 or 16.
 
 **List** (start aligned to 8): `count u32 · 0 u32 · count elements`. Lists exist only for fields
 with at least one element (absent lists are slot 0 with the presence bit clear).
 
 **Unknown span** (start aligned to 4): `length u32 · bytes`. Unknown spans are always copied,
 also in borrowing slabs.
+
+**Unknown table** (start aligned to 8; header word 28): `count u32 · 0 u32 · count × (record u32,
+span u32)`, ascending by record offset (which is handle order). It lists every record that
+collected unknown bytes, orphans included; a record without an entry has no unknown fields.
+Readers binary-search it (`SlabFormat.unknown`); it exists only when `count > 0`.
 
 ## Decoding into a slab
 
@@ -118,7 +129,7 @@ unknown fields) stay in the slab with their handles; readers never reach them.
 
 `record(T, input)` decodes one message body:
 
-1. `alloc(recordBytes(T), 8)`, take a handle, write it to the handle word.
+1. `alloc(recordBytes(T), 8)` (zeroed), take a handle, write it to the handle word (offset 0).
 2. For each field in wire order (tag, wire type and budget rules exactly as `ProtoCodec`):
    - **Unknown** number, or a wire type that differs from the field's (other than a packed
      run of a packable repeated field): append the raw field bytes, tag through value, to the
@@ -127,7 +138,8 @@ unknown fields) stay in the slab with their handles; readers never reach them.
      field's pending elements, except an out-of-set closed-enum value, which is appended to
      the unknown bytes **re-encoded** as `varint(number << 3) varint(sign-extended value)`.
    - **Scalar** (including string and bytes): read the value. A string or bytes value
-     allocates its header now (`alloc(12 + length, 4)`, handle, payload copy). If the record's
+     allocates its header now (`alloc(8 + length, 4)` for ASCII strings, else
+     `alloc(12 + length, 4)`; handle; payload copy). If the record's
      type is a map entry, the field is ordinal 1 and is an enum, remember whether the value is
      out of set. An out-of-set closed-enum value appends the raw field bytes to the unknown bytes
      and changes nothing else (no oneof selection). Otherwise, repeated: append to pending;
@@ -155,16 +167,52 @@ unknown fields) stay in the slab with their handles; readers never reach them.
       `alloc(8 + count × width, 8)`, count, elements in wire order; slot and presence bit are
       set. A **map** list keeps one entry per key — the position of the key's first entry and the
       record of its last — keyed by the entry's field 0 (an absent key is the default key).
-   4. **Unknown span**: if the record collected unknown bytes, `alloc(4 + length, 4)` and point the
-      unknown word at it.
+   4. **Unknown span**: if the record collected unknown bytes, `alloc(4 + length, 4)` and remember
+      `(record, span)` for the unknown table.
    5. **Required fields**: a required field without its presence bit clears `CERTIFIED`.
 
 Groups end at their matching end tag; a mismatched end tag, an unterminated group, depth beyond
-the plan's limit and every other `ProtoCodec` error reject the input. After the root closes the
-producer writes the header; `bytes` is the cursor rounded up to 8.
+the plan's limit and every other `ProtoCodec` error reject the input. After the root closes, if any
+record has unknown fields, the producer allocates the unknown table (`alloc(8 + 8 × count, 8)`,
+the last allocation); then it writes the header; `bytes` is the cursor rounded up to 8.
+
+Depth: the root record is at depth 0 and a record at depth `d` may contain messages and groups
+only while `d < maxDepth` (also unknown groups, which are skipped; and the empty value record a
+map entry gets at close). Deeper nesting is a budget error.
 
 The header's `records` and `handles` count orphans. Producers must agree byte for byte, orphans
 and padding included; this is what `producers_agree_byte_for_byte` (Task A3) compares.
+
+## Native producer (seam ABI 10)
+
+`protobuf-buffa/native/slab.rs` behind four `buffa.seam` imports (the ABI 9 view imports stay
+until Task G1):
+
+- `compileLayout(schema, length, result)`: compiles a schema program (`TDB3` + `TDL1`) once into
+  an owned handle (`result.data`; `result.count` types). The layout is recomputed from the TDB3
+  kinds and flags and the section's oneof indices; a section whose tables, extents or
+  fingerprint disagree is `MALFORMED` (1). Oneof membership exists only in the section, so a
+  section that differs from Java's only there describes another consistent layout of the same
+  tables; programs come from `NativeSchema`, never from input. `releaseLayout(handle)` frees it.
+- `decodeSlab(compiled, data, length, flags, projection, out, capacity, maxDepth, maxSlabBytes,
+  result)`: `flags` `OWNING = 1` (required), `LAX = 2` (rejected until Task E1), `SIZING_ONLY = 4`;
+  `projection` must be null until Task E1. Writes the slab to `out[..capacity]` and returns 0,
+  or `NEEDS_CAPACITY` (6) with `result.bytes` the **exact** slab length when it does not fit (or
+  under `SIZING_ONLY`); a retry with that capacity succeeds. Allocations that do not fit are not
+  written, but the walk continues to the end (records that do not fit are kept in decoder
+  frames), so the count is exact and errors are reported exactly as with room. A slab longer
+  than `maxSlabBytes` is `BUDGET` (2), never `NEEDS_CAPACITY`, so the caller never allocates for
+  it; `maxDepth` above 128 (the ABI 9 bound) and `maxSlabBytes` above `Integer.MAX_VALUE` are
+  `BUDGET` up front. `result` (`SlabResult`, 32 B): `bytes u64 · records u32 · handles u32 · flags u32 · error u32 ·
+  reserved u64`; on a rejection `error` is the input offset of the innermost field being decoded
+  (for invalid UTF-8, of the string's first payload byte, which is where protobuf-java fails:
+  strings are validated when read, in wire order). Other statuses: `ALLOCATION` (3), `PANIC` (4;
+  no unwind crosses the ABI).
+- `decodeSlabSmall(...)`: the same, as a bounded native leaf: `length` and `capacity` above
+  64 KiB are `BUDGET` before any work; no heap allocation and no lock. Its scratch (pending list
+  elements, merge payloads, unknown bytes, unknown-table entries, frames) is fixed stack storage
+  (about 20 KiB); an input that overflows it is `BUDGET`, and the caller retries through
+  `decodeSlab`, whose scratch starts in the same stack storage and spills to the heap.
 
 ## Schema program section (`TDL1`)
 
@@ -201,7 +249,7 @@ slab. Schemas are the `LayoutTest` factories of the same name (`timestamp`, `goo
 | Golden | Shows |
 |---|---|
 | `timestamp` | the smallest record: implicit presence, one 8-byte and one 4-byte slot |
-| `type` | `google.protobuf.Type` message 1 of the shared consumer fixture (122 B → 536 B) |
+| `type` | `google.protobuf.Type` message 1 of the shared consumer fixture (122 B → 448 B) |
 | `map` | first-key order with the last entry per key; an entry without a value gets an empty value record |
 | `oneof` | two oneofs, last member wins, cleared slots zeroed, an orphaned string |
 | `unknown` | unknown fields in wire order, an out-of-set closed enum, a packed out-of-set element re-encoded |

@@ -10,9 +10,9 @@ import java.util.zip.CRC32;
 
 /**
  * Fixed slab layout of a closed set of protobuf types (format {@code TDSLAB1}, {@code
- * docs/SLAB.md}). Every type gets a record with presence words, a handle and an unknown-span word,
- * oneof case entries, 8-byte slots and then 4-byte slots, so a field read is a constant offset from
- * a record base. Type 0 is the root; message slots name their child type by index. Immutable.
+ * docs/SLAB.md}). Every type gets a record with a handle word, {@code u32} presence words, oneof
+ * case entries, 8-byte slots and then 4-byte slots, so a field read is a constant offset from a
+ * record base. Type 0 is the root; message slots name their child type by index. Immutable.
  */
 public final class Layout {
   /** Slot kind of one field. Codes in the {@code TDL1} program are {@code ordinal() + 1}. */
@@ -95,6 +95,12 @@ public final class Layout {
   /** No oneof membership in a program field entry. */
   public static final int NO_ONEOF = -1;
 
+  /** Byte offset of the {@code u32} handle word in every record. */
+  public static final int HANDLE_OFFSET = 0;
+
+  /** Byte offset of the first {@code u32} presence word in every record. */
+  public static final int PRESENCE_OFFSET = 4;
+
   /** Largest ordinal a oneof member may have: case entries are {@code u16} holding ordinal + 1. */
   public static final int MAX_ONEOF_ORDINAL = 0xFFFE;
 
@@ -144,7 +150,7 @@ public final class Layout {
     for (int t = 0; t < count; t++) {
       ProtoPlan plan = plans[t];
       int fields = plan.size();
-      int words = (fields + 63) >>> 6;
+      int words = (fields + 31) >>> 5;
       int cases = 0;
       int[] slot = new int[fields];
       SlotKind[] kind = new SlotKind[fields];
@@ -166,8 +172,11 @@ public final class Layout {
           child[ordinal] = index;
         } else child[ordinal] = -1;
       }
-      // presence words · handle · unknown · u16 case entries padded to 8 · 8-byte · 4-byte slots.
-      long cursor = 8L * words + 8 + align8(2L * cases);
+      // handle · u32 presence words · u16 case entries · 8-byte slots (aligned to 8) · 4-byte slots.
+      boolean wide = false;
+      for (SlotKind k : kind) wide |= k.width == 8;
+      long cursor = PRESENCE_OFFSET + 4L * words + 2L * cases;
+      cursor = wide ? align8(cursor) : (cursor + 3) & ~3L;
       for (int pass = 8; pass >= 4; pass -= 4)
         for (int ordinal = 0; ordinal < fields; ordinal++)
           if (kind[ordinal].width == pass) {
@@ -245,6 +254,7 @@ public final class Layout {
     return recordBytes[type];
   }
 
+  /** Number of {@code u32} presence words: {@code ceil(fields / 32)}. */
   public int presenceWords(int type) {
     return presenceWords[type];
   }
@@ -277,22 +287,12 @@ public final class Layout {
     return childTypes[type][ordinal];
   }
 
-  /** Byte offset of the record's handle word. */
-  public int handleOffset(int type) {
-    return 8 * presenceWords[type];
-  }
-
-  /** Byte offset of the record's unknown-span word. */
-  public int unknownOffset(int type) {
-    return 8 * presenceWords[type] + 4;
-  }
-
   /**
    * Byte offset of the {@code u16} case entry of a oneof (ordinal + 1 of the set member; 0 none).
    */
   public int caseOffset(int type, int oneof) {
     if (oneof < 0 || oneof >= oneofs[type]) throw new ContractViolation("No such oneof");
-    return 8 * presenceWords[type] + 8 + 2 * oneof;
+    return PRESENCE_OFFSET + 4 * presenceWords[type] + 2 * oneof;
   }
 
   /** CRC-32 of the program's type tables; producers copy it into the slab header. */

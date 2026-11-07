@@ -362,17 +362,15 @@ class LayoutTest {
             new int[] {
               MAGIC,
               OWNING | CERTIFIED,
-              64,
+              56,
               1,
               1,
               32,
               FP,
               0,
-              // root: presence {seconds, nanos}, handle 0, no unknown, seconds (u64), nanos, pad
+              // 32 root: handle 0, presence {seconds, nanos}, seconds (u64 at 40), nanos, pad
+              0,
               3,
-              0,
-              0,
-              0,
               1_700_000_000,
               0,
               123,
@@ -398,94 +396,78 @@ class LayoutTest {
             new int[] {
               MAGIC,
               OWNING | CERTIFIED,
-              320,
+              256,
               8,
               11,
               32,
               FP,
               0,
-              // 32 MapHolder: {counts, children}, handle 0, counts list 288, children list 304
+              // 32 MapHolder: handle 0, {counts, children}, counts list 224, children list 240
+              0,
               3,
-              0,
-              0,
-              0,
-              288,
-              304,
-              // 56 CountsEntry "a" → 1 (handle 1; key header 80)
+              224,
+              240,
+              // 48 CountsEntry "a" → 1 (handle 1; key header 64)
+              1,
               3,
-              0,
+              64,
               1,
-              0,
-              80,
-              1,
-              // 80 "a" (ASCII, 1 unit, handle 2), payload padded to 4
+              // 64 "a" (ASCII: 8-byte header, handle 2), payload padded to 8 by the next record
               0x80000001,
-              1,
               2,
               'a',
-              // 96 CountsEntry "b" → 2, 120 "b"
-              3,
               0,
+              // 80 CountsEntry "b" → 2, 96 "b"
               3,
-              0,
-              120,
+              3,
+              96,
               2,
               0x80000001,
-              1,
               4,
               'b',
-              // 136 CountsEntry "a" → 3 (the surviving entry for key "a"), 160 "a"
-              3,
               0,
+              // 112 CountsEntry "a" → 3 (the surviving entry for key "a"), 128 "a"
               5,
-              0,
-              160,
+              3,
+              128,
               3,
               0x80000001,
-              1,
               6,
               'a',
-              // 176 ChildrenEntry 1 → child 208 (key u64, value offset, pad)
-              3,
               0,
+              // 144 ChildrenEntry 1 → child 168 (handle, presence, key u64 at 152, value, pad)
               7,
-              0,
+              3,
               1,
+              0,
+              168,
+              0,
+              // 168 Child {x: 4}
+              8,
+              1,
+              4,
+              0,
+              // 184 ChildrenEntry 2 with no value: an empty Child is written at 208
+              9,
+              3,
+              2,
               0,
               208,
               0,
-              // 208 Child {x: 4}
-              1,
-              0,
-              8,
-              0,
-              4,
-              0,
-              // 232 ChildrenEntry 2 with no value: an empty Child is written at 264
-              3,
-              0,
-              9,
-              0,
-              2,
-              0,
-              264,
-              0,
-              // 264 empty Child
-              0,
-              0,
+              // 208 empty Child
               10,
               0,
               0,
               0,
-              // 288 counts: first-key order, last entry per key; 304 children
+              // 224 counts: first-key order, last entry per key; 240 children
               2,
               0,
-              136,
-              96,
+              112,
+              80,
               2,
               0,
-              176,
-              232
+              144,
+              184
             }));
     goldens.add(
         new Golden(
@@ -502,38 +484,34 @@ class LayoutTest {
             new int[] {
               MAGIC,
               OWNING | CERTIFIED,
-              128,
+              112,
               2,
               3,
               32,
               FP,
               0,
-              // 32 Choice: presence {c, e}, handle 0, cases (first = c: ordinal 2 + 1,
-              // second = e: 4 + 1), case padding, d (cleared u64), a, b (cleared), c, e, f, plain
+              // 32 Choice: handle 0, presence {c, e}, cases (first = c: ordinal 2 + 1, second =
+              // e: 4 + 1), pad, d (cleared u64 at 48), a, b (cleared), c, e, f, plain
+              0,
               0b10100,
-              0,
-              0,
-              0,
               0x0005_0003,
               0,
               0,
               0,
               0,
               0,
-              104,
+              96,
               1,
               0,
               0,
-              // 88 orphaned "x" (b was cleared by c), handle 1
+              // 80 orphaned "x" (b was cleared by c), handle 1
               0x80000001,
               1,
-              1,
               'x',
-              // 104 Child {x: 7}, handle 2
-              1,
               0,
+              // 96 Child {x: 7}, handle 2
               2,
-              0,
+              1,
               7,
               0
             }));
@@ -552,34 +530,37 @@ class LayoutTest {
             new int[] {
               MAGIC,
               OWNING | CERTIFIED,
-              104,
+              112,
               1,
               1,
               32,
               FP,
+              96,
+              // 32 Unknowns: handle 0, {known, colors}, known, color, colors list 56, pad
               0,
-              // 32 Unknowns: {known, colors}, handle 0, unknown span 80, known, color, colors list
               0b101,
-              0,
-              0,
-              80,
               7,
               0,
-              64,
+              56,
               0,
-              // 64 colors [1, 0] (7 is not a Color)
+              // 56 colors [1, 0] (7 is not a Color)
               2,
               0,
               1,
               0,
-              // 80 unknown span: 18 bytes in wire order — field 99, field 100, color 5 verbatim,
+              // 72 unknown span: 18 bytes in wire order — field 99, field 100, color 5 verbatim,
               // the packed 7 re-encoded as a varint field (18 07), field 101
               18,
               0xA2010698,
               0x7A7A0206,
               0x07180510,
               0x020106AD,
-              0x00000403
+              0x00000403,
+              // 96 unknown table (header word 28): one entry, the root's span at 72
+              1,
+              0,
+              32,
+              72
             }));
     goldens.add(
         new Golden(
@@ -592,56 +573,48 @@ class LayoutTest {
             new int[] {
               MAGIC,
               OWNING,
-              200,
+              168,
               3,
               6,
               32,
               FP,
               0,
-              // 32 Outer {inner = the merged record at 120}
-              1,
-              0,
-              0,
-              0,
-              120,
-              0,
-              // 56 first Inner (orphaned once merged): {a: 1, r: list 104, s: "x" at 88}
-              7,
-              0,
-              1,
+              // 32 Outer {inner = the merged record at 104}
               0,
               1,
               104,
-              88,
               0,
-              // 88 "x"; 104 r [1]
-              0x80000001,
+              // 48 first Inner (orphaned once merged): {a: 1, r: list 88, s: "x" at 72}
               1,
+              7,
+              1,
+              88,
+              72,
+              0,
+              // 72 "x"; 88 r [1]
+              0x80000001,
               2,
               'x',
-              1,
               0,
               1,
               0,
-              // 120 merged Inner, decoded from both payloads: a 1, r [1, 2] at 184, s "yy" at 168
-              7,
+              1,
               0,
+              // 104 merged Inner, decoded from both payloads: a 1, r [1, 2] at 152, s "yy" at 140
               3,
-              0,
+              7,
               1,
-              184,
-              168,
+              152,
+              140,
               0,
-              // 152 "x" (overwritten), 168 "yy"
+              // 128 "x" (overwritten), 140 "yy"
               0x80000001,
-              1,
               4,
               'x',
               0x80000002,
-              2,
               5,
               'y' | 'y' << 8,
-              // 184 r [1, 2]
+              // 152 r [1, 2]
               2,
               0,
               1,
@@ -790,10 +763,9 @@ class LayoutTest {
       for (int type = 0; type < layout.types(); type++) {
         int fieldsCount = layout.fields(type);
         int words = layout.presenceWords(type);
-        assertEquals((fieldsCount + 63) / 64, words);
-        assertEquals(8 * words, layout.handleOffset(type));
-        assertEquals(8 * words + 4, layout.unknownOffset(type));
-        int header = 8 * words + 8 + align8(2 * layout.oneofs(type));
+        assertEquals((fieldsCount + 31) / 32, words);
+        // handle · u32 presence words · u16 case entries; slots follow, each aligned to its width.
+        int header = Layout.PRESENCE_OFFSET + 4 * words + 2 * layout.oneofs(type);
         BitSet used = new BitSet();
         used.set(0, header);
         int last8 = header, first4 = Integer.MAX_VALUE, end = header;
@@ -818,14 +790,14 @@ class LayoutTest {
 
   @Test
   void presence_words_scale_past_64_fields() {
-    for (int[] c : new int[][] {{0, 0}, {1, 1}, {64, 1}, {65, 2}, {128, 2}, {130, 3}}) {
+    for (int[] c :
+        new int[][] {{0, 0}, {1, 1}, {32, 1}, {33, 2}, {64, 2}, {65, 3}, {128, 4}, {130, 5}}) {
       FieldPlan[] fields = new FieldPlan[c[0]];
       for (int i = 0; i < fields.length; i++) fields[i] = scalar("f" + i, i + 1, Kind.BOOL, true);
       Layout layout = model(type("W", fields)).type("W").layout();
       assertEquals(c[1], layout.presenceWords(0), c[0] + " fields");
-      assertEquals(8 * c[1], layout.handleOffset(0));
-      if (c[0] > 0) assertEquals(8 * c[1] + 8, layout.slot(0, 0));
-      assertEquals(align8(8 * c[1] + 8 + 4 * c[0]), layout.recordBytes(0));
+      if (c[0] > 0) assertEquals(4 + 4 * c[1], layout.slot(0, 0));
+      assertEquals(align8(4 + 4 * c[1] + 4 * c[0]), layout.recordBytes(0));
     }
     // Presence bits address the right word past 64.
     Layout layout = wide().layout();
@@ -835,9 +807,12 @@ class LayoutTest {
           Set.of(0, 63, 64, 127, 129).contains(ordinal),
           present(slab, ROOT, ordinal),
           "bit " + ordinal);
-    assertEquals(1L << 63 | 1L, getLong(slab, ROOT));
-    assertEquals(1L << 63 | 1L, getLong(slab, ROOT + 8));
-    assertEquals(2L, getLong(slab, ROOT + 16));
+    assertEquals(0, getInt(slab, ROOT), "root handle");
+    assertEquals(1, getInt(slab, ROOT + 4));
+    assertEquals(1 << 31, getInt(slab, ROOT + 8));
+    assertEquals(1, getInt(slab, ROOT + 12));
+    assertEquals(1 << 31, getInt(slab, ROOT + 16));
+    assertEquals(2, getInt(slab, ROOT + 20));
   }
 
   @Test
@@ -845,20 +820,21 @@ class LayoutTest {
     Layout layout = choice().layout();
     assertEquals(2, layout.oneofs(0));
     assertEquals(0, layout.oneofs(1));
-    assertEquals(8 + 8, layout.caseOffset(0, 0));
-    assertEquals(8 + 8 + 2, layout.caseOffset(0, 1));
+    assertEquals(4 + 4, layout.caseOffset(0, 0));
+    assertEquals(4 + 4 + 2, layout.caseOffset(0, 1));
     assertThrows(ContractViolation.class, () -> layout.caseOffset(0, 2));
     int[] expected = {0, 0, 0, 1, 1, 1, Layout.NO_ONEOF};
     for (int ordinal = 0; ordinal < expected.length; ordinal++)
       assertEquals(expected[ordinal], layout.oneofIndex(0, ordinal));
-    // Case entries (2 × u16) pad to 8 so the 8-byte slot of `d` stays aligned right after them.
-    assertEquals(24, layout.slot(0, 3));
+    // Case entries (2 × u16) end at 12; the 8-byte slot of `d` is aligned up to 16.
+    assertEquals(16, layout.slot(0, 3));
     assertEquals(SlotKind.I64, layout.kind(0, 3));
-    assertEquals(32, layout.slot(0, 0));
-    assertEquals(56, layout.recordBytes(0));
+    assertEquals(24, layout.slot(0, 0));
+    assertEquals(48, layout.recordBytes(0));
     assertEquals(1, layout.childType(0, 2));
     assertEquals(-1, layout.childType(0, 0));
-    // Three oneofs of one member each (proto3 optional): three entries, still one padded word.
+    // Five oneofs of one member each (proto3 optional): five entries; no 8-byte slot, so the
+    // 4-byte slots start at the next multiple of 4.
     Layout three =
         model(
                 type(
@@ -871,7 +847,7 @@ class LayoutTest {
             .type("O")
             .layout();
     assertEquals(5, three.oneofs(0));
-    assertEquals(8 + 8 + 16, three.slot(0, 0));
+    assertEquals(4 + 4 + 12, three.slot(0, 0));
   }
 
   @Test
@@ -925,9 +901,9 @@ class LayoutTest {
           () -> Layout.parse(Arrays.copyOf(program, program.length - 1), 0));
       assertThrows(ContractViolation.class, () -> Layout.parse(program, 4));
     }
-    // First type's table, written out: Timestamp {seconds: I64 @16, nanos: I32 @24}, 32 bytes.
+    // First type's table, written out: Timestamp {seconds: I64 @8, nanos: I32 @16}, 24 bytes.
     byte[] program = timestamp().layout().program();
-    int[] expected = {32, 1, 0, 2, 16, SlotKind.I64.code(), -1, 24, SlotKind.I32.code(), -1};
+    int[] expected = {24, 1, 0, 2, 8, SlotKind.I64.code(), -1, 16, SlotKind.I32.code(), -1};
     for (int i = 0; i < expected.length; i++)
       assertEquals(expected[i], getInt(program, Layout.PROGRAM_HEADER_BYTES + 4 * i));
     assertEquals(SlotKind.MAP, SlotKind.of(SlotKind.MAP.code()));
@@ -982,9 +958,10 @@ class LayoutTest {
     int firstField = getInt(slab, listElement(fields, 4, 0));
     int fieldType = layout.childType(0, 1);
     assertEquals("google.protobuf.Field", layout.plan(fieldType).name());
-    assertEquals(0, handle(slab, ROOT, layout, 0));
-    assertTrue(handle(slab, firstField, layout, fieldType) > 0);
-    assertTrue(slab.length <= 4 * type.wire().length + 64, "slab amplification " + slab.length);
+    assertEquals(0, handle(slab, ROOT));
+    assertTrue(handle(slab, firstField) > 0);
+    // Task A2's gate: an owning slab of message 1 is at most 4 × its input.
+    assertTrue(slab.length <= 4 * type.wire().length, "slab amplification " + slab.length);
   }
 
   /** The executable spec agrees with the Java codec over a randomized corpus. */
