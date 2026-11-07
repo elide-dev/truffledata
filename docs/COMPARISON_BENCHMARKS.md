@@ -1064,3 +1064,28 @@ three-load implementation is retained, with this attribution limitation explicit
 [repeat](../benchmarks/results/buffa-paired-load/repeat/paired.md), exact hashes,
 patch, acceptance links and initial runs using older release metadata are retained
 in the result directory. No profile-image timing is used in these comparisons.
+
+## Protobuf against stock after ABI 9 (2026-11-06)
+
+The shared consumer (`benchmarks/comparison/CONSUMER.md`) is now the authoritative protobuf
+comparison. It covers stock, generated-owned, opt-in native views and the default eager decode.
+Its stages include decode-only, resident, heap, detach, first, interpreter and peak, and a ~52 KB
+large-message throughput cohort. It runs on SVM and JVM remote workers, with paired
+baselines on the same worker. Final state (`a58a36d`, SVM, × stock latency):
+
+| Operation | native view | default decode | generated owned |
+|---|---:|---:|---:|
+| Projected ingestion | 1.02× | 1.99× | 1.04× |
+| Full ingestion + consumption | 1.44× | 2.03× | 1.04× |
+| Decode only, ~150 B | 0.89× | 1.86× | 1.06× |
+| Interpreter reads (full) | 6.37× | 5.44× | 4.77× |
+| Peak reads (full) | ~1.6–2.1× | 1.15× | 0.42× |
+
+Native views are now at or ahead of stock for decode-only and projected ingestion. Full
+consumption, the default decode, interpreter reads and detachment remain slower than stock.
+Small messages decode at about 190–220 MB/s and large ones at about 180–280 MB/s on these
+workers. No engine reaches GB/s on this schema. Stock under HotSpot reaches 530 and 390 MB/s.
+The historical generated-getter harness (`measure`, and `measure_views` for opt-in views) was
+rerun unpaired. In it, views are at 1.09× projected, 1.92× full, 3.33× interpreter and 1.87× peak.
+See the [cycle README](../benchmarks/results/protobuf-f26678a/README.md) for every cell, Java
+and native bytes, JVM tables and caveats.
