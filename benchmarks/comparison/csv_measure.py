@@ -65,7 +65,8 @@ if SHARDS and str(shard) not in SHARDS.split(','):
     sys.exit(0)
 
 jobs = []
-forks = int(os.environ.get('CSV_MEASURE_FORKS', '2'))
+# Three forks: the median of fork medians outvotes one fork hit by a noisy neighbour.
+forks = int(os.environ.get('CSV_MEASURE_FORKS', '3'))
 if group[0] == 'fixture':
     _, dataset, size = group
     for workload, engines in ENGINES.items():

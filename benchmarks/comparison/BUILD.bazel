@@ -604,7 +604,14 @@ java_binary(
     name = "csv_jvm",
     testonly = True,
     data = ["//csv/native:csv_shared.so"],
-    jvm_flags = CSV_JVM_FLAGS + ["-Xmx8g"],
+    # A fixed, pre-touched heap: on the RBE guests a first-touch page fault intermittently costs
+    # about 40 us instead of about 1 us, so heap growth inside a timed sample made allocating
+    # cells bimodal (benchmarks/results/csv-720f0c7/README.md; CSV ledger).
+    jvm_flags = CSV_JVM_FLAGS + [
+        "-Xms8g",
+        "-Xmx8g",
+        "-XX:+AlwaysPreTouch",
+    ],
     main_class = "dev.elide.truffledata.comparison.CsvComparisonJvm",
     runtime_deps = [":csv_comparison_jvm"],
 )
