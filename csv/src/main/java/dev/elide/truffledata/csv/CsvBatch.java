@@ -129,6 +129,7 @@ public final class CsvBatch implements TruffleObject, AutoCloseable {
     if (m == null) return this;
     byte[] copy = new byte[mappedLength];
     m.copy(base, copy, 0, mappedLength);
+    // The primitive columns are shared; their reads keep the checked path (one more test).
     return new CsvBatch(schema, copy, columns, size, firstRecord, dialect, copiedBytes);
   }
 
@@ -147,17 +148,10 @@ public final class CsvBatch implements TruffleObject, AutoCloseable {
     return copiedBytes;
   }
 
-  // Row reads ({@link CsvRow} getters). Each fast path is one column load, a dense-array test and
-  // the heap test (at most 35 bytecodes, so HotSpot inlines it at any call site); nullable,
-  // optional and mapped columns, wrong kinds and closed mappings take the slow path.
+  // The checked reads behind the CsvRow getters, whose fast paths read Column.present* inline:
+  // nullable, optional and mapped columns, wrong kinds and closed mappings land here.
 
-  long longAt(int row, int column) {
-    long[] v = columns[column].presentLongs;
-    if (row >= v.length || mapping != null) return longSlow(row, column);
-    return v[row];
-  }
-
-  private long longSlow(int row, int column) {
+  long longSlow(int row, int column) {
     checkLive();
     Column c = columns[column];
     long[] longs = c.longs;
@@ -166,13 +160,7 @@ public final class CsvBatch implements TruffleObject, AutoCloseable {
     return longs[row];
   }
 
-  double doubleAt(int row, int column) {
-    double[] v = columns[column].presentDoubles;
-    if (row >= v.length || mapping != null) return doubleSlow(row, column);
-    return v[row];
-  }
-
-  private double doubleSlow(int row, int column) {
+  double doubleSlow(int row, int column) {
     checkLive();
     Column c = columns[column];
     double[] doubles = c.doubles;
@@ -181,13 +169,7 @@ public final class CsvBatch implements TruffleObject, AutoCloseable {
     return doubles[row];
   }
 
-  boolean booleanAt(int row, int column) {
-    boolean[] v = columns[column].presentBooleans;
-    if (row >= v.length || mapping != null) return booleanSlow(row, column);
-    return v[row];
-  }
-
-  private boolean booleanSlow(int row, int column) {
+  boolean booleanSlow(int row, int column) {
     checkLive();
     Column c = columns[column];
     boolean[] booleans = c.booleans;
@@ -198,7 +180,7 @@ public final class CsvBatch implements TruffleObject, AutoCloseable {
 
   String stringAt(int row, int column) {
     long[] v = columns[column].presentSpans;
-    if (row >= v.length || mapping != null) return stringSlow(row, column);
+    if (row >= v.length) return stringSlow(row, column);
     long span = v[row];
     if (CsvScanner.escaped(span)) return string(this, span);
     return Utf8.string(input, CsvScanner.offset(span), CsvScanner.length(span));

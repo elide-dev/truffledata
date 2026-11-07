@@ -20,8 +20,12 @@ final class Column {
   final byte @Nullable [] states;
 
   /**
-   * The value array when every row is present ({@code states} is null), else null: the one load a
-   * row read needs on its fast path ({@link CsvBatch#longAt} and siblings).
+   * The value array when every row is present ({@code states} is null) and the batch is on the
+   * heap, else an empty array: a row read's fast path is one load and a length test ({@link
+   * CsvRow#getLong} and siblings), and every other read (nullable, optional, wrong kind, mapped)
+   * fails the test and takes the checked path. Never null: Graal's speculative guard movement
+   * hoisted null checks of kind-specific arrays above the caller's kind dispatch and deoptimized
+   * on every compilation.
    */
   final long[] presentSpans;
 
@@ -38,13 +42,14 @@ final class Column {
       long @Nullable [] longs,
       double @Nullable [] doubles,
       boolean @Nullable [] booleans,
-      byte @Nullable [] states) {
+      byte @Nullable [] states,
+      boolean heap) {
     this.spans = spans;
     this.longs = longs;
     this.doubles = doubles;
     this.booleans = booleans;
     this.states = states;
-    boolean dense = states == null;
+    boolean dense = states == null && heap;
     presentSpans = dense && spans != null ? spans : NO_LONGS;
     presentLongs = dense && longs != null ? longs : NO_LONGS;
     presentDoubles = dense && doubles != null ? doubles : NO_DOUBLES;

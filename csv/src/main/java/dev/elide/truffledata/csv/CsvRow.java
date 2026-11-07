@@ -48,8 +48,9 @@ public final class CsvRow extends AbstractRow {
     return batch.columns[column].state(index) == Column.NULL;
   }
 
-  // The getters delegate to small batch methods with one load on their fast path, so a JIT inlines
-  // them into a caller's loop (and can then drop the row allocation).
+  // Each typed getter's fast path is a few loads and one length test (Column.present* is empty
+  // unless every row is present on the heap), small enough for ahead-of-time compilers to inline
+  // into a caller's loop; everything else takes the batch's checked path.
 
   /** Throws {@link ContractViolation} on null, missing or non-STRING. */
   public String getString(int column) {
@@ -57,15 +58,18 @@ public final class CsvRow extends AbstractRow {
   }
 
   public long getLong(int column) {
-    return batch.longAt(index, column);
+    long[] v = batch.columns[column].presentLongs;
+    return index < v.length ? v[index] : batch.longSlow(index, column);
   }
 
   public double getDouble(int column) {
-    return batch.doubleAt(index, column);
+    double[] v = batch.columns[column].presentDoubles;
+    return index < v.length ? v[index] : batch.doubleSlow(index, column);
   }
 
   public boolean getBoolean(int column) {
-    return batch.booleanAt(index, column);
+    boolean[] v = batch.columns[column].presentBooleans;
+    return index < v.length ? v[index] : batch.booleanSlow(index, column);
   }
 
   @TruffleBoundary

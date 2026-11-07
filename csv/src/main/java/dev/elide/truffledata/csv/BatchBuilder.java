@@ -419,7 +419,7 @@ final class BatchBuilder implements CsvScanner.Records {
   CsvBatch buildMapped(CsvMapping mapping, long base, int length, boolean owns) {
     trim();
     return new CsvBatch(
-        binding.schema, NO_BYTES, columns(), rows, firstRecord, dialect, 0, mapping, base, length, owns);
+        binding.schema, NO_BYTES, columns(false), rows, firstRecord, dialect, 0, mapping, base, length, owns);
   }
 
   private void trim() {
@@ -429,15 +429,16 @@ final class BatchBuilder implements CsvScanner.Records {
   /** A batch without STRING fields: every value is converted, so it retains no input. */
   CsvBatch buildDetached() {
     trim();
-    return new CsvBatch(binding.schema, NO_BYTES, columns(), rows, firstRecord, dialect, 0);
+    return new CsvBatch(binding.schema, NO_BYTES, columns(true), rows, firstRecord, dialect, 0);
   }
 
   CsvBatch build() {
     trim();
-    return new CsvBatch(binding.schema, input, columns(), rows, firstRecord, dialect, 0);
+    return new CsvBatch(binding.schema, input, columns(true), rows, firstRecord, dialect, 0);
   }
 
-  private Column[] columns() {
+  /** {@code heap}: false for mapped batches, whose reads always check the mapping first. */
+  private Column[] columns(boolean heap) {
     Column[] columns = new Column[words.length];
     for (int f = 0; f < columns.length; f++) {
       byte kind = binding.kinds[f];
@@ -447,7 +448,8 @@ final class BatchBuilder implements CsvScanner.Records {
               kind == CsvPlan.INT64 ? words[f] : null,
               kind == CsvPlan.FLOAT64 ? doubles[f] : null,
               kind == CsvPlan.BOOLEAN ? booleans[f] : null,
-              binding.stateful[f] ? states[f] : null);
+              binding.stateful[f] ? states[f] : null,
+              heap);
     }
     return columns;
   }
