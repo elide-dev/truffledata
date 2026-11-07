@@ -1,0 +1,35 @@
+PROBE jvm=Java HotSpot(TM) 64-Bit Server VM 25.0.4.1.1+1-LTS-jvmci-25.5-b24 image=null
+PROBE mode=small messages=32 bytes=4797 avg=149
+PROBE small/sizes message[1]=122 B java_gen=440 B java_table=440 B all=17256 17256
+PROBE small/stock_parse                  6426.7 ns/rep     200.8 ns/msg     746.4 MB/s
+PROBE small/java_gen                     3081.8 ns/rep      96.3 ns/msg    1556.6 MB/s
+PROBE small/java_table                   5323.6 ns/rep     166.4 ns/msg     901.1 MB/s
+PROBE small/stock_parse                  6070.0 ns/rep     189.7 ns/msg     790.3 MB/s
+PROBE small/java_gen                     3002.7 ns/rep      93.8 ns/msg    1597.6 MB/s
+PROBE small/java_table                   5442.0 ns/rep     170.1 ns/msg     881.5 MB/s
+PROBE small/stock_parse                  5991.2 ns/rep     187.2 ns/msg     800.7 MB/s
+PROBE small/java_gen                     3018.0 ns/rep      94.3 ns/msg    1589.5 MB/s
+PROBE small/java_table                   5506.4 ns/rep     172.1 ns/msg     871.2 MB/s
+PROBE mode=holdout messages=32 bytes=16321 avg=510
+PROBE holdout/sizes message[1]=390 B java_gen=1264 B java_table=1264 B all=52176 52176
+PROBE holdout/stock_parse               24590.3 ns/rep     768.4 ns/msg     663.7 MB/s
+PROBE holdout/java_gen                   9827.6 ns/rep     307.1 ns/msg    1660.7 MB/s
+PROBE holdout/java_table                16418.4 ns/rep     513.1 ns/msg     994.1 MB/s
+PROBE holdout/stock_parse               23077.0 ns/rep     721.2 ns/msg     707.2 MB/s
+PROBE holdout/java_gen                   9783.0 ns/rep     305.7 ns/msg    1668.3 MB/s
+PROBE holdout/java_table                19583.8 ns/rep     612.0 ns/msg     833.4 MB/s
+PROBE holdout/stock_parse               23312.5 ns/rep     728.5 ns/msg     700.1 MB/s
+PROBE holdout/java_gen                   9783.8 ns/rep     305.7 ns/msg    1668.2 MB/s
+PROBE holdout/java_table                17014.7 ns/rep     531.7 ns/msg     959.2 MB/s
+PROBE mode=large messages=32 bytes=1658313 avg=51822
+PROBE large/sizes message[1]=48087 B java_gen=160600 B java_table=160600 B all=5528440 5528440
+PROBE large/stock_parse               1418906.3 ns/rep   44340.8 ns/msg    1168.7 MB/s
+PROBE large/java_gen                   990270.9 ns/rep   30946.0 ns/msg    1674.6 MB/s
+PROBE large/java_table                2269364.6 ns/rep   70917.6 ns/msg     730.7 MB/s
+PROBE large/stock_parse               1387557.3 ns/rep   43361.2 ns/msg    1195.1 MB/s
+PROBE large/java_gen                   985020.9 ns/rep   30781.9 ns/msg    1683.5 MB/s
+PROBE large/java_table                2205062.5 ns/rep   68908.2 ns/msg     752.0 MB/s
+PROBE large/stock_parse               1390447.9 ns/rep   43451.5 ns/msg    1192.6 MB/s
+PROBE large/java_gen                   949557.3 ns/rep   29673.7 ns/msg    1746.4 MB/s
+PROBE large/java_table                2190223.9 ns/rep   68444.5 ns/msg     757.1 MB/s
+PROBE sink=8302722960

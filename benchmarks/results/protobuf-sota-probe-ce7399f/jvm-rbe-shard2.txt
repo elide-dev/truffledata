@@ -1,0 +1,36 @@
+PROBE jvm=OpenJDK 64-Bit Server VM 25.0.4.1.1+1-jvmci-25.5-b24 image=null
+PROBE host=model name	: AMD EPYC
+PROBE mode=small messages=32 bytes=4797 avg=149
+PROBE small/sizes message[1]=122 B java_gen=440 B java_table=440 B all=17256 17256
+PROBE small/stock_parse                  7169.1 ns/rep     224.0 ns/msg     669.1 MB/s
+PROBE small/java_gen                     6562.6 ns/rep     205.1 ns/msg     731.0 MB/s
+PROBE small/java_table                  10315.6 ns/rep     322.4 ns/msg     465.0 MB/s
+PROBE small/stock_parse                  7063.2 ns/rep     220.7 ns/msg     679.2 MB/s
+PROBE small/java_gen                     6446.3 ns/rep     201.4 ns/msg     744.1 MB/s
+PROBE small/java_table                  10887.6 ns/rep     340.2 ns/msg     440.6 MB/s
+PROBE small/stock_parse                  7228.4 ns/rep     225.9 ns/msg     663.6 MB/s
+PROBE small/java_gen                     6555.5 ns/rep     204.9 ns/msg     731.7 MB/s
+PROBE small/java_table                  10558.1 ns/rep     329.9 ns/msg     454.3 MB/s
+PROBE mode=holdout messages=32 bytes=16321 avg=510
+PROBE holdout/sizes message[1]=390 B java_gen=1264 B java_table=1264 B all=52176 52176
+PROBE holdout/stock_parse               30729.0 ns/rep     960.3 ns/msg     531.1 MB/s
+PROBE holdout/java_gen                  19823.7 ns/rep     619.5 ns/msg     823.3 MB/s
+PROBE holdout/java_table                31808.7 ns/rep     994.0 ns/msg     513.1 MB/s
+PROBE holdout/stock_parse               29310.6 ns/rep     916.0 ns/msg     556.8 MB/s
+PROBE holdout/java_gen                  19370.9 ns/rep     605.3 ns/msg     842.6 MB/s
+PROBE holdout/java_table                31232.7 ns/rep     976.0 ns/msg     522.6 MB/s
+PROBE holdout/stock_parse               30109.8 ns/rep     940.9 ns/msg     542.1 MB/s
+PROBE holdout/java_gen                  19273.1 ns/rep     602.3 ns/msg     846.8 MB/s
+PROBE holdout/java_table                32897.1 ns/rep    1028.0 ns/msg     496.1 MB/s
+PROBE mode=large messages=32 bytes=1658313 avg=51822
+PROBE large/sizes message[1]=48087 B java_gen=160600 B java_table=160600 B all=5528440 5528440
+PROBE large/stock_parse               1971971.5 ns/rep   61624.1 ns/msg     840.9 MB/s
+PROBE large/java_gen                  2661112.0 ns/rep   83159.8 ns/msg     623.2 MB/s
+PROBE large/java_table                3898966.6 ns/rep  121842.7 ns/msg     425.3 MB/s
+PROBE large/stock_parse               1918951.5 ns/rep   59967.2 ns/msg     864.2 MB/s
+PROBE large/java_gen                  2249040.3 ns/rep   70282.5 ns/msg     737.3 MB/s
+PROBE large/java_table                3653806.4 ns/rep  114181.4 ns/msg     453.9 MB/s
+PROBE large/stock_parse               1962780.3 ns/rep   61336.9 ns/msg     844.9 MB/s
+PROBE large/java_gen                  2254011.8 ns/rep   70437.9 ns/msg     735.7 MB/s
+PROBE large/java_table                3749757.8 ns/rep  117179.9 ns/msg     442.2 MB/s
+PROBE sink=8302722960

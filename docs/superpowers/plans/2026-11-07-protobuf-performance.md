@@ -369,9 +369,9 @@ Task format follows the JSON performance plan. Every task ends with the standard
 
 Port `typed.rs` text/JSON walks to write slabs (`State` retired). Gate: text acceptance unchanged; allocation ≤ eager path. **Commit** — `feat: parse protobuf text and ProtoJSON into slabs`
 
-#### Task E3: Per-schema native codegen (optional; gated)
+#### Task E3: Per-schema native codegen — withdrawn
 
-Only if Task A2's measurement shows the table-driven decoder ≥ 1.25 × the hand-written probe on the same run: emit Rust per contract type from `ContractPlugin` into the Bazel build (`rust_library` per contract set), selected by plan identity. **Commit** — `perf: generate native slab decoders per protobuf contract`
+Withdrawn by the SOTA revision (`2026-11-07-protobuf-sota.md` §5): the trigger fired (A2 measured 2.57 × hand), but the probes there show that no table-driven shape reaches 1.25 × of a per-schema decoder (the best measures 1.43 ×), that the gain of native codegen is 1.3–1.45 × on SVM only, and that it would require a Rust toolchain in every consumer's build against the release matrix. The restructure is Task A2b and per-schema specialisation moves to Java (A3) and Truffle (A4) in that revision.
 
 ### Phase F — removed
 
@@ -396,6 +396,8 @@ Profile-guided optimization is an application-level concern (Elide builds its ow
 ---
 
 ## 8. Targets (hypotheses, SVM shared consumer unless stated)
+
+> Superseded by `2026-11-07-protobuf-sota.md` §4 (2026-11-07), which re-derives every row from the same-worker decoder-shape probes; the table below is kept as the record of the original hypotheses.
 
 | Operation | Today (best engine) | Target | Basis |
 |---|---:|---:|---|

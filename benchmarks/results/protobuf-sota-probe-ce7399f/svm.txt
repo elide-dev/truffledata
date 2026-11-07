@@ -1,0 +1,36 @@
+PROBE jvm=Substrate VM 25.0.4.1.1+1 image=runtime
+PROBE host=model name	: AMD EPYC
+PROBE mode=small messages=32 bytes=4797 avg=149
+PROBE small/sizes message[1]=122 B java_gen=440 B java_table=440 B all=17256 17256
+PROBE small/stock_parse                 23758.8 ns/rep     742.5 ns/msg     201.9 MB/s
+PROBE small/java_gen                    12712.0 ns/rep     397.3 ns/msg     377.4 MB/s
+PROBE small/java_table                  18711.6 ns/rep     584.7 ns/msg     256.4 MB/s
+PROBE small/stock_parse                 23806.3 ns/rep     743.9 ns/msg     201.5 MB/s
+PROBE small/java_gen                    12746.2 ns/rep     398.3 ns/msg     376.3 MB/s
+PROBE small/java_table                  18761.2 ns/rep     586.3 ns/msg     255.7 MB/s
+PROBE small/stock_parse                 23800.6 ns/rep     743.8 ns/msg     201.5 MB/s
+PROBE small/java_gen                    12718.9 ns/rep     397.5 ns/msg     377.2 MB/s
+PROBE small/java_table                  18825.7 ns/rep     588.3 ns/msg     254.8 MB/s
+PROBE mode=holdout messages=32 bytes=16321 avg=510
+PROBE holdout/sizes message[1]=390 B java_gen=1264 B java_table=1264 B all=52176 52176
+PROBE holdout/stock_parse               74638.8 ns/rep    2332.5 ns/msg     218.7 MB/s
+PROBE holdout/java_gen                  35816.1 ns/rep    1119.3 ns/msg     455.7 MB/s
+PROBE holdout/java_table                47293.4 ns/rep    1477.9 ns/msg     345.1 MB/s
+PROBE holdout/stock_parse               74912.3 ns/rep    2341.0 ns/msg     217.9 MB/s
+PROBE holdout/java_gen                  35760.7 ns/rep    1117.5 ns/msg     456.4 MB/s
+PROBE holdout/java_table                47324.1 ns/rep    1478.9 ns/msg     344.9 MB/s
+PROBE holdout/stock_parse               74883.3 ns/rep    2340.1 ns/msg     218.0 MB/s
+PROBE holdout/java_gen                  35728.3 ns/rep    1116.5 ns/msg     456.8 MB/s
+PROBE holdout/java_table                47162.9 ns/rep    1473.8 ns/msg     346.1 MB/s
+PROBE mode=large messages=32 bytes=1658313 avg=51822
+PROBE large/sizes message[1]=48087 B java_gen=160600 B java_table=160600 B all=5528440 5528440
+PROBE large/stock_parse               6101105.3 ns/rep  190659.5 ns/msg     271.8 MB/s
+PROBE large/java_gen                  3921978.3 ns/rep  122561.8 ns/msg     422.8 MB/s
+PROBE large/java_table                5329575.4 ns/rep  166549.2 ns/msg     311.2 MB/s
+PROBE large/stock_parse               6120374.0 ns/rep  191261.7 ns/msg     270.9 MB/s
+PROBE large/java_gen                  3919042.1 ns/rep  122470.1 ns/msg     423.1 MB/s
+PROBE large/java_table                5323512.9 ns/rep  166359.8 ns/msg     311.5 MB/s
+PROBE large/stock_parse               6107560.3 ns/rep  190861.3 ns/msg     271.5 MB/s
+PROBE large/java_gen                  3935094.5 ns/rep  122971.7 ns/msg     421.4 MB/s
+PROBE large/java_table                5339760.5 ns/rep  166867.5 ns/msg     310.6 MB/s
+PROBE sink=8302722960

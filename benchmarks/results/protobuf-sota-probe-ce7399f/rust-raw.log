@@ -1,0 +1,120 @@
+INFO: Invocation ID: c4215a0d-b751-4abe-a9fb-4d6be9fc2102
+INFO: Streaming build results to: https://app.buildbuddy.io/invocation/c4215a0d-b751-4abe-a9fb-4d6be9fc2102
+Computing main repo mapping: 
+Loading: 
+Loading: 0 packages loaded
+Analyzing: target //protobuf-buffa/native:test (0 packages loaded, 0 targets configured)
+Analyzing: target //protobuf-buffa/native:test (0 packages loaded, 0 targets configured)
+INFO: Analyzed target //protobuf-buffa/native:test (0 packages loaded, 0 targets configured).
+[390 / 392] Compiling Rust bin test (11 files); 0s remote, remote-cache
+[390 / 392] Compiling Rust bin test (11 files); 11s remote, remote-cache
+INFO: From Compiling Rust bin test (11 files):
+230 | pub type Utf8_to_utf16Fn = unsafe extern "C" fn(*const u8, u64, *mut u16, u64) -> i64;
+1441 |     let at = align_up(ctx.cursor, 8);
+note: an unsafe function restricts its caller, but its body is safe by default
+1440 | unsafe fn alloc_record(ctx: &mut Ctx, bytes: usize) -> Result<*mut u8, ()> {
+1442 |     if at.add(bytes + 8) > ctx.out_end {
+1446 |         ctx.cursor.cast::<u64>().write_unaligned(0);
+1450 |         at.add(i).cast::<u64>().write_unaligned(0);
+1450 |         at.add(i).cast::<u64>().write_unaligned(0);
+1453 |     at.cast::<u32>().write_unaligned(ctx.handles);
+1456 |     ctx.cursor = at.add(bytes);
+1463 |     let payload = std::slice::from_raw_parts(src, n);
+note: an unsafe function restricts its caller, but its body is safe by default
+1462 | unsafe fn put_string(ctx: &mut Ctx, src: *const u8, n: usize) -> Result<u32, ()> {
+1466 |     let h = align_up(ctx.cursor, 4);
+1467 |     let end = h.add(header + n);
+1468 |     if end.add(8) > ctx.out_end {
+1472 |         ctx.cursor.cast::<u32>().write_unaligned(0);
+1474 |     h.cast::<u32>().write_unaligned(n as u32 | if ascii { 1 << 31 } else { 0 });
+1475 |     h.add(4).cast::<u32>().write_unaligned(ctx.handles);
+1475 |     h.add(4).cast::<u32>().write_unaligned(ctx.handles);
+1478 |         h.add(8).cast::<u32>().write_unaligned(units as u32);
+1478 |         h.add(8).cast::<u32>().write_unaligned(units as u32);
+1480 |     std::ptr::copy_nonoverlapping(src, h.add(header), n);
+1480 |     std::ptr::copy_nonoverlapping(src, h.add(header), n);
+1482 |     end.cast::<u32>().write_unaligned(0);
+1484 |     Ok(h.offset_from(ctx.out) as u32)
+1489 |     if p.add(1) < limit {
+note: an unsafe function restricts its caller, but its body is safe by default
+1488 | unsafe fn varint_p(p: *const u8, limit: *const u8) -> Result<(u64, *const u8), ()> {
+1490 |         let b = *p;
+1492 |             return Ok((b as u64, p.add(1)));
+1494 |         let c = *p.add(1);
+1494 |         let c = *p.add(1);
+1496 |             return Ok(((b & 0x7F) as u64 | (c as u64) << 7, p.add(2)));
+1498 |     } else if p < limit && *p < 0x80 {
+1499 |         return Ok((*p as u64, p.add(1)));
+1499 |         return Ok((*p as u64, p.add(1)));
+1501 |     varint_p_slow(p, limit)
+1512 |         let b = *p;
+note: an unsafe function restricts its caller, but its body is safe by default
+1505 | unsafe fn varint_p_slow(mut p: *const u8, limit: *const u8) -> Result<(u64, *const u8), ()> {
+1513 |         p = p.add(1);
+1530 |     let (n, p) = varint_p(p, limit)?;
+note: an unsafe function restricts its caller, but its body is safe by default
+1529 | unsafe fn length_p(p: *const u8, limit: *const u8) -> Result<(usize, *const u8), ()> {
+1531 |     if n > limit.offset_from(p) as u64 {
+1540 |         0 => Ok(varint_p(p, limit)?.1),
+note: an unsafe function restricts its caller, but its body is safe by default
+1538 | unsafe fn skip_p(tag: u32, p: *const u8, limit: *const u8) -> Result<*const u8, ()> {
+1541 |         1 => if p.add(8) <= limit { Ok(p.add(8)) } else { Err(()) },
+1541 |         1 => if p.add(8) <= limit { Ok(p.add(8)) } else { Err(()) },
+1543 |             let (n, p) = length_p(p, limit)?;
+1544 |             Ok(p.add(n))
+1546 |         5 => if p.add(4) <= limit { Ok(p.add(4)) } else { Err(()) },
+1546 |         5 => if p.add(4) <= limit { Ok(p.add(4)) } else { Err(()) },
+1567 |         let at = align_up(ctx.cursor, 8);
+note: an unsafe function restricts its caller, but its body is safe by default
+1552 | unsafe fn close_lists2(ctx: &mut Ctx, t: &FType, base: *mut u8, mark: usize, hasbits: &mut u32) -> Result<(), ()> {
+1568 |         if at.add(8 + 4 * count + 8) > ctx.out_end {
+1572 |             ctx.cursor.cast::<u64>().write_unaligned(0);
+1574 |         at.cast::<u32>().write_unaligned(count as u32);
+1575 |         at.add(4).cast::<u32>().write_unaligned(0);
+1575 |         at.add(4).cast::<u32>().write_unaligned(0);
+1577 |             at.add(8 + 4 * j).cast::<u32>().write_unaligned(e.1);
+1577 |             at.add(8 + 4 * j).cast::<u32>().write_unaligned(e.1);
+1579 |         ctx.cursor = at.add(8 + 4 * count);
+1581 |         base.add(slot).cast::<u32>().write_unaligned(at.offset_from(ctx.out) as u32);
+1581 |         base.add(slot).cast::<u32>().write_unaligned(at.offset_from(ctx.out) as u32);
+1581 |         base.add(slot).cast::<u32>().write_unaligned(at.offset_from(ctx.out) as u32);
+1589 |     let bytes = (ctx.cursor.offset_from(ctx.out) as usize + 7) & !7;
+note: an unsafe function restricts its caller, but its body is safe by default
+1588 | unsafe fn finish2(ctx: &mut Ctx) -> usize {
+1591 |     p.cast::<u32>().write_unaligned(0x31534454);
+1592 |     p.add(4).cast::<u32>().write_unaligned(1 | 8);
+1592 |     p.add(4).cast::<u32>().write_unaligned(1 | 8);
+1593 |     p.add(8).cast::<u32>().write_unaligned(bytes as u32);
+1593 |     p.add(8).cast::<u32>().write_unaligned(bytes as u32);
+1594 |     p.add(12).cast::<u32>().write_unaligned(ctx.records);
+1594 |     p.add(12).cast::<u32>().write_unaligned(ctx.records);
+1595 |     p.add(16).cast::<u32>().write_unaligned(ctx.handles);
+1595 |     p.add(16).cast::<u32>().write_unaligned(ctx.handles);
+1596 |     p.add(20).cast::<u32>().write_unaligned(32);
+1596 |     p.add(20).cast::<u32>().write_unaligned(32);
+1655 |     let mut base = alloc_record(ctx, (*t).record_bytes as usize)?;
+note: an unsafe function restricts its caller, but its body is safe by default
+1653 | unsafe fn run2(tables: &[FType], ctx: &mut Ctx, mut p: *const u8, mut limit: *const u8) -> Result<usize, ()> {
+1655 |     let mut base = alloc_record(ctx, (*t).record_bytes as usize)?;
+1657 |     let mut e: *const FEntry = (*t).entries.as_ptr();
+1662 |                 close_lists2(ctx, &*t, base, mark, &mut hasbits)?;
+1662 |                 close_lists2(ctx, &*t, base, mark, &mut hasbits)?;
+1664 |             base.add(4).cast::<u32>().write_unaligned(hasbits);
+1664 |             base.add(4).cast::<u32>().write_unaligned(hasbits);
+1666 |                 return Ok(finish2(ctx));
+1670 |             let child = base.offset_from(ctx.out) as u32;
+1675 |             e = (*t).entries.as_ptr().add(f.next as usize);
+1675 |             e = (*t).entries.as_ptr().add(f.next as usize);
+1678 |                 base.add(f.slot as usize).cast::<u32>().write_unaligned(child);
+1678 |                 base.add(f.slot as usize).cast::<u32>().write_unaligned(child);
+1685 |         let (raw, q) = varint_p(p, limit)?;
+1687 |         if (*e).tag as u64 != raw {
+1693 |             let idx = if number < 32 { (*t).lookup[number] } else { 0 };
+1695 |                 p = skip_p(raw as u32, p, limit)?;
+1698 |             let cand = (*t).entries.as_ptr().add(idx as usize - 1);
+1698 |             let cand = (*t).entries.as_ptr().add(idx as usize - 1);
+1699 |             if (*cand).tag as u64 != raw {
+1700 |                 if raw & 7 == 2 && (*cand).packable {
+1701 |                     let (n, q) = length_p(p, limit)?;
+1702 |                     let packed_end = q.add(n);
+1705 |                         let (v, rr) = varint_p(r, packed_end)?;

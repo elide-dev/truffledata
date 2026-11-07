@@ -1,0 +1,22 @@
+PROBE host=model name	: AMD EPYC
+PROBE mode=small messages=32 bytes=4797 avg=149
+PROBE small/scan_flat                     413.7 ns/rep      12.9 ns/msg   11594.6 MB/s
+PROBE small/cpp_reuse                    5303.1 ns/rep     165.7 ns/msg     904.6 MB/s
+PROBE small/cpp_reuse_consume            5626.0 ns/rep     175.8 ns/msg     852.7 MB/s
+PROBE small/cpp_arena                    7643.9 ns/rep     238.9 ns/msg     627.6 MB/s
+PROBE small/upb                          6684.2 ns/rep     208.9 ns/msg     717.7 MB/s
+PROBE small/upb_consume                  6823.5 ns/rep     213.2 ns/msg     703.0 MB/s
+PROBE mode=holdout messages=32 bytes=16321 avg=510
+PROBE holdout/scan_flat                  1235.5 ns/rep      38.6 ns/msg   13210.3 MB/s
+PROBE holdout/cpp_reuse                 15227.2 ns/rep     475.9 ns/msg    1071.8 MB/s
+PROBE holdout/cpp_reuse_consume         15602.4 ns/rep     487.6 ns/msg    1046.1 MB/s
+PROBE holdout/cpp_arena                 22483.9 ns/rep     702.6 ns/msg     725.9 MB/s
+PROBE holdout/upb                       19488.1 ns/rep     609.0 ns/msg     837.5 MB/s
+PROBE holdout/upb_consume               20012.6 ns/rep     625.4 ns/msg     815.5 MB/s
+PROBE mode=large messages=32 bytes=1658313 avg=51822
+PROBE large/scan_flat                  103058.9 ns/rep    3220.6 ns/msg   16090.9 MB/s
+PROBE large/cpp_reuse                 1393994.2 ns/rep   43562.3 ns/msg    1189.6 MB/s
+PROBE large/cpp_reuse_consume         1480555.6 ns/rep   46267.4 ns/msg    1120.1 MB/s
+PROBE large/cpp_arena                 3809510.9 ns/rep  119047.2 ns/msg     435.3 MB/s
+PROBE large/upb                       2024858.8 ns/rep   63276.8 ns/msg     819.0 MB/s
+PROBE large/upb_consume               2092946.2 ns/rep   65404.6 ns/msg     792.3 MB/s
