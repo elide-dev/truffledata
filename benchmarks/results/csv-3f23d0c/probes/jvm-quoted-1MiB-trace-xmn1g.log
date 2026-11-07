@@ -1,0 +1,188 @@
+exec ${PAGER:-/usr/bin/less} "$0" || exit 1
+Executing tests from //benchmarks/comparison:csv_measure_jvm
+-----------------------------------------------------------------------------
+--- strings fastcsv quoted 1048576 fork 1 Picked up JAVA_TOOL_OPTIONS: -Xms8g -Xmn1g -Xlog:gc:stderr:uptime
+[0.049s] Using G1
+WARNING: Using incubator modules: jdk.incubator.vector
+TRACE start minflt 17858 majflt 797 utime_ticks 77 stime_ticks 118 thread_run_ms 930.8 thread_wait_ms 4.2 rss_kb 121956
+TRACE /sys/kernel/mm/transparent_hugepage/enabled always [madvise] never
+TRACE /sys/kernel/mm/transparent_hugepage/defrag always defer defer+madvise [madvise] never
+TRACE /sys/fs/cgroup/cpu.max java.nio.file.NoSuchFileException: /sys/fs/cgroup/cpu.max
+TRACE /sys/fs/cgroup/memory.max java.nio.file.NoSuchFileException: /sys/fs/cgroup/memory.max
+TRACE warm minflt 48465 majflt 28 utime_ticks 142 stime_ticks 192 thread_run_ms 1987.5 thread_wait_ms 0.5 rss_kb 311564
+TRACE sample 0 ops 24 ns_per_byte 12.427321802275316 minflt 8615 majflt 0 utime_ticks 5 stime_ticks 29 thread_run_ms 322.8 thread_wait_ms 0.0 rss_kb 346008
+TRACE sample 1 ops 23 ns_per_byte 12.962395572970564 minflt 8190 majflt 0 utime_ticks 2 stime_ticks 29 thread_run_ms 314.8 thread_wait_ms 0.0 rss_kb 378868
+TRACE sample 2 ops 22 ns_per_byte 13.420265740987317 minflt 7832 majflt 0 utime_ticks 2 stime_ticks 29 thread_run_ms 311.6 thread_wait_ms 0.1 rss_kb 410284
+TRACE sample 3 ops 21 ns_per_byte 13.97727780465903 minflt 7477 majflt 0 utime_ticks 4 stime_ticks 28 thread_run_ms 309.7 thread_wait_ms 0.0 rss_kb 440116
+TRACE sample 4 ops 21 ns_per_byte 13.927406725689178 minflt 7476 majflt 1 utime_ticks 2 stime_ticks 29 thread_run_ms 308.7 thread_wait_ms 0.0 rss_kb 469940
+ 
+strings fastcsv quoted 1048576 ingest 1 [12.427321802275316, 12.962395572970564, 13.420265740987317, 13.97727780465903, 13.927406725689178]
+--- strings univocity quoted 1048576 fork 0 Picked up JAVA_TOOL_OPTIONS: -Xms8g -Xmn1g -Xlog:gc:stderr:uptime
+[0.009s] Using G1
+WARNING: Using incubator modules: jdk.incubator.vector
+TRACE start minflt 20806 majflt 8 utime_ticks 39 stime_ticks 9 thread_run_ms 194.9 thread_wait_ms 0.1 rss_kb 134928
+TRACE /sys/kernel/mm/transparent_hugepage/enabled always [madvise] never
+TRACE /sys/kernel/mm/transparent_hugepage/defrag always defer defer+madvise [madvise] never
+TRACE /sys/fs/cgroup/cpu.max java.nio.file.NoSuchFileException: /sys/fs/cgroup/cpu.max
+TRACE /sys/fs/cgroup/memory.max java.nio.file.NoSuchFileException: /sys/fs/cgroup/memory.max
+TRACE warm minflt 147343 majflt 6 utime_ticks 185 stime_ticks 207 thread_run_ms 2001.0 thread_wait_ms 0.0 rss_kb 693264
+TRACE sample 0 ops 7 ns_per_byte 46.516236094401144 minflt 9724 majflt 0 utime_ticks 4 stime_ticks 35 thread_run_ms 350.7 thread_wait_ms 0.0 rss_kb 728260
+TRACE sample 1 ops 7 ns_per_byte 46.68899081968928 minflt 9658 majflt 0 utime_ticks 3 stime_ticks 33 thread_run_ms 344.6 thread_wait_ms 0.0 rss_kb 767064
+TRACE sample 2 ops 6 ns_per_byte 47.746660004475366 minflt 8276 majflt 0 utime_ticks 1 stime_ticks 29 thread_run_ms 302.2 thread_wait_ms 0.0 rss_kb 800064
+TRACE sample 3 ops 6 ns_per_byte 49.74291125045771 minflt 8275 majflt 0 utime_ticks 3 stime_ticks 29 thread_run_ms 314.7 thread_wait_ms 0.0 rss_kb 833064
+TRACE sample 4 ops 6 ns_per_byte 53.20613188595956 minflt 8289 majflt 0 utime_ticks 3 stime_ticks 33 thread_run_ms 336.0 thread_wait_ms 0.0 rss_kb 866328
+ 
+strings univocity quoted 1048576 ingest 0 [46.516236094401144, 46.68899081968928, 47.746660004475366, 49.74291125045771, 53.20613188595956]
+--- strings univocity quoted 1048576 fork 2 Picked up JAVA_TOOL_OPTIONS: -Xms8g -Xmn1g -Xlog:gc:stderr:uptime
+[0.011s] Using G1
+WARNING: Using incubator modules: jdk.incubator.vector
+TRACE start minflt 20196 majflt 8 utime_ticks 38 stime_ticks 10 thread_run_ms 210.0 thread_wait_ms 1.8 rss_kb 131324
+TRACE /sys/kernel/mm/transparent_hugepage/enabled always [madvise] never
+TRACE /sys/kernel/mm/transparent_hugepage/defrag always defer defer+madvise [madvise] never
+TRACE /sys/fs/cgroup/cpu.max java.nio.file.NoSuchFileException: /sys/fs/cgroup/cpu.max
+TRACE /sys/fs/cgroup/memory.max java.nio.file.NoSuchFileException: /sys/fs/cgroup/memory.max
+TRACE warm minflt 263855 majflt 2 utime_ticks 189 stime_ticks 181 thread_run_ms 2030.2 thread_wait_ms 0.0 rss_kb 1155636
+TRACE sample 0 ops 6 ns_per_byte 48.19074146120672 minflt 8355 majflt 0 utime_ticks 4 stime_ticks 30 thread_run_ms 312.6 thread_wait_ms 0.0 rss_kb 1188900
+TRACE sample 1 ops 7 ns_per_byte 46.422072250265906 minflt 9660 majflt 0 utime_ticks 3 stime_ticks 31 thread_run_ms 342.6 thread_wait_ms 0.0 rss_kb 1227444
+TRACE sample 2 ops 7 ns_per_byte 45.96074910420045 minflt 9653 majflt 0 utime_ticks 2 stime_ticks 32 thread_run_ms 339.4 thread_wait_ms 0.0 rss_kb 1266252
+TRACE sample 3 ops 7 ns_per_byte 46.30664678907081 minflt 9653 majflt 0 utime_ticks 2 stime_ticks 32 thread_run_ms 340.8 thread_wait_ms 0.0 rss_kb 1304796
+TRACE sample 4 ops 7 ns_per_byte 46.198615488396015 minflt 9658 majflt 0 utime_ticks 3 stime_ticks 32 thread_run_ms 340.9 thread_wait_ms 0.0 rss_kb 1343340
+ 
+strings univocity quoted 1048576 ingest 2 [48.19074146120672, 46.422072250265906, 45.96074910420045, 46.30664678907081, 46.198615488396015]
+--- strings truffledata-batch quoted 1048576 fork 0 Picked up JAVA_TOOL_OPTIONS: -Xms8g -Xmn1g -Xlog:gc:stderr:uptime
+[0.009s] Using G1
+WARNING: Using incubator modules: jdk.incubator.vector
+TRACE start minflt 21614 majflt 12 utime_ticks 35 stime_ticks 13 thread_run_ms 198.4 thread_wait_ms 0.4 rss_kb 137316
+TRACE /sys/kernel/mm/transparent_hugepage/enabled always [madvise] never
+TRACE /sys/kernel/mm/transparent_hugepage/defrag always defer defer+madvise [madvise] never
+TRACE /sys/fs/cgroup/cpu.max java.nio.file.NoSuchFileException: /sys/fs/cgroup/cpu.max
+TRACE /sys/fs/cgroup/memory.max java.nio.file.NoSuchFileException: /sys/fs/cgroup/memory.max
+[0.899s] GC(0) Pause Young (Normal) (G1 Evacuation Pause) 1024M->5M(8192M) 9.346ms
+[1.266s] GC(1) Pause Young (Normal) (G1 Evacuation Pause) 1020M->5M(8192M) 4.000ms
+[1.633s] GC(2) Pause Young (Normal) (G1 Evacuation Pause) 1020M->6M(8192M) 5.184ms
+[1.994s] GC(3) Pause Young (Normal) (G1 Evacuation Pause) 1021M->5M(8192M) 3.381ms
+TRACE warm minflt 227550 majflt 8 utime_ticks 242 stime_ticks 23 thread_run_ms 1967.8 thread_wait_ms 0.0 rss_kb 1042744
+[2.361s] GC(4) Pause Young (Normal) (G1 Evacuation Pause) 1020M->6M(8192M) 3.923ms
+TRACE sample 0 ops 595 ns_per_byte 0.4809575429860703 minflt 559 majflt 0 utime_ticks 40 stime_ticks 1 thread_run_ms 303.6 thread_wait_ms 0.0 rss_kb 1044656
+[2.730s] GC(5) Pause Young (Normal) (G1 Evacuation Pause) 1021M->5M(8192M) 3.658ms
+TRACE sample 1 ops 602 ns_per_byte 0.47533504445341274 minflt 566 majflt 0 utime_ticks 36 stime_ticks 0 thread_run_ms 297.9 thread_wait_ms 0.0 rss_kb 1047028
+[3.087s] GC(6) Pause Young (Normal) (G1 Evacuation Pause) 1020M->6M(8192M) 2.995ms
+TRACE sample 2 ops 611 ns_per_byte 0.4686669905205294 minflt 1088 majflt 0 utime_ticks 40 stime_ticks 0 thread_run_ms 297.9 thread_wait_ms 0.0 rss_kb 1051328
+TRACE sample 3 ops 621 ns_per_byte 0.4611714702522852 minflt 68 majflt 0 utime_ticks 34 stime_ticks 0 thread_run_ms 301.8 thread_wait_ms 0.0 rss_kb 1051636
+[3.445s] GC(7) Pause Young (Normal) (G1 Evacuation Pause) 1021M->5M(8192M) 4.428ms
+TRACE sample 4 ops 612 ns_per_byte 0.4676067588484191 minflt 236 majflt 0 utime_ticks 36 stime_ticks 1 thread_run_ms 296.7 thread_wait_ms 0.0 rss_kb 1049012
+ 
+strings truffledata-batch quoted 1048576 ingest 0 [0.4809575429860703, 0.47533504445341274, 0.4686669905205294, 0.4611714702522852, 0.4676067588484191]
+--- strings fastcsv quoted 1048576 fork 0 Picked up JAVA_TOOL_OPTIONS: -Xms8g -Xmn1g -Xlog:gc:stderr:uptime
+[0.008s] Using G1
+WARNING: Using incubator modules: jdk.incubator.vector
+TRACE start minflt 20036 majflt 8 utime_ticks 33 stime_ticks 6 thread_run_ms 160.5 thread_wait_ms 0.1 rss_kb 130900
+TRACE /sys/kernel/mm/transparent_hugepage/enabled always [madvise] never
+TRACE /sys/kernel/mm/transparent_hugepage/defrag always defer defer+madvise [madvise] never
+TRACE /sys/fs/cgroup/cpu.max java.nio.file.NoSuchFileException: /sys/fs/cgroup/cpu.max
+TRACE /sys/fs/cgroup/memory.max java.nio.file.NoSuchFileException: /sys/fs/cgroup/memory.max
+[0.982s] GC(0) Pause Young (Normal) (G1 Evacuation Pause) 1025M->5M(8192M) 5.177ms
+[1.458s] GC(1) Pause Young (Normal) (G1 Evacuation Pause) 1021M->5M(8192M) 3.571ms
+[1.931s] GC(2) Pause Young (Normal) (G1 Evacuation Pause) 1021M->5M(8192M) 2.832ms
+TRACE warm minflt 265971 majflt 4 utime_ticks 247 stime_ticks 21 thread_run_ms 1981.9 thread_wait_ms 0.0 rss_kb 1181376
+[2.448s] GC(3) Pause Young (Normal) (G1 Evacuation Pause) 1021M->5M(8192M) 3.891ms
+TRACE sample 0 ops 431 ns_per_byte 0.6639446769680303 minflt 22 majflt 0 utime_ticks 31 stime_ticks 1 thread_run_ms 302.9 thread_wait_ms 0.0 rss_kb 1181672
+TRACE sample 1 ops 446 ns_per_byte 0.6418021394521408 minflt 6 majflt 0 utime_ticks 31 stime_ticks 0 thread_run_ms 301.9 thread_wait_ms 0.0 rss_kb 1181672
+[2.956s] GC(4) Pause Young (Normal) (G1 Evacuation Pause) 1021M->6M(8192M) 4.414ms
+TRACE sample 2 ops 441 ns_per_byte 0.6487214505192613 minflt 253 majflt 0 utime_ticks 31 stime_ticks 1 thread_run_ms 296.7 thread_wait_ms 0.0 rss_kb 1182728
+TRACE sample 3 ops 450 ns_per_byte 0.6361099668416128 minflt 5 majflt 0 utime_ticks 32 stime_ticks 0 thread_run_ms 301.6 thread_wait_ms 0.0 rss_kb 1182728
+[3.453s] GC(5) Pause Young (Normal) (G1 Evacuation Pause) 1022M->6M(8192M) 3.122ms
+TRACE sample 4 ops 400 ns_per_byte 0.7164719263014159 minflt 4 majflt 0 utime_ticks 30 stime_ticks 0 thread_run_ms 298.0 thread_wait_ms 0.1 rss_kb 1182976
+ 
+strings fastcsv quoted 1048576 ingest 0 [0.6639446769680303, 0.6418021394521408, 0.6487214505192613, 0.6361099668416128, 0.7164719263014159]
+--- strings truffledata-batch quoted 1048576 fork 2 Picked up JAVA_TOOL_OPTIONS: -Xms8g -Xmn1g -Xlog:gc:stderr:uptime
+[0.009s] Using G1
+WARNING: Using incubator modules: jdk.incubator.vector
+TRACE start minflt 20725 majflt 8 utime_ticks 37 stime_ticks 7 thread_run_ms 176.3 thread_wait_ms 0.3 rss_kb 133584
+TRACE /sys/kernel/mm/transparent_hugepage/enabled always [madvise] never
+TRACE /sys/kernel/mm/transparent_hugepage/defrag always defer defer+madvise [madvise] never
+TRACE /sys/fs/cgroup/cpu.max java.nio.file.NoSuchFileException: /sys/fs/cgroup/cpu.max
+TRACE /sys/fs/cgroup/memory.max java.nio.file.NoSuchFileException: /sys/fs/cgroup/memory.max
+[0.855s] GC(0) Pause Young (Normal) (G1 Evacuation Pause) 1024M->5M(8192M) 6.565ms
+[1.292s] GC(1) Pause Young (Normal) (G1 Evacuation Pause) 1020M->6M(8192M) 4.992ms
+[1.702s] GC(2) Pause Young (Normal) (G1 Evacuation Pause) 1021M->5M(8192M) 2.906ms
+[2.146s] GC(3) Pause Young (Normal) (G1 Evacuation Pause) 1020M->6M(8192M) 4.383ms
+TRACE warm minflt 242791 majflt 0 utime_ticks 268 stime_ticks 18 thread_run_ms 1977.6 thread_wait_ms 0.1 rss_kb 1097252
+TRACE sample 0 ops 472 ns_per_byte 0.6067693868344618 minflt 37 majflt 3 utime_ticks 33 stime_ticks 0 thread_run_ms 309.4 thread_wait_ms 0.0 rss_kb 1097508
+[2.632s] GC(4) Pause Young (Normal) (G1 Evacuation Pause) 1021M->5M(8192M) 4.908ms
+TRACE sample 1 ops 403 ns_per_byte 0.7100473808967832 minflt 549 majflt 0 utime_ticks 39 stime_ticks 1 thread_run_ms 296.5 thread_wait_ms 0.0 rss_kb 1099604
+TRACE sample 2 ops 504 ns_per_byte 0.5680873309811028 minflt 6 majflt 0 utime_ticks 36 stime_ticks 0 thread_run_ms 302.3 thread_wait_ms 0.0 rss_kb 1099924
+[3.110s] GC(5) Pause Young (Normal) (G1 Evacuation Pause) 1020M->6M(8192M) 4.680ms
+TRACE sample 3 ops 98 ns_per_byte 2.957932274658307 minflt 6 majflt 0 utime_ticks 31 stime_ticks 0 thread_run_ms 284.9 thread_wait_ms 0.0 rss_kb 1099924
+TRACE sample 4 ops 239 ns_per_byte 1.1978588148266174 minflt 3 majflt 0 utime_ticks 36 stime_ticks 0 thread_run_ms 298.2 thread_wait_ms 0.0 rss_kb 1099924
+ 
+strings truffledata-batch quoted 1048576 ingest 2 [0.6067693868344618, 0.7100473808967832, 0.5680873309811028, 2.957932274658307, 1.1978588148266174]
+--- strings truffledata-batch quoted 1048576 fork 1 Picked up JAVA_TOOL_OPTIONS: -Xms8g -Xmn1g -Xlog:gc:stderr:uptime
+[0.009s] Using G1
+WARNING: Using incubator modules: jdk.incubator.vector
+TRACE start minflt 20972 majflt 8 utime_ticks 49 stime_ticks 8 thread_run_ms 234.4 thread_wait_ms 0.0 rss_kb 134400
+TRACE /sys/kernel/mm/transparent_hugepage/enabled always [madvise] never
+TRACE /sys/kernel/mm/transparent_hugepage/defrag always defer defer+madvise [madvise] never
+TRACE /sys/fs/cgroup/cpu.max java.nio.file.NoSuchFileException: /sys/fs/cgroup/cpu.max
+TRACE /sys/fs/cgroup/memory.max java.nio.file.NoSuchFileException: /sys/fs/cgroup/memory.max
+[0.964s] GC(0) Pause Young (Normal) (G1 Evacuation Pause) 1024M->6M(8192M) 6.368ms
+[1.389s] GC(1) Pause Young (Normal) (G1 Evacuation Pause) 1021M->5M(8192M) 5.162ms
+[1.829s] GC(2) Pause Young (Normal) (G1 Evacuation Pause) 1020M->5M(8192M) 4.175ms
+TRACE warm minflt 233448 majflt 0 utime_ticks 262 stime_ticks 24 thread_run_ms 1979.7 thread_wait_ms 0.1 rss_kb 1062068
+[2.255s] GC(3) Pause Young (Normal) (G1 Evacuation Pause) 1020M->6M(8192M) 6.050ms
+TRACE sample 0 ops 519 ns_per_byte 0.5521022428093723 minflt 44 majflt 0 utime_ticks 33 stime_ticks 1 thread_run_ms 302.2 thread_wait_ms 0.0 rss_kb 1062328
+[2.681s] GC(4) Pause Young (Normal) (G1 Evacuation Pause) 1021M->5M(8192M) 3.500ms
+TRACE sample 1 ops 501 ns_per_byte 0.5716360650327564 minflt 561 majflt 0 utime_ticks 38 stime_ticks 1 thread_run_ms 298.3 thread_wait_ms 0.0 rss_kb 1064440
+[3.102s] GC(5) Pause Young (Normal) (G1 Evacuation Pause) 1020M->5M(8192M) 4.403ms
+TRACE sample 2 ops 532 ns_per_byte 0.5385647965402797 minflt 5 majflt 0 utime_ticks 36 stime_ticks 1 thread_run_ms 296.8 thread_wait_ms 0.0 rss_kb 1064440
+TRACE sample 3 ops 511 ns_per_byte 0.5613594887514353 minflt 826 majflt 0 utime_ticks 42 stime_ticks 1 thread_run_ms 302.4 thread_wait_ms 0.0 rss_kb 1068068
+[3.552s] GC(6) Pause Young (Normal) (G1 Evacuation Pause) 1020M->5M(8192M) 4.409ms
+TRACE sample 4 ops 462 ns_per_byte 0.6201322953042218 minflt 526 majflt 3 utime_ticks 35 stime_ticks 1 thread_run_ms 297.3 thread_wait_ms 0.0 rss_kb 1069916
+ 
+strings truffledata-batch quoted 1048576 ingest 1 [0.5521022428093723, 0.5716360650327564, 0.5385647965402797, 0.5613594887514353, 0.6201322953042218]
+--- strings univocity quoted 1048576 fork 1 Picked up JAVA_TOOL_OPTIONS: -Xms8g -Xmn1g -Xlog:gc:stderr:uptime
+[0.009s] Using G1
+WARNING: Using incubator modules: jdk.incubator.vector
+TRACE start minflt 20311 majflt 8 utime_ticks 44 stime_ticks 8 thread_run_ms 209.9 thread_wait_ms 0.1 rss_kb 131832
+TRACE /sys/kernel/mm/transparent_hugepage/enabled always [madvise] never
+TRACE /sys/kernel/mm/transparent_hugepage/defrag always defer defer+madvise [madvise] never
+TRACE /sys/fs/cgroup/cpu.max java.nio.file.NoSuchFileException: /sys/fs/cgroup/cpu.max
+TRACE /sys/fs/cgroup/memory.max java.nio.file.NoSuchFileException: /sys/fs/cgroup/memory.max
+TRACE warm minflt 360437 majflt 0 utime_ticks 235 stime_ticks 159 thread_run_ms 2056.9 thread_wait_ms 0.1 rss_kb 1540568
+TRACE sample 0 ops 5 ns_per_byte 60.849854677773706 minflt 7003 majflt 0 utime_ticks 6 stime_ticks 33 thread_run_ms 332.4 thread_wait_ms 0.0 rss_kb 1568588
+TRACE sample 1 ops 5 ns_per_byte 59.871632033443184 minflt 6901 majflt 0 utime_ticks 1 stime_ticks 31 thread_run_ms 316.3 thread_wait_ms 0.0 rss_kb 1596040
+TRACE sample 2 ops 6 ns_per_byte 56.05901188514586 minflt 8288 majflt 0 utime_ticks 1 stime_ticks 34 thread_run_ms 354.2 thread_wait_ms 0.0 rss_kb 1629304
+TRACE sample 3 ops 5 ns_per_byte 57.50795648724521 minflt 6901 majflt 0 utime_ticks 2 stime_ticks 30 thread_run_ms 303.5 thread_wait_ms 0.0 rss_kb 1656760
+TRACE sample 4 ops 5 ns_per_byte 67.7369057427072 minflt 6899 majflt 0 utime_ticks 2 stime_ticks 33 thread_run_ms 357.4 thread_wait_ms 0.0 rss_kb 1684744
+ 
+strings univocity quoted 1048576 ingest 1 [60.849854677773706, 59.871632033443184, 56.05901188514586, 57.50795648724521, 67.7369057427072]
+--- strings fastcsv quoted 1048576 fork 2 Picked up JAVA_TOOL_OPTIONS: -Xms8g -Xmn1g -Xlog:gc:stderr:uptime
+[0.012s] Using G1
+WARNING: Using incubator modules: jdk.incubator.vector
+TRACE start minflt 20083 majflt 8 utime_ticks 47 stime_ticks 9 thread_run_ms 218.8 thread_wait_ms 0.9 rss_kb 131192
+TRACE /sys/kernel/mm/transparent_hugepage/enabled always [madvise] never
+TRACE /sys/kernel/mm/transparent_hugepage/defrag always defer defer+madvise [madvise] never
+TRACE /sys/fs/cgroup/cpu.max java.nio.file.NoSuchFileException: /sys/fs/cgroup/cpu.max
+TRACE /sys/fs/cgroup/memory.max java.nio.file.NoSuchFileException: /sys/fs/cgroup/memory.max
+[1.622s] GC(0) Pause Young (Normal) (G1 Evacuation Pause) 1025M->5M(8192M) 11.298ms
+TRACE warm minflt 266839 majflt 0 utime_ticks 286 stime_ticks 33 thread_run_ms 1963.3 thread_wait_ms 0.2 rss_kb 1181892
+[2.282s] GC(1) Pause Young (Normal) (G1 Evacuation Pause) 1021M->5M(8192M) 6.207ms
+TRACE sample 0 ops 378 ns_per_byte 0.7575706595496736 minflt 36 majflt 0 utime_ticks 31 stime_ticks 1 thread_run_ms 299.7 thread_wait_ms 0.0 rss_kb 1181988
+[2.866s] GC(2) Pause Young (Normal) (G1 Evacuation Pause) 1021M->6M(8192M) 5.608ms
+TRACE sample 1 ops 382 ns_per_byte 0.7654001949771322 minflt 275 majflt 0 utime_ticks 32 stime_ticks 1 thread_run_ms 301.1 thread_wait_ms 0.0 rss_kb 1183308
+TRACE sample 2 ops 321 ns_per_byte 0.8937412272671793 minflt 3 majflt 0 utime_ticks 30 stime_ticks 0 thread_run_ms 302.3 thread_wait_ms 0.0 rss_kb 1183308
+TRACE sample 3 ops 305 ns_per_byte 0.9391904549665548 minflt 1 majflt 0 utime_ticks 31 stime_ticks 0 thread_run_ms 302.1 thread_wait_ms 0.0 rss_kb 1183308
+[3.571s] GC(3) Pause Young (Normal) (G1 Evacuation Pause) 1022M->5M(8192M) 4.113ms
+TRACE sample 4 ops 321 ns_per_byte 0.8932954612211701 minflt 4 majflt 0 utime_ticks 30 stime_ticks 1 thread_run_ms 297.6 thread_wait_ms 0.0 rss_kb 1183308
+ 
+strings fastcsv quoted 1048576 ingest 2 [0.7575706595496736, 0.7654001949771322, 0.8937412272671793, 0.9391904549665548, 0.8932954612211701]
+native native-index-scalar [0.543149, 0.534404, 0.586292, 0.611052, 0.599753]
+native native-index-swar [0.421631, 0.422048, 0.550203, 0.459929, 0.449797]
+native native-index-avx2 [0.07388, 0.058679, 0.057445, 0.066748, 0.075085]
+native native-index-avx512 [0.104689, 0.070179, 0.050627, 0.059067, 0.054454]
+native native-indexed-scan [0.07412, 0.0633, 0.067001, 0.065924, 0.065372]
+native simdutf-validate [0.009027, 0.010904, 0.010133, 0.008969, 0.008552]
+native csv-core-scan [0.6391671734752655, 0.6581432618397258, 0.6290103711892892, 0.6991665485185152, 0.6773601581843925]
+native csv-byte-record [0.9072261053353665, 0.8494303529900498, 0.8498998883029988, 0.9273184085040628, 0.908429830367193]
+native csv-string-record [0.9804064160497016, 1.0244578069693642, 1.0706178947126324, 0.91043990320812, 0.8949076073896924]
+9 cells, 9 native rows, 0 unavailable

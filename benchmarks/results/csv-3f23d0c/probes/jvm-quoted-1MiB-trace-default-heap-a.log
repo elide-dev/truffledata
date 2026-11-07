@@ -1,0 +1,388 @@
+exec ${PAGER:-/usr/bin/less} "$0" || exit 1
+Executing tests from //benchmarks/comparison:csv_measure_jvm
+-----------------------------------------------------------------------------
+--- strings truffledata-batch quoted 1048576 fork 0 Picked up JAVA_TOOL_OPTIONS: -Xlog:gc:stderr:uptime
+[0.041s] Using G1
+WARNING: Using incubator modules: jdk.incubator.vector
+TRACE start minflt 15807 majflt 796 utime_ticks 66 stime_ticks 106 thread_run_ms 730.4 thread_wait_ms 0.9 rss_kb 114256
+TRACE /sys/kernel/mm/transparent_hugepage/enabled always [madvise] never
+TRACE /sys/kernel/mm/transparent_hugepage/defrag always defer defer+madvise [madvise] never
+TRACE /sys/fs/cgroup/cpu.max java.nio.file.NoSuchFileException: /sys/fs/cgroup/cpu.max
+TRACE /sys/fs/cgroup/memory.max java.nio.file.NoSuchFileException: /sys/fs/cgroup/memory.max
+[1.220s] GC(0) Pause Young (Normal) (G1 Evacuation Pause) 44M->5M(268M) 30.378ms
+[1.563s] GC(1) Pause Young (Normal) (G1 Evacuation Pause) 73M->6M(268M) 28.102ms
+[2.272s] GC(2) Pause Young (Normal) (G1 Evacuation Pause) 153M->5M(268M) 14.350ms
+[2.368s] GC(3) Pause Young (Normal) (G1 Evacuation Pause) 152M->6M(268M) 3.117ms
+[2.453s] GC(4) Pause Young (Normal) (G1 Evacuation Pause) 153M->6M(372M) 5.870ms
+TRACE warm minflt 46607 majflt 34 utime_ticks 130 stime_ticks 198 thread_run_ms 1911.4 thread_wait_ms 0.0 rss_kb 294848
+TRACE sample 0 ops 23 ns_per_byte 12.594573915497854 minflt 6364 majflt 0 utime_ticks 4 stime_ticks 32 thread_run_ms 315.3 thread_wait_ms 0.0 rss_kb 319952
+[3.447s] GC(5) Pause Young (Normal) (G1 Evacuation Pause) 217M->6M(372M) 4.455ms
+TRACE sample 1 ops 111 ns_per_byte 2.5781603160053135 minflt 6102 majflt 0 utime_ticks 12 stime_ticks 21 thread_run_ms 297.3 thread_wait_ms 0.0 rss_kb 344240
+[3.556s] GC(6) Pause Young (Normal) (G1 Evacuation Pause) 217M->5M(372M) 12.443ms
+[3.659s] GC(7) Pause Young (Normal) (G1 Evacuation Pause) 216M->5M(372M) 11.662ms
+[3.748s] GC(8) Pause Young (Normal) (G1 Evacuation Pause) 216M->6M(372M) 3.028ms
+TRACE sample 2 ops 455 ns_per_byte 0.6292507537089421 minflt 1030 majflt 0 utime_ticks 32 stime_ticks 4 thread_run_ms 273.4 thread_wait_ms 0.0 rss_kb 348200
+[3.837s] GC(9) Pause Young (Normal) (G1 Evacuation Pause) 217M->6M(720M) 9.702ms
+TRACE sample 3 ops 162 ns_per_byte 1.800662738055145 minflt 6427 majflt 0 utime_ticks 12 stime_ticks 19 thread_run_ms 297.5 thread_wait_ms 0.1 rss_kb 373800
+TRACE sample 4 ops 30 ns_per_byte 9.556449007536921 minflt 8157 majflt 1 utime_ticks 3 stime_ticks 29 thread_run_ms 303.0 thread_wait_ms 0.0 rss_kb 406528
+ 
+strings truffledata-batch quoted 1048576 ingest 0 [12.594573915497854, 2.5781603160053135, 0.6292507537089421, 1.800662738055145, 9.556449007536921]
+--- strings univocity quoted 1048576 fork 2 Picked up JAVA_TOOL_OPTIONS: -Xlog:gc:stderr:uptime
+[0.008s] Using G1
+WARNING: Using incubator modules: jdk.incubator.vector
+TRACE start minflt 15952 majflt 9 utime_ticks 37 stime_ticks 5 thread_run_ms 177.5 thread_wait_ms 0.1 rss_kb 114612
+TRACE /sys/kernel/mm/transparent_hugepage/enabled always [madvise] never
+TRACE /sys/kernel/mm/transparent_hugepage/defrag always defer defer+madvise [madvise] never
+TRACE /sys/fs/cgroup/cpu.max java.nio.file.NoSuchFileException: /sys/fs/cgroup/cpu.max
+TRACE /sys/fs/cgroup/memory.max java.nio.file.NoSuchFileException: /sys/fs/cgroup/memory.max
+[0.298s] GC(0) Pause Young (Concurrent Start) (G1 Humongous Allocation) 147M->9M(268M) 5.031ms
+[0.298s] GC(1) Concurrent Undo Cycle
+[0.298s] GC(1) Concurrent Undo Cycle 0.242ms
+[0.328s] GC(2) Pause Young (Concurrent Start) (G1 Humongous Allocation) 140M->9M(268M) 2.332ms
+[0.328s] GC(3) Concurrent Undo Cycle
+[0.328s] GC(3) Concurrent Undo Cycle 0.130ms
+[0.364s] GC(4) Pause Young (Concurrent Start) (G1 Humongous Allocation) 141M->9M(268M) 10.437ms
+[0.364s] GC(5) Concurrent Undo Cycle
+[0.364s] GC(5) Concurrent Undo Cycle 0.124ms
+[0.419s] GC(6) Pause Young (Concurrent Start) (G1 Humongous Allocation) 141M->9M(268M) 14.951ms
+[0.419s] GC(7) Concurrent Undo Cycle
+[0.419s] GC(7) Concurrent Undo Cycle 0.180ms
+[0.459s] GC(8) Pause Young (Concurrent Start) (G1 Humongous Allocation) 143M->9M(600M) 2.785ms
+[0.459s] GC(9) Concurrent Undo Cycle
+[0.459s] GC(9) Concurrent Undo Cycle 0.164ms
+[0.556s] GC(10) Pause Young (Concurrent Start) (G1 Humongous Allocation) 317M->5M(600M) 6.074ms
+[0.556s] GC(11) Concurrent Undo Cycle
+[0.556s] GC(11) Concurrent Undo Cycle 0.197ms
+[0.615s] GC(12) Pause Young (Concurrent Start) (G1 Humongous Allocation) 315M->5M(600M) 2.841ms
+[0.616s] GC(13) Concurrent Undo Cycle
+[0.616s] GC(13) Concurrent Undo Cycle 0.188ms
+[0.672s] GC(14) Pause Young (Concurrent Start) (G1 Humongous Allocation) 315M->5M(600M) 2.375ms
+[0.672s] GC(15) Concurrent Undo Cycle
+[0.672s] GC(15) Concurrent Undo Cycle 0.160ms
+[0.732s] GC(16) Pause Young (Concurrent Start) (G1 Humongous Allocation) 315M->5M(916M) 2.608ms
+[0.732s] GC(17) Concurrent Undo Cycle
+[0.732s] GC(17) Concurrent Undo Cycle 0.178ms
+[1.608s] GC(18) Pause Young (Concurrent Start) (G1 Humongous Allocation) 483M->5M(916M) 18.283ms
+[1.608s] GC(19) Concurrent Undo Cycle
+[1.608s] GC(19) Concurrent Undo Cycle 0.265ms
+[1.746s] GC(20) Pause Young (Concurrent Start) (G1 Humongous Allocation) 483M->6M(916M) 4.580ms
+[1.746s] GC(21) Concurrent Undo Cycle
+[1.746s] GC(21) Concurrent Undo Cycle 0.197ms
+[1.848s] GC(22) Pause Young (Concurrent Start) (G1 Humongous Allocation) 484M->5M(916M) 2.758ms
+[1.848s] GC(23) Concurrent Undo Cycle
+[1.848s] GC(23) Concurrent Undo Cycle 0.163ms
+[1.949s] GC(24) Pause Young (Concurrent Start) (G1 Humongous Allocation) 485M->5M(1100M) 4.180ms
+[1.949s] GC(25) Concurrent Undo Cycle
+[1.949s] GC(25) Concurrent Undo Cycle 0.123ms
+TRACE warm minflt 108842 majflt 4 utime_ticks 245 stime_ticks 151 thread_run_ms 1900.7 thread_wait_ms 0.6 rss_kb 511404
+TRACE sample 0 ops 19 ns_per_byte 15.202773086941997 minflt 6651 majflt 0 utime_ticks 3 stime_ticks 29 thread_run_ms 315.8 thread_wait_ms 0.1 rss_kb 538056
+TRACE sample 1 ops 17 ns_per_byte 18.292421772352295 minflt 6916 majflt 0 utime_ticks 3 stime_ticks 31 thread_run_ms 328.5 thread_wait_ms 0.1 rss_kb 566024
+TRACE sample 2 ops 6 ns_per_byte 53.840203400260386 minflt 8277 majflt 0 utime_ticks 2 stime_ticks 33 thread_run_ms 341.1 thread_wait_ms 0.0 rss_kb 599024
+[3.412s] GC(26) Pause Young (Concurrent Start) (G1 Humongous Allocation) 581M->10M(1100M) 20.978ms
+[3.412s] GC(27) Concurrent Undo Cycle
+[3.413s] GC(27) Concurrent Undo Cycle 0.210ms
+TRACE sample 3 ops 43 ns_per_byte 6.67271421966852 minflt 5997 majflt 0 utime_ticks 11 stime_ticks 24 thread_run_ms 282.3 thread_wait_ms 0.0 rss_kb 622516
+[3.554s] GC(28) Pause Young (Concurrent Start) (G1 Humongous Allocation) 582M->10M(1100M) 22.716ms
+[3.554s] GC(29) Concurrent Undo Cycle
+[3.555s] GC(29) Concurrent Undo Cycle 0.184ms
+[3.694s] GC(30) Pause Young (Concurrent Start) (G1 Humongous Allocation) 582M->10M(1100M) 25.477ms
+[3.694s] GC(31) Concurrent Undo Cycle
+[3.694s] GC(31) Concurrent Undo Cycle 0.196ms
+[3.793s] GC(32) Pause Young (Concurrent Start) (G1 Humongous Allocation) 572M->10M(1100M) 2.751ms
+[3.793s] GC(33) Concurrent Undo Cycle
+[3.794s] GC(33) Concurrent Undo Cycle 0.800ms
+TRACE sample 4 ops 145 ns_per_byte 1.9768414978934918 minflt 2672 majflt 0 utime_ticks 34 stime_ticks 15 thread_run_ms 252.3 thread_wait_ms 0.1 rss_kb 633424
+ 
+strings univocity quoted 1048576 ingest 2 [15.202773086941997, 18.292421772352295, 53.840203400260386, 6.67271421966852, 1.9768414978934918]
+--- strings univocity quoted 1048576 fork 1 Picked up JAVA_TOOL_OPTIONS: -Xlog:gc:stderr:uptime
+[0.009s] Using G1
+WARNING: Using incubator modules: jdk.incubator.vector
+TRACE start minflt 16027 majflt 8 utime_ticks 43 stime_ticks 6 thread_run_ms 208.9 thread_wait_ms 0.0 rss_kb 114736
+TRACE /sys/kernel/mm/transparent_hugepage/enabled always [madvise] never
+TRACE /sys/kernel/mm/transparent_hugepage/defrag always defer defer+madvise [madvise] never
+TRACE /sys/fs/cgroup/cpu.max java.nio.file.NoSuchFileException: /sys/fs/cgroup/cpu.max
+TRACE /sys/fs/cgroup/memory.max java.nio.file.NoSuchFileException: /sys/fs/cgroup/memory.max
+[0.322s] GC(0) Pause Young (Concurrent Start) (G1 Humongous Allocation) 148M->9M(268M) 5.018ms
+[0.322s] GC(1) Concurrent Undo Cycle
+[0.326s] GC(1) Concurrent Undo Cycle 3.181ms
+[0.354s] GC(2) Pause Young (Concurrent Start) (G1 Humongous Allocation) 141M->9M(268M) 3.138ms
+[0.354s] GC(3) Concurrent Undo Cycle
+[0.357s] GC(3) Concurrent Undo Cycle 3.076ms
+[0.384s] GC(4) Pause Young (Concurrent Start) (G1 Humongous Allocation) 141M->10M(268M) 3.616ms
+[0.384s] GC(5) Concurrent Undo Cycle
+[0.385s] GC(5) Concurrent Undo Cycle 0.691ms
+[0.415s] GC(6) Pause Young (Concurrent Start) (G1 Humongous Allocation) 142M->9M(268M) 3.247ms
+[0.415s] GC(7) Concurrent Undo Cycle
+[0.415s] GC(7) Concurrent Undo Cycle 0.295ms
+[0.448s] GC(8) Pause Young (Concurrent Start) (G1 Humongous Allocation) 143M->9M(516M) 3.203ms
+[0.449s] GC(9) Concurrent Undo Cycle
+[0.449s] GC(9) Concurrent Undo Cycle 0.325ms
+[0.528s] GC(10) Pause Young (Concurrent Start) (G1 Humongous Allocation) 273M->9M(516M) 3.811ms
+[0.528s] GC(11) Concurrent Undo Cycle
+[0.529s] GC(11) Concurrent Undo Cycle 0.492ms
+[0.580s] GC(12) Pause Young (Concurrent Start) (G1 Humongous Allocation) 271M->9M(516M) 4.062ms
+[0.580s] GC(13) Concurrent Undo Cycle
+[0.580s] GC(13) Concurrent Undo Cycle 0.294ms
+[0.658s] GC(14) Pause Young (Concurrent Start) (G1 Humongous Allocation) 271M->9M(516M) 3.333ms
+[0.658s] GC(15) Concurrent Undo Cycle
+[0.658s] GC(15) Concurrent Undo Cycle 0.163ms
+[0.715s] GC(16) Pause Young (Concurrent Start) (G1 Humongous Allocation) 271M->9M(872M) 3.632ms
+[0.715s] GC(17) Concurrent Undo Cycle
+[0.715s] GC(17) Concurrent Undo Cycle 0.286ms
+[0.843s] GC(18) Pause Young (Concurrent Start) (G1 Humongous Allocation) 459M->10M(872M) 4.989ms
+[0.843s] GC(19) Concurrent Undo Cycle
+[0.843s] GC(19) Concurrent Undo Cycle 0.262ms
+[0.931s] GC(20) Pause Young (Concurrent Start) (G1 Humongous Allocation) 460M->9M(872M) 3.758ms
+[0.931s] GC(21) Concurrent Undo Cycle
+[0.931s] GC(21) Concurrent Undo Cycle 0.233ms
+[1.013s] GC(22) Pause Young (Concurrent Start) (G1 Humongous Allocation) 459M->9M(872M) 2.616ms
+[1.013s] GC(23) Concurrent Undo Cycle
+[1.013s] GC(23) Concurrent Undo Cycle 0.203ms
+[1.094s] GC(24) Pause Young (Concurrent Start) (G1 Humongous Allocation) 459M->11M(1176M) 6.663ms
+[1.095s] GC(25) Concurrent Undo Cycle
+[1.097s] GC(25) Concurrent Undo Cycle 2.866ms
+[1.243s] GC(26) Pause Young (Concurrent Start) (G1 Humongous Allocation) 621M->9M(1176M) 3.914ms
+[1.243s] GC(27) Concurrent Undo Cycle
+[1.244s] GC(27) Concurrent Undo Cycle 0.299ms
+[1.338s] GC(28) Pause Young (Concurrent Start) (G1 Humongous Allocation) 617M->9M(1176M) 3.486ms
+[1.338s] GC(29) Concurrent Undo Cycle
+[1.339s] GC(29) Concurrent Undo Cycle 0.383ms
+[1.436s] GC(30) Pause Young (Concurrent Start) (G1 Humongous Allocation) 619M->9M(1176M) 3.133ms
+[1.437s] GC(31) Concurrent Undo Cycle
+[1.437s] GC(31) Concurrent Undo Cycle 0.391ms
+[1.551s] GC(32) Pause Young (Concurrent Start) (G1 Humongous Allocation) 613M->5M(1500M) 2.713ms
+[1.551s] GC(33) Concurrent Undo Cycle
+[1.551s] GC(33) Concurrent Undo Cycle 0.269ms
+TRACE warm minflt 151692 majflt 3 utime_ticks 279 stime_ticks 79 thread_run_ms 1882.4 thread_wait_ms 0.3 rss_kb 685248
+TRACE sample 0 ops 15 ns_per_byte 19.329503844745513 minflt 7860 majflt 0 utime_ticks 9 stime_ticks 29 thread_run_ms 319.8 thread_wait_ms 0.0 rss_kb 716760
+TRACE sample 1 ops 7 ns_per_byte 46.61504376558386 minflt 9656 majflt 0 utime_ticks 2 stime_ticks 33 thread_run_ms 344.9 thread_wait_ms 0.0 rss_kb 755304
+TRACE sample 2 ops 6 ns_per_byte 49.56793655152773 minflt 8278 majflt 0 utime_ticks 2 stime_ticks 29 thread_run_ms 313.8 thread_wait_ms 0.0 rss_kb 788304
+[3.337s] GC(34) Pause Young (Concurrent Start) (G1 Humongous Allocation) 787M->9M(1500M) 2.343ms
+[3.337s] GC(35) Concurrent Undo Cycle
+[3.337s] GC(35) Concurrent Undo Cycle 0.215ms
+[3.462s] GC(36) Pause Young (Concurrent Start) (G1 Humongous Allocation) 785M->9M(1500M) 2.885ms
+[3.462s] GC(37) Concurrent Undo Cycle
+[3.463s] GC(37) Concurrent Undo Cycle 0.530ms
+TRACE sample 3 ops 118 ns_per_byte 2.4289573493908607 minflt 3373 majflt 0 utime_ticks 23 stime_ticks 13 thread_run_ms 297.3 thread_wait_ms 0.0 rss_kb 800796
+[3.588s] GC(38) Pause Young (Concurrent Start) (G1 Humongous Allocation) 785M->9M(1500M) 2.327ms
+[3.588s] GC(39) Concurrent Undo Cycle
+[3.588s] GC(39) Concurrent Undo Cycle 0.175ms
+[3.711s] GC(40) Pause Young (Concurrent Start) (G1 Humongous Allocation) 781M->5M(1500M) 2.929ms
+[3.711s] GC(41) Concurrent Undo Cycle
+[3.711s] GC(41) Concurrent Undo Cycle 0.326ms
+TRACE sample 4 ops 202 ns_per_byte 1.4168089072958925 minflt 16 majflt 0 utime_ticks 33 stime_ticks 0 thread_run_ms 296.9 thread_wait_ms 0.1 rss_kb 800796
+[3.838s] GC(42) Pause Young (Concurrent Start) (G1 Humongous Allocation) 781M->5M(1500M) 2.138ms
+[3.838s] GC(43) Concurrent Undo Cycle
+[3.839s] GC(43) Concurrent Undo Cycle 0.733ms
+ 
+strings univocity quoted 1048576 ingest 1 [19.329503844745513, 46.61504376558386, 49.56793655152773, 2.4289573493908607, 1.4168089072958925]
+--- strings truffledata-batch quoted 1048576 fork 1 Picked up JAVA_TOOL_OPTIONS: -Xlog:gc:stderr:uptime
+[0.008s] Using G1
+WARNING: Using incubator modules: jdk.incubator.vector
+TRACE start minflt 16592 majflt 8 utime_ticks 32 stime_ticks 8 thread_run_ms 162.2 thread_wait_ms 0.0 rss_kb 117136
+TRACE /sys/kernel/mm/transparent_hugepage/enabled always [madvise] never
+TRACE /sys/kernel/mm/transparent_hugepage/defrag always defer defer+madvise [madvise] never
+TRACE /sys/fs/cgroup/cpu.max java.nio.file.NoSuchFileException: /sys/fs/cgroup/cpu.max
+TRACE /sys/fs/cgroup/memory.max java.nio.file.NoSuchFileException: /sys/fs/cgroup/memory.max
+[0.244s] GC(0) Pause Young (Normal) (G1 Evacuation Pause) 44M->5M(268M) 5.040ms
+[0.310s] GC(1) Pause Young (Normal) (G1 Evacuation Pause) 117M->5M(268M) 2.888ms
+[0.372s] GC(2) Pause Young (Normal) (G1 Evacuation Pause) 153M->5M(268M) 2.723ms
+[0.431s] GC(3) Pause Young (Normal) (G1 Evacuation Pause) 153M->5M(268M) 2.365ms
+[0.502s] GC(4) Pause Young (Normal) (G1 Evacuation Pause) 152M->5M(352M) 2.648ms
+[0.617s] GC(5) Pause Young (Normal) (G1 Evacuation Pause) 204M->6M(352M) 3.347ms
+[0.698s] GC(6) Pause Young (Normal) (G1 Evacuation Pause) 205M->6M(352M) 2.706ms
+[0.784s] GC(7) Pause Young (Normal) (G1 Evacuation Pause) 205M->5M(352M) 2.821ms
+[0.862s] GC(8) Pause Young (Normal) (G1 Evacuation Pause) 204M->6M(448M) 2.666ms
+[0.973s] GC(9) Pause Young (Normal) (G1 Evacuation Pause) 265M->5M(448M) 3.684ms
+[1.068s] GC(10) Pause Young (Normal) (G1 Evacuation Pause) 264M->5M(448M) 2.841ms
+[1.166s] GC(11) Pause Young (Normal) (G1 Evacuation Pause) 264M->6M(448M) 3.074ms
+[1.263s] GC(12) Pause Young (Normal) (G1 Evacuation Pause) 265M->5M(572M) 2.755ms
+[1.412s] GC(13) Pause Young (Normal) (G1 Evacuation Pause) 336M->5M(572M) 2.878ms
+[1.538s] GC(14) Pause Young (Normal) (G1 Evacuation Pause) 336M->6M(572M) 2.777ms
+[1.666s] GC(15) Pause Young (Normal) (G1 Evacuation Pause) 337M->5M(572M) 2.915ms
+[1.798s] GC(16) Pause Young (Normal) (G1 Evacuation Pause) 340M->5M(688M) 1.914ms
+[1.971s] GC(17) Pause Young (Normal) (G1 Evacuation Pause) 412M->5M(688M) 2.790ms
+[2.124s] GC(18) Pause Young (Normal) (G1 Evacuation Pause) 412M->5M(688M) 2.429ms
+TRACE warm minflt 124279 majflt 3 utime_ticks 255 stime_ticks 17 thread_run_ms 1927.7 thread_wait_ms 0.3 rss_kb 607984
+[2.289s] GC(19) Pause Young (Normal) (G1 Evacuation Pause) 412M->5M(688M) 2.449ms
+[2.437s] GC(20) Pause Young (Normal) (G1 Evacuation Pause) 412M->5M(828M) 2.244ms
+TRACE sample 0 ops 543 ns_per_byte 0.5281509332631121 minflt 16441 majflt 0 utime_ticks 33 stime_ticks 3 thread_run_ms 300.9 thread_wait_ms 0.0 rss_kb 674180
+[2.666s] GC(21) Pause Young (Normal) (G1 Evacuation Pause) 496M->5M(828M) 2.415ms
+TRACE sample 1 ops 527 ns_per_byte 0.5432387036933458 minflt 11631 majflt 0 utime_ticks 35 stime_ticks 0 thread_run_ms 298.5 thread_wait_ms 0.0 rss_kb 720196
+[2.854s] GC(22) Pause Young (Normal) (G1 Evacuation Pause) 496M->5M(828M) 1.694ms
+[3.048s] GC(23) Pause Young (Normal) (G1 Evacuation Pause) 496M->5M(828M) 2.580ms
+TRACE sample 2 ops 528 ns_per_byte 0.5418470787406516 minflt 509 majflt 0 utime_ticks 31 stime_ticks 0 thread_run_ms 288.9 thread_wait_ms 0.0 rss_kb 722044
+[3.241s] GC(24) Pause Young (Normal) (G1 Evacuation Pause) 496M->5M(828M) 2.178ms
+TRACE sample 3 ops 509 ns_per_byte 0.5626243671822488 minflt 263 majflt 0 utime_ticks 34 stime_ticks 1 thread_run_ms 299.1 thread_wait_ms 0.0 rss_kb 723100
+[3.465s] GC(25) Pause Young (Normal) (G1 Evacuation Pause) 496M->5M(828M) 2.252ms
+[3.645s] GC(26) Pause Young (Normal) (G1 Evacuation Pause) 496M->5M(828M) 2.097ms
+TRACE sample 4 ops 576 ns_per_byte 0.49701284408077867 minflt 766 majflt 0 utime_ticks 34 stime_ticks 0 thread_run_ms 296.6 thread_wait_ms 0.0 rss_kb 726268
+ 
+strings truffledata-batch quoted 1048576 ingest 1 [0.5281509332631121, 0.5432387036933458, 0.5418470787406516, 0.5626243671822488, 0.49701284408077867]
+--- strings univocity quoted 1048576 fork 0 Picked up JAVA_TOOL_OPTIONS: -Xlog:gc:stderr:uptime
+[0.008s] Using G1
+WARNING: Using incubator modules: jdk.incubator.vector
+TRACE start minflt 15342 majflt 8 utime_ticks 37 stime_ticks 3 thread_run_ms 166.7 thread_wait_ms 0.0 rss_kb 111396
+TRACE /sys/kernel/mm/transparent_hugepage/enabled always [madvise] never
+TRACE /sys/kernel/mm/transparent_hugepage/defrag always defer defer+madvise [madvise] never
+TRACE /sys/fs/cgroup/cpu.max java.nio.file.NoSuchFileException: /sys/fs/cgroup/cpu.max
+TRACE /sys/fs/cgroup/memory.max java.nio.file.NoSuchFileException: /sys/fs/cgroup/memory.max
+[0.273s] GC(0) Pause Young (Concurrent Start) (G1 Humongous Allocation) 148M->9M(268M) 4.900ms
+[0.274s] GC(1) Concurrent Undo Cycle
+[0.276s] GC(1) Concurrent Undo Cycle 2.247ms
+[0.305s] GC(2) Pause Young (Concurrent Start) (G1 Humongous Allocation) 141M->9M(268M) 2.626ms
+[0.306s] GC(3) Concurrent Undo Cycle
+[0.309s] GC(3) Concurrent Undo Cycle 3.103ms
+[0.331s] GC(4) Pause Young (Concurrent Start) (G1 Humongous Allocation) 141M->9M(268M) 2.577ms
+[0.331s] GC(5) Concurrent Undo Cycle
+[0.334s] GC(5) Concurrent Undo Cycle 3.020ms
+[0.356s] GC(6) Pause Young (Concurrent Start) (G1 Humongous Allocation) 141M->11M(268M) 2.380ms
+[0.356s] GC(7) Concurrent Undo Cycle
+[0.358s] GC(7) Concurrent Undo Cycle 1.331ms
+[0.382s] GC(8) Pause Young (Concurrent Start) (G1 Humongous Allocation) 145M->9M(480M) 2.539ms
+[0.382s] GC(9) Concurrent Undo Cycle
+[0.383s] GC(9) Concurrent Undo Cycle 0.513ms
+[0.442s] GC(10) Pause Young (Concurrent Start) (G1 Humongous Allocation) 255M->10M(480M) 3.386ms
+[0.442s] GC(11) Concurrent Undo Cycle
+[0.445s] GC(11) Concurrent Undo Cycle 2.985ms
+[0.484s] GC(12) Pause Young (Concurrent Start) (G1 Humongous Allocation) 254M->10M(480M) 3.417ms
+[0.484s] GC(13) Concurrent Undo Cycle
+[0.487s] GC(13) Concurrent Undo Cycle 2.997ms
+[0.528s] GC(14) Pause Young (Concurrent Start) (G1 Humongous Allocation) 254M->9M(480M) 3.046ms
+[0.528s] GC(15) Concurrent Undo Cycle
+[0.528s] GC(15) Concurrent Undo Cycle 0.251ms
+[0.572s] GC(16) Pause Young (Concurrent Start) (G1 Humongous Allocation) 253M->9M(876M) 3.517ms
+[0.573s] GC(17) Concurrent Undo Cycle
+[0.573s] GC(17) Concurrent Undo Cycle 0.352ms
+[0.690s] GC(18) Pause Young (Concurrent Start) (G1 Humongous Allocation) 465M->5M(876M) 6.035ms
+[0.691s] GC(19) Concurrent Undo Cycle
+[0.691s] GC(19) Concurrent Undo Cycle 0.241ms
+[0.766s] GC(20) Pause Young (Concurrent Start) (G1 Humongous Allocation) 465M->5M(876M) 3.078ms
+[0.767s] GC(21) Concurrent Undo Cycle
+[0.767s] GC(21) Concurrent Undo Cycle 0.224ms
+[0.839s] GC(22) Pause Young (Concurrent Start) (G1 Humongous Allocation) 465M->5M(876M) 2.699ms
+[0.839s] GC(23) Concurrent Undo Cycle
+[0.842s] GC(23) Concurrent Undo Cycle 2.877ms
+[0.915s] GC(24) Pause Young (Concurrent Start) (G1 Humongous Allocation) 465M->5M(1264M) 2.772ms
+[0.915s] GC(25) Concurrent Undo Cycle
+[0.918s] GC(25) Concurrent Undo Cycle 2.372ms
+[1.059s] GC(26) Pause Young (Concurrent Start) (G1 Humongous Allocation) 667M->9M(1264M) 8.075ms
+[1.059s] GC(27) Concurrent Undo Cycle
+[1.059s] GC(27) Concurrent Undo Cycle 0.057ms
+[1.165s] GC(28) Pause Young (Concurrent Start) (G1 Humongous Allocation) 665M->9M(1264M) 3.469ms
+[1.165s] GC(29) Concurrent Undo Cycle
+[1.165s] GC(29) Concurrent Undo Cycle 0.197ms
+[1.269s] GC(30) Pause Young (Concurrent Start) (G1 Humongous Allocation) 667M->9M(1264M) 4.074ms
+[1.270s] GC(31) Concurrent Undo Cycle
+[1.270s] GC(31) Concurrent Undo Cycle 0.131ms
+[1.373s] GC(32) Pause Young (Concurrent Start) (G1 Humongous Allocation) 661M->5M(1536M) 2.414ms
+[1.376s] GC(33) Concurrent Undo Cycle
+[1.376s] GC(33) Concurrent Undo Cycle 0.209ms
+[1.767s] GC(34) Pause Young (Concurrent Start) (G1 Humongous Allocation) 805M->9M(1536M) 2.651ms
+[1.767s] GC(35) Concurrent Undo Cycle
+[1.768s] GC(35) Concurrent Undo Cycle 0.965ms
+[1.893s] GC(36) Pause Young (Concurrent Start) (G1 Humongous Allocation) 805M->9M(1536M) 2.356ms
+[1.894s] GC(37) Concurrent Undo Cycle
+[1.894s] GC(37) Concurrent Undo Cycle 0.207ms
+[2.019s] GC(38) Pause Young (Concurrent Start) (G1 Humongous Allocation) 805M->9M(1536M) 2.913ms
+[2.019s] GC(39) Concurrent Undo Cycle
+[2.019s] GC(39) Concurrent Undo Cycle 0.224ms
+[2.144s] GC(40) Pause Young (Concurrent Start) (G1 Humongous Allocation) 805M->9M(1536M) 3.370ms
+[2.144s] GC(41) Concurrent Undo Cycle
+[2.144s] GC(41) Concurrent Undo Cycle 0.241ms
+TRACE warm minflt 184813 majflt 1 utime_ticks 295 stime_ticks 45 thread_run_ms 1908.9 thread_wait_ms 0.1 rss_kb 832544
+[2.289s] GC(42) Pause Young (Concurrent Start) (G1 Humongous Allocation) 805M->9M(1536M) 2.307ms
+[2.289s] GC(43) Concurrent Undo Cycle
+[2.291s] GC(43) Concurrent Undo Cycle 2.224ms
+[2.420s] GC(44) Pause Young (Concurrent Start) (G1 Humongous Allocation) 805M->9M(1536M) 2.273ms
+[2.421s] GC(45) Concurrent Undo Cycle
+[2.421s] GC(45) Concurrent Undo Cycle 0.347ms
+TRACE sample 0 ops 184 ns_per_byte 1.5602705401350039 minflt 42 majflt 0 utime_ticks 34 stime_ticks 0 thread_run_ms 302.6 thread_wait_ms 0.0 rss_kb 832600
+[2.566s] GC(46) Pause Young (Concurrent Start) (G1 Humongous Allocation) 805M->9M(1536M) 3.092ms
+[2.566s] GC(47) Concurrent Undo Cycle
+[2.566s] GC(47) Concurrent Undo Cycle 0.157ms
+[2.693s] GC(48) Pause Young (Concurrent Start) (G1 Humongous Allocation) 805M->9M(1536M) 2.883ms
+[2.694s] GC(49) Concurrent Undo Cycle
+[2.694s] GC(49) Concurrent Undo Cycle 0.209ms
+TRACE sample 1 ops 204 ns_per_byte 1.4055331955573027 minflt 58 majflt 0 utime_ticks 33 stime_ticks 1 thread_run_ms 296.7 thread_wait_ms 0.0 rss_kb 832488
+[2.819s] GC(50) Pause Young (Concurrent Start) (G1 Humongous Allocation) 805M->9M(1536M) 2.641ms
+[2.819s] GC(51) Concurrent Undo Cycle
+[2.820s] GC(51) Concurrent Undo Cycle 0.192ms
+[2.944s] GC(52) Pause Young (Concurrent Start) (G1 Humongous Allocation) 805M->9M(1536M) 2.887ms
+[2.944s] GC(53) Concurrent Undo Cycle
+[2.945s] GC(53) Concurrent Undo Cycle 0.193ms
+[3.068s] GC(54) Pause Young (Concurrent Start) (G1 Humongous Allocation) 805M->9M(1536M) 2.615ms
+[3.068s] GC(55) Concurrent Undo Cycle
+[3.069s] GC(55) Concurrent Undo Cycle 0.211ms
+TRACE sample 2 ops 204 ns_per_byte 1.404604738651838 minflt 9 majflt 0 utime_ticks 32 stime_ticks 1 thread_run_ms 293.8 thread_wait_ms 0.0 rss_kb 832488
+[3.195s] GC(56) Pause Young (Concurrent Start) (G1 Humongous Allocation) 805M->9M(1536M) 2.844ms
+[3.195s] GC(57) Concurrent Undo Cycle
+[3.195s] GC(57) Concurrent Undo Cycle 0.188ms
+[3.318s] GC(58) Pause Young (Concurrent Start) (G1 Humongous Allocation) 805M->9M(1536M) 2.712ms
+[3.318s] GC(59) Concurrent Undo Cycle
+[3.319s] GC(59) Concurrent Undo Cycle 0.241ms
+TRACE sample 3 ops 206 ns_per_byte 1.3900977472777496 minflt 6 majflt 0 utime_ticks 32 stime_ticks 0 thread_run_ms 294.2 thread_wait_ms 0.0 rss_kb 832488
+[3.449s] GC(60) Pause Young (Concurrent Start) (G1 Humongous Allocation) 805M->9M(1536M) 2.707ms
+[3.449s] GC(61) Concurrent Undo Cycle
+[3.449s] GC(61) Concurrent Undo Cycle 0.211ms
+[3.573s] GC(62) Pause Young (Concurrent Start) (G1 Humongous Allocation) 805M->9M(1536M) 2.929ms
+[3.573s] GC(63) Concurrent Undo Cycle
+[3.573s] GC(63) Concurrent Undo Cycle 0.216ms
+[3.697s] GC(64) Pause Young (Concurrent Start) (G1 Humongous Allocation) 805M->9M(1536M) 4.453ms
+[3.697s] GC(65) Concurrent Undo Cycle
+[3.698s] GC(65) Concurrent Undo Cycle 0.249ms
+TRACE sample 4 ops 203 ns_per_byte 1.4113706060051263 minflt 2 majflt 3 utime_ticks 31 stime_ticks 1 thread_run_ms 291.2 thread_wait_ms 0.0 rss_kb 832488
+ 
+strings univocity quoted 1048576 ingest 0 [1.5602705401350039, 1.4055331955573027, 1.404604738651838, 1.3900977472777496, 1.4113706060051263]
+--- strings truffledata-batch quoted 1048576 fork 2 Picked up JAVA_TOOL_OPTIONS: -Xlog:gc:stderr:uptime
+[0.008s] Using G1
+WARNING: Using incubator modules: jdk.incubator.vector
+TRACE start minflt 16683 majflt 8 utime_ticks 38 stime_ticks 7 thread_run_ms 182.8 thread_wait_ms 0.1 rss_kb 117748
+TRACE /sys/kernel/mm/transparent_hugepage/enabled always [madvise] never
+TRACE /sys/kernel/mm/transparent_hugepage/defrag always defer defer+madvise [madvise] never
+TRACE /sys/fs/cgroup/cpu.max java.nio.file.NoSuchFileException: /sys/fs/cgroup/cpu.max
+TRACE /sys/fs/cgroup/memory.max java.nio.file.NoSuchFileException: /sys/fs/cgroup/memory.max
+[0.263s] GC(0) Pause Young (Normal) (G1 Evacuation Pause) 44M->5M(268M) 4.775ms
+[0.327s] GC(1) Pause Young (Normal) (G1 Evacuation Pause) 120M->6M(268M) 4.573ms
+[0.393s] GC(2) Pause Young (Normal) (G1 Evacuation Pause) 154M->6M(268M) 3.498ms
+[0.454s] GC(3) Pause Young (Normal) (G1 Evacuation Pause) 154M->5M(268M) 2.745ms
+[0.516s] GC(4) Pause Young (Normal) (G1 Evacuation Pause) 153M->6M(392M) 3.167ms
+[0.631s] GC(5) Pause Young (Normal) (G1 Evacuation Pause) 229M->5M(392M) 3.697ms
+[0.726s] GC(6) Pause Young (Normal) (G1 Evacuation Pause) 228M->6M(392M) 3.477ms
+[0.812s] GC(7) Pause Young (Normal) (G1 Evacuation Pause) 229M->5M(392M) 2.873ms
+[0.896s] GC(8) Pause Young (Normal) (G1 Evacuation Pause) 228M->6M(528M) 3.745ms
+[1.026s] GC(9) Pause Young (Normal) (G1 Evacuation Pause) 313M->5M(528M) 2.971ms
+[1.138s] GC(10) Pause Young (Normal) (G1 Evacuation Pause) 312M->6M(528M) 2.801ms
+[1.250s] GC(11) Pause Young (Normal) (G1 Evacuation Pause) 313M->5M(528M) 2.749ms
+[1.361s] GC(12) Pause Young (Normal) (G1 Evacuation Pause) 312M->6M(656M) 2.509ms
+[1.524s] GC(13) Pause Young (Normal) (G1 Evacuation Pause) 389M->5M(656M) 3.288ms
+[1.669s] GC(14) Pause Young (Normal) (G1 Evacuation Pause) 388M->6M(656M) 3.797ms
+[1.810s] GC(15) Pause Young (Normal) (G1 Evacuation Pause) 389M->5M(656M) 3.520ms
+[1.951s] GC(16) Pause Young (Normal) (G1 Evacuation Pause) 392M->5M(788M) 3.099ms
+[2.138s] GC(17) Pause Young (Normal) (G1 Evacuation Pause) 472M->5M(788M) 2.589ms
+TRACE warm minflt 148786 majflt 0 utime_ticks 253 stime_ticks 17 thread_run_ms 1921.7 thread_wait_ms 0.1 rss_kb 712292
+[2.310s] GC(18) Pause Young (Normal) (G1 Evacuation Pause) 472M->5M(788M) 2.571ms
+[2.475s] GC(19) Pause Young (Normal) (G1 Evacuation Pause) 472M->5M(788M) 2.365ms
+TRACE sample 0 ops 598 ns_per_byte 0.4786258797353112 minflt 624 majflt 0 utime_ticks 39 stime_ticks 1 thread_run_ms 301.9 thread_wait_ms 0.1 rss_kb 707720
+[2.653s] GC(20) Pause Young (Normal) (G1 Evacuation Pause) 472M->5M(788M) 3.032ms
+TRACE sample 1 ops 596 ns_per_byte 0.4806975990998823 minflt 806 majflt 0 utime_ticks 35 stime_ticks 2 thread_run_ms 299.1 thread_wait_ms 0.0 rss_kb 710624
+[2.827s] GC(21) Pause Young (Normal) (G1 Evacuation Pause) 472M->5M(788M) 4.429ms
+[3.017s] GC(22) Pause Young (Normal) (G1 Evacuation Pause) 472M->5M(788M) 2.795ms
+TRACE sample 2 ops 544 ns_per_byte 0.5263185700692306 minflt 697 majflt 1 utime_ticks 39 stime_ticks 1 thread_run_ms 289.8 thread_wait_ms 0.0 rss_kb 713568
+[3.188s] GC(23) Pause Young (Normal) (G1 Evacuation Pause) 472M->5M(788M) 2.761ms
+[3.352s] GC(24) Pause Young (Normal) (G1 Evacuation Pause) 472M->5M(948M) 3.133ms
+TRACE sample 3 ops 544 ns_per_byte 0.5259317305539252 minflt 15243 majflt 0 utime_ticks 33 stime_ticks 4 thread_run_ms 295.1 thread_wait_ms 0.0 rss_kb 772748
+[3.606s] GC(25) Pause Young (Normal) (G1 Evacuation Pause) 568M->5M(948M) 3.676ms
+TRACE sample 4 ops 559 ns_per_byte 0.5120863414588613 minflt 17130 majflt 0 utime_ticks 30 stime_ticks 1 thread_run_ms 297.7 thread_wait_ms 0.0 rss_kb 841124
+ 
+strings truffledata-batch quoted 1048576 ingest 2 [0.4786258797353112, 0.4806975990998823, 0.5263185700692306, 0.5259317305539252, 0.5120863414588613]
+native native-index-scalar [0.490686, 0.48671, 0.481531, 0.484437, 0.47804]
+native native-index-swar [0.359272, 0.389102, 0.383655, 0.361839, 0.371612]
+native native-index-avx2 [0.051273, 0.052138, 0.058294, 0.055814, 0.053728]
+native native-index-avx512 [0.046785, 0.047882, 0.047418, 0.04847, 0.045912]
+native native-indexed-scan [0.064891, 0.061364, 0.083901, 0.083353, 0.06748]
+native simdutf-validate [0.009208, 0.010059, 0.009062, 0.009271, 0.009401]
+native csv-core-scan [0.6010605298852423, 0.594940702416215, 0.6367048598397006, 0.6220497726552093, 0.6113429520105761]
+native csv-byte-record [0.8481687760947613, 0.8349743425643522, 0.8245194353899494, 0.8047060783081474, 0.8524749300542566]
+native csv-string-record [0.8869865831626258, 0.9081655616292654, 0.8852924098296799, 0.8976806470333456, 0.873562659709322]
+6 cells, 9 native rows, 0 unavailable
