@@ -1,5 +1,6 @@
 package dev.elide.truffledata.csv.kernel.vector;
 
+import dev.elide.truffledata.csv.CsvIndexing;
 import dev.elide.truffledata.csv.kernel.CsvIndexer;
 import dev.elide.truffledata.csv.kernel.BlockStep;
 import dev.elide.truffledata.csv.kernel.CsvIndex;
@@ -29,6 +30,30 @@ public final class VectorIndexer extends CsvIndexer {
   @Override
   public String name() {
     return "java-vector" + LANES * 8;
+  }
+
+  /**
+   * The provider for {@link CsvIndexing#install}: the JVM fallback without the native library,
+   * and an option for x86-64-v3 images (never for {@code -march=compatibility} images, where the
+   * Vector API is not intrinsified).
+   */
+  public static CsvIndexing.Provider provider() {
+    return new CsvIndexing.Provider() {
+      @Override
+      public String name() {
+        return "java-vector" + LANES * 8;
+      }
+
+      @Override
+      public CsvIndexer create(byte delimiter, byte quote, boolean quoting) {
+        return new VectorIndexer(delimiter, quote, quoting);
+      }
+
+      @Override
+      public int capacity() {
+        return CsvIndexing.JAVA.capacity();
+      }
+    };
   }
 
   @Override
