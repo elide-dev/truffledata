@@ -1,0 +1,60 @@
+load("@rules_cc//cc:defs.bzl", "cc_library", "cc_test")
+
+# Test-only yaml-test-suite event renderer over rapidyaml's ParseEngine. Header-only and
+# configuration-neutral: link it with exactly one of @rapidyaml//:ryml or @rapidyaml//:ryml_assert.
+cc_library(
+    name = "ryml_events",
+    testonly = True,
+    hdrs = ["ryml_events.h"],
+    copts = ["-std=c++17"],
+    deps = ["@rapidyaml//:ryml"],
+)
+
+cc_library(
+    name = "ryml_events_assert",
+    testonly = True,
+    hdrs = ["ryml_events.h"],
+    copts = ["-std=c++17"],
+    deps = ["@rapidyaml//:ryml_assert"],
+)
+
+_SUITE_ARGS = [
+    "--expected-failures=$(rootpath ryml_expected_failures.txt)",
+    "$(rootpaths @yaml_test_suite//:inputs)",
+]
+
+_SUITE_DATA = [
+    "ryml_expected_failures.txt",
+    "@yaml_test_suite//:cases",
+    "@yaml_test_suite//:inputs",
+]
+
+# Production configuration: 402/402 on the yaml-test-suite and linear one-line flow documents.
+cc_test(
+    name = "ryml_config_test",
+    size = "medium",
+    srcs = ["ryml_config_test.cc"],
+    args = _SUITE_ARGS,
+    copts = [
+        "-std=c++17",
+        "-O3",
+    ],
+    data = _SUITE_DATA,
+    deps = [":ryml_events"],
+)
+
+# The assertion lane: the same suite with rapidyaml's assertions on (linearity skipped; with
+# assertions, long flow lines are quadratic, biojppm/rapidyaml#694).
+cc_test(
+    name = "ryml_config_assert_test",
+    size = "medium",
+    srcs = ["ryml_config_test.cc"],
+    args = ["--assert-lane"] + _SUITE_ARGS,
+    copts = [
+        "-std=c++17",
+        "-O3",
+    ],
+    data = _SUITE_DATA,
+    local_defines = ["TD_RYML_ASSERT_LANE"],
+    deps = [":ryml_events_assert"],
+)
