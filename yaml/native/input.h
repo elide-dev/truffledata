@@ -18,6 +18,15 @@
 
 #include <simdutf.h>
 
+// TD_YAML_SCAN_SWAR forces the portable SWAR block scan (tests of other architectures' path).
+#if defined(__SSE2__) && !defined(TD_YAML_SCAN_SWAR)
+#define TD_YAML_SCAN_SSE2 1
+#include <emmintrin.h>
+#elif (defined(__ARM_NEON) || defined(__aarch64__)) && !defined(TD_YAML_SCAN_SWAR)
+#define TD_YAML_SCAN_NEON 1
+#include <arm_neon.h>
+#endif
+
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -161,49 +170,127 @@ inline void printable(const unsigned char* p, size_t k, size_t n) {
 }
 }  // namespace detail
 
+namespace detail {
+// One 64-byte block: the LF bitmap (bit k set when byte k is LF) and, in `suspect`, whether any
+// byte may break c-printable: a C0 control other than TAB/LF/CR, DEL, 0xC2 (a C1 control lead)
+// or 0xEF (a U+FFFE/U+FFFF lead). Suspect blocks are rechecked exactly by printable().
+inline uint64_t scan64(const unsigned char* p, bool& suspect) {
+#if defined(TD_YAML_SCAN_SSE2)
+  const __m128i lf = _mm_set1_epi8('\n'), tab = _mm_set1_epi8('\t'), cr = _mm_set1_epi8('\r');
+  const __m128i c1f = _mm_set1_epi8(0x1F), del = _mm_set1_epi8(0x7F);
+  const __m128i c2 = _mm_set1_epi8(char(0xC2)), ef = _mm_set1_epi8(char(0xEF));
+  uint64_t bits = 0;
+  __m128i any = _mm_setzero_si128();
+  for (int k = 0; k < 4; ++k) {
+    __m128i v = _mm_loadu_si128(reinterpret_cast<const __m128i*>(p + 16 * k));
+    __m128i is_lf = _mm_cmpeq_epi8(v, lf);
+    __m128i control = _mm_cmpeq_epi8(_mm_min_epu8(v, c1f), v);  // v <= 0x1F, unsigned
+    __m128i space = _mm_or_si128(is_lf, _mm_or_si128(_mm_cmpeq_epi8(v, tab), _mm_cmpeq_epi8(v, cr)));
+    __m128i bad = _mm_or_si128(_mm_andnot_si128(space, control),
+                               _mm_or_si128(_mm_cmpeq_epi8(v, del),
+                                            _mm_or_si128(_mm_cmpeq_epi8(v, c2), _mm_cmpeq_epi8(v, ef))));
+    any = _mm_or_si128(any, bad);
+    bits |= uint64_t(uint32_t(_mm_movemask_epi8(is_lf))) << (16 * k);
+  }
+  suspect = _mm_movemask_epi8(any) != 0;
+  return bits;
+#elif defined(TD_YAML_SCAN_NEON)
+  const uint8x16_t lf = vdupq_n_u8('\n'), tab = vdupq_n_u8('\t'), cr = vdupq_n_u8('\r');
+  const uint8x16_t c1f = vdupq_n_u8(0x1F), del = vdupq_n_u8(0x7F), c2 = vdupq_n_u8(0xC2), ef = vdupq_n_u8(0xEF);
+  static const uint8_t weights[16] = {1, 2, 4, 8, 16, 32, 64, 128, 1, 2, 4, 8, 16, 32, 64, 128};
+  const uint8x16_t weight = vld1q_u8(weights);
+  uint8x16_t is_lf[4];
+  uint8x16_t any = vdupq_n_u8(0);
+  for (int k = 0; k < 4; ++k) {
+    uint8x16_t v = vld1q_u8(p + 16 * k);
+    is_lf[k] = vceqq_u8(v, lf);
+    uint8x16_t space = vorrq_u8(is_lf[k], vorrq_u8(vceqq_u8(v, tab), vceqq_u8(v, cr)));
+    uint8x16_t bad = vorrq_u8(vbicq_u8(vcleq_u8(v, c1f), space),
+                              vorrq_u8(vceqq_u8(v, del), vorrq_u8(vceqq_u8(v, c2), vceqq_u8(v, ef))));
+    any = vorrq_u8(any, bad);
+  }
+  uint8x16_t s0 = vpaddq_u8(vandq_u8(is_lf[0], weight), vandq_u8(is_lf[1], weight));
+  uint8x16_t s1 = vpaddq_u8(vandq_u8(is_lf[2], weight), vandq_u8(is_lf[3], weight));
+  s0 = vpaddq_u8(s0, s1);
+  s0 = vpaddq_u8(s0, s0);
+  suspect = vmaxvq_u8(any) != 0;
+  return vgetq_lane_u64(vreinterpretq_u64_u8(s0), 0);
+#else
+  uint64_t bits = 0, flagged = 0;
+  for (size_t i = 0; i < 64; i += 8) {
+    uint64_t x;
+    std::memcpy(&x, p + i, 8);
+    uint64_t lf = equal(x, '\n');
+    uint64_t ws = equal(x, '\t') | lf | equal(x, '\r');
+    flagged |= (below_space(x) & ~ws) | equal(x, 0x7F) | equal(x, 0xC2) | equal(x, 0xEF);
+    bits |= pack(lf) << i;
+  }
+  suspect = flagged != 0;
+  return bits;
+#endif
+}
+
+// The printable scan and LF bitmap over `text`, optionally copying it into `copy` block by block.
+// UTF-8 is already validated. Exact rechecks read `text`, so a partial copy never matters.
+inline void scan(const char* text, size_t n, char* copy, uint64_t* newlines) {
+  const auto* p = reinterpret_cast<const unsigned char*>(text);
+  size_t full = n / 64;
+  for (size_t w = 0; w < full; ++w) {
+    size_t base = w * 64;
+    if (copy) std::memcpy(copy + base, text + base, 64);
+    bool suspect;
+    uint64_t bits = scan64(p + base, suspect);
+    if (suspect)
+      for (size_t k = base; k < base + 64; ++k) printable(p, k, n);
+    if (newlines) newlines[w] = bits;
+  }
+  size_t base = full * 64;
+  if (base < n) {
+    // The tail, padded with spaces (printable, not LF).
+    unsigned char block[64];
+    std::memset(block, ' ', sizeof block);
+    std::memcpy(block, p + base, n - base);
+    if (copy) std::memcpy(copy + base, text + base, n - base);
+    bool suspect;
+    uint64_t bits = scan64(block, suspect);
+    if (suspect)
+      for (size_t k = base; k < n; ++k) printable(p, k, n);
+    if (newlines) newlines[full] = bits;
+  }
+}
+}  // namespace detail
+
 // Validates strict UTF-8 and the c-printable set over `text`, and fills `newlines` (one bit per
 // byte, (length + 63) / 64 words) with the positions of LF bytes. `newlines` may be null.
-// Eight bytes at a time with exact SWAR masks: words holding a C0 control other than TAB/LF/CR,
-// DEL, 0xC2 (C1 controls) or 0xEF (U+FFFE/U+FFFF) are rechecked byte by byte.
+// 64 bytes at a time with SSE2 or NEON compares (SWAR elsewhere): blocks holding a C0 control
+// other than TAB/LF/CR, DEL, 0xC2 (C1 controls) or 0xEF (U+FFFE/U+FFFF) are rechecked byte by byte.
+// UTF-8 errors take precedence over printable errors, which are reported at the first such byte.
 inline void validate(std::string_view text, uint64_t* newlines) {
   simdutf::result r = simdutf::validate_utf8_with_errors(text.data(), text.size());
   if (r.error != simdutf::error_code::SUCCESS) throw syntax_error("invalid UTF-8 in YAML input", r.count);
-  using namespace detail;
-  const auto* p = reinterpret_cast<const unsigned char*>(text.data());
-  size_t n = text.size();
-  size_t words = (n + 63) / 64;
-  for (size_t w = 0; w < words; ++w) {
-    size_t base = w * 64, end = base + 64 < n ? base + 64 : n;
-    uint64_t bits = 0;
-    size_t i = base;
-    for (; i + 8 <= end; i += 8) {
-      uint64_t x;
-      std::memcpy(&x, p + i, 8);
-      uint64_t lf = equal(x, '\n');
-      uint64_t ws = equal(x, '\t') | lf | equal(x, '\r');
-      uint64_t suspect = (below_space(x) & ~ws) | equal(x, 0x7F) | equal(x, 0xC2) | equal(x, 0xEF);
-      bits |= pack(lf) << (i - base);
-      if (suspect)
-        for (size_t k = i; k < i + 8; ++k) printable(p, k, n);
-    }
-    for (; i < end; ++i) {
-      if (p[i] == '\n') bits |= uint64_t(1) << (i - base);
-      printable(p, i, n);
-    }
-    if (newlines) newlines[w] = bits;
-  }
+  detail::scan(text.data(), text.size(), nullptr, newlines);
+}
+
+// validate() of UTF-8 `text` fused with its copy into `out` (the session buffer, capacity >=
+// text.size()): after simdutf's check, one pass reads, copies and scans each block. On a
+// validation error `out` holds only a prefix of the text.
+inline void validate_copy(std::string_view text, char* out, uint64_t* newlines) {
+  simdutf::result r = simdutf::validate_utf8_with_errors(text.data(), text.size());
+  if (r.error != simdutf::error_code::SUCCESS) throw syntax_error("invalid UTF-8 in YAML input", r.count);
+  detail::scan(text.data(), text.size(), out, newlines);
 }
 
 // True when bytes [from, to) hold an LF, by the bitmap from validate().
 inline bool has_newline(const uint64_t* newlines, size_t from, size_t to) {
-  while (from < to) {
-    size_t word = from / 64, bit = from % 64;
-    size_t span = 64 - bit < to - from ? 64 - bit : to - from;
-    uint64_t mask = span == 64 ? ~uint64_t(0) : ((uint64_t(1) << span) - 1) << bit;
-    if (newlines[word] & mask) return true;
-    from += span;
-  }
-  return false;
+  if (from >= to) return false;
+  size_t first = from / 64, last = (to - 1) / 64;
+  uint64_t head = newlines[first] & (~uint64_t(0) << (from % 64));
+  uint64_t tail_mask = ~uint64_t(0) >> (63 - (to - 1) % 64);
+  if (first == last) return (head & tail_mask) != 0;
+  if (head) return true;
+  for (size_t w = first + 1; w < last; ++w)
+    if (newlines[w]) return true;
+  return (newlines[last] & tail_mask) != 0;
 }
 
 // Number of LF bytes in [from, to).

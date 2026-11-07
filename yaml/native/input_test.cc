@@ -5,6 +5,7 @@
 #include "yaml/native/session.h"
 #include "yaml/native/testing.h"
 
+#include <algorithm>
 #include <cstdio>
 #include <string>
 #include <vector>
@@ -167,10 +168,90 @@ void encodings() {
     require(e.code == status_syntax && e.line == 2 && e.column == 5);
   }
 }
+// The 64-byte vector scan (SSE2, NEON or SWAR) and the fused copy against a byte-at-a-time
+// reference: same LF bitmap, same copy, and the same first error (offset and message) for random
+// inputs of every length around block boundaries, with controls, DEL, C1, U+FFFE/U+FFFF and valid
+// look-alikes (U+0085, U+00A0, U+FEFF) planted at random positions.
+struct reference_result {
+  std::vector<uint64_t> bits;
+  bool ok = true;
+  size_t offset = 0;
+  std::string message;
+};
+reference_result reference_scan(const std::string& text) {
+  reference_result r;
+  r.bits.assign((text.size() + 63) / 64 + 1, 0);
+  const auto* p = reinterpret_cast<const unsigned char*>(text.data());
+  for (size_t i = 0; i < text.size(); ++i) {
+    if (p[i] == '\n') r.bits[i / 64] |= uint64_t(1) << (i % 64);
+    if (r.ok) {
+      try {
+        detail::printable(p, i, text.size());
+      } catch (const error& e) {
+        r.ok = false;
+        r.offset = e.offset;
+        r.message = e.what();
+      }
+    }
+  }
+  return r;
+}
+void vector_scan_matches_reference() {
+  const std::vector<std::string> pieces = {"a", " ", "\n", "\t", "\r", "\xC3\xA9", "\xC2\x85", "\xC2\xA0", "\xEF\xBB\xBF",
+                                           "\xE2\x82\xAC", "\xF0\x9F\x98\x80", "\xC2\x80", "\xC2\x9F", "\xEF\xBF\xBE",
+                                           "\xEF\xBF\xBF", "\xEF\xBF\xBD", "\x01", "\x1F", "\x7F", "\x0B", ":", "-"};
+  uint64_t state = 0x2545F4914F6CDD1Dull;
+  auto next = [&] {
+    state ^= state << 13, state ^= state >> 7, state ^= state << 17;
+    return state;
+  };
+  size_t cases = 0, failures = 0;
+  for (int round = 0; round < 4000; ++round) {
+    std::string text;
+    size_t target = next() % 300;
+    bool clean = next() % 3 != 0;  // mostly printable: errors late or never
+    while (text.size() < target) {
+      const std::string& piece = pieces[next() % pieces.size()];
+      bool bad = piece == "\x01" || piece == "\x1F" || piece == "\x7F" || piece == "\x0B" || piece == "\xC2\x80" ||
+                 piece == "\xC2\x9F" || piece == "\xEF\xBF\xBE" || piece == "\xEF\xBF\xBF";
+      if (clean && bad) continue;
+      text += piece;
+    }
+    reference_result expected = reference_scan(text);
+    std::vector<uint64_t> bits(expected.bits.size(), 0);
+    std::string copy(text.size() + 1, '\0');
+    for (int fused = 0; fused < 2; ++fused) {
+      std::fill(bits.begin(), bits.end(), 0);
+      bool ok = true;
+      size_t offset = 0;
+      std::string message;
+      try {
+        if (fused) validate_copy(text, &copy[0], bits.data());
+        else validate(text, bits.data());
+      } catch (const error& e) {
+        ok = false;
+        offset = e.offset;
+        message = e.what();
+      }
+      require(ok == expected.ok);
+      if (ok) {
+        require(bits == expected.bits);
+        if (fused) require(copy.compare(0, text.size(), text) == 0);
+      } else {
+        require(offset == expected.offset && message == expected.message);
+      }
+    }
+    ++cases;
+    failures += !expected.ok;
+  }
+  std::printf("vector_scan_matches_reference: %zu inputs (%zu with a c-printable error)\n", cases, failures);
+  require(failures > 100 && failures < cases);
+}
 }  // namespace
 
 int main() {
   try {
+    vector_scan_matches_reference();
     utf8_strictness();
     printable_set();
     newline_bitmap();

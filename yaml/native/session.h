@@ -67,6 +67,9 @@ class session final {
  public:
   // Large inputs are released before the next decode, as in the JSON session.
   static constexpr size_t retained_input_limit = size_t(1) << 20;
+  // Zeroed bytes after the input text (the first is the NUL terminator): the handler reads short
+  // scalars with fixed 16-byte loads and masks the bytes past their end.
+  static constexpr size_t input_padding = 64;
 
   struct document_view {
     myna_value_view view;
@@ -142,14 +145,15 @@ class session final {
     try {
       encoding e = detect(data, length);
       size_t capacity = utf8_capacity(e, length);
-      if (capacity + 1 > input_capacity_) {
+      if (capacity + input_padding > input_capacity_) {
         free_input();
-        input_ = static_cast<char*>(upstream_->allocate(capacity + 1, alignof(std::max_align_t)));
-        input_capacity_ = capacity + 1;
+        input_ = static_cast<char*>(upstream_->allocate(capacity + input_padding, alignof(std::max_align_t)));
+        input_capacity_ = capacity + input_padding;
       }
-      size_t text = transcode(e, data, length, input_);
+      // UTF-8 is copied by the validation pass itself; UTF-16/32 is transcoded first.
+      const bool utf8 = e == encoding::utf8 || e == encoding::utf8_bom;
+      size_t text = utf8 ? length - bom_length(e) : transcode(e, data, length, input_);
       if (text > UINT32_MAX) throw limit_error("input bytes");
-      input_[text] = 0;
       input_length_ = length;
       tape::block_arena& arena = arena_;
       decode_hint hint = hint_for(text, options_.values, options_.storage);
@@ -157,11 +161,14 @@ class session final {
       size_t words = (text + 63) / 64;
       auto* newlines = static_cast<uint64_t*>(arena.allocate((words ? words : 1) * sizeof(uint64_t), alignof(uint64_t)));
       try {
-        validate(std::string_view(input_, text), newlines);
+        if (utf8) validate_copy(std::string_view(reinterpret_cast<const char*>(data) + bom_length(e), text), input_, newlines);
+        else validate(std::string_view(input_, text), newlines);
       } catch (error& failure) {
+        if (utf8 && text) std::memcpy(input_, data + bom_length(e), text);  // locate() reads the whole prefix
         locate(failure, text);
         throw;
       }
+      std::memset(input_ + text, 0, input_padding);
       const char* pristine = nullptr;
       if (flags & retain_source) {
         char* copy = static_cast<char*>(arena.allocate(text ? text : 1, 1));
