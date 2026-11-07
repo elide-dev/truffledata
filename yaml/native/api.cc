@@ -2,6 +2,7 @@
 
 #include "yaml/native/errors.h"
 #include "yaml/native/session.h"
+#include "yaml/native/stream.h"
 
 #include <cstddef>
 #include <cstring>
@@ -52,6 +53,25 @@ int32_t translate(YamlResult& result) {
   }
 }
 
+void tables(YamlResult& result, const session::document_view& d) {
+  result.yaml_meta = const_cast<uint32_t*>(d.meta.data());
+  result.tags = const_cast<truffledata::yaml::span_entry*>(d.tags.data());
+  result.tag_count = d.tags.size();
+  result.anchors = const_cast<truffledata::yaml::anchor_entry*>(d.anchors.data());
+  result.anchor_count = d.anchors.size();
+  result.alias_targets = const_cast<uint64_t*>(d.alias_targets.data());
+  result.alias_count = d.alias_targets.size();
+  result.strings = reinterpret_cast<uint8_t*>(const_cast<char*>(d.strings.data()));
+  result.strings_length = d.strings.size();
+  result.directives = const_cast<truffledata::yaml::directive_entry*>(d.directives.data());
+  result.directive_count = d.directives.size();
+}
+static_assert(sizeof(truffledata::yaml::span_entry) == sizeof(YamlSpan), "YamlSpan layout");
+static_assert(sizeof(truffledata::yaml::anchor_entry) == sizeof(YamlAnchor) &&
+                  offsetof(truffledata::yaml::anchor_entry, offset) == offsetof(YamlAnchor, offset),
+              "YamlAnchor layout");
+static_assert(sizeof(truffledata::yaml::directive_entry) == sizeof(YamlTagDirective), "YamlTagDirective layout");
+
 void publish_document(YamlResult& result, const session::document_view& d, const session& s) {
   result.view = const_cast<myna_value_view*>(&s.view());
   result.copied_input_bytes = d.input_length;
@@ -64,7 +84,7 @@ void publish_document(YamlResult& result, const session::document_view& d, const
   result.lexical = const_cast<uint64_t*>(d.lexical.data());
   result.lexical_count = d.lexical.size();
   result.key_hashes = const_cast<uint32_t*>(d.hashes.data());
-  result.yaml_meta = const_cast<uint32_t*>(d.meta.data());
+  tables(result, d);
   result.source = reinterpret_cast<uint8_t*>(const_cast<char*>(d.source));
   result.source_length = d.source_length;
   result.yaml_version = d.version;
@@ -73,8 +93,8 @@ void publish_document(YamlResult& result, const session::document_view& d, const
 
 bool valid_options(const YamlOptionsStruct& o) {
   return o.max_depth <= 128 && o.max_input_bytes != 0 && o.schema <= TD_YAML_SCHEMA_YAML_1_1 &&
-         o.duplicate_keys <= 1 && o.merge_keys <= 1 && o.aliases <= 1 && o.unknown_tags <= 1 &&
-         o.version_directive <= 1 && o.reserved == 0;
+         o.duplicate_keys <= TD_YAML_DUPLICATE_KEYS_PAIRS && o.merge_keys <= 1 && o.aliases <= 1 &&
+         o.unknown_tags <= 1 && o.version_directive <= 1 && o.complex_keys <= TD_YAML_COMPLEX_KEYS_PAIRS;
 }
 }  // namespace
 
@@ -99,6 +119,8 @@ extern "C" void* td_yaml_session_create(const void* options) {
     truffledata::yaml::session_options s;
     s.rules.schema = truffledata::yaml::schema(o.schema);
     s.rules.last_wins = o.duplicate_keys == TD_YAML_DUPLICATE_KEYS_LAST_WINS;
+    s.rules.duplicate_keys_pairs = o.duplicate_keys == TD_YAML_DUPLICATE_KEYS_PAIRS;
+    s.rules.complex_keys_pairs = o.complex_keys == TD_YAML_COMPLEX_KEYS_PAIRS;
     s.rules.merge_keys = o.merge_keys != 0;
     s.rules.reject_aliases = o.aliases == TD_YAML_ALIASES_REJECT;
     s.rules.reject_unknown_tags = o.unknown_tags == TD_YAML_UNKNOWN_TAGS_REJECT;
@@ -143,12 +165,7 @@ extern "C" int32_t td_yaml_session_retain(void* handle, void* output) {
   auto& s = *static_cast<session*>(handle);
   if (!s.live()) return TD_YAML_ARGUMENT;
   // Read before retain: the session forgets the document once its storage moves.
-  auto lexical = s.lexical_spans();
-  auto hashes = s.key_hashes();
-  auto meta = s.meta();
-  const char* source = s.source();
-  size_t source_length = s.source_length();
-  uint32_t flags = s.document_flags(), version = s.version();
+  auto d = s.current(s.input_length(), 0);
   size_t input = s.input_length();
   try {
     auto* owner = s.retain();
@@ -160,14 +177,14 @@ extern "C" int32_t td_yaml_session_retain(void* handle, void* output) {
     result.index_retained_bytes = owner->bytes();
     result.index_peak_bytes = owner->bytes();
     result.control_bytes = sizeof(session::retained);
-    result.lexical = const_cast<uint64_t*>(lexical.data());
-    result.lexical_count = lexical.size();
-    result.key_hashes = const_cast<uint32_t*>(hashes.data());
-    result.yaml_meta = const_cast<uint32_t*>(meta.data());
-    result.source = reinterpret_cast<uint8_t*>(const_cast<char*>(source));
-    result.source_length = source_length;
-    result.yaml_version = version;
-    result.document_flags = flags;
+    result.lexical = const_cast<uint64_t*>(d.lexical.data());
+    result.lexical_count = d.lexical.size();
+    result.key_hashes = const_cast<uint32_t*>(d.hashes.data());
+    tables(result, d);
+    result.source = reinterpret_cast<uint8_t*>(const_cast<char*>(d.source));
+    result.source_length = d.source_length;
+    result.yaml_version = d.version;
+    result.document_flags = d.flags;
     return TD_YAML_OK;
   } catch (...) {
     return translate(result);
@@ -179,3 +196,45 @@ extern "C" void td_yaml_session_reset(void* handle) {
 }
 
 extern "C" void td_yaml_session_release(void* handle) { delete static_cast<session*>(handle); }
+
+// ---- Streams (plan Task 3) -------------------------------------------------------------------
+
+extern "C" void* td_yaml_stream_create(void* handle, uint64_t max_document_bytes, uint64_t buffer_bytes) {
+  if (!handle || max_document_bytes == 0 || max_document_bytes > UINT32_MAX) return nullptr;
+  try {
+    return new truffledata::yaml::stream(*static_cast<session*>(handle), size_t(max_document_bytes),
+                                         size_t(buffer_bytes < (uint64_t(1) << 40) ? buffer_bytes : uint64_t(1) << 40));
+  } catch (...) {
+    return nullptr;
+  }
+}
+
+extern "C" uint64_t td_yaml_stream_feed(void* handle, const uint8_t* data, uint64_t length) {
+  if (!handle || (!data && length)) return 0;
+  try {
+    return static_cast<truffledata::yaml::stream*>(handle)->feed(data, size_t(length));
+  } catch (...) {
+    return 0;  // allocation failure: nothing accepted
+  }
+}
+
+extern "C" void td_yaml_stream_finish(void* handle) {
+  if (handle) static_cast<truffledata::yaml::stream*>(handle)->finish();
+}
+
+extern "C" int32_t td_yaml_stream_next(void* handle, void* output) {
+  if (!handle || !aligned(output)) return TD_YAML_ARGUMENT;
+  auto& result = *static_cast<YamlResult*>(output);
+  result = {};
+  auto& st = *static_cast<truffledata::yaml::stream*>(handle);
+  session::document_view d;
+  int32_t status = st.next(&d);
+  if (status == TD_YAML_OK) {
+    publish_document(result, d, st.owner());
+    return status;
+  }
+  if (const auto& e = st.last_error()) message(result, e->text, e->length, e->line, e->column);
+  return status;
+}
+
+extern "C" void td_yaml_stream_release(void* handle) { delete static_cast<truffledata::yaml::stream*>(handle); }

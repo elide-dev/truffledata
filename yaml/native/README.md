@@ -10,14 +10,18 @@ There is no rapidyaml tree, event array or DOM in between. The plan is
 | File | Role |
 | --- | --- |
 | `input.h` | BOM detection, UTF-16/UTF-32 transcoding, strict UTF-8 (simdutf) and c-printable validation, the LF bitmap |
-| `scalars.h` | `resolve(text, style, schema, tag)`: core, JSON and failsafe schemas, explicit core tags, key stringification |
-| `decoder.h` | `yaml::handler`: nodes, `lexical` spans, `key_hashes` and `yaml_meta` per node; duplicate keys, retroactive `[a: b]` mappings |
+| `scalars.h` | `resolve(text, style, schema, tag)`: core, JSON, failsafe and YAML 1.1 schemas, explicit core tags, key stringification |
+| `tags.h` | Tag URIs and kinds; `!!binary` (simdutf base64) and `!!timestamp` validation |
+| `decoder.h` | `yaml::handler`: nodes, `lexical` spans, `key_hashes` and `yaml_meta` per node; anchors, aliases, tags, directives; duplicate keys, retroactive `[a: b]` mappings, the pairs representation |
+| `merge.h` | Merge keys (`<<`), resolved when their mapping closes |
 | `session.h` | Sessions with the JSON session's semantics: decode, borrow, retain, reset |
+| `stream.h` | Multi-document streams: a line splitter over a carry-over buffer, one document decoded at a time |
 | `errors.h` | `yaml::error` (status, line, column, fixed 256-byte message) |
 | `api.h`, `api.cc` | The C ABI (`td_yaml_*`); no exception crosses it |
 | `yaml.seam` | Myna seam (`abi=1`): `YamlResult`, `YamlOptionsStruct` and the session imports |
 | `bench.cc` | Native reference rows (`bazel test //yaml/native:bench --test_output=all`, manual, RBE) |
 | `testing.h`, `reference_tape.h` | Test-only helpers; the probe's reference tape (rapidyaml's integer handler into `myna::value_builder`) |
+| `tape_events.h` | Test-only: renders a document's tape and side tables back to yaml-test-suite events (`//yaml/conformance`, plan Task 8) |
 | `ryml_events.h` | Task 1's test-only event renderer over rapidyaml itself |
 
 ## Build configuration
@@ -42,8 +46,55 @@ Every node has three side-table entries:
   scalars are told apart from single-line ones by the LF bitmap recorded during validation.
 - `key_hashes` (`uint32`, shared with JSON): the ASCII bit, and on keys the low 15 bits of the
   FNV-1a hash and the key's offset from its object, so JSON's position-hinted reads work unchanged.
-- `yaml_meta` (`uint32`, YAML only): style (bits 0-2), anchored (3), alias (4), key kind (5-7),
-  tag index or alias ordinal (8-31).
+- `yaml_meta` (`uint32`, YAML only): style (bits 0-2; 7 marks a pair, below), anchored (3),
+  alias (4), key kind (5-7), tag index or alias ordinal (8-31).
+
+Per-document tables: `tags` (interned URIs without brackets, `tag:yaml.org,2002:str`, `!local`,
+`!`), `anchors` (node and name, in definition order, so an anchor's id is its index),
+`alias_targets` (the anchored node per alias ordinal), `directives` (`%TAG` handle and prefix) and
+the `%YAML` version; names and URIs index one `strings` byte table.
+
+## Anchors, aliases and merge keys
+
+An alias is a NULL node with the alias bit; its ordinal indexes `alias_targets`, which always
+names the anchored node itself, so readers resolve an alias with one load and nothing is expanded
+natively: a billion-laughs document decodes in O(input) (`alias_graph_is_linear`: 10 levels of 10
+aliases are 121 nodes). An alias to an anchor whose collection is still open is "recursive YAML
+alias"; an unbound name is "undefined YAML alias"; a redefined anchor rebinds later aliases; the
+number of aliases is bounded by `maxAliases`. An alias used as a key is a STRING key node with its
+target's key text and the alias bit.
+
+Merge keys (`<<`, with `mergeKeys` or the 1.1 schema) are resolved when the mapping closes: merged
+entries are key copies plus alias-reference values placed at the position of `<<`; explicit keys
+and earlier sources win; inline source mappings move into place. Rewrites (merges, last-wins
+duplicates, the pairs conversion) relocate anchors and alias targets with their nodes and fail when
+they would remove an anchored node.
+
+## Tags and schemas
+
+rapidyaml resolves `!!x`, `%TAG` handles and verbatim tags (`resolve_tags_all`). Core tags are
+enforced (`!!int "12"` is 12, `!!int abc` fails); `!!binary` (base64 through simdutf, in chunks
+without allocation) and `!!timestamp` are validated and stay strings; `!!set`, `!!omap` and
+`!!pairs` keep their natural kinds and their shape is checked when they close; other tags are
+preserved (or rejected with `UnknownTags.REJECT`); `!` forces a string. Under `YAML_1_1` the 1.1
+forms resolve (`on` is true, `0755` is 493, `1:20` is 80, `2001-12-14` is a string with an implicit
+`!!timestamp`) and merge keys are on; `VersionDirective.HONOR` switches a `%YAML 1.1` document to it.
+
+## Streams
+
+`td_yaml_stream_*` split multi-document input at c-forbidden lines (`---`/`...` at column 0
+followed by a space, tab, line break or the end of input) without parsing, then decode each
+document through the session. `%` directive lines belong to the next document only when no
+document is open. The split is pinned against the whole-buffer stream at chunk sizes from 1 byte
+to 1 MB (`stream_split_matches_whole_parse`) and, through the conformance target, on every
+yaml-test-suite case at 1- and 7-byte chunks.
+
+## Pairs
+
+The plan defers complex keys. Internally (`TD_YAML_COMPLEX_KEYS_PAIRS`,
+`TD_YAML_DUPLICATE_KEYS_PAIRS`; not in `YamlOptions` yet) a mapping with a collection key or a
+duplicate key is stored as an ARRAY of 2-element `[key, value]` ARRAYs whose style is 7. The
+yaml-test-suite target uses it to pass every case through this handler.
 
 Keys are STRING nodes holding the resolved key's canonical text (`null` -> `""`, booleans, decimal
 integers, shortest round-trip floats, `.inf`/`-.inf`/`.nan`), so duplicates are detected after
@@ -52,8 +103,9 @@ is in `yaml_meta`, and the source spelling in `lexical`.
 
 Non-finite floats (`.inf`, `-.inf`, `.nan`) are written as raw IEEE F64 bits through
 `tape_writer::nonfinite`, the single entry point; `TD_YAML_DOC_NONFINITE` marks such documents. Myna
-ABI v3 builders and `ValueTape.validate()` reject them until elide-dev/myna#52 adds a descriptor
-flag; then `tape_writer::nonfinite_flag` becomes that flag and nothing else changes.
+descriptor of such a document sets Myna 0.10.0's `MYNA_VALUE_ALLOW_NON_FINITE` (flag bit 0,
+elide-dev/myna#52), which value ABI v3 builders and Myna's Java readers honour; finite documents
+keep flags 0, exactly like JSON tapes.
 
 ## Sessions and memory
 
@@ -67,7 +119,7 @@ After warm-up a session decodes without upstream allocation (pinned by `api_test
 ## Verification
 
 ```sh
-bazel test //yaml/native:all //tape/native:all
+bazel test //yaml/native:all //tape/native:all //yaml/conformance:yaml_test_suite
 bazel test //yaml/native:all //tape/native:all \
   --copt=-fsanitize=address,undefined --copt=-fno-sanitize-recover=all --linkopt=-fsanitize=address,undefined
 bazel test //yaml/native:bench --test_output=all   # manual; RBE

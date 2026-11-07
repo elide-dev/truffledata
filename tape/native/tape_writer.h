@@ -21,10 +21,10 @@ namespace truffledata::tape {
 // paired; the JSON and YAML decoders do so by construction. Until Myna exposes a reserving builder
 // (elide-dev/myna#46, request M2) this writer is the substitute for both formats.
 //
-// Non-finite F64 nodes (YAML .inf/.nan) are written only through nonfinite(): Myna ABI v3 builders
-// and ValueTape.validate() reject them, so floating() keeps refusing them, and a tape that holds
-// them reports it through has_nonfinite(). When Myna's descriptor flag lands (elide-dev/myna#52,
-// request M6), nonfinite_flag becomes that flag and view() publishes it; nothing else changes.
+// Non-finite F64 nodes (YAML .inf/.nan) are written only through nonfinite(). Since Myna 0.10.0
+// (elide-dev/myna#52) value ABI v3 allows them when descriptor flag bit 0,
+// MYNA_VALUE_ALLOW_NON_FINITE, is set; view() sets it exactly when the tape holds one. floating()
+// keeps refusing them, so JSON tapes stay finite-only with flags 0.
 class tape_writer final {
   static constexpr size_t max_regions = 4;
   std::pmr::memory_resource* memory_;
@@ -69,8 +69,8 @@ class tape_writer final {
   }
 
 public:
-  // Descriptor flag for tapes holding non-finite F64 nodes: 0 until elide-dev/myna#52 defines it.
-  static constexpr uint32_t nonfinite_flag = 0;
+  // Descriptor flag for tapes holding non-finite F64 nodes (Myna 0.10.0).
+  static constexpr uint32_t nonfinite_flag = MYNA_VALUE_ALLOW_NON_FINITE;
 
   tape_writer(std::pmr::memory_resource* memory, myna::value_limits limits)
       : memory_(memory), limits_(limits) {
@@ -143,8 +143,9 @@ public:
   myna_value_node* nodes() { return nodes_.data(); }
   const myna_value_node* nodes() const { return nodes_.data(); }
   // Text of a STRING or DECIMAL node (inline, owned or region).
-  std::string_view text_of(size_t index) const {
-    const myna_value_node& node = nodes_[index];
+  std::string_view text_of(size_t index) const { return text_of(nodes_[index]); }
+  // The same for a copy of one of this tape's nodes (the text it names stays valid).
+  std::string_view text_of(const myna_value_node& node) const {
     if (node.tag & MYNA_VALUE_REGION_TEXT) {
       uint32_t region = uint32_t(node.payload >> 32);
       const uint8_t* base = region == 0 ? bytes_.data() : regions_[region - 1].data;

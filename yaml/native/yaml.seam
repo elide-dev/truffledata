@@ -46,7 +46,7 @@ struct YamlOptionsStruct size=80 align=8
   field aliases type=u32 offset=64
   field unknown_tags type=u32 offset=68
   field version_directive type=u32 offset=72
-  field reserved type=u32 offset=76
+  field complex_keys type=u32 offset=76
 end
 struct YamlSpan size=8 align=4
   field offset type=u32 offset=0
@@ -89,4 +89,24 @@ import session_reset symbol=td_yaml_session_reset return=void error=no_failure n
 end
 import session_release symbol=td_yaml_session_release return=void error=no_failure native_leaf=false@explicit_contract
   param session type=ptr<void> nullable=false ownership=borrowed access=read_write
+end
+import stream_create symbol=td_yaml_stream_create return=ptr<void> error=no_failure native_leaf=false@explicit_contract
+  param session type=ptr<void> nullable=false ownership=borrowed access=read_write
+  param max_document_bytes type=u64
+  param buffer_bytes type=u64
+end
+import stream_feed symbol=td_yaml_stream_feed return=u64 error=no_failure native_leaf=false@explicit_contract
+  param stream type=ptr<void> nullable=false ownership=borrowed access=read_write
+  param data type=ptr<u8> nullable=false ownership=borrowed access=read
+  param length type=u64
+end
+import stream_finish symbol=td_yaml_stream_finish return=void error=no_failure native_leaf=false@explicit_contract
+  param stream type=ptr<void> nullable=false ownership=borrowed access=read_write
+end
+import stream_next symbol=td_yaml_stream_next return=i32 error=no_failure native_leaf=false@explicit_contract
+  param stream type=ptr<void> nullable=false ownership=borrowed access=read_write
+  param result type=ptr<void> nullable=false ownership=borrowed access=read_write
+end
+import stream_release symbol=td_yaml_stream_release return=void error=no_failure native_leaf=false@explicit_contract
+  param stream type=ptr<void> nullable=false ownership=borrowed access=read_write
 end

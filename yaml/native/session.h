@@ -73,6 +73,11 @@ class session final {
     table_view<uint64_t> lexical;
     table_view<uint32_t> hashes;
     table_view<uint32_t> meta;
+    table_view<span_entry> tags;
+    table_view<anchor_entry> anchors;
+    table_view<uint64_t> alias_targets;
+    table_view<directive_entry> directives;
+    std::string_view strings;
     const char* source;
     size_t source_length;
     size_t input_length;      // caller bytes
@@ -183,8 +188,7 @@ class session final {
       throw;
     }
     live_ = true;
-    return {handler_.view(), handler_.lexical_spans(), handler_.key_hashes(), handler_.meta(), source_,
-            source_length_, length, memory_.allocations() - before, handler_.document_flags(), handler_.version()};
+    return current(length, memory_.allocations() - before);
   }
 
   bool live() const { return live_; }
@@ -208,6 +212,11 @@ class session final {
   }
 
   // The live document; valid only while live().
+  document_view current(size_t input_length, size_t allocations) const {
+    return {handler_.view(), handler_.lexical_spans(), handler_.key_hashes(), handler_.meta(), handler_.tags(),
+            handler_.anchors(), handler_.alias_targets(), handler_.directives(), handler_.strings(), source_,
+            source_length_, input_length, allocations, handler_.document_flags(), handler_.version()};
+  }
   const myna_value_view& view() const { return handler_.view(); }
   table_view<uint64_t> lexical_spans() const { return handler_.lexical_spans(); }
   table_view<uint32_t> key_hashes() const { return handler_.key_hashes(); }
@@ -233,12 +242,12 @@ class session final {
       static_cast<index_memory*>(user)->deallocate(mem, len ? len : 1, alignof(std::max_align_t));
     });
     cb.set_error_basic([](c4::csubstr msg, c4::yml::ErrorDataBasic const&, void*) {
-      throw syntax_error(std::string_view(msg.str, msg.len));
+      throw syntax_error(std::string_view(msg.str, msg.len)).from_parser();
     });
     cb.set_error_parse([](c4::csubstr msg, c4::yml::ErrorDataParse const& data, void*) {
       auto line = data.ymlloc.line == c4::yml::npos ? 0 : data.ymlloc.line;
       auto column = data.ymlloc.col == c4::yml::npos ? 0 : data.ymlloc.col;
-      throw syntax_error(std::string_view(msg.str, msg.len)).at(line, column);
+      throw syntax_error(std::string_view(msg.str, msg.len)).at(line, column).from_parser();
     });
     cb.set_error_visit([](c4::csubstr msg, c4::yml::ErrorDataVisit const&, void*) {
       throw error(status_internal, std::string_view(msg.str, msg.len));

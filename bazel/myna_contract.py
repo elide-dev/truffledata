@@ -15,7 +15,8 @@ def verify(descriptor, archive):
                              "session_create", "session_decode", "session_decode_small", "session_retain", "session_reset", "session_release"},
         "truffledata_buffa": {"fingerprint", "decode", "release", "typed", "typedReuse", "scalars", "utf8_to_utf16"},
         "truffledata_yaml": {"fingerprint", "release", "session_create", "session_decode", "session_retain",
-                             "session_reset", "session_release"},
+                             "session_reset", "session_release", "stream_create", "stream_feed", "stream_finish",
+                             "stream_next", "stream_release"},
     }[module["name"]]
     functions = module["functions"]
     assert {f["logicalName"] for f in functions} == expected

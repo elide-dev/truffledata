@@ -287,6 +287,7 @@ template<class T> class table_view {
   const T* data_;
   size_t size_;
 public:
+  table_view() : data_(nullptr), size_(0) {}
   table_view(const T* data, size_t size) : data_(data), size_(size) {}
   const T* data() const { return data_; }
   size_t size() const { return size_; }

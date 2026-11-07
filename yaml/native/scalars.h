@@ -12,7 +12,12 @@
 //   JSON (§10.2): only `null`, `true`, `false`, `-?(0|[1-9][0-9]*)` and
 //     `-?(0|[1-9][0-9]*)(\.[0-9]*)?([eE][-+]?[0-9]+)?` resolve; any other plain scalar is an error.
 //   FAILSAFE (§10.1): every scalar is a string.
-//   YAML_1_1: the YAML 1.1 type repository's forms (Task 3).
+//   YAML_1_1 (the YAML 1.1 type repository, https://yaml.org/type/): null `~|null|Null|NULL|`;
+//     bool y/n/yes/no/on/off/true/false in their casings; int `[-+]?0b[01_]+`, `[-+]?0[0-7_]+`
+//     (octal), `[-+]?(0|[1-9][0-9_]*)`, `[-+]?0x[0-9a-fA-F_]+`, `[-+]?[1-9][0-9_]*(:[0-5]?[0-9])+`
+//     (sexagesimal); float `[-+]?([0-9][0-9_]*)?\.[0-9_]*([eE][-+][0-9]+)?` (at least one digit),
+//     `[-+]?[0-9][0-9_]*(:[0-5]?[0-9])+\.[0-9_]*`, the core infinities and NaN; timestamps stay
+//     strings with an implicit !!timestamp tag. `_` separators are dropped before conversion.
 // Only plain scalars resolve implicitly; quoted and block scalars are strings unless tagged.
 //
 // Numbers map onto Myna as JSON does: int64 -> I64, above int64 within uint64 -> U64, larger -> DECIMAL
@@ -60,6 +65,7 @@ struct scalar {
   bool token = false;     // DECIMAL: `text` is the source token itself (already JSON grammar)
   uint64_t bits = 0;      // BOOL/I64/U64/F64 payload
   std::string_view text;  // STRING: the scalar; DECIMAL: JSON-grammar digits
+  tag_kind implicit = tag_kind::none;  // YAML_1_1: an implicit !!timestamp on a string
 };
 
 namespace detail {
@@ -389,6 +395,45 @@ inline scalar special_float(int which) {
   return r;
 }
 
+// YAML 1.1 timestamp grammar:
+//   [0-9]{4}-[0-9]{2}-[0-9]{2}
+//   [0-9]{4}-[0-9]{1,2}-[0-9]{1,2}([Tt]|[ \t]+)[0-9]{1,2}:[0-9]{2}:[0-9]{2}(\.[0-9]*)?
+//     (([ \t]*)Z|[-+][0-9]{1,2}(:[0-9]{2})?)?   (the zone may follow [ \t]*)
+inline bool valid_timestamp(std::string_view s) {
+  size_t i = 0, n = s.size();
+  auto digits = [&](size_t lo, size_t hi) {
+    size_t k = 0;
+    while (i < n && k < hi && digit(s[i])) ++i, ++k;
+    return k >= lo;
+  };
+  auto ch = [&](char c) {
+    if (i < n && s[i] == c) { ++i; return true; }
+    return false;
+  };
+  if (!digits(4, 4) || !ch('-')) return false;
+  size_t month = i;
+  if (!digits(1, 2)) return false;
+  bool short_month = i - month == 1;
+  if (!ch('-')) return false;
+  size_t day = i;
+  if (!digits(1, 2)) return false;
+  bool short_day = i - day == 1;
+  if (i == n) return !short_month && !short_day;  // the date-only form needs two-digit fields
+  if (s[i] == 'T' || s[i] == 't') ++i;
+  else if (s[i] == ' ' || s[i] == '\t') { while (i < n && (s[i] == ' ' || s[i] == '\t')) ++i; }
+  else return false;
+  if (!digits(1, 2) || !ch(':') || !digits(2, 2) || !ch(':') || !digits(2, 2)) return false;
+  if (ch('.')) while (i < n && digit(s[i])) ++i;
+  while (i < n && (s[i] == ' ' || s[i] == '\t')) ++i;
+  if (i == n) return true;
+  if (ch('Z')) return i == n;
+  if (s[i] != '+' && s[i] != '-') return false;
+  ++i;
+  if (!digits(1, 2)) return false;
+  if (ch(':') && !digits(2, 2)) return false;
+  return i == n;
+}
+
 inline scalar null_scalar() {
   scalar r;
   r.kind = MYNA_VALUE_NULL;
@@ -450,6 +495,167 @@ inline scalar core_float_value(std::string_view s, bool& ok, std::pmr::memory_re
   ok = false;
   return {};
 }
+// ---- YAML 1.1 ------------------------------------------------------------------------------
+inline int is_bool11(std::string_view s) {
+  switch (s.size()) {
+    case 1: return s[0] == 'y' || s[0] == 'Y' ? 1 : s[0] == 'n' || s[0] == 'N' ? 0 : -1;
+    case 2:
+      if (s == "on" || s == "On" || s == "ON") return 1;
+      if (s == "no" || s == "No" || s == "NO") return 0;
+      return -1;
+    case 3:
+      if (s == "yes" || s == "Yes" || s == "YES") return 1;
+      if (s == "off" || s == "Off" || s == "OFF") return 0;
+      return -1;
+    default:
+      return is_bool(s);
+  }
+}
+inline bool digit_or_underscore(char c) { return digit(c) || c == '_'; }
+inline bool octal_or_underscore(char c) { return octal(c) || c == '_'; }
+inline bool hex_or_underscore(char c) { return hex(c) || c == '_'; }
+inline bool binary_or_underscore(char c) { return c == '0' || c == '1' || c == '_'; }
+inline bool has_digit(std::string_view s) {
+  for (char c : s) if (c != '_') return true;
+  return false;
+}
+// `s` without `_` separators (a copy in scratch only when there are some).
+inline std::string_view strip(std::string_view s, std::pmr::memory_resource* scratch) {
+  if (s.find('_') == std::string_view::npos) return s;
+  char* out = allocate(scratch, s.size());
+  size_t at = 0;
+  for (char c : s) if (c != '_') out[at++] = c;
+  return {out, at};
+}
+// Sexagesimal `[0-9]+(:[0-5]?[0-9])+` with an optional `.fraction` (separators already removed):
+// the integral value in base 60, or false when `s` does not match. Overflow is a limit error.
+inline bool sexagesimal(std::string_view s, uint64_t& value, std::string_view& fraction) {
+  size_t colon = s.find(':');
+  if (colon == std::string_view::npos || colon == 0) return false;
+  std::string_view head = s.substr(0, colon);
+  if (!all(head, digit)) return false;
+  uint64_t v = 0;
+  for (char c : head) {
+    if (v > (UINT64_MAX - 9) / 10) throw limit_error("sexagesimal integer");
+    v = v * 10 + uint64_t(c - '0');
+  }
+  size_t i = colon;
+  fraction = {};
+  while (i < s.size() && s[i] == ':') {
+    ++i;
+    size_t start = i;
+    while (i < s.size() && digit(s[i]) && i - start < 2) ++i;
+    std::string_view part = s.substr(start, i - start);
+    if (part.empty()) return false;
+    if (part.size() == 2 && part[0] > '5') return false;
+    unsigned p = part.size() == 1 ? unsigned(part[0] - '0') : unsigned((part[0] - '0') * 10 + (part[1] - '0'));
+    if (v > (UINT64_MAX - p) / 60) throw limit_error("sexagesimal integer");
+    v = v * 60 + p;
+  }
+  if (i < s.size()) {
+    if (s[i] != '.') return false;
+    fraction = s.substr(i);
+    for (size_t k = 1; k < fraction.size(); ++k)
+      if (!digit(fraction[k])) return false;
+  }
+  value = v;
+  return true;
+}
+inline scalar signed_integer(uint64_t v, bool negative) {
+  scalar r;
+  r.key = key_kind::integer;
+  if (!negative && v <= uint64_t(INT64_MAX)) { r.kind = MYNA_VALUE_I64; r.bits = v; }
+  else if (!negative) { r.kind = MYNA_VALUE_U64; r.bits = v; }
+  else if (v == 0) {
+    double nz = -0.0;
+    r.kind = MYNA_VALUE_F64;
+    std::memcpy(&r.bits, &nz, sizeof nz);
+  } else if (v <= uint64_t(INT64_MAX) + 1) { r.kind = MYNA_VALUE_I64; r.bits = uint64_t(0) - v; }
+  else throw limit_error("sexagesimal integer");
+  return r;
+}
+inline scalar int11(std::string_view s, bool& ok, std::pmr::memory_resource* scratch) {
+  ok = true;
+  bool negative = !s.empty() && s[0] == '-';
+  size_t sign = !s.empty() && (s[0] == '-' || s[0] == '+') ? 1 : 0;
+  std::string_view body = s.substr(sign);
+  if (body.size() > 2 && body[0] == '0' && body[1] == 'b' && all(body.substr(2), binary_or_underscore) &&
+      has_digit(body.substr(2)))
+    return radix_integer(strip(body.substr(2), scratch), 2, negative, scratch);
+  if (body.size() > 2 && body[0] == '0' && body[1] == 'x' && all(body.substr(2), hex_or_underscore) &&
+      has_digit(body.substr(2)))
+    return radix_integer(strip(body.substr(2), scratch), 16, negative, scratch);
+  if (body.size() > 1 && body[0] == '0' && all(body.substr(1), octal_or_underscore) && has_digit(body.substr(1)))
+    return radix_integer(strip(body.substr(1), scratch), 8, negative, scratch);
+  if (body == "0") return decimal_integer(s, body, negative, scratch);
+  if (!body.empty() && body[0] >= '1' && body[0] <= '9') {
+    if (all(body, digit_or_underscore)) {
+      std::string_view digits = strip(body, scratch);
+      return decimal_integer(digits.data() == body.data() ? s : std::string_view{}, digits, negative, scratch);
+    }
+    std::string_view plain = strip(body, scratch);
+    uint64_t v;
+    std::string_view fraction;
+    if (plain.find('.') == std::string_view::npos && sexagesimal(plain, v, fraction)) return signed_integer(v, negative);
+  }
+  ok = false;
+  return {};
+}
+inline scalar as_float(scalar r) {
+  if (r.kind == MYNA_VALUE_I64 || r.kind == MYNA_VALUE_U64) {
+    double d = r.kind == MYNA_VALUE_I64 ? double(int64_t(r.bits)) : double(r.bits);
+    r.kind = MYNA_VALUE_F64;
+    std::memcpy(&r.bits, &d, sizeof d);
+  }
+  r.key = key_kind::floating;
+  return r;
+}
+inline scalar float11(std::string_view s, bool& ok, std::pmr::memory_resource* scratch) {
+  ok = true;
+  if (int special = is_special_float(s)) return special_float(special);
+  size_t sign = !s.empty() && (s[0] == '-' || s[0] == '+') ? 1 : 0;
+  std::string_view body = s.substr(sign);
+  if (!body.empty() && digit(body[0]) && body.find(':') != std::string_view::npos) {
+    // [0-9][0-9_]*(:[0-5]?[0-9])+\.[0-9_]*
+    std::string_view plain = strip(body, scratch);
+    uint64_t v;
+    std::string_view fraction;
+    if (sexagesimal(plain, v, fraction) && !fraction.empty()) {
+      double d = double(v);
+      if (fraction.size() > 1) {
+        double f = 0;
+        std::from_chars(fraction.data(), fraction.data() + fraction.size(), f);  // ".25"
+        d += f;
+      }
+      if (s[0] == '-') d = -d;
+      scalar r;
+      r.kind = MYNA_VALUE_F64;
+      r.key = key_kind::floating;
+      std::memcpy(&r.bits, &d, sizeof d);
+      return r;
+    }
+    ok = false;
+    return {};
+  }
+  // ([0-9][0-9_]*)?\.[0-9_]*([eE][-+][0-9]+)?, with at least one digit
+  size_t i = 0, n = body.size();
+  bool digits = false;
+  if (i < n && digit(body[i]))
+    while (i < n && digit_or_underscore(body[i])) digits |= body[i] != '_', ++i;
+  if (i >= n || body[i] != '.') { ok = false; return {}; }
+  ++i;
+  while (i < n && digit_or_underscore(body[i])) digits |= body[i] != '_', ++i;
+  if (i < n && (body[i] == 'e' || body[i] == 'E')) {
+    ++i;
+    if (i >= n || (body[i] != '+' && body[i] != '-')) { ok = false; return {}; }
+    ++i;
+    size_t start = i;
+    while (i < n && digit(body[i])) ++i;
+    if (i == start) { ok = false; return {}; }
+  }
+  if (i != n || !digits) { ok = false; return {}; }
+  return float_token(strip(s, scratch), scratch);
+}
 }  // namespace detail
 
 // Implicit resolution of a plain scalar under `s` (no tag). JSON schema errors on non-JSON forms.
@@ -465,8 +671,25 @@ inline scalar resolve_plain(std::string_view text, schema s, std::pmr::memory_re
       if (json_int(text)) return decimal_integer(text, text[0] == '-' ? text.substr(1) : text, text[0] == '-', scratch);
       if (json_float(text)) return float_token(text, scratch);
       throw syntax_error("YAML JSON schema: plain scalar is not a JSON null, boolean or number");
-    case schema::yaml11:
-      throw error(status_argument, "YAML 1.1 schema not available");
+    case schema::yaml11: {
+      if (is_null(text)) return null_scalar();
+      int b = is_bool11(text);
+      if (b >= 0) return bool_scalar(b == 1);
+      char c = text[0];
+      if (digit(c) || c == '-' || c == '+' || c == '.') {
+        bool ok;
+        scalar r = int11(text, ok, scratch);
+        if (ok) return r;
+        r = float11(text, ok, scratch);
+        if (ok) return r;
+        if (valid_timestamp(text)) {
+          r = string_scalar(text);
+          r.implicit = tag_kind::timestamp;
+          return r;
+        }
+      }
+      return string_scalar(text);
+    }
     case schema::core:
     default:
       break;
@@ -494,28 +717,33 @@ inline scalar resolve_plain(std::string_view text, schema s, std::pmr::memory_re
 // Resolution with an explicit tag (any style). Mismatches are syntax errors.
 inline scalar resolve_tagged(std::string_view text, tag_kind tag, schema s, std::pmr::memory_resource* scratch) {
   using namespace detail;
-  (void)s;
+  const bool v11 = s == schema::yaml11;
   bool ok = false;
   scalar r;
   switch (tag) {
     case tag_kind::str:
     case tag_kind::nonspecific:
+    case tag_kind::other:
       return string_scalar(text);
     case tag_kind::null_:
       if (is_null(text)) return null_scalar();
       throw syntax_error("YAML !!null tag on a non-null scalar");
     case tag_kind::bool_: {
-      int b = is_bool(text);
+      int b = v11 ? is_bool11(text) : is_bool(text);
       if (b >= 0) return bool_scalar(b == 1);
       throw syntax_error("YAML !!bool tag on a non-boolean scalar");
     }
     case tag_kind::int_:
-      r = core_int(text, ok, scratch);
+      r = v11 ? int11(text, ok, scratch) : core_int(text, ok, scratch);
       if (ok) return r;
       throw syntax_error("YAML !!int tag on a non-integer scalar");
     case tag_kind::float_:
-      r = core_float_value(text, ok, scratch);
+      r = v11 ? float11(text, ok, scratch) : core_float_value(text, ok, scratch);
       if (ok) return r;
+      if (v11) {
+        r = int11(text, ok, scratch);  // a 1.1 integer read as a float
+        if (ok) return as_float(r);
+      }
       throw syntax_error("YAML !!float tag on a non-float scalar");
     case tag_kind::seq:
     case tag_kind::map:

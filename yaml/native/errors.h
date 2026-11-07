@@ -35,6 +35,7 @@ class error : public std::exception {
   size_t offset;        // byte offset into the prepared input, or npos
   char text[capacity];
   size_t length;
+  bool parser = false;  // raised by rapidyaml itself (through its error callbacks)
 
   error(int32_t code_, std::string_view message, size_t offset_ = npos) : code(code_), offset(offset_) {
     length = message.size() < capacity - 1 ? message.size() : capacity - 1;
@@ -46,6 +47,10 @@ class error : public std::exception {
     for (char c : std::string_view(": ")) if (length < capacity - 1) text[length++] = c;
     for (char c : detail) if (length < capacity - 1) text[length++] = c;
     text[length] = 0;
+    return *this;
+  }
+  error& from_parser() {
+    parser = true;
     return *this;
   }
   error& at(uint64_t line_, uint64_t column_) {

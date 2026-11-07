@@ -120,7 +120,7 @@ void sessions() {
   bad.schema = 4;
   require(td_yaml_session_create(&bad) == nullptr);
   bad = defaults();
-  bad.reserved = 1;
+  bad.complex_keys = 2;
   require(td_yaml_session_create(&bad) == nullptr);
   require(td_yaml_session_create(nullptr) == nullptr);
   require(std::strcmp(reinterpret_cast<const char*>(td_yaml_fingerprint()), TRUFFLEDATA_YAML_SEAM_ABI) == 0);

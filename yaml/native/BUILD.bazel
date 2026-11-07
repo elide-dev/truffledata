@@ -91,8 +91,8 @@ genrule(
     tools = ["@myna//:generator"],
 )
 
-# Header-only decoder core: input preparation, scalar resolution, the rapidyaml event handler and
-# sessions. rapidyaml's defines (assertions off, tab tokens, exception callbacks) reach every
+# Header-only decoder core: input preparation, scalar resolution and tags, the rapidyaml event
+# handler with anchors, aliases and merge keys, sessions and document streams. rapidyaml's defines (assertions off, tab tokens, exception callbacks) reach every
 # translation unit that instantiates ParseEngine<yaml::handler> through @rapidyaml//:ryml.
 cc_library(
     name = "decoder",
@@ -100,10 +100,14 @@ cc_library(
         "decoder.h",
         "errors.h",
         "input.h",
+        "merge.h",
         "scalars.h",
         "session.h",
+        "stream.h",
+        "tags.h",
     ],
     copts = ["-std=c++17"],
+    visibility = ["//yaml:__subpackages__"],
     deps = [
         "//bazel:unicode",
         "//tape/native:tape",
@@ -177,6 +181,16 @@ cc_library(
     deps = ["@myna//:values_headers"],
 )
 
+# Renders decoded documents back to yaml-test-suite events (also used by plan Task 8).
+cc_library(
+    name = "tape_events",
+    testonly = True,
+    hdrs = ["tape_events.h"],
+    copts = ["-std=c++17"],
+    visibility = ["//yaml:__subpackages__"],
+    deps = [":decoder"],
+)
+
 # The probe's reference tape: rapidyaml's integer handler into Myna's value_builder.
 cc_library(
     name = "reference_tape",
@@ -226,6 +240,29 @@ cc_test(
         ":decoder",
         ":reference_tape",
         ":testing",
+    ],
+)
+
+cc_test(
+    name = "semantics_test",
+    srcs = ["semantics_test.cc"],
+    copts = ["-std=c++17"],
+    deps = [
+        ":decoder",
+        ":testing",
+    ],
+)
+
+cc_test(
+    name = "stream_test",
+    size = "medium",
+    srcs = ["stream_test.cc"],
+    args = ["$(rootpaths :testdata)"],
+    copts = ["-std=c++17"],
+    data = [":testdata"],
+    deps = [
+        ":testing",
+        ":truffledata_yaml",
     ],
 )
 

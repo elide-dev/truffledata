@@ -1,0 +1,25 @@
+load("@rules_cc//cc:defs.bzl", "cc_test")
+
+# yaml-test-suite (data-2022-01-17) through TruffleData's own handler (plan Task 3, Review Focus 5):
+# every case decoded by yaml::handler and split by yaml::stream, rendered back to events and
+# compared with test.event under strict markers; error cases must fail; 1- and 7-byte chunked
+# feeding must match the whole buffer. The expected-failures list is empty and exact.
+cc_test(
+    name = "yaml_test_suite",
+    size = "medium",
+    srcs = ["suite_test.cc"],
+    args = [
+        "--expected-failures=$(rootpath expected_failures.txt)",
+        "$(rootpaths @yaml_test_suite//:inputs)",
+    ],
+    copts = ["-std=c++17"],
+    data = [
+        "expected_failures.txt",
+        "@yaml_test_suite//:cases",
+        "@yaml_test_suite//:inputs",
+    ],
+    deps = [
+        "//yaml/native:decoder",
+        "//yaml/native:tape_events",
+    ],
+)

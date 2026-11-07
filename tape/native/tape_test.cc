@@ -57,7 +57,20 @@ void nonfinite_and_decimal() {
   w.end(root, 4);
   require(w.has_nonfinite());
   auto view = w.view();
-  require(view.flags == tape_writer::nonfinite_flag);
+  require(view.flags == MYNA_VALUE_ALLOW_NON_FINITE && tape_writer::nonfinite_flag == 1u);
+  // Myna's own builder accepts the same values only under the flag (Myna 0.10.0).
+  {
+    myna::value_builder builder(&arena, myna::value_limits{}, MYNA_VALUE_ALLOW_NON_FINITE);
+    builder.begin_array();
+    builder.floating(-std::numeric_limits<double>::infinity());
+    builder.floating(std::numeric_limits<double>::quiet_NaN());
+    builder.end();
+    require(builder.view().flags == MYNA_VALUE_ALLOW_NON_FINITE);
+    myna::value_builder strict(&arena);
+    bool rejected = false;
+    try { strict.floating(std::numeric_limits<double>::infinity()); } catch (const std::invalid_argument&) { rejected = true; }
+    require(rejected);
+  }
   double d;
   std::memcpy(&d, &view.nodes[1].payload, sizeof d);
   require(view.nodes[1].tag == MYNA_VALUE_F64 && std::isinf(d) && d < 0);

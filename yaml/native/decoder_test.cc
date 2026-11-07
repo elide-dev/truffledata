@@ -120,8 +120,9 @@ void values() {
   // Syntax errors carry rapidyaml's line and column.
   error e = failure(s, "a: 1\nb: [1, 2\n");
   require(e.code == status_syntax && e.line > 0);
-  // Anchors and aliases arrive with the side tables (Task 3).
-  require(failure(s, "a: &x 1\nb: *x\n").code == status_syntax);
+  // An alias is a NULL node with the alias bit (semantics_test covers the side tables).
+  auto aliased = decode(s, "a: &x 1\nb: *x\n");
+  require(render(aliased.view) == "{\"a\":1,\"b\":null}" && (aliased.meta[4] & meta_alias) && aliased.alias_targets[0] == 2);
   // The JSON and failsafe schemas.
   session json(with(policy{schema::json}));
   require(tape(json, "{\"a\": [1, -0, 1.5, true, null, \"x\"]}") == "{\"a\":[1,f-0,f1.5,true,null,\"x\"]}");
