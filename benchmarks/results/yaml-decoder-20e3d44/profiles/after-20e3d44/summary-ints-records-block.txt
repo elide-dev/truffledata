@@ -1,0 +1,88 @@
+9999 samples
+--- self
+ 15.27%    1527  Engine::_scan_scalar_plain_blck
+  8.25%     825  first_of
+  7.60%     760  Engine::_handle_map_block
+  7.43%     743  first_not_of
+  7.28%     728  reset_with_next_line
+  4.07%     407  ??
+  3.30%     330  _send_str_
+  3.28%     328  sub
+  2.54%     254  _line_progressed
+  2.49%     249  c4::yml::EventHandlerStack<c4::yml::extra::EventHandlerInts, c4::yml::extra::EventHandlerIntsState>::_stack_push
+  2.49%     249  Engine::_maybe_skip_comment
+  2.39%     239  last_not_of
+  2.06%     206  trimr
+  1.93%     193  Engine::_handle_seq_block
+  1.93%     193  _filter_dquoted<c4::yml::FilterProcessorInplaceMidExtending>
+  1.87%     187  empty
+  1.67%     167  _extend_from_combined_newline
+  1.55%     155  _scan_scalar_plain_seq_flow
+  1.39%     139  _peek_next_line
+  1.35%     135  Engine::_scan_scalar_dquot
+  1.17%     117  Engine::_handle_annotations_before_blck_val_scalar
+  1.15%     115  Engine::_handle_annotations_before_blck_key_scalar
+  1.10%     110  addrem_flags
+  0.94%      94  _from_next_line
+  0.86%      86  _handle_seq_flow
+  0.79%      79  reset_before_pop
+  0.76%      76  _line_ended
+  0.72%      72  range
+  0.69%      69  Engine::_is_valid_start_scalar_plain_flow
+  0.66%      66  has_any
+  0.63%      63  Engine::_handle_indentation_pop
+  0.58%      58  _finished_file
+  0.58%      58  _finished_line
+  0.58%      58  _handle_flow_skip_whitespace
+  0.50%      50  _maybe_scan_following_colon
+  0.46%      46  _scan_scalar_plain_map_blck
+  0.46%      46  _send_flag_only_
+  0.36%      36  _maybe_filter_val_scalar_plain
+  0.36%      36  copy
+  0.32%      32  Engine::_handle_indentation_pop_from_block_map
+--- inclusive
+100.00%    9999  main
+ 99.86%    9985  
+ 99.86%    9985  operator
+ 99.17%    9916  __invoke<
+ 99.17%    9916  __call<
+ 99.17%    9916  __invoke_r<unsigned long, 
+ 99.17%    9916  std::__1::__function::__func<main::$_1, unsigned long 
+ 98.65%    9864  yaml::reference::ints_tape::scan
+ 97.75%    9774  Engine::parse_in_place_ev
+ 71.64%    7163  Engine::_handle_map_block
+ 33.01%    3301  Engine::_scan_scalar_plain_blck
+ 26.96%    2696  _scan_scalar_plain_map_blck
+ 14.48%    1448  Engine::_handle_seq_block
+ 12.71%    1271  _peek_next_line
+  9.68%     968  _scan_line
+  9.55%     955  reset_with_next_line
+  8.25%     825  first_of
+  7.43%     743  first_not_of
+  7.29%     729  Engine::_maybe_skip_comment
+  6.76%     676  _handle_seq_flow
+  5.45%     545  _push
+  5.43%     543  _scan_scalar_plain_seq_blck
+  5.38%     538  _line_progressed
+  4.07%     407  ??
+  3.94%     394  trimr
+  3.62%     362  _maybe_filter_val_scalar_dquot
+  3.43%     343  _send_str_
+  3.42%     342  Engine::_filter_scalar_dquot
+  3.38%     338  filter_scalar_dquoted_in_place
+  3.35%     335  _filter_dquoted<c4::yml::FilterProcessorInplaceMidExtending>
+  3.28%     328  sub
+  3.18%     318  _maybe_scan_following_colon
+  3.06%     306  begin_map_val_block
+  2.80%     280  c4::yml::EventHandlerStack<c4::yml::extra::EventHandlerInts, c4::yml::extra::EventHandlerIntsState>::_stack_push
+  2.40%     240  _scan_scalar_plain_seq_flow
+  2.39%     239  last_not_of
+  2.06%     206  _from_next_line
+  1.90%     190  _finished_line
+  1.87%     187  empty
+  1.69%     169  set_val_scalar_plain
+  1.67%     167  _extend_from_combined_newline
+  1.63%     163  set_key_scalar_plain
+  1.52%     152  Engine::_handle_indentation_pop
+  1.42%     142  begin_seq_val_flow
+  1.42%     142  c4::yml::extra::EventHandlerInts::begin_seq_val_block
