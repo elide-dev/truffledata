@@ -282,11 +282,19 @@ data_java_library(
     srcs = [
         "ComparisonLanguage.java",
         "JsonComparison.java",
+        "JsonCompetitors.java",
     ],
     deps = [
         ":json_fixture",
         "//core",
         "//json",
+        # Benchmark-only JSON competitors (the JSON scoreboard; MODULE.bazel).
+        "@maven//:com_alibaba_fastjson2_fastjson2",
+        "@maven//:com_dslplatform_dsl_json",
+        "@maven//:com_fasterxml_jackson_core_jackson_core",
+        "@maven//:com_fasterxml_jackson_core_jackson_databind",
+        "@maven//:com_jsoniter_jsoniter",
+        "@maven//:org_simdjson_simdjson_java",
         "@maven//:com_google_code_gson_gson",
         "@maven//:org_graalvm_polyglot_polyglot",
         "@maven//:org_graalvm_truffle_truffle_api",
@@ -294,34 +302,49 @@ data_java_library(
     ],
 )
 
-native_image(
-    # Keep JsonComparison build-time initialized: its static helpers must be JIT eligible.
-    name = "json_svm",
-    testonly = True,
-    cc_deps = ["//json/native:svm"],
-    exec_properties = {
-        "EstimatedCPU": "8",
-        "EstimatedMemory": "24GB",
-    },
-    executable_name = "json-comparison",
-    extra_args = [
-        "--gc=serial",
-        "--parallelism=8",
-        "-march=compatibility",
-        "--initialize-at-build-time=dev.elide.truffledata",
-        "--add-exports=org.graalvm.truffle.runtime/com.oracle.truffle.runtime=ALL-UNNAMED",
-        "-H:+UnlockExperimentalVMOptions",
-    ] + TRUFFLE_JIT_CHECKS + ["-H:-UnlockExperimentalVMOptions"],
-    graalvm_sdk = "@graalvm_linux_amd64//:gvm",
-    main_class = "dev.elide.truffledata.comparison.JsonComparison",
-    optimization_mode = "2",
-    tags = ["manual"],
-    target_compatible_with = [
-        "@platforms//os:linux",
-        "@platforms//cpu:x86_64",
-    ],
-    deps = [":json_comparison"],
-)
+# The repository's portable image (-march=compatibility), and an x86-64-v3 variant for the JSON
+# scoreboard (simdjson-java needs 256-bit vector species; every engine shares that image's flags).
+[
+    native_image(
+        # Keep JsonComparison build-time initialized: its static helpers must be JIT eligible.
+        name = name,
+        testonly = True,
+        cc_deps = ["//json/native:svm"],
+        exec_properties = {
+            "EstimatedCPU": "8",
+            "EstimatedMemory": "24GB",
+        },
+        executable_name = executable,
+        extra_args = [
+            "--gc=serial",
+            "--parallelism=8",
+            march,
+            # simdjson-java (a JSON competitor) uses the Vector API; competitor singletons and the
+            # vector species are chosen at run time on the measuring CPU.
+            "--add-modules=jdk.incubator.vector",
+            "--initialize-at-build-time=dev.elide.truffledata",
+            "--initialize-at-run-time=dev.elide.truffledata.comparison.JsonCompetitors",
+            # fastjson2's own native-image.properties initializes its core classes at build time,
+            # which puts instances of its other classes in the image heap: initialize all of it.
+            "--initialize-at-build-time=com.alibaba.fastjson2",
+            "--add-exports=org.graalvm.truffle.runtime/com.oracle.truffle.runtime=ALL-UNNAMED",
+            "-H:+UnlockExperimentalVMOptions",
+        ] + TRUFFLE_JIT_CHECKS + ["-H:-UnlockExperimentalVMOptions"],
+        graalvm_sdk = "@graalvm_linux_amd64//:gvm",
+        main_class = "dev.elide.truffledata.comparison.JsonComparison",
+        optimization_mode = "2",
+        tags = ["manual"],
+        target_compatible_with = [
+            "@platforms//os:linux",
+            "@platforms//cpu:x86_64",
+        ],
+        deps = [":json_comparison"],
+    )
+    for name, executable, march in [
+        ("json_svm", "json-comparison", "-march=compatibility"),
+        ("json_svm_v3", "json-comparison-v3", "-march=x86-64-v3"),
+    ]
+]
 
 sh_test(
     name = "json_native_smoke",
@@ -380,7 +403,12 @@ native_image(
         "--enable-monitoring=jfr",
         "--parallelism=8",
         "-march=compatibility",
+        "--add-modules=jdk.incubator.vector",
         "--initialize-at-build-time=dev.elide.truffledata",
+        "--initialize-at-run-time=dev.elide.truffledata.comparison.JsonCompetitors",
+        # fastjson2's own native-image.properties initializes its core classes at build time, which
+        # puts instances of its other classes in the image heap: initialize the whole library then.
+        "--initialize-at-build-time=com.alibaba.fastjson2",
         "--add-exports=org.graalvm.truffle.runtime/com.oracle.truffle.runtime=ALL-UNNAMED",
         "-H:+UnlockExperimentalVMOptions",
         "-H:-DeleteLocalSymbols",

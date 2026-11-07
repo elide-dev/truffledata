@@ -108,6 +108,35 @@ public final class JsonComparison {
   static final List<String> STREAMS =
       List.of("gson-stream-lines", "simdjson-stream-java", "simdjson-stream-interop");
   static final List<String> STAGES = List.of("ingest", "read-aot", "interpret", "peak");
+  // Benchmark-only JVM JSON libraries on the generic workload (the JSON scoreboard; see
+  // JsonCompetitors, which is initialized at run time). Tree engines have every stage; streaming
+  // and single-buffer parsers measure ingest only.
+  static final List<String> COMPETITORS =
+      List.of(
+          "jackson-tree",
+          "jackson-stream",
+          "fastjson2-tree",
+          "dsljson-map",
+          "jsoniter-any",
+          "simdjson-java");
+  static final List<String> COMPETITORS_INGEST_ONLY = List.of("jackson-stream", "simdjson-java");
+
+  /**
+   * One competitor engine, created at run time by {@link JsonCompetitors#engine}. Compiled reads
+   * call it through this interface: a static call into the run-time-initialized JsonCompetitors
+   * would put a class-initialization check in the guest graph, which SVM runtime compilation
+   * rejects (the whole read helper would then stay AOT code).
+   */
+  interface Competitor {
+    long read(Object tree);
+
+    long ingest(byte[] input) throws Exception;
+  }
+
+  /** Keeps a parsed tree reachable so the ingest stage cannot drop it. */
+  static void retain(Object tree) {
+    retained = tree;
+  }
 
   public static void main(String[] args) throws Exception {
     if (args.length == 1 && args[0].equals("--smoke")) {
@@ -117,6 +146,18 @@ public final class JsonComparison {
       run(SESSION_JAVA, "ingest", true, true);
       run(SESSION_TRUFFLE, "ingest", true, true);
       for (String engine : STREAMS) run(engine, "ingest", true, true);
+      for (String engine : COMPETITORS) {
+        if (!JsonCompetitors.available(engine)) {
+          // simdjson-java in a -march=compatibility image (no 256-bit vector species).
+          System.out.println("SKIP " + engine + ": unavailable in this image");
+          continue;
+        }
+        for (String stage : STAGES)
+          if (!COMPETITORS_INGEST_ONLY.contains(engine) || stage.equals("ingest")) run(engine, stage, true, true);
+      }
+    } else if (args.length == 2 && args[0].equals("--available")) {
+      // Exit status 0 when the engine can run here (json_measure.py asks before measuring).
+      System.exit(!COMPETITORS.contains(args[1]) || JsonCompetitors.available(args[1]) ? 0 : 3);
     } else {
       if (args.length != 3) throw new IllegalArgumentException("engine stage time|memory");
       run(args[0], args[1], args[2].equals("memory"), false);
@@ -129,7 +170,8 @@ public final class JsonComparison {
         || engine.equals(WALK)
         || engine.equals(SESSION_JAVA)
         || engine.equals(SESSION_TRUFFLE)
-        || STREAMS.contains(engine)) {
+        || STREAMS.contains(engine)
+        || COMPETITORS.contains(engine)) {
       generic(engine, stage, memory, smoke);
       return;
     }
@@ -213,11 +255,16 @@ public final class JsonComparison {
                     ? GenericReads.SESSION_TRUFFLE
                     : STREAMS.contains(engine)
                         ? GenericReads.STREAM_GSON + STREAMS.indexOf(engine)
-                        : GENERIC.indexOf(engine);
+                        : COMPETITORS.contains(engine) ? GenericReads.COMPETITOR : GENERIC.indexOf(engine);
     if (mode < 0) throw new IllegalArgumentException("engine");
-    boolean streaming = mode >= GenericReads.STREAM_GSON;
-    if ((mode == GenericReads.SESSION_JAVA || mode == GenericReads.SESSION_TRUFFLE || streaming) && !ingest)
-      throw new IllegalArgumentException(engine + " measures ingest only");
+    boolean streaming = mode >= GenericReads.STREAM_GSON && mode <= GenericReads.STREAM_INTEROP;
+    boolean ingestOnly =
+        mode == GenericReads.SESSION_JAVA
+            || mode == GenericReads.SESSION_TRUFFLE
+            || streaming
+            || COMPETITORS_INGEST_ONLY.contains(engine);
+    if (ingestOnly && !ingest) throw new IllegalArgumentException(engine + " measures ingest only");
+    boolean foreign = mode == GenericReads.GSON || mode == GenericReads.STREAM_GSON || mode == GenericReads.COMPETITOR;
     try (var context = context(peak)) {
       context.initialize("td-compare");
       context.enter();
@@ -227,7 +274,7 @@ public final class JsonComparison {
           new GenericReads(
               engine,
               mode,
-              mode == GenericReads.GSON || mode == GenericReads.STREAM_GSON ? null : JsonSession.open());
+              foreign ? null : JsonSession.open());
       try {
         byte[][] inputs = new byte[ROWS][];
         Object[] rows = new Object[ROWS];
@@ -235,9 +282,12 @@ public final class JsonComparison {
         for (int i = 0; i < ROWS; i++) {
           inputs[i] = JsonFixture.document(i);
           expected += mode == GenericReads.WALK ? JsonFixture.walkChecksum(i) : JsonFixture.checksum(i);
-          if (mode == GenericReads.GSON
+          if (mode == GenericReads.COMPETITOR && !ingestOnly) {
+            rows[i] = JsonCompetitors.parse(engine, inputs[i]);
+          } else if (mode == GenericReads.GSON
               || mode == GenericReads.SESSION_JAVA
               || mode == GenericReads.SESSION_TRUFFLE
+              || mode == GenericReads.COMPETITOR
               || streaming) {
             // The session cell measures ingest only; rows exist for the shared sampler.
             rows[i] = JsonFixture.gsonParse(inputs[i]);
@@ -422,9 +472,12 @@ public final class JsonComparison {
     static final int SESSION_TRUFFLE = 6;
     // STREAMS order: gson-stream-lines, simdjson-stream-java, simdjson-stream-interop.
     static final int STREAM_GSON = 7, STREAM_JAVA = 8, STREAM_INTEROP = 9;
+    // A JsonCompetitors engine, named by `engine`.
+    static final int COMPETITOR = 10;
     private static final byte[] NDJSON = JsonFixture.ndjson(ROWS);
     private final @Nullable JsonStream stream;
     private final String name;
+    private final @Nullable Competitor competitor;
     private final int mode;
     private final @Nullable JsonSession session;
     private final JsonFixture.CountingSink counting = new JsonFixture.CountingSink();
@@ -437,9 +490,13 @@ public final class JsonComparison {
     GenericReads(String engine, int mode, @Nullable JsonSession session) {
       super(ComparisonLanguage.current());
       this.name = "GenericReads[" + engine + "]";
+      this.competitor = mode == COMPETITOR ? JsonCompetitors.engine(engine) : null;
       this.mode = mode;
       this.session = session;
-      this.stream = mode >= STREAM_JAVA ? Objects.requireNonNull(session).stream(JsonStreamOptions.DEFAULT) : null;
+      this.stream =
+          mode == STREAM_JAVA || mode == STREAM_INTEROP
+              ? Objects.requireNonNull(session).stream(JsonStreamOptions.DEFAULT)
+              : null;
     }
 
     /**
@@ -511,6 +568,8 @@ public final class JsonComparison {
       switch (mode) {
         case GSON:
           return JsonFixture.gsonRead(doc);
+        case COMPETITOR:
+          return Objects.requireNonNull(competitor).read(doc);
         case JAVA:
           {
             // Export the retained index into fresh host objects, as a JSON.parse sink would.
@@ -528,7 +587,8 @@ public final class JsonComparison {
     }
 
     /** Parse or decode one document, consume it like {@link #value}, and release native storage. */
-    long ingest(byte[] input) {
+    long ingest(byte[] input) throws Exception {
+      if (mode == COMPETITOR) return Objects.requireNonNull(competitor).ingest(input);
       if (mode == GSON) {
         Object tree = JsonFixture.gsonParse(input);
         retained = tree;

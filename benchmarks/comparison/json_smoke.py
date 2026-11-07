@@ -32,6 +32,12 @@ RULES = {
     'GenericReads[simdjson-generic-java]': (1000, 2, None),
     # Stock baseline: one boundary call per document into Gson's tree API.
     'GenericReads[gson-tree]': (1000, 1, 0),
+    # Competitor tree engines (the JSON scoreboard): one boundary call per document into each
+    # library's own tree API, like Gson's. Streaming and single-buffer engines are ingest-only.
+    'GenericReads[jackson-tree]': (1000, 1, 0),
+    'GenericReads[fastjson2-tree]': (1000, 1, 0),
+    'GenericReads[dsljson-map]': (1000, 1, 0),
+    'GenericReads[jsoniter-any]': (1000, 1, 0),
 }
 # Java bytes per document in the compiled read loop. 1.0 is the harness's own per-call boxing,
 # identical for every peak cell. JavaSink budgets are fixed in JSON.md: every JavaSink cell shares
