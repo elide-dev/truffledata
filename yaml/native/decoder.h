@@ -249,6 +249,9 @@ class handler : public c4::yml::EventHandlerStack<handler, handler_state> {
   void start(block_arena* memory, char* input, size_t length, const uint64_t* newlines, const char* pristine,
              const policy& rules, const myna::value_limits& limits, size_t node_hint, size_t byte_hint) {
     clear();
+    // Templates point into the previous input: never carried across decodes.
+    for (auto& level : templates_)
+      for (key_template& t : level) t.count = 0;
     memory_ = memory;
     input_ = input;
     length_ = length;
@@ -391,30 +394,34 @@ class handler : public c4::yml::EventHandlerStack<handler, handler_state> {
     value(m_src.first(0), scalar_style::plain, true);
     enable_<c4::yml::VAL | c4::yml::VAL_PLAIN | c4::yml::VALNIL>();
   }
-  void set_key_scalar_plain(c4::csubstr s) {
+  [[gnu::always_inline]] void set_key_scalar_plain(c4::csubstr s) {
     short_text w;
     if (!(short_plain(s, w) && key_fast(s, w))) key(s, scalar_style::plain, false);
     enable_<c4::yml::KEY | c4::yml::KEY_PLAIN>();
   }
-  void set_val_scalar_plain(c4::csubstr s) {
+  [[gnu::always_inline]] void set_val_scalar_plain(c4::csubstr s) {
     short_text w;
     if (!(short_plain(s, w) && value_fast(s, w))) value(s, scalar_style::plain, false);
     enable_<c4::yml::VAL | c4::yml::VAL_PLAIN>();
   }
   void set_key_scalar_dquoted(c4::csubstr s) {
-    key(s, scalar_style::double_quoted, false);
+    short_text w;
+    if (!(short_quoted(s, w) && key_quoted_fast(s, w, scalar_style::double_quoted))) key(s, scalar_style::double_quoted, false);
     enable_<c4::yml::KEY | c4::yml::KEY_DQUO>();
   }
   void set_val_scalar_dquoted(c4::csubstr s) {
-    value(s, scalar_style::double_quoted, false);
+    short_text w;
+    if (!(short_quoted(s, w) && value_quoted_fast(s, w, scalar_style::double_quoted))) value(s, scalar_style::double_quoted, false);
     enable_<c4::yml::VAL | c4::yml::VAL_DQUO>();
   }
   void set_key_scalar_squoted(c4::csubstr s) {
-    key(s, scalar_style::single_quoted, false);
+    short_text w;
+    if (!(short_quoted(s, w) && key_quoted_fast(s, w, scalar_style::single_quoted))) key(s, scalar_style::single_quoted, false);
     enable_<c4::yml::KEY | c4::yml::KEY_SQUO>();
   }
   void set_val_scalar_squoted(c4::csubstr s) {
-    value(s, scalar_style::single_quoted, false);
+    short_text w;
+    if (!(short_quoted(s, w) && value_quoted_fast(s, w, scalar_style::single_quoted))) value(s, scalar_style::single_quoted, false);
     enable_<c4::yml::VAL | c4::yml::VAL_SQUO>();
   }
   void set_key_scalar_literal(c4::csubstr s) {
@@ -513,6 +520,7 @@ class handler : public c4::yml::EventHandlerStack<handler, handler_state> {
  private:
   enum class frame_kind : uint8_t { seq, map, pair };
   static constexpr uint32_t no_anchor = UINT32_MAX;
+  static constexpr uint8_t no_template = 0xFF;
   static constexpr size_t none = SIZE_MAX;
 
   struct frame {
@@ -524,6 +532,8 @@ class handler : public c4::yml::EventHandlerStack<handler, handler_state> {
     tag_kind tag = tag_kind::none;
     size_t merge = none;      // node of the `<<` key
     key_set keys;
+    uint8_t follow = no_template;  // key template this mapping's keys have matched so far
+    uint8_t record = no_template;  // key template slot recording this mapping's keys
   };
   // The last scalar or alias written into a sequence, kept so `[a: b]` can turn it into a key.
   struct last_value {
@@ -756,6 +766,17 @@ class handler : public c4::yml::EventHandlerStack<handler, handler_state> {
     uint32_t hash;
   };
   static constexpr size_t hash_cache_slots = 256;
+  static constexpr size_t template_levels = 8;
+  static constexpr uint32_t template_keys = 16;
+  struct template_key {
+    uint64_t lo, hi;
+    uint32_t length, hash;
+    const char* data;
+  };
+  struct key_template {
+    uint32_t count = 0;
+    template_key keys[template_keys];
+  };
 
   static constexpr uint64_t word(const char* s, size_t n) {
     uint64_t w = 0;
@@ -769,12 +790,40 @@ class handler : public c4::yml::EventHandlerStack<handler, handler_state> {
     uint64_t lo, hi;
     std::memcpy(&lo, s.str, 8);
     std::memcpy(&hi, s.str + 8, 8);
-    lo &= low_bytes(s.len);
-    hi &= low_bytes(s.len > 8 ? s.len - 8 : 0);
-    // Masked bytes are zero, neither space nor LF.
-    if ((detail::equal(lo, ' ') | detail::equal(lo, '\n') | detail::equal(hi, ' ') | detail::equal(hi, '\n')) != 0)
-      return false;
-    w = {lo, hi};
+    const uint64_t lo_mask = low_bytes(s.len), hi_mask = low_bytes(s.len > 8 ? s.len - 8 : 0);
+    // Any byte <= 0x20 (space, LF, also TAB and CR, which only send a scalar to the general path)
+    // within the scalar: exact for "any" (a borrow only follows a true hit in a lower byte).
+    constexpr uint64_t ones = 0x0101010101010101ull, highs = 0x8080808080808080ull;
+    if ((((lo - ones * 0x21) & ~lo & highs) & lo_mask) | (((hi - ones * 0x21) & ~hi & highs) & hi_mask)) return false;
+    w = {lo & lo_mask, hi & hi_mask};
+    return true;
+  }
+
+  // An unsigned decimal of 1-8 digits (bytes [0, n) of `lo`, the rest zero), converted with SWAR
+  // multiplies: digits are checked a word at a time, padded with leading '0's and folded in pairs.
+  [[gnu::always_inline]] static bool decimal8(uint64_t lo, size_t n, uint64_t& value) {
+    const uint64_t shift = 8 * (8 - n);
+    // Leading zeros fill the low bytes (the first characters); the digits move to the high bytes.
+    uint64_t x = n == 8 ? lo : (lo << shift) | (0x3030303030303030ull & ((uint64_t(1) << shift) - 1));
+    if (((x + 0x4646464646464646ull) | (x - 0x3030303030303030ull)) & 0x8080808080808080ull) return false;
+    x -= 0x3030303030303030ull;
+    x = (x * 10) + (x >> 8);
+    x = (((x & 0x000000FF000000FFull) * 0x000F424000000064ull) +
+         (((x >> 16) & 0x000000FF000000FFull) * 0x0000271000000001ull)) >> 32;
+    value = x;
+    return true;
+  }
+
+  // Quoted scalars are strings under every schema; without a retained source their span is 0. A
+  // short one still in the input (rapidyaml filtered it in place, so it did not grow) is loaded the
+  // same way as a short plain scalar.
+  [[gnu::always_inline]] bool short_quoted(c4::csubstr s, short_text& w) const {
+    if (!fast_paths_ || pending_tag_ != tag_kind::none || has_pending_anchor_ || pristine_) return false;
+    if (s.len == 0 || s.len > 16 || !in_input(s.str, s.len)) return false;
+    uint64_t lo, hi;
+    std::memcpy(&lo, s.str, 8);
+    std::memcpy(&hi, s.str + 8, 8);
+    w = {lo & low_bytes(s.len), hi & low_bytes(s.len > 8 ? s.len - 8 : 0)};
     return true;
   }
 
@@ -802,16 +851,113 @@ class handler : public c4::yml::EventHandlerStack<handler, handler_state> {
 
   [[gnu::always_inline]] bool key_fast(c4::csubstr s, short_text w) {
     if (C4_UNLIKELY(!depth_)) return false;
-    frame& f = frames_[depth_ - 1];
+    const size_t level = depth_ - 1;
+    frame& f = frames_[level];
     if (f.kind != frame_kind::map || f.pairs || !core_string(w.lo, s.len)) return false;
     if (rules_.merge_keys && s.len == 2 && w.lo == word("<<", 2)) return false;
-    const uint32_t hash = cached_hash(w, s.str, s.len);
+    uint32_t hash;
+    if (f.follow != no_template) {
+      // Following a template: key i equal to the template's key i keeps the keys distinct.
+      const key_template& t = templates_[level][f.follow];
+      const size_t i = size_t(f.count);
+      if (C4_LIKELY(i < t.count && t.keys[i].lo == w.lo && t.keys[i].hi == w.hi && t.keys[i].length == s.len)) {
+        hash = t.keys[i].hash;
+        place_fast_key(f, s, w, hash);
+        return true;
+      }
+      leave_template(f);
+    } else if (f.count == 0 && level < template_levels && !rules_.last_wins) {
+      for (uint8_t slot = 0; slot < 2; ++slot) {
+        const key_template& t = templates_[level][slot];
+        if (t.count && t.keys[0].lo == w.lo && t.keys[0].hi == w.hi && t.keys[0].length == s.len) {
+          f.follow = slot;
+          place_fast_key(f, s, w, t.keys[0].hash);
+          return true;
+        }
+      }
+      f.record = template_next_[level];
+      templates_[level][f.record].count = 0;
+    }
+    hash = cached_hash(w, s.str, s.len);
     if (C4_UNLIKELY(!f.keys.insert(memory_, hash, std::string_view(s.str, s.len)))) return false;
+    if (f.record != no_template) {
+      key_template& t = templates_[level][f.record];
+      if (t.count == f.count && t.count < template_keys) t.keys[t.count++] = {w.lo, w.hi, uint32_t(s.len), hash, s.str};
+      else drop_record(f);
+    }
+    place_fast_key(f, s, w, hash);
+    return true;
+  }
+
+  [[gnu::always_inline]] void place_fast_key(frame& f, c4::csubstr s, short_text w, uint32_t hash) {
     const bool plain = ((w.lo | w.hi) & 0x8080808080808080ull) == 0;
     const size_t node = writer_->node_count();
     writer_->string_words(w.lo, w.hi, uint32_t(s.len));
     side(pack(size_t(s.str - input_), s.len), tape::key_meta(hash, node - f.node, plain), 0);
     ++f.count;
+  }
+
+  // ---- key templates ----------------------------------------------------------------------------
+  // Mappings at one nesting level usually repeat the same keys in one or two orders (records). Each
+  // of the first template_levels levels keeps the keys of the last two mappings whose keys all took
+  // the fast path (at most 16, distinct by the duplicate check). A new mapping whose first key equals
+  // a template's first key follows it: while key i equals the template's key i (same bytes and
+  // length) the keys so far are a copy of a distinct prefix, so neither the duplicate check nor the
+  // hash is needed; the hash comes from the template. On the first difference (or any key taking
+  // the general path) the matched prefix is inserted into the mapping's key set from the template
+  // (same bytes) and decoding continues as usual. Templates never outlive a decode.
+  void leave_template(frame& f) {
+    if (f.follow != no_template) {
+      const key_template& t = templates_[depth_index(f)][f.follow];
+      for (size_t k = 0; k < size_t(f.count); ++k)
+        f.keys.insert(memory_, t.keys[k].hash, std::string_view(t.keys[k].data, t.keys[k].length));
+      f.follow = no_template;
+    }
+    drop_record(f);
+  }
+  void drop_record(frame& f) {
+    if (f.record != no_template) {
+      templates_[depth_index(f)][f.record].count = 0;
+      f.record = no_template;
+    }
+  }
+  // A recorded mapping closes: its template becomes the newest at its level.
+  void finish_template(frame& f) {
+    const size_t level = depth_index(f);
+    if (templates_[level][f.record].count == f.count && f.count) template_next_[level] = uint8_t(f.record ^ 1);
+    else templates_[level][f.record].count = 0;
+    f.record = no_template;
+  }
+  size_t depth_index(const frame& f) const { return size_t(&f - frames_); }
+
+  [[gnu::always_inline]] bool key_quoted_fast(c4::csubstr s, short_text w, scalar_style style) {
+    if (C4_UNLIKELY(!depth_)) return false;
+    frame& f = frames_[depth_ - 1];
+    if (f.kind != frame_kind::map || f.pairs) return false;
+    if (f.follow != no_template || f.record != no_template) leave_template(f);
+    const uint32_t hash = cached_hash(w, s.str, s.len);
+    if (C4_UNLIKELY(!f.keys.insert(memory_, hash, std::string_view(s.str, s.len)))) return false;
+    const bool plain = ((w.lo | w.hi) & 0x8080808080808080ull) == 0;
+    const size_t node = writer_->node_count();
+    writer_->string_words(w.lo, w.hi, uint32_t(s.len));
+    side(0, tape::key_meta(hash, node - f.node, plain), uint32_t(style));
+    ++f.count;
+    return true;
+  }
+
+  [[gnu::always_inline]] bool value_quoted_fast(c4::csubstr s, short_text w, scalar_style style) {
+    if (C4_UNLIKELY(!depth_)) return false;
+    frame& f = frames_[depth_ - 1];
+    if (f.kind == frame_kind::pair || (f.kind == frame_kind::map && f.pairs)) return false;
+    const size_t node = writer_->node_count();
+    writer_->string_words(w.lo, w.hi, uint32_t(s.len));
+    side(0, ((w.lo | w.hi) & 0x8080808080808080ull) == 0 ? tape::ascii_flag : 0, uint32_t(style));
+    if (f.kind == frame_kind::seq) {
+      last_ = {true, node, std::string_view(s.str, s.len), style, false, tag_kind::none, 0, 0, no_anchor, false, 0};
+      ++f.count;
+    } else {
+      last_.valid = false;
+    }
     return true;
   }
 
@@ -823,8 +969,12 @@ class handler : public c4::yml::EventHandlerStack<handler, handler_state> {
     const size_t node = writer_->node_count();
     const bool plain = ((w.lo | w.hi) & 0x8080808080808080ull) == 0;
     bool string = true;
+    uint64_t digits;
     if (C4_LIKELY(core_string(w.lo, s.len))) {
       writer_->string_words(w.lo, w.hi, uint32_t(s.len));
+    } else if (s.len <= 8 && decimal8(w.lo, s.len, digits)) {
+      writer_->integer(int64_t(digits));  // core_int: `[0-9]{1,8}` is that I64
+      string = false;
     } else {
       scalar r;
       if (!resolve_core_fast(text, r)) return false;
@@ -1018,6 +1168,8 @@ class handler : public c4::yml::EventHandlerStack<handler, handler_state> {
     f.tag = tag_kind::none;
     f.merge = none;
     f.keys.clear();
+    f.follow = no_template;
+    f.record = no_template;
     return f;
   }
 
@@ -1049,7 +1201,7 @@ class handler : public c4::yml::EventHandlerStack<handler, handler_state> {
     if (m && m->kind == frame_kind::map && m->pairs) ++m->count;
   }
 
-  void value(c4::csubstr s, scalar_style style, bool empty) {
+  [[gnu::noinline]] void value(c4::csubstr s, scalar_style style, bool empty) {
     frame* f = top();
     if (!f && root_written_) throw error(status_internal, "YAML second root value");
     if (f && f->kind == frame_kind::map && f->pairs) throw error(status_internal, "YAML value without a key");
@@ -1114,7 +1266,7 @@ class handler : public c4::yml::EventHandlerStack<handler, handler_state> {
     return (any & 0x8080808080808080ull) == 0;
   }
 
-  void key(c4::csubstr s, scalar_style style, bool empty) {
+  [[gnu::noinline]] void key(c4::csubstr s, scalar_style style, bool empty) {
     std::string_view text(s.str ? s.str : "", s.len);
     taken_tag tag = take_tag();
     uint64_t span = lexical(s.str, s.len, style, empty);
@@ -1146,6 +1298,7 @@ class handler : public c4::yml::EventHandlerStack<handler, handler_state> {
   // as pairs, into a new pair. `extra_meta` carries style, kind, tag or alias bits.
   void place_key(frame& f, std::string_view canonical, key_kind kind, uint64_t span, uint32_t extra_meta, bool merge) {
     (void)kind;
+    leave_template(f);  // the general path keeps every key in f.keys
     bool plain;
     uint32_t hash = tape::key_hash(canonical, plain);
     frame* target = &f;
@@ -1255,6 +1408,7 @@ class handler : public c4::yml::EventHandlerStack<handler, handler_state> {
     frame* f = top();
     if (!f || f->kind == frame_kind::pair) throw error(status_internal, "YAML close without a collection");
     if (f->kind == frame_kind::map && f->merge != none) apply_merge(*f);
+    if (f->record != no_template) finish_template(*f);
     writer_->end(f->node, f->count);
     validate_shape(*f);
     if (f->anchor != no_anchor) anchor_open_[f->anchor] = 0;
@@ -1408,6 +1562,7 @@ class handler : public c4::yml::EventHandlerStack<handler, handler_state> {
   // Rewrites the open mapping `f` ([key, value]...) as pairs ([[key, value]]...).
   void convert_to_pairs(frame& f) {
     if (f.merge != none) fail("YAML merge key in a mapping with complex or duplicate keys");
+    leave_template(f);
     size_t start = f.node + 1, end = writer_->node_count();
     size_t count = end - start;
     auto* s = save(start, count);
@@ -1530,6 +1685,8 @@ class handler : public c4::yml::EventHandlerStack<handler, handler_state> {
   c4::yml::TagDirectives m_tag_directives;
   c4::yml::TagCache m_tag_cache;
   hash_slot hash_cache_[hash_cache_slots];
+  key_template templates_[template_levels][2];
+  uint8_t template_next_[template_levels] = {};
   bool fast_paths_ = true;
 };
 

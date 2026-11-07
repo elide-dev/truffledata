@@ -36,16 +36,18 @@ class tape_writer final {
   uint64_t text_bytes_ = 0;
   bool nonfinite_ = false;
 
-  myna_value_node* push(uint32_t tag, uint32_t length, uint64_t payload) {
-    if (nodes_.size() >= limits_.nodes) throw std::length_error("Myna node limit");
+  // Limit failures are thrown out of line so push() and charge() stay small enough to inline.
+  [[noreturn, gnu::noinline, gnu::cold]] static void limit(const char* what) { throw std::length_error(what); }
+  [[noreturn, gnu::noinline, gnu::cold]] static void invalid(const char* what) { throw std::invalid_argument(what); }
+  [[gnu::always_inline]] myna_value_node* push(uint32_t tag, uint32_t length, uint64_t payload) {
+    if (nodes_.size() >= limits_.nodes) limit("Myna node limit");
     size_t index = nodes_.size();
     myna_value_node* node = nodes_.extend(memory_, 1);
     *node = {tag, length, payload, index + 1};
     return node;
   }
-  void charge(size_t length) {
-    if (length > UINT32_MAX || length > limits_.text_bytes - text_bytes_)
-      throw std::length_error("Myna text limit");
+  [[gnu::always_inline]] void charge(size_t length) {
+    if (length > UINT32_MAX || length > limits_.text_bytes - text_bytes_) limit("Myna text limit");
     text_bytes_ += length;
   }
   // Inline text words (zero-padded little-endian bytes) of n <= 16 bytes, with overlapping fixed-size
@@ -153,8 +155,8 @@ public:
   void string(std::string_view utf8) { text(MYNA_VALUE_STRING, utf8); }
   // An inline STRING of `length` <= 16 bytes already packed as Myna's two little-endian payload
   // words (bytes past `length` zero), for producers that loaded the words themselves.
-  void string_words(uint64_t lo, uint64_t hi, uint32_t length) {
-    if (length > MYNA_VALUE_INLINE_BYTES) throw std::invalid_argument("inline Myna text above 16 bytes");
+  [[gnu::always_inline]] void string_words(uint64_t lo, uint64_t hi, uint32_t length) {
+    if (length > MYNA_VALUE_INLINE_BYTES) invalid("inline Myna text above 16 bytes");
     charge(length);
     push(MYNA_VALUE_STRING, length, lo)->next = hi;
   }

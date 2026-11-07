@@ -19,6 +19,7 @@
 namespace truffledata::yaml {
 
 inline void handler::apply_merge(frame& f) {
+  leave_template(f);  // merged keys are checked against every explicit key
   const myna_value_node* live = writer_->nodes();
   const size_t map = f.node, start = map + 1, end = writer_->node_count();
   const size_t merge_key = f.merge, merge_value = merge_key + 1;

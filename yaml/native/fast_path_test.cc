@@ -141,7 +141,8 @@ std::vector<std::string> scalar_corpus() {
       "0.1234567890123456", "12345678.1234567", "1234567.12345678", "1e3", "1E3", "1.5e-3", "-1e400", "1e-400",
       "0x1F", "0o17", "0b101", "0x", "0o", ".inf", "-.inf", "+.Inf", ".nan", ".NaN", "1_000", "1:20", "2001-12-14",
       "12abc", "-abc", "+abc", ".abc", "1.2.3", "\xC3\xA9t\xC3\xA9", "caf\xC3\xA9", "\xE2\x82\xAC", "a-b_c",
-      "with space", "x y z", "0xG", "--", "-1", "+1", "-.0", "10.", "-10.0001"};
+      "with space", "x y z", "a\tb", "1", "9", "12", "12345678", "99999999", "10000000", "00000000",
+      "1234567", "123456789", "1x", "12:3", "1/2", "8a", "\xC3\xA9", "-12345678", "+12345678", "0xG", "--", "-1", "+1", "-.0", "10.", "-10.0001"};
   return v;
 }
 
@@ -168,6 +169,50 @@ std::string generated_documents() {
   out += "--- &a x\n--- !!str 12\n--- [a: b, c, d: e]\n--- top\n";
   return out;
 }
+// Key templates (repeated mappings): followed, extended, broken by a duplicate after a matched
+// prefix, alternating orders, quoted and general-path keys after a matched prefix, merges, anchors,
+// more than 16 keys and nesting deeper than the template levels. Each is a separate input, since
+// an error ends a stream.
+std::vector<std::string> template_documents() {
+  std::vector<std::string> out;
+  const std::string rec = "- {a: 1, b: 2, c: 3}\n- {a: 4, b: 5, c: 6}\n";
+  for (const char* tail : {"- {a: 7, b: 8, a: 9}\n", "- {a: 7, b: 8, c: 9, a: 1}\n", "- {a: 7, b: 8, c: 9, d: 1, b: 2}\n",
+                           "- {a: 7, b: 8}\n- {a: 1, b: 2, b: 3}\n", "- {a: 7, \"b\": 8, b: 9}\n",
+                           "- {a: 7, 'c': 8, c: 9}\n", "- {a: 7, !!str b: 8, b: 9}\n",
+                           "- {a: 7, b: 8, <<: {b: 9, z: 1}}\n", "- {a: 7, b: 8, &x c: 9, d: *x}\n",
+                           "- {a: 7, b: 8, 1: 9, 0x1: 10}\n",
+                           "- {a: 7, b: 8, c: 9}\n- {c: 1, b: 2, a: 3}\n- {c: 1, b: 2, a: 3, c: 4}\n",
+                           "- {a: 7, b: 8, c: 9}\n- {a: 1}\n- {a: 1, c: 2, b: 3, c: 4}\n",
+                           "- {a: 7, b: 8, c: 9, x: 1}\n- {a: 7, b: 8, c: 9, x: 1, a: 2}\n", "- {a: 7, b: 8, c: 9}\n"})
+    out.push_back(rec + tail);
+  // Block records alternating two key orders, then a late duplicate in each order.
+  std::string block;
+  for (int i = 0; i < 6; ++i)
+    block += i % 2 ? "- z: 1\n  y: 2\n  x: {p: 1, q: 2}\n" : "- x: {p: 1, q: 2}\n  y: 2\n  z: 1\n";
+  out.push_back(block);
+  out.push_back(block + "- x: {p: 1, q: 2, p: 3}\n");
+  out.push_back(block + "- z: 1\n  y: 2\n  z: 3\n");
+  // More than 16 keys, the last record with a late duplicate.
+  std::string wide;
+  for (int r = 0; r < 3; ++r) {
+    wide += "- {";
+    for (int k = 0; k < 20; ++k) wide += std::string(k ? ", k" : "k") + std::to_string(k) + ": " + std::to_string(k);
+    wide += r == 2 ? ", k17: 0}\n" : "}\n";
+  }
+  out.push_back(wide);
+  // Nesting deeper than the template levels, with repeated mappings at every level.
+  std::string deep = "a:\n", indent = "  ";
+  for (int d = 0; d < 12; ++d) {
+    deep += indent + "- {k: 1, l: 2}\n" + indent + "- {k: 1, l: 2, k: 3}\n";
+    deep.resize(deep.size() - std::string(", k: 3}\n").size());
+    deep += "}\n" + indent + "- n" + std::to_string(d) + ":\n";
+    indent += "    ";
+  }
+  deep += indent + "x: 1\n";
+  out.push_back(deep);
+  out.push_back(deep + indent + "x: 2\n");
+  return out;
+}
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -175,6 +220,8 @@ int main(int argc, char** argv) {
     std::vector<std::pair<std::string, std::string>> inputs;
     for (int i = 1; i < argc; ++i) inputs.emplace_back(argv[i], slurp(argv[i]));
     inputs.emplace_back("<generated>", generated_documents());
+    int t = 0;
+    for (const std::string& doc : template_documents()) inputs.emplace_back("<template " + std::to_string(t++) + ">", doc);
     size_t compared = 0, errors = 0;
     for (const mode& m : modes()) {
       session s(m.options);
