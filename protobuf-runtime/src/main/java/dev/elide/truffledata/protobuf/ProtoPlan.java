@@ -258,6 +258,9 @@ public final class ProtoPlan {
   @CompilationFinal(dimensions = 1)
   private final int[] denseNumbers;
 
+  /** Slab layout of this plan's closure, compiled on first use; published safely once. */
+  private volatile @Nullable Layout slabLayout;
+
   private ProtoPlan(Model model, @Nullable TruffleLanguage<?> language, Type definition) {
     this.model = model;
     this.definition = definition;
@@ -294,6 +297,19 @@ public final class ProtoPlan {
     schema = new Schema(definition.name(), contracts);
     layout = language == null ? null : new StaticLayout(language, schema, model.limits);
     jsonType = ProtoJsonType.classify(this);
+  }
+
+  /** The slab layout rooted at this plan (type 0), compiled once; identity-stable per plan. */
+  @TruffleBoundary
+  public Layout layout() {
+    Layout result = slabLayout;
+    if (result == null) {
+      synchronized (this) {
+        result = slabLayout;
+        if (result == null) slabLayout = result = Layout.compile(this);
+      }
+    }
+    return result;
   }
 
   public ProtoJsonType jsonType() {

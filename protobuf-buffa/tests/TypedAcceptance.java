@@ -784,7 +784,159 @@ final class TypedAcceptance {
     }
   }
 
+  /**
+   * Schema program golden (Task A1): the TDB3 tables and strings are unchanged and the TDL1 slab
+   * layout section follows them, located by the trailer {@code [section offset]['TDL1']}.
+   */
+  static void schemaProgramGolden() {
+    var color = new ProtoPlan.EnumType("Color", false, Map.of("RED", 0, "BLUE", 1));
+    var plan =
+        new ProtoPlan.Model(
+                null,
+                List.of(
+                    new ProtoPlan.Type(
+                        "g.Node",
+                        false,
+                        List.of(
+                            new ProtoPlan.FieldPlan(
+                                "id",
+                                1,
+                                ProtoPlan.Kind.INT64,
+                                false,
+                                false,
+                                true,
+                                false,
+                                false,
+                                -1,
+                                "",
+                                null,
+                                0L),
+                            new ProtoPlan.FieldPlan(
+                                "name",
+                                2,
+                                ProtoPlan.Kind.STRING,
+                                false,
+                                false,
+                                false,
+                                false,
+                                false,
+                                -1,
+                                "",
+                                null,
+                                ""),
+                            new ProtoPlan.FieldPlan(
+                                "color",
+                                3,
+                                ProtoPlan.Kind.ENUM,
+                                false,
+                                false,
+                                true,
+                                false,
+                                false,
+                                -1,
+                                "",
+                                color,
+                                0L),
+                            new ProtoPlan.FieldPlan(
+                                "n",
+                                4,
+                                ProtoPlan.Kind.INT32,
+                                false,
+                                false,
+                                true,
+                                false,
+                                false,
+                                0,
+                                "",
+                                null,
+                                0L),
+                            new ProtoPlan.FieldPlan(
+                                "s",
+                                5,
+                                ProtoPlan.Kind.STRING,
+                                false,
+                                false,
+                                true,
+                                false,
+                                false,
+                                0,
+                                "",
+                                null,
+                                ""),
+                            new ProtoPlan.FieldPlan(
+                                "child",
+                                6,
+                                ProtoPlan.Kind.MESSAGE,
+                                false,
+                                false,
+                                true,
+                                false,
+                                false,
+                                -1,
+                                "g.Node",
+                                null,
+                                Missing.INSTANCE),
+                            new ProtoPlan.FieldPlan(
+                                "tags",
+                                7,
+                                ProtoPlan.Kind.STRING,
+                                true,
+                                false,
+                                false,
+                                false,
+                                false,
+                                -1,
+                                "",
+                                null,
+                                "")))),
+                Limits.DEFAULT,
+                32,
+                1 << 20)
+            .type("g.Node");
+    byte[] program = NativeTapeAcceptance.program(plan, List.of(), 65536);
+    String golden =
+        // TDB3 (ABI 9 tables, strings and enum tables; unchanged by Task A1), zero padding to 4.
+        "33424454010000000c00000007000000000200003401000006000000010000000300000004000000ffffffff"
+            + "00000000000000003a010000020000003c01000002000000020000000900000000000000ffffffff00000000"
+            + "000000003e010000040000004201000004000000030000000e00000004000000ffffffff4601000002000000"
+            + "65010000050000006a01000005000000040000000500000004000000ffffffff00000000000000006f010000"
+            + "010000007001000001000000050000000900000004000000ffffffff00000000000000007101000001000000"
+            + "7201000001000000060000000b00000004000000000000000000000000000000730100000500000078010000"
+            + "05000000070000000900000001000000ffffffff00000000000000007d010000040000008101000004000000"
+            + "672e4e6f6465696469646e616d656e616d65010000005e01000004000000000000006201000003000000424c"
+            + "5545524544636f6c6f72636f6c6f726e6e73736368696c646368696c647461677374616773000000"
+            // TDL1: magic, version 1, one type, fingerprint; g.Node: 56-byte record, one
+            // presence word, one oneof, 7 fields of (slot, kind code, oneof); trailer.
+            + "54444c310100000001000000e5fcbccb380000000100000001000000070000001800000002000000ffffffff"
+            + "2000000006000000ffffffff2400000001000000ffffffff2800000001000000000000002c00000006000000"
+            + "000000003000000008000000ffffffff340000000e000000ffffffff8801000054444c31";
+    String actual = java.util.HexFormat.of().formatHex(program);
+    Acceptance.check(actual.equals(golden), "schema program golden: " + actual);
+    int length = program.length;
+    int magic =
+        java.nio.ByteBuffer.wrap(program)
+            .order(java.nio.ByteOrder.LITTLE_ENDIAN)
+            .getInt(length - 4);
+    int section =
+        java.nio.ByteBuffer.wrap(program)
+            .order(java.nio.ByteOrder.LITTLE_ENDIAN)
+            .getInt(length - 8);
+    Acceptance.check(magic == Layout.PROGRAM_MAGIC && section % 4 == 0, "TDL1 trailer");
+    Acceptance.check(
+        Layout.parse(program, section).equals(plan.layout().tables()),
+        "TDL1 section is the layout");
+    byte[] expectedSection = plan.layout().program();
+    Acceptance.check(
+        section + expectedSection.length + 8 == length, "TDL1 section is the program's tail");
+    Acceptance.check(
+        Arrays.equals(
+            Arrays.copyOfRange(program, section, section + expectedSection.length),
+            expectedSection),
+        "TDL1 section bytes");
+  }
+
   static void run(BuffaWire decoder) throws Exception {
+    schemaProgramGolden();
     nativeViews(decoder);
     nativeScalarViews(decoder);
     nativeViewBudgets(decoder);

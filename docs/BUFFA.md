@@ -398,3 +398,10 @@ The ABI 8 `Result` detachment path was removed, and
 `NativeTapeAcceptance` now covers view ownership across scratch reuse and decoder closure.
 Bindings, native attachments and the Java JAR must be upgraded together. Measurements are in
 [the protobuf results](../benchmarks/results/protobuf-f26678a/README.md).
+
+Since the slab layout work (protobuf performance plan, Task A1), `NativeSchema` appends a `TDL1`
+section, the plan's fixed slab layout, after the last TDB3 byte, located by an 8-byte trailer.
+The `TDB3` magic and every existing offset are unchanged and ABI 9 never reads past its own
+tables, so this library keeps working; a Rust test compiles programs with and without the
+section and compares the descriptors and decodes. The slab format and the section are specified
+in [SLAB.md](SLAB.md).

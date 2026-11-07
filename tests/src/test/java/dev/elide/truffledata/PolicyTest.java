@@ -32,7 +32,9 @@ class PolicyTest {
             Map.entry("JdbcCursor.java", 7),
             Map.entry("JdbcSource.java", 6),
             Map.entry("ProtobufAdapter.java", 5),
-            Map.entry("ProtoPlan.java", 11), // Generated contract binding, outside reads.
+            // Generated contract binding and the lazily compiled slab layout, outside reads.
+            Map.entry("ProtoPlan.java", 12),
+            Map.entry("Layout.java", 3), // Slab layout compilation (×2) and TDL1 parsing.
             Map.entry("ProtoRow.java", 3),
             Map.entry("ProtoCompiler.java", 8),
             Map.entry("ProtoDescriptors.java", 1),

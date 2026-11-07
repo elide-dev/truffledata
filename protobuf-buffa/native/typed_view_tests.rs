@@ -493,3 +493,105 @@ fn compilation_checks_every_extent_and_view_eligibility() {
     assert_eq!(dense.types[0].find(4), None);
     assert_eq!(dense.types[0].find(u32::MAX >> 3), None);
 }
+
+/// Append a Task A1 `TDL1` slab-layout section and its trailer exactly where NativeSchema does:
+/// after the last TDB3 byte, 4-byte aligned, then `[section offset][TDL1]` (docs/SLAB.md).
+fn with_layout_section(program: &[u8], types: u32) -> Vec<u8> {
+    const TDL1: u32 = 0x314C_4454;
+    let mut out = program.to_vec();
+    while out.len() % 4 != 0 {
+        out.push(0);
+    }
+    let section = out.len() as u32;
+    let mut words = vec![TDL1, 1, types, 0x5EED_F00D];
+    for _ in 0..types {
+        // One field per type is enough: ABI 9 must never read any of these words.
+        words.extend([24, 1, 0, 1, 16, 2, u32::MAX]);
+    }
+    words.extend([section, TDL1]);
+    for word in words {
+        out.extend_from_slice(&word.to_le_bytes());
+    }
+    out
+}
+
+fn same_descriptors(a: &Compiled, b: &Compiled) {
+    assert_eq!(a.types.len(), b.types.len());
+    for (x, y) in a.types.iter().zip(b.types.iter()) {
+        assert_eq!(x.numbers, y.numbers);
+        assert_eq!(x.lookup, y.lookup);
+        assert_eq!(x.certified, y.certified);
+        assert_eq!(x.fields.len(), y.fields.len());
+        for (f, g) in x.fields.iter().zip(y.fields.iter()) {
+            assert_eq!(
+                (f.kind, f.wire, f.repeated, f.child),
+                (g.kind, g.wire, g.repeated, g.child)
+            );
+            match (&f.values, &g.values) {
+                (Values::Any, Values::Any) => {}
+                (Values::Range(a, b), Values::Range(c, d)) => assert_eq!((a, b), (c, d)),
+                (Values::Sorted(a), Values::Sorted(b)) => assert_eq!(a, b),
+                _ => panic!("enum value tables differ"),
+            }
+        }
+    }
+}
+
+/// Task A1 ruling: the appended `TDL1` section is invisible to ABI 9. Compiled descriptors are
+/// identical, and interpreted (`typed.rs`) and view decodes agree on every corpus input.
+#[test]
+fn appended_layout_section_is_invisible_to_abi9() {
+    for certified in [true, false] {
+        let plain = nested(certified);
+        let sectioned = with_layout_section(&plain, 2);
+        assert!(sectioned.len() > plain.len() && sectioned.starts_with(&plain));
+        let a = compile(&plain).unwrap();
+        let b = compile(&sectioned).unwrap();
+        same_descriptors(&a, &b);
+        let mut rng = Rng(0x1A1A_2B2B_3C3C_4D4D);
+        for _ in 0..1000 {
+            let input = wire(&mut rng);
+            let (x, xs) = interpreted(&plain, &input, 100_000);
+            let (y, ys) = interpreted(&sectioned, &input, 100_000);
+            assert_eq!(xs, ys);
+            match (x, y) {
+                (Ok(x), Ok(y)) => {
+                    assert_eq!(x.len(), y.len());
+                    for (f, g) in x.iter().zip(&y) {
+                        assert_eq!(
+                            (f.number, f.wire, f.value, f.length, f.end),
+                            (g.number, g.wire, g.value, g.length, g.end)
+                        );
+                    }
+                }
+                (Err(x), Err(y)) => assert_eq!(x, y),
+                _ => panic!("section changed the interpreted decode of {input:?}"),
+            }
+            let (mut s1, mut s2) = (-1, -1);
+            let (v1, _) = view(&a, &input, 100_000, 4096, 8, 1 << 24, Vec::new(), &mut s1);
+            let (v2, _) = view(&b, &input, 100_000, 4096, 8, 1 << 24, Vec::new(), &mut s2);
+            assert_eq!(s1, s2);
+            match (v1, v2) {
+                (Ok(v1), Ok(v2)) => {
+                    if v1.count != 0 {
+                        let (e1, w1) = parts(&v1);
+                        let (e2, w2) = parts(&v2);
+                        assert_eq!(w1, w2);
+                        for (f, g) in e1.iter().zip(e2) {
+                            assert_eq!(
+                                (f.number, f.wire, f.value, f.length, f.end),
+                                (g.number, g.wire, g.value, g.length, g.end)
+                            );
+                        }
+                        free(v1);
+                        free(v2);
+                    } else {
+                        assert_eq!(v2.count, 0);
+                    }
+                }
+                (Err(x), Err(y)) => assert_eq!(x, y),
+                _ => panic!("section changed the view decode of {input:?}"),
+            }
+        }
+    }
+}

@@ -1,6 +1,7 @@
 package dev.elide.truffledata.buffa;
 
 import dev.elide.truffledata.ContractViolation;
+import dev.elide.truffledata.protobuf.Layout;
 import dev.elide.truffledata.protobuf.ProtoPlan;
 import java.nio.*;
 import java.nio.charset.StandardCharsets;
@@ -50,6 +51,7 @@ final class NativeSchema {
     Set<String> allowed = new HashSet<>();
     for (ProtoPlan plan : registry)
       if (!allowed.add(plan.name())) throw new ContractViolation("Duplicate Any type");
+    byte[] layout = Layout.compile(types).program();
     // A bounded staging allocation, made once per compiled plan, not per message.
     ByteBuffer out = ByteBuffer.allocate(maximum).order(ByteOrder.LITTLE_ENDIAN);
     try {
@@ -106,6 +108,12 @@ final class NativeSchema {
           string(out, at + 32, f.jsonName());
         }
       }
+      // TDL1 slab layout (docs/SLAB.md): appended after every TDB3 table and string, which only
+      // header offsets reach, so ABI 9 readers never see it. The trailer locates the section.
+      int section = (out.position() + 3) & ~3;
+      out.position(section);
+      out.put(layout);
+      out.putInt(section).putInt(Layout.PROGRAM_MAGIC);
       return Arrays.copyOf(out.array(), out.position());
     } catch (IndexOutOfBoundsException
         | IllegalArgumentException

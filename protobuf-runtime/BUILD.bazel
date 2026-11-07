@@ -1,3 +1,4 @@
+load("@rules_java//java:defs.bzl", "java_test")
 load("//bazel:java.bzl", "data_java_library")
 
 package(default_visibility = ["//visibility:public"])
@@ -9,6 +10,7 @@ data_java_library(
         "src/main/java/dev/elide/truffledata/protobuf/GeneratedInput.java",
         "src/main/java/dev/elide/truffledata/protobuf/GeneratedMessage.java",
         "src/main/java/dev/elide/truffledata/protobuf/GeneratedOutput.java",
+        "src/main/java/dev/elide/truffledata/protobuf/Layout.java",
         "src/main/java/dev/elide/truffledata/protobuf/ProtoAccess.java",
         "src/main/java/dev/elide/truffledata/protobuf/ProtoCodec.java",
         "src/main/java/dev/elide/truffledata/protobuf/ProtoDescriptors.java",
@@ -18,6 +20,7 @@ data_java_library(
         "src/main/java/dev/elide/truffledata/protobuf/ProtoRow.java",
         "src/main/java/dev/elide/truffledata/protobuf/ProtoText.java",
         "src/main/java/dev/elide/truffledata/protobuf/ProtoWire.java",
+        "src/main/java/dev/elide/truffledata/protobuf/SlabFormat.java",
         "src/main/java/dev/elide/truffledata/protobuf/package-info.java",
     ],
     deps = [
@@ -25,6 +28,45 @@ data_java_library(
         "@maven//:com_google_code_gson_gson",
         "@maven//:org_graalvm_truffle_truffle_api",
     ],
+)
+
+# Slab layout compiler and the TDSLAB1 golden slabs (docs/SLAB.md); SlabReference is the
+# executable model of the format that the Rust and Java producers must match byte for byte.
+java_test(
+    name = "test",
+    size = "medium",
+    srcs = [
+        "src/test/java/dev/elide/truffledata/protobuf/LayoutTest.java",
+        "src/test/java/dev/elide/truffledata/protobuf/SlabReference.java",
+    ],
+    args = [
+        "--class",
+        "dev.elide.truffledata.protobuf.LayoutTest",
+    ],
+    data = [":golden_slabs"],
+    jvm_flags = [
+        "-Dpolyglot.engine.WarnInterpreterOnly=false",
+        "-ea",
+    ],
+    main_class = "dev.elide.bazel.junit.BazelJUnitRunner",
+    use_testrunner = False,
+    runtime_deps = [
+        "//bazel/junit:runner",
+        "@maven//:org_graalvm_truffle_truffle_runtime",
+    ],
+    deps = [
+        ":protobuf-runtime",
+        "//core",
+        "@maven//:com_google_protobuf_protobuf_java",
+        "@maven//:org_graalvm_truffle_truffle_api",
+        "@maven//:org_jspecify_jspecify",
+        "@maven//:org_junit_jupiter_junit_jupiter_api",
+    ],
+)
+
+filegroup(
+    name = "golden_slabs",
+    srcs = glob(["src/test/resources/slab/*"]),
 )
 
 filegroup(

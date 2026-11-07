@@ -11,6 +11,11 @@ import org.jspecify.annotations.Nullable;
 public final class NativeTapeAcceptance {
   private NativeTapeAcceptance() {}
 
+  /** The schema program (TDB3 plus the TDL1 slab-layout section) a plan compiles to. */
+  public static byte[] program(ProtoPlan plan, List<ProtoPlan> registry, int maximum) {
+    return NativeSchema.encode(NativeSchema.types(plan, registry, maximum), registry, maximum);
+  }
+
   public static void run(@Nullable Path library) {
     var field =
         new ProtoPlan.FieldPlan(

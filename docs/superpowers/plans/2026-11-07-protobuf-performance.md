@@ -255,11 +255,11 @@ Task format follows the JSON performance plan. Every task ends with the standard
 - Produces: `TDL1` section: per type `[recordBytes u32][presenceWords u32][oneofs u32][fields u32]` then per field `[slot u32][kind u32]`; the Rust side recomputes and compares.
 - Produces: golden slabs for ten hand-built messages (`protobuf-runtime/src/test/resources/slab/*.bin`) used by both producers.
 
-- [ ] **Step 1: Failing tests** (`LayoutTest`): `offsets_are_aligned_and_disjoint` (8-byte slots first, record size multiple of 8, no overlap across 200 generated schemas), `presence_words_scale_past_64_fields` (65 and 130 fields), `oneof_case_bytes_assigned` (two oneofs, three members each), `layout_identity_stable` (same plan → same `Layout` instance), `program_round_trips` (parse the `TDL1` bytes back and compare), `golden_slabs_decode_by_hand` (hand-written expected bytes for `Timestamp`, `Type` message 1 of the consumer fixture, a map, an oneof, an unknown field, a merged singular message).
-- [ ] **Step 2: Run** `bazel test //protobuf-runtime/...` — FAIL (classes missing).
-- [ ] **Step 3: Implement.** Slot assignment: 8-byte kinds in ordinal order, then 4-byte kinds; `handle` and `unknown` words after the presence words; record size padded to 8.
-- [ ] **Step 4: Verification set.** Expected: PASS, including every existing view test: the ABI 9 `compile` reads types through the header offsets and never looks past the enum tables, so the appended section is invisible to it (assert this with a Rust test that compiles a program with and without the section and compares the descriptors; ruling recorded).
-- [ ] **Step 5: Commit** — `feat: compile protobuf plans into fixed slab layouts`
+- [x] **Step 1: Failing tests** (`LayoutTest`): `offsets_are_aligned_and_disjoint` (8-byte slots first, record size multiple of 8, no overlap across 200 generated schemas), `presence_words_scale_past_64_fields` (65 and 130 fields), `oneof_case_bytes_assigned` (two oneofs, three members each), `layout_identity_stable` (same plan → same `Layout` instance), `program_round_trips` (parse the `TDL1` bytes back and compare), `golden_slabs_decode_by_hand` (hand-written expected bytes for `Timestamp`, `Type` message 1 of the consumer fixture, a map, an oneof, an unknown field, a merged singular message).
+- [x] **Step 2: Run** `bazel test //protobuf-runtime/...` — FAIL (classes missing).
+- [x] **Step 3: Implement.** Slot assignment: 8-byte kinds in ordinal order, then 4-byte kinds; `handle` and `unknown` words after the presence words; record size padded to 8.
+- [x] **Step 4: Verification set.** Expected: PASS, including every existing view test: the ABI 9 `compile` reads types through the header offsets and never looks past the enum tables, so the appended section is invisible to it (assert this with a Rust test that compiles a program with and without the section and compares the descriptors; ruling recorded).
+- [x] **Step 5: Commit** — `feat: compile protobuf plans into fixed slab layouts`
 
 #### Task A2: Rust slab decoder and seam ABI 10
 
