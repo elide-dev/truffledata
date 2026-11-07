@@ -210,6 +210,41 @@ final class CsvScannerTest {
     }
   }
 
+  /**
+   * unescape against a per-byte reference: every content length to 40 with twin quotes at every
+   * position (word-search and inline-copy edges), runs past 16 bytes (arraycopy), a field at the
+   * input's end, and random escape-heavy fields, into exact-size targets at an offset.
+   */
+  @Test
+  void unescapeMatchesPerByteReference() {
+    Random random = new Random(0x0e5c_a9e);
+    List<String> contents = new ArrayList<>();
+    for (int length = 0; length <= 40; length++) {
+      contents.add("a".repeat(length));
+      for (int at = 0; at < length; at++)
+        contents.add("a".repeat(at) + "\"\"" + "b".repeat(length - at));
+      contents.add("\"\"".repeat(length));
+    }
+    for (int i = 0; i < 2000; i++) {
+      StringBuilder s = new StringBuilder();
+      for (int n = random.nextInt(80); n > 0; n--)
+        s.append(random.nextInt(4) == 0 ? "\"\"" : random.nextInt(3) == 0 ? "é" : "x".repeat(random.nextInt(24)));
+      contents.add(s.toString());
+    }
+    for (String content : contents) {
+      for (String trailer : new String[] {"", ",z\n"}) {
+        byte[] input = utf8("q,\"" + content + "\"" + trailer);
+        int from = 3;
+        int length = input.length - trailer.length() - 1 - from;
+        long span = CsvScanner.span(from, length, true, content.contains("\"\""));
+        byte[] expected = utf8(content.replace("\"\"", "\""));
+        byte[] target = new byte[2 + expected.length];
+        assertEquals(expected.length, CsvScanner.unescape(input, span, (byte) '"', target, 2), content);
+        assertArrayEquals(expected, java.util.Arrays.copyOfRange(target, 2, target.length), content);
+      }
+    }
+  }
+
   @Test
   void formatAndLimitsValidate() {
     assertThrows(IllegalArgumentException.class, () -> CsvFormat.RFC4180.withDelimiter('"'));
