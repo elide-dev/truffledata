@@ -11,18 +11,17 @@ import java.nio.file.StandardOpenOption;
 
 /**
  * The owner of one read-only memory-mapped CSV file: a {@code FileChannel} mapping in a confined
- * (default) or shared {@link Arena}. Batches parsed from it keep their STRING cells as spans into the
- * mapping, with no heap copy of the input.
+ * (default) or shared {@link Arena}. Batches parsed from it keep their STRING cells as spans into
+ * the mapping, with no heap copy of the input.
  *
  * <p>{@link #close()} unmaps the file and invalidates every batch over it: afterwards each read of
  * such a batch (typed, STRING, interop, export, snapshot) throws {@code IllegalStateException("CSV
- * mapping closed")}. Take {@link CsvBatch#snapshot()} first to keep a batch. A confined mapping can be
- * read and closed only by the thread that mapped it (other threads get {@code WrongThreadException}
- * on reads that touch the file); a shared mapping can be read and closed from any thread.
+ * mapping closed")}. Take {@link CsvBatch#snapshot()} first to keep a batch. A confined mapping can
+ * be read and closed only by the thread that mapped it (other threads get {@code
+ * WrongThreadException} on reads that touch the file); a shared mapping can be read and closed from
+ * any thread.
  */
 public final class CsvMapping implements AutoCloseable {
-  private static final MemorySegment EMPTY = MemorySegment.ofArray(new byte[0]);
-
   private final Arena arena;
   private final boolean shared;
   final MemorySegment segment;
@@ -43,13 +42,30 @@ public final class CsvMapping implements AutoCloseable {
 
   /** Maps {@code path} read-only into a shared ({@code true}) or confined arena. */
   public static CsvMapping map(Path path, boolean shared) throws IOException {
-    Arena arena = shared ? Arena.ofShared() : Arena.ofConfined();
     try (FileChannel channel = FileChannel.open(path, StandardOpenOption.READ)) {
+      return map(channel, shared);
+    }
+  }
+
+  /** Maps a caller-owned channel into a confined arena; never closes the channel. */
+  public static CsvMapping map(FileChannel channel) throws IOException {
+    return map(channel, false);
+  }
+
+  /**
+   * Maps the entire file without changing the caller-owned channel's position or closing it.
+   * Closing the channel leaves this mapping valid; closing the mapping leaves the channel open.
+   */
+  public static CsvMapping map(FileChannel channel, boolean shared) throws IOException {
+    Arena arena = shared ? Arena.ofShared() : Arena.ofConfined();
+    try {
       long size = channel.size();
       MemorySegment segment =
-          size == 0 ? EMPTY : channel.map(FileChannel.MapMode.READ_ONLY, 0, size, arena);
+          size == 0
+              ? MemorySegment.ofArray(new byte[0])
+              : channel.map(FileChannel.MapMode.READ_ONLY, 0, size, arena);
       return new CsvMapping(arena, shared, segment);
-    } catch (IOException | RuntimeException e) {
+    } catch (IOException | RuntimeException | Error e) {
       arena.close();
       throw e;
     }

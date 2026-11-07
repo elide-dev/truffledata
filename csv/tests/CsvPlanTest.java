@@ -2,6 +2,9 @@ package dev.elide.truffledata.csv;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.nodes.RootNode;
+import com.oracle.truffle.api.nodes.UnexpectedResultException;
 import dev.elide.truffledata.Constraints;
 import dev.elide.truffledata.ContractViolation;
 import dev.elide.truffledata.DataLibrary;
@@ -12,9 +15,6 @@ import dev.elide.truffledata.ReadBooleanNodeGen;
 import dev.elide.truffledata.ReadDoubleNodeGen;
 import dev.elide.truffledata.ReadLongNodeGen;
 import dev.elide.truffledata.Schema;
-import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.api.nodes.RootNode;
-import com.oracle.truffle.api.nodes.UnexpectedResultException;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -57,6 +57,84 @@ final class CsvPlanTest {
   }
 
   @Test
+  void windowedAndOwnedInputRetainsExactlyItsContract() throws IOException {
+    for (String doc : List.of("name\nann\n", "\uFEFFname\n\"a\"\"b\"\n", "name\r\n中\r\n")) {
+      byte[] raw = utf8(doc);
+      byte[] backing = new byte[raw.length + 27];
+      java.util.Arrays.fill(backing, (byte) 0xFF); // invalid UTF-8 outside the window
+      System.arraycopy(raw, 0, backing, 11, raw.length);
+      CsvLimits limits = new CsvLimits(raw.length, raw.length, 8, 8);
+      var expected = Csv.parse(raw, CsvFormat.RFC4180);
+      var copied = Csv.parse(backing, 11, 11 + raw.length, CsvFormat.RFC4180, limits);
+      var owned = Csv.parseOwned(backing, 11, 11 + raw.length, CsvFormat.RFC4180, limits);
+      assertEquals(expected.row(0).getString(0), copied.row(0).getString(0));
+      assertEquals(expected.row(0).getString(0), owned.row(0).getString(0));
+      assertNotSame(backing, copied.input);
+      assertEquals(raw.length, copied.inputBytes());
+      assertSame(backing, owned.input);
+      assertEquals(backing.length, owned.inputBytes());
+      try (var reader = Csv.open(backing, 11, 11 + raw.length, CsvFormat.RFC4180)) {
+        assertEquals(
+            expected.row(0).getString(0),
+            java.util.Objects.requireNonNull(reader.next()).row(0).getString(0));
+        assertNull(reader.next());
+      }
+      java.util.Arrays.fill(
+          backing, (byte) 0); // only inspect the copied batch after violating ownership
+      assertEquals(expected.row(0).getString(0), copied.row(0).getString(0));
+    }
+    byte[] bytes = utf8("xxxn\n42\nyyy");
+    var plan = CsvPlan.compile(Schema.of(Field.requiredLong("n")), CsvFormat.RFC4180);
+    var primitive = plan.parseOwned(bytes, 3, bytes.length - 3);
+    assertEquals(42, primitive.row(0).getLong(0));
+    assertEquals(0, primitive.inputBytes());
+    assertThrows(IndexOutOfBoundsException.class, () -> plan.parse(bytes, -1, 3));
+    assertThrows(IndexOutOfBoundsException.class, () -> plan.parseOwned(bytes, 4, 3));
+    assertThrows(IndexOutOfBoundsException.class, () -> plan.open(bytes, 0, bytes.length + 1));
+    assertThrows(
+        IllegalArgumentException.class,
+        () -> plan.parseOwned(bytes, 3, bytes.length - 3, new CsvLimits(4, 4, 2, 2)));
+  }
+
+  @Test
+  void indexedWindowMatchesCopiedAndOwnedInput() {
+    byte[] raw = utf8("id,name\n" + "42,\"a,b\"\n".repeat(4000));
+    byte[] backing = new byte[raw.length + 17];
+    java.util.Arrays.fill(backing, (byte) 0xFF);
+    System.arraycopy(raw, 0, backing, 7, raw.length);
+    var schema =
+        Schema.of(Field.requiredLong("id"), new Field("name", Field.Kind.STRING, false, false));
+    var plan = CsvPlan.compile(schema, CsvFormat.RFC4180);
+    var copied = plan.parse(backing, 7, raw.length + 7);
+    var owned = plan.parseOwned(backing, 7, raw.length + 7);
+    assertEquals(4000, owned.size());
+    for (int i = 0; i < owned.size(); i++) {
+      assertEquals(42, owned.row(i).getLong(0));
+      assertEquals("a,b", owned.row(i).getString(1));
+      assertEquals(copied.row(i).getString(1), owned.row(i).getString(1));
+    }
+  }
+
+  @Test
+  void windowDiagnosticsUseWindowOffsets() {
+    byte[] bad = {'n', '\n', (byte) 0xFF, '\n'};
+    byte[] backing = new byte[bad.length + 14];
+    System.arraycopy(bad, 0, backing, 7, bad.length);
+    var plain =
+        assertThrows(IllegalArgumentException.class, () -> Csv.parse(bad, CsvFormat.RFC4180));
+    var copied =
+        assertThrows(
+            IllegalArgumentException.class,
+            () -> Csv.parse(backing, 7, 7 + bad.length, CsvFormat.RFC4180));
+    var owned =
+        assertThrows(
+            IllegalArgumentException.class,
+            () -> Csv.parseOwned(backing, 7, 7 + bad.length, CsvFormat.RFC4180));
+    assertEquals(plain.getMessage(), copied.getMessage());
+    assertEquals(plain.getMessage(), owned.getMessage());
+  }
+
+  @Test
   void conversionBoundaries() {
     Field i64 = Field.requiredLong("v");
     assertEquals(0L, one(i64, "0"));
@@ -69,8 +147,19 @@ final class CsvPlanTest {
     assertEquals(5L, one(i64, "00000000000000000000000000005"));
     for (String bad :
         List.of(
-            "9223372036854775808", "-9223372036854775809", "99999999999999999999", "+1", " 42",
-            "42 ", "1.0", "-", "1e3", "0x1", "١", "\"\"", "\"4\"\"2\"")) rejects(i64, bad, "invalid INT64");
+            "9223372036854775808",
+            "-9223372036854775809",
+            "99999999999999999999",
+            "+1",
+            " 42",
+            "42 ",
+            "1.0",
+            "-",
+            "1e3",
+            "0x1",
+            "١",
+            "\"\"",
+            "\"4\"\"2\"")) rejects(i64, bad, "invalid INT64");
     rejects(i64, "", "null");
     assertEquals(42L, one(i64, " 42 ", CsvFormat.RFC4180.withTrim(true)));
     Field nullableLong = new Field("v", Field.Kind.INT64, true, false);
@@ -101,9 +190,24 @@ final class CsvPlanTest {
     sameDouble(12.0, one(f64, "\"12\""));
     for (String bad :
         List.of(
-            "1e400", "-1e400", "1.8e308", "NaN", "Infinity", "inf", ".", "e5", "1e", "1e+", "1.5.",
-            " 1", "0x1p3", "1d", "1f", "--1", "1_0", "\"\""))
-      rejects(f64, bad, "invalid FLOAT64");
+            "1e400",
+            "-1e400",
+            "1.8e308",
+            "NaN",
+            "Infinity",
+            "inf",
+            ".",
+            "e5",
+            "1e",
+            "1e+",
+            "1.5.",
+            " 1",
+            "0x1p3",
+            "1d",
+            "1f",
+            "--1",
+            "1_0",
+            "\"\"")) rejects(f64, bad, "invalid FLOAT64");
     rejects(f64, "", "null");
     Field f32 = f64.withConstraints(Constraints.NONE.withFloatBits(32));
     sameDouble(0.5, one(f32, "0.5"));
@@ -134,13 +238,33 @@ final class CsvPlanTest {
   @Test
   void fastPathMatchesParseDouble() {
     Random random = new Random(0xd0b1e);
-    List<String> tokens = new ArrayList<>(List.of(
-        "2.2250738585072011e-308", "2.2250738585072012e-308", "2.2250738585072014e-308",
-        "4.9e-324", "2.4703282292062327e-324", "2.4703282292062328e-324", "1.7976931348623157e308",
-        "1.7976931348623158e308", "9007199254740992", "9007199254740993", "9007199254740995",
-        "123456789012345678", "1234567890123456789", "12345678901234567890", "0.1", "0.3",
-        "1e22", "1e23", "9007199254740993e-22", "9007199254740992e22", "4.35e-322", "1e-323",
-        "0.000000000000000000000000000000000000000000001", "00000000000000000000001.5"));
+    List<String> tokens =
+        new ArrayList<>(
+            List.of(
+                "2.2250738585072011e-308",
+                "2.2250738585072012e-308",
+                "2.2250738585072014e-308",
+                "4.9e-324",
+                "2.4703282292062327e-324",
+                "2.4703282292062328e-324",
+                "1.7976931348623157e308",
+                "1.7976931348623158e308",
+                "9007199254740992",
+                "9007199254740993",
+                "9007199254740995",
+                "123456789012345678",
+                "1234567890123456789",
+                "12345678901234567890",
+                "0.1",
+                "0.3",
+                "1e22",
+                "1e23",
+                "9007199254740993e-22",
+                "9007199254740992e22",
+                "4.35e-322",
+                "1e-323",
+                "0.000000000000000000000000000000000000000000001",
+                "00000000000000000000001.5"));
     for (int i = 0; i < 100_000; i++) {
       StringBuilder token = new StringBuilder();
       if (random.nextInt(4) == 0) token.append(random.nextBoolean() ? '-' : '+');
@@ -162,7 +286,10 @@ final class CsvPlanTest {
       double expected = Double.parseDouble(token);
       byte[] bytes = utf8("x" + token + "y");
       if (Double.isInfinite(expected)) {
-        assertThrows(NumberFormatException.class, () -> Numbers.parseDouble(bytes, 1, token.length()), token);
+        assertThrows(
+            NumberFormatException.class,
+            () -> Numbers.parseDouble(bytes, 1, token.length()),
+            token);
         continue;
       }
       finite++;
@@ -172,7 +299,8 @@ final class CsvPlanTest {
     assertTrue(finite > 90_000, "finite " + finite);
     // Short tokens with small exponents take the exact fast path: no fallback.
     long before = Numbers.fallbacks();
-    for (String token : List.of("1.5", "-0.25", "123456789012345", "9007199254740992", "1e22", "3.14159e-7")) {
+    for (String token :
+        List.of("1.5", "-0.25", "123456789012345", "9007199254740992", "1e22", "3.14159e-7")) {
       Numbers.parseDouble(utf8(token), 0, token.length());
     }
     assertEquals(before, Numbers.fallbacks());
@@ -209,15 +337,20 @@ final class CsvPlanTest {
     // A required field absent from the header fails at the header.
     var absent = assertThrows(ContractViolation.class, () -> plan.parse(utf8("name\na\n")));
     assertEquals("CSV header: Field 'id': missing", absent.getMessage());
-    var twice = assertThrows(ContractViolation.class, () -> plan.parse(utf8("id,name,id\n1,a,1\n")));
+    var twice =
+        assertThrows(ContractViolation.class, () -> plan.parse(utf8("id,name,id\n1,a,1\n")));
     assertEquals("CSV header: Field 'id': matched by two columns", twice.getMessage());
     // Ragged rows: rejected, or with flexible, absent fields must be optional.
-    var ragged = assertThrows(IllegalArgumentException.class, () -> plan.parse(utf8("id,name,score\n1,a\n")));
-    assertTrue(ragged.getMessage().startsWith("CSV syntax at record 2, byte 14:"), ragged.getMessage());
+    var ragged =
+        assertThrows(
+            IllegalArgumentException.class, () -> plan.parse(utf8("id,name,score\n1,a\n")));
+    assertTrue(
+        ragged.getMessage().startsWith("CSV syntax at record 2, byte 14:"), ragged.getMessage());
     CsvPlan flexible = CsvPlan.compile(schema, CsvFormat.RFC4180.withFlexible(true));
     CsvBatch shortRow = flexible.parse(utf8("id,name,score\n1,a\n"));
     assertSame(Missing.INSTANCE, DATA.read(shortRow.row(0), 2));
-    var required = assertThrows(ContractViolation.class, () -> flexible.parse(utf8("id,name,score\n1\n")));
+    var required =
+        assertThrows(ContractViolation.class, () -> flexible.parse(utf8("id,name,score\n1\n")));
     assertEquals("CSV record 2: Field 'name': missing", required.getMessage());
     // Without a header, columns map by position and the width must equal the schema.
     CsvPlan positional = CsvPlan.compile(schema, CsvFormat.RFC4180.withHeader(false));
@@ -226,14 +359,17 @@ final class CsvPlanTest {
     assertEquals(2.5, rows.row(0).getDouble(2));
     assertThrows(IllegalArgumentException.class, () -> positional.parse(utf8("7,x\n")));
     assertThrows(IllegalArgumentException.class, () -> positional.parse(utf8("7,x,1,2\n")));
-    CsvPlan positionalFlexible = CsvPlan.compile(schema, CsvFormat.RFC4180.withHeader(false).withFlexible(true));
+    CsvPlan positionalFlexible =
+        CsvPlan.compile(schema, CsvFormat.RFC4180.withHeader(false).withFlexible(true));
     assertSame(Missing.INSTANCE, DATA.read(positionalFlexible.parse(utf8("7,x\n")).row(0), 2));
     assertThrows(ContractViolation.class, () -> positionalFlexible.parse(utf8("7\n")));
     assertEquals(0, positional.parse(new byte[0]).size());
     // Typed plans stream with the plan's schema on every batch.
     StringBuilder text = new StringBuilder("id,name,score\n");
-    for (int i = 0; i < 1000; i++) text.append(i).append(",n").append(i).append(',').append(i).append(".5\n");
-    try (CsvReader reader = plan.open(new ChunkedInput(utf8(text.toString()), 3), CsvLimits.DEFAULT, 128)) {
+    for (int i = 0; i < 1000; i++)
+      text.append(i).append(",n").append(i).append(',').append(i).append(".5\n");
+    try (CsvReader reader =
+        plan.open(new ChunkedInput(utf8(text.toString()), 3), CsvLimits.DEFAULT, 128)) {
       assertSame(schema, reader.schema());
       long sum = 0;
       int count = 0;
@@ -257,13 +393,22 @@ final class CsvPlanTest {
 
   @Test
   void diagnosticsOmitValues() {
-    CsvPlan plan = CsvPlan.compile(Schema.of(new Field("id", Field.Kind.STRING, false, false), Field.requiredLong("amount")), CsvFormat.RFC4180);
-    var e = assertThrows(ContractViolation.class, () -> plan.parse(utf8("id,amount\nok,1\nsecret,9secret123x\n")));
+    CsvPlan plan =
+        CsvPlan.compile(
+            Schema.of(
+                new Field("id", Field.Kind.STRING, false, false), Field.requiredLong("amount")),
+            CsvFormat.RFC4180);
+    var e =
+        assertThrows(
+            ContractViolation.class,
+            () -> plan.parse(utf8("id,amount\nok,1\nsecret,9secret123x\n")));
     assertTrue(e.getMessage().contains("record 3"), e.getMessage());
     assertTrue(e.getMessage().contains("'amount'"), e.getMessage());
     assertFalse(e.getMessage().contains("secret"), e.getMessage());
     assertFalse(e.getMessage().contains("9"), e.getMessage());
-    CsvPlan bool = CsvPlan.compile(Schema.of(new Field("flag", Field.Kind.BOOLEAN, false, false)), CsvFormat.RFC4180);
+    CsvPlan bool =
+        CsvPlan.compile(
+            Schema.of(new Field("flag", Field.Kind.BOOLEAN, false, false)), CsvFormat.RFC4180);
     var b = assertThrows(ContractViolation.class, () -> bool.parse(utf8("flag\nhunter2\n")));
     assertFalse(b.getMessage().contains("hunter2"), b.getMessage());
     CsvBatch flags = bool.parse(utf8("flag\nTRUE\nfalse\n"));
@@ -325,7 +470,8 @@ final class CsvPlanTest {
     assertEquals("s1", DATA.read(row, 3));
     assertTrue(row.isNull(4));
     assertEquals(4L, batch.row(1).getLong(4));
-    assertEquals(Double.doubleToRawLongBits(-0.0), Double.doubleToRawLongBits(batch.row(1).getDouble(1)));
+    assertEquals(
+        Double.doubleToRawLongBits(-0.0), Double.doubleToRawLongBits(batch.row(1).getDouble(1)));
     // Wrong-type reads carry the value.
     var text = assertThrows(UnexpectedResultException.class, () -> cached.readLong(row, 3));
     assertEquals("s1", text.getResult());
@@ -355,11 +501,16 @@ final class CsvPlanTest {
                     Constraints.NONE.withLength(
                         new Constraints.Length(1, 4, Constraints.LengthUnit.UTF16))));
     for (Field field : unsupported) {
-      var e = assertThrows(IllegalArgumentException.class, () -> CsvPlan.compile(Schema.of(field), CsvFormat.RFC4180), field.toString());
+      var e =
+          assertThrows(
+              IllegalArgumentException.class,
+              () -> CsvPlan.compile(Schema.of(field), CsvFormat.RFC4180),
+              field.toString());
       assertTrue(e.getMessage().contains("'" + field.name() + "'"), e.getMessage());
     }
     Schema duplicate = Schema.of(Field.requiredLong("a"), Field.requiredLong("a"));
-    assertThrows(IllegalArgumentException.class, () -> CsvPlan.compile(duplicate, CsvFormat.RFC4180));
+    assertThrows(
+        IllegalArgumentException.class, () -> CsvPlan.compile(duplicate, CsvFormat.RFC4180));
     // Positional plans may repeat names: columns map by ordinal.
     CsvPlan positional = CsvPlan.compile(duplicate, CsvFormat.RFC4180.withHeader(false));
     assertEquals(2L, positional.parse(utf8("1,2\n")).row(0).getLong(1));

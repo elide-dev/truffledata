@@ -1,4 +1,4 @@
-# CSV backend (unreleased)
+# CSV backend
 
 The `//csv` module reads UTF-8 CSV into immutable column batches and writes CSV.
 
@@ -426,6 +426,11 @@ Output equals Commons, character for character (`CommonsRoundTripTest`).
 
 - `CsvMapping.map(path)` maps the file into a confined `Arena`;
 - `CsvMapping.map(path, true)` maps it into a shared one.
+- `CsvMapping.map(channel, shared)` maps a caller-owned `FileChannel` without
+  opening a path, changing its position, or closing it. Closing either the channel
+  or the mapping leaves the other usable. `Csv.parse(channel, ...)` and
+  `Csv.open(channel, ...)` own and close only their mapping, so sandboxed hosts can
+  supply a channel that already passed their file policy.
 
 | Entry point | Owner of the mapping | Batches valid until |
 | --- | --- | --- |
@@ -518,7 +523,21 @@ thread, shared arenas serve any. A `CsvReader` and a `CsvWriter` are single-thre
 
 ## Performance
 
-### Structural index
+### Byte windows and ownership
+
+`Csv.parse(bytes, from, to, format, limits)` and `CsvPlan.parse(bytes, from, to, limits)`
+parse the half-open array window, including an optional BOM at its start. Limits and
+error offsets are relative to that window. Generic parsing and plans with STRING
+columns retain one copy of the window; primitive-only plans retain no input.
+
+`parseOwned` has corresponding whole-array and window overloads. It transfers the
+backing array without a copy: the caller must keep every byte unchanged while the
+batch or any row remains reachable. For a window, the entire backing array stays
+retained; `inputBytes()` reports that retained size. `open(bytes, from, to, ...)`
+streams the window without an initial window copy; keep it unchanged until the
+reader closes. Each returned streaming batch owns its bytes.
+
+## Structural index
 
 Every entry point (`Csv.parse`, `Csv.open`, `CsvPlan.parse`/`open`, heap, stream and mapped
 input) scans through `CsvScanner`, which frames records over a structural index
@@ -545,6 +564,7 @@ same records, spans, return offsets and stops as the per-byte scanners.
   installed until the application calls them:
 
   ```java
+  // Run at image RUN TIME, after startup (not in a build-time class initializer):
   // Native image with truffledata-csv-native and libtruffledata_csv.a linked:
   CsvIndexing.install(CsvIndexing.loadNative());
   // JVM with truffledata-csv-jvm, --enable-native-access=ALL-UNNAMED and the .so attachment:
@@ -676,3 +696,10 @@ bazel test //tools/release:csv_native_test      # published jars in a static ima
 bazel test //tools/release:csv_kernel_consumer  # published native kernel on the JVM (FFM)
 bazel test //tools/release:csv_kernel_native_test  # published native kernel in a static image (RBE)
 ```
+
+The native provider validates its fingerprint when loaded. Call
+`CsvIndexing.install(CsvIndexing.loadNative())` at image run time, including when
+application packages use `--initialize-at-build-time`. The Native Image service is
+`SvmIndexer$Backend` from `truffledata-csv-native`; the JVM service is
+`FfmIndexer$Backend` from `truffledata-csv-jvm`, which must stay off the image
+classpath. `CsvIndexing.JAVA` is the built-in portable fallback.

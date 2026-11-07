@@ -8,9 +8,11 @@ import dev.elide.truffledata.Field;
 import dev.elide.truffledata.Schema;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.nio.channels.FileChannel;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
@@ -51,6 +53,41 @@ final class CsvMappingTest {
 
   private static List<List<@Nullable String>> rows(CsvBatch batch) {
     return Differential.rows(batch, new ArrayList<>());
+  }
+
+  @Test
+  void callerChannelSurvivesMappingAndConvenienceOwners() throws IOException {
+    Path path = file("channel.csv", utf8("name\nann\n"));
+    try (FileChannel channel = FileChannel.open(path, StandardOpenOption.READ)) {
+      channel.position(2);
+      try (CsvMapping mapping = CsvMapping.map(channel, true)) {
+        assertTrue(mapping.shared());
+        assertEquals(
+            rows(Csv.parse(utf8("name\nann\n"), CsvFormat.RFC4180)),
+            rows(Csv.parse(mapping, CsvFormat.RFC4180)));
+        assertEquals(2, channel.position());
+      }
+      assertTrue(channel.isOpen());
+      CsvBatch batch = Csv.parse(channel, CsvFormat.RFC4180);
+      batch.close();
+      assertTrue(channel.isOpen());
+      assertThrows(IllegalStateException.class, () -> batch.row(0));
+      try (CsvReader reader = Csv.open(channel, CsvFormat.RFC4180)) {
+        assertNotNull(reader.next());
+      }
+      assertTrue(channel.isOpen());
+      assertEquals(2, channel.position());
+    }
+    FileChannel channel = FileChannel.open(path, StandardOpenOption.READ);
+    try (CsvMapping mapping = CsvMapping.map(channel)) {
+      channel.close();
+      assertEquals(1, Csv.parse(mapping, CsvFormat.RFC4180).size());
+    }
+    try (FileChannel empty =
+            FileChannel.open(file("empty.csv", new byte[0]), StandardOpenOption.READ);
+        CsvMapping mapping = CsvMapping.map(empty)) {
+      assertEquals(0, mapping.size());
+    }
   }
 
   @Test
@@ -127,7 +164,8 @@ final class CsvMappingTest {
   @Test
   void closeInvalidatesEveryRead() throws Exception {
     Path path = file("close.csv", utf8("id,name\n1,ann\n2,\"b\"\"o\"\n"));
-    Schema schema = Schema.of(Field.requiredLong("id"), new Field("name", Field.Kind.STRING, false, false));
+    Schema schema =
+        Schema.of(Field.requiredLong("id"), new Field("name", Field.Kind.STRING, false, false));
     CsvMapping mapping = CsvMapping.map(path);
     CsvBatch batch = CsvPlan.compile(schema, CsvFormat.RFC4180).parse(mapping);
     CsvRow row = batch.row(1);
@@ -262,7 +300,8 @@ final class CsvMappingTest {
   @Test
   void writtenFilesReadBack() throws IOException {
     Path path = dir.resolve("written.csv");
-    CsvFormat format = CsvFormat.Predefined.POSTGRESQL_CSV.format().toBuilder().setHeader("k", "v").build();
+    CsvFormat format =
+        CsvFormat.Predefined.POSTGRESQL_CSV.format().toBuilder().setHeader("k", "v").build();
     try (CsvWriter writer = CsvWriter.open(Files.newOutputStream(path), format)) {
       writer.printRecord("a,b", null);
       writer.printRecord("", "c\nd");
