@@ -493,6 +493,64 @@ sh_test(
     ],
 )
 
+java_binary(
+    name = "consumer_jvm",
+    testonly = True,
+    data = ["//protobuf-buffa/native:shared"],
+    jvm_flags = ["--enable-native-access=ALL-UNNAMED"],
+    main_class = "dev.elide.truffledata.comparison.ConsumerComparison",
+    runtime_deps = [":consumer"],
+)
+
+# Before/after baselines: override with an executable from an earlier revision; by default each
+# measurement runs only the current build. Labels are never committed for local baselines.
+label_flag(
+    name = "consumer_svm_baseline",
+    build_setting_default = ":consumer_svm",
+)
+
+label_flag(
+    name = "consumer_jvm_baseline",
+    build_setting_default = ":consumer_jvm",
+)
+
+# Remote-worker measurements (benchmarks/comparison/CONSUMER.md). Every shard measures whole
+# (mode, stage) groups for all engines and binaries on one worker; timings remain advisory.
+[
+    sh_test(
+        name = name,
+        size = "enormous",
+        srcs = ["consumer_measure.sh"],
+        args = [
+            runtime,
+            "$(rootpath %s)" % candidate,
+            "$(rootpath %s)" % baseline,
+        ],
+        data = [
+            baseline,
+            candidate,
+            "//tools/bench:consumer.py",
+        ],
+        exec_properties = {
+            "EstimatedCPU": "4",
+            "EstimatedMemory": "16GB",
+        },
+        shard_count = 10,
+        tags = [
+            "benchmark",
+            "manual",
+        ],
+        target_compatible_with = [
+            "@platforms//os:linux",
+            "@platforms//cpu:x86_64",
+        ],
+    )
+    for name, runtime, candidate, baseline in [
+        ("consumer_measure", "svm", ":consumer_svm", ":consumer_svm_baseline"),
+        ("consumer_measure_jvm", "jvm", ":consumer_jvm", ":consumer_jvm_baseline"),
+    ]
+]
+
 # ---- CSV comparison (benchmarks/comparison/CSV.md). Competitors are benchmark-only dependencies.
 
 # Benchmark-only access to package-private CSV internals (the strict scanner, UTF-8 validator and
