@@ -163,7 +163,7 @@ final class BatchBuilder implements CsvScanner.Records {
     if (count != b.width && (count > b.width || !flexible))
       throw CsvScanner.syntax(
           number, byteBase + start, "record has " + count + " fields, expected " + b.width);
-    if (rows == capacity) grow();
+    if (rows == capacity) grow(start);
     int row = rows;
     int[] fieldToColumn = b.fieldToColumn;
     for (int f = 0; f < fieldToColumn.length; f++) {
@@ -198,8 +198,13 @@ final class BatchBuilder implements CsvScanner.Records {
   private long toLong(long number, int field, long span) {
     long value;
     try {
-      int length = view(span);
-      value = Numbers.parseLong(viewBytes, viewOffset, length);
+      // Strict spans (and simple Commons spans) are read in place; only complex Commons spans decode.
+      if (decoder == null || !CsvScanner.escaped(span)) {
+        value = Numbers.parseLong(input, CsvScanner.offset(span), CsvScanner.length(span));
+      } else {
+        int length = view(span);
+        value = Numbers.parseLong(viewBytes, viewOffset, length);
+      }
     } catch (NumberFormatException e) {
       throw violation(number, field, "invalid INT64");
     }
@@ -216,8 +221,12 @@ final class BatchBuilder implements CsvScanner.Records {
   private double toDouble(long number, int field, long span) {
     double value;
     try {
-      int length = view(span);
-      value = Numbers.parseDouble(viewBytes, viewOffset, length);
+      if (decoder == null || !CsvScanner.escaped(span)) {
+        value = Numbers.parseDouble(input, CsvScanner.offset(span), CsvScanner.length(span));
+      } else {
+        int length = view(span);
+        value = Numbers.parseDouble(viewBytes, viewOffset, length);
+      }
     } catch (NumberFormatException e) {
       throw violation(number, field, "invalid FLOAT64");
     }
@@ -226,19 +235,23 @@ final class BatchBuilder implements CsvScanner.Records {
     return value;
   }
 
+  /** {@code true} or {@code false}, ASCII case-insensitive. */
   private boolean toBoolean(long number, int field, long span) {
     int length = view(span);
-    int offset = viewOffset;
-    if (length == 4 && matches(offset, "true")) return true;
-    if (length == 5 && matches(offset, "false")) return false;
+    byte[] v = viewBytes;
+    int o = viewOffset;
+    if (length == 4
+        && (v[o] | 0x20) == 't'
+        && (v[o + 1] | 0x20) == 'r'
+        && (v[o + 2] | 0x20) == 'u'
+        && (v[o + 3] | 0x20) == 'e') return true;
+    if (length == 5
+        && (v[o] | 0x20) == 'f'
+        && (v[o + 1] | 0x20) == 'a'
+        && (v[o + 2] | 0x20) == 'l'
+        && (v[o + 3] | 0x20) == 's'
+        && (v[o + 4] | 0x20) == 'e') return false;
     throw violation(number, field, "invalid BOOLEAN");
-  }
-
-  /** ASCII case-insensitive match of a lower-case word of letters. */
-  private boolean matches(int offset, String word) {
-    for (int i = 0; i < word.length(); i++)
-      if ((viewBytes[offset + i] | 0x20) != word.charAt(i)) return false;
-    return true;
   }
 
   private ContractViolation violation(long number, int field, String reason) {
@@ -246,8 +259,34 @@ final class BatchBuilder implements CsvScanner.Records {
         "CSV record " + number + ": Field '" + binding.fields[field].name() + "': " + reason);
   }
 
-  private void grow() {
-    resize((int) Math.min((long) capacity * 2, maxRows));
+  /**
+   * Doubles the row arrays, or, when the scanned range is known ({@link #expect}), grows them to
+   * the row count extrapolated from the bytes consumed so far (plus 1/16), so a uniform input
+   * grows once or twice instead of once per doubling.
+   */
+  private void grow(int consumed) {
+    long size = (long) capacity * 2;
+    long done = (long) consumed - expectFrom;
+    if (expecting && done > 0) {
+      long estimate = rows * (expectTo - expectFrom) / done;
+      size = Math.max(size, estimate + (estimate >> 4) + 16);
+    }
+    resize((int) Math.min(size, maxRows));
+  }
+
+  /**
+   * The bytes this batch will scan, [from, to) in the coordinates of the current input: a window
+   * of a whole-file parse passes a negative {@code from} (the window's batch offset).
+   */
+  private long expectFrom;
+
+  private long expectTo;
+  private boolean expecting;
+
+  void expect(long from, long to) {
+    expectFrom = from;
+    expectTo = to;
+    expecting = to > from;
   }
 
   private void resize(int size) {

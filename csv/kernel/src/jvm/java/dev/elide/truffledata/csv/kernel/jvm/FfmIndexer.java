@@ -48,7 +48,7 @@ public final class FfmIndexer extends CsvIndexer implements AutoCloseable {
     final int best;
     private final Arena arena;
 
-    private Library(Path library, Arena arena) {
+    private Library(Path library, Arena arena, boolean closeable) {
       this.arena = arena;
       try {
         SymbolLookup symbols = SymbolLookup.libraryLookup(library.toAbsolutePath(), arena);
@@ -74,17 +74,20 @@ public final class FfmIndexer extends CsvIndexer implements AutoCloseable {
                 CsvNativeFFM.validate_utf8_DESCRIPTOR,
                 Linker.Option.critical(true));
       } catch (RuntimeException | Error failure) {
-        arena.close();
+        if (closeable) arena.close();
         throw failure;
       } catch (Throwable failure) {
-        arena.close();
+        if (closeable) arena.close();
         throw new IllegalStateException(failure);
       }
     }
 
-    /** Loads {@code library} (for example {@code csv_shared.so}) for the life of the process. */
+    /**
+     * Loads {@code library} (for example {@code csv_shared.so}) for the life of the process, in the
+     * global arena: downcalls then need no session acquire and release.
+     */
     public static Library load(Path library) {
-      return new Library(library, Arena.ofShared());
+      return new Library(library, Arena.global(), false);
     }
 
     /** The csv/native kernel the CPU supports best ({@link CsvIndex#kernelName}). */
@@ -147,7 +150,8 @@ public final class FfmIndexer extends CsvIndexer implements AutoCloseable {
    */
   public FfmIndexer(
       Path library, byte delimiter, byte quote, boolean quoting, int kernel, int criticalBytes) {
-    this(new Library(library, Arena.ofConfined()), true, delimiter, quote, quoting, kernel, criticalBytes);
+    this(
+        new Library(library, Arena.ofConfined(), true), true, delimiter, quote, quoting, kernel, criticalBytes);
   }
 
   /** An indexer over a shared {@link Library}. */

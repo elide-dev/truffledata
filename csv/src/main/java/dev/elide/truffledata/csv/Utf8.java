@@ -16,6 +16,12 @@ final class Utf8 {
   static int invalidOffset(byte[] bytes, int from, int to) {
     int i = from;
     while (i < to) {
+      // ASCII runs: sixteen bytes per step, then eight.
+      if (i + 16 <= to
+          && (((long) LONGS.get(bytes, i) | (long) LONGS.get(bytes, i + 8)) & HIGH_BITS) == 0) {
+        i += 16;
+        continue;
+      }
       if (i + 8 <= to && ((long) LONGS.get(bytes, i) & HIGH_BITS) == 0) {
         i += 8;
         continue;

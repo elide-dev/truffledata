@@ -105,6 +105,7 @@ public final class CsvReader implements AutoCloseable {
       BatchBuilder builder =
           new BatchBuilder(
               b, buffer, limits, plan.dialect, records, physical, carryOffset, rowHint);
+      builder.expect(0, filled);
       if (prevalidate) builder.prevalidate(scanner, 0, filled);
       int end = scanner.scan(buffer, 0, filled, eof, builder);
       if (scanner.stopped) finished = true;
@@ -149,6 +150,7 @@ public final class CsvReader implements AutoCloseable {
     while (!(eof && carryLength == 0) && physical + builder.rows() < stop) {
       byte[] buffer = fill(size);
       builder.window(buffer, (int) (carryOffset - base), carryOffset);
+      builder.expect(base - carryOffset, m.size() - carryOffset);
       if (prevalidate) builder.prevalidate(scanner, 0, filled);
       scanner.recordBase = physical + builder.rows();
       scanner.byteBase = carryOffset;
