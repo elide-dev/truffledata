@@ -363,7 +363,7 @@ void session_allocations() {
       }
     }
     if (calls) *calls = static_cast<fault_memory*>(memory)->calls;
-    require(text_of(&owner->view, 1) == "k0");
+    require(text_of(&owner->view.base, 1) == "k0");
     owner->destroy();
   };
   fault_memory counting(SIZE_MAX);
@@ -557,10 +557,24 @@ int main() {
     source.assign(source.size(), 'x');
   }
   auto* view = static_cast<const myna_value_view*>(first.view);
-  require(view->version == MYNA_VALUE_ABI && view->node_count == 5);
+  require(view->version == MYNA_VALUE_ABI_V4 && view->node_count == 5);
   static_assert(sizeof(JsonResult) == 112 && offsetof(JsonResult, key_hashes) == 88
                     && offsetof(JsonResult, text_table) == 96 && offsetof(JsonResult, text_bytes) == 104,
-                "ABI 5 publishes lexical spans, key hashes and session text arenas");
+                "ABI 6 publishes lexical spans, key hashes and session text arenas");
+  {
+    // ABI 6: the view is a complete Myna v4 descriptor; every object with a member has a directory
+    // of (FNV-1a, key offset) entries sorted by unsigned hash, and its payload is start + 1.
+    auto* v4 = static_cast<const myna_value_view_v4*>(first.view);
+    require(v4->directory_count == 2 && v4->directory && v4->metadata_count == 0 && !v4->metadata);
+    require(view->nodes[0].payload == 1);
+    uint32_t ha = myna_value_hash(reinterpret_cast<const uint8_t*>("a"), 1);
+    uint32_t hb = myna_value_hash(reinterpret_cast<const uint8_t*>("b"), 1);
+    const auto& lo = v4->directory[0];
+    const auto& hi = v4->directory[1];
+    require(lo.hash <= hi.hash);
+    require((lo.hash == ha && lo.key_offset == 1 && hi.hash == hb && hi.key_offset == 3)
+            || (lo.hash == hb && lo.key_offset == 3 && hi.hash == ha && hi.key_offset == 1));
+  }
   require(first.lexical_count == 5 && first.lexical);
   require(static_cast<const uint64_t*>(first.lexical)[2] == ((uint64_t(5) << 32) | 3));
   {

@@ -1,8 +1,8 @@
 # Native JSON decoder
 
-The C++ decoder traverses simdjson 5.1.1 On-Demand directly into a Myna ABI v3
-value index, without an intermediate DOM. Typed plans write fixed scalar slots
-instead. Both sit behind one versioned C ABI, `json.seam` (application ABI 5),
+The C++ decoder traverses simdjson 5.1.1 On-Demand directly into a Myna value ABI
+v4 index (Myna 0.11.0), without an intermediate DOM. Typed plans write fixed scalar
+slots instead. Both sit behind one versioned C ABI, `json.seam` (application ABI 6),
 which generates the direct SVM `@CFunction` bindings and JVM FFM handles. The Java
 owners, guest interop, export and snapshot contracts are described in
 [docs/JSON.md](../../docs/JSON.md).
@@ -41,17 +41,23 @@ retained input. Strings and keys keep their quotes and escapes, numbers keep the
 exact spelling, and containers, booleans and null carry zero.
 `JsonResult.lexical`/`lexical_count` publish that array, one entry per node.
 
-`JsonResult.key_hashes` publishes a second side table with the same count: one
-`uint32_t` per node. Bit 31 marks string and key nodes whose decoded bytes are all
-ASCII. Key nodes also carry the low 15 bits of the FNV-1a hash of their decoded
-bytes in bits 16–30 and their offset from their own object node in bits 0–15 (0
-when the offset exceeds 65,535); every other node has 0 in bits 0–30. The
-duplicate-key check computes the same hash, so it costs nothing extra. Java readers
-use the entry for member lookup: a nonzero low half identifies a direct member key
-of the object at exactly that offset, so a cached position hint is validated with
-one compare and can never match a value string or a nested object's key. It is a JSON side
-table, not a Myna layout change (container directories are requested upstream as
-elide-dev/myna#45).
+`JsonResult.view` points at a complete 88-byte `myna_value_view_v4` (ABI 6; ABI 5
+published the 56-byte v3 descriptor). Every object with at least one member has a
+Myna directory (`directory`/`directory_count`): one `(hash, key_offset)` entry per
+member, `hash` being `myna_value_hash` (32-bit FNV-1a over the decoded key bytes)
+and `key_offset` the key node's distance from its object, sorted by unsigned hash
+and then offset. The object's payload is its first entry plus one; empty objects
+keep payload 0. The duplicate-key check computes the same hash, and the writer takes
+it from the decoder rather than re-hashing key bytes when the object closes. JSON
+tapes carry no v4 metadata table (`metadata_count` 0) and no REF nodes. Java readers
+look members up through the directory and remember a member's rank in it.
+
+`JsonResult.key_hashes` publishes a side table with the node count: one `uint32_t`
+per node. Bit 31 marks string and key nodes whose decoded bytes are all ASCII (the
+text arena and export cursors use it); key nodes also carry the low 15 bits of their
+hash in bits 16–30 (export cursors' `hash()`, the sinks' key caches) and their
+offset from their object in bits 0–15, a layout shared with YAML's decoder. Member
+lookup no longer reads it.
 
 ### The lean walk
 
@@ -78,9 +84,12 @@ index budget), so a typical document makes one upstream allocation: a single are
 block. Arrays above 32 KiB are allocated upstream directly and freed on growth,
 so big tapes do not strand arena space. The writer enforces the builder's node,
 text, depth and container limits and produces byte-identical nodes, bytes and
-regions; `//json/native:test` runs both writers over a 200-document corpus. Until
-Myna can reserve builder storage (elide-dev/myna#46) the writer is the JSON-side
-substitute.
+regions, and the same v4 directories as Myna's builder with `enable_v4`;
+`//json/native:test` runs both writers over a 200-document corpus. Myna 0.11.0's
+builder can reserve storage (elide-dev/myna#46), and the parity writer uses it, but
+the raw writer stays the production path: the builder still wraps each write in a
+poisoning try/catch, keeps a slot stack and re-hashes every key when its object
+closes (`benchmarks/results/json-v4-*` measures both decoders).
 
 ## Sessions
 

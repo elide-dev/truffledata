@@ -27,14 +27,16 @@ import org.jspecify.annotations.Nullable;
  */
 public abstract class TapeOwner {
   protected final ValueTape tape;
-  // Same object as tape; raw node reads keep ValueTape.tag (a trivially inlined one-liner whose
-  // deopt target SVM runtime compilation cannot resolve) out of partially evaluated code.
+  // Same object as tape: the raw access hinted member reads and snapshots need, through one
+  // interface call.
   private final TapeSource source;
   // Null means unconfined (immutable snapshot). Final fields keep every check inlinable.
   private final @Nullable Thread thread;
-  private boolean open = true;
   // Exports in progress on the owning thread; close is refused while a walk reads the tape.
+  // Exports in progress (>= 0) while open; CLOSED once closed. One int keeps per-document owners
+  // at their size (they are allocated for every retained document).
   private int pins;
+  private static final int CLOSED = Integer.MIN_VALUE;
   // Text cursor and container stack reused by the outermost export on the owning thread; nested
   // and unconfined exports allocate their own.
   private @Nullable TapeText cursor;
@@ -50,6 +52,11 @@ public abstract class TapeOwner {
     this.thread = thread;
   }
 
+  /** The tape's raw access (the same object as {@link #tape}). */
+  final TapeSource source() {
+    return source;
+  }
+
   /** Throws when {@code format}'s alias tables (if any) do not cover {@code tape}. */
   protected static TapeFormat checkFormat(ValueTape tape, TapeFormat format) {
     int[] meta = format.meta;
@@ -61,7 +68,7 @@ public abstract class TapeOwner {
   /** Rejects closed or cross-thread access; immutable owners never fail. */
   protected final void check() {
     checkThread();
-    if (!open) throw new OwnerStateException(this, OwnerStateException.CLOSED);
+    if (pins < 0) throw new OwnerStateException(this, OwnerStateException.CLOSED);
   }
 
   /** Thread confinement only; liveness is covered by the assumption at cached sites. */
@@ -85,10 +92,13 @@ public abstract class TapeOwner {
     return format.alias(meta, node, tape.nodeCount());
   }
 
-  /** Value kind of a node; equal to {@code tape.tag(node)} for ABI v2 and v3 storage tags. */
+  /**
+   * Value kind of a node: Myna's checked {@link ValueTape#kindAt} (bounds and tag checks in one
+   * call, elide-dev/myna#47), which replaced the raw node read that kept {@code ValueTape.tag} out
+   * of partially evaluated code.
+   */
   final int tag(long node) {
-    if (node < 0 || node >= tape.nodeCount()) throw new IndexOutOfBoundsException("Node index");
-    return source.nodeInt(node * ValueTape.NODE_SIZE) & ValueTape.KIND_MASK;
+    return tape.kindAt(node);
   }
 
   /** Holds a confined owner open for an export; immutable owners never close and are not counted. */
@@ -131,9 +141,9 @@ public abstract class TapeOwner {
   /** Marks the owner closed; returns false when it already was. */
   protected final boolean markClosed() {
     checkThread();
-    if (pins != 0) throw new IllegalStateException(format().name + " message is being exported");
-    if (!open) return false;
-    open = false;
+    if (pins > 0) throw new IllegalStateException(format().name + " message is being exported");
+    if (pins < 0) return false;
+    pins = CLOSED;
     return true;
   }
 
@@ -158,66 +168,72 @@ public abstract class TapeOwner {
   }
 
   /**
-   * Whether the node at {@code offset} (1..65535) from {@code object} is that object's own key equal
-   * to {@code key}, which must be inline (at most 16 bytes). The side table publishes each key's
-   * offset from its object, so one compare rejects value strings, keys of nested objects and other
-   * positions; the inline node words are then compared exactly (Myna zero-pads inline text). No
-   * loop, no call beyond the tape's word reads, no allocation.
+   * The key node of {@code object} at entry {@code rank} of its Myna v4 directory when that is
+   * exactly {@code key} (inline, at most 16 bytes), else -1. A directory lists only its own object's
+   * keys and its order (unsigned hash, then offset) does not depend on member order, so a site's
+   * remembered rank holds for every member order of one key set. One straight-line tape call: the
+   * object word, payload, entry and the key's inline words, compared exactly (Myna zero-pads inline
+   * text). No loop, no allocation; {@code object} must be a valid node.
    */
-  final boolean keyMatches(long object, int offset, TapeKey key) {
-    long k = object + offset;
+  final long hinted(long object, int rank, TapeKey key) {
     // Keys of at most 8 bytes have an all-zero high word (zero padding); the site's key is a
     // constant, so `wide` folds and short keys skip the third word.
-    return k < tape.nodeCount()
-        && source.keyNodeEquals(
-            k, (key.hash << 16) | offset, key.header, key.low, key.high, key.length > 8);
-  }
-
-  /** Whether key node {@code k} decodes to exactly {@code key}'s bytes (hash first). */
-  final boolean keyEquals(long k, TapeKey key) {
-    return ((meta(k) >>> 16) & 0x7fff) == key.hash && tape.stringEquals(k, key.bytes);
-  }
-
-  /** Objects with more members than this get a hash directory on first lookup. */
-  static final int DIRECTORY_THRESHOLD = 32;
-
-  private volatile java.util.concurrent.@Nullable ConcurrentHashMap<Long, int[]> directories;
-
-  /** Diagnostic: number of objects given a member directory within this owner's lifetime. */
-  @TruffleBoundary
-  public final int directories() {
-    check();
-    var built = directories;
-    return built == null ? 0 : built.size();
+    return source.directoryKey(object, rank, key.hash, key.header, key.low, key.high, key.length > 8);
   }
 
   /**
-   * Open-addressing table of an object's key offsets (key node minus object, 0 = empty), probed by
-   * the native key hash. Built once per object and cached while the owner lives; a hash directory
-   * is what Myna ABI v4 container directories (elide-dev/myna#45) would publish natively.
+   * Value node of {@code key} in {@code object}, or -1. With a v4 directory: a binary search on
+   * the unsigned hash, then Myna's checked {@link ValueTape#keyMatches} over equal hashes in offset
+   * order (first match, as Myna's own {@code find}); {@code rank[0]}, when given, receives the
+   * matching entry's rank plus one. Without one (v3 tapes, objects below the producer's threshold):
+   * a linear scan filtered by the side table's 15-bit hash.
+   */
+  final long find(long object, TapeKey key, int @Nullable [] rank) {
+    long count = tape.length(object);
+    long payload = tape.bits(object);
+    if (payload != 0 && tape.version() == ValueTape.ABI_VERSION_V4) {
+      long start = payload - 1;
+      if (start > source.directorySize() || count > source.directorySize() - start)
+        throw new IllegalArgumentException("Invalid directory extent");
+      long low = start, high = start + count;
+      while (low < high) {
+        long mid = (low + high) >>> 1;
+        if (Integer.compareUnsigned((int) source.directoryEntry(mid), key.hash) < 0) low = mid + 1;
+        else high = mid;
+      }
+      long end = tape.next(object);
+      for (long entry = low; entry < start + count; entry++) {
+        long word = source.directoryEntry(entry);
+        if ((int) word != key.hash) break;
+        long k = object + (word >>> 32);
+        if (k <= object || k >= end - 1) throw new IllegalArgumentException("Invalid directory entry");
+        if (tape.keyMatches(k, key.prepared)) {
+          if (rank != null && entry - start < Integer.MAX_VALUE) rank[0] = (int) (entry - start) + 1;
+          return k + 1;
+        }
+      }
+      return -1;
+    }
+    long end = tape.next(object);
+    int side = key.sideHash();
+    for (long k = object + 1; k < end; k = tape.next(k + 1))
+      if (((meta(k) >>> 16) & 0x7fff) == side && tape.keyMatches(k, key.prepared)) return k + 1;
+    return -1;
+  }
+
+  /**
+   * Diagnostic: objects of this owner's tape that carry a native Myna v4 member directory (since
+   * the v4 adoption, every JSON object with a member; before it, objects above 32 members got a
+   * Java directory on first lookup).
    */
   @TruffleBoundary
-  final int[] directory(long object, long end) {
-    var built = directories;
-    if (built == null) {
-      synchronized (this) {
-        built = directories;
-        if (built == null) directories = built = new java.util.concurrent.ConcurrentHashMap<>();
-      }
-    }
-    return built.computeIfAbsent(
-        object,
-        key -> {
-          int members = Math.toIntExact(tape.length(key));
-          int[] table = new int[Integer.highestOneBit(Math.max(members, 1) * 2) * 2];
-          int mask = table.length - 1;
-          for (long k = key + 1; k < end; k = tape.next(k + 1)) {
-            int slot = ((meta(k) >>> 16) & 0x7fff) & mask;
-            while (table[slot] != 0) slot = (slot + 1) & mask;
-            table[slot] = Math.toIntExact(k - key);
-          }
-          return table;
-        });
+  public final int directories() {
+    check();
+    if (tape.version() != ValueTape.ABI_VERSION_V4) return 0;
+    int count = 0;
+    for (long node = 0; node < tape.nodeCount(); node++)
+      if (tape.kindAt(node) == ValueTape.OBJECT && tape.bits(node) != 0) count++;
+    return count;
   }
 
   /** True when a string or key node's decoded bytes are all ASCII; false for other nodes. */
@@ -240,54 +256,57 @@ public abstract class TapeOwner {
   /** Arrays with more elements than this get a child-offset index on first random access. */
   static final int INDEX_THRESHOLD = 8;
 
-  // Snapshots are shared across threads; computeIfAbsent publishes each fully built index. Created
-  // on first random access to a large array, so owners that never index pay nothing for it.
-  private volatile java.util.concurrent.@Nullable ConcurrentHashMap<Long, long[]> arrayIndexes;
-
-  private java.util.concurrent.ConcurrentHashMap<Long, long[]> arrayIndexes() {
-    var indexes = arrayIndexes;
-    if (indexes != null) return indexes;
-    synchronized (this) {
-      indexes = arrayIndexes;
-      if (indexes == null) arrayIndexes = indexes = new java.util.concurrent.ConcurrentHashMap<>();
-      return indexes;
-    }
-  }
-
   /** Diagnostic: number of arrays indexed for random access within this owner's lifetime. */
   @TruffleBoundary
   public final int indexedArrays() {
     check();
-    var indexes = arrayIndexes;
-    return indexes == null ? 0 : indexes.size();
+    var last = lastIndex;
+    return last == null ? 0 : last.all.size();
   }
 
   // A plain holder, not a record: identity is all the cache needs, so no equals/hashCode/toString.
+  // It also carries the owner's map of every index, so owners hold one field for both.
   private static final class ArrayIndex {
     final long array;
     final long[] children;
+    final java.util.concurrent.ConcurrentHashMap<Long, long[]> all;
 
-    ArrayIndex(long array, long[] children) {
+    ArrayIndex(long array, long[] children, java.util.concurrent.ConcurrentHashMap<Long, long[]> all) {
       this.array = array;
       this.children = children;
+      this.all = all;
     }
   }
 
-  // Most recently used index: repeated reads of one array skip the map and its key boxing.
+  // Most recently used index (and the map of all of them): repeated reads of one array skip the
+  // map and its key boxing. Snapshots are shared across threads; computeIfAbsent publishes each
+  // fully built index. Created on first random access to a large array, so owners that never
+  // index pay nothing for it.
   private volatile @Nullable ArrayIndex lastIndex;
+
+  private java.util.concurrent.ConcurrentHashMap<Long, long[]> arrayIndexes() {
+    var last = lastIndex;
+    if (last != null) return last.all;
+    synchronized (this) {
+      last = lastIndex;
+      if (last == null) lastIndex = last = new ArrayIndex(-1, new long[0], new java.util.concurrent.ConcurrentHashMap<>());
+      return last.all;
+    }
+  }
 
   /** Child node offsets of an array, built once and cached while the owner lives. */
   @TruffleBoundary
   final long[] arrayIndex(long array) {
     ArrayIndex last = lastIndex;
     if (last != null && last.array == array) return last.children;
-    long[] children = buildArrayIndex(array);
-    lastIndex = new ArrayIndex(array, children);
+    var all = arrayIndexes();
+    long[] children = buildArrayIndex(all, array);
+    lastIndex = new ArrayIndex(array, children, all);
     return children;
   }
 
-  private long[] buildArrayIndex(long array) {
-    return arrayIndexes().computeIfAbsent(
+  private long[] buildArrayIndex(java.util.concurrent.ConcurrentHashMap<Long, long[]> all, long array) {
+    return all.computeIfAbsent(
         array,
         key -> {
           long[] built = new long[Math.toIntExact(tape.length(key))];

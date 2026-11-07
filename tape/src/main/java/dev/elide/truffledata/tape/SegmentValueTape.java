@@ -5,15 +5,18 @@ import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
 
 /**
- * JVM reader over a native Myna v3 descriptor; the owner keeps every referenced region alive. Lives
- * in {@code //tape:jvm} so static images never carry it.
+ * JVM reader over a native Myna v3 or v4 descriptor (v4: with its object directory); the owner
+ * keeps every referenced region alive. Lives in {@code //tape:jvm} so static images never carry it.
  */
 public final class SegmentValueTape extends ValueTape implements TapeSource {
   private static final long REGION_SIZE = 16;
+  private static final long ENTRY_SIZE = 8;
   private final MemorySegment nodes;
   private final MemorySegment bytes;
   private final MemorySegment regions;
   private final long regionCount;
+  // ABI v4 directory entries (hash, key offset), or empty.
+  private final MemorySegment directory;
   // One int per node: the native key-hash side table; sized by of(descriptor, hashes).
   private MemorySegment hashes = MemorySegment.NULL;
 
@@ -30,12 +33,24 @@ public final class SegmentValueTape extends ValueTape implements TapeSource {
     regions = descriptor.get(ValueLayout.ADDRESS, 40).reinterpret(regionCount * REGION_SIZE);
     if (nodes.address() == 0 || (regionCount > 0 && regions.address() == 0))
       throw new IllegalArgumentException("Invalid value storage pointer");
+    if (version() == ABI_VERSION_V4) {
+      long entries = descriptor.get(ValueLayout.JAVA_LONG, 64);
+      MemorySegment table = descriptor.get(ValueLayout.ADDRESS, 56);
+      if (entries < 0 || entries > Long.MAX_VALUE / ENTRY_SIZE || (entries > 0 && (table.address() & 3) != 0)
+          || (entries > 0 && table.address() == 0) || descriptor.get(ValueLayout.JAVA_LONG, 80) != 0)
+        throw new IllegalArgumentException("Invalid ABI 4 extensions");
+      directory = table.reinterpret(entries * ENTRY_SIZE);
+    } else {
+      directory = MemorySegment.NULL;
+    }
   }
 
   static SegmentValueTape of(MemorySegment descriptor) {
     if (descriptor.address() == 0 || (descriptor.address() & 7) != 0)
       throw new IllegalArgumentException("Invalid value descriptor pointer");
-    return new SegmentValueTape(descriptor.reinterpret(56));
+    // The version decides the descriptor's size: 88 bytes for v4, 56 before.
+    int version = descriptor.reinterpret(4).get(ValueLayout.JAVA_INT, 0);
+    return new SegmentValueTape(descriptor.reinterpret(version == ABI_VERSION_V4 ? 88 : 56));
   }
 
   /** Reader over a decoded result: the descriptor plus its key-hash side table (one int per node). */
@@ -51,13 +66,44 @@ public final class SegmentValueTape extends ValueTape implements TapeSource {
     return hashes.get(ValueLayout.JAVA_INT, node * 4);
   }
 
+  // TapeSource's directory access goes through Myna's reader hooks, so both serve one layout.
   @Override
-  public boolean keyNodeEquals(long k, int meta, long header, long low, long high, boolean wide) {
-    long at = k * NODE_SIZE;
-    return (hashes.get(ValueLayout.JAVA_INT, k * 4) & 0x7fffffff) == meta
-        && readLong(at) == header
-        && readLong(at + 8) == low
-        && (!wide || readLong(at + 16) == high);
+  public long directorySize() {
+    return directoryCount();
+  }
+
+  @Override
+  public long directoryEntry(long index) {
+    return (directoryHash(index) & 0xffffffffL) | (directoryKeyOffset(index) << 32);
+  }
+
+  @Override
+  protected long directoryCount() {
+    return directory.byteSize() / ENTRY_SIZE;
+  }
+
+  @Override
+  protected int directoryHash(long index) {
+    return directory.get(ValueLayout.JAVA_INT, index * ENTRY_SIZE);
+  }
+
+  @Override
+  protected long directoryKeyOffset(long index) {
+    return Integer.toUnsignedLong(directory.get(ValueLayout.JAVA_INT, index * ENTRY_SIZE + 4));
+  }
+
+  @Override
+  public long directoryKey(long object, int rank, int hash, long header, long low, long high, boolean wide) {
+    long at = object * NODE_SIZE;
+    long word = readLong(at);
+    long payload = readLong(at + 8);
+    if ((int) word != OBJECT || rank >= (word >>> 32) || payload == 0) return -1;
+    long entry = payload - 1 + rank;
+    if (entry >= directoryCount() || directoryHash(entry) != hash) return -1;
+    long k = object + directoryKeyOffset(entry);
+    if (k >= nodeCount()) return -1;
+    long key = k * NODE_SIZE;
+    return readLong(key) == header && readLong(key + 8) == low && (!wide || readLong(key + 16) == high) ? k : -1;
   }
 
   /** Region 1 is the retained input of decoded documents: {data, length}. */

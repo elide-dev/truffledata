@@ -63,9 +63,12 @@ final class FfmAcceptanceTest {
           input.fill((byte) 'x');
         }
         MemorySegment view =
-            result.get(ValueLayout.ADDRESS, JsonFFM.JsonResult_view_OFFSET).reinterpret(56);
-        assertEquals(3, view.get(ValueLayout.JAVA_INT, 0));
+            result.get(ValueLayout.ADDRESS, JsonFFM.JsonResult_view_OFFSET).reinterpret(88);
+        // ABI 6: a complete 88-byte Myna value ABI v4 descriptor with the root object's directory.
+        assertEquals(4, view.get(ValueLayout.JAVA_INT, 0));
         assertEquals(5, view.get(ValueLayout.JAVA_LONG, 16));
+        assertEquals(2, view.get(ValueLayout.JAVA_LONG, 64));
+        assertEquals(0, view.get(ValueLayout.JAVA_LONG, 80));
         MemorySegment nodes = view.get(ValueLayout.ADDRESS, 8).reinterpret(5 * 24);
         long payload = nodes.get(ValueLayout.JAVA_LONG, 2 * 24 + 8);
         long length = Integer.toUnsignedLong(nodes.get(ValueLayout.JAVA_INT, 2 * 24 + 4));

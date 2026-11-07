@@ -168,7 +168,24 @@ public final class JsonJvm implements JsonDecoder {
     SegmentValueTape tape = tape(result);
     TapeLexical lexical = lexical(result, tape);
     live++;
-    return new JsonMessage(tape, lexical, () -> releaseResult(result, resultArena, onClose));
+    return new JsonMessage(
+        tape,
+        new JsonMessage.Storage() {
+          @Override
+          public long span(long node) {
+            return lexical.span(node);
+          }
+
+          @Override
+          public byte inputByte(long offset) {
+            return lexical.inputByte(offset);
+          }
+
+          @Override
+          public void run() {
+            releaseResult(result, resultArena, onClose);
+          }
+        });
   }
 
   // ---- Sessions (performance plan Task E1) ----

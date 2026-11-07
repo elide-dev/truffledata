@@ -44,21 +44,25 @@ ALLOCATION = {
     ('simdjson-generic-java', 'read-aot'): 1200.0,
     # Ingest through an explicit JsonSession (performance plan Task B2), fixed in JSON.md. Interop:
     # session decode + ten AOT interop reads (240 B of views, as read-aot) + close; measured 472
-    # (544 before sessions). Session JavaSink: borrowed parse into a key-cached JavaSink; measured
-    # 1,360 with the D1 text cursor (3,596 before; the plan's target was 1,900).
+    # (544 before sessions), 480 with Myna ABI v4 (ledger V1: a 112 B reader, a 40 B owner holding
+    # one storage reference, a 40 B result without a callback field). Session JavaSink: borrowed
+    # parse into a key-cached JavaSink; measured 1,360 with the D1 text cursor (3,596 before; the
+    # plan's target was 1,900), 1,240 since sessions rebind one reader (ledger V1; was 1,400).
     ('simdjson-generic-interop', 'ingest'): 480.0,
-    ('simdjson-session-java', 'ingest'): 1400.0,
+    ('simdjson-session-java', 'ingest'): 1280.0,
     # Borrowed parse into a TruffleSink over the session's shared text arena (Task D2): the host
     # tree, one TruffleString per string value and one 2 × length + 16 B text array per document;
-    # measured 1,772.5.
-    ('simdjson-session-truffle', 'ingest'): 1800.0,
+    # measured 1,772.5, 1,652.5 with the rebound reader (ledger V1; was 1,800).
+    ('simdjson-session-truffle', 'ingest'): 1680.0,
     # Streams (Task F2), one NDJSON buffer of the 32 documents per operation through a JsonStream
-    # that is never finished. JavaSink: next(JavaSink) per document, held to the session JavaSink
-    # budget (Task D1's); measured 1,338.5. Interop: next() lends the root (a borrow owner and tape
-    # reader per document, as for session parses) + ten AOT interop reads; measured 432.75. The
-    # plan's 1.0 B/document assumed a reusable borrow owner (elide-dev/myna#47).
-    ('simdjson-stream-java', 'ingest'): 1400.0,
-    ('simdjson-stream-interop', 'ingest'): 440.0,
+    # that is never finished. JavaSink: next(JavaSink) per document; measured 1,338.5, 1,218.5 with
+    # the rebound reader (ledger V1; was 1,400). Interop: next() lends the root (a borrow owner per
+    # document) + ten AOT interop reads (240 B); measured 432.75, 312.75 once the session's reader
+    # and lexical accessor are rebound instead of allocated per document (elide-dev/myna#47, ledger
+    # V1; was 440). The plan's 1.0 B/document is a compiled read root, which these ingest cells are
+    # not: 240 B are the AOT views; the rest is the borrow owner, its root view and the feed.
+    ('simdjson-stream-java', 'ingest'): 1280.0,
+    ('simdjson-stream-interop', 'ingest'): 320.0,
 }
 
 # Columns: Count Size Cycles Ifs Loops Invokes Allocs. Fail closed if trace format changes.

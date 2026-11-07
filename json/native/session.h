@@ -22,6 +22,7 @@ public:
   static constexpr size_t retained_input_limit = size_t(1) << 20;
 
   struct document_view {
+    // The descriptor prefix (version 4); the published descriptor is session::view_v4().
     myna_value_view view;
     tape::table_view<uint64_t> lexical;
     tape::table_view<uint32_t> hashes;
@@ -37,9 +38,9 @@ public:
     size_t input_capacity_;
     size_t bytes_;
   public:
-    myna_value_view view;
+    myna_value_view_v4 view;
     retained(std::pmr::memory_resource* upstream, tape::block_arena::storage storage, size_t bytes,
-             char* input, size_t input_capacity, myna_value_view view)
+             char* input, size_t input_capacity, myna_value_view_v4 view)
         : upstream_(upstream), storage_(std::move(storage)), input_(input),
           input_capacity_(input_capacity), bytes_(bytes), view(view) {}
     // Index bytes (arena blocks and large allocations) now owned by this document.
@@ -65,7 +66,7 @@ private:
   size_t input_capacity_ = 0;
   size_t input_length_ = 0;
   std::optional<tape_decoder<tape::tape_writer>> decoder_;
-  myna_value_view view_{};
+  myna_value_view_v4 view_{};
   bool live_ = false;
 
   void free_input() noexcept {
@@ -99,7 +100,7 @@ private:
       throw;
     }
     live_ = true;
-    return {view_, decoder_->lexical_spans(), decoder_->key_hashes(), length,
+    return {view_.base, decoder_->lexical_spans(), decoder_->key_hashes(), length,
             memory_.allocations() - before};
   }
   // Drops the previous document and bounds what the session keeps between documents.
@@ -181,9 +182,9 @@ public:
   size_t write_text(uint8_t* out, size_t capacity, const uint64_t*& table) {
     if (!live_) throw std::logic_error("no JSON session document");
     try {
-      size_t count = view_.node_count ? view_.node_count : 1;
+      size_t count = view_.base.node_count ? view_.base.node_count : 1;
       auto* entries = static_cast<uint64_t*>(arena_.allocate(count * sizeof(uint64_t), alignof(uint64_t)));
-      size_t used = tape::write_text_arena(view_, decoder_->key_hashes().data(), entries, out, capacity);
+      size_t used = tape::write_text_arena(view_.base, decoder_->key_hashes().data(), entries, out, capacity);
       if (used == tape::text_too_small) recycle();
       table = entries;
       return used;
@@ -212,8 +213,10 @@ public:
     return owner;
   }
 
-  // The live document; valid only while live().
-  const myna_value_view& view() const { return view_; }
+  // The live document's descriptor prefix and its complete (published) v4 descriptor; valid only
+  // while live().
+  const myna_value_view& view() const { return view_.base; }
+  const myna_value_view_v4& view_v4() const { return view_; }
   tape::table_view<uint64_t> lexical_spans() const { return decoder_->lexical_spans(); }
   tape::table_view<uint32_t> key_hashes() const { return decoder_->key_hashes(); }
   size_t input_length() const { return input_length_; }

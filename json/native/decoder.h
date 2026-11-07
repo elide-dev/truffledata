@@ -71,10 +71,21 @@ inline decode_hint hint_for(size_t input, const myna::value_limits& limits, cons
   size_t bytes = input / 8 + 64;
   if (bytes > cap * 8) bytes = cap * 8;
   size_t block = 4 * sizeof(myna_value_region) + 256;
-  for (size_t part : {nodes * sizeof(myna_value_node), nodes * sizeof(uint64_t), nodes * sizeof(uint32_t), bytes})
+  // Nodes, lexical spans, key meta, owned text, and the v4 directory and pending keys.
+  for (size_t part : {nodes * sizeof(myna_value_node), nodes * sizeof(uint64_t), nodes * sizeof(uint32_t), bytes,
+                      tape::tape_writer::directory_capacity(nodes) * sizeof(myna_value_directory_entry),
+                      tape::tape_writer::pending_capacity(nodes) * sizeof(myna_value_directory_entry)})
     if (part <= tape::block_arena::large_threshold) block += part + alignof(std::max_align_t);
   return {nodes, bytes, block};
 }
+
+// JSON tapes are Myna ABI v4 with a directory for every object with at least this many members
+// (JSON performance ledger, task V1): compiled member reads keep a per-site directory rank, which
+// is the same for every member order of one key set, and a directory entry proves its key belongs
+// to the object.
+inline constexpr int directory_threshold = 1;
+// tape_decoder's `directories` argument for an ABI v3 tape (benchmark probes only).
+inline constexpr int abi_v3 = -1;
 
 // Lean On-Demand visitor writing nodes, lexical spans and the key-hash side table into arena
 // storage. Shared by documents and sessions; one instance decodes one document.
@@ -86,6 +97,7 @@ template<class Writer> class tape_decoder final {
   const char* base_ = nullptr;
   uint32_t region_ = 0;
   myna::value_limits limits_;
+  int directories_;
 
   // Packed span into the retained input region: offset << 32 | length; zero when absent.
   void lexical(std::string_view raw = {}, uint32_t meta = 0) {
@@ -121,8 +133,11 @@ template<class Writer> class tape_decoder final {
           body_scan s = scan(body);
           std::string_view key = s.clean ? body : entry.unescaped_key().value();
           bool plain = s.clean ? s.ascii : tape::ascii(key);
-          uint32_t hash = tape::key_hash(key);
+          // Myna's directory hash (32-bit FNV-1a over the decoded bytes) serves the duplicate
+          // table, the v4 directory and (its low 15 bits) the key meta.
+          uint32_t hash = myna_value_hash(reinterpret_cast<const uint8_t*>(key.data()), key.size());
           if (!keys.insert(hash, key)) throw std::invalid_argument("duplicate JSON key");
+          writer_.member_key(index, hash);
           text(key, raw, s.clean, tape::key_meta(hash, lexical_.size() - object, plain));
           auto child = entry.value().value();
           visit(child, depth + 1);
@@ -203,8 +218,9 @@ template<class Writer> class tape_decoder final {
   }
 
 public:
-  tape_decoder(std::pmr::memory_resource* memory, myna::value_limits limits)
-      : memory_(memory), writer_(memory, limits), limits_(limits) {}
+  // `directories`: the v4 directory threshold (directory_threshold), or abi_v3.
+  tape_decoder(std::pmr::memory_resource* memory, myna::value_limits limits, int directories = directory_threshold)
+      : memory_(memory), writer_(memory, limits), limits_(limits), directories_(directories) {}
   tape_decoder(const tape_decoder&) = delete;
   tape_decoder& operator=(const tape_decoder&) = delete;
 
@@ -212,6 +228,7 @@ public:
   // given, is where the parser reads the same bytes (a stream's carry-over buffer, stream.h):
   // offsets of referenced text and lexical spans are taken relative to it, so they index `input`.
   void start(std::string_view input, const decode_hint& hint, const char* walked = nullptr) {
+    if (directories_ >= 0) writer_.enable_v4(static_cast<uint32_t>(directories_));
     writer_.reserve(hint.nodes, hint.bytes);
     lexical_.reserve(memory_, hint.nodes);
     hashes_.reserve(memory_, hint.nodes);
@@ -231,7 +248,11 @@ public:
     visit(root, 0);
     if (root.is_scalar().value()) (void)root.raw_json().value();
   }
-  myna_value_view view() const { return writer_.view(); }
+  // The complete descriptor: v4 (with the directory), or a v3 prefix with no extension tables.
+  myna_value_view_v4 view() const {
+    if (writer_.v4()) return writer_.view_v4();
+    return {writer_.view(), nullptr, 0, nullptr, 0};
+  }
   tape::table_view<uint64_t> lexical_spans() const { return {lexical_.data(), lexical_.size()}; }
   tape::table_view<uint32_t> key_hashes() const { return {hashes_.data(), hashes_.size()}; }
 };
@@ -248,7 +269,7 @@ template<class Writer> class basic_document final {
   tape::index_memory memory_;
   tape::block_arena arena_;
   tape_decoder<Writer> decoder_;
-  myna_value_view view_{};
+  myna_value_view_v4 view_{};
   size_t parser_capacity_ = 0;
 
   struct adopted_tag {};
@@ -292,7 +313,9 @@ public:
   bool adopted() const { return !owned_.data(); }
   basic_document(const basic_document&) = delete;
   basic_document& operator=(const basic_document&) = delete;
-  myna_value_view view() const { return view_; }
+  // The descriptor prefix (node, text and region fields; version 4); view_v4() is the published one.
+  myna_value_view view() const { return view_.base; }
+  const myna_value_view_v4& view_v4() const { return view_; }
   tape::table_view<uint64_t> lexical_spans() const { return decoder_.lexical_spans(); }
   // One entry per node; see key_hash and ascii_flag.
   tape::table_view<uint32_t> key_hashes() const { return decoder_.key_hashes(); }

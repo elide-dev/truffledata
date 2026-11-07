@@ -14,14 +14,18 @@ public final class JsonMessage extends TapeOwner implements AutoCloseable {
   /** JSON tapes hold no alias nodes: one shared format, without alias tables. */
   static final TapeFormat FORMAT = TapeFormat.of("JSON");
 
-  private final Runnable release;
-  private final TapeLexical lexical;
+  /**
+   * A published result's lexical tables and its release (run once, on close), as one object: a
+   * message is allocated per retained document, so it carries a single reference for both.
+   */
+  interface Storage extends TapeLexical, Runnable {}
+
+  private final Storage storage;
   private @Nullable Assumption alive;
 
-  JsonMessage(ValueTape tape, TapeLexical lexical, Runnable release) {
+  JsonMessage(ValueTape tape, Storage storage) {
     super(tape, Thread.currentThread());
-    this.lexical = lexical;
-    this.release = release;
+    this.storage = storage;
   }
 
   @Override
@@ -40,12 +44,12 @@ public final class JsonMessage extends TapeOwner implements AutoCloseable {
   @Override
   protected long lexical(long node) {
     if (node < 0 || node >= tape.nodeCount()) throw new IndexOutOfBoundsException("Node index");
-    return lexical.span(node);
+    return storage.span(node);
   }
 
   @Override
   protected byte lexicalByte(long offset) {
-    return lexical.inputByte(offset);
+    return storage.inputByte(offset);
   }
 
   @Override
@@ -53,7 +57,7 @@ public final class JsonMessage extends TapeOwner implements AutoCloseable {
   public void close() {
     if (markClosed()) {
       if (alive != null) alive.invalidate();
-      release.run();
+      storage.run();
     }
   }
 }

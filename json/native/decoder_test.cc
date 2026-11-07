@@ -333,6 +333,56 @@ void tape_writer_checks() {
     require(lean.lexical_spans().size() == a.node_count && reference.lexical_spans().size() == a.node_count);
     require(std::memcmp(lean.lexical_spans().data(), reference.lexical_spans().data(), a.node_count * 8) == 0);
     require(std::memcmp(lean.key_hashes().data(), reference.key_hashes().data(), a.node_count * 4) == 0);
+    // ABI v4 (Myna 0.11.0): the writer's directories (built from the decoder's key hashes) equal
+    // the ones myna::value_builder computes from the key bytes, entry for entry.
+    const auto& a4 = lean.view_v4();
+    const auto& b4 = reference.view_v4();
+    require(a.version == MYNA_VALUE_ABI_V4 && a4.metadata_count == 0 && b4.metadata_count == 0);
+    require(a4.directory_count == b4.directory_count);
+    require(a4.directory_count == 0
+            || std::memcmp(a4.directory, b4.directory, a4.directory_count * sizeof(myna_value_directory_entry)) == 0);
+  }
+  // Every object with a member has a directory (threshold 1); entries sorted by (hash, offset) and
+  // naming exactly the object's own keys, including nested objects.
+  {
+    std::string nested = R"({"b":{"a":1,"c":{"b":2}},"a":[{"x":1},{}],"c":3})";
+    document d(nested);
+    const auto& v = d.view_v4();
+    const myna_value_node* n = v.base.nodes;
+    size_t objects = 0, keys = 0;
+    for (uint64_t i = 0; i < v.base.node_count; ++i) {
+      if (n[i].tag != MYNA_VALUE_OBJECT) continue;
+      ++objects;
+      if (n[i].length == 0) { require(n[i].payload == 0); continue; }
+      require(n[i].payload >= 1 && n[i].payload - 1 + n[i].length <= v.directory_count);
+      const myna_value_directory_entry* e = v.directory + (n[i].payload - 1);
+      for (uint32_t k = 0; k < n[i].length; ++k) {
+        if (k) require(e[k - 1].hash < e[k].hash || (e[k - 1].hash == e[k].hash && e[k - 1].key_offset < e[k].key_offset));
+        const auto& key = n[i + e[k].key_offset];
+        require(key.tag == MYNA_VALUE_STRING);
+        uint8_t bytes[16];
+        for (uint32_t b = 0; b < key.length; ++b) bytes[b] = myna_value_inline_byte(&key, b);
+        require(myna_value_hash(bytes, key.length) == e[k].hash);
+        ++keys;
+      }
+    }
+    require(objects == 5 && keys == 7 && v.directory_count == 7);
+    // The ABI v3 decoder (benchmark probes only) writes the same nodes without directories.
+    truffledata::tape::index_memory memory(SIZE_MAX, std::pmr::new_delete_resource());
+    truffledata::tape::block_arena arena(&memory);
+    {
+      truffledata::json::tape_decoder<truffledata::tape::tape_writer> v3(&arena, {}, truffledata::json::abi_v3);
+      simdjson::padded_string padded(nested);
+      v3.start(std::string_view(padded.data(), padded.size()), truffledata::json::hint_for(padded.size(), {}, {}));
+      simdjson::ondemand::parser parser;
+      auto root = parser.iterate(padded).value();
+      v3.decode(root);
+      auto plain = v3.view();
+      require(plain.base.version == MYNA_VALUE_ABI && plain.directory_count == 0 && plain.base.node_count == v.base.node_count);
+      for (uint64_t i = 0; i < v.base.node_count; ++i)
+        require(plain.base.nodes[i].payload == (n[i].tag == MYNA_VALUE_OBJECT ? 0 : n[i].payload));
+    }
+    arena.release_all();
   }
   // The small fixture fits one arena block; the 1,000-record array needs a handful of large
   // allocations instead of one per container and growth step.

@@ -118,12 +118,18 @@ SVM_ONLY_METHODS = {
         'JsonSvm::publish (Lorg/graalvm/nativeimage/c/type/VoidPointer;Ljava/lang/Runnable;)'
         'Ldev/elide/truffledata/json/JsonMessage;',
         'JsonSvm::release (J)V',
-        'JsonSvm::lambda$static$0 ()V',
         'JsonSvm::tape (Lorg/graalvm/nativeimage/c/type/VoidPointer;)Ldev/elide/truffledata/tape/SvmValueTape;',
         'JsonSvm::tables (Lorg/graalvm/nativeimage/c/type/VoidPointer;Ldev/elide/truffledata/tape/SvmValueTape;'
-        'Ljava/lang/Runnable;)Ldev/elide/truffledata/json/JsonSvm$SvmLexical;',
+        'Ljava/lang/Runnable;)Ldev/elide/truffledata/json/JsonSvm$SvmResult;',
         'JsonSvm::adoptResult (Lorg/graalvm/nativeimage/c/type/VoidPointer;)Ldev/elide/truffledata/json/JsonMessage;',
-        'JsonSvm::borrow (Lorg/graalvm/nativeimage/c/type/VoidPointer;)Ldev/elide/truffledata/tape/TapeBorrow;',
+        # Result accessors (Myna v4 descriptor, side tables, retained input) and the session's
+        # rebindable borrow reader (JSON performance ledger V1; was JsonSvm::borrow).
+        'JsonSvm::descriptor (Lorg/graalvm/nativeimage/c/type/VoidPointer;)Lorg/graalvm/word/Pointer;',
+        'JsonSvm::hashes (Lorg/graalvm/nativeimage/c/type/VoidPointer;)Lorg/graalvm/word/Pointer;',
+        'JsonSvm::spans (Lorg/graalvm/nativeimage/c/type/VoidPointer;Ldev/elide/truffledata/tape/SvmValueTape;)'
+        'Lorg/graalvm/word/Pointer;',
+        'JsonSvm::inputRegion (Lorg/graalvm/nativeimage/c/type/VoidPointer;)Lorg/graalvm/word/Pointer;',
+        'JsonSvm$Borrows::borrow (Lorg/graalvm/nativeimage/c/type/VoidPointer;)Ldev/elide/truffledata/tape/TapeBorrow;',
         # The decoder handle returned by open() and the lexical table built by publish().
         'JsonSvm$1::decode ([BLdev/elide/truffledata/json/JsonLimits;)Ldev/elide/truffledata/json/JsonMessage;',
         'JsonSvm$1::adopt (Ljava/lang/foreign/MemorySegment;JLjava/lang/Runnable;)'
@@ -133,7 +139,9 @@ SVM_ONLY_METHODS = {
         # The side tables and release of one published result (lexical accessor and close action).
         'JsonSvm$SvmLexical::span (J)J',
         'JsonSvm$SvmLexical::inputByte (J)B',
+        'JsonSvm$SvmLexical::bind (Lorg/graalvm/word/Pointer;Lorg/graalvm/word/Pointer;J)V',
         'JsonSvm$SvmResult::run ()V',
+        'JsonSvm$AdoptedResult::run ()V',
     ),
     # Static-image session backend: open() throws from requireRuntime on the JVM (JvmScopedTest
     # asserts it), so the SVM backend and its text arenas run only in //json/tests:native_test
@@ -200,7 +208,13 @@ SVM_ONLY_METHODS = {
         'SvmValueTape::nodeInt (J)I',
         'SvmValueTape::nodeLong (J)J',
         'SvmValueTape::keyMeta (J)I',
-        'SvmValueTape::keyNodeEquals (JIJJJZ)Z',
+        # Myna v4 directory access and the session reader's rebinding (JSON performance ledger V1).
+        'SvmValueTape::directorySize ()J',
+        'SvmValueTape::directoryEntry (J)J',
+        'SvmValueTape::directoryKey (JIIJJJZ)J',
+        'SvmValueTape::rebind (Lorg/graalvm/word/Pointer;Lorg/graalvm/word/Pointer;)V',
+        'SvmValueTape::bindTables (Lorg/graalvm/word/Pointer;)V',
+        'SvmValueTape::simdThreshold ()I',
         'SvmValueTape::regionCount ()J',
         'SvmValueTape::regionSize (J)J',
         'SvmValueTape::copyRegion (JJ[BII)V',

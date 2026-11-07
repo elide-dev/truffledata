@@ -1,7 +1,7 @@
 # Native JSON backend (unreleased)
 
 The `//json` module parses general JSON with simdjson 5.1.1 On-Demand directly
-into a Myna ABI v3 value index, with no DOM, Serde value or Java object tree in
+into a Myna ABI v4 value index, with no DOM, Serde value or Java object tree in
 between. Guests read that index in place through `InteropLibrary`, embedders can
 export it into their own objects in one pass, and `snapshot()` detaches it into
 immutable heap storage. Known-schema scalar records decode into fixed native slots
@@ -24,7 +24,7 @@ that read them are the same classes for every format. `//json` re-exports `//tap
 
 | Shared (`//tape`) | Was (JSON) |
 | --- | --- |
-| `TapeOwner` (owners: liveness, confinement, pins, export cursor, array index, member directories, alias-resolution hook) | `JsonOwner` |
+| `TapeOwner` (owners: liveness, confinement, pins, export cursor, array index, directory lookups, alias-resolution hook) | `JsonOwner` |
 | `TapeValue`, `TapeSink`, `TapeText`, `TapeKey` | `JsonValue`, `JsonSink`, `JsonText`, `JsonKey` |
 | `TapeSnapshot`, `TapeExportNode`, `JavaSink`, `TruffleSink` | `JsonSnapshot`, `JsonExportNode`, `JavaSink`, `TruffleSink` |
 | `TypedOwner`, `TypedRecord`, `TypedArray`, `TypedAccess`, `TypedLayout` | `JsonTypedOwner`, `JsonRecord`, `JsonArray`, `JsonAccess`, `JsonPlan.Layout` |
@@ -332,18 +332,27 @@ is false and `readMember` throws `UnknownIdentifierException`. It is never encod
 lossily as `?`. Reads after close fail with `IllegalStateException`, which polyglot
 callers see as a `PolyglotException`.
 
-Member lookup is hash-first. The decoder publishes a key-hash side table (31-bit
-FNV-1a of each key's decoded bytes) that every owner keeps, snapshots included.
-Each cached `readMember`/`isMemberReadable` site also keeps a position hint: the
-offset of the key node where it last found its member. A hint is checked by the
-node's side-table hash (only keys carry one, so a value string with the same bytes
-never matches), tag, length and inline bytes before use, so a stale hint only costs
-a miss; for keys of at most 16 bytes the hit path is a few loads with no loop or
-call. Misses and longer keys scan key hashes behind a static boundary and update the
-hint. Objects with more than 32 members get an open-addressing directory on first
-lookup, cached by the owner (`directories()` counts them). `TapeKey.of(name)`
-prepares a key for repeated `member(TapeKey)` calls from Java. Native container
-directories are requested from Myna as elide-dev/myna#45.
+Member lookup goes through Myna value ABI v4 object directories (Myna 0.11.0,
+elide-dev/myna#45). The decoder gives every object with at least one member a
+directory: one `(hash, key offset)` entry per member, the hash being 32-bit FNV-1a
+of the key's decoded bytes, sorted by unsigned hash and then offset. Snapshots copy
+the directories of their subtree. Each cached `readMember`/`isMemberReadable` site
+keeps a rank hint: the position of its key in the directory of the object where it
+last found it. Because entries are sorted by hash, that rank is the same for every
+member order of one key set, so documents that alternate member orders hit on every
+read. A hint is checked before use: the receiver must be an object whose directory
+has that many entries, and the entry's hash, the key node's tag, length and inline
+bytes must match. A directory lists only its own object's keys, so a value string or
+a nested object's key never matches, and a stale hint only costs a miss. For keys of
+at most 16 bytes the hit path is a few loads with no loop or call. Misses and longer
+keys binary-search the directory behind a static boundary and update the hint;
+equal hashes are confirmed in key order (first match, as Myna's own `find`).
+`directories()` counts the objects that carry a directory. `TapeKey.of(name)` (or
+`TapeKey.of(ValueTape.Utf8Key)`) prepares a key for repeated `member(TapeKey)`
+calls from Java. Before ABI v4 a native side table carried each key's offset from
+its object and a Java directory was built for objects above 32 members; both are
+gone from lookups (the side table still marks ASCII text and gives export cursors
+their 15-bit key hash).
 
 ## Exporting to host objects
 

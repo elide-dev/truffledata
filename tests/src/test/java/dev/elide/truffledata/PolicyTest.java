@@ -53,12 +53,17 @@ class PolicyTest {
             Map.entry("JavaSink.java", 9), // Embedder tree building and key interning, outside the tape walk.
             Map.entry("TypedAccess.java", 2),
             Map.entry("TypedArray.java", 1),
-            Map.entry("TapeOwner.java", 10), // Close, pinning, array index, member directories, export cursors.
+            // Close, pinning, array index, export cursors, the native-directory diagnostic (the Java
+            // member directories went with Myna ABI v4, JSON performance ledger V1: 10 -> 9).
+            Map.entry("TapeOwner.java", 9),
             Map.entry("TypedRecord.java", 4),
             Map.entry("TypedOwner.java", 3),
-            Map.entry("TapeValue.java", 26), // Static (owner, node) slow paths per interop message and hint misses.
+            // Static (owner, node) slow paths per interop message and hint misses; the scan boundary
+            // folded into TapeOwner.find behind the miss boundary (V1: 26 -> 25).
+            Map.entry("TapeValue.java", 25),
             Map.entry("TapeBorrow.java", 1), // Borrowed-result assumption.
-            Map.entry("TapeKey.java", 1), // Key preparation (UTF-8 encode and hash).
+            // Key preparation from a String or from Myna's prepared Utf8Key (V1: 1 -> 2).
+            Map.entry("TapeKey.java", 2),
             Map.entry("TapeText.java", 4), // Sink-side materialization: String, TruffleString, copy, compare.
             Map.entry("TapeTextArena.java", 1), // TruffleString over a session text arena (sink side).
             Map.entry("TruffleSink.java", 9), // Reference guest sink: tree building and key interning.

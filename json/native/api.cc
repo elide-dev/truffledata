@@ -19,13 +19,13 @@ namespace {
 // Owner of a td_json_decode result; retained session results are the other result_owner.
 struct handle final : truffledata::json::result_owner {
   truffledata::json::document document;
-  myna_value_view view;
+  myna_value_view_v4 view;
   handle(std::string_view input, myna::value_limits values,
          truffledata::tape::storage_limits storage)
-      : document(input, values, storage), view(document.view()) {}
+      : document(input, values, storage), view(document.view_v4()) {}
   handle(const char* data, size_t length, size_t capacity, myna::value_limits values,
          truffledata::tape::storage_limits storage)
-      : document(data, length, capacity, values, storage), view(document.view()) {}
+      : document(data, length, capacity, values, storage), view(document.view_v4()) {}
   void destroy() noexcept override { delete this; }
 };
 int32_t publish(std::unique_ptr<handle> owned, JsonResult& result) {
@@ -212,7 +212,7 @@ constexpr uint32_t known_flags = TD_JSON_WANT_TEXT | TD_JSON_UTF16_INPUT | TD_JS
 void publish_borrowed(const session& s, const session::document_view& d, JsonResult& result,
                       const uint64_t* table = nullptr, size_t text_bytes = 0) {
   const auto& memory = s.memory();
-  result = {nullptr, const_cast<myna_value_view*>(&s.view()), d.input_length, s.input_capacity(),
+  result = {nullptr, const_cast<myna_value_view_v4*>(&s.view_v4()), d.input_length, s.input_capacity(),
             memory.current(), memory.peak(), d.index_allocations, s.parser_capacity(),
             sizeof(session), const_cast<uint64_t*>(d.lexical.data()), d.lexical.size(),
             const_cast<uint32_t*>(d.hashes.data()), const_cast<uint64_t*>(table), text_bytes};

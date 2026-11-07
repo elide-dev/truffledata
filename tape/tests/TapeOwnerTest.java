@@ -125,6 +125,69 @@ class TapeOwnerTest {
     return new int[] {0, ANCHORED, 0, TapeFormat.ALIAS};
   }
 
+  private static long inlineWord(String text) {
+    long word = 0;
+    byte[] bytes = text.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+    for (int i = 0; i < bytes.length; i++) word |= (bytes[i] & 255L) << (8 * i);
+    return word;
+  }
+
+  /** Directory entry: the key's FNV-1a hash and its offset from the object. */
+  private static long entry(String key, long offset) {
+    return (ValueTape.hashUtf8(key.getBytes(java.nio.charset.StandardCharsets.UTF_8)) & 0xffffffffL) | offset << 32;
+  }
+
+  /** {@code {"b":1,"a":{"x":2}}} as a hand-built Myna ABI v4 heap tape with both directories. */
+  private static HeapValueTape directoryDocument() {
+    long b = entry("b", 1), a = entry("a", 3), x = entry("x", 1);
+    boolean bFirst = Integer.compareUnsigned((int) b, (int) a) < 0;
+    long[] nodes = {
+      ValueTape.OBJECT | (2L << 32), 2, 7,
+      ValueTape.STRING | (1L << 32), inlineWord("b"), 0,
+      ValueTape.I64, 1, 3,
+      ValueTape.STRING | (1L << 32), inlineWord("a"), 0,
+      ValueTape.OBJECT | (1L << 32), 1, 7,
+      ValueTape.STRING | (1L << 32), inlineWord("x"), 0,
+      ValueTape.I64, 2, 7,
+    };
+    // Directories close in post order: the inner object's entry first, then the root's two.
+    long[] directory = {x, bFirst ? b : a, bFirst ? a : b};
+    return new HeapValueTape(nodes, new byte[0], new byte[0][], new int[7], directory);
+  }
+
+  // Myna ABI v4 heap tapes (JSON performance ledger V1): Myna's own validate() and find() read the
+  // same directory as the owner's lookups, rank hints and subtree snapshots.
+  @Test
+  void heapTapesServeMynaDirectories() {
+    HeapValueTape tape = directoryDocument();
+    assertEquals(ValueTape.ABI_VERSION_V4, tape.version());
+    tape.validate();
+    assertEquals(4, tape.find(0, ValueTape.Utf8Key.of("a")));
+    assertEquals(2, tape.find(0, ValueTape.Utf8Key.of("b")));
+    assertEquals(-1, tape.find(0, ValueTape.Utf8Key.of("x")));
+    assertEquals(6, tape.find(4, ValueTape.Utf8Key.of("x")));
+    Owner owner = new Owner(tape, TapeFormat.of("JSON"));
+    assertEquals(2, owner.directories());
+    assertEquals(1, owner.root().member("b").longValue());
+    assertEquals(2, owner.root().member("a").member("x").longValue());
+    TapeKey a = TapeKey.of("a");
+    int[] rank = new int[1];
+    assertEquals(4, owner.find(0, a, rank));
+    assertTrue(rank[0] > 0);
+    // A rank names a key only for an object with that many entries, and only its own keys.
+    assertEquals(3, owner.hinted(0, rank[0] - 1, a));
+    assertEquals(-1, owner.hinted(0, 2, a));
+    assertEquals(-1, owner.hinted(2, 0, a));
+    assertEquals(-1, owner.hinted(4, 0, a));
+    assertEquals(-1, owner.hinted(0, rank[0] - 1, TapeKey.of("b")));
+    // A subtree snapshot copies and re-bases exactly its own directory.
+    TapeSnapshot inner = owner.root().member("a").snapshot();
+    assertEquals(1, inner.directories());
+    assertEquals(2, inner.root().member("x").longValue());
+    // ABI v3 heap tapes have no directory: lookups scan.
+    assertEquals(0, new Owner(aliasDocument(), TapeFormat.of("JSON")).directories());
+  }
+
   @Test
   void aliasTableMustCoverTheTape() {
     TapeFormat short_ = TapeFormat.of("YAML").withAliases(new long[] {1}, new int[2]);

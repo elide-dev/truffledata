@@ -326,6 +326,8 @@ final class JsonInteropTest {
     }
   }
 
+  // Myna ABI v4 (elide-dev/myna#45): every object with a member carries a native directory, which
+  // replaced the Java directories built on first lookup for objects above 32 members.
   @Test
   void wideObjectsResolveMembersThroughADirectory() throws Exception {
     StringBuilder source = new StringBuilder("{");
@@ -335,21 +337,56 @@ final class JsonInteropTest {
         JsonMessage message = message(decoder, source.toString())) {
       InteropLibrary site = site();
       TapeValue root = message.root();
-      assertEquals(0, message.directories());
-      for (int i = 0; i < 1000; i += 37) assertEquals((long) i, root.member("k" + i).longValue());
-      assertEquals(999L, site.asLong(site.readMember(root, "k999")));
-      assertFalse(site.isMemberReadable(root, "k1000"));
       assertEquals(1, message.directories());
-      // Snapshots carry the side table: the same reads, and their own directory.
+      for (int i = 0; i < 1000; i += 37) assertEquals((long) i, root.member("k" + i).longValue());
+      for (int round = 0; round < 3; round++) {
+        assertEquals(999L, site.asLong(site.readMember(root, "k999")));
+        assertFalse(site.isMemberReadable(root, "k1000"));
+      }
+      // Snapshots copy the directory: the same reads through the heap tape.
       var snapshot = message.snapshot();
-      assertEquals(998L, site.asLong(site.readMember(snapshot.root(), "k998")));
+      for (int round = 0; round < 3; round++)
+        assertEquals(998L, site.asLong(site.readMember(snapshot.root(), "k998")));
       assertEquals(500L, snapshot.root().member("k500").longValue());
       assertFalse(site.isMemberReadable(snapshot.root(), "absent"));
       assertEquals(1, snapshot.directories());
-      // A small nested object never builds one.
-      try (JsonMessage small = message(decoder, "{\"o\":{\"a\":1,\"b\":2}}")) {
+      // Small and nested objects have directories too; an empty object has none.
+      try (JsonMessage small = message(decoder, "{\"o\":{\"a\":1,\"b\":2},\"e\":{}}")) {
         assertEquals(2L, small.root().member("o").member("b").longValue());
-        assertEquals(0, small.directories());
+        assertEquals(2, small.directories());
+        // A subtree snapshot keeps exactly its own directories, re-based.
+        var inner = small.root().member("o").snapshot();
+        assertEquals(1, inner.directories());
+        assertEquals(1L, inner.root().member("a").longValue());
+        assertEquals(2L, site.asLong(site.readMember(inner.root(), "b")));
+        assertThrows(java.util.NoSuchElementException.class, () -> inner.root().member("o"));
+      }
+    }
+  }
+
+  // Directory-rank hints (v4): documents alternating two member orders hit the same rank, and a
+  // rank that names another key, another key set or a non-object never matches.
+  @Test
+  void directoryRankHintsSurviveMemberOrderAndShapeChanges() throws Exception {
+    try (JsonDecoder decoder = JsonJvm.open(JvmScopedTest.library());
+        JsonMessage forward = message(decoder, "{\"id\":1,\"name\":\"a\",\"w\":{\"x\":1}}");
+        JsonMessage reverse = message(decoder, "{\"w\":{\"x\":2},\"name\":\"b\",\"id\":2}");
+        JsonMessage other = message(decoder, "{\"zz\":9,\"yy\":8,\"xx\":7}");
+        JsonMessage array = message(decoder, "[{\"id\":3}]")) {
+      InteropLibrary site = site();
+      for (int round = 0; round < 3; round++) {
+        assertEquals(1L, site.asLong(site.readMember(forward.root(), "id")));
+        assertEquals(2L, site.asLong(site.readMember(reverse.root(), "id")));
+        assertFalse(site.isMemberReadable(other.root(), "id"));
+        assertFalse(site.isMemberReadable(array.root(), "id"));
+        assertEquals(3L, site.asLong(site.readMember(array.root().element(0), "id")));
+      }
+      // An empty object has no directory (payload 0): lookups take the linear scan and miss.
+      try (JsonMessage empty = message(decoder, "{\"e\":{}}")) {
+        TapeValue inner = empty.root().member("e");
+        assertFalse(site.isMemberReadable(inner, "id"));
+        assertThrows(java.util.NoSuchElementException.class, () -> inner.member("id"));
+        assertEquals(1, empty.directories());
       }
     }
   }
@@ -362,7 +399,7 @@ final class JsonInteropTest {
       var snapshot = message.snapshot();
       InteropLibrary site = site();
       for (int round = 0; round < 3; round++) {
-        // After the first read, reads hit the hint through HeapValueTape.keyNodeEquals.
+        // After the first read, reads hit the hint through HeapValueTape.directoryKey.
         assertEquals(2L, site.asLong(site.readMember(snapshot.root(), "id")));
         assertEquals(3L, site.asLong(site.readMember(snapshot.root(), "name_longer_than_16_bytes")));
       }
