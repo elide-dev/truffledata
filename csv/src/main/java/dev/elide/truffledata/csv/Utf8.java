@@ -3,6 +3,7 @@ package dev.elide.truffledata.csv;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.nio.ByteOrder;
+import java.nio.charset.StandardCharsets;
 
 /** Strict UTF-8 validation: no overlongs, surrogates, values above U+10FFFF or truncation. */
 final class Utf8 {
@@ -51,5 +52,22 @@ final class Utf8 {
       i += trailing + 1;
     }
     return -1;
+  }
+
+  /**
+   * A String of strict UTF-8 bytes [offset, offset + length). ASCII spans of up to 16 bytes (the
+   * common short cell) are tested with two word loads and copied as Latin-1 directly, skipping
+   * the charset decoder's scan and dispatch; anything else decodes as UTF-8.
+   */
+  @SuppressWarnings("deprecation") // String(byte[], int, int, int): the Latin-1 copy, for ASCII
+  static String string(byte[] bytes, int offset, int length) {
+    if (length <= 16 && offset + 16 <= bytes.length) {
+      long mask = length >= 8 ? -1L : (1L << (length << 3)) - 1;
+      long high = length > 8 ? (length >= 16 ? -1L : (1L << ((length - 8) << 3)) - 1) : 0;
+      long words =
+          ((long) LONGS.get(bytes, offset) & mask) | ((long) LONGS.get(bytes, offset + 8) & high);
+      if ((words & HIGH_BITS) == 0) return new String(bytes, 0, offset, length);
+    }
+    return new String(bytes, offset, length, StandardCharsets.UTF_8);
   }
 }

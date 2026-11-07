@@ -69,15 +69,28 @@ final class Dialect {
     return decoder.decode(input, span, target, at);
   }
 
-  /** Materializes one span (allocates). */
+  /**
+   * Materializes one span (allocates the String). Strict escaped spans unescape into a per-thread
+   * scratch buffer (fields up to {@link #SCRATCH_BYTES}), so the String is the only allocation;
+   * complex Commons spans decode into a fresh array.
+   */
   String string(byte[] input, long span) {
-    if (!CsvScanner.escaped(span))
-      return new String(
-          input, CsvScanner.offset(span), CsvScanner.length(span), StandardCharsets.UTF_8);
-    byte[] text = new byte[CsvScanner.length(span)];
-    int length = decode(input, span, text, 0, decoder());
-    return new String(text, 0, length, StandardCharsets.UTF_8);
+    int length = CsvScanner.length(span);
+    if (!CsvScanner.escaped(span)) return Utf8.string(input, CsvScanner.offset(span), length);
+    if (strict && length <= SCRATCH_BYTES) {
+      byte[] text = SCRATCH.get();
+      if (text == null || text.length < length + 16) SCRATCH.set(text = new byte[SCRATCH_BYTES + 16]);
+      return Utf8.string(text, 0, CsvScanner.unescape(input, span, quote, text, 0));
+    }
+    byte[] text = new byte[length];
+    return new String(text, 0, decode(input, span, text, 0, decoder()), StandardCharsets.UTF_8);
   }
+
+  /** The longest escaped field unescaped through {@link #SCRATCH}. */
+  private static final int SCRATCH_BYTES = 4096;
+
+  /** Per-thread unescape buffer: 4 KiB plus a word of slack for the ASCII test, kept per thread. */
+  private static final ThreadLocal<byte @Nullable []> SCRATCH = new ThreadLocal<>();
 
   // ---- Java Character.isWhitespace over UTF-8
 

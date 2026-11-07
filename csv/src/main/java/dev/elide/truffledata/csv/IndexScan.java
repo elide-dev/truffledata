@@ -1,5 +1,6 @@
 package dev.elide.truffledata.csv;
 
+import com.oracle.truffle.api.HostCompilerDirectives.BytecodeInterpreterSwitch;
 import dev.elide.truffledata.csv.kernel.CsvIndex;
 import dev.elide.truffledata.csv.kernel.CsvIndexer;
 import org.jspecify.annotations.Nullable;
@@ -121,6 +122,7 @@ final class IndexScan {
    */
   private static final ThreadLocal<int @Nullable []> SHARED = new ThreadLocal<>();
 
+  @BytecodeInterpreterSwitch
   private int frame(
       int[] idx,
       byte[] input,

@@ -199,7 +199,9 @@ public final class CsvBatch implements TruffleObject, AutoCloseable {
   String stringAt(int row, int column) {
     long[] v = columns[column].presentSpans;
     if (row >= v.length || mapping != null) return stringSlow(row, column);
-    return string(this, v[row]);
+    long span = v[row];
+    if (CsvScanner.escaped(span)) return string(this, span);
+    return Utf8.string(input, CsvScanner.offset(span), CsvScanner.length(span));
   }
 
   private String stringSlow(int row, int column) {
@@ -216,11 +218,21 @@ public final class CsvBatch implements TruffleObject, AutoCloseable {
   static String string(CsvBatch batch, long span) {
     CsvMapping m = batch.mapping;
     if (m == null) return batch.dialect.string(batch.input, span);
+    // A String owns its bytes, so mapped cells pass through a per-thread buffer once (no array per
+    // cell); only cells longer than the buffer get their own copy.
     int length = CsvScanner.length(span);
-    byte[] region = new byte[length];
+    byte[] region = REGION.get();
+    if (length > REGION_BYTES) region = new byte[length + 16];
+    else if (region == null) REGION.set(region = new byte[REGION_BYTES + 16]);
     m.copy(batch.base + CsvScanner.offset(span), region, 0, length);
     return batch.dialect.string(region, rebase(span));
   }
+
+  /** The longest mapped cell read through {@link #REGION}. */
+  private static final int REGION_BYTES = 4096;
+
+  /** Per-thread copy of one mapped cell, plus a word of slack for the ASCII test. */
+  private static final ThreadLocal<byte @Nullable []> REGION = new ThreadLocal<>();
 
   /** The span relative to a copy of its own bytes. */
   private static long rebase(long span) {
