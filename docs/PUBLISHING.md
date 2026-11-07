@@ -24,7 +24,7 @@ The release publishes eighteen thin libraries and a dependency-management BOM, w
 | `dev.elide:truffledata-protobuf-runtime:<version>` | Stock-free plans, codecs, runtime descriptor compilation and generated-record support; core, Gson and Truffle dependencies |
 | `dev.elide:truffledata-protobuf:<version>` | Optional Message/descriptor compatibility bridge and build-time contract generator; depends on protobuf-runtime, protobuf-java and protobuf-java-util |
 
-All artifacts require Java 25 and currently target Elide GraalVM `25.5.5-elide.24`. They do not bundle GraalVM, guest languages, JDBC drivers, annotation processors, or test libraries. Select the runtime and guest languages in the embedding application. The driver integration artifacts declare their upstream drivers transitively; generic JDBC remains driver independent. JSpecify annotations and the Truffle API are compile dependencies. Release dependencies are checked against `maven_install.json` by `//tools/release:test`.
+All artifacts require Java 25 and currently target Elide GraalVM `25.5.5-elide.27`. They do not bundle GraalVM, guest languages, JDBC drivers, annotation processors, or test libraries. Select the runtime and guest languages in the embedding application. The driver integration artifacts declare their upstream drivers transitively; generic JDBC remains driver independent. JSpecify annotations and the Truffle API are compile dependencies. Release dependencies are checked against `maven_install.json` by `//tools/release:test`.
 
 ## Stage and inspect
 
@@ -49,7 +49,7 @@ tools/release/publish.sh 0.7.1 --publish
 
 The command runs the full test suite, the explicit native JIT smoke target, and both expected-failure native safety controls before staging artifacts. Native checks use the normal Linux RBE platform; the per-platform native gates and the native release check are described under [Prebuilt natives](#prebuilt-natives). It then merges existing metadata, uploads immutable payloads, verifies bucket contents and public payload bytes, and uploads metadata and checksums. Missing credentials, failed listings and malformed existing metadata fail the release; they are never interpreted as an empty repository. It neither tags nor pushes Git history. CI already exercises publication validation through `bazel test //...`; uploading is an explicit release operation, not a pull-request action.
 
-**Serialize publishers**, including publishers on other machines. Rclone/R2 has no atomic multi-artifact transaction or cross-machine release lock. A failed upload can leave a partial version; the publisher refuses to overwrite or automatically resume that version. Inspect and repair the incomplete release before publishing again. Metadata's `latest` and `release` identify the most recently published version, so publish releases in intended discovery order. Explicit versions work independently of these fields. No signing key or Maven Central publishing is configured.
+**Serialize publishers**, including publishers on other machines. Rclone/R2 has no atomic multi-artifact transaction or cross-machine release lock. A failed upload can leave a partial version; the publisher refuses to overwrite or automatically resume that version. Inspect and repair the incomplete release before publishing again. Metadata's `latest` and `release` identify the most recently published version, so publish releases in intended discovery order. Explicit versions work independently of these fields. The 0.9.0 Maven payloads remain unsigned; its GitHub release includes signed native checksums. The follow-up publisher signs all Maven payloads and validates a Central deployment before uploading to Elide Maven, then publishes that validated deployment to Central. It writes the deployment ID beside the staged repository so a later Central status/publish operation can resume without re-uploading immutable Maven artifacts.
 
 ## Consume
 
@@ -59,7 +59,7 @@ For version `0.8.0`, Gradle consumers can use:
 repositories {
     mavenCentral()
     maven("https://maven.elide.dev")
-    maven("https://maven.elide.dev/gvm-elide/25.5.5-elide.24")
+    maven("https://maven.elide.dev/gvm-elide/25.5.5-elide.27")
 }
 dependencies {
     implementation(platform("dev.elide:truffledata-bom:0.8.0"))
@@ -189,11 +189,18 @@ managed by the BOM, mirroring the JSON split:
 Opting in is explicit; nothing is extracted, loaded or installed automatically:
 
 ```java
-// Native image: add truffledata-csv-native and link the archive.
+// At image RUN TIME: add truffledata-csv-native and link the archive.
 CsvIndexing.install(CsvIndexing.loadNative());
 // JVM: add truffledata-csv-jvm and run with --enable-native-access=ALL-UNNAMED.
 CsvIndexing.install(CsvIndexing.loadNative(Path.of("truffledata-csv-native-<version>-linux-x86_64.so")));
 ```
+
+Loading the native provider calls `CsvNative.fingerprint()`: run the installation
+sequence after image startup, including when application packages are initialized
+at build time. The static-image service is `SvmIndexer$Backend` from
+`truffledata-csv-native`; `FfmIndexer$Backend` from `truffledata-csv-jvm` serves JVM
+applications and must stay off the image classpath. `CsvIndexing.JAVA` provides the
+portable fallback without either native backend.
 
 For a standalone native-image build, stage the archive as `libtruffledata_csv.a`, add its
 directory to `-H:CLibraryPath`, and link libc++ (`-lc++ -lc++abi`). No native-image
@@ -277,3 +284,53 @@ function into `main` and that the plain link calls the archive's machine code, r
 and loads the shared library with `dlopen`. `publish.sh` runs them, with the JVM consumers
 of the shared libraries (`buffa_consumer`, `json_consumer`, `csv_kernel_consumer`), on
 linux-aarch64 RBE and locally on macOS; linux-x86_64 runs them in `bazel test //...`.
+
+## Follow-up distribution (0.10.0)
+
+The working publisher adds Javadoc jars, Gradle `.module` metadata, and
+`MIT OR Apache-2.0` license metadata and resources. Javadocs are generated from
+the same source jars and dependency classpaths as the binary publication.
+Gradle metadata carries API/runtime variants and BOM constraints; consumers
+still configure the Elide repository for the GraalVM fork dependencies.
+
+CSV also ships static-only `linux-x86_64-musl` and `linux-aarch64-musl` archives,
+plus target-triple aliases for every archive. Musl builds use the pinned
+Elide toolchain's musl 1.2.5 sysroot, static dependencies and the same ABI
+fingerprint as the GNU and macOS bindings. Per-target CI runs the kernel and
+isolated archive on Linux x86-64/AArch64 and macOS AArch64.
+
+`truffledata-csv-native-<version>-native.h` is the C ABI header. Each classifier
+has a `.json` manifest next to its native attachments, with required link
+libraries, runtime baseline, exact ABI fingerprint, LLVM version, source commit,
+and payload hashes. CSV archives expose only the five `td_csv_*` ABI functions;
+implementation symbols are internalized before both machine-code and ThinLTO
+code generation.
+
+Staging additionally produces `.bundles/truffledata-csv-native-<version>-<triple>.tar.zst`
+files beside the Maven repository (the printed path is `<repository>.bundles`).
+Each contains conventional `lib/` and `include/` paths, `manifest.json`, license
+notices, SHA-256 sidecars, and the macOS bitcode twin where applicable. Attach
+these bundles and their checksums to the GitHub release after main is green.
+
+For signed publication, unlock the configured GPG key and provide
+`SIGNING_KEY_ID`. Central credentials can come from `SONATYPE_USERNAME` and
+`SONATYPE_TOKEN`, or from `CENTRAL_CREDENTIALS_FILE`, a private JSON
+`{"username":"...","token":"..."}` file, a Maven `<server>` XML fragment, or a
+full Maven settings file. Set `CENTRAL_SERVER_ID` if a full settings file has
+multiple servers. Credential values never enter command-line arguments or logs.
+
+```bash
+CENTRAL_CREDENTIALS_FILE="$HOME/.m2/settings-publishing.xml" \
+  MAVEN_BUCKET=r2:elide-maven tools/release/publish.sh 0.10.0 --publish
+
+# Inspect or resume the recorded Central deployment; no new bundle upload:
+python3 tools/release/central.py status --state build/release-repo.EXAMPLE.central.json
+python3 tools/release/central.py publish --state build/release-repo.EXAMPLE.central.json
+python3 tools/release/central.py wait --state build/release-repo.EXAMPLE.central.json --until PUBLISHED
+```
+
+Central publication is separate from Git tagging and GitHub release creation.
+The API workflow follows [Sonatype's Publisher API](https://central.sonatype.org/publish/publish-portal-api/);
+the signed jars, Javadocs and POM metadata satisfy its documented
+[publication requirements](https://central.sonatype.org/publish/requirements/).
+Actual deployment validation remains a release gate, including namespace access.

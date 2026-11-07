@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Stage by default. --publish uploads an immutable release using Komodo's R2 remote.
+# Stage by default. --publish signs, validates with Central, uploads to R2, then publishes Central.
 #
 # Prebuilt natives ship for linux-x86_64, linux-aarch64 and macos-aarch64 (docs/PUBLISHING.md). On an Apple silicon
 # Mac this script builds all three: Linux amd64 and arm64 on BuildBuddy RBE (--config=remote, --config=remote_arm64)
@@ -59,14 +59,18 @@ BAZEL="$bazel" python3 .github/scripts/jit_gate.py --probes-only
 platform_gates=(//tools/release:native_consumers //tools/release:buffa_consumer //tools/release:json_consumer //tools/release:csv_kernel_consumer)
 "$bazel" test --config=remote_arm64 "${platform_gates[@]}" "$flag"
 [[ $host != Darwin-arm64 ]] || "$bazel" test --config=local "${platform_gates[@]}" "$flag"
+for config in remote_musl remote_arm64_musl; do
+  "$bazel" test --config="$config" //csv/native:api_test //csv/native:index_test //tools/release:csv_archive_test "$flag"
+done
 
 # One platform's //tools/release:natives build, copied out of bazel-out before the next invocation.
 collect() { # collect CLASSIFIER BAZEL_ARGS...
-  local classifier=$1
+  local classifier=$1 target=//tools/release:natives
+  [[ $classifier != *-musl ]] || target=//tools/release:csv_musl_natives
   shift
-  "$bazel" build "$@" //tools/release:natives "$flag"
+  "$bazel" build "$@" "$target" "$flag"
   mkdir -p "$natives/$classifier"
-  "$bazel" cquery "$@" //tools/release:natives "$flag" --output=files 2> /dev/null | while IFS= read -r file; do
+  "$bazel" cquery "$@" "$target" "$flag" --output=files 2> /dev/null | while IFS= read -r file; do
     relative=${file#*/bin/tools/release/}
     mkdir -p "$natives/$classifier/$(dirname "$relative")"
     cp -L "$file" "$natives/$classifier/$relative"
@@ -74,6 +78,8 @@ collect() { # collect CLASSIFIER BAZEL_ARGS...
 }
 collect linux-x86_64 --config=remote
 collect linux-aarch64 --config=remote_arm64
+collect linux-x86_64-musl --config=remote_musl
+collect linux-aarch64-musl --config=remote_arm64_musl
 if [[ $host == Darwin-arm64 ]]; then
   collect macos-aarch64 --config=local
 else
@@ -84,16 +90,34 @@ python3 tools/release/maven_repo.py bazel-bin/tools/release "$repo" "$version" -
 
 # The release gate for the prebuilt natives, with the host's toolchain LLVM tools (they read ELF and Mach-O).
 case $host in
-  Darwin-arm64) toolchain=@elide_toolchain_darwin_arm64//:bin ;;
-  Linux-x86_64) toolchain=@elide_toolchain_linux_amd64//:bin ;;
-  Linux-aarch64) toolchain=@elide_toolchain_linux_arm64//:bin ;;
+  Darwin-arm64) toolchain=@elide_toolchain_darwin_arm64//:bin; sdk=graalvm_macos_aarch64 ;;
+  Linux-x86_64) toolchain=@elide_toolchain_linux_amd64//:bin; sdk=graalvm_linux_amd64 ;;
+  Linux-aarch64) toolchain=@elide_toolchain_linux_arm64//:bin; sdk=graalvm_linux_aarch64 ;;
   *) echo "No toolchain LLVM tools for $host" >&2; exit 1 ;;
 esac
-"$bazel" build --config=local "$toolchain"
+"$bazel" build --config=local "$toolchain" "@$sdk//:jdk"
 llvm=$("$bazel" info --config=local execution_root 2> /dev/null)/$(dirname "$("$bazel" cquery --config=local "$toolchain" --output=files 2> /dev/null | grep '/bin/llvm-nm$')")
+execution=$("$bazel" info --config=local execution_root 2> /dev/null)
+java_file=$("$bazel" cquery --config=local "@$sdk//:bin-java-filegroup" --output=files 2> /dev/null)
+JAVA_HOME=$(dirname "$(dirname "$execution/$java_file")") python3 tools/release/gradle_consumer.py --repository "$repo" --version "$version"
 python3 tools/release/check_natives.py --llvm-bin "$llvm" --version "$version" --repository "$repo" --manifests "$natives"
+bundles=$repo.bundles
+revision=$(git rev-parse HEAD)
+epoch=$(git show -s --format=%ct HEAD)
+dirty=()
+[[ -z $(git status --porcelain) ]] || dirty=(--dirty)
+python3 tools/release/native_bundle.py --repository "$repo" --version "$version" --module csv-native \
+  --header "$repo/dev/elide/truffledata-csv-native/$version/truffledata-csv-native-$version-native.h" \
+  --llvm-bin "$llvm" --output "$bundles" --revision "$revision" --source-date-epoch "$epoch" ${dirty[@]+"${dirty[@]}"}
+echo "Staged native bundles: $bundles"
 echo "Staged Maven repository: $repo"
 [[ $mode == --publish ]] || exit 0
+# Validate a signed Central deployment before making the release discoverable.
+# CENTRAL_CREDENTIALS_FILE may point to private JSON or Maven publishing settings XML.
+python3 tools/release/central.py sign --repository "$repo" --version "$version"
+python3 tools/release/central.py bundle --repository "$repo" --version "$version" --bundle "$repo.central.zip"
+python3 tools/release/central.py upload --bundle "$repo.central.zip" --state "$repo.central.json"
+python3 tools/release/central.py wait --state "$repo.central.json" --until VALIDATED
 # Run only one publisher at a time: R2/rclone has no multi-object transaction.
 # Upload and verify all immutable payloads before making the version discoverable in metadata.
 for module in "${modules[@]}"; do
@@ -101,9 +125,9 @@ for module in "${modules[@]}"; do
   path=dev/elide/$artifact/$version
   rclone copy "$repo/$path" "$bucket/$path" --immutable --checksum
   rclone check "$repo/$path" "$bucket/$path" --one-way
-  read -r -a suffixes <<< "$(python3 -c 'import sys; sys.path.insert(0, "tools/release"); from maven_repo import artifact_suffixes; print(" ".join(artifact_suffixes(sys.argv[1])))' "$module")"
-  for suffix in "${suffixes[@]}"; do
-    file=$artifact-$version$suffix
+  for payload in "$repo/$path"/*; do
+    case $payload in *.md5|*.sha1|*.sha256|*.sha512) continue ;; esac
+    file=$(basename "$payload")
     curl --fail --silent --show-error "$public/$path/$file" -o "$repo/public-check"
     cmp "$repo/$path/$file" "$repo/public-check"
   done
@@ -114,4 +138,6 @@ for module in "${modules[@]}"; do
   rclone check "$repo/$path" "$bucket/$path" --include 'maven-metadata.xml*' --one-way
 done
 rm -f "$repo/public-check"
+python3 tools/release/central.py publish --state "$repo.central.json"
+python3 tools/release/central.py wait --state "$repo.central.json" --until PUBLISHED
 echo "Published dev.elide:truffledata-{core,jdbc,jdbc-sqlite,jdbc-mysql,jdbc-postgresql,protobuf,protobuf-runtime,protobuf-buffa,protobuf-buffa-bindings,tape,tape-jvm,json,json-bindings,json-jvm,csv,csv-bindings,csv-native,csv-jvm,bom}:$version at $public"

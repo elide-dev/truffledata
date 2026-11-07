@@ -7,7 +7,7 @@ import unittest
 import xml.etree.ElementTree as ET
 import zipfile
 
-from maven_repo import artifact_suffixes, built_classifiers, CLASSIFIERS, MODULES, NAMESPACE, stage, validate_version
+from maven_repo import artifact_suffixes, built_classifiers, CLASSIFIERS, MODULES, NAMESPACE, stage, validate_version, TRIPLES
 
 
 class PublicationTest(unittest.TestCase):
@@ -69,6 +69,14 @@ class PublicationTest(unittest.TestCase):
                     self.assertEqual(root.findtext('m:packaging', namespaces=NAMESPACE), 'pom')
                     self.assertIsNone(root.find('m:dependencies', NAMESPACE))
                     self.assertFalse(Path(str(prefix) + '.jar').exists())
+                metadata = json.loads(Path(str(prefix) + '.module').read_text())
+                self.assertEqual(metadata['component']['version'], version)
+                dependency_key = 'dependencyConstraints' if module == 'bom' else 'dependencies'
+                for variant in metadata['variants'][:2]:
+                    self.assertEqual({d['group'] + ':' + d['module'] for d in variant[dependency_key]}, expected)
+                    self.assertEqual(variant['attributes']['org.gradle.category'], 'platform' if module == 'bom' else 'library')
+                    for file in variant.get('files', []):
+                        self.assertTrue((prefix.parent / file['url']).is_file())
                 actual = set()
                 dep_path = 'm:dependencyManagement/m:dependencies/m:dependency' if module == 'bom' else 'm:dependencies/m:dependency'
                 for dep in root.findall(dep_path, NAMESPACE):
@@ -111,7 +119,7 @@ class PublicationTest(unittest.TestCase):
                     else:
                         self.assertFalse(myna)
                     if module == 'tape-jvm':
-                        self.assertEqual(shared, {segment})
+                        self.assertEqual(shared, {segment, 'dev/elide/truffledata/tape/SegmentTape.class'})
                         self.assertFalse(backend | generated)
                     if module.startswith('json'):
                         self.assertFalse(shared)
@@ -146,7 +154,7 @@ class PublicationTest(unittest.TestCase):
                         self.assertIn('dev/elide/truffledata/csv/CsvRowGen.class', classes)
                         self.assertIn('dev/elide/truffledata/csv/CsvIndexing$NativeBackend.class', classes)
                         self.assertFalse(generated or svm in classes or ffm in classes or service in names)
-                        self.assertEqual(artifact_suffixes(module), ('.pom', '.jar', '-sources.jar'))
+                        self.assertEqual(artifact_suffixes(module), ('.pom', '.jar', '-sources.jar', '-javadoc.jar', '.module'))
                         self.assertFalse([p for p in (base / module).rglob('*') if p.suffix in ('.a', '.so', '.h')])
                     if module == 'csv-bindings':
                         self.assertIn('dev/elide/truffledata/csv/kernel/generated/CsvNative.class', classes)
@@ -161,6 +169,7 @@ class PublicationTest(unittest.TestCase):
                         with zipfile.ZipFile(str(prefix) + '.jar') as jar:
                             self.assertEqual(jar.read(service).decode().split(), ['dev.elide.truffledata.csv.kernel.svm.SvmIndexer$Backend'])
                         self.assertTrue(Path(str(prefix) + '-%s.a' % classifier).read_bytes().startswith(b'!<arch>\n'))
+                        self.assertEqual(Path(str(prefix) + '-%s.a' % classifier).read_bytes(), Path(str(prefix) + '-%s.a' % TRIPLES[classifier]).read_bytes())
                         self.assertTrue(Path(str(prefix) + '-%s%s' % (classifier, extension)).is_file())
                     if module == 'csv-jvm':
                         self.assertIn(ffm, classes)

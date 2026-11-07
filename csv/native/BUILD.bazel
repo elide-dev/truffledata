@@ -1,7 +1,7 @@
 load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_library", "cc_test")
 
-# CSV structural indexer (simdjson stage-1 style) and its Myna seam. Not a dependency of //csv:
-# the scanner seam adopts it in a later step (csv/native/README.md).
+# CSV structural indexer (simdjson stage-1 style) and its Myna seam. The optional
+# truffledata-csv-native provider supplies it to //csv scanners (csv/native/README.md).
 
 config_setting(
     name = "linux_arm64",
@@ -80,6 +80,9 @@ cc_library(
     ],
 )
 
+# Myna 0.13 names GNU Linux targets only. This seam uses libc-independent LP64
+# C scalars/pointers, so musl consumes the same generated layout and fingerprint;
+# the musl kernel and isolated archive are compiled and executed in their own gates.
 genrule(
     name = "bindings",
     srcs = ["csv.seam"],
@@ -94,7 +97,8 @@ genrule(
         "generated/seam.ll",
         "generated/META-INF/native-image/dev.elide.myna/dev.elide.truffledata.csv.kernel.generated.CsvNative/native-image.properties",
     ],
-    cmd = "$(location @myna//:generator) generate $(location csv.seam) --out $(RULEDIR)/generated --target " + select({
+    cmd = "$(location @myna//:generator) validate $(location csv.seam) --targets x86_64-unknown-linux-gnu,aarch64-unknown-linux-gnu,aarch64-apple-darwin && " +
+          "$(location @myna//:generator) generate $(location csv.seam) --out $(RULEDIR)/generated --target " + select({
         "@platforms//os:macos": "aarch64-apple-darwin",
         ":linux_arm64": "aarch64-unknown-linux-gnu",
         "//conditions:default": "x86_64-unknown-linux-gnu",
@@ -127,11 +131,19 @@ cc_library(
 cc_binary(
     name = "csv_shared.so",
     srcs = ["api.cc"],
+    additional_linker_inputs = select({
+        "@platforms//os:macos": ["exports.macos"],
+        "//conditions:default": ["exports.map"],
+    }),
     copts = COPTS,
     linkopts = select({
         # The macos-aarch64 release attachment (tools/release) is loaded through @rpath.
-        "@platforms//os:macos": ["-Wl,-install_name,@rpath/libtruffledata_csv.dylib", "-Wl,-dead_strip_dylibs"],
-        "//conditions:default": [],
+        "@platforms//os:macos": [
+            "-Wl,-install_name,@rpath/libtruffledata_csv.dylib",
+            "-Wl,-dead_strip_dylibs",
+            "-Wl,-exported_symbols_list,$(location exports.macos)",
+        ],
+        "//conditions:default": ["-Wl,--version-script=$(location exports.map)"],
     }),
     linkshared = True,
     linkstatic = True,
@@ -170,4 +182,10 @@ cc_test(
     srcs = ["api_test.cc"],
     copts = COPTS,
     deps = [":truffledata_csv"],
+)
+
+filegroup(
+    name = "header",
+    srcs = ["generated/seam.h"],
+    visibility = ["//visibility:public"],
 )

@@ -41,3 +41,8 @@ jobs:
       contents: read
       id-token: write
     secrets: inherit
+
+  natives:
+    name: Native targets
+    uses: ./.github/workflows/check.natives.yml
+    secrets: inherit

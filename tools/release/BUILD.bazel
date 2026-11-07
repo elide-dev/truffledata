@@ -1,5 +1,5 @@
 load("@rules_cc//cc:cc_static_library.bzl", "cc_static_library")
-load("@rules_cc//cc:defs.bzl", "cc_import")
+load("@rules_cc//cc:defs.bzl", "cc_import", "cc_test")
 load("@rules_graalvm//graalvm:defs.bzl", "native_image")
 load("@rules_java//java:defs.bzl", "java_import", "java_library", "java_test")
 load("@rules_shell//shell:sh_test.bzl", "sh_test")
@@ -16,7 +16,7 @@ release_version(
 )
 
 COMMON = [
-    "org.graalvm.truffle:truffle-api:25.5.5-elide.24",
+    "org.graalvm.truffle:truffle-api:25.5.5-elide.27",
     "org.jspecify:jspecify:1.0.1",
 ]
 
@@ -94,8 +94,7 @@ java_library(
     ],
 )
 
-# The C ABI, decoder, simdjson and simdutf objects. cc_static_library collects object files only,
-# so the Rust myna-values bridge archive is merged in by json_archive below.
+# The C ABI, decoder, compact tape text bridge, simdjson and simdutf objects.
 cc_static_library(
     name = "json_objects",
     deps = ["//json/native:truffledata_json"],
@@ -115,19 +114,23 @@ cc_static_library(
 
 # Release static archives (bazel/release_archive.bzl): self-contained, and on ELF every member with bitcode is a fat
 # object (machine code plus ThinLTO bitcode), so consumers link them with or without LTO; on Mach-O, which has no fat
-# object format, every member is machine code. JSON is json_objects plus Myna's myna-values static library
-# (myna_utf8_to_utf16_v2 for SvmValueTape, performance plan Task D1).
+# object format, every member is machine code. JSON's compact tape/text bridge is C++; its legacy Rust bridge
+# remains available only to the YAML adapter until that cutover completes.
 release_archive(
     name = "json_archive",
-    archives = [
-        ":json_objects",
-        "//json/native/bridge",
-    ],
+    archives = [":json_objects"],
 )
 
 release_archive(
     name = "csv_archive",
     archives = [":csv_objects"],
+    public_symbols = [
+        "td_csv_fingerprint",
+        "td_csv_kernel",
+        "td_csv_index",
+        "td_csv_index_leaf",
+        "td_csv_validate_utf8",
+    ],
 )
 
 release_archive(
@@ -173,7 +176,7 @@ NATIVES = {
     "csv-native": (
         ":csv_archive",
         "//csv/native:csv_shared.so",
-        {},
+        {"//csv/native:header": "-native.h"},
     ),
     "yaml": (
         ":yaml_archive",
@@ -189,7 +192,12 @@ NATIVES = {
 # publications alone.
 [native_attachments(
     name = module + "_natives",
-    attachments = classifier_attachments(static, shared, {}, manifests = True),
+    attachments = classifier_attachments(
+        static,
+        shared,
+        {},
+        manifests = True,
+    ),
     module = module,
 ) for module, (static, shared, _neutral) in NATIVES.items()]
 
@@ -218,7 +226,6 @@ native_consumers(
     name = "json_c",
     archive = ":json_archive",
     fingerprint = "td_json_fingerprint",
-    probe = "td_json_bridge_present",
     shared = "//json/native:json_shared.so",
 )
 
@@ -237,7 +244,11 @@ test_suite(
 [maven_publication(
     name = module,
     # This invocation's platform; the other platforms' attachments come from their :natives builds.
-    attachments = classifier_attachments(NATIVES[module][0], NATIVES[module][1], NATIVES[module][2]) if module in NATIVES else {},
+    attachments = classifier_attachments(
+        NATIVES[module][0],
+        NATIVES[module][1],
+        NATIVES[module][2],
+    ) if module in NATIVES else {},
     dependencies = COMMON + ([] if module == "core" else ["dev.elide:truffledata-core:{version}"]) + ([
         "com.google.protobuf:protobuf-java:4.36.1",
         "com.google.protobuf:protobuf-java-util:4.36.1",
@@ -263,8 +274,8 @@ test_suite(
         "csv-native",
         "csv-jvm",
     ] else []) + ([
-        "org.graalvm.sdk:nativeimage:25.5.5-elide.24",
-        "org.graalvm.sdk:word:25.5.5-elide.24",
+        "org.graalvm.sdk:nativeimage:25.5.5-elide.27",
+        "org.graalvm.sdk:word:25.5.5-elide.27",
     ] if module in [
         "protobuf-buffa",
         "protobuf-buffa-bindings",
@@ -283,7 +294,10 @@ test_suite(
         "dev.elide:truffledata-jdbc:{version}",
         "org.postgresql:postgresql:42.7.14",
     ] if module == "jdbc-postgresql" else []),
-    library = LIBRARIES.get(module, "//%s" % module),
+    library = LIBRARIES.get(
+        module,
+        "//%s" % module,
+    ),
     module = module,
 ) for module in MODULES]
 
@@ -295,7 +309,7 @@ maven_bom(
         "org.xerial:sqlite-jdbc:3.53.4.0",
         "com.google.protobuf:protobuf-java:4.36.1",
         "com.google.protobuf:protobuf-java-util:4.36.1",
-    ] + [coordinate + ":25.5.5-elide.24" for coordinate in [
+    ] + [coordinate + ":25.5.5-elide.27" for coordinate in [
         "org.graalvm.truffle:truffle-runtime",
         "org.graalvm.polyglot:polyglot",
         "org.graalvm.js:js-language",
@@ -313,9 +327,20 @@ sh_test(
     name = "test",
     srcs = ["test.sh"],
     data = [
+        "central.py",
+        "licenses/simdutf-APACHE",
+        "licenses/simdutf-ISA-BSD",
+        "licenses/simdutf-MIT",
+        "licenses/simdutf-rust-MIT",
         "maven_repo.py",
+        "native_bundle.py",
+        "test_central.py",
+        "test_native_bundle.py",
         "test_release.py",
         ":publications",
+        "//:LICENSE",
+        "//:LICENSE-APACHE",
+        "//:LICENSE-MIT",
         "//:MODULE.bazel",
         "//:maven_install.json",
     ],
@@ -797,4 +822,36 @@ sh_test(
         "@platforms//os:linux",
         "@platforms//cpu:x86_64",
     ],
+)
+
+cc_import(
+    name = "csv_isolated",
+    testonly = True,
+    hdrs = ["//csv/native:header"],
+    static_library = ":csv_archive",
+)
+
+cc_test(
+    name = "csv_archive_test",
+    srcs = ["csv_archive_test.c"],
+    features = ["-thin_lto"],
+    deps = [":csv_isolated"],
+)
+
+# Musl distribution is static-only and currently covers the CSV embedding kernel.
+native_attachments(
+    name = "csv_musl_natives",
+    attachments = select({
+        "//bazel/platforms:musl_amd64": {
+            ":csv_archive": "-linux-x86_64-musl.a",
+            ":csv_archive_manifest": "-linux-x86_64-musl.members.txt",
+        },
+        "//bazel/platforms:musl_arm64": {
+            ":csv_archive": "-linux-aarch64-musl.a",
+            ":csv_archive_manifest": "-linux-aarch64-musl.members.txt",
+        },
+        "//conditions:default": {},
+    }),
+    module = "csv-native",
+    tags = ["manual"],
 )

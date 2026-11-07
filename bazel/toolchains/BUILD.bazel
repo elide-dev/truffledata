@@ -24,7 +24,7 @@ default_java_toolchain(
 [toolchain(
     name = "elide_cc_" + bundle,
     exec_compatible_with = constraints,
-    target_compatible_with = constraints,
+    target_compatible_with = constraints + (["//bazel/platforms:glibc"] if bundle.startswith("linux_") else []),
     toolchain = "@elide_toolchain_%s//:cc_toolchain" % bundle,
     toolchain_type = "@bazel_tools//tools/cpp:toolchain_type",
 ) for bundle, constraints in {
@@ -41,3 +41,21 @@ default_java_toolchain(
         "@platforms//cpu:aarch64",
     ],
 }.items()]
+
+[toolchain(
+    name = "elide_cc_linux_" + cpu + "_musl",
+    exec_compatible_with = [
+        "@platforms//os:linux",
+        "@platforms//cpu:" + arch,
+    ],
+    target_compatible_with = [
+        "@platforms//os:linux",
+        "@platforms//cpu:" + arch,
+        "//bazel/platforms:musl",
+    ],
+    toolchain = "@elide_toolchain_musl_" + cpu + "//:cc_toolchain",
+    toolchain_type = "@bazel_tools//tools/cpp:toolchain_type",
+) for cpu, arch in [
+    ("amd64", "x86_64"),
+    ("arm64", "aarch64"),
+]]

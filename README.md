@@ -89,7 +89,7 @@ See [representation and compilation guarantees](docs/TRUFFLE.md),
 | `dev.elide:truffledata-csv` | Strict streaming CSV into immutable string and primitive column batches, typed plans and one-pass export; pure Java |
 | `dev.elide:truffledata-bom` | Aligned libraries, drivers and runtime dependencies |
 
-The runtime baseline is **Java 25** and **Elide GraalVM `25.5.5-elide.24`**.
+The runtime baseline is **Java 25** and **Elide GraalVM `25.5.5-elide.27`**.
 Libraries are thin JARs; choose the adapters and guest runtimes your application needs.
 Driver-specific artifacts bring their upstream drivers transitively.
 
@@ -97,7 +97,7 @@ Driver-specific artifacts bring their upstream drivers transitively.
 repositories {
     mavenCentral()
     maven("https://maven.elide.dev")
-    maven("https://maven.elide.dev/gvm-elide/25.5.5-elide.24")
+    maven("https://maven.elide.dev/gvm-elide/25.5.5-elide.27")
 }
 dependencies {
     implementation(platform("dev.elide:truffledata-bom:0.8.0"))
@@ -113,7 +113,7 @@ source JARs, consumer POMs, checksums, and Buffa, JSON and CSV native attachment
 
 Release **0.8.0** adds native JSON (simdjson, scoped guest values, typed plans,
 sessions and streams), CSV (Commons CSV scope with SIMD structural-index kernels)
-and a shared tape layer, on Myna 0.11.0 and Elide toolchain 2026.11.5. See the
+and a shared tape layer, on Myna 0.13.0 and Elide toolchain 2026.11.5. See the
 [0.8.0 notes](docs/RELEASE_0_8_0.md).
 
 Release **0.7.0** added opt-in native-index typed views and cached shared primitive
@@ -312,3 +312,7 @@ arbitrary downstream guest code or every deployment configuration. See [Truffle 
 | [Continuous benchmarks](docs/BENCHMARKS.md) | CodSpeed simulation cases and methodology |
 | [Build](docs/BAZEL.md) / [Publishing](docs/PUBLISHING.md) | Bazel, BuildBuddy, Maven artifacts and release operations |
 | [TruffleCEL](https://github.com/elide-dev/trufflecel) | CEL evaluation with native TruffleData integration |
+
+## License
+
+TruffleData is dual licensed under [MIT](LICENSE-MIT) or [Apache 2.0](LICENSE-APACHE), at your option (`MIT OR Apache-2.0`).

@@ -51,6 +51,7 @@ BINDINGS = {
     'json': ('json-bindings', 'dev/elide/truffledata/json/generated/Json.class'),
     'csv-native': ('csv-bindings', 'dev/elide/truffledata/csv/kernel/generated/CsvNative.class'),
 }
+CSV_EXPORTS = {'td_csv_fingerprint', 'td_csv_kernel', 'td_csv_index', 'td_csv_index_leaf', 'td_csv_validate_utf8'}
 HEX64 = re.compile(rb'(?<![0-9a-f])[0-9a-f]{64}(?![0-9a-f])')
 
 
@@ -218,7 +219,9 @@ class Checker:
         self.summary.append('%s: install name %s, links %s; %s' % (where, install, ' '.join(loads), 'undefined symbols all from libSystem/libc++' if not bad else 'FAILED'))
 
     def exports(self, path, module, where, flags):
-        defined = {line.split()[-1].lstrip('_') for line in self.tool('llvm-nm', *flags, '--defined-only', path).splitlines() if line.strip()}
+        defined = {line.split()[-1].lstrip('_') for line in self.tool('llvm-nm', *flags, '--defined-only', path).splitlines() if len(line.split()) >= 3}
+        if module == 'csv-native' and defined != CSV_EXPORTS:
+            self.fail(where, 'CSV public ABI mismatch: extra=%s missing=%s' % (sorted(defined - CSV_EXPORTS), sorted(CSV_EXPORTS - defined)))
         if FINGERPRINT[module].lstrip('_') not in defined:
             self.fail(where, 'does not export %s' % FINGERPRINT[module])
 
@@ -254,6 +257,8 @@ def main():
         else:
             checker.fail(jar.name, 'missing bindings jar')
         for classifier in args.classifiers:
+            if classifier.endswith('-musl') and module != 'csv-native':
+                continue
             extension, bitcode = CLASSIFIERS[classifier]
             def attachment(suffix):
                 path = Path(str(prefix) + suffix)
@@ -274,12 +279,16 @@ def main():
             listing = manifest('-%s.members.txt' % classifier)
             if static and listing:
                 checker.archive(static, listing, 'fat' if linux else 'machine-code', where)
+                if module == 'csv-native':
+                    checker.exports(static, module, where, ['--extern-only'])
             if bitcode:
                 twin, where = attachment('-%s-bitcode.a' % classifier)
                 listing = manifest('-%s-bitcode.members.txt' % classifier)
                 if twin and listing:
                     checker.archive(twin, listing, 'bitcode', where)
-            shared, where = attachment('-%s%s' % (classifier, extension))
+                    if module == 'csv-native':
+                        checker.exports(twin, module, where, ['--extern-only'])
+            shared, where = attachment('-%s%s' % (classifier, extension)) if extension else (None, '')
             for path, name in ((static, 'static archive'), (shared, 'shared library')):
                 if path and expected and expected not in path.read_bytes():
                     reported = sorted(set(HEX64.findall(path.read_bytes())) - {expected})
@@ -297,7 +306,7 @@ def main():
         for error in checker.errors:
             print('  ' + error, file=sys.stderr)
         sys.exit(1)
-    print('Release native check passed: %d modules x %d platforms' % (len(NATIVE_MODULES), len(args.classifiers)))
+    print('Release native check passed: %d modules; requested platforms %s' % (len(NATIVE_MODULES), ', '.join(args.classifiers)))
 
 
 if __name__ == '__main__':
