@@ -8,7 +8,8 @@ probes (csv/native kernels from C++, the Rust csv crate) on the same bytes, chec
 usage: csv_measure.py <svm|jvm> <comparison binary> <fixture binary> <csv_probe> <csv_probe_rs>
 
 Probe runs (never a recorded result) may narrow a run with --test_env: CSV_MEASURE_ENGINES (a regex
-on workload/engine), CSV_MEASURE_SHARDS (comma-separated shard indices) and CSV_MEASURE_FORKS.
+on workload/engine), CSV_MEASURE_SHARDS (comma-separated shard indices), CSV_MEASURE_FORKS and CSV_MEASURE_ECHO (print
+each fork's stderr and non-record stdout, e.g. with JAVA_TOOL_OPTIONS diagnostics).
 """
 import hashlib
 import json
@@ -109,6 +110,9 @@ for workload, engine, dataset, size, stage, fork in jobs:
             continue
         print(process.stdout, process.stderr, file=sys.stderr)
         raise RuntimeError(f'{workload} {engine} {dataset} {size} {stage} failed')
+    if os.environ.get('CSV_MEASURE_ECHO'):  # probes only: the fork's own diagnostics
+        print(f'--- {workload} {engine} {dataset} {size} fork {fork}', process.stderr,
+              '\n'.join(l for l in process.stdout.splitlines() if not l.startswith('{')), flush=True)
     lines = [line for line in process.stdout.splitlines() if line.startswith('{')]
     if len(lines) != 1:
         raise ValueError('Expected one measurement record')

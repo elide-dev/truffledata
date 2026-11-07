@@ -331,12 +331,19 @@ final class CsvScanner {
       System.arraycopy(input, from, target, at, length);
       return length;
     }
+    // Content holds only doubled quotes: copy each run up to and including a quote, skip its twin.
+    // (A per-byte loop that steps its own index past the twin compiles to a byte-at-a-time copy
+    // that the JIT neither vectorizes nor, on long fields, keeps stable.)
     int to = from + length;
     int out = at;
-    for (int i = from; i < to; i++) {
-      byte b = input[i];
-      target[out++] = b;
-      if (b == quote) i++; // content holds only doubled quotes
+    int i = from;
+    while (i < to) {
+      int q = i;
+      while (q < to && input[q] != quote) q++;
+      int run = q < to ? q + 1 - i : q - i;
+      System.arraycopy(input, i, target, out, run);
+      out += run;
+      i = q + 2;
     }
     return out - at;
   }
