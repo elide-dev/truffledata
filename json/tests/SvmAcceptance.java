@@ -811,9 +811,95 @@ public final class SvmAcceptance {
     }
   }
 
+  /** Counts events; materializes nothing. */
+  private static final class NoopSink implements dev.elide.truffledata.json.JsonSink {
+    long events;
+
+    public void beginObject(long members) { events++; }
+
+    public void beginArray(long elements) { events++; }
+
+    public void key(dev.elide.truffledata.json.JsonText name) { events++; }
+
+    public void end() {}
+
+    public void nullValue() { events++; }
+
+    public void booleanValue(boolean value) { events++; }
+
+    public void longValue(long value) { events++; }
+
+    public void doubleValue(double value) { events++; }
+
+    public void unsignedValue(long bits) { events++; }
+
+    public void decimalValue(dev.elide.truffledata.json.JsonText token) { events++; }
+
+    public void stringValue(dev.elide.truffledata.json.JsonText text) { events++; }
+  }
+
+  private static Object javaTree(dev.elide.truffledata.json.JsonSession session, Object input) {
+    var sink = new dev.elide.truffledata.json.JavaSink();
+    if (input instanceof byte[] utf8) session.parse(utf8, sink);
+    else session.parse((com.oracle.truffle.api.strings.TruffleString) input, sink);
+    return java.util.Objects.requireNonNull(sink.result());
+  }
+
+  /**
+   * Task D3: guest strings parse without a Java copy of the input: ASCII as UTF-8, Latin-1 as
+   * Latin-1, other UTF-16 as UTF-16, transcoded natively; the result equals the UTF-8 parse.
+   */
+  private static void utf16Input() {
+    var utf8 = com.oracle.truffle.api.strings.TruffleString.Encoding.UTF_8;
+    String[] sources = {
+      "{\"id\":1,\"name\":\"ascii only\",\"a\":[1.5,-0,1E400]}",
+      "{\"café\":\"ÿété\",\"n\":[1,2]}",
+      "{\"clé\":\"中文 😀\",\"esc\":\"\\u00e9\\ud83d\\ude00\",\"n\":null}",
+    };
+    try (var session = dev.elide.truffledata.json.JsonSession.open()) {
+      for (String source : sources) {
+        Object expected = javaTree(session, source.getBytes(StandardCharsets.UTF_8));
+        require(expected.equals(javaTree(session, utf16(source))));
+        require(expected.equals(javaTree(session, com.oracle.truffle.api.strings.TruffleString.fromJavaStringUncached(source, utf8))));
+        // Shared text from UTF-16 input.
+        var sink = new dev.elide.truffledata.json.TruffleSink(new dev.elide.truffledata.json.TruffleSink.KeyCache());
+        session.parse(utf16(source), sink);
+        require(sink.result() instanceof java.util.Map<?, ?> map && map.size() == ((java.util.Map<?, ?>) expected).size());
+      }
+      // Unpaired surrogates are invalid JSON input, in and outside strings; the session survives.
+      for (String bad : new String[] {"[\"\ud800\"]", "[\"x\udc00\"]", "[1]\ud800"}) {
+        try {
+          session.parse(utf16(bad), new NoopSink());
+          throw new AssertionError("unpaired surrogate accepted");
+        } catch (IllegalArgumentException expected) {
+        }
+      }
+      byte[] invalid = {'[', '"', (byte) 0xff, '"', ']'};
+      try {
+        session.parse(com.oracle.truffle.api.strings.TruffleString.fromByteArrayUncached(invalid, utf8, false), new NoopSink());
+        throw new AssertionError("invalid UTF-8 accepted");
+      } catch (IllegalArgumentException expected) {
+      }
+      // No Java copy of the input: a 1 MB ASCII, Latin-1 or UTF-16 guest string parses with a few
+      // hundred bytes of Java allocation (the borrow's objects).
+      var counter = (com.sun.management.ThreadMXBean) java.lang.management.ManagementFactory.getThreadMXBean();
+      long thread = Thread.currentThread().threadId();
+      for (String unit : new String[] {"a", "é", "中"}) {
+        var big = utf16("[\"" + unit.repeat(300_000) + "\"]");
+        var sink = new NoopSink();
+        session.parse(big, sink);
+        long before = counter.getThreadAllocatedBytes(thread);
+        for (int i = 0; i < 4; i++) session.parse(big, sink);
+        long perParse = (counter.getThreadAllocatedBytes(thread) - before) / 4;
+        require(sink.events == 10 && perParse < 4096);
+      }
+    }
+  }
+
   public static void main(String[] args) throws Exception {
     textBridge();
     textArenas();
+    utf16Input();
     sessions();
     typed();
     schemaTyped();

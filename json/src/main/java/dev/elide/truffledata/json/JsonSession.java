@@ -2,6 +2,8 @@ package dev.elide.truffledata.json;
 
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import dev.elide.truffledata.json.generated.Json;
+import com.oracle.truffle.api.strings.InternalByteArray;
+import com.oracle.truffle.api.strings.TruffleString;
 import java.util.Objects;
 import java.util.function.Function;
 import org.graalvm.nativeimage.PinnedObject;
@@ -92,18 +94,21 @@ public final class JsonSession implements AutoCloseable {
 
   /** Decodes into the session; the borrowed result is valid until the next session call. */
   private void decodeInto(byte[] utf8, int offset, int length) {
-    decodeInto(utf8, offset, length, null);
+    decodeInto(utf8, offset, length, 0, null);
   }
 
   /**
    * Decodes into the session and, when {@code text} is given, writes the document's text arena
    * into its array (Task D2).
    */
-  private void decodeInto(byte[] utf8, int offset, int length, @Nullable SvmTextArena text) {
+  private void decodeInto(
+      byte[] utf8, int offset, int length, int input, @Nullable SvmTextArena text) {
     check();
     Objects.checkFromIndexSize(offset, length, utf8.length);
     if (length == 0) throw new IllegalArgumentException("Empty JSON input");
-    if (length > limits.maxInputBytes()) throw new IllegalArgumentException("JSON input limit");
+    // UTF-16 input is at least half as long in UTF-8; the native side checks the exact length.
+    if (length > (input == UTF16_INPUT ? 2L : 1L) * limits.maxInputBytes())
+      throw new IllegalArgumentException("JSON input limit");
     int status;
     byte[] textArray = text == null ? null : text.array;
     try (PinnedObject pinned = PinnedObject.create(utf8);
@@ -113,7 +118,7 @@ public final class JsonSession implements AutoCloseable {
               handle(),
               pinned.addressOfArrayElement(offset),
               length,
-              textArray == null ? 0 : TEXT,
+              input | (textArray == null ? 0 : TEXT),
               out == null ? WordFactory.<CCharPointer>nullPointer() : out.addressOfArrayElement(0),
               textArray == null ? 0 : textArray.length,
               WordFactory.pointer(result));
@@ -185,10 +190,54 @@ public final class JsonSession implements AutoCloseable {
    */
   @TruffleBoundary
   public void parse(byte[] utf8, int offset, int length, JsonSink sink) {
+    parse(utf8, offset, length, 0, sink);
+  }
+
+  // TD_JSON_UTF16_INPUT and TD_JSON_LATIN1_INPUT.
+  static final int UTF16_INPUT = 2, LATIN1_INPUT = 8;
+
+  /**
+   * Decodes a guest string and exports it through {@code sink}; nothing outlives the call. The
+   * string's own storage is passed without a Java copy: ASCII text as UTF-8, Latin-1 text as
+   * Latin-1 and other UTF-16 text as UTF-16, transcoded natively (Task D3); an unpaired surrogate
+   * is rejected like any other invalid JSON. Strings in other encodings are first transcoded to
+   * UTF-8 by {@code TruffleString}; invalid UTF-8 is rejected.
+   */
+  @TruffleBoundary
+  public void parse(TruffleString text, JsonSink sink) {
     Objects.requireNonNull(sink);
-    Objects.checkFromIndexSize(offset, length, utf8.length);
+    TruffleString.Encoding stored;
+    int flags;
+    if (text.isCompatibleToUncached(TruffleString.Encoding.UTF_16)) {
+      TruffleString.CodeRange range = text.getCodeRangeUncached(TruffleString.Encoding.UTF_16);
+      if (range == TruffleString.CodeRange.ASCII) {
+        stored = TruffleString.Encoding.UTF_8;
+        flags = 0;
+      } else if (range == TruffleString.CodeRange.LATIN_1) {
+        stored = TruffleString.Encoding.ISO_8859_1;
+        flags = LATIN1_INPUT;
+      } else {
+        stored = TruffleString.Encoding.UTF_16;
+        flags = UTF16_INPUT;
+      }
+    } else {
+      stored = TruffleString.Encoding.UTF_8;
+      flags = 0;
+    }
+    // ASCII and Latin-1 UTF-16 strings are stored compactly, so switching to their byte encoding
+    // shares the string's array; UTF-16 strings above Latin-1 are stored as UTF-16 already.
+    TruffleString view = text.switchEncodingUncached(stored);
+    if (flags == 0 && !view.isValidUncached(TruffleString.Encoding.UTF_8))
+      throw new IllegalArgumentException("Invalid UTF-8 JSON input");
+    InternalByteArray bytes = view.getInternalByteArrayUncached(stored);
+    parse(bytes.getArray(), bytes.getOffset(), bytes.getLength(), flags, sink);
+  }
+
+  private void parse(byte[] data, int offset, int length, int input, JsonSink sink) {
+    Objects.requireNonNull(sink);
+    Objects.checkFromIndexSize(offset, length, data.length);
     SvmTextArena shared = sink.sharedText() ? textArena(length) : null;
-    decodeInto(utf8, offset, length, shared);
+    decodeInto(data, offset, length, input, shared);
     JsonBorrow lent = lend(shared);
     try {
       lent.export(sink);

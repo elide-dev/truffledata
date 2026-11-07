@@ -1,0 +1,22 @@
+simdjson 5.1.1 active implementation: icelake; simdutf active implementation: icelake
+small       210 B | S0 UTF-8 decode+reset                                       504 ns      417 MB/s
+small       210 B | T0 UTF-8 decode+text arena+reset                            630 ns      334 MB/s
+small       210 B | U0 UTF-16 decode+reset                                      528 ns      398 MB/s
+small       210 B | U1 UTF-16 decode+text arena+reset                           648 ns      324 MB/s
+small       210 B | L0 Latin-1 decode+reset                                     535 ns      393 MB/s
+small       210 B | C0 UTF-16 validate+transcode only                            13 ns    16288 MB/s
+small       210 B | steady state: index_allocations=0 text_bytes=136
+medium     4330 B | S0 UTF-8 decode+reset                                     10185 ns      425 MB/s
+medium     4330 B | T0 UTF-8 decode+text arena+reset                          11864 ns      365 MB/s
+medium     4330 B | U0 UTF-16 decode+reset                                    10694 ns      405 MB/s
+medium     4330 B | U1 UTF-16 decode+text arena+reset                         12565 ns      345 MB/s
+medium     4330 B | L0 Latin-1 decode+reset                                   10281 ns      421 MB/s
+medium     4330 B | C0 UTF-16 validate+transcode only                           180 ns    24110 MB/s
+medium     4330 B | steady state: index_allocations=0 text_bytes=2560
+big      228485 B | S0 UTF-8 decode+reset                                    534662 ns      427 MB/s
+big      228485 B | T0 UTF-8 decode+text arena+reset                         597753 ns      382 MB/s
+big      228485 B | U0 UTF-16 decode+reset                                   525580 ns      435 MB/s
+big      228485 B | U1 UTF-16 decode+text arena+reset                        617958 ns      370 MB/s
+big      228485 B | L0 Latin-1 decode+reset                                  507445 ns      450 MB/s
+big      228485 B | C0 UTF-16 validate+transcode only                          9390 ns    24333 MB/s
+big      228485 B | steady state: index_allocations=3 text_bytes=131680

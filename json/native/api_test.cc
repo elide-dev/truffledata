@@ -476,9 +476,73 @@ void text_arenas() {
   td_json_session_release(s);
 }
 
+// Task D3: UTF-16 and Latin-1 input.
+void utf16_input() {
+  JsonLimitsStruct limits{1024 * 1024, 1024 * 1024, 100000, 1024 * 1024, 128};
+  void* s = td_json_session_create(&limits);
+  require(s != nullptr);
+  JsonResult result{};
+  alignas(8) uint8_t arena[4096];
+  // Task D3: UTF-16LE input parses to the same tape as its UTF-8 spelling.
+  const std::string utf8 = R"({"clé":"中文 😀","n":[1.5,-0,1E400],"é":"é"})";
+  std::u16string units = utf16_of(utf8);
+  auto same_tape = [&](const JsonResult& a, const JsonResult& b) {
+    auto* x = static_cast<const myna_value_view*>(a.view);
+    auto* y = static_cast<const myna_value_view*>(b.view);
+    require(x->node_count == y->node_count);
+    for (size_t i = 0; i < x->node_count; ++i) {
+      require(x->nodes[i].tag == y->nodes[i].tag && x->nodes[i].length == y->nodes[i].length);
+      uint32_t kind = x->nodes[i].tag & MYNA_VALUE_KIND_MASK;
+      if (kind == MYNA_VALUE_STRING || kind == MYNA_VALUE_DECIMAL) require(text_of(x, i) == text_of(y, i));
+      else if (kind != MYNA_VALUE_ARRAY && kind != MYNA_VALUE_OBJECT) require(x->nodes[i].payload == y->nodes[i].payload);
+      require(static_cast<const uint32_t*>(a.key_hashes)[i] == static_cast<const uint32_t*>(b.key_hashes)[i]);
+    }
+  };
+  void* reference = td_json_session_create(&limits);
+  JsonResult expected{};
+  require(td_json_session_decode(reference, reinterpret_cast<const uint8_t*>(utf8.data()), utf8.size(), 0, nullptr, 0, &expected) == TD_JSON_OK);
+  require(td_json_session_decode(s, reinterpret_cast<const uint8_t*>(units.data()), 2 * units.size(), TD_JSON_UTF16_INPUT, nullptr, 0, &result) == TD_JSON_OK);
+  same_tape(result, expected);
+  // Lexical spans and copied_input_bytes describe the transcoded UTF-8 input.
+  require(result.copied_input_bytes == utf8.size());
+  require(std::memcmp(result.lexical, expected.lexical, 8 * expected.lexical_count) == 0);
+  // UTF-16 input with a text arena.
+  require(td_json_session_decode(s, reinterpret_cast<const uint8_t*>(units.data()), 2 * units.size(),
+                                 TD_JSON_UTF16_INPUT | TD_JSON_WANT_TEXT, arena, 2 * 2 * units.size() + 16, &result) == TD_JSON_OK);
+  require(arena_text(result, arena, 1) == u"clé" && arena_text(result, arena, 2) == u"中文 😀");
+  // Unpaired surrogates, odd lengths and misaligned input are rejected; the session survives.
+  for (std::u16string bad : {std::u16string(u"[\"") + char16_t(0xd800) + u"\"]", std::u16string(u"[\"") + char16_t(0xdc00) + u"x\"]"}) {
+    require(td_json_session_decode(s, reinterpret_cast<const uint8_t*>(bad.data()), 2 * bad.size(), TD_JSON_UTF16_INPUT, nullptr, 0, &result) == TD_JSON_SYNTAX);
+    require(!result.view);
+  }
+  require(td_json_session_decode(s, reinterpret_cast<const uint8_t*>(units.data()), 2 * units.size() - 1, TD_JSON_UTF16_INPUT, nullptr, 0, &result) == TD_JSON_ARGUMENT);
+  alignas(2) uint8_t shifted[64] = {};
+  std::memcpy(shifted + 1, u"[1]", 6);
+  require(td_json_session_decode(s, shifted + 1, 6, TD_JSON_UTF16_INPUT, nullptr, 0, &result) == TD_JSON_ARGUMENT);
+  // Latin-1 input: every byte is one code point.
+  const std::string latin1 = "{\"caf\xe9\":\"\xff\"}";
+  require(td_json_session_decode(s, reinterpret_cast<const uint8_t*>(latin1.data()), latin1.size(), TD_JSON_LATIN1_INPUT, nullptr, 0, &result) == TD_JSON_OK);
+  require(text_of(static_cast<const myna_value_view*>(result.view), 1) == "café"
+          && text_of(static_cast<const myna_value_view*>(result.view), 2) == "ÿ");
+  // Limits apply to the transcoded UTF-8 length.
+  JsonLimitsStruct tight = limits;
+  tight.max_input_bytes = 8;
+  void* small = td_json_session_create(&tight);
+  std::u16string wide = u"[\"中中\"]";  // 12 UTF-16 bytes, 10 UTF-8 bytes
+  require(td_json_session_decode(small, reinterpret_cast<const uint8_t*>(wide.data()), 2 * wide.size(), TD_JSON_UTF16_INPUT, nullptr, 0, &result) == TD_JSON_LIMIT);
+  std::u16string fits = u"[\"中\"]";  // 7 UTF-8 bytes
+  require(td_json_session_decode(small, reinterpret_cast<const uint8_t*>(fits.data()), 2 * fits.size(), TD_JSON_UTF16_INPUT, nullptr, 0, &result) == TD_JSON_OK);
+  td_json_session_release(small);
+  td_json_session_release(reference);
+  // Flag combinations: UTF-16 and Latin-1 input are exclusive.
+  require(td_json_session_decode(s, reinterpret_cast<const uint8_t*>(u"[]"), 4, TD_JSON_UTF16_INPUT | TD_JSON_LATIN1_INPUT, nullptr, 0, &result) == TD_JSON_ARGUMENT);
+  td_json_session_release(s);
+}
+
 int main() {
   sessions();
   text_arenas();
+  utf16_input();
   session_allocations();
   adopted();
   scalar_contracts();

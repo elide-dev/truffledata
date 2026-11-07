@@ -92,6 +92,13 @@ try (JsonSession session = JsonSession.open()) {            // or open(JsonLimit
 
 - `parse(byte[], JsonSink)` and `parse(byte[], offset, length, JsonSink)` decode
   into session storage and export through the sink. Nothing is retained.
+- `parse(TruffleString, JsonSink)` decodes a guest string without a Java copy:
+  the string's own storage goes to the native session as UTF-8 (ASCII code range),
+  Latin-1 (Latin-1 range) or UTF-16LE (anything else), and simdutf validates and
+  transcodes it into the padded parser buffer. An unpaired surrogate anywhere is
+  invalid JSON (`IllegalArgumentException`); limits apply to the UTF-8 form, which
+  lexical spans and `numberText()` describe. A string in another encoding is first
+  transcoded to UTF-8 by `TruffleString`, and invalid UTF-8 is rejected.
 - Text arenas: when the sink's `sharedText()` returns true (`TruffleSink` does),
   the same native call also writes every key and string once into a per-document
   `byte[]` presized to `2 × length + 16`: Latin-1 when all its code points are at

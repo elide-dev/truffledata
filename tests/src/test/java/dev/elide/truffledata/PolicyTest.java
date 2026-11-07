@@ -60,7 +60,7 @@ class PolicyTest {
             Map.entry("JsonValue.java", 26), // Static (owner, node) slow paths per interop message and hint misses.
             Map.entry("JvmTypedOwner.java", 3),
             Map.entry("SvmTypedOwner.java", 1),
-            Map.entry("JsonSession.java", 9), // Session entry points (open, parse, with, decode, retain, close).
+            Map.entry("JsonSession.java", 10), // Session entry points (open, parse ×3, with, decode, validate, close).
             Map.entry("JsonBorrow.java", 1), // Borrowed-result assumption.
             Map.entry("JsonKey.java", 1), // Key preparation (UTF-8 encode and hash).
             Map.entry("JsonText.java", 4), // Sink-side materialization: String, TruffleString, copy, compare.

@@ -207,7 +207,7 @@ using truffledata::json::session;
 // The 4 KiB bound of the leaf decode: at the probe's ≈ 150 MB/s worst case this is ≈ 30 µs.
 constexpr uint64_t critical_limit = TD_JSON_CRITICAL_LIMIT;
 
-constexpr uint32_t known_flags = TD_JSON_WANT_TEXT;
+constexpr uint32_t known_flags = TD_JSON_WANT_TEXT | TD_JSON_UTF16_INPUT | TD_JSON_LATIN1_INPUT;
 
 int32_t session_decode(session& s, const uint8_t* data, uint64_t length, uint32_t flags,
                        uint8_t* text_out, uint64_t text_capacity, JsonResult& result) {
@@ -217,9 +217,15 @@ int32_t session_decode(session& s, const uint8_t* data, uint64_t length, uint32_
   if (text ? !text_out || reinterpret_cast<uintptr_t>(text_out) % 2 || text_capacity > INT32_MAX
            : text_out || text_capacity)
     return TD_JSON_ARGUMENT;
-  if (length > UINT32_MAX) return TD_JSON_LIMIT;
+  bool utf16 = flags & TD_JSON_UTF16_INPUT, latin1 = flags & TD_JSON_LATIN1_INPUT;
+  if (utf16 && (latin1 || length % 2 || reinterpret_cast<uintptr_t>(data) % 2)) return TD_JSON_ARGUMENT;
+  // UTF-16 input may be up to twice its UTF-8 form; the session checks the transcoded length.
+  if (length > (utf16 ? 2ull * UINT32_MAX : uint64_t(UINT32_MAX))) return TD_JSON_LIMIT;
   try {
-    auto d = s.decode(reinterpret_cast<const char*>(data), size_t(length));
+    auto d = s.decode(reinterpret_cast<const char*>(data), size_t(length),
+                      utf16    ? session::encoding::utf16le
+                      : latin1 ? session::encoding::latin1
+                               : session::encoding::utf8);
     const uint64_t* table = nullptr;
     size_t text_bytes = 0;
     if (text) {
@@ -228,7 +234,7 @@ int32_t session_decode(session& s, const uint8_t* data, uint64_t length, uint32_
     }
     const auto& memory = s.memory();
     // Borrowed: no owner, so td_json_release never frees session storage.
-    result = {nullptr, const_cast<myna_value_view*>(&s.view()), length, s.input_capacity(),
+    result = {nullptr, const_cast<myna_value_view*>(&s.view()), d.input_length, s.input_capacity(),
               memory.current(), memory.peak(), d.index_allocations, s.parser_capacity(),
               sizeof(session), const_cast<uint64_t*>(d.lexical.data()), d.lexical.size(),
               const_cast<uint32_t*>(d.hashes.data()), const_cast<uint64_t*>(table), text_bytes};

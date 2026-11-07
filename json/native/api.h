@@ -17,6 +17,13 @@ enum td_json_status {
 // session_decode flags.
 // TD_JSON_WANT_TEXT (Task D2): also write the document's text arena into text_out (see below).
 #define TD_JSON_WANT_TEXT 1u
+// TD_JSON_UTF16_INPUT (Task D3): `data` is UTF-16LE (`length` bytes, even; `data` 2-byte aligned),
+// validated and transcoded to UTF-8 natively; an unpaired surrogate is TD_JSON_SYNTAX. Limits,
+// lexical spans and copied_input_bytes refer to the UTF-8 form.
+#define TD_JSON_UTF16_INPUT 2u
+// TD_JSON_LATIN1_INPUT (Task D3): `data` is ISO-8859-1, one code point per byte, transcoded to
+// UTF-8. Exclusive with TD_JSON_UTF16_INPUT.
+#define TD_JSON_LATIN1_INPUT 8u
 
 // Sessions (td_json_session_*). A session is a thread-confined decode context: one simdjson
 // On-Demand parser, a padded input buffer and a block arena reused across documents. Callers

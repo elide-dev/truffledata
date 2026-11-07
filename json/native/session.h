@@ -99,8 +99,23 @@ public:
 
   // Decodes one document into the session. Invalidates the previous borrowed document. On any
   // exception the session holds no document and stays reusable.
-  document_view decode(const char* data, size_t length) {
+  //
+  // Input encodings (Task D3): UTF-8 is copied; UTF-16LE (`bytes` even, `data` 2-byte aligned) is
+  // validated by simdutf (an unpaired surrogate is std::invalid_argument, i.e. a syntax error) and
+  // transcoded; Latin-1 is transcoded (every byte is one code point). Limits apply to the UTF-8
+  // length, which is what lexical spans and the tape describe.
+  enum class encoding { utf8, utf16le, latin1 };
+  document_view decode(const char* data, size_t bytes, encoding input = encoding::utf8) {
     recycle();
+    size_t length = bytes;
+    const char16_t* units = reinterpret_cast<const char16_t*>(data);
+    if (input == encoding::utf16le) {
+      if (bytes % 2) throw std::invalid_argument("odd UTF-16 input length");
+      if (!simdutf::validate_utf16le(units, bytes / 2)) throw std::invalid_argument("unpaired UTF-16 surrogate");
+      length = simdutf::utf8_length_from_utf16le(units, bytes / 2);
+    } else if (input == encoding::latin1) {
+      length = simdutf::utf8_length_from_latin1(data, bytes);
+    }
     if (length > UINT32_MAX || length > storage_.input_bytes) throw std::length_error("JSON input limit");
     size_t need = length + simdjson::SIMDJSON_PADDING;
     if (need > input_capacity_) {
@@ -108,7 +123,11 @@ public:
       input_ = static_cast<char*>(upstream_->allocate(need, alignof(std::max_align_t)));
       input_capacity_ = need;
     }
-    std::memcpy(input_, data, length);
+    size_t written = length;
+    if (input == encoding::utf16le) written = simdutf::convert_valid_utf16le_to_utf8(units, bytes / 2, input_);
+    else if (input == encoding::latin1) written = simdutf::convert_latin1_to_utf8(data, bytes, input_);
+    else std::memcpy(input_, data, length);
+    if (written != length) throw std::logic_error("JSON input transcoding");
     std::memset(input_ + length, 0, simdjson::SIMDJSON_PADDING);
     input_length_ = length;
     size_t before = memory_.allocations();
