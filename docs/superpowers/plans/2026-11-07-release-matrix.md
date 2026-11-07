@@ -19,13 +19,17 @@
 ## Tasks
 
 ### Task R1: Investigation and toolchain flags
+- [x] Done (ledger, Task R1).
 Determine and prove the fat-object recipe for each (language × object format): C/C++ ELF, C/C++ Mach-O, Rust ELF, Rust Mach-O, on nightly-2026-10-09 and LLVM 23.1.3. Show with the toolchain's tools that the objects carry both, and that a test link uses the bitcode under LTO (e.g. `-Wl,--lto-...` save-temps or a cross-module inlining witness) and the machine code without it. Determine how linux-aarch64 builds: BuildBuddy arm64 executors (`Arch: arm64`) or a cross-build with the toolchain sysroot. Ledger every ruling. Commit only probes or docs that the later tasks need.
 
 ### Task R2: Build wiring
+- [x] Done: linux-x86_64, linux-aarch64 (BuildBuddy arm64, Firecracker) and macos-aarch64 (local, with the `-bitcode.a` twin) build (ledger).
 Platforms (`rbe_linux_arm64` if used), per-platform archive/shared targets, fat-object features scoped to the release archives (do not slow ordinary test builds unless free), the attachment map per classifier, `.dylib` naming on macOS.
 
 ### Task R3: Release gate and consumers
+- [x] Done: `check_natives.py`, `//tools/release:native_consumers`, three-platform `publish.sh` staging, docs (ledger).
 The checker, consumer links per platform (LTO on and off), `publish.sh` multi-platform staging, `docs/PUBLISHING.md`, README platform table.
 
 ### Task R4: Verification
+- [x] Staged and checked on all three platforms; every gate passes except the ABI fingerprint check: the single bindings jars carry the linux-x86_64 fingerprint, so the aarch64 and macOS natives are not yet publishable (ledger, BLOCKED).
 Stage a full repository with every platform; run every consumer; record the checker output in the ledger.
