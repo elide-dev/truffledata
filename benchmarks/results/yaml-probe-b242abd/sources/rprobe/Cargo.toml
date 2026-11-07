@@ -1,0 +1,18 @@
+[package]
+name = "rprobe"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+saphyr-parser = "=0.3.3"
+yaml-rust2 = "=0.13.0"
+unsafe-libyaml = "=0.2.11"
+myna-values = { path = "../myna/crates/myna-values" }
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+debug = 1
+
+[workspace]

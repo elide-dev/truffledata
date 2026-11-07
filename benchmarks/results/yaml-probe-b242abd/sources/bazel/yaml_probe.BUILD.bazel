@@ -1,0 +1,60 @@
+# TEMPORARY YAML parser probe (removed before commit; raw output kept under benchmarks/results/yaml-probe-*).
+load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_test")
+
+cc_test(
+    name = "yaml_probe_test",
+    srcs = ["yaml_probe_test.cc"],
+    args = [
+        "bench",
+        "20",
+    ] + ["$(rootpath fixtures/%s.yaml)" % f for f in [
+        "config",
+        "records-block",
+        "records-flow-lines",
+        "records-stream",
+        "text-heavy",
+        "oneline-50",
+        "oneline-100",
+        "oneline-200",
+        "records-flow",
+    ]],
+    env = {"RYML_RESOLVE_TAGS": "1"},
+    copts = [
+        "-std=c++17",
+        "-O3",
+    ],
+    data = glob(["fixtures/*.yaml"]),
+    defines = ["PROBE_NO_FY"],
+    tags = ["manual"],
+    deps = [
+        "@myna//:values_headers",
+        "@probe_libyaml//:libyaml",
+        "@probe_rapidyaml//:ryml",
+    ],
+)
+
+# Size probes: smallest program that parses YAML with each library, statically linked like the JSON .so.
+cc_binary(
+    name = "ryml_min",
+    srcs = ["ryml_min.cc"],
+    copts = ["-std=c++17", "-O3"],
+    linkstatic = True,
+    tags = ["manual"],
+    deps = ["@probe_rapidyaml//:ryml"],
+)
+
+cc_binary(
+    name = "libyaml_min",
+    srcs = ["libyaml_min.c"],
+    copts = ["-O3"],
+    linkstatic = True,
+    tags = ["manual"],
+    deps = ["@probe_libyaml//:libyaml"],
+)
+
+cc_binary(
+    name = "empty_min",
+    srcs = ["empty_min.c"],
+    linkstatic = True,
+    tags = ["manual"],
+)
