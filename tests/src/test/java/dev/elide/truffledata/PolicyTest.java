@@ -52,14 +52,17 @@ class PolicyTest {
             Map.entry("JsonArray.java", 1),
             Map.entry("JsonJvm.java", 5), // FFM downcalls and arena management.
             Map.entry("JsonMessage.java", 2),
-            Map.entry("JsonOwner.java", 7), // Close, pinning and the array index slow paths.
+            Map.entry("JsonOwner.java", 9), // Close, pinning, array index and lazy member directories.
             Map.entry("JsonPlan.java", 4), // Plan compilation and decode entry points.
             Map.entry("JsonRecord.java", 4),
             Map.entry("JsonSvm.java", 4), // Static-linked native calls.
             Map.entry("JsonTypedOwner.java", 3),
-            Map.entry("JsonValue.java", 24), // Static (owner, node) slow paths per interop message.
+            Map.entry("JsonValue.java", 26), // Static (owner, node) slow paths per interop message and hint misses.
             Map.entry("JvmTypedOwner.java", 3),
             Map.entry("SvmTypedOwner.java", 1),
+            Map.entry("JsonSession.java", 9), // Session entry points (open, parse, with, decode, retain, close).
+            Map.entry("JsonBorrow.java", 1), // Borrowed-result assumption.
+            Map.entry("JsonKey.java", 1), // Key preparation (UTF-8 encode and hash).
             // CSV: diagnostics, materialization and the export walk stay out of compiled reads.
             Map.entry("CsvScanner.java", 2), // Static syntax and limit failures.
             Map.entry("CsvBatch.java", 2), // Static STRING materialization and the export walk.
