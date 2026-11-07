@@ -1,4 +1,5 @@
-//! Borrowed wire decoding: Buffa reads the caller's slice; payloads stay in that slice.
+//! Borrowed wire decoding (ABI 8/9) and layout-compiled slabs (ABI 10, slab.rs): Buffa reads the
+//! caller's slice; index payloads stay in that slice, slabs copy them into the caller's buffer.
 //! The caller owns input memory and lends it immutably for the duration of the call.
 //! Only the bounded field index is allocated in Rust. No unwind may cross the ABI.
 use buffa::encoding::{Tag, WireType, decode_varint};
@@ -12,6 +13,7 @@ mod seam {
     include!("generated/seam.rs");
 }
 
+mod slab;
 mod typed;
 mod unicode;
 use unicode::td_buffa_utf8_to_utf16;
@@ -20,6 +22,8 @@ const MALFORMED: i32 = 1;
 const BUDGET: i32 = 2;
 const ALLOCATION: i32 = 3;
 const PANIC: i32 = 4;
+// 5 is ABI 9's certified view status. ABI 10: the slab did not fit; `SlabResult.bytes` is exact.
+const NEEDS_CAPACITY: i32 = slab::NEEDS_CAPACITY;
 use seam::Field;
 const FIELD_BYTES: usize = mem::size_of::<Field>();
 
@@ -415,6 +419,400 @@ pub unsafe extern "C" fn td_buffa_release(result: *mut std::ffi::c_void) {
     result.count = 0;
     result.capacity = 0;
 }
+
+/// ABI 9: compile a view schema once. On success `result.data` is an owned handle (released by
+/// td_buffa_release_compiled) and `result.count` the number of compiled types.
+///
+/// # Safety
+/// schema is a live immutable region; result is an aligned, writable seam::Result.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn td_buffa_compile_view(
+    schema: *const u8,
+    schema_length: u64,
+    result: *mut std::ffi::c_void,
+) -> i32 {
+    if result.is_null() {
+        return MALFORMED;
+    }
+    let result = result.cast::<seam::Result>();
+    unsafe {
+        result.write(seam::Result {
+            data: std::ptr::null_mut(),
+            count: 0,
+            capacity: 0,
+        });
+    }
+    if schema.is_null() || schema_length > i32::MAX as u64 {
+        return MALFORMED;
+    }
+    match catch_unwind(AssertUnwindSafe(|| {
+        let compiled =
+            typed::view::compile(unsafe { slice::from_raw_parts(schema, schema_length as usize) })?;
+        // A fallible single-element allocation; Box::new would abort on exhaustion.
+        let mut owner = Vec::new();
+        owner.try_reserve_exact(1).map_err(|_| ALLOCATION)?;
+        owner.push(compiled);
+        Ok::<_, i32>(Box::into_raw(owner.into_boxed_slice()))
+    })) {
+        Ok(Ok(handle)) => {
+            unsafe {
+                result.write(seam::Result {
+                    data: handle.cast(),
+                    count: 1,
+                    capacity: 0,
+                });
+            }
+            0
+        }
+        Ok(Err(code)) => code,
+        Err(_) => PANIC,
+    }
+}
+
+/// # Safety
+/// compiled is null or a handle from td_buffa_compile_view, released exactly once, with no
+/// concurrent or later use.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn td_buffa_release_compiled(compiled: *mut u8) {
+    if !compiled.is_null() {
+        drop(unsafe {
+            Box::from_raw(std::ptr::slice_from_raw_parts_mut(
+                compiled.cast::<typed::view::Compiled>(),
+                1,
+            ))
+        });
+    }
+}
+
+/// ABI 9: decode a binary view. `scratch` is the decoder's reusable seam::Result (zeroed or an
+/// index previously returned through it); its ownership is consumed and replaced, and it is
+/// zeroed on failure. On success `result` receives one owned allocation (td_buffa_release_view)
+/// and the return value is 0, or 5 when the view is certified (see typed::view::view).
+///
+/// # Safety
+/// compiled is a live handle; data a live immutable region; scratch and result disjoint, aligned
+/// and writable. No view may still borrow the previous scratch index.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn td_buffa_decode_view(
+    compiled: *const u8,
+    data: *const u8,
+    length: u64,
+    max_cells: u64,
+    max_string_bytes: u64,
+    max_depth: u32,
+    max_native_bytes: u64,
+    scratch: *mut std::ffi::c_void,
+    result: *mut std::ffi::c_void,
+) -> i32 {
+    if result.is_null() || scratch.is_null() {
+        return MALFORMED;
+    }
+    let result = result.cast::<seam::View>();
+    unsafe {
+        result.write(seam::View {
+            data: std::ptr::null_mut(),
+            count: 0,
+            words: 0,
+            bytes: 0,
+        });
+    }
+    let scratch = scratch.cast::<seam::Result>();
+    let previous = unsafe { scratch.read() };
+    unsafe {
+        scratch.write(seam::Result {
+            data: std::ptr::null_mut(),
+            count: 0,
+            capacity: 0,
+        });
+    }
+    let fields = if previous.capacity == 0 {
+        Vec::new()
+    } else {
+        // Result provenance and exclusive ownership are part of this unsafe ABI contract.
+        unsafe {
+            Vec::from_raw_parts(
+                previous.data.cast::<Field>(),
+                0,
+                previous.capacity as usize,
+            )
+        }
+    };
+    if compiled.is_null() || data.is_null() || length > i32::MAX as u64 {
+        return MALFORMED;
+    }
+    let mut status = 0;
+    match catch_unwind(AssertUnwindSafe(|| {
+        let compiled = unsafe { &*compiled.cast::<typed::view::Compiled>() }.checked()?;
+        let (view, mut kept) = typed::view::view(
+            compiled,
+            unsafe { slice::from_raw_parts(data, length as usize) },
+            max_cells,
+            max_string_bytes,
+            max_depth,
+            max_native_bytes,
+            fields,
+            &mut status,
+        );
+        // Failure releases scratch too, matching td_buffa_typed_reuse.
+        let view = view?;
+        unsafe {
+            scratch.write(seam::Result {
+                data: kept.as_mut_ptr().cast(),
+                count: 0,
+                capacity: kept.capacity() as u64,
+            });
+        }
+        mem::forget(kept);
+        Ok::<_, i32>(view)
+    })) {
+        Ok(Ok(view)) => {
+            unsafe {
+                result.write(seam::View {
+                    data: view.data.cast(),
+                    count: view.count as u64,
+                    words: view.words as u64,
+                    bytes: (view.capacity * FIELD_BYTES) as u64,
+                });
+            }
+            status
+        }
+        Ok(Err(code)) => code,
+        Err(_) => PANIC,
+    }
+}
+
+/// # Safety
+/// data/bytes are null/0 or exactly one live allocation returned by td_buffa_decode_view.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn td_buffa_release_view(data: *mut u8, bytes: u64) {
+    unsafe { typed::view::release(data.cast(), bytes as usize / FIELD_BYTES) };
+}
+/// ABI 10: compile a schema program (TDB3 tables and the TDL1 layout section) into slab
+/// descriptors once. On success `result.data` is an owned handle (released by
+/// td_buffa_release_layout) and `result.count` the number of types.
+///
+/// # Safety
+/// schema is a live immutable region; result is an aligned, writable seam::Result.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn td_buffa_compile_layout(
+    schema: *const u8,
+    schema_length: u64,
+    result: *mut std::ffi::c_void,
+) -> i32 {
+    if result.is_null() {
+        return MALFORMED;
+    }
+    let result = result.cast::<seam::Result>();
+    unsafe {
+        result.write(seam::Result {
+            data: std::ptr::null_mut(),
+            count: 0,
+            capacity: 0,
+        });
+    }
+    if schema.is_null() || schema_length > i32::MAX as u64 {
+        return MALFORMED;
+    }
+    match catch_unwind(AssertUnwindSafe(|| {
+        let compiled =
+            slab::compile(unsafe { slice::from_raw_parts(schema, schema_length as usize) })?;
+        let types = compiled.types.len();
+        // A fallible single-element allocation; Box::new would abort on exhaustion.
+        let mut owner = Vec::new();
+        owner.try_reserve_exact(1).map_err(|_| ALLOCATION)?;
+        owner.push(compiled);
+        Ok::<_, i32>((Box::into_raw(owner.into_boxed_slice()), types))
+    })) {
+        Ok(Ok((handle, types))) => {
+            unsafe {
+                result.write(seam::Result {
+                    data: handle.cast(),
+                    count: types as u64,
+                    capacity: 0,
+                });
+            }
+            0
+        }
+        Ok(Err(code)) => code,
+        Err(_) => PANIC,
+    }
+}
+
+/// # Safety
+/// compiled is null or a handle from td_buffa_compile_layout, released exactly once, with no
+/// concurrent or later use.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn td_buffa_release_layout(compiled: *mut u8) {
+    if !compiled.is_null() {
+        drop(unsafe {
+            Box::from_raw(std::ptr::slice_from_raw_parts_mut(
+                compiled.cast::<slab::Compiled>(),
+                1,
+            ))
+        });
+    }
+}
+
+/// Shared body of both slab entry points; `small` forbids heap allocation.
+#[allow(clippy::too_many_arguments)]
+unsafe fn decode_slab_impl(
+    small: bool,
+    compiled: *const u8,
+    data: *const u8,
+    length: u64,
+    flags: u32,
+    projection: *const u8,
+    out: *mut u8,
+    capacity: u64,
+    max_depth: u32,
+    max_slab_bytes: u64,
+    result: *mut std::ffi::c_void,
+) -> i32 {
+    if result.is_null() {
+        return MALFORMED;
+    }
+    let result = result.cast::<seam::SlabResult>();
+    unsafe {
+        result.write(seam::SlabResult {
+            bytes: 0,
+            records: 0,
+            handles: 0,
+            flags: 0,
+            error: 0,
+            reserved: 0,
+        });
+    }
+    if small && (length > slab::SMALL_LIMIT || capacity > slab::SMALL_LIMIT) {
+        return BUDGET;
+    }
+    // Projection is Phase E (Task E1); until then only a null projection is defined.
+    if compiled.is_null()
+        || data.is_null()
+        || !projection.is_null()
+        || length > i32::MAX as u64
+        || capacity > isize::MAX as u64
+        || (out.is_null() && capacity != 0)
+    {
+        return MALFORMED;
+    }
+    let mut error_at = 0usize;
+    let outcome = catch_unwind(AssertUnwindSafe(|| {
+        let compiled = unsafe { &*compiled.cast::<slab::Compiled>() }.checked()?;
+        slab::decode(
+            compiled,
+            unsafe { slice::from_raw_parts(data, length as usize) },
+            flags,
+            out,
+            capacity as usize,
+            max_depth,
+            max_slab_bytes,
+            !small,
+            &mut error_at,
+        )
+    }));
+    let write = |o: slab::Outcome, error: usize| unsafe {
+        result.write(seam::SlabResult {
+            bytes: o.bytes,
+            records: o.records,
+            handles: o.handles,
+            flags: o.flags,
+            error: error as u32,
+            reserved: 0,
+        });
+    };
+    match outcome {
+        Ok(Ok(o)) => {
+            write(o, 0);
+            if o.bytes > capacity || flags & slab::FLAG_SIZING_ONLY != 0 {
+                NEEDS_CAPACITY
+            } else {
+                0
+            }
+        }
+        Ok(Err(code)) => {
+            write(slab::Outcome::default(), error_at);
+            code
+        }
+        Err(_) => PANIC,
+    }
+}
+
+/// ABI 10: decode one protobuf message into a slab (docs/SLAB.md) written to `out[..capacity]`.
+/// Returns 0 with `result.bytes` the slab length, `NEEDS_CAPACITY` with the exact length when it
+/// did not fit (or under `SIZING_ONLY`), or an error status with `result.error` the input offset
+/// of the rejecting field (of the string payload for invalid UTF-8). Flags: `OWNING = 1`
+/// (required), `LAX = 2` (rejected until Phase E), `SIZING_ONLY = 4`.
+///
+/// # Safety
+/// compiled is a live handle from td_buffa_compile_layout; data a live immutable region of
+/// `length` bytes; out null (capacity 0) or `capacity` writable bytes disjoint from every other
+/// region; result an aligned, writable seam::SlabResult. No callback.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn td_buffa_decode_slab(
+    compiled: *const u8,
+    data: *const u8,
+    length: u64,
+    flags: u32,
+    projection: *const u8,
+    out: *mut u8,
+    capacity: u64,
+    max_depth: u32,
+    max_slab_bytes: u64,
+    result: *mut std::ffi::c_void,
+) -> i32 {
+    unsafe {
+        decode_slab_impl(
+            false,
+            compiled,
+            data,
+            length,
+            flags,
+            projection,
+            out,
+            capacity,
+            max_depth,
+            max_slab_bytes,
+            result,
+        )
+    }
+}
+
+/// ABI 10 bounded leaf: td_buffa_decode_slab for `length` and `capacity` at most 64 KiB (else
+/// `BUDGET` before any work). It performs no heap allocation and takes no lock: scratch is fixed
+/// stack storage, and an input that overflows it returns `BUDGET` (the caller retries through
+/// td_buffa_decode_slab). No panic escapes.
+///
+/// # Safety
+/// As td_buffa_decode_slab.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn td_buffa_decode_slab_small(
+    compiled: *const u8,
+    data: *const u8,
+    length: u64,
+    flags: u32,
+    projection: *const u8,
+    out: *mut u8,
+    capacity: u64,
+    max_depth: u32,
+    max_slab_bytes: u64,
+    result: *mut std::ffi::c_void,
+) -> i32 {
+    unsafe {
+        decode_slab_impl(
+            true,
+            compiled,
+            data,
+            length,
+            flags,
+            projection,
+            out,
+            capacity,
+            max_depth,
+            max_slab_bytes,
+            result,
+        )
+    }
+}
 seam::assert_implementations!(seam);
 
 #[cfg(test)]
@@ -477,6 +875,74 @@ mod tests {
         }
     }
     #[test]
+    fn ffi_view_ownership_scratch_reuse_and_failures() {
+        // One type, field 1: repeated int64 (kind 3, flags 1), named "x".
+        let mut schema = Vec::new();
+        for word in [0x54444233u32, 1, 12, 1, 512, 68, 1, 1, 3, 1, u32::MAX, 0, 0, 68, 1, 68, 1] {
+            schema.extend_from_slice(&word.to_le_bytes());
+        }
+        schema.push(b'x');
+        let empty = || seam::Result {
+            data: std::ptr::null_mut(),
+            count: 0,
+            capacity: 0,
+        };
+        let mut handle = empty();
+        let mut scratch = empty();
+        let mut view = seam::View {
+            data: std::ptr::null_mut(),
+            count: 0,
+            words: 0,
+            bytes: 0,
+        };
+        let h = (&mut handle as *mut seam::Result).cast();
+        let s = (&mut scratch as *mut seam::Result).cast();
+        let v = (&mut view as *mut seam::View).cast();
+        unsafe {
+            assert_eq!(td_buffa_compile_view(schema.as_ptr(), 3, h), MALFORMED);
+            assert!(handle.data.is_null());
+            assert_eq!(td_buffa_compile_view(std::ptr::null(), 0, h), MALFORMED);
+            assert_eq!(td_buffa_compile_view(schema.as_ptr(), schema.len() as u64, h), 0);
+            let compiled = handle.data;
+            let input = [8, 4, 8, 5];
+            let call = |input: &[u8], budget| {
+                td_buffa_decode_view(compiled, input.as_ptr(), input.len() as u64, 100, 0, 4,
+                                     budget, s, v)
+            };
+            assert_eq!(call(&input, 4096), 5);
+            assert_eq!((view.count, view.words), (2, 4));
+            assert_eq!(view.bytes, 3 * FIELD_BYTES as u64);
+            let words = std::slice::from_raw_parts(view.data.add(2 * FIELD_BYTES).cast::<u32>(), 4);
+            assert_eq!(words, &[1, 2, 0, 1]);
+            assert_eq!((*view.data.cast::<Field>().add(1)).value, 5);
+            let retained = scratch.data;
+            assert!(scratch.capacity >= 2);
+            td_buffa_release_view(view.data, view.bytes);
+            assert_eq!(call(&input, 4096), 5);
+            assert_eq!(scratch.data, retained, "scratch index reused");
+            td_buffa_release_view(view.data, view.bytes);
+            assert_eq!(call(&[8, 128], 4096), MALFORMED);
+            assert!(view.data.is_null() && scratch.data.is_null() && scratch.capacity == 0);
+            assert_eq!(call(&input, 0), BUDGET);
+            assert_eq!(call(&input, 4096), 5);
+            td_buffa_release_view(view.data, view.bytes);
+            td_buffa_release_view(std::ptr::null_mut(), 0);
+            assert_eq!(
+                td_buffa_decode_view(std::ptr::null(), input.as_ptr(), 4, 100, 0, 4, 4096, s, v),
+                MALFORMED
+            );
+            assert_eq!(
+                td_buffa_decode_view(compiled, input.as_ptr(), 4, 100, 0, 4, 4096, s,
+                                     std::ptr::null_mut()),
+                MALFORMED
+            );
+            td_buffa_release(s);
+            td_buffa_release_compiled(compiled);
+            td_buffa_release_compiled(std::ptr::null_mut());
+        }
+    }
+
+    #[test]
     fn ffi_result_ownership() {
         let mut out = seam::Result {
             data: std::ptr::null_mut(),
@@ -503,33 +969,111 @@ mod allocation_probe {
     use std::cell::Cell;
     thread_local! {
         static COUNT: Cell<Option<u64>> = const { Cell::new(None) };
+        // Failure injection: Some(n) lets n more allocations succeed, then every one fails.
+        static FAIL: Cell<Option<u64>> = const { Cell::new(None) };
+        // Live bytes allocated (and not yet freed) while a failure-injection scope is active.
+        static LIVE: Cell<Option<i64>> = const { Cell::new(None) };
     }
     struct Counting;
     #[global_allocator]
     static ALLOCATOR: Counting = Counting;
-    fn charge() {
+    /// Count one allocation; false when an injected failure must be returned instead.
+    fn charge() -> bool {
         let _ = COUNT.try_with(|count| {
             if let Some(value) = count.get() {
                 count.set(Some(value + 1));
             }
         });
+        FAIL.try_with(|fail| match fail.get() {
+            Some(0) => false,
+            Some(n) => {
+                fail.set(Some(n - 1));
+                true
+            }
+            None => true,
+        })
+        .unwrap_or(true)
+    }
+    fn live(delta: i64) {
+        let _ = LIVE.try_with(|live| {
+            if let Some(value) = live.get() {
+                live.set(Some(value + delta));
+            }
+        });
     }
     unsafe impl GlobalAlloc for Counting {
         unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
-            charge();
-            unsafe { System.alloc(layout) }
+            if !charge() {
+                return std::ptr::null_mut();
+            }
+            let result = unsafe { System.alloc(layout) };
+            if !result.is_null() {
+                live(layout.size() as i64);
+            }
+            result
         }
         unsafe fn alloc_zeroed(&self, layout: Layout) -> *mut u8 {
-            charge();
-            unsafe { System.alloc_zeroed(layout) }
+            if !charge() {
+                return std::ptr::null_mut();
+            }
+            let result = unsafe { System.alloc_zeroed(layout) };
+            if !result.is_null() {
+                live(layout.size() as i64);
+            }
+            result
         }
         unsafe fn realloc(&self, ptr: *mut u8, layout: Layout, size: usize) -> *mut u8 {
-            charge();
-            unsafe { System.realloc(ptr, layout, size) }
+            if !charge() {
+                return std::ptr::null_mut();
+            }
+            let result = unsafe { System.realloc(ptr, layout, size) };
+            if !result.is_null() {
+                live(size as i64 - layout.size() as i64);
+            }
+            result
         }
         unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
+            live(-(layout.size() as i64));
             unsafe { System.dealloc(ptr, layout) }
         }
+    }
+    /// Count allocations (including reallocations) made by `action` on this thread.
+    pub fn allocations<T>(action: impl FnOnce() -> T) -> (T, u64) {
+        struct Reset;
+        impl Drop for Reset {
+            fn drop(&mut self) {
+                COUNT.with(|count| count.set(None));
+            }
+        }
+        COUNT.with(|count| {
+            assert!(count.get().is_none());
+            count.set(Some(0));
+        });
+        let _reset = Reset;
+        let result = action();
+        (result, COUNT.with(|count| count.get().unwrap()))
+    }
+    /// Run `action` with allocation number `succeed` (zero-based) and every later one failing.
+    /// Everything `action` allocates must be released before it returns: the scope checks that
+    /// no live bytes remain, so failure paths cannot leak partially built results.
+    pub fn failing<T>(succeed: u64, action: impl FnOnce() -> T) -> T {
+        struct Reset;
+        impl Drop for Reset {
+            fn drop(&mut self) {
+                FAIL.with(|fail| fail.set(None));
+                LIVE.with(|live| live.set(None));
+            }
+        }
+        FAIL.with(|fail| {
+            assert!(fail.get().is_none());
+            fail.set(Some(succeed));
+        });
+        LIVE.with(|live| live.set(Some(0)));
+        let _reset = Reset;
+        let result = action();
+        FAIL.with(|fail| fail.set(None));
+        assert_eq!(LIVE.with(|live| live.get().unwrap()), 0, "allocation leaked");
+        result
     }
     pub fn without_allocation<T>(action: impl FnOnce() -> T) -> T {
         struct Reset;

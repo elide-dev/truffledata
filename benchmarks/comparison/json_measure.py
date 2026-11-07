@@ -19,12 +19,21 @@ WORKLOADS = {
     'json-scalar': (('gson-stream', 'simdjson-typed', 'simdjson-specialized'), 35984),
     'json-generic': (('gson-tree', 'simdjson-generic-java', 'simdjson-generic-interop', 'simdjson-snapshot',
                       'simdjson-session-java', 'simdjson-session-truffle',
-                      'gson-stream-lines', 'simdjson-stream-java', 'simdjson-stream-interop'), 38219),
+                      'gson-stream-lines', 'simdjson-stream-java', 'simdjson-stream-interop',
+                      # Benchmark-only competitors (JsonCompetitors; the JSON scoreboard).
+                      'jackson-tree', 'jackson-stream', 'fastjson2-tree', 'dsljson-map', 'jsoniter-any',
+                      'simdjson-java'), 38219),
 }
 STAGES = ('ingest', 'read-aot', 'interpret', 'peak')
 # Borrowed session parses and streams (Task F2) retain nothing to read later: ingest cells only.
 INGEST_ONLY = {'simdjson-session-java', 'simdjson-session-truffle',
-               'gson-stream-lines', 'simdjson-stream-java', 'simdjson-stream-interop'}
+               'gson-stream-lines', 'simdjson-stream-java', 'simdjson-stream-interop',
+               'jackson-stream', 'simdjson-java'}
+# Engines this image cannot run (simdjson-java needs 256-bit vector species: the x86-64-v3 image).
+UNAVAILABLE = {engine for engines, _ in WORKLOADS.values() for engine in engines
+               if subprocess.run([str(binary), '--available', engine]).returncode != 0}
+WORKLOADS = {name: (tuple(e for e in engines if e not in UNAVAILABLE), checksum)
+             for name, (engines, checksum) in WORKLOADS.items()}
 workload_of = {engine: (name, checksum) for name, (engines, checksum) in WORKLOADS.items() for engine in engines}
 jobs = [job for job in itertools.product(workload_of, STAGES, ('time', 'memory'), range(3))
         if job[0] not in INGEST_ONLY or job[1] == 'ingest']
@@ -50,6 +59,7 @@ for engine, stage, mode, fork in jobs:
     results.append(row)
     print(engine, stage, mode, fork, samples, flush=True)
 report = {'schema': 1, 'binary_sha256': hashlib.sha256(binary.read_bytes()).hexdigest(),
+    'unavailable': sorted(UNAVAILABLE),
     'platform': platform.platform(), 'cpu': Path('/proc/cpuinfo').read_text(), 'measurements': results}
 (output / 'json-comparison.json').write_text(json.dumps(report, indent=2) + '\n')
 lines = ['# SVM JSON comparison', '',

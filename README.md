@@ -57,7 +57,14 @@ ingestion boundaries; present null and missing fields have distinct representati
 Use the JVM or Native Image. The optional Myna/Buffa backend supports JVM FFM and
 static SVM linkage, with Java fallback. The unreleased simdjson JSON backend supports
 the same linkage without a Java fallback. The unreleased CSV backend is pure Java and
-runs identically on both. Prebuilt native attachments target Linux x86-64.
+runs identically on both. Native attachments ship prebuilt for three platforms:
+
+| Platform | Static archive | Shared library | LTO |
+| --- | --- | --- | --- |
+| Linux x86-64 (`linux-x86_64`) | `.a`, fat objects | `.so` | ThinLTO with clang/lld from the same archive |
+| Linux AArch64 (`linux-aarch64`) | `.a`, fat objects | `.so` | ThinLTO with clang/lld from the same archive |
+| macOS AArch64 (`macos-aarch64`) | `.a`, machine code | `.dylib` (`@rpath`) | ThinLTO with ld64.lld from `-bitcode.a` |
+
 See [representation and compilation guarantees](docs/TRUFFLE.md),
 [ownership and native setup](docs/BUFFA.md), the [JSON backend](docs/JSON.md) and the
 [CSV backend](docs/CSV.md).
@@ -82,7 +89,7 @@ See [representation and compilation guarantees](docs/TRUFFLE.md),
 | `dev.elide:truffledata-csv` | Strict streaming CSV into immutable string and primitive column batches, typed plans and one-pass export; pure Java |
 | `dev.elide:truffledata-bom` | Aligned libraries, drivers and runtime dependencies |
 
-The runtime baseline is **Java 25** and **Elide GraalVM `25.5.5-elide.24`**.
+The runtime baseline is **Java 25** and **Elide GraalVM `25.5.5-elide.27`**.
 Libraries are thin JARs; choose the adapters and guest runtimes your application needs.
 Driver-specific artifacts bring their upstream drivers transitively.
 
@@ -90,21 +97,26 @@ Driver-specific artifacts bring their upstream drivers transitively.
 repositories {
     mavenCentral()
     maven("https://maven.elide.dev")
-    maven("https://maven.elide.dev/gvm-elide/25.5.5-elide.24")
+    maven("https://maven.elide.dev/gvm-elide/25.5.5-elide.27")
 }
 dependencies {
-    implementation(platform("dev.elide:truffledata-bom:0.8.0"))
+    implementation(platform("dev.elide:truffledata-bom:0.9.0"))
     implementation("dev.elide:truffledata-core")
     implementation("dev.elide:truffledata-protobuf")
     // Add JDBC integrations or protobuf-buffa as needed.
 }
 ```
 
-[Release 0.8.0](https://github.com/elide-dev/truffledata/releases/tag/v0.8.0) includes
+[Release 0.9.0](https://github.com/elide-dev/truffledata/releases/tag/v0.9.0) includes
 source JARs, consumer POMs, checksums, and Buffa, JSON and CSV native attachments. See
 [publishing and consumption](docs/PUBLISHING.md) for Maven, Bazel and native linking.
 
-Release **0.8.0** adds native JSON (simdjson, scoped guest values, typed plans,
+Release **0.9.0** adds prebuilt natives for Linux x86-64, Linux AArch64 and macOS
+AArch64, with static and shared libraries, Linux FatLTO objects and a separate
+macOS ThinLTO archive. It uses Myna 0.13.0 and GraalVM 25.5.5-elide.27. See the
+[0.9.0 notes](docs/RELEASE_0_9_0.md).
+
+Release **0.8.0** added native JSON (simdjson, scoped guest values, typed plans,
 sessions and streams), CSV (Commons CSV scope with SIMD structural-index kernels)
 and a shared tape layer, on Myna 0.11.0 and Elide toolchain 2026.11.5. See the
 [0.8.0 notes](docs/RELEASE_0_8_0.md).

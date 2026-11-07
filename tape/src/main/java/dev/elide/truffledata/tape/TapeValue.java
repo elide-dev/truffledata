@@ -103,10 +103,7 @@ public final class TapeValue implements TruffleObject {
   /** Prepare and retain a key with ValueTape.Utf8Key.of for repeated lookup. */
   @TruffleBoundary
   public TapeValue member(ValueTape.Utf8Key key) {
-    owner.check();
-    long found = owner.tape.find(node, key);
-    if (found < 0) throw new NoSuchElementException("Missing " + owner.format().name + " member");
-    return new TapeValue(owner, owner.resolve(found));
+    return member(TapeKey.of(key));
   }
 
   @TruffleBoundary
@@ -114,11 +111,11 @@ public final class TapeValue implements TruffleObject {
     return member(TapeKey.of(key));
   }
 
-  /** Member by prepared key: hash-first lookup, a directory for objects above 32 members. */
+  /** Member by prepared key: through the object's Myna v4 directory, else a hash-filtered scan. */
   @TruffleBoundary
   public TapeValue member(TapeKey key) {
     if (kind() != Kind.OBJECT) throw new IllegalStateException("Not a " + owner.format().name + " object");
-    long found = scan(owner, node, key);
+    long found = owner.find(node, key, null);
     if (found < 0) throw new NoSuchElementException("Missing " + owner.format().name + " member");
     return new TapeValue(owner, owner.resolve(found));
   }
@@ -249,8 +246,8 @@ public final class TapeValue implements TruffleObject {
 
   /**
    * Alias-resolved member value node, or -1; checks the receiver inline so the view itself never
-   * escapes. A hinted hit needs no kind check: the side table names this node as the key's own
-   * object, so the receiver is an object. Everything else checks the kind first.
+   * escapes. A hinted hit checks the receiver's kind on the word it loads anyway; everything else
+   * checks the kind first.
    */
   long memberNode(@org.jspecify.annotations.Nullable TapeKey key, int[] hint) {
     owner.check();
@@ -259,12 +256,15 @@ public final class TapeValue implements TruffleObject {
   }
 
   /**
-   * Position-hinted lookup over primitives. {@code hint[0]} is the offset of the key node from the
-   * object where this site last found its member (0: none). It is validated against the node's
-   * side-table entry (this object's own key at exactly that offset, with the key's hash), then by
-   * the node's tag, length and inline bytes; never by owner identity, so a stale hint only costs a
-   * miss. The hit path is four word loads and compares; misses (and keys longer than 16 bytes) scan
-   * behind a static boundary and update the hint.
+   * Directory-hinted lookup over primitives (Myna ABI v4, elide-dev/myna#45). {@code hint[0]} is
+   * one plus the rank of this site's key in the object's directory where it was last found (0:
+   * none). Directories are sorted by hash, so the rank is the same for every member order of one
+   * key set: documents that alternate member orders hit on every read, where the earlier position
+   * hint (a key's offset, validated by a native side table) missed on every other one. The hint is
+   * validated by the receiver's kind and directory size, the entry's hash and the key node's tag,
+   * length and inline bytes; never by owner identity, so a stale hint only costs a miss. The hit
+   * path is one tape call of straight-line word loads and compares; misses (and keys longer than
+   * 16 bytes) search the directory behind a static boundary and update the hint.
    *
    * <p>Aliases: a miss resolves the value it found inside its boundary, so reads of formats without
    * aliases compile with no resolution code at all. A hit returns the value node unresolved, so it
@@ -272,9 +272,11 @@ public final class TapeValue implements TruffleObject {
    * in {@link TapeSource#keyNodeEquals}, and misses on such owners never teach a hint.
    */
   static long memberNode(TapeOwner owner, long object, TapeKey key, int[] hint) {
-    int offset = hint[0];
-    if (offset != 0 && key.inline() && owner.keyMatches(object, offset, key))
-      return object + offset + 1;
+    int rank = hint[0] - 1;
+    if (rank >= 0 && key.inline()) {
+      long k = owner.hinted(object, rank, key);
+      if (k >= 0) return k + 1;
+    }
     return miss(owner, object, key, hint);
   }
 
@@ -282,34 +284,16 @@ public final class TapeValue implements TruffleObject {
   @TruffleBoundary
   private static long miss(TapeOwner owner, long object, TapeKey key, int[] hint) {
     if (owner.tag(object) != ValueTape.OBJECT) return -1;
-    long found = scan(owner, object, key);
-    if (found < 0) return found;
     boolean aliases = owner.format().hasAliases();
-    if (!aliases && found - 1 - object <= 0xffff) hint[0] = (int) (found - 1 - object);
+    // Misses on owners with aliases never teach a hint (a hit returns its value unresolved).
+    long found = owner.find(object, key, aliases ? null : hint);
+    if (found < 0) return found;
     return aliases ? owner.resolve(found) : found;
   }
 
-  /** A call site's member-position hint, cached with its key; 0 means no hint yet. */
+  /** A call site's directory-rank hint, cached with its key; 0 means no hint yet. */
   static int[] newHint() {
     return new int[1];
-  }
-
-  /** Value node of {@code key} in the object, or -1: hash-first scan, or the cached directory. */
-  @TruffleBoundary
-  static long scan(TapeOwner owner, long object, TapeKey key) {
-    long end = owner.tape.next(object);
-    if (owner.tape.length(object) > TapeOwner.DIRECTORY_THRESHOLD) {
-      int[] table = owner.directory(object, end);
-      int mask = table.length - 1;
-      for (int slot = key.hash & mask; table[slot] != 0; slot = (slot + 1) & mask) {
-        long k = object + table[slot];
-        if (owner.keyEquals(k, key)) return k + 1;
-      }
-      return -1;
-    }
-    for (long k = object + 1; k < end; k = owner.tape.next(k + 1))
-      if (owner.keyEquals(k, key)) return k + 1;
-    return -1;
   }
 
   // Guests usually read members by constant names: cache the encoded key per name identity so a

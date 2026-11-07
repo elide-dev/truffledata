@@ -35,10 +35,15 @@ std::string text_of(const myna_value_view* view, size_t index) {
   return std::string(reinterpret_cast<const char*>(data + uint32_t(node.payload)), node.length);
 }
 
-// Order-sensitive digest of a tape: kinds, lengths, scalar payloads and text, plus the lexical
-// spans and key metadata, so two decodes of one document agree exactly.
+namespace c = truffledata::tape::ctape;
+
+// Order-sensitive digest of a tape, so two decodes of one document agree exactly. A compact tape:
+// every word (kinds, flags, counts, `next`, values and the spans, which index the document's own
+// input), the directory, the pool and the input bytes, and the text of every span read through the
+// published input (a stream document's spans must index the session's copy, not the carry-over
+// buffer). A Myna tape (TRANSITIONAL): kinds, lengths, payloads and text plus lexical spans and key
+// meta.
 uint64_t digest(const JsonResult& result) {
-  auto* view = static_cast<const myna_value_view*>(result.view);
   uint64_t h = 1469598103934665603ull;
   auto mix = [&](uint64_t v) {
     for (int i = 0; i < 8; ++i) {
@@ -46,6 +51,27 @@ uint64_t digest(const JsonResult& result) {
       h *= 1099511628211ull;
     }
   };
+  if (static_cast<const td_tape_view*>(result.view)->version == TD_TAPE_VIEW_VERSION) {
+    const auto& t = *static_cast<const td_tape_view*>(result.view);
+    REQUIRE(c::validate(t) == nullptr);
+    REQUIRE(!result.lexical && !result.key_hashes);
+    for (uint64_t i = 0; i < t.word_count; ++i) mix(t.words[i]);
+    for (uint64_t i = 0; i < t.directory_count; ++i) mix(t.directory[i]);
+    for (uint64_t i = 0; i < t.pool_bytes; ++i) mix(t.pool[i]);
+    for (uint64_t i = 0; i < t.input_bytes; ++i) mix(t.input[i]);
+    for (uint64_t i = 0; i < t.word_count; i = c::step(i, t.words[i])) {
+      uint64_t w = t.words[i];
+      uint32_t k = c::kind(w);
+      std::string_view span;
+      if (k >= c::kind_i64 && k <= c::kind_f64) span = c::text_at(t.input, c::low(w), c::field(w));
+      else if ((k == c::kind_string || k == c::kind_decimal) && (w & c::owned_flag))
+        span = c::text_at(t.input, uint32_t(t.words[i + 1] >> 32), uint32_t(t.words[i + 1]));
+      else if (k == c::kind_string || k == c::kind_decimal) span = c::text(t, i);
+      for (char ch : span) mix(uint8_t(ch));
+    }
+    return h;
+  }
+  auto* view = static_cast<const myna_value_view*>(result.view);
   for (size_t i = 0; i < view->node_count; ++i) {
     const auto& node = view->nodes[i];
     uint32_t kind = node.tag & MYNA_VALUE_KIND_MASK;
@@ -104,10 +130,12 @@ corpus make_corpus(size_t count) {
   return out;
 }
 
-const JsonLimitsStruct limits{1 << 20, 1 << 20, 100000, 1 << 20, 128};
+const JsonLimitsStruct limits{1 << 20, 1 << 20, 100000, 1 << 20, 128, TD_JSON_SESSION_COMPACT_TAPE};
+// TRANSITIONAL (Task 2 -> Task 3): sessions publishing the 0.8.0 Myna tape, as the Java readers use.
+const JsonLimitsStruct myna_limits{1 << 20, 1 << 20, 100000, 1 << 20, 128, 0};
 
-std::vector<uint64_t> expected_digests(const corpus& c) {
-  void* s = td_json_session_create(&limits);
+std::vector<uint64_t> expected_digests(const corpus& c, const JsonLimitsStruct& with = limits) {
+  void* s = td_json_session_create(&with);
   std::vector<uint64_t> out;
   for (const auto& doc : c.documents) {
     JsonResult r{};
@@ -169,6 +197,13 @@ void stream_boundary_exactness() {
       td_json_session_release(s);
     }
   }
+  // TRANSITIONAL: Myna-tape sessions stream the same documents as their own decodes.
+  std::vector<uint64_t> myna = expected_digests(c, myna_limits);
+  void* s = td_json_session_create(&myna_limits);
+  void* stream = td_json_stream_create(s, 512, 512);
+  REQUIRE(run_stream(stream, c.bytes, 4096) == myna);
+  td_json_stream_release(stream);
+  td_json_session_release(s);
 }
 
 struct harness {
@@ -188,9 +223,19 @@ struct harness {
     return td_json_stream_feed(stream, reinterpret_cast<const uint8_t*>(bytes.data()), bytes.size());
   }
   int32_t next() { return td_json_stream_next(stream, &result); }
-  std::string root_text() { return text_of(static_cast<const myna_value_view*>(result.view), 0); }
-  uint64_t root_payload() { return static_cast<const myna_value_view*>(result.view)->nodes[0].payload; }
-  uint32_t root_kind() { return static_cast<const myna_value_view*>(result.view)->nodes[0].tag & MYNA_VALUE_KIND_MASK; }
+  const td_tape_view& tape() const { return *static_cast<const td_tape_view*>(result.view); }
+  std::string root_text() { return std::string(c::text(tape(), 0)); }
+  uint64_t root_payload() { return tape().words[1]; }
+  // The root's kind, as the Myna tag the assertions name.
+  uint32_t root_kind() {
+    switch (c::kind(tape().words[0])) {
+      case c::kind_i64: return MYNA_VALUE_I64;
+      case c::kind_true: case c::kind_false: return MYNA_VALUE_BOOL;
+      case c::kind_object: return MYNA_VALUE_OBJECT;
+      case c::kind_array: return MYNA_VALUE_ARRAY;
+      default: return UINT32_MAX;
+    }
+  }
 };
 
 void truncation_and_scalars() {
@@ -265,7 +310,7 @@ void errors_and_skip() {
       REQUIRE(td_json_stream_skip(h.stream) == TD_JSON_OK);
     }
     REQUIRE(h.next() == TD_JSON_OK && h.root_kind() == MYNA_VALUE_OBJECT);
-    REQUIRE(text_of(static_cast<const myna_value_view*>(h.result.view), 1) == "c");
+    REQUIRE(c::text(h.tape(), 2) == "c");
     REQUIRE(h.next() == TD_JSON_STREAM_EMPTY);
     REQUIRE(td_json_stream_skip(h.stream) == TD_JSON_ARGUMENT);  // not failed
   }
@@ -375,14 +420,16 @@ void backpressure_and_retain() {
   REQUIRE(h.feed(borrowed) == borrowed.size());
   REQUIRE(h.next() == TD_JSON_OK);
   REQUIRE(h.feed(std::string(64, ' ')) == 64);
-  REQUIRE(text_of(static_cast<const myna_value_view*>(h.result.view), 1) == "borrowed text beyond inline");
-  auto* view = static_cast<const myna_value_view*>(kept.view);
-  REQUIRE(view->nodes[0].tag == MYNA_VALUE_ARRAY && view->nodes[1].payload == 0);
+  REQUIRE(c::text(h.tape(), 2) == "borrowed text beyond inline");
+  auto* view = static_cast<const td_tape_view*>(kept.view);
+  REQUIRE(c::kind(view->words[0]) == c::kind_array && view->words[3] == 0);
   td_json_stream_release(h.stream);
   td_json_session_release(h.session);
   h.session = td_json_session_create(&limits);
   h.stream = td_json_stream_create(h.session, 64, 64);
-  REQUIRE(view->nodes[1].payload == 0 && static_cast<const uint64_t*>(kept.lexical)[1] == ((uint64_t(1) << 32) | 1));
+  // The retained number's span still reads its token "0" at offset 1 of the retained input.
+  REQUIRE(view->words[3] == 0 && c::low(view->words[2]) == 1 && c::field(view->words[2]) == 1);
+  REQUIRE(c::text_at(view->input, 1, 1) == "0" && c::validate(*view) == nullptr);
   td_json_release(&kept);
 }
 
@@ -470,11 +517,16 @@ void allocations() {
 }  // namespace
 
 int main() {
-  truncation_and_scalars();
-  errors_and_skip();
-  backpressure_and_retain();
-  stream_boundary_exactness();
-  allocations();
+  try {
+    truncation_and_scalars();
+    errors_and_skip();
+    backpressure_and_retain();
+    stream_boundary_exactness();
+    allocations();
+  } catch (const std::exception& e) {
+    std::fprintf(stderr, "stream test failure: %s\n", e.what());
+    return 1;
+  }
   std::puts("stream tests passed");
   return 0;
 }

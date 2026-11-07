@@ -1,4 +1,4 @@
-load("//bazel:versions.bzl", "RBE_IMAGE")
+load("//bazel:versions.bzl", "RBE_IMAGE", "RBE_IMAGE_ARM64")
 
 package(default_visibility = ["//visibility:public"])
 
@@ -35,6 +35,26 @@ platform(
         # BuildBuddy's cloud executors, whatever the organization's default.
         "use-self-hosted-executors": "false",
         # Most actions run a JVM (JavaBuilder, kotlinc, generators): room beyond the small default VM.
+        "EstimatedCPU": "2",
+        "EstimatedMemory": "6GB",
+    },
+)
+
+# BuildBuddy's arm64 Linux executors (--config=remote_arm64): the same image built for arm64, so linux-aarch64 natives
+# build and run natively with the Elide linux-arm64 toolchain bundle and the aarch64 Rust and GraalVM toolchains.
+platform(
+    name = "rbe_linux_arm64",
+    constraint_values = [
+        "@platforms//os:linux",
+        "@platforms//cpu:aarch64",
+    ],
+    exec_properties = {
+        "OSFamily": "Linux",
+        "Arch": "arm64",
+        "container-image": RBE_IMAGE_ARM64,
+        "workload-isolation-type": "firecracker",
+        "network": "off",
+        "use-self-hosted-executors": "false",
         "EstimatedCPU": "2",
         "EstimatedMemory": "6GB",
     },

@@ -10,6 +10,40 @@ remain mutable to the compiler. The shared-consumer experiment records a rejecte
 prototype: its read/allocation improvements came with cross-workload regressions, so it does not
 change the common access API.
 
+## Layout-bound accessors
+
+`Accessor` is the one read contract every representation can bind: an immutable object for one
+field of one row *layout*, with `accepts`, `read`, `present`, `readLong`, `readDouble`,
+`readBoolean` and `length` (UTF-16 units for strings, elements for arrays, folded to exact length
+contracts after the read). Results are exactly `DataLibrary`'s. `AbstractRow.accessor(ordinal)`
+returns the row's accessor; it is identity-stable for every row of the same layout and rejects
+rows of any other layout with `ContractViolation` instead of reading them. The key is the layout,
+not the schema: two static layouts, two protobuf plans or a `ProtoRow` and its storage can share
+one `Schema`, so schema identity alone never binds a read.
+
+`ReadLongNode`, `ReadDoubleNode`, `ReadBooleanNode` and `ReadLengthNode` try an `accessed`
+specialization first: guard `index == cachedIndex` and `accessor.accepts(row)` on a cached accessor
+(three entries, asserted a partial-evaluation constant), body one accessor call. Rows that only offer
+the default fall through to the unchanged `DataLibrary` specializations; `generic` replaces both, so
+schema churn stays bounded (three accessor entries, three library entries, then the generic path).
+
+| Representation | Accessor bound to | Compiled read |
+|---|---|---|
+| `StaticLayout.Record` | the layout instance | constant static property and state |
+| `Batch.Row` | (schema, `Batch.Row`) | column array load (long array for required INT64) |
+| generated protobuf messages | (plan, generated class) | exact-class cast, ordinal switch folds to a field |
+| `ProtoRow` | (plan, `ProtoRow`) | inline scalars, or the storage layout's accessor |
+| Buffa `ScalarRow` / eager `ArrayRow` | (plan, row class) | owner check, inline field or element load |
+| `DynamicRecord`, `NativeRow`, CSV, JSON/tape rows | schema default (`LibraryAccessor`) | unchanged library specializations |
+
+`Schema.accessor(ordinal)` is the default: a `LibraryAccessor` over the uncached `DataLibrary` for
+host callers outside guest compilation; nodes never cache it. `Schema.accessor(representation,
+ordinal, factory)` holds representation tables keyed by a row class or layout object. Accessor
+lookup, the default's library calls, the strict-mode result audit and the length of foreign interop
+arrays are behind boundaries; compiled accessor reads cross none. Accessors use `Field.Kind` only:
+typed tape slots (`TypedLayout`, `TypedRecord`) can adopt the contract later without a new kind
+enum.
+
 The [shared consumer experiment](../benchmarks/comparison/CONSUMER.md) exercises nested protobuf
 work through common nodes on JVM and SVM with the same graph budget. Its native smoke test runs in
 the reusable native-backend CI job and contributes JUnit to the existing Codecov upload. Typed JSON
@@ -28,6 +62,7 @@ Java null is represented with JSpecify `@Nullable` only where it can occur (driv
 | Mixed static typed-accessor tree | 256 nodes |
 | Compiled test graph | 10,000 Graal nodes |
 | Retained INT64 read | 0.05 allocated bytes/read, averaged over 1,000,000 reads |
+| Accessor INT64 + string length read, every adopting representation | 0.05 allocated bytes/read |
 | Static four-field ingestion | 256 allocated bytes/row |
 | Batch ingestion, one required INT64 column | 64 allocated bytes/cell |
 | Direct column filling, 1,024 required INT64 cells | 9,216 allocated bytes/batch |

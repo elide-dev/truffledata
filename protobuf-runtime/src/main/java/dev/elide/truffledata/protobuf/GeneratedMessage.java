@@ -1,5 +1,6 @@
 package dev.elide.truffledata.protobuf;
 
+import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.library.ExportLibrary;
 import com.oracle.truffle.api.library.ExportMessage;
@@ -91,6 +92,66 @@ public abstract class GeneratedMessage extends AbstractRow implements ProtoAcces
   @ExportMessage
   final Schema getSchema() {
     return descriptor;
+  }
+
+  /**
+   * The generated class is the layout: an accessor binds (plan, generated class, ordinal) and reads
+   * through the class's own ordinal switch, which folds to one field load once the ordinal and the
+   * exact class are constants.
+   */
+  @Override
+  public final Accessor accessor(int ordinal) {
+    Class<? extends GeneratedMessage> type = getClass();
+    return descriptor.accessor(type, ordinal, i -> new Generated(type, plan, i));
+  }
+
+  private static final class Generated extends Accessor {
+    private final Class<? extends GeneratedMessage> type;
+    private final ProtoPlan plan;
+
+    Generated(Class<? extends GeneratedMessage> type, ProtoPlan plan, int ordinal) {
+      super(plan.schema(), ordinal);
+      this.type = type;
+      this.plan = plan;
+    }
+
+    @Override
+    public boolean accepts(Object row) {
+      return row.getClass() == type && ((GeneratedMessage) row).plan == plan;
+    }
+
+    private GeneratedMessage message(Object row) {
+      if (!accepts(row)) throw mismatch();
+      return CompilerDirectives.castExact(row, type);
+    }
+
+    @Override
+    public Object read(Object row) {
+      return message(row).get(ordinal());
+    }
+
+    @Override
+    public long readLong(Object row) throws UnexpectedResultException {
+      var message = message(row);
+      if (field().kind() == Field.Kind.INT64) return message.getLong(ordinal());
+      Object value = message.get(ordinal());
+      if (value instanceof Long number) return number;
+      throw new UnexpectedResultException(value);
+    }
+
+    @Override
+    public double readDouble(Object row) throws UnexpectedResultException {
+      var message = message(row);
+      if (field().kind() == Field.Kind.FLOAT64) return message.getDouble(ordinal());
+      throw new UnexpectedResultException(message.get(ordinal()));
+    }
+
+    @Override
+    public boolean readBoolean(Object row) throws UnexpectedResultException {
+      var message = message(row);
+      if (field().kind() == Field.Kind.BOOLEAN) return message.getBoolean(ordinal());
+      throw new UnexpectedResultException(message.get(ordinal()));
+    }
   }
 
   @ExportMessage

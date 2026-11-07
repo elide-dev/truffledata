@@ -9,11 +9,34 @@ import com.oracle.truffle.api.nodes.*;
 @GenerateInline(false)
 @Introspectable
 @GenerateUncached
+@ImportStatic(Accessor.class)
 public abstract class ReadDoubleNode extends Node {
   public abstract double execute(Object row, int index);
 
   public static ReadDoubleNode create() {
     return ReadDoubleNodeGen.create();
+  }
+
+  /**
+   * A layout-bound accessor: one identity guard and the representation's own loads. Rows that only
+   * offer the library-backed default accessor fall through to the library specializations.
+   */
+  @Specialization(
+      guards = {"index == cachedIndex", "bound(accessor, row)"},
+      limit = "3")
+  static double accessed(
+      Object row,
+      int index,
+      @Cached("index") int cachedIndex,
+      @Cached("bind(row, cachedIndex)") Accessor accessor) {
+    com.oracle.truffle.api.CompilerAsserts.partialEvaluationConstant(accessor);
+    try {
+      double value = accessor.readDouble(row);
+      if (Accessor.STRICT) Accessor.audit(accessor, value);
+      return value;
+    } catch (UnexpectedResultException e) {
+      throw new ContractViolation("Expected a present, non-null FLOAT64");
+    }
   }
 
   @Specialization(
@@ -34,7 +57,7 @@ public abstract class ReadDoubleNode extends Node {
     return checked(data, row, cachedIndex);
   }
 
-  @Specialization(replaces = "required")
+  @Specialization(replaces = {"accessed", "required"})
   static double generic(Object row, int index, @CachedLibrary(limit = "3") DataLibrary data) {
     return checked(data, row, index);
   }

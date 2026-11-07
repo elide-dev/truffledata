@@ -1,6 +1,7 @@
 package dev.elide.truffledata.csv;
 
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
+import com.oracle.truffle.api.TruffleOptions;
 import dev.elide.truffledata.csv.kernel.CsvIndexer;
 import org.jspecify.annotations.Nullable;
 
@@ -332,8 +333,8 @@ final class CsvScanner {
       return length;
     }
     // Content holds only doubled quotes: copy each run up to and including a quote, skip its twin.
-    // (A per-byte loop that steps its own index past the twin compiles to a byte-at-a-time copy
-    // that the JIT neither vectorizes nor, on long fields, keeps stable.)
+    // Native Image copies short runs (escape-heavy text) inline, where an arraycopy per run is a
+    // call; the JVM's intrinsic arraycopy is faster at every run length (same-worker probes).
     int to = from + length;
     int out = at;
     int i = from;
@@ -341,7 +342,11 @@ final class CsvScanner {
       int q = i;
       while (q < to && input[q] != quote) q++;
       int run = q < to ? q + 1 - i : q - i;
-      System.arraycopy(input, i, target, out, run);
+      if (TruffleOptions.AOT && run <= 16) {
+        for (int k = 0; k < run; k++) target[out + k] = input[i + k];
+      } else {
+        System.arraycopy(input, i, target, out, run);
+      }
       out += run;
       i = q + 2;
     }

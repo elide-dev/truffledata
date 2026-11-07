@@ -1,0 +1,77 @@
+exec ${PAGER:-/usr/bin/less} "$0" || exit 1
+Executing tests from //json/native:sota_probe
+-----------------------------------------------------------------------------
+simdjson 5.1.1 active implementation: icelake; builtin: fallback; probe ISA: avx2
+differential corpus (200): agree=200 disagree=0 (V5 rejects 0, S3 rejects 0)
+differential malformed (60): agree=60 disagree=0 (V5 rejects 60, S3 rejects 60)
+small       210 B | S0 stage 1 (structural index + UTF-8)                                       22 ns      9353 MB/s   9.35 GB/s
+small       210 B | S1 S0 + classify every structural index (stage-2 floor)                     36 ns      5826 MB/s   5.83 GB/s
+small       210 B | D0 simdjson DOM parse (its stage 2: no duplicates, no spans)               152 ns      1380 MB/s   1.38 GB/s
+small       210 B | W2c On-Demand lean walk, checksum consumer (On-Demand floor)               220 ns       953 MB/s   0.95 GB/s
+small       210 B | V4 0.8.0 Myna-tape decoder                                                 461 ns       455 MB/s   0.46 GB/s
+small       210 B | V5 shipped compact-tape decoder (sorted directories, fused duplicates)         351 ns       599 MB/s   0.60 GB/s
+small       210 B | V5v shipped validate-only walk (null_writer)                               308 ns       681 MB/s   0.68 GB/s
+small       210 B | V5s On-Demand walk + shape-cached duplicates and directories               398 ns       527 MB/s   0.53 GB/s
+small       210 B | V5sn V5s without directories (sink consumers)                              324 ns       648 MB/s   0.65 GB/s
+small       210 B | V5sv V5s validate-only (no tape)                                           280 ns       750 MB/s   0.75 GB/s
+small       210 B | S3 own stage 2 over the structural index -> compact tape + directories         282 ns       744 MB/s   0.74 GB/s
+small       210 B | S3n S3 without directories (sink consumers)                                270 ns       777 MB/s   0.78 GB/s
+small       210 B | S3v S3 validate-only (no tape)                                             235 ns       893 MB/s   0.89 GB/s
+small       210 B | S3x S3n with no duplicate check at all (strictness dropped: the price of the check)         221 ns       949 MB/s   0.95 GB/s
+small       210 B | S3k S3 with checked pushes from the production hint over a reset arena         303 ns       692 MB/s   0.69 GB/s
+small       210 B | S3h S3, templates cleared before every document                            332 ns       632 MB/s   0.63 GB/s
+small       210 B | S3 validate: ok; S3 tape == V5 tape: yes; words=44 directory=12 pool=41 (2.33 x input); template hits/sorts first document 0/2, steady 2/0
+medium     4330 B | S0 stage 1 (structural index + UTF-8)                                      269 ns     16077 MB/s  16.08 GB/s
+medium     4330 B | S1 S0 + classify every structural index (stage-2 floor)                    471 ns      9188 MB/s   9.19 GB/s
+medium     4330 B | D0 simdjson DOM parse (its stage 2: no duplicates, no spans)              2780 ns      1558 MB/s   1.56 GB/s
+medium     4330 B | W2c On-Demand lean walk, checksum consumer (On-Demand floor)              4132 ns      1048 MB/s   1.05 GB/s
+medium     4330 B | V4 0.8.0 Myna-tape decoder                                                9071 ns       477 MB/s   0.48 GB/s
+medium     4330 B | V5 shipped compact-tape decoder (sorted directories, fused duplicates)        6712 ns       645 MB/s   0.65 GB/s
+medium     4330 B | V5v shipped validate-only walk (null_writer)                              5953 ns       727 MB/s   0.73 GB/s
+medium     4330 B | V5s On-Demand walk + shape-cached duplicates and directories              6397 ns       677 MB/s   0.68 GB/s
+medium     4330 B | V5sn V5s without directories (sink consumers)                             6093 ns       711 MB/s   0.71 GB/s
+medium     4330 B | V5sv V5s validate-only (no tape)                                          5303 ns       817 MB/s   0.82 GB/s
+medium     4330 B | S3 own stage 2 over the structural index -> compact tape + directories        4755 ns       911 MB/s   0.91 GB/s
+medium     4330 B | S3n S3 without directories (sink consumers)                               4483 ns       966 MB/s   0.97 GB/s
+medium     4330 B | S3v S3 validate-only (no tape)                                            4125 ns      1050 MB/s   1.05 GB/s
+medium     4330 B | S3x S3n with no duplicate check at all (strictness dropped: the price of the check)        3462 ns      1251 MB/s   1.25 GB/s
+medium     4330 B | S3k S3 with checked pushes from the production hint over a reset arena        5003 ns       866 MB/s   0.87 GB/s
+medium     4330 B | S3h S3, templates cleared before every document                           4673 ns       927 MB/s   0.93 GB/s
+medium     4330 B | S3 validate: ok; S3 tape == V5 tape: yes; words=862 directory=240 pool=415 (2.13 x input); template hits/sorts first document 38/2, steady 40/0
+big      228485 B | S0 stage 1 (structural index + UTF-8)                                    13803 ns     16554 MB/s  16.55 GB/s
+big      228485 B | S1 S0 + classify every structural index (stage-2 floor)                  24448 ns      9346 MB/s   9.35 GB/s
+big      228485 B | D0 simdjson DOM parse (its stage 2: no duplicates, no spans)            131827 ns      1733 MB/s   1.73 GB/s
+big      228485 B | W2c On-Demand lean walk, checksum consumer (On-Demand floor)            213662 ns      1069 MB/s   1.07 GB/s
+big      228485 B | V4 0.8.0 Myna-tape decoder                                              454801 ns       502 MB/s   0.50 GB/s
+big      228485 B | V5 shipped compact-tape decoder (sorted directories, fused duplicates)      339970 ns       672 MB/s   0.67 GB/s
+big      228485 B | V5v shipped validate-only walk (null_writer)                            298954 ns       764 MB/s   0.76 GB/s
+big      228485 B | V5s On-Demand walk + shape-cached duplicates and directories            327123 ns       698 MB/s   0.70 GB/s
+big      228485 B | V5sn V5s without directories (sink consumers)                           313127 ns       730 MB/s   0.73 GB/s
+big      228485 B | V5sv V5s validate-only (no tape)                                        272340 ns       839 MB/s   0.84 GB/s
+big      228485 B | S3 own stage 2 over the structural index -> compact tape + directories      245333 ns       931 MB/s   0.93 GB/s
+big      228485 B | S3n S3 without directories (sink consumers)                             232965 ns       981 MB/s   0.98 GB/s
+big      228485 B | S3v S3 validate-only (no tape)                                          211475 ns      1080 MB/s   1.08 GB/s
+big      228485 B | S3x S3n with no duplicate check at all (strictness dropped: the price of the check)      180566 ns      1265 MB/s   1.27 GB/s
+big      228485 B | S3k S3 with checked pushes from the production hint over a reset arena      256554 ns       891 MB/s   0.89 GB/s
+big      228485 B | S3h S3, templates cleared before every document                         240134 ns       951 MB/s   0.95 GB/s
+big      228485 B | S3 validate: ok; S3 tape == V5 tape: yes; words=43002 directory=12000 pool=21445 (2.02 x input); template hits/sorts first document 1998/2, steady 2000/0
+huge    4850894 B | S0 stage 1 (structural index + UTF-8)                                   311095 ns     15593 MB/s  15.59 GB/s
+huge    4850894 B | S1 S0 + classify every structural index (stage-2 floor)                 533813 ns      9087 MB/s   9.09 GB/s
+huge    4850894 B | D0 simdjson DOM parse (its stage 2: no duplicates, no spans)           2739096 ns      1771 MB/s   1.77 GB/s
+huge    4850894 B | W2c On-Demand lean walk, checksum consumer (On-Demand floor)           4406540 ns      1101 MB/s   1.10 GB/s
+huge    4850894 B | V4 0.8.0 Myna-tape decoder                                             9280756 ns       523 MB/s   0.52 GB/s
+huge    4850894 B | V5 shipped compact-tape decoder (sorted directories, fused duplicates)     6850744 ns       708 MB/s   0.71 GB/s
+huge    4850894 B | V5v shipped validate-only walk (null_writer)                           6064718 ns       800 MB/s   0.80 GB/s
+huge    4850894 B | V5s On-Demand walk + shape-cached duplicates and directories           6606980 ns       734 MB/s   0.73 GB/s
+huge    4850894 B | V5sn V5s without directories (sink consumers)                          6351782 ns       764 MB/s   0.76 GB/s
+huge    4850894 B | V5sv V5s validate-only (no tape)                                       5542968 ns       875 MB/s   0.88 GB/s
+huge    4850894 B | S3 own stage 2 over the structural index -> compact tape + directories     5034671 ns       963 MB/s   0.96 GB/s
+huge    4850894 B | S3n S3 without directories (sink consumers)                            4802328 ns      1010 MB/s   1.01 GB/s
+huge    4850894 B | S3v S3 validate-only (no tape)                                         4299497 ns      1128 MB/s   1.13 GB/s
+huge    4850894 B | S3x S3n with no duplicate check at all (strictness dropped: the price of the check)     3746290 ns      1295 MB/s   1.29 GB/s
+huge    4850894 B | S3k S3 with checked pushes from the production hint over a reset arena     5206587 ns       932 MB/s   0.93 GB/s
+huge    4850894 B | S3h S3, templates cleared before every document                        4937531 ns       982 MB/s   0.98 GB/s
+huge    4850894 B | S3 validate: ok; S3 tape == V5 tape: yes; words=860002 directory=240000 pool=444445 (1.91 x input); template hits/sorts first document 39998/2, steady 40000/0
+ndjson  4850893 B | N0 iterate_many (1 MiB batches) + V5 per document (the stream path)     7398447 ns       656 MB/s   0.66 GB/s
+ndjson  4850893 B | N1 stage 1 over the buffer + S3 per document (directories)             4977531 ns       975 MB/s   0.97 GB/s
+ndjson  4850893 B | N1n stage 1 over the buffer + S3 per document, no directories          4779312 ns      1015 MB/s   1.01 GB/s

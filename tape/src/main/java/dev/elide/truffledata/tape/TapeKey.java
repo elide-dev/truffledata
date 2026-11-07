@@ -1,70 +1,57 @@
 package dev.elide.truffledata.tape;
 
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
-import java.nio.ByteBuffer;
-import java.nio.CharBuffer;
-import java.nio.charset.CharacterCodingException;
-import java.nio.charset.StandardCharsets;
+import dev.elide.myna.values.ValueTape;
 
 /**
- * A prepared member name: its UTF-8 bytes, the node words a short key is stored as, and the 15-bit
- * hash the native decoder publishes per key node (the low bits of its 32-bit FNV-1a). Prepare once
- * and reuse; reads compare a short key against a node with three word loads, and look keys up by
- * hash first.
+ * A prepared member name over Myna's {@link ValueTape.Utf8Key} (elide-dev/myna#47): its UTF-8
+ * bytes, the node words a short key is stored as, and the 32-bit FNV-1a hash Myna ABI v4 object
+ * directories are sorted by. Prepare once and reuse; reads compare a short key against a node with
+ * three word loads, and look keys up through the object's directory.
  */
 public final class TapeKey {
   /** Keys up to this many UTF-8 bytes are stored inline in their node (Myna's inline text). */
   static final int INLINE_BYTES = 16;
 
-  final byte[] bytes;
+  final ValueTape.Utf8Key prepared;
   final int length;
   // Node word 0 of this key stored inline: tag STRING | length << 32.
   final long header;
   // Inline text words; Myna zero-pads bytes past the length.
   final long low;
   final long high;
+  // Myna's directory hash: 32-bit FNV-1a over the decoded bytes (ValueTape.hashUtf8).
   final int hash;
 
-  private TapeKey(byte[] bytes) {
-    this.bytes = bytes;
-    this.length = bytes.length;
-    long lo = 0, hi = 0;
-    for (int i = 0; i < Math.min(INLINE_BYTES, bytes.length); i++) {
-      if (i < 8) lo |= (bytes[i] & 255L) << (i * 8);
-      else hi |= (bytes[i] & 255L) << ((i - 8) * 8);
-    }
-    low = lo;
-    high = hi;
-    header = dev.elide.myna.values.ValueTape.STRING | ((long) bytes.length << 32);
-    hash = hash(bytes);
-  }
-
-  /** Low 15 bits of 32-bit FNV-1a over the bytes: the hash in the native key side table. */
-  static int hash(byte[] bytes) {
-    int h = 0x811c9dc5;
-    for (byte b : bytes) {
-      h ^= b & 0xff;
-      h *= 0x01000193;
-    }
-    return h & 0x7fff;
+  private TapeKey(ValueTape.Utf8Key prepared) {
+    this.prepared = prepared;
+    this.length = prepared.byteLength();
+    this.low = prepared.lowWord();
+    this.high = prepared.highWord();
+    this.header = ValueTape.STRING | ((long) length << 32);
+    this.hash = prepared.hash();
   }
 
   /** Encodes {@code name} as UTF-8; an unpaired surrogate is rejected, as no decoded key can hold it. */
   @TruffleBoundary
   public static TapeKey of(String name) {
-    try {
-      ByteBuffer encoded = StandardCharsets.UTF_8.newEncoder().encode(CharBuffer.wrap(name));
-      byte[] bytes = new byte[encoded.remaining()];
-      encoded.get(bytes);
-      return new TapeKey(bytes);
-    } catch (CharacterCodingException error) {
-      throw new IllegalArgumentException("Unpaired UTF-16 surrogate", error);
-    }
+    return new TapeKey(ValueTape.Utf8Key.of(name));
+  }
+
+  /** The same key prepared by Myna. */
+  @TruffleBoundary
+  public static TapeKey of(ValueTape.Utf8Key prepared) {
+    return new TapeKey(java.util.Objects.requireNonNull(prepared));
   }
 
   /** UTF-8 length of the key. */
   public int utf8Length() {
     return length;
+  }
+
+  /** The low 15 bits of {@link #hash}: what the native key side table publishes per key node. */
+  int sideHash() {
+    return hash & 0x7fff;
   }
 
   boolean inline() {

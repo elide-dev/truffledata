@@ -1,0 +1,91 @@
+diff --git a/benchmarks/comparison/CsvComparison.java b/benchmarks/comparison/CsvComparison.java
+index 66f9a2c..fb6232c 100644
+--- a/benchmarks/comparison/CsvComparison.java
++++ b/benchmarks/comparison/CsvComparison.java
+@@ -744,7 +744,14 @@ public final class CsvComparison {
+     long thread = Thread.currentThread().threadId();
+     // Warm up: at least three runs and two seconds (JIT tiers on the JVM, caches on SVM).
+     long warm = System.nanoTime() + (smoke ? 0 : 2_000_000_000L);
++    TRACE = System.getenv("CSV_TRACE") != null;
++    if (TRACE) {
++      trace("start");
++      for (String file : new String[] {"/sys/kernel/mm/transparent_hugepage/enabled", "/sys/kernel/mm/transparent_hugepage/defrag", "/proc/sys/kernel/numa_balancing", "/sys/kernel/mm/ksm/run", "/proc/meminfo"})
++        try { System.err.println("TRACE " + file + " " + java.nio.file.Files.readString(Path.of(file)).trim()); } catch (Exception e) { System.err.println("TRACE " + file + " " + e); }
++    }
+     for (int i = 0; i < 3 || System.nanoTime() < warm; i++) check(engine.run(input), expected);
++    if (TRACE) trace("warm");
+     double[] time = new double[smoke ? 1 : 5];
+     for (int s = 0; s < time.length; s++) {
+       long start = System.nanoTime(), elapsed, ops = 0;
+@@ -754,6 +761,7 @@ public final class CsvComparison {
+         elapsed = System.nanoTime() - start;
+       } while (elapsed < (smoke ? 0 : 300_000_000L));
+       time[s] = elapsed / (double) (ops * input.length);
++      if (TRACE) trace("sample " + s + " ops " + ops + " ns_per_byte " + time[s]);
+     }
+     double[] memory = new double[smoke ? 1 : 3];
+     int ops = (int) Math.max(1, (8L << 20) / input.length);
+@@ -772,6 +780,44 @@ public final class CsvComparison {
+         Arrays.toString(memory));
+   }
+ 
++  // PROBE (not committed): per-sample process CPU, faults and run-queue delay from /proc.
++  static boolean TRACE;
++  static long[] lastTrace = new long[6];
++  static final Map<String, Long> VM = new java.util.HashMap<>();
++
++  static void trace(String label) {
++    try {
++      String stat = java.nio.file.Files.readString(Path.of("/proc/self/stat"));
++      String[] f = stat.substring(stat.lastIndexOf(')') + 2).split(" ");
++      // fields after ')' start at field 3 (state): minflt=10, majflt=12, utime=14, stime=15
++      long minflt = Long.parseLong(f[7]), majflt = Long.parseLong(f[9]);
++      long utime = Long.parseLong(f[11]), stime = Long.parseLong(f[12]);
++      String[] sched = java.nio.file.Files.readString(Path.of("/proc/thread-self/schedstat")).trim().split(" ");
++      long run = Long.parseLong(sched[0]), wait = Long.parseLong(sched[1]);
++      long thp = 0;
++      for (String line : java.nio.file.Files.readAllLines(Path.of("/proc/self/status")))
++        if (line.startsWith("VmRSS")) thp = Long.parseLong(line.replaceAll("[^0-9]", ""));
++      StringBuilder vm = new StringBuilder();
++      for (String line : java.nio.file.Files.readAllLines(Path.of("/proc/vmstat"))) {
++        String[] kv = line.split(" ");
++        if (kv[0].startsWith("numa_") || kv[0].startsWith("thp_fault") || kv[0].startsWith("compact_stall")
++            || kv[0].startsWith("pgmigrate_success") || kv[0].equals("pgfault") || kv[0].startsWith("pgscan")
++            || kv[0].startsWith("pgsteal") || kv[0].startsWith("pswp") || kv[0].startsWith("thp_split")) {
++          long v = Long.parseLong(kv[1]);
++          Long prev = VM.put(kv[0], v);
++          if (prev != null && v != prev) vm.append(' ').append(kv[0]).append('=').append(v - prev);
++        }
++      }
++      long[] now = {minflt, majflt, utime, stime, run, wait};
++      System.err.printf(Locale.ROOT, "TRACE %s minflt %d majflt %d utime_ticks %d stime_ticks %d thread_run_ms %.1f thread_wait_ms %.1f rss_kb %d vm%s%n",
++          label, now[0] - lastTrace[0], now[1] - lastTrace[1], now[2] - lastTrace[2], now[3] - lastTrace[3],
++          (now[4] - lastTrace[4]) / 1e6, (now[5] - lastTrace[5]) / 1e6, thp, vm);
++      lastTrace = now;
++    } catch (Exception e) {
++      System.err.println("TRACE unavailable " + e);
++    }
++  }
++
+   /** Records (header included) and fields, from the strict scanner. */
+   private static long[] shape(byte[] input) {
+     long[] counts = new long[2];
+diff --git a/benchmarks/comparison/csv_measure.py b/benchmarks/comparison/csv_measure.py
+index e22bbbb..afe994e 100644
+--- a/benchmarks/comparison/csv_measure.py
++++ b/benchmarks/comparison/csv_measure.py
+@@ -91,10 +91,13 @@ if SELECT:
+ random.Random(20261106 + shard).shuffle(jobs)
+ 
+ 
++PROBE_FLAGS = os.environ.get('CSV_MEASURE_FLAGS', '').split()  # PROBE (not committed)
++
++
+ def command(*args):
+     if runtime == 'jvm':
+         return [binary, '--jvm_flag=-Xss16m', *args]
+-    return [binary, *args]
++    return [binary, *PROBE_FLAGS, *args]
+ 
+ 
+ results, unavailable = [], []

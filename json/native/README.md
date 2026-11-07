@@ -1,13 +1,33 @@
 # Native JSON decoder
 
-The C++ decoder traverses simdjson 5.1.1 On-Demand directly into a Myna ABI v3
-value index, without an intermediate DOM. Typed plans write fixed scalar slots
-instead. Both sit behind one versioned C ABI, `json.seam` (application ABI 5),
+The C++ decoder traverses simdjson 5.1.1 On-Demand directly into a Myna value ABI
+v4 index (Myna 0.11.0), without an intermediate DOM. Typed plans write fixed scalar
+slots instead. Both sit behind one versioned C ABI, `json.seam` (application ABI 7),
 which generates the direct SVM `@CFunction` bindings and JVM FFM handles. The Java
 owners, guest interop, export and snapshot contracts are described in
 [docs/JSON.md](../../docs/JSON.md).
 
-## Generic documents
+## Compact tape (ABI 7, tape-gbps plan Task 2)
+
+`decoder.h` now walks On-Demand into the compact tape of `//tape/native:ctape.h` (plan
+`docs/superpowers/plans/2026-11-07-tape-gbps.md` §3): one 64-bit word per value, a second
+word for numbers, containers and escaped (pool-owned) text; number and string words carry
+their exact token or body span in the retained input, keys carry the `KEY` flag and strings
+the `ASCII` flag, so there are no lexical-span or key-meta side tables. Every object of at
+least two members gets a directory run of `key_offset << 32 | FNV-1a` entries, and the
+duplicate-key check happens while that run is sorted (equal hashes are byte-compared); one-member
+objects have none. `tape_decoder<null_writer>` is the validate-only walk
+(`TD_JSON_VALIDATE_ONLY`): the same limits and the same sorted-run duplicate check over a
+scratch key stack, nothing written. A session created with `TD_JSON_SESSION_COMPACT_TAPE`
+(`JsonLimitsStruct.flags`) publishes `td_tape_view` descriptors (`json.seam` `TapeView`, 88
+bytes) for decodes, retains and stream documents, with a text arena indexed by word;
+`td_json_result_myna` converts a compact result into an owned Myna ABI v4 result (its own input
+copy) for interchange. Until the Java readers move to the compact tape (plan Task 3), sessions
+without the flag and `td_json_decode`/`_adopted` still publish the 0.8.0 representation below,
+from `legacy_decoder.h`; `JsonResult` keeps its `lexical`, `lexical_count` and `key_hashes`
+fields (null for compact results) until then.
+
+## Generic documents (0.8.0 representation, until Task 3)
 
 The decoder accepts every root kind, rejects decoded duplicate keys and trailing
 input, and validates number grammar without restricting numeric range. Every value
@@ -41,17 +61,23 @@ retained input. Strings and keys keep their quotes and escapes, numbers keep the
 exact spelling, and containers, booleans and null carry zero.
 `JsonResult.lexical`/`lexical_count` publish that array, one entry per node.
 
-`JsonResult.key_hashes` publishes a second side table with the same count: one
-`uint32_t` per node. Bit 31 marks string and key nodes whose decoded bytes are all
-ASCII. Key nodes also carry the low 15 bits of the FNV-1a hash of their decoded
-bytes in bits 16–30 and their offset from their own object node in bits 0–15 (0
-when the offset exceeds 65,535); every other node has 0 in bits 0–30. The
-duplicate-key check computes the same hash, so it costs nothing extra. Java readers
-use the entry for member lookup: a nonzero low half identifies a direct member key
-of the object at exactly that offset, so a cached position hint is validated with
-one compare and can never match a value string or a nested object's key. It is a JSON side
-table, not a Myna layout change (container directories are requested upstream as
-elide-dev/myna#45).
+`JsonResult.view` points at a complete 88-byte `myna_value_view_v4` (ABI 6; ABI 5
+published the 56-byte v3 descriptor). Every object with at least one member has a
+Myna directory (`directory`/`directory_count`): one `(hash, key_offset)` entry per
+member, `hash` being `myna_value_hash` (32-bit FNV-1a over the decoded key bytes)
+and `key_offset` the key node's distance from its object, sorted by unsigned hash
+and then offset. The object's payload is its first entry plus one; empty objects
+keep payload 0. The duplicate-key check computes the same hash, and the writer takes
+it from the decoder rather than re-hashing key bytes when the object closes. JSON
+tapes carry no v4 metadata table (`metadata_count` 0) and no REF nodes. Java readers
+look members up through the directory and remember a member's rank in it.
+
+`JsonResult.key_hashes` publishes a side table with the node count: one `uint32_t`
+per node. Bit 31 marks string and key nodes whose decoded bytes are all ASCII (the
+text arena and export cursors use it); key nodes also carry the low 15 bits of their
+hash in bits 16–30 (export cursors' `hash()`, the sinks' key caches) and their
+offset from their object in bits 0–15, a layout shared with YAML's decoder. Member
+lookup no longer reads it.
 
 ### The lean walk
 
@@ -78,9 +104,12 @@ index budget), so a typical document makes one upstream allocation: a single are
 block. Arrays above 32 KiB are allocated upstream directly and freed on growth,
 so big tapes do not strand arena space. The writer enforces the builder's node,
 text, depth and container limits and produces byte-identical nodes, bytes and
-regions; `//json/native:test` runs both writers over a 200-document corpus. Until
-Myna can reserve builder storage (elide-dev/myna#46) the writer is the JSON-side
-substitute.
+regions, and the same v4 directories as Myna's builder with `enable_v4`;
+`//json/native:test` runs both writers over a 200-document corpus. Myna 0.11.0's
+builder can reserve storage (elide-dev/myna#46), and the parity writer uses it, but
+the raw writer stays the production path: the builder still wraps each write in a
+poisoning try/catch, keeps a slot stack and re-hashes every key when its object
+closes (`benchmarks/results/json-v4-*` measures both decoders).
 
 ## Sessions
 
@@ -210,7 +239,7 @@ growth and checks that each unwinds with no retained bytes under ASan/UBSan.
 ## Tests
 
 ```sh
-bazel test //json/native:test //json/native:api_test //json/native:stream_test //json/native:typed_test //json/native:unicode_test
+bazel test //json/native:test //json/native:legacy_test //json/native:api_test //json/native:stream_test //json/native:typed_test //json/native:unicode_test
 bazel test //json/tests:jvm          # JVM FFM backend
 bazel test //json/tests:native_test  # SVM, manual, Linux x86-64 via RBE
 ```

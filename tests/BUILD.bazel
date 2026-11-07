@@ -9,6 +9,7 @@ data_java_library(
     name = "test_lib",
     testonly = True,
     srcs = [
+        "src/test/java/dev/elide/truffledata/AccessorTest.java",
         "src/test/java/dev/elide/truffledata/AllocationTest.java",
         "src/test/java/dev/elide/truffledata/ContractsTest.java",
         "src/test/java/dev/elide/truffledata/CoreTest.java",
@@ -55,7 +56,7 @@ java_test(
         "--package",
         "dev.elide.truffledata",
         "--include-class",
-        "dev.elide.truffledata.(Core|GeneratedCodec|GeneratedGraph|ProtoDescriptors|ProtoNative|Jdbc|JdbcLifecycle|Protobuf|Polyglot|Policy|Contracts|Integration|JitMatrix)Test",
+        "dev.elide.truffledata.(Accessor|Core|GeneratedCodec|GeneratedGraph|ProtoDescriptors|ProtoNative|Jdbc|JdbcLifecycle|Protobuf|Polyglot|Policy|Contracts|Integration|JitMatrix)Test",
     ],
     data = [
         ":native_descriptors",

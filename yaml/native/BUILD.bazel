@@ -83,7 +83,8 @@ genrule(
         "generated/seam.ll",
         "generated/META-INF/native-image/dev.elide.myna/dev.elide.truffledata.yaml.generated.Yaml/native-image.properties",
     ],
-    cmd = "$(location @myna//:generator) generate $(location yaml.seam) --out $(RULEDIR)/generated --target " + select({
+    cmd = "$(location @myna//:generator) validate $(location yaml.seam) --targets x86_64-unknown-linux-gnu,aarch64-unknown-linux-gnu,aarch64-apple-darwin && " +
+          "$(location @myna//:generator) generate $(location yaml.seam) --out $(RULEDIR)/generated --target " + select({
         "@platforms//os:macos": "aarch64-apple-darwin",
         ":linux_arm64": "aarch64-unknown-linux-gnu",
         "//conditions:default": "x86_64-unknown-linux-gnu",
@@ -166,6 +167,11 @@ cc_binary(
         "-std=c++17",
         "-O3",
     ],
+    linkopts = select({
+        # The macos-aarch64 release attachment (tools/release) is loaded through @rpath.
+        "@platforms//os:macos": ["-Wl,-install_name,@rpath/libtruffledata_yaml.dylib", "-Wl,-dead_strip_dylibs"],
+        "//conditions:default": [],
+    }),
     linkshared = True,
     linkstatic = True,
     visibility = ["//visibility:public"],

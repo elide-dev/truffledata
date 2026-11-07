@@ -4,18 +4,19 @@ load("@rules_graalvm//graalvm:defs.bzl", "native_image")
 load("@rules_java//java:defs.bzl", "java_import", "java_library", "java_test")
 load("@rules_shell//shell:sh_test.bzl", "sh_test")
 load("//bazel:jit.bzl", "TRUFFLE_JIT_CHECKS")
-load("//bazel:maven.bzl", "maven_publication", "release_version")
+load("//bazel:maven.bzl", "classifier_attachments", "maven_publication", "native_attachments", "release_version")
 load("//bazel:maven_bom.bzl", "maven_bom")
-load("//bazel:merge_archives.bzl", "merge_archives")
+load("//bazel:release_archive.bzl", "release_archive")
+load(":native_consumer.bzl", "native_consumers")
 
 release_version(
     name = "version",
-    build_setting_default = "0.8.0-SNAPSHOT",
+    build_setting_default = "0.9.0-SNAPSHOT",
     visibility = ["//visibility:public"],
 )
 
 COMMON = [
-    "org.graalvm.truffle:truffle-api:25.5.5-elide.24",
+    "org.graalvm.truffle:truffle-api:25.5.5-elide.27",
     "org.jspecify:jspecify:1.0.1",
 ]
 
@@ -102,13 +103,21 @@ cc_static_library(
 
 # The CSV kernel C ABI, its ISA kernels and simdutf, for static SVM linking.
 cc_static_library(
-    name = "csv_archive",
+    name = "csv_objects",
     deps = ["//csv/native:truffledata_csv"],
 )
 
-# One self-contained archive for static SVM linking: json_objects plus Myna's myna-values static
-# library (myna_utf8_to_utf16_v2 for SvmValueTape, performance plan Task D1).
-merge_archives(
+# The YAML C ABI, decoder and rapidyaml. Not published yet; built per platform so it can be.
+cc_static_library(
+    name = "yaml_objects",
+    deps = ["//yaml/native:truffledata_yaml"],
+)
+
+# Release static archives (bazel/release_archive.bzl): self-contained, and on ELF every member with bitcode is a fat
+# object (machine code plus ThinLTO bitcode), so consumers link them with or without LTO; on Mach-O, which has no fat
+# object format, every member is machine code. JSON is json_objects plus Myna's myna-values static library
+# (myna_utf8_to_utf16_v2 for SvmValueTape, performance plan Task D1).
+release_archive(
     name = "json_archive",
     archives = [
         ":json_objects",
@@ -116,19 +125,119 @@ merge_archives(
     ],
 )
 
+release_archive(
+    name = "csv_archive",
+    archives = [":csv_objects"],
+)
+
+release_archive(
+    name = "buffa_archive",
+    archives = ["//protobuf-buffa/native:truffledata_buffa"],
+)
+
+release_archive(
+    name = "yaml_archive",
+    archives = [":yaml_objects"],
+)
+
+# Each release archive's member manifest (member kinds, for tools/release/check_natives.py) and, on macOS, its ThinLTO
+# bitcode twin and that twin's manifest.
+[filegroup(
+    name = "%s_%s" % (archive, group),
+    srcs = [":" + archive],
+    output_group = group,
+) for archive in [
+    "buffa_archive",
+    "csv_archive",
+    "json_archive",
+    "yaml_archive",
+] for group in [
+    "manifest",
+    "bitcode",
+    "bitcode_manifest",
+]]
+
+# Native modules: (static archive, shared library, platform-neutral attachments); classifiers per target platform are
+# CLASSIFIERS in //bazel:maven.bzl. YAML is built, not yet published.
+NATIVES = {
+    "protobuf-buffa": (
+        ":buffa_archive",
+        "//protobuf-buffa/native:shared",
+        {"//protobuf-buffa/native:header": "-native.h"},
+    ),
+    "json": (
+        ":json_archive",
+        "//json/native:json_shared.so",
+        {},
+    ),
+    "csv-native": (
+        ":csv_archive",
+        "//csv/native:csv_shared.so",
+        {},
+    ),
+    "yaml": (
+        ":yaml_archive",
+        "//yaml/native:yaml_shared.so",
+        {},
+    ),
+}
+
+# The target platform's native attachments for each module, in the publication's Maven layout without jars or POMs,
+# plus the archives' member manifests for the release gate (never published). Each platform builds :natives in its own
+# invocation (--config=remote, --config=remote_arm64, --config=local on macOS); tools/release/publish.sh collects the
+# three sets and stages them beside the publications. Platform-neutral attachments (the Buffa header) come from the
+# publications alone.
+[native_attachments(
+    name = module + "_natives",
+    attachments = classifier_attachments(static, shared, {}, manifests = True),
+    module = module,
+) for module, (static, shared, _neutral) in NATIVES.items()]
+
+filegroup(
+    name = "natives",
+    # YAML (unpublished) does not build for macOS yet: its scalars use floating-point std::from_chars, which the macOS
+    # SDK's libc++ marks available from macOS 26, above --macos_minimum_os=12.0.
+    srcs = [":%s_natives" % module for module in NATIVES if module != "yaml"] + select({
+        "@platforms//os:macos": [],
+        "//conditions:default": [":yaml_natives"],
+    }),
+)
+
+# C consumers of each published native on the target platform (tools/release/native_consumer.bzl): the release static
+# archive linked with LTO off and with ThinLTO (on macOS, the bitcode twin with ld64.lld), each checked by its LTO
+# witness, and the release shared library loaded with dlopen. Linux runs them on RBE (--config=remote and
+# --config=remote_arm64), macOS locally (--config=local).
+native_consumers(
+    name = "buffa_c",
+    archive = ":buffa_archive",
+    fingerprint = "td_buffa_fingerprint",
+    shared = "//protobuf-buffa/native:shared",
+)
+
+native_consumers(
+    name = "json_c",
+    archive = ":json_archive",
+    fingerprint = "td_json_fingerprint",
+    probe = "td_json_bridge_present",
+    shared = "//json/native:json_shared.so",
+)
+
+native_consumers(
+    name = "csv_c",
+    archive = ":csv_archive",
+    fingerprint = "td_csv_fingerprint",
+    shared = "//csv/native:csv_shared.so",
+)
+
+test_suite(
+    name = "native_consumers",
+    tags = ["native-consumer"],
+)
+
 [maven_publication(
     name = module,
-    attachments = {
-        "//protobuf-buffa/native:truffledata_buffa": "-linux-x86_64.a",
-        "//protobuf-buffa/native:shared": "-linux-x86_64.so",
-        "//protobuf-buffa/native:header": "-native.h",
-    } if module == "protobuf-buffa" else {
-        ":json_archive": "-linux-x86_64.a",
-        "//json/native:json_shared.so": "-linux-x86_64.so",
-    } if module == "json" else {
-        ":csv_archive": "-linux-x86_64.a",
-        "//csv/native:csv_shared.so": "-linux-x86_64.so",
-    } if module == "csv-native" else {},
+    # This invocation's platform; the other platforms' attachments come from their :natives builds.
+    attachments = classifier_attachments(NATIVES[module][0], NATIVES[module][1], NATIVES[module][2]) if module in NATIVES else {},
     dependencies = COMMON + ([] if module == "core" else ["dev.elide:truffledata-core:{version}"]) + ([
         "com.google.protobuf:protobuf-java:4.36.1",
         "com.google.protobuf:protobuf-java-util:4.36.1",
@@ -154,8 +263,8 @@ merge_archives(
         "csv-native",
         "csv-jvm",
     ] else []) + ([
-        "org.graalvm.sdk:nativeimage:25.5.5-elide.24",
-        "org.graalvm.sdk:word:25.5.5-elide.24",
+        "org.graalvm.sdk:nativeimage:25.5.5-elide.27",
+        "org.graalvm.sdk:word:25.5.5-elide.27",
     ] if module in [
         "protobuf-buffa",
         "protobuf-buffa-bindings",
@@ -186,7 +295,7 @@ maven_bom(
         "org.xerial:sqlite-jdbc:3.53.4.0",
         "com.google.protobuf:protobuf-java:4.36.1",
         "com.google.protobuf:protobuf-java-util:4.36.1",
-    ] + [coordinate + ":25.5.5-elide.24" for coordinate in [
+    ] + [coordinate + ":25.5.5-elide.27" for coordinate in [
         "org.graalvm.truffle:truffle-runtime",
         "org.graalvm.polyglot:polyglot",
         "org.graalvm.js:js-language",

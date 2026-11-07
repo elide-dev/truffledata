@@ -43,6 +43,10 @@ public final class JavaSink implements TapeSink {
     // Open addressing at load factor ≤ 1/2, indexed by the 15-bit key hash.
     private final String[] names = new String[2 * CAPACITY];
     private final byte[][] utf8 = new byte[2 * CAPACITY][];
+    // Node words of names stored inline (at most 16 bytes): three per slot, word 0 nonzero; other
+    // slots hold zeros. An inline key is matched by three word compares instead of a byte loop.
+    private final long[] words = new long[3 * 2 * CAPACITY];
+    private final long[] probe = new long[3];
     private int size;
 
     /** Number of distinct names held. */
@@ -54,13 +58,20 @@ public final class JavaSink implements TapeSink {
     String intern(TapeText key) {
       int mask = names.length - 1;
       int slot = key.hash() & mask;
-      for (String name; (name = names[slot]) != null; slot = (slot + 1) & mask)
-        if (key.utf8Equals(utf8[slot])) return name;
+      long[] w = probe;
+      boolean inline = key.inlineWords(w, 0);
+      for (String name; (name = names[slot]) != null; slot = (slot + 1) & mask) {
+        int at = 3 * slot;
+        if (inline
+            ? words[at] == w[0] && words[at + 1] == w[1] && words[at + 2] == w[2]
+            : key.utf8Equals(utf8[slot])) return name;
+      }
       String name = key.toJavaString();
       if (size < CAPACITY) {
         byte[] bytes = new byte[key.utf8Length()];
         key.copyUtf8(bytes, 0);
         utf8[slot] = bytes;
+        if (inline) System.arraycopy(w, 0, words, 3 * slot, 3);
         names[slot] = name;
         size++;
       }

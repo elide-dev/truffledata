@@ -1,0 +1,816 @@
+exec ${PAGER:-/usr/bin/less} "$0" || exit 1
+Executing tests from //benchmarks/comparison:csv_measure_jvm
+-----------------------------------------------------------------------------
+--- strings truffledata-batch quoted 1048576 fork 2 Picked up JAVA_TOOL_OPTIONS: -Xlog:gc,gc+init,gc+cpu,safepoint,os+container:stderr:uptime
+[0.042s] CardTable entry size: 512
+[0.050s] Using G1
+[0.067s] Version: 25.0.4.1.1+1-jvmci-25.5-b24 (release)
+[0.067s] CPUs: 7 total, 7 available
+[0.067s] Memory: 16767M
+[0.067s] Large Page Support: Disabled
+[0.067s] NUMA Support: Disabled
+[0.067s] Compressed Oops: Enabled (Zero based)
+[0.067s] Heap Region Size: 4M
+[0.067s] Heap Min Capacity: 8M
+[0.067s] Heap Initial Capacity: 264M
+[0.067s] Heap Max Capacity: 8G
+[0.067s] Pre-touch: Disabled
+[0.067s] Parallel Workers: 7
+[0.067s] Concurrent Workers: 2
+[0.067s] Concurrent Refinement Workers: 7
+[0.067s] Periodic GC: Disabled
+WARNING: Using incubator modules: jdk.incubator.vector
+[2.650s] GC(0) Pause Young (Normal) (G1 Evacuation Pause) 45M->6M(268M) 54.705ms
+[2.650s] GC(0) User=0.02s Sys=0.11s Real=0.05s
+[2.650s] Safepoint "G1CollectForAllocation", Time since last: 2318932419 ns, Reaching safepoint: 129121 ns, At safepoint: 55237350 ns, Leaving safepoint: 46040 ns, Total: 55412511 ns, Threads: 1 runnable, 11 total
+[2.728s] GC(1) Pause Young (Normal) (G1 Evacuation Pause) 37M->5M(268M) 4.183ms
+[2.728s] GC(1) User=0.01s Sys=0.00s Real=0.00s
+[2.728s] Safepoint "G1CollectForAllocation", Time since last: 73250679 ns, Reaching safepoint: 9120 ns, At safepoint: 4275210 ns, Leaving safepoint: 39480 ns, Total: 4323810 ns, Threads: 0 runnable, 11 total
+[3.379s] GC(2) Pause Young (Normal) (G1 Evacuation Pause) 96M->5M(268M) 21.460ms
+[3.379s] GC(2) User=0.00s Sys=0.09s Real=0.02s
+[3.379s] Safepoint "G1CollectForAllocation", Time since last: 630106571 ns, Reaching safepoint: 9110 ns, At safepoint: 21554170 ns, Leaving safepoint: 38660 ns, Total: 21601940 ns, Threads: 0 runnable, 11 total
+[4.062s] GC(3) Pause Young (Normal) (G1 Evacuation Pause) 156M->5M(268M) 28.675ms
+[4.062s] GC(3) User=0.01s Sys=0.08s Real=0.03s
+[4.062s] Safepoint "G1CollectForAllocation", Time since last: 653868549 ns, Reaching safepoint: 263420 ns, At safepoint: 28768450 ns, Leaving safepoint: 25270 ns, Total: 29057140 ns, Threads: 0 runnable, 11 total
+[4.178s] GC(4) Pause Young (Normal) (G1 Evacuation Pause) 152M->5M(360M) 14.249ms
+[4.178s] GC(4) User=0.00s Sys=0.03s Real=0.01s
+[4.178s] Safepoint "G1CollectForAllocation", Time since last: 101326420 ns, Reaching safepoint: 5930 ns, At safepoint: 14330970 ns, Leaving safepoint: 19270 ns, Total: 14356170 ns, Threads: 0 runnable, 11 total
+[5.232s] GC(5) Pause Young (Normal) (G1 Evacuation Pause) 216M->5M(360M) 21.019ms
+[5.232s] GC(5) User=0.03s Sys=0.01s Real=0.02s
+[5.232s] Safepoint "G1CollectForAllocation", Time since last: 1033017020 ns, Reaching safepoint: 6190 ns, At safepoint: 21106600 ns, Leaving safepoint: 18950 ns, Total: 21131740 ns, Threads: 0 runnable, 11 total
+[5.384s] GC(6) Pause Young (Normal) (G1 Evacuation Pause) 216M->5M(360M) 13.409ms
+[5.384s] GC(6) User=0.01s Sys=0.02s Real=0.02s
+[5.384s] Safepoint "G1CollectForAllocation", Time since last: 137968970 ns, Reaching safepoint: 7360 ns, At safepoint: 13499360 ns, Leaving safepoint: 21680 ns, Total: 13528400 ns, Threads: 0 runnable, 11 total
+[5.485s] GC(7) Pause Young (Normal) (G1 Evacuation Pause) 216M->5M(360M) 5.095ms
+[5.485s] GC(7) User=0.01s Sys=0.01s Real=0.01s
+[5.485s] Safepoint "G1CollectForAllocation", Time since last: 96571860 ns, Reaching safepoint: 6650 ns, At safepoint: 5170660 ns, Leaving safepoint: 102850 ns, Total: 5280160 ns, Threads: 0 runnable, 11 total
+[5.596s] GC(8) Pause Young (Normal) (G1 Evacuation Pause) 216M->5M(640M) 11.454ms
+[5.596s] GC(8) User=0.00s Sys=0.01s Real=0.01s
+[5.596s] Safepoint "G1CollectForAllocation", Time since last: 98689090 ns, Reaching safepoint: 6430 ns, At safepoint: 11568380 ns, Leaving safepoint: 221830 ns, Total: 11796640 ns, Threads: 0 runnable, 11 total
+ 
+strings truffledata-batch quoted 1048576 ingest 2 [3.4800670436230456, 13.264378959865962, 13.201093054769593, 1.5300580220104418, 0.8156311331587672]
+--- strings truffledata-batch quoted 1048576 fork 1 Picked up JAVA_TOOL_OPTIONS: -Xlog:gc,gc+init,gc+cpu,safepoint,os+container:stderr:uptime
+[0.009s] CardTable entry size: 512
+[0.012s] Using G1
+[0.014s] Version: 25.0.4.1.1+1-jvmci-25.5-b24 (release)
+[0.014s] CPUs: 7 total, 7 available
+[0.014s] Memory: 16767M
+[0.014s] Large Page Support: Disabled
+[0.014s] NUMA Support: Disabled
+[0.014s] Compressed Oops: Enabled (Zero based)
+[0.014s] Heap Region Size: 4M
+[0.014s] Heap Min Capacity: 8M
+[0.014s] Heap Initial Capacity: 264M
+[0.014s] Heap Max Capacity: 8G
+[0.014s] Pre-touch: Disabled
+[0.014s] Parallel Workers: 7
+[0.014s] Concurrent Workers: 2
+[0.014s] Concurrent Refinement Workers: 7
+[0.015s] Periodic GC: Disabled
+WARNING: Using incubator modules: jdk.incubator.vector
+[0.428s] GC(0) Pause Young (Normal) (G1 Evacuation Pause) 45M->5M(268M) 17.620ms
+[0.428s] GC(0) User=0.02s Sys=0.03s Real=0.02s
+[0.428s] Safepoint "G1CollectForAllocation", Time since last: 382213270 ns, Reaching safepoint: 6020 ns, At safepoint: 17713990 ns, Leaving safepoint: 41940 ns, Total: 17761950 ns, Threads: 0 runnable, 11 total
+[0.589s] GC(1) Pause Young (Normal) (G1 Evacuation Pause) 120M->5M(268M) 6.376ms
+[0.589s] GC(1) User=0.01s Sys=0.01s Real=0.01s
+[0.589s] Safepoint "G1CollectForAllocation", Time since last: 154904940 ns, Reaching safepoint: 7210 ns, At safepoint: 6473530 ns, Leaving safepoint: 77180 ns, Total: 6557920 ns, Threads: 0 runnable, 11 total
+[0.685s] GC(2) Pause Young (Normal) (G1 Evacuation Pause) 157M->5M(268M) 5.291ms
+[0.685s] GC(2) User=0.01s Sys=0.00s Real=0.01s
+[0.685s] Safepoint "G1CollectForAllocation", Time since last: 90122280 ns, Reaching safepoint: 9310 ns, At safepoint: 5394350 ns, Leaving safepoint: 42340 ns, Total: 5446000 ns, Threads: 0 runnable, 11 total
+[0.786s] GC(3) Pause Young (Normal) (G1 Evacuation Pause) 157M->5M(268M) 4.564ms
+[0.786s] GC(3) User=0.00s Sys=0.01s Real=0.01s
+[0.786s] Safepoint "G1CollectForAllocation", Time since last: 96211170 ns, Reaching safepoint: 9640 ns, At safepoint: 4673160 ns, Leaving safepoint: 45250 ns, Total: 4728050 ns, Threads: 0 runnable, 11 total
+[0.885s] GC(4) Pause Young (Normal) (G1 Evacuation Pause) 157M->5M(384M) 3.342ms
+[0.885s] GC(4) User=0.01s Sys=0.00s Real=0.01s
+[0.886s] Safepoint "G1CollectForAllocation", Time since last: 96280530 ns, Reaching safepoint: 7770 ns, At safepoint: 3433590 ns, Leaving safepoint: 39660 ns, Total: 3481020 ns, Threads: 0 runnable, 11 total
+[1.212s] GC(5) Pause Young (Normal) (G1 Evacuation Pause) 228M->5M(384M) 3.967ms
+[1.212s] GC(5) User=0.00s Sys=0.00s Real=0.00s
+[1.212s] Safepoint "G1CollectForAllocation", Time since last: 321116220 ns, Reaching safepoint: 8270 ns, At safepoint: 4990280 ns, Leaving safepoint: 21330 ns, Total: 5019880 ns, Threads: 0 runnable, 11 total
+[1.334s] GC(6) Pause Young (Normal) (G1 Evacuation Pause) 228M->5M(384M) 5.088ms
+[1.334s] GC(6) User=0.01s Sys=0.01s Real=0.00s
+[1.334s] Safepoint "G1CollectForAllocation", Time since last: 116954470 ns, Reaching safepoint: 7160 ns, At safepoint: 5170680 ns, Leaving safepoint: 24560 ns, Total: 5202400 ns, Threads: 0 runnable, 11 total
+[1.432s] GC(7) Pause Young (Normal) (G1 Evacuation Pause) 228M->5M(384M) 3.516ms
+[1.432s] GC(7) User=0.00s Sys=0.00s Real=0.00s
+[1.432s] Safepoint "G1CollectForAllocation", Time since last: 94183620 ns, Reaching safepoint: 9760 ns, At safepoint: 3621930 ns, Leaving safepoint: 24900 ns, Total: 3656590 ns, Threads: 0 runnable, 11 total
+[1.527s] GC(8) Pause Young (Normal) (G1 Evacuation Pause) 228M->5M(384M) 3.596ms
+[1.527s] GC(8) User=0.00s Sys=0.00s Real=0.00s
+[1.527s] Safepoint "G1CollectForAllocation", Time since last: 91229510 ns, Reaching safepoint: 117150 ns, At safepoint: 3686830 ns, Leaving safepoint: 23030 ns, Total: 3827010 ns, Threads: 0 runnable, 11 total
+[1.628s] GC(9) Pause Young (Normal) (G1 Evacuation Pause) 228M->5M(516M) 5.271ms
+[1.628s] GC(9) User=0.01s Sys=0.01s Real=0.01s
+[1.628s] Safepoint "G1CollectForAllocation", Time since last: 95601670 ns, Reaching safepoint: 6440 ns, At safepoint: 5359120 ns, Leaving safepoint: 18850 ns, Total: 5384410 ns, Threads: 0 runnable, 11 total
+[2.789s] GC(10) Pause Young (Normal) (G1 Evacuation Pause) 308M->5M(516M) 4.072ms
+[2.789s] GC(10) User=0.01s Sys=0.00s Real=0.00s
+[2.789s] Safepoint "G1CollectForAllocation", Time since last: 1157235229 ns, Reaching safepoint: 9270 ns, At safepoint: 4203221 ns, Leaving safepoint: 22260 ns, Total: 4234751 ns, Threads: 0 runnable, 11 total
+[3.053s] GC(11) Pause Young (Normal) (G1 Evacuation Pause) 308M->5M(516M) 5.875ms
+[3.053s] GC(11) User=0.01s Sys=0.01s Real=0.00s
+[3.053s] Safepoint "G1CollectForAllocation", Time since last: 258021929 ns, Reaching safepoint: 79490 ns, At safepoint: 5990360 ns, Leaving safepoint: 47420 ns, Total: 6117270 ns, Threads: 0 runnable, 10 total
+[3.207s] GC(12) Pause Young (Normal) (G1 Evacuation Pause) 308M->5M(516M) 4.968ms
+[3.207s] GC(12) User=0.01s Sys=0.00s Real=0.01s
+[3.207s] Safepoint "G1CollectForAllocation", Time since last: 148224170 ns, Reaching safepoint: 6740 ns, At safepoint: 5064630 ns, Leaving safepoint: 23670 ns, Total: 5095040 ns, Threads: 0 runnable, 10 total
+[3.336s] GC(13) Pause Young (Normal) (G1 Evacuation Pause) 308M->5M(516M) 3.446ms
+[3.336s] GC(13) User=0.00s Sys=0.00s Real=0.01s
+[3.336s] Safepoint "G1CollectForAllocation", Time since last: 125730870 ns, Reaching safepoint: 6680 ns, At safepoint: 3529231 ns, Leaving safepoint: 21190 ns, Total: 3557101 ns, Threads: 0 runnable, 10 total
+[3.541s] GC(14) Pause Young (Normal) (G1 Evacuation Pause) 308M->5M(668M) 7.616ms
+[3.541s] GC(14) User=0.00s Sys=0.00s Real=0.01s
+[3.541s] Safepoint "G1CollectForAllocation", Time since last: 197703400 ns, Reaching safepoint: 74950 ns, At safepoint: 7771890 ns, Leaving safepoint: 21730 ns, Total: 7868570 ns, Threads: 0 runnable, 10 total
+ 
+strings truffledata-batch quoted 1048576 ingest 1 [14.15962936384428, 1.2787113776691448, 0.7613155141965703, 0.7188713501051132, 12.82299286838181]
+--- strings univocity quoted 1048576 fork 2 Picked up JAVA_TOOL_OPTIONS: -Xlog:gc,gc+init,gc+cpu,safepoint,os+container:stderr:uptime
+[0.009s] CardTable entry size: 512
+[0.012s] Using G1
+[0.016s] Version: 25.0.4.1.1+1-jvmci-25.5-b24 (release)
+[0.016s] CPUs: 7 total, 7 available
+[0.016s] Memory: 16767M
+[0.016s] Large Page Support: Disabled
+[0.016s] NUMA Support: Disabled
+[0.016s] Compressed Oops: Enabled (Zero based)
+[0.016s] Heap Region Size: 4M
+[0.016s] Heap Min Capacity: 8M
+[0.016s] Heap Initial Capacity: 264M
+[0.016s] Heap Max Capacity: 8G
+[0.016s] Pre-touch: Disabled
+[0.016s] Parallel Workers: 7
+[0.016s] Concurrent Workers: 2
+[0.016s] Concurrent Refinement Workers: 7
+[0.016s] Periodic GC: Disabled
+WARNING: Using incubator modules: jdk.incubator.vector
+[0.454s] GC(0) Pause Young (Concurrent Start) (G1 Humongous Allocation) 147M->9M(268M) 16.454ms
+[0.454s] GC(0) User=0.01s Sys=0.01s Real=0.02s
+[0.454s] GC(1) Concurrent Undo Cycle
+[0.454s] Safepoint "G1TryInitiateConcMark", Time since last: 411317900 ns, Reaching safepoint: 8430 ns, At safepoint: 16607460 ns, Leaving safepoint: 36420 ns, Total: 16652310 ns, Threads: 0 runnable, 11 total
+[0.455s] GC(1) Concurrent Undo Cycle 0.594ms
+[0.510s] GC(2) Pause Young (Concurrent Start) (G1 Humongous Allocation) 140M->9M(268M) 3.113ms
+[0.511s] GC(2) User=0.00s Sys=0.00s Real=0.00s
+[0.511s] GC(3) Concurrent Undo Cycle
+[0.511s] Safepoint "G1TryInitiateConcMark", Time since last: 52985050 ns, Reaching safepoint: 7680 ns, At safepoint: 3212290 ns, Leaving safepoint: 123230 ns, Total: 3343200 ns, Threads: 0 runnable, 11 total
+[0.511s] GC(3) Concurrent Undo Cycle 0.175ms
+[0.566s] GC(4) Pause Young (Concurrent Start) (G1 Humongous Allocation) 141M->9M(268M) 3.763ms
+[0.567s] GC(4) User=0.01s Sys=0.00s Real=0.00s
+[0.567s] GC(5) Concurrent Undo Cycle
+[0.567s] Safepoint "G1TryInitiateConcMark", Time since last: 51989520 ns, Reaching safepoint: 8180 ns, At safepoint: 3864180 ns, Leaving safepoint: 34250 ns, Total: 3906610 ns, Threads: 0 runnable, 11 total
+[0.568s] GC(5) Concurrent Undo Cycle 0.991ms
+[0.604s] GC(6) Pause Young (Concurrent Start) (G1 Humongous Allocation) 141M->9M(268M) 3.980ms
+[0.605s] GC(6) User=0.01s Sys=0.00s Real=0.00s
+[0.605s] GC(7) Concurrent Undo Cycle
+[0.605s] Safepoint "G1TryInitiateConcMark", Time since last: 33738310 ns, Reaching safepoint: 157600 ns, At safepoint: 4099570 ns, Leaving safepoint: 39940 ns, Total: 4297110 ns, Threads: 1 runnable, 11 total
+[0.608s] GC(7) Concurrent Undo Cycle 3.075ms
+[0.642s] GC(8) Pause Young (Concurrent Start) (G1 Humongous Allocation) 143M->9M(440M) 3.787ms
+[0.642s] GC(8) User=0.01s Sys=0.00s Real=0.01s
+[0.642s] GC(9) Concurrent Undo Cycle
+[0.642s] Safepoint "G1TryInitiateConcMark", Time since last: 33066180 ns, Reaching safepoint: 10240 ns, At safepoint: 3900440 ns, Leaving safepoint: 37170 ns, Total: 3947850 ns, Threads: 0 runnable, 11 total
+[0.642s] GC(9) Concurrent Undo Cycle 0.279ms
+[0.813s] GC(10) Pause Young (Concurrent Start) (G1 Humongous Allocation) 231M->5M(440M) 6.421ms
+[0.813s] GC(10) User=0.02s Sys=0.01s Real=0.01s
+[0.813s] Safepoint "G1TryInitiateConcMark", Time since last: 164716980 ns, Reaching safepoint: 5610 ns, At safepoint: 6724080 ns, Leaving safepoint: 18970 ns, Total: 6748660 ns, Threads: 0 runnable, 11 total
+[0.813s] GC(11) Concurrent Undo Cycle
+[0.816s] GC(11) Concurrent Undo Cycle 2.988ms
+[0.864s] GC(12) Pause Young (Concurrent Start) (G1 Humongous Allocation) 231M->5M(440M) 4.440ms
+[0.864s] GC(12) User=0.01s Sys=0.00s Real=0.00s
+[0.864s] Safepoint "G1TryInitiateConcMark", Time since last: 46630880 ns, Reaching safepoint: 6270 ns, At safepoint: 4543100 ns, Leaving safepoint: 2600 ns, Total: 4551970 ns, Threads: 0 runnable, 11 total
+[0.867s] GC(13) Concurrent Undo Cycle
+[0.867s] GC(13) Concurrent Undo Cycle 0.265ms
+[0.914s] GC(14) Pause Young (Concurrent Start) (G1 Humongous Allocation) 231M->5M(440M) 3.093ms
+[0.914s] GC(14) User=0.01s Sys=0.00s Real=0.00s
+[0.914s] Safepoint "G1TryInitiateConcMark", Time since last: 46726590 ns, Reaching safepoint: 7560 ns, At safepoint: 3187640 ns, Leaving safepoint: 32820 ns, Total: 3228020 ns, Threads: 0 runnable, 11 total
+[0.914s] GC(15) Concurrent Undo Cycle
+[0.917s] GC(15) Concurrent Undo Cycle 3.014ms
+[0.961s] GC(16) Pause Young (Concurrent Start) (G1 Humongous Allocation) 231M->5M(780M) 3.529ms
+[0.961s] GC(16) User=0.01s Sys=0.00s Real=0.01s
+[0.961s] Safepoint "G1TryInitiateConcMark", Time since last: 43156540 ns, Reaching safepoint: 8750 ns, At safepoint: 3624440 ns, Leaving safepoint: 36820 ns, Total: 3670010 ns, Threads: 0 runnable, 11 total
+[0.961s] GC(17) Concurrent Undo Cycle
+[0.961s] GC(17) Concurrent Undo Cycle 0.209ms
+[1.096s] GC(18) Pause Young (Concurrent Start) (G1 Humongous Allocation) 413M->9M(780M) 5.839ms
+[1.096s] GC(18) User=0.01s Sys=0.00s Real=0.01s
+[1.096s] GC(19) Concurrent Undo Cycle
+[1.096s] Safepoint "G1TryInitiateConcMark", Time since last: 129381600 ns, Reaching safepoint: 6550 ns, At safepoint: 5942710 ns, Leaving safepoint: 37390 ns, Total: 5986650 ns, Threads: 0 runnable, 11 total
+[1.097s] GC(19) Concurrent Undo Cycle 0.275ms
+[1.200s] GC(20) Pause Young (Concurrent Start) (G1 Humongous Allocation) 411M->9M(780M) 3.925ms
+[1.200s] GC(20) User=0.00s Sys=0.01s Real=0.01s
+[1.200s] GC(21) Concurrent Undo Cycle
+[1.200s] Safepoint "G1TryInitiateConcMark", Time since last: 99713260 ns, Reaching safepoint: 5310 ns, At safepoint: 4012610 ns, Leaving safepoint: 108100 ns, Total: 4126020 ns, Threads: 0 runnable, 11 total
+[1.200s] GC(21) Concurrent Undo Cycle 0.172ms
+[1.285s] GC(22) Pause Young (Concurrent Start) (G1 Humongous Allocation) 411M->9M(780M) 3.725ms
+[1.285s] GC(22) User=0.01s Sys=0.00s Real=0.00s
+[1.285s] Safepoint "G1TryInitiateConcMark", Time since last: 80819540 ns, Reaching safepoint: 6380 ns, At safepoint: 3814170 ns, Leaving safepoint: 31490 ns, Total: 3852040 ns, Threads: 0 runnable, 11 total
+[1.285s] GC(23) Concurrent Undo Cycle
+[1.285s] GC(23) Concurrent Undo Cycle 0.344ms
+[1.395s] GC(24) Pause Young (Concurrent Start) (G1 Humongous Allocation) 411M->9M(1128M) 6.835ms
+[1.395s] GC(24) User=0.01s Sys=0.01s Real=0.01s
+[1.395s] Safepoint "G1TryInitiateConcMark", Time since last: 103109110 ns, Reaching safepoint: 179200 ns, At safepoint: 6940360 ns, Leaving safepoint: 33980 ns, Total: 7153540 ns, Threads: 1 runnable, 11 total
+[1.396s] GC(25) Concurrent Undo Cycle
+[1.397s] GC(25) Concurrent Undo Cycle 1.011ms
+[2.382s] GC(26) Pause Young (Concurrent Start) (G1 Humongous Allocation) 597M->5M(1128M) 10.434ms
+[2.382s] GC(26) User=0.01s Sys=0.02s Real=0.01s
+[2.382s] GC(27) Concurrent Undo Cycle
+[2.382s] Safepoint "G1TryInitiateConcMark", Time since last: 976291240 ns, Reaching safepoint: 6430 ns, At safepoint: 10540650 ns, Leaving safepoint: 34670 ns, Total: 10581750 ns, Threads: 0 runnable, 11 total
+[2.382s] GC(27) Concurrent Undo Cycle 0.143ms
+[2.606s] GC(28) Pause Young (Concurrent Start) (G1 Humongous Allocation) 595M->5M(1128M) 14.489ms
+[2.607s] GC(28) User=0.02s Sys=0.01s Real=0.01s
+[2.607s] Safepoint "G1TryInitiateConcMark", Time since last: 209899330 ns, Reaching safepoint: 6890 ns, At safepoint: 14587400 ns, Leaving safepoint: 19800 ns, Total: 14614090 ns, Threads: 0 runnable, 11 total
+[2.607s] GC(29) Concurrent Undo Cycle
+[2.607s] GC(29) Concurrent Undo Cycle 0.312ms
+[2.737s] GC(30) Pause Young (Concurrent Start) (G1 Humongous Allocation) 597M->5M(1128M) 17.731ms
+[2.737s] GC(30) User=0.01s Sys=0.03s Real=0.01s
+[2.737s] GC(31) Concurrent Undo Cycle
+[2.737s] Safepoint "G1TryInitiateConcMark", Time since last: 112913280 ns, Reaching safepoint: 10860 ns, At safepoint: 17848990 ns, Leaving safepoint: 23660 ns, Total: 17883510 ns, Threads: 0 runnable, 11 total
+[2.738s] GC(31) Concurrent Undo Cycle 0.392ms
+[2.846s] GC(32) Pause Young (Concurrent Start) (G1 Humongous Allocation) 589M->9M(1128M) 3.154ms
+[2.846s] GC(32) User=0.01s Sys=0.01s Real=0.00s
+[2.846s] Safepoint "G1TryInitiateConcMark", Time since last: 105802400 ns, Reaching safepoint: 10900 ns, At safepoint: 3261530 ns, Leaving safepoint: 22700 ns, Total: 3295130 ns, Threads: 0 runnable, 11 total
+[2.847s] GC(33) Concurrent Undo Cycle
+[2.847s] GC(33) Concurrent Undo Cycle 0.753ms
+[2.988s] GC(34) Pause Young (Concurrent Start) (G1 Humongous Allocation) 589M->9M(1872M) 20.481ms
+[2.988s] GC(34) User=0.00s Sys=0.02s Real=0.02s
+[2.988s] Safepoint "G1TryInitiateConcMark", Time since last: 120718330 ns, Reaching safepoint: 7650 ns, At safepoint: 20606890 ns, Leaving safepoint: 28980 ns, Total: 20643520 ns, Threads: 0 runnable, 11 total
+[2.988s] GC(35) Concurrent Undo Cycle
+[2.988s] GC(35) Concurrent Undo Cycle 0.353ms
+ 
+strings univocity quoted 1048576 ingest 2 [2.8089125655449534, 2.1379865372469706, 19.46753071727898, 14.970849257750519, 15.970744040162655]
+--- strings univocity quoted 1048576 fork 0 Picked up JAVA_TOOL_OPTIONS: -Xlog:gc,gc+init,gc+cpu,safepoint,os+container:stderr:uptime
+[0.006s] CardTable entry size: 512
+[0.010s] Using G1
+[0.013s] Version: 25.0.4.1.1+1-jvmci-25.5-b24 (release)
+[0.013s] CPUs: 7 total, 7 available
+[0.013s] Memory: 16767M
+[0.013s] Large Page Support: Disabled
+[0.013s] NUMA Support: Disabled
+[0.013s] Compressed Oops: Enabled (Zero based)
+[0.013s] Heap Region Size: 4M
+[0.013s] Heap Min Capacity: 8M
+[0.013s] Heap Initial Capacity: 264M
+[0.013s] Heap Max Capacity: 8G
+[0.013s] Pre-touch: Disabled
+[0.013s] Parallel Workers: 7
+[0.013s] Concurrent Workers: 2
+[0.013s] Concurrent Refinement Workers: 7
+[0.013s] Periodic GC: Disabled
+WARNING: Using incubator modules: jdk.incubator.vector
+[0.369s] GC(0) Pause Young (Concurrent Start) (G1 Humongous Allocation) 147M->9M(268M) 6.802ms
+[0.369s] GC(0) User=0.00s Sys=0.01s Real=0.00s
+[0.369s] GC(1) Concurrent Undo Cycle
+[0.369s] Safepoint "G1TryInitiateConcMark", Time since last: 335915940 ns, Reaching safepoint: 7260 ns, At safepoint: 6910480 ns, Leaving safepoint: 36290 ns, Total: 6954030 ns, Threads: 0 runnable, 11 total
+[0.370s] GC(1) Concurrent Undo Cycle 0.533ms
+[0.410s] GC(2) Pause Young (Concurrent Start) (G1 Humongous Allocation) 140M->9M(268M) 10.392ms
+[0.410s] GC(2) User=0.01s Sys=0.00s Real=0.01s
+[0.410s] Safepoint "G1TryInitiateConcMark", Time since last: 30424259 ns, Reaching safepoint: 6200 ns, At safepoint: 10495960 ns, Leaving safepoint: 22760 ns, Total: 10524920 ns, Threads: 0 runnable, 11 total
+[0.410s] GC(3) Concurrent Undo Cycle
+[0.410s] GC(3) Concurrent Undo Cycle 0.265ms
+[0.461s] GC(4) Pause Young (Concurrent Start) (G1 Humongous Allocation) 141M->9M(268M) 9.723ms
+[0.461s] GC(4) User=0.01s Sys=0.01s Real=0.02s
+[0.461s] Safepoint "G1TryInitiateConcMark", Time since last: 40938711 ns, Reaching safepoint: 9120 ns, At safepoint: 9843729 ns, Leaving safepoint: 37280 ns, Total: 9890129 ns, Threads: 0 runnable, 11 total
+[0.461s] GC(5) Concurrent Undo Cycle
+[0.464s] GC(5) Concurrent Undo Cycle 3.204ms
+[0.507s] GC(6) Pause Young (Concurrent Start) (G1 Humongous Allocation) 141M->9M(268M) 3.726ms
+[0.507s] GC(6) User=0.02s Sys=0.00s Real=0.00s
+[0.507s] GC(7) Concurrent Undo Cycle
+[0.507s] Safepoint "G1TryInitiateConcMark", Time since last: 42009571 ns, Reaching safepoint: 8500 ns, At safepoint: 3837809 ns, Leaving safepoint: 37710 ns, Total: 3884019 ns, Threads: 0 runnable, 11 total
+[0.507s] GC(7) Concurrent Undo Cycle 0.250ms
+[0.554s] GC(8) Pause Young (Concurrent Start) (G1 Humongous Allocation) 143M->9M(552M) 4.061ms
+[0.554s] GC(8) User=0.01s Sys=0.00s Real=0.01s
+[0.554s] Safepoint "G1TryInitiateConcMark", Time since last: 43049331 ns, Reaching safepoint: 9080 ns, At safepoint: 4171140 ns, Leaving safepoint: 21740 ns, Total: 4201960 ns, Threads: 0 runnable, 11 total
+[0.554s] GC(9) Concurrent Undo Cycle
+[0.554s] GC(9) Concurrent Undo Cycle 0.235ms
+[0.715s] GC(10) Pause Young (Concurrent Start) (G1 Humongous Allocation) 291M->9M(552M) 6.147ms
+[0.715s] GC(10) User=0.01s Sys=0.00s Real=0.01s
+[0.716s] Safepoint "G1TryInitiateConcMark", Time since last: 155046790 ns, Reaching safepoint: 9470 ns, At safepoint: 6264889 ns, Leaving safepoint: 27110 ns, Total: 6301469 ns, Threads: 0 runnable, 11 total
+[0.716s] GC(11) Concurrent Undo Cycle
+[0.716s] GC(11) Concurrent Undo Cycle 0.416ms
+[0.827s] GC(12) Pause Young (Concurrent Start) (G1 Humongous Allocation) 291M->9M(552M) 9.340ms
+[0.827s] GC(12) User=0.01s Sys=0.01s Real=0.01s
+[0.827s] Safepoint "G1TryInitiateConcMark", Time since last: 102223180 ns, Reaching safepoint: 8380 ns, At safepoint: 9459100 ns, Leaving safepoint: 5650 ns, Total: 9473130 ns, Threads: 0 runnable, 11 total
+[0.828s] GC(13) Concurrent Undo Cycle
+[0.829s] GC(13) Concurrent Undo Cycle 0.599ms
+[0.928s] GC(14) Pause Young (Concurrent Start) (G1 Humongous Allocation) 291M->9M(552M) 9.283ms
+[0.928s] GC(14) User=0.02s Sys=0.00s Real=0.01s
+[0.928s] GC(15) Concurrent Undo Cycle
+[0.928s] Safepoint "G1TryInitiateConcMark", Time since last: 91492640 ns, Reaching safepoint: 8690 ns, At safepoint: 9398511 ns, Leaving safepoint: 41760 ns, Total: 9448961 ns, Threads: 0 runnable, 11 total
+[0.931s] GC(15) Concurrent Undo Cycle 3.011ms
+[1.025s] GC(16) Pause Young (Concurrent Start) (G1 Humongous Allocation) 291M->9M(996M) 7.413ms
+[1.025s] GC(16) User=0.02s Sys=0.00s Real=0.01s
+[1.025s] Safepoint "G1TryInitiateConcMark", Time since last: 89089440 ns, Reaching safepoint: 9840 ns, At safepoint: 7527840 ns, Leaving safepoint: 24320 ns, Total: 7562000 ns, Threads: 0 runnable, 11 total
+[1.025s] GC(17) Concurrent Undo Cycle
+[1.025s] GC(17) Concurrent Undo Cycle 0.409ms
+[1.280s] GC(18) Pause Young (Concurrent Start) (G1 Humongous Allocation) 525M->9M(996M) 4.971ms
+[1.280s] GC(18) User=0.01s Sys=0.00s Real=0.00s
+[1.280s] GC(19) Concurrent Undo Cycle
+[1.280s] Safepoint "G1TryInitiateConcMark", Time since last: 250123999 ns, Reaching safepoint: 6150 ns, At safepoint: 5070310 ns, Leaving safepoint: 33180 ns, Total: 5109640 ns, Threads: 0 runnable, 11 total
+[1.280s] GC(19) Concurrent Undo Cycle 0.250ms
+[1.488s] GC(20) Pause Young (Concurrent Start) (G1 Humongous Allocation) 525M->9M(996M) 5.697ms
+[1.488s] GC(20) User=0.00s Sys=0.01s Real=0.00s
+[1.488s] Safepoint "G1TryInitiateConcMark", Time since last: 202574400 ns, Reaching safepoint: 11360 ns, At safepoint: 5818390 ns, Leaving safepoint: 43960 ns, Total: 5873710 ns, Threads: 0 runnable, 11 total
+[1.489s] GC(21) Concurrent Undo Cycle
+[1.492s] GC(21) Concurrent Undo Cycle 3.230ms
+[1.650s] GC(22) Pause Young (Concurrent Start) (G1 Humongous Allocation) 525M->9M(996M) 5.403ms
+[1.650s] GC(22) User=0.01s Sys=0.00s Real=0.00s
+[1.650s] Safepoint "G1TryInitiateConcMark", Time since last: 155751260 ns, Reaching safepoint: 5650 ns, At safepoint: 5506580 ns, Leaving safepoint: 35760 ns, Total: 5547990 ns, Threads: 0 runnable, 11 total
+[1.650s] GC(23) Concurrent Undo Cycle
+[1.651s] GC(23) Concurrent Undo Cycle 1.551ms
+[1.766s] GC(24) Pause Young (Concurrent Start) (G1 Humongous Allocation) 527M->9M(1252M) 8.974ms
+[1.766s] GC(24) User=0.01s Sys=0.01s Real=0.01s
+[1.766s] Safepoint "G1TryInitiateConcMark", Time since last: 107312970 ns, Reaching safepoint: 8030 ns, At safepoint: 9089420 ns, Leaving safepoint: 39250 ns, Total: 9136700 ns, Threads: 0 runnable, 11 total
+[1.769s] GC(25) Concurrent Undo Cycle
+[1.769s] GC(25) Concurrent Undo Cycle 0.275ms
+[1.945s] GC(26) Pause Young (Concurrent Start) (G1 Humongous Allocation) 661M->5M(1252M) 6.538ms
+[1.946s] GC(26) User=0.00s Sys=0.01s Real=0.01s
+[1.946s] Safepoint "G1TryInitiateConcMark", Time since last: 172629010 ns, Reaching safepoint: 5520 ns, At safepoint: 6818090 ns, Leaving safepoint: 22840 ns, Total: 6846450 ns, Threads: 0 runnable, 11 total
+[1.946s] GC(27) Concurrent Undo Cycle
+[1.946s] GC(27) Concurrent Undo Cycle 0.507ms
+[2.136s] GC(28) Pause Young (Concurrent Start) (G1 Humongous Allocation) 663M->5M(1252M) 5.310ms
+[2.136s] GC(28) User=0.01s Sys=0.00s Real=0.01s
+[2.136s] Safepoint "G1TryInitiateConcMark", Time since last: 184870270 ns, Reaching safepoint: 9400 ns, At safepoint: 5418780 ns, Leaving safepoint: 20330 ns, Total: 5448510 ns, Threads: 0 runnable, 11 total
+[2.136s] GC(29) Concurrent Undo Cycle
+[2.136s] GC(29) Concurrent Undo Cycle 0.267ms
+[2.295s] GC(30) Pause Young (Concurrent Start) (G1 Humongous Allocation) 661M->5M(1252M) 4.999ms
+[2.295s] GC(30) User=0.01s Sys=0.00s Real=0.01s
+[2.295s] Safepoint "G1TryInitiateConcMark", Time since last: 153657220 ns, Reaching safepoint: 6610 ns, At safepoint: 5104410 ns, Leaving safepoint: 31860 ns, Total: 5142880 ns, Threads: 0 runnable, 11 total
+[2.295s] GC(31) Concurrent Undo Cycle
+[2.298s] GC(31) Concurrent Undo Cycle 3.139ms
+[2.461s] GC(32) Pause Young (Concurrent Start) (G1 Humongous Allocation) 655M->9M(1564M) 6.720ms
+[2.461s] GC(32) User=0.00s Sys=0.01s Real=0.01s
+[2.461s] Safepoint "G1TryInitiateConcMark", Time since last: 159205100 ns, Reaching safepoint: 9580 ns, At safepoint: 6864490 ns, Leaving safepoint: 25120 ns, Total: 6899190 ns, Threads: 0 runnable, 11 total
+[2.461s] GC(33) Concurrent Undo Cycle
+[2.464s] GC(33) Concurrent Undo Cycle 3.190ms
+[3.726s] GC(34) Pause Young (Concurrent Start) (G1 Humongous Allocation) 819M->5M(1564M) 6.160ms
+[3.726s] GC(34) User=0.00s Sys=0.01s Real=0.01s
+[3.726s] GC(35) Concurrent Undo Cycle
+[3.726s] Safepoint "G1TryInitiateConcMark", Time since last: 1258768170 ns, Reaching safepoint: 10720 ns, At safepoint: 6290280 ns, Leaving safepoint: 24270 ns, Total: 6325270 ns, Threads: 0 runnable, 10 total
+[3.727s] GC(35) Concurrent Undo Cycle 0.686ms
+ 
+strings univocity quoted 1048576 ingest 0 [2.3910613322094063, 7.946888782777651, 61.68082700170878, 64.13585721042354, 5.841447916588825]
+--- strings univocity quoted 1048576 fork 1 Picked up JAVA_TOOL_OPTIONS: -Xlog:gc,gc+init,gc+cpu,safepoint,os+container:stderr:uptime
+[0.006s] CardTable entry size: 512
+[0.010s] Using G1
+[0.011s] Version: 25.0.4.1.1+1-jvmci-25.5-b24 (release)
+[0.011s] CPUs: 7 total, 7 available
+[0.011s] Memory: 16767M
+[0.011s] Large Page Support: Disabled
+[0.011s] NUMA Support: Disabled
+[0.011s] Compressed Oops: Enabled (Zero based)
+[0.011s] Heap Region Size: 4M
+[0.011s] Heap Min Capacity: 8M
+[0.011s] Heap Initial Capacity: 264M
+[0.011s] Heap Max Capacity: 8G
+[0.011s] Pre-touch: Disabled
+[0.011s] Parallel Workers: 7
+[0.011s] Concurrent Workers: 2
+[0.011s] Concurrent Refinement Workers: 7
+[0.011s] Periodic GC: Disabled
+WARNING: Using incubator modules: jdk.incubator.vector
+[0.374s] GC(0) Pause Young (Concurrent Start) (G1 Humongous Allocation) 147M->9M(268M) 6.243ms
+[0.375s] GC(0) User=0.00s Sys=0.01s Real=0.01s
+[0.375s] Safepoint "G1TryInitiateConcMark", Time since last: 346179550 ns, Reaching safepoint: 8730 ns, At safepoint: 6383480 ns, Leaving safepoint: 45920 ns, Total: 6438130 ns, Threads: 0 runnable, 11 total
+[0.375s] GC(1) Concurrent Undo Cycle
+[0.377s] GC(1) Concurrent Undo Cycle 1.985ms
+[0.415s] GC(2) Pause Young (Concurrent Start) (G1 Humongous Allocation) 140M->9M(268M) 3.334ms
+[0.415s] GC(2) User=0.01s Sys=0.00s Real=0.01s
+[0.416s] Safepoint "G1TryInitiateConcMark", Time since last: 37364830 ns, Reaching safepoint: 7350 ns, At safepoint: 3554190 ns, Leaving safepoint: 32280 ns, Total: 3593820 ns, Threads: 0 runnable, 11 total
+[0.416s] GC(3) Concurrent Undo Cycle
+[0.417s] GC(3) Concurrent Undo Cycle 1.230ms
+[0.451s] GC(4) Pause Young (Concurrent Start) (G1 Humongous Allocation) 141M->9M(268M) 3.489ms
+[0.451s] GC(4) User=0.01s Sys=0.00s Real=0.00s
+[0.451s] Safepoint "G1TryInitiateConcMark", Time since last: 31812440 ns, Reaching safepoint: 5440 ns, At safepoint: 3584040 ns, Leaving safepoint: 34030 ns, Total: 3623510 ns, Threads: 0 runnable, 11 total
+[0.451s] GC(5) Concurrent Undo Cycle
+[0.454s] GC(5) Concurrent Undo Cycle 3.247ms
+[0.485s] GC(6) Pause Young (Concurrent Start) (G1 Humongous Allocation) 141M->9M(268M) 4.175ms
+[0.485s] GC(6) User=0.01s Sys=0.01s Real=0.00s
+[0.485s] Safepoint "G1TryInitiateConcMark", Time since last: 29824770 ns, Reaching safepoint: 8020 ns, At safepoint: 4279200 ns, Leaving safepoint: 40680 ns, Total: 4327900 ns, Threads: 0 runnable, 11 total
+[0.485s] GC(7) Concurrent Undo Cycle
+[0.486s] GC(7) Concurrent Undo Cycle 0.299ms
+[0.516s] GC(8) Pause Young (Concurrent Start) (G1 Humongous Allocation) 143M->9M(500M) 4.002ms
+[0.516s] GC(8) User=0.01s Sys=0.01s Real=0.01s
+[0.516s] GC(9) Concurrent Undo Cycle
+[0.516s] Safepoint "G1TryInitiateConcMark", Time since last: 26332760 ns, Reaching safepoint: 6170 ns, At safepoint: 4116830 ns, Leaving safepoint: 37550 ns, Total: 4160550 ns, Threads: 0 runnable, 11 total
+[0.516s] GC(9) Concurrent Undo Cycle 0.185ms
+[0.600s] GC(10) Pause Young (Concurrent Start) (G1 Humongous Allocation) 263M->9M(500M) 8.060ms
+[0.600s] GC(10) User=0.01s Sys=0.01s Real=0.02s
+[0.600s] GC(11) Concurrent Undo Cycle
+[0.601s] Safepoint "G1TryInitiateConcMark", Time since last: 76644080 ns, Reaching safepoint: 5640 ns, At safepoint: 8176490 ns, Leaving safepoint: 59530 ns, Total: 8241660 ns, Threads: 0 runnable, 11 total
+[0.603s] GC(11) Concurrent Undo Cycle 3.008ms
+[0.686s] GC(12) Pause Young (Concurrent Start) (G1 Humongous Allocation) 263M->9M(500M) 4.821ms
+[0.686s] GC(12) User=0.01s Sys=0.00s Real=0.00s
+[0.687s] Safepoint "G1TryInitiateConcMark", Time since last: 81023140 ns, Reaching safepoint: 5820 ns, At safepoint: 4935730 ns, Leaving safepoint: 29700 ns, Total: 4971250 ns, Threads: 0 runnable, 11 total
+[0.687s] GC(13) Concurrent Undo Cycle
+[0.687s] GC(13) Concurrent Undo Cycle 0.278ms
+[0.761s] GC(14) Pause Young (Concurrent Start) (G1 Humongous Allocation) 263M->9M(500M) 4.153ms
+[0.762s] GC(14) User=0.01s Sys=0.01s Real=0.01s
+[0.762s] Safepoint "G1TryInitiateConcMark", Time since last: 70804020 ns, Reaching safepoint: 7730 ns, At safepoint: 4303530 ns, Leaving safepoint: 41620 ns, Total: 4352880 ns, Threads: 0 runnable, 11 total
+[0.762s] GC(15) Concurrent Undo Cycle
+[0.762s] GC(15) Concurrent Undo Cycle 0.307ms
+[0.827s] GC(16) Pause Young (Concurrent Start) (G1 Humongous Allocation) 263M->9M(932M) 4.362ms
+[0.827s] GC(16) User=0.01s Sys=0.01s Real=0.00s
+[0.827s] Safepoint "G1TryInitiateConcMark", Time since last: 60688920 ns, Reaching safepoint: 9610 ns, At safepoint: 4509790 ns, Leaving safepoint: 21850 ns, Total: 4541250 ns, Threads: 0 runnable, 11 total
+[0.827s] GC(17) Concurrent Undo Cycle
+[0.827s] GC(17) Concurrent Undo Cycle 0.295ms
+[1.046s] GC(18) Pause Young (Concurrent Start) (G1 Humongous Allocation) 493M->5M(932M) 8.097ms
+[1.046s] GC(18) User=0.01s Sys=0.01s Real=0.01s
+[1.046s] GC(19) Concurrent Undo Cycle
+[1.046s] Safepoint "G1TryInitiateConcMark", Time since last: 210841930 ns, Reaching safepoint: 7860 ns, At safepoint: 8216170 ns, Leaving safepoint: 42180 ns, Total: 8266210 ns, Threads: 0 runnable, 11 total
+[1.046s] GC(19) Concurrent Undo Cycle 0.228ms
+[1.205s] GC(20) Pause Young (Concurrent Start) (G1 Humongous Allocation) 493M->5M(932M) 5.829ms
+[1.205s] GC(20) User=0.02s Sys=0.01s Real=0.01s
+[1.205s] GC(21) Concurrent Undo Cycle
+[1.205s] Safepoint "G1TryInitiateConcMark", Time since last: 153000950 ns, Reaching safepoint: 10350 ns, At safepoint: 5960660 ns, Leaving safepoint: 45730 ns, Total: 6016740 ns, Threads: 0 runnable, 11 total
+[1.207s] GC(21) Concurrent Undo Cycle 2.405ms
+[1.315s] GC(22) Pause Young (Concurrent Start) (G1 Humongous Allocation) 493M->5M(932M) 5.361ms
+[1.315s] GC(22) User=0.01s Sys=0.00s Real=0.01s
+[1.315s] Safepoint "G1TryInitiateConcMark", Time since last: 104341030 ns, Reaching safepoint: 10750 ns, At safepoint: 5481730 ns, Leaving safepoint: 46510 ns, Total: 5538990 ns, Threads: 0 runnable, 11 total
+[1.315s] GC(23) Concurrent Undo Cycle
+[1.316s] GC(23) Concurrent Undo Cycle 0.489ms
+[1.428s] GC(24) Pause Young (Concurrent Start) (G1 Humongous Allocation) 495M->5M(1280M) 7.940ms
+[1.429s] GC(24) User=0.01s Sys=0.00s Real=0.00s
+[1.429s] Safepoint "G1TryInitiateConcMark", Time since last: 105427320 ns, Reaching safepoint: 5490 ns, At safepoint: 8193150 ns, Leaving safepoint: 39490 ns, Total: 8238130 ns, Threads: 0 runnable, 11 total
+[1.429s] GC(25) Concurrent Undo Cycle
+[1.429s] GC(25) Concurrent Undo Cycle 0.889ms
+[1.672s] GC(26) Pause Young (Concurrent Start) (G1 Humongous Allocation) 673M->9M(1280M) 13.364ms
+[1.672s] GC(26) User=0.01s Sys=0.00s Real=0.02s
+[1.672s] GC(27) Concurrent Undo Cycle
+[1.673s] Safepoint "G1TryInitiateConcMark", Time since last: 230238470 ns, Reaching safepoint: 6890 ns, At safepoint: 13551810 ns, Leaving safepoint: 272440 ns, Total: 13831140 ns, Threads: 0 runnable, 11 total
+[1.673s] GC(27) Concurrent Undo Cycle 0.414ms
+[1.886s] GC(28) Pause Young (Concurrent Start) (G1 Humongous Allocation) 675M->9M(1280M) 6.545ms
+[1.886s] GC(28) User=0.01s Sys=0.01s Real=0.01s
+[1.886s] Safepoint "G1TryInitiateConcMark", Time since last: 206742240 ns, Reaching safepoint: 5950 ns, At safepoint: 6662650 ns, Leaving safepoint: 29130 ns, Total: 6697730 ns, Threads: 0 runnable, 11 total
+[1.886s] GC(29) Concurrent Undo Cycle
+[1.889s] GC(29) Concurrent Undo Cycle 3.136ms
+[2.049s] GC(30) Pause Young (Concurrent Start) (G1 Humongous Allocation) 673M->9M(1280M) 6.068ms
+[2.049s] GC(30) User=0.00s Sys=0.01s Real=0.00s
+[2.049s] Safepoint "G1TryInitiateConcMark", Time since last: 156760119 ns, Reaching safepoint: 6780 ns, At safepoint: 6175511 ns, Leaving safepoint: 20370 ns, Total: 6202661 ns, Threads: 0 runnable, 11 total
+[2.049s] GC(31) Concurrent Undo Cycle
+[2.049s] GC(31) Concurrent Undo Cycle 0.256ms
+[2.205s] GC(32) Pause Young (Concurrent Start) (G1 Humongous Allocation) 669M->5M(1668M) 6.750ms
+[2.205s] GC(32) User=0.00s Sys=0.00s Real=0.01s
+[2.206s] Safepoint "G1TryInitiateConcMark", Time since last: 149562920 ns, Reaching safepoint: 7890 ns, At safepoint: 6863650 ns, Leaving safepoint: 43980 ns, Total: 6915520 ns, Threads: 0 runnable, 11 total
+[2.206s] GC(33) Concurrent Undo Cycle
+[2.209s] GC(33) Concurrent Undo Cycle 3.093ms
+[2.858s] GC(34) Pause Young (Concurrent Start) (G1 Humongous Allocation) 875M->5M(1668M) 5.740ms
+[2.858s] GC(34) User=0.00s Sys=0.01s Real=0.01s
+[2.858s] Safepoint "G1TryInitiateConcMark", Time since last: 646418459 ns, Reaching safepoint: 7160 ns, At safepoint: 5849390 ns, Leaving safepoint: 19880 ns, Total: 5876430 ns, Threads: 0 runnable, 11 total
+[2.861s] GC(35) Concurrent Undo Cycle
+[2.861s] GC(35) Concurrent Undo Cycle 0.262ms
+[3.108s] GC(36) Pause Young (Concurrent Start) (G1 Humongous Allocation) 875M->5M(1668M) 4.351ms
+[3.108s] GC(36) User=0.00s Sys=0.00s Real=0.00s
+[3.108s] Safepoint "G1TryInitiateConcMark", Time since last: 246135121 ns, Reaching safepoint: 5230 ns, At safepoint: 4439669 ns, Leaving safepoint: 18200 ns, Total: 4463099 ns, Threads: 0 runnable, 10 total
+[3.108s] GC(37) Concurrent Undo Cycle
+[3.109s] GC(37) Concurrent Undo Cycle 0.235ms
+[3.307s] GC(38) Pause Young (Concurrent Start) (G1 Humongous Allocation) 875M->5M(1668M) 4.144ms
+[3.307s] GC(38) User=0.01s Sys=0.00s Real=0.00s
+[3.307s] Safepoint "G1TryInitiateConcMark", Time since last: 194242071 ns, Reaching safepoint: 6260 ns, At safepoint: 4245240 ns, Leaving safepoint: 18470 ns, Total: 4269970 ns, Threads: 0 runnable, 10 total
+[3.307s] GC(39) Concurrent Undo Cycle
+[3.309s] GC(39) Concurrent Undo Cycle 1.991ms
+[3.500s] GC(40) Pause Young (Concurrent Start) (G1 Humongous Allocation) 875M->5M(1668M) 7.398ms
+[3.500s] GC(40) User=0.00s Sys=0.00s Real=0.01s
+[3.500s] Safepoint "G1TryInitiateConcMark", Time since last: 185183859 ns, Reaching safepoint: 9490 ns, At safepoint: 7516510 ns, Leaving safepoint: 25280 ns, Total: 7551280 ns, Threads: 0 runnable, 10 total
+[3.500s] GC(41) Concurrent Undo Cycle
+[3.503s] GC(41) Concurrent Undo Cycle 3.092ms
+[3.705s] GC(42) Pause Young (Concurrent Start) (G1 Humongous Allocation) 875M->5M(1668M) 7.568ms
+[3.705s] GC(42) User=0.01s Sys=0.00s Real=0.01s
+[3.705s] Safepoint "G1TryInitiateConcMark", Time since last: 197400510 ns, Reaching safepoint: 8290 ns, At safepoint: 7683810 ns, Leaving safepoint: 44700 ns, Total: 7736800 ns, Threads: 0 runnable, 10 total
+[3.705s] GC(43) Concurrent Undo Cycle
+[3.705s] GC(43) Concurrent Undo Cycle 0.391ms
+ 
+strings univocity quoted 1048576 ingest 1 [4.585671084210275, 15.960755635315378, 2.3674006004924584, 1.9932706490847538, 2.3690646772643045]
+--- strings truffledata-batch quoted 1048576 fork 0 Picked up JAVA_TOOL_OPTIONS: -Xlog:gc,gc+init,gc+cpu,safepoint,os+container:stderr:uptime
+[0.007s] CardTable entry size: 512
+[0.010s] Using G1
+[0.015s] Version: 25.0.4.1.1+1-jvmci-25.5-b24 (release)
+[0.015s] CPUs: 7 total, 7 available
+[0.015s] Memory: 16767M
+[0.015s] Large Page Support: Disabled
+[0.015s] NUMA Support: Disabled
+[0.015s] Compressed Oops: Enabled (Zero based)
+[0.015s] Heap Region Size: 4M
+[0.015s] Heap Min Capacity: 8M
+[0.015s] Heap Initial Capacity: 264M
+[0.015s] Heap Max Capacity: 8G
+[0.015s] Pre-touch: Disabled
+[0.015s] Parallel Workers: 7
+[0.015s] Concurrent Workers: 2
+[0.015s] Concurrent Refinement Workers: 7
+[0.015s] Periodic GC: Disabled
+WARNING: Using incubator modules: jdk.incubator.vector
+[0.408s] GC(0) Pause Young (Normal) (G1 Evacuation Pause) 44M->5M(268M) 10.106ms
+[0.408s] GC(0) User=0.00s Sys=0.01s Real=0.01s
+[0.408s] Safepoint "G1CollectForAllocation", Time since last: 369383700 ns, Reaching safepoint: 7390 ns, At safepoint: 10221660 ns, Leaving safepoint: 22110 ns, Total: 10251160 ns, Threads: 0 runnable, 11 total
+[0.538s] GC(1) Pause Young (Normal) (G1 Evacuation Pause) 120M->5M(268M) 6.836ms
+[0.538s] GC(1) User=0.00s Sys=0.01s Real=0.01s
+[0.538s] Safepoint "G1CollectForAllocation", Time since last: 123403710 ns, Reaching safepoint: 6520 ns, At safepoint: 7273540 ns, Leaving safepoint: 43440 ns, Total: 7323500 ns, Threads: 0 runnable, 11 total
+[0.684s] GC(2) Pause Young (Normal) (G1 Evacuation Pause) 156M->5M(268M) 5.738ms
+[0.684s] GC(2) User=0.01s Sys=0.00s Real=0.00s
+[0.684s] Safepoint "G1CollectForAllocation", Time since last: 139429520 ns, Reaching safepoint: 10070 ns, At safepoint: 5832430 ns, Leaving safepoint: 38690 ns, Total: 5881190 ns, Threads: 0 runnable, 11 total
+[0.819s] GC(3) Pause Young (Normal) (G1 Evacuation Pause) 157M->6M(268M) 5.397ms
+[0.819s] GC(3) User=0.01s Sys=0.01s Real=0.01s
+[0.819s] Safepoint "G1CollectForAllocation", Time since last: 129477410 ns, Reaching safepoint: 6640 ns, At safepoint: 5481160 ns, Leaving safepoint: 20250 ns, Total: 5508050 ns, Threads: 0 runnable, 11 total
+[1.032s] GC(4) Pause Young (Normal) (G1 Evacuation Pause) 154M->5M(360M) 15.908ms
+[1.032s] GC(4) User=0.02s Sys=0.01s Real=0.01s
+[1.032s] Safepoint "G1CollectForAllocation", Time since last: 197099150 ns, Reaching safepoint: 58680 ns, At safepoint: 16135650 ns, Leaving safepoint: 46320 ns, Total: 16240650 ns, Threads: 0 runnable, 11 total
+[1.236s] GC(5) Pause Young (Normal) (G1 Evacuation Pause) 216M->5M(360M) 4.839ms
+[1.236s] GC(5) User=0.01s Sys=0.00s Real=0.01s
+[1.236s] Safepoint "G1CollectForAllocation", Time since last: 199191760 ns, Reaching safepoint: 7100 ns, At safepoint: 4923100 ns, Leaving safepoint: 38470 ns, Total: 4968670 ns, Threads: 0 runnable, 11 total
+[1.442s] GC(6) Pause Young (Normal) (G1 Evacuation Pause) 216M->5M(360M) 4.572ms
+[1.442s] GC(6) User=0.00s Sys=0.00s Real=0.00s
+[1.442s] Safepoint "G1CollectForAllocation", Time since last: 201180120 ns, Reaching safepoint: 10330 ns, At safepoint: 4675810 ns, Leaving safepoint: 24750 ns, Total: 4710890 ns, Threads: 0 runnable, 11 total
+[1.567s] GC(7) Pause Young (Normal) (G1 Evacuation Pause) 216M->5M(360M) 5.433ms
+[1.567s] GC(7) User=0.01s Sys=0.01s Real=0.01s
+[1.567s] Safepoint "G1CollectForAllocation", Time since last: 119531500 ns, Reaching safepoint: 6870 ns, At safepoint: 5512040 ns, Leaving safepoint: 18810 ns, Total: 5537720 ns, Threads: 0 runnable, 11 total
+[1.704s] GC(8) Pause Young (Normal) (G1 Evacuation Pause) 216M->5M(500M) 8.229ms
+[1.704s] GC(8) User=0.01s Sys=0.01s Real=0.00s
+[1.704s] Safepoint "G1CollectForAllocation", Time since last: 128618440 ns, Reaching safepoint: 8040 ns, At safepoint: 8320630 ns, Leaving safepoint: 25640 ns, Total: 8354310 ns, Threads: 0 runnable, 11 total
+[1.969s] GC(9) Pause Young (Normal) (G1 Evacuation Pause) 300M->5M(500M) 5.287ms
+[1.969s] GC(9) User=0.01s Sys=0.00s Real=0.01s
+[1.969s] Safepoint "G1CollectForAllocation", Time since last: 259232790 ns, Reaching safepoint: 9300 ns, At safepoint: 5383540 ns, Leaving safepoint: 23940 ns, Total: 5416780 ns, Threads: 0 runnable, 11 total
+[2.173s] GC(10) Pause Young (Normal) (G1 Evacuation Pause) 300M->5M(500M) 5.535ms
+[2.173s] GC(10) User=0.00s Sys=0.00s Real=0.01s
+[2.173s] Safepoint "G1CollectForAllocation", Time since last: 198910210 ns, Reaching safepoint: 9700 ns, At safepoint: 5725750 ns, Leaving safepoint: 21900 ns, Total: 5757350 ns, Threads: 0 runnable, 11 total
+[2.376s] GC(11) Pause Young (Normal) (G1 Evacuation Pause) 300M->5M(500M) 8.583ms
+[2.376s] GC(11) User=0.01s Sys=0.01s Real=0.01s
+[2.376s] Safepoint "G1CollectForAllocation", Time since last: 194387100 ns, Reaching safepoint: 9530 ns, At safepoint: 8657100 ns, Leaving safepoint: 23970 ns, Total: 8690600 ns, Threads: 0 runnable, 11 total
+[2.575s] GC(12) Pause Young (Normal) (G1 Evacuation Pause) 300M->5M(676M) 4.613ms
+[2.575s] GC(12) User=0.01s Sys=0.00s Real=0.01s
+[2.575s] Safepoint "G1CollectForAllocation", Time since last: 193949500 ns, Reaching safepoint: 8140 ns, At safepoint: 4712350 ns, Leaving safepoint: 19660 ns, Total: 4740150 ns, Threads: 0 runnable, 11 total
+[3.320s] GC(13) Pause Young (Normal) (G1 Evacuation Pause) 404M->5M(676M) 84.533ms
+[3.320s] GC(13) User=0.08s Sys=0.01s Real=0.08s
+[3.320s] Safepoint "G1CollectForAllocation", Time since last: 659763320 ns, Reaching safepoint: 73590 ns, At safepoint: 84684140 ns, Leaving safepoint: 23970 ns, Total: 84781700 ns, Threads: 0 runnable, 11 total
+ 
+strings truffledata-batch quoted 1048576 ingest 0 [0.9506408174418802, 1.3298824412935257, 9.641112903799993, 3.625539972771095, 2.535658624459584]
+--- strings fastcsv quoted 1048576 fork 2 Picked up JAVA_TOOL_OPTIONS: -Xlog:gc,gc+init,gc+cpu,safepoint,os+container:stderr:uptime
+[0.007s] CardTable entry size: 512
+[0.011s] Using G1
+[0.016s] Version: 25.0.4.1.1+1-jvmci-25.5-b24 (release)
+[0.016s] CPUs: 7 total, 7 available
+[0.016s] Memory: 16767M
+[0.016s] Large Page Support: Disabled
+[0.016s] NUMA Support: Disabled
+[0.016s] Compressed Oops: Enabled (Zero based)
+[0.016s] Heap Region Size: 4M
+[0.016s] Heap Min Capacity: 8M
+[0.016s] Heap Initial Capacity: 264M
+[0.016s] Heap Max Capacity: 8G
+[0.016s] Pre-touch: Disabled
+[0.016s] Parallel Workers: 7
+[0.016s] Concurrent Workers: 2
+[0.016s] Concurrent Refinement Workers: 7
+[0.016s] Periodic GC: Disabled
+WARNING: Using incubator modules: jdk.incubator.vector
+[0.774s] GC(0) Pause Young (Normal) (G1 Evacuation Pause) 45M->5M(268M) 13.737ms
+[0.775s] GC(0) User=0.00s Sys=0.01s Real=0.02s
+[0.775s] Safepoint "G1CollectForAllocation", Time since last: 715270620 ns, Reaching safepoint: 5560 ns, At safepoint: 13931009 ns, Leaving safepoint: 25070 ns, Total: 13961639 ns, Threads: 0 runnable, 11 total
+[1.561s] GC(1) Pause Young (Normal) (G1 Evacuation Pause) 121M->5M(268M) 6.293ms
+[1.561s] GC(1) User=0.00s Sys=0.01s Real=0.00s
+[1.562s] Safepoint "G1CollectForAllocation", Time since last: 780467740 ns, Reaching safepoint: 8660 ns, At safepoint: 6409810 ns, Leaving safepoint: 37080 ns, Total: 6455550 ns, Threads: 0 runnable, 11 total
+[1.800s] GC(2) Pause Young (Normal) (G1 Evacuation Pause) 157M->5M(268M) 6.191ms
+[1.800s] GC(2) User=0.00s Sys=0.01s Real=0.01s
+[1.800s] Safepoint "G1CollectForAllocation", Time since last: 232067470 ns, Reaching safepoint: 8450 ns, At safepoint: 6285650 ns, Leaving safepoint: 24140 ns, Total: 6318240 ns, Threads: 0 runnable, 11 total
+[1.933s] GC(3) Pause Young (Normal) (G1 Evacuation Pause) 157M->5M(268M) 3.465ms
+[1.933s] GC(3) User=0.01s Sys=0.01s Real=0.00s
+[1.933s] Safepoint "G1CollectForAllocation", Time since last: 129954380 ns, Reaching safepoint: 6030 ns, At safepoint: 3580950 ns, Leaving safepoint: 20030 ns, Total: 3607010 ns, Threads: 0 runnable, 11 total
+[2.031s] GC(4) Pause Young (Normal) (G1 Evacuation Pause) 157M->5M(268M) 3.946ms
+[2.031s] GC(4) User=0.00s Sys=0.00s Real=0.00s
+[2.031s] Safepoint "G1CollectForAllocation", Time since last: 93256270 ns, Reaching safepoint: 5910 ns, At safepoint: 4036090 ns, Leaving safepoint: 19880 ns, Total: 4061880 ns, Threads: 0 runnable, 11 total
+[2.137s] GC(5) Pause Young (Normal) (G1 Evacuation Pause) 157M->5M(324M) 3.999ms
+[2.137s] GC(5) User=0.01s Sys=0.00s Real=0.01s
+[2.137s] Safepoint "G1CollectForAllocation", Time since last: 102136340 ns, Reaching safepoint: 55580 ns, At safepoint: 4087060 ns, Leaving safepoint: 18370 ns, Total: 4161010 ns, Threads: 0 runnable, 11 total
+[2.301s] GC(6) Pause Young (Normal) (G1 Evacuation Pause) 193M->5M(324M) 5.139ms
+[2.301s] GC(6) User=0.01s Sys=0.00s Real=0.00s
+[2.301s] Safepoint "G1CollectForAllocation", Time since last: 158700570 ns, Reaching safepoint: 8200 ns, At safepoint: 5233820 ns, Leaving safepoint: 20450 ns, Total: 5262470 ns, Threads: 0 runnable, 11 total
+[2.418s] GC(7) Pause Young (Normal) (G1 Evacuation Pause) 193M->5M(324M) 4.233ms
+[2.418s] GC(7) User=0.00s Sys=0.01s Real=0.01s
+[2.418s] Safepoint "G1CollectForAllocation", Time since last: 112642930 ns, Reaching safepoint: 6830 ns, At safepoint: 4314450 ns, Leaving safepoint: 18390 ns, Total: 4339670 ns, Threads: 0 runnable, 11 total
+[2.619s] GC(8) Pause Young (Normal) (G1 Evacuation Pause) 193M->6M(324M) 5.466ms
+[2.619s] GC(8) User=0.00s Sys=0.00s Real=0.01s
+[2.619s] Safepoint "G1CollectForAllocation", Time since last: 195244700 ns, Reaching safepoint: 6270 ns, At safepoint: 5554080 ns, Leaving safepoint: 20660 ns, Total: 5581010 ns, Threads: 0 runnable, 11 total
+[2.808s] GC(9) Pause Young (Normal) (G1 Evacuation Pause) 190M->5M(412M) 5.549ms
+[2.808s] GC(9) User=0.01s Sys=0.00s Real=0.01s
+[2.808s] Safepoint "G1CollectForAllocation", Time since last: 183458840 ns, Reaching safepoint: 7840 ns, At safepoint: 5642100 ns, Leaving safepoint: 20540 ns, Total: 5670480 ns, Threads: 0 runnable, 11 total
+[3.111s] GC(10) Pause Young (Normal) (G1 Evacuation Pause) 245M->5M(412M) 10.378ms
+[3.111s] GC(10) User=0.01s Sys=0.01s Real=0.01s
+[3.111s] Safepoint "G1CollectForAllocation", Time since last: 292918500 ns, Reaching safepoint: 7610 ns, At safepoint: 10470560 ns, Leaving safepoint: 50010 ns, Total: 10528180 ns, Threads: 0 runnable, 10 total
+[3.306s] GC(11) Pause Young (Normal) (G1 Evacuation Pause) 245M->6M(412M) 8.786ms
+[3.306s] GC(11) User=0.00s Sys=0.00s Real=0.00s
+[3.306s] Safepoint "G1CollectForAllocation", Time since last: 185659870 ns, Reaching safepoint: 6050 ns, At safepoint: 8870120 ns, Leaving safepoint: 23620 ns, Total: 8899790 ns, Threads: 0 runnable, 10 total
+[3.494s] GC(12) Pause Young (Normal) (G1 Evacuation Pause) 242M->6M(412M) 5.748ms
+[3.494s] GC(12) User=0.00s Sys=0.01s Real=0.00s
+[3.494s] Safepoint "G1CollectForAllocation", Time since last: 182472930 ns, Reaching safepoint: 7870 ns, At safepoint: 5841880 ns, Leaving safepoint: 20550 ns, Total: 5870300 ns, Threads: 0 runnable, 10 total
+[3.720s] GC(13) Pause Young (Normal) (G1 Evacuation Pause) 242M->5M(544M) 5.651ms
+[3.720s] GC(13) User=0.01s Sys=0.00s Real=0.00s
+[3.720s] Safepoint "G1CollectForAllocation", Time since last: 220054650 ns, Reaching safepoint: 42010 ns, At safepoint: 5836190 ns, Leaving safepoint: 28580 ns, Total: 5906780 ns, Threads: 0 runnable, 10 total
+ 
+strings fastcsv quoted 1048576 ingest 2 [1.2644408574984232, 1.6325937126378671, 1.1985359606399382, 1.0808657118583718, 1.6048859689631494]
+--- strings fastcsv quoted 1048576 fork 0 Picked up JAVA_TOOL_OPTIONS: -Xlog:gc,gc+init,gc+cpu,safepoint,os+container:stderr:uptime
+[0.005s] CardTable entry size: 512
+[0.009s] Using G1
+[0.012s] Version: 25.0.4.1.1+1-jvmci-25.5-b24 (release)
+[0.012s] CPUs: 7 total, 7 available
+[0.012s] Memory: 16767M
+[0.012s] Large Page Support: Disabled
+[0.012s] NUMA Support: Disabled
+[0.012s] Compressed Oops: Enabled (Zero based)
+[0.012s] Heap Region Size: 4M
+[0.012s] Heap Min Capacity: 8M
+[0.012s] Heap Initial Capacity: 264M
+[0.012s] Heap Max Capacity: 8G
+[0.012s] Pre-touch: Disabled
+[0.012s] Parallel Workers: 7
+[0.012s] Concurrent Workers: 2
+[0.012s] Concurrent Refinement Workers: 7
+[0.012s] Periodic GC: Disabled
+WARNING: Using incubator modules: jdk.incubator.vector
+[0.456s] GC(0) Pause Young (Normal) (G1 Evacuation Pause) 45M->5M(268M) 13.070ms
+[0.456s] GC(0) User=0.01s Sys=0.02s Real=0.01s
+[0.456s] Safepoint "G1CollectForAllocation", Time since last: 422741830 ns, Reaching safepoint: 242540 ns, At safepoint: 13194600 ns, Leaving safepoint: 53350 ns, Total: 13490490 ns, Threads: 1 runnable, 11 total
+[0.673s] GC(1) Pause Young (Normal) (G1 Evacuation Pause) 121M->6M(268M) 6.094ms
+[0.674s] GC(1) User=0.00s Sys=0.00s Real=0.01s
+[0.674s] Safepoint "G1CollectForAllocation", Time since last: 211286040 ns, Reaching safepoint: 8430 ns, At safepoint: 6201280 ns, Leaving safepoint: 43150 ns, Total: 6252860 ns, Threads: 0 runnable, 11 total
+[0.809s] GC(2) Pause Young (Normal) (G1 Evacuation Pause) 154M->5M(268M) 3.787ms
+[0.809s] GC(2) User=0.01s Sys=0.01s Real=0.00s
+[0.809s] Safepoint "G1CollectForAllocation", Time since last: 131686440 ns, Reaching safepoint: 7660 ns, At safepoint: 3875150 ns, Leaving safepoint: 40490 ns, Total: 3923300 ns, Threads: 0 runnable, 11 total
+[0.929s] GC(3) Pause Young (Normal) (G1 Evacuation Pause) 157M->5M(268M) 5.930ms
+[0.929s] GC(3) User=0.01s Sys=0.00s Real=0.00s
+[0.929s] Safepoint "G1CollectForAllocation", Time since last: 113848470 ns, Reaching safepoint: 7300 ns, At safepoint: 6015760 ns, Leaving safepoint: 44380 ns, Total: 6067440 ns, Threads: 0 runnable, 11 total
+[1.036s] GC(4) Pause Young (Normal) (G1 Evacuation Pause) 157M->5M(344M) 3.363ms
+[1.036s] GC(4) User=0.01s Sys=0.00s Real=0.00s
+[1.036s] Safepoint "G1CollectForAllocation", Time since last: 103296050 ns, Reaching safepoint: 6830 ns, At safepoint: 3450710 ns, Leaving safepoint: 20130 ns, Total: 3477670 ns, Threads: 0 runnable, 11 total
+[1.252s] GC(5) Pause Young (Normal) (G1 Evacuation Pause) 205M->5M(344M) 8.247ms
+[1.252s] GC(5) User=0.01s Sys=0.00s Real=0.01s
+[1.252s] Safepoint "G1CollectForAllocation", Time since last: 208022670 ns, Reaching safepoint: 9890 ns, At safepoint: 8373920 ns, Leaving safepoint: 8190 ns, Total: 8392000 ns, Threads: 0 runnable, 11 total
+[1.444s] GC(6) Pause Young (Normal) (G1 Evacuation Pause) 205M->5M(344M) 5.437ms
+[1.444s] GC(6) User=0.01s Sys=0.00s Real=0.01s
+[1.445s] Safepoint "G1CollectForAllocation", Time since last: 186661410 ns, Reaching safepoint: 9690 ns, At safepoint: 5543850 ns, Leaving safepoint: 2730 ns, Total: 5556270 ns, Threads: 0 runnable, 11 total
+[1.703s] GC(7) Pause Young (Normal) (G1 Evacuation Pause) 205M->6M(344M) 17.306ms
+[1.703s] GC(7) User=0.01s Sys=0.00s Real=0.02s
+[1.703s] Safepoint "G1CollectForAllocation", Time since last: 240766660 ns, Reaching safepoint: 10590 ns, At safepoint: 17489930 ns, Leaving safepoint: 4420 ns, Total: 17504940 ns, Threads: 0 runnable, 11 total
+[1.916s] GC(8) Pause Young (Normal) (G1 Evacuation Pause) 202M->5M(480M) 4.753ms
+[1.916s] GC(8) User=0.01s Sys=0.00s Real=0.01s
+[1.916s] Safepoint "G1CollectForAllocation", Time since last: 208301499 ns, Reaching safepoint: 7370 ns, At safepoint: 4836150 ns, Leaving safepoint: 2960 ns, Total: 4846480 ns, Threads: 0 runnable, 11 total
+[2.293s] GC(9) Pause Young (Normal) (G1 Evacuation Pause) 289M->5M(480M) 8.422ms
+[2.294s] GC(9) User=0.00s Sys=0.00s Real=0.01s
+[2.294s] Safepoint "G1CollectForAllocation", Time since last: 368925670 ns, Reaching safepoint: 10110 ns, At safepoint: 9198120 ns, Leaving safepoint: 32170 ns, Total: 9240400 ns, Threads: 0 runnable, 10 total
+[2.642s] GC(10) Pause Young (Normal) (G1 Evacuation Pause) 289M->5M(480M) 7.008ms
+[2.642s] GC(10) User=0.01s Sys=0.00s Real=0.01s
+[2.642s] Safepoint "G1CollectForAllocation", Time since last: 341029590 ns, Reaching safepoint: 7370 ns, At safepoint: 7232611 ns, Leaving safepoint: 24670 ns, Total: 7264651 ns, Threads: 0 runnable, 10 total
+[3.000s] GC(11) Pause Young (Normal) (G1 Evacuation Pause) 289M->5M(480M) 5.357ms
+[3.000s] GC(11) User=0.00s Sys=0.00s Real=0.01s
+[3.000s] Safepoint "G1CollectForAllocation", Time since last: 352019610 ns, Reaching safepoint: 9660 ns, At safepoint: 5485799 ns, Leaving safepoint: 22910 ns, Total: 5518369 ns, Threads: 0 runnable, 10 total
+[3.383s] GC(12) Pause Young (Normal) (G1 Evacuation Pause) 289M->5M(576M) 6.109ms
+[3.383s] GC(12) User=0.01s Sys=0.01s Real=0.01s
+[3.383s] Safepoint "G1CollectForAllocation", Time since last: 376728751 ns, Reaching safepoint: 55210 ns, At safepoint: 6220940 ns, Leaving safepoint: 20210 ns, Total: 6296360 ns, Threads: 0 runnable, 10 total
+[3.772s] GC(13) Pause Young (Normal) (G1 Evacuation Pause) 345M->5M(576M) 3.869ms
+[3.772s] GC(13) User=0.00s Sys=0.00s Real=0.01s
+[3.772s] Safepoint "G1CollectForAllocation", Time since last: 384762829 ns, Reaching safepoint: 7770 ns, At safepoint: 3964130 ns, Leaving safepoint: 32930 ns, Total: 4004830 ns, Threads: 0 runnable, 10 total
+ 
+strings fastcsv quoted 1048576 ingest 0 [1.6835944511455259, 1.7152922391211718, 1.6975213802354732, 1.814818600211743, 1.4072166927081464]
+--- strings kernel-swar quoted 1048576 fork 1 Picked up JAVA_TOOL_OPTIONS: -Xlog:gc,gc+init,gc+cpu,safepoint,os+container:stderr:uptime
+[0.008s] CardTable entry size: 512
+[0.011s] Using G1
+[0.013s] Version: 25.0.4.1.1+1-jvmci-25.5-b24 (release)
+[0.014s] CPUs: 7 total, 7 available
+[0.014s] Memory: 16767M
+[0.014s] Large Page Support: Disabled
+[0.014s] NUMA Support: Disabled
+[0.014s] Compressed Oops: Enabled (Zero based)
+[0.014s] Heap Region Size: 4M
+[0.014s] Heap Min Capacity: 8M
+[0.014s] Heap Initial Capacity: 264M
+[0.014s] Heap Max Capacity: 8G
+[0.014s] Pre-touch: Disabled
+[0.014s] Parallel Workers: 7
+[0.014s] Concurrent Workers: 2
+[0.014s] Concurrent Refinement Workers: 7
+[0.014s] Periodic GC: Disabled
+WARNING: Using incubator modules: jdk.incubator.vector
+[0.416s] GC(0) Pause Young (Normal) (G1 Evacuation Pause) 45M->5M(268M) 8.068ms
+[0.416s] GC(0) User=0.01s Sys=0.01s Real=0.00s
+[0.416s] Safepoint "G1CollectForAllocation", Time since last: 373846740 ns, Reaching safepoint: 10570 ns, At safepoint: 8166410 ns, Leaving safepoint: 20770 ns, Total: 8197750 ns, Threads: 1 runnable, 11 total
+ 
+strings kernel-swar quoted 1048576 ingest 1 [0.6192477341152277, 0.5897038379395438, 0.5713833607653483, 0.5191918663002351, 0.536221900969632]
+--- strings kernel-swar quoted 1048576 fork 0 Picked up JAVA_TOOL_OPTIONS: -Xlog:gc,gc+init,gc+cpu,safepoint,os+container:stderr:uptime
+[0.006s] CardTable entry size: 512
+[0.011s] Using G1
+[0.013s] Version: 25.0.4.1.1+1-jvmci-25.5-b24 (release)
+[0.013s] CPUs: 7 total, 7 available
+[0.013s] Memory: 16767M
+[0.013s] Large Page Support: Disabled
+[0.013s] NUMA Support: Disabled
+[0.013s] Compressed Oops: Enabled (Zero based)
+[0.013s] Heap Region Size: 4M
+[0.013s] Heap Min Capacity: 8M
+[0.013s] Heap Initial Capacity: 264M
+[0.013s] Heap Max Capacity: 8G
+[0.013s] Pre-touch: Disabled
+[0.013s] Parallel Workers: 7
+[0.013s] Concurrent Workers: 2
+[0.013s] Concurrent Refinement Workers: 7
+[0.013s] Periodic GC: Disabled
+WARNING: Using incubator modules: jdk.incubator.vector
+ 
+strings kernel-swar quoted 1048576 ingest 0 [0.5545269057229352, 0.5351538839287242, 0.518465331177021, 0.5267079337084294, 0.6313228451036154]
+--- strings fastcsv quoted 1048576 fork 1 Picked up JAVA_TOOL_OPTIONS: -Xlog:gc,gc+init,gc+cpu,safepoint,os+container:stderr:uptime
+[0.006s] CardTable entry size: 512
+[0.010s] Using G1
+[0.012s] Version: 25.0.4.1.1+1-jvmci-25.5-b24 (release)
+[0.012s] CPUs: 7 total, 7 available
+[0.012s] Memory: 16767M
+[0.012s] Large Page Support: Disabled
+[0.012s] NUMA Support: Disabled
+[0.012s] Compressed Oops: Enabled (Zero based)
+[0.012s] Heap Region Size: 4M
+[0.012s] Heap Min Capacity: 8M
+[0.012s] Heap Initial Capacity: 264M
+[0.012s] Heap Max Capacity: 8G
+[0.012s] Pre-touch: Disabled
+[0.012s] Parallel Workers: 7
+[0.012s] Concurrent Workers: 2
+[0.012s] Concurrent Refinement Workers: 7
+[0.012s] Periodic GC: Disabled
+WARNING: Using incubator modules: jdk.incubator.vector
+[0.473s] GC(0) Pause Young (Normal) (G1 Evacuation Pause) 45M->5M(268M) 5.553ms
+[0.473s] GC(0) User=0.02s Sys=0.00s Real=0.01s
+[0.474s] Safepoint "G1CollectForAllocation", Time since last: 448357560 ns, Reaching safepoint: 5520 ns, At safepoint: 5639480 ns, Leaving safepoint: 38330 ns, Total: 5683330 ns, Threads: 0 runnable, 11 total
+[0.709s] GC(1) Pause Young (Normal) (G1 Evacuation Pause) 121M->5M(268M) 4.984ms
+[0.709s] GC(1) User=0.00s Sys=0.01s Real=0.01s
+[0.709s] Safepoint "G1CollectForAllocation", Time since last: 230230140 ns, Reaching safepoint: 146260 ns, At safepoint: 5073420 ns, Leaving safepoint: 24560 ns, Total: 5244240 ns, Threads: 1 runnable, 11 total
+[0.872s] GC(2) Pause Young (Normal) (G1 Evacuation Pause) 157M->6M(268M) 5.549ms
+[0.872s] GC(2) User=0.01s Sys=0.00s Real=0.00s
+[0.872s] Safepoint "G1CollectForAllocation", Time since last: 156984980 ns, Reaching safepoint: 6600 ns, At safepoint: 5665170 ns, Leaving safepoint: 40510 ns, Total: 5712280 ns, Threads: 0 runnable, 11 total
+[0.985s] GC(3) Pause Young (Normal) (G1 Evacuation Pause) 154M->5M(268M) 3.430ms
+[0.985s] GC(3) User=0.01s Sys=0.01s Real=0.01s
+[0.985s] Safepoint "G1CollectForAllocation", Time since last: 109861030 ns, Reaching safepoint: 9700 ns, At safepoint: 3576890 ns, Leaving safepoint: 46060 ns, Total: 3632650 ns, Threads: 0 runnable, 11 total
+[1.098s] GC(4) Pause Young (Normal) (G1 Evacuation Pause) 157M->5M(268M) 3.510ms
+[1.098s] GC(4) User=0.00s Sys=0.01s Real=0.00s
+[1.098s] Safepoint "G1CollectForAllocation", Time since last: 109508400 ns, Reaching safepoint: 7450 ns, At safepoint: 3604700 ns, Leaving safepoint: 44560 ns, Total: 3656710 ns, Threads: 0 runnable, 11 total
+[1.210s] GC(5) Pause Young (Normal) (G1 Evacuation Pause) 157M->5M(332M) 3.653ms
+[1.210s] GC(5) User=0.00s Sys=0.01s Real=0.00s
+[1.210s] Safepoint "G1CollectForAllocation", Time since last: 107502490 ns, Reaching safepoint: 23360 ns, At safepoint: 3792000 ns, Leaving safepoint: 45350 ns, Total: 3860710 ns, Threads: 0 runnable, 11 total
+[1.352s] GC(6) Pause Young (Normal) (G1 Evacuation Pause) 197M->5M(332M) 3.886ms
+[1.352s] GC(6) User=0.01s Sys=0.00s Real=0.00s
+[1.352s] Safepoint "G1CollectForAllocation", Time since last: 137850930 ns, Reaching safepoint: 7680 ns, At safepoint: 4000610 ns, Leaving safepoint: 49800 ns, Total: 4058090 ns, Threads: 0 runnable, 11 total
+[1.493s] GC(7) Pause Young (Normal) (G1 Evacuation Pause) 197M->5M(332M) 3.158ms
+[1.493s] GC(7) User=0.00s Sys=0.00s Real=0.01s
+[1.493s] Safepoint "G1CollectForAllocation", Time since last: 138454860 ns, Reaching safepoint: 7970 ns, At safepoint: 3254220 ns, Leaving safepoint: 23950 ns, Total: 3286140 ns, Threads: 0 runnable, 11 total
+[1.615s] GC(8) Pause Young (Normal) (G1 Evacuation Pause) 197M->5M(332M) 3.695ms
+[1.615s] GC(8) User=0.01s Sys=0.00s Real=0.01s
+[1.615s] Safepoint "G1CollectForAllocation", Time since last: 117626400 ns, Reaching safepoint: 9070 ns, At safepoint: 3803440 ns, Leaving safepoint: 29210 ns, Total: 3841720 ns, Threads: 0 runnable, 11 total
+[1.743s] GC(9) Pause Young (Normal) (G1 Evacuation Pause) 197M->5M(404M) 3.077ms
+[1.743s] GC(9) User=0.01s Sys=0.00s Real=0.00s
+[1.743s] Safepoint "G1CollectForAllocation", Time since last: 124822710 ns, Reaching safepoint: 56100 ns, At safepoint: 3187320 ns, Leaving safepoint: 28060 ns, Total: 3271480 ns, Threads: 0 runnable, 11 total
+[1.949s] GC(10) Pause Young (Normal) (G1 Evacuation Pause) 241M->5M(404M) 3.720ms
+[1.949s] GC(10) User=0.01s Sys=0.01s Real=0.00s
+[1.949s] Safepoint "G1CollectForAllocation", Time since last: 202337720 ns, Reaching safepoint: 9690 ns, At safepoint: 3815050 ns, Leaving safepoint: 28420 ns, Total: 3853160 ns, Threads: 0 runnable, 10 total
+[2.100s] GC(11) Pause Young (Normal) (G1 Evacuation Pause) 241M->5M(404M) 3.110ms
+[2.100s] GC(11) User=0.01s Sys=0.00s Real=0.00s
+[2.100s] Safepoint "G1CollectForAllocation", Time since last: 148084140 ns, Reaching safepoint: 9500 ns, At safepoint: 3207820 ns, Leaving safepoint: 24360 ns, Total: 3241680 ns, Threads: 0 runnable, 10 total
+[2.283s] GC(12) Pause Young (Normal) (G1 Evacuation Pause) 241M->5M(404M) 3.313ms
+[2.283s] GC(12) User=0.00s Sys=0.00s Real=0.00s
+[2.283s] Safepoint "G1CollectForAllocation", Time since last: 178970060 ns, Reaching safepoint: 9560 ns, At safepoint: 3390340 ns, Leaving safepoint: 17980 ns, Total: 3417880 ns, Threads: 0 runnable, 10 total
+[2.444s] GC(13) Pause Young (Normal) (G1 Evacuation Pause) 241M->5M(488M) 3.258ms
+[2.445s] GC(13) User=0.01s Sys=0.00s Real=0.00s
+[2.445s] Safepoint "G1CollectForAllocation", Time since last: 158339699 ns, Reaching safepoint: 9670 ns, At safepoint: 3338230 ns, Leaving safepoint: 16910 ns, Total: 3364810 ns, Threads: 0 runnable, 10 total
+[2.667s] GC(14) Pause Young (Normal) (G1 Evacuation Pause) 293M->5M(488M) 3.484ms
+[2.667s] GC(14) User=0.00s Sys=0.01s Real=0.01s
+[2.667s] Safepoint "G1CollectForAllocation", Time since last: 218484430 ns, Reaching safepoint: 5540 ns, At safepoint: 3586721 ns, Leaving safepoint: 18790 ns, Total: 3611051 ns, Threads: 0 runnable, 10 total
+[2.851s] GC(15) Pause Young (Normal) (G1 Evacuation Pause) 293M->5M(488M) 3.996ms
+[2.851s] GC(15) User=0.00s Sys=0.00s Real=0.00s
+[2.851s] Safepoint "G1CollectForAllocation", Time since last: 180167079 ns, Reaching safepoint: 7750 ns, At safepoint: 4100980 ns, Leaving safepoint: 23370 ns, Total: 4132100 ns, Threads: 0 runnable, 10 total
+[3.068s] GC(16) Pause Young (Normal) (G1 Evacuation Pause) 293M->5M(488M) 2.789ms
+[3.068s] GC(16) User=0.01s Sys=0.00s Real=0.00s
+[3.068s] Safepoint "G1CollectForAllocation", Time since last: 214449221 ns, Reaching safepoint: 8020 ns, At safepoint: 2867950 ns, Leaving safepoint: 17610 ns, Total: 2893580 ns, Threads: 0 runnable, 10 total
+[3.317s] GC(17) Pause Young (Normal) (G1 Evacuation Pause) 293M->5M(588M) 3.319ms
+[3.317s] GC(17) User=0.00s Sys=0.01s Real=0.00s
+[3.317s] Safepoint "G1CollectForAllocation", Time since last: 245434299 ns, Reaching safepoint: 8580 ns, At safepoint: 3419441 ns, Leaving safepoint: 21350 ns, Total: 3449371 ns, Threads: 0 runnable, 10 total
+[3.606s] GC(18) Pause Young (Normal) (G1 Evacuation Pause) 353M->5M(588M) 4.488ms
+[3.606s] GC(18) User=0.00s Sys=0.00s Real=0.01s
+[3.606s] Safepoint "G1CollectForAllocation", Time since last: 284386920 ns, Reaching safepoint: 9920 ns, At safepoint: 4624460 ns, Leaving safepoint: 21710 ns, Total: 4656090 ns, Threads: 0 runnable, 10 total
+ 
+strings fastcsv quoted 1048576 ingest 1 [0.9876794694640505, 0.880226682010642, 1.0756846131551965, 1.1420779449333145, 1.1256895195982701]
+--- strings kernel-swar quoted 1048576 fork 2 Picked up JAVA_TOOL_OPTIONS: -Xlog:gc,gc+init,gc+cpu,safepoint,os+container:stderr:uptime
+[0.006s] CardTable entry size: 512
+[0.010s] Using G1
+[0.012s] Version: 25.0.4.1.1+1-jvmci-25.5-b24 (release)
+[0.012s] CPUs: 7 total, 7 available
+[0.012s] Memory: 16767M
+[0.012s] Large Page Support: Disabled
+[0.012s] NUMA Support: Disabled
+[0.012s] Compressed Oops: Enabled (Zero based)
+[0.012s] Heap Region Size: 4M
+[0.012s] Heap Min Capacity: 8M
+[0.012s] Heap Initial Capacity: 264M
+[0.012s] Heap Max Capacity: 8G
+[0.012s] Pre-touch: Disabled
+[0.012s] Parallel Workers: 7
+[0.012s] Concurrent Workers: 2
+[0.012s] Concurrent Refinement Workers: 7
+[0.012s] Periodic GC: Disabled
+WARNING: Using incubator modules: jdk.incubator.vector
+[0.345s] GC(0) Pause Young (Normal) (G1 Evacuation Pause) 45M->5M(268M) 5.375ms
+[0.345s] GC(0) User=0.00s Sys=0.01s Real=0.01s
+[0.346s] Safepoint "G1CollectForAllocation", Time since last: 321288339 ns, Reaching safepoint: 5920 ns, At safepoint: 5452900 ns, Leaving safepoint: 32960 ns, Total: 5491780 ns, Threads: 0 runnable, 11 total
+ 
+strings kernel-swar quoted 1048576 ingest 2 [0.5834198837652131, 0.6389597473234991, 0.5614851152227033, 0.5456347390048415, 0.5138087900240043]
+native native-index-scalar [0.583902, 0.74396, 0.823026, 0.94987, 1.012079]
+native native-index-swar [0.473697, 0.478414, 0.439559, 0.442497, 0.464834]
+native native-index-avx2 [0.083479, 0.069638, 0.0695, 0.099152, 0.092495]
+native native-index-avx512 [0.055532, 0.060992, 0.056336, 0.06189, 0.063522]
+native native-indexed-scan [0.103156, 0.093203, 0.101233, 0.087995, 0.088611]
+native simdutf-validate [0.011398, 0.011915, 0.011079, 0.010485, 0.012314]
+native csv-core-scan [1.0172550430093845, 0.7826114514322836, 0.7214440725264333, 0.8165576687485634, 0.7477096086610266]
+native csv-byte-record [1.63952808146327, 1.0459469897805318, 1.1691484470939602, 1.1773029369396206, 1.1659679412898578]
+native csv-string-record [1.5076701187470691, 1.3424457912128087, 1.4773347442844722, 1.2037509186208353, 1.288849574365955]
+12 cells, 9 native rows, 0 unavailable

@@ -13,11 +13,28 @@ import com.oracle.truffle.api.nodes.Node;
 @GenerateInline(false)
 @GenerateUncached
 @Introspectable
+@ImportStatic(Accessor.class)
 public abstract class ReadLengthNode extends Node {
   public abstract int execute(Object row, int index);
 
   public static ReadLengthNode create() {
     return ReadLengthNodeGen.create();
+  }
+
+  /**
+   * A layout-bound accessor reports the length from the representation, so a string field need not
+   * be materialized where the layout already knows its UTF-16 length.
+   */
+  @Specialization(
+      guards = {"index == cachedIndex", "bound(accessor, row)"},
+      limit = "3")
+  static int accessed(
+      Object row,
+      int index,
+      @Cached("index") int cachedIndex,
+      @Cached("bind(row, cachedIndex)") Accessor accessor) {
+    CompilerAsserts.partialEvaluationConstant(accessor);
+    return accessor.length(row);
   }
 
   @Specialization(
@@ -35,7 +52,7 @@ public abstract class ReadLengthNode extends Node {
     return length(data.read(row, cachedIndex), schema.field(cachedIndex), arrays);
   }
 
-  @Specialization(replaces = "cached")
+  @Specialization(replaces = {"accessed", "cached"})
   static int generic(
       Object row,
       int index,

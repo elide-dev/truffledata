@@ -110,7 +110,9 @@ final class IndexScan {
     if (idx == null || idx.length < capacity) idx = new int[capacity];
     SHARED.set(null); // a scan nested in a callback allocates its own
     try {
-      return frame(idx, input, from, to, eof, records, recordBase, stopAfter);
+      return records instanceof BatchBuilder b && b.fusable()
+          ? frameFused(idx, input, from, to, eof, b, recordBase, stopAfter)
+          : framePlain(idx, input, from, to, eof, records, recordBase, stopAfter);
     } finally {
       SHARED.set(idx);
     }
@@ -122,8 +124,14 @@ final class IndexScan {
    */
   private static final ThreadLocal<int @Nullable []> SHARED = new ThreadLocal<>();
 
-  @BytecodeInterpreterSwitch
-  private int frame(
+  /**
+   * Framing for any consumer: each record goes to {@code records.record}. Kept apart from {@link
+   * #frameFused}: Native Image has no profile to tell the fused branches are dead for other
+   * consumers, so one shared loop compiled with the inlined conversions (7.7k instructions, a
+   * 368-byte frame, about 3x the stack loads of this loop on arm64) and scan-only callers ran it
+   * at about 0.7x the reference kernel consumer instead of 0.9x (CSV ledger).
+   */
+  private int framePlain(
       int[] idx,
       byte[] input,
       int from,
@@ -135,9 +143,144 @@ final class IndexScan {
     final CsvIndexer ix = indexer;
     final byte delim = delimiter;
     final boolean commonsFraming = commons;
-    // Fused: a batch builder takes each field as it is framed (no per-record pass over spans); a
-    // record it declines goes through records.record with the spans, as on the unfused path.
-    final BatchBuilder fused = records instanceof BatchBuilder b && b.fusable() ? b : null;
+    ix.carry(0);
+    int pos = from;
+    int resume = from; // where a refused, incomplete or handed-over record restarts
+    int recordStart = from;
+    int fieldStart = from;
+    int count = 0;
+    boolean quoted = false; // a field of the current record holds a quote
+    int skip = -1; // the LF of a CRLF pair, already consumed
+    while (pos < to) {
+      int length = CsvIndex.indexable(to - pos, idx.length);
+      int n = ix.index(input, pos, length, idx);
+      for (int k = 0; k < n; k++) {
+        int entry = idx[k];
+        int p = pos + (entry & CsvIndex.OFFSET_MASK);
+        if (p == skip) continue;
+        byte b = input[p];
+        if (b != delim && count == 0 && p == fieldStart) {
+          // A completely empty line: CRLF, LF or a lone CR.
+          int next = p + 1;
+          if (b == CR) {
+            if (next < to) {
+              if (input[next] == LF) skip = next++;
+            } else if (commonsFraming && !eof) {
+              return resume; // Commons peeks past a final CR
+            }
+          }
+          if (emptyLineRecords) {
+            spans[0] = CsvScanner.span(p, 0, false, false);
+            if (!records.record(spans, 1, p, next)) return resume;
+            reported++;
+            if (recordBase + reported >= stopAfter) {
+              stopped = true; // Commons checks before the next record, even at the end
+              return next;
+            }
+            resume = next;
+          } else if (!commonsFraming) {
+            resume = next;
+          }
+          recordStart = fieldStart = next;
+          continue;
+        }
+        if (count == maxColumns) return stop(resume);
+        long span;
+        if (entry < 0) {
+          if ((entry & CsvIndex.UNQUOTED) != 0) return stop(resume);
+          if ((entry & CsvIndex.ESCAPED) != 0 && commonsFraming) {
+            // A Commons complex token: the span covers the raw token, decoded on read.
+            span = CsvScanner.span(fieldStart, p - fieldStart, true, true);
+          } else {
+            span =
+                (long) (fieldStart + 1) << 32
+                    | (long) (p - fieldStart - 2) << 2
+                    | 2
+                    | (entry >>> 30 & 1);
+          }
+          quoted = true;
+        } else if (trim) {
+          span = trimmed(input, fieldStart, p);
+        } else {
+          span = (long) fieldStart << 32 | (long) (p - fieldStart) << 2;
+        }
+        if (count == spans.length) grow();
+        spans[count++] = span;
+        if (b == delim) {
+          fieldStart = p + 1;
+          continue;
+        }
+        if (p - recordStart > maxRecordBytes) return stop(resume);
+        int end;
+        if (b == LF) end = p + 1;
+        else if (p + 1 < to) {
+          end = p + 1;
+          if (input[end] == LF) skip = end++;
+        } else if (eof) end = p + 1;
+        else return resume; // a final CR may be the first half of CRLF
+        if (!records.record(spans, count, recordStart, end)) return resume;
+        reported++;
+        if (recordBase + reported >= stopAfter && (commonsFraming || end < to)) {
+          stopped = true;
+          return end;
+        }
+        resume = recordStart = fieldStart = end;
+        count = 0;
+        quoted = false;
+      }
+      pos += length;
+    }
+    if (recordStart >= to) return commonsFraming && !eof ? resume : to;
+    long carry = ix.carry();
+    if (!eof) {
+      // An incomplete record is left for the next buffer, but the per-byte scanners report errors
+      // they can already see (a quote problem, too many fields), so quoted or full tails go to them.
+      boolean suspect = quoted || (carry & CsvIndex.CARRY_QUOTED) != 0 || count == maxColumns;
+      return suspect ? stop(resume) : resume;
+    }
+    // The final record has no terminator.
+    if ((carry & CsvIndex.CARRY_INSIDE) != 0) return stop(resume);
+    if (count == maxColumns || to - recordStart > maxRecordBytes) return stop(resume);
+    int flags = CsvIndex.pendingFlags(carry);
+    long span;
+    if (flags < 0) {
+      if ((flags & CsvIndex.UNQUOTED) != 0) return stop(resume);
+      span =
+          (flags & CsvIndex.ESCAPED) != 0 && commonsFraming
+              ? CsvScanner.span(fieldStart, to - fieldStart, true, true)
+              : CsvScanner.span(fieldStart + 1, to - fieldStart - 2, true, (flags & CsvIndex.ESCAPED) != 0);
+    } else if (trim) {
+      span = trimmed(input, fieldStart, to);
+    } else {
+      span = CsvScanner.span(fieldStart, to - fieldStart, false, false);
+    }
+    if (count == spans.length) grow();
+    spans[count++] = span;
+    if (!records.record(spans, count, recordStart, to)) return resume;
+    reported++;
+    if (commonsFraming && recordBase + reported >= stopAfter) stopped = true;
+    return to;
+  }
+
+  /**
+   * Fused framing ({@link BatchBuilder#fusable}): the batch builder takes each field as it is
+   * framed ({@link BatchBuilder#put}, no per-record pass over spans) and commits the record at its
+   * terminator; a record it declines goes through {@link BatchBuilder#record} with the spans, as on
+   * the plain path. A host-inlining root, so Native Image inlines the conversions into the loop.
+   */
+  @BytecodeInterpreterSwitch
+  private int frameFused(
+      int[] idx,
+      byte[] input,
+      int from,
+      int to,
+      boolean eof,
+      BatchBuilder records,
+      long recordBase,
+      long stopAfter) {
+    final CsvIndexer ix = indexer;
+    final byte delim = delimiter;
+    final boolean commonsFraming = commons;
     boolean converted = true; // every field of the current record so far was put
     ix.carry(0);
     int pos = from;
@@ -202,7 +345,7 @@ final class IndexScan {
         }
         if (count == spans.length) grow();
         spans[count] = span;
-        if (fused != null && converted) converted = fused.put(count, span);
+        if (converted) converted = records.put(count, span);
         count++;
         if (b == delim) {
           fieldStart = p + 1;
@@ -216,7 +359,7 @@ final class IndexScan {
           if (input[end] == LF) skip = end++;
         } else if (eof) end = p + 1;
         else return resume; // a final CR may be the first half of CRLF
-        if (!(fused != null && converted && fused.commit(count, recordStart, end))
+        if (!(converted && records.commit(count, recordStart, end))
             && !records.record(spans, count, recordStart, end)) return resume;
         converted = true;
         reported++;
@@ -256,9 +399,9 @@ final class IndexScan {
     }
     if (count == spans.length) grow();
     spans[count] = span;
-    if (fused != null && converted) converted = fused.put(count, span);
+    if (converted) converted = records.put(count, span);
     count++;
-    if (!(fused != null && converted && fused.commit(count, recordStart, to))
+    if (!(converted && records.commit(count, recordStart, to))
         && !records.record(spans, count, recordStart, to)) return resume;
     reported++;
     if (commonsFraming && recordBase + reported >= stopAfter) stopped = true;

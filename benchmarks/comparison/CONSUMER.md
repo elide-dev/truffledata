@@ -2,12 +2,13 @@
 
 This small comparison asks whether representation improvements reach a guest using the common access API. It complements the historical generated-getter microbenchmarks; it is not an Elide or TruffleCEL application integration test.
 
-`ConsumerComparison` audits 32 varied `google.protobuf.Type` messages. Sparse work reads string lengths, repeated counts, syntax and an optional source context. Full work also visits every field and oneof, reads names, and conditionally combines field number, kind and cardinality. Both generated-owned and native-view records execute the **same** `SharedRoot`, through `DataLibrary`, the common typed nodes and `InteropLibrary`. No format-specific getters participate in that computation. Protobuf-java supplies an independent decode and reference computation.
+`ConsumerComparison` audits 32 varied `google.protobuf.Type` messages. Sparse work reads string lengths, repeated counts, syntax and an optional source context. Full work also visits every field and oneof, reads names, and conditionally combines field number, kind and cardinality. Generated-owned records, native views (`decodeView`) and default eager decodes (`decode`, engine `native-eager`) all execute the **same** `SharedRoot`, through `DataLibrary`, the common typed nodes and `InteropLibrary`. No format-specific getters participate in that computation. Protobuf-java supplies an independent decode and reference computation.
 
 The holdout changes nested cardinality from 3–8 to 12–24 and uses longer supplementary-Unicode names. It is a data-distribution holdout on the same schema, not proof across unrelated schemas, maps, real oneofs, constraints or fallback routes. Every native-view cell rejects eager fallback.
 
 | Stage | Measured work |
 |---|---|
+| decode | Decode and release only; no guest code runs (throughput cohort) |
 | resident | Decode existing unmanaged input (native) or existing heap bytes (owned/stock), run compiled guest, close |
 | heap | Same, including native input allocation and heap-to-native copy |
 | detach | Decode, produce durable snapshot, close the native owner, then consume; owned/stock need no snapshot |
@@ -18,6 +19,12 @@ The holdout changes nested cardinality from 3–8 to 12–24 and uses longer sup
 Unlike the historical ingestion comparison, ingestion here includes a compiled shared guest computation. Stock's computation has an explicit boundary because stock collection traversal cannot enter the pinned SVM JIT. Its helper is AOT in every stage; this is a guest-integration comparison, not fully inlined stock versus TD. The shared helper itself emits the compiled marker; checking only its caller is insufficient.
 
 Plan creation, fixture creation, context startup and compilation are outside the measured work. All fixtures prepare the same native plan/input setup, including controls that do not use it. No total process-memory claim is made. Read-only cells warm 32 retained rows; larger working sets and fresh schemas remain separate questions. The caller rotates row order and verifies a reference checksum on every batch.
+
+The `large` data set (2,048–2,496 nested fields, about 52 KB per message) measures decode, resident and peak throughput. Results report MB/s of wire input next to the ratio to stock.
+
+## Remote paired measurement
+
+`consumer_measure` (SVM) and `consumer_measure_jvm` run ten shards on BuildBuddy workers. Each shard measures whole `(mode, stage)` groups for every engine and binary on one worker, with the runner pinned to one vCPU. Override `consumer_svm_baseline` / `consumer_jvm_baseline` with an earlier executable for a before/after pair. Merge shards with `python3 tools/bench/consumer.py merge --output DIR shard*.json`. Shared remote hosts make these timings advisory, so compare only within a shard.
 
 ## Run and preserve evidence
 

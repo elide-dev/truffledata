@@ -4,6 +4,7 @@ cc_library(
     name = "decoder",
     hdrs = [
         "decoder.h",
+        "legacy_decoder.h",
         "parser_pool.h",
         "session.h",
         "status.h",
@@ -22,7 +23,21 @@ cc_test(
     name = "test",
     srcs = ["decoder_test.cc"],
     copts = ["-std=c++17"],
-    deps = [":decoder"],
+    deps = [
+        ":decoder",
+        "//tape/native:testing",
+    ],
+)
+
+# TRANSITIONAL (tape-gbps Task 2 -> Task 3): the 0.8.0 Myna-tape decoder the Java readers still use.
+cc_test(
+    name = "legacy_test",
+    srcs = ["legacy_decoder_test.cc"],
+    copts = ["-std=c++17"],
+    deps = [
+        ":decoder",
+        "//tape/native:testing",
+    ],
 )
 
 config_setting(
@@ -47,7 +62,8 @@ genrule(
         "generated/seam.ll",
         "generated/META-INF/native-image/dev.elide.myna/dev.elide.truffledata.json.generated.Json/native-image.properties",
     ],
-    cmd = "$(location @myna//:generator) generate $(location json.seam) --out $(RULEDIR)/generated --target " + select({
+    cmd = "$(location @myna//:generator) validate $(location json.seam) --targets x86_64-unknown-linux-gnu,aarch64-unknown-linux-gnu,aarch64-apple-darwin && " +
+          "$(location @myna//:generator) generate $(location json.seam) --out $(RULEDIR)/generated --target " + select({
         "@platforms//os:macos": "aarch64-apple-darwin",
         ":linux_arm64": "aarch64-unknown-linux-gnu",
         "//conditions:default": "x86_64-unknown-linux-gnu",
@@ -127,6 +143,11 @@ cc_binary(
         "-std=c++17",
         "-O3",
     ],
+    linkopts = select({
+        # The macos-aarch64 release attachment (tools/release) is loaded through @rpath.
+        "@platforms//os:macos": ["-Wl,-install_name,@rpath/libtruffledata_json.dylib", "-Wl,-dead_strip_dylibs"],
+        "//conditions:default": [],
+    }),
     linkshared = True,
     linkstatic = True,
     visibility = ["//visibility:public"],

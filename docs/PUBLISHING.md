@@ -9,60 +9,60 @@ The release publishes eighteen thin libraries and a dependency-management BOM, w
 | `dev.elide:truffledata-jdbc-sqlite:<version>` | Xerial SQLite integration; depends on JDBC, core and sqlite-jdbc |
 | `dev.elide:truffledata-jdbc-mysql:<version>` | Connector/J integration; depends on JDBC, core and mysql-connector-j |
 | `dev.elide:truffledata-jdbc-postgresql:<version>` | pgJDBC integration; depends on JDBC, core and postgresql |
-| `dev.elide:truffledata-protobuf-buffa:<version>` | Optional native protobuf decoder and typed views; includes Linux x86-64 native attachments |
+| `dev.elide:truffledata-protobuf-buffa:<version>` | Optional native protobuf decoder and typed views; includes [prebuilt natives](#prebuilt-natives) |
 | `dev.elide:truffledata-protobuf-buffa-bindings:<version>` | Generated Myna bindings for JVM FFM and static SVM |
 | `dev.elide:truffledata-tape:<version>` | Format-neutral native tape layer shared by JSON and YAML: owners, values, sinks, export, snapshots, sessions, streams and typed records, plus the Myna value ABI runtime they extend; depends on core |
 | `dev.elide:truffledata-tape-jvm:<version>` | JVM FFM tape reader (`SegmentValueTape`); depends on truffledata-tape. Keep it out of native-image classpaths |
-| `dev.elide:truffledata-json:<version>` | Native simdjson JSON entry points (`JsonSession`, `JsonMessage`, `JsonStream`, typed plans), with the static SVM backend; depends on truffledata-tape; includes Linux x86-64 native attachments |
+| `dev.elide:truffledata-json:<version>` | Native simdjson JSON entry points (`JsonSession`, `JsonMessage`, `JsonStream`, typed plans), with the static SVM backend; depends on truffledata-tape; includes [prebuilt natives](#prebuilt-natives) |
 | `dev.elide:truffledata-json-bindings:<version>` | Generated Myna JSON bindings |
 | `dev.elide:truffledata-json-jvm:<version>` | JVM FFM backend (`JsonJvm`); depends on truffledata-json and truffledata-tape-jvm. Keep it out of native-image classpaths |
 | `dev.elide:truffledata-csv:<version>` | Strict streaming CSV batches, typed plans and export; pure Java for JVM and SVM, no native attachments; depends on core |
 | `dev.elide:truffledata-csv-bindings:<version>` | Generated Myna bindings of the native CSV structural-index kernel (static SVM and JVM FFM) |
-| `dev.elide:truffledata-csv-native:<version>` | Optional native CSV kernel: the static SVM backend; includes Linux x86-64 native attachments; depends on truffledata-csv and its bindings |
+| `dev.elide:truffledata-csv-native:<version>` | Optional native CSV kernel: the static SVM backend; includes [prebuilt natives](#prebuilt-natives); depends on truffledata-csv and its bindings |
 | `dev.elide:truffledata-csv-jvm:<version>` | JVM FFM backend of the native CSV kernel; depends on truffledata-csv and its bindings. Keep it out of native-image classpaths |
 | `dev.elide:truffledata-bom:<version>` | POM-only dependency management for the tested libraries, drivers and runtime |
 | `dev.elide:truffledata-protobuf-runtime:<version>` | Stock-free plans, codecs, runtime descriptor compilation and generated-record support; core, Gson and Truffle dependencies |
 | `dev.elide:truffledata-protobuf:<version>` | Optional Message/descriptor compatibility bridge and build-time contract generator; depends on protobuf-runtime, protobuf-java and protobuf-java-util |
 
-All artifacts require Java 25 and currently target Elide GraalVM `25.5.5-elide.24`. They do not bundle GraalVM, guest languages, JDBC drivers, annotation processors, or test libraries. Select the runtime and guest languages in the embedding application. The driver integration artifacts declare their upstream drivers transitively; generic JDBC remains driver independent. JSpecify annotations and the Truffle API are compile dependencies. Release dependencies are checked against `maven_install.json` by `//tools/release:test`.
+All artifacts require Java 25 and currently target Elide GraalVM `25.5.5-elide.27`. They do not bundle GraalVM, guest languages, JDBC drivers, annotation processors, or test libraries. Select the runtime and guest languages in the embedding application. The driver integration artifacts declare their upstream drivers transitively; generic JDBC remains driver independent. JSpecify annotations and the Truffle API are compile dependencies. Release dependencies are checked against `maven_install.json` by `//tools/release:test`.
 
 ## Stage and inspect
 
 ```sh
 # Build publication outputs only, with the normal remote execution/cache configuration:
-bazel build //tools/release:publications --//tools/release:version=0.8.0
+bazel build //tools/release:publications --//tools/release:version=0.9.0
 
 # Run all checks and stage jars, POMs, metadata and checksums without network writes:
-tools/release/publish.sh 0.8.0
+tools/release/publish.sh 0.9.0
 ```
 
-The staging command prints a unique directory under `build/release-repo.*`. Each library artifact includes its binary jar (including generated Truffle implementations), source jar, POM, and MD5/SHA-1/SHA-256/SHA-512 checksums. Source jars come from the library's JavaInfo, rather than an independently maintained source list. The default Bazel version is `0.8.0-SNAPSHOT` for checks; the release script requires an explicit immutable version and refuses snapshots.
+The staging command builds the prebuilt natives of all three platforms (Linux amd64 and arm64 on BuildBuddy RBE, macOS locally, so run it on an Apple silicon Mac; see [Prebuilt natives](#prebuilt-natives)), gates them with `tools/release/check_natives.py`, and prints a unique directory under `build/release-repo.*`; the collected per-platform build outputs and member manifests stay beside it in `build/release-repo.*.natives`. Each library artifact includes its binary jar (including generated Truffle implementations), source jar, POM, and MD5/SHA-1/SHA-256/SHA-512 checksums. Source jars come from the library's JavaInfo, rather than an independently maintained source list. The default Bazel version is `0.9.0-SNAPSHOT` for checks; the release script requires an explicit immutable version and refuses snapshots.
 
 ## Upload
 
-The publisher follows Komodo's deployment: `rclone` remote `elide:`, bucket `elide-maven`, public URL `https://maven.elide.dev`. Provision rclone credentials outside the repository. If your configured remote has a different name, set `MAVEN_BUCKET`, for example `MAVEN_BUCKET=r2:elide-maven tools/release/publish.sh 0.7.1 --publish`. The publishing host needs Bash, Python 3, curl, rclone and Bazelisk; compilation and tests retain the normal hermetic Bazel toolchains and RBE settings. The small repository-layout check runs with Python 3 from the pinned remote executor image.
+The publisher follows Komodo's deployment: `rclone` remote `elide:`, bucket `elide-maven`, public URL `https://maven.elide.dev`. Provision rclone credentials outside the repository. If your configured remote has a different name, set `MAVEN_BUCKET`, for example `MAVEN_BUCKET=r2:elide-maven tools/release/publish.sh 0.9.0 --publish`. The publishing host needs Bash, Python 3, curl, rclone and Bazelisk; compilation and tests retain the normal hermetic Bazel toolchains and RBE settings. The small repository-layout check runs with Python 3 from the pinned remote executor image.
 
 ```sh
 # Run from a clean, committed checkout. This command writes to the public repository.
-tools/release/publish.sh 0.7.1 --publish
+tools/release/publish.sh 0.9.0 --publish
 ```
 
-The command runs the full test suite, the explicit native JIT smoke target, and both expected-failure native safety controls before staging artifacts. Native checks use the normal Linux RBE platform. It then merges existing metadata, uploads immutable payloads, verifies bucket contents and public payload bytes, and uploads metadata and checksums. Missing credentials, failed listings and malformed existing metadata fail the release; they are never interpreted as an empty repository. It neither tags nor pushes Git history. CI already exercises publication validation through `bazel test //...`; uploading is an explicit release operation, not a pull-request action.
+The command runs the full test suite, the explicit native JIT smoke target, and both expected-failure native safety controls before staging artifacts. Native checks use the normal Linux RBE platform; the per-platform native gates and the native release check are described under [Prebuilt natives](#prebuilt-natives). It then merges existing metadata, uploads immutable payloads, verifies bucket contents and public payload bytes, and uploads metadata and checksums. Missing credentials, failed listings and malformed existing metadata fail the release; they are never interpreted as an empty repository. It neither tags nor pushes Git history. CI already exercises publication validation through `bazel test //...`; uploading is an explicit release operation, not a pull-request action.
 
 **Serialize publishers**, including publishers on other machines. Rclone/R2 has no atomic multi-artifact transaction or cross-machine release lock. A failed upload can leave a partial version; the publisher refuses to overwrite or automatically resume that version. Inspect and repair the incomplete release before publishing again. Metadata's `latest` and `release` identify the most recently published version, so publish releases in intended discovery order. Explicit versions work independently of these fields. No signing key or Maven Central publishing is configured.
 
 ## Consume
 
-For version `0.8.0`, Gradle consumers can use:
+For version `0.9.0`, Gradle consumers can use:
 
 ```kotlin
 repositories {
     mavenCentral()
     maven("https://maven.elide.dev")
-    maven("https://maven.elide.dev/gvm-elide/25.5.5-elide.24")
+    maven("https://maven.elide.dev/gvm-elide/25.5.5-elide.27")
 }
 dependencies {
-    implementation(platform("dev.elide:truffledata-bom:0.8.0"))
+    implementation(platform("dev.elide:truffledata-bom:0.9.0"))
     implementation("dev.elide:truffledata-jdbc-sqlite")
     implementation("dev.elide:truffledata-protobuf")
     // Select truffledata-jdbc-mysql or truffledata-jdbc-postgresql as needed.
@@ -93,19 +93,21 @@ The reusable driver CI job runs it alongside real database acceptance. Pass
 
 Since version `0.2.0`, the distribution includes `dev.elide:truffledata-protobuf-buffa` and its transitive
 `truffledata-protobuf-buffa-bindings` artifact to the BOM. Java-only fallback works without
-loading a native library. Native prebuilt attachments target **Linux x86-64**; other native
-platforms must build their matching bindings and libraries from the Bazel source targets.
+loading a native library. Prebuilt attachments ship for Linux x86-64, Linux AArch64 and macOS
+AArch64 ([Prebuilt natives](#prebuilt-natives)); other platforms must build their matching
+libraries from the Bazel source targets.
 
 The Buffa artifact publishes these additional files, each with the normal checksums:
 
 | Classifier | Extension | Use |
 |---|---|---|
-| `linux-x86_64` | `so` | Explicit JVM FFM loading through `BuffaWire.open` |
-| `linux-x86_64` | `a` | Static linking into an SVM executable |
+| `<platform>` | `so` / `dylib` | Explicit JVM FFM loading through `BuffaWire.open` |
+| `<platform>` | `a` | Static linking into an SVM executable |
+| `macos-aarch64-bitcode` | `a` | ThinLTO links on macOS (ld64.lld, LLVM 23 or newer) |
 | `native` | `h` | Generated C ABI declarations |
 
 Resolve an attachment with Maven's dependency plugin using
-`dev.elide:truffledata-protobuf-buffa:0.8.0:a:linux-x86_64` (or `so`), or use the
+`dev.elide:truffledata-protobuf-buffa:0.9.0:a:linux-x86_64` (or `so`, or another platform), or use the
 matching classifier/type in your build. For a standalone native-image build, stage the
 archive as `libtruffledata_buffa.a`, add its directory to `-H:CLibraryPath`, and enable
 `--features=dev.elide.truffledata.buffa.BuffaFeature`. Keep the release's Java jars and
@@ -142,8 +144,9 @@ managed by the BOM:
 
 | Classifier | Extension | Use |
 |---|---|---|
-| `linux-x86_64` | `so` | Explicit JVM FFM loading through `JsonJvm.open(Path)` |
-| `linux-x86_64` | `a` | Static linking into an SVM executable (decoder, simdjson, simdutf, C ABI and Myna's `myna-values` Rust static library, whose `myna_utf8_to_utf16_v2` the SVM tape calls for long strings, in one archive) |
+| `<platform>` | `so` / `dylib` | Explicit JVM FFM loading through `JsonJvm.open(Path)` |
+| `macos-aarch64-bitcode` | `a` | ThinLTO links on macOS (ld64.lld, LLVM 23 or newer) |
+| `<platform>` | `a` | Static linking into an SVM executable (decoder, simdjson, simdutf, C ABI and Myna's `myna-values` Rust static library, whose `myna_utf8_to_utf16_v2` the SVM tape calls for long strings, in one archive) |
 
 For a standalone native-image build, stage the archive as `libtruffledata_json.a`, add
 its directory to `-H:CLibraryPath`, and link libc++ (`-lc++ -lc++abi`). No native-image
@@ -179,8 +182,9 @@ managed by the BOM, mirroring the JSON split:
 
 | Classifier | Extension | Use |
 |---|---|---|
-| `linux-x86_64` | `so` | JVM FFM loading through `CsvIndexing.loadNative(Path)` |
-| `linux-x86_64` | `a` | Static linking into an SVM executable (kernels, C ABI and simdutf in one archive) |
+| `<platform>` | `so` / `dylib` | JVM FFM loading through `CsvIndexing.loadNative(Path)` |
+| `macos-aarch64-bitcode` | `a` | ThinLTO links on macOS (ld64.lld, LLVM 23 or newer) |
+| `<platform>` | `a` | Static linking into an SVM executable (kernels, C ABI and simdutf in one archive) |
 
 Opting in is explicit; nothing is extracted, loaded or installed automatically:
 
@@ -210,3 +214,67 @@ compare generic, typed and streamed parses and malformed-input diagnostics with 
 built-in kernel's. Release publishing and native CI require both static checks.
 
 The publisher includes all eighteen Java libraries and the BOM, plus Buffa, JSON and CSV native attachments.
+
+## Prebuilt natives
+
+`truffledata-protobuf-buffa`, `truffledata-json` and `truffledata-csv-native` ship their native
+library prebuilt for three platforms, each as a self-contained static archive and a shared
+library (`<platform>` in the tables above):
+
+| Platform | Static archive | LTO input | Shared library | Built on |
+|---|---|---|---|---|
+| `linux-x86_64` | `-linux-x86_64.a` (fat objects) | the same archive | `-linux-x86_64.so` | BuildBuddy RBE, `--config=remote` |
+| `linux-aarch64` | `-linux-aarch64.a` (fat objects) | the same archive | `-linux-aarch64.so` | BuildBuddy arm64 RBE, `--config=remote_arm64` |
+| `macos-aarch64` | `-macos-aarch64.a` (machine code) | `-macos-aarch64-bitcode.a` | `-macos-aarch64.dylib` | an Apple silicon Mac, `--config=local` |
+
+**Linux archives hold fat objects.** Every member carries machine code and, in an
+`SHF_EXCLUDE` `.llvm.lto` section, the same code as LLVM 23 ThinLTO bitcode (clang's
+`-flto=thin -ffat-lto-objects`, Rust included). Link it like any static archive and the
+linker uses the machine code; link with clang/ld.lld and `-flto=thin` and lld reads the
+bitcode, so our code inlines into yours across the C/C++ and Rust boundary. Other linkers
+(GNU ld, gold, Native Image) see ordinary objects. The only members without bitcode are
+Rust's `compiler_builtins` and the compiler-rt objects it bundles, which rustc never LTOs.
+
+**macOS ships two archives.** Mach-O has no fat object format (LLVM embeds LTO bitcode
+only in ELF and COFF objects, and neither ld64 nor ld64.lld reads `__LLVM,__bitcode` for
+LTO), so `-macos-aarch64.a` is machine code for any linker, including Apple's, and
+`-macos-aarch64-bitcode.a` holds the same members as ThinLTO bitcode. LTO on macOS
+therefore needs **lld**: link the bitcode archive with clang `-flto=thin -fuse-ld=lld`
+(ld64.lld) from LLVM 23 or newer. Apple's linker and Apple clang reject LLVM 23 bitcode
+(summary version 14). The `compiler_builtins` members are machine code in both archives.
+LLVM inlines our functions into yours only when their CPU tuning is no wider than your
+code's: the bitcode is tuned as clang 23 tunes by default (`apple-m5` on macOS, generic on
+Linux), so build with that LLVM's default or a matching `-mtune`.
+
+Shared libraries need only the platform's C runtime: on Linux libc, libm, libpthread,
+libdl, librt, the dynamic loader and libgcc_s (libc++ is linked in); on macOS libSystem and
+the OS's libc++ (`/usr/lib/libc++.1.dylib`).
+Each `.dylib` has the install name `@rpath/libtruffledata_<name>.dylib`: stage it under
+that name in a directory on your executable's `LC_RPATH`, or load it by path (as the JVM
+backends do). Each static archive needs libc++ (`-lc++ -lc++abi` on Linux, `-lc++` on
+macOS) from the consumer's link, plus `-ldl -lpthread -lm` on Linux.
+
+**Release gate.** `tools/release/publish.sh` builds `//tools/release:natives` once per
+platform (`--config=remote`, `--config=remote_arm64`, `--config=local`), copies each
+result out, and stages all of them with the publications (`maven_repo.py --natives`);
+outside an Apple silicon Mac, set `MACOS_NATIVES` to a macOS natives build output. Then
+`tools/release/check_natives.py`, with the toolchain's `llvm-readobj`, `llvm-objdump`,
+`llvm-nm`, `llvm-ar` and `llvm-bcanalyzer`, checks every attachment of the staged
+repository against the member manifests that `release_archive` writes, and fails the
+release if an attachment is missing, a Linux archive member is not fat (machine code and a
+ThinLTO-summarized `.llvm.lto`, except the exemptions above), a macOS machine-code member
+lacks machine code or still carries bitcode, a macOS bitcode member is not ThinLTO
+bitcode, a shared library needs a library or binds an undefined symbol outside the
+platform allowlist above (Rust std's weak probes for newer glibc functions excepted), or a dylib's install name is not `@rpath/...`, or any platform's library lacks the ABI fingerprint
+that the published bindings jar verifies. Myna 0.13.0 hashes the resolved ABI class
+(LP64, little-endian on these platforms), so every target shares the fingerprint.
+Each bindings generation first runs Myna multi-target validation across the release
+triples, rejecting layout divergence before building native libraries.
+
+**Consumers per platform.** `//tools/release:native_consumers` links each release static
+archive into a C program with LTO off and with ThinLTO (on macOS, the bitcode archive with
+ld64.lld), checks from the disassembly that ThinLTO inlined the archive's ABI fingerprint
+function into `main` and that the plain link calls the archive's machine code, runs both,
+and loads the shared library with `dlopen`. `publish.sh` runs them, with the JVM consumers
+of the shared libraries (`buffa_consumer`, `json_consumer`, `csv_kernel_consumer`), on
+linux-aarch64 RBE and locally on macOS; linux-x86_64 runs them in `bazel test //...`.

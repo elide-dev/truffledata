@@ -197,25 +197,32 @@ sh_test(
     ],
 )
 
-sh_test(
-    name = "measure",
-    size = "large",
-    timeout = "long",
-    srcs = ["measure.sh"],
-    args = ["$(rootpath :svm)"],
-    data = [
-        ":svm",
-        "//tools/bench:compare.py",
-    ],
-    tags = [
-        "benchmark",
-        "manual",
-    ],
-    target_compatible_with = [
-        "@platforms//os:linux",
-        "@platforms//cpu:x86_64",
-    ],
-)
+[
+    sh_test(
+        name = name,
+        size = "large",
+        timeout = "long",
+        srcs = ["measure.sh"],
+        args = ["$(rootpath :svm)"] + extra,
+        data = [
+            ":svm",
+            "//tools/bench:compare.py",
+        ],
+        tags = [
+            "benchmark",
+            "manual",
+        ],
+        target_compatible_with = [
+            "@platforms//os:linux",
+            "@platforms//cpu:x86_64",
+        ],
+    )
+    # measure_views selects opt-in native views (BuffaPlan.decodeView) for the mixed buffa cells.
+    for name, extra in [
+        ("measure", []),
+        ("measure_views", ["--views"]),
+    ]
+]
 
 sh_test(
     name = "profile",
@@ -275,11 +282,19 @@ data_java_library(
     srcs = [
         "ComparisonLanguage.java",
         "JsonComparison.java",
+        "JsonCompetitors.java",
     ],
     deps = [
         ":json_fixture",
         "//core",
         "//json",
+        # Benchmark-only JSON competitors (the JSON scoreboard; MODULE.bazel).
+        "@maven//:com_alibaba_fastjson2_fastjson2",
+        "@maven//:com_dslplatform_dsl_json",
+        "@maven//:com_fasterxml_jackson_core_jackson_core",
+        "@maven//:com_fasterxml_jackson_core_jackson_databind",
+        "@maven//:com_jsoniter_jsoniter",
+        "@maven//:org_simdjson_simdjson_java",
         "@maven//:com_google_code_gson_gson",
         "@maven//:org_graalvm_polyglot_polyglot",
         "@maven//:org_graalvm_truffle_truffle_api",
@@ -287,34 +302,49 @@ data_java_library(
     ],
 )
 
-native_image(
-    # Keep JsonComparison build-time initialized: its static helpers must be JIT eligible.
-    name = "json_svm",
-    testonly = True,
-    cc_deps = ["//json/native:svm"],
-    exec_properties = {
-        "EstimatedCPU": "8",
-        "EstimatedMemory": "24GB",
-    },
-    executable_name = "json-comparison",
-    extra_args = [
-        "--gc=serial",
-        "--parallelism=8",
-        "-march=compatibility",
-        "--initialize-at-build-time=dev.elide.truffledata",
-        "--add-exports=org.graalvm.truffle.runtime/com.oracle.truffle.runtime=ALL-UNNAMED",
-        "-H:+UnlockExperimentalVMOptions",
-    ] + TRUFFLE_JIT_CHECKS + ["-H:-UnlockExperimentalVMOptions"],
-    graalvm_sdk = "@graalvm_linux_amd64//:gvm",
-    main_class = "dev.elide.truffledata.comparison.JsonComparison",
-    optimization_mode = "2",
-    tags = ["manual"],
-    target_compatible_with = [
-        "@platforms//os:linux",
-        "@platforms//cpu:x86_64",
-    ],
-    deps = [":json_comparison"],
-)
+# The repository's portable image (-march=compatibility), and an x86-64-v3 variant for the JSON
+# scoreboard (simdjson-java needs 256-bit vector species; every engine shares that image's flags).
+[
+    native_image(
+        # Keep JsonComparison build-time initialized: its static helpers must be JIT eligible.
+        name = name,
+        testonly = True,
+        cc_deps = ["//json/native:svm"],
+        exec_properties = {
+            "EstimatedCPU": "8",
+            "EstimatedMemory": "24GB",
+        },
+        executable_name = executable,
+        extra_args = [
+            "--gc=serial",
+            "--parallelism=8",
+            march,
+            # simdjson-java (a JSON competitor) uses the Vector API; competitor singletons and the
+            # vector species are chosen at run time on the measuring CPU.
+            "--add-modules=jdk.incubator.vector",
+            "--initialize-at-build-time=dev.elide.truffledata",
+            "--initialize-at-run-time=dev.elide.truffledata.comparison.JsonCompetitors",
+            # fastjson2's own native-image.properties initializes its core classes at build time,
+            # which puts instances of its other classes in the image heap: initialize all of it.
+            "--initialize-at-build-time=com.alibaba.fastjson2",
+            "--add-exports=org.graalvm.truffle.runtime/com.oracle.truffle.runtime=ALL-UNNAMED",
+            "-H:+UnlockExperimentalVMOptions",
+        ] + TRUFFLE_JIT_CHECKS + ["-H:-UnlockExperimentalVMOptions"],
+        graalvm_sdk = "@graalvm_linux_amd64//:gvm",
+        main_class = "dev.elide.truffledata.comparison.JsonComparison",
+        optimization_mode = "2",
+        tags = ["manual"],
+        target_compatible_with = [
+            "@platforms//os:linux",
+            "@platforms//cpu:x86_64",
+        ],
+        deps = [":json_comparison"],
+    )
+    for name, executable, march in [
+        ("json_svm", "json-comparison", "-march=compatibility"),
+        ("json_svm_v3", "json-comparison-v3", "-march=x86-64-v3"),
+    ]
+]
 
 sh_test(
     name = "json_native_smoke",
@@ -373,7 +403,12 @@ native_image(
         "--enable-monitoring=jfr",
         "--parallelism=8",
         "-march=compatibility",
+        "--add-modules=jdk.incubator.vector",
         "--initialize-at-build-time=dev.elide.truffledata",
+        "--initialize-at-run-time=dev.elide.truffledata.comparison.JsonCompetitors",
+        # fastjson2's own native-image.properties initializes its core classes at build time, which
+        # puts instances of its other classes in the image heap: initialize the whole library then.
+        "--initialize-at-build-time=com.alibaba.fastjson2",
         "--add-exports=org.graalvm.truffle.runtime/com.oracle.truffle.runtime=ALL-UNNAMED",
         "-H:+UnlockExperimentalVMOptions",
         "-H:-DeleteLocalSymbols",
@@ -493,6 +528,64 @@ sh_test(
     ],
 )
 
+java_binary(
+    name = "consumer_jvm",
+    testonly = True,
+    data = ["//protobuf-buffa/native:shared"],
+    jvm_flags = ["--enable-native-access=ALL-UNNAMED"],
+    main_class = "dev.elide.truffledata.comparison.ConsumerComparison",
+    runtime_deps = [":consumer"],
+)
+
+# Before/after baselines: override with an executable from an earlier revision; by default each
+# measurement runs only the current build. Labels are never committed for local baselines.
+label_flag(
+    name = "consumer_svm_baseline",
+    build_setting_default = ":consumer_svm",
+)
+
+label_flag(
+    name = "consumer_jvm_baseline",
+    build_setting_default = ":consumer_jvm",
+)
+
+# Remote-worker measurements (benchmarks/comparison/CONSUMER.md). Every shard measures whole
+# (mode, stage) groups for all engines and binaries on one worker; timings remain advisory.
+[
+    sh_test(
+        name = name,
+        size = "enormous",
+        srcs = ["consumer_measure.sh"],
+        args = [
+            runtime,
+            "$(rootpath %s)" % candidate,
+            "$(rootpath %s)" % baseline,
+        ],
+        data = [
+            baseline,
+            candidate,
+            "//tools/bench:consumer.py",
+        ],
+        exec_properties = {
+            "EstimatedCPU": "4",
+            "EstimatedMemory": "16GB",
+        },
+        shard_count = 10,
+        tags = [
+            "benchmark",
+            "manual",
+        ],
+        target_compatible_with = [
+            "@platforms//os:linux",
+            "@platforms//cpu:x86_64",
+        ],
+    )
+    for name, runtime, candidate, baseline in [
+        ("consumer_measure", "svm", ":consumer_svm", ":consumer_svm_baseline"),
+        ("consumer_measure_jvm", "jvm", ":consumer_jvm", ":consumer_jvm_baseline"),
+    ]
+]
+
 # ---- CSV comparison (benchmarks/comparison/CSV.md). Competitors are benchmark-only dependencies.
 
 # Benchmark-only access to package-private CSV internals (the strict scanner, UTF-8 validator and
@@ -604,7 +697,14 @@ java_binary(
     name = "csv_jvm",
     testonly = True,
     data = ["//csv/native:csv_shared.so"],
-    jvm_flags = CSV_JVM_FLAGS + ["-Xmx8g"],
+    # A fixed, pre-touched heap: on the RBE guests a first-touch page fault intermittently costs
+    # about 40 us instead of about 1 us, so heap growth inside a timed sample made allocating
+    # cells bimodal (benchmarks/results/csv-720f0c7/README.md; CSV ledger).
+    jvm_flags = CSV_JVM_FLAGS + [
+        "-Xms8g",
+        "-Xmx8g",
+        "-XX:+AlwaysPreTouch",
+    ],
     main_class = "dev.elide.truffledata.comparison.CsvComparisonJvm",
     runtime_deps = [":csv_comparison_jvm"],
 )

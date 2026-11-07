@@ -1,0 +1,37 @@
+simdjson 5.1.1 active implementation: icelake; simdutf active implementation: icelake
+small       210 B | D0 simdjson DOM parse (ceiling)                           99 ns      2122 MB/s   2.12 GB/s
+small       210 B | D1 simdjson On-Demand full walk                          147 ns      1428 MB/s   1.43 GB/s
+small       210 B | V3 tape decoder, ABI v3 (no directories)                 327 ns       643 MB/s   0.64 GB/s
+small       210 B | V4 tape decoder, ABI v4 (directory per object)           340 ns       617 MB/s   0.62 GB/s
+small       210 B | B4 Myna value_builder, reserve + enable_v4               598 ns       351 MB/s   0.35 GB/s
+small       210 B | S4 td_json_session_decode + reset (C ABI, v4)            353 ns       595 MB/s   0.59 GB/s
+small       210 B | T0 text arena (text_arena.h)                             293 ns       716 MB/s   0.72 GB/s
+small       210 B | T1 Myna myna_tape_text_v1 batch export                   251 ns       836 MB/s   0.84 GB/s
+small       210 B | nodes=31 directory_entries=12 text_arena_bytes=136 myna_batch_bytes=135
+medium     4330 B | D0 simdjson DOM parse (ceiling)                         1759 ns      2462 MB/s   2.46 GB/s
+medium     4330 B | D1 simdjson On-Demand full walk                         2868 ns      1510 MB/s   1.51 GB/s
+medium     4330 B | V3 tape decoder, ABI v3 (no directories)                6508 ns       665 MB/s   0.67 GB/s
+medium     4330 B | V4 tape decoder, ABI v4 (directory per object)          6778 ns       639 MB/s   0.64 GB/s
+medium     4330 B | B4 Myna value_builder, reserve + enable_v4             12094 ns       358 MB/s   0.36 GB/s
+medium     4330 B | S4 td_json_session_decode + reset (C ABI, v4)           6795 ns       637 MB/s   0.64 GB/s
+medium     4330 B | T0 text arena (text_arena.h)                            3564 ns      1215 MB/s   1.21 GB/s
+medium     4330 B | T1 Myna myna_tape_text_v1 batch export                  5719 ns       757 MB/s   0.76 GB/s
+medium     4330 B | nodes=621 directory_entries=240 text_arena_bytes=2560 myna_batch_bytes=2555
+big      228485 B | D0 simdjson DOM parse (ceiling)                        94787 ns      2411 MB/s   2.41 GB/s
+big      228485 B | D1 simdjson On-Demand full walk                       150486 ns      1518 MB/s   1.52 GB/s
+big      228485 B | V3 tape decoder, ABI v3 (no directories)              323773 ns       706 MB/s   0.71 GB/s
+big      228485 B | V4 tape decoder, ABI v4 (directory per object)        338597 ns       675 MB/s   0.67 GB/s
+big      228485 B | B4 Myna value_builder, reserve + enable_v4            600316 ns       381 MB/s   0.38 GB/s
+big      228485 B | S4 td_json_session_decode + reset (C ABI, v4)         346894 ns       659 MB/s   0.66 GB/s
+big      228485 B | T0 text arena (text_arena.h)                          179327 ns      1274 MB/s   1.27 GB/s
+big      228485 B | T1 Myna myna_tape_text_v1 batch export                288980 ns       791 MB/s   0.79 GB/s
+big      228485 B | nodes=31001 directory_entries=12000 text_arena_bytes=131680 myna_batch_bytes=131225
+huge    4850894 B | D0 simdjson DOM parse (ceiling)                      1984765 ns      2444 MB/s   2.44 GB/s
+huge    4850894 B | D1 simdjson On-Demand full walk                      3099206 ns      1565 MB/s   1.57 GB/s
+huge    4850894 B | V3 tape decoder, ABI v3 (no directories)             6825197 ns       711 MB/s   0.71 GB/s
+huge    4850894 B | V4 tape decoder, ABI v4 (directory per object)       7049269 ns       688 MB/s   0.69 GB/s
+huge    4850894 B | B4 Myna value_builder, reserve + enable_v4          12041023 ns       403 MB/s   0.40 GB/s
+huge    4850894 B | S4 td_json_session_decode + reset (C ABI, v4)        7185747 ns       675 MB/s   0.68 GB/s
+huge    4850894 B | T0 text arena (text_arena.h)                         4006679 ns      1211 MB/s   1.21 GB/s
+huge    4850894 B | T1 Myna myna_tape_text_v1 batch export               6215586 ns       780 MB/s   0.78 GB/s
+huge    4850894 B | nodes=620001 directory_entries=240000 text_arena_bytes=2707680 myna_batch_bytes=2702225

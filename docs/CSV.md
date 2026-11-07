@@ -22,7 +22,7 @@ The delivery plan is
 The module publishes (from 0.8.0) as `dev.elide:truffledata-csv`:
 one pure-Java jar for the JVM and Native Image, with no native attachments. The optional
 native structural-index kernel publishes as `truffledata-csv-native` (static images, with
-the Linux x86-64 `.a` and `.so` attachments), `truffledata-csv-jvm` (FFM) and
+the `.a` and `.so`/`.dylib` attachments for Linux x86-64, Linux AArch64 and macOS AArch64), `truffledata-csv-jvm` (FFM) and
 `truffledata-csv-bindings`, and is opted into with `CsvIndexing.loadNative`; see
 [publishing](PUBLISHING.md#csv-distribution) and [Structural index](#structural-index).
 
@@ -562,8 +562,10 @@ same records, spans, return offsets and stops as the per-byte scanners.
   place (a grammar or constraint failure, a complex Commons span in a typed field, a width other
   than the binding's, UTF-8 outside the prevalidated range, `maxBatchRows`) goes through the
   per-record builder with the same spans, which reports the exact diagnostic or accepts it.
-  `IndexScan.frame` is a host-inlining root (`@BytecodeInterpreterSwitch`), so native images
-  inline the conversions into the loop.
+  The fused loop (`IndexScan.frameFused`) is a host-inlining root (`@BytecodeInterpreterSwitch`),
+  so native images inline the conversions into it; every other consumer (`CsvScanner` callers,
+  readers, non-fusable batches) frames through a separate plain loop (`framePlain`) that carries
+  no conversion code.
 - **Reads.** Typed `CsvRow` getters read a dense column with one length test (nullable,
   optional, mapped and wrong-kind reads take a checked path); `getString` builds ASCII cells of
   up to 16 bytes as Latin-1 without the charset decoder, and unescapes strict doubled quotes into
@@ -619,23 +621,30 @@ The gates below are enforced; they bound shape and allocation, not throughput:
 dataformat-csv 2.22.4, univocity-parsers 2.9.1 and Commons CSV 1.14.1. It runs on SVM (portable
 and x86-64-v3 images) and on the JVM, over four synthetic fixtures at 1 MiB and 128 MiB, with Rust
 `csv` and `csv-core` and a C++ consumer of the native index measured on the same worker. The
-latest run is `benchmarks/results/csv-720f0c7/` (fused batches, lean `String` cells, the native
-kernel installed through `CsvIndexing.loadNative`); `delta.md` there compares it with
-`csv-b5bd173` as same-shard ratios. Shared-host timings are advisory; only figures from one shard
-compare. Shipped native paths, as ratios within their shard (before: `csv-b5bd173`):
+latest run is `benchmarks/results/csv-3f23d0c/` (after the unescape fix and the scan-loop split,
+with a pre-touched JVM heap and three forks per cell); `standing.md` there lists every competitor
+and reference per workload and runtime, and `delta.md` compares it with `csv-720f0c7` as
+same-shard ratios. Shared-host timings are advisory; only figures from one shard compare. Where
+the shipped native paths stand, as ratios within their shard:
 
-- **Typed** (`CsvPlan`): 0.43–0.78× the reference kernel consumer (before 0.38–0.64); 1.2–3.2× the
-  best Java competitor in all 12 rows; 1.07–1.8× Rust `csv` on `mixed`, 0.58–0.74× on SVM
-  `numeric`.
-- **Strings** (`Csv.parse` + `getString`): ahead of the best Java competitor in 13 of 24 rows
-  (before 11); FastCSV still leads on SVM short-field `numeric` and some `mixed` rows. The JVM
-  `quoted` cells of this run predate the unescape fix (`bf044ec`; a probe after it measured 0.87×
-  the kernel path at 128 MiB), and JVM `quoted` 1 MiB shows a pre-existing bimodal slowdown on
-  every index-path engine whose cause is open (results README).
-- **Scan** (`CsvScanner`): 1.7–19× the best Java competitor in every row and ahead of Rust
-  `csv-core` in 21 of 24; but on SVM its ratio to the reference kernel consumer fell (for example
-  0.88× to 0.69× on compat `numeric` 1 MiB) now that `IndexScan.frame` also carries the fused batch
-  path. JVM scan ratios are unchanged or better.
+- **Scan** (`CsvScanner`): first among the Java parsers in all 24 rows (2.3–19× the best of
+  FastCSV and Jackson; univocity and Commons CSV have no scan-only mode) and ahead of Rust
+  `csv-core` in all 24 (1.3–9.9×, leaving out one outlier probe). Against the C++ consumer of the
+  same index it reaches 0.57–0.85× on SVM and 0.95–1.11× on the JVM (ahead in 5 of 8 JVM rows);
+  against the in-harness reference consumer 0.87–0.98× on SVM (was 0.62–0.94× before the loop
+  split) and 0.95–1.34× on the JVM.
+- **Typed** (`CsvPlan`): first among the Java parsers in all 12 rows (2.3–3.1× FastCSV, the best
+  of them). Against Rust `csv` (typed serde records): ahead on `mixed` everywhere (1.18–2.08×) and
+  on JVM `numeric` (1.18–1.33×), behind on SVM `numeric` (0.61–0.73×). 0.57–0.86× the reference
+  kernel consumer.
+- **Strings** (`Csv.parse` + `getString`): on the JVM first among the Java parsers in all 8 rows
+  (1.24–3.2× the best) and ahead of Rust's reused `StringRecord` in 6 of 8. On SVM ahead of the
+  best Java parser in 6 of 16 rows: ahead on `quoted` (1.35–1.61×, except compat 128 MiB, a
+  fault-bound cell) and about even on `escaped` (0.96–1.05×; `7ba51d1`, after the run, probes at
+  1.25× Jackson on compat 1 MiB), behind FastCSV on the short-field
+  `mixed` (0.74–0.95×) and `numeric` (0.58–0.96×) fixtures; behind Rust `StringRecord` in 13 of
+  16 SVM rows (0.24–0.67× on the short-field fixtures): Rust reuses one record buffer, while this
+  API returns one `String` per cell over a retained batch (CSV ledger).
 
 ## Deferred
 
@@ -648,8 +657,10 @@ compare. Shipped native paths, as ratios within their shard (before: `csv-b5bd17
 - Primitive and text columns in core `Batch`, so CSV and JDBC share column storage.
 - A tree-shaped sink and a backend-neutral UTF-8 text view shared with JSON and YAML.
 - CodSpeed simulation cases.
-- The SVM scan-only regression against the kernel consumer since the fused path, and the bimodal
-  JVM `quoted` 1 MiB index-path cells (both in `benchmarks/results/csv-720f0c7/README.md`).
+- SVM strings behind FastCSV on short fields and SVM `numeric` typed behind Rust `csv`
+  (`benchmarks/results/csv-3f23d0c/README.md`).
+- SVM 128 MiB allocating cells are page-fault bound on the shared hosts (each large array is
+  mapped fresh per parse); a quiet-host confirmation of every figure.
 
 ## Verification
 

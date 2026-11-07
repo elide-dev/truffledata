@@ -177,3 +177,73 @@ When work resumes, first establish the current acceptance matrix, complete memor
 Choose the result by workload-level evidence, including full consumption and lifetime cost. Preserve contracts, strict validation, bounds, thread checks, and supported JIT gates. If the experiment does not improve the intended workload class, reject it and retain the measured implementation. This gives the next cycle a concrete architectural decision and an explicit stop condition instead of another open-ended sequence of local tuning.
 
 The independent review found no basis to allege fabricated measurements or an unsafe native lifetime implementation. Its strongest criticism is the gap between demonstrated specialized improvements and the universal-access proposition, together with unmeasured costs at ownership and guest-language boundaries. The deliberately supported live nested-object semantics were reviewed and are classified here as an API design risk, not an unintended immutability bug.
+
+## 2026-11-06 update: protobuf against stock after ABI 9
+
+**Source:** `a58a36d` on `86a691a` (TruffleData 0.8.0 release merge). This section adds to the
+2026-11-05 assessment above; it does not revise it. Evidence:
+[cycle README](benchmarks/results/protobuf-f26678a/README.md),
+[ABI 9 pair](benchmarks/results/protobuf-83e8ebc/README.md),
+[directed-decode pair](benchmarks/results/protobuf-a58a36d/README.md).
+
+**Measurement.** The shared consumer now covers stock, generated-owned, opt-in native views,
+and the default eager decode. It adds decode-only cells and a ~52 KB large-message throughput
+cohort, and runs on both SVM and JVM. Runs used BuildBuddy remote workers (Firecracker VMs,
+AMD EPYC). Before/after binaries shared every worker, and raw samples are retained. These are
+shared-host timings and remain advisory. Identical code repeated within 20–40% on large and
+some peak cells.
+
+**Fixes, in measured-gap order.**
+
+1. *Full ingestion: schema-compiled native views with native field directories (seam ABI 9).*
+   This implements the representation experiment from finding B. Native decoding now writes a
+   directory per message, so Java no longer walks siblings or builds per-row directories. Each
+   view is one exact native allocation built from reused decoder scratch, replacing a growing
+   index plus a separately allocated header. Paired SVM results for the native view:
+   - full resident: 1.99× → 1.42× stock
+   - sparse resident: 1.30× → 1.03×
+   - decode only: 1.14× → 0.92×
+   - first full access: 740 → 610 ns
+   - retained native bytes: 1,512 → 1,166 B/row
+   - Java allocation: 1,307 → 1,132 B/row
+2. *Default eager decode: owned rows built directly from view directories.* Certified,
+   view-eligible default decodes skip `State` staging and finishing. Paired results:
+   - decode only: 2.19× → 1.86× stock
+   - full resident: 2.32× → 2.03×
+   - Java allocation: 1,737 → 1,424 B/row
+
+   Acceptance and budgets are unchanged, via the index-only fallback.
+3. *Interpreter and peak reads:* no accepted change. Directory loads replaced Java offset arrays
+   without reducing warm-read cost.
+
+**Where protobuf stands against stock now (SVM, shared consumer, final run).**
+
+| Operation | native view | default decode | generated owned |
+|---|---:|---:|---:|
+| Projected ingestion | 1.02× | 1.99× | 1.04× |
+| Full ingestion + consumption | 1.44× | 2.03× | 1.04× |
+| Decode only, small / large | 0.89× / ~0.9–1.25× | 1.86× / 2.04× | 1.06× / 1.16× |
+| Interpreter reads (full) | 6.37× | 5.44× | 4.77× |
+| Peak reads (full) | ~1.6–2.1× | 1.15× | 0.42× |
+| Detach + consume | 6.59× | 7.51× | 1.01× |
+
+Throughput is far from GB/s for every engine on this schema. Small messages decode at about
+190–220 MB/s, and stock decodes large messages at about 230 MB/s on these workers (530 and
+390 MB/s under HotSpot). Native views match or beat stock for decode-only and projected
+ingestion, and
+only generated-owned records are at or beyond stock for full consumption and peak reads.
+**The objective (at or beyond stock on every operation) is still not met.** The remaining gaps:
+
+- Full consumption through views (1.44×): Java child-row, array and string materialization on
+  access dominates. Reads, not parsing, are now the cost.
+- Default decode (≈2×): Java owned-tree construction. Generated-owned decoding shows a typed
+  owned representation can reach stock.
+- Interpreter reads: in shared-API interpreter dispatch, owned rows also run at 4.8× the stock
+  AOT boundary. The historical generated-getter harness puts views at 3.3×.
+- Peak reads and detach: snapshot still reparses the wire, as finding C describes.
+- JVM: views are 2.5–3.9× stock under HotSpot. JVM directory reads use a copied `int[]`.
+
+Next experiments: schema-specific owned construction from native directories (generated
+classes rather than generic `ArrayRow`), an ASCII fast path for native UTF-16 sizing, and packed
+per-row offsets cached from the native directory for warm reads. Each needs a paired measurement
+before acceptance.

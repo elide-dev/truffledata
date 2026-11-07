@@ -15,28 +15,32 @@ import org.graalvm.word.Pointer;
 import org.graalvm.word.WordFactory;
 import org.jspecify.annotations.Nullable;
 
-/** Binary view over an owned native index. Java child objects are created only when accessed. */
+/**
+ * Binary view over an owned ABI 9 native allocation. Native decoding wrote one field directory per
+ * message, so locating a field or repeated element is a bounded native load; Java child objects
+ * are created only when accessed.
+ */
 final class NativeRow extends TypedRow {
   private static final ByteBuffer POINTER_PROFILE = ByteBuffer.allocate(0);
-  private static final long[] PACKED_OFFSETS = new long[0];
   private final BuffaWire.Tape tape;
   private final int start;
   private final int end;
 
-  private long @Nullable [] offsets;
-
-  private long packedOffsets;
+  /** Word offset of this message's directory: one word per schema field. */
+  private final int directory;
 
   // Host code can populate these after guest compilation; references and contents are mutable.
   private Object @Nullable [] cache;
   private int firstOrdinal = -1;
   private @Nullable Object firstValue;
 
-  NativeRow(ViewOwner owner, ProtoPlan plan, BuffaWire.Tape tape, int start, int end) {
+  NativeRow(
+      ViewOwner owner, ProtoPlan plan, BuffaWire.Tape tape, int start, int end, int directory) {
     super(owner, plan);
     this.tape = tape;
     this.start = start;
     this.end = end;
+    this.directory = directory;
   }
 
   static boolean supports(List<ProtoPlan> types) {
@@ -171,53 +175,33 @@ final class NativeRow extends TypedRow {
     return tape.bytes().getInt(index * Buffa.Field.SIZE + (int) BuffaFFM.Field_end_OFFSET);
   }
 
+  /**
+   * One directory word, bounds-checked against the view's directory extent. SVM loads it from
+   * native memory; the JVM adapter reads a once-copied array, keeping FFM buffer access (and its
+   * scope checks) out of compiled guest code.
+   */
+  static int word(BuffaWire.Tape tape, int at) {
+    if (ImageInfo.inImageCode() && tape.nativeAddress != 0) {
+      Objects.checkIndex(at, tape.words);
+      return WordFactory.<Pointer>pointer(tape.nativeAddress + tape.directory + 4L * at).readInt(0);
+    }
+    return tape.directoryWords()[at];
+  }
+
+  /** Last occurrence of a singular field, or -1. An empty span has no fields (nor directory). */
   private int offset(int ordinal) {
-    var result = offsets;
-    if (result == null) result = index();
-    if (result.length != 0) return (int) result[ordinal] - 1;
-    int position = (int) (packedOffsets >>> (ordinal * 4)) & 15;
-    return position == 0 ? -1 : start + position - 1;
+    return start == end ? -1 : word(tape, directory + ordinal) - 1;
   }
 
-  @TruffleBoundary
-  private long[] index() {
-    // Four-bit relative positions cover up to sixteen schema fields and fifteen index entries.
-    // Zero denotes absence. Unique occurrences also imply a count of one. Duplicates and larger
-    // spans use a directory containing both the last position and the occurrence count.
-    if (plan().size() <= 16 && end - start <= 15) {
-      long packed = 0;
-      int i = start;
-      for (; i < end; ) {
-        long link = link(tape, i);
-        int shift = (int) link * 4;
-        if ((packed & (15L << shift)) != 0) break;
-        packed |= (long) (i - start + 1) << shift;
-        i = (int) (link >>> 32);
-      }
-      if (i == end) {
-        packedOffsets = packed;
-        offsets = PACKED_OFFSETS;
-        return PACKED_OFFSETS;
-      }
-    }
-    long[] result = new long[plan().size()];
-    for (int i = start; i < end; ) {
-      long link = link(tape, i);
-      int ordinal = (int) link;
-      long count = (result[ordinal] >>> 32) + 1;
-      result[ordinal] = (count << 32) | (i + 1L);
-      i = (int) (link >>> 32);
-    }
-    offsets = result;
-    return result;
+  /** Word offset of a repeated field's [count, entries...] list, or zero when absent. */
+  private int list(int ordinal) {
+    return start == end ? 0 : word(tape, directory + ordinal);
   }
 
-  /** Caller checks owner and ordinal; counts come from the same traversal as field positions. */
+  /** Caller checks owner and ordinal; native decoding recorded every repeated count. */
   int repeatedSize(int ordinal) {
-    var directory = offsets;
-    if (directory == null) directory = index();
-    if (directory.length != 0) return (int) (directory[ordinal] >>> 32);
-    return ((packedOffsets >>> (ordinal * 4)) & 15) == 0 ? 0 : 1;
+    int list = list(ordinal);
+    return list == 0 ? 0 : word(tape, list);
   }
 
   boolean integer(int ordinal) {
@@ -276,10 +260,10 @@ final class NativeRow extends TypedRow {
 
   private Object uncachedValue(int ordinal, ByteBuffer buffer) {
     var field = plan().field(ordinal);
+    if (field.repeated()) return materialize(ordinal, -1);
     int index = offset(ordinal);
-    if (!field.repeated() && index < 0) return field.defaultValue();
-    if (!field.repeated()
-        && !field.kind().message()
+    if (index < 0) return field.defaultValue();
+    if (!field.kind().message()
         && field.kind() != ProtoPlan.Kind.STRING
         && field.kind() != ProtoPlan.Kind.UINT64
         && field.kind() != ProtoPlan.Kind.FIXED64
@@ -312,7 +296,13 @@ final class NativeRow extends TypedRow {
   private Object decode(int ordinal, int index) {
     var field = plan().field(ordinal);
     if (field.kind().message())
-      return new NativeRow(owner, plan().nested(ordinal), tape, index + 1, next(tape, index));
+      return new NativeRow(
+          owner,
+          plan().nested(ordinal),
+          tape,
+          index + 1,
+          next(tape, index),
+          Math.toIntExact(bits(tape, index)));
     long value = bits(tape, index);
     return switch (field.kind()) {
       case STRING -> owner.utf8(Math.toIntExact(value), length(tape, index));
@@ -342,10 +332,11 @@ final class NativeRow extends TypedRow {
   }
 
   boolean present(int ordinal) {
+    var field = plan().field(ordinal);
+    if (field.repeated()) return repeatedSize(ordinal) != 0;
     int index = offset(ordinal);
     if (index < 0) return false;
-    var field = plan().field(ordinal);
-    if (field.explicitPresence() || field.repeated() || field.kind().message()) return true;
+    if (field.explicitPresence() || field.kind().message()) return true;
     if (field.kind() == ProtoPlan.Kind.BYTES) return length(tape, index) != 0;
     if (field.kind() == ProtoPlan.Kind.STRING) {
       if (field.defaultValue().equals("")) return length(tape, index) != 0;
@@ -361,16 +352,16 @@ final class NativeRow extends TypedRow {
   static final class NativeArray implements BorrowedArray {
     private final NativeRow row;
     private final int ordinal;
+    private final int list;
     private final int count;
-
-    private int @Nullable [] entries;
 
     private Object @Nullable [] cache;
 
     NativeArray(NativeRow row, int ordinal) {
       this.row = row;
       this.ordinal = ordinal;
-      count = row.repeatedSize(ordinal);
+      list = row.list(ordinal);
+      count = list == 0 ? 0 : word(row.tape, list);
     }
 
     public int size() {
@@ -388,19 +379,10 @@ final class NativeRow extends TypedRow {
 
     @TruffleBoundary
     private Object materialize(int index) {
-      var positions = entries;
       var values = cache;
-      if (positions == null || values == null) {
-        entries = positions = new int[count];
-        cache = values = new Object[count];
-        int n = 0;
-        for (int i = row.start; i < row.end; ) {
-          long link = link(row.tape, i);
-          if ((int) link == ordinal) positions[n++] = i;
-          i = (int) (link >>> 32);
-        }
-      }
-      Object result = row.decode(ordinal, positions[index]);
+      if (values == null) cache = values = new Object[count];
+      // The native list holds this field's entry indices in wire order.
+      Object result = row.decode(ordinal, word(row.tape, list + 1 + index));
       values[index] = result;
       return result;
     }

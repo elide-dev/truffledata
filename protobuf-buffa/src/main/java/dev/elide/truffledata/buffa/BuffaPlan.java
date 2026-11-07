@@ -22,6 +22,10 @@ public final class BuffaPlan implements AutoCloseable {
   private final List<ProtoPlan> anyTypes;
   private final WireInput schema;
   private final WireInput empty;
+
+  /** ABI 9 compiled view schema, owned by this plan; zero without a native view backend. */
+  private long views;
+
   private boolean open = true;
 
   BuffaPlan(BuffaWire decoder, ProtoPlan plan, int maxSchemaBytes, List<ProtoPlan> anyTypes) {
@@ -52,6 +56,16 @@ public final class BuffaPlan implements AutoCloseable {
     }
     // Schema input is immutable for the lifetime of this plan.
     schema.retain().release();
+    var backend = decoder.backend;
+    if (backend != null && nativeViews != null) {
+      try {
+        views = backend.compileView(schema);
+      } catch (RuntimeException | Error failure) {
+        empty.close();
+        schema.close();
+        throw failure;
+      }
+    }
   }
 
   public ProtoPlan contract() {
@@ -70,10 +84,11 @@ public final class BuffaPlan implements AutoCloseable {
   }
 
   /**
-   * Request an owned native-index view. Binary standard schemas use lazy Java wrappers; unsupported
-   * shapes and singular-message merges retain the eager semantics-preserving path. The native
-   * budget includes the detached result header. Scalar-only plans retain their smaller inline
-   * representation.
+   * Request an owned native view. Binary standard schemas decode into one native allocation with
+   * schema-directed field directories, read by lazy Java wrappers; unsupported shapes and
+   * singular-message merges retain the eager semantics-preserving path. The native budget bounds
+   * the retained view together with any decoder scratch growth. Scalar-only plans retain their
+   * smaller inline representation.
    */
   @TruffleBoundary
   public TypedMessage decodeView(WireInput input, int maxNativeBytes) {
@@ -129,16 +144,44 @@ public final class BuffaPlan implements AutoCloseable {
       }
       if (format == 0 && compactScalars)
         return compact(owner, backend.scalars(schema, input, plan));
-      boolean useView =
-          view && nativeViews != null && format == 0 && nativeBytes >= Buffa.Result.SIZE;
+      boolean useView = view && views != 0 && format == 0;
+      if (!view && views != 0 && format == 0) {
+        // Default decode of a view-eligible schema: native decoding writes field directories, so
+        // Java builds the owned row tree directly instead of rediscovering fields. The transient
+        // view is released before returning. A view that exceeds the budget only through its
+        // directories falls back to the index-only route, which accepts exactly what it did.
+        var directed = backend.view(views, input, plan, nativeBytes, true);
+        if (directed != null) {
+          try {
+            if (directed.viewReady() && !STRICT)
+              return owner.finish(
+                  directed(
+                      new DecodeContext(owner, 0, plan.limits().maxCells(), profile),
+                      plan,
+                      profile.hints[0],
+                      directed,
+                      0,
+                      directed.count(),
+                      0,
+                      1),
+                  directed.allocated);
+            // Required fields, merges and strict audits keep the general semantic path.
+            State state =
+                new State(
+                    plan,
+                    profile.hints[0],
+                    new DecodeContext(owner, format, plan.limits().maxCells(), profile));
+            state.consume(directed, 0, directed.count());
+            return owner.finish(state.finish(1), directed.allocated);
+          } finally {
+            directed.close();
+          }
+        }
+      }
       var tape =
-          backend.typed(
-              schema,
-              input,
-              useView ? 3 : format,
-              payload,
-              plan,
-              useView ? nativeBytes - Buffa.Result.SIZE : nativeBytes);
+          useView
+              ? Objects.requireNonNull(backend.view(views, input, plan, nativeBytes, false))
+              : backend.typed(schema, input, format, payload, plan, nativeBytes);
       boolean retained = false;
       try {
         if (useView
@@ -153,8 +196,8 @@ public final class BuffaPlan implements AutoCloseable {
             audit.consume(tape, 0, tape.count());
             audit.finish(1);
           }
-          var row = new NativeRow(owner, plan, tape, 0, tape.count());
-          owner.retainIndex(tape.detach());
+          var row = new NativeRow(owner, plan, tape, 0, tape.count(), 0);
+          owner.retainIndex(tape);
           retained = true;
           return owner.finish(row, tape.allocated);
         }
@@ -174,6 +217,103 @@ public final class BuffaPlan implements AutoCloseable {
     } finally {
       source.release();
     }
+  }
+
+  /**
+   * Build one owned row from a certified view directory: no merges, no required fields and only
+   * standard contracts (view eligibility), so the State staging, oneof clearing and finish pass
+   * have nothing to do. Cells were charged by the native decoder under the same limit with the
+   * same per-type, per-entry and byte charges as State, so Java does not charge them twice.
+   */
+  private static TypedRow directed(
+      DecodeContext context,
+      ProtoPlan plan,
+      TypeProfile hints,
+      BuffaWire.Tape tape,
+      int start,
+      int end,
+      int directory,
+      int depth) {
+    if (depth > plan.maxDepth()) throw new ContractViolation("Typed nesting budget");
+    Object[] values = Arrays.copyOf(hints.defaults, hints.defaults.length, Object[].class);
+    long presence = 0;
+    for (int i = 0; i < values.length; i++) {
+      var field = plan.field(i);
+      int word = start == end ? 0 : NativeRow.word(tape, directory + i);
+      if (field.repeated()) {
+        if (word == 0) {
+          values[i] = context.emptyArray();
+          continue;
+        }
+        int count = NativeRow.word(tape, word);
+        Object[] items = new Object[count];
+        for (int k = 0; k < count; k++)
+          items[k] =
+              directedValue(
+                  context, plan, hints, tape, i, NativeRow.word(tape, word + 1 + k), true, depth);
+        values[i] = new TypedArray(context.owner, items);
+        presence |= 1L << i;
+      } else if (word != 0) {
+        Object value = directedValue(context, plan, hints, tape, i, word - 1, false, depth);
+        values[i] = value;
+        if (field.explicitPresence() || State.nonDefault(field, value)) presence |= 1L << i;
+      }
+    }
+    return new TypedRow.ArrayRow(context.owner, plan, values, presence, State.NO_SEEN_FIELDS);
+  }
+
+  private static Object directedValue(
+      DecodeContext context,
+      ProtoPlan plan,
+      TypeProfile hints,
+      BuffaWire.Tape tape,
+      int ordinal,
+      int index,
+      boolean repeated,
+      int depth) {
+    var field = plan.field(ordinal);
+    var buffer = tape.bytes();
+    int at = Math.multiplyExact(index, Buffa.Field.SIZE);
+    long value = buffer.getLong(at + (int) BuffaFFM.Field_value_OFFSET);
+    int length = buffer.getInt(at + (int) BuffaFFM.Field_length_OFFSET);
+    int kind = buffer.getInt(at + (int) BuffaFFM.Field_wire_OFFSET);
+    if (kind != field.kind().ordinal() + 1 || length < 0)
+      throw new IllegalStateException("Native kind mismatch");
+    if (field.kind().message()) {
+      int next = buffer.getInt(at + (int) BuffaFFM.Field_end_OFFSET);
+      return directed(
+          context,
+          plan.nested(ordinal),
+          Objects.requireNonNull(hints.children[ordinal]),
+          tape,
+          index + 1,
+          next,
+          Math.toIntExact(value),
+          depth + 1);
+    }
+    return switch (field.kind()) {
+      case STRING -> {
+        // Same deferral rule as State: singular, empty default and not yet read by this plan.
+        if (!repeated && ((String) field.defaultValue()).isEmpty() && !hints.stringReads[ordinal])
+          yield length == 0
+              ? ""
+              : new TypedRow.Utf8(
+                  context.owner, Math.toIntExact(value), length, hints.stringReads, ordinal);
+        yield context.owner.utf8(Math.toIntExact(value), length);
+      }
+      case BYTES -> new BorrowedBytes(context.owner, Math.toIntExact(value), length);
+      case DOUBLE -> Double.longBitsToDouble(value);
+      case FLOAT -> (double) Float.intBitsToFloat((int) value);
+      case BOOL -> value != 0;
+      case INT32, SINT32, SFIXED32, ENUM -> (long) (int) value;
+      case UINT32, FIXED32 -> value & 0xffffffffL;
+      case UINT64, FIXED64 ->
+          Values.normalize(
+              value >= 0
+                  ? BigInteger.valueOf(value)
+                  : BigInteger.valueOf(value & Long.MAX_VALUE).setBit(63));
+      default -> value;
+    };
   }
 
   /** Fixed native scalar output avoids allocating or materializing an index. */
@@ -229,8 +369,14 @@ public final class BuffaPlan implements AutoCloseable {
     schema.lease.thread();
     if (open) {
       open = false;
-      empty.close();
-      schema.close();
+      long compiled = views;
+      views = 0;
+      try {
+        if (compiled != 0) Objects.requireNonNull(decoder.backend).releaseCompiled(compiled);
+      } finally {
+        empty.close();
+        schema.close();
+      }
     }
   }
 
@@ -602,7 +748,7 @@ public final class BuffaPlan implements AutoCloseable {
       return new TypedRow.ArrayRow(context.owner, plan, values, presenceBits, present);
     }
 
-    private static boolean nonDefault(ProtoPlan.FieldPlan field, Object value) {
+    static boolean nonDefault(ProtoPlan.FieldPlan field, Object value) {
       // Deferred strings are nonempty and only used with the empty default.
       if (value instanceof TypedRow.Utf8) return true;
       if (value instanceof BorrowedArray a) return a.size() != 0;

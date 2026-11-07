@@ -14,7 +14,7 @@ provide a different adapter through the same opt-in API.
 
 This is the tested development combination, not a claim of compatibility with every
 server/driver version. The BOM also manages Protobuf 4.36.1 and the Elide GraalVM
-25.5.5-elide.24 API/runtime/language versions. Driver versions remain overridable;
+25.5.5-elide.27 API/runtime/language versions. Driver versions remain overridable;
 consumer override resolution does not establish functional compatibility for that override.
 
 ## Streaming prerequisites

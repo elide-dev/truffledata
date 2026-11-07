@@ -40,7 +40,7 @@ public final class SvmAcceptance {
 
   private static NativeValueTape tape(VoidPointer result) {
     Pointer descriptor = (Pointer) Json.JsonResult.view(result);
-    require(descriptor.readInt(0) == ValueTape.ABI_VERSION);
+    require(descriptor.readInt(0) == ValueTape.ABI_VERSION_V4);
     NativeValueTape tape = new NativeValueTape(descriptor);
     tape.validate();
     return tape;

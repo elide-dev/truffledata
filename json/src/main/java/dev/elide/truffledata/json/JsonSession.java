@@ -107,6 +107,8 @@ public final class JsonSession extends TapeSession<JsonMessage> {
     private final VoidPointer session;
     // Reusable JsonResult for borrowed decodes.
     private final VoidPointer result;
+    // The tape reader and lexical accessor every borrow of this session rebinds.
+    private final JsonSvm.Borrows borrows = new JsonSvm.Borrows();
 
     private SvmBackend(VoidPointer session, VoidPointer result) {
       this.session = session;
@@ -170,7 +172,7 @@ public final class JsonSession extends TapeSession<JsonMessage> {
 
     @Override
     protected TapeBorrow borrow() {
-      return JsonSvm.borrow(result);
+      return borrows.borrow(result);
     }
 
     @Override

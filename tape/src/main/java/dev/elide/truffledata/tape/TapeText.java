@@ -82,6 +82,40 @@ public final class TapeText {
     return (owner.meta(node()) >>> 16) & 0x7fff;
   }
 
+  /**
+   * Writes the three node words of the bound node into {@code words} at {@code offset} when it is an
+   * inline string or key, and returns whether it was.
+   */
+  boolean inlineWords(long[] words, int offset) {
+    long at = node() * ValueTape.NODE_SIZE;
+    TapeSource source = owner.source();
+    long header = source.nodeLong(at);
+    if ((int) header != ValueTape.STRING || (header >>> 32) > TapeKey.INLINE_BYTES) return false;
+    words[offset] = header;
+    words[offset + 1] = source.nodeLong(at + 8);
+    words[offset + 2] = source.nodeLong(at + 16);
+    return true;
+  }
+
+  /**
+   * Copies an inline string's bytes (at most 16, no storage flag) from its two node words, or
+   * returns false for other nodes. Replaces Myna's per-byte checked reads for short text.
+   */
+  private boolean copyInline(long at, int length, byte[] output, int offset) {
+    if (length > TapeKey.INLINE_BYTES) return false;
+    TapeSource source = owner.source();
+    long word = at * ValueTape.NODE_SIZE;
+    if (source.nodeInt(word) != ValueTape.STRING) return false;
+    java.util.Objects.checkFromIndexSize(offset, length, output.length);
+    long low = source.nodeLong(word + 8);
+    for (int i = 0; i < Math.min(length, 8); i++) output[offset + i] = (byte) (low >>> (8 * i));
+    if (length > 8) {
+      long high = source.nodeLong(word + 16);
+      for (int i = 8; i < length; i++) output[offset + i] = (byte) (high >>> (8 * (i - 8)));
+    }
+    return true;
+  }
+
   /** Decoded text of a key or string, or the exact source token of a decimal. */
   @TruffleBoundary
   public String toJavaString() {
@@ -94,7 +128,7 @@ public final class TapeText {
     // UTF-16 on SVM). ASCII strings become Latin-1 Strings with one copy from scratch.
     if (!ascii && length >= BULK_THRESHOLD) return owner.tape.stringValue(at);
     byte[] buffer = length <= MAX_SCRATCH ? scratch(length) : new byte[length];
-    owner.tape.copyStringUtf8(at, buffer, 0);
+    if (!copyInline(at, length, buffer, 0)) owner.tape.copyStringUtf8(at, buffer, 0);
     // Tape strings are valid UTF-8 (stage 1 validated the input; escapes were decoded by simdjson),
     // so the decoding constructor never substitutes.
     return new String(buffer, 0, length, ascii ? StandardCharsets.ISO_8859_1 : StandardCharsets.UTF_8);
@@ -122,7 +156,7 @@ public final class TapeText {
     TapeTextArena text = arena;
     if (text != null) return text.string(at, encoding);
     byte[] bytes = new byte[Math.toIntExact(owner.tape.length(at))];
-    owner.tape.copyStringUtf8(at, bytes, 0);
+    if (!copyInline(at, bytes.length, bytes, 0)) owner.tape.copyStringUtf8(at, bytes, 0);
     TruffleString utf8 =
         TruffleString.fromByteArrayUncached(bytes, 0, bytes.length, TruffleString.Encoding.UTF_8, false);
     return encoding == TruffleString.Encoding.UTF_8 ? utf8 : utf8.switchEncodingUncached(encoding);
@@ -131,7 +165,10 @@ public final class TapeText {
   /** Copies the decoded UTF-8 bytes of a key or string into {@code output}; returns the length. */
   @TruffleBoundary
   public int copyUtf8(byte[] output, int offset) {
-    return owner.tape.copyStringUtf8(node(), output, offset);
+    long at = node();
+    int length = Math.toIntExact(owner.tape.length(at));
+    if (owner.tag(at) == ValueTape.STRING && copyInline(at, length, output, offset)) return length;
+    return owner.tape.copyStringUtf8(at, output, offset);
   }
 
   /** Whether a key or string decodes to exactly {@code utf8}, without materializing it. */

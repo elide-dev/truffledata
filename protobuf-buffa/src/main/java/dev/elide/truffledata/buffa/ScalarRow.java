@@ -30,6 +30,59 @@ final class ScalarRow extends TypedRow {
     return index == 0 ? first : second;
   }
 
+  /** Bound per plan: an owner check and one inline field; no node, so fresh owners never churn. */
+  @Override
+  public Accessor accessor(int ordinal) {
+    ProtoPlan rowPlan = plan();
+    return descriptor.accessor(ScalarRow.class, ordinal, i -> new Inline(rowPlan, i));
+  }
+
+  private static final class Inline extends Accessor {
+    private final ProtoPlan plan;
+
+    Inline(ProtoPlan plan, int ordinal) {
+      super(plan.schema(), ordinal);
+      this.plan = plan;
+    }
+
+    @Override
+    public boolean accepts(Object row) {
+      return row instanceof ScalarRow r && r.plan() == plan;
+    }
+
+    private long scalar(Object row) {
+      if (!(row instanceof ScalarRow r && r.plan() == plan)) throw mismatch();
+      r.owner.check();
+      return ordinal() == 0 ? r.first : r.second;
+    }
+
+    @Override
+    public Object read(Object row) {
+      return scalar(row);
+    }
+
+    @Override
+    public boolean present(Object row) {
+      scalar(row);
+      return true;
+    }
+
+    @Override
+    public long readLong(Object row) {
+      return scalar(row);
+    }
+
+    @Override
+    public double readDouble(Object row) throws UnexpectedResultException {
+      throw new UnexpectedResultException(scalar(row));
+    }
+
+    @Override
+    public boolean readBoolean(Object row) throws UnexpectedResultException {
+      throw new UnexpectedResultException(scalar(row));
+    }
+  }
+
   @ExportMessage
   static Object read(
       ScalarRow row,

@@ -86,6 +86,11 @@ common:remote --disk_cache=
 # Tests and tools execute remotely: no local runfiles trees (they hold whole JDKs and fill small CI disks).
 common:remote --nobuild_runfile_links
 common:remote --verbose_failures
+# The same remote profile on BuildBuddy's arm64 Linux executors: targets and execution are linux-aarch64
+# (//bazel/platforms:rbe_linux_arm64), for the linux-aarch64 release natives and their tests.
+common:remote_arm64 --config=remote
+common:remote_arm64 --platforms=//bazel/platforms:rbe_linux_arm64
+common:remote_arm64 --host_platform=//bazel/platforms:rbe_linux_arm64
 
 # Explicit host execution for performance measurements and workspace tools (bazel run). Never write host results to
 # the remote cache: the macOS C/C++ wrapper selects a host SDK outside action keys.

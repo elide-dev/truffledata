@@ -1,0 +1,391 @@
+exec ${PAGER:-/usr/bin/less} "$0" || exit 1
+Executing tests from //benchmarks/comparison:csv_measure
+-----------------------------------------------------------------------------
+--- strings truffledata-batch quoted 134217728 fork 2 TRACE start minflt 113361 majflt 155 utime_ticks 135 stime_ticks 445 thread_run_ms 5808.6 thread_wait_ms 0.2 rss_kb 460572 vm
+TRACE /sys/kernel/mm/transparent_hugepage/enabled always [madvise] never
+TRACE /sys/kernel/mm/transparent_hugepage/defrag always defer defer+madvise [madvise] never
+TRACE /proc/sys/kernel/numa_balancing 0
+TRACE /sys/kernel/mm/ksm/run 0
+TRACE /proc/meminfo MemTotal:       17169984 kB
+MemFree:        16567992 kB
+MemAvailable:   16422144 kB
+Buffers:            3608 kB
+Cached:            74640 kB
+SwapCached:            0 kB
+Active:             8060 kB
+Inactive:         543028 kB
+Active(anon):         28 kB
+Inactive(anon):   510216 kB
+Active(file):       8032 kB
+Inactive(file):    32812 kB
+Unevictable:           0 kB
+Mlocked:               0 kB
+SwapTotal:             0 kB
+SwapFree:              0 kB
+Dirty:                52 kB
+Writeback:             0 kB
+AnonPages:        473012 kB
+Mapped:            51372 kB
+Shmem:             37356 kB
+KReclaimable:      11936 kB
+Slab:              25740 kB
+SReclaimable:      11936 kB
+SUnreclaim:        13804 kB
+KernelStack:        1888 kB
+PageTables:         1524 kB
+NFS_Unstable:          0 kB
+Bounce:                0 kB
+WritebackTmp:          0 kB
+CommitLimit:     8584992 kB
+Committed_AS:     700776 kB
+VmallocTotal:   34359738367 kB
+VmallocUsed:        2484 kB
+VmallocChunk:          0 kB
+Percpu:             1696 kB
+AnonHugePages:         0 kB
+ShmemHugePages:        0 kB
+ShmemPmdMapped:        0 kB
+FileHugePages:         0 kB
+FilePmdMapped:         0 kB
+HugePages_Total:       0
+HugePages_Free:        0
+HugePages_Rsvd:        0
+HugePages_Surp:        0
+Hugepagesize:       2048 kB
+Hugetlb:               0 kB
+DirectMap4k:       19456 kB
+DirectMap2M:     2891776 kB
+DirectMap1G:    14680064 kB
+TRACE warm minflt 137134 majflt 30 utime_ticks 52 stime_ticks 160 thread_run_ms 2116.4 thread_wait_ms 0.1 rss_kb 611480 vm numa_hit=138049 numa_local=138049 pgfault=137248
+TRACE sample 0 ops 1 ns_per_byte 11.712707177257373 minflt 55768 majflt 0 utime_ticks 16 stime_ticks 141 thread_run_ms 1572.4 thread_wait_ms 0.0 rss_kb 456484 vm numa_hit=56010 numa_local=56010 pgfault=55822
+TRACE sample 1 ops 2 ns_per_byte 1.6894060219575708 minflt 74102 majflt 0 utime_ticks 34 stime_ticks 11 thread_run_ms 453.8 thread_wait_ms 0.0 rss_kb 741788 vm numa_hit=74745 numa_local=74745 pgfault=74656
+TRACE sample 2 ops 1 ns_per_byte 10.91891364877416 minflt 39577 majflt 0 utime_ticks 19 stime_ticks 128 thread_run_ms 1462.7 thread_wait_ms 0.0 rss_kb 868512 vm numa_hit=39723 numa_local=39723 pgfault=39620
+TRACE sample 3 ops 1 ns_per_byte 10.828918046749429 minflt 57305 majflt 0 utime_ticks 17 stime_ticks 128 thread_run_ms 1453.6 thread_wait_ms 0.0 rss_kb 455464 vm numa_hit=57563 numa_local=57563 pgfault=57347
+TRACE sample 4 ops 2 ns_per_byte 1.4581754854046625 minflt 74486 majflt 0 utime_ticks 32 stime_ticks 7 thread_run_ms 391.7 thread_wait_ms 0.0 rss_kb 741280 vm numa_hit=74645 numa_local=74645 pgfault=74495
+ 
+strings truffledata-batch quoted 134217728 ingest 2 [11.712707177257373, 1.6894060219575708, 10.91891364877416, 10.828918046749429, 1.4581754854046625]
+--- strings truffledata-batch quoted 134217728 fork 0 TRACE start minflt 113490 majflt 0 utime_ticks 108 stime_ticks 6 thread_run_ms 1153.5 thread_wait_ms 0.4 rss_kb 460900 vm
+TRACE /sys/kernel/mm/transparent_hugepage/enabled always [madvise] never
+TRACE /sys/kernel/mm/transparent_hugepage/defrag always defer defer+madvise [madvise] never
+TRACE /proc/sys/kernel/numa_balancing 0
+TRACE /sys/kernel/mm/ksm/run 0
+TRACE /proc/meminfo MemTotal:       17169984 kB
+MemFree:        16550644 kB
+MemAvailable:   16405140 kB
+Buffers:            3624 kB
+Cached:            75236 kB
+SwapCached:            0 kB
+Active:             8300 kB
+Inactive:         544476 kB
+Active(anon):         28 kB
+Inactive(anon):   511252 kB
+Active(file):       8272 kB
+Inactive(file):    33224 kB
+Unevictable:           0 kB
+Mlocked:               0 kB
+SwapTotal:             0 kB
+SwapFree:              0 kB
+Dirty:                 0 kB
+Writeback:             4 kB
+AnonPages:        474248 kB
+Mapped:            51700 kB
+Shmem:             37356 kB
+KReclaimable:      11972 kB
+Slab:              25904 kB
+SReclaimable:      11972 kB
+SUnreclaim:        13932 kB
+KernelStack:        1872 kB
+PageTables:         1484 kB
+NFS_Unstable:          0 kB
+Bounce:                0 kB
+WritebackTmp:          0 kB
+CommitLimit:     8584992 kB
+Committed_AS:     700860 kB
+VmallocTotal:   34359738367 kB
+VmallocUsed:        2484 kB
+VmallocChunk:          0 kB
+Percpu:             1696 kB
+AnonHugePages:         0 kB
+ShmemHugePages:        0 kB
+ShmemPmdMapped:        0 kB
+FileHugePages:         0 kB
+FilePmdMapped:         0 kB
+HugePages_Total:       0
+HugePages_Free:        0
+HugePages_Rsvd:        0
+HugePages_Surp:        0
+Hugepagesize:       2048 kB
+Hugetlb:               0 kB
+DirectMap4k:       19456 kB
+DirectMap2M:     2891776 kB
+DirectMap1G:    14680064 kB
+TRACE warm minflt 478342 majflt 0 utime_ticks 181 stime_ticks 36 thread_run_ms 2162.3 thread_wait_ms 0.0 rss_kb 868680 vm numa_hit=479617 numa_local=479617 pgfault=478347
+TRACE sample 0 ops 2 ns_per_byte 1.7949827453473077 minflt 84276 majflt 0 utime_ticks 35 stime_ticks 13 thread_run_ms 482.1 thread_wait_ms 0.0 rss_kb 1128792 vm numa_hit=84495 numa_local=84495 pgfault=84277
+TRACE sample 1 ops 1 ns_per_byte 10.689339928277144 minflt 57688 majflt 0 utime_ticks 20 stime_ticks 123 thread_run_ms 1434.9 thread_wait_ms 0.0 rss_kb 455636 vm numa_hit=58396 numa_local=58396 pgfault=58239
+TRACE sample 2 ops 2 ns_per_byte 1.4351171839612877 minflt 74486 majflt 0 utime_ticks 35 stime_ticks 4 thread_run_ms 385.5 thread_wait_ms 0.0 rss_kb 741452 vm numa_hit=74636 numa_local=74636 pgfault=74486
+TRACE sample 3 ops 2 ns_per_byte 1.3947299107565443 minflt 81842 majflt 0 utime_ticks 34 stime_ticks 4 thread_run_ms 374.6 thread_wait_ms 0.0 rss_kb 997972 vm numa_hit=82050 numa_local=82050 pgfault=81842
+TRACE sample 4 ops 2 ns_per_byte 1.7086362282432415 minflt 85170 majflt 0 utime_ticks 34 stime_ticks 12 thread_run_ms 458.9 thread_wait_ms 0.0 rss_kb 1260124 vm numa_hit=85385 numa_local=85385 pgfault=85171
+ 
+strings truffledata-batch quoted 134217728 ingest 0 [1.7949827453473077, 10.689339928277144, 1.4351171839612877, 1.3947299107565443, 1.7086362282432415]
+--- strings univocity quoted 134217728 fork 0 TRACE start minflt 92175 majflt 7 utime_ticks 130 stime_ticks 6 thread_run_ms 1367.6 thread_wait_ms 0.8 rss_kb 309124 vm
+TRACE /sys/kernel/mm/transparent_hugepage/enabled always [madvise] never
+TRACE /sys/kernel/mm/transparent_hugepage/defrag always defer defer+madvise [madvise] never
+TRACE /proc/sys/kernel/numa_balancing 0
+TRACE /sys/kernel/mm/ksm/run 0
+TRACE /proc/meminfo MemTotal:       17169984 kB
+MemFree:        16700360 kB
+MemAvailable:   16555064 kB
+Buffers:            3624 kB
+Cached:            75628 kB
+SwapCached:            0 kB
+Active:            22512 kB
+Inactive:         378528 kB
+Active(anon):         28 kB
+Inactive(anon):   359116 kB
+Active(file):      22484 kB
+Inactive(file):    19412 kB
+Unevictable:           0 kB
+Mlocked:               0 kB
+SwapTotal:             0 kB
+SwapFree:              0 kB
+Dirty:                 0 kB
+Writeback:             0 kB
+AnonPages:        321932 kB
+Mapped:            51480 kB
+Shmem:             37356 kB
+KReclaimable:      11988 kB
+Slab:              26016 kB
+SReclaimable:      11988 kB
+SUnreclaim:        14028 kB
+KernelStack:        1872 kB
+PageTables:         1200 kB
+NFS_Unstable:          0 kB
+Bounce:                0 kB
+WritebackTmp:          0 kB
+CommitLimit:     8584992 kB
+Committed_AS:     550112 kB
+VmallocTotal:   34359738367 kB
+VmallocUsed:        2532 kB
+VmallocChunk:          0 kB
+Percpu:             1696 kB
+AnonHugePages:         0 kB
+ShmemHugePages:        0 kB
+ShmemPmdMapped:        0 kB
+FileHugePages:         0 kB
+FilePmdMapped:         0 kB
+HugePages_Total:       0
+HugePages_Free:        0
+HugePages_Rsvd:        0
+HugePages_Surp:        0
+Hugepagesize:       2048 kB
+Hugetlb:               0 kB
+DirectMap4k:       19456 kB
+DirectMap2M:     2891776 kB
+DirectMap1G:    14680064 kB
+TRACE warm minflt 31680 majflt 0 utime_ticks 229 stime_ticks 5 thread_run_ms 2344.1 thread_wait_ms 0.8 rss_kb 199300 vm numa_hit=32313 numa_local=32313 pgfault=32246
+TRACE sample 0 ops 1 ns_per_byte 2.8413064209045693 minflt 1412 majflt 0 utime_ticks 38 stime_ticks 0 thread_run_ms 381.4 thread_wait_ms 0.2 rss_kb 196228 vm numa_hit=1433 numa_local=1433 pgfault=1423
+TRACE sample 1 ops 1 ns_per_byte 2.88855318027837 minflt 1143 majflt 0 utime_ticks 39 stime_ticks 0 thread_run_ms 387.8 thread_wait_ms 0.1 rss_kb 192592 vm numa_hit=1159 numa_local=1159 pgfault=1149
+TRACE sample 2 ops 1 ns_per_byte 2.885636937258337 minflt 1156 majflt 0 utime_ticks 38 stime_ticks 0 thread_run_ms 384.5 thread_wait_ms 0.2 rss_kb 190544 vm numa_hit=1182 numa_local=1182 pgfault=1174
+TRACE sample 3 ops 1 ns_per_byte 2.8531234509177237 minflt 1156 majflt 0 utime_ticks 38 stime_ticks 1 thread_run_ms 383.0 thread_wait_ms 0.2 rss_kb 188496 vm numa_hit=1172 numa_local=1172 pgfault=1164
+TRACE sample 4 ops 1 ns_per_byte 2.8794882878399677 minflt 1168 majflt 0 utime_ticks 38 stime_ticks 1 thread_run_ms 386.6 thread_wait_ms 0.1 rss_kb 185984 vm numa_hit=1179 numa_local=1179 pgfault=1168
+ 
+strings univocity quoted 134217728 ingest 0 [2.8413064209045693, 2.88855318027837, 2.885636937258337, 2.8531234509177237, 2.8794882878399677]
+--- strings univocity quoted 134217728 fork 2 TRACE start minflt 92181 majflt 0 utime_ticks 129 stime_ticks 5 thread_run_ms 1353.1 thread_wait_ms 0.6 rss_kb 308952 vm
+TRACE /sys/kernel/mm/transparent_hugepage/enabled always [madvise] never
+TRACE /sys/kernel/mm/transparent_hugepage/defrag always defer defer+madvise [madvise] never
+TRACE /proc/sys/kernel/numa_balancing 0
+TRACE /sys/kernel/mm/ksm/run 0
+TRACE /proc/meminfo MemTotal:       17169984 kB
+MemFree:        16703584 kB
+MemAvailable:   16558376 kB
+Buffers:            3624 kB
+Cached:            75784 kB
+SwapCached:            0 kB
+Active:            22736 kB
+Inactive:         379192 kB
+Active(anon):         28 kB
+Inactive(anon):   359848 kB
+Active(file):      22708 kB
+Inactive(file):    19344 kB
+Unevictable:           0 kB
+Mlocked:               0 kB
+SwapTotal:             0 kB
+SwapFree:              0 kB
+Dirty:                 0 kB
+Writeback:             0 kB
+AnonPages:        322596 kB
+Mapped:            51720 kB
+Shmem:             37356 kB
+KReclaimable:      12004 kB
+Slab:              26332 kB
+SReclaimable:      12004 kB
+SUnreclaim:        14328 kB
+KernelStack:        1872 kB
+PageTables:         1260 kB
+NFS_Unstable:          0 kB
+Bounce:                0 kB
+WritebackTmp:          0 kB
+CommitLimit:     8584992 kB
+Committed_AS:     550112 kB
+VmallocTotal:   34359738367 kB
+VmallocUsed:        2548 kB
+VmallocChunk:          0 kB
+Percpu:             1696 kB
+AnonHugePages:         0 kB
+ShmemHugePages:        0 kB
+ShmemPmdMapped:        0 kB
+FileHugePages:         0 kB
+FilePmdMapped:         0 kB
+HugePages_Total:       0
+HugePages_Free:        0
+HugePages_Rsvd:        0
+HugePages_Surp:        0
+Hugepagesize:       2048 kB
+Hugetlb:               0 kB
+DirectMap4k:       19456 kB
+DirectMap2M:     2891776 kB
+DirectMap1G:    14680064 kB
+TRACE warm minflt 31680 majflt 0 utime_ticks 233 stime_ticks 2 thread_run_ms 2351.4 thread_wait_ms 0.8 rss_kb 199192 vm numa_hit=31882 numa_local=31882 pgfault=31745
+TRACE sample 0 ops 1 ns_per_byte 2.9352095742988076 minflt 1412 majflt 0 utime_ticks 40 stime_ticks 0 thread_run_ms 394.1 thread_wait_ms 0.1 rss_kb 196120 vm numa_hit=1431 numa_local=1431 pgfault=1423
+TRACE sample 1 ops 1 ns_per_byte 2.941273593110033 minflt 1143 majflt 0 utime_ticks 39 stime_ticks 0 thread_run_ms 394.7 thread_wait_ms 0.2 rss_kb 192484 vm numa_hit=1164 numa_local=1164 pgfault=1154
+TRACE sample 2 ops 1 ns_per_byte 2.850972332958877 minflt 1156 majflt 0 utime_ticks 39 stime_ticks 0 thread_run_ms 382.8 thread_wait_ms 0.1 rss_kb 190436 vm numa_hit=1168 numa_local=1168 pgfault=1161
+TRACE sample 3 ops 1 ns_per_byte 2.9004001763362406 minflt 1156 majflt 0 utime_ticks 39 stime_ticks 0 thread_run_ms 389.2 thread_wait_ms 0.3 rss_kb 188388 vm numa_hit=1660 numa_local=1660 pgfault=1725
+TRACE sample 4 ops 1 ns_per_byte 2.908982207165489 minflt 1168 majflt 0 utime_ticks 38 stime_ticks 0 thread_run_ms 390.6 thread_wait_ms 0.1 rss_kb 185876 vm numa_hit=1183 numa_local=1183 pgfault=1173
+ 
+strings univocity quoted 134217728 ingest 2 [2.9352095742988076, 2.941273593110033, 2.850972332958877, 2.9004001763362406, 2.908982207165489]
+--- strings univocity quoted 134217728 fork 1 TRACE start minflt 92052 majflt 0 utime_ticks 125 stime_ticks 9 thread_run_ms 1342.5 thread_wait_ms 0.1 rss_kb 309008 vm
+TRACE /sys/kernel/mm/transparent_hugepage/enabled always [madvise] never
+TRACE /sys/kernel/mm/transparent_hugepage/defrag always defer defer+madvise [madvise] never
+TRACE /proc/sys/kernel/numa_balancing 0
+TRACE /sys/kernel/mm/ksm/run 0
+TRACE /proc/meminfo MemTotal:       17169984 kB
+MemFree:        16698116 kB
+MemAvailable:   16552908 kB
+Buffers:            3624 kB
+Cached:            75784 kB
+SwapCached:            0 kB
+Active:            23260 kB
+Inactive:         379464 kB
+Active(anon):         28 kB
+Inactive(anon):   360644 kB
+Active(file):      23232 kB
+Inactive(file):    18820 kB
+Unevictable:           0 kB
+Mlocked:               0 kB
+SwapTotal:             0 kB
+SwapFree:              0 kB
+Dirty:                 0 kB
+Writeback:             0 kB
+AnonPages:        323392 kB
+Mapped:            51736 kB
+Shmem:             37356 kB
+KReclaimable:      12008 kB
+Slab:              26272 kB
+SReclaimable:      12008 kB
+SUnreclaim:        14264 kB
+KernelStack:        1872 kB
+PageTables:         1248 kB
+NFS_Unstable:          0 kB
+Bounce:                0 kB
+WritebackTmp:          0 kB
+CommitLimit:     8584992 kB
+Committed_AS:     549224 kB
+VmallocTotal:   34359738367 kB
+VmallocUsed:        2532 kB
+VmallocChunk:          0 kB
+Percpu:             1696 kB
+AnonHugePages:         0 kB
+ShmemHugePages:        0 kB
+ShmemPmdMapped:        0 kB
+FileHugePages:         0 kB
+FilePmdMapped:         0 kB
+HugePages_Total:       0
+HugePages_Free:        0
+HugePages_Rsvd:        0
+HugePages_Surp:        0
+Hugepagesize:       2048 kB
+Hugetlb:               0 kB
+DirectMap4k:       19456 kB
+DirectMap2M:     2891776 kB
+DirectMap1G:    14680064 kB
+TRACE warm minflt 31809 majflt 0 utime_ticks 219 stime_ticks 2 thread_run_ms 2218.5 thread_wait_ms 0.0 rss_kb 199192 vm numa_hit=31989 numa_local=31989 pgfault=31852
+TRACE sample 0 ops 1 ns_per_byte 2.705728478831109 minflt 1412 majflt 0 utime_ticks 37 stime_ticks 0 thread_run_ms 363.4 thread_wait_ms 0.0 rss_kb 196120 vm numa_hit=1422 numa_local=1422 pgfault=1412
+TRACE sample 1 ops 1 ns_per_byte 2.7591678159672988 minflt 1143 majflt 0 utime_ticks 37 stime_ticks 0 thread_run_ms 370.6 thread_wait_ms 0.0 rss_kb 192484 vm numa_hit=1152 numa_local=1152 pgfault=1143
+TRACE sample 2 ops 1 ns_per_byte 2.7595925336149993 minflt 1156 majflt 0 utime_ticks 37 stime_ticks 0 thread_run_ms 370.7 thread_wait_ms 0.0 rss_kb 190436 vm numa_hit=1163 numa_local=1163 pgfault=1156
+TRACE sample 3 ops 1 ns_per_byte 2.828156512845267 minflt 1156 majflt 0 utime_ticks 38 stime_ticks 0 thread_run_ms 378.3 thread_wait_ms 0.0 rss_kb 188388 vm numa_hit=1163 numa_local=1163 pgfault=1157
+TRACE sample 4 ops 1 ns_per_byte 2.8326188830740207 minflt 1168 majflt 0 utime_ticks 38 stime_ticks 0 thread_run_ms 378.6 thread_wait_ms 0.0 rss_kb 185876 vm numa_hit=1177 numa_local=1177 pgfault=1170
+ 
+strings univocity quoted 134217728 ingest 1 [2.705728478831109, 2.7591678159672988, 2.7595925336149993, 2.828156512845267, 2.8326188830740207]
+--- strings truffledata-batch quoted 134217728 fork 1 TRACE start minflt 113490 majflt 0 utime_ticks 107 stime_ticks 8 thread_run_ms 1155.3 thread_wait_ms 0.3 rss_kb 460988 vm
+TRACE /sys/kernel/mm/transparent_hugepage/enabled always [madvise] never
+TRACE /sys/kernel/mm/transparent_hugepage/defrag always defer defer+madvise [madvise] never
+TRACE /proc/sys/kernel/numa_balancing 0
+TRACE /sys/kernel/mm/ksm/run 0
+TRACE /proc/meminfo MemTotal:       17169984 kB
+MemFree:        16529616 kB
+MemAvailable:   16384416 kB
+Buffers:            3624 kB
+Cached:            75784 kB
+SwapCached:            0 kB
+Active:            23260 kB
+Inactive:         531920 kB
+Active(anon):         28 kB
+Inactive(anon):   513100 kB
+Active(file):      23232 kB
+Inactive(file):    18820 kB
+Unevictable:           0 kB
+Mlocked:               0 kB
+SwapTotal:             0 kB
+SwapFree:              0 kB
+Dirty:                 0 kB
+Writeback:             0 kB
+AnonPages:        475908 kB
+Mapped:            51732 kB
+Shmem:             37356 kB
+KReclaimable:      12024 kB
+Slab:              26368 kB
+SReclaimable:      12024 kB
+SUnreclaim:        14344 kB
+KernelStack:        1872 kB
+PageTables:         1476 kB
+NFS_Unstable:          0 kB
+Bounce:                0 kB
+WritebackTmp:          0 kB
+CommitLimit:     8584992 kB
+Committed_AS:     700724 kB
+VmallocTotal:   34359738367 kB
+VmallocUsed:        2532 kB
+VmallocChunk:          0 kB
+Percpu:             1696 kB
+AnonHugePages:         0 kB
+ShmemHugePages:        0 kB
+ShmemPmdMapped:        0 kB
+FileHugePages:         0 kB
+FilePmdMapped:         0 kB
+HugePages_Total:       0
+HugePages_Free:        0
+HugePages_Rsvd:        0
+HugePages_Surp:        0
+Hugepagesize:       2048 kB
+Hugetlb:               0 kB
+DirectMap4k:       19456 kB
+DirectMap2M:     2891776 kB
+DirectMap1G:    14680064 kB
+TRACE warm minflt 438382 majflt 0 utime_ticks 171 stime_ticks 29 thread_run_ms 2001.0 thread_wait_ms 0.1 rss_kb 741468 vm numa_hit=439558 numa_local=439558 pgfault=438378
+TRACE sample 0 ops 2 ns_per_byte 1.3756893428935895 minflt 81844 majflt 0 utime_ticks 33 stime_ticks 4 thread_run_ms 369.6 thread_wait_ms 0.0 rss_kb 997996 vm numa_hit=82049 numa_local=82049 pgfault=81846
+TRACE sample 1 ops 2 ns_per_byte 1.5013136556703726 minflt 100081 majflt 0 utime_ticks 30 stime_ticks 10 thread_run_ms 403.3 thread_wait_ms 0.0 rss_kb 455660 vm numa_hit=100436 numa_local=100436 pgfault=100081
+TRACE sample 2 ops 2 ns_per_byte 1.3791034677978007 minflt 74486 majflt 0 utime_ticks 34 stime_ticks 3 thread_run_ms 370.5 thread_wait_ms 0.0 rss_kb 741476 vm numa_hit=74641 numa_local=74641 pgfault=74486
+TRACE sample 3 ops 2 ns_per_byte 1.4128312047942155 minflt 81842 majflt 0 utime_ticks 33 stime_ticks 5 thread_run_ms 376.7 thread_wait_ms 0.0 rss_kb 997996 vm numa_hit=82048 numa_local=82048 pgfault=81842
+TRACE sample 4 ops 2 ns_per_byte 1.5289010133403214 minflt 85170 majflt 0 utime_ticks 35 stime_ticks 6 thread_run_ms 409.7 thread_wait_ms 0.0 rss_kb 1260148 vm numa_hit=85384 numa_local=85384 pgfault=85170
+ 
+strings truffledata-batch quoted 134217728 ingest 1 [1.3756893428935895, 1.5013136556703726, 1.3791034677978007, 1.4128312047942155, 1.5289010133403214]
+native native-index-scalar [0.584364, 0.580168, 0.584929, 0.588514, 0.583407]
+native native-index-swar [0.44227, 0.444058, 0.444921, 0.444345, 0.441776]
+native native-index-avx2 [0.081535, 0.081728, 0.081863, 0.081562, 0.08178]
+native native-index-avx512 [0.080581, 0.079789, 0.080217, 0.08065, 0.08009]
+native native-indexed-scan [0.095402, 0.105715, 0.098571, 0.095605, 0.095025]
+native simdutf-validate [0.028761, 0.028474, 0.028487, 0.02919, 0.02803]
+native csv-core-scan [0.6834344009343982, 0.6974110350637667, 0.6961957171190776, 0.6975119655750197, 0.6840162093503284]
+native csv-byte-record [0.9703632986553479, 0.9697991765635887, 0.9605740777923041, 0.9606599327704113, 0.9476886860148422]
+native csv-string-record [0.9877680274387642, 0.9638529432324525, 0.9698523684039445, 0.9656500168184612, 0.9639976226540496]
+6 cells, 9 native rows, 0 unavailable

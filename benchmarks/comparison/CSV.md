@@ -4,7 +4,8 @@ The comparison cell for the CSV backend (plan Task 7, expanded). It measures the
 kernels (`csv/native`, `csv/kernel`) and the current pure-Java scanner against the Java CSV field
 and native references, on identical bytes and on the same worker.
 
-Raw samples, hosts, binary hashes and caveats are in [`csv-b5bd173/`](../results/csv-b5bd173/README.md) (shipped paths) and
+Raw samples, hosts, binary hashes and caveats are in [`csv-3f23d0c/`](../results/csv-3f23d0c/README.md) (latest, shipped paths),
+[`csv-b5bd173/`](../results/csv-b5bd173/README.md) and
 [`benchmarks/results/csv-f5daec1/`](../results/csv-f5daec1/README.md). **Shared-host timings are
 advisory. Compare only within one row**: each row is one dataset at one size, measured on one
 worker.
@@ -46,7 +47,7 @@ worker.
   - SVM `-march=x86-64-v3`.
   - GraalVM 25 JVM.
 - **Rigor**: every engine in a workload must produce the same checksum, including the Rust
-  `csv-typed` row. Each cell is measured in two fresh-process forks, each with five time samples
+  `csv-typed` row. Each cell is measured in three fresh-process forks (two before `csv-3f23d0c`), each with five time samples
   and three allocation samples.
 - **Not included**:
   - opencsv: popular, but not a throughput leader, and it would add four Commons dependencies.
@@ -54,9 +55,49 @@ worker.
   - zsv: would need a third-party C build. The csv/native kernel is itself the simdcsv design
     (simdjson stage 1), so `native-indexed-scan` stands in for that class.
 
+## Current standing (csv-3f23d0c)
+
+The latest run measures the shipped paths after the run-copy unescape (`a19119f`), with the
+scan-only framing loop split from the fused batch loop (`24ac7fe`), on a harness that pre-touches
+a fixed JVM heap and takes three forks per cell (`3f23d0c`). Raw samples, every table and the
+caveats are in [`csv-3f23d0c/`](../results/csv-3f23d0c/README.md);
+[`standing.md`](../results/csv-3f23d0c/standing.md) gives every competitor and reference per
+workload, runtime and path, and [`delta.md`](../results/csv-3f23d0c/delta.md) the same-shard
+ratios against `csv-720f0c7`. The shipped native paths (`CsvIndexing.loadNative`), as ratios to
+cells of the same shard (rows ahead / rows, range):
+
+| Workload | Runtime | vs FastCSV | vs Jackson | vs univocity | vs Commons CSV | vs Rust/C++ reference |
+|---|---|---|---|---|---|---|
+| Scan | SVM (compat) | 8/8 (2.3–19×) | 8/8 (7.1–35×) | no scan mode | no scan mode | `csv-core` 8/8 (1.3–8.3×); C++ index consumer 0/8 (0.57–0.85×) |
+| Scan | SVM (x86-64-v3) | 8/8 (2.5–17×) | 8/8 (7.8–34×) | no scan mode | no scan mode | `csv-core` 8/8 (1.3–7.7×); C++ 0/8 (0.57–0.84×) |
+| Scan | JVM | 8/8 (2.4–20×) | 8/8 (7.8–37×) | no scan mode | no scan mode | `csv-core` 8/8 (2.2–9.9×, one outlier probe left out); C++ 5/8 (0.95–1.11×) |
+| Typed | SVM (compat) | 4/4 (2.6–3.0×) | 4/4 (3.2–3.7×) | 4/4 (2.8–3.4×) | 4/4 (5.5–7.4×) | Rust `csv` 2/4: `mixed` 1.18–1.35×, `numeric` 0.61–0.66× |
+| Typed | SVM (x86-64-v3) | 4/4 (2.7–3.1×) | 4/4 (3.2–3.7×) | 4/4 (2.9–3.6×) | 4/4 (6.2–7.8×) | Rust `csv` 2/4: `mixed` 1.25–1.61×, `numeric` 0.65–0.73× |
+| Typed | JVM | 4/4 (2.3–2.9×) | 4/4 (2.9–3.5×) | 4/4 (2.6–3.1×) | 4/4 (4.4–5.6×) | Rust `csv` 4/4 (1.18–2.08×) |
+| Strings | SVM (compat) | 3/8 (0.33–1.61×) | 6/8 (0.67–3.2×) | 5/8 (0.57–3.3×) | 8/8 (1.4–7.0×) | Rust `StringRecord` 1/8 (0.21–1.04×) |
+| Strings | SVM (x86-64-v3) | 4/8 (0.58–1.55×) | 8/8 (1.0–4.8×) | 5/8 (0.69–4.2×) | 8/8 (2.4–9.6×) | Rust `StringRecord` 2/8 (0.24–1.56×) |
+| Strings | JVM | 8/8 (1.4–3.2×) | 8/8 (1.2–12×) | 8/8 (1.6–8.2×) | 8/8 (2.2–12×) | Rust `StringRecord` 6/8 (0.83–4.5×) |
+
+In plain terms:
+
+- **Scan and typed: first among the Java CSV parsers in every row, on every runtime.** Scan beats
+  Rust `csv-core` in every row; typed beats Rust `csv` on `mixed` everywhere and on the JVM's
+  `numeric`, and trails it on SVM `numeric` (0.61–0.73×). Scan reaches 0.87–0.98× the in-harness
+  kernel consumer on SVM (0.62–0.94× in `csv-720f0c7`) and 0.57–0.85× the C++ consumer of the same
+  index; on the JVM it matches the C++ consumer (0.95–1.11×).
+- **Strings: first on the JVM in every row; not first on SVM.** On SVM, FastCSV leads on the
+  short-field `mixed` and `numeric` fixtures (we reach 0.58–0.96× of it) and Rust's reused
+  `StringRecord` leads on every non-`quoted` row. SVM compat `quoted` 128 MiB (0.33× FastCSV) is a
+  page-fault-bound cell, not representative (results README).
+- **What changed:** SVM scan returned to its pre-fusion ratio (the fused path had made Native
+  Image compile one loop for every consumer with the conversions inlined); JVM `quoted` strings
+  went from 0.51/0.17 GB/s (1 MiB/128 MiB, old per-byte unescape plus fault stalls) to 5.4/2.3 GB/s;
+  the JVM's bimodal cells were first-touch page faults in timed samples on the RBE guests, now
+  pre-touched.
+
 ## Fused batches and published native kernel (csv-720f0c7)
 
-The latest run measures the shipped paths after fusing batch building into the index scan, the
+This run measured the shipped paths after fusing batch building into the index scan, the
 `String` fast paths, the mapped-cell buffer and the published native kernel (installed through
 `CsvIndexing.loadNative`, as applications do). Raw samples, the full tables and caveats are in
 [`csv-720f0c7/`](../results/csv-720f0c7/README.md); [`delta.md`](../results/csv-720f0c7/delta.md)
@@ -74,7 +115,7 @@ used different hosts.
 - The low end of strings is JVM `quoted`: the old per-byte unescape loop (fixed after this run in
   `bf044ec`; probe 0.87× the kernel at 128 MiB) and a pre-existing bimodal slowdown at 1 MiB.
 - The SVM scan ratios fell from about 0.9× to about 0.7× of the kernel consumer since the fused
-  path; it is open (see the results README).
+  path (fixed in `24ac7fe`; see `csv-3f23d0c`).
 
 ## Shipped paths over the structural index (csv-b5bd173)
 
@@ -315,7 +356,7 @@ The CsvRow read loop compiles to 141–197 nodes with no graph allocations and a
 row, which is the harness's per-call boxing. The core `Batch` loop keeps four allocation sites,
 because FLOAT64 and BOOLEAN cells are boxed.
 
-## Where we stand
+## Where the kernels stood (csv-f5daec1)
 
 **Against the Java competitors: first in every cell.**
 

@@ -1,0 +1,70 @@
+→ 🎬 Running test task
+
+→ 🔧 Setup · Running setup
+
+→ 🧪 Test · Spawning bazel test
+INFO: Invocation ID: 6ab1c651-894b-4154-b417-a7dae849b749
+INFO: Streaming build results to: https://app.buildbuddy.io/invocation/6ab1c651-894b-4154-b417-a7dae849b749
+Computing main repo mapping: 
+Loading: 
+Loading: 0 packages loaded
+Analyzing: target //benchmarks/comparison:proto_probe (1 packages loaded, 0 targets configured)
+Analyzing: target //benchmarks/comparison:proto_probe (1 packages loaded, 0 targets configured)
+
+INFO: Analyzed target //benchmarks/comparison:proto_probe (62 packages loaded, 1650 targets configured, 25 aspect applications).
+INFO: From Compiling absl/base/internal/spinlock.cc [for tool]:
+In file included from external/abseil-cpp+/absl/base/internal/spinlock.cc:15:
+external/abseil-cpp+/absl/base/internal/spinlock.h:242:55: warning: 'lifetime_capture_by(this)' is deprecated; use 'lifetime_capture_by_this' instead [-Wdeprecated-attributes]
+  242 |       SpinLock& l ABSL_INTERNAL_ATTRIBUTE_CAPTURED_BY(this))
+      |                                                       ^~~~
+1 warning generated.
+
+[... 135369 lines of protobuf C++ and upb compilation output omitted; see the invocation link ...]
+
+[1,389 / 1,390] Testing //benchmarks/comparison:proto_probe; 1s remote
+[1,389 / 1,390] Testing //benchmarks/comparison:proto_probe; 9s remote
+[1,389 / 1,390] Testing //benchmarks/comparison:proto_probe; 10s remote, remote-cache
+[1,389 / 1,390] Testing //benchmarks/comparison:proto_probe; 11s remote, remote-cache
+[1,389 / 1,390] 1 / 1 tests; Testing //benchmarks/comparison:proto_probe; 16s remote, remote-cache
+INFO: From Testing //benchmarks/comparison:proto_probe:
+==================== Test output for //benchmarks/comparison:proto_probe:
+PROBE host=model name	: AMD EPYC
+PROBE mode=small messages=32 bytes=4797 avg=149
+PROBE small/scan_flat                     684.0 ns/rep      21.4 ns/msg    7012.9 MB/s
+PROBE small/cpp_reuse                    9245.3 ns/rep     288.9 ns/msg     518.9 MB/s
+PROBE small/cpp_reuse_consume            9304.3 ns/rep     290.8 ns/msg     515.6 MB/s
+PROBE small/cpp_arena                   10930.2 ns/rep     341.6 ns/msg     438.9 MB/s
+PROBE small/upb                         11718.4 ns/rep     366.2 ns/msg     409.4 MB/s
+PROBE small/upb_consume                 11885.3 ns/rep     371.4 ns/msg     403.6 MB/s
+PROBE mode=holdout messages=32 bytes=16321 avg=510
+PROBE holdout/scan_flat                  2176.8 ns/rep      68.0 ns/msg    7497.6 MB/s
+PROBE holdout/cpp_reuse                 26830.6 ns/rep     838.5 ns/msg     608.3 MB/s
+PROBE holdout/cpp_reuse_consume         27525.2 ns/rep     860.2 ns/msg     592.9 MB/s
+PROBE holdout/cpp_arena                 30984.0 ns/rep     968.3 ns/msg     526.8 MB/s
+PROBE holdout/upb                       34434.7 ns/rep    1076.1 ns/msg     474.0 MB/s
+PROBE holdout/upb_consume               33636.3 ns/rep    1051.1 ns/msg     485.2 MB/s
+PROBE mode=large messages=32 bytes=1658313 avg=51822
+PROBE large/scan_flat                  190738.9 ns/rep    5960.6 ns/msg    8694.2 MB/s
+PROBE large/cpp_reuse                 2653182.1 ns/rep   82911.9 ns/msg     625.0 MB/s
+PROBE large/cpp_reuse_consume         2778590.4 ns/rep   86830.9 ns/msg     596.8 MB/s
+PROBE large/cpp_arena                 6154828.4 ns/rep  192338.4 ns/msg     269.4 MB/s
+PROBE large/upb                       3997029.1 ns/rep  124907.2 ns/msg     414.9 MB/s
+PROBE large/upb_consume               4030375.4 ns/rep  125949.2 ns/msg     411.5 MB/s
+================================================================================
+INFO: Found 1 test target...
+Target //benchmarks/comparison:proto_probe up-to-date:
+  bazel-bin/benchmarks/comparison/proto_probe
+INFO: Elapsed time: 254.801s, Critical Path: 202.32s
+INFO: 1390 processes: 416 remote cache hit, 435 internal, 540 remote.
+INFO: Build completed successfully, 1390 total actions
+INFO: 
+//benchmarks/comparison:proto_probe                                      PASSED in 8.9s
+
+Executed 1 out of 1 test: 1 test passes.
+There were tests whose specified size is too big. Use the --test_verbose_timeout_warnings command line option to see which ones these are.
+INFO: Streaming build results to: https://app.buildbuddy.io/invocation/6ab1c651-894b-4154-b417-a7dae849b749
+
+→ ✅ Passed test task in 4m 15s · Tests passed
+    🔧 Setup     0ms  Prepare the task environment
+    🧪 Test   4m 15s  Run bazel tests
+exit=0

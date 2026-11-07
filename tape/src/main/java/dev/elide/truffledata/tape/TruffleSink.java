@@ -43,6 +43,9 @@ public final class TruffleSink implements TapeSink {
     static final int CAPACITY = 1024;
     private final TruffleString[] names = new TruffleString[2 * CAPACITY];
     private final byte[][] utf8 = new byte[2 * CAPACITY][];
+    // Node words of names stored inline (at most 16 bytes), as in JavaSink.KeyCache.
+    private final long[] words = new long[3 * 2 * CAPACITY];
+    private final long[] probe = new long[3];
     private int size;
 
     /** Number of distinct names held. */
@@ -54,8 +57,14 @@ public final class TruffleSink implements TapeSink {
     TruffleString intern(TapeText key) {
       int mask = names.length - 1;
       int slot = key.hash() & mask;
-      for (TruffleString name; (name = names[slot]) != null; slot = (slot + 1) & mask)
-        if (key.utf8Equals(utf8[slot])) return name;
+      long[] w = probe;
+      boolean inline = key.inlineWords(w, 0);
+      for (TruffleString name; (name = names[slot]) != null; slot = (slot + 1) & mask) {
+        int at = 3 * slot;
+        if (inline
+            ? words[at] == w[0] && words[at + 1] == w[1] && words[at + 2] == w[2]
+            : key.utf8Equals(utf8[slot])) return name;
+      }
       byte[] bytes = new byte[key.utf8Length()];
       key.copyUtf8(bytes, 0);
       TruffleString name =
@@ -63,6 +72,7 @@ public final class TruffleSink implements TapeSink {
               .switchEncodingUncached(TruffleString.Encoding.UTF_16);
       if (size < CAPACITY) {
         utf8[slot] = bytes;
+        if (inline) System.arraycopy(w, 0, words, 3 * slot, 3);
         names[slot] = name;
         size++;
       }

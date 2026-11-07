@@ -39,29 +39,52 @@ public final class ConsumerComparison {
 
   public static void main(String[] args) throws Exception {
     if (args.length == 1 && args[0].equals("--smoke")) {
-      for (String engine : new String[] {"stock", "generated-owned", "native-view"})
-        for (String mode : new String[] {"sparse", "full", "holdout"})
-          for (String stage :
-              new String[] {"resident", "heap", "detach", "first", "interpret", "peak"}) {
+      for (String engine : ENGINES)
+        for (String mode : MODES)
+          for (String stage : STAGES) {
+            if (!cell(mode, stage)) continue;
             System.out.println("SMOKE " + engine + " " + mode + " " + stage);
             run(engine, mode, stage, "time", true);
           }
       return;
     }
     if (args.length != 4)
-      throw new IllegalArgumentException("engine sparse|full|holdout stage time|memory");
+      throw new IllegalArgumentException("engine sparse|full|holdout|large stage time|memory");
     run(args[0], args[1], args[2], args[3], false);
+  }
+
+  static final String[] ENGINES = {"stock", "generated-owned", "native-view", "native-eager"};
+  static final String[] MODES = {"sparse", "full", "holdout", "large"};
+  static final String[] STAGES = {
+    "decode", "resident", "heap", "detach", "first", "interpret", "peak"
+  };
+
+  /** Holdout and large-message data sets measure a deliberately smaller matrix. */
+  static boolean cell(String mode, String stage) {
+    return switch (mode) {
+      case "holdout" -> stage.equals("resident") || stage.equals("peak");
+      case "large" -> stage.equals("decode") || stage.equals("resident") || stage.equals("peak");
+      default -> true;
+    };
+  }
+
+  private static boolean nativeEngine(String engine) {
+    return engine.equals("native-view") || engine.equals("native-eager");
   }
 
   private static void run(String engine, String mode, String stage, String metric, boolean smoke)
       throws Exception {
-    if (!Arrays.asList("stock", "generated-owned", "native-view").contains(engine)
-        || !Arrays.asList("sparse", "full", "holdout").contains(mode)
-        || !Arrays.asList("resident", "heap", "detach", "first", "interpret", "peak")
-            .contains(stage)
+    if (!Arrays.asList(ENGINES).contains(engine)
+        || !Arrays.asList(MODES).contains(mode)
+        || !Arrays.asList(STAGES).contains(stage)
+        || !cell(mode, stage)
         || !Arrays.asList("time", "memory").contains(metric))
       throw new IllegalArgumentException("Unknown consumer cell");
-    boolean peak = !stage.equals("interpret");
+    // Decode-only cells run no guest code; their parsing is host code on both runtimes.
+    boolean peak = !stage.equals("interpret") && !stage.equals("decode");
+    // HotSpot needs much longer host warmup than a closed-world image; both are recorded.
+    long warmupNanos = Long.getLong("consumer.warmupMillis", 100) * 1_000_000;
+    long sampleWindow = Long.getLong("consumer.sampleMillis", sampleNanos / 1_000_000) * 1_000_000;
     try (var context =
         Context.newBuilder("td-compare")
             .allowExperimentalOptions(true)
@@ -101,7 +124,7 @@ public final class ConsumerComparison {
           fixture.closedReadCheck();
           return;
         }
-        long until = System.nanoTime() + 100_000_000;
+        long until = System.nanoTime() + warmupNanos;
         while (System.nanoTime() < until) fixture.operation();
         fixture.tier(peak);
         beforeSamples.run();
@@ -125,13 +148,15 @@ public final class ConsumerComparison {
                     - from;
             if (stage.equals("first")) fixture.release();
             count++;
-          } while (metric.equals("memory") ? count < 64 : System.nanoTime() - start < sampleNanos);
+          } while (metric.equals("memory")
+              ? count < 64
+              : System.nanoTime() - start < sampleWindow);
           samples[s] = (double) total / (count * ROWS);
           fixture.tier(peak);
         }
         System.out.printf(
             Locale.ROOT,
-            "{\"engine\":\"%s\",\"mode\":\"%s\",\"stage\":\"%s\",\"runtime\":\"%s\",\"rows\":%d,\"checksum\":%d,\"guest_compiled\":%s,\"shared_access\":%s,\"stock_boundary\":%s,\"input_bytes_per_row\":%.3f,\"copied_input_bytes_per_row\":%.3f,\"decoded_native_index_capacity_bytes_per_row\":%.3f,\"decoded_native_result_header_bytes_per_row\":%d,\"native_transient_peak_bytes\":null,\"native_allocation_count\":null,\"%s\":%s}%n",
+            "{\"engine\":\"%s\",\"mode\":\"%s\",\"stage\":\"%s\",\"runtime\":\"%s\",\"rows\":%d,\"checksum\":%d,\"guest_compiled\":%s,\"shared_access\":%s,\"stock_boundary\":%s,\"native_index_retained\":%s,\"input_bytes_per_row\":%.3f,\"copied_input_bytes_per_row\":%.3f,\"decoded_native_index_capacity_bytes_per_row\":%.3f,\"decoded_native_result_header_bytes_per_row\":%d,\"native_transient_peak_bytes\":null,\"native_allocation_count\":null,\"%s\":%s}%n",
             engine,
             mode,
             stage,
@@ -139,14 +164,15 @@ public final class ConsumerComparison {
             ROWS,
             fixture.expected,
             peak,
-            !engine.equals("stock"),
-            engine.equals("stock"),
+            !engine.equals("stock") && !stage.equals("decode"),
+            engine.equals("stock") && !stage.equals("decode"),
+            engine.equals("native-view"),
             fixture.inputBytes / (double) ROWS,
-            engine.equals("native-view") && stage.equals("heap")
+            nativeEngine(engine) && stage.equals("heap")
                 ? fixture.inputBytes / (double) ROWS
                 : 0,
             fixture.indexBytes / (double) ROWS,
-            engine.equals("native-view") ? Buffa.Result.SIZE : 0,
+            fixture.headerBytes,
             metric.equals("memory") ? "java_bytes_per_row" : "ns_per_row",
             Arrays.toString(samples));
       } finally {
@@ -184,7 +210,7 @@ public final class ConsumerComparison {
     final ConsumerRoot root;
     final OptimizedCallTarget target;
     final long expected;
-    long inputBytes, indexBytes;
+    long inputBytes, indexBytes, headerBytes;
     int rotation;
 
     Fixture(String engine, String mode, String stage) throws Exception {
@@ -208,7 +234,13 @@ public final class ConsumerComparison {
       long sum = 0;
       for (int i = 0; i < ROWS; i++) {
         var b = Type.newBuilder().setName("catalog-" + i + "-λ").setSyntax(Syntax.SYNTAX_PROTO3);
-        int count = mode.equals("holdout") ? 12 + i % 13 : 3 + i % 6;
+        int count =
+            switch (mode) {
+              case "holdout" -> 12 + i % 13;
+              // About 50 KB per message: a throughput cohort for large repeated payloads.
+              case "large" -> 2048 + (i % 8) * 64;
+              default -> 3 + i % 6;
+            };
         // Missing source_context is a real absent record, represented as Missing by both TD routes.
         if (i % 3 != 0)
           b.setSourceContext(SourceContext.newBuilder().setFileName("schema-" + i + ".proto"));
@@ -231,28 +263,34 @@ public final class ConsumerComparison {
       }
       expected = sum;
       // Observe representative native capacity outside measured operations, including detach cells.
-      if (engine.equals("native-view"))
+      if (nativeEngine(engine))
         for (var input : inputs)
-          try (var message =
-              nativePlan.decodeView(java.util.Objects.requireNonNull(input), 1 << 20)) {
+          try (var message = decode(java.util.Objects.requireNonNull(input))) {
             indexBytes += message.nativeIndexBytes();
           }
+      headerBytes = engine.equals("native-view") ? Buffa.Result.SIZE : 0;
       prepare();
       if (!stage.equals("interpret") && !stage.equals("peak")) release();
     }
 
+    /** The opt-in scoped view, or the default eager native decode into Java rows. */
+    TypedMessage decode(WireInput input) {
+      return engine.equals("native-view")
+          ? nativePlan.decodeView(input, 1 << 20)
+          : nativePlan.decode(input, 1 << 20);
+    }
+
     void prepare() throws Exception {
       for (int i = 0; i < ROWS; i++) {
-        if (engine.equals("native-view")) {
+        if (nativeEngine(engine)) {
           if (stage.equals("heap")) {
             try (var input = decoder.allocate(wires[i].length).put(wires[i])) {
-              messages[i] = nativePlan.decodeView(input, 1 << 20);
+              messages[i] = decode(input);
             }
-          } else
-            messages[i] =
-                nativePlan.decodeView(java.util.Objects.requireNonNull(inputs[i]), 1 << 20);
+          } else messages[i] = decode(java.util.Objects.requireNonNull(inputs[i]));
           var message = java.util.Objects.requireNonNull(messages[i]);
-          if (!message.nativeBacked()) throw new AssertionError("Unexpected eager fallback");
+          if (message.nativeBacked() != engine.equals("native-view"))
+            throw new AssertionError("Unexpected native representation");
           rows[i] = stage.equals("detach") ? message.snapshot() : message.row();
           if (stage.equals("detach")) {
             message.close();
@@ -275,7 +313,7 @@ public final class ConsumerComparison {
       else {
         prepare();
         try {
-          consume();
+          if (!stage.equals("decode")) consume();
         } finally {
           release();
         }
@@ -283,6 +321,7 @@ public final class ConsumerComparison {
     }
 
     void tier(boolean peak) {
+      if (stage.equals("decode")) return;
       if (target.isValidLastTier() != peak) throw new AssertionError("Wrong guest tier");
       // SharedRoot returns this bit inside the actual shared-access helper, not its caller.
       if (!engine.equals("stock") && ((sink & COMPILED) != 0) != peak)
@@ -301,7 +340,7 @@ public final class ConsumerComparison {
     }
 
     void closedReadCheck() throws Exception {
-      if (!engine.equals("native-view") || stage.equals("detach")) return;
+      if (!nativeEngine(engine) || stage.equals("detach")) return;
       release();
       prepare();
       for (var message : messages) java.util.Objects.requireNonNull(message).close();

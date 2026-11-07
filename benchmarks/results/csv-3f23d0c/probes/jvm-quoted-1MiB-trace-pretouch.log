@@ -1,0 +1,742 @@
+exec ${PAGER:-/usr/bin/less} "$0" || exit 1
+Executing tests from //benchmarks/comparison:csv_measure_jvm
+-----------------------------------------------------------------------------
+--- strings fastcsv quoted 1048576 fork 1 Picked up JAVA_TOOL_OPTIONS: -Xms8g -XX:+AlwaysPreTouch -Xlog:gc+init,gc+heap+exit:stderr:uptime
+[0.094s] CardTable entry size: 512
+[15.406s] Version: 25.0.4.1.1+1-jvmci-25.5-b24 (release)
+[15.406s] CPUs: 7 total, 7 available
+[15.406s] Memory: 16767M
+[15.406s] Large Page Support: Disabled
+[15.406s] NUMA Support: Disabled
+[15.406s] Compressed Oops: Enabled (Zero based)
+[15.406s] Heap Region Size: 4M
+[15.406s] Heap Min Capacity: 8G
+[15.406s] Heap Initial Capacity: 8G
+[15.406s] Heap Max Capacity: 8G
+[15.406s] Pre-touch: Enabled
+[15.406s] Parallel Workers: 7
+[15.406s] Concurrent Workers: 2
+[15.406s] Concurrent Refinement Workers: 7
+[15.406s] Periodic GC: Disabled
+WARNING: Using incubator modules: jdk.incubator.vector
+TRACE start minflt 2151153 majflt 784 utime_ticks 95 stime_ticks 10617 thread_run_ms 670.9 thread_wait_ms 1.1 rss_kb 8649384 vm
+TRACE /sys/kernel/mm/transparent_hugepage/enabled always [madvise] never
+TRACE /sys/kernel/mm/transparent_hugepage/defrag always defer defer+madvise [madvise] never
+TRACE /proc/sys/kernel/numa_balancing 0
+TRACE /sys/kernel/mm/ksm/run 0
+TRACE /proc/meminfo MemTotal:       17169984 kB
+MemFree:         8350172 kB
+MemAvailable:    8228684 kB
+Buffers:            3872 kB
+Cached:           122688 kB
+SwapCached:            0 kB
+Active:             9268 kB
+Inactive:        8744776 kB
+Active(anon):         32 kB
+Inactive(anon):  8664872 kB
+Active(file):       9236 kB
+Inactive(file):    79904 kB
+Unevictable:           0 kB
+Mlocked:               0 kB
+SwapTotal:             0 kB
+SwapFree:              0 kB
+Dirty:                16 kB
+Writeback:             0 kB
+AnonPages:       8627736 kB
+Mapped:            78164 kB
+Shmem:             37356 kB
+KReclaimable:      12360 kB
+Slab:              26780 kB
+SReclaimable:      12360 kB
+SUnreclaim:        14420 kB
+KernelStack:        2192 kB
+PageTables:        17828 kB
+NFS_Unstable:          0 kB
+Bounce:                0 kB
+WritebackTmp:          0 kB
+CommitLimit:     8584992 kB
+Committed_AS:    9053512 kB
+VmallocTotal:   34359738367 kB
+VmallocUsed:        2804 kB
+VmallocChunk:          0 kB
+Percpu:             1696 kB
+AnonHugePages:         0 kB
+ShmemHugePages:        0 kB
+ShmemPmdMapped:        0 kB
+FileHugePages:         0 kB
+FilePmdMapped:         0 kB
+HugePages_Total:       0
+HugePages_Free:        0
+HugePages_Rsvd:        0
+HugePages_Surp:        0
+Hugepagesize:       2048 kB
+Hugetlb:               0 kB
+DirectMap4k:       19456 kB
+DirectMap2M:     2891776 kB
+DirectMap1G:    14680064 kB
+TRACE warm minflt 6609 majflt 37 utime_ticks 282 stime_ticks 23 thread_run_ms 1978.8 thread_wait_ms 0.0 rss_kb 8668832 vm numa_hit=7043 numa_local=7043 pgfault=6619
+TRACE sample 0 ops 401 ns_per_byte 0.7139173019026948 minflt 24 majflt 0 utime_ticks 31 stime_ticks 1 thread_run_ms 307.7 thread_wait_ms 0.0 rss_kb 8668924 vm numa_hit=29 numa_local=29 pgfault=29
+TRACE sample 1 ops 474 ns_per_byte 0.6047054510295142 minflt 45 majflt 0 utime_ticks 31 stime_ticks 2 thread_run_ms 298.2 thread_wait_ms 0.1 rss_kb 8668924 vm numa_hit=55 numa_local=55 pgfault=51
+TRACE sample 2 ops 481 ns_per_byte 0.5948375357760656 minflt 1 majflt 0 utime_ticks 30 stime_ticks 0 thread_run_ms 301.2 thread_wait_ms 0.0 rss_kb 8668924 vm numa_hit=8 numa_local=8 pgfault=8
+TRACE sample 3 ops 479 ns_per_byte 0.5977383366051319 minflt 2 majflt 2 utime_ticks 33 stime_ticks 0 thread_run_ms 301.5 thread_wait_ms 0.0 rss_kb 8668924 vm numa_hit=8 numa_local=8 pgfault=13
+TRACE sample 4 ops 480 ns_per_byte 0.5960579280076488 minflt 0 majflt 0 utime_ticks 30 stime_ticks 0 thread_run_ms 301.0 thread_wait_ms 0.0 rss_kb 8668924 vm numa_hit=12 numa_local=12 pgfault=12
+ 
+strings fastcsv quoted 1048576 ingest 1 [0.7139173019026948, 0.6047054510295142, 0.5948375357760656, 0.5977383366051319, 0.5960579280076488]
+--- strings univocity quoted 1048576 fork 0 Picked up JAVA_TOOL_OPTIONS: -Xms8g -XX:+AlwaysPreTouch -Xlog:gc+init,gc+heap+exit:stderr:uptime
+[0.009s] CardTable entry size: 512
+[0.672s] Version: 25.0.4.1.1+1-jvmci-25.5-b24 (release)
+[0.672s] CPUs: 7 total, 7 available
+[0.672s] Memory: 16767M
+[0.672s] Large Page Support: Disabled
+[0.672s] NUMA Support: Disabled
+[0.672s] Compressed Oops: Enabled (Zero based)
+[0.672s] Heap Region Size: 4M
+[0.672s] Heap Min Capacity: 8G
+[0.672s] Heap Initial Capacity: 8G
+[0.672s] Heap Max Capacity: 8G
+[0.672s] Pre-touch: Enabled
+[0.672s] Parallel Workers: 7
+[0.672s] Concurrent Workers: 2
+[0.672s] Concurrent Refinement Workers: 7
+[0.672s] Periodic GC: Disabled
+WARNING: Using incubator modules: jdk.incubator.vector
+TRACE start minflt 2154261 majflt 9 utime_ticks 54 stime_ticks 433 thread_run_ms 163.0 thread_wait_ms 0.1 rss_kb 8662464 vm
+TRACE /sys/kernel/mm/transparent_hugepage/enabled always [madvise] never
+TRACE /sys/kernel/mm/transparent_hugepage/defrag always defer defer+madvise [madvise] never
+TRACE /proc/sys/kernel/numa_balancing 0
+TRACE /sys/kernel/mm/ksm/run 0
+TRACE /proc/meminfo MemTotal:       17169984 kB
+MemFree:         8336644 kB
+MemAvailable:    8216752 kB
+Buffers:            3880 kB
+Cached:           125716 kB
+SwapCached:            0 kB
+Active:            18336 kB
+Inactive:        8750316 kB
+Active(anon):         32 kB
+Inactive(anon):  8676380 kB
+Active(file):      18304 kB
+Inactive(file):    73936 kB
+Unevictable:           0 kB
+Mlocked:               0 kB
+SwapTotal:             0 kB
+SwapFree:              0 kB
+Dirty:                32 kB
+Writeback:             0 kB
+AnonPages:       8639280 kB
+Mapped:            79756 kB
+Shmem:             37356 kB
+KReclaimable:      12452 kB
+Slab:              26896 kB
+SReclaimable:      12452 kB
+SUnreclaim:        14444 kB
+KernelStack:        2192 kB
+PageTables:        17848 kB
+NFS_Unstable:          0 kB
+Bounce:                0 kB
+WritebackTmp:          0 kB
+CommitLimit:     8584992 kB
+Committed_AS:    9065008 kB
+VmallocTotal:   34359738367 kB
+VmallocUsed:        2852 kB
+VmallocChunk:          0 kB
+Percpu:             1696 kB
+AnonHugePages:         0 kB
+ShmemHugePages:        0 kB
+ShmemPmdMapped:        0 kB
+FileHugePages:         0 kB
+FilePmdMapped:         0 kB
+HugePages_Total:       0
+HugePages_Free:        0
+HugePages_Rsvd:        0
+HugePages_Surp:        0
+Hugepagesize:       2048 kB
+Hugetlb:               0 kB
+DirectMap4k:       19456 kB
+DirectMap2M:     2891776 kB
+DirectMap1G:    14680064 kB
+TRACE warm minflt 9542 majflt 7 utime_ticks 309 stime_ticks 13 thread_run_ms 1971.5 thread_wait_ms 0.7 rss_kb 8674292 vm numa_hit=9416 numa_local=9416 pgfault=9332
+TRACE sample 0 ops 208 ns_per_byte 1.3809226765754536 minflt 21 majflt 0 utime_ticks 33 stime_ticks 0 thread_run_ms 311.8 thread_wait_ms 0.1 rss_kb 8674356 vm numa_hit=28 numa_local=28 pgfault=28
+TRACE sample 1 ops 189 ns_per_byte 1.5202031475927638 minflt 109 majflt 0 utime_ticks 35 stime_ticks 0 thread_run_ms 298.8 thread_wait_ms 0.1 rss_kb 8674976 vm numa_hit=112 numa_local=112 pgfault=112
+TRACE sample 2 ops 213 ns_per_byte 1.345274761490543 minflt 1 majflt 0 utime_ticks 32 stime_ticks 0 thread_run_ms 303.3 thread_wait_ms 0.0 rss_kb 8674976 vm numa_hit=9 numa_local=9 pgfault=9
+TRACE sample 3 ops 203 ns_per_byte 1.4139019499705083 minflt 4 majflt 0 utime_ticks 33 stime_ticks 1 thread_run_ms 299.2 thread_wait_ms 0.0 rss_kb 8674496 vm numa_hit=20 numa_local=20 pgfault=19
+TRACE sample 4 ops 212 ns_per_byte 1.352759943845874 minflt 5 majflt 1 utime_ticks 35 stime_ticks 0 thread_run_ms 303.9 thread_wait_ms 0.0 rss_kb 8674496 vm numa_hit=36 numa_local=36 pgfault=13
+ 
+strings univocity quoted 1048576 ingest 0 [1.3809226765754536, 1.5202031475927638, 1.345274761490543, 1.4139019499705083, 1.352759943845874]
+--- strings univocity quoted 1048576 fork 2 Picked up JAVA_TOOL_OPTIONS: -Xms8g -XX:+AlwaysPreTouch -Xlog:gc+init,gc+heap+exit:stderr:uptime
+[0.006s] CardTable entry size: 512
+[0.466s] Version: 25.0.4.1.1+1-jvmci-25.5-b24 (release)
+[0.466s] CPUs: 7 total, 7 available
+[0.466s] Memory: 16767M
+[0.466s] Large Page Support: Disabled
+[0.466s] NUMA Support: Disabled
+[0.466s] Compressed Oops: Enabled (Zero based)
+[0.466s] Heap Region Size: 4M
+[0.466s] Heap Min Capacity: 8G
+[0.466s] Heap Initial Capacity: 8G
+[0.466s] Heap Max Capacity: 8G
+[0.466s] Pre-touch: Enabled
+[0.466s] Parallel Workers: 7
+[0.467s] Concurrent Workers: 2
+[0.467s] Concurrent Refinement Workers: 7
+[0.467s] Periodic GC: Disabled
+WARNING: Using incubator modules: jdk.incubator.vector
+TRACE start minflt 2153413 majflt 8 utime_ticks 50 stime_ticks 300 thread_run_ms 151.1 thread_wait_ms 0.0 rss_kb 8658564 vm
+TRACE /sys/kernel/mm/transparent_hugepage/enabled always [madvise] never
+TRACE /sys/kernel/mm/transparent_hugepage/defrag always defer defer+madvise [madvise] never
+TRACE /proc/sys/kernel/numa_balancing 0
+TRACE /sys/kernel/mm/ksm/run 0
+TRACE /proc/meminfo MemTotal:       17169984 kB
+MemFree:         8339140 kB
+MemAvailable:    8219480 kB
+Buffers:            3888 kB
+Cached:           126164 kB
+SwapCached:            0 kB
+Active:            53532 kB
+Inactive:        8713084 kB
+Active(anon):         28 kB
+Inactive(anon):  8673892 kB
+Active(file):      53504 kB
+Inactive(file):    39192 kB
+Unevictable:           0 kB
+Mlocked:               0 kB
+SwapTotal:             0 kB
+SwapFree:              0 kB
+Dirty:                56 kB
+Writeback:             0 kB
+AnonPages:       8636712 kB
+Mapped:            79868 kB
+Shmem:             37356 kB
+KReclaimable:      12460 kB
+Slab:              26976 kB
+SReclaimable:      12460 kB
+SUnreclaim:        14516 kB
+KernelStack:        2236 kB
+PageTables:        17672 kB
+NFS_Unstable:          0 kB
+Bounce:                0 kB
+WritebackTmp:          0 kB
+CommitLimit:     8584992 kB
+Committed_AS:    9062060 kB
+VmallocTotal:   34359738367 kB
+VmallocUsed:        2884 kB
+VmallocChunk:          0 kB
+Percpu:             1696 kB
+AnonHugePages:         0 kB
+ShmemHugePages:        0 kB
+ShmemPmdMapped:        0 kB
+FileHugePages:         0 kB
+FilePmdMapped:         0 kB
+HugePages_Total:       0
+HugePages_Free:        0
+HugePages_Rsvd:        0
+HugePages_Surp:        0
+Hugepagesize:       2048 kB
+Hugetlb:               0 kB
+DirectMap4k:       19456 kB
+DirectMap2M:     2891776 kB
+DirectMap1G:    14680064 kB
+TRACE warm minflt 9717 majflt 3 utime_ticks 279 stime_ticks 5 thread_run_ms 1975.0 thread_wait_ms 0.1 rss_kb 8674940 vm numa_hit=9804 numa_local=9804 pgfault=9795
+TRACE sample 0 ops 22 ns_per_byte 13.023049531959101 minflt 22 majflt 0 utime_ticks 30 stime_ticks 2 thread_run_ms 308.8 thread_wait_ms 0.1 rss_kb 8675200 vm numa_hit=22 numa_local=22 pgfault=23
+TRACE sample 1 ops 128 ns_per_byte 2.2544451368665515 minflt 1 majflt 0 utime_ticks 32 stime_ticks 0 thread_run_ms 304.2 thread_wait_ms 0.0 rss_kb 8675200 vm numa_hit=1 numa_local=1 pgfault=1
+TRACE sample 2 ops 165 ns_per_byte 1.7337606717578569 minflt 2 majflt 0 utime_ticks 35 stime_ticks 0 thread_run_ms 296.6 thread_wait_ms 0.1 rss_kb 8675200 vm numa_hit=8 numa_local=8 pgfault=8
+TRACE sample 3 ops 201 ns_per_byte 1.4280225736476897 minflt 6 majflt 0 utime_ticks 33 stime_ticks 0 thread_run_ms 298.6 thread_wait_ms 0.0 rss_kb 8675200 vm numa_hit=10 numa_local=10 pgfault=10
+TRACE sample 4 ops 209 ns_per_byte 1.3695337771565994 minflt 1 majflt 0 utime_ticks 32 stime_ticks 0 thread_run_ms 303.0 thread_wait_ms 0.0 rss_kb 8675200 vm numa_hit=6 numa_local=6 pgfault=6
+ 
+strings univocity quoted 1048576 ingest 2 [13.023049531959101, 2.2544451368665515, 1.7337606717578569, 1.4280225736476897, 1.3695337771565994]
+--- strings truffledata-batch quoted 1048576 fork 0 Picked up JAVA_TOOL_OPTIONS: -Xms8g -XX:+AlwaysPreTouch -Xlog:gc+init,gc+heap+exit:stderr:uptime
+[0.006s] CardTable entry size: 512
+[0.499s] Version: 25.0.4.1.1+1-jvmci-25.5-b24 (release)
+[0.499s] CPUs: 7 total, 7 available
+[0.499s] Memory: 16767M
+[0.499s] Large Page Support: Disabled
+[0.499s] NUMA Support: Disabled
+[0.499s] Compressed Oops: Enabled (Zero based)
+[0.499s] Heap Region Size: 4M
+[0.499s] Heap Min Capacity: 8G
+[0.499s] Heap Initial Capacity: 8G
+[0.499s] Heap Max Capacity: 8G
+[0.499s] Pre-touch: Enabled
+[0.499s] Parallel Workers: 7
+[0.499s] Concurrent Workers: 2
+[0.499s] Concurrent Refinement Workers: 7
+[0.499s] Periodic GC: Disabled
+WARNING: Using incubator modules: jdk.incubator.vector
+TRACE start minflt 2154478 majflt 9 utime_ticks 60 stime_ticks 302 thread_run_ms 176.3 thread_wait_ms 0.0 rss_kb 8662880 vm
+TRACE /sys/kernel/mm/transparent_hugepage/enabled always [madvise] never
+TRACE /sys/kernel/mm/transparent_hugepage/defrag always defer defer+madvise [madvise] never
+TRACE /proc/sys/kernel/numa_balancing 0
+TRACE /sys/kernel/mm/ksm/run 0
+TRACE /proc/meminfo MemTotal:       17169984 kB
+MemFree:         8336692 kB
+MemAvailable:    8217168 kB
+Buffers:            3896 kB
+Cached:           126492 kB
+SwapCached:            0 kB
+Active:            55568 kB
+Inactive:        8713676 kB
+Active(anon):         28 kB
+Inactive(anon):  8676248 kB
+Active(file):      55540 kB
+Inactive(file):    37428 kB
+Unevictable:           0 kB
+Mlocked:               0 kB
+SwapTotal:             0 kB
+SwapFree:              0 kB
+Dirty:                56 kB
+Writeback:             0 kB
+AnonPages:       8638992 kB
+Mapped:            80088 kB
+Shmem:             37356 kB
+KReclaimable:      12464 kB
+Slab:              26984 kB
+SReclaimable:      12464 kB
+SUnreclaim:        14520 kB
+KernelStack:        2208 kB
+PageTables:        17848 kB
+NFS_Unstable:          0 kB
+Bounce:                0 kB
+WritebackTmp:          0 kB
+CommitLimit:     8584992 kB
+Committed_AS:    9064544 kB
+VmallocTotal:   34359738367 kB
+VmallocUsed:        2900 kB
+VmallocChunk:          0 kB
+Percpu:             1696 kB
+AnonHugePages:         0 kB
+ShmemHugePages:        0 kB
+ShmemPmdMapped:        0 kB
+FileHugePages:         0 kB
+FilePmdMapped:         0 kB
+HugePages_Total:       0
+HugePages_Free:        0
+HugePages_Rsvd:        0
+HugePages_Surp:        0
+Hugepagesize:       2048 kB
+Hugetlb:               0 kB
+DirectMap4k:       19456 kB
+DirectMap2M:     2891776 kB
+DirectMap1G:    14680064 kB
+TRACE warm minflt 1532 majflt 3 utime_ticks 269 stime_ticks 4 thread_run_ms 1986.2 thread_wait_ms 0.0 rss_kb 8665932 vm numa_hit=2001 numa_local=2001 pgfault=2068
+TRACE sample 0 ops 608 ns_per_byte 0.4706642047808784 minflt 103 majflt 1 utime_ticks 37 stime_ticks 1 thread_run_ms 303.1 thread_wait_ms 0.0 rss_kb 8664620 vm numa_hit=106 numa_local=106 pgfault=104
+TRACE sample 1 ops 621 ns_per_byte 0.46130716568953545 minflt 22 majflt 0 utime_ticks 31 stime_ticks 0 thread_run_ms 302.1 thread_wait_ms 0.0 rss_kb 8664620 vm numa_hit=22 numa_local=22 pgfault=22
+TRACE sample 2 ops 586 ns_per_byte 0.4882312532987246 minflt 28 majflt 0 utime_ticks 34 stime_ticks 0 thread_run_ms 302.1 thread_wait_ms 0.0 rss_kb 8664620 vm numa_hit=29 numa_local=29 pgfault=29
+TRACE sample 3 ops 616 ns_per_byte 0.46459092247787154 minflt 1 majflt 0 utime_ticks 32 stime_ticks 0 thread_run_ms 301.7 thread_wait_ms 0.0 rss_kb 8664620 vm numa_hit=6 numa_local=6 pgfault=6
+TRACE sample 4 ops 613 ns_per_byte 0.4673091475454816 minflt 766 majflt 2 utime_ticks 40 stime_ticks 0 thread_run_ms 299.7 thread_wait_ms 0.0 rss_kb 8667900 vm numa_hit=800 numa_local=800 pgfault=775
+ 
+strings truffledata-batch quoted 1048576 ingest 0 [0.4706642047808784, 0.46130716568953545, 0.4882312532987246, 0.46459092247787154, 0.4673091475454816]
+--- strings fastcsv quoted 1048576 fork 0 Picked up JAVA_TOOL_OPTIONS: -Xms8g -XX:+AlwaysPreTouch -Xlog:gc+init,gc+heap+exit:stderr:uptime
+[0.006s] CardTable entry size: 512
+[0.432s] Version: 25.0.4.1.1+1-jvmci-25.5-b24 (release)
+[0.432s] CPUs: 7 total, 7 available
+[0.432s] Memory: 16767M
+[0.432s] Large Page Support: Disabled
+[0.432s] NUMA Support: Disabled
+[0.432s] Compressed Oops: Enabled (Zero based)
+[0.432s] Heap Region Size: 4M
+[0.432s] Heap Min Capacity: 8G
+[0.432s] Heap Initial Capacity: 8G
+[0.432s] Heap Max Capacity: 8G
+[0.432s] Pre-touch: Enabled
+[0.432s] Parallel Workers: 7
+[0.432s] Concurrent Workers: 2
+[0.432s] Concurrent Refinement Workers: 7
+[0.432s] Periodic GC: Disabled
+WARNING: Using incubator modules: jdk.incubator.vector
+TRACE start minflt 2154818 majflt 8 utime_ticks 50 stime_ticks 251 thread_run_ms 146.2 thread_wait_ms 0.1 rss_kb 8664308 vm
+TRACE /sys/kernel/mm/transparent_hugepage/enabled always [madvise] never
+TRACE /sys/kernel/mm/transparent_hugepage/defrag always defer defer+madvise [madvise] never
+TRACE /proc/sys/kernel/numa_balancing 0
+TRACE /sys/kernel/mm/ksm/run 0
+TRACE /proc/meminfo MemTotal:       17169984 kB
+MemFree:         8328216 kB
+MemAvailable:    8208800 kB
+Buffers:            3904 kB
+Cached:           126620 kB
+SwapCached:            0 kB
+Active:            56040 kB
+Inactive:        8716660 kB
+Active(anon):         28 kB
+Inactive(anon):  8679504 kB
+Active(file):      56012 kB
+Inactive(file):    37156 kB
+Unevictable:           0 kB
+Mlocked:               0 kB
+SwapTotal:             0 kB
+SwapFree:              0 kB
+Dirty:                56 kB
+Writeback:             0 kB
+AnonPages:       8642556 kB
+Mapped:            79856 kB
+Shmem:             37356 kB
+KReclaimable:      12476 kB
+Slab:              27272 kB
+SReclaimable:      12476 kB
+SUnreclaim:        14796 kB
+KernelStack:        2192 kB
+PageTables:        17664 kB
+NFS_Unstable:          0 kB
+Bounce:                0 kB
+WritebackTmp:          0 kB
+CommitLimit:     8584992 kB
+Committed_AS:    9067524 kB
+VmallocTotal:   34359738367 kB
+VmallocUsed:        2884 kB
+VmallocChunk:          0 kB
+Percpu:             1696 kB
+AnonHugePages:         0 kB
+ShmemHugePages:        0 kB
+ShmemPmdMapped:        0 kB
+FileHugePages:         0 kB
+FilePmdMapped:         0 kB
+HugePages_Total:       0
+HugePages_Free:        0
+HugePages_Rsvd:        0
+HugePages_Surp:        0
+Hugepagesize:       2048 kB
+Hugetlb:               0 kB
+DirectMap4k:       19456 kB
+DirectMap2M:     2891776 kB
+DirectMap1G:    14680064 kB
+TRACE warm minflt 5174 majflt 0 utime_ticks 265 stime_ticks 1 thread_run_ms 1992.8 thread_wait_ms 0.0 rss_kb 8671008 vm numa_hit=5167 numa_local=5167 pgfault=5155
+TRACE sample 0 ops 486 ns_per_byte 0.5887654074553756 minflt 22 majflt 0 utime_ticks 31 stime_ticks 0 thread_run_ms 307.3 thread_wait_ms 0.0 rss_kb 8671088 vm numa_hit=28 numa_local=28 pgfault=27
+TRACE sample 1 ops 437 ns_per_byte 0.6558198210030832 minflt 3 majflt 1 utime_ticks 31 stime_ticks 0 thread_run_ms 302.0 thread_wait_ms 0.0 rss_kb 8671088 vm numa_hit=8 numa_local=8 pgfault=8
+TRACE sample 2 ops 482 ns_per_byte 0.594000920258565 minflt 55 majflt 2 utime_ticks 32 stime_ticks 1 thread_run_ms 298.8 thread_wait_ms 0.0 rss_kb 8671136 vm numa_hit=51 numa_local=51 pgfault=58
+TRACE sample 3 ops 487 ns_per_byte 0.5877930316760113 minflt 2 majflt 0 utime_ticks 32 stime_ticks 0 thread_run_ms 301.5 thread_wait_ms 0.0 rss_kb 8671136 vm numa_hit=2 numa_local=2 pgfault=2
+TRACE sample 4 ops 320 ns_per_byte 0.9000811060604327 minflt 1 majflt 0 utime_ticks 31 stime_ticks 0 thread_run_ms 306.5 thread_wait_ms 0.0 rss_kb 8671136 vm numa_hit=8 numa_local=8 pgfault=8
+ 
+strings fastcsv quoted 1048576 ingest 0 [0.5887654074553756, 0.6558198210030832, 0.594000920258565, 0.5877930316760113, 0.9000811060604327]
+--- strings truffledata-batch quoted 1048576 fork 2 Picked up JAVA_TOOL_OPTIONS: -Xms8g -XX:+AlwaysPreTouch -Xlog:gc+init,gc+heap+exit:stderr:uptime
+[0.006s] CardTable entry size: 512
+[0.648s] Version: 25.0.4.1.1+1-jvmci-25.5-b24 (release)
+[0.648s] CPUs: 7 total, 7 available
+[0.648s] Memory: 16767M
+[0.648s] Large Page Support: Disabled
+[0.648s] NUMA Support: Disabled
+[0.648s] Compressed Oops: Enabled (Zero based)
+[0.648s] Heap Region Size: 4M
+[0.648s] Heap Min Capacity: 8G
+[0.648s] Heap Initial Capacity: 8G
+[0.648s] Heap Max Capacity: 8G
+[0.648s] Pre-touch: Enabled
+[0.648s] Parallel Workers: 7
+[0.648s] Concurrent Workers: 2
+[0.648s] Concurrent Refinement Workers: 7
+[0.648s] Periodic GC: Disabled
+WARNING: Using incubator modules: jdk.incubator.vector
+TRACE start minflt 2154357 majflt 8 utime_ticks 68 stime_ticks 397 thread_run_ms 221.4 thread_wait_ms 2.6 rss_kb 8662608 vm
+TRACE /sys/kernel/mm/transparent_hugepage/enabled always [madvise] never
+TRACE /sys/kernel/mm/transparent_hugepage/defrag always defer defer+madvise [madvise] never
+TRACE /proc/sys/kernel/numa_balancing 0
+TRACE /sys/kernel/mm/ksm/run 0
+TRACE /proc/meminfo MemTotal:       17169984 kB
+MemFree:         8328172 kB
+MemAvailable:    8208760 kB
+Buffers:            3912 kB
+Cached:           126620 kB
+SwapCached:            0 kB
+Active:            56456 kB
+Inactive:        8712788 kB
+Active(anon):         28 kB
+Inactive(anon):  8676040 kB
+Active(file):      56428 kB
+Inactive(file):    36748 kB
+Unevictable:           0 kB
+Mlocked:               0 kB
+SwapTotal:             0 kB
+SwapFree:              0 kB
+Dirty:                32 kB
+Writeback:             0 kB
+AnonPages:       8638884 kB
+Mapped:            80456 kB
+Shmem:             37356 kB
+KReclaimable:      12480 kB
+Slab:              27300 kB
+SReclaimable:      12480 kB
+SUnreclaim:        14820 kB
+KernelStack:        2224 kB
+PageTables:        17860 kB
+NFS_Unstable:          0 kB
+Bounce:                0 kB
+WritebackTmp:          0 kB
+CommitLimit:     8584992 kB
+Committed_AS:    9063504 kB
+VmallocTotal:   34359738367 kB
+VmallocUsed:        2916 kB
+VmallocChunk:          0 kB
+Percpu:             1696 kB
+AnonHugePages:         0 kB
+ShmemHugePages:        0 kB
+ShmemPmdMapped:        0 kB
+FileHugePages:         0 kB
+FilePmdMapped:         0 kB
+HugePages_Total:       0
+HugePages_Free:        0
+HugePages_Rsvd:        0
+HugePages_Surp:        0
+Hugepagesize:       2048 kB
+Hugetlb:               0 kB
+DirectMap4k:       19456 kB
+DirectMap2M:     2891776 kB
+DirectMap1G:    14680064 kB
+TRACE warm minflt 2392 majflt 0 utime_ticks 281 stime_ticks 7 thread_run_ms 1992.2 thread_wait_ms 0.2 rss_kb 8669160 vm numa_hit=2881 numa_local=2881 pgfault=2950
+TRACE sample 0 ops 609 ns_per_byte 0.47017133365781233 minflt 15 majflt 0 utime_ticks 34 stime_ticks 0 thread_run_ms 307.4 thread_wait_ms 0.0 rss_kb 8669160 vm numa_hit=13 numa_local=13 pgfault=13
+TRACE sample 1 ops 613 ns_per_byte 0.467107064823172 minflt 51 majflt 0 utime_ticks 34 stime_ticks 0 thread_run_ms 299.1 thread_wait_ms 0.0 rss_kb 8669160 vm numa_hit=56 numa_local=56 pgfault=56
+TRACE sample 2 ops 621 ns_per_byte 0.4609947948574772 minflt 33 majflt 2 utime_ticks 35 stime_ticks 0 thread_run_ms 300.0 thread_wait_ms 0.0 rss_kb 8669068 vm numa_hit=36 numa_local=36 pgfault=37
+TRACE sample 3 ops 630 ns_per_byte 0.45453991345205647 minflt 3 majflt 0 utime_ticks 32 stime_ticks 0 thread_run_ms 301.9 thread_wait_ms 0.0 rss_kb 8669068 vm numa_hit=4 numa_local=4 pgfault=4
+TRACE sample 4 ops 624 ns_per_byte 0.4588928701154363 minflt 110 majflt 1 utime_ticks 37 stime_ticks 0 thread_run_ms 301.8 thread_wait_ms 0.0 rss_kb 8669320 vm numa_hit=114 numa_local=114 pgfault=116
+ 
+strings truffledata-batch quoted 1048576 ingest 2 [0.47017133365781233, 0.467107064823172, 0.4609947948574772, 0.45453991345205647, 0.4588928701154363]
+--- strings truffledata-batch quoted 1048576 fork 1 Picked up JAVA_TOOL_OPTIONS: -Xms8g -XX:+AlwaysPreTouch -Xlog:gc+init,gc+heap+exit:stderr:uptime
+[0.006s] CardTable entry size: 512
+[0.485s] Version: 25.0.4.1.1+1-jvmci-25.5-b24 (release)
+[0.485s] CPUs: 7 total, 7 available
+[0.485s] Memory: 16767M
+[0.485s] Large Page Support: Disabled
+[0.485s] NUMA Support: Disabled
+[0.485s] Compressed Oops: Enabled (Zero based)
+[0.485s] Heap Region Size: 4M
+[0.485s] Heap Min Capacity: 8G
+[0.485s] Heap Initial Capacity: 8G
+[0.485s] Heap Max Capacity: 8G
+[0.485s] Pre-touch: Enabled
+[0.485s] Parallel Workers: 7
+[0.485s] Concurrent Workers: 2
+[0.485s] Concurrent Refinement Workers: 7
+[0.485s] Periodic GC: Disabled
+WARNING: Using incubator modules: jdk.incubator.vector
+TRACE start minflt 2154139 majflt 10 utime_ticks 50 stime_ticks 315 thread_run_ms 157.1 thread_wait_ms 0.0 rss_kb 8661856 vm
+TRACE /sys/kernel/mm/transparent_hugepage/enabled always [madvise] never
+TRACE /sys/kernel/mm/transparent_hugepage/defrag always defer defer+madvise [madvise] never
+TRACE /proc/sys/kernel/numa_balancing 0
+TRACE /sys/kernel/mm/ksm/run 0
+TRACE /proc/meminfo MemTotal:       17169984 kB
+MemFree:         8326196 kB
+MemAvailable:    8206888 kB
+Buffers:            3920 kB
+Cached:           126796 kB
+SwapCached:            0 kB
+Active:            56680 kB
+Inactive:        8712156 kB
+Active(anon):         28 kB
+Inactive(anon):  8675448 kB
+Active(file):      56652 kB
+Inactive(file):    36708 kB
+Unevictable:           0 kB
+Mlocked:               0 kB
+SwapTotal:             0 kB
+SwapFree:              0 kB
+Dirty:                56 kB
+Writeback:             0 kB
+AnonPages:       8638260 kB
+Mapped:            80488 kB
+Shmem:             37356 kB
+KReclaimable:      12500 kB
+Slab:              27416 kB
+SReclaimable:      12500 kB
+SUnreclaim:        14916 kB
+KernelStack:        2224 kB
+PageTables:        17844 kB
+NFS_Unstable:          0 kB
+Bounce:                0 kB
+WritebackTmp:          0 kB
+CommitLimit:     8584992 kB
+Committed_AS:    9062820 kB
+VmallocTotal:   34359738367 kB
+VmallocUsed:        2916 kB
+VmallocChunk:          0 kB
+Percpu:             1696 kB
+AnonHugePages:         0 kB
+ShmemHugePages:        0 kB
+ShmemPmdMapped:        0 kB
+FileHugePages:         0 kB
+FilePmdMapped:         0 kB
+HugePages_Total:       0
+HugePages_Free:        0
+HugePages_Rsvd:        0
+HugePages_Surp:        0
+Hugepagesize:       2048 kB
+Hugetlb:               0 kB
+DirectMap4k:       19456 kB
+DirectMap2M:     2891776 kB
+DirectMap1G:    14680064 kB
+TRACE warm minflt 1631 majflt 0 utime_ticks 254 stime_ticks 2 thread_run_ms 1961.8 thread_wait_ms 0.0 rss_kb 8669012 vm numa_hit=1606 numa_local=1606 pgfault=1615
+TRACE sample 0 ops 625 ns_per_byte 0.457774318015379 minflt 99 majflt 0 utime_ticks 37 stime_ticks 0 thread_run_ms 306.6 thread_wait_ms 0.0 rss_kb 8668452 vm numa_hit=100 numa_local=100 pgfault=98
+TRACE sample 1 ops 622 ns_per_byte 0.4604369986063705 minflt 471 majflt 0 utime_ticks 39 stime_ticks 0 thread_run_ms 300.9 thread_wait_ms 0.0 rss_kb 8670516 vm numa_hit=470 numa_local=470 pgfault=471
+TRACE sample 2 ops 626 ns_per_byte 0.4571501659836633 minflt 5 majflt 0 utime_ticks 34 stime_ticks 1 thread_run_ms 301.9 thread_wait_ms 0.0 rss_kb 8670516 vm numa_hit=5 numa_local=5 pgfault=5
+TRACE sample 3 ops 630 ns_per_byte 0.45463470921750854 minflt 2 majflt 0 utime_ticks 32 stime_ticks 0 thread_run_ms 302.1 thread_wait_ms 0.0 rss_kb 8669160 vm numa_hit=11 numa_local=11 pgfault=2
+TRACE sample 4 ops 628 ns_per_byte 0.4558643031330731 minflt 169 majflt 0 utime_ticks 33 stime_ticks 0 thread_run_ms 301.9 thread_wait_ms 0.0 rss_kb 8669684 vm numa_hit=170 numa_local=170 pgfault=170
+ 
+strings truffledata-batch quoted 1048576 ingest 1 [0.457774318015379, 0.4604369986063705, 0.4571501659836633, 0.45463470921750854, 0.4558643031330731]
+--- strings univocity quoted 1048576 fork 1 Picked up JAVA_TOOL_OPTIONS: -Xms8g -XX:+AlwaysPreTouch -Xlog:gc+init,gc+heap+exit:stderr:uptime
+[0.006s] CardTable entry size: 512
+[0.432s] Version: 25.0.4.1.1+1-jvmci-25.5-b24 (release)
+[0.432s] CPUs: 7 total, 7 available
+[0.432s] Memory: 16767M
+[0.432s] Large Page Support: Disabled
+[0.432s] NUMA Support: Disabled
+[0.432s] Compressed Oops: Enabled (Zero based)
+[0.432s] Heap Region Size: 4M
+[0.432s] Heap Min Capacity: 8G
+[0.432s] Heap Initial Capacity: 8G
+[0.432s] Heap Max Capacity: 8G
+[0.432s] Pre-touch: Enabled
+[0.432s] Parallel Workers: 7
+[0.432s] Concurrent Workers: 2
+[0.432s] Concurrent Refinement Workers: 7
+[0.432s] Periodic GC: Disabled
+WARNING: Using incubator modules: jdk.incubator.vector
+TRACE start minflt 2153780 majflt 8 utime_ticks 55 stime_ticks 262 thread_run_ms 145.3 thread_wait_ms 0.0 rss_kb 8661168 vm
+TRACE /sys/kernel/mm/transparent_hugepage/enabled always [madvise] never
+TRACE /sys/kernel/mm/transparent_hugepage/defrag always defer defer+madvise [madvise] never
+TRACE /proc/sys/kernel/numa_balancing 0
+TRACE /sys/kernel/mm/ksm/run 0
+TRACE /proc/meminfo MemTotal:       17169984 kB
+MemFree:         8323748 kB
+MemAvailable:    8204456 kB
+Buffers:            3928 kB
+Cached:           126820 kB
+SwapCached:            0 kB
+Active:            56696 kB
+Inactive:        8713048 kB
+Active(anon):         28 kB
+Inactive(anon):  8676324 kB
+Active(file):      56668 kB
+Inactive(file):    36724 kB
+Unevictable:           0 kB
+Mlocked:               0 kB
+SwapTotal:             0 kB
+SwapFree:              0 kB
+Dirty:                88 kB
+Writeback:             0 kB
+AnonPages:       8638872 kB
+Mapped:            79492 kB
+Shmem:             37356 kB
+KReclaimable:      12500 kB
+Slab:              27592 kB
+SReclaimable:      12500 kB
+SUnreclaim:        15092 kB
+KernelStack:        2376 kB
+PageTables:        17168 kB
+NFS_Unstable:          0 kB
+Bounce:                0 kB
+WritebackTmp:          0 kB
+CommitLimit:     8584992 kB
+Committed_AS:    9063632 kB
+VmallocTotal:   34359738367 kB
+VmallocUsed:        2916 kB
+VmallocChunk:          0 kB
+Percpu:             1696 kB
+AnonHugePages:         0 kB
+ShmemHugePages:        0 kB
+ShmemPmdMapped:        0 kB
+FileHugePages:         0 kB
+FilePmdMapped:         0 kB
+HugePages_Total:       0
+HugePages_Free:        0
+HugePages_Rsvd:        0
+HugePages_Surp:        0
+Hugepagesize:       2048 kB
+Hugetlb:               0 kB
+DirectMap4k:       19456 kB
+DirectMap2M:     2891776 kB
+DirectMap1G:    14680064 kB
+TRACE warm minflt 10266 majflt 0 utime_ticks 287 stime_ticks 29 thread_run_ms 1841.7 thread_wait_ms 115.1 rss_kb 8675952 vm numa_hit=9802 numa_local=9802 pgfault=9798
+TRACE sample 0 ops 219 ns_per_byte 1.3065356650515225 minflt 22 majflt 0 utime_ticks 34 stime_ticks 0 thread_run_ms 309.6 thread_wait_ms 0.0 rss_kb 8676084 vm numa_hit=22 numa_local=22 pgfault=22
+TRACE sample 1 ops 214 ns_per_byte 1.3379479832909562 minflt 9 majflt 0 utime_ticks 34 stime_ticks 0 thread_run_ms 299.2 thread_wait_ms 0.0 rss_kb 8676084 vm numa_hit=9 numa_local=9 pgfault=9
+TRACE sample 2 ops 220 ns_per_byte 1.305963880613162 minflt 1 majflt 0 utime_ticks 32 stime_ticks 0 thread_run_ms 303.9 thread_wait_ms 0.0 rss_kb 8676084 vm numa_hit=1 numa_local=1 pgfault=1
+TRACE sample 3 ops 218 ns_per_byte 1.3176825785213826 minflt 2 majflt 0 utime_ticks 32 stime_ticks 0 thread_run_ms 302.5 thread_wait_ms 0.0 rss_kb 8676084 vm numa_hit=478 numa_local=478 pgfault=548
+TRACE sample 4 ops 216 ns_per_byte 1.3285962165364742 minflt 9 majflt 0 utime_ticks 36 stime_ticks 0 thread_run_ms 299.2 thread_wait_ms 0.1 rss_kb 8676084 vm numa_hit=9 numa_local=9 pgfault=9
+ 
+strings univocity quoted 1048576 ingest 1 [1.3065356650515225, 1.3379479832909562, 1.305963880613162, 1.3176825785213826, 1.3285962165364742]
+--- strings fastcsv quoted 1048576 fork 2 Picked up JAVA_TOOL_OPTIONS: -Xms8g -XX:+AlwaysPreTouch -Xlog:gc+init,gc+heap+exit:stderr:uptime
+[0.006s] CardTable entry size: 512
+[0.416s] Version: 25.0.4.1.1+1-jvmci-25.5-b24 (release)
+[0.417s] CPUs: 7 total, 7 available
+[0.417s] Memory: 16767M
+[0.417s] Large Page Support: Disabled
+[0.417s] NUMA Support: Disabled
+[0.417s] Compressed Oops: Enabled (Zero based)
+[0.417s] Heap Region Size: 4M
+[0.417s] Heap Min Capacity: 8G
+[0.417s] Heap Initial Capacity: 8G
+[0.417s] Heap Max Capacity: 8G
+[0.417s] Pre-touch: Enabled
+[0.417s] Parallel Workers: 7
+[0.417s] Concurrent Workers: 2
+[0.417s] Concurrent Refinement Workers: 7
+[0.417s] Periodic GC: Disabled
+WARNING: Using incubator modules: jdk.incubator.vector
+TRACE start minflt 2154252 majflt 8 utime_ticks 48 stime_ticks 263 thread_run_ms 135.5 thread_wait_ms 0.0 rss_kb 8661888 vm
+TRACE /sys/kernel/mm/transparent_hugepage/enabled always [madvise] never
+TRACE /sys/kernel/mm/transparent_hugepage/defrag always defer defer+madvise [madvise] never
+TRACE /proc/sys/kernel/numa_balancing 0
+TRACE /sys/kernel/mm/ksm/run 0
+TRACE /proc/meminfo MemTotal:       17169984 kB
+MemFree:         8335160 kB
+MemAvailable:    8215864 kB
+Buffers:            3928 kB
+Cached:           126796 kB
+SwapCached:            0 kB
+Active:            56892 kB
+Inactive:        8712768 kB
+Active(anon):         28 kB
+Inactive(anon):  8676264 kB
+Active(file):      56864 kB
+Inactive(file):    36504 kB
+Unevictable:           0 kB
+Mlocked:               0 kB
+SwapTotal:             0 kB
+SwapFree:              0 kB
+Dirty:                32 kB
+Writeback:             0 kB
+AnonPages:       8639048 kB
+Mapped:            80048 kB
+Shmem:             37356 kB
+KReclaimable:      12520 kB
+Slab:              27672 kB
+SReclaimable:      12520 kB
+SUnreclaim:        15152 kB
+KernelStack:        2224 kB
+PageTables:        17848 kB
+NFS_Unstable:          0 kB
+Bounce:                0 kB
+WritebackTmp:          0 kB
+CommitLimit:     8584992 kB
+Committed_AS:    9064256 kB
+VmallocTotal:   34359738367 kB
+VmallocUsed:        2932 kB
+VmallocChunk:          0 kB
+Percpu:             1696 kB
+AnonHugePages:         0 kB
+ShmemHugePages:        0 kB
+ShmemPmdMapped:        0 kB
+FileHugePages:         0 kB
+FilePmdMapped:         0 kB
+HugePages_Total:       0
+HugePages_Free:        0
+HugePages_Rsvd:        0
+HugePages_Surp:        0
+Hugepagesize:       2048 kB
+Hugetlb:               0 kB
+DirectMap4k:       19456 kB
+DirectMap2M:     2891776 kB
+DirectMap1G:    14680064 kB
+TRACE warm minflt 5773 majflt 0 utime_ticks 263 stime_ticks 3 thread_run_ms 1984.1 thread_wait_ms 0.2 rss_kb 8670484 vm numa_hit=5766 numa_local=5766 pgfault=5755
+TRACE sample 0 ops 423 ns_per_byte 0.677101164640922 minflt 23 majflt 0 utime_ticks 31 stime_ticks 0 thread_run_ms 306.3 thread_wait_ms 0.0 rss_kb 8670628 vm numa_hit=23 numa_local=23 pgfault=23
+TRACE sample 1 ops 424 ns_per_byte 0.6750956598505627 minflt 2 majflt 0 utime_ticks 30 stime_ticks 1 thread_run_ms 300.1 thread_wait_ms 0.0 rss_kb 8670628 vm numa_hit=5 numa_local=5 pgfault=5
+TRACE sample 2 ops 420 ns_per_byte 0.68224641807321 minflt 49 majflt 0 utime_ticks 31 stime_ticks 1 thread_run_ms 297.8 thread_wait_ms 0.0 rss_kb 8670628 vm numa_hit=43 numa_local=43 pgfault=47
+TRACE sample 3 ops 426 ns_per_byte 0.672883761308033 minflt 4 majflt 0 utime_ticks 31 stime_ticks 1 thread_run_ms 301.2 thread_wait_ms 0.0 rss_kb 8670244 vm numa_hit=3 numa_local=3 pgfault=4
+TRACE sample 4 ops 435 ns_per_byte 0.6582941212781868 minflt 1 majflt 0 utime_ticks 31 stime_ticks 0 thread_run_ms 301.9 thread_wait_ms 0.0 rss_kb 8670244 vm numa_hit=17 numa_local=17 pgfault=17
+ 
+strings fastcsv quoted 1048576 ingest 2 [0.677101164640922, 0.6750956598505627, 0.68224641807321, 0.672883761308033, 0.6582941212781868]
+native native-index-scalar [0.473513, 0.47985, 0.475109, 0.475227, 0.474147]
+native native-index-swar [0.358733, 0.357842, 0.357154, 0.357286, 0.356836]
+native native-index-avx2 [0.050019, 0.05025, 0.050199, 0.050084, 0.051803]
+native native-index-avx512 [0.045388, 0.045506, 0.045412, 0.045471, 0.045572]
+native native-indexed-scan [0.056142, 0.056204, 0.056192, 0.056074, 0.056136]
+native simdutf-validate [0.00792, 0.007864, 0.007885, 0.007928, 0.007895]
+native csv-core-scan [0.5538449181508676, 0.5500554908478353, 0.5462693815377677, 0.5494464217440899, 0.5504048513505901]
+native csv-byte-record [0.775807794313144, 0.7987915876621356, 0.7757549196559492, 0.7839349839655971, 0.7769552940212363]
+native csv-string-record [0.8211971913615543, 0.8118258750733456, 0.8081599415853107, 0.8038824292661453, 0.8073944091744413]
+9 cells, 9 native rows, 0 unavailable

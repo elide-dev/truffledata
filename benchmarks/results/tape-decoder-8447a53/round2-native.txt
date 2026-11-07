@@ -1,0 +1,133 @@
+simdjson 5.1.1 active implementation: icelake
+small       210 B | I0 On-Demand iterate only (stage 1)                           22 ns      9597 MB/s   9.60 GB/s
+small       210 B | D0 simdjson DOM parse (ceiling)                              141 ns      1486 MB/s   1.49 GB/s
+small       210 B | D0d DOM parse + strict duplicate check (dom walk)            235 ns       892 MB/s   0.89 GB/s
+small       210 B | D0t DOM parse + duplicate check over the raw DOM tape words         272 ns       771 MB/s   0.77 GB/s
+small       210 B | D0e D0d + directory per object (hash, sort)                  311 ns       675 MB/s   0.68 GB/s
+small       210 B | W1 On-Demand full walk (get_string, get_double)              229 ns       915 MB/s   0.92 GB/s
+small       210 B | W2 lean walk, scalar scan, no duplicate check, no output         230 ns       913 MB/s   0.91 GB/s
+small       210 B | W2s lean walk, SWAR scan, no duplicate check, no output         238 ns       883 MB/s   0.88 GB/s
+small       210 B | W3 W2s + duplicate check: validate-only ceiling              293 ns       717 MB/s   0.72 GB/s
+small       210 B | W2c lean walk, checksum consumer, no duplicate check         276 ns       760 MB/s   0.76 GB/s
+small       210 B | W3c W2c + key_table duplicate check (honest validate ceiling)         341 ns       615 MB/s   0.61 GB/s
+small       210 B | S0 stage 1 through dom_parser_implementation                  22 ns      9473 MB/s   9.47 GB/s
+small       210 B | S1 S0 + classify every structural index (walk floor)          35 ns      5983 MB/s   5.98 GB/s
+small       210 B | S2 own stage 2 over the index: validate + duplicates + compact tape         323 ns       651 MB/s   0.65 GB/s
+small       210 B | S2 words=37 vs On-Demand tape8 words=39 (doubles lazy in S2)
+small       210 B | K1 W2s + duplicate check through a 64-bit filter             285 ns       737 MB/s   0.74 GB/s
+small       210 B | K2 W2s + per-depth key templates, FNV hash                   301 ns       697 MB/s   0.70 GB/s
+small       210 B | K3 W2s + key templates + SWAR hash (<= 8 B keys)             301 ns       697 MB/s   0.70 GB/s
+small       210 B | T8k K3 + compact 8-byte tape                                 337 ns       623 MB/s   0.62 GB/s
+small       210 B | T8x K3 + compact 8-byte tape, unchecked presized pushes         332 ns       633 MB/s   0.63 GB/s
+small       210 B | W3g W3 with grammar-only numbers (lazy typing)               273 ns       771 MB/s   0.77 GB/s
+small       210 B | W3v W3 driving a virtual sink (direct-sink ceiling)          329 ns       638 MB/s   0.64 GB/s
+small       210 B | T8 W3 + compact 8-byte tape (simdjson-style)                 363 ns       579 MB/s   0.58 GB/s
+small       210 B | T16 W3 + fixed 16-byte nodes with embedded spans             401 ns       524 MB/s   0.52 GB/s
+small       210 B | T16d T16 + eager directory per object                        434 ns       483 MB/s   0.48 GB/s
+small       210 B | T24 W3 + Myna 24-byte nodes (tape_writer v3, no side tables)         393 ns       534 MB/s   0.53 GB/s
+small       210 B | V3 shipped tape_decoder, ABI v3 (spans + meta)               486 ns       432 MB/s   0.43 GB/s
+small       210 B | V4 shipped tape_decoder, ABI v4 (+ directories)              506 ns       415 MB/s   0.41 GB/s
+small       210 B | V5 compact-tape decoder (ctape_writer, fused duplicates)         383 ns       549 MB/s   0.55 GB/s
+small       210 B | V5v validate-only walk (null_writer, fused duplicates)         323 ns       649 MB/s   0.65 GB/s
+small       210 B | V5 words=44 directory=12 pool=41 bytes=489 (2.33 x input)
+small       210 B | nodes16=31 directory=12 owned_bytes=41 tape16_bytes=592 (2.82 x input)
+small       210 B | words8=39 tape8_bytes=312 (1.49 x input); shipped v4: 5.77 x input
+medium     4330 B | I0 On-Demand iterate only (stage 1)                          284 ns     15241 MB/s  15.24 GB/s
+medium     4330 B | D0 simdjson DOM parse (ceiling)                             2570 ns      1685 MB/s   1.68 GB/s
+medium     4330 B | D0d DOM parse + strict duplicate check (dom walk)           4939 ns       877 MB/s   0.88 GB/s
+medium     4330 B | D0t DOM parse + duplicate check over the raw DOM tape words        5517 ns       785 MB/s   0.78 GB/s
+medium     4330 B | D0e D0d + directory per object (hash, sort)                 5817 ns       744 MB/s   0.74 GB/s
+medium     4330 B | W1 On-Demand full walk (get_string, get_double)             4276 ns      1013 MB/s   1.01 GB/s
+medium     4330 B | W2 lean walk, scalar scan, no duplicate check, no output        3967 ns      1092 MB/s   1.09 GB/s
+medium     4330 B | W2s lean walk, SWAR scan, no duplicate check, no output        3901 ns      1110 MB/s   1.11 GB/s
+medium     4330 B | W3 W2s + duplicate check: validate-only ceiling             5236 ns       827 MB/s   0.83 GB/s
+medium     4330 B | W2c lean walk, checksum consumer, no duplicate check        4607 ns       940 MB/s   0.94 GB/s
+medium     4330 B | W3c W2c + key_table duplicate check (honest validate ceiling)        6070 ns       713 MB/s   0.71 GB/s
+medium     4330 B | S0 stage 1 through dom_parser_implementation                 272 ns     15929 MB/s  15.93 GB/s
+medium     4330 B | S1 S0 + classify every structural index (walk floor)         515 ns      8408 MB/s   8.41 GB/s
+medium     4330 B | S2 own stage 2 over the index: validate + duplicates + compact tape        6007 ns       721 MB/s   0.72 GB/s
+medium     4330 B | S2 words=731 vs On-Demand tape8 words=771 (doubles lazy in S2)
+medium     4330 B | K1 W2s + duplicate check through a 64-bit filter            5043 ns       859 MB/s   0.86 GB/s
+medium     4330 B | K2 W2s + per-depth key templates, FNV hash                  5049 ns       858 MB/s   0.86 GB/s
+medium     4330 B | K3 W2s + key templates + SWAR hash (<= 8 B keys)            5090 ns       851 MB/s   0.85 GB/s
+medium     4330 B | T8k K3 + compact 8-byte tape                                6056 ns       715 MB/s   0.71 GB/s
+medium     4330 B | T8x K3 + compact 8-byte tape, unchecked presized pushes        5725 ns       756 MB/s   0.76 GB/s
+medium     4330 B | W3g W3 with grammar-only numbers (lazy typing)              4793 ns       903 MB/s   0.90 GB/s
+medium     4330 B | W3v W3 driving a virtual sink (direct-sink ceiling)         5901 ns       734 MB/s   0.73 GB/s
+medium     4330 B | T8 W3 + compact 8-byte tape (simdjson-style)                6224 ns       696 MB/s   0.70 GB/s
+medium     4330 B | T16 W3 + fixed 16-byte nodes with embedded spans            7065 ns       613 MB/s   0.61 GB/s
+medium     4330 B | T16d T16 + eager directory per object                       8606 ns       503 MB/s   0.50 GB/s
+medium     4330 B | T24 W3 + Myna 24-byte nodes (tape_writer v3, no side tables)        7148 ns       606 MB/s   0.61 GB/s
+medium     4330 B | V3 shipped tape_decoder, ABI v3 (spans + meta)              9442 ns       459 MB/s   0.46 GB/s
+medium     4330 B | V4 shipped tape_decoder, ABI v4 (+ directories)             9731 ns       445 MB/s   0.44 GB/s
+medium     4330 B | V5 compact-tape decoder (ctape_writer, fused duplicates)        7191 ns       602 MB/s   0.60 GB/s
+medium     4330 B | V5v validate-only walk (null_writer, fused duplicates)        6054 ns       715 MB/s   0.72 GB/s
+medium     4330 B | V5 words=862 directory=240 pool=415 bytes=9231 (2.13 x input)
+medium     4330 B | nodes16=621 directory=240 owned_bytes=415 tape16_bytes=11856 (2.74 x input)
+medium     4330 B | words8=771 tape8_bytes=6168 (1.42 x input); shipped v4: 5.61 x input
+big      228485 B | I0 On-Demand iterate only (stage 1)                        14394 ns     15873 MB/s  15.87 GB/s
+big      228485 B | D0 simdjson DOM parse (ceiling)                           136544 ns      1673 MB/s   1.67 GB/s
+big      228485 B | D0d DOM parse + strict duplicate check (dom walk)         248572 ns       919 MB/s   0.92 GB/s
+big      228485 B | D0t DOM parse + duplicate check over the raw DOM tape words      285775 ns       800 MB/s   0.80 GB/s
+big      228485 B | D0e D0d + directory per object (hash, sort)               291765 ns       783 MB/s   0.78 GB/s
+big      228485 B | W1 On-Demand full walk (get_string, get_double)           212317 ns      1076 MB/s   1.08 GB/s
+big      228485 B | W2 lean walk, scalar scan, no duplicate check, no output      201939 ns      1131 MB/s   1.13 GB/s
+big      228485 B | W2s lean walk, SWAR scan, no duplicate check, no output      201970 ns      1131 MB/s   1.13 GB/s
+big      228485 B | W3 W2s + duplicate check: validate-only ceiling           258293 ns       885 MB/s   0.88 GB/s
+big      228485 B | W2c lean walk, checksum consumer, no duplicate check      246651 ns       926 MB/s   0.93 GB/s
+big      228485 B | W3c W2c + key_table duplicate check (honest validate ceiling)      315030 ns       725 MB/s   0.73 GB/s
+big      228485 B | S0 stage 1 through dom_parser_implementation               14834 ns     15402 MB/s  15.40 GB/s
+big      228485 B | S1 S0 + classify every structural index (walk floor)       27584 ns      8283 MB/s   8.28 GB/s
+big      228485 B | S2 own stage 2 over the index: validate + duplicates + compact tape      321008 ns       712 MB/s   0.71 GB/s
+big      228485 B | S2 words=36501 vs On-Demand tape8 words=38501 (doubles lazy in S2)
+big      228485 B | K1 W2s + duplicate check through a 64-bit filter          262875 ns       869 MB/s   0.87 GB/s
+big      228485 B | K2 W2s + per-depth key templates, FNV hash                261228 ns       875 MB/s   0.87 GB/s
+big      228485 B | K3 W2s + key templates + SWAR hash (<= 8 B keys)          261646 ns       873 MB/s   0.87 GB/s
+big      228485 B | T8k K3 + compact 8-byte tape                              313136 ns       730 MB/s   0.73 GB/s
+big      228485 B | T8x K3 + compact 8-byte tape, unchecked presized pushes      294957 ns       775 MB/s   0.77 GB/s
+big      228485 B | W3g W3 with grammar-only numbers (lazy typing)            238794 ns       957 MB/s   0.96 GB/s
+big      228485 B | W3v W3 driving a virtual sink (direct-sink ceiling)       301046 ns       759 MB/s   0.76 GB/s
+big      228485 B | T8 W3 + compact 8-byte tape (simdjson-style)              316522 ns       722 MB/s   0.72 GB/s
+big      228485 B | T16 W3 + fixed 16-byte nodes with embedded spans          372077 ns       614 MB/s   0.61 GB/s
+big      228485 B | T16d T16 + eager directory per object                     422673 ns       541 MB/s   0.54 GB/s
+big      228485 B | T24 W3 + Myna 24-byte nodes (tape_writer v3, no side tables)      338720 ns       675 MB/s   0.67 GB/s
+big      228485 B | V3 shipped tape_decoder, ABI v3 (spans + meta)            466801 ns       489 MB/s   0.49 GB/s
+big      228485 B | V4 shipped tape_decoder, ABI v4 (+ directories)           487593 ns       469 MB/s   0.47 GB/s
+big      228485 B | V5 compact-tape decoder (ctape_writer, fused duplicates)      341382 ns       669 MB/s   0.67 GB/s
+big      228485 B | V5v validate-only walk (null_writer, fused duplicates)      301056 ns       759 MB/s   0.76 GB/s
+big      228485 B | V5 words=43002 directory=12000 pool=21445 bytes=461461 (2.02 x input)
+big      228485 B | nodes16=31001 directory=12000 owned_bytes=21445 tape16_bytes=592016 (2.59 x input)
+big      228485 B | words8=38501 tape8_bytes=308008 (1.35 x input); shipped v4: 5.30 x input
+huge    4850894 B | I0 On-Demand iterate only (stage 1)                       316954 ns     15305 MB/s  15.30 GB/s
+huge    4850894 B | D0 simdjson DOM parse (ceiling)                          2799992 ns      1732 MB/s   1.73 GB/s
+huge    4850894 B | D0d DOM parse + strict duplicate check (dom walk)        4835766 ns      1003 MB/s   1.00 GB/s
+huge    4850894 B | D0t DOM parse + duplicate check over the raw DOM tape words     5542250 ns       875 MB/s   0.88 GB/s
+huge    4850894 B | D0e D0d + directory per object (hash, sort)              5734708 ns       846 MB/s   0.85 GB/s
+huge    4850894 B | W1 On-Demand full walk (get_string, get_double)          4372789 ns      1109 MB/s   1.11 GB/s
+huge    4850894 B | W2 lean walk, scalar scan, no duplicate check, no output     4082939 ns      1188 MB/s   1.19 GB/s
+huge    4850894 B | W2s lean walk, SWAR scan, no duplicate check, no output     4114329 ns      1179 MB/s   1.18 GB/s
+huge    4850894 B | W3 W2s + duplicate check: validate-only ceiling          5303599 ns       915 MB/s   0.91 GB/s
+huge    4850894 B | W2c lean walk, checksum consumer, no duplicate check     4922826 ns       985 MB/s   0.99 GB/s
+huge    4850894 B | W3c W2c + key_table duplicate check (honest validate ceiling)     6338114 ns       765 MB/s   0.77 GB/s
+huge    4850894 B | S0 stage 1 through dom_parser_implementation              326827 ns     14842 MB/s  14.84 GB/s
+huge    4850894 B | S1 S0 + classify every structural index (walk floor)      605990 ns      8005 MB/s   8.00 GB/s
+huge    4850894 B | S2 own stage 2 over the index: validate + duplicates + compact tape     6529478 ns       743 MB/s   0.74 GB/s
+huge    4850894 B | S2 words=730001 vs On-Demand tape8 words=770001 (doubles lazy in S2)
+huge    4850894 B | K1 W2s + duplicate check through a 64-bit filter         5350870 ns       907 MB/s   0.91 GB/s
+huge    4850894 B | K2 W2s + per-depth key templates, FNV hash               5220187 ns       929 MB/s   0.93 GB/s
+huge    4850894 B | K3 W2s + key templates + SWAR hash (<= 8 B keys)         5225790 ns       928 MB/s   0.93 GB/s
+huge    4850894 B | T8k K3 + compact 8-byte tape                             6210927 ns       781 MB/s   0.78 GB/s
+huge    4850894 B | T8x K3 + compact 8-byte tape, unchecked presized pushes     6968882 ns       696 MB/s   0.70 GB/s
+huge    4850894 B | W3g W3 with grammar-only numbers (lazy typing)           4545930 ns      1067 MB/s   1.07 GB/s
+huge    4850894 B | W3v W3 driving a virtual sink (direct-sink ceiling)      5777826 ns       840 MB/s   0.84 GB/s
+huge    4850894 B | T8 W3 + compact 8-byte tape (simdjson-style)             5996814 ns       809 MB/s   0.81 GB/s
+huge    4850894 B | T16 W3 + fixed 16-byte nodes with embedded spans         7045413 ns       689 MB/s   0.69 GB/s
+huge    4850894 B | T16d T16 + eager directory per object                    8322512 ns       583 MB/s   0.58 GB/s
+huge    4850894 B | T24 W3 + Myna 24-byte nodes (tape_writer v3, no side tables)     6679495 ns       726 MB/s   0.73 GB/s
+huge    4850894 B | V3 shipped tape_decoder, ABI v3 (spans + meta)           9227110 ns       526 MB/s   0.53 GB/s
+huge    4850894 B | V4 shipped tape_decoder, ABI v4 (+ directories)          9545122 ns       508 MB/s   0.51 GB/s
+huge    4850894 B | V5 compact-tape decoder (ctape_writer, fused duplicates)     6815086 ns       712 MB/s   0.71 GB/s
+huge    4850894 B | V5v validate-only walk (null_writer, fused duplicates)     6027915 ns       805 MB/s   0.80 GB/s
+huge    4850894 B | V5 words=860002 directory=240000 pool=444445 bytes=9244461 (1.91 x input)
+huge    4850894 B | nodes16=620001 directory=240000 owned_bytes=444445 tape16_bytes=11840016 (2.44 x input)
+huge    4850894 B | words8=770001 tape8_bytes=6160008 (1.27 x input); shipped v4: 5.00 x input

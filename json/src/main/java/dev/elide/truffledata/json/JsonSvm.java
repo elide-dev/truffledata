@@ -105,7 +105,7 @@ public final class JsonSvm {
                 result);
       }
       checkStatus(status);
-      return publish(result, NO_CLOSE);
+      return publish(result, null);
     } catch (RuntimeException | Error failure) {
       release(result.rawValue());
       throw failure;
@@ -149,14 +149,19 @@ public final class JsonSvm {
 
   /**
    * Native side tables and retained input of one published result, plus its release. One object
-   * per message serves as both the lexical accessor and the close action.
+   * per message serves as both the lexical accessor and the close action; a session keeps one
+   * rebindable accessor for its borrows ({@link Borrows}).
    */
   static class SvmLexical implements TapeLexical {
-    private final Pointer spans;
-    private final Pointer inputData;
-    private final long inputLength;
+    private Pointer spans;
+    private Pointer inputData;
+    private long inputLength;
 
     SvmLexical(Pointer spans, Pointer inputData, long inputLength) {
+      bind(spans, inputData, inputLength);
+    }
+
+    final void bind(Pointer spans, Pointer inputData, long inputLength) {
       this.spans = spans;
       this.inputData = inputData;
       this.inputLength = inputLength;
@@ -175,78 +180,130 @@ public final class JsonSvm {
   }
 
   /** An owned result: its lexical accessor is also its close action (one object per message). */
-  static final class SvmResult extends SvmLexical implements Runnable {
+  static class SvmResult extends SvmLexical implements JsonMessage.Storage {
     private final long address;
-    private final Runnable onClose;
 
-    SvmResult(Pointer spans, Pointer inputData, long inputLength, long address, Runnable onClose) {
+    SvmResult(Pointer spans, Pointer inputData, long inputLength, long address) {
       super(spans, inputData, inputLength);
       this.address = address;
+    }
+
+    @Override
+    public void run() {
+      release(address);
+    }
+  }
+
+  /** An adopted region's result: its caller's release runs after the native one. */
+  static final class AdoptedResult extends SvmResult {
+    private final Runnable onClose;
+
+    AdoptedResult(Pointer spans, Pointer inputData, long inputLength, long address, Runnable onClose) {
+      super(spans, inputData, inputLength, address);
       this.onClose = onClose;
     }
 
     @Override
     public void run() {
       try {
-        release(address);
+        super.run();
       } finally {
         onClose.run();
       }
     }
   }
 
-  /** Validates a published result and builds its tape reader. */
-  private static SvmValueTape tape(VoidPointer result) {
+  /** The published result's descriptor: Myna value ABI v4 (ABI 6 of this library). */
+  private static Pointer descriptor(VoidPointer result) {
     Pointer descriptor = (Pointer) Json.JsonResult.view(result);
-    if (descriptor.isNull() || descriptor.readInt(0) != ValueTape.ABI_VERSION)
+    if (descriptor.isNull() || descriptor.readInt(0) != ValueTape.ABI_VERSION_V4)
       throw new IllegalStateException("Unsupported Myna value ABI");
-    Pointer hashes = (Pointer) Json.JsonResult.key_hashes(result);
-    if (hashes.isNull()) throw new IllegalStateException("JSON key-hash table missing");
-    return new SvmValueTape(descriptor, hashes);
+    return descriptor;
   }
 
-  /** Lexical accessor of a result: owning (released on close) when {@code onClose} is set. */
-  private static SvmLexical tables(
-      VoidPointer result, SvmValueTape tape, @org.jspecify.annotations.Nullable Runnable onClose) {
+  private static Pointer hashes(VoidPointer result) {
+    Pointer hashes = (Pointer) Json.JsonResult.key_hashes(result);
+    if (hashes.isNull()) throw new IllegalStateException("JSON key-hash table missing");
+    return hashes;
+  }
+
+  /** Validates a published result and builds its tape reader. */
+  private static SvmValueTape tape(VoidPointer result) {
+    return new SvmValueTape(descriptor(result), hashes(result));
+  }
+
+  private static Pointer spans(VoidPointer result, SvmValueTape tape) {
     Pointer spans = (Pointer) Json.JsonResult.lexical(result);
     long spanCount = Json.JsonResult.lexical_count(result);
     if (spanCount != tape.nodeCount() || (spanCount > 0 && spans.isNull()))
       throw new IllegalStateException("JSON lexical table mismatch");
-    // Region table entry 0 (region 1) is the retained input: {data, length}.
+    return spans;
+  }
+
+  // Region table entry 0 (region 1) is the retained input: {data, length}.
+  private static Pointer inputRegion(VoidPointer result) {
     Pointer descriptor = (Pointer) Json.JsonResult.view(result);
     Pointer regions = (Pointer) descriptor.readWord(40);
     if (regions.isNull() || descriptor.readLong(48) < 1)
       throw new IllegalStateException("JSON input region missing");
-    Pointer input = regions.readWord(0);
-    long length = regions.readLong(8);
-    return onClose == null
-        ? new SvmLexical(spans, input, length)
-        : new SvmResult(spans, input, length, result.rawValue(), onClose);
+    return regions;
   }
 
-  private static JsonMessage publish(VoidPointer result, Runnable onClose) {
+  /**
+   * Lexical accessor of an owned result, released on close (then {@code onClose}, for adopted
+   * regions). Results without a caller release carry no callback field: one is allocated per
+   * retained message.
+   */
+  private static SvmResult tables(
+      VoidPointer result, SvmValueTape tape, @org.jspecify.annotations.Nullable Runnable onClose) {
+    Pointer spans = spans(result, tape);
+    Pointer regions = inputRegion(result);
+    return onClose == null
+        ? new SvmResult(spans, regions.readWord(0), regions.readLong(8), result.rawValue())
+        : new AdoptedResult(spans, regions.readWord(0), regions.readLong(8), result.rawValue(), onClose);
+  }
+
+  private static JsonMessage publish(VoidPointer result, @org.jspecify.annotations.Nullable Runnable onClose) {
     SvmValueTape tape = tape(result);
-    SvmResult owned = (SvmResult) tables(result, tape, onClose);
-    return new JsonMessage(tape, owned, owned);
+    return new JsonMessage(tape, tables(result, tape, onClose));
   }
 
   /** Message owning a retained session result; the result storage is released on failure too. */
   static JsonMessage adoptResult(VoidPointer result) {
     try {
-      return publish(result, NO_CLOSE);
+      return publish(result, null);
     } catch (RuntimeException | Error failure) {
       release(result.rawValue());
       throw failure;
     }
   }
 
-  /** Borrowed owner over a session's current result; the session ends it before its next call. */
-  static TapeBorrow borrow(VoidPointer result) {
-    SvmValueTape tape = tape(result);
-    return new TapeBorrow(tape, tables(result, tape, null), JsonMessage.FORMAT);
+  /**
+   * One session's reusable tape reader and lexical accessor (Myna 0.11.0's rebindable readers,
+   * elide-dev/myna#47): every borrow of the session reads through them, rebound to the session's
+   * current result, so a borrow allocates only its owner. A borrow ends (closing its owner) before
+   * the session's next call, so no live owner ever sees a rebinding.
+   */
+  static final class Borrows {
+    private @org.jspecify.annotations.Nullable SvmValueTape tape;
+    private @org.jspecify.annotations.Nullable SvmLexical lexical;
+
+    /** Borrowed owner over the session's current result; the session ends it before its next call. */
+    TapeBorrow borrow(VoidPointer result) {
+      Pointer descriptor = descriptor(result);
+      Pointer hashes = hashes(result);
+      SvmValueTape reader = tape;
+      if (reader == null) tape = reader = new SvmValueTape(descriptor, hashes);
+      else reader.rebind(descriptor, hashes);
+      Pointer spans = spans(result, reader);
+      Pointer regions = inputRegion(result);
+      SvmLexical tables = lexical;
+      if (tables == null) lexical = tables = new SvmLexical(spans, regions.readWord(0), regions.readLong(8));
+      else tables.bind(spans, regions.readWord(0), regions.readLong(8));
+      return new TapeBorrow(reader, tables, JsonMessage.FORMAT);
+    }
   }
 
-  private static final Runnable NO_CLOSE = () -> {};
 
   private static void release(long address) {
     if (address == 0) return;

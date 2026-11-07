@@ -1,0 +1,2529 @@
+{
+ "schema": 1,
+ "runtime": "jvm",
+ "binary": "csv_jvm",
+ "group": [
+  "fixture",
+  "quoted",
+  1048576
+ ],
+ "binary_sha256": null,
+ "platform": "Linux-5.15.0-x86_64-with-glibc2.39",
+ "cpu": "processor\t: 0\nvendor_id\t: AuthenticAMD\ncpu family\t: 26\nmodel\t\t: 2\nmodel name\t: AMD EPYC\nstepping\t: 1\nmicrocode\t: 0x1000065\ncpu MHz\t\t: 3300.000\ncache size\t: 512 KB\nphysical id\t: 0\nsiblings\t: 7\ncore id\t\t: 0\ncpu cores\t: 7\napicid\t\t: 0\ninitial apicid\t: 0\nfpu\t\t: yes\nfpu_exception\t: yes\ncpuid level\t: 16\nwp\t\t: yes\nflags\t\t: fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ht syscall nx mmxext fxsr_opt pdpe1gb rdtscp lm rep_good nopl cpuid extd_apicid tsc_known_freq pni pclmulqdq ssse3 fma cx16 pcid sse4_1 sse4_2 x2apic movbe popcnt tsc_deadline_timer aes xsave avx f16c rdrand hypervisor lahf_lm cmp_legacy svm cr8_legacy abm sse4a misalignsse 3dnowprefetch osvw topoext perfctr_core invpcid_single ssbd ibrs ibpb stibp vmmcall fsgsbase tsc_adjust bmi1 avx2 smep bmi2 erms invpcid avx512f avx512dq rdseed adx smap avx512ifma clflushopt clwb avx512cd sha_ni avx512bw avx512vl xsaveopt xsavec xgetbv1 xsaves avx_vnni avx512_bf16 clzero xsaveerptr wbnoinvd arat npt lbrv nrip_save tsc_scale vmcb_clean flushbyasid pausefilter pfthreshold v_vmsave_vmload vgif avx512vbmi umip pku avx512_vbmi2 gfni vaes vpclmulqdq avx512_vnni avx512_bitalg avx512_vpopcntdq rdpid movdiri movdir64b fsrm avx512_vp2intersect flush_l1d\nbugs\t\t: sysret_ss_attrs spectre_v1 spectre_v2 spec_store_bypass\nbogomips\t: 6600.00\nTLB size\t: 1024 4K pages\nclflush size\t: 64\ncache_alignment\t: 64\naddress sizes\t: 52 bits physical, 57 bits virtual\npower management:\n\nprocessor\t: 1\nvendor_id\t: AuthenticAMD\ncpu family\t: 26\nmodel\t\t: 2\nmodel name\t: AMD EPYC\nstepping\t: 1\nmicrocode\t: 0x1000065\ncpu MHz\t\t: 3300.000\ncache size\t: 512 KB\nphysical id\t: 0\nsiblings\t: 7\ncore id\t\t: 1\ncpu cores\t: 7\napicid\t\t: 1\ninitial apicid\t: 1\nfpu\t\t: yes\nfpu_exception\t: yes\ncpuid level\t: 16\nwp\t\t: yes\nflags\t\t: fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ht syscall nx mmxext fxsr_opt pdpe1gb rdtscp lm rep_good nopl cpuid extd_apicid tsc_known_freq pni pclmulqdq ssse3 fma cx16 pcid sse4_1 sse4_2 x2apic movbe popcnt tsc_deadline_timer aes xsave avx f16c rdrand hypervisor lahf_lm cmp_legacy svm cr8_legacy abm sse4a misalignsse 3dnowprefetch osvw topoext perfctr_core invpcid_single ssbd ibrs ibpb stibp vmmcall fsgsbase tsc_adjust bmi1 avx2 smep bmi2 erms invpcid avx512f avx512dq rdseed adx smap avx512ifma clflushopt clwb avx512cd sha_ni avx512bw avx512vl xsaveopt xsavec xgetbv1 xsaves avx_vnni avx512_bf16 clzero xsaveerptr wbnoinvd arat npt lbrv nrip_save tsc_scale vmcb_clean flushbyasid pausefilter pfthreshold v_vmsave_vmload vgif avx512vbmi umip pku avx512_vbmi2 gfni vaes vpclmulqdq avx512_vnni avx512_bitalg avx512_vpopcntdq rdpid movdiri movdir64b fsrm avx512_vp2intersect flush_l1d\nbugs\t\t: sysret_ss_attrs spectre_v1 spectre_v2 spec_store_bypass\nbogomips\t: 6600.00\nTLB size\t: 1024 4K pages\nclflush size\t: 64\ncache_alignment\t: 64\naddress sizes\t: 52 bits physical, 57 bits virtual\npower management:\n\nprocessor\t: 2\nvendor_id\t: AuthenticAMD\ncpu family\t: 26\nmodel\t\t: 2\nmodel name\t: AMD EPYC\nstepping\t: 1\nmicrocode\t: 0x1000065\ncpu MHz\t\t: 3300.000\ncache size\t: 512 KB\nphysical id\t: 0\nsiblings\t: 7\ncore id\t\t: 2\ncpu cores\t: 7\napicid\t\t: 2\ninitial apicid\t: 2\nfpu\t\t: yes\nfpu_exception\t: yes\ncpuid level\t: 16\nwp\t\t: yes\nflags\t\t: fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ht syscall nx mmxext fxsr_opt pdpe1gb rdtscp lm rep_good nopl cpuid extd_apicid tsc_known_freq pni pclmulqdq ssse3 fma cx16 pcid sse4_1 sse4_2 x2apic movbe popcnt tsc_deadline_timer aes xsave avx f16c rdrand hypervisor lahf_lm cmp_legacy svm cr8_legacy abm sse4a misalignsse 3dnowprefetch osvw topoext perfctr_core invpcid_single ssbd ibrs ibpb stibp vmmcall fsgsbase tsc_adjust bmi1 avx2 smep bmi2 erms invpcid avx512f avx512dq rdseed adx smap avx512ifma clflushopt clwb avx512cd sha_ni avx512bw avx512vl xsaveopt xsavec xgetbv1 xsaves avx_vnni avx512_bf16 clzero xsaveerptr wbnoinvd arat npt lbrv nrip_save tsc_scale vmcb_clean flushbyasid pausefilter pfthreshold v_vmsave_vmload vgif avx512vbmi umip pku avx512_vbmi2 gfni vaes vpclmulqdq avx512_vnni avx512_bitalg avx512_vpopcntdq rdpid movdiri movdir64b fsrm avx512_vp2intersect flush_l1d\nbugs\t\t: sysret_ss_attrs spectre_v1 spectre_v2 spec_store_bypass\nbogomips\t: 6600.00\nTLB size\t: 1024 4K pages\nclflush size\t: 64\ncache_alignment\t: 64\naddress sizes\t: 52 bits physical, 57 bits virtual\npower management:\n\nprocessor\t: 3\nvendor_id\t: AuthenticAMD\ncpu family\t: 26\nmodel\t\t: 2\nmodel name\t: AMD EPYC\nstepping\t: 1\nmicrocode\t: 0x1000065\ncpu MHz\t\t: 3300.000\ncache size\t: 512 KB\nphysical id\t: 0\nsiblings\t: 7\ncore id\t\t: 3\ncpu cores\t: 7\napicid\t\t: 3\ninitial apicid\t: 3\nfpu\t\t: yes\nfpu_exception\t: yes\ncpuid level\t: 16\nwp\t\t: yes\nflags\t\t: fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ht syscall nx mmxext fxsr_opt pdpe1gb rdtscp lm rep_good nopl cpuid extd_apicid tsc_known_freq pni pclmulqdq ssse3 fma cx16 pcid sse4_1 sse4_2 x2apic movbe popcnt tsc_deadline_timer aes xsave avx f16c rdrand hypervisor lahf_lm cmp_legacy svm cr8_legacy abm sse4a misalignsse 3dnowprefetch osvw topoext perfctr_core invpcid_single ssbd ibrs ibpb stibp vmmcall fsgsbase tsc_adjust bmi1 avx2 smep bmi2 erms invpcid avx512f avx512dq rdseed adx smap avx512ifma clflushopt clwb avx512cd sha_ni avx512bw avx512vl xsaveopt xsavec xgetbv1 xsaves avx_vnni avx512_bf16 clzero xsaveerptr wbnoinvd arat npt lbrv nrip_save tsc_scale vmcb_clean flushbyasid pausefilter pfthreshold v_vmsave_vmload vgif avx512vbmi umip pku avx512_vbmi2 gfni vaes vpclmulqdq avx512_vnni avx512_bitalg avx512_vpopcntdq rdpid movdiri movdir64b fsrm avx512_vp2intersect flush_l1d\nbugs\t\t: sysret_ss_attrs spectre_v1 spectre_v2 spec_store_bypass\nbogomips\t: 6600.00\nTLB size\t: 1024 4K pages\nclflush size\t: 64\ncache_alignment\t: 64\naddress sizes\t: 52 bits physical, 57 bits virtual\npower management:\n\nprocessor\t: 4\nvendor_id\t: AuthenticAMD\ncpu family\t: 26\nmodel\t\t: 2\nmodel name\t: AMD EPYC\nstepping\t: 1\nmicrocode\t: 0x1000065\ncpu MHz\t\t: 3300.000\ncache size\t: 512 KB\nphysical id\t: 0\nsiblings\t: 7\ncore id\t\t: 4\ncpu cores\t: 7\napicid\t\t: 4\ninitial apicid\t: 4\nfpu\t\t: yes\nfpu_exception\t: yes\ncpuid level\t: 16\nwp\t\t: yes\nflags\t\t: fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ht syscall nx mmxext fxsr_opt pdpe1gb rdtscp lm rep_good nopl cpuid extd_apicid tsc_known_freq pni pclmulqdq ssse3 fma cx16 pcid sse4_1 sse4_2 x2apic movbe popcnt tsc_deadline_timer aes xsave avx f16c rdrand hypervisor lahf_lm cmp_legacy svm cr8_legacy abm sse4a misalignsse 3dnowprefetch osvw topoext perfctr_core invpcid_single ssbd ibrs ibpb stibp vmmcall fsgsbase tsc_adjust bmi1 avx2 smep bmi2 erms invpcid avx512f avx512dq rdseed adx smap avx512ifma clflushopt clwb avx512cd sha_ni avx512bw avx512vl xsaveopt xsavec xgetbv1 xsaves avx_vnni avx512_bf16 clzero xsaveerptr wbnoinvd arat npt lbrv nrip_save tsc_scale vmcb_clean flushbyasid pausefilter pfthreshold v_vmsave_vmload vgif avx512vbmi umip pku avx512_vbmi2 gfni vaes vpclmulqdq avx512_vnni avx512_bitalg avx512_vpopcntdq rdpid movdiri movdir64b fsrm avx512_vp2intersect flush_l1d\nbugs\t\t: sysret_ss_attrs spectre_v1 spectre_v2 spec_store_bypass\nbogomips\t: 6600.00\nTLB size\t: 1024 4K pages\nclflush size\t: 64\ncache_alignment\t: 64\naddress sizes\t: 52 bits physical, 57 bits virtual\npower management:\n\nprocessor\t: 5\nvendor_id\t: AuthenticAMD\ncpu family\t: 26\nmodel\t\t: 2\nmodel name\t: AMD EPYC\nstepping\t: 1\nmicrocode\t: 0x1000065\ncpu MHz\t\t: 3300.000\ncache size\t: 512 KB\nphysical id\t: 0\nsiblings\t: 7\ncore id\t\t: 5\ncpu cores\t: 7\napicid\t\t: 5\ninitial apicid\t: 5\nfpu\t\t: yes\nfpu_exception\t: yes\ncpuid level\t: 16\nwp\t\t: yes\nflags\t\t: fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ht syscall nx mmxext fxsr_opt pdpe1gb rdtscp lm rep_good nopl cpuid extd_apicid tsc_known_freq pni pclmulqdq ssse3 fma cx16 pcid sse4_1 sse4_2 x2apic movbe popcnt tsc_deadline_timer aes xsave avx f16c rdrand hypervisor lahf_lm cmp_legacy svm cr8_legacy abm sse4a misalignsse 3dnowprefetch osvw topoext perfctr_core invpcid_single ssbd ibrs ibpb stibp vmmcall fsgsbase tsc_adjust bmi1 avx2 smep bmi2 erms invpcid avx512f avx512dq rdseed adx smap avx512ifma clflushopt clwb avx512cd sha_ni avx512bw avx512vl xsaveopt xsavec xgetbv1 xsaves avx_vnni avx512_bf16 clzero xsaveerptr wbnoinvd arat npt lbrv nrip_save tsc_scale vmcb_clean flushbyasid pausefilter pfthreshold v_vmsave_vmload vgif avx512vbmi umip pku avx512_vbmi2 gfni vaes vpclmulqdq avx512_vnni avx512_bitalg avx512_vpopcntdq rdpid movdiri movdir64b fsrm avx512_vp2intersect flush_l1d\nbugs\t\t: sysret_ss_attrs spectre_v1 spectre_v2 spec_store_bypass\nbogomips\t: 6600.00\nTLB size\t: 1024 4K pages\nclflush size\t: 64\ncache_alignment\t: 64\naddress sizes\t: 52 bits physical, 57 bits virtual\npower management:\n\nprocessor\t: 6\nvendor_id\t: AuthenticAMD\ncpu family\t: 26\nmodel\t\t: 2\nmodel name\t: AMD EPYC\nstepping\t: 1\nmicrocode\t: 0x1000065\ncpu MHz\t\t: 3300.000\ncache size\t: 512 KB\nphysical id\t: 0\nsiblings\t: 7\ncore id\t\t: 6\ncpu cores\t: 7\napicid\t\t: 6\ninitial apicid\t: 6\nfpu\t\t: yes\nfpu_exception\t: yes\ncpuid level\t: 16\nwp\t\t: yes\nflags\t\t: fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ht syscall nx mmxext fxsr_opt pdpe1gb rdtscp lm rep_good nopl cpuid extd_apicid tsc_known_freq pni pclmulqdq ssse3 fma cx16 pcid sse4_1 sse4_2 x2apic movbe popcnt tsc_deadline_timer aes xsave avx f16c rdrand hypervisor lahf_lm cmp_legacy svm cr8_legacy abm sse4a misalignsse 3dnowprefetch osvw topoext perfctr_core invpcid_single ssbd ibrs ibpb stibp vmmcall fsgsbase tsc_adjust bmi1 avx2 smep bmi2 erms invpcid avx512f avx512dq rdseed adx smap avx512ifma clflushopt clwb avx512cd sha_ni avx512bw avx512vl xsaveopt xsavec xgetbv1 xsaves avx_vnni avx512_bf16 clzero xsaveerptr wbnoinvd arat npt lbrv nrip_save tsc_scale vmcb_clean flushbyasid pausefilter pfthreshold v_vmsave_vmload vgif avx512vbmi umip pku avx512_vbmi2 gfni vaes vpclmulqdq avx512_vnni avx512_bitalg avx512_vpopcntdq rdpid movdiri movdir64b fsrm avx512_vp2intersect flush_l1d\nbugs\t\t: sysret_ss_attrs spectre_v1 spectre_v2 spec_store_bypass\nbogomips\t: 6600.00\nTLB size\t: 1024 4K pages\nclflush size\t: 64\ncache_alignment\t: 64\naddress sizes\t: 52 bits physical, 57 bits virtual\npower management:\n\n",
+ "measurements": [
+  {
+   "workload": "index",
+   "engine": "index-native-avx2",
+   "kernel": "native-avx2-ffm",
+   "dataset": "quoted",
+   "target": 1048576,
+   "bytes": 1048704,
+   "rows": 1576,
+   "fields": 6308,
+   "stage": "ingest",
+   "runtime": "jvm",
+   "checksum": 1614848,
+   "sha256": "989afae940ce9d856e22c0179bff80eb6bf2be6024e31479e3e3acb539973213",
+   "ns_per_byte": [
+    0.09227031122779406,
+    0.15035562788651208,
+    0.09498178566350166,
+    0.07589151974084431,
+    0.08558524549449219
+   ],
+   "allocated_bytes_per_row": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "fork": 0
+  },
+  {
+   "workload": "index",
+   "engine": "index-native",
+   "kernel": "native-avx512-ffm",
+   "dataset": "quoted",
+   "target": 1048576,
+   "bytes": 1048704,
+   "rows": 1576,
+   "fields": 6308,
+   "stage": "ingest",
+   "runtime": "jvm",
+   "checksum": 1614848,
+   "sha256": "989afae940ce9d856e22c0179bff80eb6bf2be6024e31479e3e3acb539973213",
+   "ns_per_byte": [
+    0.06313589243882205,
+    0.06420707752666209,
+    0.06437575913852828,
+    0.06919580527497815,
+    0.0688394636479567
+   ],
+   "allocated_bytes_per_row": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "fork": 2
+  },
+  {
+   "workload": "strings",
+   "engine": "kernel-swar",
+   "kernel": "java-swar",
+   "dataset": "quoted",
+   "target": 1048576,
+   "bytes": 1048704,
+   "rows": 1576,
+   "fields": 6308,
+   "stage": "ingest",
+   "runtime": "jvm",
+   "checksum": 1035767,
+   "sha256": "989afae940ce9d856e22c0179bff80eb6bf2be6024e31479e3e3acb539973213",
+   "ns_per_byte": [
+    0.3908544674594766,
+    0.3870202418181638,
+    0.39272235652084814,
+    0.40013648716594147,
+    0.40225694542657336
+   ],
+   "allocated_bytes_per_row": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "fork": 0
+  },
+  {
+   "workload": "scan",
+   "engine": "kernel-swar",
+   "kernel": "java-swar",
+   "dataset": "quoted",
+   "target": 1048576,
+   "bytes": 1048704,
+   "rows": 1576,
+   "fields": 6308,
+   "stage": "ingest",
+   "runtime": "jvm",
+   "checksum": 1577011039,
+   "sha256": "989afae940ce9d856e22c0179bff80eb6bf2be6024e31479e3e3acb539973213",
+   "ns_per_byte": [
+    0.30080710624372414,
+    0.29636810993402185,
+    0.3070546630662282,
+    0.31685838270630234,
+    0.3256688300780363
+   ],
+   "allocated_bytes_per_row": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "fork": 1
+  },
+  {
+   "workload": "strings",
+   "engine": "truffledata-mapped-native",
+   "kernel": "native-avx512-ffm",
+   "dataset": "quoted",
+   "target": 1048576,
+   "bytes": 1048704,
+   "rows": 1576,
+   "fields": 6308,
+   "stage": "ingest",
+   "runtime": "jvm",
+   "checksum": 1035767,
+   "sha256": "989afae940ce9d856e22c0179bff80eb6bf2be6024e31479e3e3acb539973213",
+   "ns_per_byte": [
+    0.3154996282659075,
+    0.31983108110411734,
+    0.32590592737160756,
+    0.3154416893720686,
+    0.3211426379832336
+   ],
+   "allocated_bytes_per_row": [
+    1372.3502538071066,
+    1372.3502538071066,
+    1372.3502538071066
+   ],
+   "fork": 2
+  },
+  {
+   "workload": "index",
+   "engine": "index-native-swar",
+   "kernel": "native-swar-ffm",
+   "dataset": "quoted",
+   "target": 1048576,
+   "bytes": 1048704,
+   "rows": 1576,
+   "fields": 6308,
+   "stage": "ingest",
+   "runtime": "jvm",
+   "checksum": 1614848,
+   "sha256": "989afae940ce9d856e22c0179bff80eb6bf2be6024e31479e3e3acb539973213",
+   "ns_per_byte": [
+    0.3907406497935465,
+    0.38775104363166785,
+    0.3817252786931934,
+    0.38032419378590443,
+    0.37978990099104465
+   ],
+   "allocated_bytes_per_row": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "fork": 1
+  },
+  {
+   "workload": "index",
+   "engine": "index-native-avx2",
+   "kernel": "native-avx2-ffm",
+   "dataset": "quoted",
+   "target": 1048576,
+   "bytes": 1048704,
+   "rows": 1576,
+   "fields": 6308,
+   "stage": "ingest",
+   "runtime": "jvm",
+   "checksum": 1614848,
+   "sha256": "989afae940ce9d856e22c0179bff80eb6bf2be6024e31479e3e3acb539973213",
+   "ns_per_byte": [
+    0.06645536022613849,
+    0.06794001892184984,
+    0.0708687595920653,
+    0.06849110188059135,
+    0.06715505463233243
+   ],
+   "allocated_bytes_per_row": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "fork": 2
+  },
+  {
+   "workload": "index",
+   "engine": "index-native-swar",
+   "kernel": "native-swar-ffm",
+   "dataset": "quoted",
+   "target": 1048576,
+   "bytes": 1048704,
+   "rows": 1576,
+   "fields": 6308,
+   "stage": "ingest",
+   "runtime": "jvm",
+   "checksum": 1614848,
+   "sha256": "989afae940ce9d856e22c0179bff80eb6bf2be6024e31479e3e3acb539973213",
+   "ns_per_byte": [
+    0.381089674790584,
+    0.37960949643319764,
+    0.3785813869450434,
+    0.3789038155855871,
+    0.3795325023225332
+   ],
+   "allocated_bytes_per_row": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "fork": 0
+  },
+  {
+   "workload": "strings",
+   "engine": "truffledata-batch-native",
+   "kernel": "native-avx512-ffm",
+   "dataset": "quoted",
+   "target": 1048576,
+   "bytes": 1048704,
+   "rows": 1576,
+   "fields": 6308,
+   "stage": "ingest",
+   "runtime": "jvm",
+   "checksum": 1035767,
+   "sha256": "989afae940ce9d856e22c0179bff80eb6bf2be6024e31479e3e3acb539973213",
+   "ns_per_byte": [
+    0.1879605872685779,
+    0.18227562624339094,
+    0.18582924888564992,
+    0.1732734749856265,
+    0.1843715534288134
+   ],
+   "allocated_bytes_per_row": [
+    706.4517766497462,
+    706.4517766497462,
+    706.4517766497462
+   ],
+   "fork": 1
+  },
+  {
+   "workload": "strings",
+   "engine": "truffledata-mapped",
+   "kernel": "java-swar",
+   "dataset": "quoted",
+   "target": 1048576,
+   "bytes": 1048704,
+   "rows": 1576,
+   "fields": 6308,
+   "stage": "ingest",
+   "runtime": "jvm",
+   "checksum": 1035767,
+   "sha256": "989afae940ce9d856e22c0179bff80eb6bf2be6024e31479e3e3acb539973213",
+   "ns_per_byte": [
+    0.6611660711356143,
+    0.5885345942822928,
+    0.7953788411431846,
+    0.599784310397151,
+    1.3133076285613026
+   ],
+   "allocated_bytes_per_row": [
+    1370.0253807106599,
+    1370.0253807106599,
+    1370.0253807106599
+   ],
+   "fork": 1
+  },
+  {
+   "workload": "index",
+   "engine": "index-scalar",
+   "kernel": "java-scalar",
+   "dataset": "quoted",
+   "target": 1048576,
+   "bytes": 1048704,
+   "rows": 1576,
+   "fields": 6308,
+   "stage": "ingest",
+   "runtime": "jvm",
+   "checksum": 1614848,
+   "sha256": "989afae940ce9d856e22c0179bff80eb6bf2be6024e31479e3e3acb539973213",
+   "ns_per_byte": [
+    0.32839094314716244,
+    0.32827018575378175,
+    0.3264615024509896,
+    0.3278971739330882,
+    0.3328394025298823
+   ],
+   "allocated_bytes_per_row": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "fork": 2
+  },
+  {
+   "workload": "strings",
+   "engine": "kernel-native",
+   "kernel": "native-avx512-ffm",
+   "dataset": "quoted",
+   "target": 1048576,
+   "bytes": 1048704,
+   "rows": 1576,
+   "fields": 6308,
+   "stage": "ingest",
+   "runtime": "jvm",
+   "checksum": 1035767,
+   "sha256": "989afae940ce9d856e22c0179bff80eb6bf2be6024e31479e3e3acb539973213",
+   "ns_per_byte": [
+    2.079544234734355,
+    2.330814902289228,
+    3.93291019071983,
+    0.20473618274663793,
+    0.15296304866142527
+   ],
+   "allocated_bytes_per_row": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "fork": 0
+  },
+  {
+   "workload": "index",
+   "engine": "index-swar",
+   "kernel": "java-swar",
+   "dataset": "quoted",
+   "target": 1048576,
+   "bytes": 1048704,
+   "rows": 1576,
+   "fields": 6308,
+   "stage": "ingest",
+   "runtime": "jvm",
+   "checksum": 1614848,
+   "sha256": "989afae940ce9d856e22c0179bff80eb6bf2be6024e31479e3e3acb539973213",
+   "ns_per_byte": [
+    0.279784499863329,
+    0.28212248200584544,
+    0.2809005701523968,
+    0.2857493030690724,
+    0.2810225661335315
+   ],
+   "allocated_bytes_per_row": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "fork": 1
+  },
+  {
+   "workload": "index",
+   "engine": "index-native-small",
+   "kernel": "native-avx512-ffm",
+   "dataset": "quoted",
+   "target": 1048576,
+   "bytes": 1048704,
+   "rows": 1576,
+   "fields": 6308,
+   "stage": "ingest",
+   "runtime": "jvm",
+   "checksum": 1614848,
+   "sha256": "989afae940ce9d856e22c0179bff80eb6bf2be6024e31479e3e3acb539973213",
+   "ns_per_byte": [
+    0.04633126351813116,
+    0.046473570395737115,
+    0.045532132449782686,
+    0.0488369537124327,
+    0.04532174056839613
+   ],
+   "allocated_bytes_per_row": [
+    0.18274111675126903,
+    0.18274111675126903,
+    0.18274111675126903
+   ],
+   "fork": 0
+  },
+  {
+   "workload": "strings",
+   "engine": "fastcsv",
+   "kernel": "",
+   "dataset": "quoted",
+   "target": 1048576,
+   "bytes": 1048704,
+   "rows": 1576,
+   "fields": 6308,
+   "stage": "ingest",
+   "runtime": "jvm",
+   "checksum": 1035767,
+   "sha256": "989afae940ce9d856e22c0179bff80eb6bf2be6024e31479e3e3acb539973213",
+   "ns_per_byte": [
+    0.5902110221700446,
+    0.5972861232104804,
+    0.5901976133762666,
+    0.5860378380828863,
+    0.5870294801339808
+   ],
+   "allocated_bytes_per_row": [
+    922.9543147208121,
+    922.9543147208121,
+    922.9543147208121
+   ],
+   "fork": 0
+  },
+  {
+   "workload": "strings",
+   "engine": "kernel-swar",
+   "kernel": "java-swar",
+   "dataset": "quoted",
+   "target": 1048576,
+   "bytes": 1048704,
+   "rows": 1576,
+   "fields": 6308,
+   "stage": "ingest",
+   "runtime": "jvm",
+   "checksum": 1035767,
+   "sha256": "989afae940ce9d856e22c0179bff80eb6bf2be6024e31479e3e3acb539973213",
+   "ns_per_byte": [
+    0.3834905704319453,
+    0.38272375282375526,
+    0.38802745913955233,
+    0.378949725294489,
+    0.3761208828952891
+   ],
+   "allocated_bytes_per_row": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "fork": 2
+  },
+  {
+   "workload": "strings",
+   "engine": "truffledata-batch-bytes",
+   "kernel": "per-byte",
+   "dataset": "quoted",
+   "target": 1048576,
+   "bytes": 1048704,
+   "rows": 1576,
+   "fields": 6308,
+   "stage": "ingest",
+   "runtime": "jvm",
+   "checksum": 1035767,
+   "sha256": "989afae940ce9d856e22c0179bff80eb6bf2be6024e31479e3e3acb539973213",
+   "ns_per_byte": [
+    0.34665623672869034,
+    0.34845706617217126,
+    0.34844373262178446,
+    0.33670560660642873,
+    0.3385824733030867
+   ],
+   "allocated_bytes_per_row": [
+    703.8324873096446,
+    703.8324873096446,
+    703.8324873096446
+   ],
+   "fork": 1
+  },
+  {
+   "workload": "strings",
+   "engine": "jackson",
+   "kernel": "",
+   "dataset": "quoted",
+   "target": 1048576,
+   "bytes": 1048704,
+   "rows": 1576,
+   "fields": 6308,
+   "stage": "ingest",
+   "runtime": "jvm",
+   "checksum": 1035767,
+   "sha256": "989afae940ce9d856e22c0179bff80eb6bf2be6024e31479e3e3acb539973213",
+   "ns_per_byte": [
+    2.0629817319707033,
+    2.068670631052829,
+    2.092634490365195,
+    2.0685851538468967,
+    2.064610875378789
+   ],
+   "allocated_bytes_per_row": [
+    832.9746192893401,
+    832.9746192893401,
+    832.9746192893401
+   ],
+   "fork": 1
+  },
+  {
+   "workload": "strings",
+   "engine": "truffledata-mapped",
+   "kernel": "java-swar",
+   "dataset": "quoted",
+   "target": 1048576,
+   "bytes": 1048704,
+   "rows": 1576,
+   "fields": 6308,
+   "stage": "ingest",
+   "runtime": "jvm",
+   "checksum": 1035767,
+   "sha256": "989afae940ce9d856e22c0179bff80eb6bf2be6024e31479e3e3acb539973213",
+   "ns_per_byte": [
+    0.5835197626451024,
+    0.6090483902520134,
+    0.5935254865693464,
+    0.5899448958108875,
+    0.5931954083473773
+   ],
+   "allocated_bytes_per_row": [
+    1370.0253807106599,
+    1370.0253807106599,
+    1370.0253807106599
+   ],
+   "fork": 0
+  },
+  {
+   "workload": "scan",
+   "engine": "kernel-native-small",
+   "kernel": "native-avx512-ffm",
+   "dataset": "quoted",
+   "target": 1048576,
+   "bytes": 1048704,
+   "rows": 1576,
+   "fields": 6308,
+   "stage": "ingest",
+   "runtime": "jvm",
+   "checksum": 1577011039,
+   "sha256": "989afae940ce9d856e22c0179bff80eb6bf2be6024e31479e3e3acb539973213",
+   "ns_per_byte": [
+    0.05386130794662309,
+    0.053737689868210876,
+    0.053394530637252725,
+    0.05361309505959671,
+    0.05392295789458599
+   ],
+   "allocated_bytes_per_row": [
+    0.18274111675126903,
+    0.18274111675126903,
+    0.18274111675126903
+   ],
+   "fork": 1
+  },
+  {
+   "workload": "scan",
+   "engine": "kernel-vector",
+   "kernel": "java-vector512",
+   "dataset": "quoted",
+   "target": 1048576,
+   "bytes": 1048704,
+   "rows": 1576,
+   "fields": 6308,
+   "stage": "ingest",
+   "runtime": "jvm",
+   "checksum": 1577011039,
+   "sha256": "989afae940ce9d856e22c0179bff80eb6bf2be6024e31479e3e3acb539973213",
+   "ns_per_byte": [
+    0.0963478224564289,
+    0.09622580968863799,
+    0.09820068281186686,
+    0.11612920127580027,
+    2.1711413890471087
+   ],
+   "allocated_bytes_per_row": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "fork": 1
+  },
+  {
+   "workload": "strings",
+   "engine": "univocity",
+   "kernel": "",
+   "dataset": "quoted",
+   "target": 1048576,
+   "bytes": 1048704,
+   "rows": 1576,
+   "fields": 6308,
+   "stage": "ingest",
+   "runtime": "jvm",
+   "checksum": 1035767,
+   "sha256": "989afae940ce9d856e22c0179bff80eb6bf2be6024e31479e3e3acb539973213",
+   "ns_per_byte": [
+    42.666369973932454,
+    41.01368233008143,
+    54.410438435031644,
+    115.42694888166727,
+    46.116562283860205
+   ],
+   "allocated_bytes_per_row": [
+    3558.3604060913704,
+    3558.3604060913704,
+    3558.3604060913704
+   ],
+   "fork": 2
+  },
+  {
+   "workload": "scan",
+   "engine": "fastcsv",
+   "kernel": "",
+   "dataset": "quoted",
+   "target": 1048576,
+   "bytes": 1048704,
+   "rows": 1576,
+   "fields": 6308,
+   "stage": "ingest",
+   "runtime": "jvm",
+   "checksum": 1577011039,
+   "sha256": "989afae940ce9d856e22c0179bff80eb6bf2be6024e31479e3e3acb539973213",
+   "ns_per_byte": [
+    0.4276728345244227,
+    0.42740454002871037,
+    0.4294857874751749,
+    0.42507815264326143,
+    0.4280794008319837
+   ],
+   "allocated_bytes_per_row": [
+    26.248730964467004,
+    26.248730964467004,
+    26.248730964467004
+   ],
+   "fork": 0
+  },
+  {
+   "workload": "index",
+   "engine": "index-native-swar",
+   "kernel": "native-swar-ffm",
+   "dataset": "quoted",
+   "target": 1048576,
+   "bytes": 1048704,
+   "rows": 1576,
+   "fields": 6308,
+   "stage": "ingest",
+   "runtime": "jvm",
+   "checksum": 1614848,
+   "sha256": "989afae940ce9d856e22c0179bff80eb6bf2be6024e31479e3e3acb539973213",
+   "ns_per_byte": [
+    0.38243113666996004,
+    0.38210753807061515,
+    0.39273989727756153,
+    0.3819214700557386,
+    0.39420233950469713
+   ],
+   "allocated_bytes_per_row": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "fork": 2
+  },
+  {
+   "workload": "strings",
+   "engine": "truffledata-mapped-native",
+   "kernel": "native-avx512-ffm",
+   "dataset": "quoted",
+   "target": 1048576,
+   "bytes": 1048704,
+   "rows": 1576,
+   "fields": 6308,
+   "stage": "ingest",
+   "runtime": "jvm",
+   "checksum": 1035767,
+   "sha256": "989afae940ce9d856e22c0179bff80eb6bf2be6024e31479e3e3acb539973213",
+   "ns_per_byte": [
+    0.34918792100744833,
+    0.33976336348225256,
+    0.3446260431808845,
+    0.3317057061011725,
+    0.32504308566475104
+   ],
+   "allocated_bytes_per_row": [
+    1372.3197969543148,
+    1372.3197969543148,
+    1372.3197969543148
+   ],
+   "fork": 1
+  },
+  {
+   "workload": "index",
+   "engine": "index-swar",
+   "kernel": "java-swar",
+   "dataset": "quoted",
+   "target": 1048576,
+   "bytes": 1048704,
+   "rows": 1576,
+   "fields": 6308,
+   "stage": "ingest",
+   "runtime": "jvm",
+   "checksum": 1614848,
+   "sha256": "989afae940ce9d856e22c0179bff80eb6bf2be6024e31479e3e3acb539973213",
+   "ns_per_byte": [
+    0.30510421192508713,
+    0.31149806899437893,
+    0.32499993311023934,
+    0.3258298371425604,
+    0.31617306399715966
+   ],
+   "allocated_bytes_per_row": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "fork": 2
+  },
+  {
+   "workload": "scan",
+   "engine": "kernel-swar",
+   "kernel": "java-swar",
+   "dataset": "quoted",
+   "target": 1048576,
+   "bytes": 1048704,
+   "rows": 1576,
+   "fields": 6308,
+   "stage": "ingest",
+   "runtime": "jvm",
+   "checksum": 1577011039,
+   "sha256": "989afae940ce9d856e22c0179bff80eb6bf2be6024e31479e3e3acb539973213",
+   "ns_per_byte": [
+    0.2877030474599287,
+    0.28851595174738565,
+    0.28809413168820336,
+    0.2886668099925733,
+    0.28904444019099823
+   ],
+   "allocated_bytes_per_row": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "fork": 0
+  },
+  {
+   "workload": "index",
+   "engine": "index-native-avx512",
+   "kernel": "native-avx512-ffm",
+   "dataset": "quoted",
+   "target": 1048576,
+   "bytes": 1048704,
+   "rows": 1576,
+   "fields": 6308,
+   "stage": "ingest",
+   "runtime": "jvm",
+   "checksum": 1614848,
+   "sha256": "989afae940ce9d856e22c0179bff80eb6bf2be6024e31479e3e3acb539973213",
+   "ns_per_byte": [
+    0.061008714731120045,
+    0.060892820148776665,
+    0.060839799697125024,
+    0.061080909573146894,
+    0.06086908729169426
+   ],
+   "allocated_bytes_per_row": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "fork": 2
+  },
+  {
+   "workload": "strings",
+   "engine": "truffledata-batch-bytes",
+   "kernel": "per-byte",
+   "dataset": "quoted",
+   "target": 1048576,
+   "bytes": 1048704,
+   "rows": 1576,
+   "fields": 6308,
+   "stage": "ingest",
+   "runtime": "jvm",
+   "checksum": 1035767,
+   "sha256": "989afae940ce9d856e22c0179bff80eb6bf2be6024e31479e3e3acb539973213",
+   "ns_per_byte": [
+    0.3497461014081529,
+    0.344127864515484,
+    0.3525267443402063,
+    0.3466296386967674,
+    0.3391633434947357
+   ],
+   "allocated_bytes_per_row": [
+    703.8324873096446,
+    703.8324873096446,
+    703.8324873096446
+   ],
+   "fork": 2
+  },
+  {
+   "workload": "scan",
+   "engine": "truffledata-scanner-bytes",
+   "kernel": "per-byte",
+   "dataset": "quoted",
+   "target": 1048576,
+   "bytes": 1048704,
+   "rows": 1576,
+   "fields": 6308,
+   "stage": "ingest",
+   "runtime": "jvm",
+   "checksum": 1577011039,
+   "sha256": "989afae940ce9d856e22c0179bff80eb6bf2be6024e31479e3e3acb539973213",
+   "ns_per_byte": [
+    0.1785923143298693,
+    0.17703972812118954,
+    0.17450794783545145,
+    0.17526570246066853,
+    0.1740776294607764
+   ],
+   "allocated_bytes_per_row": [
+    0.467005076142132,
+    0.467005076142132,
+    0.467005076142132
+   ],
+   "fork": 1
+  },
+  {
+   "workload": "scan",
+   "engine": "truffledata-scanner-native",
+   "kernel": "native-avx512-ffm",
+   "dataset": "quoted",
+   "target": 1048576,
+   "bytes": 1048704,
+   "rows": 1576,
+   "fields": 6308,
+   "stage": "ingest",
+   "runtime": "jvm",
+   "checksum": 1577011039,
+   "sha256": "989afae940ce9d856e22c0179bff80eb6bf2be6024e31479e3e3acb539973213",
+   "ns_per_byte": [
+    0.055978735889089144,
+    0.05601710609184614,
+    0.05659325670402335,
+    0.056040217632213445,
+    0.05500073296011876
+   ],
+   "allocated_bytes_per_row": [
+    2.015228426395939,
+    2.015228426395939,
+    2.015228426395939
+   ],
+   "fork": 0
+  },
+  {
+   "workload": "index",
+   "engine": "index-native-small",
+   "kernel": "native-avx512-ffm",
+   "dataset": "quoted",
+   "target": 1048576,
+   "bytes": 1048704,
+   "rows": 1576,
+   "fields": 6308,
+   "stage": "ingest",
+   "runtime": "jvm",
+   "checksum": 1614848,
+   "sha256": "989afae940ce9d856e22c0179bff80eb6bf2be6024e31479e3e3acb539973213",
+   "ns_per_byte": [
+    0.04869713166532925,
+    0.04667279594405681,
+    0.046151810847798395,
+    0.0463786563339706,
+    0.04652105480684979
+   ],
+   "allocated_bytes_per_row": [
+    0.18274111675126903,
+    0.18274111675126903,
+    0.18274111675126903
+   ],
+   "fork": 1
+  },
+  {
+   "workload": "strings",
+   "engine": "truffledata-batch",
+   "kernel": "java-swar",
+   "dataset": "quoted",
+   "target": 1048576,
+   "bytes": 1048704,
+   "rows": 1576,
+   "fields": 6308,
+   "stage": "ingest",
+   "runtime": "jvm",
+   "checksum": 1035767,
+   "sha256": "989afae940ce9d856e22c0179bff80eb6bf2be6024e31479e3e3acb539973213",
+   "ns_per_byte": [
+    0.533774571266129,
+    0.5079199274289676,
+    0.5236947235550882,
+    0.5222511591088084,
+    0.5194427638058295
+   ],
+   "allocated_bytes_per_row": [
+    704.1065989847716,
+    704.1065989847716,
+    704.1065989847716
+   ],
+   "fork": 2
+  },
+  {
+   "workload": "index",
+   "engine": "index-vector",
+   "kernel": "java-vector512",
+   "dataset": "quoted",
+   "target": 1048576,
+   "bytes": 1048704,
+   "rows": 1576,
+   "fields": 6308,
+   "stage": "ingest",
+   "runtime": "jvm",
+   "checksum": 1614848,
+   "sha256": "989afae940ce9d856e22c0179bff80eb6bf2be6024e31479e3e3acb539973213",
+   "ns_per_byte": [
+    0.09495650932800292,
+    0.09824897531295142,
+    0.11167542368419812,
+    0.10253487659086942,
+    0.10354985998967454
+   ],
+   "allocated_bytes_per_row": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "fork": 0
+  },
+  {
+   "workload": "scan",
+   "engine": "jackson",
+   "kernel": "",
+   "dataset": "quoted",
+   "target": 1048576,
+   "bytes": 1048704,
+   "rows": 1576,
+   "fields": 6308,
+   "stage": "ingest",
+   "runtime": "jvm",
+   "checksum": 1577011039,
+   "sha256": "989afae940ce9d856e22c0179bff80eb6bf2be6024e31479e3e3acb539973213",
+   "ns_per_byte": [
+    2.0970017856172394,
+    2.0808541518519696,
+    2.094451052995213,
+    2.1604905078973524,
+    2.127689174588967
+   ],
+   "allocated_bytes_per_row": [
+    832.9746192893401,
+    832.9746192893401,
+    832.9746192893401
+   ],
+   "fork": 1
+  },
+  {
+   "workload": "index",
+   "engine": "index-native-small",
+   "kernel": "native-avx512-ffm",
+   "dataset": "quoted",
+   "target": 1048576,
+   "bytes": 1048704,
+   "rows": 1576,
+   "fields": 6308,
+   "stage": "ingest",
+   "runtime": "jvm",
+   "checksum": 1614848,
+   "sha256": "989afae940ce9d856e22c0179bff80eb6bf2be6024e31479e3e3acb539973213",
+   "ns_per_byte": [
+    0.04616810445166246,
+    0.04563801041781598,
+    0.045723647472843354,
+    0.04557145777469846,
+    0.04525778810228317
+   ],
+   "allocated_bytes_per_row": [
+    0.18274111675126903,
+    0.18274111675126903,
+    0.18274111675126903
+   ],
+   "fork": 2
+  },
+  {
+   "workload": "index",
+   "engine": "index-table",
+   "kernel": "java-table",
+   "dataset": "quoted",
+   "target": 1048576,
+   "bytes": 1048704,
+   "rows": 1576,
+   "fields": 6308,
+   "stage": "ingest",
+   "runtime": "jvm",
+   "checksum": 1614848,
+   "sha256": "989afae940ce9d856e22c0179bff80eb6bf2be6024e31479e3e3acb539973213",
+   "ns_per_byte": [
+    0.8164236001356867,
+    0.8169510996810215,
+    0.81640189378884,
+    0.8273746436228868,
+    0.8135060469441763
+   ],
+   "allocated_bytes_per_row": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "fork": 0
+  },
+  {
+   "workload": "index",
+   "engine": "index-native-avx2",
+   "kernel": "native-avx2-ffm",
+   "dataset": "quoted",
+   "target": 1048576,
+   "bytes": 1048704,
+   "rows": 1576,
+   "fields": 6308,
+   "stage": "ingest",
+   "runtime": "jvm",
+   "checksum": 1614848,
+   "sha256": "989afae940ce9d856e22c0179bff80eb6bf2be6024e31479e3e3acb539973213",
+   "ns_per_byte": [
+    0.0667813446043416,
+    0.0668268399839278,
+    0.06647688905636533,
+    0.06604435231895142,
+    0.06650048399780334
+   ],
+   "allocated_bytes_per_row": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "fork": 1
+  },
+  {
+   "workload": "scan",
+   "engine": "kernel-vector",
+   "kernel": "java-vector512",
+   "dataset": "quoted",
+   "target": 1048576,
+   "bytes": 1048704,
+   "rows": 1576,
+   "fields": 6308,
+   "stage": "ingest",
+   "runtime": "jvm",
+   "checksum": 1577011039,
+   "sha256": "989afae940ce9d856e22c0179bff80eb6bf2be6024e31479e3e3acb539973213",
+   "ns_per_byte": [
+    0.10235058901558905,
+    0.10313475893506102,
+    0.10356338857102797,
+    0.1002004969910455,
+    0.09872896152470544
+   ],
+   "allocated_bytes_per_row": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "fork": 0
+  },
+  {
+   "workload": "index",
+   "engine": "index-table",
+   "kernel": "java-table",
+   "dataset": "quoted",
+   "target": 1048576,
+   "bytes": 1048704,
+   "rows": 1576,
+   "fields": 6308,
+   "stage": "ingest",
+   "runtime": "jvm",
+   "checksum": 1614848,
+   "sha256": "989afae940ce9d856e22c0179bff80eb6bf2be6024e31479e3e3acb539973213",
+   "ns_per_byte": [
+    0.8338927419650992,
+    0.8370553598475521,
+    0.8302792973897831,
+    0.8383874105506912,
+    0.8305454340219736
+   ],
+   "allocated_bytes_per_row": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "fork": 2
+  },
+  {
+   "workload": "scan",
+   "engine": "truffledata-scanner-native",
+   "kernel": "native-avx512-ffm",
+   "dataset": "quoted",
+   "target": 1048576,
+   "bytes": 1048704,
+   "rows": 1576,
+   "fields": 6308,
+   "stage": "ingest",
+   "runtime": "jvm",
+   "checksum": 1577011039,
+   "sha256": "989afae940ce9d856e22c0179bff80eb6bf2be6024e31479e3e3acb539973213",
+   "ns_per_byte": [
+    0.0568640474008056,
+    0.06109205290311133,
+    0.05802429695116667,
+    0.058146804613471346,
+    0.05726474487902296
+   ],
+   "allocated_bytes_per_row": [
+    2.015228426395939,
+    2.015228426395939,
+    2.015228426395939
+   ],
+   "fork": 2
+  },
+  {
+   "workload": "index",
+   "engine": "index-native-avx512",
+   "kernel": "native-avx512-ffm",
+   "dataset": "quoted",
+   "target": 1048576,
+   "bytes": 1048704,
+   "rows": 1576,
+   "fields": 6308,
+   "stage": "ingest",
+   "runtime": "jvm",
+   "checksum": 1614848,
+   "sha256": "989afae940ce9d856e22c0179bff80eb6bf2be6024e31479e3e3acb539973213",
+   "ns_per_byte": [
+    0.061059593588032715,
+    0.061214252211346916,
+    0.06122334205495398,
+    0.06270136685612139,
+    0.060837824264678424
+   ],
+   "allocated_bytes_per_row": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "fork": 0
+  },
+  {
+   "workload": "scan",
+   "engine": "truffledata-scanner-bytes",
+   "kernel": "per-byte",
+   "dataset": "quoted",
+   "target": 1048576,
+   "bytes": 1048704,
+   "rows": 1576,
+   "fields": 6308,
+   "stage": "ingest",
+   "runtime": "jvm",
+   "checksum": 1577011039,
+   "sha256": "989afae940ce9d856e22c0179bff80eb6bf2be6024e31479e3e3acb539973213",
+   "ns_per_byte": [
+    0.17959194846871027,
+    0.17671319383771697,
+    0.1768593680386736,
+    0.17620392746361035,
+    0.18024329456152438
+   ],
+   "allocated_bytes_per_row": [
+    0.467005076142132,
+    0.467005076142132,
+    0.467005076142132
+   ],
+   "fork": 2
+  },
+  {
+   "workload": "index",
+   "engine": "index-table",
+   "kernel": "java-table",
+   "dataset": "quoted",
+   "target": 1048576,
+   "bytes": 1048704,
+   "rows": 1576,
+   "fields": 6308,
+   "stage": "ingest",
+   "runtime": "jvm",
+   "checksum": 1614848,
+   "sha256": "989afae940ce9d856e22c0179bff80eb6bf2be6024e31479e3e3acb539973213",
+   "ns_per_byte": [
+    0.8153402116426954,
+    0.8170371643954275,
+    0.8169680491050487,
+    0.81789784615787,
+    0.8177137549911946
+   ],
+   "allocated_bytes_per_row": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "fork": 1
+  },
+  {
+   "workload": "scan",
+   "engine": "fastcsv",
+   "kernel": "",
+   "dataset": "quoted",
+   "target": 1048576,
+   "bytes": 1048704,
+   "rows": 1576,
+   "fields": 6308,
+   "stage": "ingest",
+   "runtime": "jvm",
+   "checksum": 1577011039,
+   "sha256": "989afae940ce9d856e22c0179bff80eb6bf2be6024e31479e3e3acb539973213",
+   "ns_per_byte": [
+    0.40562140003523356,
+    0.40304115674149865,
+    0.4045616395136471,
+    0.403013181232519,
+    0.4017456919831505
+   ],
+   "allocated_bytes_per_row": [
+    26.248730964467004,
+    26.248730964467004,
+    26.248730964467004
+   ],
+   "fork": 2
+  },
+  {
+   "workload": "scan",
+   "engine": "kernel-native-small",
+   "kernel": "native-avx512-ffm",
+   "dataset": "quoted",
+   "target": 1048576,
+   "bytes": 1048704,
+   "rows": 1576,
+   "fields": 6308,
+   "stage": "ingest",
+   "runtime": "jvm",
+   "checksum": 1577011039,
+   "sha256": "989afae940ce9d856e22c0179bff80eb6bf2be6024e31479e3e3acb539973213",
+   "ns_per_byte": [
+    0.05440133126795336,
+    0.05435718213893542,
+    0.05445810642249171,
+    0.05480624718828287,
+    0.05472538550529867
+   ],
+   "allocated_bytes_per_row": [
+    0.18274111675126903,
+    0.18274111675126903,
+    0.18274111675126903
+   ],
+   "fork": 0
+  },
+  {
+   "workload": "scan",
+   "engine": "truffledata-scanner",
+   "kernel": "java-swar",
+   "dataset": "quoted",
+   "target": 1048576,
+   "bytes": 1048704,
+   "rows": 1576,
+   "fields": 6308,
+   "stage": "ingest",
+   "runtime": "jvm",
+   "checksum": 1577011039,
+   "sha256": "989afae940ce9d856e22c0179bff80eb6bf2be6024e31479e3e3acb539973213",
+   "ns_per_byte": [
+    0.3319204569686703,
+    0.33607773792711515,
+    0.3119387200222997,
+    0.2929573917295402,
+    0.29062186826410563
+   ],
+   "allocated_bytes_per_row": [
+    0.4365482233502538,
+    0.4365482233502538,
+    0.4365482233502538
+   ],
+   "fork": 2
+  },
+  {
+   "workload": "strings",
+   "engine": "jackson",
+   "kernel": "",
+   "dataset": "quoted",
+   "target": 1048576,
+   "bytes": 1048704,
+   "rows": 1576,
+   "fields": 6308,
+   "stage": "ingest",
+   "runtime": "jvm",
+   "checksum": 1035767,
+   "sha256": "989afae940ce9d856e22c0179bff80eb6bf2be6024e31479e3e3acb539973213",
+   "ns_per_byte": [
+    2.1893907379274617,
+    2.1770653313157204,
+    2.307930365910317,
+    2.295280498596363,
+    2.2957665079946294
+   ],
+   "allocated_bytes_per_row": [
+    832.9746192893401,
+    832.9746192893401,
+    832.9746192893401
+   ],
+   "fork": 0
+  },
+  {
+   "workload": "index",
+   "engine": "index-swar",
+   "kernel": "java-swar",
+   "dataset": "quoted",
+   "target": 1048576,
+   "bytes": 1048704,
+   "rows": 1576,
+   "fields": 6308,
+   "stage": "ingest",
+   "runtime": "jvm",
+   "checksum": 1614848,
+   "sha256": "989afae940ce9d856e22c0179bff80eb6bf2be6024e31479e3e3acb539973213",
+   "ns_per_byte": [
+    0.2831638331792248,
+    0.28099164850209024,
+    0.2848056988643989,
+    0.2851563943633497,
+    0.2809802132933317
+   ],
+   "allocated_bytes_per_row": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "fork": 0
+  },
+  {
+   "workload": "scan",
+   "engine": "kernel-native",
+   "kernel": "native-avx512-ffm",
+   "dataset": "quoted",
+   "target": 1048576,
+   "bytes": 1048704,
+   "rows": 1576,
+   "fields": 6308,
+   "stage": "ingest",
+   "runtime": "jvm",
+   "checksum": 1577011039,
+   "sha256": "989afae940ce9d856e22c0179bff80eb6bf2be6024e31479e3e3acb539973213",
+   "ns_per_byte": [
+    0.0715945528900376,
+    0.07193676638428194,
+    0.07213852445761511,
+    0.07181461508336531,
+    0.07729041015448945
+   ],
+   "allocated_bytes_per_row": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "fork": 1
+  },
+  {
+   "workload": "strings",
+   "engine": "univocity",
+   "kernel": "",
+   "dataset": "quoted",
+   "target": 1048576,
+   "bytes": 1048704,
+   "rows": 1576,
+   "fields": 6308,
+   "stage": "ingest",
+   "runtime": "jvm",
+   "checksum": 1035767,
+   "sha256": "989afae940ce9d856e22c0179bff80eb6bf2be6024e31479e3e3acb539973213",
+   "ns_per_byte": [
+    1.5412249437790455,
+    1.5156651705191617,
+    1.5200956831292942,
+    1.487797576275147,
+    1.718268481802415
+   ],
+   "allocated_bytes_per_row": [
+    3558.253807106599,
+    3558.253807106599,
+    3558.253807106599
+   ],
+   "fork": 1
+  },
+  {
+   "workload": "strings",
+   "engine": "truffledata-batch",
+   "kernel": "java-swar",
+   "dataset": "quoted",
+   "target": 1048576,
+   "bytes": 1048704,
+   "rows": 1576,
+   "fields": 6308,
+   "stage": "ingest",
+   "runtime": "jvm",
+   "checksum": 1035767,
+   "sha256": "989afae940ce9d856e22c0179bff80eb6bf2be6024e31479e3e3acb539973213",
+   "ns_per_byte": [
+    0.5554869055575503,
+    0.5408034858529931,
+    0.48603152922895587,
+    0.46813227521062534,
+    0.46709598924020806
+   ],
+   "allocated_bytes_per_row": [
+    704.1065989847716,
+    704.1065989847716,
+    704.1065989847716
+   ],
+   "fork": 1
+  },
+  {
+   "workload": "scan",
+   "engine": "kernel-native",
+   "kernel": "native-avx512-ffm",
+   "dataset": "quoted",
+   "target": 1048576,
+   "bytes": 1048704,
+   "rows": 1576,
+   "fields": 6308,
+   "stage": "ingest",
+   "runtime": "jvm",
+   "checksum": 1577011039,
+   "sha256": "989afae940ce9d856e22c0179bff80eb6bf2be6024e31479e3e3acb539973213",
+   "ns_per_byte": [
+    0.07446518912584751,
+    0.07485418906904039,
+    0.07365432325914224,
+    0.07945204226822004,
+    0.07440442285407457
+   ],
+   "allocated_bytes_per_row": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "fork": 2
+  },
+  {
+   "workload": "strings",
+   "engine": "truffledata-batch-bytes",
+   "kernel": "per-byte",
+   "dataset": "quoted",
+   "target": 1048576,
+   "bytes": 1048704,
+   "rows": 1576,
+   "fields": 6308,
+   "stage": "ingest",
+   "runtime": "jvm",
+   "checksum": 1035767,
+   "sha256": "989afae940ce9d856e22c0179bff80eb6bf2be6024e31479e3e3acb539973213",
+   "ns_per_byte": [
+    0.3751620648536559,
+    0.36784121665400615,
+    0.4003138152430994,
+    0.3478780182575915,
+    0.3354090221057664
+   ],
+   "allocated_bytes_per_row": [
+    703.8324873096446,
+    703.8324873096446,
+    703.8324873096446
+   ],
+   "fork": 0
+  },
+  {
+   "workload": "scan",
+   "engine": "jackson",
+   "kernel": "",
+   "dataset": "quoted",
+   "target": 1048576,
+   "bytes": 1048704,
+   "rows": 1576,
+   "fields": 6308,
+   "stage": "ingest",
+   "runtime": "jvm",
+   "checksum": 1577011039,
+   "sha256": "989afae940ce9d856e22c0179bff80eb6bf2be6024e31479e3e3acb539973213",
+   "ns_per_byte": [
+    2.260423228947123,
+    2.297449728426706,
+    2.271821908014294,
+    2.2587188455359914,
+    2.24116690994313
+   ],
+   "allocated_bytes_per_row": [
+    832.9746192893401,
+    832.9746192893401,
+    832.9746192893401
+   ],
+   "fork": 2
+  },
+  {
+   "workload": "strings",
+   "engine": "commons-csv",
+   "kernel": "",
+   "dataset": "quoted",
+   "target": 1048576,
+   "bytes": 1048704,
+   "rows": 1576,
+   "fields": 6308,
+   "stage": "ingest",
+   "runtime": "jvm",
+   "checksum": 1035767,
+   "sha256": "989afae940ce9d856e22c0179bff80eb6bf2be6024e31479e3e3acb539973213",
+   "ns_per_byte": [
+    2.316417800354748,
+    2.3498489407941205,
+    2.3291708747254996,
+    3.019325507332961,
+    2.9089783892569043
+   ],
+   "allocated_bytes_per_row": [
+    931.253807106599,
+    931.253807106599,
+    931.253807106599
+   ],
+   "fork": 1
+  },
+  {
+   "workload": "strings",
+   "engine": "truffledata-mapped",
+   "kernel": "java-swar",
+   "dataset": "quoted",
+   "target": 1048576,
+   "bytes": 1048704,
+   "rows": 1576,
+   "fields": 6308,
+   "stage": "ingest",
+   "runtime": "jvm",
+   "checksum": 1035767,
+   "sha256": "989afae940ce9d856e22c0179bff80eb6bf2be6024e31479e3e3acb539973213",
+   "ns_per_byte": [
+    0.5826493079818523,
+    0.6083675610011446,
+    0.5983753093110953,
+    0.5960918985083812,
+    0.5950734273692897
+   ],
+   "allocated_bytes_per_row": [
+    1370.0253807106599,
+    1370.0253807106599,
+    1370.0253807106599
+   ],
+   "fork": 2
+  },
+  {
+   "workload": "index",
+   "engine": "index-vector",
+   "kernel": "java-vector512",
+   "dataset": "quoted",
+   "target": 1048576,
+   "bytes": 1048704,
+   "rows": 1576,
+   "fields": 6308,
+   "stage": "ingest",
+   "runtime": "jvm",
+   "checksum": 1614848,
+   "sha256": "989afae940ce9d856e22c0179bff80eb6bf2be6024e31479e3e3acb539973213",
+   "ns_per_byte": [
+    0.08722254982363364,
+    0.0869487283214881,
+    0.08685496166648547,
+    0.08767906584423836,
+    0.08729308119041933
+   ],
+   "allocated_bytes_per_row": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "fork": 2
+  },
+  {
+   "workload": "strings",
+   "engine": "jackson",
+   "kernel": "",
+   "dataset": "quoted",
+   "target": 1048576,
+   "bytes": 1048704,
+   "rows": 1576,
+   "fields": 6308,
+   "stage": "ingest",
+   "runtime": "jvm",
+   "checksum": 1035767,
+   "sha256": "989afae940ce9d856e22c0179bff80eb6bf2be6024e31479e3e3acb539973213",
+   "ns_per_byte": [
+    2.17855049776879,
+    2.251315597036914,
+    2.1894280795465875,
+    2.3345245209821193,
+    2.1886353817562565
+   ],
+   "allocated_bytes_per_row": [
+    832.9746192893401,
+    832.9746192893401,
+    832.9746192893401
+   ],
+   "fork": 2
+  },
+  {
+   "workload": "scan",
+   "engine": "truffledata-scanner-native",
+   "kernel": "native-avx512-ffm",
+   "dataset": "quoted",
+   "target": 1048576,
+   "bytes": 1048704,
+   "rows": 1576,
+   "fields": 6308,
+   "stage": "ingest",
+   "runtime": "jvm",
+   "checksum": 1577011039,
+   "sha256": "989afae940ce9d856e22c0179bff80eb6bf2be6024e31479e3e3acb539973213",
+   "ns_per_byte": [
+    0.06654915736693284,
+    0.06318024353545688,
+    0.06173770596587579,
+    0.0626173767391928,
+    0.062199084070309225
+   ],
+   "allocated_bytes_per_row": [
+    2.015228426395939,
+    2.015228426395939,
+    2.015228426395939
+   ],
+   "fork": 1
+  },
+  {
+   "workload": "index",
+   "engine": "index-native-avx512",
+   "kernel": "native-avx512-ffm",
+   "dataset": "quoted",
+   "target": 1048576,
+   "bytes": 1048704,
+   "rows": 1576,
+   "fields": 6308,
+   "stage": "ingest",
+   "runtime": "jvm",
+   "checksum": 1614848,
+   "sha256": "989afae940ce9d856e22c0179bff80eb6bf2be6024e31479e3e3acb539973213",
+   "ns_per_byte": [
+    0.060489307216829505,
+    0.06035291146257405,
+    0.06056641789091553,
+    0.060469763335173066,
+    0.06037866933593972
+   ],
+   "allocated_bytes_per_row": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "fork": 1
+  },
+  {
+   "workload": "scan",
+   "engine": "truffledata-scanner",
+   "kernel": "java-swar",
+   "dataset": "quoted",
+   "target": 1048576,
+   "bytes": 1048704,
+   "rows": 1576,
+   "fields": 6308,
+   "stage": "ingest",
+   "runtime": "jvm",
+   "checksum": 1577011039,
+   "sha256": "989afae940ce9d856e22c0179bff80eb6bf2be6024e31479e3e3acb539973213",
+   "ns_per_byte": [
+    0.2980811315681069,
+    0.2863988290285892,
+    0.2835380740309024,
+    0.2830691659112149,
+    0.28252055332429904
+   ],
+   "allocated_bytes_per_row": [
+    0.4365482233502538,
+    0.4365482233502538,
+    0.4365482233502538
+   ],
+   "fork": 0
+  },
+  {
+   "workload": "index",
+   "engine": "index-native",
+   "kernel": "native-avx512-ffm",
+   "dataset": "quoted",
+   "target": 1048576,
+   "bytes": 1048704,
+   "rows": 1576,
+   "fields": 6308,
+   "stage": "ingest",
+   "runtime": "jvm",
+   "checksum": 1614848,
+   "sha256": "989afae940ce9d856e22c0179bff80eb6bf2be6024e31479e3e3acb539973213",
+   "ns_per_byte": [
+    0.060841602574595664,
+    0.060887020563661715,
+    0.06116028557777009,
+    0.06085074249413721,
+    0.0608958178913365
+   ],
+   "allocated_bytes_per_row": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "fork": 0
+  },
+  {
+   "workload": "scan",
+   "engine": "kernel-native",
+   "kernel": "native-avx512-ffm",
+   "dataset": "quoted",
+   "target": 1048576,
+   "bytes": 1048704,
+   "rows": 1576,
+   "fields": 6308,
+   "stage": "ingest",
+   "runtime": "jvm",
+   "checksum": 1577011039,
+   "sha256": "989afae940ce9d856e22c0179bff80eb6bf2be6024e31479e3e3acb539973213",
+   "ns_per_byte": [
+    0.07118913196158112,
+    0.07139276927070536,
+    0.07592014336361985,
+    0.07144053044276859,
+    0.0725324070042353
+   ],
+   "allocated_bytes_per_row": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "fork": 0
+  },
+  {
+   "workload": "strings",
+   "engine": "truffledata-mapped-native",
+   "kernel": "native-avx512-ffm",
+   "dataset": "quoted",
+   "target": 1048576,
+   "bytes": 1048704,
+   "rows": 1576,
+   "fields": 6308,
+   "stage": "ingest",
+   "runtime": "jvm",
+   "checksum": 1035767,
+   "sha256": "989afae940ce9d856e22c0179bff80eb6bf2be6024e31479e3e3acb539973213",
+   "ns_per_byte": [
+    0.3137072126853047,
+    0.3160198811731277,
+    0.34551819810463275,
+    0.3142340937412369,
+    0.31713746999471093
+   ],
+   "allocated_bytes_per_row": [
+    1372.3096446700508,
+    1372.3096446700508,
+    1372.3096446700508
+   ],
+   "fork": 0
+  },
+  {
+   "workload": "strings",
+   "engine": "kernel-native",
+   "kernel": "native-avx512-ffm",
+   "dataset": "quoted",
+   "target": 1048576,
+   "bytes": 1048704,
+   "rows": 1576,
+   "fields": 6308,
+   "stage": "ingest",
+   "runtime": "jvm",
+   "checksum": 1035767,
+   "sha256": "989afae940ce9d856e22c0179bff80eb6bf2be6024e31479e3e3acb539973213",
+   "ns_per_byte": [
+    0.15315626608184613,
+    0.15147161527949624,
+    0.15024710014278242,
+    0.15104970545190083,
+    0.15116825160585398
+   ],
+   "allocated_bytes_per_row": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "fork": 2
+  },
+  {
+   "workload": "strings",
+   "engine": "fastcsv",
+   "kernel": "",
+   "dataset": "quoted",
+   "target": 1048576,
+   "bytes": 1048704,
+   "rows": 1576,
+   "fields": 6308,
+   "stage": "ingest",
+   "runtime": "jvm",
+   "checksum": 1035767,
+   "sha256": "989afae940ce9d856e22c0179bff80eb6bf2be6024e31479e3e3acb539973213",
+   "ns_per_byte": [
+    0.6248340226266218,
+    0.7148028266709645,
+    0.6337977109749419,
+    0.6042750021115072,
+    0.5980249394851045
+   ],
+   "allocated_bytes_per_row": [
+    922.9543147208121,
+    922.9543147208121,
+    922.9543147208121
+   ],
+   "fork": 1
+  },
+  {
+   "workload": "strings",
+   "engine": "kernel-native",
+   "kernel": "native-avx512-ffm",
+   "dataset": "quoted",
+   "target": 1048576,
+   "bytes": 1048704,
+   "rows": 1576,
+   "fields": 6308,
+   "stage": "ingest",
+   "runtime": "jvm",
+   "checksum": 1035767,
+   "sha256": "989afae940ce9d856e22c0179bff80eb6bf2be6024e31479e3e3acb539973213",
+   "ns_per_byte": [
+    0.1472372442910841,
+    0.1493484703067719,
+    0.1491244279169288,
+    0.14645668692824004,
+    0.1462739024404094
+   ],
+   "allocated_bytes_per_row": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "fork": 1
+  },
+  {
+   "workload": "scan",
+   "engine": "truffledata-scanner-bytes",
+   "kernel": "per-byte",
+   "dataset": "quoted",
+   "target": 1048576,
+   "bytes": 1048704,
+   "rows": 1576,
+   "fields": 6308,
+   "stage": "ingest",
+   "runtime": "jvm",
+   "checksum": 1577011039,
+   "sha256": "989afae940ce9d856e22c0179bff80eb6bf2be6024e31479e3e3acb539973213",
+   "ns_per_byte": [
+    0.17813755573338202,
+    0.17728902062025625,
+    0.17491142566056897,
+    0.17815777341742542,
+    0.17552032320909888
+   ],
+   "allocated_bytes_per_row": [
+    0.467005076142132,
+    0.467005076142132,
+    0.467005076142132
+   ],
+   "fork": 0
+  },
+  {
+   "workload": "strings",
+   "engine": "fastcsv",
+   "kernel": "",
+   "dataset": "quoted",
+   "target": 1048576,
+   "bytes": 1048704,
+   "rows": 1576,
+   "fields": 6308,
+   "stage": "ingest",
+   "runtime": "jvm",
+   "checksum": 1035767,
+   "sha256": "989afae940ce9d856e22c0179bff80eb6bf2be6024e31479e3e3acb539973213",
+   "ns_per_byte": [
+    0.5820862908358464,
+    0.5812945530110427,
+    0.5928857665730656,
+    0.5879315423267872,
+    0.5814739574185379
+   ],
+   "allocated_bytes_per_row": [
+    922.9543147208121,
+    922.9543147208121,
+    922.9543147208121
+   ],
+   "fork": 2
+  },
+  {
+   "workload": "strings",
+   "engine": "truffledata-batch-native",
+   "kernel": "native-avx512-ffm",
+   "dataset": "quoted",
+   "target": 1048576,
+   "bytes": 1048704,
+   "rows": 1576,
+   "fields": 6308,
+   "stage": "ingest",
+   "runtime": "jvm",
+   "checksum": 1035767,
+   "sha256": "989afae940ce9d856e22c0179bff80eb6bf2be6024e31479e3e3acb539973213",
+   "ns_per_byte": [
+    0.18160575842104903,
+    0.18173979577998253,
+    0.17880911224711643,
+    0.1784346319070504,
+    0.18126596819688842
+   ],
+   "allocated_bytes_per_row": [
+    706.4517766497462,
+    706.4517766497462,
+    706.4517766497462
+   ],
+   "fork": 2
+  },
+  {
+   "workload": "scan",
+   "engine": "jackson",
+   "kernel": "",
+   "dataset": "quoted",
+   "target": 1048576,
+   "bytes": 1048704,
+   "rows": 1576,
+   "fields": 6308,
+   "stage": "ingest",
+   "runtime": "jvm",
+   "checksum": 1577011039,
+   "sha256": "989afae940ce9d856e22c0179bff80eb6bf2be6024e31479e3e3acb539973213",
+   "ns_per_byte": [
+    2.155295839837602,
+    2.152788986265554,
+    2.1590393791600935,
+    2.171545242335475,
+    2.156079262945904
+   ],
+   "allocated_bytes_per_row": [
+    832.9746192893401,
+    832.9746192893401,
+    832.9746192893401
+   ],
+   "fork": 0
+  },
+  {
+   "workload": "strings",
+   "engine": "commons-csv",
+   "kernel": "",
+   "dataset": "quoted",
+   "target": 1048576,
+   "bytes": 1048704,
+   "rows": 1576,
+   "fields": 6308,
+   "stage": "ingest",
+   "runtime": "jvm",
+   "checksum": 1035767,
+   "sha256": "989afae940ce9d856e22c0179bff80eb6bf2be6024e31479e3e3acb539973213",
+   "ns_per_byte": [
+    2.21939562523595,
+    2.2332530393217125,
+    2.2226788212332895,
+    2.221889807497798,
+    2.2493277267703755
+   ],
+   "allocated_bytes_per_row": [
+    931.253807106599,
+    931.253807106599,
+    931.253807106599
+   ],
+   "fork": 2
+  },
+  {
+   "workload": "scan",
+   "engine": "kernel-native-small",
+   "kernel": "native-avx512-ffm",
+   "dataset": "quoted",
+   "target": 1048576,
+   "bytes": 1048704,
+   "rows": 1576,
+   "fields": 6308,
+   "stage": "ingest",
+   "runtime": "jvm",
+   "checksum": 1577011039,
+   "sha256": "989afae940ce9d856e22c0179bff80eb6bf2be6024e31479e3e3acb539973213",
+   "ns_per_byte": [
+    0.05492245180094062,
+    0.0541786417001175,
+    0.05522056850653953,
+    0.054722622047767185,
+    0.05437755452746123
+   ],
+   "allocated_bytes_per_row": [
+    0.18274111675126903,
+    0.18274111675126903,
+    0.18274111675126903
+   ],
+   "fork": 2
+  },
+  {
+   "workload": "index",
+   "engine": "index-scalar",
+   "kernel": "java-scalar",
+   "dataset": "quoted",
+   "target": 1048576,
+   "bytes": 1048704,
+   "rows": 1576,
+   "fields": 6308,
+   "stage": "ingest",
+   "runtime": "jvm",
+   "checksum": 1614848,
+   "sha256": "989afae940ce9d856e22c0179bff80eb6bf2be6024e31479e3e3acb539973213",
+   "ns_per_byte": [
+    0.32861714317324175,
+    0.32723540130076195,
+    0.32798737526894484,
+    0.3263016026401129,
+    0.330924006659428
+   ],
+   "allocated_bytes_per_row": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "fork": 0
+  },
+  {
+   "workload": "index",
+   "engine": "index-native",
+   "kernel": "native-avx512-ffm",
+   "dataset": "quoted",
+   "target": 1048576,
+   "bytes": 1048704,
+   "rows": 1576,
+   "fields": 6308,
+   "stage": "ingest",
+   "runtime": "jvm",
+   "checksum": 1614848,
+   "sha256": "989afae940ce9d856e22c0179bff80eb6bf2be6024e31479e3e3acb539973213",
+   "ns_per_byte": [
+    0.06053170715414659,
+    0.06072686320593582,
+    0.06099731268267648,
+    0.06084764190992477,
+    0.060449159036784994
+   ],
+   "allocated_bytes_per_row": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "fork": 1
+  },
+  {
+   "workload": "strings",
+   "engine": "univocity",
+   "kernel": "",
+   "dataset": "quoted",
+   "target": 1048576,
+   "bytes": 1048704,
+   "rows": 1576,
+   "fields": 6308,
+   "stage": "ingest",
+   "runtime": "jvm",
+   "checksum": 1035767,
+   "sha256": "989afae940ce9d856e22c0179bff80eb6bf2be6024e31479e3e3acb539973213",
+   "ns_per_byte": [
+    1.3164813579952455,
+    1.34818065089344,
+    1.32564711795243,
+    1.346757566432813,
+    1.320512883384771
+   ],
+   "allocated_bytes_per_row": [
+    3558.253807106599,
+    3558.253807106599,
+    3558.253807106599
+   ],
+   "fork": 0
+  },
+  {
+   "workload": "index",
+   "engine": "index-vector",
+   "kernel": "java-vector512",
+   "dataset": "quoted",
+   "target": 1048576,
+   "bytes": 1048704,
+   "rows": 1576,
+   "fields": 6308,
+   "stage": "ingest",
+   "runtime": "jvm",
+   "checksum": 1614848,
+   "sha256": "989afae940ce9d856e22c0179bff80eb6bf2be6024e31479e3e3acb539973213",
+   "ns_per_byte": [
+    0.0873411951750072,
+    0.09930476943018593,
+    0.09464421872856939,
+    0.08910668195229211,
+    0.0879015319594881
+   ],
+   "allocated_bytes_per_row": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "fork": 1
+  },
+  {
+   "workload": "strings",
+   "engine": "truffledata-batch",
+   "kernel": "java-swar",
+   "dataset": "quoted",
+   "target": 1048576,
+   "bytes": 1048704,
+   "rows": 1576,
+   "fields": 6308,
+   "stage": "ingest",
+   "runtime": "jvm",
+   "checksum": 1035767,
+   "sha256": "989afae940ce9d856e22c0179bff80eb6bf2be6024e31479e3e3acb539973213",
+   "ns_per_byte": [
+    0.47499038029268603,
+    0.49057279335725956,
+    0.4770328901196143,
+    0.4609489595857034,
+    0.4584895792990498
+   ],
+   "allocated_bytes_per_row": [
+    704.0659898477157,
+    704.0659898477157,
+    704.0659898477157
+   ],
+   "fork": 0
+  },
+  {
+   "workload": "strings",
+   "engine": "commons-csv",
+   "kernel": "",
+   "dataset": "quoted",
+   "target": 1048576,
+   "bytes": 1048704,
+   "rows": 1576,
+   "fields": 6308,
+   "stage": "ingest",
+   "runtime": "jvm",
+   "checksum": 1035767,
+   "sha256": "989afae940ce9d856e22c0179bff80eb6bf2be6024e31479e3e3acb539973213",
+   "ns_per_byte": [
+    2.3007617020627364,
+    2.2777353368826274,
+    2.2864508562284103,
+    2.333143412505619,
+    2.287547220793399
+   ],
+   "allocated_bytes_per_row": [
+    931.5380710659898,
+    931.5380710659898,
+    931.5380710659898
+   ],
+   "fork": 0
+  },
+  {
+   "workload": "index",
+   "engine": "index-scalar",
+   "kernel": "java-scalar",
+   "dataset": "quoted",
+   "target": 1048576,
+   "bytes": 1048704,
+   "rows": 1576,
+   "fields": 6308,
+   "stage": "ingest",
+   "runtime": "jvm",
+   "checksum": 1614848,
+   "sha256": "989afae940ce9d856e22c0179bff80eb6bf2be6024e31479e3e3acb539973213",
+   "ns_per_byte": [
+    0.3311242210756218,
+    0.3282728769304211,
+    0.32751955073029354,
+    0.3257735587255249,
+    0.327802376295161
+   ],
+   "allocated_bytes_per_row": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "fork": 1
+  },
+  {
+   "workload": "strings",
+   "engine": "kernel-swar",
+   "kernel": "java-swar",
+   "dataset": "quoted",
+   "target": 1048576,
+   "bytes": 1048704,
+   "rows": 1576,
+   "fields": 6308,
+   "stage": "ingest",
+   "runtime": "jvm",
+   "checksum": 1035767,
+   "sha256": "989afae940ce9d856e22c0179bff80eb6bf2be6024e31479e3e3acb539973213",
+   "ns_per_byte": [
+    0.38759486649631764,
+    0.3940552901577839,
+    0.39459132743679426,
+    0.3887701212639601,
+    0.3869724737209747
+   ],
+   "allocated_bytes_per_row": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "fork": 1
+  },
+  {
+   "workload": "scan",
+   "engine": "fastcsv",
+   "kernel": "",
+   "dataset": "quoted",
+   "target": 1048576,
+   "bytes": 1048704,
+   "rows": 1576,
+   "fields": 6308,
+   "stage": "ingest",
+   "runtime": "jvm",
+   "checksum": 1577011039,
+   "sha256": "989afae940ce9d856e22c0179bff80eb6bf2be6024e31479e3e3acb539973213",
+   "ns_per_byte": [
+    0.4910508900414716,
+    0.45269330682973424,
+    0.4427310005987695,
+    0.43065060066405486,
+    0.43162003685042544
+   ],
+   "allocated_bytes_per_row": [
+    26.248730964467004,
+    26.248730964467004,
+    26.248730964467004
+   ],
+   "fork": 1
+  },
+  {
+   "workload": "scan",
+   "engine": "kernel-swar",
+   "kernel": "java-swar",
+   "dataset": "quoted",
+   "target": 1048576,
+   "bytes": 1048704,
+   "rows": 1576,
+   "fields": 6308,
+   "stage": "ingest",
+   "runtime": "jvm",
+   "checksum": 1577011039,
+   "sha256": "989afae940ce9d856e22c0179bff80eb6bf2be6024e31479e3e3acb539973213",
+   "ns_per_byte": [
+    0.29236744017726335,
+    0.29136499085019424,
+    0.2916766863149754,
+    0.29252998430235233,
+    0.2956080958611615
+   ],
+   "allocated_bytes_per_row": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "fork": 2
+  },
+  {
+   "workload": "scan",
+   "engine": "truffledata-scanner",
+   "kernel": "java-swar",
+   "dataset": "quoted",
+   "target": 1048576,
+   "bytes": 1048704,
+   "rows": 1576,
+   "fields": 6308,
+   "stage": "ingest",
+   "runtime": "jvm",
+   "checksum": 1577011039,
+   "sha256": "989afae940ce9d856e22c0179bff80eb6bf2be6024e31479e3e3acb539973213",
+   "ns_per_byte": [
+    0.2944450479720468,
+    0.2924768616785524,
+    0.29769578018493237,
+    0.30120911143659224,
+    0.33196072211317
+   ],
+   "allocated_bytes_per_row": [
+    0.4365482233502538,
+    0.4365482233502538,
+    0.4365482233502538
+   ],
+   "fork": 1
+  },
+  {
+   "workload": "strings",
+   "engine": "truffledata-batch-native",
+   "kernel": "native-avx512-ffm",
+   "dataset": "quoted",
+   "target": 1048576,
+   "bytes": 1048704,
+   "rows": 1576,
+   "fields": 6308,
+   "stage": "ingest",
+   "runtime": "jvm",
+   "checksum": 1035767,
+   "sha256": "989afae940ce9d856e22c0179bff80eb6bf2be6024e31479e3e3acb539973213",
+   "ns_per_byte": [
+    0.19595452531939225,
+    0.19078302361772245,
+    0.1874447261130882,
+    0.20082506514975343,
+    0.20562835942837732
+   ],
+   "allocated_bytes_per_row": [
+    706.4517766497462,
+    706.4517766497462,
+    706.4517766497462
+   ],
+   "fork": 0
+  },
+  {
+   "workload": "scan",
+   "engine": "kernel-vector",
+   "kernel": "java-vector512",
+   "dataset": "quoted",
+   "target": 1048576,
+   "bytes": 1048704,
+   "rows": 1576,
+   "fields": 6308,
+   "stage": "ingest",
+   "runtime": "jvm",
+   "checksum": 1577011039,
+   "sha256": "989afae940ce9d856e22c0179bff80eb6bf2be6024e31479e3e3acb539973213",
+   "ns_per_byte": [
+    0.09783961096903315,
+    0.09878491350433814,
+    0.0978366759412501,
+    0.0975523819240802,
+    0.09733511365937951
+   ],
+   "allocated_bytes_per_row": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "fork": 2
+  }
+ ],
+ "native": [
+  {
+   "workload": "index",
+   "engine": "native-index-scalar",
+   "kernel": "scalar",
+   "dataset": "quoted",
+   "bytes": 1048704,
+   "stage": "ingest",
+   "runtime": "native",
+   "checksum": 1614848,
+   "ns_per_byte": [
+    0.477902,
+    0.47495,
+    0.478182,
+    0.475857,
+    0.475151
+   ],
+   "sha256": "989afae940ce9d856e22c0179bff80eb6bf2be6024e31479e3e3acb539973213"
+  },
+  {
+   "workload": "index",
+   "engine": "native-index-swar",
+   "kernel": "swar",
+   "dataset": "quoted",
+   "bytes": 1048704,
+   "stage": "ingest",
+   "runtime": "native",
+   "checksum": 1614848,
+   "ns_per_byte": [
+    0.360542,
+    0.359337,
+    0.35787,
+    0.357508,
+    0.360463
+   ],
+   "sha256": "989afae940ce9d856e22c0179bff80eb6bf2be6024e31479e3e3acb539973213"
+  },
+  {
+   "workload": "index",
+   "engine": "native-index-avx2",
+   "kernel": "avx2",
+   "dataset": "quoted",
+   "bytes": 1048704,
+   "stage": "ingest",
+   "runtime": "native",
+   "checksum": 1614848,
+   "ns_per_byte": [
+    0.050551,
+    0.050844,
+    0.050961,
+    0.05095,
+    0.050544
+   ],
+   "sha256": "989afae940ce9d856e22c0179bff80eb6bf2be6024e31479e3e3acb539973213"
+  },
+  {
+   "workload": "index",
+   "engine": "native-index-avx512",
+   "kernel": "avx512",
+   "dataset": "quoted",
+   "bytes": 1048704,
+   "stage": "ingest",
+   "runtime": "native",
+   "checksum": 1614848,
+   "ns_per_byte": [
+    0.045693,
+    0.045622,
+    0.045507,
+    0.045511,
+    0.045635
+   ],
+   "sha256": "989afae940ce9d856e22c0179bff80eb6bf2be6024e31479e3e3acb539973213"
+  },
+  {
+   "workload": "scan",
+   "engine": "native-indexed-scan",
+   "kernel": "avx512",
+   "dataset": "quoted",
+   "bytes": 1048704,
+   "stage": "ingest",
+   "runtime": "native",
+   "checksum": 1577011039,
+   "ns_per_byte": [
+    0.064198,
+    0.056919,
+    0.058604,
+    0.059058,
+    0.058232
+   ],
+   "sha256": "989afae940ce9d856e22c0179bff80eb6bf2be6024e31479e3e3acb539973213"
+  },
+  {
+   "workload": "utf8",
+   "engine": "simdutf-validate",
+   "kernel": "",
+   "dataset": "quoted",
+   "bytes": 1048704,
+   "stage": "ingest",
+   "runtime": "native",
+   "checksum": 1,
+   "ns_per_byte": [
+    0.007638,
+    0.00793,
+    0.007358,
+    0.007567,
+    0.00842
+   ],
+   "sha256": "989afae940ce9d856e22c0179bff80eb6bf2be6024e31479e3e3acb539973213"
+  },
+  {
+   "workload": "scan",
+   "engine": "csv-core-scan",
+   "kernel": "",
+   "dataset": "quoted",
+   "bytes": 1048704,
+   "stage": "ingest",
+   "runtime": "native",
+   "checksum": 1577011039,
+   "ns_per_byte": [
+    0.5556636563121016,
+    0.5574422768724939,
+    0.6089391428788458,
+    0.5542557411490349,
+    0.5568225013309739
+   ],
+   "sha256": "989afae940ce9d856e22c0179bff80eb6bf2be6024e31479e3e3acb539973213"
+  },
+  {
+   "workload": "scan",
+   "engine": "csv-byte-record",
+   "kernel": "",
+   "dataset": "quoted",
+   "bytes": 1048704,
+   "stage": "ingest",
+   "runtime": "native",
+   "checksum": 1577011039,
+   "ns_per_byte": [
+    0.7761194191071961,
+    0.7754376122769222,
+    0.7735676993131909,
+    0.7782910165060046,
+    0.7727793728325706
+   ],
+   "sha256": "989afae940ce9d856e22c0179bff80eb6bf2be6024e31479e3e3acb539973213"
+  },
+  {
+   "workload": "strings",
+   "engine": "csv-string-record",
+   "kernel": "",
+   "dataset": "quoted",
+   "bytes": 1048704,
+   "stage": "ingest",
+   "runtime": "native",
+   "checksum": 1035767,
+   "ns_per_byte": [
+    0.8157965610974277,
+    0.8409109840431339,
+    0.8403821956319195,
+    0.8369572186631649,
+    0.8147006735109587
+   ],
+   "sha256": "989afae940ce9d856e22c0179bff80eb6bf2be6024e31479e3e3acb539973213"
+  }
+ ],
+ "unavailable": []
+}
