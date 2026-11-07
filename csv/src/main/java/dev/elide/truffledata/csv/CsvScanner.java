@@ -1,6 +1,7 @@
 package dev.elide.truffledata.csv;
 
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
+import dev.elide.truffledata.csv.kernel.CsvIndexer;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -54,6 +55,15 @@ final class CsvScanner {
   /** The Commons lexer, for Commons formats. */
   private final @Nullable CommonsScanner commons;
 
+  private final Dialect dialect;
+  private final CsvLimits limits;
+
+  /** The kernel provider when the dialect is indexable and indexing is on, else null. */
+  private final CsvIndexing.@Nullable Provider provider;
+
+  /** The index path, created by the first scan of at least {@link CsvIndexing#MIN_INDEX_BYTES}. */
+  private @Nullable IndexScan indexed;
+
   CsvScanner(CsvFormat format, CsvLimits limits) {
     delimiter = format.delimiter();
     quote = format.quote();
@@ -67,10 +77,43 @@ final class CsvScanner {
     if (quoting) classes[quote & 0xFF] = QUOTE;
     kernel = new CsvKernel(delimiter, quote, quoting, -1);
     spans = new long[Math.min(16, maxColumns)];
-    commons =
-        format.strict()
-            ? null
-            : new CommonsScanner(Dialect.of(format), maxColumns, maxRecordBytes);
+    this.limits = limits;
+    dialect = Dialect.of(format);
+    commons = format.strict() ? null : new CommonsScanner(dialect, maxColumns, maxRecordBytes);
+    CsvIndexing.Provider p = CsvIndexing.provider();
+    provider = p != null && IndexScan.indexable(dialect) ? p : null;
+  }
+
+  /**
+   * The first invalid UTF-8 offset in [from, to), or -1: the index kernel's validator when it has
+   * one (simdutf for native kernels), else the Java validator.
+   */
+  int invalidUtf8(byte[] input, int from, int to) {
+    CsvIndexing.Provider p = provider;
+    if (p != null && to - from >= CsvIndexing.minIndexBytes) {
+      IndexScan ix = indexed;
+      if (ix == null) indexed = ix = CsvIndexing.scanner(p, dialect, limits, to - from);
+      CsvIndexer indexer = ix.indexer();
+      // Calls of at most the index capacity (native calls may hold off the GC), cut only before a
+      // byte that starts a sequence, so no sequence spans two calls.
+      int chunk = Math.max(ix.capacity(), 64);
+      for (int at = from; at < to; ) {
+        int end = to - at <= chunk ? to : at + chunk;
+        if (end < to) while (end > at + 1 && (input[end] & 0xC0) == 0x80) end--;
+        long bad = indexer.validateUtf8(input, at, end - at);
+        if (bad == CsvIndexer.NO_VALIDATOR) return Utf8.invalidOffset(input, at, to);
+        if (bad >= 0) return at + (int) bad;
+        at = end;
+      }
+      return -1;
+    }
+    return Utf8.invalidOffset(input, from, to);
+  }
+
+  /** The kernel the index path uses, or null when this scanner has not indexed (yet). */
+  @Nullable String kernel() {
+    IndexScan ix = indexed;
+    return ix == null ? null : ix.indexer().name();
   }
 
   /**
@@ -81,6 +124,63 @@ final class CsvScanner {
    * maxColumns fields throws the columns limit.
    */
   int scan(byte[] input, int from, int to, boolean eof, Records records) {
+    CsvIndexing.Provider p = provider;
+    if (p != null && to - from >= CsvIndexing.minIndexBytes) {
+      IndexScan ix = indexed;
+      if (ix == null) indexed = ix = CsvIndexing.scanner(p, dialect, limits, to - from);
+      return scanIndexed(ix, input, from, to, eof, records);
+    }
+    return scanBytes(input, from, to, eof, records);
+  }
+
+  /**
+   * The index path: {@link IndexScan} frames records until it declines one, the per-byte scanner
+   * takes that one record (reporting its exact diagnostic, or accepting it), and indexing resumes
+   * after it. Record numbers in diagnostics count the records already reported.
+   */
+  private int scanIndexed(
+      IndexScan ix, byte[] input, int from, int to, boolean eof, Records records) {
+    final long base = recordBase;
+    long reported = 0;
+    int pos = from;
+    try {
+      for (; ; ) {
+        int end = ix.scan(input, pos, to, eof, records, base + reported, stopAfter);
+        reported += ix.reported;
+        stopped = ix.stopped;
+        if (!ix.fallback) return end;
+        // Rare (malformed records, quoted tails of stream buffers): one small object each.
+        One o = new One(records);
+        recordBase = base + reported;
+        int after = scanBytes(input, end, to, eof, o);
+        if (o.passed) reported++;
+        if (stopped || after == end) return after;
+        pos = after;
+      }
+    } finally {
+      recordBase = base;
+    }
+  }
+
+  /** Passes the first record of a per-byte scan through and refuses the next one. */
+  private static final class One implements Records {
+    private final Records target;
+    boolean passed;
+
+    One(Records target) {
+      this.target = target;
+    }
+
+    @Override
+    public boolean record(long[] spans, int count, int start, int end) {
+      if (passed || !target.record(spans, count, start, end)) return false;
+      passed = true;
+      return true;
+    }
+  }
+
+  /** The per-byte scanners: the strict loop below, or the Commons lexer. */
+  private int scanBytes(byte[] input, int from, int to, boolean eof, Records records) {
     CommonsScanner c = commons;
     if (c != null) {
       c.recordBase = recordBase;

@@ -118,6 +118,7 @@ public final class CsvPlan {
     BatchBuilder builder =
         new BatchBuilder(
             Objects.requireNonNull(binder.binding), input, limits, dialect, 0, base, 0, 16);
+    if (format.maxRows() == 0) builder.prevalidate(scanner, binder.end, input.length);
     scanner.scan(input, binder.end, input.length, true, builder);
     if (builder.full()) throw CsvScanner.limit("maxBatchRows");
     return builder.build();

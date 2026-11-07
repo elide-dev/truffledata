@@ -28,6 +28,19 @@ public abstract class CsvIndexer {
    */
   public abstract int index(byte[] input, int from, int length, int[] out);
 
+  /** {@link #validateUtf8} result of an indexer without a validator of its own. */
+  public static final long NO_VALIDATOR = -2;
+
+  /**
+   * Strict UTF-8 validation of {@code input[from, from + length)} with the CSV rules (no overlong
+   * forms, surrogates, values above U+10FFFF or truncated sequences): -1 when valid, else the
+   * offset of the first invalid sequence relative to {@code from}. The default returns {@link
+   * #NO_VALIDATOR}, and the scanners then use their Java validator.
+   */
+  public long validateUtf8(byte[] input, int from, int length) {
+    return NO_VALIDATOR;
+  }
+
   public final long carry() {
     return carry;
   }

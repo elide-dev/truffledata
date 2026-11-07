@@ -123,6 +123,22 @@ final class BatchBuilder implements CsvScanner.Records {
     return CsvScanner.length(span);
   }
 
+  /** Input [validFrom, validTo) is known to be strict UTF-8 ({@link #prevalidate}). */
+  private int validFrom;
+
+  private int validTo;
+
+  /**
+   * Validates input [from, to) once, ahead of the records: records inside the valid prefix skip
+   * their own validation, and a record reaching the first invalid byte validates itself, so every
+   * diagnostic (record, offset, and its order against syntax errors) is the per-record one.
+   */
+  void prevalidate(CsvScanner scanner, int from, int to) {
+    int bad = scanner.invalidUtf8(input, from, to);
+    validFrom = from;
+    validTo = bad < 0 ? to : bad;
+  }
+
   int rows() {
     return rows;
   }
@@ -139,8 +155,10 @@ final class BatchBuilder implements CsvScanner.Records {
       return false;
     }
     long number = recordBase + rows + 1;
-    int bad = Utf8.invalidOffset(input, start, end);
-    if (bad >= 0) throw CsvScanner.syntax(number, byteBase + bad, "invalid UTF-8");
+    if (start < validFrom || end > validTo) {
+      int bad = Utf8.invalidOffset(input, start, end);
+      if (bad >= 0) throw CsvScanner.syntax(number, byteBase + bad, "invalid UTF-8");
+    }
     CsvPlan.Binding b = binding;
     if (count != b.width && (count > b.width || !flexible))
       throw CsvScanner.syntax(
@@ -247,6 +265,7 @@ final class BatchBuilder implements CsvScanner.Records {
     this.input = input;
     this.spanShift = (long) shift << 32;
     this.byteBase = byteBase;
+    validFrom = validTo = 0;
   }
 
   /** A batch over {@code length} mapped bytes at file offset {@code base}. */

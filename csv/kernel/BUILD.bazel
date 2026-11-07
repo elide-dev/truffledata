@@ -2,22 +2,21 @@ load("@rules_java//java:defs.bzl", "java_library")
 load("//bazel:java.bzl", "data_java_library")
 
 # CSV structural-index kernels (csv/native/README.md has the contract and the seam plan).
-# Not a dependency of //csv yet: the scanner seam adopts a kernel in a later step.
+# //csv holds the index contract (CsvIndex, CsvIndexer), the block step, the SWAR kernel and the
+# scanner integration (CsvIndexing); this package keeps the reference kernels, the Vector API kernel
+# and the native backends, each with a CsvIndexing provider.
 
-# Pure Java kernels (scalar, branch-light table, SWAR) and the index consumer.
+# Reference Java kernels (scalar oracle, branch-light table) and the reference index consumer.
 data_java_library(
     name = "kernel",
     srcs = [
-        "src/main/java/dev/elide/truffledata/csv/kernel/BlockStep.java",
-        "src/main/java/dev/elide/truffledata/csv/kernel/CsvIndex.java",
-        "src/main/java/dev/elide/truffledata/csv/kernel/CsvIndexer.java",
         "src/main/java/dev/elide/truffledata/csv/kernel/IndexedScanner.java",
         "src/main/java/dev/elide/truffledata/csv/kernel/ScalarIndexer.java",
-        "src/main/java/dev/elide/truffledata/csv/kernel/SwarIndexer.java",
         "src/main/java/dev/elide/truffledata/csv/kernel/TableIndexer.java",
         "src/main/java/dev/elide/truffledata/csv/kernel/package-info.java",
     ],
     visibility = ["//visibility:public"],
+    exports = ["//csv"],
     deps = ["//csv"],
 )
 
@@ -31,7 +30,7 @@ java_library(
     javacopts = ["--add-modules=jdk.incubator.vector"],
     visibility = ["//visibility:public"],
     deps = [
-        ":kernel",
+        "//csv",
         "@maven//:org_jspecify_jspecify",
     ],
 )
@@ -60,7 +59,7 @@ data_java_library(
     visibility = ["//visibility:public"],
     deps = [
         ":bindings",
-        ":kernel",
+        "//csv",
     ],
 )
 
@@ -74,7 +73,7 @@ data_java_library(
     visibility = ["//visibility:public"],
     deps = [
         ":bindings",
-        ":kernel",
+        "//csv",
         "@maven//:org_graalvm_sdk_nativeimage",
         "@maven//:org_graalvm_sdk_word",
     ],

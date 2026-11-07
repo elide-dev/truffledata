@@ -40,9 +40,11 @@ ACCESS_SOURCES = {f'core/src/main/java/dev/elide/truffledata/{name}.java' for na
     # Every CSV source: the scanner, ingest and typed conversions run on every read path, and the
     # batch, row and text views are the guest and embedder access surfaces.
     f'csv/src/main/java/dev/elide/truffledata/csv/{name}.java' for name in (
-        'BatchBuilder', 'Column', 'CommonsScanner', 'Csv', 'CsvBatch', 'CsvFormat', 'CsvKernel',
-        'CsvLimits', 'CsvMapping', 'CsvPlan', 'CsvReader', 'CsvRow', 'CsvScanner', 'CsvSink', 'CsvText',
-        'CsvWriter', 'Dialect', 'Nulls', 'Numbers', 'Utf8',
+        'BatchBuilder', 'Column', 'CommonsScanner', 'Csv', 'CsvBatch', 'CsvFormat', 'CsvIndexing',
+        'CsvKernel', 'CsvLimits', 'CsvMapping', 'CsvPlan', 'CsvReader', 'CsvRow', 'CsvScanner',
+        'CsvSink', 'CsvText', 'CsvWriter', 'Dialect', 'IndexScan', 'Nulls', 'Numbers', 'Utf8',
+        # The structural index every parse path frames records over, and its built-in kernel.
+        'kernel/BlockStep', 'kernel/CsvIndex', 'kernel/CsvIndexer', 'kernel/SwarIndexer',
     )
 }
 

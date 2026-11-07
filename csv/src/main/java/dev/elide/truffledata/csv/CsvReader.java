@@ -33,6 +33,9 @@ public final class CsvReader implements AutoCloseable {
   private final int batchBytes;
   private final CsvScanner scanner;
 
+  /** Whether buffers are validated as a whole before scanning (not when maxRows may stop early). */
+  private final boolean prevalidate;
+
   /** Unconsumed bytes: carry[carryFrom, carryFrom + carryLength) at stream offset carryOffset. */
   private byte[] carry = EMPTY;
 
@@ -64,6 +67,7 @@ public final class CsvReader implements AutoCloseable {
     this.limits = limits;
     this.batchBytes = batchBytes;
     this.scanner = new CsvScanner(plan.format(), limits);
+    this.prevalidate = plan.format().maxRows() == 0;
   }
 
   CsvReader(CsvMapping mapping, boolean owns, CsvPlan plan, CsvLimits limits, int batchBytes) {
@@ -77,6 +81,7 @@ public final class CsvReader implements AutoCloseable {
     this.limits = limits;
     this.batchBytes = batchBytes;
     this.scanner = new CsvScanner(plan.format(), limits);
+    this.prevalidate = plan.format().maxRows() == 0;
   }
 
   /** Reads the header (or first record) on first call; the same instance for every batch. */
@@ -100,6 +105,7 @@ public final class CsvReader implements AutoCloseable {
       BatchBuilder builder =
           new BatchBuilder(
               b, buffer, limits, plan.dialect, records, physical, carryOffset, rowHint);
+      if (prevalidate) builder.prevalidate(scanner, 0, filled);
       int end = scanner.scan(buffer, 0, filled, eof, builder);
       if (scanner.stopped) finished = true;
       else if (!builder.full()) checkIncomplete(end);
@@ -143,6 +149,7 @@ public final class CsvReader implements AutoCloseable {
     while (!(eof && carryLength == 0) && physical + builder.rows() < stop) {
       byte[] buffer = fill(size);
       builder.window(buffer, (int) (carryOffset - base), carryOffset);
+      if (prevalidate) builder.prevalidate(scanner, 0, filled);
       scanner.recordBase = physical + builder.rows();
       scanner.byteBase = carryOffset;
       scanner.stopAfter = stop;
