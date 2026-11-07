@@ -311,21 +311,68 @@ cc_test(
     ],
 )
 
-# Native reference rows (plan Task 2 Step 4). The binary is Linux-only on RBE, so it runs as a
-# manual test there: `bazel test //yaml/native:bench --test_output=all`.
+# Native reference rows (plan Task 2 Step 4): rapidyaml's integer handler and tree, libyaml, and
+# the session and stream APIs, in one process, three passes. The binary is Linux-only on RBE, so it
+# runs as a manual test there: `bazel test //yaml/native:bench --test_output=all`.
 cc_test(
     name = "bench",
     size = "large",
     srcs = ["bench.cc"],
-    args = ["$(rootpaths :testdata)"],
+    args = ["--passes=3"] + ["$(rootpaths :testdata)"],
     copts = [
         "-std=c++17",
         "-O3",
     ],
     data = [":testdata"],
+    # Statically linked like the production yaml_shared.so: test binaries otherwise load every
+    # dependency as a shared object, which puts PLT calls between the parser and the handler.
+    linkstatic = True,
     tags = ["manual"],
     deps = [
         ":reference_tape",
+        ":sampler",
         ":truffledata_yaml",
+        "@libyaml",
     ],
+)
+
+# The same binary sampling 40 s of td-session decode and of ryml-ints(scan) per record fixture on an RBE
+# worker (sampler.h; perf is unavailable there). Samples land in the test's undeclared outputs;
+# symbolize them against the binary as yaml/native/README.md describes.
+cc_test(
+    name = "bench_profile",
+    size = "large",
+    srcs = ["bench.cc"],
+    args = [
+        "--profile=40",
+        "$(rootpath testdata/records-block.yaml)",
+        "$(rootpath testdata/records-flow.yaml)",
+        "$(rootpath testdata/records-stream.yaml)",
+    ],
+    copts = [
+        "-std=c++17",
+        "-O3",
+    ],
+    data = [
+        "testdata/records-block.yaml",
+        "testdata/records-flow.yaml",
+        "testdata/records-stream.yaml",
+    ],
+    # Statically linked like the production yaml_shared.so: test binaries otherwise load every
+    # dependency as a shared object, which puts PLT calls between the parser and the handler.
+    linkstatic = True,
+    tags = ["manual"],
+    deps = [
+        ":reference_tape",
+        ":sampler",
+        ":truffledata_yaml",
+        "@libyaml",
+    ],
+)
+
+cc_library(
+    name = "sampler",
+    testonly = True,
+    hdrs = ["sampler.h"],
+    copts = ["-std=c++17"],
 )

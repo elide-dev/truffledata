@@ -364,6 +364,17 @@ http_archive(
     urls = ["https://github.com/biojppm/rapidyaml/releases/download/v0.16.0/rapidyaml.v0.16.0.src.tgz"],
 )
 
+# Benchmark only: libyaml 0.2.5, the reference C parser row of //yaml/native:bench (as in the YAML
+# probe, benchmarks/results/yaml-probe-b242abd). Never a production dependency.
+http_archive(
+    name = "libyaml",
+    build_file = "//bazel:libyaml.BUILD",
+    sha256 = "c642ae9b75fee120b2d96c712538bd2cf283228d2337df2cf2988e3c02678ef4",
+    strip_prefix = "yaml-0.2.5",
+    type = "tar.gz",
+    urls = ["https://github.com/yaml/libyaml/releases/download/0.2.5/yaml-0.2.5.tar.gz"],
+)
+
 # Test-only: the official yaml-test-suite data release (402 cases) for YAML conformance.
 http_archive(
     name = "yaml_test_suite",

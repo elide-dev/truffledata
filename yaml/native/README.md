@@ -9,7 +9,7 @@ There is no rapidyaml tree, event array or DOM in between. The plan is
 
 | File | Role |
 | --- | --- |
-| `input.h` | BOM detection, UTF-16/UTF-32 transcoding, strict UTF-8 (simdutf) and c-printable validation, the LF bitmap |
+| `input.h` | BOM detection, UTF-16/UTF-32 transcoding, strict UTF-8 (simdutf) and c-printable validation in 64-byte SSE2/NEON blocks fused with the session copy, the LF bitmap |
 | `scalars.h` | `resolve(text, style, schema, tag)`: core, JSON, failsafe and YAML 1.1 schemas, explicit core tags, key stringification |
 | `tags.h` | Tag URIs and kinds; `!!binary` (simdutf base64) and `!!timestamp` validation |
 | `decoder.h` | `yaml::handler`: nodes, `lexical` spans, `key_hashes` and `yaml_meta` per node; anchors, aliases, tags, directives; duplicate keys, retroactive `[a: b]` mappings, the pairs representation |
@@ -19,7 +19,8 @@ There is no rapidyaml tree, event array or DOM in between. The plan is
 | `errors.h` | `yaml::error` (status, line, column, fixed 256-byte message) |
 | `api.h`, `api.cc` | The C ABI (`td_yaml_*`); no exception crosses it |
 | `yaml.seam` | Myna seam (`abi=1`): `YamlResult`, `YamlOptionsStruct` and the session imports |
-| `bench.cc` | Native reference rows (`bazel test //yaml/native:bench --test_output=all`, manual, RBE) |
+| `bench.cc` | Native reference rows: rapidyaml's integer handler and tree, libyaml, the session and stream APIs (`bazel test //yaml/native:bench --test_output=all`, manual, RBE) |
+| `sampler.h` | Benchmark only: a SIGPROF frame-pointer sampler for RBE workers (`//yaml/native:bench_profile`) |
 | `testing.h`, `reference_tape.h` | Test-only helpers; the probe's reference tape (rapidyaml's integer handler into `myna::value_builder`) |
 | `tape_events.h` | Test-only: renders a document's tape and side tables back to yaml-test-suite events (`//yaml/conformance`, plan Task 8) |
 | `ryml_events.h` | Task 1's test-only event renderer over rapidyaml itself |
@@ -116,11 +117,45 @@ allocations (its parser stack and tag cache) go through `c4::yml::Callbacks` int
 counted `index_memory`, so they are charged to `maxIndexBytes` and fail like every other allocation.
 After warm-up a session decodes without upstream allocation (pinned by `api_test`).
 
+## Fast paths
+
+Nearly every scalar is short, untagged and unanchored. Such a plain scalar of 1-16 bytes still in
+the input (under CORE), or a quoted one (any schema, without `TD_YAML_RETAIN_SOURCE`), is loaded
+once as two words: the session pads its input buffer with 64 zero bytes, so the 16-byte read is
+always in bounds, and bytes past the scalar are masked. The words give the lexical span (a plain
+scalar with no byte <= 0x20 is single-line, so its bytes are the source token), the class (first
+byte and length: strings, the null and bool spellings, 1-8 digit integers and `d*.d*` decimals by
+SWAR, the rest through `resolve_core_fast`), the ASCII bit, the inline node
+(`tape_writer::string_words`) and, for keys, a 256-slot FNV-1a memo. Duplicate keys go through a
+per-mapping `key_set` (16 inline keys behind a 64-bit hash filter, then `tape::key_table`), and
+mappings that repeat the keys of one of the last two mappings at their level (records) follow that
+key template: matching keys need neither the duplicate check nor the hash. Anything else takes the
+general path. `//yaml/native:fast_path_test` decodes the probe fixtures, every yaml-test-suite
+input and generated boundary and template corpora with the fast paths on and off
+(`session::fast_paths`, a test hook) under seven policies and requires byte-identical tapes, side
+tables and errors.
+
+## Profiling on RBE
+
+perf is not available on the RBE workers, so `//yaml/native:bench_profile` samples the same
+benchmark binary with `sampler.h` (SIGPROF, frame-pointer stacks; 250 samples per second of CPU on
+those kernels) and writes one line of load-relative addresses per sample into the test's undeclared
+outputs. Symbolize them against the downloaded binary:
+
+```sh
+bazel test //yaml/native:bench_profile --test_output=all --copt=-gline-tables-only
+bazel build //yaml/native:bench_profile --copt=-gline-tables-only --remote_download_outputs=toplevel
+llvm-symbolizer --obj=bazel-out/rbe_linux_amd64-opt/bin/yaml/native/bench_profile --inlining \
+  < <(tr ' ' '\n' < bazel-testlogs/yaml/native/bench_profile/test.outputs/profile-td-records-block.yaml.txt | sed 's/^/0x/')
+```
+
+`benchmarks/results/yaml-decoder-*/` keep the folded stacks and summaries.
+
 ## Verification
 
 ```sh
-bazel test //yaml/native:all //tape/native:all //yaml/conformance:yaml_test_suite
+bazel test //yaml/native:all //tape/native:all //yaml/conformance:yaml_test_suite //json/native:all
 bazel test //yaml/native:all //tape/native:all \
   --copt=-fsanitize=address,undefined --copt=-fno-sanitize-recover=all --linkopt=-fsanitize=address,undefined
-bazel test //yaml/native:bench --test_output=all   # manual; RBE
+bazel test //yaml/native:bench --test_output=all   # manual; RBE; three passes, best per variant
 ```
