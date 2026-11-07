@@ -103,9 +103,9 @@ per-thread state).
 ### Text arenas
 
 With `TD_JSON_WANT_TEXT`, `session_decode` also writes every key and string once into the
-caller's buffer (`text_arena.h`, a post-pass over the finished tape): Latin-1 when all code points
-are at most U+00FF, UTF-16LE (even offset) otherwise, with one `offset << 32 | bytes << 1 | utf16`
-entry per node in `JsonResult.text_table` (session arena, valid like the borrowed result).
+caller's buffer (`tape/native/text_arena.h`, shared with YAML; a post-pass over the finished
+tape): Latin-1 when all code points are at most U+00FF, UTF-16LE (even offset) otherwise, with
+one `offset << 32 | bytes << 1 | utf16` entry per node in `JsonResult.text_table` (session arena, valid like the borrowed result).
 `2 × length + 16` bytes always suffice; `TD_JSON_TEXT_TOO_SMALL` reports a smaller buffer and
 leaves the session reusable. Java's `TruffleSink` builds `TruffleString`s over that array without
 copying.
@@ -178,7 +178,7 @@ construction are separate. The ABI exposes plan creation/release and typed
 decode/release, with 80-byte field descriptors and 40-byte slots, published
 without copying a second slot array.
 
-The Java side is `JsonPlan`, `JsonRecord`, `JsonArray` and `JsonAccess`, on SVM
+The Java side is `JsonPlan`, `TypedRecord`, `TypedArray` and `TypedAccess`, on SVM
 through the static bindings and on the JVM through FFM (`JsonDecoder.compile`).
 
 Character-length contracts use the shared `//bazel:unicode` simdutf library, also

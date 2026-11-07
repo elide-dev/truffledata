@@ -4,6 +4,8 @@ import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import dev.elide.truffledata.Schema;
 import dev.elide.truffledata.json.generated.JsonFFM;
+import dev.elide.truffledata.tape.TapeFormat;
+import dev.elide.truffledata.tape.TypedOwner;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
 import java.nio.charset.StandardCharsets;
@@ -13,7 +15,7 @@ import java.nio.charset.StandardCharsets;
  * the same exact-class cast as the Buffa FFM index reads so compiled code needs no interface
  * dispatch.
  */
-final class JvmTypedOwner extends JsonTypedOwner {
+final class JvmTypedOwner extends TypedOwner {
   // The JVM's concrete native segment class, derived without retaining any allocation.
   private static final Class<? extends MemorySegment> NATIVE_SEGMENT_TYPE =
       MemorySegment.NULL.getClass();
@@ -70,12 +72,12 @@ final class JvmTypedOwner extends JsonTypedOwner {
   }
 
   @Override
-  long bits(long slot) {
+  protected long bits(long slot) {
     return readLong(slots, slot * SLOT_SIZE + JsonFFM.JsonScalarSlot_bits_OFFSET);
   }
 
   @Override
-  String text(long slot) {
+  protected String text(long slot) {
     return copyText(slots, slot * SLOT_SIZE);
   }
 
@@ -90,27 +92,32 @@ final class JvmTypedOwner extends JsonTypedOwner {
   }
 
   @Override
-  long present(long entry) {
+  protected long present(long entry) {
     return readLong(records, entry * ENTRY_SIZE + JsonFFM.JsonRecordEntry_present_OFFSET);
   }
 
   @Override
-  long nulls(long entry) {
+  protected long nulls(long entry) {
     return readLong(records, entry * ENTRY_SIZE + JsonFFM.JsonRecordEntry_nulls_OFFSET);
   }
 
   @Override
-  int slotBase(long entry) {
+  protected int slotBase(long entry) {
     return readInt(records, entry * ENTRY_SIZE + JsonFFM.JsonRecordEntry_slots_OFFSET);
   }
 
   @Override
-  int plan(long entry) {
+  protected int plan(long entry) {
     return readInt(records, entry * ENTRY_SIZE + JsonFFM.JsonRecordEntry_plan_OFFSET);
   }
 
   @Override
-  void release() {
+  protected void release() {
     release.run();
+  }
+
+  @Override
+  protected TapeFormat format() {
+    return JsonMessage.FORMAT;
   }
 }

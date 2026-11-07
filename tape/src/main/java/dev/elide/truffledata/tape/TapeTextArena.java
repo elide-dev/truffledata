@@ -1,4 +1,4 @@
-package dev.elide.truffledata.json;
+package dev.elide.truffledata.tape;
 
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.strings.TruffleString;
@@ -11,8 +11,9 @@ import com.oracle.truffle.api.strings.TruffleString;
  * without a copy too), so the session hands the next parse a fresh array once any string took this
  * one. Strings of {@value #COPY_BYTES} bytes or more are copied, so one retained string never pins
  * a large document's text (user decision 1). Valid only during the borrowed parse that wrote it.
+ * Each format's static-image session backend supplies the per-node table it decoded natively.
  */
-abstract class JsonTextArena {
+public abstract class TapeTextArena {
   /** Strings at least this long (in arena bytes) are copied out instead of shared. */
   static final int COPY_BYTES = 64 * 1024;
 
@@ -20,12 +21,17 @@ abstract class JsonTextArena {
   // A string references the array: the session must not overwrite it.
   boolean shared;
 
-  JsonTextArena(byte[] array) {
+  protected TapeTextArena(byte[] array) {
     this.array = array;
   }
 
+  /** The text array the native decode writes into. */
+  protected final byte[] array() {
+    return array;
+  }
+
   /** Table entry of a string or key node of the borrowed document. */
-  abstract long entry(long node);
+  protected abstract long entry(long node);
 
   @TruffleBoundary
   final TruffleString string(long node, TruffleString.Encoding encoding) {

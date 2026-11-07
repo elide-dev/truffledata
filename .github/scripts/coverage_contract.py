@@ -30,14 +30,26 @@ ACCESS_SOURCES = {f'core/src/main/java/dev/elide/truffledata/{name}.java' for na
     'protobuf-buffa/src/main/java/dev/elide/truffledata/buffa/TypedMessage.java',
 } | {
     # Every hand-written JSON source (//json and //json:jvm); generated bindings live in //json:bindings.
+    # The format-neutral classes moved to //tape (YAML plan Task 4) and are listed below.
     f'json/src/main/java/dev/elide/truffledata/json/{name}.java' for name in (
-        'HeapValueTape', 'JavaSink', 'JsonAccess', 'JsonArray', 'JsonBorrow', 'JsonDecoder', 'JsonExportNode', 'JsonKey',
-        'JsonJvm', 'JsonLimits', 'JsonMessage', 'JsonOwner', 'JsonPlan', 'JsonRecord', 'JsonSink',
-        'JsonSession', 'JsonSnapshot', 'JsonStream', 'JsonStreamOptions', 'JsonSvm', 'JsonText', 'JsonTextArena',
-        'JsonTypedOwner', 'JsonValue',
-        'JvmSessionBackend', 'JvmTypedOwner', 'TruffleSink',
-        'SegmentValueTape',
-        'SvmTypedOwner', 'SvmValueTape', 'TapeSource',
+        'JsonDecoder', 'JsonJvm', 'JsonLimits', 'JsonMessage', 'JsonPlan',
+        'JsonSession', 'JsonStream', 'JsonStreamOptions', 'JsonSvm',
+        # JvmSessionBackend was missing before Task 4 (test_coverage_contract failed on it).
+        'JvmSessionBackend', 'JvmTypedOwner', 'SvmTypedOwner',
+    )
+} | {
+    # Every hand-written shared tape source (//tape and //tape:jvm), run on this lane through the JSON
+    # suites: JsonOwner → TapeOwner, JsonValue → TapeValue, JsonSink → TapeSink, JsonText → TapeText,
+    # JsonKey → TapeKey, JsonSnapshot → TapeSnapshot, JsonExportNode → TapeExportNode, JsonTextArena →
+    # TapeTextArena, JsonBorrow → TapeBorrow, JsonTypedOwner → TypedOwner, JsonRecord → TypedRecord,
+    # JsonArray → TypedArray, JsonAccess → TypedAccess, JsonPlan.Layout → TypedLayout,
+    # JsonMessage.Lexical → TapeLexical; JavaSink, TruffleSink and the tapes keep their names;
+    # TapeSession, TapeStream and TapeFormat hold what JsonSession and JsonStream shared.
+    f'tape/src/main/java/dev/elide/truffledata/tape/{name}.java' for name in (
+        'HeapValueTape', 'JavaSink', 'OwnerStateException', 'SegmentValueTape', 'SvmValueTape', 'TapeBorrow', 'TapeExportNode',
+        'TapeFormat', 'TapeKey', 'TapeLexical', 'TapeOwner', 'TapeSession', 'TapeSink', 'TapeSnapshot',
+        'TapeSource', 'TapeStream', 'TapeText', 'TapeTextArena', 'TapeValue', 'TruffleSink',
+        'TypedAccess', 'TypedArray', 'TypedLayout', 'TypedOwner', 'TypedRecord',
     )
 } | {
     # Every CSV source: the scanner, ingest and typed conversions run on every read path, and the
@@ -54,8 +66,9 @@ ACCESS_SOURCES = {f'core/src/main/java/dev/elide/truffledata/{name}.java' for na
 # Interfaces with only abstract methods have an LCOV record but no executable method. Any method
 # they gain is enforced like every other access method.
 DECLARATION_ONLY_SOURCES = {
-    'json/src/main/java/dev/elide/truffledata/json/JsonSink.java',
-    'json/src/main/java/dev/elide/truffledata/json/TapeSource.java',
+    'tape/src/main/java/dev/elide/truffledata/tape/TapeLexical.java',
+    'tape/src/main/java/dev/elide/truffledata/tape/TapeSink.java',
+    'tape/src/main/java/dev/elide/truffledata/tape/TapeSource.java',
     'csv/src/main/java/dev/elide/truffledata/csv/CsvSink.java',
 }
 
@@ -65,6 +78,14 @@ JSON_CLASS = 'dev/elide/truffledata/json/'
 
 def _json_methods(source, *signatures):
     return {JSON + source + '.java': {JSON_CLASS + signature for signature in signatures}}
+
+
+TAPE = 'tape/src/main/java/dev/elide/truffledata/tape/'
+TAPE_CLASS = 'dev/elide/truffledata/tape/'
+
+
+def _tape_methods(source, *signatures):
+    return {TAPE + source + '.java': {TAPE_CLASS + signature for signature in signatures}}
 
 
 # JVM LCOV cannot execute an SVM pointer intrinsic. Keep the exact method visible in gap reports;
@@ -98,11 +119,11 @@ SVM_ONLY_METHODS = {
         'Ldev/elide/truffledata/json/JsonMessage;',
         'JsonSvm::release (J)V',
         'JsonSvm::lambda$static$0 ()V',
-        'JsonSvm::tape (Lorg/graalvm/nativeimage/c/type/VoidPointer;)Ldev/elide/truffledata/json/SvmValueTape;',
-        'JsonSvm::tables (Lorg/graalvm/nativeimage/c/type/VoidPointer;Ldev/elide/truffledata/json/SvmValueTape;'
+        'JsonSvm::tape (Lorg/graalvm/nativeimage/c/type/VoidPointer;)Ldev/elide/truffledata/tape/SvmValueTape;',
+        'JsonSvm::tables (Lorg/graalvm/nativeimage/c/type/VoidPointer;Ldev/elide/truffledata/tape/SvmValueTape;'
         'Ljava/lang/Runnable;)Ldev/elide/truffledata/json/JsonSvm$SvmLexical;',
         'JsonSvm::adoptResult (Lorg/graalvm/nativeimage/c/type/VoidPointer;)Ldev/elide/truffledata/json/JsonMessage;',
-        'JsonSvm::borrow (Lorg/graalvm/nativeimage/c/type/VoidPointer;)Ldev/elide/truffledata/json/JsonBorrow;',
+        'JsonSvm::borrow (Lorg/graalvm/nativeimage/c/type/VoidPointer;)Ldev/elide/truffledata/tape/TapeBorrow;',
         # The decoder handle returned by open() and the lexical table built by publish().
         'JsonSvm$1::decode ([BLdev/elide/truffledata/json/JsonLimits;)Ldev/elide/truffledata/json/JsonMessage;',
         'JsonSvm$1::adopt (Ljava/lang/foreign/MemorySegment;JLjava/lang/Runnable;)'
@@ -124,14 +145,17 @@ SVM_ONLY_METHODS = {
         'JsonSession::open (Ldev/elide/truffledata/json/JsonLimits;)Ldev/elide/truffledata/json/JsonSession;',
         'JsonSession$SvmBackend::create (Ldev/elide/truffledata/json/JsonLimits;)'
         'Ldev/elide/truffledata/json/JsonSession$SvmBackend;',
-        'JsonSession$SvmBackend::decode ([BIIILdev/elide/truffledata/json/JsonTextArena;)V',
+        'JsonSession$SvmBackend::decode ([BIIILdev/elide/truffledata/tape/TapeTextArena;)V',
         'JsonSession$SvmBackend::decode (Ljava/lang/foreign/MemorySegment;J)V',
-        'JsonSession$SvmBackend::textArena ([B)Ldev/elide/truffledata/json/JsonTextArena;',
-        'JsonSession$SvmBackend::borrow ()Ldev/elide/truffledata/json/JsonBorrow;',
+        'JsonSession$SvmBackend::textArena ([B)Ldev/elide/truffledata/tape/TapeTextArena;',
+        'JsonSession$SvmBackend::borrow ()Ldev/elide/truffledata/tape/TapeBorrow;',
         'JsonSession$SvmBackend::retain ()Ldev/elide/truffledata/json/JsonMessage;',
+        # javac's bridge for TapeSession.Backend<JsonMessage>.retain (erased to TapeOwner).
+        'JsonSession$SvmBackend::retain ()Ldev/elide/truffledata/tape/TapeOwner;',
         'JsonSession$SvmBackend::reset ()V',
         'JsonSession$SvmBackend::release ()V',
         'JsonSession$SvmTextArena::entry (J)J',
+        'JsonSession$SvmTextArena::bytes ()[B',
         # Streams through the static-image backend (Task F2; SvmAcceptance.streams). The JVM lane
         # runs the same JsonStream/JsonSession stream methods through JvmSessionBackend.
         'JsonSession$SvmBackend::streamCreate (II)J',
@@ -142,18 +166,21 @@ SVM_ONLY_METHODS = {
         'JsonSession$SvmBackend::streamSkip (J)I',
         'JsonSession$SvmBackend::streamTruncatedBytes (J)J',
         'JsonSession$SvmBackend::streamRelease (J)V',
-        # The default (0) is the static-image backend's: only JvmSessionBackend overrides it (Task E2).
-        'JsonSession$Backend::criticalDecodes ()J',
     ),
+    # The default (0) is the static-image backend's: only JvmSessionBackend overrides it (Task E2).
+    # Moved with the shared session (was JsonSession$Backend::criticalDecodes).
+    **_tape_methods('TapeSession', 'TapeSession$Backend::criticalDecodes ()J'),
     # A borrow's assumption is requested only by cached compiled reads of a borrowed view
-    # (CompiledReads.borrowed on SVM); the JVM coverage lane runs no compiled code.
-    **_json_methods('JsonBorrow', 'JsonBorrow::assumption ()Lcom/oracle/truffle/api/Assumption;'),
+    # (CompiledReads.borrowed on SVM); the JVM coverage lane runs no compiled code. (Was JsonBorrow.)
+    **_tape_methods('TapeBorrow', 'TapeBorrow::assumption ()Lcom/oracle/truffle/api/Assumption;'),
     # Strings over a session text arena: written only by static-image session parses whose sink
-    # asks for shared text (SvmAcceptance.textArenas); JVM sessions write no text arena.
-    **_json_methods(
-        'JsonTextArena',
-        'JsonTextArena::string (JLcom/oracle/truffle/api/strings/TruffleString$Encoding;)'
+    # asks for shared text (SvmAcceptance.textArenas); JVM sessions write no text arena. (Was
+    # JsonTextArena::string; array() is the static-image backend's view of the same array.)
+    **_tape_methods(
+        'TapeTextArena',
+        'TapeTextArena::string (JLcom/oracle/truffle/api/strings/TruffleString$Encoding;)'
         'Lcom/oracle/truffle/api/strings/TruffleString;',
+        'TapeTextArena::array ()[B',
     ),
     # Static typed plans: compile throws from requireRuntime on the JVM (JvmScopedTest asserts it);
     # JVM plans compile through JsonJvm and its own backend instead.
@@ -161,13 +188,14 @@ SVM_ONLY_METHODS = {
         'JsonPlan',
         'JsonPlan::compile (Ldev/elide/truffledata/Schema;)Ldev/elide/truffledata/json/JsonPlan;',
         'JsonPlan::compile (Ldev/elide/truffledata/Schema;Ljava/util/Map;)Ldev/elide/truffledata/json/JsonPlan;',
-        'JsonPlan$SvmBackend::create (Ldev/elide/truffledata/json/JsonPlan$Layout;)'
+        'JsonPlan$SvmBackend::create (Ldev/elide/truffledata/tape/TypedLayout;)'
         'Ldev/elide/truffledata/json/JsonPlan$SvmBackend;',
-        'JsonPlan$SvmBackend::decode ([B[Ldev/elide/truffledata/Schema;)Ldev/elide/truffledata/json/JsonTypedOwner;',
+        'JsonPlan$SvmBackend::decode ([B[Ldev/elide/truffledata/Schema;)Ldev/elide/truffledata/tape/TypedOwner;',
         'JsonPlan$SvmBackend::release ()V',
     ),
-    # Word-pointer tape over a native descriptor; constructed only by JsonSvm.publish.
-    **_json_methods(
+    # Word-pointer tape over a native descriptor; constructed only by JsonSvm.publish and the
+    # static-image session backend.
+    **_tape_methods(
         'SvmValueTape',
         'SvmValueTape::nodeInt (J)I',
         'SvmValueTape::nodeLong (J)J',
@@ -192,16 +220,27 @@ SVM_ONLY_METHODS = {
         'SvmTypedOwner::slot (J)J',
         'SvmTypedOwner::entry (J)J',
         'SvmTypedOwner::release ()V',
+        # Format name for its closed/thread messages (YAML plan Task 4).
+        'SvmTypedOwner::format ()Ldev/elide/truffledata/tape/TapeFormat;',
     ),
 }
 
 # Methods the JVM coverage lane cannot reach on HotSpot although they are not SVM code. Each entry
 # names why; nothing else is exempt.
 JVM_UNREACHABLE_METHODS = {
-    # Compiled-code fallback for a non-constant JsonAccess: the interpreter reports every value as a
+    # Compiled-code fallback for a non-constant TypedAccess: the interpreter reports every value as a
     # partial-evaluation constant (so it takes walkExploded), and the coverage lane excludes JIT.
-    # Exercised on SVM by the dynamic NestedReads root in json/tests/CompiledReads.java.
-    **_json_methods('JsonRecord', 'JsonRecord::walk (Ldev/elide/truffledata/json/JsonAccess;)J'),
+    # Exercised on SVM by the dynamic NestedReads root in json/tests/CompiledReads.java. (Was
+    # JsonRecord::walk.)
+    **_tape_methods('TypedRecord', 'TypedRecord::walk (Ldev/elide/truffledata/tape/TypedAccess;)J'),
+    # YAML alias tables: JSON formats have none, so this lane (JSON suites) never builds or reads
+    # them; //tape/tests:jvm (TapeOwnerTest) runs all three, and YAML Task 5 adds lane coverage.
+    **_tape_methods(
+        'TapeFormat',
+        'TapeFormat::withAliases ([J[I)Ldev/elide/truffledata/tape/TapeFormat;',
+        'TapeFormat::alias ([IJJ)J',
+        'TapeFormat::outside (Ldev/elide/truffledata/tape/TapeFormat;)Ljava/lang/IllegalStateException;',
+    ),
     # Fallbacks for a segment that is not HotSpot's native segment class. Typed tables are always
     # reinterpreted native segments, so on HotSpot only the exact-class fast path runs.
     **_json_methods(

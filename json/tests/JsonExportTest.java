@@ -4,17 +4,17 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import com.google.gson.JsonElement;
 import com.google.gson.JsonParser;
-import dev.elide.truffledata.json.JavaSink;
+import com.oracle.truffle.api.strings.TruffleString;
 import dev.elide.truffledata.json.JsonDecoder;
-import dev.elide.truffledata.json.JsonExportNode;
 import dev.elide.truffledata.json.JsonJvm;
 import dev.elide.truffledata.json.JsonMessage;
-import dev.elide.truffledata.json.JsonSink;
-import dev.elide.truffledata.json.JsonSnapshot;
-import dev.elide.truffledata.json.JsonText;
-import dev.elide.truffledata.json.JsonValue;
-import dev.elide.truffledata.json.TruffleSink;
-import com.oracle.truffle.api.strings.TruffleString;
+import dev.elide.truffledata.tape.JavaSink;
+import dev.elide.truffledata.tape.TapeExportNode;
+import dev.elide.truffledata.tape.TapeSink;
+import dev.elide.truffledata.tape.TapeSnapshot;
+import dev.elide.truffledata.tape.TapeText;
+import dev.elide.truffledata.tape.TapeValue;
+import dev.elide.truffledata.tape.TruffleSink;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
@@ -30,7 +30,7 @@ final class JsonExportTest {
     return JsonJvm.open(JvmScopedTest.library());
   }
 
-  private static Object export(JsonValue value) {
+  private static Object export(TapeValue value) {
     var sink = new JavaSink();
     value.export(sink);
     return sink.result();
@@ -84,14 +84,14 @@ final class JsonExportTest {
   }
 
   /** Counts events without materializing anything. */
-  private static class Counting implements JsonSink {
+  private static class Counting implements TapeSink {
     long keys, values, begins, ends;
 
     public void beginObject(long members) {
       begins++;
     }
 
-    public void key(JsonText key) {
+    public void key(TapeText key) {
       keys++;
     }
 
@@ -123,11 +123,11 @@ final class JsonExportTest {
       values++;
     }
 
-    public void decimalValue(JsonText token) {
+    public void decimalValue(TapeText token) {
       values++;
     }
 
-    public void stringValue(JsonText text) {
+    public void stringValue(TapeText text) {
       values++;
     }
   }
@@ -137,7 +137,7 @@ final class JsonExportTest {
     var source = new StringBuilder("{");
     for (int i = 0; i < 10_000; i++) source.append(i == 0 ? "" : ",").append("\"m").append(i).append("\":").append(i);
     try (var decoder = decoder(); var message = decoder.decode(JvmScopedTest.utf8(source.append('}').toString()))) {
-      var node = JsonExportNode.create();
+      var node = TapeExportNode.create();
       var counting = new Counting();
       node.execute(message.root(), counting);
       assertEquals(1, node.maxDepthSeen());
@@ -163,7 +163,7 @@ final class JsonExportTest {
       for (int depth = 1; depth <= 200; depth++) {
         try (var message = decoder.decode(JvmScopedTest.utf8(nested(depth)))) {
           deepest = depth;
-          var node = JsonExportNode.create();
+          var node = TapeExportNode.create();
           node.execute(message.root(), new Counting());
           assertEquals(depth, node.maxDepthSeen());
         } catch (IllegalArgumentException limit) {
@@ -189,7 +189,7 @@ final class JsonExportTest {
       var closing =
           new Counting() {
             @Override
-            public void stringValue(JsonText text) {
+            public void stringValue(TapeText text) {
               strings.add(text.toJavaString());
               if (strings.size() == 1)
                 assertThrows(IllegalStateException.class, message::close, "close during export");
@@ -200,7 +200,7 @@ final class JsonExportTest {
       message.close();
       assertThrows(IllegalStateException.class, () -> message.root());
       var sink = new JavaSink();
-      JsonValue[] stale = new JsonValue[1];
+      TapeValue[] stale = new TapeValue[1];
       try (var other = decoder.decode(JvmScopedTest.utf8("[1]"))) {
         stale[0] = other.root();
       }
@@ -211,7 +211,7 @@ final class JsonExportTest {
   @Test
   void snapshotsExportAfterTheMessageCloses() {
     try (var decoder = decoder()) {
-      JsonSnapshot snapshot;
+      TapeSnapshot snapshot;
       try (var message = decoder.decode(JvmScopedTest.utf8("{\"a\":[1,\"two beyond sixteen bytes\",1E400]}"))) {
         snapshot = message.snapshot();
       }
@@ -229,11 +229,11 @@ final class JsonExportTest {
       var outer =
           new Counting() {
             @Override
-            public void stringValue(JsonText text) {
+            public void stringValue(TapeText text) {
               inner.add(export(message.root().element(2)));
             }
           };
-      var node = JsonExportNode.create();
+      var node = TapeExportNode.create();
       node.execute(message.root(), outer);
       assertEquals(List.of(List.of(3L, List.of(4L, List.of(5L)))), inner);
       assertEquals(4, node.maxDepthSeen());
@@ -344,24 +344,24 @@ final class JsonExportTest {
     assertThrows(IllegalStateException.class, sink::nullValue);
   }
 
-  // ---- JsonText cursor (performance plan Task D1) ----
+  // ---- TapeText cursor (performance plan Task D1) ----
 
   @Test
   void textCursorIsValidOnlyDuringItsEvent() {
     try (var decoder = decoder();
         var message = decoder.decode(JvmScopedTest.utf8("{\"key\":\"value\",\"n\":1E400,\"z\":null}"))) {
-      var seen = new ArrayList<JsonText>();
-      var views = new ArrayList<JsonValue>();
+      var seen = new ArrayList<TapeText>();
+      var views = new ArrayList<TapeValue>();
       var retaining =
           new Counting() {
             @Override
-            public void key(JsonText key) {
+            public void key(TapeText key) {
               seen.add(key);
               views.add(key.view());
             }
 
             @Override
-            public void stringValue(JsonText text) {
+            public void stringValue(TapeText text) {
               seen.add(text);
               assertEquals("value", text.toJavaString());
             }
@@ -378,26 +378,26 @@ final class JsonExportTest {
       message.root().export(retaining);
       assertEquals(4, seen.size());
       assertSame(seen.get(0), seen.get(1), "one cursor per export, rebound per event");
-      for (JsonText text : seen) {
+      for (TapeText text : seen) {
         assertThrows(IllegalStateException.class, text::toJavaString);
         assertThrows(IllegalStateException.class, text::utf8Length);
         assertThrows(IllegalStateException.class, text::view);
       }
       // Views taken during an event outlive it while the message is open.
-      assertEquals(List.of("key", "n", "z"), views.stream().map(JsonValue::stringValue).toList());
+      assertEquals(List.of("key", "n", "z"), views.stream().map(TapeValue::stringValue).toList());
       message.root().export(new Counting());
       assertSame(seen.get(0), cursorOf(message), "the outermost export reuses the owner's cursor");
     }
   }
 
-  private static JsonText cursorOf(JsonMessage message) {
-    var cursor = new JsonText[1];
+  private static TapeText cursorOf(JsonMessage message) {
+    var cursor = new TapeText[1];
     message
         .root()
         .export(
             new Counting() {
               @Override
-              public void key(JsonText key) {
+              public void key(TapeText key) {
                 cursor[0] = key;
               }
             });
@@ -417,7 +417,7 @@ final class JsonExportTest {
           .export(
               new Counting() {
                 @Override
-                public void key(JsonText key) {
+                public void key(TapeText key) {
                   String name = key.toJavaString();
                   byte[] utf8 = name.getBytes(StandardCharsets.UTF_8);
                   assertEquals(utf8.length, key.utf8Length());
@@ -433,7 +433,7 @@ final class JsonExportTest {
                 }
 
                 @Override
-                public void stringValue(JsonText text) {
+                public void stringValue(TapeText text) {
                   String value = text.toJavaString();
                   assertEquals(0, text.hash(), "strings carry no key hash");
                   assertEquals(value, text.toTruffleString(TruffleString.Encoding.UTF_16).toJavaStringUncached());
@@ -442,7 +442,7 @@ final class JsonExportTest {
                 }
 
                 @Override
-                public void decimalValue(JsonText token) {
+                public void decimalValue(TapeText token) {
                   events.add(token.toJavaString());
                   assertEquals(
                       "-12.5e999", token.toTruffleString(TruffleString.Encoding.UTF_8).toJavaStringUncached());
@@ -451,6 +451,55 @@ final class JsonExportTest {
       assertEquals(List.of("id", "ascii", "été", note, "big", "-12.5e999", "long", ascii), events);
       // The bulk path (≥ 256 non-ASCII bytes) and the scratch path agree with the tape's decoder.
       assertEquals(note, message.root().member("été").stringValue());
+    }
+  }
+
+  /**
+   * JSON owners carry no alias tables (reads never resolve) and JSON exports never emit the YAML
+   * events; the shared sinks accept those events as no-ops, and alias() asks for expansion.
+   */
+  @Test
+  void jsonFormatHasNoAliasesAndSinksIgnoreYamlEvents() {
+    try (var decoder = decoder(); var message = decoder.decode(JvmScopedTest.utf8("{\"a\":[1,null]}"))) {
+      assertEquals("JSON", message.format().name());
+      assertFalse(message.format().hasAliases());
+      for (long node = 0; node < 5; node++) assertEquals(node, message.resolve(node));
+      var sinks = List.<TapeSink>of(new JavaSink(), new TruffleSink(new TruffleSink.KeyCache()));
+      for (TapeSink sink : sinks) {
+        message
+            .root()
+            .export(
+                new Counting() {
+                  @Override
+                  public void key(TapeText key) {
+                    sink.tag(key);
+                    sink.anchor(0);
+                    assertFalse(sink.alias(0));
+                  }
+                });
+      }
+      var events = new ArrayList<String>();
+      message
+          .root()
+          .export(
+              new Counting() {
+                @Override
+                public void tag(TapeText uri) {
+                  events.add("tag");
+                }
+
+                @Override
+                public void anchor(int id) {
+                  events.add("anchor");
+                }
+
+                @Override
+                public boolean alias(int id) {
+                  events.add("alias");
+                  return true;
+                }
+              });
+      assertEquals(List.of(), events);
     }
   }
 

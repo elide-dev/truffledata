@@ -1,6 +1,9 @@
 package dev.elide.truffledata.json;
 
 import dev.elide.truffledata.json.generated.JsonFFM;
+import dev.elide.truffledata.tape.SegmentValueTape;
+import dev.elide.truffledata.tape.TapeBorrow;
+import dev.elide.truffledata.tape.TapeTextArena;
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
@@ -85,12 +88,13 @@ final class JvmSessionBackend extends JsonSession.Backend {
   }
 
   @Override
-  void decode(byte[] data, int offset, int length, int input, @Nullable JsonTextArena text) {
-    call(stage(data, offset, length), length, input);
+  protected void decode(
+      byte[] data, int offset, int length, int encoding, @Nullable TapeTextArena text) {
+    call(stage(data, offset, length), length, JsonSession.inputFlag(encoding));
   }
 
   @Override
-  void decode(MemorySegment data, long length) {
+  protected void decode(MemorySegment data, long length) {
     if (!data.isNative() || data.address() == 0)
       throw new IllegalArgumentException("Expected a native segment");
     if (!data.scope().isAlive()) throw new IllegalStateException("JSON input segment closed");
@@ -116,19 +120,18 @@ final class JvmSessionBackend extends JsonSession.Backend {
   }
 
   @Override
-  @Nullable
-  JsonTextArena textArena(byte[] array) {
+  protected @Nullable TapeTextArena textArena(byte[] array) {
     return null;
   }
 
   @Override
-  JsonBorrow borrow() {
+  protected TapeBorrow borrow() {
     SegmentValueTape tape = JsonJvm.tape(result);
-    return new JsonBorrow(tape, JsonJvm.lexical(result, tape));
+    return new TapeBorrow(tape, JsonJvm.lexical(result, tape), JsonMessage.FORMAT);
   }
 
   @Override
-  JsonMessage retain() {
+  protected JsonMessage retain() {
     return library.retain(this::retainInto);
   }
 
@@ -144,12 +147,12 @@ final class JvmSessionBackend extends JsonSession.Backend {
   }
 
   @Override
-  long criticalDecodes() {
+  protected long criticalDecodes() {
     return criticalDecodes;
   }
 
   @Override
-  void reset() {
+  protected void reset() {
     try {
       // O(1), frees nothing: a native leaf.
       critical.session_reset(session);
@@ -159,7 +162,7 @@ final class JvmSessionBackend extends JsonSession.Backend {
   }
 
   @Override
-  long streamCreate(int maxDocumentBytes, int batchBytes) {
+  protected long streamCreate(int maxDocumentBytes, int batchBytes) {
     MemorySegment stream;
     try {
       stream = calls.stream_create(session, maxDocumentBytes, batchBytes);
@@ -171,13 +174,13 @@ final class JvmSessionBackend extends JsonSession.Backend {
   }
 
   @Override
-  int streamFeed(long stream, byte[] data, int offset, int length) {
+  protected int streamFeed(long stream, byte[] data, int offset, int length) {
     // Normal downcalls take native memory: stage the chunk (the stream copies what it accepts).
     return (int) streamFeedNative(stream, stage(data, offset, length), length);
   }
 
   @Override
-  long streamFeed(long stream, MemorySegment data) {
+  protected long streamFeed(long stream, MemorySegment data) {
     if (!data.isNative() || data.address() == 0)
       throw new IllegalArgumentException("Expected a native segment");
     if (!data.scope().isAlive()) throw new IllegalStateException("JSON input segment closed");
@@ -195,7 +198,7 @@ final class JvmSessionBackend extends JsonSession.Backend {
   }
 
   @Override
-  void streamFinish(long stream) {
+  protected void streamFinish(long stream) {
     try {
       calls.stream_finish(MemorySegment.ofAddress(stream));
     } catch (Throwable failure) {
@@ -204,7 +207,7 @@ final class JvmSessionBackend extends JsonSession.Backend {
   }
 
   @Override
-  int streamNext(long stream) {
+  protected int streamNext(long stream) {
     try {
       return calls.stream_next(MemorySegment.ofAddress(stream), result);
     } catch (Throwable failure) {
@@ -231,7 +234,7 @@ final class JvmSessionBackend extends JsonSession.Backend {
   }
 
   @Override
-  void streamRelease(long stream) {
+  protected void streamRelease(long stream) {
     try {
       calls.stream_release(MemorySegment.ofAddress(stream));
     } catch (Throwable failure) {
@@ -240,7 +243,7 @@ final class JvmSessionBackend extends JsonSession.Backend {
   }
 
   @Override
-  void release() {
+  protected void release() {
     try {
       calls.session_release(session);
     } catch (Throwable failure) {

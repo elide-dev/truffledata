@@ -10,11 +10,11 @@ import com.oracle.truffle.api.object.*;
 import dev.elide.truffledata.*;
 import dev.elide.truffledata.comparison.JsonFixture;
 import dev.elide.truffledata.jdbc.*;
-import dev.elide.truffledata.json.JavaSink;
 import dev.elide.truffledata.json.JsonMessage;
-import dev.elide.truffledata.json.JsonSnapshot;
 import dev.elide.truffledata.json.JsonSvm;
 import dev.elide.truffledata.protobuf.ProtobufAdapter;
+import dev.elide.truffledata.tape.JavaSink;
+import dev.elide.truffledata.tape.TapeSnapshot;
 import java.sql.*;
 import java.util.*;
 import org.graalvm.nativeimage.ImageInfo;
@@ -350,7 +350,7 @@ public final class SimulationBenchmark {
       }
       JsonMessage message = JsonSvm.decode(input);
       if (mode == 3) {
-        JsonSnapshot snapshot;
+        TapeSnapshot snapshot;
         try {
           snapshot = message.snapshot();
         } finally {

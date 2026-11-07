@@ -7,7 +7,7 @@ import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import dev.elide.truffledata.json.JsonDecoder;
 import dev.elide.truffledata.json.JsonJvm;
 import dev.elide.truffledata.json.JsonMessage;
-import dev.elide.truffledata.json.JsonValue;
+import dev.elide.truffledata.tape.TapeValue;
 import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
@@ -155,36 +155,36 @@ final class JsonInteropTest {
     try (JsonDecoder decoder = JsonJvm.open(JvmScopedTest.library());
         JsonMessage message =
             decoder.decode("[1,300,70000,2.0,0.1,\"text\"]".getBytes(StandardCharsets.UTF_8))) {
-      JsonValue root = message.root();
-      JsonValue one = root.element(0);
+      TapeValue root = message.root();
+      TapeValue one = root.element(0);
       assertEquals(1, one.longValue());
       assertTrue(interop.fitsInByte(one));
       assertEquals((byte) 1, interop.asByte(one));
       assertTrue(interop.fitsInShort(one));
       assertEquals((short) 1, interop.asShort(one));
       assertEquals(1, interop.asInt(one));
-      JsonValue beyondByte = root.element(1);
+      TapeValue beyondByte = root.element(1);
       assertFalse(interop.fitsInByte(beyondByte));
       assertThrows(UnsupportedMessageException.class, () -> interop.asByte(beyondByte));
       assertEquals((short) 300, interop.asShort(beyondByte));
-      JsonValue beyondShort = root.element(2);
+      TapeValue beyondShort = root.element(2);
       assertFalse(interop.fitsInShort(beyondShort));
       assertThrows(UnsupportedMessageException.class, () -> interop.asShort(beyondShort));
       assertEquals(70000, interop.asInt(beyondShort));
       // An integral binary64 converts exactly to integer and float types.
-      JsonValue two = root.element(3);
+      TapeValue two = root.element(3);
       assertEquals(2.0, two.doubleValue());
       assertEquals(2L, interop.asLong(two));
       assertTrue(interop.fitsInFloat(two));
       assertEquals(2.0f, interop.asFloat(two));
-      JsonValue tenth = root.element(4);
+      TapeValue tenth = root.element(4);
       assertFalse(interop.fitsInFloat(tenth), "0.1 is not exact in binary32");
       assertThrows(UnsupportedMessageException.class, () -> interop.asFloat(tenth));
       assertThrows(UnsupportedMessageException.class, () -> interop.asLong(tenth));
       assertEquals("text", interop.asTruffleString(root.element(5)).toJavaStringUncached());
       assertThrows(UnsupportedMessageException.class, () -> interop.asTruffleString(one));
-      assertEquals(JsonValue.Kind.NUMBER, JsonValue.Kind.valueOf("NUMBER"));
-      assertEquals(6, JsonValue.Kind.values().length);
+      assertEquals(TapeValue.Kind.NUMBER, TapeValue.Kind.valueOf("NUMBER"));
+      assertEquals(6, TapeValue.Kind.values().length);
     }
   }
   @Test
@@ -287,7 +287,7 @@ final class JsonInteropTest {
                 decoder,
                 "{\"\\u0069d\":9,\"" + longKey + "\":7,\"\u00e9t\u00e9\":5,\"k\\u00e9y_long_escaped_name\":6,\"\":3}")) {
       InteropLibrary site = site();
-      JsonValue root = message.root();
+      TapeValue root = message.root();
       for (int round = 0; round < 2; round++) {
         assertEquals(9L, site.asLong(site.readMember(root, "id")));
         assertEquals(7L, site.asLong(site.readMember(root, longKey)));
@@ -296,9 +296,9 @@ final class JsonInteropTest {
         assertEquals(3L, site.asLong(site.readMember(root, "")));
         assertFalse(site.isMemberReadable(root, "\uD800"));
       }
-      assertEquals(7L, root.member(dev.elide.truffledata.json.JsonKey.of(longKey)).longValue());
-      assertEquals(longKey.length(), dev.elide.truffledata.json.JsonKey.of(longKey).utf8Length());
-      assertThrows(IllegalArgumentException.class, () -> dev.elide.truffledata.json.JsonKey.of("\uD800"));
+      assertEquals(7L, root.member(dev.elide.truffledata.tape.TapeKey.of(longKey)).longValue());
+      assertEquals(longKey.length(), dev.elide.truffledata.tape.TapeKey.of(longKey).utf8Length());
+      assertThrows(IllegalArgumentException.class, () -> dev.elide.truffledata.tape.TapeKey.of("\uD800"));
       assertThrows(java.util.NoSuchElementException.class, () -> root.member("absent"));
       assertThrows(IllegalStateException.class, () -> root.member("id").member("x"));
     }
@@ -334,7 +334,7 @@ final class JsonInteropTest {
     try (JsonDecoder decoder = JsonJvm.open(JvmScopedTest.library());
         JsonMessage message = message(decoder, source.toString())) {
       InteropLibrary site = site();
-      JsonValue root = message.root();
+      TapeValue root = message.root();
       assertEquals(0, message.directories());
       for (int i = 0; i < 1000; i += 37) assertEquals((long) i, root.member("k" + i).longValue());
       assertEquals(999L, site.asLong(site.readMember(root, "k999")));

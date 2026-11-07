@@ -11,9 +11,9 @@ import dev.elide.truffledata.ReadBooleanNode;
 import dev.elide.truffledata.ReadDoubleNode;
 import dev.elide.truffledata.ReadLongNode;
 import dev.elide.truffledata.Schema;
-import dev.elide.truffledata.json.JsonAccess;
 import dev.elide.truffledata.json.JsonPlan;
-import dev.elide.truffledata.json.JsonRecord;
+import dev.elide.truffledata.tape.TypedAccess;
+import dev.elide.truffledata.tape.TypedRecord;
 import java.nio.charset.StandardCharsets;
 import org.graalvm.polyglot.Context;
 
@@ -45,7 +45,7 @@ final class CompiledReads {
       context.enter();
       try {
         plan.close();
-        var rows = new JsonRecord[] {first, second};
+        var rows = new TypedRecord[] {first, second};
         var data = DataLibrary.factory().getUncached();
         try {
           check(
@@ -119,7 +119,7 @@ final class CompiledReads {
                   nextPlan.decode(
                       ("{\"n\":" + (1000 + i) + ",\"d\":1.5,\"b\":true}")
                           .getBytes(StandardCharsets.UTF_8))) {
-            var nextRows = new JsonRecord[] {next, next};
+            var nextRows = new TypedRecord[] {next, next};
             churn.compiled = false;
             for (int warmup = 0; warmup < 200 && !churn.compiled; warmup++)
               churnTarget.call(nextRows, 100000);
@@ -137,7 +137,7 @@ final class CompiledReads {
     }
   }
 
-  /** Nested primitives read through constant JsonAccess paths, with no intermediate records. */
+  /** Nested primitives read through constant TypedAccess paths, with no intermediate records. */
   private static void nested() {
     var inner =
         new Schema(
@@ -175,7 +175,7 @@ final class CompiledReads {
             plan.decode(
                 "{\"mid\":{\"inner\":{\"b\":false,\"d\":2.5,\"n\":2000}},\"id\":2}"
                     .getBytes(StandardCharsets.UTF_8))) {
-      var rows = new JsonRecord[] {first, second};
+      var rows = new TypedRecord[] {first, second};
       // Constant accessors take the exploded walk; dynamic ones (loaded from a mutable array) the loop.
       var roots =
           new NestedReads[] {new NestedReads(schema, types, false), new NestedReads(schema, types, true)};
@@ -208,24 +208,24 @@ final class CompiledReads {
   }
 
   private static final class NestedReads extends RootNode {
-    final JsonAccess n, d, b;
+    final TypedAccess n, d, b;
     // Not compilation-final: loads from it are not partial-evaluation constants.
-    private final JsonAccess[] paths;
+    private final TypedAccess[] paths;
     final boolean dynamic;
     boolean compiled;
 
     NestedReads(Schema schema, java.util.Map<String, Schema> types, boolean dynamic) {
       super(TestLanguage.current());
-      n = new JsonAccess(schema, types, 1, 0, 0);
-      d = new JsonAccess(schema, types, 1, 0, 1);
-      b = new JsonAccess(schema, types, 1, 0, 2);
-      paths = new JsonAccess[] {n, d, b};
+      n = new TypedAccess(schema, types, 1, 0, 0);
+      d = new TypedAccess(schema, types, 1, 0, 1);
+      b = new TypedAccess(schema, types, 1, 0, 2);
+      paths = new TypedAccess[] {n, d, b};
       this.dynamic = dynamic;
     }
 
     @Override
     public Object execute(VirtualFrame frame) {
-      var rows = (JsonRecord[]) frame.getArguments()[0];
+      var rows = (TypedRecord[]) frame.getArguments()[0];
       int count = (Integer) frame.getArguments()[1];
       long sum = 0;
       for (int i = 0; i < count; i++) {
@@ -353,14 +353,14 @@ final class CompiledReads {
     check(root.export.maxDepthSeen() == 1, "Export JSON stack depth");
   }
 
-  private static final class SummingSink implements dev.elide.truffledata.json.JsonSink {
+  private static final class SummingSink implements dev.elide.truffledata.tape.TapeSink {
     long sum;
 
     public void beginObject(long members) {
       sum += 1;
     }
 
-    public void key(dev.elide.truffledata.json.JsonText key) {
+    public void key(dev.elide.truffledata.tape.TapeText key) {
       sum += 1000;
     }
 
@@ -388,23 +388,23 @@ final class CompiledReads {
       sum += bits;
     }
 
-    public void decimalValue(dev.elide.truffledata.json.JsonText token) {
+    public void decimalValue(dev.elide.truffledata.tape.TapeText token) {
       sum += 7;
     }
 
-    public void stringValue(dev.elide.truffledata.json.JsonText text) {
+    public void stringValue(dev.elide.truffledata.tape.TapeText text) {
       sum += 11;
     }
   }
 
   private static final class ExportReads extends RootNode {
-    private final dev.elide.truffledata.json.JsonValue value;
+    private final dev.elide.truffledata.tape.TapeValue value;
     private final SummingSink sink = new SummingSink();
-    @Child dev.elide.truffledata.json.JsonExportNode export =
-        dev.elide.truffledata.json.JsonExportNode.create();
+    @Child dev.elide.truffledata.tape.TapeExportNode export =
+        dev.elide.truffledata.tape.TapeExportNode.create();
     boolean compiled;
 
-    ExportReads(dev.elide.truffledata.json.JsonValue value) {
+    ExportReads(dev.elide.truffledata.tape.TapeValue value) {
       super(TestLanguage.current());
       this.value = value;
     }
@@ -459,22 +459,22 @@ final class CompiledReads {
 
   private static final class GenericReads extends RootNode {
     @CompilerDirectives.CompilationFinal(dimensions = 1)
-    private final dev.elide.truffledata.json.JsonOwner[] owners;
+    private final dev.elide.truffledata.tape.TapeOwner[] owners;
 
     @CompilerDirectives.CompilationFinal(dimensions = 1)
-    private final dev.elide.truffledata.json.JsonValue[] n, d, b;
+    private final dev.elide.truffledata.tape.TapeValue[] n, d, b;
 
-    @Child private dev.elide.truffledata.json.JsonOwner.CheckOpenNode check =
-        dev.elide.truffledata.json.JsonOwner.CheckOpenNode.create();
+    @Child private dev.elide.truffledata.tape.TapeOwner.CheckOpenNode check =
+        dev.elide.truffledata.tape.TapeOwner.CheckOpenNode.create();
 
     boolean compiled;
 
     GenericReads(dev.elide.truffledata.json.JsonMessage[] messages) {
       super(TestLanguage.current());
       owners = messages;
-      n = new dev.elide.truffledata.json.JsonValue[messages.length];
-      d = new dev.elide.truffledata.json.JsonValue[messages.length];
-      b = new dev.elide.truffledata.json.JsonValue[messages.length];
+      n = new dev.elide.truffledata.tape.TapeValue[messages.length];
+      d = new dev.elide.truffledata.tape.TapeValue[messages.length];
+      b = new dev.elide.truffledata.tape.TapeValue[messages.length];
       for (int i = 0; i < messages.length; i++) {
         var root = messages[i].root();
         n[i] = root.member("n");
@@ -500,17 +500,17 @@ final class CompiledReads {
 
   private static final class Reads extends RootNode {
     @CompilerDirectives.CompilationFinal(dimensions = 1)
-    final JsonRecord @org.jspecify.annotations.Nullable [] constant;
+    final TypedRecord @org.jspecify.annotations.Nullable [] constant;
 
     boolean compiled;
     final boolean specialized, shared;
     @Child private ReadLongNode sharedLong = ReadLongNode.create();
     @Child private ReadDoubleNode sharedDouble = ReadDoubleNode.create();
     @Child private ReadBooleanNode sharedBoolean = ReadBooleanNode.create();
-    final JsonAccess n, d, b;
+    final TypedAccess n, d, b;
 
     Reads(
-        JsonRecord @org.jspecify.annotations.Nullable [] constant,
+        TypedRecord @org.jspecify.annotations.Nullable [] constant,
         Schema schema,
         boolean specialized,
         boolean shared) {
@@ -518,14 +518,14 @@ final class CompiledReads {
       this.constant = constant;
       this.specialized = specialized;
       this.shared = shared;
-      n = new JsonAccess(schema, 0);
-      d = new JsonAccess(schema, 1);
-      b = new JsonAccess(schema, 2);
+      n = new TypedAccess(schema, 0);
+      d = new TypedAccess(schema, 1);
+      b = new TypedAccess(schema, 2);
     }
 
     @Override
     public Object execute(VirtualFrame frame) {
-      var rows = constant == null ? (JsonRecord[]) frame.getArguments()[0] : constant;
+      var rows = constant == null ? (TypedRecord[]) frame.getArguments()[0] : constant;
       int count = (Integer) frame.getArguments()[1];
       long sum = 0;
       for (int i = 0; i < count; i++) {

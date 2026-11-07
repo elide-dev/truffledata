@@ -8,7 +8,7 @@ import com.oracle.truffle.api.nodes.LoopNode;
 import com.oracle.truffle.api.nodes.NodeUtil;
 import com.oracle.truffle.api.nodes.RootNode;
 import dev.elide.truffledata.json.JsonSvm;
-import dev.elide.truffledata.json.JsonValue;
+import dev.elide.truffledata.tape.TapeValue;
 import java.nio.charset.StandardCharsets;
 
 /** Compiled guest reads of members and indexed array elements, over live messages and snapshots. */
@@ -24,7 +24,7 @@ final class CompiledArrayReads {
     }
   }
 
-  private static void gate(String label, JsonValue root) {
+  private static void gate(String label, TapeValue root) {
     var reads = new Reads(root);
     var target = reads.getCallTarget();
     for (int i = 0; i < 200 && !reads.compiled; i++) target.call(100000);

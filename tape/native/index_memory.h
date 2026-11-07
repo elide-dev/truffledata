@@ -56,10 +56,4 @@ struct allocation_stats {
 };
 } // namespace truffledata::tape
 
-// JSON's names for the shared types until the Java/C++ rename (YAML plan Task 4) settles them.
-namespace truffledata::json {
-using tape::allocation_stats;
-using tape::index_memory;
-using tape::storage_limits;
-} // namespace truffledata::json
 #endif

@@ -1,4 +1,4 @@
-package dev.elide.truffledata.json;
+package dev.elide.truffledata.tape;
 
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.dsl.Cached;
@@ -21,11 +21,11 @@ import java.util.NoSuchElementException;
  * {@value #MAX_INTEGER_DIGITS} digits long, and fit no primitive type otherwise.
  */
 @ExportLibrary(InteropLibrary.class)
-public final class JsonValue implements TruffleObject {
-  private final JsonOwner owner;
+public final class TapeValue implements TruffleObject {
+  private final TapeOwner owner;
   private final long node;
 
-  JsonValue(JsonOwner owner, long node) {
+  TapeValue(TapeOwner owner, long node) {
     this.owner = owner;
     this.node = node;
   }
@@ -48,7 +48,7 @@ public final class JsonValue implements TruffleObject {
       case ValueTape.ARRAY -> Kind.ARRAY;
       case ValueTape.OBJECT -> Kind.OBJECT;
       case ValueTape.I64, ValueTape.U64, ValueTape.F64, ValueTape.DECIMAL -> Kind.NUMBER;
-      default -> throw new IllegalStateException("Unknown JSON node kind");
+      default -> throw new IllegalStateException("Unknown tape node kind");
     };
   }
 
@@ -78,7 +78,7 @@ public final class JsonValue implements TruffleObject {
   /** Exact lexical token; no bounded decimal or floating-point conversion. */
   @TruffleBoundary
   public String numberText() {
-    if (kind() != Kind.NUMBER) throw new IllegalStateException("Not a JSON number");
+    if (kind() != Kind.NUMBER) throw new IllegalStateException("Not a " + owner.format().name + " number");
     return owner.lexicalText(node);
   }
 
@@ -87,7 +87,8 @@ public final class JsonValue implements TruffleObject {
   public String rawText() {
     Kind kind = kind();
     if (kind != Kind.NUMBER && kind != Kind.STRING)
-      throw new IllegalStateException("JSON containers, booleans and null have no raw text");
+      throw new IllegalStateException(
+          owner.format().name + " containers, booleans and null have no raw text");
     return owner.lexicalText(node);
   }
 
@@ -95,40 +96,40 @@ public final class JsonValue implements TruffleObject {
   public long size() {
     Kind kind = kind();
     if (kind != Kind.ARRAY && kind != Kind.OBJECT)
-      throw new IllegalStateException("Not a JSON container");
+      throw new IllegalStateException("Not a " + owner.format().name + " container");
     return owner.tape.length(node);
   }
 
   /** Prepare and retain a key with ValueTape.Utf8Key.of for repeated lookup. */
   @TruffleBoundary
-  public JsonValue member(ValueTape.Utf8Key key) {
+  public TapeValue member(ValueTape.Utf8Key key) {
     owner.check();
     long found = owner.tape.find(node, key);
-    if (found < 0) throw new NoSuchElementException("Missing JSON member");
-    return new JsonValue(owner, found);
+    if (found < 0) throw new NoSuchElementException("Missing " + owner.format().name + " member");
+    return new TapeValue(owner, owner.resolve(found));
   }
 
   @TruffleBoundary
-  public JsonValue member(String key) {
-    return member(JsonKey.of(key));
+  public TapeValue member(String key) {
+    return member(TapeKey.of(key));
   }
 
   /** Member by prepared key: hash-first lookup, a directory for objects above 32 members. */
   @TruffleBoundary
-  public JsonValue member(JsonKey key) {
-    if (kind() != Kind.OBJECT) throw new IllegalStateException("Not a JSON object");
+  public TapeValue member(TapeKey key) {
+    if (kind() != Kind.OBJECT) throw new IllegalStateException("Not a " + owner.format().name + " object");
     long found = scan(owner, node, key);
-    if (found < 0) throw new NoSuchElementException("Missing JSON member");
-    return new JsonValue(owner, found);
+    if (found < 0) throw new NoSuchElementException("Missing " + owner.format().name + " member");
+    return new TapeValue(owner, owner.resolve(found));
   }
 
-  /** Single-pass export of this subtree; see {@link JsonSink} and {@link JsonExportNode}. */
+  /** Single-pass export of this subtree; see {@link TapeSink} and {@link TapeExportNode}. */
   @TruffleBoundary
-  public void export(JsonSink sink) {
-    JsonExportNode.walk(owner, node, sink);
+  public void export(TapeSink sink) {
+    TapeExportNode.walk(owner, node, sink);
   }
 
-  JsonOwner owner() {
+  TapeOwner owner() {
     return owner;
   }
 
@@ -136,52 +137,55 @@ public final class JsonValue implements TruffleObject {
     return node;
   }
 
-    /** Independently owned immutable copy of this subtree, re-based to node 0. */
+  /** Independently owned immutable copy of this subtree, re-based to node 0. */
   @TruffleBoundary
-  public JsonSnapshot snapshot() {
+  public TapeSnapshot snapshot() {
     return owner.snapshot(node);
   }
 
   /** Key of the i-th member in source order. */
   @TruffleBoundary
-  public JsonValue keyAt(long index) {
-    if (kind() != Kind.OBJECT) throw new IllegalStateException("Not a JSON object");
+  public TapeValue keyAt(long index) {
+    if (kind() != Kind.OBJECT) throw new IllegalStateException("Not a " + owner.format().name + " object");
     long count = owner.tape.length(node);
-    if (index < 0 || index >= count) throw new IndexOutOfBoundsException("JSON member index");
+    if (index < 0 || index >= count) throw new IndexOutOfBoundsException(owner.format().name + " member index");
     long key = owner.tape.first(node);
     for (long i = 0; i < index; ++i) key = owner.tape.next(key + 1);
-    return new JsonValue(owner, key);
+    return new TapeValue(owner, key);
   }
 
   /** Value of the i-th member in source order. */
   @TruffleBoundary
-  public JsonValue memberAt(long index) {
-    JsonValue key = keyAt(index);
-    return new JsonValue(owner, key.node + 1);
+  public TapeValue memberAt(long index) {
+    TapeValue key = keyAt(index);
+    return new TapeValue(owner, owner.resolve(key.node + 1));
   }
 
   /** Random access: small arrays are walked; larger ones use an index cached by the owner. */
   @TruffleBoundary
-  public JsonValue element(long index) {
-    if (kind() != Kind.ARRAY) throw new IllegalStateException("Not a JSON array");
-    return new JsonValue(owner, elementNode(owner, node, index));
+  public TapeValue element(long index) {
+    if (kind() != Kind.ARRAY) throw new IllegalStateException("Not a " + owner.format().name + " array");
+    return new TapeValue(owner, elementNode(owner, node, index));
   }
 
-  /** Child node of an array; static so compiled interop reads never pass a fresh view to a boundary. */
+  /**
+   * Child node of an array, alias-resolved; static so compiled interop reads never pass a fresh
+   * view to a boundary.
+   */
   @TruffleBoundary
-  private static long elementNode(JsonOwner owner, long array, long index) {
+  private static long elementNode(TapeOwner owner, long array, long index) {
     long count = owner.tape.length(array);
-    if (index < 0 || index >= count) throw new IndexOutOfBoundsException("JSON array index");
-    if (count > JsonOwner.INDEX_THRESHOLD) return owner.arrayIndex(array)[(int) index];
+    if (index < 0 || index >= count) throw new IndexOutOfBoundsException(owner.format().name + " array index");
+    if (count > TapeOwner.INDEX_THRESHOLD) return owner.resolve(owner.arrayIndex(array)[(int) index]);
     long child = owner.tape.first(array);
     for (long i = 0; i < index; ++i) child = owner.tape.next(child);
-    return child;
+    return owner.resolve(child);
   }
 
   /** Sequential traversal in source order without building an index. */
   @TruffleBoundary
-  public Iterable<JsonValue> elements() {
-    if (kind() != Kind.ARRAY) throw new IllegalStateException("Not a JSON array");
+  public Iterable<TapeValue> elements() {
+    if (kind() != Kind.ARRAY) throw new IllegalStateException("Not a " + owner.format().name + " array");
     return () -> {
       // The Iterable may outlive its owner or cross threads: check before touching the tape.
       owner.check();
@@ -195,10 +199,10 @@ public final class JsonValue implements TruffleObject {
           }
 
           @Override
-          public JsonValue next() {
+          public TapeValue next() {
             owner.check();
             if (remaining == 0) throw new java.util.NoSuchElementException();
-            JsonValue value = new JsonValue(owner, child);
+            TapeValue value = new TapeValue(owner, owner.resolve(child));
             if (--remaining > 0) child = owner.tape.next(child);
             return value;
           }
@@ -235,20 +239,20 @@ public final class JsonValue implements TruffleObject {
 
   /** Encoded member name, or null when the name has an unpaired surrogate and matches no key. */
   @TruffleBoundary
-  static @org.jspecify.annotations.Nullable JsonKey keyOf(String name) {
+  static @org.jspecify.annotations.Nullable TapeKey keyOf(String name) {
     try {
-      return JsonKey.of(name);
+      return TapeKey.of(name);
     } catch (IllegalArgumentException unpaired) {
       return null;
     }
   }
 
   /**
-   * Member value node, or -1; checks the receiver inline so the view itself never escapes. A hinted
-   * hit needs no kind check: the side table names this node as the key's own object, so the
-   * receiver is an object. Everything else checks the kind first.
+   * Alias-resolved member value node, or -1; checks the receiver inline so the view itself never
+   * escapes. A hinted hit needs no kind check: the side table names this node as the key's own
+   * object, so the receiver is an object. Everything else checks the kind first.
    */
-  long memberNode(@org.jspecify.annotations.Nullable JsonKey key, int[] hint) {
+  long memberNode(@org.jspecify.annotations.Nullable TapeKey key, int[] hint) {
     owner.check();
     if (key == null) return -1;
     return memberNode(owner, node, key, hint);
@@ -261,21 +265,28 @@ public final class JsonValue implements TruffleObject {
    * the node's tag, length and inline bytes; never by owner identity, so a stale hint only costs a
    * miss. The hit path is four word loads and compares; misses (and keys longer than 16 bytes) scan
    * behind a static boundary and update the hint.
+   *
+   * <p>Aliases: a miss resolves the value it found inside its boundary, so reads of formats without
+   * aliases compile with no resolution code at all. A hit returns the value node unresolved, so it
+   * must never land on an alias: tapes of formats with aliases reject a key whose value is an alias
+   * in {@link TapeSource#keyNodeEquals}, and misses on such owners never teach a hint.
    */
-  static long memberNode(JsonOwner owner, long object, JsonKey key, int[] hint) {
+  static long memberNode(TapeOwner owner, long object, TapeKey key, int[] hint) {
     int offset = hint[0];
     if (offset != 0 && key.inline() && owner.keyMatches(object, offset, key))
       return object + offset + 1;
     return miss(owner, object, key, hint);
   }
 
-  /** Kind check, scan and hint update of a missed lookup: one call in compiled code. */
+  /** Kind check, scan, hint update and alias resolution of a missed lookup: one call in compiled code. */
   @TruffleBoundary
-  private static long miss(JsonOwner owner, long object, JsonKey key, int[] hint) {
+  private static long miss(TapeOwner owner, long object, TapeKey key, int[] hint) {
     if (owner.tag(object) != ValueTape.OBJECT) return -1;
     long found = scan(owner, object, key);
-    if (found >= 0 && found - 1 - object <= 0xffff) hint[0] = (int) (found - 1 - object);
-    return found;
+    if (found < 0) return found;
+    boolean aliases = owner.format().hasAliases();
+    if (!aliases && found - 1 - object <= 0xffff) hint[0] = (int) (found - 1 - object);
+    return aliases ? owner.resolve(found) : found;
   }
 
   /** A call site's member-position hint, cached with its key; 0 means no hint yet. */
@@ -285,9 +296,9 @@ public final class JsonValue implements TruffleObject {
 
   /** Value node of {@code key} in the object, or -1: hash-first scan, or the cached directory. */
   @TruffleBoundary
-  static long scan(JsonOwner owner, long object, JsonKey key) {
+  static long scan(TapeOwner owner, long object, TapeKey key) {
     long end = owner.tape.next(object);
-    if (owner.tape.length(object) > JsonOwner.DIRECTORY_THRESHOLD) {
+    if (owner.tape.length(object) > TapeOwner.DIRECTORY_THRESHOLD) {
       int[] table = owner.directory(object, end);
       int mask = table.length - 1;
       for (int slot = key.hash & mask; table[slot] != 0; slot = (slot + 1) & mask) {
@@ -308,16 +319,16 @@ public final class JsonValue implements TruffleObject {
   static final class IsMemberReadable {
     @Specialization(guards = "name == cachedName", limit = "3")
     static boolean cached(
-        JsonValue receiver,
+        TapeValue receiver,
         String name,
         @Cached(value = "name", neverDefault = true) String cachedName,
-        @Cached("keyOf(name)") @org.jspecify.annotations.Nullable JsonKey key,
+        @Cached("keyOf(name)") @org.jspecify.annotations.Nullable TapeKey key,
         @Cached(value = "newHint()", dimensions = 0, neverDefault = true) int[] hint) {
       return receiver.memberNode(key, hint) >= 0;
     }
 
     @Specialization(replaces = "cached")
-    static boolean generic(JsonValue receiver, String name) {
+    static boolean generic(TapeValue receiver, String name) {
       return receiver.memberNode(keyOf(name), new int[1]) >= 0;
     }
   }
@@ -326,24 +337,24 @@ public final class JsonValue implements TruffleObject {
   static final class ReadMember {
     @Specialization(guards = "name == cachedName", limit = "3")
     static Object cached(
-        JsonValue receiver,
+        TapeValue receiver,
         String name,
         @Cached(value = "name", neverDefault = true) String cachedName,
-        @Cached("keyOf(name)") @org.jspecify.annotations.Nullable JsonKey key,
+        @Cached("keyOf(name)") @org.jspecify.annotations.Nullable TapeKey key,
         @Cached(value = "newHint()", dimensions = 0, neverDefault = true) int[] hint)
         throws UnknownIdentifierException {
       return receiver.readFound(receiver.memberNode(key, hint), name);
     }
 
     @Specialization(replaces = "cached")
-    static Object generic(JsonValue receiver, String name) throws UnknownIdentifierException {
+    static Object generic(TapeValue receiver, String name) throws UnknownIdentifierException {
       return receiver.readFound(receiver.memberNode(keyOf(name), new int[1]), name);
     }
   }
 
   private Object readFound(long found, String name) throws UnknownIdentifierException {
     if (found < 0) throw unknown(name);
-    return new JsonValue(owner, found);
+    return new TapeValue(owner, found);
   }
 
   @TruffleBoundary
@@ -371,7 +382,7 @@ public final class JsonValue implements TruffleObject {
   Object readArrayElement(long index) throws InvalidArrayIndexException, UnsupportedMessageException {
     if (tag() != ValueTape.ARRAY) throw UnsupportedMessageException.create();
     if (index < 0 || index >= owner.tape.length(node)) throw InvalidArrayIndexException.create(index);
-    return new JsonValue(owner, elementNode(owner, node, index));
+    return new TapeValue(owner, elementNode(owner, node, index));
   }
 
   // ---- InteropLibrary: scalars ----
@@ -447,7 +458,7 @@ public final class JsonValue implements TruffleObject {
 
   /** Exact decimal of a DECIMAL token; null for tokens no bounded decimal can hold. */
   @TruffleBoundary
-  private static @org.jspecify.annotations.Nullable BigDecimal decimal(JsonOwner owner, long node) {
+  private static @org.jspecify.annotations.Nullable BigDecimal decimal(TapeOwner owner, long node) {
     // BigDecimal parsing is superlinear in digits: tokens past the bound fit no type and are never
     // parsed here (numberText still returns them exactly).
     if ((int) owner.lexical(node) > MAX_DECIMAL_TOKEN_BYTES) return null;
@@ -460,7 +471,7 @@ public final class JsonValue implements TruffleObject {
 
   /** Exact integer when the number is integral and in range, else null (also for non-numbers). */
   @TruffleBoundary
-  private static @org.jspecify.annotations.Nullable BigInteger exactInteger(JsonOwner owner, long node) {
+  private static @org.jspecify.annotations.Nullable BigInteger exactInteger(TapeOwner owner, long node) {
     return switch (owner.tag(node)) {
       case ValueTape.I64 -> BigInteger.valueOf(owner.tape.signedValue(node));
       case ValueTape.U64 -> {
@@ -483,7 +494,7 @@ public final class JsonValue implements TruffleObject {
 
   /** Signed value within [min, max] when the number is an exact integer there. */
   @TruffleBoundary
-  private static boolean fitsSigned(JsonOwner owner, long node, long min, long max) {
+  private static boolean fitsSigned(TapeOwner owner, long node, long min, long max) {
     BigInteger exact = exactInteger(owner, node);
     return exact != null && exact.bitLength() < 64 && exact.longValue() >= min && exact.longValue() <= max;
   }
@@ -499,7 +510,7 @@ public final class JsonValue implements TruffleObject {
 
   /** Binary64 value when exactly representable, else NaN (also for non-numbers). */
   @TruffleBoundary
-  private static double exactDouble(JsonOwner owner, long node) {
+  private static double exactDouble(TapeOwner owner, long node) {
     return switch (owner.tag(node)) {
       case ValueTape.F64 -> owner.tape.doubleValue(node);
       case ValueTape.I64 -> {
@@ -591,7 +602,7 @@ public final class JsonValue implements TruffleObject {
   }
 
   @TruffleBoundary
-  private static long exactLong(JsonOwner owner, long node) throws UnsupportedMessageException {
+  private static long exactLong(TapeOwner owner, long node) throws UnsupportedMessageException {
     BigInteger exact = exactInteger(owner, node);
     if (exact == null || exact.bitLength() >= 64) throw UnsupportedMessageException.create();
     return exact.longValue();

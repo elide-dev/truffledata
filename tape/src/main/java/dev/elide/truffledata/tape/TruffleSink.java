@@ -1,4 +1,4 @@
-package dev.elide.truffledata.json;
+package dev.elide.truffledata.tape;
 
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.strings.TruffleString;
@@ -13,16 +13,16 @@ import org.jspecify.annotations.Nullable;
 /**
  * Reference sink for Truffle guests: builds {@code LinkedHashMap<TruffleString,Object>} in source
  * member order, {@code ArrayList<Object>}, UTF-16 {@link TruffleString} keys and strings, and the
- * same number and literal objects as {@link JavaSink}. A guest {@code JSON.parse} sink (GraalJS
+ * same number and literal objects as {@link JavaSink}. A guest {@code JSON.parse} or {@code YAML.parse} sink (GraalJS
  * objects instead of maps) follows the same shape. One sink builds one tree.
  *
- * <p>The sink asks for the session's text arena ({@link #sharedText()}): a {@link JsonSession}
+ * <p>The sink asks for the session's text arena ({@link #sharedText()}): a {@link TapeSession}
  * parse then writes every string once, natively, into a per-document array, and each string value
  * is a {@code TruffleString} over that array with no copy (strings of 64 KiB or more are copied, so
  * a small retained string never pins a large document). Member names come from a {@link KeyCache},
  * copied once and reused across documents.
  */
-public final class TruffleSink implements JsonSink {
+public final class TruffleSink implements TapeSink {
   private final ArrayList<Object> open = new ArrayList<>();
   private final KeyCache keys;
   private @Nullable TruffleString key;
@@ -51,7 +51,7 @@ public final class TruffleSink implements JsonSink {
     }
 
     @TruffleBoundary
-    TruffleString intern(JsonText key) {
+    TruffleString intern(TapeText key) {
       int mask = names.length - 1;
       int slot = key.hash() & mask;
       for (TruffleString name; (name = names[slot]) != null; slot = (slot + 1) & mask)
@@ -77,7 +77,7 @@ public final class TruffleSink implements JsonSink {
 
   /** The exported tree; throws until one complete value has been received. */
   public @Nullable Object result() {
-    if (!done || !open.isEmpty()) throw new IllegalStateException("JSON export incomplete");
+    if (!done || !open.isEmpty()) throw new IllegalStateException("Tape export incomplete");
     return result;
   }
 
@@ -85,12 +85,12 @@ public final class TruffleSink implements JsonSink {
   @TruffleBoundary
   private void add(@Nullable Object value) {
     if (open.isEmpty()) {
-      if (done) throw new IllegalStateException("JSON sink already holds a value");
+      if (done) throw new IllegalStateException("Sink already holds a value");
       result = value;
       done = true;
     } else if (open.get(open.size() - 1) instanceof Map<?, ?> map) {
       TruffleString name = key;
-      if (name == null) throw new IllegalStateException("JSON member value without a key");
+      if (name == null) throw new IllegalStateException("Member value without a key");
       ((Map<TruffleString, @Nullable Object>) map).put(name, value);
       key = null;
     } else {
@@ -121,16 +121,16 @@ public final class TruffleSink implements JsonSink {
 
   @Override
   @TruffleBoundary
-  public void key(JsonText name) {
+  public void key(TapeText name) {
     if (key != null || open.isEmpty() || !(open.get(open.size() - 1) instanceof Map))
-      throw new IllegalStateException("JSON key outside a member position");
+      throw new IllegalStateException("Key outside a member position");
     key = keys.intern(name);
   }
 
   @Override
   @TruffleBoundary
   public void end() {
-    if (open.isEmpty() || key != null) throw new IllegalStateException("Unbalanced JSON container end");
+    if (open.isEmpty() || key != null) throw new IllegalStateException("Unbalanced container end");
     open.remove(open.size() - 1);
   }
 
@@ -163,13 +163,13 @@ public final class TruffleSink implements JsonSink {
   /** Throws {@link NumberFormatException} for exponents beyond {@code BigDecimal}'s scale range. */
   @Override
   @TruffleBoundary
-  public void decimalValue(JsonText token) {
+  public void decimalValue(TapeText token) {
     add(new BigDecimal(token.toJavaString()));
   }
 
   @Override
   @TruffleBoundary
-  public void stringValue(JsonText text) {
+  public void stringValue(TapeText text) {
     add(text.toTruffleString(TruffleString.Encoding.UTF_16));
   }
 }

@@ -243,9 +243,4 @@ public:
 };
 } // namespace truffledata::tape
 
-// JSON's names for the shared types until the Java/C++ rename (YAML plan Task 4) settles them.
-namespace truffledata::json {
-using tape::builder_writer;
-using tape::tape_writer;
-} // namespace truffledata::json
 #endif

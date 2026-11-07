@@ -1,4 +1,4 @@
-package dev.elide.truffledata.json;
+package dev.elide.truffledata.tape;
 
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.interop.InteropLibrary;
@@ -14,15 +14,15 @@ import java.util.ArrayList;
  * owner; {@link #snapshot()} detaches an owned immutable copy.
  */
 @ExportLibrary(InteropLibrary.class)
-public final class JsonArray implements BorrowedArray {
-  final JsonTypedOwner owner;
+public final class TypedArray implements BorrowedArray {
+  final TypedOwner owner;
   // Element contract: a scalar kind or RECORD.
   final Field element;
   // Slot index (scalar elements) or record-table index (record elements) of element 0.
   final long first;
   final int count;
 
-  JsonArray(JsonTypedOwner owner, Field element, long first, int count) {
+  TypedArray(TypedOwner owner, Field element, long first, int count) {
     this.owner = owner;
     this.element = element;
     this.first = first;
@@ -43,7 +43,7 @@ public final class JsonArray implements BorrowedArray {
   private long slot(int index, Field.Kind kind) {
     owner.check();
     if (index < 0 || index >= count) throw new IndexOutOfBoundsException(index);
-    if (element.kind() != kind) throw new IllegalArgumentException("JSON element kind mismatch");
+    if (element.kind() != kind) throw new IllegalArgumentException("Element kind mismatch");
     return first + index;
   }
 
@@ -64,15 +64,15 @@ public final class JsonArray implements BorrowedArray {
   }
 
   /** Record element; shares this array's owner. */
-  public JsonRecord record(int index) {
+  public TypedRecord record(int index) {
     owner.check();
     if (index < 0 || index >= count) throw new IndexOutOfBoundsException(index);
     if (element.kind() != Field.Kind.RECORD)
-      throw new IllegalArgumentException("JSON element kind mismatch");
-    return new JsonRecord(owner, Math.toIntExact(first + index));
+      throw new IllegalArgumentException("Element kind mismatch");
+    return new TypedRecord(owner, Math.toIntExact(first + index));
   }
 
-  /** Normalized element value: Long, Double, Boolean, String, ExactNumber or JsonRecord. */
+  /** Normalized element value: Long, Double, Boolean, String, ExactNumber or TypedRecord. */
   @Override
   public Object element(int index) {
     return switch (element.kind()) {
@@ -81,9 +81,9 @@ public final class JsonArray implements BorrowedArray {
       case BOOLEAN -> booleanValue(index);
       case STRING -> stringValue(index);
       case EXACT ->
-          Values.normalize(JsonTypedOwner.unsigned(owner.bits(slot(index, Field.Kind.EXACT))));
+          Values.normalize(TypedOwner.unsigned(owner.bits(slot(index, Field.Kind.EXACT))));
       case RECORD -> record(index);
-      default -> throw new IllegalStateException("Unsupported JSON element kind");
+      default -> throw new IllegalStateException("Unsupported element kind");
     };
   }
 
@@ -98,7 +98,7 @@ public final class JsonArray implements BorrowedArray {
       var rows = new ArrayList<Object[]>(count);
       Schema schema = record(0).schema();
       for (int i = 0; i < count; i++) rows.add(record(i).snapshotValues());
-      Batch batch = Batch.copyOf(schema, rows, JsonRecord.SNAPSHOT_LIMITS);
+      Batch batch = Batch.copyOf(schema, rows, TypedRecord.SNAPSHOT_LIMITS);
       for (int i = 0; i < count; i++) values[i] = batch.row(i);
     } else {
       for (int i = 0; i < count; i++) values[i] = element(i);

@@ -9,19 +9,19 @@ import com.oracle.truffle.runtime.OptimizedCallTarget;
 import com.sun.management.ThreadMXBean;
 import dev.elide.truffledata.Field;
 import dev.elide.truffledata.Schema;
-import dev.elide.truffledata.json.JavaSink;
-import dev.elide.truffledata.json.TruffleSink;
-import dev.elide.truffledata.json.JsonAccess;
-import dev.elide.truffledata.json.JsonExportNode;
 import dev.elide.truffledata.json.JsonMessage;
 import dev.elide.truffledata.json.JsonPlan;
-import dev.elide.truffledata.json.JsonRecord;
 import dev.elide.truffledata.json.JsonSession;
-import dev.elide.truffledata.json.JsonSnapshot;
 import dev.elide.truffledata.json.JsonStream;
 import dev.elide.truffledata.json.JsonStreamOptions;
 import dev.elide.truffledata.json.JsonSvm;
-import dev.elide.truffledata.json.JsonValue;
+import dev.elide.truffledata.tape.JavaSink;
+import dev.elide.truffledata.tape.TapeExportNode;
+import dev.elide.truffledata.tape.TapeSnapshot;
+import dev.elide.truffledata.tape.TapeValue;
+import dev.elide.truffledata.tape.TruffleSink;
+import dev.elide.truffledata.tape.TypedAccess;
+import dev.elide.truffledata.tape.TypedRecord;
 import java.io.ByteArrayInputStream;
 import java.io.InputStreamReader;
 import java.lang.management.ManagementFactory;
@@ -192,7 +192,7 @@ public final class JsonComparison {
             };
         sample("json-scalar", engine, stage, memory, smoke, target, rows, operation, expected);
       } finally {
-        for (Object row : rows) if (row instanceof JsonRecord record) record.close();
+        for (Object row : rows) if (row instanceof TypedRecord record) record.close();
         context.leave();
       }
     }
@@ -369,7 +369,7 @@ public final class JsonComparison {
       throw new AssertionError("Read helper did not execute as compiled guest code");
   }
 
-  private static long nativeRead(JsonRecord r) {
+  private static long nativeRead(TypedRecord r) {
     return r.longValue(0) + (long) r.doubleValue(1) + (r.booleanValue(2) ? 1 : 0);
   }
 
@@ -381,15 +381,15 @@ public final class JsonComparison {
     private final boolean nativeEngine;
 
     private final boolean specialized;
-    private final JsonAccess n, d, b;
+    private final TypedAccess n, d, b;
 
     Reads(boolean nativeEngine, boolean specialized, Schema schema) {
       super(ComparisonLanguage.current());
       this.nativeEngine = nativeEngine;
       this.specialized = specialized;
-      n = new JsonAccess(schema, 0);
-      d = new JsonAccess(schema, 1);
-      b = new JsonAccess(schema, 2);
+      n = new TypedAccess(schema, 0);
+      d = new TypedAccess(schema, 1);
+      b = new TypedAccess(schema, 2);
     }
 
     @Override
@@ -397,7 +397,7 @@ public final class JsonComparison {
       return read((Object[]) frame.getArguments()[0], (Integer) frame.getArguments()[1]);
     }
 
-    long nativeValue(JsonRecord row) {
+    long nativeValue(TypedRecord row) {
       return specialized
           ? n.longValue(row) + (long) d.doubleValue(row) + (b.booleanValue(row) ? 1 : 0)
           : nativeRead(row);
@@ -407,7 +407,7 @@ public final class JsonComparison {
       long sum = 0;
       for (int i = 0; i < ROWS; i++) {
         Object row = rows[(i + rotation) & (ROWS - 1)];
-        sum += nativeEngine ? nativeValue((JsonRecord) row) : stockRead((Stock) row);
+        sum += nativeEngine ? nativeValue((TypedRecord) row) : stockRead((Stock) row);
       }
       return sum | (CompilerDirectives.inCompiledCode() ? COMPILED_READ : 0);
     }
@@ -432,7 +432,7 @@ public final class JsonComparison {
     private final JavaSink.KeyCache keys = new JavaSink.KeyCache();
     private final TruffleSink.KeyCache truffleKeys = new TruffleSink.KeyCache();
     @Child private JsonFixture.InteropReader reader = new JsonFixture.InteropReader();
-    @Child private JsonExportNode export = JsonExportNode.create();
+    @Child private TapeExportNode export = TapeExportNode.create();
 
     GenericReads(String engine, int mode, @Nullable JsonSession session) {
       super(ComparisonLanguage.current());
@@ -474,7 +474,7 @@ public final class JsonComparison {
             sum += JsonFixture.javaRead(tree);
           }
         } else {
-          JsonValue root;
+          TapeValue root;
           while ((root = open.next()) != null) sum += reader.read(root);
         }
       }
@@ -515,12 +515,12 @@ public final class JsonComparison {
           {
             // Export the retained index into fresh host objects, as a JSON.parse sink would.
             JavaSink sink = new JavaSink(keys);
-            export.execute((JsonValue) doc, sink);
+            export.execute((TapeValue) doc, sink);
             return JsonFixture.javaRead(Objects.requireNonNull(sink.result()));
           }
         case WALK:
           counting.sum = 0;
-          export.execute((JsonValue) doc, counting);
+          export.execute((TapeValue) doc, counting);
           return counting.sum;
         default:
           return reader.read(doc);
@@ -551,7 +551,7 @@ public final class JsonComparison {
       }
       JsonMessage message = session.decode(input);
       if (mode == SNAPSHOT) {
-        JsonSnapshot snapshot;
+        TapeSnapshot snapshot;
         try {
           snapshot = message.snapshot();
         } finally {

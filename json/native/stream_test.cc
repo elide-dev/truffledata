@@ -409,7 +409,7 @@ void allocations() {
   // Every upstream allocation of a stream run can fail: the failure is reported (by feed's stream
   // or the document's decode) and everything is freed.
   auto run = [&](counting_memory& memory) {
-    session s(myna::value_limits{}, truffledata::json::storage_limits{}, &memory);
+    session s(myna::value_limits{}, truffledata::tape::storage_limits{}, &memory);
     stream st(s, 4096, 4096);
     size_t at = 0, documents = 0;
     session::retained* kept = nullptr;
@@ -446,7 +446,7 @@ void allocations() {
   corpus big = make_corpus(10000);
   counting_memory steady;
   {
-    session s(myna::value_limits{}, truffledata::json::storage_limits{}, &steady);
+    session s(myna::value_limits{}, truffledata::tape::storage_limits{}, &steady);
     stream st(s, 1 << 20, 1 << 20);
     size_t at = 0, documents = 0, calls_after_warmup = 0;
     session::document_view d{};

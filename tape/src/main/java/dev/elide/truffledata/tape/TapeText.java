@@ -1,4 +1,4 @@
-package dev.elide.truffledata.json;
+package dev.elide.truffledata.tape;
 
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.strings.TruffleString;
@@ -7,13 +7,13 @@ import java.nio.charset.StandardCharsets;
 import org.jspecify.annotations.Nullable;
 
 /**
- * Reusable cursor over the key, string or decimal token a {@link JsonSink} event receives. One
+ * Reusable cursor over the key, string or decimal token a {@link TapeSink} event receives. One
  * cursor serves a whole export and is rebound per event, so an export creates no view per string.
  * It is valid only during the event that passed it: afterwards every method throws {@link
- * IllegalStateException}. Call {@link #view()} for a {@link JsonValue} that lives as long as its
+ * IllegalStateException}. Call {@link #view()} for a {@link TapeValue} that lives as long as its
  * owner.
  */
-public final class JsonText {
+public final class TapeText {
   /**
    * Non-ASCII strings at least this long materialize through the tape's bulk path (simdutf on
    * SVM, elide-dev/myna#49); shorter and ASCII strings decode from the cursor's scratch buffer.
@@ -24,28 +24,28 @@ public final class JsonText {
   private static final int MAX_SCRATCH = 4096;
 
   // The owner exports pin; a session rebinds its cursor to each borrowed document.
-  private JsonOwner owner;
+  private TapeOwner owner;
   private long node = -1;
   // Open containers of the export walk: exclusive end node, sign bit set for objects.
-  final long[] ends = new long[JsonExportNode.MAX_DEPTH];
+  final long[] ends = new long[TapeExportNode.MAX_DEPTH];
   private byte[] scratch = EMPTY;
   // Text arena of the session parse this cursor serves (Task D2), else null.
-  private @Nullable JsonTextArena arena;
+  private @Nullable TapeTextArena arena;
 
   private static final byte[] EMPTY = new byte[0];
 
-  JsonText(JsonOwner owner) {
+  TapeText(TapeOwner owner) {
     this.owner = owner;
   }
 
   /** Rebinds a session's cursor to its next borrowed document. */
-  void rebind(JsonOwner next) {
+  void rebind(TapeOwner next) {
     owner = next;
     node = -1;
   }
 
   /** Attaches the session's text arena for one borrowed parse, or detaches it (null). */
-  void arena(@Nullable JsonTextArena text) {
+  void arena(@Nullable TapeTextArena text) {
     arena = text;
   }
 
@@ -59,7 +59,7 @@ public final class JsonText {
 
   private long node() {
     long bound = node;
-    if (bound < 0) throw new IllegalStateException("JSON text used outside its sink event");
+    if (bound < 0) throw new IllegalStateException("Tape text used outside its sink event");
     owner.check();
     return bound;
   }
@@ -109,7 +109,7 @@ public final class JsonText {
 
   /**
    * The text as a {@link TruffleString} in {@code encoding}. In a session parse whose sink asked
-   * for {@linkplain JsonSink#sharedText() shared text}, a string is built over the document's text
+   * for {@linkplain TapeSink#sharedText() shared text}, a string is built over the document's text
    * arena without a copy (Latin-1 or UTF-16 as written natively, switched to {@code encoding};
    * strings of 64 KiB or more are copied). Otherwise: one copy of the decoded UTF-8 bytes,
    * transcoded only when {@code encoding} is not UTF-8 and the text is not ASCII.
@@ -119,7 +119,7 @@ public final class JsonText {
     long at = node();
     if (owner.tag(at) == ValueTape.DECIMAL)
       return TruffleString.fromJavaStringUncached(owner.lexicalText(at), encoding);
-    JsonTextArena text = arena;
+    TapeTextArena text = arena;
     if (text != null) return text.string(at, encoding);
     byte[] bytes = new byte[Math.toIntExact(owner.tape.length(at))];
     owner.tape.copyStringUtf8(at, bytes, 0);
@@ -141,7 +141,7 @@ public final class JsonText {
   }
 
   /** A view of the current node that stays valid while its owner is open. */
-  public JsonValue view() {
-    return new JsonValue(owner, node());
+  public TapeValue view() {
+    return new TapeValue(owner, node());
   }
 }

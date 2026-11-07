@@ -1,4 +1,4 @@
-package dev.elide.truffledata.json;
+package dev.elide.truffledata.tape;
 
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
@@ -12,22 +12,22 @@ import java.util.List;
 
 /**
  * One record entry of a typed result: validated slots with allocation-free primitive reads. Every
- * record and array of a result shares one {@link JsonTypedOwner}; closing any record closes that
+ * record and array of a result shares one {@link TypedOwner}; closing any record closes that
  * owner and invalidates all of them. {@link #snapshot()} detaches an owned immutable copy.
  */
 @ExportLibrary(DataLibrary.class)
-public final class JsonRecord extends AbstractRow implements AutoCloseable {
+public final class TypedRecord extends AbstractRow implements AutoCloseable {
   /** Snapshot budgets: typed results are already bounded by the native input and index caps. */
   static final Limits SNAPSHOT_LIMITS = new Limits(Integer.MAX_VALUE, 64, Long.MAX_VALUE, Long.MAX_VALUE);
 
-  final JsonTypedOwner owner;
+  final TypedOwner owner;
   final int entry;
   // Immutable copies of the native entry, read once while the owner was open.
   private final long base;
   private final long present;
   private final long nulls;
 
-  JsonRecord(JsonTypedOwner owner, int entry) {
+  TypedRecord(TypedOwner owner, int entry) {
     super(owner.schemas[owner.plan(entry)]);
     this.owner = owner;
     this.entry = entry;
@@ -37,7 +37,7 @@ public final class JsonRecord extends AbstractRow implements AutoCloseable {
   }
 
   /** The result owner shared by every record and array of this decode. */
-  public JsonTypedOwner owner() {
+  public TypedOwner owner() {
     return owner;
   }
 
@@ -61,15 +61,15 @@ public final class JsonRecord extends AbstractRow implements AutoCloseable {
       case FLOAT64 -> doubleValue(index);
       case BOOLEAN -> booleanValue(index);
       case STRING -> stringValue(index);
-      case EXACT -> Values.normalize(JsonTypedOwner.unsigned(slotBits(index, Field.Kind.EXACT)));
+      case EXACT -> Values.normalize(TypedOwner.unsigned(slotBits(index, Field.Kind.EXACT)));
       case RECORD -> record(index);
       case ARRAY -> array(index);
-      default -> throw new IllegalStateException("Unsupported JSON typed kind");
+      default -> throw new IllegalStateException("Unsupported typed kind");
     };
   }
 
-  static JsonAccess access(Schema schema, int index) {
-    return new JsonAccess(schema, index);
+  static TypedAccess access(Schema schema, int index) {
+    return new TypedAccess(schema, index);
   }
 
   @ExportMessage
@@ -82,16 +82,16 @@ public final class JsonRecord extends AbstractRow implements AutoCloseable {
         },
         limit = "3")
     static long cached(
-        JsonRecord row,
+        TypedRecord row,
         int index,
         @Cached("row.getSchema()") Schema schema,
         @Cached("index") int cachedIndex,
-        @Cached("access(schema, cachedIndex)") JsonAccess binding) {
+        @Cached("access(schema, cachedIndex)") TypedAccess binding) {
       return binding.longValue(row);
     }
 
     @Specialization(replaces = "cached")
-    static long generic(JsonRecord row, int index) throws UnexpectedResultException {
+    static long generic(TypedRecord row, int index) throws UnexpectedResultException {
       Object value = row.read(index);
       if (value instanceof Long result) return result;
       throw new UnexpectedResultException(value);
@@ -108,16 +108,16 @@ public final class JsonRecord extends AbstractRow implements AutoCloseable {
         },
         limit = "3")
     static double cached(
-        JsonRecord row,
+        TypedRecord row,
         int index,
         @Cached("row.getSchema()") Schema schema,
         @Cached("index") int cachedIndex,
-        @Cached("access(schema, cachedIndex)") JsonAccess binding) {
+        @Cached("access(schema, cachedIndex)") TypedAccess binding) {
       return binding.doubleValue(row);
     }
 
     @Specialization(replaces = "cached")
-    static double generic(JsonRecord row, int index) throws UnexpectedResultException {
+    static double generic(TypedRecord row, int index) throws UnexpectedResultException {
       Object value = row.read(index);
       if (value instanceof Double result) return result;
       throw new UnexpectedResultException(value);
@@ -134,16 +134,16 @@ public final class JsonRecord extends AbstractRow implements AutoCloseable {
         },
         limit = "3")
     static boolean cached(
-        JsonRecord row,
+        TypedRecord row,
         int index,
         @Cached("row.getSchema()") Schema schema,
         @Cached("index") int cachedIndex,
-        @Cached("access(schema, cachedIndex)") JsonAccess binding) {
+        @Cached("access(schema, cachedIndex)") TypedAccess binding) {
       return binding.booleanValue(row);
     }
 
     @Specialization(replaces = "cached")
-    static boolean generic(JsonRecord row, int index) throws UnexpectedResultException {
+    static boolean generic(TypedRecord row, int index) throws UnexpectedResultException {
       Object value = row.read(index);
       if (value instanceof Boolean result) return result;
       throw new UnexpectedResultException(value);
@@ -174,17 +174,17 @@ public final class JsonRecord extends AbstractRow implements AutoCloseable {
   private long slot(int index, Field.Kind kind) {
     check(index);
     if (descriptor.field(index).kind() != kind)
-      throw new IllegalArgumentException("JSON field kind mismatch");
+      throw new IllegalArgumentException("Field kind mismatch");
     long bit = 1L << index;
     if ((present & bit) == 0 || (nulls & bit) != 0)
-      throw new IllegalStateException("JSON field missing or null");
+      throw new IllegalStateException("Field missing or null");
     return base + index;
   }
 
-  long bits(JsonAccess access) {
+  long bits(TypedAccess access) {
     owner.check();
     if (descriptor != access.schema)
-      throw new IllegalArgumentException("JSON accessor schema mismatch");
+      throw new IllegalArgumentException("Accessor schema mismatch");
     if (access.hops.length == 0) return leaf(owner, base, present, nulls, access);
     return CompilerDirectives.isPartialEvaluationConstant(access)
         ? walkExploded(access)
@@ -192,23 +192,23 @@ public final class JsonRecord extends AbstractRow implements AutoCloseable {
   }
 
   private static long leaf(
-      JsonTypedOwner owner, long base, long present, long nulls, JsonAccess access) {
+      TypedOwner owner, long base, long present, long nulls, TypedAccess access) {
     long bit = 1L << access.index;
     if ((access.optional && (present & bit) == 0) || (access.nullable && (nulls & bit) != 0))
-      throw new IllegalStateException("JSON scalar missing or null");
+      throw new IllegalStateException("Scalar missing or null");
     return owner.bits(base + access.index);
   }
 
   // Constant accessors unroll the hop walk; each hop is one slot load and one entry load.
   @ExplodeLoop
-  private long walkExploded(JsonAccess access) {
+  private long walkExploded(TypedAccess access) {
     long base = this.base, present = this.present, nulls = this.nulls;
     for (int i = 0; i < access.hops.length; i++) {
       int ordinal = access.hops[i];
       long bit = 1L << ordinal;
       byte checks = access.hopChecks[i];
       if (((checks & 1) != 0 && (present & bit) == 0) || ((checks & 2) != 0 && (nulls & bit) != 0))
-        throw new IllegalStateException("JSON record missing or null");
+        throw new IllegalStateException("Record missing or null");
       long child = owner.bits(base + ordinal);
       if (owner.schemas[owner.plan(child)] != access.hopSchemas[i]) throw hopMismatch();
       base = Integer.toUnsignedLong(owner.slotBase(child));
@@ -220,17 +220,17 @@ public final class JsonRecord extends AbstractRow implements AutoCloseable {
 
   @TruffleBoundary
   private static IllegalArgumentException hopMismatch() {
-    return new IllegalArgumentException("JSON accessor record type mismatch");
+    return new IllegalArgumentException("Accessor record type mismatch");
   }
 
-  private long walk(JsonAccess access) {
+  private long walk(TypedAccess access) {
     long base = this.base, present = this.present, nulls = this.nulls;
     for (int i = 0; i < access.hops.length; i++) {
       int ordinal = access.hops[i];
       long bit = 1L << ordinal;
       byte checks = access.hopChecks[i];
       if (((checks & 1) != 0 && (present & bit) == 0) || ((checks & 2) != 0 && (nulls & bit) != 0))
-        throw new IllegalStateException("JSON record missing or null");
+        throw new IllegalStateException("Record missing or null");
       long child = owner.bits(base + ordinal);
       if (owner.schemas[owner.plan(child)] != access.hopSchemas[i]) throw hopMismatch();
       base = Integer.toUnsignedLong(owner.slotBase(child));
@@ -254,7 +254,7 @@ public final class JsonRecord extends AbstractRow implements AutoCloseable {
 
   /** Unsigned 64-bit value, materialized only when requested. */
   public BigInteger unsignedValue(int index) {
-    return JsonTypedOwner.unsigned(slotBits(index, Field.Kind.EXACT));
+    return TypedOwner.unsigned(slotBits(index, Field.Kind.EXACT));
   }
 
   public String stringValue(int index) {
@@ -262,16 +262,16 @@ public final class JsonRecord extends AbstractRow implements AutoCloseable {
   }
 
   /** Nested record of a present, non-null RECORD field; shares this record's owner. */
-  public JsonRecord record(int index) {
-    return new JsonRecord(owner, Math.toIntExact(slotBits(index, Field.Kind.RECORD)));
+  public TypedRecord record(int index) {
+    return new TypedRecord(owner, Math.toIntExact(slotBits(index, Field.Kind.RECORD)));
   }
 
   /** Scoped elements of a present, non-null ARRAY field; valid until the owner closes. */
-  public JsonArray array(int index) {
+  public TypedArray array(int index) {
     long bits = slotBits(index, Field.Kind.ARRAY);
     Field element = descriptor.field(index).constraints().element();
-    if (element == null) throw new IllegalStateException("JSON array without element contract");
-    return new JsonArray(owner, element, bits >>> 32, (int) bits);
+    if (element == null) throw new IllegalStateException("Array without element contract");
+    return new TypedArray(owner, element, bits >>> 32, (int) bits);
   }
 
   /**
@@ -290,8 +290,8 @@ public final class JsonRecord extends AbstractRow implements AutoCloseable {
     Object[] values = new Object[descriptor.size()];
     for (int i = 0; i < values.length; i++) {
       Object value = read(i);
-      if (value instanceof JsonRecord record) value = record.snapshot();
-      else if (value instanceof JsonArray array) value = array.snapshot();
+      if (value instanceof TypedRecord record) value = record.snapshot();
+      else if (value instanceof TypedArray array) value = array.snapshot();
       values[i] = value;
     }
     return values;

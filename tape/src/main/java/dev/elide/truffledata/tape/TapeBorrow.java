@@ -1,4 +1,4 @@
-package dev.elide.truffledata.json;
+package dev.elide.truffledata.tape;
 
 import com.oracle.truffle.api.Assumption;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
@@ -7,36 +7,44 @@ import dev.elide.myna.values.ValueTape;
 import org.jspecify.annotations.Nullable;
 
 /**
- * A document borrowed from a {@link JsonSession}: it reads session storage that the session's next
+ * A document borrowed from a {@link TapeSession}: it reads session storage that the session's next
  * call overwrites, so the session ends the borrow (closing this owner and invalidating its
  * assumption) before that call. Views captured from a borrow throw afterwards, in interpreted and
- * compiled code alike.
+ * compiled code alike. Session backends create one per borrowed decode.
  */
-final class JsonBorrow extends JsonOwner {
-  private final JsonMessage.Lexical lexical;
+public final class TapeBorrow extends TapeOwner {
+  private final TapeLexical lexical;
+  private final TapeFormat format;
   private @Nullable Assumption alive;
 
-  JsonBorrow(ValueTape tape, JsonMessage.Lexical lexical) {
+  /** A borrow of the session's current document, confined to the calling thread. */
+  public TapeBorrow(ValueTape tape, TapeLexical lexical, TapeFormat format) {
     super(tape, Thread.currentThread());
     this.lexical = lexical;
+    this.format = checkFormat(tape, format);
+  }
+
+  @Override
+  public TapeFormat format() {
+    return format;
   }
 
   @Override
   @TruffleBoundary
   public Assumption assumption() {
     check();
-    if (alive == null) alive = Truffle.getRuntime().createAssumption("JSON borrow alive");
+    if (alive == null) alive = Truffle.getRuntime().createAssumption(format.name + " borrow alive");
     return alive;
   }
 
   @Override
-  long lexical(long node) {
+  protected long lexical(long node) {
     if (node < 0 || node >= tape.nodeCount()) throw new IndexOutOfBoundsException("Node index");
     return lexical.span(node);
   }
 
   @Override
-  byte lexicalByte(long offset) {
+  protected byte lexicalByte(long offset) {
     return lexical.inputByte(offset);
   }
 

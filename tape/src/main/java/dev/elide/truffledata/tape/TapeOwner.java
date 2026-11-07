@@ -1,4 +1,4 @@
-package dev.elide.truffledata.json;
+package dev.elide.truffledata.tape;
 
 import com.oracle.truffle.api.Assumption;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
@@ -9,11 +9,24 @@ import java.nio.charset.StandardCharsets;
 import org.jspecify.annotations.Nullable;
 
 /**
- * Owner of a validated JSON index. Views read the tape only after {@link #check()}; owners that
- * can close expose an {@link Assumption} so compiled reads cache liveness without a field load.
+ * Owner of a validated native tape, shared by the JSON and YAML producers. Views read the tape only
+ * after {@link #check()}; owners that can close expose an {@link Assumption} so compiled reads cache
+ * liveness without a field load. Format modules subclass it for their retained messages; borrowed
+ * documents ({@link TapeBorrow}) and snapshots ({@link TapeSnapshot}) are shared.
+ *
+ * <p>Alias resolution: every read that reaches a value through a member or element passes the node
+ * through {@link #resolve(long)}, which is the identity unless the owner's {@link #format()} holds
+ * alias tables (YAML). Resolution runs only inside the read paths' existing boundaries (scans,
+ * element walks, view-returning methods), so formats without aliases compile exactly as before; the
+ * one inline path, a position-hinted member hit, is alias-free by contract (see {@link
+ * TapeSource#keyNodeEquals}). The export walk does not resolve: exports handle aliases themselves.
+ *
+ * <p>The format is a virtual property rather than a field so that format-specific owners (a JSON
+ * message) carry no extra reference; liveness and confinement failures name it lazily ({@link
+ * OwnerStateException}).
  */
-public abstract sealed class JsonOwner permits JsonMessage, JsonSnapshot, JsonBorrow {
-  final ValueTape tape;
+public abstract class TapeOwner {
+  protected final ValueTape tape;
   // Same object as tape; raw node reads keep ValueTape.tag (a trivially inlined one-liner whose
   // deopt target SVM runtime compilation cannot resolve) out of partially evaluated code.
   private final TapeSource source;
@@ -24,24 +37,52 @@ public abstract sealed class JsonOwner permits JsonMessage, JsonSnapshot, JsonBo
   private int pins;
   // Text cursor and container stack reused by the outermost export on the owning thread; nested
   // and unconfined exports allocate their own.
-  private @Nullable JsonText cursor;
+  private @Nullable TapeText cursor;
 
-  JsonOwner(ValueTape tape, @Nullable Thread thread) {
+  /**
+   * An owner of {@code tape}, which must be one of this module's tapes ({@link SvmValueTape},
+   * {@code SegmentValueTape} or a snapshot's heap tape), confined to {@code thread} (null: an
+   * immutable owner that never closes).
+   */
+  protected TapeOwner(ValueTape tape, @Nullable Thread thread) {
     this.tape = tape;
     this.source = (TapeSource) tape;
     this.thread = thread;
   }
 
+  /** Throws when {@code format}'s alias tables (if any) do not cover {@code tape}. */
+  protected static TapeFormat checkFormat(ValueTape tape, TapeFormat format) {
+    int[] meta = format.meta;
+    if (meta != null && meta.length != tape.nodeCount())
+      throw new IllegalArgumentException("Alias side table does not cover the tape");
+    return format;
+  }
+
   /** Rejects closed or cross-thread access; immutable owners never fail. */
-  final void check() {
+  protected final void check() {
     checkThread();
-    if (!open) throw new IllegalStateException("JSON message closed");
+    if (!open) throw new OwnerStateException(this, OwnerStateException.CLOSED);
   }
 
   /** Thread confinement only; liveness is covered by the assumption at cached sites. */
-  final void checkThread() {
+  protected final void checkThread() {
     if (thread != null && Thread.currentThread() != thread)
-      throw new IllegalStateException("JSON message thread mismatch");
+      throw new OwnerStateException(this, OwnerStateException.THREAD);
+  }
+
+  /** The format that produced this owner's tape: its name for messages and any alias tables. */
+  public abstract TapeFormat format();
+
+  /**
+   * The node an alias stands for, or {@code node} itself (always, for formats without aliases).
+   * Throws {@link IllegalStateException} when an alias names no node of this tape. Called from
+   * boundaries only; see the class comment.
+   */
+  public final long resolve(long node) {
+    TapeFormat format = format();
+    int[] meta = format.meta;
+    if (meta == null) return node;
+    return format.alias(meta, node, tape.nodeCount());
   }
 
   /** Value kind of a node; equal to {@code tape.tag(node)} for ABI v2 and v3 storage tags. */
@@ -57,22 +98,22 @@ public abstract sealed class JsonOwner permits JsonMessage, JsonSnapshot, JsonBo
   }
 
   /** Text cursor (and container stack) for an export that already holds a pin. */
-  final JsonText exportCursor() {
-    JsonText reused = cursor;
+  final TapeText exportCursor() {
+    TapeText reused = cursor;
     if (thread != null && pins == 1 && reused != null) return reused;
     return newCursor(this);
   }
 
   /** First, nested or unconfined export: allocates outside compiled export loops. */
   @TruffleBoundary
-  private static JsonText newCursor(JsonOwner owner) {
-    JsonText fresh = new JsonText(owner);
+  private static TapeText newCursor(TapeOwner owner) {
+    TapeText fresh = new TapeText(owner);
     if (owner.thread != null && owner.pins == 1) owner.cursor = fresh;
     return fresh;
   }
 
   /** Lends a session's cursor to a borrowed owner, so borrowed exports allocate none. */
-  final void adoptCursor(JsonText lent) {
+  final void adoptCursor(TapeText lent) {
     lent.rebind(this);
     cursor = lent;
   }
@@ -81,16 +122,16 @@ public abstract sealed class JsonOwner permits JsonMessage, JsonSnapshot, JsonBo
     if (thread != null) pins--;
   }
 
-  /** Single-pass export of the whole document; see {@link JsonSink}. */
+  /** Single-pass export of the whole document; see {@link TapeSink}. */
   @TruffleBoundary
-  public final void export(JsonSink sink) {
-    JsonExportNode.walk(this, 0, sink);
+  public final void export(TapeSink sink) {
+    TapeExportNode.walk(this, 0, sink);
   }
 
   /** Marks the owner closed; returns false when it already was. */
-  final boolean markClosed() {
+  protected final boolean markClosed() {
     checkThread();
-    if (pins != 0) throw new IllegalStateException("JSON message is being exported");
+    if (pins != 0) throw new IllegalStateException(format().name + " message is being exported");
     if (!open) return false;
     open = false;
     return true;
@@ -101,10 +142,10 @@ public abstract sealed class JsonOwner permits JsonMessage, JsonSnapshot, JsonBo
   public abstract Assumption assumption();
 
   /** Packed lexical span (offset {@code << 32 | length} into the retained input), or 0. */
-  abstract long lexical(long node);
+  protected abstract long lexical(long node);
 
   /** Reads the raw UTF-8 bytes of a lexical span from the retained input region. */
-  abstract byte lexicalByte(long offset);
+  protected abstract byte lexicalByte(long offset);
 
   /**
    * Native side-table entry of a node: bit 31 marks string and key nodes whose bytes are all ASCII;
@@ -123,7 +164,7 @@ public abstract sealed class JsonOwner permits JsonMessage, JsonSnapshot, JsonBo
    * positions; the inline node words are then compared exactly (Myna zero-pads inline text). No
    * loop, no call beyond the tape's word reads, no allocation.
    */
-  final boolean keyMatches(long object, int offset, JsonKey key) {
+  final boolean keyMatches(long object, int offset, TapeKey key) {
     long k = object + offset;
     // Keys of at most 8 bytes have an all-zero high word (zero padding); the site's key is a
     // constant, so `wide` folds and short keys skip the third word.
@@ -133,7 +174,7 @@ public abstract sealed class JsonOwner permits JsonMessage, JsonSnapshot, JsonBo
   }
 
   /** Whether key node {@code k} decodes to exactly {@code key}'s bytes (hash first). */
-  final boolean keyEquals(long k, JsonKey key) {
+  final boolean keyEquals(long k, TapeKey key) {
     return ((meta(k) >>> 16) & 0x7fff) == key.hash && tape.stringEquals(k, key.bytes);
   }
 
@@ -188,7 +229,7 @@ public abstract sealed class JsonOwner permits JsonMessage, JsonSnapshot, JsonBo
   final String lexicalText(long node) {
     check();
     long span = lexical(node);
-    if (span == 0) throw new IllegalStateException("JSON node has no lexical text");
+    if (span == 0) throw new IllegalStateException(format().name + " node has no lexical text");
     int length = (int) span;
     long offset = span >>> 32;
     byte[] bytes = new byte[length];
@@ -259,44 +300,44 @@ public abstract sealed class JsonOwner permits JsonMessage, JsonSnapshot, JsonBo
         });
   }
 
-  public final JsonValue root() {
+  public final TapeValue root() {
     check();
-    return new JsonValue(this, 0);
+    return new TapeValue(this, 0);
   }
 
   /** Independently owned immutable copy of the whole document. */
   @TruffleBoundary
-  public JsonSnapshot snapshot() {
+  public TapeSnapshot snapshot() {
     return snapshot(0);
   }
 
   @TruffleBoundary
-  final JsonSnapshot snapshot(long root) {
+  final TapeSnapshot snapshot(long root) {
     check();
-    return JsonSnapshot.copy(this, (TapeSource) tape, root);
+    return TapeSnapshot.copy(this, (TapeSource) tape, root);
   }
 
   /** Cache only retained owners; uncached ingestion and megamorphic sites use ordinary checks. */
   @GenerateUncached
   @GenerateInline(false)
   public abstract static class CheckOpenNode extends Node {
-    public abstract void execute(JsonOwner owner);
+    public abstract void execute(TapeOwner owner);
 
     @NeverDefault
     public static CheckOpenNode create() {
-      return JsonOwnerFactory.CheckOpenNodeGen.create();
+      return TapeOwnerFactory.CheckOpenNodeGen.create();
     }
 
     @Specialization(guards = "owner == cachedOwner", assumptions = "alive", limit = "3")
     static void cached(
-        JsonOwner owner,
-        @Cached("owner") JsonOwner cachedOwner,
+        TapeOwner owner,
+        @Cached("owner") TapeOwner cachedOwner,
         @Cached("cachedOwner.assumption()") Assumption alive) {
       owner.checkThread();
     }
 
     @Specialization(replaces = "cached")
-    static void generic(JsonOwner owner) {
+    static void generic(TapeOwner owner) {
       owner.check();
     }
   }

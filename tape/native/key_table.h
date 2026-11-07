@@ -99,14 +99,4 @@ public:
 };
 } // namespace truffledata::tape
 
-// JSON's names for the shared types until the Java/C++ rename (YAML plan Task 4) settles them.
-namespace truffledata::json {
-using tape::ascii;
-using tape::ascii_flag;
-using tape::hash_mask;
-using tape::key_hash;
-using tape::key_meta;
-using tape::key_offset_mask;
-using tape::key_table;
-} // namespace truffledata::json
 #endif

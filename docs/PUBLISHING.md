@@ -1,6 +1,6 @@
 # Maven publishing
 
-The release publishes sixteen thin libraries and a dependency-management BOM, with source jars and POMs. The protobuf runtime can be consumed without protobuf-java. Version 0.7.0 shipped the first nine libraries; the three JSON artifacts and the four CSV artifacts publish from the next release, which also adds them to the BOM.
+The release publishes eighteen thin libraries and a dependency-management BOM, with source jars and POMs. The protobuf runtime can be consumed without protobuf-java. Version 0.7.0 shipped the first nine libraries; the two shared tape artifacts, the three JSON artifacts and the four CSV artifacts publish from the next release, which also adds them to the BOM.
 
 | Coordinate | Contents |
 | --- | --- |
@@ -11,9 +11,11 @@ The release publishes sixteen thin libraries and a dependency-management BOM, wi
 | `dev.elide:truffledata-jdbc-postgresql:<version>` | pgJDBC integration; depends on JDBC, core and postgresql |
 | `dev.elide:truffledata-protobuf-buffa:<version>` | Optional native protobuf decoder and typed views; includes Linux x86-64 native attachments |
 | `dev.elide:truffledata-protobuf-buffa-bindings:<version>` | Generated Myna bindings for JVM FFM and static SVM |
-| `dev.elide:truffledata-json:<version>` | Native simdjson JSON values, export, snapshots and typed plans, with the static SVM backend; includes Linux x86-64 native attachments |
-| `dev.elide:truffledata-json-bindings:<version>` | Generated Myna JSON bindings and the Myna value ABI runtime they were generated against |
-| `dev.elide:truffledata-json-jvm:<version>` | JVM FFM backend (`JsonJvm`); depends on truffledata-json. Keep it out of native-image classpaths |
+| `dev.elide:truffledata-tape:<version>` | Format-neutral native tape layer shared by JSON and YAML: owners, values, sinks, export, snapshots, sessions, streams and typed records, plus the Myna value ABI runtime they extend; depends on core |
+| `dev.elide:truffledata-tape-jvm:<version>` | JVM FFM tape reader (`SegmentValueTape`); depends on truffledata-tape. Keep it out of native-image classpaths |
+| `dev.elide:truffledata-json:<version>` | Native simdjson JSON entry points (`JsonSession`, `JsonMessage`, `JsonStream`, typed plans), with the static SVM backend; depends on truffledata-tape; includes Linux x86-64 native attachments |
+| `dev.elide:truffledata-json-bindings:<version>` | Generated Myna JSON bindings |
+| `dev.elide:truffledata-json-jvm:<version>` | JVM FFM backend (`JsonJvm`); depends on truffledata-json and truffledata-tape-jvm. Keep it out of native-image classpaths |
 | `dev.elide:truffledata-csv:<version>` | Strict streaming CSV batches, typed plans and export; pure Java for JVM and SVM, no native attachments; depends on core |
 | `dev.elide:truffledata-csv-bindings:<version>` | Generated Myna bindings of the native CSV structural-index kernel (static SVM and JVM FFM) |
 | `dev.elide:truffledata-csv-native:<version>` | Optional native CSV kernel: the static SVM backend; includes Linux x86-64 native attachments; depends on truffledata-csv and its bindings |
@@ -67,7 +69,7 @@ dependencies {
 }
 ```
 
-For Maven, declare `https://maven.elide.dev` in `<repositories>` and the same coordinates in `<dependencies>`. Published POMs also declare the fork repository; Gradle and Bazel consumers must explicitly configure it. For Bazel, add the two repositories and desired coordinates to `maven.install`, then repin. Use core alone if neither adapter is needed. The release contains sixteen libraries and the BOM. Publishing verifies public artifact bytes and metadata; isolated consumers check Maven resolution and JVM/static SVM execution. The staging examples can reproduce that version locally. Choose a new version for the next upload: published versions are immutable.
+For Maven, declare `https://maven.elide.dev` in `<repositories>` and the same coordinates in `<dependencies>`. Published POMs also declare the fork repository; Gradle and Bazel consumers must explicitly configure it. For Bazel, add the two repositories and desired coordinates to `maven.install`, then repin. Use core alone if neither adapter is needed. The release contains eighteen libraries and the BOM. Publishing verifies public artifact bytes and metadata; isolated consumers check Maven resolution and JVM/static SVM execution. The staging examples can reproduce that version locally. Choose a new version for the next upload: published versions are immutable.
 
 
 ## BOM and consumer acceptance
@@ -117,13 +119,21 @@ using publication jars and the published shared-library attachment. The explicit
 runs the same consumer. Both release publishing and native CI require this static check.
 ## JSON native distribution
 
-The JSON backend publishes as three artifacts, all managed by the BOM:
+The JSON backend publishes as three artifacts on top of the two shared tape artifacts, all
+managed by the BOM:
 
-- `truffledata-json`: the shared API (`JsonMessage`, `JsonValue`, `JavaSink`,
-  snapshots, typed plans) and the static SVM backend `JsonSvm`.
-- `truffledata-json-bindings`: the generated Myna bindings and Myna's value ABI classes
-  (`dev.elide.myna.values`), pinned to the same Myna source as the native library. Myna is
-  not published separately, and the bindings are only valid against that exact value ABI.
+- `truffledata-tape`: the format-neutral classes JSON and YAML share (`TapeValue`,
+  `TapeSink`, `JavaSink`, `TruffleSink`, `TapeSnapshot`, `TapeSession`, `TapeStream`,
+  `TypedRecord`, `TypedAccess`, ...; see [Shared tape types](JSON.md#shared-tape-types)) and
+  Myna's value ABI classes (`dev.elide.myna.values`), which its tapes extend. Myna is not
+  published separately; the classes ship once here, pinned to the same Myna source as every
+  native library of the release, so the format artifacts never carry two copies.
+- `truffledata-tape-jvm`: the JVM FFM tape reader. Like `truffledata-json-jvm`, static images
+  must not carry it.
+- `truffledata-json`: the JSON API (`JsonMessage`, `JsonSession`, `JsonStream`, `JsonPlan`,
+  `JsonLimits`) and the static SVM backend `JsonSvm`.
+- `truffledata-json-bindings`: the generated Myna bindings, valid only against the Myna value
+  ABI that `truffledata-tape` of the same release carries.
 - `truffledata-json-jvm`: the JVM FFM backend `JsonJvm`. It is a separate artifact because
   static images link the parser directly and must not carry the FFM backend; this mirrors
   the source split between `//json` and `//json:jvm`. JVM applications add it explicitly.
@@ -199,4 +209,4 @@ published static archive into an image through `truffledata-csv-native` (without
 compare generic, typed and streamed parses and malformed-input diagnostics with the
 built-in kernel's. Release publishing and native CI require both static checks.
 
-The publisher includes all sixteen Java libraries and the BOM, plus Buffa, JSON and CSV native attachments.
+The publisher includes all eighteen Java libraries and the BOM, plus Buffa, JSON and CSV native attachments.

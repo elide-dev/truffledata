@@ -21,10 +21,10 @@ struct handle final : truffledata::json::result_owner {
   truffledata::json::document document;
   myna_value_view view;
   handle(std::string_view input, myna::value_limits values,
-         truffledata::json::storage_limits storage)
+         truffledata::tape::storage_limits storage)
       : document(input, values, storage), view(document.view()) {}
   handle(const char* data, size_t length, size_t capacity, myna::value_limits values,
-         truffledata::json::storage_limits storage)
+         truffledata::tape::storage_limits storage)
       : document(data, length, capacity, values, storage), view(document.view()) {}
   void destroy() noexcept override { delete this; }
 };
@@ -66,7 +66,7 @@ extern "C" int32_t td_json_decode(const uint8_t* data, uint64_t length,
     return publish(std::make_unique<handle>(
         std::string_view(reinterpret_cast<const char*>(data), length),
         myna::value_limits{max_nodes, max_text_bytes, max_depth},
-        truffledata::json::storage_limits{size_t(max_input_bytes), size_t(max_index_bytes)}), result);
+        truffledata::tape::storage_limits{size_t(max_input_bytes), size_t(max_index_bytes)}), result);
   } catch (...) { return translate(); }
 }
 
@@ -83,7 +83,7 @@ extern "C" int32_t td_json_decode_adopted(const uint8_t* data, uint64_t length,
     return publish(std::make_unique<handle>(
         reinterpret_cast<const char*>(data), size_t(length), size_t(capacity),
         myna::value_limits{max_nodes, max_text_bytes, max_depth},
-        truffledata::json::storage_limits{size_t(max_input_bytes), size_t(max_index_bytes)}), result);
+        truffledata::tape::storage_limits{size_t(max_input_bytes), size_t(max_index_bytes)}), result);
   } catch (...) { return translate(); }
 }
 
@@ -169,7 +169,7 @@ extern "C" int32_t td_json_typed_decode(const void* plan_record, const uint8_t* 
   try {
     auto owned = std::make_unique<truffledata::json::typed_document>(*plan,
         std::string_view(reinterpret_cast<const char*>(data), length),
-        truffledata::json::storage_limits{size_t(max_input_bytes), size_t(max_index_bytes)});
+        truffledata::tape::storage_limits{size_t(max_input_bytes), size_t(max_index_bytes)});
     auto stats = owned->allocations();
     result = {owned.get(), const_cast<JsonScalarSlot*>(owned->slots()), owned->size(),
         owned->present(), owned->nulls(), stats.copied_input_bytes, stats.padded_input_bytes,
@@ -239,7 +239,7 @@ int32_t session_decode(session& s, const uint8_t* data, uint64_t length, uint32_
     size_t text_bytes = 0;
     if (text) {
       text_bytes = s.write_text(text_out, size_t(text_capacity), table);
-      if (text_bytes == truffledata::json::text_too_small) return TD_JSON_TEXT_TOO_SMALL;
+      if (text_bytes == truffledata::tape::text_too_small) return TD_JSON_TEXT_TOO_SMALL;
     }
     publish_borrowed(s, d, result, table, text_bytes);
     return TD_JSON_OK;
@@ -253,7 +253,7 @@ extern "C" void* td_json_session_create(const void* limits) {
   if (l.max_depth > 128 || l.max_input_bytes == 0) return nullptr;
   try {
     return new session(myna::value_limits{l.max_nodes, l.max_text_bytes, l.max_depth},
-        truffledata::json::storage_limits{size_t(l.max_input_bytes), size_t(l.max_index_bytes)});
+        truffledata::tape::storage_limits{size_t(l.max_input_bytes), size_t(l.max_index_bytes)});
   } catch (...) { return nullptr; }
 }
 

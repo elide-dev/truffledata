@@ -1,4 +1,4 @@
-package dev.elide.truffledata.json;
+package dev.elide.truffledata.tape;
 
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import java.nio.ByteBuffer;
@@ -12,7 +12,7 @@ import java.nio.charset.StandardCharsets;
  * and reuse; reads compare a short key against a node with three word loads, and look keys up by
  * hash first.
  */
-public final class JsonKey {
+public final class TapeKey {
   /** Keys up to this many UTF-8 bytes are stored inline in their node (Myna's inline text). */
   static final int INLINE_BYTES = 16;
 
@@ -25,7 +25,7 @@ public final class JsonKey {
   final long high;
   final int hash;
 
-  private JsonKey(byte[] bytes) {
+  private TapeKey(byte[] bytes) {
     this.bytes = bytes;
     this.length = bytes.length;
     long lo = 0, hi = 0;
@@ -49,14 +49,14 @@ public final class JsonKey {
     return h & 0x7fff;
   }
 
-  /** Encodes {@code name} as UTF-8; an unpaired surrogate is rejected, as no JSON key can hold it. */
+  /** Encodes {@code name} as UTF-8; an unpaired surrogate is rejected, as no decoded key can hold it. */
   @TruffleBoundary
-  public static JsonKey of(String name) {
+  public static TapeKey of(String name) {
     try {
       ByteBuffer encoded = StandardCharsets.UTF_8.newEncoder().encode(CharBuffer.wrap(name));
       byte[] bytes = new byte[encoded.remaining()];
       encoded.get(bytes);
-      return new JsonKey(bytes);
+      return new TapeKey(bytes);
     } catch (CharacterCodingException error) {
       throw new IllegalArgumentException("Unpaired UTF-16 surrogate", error);
     }

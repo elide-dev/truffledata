@@ -35,12 +35,14 @@ class PublicationTest(unittest.TestCase):
                     expected.update(('org.graalvm.sdk:nativeimage', 'org.graalvm.sdk:word'))
                 if module == 'protobuf-buffa':
                     expected.update(('dev.elide:truffledata-protobuf-runtime', 'dev.elide:truffledata-protobuf-buffa-bindings'))
-                if module in ('json', 'json-bindings'):
+                if module in ('tape', 'json', 'json-bindings'):
                     expected.update(('org.graalvm.sdk:nativeimage', 'org.graalvm.sdk:word'))
+                if module == 'tape-jvm':
+                    expected.add('dev.elide:truffledata-tape')
                 if module == 'json':
-                    expected.add('dev.elide:truffledata-json-bindings')
+                    expected.update(('dev.elide:truffledata-json-bindings', 'dev.elide:truffledata-tape'))
                 if module == 'json-jvm':
-                    expected.update(('dev.elide:truffledata-json', 'dev.elide:truffledata-json-bindings'))
+                    expected.update(('dev.elide:truffledata-json', 'dev.elide:truffledata-json-bindings', 'dev.elide:truffledata-tape-jvm'))
                 if module in ('csv-bindings', 'csv-native'):
                     expected.update(('org.graalvm.sdk:nativeimage', 'org.graalvm.sdk:word'))
                 if module in ('csv-native', 'csv-jvm'):
@@ -81,27 +83,43 @@ class PublicationTest(unittest.TestCase):
                     with zipfile.ZipFile(str(prefix) + '.jar') as jar:
                         self.assertIn('dev/elide/truffledata/buffa/generated/Buffa.class', jar.namelist())
                         self.assertIn('dev/elide/truffledata/buffa/generated/BuffaFFM.class', jar.namelist())
-                if module.startswith('json'):
+                if module.startswith('json') or module.startswith('tape'):
                     with zipfile.ZipFile(str(prefix) + '.jar') as jar:
                         names = {n for n in jar.namelist() if not n.endswith('/')}
                     myna = {n for n in names if n.startswith('dev/elide/myna/')}
                     generated = {n for n in names if n.startswith('dev/elide/truffledata/json/generated/')}
                     backend = {n for n in names if n.startswith('dev/elide/truffledata/json/') and n not in generated}
-                    jvm = {'dev/elide/truffledata/json/JsonJvm.class', 'dev/elide/truffledata/json/SegmentValueTape.class', 'dev/elide/truffledata/json/JvmTypedOwner.class'}
-                    if module == 'json-bindings':
-                        # Generated bindings travel with the exact Myna value ABI they were generated against.
-                        self.assertIn('dev/elide/truffledata/json/generated/Json.class', names)
-                        self.assertIn('dev/elide/truffledata/json/generated/JsonFFM.class', names)
+                    shared = {n for n in names if n.startswith('dev/elide/truffledata/tape/')}
+                    jvm = {'dev/elide/truffledata/json/JsonJvm.class', 'dev/elide/truffledata/json/JvmTypedOwner.class'}
+                    segment = 'dev/elide/truffledata/tape/SegmentValueTape.class'
+                    if module == 'tape':
+                        # The shared tape travels with the exact Myna value ABI its tapes extend; static
+                        # images take it, so the FFM tape reader stays out.
+                        self.assertIn('dev/elide/truffledata/tape/TapeValue.class', names)
+                        self.assertIn('dev/elide/truffledata/tape/TapeValueGen.class', names)
+                        self.assertIn('dev/elide/truffledata/tape/SvmValueTape.class', names)
                         self.assertIn('dev/elide/myna/values/ValueTape.class', names)
-                        self.assertIn('META-INF/native-image/dev.elide.myna/dev.elide.truffledata.json.generated.Json/native-image.properties', names)
-                        self.assertFalse(backend)
+                        self.assertNotIn(segment, names)
+                        self.assertFalse(backend | generated)
                     else:
                         self.assertFalse(myna)
+                    if module == 'tape-jvm':
+                        self.assertEqual(shared, {segment})
+                        self.assertFalse(backend | generated)
+                    if module.startswith('json'):
+                        self.assertFalse(shared)
+                    if module == 'json-bindings':
+                        # Generated bindings; the Myna value ABI they were generated against ships in truffledata-tape.
+                        self.assertIn('dev/elide/truffledata/json/generated/Json.class', names)
+                        self.assertIn('dev/elide/truffledata/json/generated/JsonFFM.class', names)
+                        self.assertIn('META-INF/native-image/dev.elide.myna/dev.elide.truffledata.json.generated.Json/native-image.properties', names)
+                        self.assertFalse(backend)
+                    elif module.startswith('json'):
                         self.assertFalse(generated)
                     if module == 'json':
                         # Static images take this jar: the FFM backend must stay out of it.
                         self.assertIn('dev/elide/truffledata/json/JsonSvm.class', names)
-                        self.assertIn('dev/elide/truffledata/json/JsonValue.class', names)
+                        self.assertIn('dev/elide/truffledata/json/JsonSession.class', names)
                         self.assertFalse(jvm & names)
                     if module == 'json-jvm':
                         self.assertTrue(jvm <= names)

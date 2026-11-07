@@ -3,6 +3,9 @@ package dev.elide.truffledata.json;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import dev.elide.myna.values.ValueTape;
 import dev.elide.truffledata.json.generated.Json;
+import dev.elide.truffledata.tape.SvmValueTape;
+import dev.elide.truffledata.tape.TapeBorrow;
+import dev.elide.truffledata.tape.TapeLexical;
 import org.graalvm.nativeimage.ImageInfo;
 import org.graalvm.nativeimage.PinnedObject;
 import org.graalvm.nativeimage.UnmanagedMemory;
@@ -148,7 +151,7 @@ public final class JsonSvm {
    * Native side tables and retained input of one published result, plus its release. One object
    * per message serves as both the lexical accessor and the close action.
    */
-  static class SvmLexical implements JsonMessage.Lexical {
+  static class SvmLexical implements TapeLexical {
     private final Pointer spans;
     private final Pointer inputData;
     private final long inputLength;
@@ -238,9 +241,9 @@ public final class JsonSvm {
   }
 
   /** Borrowed owner over a session's current result; the session ends it before its next call. */
-  static JsonBorrow borrow(VoidPointer result) {
+  static TapeBorrow borrow(VoidPointer result) {
     SvmValueTape tape = tape(result);
-    return new JsonBorrow(tape, tables(result, tape, null));
+    return new TapeBorrow(tape, tables(result, tape, null), JsonMessage.FORMAT);
   }
 
   private static final Runnable NO_CLOSE = () -> {};

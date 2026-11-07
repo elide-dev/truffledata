@@ -9,9 +9,9 @@ import com.oracle.truffle.api.interop.InteropException;
 import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.strings.TruffleString;
-import dev.elide.truffledata.json.JsonSink;
-import dev.elide.truffledata.json.JsonText;
-import dev.elide.truffledata.json.JsonValue;
+import dev.elide.truffledata.tape.TapeSink;
+import dev.elide.truffledata.tape.TapeText;
+import dev.elide.truffledata.tape.TapeValue;
 import java.io.ByteArrayInputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
@@ -125,7 +125,7 @@ public final class JsonFixture {
         + (o.get("parent").isJsonNull() ? 1 : 0);
   }
 
-  /** Reads the tree {@link dev.elide.truffledata.json.JavaSink} builds for a fixture document. */
+  /** Reads the tree {@link dev.elide.truffledata.tape.JavaSink} builds for a fixture document. */
   @TruffleBoundary
   public static long javaRead(Object tree) {
     Map<?, ?> o = (Map<?, ?>) tree;
@@ -153,7 +153,7 @@ public final class JsonFixture {
   private static final TruffleString NOTE = TruffleString.fromJavaStringUncached("note", UTF_16);
   private static final TruffleString PARENT = TruffleString.fromJavaStringUncached("parent", UTF_16);
 
-  /** Reads the tree {@link dev.elide.truffledata.json.TruffleSink} builds for a fixture document. */
+  /** Reads the tree {@link dev.elide.truffledata.tape.TruffleSink} builds for a fixture document. */
   @TruffleBoundary
   public static long truffleRead(Object tree) {
     Map<?, ?> o = (Map<?, ?>) tree;
@@ -213,7 +213,7 @@ public final class JsonFixture {
   }
 
   /** Non-materializing sink: the export walk itself is all that runs. */
-  public static final class CountingSink implements JsonSink {
+  public static final class CountingSink implements TapeSink {
     public long sum;
 
     @Override
@@ -222,7 +222,7 @@ public final class JsonFixture {
     }
 
     @Override
-    public void key(JsonText key) {
+    public void key(TapeText key) {
       sum += 1;
     }
 
@@ -260,12 +260,12 @@ public final class JsonFixture {
     }
 
     @Override
-    public void decimalValue(JsonText token) {
+    public void decimalValue(TapeText token) {
       sum += 1;
     }
 
     @Override
-    public void stringValue(JsonText text) {
+    public void stringValue(TapeText text) {
       sum += 1;
     }
   }

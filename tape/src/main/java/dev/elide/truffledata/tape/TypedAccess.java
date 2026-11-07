@@ -1,4 +1,4 @@
-package dev.elide.truffledata.json;
+package dev.elide.truffledata.tape;
 
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
@@ -12,9 +12,9 @@ import java.util.Map;
  *
  * <p>A path is zero or more RECORD field ordinals (hops from the root record into nested records)
  * followed by one INT64, FLOAT64 or BOOLEAN ordinal. Nested reads walk the record table directly,
- * without materializing an intermediate {@link JsonRecord}.
+ * without materializing an intermediate {@link TypedRecord}.
  */
-public final class JsonAccess {
+public final class TypedAccess {
   final Schema schema;
   // Leaf ordinal within the last record of the path.
   final int index;
@@ -37,20 +37,20 @@ public final class JsonAccess {
 
   /** Root-level primitive at {@code index}. */
   @TruffleBoundary
-  public JsonAccess(Schema schema, int index) {
+  public TypedAccess(Schema schema, int index) {
     this(schema, Map.of(), new int[] {index});
   }
 
   /**
    * Nested primitive reached by {@code path}: RECORD ordinals, each resolved through {@code
    * recordTypes} by its {@code recordType}, then a primitive ordinal. Pass the same map given to
-   * {@link JsonPlan#compile(Schema, Map)}.
+   * the format's plan compiler (for JSON, {@code JsonPlan.compile(Schema, Map)}).
    */
   @TruffleBoundary
-  public JsonAccess(Schema schema, Map<String, Schema> recordTypes, int... path) {
-    if (path.length == 0) throw new IllegalArgumentException("Empty JSON accessor path");
-    if (path.length > JsonPlan.MAX_DEPTH)
-      throw new IllegalArgumentException("JSON accessor path exceeds plan depth");
+  public TypedAccess(Schema schema, Map<String, Schema> recordTypes, int... path) {
+    if (path.length == 0) throw new IllegalArgumentException("Empty accessor path");
+    if (path.length > TypedLayout.MAX_DEPTH)
+      throw new IllegalArgumentException("Accessor path exceeds plan depth");
     int[] hops = new int[path.length - 1];
     byte[] checks = new byte[hops.length];
     Schema[] targets = new Schema[hops.length];
@@ -58,10 +58,10 @@ public final class JsonAccess {
     for (int i = 0; i < hops.length; i++) {
       Field hop = current.field(path[i]);
       if (hop.kind() != Field.Kind.RECORD)
-        throw new IllegalArgumentException("JSON accessor path hop requires RECORD");
+        throw new IllegalArgumentException("Accessor path hop requires RECORD");
       String type = hop.constraints().recordType();
       Schema next = type == null ? null : recordTypes.get(type);
-      if (next == null) throw new IllegalArgumentException("Unknown JSON record type: " + type);
+      if (next == null) throw new IllegalArgumentException("Unknown record type: " + type);
       hops[i] = path[i];
       checks[i] = (byte) ((hop.optional() ? 1 : 0) | (hop.nullable() ? 2 : 0));
       targets[i] = next;
@@ -73,7 +73,7 @@ public final class JsonAccess {
         && field.kind() != Field.Kind.FLOAT64
         && field.kind() != Field.Kind.BOOLEAN)
       throw new IllegalArgumentException(
-          "Primitive JSON accessor requires INT64, FLOAT64 or BOOLEAN");
+          "Primitive accessor requires INT64, FLOAT64 or BOOLEAN");
     this.schema = schema;
     this.index = leaf;
     this.kind = field.kind();
@@ -84,22 +84,22 @@ public final class JsonAccess {
     this.hopSchemas = targets;
   }
 
-  public long longValue(JsonRecord row) {
+  public long longValue(TypedRecord row) {
     requireKind(Field.Kind.INT64);
     return row.bits(this);
   }
 
-  public double doubleValue(JsonRecord row) {
+  public double doubleValue(TypedRecord row) {
     requireKind(Field.Kind.FLOAT64);
     return Double.longBitsToDouble(row.bits(this));
   }
 
-  public boolean booleanValue(JsonRecord row) {
+  public boolean booleanValue(TypedRecord row) {
     requireKind(Field.Kind.BOOLEAN);
     return row.bits(this) != 0;
   }
 
   private void requireKind(Field.Kind expected) {
-    if (kind != expected) throw new IllegalArgumentException("JSON accessor kind mismatch");
+    if (kind != expected) throw new IllegalArgumentException("Accessor kind mismatch");
   }
 }

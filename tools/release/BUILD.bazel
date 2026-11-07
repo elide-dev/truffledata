@@ -29,6 +29,8 @@ MODULES = [
     "protobuf-runtime",
     "protobuf-buffa",
     "protobuf-buffa-bindings",
+    "tape",
+    "tape-jvm",
     "json",
     "json-bindings",
     "json-jvm",
@@ -41,6 +43,10 @@ MODULES = [
 # Publication libraries that are not the module's own //<module> target.
 LIBRARIES = {
     "protobuf-buffa-bindings": "//protobuf-buffa:bindings",
+    # The shared tape classes plus the exact Myna value ABI runtime they extend (YAML plan Task 4).
+    "tape": ":tape_library",
+    # JVM-only FFM tape reader, published separately like json-jvm.
+    "tape-jvm": "//tape:jvm",
     "json-bindings": ":json_bindings_library",
     # JVM-only FFM backend, published separately so static images never carry it.
     "json-jvm": "//json:jvm",
@@ -51,14 +57,33 @@ LIBRARIES = {
     "csv-jvm": "//csv/kernel:jvm",
 }
 
-# The generated JSON bindings plus the exact Myna value ABI runtime they were generated against.
-# Myna is not published to Maven; its value classes ship with the bindings they must match.
+# The shared tape classes plus the exact Myna value ABI runtime they read and extend. Myna is not
+# published to Maven; its value classes ship in truffledata-tape, which every format depends on, so
+# JSON and YAML never carry two copies. //tape itself is NullAway-checked; this republishes it.
 java_library(
-    name = "json_bindings_library",
+    name = "tape_library",
     srcs = [
-        "//json/native:java_bindings",
+        "//tape:tape_sources",
         "@myna//:values_sources",
     ],
+    # //tape compiles the same sources under NullAway and the repository's checks.
+    javacopts = ["-XepDisableAllChecks"],
+    deps = [
+        "//bazel:myna_compiler_sdk",
+        "//bazel:truffle_processor",
+        "//core",
+        "@maven//:org_graalvm_sdk_nativeimage",
+        "@maven//:org_graalvm_sdk_word",
+        "@maven//:org_graalvm_truffle_truffle_api",
+        "@maven//:org_jspecify_jspecify",
+    ],
+)
+
+# The generated JSON bindings; the Myna value runtime they were generated against ships in
+# truffledata-tape from the same release.
+java_library(
+    name = "json_bindings_library",
+    srcs = ["//json/native:java_bindings"],
     resource_strip_prefix = "json/native/generated",
     resources = ["//json/native:native_resources"],
     deps = [
@@ -114,10 +139,14 @@ merge_archives(
         "dev.elide:truffledata-protobuf-runtime:{version}",
         "dev.elide:truffledata-protobuf-buffa-bindings:{version}",
     ] if module == "protobuf-buffa" else []) + ([
+        "dev.elide:truffledata-tape:{version}",
+    ] if module == "tape-jvm" else []) + ([
         "dev.elide:truffledata-json-bindings:{version}",
+        "dev.elide:truffledata-tape:{version}",
     ] if module == "json" else []) + ([
         "dev.elide:truffledata-json:{version}",
         "dev.elide:truffledata-json-bindings:{version}",
+        "dev.elide:truffledata-tape-jvm:{version}",
     ] if module == "json-jvm" else []) + ([
         "dev.elide:truffledata-csv:{version}",
         "dev.elide:truffledata-csv-bindings:{version}",
@@ -130,6 +159,7 @@ merge_archives(
     ] if module in [
         "protobuf-buffa",
         "protobuf-buffa-bindings",
+        "tape",
         "json",
         "json-bindings",
         "csv-bindings",
@@ -205,10 +235,14 @@ sh_test(
         ":protobuf-runtime_import",
         ":protobuf-buffa-bindings_import",
     ] if module == "protobuf-buffa" else []) + ([
+        ":tape_import",
+    ] if module == "tape-jvm" else []) + ([
         ":json-bindings_import",
+        ":tape_import",
     ] if module == "json" else []) + ([
         ":json-bindings_import",
         ":json_import",
+        ":tape-jvm_import",
     ] if module == "json-jvm" else []) + ([
         ":csv-bindings_import",
         ":csv_import",
@@ -221,6 +255,7 @@ sh_test(
     ] if module in [
         "protobuf-buffa",
         "protobuf-buffa-bindings",
+        "tape",
         "json",
         "json-bindings",
         "csv-bindings",
@@ -434,7 +469,10 @@ java_import(
     name = "json-jvm_compile",
     jars = [":json-jvm_binary"],
     neverlink = True,
-    deps = [":json_import"],
+    deps = [
+        ":json_import",
+        ":tape-jvm_import",
+    ],
 )
 
 java_library(
@@ -444,6 +482,7 @@ java_library(
     deps = [
         ":json-jvm_compile",
         ":json_import",
+        ":tape_import",
         "@maven//:org_graalvm_sdk_nativeimage",
     ],
 )

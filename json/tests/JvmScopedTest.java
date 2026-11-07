@@ -15,16 +15,16 @@ import dev.elide.truffledata.ExactNumber;
 import dev.elide.truffledata.Field;
 import dev.elide.truffledata.Missing;
 import dev.elide.truffledata.Schema;
-import dev.elide.truffledata.json.JsonAccess;
-import dev.elide.truffledata.json.JsonArray;
 import dev.elide.truffledata.json.JsonDecoder;
 import dev.elide.truffledata.json.JsonJvm;
 import dev.elide.truffledata.json.JsonMessage;
 import dev.elide.truffledata.json.JsonPlan;
-import dev.elide.truffledata.json.JsonRecord;
 import dev.elide.truffledata.json.JsonSession;
-import dev.elide.truffledata.json.JsonValue;
 import dev.elide.truffledata.json.generated.JsonFFM;
+import dev.elide.truffledata.tape.TapeValue;
+import dev.elide.truffledata.tape.TypedAccess;
+import dev.elide.truffledata.tape.TypedArray;
+import dev.elide.truffledata.tape.TypedRecord;
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.SymbolLookup;
@@ -61,12 +61,12 @@ final class JvmScopedTest {
     }
     Arrays.fill(input, (byte) 'x');
     try (message) {
-      JsonValue root = message.root();
-      assertEquals(JsonValue.Kind.OBJECT, root.kind());
+      TapeValue root = message.root();
+      assertEquals(TapeValue.Kind.OBJECT, root.kind());
       assertEquals("retained child beyond sixteen", root.member("a").element(2).member("s").stringValue());
       assertEquals("\"retained child beyond sixteen\"", root.member("a").element(2).member("s").rawText());
       assertTrue(root.member("a").element(0).booleanValue());
-      assertEquals(JsonValue.Kind.NULL, root.member("a").element(1).kind());
+      assertEquals(TapeValue.Kind.NULL, root.member("a").element(1).kind());
       assertEquals("1e9999999999999999", root.member("n").numberText());
     }
   }
@@ -84,7 +84,7 @@ final class JvmScopedTest {
   void confinesMessagesToTheirThreadAndClosesIdempotently() throws Exception {
     try (JsonDecoder decoder = JsonJvm.open(library());
         JsonMessage message = decoder.decode(utf8("[1,2]"))) {
-      JsonValue root = message.root();
+      TapeValue root = message.root();
       AtomicInteger rejected = new AtomicInteger();
       Thread other =
           new Thread(
@@ -141,7 +141,7 @@ final class JvmScopedTest {
       MemorySegment unpadded = arena.allocate(source.length);
       MemorySegment.copy(source, 0, unpadded, java.lang.foreign.ValueLayout.JAVA_BYTE, 0, source.length);
       try (JsonMessage copied = decoder.adopt(unpadded, source.length, released::incrementAndGet)) {
-        assertEquals(JsonValue.Kind.STRING, copied.root().member("s").kind());
+        assertEquals(TapeValue.Kind.STRING, copied.root().member("s").kind());
       }
       assertEquals(2, released.get());
     }
@@ -186,15 +186,15 @@ final class JvmScopedTest {
                 + "\":{\"an escaped \\u00e9 member name, also long\":[1,2]},\"d\":2.5}");
     try (JsonDecoder decoder = JsonJvm.open(library());
         JsonMessage message = decoder.decode(input)) {
-      dev.elide.truffledata.json.JsonSnapshot snapshot = message.snapshot();
+      dev.elide.truffledata.tape.TapeSnapshot snapshot = message.snapshot();
       assertSame(snapshot, snapshot.snapshot());
       // Message reads go through the FFM tape, snapshot reads through the heap tape.
-      for (JsonValue root : new JsonValue[] {message.root(), snapshot.root()}) {
+      for (TapeValue root : new TapeValue[] {message.root(), snapshot.root()}) {
         assertEquals(2.5, root.member("d").doubleValue());
-        JsonValue inner = root.member(plain);
+        TapeValue inner = root.member(plain);
         assertEquals(2, inner.member(escaped).element(1).longValue());
         // A subtree snapshot copies from the owner's own tape, including a snapshot's heap tape.
-        dev.elide.truffledata.json.JsonSnapshot nested = inner.snapshot();
+        dev.elide.truffledata.tape.TapeSnapshot nested = inner.snapshot();
         assertEquals(5, nested.nodeCount());
         assertEquals(1, nested.root().member(escaped).element(0).longValue());
         assertEquals(escaped, nested.root().keyAt(0).stringValue());
@@ -204,7 +204,7 @@ final class JvmScopedTest {
 
   @Test
   void checkOpenNodeCachesLiveOwnersThenChecksGenerically() {
-    var check = dev.elide.truffledata.json.JsonOwner.CheckOpenNode.create();
+    var check = dev.elide.truffledata.tape.TapeOwner.CheckOpenNode.create();
     try (JsonDecoder decoder = JsonJvm.open(library())) {
       JsonMessage[] messages = new JsonMessage[4];
       for (int i = 0; i < messages.length; i++) messages[i] = decoder.decode(utf8("[" + i + "]"));
@@ -213,7 +213,7 @@ final class JvmScopedTest {
       check.execute(messages[0].snapshot());
       messages[0].close();
       assertThrows(IllegalStateException.class, () -> check.execute(messages[0]));
-      var fresh = dev.elide.truffledata.json.JsonOwner.CheckOpenNode.create();
+      var fresh = dev.elide.truffledata.tape.TapeOwner.CheckOpenNode.create();
       fresh.execute(messages[1]);
       messages[1].close();
       assertThrows(IllegalStateException.class, () -> fresh.execute(messages[1]));
@@ -239,8 +239,8 @@ final class JvmScopedTest {
 
   @Test
   void snapshotsOutliveMessageAndDecoderAndCrossThreads() throws Exception {
-    dev.elide.truffledata.json.JsonSnapshot snapshot;
-    dev.elide.truffledata.json.JsonSnapshot subtree;
+    dev.elide.truffledata.tape.TapeSnapshot snapshot;
+    dev.elide.truffledata.tape.TapeSnapshot subtree;
     try (JsonDecoder decoder = JsonJvm.open(library());
         JsonMessage message =
             decoder.decode(
@@ -248,10 +248,10 @@ final class JvmScopedTest {
       snapshot = message.snapshot();
       subtree = message.root().member("kA").snapshot();
     }
-    JsonValue root = snapshot.root();
-    assertEquals(JsonValue.Kind.OBJECT, root.kind());
+    TapeValue root = snapshot.root();
+    assertEquals(TapeValue.Kind.OBJECT, root.kind());
     assertEquals("\"k\\u0041\"", root.keyAt(0).rawText());
-    JsonValue array = root.member("kA");
+    TapeValue array = root.member("kA");
     assertEquals(4, array.size());
     assertEquals("1", array.element(0).numberText());
     assertEquals("-0", array.element(1).numberText());
@@ -259,7 +259,7 @@ final class JvmScopedTest {
     assertEquals("plain text that is long enough", array.element(3).stringValue());
     assertEquals("\"plain text that is long enough\"", array.element(3).rawText());
     assertEquals("1E400", root.member("n").numberText());
-    assertEquals(JsonValue.Kind.ARRAY, subtree.root().kind());
+    assertEquals(TapeValue.Kind.ARRAY, subtree.root().kind());
     assertEquals(5, subtree.nodeCount());
     assertEquals("plain text that is long enough", subtree.root().element(3).stringValue());
     assertTrue(snapshot.assumption().isValid());
@@ -277,7 +277,7 @@ final class JvmScopedTest {
     source.append(",[\"nested\"]]");
     try (JsonDecoder decoder = JsonJvm.open(library());
         JsonMessage message = decoder.decode(utf8(source.toString()))) {
-      JsonValue array = message.root();
+      TapeValue array = message.root();
       assertEquals(0, message.indexedArrays());
       assertEquals("9999", array.element(9_999).numberText());
       assertEquals(1, message.indexedArrays());
@@ -286,7 +286,7 @@ final class JvmScopedTest {
       assertEquals(1, message.indexedArrays(), "small arrays are walked, not indexed");
       assertThrows(IndexOutOfBoundsException.class, () -> array.element(10_001));
       long count = 0;
-      for (JsonValue element : array.elements()) count++;
+      for (TapeValue element : array.elements()) count++;
       assertEquals(10_001, count);
       assertEquals(1, message.indexedArrays(), "sequential traversal needs no index");
     }
@@ -296,12 +296,12 @@ final class JvmScopedTest {
   void ordersObjectMembersBySource() {
     try (JsonDecoder decoder = JsonJvm.open(library());
         JsonMessage message = decoder.decode(utf8("{\"z\":1,\"a\":[2],\"m\":3}"))) {
-      JsonValue root = message.root();
+      TapeValue root = message.root();
       assertEquals("z", root.keyAt(0).stringValue());
       assertEquals("a", root.keyAt(1).stringValue());
       assertEquals("m", root.keyAt(2).stringValue());
       assertEquals("3", root.memberAt(2).numberText());
-      assertEquals(JsonValue.Kind.ARRAY, root.memberAt(1).kind());
+      assertEquals(TapeValue.Kind.ARRAY, root.memberAt(1).kind());
       assertThrows(IndexOutOfBoundsException.class, () -> root.keyAt(3));
     }
   }
@@ -311,7 +311,7 @@ final class JvmScopedTest {
     StringBuilder source = new StringBuilder("[");
     for (int i = 0; i < 1_000; i++) source.append(i == 0 ? "" : ",").append(i);
     source.append("]");
-    dev.elide.truffledata.json.JsonSnapshot snapshot;
+    dev.elide.truffledata.tape.TapeSnapshot snapshot;
     try (JsonDecoder decoder = JsonJvm.open(library());
         JsonMessage message = decoder.decode(utf8(source.toString()))) {
       snapshot = message.snapshot();
@@ -410,17 +410,17 @@ final class JvmScopedTest {
     try (JsonDecoder decoder = JsonJvm.open(library())) {
       JsonPlan plan = decoder.compile(schema);
       byte[] input = utf8("{\"n\":127,\"s\":\"😀\",\"u\":18446744073709551615}");
-      JsonRecord record = plan.decode(input);
+      TypedRecord record = plan.decode(input);
       Arrays.fill(input, (byte) 'x');
       for (String bad : new String[] {"{\"n\":128,\"u\":0}", "{\"n\":0,\"s\":\"ab\",\"u\":0}", "{\"n\":0}"})
         assertThrows(IllegalArgumentException.class, () -> plan.decode(utf8(bad)), bad);
-      try (JsonRecord missing = plan.decode(utf8("{\"n\":0,\"u\":0}"))) {
+      try (TypedRecord missing = plan.decode(utf8("{\"n\":0,\"u\":0}"))) {
         assertFalse(missing.isPresent(1));
         assertSame(Missing.INSTANCE, data.read(missing, 1));
         assertFalse(data.isPresent(missing, 1));
         assertEquals(0, missing.unsignedValue(2).signum());
       }
-      try (JsonRecord nullable = plan.decode(utf8("{\"n\":0,\"s\":null,\"u\":1}"))) {
+      try (TypedRecord nullable = plan.decode(utf8("{\"n\":0,\"s\":null,\"u\":1}"))) {
         assertTrue(nullable.isPresent(1) && nullable.isNull(1));
         assertSame(DataNull.INSTANCE, data.read(nullable, 1));
         assertTrue(data.isPresent(nullable, 1));
@@ -450,19 +450,19 @@ final class JvmScopedTest {
   void typedAccessorsPreserveMissingAndNull() throws Exception {
     DataLibrary data = DataLibrary.factory().getUncached();
     Schema schema = Schema.of(new Field("n", Field.Kind.INT64, true, true));
-    JsonAccess access = new JsonAccess(schema, 0);
-    JsonAccess wrong = new JsonAccess(Schema.of(Field.requiredLong("n")), 0);
+    TypedAccess access = new TypedAccess(schema, 0);
+    TypedAccess wrong = new TypedAccess(Schema.of(Field.requiredLong("n")), 0);
     try (JsonDecoder decoder = JsonJvm.open(library());
         JsonPlan plan = decoder.compile(schema)) {
       for (String input : new String[] {"{}", "{\"n\":null}"}) {
-        try (JsonRecord record = plan.decode(utf8(input))) {
+        try (TypedRecord record = plan.decode(utf8(input))) {
           assertSame(
               input.equals("{}") ? Missing.INSTANCE : DataNull.INSTANCE, data.read(record, 0));
           assertThrows(UnexpectedResultException.class, () -> data.readLong(record, 0));
           assertThrows(IllegalStateException.class, () -> access.longValue(record));
         }
       }
-      try (JsonRecord record = plan.decode(utf8("{\"n\":7}"))) {
+      try (TypedRecord record = plan.decode(utf8("{\"n\":7}"))) {
         assertEquals(7, access.longValue(record));
         assertEquals(7, data.readLong(record, 0));
         assertThrows(IllegalArgumentException.class, () -> wrong.longValue(record));
@@ -522,7 +522,7 @@ final class JvmScopedTest {
               "{\"id\":7,\"line\":{\"a\":{\"x\":1,\"y\":2.5},\"b\":null},"
                   + "\"points\":[{\"x\":10,\"y\":0.5,\"tag\":\"p0\"},{\"x\":20,\"y\":1.5},"
                   + "{\"x\":30,\"y\":2.5,\"tag\":null}],\"scores\":[1,2,100],\"names\":[]}");
-      JsonRecord record = plan.decode(input);
+      TypedRecord record = plan.decode(input);
       Arrays.fill(input, (byte) 'x');
       for (String bad :
           new String[] {
@@ -535,7 +535,7 @@ final class JvmScopedTest {
             "{\"id\":0,\"line\":{},\"points\":[]}"
           })
         assertThrows(IllegalArgumentException.class, () -> plan.decode(utf8(bad)), bad);
-      try (JsonRecord nullable =
+      try (TypedRecord nullable =
           plan.decode(
               utf8("{\"id\":0,\"line\":{\"a\":{\"x\":1,\"y\":1}},\"points\":[],\"scores\":null}"))) {
         assertTrue(nullable.isNull(3) && !nullable.isPresent(4));
@@ -545,37 +545,37 @@ final class JvmScopedTest {
       }
       plan.close();
 
-      // Nested primitives through JsonAccess paths: no intermediate JsonRecord.
-      JsonAccess x = new JsonAccess(root, types, 1, 0, 0);
-      JsonAccess y = new JsonAccess(root, types, 1, 0, 1);
-      JsonAccess bx = new JsonAccess(root, types, 1, 1, 0);
+      // Nested primitives through TypedAccess paths: no intermediate TypedRecord.
+      TypedAccess x = new TypedAccess(root, types, 1, 0, 0);
+      TypedAccess y = new TypedAccess(root, types, 1, 0, 1);
+      TypedAccess bx = new TypedAccess(root, types, 1, 1, 0);
       assertEquals(1, x.longValue(record));
       assertEquals(2.5, y.doubleValue(record));
       assertThrows(IllegalStateException.class, () -> bx.longValue(record));
-      assertThrows(IllegalArgumentException.class, () -> new JsonAccess(root, types, 2, 0));
+      assertThrows(IllegalArgumentException.class, () -> new TypedAccess(root, types, 2, 0));
       assertThrows(IllegalArgumentException.class, () -> x.longValue(record.record(1)));
 
       // Records and arrays through Java, DataLibrary and interop.
-      JsonRecord lineRecord = record.record(1);
+      TypedRecord lineRecord = record.record(1);
       assertSame(line, lineRecord.schema());
       assertSame(point, lineRecord.record(0).schema());
       assertEquals(1, lineRecord.record(0).longValue(0));
       assertTrue(lineRecord.isNull(1));
-      assertInstanceOf(JsonRecord.class, data.read(record, 1));
-      assertInstanceOf(JsonArray.class, data.read(record, 2));
-      JsonArray points = record.array(2);
+      assertInstanceOf(TypedRecord.class, data.read(record, 1));
+      assertInstanceOf(TypedArray.class, data.read(record, 2));
+      TypedArray points = record.array(2);
       assertEquals(3, points.size());
       long xs = 0;
       for (int i = 0; i < points.size(); i++) xs += points.record(i).longValue(0);
       assertEquals(60, xs);
       assertEquals("p0", points.record(0).stringValue(2));
       assertTrue(!points.record(1).isPresent(2) && points.record(2).isNull(2));
-      assertInstanceOf(JsonRecord.class, points.element(1));
-      JsonArray scores = record.array(3);
+      assertInstanceOf(TypedRecord.class, points.element(1));
+      TypedArray scores = record.array(3);
       assertEquals(3, scores.size());
       assertEquals(100, scores.longValue(2));
       assertEquals(1L, scores.element(0));
-      JsonArray names = (JsonArray) data.read(record, 4);
+      TypedArray names = (TypedArray) data.read(record, 4);
       assertEquals(0, names.size());
       assertEquals(0, names.snapshot().size());
       Object guestPoints = interop.readMember(record, "points");
@@ -663,8 +663,8 @@ final class JvmScopedTest {
         }
         try (JsonPlan deep = decoder.compile(chainRoot, chain)) {
           String json = "{\"c\":".repeat(depth - 1) + "{\"leaf\":5}" + "}".repeat(depth - 1);
-          try (JsonRecord deepRecord = deep.decode(utf8(json))) {
-            assertEquals(5, new JsonAccess(chainRoot, chain, new int[depth]).longValue(deepRecord));
+          try (TypedRecord deepRecord = deep.decode(utf8(json))) {
+            assertEquals(5, new TypedAccess(chainRoot, chain, new int[depth]).longValue(deepRecord));
           }
         }
       }
@@ -683,14 +683,14 @@ final class JvmScopedTest {
             array("ss", new Field("e", Field.Kind.STRING, false, false), false, false));
     try (JsonDecoder decoder = JsonJvm.open(library());
         JsonPlan plan = decoder.compile(schema);
-        JsonRecord record =
+        TypedRecord record =
             plan.decode(
                 utf8(
                     "{\"n\":3,\"d\":1.5,\"b\":true,\"ds\":[0.5,2.0],\"bs\":[true,false],"
                         + "\"ss\":[\"x\",\"a string longer than sixteen\"]}"))) {
       assertTrue(record.booleanValue(2));
-      assertTrue(new JsonAccess(schema, 2).booleanValue(record));
-      // A cached library binds JsonAccess per (schema, index); the uncached one reads generically.
+      assertTrue(new TypedAccess(schema, 2).booleanValue(record));
+      // A cached library binds TypedAccess per (schema, index); the uncached one reads generically.
       DataLibrary cached = DataLibrary.factory().create(record);
       new com.oracle.truffle.api.nodes.RootNode(null) {
         @Child DataLibrary library = cached;
@@ -712,14 +712,14 @@ final class JvmScopedTest {
       assertTrue(uncached.readBoolean(record, 2));
       assertThrows(UnexpectedResultException.class, () -> uncached.readDouble(record, 0));
       assertThrows(UnexpectedResultException.class, () -> uncached.readBoolean(record, 0));
-      JsonArray doubles = record.array(3);
+      TypedArray doubles = record.array(3);
       assertEquals(Field.Kind.FLOAT64, doubles.elementField().kind());
       assertEquals(2.0, doubles.doubleValue(1));
       assertEquals(0.5, doubles.element(0));
-      JsonArray booleans = record.array(4);
+      TypedArray booleans = record.array(4);
       assertFalse(booleans.booleanValue(1));
       assertEquals(true, booleans.element(0));
-      JsonArray strings = record.array(5);
+      TypedArray strings = record.array(5);
       assertEquals("a string longer than sixteen", strings.stringValue(1));
       assertEquals("x", strings.element(0));
       assertThrows(IllegalArgumentException.class, () -> strings.longValue(0));
@@ -733,7 +733,7 @@ final class JvmScopedTest {
     Schema schema = Schema.of(Field.requiredLong("n"));
     JsonDecoder decoder = JsonJvm.open(library());
     JsonPlan plan = decoder.compile(schema);
-    JsonRecord record = plan.decode(utf8("{\"n\":5}"));
+    TypedRecord record = plan.decode(utf8("{\"n\":5}"));
     decoder.close();
     assertThrows(IllegalStateException.class, () -> plan.decode(utf8("{\"n\":6}")));
     assertThrows(IllegalStateException.class, () -> decoder.compile(schema));
@@ -746,7 +746,7 @@ final class JvmScopedTest {
     // A sibling decoder's plan is independent of the closed one.
     try (JsonDecoder other = JsonJvm.open(library());
         JsonPlan sibling = other.compile(schema);
-        JsonRecord fresh = sibling.decode(utf8("{\"n\":7}"))) {
+        TypedRecord fresh = sibling.decode(utf8("{\"n\":7}"))) {
       assertEquals(7, fresh.longValue(0));
     }
   }
@@ -757,7 +757,7 @@ final class JvmScopedTest {
         JsonPlan plan = decoder.compile(Schema.of(Field.requiredLong("n")))) {
       assertEquals(
           2, rejectedOnOtherThread(() -> plan.decode(utf8("{\"n\":1}")), plan::close));
-      try (JsonRecord record = plan.decode(utf8("{\"n\":1}"))) {
+      try (TypedRecord record = plan.decode(utf8("{\"n\":1}"))) {
         assertEquals(1, record.longValue(0));
       }
     }
@@ -791,7 +791,7 @@ final class JvmScopedTest {
   void elementIterablesCheckTheOwnerWhenIterated() throws Exception {
     try (JsonDecoder decoder = JsonJvm.open(library())) {
       JsonMessage message = decoder.decode(utf8("[1,2,3]"));
-      Iterable<JsonValue> elements = message.root().elements();
+      Iterable<TapeValue> elements = message.root().elements();
       var crossThread = new java.util.concurrent.atomic.AtomicReference<Throwable>();
       Thread other = new Thread(() -> {
         try {
@@ -819,20 +819,20 @@ final class JvmScopedTest {
     try (JsonDecoder decoder = JsonJvm.open(library());
         JsonPlan narrowPlan = decoder.compile(root, Map.of("T", narrow));
         JsonPlan widePlan = decoder.compile(root, Map.of("T", wide))) {
-      var access = new JsonAccess(root, Map.of("T", narrow), 0, 0);
-      try (JsonRecord ok = narrowPlan.decode(utf8("{\"t\":{\"a\":5}}"));
-          JsonRecord other = widePlan.decode(utf8("{\"t\":{\"b\":1.5,\"a\":6}}"))) {
+      var access = new TypedAccess(root, Map.of("T", narrow), 0, 0);
+      try (TypedRecord ok = narrowPlan.decode(utf8("{\"t\":{\"a\":5}}"));
+          TypedRecord other = widePlan.decode(utf8("{\"t\":{\"b\":1.5,\"a\":6}}"))) {
         assertEquals(5, access.longValue(ok));
         // Same root Schema object, different record layout: the hop must not index the wrong slots.
         assertThrows(IllegalArgumentException.class, () -> access.longValue(other));
-        assertEquals(6, new JsonAccess(root, Map.of("T", wide), 0, 1).longValue(other));
+        assertEquals(6, new TypedAccess(root, Map.of("T", wide), 0, 1).longValue(other));
       }
     }
   }
 
   // ---- JVM sessions (performance plan Task E1): mirrors SvmAcceptance.sessions() ----
 
-  private static Map<?, ?> tree(dev.elide.truffledata.json.JavaSink sink) {
+  private static Map<?, ?> tree(dev.elide.truffledata.tape.JavaSink sink) {
     return (Map<?, ?>) java.util.Objects.requireNonNull(sink.result());
   }
 
@@ -845,7 +845,7 @@ final class JvmScopedTest {
     try {
       // borrow_invalidated_by_next_parse: a captured view throws once the borrow ends and after
       // the next parse; the session itself stays usable.
-      var escaped = new JsonValue[1];
+      var escaped = new TapeValue[1];
       long id =
           session.with(
               first,
@@ -857,17 +857,17 @@ final class JvmScopedTest {
               });
       assertEquals(1, id);
       assertThrows(IllegalStateException.class, () -> escaped[0].stringValue());
-      var sink = new dev.elide.truffledata.json.JavaSink();
+      var sink = new dev.elide.truffledata.tape.JavaSink();
       session.parse(second, sink);
       assertEquals(2L, tree(sink).get("id"));
       assertThrows(IllegalStateException.class, () -> escaped[0].stringValue());
       byte[] framed = utf8("xx{\"id\":3}yy");
-      var slice = new dev.elide.truffledata.json.JavaSink();
+      var slice = new dev.elide.truffledata.tape.JavaSink();
       session.parse(framed, 2, framed.length - 4, slice);
       assertEquals(3L, tree(slice).get("id"));
       // Retained decodes outlive later decodes and the session.
       kept = session.decode(first);
-      session.parse(second, new dev.elide.truffledata.json.JavaSink());
+      session.parse(second, new dev.elide.truffledata.tape.JavaSink());
       assertEquals("retained text longer than inline storage", kept.root().member("note").stringValue());
       try (JsonMessage sliced = session.decode(framed, 2, framed.length - 4)) {
         assertEquals(3L, sliced.root().member("id").longValue());
@@ -878,14 +878,14 @@ final class JvmScopedTest {
           () ->
               session.parse(
                   first,
-                  new dev.elide.truffledata.json.JsonSink() {
+                  new dev.elide.truffledata.tape.TapeSink() {
                     public void beginObject(long members) {
-                      session.parse(second, new dev.elide.truffledata.json.JavaSink());
+                      session.parse(second, new dev.elide.truffledata.tape.JavaSink());
                     }
 
                     public void beginArray(long elements) {}
 
-                    public void key(dev.elide.truffledata.json.JsonText name) {}
+                    public void key(dev.elide.truffledata.tape.TapeText name) {}
 
                     public void end() {}
 
@@ -899,9 +899,9 @@ final class JvmScopedTest {
 
                     public void unsignedValue(long bits) {}
 
-                    public void decimalValue(dev.elide.truffledata.json.JsonText token) {}
+                    public void decimalValue(dev.elide.truffledata.tape.TapeText token) {}
 
-                    public void stringValue(dev.elide.truffledata.json.JsonText text) {}
+                    public void stringValue(dev.elide.truffledata.tape.TapeText text) {}
                   }));
       assertThrows(IllegalStateException.class, () -> session.with(first, root -> session.decode(second)));
       assertThrows(
@@ -914,7 +914,7 @@ final class JvmScopedTest {
                     return Boolean.TRUE;
                   }));
       // Shared-text sinks work on the JVM too; their strings are copied (no text arena).
-      var truffle = new dev.elide.truffledata.json.TruffleSink(new dev.elide.truffledata.json.TruffleSink.KeyCache());
+      var truffle = new dev.elide.truffledata.tape.TruffleSink(new dev.elide.truffledata.tape.TruffleSink.KeyCache());
       session.parse(first, truffle);
       assertEquals(
           com.oracle.truffle.api.strings.TruffleString.fromJavaStringUncached(
@@ -925,7 +925,7 @@ final class JvmScopedTest {
                       "note", com.oracle.truffle.api.strings.TruffleString.Encoding.UTF_16)));
       // Invalid input publishes nothing and leaves the session reusable.
       for (String bad : new String[] {"[1,]", "{\"a\":1,\"a\":2}", "[\"\\q\"]", "01"}) {
-        assertThrows(IllegalArgumentException.class, () -> session.parse(utf8(bad), new dev.elide.truffledata.json.JavaSink()));
+        assertThrows(IllegalArgumentException.class, () -> session.parse(utf8(bad), new dev.elide.truffledata.tape.JavaSink()));
         assertThrows(IllegalArgumentException.class, () -> session.decode(utf8(bad)));
       }
       assertThrows(IllegalArgumentException.class, () -> session.validate(new byte[0]));
@@ -934,7 +934,7 @@ final class JvmScopedTest {
       for (String source :
           new String[] {"{\"id\":1}", "{\"café\":\"ÿ\"}", "{\"clé\":\"中 😀\"}"}) {
         Object expected;
-        var fromBytes = new dev.elide.truffledata.json.JavaSink();
+        var fromBytes = new dev.elide.truffledata.tape.JavaSink();
         session.parse(utf8(source), fromBytes);
         expected = tree(fromBytes);
         for (var encoding :
@@ -942,7 +942,7 @@ final class JvmScopedTest {
               com.oracle.truffle.api.strings.TruffleString.Encoding.UTF_16,
               com.oracle.truffle.api.strings.TruffleString.Encoding.UTF_8
             }) {
-          var guest = new dev.elide.truffledata.json.JavaSink();
+          var guest = new dev.elide.truffledata.tape.JavaSink();
           session.parse(com.oracle.truffle.api.strings.TruffleString.fromJavaStringUncached(source, encoding), guest);
           assertEquals(expected, tree(guest));
         }
@@ -953,7 +953,7 @@ final class JvmScopedTest {
               session.parse(
                   com.oracle.truffle.api.strings.TruffleString.fromJavaStringUncached(
                       "[\"\ud800\"]", com.oracle.truffle.api.strings.TruffleString.Encoding.UTF_16),
-                  new dev.elide.truffledata.json.JavaSink()));
+                  new dev.elide.truffledata.tape.JavaSink()));
       assertThrows(
           IllegalArgumentException.class,
           () ->
@@ -962,41 +962,41 @@ final class JvmScopedTest {
                       new byte[] {'[', '"', (byte) 0xff, '"', ']'},
                       com.oracle.truffle.api.strings.TruffleString.Encoding.UTF_8,
                       false),
-                  new dev.elide.truffledata.json.JavaSink()));
+                  new dev.elide.truffledata.tape.JavaSink()));
       // Native segments: borrowed for the call and copied natively; heap, closed and other
       // threads' segments are rejected before entry.
       try (Arena arena = Arena.ofConfined()) {
         MemorySegment native_ = arena.allocate(first.length + 8);
         MemorySegment.copy(first, 0, native_, ValueLayout.JAVA_BYTE, 0, first.length);
-        var fromSegment = new dev.elide.truffledata.json.JavaSink();
+        var fromSegment = new dev.elide.truffledata.tape.JavaSink();
         session.parse(native_, first.length, fromSegment);
         assertEquals(1L, tree(fromSegment).get("id"));
         assertThrows(
             IllegalArgumentException.class,
-            () -> session.parse(MemorySegment.ofArray(first), first.length, new dev.elide.truffledata.json.JavaSink()));
+            () -> session.parse(MemorySegment.ofArray(first), first.length, new dev.elide.truffledata.tape.JavaSink()));
         assertThrows(
             IllegalArgumentException.class,
-            () -> session.parse(native_, native_.byteSize() + 1, new dev.elide.truffledata.json.JavaSink()));
+            () -> session.parse(native_, native_.byteSize() + 1, new dev.elide.truffledata.tape.JavaSink()));
         assertThrows(
-            IllegalArgumentException.class, () -> session.parse(native_, 0, new dev.elide.truffledata.json.JavaSink()));
+            IllegalArgumentException.class, () -> session.parse(native_, 0, new dev.elide.truffledata.tape.JavaSink()));
       }
       MemorySegment closed;
       try (Arena arena = Arena.ofConfined()) {
         closed = arena.allocate(8);
       }
-      assertThrows(IllegalStateException.class, () -> session.parse(closed, 2, new dev.elide.truffledata.json.JavaSink()));
+      assertThrows(IllegalStateException.class, () -> session.parse(closed, 2, new dev.elide.truffledata.tape.JavaSink()));
       var other = new MemorySegment[1];
       Thread allocator = new Thread(() -> other[0] = Arena.ofConfined().allocate(8));
       allocator.start();
       allocator.join();
-      assertThrows(IllegalStateException.class, () -> session.parse(other[0], 2, new dev.elide.truffledata.json.JavaSink()));
+      assertThrows(IllegalStateException.class, () -> session.parse(other[0], 2, new dev.elide.truffledata.tape.JavaSink()));
       // Sessions are confined to their opening thread.
       var failure = new Throwable[1];
       Thread intruder =
           new Thread(
               () -> {
                 try {
-                  session.parse(first, new dev.elide.truffledata.json.JavaSink());
+                  session.parse(first, new dev.elide.truffledata.tape.JavaSink());
                 } catch (Throwable expected) {
                   failure[0] = expected;
                 }
@@ -1010,7 +1010,7 @@ final class JvmScopedTest {
       session.close();
     }
     session.close();
-    assertThrows(IllegalStateException.class, () -> session.parse(first, new dev.elide.truffledata.json.JavaSink()));
+    assertThrows(IllegalStateException.class, () -> session.parse(first, new dev.elide.truffledata.tape.JavaSink()));
     assertThrows(IllegalStateException.class, () -> session.criticalDecodes());
     // Limits apply per document.
     try (JsonSession limited =
@@ -1059,9 +1059,9 @@ final class JvmScopedTest {
       session.validate(over);
       assertEquals(1, session.criticalDecodes(), "4,097 bytes take the normal path");
       // Same results either way, borrowed and retained.
-      var a = new dev.elide.truffledata.json.JavaSink();
+      var a = new dev.elide.truffledata.tape.JavaSink();
       session.parse(small, a);
-      var b = new dev.elide.truffledata.json.JavaSink();
+      var b = new dev.elide.truffledata.tape.JavaSink();
       normal.parse(small, b);
       assertEquals(tree(b), tree(a));
       try (JsonMessage kept = session.decode(small)) {
@@ -1070,7 +1070,7 @@ final class JvmScopedTest {
       assertEquals(0, normal.criticalDecodes());
       assertThrows(IllegalArgumentException.class, () -> session.validate(utf8("[1,]")));
       // UTF-16 guest strings count their UTF-16 bytes against the limit.
-      var guest = new dev.elide.truffledata.json.JavaSink();
+      var guest = new dev.elide.truffledata.tape.JavaSink();
       long before = session.criticalDecodes();
       session.parse(
           com.oracle.truffle.api.strings.TruffleString.fromJavaStringUncached(
@@ -1095,7 +1095,7 @@ final class JvmScopedTest {
       long deadline = System.nanoTime() + 2_000_000_000L;
       long decodes = 0;
       while (System.nanoTime() < deadline) {
-        session.parse(small, new dev.elide.truffledata.json.JavaSink());
+        session.parse(small, new dev.elide.truffledata.tape.JavaSink());
         decodes++;
       }
       stop.set(true);
@@ -1142,7 +1142,7 @@ final class JvmScopedTest {
         try (var stream = session.stream(options)) {
           long sum = 0, count = 0;
           int at = 0;
-          JsonValue root;
+          TapeValue root;
           while (at < input.length) {
             at += stream.feed(input, at, Math.min(chunk, input.length - at));
             while ((root = stream.next()) != null) {
@@ -1162,21 +1162,21 @@ final class JvmScopedTest {
         }
       }
       try (var stream = session.stream(options)) {
-        // next(JsonSink) exports each document; strings are copied (no shared text array).
+        // next(TapeSink) exports each document; strings are copied (no shared text array).
         assertEquals(1024, stream.feed(input));
-        var sink = new dev.elide.truffledata.json.JavaSink();
+        var sink = new dev.elide.truffledata.tape.JavaSink();
         assertTrue(stream.next(sink));
         assertEquals(0L, tree(sink).get("id"));
         // Backpressure: a region still being read accepts nothing.
         assertEquals(0, stream.feed(input, 0, 10));
         // A lent root is valid until the next call; retain detaches it into an owned message.
-        JsonValue lent = stream.next();
+        TapeValue lent = stream.next();
         assertNotNull(lent);
         assertEquals(1L, lent.element(0).longValue());
         kept = stream.retain();
         assertThrows(IllegalStateException.class, lent::kind);
         assertThrows(IllegalStateException.class, stream::retain);  // nothing lent any more
-        JsonValue next = stream.next();
+        TapeValue next = stream.next();
         assertNotNull(next);
         // Any session call ends the lent document; views of it throw afterwards.
         session.validate(utf8("[1]"));
@@ -1235,7 +1235,7 @@ final class JvmScopedTest {
       // Closing the session closes its streams and ends a lent document.
       var open = session.stream(options);
       open.feed(utf8("[8]\n"));
-      JsonValue lent = open.next();
+      TapeValue lent = open.next();
       assertNotNull(lent);
       session.close();
       assertThrows(IllegalStateException.class, lent::kind);
@@ -1249,7 +1249,7 @@ final class JvmScopedTest {
     kept.close();
   }
 
-  private static long streamedId(JsonValue root) {
+  private static long streamedId(TapeValue root) {
     return switch (root.kind()) {
       case OBJECT -> root.member("id").longValue();
       case ARRAY -> root.element(0).longValue();
@@ -1259,10 +1259,10 @@ final class JvmScopedTest {
   }
 
   /** A sink that runs {@code action} on its first event. */
-  private static dev.elide.truffledata.json.JsonSink reentrant(Runnable action) {
-    return new dev.elide.truffledata.json.JsonSink() {
+  private static dev.elide.truffledata.tape.TapeSink reentrant(Runnable action) {
+    return new dev.elide.truffledata.tape.TapeSink() {
       @Override public void beginObject(long members) { action.run(); }
-      @Override public void key(dev.elide.truffledata.json.JsonText key) { action.run(); }
+      @Override public void key(dev.elide.truffledata.tape.TapeText key) { action.run(); }
       @Override public void beginArray(long elements) { action.run(); }
       @Override public void end() { action.run(); }
       @Override public void nullValue() { action.run(); }
@@ -1270,8 +1270,8 @@ final class JvmScopedTest {
       @Override public void longValue(long value) { action.run(); }
       @Override public void doubleValue(double value) { action.run(); }
       @Override public void unsignedValue(long bits) { action.run(); }
-      @Override public void decimalValue(dev.elide.truffledata.json.JsonText token) { action.run(); }
-      @Override public void stringValue(dev.elide.truffledata.json.JsonText text) { action.run(); }
+      @Override public void decimalValue(dev.elide.truffledata.tape.TapeText token) { action.run(); }
+      @Override public void stringValue(dev.elide.truffledata.tape.TapeText text) { action.run(); }
     };
   }
 }

@@ -307,10 +307,10 @@ public final class SvmAcceptance {
     }
     plan.close();
 
-    // Nested primitives through JsonAccess paths: no intermediate JsonRecord.
-    var x = new dev.elide.truffledata.json.JsonAccess(root, types, 1, 0, 0);
-    var y = new dev.elide.truffledata.json.JsonAccess(root, types, 1, 0, 1);
-    var bx = new dev.elide.truffledata.json.JsonAccess(root, types, 1, 1, 0);
+    // Nested primitives through TypedAccess paths: no intermediate TypedRecord.
+    var x = new dev.elide.truffledata.tape.TypedAccess(root, types, 1, 0, 0);
+    var y = new dev.elide.truffledata.tape.TypedAccess(root, types, 1, 0, 1);
+    var bx = new dev.elide.truffledata.tape.TypedAccess(root, types, 1, 1, 0);
     require(x.longValue(record) == 1 && y.doubleValue(record) == 2.5);
     try {
       bx.longValue(record);
@@ -318,7 +318,7 @@ public final class SvmAcceptance {
     } catch (IllegalStateException expected) {
     }
     try {
-      new dev.elide.truffledata.json.JsonAccess(root, types, 2, 0);
+      new dev.elide.truffledata.tape.TypedAccess(root, types, 2, 0);
       throw new AssertionError("Path hop through an array");
     } catch (IllegalArgumentException expected) {
     }
@@ -332,8 +332,8 @@ public final class SvmAcceptance {
     var lineRecord = record.record(1);
     require(lineRecord.schema() == line && lineRecord.record(0).schema() == point);
     require(lineRecord.record(0).longValue(0) == 1 && lineRecord.isNull(1));
-    require(data.read(record, 1) instanceof dev.elide.truffledata.json.JsonRecord);
-    require(data.read(record, 2) instanceof dev.elide.truffledata.json.JsonArray);
+    require(data.read(record, 1) instanceof dev.elide.truffledata.tape.TypedRecord);
+    require(data.read(record, 2) instanceof dev.elide.truffledata.tape.TypedArray);
     var points = record.array(2);
     require(points.size() == 3);
     long xs = 0;
@@ -341,10 +341,10 @@ public final class SvmAcceptance {
     require(xs == 60);
     require(points.record(0).stringValue(2).equals("p0"));
     require(!points.record(1).isPresent(2) && points.record(2).isNull(2));
-    require(points.element(1) instanceof dev.elide.truffledata.json.JsonRecord);
+    require(points.element(1) instanceof dev.elide.truffledata.tape.TypedRecord);
     var scores = record.array(3);
     require(scores.size() == 3 && scores.longValue(2) == 100 && scores.element(0).equals(1L));
-    var names = (dev.elide.truffledata.json.JsonArray) data.read(record, 4);
+    var names = (dev.elide.truffledata.tape.TypedArray) data.read(record, 4);
     require(names.size() == 0 && names.snapshot().size() == 0);
     var guestPoints = interop.readMember(record, "points");
     require(interop.hasArrayElements(guestPoints) && interop.getArraySize(guestPoints) == 3);
@@ -459,7 +459,7 @@ public final class SvmAcceptance {
       try (var deep = dev.elide.truffledata.json.JsonPlan.compile(chainRoot, chain)) {
         String json = "{\"c\":".repeat(depth - 1) + "{\"leaf\":5}" + "}".repeat(depth - 1);
         try (var deepRecord = deep.decode(json.getBytes(StandardCharsets.UTF_8))) {
-          var leaf = new dev.elide.truffledata.json.JsonAccess(chainRoot, chain, new int[depth]);
+          var leaf = new dev.elide.truffledata.tape.TypedAccess(chainRoot, chain, new int[depth]);
           require(leaf.longValue(deepRecord) == 5);
         }
       }
@@ -472,9 +472,9 @@ public final class SvmAcceptance {
         dev.elide.truffledata.Schema.of(
             new dev.elide.truffledata.Field(
                 "n", dev.elide.truffledata.Field.Kind.INT64, true, true));
-    var access = new dev.elide.truffledata.json.JsonAccess(schema, 0);
+    var access = new dev.elide.truffledata.tape.TypedAccess(schema, 0);
     var wrong =
-        new dev.elide.truffledata.json.JsonAccess(
+        new dev.elide.truffledata.tape.TypedAccess(
             dev.elide.truffledata.Schema.of(dev.elide.truffledata.Field.requiredLong("n")), 0);
     try (var plan = dev.elide.truffledata.json.JsonPlan.compile(schema)) {
       for (String input : new String[] {"{}", "{\"n\":null}"}) {
@@ -599,7 +599,7 @@ public final class SvmAcceptance {
     try {
       // borrow_invalidated_by_next_parse: a captured view throws once the borrow ends and after
       // the next parse; the session itself stays usable.
-      var escaped = new dev.elide.truffledata.json.JsonValue[1];
+      var escaped = new dev.elide.truffledata.tape.TapeValue[1];
       long id =
           session.with(
               first,
@@ -609,28 +609,28 @@ public final class SvmAcceptance {
               });
       require(id == 1);
       require(throwsState(() -> escaped[0].stringValue()));
-      var sink = new dev.elide.truffledata.json.JavaSink();
+      var sink = new dev.elide.truffledata.tape.JavaSink();
       session.parse(second, sink);
       require(throwsState(() -> escaped[0].kind()));
       require("second".equals(((java.util.Map<?, ?>) java.util.Objects.requireNonNull(sink.result())).get("note")));
       // Offsets select a slice of a larger buffer.
       byte[] framed = ("xx" + new String(second, StandardCharsets.UTF_8) + "yy").getBytes(StandardCharsets.UTF_8);
-      var slice = new dev.elide.truffledata.json.JavaSink();
+      var slice = new dev.elide.truffledata.tape.JavaSink();
       session.parse(framed, 2, second.length, slice);
       require(Long.valueOf(2).equals(((java.util.Map<?, ?>) java.util.Objects.requireNonNull(slice.result())).get("id")));
       // Re-entering the session from a sink event or a reader is rejected; the session survives.
       var reentrant =
-          new dev.elide.truffledata.json.JsonSink() {
+          new dev.elide.truffledata.tape.TapeSink() {
             @Override
             public void beginObject(long members) {
-              session.parse(second, new dev.elide.truffledata.json.JavaSink());
+              session.parse(second, new dev.elide.truffledata.tape.JavaSink());
             }
 
             @Override
             public void beginArray(long elements) {}
 
             @Override
-            public void key(dev.elide.truffledata.json.JsonText name) {}
+            public void key(dev.elide.truffledata.tape.TapeText name) {}
 
             @Override
             public void end() {}
@@ -651,10 +651,10 @@ public final class SvmAcceptance {
             public void unsignedValue(long bits) {}
 
             @Override
-            public void decimalValue(dev.elide.truffledata.json.JsonText token) {}
+            public void decimalValue(dev.elide.truffledata.tape.TapeText token) {}
 
             @Override
-            public void stringValue(dev.elide.truffledata.json.JsonText text) {}
+            public void stringValue(dev.elide.truffledata.tape.TapeText text) {}
           };
       require(throwsState(() -> session.parse(first, reentrant)));
       require(throwsState(() -> session.with(first, root -> session.decode(second))));
@@ -729,11 +729,11 @@ public final class SvmAcceptance {
         try (var stream = session.stream(options)) {
           long sum = 0;
           int at = 0;
-          dev.elide.truffledata.json.JsonValue root;
+          dev.elide.truffledata.tape.TapeValue root;
           while (at < input.length) {
             at += stream.feed(input, at, Math.min(chunk, input.length - at));
             while ((root = stream.next()) != null)
-              sum += root.kind() == dev.elide.truffledata.json.JsonValue.Kind.OBJECT ? root.member("id").longValue() : root.element(0).longValue();
+              sum += root.kind() == dev.elide.truffledata.tape.TapeValue.Kind.OBJECT ? root.member("id").longValue() : root.element(0).longValue();
           }
           stream.finish();
           require(stream.next() == null && stream.documents() == 500 && sum == expected);
@@ -742,7 +742,7 @@ public final class SvmAcceptance {
       try (var stream = session.stream(options)) {
         require(stream.feed(input) == 512);
         // Streams copy strings: a TruffleSink gets no shared text array.
-        var truffle = new dev.elide.truffledata.json.TruffleSink(new dev.elide.truffledata.json.TruffleSink.KeyCache());
+        var truffle = new dev.elide.truffledata.tape.TruffleSink(new dev.elide.truffledata.tape.TruffleSink.KeyCache());
         require(stream.next(truffle));
         var text = (com.oracle.truffle.api.strings.TruffleString) member((java.util.Map<?, ?>) java.util.Objects.requireNonNull(truffle.result()), "s");
         require(text.toJavaStringUncached().equals("caf\u00e9 \u00e9 text beyond inline"));
@@ -753,7 +753,7 @@ public final class SvmAcceptance {
         var next = java.util.Objects.requireNonNull(stream.next());
         session.validate("[1]".getBytes(StandardCharsets.UTF_8));
         require(throwsState(next::kind));
-        stream.next(new dev.elide.truffledata.json.JavaSink());
+        stream.next(new dev.elide.truffledata.tape.JavaSink());
         stream.feed("[1,]\n[5]\n".getBytes(StandardCharsets.UTF_8));
       }
       try (var stream = session.stream(options)) {
@@ -807,13 +807,13 @@ public final class SvmAcceptance {
         byte[] input = ("{\"s\":\"" + spelled + "\",\"k\":[\"" + spelled + "\"]}").getBytes(StandardCharsets.UTF_8);
         try (var message = dev.elide.truffledata.json.JsonSvm.decode(input)) {
           require(message.root().member("s").stringValue().equals(text));
-          var sink = new dev.elide.truffledata.json.JavaSink(new dev.elide.truffledata.json.JavaSink.KeyCache());
+          var sink = new dev.elide.truffledata.tape.JavaSink(new dev.elide.truffledata.tape.JavaSink.KeyCache());
           message.export(sink);
           var tree = (java.util.Map<?, ?>) java.util.Objects.requireNonNull(sink.result());
           require(text.equals(tree.get("s")) && java.util.List.of(text).equals(tree.get("k")));
         }
         try (var session = dev.elide.truffledata.json.JsonSession.open()) {
-          var sink = new dev.elide.truffledata.json.JavaSink();
+          var sink = new dev.elide.truffledata.tape.JavaSink();
           session.parse(input, sink);
           require(text.equals(((java.util.Map<?, ?>) java.util.Objects.requireNonNull(sink.result())).get("s")));
         }
@@ -842,7 +842,7 @@ public final class SvmAcceptance {
    * overwrites an array a string still references.
    */
   private static void textArenas() {
-    var keys = new dev.elide.truffledata.json.TruffleSink.KeyCache();
+    var keys = new dev.elide.truffledata.tape.TruffleSink.KeyCache();
     String big = "y".repeat(70_000);
     byte[] doc =
         ("{\"id\":\"x\",\"\\u00e9t\\u00e9\":\"caf\\u00e9 au lait beyond sixteen bytes\",\"k\":\"\\ud83d\\ude00 中\","
@@ -852,8 +852,8 @@ public final class SvmAcceptance {
       java.util.Map<?, ?> previous = null;
       byte[] previousArena = null;
       for (int round = 0; round < 3; round++) {
-        var sink = new dev.elide.truffledata.json.TruffleSink(keys);
-        require(sink.sharedText() && !new dev.elide.truffledata.json.JavaSink().sharedText());
+        var sink = new dev.elide.truffledata.tape.TruffleSink(keys);
+        require(sink.sharedText() && !new dev.elide.truffledata.tape.JavaSink().sharedText());
         session.parse(doc, sink);
         var tree = (java.util.Map<?, ?>) java.util.Objects.requireNonNull(sink.result());
         var id = (com.oracle.truffle.api.strings.TruffleString) member(tree, "id");
@@ -880,21 +880,21 @@ public final class SvmAcceptance {
       }
       require(keys.size() == 6);
       // A JavaSink parse in between needs no arena, and keeps working.
-      var plainSink = new dev.elide.truffledata.json.JavaSink();
+      var plainSink = new dev.elide.truffledata.tape.JavaSink();
       session.parse(doc, plainSink);
       require("x".equals(((java.util.Map<?, ?>) java.util.Objects.requireNonNull(plainSink.result())).get("id")));
     }
   }
 
   /** Counts events; materializes nothing. */
-  private static final class NoopSink implements dev.elide.truffledata.json.JsonSink {
+  private static final class NoopSink implements dev.elide.truffledata.tape.TapeSink {
     long events;
 
     public void beginObject(long members) { events++; }
 
     public void beginArray(long elements) { events++; }
 
-    public void key(dev.elide.truffledata.json.JsonText name) { events++; }
+    public void key(dev.elide.truffledata.tape.TapeText name) { events++; }
 
     public void end() {}
 
@@ -908,13 +908,13 @@ public final class SvmAcceptance {
 
     public void unsignedValue(long bits) { events++; }
 
-    public void decimalValue(dev.elide.truffledata.json.JsonText token) { events++; }
+    public void decimalValue(dev.elide.truffledata.tape.TapeText token) { events++; }
 
-    public void stringValue(dev.elide.truffledata.json.JsonText text) { events++; }
+    public void stringValue(dev.elide.truffledata.tape.TapeText text) { events++; }
   }
 
   private static Object javaTree(dev.elide.truffledata.json.JsonSession session, Object input) {
-    var sink = new dev.elide.truffledata.json.JavaSink();
+    var sink = new dev.elide.truffledata.tape.JavaSink();
     if (input instanceof byte[] utf8) session.parse(utf8, sink);
     else session.parse((com.oracle.truffle.api.strings.TruffleString) input, sink);
     return java.util.Objects.requireNonNull(sink.result());
@@ -937,7 +937,7 @@ public final class SvmAcceptance {
         require(expected.equals(javaTree(session, utf16(source))));
         require(expected.equals(javaTree(session, com.oracle.truffle.api.strings.TruffleString.fromJavaStringUncached(source, utf8))));
         // Shared text from UTF-16 input.
-        var sink = new dev.elide.truffledata.json.TruffleSink(new dev.elide.truffledata.json.TruffleSink.KeyCache());
+        var sink = new dev.elide.truffledata.tape.TruffleSink(new dev.elide.truffledata.tape.TruffleSink.KeyCache());
         session.parse(utf16(source), sink);
         require(sink.result() instanceof java.util.Map<?, ?> map && map.size() == ((java.util.Map<?, ?>) expected).size());
       }

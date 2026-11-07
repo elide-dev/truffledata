@@ -1,11 +1,14 @@
-package dev.elide.truffledata.json;
+package dev.elide.truffledata.tape;
 
 import dev.elide.myna.values.ValueTape;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
 
-/** JVM reader over a native Myna v3 descriptor; the owner keeps every referenced region alive. */
-final class SegmentValueTape extends ValueTape implements TapeSource {
+/**
+ * JVM reader over a native Myna v3 descriptor; the owner keeps every referenced region alive. Lives
+ * in {@code //tape:jvm} so static images never carry it.
+ */
+public final class SegmentValueTape extends ValueTape implements TapeSource {
   private static final long REGION_SIZE = 16;
   private final MemorySegment nodes;
   private final MemorySegment bytes;
@@ -35,10 +38,10 @@ final class SegmentValueTape extends ValueTape implements TapeSource {
     return new SegmentValueTape(descriptor.reinterpret(56));
   }
 
-  /** Reader over a JSON result: the descriptor plus its key-hash side table (one int per node). */
-  static SegmentValueTape of(MemorySegment descriptor, MemorySegment hashes) {
+  /** Reader over a decoded result: the descriptor plus its key-hash side table (one int per node). */
+  public static SegmentValueTape of(MemorySegment descriptor, MemorySegment hashes) {
     SegmentValueTape tape = of(descriptor);
-    if (hashes.address() == 0) throw new IllegalStateException("JSON key-hash table missing");
+    if (hashes.address() == 0) throw new IllegalStateException("Key-hash table missing");
     tape.hashes = hashes.reinterpret(tape.nodeCount() * 4);
     return tape;
   }
@@ -57,8 +60,8 @@ final class SegmentValueTape extends ValueTape implements TapeSource {
         && (!wide || readLong(at + 16) == high);
   }
 
-  /** Region 1 is the retained input for JSON documents: {data, length}. */
-  MemorySegment region(long region) {
+  /** Region 1 is the retained input of decoded documents: {data, length}. */
+  public MemorySegment region(long region) {
     long length = regionLength(region);
     if (region == 0) return bytes;
     return regions.get(ValueLayout.ADDRESS, (region - 1) * REGION_SIZE).reinterpret(length);

@@ -15,7 +15,7 @@ if 'SNAPSHOT' in sys.argv[1].upper():
 PY
 bucket=${MAVEN_BUCKET:-elide:elide-maven}
 public=https://maven.elide.dev
-modules=(core jdbc jdbc-sqlite jdbc-mysql jdbc-postgresql protobuf protobuf-runtime protobuf-buffa protobuf-buffa-bindings json json-bindings json-jvm csv csv-bindings csv-native csv-jvm bom)
+modules=(core jdbc jdbc-sqlite jdbc-mysql jdbc-postgresql protobuf protobuf-runtime protobuf-buffa protobuf-buffa-bindings tape tape-jvm json json-bindings json-jvm csv csv-bindings csv-native csv-jvm bom)
 bazel=${BAZEL:-$(command -v bazelisk || command -v bazel)}
 mkdir -p build
 repo=$(mktemp -d "$PWD/build/release-repo.XXXXXX")
@@ -66,4 +66,4 @@ for module in "${modules[@]}"; do
   rclone check "$repo/$path" "$bucket/$path" --include 'maven-metadata.xml*' --one-way
 done
 rm -f "$repo/public-check"
-echo "Published dev.elide:truffledata-{core,jdbc,jdbc-sqlite,jdbc-mysql,jdbc-postgresql,protobuf,protobuf-runtime,protobuf-buffa,protobuf-buffa-bindings,json,json-bindings,json-jvm,csv,csv-bindings,csv-native,csv-jvm,bom}:$version at $public"
+echo "Published dev.elide:truffledata-{core,jdbc,jdbc-sqlite,jdbc-mysql,jdbc-postgresql,protobuf,protobuf-runtime,protobuf-buffa,protobuf-buffa-bindings,tape,tape-jvm,json,json-bindings,json-jvm,csv,csv-bindings,csv-native,csv-jvm,bom}:$version at $public"

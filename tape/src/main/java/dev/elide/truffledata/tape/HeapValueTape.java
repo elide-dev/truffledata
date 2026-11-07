@@ -1,4 +1,4 @@
-package dev.elide.truffledata.json;
+package dev.elide.truffledata.tape;
 
 import dev.elide.myna.values.ValueTape;
 
@@ -14,7 +14,8 @@ final class HeapValueTape extends ValueTape implements TapeSource {
   private final byte[][] regions;
   private final int[] meta;
 
-  private HeapValueTape(long[] nodes, byte[] bytes, byte[][] regions, int[] meta) {
+  // Package-private for tests that build tapes by hand.
+  HeapValueTape(long[] nodes, byte[] bytes, byte[][] regions, int[] meta) {
     super(nodes.length / WORDS, bytes.length);
     this.nodes = nodes;
     this.bytes = bytes;

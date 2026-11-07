@@ -1,4 +1,4 @@
-package dev.elide.truffledata.json;
+package dev.elide.truffledata.tape;
 
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import java.math.BigDecimal;
@@ -15,7 +15,7 @@ import org.jspecify.annotations.Nullable;
  * (U64), {@code BigDecimal} (DECIMAL), {@code Boolean} and {@code null}. One sink builds one tree.
  * Sinks that share a {@link KeyCache} reuse one {@code String} per distinct key across documents.
  */
-public final class JavaSink implements JsonSink {
+public final class JavaSink implements TapeSink {
   private final ArrayList<Object> open = new ArrayList<>();
   private final @Nullable KeyCache keys;
   private @Nullable String key;
@@ -51,7 +51,7 @@ public final class JavaSink implements JsonSink {
     }
 
     @TruffleBoundary
-    String intern(JsonText key) {
+    String intern(TapeText key) {
       int mask = names.length - 1;
       int slot = key.hash() & mask;
       for (String name; (name = names[slot]) != null; slot = (slot + 1) & mask)
@@ -70,7 +70,7 @@ public final class JavaSink implements JsonSink {
 
   /** The exported tree; throws until one complete value has been received. */
   public @Nullable Object result() {
-    if (!done || !open.isEmpty()) throw new IllegalStateException("JSON export incomplete");
+    if (!done || !open.isEmpty()) throw new IllegalStateException("Tape export incomplete");
     return result;
   }
 
@@ -78,12 +78,12 @@ public final class JavaSink implements JsonSink {
   @TruffleBoundary
   private void add(@Nullable Object value) {
     if (open.isEmpty()) {
-      if (done) throw new IllegalStateException("JSON sink already holds a value");
+      if (done) throw new IllegalStateException("Sink already holds a value");
       result = value;
       done = true;
     } else if (open.get(open.size() - 1) instanceof Map<?, ?> map) {
       String name = key;
-      if (name == null) throw new IllegalStateException("JSON member value without a key");
+      if (name == null) throw new IllegalStateException("Member value without a key");
       ((Map<String, @Nullable Object>) map).put(name, value);
       key = null;
     } else {
@@ -115,16 +115,16 @@ public final class JavaSink implements JsonSink {
 
   @Override
   @TruffleBoundary
-  public void key(JsonText name) {
+  public void key(TapeText name) {
     if (key != null || open.isEmpty() || !(open.get(open.size() - 1) instanceof Map))
-      throw new IllegalStateException("JSON key outside a member position");
+      throw new IllegalStateException("Key outside a member position");
     key = keys == null ? name.toJavaString() : keys.intern(name);
   }
 
   @Override
   @TruffleBoundary
   public void end() {
-    if (open.isEmpty() || key != null) throw new IllegalStateException("Unbalanced JSON container end");
+    if (open.isEmpty() || key != null) throw new IllegalStateException("Unbalanced container end");
     open.remove(open.size() - 1);
   }
 
@@ -157,13 +157,13 @@ public final class JavaSink implements JsonSink {
   /** Throws {@link NumberFormatException} for exponents beyond {@code BigDecimal}'s scale range. */
   @Override
   @TruffleBoundary
-  public void decimalValue(JsonText token) {
+  public void decimalValue(TapeText token) {
     add(new BigDecimal(token.toJavaString()));
   }
 
   @Override
   @TruffleBoundary
-  public void stringValue(JsonText text) {
+  public void stringValue(TapeText text) {
     add(text.toJavaString());
   }
 }

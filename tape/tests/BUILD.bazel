@@ -1,0 +1,27 @@
+load("@rules_java//java:defs.bzl", "java_test")
+
+# The shared module's own contracts; JSON's suites (//json/tests) exercise it end to end.
+java_test(
+    name = "jvm",
+    srcs = ["TapeOwnerTest.java"],
+    args = [
+        "--class",
+        "dev.elide.truffledata.tape.TapeOwnerTest",
+    ],
+    jvm_flags = [
+        "-Dpolyglot.engine.WarnInterpreterOnly=false",
+        "-ea",
+    ],
+    main_class = "dev.elide.bazel.junit.BazelJUnitRunner",
+    use_testrunner = False,
+    runtime_deps = [
+        "//bazel/junit:runner",
+        "@maven//:org_graalvm_truffle_truffle_runtime",
+    ],
+    deps = [
+        "//tape",
+        "@maven//:org_graalvm_truffle_truffle_api",
+        "@maven//:org_junit_jupiter_junit_jupiter_api",
+        "@myna//:values",
+    ],
+)

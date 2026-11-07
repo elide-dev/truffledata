@@ -1,4 +1,4 @@
-package dev.elide.truffledata.json;
+package dev.elide.truffledata.tape;
 
 import dev.elide.myna.values.NativeValueTape;
 import org.graalvm.nativeimage.PinnedObject;
@@ -11,25 +11,23 @@ import org.graalvm.word.WordFactory;
  * Static-image tape exposing the copy hooks snapshots need and materializing long strings with
  * Myna's simdutf bridge.
  */
-final class SvmValueTape extends NativeValueTape implements TapeSource {
+public final class SvmValueTape extends NativeValueTape implements TapeSource {
   private final long regions;
-  // One int per node: the native key-hash side table (JsonResult.key_hashes).
+  // One int per node: the native key-hash side table (the result's key_hashes).
   private final Pointer hashes;
 
-  SvmValueTape(Pointer descriptor, Pointer hashes) {
+  /** A reader over a native Myna descriptor and its key-hash side table (one int per node). */
+  public SvmValueTape(Pointer descriptor, Pointer hashes) {
     super(descriptor);
     regions = descriptor.readLong(48);
     this.hashes = hashes;
   }
 
-  // Myna's simdutf transcoder, linked from //json/native/bridge (myna-values 0.9.1). A normal
-  // transition: string lengths are unbounded.
+  // Myna's simdutf transcoder (myna-values), linked into every static image that uses this tape:
+  // //json/native:svm links it through //json/native/bridge. A normal transition: string lengths
+  // are unbounded.
   @CFunction("myna_utf8_to_utf16_v2")
   private static native long transcode(Pointer input, long length, CShortPointer output, long capacity);
-
-  // Link probe of //json/native/bridge; SvmAcceptance proves the archive is in the image.
-  @CFunction("td_json_bridge_present")
-  static native int bridgePresent();
 
   /**
    * Long strings transcode with simdutf straight into the String's UTF-16 storage, as Myna's
@@ -39,7 +37,7 @@ final class SvmValueTape extends NativeValueTape implements TapeSource {
    */
   @Override
   protected String decodeExternalUtf8(long region, long start, int len) {
-    if (len < JsonText.BULK_THRESHOLD) return super.decodeExternalUtf8(region, start, len);
+    if (len < TapeText.BULK_THRESHOLD) return super.decodeExternalUtf8(region, start, len);
     // One UTF-16 unit per UTF-8 byte bounds the output; simdutf validates while converting and
     // neither pointer escapes the pinned interval.
     char[] chars = new char[len];

@@ -1,27 +1,27 @@
-package dev.elide.truffledata.json;
+package dev.elide.truffledata.tape;
 
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.nodes.Node;
 import dev.elide.myna.values.ValueTape;
 
 /**
- * Single-pass export of a JSON subtree into a {@link JsonSink}. The walk is one loop over the tape
+ * Single-pass export of a tape subtree into a {@link TapeSink}. The walk is one loop over the tape
  * in source order with an explicit container stack: no recursion, no per-node native calls, one
- * liveness check per export, and one reusable {@link JsonText} cursor (which also holds the stack)
+ * liveness check per export, and one reusable {@link TapeText} cursor (which also holds the stack)
  * instead of a view per key, string or decimal. The owner is pinned open for the duration so a sink that closes
  * it fails instead of freeing the tape under the walk.
  */
-public final class JsonExportNode extends Node {
+public final class TapeExportNode extends Node {
   /** Open containers the walk can hold: the decoder's depth limit admits 128 levels below the root. */
   static final int MAX_DEPTH = 129;
 
   private static final long OBJECT_BIT = Long.MIN_VALUE;
   private int maxDepthSeen;
 
-  JsonExportNode() {}
+  TapeExportNode() {}
 
-  public static JsonExportNode create() {
-    return new JsonExportNode();
+  public static TapeExportNode create() {
+    return new TapeExportNode();
   }
 
   /** Diagnostic for tests: deepest container stack any export through this node needed. */
@@ -29,15 +29,15 @@ public final class JsonExportNode extends Node {
     return maxDepthSeen;
   }
 
-  public void execute(JsonValue value, JsonSink sink) {
+  public void execute(TapeValue value, TapeSink sink) {
     int depth = walk(value.owner(), value.node(), sink);
     if (depth > maxDepthSeen) maxDepthSeen = depth;
   }
 
   /** Returns the deepest container stack used. */
-  static int walk(JsonOwner owner, long root, JsonSink sink) {
+  static int walk(TapeOwner owner, long root, TapeSink sink) {
     owner.pin();
-    JsonText text = owner.exportCursor();
+    TapeText text = owner.exportCursor();
     try {
       return loop(owner, root, sink, text);
     } finally {
@@ -50,7 +50,7 @@ public final class JsonExportNode extends Node {
    * {@code text.ends} holds each open container's exclusive end node, sign bit set for objects;
    * {@code text} is bound to each key, string and decimal for exactly the duration of its event.
    */
-  private static int loop(JsonOwner owner, long root, JsonSink sink, JsonText text) {
+  private static int loop(TapeOwner owner, long root, TapeSink sink, TapeText text) {
     long[] ends = text.ends;
     ValueTape tape = owner.tape;
     int depth = 0;
@@ -77,7 +77,7 @@ public final class JsonExportNode extends Node {
       if (tag == ValueTape.OBJECT || tag == ValueTape.ARRAY) {
         if (depth == MAX_DEPTH) {
           CompilerDirectives.transferToInterpreter();
-          throw new IllegalStateException("JSON export depth limit");
+          throw new IllegalStateException(owner.format().name + " export depth limit");
         }
         long count = tape.length(cursor);
         boolean object = tag == ValueTape.OBJECT;
@@ -107,7 +107,7 @@ public final class JsonExportNode extends Node {
         }
         default -> {
           CompilerDirectives.transferToInterpreter();
-          throw new IllegalStateException("Unknown JSON node kind");
+          throw new IllegalStateException("Unknown " + owner.format().name + " node kind");
         }
       }
       cursor = tape.next(cursor);

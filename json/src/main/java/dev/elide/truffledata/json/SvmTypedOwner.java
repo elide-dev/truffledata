@@ -3,6 +3,8 @@ package dev.elide.truffledata.json;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import dev.elide.truffledata.Schema;
 import dev.elide.truffledata.json.generated.Json;
+import dev.elide.truffledata.tape.TapeFormat;
+import dev.elide.truffledata.tape.TypedOwner;
 import org.graalvm.nativeimage.UnmanagedMemory;
 import org.graalvm.nativeimage.c.type.VoidPointer;
 import org.graalvm.word.Pointer;
@@ -12,7 +14,7 @@ import org.graalvm.word.WordFactory;
  * Static SVM typed owner. Native addresses are read once at publication, so reads touch only final
  * fields and the immutable arenas through generated word accessors.
  */
-final class SvmTypedOwner extends JsonTypedOwner {
+final class SvmTypedOwner extends TypedOwner {
   private final VoidPointer result;
   // Raw addresses of the immutable slot arena and record table; valid until release.
   private final long slots;
@@ -38,12 +40,12 @@ final class SvmTypedOwner extends JsonTypedOwner {
   }
 
   @Override
-  long bits(long slot) {
+  protected long bits(long slot) {
     return Json.JsonScalarSlot.bits(WordFactory.<VoidPointer>pointer(slot(slot)));
   }
 
   @Override
-  String text(long slot) {
+  protected String text(long slot) {
     return copyText(slot(slot));
   }
 
@@ -59,28 +61,33 @@ final class SvmTypedOwner extends JsonTypedOwner {
   }
 
   @Override
-  long present(long entry) {
+  protected long present(long entry) {
     return Json.JsonRecordEntry.present(WordFactory.<VoidPointer>pointer(entry(entry)));
   }
 
   @Override
-  long nulls(long entry) {
+  protected long nulls(long entry) {
     return Json.JsonRecordEntry.nulls(WordFactory.<VoidPointer>pointer(entry(entry)));
   }
 
   @Override
-  int slotBase(long entry) {
+  protected int slotBase(long entry) {
     return Json.JsonRecordEntry.slots(WordFactory.<VoidPointer>pointer(entry(entry)));
   }
 
   @Override
-  int plan(long entry) {
+  protected int plan(long entry) {
     return Json.JsonRecordEntry.plan(WordFactory.<VoidPointer>pointer(entry(entry)));
   }
 
   @Override
-  void release() {
+  protected void release() {
     Json.typed_release(result);
     UnmanagedMemory.free(result);
+  }
+
+  @Override
+  protected TapeFormat format() {
+    return JsonMessage.FORMAT;
   }
 }

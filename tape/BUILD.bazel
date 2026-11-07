@@ -1,0 +1,68 @@
+load("//bazel:java.bzl", "data_java_library")
+
+TAPE_SRCS = [
+    "src/main/java/dev/elide/truffledata/tape/HeapValueTape.java",
+    "src/main/java/dev/elide/truffledata/tape/JavaSink.java",
+    "src/main/java/dev/elide/truffledata/tape/OwnerStateException.java",
+    "src/main/java/dev/elide/truffledata/tape/SvmValueTape.java",
+    "src/main/java/dev/elide/truffledata/tape/TapeBorrow.java",
+    "src/main/java/dev/elide/truffledata/tape/TapeExportNode.java",
+    "src/main/java/dev/elide/truffledata/tape/TapeFormat.java",
+    "src/main/java/dev/elide/truffledata/tape/TapeKey.java",
+    "src/main/java/dev/elide/truffledata/tape/TapeLexical.java",
+    "src/main/java/dev/elide/truffledata/tape/TapeOwner.java",
+    "src/main/java/dev/elide/truffledata/tape/TapeSession.java",
+    "src/main/java/dev/elide/truffledata/tape/TapeSink.java",
+    "src/main/java/dev/elide/truffledata/tape/TapeSnapshot.java",
+    "src/main/java/dev/elide/truffledata/tape/TapeSource.java",
+    "src/main/java/dev/elide/truffledata/tape/TapeStream.java",
+    "src/main/java/dev/elide/truffledata/tape/TapeText.java",
+    "src/main/java/dev/elide/truffledata/tape/TapeTextArena.java",
+    "src/main/java/dev/elide/truffledata/tape/TapeValue.java",
+    "src/main/java/dev/elide/truffledata/tape/TruffleSink.java",
+    "src/main/java/dev/elide/truffledata/tape/TypedAccess.java",
+    "src/main/java/dev/elide/truffledata/tape/TypedArray.java",
+    "src/main/java/dev/elide/truffledata/tape/TypedLayout.java",
+    "src/main/java/dev/elide/truffledata/tape/TypedOwner.java",
+    "src/main/java/dev/elide/truffledata/tape/TypedRecord.java",
+    "src/main/java/dev/elide/truffledata/tape/package-info.java",
+]
+
+# Format-neutral Java tape layer shared by the JSON and YAML backends: owners, values, sinks, the
+# export walk, snapshots, sessions, streams and typed records. SVM-safe: static images carry it.
+data_java_library(
+    name = "tape",
+    srcs = TAPE_SRCS,
+    visibility = ["//visibility:public"],
+    deps = [
+        "//core",
+        "@maven//:org_graalvm_sdk_nativeimage",
+        "@maven//:org_graalvm_sdk_word",
+        "@maven//:org_graalvm_truffle_truffle_api",
+        "@myna//:values",
+    ],
+)
+
+# JVM-only FFM tape reader; kept out of static images, like //json:jvm.
+data_java_library(
+    name = "jvm",
+    srcs = ["src/main/java/dev/elide/truffledata/tape/SegmentValueTape.java"],
+    visibility = ["//visibility:public"],
+    deps = [
+        ":tape",
+        "@myna//:values",
+    ],
+)
+
+# The SVM-safe sources alone: //tools/release republishes them with Myna's value classes.
+filegroup(
+    name = "tape_sources",
+    srcs = TAPE_SRCS,
+    visibility = ["//tools/release:__pkg__"],
+)
+
+filegroup(
+    name = "sources",
+    srcs = glob(["src/main/java/**/*.java"]),
+    visibility = ["//tests:__pkg__"],
+)

@@ -1,9 +1,9 @@
-import dev.elide.truffledata.json.JavaSink;
 import dev.elide.truffledata.json.JsonDecoder;
 import dev.elide.truffledata.json.JsonJvm;
 import dev.elide.truffledata.json.JsonMessage;
 import dev.elide.truffledata.json.JsonSvm;
-import dev.elide.truffledata.json.JsonValue;
+import dev.elide.truffledata.tape.JavaSink;
+import dev.elide.truffledata.tape.TapeValue;
 import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
@@ -29,7 +29,7 @@ public final class JsonConsumer {
     try (JsonDecoder decoder =
             ImageInfo.inImageCode() ? JsonSvm.open() : Jvm.open(Path.of(args[0]));
         JsonMessage message = decoder.decode(INPUT)) {
-      JsonValue root = message.root();
+      TapeValue root = message.root();
       if (root.member("id").longValue() != 42) throw new AssertionError("Published JSON member read");
       if (!root.member("name").stringValue().equals("trüffle"))
         throw new AssertionError("Published JSON string read");

@@ -65,7 +65,7 @@ private:
 };
 
 void allocation_checks() {
-  using truffledata::json::storage_limits;
+  using truffledata::tape::storage_limits;
   const std::string source = R"({"long":"some long escaped content \u4e2d", "nested":[{"a":1,"b":true},null,4]})";
   document baseline(source);
   const auto stats = baseline.allocations();
@@ -174,7 +174,7 @@ std::string object_with_keys(size_t count, size_t duplicate_at, const std::strin
 }
 // Plan Task A1: number-first typing, deferred unescaping, hashed duplicate table, side table.
 void lean_checks() {
-  using truffledata::json::ascii_flag;
+  using truffledata::tape::ascii_flag;
   // Review focus 2: a raw control byte or invalid UTF-8 never reaches the referenced path.
   require(throws([] { document d("[\"a\x01" "bcdefghijklmnopqrstuvwxyz\"]"); }));
   require(throws([] { document d("[\"a\x01" "b\"]"); }));
@@ -356,10 +356,10 @@ void tape_writer_checks() {
     require(grown.view().node_count == 40001);
     require(stats.index_peak_bytes > stats.index_retained_bytes);
     {
-      document exact(dense, {}, truffledata::json::storage_limits{dense.size(), stats.index_peak_bytes});
+      document exact(dense, {}, truffledata::tape::storage_limits{dense.size(), stats.index_peak_bytes});
       require(exact.view().node_count == 40001);
     }
-    require(throws([&] { document d(dense, {}, truffledata::json::storage_limits{dense.size(), stats.index_peak_bytes - 1}); }));
+    require(throws([&] { document d(dense, {}, truffledata::tape::storage_limits{dense.size(), stats.index_peak_bytes - 1}); }));
     for (size_t i = 0; i <= stats.index_allocations; ++i) {
       fault_memory memory(i);
       bool rejected = false;

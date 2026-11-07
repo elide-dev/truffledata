@@ -345,7 +345,7 @@ void session_allocations() {
   auto sequence = [&](std::pmr::memory_resource* memory, size_t* calls) {
     session::retained* owner = nullptr;
     {
-      session s(myna::value_limits{}, truffledata::json::storage_limits{}, memory);
+      session s(myna::value_limits{}, truffledata::tape::storage_limits{}, memory);
       try {
         s.decode(doc.data(), doc.size());
         s.decode(wide.data(), wide.size());
@@ -354,9 +354,9 @@ void session_allocations() {
         // Task D2: the text table is an arena allocation too (the big document's is large).
         std::vector<uint8_t> text(2 * big.size() + 16);
         const uint64_t* table = nullptr;
-        require(s.write_text(text.data(), text.size(), table) != truffledata::json::text_too_small);
+        require(s.write_text(text.data(), text.size(), table) != truffledata::tape::text_too_small);
         s.decode(doc.data(), doc.size());
-        require(s.write_text(text.data(), text.size(), table) != truffledata::json::text_too_small);
+        require(s.write_text(text.data(), text.size(), table) != truffledata::tape::text_too_small);
       } catch (...) {
         if (owner) owner->destroy();
         throw;
@@ -378,7 +378,7 @@ void session_allocations() {
   }
   // Steady state: after warm-up a session decodes without any upstream allocation, and keeps a
   // bounded number of blocks.
-  session s(myna::value_limits{}, truffledata::json::storage_limits{});
+  session s(myna::value_limits{}, truffledata::tape::storage_limits{});
   for (int i = 0; i < 3; ++i) s.decode(doc.data(), doc.size());
   size_t blocks = s.arena_blocks(), allocations = s.memory().allocations();
   for (int i = 0; i < 10000; ++i) {
@@ -396,7 +396,7 @@ void session_allocations() {
   auto d = s.decode(doc.data(), doc.size());
   require(s.input_capacity() <= session::retained_input_limit);
   require(s.parser_capacity() <= session::retained_input_limit);
-  require(s.memory().current() <= truffledata::json::block_arena::retained_blocks * truffledata::json::block_arena::max_block);
+  require(s.memory().current() <= truffledata::tape::block_arena::retained_blocks * truffledata::tape::block_arena::max_block);
   (void)d;
 }
 

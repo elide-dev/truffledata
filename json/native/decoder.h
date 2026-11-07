@@ -63,7 +63,7 @@ struct decode_hint {
   size_t bytes;
   size_t block;  // First arena block: the presized arrays that are not large allocations.
 };
-inline decode_hint hint_for(size_t input, const myna::value_limits& limits, const storage_limits& storage) {
+inline decode_hint hint_for(size_t input, const myna::value_limits& limits, const tape::storage_limits& storage) {
   size_t cap = storage.index_bytes / 72 > 4096 ? storage.index_bytes / 72 : 4096;
   size_t nodes = input / 4 + 8;
   if (nodes > cap) nodes = cap;
@@ -72,7 +72,7 @@ inline decode_hint hint_for(size_t input, const myna::value_limits& limits, cons
   if (bytes > cap * 8) bytes = cap * 8;
   size_t block = 4 * sizeof(myna_value_region) + 256;
   for (size_t part : {nodes * sizeof(myna_value_node), nodes * sizeof(uint64_t), nodes * sizeof(uint32_t), bytes})
-    if (part <= block_arena::large_threshold) block += part + alignof(std::max_align_t);
+    if (part <= tape::block_arena::large_threshold) block += part + alignof(std::max_align_t);
   return {nodes, bytes, block};
 }
 
@@ -81,8 +81,8 @@ inline decode_hint hint_for(size_t input, const myna::value_limits& limits, cons
 template<class Writer> class tape_decoder final {
   std::pmr::memory_resource* memory_;
   Writer writer_;
-  arena_vec<uint64_t> lexical_;
-  arena_vec<uint32_t> hashes_;
+  tape::arena_vec<uint64_t> lexical_;
+  tape::arena_vec<uint32_t> hashes_;
   const char* base_ = nullptr;
   uint32_t region_ = 0;
   myna::value_limits limits_;
@@ -114,16 +114,16 @@ template<class Writer> class tape_decoder final {
         lexical();
         size_t index = writer_.begin(MYNA_VALUE_OBJECT, depth);
         uint64_t members = 0;
-        key_table keys(memory_);
+        tape::key_table keys(memory_);
         for (auto entry : value.get_object()) {
           std::string_view raw = json::trim(entry.key_raw_json_token().value());
           std::string_view body = raw.substr(1, raw.size() - 2);
           body_scan s = scan(body);
           std::string_view key = s.clean ? body : entry.unescaped_key().value();
-          bool plain = s.clean ? s.ascii : ascii(key);
-          uint32_t hash = key_hash(key);
+          bool plain = s.clean ? s.ascii : tape::ascii(key);
+          uint32_t hash = tape::key_hash(key);
           if (!keys.insert(hash, key)) throw std::invalid_argument("duplicate JSON key");
-          text(key, raw, s.clean, key_meta(hash, lexical_.size() - object, plain));
+          text(key, raw, s.clean, tape::key_meta(hash, lexical_.size() - object, plain));
           auto child = entry.value().value();
           visit(child, depth + 1);
           ++members;
@@ -148,10 +148,10 @@ template<class Writer> class tape_decoder final {
         std::string_view body = raw.substr(1, raw.size() - 2);
         body_scan s = scan(body);
         if (s.clean) {
-          text(body, raw, true, s.ascii ? ascii_flag : 0);
+          text(body, raw, true, s.ascii ? tape::ascii_flag : 0);
         } else {
           std::string_view decoded = value.get_string().value();
-          text(decoded, raw, false, ascii(decoded) ? ascii_flag : 0);
+          text(decoded, raw, false, tape::ascii(decoded) ? tape::ascii_flag : 0);
         }
         break;
       }
@@ -232,8 +232,8 @@ public:
     if (root.is_scalar().value()) (void)root.raw_json().value();
   }
   myna_value_view view() const { return writer_.view(); }
-  table_view<uint64_t> lexical_spans() const { return {lexical_.data(), lexical_.size()}; }
-  table_view<uint32_t> key_hashes() const { return {hashes_.data(), hashes_.size()}; }
+  tape::table_view<uint64_t> lexical_spans() const { return {lexical_.data(), lexical_.size()}; }
+  tape::table_view<uint32_t> key_hashes() const { return {hashes_.data(), hashes_.size()}; }
 };
 
 // The input is retained; the parser is pooled and released before construction completes.
@@ -245,15 +245,15 @@ template<class Writer> class basic_document final {
   simdjson::padded_string owned_;
   // Either owned_ or caller memory adopted with sufficient padding; never copied twice.
   simdjson::padded_string_view input_;
-  index_memory memory_;
-  block_arena arena_;
+  tape::index_memory memory_;
+  tape::block_arena arena_;
   tape_decoder<Writer> decoder_;
   myna_value_view view_{};
   size_t parser_capacity_ = 0;
 
   struct adopted_tag {};
   basic_document(adopted_tag, simdjson::padded_string owned, simdjson::padded_string_view input,
-                 myna::value_limits limits, storage_limits storage, std::pmr::memory_resource* upstream)
+                 myna::value_limits limits, tape::storage_limits storage, std::pmr::memory_resource* upstream)
       : owned_(std::move(owned)),
         input_(owned_.data() ? simdjson::padded_string_view(owned_.data(), owned_.size(), owned_.size() + simdjson::SIMDJSON_PADDING) : input),
         memory_(storage.index_bytes, upstream),
@@ -272,14 +272,14 @@ template<class Writer> class basic_document final {
   }
 public:
   explicit basic_document(std::string_view input, myna::value_limits limits = {},
-                          storage_limits storage = {},
+                          tape::storage_limits storage = {},
                           std::pmr::memory_resource* upstream = std::pmr::get_default_resource())
       : basic_document(adopted_tag{}, simdjson::padded_string(checked(input, storage)),
                        simdjson::padded_string_view(), limits, storage, upstream) {}
   // Adopt caller memory when it carries SIMDJSON_PADDING readable bytes past `length`;
   // otherwise copy once. The caller keeps adopted memory valid for the document's life.
   basic_document(const char* data, size_t length, size_t capacity, myna::value_limits limits = {},
-                 storage_limits storage = {},
+                 tape::storage_limits storage = {},
                  std::pmr::memory_resource* upstream = std::pmr::get_default_resource())
       : basic_document(adopted_tag{},
                        capacity >= length + simdjson::SIMDJSON_PADDING
@@ -293,24 +293,24 @@ public:
   basic_document(const basic_document&) = delete;
   basic_document& operator=(const basic_document&) = delete;
   myna_value_view view() const { return view_; }
-  table_view<uint64_t> lexical_spans() const { return decoder_.lexical_spans(); }
+  tape::table_view<uint64_t> lexical_spans() const { return decoder_.lexical_spans(); }
   // One entry per node; see key_hash and ascii_flag.
-  table_view<uint32_t> key_hashes() const { return decoder_.key_hashes(); }
+  tape::table_view<uint32_t> key_hashes() const { return decoder_.key_hashes(); }
   // Index accounting counts arena blocks and large allocations, not individual nodes.
-  allocation_stats allocations() const {
+  tape::allocation_stats allocations() const {
     return {adopted() ? 0 : input_.size(),
             adopted() ? input_.capacity() : input_.size() + simdjson::SIMDJSON_PADDING,
             memory_.current(), memory_.peak(), memory_.allocations(), parser_capacity_};
   }
 private:
-  static std::string_view checked(std::string_view input, storage_limits storage) {
+  static std::string_view checked(std::string_view input, tape::storage_limits storage) {
     if (input.size() > UINT32_MAX || input.size() > storage.input_bytes) throw std::length_error("JSON input limit");
     return input;
   }
 };
 // Production documents write through the presized tape writer; builder_document runs the same
 // visitor through myna::value_builder and exists to prove byte-for-byte parity in tests.
-using document = basic_document<tape_writer>;
-using builder_document = basic_document<builder_writer>;
+using document = basic_document<tape::tape_writer>;
+using builder_document = basic_document<tape::builder_writer>;
 } // namespace truffledata::json
 #endif

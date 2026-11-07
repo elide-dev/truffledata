@@ -74,9 +74,11 @@ See [representation and compilation guarantees](docs/TRUFFLE.md),
 | `dev.elide:truffledata-protobuf` | Protobuf contracts, Java codec, runtime schemas and generated getters |
 | `dev.elide:truffledata-protobuf-buffa` | Optional native parsing and borrowed typed views |
 | `dev.elide:truffledata-protobuf-buffa-bindings` | Myna bindings, pulled in by the Buffa adapter |
-| `dev.elide:truffledata-json` | Native simdjson JSON values, export, snapshots, typed plans and the static SVM backend |
+| `dev.elide:truffledata-tape` | Shared native-tape values, sinks, export, snapshots, sessions, streams and typed records, with the Myna value ABI; pulled in by the JSON adapter |
+| `dev.elide:truffledata-tape-jvm` | JVM FFM tape reader, pulled in by the JSON JVM backend; keep it off native-image classpaths |
+| `dev.elide:truffledata-json` | Native simdjson JSON sessions, messages, streams, typed plans and the static SVM backend |
 | `dev.elide:truffledata-json-jvm` | JVM FFM backend for JSON; keep it off native-image classpaths |
-| `dev.elide:truffledata-json-bindings` | Myna JSON bindings and value ABI, pulled in by the JSON adapter |
+| `dev.elide:truffledata-json-bindings` | Myna JSON bindings, pulled in by the JSON adapter |
 | `dev.elide:truffledata-csv` | Strict streaming CSV into immutable string and primitive column batches, typed plans and one-pass export; pure Java |
 | `dev.elide:truffledata-bom` | Aligned libraries, drivers and runtime dependencies |
 
@@ -245,7 +247,7 @@ The internal `DataLibrary` is for cooperating implementations. `ReadLongNode` pr
 | `DynamicRecord` | Live `DynamicObject` view; cached shape-aware access and validation of mutable values |
 | `ProtoPlan` / `ProtoRow` | Lossless protobuf contracts, separate presence, compact scalars and generated access |
 | Buffa `TypedRow` | Scoped borrowed typed views; inline small integer records and borrowed bytes |
-| `JsonMessage` / `JsonSnapshot` | Scoped native JSON index or its immutable heap copy; ordered members, exact number tokens |
+| `JsonMessage` / `TapeSnapshot` | Scoped native JSON index or its immutable heap copy; ordered members, exact number tokens |
 | `CsvBatch` / `CsvRow` | Immutable, unconfined CSV batches over retained input; string spans unescaped on read, primitive INT64/FLOAT64/BOOLEAN columns |
 | `DataArray` | Sequences without a column schema |
 

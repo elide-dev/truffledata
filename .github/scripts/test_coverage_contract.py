@@ -50,7 +50,7 @@ class CoverageContractTest(unittest.TestCase):
 
     def test_json_and_csv_sources_are_inventoried(self):
         repo = Path(__file__).resolve().parents[2]
-        for module in ('json', 'csv'):
+        for module in ('json', 'tape', 'csv'):
             root = repo / module / 'src/main/java'
             sources = {str(path.relative_to(repo)) for path in root.rglob('*.java')
                        if path.name != 'package-info.java'}

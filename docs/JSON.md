@@ -9,18 +9,48 @@ instead. Native details and ABI notes are in [`json/native/README.md`](../json/n
 the delivery plan is [`JSON_PLAN.md`](../JSON_PLAN.md).
 
 The module publishes (from the release after 0.7.0) as `dev.elide:truffledata-json`
-(`//json:json`: shared API, SVM backend, typed plans, plus Linux x86-64 `.so`/`.a`
-attachments), `truffledata-json-jvm` (`//json:jvm`: FFM backend) and
-`truffledata-json-bindings`; see [publishing](PUBLISHING.md#json-native-distribution).
+(`//json:json`: the JSON entry points, SVM backend and typed plans, plus Linux x86-64
+`.so`/`.a` attachments), `truffledata-json-jvm` (`//json:jvm`: FFM backend) and
+`truffledata-json-bindings`, on top of the shared `truffledata-tape` and
+`truffledata-tape-jvm`; see [publishing](PUBLISHING.md#json-native-distribution).
+
+### Shared tape types
+
+The format-neutral half of this backend lives in `//tape` (package
+`dev.elide.truffledata.tape`), which the YAML backend shares. JSON produces its tapes;
+the owners, views, sinks, snapshots, session and stream plumbing and typed records
+that read them are the same classes for every format. `//json` re-exports `//tape` (and
+`//json:jvm` re-exports `//tape:jvm`), so a JSON dependency brings them along.
+
+| Shared (`//tape`) | Was (JSON) |
+| --- | --- |
+| `TapeOwner` (owners: liveness, confinement, pins, export cursor, array index, member directories, alias-resolution hook) | `JsonOwner` |
+| `TapeValue`, `TapeSink`, `TapeText`, `TapeKey` | `JsonValue`, `JsonSink`, `JsonText`, `JsonKey` |
+| `TapeSnapshot`, `TapeExportNode`, `JavaSink`, `TruffleSink` | `JsonSnapshot`, `JsonExportNode`, `JavaSink`, `TruffleSink` |
+| `TypedOwner`, `TypedRecord`, `TypedArray`, `TypedAccess`, `TypedLayout` | `JsonTypedOwner`, `JsonRecord`, `JsonArray`, `JsonAccess`, `JsonPlan.Layout` |
+| `TapeSession`, `TapeStream` (borrow, cursor, text-arena and stream bookkeeping) | the shared half of `JsonSession` and `JsonStream` |
+| `TapeBorrow`, `TapeLexical`, `TapeTextArena`, `TapeFormat` | `JsonBorrow`, `JsonMessage.Lexical`, `JsonTextArena`, new |
+| `HeapValueTape`, `SvmValueTape`, `TapeSource`; `SegmentValueTape` in `//tape:jvm` | same names |
+
+The JSON entry points keep their names and behaviour: `JsonSession` is a
+`TapeSession<JsonMessage>` (so `decode` returns `JsonMessage` and `with` lends a
+`TapeValue`), `JsonStream` a `TapeStream<JsonMessage>` that adds `skip`,
+`truncatedBytes` and `options`, and `JsonMessage`, `JsonPlan`, `JsonLimits`,
+`JsonSvm`, `JsonJvm` and `JsonDecoder` are unchanged apart from the renamed types.
+Messages still name JSON (`"JSON message closed"`), because every owner reports its
+`TapeFormat`; only the format-independent objects (sinks, text cursors and typed
+records and accessors) say no format name. `TapeSink` gains YAML's `tag`, `anchor`
+and `alias` events with no-op defaults; JSON never emits them, and `TapeOwner.resolve`
+is the identity for JSON owners, which carry no alias tables.
 
 ```java
 try (JsonDecoder decoder = JsonJvm.open(libraryPath);
      JsonMessage message = decoder.decode(utf8)) {
-  JsonValue root = message.root();
+  TapeValue root = message.root();
   long id = root.member("id").longValue();
   JavaSink sink = new JavaSink();
   root.member("items").export(sink);     // one walk, no per-node native calls
-  JsonSnapshot kept = message.snapshot(); // outlives the message and decoder
+  TapeSnapshot kept = message.snapshot(); // outlives the message and decoder
 }
 ```
 
@@ -92,9 +122,9 @@ try (JsonSession session = JsonSession.open()) {            // or open(JsonLimit
 }
 ```
 
-- `parse(byte[], JsonSink)` and `parse(byte[], offset, length, JsonSink)` decode
+- `parse(byte[], TapeSink)` and `parse(byte[], offset, length, TapeSink)` decode
   into session storage and export through the sink. Nothing is retained.
-- `parse(TruffleString, JsonSink)` decodes a guest string without a Java copy:
+- `parse(TruffleString, TapeSink)` decodes a guest string without a Java copy:
   the string's own storage goes to the native session as UTF-8 (ASCII code range),
   Latin-1 (Latin-1 range) or UTF-16LE (anything else), and simdutf validates and
   transcodes it into the padded parser buffer. An unpaired surrogate anywhere is
@@ -104,13 +134,13 @@ try (JsonSession session = JsonSession.open()) {            // or open(JsonLimit
 - Text arenas: when the sink's `sharedText()` returns true (`TruffleSink` does),
   the same native call also writes every key and string once into a per-document
   `byte[]` presized to `2 × length + 16`: Latin-1 when all its code points are at
-  most U+00FF, UTF-16LE otherwise. `JsonText.toTruffleString(encoding)` then builds
+  most U+00FF, UTF-16LE otherwise. `TapeText.toTruffleString(encoding)` then builds
   each string over that array without a copy (a Latin-1 string becomes UTF-16 without
   one too), so a parse costs one array plus one `TruffleString` per string. Strings
   of 64 KiB or more are copied, so one small retained string never keeps a large
   document's text alive. Once any string shares the array, the session gives the next
   parse a fresh one; an array nobody took is reused.
-- `with(byte[], Function<JsonValue, R>)` lends the root to a reader. The root and
+- `with(byte[], Function<TapeValue, R>)` lends the root to a reader. The root and
   every view derived from it belong to a borrowed owner that is closed (and its
   assumption invalidated, so cached compiled reads fail too) when the call
   returns; a view that escapes throws `IllegalStateException` afterwards.
@@ -132,7 +162,7 @@ try (JsonSession session = JsonSession.open();
   int at = 0;
   while (at < input.length) {
     at += stream.feed(input, at, input.length - at);  // accepted bytes: fewer means drain first
-    JsonValue root;
+    TapeValue root;
     while ((root = stream.next()) != null) consume(root);  // lent until the next call
   }
   stream.finish();                                     // a final number or literal completes
@@ -144,7 +174,7 @@ try (JsonSession session = JsonSession.open();
   `iterate_many` batch) must be at least `maxDocumentBytes`. `feed` accepts nothing while
   buffered documents are still being read: drain with `next` until it returns `false` or
   `null`, then feed the rest.
-- `next(JsonSink)` exports a document; `next()` lends its root until the next call on the
+- `next(TapeSink)` exports a document; `next()` lends its root until the next call on the
   stream, another stream of the session or the session (views throw afterwards);
   `retain()` detaches the lent document into a `JsonMessage` without copying the tape.
   Streams never share a text array: a `sharedText()` sink gets each string copied.
@@ -165,7 +195,7 @@ session and every message it retained are closed. Differences from static images
 
 - Normal FFM downcalls take native memory only, so array input (and a guest string's
   storage) is first copied into a reusable session-owned native staging buffer.
-- `parse(MemorySegment data, long length, JsonSink)` borrows a live native segment the
+- `parse(MemorySegment data, long length, TapeSink)` borrows a live native segment the
   calling thread can access for the call (copied natively; nothing retained). Heap,
   closed and other threads' segments are rejected before entry.
 - No text arenas: a Java array cannot be the target of a normal downcall, so a
@@ -214,7 +244,7 @@ detachment, and Truffle assumptions invalidated on close.
 - A message is confined to the thread that decoded it. Cross-thread reads and
   cross-thread `close()` throw `IllegalStateException`. Asynchronous transfer is not
   implemented.
-- `close()` is idempotent on the owning thread. It invalidates every `JsonValue`
+- `close()` is idempotent on the owning thread. It invalidates every `TapeValue`
   derived from the message, the message's `assumption()` and therefore cached
   compiled reads, then releases native memory.
 - `close()` throws `IllegalStateException("JSON message is being exported")` while
@@ -223,14 +253,14 @@ detachment, and Truffle assumptions invalidated on close.
 - Sibling messages have independent lifetimes.
 - There is no finalizer or Cleaner; close messages explicitly.
 
-`JsonValue` is a reusable view of one node. Every read checks its owner first, and
-that check is inlined into compiled code. `JsonOwner.CheckOpenNode` caches up to
+`TapeValue` is a reusable view of one node. Every read checks its owner first, and
+that check is inlined into compiled code. `TapeOwner.CheckOpenNode` caches up to
 three owners behind their assumptions for nodes that hoist the liveness check.
 Retain a value beyond its message only through a snapshot.
 
 ## Snapshots
 
-`message.snapshot()` and `value.snapshot()` return a `JsonSnapshot`: immutable,
+`message.snapshot()` and `value.snapshot()` return a `TapeSnapshot`: immutable,
 unconfined and never closed. Its `assumption()` is `Assumption.ALWAYS_VALID`, and its
 reads never touch native memory. A snapshot remains valid after its message and
 decoder close, and can be read from any thread.
@@ -266,7 +296,7 @@ surrogate.
 The decoder classifies each token once. `numberText()` always returns the exact
 token, whatever its node kind.
 
-| Token | Node | `JsonSink` event | `JavaSink` | Interop |
+| Token | Node | `TapeSink` event | `JavaSink` | Interop |
 | --- | --- | --- | --- | --- |
 | Integer in `int64` (`-42`) | I64 | `longValue` | `Long` | Integer types by range; `BigInteger`; `double` when \|v\| ≤ 2^53; `float` when also exact |
 | `-0` | F64 `-0.0` | `doubleValue(-0.0)` | `Double` `-0.0` | `asDouble` is `-0.0`; no integer type fits (the sign would be lost) |
@@ -282,7 +312,7 @@ node value, not the token; use `numberText()` when the spelling matters.
 
 ## Guest interop
 
-`JsonValue` exports `InteropLibrary`. It is read-only: no member or element writes,
+`TapeValue` exports `InteropLibrary`. It is read-only: no member or element writes,
 removals or invocations. Every message checks liveness and thread first.
 
 | Kind | Messages |
@@ -294,7 +324,7 @@ removals or invocations. Every message checks liveness and thread first.
 | BOOLEAN | `isBoolean`, `asBoolean` |
 | NULL | `isNull` |
 
-`readMember` and `readArrayElement` return `JsonValue` views, including for scalars.
+`readMember` and `readArrayElement` return `TapeValue` views, including for scalars.
 Member reads cache the encoded name for up to three name identities per site, so
 compiled reads by constant name neither re-encode nor allocate. A member name with
 an unpaired surrogate has no UTF-8 encoding and matches nothing: `isMemberReadable`
@@ -311,14 +341,14 @@ never matches), tag, length and inline bytes before use, so a stale hint only co
 a miss; for keys of at most 16 bytes the hit path is a few loads with no loop or
 call. Misses and longer keys scan key hashes behind a static boundary and update the
 hint. Objects with more than 32 members get an open-addressing directory on first
-lookup, cached by the owner (`directories()` counts them). `JsonKey.of(name)`
-prepares a key for repeated `member(JsonKey)` calls from Java. Native container
+lookup, cached by the owner (`directories()` counts them). `TapeKey.of(name)`
+prepares a key for repeated `member(TapeKey)` calls from Java. Native container
 directories are requested from Myna as elide-dev/myna#45.
 
 ## Exporting to host objects
 
-`JsonValue.export(JsonSink)` and `JsonOwner.export(JsonSink)` (the whole document)
-walk the tape once, in source order. A `JsonExportNode` does the same inside guest
+`TapeValue.export(TapeSink)` and `TapeOwner.export(TapeSink)` (the whole document)
+walk the tape once, in source order. A `TapeExportNode` does the same inside guest
 code; adopt it as a child node and call `execute(value, sink)`. The walk is a loop
 with an explicit container stack: no recursion, no per-node native calls, one
 liveness check per export, and no view per key or string.
@@ -327,19 +357,19 @@ The sink receives:
 
 - `beginObject(members)` or `beginArray(elements)` with the child count, so it can
   presize. Each is matched by one `end()`.
-- Inside an object, a `key(JsonText)` before each member value.
+- Inside an object, a `key(TapeText)` before each member value.
 - One event per scalar: `nullValue`, `booleanValue`, `longValue` (I64),
   `doubleValue` (F64, including `-0.0`), `unsignedValue` (U64 as unsigned
-  two's-complement bits), `decimalValue(JsonText)` or `stringValue(JsonText)`.
+  two's-complement bits), `decimalValue(TapeText)` or `stringValue(TapeText)`.
 
-Keys, strings and decimals arrive through one reusable `JsonText` cursor per export,
+Keys, strings and decimals arrive through one reusable `TapeText` cursor per export,
 rebound for each event, so an export creates no object per string. The sink chooses
 how to materialize: `toJavaString()` (a decimal gives its exact token),
 `toTruffleString(encoding)`, `copyUtf8(byte[], offset)`, `utf8Equals(byte[])`,
 `utf8Length()`, `isAscii()` (from the decoder's side table, no scan) and `hash()`
 (the decoder's 15-bit key hash; 0 for strings and decimals). The cursor is valid
 only during the event that passed it: afterwards every method throws
-`IllegalStateException`. `view()` returns a `JsonValue` that lives as long as the
+`IllegalStateException`. `view()` returns a `TapeValue` that lives as long as the
 owner. The owner cannot close until the export returns. An exception from the sink
 ends the export and releases that hold.
 
@@ -372,7 +402,7 @@ factory names are illustrative; check the pinned GraalJS revision for exact
 signatures.
 
 ```java
-final class JsSink implements JsonSink {
+final class JsSink implements TapeSink {
   private final JSContext context;
   private final JSRealm realm;
   private final ArrayDeque<Object> open = new ArrayDeque<>(); // JSObject or ArrayFrame
@@ -389,19 +419,19 @@ final class JsSink implements JsonSink {
     if (done instanceof ArrayFrame f) add(JSArray.createConstantObjectArray(context, realm, f.items()));
   }
 
-  public void key(JsonText name) { key = js(name); }
-  public void stringValue(JsonText text) { add(js(text)); }
+  public void key(TapeText name) { key = js(name); }
+  public void stringValue(TapeText text) { add(js(text)); }
   public void nullValue() { add(Null.instance); }
   public void booleanValue(boolean v) { add(v); }
   public void longValue(long v) { add(v == (int) v ? (Object) (int) v : (double) v); }
   public void doubleValue(double v) { add(v); }                  // keeps -0
   public void unsignedValue(long bits) { add(Double.parseDouble(Long.toUnsignedString(bits))); }
-  public void decimalValue(JsonText t) { add(Double.parseDouble(t.toJavaString())); } // 1E400 -> Infinity
+  public void decimalValue(TapeText t) { add(Double.parseDouble(t.toJavaString())); } // 1E400 -> Infinity
   public boolean sharedText() { return true; }                   // session parses fill a text arena
 
   // In a session parse: a UTF-16 view of the document's text arena, no copy. Otherwise the
   // UTF-8 bytes are copied once. (A real sink interns keys, as TruffleSink.KeyCache does.)
-  private static TruffleString js(JsonText v) {
+  private static TruffleString js(TapeText v) {
     return v.toTruffleString(TruffleString.Encoding.UTF_16);
   }
 
@@ -429,7 +459,7 @@ Known-schema JSON compiles through `decoder.compile(schema)` or
 `decoder.compile(root, recordTypes)` on either backend's `JsonDecoder` into a
 reusable, thread-confined native plan (`JsonPlan.compile(...)` is the static SVM
 shortcut, and `JsonSvm.open().compile(...)` returns the same plan).
-`plan.decode(utf8)` returns the scoped root `JsonRecord`: validated slots with
+`plan.decode(utf8)` returns the scoped root `TypedRecord`: validated slots with
 separate presence and null masks, read with primitive getters or through
 `DataLibrary`. Strings and unsigned `BigInteger`s materialize on request.
 
@@ -445,17 +475,17 @@ types and nesting deeper than 32 records (the root counts as 1) are rejected whe
 the plan compiles. Unknown fields, escaped duplicates, missing required fields, type
 mismatches and trailing input are rejected at every level.
 
-Every record and array of one decode shares a `JsonTypedOwner` (thread guard,
-assumption, close). `record(i)` returns a nested `JsonRecord`, `array(i)` a
-`JsonArray` (`BorrowedArray` with interop array exports), and `DataLibrary.read`
+Every record and array of one decode shares a `TypedOwner` (thread guard,
+assumption, close). `record(i)` returns a nested `TypedRecord`, `array(i)` a
+`TypedArray` (`BorrowedArray` with interop array exports), and `DataLibrary.read`
 returns those for RECORD and ARRAY fields. Closing any record closes the owner and
-invalidates all of them. `JsonRecord.snapshot()` and `JsonArray.snapshot()` copy into
+invalidates all of them. `TypedRecord.snapshot()` and `TypedArray.snapshot()` copy into
 owned immutable `Batch` rows and `DataArray`s that survive close.
 
-`JsonAccess` binds a schema and an ordinal path (`new JsonAccess(root, recordTypes,
+`TypedAccess` binds a schema and an ordinal path (`new TypedAccess(root, recordTypes,
 1, 0, 2)`: RECORD hops, then an INT64/FLOAT64/BOOLEAN leaf) for allocation-free
 compiled primitive reads that walk the record table without intermediate
-`JsonRecord`s; keep it in a final node field. Records outlive their plans.
+`TypedRecord`s; keep it in a final node field. Records outlive their plans.
 
 On the JVM the plan table is written through the generated FFM layouts from the
 same backend-neutral layout the SVM plan uses, and slot and record-entry reads go
@@ -469,7 +499,7 @@ These interfaces exist for follow-on adapters: ordered members (`keyAt`,
 `memberAt`), random lookup, exact and raw token text (`numberText`, `rawText`),
 immutable snapshots, single-pass export and typed plans. Still to do:
 
-- **JEP 540**: durable, thread-safe JDK `JsonValue` implementations on a pinned
+- **JEP 540**: durable, thread-safe JDK `TapeValue` implementations on a pinned
   JDK 28 early-access lane, backed initially by snapshots; JSON generation with
   exact number emission; Java UTF-16 factory semantics for unpaired surrogates; and
   differential conformance against the pinned JDK, including its surrogate policy.

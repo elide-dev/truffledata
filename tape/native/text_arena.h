@@ -1,14 +1,15 @@
-#ifndef TRUFFLEDATA_JSON_TEXT_ARENA_H
-#define TRUFFLEDATA_JSON_TEXT_ARENA_H
-#include "json/native/decoder.h"
+#ifndef TRUFFLEDATA_TAPE_TEXT_ARENA_H
+#define TRUFFLEDATA_TAPE_TEXT_ARENA_H
+#include "tape/native/key_table.h"
 #include <myna/values.h>
 #include <simdutf.h>
 #include <cstdint>
 #include <cstring>
 
-namespace truffledata::json {
+namespace truffledata::tape {
 
-// Per-document text arena (performance plan Task D2): every key and string node's decoded text,
+// Per-document text arena (JSON performance plan Task D2, moved here for YAML in YAML plan Task 4):
+// every key and string node's decoded text,
 // written once in tape order into a caller buffer in the representation a UTF-16 guest string
 // uses, so a Truffle sink can build each string over the shared buffer without transcoding:
 //   - Latin-1 (one byte per code point) when every code point is at most U+00FF. ASCII strings are
@@ -16,13 +17,15 @@ namespace truffledata::json {
 //     (and is retried as UTF-16) at the first code point above U+00FF.
 //   - UTF-16LE otherwise, at an even offset.
 // Each node gets one table entry: offset << 32 | byte length << 1 | utf16. Non-string nodes and
-// empty strings are 0. Strings come from a validated tape (stage 1 validated the input, escapes
-// were decoded by simdjson), so the non-validating UTF-16 conversion is safe.
+// empty strings are 0. `meta` is the key-hash side table (key_table.h), whose ascii_flag marks
+// ASCII strings. Strings must come from a validated tape (for JSON, stage 1 validated the input and
+// simdjson decoded the escapes), so the non-validating UTF-16 conversion is safe.
 //
-// Capacity bound: a string of n decoded UTF-8 bytes was at least n + 2 input bytes (its quotes;
-// escapes only lengthen the input) and needs at most 2n + 1 output bytes (UTF-16 plus one byte of
-// alignment), so 2 × input length bytes always suffice — 2 × UTF-16 input bytes too, since each
-// UTF-16 input unit yields at most one output unit. Java presizes to 2 × length + 16.
+// Capacity bound (JSON): a string of n decoded UTF-8 bytes was at least n + 2 input bytes (its
+// quotes; escapes only lengthen the input) and needs at most 2n + 1 output bytes (UTF-16 plus one
+// byte of alignment), so 2 × input length bytes always suffice — 2 × UTF-16 input bytes too, since
+// each UTF-16 input unit yields at most one output unit. Java presizes to 2 × length + 16. Another
+// producer must prove its own bound before sharing that presizing (YAML: plan Task 5).
 inline constexpr uint64_t text_utf16_bit = 1;
 inline constexpr size_t text_too_small = SIZE_MAX;
 
@@ -74,5 +77,5 @@ inline size_t write_text_arena(const myna_value_view& view, const uint32_t* meta
   }
   return used;
 }
-} // namespace truffledata::json
+} // namespace truffledata::tape
 #endif

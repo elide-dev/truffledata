@@ -46,27 +46,36 @@ class PolicyTest {
             Map.entry("MysqlAdapter.java", 1),
             Map.entry("PostgresqlAdapter.java", 1),
             Map.entry("JdbcValues.java", 1),
-            // JSON: native downcalls, slow-path conversions and allocation stay out of compiled reads.
+            // Shared tape (//tape, YAML plan Task 4): the JSON budgets below moved here with their
+            // classes (JsonOwner → TapeOwner, JsonValue → TapeValue, JsonText → TapeText, JsonKey →
+            // TapeKey, JsonTextArena → TapeTextArena, JsonBorrow → TapeBorrow, JsonTypedOwner →
+            // TypedOwner, JsonRecord → TypedRecord, JsonArray → TypedArray, JsonAccess → TypedAccess).
             Map.entry("JavaSink.java", 9), // Embedder tree building and key interning, outside the tape walk.
-            Map.entry("JsonAccess.java", 2),
-            Map.entry("JsonArray.java", 1),
+            Map.entry("TypedAccess.java", 2),
+            Map.entry("TypedArray.java", 1),
+            Map.entry("TapeOwner.java", 10), // Close, pinning, array index, member directories, export cursors.
+            Map.entry("TypedRecord.java", 4),
+            Map.entry("TypedOwner.java", 3),
+            Map.entry("TapeValue.java", 26), // Static (owner, node) slow paths per interop message and hint misses.
+            Map.entry("TapeBorrow.java", 1), // Borrowed-result assumption.
+            Map.entry("TapeKey.java", 1), // Key preparation (UTF-8 encode and hash).
+            Map.entry("TapeText.java", 4), // Sink-side materialization: String, TruffleString, copy, compare.
+            Map.entry("TapeTextArena.java", 1), // TruffleString over a session text arena (sink side).
+            Map.entry("TruffleSink.java", 9), // Reference guest sink: tree building and key interning.
+            // The session and stream entry points JsonSession (13) and JsonStream (10) held: the
+            // shared bookkeeping moved here, the JSON-only ones stayed below.
+            Map.entry("TapeSession.java", 10), // parse ×4, with, decode ×2, validate, criticalDecodes, close.
+            Map.entry("TapeStream.java", 8), // feed ×3, finish, next ×2, retain, close: native calls.
+            Map.entry("TapeFormat.java", 1), // Alias-target failure, built outside compiled alias reads.
+            // JSON: native downcalls, slow-path conversions and allocation stay out of compiled reads.
             Map.entry("JsonJvm.java", 7), // FFM downcalls, arena management and openSession (×2).
             Map.entry("JsonMessage.java", 2),
-            Map.entry("JsonOwner.java", 10), // Close, pinning, array index, member directories, export cursors.
             Map.entry("JsonPlan.java", 4), // Plan compilation and decode entry points.
-            Map.entry("JsonRecord.java", 4),
             Map.entry("JsonSvm.java", 4), // Static-linked native calls.
-            Map.entry("JsonTypedOwner.java", 3),
-            Map.entry("JsonValue.java", 26), // Static (owner, node) slow paths per interop message and hint misses.
             Map.entry("JvmTypedOwner.java", 3),
             Map.entry("SvmTypedOwner.java", 1),
-            Map.entry("JsonSession.java", 13), // Session entry points (open ×2, parse ×4, with, decode ×2, validate, close, criticalDecodes, stream).
-            Map.entry("JsonStream.java", 10), // Stream entry points (feed ×3, finish, next ×2, retain, skip, truncatedBytes, close): native calls.
-            Map.entry("JsonBorrow.java", 1), // Borrowed-result assumption.
-            Map.entry("JsonKey.java", 1), // Key preparation (UTF-8 encode and hash).
-            Map.entry("JsonText.java", 4), // Sink-side materialization: String, TruffleString, copy, compare.
-            Map.entry("JsonTextArena.java", 1), // TruffleString over a session text arena (sink side).
-            Map.entry("TruffleSink.java", 9), // Reference guest sink: tree building and key interning.
+            Map.entry("JsonSession.java", 3), // open ×2 and stream; the rest is TapeSession's.
+            Map.entry("JsonStream.java", 2), // skip and truncatedBytes; the rest is TapeStream's.
             // CSV: diagnostics, materialization and the export walk stay out of compiled reads.
             Map.entry("CsvScanner.java", 2), // Static syntax and limit failures.
             Map.entry("CsvBatch.java", 2), // Static STRING materialization and the export walk.
@@ -99,9 +108,9 @@ class PolicyTest {
                 "JdbcCursor.java",
                 9));
     exportedMessages.put("GeneratedMessage.java", 5);
-    exportedMessages.put("JsonValue.java", 29);
-    exportedMessages.put("JsonArray.java", 4);
-    exportedMessages.put("JsonRecord.java", 6);
+    exportedMessages.put("TapeValue.java", 29);
+    exportedMessages.put("TypedArray.java", 4);
+    exportedMessages.put("TypedRecord.java", 6);
     exportedMessages.put("CsvBatch.java", 4);
     exportedMessages.put("CsvRow.java", 6);
     Set<String> accessSurfaces = exportedMessages.keySet();
@@ -117,6 +126,7 @@ class PolicyTest {
           "protobuf",
           "protobuf-runtime",
           "json",
+          "tape",
           "csv"
         }) {
       try (var paths = Files.walk(root.resolve(module + "/src/main/java"))) {

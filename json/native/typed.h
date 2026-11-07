@@ -156,13 +156,13 @@ using record_entry = JsonRecordEntry;
 class typed_document final {
   simdjson::padded_string input_;
   simdjson::ondemand::parser parser_;
-  index_memory memory_;
+  tape::index_memory memory_;
   std::pmr::vector<scalar_slot> slots_;
   std::pmr::vector<record_entry> records_;
   record_entry root_{};
   const typed_plan* plan_;
 
-  static std::string_view checked(std::string_view input, storage_limits storage) {
+  static std::string_view checked(std::string_view input, tape::storage_limits storage) {
     if (input.size() > UINT32_MAX || input.size() > storage.input_bytes)
       throw std::length_error("JSON input limit");
     return input;
@@ -309,7 +309,7 @@ class typed_document final {
     return {present, nulls};
   }
 public:
-  typed_document(const typed_plan& plan, std::string_view input, storage_limits storage = {},
+  typed_document(const typed_plan& plan, std::string_view input, tape::storage_limits storage = {},
                  std::pmr::memory_resource* upstream = std::pmr::get_default_resource())
       : input_(checked(input, storage)), memory_(storage.index_bytes, upstream), slots_(&memory_),
         records_(&memory_), plan_(&plan) {
@@ -338,7 +338,7 @@ public:
     if (index >= record_count()) throw std::out_of_range("JSON record entry");
     return records()[index];
   }
-  allocation_stats allocations() const {
+  tape::allocation_stats allocations() const {
     return {input_.size(), input_.size() + simdjson::SIMDJSON_PADDING,
             memory_.current(), memory_.peak(), memory_.allocations(), parser_.capacity()};
   }

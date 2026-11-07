@@ -109,7 +109,7 @@ string and `parent` being null. The checksum is 38,219.
 | Engine | Ingest (per document) | Retained form and read |
 | --- | --- | --- |
 | `gson-tree` | `JsonParser.parseReader` over `InputStreamReader` from UTF-8 bytes, then read | `JsonElement` trees, read in one `@TruffleBoundary` call per document |
-| `simdjson-generic-java` | `JsonSession.decode`, `export(JavaSink)`, read the Java tree, close | Live messages; the guest exports each into a fresh `JavaSink` through an adopted `JsonExportNode` and reads the tree behind a boundary |
+| `simdjson-generic-java` | `JsonSession.decode`, `export(JavaSink)`, read the Java tree, close | Live messages; the guest exports each into a fresh `JavaSink` through an adopted `TapeExportNode` and reads the tree behind a boundary |
 | `simdjson-generic-interop` | Decode, read through cached `InteropLibrary`, close | Live messages, read by the guest through cached interop, one library per member site |
 | `simdjson-snapshot` | Decode, `snapshot()`, close, read the snapshot through interop | Snapshots, read like `simdjson-generic-interop` |
 | `simdjson-session-java` (ingest only) | Borrowed `JsonSession.parse(input, JavaSink)`, read the Java tree | Nothing native is retained, so there is no read stage |
@@ -137,7 +137,7 @@ Caveats:
   it still rejects trailing input. This is a valid-input performance fixture, not a
   conformance comparison. Gson stores numbers as `LazilyParsedNumber`, so its reads
   parse number text on every access.
-- Array elements are counted but not read. `JsonValue.readArrayElement` calls the
+- Array elements are counted but not read. `TapeValue.readArrayElement` calls the
   instance boundary `element(index)`. In compiled code, that would materialize the
   freshly read array view on every access. Reading elements needs a static
   `(owner, node)` element path like `memberNode`. Until then, element reads are not
@@ -176,9 +176,9 @@ key's side-table entry and node words) and keeps one static boundary for misses.
 Earlier drafts that inlined the miss path and three separate tape reads per member
 measured 2,866–3,037 nodes and were rejected by this gate. The export loops have two loops, the document loop and the tape walk.
 Neither has a per-member loop or recursion. Since Task D1 the walk has no graph
-allocation: the owner's reusable `JsonText` cursor carries the container stack, and a
+allocation: the owner's reusable `TapeText` cursor carries the container stack, and a
 first, nested or unconfined export allocates its cursor behind a boundary
-(`JsonOwner.newCursor`). Before D1 the walk had two allocation sites (the container
+(`TapeOwner.newCursor`). Before D1 the walk had two allocation sites (the container
 stacks for nested or unconfined exports). The counter's 1.0 B/document shows the
 outermost export on a confined message allocates nothing. 1.0 B/document is the harness's own per-call boxing; all three
 scalar peak cells measure exactly that.
@@ -187,7 +187,7 @@ scalar peak cells measure exactly that.
 measured value is 1,169 B at peak and 1,168 B from AOT code, against 2,357 B before
 D1. It covers only what the sink builds: the `JavaSink` and its stack, two
 `LinkedHashMap`s with their tables and entries, two `ArrayList`s, the value
-`String`s and boxed numbers. Since D1 the sink receives one reusable `JsonText`
+`String`s and boxed numbers. Since D1 the sink receives one reusable `TapeText`
 cursor instead of 16–19 views per document, decodes ASCII strings with one copy, and
 every `JavaSink` cell shares one `JavaSink.KeyCache`, so the twelve member names
 are not reallocated per document. The budget leaves 31 B of headroom: any per-node

@@ -1,7 +1,7 @@
 #ifndef TRUFFLEDATA_JSON_SESSION_H
 #define TRUFFLEDATA_JSON_SESSION_H
 #include "json/native/decoder.h"
-#include "json/native/text_arena.h"
+#include "tape/native/text_arena.h"
 #include <optional>
 
 namespace truffledata::json {
@@ -23,8 +23,8 @@ public:
 
   struct document_view {
     myna_value_view view;
-    table_view<uint64_t> lexical;
-    table_view<uint32_t> hashes;
+    tape::table_view<uint64_t> lexical;
+    tape::table_view<uint32_t> hashes;
     size_t input_length;
     size_t index_allocations;  // Upstream allocations made by this decode.
   };
@@ -32,13 +32,13 @@ public:
   // A retained document: arena storage, input buffer and the descriptor that points into them.
   class retained final : public result_owner {
     std::pmr::memory_resource* upstream_;
-    block_arena::storage storage_;
+    tape::block_arena::storage storage_;
     char* input_;
     size_t input_capacity_;
     size_t bytes_;
   public:
     myna_value_view view;
-    retained(std::pmr::memory_resource* upstream, block_arena::storage storage, size_t bytes,
+    retained(std::pmr::memory_resource* upstream, tape::block_arena::storage storage, size_t bytes,
              char* input, size_t input_capacity, myna_value_view view)
         : upstream_(upstream), storage_(std::move(storage)), input_(input),
           input_capacity_(input_capacity), bytes_(bytes), view(view) {}
@@ -57,14 +57,14 @@ public:
 private:
   std::pmr::memory_resource* upstream_;
   myna::value_limits values_;
-  storage_limits storage_;
-  index_memory memory_;
-  block_arena arena_;
+  tape::storage_limits storage_;
+  tape::index_memory memory_;
+  tape::block_arena arena_;
   simdjson::ondemand::parser parser_;
   char* input_ = nullptr;
   size_t input_capacity_ = 0;
   size_t input_length_ = 0;
-  std::optional<tape_decoder<tape_writer>> decoder_;
+  std::optional<tape_decoder<tape::tape_writer>> decoder_;
   myna_value_view view_{};
   bool live_ = false;
 
@@ -112,7 +112,7 @@ private:
   }
 
 public:
-  session(myna::value_limits values, storage_limits storage,
+  session(myna::value_limits values, tape::storage_limits storage,
           std::pmr::memory_resource* upstream = std::pmr::get_default_resource())
       : upstream_(upstream), values_(values), storage_(storage),
         memory_(storage.index_bytes, upstream), arena_(&memory_) {
@@ -183,8 +183,8 @@ public:
     try {
       size_t count = view_.node_count ? view_.node_count : 1;
       auto* entries = static_cast<uint64_t*>(arena_.allocate(count * sizeof(uint64_t), alignof(uint64_t)));
-      size_t used = write_text_arena(view_, decoder_->key_hashes().data(), entries, out, capacity);
-      if (used == text_too_small) recycle();
+      size_t used = tape::write_text_arena(view_, decoder_->key_hashes().data(), entries, out, capacity);
+      if (used == tape::text_too_small) recycle();
       table = entries;
       return used;
     } catch (...) {
@@ -201,7 +201,7 @@ public:
   retained* retain() {
     if (!live_) throw std::logic_error("no JSON session document");
     void* raw = upstream_->allocate(sizeof(retained), alignof(retained));
-    block_arena::storage storage;
+    tape::block_arena::storage storage;
     size_t bytes = arena_.detach(storage, upstream_);
     memory_.forget(bytes);
     auto* owner = new (raw) retained(upstream_, std::move(storage), bytes, input_, input_capacity_, view_);
@@ -214,12 +214,12 @@ public:
 
   // The live document; valid only while live().
   const myna_value_view& view() const { return view_; }
-  table_view<uint64_t> lexical_spans() const { return decoder_->lexical_spans(); }
-  table_view<uint32_t> key_hashes() const { return decoder_->key_hashes(); }
+  tape::table_view<uint64_t> lexical_spans() const { return decoder_->lexical_spans(); }
+  tape::table_view<uint32_t> key_hashes() const { return decoder_->key_hashes(); }
   size_t input_length() const { return input_length_; }
   size_t parser_capacity() const { return parser_.capacity(); }
   size_t input_capacity() const { return input_capacity_; }
-  const index_memory& memory() const { return memory_; }
+  const tape::index_memory& memory() const { return memory_; }
   // The allocator behind the session's input buffer and arena (streams buffer through it too).
   std::pmr::memory_resource* upstream() const { return upstream_; }
   size_t arena_blocks() const { return arena_.blocks(); }

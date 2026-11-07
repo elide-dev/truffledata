@@ -4,25 +4,29 @@ import com.oracle.truffle.api.Assumption;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.Truffle;
 import dev.elide.myna.values.ValueTape;
+import dev.elide.truffledata.tape.TapeFormat;
+import dev.elide.truffledata.tape.TapeLexical;
+import dev.elide.truffledata.tape.TapeOwner;
 import org.jspecify.annotations.Nullable;
 
 /** Thread-confined owner of a validated JSON index. Closing invalidates every derived view. */
-public final class JsonMessage extends JsonOwner implements AutoCloseable {
+public final class JsonMessage extends TapeOwner implements AutoCloseable {
+  /** JSON tapes hold no alias nodes: one shared format, without alias tables. */
+  static final TapeFormat FORMAT = TapeFormat.of("JSON");
+
   private final Runnable release;
-  private final Lexical lexical;
+  private final TapeLexical lexical;
   private @Nullable Assumption alive;
 
-  /** Backend-specific access to the native lexical span table and retained input. */
-  interface Lexical {
-    long span(long node);
-
-    byte inputByte(long offset);
-  }
-
-  JsonMessage(ValueTape tape, Lexical lexical, Runnable release) {
+  JsonMessage(ValueTape tape, TapeLexical lexical, Runnable release) {
     super(tape, Thread.currentThread());
     this.lexical = lexical;
     this.release = release;
+  }
+
+  @Override
+  public TapeFormat format() {
+    return FORMAT;
   }
 
   @Override
@@ -34,13 +38,13 @@ public final class JsonMessage extends JsonOwner implements AutoCloseable {
   }
 
   @Override
-  long lexical(long node) {
+  protected long lexical(long node) {
     if (node < 0 || node >= tape.nodeCount()) throw new IndexOutOfBoundsException("Node index");
     return lexical.span(node);
   }
 
   @Override
-  byte lexicalByte(long offset) {
+  protected byte lexicalByte(long offset) {
     return lexical.inputByte(offset);
   }
 

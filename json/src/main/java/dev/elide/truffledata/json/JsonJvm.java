@@ -3,6 +3,10 @@ package dev.elide.truffledata.json;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import dev.elide.truffledata.Schema;
 import dev.elide.truffledata.json.generated.JsonFFM;
+import dev.elide.truffledata.tape.SegmentValueTape;
+import dev.elide.truffledata.tape.TapeLexical;
+import dev.elide.truffledata.tape.TypedLayout;
+import dev.elide.truffledata.tape.TypedOwner;
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.SymbolLookup;
@@ -140,13 +144,13 @@ public final class JsonJvm implements JsonDecoder {
   }
 
   /** Lexical spans and retained input of a published JsonResult. */
-  static JsonMessage.Lexical lexical(MemorySegment result, SegmentValueTape tape) {
+  static TapeLexical lexical(MemorySegment result, SegmentValueTape tape) {
     long spanCount = result.get(ValueLayout.JAVA_LONG, JsonFFM.JsonResult_lexical_count_OFFSET);
     if (spanCount != tape.nodeCount()) throw new IllegalStateException("JSON lexical table mismatch");
     MemorySegment spans =
         result.get(ValueLayout.ADDRESS, JsonFFM.JsonResult_lexical_OFFSET).reinterpret(spanCount * 8);
     MemorySegment input = tape.region(1);
-    return new JsonMessage.Lexical() {
+    return new TapeLexical() {
       @Override
       public long span(long node) {
         return spans.get(ValueLayout.JAVA_LONG, node * 8);
@@ -162,7 +166,7 @@ public final class JsonJvm implements JsonDecoder {
   /** Message owning a published result (freed through td_json_release when it closes). */
   private JsonMessage message(MemorySegment result, Arena resultArena, Runnable onClose) {
     SegmentValueTape tape = tape(result);
-    JsonMessage.Lexical lexical = lexical(result, tape);
+    TapeLexical lexical = lexical(result, tape);
     live++;
     return new JsonMessage(tape, lexical, () -> releaseResult(result, resultArena, onClose));
   }
@@ -288,14 +292,14 @@ public final class JsonJvm implements JsonDecoder {
   }
 
   /**
-   * Writes the shared {@link JsonPlan.Layout} into FFM memory and creates the native plan. Plan
+   * Writes the shared {@link TypedLayout} into FFM memory and creates the native plan. Plan
    * decodes require this decoder to be open; returned records do not.
    */
   @Override
   @TruffleBoundary
   public JsonPlan compile(Schema root, Map<String, Schema> recordTypes) {
     check();
-    JsonPlan.Layout layout = new JsonPlan.Layout(root, recordTypes);
+    TypedLayout layout = new TypedLayout(root, recordTypes, JsonMessage.FORMAT);
     long fieldSize = JsonFFM.JsonScalarField_LAYOUT.byteSize();
     long recordSize = JsonFFM.JsonRecordPlan_LAYOUT.byteSize();
     Arena planArena = Arena.ofConfined();
@@ -350,11 +354,11 @@ public final class JsonJvm implements JsonDecoder {
         fields.set(
             ValueLayout.JAVA_LONG,
             at + JsonFFM.JsonScalarField_unsigned_maximum_OFFSET,
-            JsonPlan.Layout.UNSIGNED_MAXIMUM);
+            TypedLayout.UNSIGNED_MAXIMUM);
         fields.set(
             ValueLayout.JAVA_LONG,
             at + JsonFFM.JsonScalarField_max_utf8_bytes_OFFSET,
-            JsonPlan.Layout.MAX_UTF8_BYTES);
+            TypedLayout.MAX_UTF8_BYTES);
         fields.set(
             ValueLayout.JAVA_INT,
             at + JsonFFM.JsonScalarField_float_bits_OFFSET,
@@ -409,7 +413,7 @@ public final class JsonJvm implements JsonDecoder {
     }
 
     @Override
-    JsonTypedOwner decode(byte[] utf8, Schema[] schemas) {
+    TypedOwner decode(byte[] utf8, Schema[] schemas) {
       if (!open) throw new IllegalStateException("JSON decoder closed");
       Arena resultArena = Arena.ofConfined();
       MemorySegment result;
@@ -441,7 +445,7 @@ public final class JsonJvm implements JsonDecoder {
           throw callFailure(failure);
         }
         JsonSvm.checkStatus(status);
-        JsonTypedOwner owner =
+        TypedOwner owner =
             new JvmTypedOwner(
                 result, schemas, () -> retire(typedRelease, result, resultArena));
         published = true;
