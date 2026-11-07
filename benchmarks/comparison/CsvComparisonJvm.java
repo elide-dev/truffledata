@@ -1,6 +1,7 @@
 package dev.elide.truffledata.comparison;
 
 import org.jspecify.annotations.NullMarked;
+import dev.elide.truffledata.csv.CsvIndexing;
 import dev.elide.truffledata.csv.kernel.CsvIndexer;
 import dev.elide.truffledata.csv.kernel.jvm.FfmIndexer;
 import java.nio.file.Path;
@@ -35,6 +36,16 @@ public final class CsvComparisonJvm {
           public CsvIndexer create(byte d, byte q, boolean quoting, int kernel, boolean small) {
             if (library.isEmpty()) throw new IllegalStateException("truffledata.csv.library unset");
             return new FfmIndexer(Path.of(library), d, q, quoting, kernel, small ? Integer.MAX_VALUE : 0);
+          }
+
+          private CsvIndexing.@Nullable Provider provider;
+
+          @Override
+          public CsvIndexing.Provider provider() {
+            if (library.isEmpty()) throw new IllegalStateException("truffledata.csv.library unset");
+            CsvIndexing.Provider p = provider;
+            if (p == null) provider = p = FfmIndexer.Library.load(Path.of(library)).provider();
+            return p;
           }
 
           @Override

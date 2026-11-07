@@ -69,7 +69,8 @@ def main(paths):
     if sweep:
         sizes = sorted({k[3] for k in sweep})
         out += ['', '## Size sweep (kernel crossovers; GB/s, one fork)', '',
-                '| Binary | Workload | Dataset | Engine | ' + ' | '.join(f'{s // 1024} KiB' for s in sizes) + ' |',
+                '| Binary | Workload | Dataset | Engine | '
+                + ' | '.join(f'{s // 1024} KiB' if s >= 1024 else f'{s} B' for s in sizes) + ' |',
                 '|---|---|---|---|' + '---:|' * len(sizes)]
         for binary, workload, dataset, engine in sorted({(k[0], k[1], k[2], k[4]) for k in sweep}):
             values = []

@@ -1,6 +1,7 @@
 package dev.elide.truffledata.comparison;
 
 import org.jspecify.annotations.NullMarked;
+import dev.elide.truffledata.csv.CsvIndexing;
 import dev.elide.truffledata.csv.kernel.CsvIndexer;
 import dev.elide.truffledata.csv.kernel.svm.SvmIndexer;
 
@@ -26,6 +27,11 @@ public final class CsvComparisonSvm {
           @Override
           public long invalidUtf8(byte[] input) {
             return SvmIndexer.invalidUtf8(input, 0, input.length);
+          }
+
+          @Override
+          public CsvIndexing.Provider provider() {
+            return SvmIndexer.provider();
           }
         });
   }

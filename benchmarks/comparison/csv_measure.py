@@ -29,20 +29,26 @@ shards = int(os.environ.get('TEST_TOTAL_SHARDS', '1'))
 
 DATASETS = ('numeric', 'mixed', 'quoted', 'escaped')
 SMALL, LARGE = 1 << 20, 128 << 20
+# truffledata-<path>: the shipped entry points with the default kernel (java-swar), -native with
+# the native provider installed, -bytes with the index path off (the library before the kernels).
 ENGINES = {
     'index': ('index-scalar', 'index-table', 'index-swar', 'index-vector', 'index-native',
               'index-native-small', 'index-native-swar', 'index-native-avx2', 'index-native-avx512'),
-    'scan': ('truffledata-scanner', 'kernel-table', 'kernel-swar', 'kernel-vector', 'kernel-native',
-             'kernel-native-small', 'fastcsv', 'jackson'),
-    'strings': ('truffledata-batch', 'kernel-swar', 'kernel-native', 'fastcsv', 'univocity',
-                'commons-csv', 'jackson'),
-    'typed': ('truffledata-plan', 'kernel-swar', 'kernel-native', 'fastcsv', 'univocity',
-              'commons-csv', 'jackson'),
+    'scan': ('truffledata-scanner', 'truffledata-scanner-native', 'truffledata-scanner-bytes',
+             'kernel-swar', 'kernel-vector', 'kernel-native', 'kernel-native-small', 'fastcsv',
+             'jackson'),
+    'strings': ('truffledata-batch', 'truffledata-batch-native', 'truffledata-batch-bytes',
+                'truffledata-mapped', 'truffledata-mapped-native', 'kernel-swar', 'kernel-native',
+                'fastcsv', 'univocity', 'commons-csv', 'jackson'),
+    'typed': ('truffledata-plan', 'truffledata-plan-native', 'truffledata-plan-bytes', 'kernel-swar',
+              'kernel-native', 'fastcsv', 'univocity', 'commons-csv', 'jackson'),
 }
-SWEEP_SIZES = (4 << 10, 16 << 10, 64 << 10, 256 << 10, 1 << 20, 4 << 20, 16 << 20)
+# Down to 256 B: the index-path threshold (sweep-* force the index path at every size).
+SWEEP_SIZES = (256, 1 << 10, 4 << 10, 16 << 10, 64 << 10, 256 << 10, 1 << 20, 4 << 20, 16 << 20)
 SWEEP = {
-    'index': ('index-swar', 'index-vector', 'index-native', 'index-native-small'),
-    'scan': ('truffledata-scanner', 'kernel-swar', 'kernel-native', 'kernel-native-small'),
+    'index': ('index-swar', 'index-native', 'index-native-small'),
+    'scan': ('truffledata-scanner-bytes', 'sweep-swar', 'sweep-native', 'kernel-native-small'),
+    'strings': ('truffledata-batch-bytes', 'sweep-batch-swar', 'sweep-batch-native'),
 }
 GROUPS = [('fixture', d, SMALL) for d in DATASETS] + [('fixture', d, LARGE) for d in DATASETS] + [('sweep',)]
 if shards != len(GROUPS):
@@ -85,7 +91,8 @@ for workload, engine, dataset, size, stage, fork in jobs:
                              capture_output=True, text=True)
     if process.returncode != 0:
         if ('CSV native kernel' in process.stderr and 'native' in engine) or (
-                'vector' in engine and 'VectorIndexer' in process.stderr):
+                'vector' in engine and 'VectorIndexer' in process.stderr) or (
+                'CSV engine unavailable' in process.stderr):
             unavailable.append({'workload': workload, 'engine': engine, 'reason': process.stderr[-400:]})
             print('unavailable', workload, engine, flush=True)
             continue

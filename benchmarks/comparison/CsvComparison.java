@@ -24,6 +24,7 @@ import dev.elide.truffledata.csv.Csv;
 import dev.elide.truffledata.csv.CsvBatch;
 import dev.elide.truffledata.csv.CsvBench;
 import dev.elide.truffledata.csv.CsvFormat;
+import dev.elide.truffledata.csv.CsvIndexing;
 import dev.elide.truffledata.csv.CsvLimits;
 import dev.elide.truffledata.csv.CsvPlan;
 import dev.elide.truffledata.csv.CsvRow;
@@ -77,6 +78,9 @@ public final class CsvComparison {
     CsvIndexer create(byte delimiter, byte quote, boolean quoting, int kernel, boolean small);
 
     long invalidUtf8(byte[] input);
+
+    /** The native kernel as a {@link CsvIndexing} provider (what an application installs). */
+    CsvIndexing.Provider provider();
   }
 
   static Natives natives =
@@ -93,6 +97,11 @@ public final class CsvComparison {
 
         @Override
         public long invalidUtf8(byte[] input) {
+          throw new IllegalStateException("No native kernel in this runtime");
+        }
+
+        @Override
+        public CsvIndexing.Provider provider() {
           throw new IllegalStateException("No native kernel in this runtime");
         }
       };
@@ -118,21 +127,28 @@ public final class CsvComparison {
         List.of(
             "index-scalar", "index-table", "index-swar", "index-vector", "index-native",
             "index-native-small", "index-native-swar", "index-native-avx2", "index-native-avx512"));
+    // Shipped paths: truffledata-<path> runs the library with its default kernel (java-swar),
+    // -native with the native provider installed, and -bytes with the index path off (the
+    // per-byte scanners: the library before the kernels were wired in). sweep-* force the index
+    // path at every size (the small-size crossover). kernel-* are the reference consumers.
     ENGINES.put(
         "scan",
         List.of(
-            "truffledata-scanner", "kernel-table", "kernel-swar", "kernel-vector", "kernel-native",
+            "truffledata-scanner", "truffledata-scanner-native", "truffledata-scanner-bytes",
+            "sweep-swar", "sweep-native", "kernel-swar", "kernel-vector", "kernel-native",
             "kernel-native-small", "fastcsv", "jackson"));
     ENGINES.put(
         "strings",
         List.of(
-            "truffledata-batch", "kernel-swar", "kernel-native", "fastcsv", "univocity",
+            "truffledata-batch", "truffledata-batch-native", "truffledata-batch-bytes",
+            "truffledata-mapped", "truffledata-mapped-native", "sweep-batch-swar",
+            "sweep-batch-native", "kernel-swar", "kernel-native", "fastcsv", "univocity",
             "commons-csv", "jackson"));
     ENGINES.put(
         "typed",
         List.of(
-            "truffledata-plan", "kernel-swar", "kernel-native", "fastcsv", "univocity",
-            "commons-csv", "jackson"));
+            "truffledata-plan", "truffledata-plan-native", "truffledata-plan-bytes", "kernel-swar",
+            "kernel-native", "fastcsv", "univocity", "commons-csv", "jackson"));
     ENGINES.put("typed-reads", List.of("truffledata-plan", "batch-fastcsv"));
   }
 
@@ -185,12 +201,86 @@ public final class CsvComparison {
       if (engine.contains("native")) {
         int kernel = nativeKernel(engine);
         natives.create((byte) ',', (byte) '"', true, kernel, false);
+        if (shipped(engine)) natives.provider();
+      }
+      if (engine.contains("mapped")) {
+        Path probe = java.nio.file.Files.createTempFile("csv-probe", ".csv");
+        try {
+          java.nio.file.Files.write(probe, "a\n1\n".getBytes(StandardCharsets.UTF_8));
+          try (CsvBatch batch = Csv.parse(probe, FORMAT, BIG)) {
+            if (batch.size() != 1) throw new IllegalStateException("mapped probe");
+          }
+        } finally {
+          java.nio.file.Files.deleteIfExists(probe);
+        }
       }
       if (engine.contains("vector")) new VectorIndexer((byte) ',', (byte) '"', true);
       return true;
     } catch (IllegalArgumentException | IllegalStateException | UnsupportedOperationException
-        | LinkageError unavailable) {
+        | java.io.IOException | LinkageError unavailable) {
       return false;
+    }
+  }
+
+  /** Whether an engine runs the library's own entry points (CsvScanner, Csv.parse, CsvPlan). */
+  static boolean shipped(String engine) {
+    return engine.startsWith("truffledata-") || engine.startsWith("sweep-");
+  }
+
+  /**
+   * Installs the kernel an engine runs with: -native the native provider, -bytes none (the
+   * per-byte scanners), sweep-* the index path at every size, and otherwise the library default.
+   * Every cell selects, so a smoke run's earlier cells never leak a kernel into later ones.
+   */
+  static void select(String engine) {
+    CsvBench.forceIndex(engine.startsWith("sweep-"));
+    if (!shipped(engine)) CsvIndexing.install(CsvIndexing.JAVA);
+    else if (engine.endsWith("-bytes")) CsvIndexing.install(null);
+    else if (engine.endsWith("-native")) CsvIndexing.install(natives.provider());
+    else CsvIndexing.install(CsvIndexing.JAVA);
+  }
+
+  /** A shipped engine reports the kernel the library used. */
+  static Engine reporting(Engine engine) {
+    String kernel = CsvIndexing.kernel();
+    return new Engine() {
+      @Override
+      public long run(byte[] input) throws Exception {
+        return engine.run(input);
+      }
+
+      @Override
+      public String kernel() {
+        return kernel;
+      }
+    };
+  }
+
+  /** {@link Csv#parse(Path, CsvFormat, CsvLimits)} over a file holding the input. */
+  static final class Mapped implements Engine {
+    private byte[] written = new byte[0];
+    private @Nullable Path file;
+
+    @Override
+    public long run(byte[] input) throws Exception {
+      Path f = file;
+      if (f == null || written != input) {
+        if (f != null) java.nio.file.Files.deleteIfExists(f);
+        f = java.nio.file.Files.createTempFile("csv-mapped", ".csv");
+        f.toFile().deleteOnExit();
+        java.nio.file.Files.write(f, input);
+        file = f;
+        written = input;
+      }
+      long sum = 0;
+      try (CsvBatch batch = Csv.parse(f, FORMAT, BIG)) {
+        int width = batch.schema().size();
+        for (int r = 0, n = batch.size(); r < n; r++) {
+          CsvRow row = batch.row(r);
+          for (int c = 0; c < width; c++) sum += row.getString(c).length();
+        }
+      }
+      return sum;
     }
   }
 
@@ -223,6 +313,18 @@ public final class CsvComparison {
   // ---------------------------------------------------------------- engines
 
   static Engine engine(String workload, String engine, String dataset) {
+    if (!shipped(engine)) return base(workload, engine, dataset);
+    String path =
+        switch (workload) {
+          case "scan" -> "truffledata-scanner";
+          case "strings" -> engine.contains("mapped") ? "truffledata-mapped" : "truffledata-batch";
+          case "typed" -> "truffledata-plan";
+          default -> throw new IllegalArgumentException("engine " + workload + "/" + engine);
+        };
+    return reporting(path.equals("truffledata-mapped") ? new Mapped() : base(workload, path, dataset));
+  }
+
+  private static Engine base(String workload, String engine, String dataset) {
     switch (workload) {
       case "index" -> {
         CsvIndexer indexer = indexer(engine);
@@ -619,6 +721,9 @@ public final class CsvComparison {
     if (engines == null || !engines.contains(engineName))
       throw new IllegalArgumentException("engine " + workload + "/" + engineName);
     if (!CsvFixture.DATASETS.contains(dataset)) throw new IllegalArgumentException("dataset");
+    if (!smoke && !available(engineName))
+      throw new IllegalStateException("CSV engine unavailable: " + engineName);
+    select(workload.equals("typed-reads") ? "default" : engineName);
     if (workload.equals("typed-reads")) {
       typedReads(engineName, dataset, stage, smoke);
       return;

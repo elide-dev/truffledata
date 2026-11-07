@@ -47,6 +47,14 @@ public final class CsvBench {
         });
   }
 
+  /**
+   * Forces the index path at every input size ({@code true}, for the small-size sweep) or restores
+   * the shipped threshold ({@link CsvIndexing#MIN_INDEX_BYTES}).
+   */
+  public static void forceIndex(boolean force) {
+    CsvIndexing.minIndexBytes = force ? 0 : CsvIndexing.MIN_INDEX_BYTES;
+  }
+
   public static int invalidUtf8(byte[] bytes, int from, int to) {
     return Utf8.invalidOffset(bytes, from, to);
   }
