@@ -6,6 +6,7 @@ load("@rules_shell//shell:sh_test.bzl", "sh_test")
 load("//bazel:jit.bzl", "TRUFFLE_JIT_CHECKS")
 load("//bazel:maven.bzl", "maven_publication", "release_version")
 load("//bazel:maven_bom.bzl", "maven_bom")
+load("//bazel:merge_archives.bzl", "merge_archives")
 
 release_version(
     name = "version",
@@ -59,10 +60,21 @@ java_library(
     ],
 )
 
-# One self-contained archive (C ABI, decoder and simdjson) for static SVM linking.
+# The C ABI, decoder, simdjson and simdutf objects. cc_static_library collects object files only,
+# so the Rust myna-values bridge archive is merged in by json_archive below.
 cc_static_library(
-    name = "json_archive",
+    name = "json_objects",
     deps = ["//json/native:truffledata_json"],
+)
+
+# One self-contained archive for static SVM linking: json_objects plus Myna's myna-values static
+# library (myna_utf8_to_utf16_v2 for SvmValueTape, performance plan Task D1).
+merge_archives(
+    name = "json_archive",
+    archives = [
+        ":json_objects",
+        "//json/native/bridge",
+    ],
 )
 
 [maven_publication(

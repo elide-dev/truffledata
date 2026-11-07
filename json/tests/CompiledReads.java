@@ -360,7 +360,7 @@ final class CompiledReads {
       sum += 1;
     }
 
-    public void key(dev.elide.truffledata.json.JsonValue key) {
+    public void key(dev.elide.truffledata.json.JsonText key) {
       sum += 1000;
     }
 
@@ -388,11 +388,11 @@ final class CompiledReads {
       sum += bits;
     }
 
-    public void decimalValue(dev.elide.truffledata.json.JsonValue token) {
+    public void decimalValue(dev.elide.truffledata.json.JsonText token) {
       sum += 7;
     }
 
-    public void stringValue(dev.elide.truffledata.json.JsonValue text) {
+    public void stringValue(dev.elide.truffledata.json.JsonText text) {
       sum += 11;
     }
   }

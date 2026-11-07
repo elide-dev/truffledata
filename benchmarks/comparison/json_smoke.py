@@ -23,28 +23,31 @@ SCALAR = (1000, 1, 0)
 RULES = {
     'GenericReads[simdjson-generic-interop]': (2000, 1, 0),
     'GenericReads[simdjson-snapshot]': (2000, 1, 0),
-    # Document loop plus the tape walk. The two allocation sites are the container stack for
-    # nested or unconfined exports; the runtime budget below proves they never run here.
-    'GenericReads[simdjson-export-walk]': (1000, 2, 2),
-    # JavaSink events are boundaries that receive fresh views and build host objects; their
+    # Document loop plus the tape walk, with no allocation: the owner's reusable text cursor holds
+    # the container stack, and a first, nested or unconfined export allocates its cursor behind a
+    # boundary (was (1000, 2, 2) with the stack allocated inline, before Task D1).
+    'GenericReads[simdjson-export-walk]': (1000, 2, 0),
+    # JavaSink events are boundaries that receive the text cursor and build host objects; their
     # allocations are bounded at runtime instead of in the graph.
     'GenericReads[simdjson-generic-java]': (1000, 2, None),
     # Stock baseline: one boundary call per document into Gson's tree API.
     'GenericReads[gson-tree]': (1000, 1, 0),
 }
 # Java bytes per document in the compiled read loop. 1.0 is the harness's own per-call boxing,
-# identical for every peak cell. The JavaSink budget is fixed in JSON.md (measured 2,357).
+# identical for every peak cell. JavaSink budgets are fixed in JSON.md: every JavaSink cell shares
+# one JavaSink.KeyCache, and the text cursor replaced a view per key/string (Task D1): measured
+# 1,169 peak and 1,168 read-aot (2,357 before D1; the plan's target was 1,900).
 ALLOCATION = {
     ('simdjson-generic-interop', 'peak'): 1.0,
     ('simdjson-export-walk', 'peak'): 1.0,
-    ('simdjson-generic-java', 'peak'): 2400.0,
-    ('simdjson-generic-java', 'read-aot'): 2400.0,
+    ('simdjson-generic-java', 'peak'): 1200.0,
+    ('simdjson-generic-java', 'read-aot'): 1200.0,
     # Ingest through an explicit JsonSession (performance plan Task B2), fixed in JSON.md. Interop:
     # session decode + ten AOT interop reads (240 B of views, as read-aot) + close; measured 472
-    # (544 before sessions). Session JavaSink: borrowed parse into a JavaSink; measured 3,596. The
-    # plan's 160 B decode / 1,900 B JavaSink targets need the text cursor (Task D1).
+    # (544 before sessions). Session JavaSink: borrowed parse into a key-cached JavaSink; measured
+    # 1,360 with the D1 text cursor (3,596 before; the plan's target was 1,900).
     ('simdjson-generic-interop', 'ingest'): 480.0,
-    ('simdjson-session-java', 'ingest'): 3600.0,
+    ('simdjson-session-java', 'ingest'): 1400.0,
 }
 
 # Columns: Count Size Cycles Ifs Loops Invokes Allocs. Fail closed if trace format changes.

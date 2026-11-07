@@ -130,7 +130,7 @@ The JSON backend publishes as three artifacts, all managed by the BOM:
 | Classifier | Extension | Use |
 |---|---|---|
 | `linux-x86_64` | `so` | Explicit JVM FFM loading through `JsonJvm.open(Path)` |
-| `linux-x86_64` | `a` | Static linking into an SVM executable (decoder, simdjson and C ABI in one archive) |
+| `linux-x86_64` | `a` | Static linking into an SVM executable (decoder, simdjson, simdutf, C ABI and Myna's `myna-values` Rust static library, whose `myna_utf8_to_utf16_v2` the SVM tape calls for long strings, in one archive) |
 
 For a standalone native-image build, stage the archive as `libtruffledata_json.a`, add
 its directory to `-H:CLibraryPath`, and link libc++ (`-lc++ -lc++abi`). No native-image

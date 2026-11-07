@@ -203,7 +203,10 @@ bazel test //json/native:test //json/native:api_test //json/native:typed_test //
   --linkopt=-fsanitize=address,undefined
 ```
 
-The SVM target links the parser statically and adds compiled-read gates: typed
+The SVM target links `//json/native:svm` statically: the C ABI plus `bridge/`, a thin
+Rust static library over Myna's `myna-values` 0.9.1 whose `myna_utf8_to_utf16_v2` (simdutf)
+`SvmValueTape` calls to materialize non-ASCII strings of 256 bytes or more
+(`td_json_bridge_present` is its link probe). It adds compiled-read gates: typed
 primitive reads, generic member reads, interop reads and export loops each require
 observed compiled execution with performance warnings as errors, Graal graphs of at
 most 10,000 nodes, ASTs of at most 192 nodes, and at most 0.05 Java bytes per

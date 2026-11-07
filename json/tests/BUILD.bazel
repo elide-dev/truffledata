@@ -30,7 +30,7 @@ data_java_library(
 native_image(
     name = "native",
     testonly = True,
-    cc_deps = ["//json/native:truffledata_json"],
+    cc_deps = ["//json/native:svm"],
     exec_properties = {
         "EstimatedCPU": "8",
         "EstimatedMemory": "24GB",

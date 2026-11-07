@@ -33,7 +33,8 @@ ACCESS_SOURCES = {f'core/src/main/java/dev/elide/truffledata/{name}.java' for na
     f'json/src/main/java/dev/elide/truffledata/json/{name}.java' for name in (
         'HeapValueTape', 'JavaSink', 'JsonAccess', 'JsonArray', 'JsonBorrow', 'JsonDecoder', 'JsonExportNode', 'JsonKey',
         'JsonJvm', 'JsonLimits', 'JsonMessage', 'JsonOwner', 'JsonPlan', 'JsonRecord', 'JsonSink',
-        'JsonSession', 'JsonSnapshot', 'JsonSvm', 'JsonTypedOwner', 'JsonValue', 'JvmTypedOwner', 'SegmentValueTape',
+        'JsonSession', 'JsonSnapshot', 'JsonSvm', 'JsonText', 'JsonTypedOwner', 'JsonValue', 'JvmTypedOwner',
+        'SegmentValueTape',
         'SvmTypedOwner', 'SvmValueTape', 'TapeSource',
     )
 } | {
@@ -132,6 +133,10 @@ SVM_ONLY_METHODS = {
         'JsonBorrow::lexicalByte (J)B',
         'JsonBorrow::end ()V',
     ),
+    # A session lends its one export cursor to each borrow (Task D1); only JsonSession.lend calls
+    # these, so they run only where sessions do.
+    **_json_methods('JsonOwner', 'JsonOwner::adoptCursor (Ldev/elide/truffledata/json/JsonText;)V'),
+    **_json_methods('JsonText', 'JsonText::rebind (Ldev/elide/truffledata/json/JsonOwner;)V'),
     # Static typed plans: compile throws from requireRuntime on the JVM (JvmScopedTest asserts it);
     # JVM plans compile through JsonJvm and its own backend instead.
     **_json_methods(
@@ -153,6 +158,8 @@ SVM_ONLY_METHODS = {
         'SvmValueTape::regionCount ()J',
         'SvmValueTape::regionSize (J)J',
         'SvmValueTape::copyRegion (JJ[BII)V',
+        # simdutf bridge for long non-ASCII strings (myna_utf8_to_utf16_v2, linked only into images).
+        'SvmValueTape::decodeExternalUtf8 (JJI)Ljava/lang/String;',
     ),
     # Word-accessor typed owner; constructed only by the static plan backend.
     **_json_methods(

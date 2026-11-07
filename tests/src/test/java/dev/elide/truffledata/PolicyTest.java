@@ -47,12 +47,12 @@ class PolicyTest {
             Map.entry("PostgresqlAdapter.java", 1),
             Map.entry("JdbcValues.java", 1),
             // JSON: native downcalls, slow-path conversions and allocation stay out of compiled reads.
-            Map.entry("JavaSink.java", 8), // Embedder tree building, outside the tape walk.
+            Map.entry("JavaSink.java", 9), // Embedder tree building and key interning, outside the tape walk.
             Map.entry("JsonAccess.java", 2),
             Map.entry("JsonArray.java", 1),
             Map.entry("JsonJvm.java", 5), // FFM downcalls and arena management.
             Map.entry("JsonMessage.java", 2),
-            Map.entry("JsonOwner.java", 9), // Close, pinning, array index and lazy member directories.
+            Map.entry("JsonOwner.java", 10), // Close, pinning, array index, member directories, export cursors.
             Map.entry("JsonPlan.java", 4), // Plan compilation and decode entry points.
             Map.entry("JsonRecord.java", 4),
             Map.entry("JsonSvm.java", 4), // Static-linked native calls.
@@ -63,6 +63,7 @@ class PolicyTest {
             Map.entry("JsonSession.java", 9), // Session entry points (open, parse, with, decode, retain, close).
             Map.entry("JsonBorrow.java", 1), // Borrowed-result assumption.
             Map.entry("JsonKey.java", 1), // Key preparation (UTF-8 encode and hash).
+            Map.entry("JsonText.java", 4), // Sink-side materialization: String, TruffleString, copy, compare.
             // CSV: diagnostics, materialization and the export walk stay out of compiled reads.
             Map.entry("CsvScanner.java", 2), // Static syntax and limit failures.
             Map.entry("CsvBatch.java", 2), // Static STRING materialization and the export walk.

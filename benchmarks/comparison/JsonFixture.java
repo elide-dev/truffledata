@@ -9,6 +9,7 @@ import com.oracle.truffle.api.interop.InteropException;
 import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.nodes.Node;
 import dev.elide.truffledata.json.JsonSink;
+import dev.elide.truffledata.json.JsonText;
 import dev.elide.truffledata.json.JsonValue;
 import java.io.ByteArrayInputStream;
 import java.io.InputStreamReader;
@@ -175,7 +176,7 @@ public final class JsonFixture {
     }
 
     @Override
-    public void key(JsonValue key) {
+    public void key(JsonText key) {
       sum += 1;
     }
 
@@ -213,12 +214,12 @@ public final class JsonFixture {
     }
 
     @Override
-    public void decimalValue(JsonValue token) {
+    public void decimalValue(JsonText token) {
       sum += 1;
     }
 
     @Override
-    public void stringValue(JsonValue text) {
+    public void stringValue(JsonText text) {
       sum += 1;
     }
   }

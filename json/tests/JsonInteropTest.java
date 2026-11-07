@@ -353,4 +353,23 @@ final class JsonInteropTest {
       }
     }
   }
+
+  // Coverage of the snapshot tape's hinted-hit path and the Utf8Key adapter (Task C1 follow-up).
+  @Test
+  void snapshotHintsAndPreparedUtf8Keys() throws Exception {
+    try (JsonDecoder decoder = JsonJvm.open(JvmScopedTest.library());
+        JsonMessage message = message(decoder, "{\"a\":1,\"id\":2,\"name_longer_than_16_bytes\":3}")) {
+      var snapshot = message.snapshot();
+      InteropLibrary site = site();
+      for (int round = 0; round < 3; round++) {
+        // After the first read, reads hit the hint through HeapValueTape.keyNodeEquals.
+        assertEquals(2L, site.asLong(site.readMember(snapshot.root(), "id")));
+        assertEquals(3L, site.asLong(site.readMember(snapshot.root(), "name_longer_than_16_bytes")));
+      }
+      assertEquals(2L, message.root().member(dev.elide.myna.values.ValueTape.Utf8Key.of("id")).longValue());
+      assertThrows(
+          java.util.NoSuchElementException.class,
+          () -> message.root().member(dev.elide.myna.values.ValueTape.Utf8Key.of("zz")));
+    }
+  }
 }

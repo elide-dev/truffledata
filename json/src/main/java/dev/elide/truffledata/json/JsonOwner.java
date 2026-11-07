@@ -22,8 +22,9 @@ public abstract sealed class JsonOwner permits JsonMessage, JsonSnapshot, JsonBo
   private boolean open = true;
   // Exports in progress on the owning thread; close is refused while a walk reads the tape.
   private int pins;
-  // Reused by the outermost export on the owning thread; nested and unconfined exports allocate.
-  private long @Nullable [] exportStack;
+  // Text cursor and container stack reused by the outermost export on the owning thread; nested
+  // and unconfined exports allocate their own.
+  private @Nullable JsonText cursor;
 
   JsonOwner(ValueTape tape, @Nullable Thread thread) {
     this.tape = tape;
@@ -55,12 +56,25 @@ public abstract sealed class JsonOwner permits JsonMessage, JsonSnapshot, JsonBo
     if (thread != null) pins++;
   }
 
-  /** Container stack for an export that already holds a pin. */
-  final long[] exportStack() {
-    if (thread == null || pins != 1) return new long[JsonExportNode.MAX_DEPTH];
-    long[] stack = exportStack;
-    if (stack == null) exportStack = stack = new long[JsonExportNode.MAX_DEPTH];
-    return stack;
+  /** Text cursor (and container stack) for an export that already holds a pin. */
+  final JsonText exportCursor() {
+    JsonText reused = cursor;
+    if (thread != null && pins == 1 && reused != null) return reused;
+    return newCursor(this);
+  }
+
+  /** First, nested or unconfined export: allocates outside compiled export loops. */
+  @TruffleBoundary
+  private static JsonText newCursor(JsonOwner owner) {
+    JsonText fresh = new JsonText(owner);
+    if (owner.thread != null && owner.pins == 1) owner.cursor = fresh;
+    return fresh;
+  }
+
+  /** Lends a session's cursor to a borrowed owner, so borrowed exports allocate none. */
+  final void adoptCursor(JsonText lent) {
+    lent.rebind(this);
+    cursor = lent;
   }
 
   final void unpin() {
@@ -163,6 +177,11 @@ public abstract sealed class JsonOwner permits JsonMessage, JsonSnapshot, JsonBo
           }
           return table;
         });
+  }
+
+  /** True when a string or key node's decoded bytes are all ASCII; false for other nodes. */
+  final boolean ascii(long node) {
+    return meta(node) < 0;
   }
 
   @TruffleBoundary

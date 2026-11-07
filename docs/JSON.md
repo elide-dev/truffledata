@@ -46,7 +46,7 @@ Choose the backend explicitly; nothing searches for a library or falls back to J
 
 | Runtime | Entry point | Notes |
 | --- | --- | --- |
-| Native Image (SVM) | `JsonSvm.open()`, `JsonSvm.decode(...)` | Links `//json/native:truffledata_json` statically. Throws `UnsupportedOperationException` outside image runtime code. |
+| Native Image (SVM) | `JsonSvm.open()`, `JsonSvm.decode(...)` | Links `//json/native:svm` statically (the C ABI plus Myna's `myna-values` static library). Throws `UnsupportedOperationException` outside image runtime code. |
 | JVM | `JsonJvm.open(Path library)` | Loads `json_shared.so` through FFM. Keep `//json:jvm` out of static images. |
 
 Both check the generated binding fingerprint before the first decode. Both
@@ -240,28 +240,44 @@ directories are requested from Myna as elide-dev/myna#45.
 `JsonValue.export(JsonSink)` and `JsonOwner.export(JsonSink)` (the whole document)
 walk the tape once, in source order. A `JsonExportNode` does the same inside guest
 code; adopt it as a child node and call `execute(value, sink)`. The walk is a loop
-with an explicit container stack: no recursion, no per-node native calls, and one
-liveness check per export.
+with an explicit container stack: no recursion, no per-node native calls, one
+liveness check per export, and no view per key or string.
 
 The sink receives:
 
 - `beginObject(members)` or `beginArray(elements)` with the child count, so it can
   presize. Each is matched by one `end()`.
-- Inside an object, a `key(JsonValue)` before each member value.
+- Inside an object, a `key(JsonText)` before each member value.
 - One event per scalar: `nullValue`, `booleanValue`, `longValue` (I64),
   `doubleValue` (F64, including `-0.0`), `unsignedValue` (U64 as unsigned
-  two's-complement bits), `decimalValue(JsonValue)` or `stringValue(JsonValue)`.
+  two's-complement bits), `decimalValue(JsonText)` or `stringValue(JsonText)`.
 
-Keys, strings and decimals arrive as `JsonValue` views, so the sink chooses how to
-materialize them: `stringValue()`, `asTruffleString` through `InteropLibrary`,
-`numberText()` or `rawText()`. The views are valid only while the owner is open; do
-not retain them. The owner cannot close until the export returns. An exception
-from the sink ends the export and releases that hold.
+Keys, strings and decimals arrive through one reusable `JsonText` cursor per export,
+rebound for each event, so an export creates no object per string. The sink chooses
+how to materialize: `toJavaString()` (a decimal gives its exact token),
+`toTruffleString(encoding)`, `copyUtf8(byte[], offset)`, `utf8Equals(byte[])`,
+`utf8Length()`, `isAscii()` (from the decoder's side table, no scan) and `hash()`
+(the decoder's 15-bit key hash; 0 for strings and decimals). The cursor is valid
+only during the event that passed it: afterwards every method throws
+`IllegalStateException`. `view()` returns a `JsonValue` that lives as long as the
+owner. The owner cannot close until the export returns. An exception from the sink
+ends the export and releases that hold.
 
-The outermost export on a confined message reuses one 129-slot container stack held
-by the message. Nested exports and snapshot exports allocate their own. `JavaSink`
-builds `LinkedHashMap` (source order), `ArrayList`, `String`, `Long`, `Double`,
+`toJavaString()` decodes ASCII text into a Latin-1 `String` from a reusable scratch
+buffer (one copy) and other short text with the JDK's UTF-8 decoder. Non-ASCII
+strings of 256 bytes or more go through the tape's bulk path: on SVM, Myna's
+simdutf transcoder (`myna_utf8_to_utf16_v2` from the `myna-values` Rust static
+library, which `//json/native:svm` links into every JSON image) writes straight
+into the `String`'s UTF-16 storage.
+
+The outermost export on a confined message reuses one cursor (and its 129-slot
+container stack) held by the message; a session's borrowed parses share one cursor.
+Nested exports and snapshot exports allocate their own. `JavaSink` builds
+`LinkedHashMap` (source order), `ArrayList`, `String`, `Long`, `Double`,
 `BigInteger`, `BigDecimal`, `Boolean` and `null`; one sink builds one tree.
+`new JavaSink(keyCache)` takes member names from a `JavaSink.KeyCache` shared by the
+sinks of one thread: a bounded (1,024 names) table keyed by the key hash and the
+decoded bytes, so documents of one schema stop allocating key `String`s.
 
 ### Sketch: a GraalJS `JSON.parse` sink
 
@@ -271,7 +287,6 @@ signatures.
 
 ```java
 final class JsSink implements JsonSink {
-  private static final InteropLibrary INTEROP = InteropLibrary.getUncached();
   private final JSContext context;
   private final JSRealm realm;
   private final ArrayDeque<Object> open = new ArrayDeque<>(); // JSObject or ArrayFrame
@@ -288,22 +303,18 @@ final class JsSink implements JsonSink {
     if (done instanceof ArrayFrame f) add(JSArray.createConstantObjectArray(context, realm, f.items()));
   }
 
-  public void key(JsonValue name) { key = js(name); }
-  public void stringValue(JsonValue text) { add(js(text)); }
+  public void key(JsonText name) { key = js(name); }
+  public void stringValue(JsonText text) { add(js(text)); }
   public void nullValue() { add(Null.instance); }
   public void booleanValue(boolean v) { add(v); }
   public void longValue(long v) { add(v == (int) v ? (Object) (int) v : (double) v); }
   public void doubleValue(double v) { add(v); }                  // keeps -0
   public void unsignedValue(long bits) { add(Double.parseDouble(Long.toUnsignedString(bits))); }
-  public void decimalValue(JsonValue t) { add(Double.parseDouble(t.numberText())); } // 1E400 -> Infinity
+  public void decimalValue(JsonText t) { add(Double.parseDouble(t.toJavaString())); } // 1E400 -> Infinity
 
   // UTF-8 bytes are copied once into a TruffleString; JS strings are UTF-16.
-  private static TruffleString js(JsonValue v) {
-    try {
-      return INTEROP.asTruffleString(v).switchEncodingUncached(TruffleString.Encoding.UTF_16);
-    } catch (UnsupportedMessageException e) {
-      throw new IllegalStateException(e);
-    }
+  private static TruffleString js(JsonText v) {
+    return v.toTruffleString(TruffleString.Encoding.UTF_16);
   }
 
   private void push(Object container) {

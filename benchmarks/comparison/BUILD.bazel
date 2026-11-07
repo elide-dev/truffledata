@@ -291,7 +291,7 @@ native_image(
     # Keep JsonComparison build-time initialized: its static helpers must be JIT eligible.
     name = "json_svm",
     testonly = True,
-    cc_deps = ["//json/native:truffledata_json"],
+    cc_deps = ["//json/native:svm"],
     exec_properties = {
         "EstimatedCPU": "8",
         "EstimatedMemory": "24GB",
@@ -362,7 +362,7 @@ data_java_library(
 native_image(
     name = "json_svm_profile",
     testonly = True,
-    cc_deps = ["//json/native:truffledata_json"],
+    cc_deps = ["//json/native:svm"],
     exec_properties = {
         "EstimatedCPU": "8",
         "EstimatedMemory": "24GB",

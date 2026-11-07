@@ -630,7 +630,7 @@ public final class SvmAcceptance {
             public void beginArray(long elements) {}
 
             @Override
-            public void key(dev.elide.truffledata.json.JsonValue name) {}
+            public void key(dev.elide.truffledata.json.JsonText name) {}
 
             @Override
             public void end() {}
@@ -651,10 +651,10 @@ public final class SvmAcceptance {
             public void unsignedValue(long bits) {}
 
             @Override
-            public void decimalValue(dev.elide.truffledata.json.JsonValue token) {}
+            public void decimalValue(dev.elide.truffledata.json.JsonText token) {}
 
             @Override
-            public void stringValue(dev.elide.truffledata.json.JsonValue text) {}
+            public void stringValue(dev.elide.truffledata.json.JsonText text) {}
           };
       require(throwsState(() -> session.parse(first, reentrant)));
       require(throwsState(() -> session.with(first, root -> session.decode(second))));
@@ -712,7 +712,42 @@ public final class SvmAcceptance {
     require(throwsState(() -> kept.root()));
   }
 
+  // Link probe of //json/native/bridge (Myna's myna-values static library).
+  @org.graalvm.nativeimage.c.function.CFunction("td_json_bridge_present")
+  private static native int bridgePresent();
+
+  /**
+   * Task D1: the image links Myna's simdutf bridge, and strings of 256 or more non-ASCII bytes
+   * (transcoded by myna_utf8_to_utf16_v2) decode exactly like shorter ones (decoded locally),
+   * through views, the export cursor and a borrowed session parse.
+   */
+  private static void textBridge() {
+    require(bridgePresent() == 1);
+    for (int units : new int[] {125, 126, 150, 2000}) {
+      // A 4-byte emoji, units × "é" (2 bytes) and "z": 255 bytes (local), 257, 305 and 4005
+      // (bulk). The escaped spelling lands in the decoded text region; the raw one is referenced
+      // from the input buffer.
+      String text = "😀" + "é".repeat(units) + "z";
+      for (String spelled : new String[] {text, "\\ud83d\\ude00" + "\\u00e9".repeat(units) + "z"}) {
+        byte[] input = ("{\"s\":\"" + spelled + "\",\"k\":[\"" + spelled + "\"]}").getBytes(StandardCharsets.UTF_8);
+        try (var message = dev.elide.truffledata.json.JsonSvm.decode(input)) {
+          require(message.root().member("s").stringValue().equals(text));
+          var sink = new dev.elide.truffledata.json.JavaSink(new dev.elide.truffledata.json.JavaSink.KeyCache());
+          message.export(sink);
+          var tree = (java.util.Map<?, ?>) java.util.Objects.requireNonNull(sink.result());
+          require(text.equals(tree.get("s")) && java.util.List.of(text).equals(tree.get("k")));
+        }
+        try (var session = dev.elide.truffledata.json.JsonSession.open()) {
+          var sink = new dev.elide.truffledata.json.JavaSink();
+          session.parse(input, sink);
+          require(text.equals(((java.util.Map<?, ?>) java.util.Objects.requireNonNull(sink.result())).get("s")));
+        }
+      }
+    }
+  }
+
   public static void main(String[] args) throws Exception {
+    textBridge();
     sessions();
     typed();
     schemaTyped();

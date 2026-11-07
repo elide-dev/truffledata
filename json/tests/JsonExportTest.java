@@ -11,7 +11,9 @@ import dev.elide.truffledata.json.JsonJvm;
 import dev.elide.truffledata.json.JsonMessage;
 import dev.elide.truffledata.json.JsonSink;
 import dev.elide.truffledata.json.JsonSnapshot;
+import dev.elide.truffledata.json.JsonText;
 import dev.elide.truffledata.json.JsonValue;
+import com.oracle.truffle.api.strings.TruffleString;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
@@ -88,7 +90,7 @@ final class JsonExportTest {
       begins++;
     }
 
-    public void key(JsonValue key) {
+    public void key(JsonText key) {
       keys++;
     }
 
@@ -120,11 +122,11 @@ final class JsonExportTest {
       values++;
     }
 
-    public void decimalValue(JsonValue token) {
+    public void decimalValue(JsonText token) {
       values++;
     }
 
-    public void stringValue(JsonValue text) {
+    public void stringValue(JsonText text) {
       values++;
     }
   }
@@ -186,8 +188,8 @@ final class JsonExportTest {
       var closing =
           new Counting() {
             @Override
-            public void stringValue(JsonValue text) {
-              strings.add(text.stringValue());
+            public void stringValue(JsonText text) {
+              strings.add(text.toJavaString());
               if (strings.size() == 1)
                 assertThrows(IllegalStateException.class, message::close, "close during export");
             }
@@ -226,7 +228,7 @@ final class JsonExportTest {
       var outer =
           new Counting() {
             @Override
-            public void stringValue(JsonValue text) {
+            public void stringValue(JsonText text) {
               inner.add(export(message.root().element(2)));
             }
           };
@@ -339,5 +341,178 @@ final class JsonExportTest {
     sink.end();
     assertEquals(List.of(), sink.result());
     assertThrows(IllegalStateException.class, sink::nullValue);
+  }
+
+  // ---- JsonText cursor (performance plan Task D1) ----
+
+  @Test
+  void textCursorIsValidOnlyDuringItsEvent() {
+    try (var decoder = decoder();
+        var message = decoder.decode(JvmScopedTest.utf8("{\"key\":\"value\",\"n\":1E400,\"z\":null}"))) {
+      var seen = new ArrayList<JsonText>();
+      var views = new ArrayList<JsonValue>();
+      var retaining =
+          new Counting() {
+            @Override
+            public void key(JsonText key) {
+              seen.add(key);
+              views.add(key.view());
+            }
+
+            @Override
+            public void stringValue(JsonText text) {
+              seen.add(text);
+              assertEquals("value", text.toJavaString());
+            }
+
+            @Override
+            public void beginArray(long elements) {}
+
+            @Override
+            public void nullValue() {
+              // A cursor retained from an earlier event fails inside a later one too.
+              assertThrows(IllegalStateException.class, seen.get(0)::toJavaString);
+            }
+          };
+      message.root().export(retaining);
+      assertEquals(4, seen.size());
+      assertSame(seen.get(0), seen.get(1), "one cursor per export, rebound per event");
+      for (JsonText text : seen) {
+        assertThrows(IllegalStateException.class, text::toJavaString);
+        assertThrows(IllegalStateException.class, text::utf8Length);
+        assertThrows(IllegalStateException.class, text::view);
+      }
+      // Views taken during an event outlive it while the message is open.
+      assertEquals(List.of("key", "n", "z"), views.stream().map(JsonValue::stringValue).toList());
+      message.root().export(new Counting());
+      assertSame(seen.get(0), cursorOf(message), "the outermost export reuses the owner's cursor");
+    }
+  }
+
+  private static JsonText cursorOf(JsonMessage message) {
+    var cursor = new JsonText[1];
+    message
+        .root()
+        .export(
+            new Counting() {
+              @Override
+              public void key(JsonText key) {
+                cursor[0] = key;
+              }
+            });
+    return cursor[0];
+  }
+
+  @Test
+  void textCursorReadsKeysStringsAndDecimals() {
+    String note = "é".repeat(150); // 300 UTF-8 bytes: the bulk path
+    String ascii = "a".repeat(5000); // longer than the cursor's scratch
+    String source =
+        "{\"id\":\"ascii\",\"\\u00e9t\\u00e9\":\"" + note + "\",\"big\":-12.5e999,\"long\":\"" + ascii + "\"}";
+    try (var decoder = decoder(); var message = decoder.decode(JvmScopedTest.utf8(source))) {
+      var events = new ArrayList<String>();
+      message
+          .root()
+          .export(
+              new Counting() {
+                @Override
+                public void key(JsonText key) {
+                  String name = key.toJavaString();
+                  byte[] utf8 = name.getBytes(StandardCharsets.UTF_8);
+                  assertEquals(utf8.length, key.utf8Length());
+                  assertEquals(name.equals("id") || name.equals("big") || name.equals("long"), key.isAscii());
+                  assertEquals(fnv15(utf8), key.hash(), name);
+                  assertTrue(key.utf8Equals(utf8));
+                  assertFalse(key.utf8Equals(new byte[] {'x'}));
+                  byte[] copy = new byte[utf8.length + 2];
+                  assertEquals(utf8.length, key.copyUtf8(copy, 2));
+                  assertArrayEquals(utf8, java.util.Arrays.copyOfRange(copy, 2, copy.length));
+                  assertEquals(name, key.view().stringValue());
+                  events.add(name);
+                }
+
+                @Override
+                public void stringValue(JsonText text) {
+                  String value = text.toJavaString();
+                  assertEquals(0, text.hash(), "strings carry no key hash");
+                  assertEquals(value, text.toTruffleString(TruffleString.Encoding.UTF_16).toJavaStringUncached());
+                  assertEquals(value, text.toTruffleString(TruffleString.Encoding.UTF_8).toJavaStringUncached());
+                  events.add(value);
+                }
+
+                @Override
+                public void decimalValue(JsonText token) {
+                  events.add(token.toJavaString());
+                  assertEquals(
+                      "-12.5e999", token.toTruffleString(TruffleString.Encoding.UTF_8).toJavaStringUncached());
+                }
+              });
+      assertEquals(List.of("id", "ascii", "été", note, "big", "-12.5e999", "long", ascii), events);
+      // The bulk path (≥ 256 non-ASCII bytes) and the scratch path agree with the tape's decoder.
+      assertEquals(note, message.root().member("été").stringValue());
+    }
+  }
+
+  private static int fnv15(byte[] utf8) {
+    int hash = 0x811c9dc5;
+    for (byte b : utf8) hash = (hash ^ (b & 0xff)) * 0x01000193;
+    return hash & 0x7fff;
+  }
+
+  @Test
+  void keyCacheReturnsOneStringPerKeyAcrossDocuments() {
+    var keys = new JavaSink.KeyCache();
+    try (var decoder = decoder()) {
+      Map<?, ?> first, second;
+      try (var message = decoder.decode(JvmScopedTest.utf8("{\"id\":1,\"name\":\"a\",\"\\u00e9\":2}"))) {
+        var sink = new JavaSink(keys);
+        message.export(sink);
+        first = (Map<?, ?>) sink.result();
+      }
+      try (var message = decoder.decode(JvmScopedTest.utf8("{\"\\u00e9\":3,\"name\":\"b\",\"id\":4}"))) {
+        var sink = new JavaSink(keys);
+        message.export(sink);
+        second = (Map<?, ?>) sink.result();
+      }
+      assertEquals(3, keys.size());
+      var firstKeys = new ArrayList<Object>(first.keySet());
+      var secondKeys = new ArrayList<Object>(second.keySet());
+      assertSame(firstKeys.get(0), secondKeys.get(2));
+      assertSame(firstKeys.get(1), secondKeys.get(1));
+      assertSame(firstKeys.get(2), secondKeys.get(0));
+      assertEquals(List.of("é", "name", "id"), secondKeys);
+      // Past its capacity the cache stops growing and still returns correct names.
+      var wide = new StringBuilder("{");
+      for (int i = 0; i < 1500; i++) wide.append(i == 0 ? "" : ",").append("\"w").append(i).append("\":").append(i);
+      try (var message = decoder.decode(JvmScopedTest.utf8(wide.append('}').toString()))) {
+        for (int round = 0; round < 2; round++) {
+          var sink = new JavaSink(keys);
+          message.export(sink);
+          var tree = (Map<?, ?>) sink.result();
+          assertEquals(1500, tree.size());
+          assertEquals(1499L, tree.get("w1499"));
+        }
+      }
+      assertEquals(1024, keys.size());
+      assertThrows(NullPointerException.class, () -> new JavaSink(null));
+    }
+  }
+
+  @Test
+  void keyCacheSinksMatchGsonOnGeneratedDocuments() {
+    var random = new Random(0x7E47C0DEL);
+    var keys = new JavaSink.KeyCache();
+    try (var decoder = decoder()) {
+      for (int document = 0; document < 200; document++) {
+        var source = new StringBuilder();
+        value(random, source, 0);
+        String text = source.toString();
+        try (var message = decoder.decode(text.getBytes(StandardCharsets.UTF_8))) {
+          var sink = new JavaSink(keys);
+          message.export(sink);
+          assertEquals(fromGson(JsonParser.parseString(text)), sink.result(), text);
+        }
+      }
+    }
   }
 }

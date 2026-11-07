@@ -1,10 +1,16 @@
 package dev.elide.truffledata.json;
 
 import dev.elide.myna.values.NativeValueTape;
+import org.graalvm.nativeimage.PinnedObject;
+import org.graalvm.nativeimage.c.function.CFunction;
+import org.graalvm.nativeimage.c.type.CShortPointer;
 import org.graalvm.word.Pointer;
 import org.graalvm.word.WordFactory;
 
-/** Static-image tape exposing the copy hooks snapshots need. */
+/**
+ * Static-image tape exposing the copy hooks snapshots need and materializing long strings with
+ * Myna's simdutf bridge.
+ */
 final class SvmValueTape extends NativeValueTape implements TapeSource {
   private final long regions;
   // One int per node: the native key-hash side table (JsonResult.key_hashes).
@@ -14,6 +20,37 @@ final class SvmValueTape extends NativeValueTape implements TapeSource {
     super(descriptor);
     regions = descriptor.readLong(48);
     this.hashes = hashes;
+  }
+
+  // Myna's simdutf transcoder, linked from //json/native/bridge (myna-values 0.9.1). A normal
+  // transition: string lengths are unbounded.
+  @CFunction("myna_utf8_to_utf16_v2")
+  private static native long transcode(Pointer input, long length, CShortPointer output, long capacity);
+
+  // Link probe of //json/native/bridge; SvmAcceptance proves the archive is in the image.
+  @CFunction("td_json_bridge_present")
+  static native int bridgePresent();
+
+  /**
+   * Long strings transcode with simdutf straight into the String's UTF-16 storage, as Myna's
+   * SimdNativeValueTape does. That class is final and its 256-byte threshold fixed
+   * (elide-dev/myna#49), so this tape mirrors it over its own reader. Shorter strings decode
+   * locally.
+   */
+  @Override
+  protected String decodeExternalUtf8(long region, long start, int len) {
+    if (len < JsonText.BULK_THRESHOLD) return super.decodeExternalUtf8(region, start, len);
+    // One UTF-16 unit per UTF-8 byte bounds the output; simdutf validates while converting and
+    // neither pointer escapes the pinned interval.
+    char[] chars = new char[len];
+    long written;
+    try (PinnedObject pinned = PinnedObject.create(chars)) {
+      written =
+          transcode(
+              regionAddress(region).add(WordFactory.signed(start)), len, pinned.addressOfArrayElement(0), len);
+    }
+    if (written < 0 || written > len) throw new IllegalArgumentException("Invalid UTF-8 or output extent");
+    return new String(chars, 0, (int) written);
   }
 
   @Override

@@ -393,6 +393,8 @@ public final class JsonComparison {
     private final int mode;
     private final @Nullable JsonSession session;
     private final JsonFixture.CountingSink counting = new JsonFixture.CountingSink();
+    // Member names repeat across documents: JavaSink cells share one key cache (Task D1).
+    private final JavaSink.KeyCache keys = new JavaSink.KeyCache();
     @Child private JsonFixture.InteropReader reader = new JsonFixture.InteropReader();
     @Child private JsonExportNode export = JsonExportNode.create();
 
@@ -436,7 +438,7 @@ public final class JsonComparison {
         case JAVA:
           {
             // Export the retained index into fresh host objects, as a JSON.parse sink would.
-            JavaSink sink = new JavaSink();
+            JavaSink sink = new JavaSink(keys);
             export.execute((JsonValue) doc, sink);
             return JsonFixture.javaRead(Objects.requireNonNull(sink.result()));
           }
@@ -458,7 +460,7 @@ public final class JsonComparison {
       }
       JsonSession session = Objects.requireNonNull(this.session);
       if (mode == SESSION_JAVA) {
-        JavaSink sink = new JavaSink();
+        JavaSink sink = new JavaSink(keys);
         session.parse(input, sink);
         Object tree = Objects.requireNonNull(sink.result());
         retained = tree;
@@ -479,7 +481,7 @@ public final class JsonComparison {
         switch (mode) {
           case JAVA:
             {
-              JavaSink sink = new JavaSink();
+              JavaSink sink = new JavaSink(keys);
               message.export(sink);
               Object tree = Objects.requireNonNull(sink.result());
               retained = tree;

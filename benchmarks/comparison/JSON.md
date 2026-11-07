@@ -114,6 +114,10 @@ string and `parent` being null. The checksum is 38,219.
 | `simdjson-snapshot` | Decode, `snapshot()`, close, read the snapshot through interop | Snapshots, read like `simdjson-generic-interop` |
 | `simdjson-session-java` (ingest only) | Borrowed `JsonSession.parse(input, JavaSink)`, read the Java tree | Nothing native is retained, so there is no read stage |
 
+Since performance plan Task D1 the `JavaSink` cells (`simdjson-generic-java` and
+`simdjson-session-java`) share one `JavaSink.KeyCache` per run, as an embedder
+decoding one schema would; their earlier results materialized every key.
+
 Since performance plan Task B2 every simdjson ingest decodes through one explicit
 `JsonSession` per run (`decode` moves the session's storage into the message);
 the retained rows are still built with `JsonSvm.decode`. Earlier results used
@@ -152,11 +156,11 @@ column counts unresolved Java calls only, not `@TruffleBoundary` calls. The
 | Scalar engines (unchanged) | ≤ 1,000 | 1 | 0 | — |
 | `simdjson-generic-interop`, peak | ≤ 2,000 | 1 | 0 | ≤ 1.0 |
 | `simdjson-snapshot`, peak | ≤ 2,000 | 1 | 0 | not gated (see results) |
-| `simdjson-export-walk`, peak (smoke-only, constant counting sink) | ≤ 1,000 | 2 | ≤ 2 | ≤ 1.0 |
-| `simdjson-generic-java`, peak and read-aot | ≤ 1,000 (peak) | 2 (peak) | not gated | ≤ 2,400 |
+| `simdjson-export-walk`, peak (smoke-only, constant counting sink) | ≤ 1,000 | 2 | 0 | ≤ 1.0 |
+| `simdjson-generic-java`, peak and read-aot | ≤ 1,000 (peak) | 2 (peak) | not gated | ≤ 1,200 |
 | `gson-tree`, peak | ≤ 1,000 | 1 | 0 | — |
 | `simdjson-generic-interop`, ingest | — | — | — | ≤ 480 |
-| `simdjson-session-java`, ingest | — | — | — | ≤ 3,600 |
+| `simdjson-session-java`, ingest | — | — | — | ≤ 1,400 |
 
 The interop loop measured 1,754–1,810 nodes: ten inlined member reads and their
 owner checks. With position-hinted member lookup (performance plan Task C1) it
@@ -164,28 +168,34 @@ measures 1,916–1,972: each read inlines its hint check (one tape call comparin
 key's side-table entry and node words) and keeps one static boundary for misses.
 Earlier drafts that inlined the miss path and three separate tape reads per member
 measured 2,866–3,037 nodes and were rejected by this gate. The export loops have two loops, the document loop and the tape walk.
-Neither has a per-member loop or recursion. The walk's two graph allocation sites
-are `JsonOwner.exportStack`'s container stacks for nested or unconfined exports. The
-counter's 1.0 B/document shows they never run for the outermost export on a
-confined message. 1.0 B/document is the harness's own per-call boxing; all three
+Neither has a per-member loop or recursion. Since Task D1 the walk has no graph
+allocation: the owner's reusable `JsonText` cursor carries the container stack, and a
+first, nested or unconfined export allocates its cursor behind a boundary
+(`JsonOwner.newCursor`). Before D1 the walk had two allocation sites (the container
+stacks for nested or unconfined exports). The counter's 1.0 B/document shows the
+outermost export on a confined message allocates nothing. 1.0 B/document is the harness's own per-call boxing; all three
 scalar peak cells measure exactly that.
 
-**`JavaSink` budget: 2,400 Java bytes per document.** The measured value is 2,357 B
-(2,356 B when the export runs directly from AOT code). It covers only what the sink
-needs: the `JavaSink` and its stack, two `LinkedHashMap`s with their tables and
-entries, two `ArrayList`s, the key and value `String`s, boxed numbers, and the 16–19
-key and string views per document. Those views escape because `JavaSink`'s event
-methods are boundaries. The budget leaves 43 B of headroom. That is less than two
-additional 24-byte objects per document. Any per-node allocation in the walk (at
-least 16 B × ~40 nodes) or an escaping view per scalar fails it.
+**`JavaSink` budget: 1,200 Java bytes per document** (2,400 before Task D1). The
+measured value is 1,169 B at peak and 1,168 B from AOT code, against 2,357 B before
+D1. It covers only what the sink builds: the `JavaSink` and its stack, two
+`LinkedHashMap`s with their tables and entries, two `ArrayList`s, the value
+`String`s and boxed numbers. Since D1 the sink receives one reusable `JsonText`
+cursor instead of 16–19 views per document, decodes ASCII strings with one copy, and
+every `JavaSink` cell shares one `JavaSink.KeyCache`, so the twelve member names
+are not reallocated per document. The budget leaves 31 B of headroom: any per-node
+allocation in the walk, an escaping view per scalar, or a key `String` per member
+fails it.
 
 **Session ingest budgets (Task B2).** Interop ingest measured 472 B/document: the
 session decode's Java objects (tape reader, side-table accessor, message, pinned
 input) plus the same 240 B of ten AOT interop views that `read-aot` shows, against
 544 B through `JsonSvm.decode` before sessions. The borrowed `JavaSink` parse
-measured 3,596 B/document: the host tree, the key and value `String`s and the views
-the sink receives. The plan's targets (160 B of decode overhead, 1,900 B for the
-sink) depend on the reusable text cursor of Task D1 and are not met yet.
+measured 3,596 B/document in B2 and 1,360 B/document after Task D1 (the host tree
+and value `String`s; the borrow's Java objects; the session lends its one text
+cursor to every borrow), under a 1,400 B gate. The plan's 1,900 B target is met;
+its 160 B decode-overhead target is not (the 240 B of AOT interop views are read
+cost, and a reusable borrow reader needs elide-dev/myna#47).
 
 ### Results
 

@@ -36,6 +36,7 @@ public final class JsonSession implements AutoCloseable {
   // Reusable JsonResult for borrowed decodes.
   private final long result;
   private @Nullable JsonBorrow borrow;
+  private @Nullable JsonText text;
 
   private JsonSession(JsonLimits limits, long session, long result) {
     this.limits = limits;
@@ -110,6 +111,10 @@ public final class JsonSession implements AutoCloseable {
 
   private JsonBorrow lend() {
     JsonBorrow lent = JsonSvm.borrow(WordFactory.pointer(result));
+    // One text cursor (and export stack) per session, rebound to each borrow.
+    JsonText cursor = text;
+    if (cursor == null) text = cursor = new JsonText(lent);
+    lent.adoptCursor(cursor);
     borrow = lent;
     return lent;
   }

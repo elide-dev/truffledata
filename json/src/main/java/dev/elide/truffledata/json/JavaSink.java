@@ -13,12 +13,60 @@ import org.jspecify.annotations.Nullable;
  * Builds plain Java objects: {@code LinkedHashMap<String,Object>} in source member order, {@code
  * ArrayList<Object>}, {@code String}, {@code Long} (I64), {@code Double} (F64), {@code BigInteger}
  * (U64), {@code BigDecimal} (DECIMAL), {@code Boolean} and {@code null}. One sink builds one tree.
+ * Sinks that share a {@link KeyCache} reuse one {@code String} per distinct key across documents.
  */
 public final class JavaSink implements JsonSink {
   private final ArrayList<Object> open = new ArrayList<>();
+  private final @Nullable KeyCache keys;
   private @Nullable String key;
   private @Nullable Object result;
   private boolean done;
+
+  /** A sink that materializes every key. */
+  public JavaSink() {
+    this.keys = null;
+  }
+
+  /** A sink that takes member names from {@code keys}, shared by the sinks of one thread. */
+  public JavaSink(KeyCache keys) {
+    this.keys = java.util.Objects.requireNonNull(keys);
+  }
+
+  /**
+   * Bounded intern table of member names keyed by the decoder's key hash and the decoded bytes, so
+   * documents of one schema stop allocating key {@code String}s after the first. Holds at most
+   * {@value #CAPACITY} names; later distinct names are materialized per use. Not thread-safe: share
+   * one cache among the sinks of one thread.
+   */
+  public static final class KeyCache {
+    static final int CAPACITY = 1024;
+    // Open addressing at load factor ≤ 1/2, indexed by the 15-bit key hash.
+    private final String[] names = new String[2 * CAPACITY];
+    private final byte[][] utf8 = new byte[2 * CAPACITY][];
+    private int size;
+
+    /** Number of distinct names held. */
+    public int size() {
+      return size;
+    }
+
+    @TruffleBoundary
+    String intern(JsonText key) {
+      int mask = names.length - 1;
+      int slot = key.hash() & mask;
+      for (String name; (name = names[slot]) != null; slot = (slot + 1) & mask)
+        if (key.utf8Equals(utf8[slot])) return name;
+      String name = key.toJavaString();
+      if (size < CAPACITY) {
+        byte[] bytes = new byte[key.utf8Length()];
+        key.copyUtf8(bytes, 0);
+        utf8[slot] = bytes;
+        names[slot] = name;
+        size++;
+      }
+      return name;
+    }
+  }
 
   /** The exported tree; throws until one complete value has been received. */
   public @Nullable Object result() {
@@ -67,10 +115,10 @@ public final class JavaSink implements JsonSink {
 
   @Override
   @TruffleBoundary
-  public void key(JsonValue name) {
+  public void key(JsonText name) {
     if (key != null || open.isEmpty() || !(open.get(open.size() - 1) instanceof Map))
       throw new IllegalStateException("JSON key outside a member position");
-    key = name.stringValue();
+    key = keys == null ? name.toJavaString() : keys.intern(name);
   }
 
   @Override
@@ -109,13 +157,13 @@ public final class JavaSink implements JsonSink {
   /** Throws {@link NumberFormatException} for exponents beyond {@code BigDecimal}'s scale range. */
   @Override
   @TruffleBoundary
-  public void decimalValue(JsonValue token) {
-    add(new BigDecimal(token.numberText()));
+  public void decimalValue(JsonText token) {
+    add(new BigDecimal(token.toJavaString()));
   }
 
   @Override
   @TruffleBoundary
-  public void stringValue(JsonValue text) {
-    add(text.stringValue());
+  public void stringValue(JsonText text) {
+    add(text.toJavaString());
   }
 }

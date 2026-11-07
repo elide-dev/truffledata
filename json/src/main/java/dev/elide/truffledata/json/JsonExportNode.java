@@ -6,8 +6,9 @@ import dev.elide.myna.values.ValueTape;
 
 /**
  * Single-pass export of a JSON subtree into a {@link JsonSink}. The walk is one loop over the tape
- * in source order with an explicit container stack: no recursion, no per-node native calls, and
- * one liveness check per export. The owner is pinned open for the duration so a sink that closes
+ * in source order with an explicit container stack: no recursion, no per-node native calls, one
+ * liveness check per export, and one reusable {@link JsonText} cursor (which also holds the stack)
+ * instead of a view per key, string or decimal. The owner is pinned open for the duration so a sink that closes
  * it fails instead of freeing the tape under the walk.
  */
 public final class JsonExportNode extends Node {
@@ -36,15 +37,21 @@ public final class JsonExportNode extends Node {
   /** Returns the deepest container stack used. */
   static int walk(JsonOwner owner, long root, JsonSink sink) {
     owner.pin();
+    JsonText text = owner.exportCursor();
     try {
-      return loop(owner, root, sink, owner.exportStack());
+      return loop(owner, root, sink, text);
     } finally {
+      text.unbind();
       owner.unpin();
     }
   }
 
-  /** {@code ends} holds each open container's exclusive end node, sign bit set for objects. */
-  private static int loop(JsonOwner owner, long root, JsonSink sink, long[] ends) {
+  /**
+   * {@code text.ends} holds each open container's exclusive end node, sign bit set for objects;
+   * {@code text} is bound to each key, string and decimal for exactly the duration of its event.
+   */
+  private static int loop(JsonOwner owner, long root, JsonSink sink, JsonText text) {
+    long[] ends = text.ends;
     ValueTape tape = owner.tape;
     int depth = 0;
     int deepest = 0;
@@ -59,7 +66,9 @@ public final class JsonExportNode extends Node {
       }
       if (cursor >= end) return deepest;
       if (expectKey) {
-        sink.key(new JsonValue(owner, cursor));
+        text.bind(cursor);
+        sink.key(text);
+        text.unbind();
         cursor++;
         expectKey = false;
         continue;
@@ -86,8 +95,16 @@ public final class JsonExportNode extends Node {
         case ValueTape.I64 -> sink.longValue(tape.signedValue(cursor));
         case ValueTape.U64 -> sink.unsignedValue(tape.unsignedBits(cursor));
         case ValueTape.F64 -> sink.doubleValue(tape.doubleValue(cursor));
-        case ValueTape.STRING -> sink.stringValue(new JsonValue(owner, cursor));
-        case ValueTape.DECIMAL -> sink.decimalValue(new JsonValue(owner, cursor));
+        case ValueTape.STRING -> {
+          text.bind(cursor);
+          sink.stringValue(text);
+          text.unbind();
+        }
+        case ValueTape.DECIMAL -> {
+          text.bind(cursor);
+          sink.decimalValue(text);
+          text.unbind();
+        }
         default -> {
           CompilerDirectives.transferToInterpreter();
           throw new IllegalStateException("Unknown JSON node kind");
