@@ -814,6 +814,22 @@ class handler : public c4::yml::EventHandlerStack<handler, handler_state> {
     return true;
   }
 
+  // `[0-9]*\.[0-9]*` of n <= 8 bytes with at least one digit: the digits without the point as an
+  // integer (high bits) and the fraction digit count (low byte). False for anything else.
+  [[gnu::always_inline]] static bool decimal_point8(uint64_t lo, size_t n, uint64_t& packed) {
+    if (n < 2) return false;
+    const uint64_t dots = detail::equal(lo, '.') & low_bytes(n);
+    if (!dots || (dots & (dots - 1))) return false;  // exactly one '.'
+    const size_t at = size_t(__builtin_ctzll(dots)) / 8;
+    // Remove the '.' byte: bytes above it move down one place.
+    const uint64_t below = lo & low_bytes(at);
+    const uint64_t above = at + 1 < 8 ? (lo >> (8 * (at + 1))) << (8 * at) : 0;
+    uint64_t value;
+    if (!decimal8(below | above, n - 1, value)) return false;
+    packed = (value << 8) | uint64_t(n - 1 - at);
+    return true;
+  }
+
   // Quoted scalars are strings under every schema; without a retained source their span is 0. A
   // short one still in the input (rapidyaml filtered it in place, so it did not grow) is loaded the
   // same way as a short plain scalar.
@@ -974,6 +990,18 @@ class handler : public c4::yml::EventHandlerStack<handler, handler_state> {
       writer_->string_words(w.lo, w.hi, uint32_t(s.len));
     } else if (s.len <= 8 && decimal8(w.lo, s.len, digits)) {
       writer_->integer(int64_t(digits));  // core_int: `[0-9]{1,8}` is that I64
+      string = false;
+    } else if (s.len <= 8 && decimal_point8(w.lo, s.len, digits)) {
+      // `[0-9]*\.[0-9]*` with 1-7 digits: resolve_core_fast's exactly rounded quotient.
+      double v = double(digits >> 8) / detail::exact_powers[digits & 0xff];
+      writer_->floating(v);
+      string = false;
+    } else if (s.len == 4 && (w.lo == word("null", 4) || w.lo == word("Null", 4) || w.lo == word("NULL", 4))) {
+      writer_->null();
+      string = false;
+    } else if ((s.len == 4 && (w.lo == word("true", 4) || w.lo == word("True", 4) || w.lo == word("TRUE", 4))) ||
+               (s.len == 5 && (w.lo == word("false", 5) || w.lo == word("False", 5) || w.lo == word("FALSE", 5)))) {
+      writer_->boolean(s.len == 4);
       string = false;
     } else {
       scalar r;
