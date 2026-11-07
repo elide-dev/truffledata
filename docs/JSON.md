@@ -134,6 +134,16 @@ session and every message it retained are closed. Differences from static images
   closed and other threads' segments are rejected before entry.
 - No text arenas: a Java array cannot be the target of a normal downcall, so a
   `sharedText()` sink receives strings copied once each.
+- Inputs of at most `JsonSession.CRITICAL_LIMIT` (4,096) bytes decode through Myna's
+  `CriticalLibraryBinding` (`session_decode_small`), and `reset` always does: both are
+  declared native leaves. The safety argument: the input is bounded (4 KiB at the
+  slowest measured decode rate, ≈ 150 MB/s, is ≈ 30 µs of delayed safepoint), the
+  native side takes no lock, makes no callback and lets no exception escape, and the
+  staged input is native memory (Myna's critical adapters forbid heap segments). Pass
+  a smaller `criticalLimit` to `openSession(Path, JsonLimits, int)`, or 0 to disable;
+  `criticalDecodes()` counts the decodes that took the path. A diagnostic timing found
+  no measurable difference against normal transitions for the 210-byte fixture
+  document on HotSpot.
 
 ## Limits
 

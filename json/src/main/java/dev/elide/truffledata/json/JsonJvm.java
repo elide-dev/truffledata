@@ -176,20 +176,40 @@ public final class JsonJvm implements JsonDecoder {
    */
   @TruffleBoundary
   public static JsonSession openSession(Path library, JsonLimits limits) {
+    return openSession(library, limits, JsonSession.CRITICAL_LIMIT);
+  }
+
+  /**
+   * As {@link #openSession(Path, JsonLimits)}, decoding inputs of at most {@code criticalLimit}
+   * bytes (0 to {@link JsonSession#CRITICAL_LIMIT}; 0 disables) through bounded critical calls
+   * (performance plan Task E2). Even bounded, a critical call delays safepoints for its duration
+   * (at most ≈ 30 µs for 4 KiB at the slowest measured decode rate).
+   */
+  @TruffleBoundary
+  public static JsonSession openSession(Path library, JsonLimits limits, int criticalLimit) {
     Objects.requireNonNull(limits);
+    if (criticalLimit < 0 || criticalLimit > JsonSession.CRITICAL_LIMIT)
+      throw new IllegalArgumentException("Critical limit outside 0.." + JsonSession.CRITICAL_LIMIT);
     JsonJvm jvm = new JsonJvm(library);
     try {
-      return jvm.session(limits);
+      return jvm.session(limits, criticalLimit);
     } finally {
       // The session counts as live, so this only marks the decoder closed.
       jvm.close();
     }
   }
 
-  private JsonSession session(JsonLimits limits) {
+  private JsonSession session(JsonLimits limits, int criticalLimit) {
     check();
     JsonSession session =
-        new JsonSession(limits, new JvmSessionBackend(this, new JsonFFM.LibraryBinding(symbols), limits));
+        new JsonSession(
+            limits,
+            new JvmSessionBackend(
+                this,
+                new JsonFFM.LibraryBinding(symbols),
+                new JsonFFM.CriticalLibraryBinding(symbols),
+                criticalLimit,
+                limits));
     live++;
     return session;
   }

@@ -12,10 +12,20 @@ import org.jspecify.annotations.Nullable;
  * so array input is staged in a reusable session-owned native buffer (the native session then
  * copies it into its padded parser buffer, as on SVM). No text arenas: a Java array cannot be the
  * target of a normal downcall, so shared-text sinks copy each string on the JVM.
+ *
+ * <p>Inputs of at most {@code criticalLimit} bytes (≤ {@link JsonSession#CRITICAL_LIMIT}) decode
+ * through Myna's {@code CriticalLibraryBinding} (Task E2): {@code session_decode_small} and {@code
+ * session_reset} are declared native leaves (bounded input, no locks, no callbacks, no exception
+ * escapes; json/native/api.h), so the call skips the thread-state transition. Myna's critical
+ * adapters use {@code Linker.Option.critical(false)}, which forbids heap segments, so the input is
+ * still staged natively.
  */
 final class JvmSessionBackend extends JsonSession.Backend {
   private final JsonJvm library;
   private final JsonFFM.LibraryBinding calls;
+  private final JsonFFM.CriticalLibraryBinding critical;
+  private final int criticalLimit;
+  private long criticalDecodes;
   // Session lifetime: the result struct; the staging buffer has its own arena so it can grow.
   private final Arena arena = Arena.ofConfined();
   private final MemorySegment session;
@@ -23,9 +33,16 @@ final class JvmSessionBackend extends JsonSession.Backend {
   private Arena stagingArena = Arena.ofConfined();
   private MemorySegment staging = MemorySegment.NULL;
 
-  JvmSessionBackend(JsonJvm library, JsonFFM.LibraryBinding calls, JsonLimits limits) {
+  JvmSessionBackend(
+      JsonJvm library,
+      JsonFFM.LibraryBinding calls,
+      JsonFFM.CriticalLibraryBinding critical,
+      int criticalLimit,
+      JsonLimits limits) {
     this.library = library;
     this.calls = calls;
+    this.critical = critical;
+    this.criticalLimit = criticalLimit;
     try {
       MemorySegment struct = arena.allocate(JsonFFM.JsonLimitsStruct_LAYOUT);
       struct.set(ValueLayout.JAVA_LONG, JsonFFM.JsonLimitsStruct_max_input_bytes_OFFSET, limits.maxInputBytes());
@@ -86,7 +103,12 @@ final class JvmSessionBackend extends JsonSession.Backend {
   void call(MemorySegment data, long length, int input) {
     int status;
     try {
-      status = calls.session_decode(session, data, length, input, MemorySegment.NULL, 0L, result);
+      if (length <= criticalLimit) {
+        status = critical.session_decode_small(session, data, length, input, MemorySegment.NULL, 0L, result);
+        criticalDecodes++;
+      } else {
+        status = calls.session_decode(session, data, length, input, MemorySegment.NULL, 0L, result);
+      }
     } catch (Throwable failure) {
       throw JsonJvm.callFailure(failure);
     }
@@ -122,9 +144,15 @@ final class JvmSessionBackend extends JsonSession.Backend {
   }
 
   @Override
+  long criticalDecodes() {
+    return criticalDecodes;
+  }
+
+  @Override
   void reset() {
     try {
-      calls.session_reset(session);
+      // O(1), frees nothing: a native leaf.
+      critical.session_reset(session);
     } catch (Throwable failure) {
       throw JsonJvm.callFailure(failure);
     }

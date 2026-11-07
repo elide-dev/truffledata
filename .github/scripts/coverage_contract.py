@@ -124,6 +124,8 @@ SVM_ONLY_METHODS = {
         'JsonSession$SvmBackend::reset ()V',
         'JsonSession$SvmBackend::release ()V',
         'JsonSession$SvmTextArena::entry (J)J',
+        # The default (0) is the static-image backend's: only JvmSessionBackend overrides it (Task E2).
+        'JsonSession$Backend::criticalDecodes ()J',
     ),
     # A borrow's assumption is requested only by cached compiled reads of a borrowed view
     # (CompiledReads.borrowed on SVM); the JVM coverage lane runs no compiled code.

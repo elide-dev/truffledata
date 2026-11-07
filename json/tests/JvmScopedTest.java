@@ -1004,7 +1004,8 @@ final class JvmScopedTest {
       intruder.start();
       intruder.join();
       assertInstanceOf(IllegalStateException.class, failure[0]);
-      assertEquals(0, session.criticalDecodes());
+      // Default sessions decode inputs of at most 4 KiB through bounded critical calls (Task E2).
+      assertTrue(session.criticalDecodes() > 0);
     } finally {
       session.close();
     }
@@ -1020,5 +1021,99 @@ final class JvmScopedTest {
     assertEquals("retained text longer than inline storage", kept.root().member("note").stringValue());
     kept.close();
     assertThrows(IllegalStateException.class, () -> kept.root());
+  }
+
+  // ---- JVM critical decode (performance plan Task E2) ----
+
+  private static long collections() {
+    long total = 0;
+    for (var gc : java.lang.management.ManagementFactory.getGarbageCollectorMXBeans())
+      total += Math.max(0, gc.getCollectionCount());
+    return total;
+  }
+
+  private static double bestNanos(Runnable body, int reps) {
+    double best = Double.MAX_VALUE;
+    for (int round = 0; round < 5; round++) {
+      long start = System.nanoTime();
+      for (int i = 0; i < reps; i++) body.run();
+      best = Math.min(best, (System.nanoTime() - start) / (double) reps);
+    }
+    return best;
+  }
+
+  @Test
+  void jvmCriticalDecodeIsSizeGated() throws Exception {
+    byte[] limit = utf8("[" + " ".repeat(JsonSession.CRITICAL_LIMIT - 2) + "]");
+    byte[] over = utf8("[" + " ".repeat(JsonSession.CRITICAL_LIMIT - 1) + "]");
+    assertEquals(4096, limit.length);
+    byte[] small =
+        utf8(
+            "{\"id\":1007,\"name\":\"item-1\",\"price\":1.25,\"active\":false,\"tags\":[\"t0\",\"t1\"],"
+                + "\"dims\":{\"w\":3,\"h\":1.5,\"unit\":\"cm\"},\"scores\":[1,2,3,4],"
+                + "\"note\":\"line \\\"1\\\" with \\\\ escapes\\n\\t\\u00e9 and \\ud83d\\ude00 tail\",\"parent\":null}");
+    try (JsonSession session = JsonJvm.openSession(library(), dev.elide.truffledata.json.JsonLimits.DEFAULT);
+        JsonSession normal = JsonJvm.openSession(library(), dev.elide.truffledata.json.JsonLimits.DEFAULT, 0)) {
+      session.validate(limit);
+      assertEquals(1, session.criticalDecodes(), "4,096 bytes take the critical path");
+      session.validate(over);
+      assertEquals(1, session.criticalDecodes(), "4,097 bytes take the normal path");
+      // Same results either way, borrowed and retained.
+      var a = new dev.elide.truffledata.json.JavaSink();
+      session.parse(small, a);
+      var b = new dev.elide.truffledata.json.JavaSink();
+      normal.parse(small, b);
+      assertEquals(tree(b), tree(a));
+      try (JsonMessage kept = session.decode(small)) {
+        assertEquals(1007L, kept.root().member("id").longValue());
+      }
+      assertEquals(0, normal.criticalDecodes());
+      assertThrows(IllegalArgumentException.class, () -> session.validate(utf8("[1,]")));
+      // UTF-16 guest strings count their UTF-16 bytes against the limit.
+      var guest = new dev.elide.truffledata.json.JavaSink();
+      long before = session.criticalDecodes();
+      session.parse(
+          com.oracle.truffle.api.strings.TruffleString.fromJavaStringUncached(
+              "{\"中\":1}", com.oracle.truffle.api.strings.TruffleString.Encoding.UTF_16),
+          guest);
+      assertEquals(before + 1, session.criticalDecodes());
+      assertEquals(1L, tree(guest).get("中"));
+      // A collector running on another thread does not deadlock against critical decodes.
+      var stop = new java.util.concurrent.atomic.AtomicBoolean();
+      var churned = new java.util.concurrent.atomic.AtomicLong();
+      Thread churn =
+          new Thread(
+              () -> {
+                Object[] keep = new Object[64];
+                for (int i = 0; !stop.get(); i++) {
+                  keep[i & 63] = new byte[1 << 16];
+                  churned.incrementAndGet();
+                }
+              });
+      long gcBefore = collections();
+      churn.start();
+      long deadline = System.nanoTime() + 2_000_000_000L;
+      long decodes = 0;
+      while (System.nanoTime() < deadline) {
+        session.parse(small, new dev.elide.truffledata.json.JavaSink());
+        decodes++;
+      }
+      stop.set(true);
+      churn.join(10_000);
+      assertFalse(churn.isAlive());
+      assertTrue(decodes > 0 && churned.get() > 0);
+      assertTrue(collections() > gcBefore, "the stress thread forced collections during critical decodes");
+      // Diagnostic timing only (not evidence; recorded in the ledger): validate of the 210-byte
+      // fixture document, critical against normal transitions, best of 5 rounds.
+      double criticalNs = bestNanos(() -> session.validate(small), 20_000);
+      double normalNs = bestNanos(() -> normal.validate(small), 20_000);
+      System.out.printf(
+          "JSON E2 diagnostic: %d B validate critical %.0f ns, normal %.0f ns (%d decodes under GC stress)%n",
+          small.length, criticalNs, normalNs, decodes);
+    }
+    for (int bad : new int[] {-1, JsonSession.CRITICAL_LIMIT + 1})
+      assertThrows(
+          IllegalArgumentException.class,
+          () -> JsonJvm.openSession(library(), dev.elide.truffledata.json.JsonLimits.DEFAULT, bad));
   }
 }

@@ -50,7 +50,7 @@ class PolicyTest {
             Map.entry("JavaSink.java", 9), // Embedder tree building and key interning, outside the tape walk.
             Map.entry("JsonAccess.java", 2),
             Map.entry("JsonArray.java", 1),
-            Map.entry("JsonJvm.java", 6), // FFM downcalls, arena management and openSession.
+            Map.entry("JsonJvm.java", 7), // FFM downcalls, arena management and openSession (×2).
             Map.entry("JsonMessage.java", 2),
             Map.entry("JsonOwner.java", 10), // Close, pinning, array index, member directories, export cursors.
             Map.entry("JsonPlan.java", 4), // Plan compilation and decode entry points.
