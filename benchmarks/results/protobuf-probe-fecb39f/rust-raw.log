@@ -1,0 +1,180 @@
+→ 🎬 Running test task
+
+→ 🔧 Setup · Running setup
+
+→ 🧪 Test · Spawning bazel test
+INFO: Invocation ID: 182fa836-af4e-4229-aa91-05eedf4c9d64
+INFO: Streaming build results to: https://app.buildbuddy.io/invocation/182fa836-af4e-4229-aa91-05eedf4c9d64
+Computing main repo mapping: 
+Loading: 
+Loading: 3 packages loaded
+Analyzing: target //protobuf-buffa/native:test (7 packages loaded, 5 targets configured)
+Analyzing: target //protobuf-buffa/native:test (7 packages loaded, 5 targets configured)
+
+Analyzing: target //protobuf-buffa/native:test (144 packages loaded, 13686 targets configured)
+
+Analyzing: target //protobuf-buffa/native:test (144 packages loaded, 13686 targets configured)
+
+DEBUG: /Users/sam/Library/Caches/komodo-bazel-volume/root/b291c005c09c205351caafc3a8dcebf2/external/rules_rust+/rust/private/rust.bzl:103:18: 
+WARNING: Target @@rules_rust++crate+crates__simdutf-0.7.0//:native in 'deps' of @@rules_rust++crate+crates__simdutf-0.7.0//:simdutf is a C++ library. Only Rust targets are allowed in 'deps'. Please use 'link_deps' for manual FFI linkage. Support for C++ libraries in 'deps' is deprecated and will be removed in a future release.
+INFO: Analyzed target //protobuf-buffa/native:test (240 packages loaded, 19374 targets configured).
+[1 / 1] no actions running
+[131 / 390] [Prepa] Creating symlink external/rules_rust++rust+rust_linux_x86_64__x86_64-unknown-linux-gnu__nightly_tools/rust_toolchain/lib/libLLVM-23-rust-1.101.0-nightly.so
+[168 / 390] [Prepa] Creating symlink external/rules_rust++rust+rust_linux_x86_64__x86_64-unknown-linux-gnu__nightly_tools/rust_toolchain/lib/rustlib/x86_64-unknown-linux-gnu/lib/libsysroot-268ed1bb67760190.rmeta
+[223 / 390] [Prepa] Creating symlink external/rules_rust++rust+rust_linux_x86_64__x86_64-unknown-linux-gnu__nightly_tools/rust_toolchain/lib/rustlib/x86_64-unknown-linux-gnu/lib/libcore-7832d2fe4fa07f06.rmeta [for tool]
+INFO: From Compiling cpp/simdutfrs.cpp:
+In file included from external/rules_rust++crate+crates__simdutf-0.7.0/cpp/simdutfrs.cpp:2:
+external/rules_rust++crate+crates__simdutf-0.7.0/cpp/simdutf.cpp:38062:34: warning: array index 2 is past the end of the array (that has type 'simd8<signed char>[2]') [-Warray-bounds]
+ 38062 |           this->check_utf8_bytes(input.chunks[2], input.chunks[1]);
+       |                                  ^            ~
+external/rules_rust++crate+crates__simdutf-0.7.0/cpp/simdutf.cpp:5668:3: note: array 'chunks' declared here
+ 5668 |   simd8<T> chunks[NUM_CHUNKS];
+      |   ^
+external/rules_rust++crate+crates__simdutf-0.7.0/cpp/simdutf.cpp:38063:34: warning: array index 3 is past the end of the array (that has type 'simd8<signed char>[2]') [-Warray-bounds]
+ 38063 |           this->check_utf8_bytes(input.chunks[3], input.chunks[2]);
+       |                                  ^            ~
+external/rules_rust++crate+crates__simdutf-0.7.0/cpp/simdutf.cpp:5668:3: note: array 'chunks' declared here
+ 5668 |   simd8<T> chunks[NUM_CHUNKS];
+      |   ^
+external/rules_rust++crate+crates__simdutf-0.7.0/cpp/simdutf.cpp:38063:51: warning: array index 2 is past the end of the array (that has type 'simd8<signed char>[2]') [-Warray-bounds]
+ 38063 |           this->check_utf8_bytes(input.chunks[3], input.chunks[2]);
+       |                                                   ^            ~
+external/rules_rust++crate+crates__simdutf-0.7.0/cpp/simdutf.cpp:5668:3: note: array 'chunks' declared here
+ 5668 |   simd8<T> chunks[NUM_CHUNKS];
+      |   ^
+external/rules_rust++crate+crates__simdutf-0.7.0/cpp/simdutf.cpp:38150:34: warning: array index 2 is past the end of the array (that has type 'simd8<signed char>[2]') [-Warray-bounds]
+ 38150 |           this->check_utf8_bytes(input.chunks[2], input.chunks[1]);
+       |                                  ^            ~
+external/rules_rust++crate+crates__simdutf-0.7.0/cpp/simdutf.cpp:5668:3: note: array 'chunks' declared here
+ 5668 |   simd8<T> chunks[NUM_CHUNKS];
+      |   ^
+external/rules_rust++crate+crates__simdutf-0.7.0/cpp/simdutf.cpp:38151:34: warning: array index 3 is past the end of the array (that has type 'simd8<signed char>[2]') [-Warray-bounds]
+ 38151 |           this->check_utf8_bytes(input.chunks[3], input.chunks[2]);
+       |                                  ^            ~
+external/rules_rust++crate+crates__simdutf-0.7.0/cpp/simdutf.cpp:5668:3: note: array 'chunks' declared here
+ 5668 |   simd8<T> chunks[NUM_CHUNKS];
+      |   ^
+external/rules_rust++crate+crates__simdutf-0.7.0/cpp/simdutf.cpp:38151:51: warning: array index 2 is past the end of the array (that has type 'simd8<signed char>[2]') [-Warray-bounds]
+ 38151 |           this->check_utf8_bytes(input.chunks[3], input.chunks[2]);
+       |                                                   ^            ~
+external/rules_rust++crate+crates__simdutf-0.7.0/cpp/simdutf.cpp:5668:3: note: array 'chunks' declared here
+ 5668 |   simd8<T> chunks[NUM_CHUNKS];
+      |   ^
+6 warnings generated.
+INFO: From Executing genrule //protobuf-buffa/native:bindings:
+generated truffledata_buffa 35613c9b84ecb32ecc98f85ac708761f86d3951799d0d737f2f1a5c696ee065c
+[291 / 390] [Prepa] Compiling Rust proc-macro thiserror_impl v1.0.69 (10 files) [for tool] ... (4 actions, 0 running)
+[361 / 390] Compiling Rust bin _bs_ (70 files) [for tool]; 0s remote, remote-cache ... (3 actions, 0 running)
+[388 / 390] Compiling Rust bin test (9 files); 0s remote, remote-cache
+[388 / 390] Compiling Rust bin test (9 files); 9s remote, remote-cache
+INFO: From Compiling Rust bin test (9 files):
+warning: type `Utf8_to_utf16Fn` should have an upper camel case name
+   --> bazel-out/cfg/bin/protobuf-buffa/native/generated/seam.rs:170:10
+    |
+170 | pub type Utf8_to_utf16Fn = unsafe extern "C" fn(*const u8, u64, *mut u16, u64) -> i64;
+    |          ^^^^^^^^^^^^^^^ help: convert the identifier to upper camel case: `Utf8ToUtf16fn`
+    |
+    = note: `#[warn(non_camel_case_types)]` (part of `#[warn(nonstandard_style)]`) on by default
+
+warning: unnecessary `unsafe` block
+   --> bazel-out/cfg/bin/protobuf-buffa/native/probe.rs:693:32
+    |
+693 |         sum = sum.wrapping_add(unsafe { _pext_u64(masked, 0x7f7f7f7f7f7f7f7f) });
+    |                                ^^^^^^ unnecessary `unsafe` block
+    |
+    = note: `#[warn(unused_unsafe)]` (part of `#[warn(unused)]`) on by default
+
+warning: variable does not need to be mutable
+   --> bazel-out/cfg/bin/protobuf-buffa/native/probe.rs:832:9
+    |
+832 |     let mut vb = |name: &str, mut f: Box<dyn FnMut() -> u64>| {
+    |         ----^^
+    |         |
+    |         help: remove this `mut`
+    |
+    = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: 3 warnings emitted
+
+[389 / 390] [Prepa] runfiles for //protobuf-buffa/native:test
+[390 / 391] Testing //protobuf-buffa/native:test; 0s remote
+[390 / 391] Testing //protobuf-buffa/native:test; 9s remote
+[390 / 391] Testing //protobuf-buffa/native:test; 10s remote, remote-cache
+[390 / 391] Testing //protobuf-buffa/native:test; 11s remote, remote-cache
+[390 / 391] 1 / 1 tests; Testing //protobuf-buffa/native:test; 13s remote, remote-cache
+INFO: From Testing //protobuf-buffa/native:test:
+==================== Test output for //protobuf-buffa/native:test:
+
+running 1 test
+PROBE host=model name	: AMD EPYC
+PROBE mode=small messages=32 bytes=4797 avg=149
+PROBE small/scan_flat                     898.2 ns/rep      28.1 ns/msg    5340.8 MB/s sink=0x4127b0
+PROBE small/scan_nested                  3911.2 ns/rep     122.2 ns/msg    1226.5 MB/s sink=0x2a4c200
+PROBE small/view                        20289.0 ns/rep     634.0 ns/msg     236.4 MB/s sink=0x1135c30
+PROBE small/hand                         5576.0 ns/rep     174.3 ns/msg     860.3 MB/s sink=0x4ae6ce0
+PROBE small/hand_ascii                   3669.5 ns/rep     114.7 ns/msg    1307.3 MB/s sink=0x4ae6ce0
+PROBE small/hand_novf                    2574.9 ns/rep      80.5 ns/msg    1863.0 MB/s sink=0x4ae6ce0
+PROBE small/table                        8793.6 ns/rep     274.8 ns/msg     545.5 MB/s sink=0x4b542e0
+PROBE small/table_novf                   4873.5 ns/rep     152.3 ns/msg     984.3 MB/s sink=0x4b542e0
+PROBE small/table_sparse                 7246.1 ns/rep     226.4 ns/msg     662.0 MB/s sink=0x4ac4a00
+PROBE small/table_sparse_noskipv         7234.3 ns/rep     226.1 ns/msg     663.1 MB/s sink=0x4ac4a00
+PROBE small/table_none                   2585.4 ns/rep      80.8 ns/msg    1855.4 MB/s sink=0x3181d40
+PROBE small/size message[1]=122 B slab=488 B view=892 B (entries=28 words=55)
+PROBE mode=holdout messages=32 bytes=16321 avg=510
+PROBE holdout/scan_flat                  1631.6 ns/rep      51.0 ns/msg   10003.1 MB/s sink=0x497c80
+PROBE holdout/scan_nested                6606.8 ns/rep     206.5 ns/msg    2470.3 MB/s sink=0x1526100
+PROBE holdout/view                      60099.0 ns/rep    1878.1 ns/msg     271.6 MB/s sink=0x1717608
+PROBE holdout/hand                      20227.2 ns/rep     632.1 ns/msg     806.9 MB/s sink=0x4421e50
+PROBE holdout/hand_ascii                22051.2 ns/rep     689.1 ns/msg     740.1 MB/s sink=0x4421e50
+PROBE holdout/hand_novf                  6738.2 ns/rep     210.6 ns/msg    2422.2 MB/s sink=0x4421e50
+PROBE holdout/table                     27399.7 ns/rep     856.2 ns/msg     595.7 MB/s sink=0x4458950
+PROBE holdout/table_novf                13379.7 ns/rep     418.1 ns/msg    1219.8 MB/s sink=0x4458950
+PROBE holdout/table_sparse              25548.7 ns/rep     798.4 ns/msg     638.8 MB/s sink=0x4410ce0
+PROBE holdout/table_sparse_noskipv      25548.9 ns/rep     798.4 ns/msg     638.8 MB/s sink=0x4410ce0
+PROBE holdout/table_none                 8514.5 ns/rep     266.1 ns/msg    1916.8 MB/s sink=0x1b4f748
+PROBE holdout/size message[1]=390 B slab=1352 B view=2512 B (entries=79 words=154)
+PROBE mode=large messages=32 bytes=1658313 avg=51822
+PROBE large/scan_flat                  132500.0 ns/rep    4140.6 ns/msg   12515.6 MB/s sink=0x3e3d18
+PROBE large/scan_nested                723603.8 ns/rep   22612.6 ns/msg    2291.7 MB/s sink=0x2b500
+PROBE large/view                      6551082.5 ns/rep  204721.3 ns/msg     253.1 MB/s sink=0x1604f48
+PROBE large/hand                      1998498.8 ns/rep   62453.1 ns/msg     829.8 MB/s sink=0x2ec87b0
+PROBE large/hand_ascii                 843235.0 ns/rep   26351.1 ns/msg    1966.6 MB/s sink=0x2ec87b0
+PROBE large/hand_novf                  740017.5 ns/rep   23125.5 ns/msg    2240.9 MB/s sink=0x2ec87b0
+PROBE large/table                     3157628.8 ns/rep   98675.9 ns/msg     525.2 MB/s sink=0x2ec8eb0
+PROBE large/table_novf                1605592.5 ns/rep   50174.8 ns/msg    1032.8 MB/s sink=0x2ec8eb0
+PROBE large/table_sparse              3006230.0 ns/rep   93944.7 ns/msg     551.6 MB/s sink=0x2ec8580
+PROBE large/table_sparse_noskipv      2993422.5 ns/rep   93544.5 ns/msg     554.0 MB/s sink=0x2ec8580
+PROBE large/table_none                 701567.5 ns/rep   21924.0 ns/msg    2363.7 MB/s sink=0x412580
+PROBE large/size message[1]=48087 B slab=202856 B view=380324 B (entries=11973 words=23243)
+PROBE varints n=4096 bytes=9621 avg=2.35 B
+PROBE varint_byte_loop           0.751 ns/varint    3127.6 MB/s sink=0x0
+PROBE varint_buffa               0.886 ns/varint    2652.2 MB/s sink=0x0
+PROBE varint_wide8               2.636 ns/varint     891.2 MB/s sink=0x0
+PROBE varint_pext                2.615 ns/varint     898.3 MB/s sink=0x0
+PROBE varint_count_only          0.329 ns/varint    7144.1 MB/s sink=0x0
+PROBE utf8_ascii/production               173.1 ns/rep       5.4 ns/msg    1606.1 MB/s sink=0x3b6320
+PROBE utf8_ascii/ascii_fast                32.5 ns/rep       1.0 ns/msg    8551.2 MB/s sink=0x6d600
+PROBE utf8_unicode/production             254.1 ns/rep       7.9 ns/msg    1597.9 MB/s sink=0x4fe520
+PROBE utf8_unicode/ascii_fast             213.6 ns/rep       6.7 ns/msg    1900.8 MB/s sink=0x6d600
+test probe::probe ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 22 filtered out; finished in 4.00s
+
+================================================================================
+INFO: Found 1 test target...
+Target //protobuf-buffa/native:test up-to-date:
+  bazel-bin/protobuf-buffa/native/test
+INFO: Elapsed time: 59.259s, Critical Path: 51.57s
+INFO: 391 processes: 140 remote cache hit, 249 internal, 3 remote.
+INFO: Build completed successfully, 391 total actions
+INFO: 
+//protobuf-buffa/native:test                                             PASSED in 8.8s
+
+Executed 1 out of 1 test: 1 test passes.
+There were tests whose specified size is too big. Use the --test_verbose_timeout_warnings command line option to see which ones these are.
+INFO: Streaming build results to: https://app.buildbuddy.io/invocation/182fa836-af4e-4229-aa91-05eedf4c9d64
+
+→ ✅ Passed test task in 1m 9s · Tests passed
+    🔧 Setup    0ms  Prepare the task environment
+    🧪 Test   1m 9s  Run bazel tests
+exit=0

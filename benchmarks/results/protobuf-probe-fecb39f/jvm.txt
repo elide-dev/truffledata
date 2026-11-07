@@ -1,0 +1,60 @@
+PROBE jvm=OpenJDK 64-Bit Server VM 25.0.4.1.1+1-jvmci-25.5-b24
+PROBE host=model name	: AMD EPYC
+PROBE mode=small messages=32 bytes=4797 avg=149
+PROBE small/stock_parse                  6348.9 ns/rep     198.4 ns/msg     755.6 MB/s
+PROBE small/stock_parse_consume          6259.0 ns/rep     195.6 ns/msg     766.4 MB/s
+PROBE small/java_slab                   18054.7 ns/rep     564.2 ns/msg     265.7 MB/s
+PROBE small/java_slab_novf               4435.5 ns/rep     138.6 ns/msg    1081.5 MB/s
+PROBE small/java_slab_consume            3284.2 ns/rep     102.6 ns/msg    1460.6 MB/s
+PROBE small/stock_parse                  6638.8 ns/rep     207.5 ns/msg     722.6 MB/s
+PROBE small/stock_parse_consume          6247.2 ns/rep     195.2 ns/msg     767.9 MB/s
+PROBE small/java_slab                    2839.8 ns/rep      88.7 ns/msg    1689.2 MB/s
+PROBE small/java_slab_novf               2160.1 ns/rep      67.5 ns/msg    2220.7 MB/s
+PROBE small/java_slab_consume            3084.1 ns/rep      96.4 ns/msg    1555.4 MB/s
+PROBE small/stock_parse                  6120.0 ns/rep     191.3 ns/msg     783.8 MB/s
+PROBE small/stock_parse_consume          6338.4 ns/rep     198.1 ns/msg     756.8 MB/s
+PROBE small/java_slab                    2851.7 ns/rep      89.1 ns/msg    1682.2 MB/s
+PROBE small/java_slab_novf               2042.2 ns/rep      63.8 ns/msg    2348.9 MB/s
+PROBE small/java_slab_consume            2962.1 ns/rep      92.6 ns/msg    1619.4 MB/s
+PROBE mode=holdout messages=32 bytes=16321 avg=510
+PROBE holdout/stock_parse               25640.4 ns/rep     801.3 ns/msg     636.5 MB/s
+PROBE holdout/stock_parse_consume       26984.7 ns/rep     843.3 ns/msg     604.8 MB/s
+PROBE holdout/java_slab                  8688.0 ns/rep     271.5 ns/msg    1878.6 MB/s
+PROBE holdout/java_slab_novf             5576.7 ns/rep     174.3 ns/msg    2926.6 MB/s
+PROBE holdout/java_slab_consume         10227.2 ns/rep     319.6 ns/msg    1595.8 MB/s
+PROBE holdout/stock_parse               26700.0 ns/rep     834.4 ns/msg     611.3 MB/s
+PROBE holdout/stock_parse_consume       24577.9 ns/rep     768.1 ns/msg     664.1 MB/s
+PROBE holdout/java_slab                  7912.3 ns/rep     247.3 ns/msg    2062.7 MB/s
+PROBE holdout/java_slab_novf             5263.4 ns/rep     164.5 ns/msg    3100.9 MB/s
+PROBE holdout/java_slab_consume         10056.5 ns/rep     314.3 ns/msg    1622.9 MB/s
+PROBE holdout/stock_parse               26963.7 ns/rep     842.6 ns/msg     605.3 MB/s
+PROBE holdout/stock_parse_consume       24828.5 ns/rep     775.9 ns/msg     657.4 MB/s
+PROBE holdout/java_slab                  7843.5 ns/rep     245.1 ns/msg    2080.8 MB/s
+PROBE holdout/java_slab_novf             5227.7 ns/rep     163.4 ns/msg    3122.0 MB/s
+PROBE holdout/java_slab_consume          9963.4 ns/rep     311.4 ns/msg    1638.1 MB/s
+PROBE mode=large messages=32 bytes=1658313 avg=51822
+PROBE large/stock_parse               1813808.5 ns/rep   56681.5 ns/msg     914.3 MB/s
+PROBE large/stock_parse_consume       2286456.4 ns/rep   71451.8 ns/msg     725.3 MB/s
+PROBE large/java_slab                 1486529.6 ns/rep   46454.1 ns/msg    1115.6 MB/s
+PROBE large/java_slab_novf             756929.1 ns/rep   23654.0 ns/msg    2190.8 MB/s
+PROBE large/java_slab_consume         1017127.0 ns/rep   31785.2 ns/msg    1630.4 MB/s
+PROBE large/stock_parse               1591682.1 ns/rep   49740.1 ns/msg    1041.9 MB/s
+PROBE large/stock_parse_consume       1765066.0 ns/rep   55158.3 ns/msg     939.5 MB/s
+PROBE large/java_slab                  846741.8 ns/rep   26460.7 ns/msg    1958.5 MB/s
+PROBE large/java_slab_novf             680869.1 ns/rep   21277.2 ns/msg    2435.6 MB/s
+PROBE large/java_slab_consume          995318.0 ns/rep   31103.7 ns/msg    1666.1 MB/s
+PROBE large/stock_parse               1594363.6 ns/rep   49823.9 ns/msg    1040.1 MB/s
+PROBE large/stock_parse_consume       1521269.8 ns/rep   47539.7 ns/msg    1090.1 MB/s
+PROBE large/java_slab                  850716.8 ns/rep   26584.9 ns/msg    1949.3 MB/s
+PROBE large/java_slab_novf             681782.9 ns/rep   21305.7 ns/msg    2432.3 MB/s
+PROBE large/java_slab_consume          926320.5 ns/rep   28947.5 ns/msg    1790.2 MB/s
+PROBE ffm/downcall_normal                 253.9 ns/rep       7.9 ns/msg     126.1 MB/s
+PROBE ffm/downcall_critical               144.1 ns/rep       4.5 ns/msg     222.1 MB/s
+PROBE ffm/downcall_normal                 254.2 ns/rep       7.9 ns/msg     125.9 MB/s
+PROBE ffm/downcall_critical               144.7 ns/rep       4.5 ns/msg     221.1 MB/s
+PROBE ffm/downcall_normal                 255.6 ns/rep       8.0 ns/msg     125.2 MB/s
+PROBE ffm/downcall_critical               145.0 ns/rep       4.5 ns/msg     220.7 MB/s
+PROBE ffm/copy_150B_to_native             139.1 ns/rep       4.3 ns/msg   22539.3 MB/s
+PROBE ffm/copy_150B_to_native             137.3 ns/rep       4.3 ns/msg   22838.4 MB/s
+PROBE ffm/copy_150B_to_native             137.7 ns/rep       4.3 ns/msg   22781.5 MB/s
+PROBE sink=-8141082154799298144
