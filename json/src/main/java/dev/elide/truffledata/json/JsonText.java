@@ -4,6 +4,7 @@ import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.strings.TruffleString;
 import dev.elide.myna.values.ValueTape;
 import java.nio.charset.StandardCharsets;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Reusable cursor over the key, string or decimal token a {@link JsonSink} event receives. One
@@ -28,6 +29,8 @@ public final class JsonText {
   // Open containers of the export walk: exclusive end node, sign bit set for objects.
   final long[] ends = new long[JsonExportNode.MAX_DEPTH];
   private byte[] scratch = EMPTY;
+  // Text arena of the session parse this cursor serves (Task D2), else null.
+  private @Nullable JsonTextArena arena;
 
   private static final byte[] EMPTY = new byte[0];
 
@@ -39,6 +42,11 @@ public final class JsonText {
   void rebind(JsonOwner next) {
     owner = next;
     node = -1;
+  }
+
+  /** Attaches the session's text arena for one borrowed parse, or detaches it (null). */
+  void arena(@Nullable JsonTextArena text) {
+    arena = text;
   }
 
   void bind(long next) {
@@ -100,7 +108,10 @@ public final class JsonText {
   }
 
   /**
-   * The text as a {@link TruffleString} in {@code encoding}: one copy of the decoded UTF-8 bytes,
+   * The text as a {@link TruffleString} in {@code encoding}. In a session parse whose sink asked
+   * for {@linkplain JsonSink#sharedText() shared text}, a string is built over the document's text
+   * arena without a copy (Latin-1 or UTF-16 as written natively, switched to {@code encoding};
+   * strings of 64 KiB or more are copied). Otherwise: one copy of the decoded UTF-8 bytes,
    * transcoded only when {@code encoding} is not UTF-8 and the text is not ASCII.
    */
   @TruffleBoundary
@@ -108,6 +119,8 @@ public final class JsonText {
     long at = node();
     if (owner.tag(at) == ValueTape.DECIMAL)
       return TruffleString.fromJavaStringUncached(owner.lexicalText(at), encoding);
+    JsonTextArena text = arena;
+    if (text != null) return text.string(at, encoding);
     byte[] bytes = new byte[Math.toIntExact(owner.tape.length(at))];
     owner.tape.copyStringUtf8(at, bytes, 0);
     TruffleString utf8 =

@@ -64,6 +64,8 @@ class PolicyTest {
             Map.entry("JsonBorrow.java", 1), // Borrowed-result assumption.
             Map.entry("JsonKey.java", 1), // Key preparation (UTF-8 encode and hash).
             Map.entry("JsonText.java", 4), // Sink-side materialization: String, TruffleString, copy, compare.
+            Map.entry("JsonTextArena.java", 1), // TruffleString over a session text arena (sink side).
+            Map.entry("TruffleSink.java", 9), // Reference guest sink: tree building and key interning.
             // CSV: diagnostics, materialization and the export walk stay out of compiled reads.
             Map.entry("CsvScanner.java", 2), // Static syntax and limit failures.
             Map.entry("CsvBatch.java", 2), // Static STRING materialization and the export walk.

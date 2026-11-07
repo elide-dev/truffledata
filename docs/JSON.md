@@ -92,6 +92,15 @@ try (JsonSession session = JsonSession.open()) {            // or open(JsonLimit
 
 - `parse(byte[], JsonSink)` and `parse(byte[], offset, length, JsonSink)` decode
   into session storage and export through the sink. Nothing is retained.
+- Text arenas: when the sink's `sharedText()` returns true (`TruffleSink` does),
+  the same native call also writes every key and string once into a per-document
+  `byte[]` presized to `2 × length + 16`: Latin-1 when all its code points are at
+  most U+00FF, UTF-16LE otherwise. `JsonText.toTruffleString(encoding)` then builds
+  each string over that array without a copy (a Latin-1 string becomes UTF-16 without
+  one too), so a parse costs one array plus one `TruffleString` per string. Strings
+  of 64 KiB or more are copied, so one small retained string never keeps a large
+  document's text alive. Once any string shares the array, the session gives the next
+  parse a fresh one; an array nobody took is reused.
 - `with(byte[], Function<JsonValue, R>)` lends the root to a reader. The root and
   every view derived from it belong to a borrowed owner that is closed (and its
   assumption invalidated, so cached compiled reads fail too) when the call
@@ -279,6 +288,12 @@ Nested exports and snapshot exports allocate their own. `JavaSink` builds
 sinks of one thread: a bounded (1,024 names) table keyed by the key hash and the
 decoded bytes, so documents of one schema stop allocating key `String`s.
 
+`TruffleSink` is the reference sink for Truffle guests: the same tree shape with
+UTF-16 `TruffleString` keys (from a `TruffleSink.KeyCache`, copied once out of the
+document) and string values. It asks for shared text, so through a `JsonSession`
+parse its strings share the document's text arena; exporting a retained message or
+snapshot (no arena) copies each string once.
+
 ### Sketch: a GraalJS `JSON.parse` sink
 
 This shows the intended shape for an embedder such as Elide. GraalJS internal
@@ -311,8 +326,10 @@ final class JsSink implements JsonSink {
   public void doubleValue(double v) { add(v); }                  // keeps -0
   public void unsignedValue(long bits) { add(Double.parseDouble(Long.toUnsignedString(bits))); }
   public void decimalValue(JsonText t) { add(Double.parseDouble(t.toJavaString())); } // 1E400 -> Infinity
+  public boolean sharedText() { return true; }                   // session parses fill a text arena
 
-  // UTF-8 bytes are copied once into a TruffleString; JS strings are UTF-16.
+  // In a session parse: a UTF-16 view of the document's text arena, no copy. Otherwise the
+  // UTF-8 bytes are copied once. (A real sink interns keys, as TruffleSink.KeyCache does.)
   private static TruffleString js(JsonText v) {
     return v.toTruffleString(TruffleString.Encoding.UTF_16);
   }

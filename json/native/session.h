@@ -1,6 +1,7 @@
 #ifndef TRUFFLEDATA_JSON_SESSION_H
 #define TRUFFLEDATA_JSON_SESSION_H
 #include "json/native/decoder.h"
+#include "json/native/text_arena.h"
 #include <optional>
 
 namespace truffledata::json {
@@ -126,6 +127,25 @@ public:
     live_ = true;
     return {view_, decoder_->lexical_spans(), decoder_->key_hashes(), length,
             memory_.allocations() - before};
+  }
+
+  // Writes the live document's text arena (Task D2, text_arena.h) into `out`; the per-node table
+  // lives in the session arena until the next decode. Returns the bytes used, or text_too_small
+  // after dropping the document (the session stays reusable). On an exception the document is
+  // dropped too.
+  size_t write_text(uint8_t* out, size_t capacity, const uint64_t*& table) {
+    if (!live_) throw std::logic_error("no JSON session document");
+    try {
+      size_t count = view_.node_count ? view_.node_count : 1;
+      auto* entries = static_cast<uint64_t*>(arena_.allocate(count * sizeof(uint64_t), alignof(uint64_t)));
+      size_t used = write_text_arena(view_, decoder_->key_hashes().data(), entries, out, capacity);
+      if (used == text_too_small) recycle();
+      table = entries;
+      return used;
+    } catch (...) {
+      recycle();
+      throw;
+    }
   }
 
   bool live() const { return live_; }

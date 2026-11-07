@@ -746,8 +746,74 @@ public final class SvmAcceptance {
     }
   }
 
+  private static com.oracle.truffle.api.strings.TruffleString utf16(String text) {
+    return com.oracle.truffle.api.strings.TruffleString.fromJavaStringUncached(
+        text, com.oracle.truffle.api.strings.TruffleString.Encoding.UTF_16);
+  }
+
+  private static Object member(java.util.Map<?, ?> tree, String name) {
+    return java.util.Objects.requireNonNull(tree.get(utf16(name)), name);
+  }
+
+  // The array a Latin-1 (or ASCII) TruffleString stores its text in, without copying it.
+  private static byte[] latin1Storage(com.oracle.truffle.api.strings.TruffleString text) {
+    var latin1 = com.oracle.truffle.api.strings.TruffleString.Encoding.ISO_8859_1;
+    return text.switchEncodingUncached(latin1).getInternalByteArrayUncached(latin1).getArray();
+  }
+
+  /**
+   * Task D2: a TruffleSink session parse builds every string over one per-document text array (no
+   * copy; Latin-1 when possible, UTF-16 otherwise), copies strings of 64 KiB or more, and never
+   * overwrites an array a string still references.
+   */
+  private static void textArenas() {
+    var keys = new dev.elide.truffledata.json.TruffleSink.KeyCache();
+    String big = "y".repeat(70_000);
+    byte[] doc =
+        ("{\"id\":\"x\",\"\\u00e9t\\u00e9\":\"caf\\u00e9 au lait beyond sixteen bytes\",\"k\":\"\\ud83d\\ude00 中\","
+                + "\"e\":\"\",\"n\":[1,\"plain ascii text\"],\"big\":\"" + big + "\"}")
+            .getBytes(StandardCharsets.UTF_8);
+    try (var session = dev.elide.truffledata.json.JsonSession.open()) {
+      java.util.Map<?, ?> previous = null;
+      byte[] previousArena = null;
+      for (int round = 0; round < 3; round++) {
+        var sink = new dev.elide.truffledata.json.TruffleSink(keys);
+        require(sink.sharedText() && !new dev.elide.truffledata.json.JavaSink().sharedText());
+        session.parse(doc, sink);
+        var tree = (java.util.Map<?, ?>) java.util.Objects.requireNonNull(sink.result());
+        var id = (com.oracle.truffle.api.strings.TruffleString) member(tree, "id");
+        var cafe = (com.oracle.truffle.api.strings.TruffleString) member(tree, "été");
+        var emoji = (com.oracle.truffle.api.strings.TruffleString) member(tree, "k");
+        var plain = (com.oracle.truffle.api.strings.TruffleString) ((java.util.List<?>) member(tree, "n")).get(1);
+        var large = (com.oracle.truffle.api.strings.TruffleString) member(tree, "big");
+        require(id.equals(utf16("x")) && cafe.equals(utf16("café au lait beyond sixteen bytes")));
+        require(emoji.equals(utf16("😀 中")) && plain.equals(utf16("plain ascii text")));
+        require(large.equals(utf16(big)) && utf16("").equals(tree.get(utf16("e"))));
+        // ASCII and Latin-1 strings share one array; the UTF-16 one shares it too; 64 KiB copies.
+        byte[] arena = latin1Storage(id);
+        require(latin1Storage(cafe) == arena && latin1Storage(plain) == arena);
+        var utf16 = com.oracle.truffle.api.strings.TruffleString.Encoding.UTF_16;
+        require(emoji.getInternalByteArrayUncached(utf16).getArray() == arena);
+        require(latin1Storage(large) != arena);
+        // The previous document's strings are intact: its array was not reused.
+        if (previous != null) {
+          require(previousArena != arena);
+          require(utf16("café au lait beyond sixteen bytes").equals(previous.get(utf16("été"))));
+        }
+        previous = tree;
+        previousArena = arena;
+      }
+      require(keys.size() == 6);
+      // A JavaSink parse in between needs no arena, and keeps working.
+      var plainSink = new dev.elide.truffledata.json.JavaSink();
+      session.parse(doc, plainSink);
+      require("x".equals(((java.util.Map<?, ?>) java.util.Objects.requireNonNull(plainSink.result())).get("id")));
+    }
+  }
+
   public static void main(String[] args) throws Exception {
     textBridge();
+    textArenas();
     sessions();
     typed();
     schemaTyped();

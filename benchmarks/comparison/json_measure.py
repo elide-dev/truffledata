@@ -18,11 +18,11 @@ output.mkdir(parents=True, exist_ok=True)
 WORKLOADS = {
     'json-scalar': (('gson-stream', 'simdjson-typed', 'simdjson-specialized'), 35984),
     'json-generic': (('gson-tree', 'simdjson-generic-java', 'simdjson-generic-interop', 'simdjson-snapshot',
-                      'simdjson-session-java'), 38219),
+                      'simdjson-session-java', 'simdjson-session-truffle'), 38219),
 }
 STAGES = ('ingest', 'read-aot', 'interpret', 'peak')
 # Borrowed session parse retains nothing to read later: it has an ingest cell only.
-INGEST_ONLY = {'simdjson-session-java'}
+INGEST_ONLY = {'simdjson-session-java', 'simdjson-session-truffle'}
 workload_of = {engine: (name, checksum) for name, (engines, checksum) in WORKLOADS.items() for engine in engines}
 jobs = [job for job in itertools.product(workload_of, STAGES, ('time', 'memory'), range(3))
         if job[0] not in INGEST_ONLY or job[1] == 'ingest']

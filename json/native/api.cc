@@ -207,19 +207,31 @@ using truffledata::json::session;
 // The 4 KiB bound of the leaf decode: at the probe's ≈ 150 MB/s worst case this is ≈ 30 µs.
 constexpr uint64_t critical_limit = TD_JSON_CRITICAL_LIMIT;
 
+constexpr uint32_t known_flags = TD_JSON_WANT_TEXT;
+
 int32_t session_decode(session& s, const uint8_t* data, uint64_t length, uint32_t flags,
-                       const uint8_t* text_out, uint64_t text_capacity, JsonResult& result) {
+                       uint8_t* text_out, uint64_t text_capacity, JsonResult& result) {
   result = {};
-  if (!data || flags != 0 || text_out || text_capacity) return TD_JSON_ARGUMENT;
+  if (!data || (flags & ~known_flags)) return TD_JSON_ARGUMENT;
+  bool text = flags & TD_JSON_WANT_TEXT;
+  if (text ? !text_out || reinterpret_cast<uintptr_t>(text_out) % 2 || text_capacity > INT32_MAX
+           : text_out || text_capacity)
+    return TD_JSON_ARGUMENT;
   if (length > UINT32_MAX) return TD_JSON_LIMIT;
   try {
     auto d = s.decode(reinterpret_cast<const char*>(data), size_t(length));
+    const uint64_t* table = nullptr;
+    size_t text_bytes = 0;
+    if (text) {
+      text_bytes = s.write_text(text_out, size_t(text_capacity), table);
+      if (text_bytes == truffledata::json::text_too_small) return TD_JSON_TEXT_TOO_SMALL;
+    }
     const auto& memory = s.memory();
     // Borrowed: no owner, so td_json_release never frees session storage.
     result = {nullptr, const_cast<myna_value_view*>(&s.view()), length, s.input_capacity(),
               memory.current(), memory.peak(), d.index_allocations, s.parser_capacity(),
               sizeof(session), const_cast<uint64_t*>(d.lexical.data()), d.lexical.size(),
-              const_cast<uint32_t*>(d.hashes.data())};
+              const_cast<uint32_t*>(d.hashes.data()), const_cast<uint64_t*>(table), text_bytes};
     return TD_JSON_OK;
   } catch (...) { return translate(); }
 }

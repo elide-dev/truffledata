@@ -48,6 +48,10 @@ ALLOCATION = {
     # 1,360 with the D1 text cursor (3,596 before; the plan's target was 1,900).
     ('simdjson-generic-interop', 'ingest'): 480.0,
     ('simdjson-session-java', 'ingest'): 1400.0,
+    # Borrowed parse into a TruffleSink over the session's shared text arena (Task D2): the host
+    # tree, one TruffleString per string value and one 2 × length + 16 B text array per document;
+    # measured 1,772.5.
+    ('simdjson-session-truffle', 'ingest'): 1800.0,
 }
 
 # Columns: Count Size Cycles Ifs Loops Invokes Allocs. Fail closed if trace format changes.

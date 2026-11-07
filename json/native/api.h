@@ -10,8 +10,13 @@ enum td_json_status {
   TD_JSON_ALLOCATION = 3,
   TD_JSON_SYNTAX = 4,
   TD_JSON_INTERNAL = 5,
-  TD_JSON_CONTRACT = 6
+  TD_JSON_CONTRACT = 6,
+  TD_JSON_TEXT_TOO_SMALL = 7
 };
+
+// session_decode flags.
+// TD_JSON_WANT_TEXT (Task D2): also write the document's text arena into text_out (see below).
+#define TD_JSON_WANT_TEXT 1u
 
 // Sessions (td_json_session_*). A session is a thread-confined decode context: one simdjson
 // On-Demand parser, a padded input buffer and a block arena reused across documents. Callers
@@ -20,10 +25,17 @@ enum td_json_status {
 // session_decode copies `data` into the session and writes a *borrowed* JsonResult: owner is
 // null, and every pointer stays valid only until the next call on the session (decode, retain,
 // reset or release). Never td_json_release a borrowed result (doing so is a harmless no-op). A
-// failed decode zeroes the result, keeps nothing and leaves the session reusable. `flags`,
-// `text_out` and `text_capacity` are reserved for text arenas, UTF-16 input and frame mode; until
-// then any nonzero value is TD_JSON_ARGUMENT. index_allocations counts upstream allocations made
-// by this decode (0 in steady state).
+// failed decode zeroes the result, keeps nothing and leaves the session reusable. Unknown flags
+// are TD_JSON_ARGUMENT. index_allocations counts upstream allocations made by this decode (0 in
+// steady state).
+// Text arenas (TD_JSON_WANT_TEXT, Task D2): text_out (2-byte aligned, text_capacity ≤ INT32_MAX)
+// receives every key and string node's decoded text once, in tape order: Latin-1 when all its code
+// points are ≤ U+00FF, else UTF-16LE at an even offset. result.text_table holds one u64 per node,
+// offset << 32 | byte length << 1 | utf16 (0 for other nodes and empty strings), valid like the
+// rest of the borrowed result; result.text_bytes is the bytes written. 2 × length + 16 bytes always
+// suffice; a smaller capacity may fail with TD_JSON_TEXT_TOO_SMALL (nothing published, session
+// reusable). text_out/text_capacity without the flag, or the flag without text_out, is
+// TD_JSON_ARGUMENT.
 // session_retain moves the live document's arena blocks and input into a zero-initialized
 // `result` that owns them (release with td_json_release), without copying nodes; the session then
 // holds no document. Retaining twice, with no document, or into a live result is TD_JSON_ARGUMENT.

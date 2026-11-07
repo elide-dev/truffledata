@@ -33,7 +33,8 @@ ACCESS_SOURCES = {f'core/src/main/java/dev/elide/truffledata/{name}.java' for na
     f'json/src/main/java/dev/elide/truffledata/json/{name}.java' for name in (
         'HeapValueTape', 'JavaSink', 'JsonAccess', 'JsonArray', 'JsonBorrow', 'JsonDecoder', 'JsonExportNode', 'JsonKey',
         'JsonJvm', 'JsonLimits', 'JsonMessage', 'JsonOwner', 'JsonPlan', 'JsonRecord', 'JsonSink',
-        'JsonSession', 'JsonSnapshot', 'JsonSvm', 'JsonText', 'JsonTypedOwner', 'JsonValue', 'JvmTypedOwner',
+        'JsonSession', 'JsonSnapshot', 'JsonSvm', 'JsonText', 'JsonTextArena', 'JsonTypedOwner', 'JsonValue',
+        'JvmTypedOwner', 'TruffleSink',
         'SegmentValueTape',
         'SvmTypedOwner', 'SvmValueTape', 'TapeSource',
     )
@@ -115,7 +116,10 @@ SVM_ONLY_METHODS = {
         'JsonSession::check ()V',
         'JsonSession::handle ()Lorg/graalvm/nativeimage/c/type/VoidPointer;',
         'JsonSession::decodeInto ([BII)V',
-        'JsonSession::lend ()Ldev/elide/truffledata/json/JsonBorrow;',
+        'JsonSession::decodeInto ([BIILdev/elide/truffledata/json/JsonSession$SvmTextArena;)V',
+        'JsonSession::textArena (I)Ldev/elide/truffledata/json/JsonSession$SvmTextArena;',
+        'JsonSession$SvmTextArena::entry (J)J',
+        'JsonSession::lend (Ldev/elide/truffledata/json/JsonSession$SvmTextArena;)Ldev/elide/truffledata/json/JsonBorrow;',
         'JsonSession::giveBack (Ldev/elide/truffledata/json/JsonBorrow;)V',
         'JsonSession::parse ([BLdev/elide/truffledata/json/JsonSink;)V',
         'JsonSession::parse ([BIILdev/elide/truffledata/json/JsonSink;)V',
@@ -136,7 +140,19 @@ SVM_ONLY_METHODS = {
     # A session lends its one export cursor to each borrow (Task D1); only JsonSession.lend calls
     # these, so they run only where sessions do.
     **_json_methods('JsonOwner', 'JsonOwner::adoptCursor (Ldev/elide/truffledata/json/JsonText;)V'),
-    **_json_methods('JsonText', 'JsonText::rebind (Ldev/elide/truffledata/json/JsonOwner;)V'),
+    **_json_methods(
+        'JsonText',
+        'JsonText::rebind (Ldev/elide/truffledata/json/JsonOwner;)V',
+        # Attaches a session parse's text arena (Task D2).
+        'JsonText::arena (Ldev/elide/truffledata/json/JsonTextArena;)V',
+    ),
+    # Strings over a session text arena: written only by JsonSession parses whose sink asks for
+    # shared text (SvmAcceptance.textArenas).
+    **_json_methods(
+        'JsonTextArena',
+        'JsonTextArena::string (JLcom/oracle/truffle/api/strings/TruffleString$Encoding;)'
+        'Lcom/oracle/truffle/api/strings/TruffleString;',
+    ),
     # Static typed plans: compile throws from requireRuntime on the JVM (JvmScopedTest asserts it);
     # JVM plans compile through JsonJvm and its own backend instead.
     **_json_methods(

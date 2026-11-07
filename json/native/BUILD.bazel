@@ -9,9 +9,11 @@ cc_library(
         "parser_pool.h",
         "session.h",
         "tape_writer.h",
+        "text_arena.h",
     ],
     copts = ["-std=c++17"],
     deps = [
+        "//bazel:unicode",
         "@myna//:values_headers",
         "@simdjson",
     ],

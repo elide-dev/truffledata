@@ -113,6 +113,7 @@ string and `parent` being null. The checksum is 38,219.
 | `simdjson-generic-interop` | Decode, read through cached `InteropLibrary`, close | Live messages, read by the guest through cached interop, one library per member site |
 | `simdjson-snapshot` | Decode, `snapshot()`, close, read the snapshot through interop | Snapshots, read like `simdjson-generic-interop` |
 | `simdjson-session-java` (ingest only) | Borrowed `JsonSession.parse(input, JavaSink)`, read the Java tree | Nothing native is retained, so there is no read stage |
+| `simdjson-session-truffle` (ingest only) | Borrowed `JsonSession.parse(input, TruffleSink)` over the shared text arena, read the `TruffleString`-keyed tree | As above (Task D2) |
 
 Since performance plan Task D1 the `JavaSink` cells (`simdjson-generic-java` and
 `simdjson-session-java`) share one `JavaSink.KeyCache` per run, as an embedder
@@ -161,6 +162,7 @@ column counts unresolved Java calls only, not `@TruffleBoundary` calls. The
 | `gson-tree`, peak | ≤ 1,000 | 1 | 0 | — |
 | `simdjson-generic-interop`, ingest | — | — | — | ≤ 480 |
 | `simdjson-session-java`, ingest | — | — | — | ≤ 1,400 |
+| `simdjson-session-truffle`, ingest | — | — | — | ≤ 1,800 |
 
 The interop loop measured 1,754–1,810 nodes: ten inlined member reads and their
 owner checks. With position-hinted member lookup (performance plan Task C1) it
@@ -196,6 +198,13 @@ and value `String`s; the borrow's Java objects; the session lends its one text
 cursor to every borrow), under a 1,400 B gate. The plan's 1,900 B target is met;
 its 160 B decode-overhead target is not (the 240 B of AOT interop views are read
 cost, and a reusable borrow reader needs elide-dev/myna#47).
+
+**Truffle session budget (Task D2).** The borrowed parse into a `TruffleSink` measured
+1,772.5 B/document under a 1,800 B gate: the host tree, one `TruffleString` per string
+value sharing the document's text arena, and the arena itself (a `byte[]` of
+`2 × length + 16` bytes per document, since the strings keep it). Keys come from a
+`TruffleSink.KeyCache`. The plan's graph gate `(1000, 2, None)` applies to a compiled
+read root; this cell is ingest-only like `simdjson-session-java`, so it has none.
 
 ### Results
 

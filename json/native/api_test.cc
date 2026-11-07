@@ -7,6 +7,7 @@
 #include <stdexcept>
 #include <string>
 #include <simdjson.h>
+#include <simdutf.h>
 #include <vector>
 
 void require(bool condition) { if (!condition) throw std::runtime_error("ABI check failed"); }
@@ -350,7 +351,12 @@ void session_allocations() {
         s.decode(wide.data(), wide.size());
         owner = s.retain();
         s.decode(big.data(), big.size());
+        // Task D2: the text table is an arena allocation too (the big document's is large).
+        std::vector<uint8_t> text(2 * big.size() + 16);
+        const uint64_t* table = nullptr;
+        require(s.write_text(text.data(), text.size(), table) != truffledata::json::text_too_small);
         s.decode(doc.data(), doc.size());
+        require(s.write_text(text.data(), text.size(), table) != truffledata::json::text_too_small);
       } catch (...) {
         if (owner) owner->destroy();
         throw;
@@ -394,8 +400,85 @@ void session_allocations() {
   (void)d;
 }
 
+// Decodes the arena entry of node `index` back to UTF-16 code units.
+std::u16string arena_text(const JsonResult& result, const uint8_t* arena, size_t index) {
+  uint64_t entry = static_cast<const uint64_t*>(result.text_table)[index];
+  size_t offset = entry >> 32, length = (entry >> 1) & 0x7fffffffu;
+  std::u16string out;
+  if (entry & 1) {
+    require(offset % 2 == 0 && length % 2 == 0);
+    for (size_t i = 0; i < length; i += 2) out += char16_t(arena[offset + i] | arena[offset + i + 1] << 8);
+  } else {
+    for (size_t i = 0; i < length; ++i) out += char16_t(arena[offset + i]);
+  }
+  return out;
+}
+std::u16string utf16_of(const std::string& utf8) {
+  std::u16string out(simdutf::utf16_length_from_utf8(utf8.data(), utf8.size()), u'\0');
+  require(simdutf::convert_valid_utf8_to_utf16le(utf8.data(), utf8.size(), out.data()) == out.size());
+  return out;
+}
+// Task D2: per-document text arenas.
+void text_arenas() {
+  JsonLimitsStruct limits{1024 * 1024, 1024 * 1024, 100000, 1024 * 1024, 128};
+  void* s = td_json_session_create(&limits);
+  require(s != nullptr);
+  JsonResult result{};
+  alignas(8) uint8_t arena[4096];
+  auto run = [&](const std::string& source, uint64_t capacity, uint32_t flags = TD_JSON_WANT_TEXT) {
+    return td_json_session_decode(s, reinterpret_cast<const uint8_t*>(source.data()), source.size(), flags,
+                                  arena, capacity, &result);
+  };
+  // Keys and strings, ASCII, Latin-1 range, BMP, surrogate pairs, escapes, inline and region text.
+  const std::string doc =
+      R"({"id":"x","été":"café au lait, long enough for a region","k":"😀 中",)"
+      R"("":"","n":[1,"plain ascii string beyond sixteen bytes"],"ÿ":"Ā"})";
+  require(run(doc, 2 * doc.size() + 16) == TD_JSON_OK);
+  require(result.text_table && result.text_bytes > 0 && result.text_bytes <= 2 * doc.size());
+  auto* view = static_cast<const myna_value_view*>(result.view);
+  const auto* table = static_cast<const uint64_t*>(result.text_table);
+  size_t strings = 0;
+  for (size_t i = 0; i < view->node_count; ++i) {
+    if ((view->nodes[i].tag & MYNA_VALUE_KIND_MASK) != MYNA_VALUE_STRING) {
+      require(table[i] == 0);
+      continue;
+    }
+    ++strings;
+    // Every key and string round-trips to the code units of its decoded UTF-8.
+    require(arena_text(result, arena, i) == utf16_of(text_of(view, i)));
+  }
+  require(strings == 12);
+  // Representation: Latin-1 whenever every code point is ≤ U+00FF, UTF-16 otherwise.
+  require((table[1] & 1) == 0 && (table[3] & 1) == 0 && (table[4] & 1) == 0);  // "id", "été", "café…"
+  require((table[6] & 1) == 1 && arena_text(result, arena, 6).size() == 4);     // 😀 is two units
+  require((table[view->node_count - 1] & 1) == 1 && (table[view->node_count - 2] & 1) == 0);
+  // The bound holds by construction: "é" is 6 input bytes and 2 output bytes (or 1 as Latin-1).
+  require(run(R"(["é"])", 2 * 10 + 16) == TD_JSON_OK && result.text_bytes == 1);
+  require(run(R"(["Ā"])", 2 * 10 + 16) == TD_JSON_OK && result.text_bytes == 2);
+  // A caller-shrunk capacity reports TD_JSON_TEXT_TOO_SMALL, publishes nothing, and the session
+  // decodes the next document.
+  for (uint64_t capacity : {uint64_t(0), uint64_t(1), uint64_t(10)}) {
+    require(run(doc, capacity) == TD_JSON_TEXT_TOO_SMALL);
+    JsonResult empty{};
+    require(std::memcmp(&result, &empty, sizeof(empty)) == 0);
+  }
+  require(run(doc, sizeof(arena)) == TD_JSON_OK);
+  // Argument checks: text needs the flag and an even buffer, the flag needs a buffer.
+  require(td_json_session_decode(s, reinterpret_cast<const uint8_t*>("[]"), 2, 0, arena, 8, &result) == TD_JSON_ARGUMENT);
+  require(td_json_session_decode(s, reinterpret_cast<const uint8_t*>("[]"), 2, TD_JSON_WANT_TEXT, nullptr, 0, &result) == TD_JSON_ARGUMENT);
+  require(td_json_session_decode(s, reinterpret_cast<const uint8_t*>("[]"), 2, TD_JSON_WANT_TEXT, arena + 1, 8, &result) == TD_JSON_ARGUMENT);
+  require(td_json_session_decode(s, reinterpret_cast<const uint8_t*>("[]"), 2, 64, nullptr, 0, &result) == TD_JSON_ARGUMENT);
+  // Retained decodes never carry a text arena.
+  require(run(doc, sizeof(arena), 0) == TD_JSON_ARGUMENT);
+  require(td_json_session_decode(s, reinterpret_cast<const uint8_t*>(doc.data()), doc.size(), 0, nullptr, 0, &result) == TD_JSON_OK);
+  require(!result.text_table && result.text_bytes == 0);
+
+  td_json_session_release(s);
+}
+
 int main() {
   sessions();
+  text_arenas();
   session_allocations();
   adopted();
   scalar_contracts();
@@ -411,8 +494,9 @@ int main() {
   }
   auto* view = static_cast<const myna_value_view*>(first.view);
   require(view->version == MYNA_VALUE_ABI && view->node_count == 5);
-  static_assert(sizeof(JsonResult) == 96 && offsetof(JsonResult, key_hashes) == 88,
-                "ABI 5 publishes lexical spans and key hashes");
+  static_assert(sizeof(JsonResult) == 112 && offsetof(JsonResult, key_hashes) == 88
+                    && offsetof(JsonResult, text_table) == 96 && offsetof(JsonResult, text_bytes) == 104,
+                "ABI 5 publishes lexical spans, key hashes and session text arenas");
   require(first.lexical_count == 5 && first.lexical);
   require(static_cast<const uint64_t*>(first.lexical)[2] == ((uint64_t(5) << 32) | 3));
   {

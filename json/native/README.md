@@ -100,6 +100,16 @@ A failed decode publishes nothing and leaves the session reusable. `api.h`
 documents the contract; `td_json_decode` does not use a session (no hidden
 per-thread state).
 
+### Text arenas
+
+With `TD_JSON_WANT_TEXT`, `session_decode` also writes every key and string once into the
+caller's buffer (`text_arena.h`, a post-pass over the finished tape): Latin-1 when all code points
+are at most U+00FF, UTF-16LE (even offset) otherwise, with one `offset << 32 | bytes << 1 | utf16`
+entry per node in `JsonResult.text_table` (session arena, valid like the borrowed result).
+`2 × length + 16` bytes always suffice; `TD_JSON_TEXT_TOO_SMALL` reports a smaller buffer and
+leaves the session reusable. Java's `TruffleSink` builds `TruffleString`s over that array without
+copying.
+
 ## Limits and accounting
 
 `storage_limits` caps logical input bytes before copying, and index allocations

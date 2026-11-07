@@ -37,6 +37,8 @@ public final class JsonSession implements AutoCloseable {
   private final long result;
   private @Nullable JsonBorrow borrow;
   private @Nullable JsonText text;
+  // Text array for shared-text parses; replaced once a string shares it.
+  private @Nullable SvmTextArena arena;
 
   private JsonSession(JsonLimits limits, long session, long result) {
     this.limits = limits;
@@ -90,37 +92,79 @@ public final class JsonSession implements AutoCloseable {
 
   /** Decodes into the session; the borrowed result is valid until the next session call. */
   private void decodeInto(byte[] utf8, int offset, int length) {
+    decodeInto(utf8, offset, length, null);
+  }
+
+  /**
+   * Decodes into the session and, when {@code text} is given, writes the document's text arena
+   * into its array (Task D2).
+   */
+  private void decodeInto(byte[] utf8, int offset, int length, @Nullable SvmTextArena text) {
     check();
     Objects.checkFromIndexSize(offset, length, utf8.length);
     if (length == 0) throw new IllegalArgumentException("Empty JSON input");
     if (length > limits.maxInputBytes()) throw new IllegalArgumentException("JSON input limit");
     int status;
-    try (PinnedObject pinned = PinnedObject.create(utf8)) {
+    byte[] textArray = text == null ? null : text.array;
+    try (PinnedObject pinned = PinnedObject.create(utf8);
+        PinnedObject out = textArray == null ? null : PinnedObject.create(textArray)) {
       status =
           Json.session_decode(
               handle(),
               pinned.addressOfArrayElement(offset),
               length,
-              0,
-              WordFactory.<CCharPointer>nullPointer(),
-              0,
+              textArray == null ? 0 : TEXT,
+              out == null ? WordFactory.<CCharPointer>nullPointer() : out.addressOfArrayElement(0),
+              textArray == null ? 0 : textArray.length,
               WordFactory.pointer(result));
     }
     JsonSvm.checkStatus(status);
+    if (text != null)
+      text.table = (org.graalvm.word.Pointer) Json.JsonResult.text_table(WordFactory.pointer(result));
   }
 
-  private JsonBorrow lend() {
+  // TD_JSON_WANT_TEXT.
+  private static final int TEXT = 1;
+
+  /** The session's text arena for the next shared-text parse of {@code length} input bytes. */
+  private SvmTextArena textArena(int length) {
+    long need = 2L * length + 16;
+    if (need > Integer.MAX_VALUE) throw new IllegalArgumentException("JSON input limit");
+    SvmTextArena text = arena;
+    // A string still references the previous array: never overwrite it.
+    if (text == null || text.shared || text.array.length < need) arena = text = new SvmTextArena(new byte[(int) need]);
+    return text;
+  }
+
+  /** Text arena whose per-node table lives in the session's native arena (Task D2). */
+  private static final class SvmTextArena extends JsonTextArena {
+    org.graalvm.word.Pointer table = WordFactory.nullPointer();
+
+    SvmTextArena(byte[] array) {
+      super(array);
+    }
+
+    @Override
+    long entry(long node) {
+      return table.readLong(WordFactory.signed(node * 8));
+    }
+  }
+
+  private JsonBorrow lend(@Nullable SvmTextArena shared) {
     JsonBorrow lent = JsonSvm.borrow(WordFactory.pointer(result));
     // One text cursor (and export stack) per session, rebound to each borrow.
     JsonText cursor = text;
     if (cursor == null) text = cursor = new JsonText(lent);
     lent.adoptCursor(cursor);
+    cursor.arena(shared);
     borrow = lent;
     return lent;
   }
 
   private void giveBack(JsonBorrow lent) {
     borrow = null;
+    JsonText cursor = text;
+    if (cursor != null) cursor.arena(null);
     try {
       lent.end();
     } finally {
@@ -134,12 +178,18 @@ public final class JsonSession implements AutoCloseable {
     parse(utf8, 0, utf8.length, sink);
   }
 
-  /** Decodes {@code length} bytes at {@code offset} and exports them through {@code sink}. */
+  /**
+   * Decodes {@code length} bytes at {@code offset} and exports them through {@code sink}. When the
+   * sink asks for {@linkplain JsonSink#sharedText() shared text}, the decode also writes every
+   * string once into a per-document array that the sink's {@code TruffleString}s share.
+   */
   @TruffleBoundary
   public void parse(byte[] utf8, int offset, int length, JsonSink sink) {
     Objects.requireNonNull(sink);
-    decodeInto(utf8, offset, length);
-    JsonBorrow lent = lend();
+    Objects.checkFromIndexSize(offset, length, utf8.length);
+    SvmTextArena shared = sink.sharedText() ? textArena(length) : null;
+    decodeInto(utf8, offset, length, shared);
+    JsonBorrow lent = lend(shared);
     try {
       lent.export(sink);
     } finally {
@@ -155,7 +205,7 @@ public final class JsonSession implements AutoCloseable {
   public <R> R with(byte[] utf8, Function<JsonValue, R> reader) {
     Objects.requireNonNull(reader);
     decodeInto(utf8, 0, utf8.length);
-    JsonBorrow lent = lend();
+    JsonBorrow lent = lend(null);
     try {
       return reader.apply(lent.root());
     } finally {

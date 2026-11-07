@@ -8,6 +8,7 @@ import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.interop.InteropException;
 import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.nodes.Node;
+import com.oracle.truffle.api.strings.TruffleString;
 import dev.elide.truffledata.json.JsonSink;
 import dev.elide.truffledata.json.JsonText;
 import dev.elide.truffledata.json.JsonValue;
@@ -123,8 +124,36 @@ public final class JsonFixture {
         + (o.containsKey("parent") && o.get("parent") == null ? 1 : 0);
   }
 
-  private static Object member(Map<?, ?> map, String name) {
-    return Objects.requireNonNull(map.get(name), name);
+  private static final TruffleString.Encoding UTF_16 = TruffleString.Encoding.UTF_16;
+  private static final TruffleString ID = TruffleString.fromJavaStringUncached("id", UTF_16);
+  private static final TruffleString PRICE = TruffleString.fromJavaStringUncached("price", UTF_16);
+  private static final TruffleString ACTIVE = TruffleString.fromJavaStringUncached("active", UTF_16);
+  private static final TruffleString DIMS = TruffleString.fromJavaStringUncached("dims", UTF_16);
+  private static final TruffleString W = TruffleString.fromJavaStringUncached("w", UTF_16);
+  private static final TruffleString H = TruffleString.fromJavaStringUncached("h", UTF_16);
+  private static final TruffleString TAGS = TruffleString.fromJavaStringUncached("tags", UTF_16);
+  private static final TruffleString SCORES = TruffleString.fromJavaStringUncached("scores", UTF_16);
+  private static final TruffleString NOTE = TruffleString.fromJavaStringUncached("note", UTF_16);
+  private static final TruffleString PARENT = TruffleString.fromJavaStringUncached("parent", UTF_16);
+
+  /** Reads the tree {@link dev.elide.truffledata.json.TruffleSink} builds for a fixture document. */
+  @TruffleBoundary
+  public static long truffleRead(Object tree) {
+    Map<?, ?> o = (Map<?, ?>) tree;
+    Map<?, ?> dims = (Map<?, ?>) member(o, DIMS);
+    return (Long) member(o, ID)
+        + (long) (double) (Double) member(o, PRICE)
+        + ((Boolean) member(o, ACTIVE) ? 1 : 0)
+        + (Long) member(dims, W)
+        + (long) (double) (Double) member(dims, H)
+        + ((List<?>) member(o, TAGS)).size()
+        + ((List<?>) member(o, SCORES)).size()
+        + (member(o, NOTE) instanceof TruffleString ? 1 : 0)
+        + (o.containsKey(PARENT) && o.get(PARENT) == null ? 1 : 0);
+  }
+
+  private static Object member(Map<?, ?> map, Object name) {
+    return Objects.requireNonNull(map.get(name), name::toString);
   }
 
   /**

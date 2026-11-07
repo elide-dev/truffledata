@@ -13,6 +13,7 @@ import dev.elide.truffledata.json.JsonSink;
 import dev.elide.truffledata.json.JsonSnapshot;
 import dev.elide.truffledata.json.JsonText;
 import dev.elide.truffledata.json.JsonValue;
+import dev.elide.truffledata.json.TruffleSink;
 import com.oracle.truffle.api.strings.TruffleString;
 import java.math.BigDecimal;
 import java.math.BigInteger;
@@ -514,5 +515,78 @@ final class JsonExportTest {
         }
       }
     }
+  }
+
+  // ---- TruffleSink (performance plan Task D2) ----
+
+  /** The Java tree a TruffleSink tree corresponds to: TruffleString keys and strings as String. */
+  private static Object fromTruffle(Object value) {
+    if (value instanceof TruffleString text) {
+      assertTrue(text.isCompatibleToUncached(TruffleString.Encoding.UTF_16), "UTF-16 guest strings");
+      return text.toJavaStringUncached();
+    }
+    if (value instanceof Map<?, ?> map) {
+      var out = new LinkedHashMap<String, Object>();
+      for (var entry : map.entrySet()) out.put((String) fromTruffle(entry.getKey()), fromTruffle(entry.getValue()));
+      return out;
+    }
+    if (value instanceof List<?> list) {
+      var out = new ArrayList<Object>();
+      for (Object item : list) out.add(fromTruffle(item));
+      return out;
+    }
+    return value;
+  }
+
+  @Test
+  void truffleSinkMatchesJavaSinkWithInternedKeys() {
+    var random = new Random(0x7255F1E5L);
+    var keys = new TruffleSink.KeyCache();
+    assertFalse(new JavaSink().sharedText(), "sinks copy text unless they ask to share");
+    try (var decoder = decoder()) {
+      for (int document = 0; document < 200; document++) {
+        var source = new StringBuilder();
+        value(random, source, 0);
+        String text = source.toString();
+        try (var message = decoder.decode(text.getBytes(StandardCharsets.UTF_8))) {
+          var sink = new TruffleSink(keys);
+          assertTrue(sink.sharedText());
+          message.export(sink);
+          assertEquals(fromGson(JsonParser.parseString(text)), fromTruffle(sink.result()), text);
+        }
+      }
+      try (var first = decoder.decode(JvmScopedTest.utf8("{\"id\":1,\"\\u00e9\":[\"x\",-0,18446744073709551615,1E400,null,true]}"));
+          var second = decoder.decode(JvmScopedTest.utf8("{\"\\u00e9\":2,\"id\":3}"))) {
+        var a = new TruffleSink(keys);
+        first.export(a);
+        var b = new TruffleSink(keys);
+        second.export(b);
+        var x = new ArrayList<Object>(((Map<?, ?>) a.result()).keySet());
+        var y = new ArrayList<Object>(((Map<?, ?>) b.result()).keySet());
+        assertSame(x.get(0), y.get(1));
+        assertSame(x.get(1), y.get(0));
+        assertEquals(
+            java.util.Arrays.asList("x", -0.0, new BigInteger("18446744073709551615"), new BigDecimal("1E400"), null, true),
+            fromTruffle(((Map<?, ?>) a.result()).get(TruffleString.fromJavaStringUncached("é", TruffleString.Encoding.UTF_16))));
+      }
+      int before = keys.size();
+      var wide = new StringBuilder("{");
+      for (int i = 0; i < 1500; i++) wide.append(i == 0 ? "" : ",").append("\"t").append(i).append("\":").append(i);
+      try (var message = decoder.decode(JvmScopedTest.utf8(wide.append('}').toString()))) {
+        var sink = new TruffleSink(keys);
+        message.export(sink);
+        assertEquals(1500, ((Map<?, ?>) sink.result()).size());
+      }
+      assertTrue(before < 1024 && keys.size() == 1024);
+    }
+    var sink = new TruffleSink(keys);
+    assertThrows(IllegalStateException.class, sink::result);
+    assertThrows(IllegalStateException.class, sink::end);
+    assertThrows(IllegalStateException.class, () -> sink.key(null));
+    sink.beginArray(0);
+    sink.end();
+    assertEquals(List.of(), sink.result());
+    assertThrows(IllegalStateException.class, sink::nullValue);
+    assertThrows(NullPointerException.class, () -> new TruffleSink(null));
   }
 }

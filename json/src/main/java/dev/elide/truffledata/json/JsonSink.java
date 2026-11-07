@@ -43,4 +43,14 @@ public interface JsonSink {
   void decimalValue(JsonText token);
 
   void stringValue(JsonText text);
+
+  /**
+   * Whether a {@link JsonSession} parse into this sink should also write the document's text once,
+   * natively, into a per-document array that {@link JsonText#toTruffleString} shares instead of
+   * copying (performance plan Task D2). For sinks that build a {@code TruffleString} per string;
+   * default false.
+   */
+  default boolean sharedText() {
+    return false;
+  }
 }

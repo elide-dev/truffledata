@@ -10,6 +10,7 @@ import com.sun.management.ThreadMXBean;
 import dev.elide.truffledata.Field;
 import dev.elide.truffledata.Schema;
 import dev.elide.truffledata.json.JavaSink;
+import dev.elide.truffledata.json.TruffleSink;
 import dev.elide.truffledata.json.JsonAccess;
 import dev.elide.truffledata.json.JsonExportNode;
 import dev.elide.truffledata.json.JsonMessage;
@@ -97,6 +98,8 @@ public final class JsonComparison {
   static final String WALK = "simdjson-export-walk";
   // Ingest-only: borrowed JsonSession.parse straight into a JavaSink (nothing retained natively).
   static final String SESSION_JAVA = "simdjson-session-java";
+  // Ingest-only: borrowed JsonSession.parse into a TruffleSink over the shared text arena (Task D2).
+  static final String SESSION_TRUFFLE = "simdjson-session-truffle";
   static final List<String> STAGES = List.of("ingest", "read-aot", "interpret", "peak");
 
   public static void main(String[] args) throws Exception {
@@ -105,6 +108,7 @@ public final class JsonComparison {
       for (String engine : GENERIC) for (String stage : STAGES) run(engine, stage, true, true);
       run(WALK, "peak", true, true);
       run(SESSION_JAVA, "ingest", true, true);
+      run(SESSION_TRUFFLE, "ingest", true, true);
     } else {
       if (args.length != 3) throw new IllegalArgumentException("engine stage time|memory");
       run(args[0], args[1], args[2].equals("memory"), false);
@@ -113,7 +117,10 @@ public final class JsonComparison {
 
   private static void run(String engine, String stage, boolean memory, boolean smoke)
       throws Exception {
-    if (GENERIC.contains(engine) || engine.equals(WALK) || engine.equals(SESSION_JAVA)) {
+    if (GENERIC.contains(engine)
+        || engine.equals(WALK)
+        || engine.equals(SESSION_JAVA)
+        || engine.equals(SESSION_TRUFFLE)) {
       generic(engine, stage, memory, smoke);
       return;
     }
@@ -191,10 +198,12 @@ public final class JsonComparison {
     int mode =
         engine.equals(WALK)
             ? GenericReads.WALK
-            : engine.equals(SESSION_JAVA) ? GenericReads.SESSION_JAVA : GENERIC.indexOf(engine);
+            : engine.equals(SESSION_JAVA)
+                ? GenericReads.SESSION_JAVA
+                : engine.equals(SESSION_TRUFFLE) ? GenericReads.SESSION_TRUFFLE : GENERIC.indexOf(engine);
     if (mode < 0) throw new IllegalArgumentException("engine");
-    if (mode == GenericReads.SESSION_JAVA && !ingest)
-      throw new IllegalArgumentException("simdjson-session-java measures ingest only");
+    if ((mode == GenericReads.SESSION_JAVA || mode == GenericReads.SESSION_TRUFFLE) && !ingest)
+      throw new IllegalArgumentException(engine + " measures ingest only");
     try (var context = context(peak)) {
       context.initialize("td-compare");
       context.enter();
@@ -209,7 +218,9 @@ public final class JsonComparison {
         for (int i = 0; i < ROWS; i++) {
           inputs[i] = JsonFixture.document(i);
           expected += mode == GenericReads.WALK ? JsonFixture.walkChecksum(i) : JsonFixture.checksum(i);
-          if (mode == GenericReads.GSON || mode == GenericReads.SESSION_JAVA) {
+          if (mode == GenericReads.GSON
+              || mode == GenericReads.SESSION_JAVA
+              || mode == GenericReads.SESSION_TRUFFLE) {
             // The session cell measures ingest only; rows exist for the shared sampler.
             rows[i] = JsonFixture.gsonParse(inputs[i]);
           } else if (mode == GenericReads.SNAPSHOT) {
@@ -389,12 +400,14 @@ public final class JsonComparison {
    */
   private static final class GenericReads extends RootNode {
     static final int GSON = 0, JAVA = 1, INTEROP = 2, SNAPSHOT = 3, WALK = 4, SESSION_JAVA = 5;
+    static final int SESSION_TRUFFLE = 6;
     private final String name;
     private final int mode;
     private final @Nullable JsonSession session;
     private final JsonFixture.CountingSink counting = new JsonFixture.CountingSink();
     // Member names repeat across documents: JavaSink cells share one key cache (Task D1).
     private final JavaSink.KeyCache keys = new JavaSink.KeyCache();
+    private final TruffleSink.KeyCache truffleKeys = new TruffleSink.KeyCache();
     @Child private JsonFixture.InteropReader reader = new JsonFixture.InteropReader();
     @Child private JsonExportNode export = JsonExportNode.create();
 
@@ -459,6 +472,13 @@ public final class JsonComparison {
         return JsonFixture.gsonRead(tree);
       }
       JsonSession session = Objects.requireNonNull(this.session);
+      if (mode == SESSION_TRUFFLE) {
+        TruffleSink sink = new TruffleSink(truffleKeys);
+        session.parse(input, sink);
+        Object tree = Objects.requireNonNull(sink.result());
+        retained = tree;
+        return JsonFixture.truffleRead(tree);
+      }
       if (mode == SESSION_JAVA) {
         JavaSink sink = new JavaSink(keys);
         session.parse(input, sink);
