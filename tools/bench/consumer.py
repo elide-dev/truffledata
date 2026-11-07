@@ -98,10 +98,29 @@ def markdown(rows, labels, runtime='svm'):
              'excludes native storage, reported separately as retained index/header bytes. Stock '
              'guest projection has an explicit boundary. MB/s divides wire input bytes by the '
              'whole cell (decode cells: decode and release only). Native transient allocation '
-             'peaks are not measured.', '',
-             '| Binary | Mode | Stage | Engine | ns/row (fork range) | × stock | MB/s | '
-             'Java B/row | Native index+header B/row |',
-             '|---|---|---|---|---:|---:|---:|---:|---:|']
+             'peaks are not measured.', '']
+    index = {(s['binary'], s['engine'], s['mode'], s['stage']): s for s in summary}
+    for label in labels:
+        lines += [f'## {label}: ns/row (× stock)', '',
+                  '| Mode | Stage | ' + ' | '.join(ENGINES) + ' |',
+                  '|---|---|' + '---:|' * len(ENGINES)]
+        for mode, stage in GROUPS:
+            base = stock.get((label, mode, stage))
+            cells = []
+            for engine in ENGINES:
+                s = index.get((label, engine, mode, stage))
+                if s is None:
+                    cells.append('—')
+                elif engine == 'stock' or not base:
+                    cells.append(f"{s['ns_per_row']:.1f}")
+                else:
+                    cells.append(f"{s['ns_per_row']:.1f} ({s['ns_per_row'] / base:.2f}×)")
+            lines.append(f'| {mode} | {stage} | ' + ' | '.join(cells) + ' |')
+        lines.append('')
+    lines += ['## All cells', '',
+              '| Binary | Mode | Stage | Engine | ns/row (fork range) | × stock | MB/s | '
+              'Java B/row | Native index+header B/row |',
+              '|---|---|---|---|---:|---:|---:|---:|---:|']
     for s in summary:
         base = stock.get((s['binary'], s['mode'], s['stage']))
         ratio = f"{s['ns_per_row'] / base:.2f}" if base else '—'
@@ -131,7 +150,44 @@ def command(binary, runtime, cell, metric):
     return [str(binary), *flags, *cell, metric]
 
 
+def merge(argv):
+    """Combine shard outputs (each a results.json directory) into one validated report."""
+    parser = argparse.ArgumentParser(description='Merge consumer shard results')
+    parser.add_argument('--output', type=Path, required=True)
+    parser.add_argument('shards', type=Path, nargs='+')
+    args = parser.parse_args(argv)
+    reports = [json.loads((s if s.is_file() else s / 'results.json').read_text())
+               for s in args.shards]
+    runtime = reports[0]['runtime']
+    labels = list(reports[0]['binary_sha256']) or ['candidate']
+    seen = set()
+    measurements = []
+    for report in reports:
+        if report['runtime'] != runtime or list(report['binary_sha256']) != labels:
+            raise ValueError('Shards measured different runtimes or binaries')
+        for group in report['groups']:
+            if tuple(group) in seen:
+                raise ValueError(f'Duplicate shard group {group}')
+            seen.add(tuple(group))
+        measurements += report['measurements']
+    labels = list(dict.fromkeys(m['binary'] for m in measurements))
+    merged = dict(schema=2, runtime=runtime, source=reports[0]['source'], seed=SEED,
+                  binary_sha256=reports[0]['binary_sha256'],
+                  shards=[{k: r[k] for k in ('shard', 'groups', 'host', 'cpu_model', 'affinity',
+                                             'logical_cpus', 'load_average',
+                                             'load_average_after') if k in r}
+                          for r in reports],
+                  complete=seen == set(GROUPS), measurements=measurements,
+                  summary=summarize(measurements, labels))
+    args.output.mkdir(parents=True, exist_ok=True)
+    (args.output / 'results.json').write_text(json.dumps(merged, indent=2) + '\n')
+    (args.output / 'results.md').write_text(markdown(measurements, labels, runtime))
+
+
 def run():
+    import sys
+    if len(sys.argv) > 1 and sys.argv[1] == 'merge':
+        return merge(sys.argv[2:])
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--binary', action='append', required=True, help='label=/absolute/executable')
     parser.add_argument('--output', type=Path, required=True)

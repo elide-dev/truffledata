@@ -139,6 +139,8 @@ def measure(args):
                 if line.startswith('model name')), platform.processor())
     data = {'schema': 12, 'forks': 3, 'captured_at': datetime.datetime.now(datetime.timezone.utc).isoformat(),
             'revision': args.revision, 'binary_sha256': hashlib.sha256(binary.read_bytes()).hexdigest(),
+            # Opt-in native views select BuffaPlan.decodeView for the mixed buffa cells.
+            'native_views': args.views,
             'host': {'system': platform.system(), 'machine': platform.machine(), 'cpu': cpu,
                      'kernel': platform.release(), 'logical_cpus': os.cpu_count()},
             'allocation_scope': 'current-thread Java heap; excludes native heap and compiler/background threads',
@@ -151,7 +153,9 @@ def measure(args):
         print('/'.join(cell) + f' fork {fork + 1}/3', flush=True)
         merged = None
         for mode, metric in [('time', 'ns_per_row'), ('memory', 'allocated_bytes_per_row')]:
-            result = subprocess.run([str(binary), *cell, mode], capture_output=True, text=True, timeout=90)
+            flags = ['-Dtruffledata.buffa.views=true'] if args.views else []
+            result = subprocess.run([str(binary), *flags, *cell, mode], capture_output=True, text=True,
+                                    timeout=90)
             if result.returncode:
                 raise RuntimeError(result.stdout + '\n' + result.stderr)
             records = [json.loads(line) for line in result.stdout.splitlines() if line.startswith('{')]
@@ -181,6 +185,7 @@ def main():
     run.add_argument('--binary', type=Path, required=True)
     run.add_argument('--output', type=Path, default=Path('build/comparison'))
     run.add_argument('--revision', default=os.getenv('TRUFFLEDATA_BENCH_REVISION', 'unrecorded'))
+    run.add_argument('--views', action='store_true', help='Measure opt-in native views')
     report = sub.add_parser('render')
     report.add_argument('input', type=Path)
     report.add_argument('output', type=Path)
