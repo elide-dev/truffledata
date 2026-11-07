@@ -171,7 +171,7 @@ when the downstream adapter lands.
 For FFM on SVM, retain Myna's build-time unbound ABI adapters and runtime symbol
 addresses. Do not move runtime addresses into the image heap or recreate bound
 handles in a hot path. JVM FFM/JNI measurements are secondary to SVM results.
-Pin Elide 1.6.2, elide-dev/toolchain 2026.11.1 and elide-dev/graal
+Pin Elide 1.6.2, elide-dev/toolchain 2026.11.5 and elide-dev/graal
 25.5.5-elide.24 when reproducing the upstream qualification.
 
 Keep CodSpeed's own-workload regression series separate from uninstrumented
