@@ -33,6 +33,9 @@ MODULES = [
     "json-bindings",
     "json-jvm",
     "csv",
+    "csv-bindings",
+    "csv-native",
+    "csv-jvm",
 ]
 
 # Publication libraries that are not the module's own //<module> target.
@@ -41,6 +44,11 @@ LIBRARIES = {
     "json-bindings": ":json_bindings_library",
     # JVM-only FFM backend, published separately so static images never carry it.
     "json-jvm": "//json:jvm",
+    # Optional native CSV kernel: generated bindings, the static-image backend (with the native
+    # attachments) and the JVM FFM backend; truffledata-csv itself stays pure Java.
+    "csv-bindings": "//csv/kernel:bindings",
+    "csv-native": "//csv/kernel:svm",
+    "csv-jvm": "//csv/kernel:jvm",
 }
 
 # The generated JSON bindings plus the exact Myna value ABI runtime they were generated against.
@@ -67,6 +75,12 @@ cc_static_library(
     deps = ["//json/native:truffledata_json"],
 )
 
+# The CSV kernel C ABI, its ISA kernels and simdutf, for static SVM linking.
+cc_static_library(
+    name = "csv_archive",
+    deps = ["//csv/native:truffledata_csv"],
+)
+
 # One self-contained archive for static SVM linking: json_objects plus Myna's myna-values static
 # library (myna_utf8_to_utf16_v2 for SvmValueTape, performance plan Task D1).
 merge_archives(
@@ -86,7 +100,10 @@ merge_archives(
     } if module == "protobuf-buffa" else {
         ":json_archive": "-linux-x86_64.a",
         "//json/native:json_shared.so": "-linux-x86_64.so",
-    } if module == "json" else {},
+    } if module == "json" else {
+        ":csv_archive": "-linux-x86_64.a",
+        "//csv/native:csv_shared.so": "-linux-x86_64.so",
+    } if module == "csv-native" else {},
     dependencies = COMMON + ([] if module == "core" else ["dev.elide:truffledata-core:{version}"]) + ([
         "com.google.protobuf:protobuf-java:4.36.1",
         "com.google.protobuf:protobuf-java-util:4.36.1",
@@ -102,6 +119,12 @@ merge_archives(
         "dev.elide:truffledata-json:{version}",
         "dev.elide:truffledata-json-bindings:{version}",
     ] if module == "json-jvm" else []) + ([
+        "dev.elide:truffledata-csv:{version}",
+        "dev.elide:truffledata-csv-bindings:{version}",
+    ] if module in [
+        "csv-native",
+        "csv-jvm",
+    ] else []) + ([
         "org.graalvm.sdk:nativeimage:25.5.5-elide.24",
         "org.graalvm.sdk:word:25.5.5-elide.24",
     ] if module in [
@@ -109,6 +132,8 @@ merge_archives(
         "protobuf-buffa-bindings",
         "json",
         "json-bindings",
+        "csv-bindings",
+        "csv-native",
     ] else []) + ([
         "dev.elide:truffledata-jdbc:{version}",
         "org.xerial:sqlite-jdbc:3.53.4.0",
@@ -185,6 +210,12 @@ sh_test(
         ":json-bindings_import",
         ":json_import",
     ] if module == "json-jvm" else []) + ([
+        ":csv-bindings_import",
+        ":csv_import",
+    ] if module in [
+        "csv-native",
+        "csv-jvm",
+    ] else []) + ([
         "@maven//:org_graalvm_sdk_nativeimage",
         "@maven//:org_graalvm_sdk_word",
     ] if module in [
@@ -192,6 +223,8 @@ sh_test(
         "protobuf-buffa-bindings",
         "json",
         "json-bindings",
+        "csv-bindings",
+        "csv-native",
     ] else []) + ([
         ":jdbc_import",
         "@maven//:org_xerial_sqlite_jdbc",
@@ -470,7 +503,7 @@ sh_test(
     ],
 )
 
-# CSV is pure Java: one jar serves the JVM and SVM, with no native attachments or cc_deps.
+# truffledata-csv is pure Java: one jar serves the JVM and SVM, with no native attachments or cc_deps.
 java_library(
     name = "csv_consumer_lib",
     testonly = True,
@@ -523,6 +556,94 @@ sh_test(
     srcs = ["native_consumer.sh"],
     args = ["$(location :csv_native)"],
     data = [":csv_native"],
+    tags = ["manual"],
+    target_compatible_with = [
+        "@platforms//os:linux",
+        "@platforms//cpu:x86_64",
+    ],
+)
+
+# The optional native CSV kernel from publication jars and attachments only: the JVM consumer
+# loads the published shared library through truffledata-csv-jvm, and the static image links the
+# published archive through truffledata-csv-native (never carrying truffledata-csv-jvm).
+filegroup(
+    name = "csv_kernel_static",
+    srcs = [":csv-native"],
+    output_group = "native_static",
+)
+
+filegroup(
+    name = "csv_kernel_shared",
+    srcs = [":csv-native"],
+    output_group = "native_shared",
+)
+
+cc_import(
+    name = "published_csv_kernel",
+    static_library = ":csv_kernel_static",
+    deps = ["//protobuf-buffa/native:cpp_runtime"],
+)
+
+java_library(
+    name = "csv_kernel_consumer_lib",
+    testonly = True,
+    srcs = ["CsvKernelConsumer.java"],
+    deps = [
+        ":core_import",
+        ":csv_import",
+        "@maven//:org_graalvm_sdk_nativeimage",
+    ],
+)
+
+java_test(
+    name = "csv_kernel_consumer",
+    args = ["$(location :csv_kernel_shared)"],
+    data = [":csv_kernel_shared"],
+    jvm_flags = ["--enable-native-access=ALL-UNNAMED"],
+    main_class = "CsvKernelConsumer",
+    use_testrunner = False,
+    runtime_deps = [
+        ":csv-jvm_import",
+        ":csv_kernel_consumer_lib",
+    ],
+)
+
+native_image(
+    name = "csv_kernel_native",
+    testonly = True,
+    cc_deps = [":published_csv_kernel"],
+    exec_properties = {
+        "EstimatedCPU": "4",
+        "EstimatedMemory": "16GB",
+    },
+    executable_name = "csv-kernel-published-consumer",
+    extra_args = [
+        "--gc=serial",
+        "--parallelism=4",
+        "-march=compatibility",
+        "--initialize-at-build-time=dev.elide.truffledata",
+        "-H:+UnlockExperimentalVMOptions",
+    ] + TRUFFLE_JIT_CHECKS + ["-H:-UnlockExperimentalVMOptions"],
+    graalvm_sdk = "@graalvm_linux_amd64//:gvm",
+    main_class = "CsvKernelConsumer",
+    optimization_mode = "2",
+    tags = ["manual"],
+    target_compatible_with = [
+        "@platforms//os:linux",
+        "@platforms//cpu:x86_64",
+    ],
+    deps = [
+        ":csv-native_import",
+        ":csv_kernel_consumer_lib",
+        "@maven//:org_graalvm_truffle_truffle_runtime",
+    ],
+)
+
+sh_test(
+    name = "csv_kernel_native_test",
+    srcs = ["native_consumer.sh"],
+    args = ["$(location :csv_kernel_native)"],
+    data = [":csv_kernel_native"],
     tags = ["manual"],
     target_compatible_with = [
         "@platforms//os:linux",

@@ -1,6 +1,6 @@
 # Maven publishing
 
-The release publishes thirteen thin libraries and a dependency-management BOM, with source jars and POMs. The protobuf runtime can be consumed without protobuf-java. Version 0.7.0 shipped the first nine libraries; the three JSON artifacts and the CSV artifact publish from the next release, which also adds them to the BOM.
+The release publishes sixteen thin libraries and a dependency-management BOM, with source jars and POMs. The protobuf runtime can be consumed without protobuf-java. Version 0.7.0 shipped the first nine libraries; the three JSON artifacts and the four CSV artifacts publish from the next release, which also adds them to the BOM.
 
 | Coordinate | Contents |
 | --- | --- |
@@ -15,6 +15,9 @@ The release publishes thirteen thin libraries and a dependency-management BOM, w
 | `dev.elide:truffledata-json-bindings:<version>` | Generated Myna JSON bindings and the Myna value ABI runtime they were generated against |
 | `dev.elide:truffledata-json-jvm:<version>` | JVM FFM backend (`JsonJvm`); depends on truffledata-json. Keep it out of native-image classpaths |
 | `dev.elide:truffledata-csv:<version>` | Strict streaming CSV batches, typed plans and export; pure Java for JVM and SVM, no native attachments; depends on core |
+| `dev.elide:truffledata-csv-bindings:<version>` | Generated Myna bindings of the native CSV structural-index kernel (static SVM and JVM FFM) |
+| `dev.elide:truffledata-csv-native:<version>` | Optional native CSV kernel: the static SVM backend; includes Linux x86-64 native attachments; depends on truffledata-csv and its bindings |
+| `dev.elide:truffledata-csv-jvm:<version>` | JVM FFM backend of the native CSV kernel; depends on truffledata-csv and its bindings. Keep it out of native-image classpaths |
 | `dev.elide:truffledata-bom:<version>` | POM-only dependency management for the tested libraries, drivers and runtime |
 | `dev.elide:truffledata-protobuf-runtime:<version>` | Stock-free plans, codecs, runtime descriptor compilation and generated-record support; core, Gson and Truffle dependencies |
 | `dev.elide:truffledata-protobuf:<version>` | Optional Message/descriptor compatibility bridge and build-time contract generator; depends on protobuf-runtime, protobuf-java and protobuf-java-util |
@@ -64,7 +67,7 @@ dependencies {
 }
 ```
 
-For Maven, declare `https://maven.elide.dev` in `<repositories>` and the same coordinates in `<dependencies>`. Published POMs also declare the fork repository; Gradle and Bazel consumers must explicitly configure it. For Bazel, add the two repositories and desired coordinates to `maven.install`, then repin. Use core alone if neither adapter is needed. The release contains thirteen libraries and the BOM. Publishing verifies public artifact bytes and metadata; isolated consumers check Maven resolution and JVM/static SVM execution. The staging examples can reproduce that version locally. Choose a new version for the next upload: published versions are immutable.
+For Maven, declare `https://maven.elide.dev` in `<repositories>` and the same coordinates in `<dependencies>`. Published POMs also declare the fork repository; Gradle and Bazel consumers must explicitly configure it. For Bazel, add the two repositories and desired coordinates to `maven.install`, then repin. Use core alone if neither adapter is needed. The release contains sixteen libraries and the BOM. Publishing verifies public artifact bytes and metadata; isolated consumers check Maven resolution and JVM/static SVM execution. The staging examples can reproduce that version locally. Choose a new version for the next upload: published versions are immutable.
 
 
 ## BOM and consumer acceptance
@@ -148,13 +151,52 @@ classpath.
 
 `dev.elide:truffledata-csv` is a single pure-Java artifact (jar, sources jar and POM)
 managed by the BOM. It has no native attachments, no classifier variants and no
-native-image feature: the same jar serves the JVM and static SVM images. Its POM depends
-only on `truffledata-core`, `truffle-api` and `jspecify`. See the [CSV backend](CSV.md).
+native-image feature: the same jar serves the JVM and static SVM images, with the
+built-in `java-swar` structural-index kernel. Its POM depends only on `truffledata-core`,
+`truffle-api` and `jspecify`. See the [CSV backend](CSV.md).
+
+The native AVX-512/AVX2/NEON kernel is optional and ships as three more artifacts, all
+managed by the BOM, mirroring the JSON split:
+
+- `truffledata-csv-bindings`: the generated Myna bindings (`CsvNative` for static images,
+  `CsvNativeFFM` for the JVM) and their native-image properties.
+- `truffledata-csv-native`: the static-image backend (`SvmIndexer`), registered as a
+  `CsvIndexing.NativeBackend` service, plus the native attachments below.
+- `truffledata-csv-jvm`: the JVM FFM backend (`FfmIndexer`), also a service. Static images
+  link the kernel directly and must not carry it.
+
+`truffledata-csv-native` carries the native attachments, each with the normal checksums:
+
+| Classifier | Extension | Use |
+|---|---|---|
+| `linux-x86_64` | `so` | JVM FFM loading through `CsvIndexing.loadNative(Path)` |
+| `linux-x86_64` | `a` | Static linking into an SVM executable (kernels, C ABI and simdutf in one archive) |
+
+Opting in is explicit; nothing is extracted, loaded or installed automatically:
+
+```java
+// Native image: add truffledata-csv-native and link the archive.
+CsvIndexing.install(CsvIndexing.loadNative());
+// JVM: add truffledata-csv-jvm and run with --enable-native-access=ALL-UNNAMED.
+CsvIndexing.install(CsvIndexing.loadNative(Path.of("truffledata-csv-native-<version>-linux-x86_64.so")));
+```
+
+For a standalone native-image build, stage the archive as `libtruffledata_csv.a`, add its
+directory to `-H:CLibraryPath`, and link libc++ (`-lc++ -lc++abi`). No native-image
+feature is required. Keep the Java jars and native attachments from the same release:
+both backends verify the generated ABI fingerprint before the first index call.
+`CsvIndexing.loadNative` throws `IllegalStateException` when no backend for the runtime is
+on the class path or the library cannot be loaded.
 
 `//tools/release:csv_consumer` parses, streams, compiles a typed plan, reads typed values
 and exports using only the publication jars on the JVM. The explicit
 `//tools/release:csv_native_test` builds the same consumer into a static image (Linux
-x86-64, through RBE) with the Truffle JIT checks and runs it. Release publishing and
-native CI both require it.
+x86-64, through RBE) with the Truffle JIT checks and runs it.
+`//tools/release:csv_kernel_consumer` loads the published shared library through
+`truffledata-csv-jvm`, and the explicit `//tools/release:csv_kernel_native_test` links the
+published static archive into an image through `truffledata-csv-native` (without
+`truffledata-csv-jvm`); both check that nothing native loads before `loadNative`, then
+compare generic, typed and streamed parses and malformed-input diagnostics with the
+built-in kernel's. Release publishing and native CI require both static checks.
 
-The publisher includes all thirteen Java libraries and the BOM, plus Buffa and JSON native attachments.
+The publisher includes all sixteen Java libraries and the BOM, plus Buffa, JSON and CSV native attachments.

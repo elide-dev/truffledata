@@ -11,6 +11,8 @@ import java.lang.foreign.SymbolLookup;
 import java.lang.foreign.ValueLayout;
 import java.lang.invoke.MethodHandle;
 import java.nio.file.Path;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -127,6 +129,30 @@ public final class FfmIndexer extends CsvIndexer implements AutoCloseable {
           return PROVIDER_CAPACITY;
         }
       };
+    }
+  }
+
+  /**
+   * The JVM backend of {@link CsvIndexing#loadNative}, registered as a service by {@code
+   * truffledata-csv-jvm}: loads the given {@code csv_shared} library once per path (for the life of
+   * the process) and returns its provider. Not available in native images, which link the kernel
+   * statically through {@code truffledata-csv-native}.
+   */
+  public static final class Backend implements CsvIndexing.NativeBackend {
+    private static final Map<Path, Library> LOADED = new ConcurrentHashMap<>();
+
+    public Backend() {}
+
+    @Override
+    public boolean available() {
+      return System.getProperty("org.graalvm.nativeimage.imagecode") == null;
+    }
+
+    @Override
+    public CsvIndexing.Provider load(@Nullable Path library) {
+      if (library == null)
+        throw new IllegalStateException("The JVM CSV kernel needs the csv_shared library path");
+      return LOADED.computeIfAbsent(library.toAbsolutePath().normalize(), Library::load).provider();
     }
   }
 

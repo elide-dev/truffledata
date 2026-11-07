@@ -9,7 +9,7 @@ import sys
 import xml.etree.ElementTree as ET
 import zipfile
 
-MODULES = ('core', 'jdbc', 'jdbc-sqlite', 'jdbc-mysql', 'jdbc-postgresql', 'protobuf', 'protobuf-runtime', 'protobuf-buffa', 'protobuf-buffa-bindings', 'json', 'json-bindings', 'json-jvm', 'csv', 'bom')
+MODULES = ('core', 'jdbc', 'jdbc-sqlite', 'jdbc-mysql', 'jdbc-postgresql', 'protobuf', 'protobuf-runtime', 'protobuf-buffa', 'protobuf-buffa-bindings', 'json', 'json-bindings', 'json-jvm', 'csv', 'csv-bindings', 'csv-native', 'csv-jvm', 'bom')
 NAMESPACE = {'m': 'http://maven.apache.org/POM/4.0.0'}
 
 
@@ -19,7 +19,7 @@ def artifact_suffixes(module):
     common = ('.pom', '.jar', '-sources.jar')
     if module == 'protobuf-buffa':
         return common + ('-linux-x86_64.a', '-linux-x86_64.so', '-native.h')
-    if module == 'json':
+    if module in ('json', 'csv-native'):
         return common + ('-linux-x86_64.a', '-linux-x86_64.so')
     return common
 

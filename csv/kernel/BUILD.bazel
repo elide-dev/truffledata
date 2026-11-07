@@ -56,6 +56,9 @@ data_java_library(
         "src/jvm/java/dev/elide/truffledata/csv/kernel/jvm/FfmIndexer.java",
         "src/jvm/java/dev/elide/truffledata/csv/kernel/jvm/package-info.java",
     ],
+    # CsvIndexing.loadNative finds the FFM backend as a service.
+    resource_strip_prefix = "csv/kernel/src/jvm/resources",
+    resources = ["src/jvm/resources/META-INF/services/dev.elide.truffledata.csv.CsvIndexing$NativeBackend"],
     visibility = ["//visibility:public"],
     deps = [
         ":bindings",
@@ -70,6 +73,9 @@ data_java_library(
         "src/svm/java/dev/elide/truffledata/csv/kernel/svm/SvmIndexer.java",
         "src/svm/java/dev/elide/truffledata/csv/kernel/svm/package-info.java",
     ],
+    # CsvIndexing.loadNative finds the static-image backend as a service.
+    resource_strip_prefix = "csv/kernel/src/svm/resources",
+    resources = ["src/svm/resources/META-INF/services/dev.elide.truffledata.csv.CsvIndexing$NativeBackend"],
     visibility = ["//visibility:public"],
     deps = [
         ":bindings",

@@ -185,4 +185,12 @@ final class CsvFusedTest {
       assertEquals(List.of("short", "e\"s", big, "é"), cells(batch));
     }
   }
+
+  @Test
+  void nativeLoadingIsExplicit() {
+    // Without a native backend on the class path nothing loads, and nothing is installed.
+    IllegalStateException missing = assertThrows(IllegalStateException.class, CsvIndexing::loadNative);
+    assertTrue(missing.getMessage().startsWith("No native CSV kernel for this runtime"));
+    assertEquals("java-swar", CsvIndexing.kernel());
+  }
 }

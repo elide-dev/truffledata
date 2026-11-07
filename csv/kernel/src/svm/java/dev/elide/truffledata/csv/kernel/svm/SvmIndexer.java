@@ -4,10 +4,13 @@ import dev.elide.truffledata.csv.CsvIndexing;
 import dev.elide.truffledata.csv.kernel.CsvIndex;
 import dev.elide.truffledata.csv.kernel.CsvIndexer;
 import dev.elide.truffledata.csv.kernel.generated.CsvNative;
+import java.nio.file.Path;
+import org.graalvm.nativeimage.ImageInfo;
 import org.graalvm.nativeimage.PinnedObject;
 import org.graalvm.nativeimage.c.type.CCharPointer;
 import org.graalvm.nativeimage.c.type.CIntPointer;
 import org.graalvm.nativeimage.c.type.CTypeConversion;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Native Image backend for the native indexer (csv/native linked statically). The input and output
@@ -102,6 +105,25 @@ public final class SvmIndexer extends CsvIndexer {
         return PROVIDER_CAPACITY;
       }
     };
+  }
+
+  /**
+   * The static-image backend of {@link CsvIndexing#loadNative}, registered as a service by {@code
+   * truffledata-csv-native}: available only in native-image runtime code, where the kernel is
+   * linked from {@code libtruffledata_csv.a}.
+   */
+  public static final class Backend implements CsvIndexing.NativeBackend {
+    public Backend() {}
+
+    @Override
+    public boolean available() {
+      return ImageInfo.inImageRuntimeCode();
+    }
+
+    @Override
+    public CsvIndexing.Provider load(@Nullable Path library) {
+      return provider();
+    }
   }
 
   /** Strict UTF-8 validation with simdutf: -1, or the offset of the first invalid sequence. */
