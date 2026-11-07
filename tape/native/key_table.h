@@ -43,6 +43,10 @@ inline bool ascii(std::string_view s) {
 // Per-object duplicate-key table: a linear (hash, length, bytes) compare for up to 16 keys on the
 // stack, then open addressing in counted index memory. Keys are compared after escape decoding.
 // The key bytes must stay valid and unchanged while the table lives.
+//
+// Compact tapes (ctape.h) detect duplicates in the directory sort instead (tape-gbps plan §3.2).
+// This table stays for the Myna-tape JSON decoder until that plan's Task 2 and for YAML until its
+// Task 8; key_hash/ascii/key_meta stay as long as those producers do.
 class key_table final {
   struct entry { uint32_t hash; uint32_t length; const char* data; };
   static constexpr size_t inline_keys = 16;

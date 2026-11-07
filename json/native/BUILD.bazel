@@ -10,6 +10,8 @@ cc_library(
         "stream.h",
     ],
     copts = ["-std=c++17"],
+    # //tape/native:ctape_test transcodes this decoder's tapes into compact tapes (tape-gbps Task 1).
+    visibility = ["//tape/native:__pkg__"],
     deps = [
         "//bazel:unicode",
         "//tape/native:tape",
@@ -22,7 +24,10 @@ cc_test(
     name = "test",
     srcs = ["decoder_test.cc"],
     copts = ["-std=c++17"],
-    deps = [":decoder"],
+    deps = [
+        ":decoder",
+        "//tape/native:testing",
+    ],
 )
 
 config_setting(
