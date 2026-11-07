@@ -165,16 +165,6 @@ public abstract sealed class JsonOwner permits JsonMessage, JsonSnapshot, JsonBo
         });
   }
 
-  /** 31-bit FNV-1a hash of a key node's decoded UTF-8 bytes; 0 for nodes that are not keys. */
-  final int keyHash(long node) {
-    return meta(node) & 0x7fffffff;
-  }
-
-  /** True when a string or key node's decoded bytes are all ASCII; false for other nodes. */
-  final boolean ascii(long node) {
-    return meta(node) < 0;
-  }
-
   @TruffleBoundary
   final String lexicalText(long node) {
     check();

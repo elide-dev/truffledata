@@ -305,6 +305,28 @@ final class JsonInteropTest {
   }
 
   @Test
+  void snapshotsServePositionHintsAndPreparedKeys() throws Exception {
+    try (JsonDecoder decoder = JsonJvm.open(JvmScopedTest.library());
+        JsonMessage message = message(decoder, "{\"id\":1,\"name\":\"n\",\"a_long_member_name_beyond_8\":2}")) {
+      var snapshot = message.snapshot();
+      InteropLibrary site = site();
+      InteropLibrary wide = site();
+      // Repeated reads through one site learn a position hint, then verify it on the heap tape.
+      for (int round = 0; round < 3; round++) {
+        assertEquals(1L, site.asLong(site.readMember(snapshot.root(), "id")));
+        assertEquals(2L, wide.asLong(wide.readMember(snapshot.root(), "a_long_member_name_beyond_8")));
+      }
+      assertFalse(site.isMemberReadable(snapshot.root(), "absent"));
+      var key = dev.elide.myna.values.ValueTape.Utf8Key.of("name");
+      assertEquals("n", snapshot.root().member(key).stringValue());
+      assertEquals("n", message.root().member(key).stringValue());
+      assertThrows(
+          java.util.NoSuchElementException.class,
+          () -> message.root().member(dev.elide.myna.values.ValueTape.Utf8Key.of("absent")));
+    }
+  }
+
+  @Test
   void wideObjectsResolveMembersThroughADirectory() throws Exception {
     StringBuilder source = new StringBuilder("{");
     for (int i = 0; i < 1000; i++) source.append(i == 0 ? "" : ",").append("\"k").append(i).append("\":").append(i);
