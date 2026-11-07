@@ -409,7 +409,7 @@ Only if Task A2's measurement shows the table-driven decoder ≥ 1.25 × the han
 | Full ingestion + consumption | 1.04× (owned) / 1.44× (view) | ≤ 0.7× | decode gain + no Strings for lengths + flyweights |
 | Full, heap input | 1.00× (owned) | ≤ 0.7× | pinned input, no copy |
 | First full access | 0.52× (owned) / 8.5× (view) | ≤ 1.2× (stretch 0.8×) | one `Object[]` + ≈ 8 flyweights (≈ 100 ns est.) |
-| Interpreter reads (full) | 4.77× (owned) | ≤ 2.5× (≤ 1.5× with PGO, F1) | dispatch layers 5 → 2; JVM shows 1.36× for the same code |
+| Interpreter reads (full) | 4.77× (owned) | ≤ 2.5× (no PGO; Task B4) | dispatch layers 5 → 2; JVM shows 1.36× for the same code |
 | Peak reads (full) | 0.42× (owned) / 1.6–2.1× (view) | ≤ 0.5× | offset loads, no lifetime check |
 | Detach + consume | 1.01× (owned) / 6.6× (view) | ≤ 0.8× | identity snapshot |
 | Java B/row (full / sparse / decode) | 1,132 / 1,017 / 336 (view) | ≤ 700 / 450 / 560 | slab + handles + flyweights |
@@ -453,3 +453,11 @@ Only if Task A2's measurement shows the table-driven decoder ≥ 1.25 × the han
 **Decided (user, 2026-11-07): every proposed default.** Q1 owning slabs by default; borrowing for `bytes` ≥ 4 KiB and `decodeBorrowed`. Q2 Rust producer on SVM until F1 shows the AOT Java producer within 1.1 ×. Q3 strict by default, `Projection.lax()` opt-in with on-read validation. Q4 change the core `Accessor` now (additive, default wrapper). Q5 64 KiB critical bound. Q6 retire ABI 9 views; ABI 10 ships in 0.9.0. Q7 a PGO step is acceptable for Elide images if it pays ≥ 1.5 × on interpreter cells. Q8 run the upb fast-table probe as a follow-up record.
 
 **Added (user, 2026-11-07):** a pure-Java protobuf path is required for consumers who cannot use Buffa. Task A3 (the Java slab producer) is therefore mandatory, the native-free consumer (`fallback_test`, `buffa_consumer` fallback mode) reads Java-produced slabs, and both are release gates for 0.9.0. See `2026-11-07-release-matrix.md`.
+
+**Revised (user, 2026-11-07): PGO is a final polish step, never load-bearing.** No target, gate or producer choice depends on profiles. Every hypothesis in §8 is measured on images built without PGO; the "(≤ 1.5× with PGO, F1)" note is withdrawn. Q2 now reads: Rust producer on SVM until the AOT Java producer, built **without** profiles, is within 1.1× on the decode cells. Q7 now reads: F1 runs last, after G1, as an optional measurement; its result changes no ruling. The interpreter gap is closed by design in Task B4.
+
+#### Task B4: Interpreter reads by design (no PGO)
+
+After B1. B2 measured interpreter full reads at 4.18× (generated-owned) and 3.88× (native-eager) stock against ≤ 2.5×, and generated-owned peak 4–9 % slower (ledger, Task B2). Diagnose with evidence on the SVM consumer image (a sampling profile of the interpreter cells, the compiled-code size of the read nodes' `execute` paths, the dispatch layers left between `SharedRoot` and the slot load) and remove the cost structurally: e.g. inlined DSL nodes (`@GenerateInline`/`@GenerateCached(false)`), no exception-driven result paths on the hot accessor route, accessor calls that are monomorphic direct calls in AOT code, fewer node layers per read, cold paths out of line. Fix the generated-owned peak regression in the same task.
+
+- [ ] Gates (no PGO): interpreter full ≤ 2.5× stock for `slab` and `generated-owned`; peak unchanged or better than `f5e2d97` for every engine; every allocation and AST gate unchanged. Retain under `benchmarks/results/protobuf-interpreter-<sha>/`. **Commit** — `perf: read protobuf rows in the interpreter through one guard and one call`
