@@ -103,6 +103,16 @@ public final class ProtoRow extends AbstractRow implements ProtoAccess {
     return presence;
   }
 
+  /**
+   * A defensive copy of the preserved unknown wire fields of this record, in wire order. Includes
+   * unknown numbers, mismatched wire types, rejected closed-enum values and map entries, and unknown
+   * groups. Declared child messages expose their own unknown bytes. Bytes are not canonicalized:
+   * equality policies may parse these fields independently.
+   */
+  public byte[] unknownFieldBytes() {
+    return unknown().clone();
+  }
+
   byte[] unknown() {
     return wireState instanceof WidePresence wide ? wide.unknown : (byte[]) wireState;
   }

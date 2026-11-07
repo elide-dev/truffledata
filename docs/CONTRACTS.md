@@ -222,6 +222,13 @@ byte[] wire = plan.encode(constructed);
 
 For runtime schemas, the `ProtoCompiler.compile` overload accepts a `FileDescriptorSet` and fully qualified message name, with the same language owner and budgets. `ProtoCompiler.bind` verifies the entire reachable graph once and enforces descriptor identity on subsequent snapshots. `ProtoCompiler.snapshot` is a convenient one-shot form; reuse a bound source for repeated ingestion. Schemas containing proto2 maps with closed-enum values use a preflighted serialization/decode compatibility path for source objects: protobuf-java `DynamicMessage` otherwise gives those unknown entries different semantics from wire parsing. This uncommon case incurs a temporary wire copy. Host construction accepts normalized TruffleData values. `uint64` and `fixed64` use `ExactNumber`, including small values; `Values.normalize(BigInteger)` constructs one. Builders are mutable host objects and must not be shared concurrently. Built rows are immutable snapshots, including binary payloads.
 
+`ProtoRow.unknownFieldBytes()` returns a defensive copy of that record's preserved unknown
+wire fields, including mismatched wire types, rejected closed-enum values and map entries,
+and unknown groups. Child records expose their own unknown fields. These bytes retain wire
+order (packed rejected enum values are re-encoded as unpacked fields); they are not a canonical
+equality or hash representation. Consumers can apply their own protobuf equality policy without
+re-encoding the declared fields, and mutating the returned array never changes the row.
+
 Read values using cached `DataLibrary` dispatch, as with other rows. `row.has(ordinal)` reports protobuf presence separately: explicit fields retain their set bit, implicit fields use non-default values, and repeated/map fields use non-emptiness. Absent scalar fields remain readable with declared defaults (including proto2 defaults); an absent message reads `Missing.INSTANCE`. Thus `DataLibrary.isPresent` describes readability, while `ProtoRow.has` describes protobuf presence. Closed-enum unknown numbers remain unknown wire fields; open-enum numbers are returned as signed INT32 values without losing unknown numbers. `FieldPlan.kind() == BYTES` and `DataArray.isBytes()` distinguish binary payloads from numeric repeated fields. Maps remain sequences of typed entry rows with last-key-wins decoding; map construction rejects duplicate keys. Nested message plans are available through `plan.nested(ordinal)`.
 
 Generic rows, builders and decoder states keep their first 64 protobuf presence bits

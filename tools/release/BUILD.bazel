@@ -11,12 +11,12 @@ load(":native_consumer.bzl", "native_consumers")
 
 release_version(
     name = "version",
-    build_setting_default = "0.8.0-SNAPSHOT",
+    build_setting_default = "0.9.0-SNAPSHOT",
     visibility = ["//visibility:public"],
 )
 
 COMMON = [
-    "org.graalvm.truffle:truffle-api:25.5.5-elide.24",
+    "org.graalvm.truffle:truffle-api:25.5.5-elide.27",
     "org.jspecify:jspecify:1.0.1",
 ]
 
@@ -263,8 +263,8 @@ test_suite(
         "csv-native",
         "csv-jvm",
     ] else []) + ([
-        "org.graalvm.sdk:nativeimage:25.5.5-elide.24",
-        "org.graalvm.sdk:word:25.5.5-elide.24",
+        "org.graalvm.sdk:nativeimage:25.5.5-elide.27",
+        "org.graalvm.sdk:word:25.5.5-elide.27",
     ] if module in [
         "protobuf-buffa",
         "protobuf-buffa-bindings",
@@ -295,7 +295,7 @@ maven_bom(
         "org.xerial:sqlite-jdbc:3.53.4.0",
         "com.google.protobuf:protobuf-java:4.36.1",
         "com.google.protobuf:protobuf-java-util:4.36.1",
-    ] + [coordinate + ":25.5.5-elide.24" for coordinate in [
+    ] + [coordinate + ":25.5.5-elide.27" for coordinate in [
         "org.graalvm.truffle:truffle-runtime",
         "org.graalvm.polyglot:polyglot",
         "org.graalvm.js:js-language",

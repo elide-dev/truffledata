@@ -34,7 +34,7 @@ def dependency(parent, artifact, version=None, group='dev.elide'):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--version', default='0.8.0-SNAPSHOT')
+    parser.add_argument('--version', default='0.9.0-SNAPSHOT')
     args = parser.parse_args()
     validate_version(args.version)
     root = Path(__file__).resolve().parents[2]
@@ -75,7 +75,7 @@ def main():
     element(element(pom, 'properties'), 'maven.compiler.release', '25')
     repositories = element(pom, 'repositories')
     for name, url in [('staged', (work / 'repository').as_uri()),
-                      ('elide-graalvm', 'https://maven.elide.dev/gvm-elide/25.5.5-elide.24')]:
+                      ('elide-graalvm', 'https://maven.elide.dev/gvm-elide/25.5.5-elide.27')]:
         repository = element(repositories, 'repository')
         element(repository, 'id', name)
         element(repository, 'url', url)

@@ -25,7 +25,8 @@ genrule(
         "generated/seam.ll",
         "generated/META-INF/native-image/dev.elide.myna/dev.elide.truffledata.buffa.generated.Buffa/native-image.properties",
     ],
-    cmd = "$(location @myna//:generator) generate $(location buffa.seam) --out $(RULEDIR)/generated --target " + select({
+    cmd = "$(location @myna//:generator) validate $(location buffa.seam) --targets x86_64-unknown-linux-gnu,aarch64-unknown-linux-gnu,aarch64-apple-darwin && " +
+          "$(location @myna//:generator) generate $(location buffa.seam) --out $(RULEDIR)/generated --target " + select({
         "@platforms//os:macos": "aarch64-apple-darwin",
         ":linux_arm64": "aarch64-unknown-linux-gnu",
         "//conditions:default": "x86_64-unknown-linux-gnu",

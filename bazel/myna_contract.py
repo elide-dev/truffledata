@@ -8,7 +8,9 @@ import zipfile
 def verify(descriptor, archive):
     with open(descriptor, encoding="utf-8") as source:
         module = json.load(source)
-    assert module["schemaVersion"] == 2
+    assert module["schemaVersion"] == 3
+    assert module["targetAbi"] == {"dataModel": "LP64", "byteOrder": "little"}
+    assert "targetTriple" not in module
     assert module["bindingAbiVersion"] == 2
     expected = {
         "truffledata_json": {"fingerprint", "decode", "decode_adopted", "release", "plan_create", "plan_release", "typed_decode", "typed_release",

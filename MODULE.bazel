@@ -1,6 +1,6 @@
 module(
     name = "truffledata",
-    version = "0.8.0",
+    version = "0.9.0",
 )
 
 bazel_dep(name = "platforms", version = "1.1.0")
@@ -21,12 +21,12 @@ git_override(
     remote = "https://github.com/sgammon/rules_graalvm.git",
 )
 
-GRAALVM = "25.5.5-elide.24"
+GRAALVM = "25.5.5-elide.27"
 
 GRAALVM_DISTS = {
-    "macos-aarch64": "8b03207cb35ab5b9bec6422b4266178315f7a056ae88e90f57cc22b2362c44a6",
-    "linux-x64": "83bd7b3b78e76de00bb3879eeae79a8b439f9356fefd3bf3b84d2818af8961e7",
-    "linux-aarch64": "f89eb4bdc6596b8aa7acdf063997c69ab06aa9a488e8f98cff07865b0261618f",
+    "macos-aarch64": "e8ece6d4c8f3f1bc582d447ec36e7ade69d9cf4fc0e30c58bc40af39a9541f0c",
+    "linux-x64": "b6d316ed0b81354949704afe632e1e2a1551d637736df5b6b03088cc5b09c852",
+    "linux-aarch64": "c37b539081b55b2eb99abc593d06c037ec2421c2aa71aa8430c2d0b0a94b4ec8",
 }
 
 # The fork names its archives macos-aarch64, linux-amd64 and linux-aarch64.
@@ -35,9 +35,9 @@ GRAALVM_ARCHIVES = {key: key.replace("x64", "amd64") for key in GRAALVM_DISTS}
 # The EE toolchain profile (docs/NATIVE_BENCHMARKS.md): the fork's Oracle GraalVM overlay of the same release, the test and
 # run runtime under --config=ee (compilation stays on CE). Its budgets and graph expectations are tracked separately.
 GRAALVM_EE_DISTS = {
-    "macos-aarch64": "c9c21b7b58bb9cead0925b2611054443b264289adaa1b036a2712d3b78066b1b",
-    "linux-x64": "652ad0ebe5d50b59958f95045336f5498267a668b9cb123e7bbb540a1e0fede4",
-    "linux-aarch64": "efd2be28c6e755b1f883c289a33182ac4c55685f26c39ccf199d85a097caadd9",
+    "macos-aarch64": "fc0f2818cb694e1abcc18f06a4bf049c090364e4b15441cc409b6a17a6c79509",
+    "linux-x64": "78d0334f16fd399635e74575d214d009c950b536ecb4b4bc37fde1176775f43f",
+    "linux-aarch64": "ccd0130761408a0154c9e7c3d2ea79f79689befa09f2bc2ee804744f17798954",
 }
 
 # One repository per platform and edition (graalvm_<os>_<cpu>, graalvm_ee_<os>_<cpu>), its toolchains constrained to that
@@ -170,6 +170,15 @@ maven.install(
         "https://repo.maven.apache.org/maven2",
         "https://maven.elide.dev/gvm-elide/" + GRAALVM,
     ],
+)
+
+# Test-only oracle for YAML differential coverage.
+maven.artifact(
+    name = "maven",
+    artifact = "snakeyaml-engine",
+    group = "org.snakeyaml",
+    testonly = True,
+    version = "3.2",
 )
 
 # Test-only oracle for the CSV differential suite (//csv/tests); no library depends on it.
@@ -344,10 +353,10 @@ use_repo(crate, "crates", simdutf_src = "crates__simdutf-0.7.0")
 http_archive(
     name = "myna",
     build_file = "//bazel:myna.BUILD",
-    sha256 = "ce1dc5ff7a7a57f1b8d0dda2e215a1806c9feae620f3d922b17d92a2ea4cfd42",
-    strip_prefix = "myna-0.11.0",
+    sha256 = "ad91203d6dca224c12a1aba916198ed28c61d4af5e99562f1a899608a446b453",
+    strip_prefix = "myna-0.13.0",
     type = "tar.gz",
-    urls = ["https://github.com/elide-dev/myna/releases/download/v0.11.0/myna-source-0.11.0.tar.gz"],
+    urls = ["https://github.com/elide-dev/myna/releases/download/v0.13.0/myna-source-0.13.0.tar.gz"],
 )
 
 # Production JSON adapter: match the parser qualified by Myna's value ABI tests.
