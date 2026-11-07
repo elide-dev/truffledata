@@ -166,6 +166,11 @@ cc_binary(
         "-std=c++17",
         "-O3",
     ],
+    linkopts = select({
+        # The macos-aarch64 release attachment (tools/release) is loaded through @rpath.
+        "@platforms//os:macos": ["-Wl,-install_name,@rpath/libtruffledata_yaml.dylib"],
+        "//conditions:default": [],
+    }),
     linkshared = True,
     linkstatic = True,
     visibility = ["//visibility:public"],

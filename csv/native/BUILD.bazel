@@ -128,6 +128,11 @@ cc_binary(
     name = "csv_shared.so",
     srcs = ["api.cc"],
     copts = COPTS,
+    linkopts = select({
+        # The macos-aarch64 release attachment (tools/release) is loaded through @rpath.
+        "@platforms//os:macos": ["-Wl,-install_name,@rpath/libtruffledata_csv.dylib"],
+        "//conditions:default": [],
+    }),
     linkshared = True,
     linkstatic = True,
     visibility = ["//visibility:public"],

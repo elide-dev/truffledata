@@ -42,20 +42,49 @@ def _publication_impl(ctx):
         output = ctx.actions.declare_file(prefix + suffix)
         ctx.actions.symlink(output = output, target_file = source)
         outputs.append(output)
+    native_static, native_shared, other = _attachments(ctx, prefix)
+    outputs += native_static + native_shared + other
+    return [DefaultInfo(files = depset(outputs)), OutputGroupInfo(binary = depset([outputs[1]]), native_static = depset(native_static), native_shared = depset(native_shared))]
+
+def _prefix(ctx):
+    version = ctx.attr._version[VersionInfo].value
+    if not version or any([c not in "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ.-" for c in version.elems()]):
+        fail("Invalid Maven version")
+    artifact = "truffledata-" + ctx.attr.module
+    return "%s/dev/elide/%s/%s/%s-%s" % (ctx.label.name, artifact, version, artifact, version)
+
+def _attachments(ctx, prefix):
+    """Symlinks each attachment as <prefix><suffix>: (static archives, shared libraries, other files such as headers)."""
     native_static = []
     native_shared = []
+    other = []
     for target, suffix in ctx.attr.attachments.items():
         files = target[DefaultInfo].files.to_list()
         if len(files) != 1:
             fail("Publication attachment must contain exactly one file")
         output = ctx.actions.declare_file(prefix + suffix)
         ctx.actions.symlink(output = output, target_file = files[0])
-        outputs.append(output)
         if suffix.endswith(".a"):
             native_static.append(output)
-        elif suffix.endswith(".so"):
+        elif suffix.endswith(".so") or suffix.endswith(".dylib"):
             native_shared.append(output)
-    return [DefaultInfo(files = depset(outputs)), OutputGroupInfo(binary = depset([outputs[1]]), native_static = depset(native_static), native_shared = depset(native_shared))]
+        else:
+            other.append(output)
+    return native_static, native_shared, other
+
+def _native_attachments_impl(ctx):
+    native_static, native_shared, other = _attachments(ctx, _prefix(ctx))
+    return [DefaultInfo(files = depset(native_static + native_shared + other)), OutputGroupInfo(native_static = depset(native_static), native_shared = depset(native_shared))]
+
+native_attachments = rule(
+    implementation = _native_attachments_impl,
+    doc = "A module's native attachments for the target platform, in its maven_publication layout (no jars or POM).",
+    attrs = {
+        "module": attr.string(mandatory = True),
+        "attachments": attr.label_keyed_string_dict(),
+        "_version": attr.label(default = "//tools/release:version"),
+    },
+)
 
 maven_publication = rule(
     implementation = _publication_impl,

@@ -110,7 +110,11 @@ rust_shared_library(
     crate_name = "truffledata_buffa",
     crate_root = "lib.rs",
     edition = "2024",
-    rustc_flags = ["-Copt-level=3"],
+    # The macos-aarch64 release attachment (tools/release) is loaded through @rpath.
+    rustc_flags = ["-Copt-level=3"] + select({
+        "@platforms//os:macos": ["-Clink-arg=-Wl,-install_name,@rpath/libtruffledata_buffa.dylib"],
+        "//conditions:default": [],
+    }),
     deps = [
         "@crates//:buffa",
         "@crates//:bytes",
