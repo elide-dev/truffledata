@@ -867,18 +867,30 @@ class handler : public c4::yml::EventHandlerStack<handler, handler_state> {
 
   [[gnu::always_inline]] bool key_fast(c4::csubstr s, short_text w) {
     if (C4_UNLIKELY(!depth_)) return false;
-    const size_t level = depth_ - 1;
-    frame& f = frames_[level];
+    frame& f = frames_[depth_ - 1];
     if (f.kind != frame_kind::map || f.pairs || !core_string(w.lo, s.len)) return false;
     if (rules_.merge_keys && s.len == 2 && w.lo == word("<<", 2)) return false;
-    uint32_t hash;
+    return fast_key(f, s, w, pack(size_t(s.str - input_), s.len), 0);
+  }
+
+  [[gnu::always_inline]] bool key_quoted_fast(c4::csubstr s, short_text w, scalar_style style) {
+    if (C4_UNLIKELY(!depth_)) return false;
+    frame& f = frames_[depth_ - 1];
+    if (f.kind != frame_kind::map || f.pairs) return false;
+    return fast_key(f, s, w, 0, uint32_t(style));
+  }
+
+  // A string key of mapping `f` (stored as an object) whose text is the loaded words: follows or
+  // records the level's key template, else hashes (memo) and checks duplicates. Returns false,
+  // having written nothing, on a duplicate, which the general path then reports or resolves.
+  [[gnu::always_inline]] bool fast_key(frame& f, c4::csubstr s, short_text w, uint64_t span, uint32_t meta) {
+    const size_t level = depth_index(f);
     if (f.follow != no_template) {
       // Following a template: key i equal to the template's key i keeps the keys distinct.
       const key_template& t = templates_[level][f.follow];
       const size_t i = size_t(f.count);
       if (C4_LIKELY(i < t.count && t.keys[i].lo == w.lo && t.keys[i].hi == w.hi && t.keys[i].length == s.len)) {
-        hash = t.keys[i].hash;
-        place_fast_key(f, s, w, hash);
+        place_fast_key(f, s, w, t.keys[i].hash, span, meta);
         return true;
       }
       leave_template(f);
@@ -887,29 +899,30 @@ class handler : public c4::yml::EventHandlerStack<handler, handler_state> {
         const key_template& t = templates_[level][slot];
         if (t.count && t.keys[0].lo == w.lo && t.keys[0].hi == w.hi && t.keys[0].length == s.len) {
           f.follow = slot;
-          place_fast_key(f, s, w, t.keys[0].hash);
+          place_fast_key(f, s, w, t.keys[0].hash, span, meta);
           return true;
         }
       }
       f.record = template_next_[level];
       templates_[level][f.record].count = 0;
     }
-    hash = cached_hash(w, s.str, s.len);
+    const uint32_t hash = cached_hash(w, s.str, s.len);
     if (C4_UNLIKELY(!f.keys.insert(memory_, hash, std::string_view(s.str, s.len)))) return false;
     if (f.record != no_template) {
       key_template& t = templates_[level][f.record];
       if (t.count == f.count && t.count < template_keys) t.keys[t.count++] = {w.lo, w.hi, uint32_t(s.len), hash, s.str};
       else drop_record(f);
     }
-    place_fast_key(f, s, w, hash);
+    place_fast_key(f, s, w, hash, span, meta);
     return true;
   }
 
-  [[gnu::always_inline]] void place_fast_key(frame& f, c4::csubstr s, short_text w, uint32_t hash) {
+  [[gnu::always_inline]] void place_fast_key(frame& f, c4::csubstr s, short_text w, uint32_t hash, uint64_t span,
+                                             uint32_t meta) {
     const bool plain = ((w.lo | w.hi) & 0x8080808080808080ull) == 0;
     const size_t node = writer_->node_count();
     writer_->string_words(w.lo, w.hi, uint32_t(s.len));
-    side(pack(size_t(s.str - input_), s.len), tape::key_meta(hash, node - f.node, plain), 0);
+    side(span, tape::key_meta(hash, node - f.node, plain), meta);
     ++f.count;
   }
 
@@ -945,21 +958,6 @@ class handler : public c4::yml::EventHandlerStack<handler, handler_state> {
     f.record = no_template;
   }
   size_t depth_index(const frame& f) const { return size_t(&f - frames_); }
-
-  [[gnu::always_inline]] bool key_quoted_fast(c4::csubstr s, short_text w, scalar_style style) {
-    if (C4_UNLIKELY(!depth_)) return false;
-    frame& f = frames_[depth_ - 1];
-    if (f.kind != frame_kind::map || f.pairs) return false;
-    if (f.follow != no_template || f.record != no_template) leave_template(f);
-    const uint32_t hash = cached_hash(w, s.str, s.len);
-    if (C4_UNLIKELY(!f.keys.insert(memory_, hash, std::string_view(s.str, s.len)))) return false;
-    const bool plain = ((w.lo | w.hi) & 0x8080808080808080ull) == 0;
-    const size_t node = writer_->node_count();
-    writer_->string_words(w.lo, w.hi, uint32_t(s.len));
-    side(0, tape::key_meta(hash, node - f.node, plain), uint32_t(style));
-    ++f.count;
-    return true;
-  }
 
   [[gnu::always_inline]] bool value_quoted_fast(c4::csubstr s, short_text w, scalar_style style) {
     if (C4_UNLIKELY(!depth_)) return false;

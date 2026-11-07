@@ -185,6 +185,11 @@ std::vector<std::string> template_documents() {
                            "- {a: 7, b: 8, c: 9}\n- {a: 1}\n- {a: 1, c: 2, b: 3, c: 4}\n",
                            "- {a: 7, b: 8, c: 9, x: 1}\n- {a: 7, b: 8, c: 9, x: 1, a: 2}\n", "- {a: 7, b: 8, c: 9}\n"})
     out.push_back(rec + tail);
+  // Quoted keys (JSON-style records) follow and record templates like plain ones.
+  const std::string json = "[{\"a\": 1, \"b\": 2}, {\"a\": 3, \"b\": 4}, {\"a\": 5, 'b': 6}";
+  for (const char* tail : {"]\n", ", {\"a\": 7, \"b\": 8, \"a\": 9}]\n", ", {\"a\": 7, b: 8, a: 9}]\n",
+                           ", {a: 7, \"b\": 8, 'b': 9}]\n", ", {\"a\": 7, \"b\": 8, \"c\": 9, \"b\": 1}]\n"})
+    out.push_back(json + tail);
   // Block records alternating two key orders, then a late duplicate in each order.
   std::string block;
   for (int i = 0; i < 6; ++i)
