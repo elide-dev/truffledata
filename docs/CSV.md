@@ -20,8 +20,11 @@ The delivery plan is
 (Tasks 9–15 cover the Commons scope).
 
 The module publishes (from the release after 0.7.0) as `dev.elide:truffledata-csv`:
-one pure-Java jar for the JVM and Native Image, with no native attachments; see
-[publishing](PUBLISHING.md#csv-distribution).
+one pure-Java jar for the JVM and Native Image, with no native attachments. The optional
+native structural-index kernel publishes as `truffledata-csv-native` (static images, with
+the Linux x86-64 `.a` and `.so` attachments), `truffledata-csv-jvm` (FFM) and
+`truffledata-csv-bindings`, and is opted into with `CsvIndexing.loadNative`; see
+[publishing](PUBLISHING.md#csv-distribution) and [Structural index](#structural-index).
 
 ```java
 CsvBatch batch = Csv.parse(utf8, CsvFormat.RFC4180);  // header on by default
@@ -44,7 +47,7 @@ try (CsvReader reader = plan.open(input)) {
 
 | Decision | Current rule |
 | --- | --- |
-| Implementation | Pure Java, with no native code, seam or `@CFunction` in the jar. FFM is used only for mapped files. One jar serves JVM and SVM. Every parse path frames records over a structural index (built-in kernel: Java SWAR); an application may install the native AVX-512/AVX2/NEON kernel (`CsvIndexing`, [Structural index](#structural-index)), which the jar neither bundles nor loads |
+| Implementation | Pure Java, with no native code, seam or `@CFunction` in the jar. FFM is used only for mapped files. One jar serves JVM and SVM. Every parse path frames records over a structural index (built-in kernel: Java SWAR); an application may opt into the native AVX-512/AVX2/NEON kernel from the separate `truffledata-csv-native`/`-jvm` artifacts (`CsvIndexing.loadNative`, [Structural index](#structural-index)), which the jar neither bundles nor loads |
 | Behaviour scope | Apache Commons CSV 1.14.1 parsing and printing (feature matrix below). Commons formats get Commons behaviour; our own default format stays strict |
 | Strict dialect | RFC 4180 with four leniencies: lone CR terminators, skipped empty lines, flexible rows that may only be shorter, and ASCII case-insensitive `true`/`false` |
 | Null | One rule (`Nulls`, below). An unconfigured strict format keeps the v1 rule: only an unquoted empty field is null, and only in a nullable typed column |
@@ -239,7 +242,10 @@ are decoded only when a field is read.
 `CsvPlan.compile(Schema schema, CsvFormat format)` builds an immutable, thread-safe plan.
 `plan.parse(utf8[, limits])` and `plan.open(input[, limits, batchBytes])` return batches
 with `schema() == plan.schema()`, so compiled caches keyed on schema identity stay
-monomorphic.
+monomorphic. `plan.parse(utf8)` reads the array only during the call: a plan with STRING
+fields retains one copy of it (its cells are spans into the copy), and a plan of only INT64,
+FLOAT64 and BOOLEAN fields converts every value during the scan and retains no input
+(`inputBytes()` is 0).
 
 | Kind | Accepted content | Notes |
 | --- | --- | --- |
@@ -446,6 +452,9 @@ Output equals Commons, character for character (`CommonsRoundTripTest`).
   shares the primitive columns. The copy outlives the mapping.
 - **Export.** Copies each STRING cell into a reusable scratch buffer before handing the
   sink a `CsvText`, so the export allocates nothing per cell.
+- **`getString`.** A `String` owns its bytes, so a mapped cell passes through the heap once:
+  it is copied into a per-thread 4 KiB buffer and the `String` is built from there (longer
+  cells get their own copy). Nothing is allocated per cell besides the `String`.
 
 Heap batches are unchanged: immutable, shareable, never closed (`close()` is a no-op).
 
@@ -528,11 +537,37 @@ same records, spans, return offsets and stops as the per-byte scanners.
   a quoted tail of a stream buffer) goes to the per-byte scanner of the same dialect, one record,
   which reports the exact diagnostic or accepts it; indexing resumes after it.
 - **Kernels.** `CsvIndexing.install(provider)` selects the kernel for parses and readers started
-  afterwards; `CsvIndexing.JAVA` (Java SWAR) is the default, `null` turns the index path off. The
-  providers in `//csv/kernel` are `SvmIndexer.provider()` (static native library, leaf calls up to
-  1 MiB), `FfmIndexer.Library.load(path).provider()` (JVM, `csv_shared.so`, critical heap calls)
-  and `VectorIndexer.provider()` (Vector API). Inputs below `CsvIndexing.MIN_INDEX_BYTES` use the
-  per-byte scanners.
+  afterwards; `CsvIndexing.JAVA` (Java SWAR) is the default, `null` turns the index path off.
+  Inputs below `CsvIndexing.MIN_INDEX_BYTES` use the per-byte scanners.
+- **Native kernel (opt-in).** `CsvIndexing.loadNative()` (native image) and
+  `CsvIndexing.loadNative(Path)` (JVM) find the backend for the running runtime as a
+  `CsvIndexing.NativeBackend` service, load it and return its provider; nothing is loaded or
+  installed until the application calls them:
+
+  ```java
+  // Native image with truffledata-csv-native and libtruffledata_csv.a linked:
+  CsvIndexing.install(CsvIndexing.loadNative());
+  // JVM with truffledata-csv-jvm, --enable-native-access=ALL-UNNAMED and the .so attachment:
+  CsvIndexing.install(CsvIndexing.loadNative(Path.of("truffledata-csv-native-<v>-linux-x86_64.so")));
+  ```
+
+  The static backend (`SvmIndexer`) makes leaf calls up to 1 MiB; the JVM backend (`FfmIndexer`)
+  loads the library once per path for the life of the process and makes critical heap calls.
+  Both check the generated ABI fingerprint. A missing backend or library throws
+  `IllegalStateException`. The Vector API kernel (`VectorIndexer.provider()`, `//csv/kernel`) is
+  not published.
+- **Fused batches.** Typed and generic batches are built inside the framing loop: each field goes
+  straight into its column (STRING span, or the converted INT64, FLOAT64 or BOOLEAN) as the index
+  delimits it, and the record commits at its terminator. A record the fused path cannot take in
+  place (a grammar or constraint failure, a complex Commons span in a typed field, a width other
+  than the binding's, UTF-8 outside the prevalidated range, `maxBatchRows`) goes through the
+  per-record builder with the same spans, which reports the exact diagnostic or accepts it.
+  `IndexScan.frame` is a host-inlining root (`@BytecodeInterpreterSwitch`), so native images
+  inline the conversions into the loop.
+- **Reads.** Typed `CsvRow` getters read a dense column with one length test (nullable,
+  optional, mapped and wrong-kind reads take a checked path); `getString` builds ASCII cells of
+  up to 16 bytes as Latin-1 without the charset decoder, and unescapes strict doubled quotes into
+  a per-thread buffer, so the `String` is the only allocation.
 - **UTF-8.** Each buffer is validated once ahead of the scan (simdutf with a native provider);
   records in the valid prefix skip their own validation, so diagnostics are unchanged.
 - **Numbers.** INT64 and FLOAT64 conversions use eight-digit SWAR steps, Clinger's exact path and
@@ -573,42 +608,48 @@ The gates below are enforced; they bound shape and allocation, not throughput:
   at most 10,000 nodes, ASTs of at most 192 nodes, and at most 0.05 Java bytes per read
   (per row for the export walk).
 - `//tools/release:csv_native_test` runs the published-jar consumer in a static image.
+- `//tools/release:csv_kernel_consumer` (JVM, published `.so`) and
+  `//tools/release:csv_kernel_native_test` (static image linking the published archive) run the
+  published native kernel through `CsvIndexing.loadNative` and require every parse, stream and
+  diagnostic to equal the built-in kernel's.
 
 ### Comparison results
 
 `//benchmarks/comparison:csv_measure` compares truffledata with FastCSV 4.4.0, Jackson
 dataformat-csv 2.22.4, univocity-parsers 2.9.1 and Commons CSV 1.14.1. It runs on SVM (portable
 and x86-64-v3 images) and on the JVM, over four synthetic fixtures at 1 MiB and 128 MiB, with Rust
-`csv` and `csv-core` and a C++ consumer of the native index measured on the same worker. The raw
-samples and the shared-host caveats are in `benchmarks/results/csv-b5bd173/` (the shipped paths
-over the index) and `csv-f5daec1/` (kernels alone). The write-up, hypotheses H1–H5 and the
-per-runtime kernel choice are in `benchmarks/comparison/CSV.md`. Shared-host timings are
-advisory, and only figures from one shard compare. Shipped paths with the native kernel
-installed, against the same entry points with the index path off (same shard):
+`csv` and `csv-core` and a C++ consumer of the native index measured on the same worker. The
+latest run is `benchmarks/results/csv-720f0c7/` (fused batches, lean `String` cells, the native
+kernel installed through `CsvIndexing.loadNative`); `delta.md` there compares it with
+`csv-b5bd173` as same-shard ratios. Shared-host timings are advisory; only figures from one shard
+compare. Shipped native paths, as ratios within their shard (before: `csv-b5bd173`):
 
-- **Scan** (`CsvScanner`): 1.7–7.8× faster than before, at 0.75–1.15× of the reference kernel
-  consumer; 2.4–18× the best Java competitor and 1.3–9.8× Rust `csv-core` in every row; 0.6–1.2×
-  of a C++ consumer of the same index. The default `java-swar` kernel is 0.63–2.9× (faster in 21
-  of 24 rows).
-- **Typed** (`CsvPlan`): 1.1–2.7× faster than before; 1.2–3.1× the best Java competitor in every
-  row; 1.05–1.6× Rust `csv` on `mixed`, 0.50–0.65× on `numeric`.
-- **Strings** (`Csv.parse` + `getString`): 0.8–2.2× before; ahead of the best Java competitor in
-  11 of 24 rows (FastCSV leads on short-field `numeric` and `mixed`); one Java `String` per cell
-  bounds it.
-- Typed and strings stay at 0.26–0.87× of the reference kernel consumers, which retain no batch.
+- **Typed** (`CsvPlan`): 0.43–0.78× the reference kernel consumer (before 0.38–0.64); 1.2–3.2× the
+  best Java competitor in all 12 rows; 1.07–1.8× Rust `csv` on `mixed`, 0.58–0.74× on SVM
+  `numeric`.
+- **Strings** (`Csv.parse` + `getString`): ahead of the best Java competitor in 13 of 24 rows
+  (before 11); FastCSV still leads on SVM short-field `numeric` and some `mixed` rows. The JVM
+  `quoted` cells of this run predate the unescape fix (`bf044ec`; a probe after it measured 0.87×
+  the kernel path at 128 MiB), and JVM `quoted` 1 MiB shows a pre-existing bimodal slowdown on
+  every index-path engine whose cause is open (results README).
+- **Scan** (`CsvScanner`): 1.7–19× the best Java competitor in every row and ahead of Rust
+  `csv-core` in 21 of 24; but on SVM its ratio to the reference kernel consumer fell (for example
+  0.88× to 0.69× on compat `numeric` 1 MiB) now that `IndexScan.frame` also carries the fused batch
+  path. JVM scan ratios are unchanged or better.
 
 ## Deferred
 
-- Publishing the native CSV providers (`//csv/kernel:jvm`, `:svm` and the `csv_shared.so` /
-  static archive attachments). They are built and measured here but not yet release artifacts.
 - A `MemorySegment`-native index consumer for mapped input (the window copy stays; see the
   comparison write-up for why it is not the mapped path's main cost).
-- Lazy text views for `getString` (a `String` per cell remains the API).
+- Lazy text views for `getString` and TruffleString cells for guests (a `String` per cell remains
+  the API; see the CSV ledger rulings).
 - Buffer recycling across heap batches.
 - Wider boolean spellings, STRING length constraints, other encodings, type inference.
 - Primitive and text columns in core `Batch`, so CSV and JDBC share column storage.
 - A tree-shaped sink and a backend-neutral UTF-8 text view shared with JSON and YAML.
 - CodSpeed simulation cases.
+- The SVM scan-only regression against the kernel consumer since the fused path, and the bimodal
+  JVM `quoted` 1 MiB index-path cells (both in `benchmarks/results/csv-720f0c7/README.md`).
 
 ## Verification
 
@@ -621,4 +662,6 @@ bazel test //csv/kernel/tests:jvm               # every kernel against the scala
 bazel test //csv/tests:native_test              # SVM compiled read and export gates (Linux x86-64, RBE)
 bazel test //tools/release:csv_consumer         # published jars on the JVM
 bazel test //tools/release:csv_native_test      # published jars in a static image (Linux x86-64, RBE)
+bazel test //tools/release:csv_kernel_consumer  # published native kernel on the JVM (FFM)
+bazel test //tools/release:csv_kernel_native_test  # published native kernel in a static image (RBE)
 ```

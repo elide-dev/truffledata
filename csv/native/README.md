@@ -87,7 +87,9 @@ calls. Results pack `count << 8 | carry`; negative results are argument errors.
 
 ## Consuming the index
 
-The shipped consumer is `IndexScan` in `//csv`, behind `CsvScanner.scan`; it serves every strict
+The shipped consumer is `IndexScan` in `//csv`, behind `CsvScanner.scan`. When it fills a batch it
+is fused with the batch builder: each field is written into its column (span or converted value)
+as its entry is consumed, and only records the builder declines take the per-record path. It serves every strict
 format and the Commons formats the index represents (one-byte delimiter, no comment marker, no
 escape other than the quote, none of the Commons trims or a trailing delimiter), and it reproduces
 the Commons lexer's framing (empty lines commit with the next record; `ignoreEmptyLines(false)`
@@ -148,6 +150,14 @@ inputs below 16 KiB use the per-byte scanners (the sweep down to 256 B put the c
 4 and 16 KiB on SVM), and every provider indexes 64 Ki entries per call into one buffer per
 thread (native index rates are flat from 16 KiB calls, and 1 Mi-entry buffers per scanner cost a
 4 MiB allocation per 1 MiB parse).
+
+## Publication
+
+The kernel ships outside the pure-Java `truffledata-csv` jar: `truffledata-csv-bindings` (the
+generated seam bindings), `truffledata-csv-native` (`SvmIndexer` plus the Linux x86-64
+`csv_shared.so` and `libtruffledata_csv.a` attachments) and `truffledata-csv-jvm` (`FfmIndexer`).
+Applications opt in with `CsvIndexing.install(CsvIndexing.loadNative(...))`
+([docs/PUBLISHING.md](../../docs/PUBLISHING.md#csv-distribution)).
 
 ## Tests
 

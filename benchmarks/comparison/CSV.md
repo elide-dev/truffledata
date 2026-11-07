@@ -54,6 +54,28 @@ worker.
   - zsv: would need a third-party C build. The csv/native kernel is itself the simdcsv design
     (simdjson stage 1), so `native-indexed-scan` stands in for that class.
 
+## Fused batches and published native kernel (csv-720f0c7)
+
+The latest run measures the shipped paths after fusing batch building into the index scan, the
+`String` fast paths, the mapped-cell buffer and the published native kernel (installed through
+`CsvIndexing.loadNative`, as applications do). Raw samples, the full tables and caveats are in
+[`csv-720f0c7/`](../results/csv-720f0c7/README.md); [`delta.md`](../results/csv-720f0c7/delta.md)
+gives every row against `csv-b5bd173` as same-shard ratios (`csv_delta.py`), since the two runs
+used different hosts.
+
+| Shipped native path | × kernel consumer, before → after | Rows ahead of best Java, before → after | × Rust/C++ reference (after) |
+|---|---|---|---|
+| Typed (`CsvPlan`) | 0.38–0.64 → **0.43–0.78** | 12/12 → **12/12** (1.2–3.2×) | `csv-typed` 0.58–1.80 (ahead in 7 of 12) |
+| Strings (`Csv.parse` + `getString`) | 0.26–0.87 → 0.11–0.93 | 11/24 → **13/24** | `csv-string-record` 0.22–1.50 |
+| Scan (`CsvScanner`) | 0.83–2.17 → 0.62–1.32 | 24/24 → **24/24** (1.7–19×) | `csv-core-scan` 0.85–9.9 (ahead in 21 of 24) |
+
+- Typed improved most on JVM `numeric` 1 MiB (0.38× → 0.78× of the kernel path, 0.64× → 1.15×
+  Rust `csv`) and SVM `numeric` 128 MiB (0.38× → 0.59×).
+- The low end of strings is JVM `quoted`: the old per-byte unescape loop (fixed after this run in
+  `bf044ec`; probe 0.87× the kernel at 128 MiB) and a pre-existing bimodal slowdown at 1 MiB.
+- The SVM scan ratios fell from about 0.9× to about 0.7× of the kernel consumer since the fused
+  path; it is open (see the results README).
+
 ## Shipped paths over the structural index (csv-b5bd173)
 
 Every parse path now frames records over the structural index. These tables measure the
