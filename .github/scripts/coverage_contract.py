@@ -33,7 +33,8 @@ ACCESS_SOURCES = {f'core/src/main/java/dev/elide/truffledata/{name}.java' for na
     f'json/src/main/java/dev/elide/truffledata/json/{name}.java' for name in (
         'HeapValueTape', 'JavaSink', 'JsonAccess', 'JsonArray', 'JsonBorrow', 'JsonDecoder', 'JsonExportNode', 'JsonKey',
         'JsonJvm', 'JsonLimits', 'JsonMessage', 'JsonOwner', 'JsonPlan', 'JsonRecord', 'JsonSink',
-        'JsonSession', 'JsonSnapshot', 'JsonSvm', 'JsonText', 'JsonTextArena', 'JsonTypedOwner', 'JsonValue',
+        'JsonSession', 'JsonSnapshot', 'JsonStream', 'JsonStreamOptions', 'JsonSvm', 'JsonText', 'JsonTextArena',
+        'JsonTypedOwner', 'JsonValue',
         'JvmTypedOwner', 'TruffleSink',
         'SegmentValueTape',
         'SvmTypedOwner', 'SvmValueTape', 'TapeSource',
@@ -124,6 +125,16 @@ SVM_ONLY_METHODS = {
         'JsonSession$SvmBackend::reset ()V',
         'JsonSession$SvmBackend::release ()V',
         'JsonSession$SvmTextArena::entry (J)J',
+        # Streams through the static-image backend (Task F2; SvmAcceptance.streams). The JVM lane
+        # runs the same JsonStream/JsonSession stream methods through JvmSessionBackend.
+        'JsonSession$SvmBackend::streamCreate (II)J',
+        'JsonSession$SvmBackend::streamFeed (J[BII)I',
+        'JsonSession$SvmBackend::streamFeed (JLjava/lang/foreign/MemorySegment;)J',
+        'JsonSession$SvmBackend::streamFinish (J)V',
+        'JsonSession$SvmBackend::streamNext (J)I',
+        'JsonSession$SvmBackend::streamSkip (J)I',
+        'JsonSession$SvmBackend::streamTruncatedBytes (J)J',
+        'JsonSession$SvmBackend::streamRelease (J)V',
         # The default (0) is the static-image backend's: only JvmSessionBackend overrides it (Task E2).
         'JsonSession$Backend::criticalDecodes ()J',
     ),

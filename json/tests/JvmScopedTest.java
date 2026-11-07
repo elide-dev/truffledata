@@ -1116,4 +1116,162 @@ final class JvmScopedTest {
           IllegalArgumentException.class,
           () -> JsonJvm.openSession(library(), dev.elide.truffledata.json.JsonLimits.DEFAULT, bad));
   }
+
+  /** Performance plan Task F2: JSON streams over a JVM session (mirrors json/native/stream_test). */
+  @Test
+  void jvmStreamsCarryOverBorrowRetainAndSkip() throws Exception {
+    StringBuilder ndjson = new StringBuilder();
+    long expected = 0;
+    for (int i = 0; i < 2000; i++) {
+      ndjson.append(i % 3 == 0 ? "\n" : " ");
+      switch (i % 4) {
+        case 0 -> ndjson.append("{\"id\":").append(i).append(",\"note\":\"café \\u00e9 \\\"").append(i).append("\\\"\"}");
+        case 1 -> ndjson.append('[').append(i).append(",true,null]");
+        case 2 -> ndjson.append(i);
+        default -> ndjson.append("\"text number ").append(i).append(" beyond the inline limit\"");
+      }
+      expected += i;
+    }
+    byte[] input = utf8(ndjson.toString());
+    JsonMessage kept;
+    var options = new dev.elide.truffledata.json.JsonStreamOptions(512, 512);
+    try (JsonSession session = JsonJvm.openSession(library(), dev.elide.truffledata.json.JsonLimits.DEFAULT)) {
+      // stream_boundary_exactness from Java: chunk sizes and partial batches never drop or repeat
+      // a document.
+      for (int chunk : new int[] {1, 7, 64, 4096, 1 << 20}) {
+        try (var stream = session.stream(options)) {
+          long sum = 0, count = 0;
+          int at = 0;
+          JsonValue root;
+          while (at < input.length) {
+            at += stream.feed(input, at, Math.min(chunk, input.length - at));
+            while ((root = stream.next()) != null) {
+              sum += streamedId(root);
+              count++;
+            }
+          }
+          stream.finish();
+          while ((root = stream.next()) != null) {
+            sum += streamedId(root);
+            count++;
+          }
+          assertEquals(0, stream.truncatedBytes());
+          assertEquals(2000, count);
+          assertEquals(2000, stream.documents());
+          assertEquals(expected, sum);
+        }
+      }
+      try (var stream = session.stream(options)) {
+        // next(JsonSink) exports each document; strings are copied (no shared text array).
+        assertEquals(1024, stream.feed(input));
+        var sink = new dev.elide.truffledata.json.JavaSink();
+        assertTrue(stream.next(sink));
+        assertEquals(0L, tree(sink).get("id"));
+        // Backpressure: a region still being read accepts nothing.
+        assertEquals(0, stream.feed(input, 0, 10));
+        // A lent root is valid until the next call; retain detaches it into an owned message.
+        JsonValue lent = stream.next();
+        assertNotNull(lent);
+        assertEquals(1L, lent.element(0).longValue());
+        kept = stream.retain();
+        assertThrows(IllegalStateException.class, lent::kind);
+        assertThrows(IllegalStateException.class, stream::retain);  // nothing lent any more
+        JsonValue next = stream.next();
+        assertNotNull(next);
+        // Any session call ends the lent document; views of it throw afterwards.
+        session.validate(utf8("[1]"));
+        assertThrows(IllegalStateException.class, next::kind);
+        // Re-entering the session or the stream from a sink event is rejected.
+        assertThrows(IllegalStateException.class, () -> stream.next(reentrant(stream::next)));
+        assertThrows(IllegalStateException.class, () -> stream.next(reentrant(() -> session.validate(utf8("[1]")))));
+      }
+      // Invalid documents fail the stream until skip() resumes after them.
+      try (var stream = session.stream(options)) {
+        stream.feed(utf8("[1]\n[1,]\n{\"a\":1,\"a\":2}\n[2]\n"));
+        stream.finish();
+        assertEquals(1L, stream.next().element(0).longValue());
+        for (int bad = 0; bad < 2; bad++) {
+          assertThrows(IllegalArgumentException.class, stream::next);
+          assertThrows(IllegalArgumentException.class, stream::next);
+          assertEquals(0, stream.feed(utf8("[3]")));
+          assertTrue(stream.skip());
+        }
+        assertEquals(2L, stream.next().element(0).longValue());
+        assertNull(stream.next());
+        assertFalse(stream.skip());
+      }
+      // Truncation after finish; stage-1 errors cannot be skipped.
+      try (var stream = session.stream(options)) {
+        stream.feed(utf8("{\"a\":1}\n{\"b\":"));
+        assertNotNull(stream.next());
+        assertNull(stream.next());
+        assertEquals(5, stream.truncatedBytes());
+        stream.finish();
+        assertThrows(IllegalArgumentException.class, stream::next);
+        assertFalse(stream.skip());
+      }
+      try (var stream = session.stream(options)) {
+        stream.feed(new byte[] {'[', '1', ']', '\n', '"', (byte) 0xff, '"', '\n'});
+        stream.finish();
+        // simdjson reports invalid UTF-8 for its batch: before or after the documents preceding it.
+        assertThrows(
+            IllegalArgumentException.class,
+            () -> {
+              while (stream.next() != null) {}
+            });
+        assertFalse(stream.skip());
+      }
+      // Native segments feed directly; heap segments are rejected.
+      try (var stream = session.stream(dev.elide.truffledata.json.JsonStreamOptions.DEFAULT);
+          Arena arena = Arena.ofConfined()) {
+        assertEquals(dev.elide.truffledata.json.JsonStreamOptions.DEFAULT, stream.options());
+        assertEquals(new dev.elide.truffledata.json.JsonStreamOptions(1 << 20, 1 << 20).hashCode(), stream.options().hashCode());
+        assertEquals("JsonStreamOptions[maxDocumentBytes=1048576, batchBytes=1048576]", stream.options().toString());
+        MemorySegment chunk = arena.allocateFrom("[7]\n");
+        assertEquals(4, stream.feed(chunk.asSlice(0, 4)));
+        assertEquals(7L, stream.next().element(0).longValue());
+        assertThrows(IllegalArgumentException.class, () -> stream.feed(MemorySegment.ofArray(new byte[4])));
+      }
+      // Closing the session closes its streams and ends a lent document.
+      var open = session.stream(options);
+      open.feed(utf8("[8]\n"));
+      JsonValue lent = open.next();
+      assertNotNull(lent);
+      session.close();
+      assertThrows(IllegalStateException.class, lent::kind);
+      assertThrows(IllegalStateException.class, () -> open.feed(utf8("[9]")));
+      open.close();
+      assertThrows(IllegalArgumentException.class, () -> new dev.elide.truffledata.json.JsonStreamOptions(1024, 512));
+      assertThrows(IllegalArgumentException.class, () -> new dev.elide.truffledata.json.JsonStreamOptions(0, 512));
+    }
+    // A retained stream document outlives the stream and the session.
+    assertEquals(1L, kept.root().element(0).longValue());
+    kept.close();
+  }
+
+  private static long streamedId(JsonValue root) {
+    return switch (root.kind()) {
+      case OBJECT -> root.member("id").longValue();
+      case ARRAY -> root.element(0).longValue();
+      case STRING -> Long.parseLong(root.stringValue().split(" ")[2]);
+      default -> root.longValue();
+    };
+  }
+
+  /** A sink that runs {@code action} on its first event. */
+  private static dev.elide.truffledata.json.JsonSink reentrant(Runnable action) {
+    return new dev.elide.truffledata.json.JsonSink() {
+      @Override public void beginObject(long members) { action.run(); }
+      @Override public void key(dev.elide.truffledata.json.JsonText key) { action.run(); }
+      @Override public void beginArray(long elements) { action.run(); }
+      @Override public void end() { action.run(); }
+      @Override public void nullValue() { action.run(); }
+      @Override public void booleanValue(boolean value) { action.run(); }
+      @Override public void longValue(long value) { action.run(); }
+      @Override public void doubleValue(double value) { action.run(); }
+      @Override public void unsignedValue(long bits) { action.run(); }
+      @Override public void decimalValue(dev.elide.truffledata.json.JsonText token) { action.run(); }
+      @Override public void stringValue(dev.elide.truffledata.json.JsonText text) { action.run(); }
+    };
+  }
 }

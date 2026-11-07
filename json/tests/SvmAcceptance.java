@@ -712,6 +712,81 @@ public final class SvmAcceptance {
     require(throwsState(() -> kept.root()));
   }
 
+  /** Plan Task F2: streams through the static-image session backend. */
+  private static void streams() {
+    StringBuilder ndjson = new StringBuilder();
+    long expected = 0;
+    for (int i = 0; i < 500; i++) {
+      ndjson.append(i % 2 == 0 ? "{\"id\":" + i + ",\"s\":\"caf\u00e9 \\u00e9 text beyond inline\"}\n" : "[" + i + "] ");
+      expected += i;
+    }
+    byte[] input = ndjson.toString().getBytes(StandardCharsets.UTF_8);
+    var options = new dev.elide.truffledata.json.JsonStreamOptions(256, 256);
+    dev.elide.truffledata.json.JsonMessage kept;
+    var session = dev.elide.truffledata.json.JsonSession.open();
+    try {
+      for (int chunk : new int[] {1, 13, 4096}) {
+        try (var stream = session.stream(options)) {
+          long sum = 0;
+          int at = 0;
+          dev.elide.truffledata.json.JsonValue root;
+          while (at < input.length) {
+            at += stream.feed(input, at, Math.min(chunk, input.length - at));
+            while ((root = stream.next()) != null)
+              sum += root.kind() == dev.elide.truffledata.json.JsonValue.Kind.OBJECT ? root.member("id").longValue() : root.element(0).longValue();
+          }
+          stream.finish();
+          require(stream.next() == null && stream.documents() == 500 && sum == expected);
+        }
+      }
+      try (var stream = session.stream(options)) {
+        require(stream.feed(input) == 512);
+        // Streams copy strings: a TruffleSink gets no shared text array.
+        var truffle = new dev.elide.truffledata.json.TruffleSink(new dev.elide.truffledata.json.TruffleSink.KeyCache());
+        require(stream.next(truffle));
+        var text = (com.oracle.truffle.api.strings.TruffleString) member((java.util.Map<?, ?>) java.util.Objects.requireNonNull(truffle.result()), "s");
+        require(text.toJavaStringUncached().equals("caf\u00e9 \u00e9 text beyond inline"));
+        var lent = java.util.Objects.requireNonNull(stream.next());
+        require(lent.element(0).longValue() == 1);
+        kept = stream.retain();
+        require(throwsState(lent::kind));
+        var next = java.util.Objects.requireNonNull(stream.next());
+        session.validate("[1]".getBytes(StandardCharsets.UTF_8));
+        require(throwsState(next::kind));
+        stream.next(new dev.elide.truffledata.json.JavaSink());
+        stream.feed("[1,]\n[5]\n".getBytes(StandardCharsets.UTF_8));
+      }
+      try (var stream = session.stream(options)) {
+        stream.feed("[1,]\n[5]\n{\"a\":".getBytes(StandardCharsets.UTF_8));
+        stream.finish();
+        try {
+          stream.next();
+          throw new AssertionError("accepted [1,]");
+        } catch (IllegalArgumentException expected2) {
+        }
+        require(stream.skip());
+        require(java.util.Objects.requireNonNull(stream.next()).element(0).longValue() == 5);
+        require(stream.truncatedBytes() == 5);
+        try {
+          stream.next();
+          throw new AssertionError("accepted a truncated document");
+        } catch (IllegalArgumentException expected2) {
+        }
+        require(!stream.skip());
+      }
+      var open = session.stream(options);
+      open.feed("[9]\n".getBytes(StandardCharsets.UTF_8));
+      var lent = java.util.Objects.requireNonNull(open.next());
+      session.close();
+      require(throwsState(lent::kind));
+      require(throwsState(() -> open.feed(new byte[] {'1'})));
+    } finally {
+      session.close();
+    }
+    require(kept.root().element(0).longValue() == 1);
+    kept.close();
+  }
+
   // Link probe of //json/native/bridge (Myna's myna-values static library).
   @org.graalvm.nativeimage.c.function.CFunction("td_json_bridge_present")
   private static native int bridgePresent();
@@ -901,6 +976,7 @@ public final class SvmAcceptance {
     textArenas();
     utf16Input();
     sessions();
+    streams();
     typed();
     schemaTyped();
     accessorContracts();

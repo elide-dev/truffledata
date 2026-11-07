@@ -121,6 +121,42 @@ try (JsonSession session = JsonSession.open()) {            // or open(JsonLimit
   on the session, including `close()`, throws `IllegalStateException`.
 - Limits apply per document. Parsing semantics are identical to `JsonSvm.decode`.
 
+### Streams
+
+`JsonSession.stream(JsonStreamOptions)` reads whitespace-separated documents
+(NDJSON, JSON Lines, concatenated JSON) one at a time through the session:
+
+```java
+try (JsonSession session = JsonSession.open();
+     JsonStream stream = session.stream(JsonStreamOptions.DEFAULT)) {   // 1 MiB documents
+  int at = 0;
+  while (at < input.length) {
+    at += stream.feed(input, at, input.length - at);  // accepted bytes: fewer means drain first
+    JsonValue root;
+    while ((root = stream.next()) != null) consume(root);  // lent until the next call
+  }
+  stream.finish();                                     // a final number or literal completes
+  while (stream.next(sink)) {}                         // or export each document
+}
+```
+
+- The carry-over buffer holds at most `2 × maxDocumentBytes`; `batchBytes` (simdjson's
+  `iterate_many` batch) must be at least `maxDocumentBytes`. `feed` accepts nothing while
+  buffered documents are still being read: drain with `next` until it returns `false` or
+  `null`, then feed the rest.
+- `next(JsonSink)` exports a document; `next()` lends its root until the next call on the
+  stream, another stream of the session or the session (views throw afterwards);
+  `retain()` detaches the lent document into a `JsonMessage` without copying the tape.
+  Streams never share a text array: a `sharedText()` sink gets each string copied.
+- Only whitespace separates documents: `[1],[2]` is a syntax error (simdjson's comma
+  format accepts doubled and missing commas). A BOM is accepted only at the start.
+- An invalid document throws `IllegalArgumentException` from `next`, and the stream stays
+  failed until `skip()` resumes after that document. Invalid UTF-8 and raw control bytes
+  are reported by simdjson for a whole batch and cannot be skipped. After `finish()`, a
+  final incomplete document throws ("truncated") and `truncatedBytes()` is its length.
+- Each document is decoded with the session's limits and duplicate-key and number rules;
+  closing the session closes its streams.
+
 ### JVM sessions
 
 `JsonJvm.openSession(Path library, JsonLimits limits)` opens the same native session
@@ -134,6 +170,8 @@ session and every message it retained are closed. Differences from static images
   closed and other threads' segments are rejected before entry.
 - No text arenas: a Java array cannot be the target of a normal downcall, so a
   `sharedText()` sink receives strings copied once each.
+- `JsonStream.feed(byte[], …)` stages at most `2 × maxDocumentBytes` per call natively;
+  `feed(MemorySegment)` passes a live native segment directly (heap segments rejected).
 - Inputs of at most `JsonSession.CRITICAL_LIMIT` (4,096) bytes decode through Myna's
   `CriticalLibraryBinding` (`session_decode_small`), and `reset` always does: both are
   declared native leaves. The safety argument: the input is bounded (4 KiB at the

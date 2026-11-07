@@ -93,6 +93,23 @@ public final class JsonFixture {
         new InputStreamReader(new ByteArrayInputStream(input), StandardCharsets.UTF_8));
   }
 
+  /** Gson's tree parser over one line of an NDJSON buffer (the caller splits lines). */
+  @TruffleBoundary
+  public static JsonElement gsonParse(byte[] input, int offset, int length) {
+    return JsonParser.parseReader(
+        new InputStreamReader(new ByteArrayInputStream(input, offset, length), StandardCharsets.UTF_8));
+  }
+
+  /** The fixture's documents {@code 0..count-1} as NDJSON (one document per line). */
+  public static byte[] ndjson(int count) {
+    var out = new java.io.ByteArrayOutputStream();
+    for (int i = 0; i < count; i++) {
+      out.writeBytes(document(i));
+      out.write('\n');
+    }
+    return out.toByteArray();
+  }
+
   @TruffleBoundary
   public static long gsonRead(Object tree) {
     JsonObject o = ((JsonElement) tree).getAsJsonObject();

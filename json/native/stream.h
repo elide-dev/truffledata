@@ -26,9 +26,10 @@
 //
 // Errors: a document-level failure (syntax, duplicate key, number grammar, limits) fails the stream
 // with the document's extent known, and skip() resumes after it. Stage-1 failures (invalid UTF-8,
-// unescaped control bytes) cover a whole simdjson batch, documents of that batch not yet delivered
-// included, and cannot be skipped; neither can allocation failures, a truncated final document, or
-// an incomplete document larger than max_document_bytes.
+// unescaped control bytes) are reported by simdjson for a whole batch, without an extent: the
+// batch's documents before the error may or may not be delivered first (it depends on where in
+// the batch the error lies), and the failure cannot be skipped; neither can allocation failures,
+// a truncated final document, or an incomplete document larger than max_document_bytes.
 #include "json/native/session.h"
 #include "json/native/status.h"
 

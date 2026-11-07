@@ -73,7 +73,8 @@ enum td_json_status {
 // document) or the failing status; a failed stream stays failed. stream_skip resumes a stream
 // failed by a document-level error (TD_JSON_SYNTAX, or TD_JSON_LIMIT for a complete document) after
 // that document and returns TD_JSON_OK, else TD_JSON_ARGUMENT: stage-1 errors (invalid UTF-8, raw
-// control bytes) fail a whole simdjson batch and cannot be skipped, nor can allocation failures,
+// control bytes) are reported for a whole simdjson batch (documents of the batch before the error
+// may not be delivered) and cannot be skipped, nor can allocation failures,
 // truncation, or an incomplete document above max_document_bytes. stream_truncated_bytes is the
 // number of buffered bytes past the last delivered document (after TD_JSON_STREAM_TRUNCATED: the
 // incomplete document). A UTF-8 BOM is accepted only at the start of the stream. Session results

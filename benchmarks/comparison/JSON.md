@@ -114,6 +114,9 @@ string and `parent` being null. The checksum is 38,219.
 | `simdjson-snapshot` | Decode, `snapshot()`, close, read the snapshot through interop | Snapshots, read like `simdjson-generic-interop` |
 | `simdjson-session-java` (ingest only) | Borrowed `JsonSession.parse(input, JavaSink)`, read the Java tree | Nothing native is retained, so there is no read stage |
 | `simdjson-session-truffle` (ingest only) | Borrowed `JsonSession.parse(input, TruffleSink)` over the shared text arena, read the `TruffleString`-keyed tree | As above (Task D2) |
+| `gson-stream-lines` (ingest only) | The 32 documents as one NDJSON buffer: split at newlines, parse each line into a Gson tree, read it | No read stage (Gson's strict reader takes one top-level value, so lines are split by the caller) |
+| `simdjson-stream-java` (ingest only) | The same buffer fed to one `JsonStream` per run (never finished); `next(JavaSink)` per document, read the Java tree | No read stage (Task F2) |
+| `simdjson-stream-interop` (ingest only) | As above; `next()` lends each root, ten AOT interop reads | No read stage (Task F2) |
 
 Since performance plan Task D1 the `JavaSink` cells (`simdjson-generic-java` and
 `simdjson-session-java`) share one `JavaSink.KeyCache` per run, as an embedder
@@ -163,6 +166,8 @@ column counts unresolved Java calls only, not `@TruffleBoundary` calls. The
 | `simdjson-generic-interop`, ingest | — | — | — | ≤ 480 |
 | `simdjson-session-java`, ingest | — | — | — | ≤ 1,400 |
 | `simdjson-session-truffle`, ingest | — | — | — | ≤ 1,800 |
+| `simdjson-stream-java`, ingest | — | — | — | ≤ 1,400 |
+| `simdjson-stream-interop`, ingest | — | — | — | ≤ 440 |
 
 The interop loop measured 1,754–1,810 nodes: ten inlined member reads and their
 owner checks. With position-hinted member lookup (performance plan Task C1) it
@@ -205,6 +210,16 @@ value sharing the document's text arena, and the arena itself (a `byte[]` of
 `2 × length + 16` bytes per document, since the strings keep it). Keys come from a
 `TruffleSink.KeyCache`. The plan's graph gate `(1000, 2, None)` applies to a compiled
 read root; this cell is ingest-only like `simdjson-session-java`, so it has none.
+
+**Stream budgets (Task F2).** One NDJSON buffer of the 32 documents per operation
+through a `JsonStream` that is never finished. `next(JavaSink)` measured 1,338.5
+B/document under the session `JavaSink` gate (1,400 B; the plan held streams to the
+Task D1 budget). `next()` plus ten AOT interop reads measured 432.75 B/document under a
+440 B gate: a borrow owner and tape reader per lent document (as for session parses)
+and the 240 B of interop views. The plan's 1.0 B/document and `(2000, 1, 0)` graph
+gate assumed a compiled read root over a reusable borrow; streamed documents are lent
+one at a time, so these cells are ingest-only (like the session cells) and the reusable
+borrow reader still needs elide-dev/myna#47.
 
 ### Results
 

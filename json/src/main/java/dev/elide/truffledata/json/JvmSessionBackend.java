@@ -159,6 +159,87 @@ final class JvmSessionBackend extends JsonSession.Backend {
   }
 
   @Override
+  long streamCreate(int maxDocumentBytes, int batchBytes) {
+    MemorySegment stream;
+    try {
+      stream = calls.stream_create(session, maxDocumentBytes, batchBytes);
+    } catch (Throwable failure) {
+      throw JsonJvm.callFailure(failure);
+    }
+    if (stream.address() == 0) throw new OutOfMemoryError("JSON stream allocation");
+    return stream.address();
+  }
+
+  @Override
+  int streamFeed(long stream, byte[] data, int offset, int length) {
+    // Normal downcalls take native memory: stage the chunk (the stream copies what it accepts).
+    return (int) streamFeedNative(stream, stage(data, offset, length), length);
+  }
+
+  @Override
+  long streamFeed(long stream, MemorySegment data) {
+    if (!data.isNative() || data.address() == 0)
+      throw new IllegalArgumentException("Expected a native segment");
+    if (!data.scope().isAlive()) throw new IllegalStateException("JSON input segment closed");
+    if (!data.isAccessibleBy(Thread.currentThread()))
+      throw new IllegalStateException("JSON input segment thread mismatch");
+    return streamFeedNative(stream, data, data.byteSize());
+  }
+
+  private long streamFeedNative(long stream, MemorySegment data, long length) {
+    try {
+      return calls.stream_feed(MemorySegment.ofAddress(stream), data, length);
+    } catch (Throwable failure) {
+      throw JsonJvm.callFailure(failure);
+    }
+  }
+
+  @Override
+  void streamFinish(long stream) {
+    try {
+      calls.stream_finish(MemorySegment.ofAddress(stream));
+    } catch (Throwable failure) {
+      throw JsonJvm.callFailure(failure);
+    }
+  }
+
+  @Override
+  int streamNext(long stream) {
+    try {
+      return calls.stream_next(MemorySegment.ofAddress(stream), result);
+    } catch (Throwable failure) {
+      throw JsonJvm.callFailure(failure);
+    }
+  }
+
+  @Override
+  int streamSkip(long stream) {
+    try {
+      return calls.stream_skip(MemorySegment.ofAddress(stream));
+    } catch (Throwable failure) {
+      throw JsonJvm.callFailure(failure);
+    }
+  }
+
+  @Override
+  long streamTruncatedBytes(long stream) {
+    try {
+      return calls.stream_truncated_bytes(MemorySegment.ofAddress(stream));
+    } catch (Throwable failure) {
+      throw JsonJvm.callFailure(failure);
+    }
+  }
+
+  @Override
+  void streamRelease(long stream) {
+    try {
+      calls.stream_release(MemorySegment.ofAddress(stream));
+    } catch (Throwable failure) {
+      throw JsonJvm.callFailure(failure);
+    }
+  }
+
+  @Override
   void release() {
     try {
       calls.session_release(session);

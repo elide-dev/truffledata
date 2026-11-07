@@ -18,6 +18,8 @@ import dev.elide.truffledata.json.JsonPlan;
 import dev.elide.truffledata.json.JsonRecord;
 import dev.elide.truffledata.json.JsonSession;
 import dev.elide.truffledata.json.JsonSnapshot;
+import dev.elide.truffledata.json.JsonStream;
+import dev.elide.truffledata.json.JsonStreamOptions;
 import dev.elide.truffledata.json.JsonSvm;
 import dev.elide.truffledata.json.JsonValue;
 import java.io.ByteArrayInputStream;
@@ -100,6 +102,11 @@ public final class JsonComparison {
   static final String SESSION_JAVA = "simdjson-session-java";
   // Ingest-only: borrowed JsonSession.parse into a TruffleSink over the shared text arena (Task D2).
   static final String SESSION_TRUFFLE = "simdjson-session-truffle";
+  // Ingest-only streams (Task F2): the 32 documents as one NDJSON buffer per operation. Gson splits
+  // lines and parses each into a tree; the simdjson cells feed a JsonStream and export each
+  // document into a JavaSink or read ten members of the lent root through interop.
+  static final List<String> STREAMS =
+      List.of("gson-stream-lines", "simdjson-stream-java", "simdjson-stream-interop");
   static final List<String> STAGES = List.of("ingest", "read-aot", "interpret", "peak");
 
   public static void main(String[] args) throws Exception {
@@ -109,6 +116,7 @@ public final class JsonComparison {
       run(WALK, "peak", true, true);
       run(SESSION_JAVA, "ingest", true, true);
       run(SESSION_TRUFFLE, "ingest", true, true);
+      for (String engine : STREAMS) run(engine, "ingest", true, true);
     } else {
       if (args.length != 3) throw new IllegalArgumentException("engine stage time|memory");
       run(args[0], args[1], args[2].equals("memory"), false);
@@ -120,7 +128,8 @@ public final class JsonComparison {
     if (GENERIC.contains(engine)
         || engine.equals(WALK)
         || engine.equals(SESSION_JAVA)
-        || engine.equals(SESSION_TRUFFLE)) {
+        || engine.equals(SESSION_TRUFFLE)
+        || STREAMS.contains(engine)) {
       generic(engine, stage, memory, smoke);
       return;
     }
@@ -200,9 +209,14 @@ public final class JsonComparison {
             ? GenericReads.WALK
             : engine.equals(SESSION_JAVA)
                 ? GenericReads.SESSION_JAVA
-                : engine.equals(SESSION_TRUFFLE) ? GenericReads.SESSION_TRUFFLE : GENERIC.indexOf(engine);
+                : engine.equals(SESSION_TRUFFLE)
+                    ? GenericReads.SESSION_TRUFFLE
+                    : STREAMS.contains(engine)
+                        ? GenericReads.STREAM_GSON + STREAMS.indexOf(engine)
+                        : GENERIC.indexOf(engine);
     if (mode < 0) throw new IllegalArgumentException("engine");
-    if ((mode == GenericReads.SESSION_JAVA || mode == GenericReads.SESSION_TRUFFLE) && !ingest)
+    boolean streaming = mode >= GenericReads.STREAM_GSON;
+    if ((mode == GenericReads.SESSION_JAVA || mode == GenericReads.SESSION_TRUFFLE || streaming) && !ingest)
       throw new IllegalArgumentException(engine + " measures ingest only");
     try (var context = context(peak)) {
       context.initialize("td-compare");
@@ -210,7 +224,10 @@ public final class JsonComparison {
       List<JsonMessage> messages = new ArrayList<>();
       // Every simdjson ingest decodes through one explicit session, the documented decode path.
       var root =
-          new GenericReads(engine, mode, mode == GenericReads.GSON ? null : JsonSession.open());
+          new GenericReads(
+              engine,
+              mode,
+              mode == GenericReads.GSON || mode == GenericReads.STREAM_GSON ? null : JsonSession.open());
       try {
         byte[][] inputs = new byte[ROWS][];
         Object[] rows = new Object[ROWS];
@@ -220,7 +237,8 @@ public final class JsonComparison {
           expected += mode == GenericReads.WALK ? JsonFixture.walkChecksum(i) : JsonFixture.checksum(i);
           if (mode == GenericReads.GSON
               || mode == GenericReads.SESSION_JAVA
-              || mode == GenericReads.SESSION_TRUFFLE) {
+              || mode == GenericReads.SESSION_TRUFFLE
+              || streaming) {
             // The session cell measures ingest only; rows exist for the shared sampler.
             rows[i] = JsonFixture.gsonParse(inputs[i]);
           } else if (mode == GenericReads.SNAPSHOT) {
@@ -240,6 +258,7 @@ public final class JsonComparison {
                 return guest
                     ? ((Long) target.call(rows, rotation)) & ~COMPILED_READ
                     : root.read(rows, rotation);
+              if (streaming) return root.ingestStream();
               long sum = 0;
               for (int i = 0; i < ROWS; i++) sum += root.ingest(inputs[(i + rotation) & (ROWS - 1)]);
               return sum;
@@ -401,6 +420,10 @@ public final class JsonComparison {
   private static final class GenericReads extends RootNode {
     static final int GSON = 0, JAVA = 1, INTEROP = 2, SNAPSHOT = 3, WALK = 4, SESSION_JAVA = 5;
     static final int SESSION_TRUFFLE = 6;
+    // STREAMS order: gson-stream-lines, simdjson-stream-java, simdjson-stream-interop.
+    static final int STREAM_GSON = 7, STREAM_JAVA = 8, STREAM_INTEROP = 9;
+    private static final byte[] NDJSON = JsonFixture.ndjson(ROWS);
+    private final @Nullable JsonStream stream;
     private final String name;
     private final int mode;
     private final @Nullable JsonSession session;
@@ -416,6 +439,46 @@ public final class JsonComparison {
       this.name = "GenericReads[" + engine + "]";
       this.mode = mode;
       this.session = session;
+      this.stream = mode >= STREAM_JAVA ? Objects.requireNonNull(session).stream(JsonStreamOptions.DEFAULT) : null;
+    }
+
+    /**
+     * One NDJSON buffer of the 32 documents per operation: split and parse each line (Gson), or feed
+     * the stream and consume each document as it is decoded. The stream is never finished: every
+     * line ends with a newline after a container, so each document is complete when fed.
+     */
+    long ingestStream() {
+      byte[] input = NDJSON;
+      long sum = 0;
+      if (mode == STREAM_GSON) {
+        int start = 0;
+        for (int i = 0; i < input.length; i++) {
+          if (input[i] != '\n') continue;
+          Object tree = JsonFixture.gsonParse(input, start, i - start);
+          retained = tree;
+          sum += JsonFixture.gsonRead(tree);
+          start = i + 1;
+        }
+        return sum;
+      }
+      JsonStream open = Objects.requireNonNull(stream);
+      int at = 0;
+      while (at < input.length) {
+        at += open.feed(input, at, input.length - at);
+        if (mode == STREAM_JAVA) {
+          while (true) {
+            JavaSink sink = new JavaSink(keys);
+            if (!open.next(sink)) break;
+            Object tree = Objects.requireNonNull(sink.result());
+            retained = tree;
+            sum += JsonFixture.javaRead(tree);
+          }
+        } else {
+          JsonValue root;
+          while ((root = open.next()) != null) sum += reader.read(root);
+        }
+      }
+      return sum;
     }
 
     void close() {

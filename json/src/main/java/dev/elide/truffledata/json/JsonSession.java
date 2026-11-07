@@ -5,6 +5,8 @@ import dev.elide.truffledata.json.generated.Json;
 import com.oracle.truffle.api.strings.InternalByteArray;
 import com.oracle.truffle.api.strings.TruffleString;
 import java.lang.foreign.MemorySegment;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Objects;
 import java.util.function.Function;
 import org.graalvm.nativeimage.PinnedObject;
@@ -72,6 +74,31 @@ public final class JsonSession implements AutoCloseable {
     long criticalDecodes() {
       return 0;
     }
+
+    // Streams (Task F2) over td_json_stream_*: `stream` is the native handle's address.
+
+    /** Creates a native stream over this session; throws on invalid options or allocation. */
+    abstract long streamCreate(int maxDocumentBytes, int batchBytes);
+
+    /** Feeds {@code length} bytes at {@code offset}; returns the bytes accepted. */
+    abstract int streamFeed(long stream, byte[] data, int offset, int length);
+
+    /** Feeds a native segment the caller keeps alive for the call; returns the bytes accepted. */
+    abstract long streamFeed(long stream, MemorySegment data);
+
+    abstract void streamFinish(long stream);
+
+    /**
+     * Decodes the next document into the session's borrowed result ({@link #borrow()} reads it);
+     * returns the native status (0; 8 no complete document; 9 truncated; else the failure).
+     */
+    abstract int streamNext(long stream);
+
+    abstract int streamSkip(long stream);
+
+    abstract long streamTruncatedBytes(long stream);
+
+    abstract void streamRelease(long stream);
   }
 
   private final Thread thread = Thread.currentThread();
@@ -82,6 +109,11 @@ public final class JsonSession implements AutoCloseable {
   private @Nullable JsonText text;
   // Text array for shared-text parses; replaced once a string shares it.
   private @Nullable JsonTextArena arena;
+  // The document a stream's next() lent (Task F2): valid until the next call on the session or
+  // any of its streams, which ends it first.
+  private @Nullable JsonBorrow streamed;
+  private @Nullable JsonStream streamedBy;
+  private final List<JsonStream> streams = new ArrayList<>(1);
 
   JsonSession(JsonLimits limits, Backend backend) {
     this.limits = Objects.requireNonNull(limits);
@@ -105,13 +137,33 @@ public final class JsonSession implements AutoCloseable {
     return new JsonSession(limits, SvmBackend.create(limits));
   }
 
-  private Backend check() {
+  /** Confinement, liveness and pin checks; a document lent by a stream stays lent. */
+  Backend guard() {
     if (Thread.currentThread() != thread)
       throw new IllegalStateException("JSON session thread mismatch");
     Backend open = backend;
     if (open == null) throw new IllegalStateException("JSON session closed");
     if (borrow != null) throw new IllegalStateException("JSON session is borrowed");
     return open;
+  }
+
+  /** {@link #guard()}, then ends a document lent by a stream: every call overwrites it. */
+  Backend check() {
+    Backend open = guard();
+    endStreamed(open);
+    return open;
+  }
+
+  private void endStreamed(Backend open) {
+    JsonBorrow lent = streamed;
+    if (lent == null) return;
+    streamed = null;
+    streamedBy = null;
+    try {
+      lent.end();
+    } finally {
+      open.reset();
+    }
   }
 
   /** Decodes into the session; the borrowed result is valid until the next session call. */
@@ -151,6 +203,55 @@ public final class JsonSession implements AutoCloseable {
     cursor.arena(shared);
     borrow = lent;
     return lent;
+  }
+
+  // ---- Streams (Task F2) ---------------------------------------------------------------------
+
+  /**
+   * Opens a stream of whitespace-separated documents (NDJSON, JSON Lines, concatenated JSON) over
+   * this session. The stream is confined to this thread and closed with the session; each document
+   * is decoded into the session, so the session's limits and borrowing rules apply to it.
+   */
+  @TruffleBoundary
+  public JsonStream stream(JsonStreamOptions options) {
+    Objects.requireNonNull(options);
+    Backend open = check();
+    JsonStream stream =
+        new JsonStream(this, open.streamCreate(options.maxDocumentBytes(), options.batchBytes()), options);
+    streams.add(stream);
+    return stream;
+  }
+
+  /** Exports the stream document just decoded into the session through {@code sink}. */
+  void exportStreamed(Backend open, JsonSink sink) {
+    // Streaming modes never share a text array (user decision 1): strings are copied per string.
+    export(open, null, sink);
+  }
+
+  /** Lends the stream document just decoded until the next call on the session or its streams. */
+  JsonValue lendStreamed(Backend open, JsonStream by) {
+    JsonBorrow lent = lend(open, null);
+    // Not a pin: the next call ends this borrow instead of failing.
+    borrow = null;
+    streamed = lent;
+    streamedBy = by;
+    return lent.root();
+  }
+
+  /** Detaches the document {@code by}'s {@link JsonStream#next()} lent into an owned message. */
+  JsonMessage retainStreamed(JsonStream by) {
+    Backend open = guard();
+    JsonBorrow lent = streamed;
+    if (lent == null || streamedBy != by)
+      throw new IllegalStateException("No JSON stream document to retain");
+    streamed = null;
+    streamedBy = null;
+    lent.end();
+    return open.retain();
+  }
+
+  void streamClosed(JsonStream stream) {
+    streams.remove(stream);
   }
 
   private void giveBack(Backend open, JsonBorrow lent) {
@@ -303,8 +404,14 @@ public final class JsonSession implements AutoCloseable {
     if (borrow != null) throw new IllegalStateException("JSON session is borrowed");
     Backend open = backend;
     if (open != null) {
-      backend = null;
-      open.release();
+      try {
+        endStreamed(open);
+        // Streams borrow the native session: close them first (their views fail from now on).
+        for (JsonStream stream : List.copyOf(streams)) stream.close();
+      } finally {
+        backend = null;
+        open.release();
+      }
     }
   }
 
@@ -405,6 +512,50 @@ public final class JsonSession implements AutoCloseable {
     void release() {
       Json.session_release(session);
       UnmanagedMemory.free(result);
+    }
+
+    @Override
+    long streamCreate(int maxDocumentBytes, int batchBytes) {
+      VoidPointer stream = Json.stream_create(session, maxDocumentBytes, batchBytes);
+      if (stream.isNull()) throw new OutOfMemoryError("JSON stream allocation");
+      return stream.rawValue();
+    }
+
+    @Override
+    int streamFeed(long stream, byte[] data, int offset, int length) {
+      try (PinnedObject pinned = PinnedObject.create(data)) {
+        return (int) Json.stream_feed(WordFactory.pointer(stream), pinned.addressOfArrayElement(offset), length);
+      }
+    }
+
+    @Override
+    long streamFeed(long stream, MemorySegment data) {
+      throw new UnsupportedOperationException("Static-image streams take byte arrays");
+    }
+
+    @Override
+    void streamFinish(long stream) {
+      Json.stream_finish(WordFactory.pointer(stream));
+    }
+
+    @Override
+    int streamNext(long stream) {
+      return Json.stream_next(WordFactory.pointer(stream), result);
+    }
+
+    @Override
+    int streamSkip(long stream) {
+      return Json.stream_skip(WordFactory.pointer(stream));
+    }
+
+    @Override
+    long streamTruncatedBytes(long stream) {
+      return Json.stream_truncated_bytes(WordFactory.pointer(stream));
+    }
+
+    @Override
+    void streamRelease(long stream) {
+      Json.stream_release(WordFactory.pointer(stream));
     }
   }
 

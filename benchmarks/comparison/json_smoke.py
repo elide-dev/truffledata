@@ -52,6 +52,13 @@ ALLOCATION = {
     # tree, one TruffleString per string value and one 2 × length + 16 B text array per document;
     # measured 1,772.5.
     ('simdjson-session-truffle', 'ingest'): 1800.0,
+    # Streams (Task F2), one NDJSON buffer of the 32 documents per operation through a JsonStream
+    # that is never finished. JavaSink: next(JavaSink) per document, held to the session JavaSink
+    # budget (Task D1's); measured 1,338.5. Interop: next() lends the root (a borrow owner and tape
+    # reader per document, as for session parses) + ten AOT interop reads; measured 432.75. The
+    # plan's 1.0 B/document assumed a reusable borrow owner (elide-dev/myna#47).
+    ('simdjson-stream-java', 'ingest'): 1400.0,
+    ('simdjson-stream-interop', 'ingest'): 440.0,
 }
 
 # Columns: Count Size Cycles Ifs Loops Invokes Allocs. Fail closed if trace format changes.
