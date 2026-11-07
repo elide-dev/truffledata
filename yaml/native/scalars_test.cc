@@ -197,10 +197,59 @@ void key_texts() {
   require(key_text(plain("1e400"), buffer) == "1e400");
   require(key_text(plain("abc"), buffer) == "abc");
 }
+// resolve_core_fast equals resolve_plain under CORE whenever it answers: kind, key kind, payload
+// bits and text, over fixed boundary tokens and 200,000 pseudo-random tokens drawn from the
+// characters that matter to the grammar (decimals of up to 15 digits are exactly rounded).
+bool same(const scalar& a, const scalar& b) {
+  return a.kind == b.kind && a.key == b.key && a.nonfinite == b.nonfinite && a.bits == b.bits && a.text == b.text &&
+         a.token == b.token && a.implicit == b.implicit;
+}
+void core_fast_matches_general() {
+  size_t answered = 0, checked = 0;
+  auto check = [&](const std::string& token) {
+    scalar fast;
+    ++checked;
+    if (!resolve_core_fast(token, fast)) return;
+    ++answered;
+    scalar general = plain(token);
+    if (!same(fast, general)) std::fprintf(stderr, "resolve_core_fast differs on '%s'\n", token.c_str());
+    require(same(fast, general));
+  };
+  for (const char* token : {"", "~", "~~", "null", "Null", "NULL", "nULL", "true", "True", "TRUE", "false", "False",
+                            "FALSE", "fals", "truee", "0", "-0", "+0", "00", "-", "+", ".", "-.", "1.", ".5", "-.5",
+                            "+.5", "0.25", "-0.0", "1.25", "123456789012345.", "1234567890123456.", "0.000000000000001",
+                            "999999999999999", "999999999999999999", "9999999999999999999", "-999999999999999999",
+                            "0x1F", "0o17", ".inf", ".nan", "1e5", "1.5e5", "1.5.5", "abc", "nope", "t0", "-x", "+x"})
+    check(token);
+  const char alphabet[] = "0123456789000111.-+eExo_abnultrsfNTF~ ";
+  uint64_t state = 0x9E3779B97F4A7C15ull;
+  auto next = [&] {
+    state ^= state << 13, state ^= state >> 7, state ^= state << 17;
+    return state;
+  };
+  for (int i = 0; i < 200000; ++i) {
+    size_t length = next() % 21;
+    std::string token;
+    bool numeric = next() % 2;
+    for (size_t k = 0; k < length; ++k) {
+      if (numeric) {
+        uint64_t r = next() % 16;
+        token.push_back(r < 12 ? char('0' + r % 10) : r == 12 ? '.' : r == 13 ? '-' : r == 14 ? '+' : 'e');
+      } else {
+        token.push_back(alphabet[next() % (sizeof alphabet - 1)]);
+      }
+    }
+    check(token);
+  }
+  std::printf("core_fast_matches_general: %zu of %zu tokens answered by the fast resolver, all equal\n", answered,
+              checked);
+  require(answered > checked / 4);
+}
 }  // namespace
 
 int main() {
   try {
+    core_fast_matches_general();
     core_table();
     styles_and_tags();
     json_schema();

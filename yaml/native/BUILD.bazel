@@ -255,6 +255,27 @@ cc_test(
     ],
 )
 
+# The scalar fast paths against the general paths: identical tapes, side tables and errors over the
+# probe fixtures, every yaml-test-suite input and a generated boundary corpus, under several policies.
+cc_test(
+    name = "fast_path_test",
+    size = "medium",
+    srcs = ["fast_path_test.cc"],
+    args = [
+        "$(rootpaths :testdata)",
+        "$(rootpaths @yaml_test_suite//:inputs)",
+    ],
+    copts = ["-std=c++17"],
+    data = [
+        ":testdata",
+        "@yaml_test_suite//:inputs",
+    ],
+    deps = [
+        ":decoder",
+        ":testing",
+    ],
+)
+
 cc_test(
     name = "semantics_test",
     srcs = ["semantics_test.cc"],

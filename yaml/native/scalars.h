@@ -714,6 +714,85 @@ inline scalar resolve_plain(std::string_view text, schema s, std::pmr::memory_re
   return string_scalar(text);
 }
 
+namespace detail {
+// Exact powers of ten for the Clinger fast path (10^0 .. 10^15 are exact binary64 values).
+inline constexpr double exact_powers[16] = {1e0, 1e1, 1e2,  1e3,  1e4,  1e5,  1e6,  1e7,
+                                            1e8, 1e9, 1e10, 1e11, 1e12, 1e13, 1e14, 1e15};
+}  // namespace detail
+
+// The common untagged plain scalars under CORE, classified by their first byte and length and
+// converted without the general resolver: empty, null and bool spellings, strings that cannot be
+// anything else, integers of at most 18 digits and decimals `[-+]?[0-9]*\.[0-9]*` of at most 15
+// digits (exactly rounded: both the digits and 10^k are exact binary64 values, so one IEEE
+// division rounds once, as std::from_chars does). Returns false when `s` needs resolve_plain;
+// whenever it returns true, `r` equals resolve_plain(s, schema::core) (pinned by scalars_test).
+[[gnu::always_inline]] inline bool resolve_core_fast(std::string_view s, scalar& r) {
+  using namespace detail;
+  const size_t n = s.size();
+  if (n == 0) {
+    r = null_scalar();
+    return true;
+  }
+  const unsigned char c = static_cast<unsigned char>(s[0]);
+  if ((c >= '0' && c <= '9') || c == '-' || c == '+' || c == '.') {
+    size_t i = (c == '-' || c == '+') ? 1 : 0;
+    const bool negative = c == '-';
+    uint64_t m = 0;
+    size_t digits = 0;
+    while (i < n) {
+      unsigned d = unsigned(static_cast<unsigned char>(s[i])) - '0';
+      if (d > 9) break;
+      if (++digits > 18) return false;
+      m = m * 10 + d;
+      ++i;
+    }
+    if (i == n) {
+      if (!digits) return false;  // "-", "+"
+      r = scalar{};
+      r.key = key_kind::integer;
+      if (m == 0 && negative) {
+        double nz = -0.0;
+        r.kind = MYNA_VALUE_F64;
+        std::memcpy(&r.bits, &nz, sizeof nz);
+      } else {
+        r.kind = MYNA_VALUE_I64;
+        r.bits = negative ? uint64_t(0) - m : m;
+      }
+      return true;
+    }
+    if (s[i] != '.') return false;  // radix prefixes, exponents, other text
+    size_t fraction = 0;
+    for (++i; i < n; ++i) {
+      unsigned d = unsigned(static_cast<unsigned char>(s[i])) - '0';
+      if (d > 9) return false;  // exponents, a second '.', other text
+      if (++digits > 15) return false;
+      m = m * 10 + d;
+      ++fraction;
+    }
+    if (!digits || digits > 15) return false;  // ".", "-.", or a long integer part
+    double v = double(m) / exact_powers[fraction];
+    if (negative) v = -v;
+    r = scalar{};
+    r.kind = MYNA_VALUE_F64;
+    r.key = key_kind::floating;
+    std::memcpy(&r.bits, &v, sizeof v);
+    return true;
+  }
+  switch (c) {
+    case 'n': case 'N': case '~':
+      r = is_null(s) ? null_scalar() : string_scalar(s);
+      return true;
+    case 't': case 'T': case 'f': case 'F': {
+      int b = is_bool(s);
+      r = b < 0 ? string_scalar(s) : bool_scalar(b == 1);
+      return true;
+    }
+    default:
+      r = string_scalar(s);
+      return true;
+  }
+}
+
 // Resolution with an explicit tag (any style). Mismatches are syntax errors.
 inline scalar resolve_tagged(std::string_view text, tag_kind tag, schema s, std::pmr::memory_resource* scratch) {
   using namespace detail;

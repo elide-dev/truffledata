@@ -174,6 +174,57 @@ class string_map {
   }
 };
 
+// Duplicate-key set of one open mapping, over tape::key_table's hashes: up to 16 keys inline behind
+// a 64-bit filter of their hashes (a clear bit skips the linear compare, so a mapping of distinct
+// keys rarely compares bytes), then a tape::key_table (open addressing in the session arena). Keys
+// are compared after resolution; their bytes must stay valid while the set holds them.
+class key_set {
+  struct entry {
+    uint32_t hash;
+    uint32_t length;
+    const char* data;
+  };
+  static constexpr uint32_t inline_keys = 16;
+  entry small_[inline_keys];
+  uint32_t count_ = 0;
+  uint64_t seen_ = 0;
+  std::optional<tape::key_table> table_;
+
+  [[gnu::noinline]] bool spill(std::pmr::memory_resource* memory, uint32_t hash, std::string_view key) {
+    if (!table_) {
+      table_.emplace(memory);
+      for (uint32_t i = 0; i < count_; ++i) table_->insert(small_[i].hash, {small_[i].data, small_[i].length});
+    }
+    return table_->insert(hash, key);
+  }
+
+ public:
+  void clear() noexcept {
+    count_ = 0;
+    seen_ = 0;
+    table_.reset();
+  }
+  // False when an equal key is already present.
+  [[gnu::always_inline]] bool insert(std::pmr::memory_resource* memory, uint32_t hash, std::string_view key) {
+    if (C4_LIKELY(!table_)) {
+      const uint64_t bit = uint64_t(1) << (hash & 63);
+      if (seen_ & bit) {
+        for (uint32_t i = 0; i < count_; ++i) {
+          const entry& e = small_[i];
+          if (e.hash == hash && e.length == key.size() && (key.empty() || std::memcmp(e.data, key.data(), key.size()) == 0))
+            return false;
+        }
+      }
+      if (C4_LIKELY(count_ < inline_keys)) {
+        seen_ |= bit;
+        small_[count_++] = {hash, uint32_t(key.size()), key.data()};
+        return true;
+      }
+    }
+    return spill(memory, hash, key);
+  }
+};
+
 class handler : public c4::yml::EventHandlerStack<handler, handler_state> {
  public:
   using state = handler_state;
@@ -184,6 +235,7 @@ class handler : public c4::yml::EventHandlerStack<handler, handler_state> {
 
   explicit handler(c4::yml::Callbacks const& callbacks) : EventHandlerStack(callbacks) {
     m_tag_cache.m_entries.m_callbacks = callbacks;
+    for (hash_slot& slot : hash_cache_) slot = {0, 0, UINT32_MAX, 0};
     _stack_reset_root();
   }
   handler(const handler&) = delete;
@@ -232,7 +284,7 @@ class handler : public c4::yml::EventHandlerStack<handler, handler_state> {
   }
   // Drops the per-decode state before the arena is reset (key tables free into the arena).
   void clear() noexcept {
-    while (depth_) frames_[--depth_].keys.reset();
+    while (depth_) frames_[--depth_].keys.clear();
     writer_.reset();
     lexical_.forget();
     hashes_.forget();
@@ -259,6 +311,10 @@ class handler : public c4::yml::EventHandlerStack<handler, handler_state> {
     last_closed_ = SIZE_MAX;
     view_ = {};
   }
+
+  // Test hook: false routes every scalar through the general resolver and writers, so tests can
+  // prove the fast paths produce identical tapes and side tables. Production never clears it.
+  void fast_paths(bool on) { fast_paths_ = on; }
 
   const myna_value_view& view() const { return view_; }
   table_view<uint64_t> lexical_spans() const { return {lexical_.data(), lexical_.size()}; }
@@ -336,11 +392,13 @@ class handler : public c4::yml::EventHandlerStack<handler, handler_state> {
     enable_<c4::yml::VAL | c4::yml::VAL_PLAIN | c4::yml::VALNIL>();
   }
   void set_key_scalar_plain(c4::csubstr s) {
-    key(s, scalar_style::plain, false);
+    short_text w;
+    if (!(short_plain(s, w) && key_fast(s, w))) key(s, scalar_style::plain, false);
     enable_<c4::yml::KEY | c4::yml::KEY_PLAIN>();
   }
   void set_val_scalar_plain(c4::csubstr s) {
-    value(s, scalar_style::plain, false);
+    short_text w;
+    if (!(short_plain(s, w) && value_fast(s, w))) value(s, scalar_style::plain, false);
     enable_<c4::yml::VAL | c4::yml::VAL_PLAIN>();
   }
   void set_key_scalar_dquoted(c4::csubstr s) {
@@ -465,7 +523,7 @@ class handler : public c4::yml::EventHandlerStack<handler, handler_state> {
     uint32_t anchor = no_anchor;
     tag_kind tag = tag_kind::none;
     size_t merge = none;      // node of the `<<` key
-    std::optional<tape::key_table> keys;
+    key_set keys;
   };
   // The last scalar or alias written into a sequence, kept so `[a: b]` can turn it into a key.
   struct last_value {
@@ -487,7 +545,7 @@ class handler : public c4::yml::EventHandlerStack<handler, handler_state> {
   bool in_input(const char* p, size_t n) const { return p && p >= input_ && p + n <= input_ + length_; }
 
   // The three side tables grow in step (their capacities only differ after a failed growth).
-  void side(uint64_t lexical, uint32_t hash, uint32_t meta) {
+  [[gnu::always_inline]] void side(uint64_t lexical, uint32_t hash, uint32_t meta) {
     *lexical_.extend(memory_, 1) = lexical;
     *hashes_.extend(memory_, 1) = hash;
     *meta_.extend(memory_, 1) = meta;
@@ -570,7 +628,10 @@ class handler : public c4::yml::EventHandlerStack<handler, handler_state> {
 
   // Defines the pending anchor on `node` (closed for scalars, open for collections until close).
   uint32_t define_anchor(size_t node, bool open) {
-    if (!has_pending_anchor_) return no_anchor;
+    if (C4_LIKELY(!has_pending_anchor_)) return no_anchor;
+    return bind_anchor(node, open);
+  }
+  [[gnu::noinline]] uint32_t bind_anchor(size_t node, bool open) {
     has_pending_anchor_ = false;
     uint32_t id = uint32_t(anchors_.size());
     *anchors_.extend(memory_, 1) = {node, pending_anchor_.offset, pending_anchor_.length};
@@ -678,13 +739,157 @@ class handler : public c4::yml::EventHandlerStack<handler, handler_state> {
     return key_text(r, buffer);
   }
 
+  // ---- fast paths: short untagged plain scalars -------------------------------------------------
+  // The common scalar is an untagged, unanchored plain scalar of 1-16 bytes in the input, decoded
+  // under CORE inside a mapping stored as an object or a sequence. Its bytes are loaded once as two
+  // words (the session pads the input, so the 16-byte read is safe; bytes past the scalar are
+  // masked) and serve the span (no space or LF: single-line, the source token), the
+  // classification, the key hash cache, ASCII detection and the inline node. Each fast path
+  // produces exactly the general path's node and side entries; anything else (and every
+  // duplicate key) returns false and takes the general path.
+  struct short_text {
+    uint64_t lo, hi;
+  };
+  struct hash_slot {
+    uint64_t lo, hi;
+    uint32_t length;  // UINT32_MAX: empty
+    uint32_t hash;
+  };
+  static constexpr size_t hash_cache_slots = 256;
+
+  static constexpr uint64_t word(const char* s, size_t n) {
+    uint64_t w = 0;
+    for (size_t i = 0; i < n; ++i) w |= uint64_t(uint8_t(s[i])) << (8 * i);
+    return w;
+  }
+
+  [[gnu::always_inline]] bool short_plain(c4::csubstr s, short_text& w) const {
+    if (!fast_paths_ || pending_tag_ != tag_kind::none || has_pending_anchor_ || schema_ != schema::core) return false;
+    if (s.len == 0 || s.len > 16 || !in_input(s.str, s.len)) return false;
+    uint64_t lo, hi;
+    std::memcpy(&lo, s.str, 8);
+    std::memcpy(&hi, s.str + 8, 8);
+    lo &= low_bytes(s.len);
+    hi &= low_bytes(s.len > 8 ? s.len - 8 : 0);
+    // Masked bytes are zero, neither space nor LF.
+    if ((detail::equal(lo, ' ') | detail::equal(lo, '\n') | detail::equal(hi, ' ') | detail::equal(hi, '\n')) != 0)
+      return false;
+    w = {lo, hi};
+    return true;
+  }
+
+  // True when a plain scalar is certainly a string under CORE: it cannot start a number or `~`,
+  // and it is not one of the null or bool spellings (resolve_plain's forms).
+  [[gnu::always_inline]] static bool core_string(uint64_t lo, size_t n) {
+    const unsigned c = unsigned(lo & 0xff);
+    if ((c >= '0' && c <= '9') || c == '-' || c == '+' || c == '.' || c == '~') return false;
+    if (n == 4)
+      return lo != word("null", 4) && lo != word("Null", 4) && lo != word("NULL", 4) && lo != word("true", 4) &&
+             lo != word("True", 4) && lo != word("TRUE", 4);
+    if (n == 5) return lo != word("false", 5) && lo != word("False", 5) && lo != word("FALSE", 5);
+    return true;
+  }
+
+  // tape::key_hash of short text, memoized by its exact bytes and length (keys repeat).
+  [[gnu::always_inline]] uint32_t cached_hash(short_text w, const char* text, size_t n) {
+    uint64_t mix = (w.lo ^ (w.hi * 0x9E3779B97F4A7C15ull) ^ n) * 0xff51afd7ed558ccdull;
+    hash_slot& slot = hash_cache_[mix >> 56];
+    if (C4_LIKELY(slot.lo == w.lo && slot.hi == w.hi && slot.length == n)) return slot.hash;
+    uint32_t hash = tape::key_hash(std::string_view(text, n));
+    slot = {w.lo, w.hi, uint32_t(n), hash};
+    return hash;
+  }
+
+  [[gnu::always_inline]] bool key_fast(c4::csubstr s, short_text w) {
+    if (C4_UNLIKELY(!depth_)) return false;
+    frame& f = frames_[depth_ - 1];
+    if (f.kind != frame_kind::map || f.pairs || !core_string(w.lo, s.len)) return false;
+    if (rules_.merge_keys && s.len == 2 && w.lo == word("<<", 2)) return false;
+    const uint32_t hash = cached_hash(w, s.str, s.len);
+    if (C4_UNLIKELY(!f.keys.insert(memory_, hash, std::string_view(s.str, s.len)))) return false;
+    const bool plain = ((w.lo | w.hi) & 0x8080808080808080ull) == 0;
+    const size_t node = writer_->node_count();
+    writer_->string_words(w.lo, w.hi, uint32_t(s.len));
+    side(pack(size_t(s.str - input_), s.len), tape::key_meta(hash, node - f.node, plain), 0);
+    ++f.count;
+    return true;
+  }
+
+  [[gnu::always_inline]] bool value_fast(c4::csubstr s, short_text w) {
+    if (C4_UNLIKELY(!depth_)) return false;
+    frame& f = frames_[depth_ - 1];
+    if (f.kind == frame_kind::pair || (f.kind == frame_kind::map && f.pairs)) return false;
+    const std::string_view text(s.str, s.len);
+    const size_t node = writer_->node_count();
+    const bool plain = ((w.lo | w.hi) & 0x8080808080808080ull) == 0;
+    bool string = true;
+    if (C4_LIKELY(core_string(w.lo, s.len))) {
+      writer_->string_words(w.lo, w.hi, uint32_t(s.len));
+    } else {
+      scalar r;
+      if (!resolve_core_fast(text, r)) return false;
+      write_value(r);
+      string = r.kind == MYNA_VALUE_STRING;
+    }
+    const uint64_t span = pack(size_t(s.str - input_), s.len);
+    side(span, string && plain ? tape::ascii_flag : 0, 0);
+    if (f.kind == frame_kind::seq) {
+      last_ = {true, node, text, scalar_style::plain, false, tag_kind::none, 0, span, no_anchor, false, 0};
+      ++f.count;
+    } else {
+      last_.valid = false;
+    }
+    return true;
+  }
+
   // ---- lexical spans --------------------------------------------------------------------------
   static bool space(char c) { return c == ' ' || c == '\t' || c == '\r' || c == '\n'; }
+  // blank() of n <= 16 bytes that lie in the padded input: two word loads, bytes past n masked.
+  [[gnu::always_inline]] static bool blank16(const char* text, size_t n) {
+    uint64_t lo, hi;
+    std::memcpy(&lo, text, 8);
+    std::memcpy(&hi, text + 8, 8);
+    uint64_t lo_hits = (detail::equal(lo, ' ') | detail::equal(lo, '\n')) & low_bytes(n);
+    uint64_t hi_hits = (detail::equal(hi, ' ') | detail::equal(hi, '\n')) & low_bytes(n > 8 ? n - 8 : 0);
+    return (lo_hits | hi_hits) != 0;
+  }
+  // Mask of the first min(n, 8) bytes of a little-endian word.
+  [[gnu::always_inline]] static uint64_t low_bytes(size_t n) {
+    return n >= 8 ? ~uint64_t(0) : (uint64_t(1) << (8 * n)) - 1;
+  }
+  // True when text[0, n) holds a space or an LF (exact SWAR masks, eight bytes per step).
+  static bool blank(const char* text, size_t n) {
+    uint64_t hits = 0;
+    size_t i = 0;
+    for (; i + 8 <= n; i += 8) {
+      uint64_t x;
+      std::memcpy(&x, text + i, 8);
+      hits |= detail::equal(x, ' ') | detail::equal(x, '\n');
+    }
+    if (i < n) {
+      if (n >= 8) {
+        uint64_t x;
+        std::memcpy(&x, text + n - 8, 8);
+        hits |= detail::equal(x, ' ') | detail::equal(x, '\n');
+      } else {
+        for (; i < n; ++i) hits |= text[i] == ' ' || text[i] == '\n';
+      }
+    }
+    return hits != 0;
+  }
   static uint64_t pack(size_t offset, size_t length) { return (uint64_t(offset) << 32) | uint64_t(length); }
 
   // Spans index the input: plain single-line scalars always; quoted, multi-line plain and block
   // scalars only when a pristine copy of the source is retained (rapidyaml rewrote them in place).
-  uint64_t lexical(const char* text, size_t length, scalar_style style, bool empty) const {
+  [[gnu::always_inline]] uint64_t lexical(const char* text, size_t length, scalar_style style, bool empty) const {
+    // Plain scalars in the input holding no space or LF (numbers, identifiers) were single-line:
+    // their bytes are the source token. The padded input makes a 16-byte read past them safe.
+    if (C4_LIKELY(style == scalar_style::plain && !empty && in_input(text, length) && length <= 16 &&
+                  !blank16(text, length)))
+      return pack(size_t(text - input_), length);
+    return lexical_slow(text, length, style, empty);
+  }
+  [[gnu::noinline]] uint64_t lexical_slow(const char* text, size_t length, scalar_style style, bool empty) const {
     if (empty || !text) return 0;
     const bool located = in_input(text, length);
     size_t position = m_curr->pos.offset;
@@ -694,10 +899,8 @@ class handler : public c4::yml::EventHandlerStack<handler, handler_state> {
         if (!located) return 0;
         size_t begin = size_t(text - input_), end = begin + length;
         // Folding turns every line break into a space or LF: a scalar holding neither (numbers,
-        // identifiers) was single-line and its bytes are the source token.
-        bool folded = false;
-        for (size_t i = 0; i < length; ++i) folded |= text[i] == ' ' || text[i] == '\n';
-        if (!folded) return pack(begin, length);
+        // identifiers) was single-line and its bytes are the source token. Eight bytes per step.
+        if (C4_LIKELY(!blank(text, length))) return pack(begin, length);
         // The source token ends at the last non-space byte before the parser position; bytes
         // between the filtered end and there are the folded scalar's leftover tail.
         size_t source_end = position;
@@ -742,7 +945,7 @@ class handler : public c4::yml::EventHandlerStack<handler, handler_state> {
   // ---- node writing ---------------------------------------------------------------------------
   // Resolves a scalar with its tag: 1.1 type tags and unknown tags are validated here and stored as
   // strings; collection tags on scalars are errors.
-  scalar resolve_now(std::string_view text, scalar_style style, tag_kind tag) {
+  [[gnu::noinline]] scalar resolve_now(std::string_view text, scalar_style style, tag_kind tag) {
     switch (tag) {
       case tag_kind::binary:
         if (!valid_base64(text)) fail("invalid base64 in a YAML !!binary scalar");
@@ -767,14 +970,14 @@ class handler : public c4::yml::EventHandlerStack<handler, handler_state> {
     }
   }
 
-  void write_text(std::string_view text) {
+  [[gnu::always_inline]] void write_text(std::string_view text) {
     if (text.size() > MYNA_VALUE_INLINE_BYTES && in_input(text.data(), text.size()))
       writer_->string_ref(region_, uint32_t(text.data() - input_), uint32_t(text.size()));
     else
       writer_->string(text);
   }
 
-  void write_value(const scalar& r) {
+  [[gnu::always_inline]] void write_value(const scalar& r) {
     switch (r.kind) {
       case MYNA_VALUE_NULL: writer_->null(); break;
       case MYNA_VALUE_BOOL: writer_->boolean(r.bits != 0); break;
@@ -814,8 +1017,7 @@ class handler : public c4::yml::EventHandlerStack<handler, handler_state> {
     f.anchor = no_anchor;
     f.tag = tag_kind::none;
     f.merge = none;
-    f.keys.reset();
-    if (kind == frame_kind::map) f.keys.emplace(memory_);
+    f.keys.clear();
     return f;
   }
 
@@ -852,22 +1054,64 @@ class handler : public c4::yml::EventHandlerStack<handler, handler_state> {
     if (!f && root_written_) throw error(status_internal, "YAML second root value");
     if (f && f->kind == frame_kind::map && f->pairs) throw error(status_internal, "YAML value without a key");
     std::string_view text(s.str ? s.str : "", s.len);
-    taken_tag tag = take_tag();
     uint64_t span = lexical(s.str, s.len, style, empty);
-    scalar r = resolve_now(text, style, tag.kind);
-    uint32_t tag_index = tag.index;
-    if (r.implicit == tag_kind::timestamp && !tag_index) tag_index = intern("tag:yaml.org,2002:timestamp");
+    scalar r;
+    taken_tag tag{tag_kind::none, 0};
+    uint32_t tag_index = 0;
+    // Untagged plain scalars under CORE (nearly every value) skip the general resolver.
+    if (!(fast_paths_ && pending_tag_ == tag_kind::none && style == scalar_style::plain && schema_ == schema::core &&
+          resolve_core_fast(text, r))) {
+      tag = take_tag();
+      r = resolve_now(text, style, tag.kind);
+      tag_index = tag.index;
+      if (r.implicit == tag_kind::timestamp && !tag_index) tag_index = intern("tag:yaml.org,2002:timestamp");
+    }
     size_t node = writer_->node_count();
     write_value(r);
     uint32_t anchor = define_anchor(node, false);
-    side(span, r.kind == MYNA_VALUE_STRING && tape::ascii(r.text) ? tape::ascii_flag : 0,
+    side(span, r.kind == MYNA_VALUE_STRING && ascii_text(r.text) ? tape::ascii_flag : 0,
          meta_word(uint32_t(style), key_kind::string, tag_index) | (anchor != no_anchor ? meta_anchored : 0));
-    last_ = {};
     if (f && f->kind == frame_kind::seq) {
       // input bytes or rapidyaml arena bytes: both stay put (grow_arena)
       last_ = {true, node, text, style, empty, tag.kind, tag_index, span, anchor, false, 0};
+    } else {
+      last_.valid = false;  // retro_map reads the other fields only when valid
     }
     child_done(f);
+  }
+
+  // tape::ascii, with two word loads for short text in the padded input.
+  [[gnu::always_inline]] bool ascii_text(std::string_view s) const {
+    if (C4_LIKELY(s.size() <= 16 && in_input(s.data(), s.size()))) {
+      uint64_t lo, hi;
+      std::memcpy(&lo, s.data(), 8);
+      std::memcpy(&hi, s.data() + 8, 8);
+      uint64_t any = (lo & low_bytes(s.size())) | (hi & low_bytes(s.size() > 8 ? s.size() - 8 : 0));
+      return (any & 0x8080808080808080ull) == 0;
+    }
+    return ascii(s);
+  }
+  // tape::ascii eight bytes at a time.
+  static bool ascii(std::string_view s) {
+    const char* p = s.data();
+    size_t n = s.size();
+    uint64_t any = 0;
+    size_t i = 0;
+    for (; i + 8 <= n; i += 8) {
+      uint64_t w;
+      std::memcpy(&w, p + i, 8);
+      any |= w;
+    }
+    if (i < n) {
+      if (n >= 8) {
+        uint64_t w;
+        std::memcpy(&w, p + n - 8, 8);
+        any |= w;
+      } else {
+        for (; i < n; ++i) any |= uint8_t(p[i]);
+      }
+    }
+    return (any & 0x8080808080808080ull) == 0;
   }
 
   void key(c4::csubstr s, scalar_style style, bool empty) {
@@ -881,7 +1125,10 @@ class handler : public c4::yml::EventHandlerStack<handler, handler_state> {
     frame* f = top();
     if (!f || f->kind != frame_kind::map) throw error(status_internal, "YAML key outside a mapping");
     (void)empty;
-    scalar r = resolve_now(text, style, tag.kind);
+    scalar r;
+    if (!(fast_paths_ && tag.kind == tag_kind::none && style == scalar_style::plain && schema_ == schema::core &&
+          resolve_core_fast(text, r)))
+      r = resolve_now(text, style, tag.kind);
     uint32_t tag_index = tag.index;
     if (r.implicit == tag_kind::timestamp && !tag_index) tag_index = intern("tag:yaml.org,2002:timestamp");
     // `<<` (plain and untagged, or tagged !!merge) is a merge key when merges are on.
@@ -910,7 +1157,7 @@ class handler : public c4::yml::EventHandlerStack<handler, handler_state> {
         if (!rules_.last_wins) duplicate(f);
         remove_merge_entry(f);
       }
-    } else if (!f.keys->insert(hash, canonical)) {
+    } else if (!f.keys.insert(memory_, hash, canonical)) {
       if (rules_.duplicate_keys_pairs) {
         convert_to_pairs(f);
         open_pair(f);
@@ -1012,7 +1259,7 @@ class handler : public c4::yml::EventHandlerStack<handler, handler_state> {
     validate_shape(*f);
     if (f->anchor != no_anchor) anchor_open_[f->anchor] = 0;
     size_t node = f->node;
-    f->keys.reset();
+    f->keys.clear();
     --depth_;
     last_ = {};
     last_closed_ = node;
@@ -1095,7 +1342,7 @@ class handler : public c4::yml::EventHandlerStack<handler, handler_state> {
     side(0, 0, style);
     frame& m = push_frame(node, frame_kind::map);
     m.pairs = true;
-    m.keys.reset();
+    m.keys.clear();
     open_pair(m);
     size_t at = writer_->node_count();
     replay(scratch, 0, count, int64_t(at) - int64_t(start));
@@ -1179,7 +1426,7 @@ class handler : public c4::yml::EventHandlerStack<handler, handler_state> {
       k = next;
     }
     f.pairs = true;
-    f.keys.reset();
+    f.keys.clear();
   }
 
   // DuplicateKeys.LAST_WINS: removes the earlier entry with key `canonical` from the open mapping.
@@ -1282,6 +1529,8 @@ class handler : public c4::yml::EventHandlerStack<handler, handler_state> {
   size_t arena_capacity_ = 0, arena_size_ = 0;
   c4::yml::TagDirectives m_tag_directives;
   c4::yml::TagCache m_tag_cache;
+  hash_slot hash_cache_[hash_cache_slots];
+  bool fast_paths_ = true;
 };
 
 }  // namespace truffledata::yaml

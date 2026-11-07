@@ -96,7 +96,7 @@ inline void handler::apply_merge(frame& f) {
         std::string_view text = stable_copy(writer_->text_of(node_at(kj)));
         bool plain;
         uint32_t hash = tape::key_hash(text, plain);
-        if (f.keys->insert(hash, text)) {
+        if (f.keys.insert(memory_, hash, text)) {
           // The key node is copied; its text (inline, owned or input region) is unchanged.
           size_t at = writer_->node_count();
           myna_value_node key = node_at(kj);

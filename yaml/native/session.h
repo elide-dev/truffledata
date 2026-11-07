@@ -199,6 +199,8 @@ class session final {
   }
 
   bool live() const { return live_; }
+  // Test hook (handler::fast_paths): false decodes through the general scalar paths only.
+  void fast_paths(bool on) { handler_.fast_paths(on); }
   // Invalidates the borrowed document without freeing: O(1), no allocation, no exception.
   void reset() noexcept { live_ = false; }
 
