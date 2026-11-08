@@ -60,10 +60,13 @@ final class BatchBuilder implements CsvScanner.Records {
   /** Whether {@link #put} and {@link #commit} may build this batch. */
   private final boolean fusable;
 
+  /** All retained fields are STRING: framing needs only span stores, never typed conversion. */
+  private final boolean spanOnly;
+
   /** Per record column: the field kind it fills, or {@link #SKIP} (projected away). */
   private final byte[] fuseKind;
 
-  /** Per record column: the field it fills. */
+  /** Per record column: the field it fills, or -1 when projected away. */
   private final int[] fuseField;
 
   /** Whether row {@link #rows} has capacity (false once the batch reaches maxBatchRows). */
@@ -113,10 +116,13 @@ final class BatchBuilder implements CsvScanner.Records {
     fuseKind = new byte[binding.width];
     fuseField = new int[binding.width];
     Arrays.fill(fuseKind, SKIP);
+    Arrays.fill(fuseField, -1);
     // Fused records hold every field (no state arrays) and need no null-token decision beyond the
     // strict legacy rule, which no typed grammar accepts and a STRING field stores as is.
     boolean simple = !nullsActive || nullsLegacy;
+    boolean strings = true;
     for (int f = 0; f < fields; f++) {
+      strings &= binding.kinds[f] == CsvPlan.STRING;
       int column = binding.fieldToColumn[f];
       if (binding.stateful[f] || column < 0 || column >= binding.width) simple = false;
       else {
@@ -125,11 +131,25 @@ final class BatchBuilder implements CsvScanner.Records {
       }
     }
     fusable = simple;
+    spanOnly = strings;
   }
 
   /** Whether the index path may fill this batch through {@link #put} and {@link #commit}. */
   boolean fusable() {
     return fusable;
+  }
+
+  /** Selects the span-only framing loop after {@link #fusable} has admitted this builder. */
+  boolean spanOnly() {
+    return spanOnly;
+  }
+
+  /** The all-STRING form of {@link #put}, with the plan's kind decision outside the field loop. */
+  boolean putSpan(int column, long span) {
+    if (column >= fuseField.length || !writable) return false;
+    int f = fuseField[column];
+    if (f >= 0) words[f][rows] = span + spanShift;
+    return true;
   }
 
   /**
