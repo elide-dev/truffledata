@@ -137,15 +137,15 @@ final class SlabGenerator {
               " if(expected!=layout) throw new ContractViolation(\"Generated projection layout"
                   + " mismatch\"); projection.requireLayout(layout);\n")
           .append(
-              " if(!projection.lazyChildrenEnabled() || projection.borrowBytesThreshold()!=0)"
-                  + " return"
+              " if(projection.borrowBytesThreshold()!=0) return"
                   + " dev.elide.truffledata.protobuf.SlabCodec.decode(layout,input,offset,length,limits,projection);\n")
           .append(
               " int bucket=(length^(length>>>6))&63; long hint=projectedHints.getOpaque(bucket);"
                   + " var writer=new ")
           .append(WRITER)
           .append(
-              "(layout,input,offset,length,limits,(int)(hint>>>32)==length?(int)hint:0); byte[]"
+              "(layout,input,offset,length,limits,(int)(hint>>>32)==length?(int)hint:"
+                  + "(projection.lazyChildrenEnabled()?0:256)); byte[]"
                   + " result;\n")
           .append(" try { slabProjectedRead")
           .append(t)
@@ -247,9 +247,22 @@ final class SlabGenerator {
                 .append(WRITER)
                 .append(".fallback(); slabScan")
                 .append(child)
-                .append(
-                    "(w,childEnd,depth+1,projection.laxValidation());"
-                        + " bits=w.lazyChild(start,length,depth+1); }\n")
+                .append("(w,childEnd,depth+1,projection.laxValidation());\n")
+                .append(" if(!projection.lazyChildrenEnabled()) {\n");
+            if (field.repeated())
+              out.append(" if(n")
+                  .append(f)
+                  .append("==Integer.MAX_VALUE) throw ")
+                  .append(WRITER)
+                  .append(".fallback(); n")
+                  .append(f)
+                  .append("++;\n");
+            out.append(" presence")
+                .append(f >>> 5)
+                .append("|=")
+                .append(1 << f)
+                .append("; continue; }\n")
+                .append(" bits=w.lazyChild(start,length,depth+1); }\n")
                 .append(" else bits=slabProjectedRead")
                 .append(child)
                 .append("(w,childEnd,depth+1,projection,typeIds);\n");
@@ -314,12 +327,21 @@ final class SlabGenerator {
       out.append(" default -> throw ").append(WRITER).append(".fallback();\n } }\n");
       for (int f = 0; f < type.fields().size(); f++) {
         var field = type.fields().get(f);
-        if (field.repeated() && !field.map())
+        if (field.repeated() && !field.map()) {
           out.append(" if(n")
               .append(f)
               .append("!=0) { w.put32(record+")
               .append(layout.slot(0, f))
-              .append(",w.list(p")
+              .append(',');
+          if (projected && field.kind() == ProtoPlan.Kind.MESSAGE)
+            out.append("!projection.lazyChildrenEnabled() && !projection.wants(typeIds[")
+                .append(t)
+                .append("],")
+                .append(f)
+                .append(") ? w.countsOnly(n")
+                .append(f)
+                .append(") : ");
+          out.append("w.list(p")
               .append(f)
               .append(",n")
               .append(f)
@@ -330,6 +352,7 @@ final class SlabGenerator {
               .append("|=")
               .append(1 << f)
               .append("; }\n");
+        }
         if (field.required())
           out.append(" if((presence")
               .append(f >>> 5)

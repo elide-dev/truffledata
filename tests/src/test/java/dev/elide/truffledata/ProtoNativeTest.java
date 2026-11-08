@@ -1354,7 +1354,7 @@ class ProtoNativeTest {
   }
 
   @Test
-  void generatedLazyProjectionsPreserveBytesWindowsValidationAndBudgets() throws Exception {
+  void generatedProjectionsPreserveBytesWindowsValidationAndBudgets() throws Exception {
     var contract = plan("truffledata.lossless.ProjectedTree");
     var descriptor = descriptor(contract.name());
     var sparse = Projection.builder(contract).select("id", "text").build().lazyChildren();
@@ -1363,6 +1363,10 @@ class ProtoNativeTest {
             sparse,
             sparse.lax(),
             sparse.borrowBytes(1),
+            Projection.builder(contract).select("id", "text").build(),
+            Projection.builder(contract).build(),
+            Projection.builder(contract).select("child", "children").build(),
+            Projection.all(contract),
             Projection.builder(contract).build().lazyChildren(),
             Projection.builder(contract).select("child", "children").build().lazyChildren(),
             Projection.all(contract).lazyChildren());
@@ -1417,23 +1421,26 @@ class ProtoNativeTest {
             "truffledata.lossless.OptionalRequired",
             "truffledata.lossless.Legacy")) {
       var complex = plan(name);
-      var projection = Projection.builder(complex).build().lazyChildren();
-      for (byte[] wire :
+      for (var projection :
           List.of(
-              new byte[0],
-              new byte[] {8, 1},
-              new byte[] {18, 0},
-              new byte[] {10, 0},
-              new byte[] {10, 2, 10, 0},
-              new byte[] {66, 2, 8, 1, 66, 2, 8, 2},
-              new byte[] {(byte) 0x98, 6, 42}))
-        projectedParity(
-            complex,
-            wire,
-            0,
-            wire.length,
-            SlabLimits.forInput(complex.layout(), wire.length),
-            projection);
+              Projection.builder(complex).build(),
+              Projection.builder(complex).build().lazyChildren()))
+        for (byte[] wire :
+            List.of(
+                new byte[0],
+                new byte[] {8, 1},
+                new byte[] {18, 0},
+                new byte[] {10, 0},
+                new byte[] {10, 2, 10, 0},
+                new byte[] {66, 2, 8, 1, 66, 2, 8, 2},
+                new byte[] {(byte) 0x98, 6, 42}))
+          projectedParity(
+              complex,
+              wire,
+              0,
+              wire.length,
+              SlabLimits.forInput(complex.layout(), wire.length),
+              projection);
     }
   }
 

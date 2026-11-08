@@ -236,6 +236,14 @@ public final class GeneratedSlabWriter {
     return at;
   }
 
+  /** An omitted eager child list retains its count without allocating child records or slots. */
+  public int countsOnly(int count) {
+    int at = allocate(LIST_ELEMENTS, 8);
+    putInt(output, at + LIST_COUNT, count);
+    putInt(output, at + 4, COUNTS_ONLY);
+    return at;
+  }
+
   public byte[] finish() {
     long aligned = ((long) top + 7) & -8L;
     if (aligned > maximum) throw SlabCodec.bad("Slab byte budget exceeded");
