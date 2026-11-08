@@ -63,7 +63,9 @@ data_java_library(
         ],
         deps = [
             ":acceptance",
+            "//core",
             "//protobuf-buffa",
+            "//protobuf-runtime",
             "@maven//:org_junit_jupiter_junit_jupiter_api",
         ],
     )
@@ -161,7 +163,9 @@ java_test(
     ],
     deps = [
         ":acceptance",
+        "//core",
         "//protobuf-buffa",
+        "//protobuf-runtime",
         "@maven//:org_junit_jupiter_junit_jupiter_api",
     ],
 )
@@ -177,12 +181,21 @@ java_test(
     name = "slab_producers",
     size = "medium",
     srcs = ["SlabNativeParity.java"],
-    args = ["--class", "dev.elide.truffledata.protobuf.SlabNativeParity"],
+    args = [
+        "--class",
+        "dev.elide.truffledata.protobuf.SlabNativeParity",
+    ],
     data = ["//protobuf-buffa/native:shared"],
-    jvm_flags = ["--enable-native-access=ALL-UNNAMED", "-Dpolyglot.engine.WarnInterpreterOnly=false"],
+    jvm_flags = [
+        "--enable-native-access=ALL-UNNAMED",
+        "-Dpolyglot.engine.WarnInterpreterOnly=false",
+    ],
     main_class = "dev.elide.bazel.junit.BazelJUnitRunner",
     use_testrunner = False,
-    runtime_deps = ["//bazel/junit:runner", "@maven//:org_graalvm_truffle_truffle_runtime"],
+    runtime_deps = [
+        "//bazel/junit:runner",
+        "@maven//:org_graalvm_truffle_truffle_runtime",
+    ],
     deps = [
         ":acceptance",
         "//core",
