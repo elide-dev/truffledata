@@ -101,8 +101,7 @@ final class CompiledReads {
     int[] slabOrdinals = {1, 12, 10, 13};
     Object[] slabValues = {7L, 2.5, true, 3};
     byte[] wire =
-        flat.encode(
-            flat.newBuilder().set(1, 7L).set(12, 2.5).set(10, true).set(13, "λ😀").build());
+        flat.encode(flat.newBuilder().set(1, 7L).set(12, 2.5).set(10, true).set(13, "λ😀").build());
     try (var plan = decoder.compile(flat, 65536);
         var input = decoder.allocate(wire.length).put(wire);
         var session = plan.newSession(4096)) {
@@ -134,8 +133,7 @@ final class CompiledReads {
       CallTarget target, Object row, int[] ordinals, String what) {
     for (int operation = 0; operation < ordinals.length; operation++) {
       int read = operation;
-      Acceptance.rejects(
-          () -> target.call(row, read, ordinals[read]), IllegalStateException.class);
+      Acceptance.rejects(() -> target.call(row, read, ordinals[read]), IllegalStateException.class);
     }
   }
 

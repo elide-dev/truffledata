@@ -795,10 +795,10 @@ class AccessorTest {
   }
 
   /**
-   * A site warmed on one layout still rejects rows of another layout that share its generated
-   * class or its schema identity: the cached accessor never reads them, the public read raises
-   * {@link ContractViolation}, and the site respecializes to the correct value, for the shared
-   * nodes and the inline readers alike.
+   * A site warmed on one layout still rejects rows of another layout that share its generated class
+   * or its schema identity: the cached accessor never reads them, the public read raises {@link
+   * ContractViolation}, and the site respecializes to the correct value, for the shared nodes and
+   * the inline readers alike.
    */
   @Test
   void foreignLayoutStillRejectedThroughNodes() {

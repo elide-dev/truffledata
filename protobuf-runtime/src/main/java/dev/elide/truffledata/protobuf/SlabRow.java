@@ -212,6 +212,15 @@ public class SlabRow extends AbstractRow implements ProtoAccess {
       throw mismatch();
     }
 
+    /**
+     * A row the read node's guard already admitted: only the layout check is skipped, projection
+     * ({@code requireValue}), presence and kind handling stay in the shared readers.
+     */
+    private SlabRow trusted(Object value) {
+      assertAccepted(value);
+      return (SlabRow) value;
+    }
+
     @Override
     public Object read(Object value) {
       return row(value).get(ordinal());
@@ -223,7 +232,15 @@ public class SlabRow extends AbstractRow implements ProtoAccess {
 
     @Override
     public long readLong(Object value) throws UnexpectedResultException {
-      SlabRow r = row(value);
+      return longOf(row(value));
+    }
+
+    @Override
+    protected long readLongBound(Object value) throws UnexpectedResultException {
+      return longOf(trusted(value));
+    }
+
+    private long longOf(SlabRow r) throws UnexpectedResultException {
       r.owner.requireValue(type, ordinal(), r.expanded);
       if (planField.repeated()) throw new UnexpectedResultException(r.get(ordinal()));
       if (!has(r) && planField.defaultValue() instanceof Long n) return n;
@@ -238,7 +255,15 @@ public class SlabRow extends AbstractRow implements ProtoAccess {
 
     @Override
     public double readDouble(Object value) throws UnexpectedResultException {
-      SlabRow r = row(value);
+      return doubleOf(row(value));
+    }
+
+    @Override
+    protected double readDoubleBound(Object value) throws UnexpectedResultException {
+      return doubleOf(trusted(value));
+    }
+
+    private double doubleOf(SlabRow r) throws UnexpectedResultException {
       r.owner.requireValue(type, ordinal(), r.expanded);
       if (planField.repeated()) throw new UnexpectedResultException(r.get(ordinal()));
       if (!has(r) && planField.defaultValue() instanceof Double n) return n;
@@ -252,7 +277,15 @@ public class SlabRow extends AbstractRow implements ProtoAccess {
 
     @Override
     public boolean readBoolean(Object value) throws UnexpectedResultException {
-      SlabRow r = row(value);
+      return booleanOf(row(value));
+    }
+
+    @Override
+    protected boolean readBooleanBound(Object value) throws UnexpectedResultException {
+      return booleanOf(trusted(value));
+    }
+
+    private boolean booleanOf(SlabRow r) throws UnexpectedResultException {
       r.owner.requireValue(type, ordinal(), r.expanded);
       if (planField.repeated() || planField.kind() != ProtoPlan.Kind.BOOL)
         throw new UnexpectedResultException(r.get(ordinal()));
@@ -263,7 +296,15 @@ public class SlabRow extends AbstractRow implements ProtoAccess {
 
     @Override
     public int length(Object value) {
-      SlabRow r = row(value);
+      return lengthIn(row(value));
+    }
+
+    @Override
+    protected int lengthBound(Object value) {
+      return lengthIn(trusted(value));
+    }
+
+    private int lengthIn(SlabRow r) {
       if (!planField.repeated()) r.owner.requireValue(type, ordinal(), r.expanded);
       if (planField.repeated())
         return arrayLength(

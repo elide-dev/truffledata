@@ -31,7 +31,7 @@ public abstract class ReadDoubleNode extends Node {
       @Cached("bind(row, cachedIndex)") Accessor accessor) {
     com.oracle.truffle.api.CompilerAsserts.partialEvaluationConstant(accessor);
     try {
-      double value = accessor.readDouble(row);
+      double value = accessor.readDoubleBound(row);
       if (Accessor.STRICT) Accessor.audit(accessor, value);
       return value;
     } catch (UnexpectedResultException e) {

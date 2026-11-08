@@ -133,12 +133,16 @@ public final class Batch {
     }
   }
 
-  /** Column reads of one schema's batches; the required INT64 path loads the long array alone. */
+  /**
+   * Column reads of one schema's batches; the required INT64 path loads the long array alone. Rows
+   * are the final {@link Row} class and the layout is the schema, so the layout is exactly (class,
+   * schema identity).
+   */
   private static final class ColumnAccessor extends Accessor {
     private final boolean requiredLong;
 
     ColumnAccessor(Schema schema, int ordinal) {
-      super(schema, ordinal);
+      super(schema, ordinal, Row.class);
       requiredLong = schema.requiredLong(ordinal);
     }
 
@@ -152,10 +156,19 @@ public final class Batch {
       throw mismatch();
     }
 
+    /** A row the read node's exact-layout guard already admitted. */
+    private Row trusted(Object row) {
+      assertAccepted(row);
+      return (Row) row;
+    }
+
+    private Object valueOf(Row r) {
+      return r.batch.columns[ordinal()].read(r.index);
+    }
+
     @Override
     public Object read(Object row) {
-      Row r = row(row);
-      return r.batch.columns[ordinal()].read(r.index);
+      return valueOf(row(row));
     }
 
     @Override
@@ -167,10 +180,37 @@ public final class Batch {
 
     @Override
     public long readLong(Object row) throws UnexpectedResultException {
-      Row r = row(row);
+      return longOf(row(row));
+    }
+
+    @Override
+    protected long readLongBound(Object row) throws UnexpectedResultException {
+      return longOf(trusted(row));
+    }
+
+    private long longOf(Row r) throws UnexpectedResultException {
       Column column = r.batch.columns[ordinal()];
       if (requiredLong) return Objects.requireNonNull(column.longs)[r.index];
       return column.readLong(r.index);
+    }
+
+    @Override
+    protected double readDoubleBound(Object row) throws UnexpectedResultException {
+      Object value = valueOf(trusted(row));
+      if (value instanceof Double n) return n;
+      throw new UnexpectedResultException(value);
+    }
+
+    @Override
+    protected boolean readBooleanBound(Object row) throws UnexpectedResultException {
+      Object value = valueOf(trusted(row));
+      if (value instanceof Boolean b) return b;
+      throw new UnexpectedResultException(value);
+    }
+
+    @Override
+    protected int lengthBound(Object row) {
+      return lengthOf(valueOf(trusted(row)));
     }
   }
 

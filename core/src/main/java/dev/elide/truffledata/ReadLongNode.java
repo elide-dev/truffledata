@@ -31,7 +31,7 @@ public abstract class ReadLongNode extends Node {
       @Cached("bind(row, cachedIndex)") Accessor accessor) {
     com.oracle.truffle.api.CompilerAsserts.partialEvaluationConstant(accessor);
     try {
-      long value = accessor.readLong(row);
+      long value = accessor.readLongBound(row);
       if (Accessor.STRICT) Accessor.audit(accessor, value);
       return value;
     } catch (UnexpectedResultException e) {

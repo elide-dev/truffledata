@@ -119,23 +119,39 @@ public abstract class GeneratedMessage extends AbstractRow implements ProtoAcces
     return descriptor.accessor(type, ordinal, i -> new Generated(type, plan, i));
   }
 
+  /**
+   * Layout (generated class, plan). Each plan owns its schema, and generated rows take it as their
+   * descriptor, so the layout is exactly (class, schema identity) and read nodes guard it without a
+   * virtual call. The bound hooks skip only the repeated layout check.
+   */
   private static final class Generated extends Accessor {
     private final Class<? extends GeneratedMessage> type;
-    private final ProtoPlan plan;
+    private final boolean int64;
+    private final boolean float64;
+    private final boolean flag;
 
     Generated(Class<? extends GeneratedMessage> type, ProtoPlan plan, int ordinal) {
-      super(plan.schema(), ordinal);
+      super(plan.schema(), ordinal, type);
       this.type = type;
-      this.plan = plan;
+      var kind = field().kind();
+      int64 = kind == Field.Kind.INT64;
+      float64 = kind == Field.Kind.FLOAT64;
+      flag = kind == Field.Kind.BOOLEAN;
     }
 
     @Override
     public boolean accepts(Object row) {
-      return row.getClass() == type && ((GeneratedMessage) row).plan == plan;
+      return row.getClass() == type && ((GeneratedMessage) row).descriptor == schema();
     }
 
     private GeneratedMessage message(Object row) {
       if (!accepts(row)) throw mismatch();
+      return CompilerDirectives.castExact(row, type);
+    }
+
+    /** A row the read node's exact-layout guard already admitted. */
+    private GeneratedMessage trusted(Object row) {
+      assertAccepted(row);
       return CompilerDirectives.castExact(row, type);
     }
 
@@ -146,8 +162,16 @@ public abstract class GeneratedMessage extends AbstractRow implements ProtoAcces
 
     @Override
     public long readLong(Object row) throws UnexpectedResultException {
-      var message = message(row);
-      if (field().kind() == Field.Kind.INT64) return message.getLong(ordinal());
+      return longOf(message(row));
+    }
+
+    @Override
+    protected long readLongBound(Object row) throws UnexpectedResultException {
+      return longOf(trusted(row));
+    }
+
+    private long longOf(GeneratedMessage message) throws UnexpectedResultException {
+      if (int64) return message.getLong(ordinal());
       Object value = message.get(ordinal());
       if (value instanceof Long number) return number;
       throw new UnexpectedResultException(value);
@@ -155,16 +179,37 @@ public abstract class GeneratedMessage extends AbstractRow implements ProtoAcces
 
     @Override
     public double readDouble(Object row) throws UnexpectedResultException {
-      var message = message(row);
-      if (field().kind() == Field.Kind.FLOAT64) return message.getDouble(ordinal());
+      return doubleOf(message(row));
+    }
+
+    @Override
+    protected double readDoubleBound(Object row) throws UnexpectedResultException {
+      return doubleOf(trusted(row));
+    }
+
+    private double doubleOf(GeneratedMessage message) throws UnexpectedResultException {
+      if (float64) return message.getDouble(ordinal());
       throw new UnexpectedResultException(message.get(ordinal()));
     }
 
     @Override
     public boolean readBoolean(Object row) throws UnexpectedResultException {
-      var message = message(row);
-      if (field().kind() == Field.Kind.BOOLEAN) return message.getBoolean(ordinal());
+      return booleanOf(message(row));
+    }
+
+    @Override
+    protected boolean readBooleanBound(Object row) throws UnexpectedResultException {
+      return booleanOf(trusted(row));
+    }
+
+    private boolean booleanOf(GeneratedMessage message) throws UnexpectedResultException {
+      if (flag) return message.getBoolean(ordinal());
       throw new UnexpectedResultException(message.get(ordinal()));
+    }
+
+    @Override
+    protected int lengthBound(Object row) {
+      return lengthOf(trusted(row).get(ordinal()));
     }
   }
 
