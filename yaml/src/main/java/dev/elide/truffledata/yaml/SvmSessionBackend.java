@@ -227,18 +227,13 @@ final class SvmSessionBackend extends YamlSession.Backend {
     }
     try {
       YamlSvm.checkStatus(Yaml.session_retain(session, owned));
-      SvmTape tape = tape(owned);
-      return YamlMessage.create(
-          tape,
-          new Storage(tape, owned) {
-            @Override
-            public void run() {
-              Yaml.release(owned);
-              UnmanagedMemory.free(owned);
-            }
-          },
+      Pointer descriptor = (Pointer) Yaml.YamlResult.view(owned);
+      long count = SvmYamlMessage.validate(descriptor);
+      return SvmYamlMessage.create(
+          descriptor,
+          owned.rawValue(),
           ResultMetadata.read(
-              MEMORY, owned.rawValue(), tape.nodeCount(), options.limits().maxAliasExpansion()));
+              MEMORY, owned.rawValue(), count, options.limits().maxAliasExpansion()));
     } catch (RuntimeException | Error failure) {
       Yaml.release(owned);
       UnmanagedMemory.free(owned);

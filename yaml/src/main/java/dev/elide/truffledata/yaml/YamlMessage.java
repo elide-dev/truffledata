@@ -10,17 +10,35 @@ import dev.elide.truffledata.tape.TapeOwner;
 import org.jspecify.annotations.Nullable;
 
 /** Owned YAML document. Every derived view is invalidated when the message closes. */
-public class YamlMessage extends TapeOwner implements AutoCloseable {
+public abstract class YamlMessage extends TapeOwner implements AutoCloseable {
   interface Storage extends TapeLexical, Runnable {}
 
-  private final Storage storage;
   private final YamlMetadata metadata;
   private @Nullable Assumption alive;
 
-  private YamlMessage(TapeReader tape, Storage storage, YamlMetadata metadata) {
+  YamlMessage(TapeReader tape, YamlMetadata metadata) {
     super(tape, Thread.currentThread());
-    this.storage = storage;
     this.metadata = metadata;
+  }
+
+  YamlMessage(YamlMetadata metadata) {
+    super(Thread.currentThread());
+    this.metadata = metadata;
+  }
+
+  protected abstract void release();
+
+  private static class Managed extends YamlMessage {
+    private final Storage storage;
+
+    Managed(TapeReader tape, Storage storage, YamlMetadata metadata) {
+      super(tape, metadata);
+      this.storage = storage;
+    }
+
+    @Override protected long lexical(long node) { return storage.span(node); }
+    @Override protected byte lexicalByte(long offset) { return storage.inputByte(offset); }
+    @Override protected void release() { storage.run(); }
   }
 
   @Override
@@ -35,7 +53,7 @@ public class YamlMessage extends TapeOwner implements AutoCloseable {
     return true;
   }
 
-  private static final class Plain extends YamlMessage {
+  private static final class Plain extends Managed {
     Plain(TapeReader tape, Storage storage, YamlMetadata metadata) {
       super(tape, storage, metadata);
     }
@@ -47,9 +65,13 @@ public class YamlMessage extends TapeOwner implements AutoCloseable {
   }
 
   static YamlMessage create(TapeReader tape, Storage storage, YamlMetadata metadata) {
+    return hasAliases(metadata) ? new Managed(tape, storage, metadata) : new Plain(tape, storage, metadata);
+  }
+
+  static boolean hasAliases(YamlMetadata metadata) {
     for (int word : metadata.words)
-      if ((word & 16) != 0) return new YamlMessage(tape, storage, metadata);
-    return new Plain(tape, storage, metadata);
+      if ((word & 16) != 0) return true;
+    return false;
   }
 
   @Override
@@ -78,21 +100,11 @@ public class YamlMessage extends TapeOwner implements AutoCloseable {
   }
 
   @Override
-  protected long lexical(long node) {
-    return storage.span(node);
-  }
-
-  @Override
-  protected byte lexicalByte(long offset) {
-    return storage.inputByte(offset);
-  }
-
-  @Override
   @TruffleBoundary
   public void close() {
     if (markClosed()) {
       if (alive != null) alive.invalidate();
-      storage.run();
+      release();
     }
   }
 }

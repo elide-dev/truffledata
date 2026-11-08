@@ -429,15 +429,25 @@ class handler : public c4::yml::EventHandlerStack<handler, handler_state> {
     enable_<c4::yml::VAL | c4::yml::VAL_PLAIN>();
   }
   void set_key_scalar_dquoted(c4::csubstr s) {
-    s = unicode_dquoted(s);
     short_text w;
-    if (!(short_quoted(s, w) && key_quoted_fast(s, w, scalar_style::double_quoted))) key(s, scalar_style::double_quoted, false);
+    // The same masked bytes serve UTF-8 validation and the short-key fast path.
+    // Every ASCII byte sequence is valid UTF-8; other text still needs surrogate repair.
+    bool shorted = short_quoted(s, w);
+    if (!shorted || ((w.lo | w.hi) & 0x8080808080808080ull) != 0) {
+      s = unicode_dquoted(s);
+      shorted = short_quoted(s, w);
+    }
+    if (!(shorted && key_quoted_fast(s, w, scalar_style::double_quoted))) key(s, scalar_style::double_quoted, false);
     enable_<c4::yml::KEY | c4::yml::KEY_DQUO>();
   }
   void set_val_scalar_dquoted(c4::csubstr s) {
-    s = unicode_dquoted(s);
     short_text w;
-    if (!(short_quoted(s, w) && value_quoted_fast(s, w, scalar_style::double_quoted))) value(s, scalar_style::double_quoted, false);
+    bool shorted = short_quoted(s, w);
+    if (!shorted || ((w.lo | w.hi) & 0x8080808080808080ull) != 0) {
+      s = unicode_dquoted(s);
+      shorted = short_quoted(s, w);
+    }
+    if (!(shorted && value_quoted_fast(s, w, scalar_style::double_quoted))) value(s, scalar_style::double_quoted, false);
     enable_<c4::yml::VAL | c4::yml::VAL_DQUO>();
   }
   void set_key_scalar_squoted(c4::csubstr s) {
