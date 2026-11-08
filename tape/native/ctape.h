@@ -442,7 +442,8 @@ struct key_shape_cache {
   static constexpr uint32_t depths = 32, max_keys = 32, max_bytes = 32;
   struct key {
     uint8_t bytes[max_bytes];
-    uint32_t length, hash;
+    uint8_t length, ascii, clean;
+    uint32_t hash;
     bool equals(const uint8_t* text, uint32_t size, bool padded) const {
       if (length != size) return false;
       if (size == 0) return true;
@@ -468,7 +469,9 @@ struct key_shape_cache {
       return equal16(bytes, text, size) && (size <= 16 || equal16(bytes + 16, text + 16, size - 16));
     }
     void set(std::string_view text, uint32_t value) {
-      length = uint32_t(text.size()); hash = value;
+      length = uint8_t(text.size()); hash = value;
+      ascii = clean = 1;
+      for (uint8_t c : text) { ascii &= c < 128; clean &= c >= 32 && c != '"' && c != '\\'; }
       std::memset(bytes, 0, sizeof bytes);
       if (length) std::memcpy(bytes, text.data(), length);
     }
@@ -496,7 +499,7 @@ struct key_shape_cache {
 // meaning: one value is one Myna node. The rewrite operations (truncate, erase, append) keep the
 // value count, `next`, REF targets and directory references consistent; they refuse to run while
 // announced keys are pending, so a producer that rewrites closes objects with end_rescan().
-class ctape_writer final {
+template<bool Structural = false> class basic_ctape_writer final {
   std::pmr::memory_resource* memory_;
   arena_vec<uint64_t> words_;
   arena_vec<uint8_t> pool_;
@@ -520,7 +523,12 @@ class ctape_writer final {
   }
   [[gnu::always_inline]] uint64_t* push(size_t n) {
     if (words_.size() > ctape::max_words - n) limit("tape word limit");
-    return words_.extend(memory_, n);
+    if constexpr (Structural) return words_.extend_reserved(n);
+    else return words_.extend(memory_, n);
+  }
+  [[gnu::always_inline]] void pending(uint64_t entry) {
+    if constexpr (Structural) *pending_.extend_reserved(1) = entry;
+    else pending_.push(memory_, entry);
   }
   [[gnu::always_inline]] void charge(size_t length) {
     if (length > ctape::max_length) limit("tape text token limit");
@@ -626,15 +634,16 @@ class ctape_writer final {
   }
 
  public:
+  static constexpr bool retains_values = true;
   // Descriptor flag set when the tape holds a non-finite F64 (YAML).
   static constexpr uint32_t nonfinite_flag = TD_TAPE_NONFINITE;
 
-  ctape_writer(std::pmr::memory_resource* memory, myna::value_limits limits) : memory_(memory), limits_(limits) {
+  basic_ctape_writer(std::pmr::memory_resource* memory, myna::value_limits limits) : memory_(memory), limits_(limits) {
     if (!memory) throw std::invalid_argument("null tape allocator");
   }
   void shapes(key_shape_cache* cache) { shapes_ = cache; if (cache) cache->start(); }
-  ctape_writer(const ctape_writer&) = delete;
-  ctape_writer& operator=(const ctape_writer&) = delete;
+  basic_ctape_writer(const basic_ctape_writer&) = delete;
+  basic_ctape_writer& operator=(const basic_ctape_writer&) = delete;
 
   // Registers the retained input that spans index (at most 4 GiB; the producer keeps it live and
   // padded as its readers require).
@@ -654,7 +663,8 @@ class ctape_writer final {
 
   // JSON stage-1 bounds; the pool includes readable scratch padding for scalar-root numbers.
   void reserve_structural(size_t count, size_t input_bytes) {
-    words_.reserve(memory_, 2 * count + 2);
+    if (count > (SIZE_MAX - 2) / 2) limit("tape structural count");
+    words_.reserve(memory_, std::min<size_t>(2 * count + 2, ctape::max_words));
     pool_.reserve(memory_, input_bytes + 64);
     directory_.reserve(memory_, count / 2 + 1);
     pending_.reserve(memory_, count / 2 + 1);
@@ -713,7 +723,7 @@ class ctape_writer final {
       if (ctape::kind(key) != ctape::kind_string || !(key & ctape::key_flag)) misuse("object key is not a KEY string");
       std::string_view t = text_of(k);
       uint32_t hash = hash_of(t);
-      pending_.push(memory_, uint64_t(hash) << 32 | (k - index));
+      pending(uint64_t(hash) << 32 | (k - index));
       size_t v = ctape::step(k, key);
       if (v >= words_.size()) misuse("object key without a value");
       k = ctape::after(v, words_[v]);
@@ -728,7 +738,7 @@ class ctape_writer final {
   // Announces the word written next as a member key of the open object at `object`; `hash` is
   // myna_value_hash over the decoded key bytes.
   [[gnu::always_inline]] void member_key(size_t object, uint32_t hash) {
-    pending_.push(memory_, uint64_t(hash) << 32 | (words_.size() - object));
+    pending(uint64_t(hash) << 32 | (words_.size() - object));
   }
 
   // Announce decoded bytes before the key word. A hit skips hashing and sorting, but every
@@ -741,7 +751,7 @@ class ctape_writer final {
       uint32_t ordinal = frame->count;
       if (frame->matched) {
         if (ordinal < shape.count && shape.keys[ordinal].equals(text, length, padded)) {
-          pending_.push(memory_, offset);
+          pending(offset);
           ++frame->count;
           return;
         }
@@ -749,7 +759,25 @@ class ctape_writer final {
       }
       ++frame->count;
     }
-    pending_.push(memory_, uint64_t(myna_value_hash(text, length)) << 32 | offset);
+    pending(uint64_t(myna_value_hash(text, length)) << 32 | offset);
+  }
+
+  // A checked template can recognize an unescaped JSON key without first scanning for its
+  // closing quote. The decoded template must itself be a legal raw body; the bound and closing
+  // quote still belong to the current logical input, and every byte is compared before a hit.
+  [[gnu::always_inline]] uint32_t cached_key_ref(size_t object, uint32_t offset, uint32_t available) {
+    auto* frame = shapes_ ? shapes_->current(object) : nullptr;
+    if (!frame || !frame->matched) return UINT32_MAX;
+    const auto& shape = shapes_->levels[frame->depth];
+    if (frame->count >= shape.count) return UINT32_MAX;
+    const auto& key = shape.keys[frame->count];
+    const uint8_t* text = input_ + offset;
+    if (!key.clean || available <= key.length || text[key.length] != '"' || !key.equals(text, key.length, true))
+      return UINT32_MAX;
+    pending(words_.size() - object);
+    ++frame->count;
+    string_ref({offset, key.length}, key.ascii, true);
+    return key.length;
   }
 
   void null(ctape::span token = {}) {
@@ -823,6 +851,17 @@ class ctape_writer final {
   }
 
   // ---- rewrites (YAML) ------------------------------------------------------------------------
+  // Replaces the last scalar value with a retroactive YAML mapping. Its index is a node
+  // boundary; it cannot be an announced key. Earlier keys and directory offsets stay valid,
+  // so unlike general rewrites this is safe while enclosing objects have pending keys.
+  void pop_scalar(size_t index) {
+    if (index >= words_.size()) range("tape scalar index");
+    uint64_t word = words_[index];
+    if (ctape::is_container(ctape::kind(word)) || (word & ctape::key_flag) ||
+        ctape::step(index, word) != words_.size()) misuse("tape pop requires the last scalar value");
+    words_.truncate(index);
+    --values_;
+  }
   // Drops words [words, word_count()); `words` is a node boundary. Their owned text stays in the pool.
   void truncate(size_t words) {
     if (pending_.size()) misuse("tape rewrite with announced keys pending");
@@ -904,5 +943,11 @@ class ctape_writer final {
             pool_.data(), pool_.size(), input_, input_bytes_, directory_.data(), directory_.size(), nullptr, 0};
   }
 };
+// Structural producers reserve from their complete token index before emitting any value.
+// At most two words are emitted per token, and each key consumes at least two index entries.
+// The word-width guard remains active even when the reservation saturates the ABI's word limit.
+using ctape_writer = basic_ctape_writer<false>;
+using structural_writer = basic_ctape_writer<true>;
+
 }  // namespace truffledata::tape
 #endif

@@ -159,7 +159,7 @@ class document final {
   simdjson::padded_string_view input_;
   tape::index_memory memory_;
   tape::block_arena arena_;
-  tape::ctape_writer writer_;
+  tape::structural_writer writer_;
   td_tape_view view_{};
   size_t parser_capacity_ = 0;
 
@@ -181,7 +181,7 @@ class document final {
     writer_.reserve_structural(parser.size(), input_.size());
     tape::key_shape_cache shapes;
     writer_.shapes(&shapes);
-    stage2_walk<tape::ctape_writer> walk(reinterpret_cast<const uint8_t*>(input_.data()), input_.size(),
+    stage2_walk<tape::structural_writer> walk(reinterpret_cast<const uint8_t*>(input_.data()), input_.size(),
                                        parser.indexes(), parser.size(), writer_);
     walk.run();
     writer_.shapes(nullptr);

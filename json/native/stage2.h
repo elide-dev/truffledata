@@ -13,6 +13,39 @@ inline bool whitespace(uint8_t c) { return c == ' ' || c == '\n' || c == '\r' ||
 inline bool terminator(uint8_t c) {
   return whitespace(c) || c == ',' || c == ']' || c == '}';
 }
+// Validation needs numeric range only when it changes DECIMAL text-limit accounting. A strict
+// fixed-point token with at most 18 digits always fits I64 or a finite, non-underflowing F64.
+// Longer tokens and every exponent keep the pinned parser's full classification.
+[[gnu::always_inline]] inline bool bounded_number(const uint8_t* text, uint32_t length) {
+  if (length == 0 || length > 20) return false;
+  uint32_t at = text[0] == '-' ? 1 : 0, digits = 0;
+  if (at == length) return false;
+  if (text[at] == '0') { ++at; ++digits; }
+  else {
+    if (text[at] < '1' || text[at] > '9') return false;
+    do { ++at; ++digits; } while (at < length && text[at] >= '0' && text[at] <= '9');
+  }
+  if (at < length && text[at] == '.') {
+    ++at;
+    if (at == length || text[at] < '0' || text[at] > '9') return false;
+    do { ++at; ++digits; } while (at < length && text[at] >= '0' && text[at] <= '9');
+  }
+  return at == length && digits <= 18;
+}
+// Common signed integers need neither overflow arithmetic nor floating-point conversion.
+[[gnu::always_inline]] inline bool integer18(const uint8_t* text, uint32_t length, uint64_t& bits) {
+  bool negative = text[0] == '-';
+  uint32_t at = negative ? 1 : 0, digits = length - at;
+  if (digits == 0 || digits > 18 || (digits > 1 && text[at] == '0')) return false;
+  uint64_t value = 0;
+  for (; at < length; ++at) {
+    uint32_t digit = uint32_t(text[at]) - '0';
+    if (digit > 9) return false;
+    value = value * 10 + digit;
+  }
+  bits = negative ? uint64_t(0) - value : value;
+  return true;
+}
 struct scan_hit { uint32_t length; bool quote, ascii; };
 // Input has SIMDJSON_PADDING readable bytes. The returned delimiter must still precede end;
 // padding is only load safety, never accepted as part of a token.
@@ -63,13 +96,7 @@ inline int hex(uint8_t c) {
   if (c >= 'A' && c <= 'F') return c - 'A' + 10;
   return -1;
 }
-inline bool ascii_bytes(const uint8_t* text, uint32_t length) {
-  uint64_t high = 0;
-  uint32_t i = 0;
-  for (; i + 8 <= length; i += 8) { uint64_t word; std::memcpy(&word, text + i, 8); high |= word; }
-  for (; i < length; ++i) high |= text[i];
-  return (high & 0x8080808080808080ull) == 0;
-}
+
 }
 
 // Grammar and token semantics over a stage-1 structural index. Writer sees the same events as
@@ -104,11 +131,12 @@ template<class Writer> class stage2_walk {
       }
     }
   };
-  uint32_t unescape(const uint8_t* text, const uint8_t*& closing) {
+  uint32_t unescape(const uint8_t* text, const uint8_t*& closing, stage2_detail::scan_hit run, bool& ascii) {
     uint8_t* first = writer_.pool_reserve(size_t(end_ - text));
     uint8_t* out = first;
+    ascii = true;
     for (;;) {
-      auto run = stage2_detail::scan_string(text, end_);
+      ascii &= run.ascii;
       std::memcpy(out, text, run.length); out += run.length; text += run.length;
       if (run.quote) { closing = text; break; }
       if (end_ - text < 2) stage2_detail::syntax("truncated JSON escape");
@@ -142,6 +170,7 @@ template<class Writer> class stage2_walk {
             codepoint = 0x10000 + ((codepoint - 0xd800) << 10) + low - 0xdc00;
             text += 6;
           } else if (codepoint >= 0xdc00 && codepoint <= 0xdfff) stage2_detail::syntax("unpaired JSON surrogate");
+          ascii &= codepoint < 0x80;
           if (codepoint < 0x80) *out++ = uint8_t(codepoint);
           else if (codepoint < 0x800) {
             *out++ = uint8_t(0xc0 | (codepoint >> 6)); *out++ = uint8_t(0x80 | (codepoint & 63));
@@ -156,6 +185,7 @@ template<class Writer> class stage2_walk {
         }
         default: stage2_detail::syntax("invalid JSON escape");
       }
+      run = stage2_detail::scan_string(text, end_);
     }
     uint32_t length = uint32_t(out - first);
     writer_.pool_commit(length);
@@ -163,6 +193,10 @@ template<class Writer> class stage2_walk {
   }
   [[gnu::always_inline]] void string(uint32_t start, bool key) {
     const uint8_t* text = input_ + start + 1;
+    if (key) {
+      uint32_t length = writer_.cached_key_ref(frames_[depth_ - 1].index, start + 1, uint32_t(end_ - text));
+      if (length != UINT32_MAX) { root_end_ = start + length + 2; return; }
+    }
     auto scan = stage2_detail::scan_string(text, end_);
     if (scan.quote) {
       if (key) writer_.key_text(frames_[depth_ - 1].index, text, scan.length, true);
@@ -172,15 +206,30 @@ template<class Writer> class stage2_walk {
     }
     uint32_t offset = uint32_t(writer_.pool_size());
     const uint8_t* closing;
-    uint32_t length = unescape(text, closing);
+    bool ascii;
+    uint32_t length = unescape(text, closing, scan, ascii);
     const uint8_t* decoded = writer_.pool_data() + offset;
     if (key) writer_.key_text(frames_[depth_ - 1].index, decoded, length);
     root_end_ = uint32_t(closing + 1 - input_);
-    writer_.string_owned(offset, length, {start, root_end_ - start}, stage2_detail::ascii_bytes(decoded, length), key);
+    writer_.string_owned(offset, length, {start, root_end_ - start}, ascii, key);
   }
   [[gnu::always_inline]] void number(uint32_t start) {
     uint32_t end = indexes_[at_];
     while (end > start && stage2_detail::whitespace(input_[end - 1])) --end;
+    if constexpr (!Writer::retains_values) {
+      if (stage2_detail::bounded_number(input_ + start, end - start)) {
+        writer_.commit_number({start, end - start}); root_end_ = end; return;
+      }
+    }
+    if constexpr (Writer::retains_values) {
+      uint64_t bits;
+      if (stage2_detail::integer18(input_ + start, end - start, bits)) {
+        uint32_t kind = bits == 0 && input_[start] == '-' ? tape::ctape::kind_f64 : tape::ctape::kind_i64;
+        if (kind == tape::ctape::kind_f64) bits = uint64_t(1) << 63;
+        writer_.parsed_number(kind, bits, {start, end - start});
+        writer_.commit_number({start, end - start}); root_end_ = end; return;
+      }
+    }
     number_writer out{writer_, {start, end - start}, input_[start] == '-'};
     const uint8_t* source = input_ + start;
     // The pinned number parser requires a structural/whitespace terminator, including at EOF.

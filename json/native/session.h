@@ -66,8 +66,8 @@ private:
   tape::block_arena arena_;
   stage1_index parser_;
   tape::block_arena scratch_;
-  std::optional<tape::ctape_writer> writer_;
-  std::optional<null_writer> validator_;
+  std::optional<tape::structural_writer> writer_;
+  std::optional<structural_null_writer> validator_;
   tape::arena_vec<uint64_t> text_table_;
   bool streamed_ = false;
   char* input_ = nullptr;

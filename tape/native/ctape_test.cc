@@ -84,6 +84,36 @@ void yaml_plain_and_constant_spans() {
   require(throws([&] { w.boolean(false, {14, 1}); }));
 }
 
+void pop_scalar_preserves_pending_keys() {
+  scratch s;
+  ctape_writer w(&s.arena, {});
+  w.input("ab");
+  size_t root = w.begin(c::kind_object, 0);
+  require(throws([&] { w.pop_scalar(root); }));
+  w.member_key(root, hash("a"));
+  w.string_ref({0, 1}, true, true);
+  require(throws([&] { w.pop_scalar(2); }));
+  size_t scalar = w.word_count();
+  w.integer(9, {});
+  require(throws([&] { w.pop_scalar(0); }));
+  w.pop_scalar(scalar);
+  size_t nested = w.begin(c::kind_object, 1);
+  w.member_key(nested, hash("b"));
+  w.string_ref({1, 1}, true, true);
+  w.null();
+  w.end(nested, 1);
+  w.member_key(root, hash("b"));
+  w.string_ref({1, 1}, true, true);
+  scalar = w.word_count();
+  w.ref(nested);
+  w.pop_scalar(scalar);
+  w.boolean(true);
+  w.end(root, 2);
+  require(w.value_count() == 7);
+  require(c::validate(w.view()) == nullptr);
+  require(throws([&] { w.pop_scalar(w.word_count()); }));
+}
+
 void words_follow_the_layout() {
   const std::string input = R"({"a":1,"bb":[true,null,"x\n"],"c":1.5})";
   scratch s;
@@ -737,6 +767,7 @@ int main() {
       {"shape_cache_rejects_duplicates", shape_cache_rejects_duplicates},
       {"permuted_directories_match_sorted", permuted_directories_match_sorted},
       {"words_follow_the_layout", words_follow_the_layout},
+      {"pop_scalar_preserves_pending_keys", pop_scalar_preserves_pending_keys},
       {"yaml_plain_and_constant_spans", yaml_plain_and_constant_spans},
       {"duplicates_detected_in_sorted_directory", duplicates_detected_in_sorted_directory},
       {"singleton_objects_have_no_directory", singleton_objects_have_no_directory},

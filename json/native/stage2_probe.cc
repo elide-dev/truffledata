@@ -69,9 +69,9 @@ int main() {
     else { input = "["; for (unsigned i = 0; i < size; ++i) { if (i) input += ','; input += tape::testing::fixture(i); } input += ']'; }
     size_t reps = std::max<size_t>(5, 20000000 / input.size());
     double baseline = measure<json_baseline::tape_decoder<tape::ctape_writer>>(input, false, reps);
-    double cached = structural<tape::ctape_writer>(input, reps);
+    double cached = structural<tape::structural_writer>(input, reps);
     double validate_base = measure<json_baseline::tape_decoder<json_baseline::null_writer>>(input, false, reps);
-    double validate_cached = structural<json::null_writer>(input, reps);
+    double validate_cached = structural<json::structural_null_writer>(input, reps);
     std::printf("%zu bytes baseline %.0fns cached %.0fns ratio %.3f validate-baseline %.0fns cached %.0fns ratio %.3f\n",
         input.size(), baseline, cached, baseline/cached, validate_base, validate_cached, validate_base/validate_cached);
   }

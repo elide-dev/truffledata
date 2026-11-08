@@ -114,9 +114,10 @@ inline uint32_t scratch_hash(const char* p, size_t n, bool readable) {
 // The validate-only writer: no tape, the same limits as ctape_writer (values, decoded text bytes,
 // depth, token lengths) and the same sorted-run duplicate check, over a scratch stack of the open
 // objects' keys (hash << 32 | position, and the key text, which stays valid for the walk: clean
-// keys are input spans, escaped ones live in the retained pool or the oracle parser's string buffer). Its hash is
+// keys are input spans, escaped ones live in the retained pool or the oracle parser's string buffer).
+// A matched template holds only its count: scratch slots are materialized only after a miss. Its hash is
 // scratch_hash, not the directory FNV-1a (see directory_hash).
-class null_writer final {
+template<bool Structural = false> class basic_null_writer final {
   std::pmr::memory_resource* memory_;
   tape::arena_vec<uint64_t> pending_;
   tape::arena_vec<std::string_view> keys_;
@@ -126,6 +127,10 @@ class null_writer final {
   uint64_t values_ = 0, text_bytes_ = 0;
   tape::key_shape_cache* shapes_ = nullptr;
 
+  template<class T> [[gnu::always_inline]] T* extend(tape::arena_vec<T>& array, size_t count = 1) {
+    if constexpr (Structural) return array.extend_reserved(count);
+    else return array.extend(memory_, count);
+  }
   [[noreturn, gnu::noinline, gnu::cold]] static void limit(const char* what) { throw std::length_error(what); }
   [[gnu::always_inline]] void value() {
     if (values_ >= limits_.nodes) limit("tape value limit");
@@ -142,6 +147,7 @@ class null_writer final {
   }
   [[gnu::noinline, gnu::cold]] void materialize(tape::key_shape_cache::frame& frame) {
     const auto& shape = shapes_->levels[frame.depth];
+    if (frame.count) { extend(pending_, frame.count); extend(keys_, frame.count); }
     for (uint32_t i = 0; i < frame.count; ++i) {
       pending_[frame.first + i] = uint64_t(shape.keys[i].hash) << 32;
       keys_[frame.first + i] = {reinterpret_cast<const char*>(shape.keys[i].bytes), shape.keys[i].length};
@@ -149,13 +155,13 @@ class null_writer final {
     frame.matched = false;
   }
   void close(size_t object, uint64_t count) {
-    size_t first = pending_.size() - count;
     auto* frame = shapes_ ? shapes_->current(object) : nullptr;
     auto* shape = frame ? &shapes_->levels[frame->depth] : nullptr;
-    if (frame && (frame->count != count || frame->first != first))
-      throw std::logic_error("object key count mismatch");
     bool hit = frame && frame->matched && count == shape->count;
     if (frame && frame->matched && !hit) materialize(*frame);
+    size_t first = hit ? frame->first : pending_.size() - count;
+    if (frame && (frame->count != count || frame->first != first))
+      throw std::logic_error("object key count mismatch");
     if (count >= 2 && !hit) {
       uint64_t* e = pending_.data() + first;
       // Entry i names keys_[first + i]: hash << 32 | i sorts by (hash, position).
@@ -198,10 +204,11 @@ class null_writer final {
   }
 
  public:
-  null_writer(std::pmr::memory_resource* memory, myna::value_limits limits) : memory_(memory), limits_(limits) {}
+  static constexpr bool retains_values = false;
+  basic_null_writer(std::pmr::memory_resource* memory, myna::value_limits limits) : memory_(memory), limits_(limits) {}
   void shapes(tape::key_shape_cache* cache) { shapes_ = cache; if (cache) cache->start(); }
-  null_writer(const null_writer&) = delete;
-  null_writer& operator=(const null_writer&) = delete;
+  basic_null_writer(const basic_null_writer&) = delete;
+  basic_null_writer& operator=(const basic_null_writer&) = delete;
 
   void input(std::string_view input) { input_ = input.data(); }
   void reserve(size_t, size_t, size_t entries) {
@@ -246,8 +253,6 @@ class null_writer final {
       uint32_t ordinal = frame->count;
       if (frame->matched) {
         if (ordinal < shape.count && shape.keys[ordinal].equals(text, length, padded)) {
-          pending_.extend(memory_, 1);
-          keys_.extend(memory_, 1);
           ++frame->count;
           return;
         }
@@ -255,8 +260,21 @@ class null_writer final {
       }
       ++frame->count;
     }
-    pending_.push(memory_, uint64_t(myna_value_hash(text, length)) << 32);
-    keys_.push(memory_, {reinterpret_cast<const char*>(text), length});
+    *extend(pending_) = uint64_t(myna_value_hash(text, length)) << 32;
+    *extend(keys_) = {reinterpret_cast<const char*>(text), length};
+  }
+  [[gnu::always_inline]] uint32_t cached_key_ref(size_t object, uint32_t offset, uint32_t available) {
+    auto* frame = shapes_ ? shapes_->current(object) : nullptr;
+    if (!frame || !frame->matched) return UINT32_MAX;
+    const auto& shape = shapes_->levels[frame->depth];
+    if (frame->count >= shape.count) return UINT32_MAX;
+    const auto& key = shape.keys[frame->count];
+    const auto* text = reinterpret_cast<const uint8_t*>(input_) + offset;
+    if (!key.clean || available <= key.length || text[key.length] != '"' || !key.equals(text, key.length, true))
+      return UINT32_MAX;
+    ++frame->count;
+    charge(key.length); value();
+    return key.length;
   }
   void null() { value(); }
   void boolean(bool) { value(); }
@@ -280,6 +298,9 @@ class null_writer final {
   }
   uint64_t value_count() const { return values_; }
 };
+
+using null_writer = basic_null_writer<false>;
+using structural_null_writer = basic_null_writer<true>;
 
 } // namespace truffledata::json
 #endif

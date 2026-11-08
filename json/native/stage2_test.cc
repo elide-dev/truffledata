@@ -23,10 +23,12 @@ struct harness {
     std::pmr::monotonic_buffer_resource memory;
     if (stage2) {
       index.run(reinterpret_cast<const uint8_t*>(input.data()), input.size());
-      Writer writer(&memory, limits);
+      using Structural = std::conditional_t<std::is_same_v<Writer, tape::ctape_writer>,
+          tape::structural_writer, json::structural_null_writer>;
+      Structural writer(&memory, limits);
       writer.shapes(&shapes); writer.input({input.data(), input.size()});
-      writer.reserve(size_t(index.size()) * 2 + 2, input.size(), index.size() / 2 + 1);
-      json::stage2_walk<Writer> walk(reinterpret_cast<const uint8_t*>(input.data()), input.size(), index.indexes(), index.size(), writer);
+      writer.reserve_structural(index.size(), input.size());
+      json::stage2_walk<Structural> walk(reinterpret_cast<const uint8_t*>(input.data()), input.size(), index.indexes(), index.size(), writer);
       walk.run();
       if constexpr (std::is_same_v<Writer, tape::ctape_writer>) {
         auto view = writer.view();
@@ -91,6 +93,23 @@ void differential() {
       parser.compare(std::string(token) + whitespace);
       parser.compare(std::string("[") + token + whitespace + ",2]");
     }
+  for (const auto* token : {"999999999999999999", "-999999999999999999", "1000000000000000000",
+      "-1000000000000000000", "1.00000000000000000", "0.00000000000000001", "0.000000000000000001",
+      "-0.00000000000000000", "1e-400", "1e400"}) {
+    parser.compare(token);
+    parser.compare(std::string("[") + token + "]");
+    parser.compare(std::string(token) + "x");
+    parser.compare(std::string("0") + token);
+  }
+  // Warm the same key sequence with raw and escaped spellings, then vary quote/backslash
+  // content and truncate at each byte. A cached decoded key must never invent a closing quote.
+  for (const std::string& text : {std::string("{\"\":0,\"plain\":1,\"é\":2}"),
+      std::string(R"({"a\"b":1,"a\\b":2,"a\nb":3})"),
+      std::string(R"({"\u0061":1,"\u0062":2,"\u0063":3})")}) {
+    for (int repeat = 0; repeat < 4; ++repeat) parser.compare(text);
+    for (size_t end = 1; end < text.size(); ++end) parser.compare(text.substr(0, end));
+    parser.compare(text);
+  }
   for (auto limits : {myna::value_limits{0, 0, 0}, myna::value_limits{1, 0, 128}, myna::value_limits{3, 1, 1}}) {
     parser.limits = limits;
     for (const auto& token : {"1x", "1.0x", "1x2", "0", "-0", "18446744073709551616", "[0,1]", "{\"a\":1}"})
