@@ -60,3 +60,107 @@ and matches on both `keys.openpgp.org` and `keyserver.ubuntu.com`; the signing
 identity itself is unchanged. These are supported distribution servers in
 [Central's signing requirements](https://central.sonatype.org/publish/requirements/gpg/).
 This checks public-key availability, not deployment permission or publication.
+
+
+## User-requested pause checkpoint
+
+The user asked to pause at a stopping point. The in-flight qualification finished;
+no new validation round, merge or publication was started after that request.
+The already-built YAML profiler executable was retrieved from cache only for
+symbolization. Release authorization remains: finish the follow-up and all open
+TruffleData issues, require green main, then publish 0.10.0. The intermediate
+0.9.0 is already released. Do not ask again for the selected dual license or the
+Central credential-file path.
+
+Work is on `feat/followup-v5` in `/Users/sam/workspace/graalvm/truffledata-followup`.
+[Draft PR #36](https://github.com/elide-dev/truffledata/pull/36) is open; its last
+pushed commit is `a94ec5b`. Subsequent local correctness and evidence commits have
+not been pushed, to avoid starting another CI round during the pause. Main and
+release tags are unchanged. The isolated qualification checkout remains at
+`5002235` in `/Users/sam/workspace/graalvm/truffledata-qualification`.
+
+### Completed qualification and pending fixes
+
+- Full invocation [4065dd6f](https://app.buildbuddy.io/invocation/4065dd6f-2b23-40f9-bb50-bfec5e1a448f),
+  snapshot `5002235`: 86/93 test targets passed, four failed to build and three
+  failed remotely. `/tmp/td-010-full-5002235.log` contains the full command output.
+  Both 10-shard G1 runtimes completed, as did legacy measurements, native API,
+  compiled reader, native-free consumer and allocation suites explicitly listed
+  in that invocation. This was not a complete release qualification.
+- The four strict Java dependency failures are fixed in `b79a787` and `c11fa85`.
+  The YAML measurement target's stale shared-library label is fixed in `c11fa85`;
+  the three-fork measurement itself did not run. The stale YAML string-ownership
+  assertion is fixed in `a94ec5b`, with exact text/raw-span/Myna parity and ASan/UBSan.
+  Those fixes require integrated recapture.
+- Protobuf E1: SVM selected-small/selected-holdout/lazy-holdout pass at
+  0.66443/0.37369/0.49774. JVM selected-holdout/lazy-holdout pass at
+  0.48924/0.34602; selected-small misses 0.85 at 0.86384. `844aafe` adds checked
+  generated eager selection and count-only omitted child lists; 29,440 local
+  exact byte/status pairs pass, but formal JVM resident recapture is pending.
+- Protobuf B4 remains open: generated/slab full interpreter ratios are
+  4.358/6.729 versus the required 2.5 ceiling; historical peak comparisons also
+  need attention. The historical SDK is .24 and candidate SDK is .27, so these
+  are combined implementation/runtime comparisons. `63fd6d4` separately fixes
+  cross-root SlabRow accessor caching; local regression tests pass, integrated
+  recapture is pending. No speculative B4 unchecked-read hook was implemented.
+- JSON `d03ffe1` fixes validate-only duplicate acceptance after a shape-template
+  replacement aliases its own stored key bytes. Exact regression, expanded
+  million-sequence corpus and sanitizers pass locally. `586db22` removes the
+  rejected text-fusion candidate from production and keeps it test-only.
+  `b1a90b4` adds the duplicate-check price probe. Native recapture and updated
+  compatibility/v3 unclemax measurements are pending. Previous required Task2
+  misses remain big/huge retained and small/huge validation; duplicate-price
+  qualification is pending. The fixed-format 1.5x logical-memory criterion is
+  explicitly not met, not silently waived.
+- YAML ABI5 compiled reader/export/allocation gates pass. Native ratios
+  config/block/flow/stream/text are 0.561/0.693/0.692/0.507/0.771; only stream
+  clears its required floor. Existing profiles and symbol-level findings are
+  archived; four required throughput floors remain open. Profiler ELF was
+  retrieved in [2b9db0e6](https://app.buildbuddy.io/invocation/2b9db0e6-e0ef-4f44-80c7-e291ed03a218)
+  with cache hits only. No new YAML optimization was started after the pause.
+
+### GitHub CI findings to resume
+
+Run [42443797685](https://github.com/elide-dev/truffledata/actions/runs/42443797685)
+checks `a94ec5b`, not the later local checkpoints. Linux AArch64 GNU/musl,
+x86-64 musl and database driver jobs passed. Pending known failures:
+
+- Access-method coverage: `ReadBooleanNode$InlineReader::accessedInline` is
+  uncovered. Full contract reporting may reveal further gaps after it is fixed.
+  Log: `/tmp/td-010-core-ci-failure.log`.
+- Legacy `//benchmarks/comparison:native_smoke` fails compact scalar allocation,
+  416B versus 128B. This manual target was omitted from the broad invocation's
+  explicit list; add it to subsequent qualification. The distinct
+  `consumer_native_smoke` passed. Log: `/tmp/td-010-buffa-ci-failure.log`.
+- macOS CSV CI fails Bazel absolute-header validation: actual SDK headers are
+  under `/Applications/Xcode_16.4.app/...`, while the toolchain's builtin include
+  list names unversioned Xcode and CommandLineTools paths. The runner is arm64;
+  this is SDK discovery/include declaration, not architecture selection.
+  No workaround has been implemented. Log: `/tmp/td-010-macos-ci-failure.log`.
+
+### Resume order and operational notes
+
+Review the agents' checked-in evidence/handoffs, finish the mandatory fixes, then
+update the isolated qualification checkout to a complete committed snapshot.
+Only one local Bazel invocation may run across all worktrees. Use
+`JAVA_HOME=/Library/Java/JavaVirtualMachines/gvm.jdk25/Contents/Home` consistently.
+The qualification output base is
+`/Users/sam/Library/Caches/komodo-bazel-volume/root/f3ea07f1e7d36952c2afa08f82935352`;
+the shared cache volume had about 3.4GiB free at pause. Preserve the historical
+protobuf baseline under `build/protobuf-baseline-fecb39f` (including SDK symlinks)
+and the JSON `ce7399f` baseline. Do not delete shared caches or release evidence.
+
+After focused fixes, complete method coverage, all explicit native/negative-JIT
+and sanitizer gates, five-platform staging, published Java/native/Gradle
+consumers, signatures/metadata, and full CI. Then mark the PR ready, merge,
+require green main, and publish 0.10.0 with
+`CENTRAL_CREDENTIALS_FILE="$HOME/.m2/settings-publishing.xml"`. Verify public
+Maven/GitHub artifacts and close distribution issues only after publication.
+The ten requested GitHub issues remain open; implementation does not establish
+successful release. No new upstream Myna/YAML issues were filed.
+
+Final evidence checkpoints before pausing: JSON/tape `b1a90b4`, YAML `65155d1`,
+protobuf `5c0d10a` (correctness fix `63fd6d4`). All three workers have stopped.
+Their owned source and evidence changes are committed; only this pause record
+is added afterward. No B4 performance prototype or new YAML optimization is
+left active. JSON candidates under `/tmp` are explicitly unadopted.
