@@ -196,7 +196,7 @@ void depth_limit() {
   require(failure(shallow, "[[[1]]]").code == status_limit);
 }
 
-void inline_and_region_strings() {
+void input_and_owned_strings() {
   yaml_session s(with());
   const std::string doc = "- 0123456789abcdef\n- 0123456789abcdefg\n- \"\\u00e9t\\u00e9 quoted, longer\"\n- |\n  literal block text\n"
                           "- \"\\L grows\"\n";
@@ -206,10 +206,31 @@ void inline_and_region_strings() {
   require(ct::kind(n[ordinal(d.view, 1)]) == ct::kind_string && ct::field(n[ordinal(d.view, 1)]) == 16);
   require(!(n[ordinal(d.view, 1)] & ct::owned_flag));
   require(!(n[ordinal(d.view, 2)] & ct::owned_flag));
-  for (size_t i : {size_t(3), size_t(4), size_t(5)}) require(n[ordinal(d.view, i)] & ct::owned_flag);
+  // Shrinking quoted/block text stays in filtered input; text that grows into rapidyaml's
+  // separate arena still needs owned pool storage. Both carry an independent raw-span word.
+  for (size_t i : {size_t(3), size_t(4)}) {
+    size_t at = ordinal(d.view, i);
+    require((n[at] & ct::wide_flag) && !(n[at] & ct::owned_flag));
+    require(lexical_span(d.view, at) == 0);
+  }
+  require((n[ordinal(d.view, 5)] & (ct::wide_flag | ct::owned_flag)) == (ct::wide_flag | ct::owned_flag));
+  require(lexical_span(d.view, ordinal(d.view, 5)) == 0);
   require(node_text(d.view, ordinal(d.view, 5)) == "\xE2\x80\xA8 grows");
   require((n[ordinal(d.view, 1)] & ct::ascii_flag) && !(n[ordinal(d.view, 3)] & ct::ascii_flag));
-
+  const std::string expected = render(d.view);
+  truffledata::tape::index_memory allocations(SIZE_MAX, std::pmr::new_delete_resource());
+  truffledata::tape::block_arena copies(&allocations);
+  require(ct::validate(d.view) == nullptr);
+  require(render(ct::to_myna(d.view, &copies).base) == expected);
+  auto pristine = decode(s, doc, yaml_session::retain_source);
+  require(render(pristine.view) == expected && ct::validate(pristine.view) == nullptr);
+  require(render(ct::to_myna(pristine.view, &copies).base) == expected);
+  for (size_t i : {size_t(3), size_t(4), size_t(5)})
+    require(pristine.view.words[ordinal(pristine.view, i)] & ct::owned_flag);
+  uint64_t quoted = lexical_span(pristine.view, ordinal(pristine.view, 3));
+  uint64_t block = lexical_span(pristine.view, ordinal(pristine.view, 4));
+  require(std::string(pristine.source + (quoted >> 32), uint32_t(quoted)) == "\"\\u00e9t\\u00e9 quoted, longer\"");
+  require(std::string(pristine.source + (block >> 32), uint32_t(block)) == "|\n  literal block text");
 }
 
 std::string span(const yaml_session::document_view& d, size_t node) {
@@ -270,7 +291,7 @@ int main(int argc, char** argv) {
     duplicate_keys_after_resolution();
     complex_key_rejected();
     depth_limit();
-    inline_and_region_strings();
+    input_and_owned_strings();
     lexical_spans_plain_always_quoted_with_retain_source();
     multiple_documents_rejected_by_decode(fixtures);
   } catch (const std::exception& e) {
