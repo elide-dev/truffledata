@@ -750,6 +750,9 @@ shape_document write_shape(const std::vector<std::string>& keys, key_shape_cache
 
 void shape_cache_rejects_duplicates() {
   key_shape_cache cache;
+  // Templates install from a depth's second object on; prime depth 0 so each count installs.
+  write_shape({"prime0", "prime1"}, &cache);
+  require(cache.levels[0].count == 0);
   for (unsigned count = 2; count <= 32; ++count) {
     std::vector<std::string> keys;
     for (unsigned i = 0; i < count; ++i) keys.push_back("key" + std::to_string(i));
@@ -772,6 +775,8 @@ void shape_cache_rejects_duplicates() {
   std::string long_key(40, 'x');
   require(throws_as<c::duplicate_key>([&] { write_shape({long_key, "short", long_key}, &cache); }));
   write_shape({"a", "b"}, &cache, false, 31);
+  write_shape({"a", "b"}, &cache, false, 31);
+  require(cache.levels[31].count == 2);
   require(throws_as<c::duplicate_key>([&] { write_shape({"a", "a"}, &cache, false, 31); }));
   require(throws_as<c::duplicate_key>([&] { write_shape({"a", "a"}, &cache, false, 32); }));
 }
@@ -867,6 +872,19 @@ void shape_key_replacement_preserves_aliased_bytes() {
   }
 }
 
+void shape_templates_install_on_second_object() {
+  key_shape_cache cache;
+  std::vector<std::string> keys{"id", "name", "price"};
+  auto sorted = write_shape(keys, nullptr);
+  // The first object of a depth only marks it; the second installs; later ones match.
+  for (unsigned round = 0; round < 3; ++round) {
+    auto cached = write_shape(keys, &cache);
+    require(cached.words == sorted.words && cached.directory == sorted.directory && cached.pool == sorted.pool);
+    require(cache.levels[0].seen && cache.levels[0].count == (round == 0 ? 0u : 3u));
+  }
+  require(cache.levels[1].count == 0 && !cache.levels[1].seen);
+}
+
 void permuted_directories_match_sorted() {
   key_shape_cache cache;
   std::vector<std::string> keys;
@@ -887,6 +905,7 @@ int main() {
       {"directoryless_shapes_still_check_duplicates", directoryless_shapes_still_check_duplicates},
       {"producer_proofs_close_directoryless_objects", producer_proofs_close_directoryless_objects},
       {"shape_cache_rejects_duplicates", shape_cache_rejects_duplicates},
+      {"shape_templates_install_on_second_object", shape_templates_install_on_second_object},
       {"shape_key_replacement_preserves_aliased_bytes", shape_key_replacement_preserves_aliased_bytes},
       {"permuted_directories_match_sorted", permuted_directories_match_sorted},
       {"words_follow_the_layout", words_follow_the_layout},
