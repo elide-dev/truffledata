@@ -52,6 +52,14 @@ report = {
 def save():
     (output / 'json-typed-pair.json').write_text(json.dumps(report, indent=2) + '\n')
 
+# Prove both old and new images execute every public read tier before timing this shard.
+# Preserve compiler/runtime output separately so failures cannot disappear into timing data.
+for role, path in binary.items():
+    smoke = subprocess.run([str(path), '--typed-smoke'], capture_output=True, text=True)
+    (output / (role + '-typed-smoke.stdout')).write_text(smoke.stdout)
+    (output / (role + '-typed-smoke.stderr')).write_text(smoke.stderr)
+    smoke.check_returncode()
+
 for engine, stage, mode, fork in jobs:
     order = ['candidate', 'baseline']
     rng.shuffle(order)
