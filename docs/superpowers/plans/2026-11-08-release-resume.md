@@ -158,3 +158,42 @@ structural typed JSON, plan-specialized CSV batch construction, and protobuf
 warm-read caches/dispatch, followed by evidence-driven snapshot/streaming/bulk
 experiments. Those new optimizations are not implemented by this restoration.
 The stay-local/no-push/no-CI/no-publication rule remains in force.
+
+## SVM tranche integrated; final Arm acceptance running — 2026-11-08
+
+The first authorized tranche is integrated locally. Production/test tip is
+`7fca64b`; protobuf evidence through `a259275` retains the initial and refined
+candidates. CSV, JSON and protobuf owning ledgers are updated. The common
+comparison is `benchmarks/results/svm-tranche-20261108/README.md`; it separates
+workloads, includes competitors and preserves measured regressions. Baseline
+production remains `9a1dcec`, including restored B4 Phase 1.
+
+All paired experiments are complete: CSV `07bb26fb` (78 cells), JSON `950032e5`
+(34 cells), final protobuf `1159ca42` (264 cells). JSON typed ingestion improves
+9.5–15.5%; CSV string aggregates improve about 1.5–2%; protobuf full slab reads
+improve 16.2% interpreted and 32.1% peak. All allocation/retention comparisons
+match. Generic JSON ingest is 2.2% slower; some sparse protobuf first reads are
+3–4.5% slower. B4 remains above its 2.5× direct-stock interpreter target.
+
+Combined coverage `b436036f` passes all nine targets (455 tests), LCOV validation
+for 201 production files across 12 modules and the access-method contract, with
+no new exclusions. All five x86 native targets pass in `6227eb3c`, including
+protobuf strict, non-strict and Java fallback publication races. The 14 reporting
+tests and four CSV paired-runner tests pass. All artifacts are saved in the common
+results directory.
+
+Arm acceptance is currently active in `0de92e3b-a02f-4532-ac98-eed245afec71`; CSV
+has passed and four remaining targets are building. Root owns the serialized
+Bazel slot. Log: `/tmp/td-tranche-native-arm64.log`. A new case-sensitive sparse
+cache is mounted at `/private/tmp/truffledata-svm-arm64-20261108` (64 GiB sparse
+image alongside it) because the shared volume had only 2.6 GiB free. Use that
+`--output_user_root`, its `repository-cache` directory and `--config=remote_arm64`.
+An initial ordinary-APFS output override was correctly rejected before Bazel ran;
+the guard output and setup are preserved. No Arm throughput claim is made.
+
+Remaining work: finish/archive Arm acceptance, update this checkpoint and the
+common report to final status, commit, verify clean state/no active invocation,
+then give Sam the requested performance table and pause. Workers have finished
+and require no further work. Original `main` stays clean at `223edf7`. Nothing
+has been pushed, dispatched to CI, merged remotely or published. No further
+optimization tranche or release qualification is authorized by this checkpoint.

@@ -7,10 +7,13 @@ release gates; it does not waive semantic, lifetime, SVM graph/allocation, no-PG
 or prebuilt-native distribution requirements. See the root `AGENTS.md`.
 
 Status: Sam authorized the first parallel tranche after compaction ("ok do it").
-B4 Phase 1 is restored in `29aa408`; seven validation targets (including both
-native smokes) and all nine coverage suites/method contracts pass. The experiments
-below are in progress, not admitted optimizations or promised speedups. The
-production baseline is `9a1dcec`. Follow-ons remain conditional on these results.
+All three measured mechanisms are now integrated locally. Final combined coverage
+and x86 native acceptance pass; Arm native acceptance is in progress. B4 Phase 1
+remains restored in `29aa408`.
+The production baseline is `9a1dcec`. The
+[common comparison](../../../benchmarks/results/svm-tranche-20261108/README.md)
+records measured gains, regressions and workload boundaries. Follow-ons remain
+separate future work; no additional optimization cycle is started by this tranche.
 
 Execution branches start at that baseline: `tranche/json` in `td-climb-json`,
 `tranche/csv` in `td-climb-slab`, and `tranche/protobuf` in `td-climb-b4`.
@@ -22,33 +25,43 @@ for nested typed JSON and owned CSV are applied to the old production baseline
 before recapturing images; candidates must use the same workload definitions.
 No push, CI dispatch, publication, or main-branch merge is authorized.
 
-### Execution checkpoint (qualification in progress)
+### Measured admission checkpoint
 
-- CSV candidate `234304c` isolates all-STRING framing; regular and forced-index
-  JVM suites pass 121/121 each, native comparison smoke passes 162 cells, and
-  typed compiled reads retain zero invokes/allocation sites (`b7b8fae5`). Eight
-  paired SVM shards are running in `07bb26fb`; completed small-input cells show
-  modest/neutral results, not a step-change conclusion. Test-only `6992a00`
-  extends native acceptance to a large projected/owned string fixture.
-- Protobuf candidate `f045f5c`, evidence `f3f9a3f`, removes monitors from warm
-  handle-cache reads with acquire/release publication and synchronized misses.
-  All seven correctness/allocation/native smoke targets pass (`4097845d`),
-  including unchanged 168/136 B scalar floors and 48 B owner. Paired timing is
-  pending. Test-only `30e4b7f` plus `fadf9e4` adds shared JVM/SVM publication races.
-- JSON candidate checkpoint `a966cf2` is unqualified. The initial exact native
-  differential passed, but its array-heavy producer probes lost 1–4%; that
-  negative evidence is retained. The revised frame writer passes 155,647 exact
-  Arm64 ASan/UBSan cases and Cargo link/fingerprint checks. Revised pinned native,
-  JVM and six-shard SVM pairs (including flat/generic competitor controls) remain.
-- Parent test infrastructure `c5d237f` selects the pinned Linux Arm64 SDK for
-  existing format native acceptance targets; these new configurations are not
-  yet executed. Final integration requires nine-suite method coverage plus
-  native acceptance on both Linux ISAs; only x86 SVM timing claims are planned.
+- CSV `fef9ae5` (worker `234304c`) isolates all-STRING framing. Eight paired SVM
+  shards (`07bb26fb`, 78 cells / 468 fresh processes) show roughly 1.5–2.0% lower
+  aggregate string time across copied/owned and Java/native-indexed paths. This
+  is incremental, not a step-change. All allocation cells match. JVM and forced-
+  index suites pass 121/121 each; native smoke passes 162 cells with unchanged
+  graph/read-allocation gates. `2267344` adds large projected/owned acceptance.
+  More typed-writer specialization is deferred pending a focused profile.
+- Protobuf `de2e498` plus `7fca64b` (workers `f045f5c` plus `e4cec9f`) uses
+  acquire/release warm handle slots and synchronized misses, forwarding the
+  already decoded handle. Final pair `1159ca42` covers 264 cells / 1,584 raw
+  records: full slab interpreter time −16.2%, peak −32.1%, large native slab
+  peak −44.6%. All 132 allocation/retention pairs match. Sparse native/lazy
+  first reads still cost about 3–4.5% more. The initial candidate's larger cold
+  penalty and all raw results remain preserved. Both seven-target validations
+  pass, including 168/136 B scalar floors, 48 B owner and 132 native smoke cells.
+  `598ce6f`/`4fd49c2` add cold/warm publication races to shared acceptance.
+  B4 remains open: full interpreter/stock is 5.652× slab and 3.471× generated.
+- JSON `152dac5` (worker `a966cf2`) extends structural typed decoding to nested
+  and repeated plans. Six paired SVM groups (`950032e5`) give 9.5–15.5% lower
+  ingest time in all four new workloads, with separated fork ranges and all
+  34 allocation cells unchanged. Generic ingest regresses 2.2%; flat ingest
+  is +1.5% with overlapping ranges. Native differential, 155,647 exact Arm64
+  ASan/UBSan cases, Cargo checks, 24 graph checks and nine allocation budgets
+  pass. The rejected initial writer and noisy diagnostics remain preserved.
+  `de07d75` also synchronizes an older canonical tape optimization missing from
+  the Cargo vendor copy; all 21 mapped files match and Cargo build/link passes.
+- `c5d237f` selects the pinned Linux Arm64 SDK for native acceptance. Combined
+  coverage `b436036f` passes all nine suites (455 tests), 201 production files /
+  12 modules and the access-method contract. All five x86 native targets pass
+  in `6227eb3c`. Arm invocation `0de92e3b` is still running; CSV has passed.
+  Only x86 SVM timing claims are made.
 
-Current queue: finish CSV pair, revised JSON native/JVM/build, protobuf full
-paired matrix, JSON pairs, then admission/integration and final common checks.
-No candidate production change is integrated at this checkpoint. Worker source,
-negative experiments, baselines and validation artifacts remain local.
+Worker source, negative experiments, baselines and validation artifacts remain
+local. Final common qualification and the requested pause are recorded below
+when complete; no release completion is implied by these admissions.
 
 ## Restore and audit
 

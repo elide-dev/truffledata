@@ -8,6 +8,15 @@ remain disclosed in the [paired evidence](../../../benchmarks/results/protobuf-b
 B4 remains open because generated/slab full SVM interpretation still exceeds 2.5× stock. No
 Phase 2 implementation is included in this restoration.
 
+Follow-up: the [SVM warm-cache tranche](../../../benchmarks/results/protobuf-warm-cache-9a1dcec/README.md)
+is admitted locally as `de2e498` plus `7fca64b`. Row/text/blob handle hits use
+acquire/release publication; synchronized misses preserve identity and lazy
+accounting. Full slab interpreter time improves 16.2% and peak time 32.1% in the
+final pair. B4 remains open at 5.652× stock for slab and 3.471× for generated full
+interpretation. The list-map proposal below is historical and is not implemented:
+lists have no handle ids, so any replacement needs a separately verified offset,
+type and projection identity. The existing list/unsigned map remains synchronized.
+
 ## 0. Gate and evidence
 
 - Gate: SVM full **interpret** generated-owned/stock ≤ 2.5× and slab/stock ≤ 2.5×, with peak
