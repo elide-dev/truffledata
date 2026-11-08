@@ -1,7 +1,7 @@
 #ifndef TRUFFLEDATA_JSON_DECODER_H
 #define TRUFFLEDATA_JSON_DECODER_H
 // Structural producer for generic documents. The previous generic walk is test-only;
-// nested/repeated typed plans retain their separate On-Demand slot writer in typed.h.
+// typed plans use a structural slot writer, with On-Demand retained for failure diagnostics.
 #include "json/native/parser_pool.h"
 #include "json/native/decoder_common.h"
 #include "json/native/stage2.h"

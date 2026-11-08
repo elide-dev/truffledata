@@ -3,19 +3,42 @@
 #include <cstdio>
 #include <random>
 #include <sstream>
+#include "json/native/status.h"
 using namespace truffledata::json;
 using testing::ondemand_typed_document;
 static uint64_t cases;
 std::string_view text(const uint8_t* p, uint32_t n) { return n ? std::string_view(reinterpret_cast<const char*>(p), n) : std::string_view(); }
-void same(const typed_plan& plan, const std::string& input) {
+int typed_status() {
+  try { throw; }
+  catch (const std::bad_alloc&) { return status_allocation; }
+  catch (const std::length_error&) { return status_limit; }
+  catch (const simdjson::simdjson_error& error) {
+    if (error.error() == simdjson::INCORRECT_TYPE || error.error() == simdjson::NUMBER_OUT_OF_RANGE)
+      return status_contract;
+    return status_of(error.error());
+  }
+  catch (const stage2_detail::syntax_error&) { return status_syntax; }
+  catch (const std::invalid_argument&) { return status_contract; }
+  catch (...) { return status_internal; }
+}
+void same(const typed_plan& plan, const std::string& input, truffledata::tape::storage_limits limits = {}) {
   std::unique_ptr<typed_document> actual;
   std::unique_ptr<ondemand_typed_document> expected;
-  try { actual = std::make_unique<typed_document>(plan, input); } catch (const std::exception&) {}
-  try { expected = std::make_unique<ondemand_typed_document>(plan, input); } catch (const std::exception&) {}
+  int actual_status = status_ok, expected_status = status_ok;
+  try { actual = std::make_unique<typed_document>(plan, input, limits); } catch (...) { actual_status = typed_status(); }
+  try { expected = std::make_unique<ondemand_typed_document>(plan, input, limits); } catch (...) { expected_status = typed_status(); }
   auto fail = [&] { std::fprintf(stderr, "typed mismatch case%llu: %s\n", static_cast<unsigned long long>(cases), input.c_str()); throw std::runtime_error("typed stage2 oracle mismatch"); };
   ++cases;
   if (bool(actual) != bool(expected)) fail();
+  if (!plan.scalar() && actual_status != expected_status) {
+    std::fprintf(stderr, "actual status %d expected %d\n", actual_status, expected_status); fail();
+  }
   if (!actual) return;
+  if (!plan.scalar()) {
+    const auto a = actual->allocations(), b = expected->allocations();
+    if (a.index_retained_bytes != b.index_retained_bytes || a.index_peak_bytes != b.index_peak_bytes
+        || a.index_allocations != b.index_allocations) fail();
+  }
   if (actual->present() != expected->present() || actual->nulls() != expected->nulls() || actual->size() != expected->size() || actual->record_count() != expected->record_count()) fail();
   for (size_t i = 0; i < actual->size(); ++i) {
     auto& a = actual->slot(i); auto& b = expected->slot(i);
@@ -75,4 +98,83 @@ void strings_and_shapes() {
   typed_plan empty_plan(std::vector<scalar_field>{});
   for (auto input : {"{}", "[]", "null", "{\"a\":1}", "{}{}"}) same(empty_plan, input);
 }
-int main() { numeric(); strings_and_shapes(); std::printf("typed structural oracle parity: %llu cases\n", static_cast<unsigned long long>(cases)); }
+scalar_field record_field(std::string name, uint32_t child, bool repeated = false) {
+  scalar_field field{std::move(name), scalar_kind::record}; field.child = child;
+  field.repeated = repeated; return field;
+}
+scalar_field repeated_field(std::string name, scalar_kind kind) {
+  scalar_field field{std::move(name), kind}; field.repeated = true; return field;
+}
+void nested_and_repeated() {
+  auto optional = record_field("optional", 1); optional.required = false; optional.nullable = true;
+  auto words = repeated_field("words", scalar_kind::string); words.nullable = true;
+  auto bounded = repeated_field("numbers", scalar_kind::int64); bounded.minimum = -5; bounded.maximum = 5;
+  typed_plan plan(std::vector<std::vector<scalar_field>>{
+    {record_field("child", 1), record_field("items", 1, true), words, bounded, optional},
+    {{"n", scalar_kind::int64}, {"s", scalar_kind::string}, record_field("leaf", 2)},
+    {{"b", scalar_kind::boolean}, repeated_field("u", scalar_kind::uint64)}});
+  const std::string point = R"({"n":-0,"s":"中\\x","leaf":{"b":true,"u":[0,18446744073709551615]}})";
+  const std::string reordered = R"({"leaf":{"u":[],"b":false},"s":"\u4e2d\ud83d\ude00","\u006e":9})";
+  const std::string empty = R"({"words":null,"numbers":[],"items":[],"child":)" + point + "}";
+  const std::string full = R"({"words":["","abc","\u0000"],"numbers":[-5,0,5],"items":[)"
+      + point + "," + reordered + "],\"child\":" + point + ",\"optional\":" + reordered + "}";
+  for (const auto& input : {empty, full}) {
+    same(plan, input);
+    same(plan, input + "{}");
+    for (size_t cut = 0; cut < input.size(); ++cut) same(plan, input.substr(0, cut));
+    for (size_t at = 0; at < input.size(); ++at) {
+      same(plan, input.substr(0, at) + input.substr(at + 1));
+      for (char c : std::string("{}[],:\"0ntf ")) {
+        std::string corrupt = input; corrupt[at] = c; same(plan, corrupt);
+      }
+    }
+    for (size_t limit : {size_t(0), size_t(1), size_t(48), size_t(256), size_t(1024), size_t(4096)})
+      same(plan, input, {input.size(), limit});
+    same(plan, input, {input.size() - 1, size_t(-1)});
+  }
+  for (const auto* token : {"null", "true", "0", "0.0", "\"x\"", "[]", "{}", "[null]", "[[]]", "[{}]",
+                           "[1,]", "[,1]", "[1,,2]", "[1 2]", "[1,2}", "[1e999]", "[9223372036854775808]"}) {
+    same(plan, std::string("{\"child\":") + token + R"(,"items":[],"words":[],"numbers":[]})");
+    same(plan, "{\"child\":" + point + ",\"items\":" + token + R"(,"words":[],"numbers":[]})");
+    same(plan, "{\"child\":" + point + R"(,"items":[],"words":)" + token + R"(,"numbers":[]})");
+    same(plan, "{\"child\":" + point + R"(,"items":[],"words":[],"numbers":)" + token + "}");
+    for (size_t limit : {size_t(256), size_t(1024), size_t(4096)})
+      same(plan, "{\"child\":" + point + ",\"items\":" + token + R"(,"words":[],"numbers":[]})",
+           {4096, limit});
+  }
+  auto nullable_items = record_field("items", 1, true); nullable_items.nullable = true;
+  auto nullable_child = record_field("child", 1); nullable_child.nullable = true;
+  typed_plan empty_children(std::vector<std::vector<scalar_field>>{{nullable_child, nullable_items}, {}});
+  for (const auto* input : {R"({"child":{},"items":[{},{},{}]})", R"({"child":null,"items":null})",
+                           R"({"child":{},"items":[]})", R"({"child":{},"items":[null]})",
+                           R"({"child":{"extra":0},"items":[]})", R"({"child":{},"items":[{"x":1}]})"})
+    same(empty_children, input);
+  // Empty child records allocate table entries but no slots. A late non-record element must
+  // fail before a scalar callback could mistake a record-table index for a slot index.
+  std::string empties = R"({"child":{},"items":[)";
+  for (size_t i = 0; i < 80; ++i) empties += "{},";
+  for (const auto* value : {"{}", "null", "true", "1", "\"x\"", "[]"})
+    same(empty_children, empties + value + "]}");
+  // Repeated scalars share exact lexical/numeric semantics with flat scalars.
+  std::mt19937_64 random(0x41f4e2);
+  for (auto kind : {scalar_kind::int64, scalar_kind::uint64, scalar_kind::float64}) {
+    typed_plan scalars({repeated_field("v", kind)});
+    for (size_t i = 0; i < 2000; ++i) {
+      std::string n = std::to_string(random());
+      std::string d = "-" + n + ".5e" + std::to_string(int(random() % 800) - 400);
+      same(scalars, "{\"v\":[0," + n + "," + d + "]}");
+    }
+  }
+  // Every valid record depth, including one repeated edge at each hop.
+  for (size_t depth = 1; depth <= max_plan_depth; ++depth) {
+    std::vector<std::vector<scalar_field>> records(depth);
+    records.back().push_back(repeated_field("v", scalar_kind::int64));
+    std::string input = R"({"v":[7,8]})";
+    for (size_t i = depth - 1; i > 0; --i) {
+      records[i - 1].push_back(record_field("c", i, true));
+      input = "{\"c\":[" + input + "]}";
+    }
+    typed_plan deep(std::move(records)); same(deep, input);
+  }
+}
+int main() { numeric(); strings_and_shapes(); nested_and_repeated(); std::printf("typed structural oracle parity: %llu cases\n", static_cast<unsigned long long>(cases)); }

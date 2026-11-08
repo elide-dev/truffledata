@@ -729,6 +729,52 @@ final class JvmScopedTest {
   }
 
   @Test
+  void typedRepeatedRecordsKeepDescendantsAndEscapedKeysIndependent() {
+    Schema leaf = new Schema("Leaf", List.of(new Field("text", Field.Kind.STRING, false, false)));
+    Schema branch = new Schema("Branch", List.of(Field.requiredLong("id"),
+        record("leaf", "Leaf", false, false),
+        array("values", Field.requiredLong("value"), false, false)));
+    Schema root = Schema.of(array("items", record("item", "Branch", false, false), false, false));
+    try (JsonDecoder decoder = JsonJvm.open(library());
+        JsonPlan plan = decoder.compile(root, Map.of("Branch", branch, "Leaf", leaf))) {
+      for (int count : new int[] {0, 1, 2, 8, 17, 33}) {
+        StringBuilder json = new StringBuilder("{\"items\":[");
+        for (int i = 0; i < count; i++) {
+          if (i != 0) json.append(',');
+          json.append("{\"leaf\":{\"text\":\"\\u4e2d\\n").append(i)
+              .append("\"},\"values\":[").append(i).append(',').append(-i)
+              .append("],\"\\u0069d\":").append(i).append('}');
+        }
+        byte[] input = utf8(json.append("]}").toString());
+        try (TypedRecord record = plan.decode(input)) {
+          Arrays.fill(input, (byte) 'x');
+          TypedArray items = record.array(0);
+          assertEquals(count, items.size());
+          for (int i = 0; i < count; i++) {
+            TypedRecord item = items.record(i);
+            assertEquals(i, item.longValue(0));
+            assertEquals("中\n" + i, item.record(1).stringValue(0));
+            assertEquals(i, item.array(2).longValue(0));
+            assertEquals(-i, item.array(2).longValue(1));
+          }
+        }
+      }
+      for (String bad : List.of(
+          "{\"items\":[null]}",
+          "{\"items\":[{\"id\":0,\"leaf\":{\"text\":\"x\"},\"values\":[1,]}]}",
+          "{\"items\":[{\"id\":0,\"\\u0069d\":1,\"leaf\":{\"text\":\"x\"},\"values\":[]}]}",
+          "{\"items\":[{\"id\":0,\"leaf\":{\"text\":\"x\",\"extra\":0},\"values\":[]}]}",
+          "{\"items\":[{\"id\":0,\"leaf\":{\"text\":\"\\ud800\"},\"values\":[]}]}",
+          "{\"items\":[]} trailing")) {
+        assertThrows(IllegalArgumentException.class, () -> plan.decode(utf8(bad)), bad);
+      }
+      try (TypedRecord stillUsable = plan.decode(utf8("{\"items\":[]}"))) {
+        assertEquals(0, stillUsable.array(0).size());
+      }
+    }
+  }
+
+  @Test
   void plansRejectDecodingAfterTheirDecoderCloses() {
     Schema schema = Schema.of(Field.requiredLong("n"));
     JsonDecoder decoder = JsonJvm.open(library());

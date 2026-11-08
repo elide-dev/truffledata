@@ -1,0 +1,141 @@
+INFO: Invocation ID: 194aaa6f-c162-4137-902c-48645700e1f2
+INFO: Streaming build results to: https://app.buildbuddy.io/invocation/194aaa6f-c162-4137-902c-48645700e1f2
+Computing main repo mapping: 
+Loading: 
+Loading: 0 packages loaded
+Analyzing: 4 targets (0 packages loaded, 0 targets configured)
+Analyzing: 4 targets (0 packages loaded, 0 targets configured)
+
+INFO: Analyzed 4 targets (0 packages loaded, 6 targets configured).
+[11 / 36] Compiling json/native/typed_probe.cc; 1s remote, remote-cache ... (5 actions running)
+[11 / 36] Compiling json/native/typed_probe.cc; 11s remote, remote-cache ... (5 actions running)
+[12 / 36] Compiling json/native/typed_probe.cc; 20s remote, remote-cache ... (5 actions, 4 running)
+[12 / 36] Compiling json/native/typed_probe.cc; 21s remote, remote-cache ... (5 actions running)
+[13 / 36] Compiling json/native/typed_probe.cc; 24s remote, remote-cache ... (4 actions running)
+INFO: From Compiling json/native/api.cc:
+json/native/api.cc:10:26: warning: comparison of different enumeration types ('td_json_status' and 'truffledata::json::status') [-Wenum-compare]
+   10 | static_assert(TD_JSON_OK == truffledata::json::status_ok && TD_JSON_ARGUMENT == truffledata::json::status_argument
+      |               ~~~~~~~~~~ ^  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+json/native/api.cc:10:78: warning: comparison of different enumeration types ('td_json_status' and 'truffledata::json::status') [-Wenum-compare]
+   10 | static_assert(TD_JSON_OK == truffledata::json::status_ok && TD_JSON_ARGUMENT == truffledata::json::status_argument
+      |                                                             ~~~~~~~~~~~~~~~~ ^  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+json/native/api.cc:11:32: warning: comparison of different enumeration types ('td_json_status' and 'truffledata::json::status') [-Wenum-compare]
+   11 |               && TD_JSON_LIMIT == truffledata::json::status_limit && TD_JSON_ALLOCATION == truffledata::json::status_allocation
+      |                  ~~~~~~~~~~~~~ ^  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+json/native/api.cc:11:89: warning: comparison of different enumeration types ('td_json_status' and 'truffledata::json::status') [-Wenum-compare]
+   11 |               && TD_JSON_LIMIT == truffledata::json::status_limit && TD_JSON_ALLOCATION == truffledata::json::status_allocation
+      |                                                                      ~~~~~~~~~~~~~~~~~~ ^  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+json/native/api.cc:12:33: warning: comparison of different enumeration types ('td_json_status' and 'truffledata::json::status') [-Wenum-compare]
+   12 |               && TD_JSON_SYNTAX == truffledata::json::status_syntax && TD_JSON_INTERNAL == truffledata::json::status_internal
+      |                  ~~~~~~~~~~~~~~ ^  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+json/native/api.cc:12:89: warning: comparison of different enumeration types ('td_json_status' and 'truffledata::json::status') [-Wenum-compare]
+   12 |               && TD_JSON_SYNTAX == truffledata::json::status_syntax && TD_JSON_INTERNAL == truffledata::json::status_internal
+      |                                                                        ~~~~~~~~~~~~~~~~ ^  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+json/native/api.cc:13:35: warning: comparison of different enumeration types ('td_json_status' and 'truffledata::json::status') [-Wenum-compare]
+   13 |               && TD_JSON_CONTRACT == truffledata::json::status_contract
+      |                  ~~~~~~~~~~~~~~~~ ^  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+json/native/api.cc:14:41: warning: comparison of different enumeration types ('td_json_status' and 'truffledata::json::status') [-Wenum-compare]
+   14 |               && TD_JSON_TEXT_TOO_SMALL == truffledata::json::status_text_too_small
+      |                  ~~~~~~~~~~~~~~~~~~~~~~ ^  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+json/native/api.cc:15:39: warning: comparison of different enumeration types ('td_json_status' and 'truffledata::json::status') [-Wenum-compare]
+   15 |               && TD_JSON_STREAM_EMPTY == truffledata::json::status_stream_empty
+      |                  ~~~~~~~~~~~~~~~~~~~~ ^  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+json/native/api.cc:16:43: warning: comparison of different enumeration types ('td_json_status' and 'truffledata::json::status') [-Wenum-compare]
+   16 |               && TD_JSON_STREAM_TRUNCATED == truffledata::json::status_stream_truncated,
+      |                  ~~~~~~~~~~~~~~~~~~~~~~~~ ^  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+10 warnings generated.
+[15 / 36] Compiling json/native/typed_stage2_test.cc; 25s remote, remote-cache ... (4 actions running)
+[15 / 36] Compiling json/native/typed_stage2_test.cc; 35s remote, remote-cache ... (4 actions running)
+[16 / 36] LTO indexing json/native/typed_test.lto/bazel-out/rbe_linux_amd64-opt/bin/json/native/_objs/typed_test/typed_test.o.imports; 16s remote, remote-cache ... (4 actions running)
+[17 / 36] LTO indexing json/native/typed_probe.lto/bazel-out/rbe_linux_amd64-opt/bin/json/native/_objs/typed_probe/typed_probe.o.imports; 13s remote, remote-cache ... (4 actions, 3 running)
+[17 / 36] LTO indexing json/native/typed_probe.lto/bazel-out/rbe_linux_amd64-opt/bin/json/native/_objs/typed_probe/typed_probe.o.imports; 15s remote, remote-cache ... (4 actions running)
+[18 / 36] LTO indexing json/native/typed_probe.lto/bazel-out/rbe_linux_amd64-opt/bin/json/native/_objs/typed_probe/typed_probe.o.imports; 18s remote, remote-cache ... (4 actions, 3 running)
+[18 / 36] LTO indexing json/native/typed_probe.lto/bazel-out/rbe_linux_amd64-opt/bin/json/native/_objs/typed_probe/typed_probe.o.imports; 19s remote, remote-cache ... (4 actions running)
+[19 / 36] LTO indexing json/native/typed_stage2_test.lto/bazel-out/rbe_linux_amd64-opt/bin/json/native/_objs/typed_stage2_test/typed_stage2_test.o.imports; 17s remote, remote-cache ... (4 actions, 3 running)
+[20 / 36] LTO Backend Compile json/native/typed_test.lto/bazel-out/rbe_linux_amd64-opt/bin/json/native/_objs/typed_test/typed_test.o; 15s remote, remote-cache ... (4 actions running)
+[21 / 36] LTO Backend Compile json/native/libtruffledata_json.so.lto/bazel-out/rbe_linux_amd64-opt/bin/json/native/_objs/truffledata_json/api.pic.o; 16s remote, remote-cache ... (4 actions, 3 running)
+[21 / 36] LTO Backend Compile json/native/libtruffledata_json.so.lto/bazel-out/rbe_linux_amd64-opt/bin/json/native/_objs/truffledata_json/api.pic.o; 18s remote, remote-cache ... (4 actions running)
+[22 / 36] LTO Backend Compile json/native/typed_probe.lto/bazel-out/rbe_linux_amd64-opt/bin/json/native/_objs/typed_probe/typed_probe.o; 9s remote, remote-cache ... (4 actions, 3 running)
+[22 / 36] LTO Backend Compile json/native/typed_probe.lto/bazel-out/rbe_linux_amd64-opt/bin/json/native/_objs/typed_probe/typed_probe.o; 10s remote, remote-cache ... (4 actions running)
+[23 / 36] LTO Backend Compile json/native/typed_stage2_test.lto/bazel-out/rbe_linux_amd64-opt/bin/json/native/_objs/typed_stage2_test/typed_stage2_test.o; 18s remote, remote-cache ... (4 actions, 3 running)
+[23 / 36] LTO Backend Compile json/native/typed_stage2_test.lto/bazel-out/rbe_linux_amd64-opt/bin/json/native/_objs/typed_stage2_test/typed_stage2_test.o; 19s remote, remote-cache ... (4 actions running)
+[24 / 36] LTO Backend Compile json/native/typed_stage2_test.lto/bazel-out/rbe_linux_amd64-opt/bin/json/native/_objs/typed_stage2_test/typed_stage2_test.o; 23s remote, remote-cache ... (4 actions, 3 running)
+[25 / 37] LTO Backend Compile json/native/typed_stage2_test.lto/bazel-out/rbe_linux_amd64-opt/bin/json/native/_objs/typed_stage2_test/typed_stage2_test.o; 24s remote, remote-cache ... (4 actions running)
+[25 / 37] LTO Backend Compile json/native/typed_stage2_test.lto/bazel-out/rbe_linux_amd64-opt/bin/json/native/_objs/typed_stage2_test/typed_stage2_test.o; 28s remote, remote-cache ... (4 actions running)
+INFO: From Testing //json/native:typed_test:
+==================== Test output for //json/native:typed_test:
+Typed nested and repeated JSON slots, contracts and retained ownership passed
+================================================================================
+[26 / 37] 1 / 4 tests; LTO Backend Compile json/native/typed_stage2_test.lto/bazel-out/rbe_linux_amd64-opt/bin/json/native/_objs/typed_stage2_test/typed_stage2_test.o; 30s remote, remote-cache ... (3 actions running)
+[27 / 37] 1 / 4 tests; Linking json/native/libtruffledata_json.so; 23s remote, remote-cache ... (3 actions, 2 running)
+[27 / 37] 1 / 4 tests; Linking json/native/libtruffledata_json.so; 25s remote, remote-cache ... (3 actions running)
+[28 / 37] 1 / 4 tests; Linking json/native/typed_probe; 23s remote, remote-cache ... (3 actions, 2 running)
+[29 / 37] 1 / 4 tests; Linking json/native/typed_probe; 25s remote, remote-cache ... (3 actions running)
+[30 / 37] 1 / 4 tests; Linking json/native/typed_stage2_test; 16s remote, remote-cache ... (3 actions, 2 running)
+[31 / 38] 1 / 4 tests; Linking json/native/typed_stage2_test; 18s remote, remote-cache ... (3 actions running)
+[33 / 39] 1 / 4 tests; LTO indexing json/native/api_test.lto/bazel-out/rbe_linux_amd64-opt/bin/json/native/_objs/api_test/api_test.o.imports; 9s remote, remote-cache ... (3 actions, 2 running)
+[33 / 39] 1 / 4 tests; LTO indexing json/native/api_test.lto/bazel-out/rbe_linux_amd64-opt/bin/json/native/_objs/api_test/api_test.o.imports; 10s remote, remote-cache ... (3 actions running)
+[35 / 39] 1 / 4 tests; Testing //json/native:typed_probe; 7s remote, remote-cache ... (3 actions, 2 running)
+[35 / 39] 1 / 4 tests; Testing //json/native:typed_probe; 9s remote, remote-cache ... (3 actions running)
+[35 / 39] 1 / 4 tests; Testing //json/native:typed_probe; 10s remote, remote-cache ... (3 actions running)
+[35 / 39] 2 / 4 tests; Testing //json/native:typed_probe; 15s remote, remote-cache ... (3 actions running)
+INFO: From Testing //json/native:typed_stage2_test:
+==================== Test output for //json/native:typed_stage2_test:
+typed structural oracle parity: 155635 cases
+================================================================================
+INFO: From Testing //json/native:typed_probe:
+==================== Test output for //json/native:typed_probe:
+typed round0 ondemand 198.80ns structural 106.23ns ratio 1.871
+typed round1 ondemand 194.45ns structural 106.33ns ratio 1.829
+typed round2 ondemand 191.13ns structural 106.17ns ratio 1.800
+typed round3 ondemand 191.92ns structural 109.57ns ratio 1.752
+typed round4 ondemand 194.58ns structural 106.73ns ratio 1.823
+nested input0 bytes92 slots9 records3 old_index736 new_index736 old_peak1056 new_peak1056 old_allocs6 new_allocs6
+nested input1 bytes93 slots9 records3 old_index736 new_index736 old_peak1056 new_peak1056 old_allocs6 new_allocs6
+nested round0 ondemand 402.26ns structural 358.77ns ratio 1.121
+nested round1 ondemand 410.53ns structural 372.05ns ratio 1.103
+nested round2 ondemand 394.59ns structural 362.64ns ratio 1.088
+nested round3 ondemand 392.90ns structural 365.46ns ratio 1.075
+nested round4 ondemand 410.48ns structural 360.21ns ratio 1.140
+repeated input0 bytes1032 slots105 records35 old_index6032 new_index6032 old_peak8592 new_peak8592 old_allocs11 new_allocs11
+repeated input1 bytes1033 slots105 records35 old_index6032 new_index6032 old_peak8592 new_peak8592 old_allocs11 new_allocs11
+repeated round0 ondemand 3475.16ns structural 3556.24ns ratio 0.977
+repeated round1 ondemand 3458.43ns structural 3510.29ns ratio 0.985
+repeated round2 ondemand 3456.84ns structural 3509.29ns ratio 0.985
+repeated round3 ondemand 3448.70ns structural 3506.29ns ratio 0.984
+repeated round4 ondemand 3451.37ns structural 3524.01ns ratio 0.979
+mixed input0 bytes324 slots33 records11 old_index2944 new_index2944 old_peak4224 new_peak4224 old_allocs10 new_allocs10
+mixed input1 bytes381 slots33 records11 old_index3040 new_index3040 old_peak4320 new_peak4320 old_allocs9 new_allocs9
+mixed round0 ondemand 1324.79ns structural 1383.16ns ratio 0.958
+mixed round1 ondemand 1329.14ns structural 1360.81ns ratio 0.977
+mixed round2 ondemand 1330.45ns structural 1381.94ns ratio 0.963
+mixed round3 ondemand 1326.64ns structural 1360.90ns ratio 0.975
+mixed round4 ondemand 1355.53ns structural 1372.81ns ratio 0.987
+churn input0 bytes92 slots9 records3 old_index736 new_index736 old_peak1056 new_peak1056 old_allocs6 new_allocs6
+churn input1 bytes173 slots15 records5 old_index832 new_index832 old_peak1008 new_peak1008 old_allocs7 new_allocs7
+churn round0 ondemand 1277.58ns structural 1303.88ns ratio 0.980
+churn round1 ondemand 1262.27ns structural 1306.93ns ratio 0.966
+churn round2 ondemand 1265.38ns structural 1301.18ns ratio 0.972
+churn round3 ondemand 1265.93ns structural 1304.29ns ratio 0.971
+churn round4 ondemand 1267.29ns structural 1297.81ns ratio 0.976
+================================================================================
+[37 / 39] 3 / 4 tests; Linking json/native/api_test; 8s remote, remote-cache
+[38 / 39] 3 / 4 tests; [Prepa] runfiles for //json/native:api_test
+[39 / 40] 3 / 4 tests; Testing //json/native:api_test; 1s remote, remote-cache
+[39 / 40] 3 / 4 tests; Testing //json/native:api_test; 4s remote, remote-cache
+INFO: From Testing //json/native:api_test:
+==================== Test output for //json/native:api_test:
+================================================================================
+INFO: Found 4 test targets...
+INFO: Elapsed time: 136.216s, Critical Path: 135.93s
+INFO: 31 processes: 9 action cache hit, 2 remote cache hit, 8 internal, 25 remote.
+INFO: Build completed successfully, 31 total actions
+INFO: 
+//json/native:api_test                                                   PASSED in 4.4s
+//json/native:typed_probe                                                PASSED in 9.1s
+//json/native:typed_stage2_test                                          PASSED in 6.9s
+//json/native:typed_test                                                 PASSED in 5.2s
+
+Executed 4 out of 4 tests: 4 tests pass.
+There were tests whose specified size is too big. Use the --test_verbose_timeout_warnings command line option to see which ones these are.
+INFO: Streaming build results to: https://app.buildbuddy.io/invocation/194aaa6f-c162-4137-902c-48645700e1f2

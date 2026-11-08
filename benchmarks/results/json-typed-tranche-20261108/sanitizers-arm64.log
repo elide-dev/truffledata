@@ -1,0 +1,10 @@
+RUN typed_stage2_test
+typed structural oracle parity: 155641 cases
+RUN typed_test
+Typed nested and repeated JSON slots, contracts and retained ownership passed
+RUN api_test
+RUN stage2_test
+stage2 differential: corpus200, malformed60, grammar and exact numeric whitespace passed
+RUN shape_fuzz_test
+1,000,000 generated key sequences agree with a sorted decoded-key oracle in indexed, directoryless and validate-only modes
+All five Arm64 ASan+UBSan tests passed
