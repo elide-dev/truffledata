@@ -160,12 +160,25 @@ public final class ProtoPlan {
     return result.toString();
   }
 
+  /** Schema-generated producer; each result must be a fresh, exclusively owned slab array. */
+  @FunctionalInterface
+  public interface SlabDecoder {
+    byte[] decode(byte[] input, int offset, int length, SlabLimits limits);
+  }
+
+  /** Immutable model hook that binds generated code to the complete checked type definition. */
+  @FunctionalInterface
+  public interface SlabDecoderFactory {
+    SlabDecoder bind(ProtoPlan plan);
+  }
+
   /** All graph references resolve once when the model is built, including recursive messages. */
   public static final class Model {
     private final Map<String, ProtoPlan> types;
     final Limits limits;
     final int maxDepth;
     final int maxWireBytes;
+    final @Nullable SlabDecoderFactory slabDecoders;
 
     @TruffleBoundary
     public Model(
@@ -174,6 +187,19 @@ public final class ProtoPlan {
         Limits limits,
         int maxDepth,
         int maxWireBytes) {
+      this(language, definitions, limits, maxDepth, maxWireBytes, null);
+    }
+
+    /** Generated contracts supply their producer factory; runtime models use the table decoder. */
+    @TruffleBoundary
+    public Model(
+        @Nullable TruffleLanguage<?> language,
+        List<Type> definitions,
+        Limits limits,
+        int maxDepth,
+        int maxWireBytes,
+        @Nullable SlabDecoderFactory slabDecoders) {
+      this.slabDecoders = slabDecoders;
       this.limits = Objects.requireNonNull(limits);
       if (maxDepth < 1 || maxDepth > 128 || maxWireBytes < 0)
         throw new ContractViolation("Invalid protobuf decoding budgets");
@@ -261,6 +287,8 @@ public final class ProtoPlan {
   /** Slab layout of this plan's closure, compiled on first use; published safely once. */
   private volatile @Nullable Layout slabLayout;
 
+  private volatile @Nullable SlabDecoder slabDecoder;
+
   private ProtoPlan(Model model, @Nullable TruffleLanguage<?> language, Type definition) {
     this.model = model;
     this.definition = definition;
@@ -310,6 +338,24 @@ public final class ProtoPlan {
       }
     }
     return result;
+  }
+
+  /**
+   * Decode to an exclusively owned byte array, choosing this model's generated producer when
+   * present.
+   */
+  @TruffleBoundary
+  public byte[] decodeSlabBytes(byte[] input, int offset, int length, SlabLimits limits) {
+    SlabDecoderFactory factory = model.slabDecoders;
+    if (factory == null) return SlabCodec.decode(layout(), input, offset, length, limits);
+    SlabDecoder decoder = slabDecoder;
+    if (decoder == null) {
+      synchronized (this) {
+        decoder = slabDecoder;
+        if (decoder == null) slabDecoder = decoder = Objects.requireNonNull(factory.bind(this));
+      }
+    }
+    return decoder.decode(input, offset, length, limits);
   }
 
   public ProtoJsonType jsonType() {
@@ -398,9 +444,24 @@ public final class ProtoPlan {
     return ProtoJson.decode(this, json, anyTypes);
   }
 
+  /** Decode directly into a durable owning slab; no native library is needed. */
+  @TruffleBoundary
+  public SlabMessage decodeSlab(byte[] wire) {
+    return SlabMessage.decode(this, wire);
+  }
+
   @TruffleBoundary
   public byte[] encode(ProtoRow row) {
     if (row.plan() != this) throw new ContractViolation("Protobuf plan identity mismatch");
+    return ProtoCodec.encode(row);
+  }
+
+  /** Encode any durable protobuf representation, including generated records and slab rows. */
+  @TruffleBoundary
+  public byte[] encode(ProtoAccess row) {
+    if (row.plan() != this) throw new ContractViolation("Protobuf plan identity mismatch");
+    if (!(row instanceof ProtoRow || row instanceof GeneratedMessage || row instanceof SlabRow))
+      throw new ContractViolation("Encoding requires a durable protobuf row");
     return ProtoCodec.encode(row);
   }
 
@@ -481,7 +542,7 @@ public final class ProtoPlan {
   public int getSize(ProtoAccess row, int ordinal) {
     if (row instanceof ProtoRow) {
       Object value = get(row, ordinal);
-      if (value instanceof DataArray array) return array.size();
+      if (value instanceof OwnedArray array) return array.size();
       throw new ContractViolation("Expected array");
     }
     if (row.plan() != this) throw new ContractViolation("Generated plan mismatch");
