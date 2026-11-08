@@ -17,6 +17,9 @@ are disclosed but do not veto measured SVM gains.
   fallback. Reusable sessions and explicit projections support borrowed data and
   lazy children with checked lifetimes. Raw unknown-field presence and byte counts
   are available without copying on immutable, generated, owning and borrowed rows.
+  Verification of externally supplied shared slab graphs and repeated text
+  payloads is bounded while preserving handle identity, projection/depth checks
+  and per-occurrence budgets; the slab format is unchanged.
 - Resolved protobuf Editions, extensions and MessageSet plans can bind supported
   host sources explicitly. `Source.ingestion()` identifies direct, normalized and
   unsupported paths before input is processed.
