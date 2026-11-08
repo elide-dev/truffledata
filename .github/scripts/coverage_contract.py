@@ -173,6 +173,7 @@ SVM_ONLY_METHODS = {
         'SvmYamlMessage::flags ()I',
         'SvmYamlMessage::readWord (J)J',
         'SvmYamlMessage::textByte (ZJ)B',
+        'SvmYamlMessage::copyText (ZJ[BII)V',
         'SvmYamlMessage::textWord (ZJI)J',
         'SvmYamlMessage::directoryEntry (J)J',
         'SvmYamlMessage::metadata (J)I',

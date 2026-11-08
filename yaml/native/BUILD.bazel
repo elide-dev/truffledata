@@ -398,18 +398,58 @@ cc_test(
     srcs = ["bench.cc"],
     args = [
         "--profile=40",
+        "$(rootpath testdata/config.yaml)",
         "$(rootpath testdata/records-block.yaml)",
         "$(rootpath testdata/records-flow.yaml)",
         "$(rootpath testdata/records-stream.yaml)",
+        "$(rootpath testdata/text-heavy.yaml)",
     ],
     copts = [
         "-std=c++17",
         "-O3",
     ],
     data = [
+        "testdata/config.yaml",
         "testdata/records-block.yaml",
         "testdata/records-flow.yaml",
         "testdata/records-stream.yaml",
+        "testdata/text-heavy.yaml",
+    ],
+    # Statically linked like the production yaml_shared.so: test binaries otherwise load every
+    # dependency as a shared object, which puts PLT calls between the parser and the handler.
+    linkstatic = True,
+    tags = ["manual"],
+    deps = [
+        ":reference_tape",
+        ":sampler",
+        ":truffledata_yaml",
+        "@libyaml",
+    ],
+)
+
+# A dedicated diagnostic target keeps profile flags away from unrelated tests.
+cc_test(
+    name = "bench_profile_short",
+    size = "large",
+    srcs = ["bench.cc"],
+    args = [
+        "--profile=5",
+        "$(rootpath testdata/config.yaml)",
+        "$(rootpath testdata/records-block.yaml)",
+        "$(rootpath testdata/records-flow.yaml)",
+        "$(rootpath testdata/records-stream.yaml)",
+        "$(rootpath testdata/text-heavy.yaml)",
+    ],
+    copts = [
+        "-std=c++17",
+        "-O3",
+    ],
+    data = [
+        "testdata/config.yaml",
+        "testdata/records-block.yaml",
+        "testdata/records-flow.yaml",
+        "testdata/records-stream.yaml",
+        "testdata/text-heavy.yaml",
     ],
     # Statically linked like the production yaml_shared.so: test binaries otherwise load every
     # dependency as a shared object, which puts PLT calls between the parser and the handler.

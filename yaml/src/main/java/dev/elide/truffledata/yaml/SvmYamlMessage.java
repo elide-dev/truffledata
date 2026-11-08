@@ -74,6 +74,9 @@ class SvmYamlMessage extends YamlMessage implements TapeReader {
     if (offset < 0 || offset >= (owned ? poolBytes : inputBytes)) throw new IndexOutOfBoundsException("Tape text");
     return (owned ? pool : input).readByte(WordFactory.signed(offset));
   }
+  @Override public void copyText(boolean owned, long offset, byte[] output, int at, int length) {
+    SvmTape.copyText(owned ? pool : input, owned ? poolBytes : inputBytes, offset, output, at, length);
+  }
   @Override public long textWord(boolean owned, long offset, int length) {
     if (length == 0) return 0;
     long size = owned ? poolBytes : inputBytes;
