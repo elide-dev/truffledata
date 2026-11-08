@@ -13,7 +13,7 @@ absolute timings. None of the local measurements override the pinned RBE gate.
 
 | Sample | Environment and source variant | Result |
 | --- | --- | --- |
-| `rbe-announced-keys.txt` | RBE x86-64, invocation `4bb84dea-d72c-4dda-84c5-43f6c45f1910`; strict key announcements and fused duplicate detection, before scalar header cleanup | 0.590 × scan; pass ratios 0.588–0.593 |
+| Announced-key gate (invocation below) | RBE x86-64, invocation `4bb84dea-d72c-4dda-84c5-43f6c45f1910`; strict key announcements and fused duplicate detection, before scalar header cleanup | 0.590 × scan; pass ratios 0.588–0.593 |
 | `rbe-single-header-write.txt` | RBE x86-64, invocation prefix `78b45781`; scalar source spans emitted once by the writer | 0.603 × scan; pass ratios 0.603–0.606 |
 | `rbe-sparse-metadata.txt` | RBE x86-64, `e8eea551-968c-49ab-beec-114d475484ce`; strict metadata reservation zeroed once, only nonzero metadata stored | 0.616 × scan; pass ratios 0.616–0.622; floor still missed |
 | `rbe-duplicate-fusion.txt` | Same-process alternating incremental and fused duplicate handling, five passes, invocation `4bb84dea…` | Best 1,338,440 → 1,294,013 ns, a 3.43% improvement |

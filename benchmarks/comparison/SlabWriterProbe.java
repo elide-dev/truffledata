@@ -653,12 +653,37 @@ public final class SlabWriterProbe {
     }
   }
 
+  static String selectedMode = "all", selectedCase = "all";
+
+  // Warmup and samples execute this same call site. Separate loops can deoptimize the first
+  // measured invocation even after the other loop has warmed its own receiver profile.
+  static long sample(
+      IntToLongFunction operation,
+      long duration,
+      com.sun.management.ThreadMXBean memory,
+      double[] ns,
+      double[] bytes,
+      int sample) {
+    long sum = 0, count = 0;
+    long before = memory.getThreadAllocatedBytes(Thread.currentThread().threadId());
+    long start = System.nanoTime(), end;
+    do {
+      for (int i = 0; i < 32; i++) sum += operation.applyAsLong(i);
+      count += 32;
+      end = System.nanoTime();
+    } while (end - start < duration);
+    ns[sample] = (double) (end - start) / count;
+    bytes[sample] =
+        (double) (memory.getThreadAllocatedBytes(Thread.currentThread().threadId()) - before)
+            / count;
+    return sum;
+  }
+
   static void measure(String mode, String name, byte[][] wires, IntToLongFunction operation) {
+    if (!selectedMode.equals("all") && !selectedMode.equals(mode)
+        || !selectedCase.equals("all") && !selectedCase.equals(name)) return;
     long warmup = Long.getLong("slab.probe.warmupMillis", 6000) * 1_000_000;
     long duration = Long.getLong("slab.probe.sampleMillis", 200) * 1_000_000;
-    long until = System.nanoTime() + warmup;
-    long sum = 0;
-    while (System.nanoTime() < until) for (int i = 0; i < 32; i++) sum += operation.applyAsLong(i);
     var memory =
         (com.sun.management.ThreadMXBean) java.lang.management.ManagementFactory.getThreadMXBean();
     if (!memory.isThreadAllocatedMemorySupported())
@@ -670,19 +695,9 @@ public final class SlabWriterProbe {
         || memory.getThreadAllocatedBytes(Thread.currentThread().threadId()) - calibration
             < 1 << 20) throw new AssertionError("Allocation counter calibration failed");
     double[] ns = new double[7], bytes = new double[7];
-    for (int sample = 0; sample < ns.length; sample++) {
-      long count = 0, before = memory.getThreadAllocatedBytes(Thread.currentThread().threadId());
-      long start = System.nanoTime(), end;
-      do {
-        for (int i = 0; i < 32; i++) sum += operation.applyAsLong(i);
-        count += 32;
-        end = System.nanoTime();
-      } while (end - start < duration);
-      ns[sample] = (double) (end - start) / count;
-      bytes[sample] =
-          (double) (memory.getThreadAllocatedBytes(Thread.currentThread().threadId()) - before)
-              / count;
-    }
+    long sum = sample(operation, warmup, memory, ns, bytes, 0);
+    for (int sample = 0; sample < ns.length; sample++)
+      sum += sample(operation, duration, memory, ns, bytes, sample);
     checksum += sum;
     System.out.printf(
         Locale.ROOT,
@@ -698,6 +713,21 @@ public final class SlabWriterProbe {
 
   public static void main(String[] args) throws Exception {
     if (VARIANT < 0 || VARIANT > 4) throw new IllegalArgumentException("variant");
+    if (args.length != 0) {
+      if (args.length != 2
+          || !List.of("small", "holdout", "large").contains(args[0])
+          || !List.of(
+                  "stock",
+                  "generated-owning",
+                  "table-owning",
+                  "probe-spans-reused",
+                  "probe-slab-reused")
+              .contains(args[1])
+          || VARIANT != 0 && !args[1].equals("probe-slab-reused"))
+        throw new IllegalArgumentException("expected mode and case for this variant");
+      selectedMode = args[0];
+      selectedCase = args[1];
+    }
     System.out.println(
         "VM " + System.getProperty("java.vm.name") + " " + System.getProperty("java.vm.version"));
     if (Files.exists(Path.of("/proc/cpuinfo")))

@@ -1,0 +1,9 @@
+# x86 Java writer diagnosis, initial fork
+
+Invocation [dab2dbc5-ae9d-4a8e-b29c-5d43be2cadc3](https://app.buildbuddy.io/invocation/dab2dbc5-ae9d-4a8e-b29c-5d43be2cadc3), AMD EPYC, one fresh fork per variant, before the bounded capacity-hint change. All 96 fixtures match production slab bytes, with equal hashes across every runtime/variant. Complete raw samples and generated summary are retained.
+
+The writer bisection identifies `Arrays.fill` on each reused record as the dominant x86 cost. Replacing only that fill with eight-byte stores reduces reusable slab/span ratios to 1.159 small, 1.111 holdout and 1.172 large, within the unchanged 1.2 Step0 threshold in this diagnostic fork. Short copies help less; ordinary byte stores regress, and moving the cursor into a field does not materially help. The production owning writer already relies on freshly zeroed arrays and performs no redundant per-record fill, so this finding changes the retained probe, not production initialization semantics.
+
+Production small generated and small/holdout table samples show severe timing discontinuities (within-fork max/min up to55.2), so these timings cannot establish producer speedups or failures. Warmup and measured loops had separate lambda call sites, and several producer implementations shared the measured site; that permits profile changes/deoptimization during measured cells despite warming the other loop. The follow-up runner uses the same loop for warmup/samples and a fresh process for every case/mode/variant/fork. All original noisy samples remain here. Three-fork confirmation with the updated runner and bounded owning capacity hints is pending.
+
+SVM owning results and both reusable shapes are reported without a generated-decoder release floor; the native slab decoder remains the SVM default.

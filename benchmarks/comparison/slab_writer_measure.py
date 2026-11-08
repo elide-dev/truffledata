@@ -16,15 +16,21 @@ output.mkdir(parents=True, exist_ok=True)
 forks = int(os.environ.get('SLAB_PROBE_FORKS', '3'))
 if forks < 1:
     raise ValueError('SLAB_PROBE_FORKS must be positive')
-jobs = [('jvm', variant, fork) for variant in range(5) for fork in range(forks)]
-jobs += [('svm', 0, fork) for fork in range(forks)]
+cases = ('stock', 'generated-owning', 'table-owning', 'probe-spans-reused', 'probe-slab-reused')
+jobs = [(runtime, variant, fork, mode, case)
+        for runtime in ('jvm', 'svm')
+        for variant in (range(5) if runtime == 'jvm' else (0,))
+        for fork in range(forks)
+        for mode in ('small', 'holdout', 'large')
+        for case in (cases if variant == 0 else ('probe-slab-reused',))]
 random.Random(20261107).shuffle(jobs)
 rows = []
 digests = {}
-for runtime, variant, fork in jobs:
+for runtime, variant, fork, mode, case in jobs:
     command = [str(svm), '-Xms512m', '-Xmx512m'] if runtime == 'svm' else [str(jvm), '--jvm_flag=-Dslab.writer.variant=' + str(variant)]
+    command += [mode, case]
     process = subprocess.run(command, capture_output=True, text=True)
-    (output / f'{runtime}-{variant}-{fork}.log').write_text(process.stdout + process.stderr)
+    (output / f'{runtime}-{variant}-{mode}-{case}-{fork}.log').write_text(process.stdout + process.stderr)
     process.check_returncode()
     hashes = dict(re.findall(r'^WRITER_BYTES (\S+) ([0-9a-f]{64})$', process.stdout, re.M))
     if hashes.keys() != {'small', 'holdout', 'large'}:
@@ -33,11 +39,11 @@ for runtime, variant, fork in jobs:
         raise AssertionError('Writer variants disagree on bytes')
     digests = hashes
     cells = [json.loads(line) for line in process.stdout.splitlines() if line.startswith('{')]
-    expected = 15 if variant == 0 else 3
+    expected = 1
     if len(cells) != expected:
         raise AssertionError(f'Expected {expected} cells, got {len(cells)}')
     for cell in cells:
-        if cell['runtime'] != runtime or cell['variant'] != variant:
+        if (cell['runtime'], cell['variant'], cell['mode'], cell['case']) != (runtime, variant, mode, case):
             raise AssertionError('Mislabeled runtime/variant')
         for metric in ('ns_per_message', 'bytes_per_message'):
             values = cell[metric]
@@ -46,11 +52,11 @@ for runtime, variant, fork in jobs:
         cell['fork'] = fork
         rows.append(cell)
     (output / 'slab-writer-partial.json').write_text(json.dumps(rows, indent=2) + '\n')
-    print(runtime, variant, fork, 'complete', flush=True)
+    print(runtime, variant, mode, case, fork, 'complete', flush=True)
 report = {'forks': forks, 'writer_sha256': digests, 'measurements': rows}
 (output / 'slab-writer.json').write_text(json.dumps(report, indent=2) + '\n')
 lines = ['# Java slab producer and writer diagnosis', '',
-         f'{forks} fresh-process forks. Ratios use medians of fork medians; every raw sample is retained. Reused probe storage and fresh owning production storage are labeled separately.', '',
+         f'{forks} fresh-process forks per cell. Ratios use medians of fork medians; every raw sample is retained. Reused probe storage and fresh owning production storage are labeled separately.', '',
          '| Runtime | Mode | Variant | Case | ns/message | bytes/message | Within-fork max/min |', '|---|---|---:|---|---:|---:|---:|']
 for runtime, mode, variant, case in sorted({(r['runtime'], r['mode'], r['variant'], r['case']) for r in rows}):
     cells = [r for r in rows if (r['runtime'], r['mode'], r['variant'], r['case']) == (runtime, mode, variant, case)]
