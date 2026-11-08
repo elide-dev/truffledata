@@ -16,8 +16,8 @@ class CompactTapeTest {
     Owner(TapeReader tape) { super(tape, Thread.currentThread()); }
     @Override public TapeFormat format() { return TapeFormat.of("JSON"); }
     @Override public Assumption assumption() { return Assumption.ALWAYS_VALID; }
-    @Override protected long lexical(long node) { return tape.span(node); }
-    @Override protected byte lexicalByte(long offset) { return tape.inputByte(offset); }
+    @Override public long lexical(long node) { return tape.span(node); }
+    @Override public byte lexicalByte(long offset) { return tape.inputByte(offset); }
   }
 
   private static Owner document() {
@@ -34,6 +34,53 @@ class CompactTapeTest {
     long s = (5L << 32) | Integer.toUnsignedLong(ValueTape.hashUtf8(new byte[]{'s'}));
     long[] dirs = Integer.compareUnsigned((int) n, (int) s) < 0 ? new long[]{n, s} : new long[]{s, n};
     return new Owner(new HeapTape(words, new byte[]{'A'}, input, dirs, new int[0], 0));
+  }
+
+  @Test void cachedScalarAndArrayInteropChecksTheValueKind() throws Exception {
+    Owner owner = new Owner(new HeapTape(new long[]{w(8, TapeReader.WIDE, 2, 5), 0,
+        w(2, 0, 0, 0), w(5, TapeReader.WIDE, 0, 0), Double.doubleToRawLongBits(2.5)},
+        new byte[0], new byte[0], new long[0], new int[0], 0));
+    TapeValue array = owner.root(), bool = array.element(0), number = array.element(1);
+    var root = new com.oracle.truffle.api.nodes.RootNode(null) {
+      @Child com.oracle.truffle.api.interop.InteropLibrary interop =
+          com.oracle.truffle.api.interop.InteropLibrary.getFactory().createDispatched(3);
+      @Override public Object execute(com.oracle.truffle.api.frame.VirtualFrame frame) {
+        try {
+          assertEquals(2, interop.getArraySize(array));
+          assertTrue(interop.asBoolean(bool));
+          assertEquals(2.5, interop.asDouble(number));
+          assertThrows(com.oracle.truffle.api.interop.UnsupportedMessageException.class,
+              () -> interop.asBoolean(number));
+          assertThrows(com.oracle.truffle.api.interop.UnsupportedMessageException.class,
+              () -> interop.asDouble(bool));
+          return true;
+        } catch (com.oracle.truffle.api.interop.InteropException failure) {
+          throw new AssertionError(failure);
+        }
+      }
+    };
+    assertEquals(true, root.getCallTarget().call());
+    var uncached = com.oracle.truffle.api.interop.InteropLibrary.getUncached();
+    assertEquals(2, uncached.getArraySize(array));
+    assertThrows(com.oracle.truffle.api.interop.UnsupportedMessageException.class,
+        () -> uncached.getArraySize(bool));
+  }
+
+  @Test void preparedKeysUseStrictUtf8AndTheInterchangeHash() {
+    for (String name : new String[]{"", "a", "abcdefgh", "abcdefghijklmnop", "abcdefghijklmnopq", "é中😀"}) {
+      TapeKey key = TapeKey.of(name);
+      byte[] bytes = name.getBytes(StandardCharsets.UTF_8);
+      assertArrayEquals(bytes, key.bytes);
+      assertEquals(bytes.length, key.utf8Length());
+      assertEquals(ValueTape.hashUtf8(bytes), key.hash);
+      TapeKey copied = TapeKey.of(ValueTape.Utf8Key.of(name));
+      assertEquals(key.low, copied.low);
+      assertEquals(key.high, copied.high);
+      assertEquals(key.hash, copied.hash);
+    }
+    assertThrows(IllegalArgumentException.class, () -> TapeKey.of("\uD800"));
+    assertThrows(IllegalArgumentException.class, () -> TapeKey.of("\uDC00"));
+    assertThrows(IllegalArgumentException.class, () -> TapeKey.of("\uD800x"));
   }
 
   @Test void yamlPlainAndConstantSpansSurviveSubtreeSnapshots() {
@@ -98,7 +145,12 @@ class CompactTapeTest {
 
   @Test void exportsSkipSecondWords() {
     JavaSink sink = new JavaSink();
-    document().export(sink);
+    Owner owner = document();
+    TapeExportNode node = TapeExportNode.create();
+    node.execute(owner.root(), sink);
+    assertEquals(java.util.Map.of("n", 42L, "s", "A"), sink.result());
+    sink = new JavaSink();
+    node.execute(owner.snapshot().root(), sink);  // A different owner class takes the safe fallback.
     assertEquals(java.util.Map.of("n", 42L, "s", "A"), sink.result());
   }
 
@@ -108,7 +160,7 @@ class CompactTapeTest {
     long[] words = new long[Math.toIntExact(copy.nodeCount())];
     for (int i = 0; i < words.length; i++) words[i] = copy.word(i);
     words[1] = 0;
-    byte[] input = new byte[Math.toIntExact(copy.inputBytes)];
+    byte[] input = new byte[Math.toIntExact(copy.inputSize())];
     for (int i = 0; i < input.length; i++) input[i] = copy.inputByte(i);
     Owner owner = new Owner(new HeapTape(words, new byte[]{'A'}, input, new long[0], new int[0], 4));
     assertEquals(42, owner.root().member("n").longValue());
@@ -132,12 +184,16 @@ class CompactTapeTest {
   @Test void saturatedContainerCountsWalkHeadersWithoutAllocatingAnIndex() {
     long children = (long) TapeReader.MAX_COUNT + 1;
     TapeReader tape = new TapeReader() {
-      { count = children + 2; }
-      @Override protected long readWord(long index) {
+      @Override public long nodeCount() { return children + 2; }
+      @Override public long poolSize() { return 0; }
+      @Override public long inputSize() { return 0; }
+      @Override public long directorySize() { return 0; }
+      @Override public int flags() { return 0; }
+      @Override public long readWord(long index) {
         return index == 0 ? w(8, WIDE, MAX_COUNT, children + 2) : 0;
       }
-      @Override protected byte textByte(boolean owned, long offset) { throw new AssertionError(); }
-      @Override protected long textWord(boolean owned, long offset, int length) { throw new AssertionError(); }
+      @Override public byte textByte(boolean owned, long offset) { throw new AssertionError(); }
+      @Override public long textWord(boolean owned, long offset, int length) { throw new AssertionError(); }
       @Override public long directoryEntry(long index) { throw new AssertionError(); }
       @Override public int metadata(long index) { return 0; }
     };

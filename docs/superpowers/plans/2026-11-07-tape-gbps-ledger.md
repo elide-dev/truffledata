@@ -64,3 +64,34 @@ The directory-cache requalification caught the legacy hash helper's 31-bit mask;
 compact directories require full unsigned FNV-1a. YAML now uses full 32-bit hashes
 consistently for its cache, duplicate checks and directories. ASan+UBSan parity
 again passes all 9,093 decodes with structural/directory validation after that fix.
+
+Task 3–4 owner fusion and retirement: TapeReader is a stateless storage interface. The retained
+SVM JSON owner embeds descriptor pointers/counts and implements it directly; managed JVM owners
+retain their FFM storage wrapper. Scalar, member and array interop cache concrete owner/reader
+classes before reading. This preserves the 24-byte TapeValue shape and permits nested reads to
+partially evaluate without residual SvmTape/SvmJsonMessage dispatch. JSON Native Image acceptance
+passes in c8037437, including array size/element roots added after the earlier d6a84c7b failure.
+
+Measured d6a84c7b allocations: interop ingest384B includes240B of harness views, leaving144B for
+the retained library owner/root (target160B); snapshot ingest1185B and JavaSink peak1177B are below
+their1200B gates. That run still failed compiled graph limits: interop3044nodes and snapshot3356,
+with snapshot11loops. These are not final acceptance numbers.
+
+After YAML compact cutover, Task4's transition is removed: LegacyTapeReader, SegmentValueTape,
+SvmValueTape and TapeSource are deleted. HeapValueTape is package-private output-only Myna ABI4
+interchange. TapeKey prepares strict UTF-8, packed words and FNV locally; source-compatible Myna
+prepared-key overloads copy into that representation. TapeLexical remains deliberately: YAML's
+pristine lexical source can differ from decoded compact input, including borrowed documents.
+Legacy owner tests now exercise compact words while preserving alias/directory/snapshot intent.
+Local tape JVM18/18 and the complete Truffle DSL source compilation pass.
+
+Plain immutable snapshots use a private concrete subtype whose alias-free behavior is constant,
+removing speculative alias-view allocations on variable-owner fixture reads. The snapshot's
+obsolete span array/reference is removed. Input has seven private padding bytes (excluded from
+logical inputSize and Myna output); exact masked word comparisons avoid a variable tail load at
+short keys. Directory hints check receiver kind, rank, entry hash, key header and decoded bytes;
+validated directory extents/relative key offsets are trusted instead of checked a second time.
+The full32-row fixture's local HotSpot graph drops2431→1952nodes with1loop,0calls and only its
+harness return-box allocation. This is diagnostic evidence, not the Native Image graph gate;
+new image/coverage/allocation requalification remains pending. Logs and harness are retained in
+benchmarks/results/tape-reader-followup/. No budget is relaxed.

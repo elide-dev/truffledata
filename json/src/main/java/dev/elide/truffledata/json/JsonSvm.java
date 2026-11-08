@@ -1,11 +1,9 @@
 package dev.elide.truffledata.json;
 
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
-import dev.elide.myna.values.ValueTape;
 import dev.elide.truffledata.json.generated.Json;
 import dev.elide.truffledata.tape.SvmTape;
 import dev.elide.truffledata.tape.TapeBorrow;
-import dev.elide.truffledata.tape.TapeLexical;
 import org.graalvm.nativeimage.ImageInfo;
 import org.graalvm.nativeimage.PinnedObject;
 import org.graalvm.nativeimage.UnmanagedMemory;
@@ -147,21 +145,6 @@ public final class JsonSvm {
     }
   }
 
-  /** Native result ownership; lexical spans are embedded in the reader's words. */
-  static class SvmResult implements JsonMessage.Storage {
-    private final long address;
-    SvmResult(long address) { this.address = address; }
-    @Override public void run() { release(address); }
-  }
-
-  static final class AdoptedResult extends SvmResult {
-    private final Runnable onClose;
-    AdoptedResult(long address, Runnable onClose) { super(address); this.onClose = onClose; }
-    @Override public void run() {
-      try { super.run(); } finally { onClose.run(); }
-    }
-  }
-
   private static Pointer descriptor(VoidPointer result) {
     Pointer descriptor = (Pointer) Json.JsonResult.view(result);
     if (descriptor.isNull() || descriptor.readInt(0) != 1)
@@ -170,9 +153,8 @@ public final class JsonSvm {
   }
 
   private static JsonMessage publish(VoidPointer result, @org.jspecify.annotations.Nullable Runnable onClose) {
-    SvmTape tape = new SvmTape(descriptor(result));
-    JsonMessage.Storage storage = onClose == null ? new SvmResult(result.rawValue()) : new AdoptedResult(result.rawValue(), onClose);
-    return new JsonMessage(tape, storage);
+    return onClose == null ? new SvmJsonMessage(descriptor(result), result.rawValue())
+        : new SvmJsonMessage.Adopted(descriptor(result), result.rawValue(), onClose);
   }
 
   static JsonMessage adoptResult(VoidPointer result) {
@@ -192,7 +174,7 @@ public final class JsonSvm {
     }
   }
 
-  private static void release(long address) {
+  static void release(long address) {
     if (address == 0) return;
     VoidPointer result = WordFactory.pointer(address);
     Json.release(result);

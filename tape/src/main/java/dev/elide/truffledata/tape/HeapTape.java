@@ -1,31 +1,60 @@
 package dev.elide.truffledata.tape;
 
+import static dev.elide.truffledata.tape.TapeReader.*;
+
 import dev.elide.myna.values.ValueTape;
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.VarHandle;
+import java.nio.ByteOrder;
+import java.util.Arrays;
 
 /** Detached compact words, directories and only the input/pool ranges referenced by the subtree. */
-public final class HeapTape extends TapeReader {
+public final class HeapTape implements TapeReader {
+  private static final VarHandle WORD = MethodHandles.byteArrayViewVarHandle(long[].class, ByteOrder.LITTLE_ENDIAN);
   private final long[] words, directory;
   private final byte[] pool, input;
   private final int[] meta;
+  private final int flags;
   HeapTape(long[] words, byte[] pool, byte[] input, long[] directory, int[] meta, int flags) {
-    this.words = words; this.pool = pool; this.input = input; this.directory = directory; this.meta = meta;
-    count = words.length; poolBytes = pool.length; inputBytes = input.length; directoryCount = directory.length; this.flags = flags;
+    this(words, pool, Arrays.copyOf(input, Math.addExact(input.length, 7)), directory, meta, flags, true);
   }
-  @Override protected long readWord(long index) { return words[Math.toIntExact(index)]; }
-  @Override protected byte textByte(boolean owned, long offset) { return (owned ? pool : input)[Math.toIntExact(offset)]; }
-  @Override protected long textWord(boolean owned, long offset, int length) {
+  private HeapTape(long[] words, byte[] pool, byte[] input, long[] directory, int[] meta, int flags,
+      boolean padded) {
+    this.words = words; this.pool = pool; this.input = input; this.directory = directory; this.meta = meta;
+    this.flags = flags;
+  }
+  @Override public long readWord(long index) { return words[(int) index]; }
+  @Override public byte textByte(boolean owned, long offset) { return (owned ? pool : input)[(int) offset]; }
+  @Override public long textWord(boolean owned, long offset, int length) {
+    if (length == 0) return 0;
     byte[] bytes = owned ? pool : input;
-    long value = 0;
-    for (int j = 0; j < length; j++) value |= (bytes[Math.toIntExact(offset) + j] & 255L) << (j * 8);
+    int at = (int) offset;
+    // Every input has seven private padding bytes. A valid short key therefore needs one
+    // word load even at the logical end; the mask excludes padding from comparison.
+    if (!owned || at <= bytes.length - 8) {
+      long value = (long) WORD.get(bytes, at);
+      return length == 8 ? value : value & (-1L >>> (64 - length * 8));
+    }
+    // A snapshot keeps exactly its referenced bytes. Its final short word has no padding;
+    // bounded explicit loads avoid leaving a byte-copy loop in compiled member reads.
+    long value = bytes[at] & 255L;
+    if (length > 1) value |= (bytes[at + 1] & 255L) << 8;
+    if (length > 2) value |= (bytes[at + 2] & 255L) << 16;
+    if (length > 3) value |= (bytes[at + 3] & 255L) << 24;
+    if (length > 4) value |= (bytes[at + 4] & 255L) << 32;
+    if (length > 5) value |= (bytes[at + 5] & 255L) << 40;
+    if (length > 6) value |= (bytes[at + 6] & 255L) << 48;
+    if (length > 7) value |= (bytes[at + 7] & 255L) << 56;
     return value;
   }
-  @Override public long directoryEntry(long index) { return directory[Math.toIntExact(index)]; }
-  @Override public int metadata(long index) { return meta.length == 0 ? 0 : meta[Math.toIntExact(index)]; }
+
+  @Override public long directoryEntry(long index) { return directory[(int) index]; }
+  @Override public int metadata(long index) { return meta.length == 0 ? 0 : meta[(int) index]; }
 
   static HeapTape copy(TapeReader source, long root) {
     long end = source.next(root);
-    long inputFirst = source.inputBytes, inputLast = 0, poolFirst = source.poolBytes, poolLast = 0;
-    long dirFirst = source.directoryCount, dirLast = 0;
+    long inputFirst = source.inputSize(), inputLast = 0, poolFirst = source.poolSize(), poolLast = 0;
+    long dirFirst = source.directorySize(), dirLast = 0;
     for (long i = root; i < end; i = source.step(i)) {
       long w = source.word(i), span = source.span(i);
       int k = kind(w), len = field(w);
@@ -40,11 +69,11 @@ public final class HeapTape extends TapeReader {
     if (inputLast == 0) inputFirst = 0;
     if (poolLast == 0) poolFirst = 0;
     if (dirLast == 0) dirFirst = 0;
-    byte[] input = new byte[Math.toIntExact(inputLast - inputFirst)], pool = new byte[Math.toIntExact(poolLast - poolFirst)];
-    for (int i = 0; i < input.length; i++) input[i] = source.textByte(false, inputFirst + i);
+    byte[] input = new byte[Math.addExact(Math.toIntExact(inputLast - inputFirst), 7)], pool = new byte[Math.toIntExact(poolLast - poolFirst)];
+    for (int i = 0; i < input.length - 7; i++) input[i] = source.textByte(false, inputFirst + i);
     for (int i = 0; i < pool.length; i++) pool[i] = source.textByte(true, poolFirst + i);
     long[] words = new long[Math.toIntExact(end - root)], dirs = new long[Math.toIntExact(dirLast - dirFirst)];
-    int[] meta = (source.flags & 2) == 0 ? new int[0] : new int[words.length];
+    int[] meta = (source.flags() & 2) == 0 ? new int[0] : new int[words.length];
     for (int i = 0; i < dirs.length; i++) dirs[i] = source.directoryEntry(dirFirst + i);
     for (long i = root; i < end; i = source.step(i)) {
       int at = Math.toIntExact(i - root);
@@ -67,18 +96,17 @@ public final class HeapTape extends TapeReader {
       if ((w & WIDE) != 0) words[at + 1] = second;
       if (meta.length != 0) meta[at] = source.metadata(i);
     }
-    return new HeapTape(words, pool, input, dirs, meta, source.flags);
+    return new HeapTape(words, pool, input, dirs, meta, source.flags(), true);
   }
 
   ValueTape toMyna() {
     int[] mapping = new int[words.length + 1];
     int nodes = 0;
-    for (long i = 0; i < count; i = step(i)) mapping[(int) i] = nodes++;
+    for (long i = 0; i < nodeCount(); i = step(i)) mapping[(int) i] = nodes++;
     mapping[words.length] = nodes;
     long[] out = new long[nodes * 3];
-    int[] hashes = new int[nodes];
     long[] dirs = new long[directory.length];
-    for (long i = 0; i < count; i = step(i)) {
+    for (long i = 0; i < nodeCount(); i = step(i)) {
       int n = mapping[(int) i], at = n * 3, k = kindAt(i);
       long w = word(i), len = length(i), payload = 0;
       int tag = k;
@@ -100,8 +128,12 @@ public final class HeapTape extends TapeReader {
         }
       }
       out[at] = tag | ((k == ValueTape.STRING || k == ValueTape.DECIMAL || k == ValueTape.OBJECT || k == ValueTape.ARRAY ? len : 0) << 32); out[at + 1] = payload; out[at + 2] = mapping[Math.toIntExact(next(i))];
-      hashes[n] = (ascii(i) ? 0x80000000 : 0) | ((hash(i) & 0x7fff) << 16);
     }
-    return new HeapValueTape(out, pool.clone(), new byte[][] {input.clone()}, hashes, dirs, flags & 1);
+    return new HeapValueTape(out, pool.clone(), new byte[][] {Arrays.copyOf(input, input.length - 7)}, dirs, flags & 1);
   }
+  @Override public long nodeCount() { return words.length; }
+  @Override public long poolSize() { return pool.length; }
+  @Override public long inputSize() { return input.length - 7; }
+  @Override public long directorySize() { return directory.length; }
+  @Override public int flags() { return flags; }
 }

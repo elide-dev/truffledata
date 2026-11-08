@@ -3,21 +3,33 @@ package dev.elide.truffledata.tape;
 import com.oracle.truffle.api.Assumption;
 
 /** Immutable, thread-safe, heap-owned tape index. Never closes; reads never touch native memory. */
-public final class TapeSnapshot extends TapeOwner {
-  private final long[] spans;
+public class TapeSnapshot extends TapeOwner {
   // The heap tape is the owner's `tape`; holding the format instead keeps snapshots at their size.
   private final TapeFormat format;
   private final byte @org.jspecify.annotations.Nullable [] lexicalInput;
 
-  private TapeSnapshot(TapeReader tape, long[] spans, TapeFormat format) {
-    this(tape, spans, format, null);
+  private TapeSnapshot(TapeReader tape, TapeFormat format) {
+    this(tape, format, null);
   }
 
-  private TapeSnapshot(TapeReader tape, long[] spans, TapeFormat format, byte @org.jspecify.annotations.Nullable [] lexicalInput) {
+  private TapeSnapshot(TapeReader tape, TapeFormat format, byte @org.jspecify.annotations.Nullable [] lexicalInput) {
     super(tape, null);
     this.lexicalInput = lexicalInput;
-    this.spans = spans;
     this.format = checkFormat(tape, format);
+  }
+
+  // Metadata-bearing snapshots use this class; plain snapshots make the absence of alias
+  // behavior a class property so fresh child views stay scalar-replaceable in compiled reads.
+  @Override protected boolean aliases() { return true; }
+
+  private static final class Plain extends TapeSnapshot {
+    Plain(TapeReader tape, TapeFormat format) { super(tape, format); }
+    @Override protected boolean aliases() { return false; }
+  }
+
+  private static TapeSnapshot create(TapeReader tape, TapeFormat format,
+      byte @org.jspecify.annotations.Nullable [] source) {
+    return format.hasAliases() ? new TapeSnapshot(tape, format, source) : new Plain(tape, format);
   }
 
   /**
@@ -28,25 +40,24 @@ public final class TapeSnapshot extends TapeOwner {
    */
   static TapeSnapshot copy(TapeOwner owner, long root) {
     owner.check();
-    if (!(owner.tape instanceof LegacyTapeReader legacy))
-      return new TapeSnapshot(HeapTape.copy(owner.tape, root), new long[0], owner.format());
-    TapeReader heap = new LegacyTapeReader(HeapValueTape.copy(legacy.value, legacy.source, root));
-    int count = Math.toIntExact(heap.nodeCount());
-    long[] spans = new long[count];
-    for (int i = 0; i < count; i++) spans[i] = owner.lexical(root + i);
-    TapeFormat format = owner.format().slice(root, count);
+    HeapTape heap = HeapTape.copy(owner.tape, root);
+    TapeFormat format = owner.format().slice(root, Math.toIntExact(heap.nodeCount()));
     byte[] source = null;
     if (format.hasAliases()) {
-      long extent = 0;
-      for (long span : spans) extent = Math.max(extent, (span >>> 32) + (span & 0xffffffffL));
+      long inputFirst = 0, extent = 0;
+      for (long node = 0; node < heap.nodeCount(); node = heap.step(node)) {
+        long span = heap.span(node);
+        if (span == 0) continue;
+        inputFirst = (owner.lexical(root + node) >>> 32) - (span >>> 32);
+        extent = Math.max(extent, (span >>> 32) + (span & 0xffffffffL));
+      }
       source = new byte[Math.toIntExact(extent)];
-      for (int i = 0; i < source.length; i++) source[i] = owner.lexicalByte(i);
+      for (int i = 0; i < source.length; i++) source[i] = owner.lexicalByte(inputFirst + i);
     }
-    return new TapeSnapshot(heap, spans, format, source);
+    return create(heap, format, source);
   }
 
   public long nodeCount() {
-    if (tape instanceof LegacyTapeReader) return tape.nodeCount();
     long count = 0;
     for (long i = 0; i < tape.nodeCount(); i = tape.step(i)) count++;
     return count;
@@ -64,14 +75,14 @@ public final class TapeSnapshot extends TapeOwner {
 
   @Override
   protected long lexical(long node) {
-    return tape instanceof LegacyTapeReader ? spans[Math.toIntExact(node)] : tape.span(node);
+    return tape.span(node);
   }
 
   @Override
   protected byte lexicalByte(long offset) {
     byte[] source = lexicalInput;
     if (source != null) return source[Math.toIntExact(offset)];
-    return tape instanceof LegacyTapeReader legacy ? ((HeapValueTape) legacy.value).inputByte(offset) : tape.inputByte(offset);
+    return tape.inputByte(offset);
   }
 
   /** A snapshot of a snapshot shares nothing mutable, so the same storage is returned. */

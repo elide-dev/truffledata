@@ -1,10 +1,13 @@
 package dev.elide.truffledata.tape;
 
+import static dev.elide.truffledata.tape.TapeReader.*;
+
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
 
 /** JVM reader of the compact descriptor; a session reuses one reader between borrows. */
-public final class SegmentTape extends TapeReader {
+public final class SegmentTape implements TapeReader {
+  private int flags;
   private MemorySegment words = MemorySegment.NULL, pool = MemorySegment.NULL,
       input = MemorySegment.NULL, directory = MemorySegment.NULL, meta = MemorySegment.NULL;
   public SegmentTape(MemorySegment descriptor) { rebind(descriptor); }
@@ -23,7 +26,7 @@ public final class SegmentTape extends TapeReader {
     MemorySegment w = region(d, 8, n * 8, 8), pb = region(d, 24, p, 1), ib = region(d, 40, i, 1);
     MemorySegment dir = region(d, 56, e * 8, 8), mt = region(d, 72, m * 4, 4);
     words = w; pool = pb; input = ib; directory = dir; meta = mt;
-    count = n; poolBytes = p; inputBytes = i; directoryCount = e; flags = f;
+    flags = f;
   }
   private static MemorySegment region(MemorySegment d, long at, long size, int alignment) {
     MemorySegment address = d.get(ValueLayout.ADDRESS, at);
@@ -31,9 +34,9 @@ public final class SegmentTape extends TapeReader {
       throw new IllegalArgumentException("Invalid compact tape pointer");
     return address.reinterpret(size);
   }
-  @Override protected long readWord(long index) { return words.get(ValueLayout.JAVA_LONG, Math.multiplyExact(index, 8)); }
-  @Override protected byte textByte(boolean owned, long offset) { return (owned ? pool : input).get(ValueLayout.JAVA_BYTE, offset); }
-  @Override protected long textWord(boolean owned, long offset, int length) {
+  @Override public long readWord(long index) { return words.get(ValueLayout.JAVA_LONG, Math.multiplyExact(index, 8)); }
+  @Override public byte textByte(boolean owned, long offset) { return (owned ? pool : input).get(ValueLayout.JAVA_BYTE, offset); }
+  @Override public long textWord(boolean owned, long offset, int length) {
     if (length == 0) return 0;
     MemorySegment bytes = owned ? pool : input;
     if (offset >= 0 && offset <= bytes.byteSize() - 8) {
@@ -46,4 +49,9 @@ public final class SegmentTape extends TapeReader {
   }
   @Override public long directoryEntry(long index) { return directory.get(ValueLayout.JAVA_LONG, Math.multiplyExact(index, 8)); }
   @Override public int metadata(long index) { return (flags & 2) == 0 ? 0 : meta.get(ValueLayout.JAVA_INT, Math.multiplyExact(index, 4)); }
+  @Override public long nodeCount() { return words.byteSize() / 8; }
+  @Override public long poolSize() { return pool.byteSize(); }
+  @Override public long inputSize() { return input.byteSize(); }
+  @Override public long directorySize() { return directory.byteSize() / 8; }
+  @Override public int flags() { return flags; }
 }

@@ -18,8 +18,8 @@ import org.jspecify.annotations.Nullable;
  * through {@link #resolve(long)}, which is the identity unless the owner's {@link #format()} holds
  * alias tables (YAML). Resolution runs only inside the read paths' existing boundaries (scans,
  * element walks, view-returning methods), so formats without aliases compile exactly as before; the
- * one inline path, a position-hinted member hit, is alias-free by contract (see {@link
- * TapeSource#keyNodeEquals}). The export walk does not resolve: exports handle aliases themselves.
+ * inline position-hinted path resolves compact references too. The export walk does not resolve:
+ * exports handle aliases themselves.
  *
  * <p>The format is a virtual property rather than a field so that format-specific owners (a JSON
  * message) carry no extra reference; liveness and confinement failures name it lazily ({@link
@@ -27,8 +27,6 @@ import org.jspecify.annotations.Nullable;
  */
 public abstract class TapeOwner {
   protected final TapeReader tape;
-  // Same object as tape: the raw access hinted member reads and snapshots need, through one
-  // interface call.
   // Null means unconfined (immutable snapshot). Final fields keep every check inlinable.
   private final @Nullable Thread thread;
   // Exports in progress on the owning thread; close is refused while a walk reads the tape.
@@ -40,25 +38,19 @@ public abstract class TapeOwner {
   // and unconfined exports allocate their own.
   private @Nullable TapeText cursor;
 
-  /**
-   * An owner of {@code tape}, which must be one of this module's tapes ({@link SvmValueTape},
-   * {@code SegmentValueTape} or a snapshot's heap tape), confined to {@code thread} (null: an
-   * immutable owner that never closes).
-   */
-  protected TapeOwner(ValueTape tape, @Nullable Thread thread) {
-    this(new LegacyTapeReader(tape), thread);
-  }
-
+  /** An owner of validated compact storage, confined to thread unless immutable. */
   protected TapeOwner(TapeReader tape, @Nullable Thread thread) {
     this.tape = tape;
     this.thread = thread;
   }
 
-  /** Throws when {@code format}'s alias tables (if any) do not cover {@code tape}. */
-  protected static TapeFormat checkFormat(ValueTape tape, TapeFormat format) {
-    return checkFormat(new LegacyTapeReader(tape), format);
+  /** Storage is on this owner; the concrete subtype must implement {@link TapeReader}. */
+  protected TapeOwner(@Nullable Thread thread) {
+    this.tape = (TapeReader) this;
+    this.thread = thread;
   }
 
+  /** Throws when {@code format}'s alias tables (if any) do not cover {@code tape}. */
   protected static TapeFormat checkFormat(TapeReader tape, TapeFormat format) {
     int[] meta = format.meta;
     if (meta != null && meta.length != tape.nodeCount())
@@ -68,6 +60,7 @@ public abstract class TapeOwner {
 
   /** Rejects closed or cross-thread access; immutable owners never fail. */
   protected final void check() {
+    if (this instanceof TapeSnapshot) return;
     checkThread();
     if (pins < 0) throw new OwnerStateException(this, OwnerStateException.CLOSED);
   }
@@ -81,6 +74,9 @@ public abstract class TapeOwner {
   /** The format that produced this owner's tape: its name for messages and any alias tables. */
   public abstract TapeFormat format();
 
+  /** Whether this owner can expose format aliases; immutable/plain variants make it constant. */
+  protected boolean aliases() { return format().hasAliases(); }
+
   /**
    * The node an alias stands for, or {@code node} itself (always, for formats without aliases).
    * Throws {@link IllegalStateException} when an alias names no node of this tape. Called from
@@ -89,7 +85,7 @@ public abstract class TapeOwner {
   public final long resolve(long node) {
     TapeFormat format = format();
     int[] meta = format.meta;
-    if (meta == null) return tape.resolve(node);
+    if (meta == null || format.aliasTargets == null) return tape.resolveReference(node);
     return format.alias(meta, node, tape.nodeCount());
   }
 
@@ -166,10 +162,10 @@ public abstract class TapeOwner {
    * object word, payload, entry and the key's inline words, compared exactly (Myna zero-pads inline
    * text). No loop, no allocation; {@code object} must be a valid node.
    */
-  final long hinted(long object, int rank, TapeKey key) {
+  final long hinted(TapeReader reader, long object, int rank, TapeKey key) {
     // Keys of at most 8 bytes have an all-zero high word (zero padding); the site's key is a
     // constant, so `wide` folds and short keys skip the third word.
-    return format().hasAliases() ? -1 : tape.directoryKey(object, rank, key);
+    return aliases() ? -1 : reader.directoryKey(object, rank, key);
   }
 
   /**
@@ -227,13 +223,13 @@ public abstract class TapeOwner {
 
   /** True when a string or key node's decoded bytes are all ASCII; false for other nodes. */
   final boolean ascii(long node) {
-    return tape.ascii(node);
+    return tape.isAscii(node);
   }
 
   @TruffleBoundary
   final String numberText(long node) {
     check();
-    if (!format().hasAliases()) return lexicalText(node);
+    if (!aliases()) return lexicalText(node);
     // Preserve exact decimal digits when the input already has JSON grammar. YAML-specific
     // spellings normalize without rounding through binary64; radix/sexagesimal forms use bits.
     String spelling = lexicalText(node).replace("_", "");
@@ -377,7 +373,6 @@ public abstract class TapeOwner {
   @TruffleBoundary
   public final ValueTape toMyna() {
     check();
-    if (tape instanceof LegacyTapeReader legacy) return HeapValueTape.copy(legacy.value, legacy.source, 0);
     return HeapTape.copy(tape, 0).toMyna();
   }
 

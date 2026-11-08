@@ -144,7 +144,7 @@ public final class JsonJvm implements JsonDecoder {
   private JsonMessage message(MemorySegment result, Arena resultArena, Runnable onClose) {
     SegmentTape tape = tape(result);
     live++;
-    return new JsonMessage(tape, () -> releaseResult(result, resultArena, onClose));
+    return new JsonMessage.Managed(tape, () -> releaseResult(result, resultArena, onClose));
   }
 
   // ---- Sessions (performance plan Task E1) ----

@@ -1,10 +1,14 @@
 package dev.elide.truffledata.tape;
 
+import static dev.elide.truffledata.tape.TapeReader.*;
+
 import org.graalvm.word.Pointer;
 import org.graalvm.word.WordFactory;
 
 /** Rebindable static-image reader of the 88-byte compact descriptor. */
-public final class SvmTape extends TapeReader {
+public final class SvmTape implements TapeReader {
+  private long count, poolBytes, inputBytes, directoryCount;
+  private int flags;
   private Pointer words = WordFactory.nullPointer(), pool = WordFactory.nullPointer(),
       input = WordFactory.nullPointer(), directory = WordFactory.nullPointer(), meta = WordFactory.nullPointer();
   public SvmTape(Pointer descriptor) { rebind(descriptor); }
@@ -27,25 +31,30 @@ public final class SvmTape extends TapeReader {
   @Override public String stringValue(long node) {
     long w = word(node);
     int length = field(w);
-    if (kind(w) != 7 || length < 256 || (w & ASCII) != 0) return super.stringValue(node);
-    char[] chars = new char[length];
+    if (kind(w) != 7 || length < 256 || (w & ASCII) != 0) return TapeReader.super.stringValue(node);
     Pointer data = (w & OWNED) == 0 ? input : pool;
+    return decodeUtf8(data.add(WordFactory.signed(low(w))), length);
+  }
+
+  /** Bulk strict UTF-8 conversion shared by native readers and fused document owners. */
+  public static String decodeUtf8(Pointer data, int length) {
+    char[] chars = new char[length];
     long written;
     try (var pinned = org.graalvm.nativeimage.PinnedObject.create(chars)) {
-      written = transcode(data.add(WordFactory.signed(low(w))), length, pinned.addressOfArrayElement(0), length);
+      written = transcode(data, length, pinned.addressOfArrayElement(0), length);
     }
     if (written < 0 || written > length) throw new IllegalArgumentException("Invalid UTF-8 or output extent");
     return new String(chars, 0, (int) written);
   }
 
-  @Override protected long readWord(long index) {
+  @Override public long readWord(long index) {
     return words.readLong(WordFactory.signed(index * 8));
   }
-  @Override protected byte textByte(boolean owned, long offset) {
+  @Override public byte textByte(boolean owned, long offset) {
     if (offset < 0 || offset >= (owned ? poolBytes : inputBytes)) throw new IndexOutOfBoundsException("Tape text");
     return (owned ? pool : input).readByte(WordFactory.signed(offset));
   }
-  @Override protected long textWord(boolean owned, long offset, int length) {
+  @Override public long textWord(boolean owned, long offset, int length) {
     if (length == 0) return 0;
     long size = owned ? poolBytes : inputBytes;
     if (offset < 0 || offset > size - length) throw new IndexOutOfBoundsException("Tape text");
@@ -66,4 +75,9 @@ public final class SvmTape extends TapeReader {
     if (index < 0 || index >= count) throw new IndexOutOfBoundsException("Tape metadata");
     return (flags & 2) == 0 ? 0 : meta.readInt(WordFactory.signed(index * 4));
   }
+  @Override public long nodeCount() { return count; }
+  @Override public long poolSize() { return poolBytes; }
+  @Override public long inputSize() { return inputBytes; }
+  @Override public long directorySize() { return directoryCount; }
+  @Override public int flags() { return flags; }
 }

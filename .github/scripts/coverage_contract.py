@@ -46,7 +46,7 @@ ACCESS_SOURCES = {f'core/src/main/java/dev/elide/truffledata/{name}.java' for na
         'JsonDecoder', 'JsonJvm', 'JsonLimits', 'JsonMessage', 'JsonPlan',
         'JsonSession', 'JsonStream', 'JsonStreamOptions', 'JsonSvm',
         # JvmSessionBackend was missing before Task 4 (test_coverage_contract failed on it).
-        'JvmSessionBackend', 'JvmTypedOwner', 'SvmTypedOwner',
+        'JvmSessionBackend', 'JvmTypedOwner', 'SvmTypedOwner', 'SvmJsonMessage',
     )
 } | {
     # Every hand-written shared tape source (//tape and //tape:jvm), run on this lane through the JSON
@@ -57,9 +57,9 @@ ACCESS_SOURCES = {f'core/src/main/java/dev/elide/truffledata/{name}.java' for na
     # JsonMessage.Lexical → TapeLexical; JavaSink, TruffleSink and the tapes keep their names;
     # TapeSession, TapeStream and TapeFormat hold what JsonSession and JsonStream shared.
     f'tape/src/main/java/dev/elide/truffledata/tape/{name}.java' for name in (
-        'HeapTape', 'TapeReader', 'LegacyTapeReader', 'SvmTape', 'SegmentTape', 'AliasExport', 'HeapValueTape', 'JavaSink', 'OwnerStateException', 'SegmentValueTape', 'SvmValueTape', 'TapeBorrow', 'TapeExportNode',
+        'HeapTape', 'TapeReader', 'SvmTape', 'SegmentTape', 'AliasExport', 'HeapValueTape', 'JavaSink', 'OwnerStateException', 'TapeBorrow', 'TapeExportNode',
         'TapeFormat', 'TapeKey', 'TapeLexical', 'TapeOwner', 'TapeSession', 'TapeSink', 'TapeSnapshot',
-        'TapeSource', 'TapeStream', 'TapeText', 'TapeTextArena', 'TapeValue', 'TruffleSink',
+        'TapeStream', 'TapeText', 'TapeTextArena', 'TapeValue', 'TruffleSink',
         'TypedAccess', 'TypedArray', 'TypedLayout', 'TypedOwner', 'TypedRecord',
     )
 } | {
@@ -88,7 +88,6 @@ ACCESS_SOURCES = {f'core/src/main/java/dev/elide/truffledata/{name}.java' for na
 DECLARATION_ONLY_SOURCES = {
     'tape/src/main/java/dev/elide/truffledata/tape/TapeLexical.java',
     'tape/src/main/java/dev/elide/truffledata/tape/TapeSink.java',
-    'tape/src/main/java/dev/elide/truffledata/tape/TapeSource.java',
     'csv/src/main/java/dev/elide/truffledata/csv/CsvSink.java',
 }
 
@@ -140,6 +139,8 @@ SVM_ONLY_METHODS = {
         'SvmSessionBackend$Storage::inputByte (J)B',
         'SvmSessionBackend$Storage::run ()V',
         'SvmSessionBackend$Storage::span (J)J',
+        'SvmSessionBackend$NativeText::entry (J)J',
+        'SvmSessionBackend$NativeText::write (Lorg/graalvm/nativeimage/c/type/VoidPointer;)V',
         'SvmSessionBackend::borrow ()Ldev/elide/truffledata/tape/TapeBorrow;',
         'SvmSessionBackend::check (ILorg/graalvm/nativeimage/c/type/VoidPointer;)V',
         'SvmSessionBackend::decode (Ljava/lang/foreign/MemorySegment;J)V',
@@ -154,7 +155,7 @@ SVM_ONLY_METHODS = {
         'SvmSessionBackend::streamFinish (J)V',
         'SvmSessionBackend::streamNext (J)I',
         'SvmSessionBackend::streamRelease (J)V',
-        'SvmSessionBackend::tape (Lorg/graalvm/nativeimage/c/type/VoidPointer;)Ldev/elide/truffledata/tape/SvmValueTape;',
+        'SvmSessionBackend::tape (Lorg/graalvm/nativeimage/c/type/VoidPointer;)Ldev/elide/truffledata/tape/SvmTape;',
         'SvmSessionBackend::textArena ([B)Ldev/elide/truffledata/tape/TapeTextArena;'),
     **_yaml_methods('YamlPlan',
         'YamlPlan::compile (Ldev/elide/truffledata/Schema;)Ldev/elide/truffledata/yaml/YamlPlan;',
@@ -210,9 +211,24 @@ SVM_ONLY_METHODS = {
         'Ldev/elide/truffledata/json/JsonMessage;',
         'JsonSvm$1::compile (Ldev/elide/truffledata/Schema;Ljava/util/Map;)Ldev/elide/truffledata/json/JsonPlan;',
         'JsonSvm$1::close ()V',
-        # The side tables and release of one published result (lexical accessor and close action).
-        'JsonSvm$SvmResult::run ()V',
-        'JsonSvm$AdoptedResult::run ()V',
+    ),
+    # The fused retained JSON owner embeds native pointers; its storage operations run in
+    # //json/tests:native_test and the retained/interop allocation cells of json_native_smoke.
+    **_json_methods(
+        'SvmJsonMessage',
+        'SvmJsonMessage::release ()V',
+        'SvmJsonMessage::nodeCount ()J',
+        'SvmJsonMessage::poolSize ()J',
+        'SvmJsonMessage::inputSize ()J',
+        'SvmJsonMessage::directorySize ()J',
+        'SvmJsonMessage::flags ()I',
+        'SvmJsonMessage::readWord (J)J',
+        'SvmJsonMessage::textByte (ZJ)B',
+        'SvmJsonMessage::textWord (ZJI)J',
+        'SvmJsonMessage::directoryEntry (J)J',
+        'SvmJsonMessage::metadata (J)I',
+        'SvmJsonMessage::stringValue (J)Ljava/lang/String;',
+        'SvmJsonMessage$Adopted::release ()V',
     ),
     # Static-image session backend: open() throws from requireRuntime on the JVM (JvmScopedTest
     # asserts it), so the SVM backend and its text arenas run only in //json/tests:native_test
@@ -276,32 +292,18 @@ SVM_ONLY_METHODS = {
     **_tape_methods(
         'SvmTape',
         'SvmTape::rebind (Lorg/graalvm/word/Pointer;)V',
+        'SvmTape::nodeCount ()J',
+        'SvmTape::poolSize ()J',
+        'SvmTape::inputSize ()J',
+        'SvmTape::directorySize ()J',
+        'SvmTape::flags ()I',
+        'SvmTape::decodeUtf8 (Lorg/graalvm/word/Pointer;I)Ljava/lang/String;',
         'SvmTape::readWord (J)J',
         'SvmTape::textByte (ZJ)B',
         'SvmTape::textWord (ZJI)J',
         'SvmTape::directoryEntry (J)J',
         'SvmTape::metadata (J)I',
         'SvmTape::stringValue (J)Ljava/lang/String;',
-    ),
-    # Word-pointer tape over a native descriptor; constructed only by JsonSvm.publish and the
-    # static-image session backend.
-    **_tape_methods(
-        'SvmValueTape',
-        'SvmValueTape::nodeInt (J)I',
-        'SvmValueTape::nodeLong (J)J',
-        'SvmValueTape::keyMeta (J)I',
-        # Myna v4 directory access and the session reader's rebinding (JSON performance ledger V1).
-        'SvmValueTape::directorySize ()J',
-        'SvmValueTape::directoryEntry (J)J',
-        'SvmValueTape::directoryKey (JIIJJJZ)J',
-        'SvmValueTape::rebind (Lorg/graalvm/word/Pointer;Lorg/graalvm/word/Pointer;)V',
-        'SvmValueTape::bindTables (Lorg/graalvm/word/Pointer;)V',
-        'SvmValueTape::simdThreshold ()I',
-        'SvmValueTape::regionCount ()J',
-        'SvmValueTape::regionSize (J)J',
-        'SvmValueTape::copyRegion (JJ[BII)V',
-        # simdutf bridge for long non-ASCII strings (myna_utf8_to_utf16_v2, linked only into images).
-        'SvmValueTape::decodeExternalUtf8 (JJI)Ljava/lang/String;',
     ),
     # Word-accessor typed owner; constructed only by the static plan backend.
     **_json_methods(
@@ -324,6 +326,9 @@ SVM_ONLY_METHODS = {
 # Methods the JVM coverage lane cannot reach on HotSpot although they are not SVM code. Each entry
 # names why; nothing else is exempt.
 JVM_UNREACHABLE_METHODS = {
+    # Synthetic tag cursors expose resolved URI text but no source token: lexical() is always0,
+    # so rawText rejects before a byte accessor can run. Tag view/snapshot/lifetime hooks are tested.
+    **_tape_methods('AliasExport', 'AliasExport$1::lexicalByte (J)B'),
     # Native typed tables always use HotSpot's exact native segment class; these fallbacks are
     # present for other JVM implementations, matching the JSON typed owner.
     **_yaml_methods('JvmTypedOwner',
@@ -337,14 +342,6 @@ JVM_UNREACHABLE_METHODS = {
     # Exercised on SVM by the dynamic NestedReads root in json/tests/CompiledReads.java. (Was
     # JsonRecord::walk.)
     **_tape_methods('TypedRecord', 'TypedRecord::walk (Ldev/elide/truffledata/tape/TypedAccess;)J'),
-    # YAML alias tables: JSON formats have none, so this lane (JSON suites) never builds or reads
-    # them; //tape/tests:jvm (TapeOwnerTest) runs all three, and YAML Task 5 adds lane coverage.
-    **_tape_methods(
-        'TapeFormat',
-        'TapeFormat::withAliases ([J[I)Ldev/elide/truffledata/tape/TapeFormat;',
-        'TapeFormat::alias ([IJJ)J',
-        'TapeFormat::outside (Ldev/elide/truffledata/tape/TapeFormat;)Ljava/lang/IllegalStateException;',
-    ),
     # Fallbacks for a segment that is not HotSpot's native segment class. Typed tables are always
     # reinterpreted native segments, so on HotSpot only the exact-class fast path runs.
     **_json_methods(

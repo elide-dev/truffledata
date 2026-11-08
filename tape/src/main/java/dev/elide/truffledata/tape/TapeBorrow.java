@@ -3,7 +3,6 @@ package dev.elide.truffledata.tape;
 import com.oracle.truffle.api.Assumption;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.Truffle;
-import dev.elide.myna.values.ValueTape;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -18,15 +17,14 @@ public final class TapeBorrow extends TapeOwner {
   private @Nullable Assumption alive;
 
   /** A borrow of the session's current document, confined to the calling thread. */
-  public TapeBorrow(ValueTape tape, TapeLexical lexical, TapeFormat format) {
-    super(tape, Thread.currentThread());
-    this.lexical = lexical;
-    this.format = checkFormat(tape, format);
+  public TapeBorrow(TapeReader tape, TapeFormat format) {
+    this(tape, tape, format);
   }
 
-  public TapeBorrow(TapeReader tape, TapeFormat format) {
+  /** A compact borrow whose pristine lexical source differs from its decoded string storage. */
+  public TapeBorrow(TapeReader tape, TapeLexical lexical, TapeFormat format) {
     super(tape, Thread.currentThread());
-    this.lexical = tape;
+    this.lexical = lexical;
     this.format = checkFormat(tape, format);
   }
 
