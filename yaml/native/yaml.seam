@@ -1,4 +1,4 @@
-module truffledata_yaml abi=1 target=x86_64-unknown-linux-gnu java_package=dev.elide.truffledata.yaml.generated java_class=Yaml c_library=truffledata_yaml c_library_static=true
+module truffledata_yaml abi=2 target=x86_64-unknown-linux-gnu java_package=dev.elide.truffledata.yaml.generated java_class=Yaml c_library=truffledata_yaml c_library_static=true
 struct YamlResult size=488 align=8
   field owner type=ptr<void> offset=0
   field view type=ptr<void> offset=8
@@ -109,4 +109,81 @@ import stream_next symbol=td_yaml_stream_next return=i32 error=no_failure native
 end
 import stream_release symbol=td_yaml_stream_release return=void error=no_failure native_leaf=false@explicit_contract
   param stream type=ptr<void> nullable=false ownership=borrowed access=read_write
+end
+
+struct YamlScalarField size=88 align=8
+  field name type=ptr<u8> offset=0
+  field name_length type=u64 offset=8
+  field kind type=u32 offset=16
+  field flags type=u32 offset=20
+  field minimum type=i64 offset=24
+  field maximum type=i64 offset=32
+  field unsigned_maximum type=u64 offset=40
+  field max_utf8_bytes type=u64 offset=48
+  field float_bits type=u32 offset=56
+  field length_unit type=u32 offset=60
+  field minimum_length type=u64 offset=64
+  field maximum_length type=u64 offset=72
+  field child type=u32 offset=80
+end
+struct YamlRecordPlan size=8 align=4
+  field fields_offset type=u32 offset=0
+  field field_count type=u32 offset=4
+end
+struct YamlRecordEntry size=24 align=8
+  field present type=u64 offset=0
+  field nulls type=u64 offset=8
+  field slots type=u32 offset=16
+  field plan type=u32 offset=20
+end
+struct YamlPlan size=8 align=8
+  field owner type=ptr<void> offset=0
+end
+struct YamlScalarSlot size=40 align=8
+  field bits type=u64 offset=0
+  field text type=ptr<u8> offset=8
+  field text_length type=u64 offset=16
+  field lexical type=ptr<u8> offset=24
+  field lexical_length type=u64 offset=32
+end
+struct YamlTypedResult size=392 align=8
+  field owner type=ptr<void> offset=0
+  field slots type=ptr<void> offset=8
+  field count type=u64 offset=16
+  field present type=u64 offset=24
+  field nulls type=u64 offset=32
+  field copied_input_bytes type=u64 offset=40
+  field padded_input_bytes type=u64 offset=48
+  field index_retained_bytes type=u64 offset=56
+  field index_peak_bytes type=u64 offset=64
+  field index_allocations type=u64 offset=72
+  field parser_input_capacity type=u64 offset=80
+  field control_bytes type=u64 offset=88
+  field records type=ptr<void> offset=96
+  field record_count type=u64 offset=104
+  field error_line type=u64 offset=112
+  field error_column type=u64 offset=120
+  field error_message_length type=u32 offset=128
+  field error_message type=u8 offset=136
+end
+import plan_create symbol=td_yaml_plan_create return=i32 error=no_failure native_leaf=false@explicit_contract
+  param records type=ptr<void> nullable=false ownership=borrowed access=read
+  param record_count type=u64
+  param fields type=ptr<void> nullable=true ownership=borrowed access=read
+  param field_count type=u64
+  param max_name_bytes type=u64
+  param options type=ptr<void> nullable=false ownership=borrowed access=read
+  param result type=ptr<void> nullable=false ownership=borrowed access=read_write
+end
+import plan_release symbol=td_yaml_plan_release return=void error=no_failure native_leaf=false@explicit_contract
+  param plan type=ptr<void> nullable=false ownership=borrowed access=read_write
+end
+import typed_decode symbol=td_yaml_typed_decode return=i32 error=no_failure native_leaf=false@explicit_contract
+  param plan type=ptr<void> nullable=false ownership=borrowed access=read
+  param data type=ptr<u8> nullable=false ownership=borrowed access=read
+  param length type=u64
+  param result type=ptr<void> nullable=false ownership=borrowed access=read_write
+end
+import typed_release symbol=td_yaml_typed_release return=void error=no_failure native_leaf=false@explicit_contract
+  param result type=ptr<void> nullable=false ownership=borrowed access=read_write
 end

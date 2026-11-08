@@ -14,6 +14,7 @@
 #include <string>
 
 using namespace truffledata::yaml;
+using yaml_session = truffledata::yaml::session;
 using truffledata::yaml::testing::fault_memory;
 using truffledata::yaml::testing::render;
 
@@ -42,6 +43,38 @@ std::string error_text(const YamlResult& r) {
 }
 bool nothing_published(const YamlResult& r) {
   return !r.owner && !r.view && !r.lexical && !r.key_hashes && !r.yaml_meta && !r.source && r.lexical_count == 0;
+}
+
+void typed_plans() {
+  auto options = defaults();
+  YamlRecordPlan record{0, 1};
+  YamlScalarField field{};
+  field.name = reinterpret_cast<uint8_t*>(const_cast<char*>("n"));
+  field.name_length = 1; field.kind = 1; field.flags = 1; field.child = UINT32_MAX;
+  field.minimum = INT64_MIN; field.maximum = INT64_MAX;
+  YamlPlan plan{};
+  require(td_yaml_plan_create(&record, 1, &field, 1, 1024, &options, &plan) == TD_YAML_OK);
+  require(td_yaml_plan_create(&record, 1, &field, 1, 1024, &options, &plan) == TD_YAML_ARGUMENT);
+  auto decode = [&](const char* text, YamlTypedResult& result) {
+    return td_yaml_typed_decode(&plan, reinterpret_cast<const uint8_t*>(text), std::strlen(text), &result);
+  };
+  YamlTypedResult good{}, bad{};
+  require(decode("n: 0x1f", good) == TD_YAML_OK && good.owner && good.count == 1 && good.present == 1);
+  require(decode("n: 1", good) == TD_YAML_ARGUMENT);
+  require(decode("n: '31'", bad) == TD_YAML_CONTRACT && !bad.owner && !bad.slots && bad.error_message_length > 0);
+  require(decode("n: [", bad) == TD_YAML_SYNTAX && bad.error_line > 0 && !bad.owner);
+  require(decode("other: 1", bad) == TD_YAML_CONTRACT && !bad.owner);
+  td_yaml_plan_release(&plan); td_yaml_plan_release(&plan);
+  YamlScalarSlot copied;
+  std::memcpy(&copied, good.slots, sizeof copied);
+  require(copied.bits == 31); // Result survives plan close.
+  td_yaml_typed_release(&good); td_yaml_typed_release(&good); td_yaml_typed_release(&bad);
+  require(!good.owner && !good.slots);
+  require(decode("n: 1", bad) == TD_YAML_ARGUMENT);
+  field.child = 0;
+  require(td_yaml_plan_create(&record, 1, &field, 1, 1024, &options, &plan) == TD_YAML_ARGUMENT);
+  field.child = UINT32_MAX;
+  require(td_yaml_plan_create(&record, 1, &field, 1, 0, &options, &plan) == TD_YAML_LIMIT);
 }
 
 void sessions() {
@@ -144,12 +177,12 @@ void allocation_failures() {
   // Every upstream allocation of a decode/retain/decode sequence can fail; the session stays
   // consistent and everything is freed once the session and the retained owner are destroyed.
   auto sequence = [&](fault_memory& memory) {
-    session::retained* owner = nullptr;
+    yaml_session::retained* owner = nullptr;
     {
-      session s(session_options{}, &memory);
+      yaml_session s(session_options{}, &memory);
       try {
         s.decode(reinterpret_cast<const uint8_t*>(doc.data()), doc.size(), 0);
-        s.decode(reinterpret_cast<const uint8_t*>(wide.data()), wide.size(), session::retain_source);
+        s.decode(reinterpret_cast<const uint8_t*>(wide.data()), wide.size(), yaml_session::retain_source);
         owner = s.retain();
         s.decode(reinterpret_cast<const uint8_t*>(nested.data()), nested.size(), 0);
         s.decode(reinterpret_cast<const uint8_t*>(big.data()), big.size(), 0);
@@ -169,7 +202,7 @@ void allocation_failures() {
   size_t rapidyaml = 0;
   {
     fault_memory probe;
-    session s(session_options{}, &probe);
+    yaml_session s(session_options{}, &probe);
     s.decode(reinterpret_cast<const uint8_t*>(doc.data()), doc.size(), 0);
     size_t before = s.memory().allocations();
     s.decode(reinterpret_cast<const uint8_t*>(nested.data()), nested.size(), 0);
@@ -190,7 +223,7 @@ void allocation_failures() {
 
   // Steady state: after warm-up a session decodes without any upstream allocation and keeps a
   // bounded number of blocks.
-  session s(session_options{});
+  yaml_session s(session_options{});
   for (int i = 0; i < 3; ++i) s.decode(reinterpret_cast<const uint8_t*>(doc.data()), doc.size(), 0);
   size_t blocks = s.arena_blocks(), allocations = s.memory().allocations();
   for (int i = 0; i < 10000; ++i) {
@@ -201,9 +234,9 @@ void allocation_failures() {
   // Large inputs are not kept: the input buffer above 1 MiB is released before the next decode.
   std::string huge = "- " + std::string(size_t(1) << 21, 'x') + "\n";
   s.decode(reinterpret_cast<const uint8_t*>(huge.data()), huge.size(), 0);
-  require(s.input_capacity() > session::retained_input_limit);
+  require(s.input_capacity() > yaml_session::retained_input_limit);
   s.decode(reinterpret_cast<const uint8_t*>(doc.data()), doc.size(), 0);
-  require(s.input_capacity() <= session::retained_input_limit);
+  require(s.input_capacity() <= yaml_session::retained_input_limit);
   require(s.memory().current() <= truffledata::tape::block_arena::retained_blocks * truffledata::tape::block_arena::max_block + 4096);
 }
 }  // namespace
@@ -211,6 +244,7 @@ void allocation_failures() {
 int main() {
   try {
     sessions();
+    typed_plans();
     allocation_failures();
   } catch (const std::exception& e) {
     std::fprintf(stderr, "api_test failure: %s\n", e.what());

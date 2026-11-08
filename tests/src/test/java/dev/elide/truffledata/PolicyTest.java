@@ -63,19 +63,19 @@ class PolicyTest {
             // TypedAccess).
             Map.entry(
                 "JavaSink.java",
-                9), // Embedder tree building and key interning, outside the tape walk.
+                10), // Embedder tree building and key interning, outside the tape walk.
             Map.entry("TypedAccess.java", 2),
             Map.entry("TypedArray.java", 1),
             // Close, pinning, array index, export cursors, the native-directory diagnostic (the
             // Java
             // member directories went with Myna ABI v4, JSON performance ledger V1: 10 -> 9).
-            Map.entry("TapeOwner.java", 9),
+            Map.entry("TapeOwner.java", 11),
             Map.entry("TypedRecord.java", 4),
             Map.entry("TypedOwner.java", 3),
             // Static (owner, node) slow paths per interop message and hint misses; the scan
             // boundary
             // folded into TapeOwner.find behind the miss boundary (V1: 26 -> 25).
-            Map.entry("TapeValue.java", 25),
+            Map.entry("TapeValue.java", 26),
             Map.entry("TapeBorrow.java", 1), // Borrowed-result assumption.
             // Key preparation from a String or from Myna's prepared Utf8Key (V1: 1 -> 2).
             Map.entry("TapeKey.java", 2),
@@ -85,7 +85,7 @@ class PolicyTest {
             Map.entry(
                 "TapeTextArena.java", 1), // TruffleString over a session text arena (sink side).
             Map.entry(
-                "TruffleSink.java", 9), // Reference guest sink: tree building and key interning.
+                "TruffleSink.java", 10), // Reference guest sink: tree building and key interning.
             // The session and stream entry points JsonSession (13) and JsonStream (10) held: the
             // shared bookkeeping moved here, the JSON-only ones stayed below.
             Map.entry(
@@ -105,6 +105,14 @@ class PolicyTest {
             Map.entry("SvmTypedOwner.java", 1),
             Map.entry("JsonSession.java", 3), // open ×2 and stream; the rest is TapeSession's.
             Map.entry("JsonStream.java", 2), // skip and truncatedBytes; the rest is TapeStream's.
+            Map.entry("AliasExport.java", 1),
+            Map.entry("TapeReader.java", 1), // Explicit compatibility copy to Myna.
+            Map.entry("YamlSession.java", 5), // open ×2, stream, documents, compile.
+            Map.entry("YamlPlan.java", 4), // compile ×2, decode, close.
+            Map.entry("YamlJvm.java", 2), // Library open ×2.
+            Map.entry("YamlSvm.java", 3), // Native entry points.
+            Map.entry("YamlMessage.java", 4), // Directives, metadata, assumption, close.
+            Map.entry("Yaml.java", 2), // Binary and timestamp materialization.
             // CSV: diagnostics, materialization and the export walk stay out of compiled reads.
             Map.entry("CsvScanner.java", 2), // Static syntax and limit failures.
             Map.entry("CsvBatch.java", 2), // Static STRING materialization and the export walk.
@@ -156,6 +164,7 @@ class PolicyTest {
           "protobuf-runtime",
           "json",
           "tape",
+          "yaml",
           "csv"
         }) {
       try (var paths = Files.walk(root.resolve(module + "/src/main/java"))) {

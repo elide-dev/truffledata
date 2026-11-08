@@ -4,6 +4,7 @@
 #pragma once
 
 #include <myna/values.h>
+#include <simdjson.h>
 
 #include <charconv>
 #include <cmath>
@@ -79,9 +80,10 @@ inline uint64_t render(const myna_value_view& view, uint64_t index, std::string&
       if (std::isnan(d)) out += "nan";
       else if (std::isinf(d)) out += d < 0 ? "-inf" : "inf";
       else {
-        char b[32];
-        auto r = std::to_chars(b, b + sizeof b, d);
-        out.append(b, r.ptr);
+        char b[40];
+        char* end = simdjson::internal::to_chars(b, b + sizeof b, d);
+        if (end - b >= 2 && end[-2] == '.' && end[-1] == '0') end -= 2;
+        out.append(b, end);
       }
       return index + 1;
     }

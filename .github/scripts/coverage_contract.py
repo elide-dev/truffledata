@@ -64,7 +64,8 @@ ACCESS_SOURCES = {f'core/src/main/java/dev/elide/truffledata/{name}.java' for na
         'Aliases', 'DuplicateKeys', 'KeyKind', 'Style', 'UnknownTags', 'VersionDirective',
         'Yaml', 'YamlSchema', 'YamlOptions', 'YamlLimits', 'YamlDirectives', 'YamlMetadata',
         'ResultMetadata', 'YamlSession', 'YamlMessage', 'YamlStream', 'YamlStreamOptions',
-        'YamlJvm', 'YamlSvm', 'JvmSessionBackend', 'SvmSessionBackend',
+        'YamlJvm', 'YamlSvm', 'JvmSessionBackend', 'SvmSessionBackend', 'YamlPlan',
+        'JvmTypedOwner', 'SvmTypedOwner', 'JvmPlanBackend',
     )
 } | {
     # Every CSV source: the scanner, ingest and typed conversions run on every read path, and the
@@ -103,12 +104,73 @@ def _tape_methods(source, *signatures):
     return {TAPE + source + '.java': {TAPE_CLASS + signature for signature in signatures}}
 
 
+def _yaml_methods(source, *signatures):
+    return {'yaml/src/main/java/dev/elide/truffledata/yaml/' + source + '.java':
+            {'dev/elide/truffledata/yaml/' + signature for signature in signatures}}
+
+
 # JVM LCOV cannot execute an SVM pointer intrinsic. Keep the exact method visible in gap reports;
 # native_views_test and consumer_native_smoke exercise these loads under SVM's JIT checks.
 # JSON: these run only in a static image (//json/tests:native_test, json_native_smoke and
 # //tools/release:json_native_test). On the JVM, JsonSvm.requireRuntime rejects every entry point
 # before native code runs, and the word-typed tapes and owners below exist only behind it.
 SVM_ONLY_METHODS = {
+    # YAML has the same static-image split as JSON. These entry points reject the JVM before
+    # JaCoCo reaches a probe; YamlContractTest checks rejection, and //yaml/tests:native_test
+    # exercises decoding, borrowed and retained results, metadata, streams and release.
+    **_yaml_methods('YamlSvm',
+        'YamlSvm::open ()Ldev/elide/truffledata/yaml/YamlSession;',
+        'YamlSvm::decode ([B)Ldev/elide/truffledata/yaml/YamlMessage;',
+        'YamlSvm::decode ([BLdev/elide/truffledata/yaml/YamlOptions;)Ldev/elide/truffledata/yaml/YamlMessage;'),
+    **_yaml_methods('YamlSession',
+        'YamlSession::open ()Ldev/elide/truffledata/yaml/YamlSession;'),
+    **_yaml_methods('SvmSessionBackend',
+        'SvmSessionBackend::compile (Ldev/elide/truffledata/tape/TypedLayout;Ldev/elide/truffledata/yaml/YamlOptions;)Ldev/elide/truffledata/yaml/YamlPlan;',
+        'SvmSessionBackend::writeOptions (Lorg/graalvm/word/Pointer;Ldev/elide/truffledata/yaml/YamlOptions;)V',
+        'SvmSessionBackend::checkTyped (ILorg/graalvm/nativeimage/c/type/VoidPointer;)V',
+        'SvmSessionBackend$1::integer (JJ)I',
+        'SvmSessionBackend$1::octet (JJ)B',
+        'SvmSessionBackend$1::pointer (JI)J',
+        'SvmSessionBackend$1::word (JJ)J',
+        'SvmSessionBackend$2::run ()V',
+        'SvmSessionBackend$Storage::inputByte (J)B',
+        'SvmSessionBackend$Storage::run ()V',
+        'SvmSessionBackend$Storage::span (J)J',
+        'SvmSessionBackend::borrow ()Ldev/elide/truffledata/tape/TapeBorrow;',
+        'SvmSessionBackend::check (ILorg/graalvm/nativeimage/c/type/VoidPointer;)V',
+        'SvmSessionBackend::decode (Ljava/lang/foreign/MemorySegment;J)V',
+        'SvmSessionBackend::decode ([BIIILdev/elide/truffledata/tape/TapeTextArena;)V',
+        'SvmSessionBackend::release ()V',
+        'SvmSessionBackend::reset ()V',
+        'SvmSessionBackend::retain ()Ldev/elide/truffledata/tape/TapeOwner;',
+        'SvmSessionBackend::retain ()Ldev/elide/truffledata/yaml/YamlMessage;',
+        'SvmSessionBackend::streamCreate (II)J',
+        'SvmSessionBackend::streamFeed (JLjava/lang/foreign/MemorySegment;)J',
+        'SvmSessionBackend::streamFeed (J[BII)I',
+        'SvmSessionBackend::streamFinish (J)V',
+        'SvmSessionBackend::streamNext (J)I',
+        'SvmSessionBackend::streamRelease (J)V',
+        'SvmSessionBackend::tape (Lorg/graalvm/nativeimage/c/type/VoidPointer;)Ldev/elide/truffledata/tape/SvmValueTape;',
+        'SvmSessionBackend::textArena ([B)Ldev/elide/truffledata/tape/TapeTextArena;'),
+    **_yaml_methods('YamlPlan',
+        'YamlPlan::compile (Ldev/elide/truffledata/Schema;)Ldev/elide/truffledata/yaml/YamlPlan;',
+        'YamlPlan::compile (Ldev/elide/truffledata/Schema;Ljava/util/Map;)Ldev/elide/truffledata/yaml/YamlPlan;',
+        'YamlPlan::create (Ldev/elide/truffledata/tape/TypedLayout;Ldev/elide/truffledata/yaml/YamlOptions;)Ldev/elide/truffledata/yaml/YamlPlan;',
+        'YamlPlan$SvmBackend::create (Ldev/elide/truffledata/tape/TypedLayout;Ldev/elide/truffledata/yaml/YamlOptions;)Ldev/elide/truffledata/yaml/YamlPlan$SvmBackend;',
+        'YamlPlan$SvmBackend::decode ([B[Ldev/elide/truffledata/Schema;)Ldev/elide/truffledata/tape/TypedOwner;',
+        'YamlPlan$SvmBackend::release ()V'),
+    **_yaml_methods('SvmTypedOwner',
+        'SvmTypedOwner::bits (J)J',
+        'SvmTypedOwner::text (J)Ljava/lang/String;',
+        'SvmTypedOwner::copyText (J)Ljava/lang/String;',
+        'SvmTypedOwner::present (J)J',
+        'SvmTypedOwner::nulls (J)J',
+        'SvmTypedOwner::slotBase (J)I',
+        'SvmTypedOwner::plan (J)I',
+        'SvmTypedOwner::slot (J)J',
+        'SvmTypedOwner::entry (J)J',
+        'SvmTypedOwner::release ()V',
+        'SvmTypedOwner::format ()Ldev/elide/truffledata/tape/TapeFormat;'),
     # The no-argument form is the static-image entry point (the kernel is linked; no library path).
     # It delegates to loadNative(null), which on the JVM test class path always throws because no
     # native backend is present, so JaCoCo records no probe although CsvFusedTest calls it.
@@ -258,6 +320,14 @@ SVM_ONLY_METHODS = {
 # Methods the JVM coverage lane cannot reach on HotSpot although they are not SVM code. Each entry
 # names why; nothing else is exempt.
 JVM_UNREACHABLE_METHODS = {
+    # Native typed tables always use HotSpot's exact native segment class; these fallbacks are
+    # present for other JVM implementations, matching the JSON typed owner.
+    **_yaml_methods('JvmTypedOwner',
+        'JvmTypedOwner::readOtherLong (Ljava/lang/foreign/MemorySegment;J)J',
+        'JvmTypedOwner::readOtherInt (Ljava/lang/foreign/MemorySegment;J)I'),
+    # The borrowed lexical holder owns no native result and is never released independently.
+    # Retained results override run() with the actual release, covered by YamlIntegrationTest.
+    **_yaml_methods('JvmSessionBackend', 'JvmSessionBackend$Storage::run ()V'),
     # Compiled-code fallback for a non-constant TypedAccess: the interpreter reports every value as a
     # partial-evaluation constant (so it takes walkExploded), and the coverage lane excludes JIT.
     # Exercised on SVM by the dynamic NestedReads root in json/tests/CompiledReads.java. (Was

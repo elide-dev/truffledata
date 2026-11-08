@@ -83,7 +83,8 @@ genrule(
         "generated/seam.ll",
         "generated/META-INF/native-image/dev.elide.myna/dev.elide.truffledata.yaml.generated.Yaml/native-image.properties",
     ],
-    cmd = "$(location @myna//:generator) generate $(location yaml.seam) --out $(RULEDIR)/generated --target " + select({
+    cmd = "$(location @myna//:generator) validate $(location yaml.seam) --targets x86_64-unknown-linux-gnu,aarch64-unknown-linux-gnu,aarch64-apple-darwin && " +
+          "$(location @myna//:generator) generate $(location yaml.seam) --out $(RULEDIR)/generated --target " + select({
         "@platforms//os:macos": "aarch64-apple-darwin",
         ":linux_arm64": "aarch64-unknown-linux-gnu",
         "//conditions:default": "x86_64-unknown-linux-gnu",
@@ -105,6 +106,7 @@ cc_library(
         "session.h",
         "stream.h",
         "tags.h",
+        "typed.h",
     ],
     copts = ["-std=c++17"],
     visibility = ["//yaml:__subpackages__"],
@@ -113,7 +115,15 @@ cc_library(
         "//tape/native:tape",
         "@myna//:values_headers",
         "@rapidyaml//:ryml",
+        "@simdjson",
     ],
+)
+
+cc_test(
+    name = "typed_test",
+    srcs = ["typed_test.cc"],
+    copts = ["-std=c++17"],
+    deps = [":decoder", ":testing"],
 )
 
 cc_library(
@@ -183,7 +193,7 @@ cc_library(
     testonly = True,
     hdrs = ["testing.h"],
     copts = ["-std=c++17"],
-    deps = ["@myna//:values_headers"],
+    deps = ["@myna//:values_headers", "@simdjson"],
 )
 
 # Renders decoded documents back to yaml-test-suite events (also used by plan Task 8).
@@ -380,4 +390,11 @@ cc_library(
     testonly = True,
     hdrs = ["sampler.h"],
     copts = ["-std=c++17"],
+)
+
+# Myna's SIMD text bridge for SvmValueTape, shared with JSON.
+cc_library(
+    name = "svm",
+    visibility = ["//visibility:public"],
+    deps = [":truffledata_yaml", "//json/native/bridge"],
 )

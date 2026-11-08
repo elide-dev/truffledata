@@ -48,7 +48,7 @@ jobs:
       - name: JVM coverage
         id: coverage
         if: ${{ !cancelled() && steps.tests.outcome != 'skipped' }}
-        run: bazel coverage //tests:test //protobuf-buffa/tests:jvm //protobuf-buffa/tests:jvm_non_strict //protobuf-buffa/tests:jvm_views //protobuf-buffa/tests:jvm_views_strict //protobuf-buffa/tests:jvm_no_native_access //json/tests:jvm //csv/tests:jvm --config=codecov
+        run: bazel coverage //tests:test //protobuf-buffa/tests:jvm //protobuf-buffa/tests:jvm_non_strict //protobuf-buffa/tests:jvm_views //protobuf-buffa/tests:jvm_views_strict //protobuf-buffa/tests:jvm_no_native_access //json/tests:jvm //yaml/tests:jvm //csv/tests:jvm --config=codecov
       - name: Validate LCOV
         id: lcov
         if: ${{ !cancelled() && steps.coverage.outcome == 'success' }}

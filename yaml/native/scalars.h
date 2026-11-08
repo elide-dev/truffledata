@@ -22,7 +22,7 @@
 //
 // Numbers map onto Myna as JSON does: int64 -> I64, above int64 within uint64 -> U64, larger -> DECIMAL
 // (canonical decimal digits; hex, octal and binary spellings are converted), `-0` -> F64 -0.0,
-// finite floats -> F64 (nearest binary64 by std::from_chars), floats that overflow binary64 ->
+// finite floats -> F64 (nearest binary64 by fast_float::from_chars), floats that overflow binary64 ->
 // DECIMAL (text normalized to JSON grammar), floats that underflow -> F64 ±0.0 (as simdjson does
 // for JSON). `.inf`/`-.inf`/`.nan` are non-finite F64 (tape_writer::nonfinite).
 //
@@ -33,6 +33,8 @@
 #include "yaml/native/errors.h"
 
 #include <myna/values.h>
+#include <c4/ext/fast_float.hpp>
+#include <simdjson.h>
 
 #include <charconv>
 #include <cmath>
@@ -364,7 +366,7 @@ inline scalar float_token(std::string_view token, std::pmr::memory_resource* scr
   r.key = key_kind::floating;
   std::string_view body = token[0] == '+' ? token.substr(1) : token;
   double d = 0;
-  auto parsed = std::from_chars(body.data(), body.data() + body.size(), d);
+  auto parsed = fast_float::from_chars(body.data(), body.data() + body.size(), d);
   if (parsed.ec == std::errc() && parsed.ptr == body.data() + body.size() && std::isfinite(d)) {
     r.kind = MYNA_VALUE_F64;
     std::memcpy(&r.bits, &d, sizeof d);
@@ -624,7 +626,7 @@ inline scalar float11(std::string_view s, bool& ok, std::pmr::memory_resource* s
       double d = double(v);
       if (fraction.size() > 1) {
         double f = 0;
-        std::from_chars(fraction.data(), fraction.data() + fraction.size(), f);  // ".25"
+        fast_float::from_chars(fraction.data(), fraction.data() + fraction.size(), f);  // ".25"
         d += f;
       }
       if (s[0] == '-') d = -d;
@@ -844,9 +846,9 @@ inline scalar resolve(std::string_view text, scalar_style style, schema s, tag_k
 // Canonical STRING text of a resolved scalar used as a mapping key (D2/D3: keys are strings, so
 // `{1: a, 0x1: b}`, `{1: a, "1": b}` and `{null: a, ~: b}` are duplicates). null -> "" (as the
 // `yaml` npm package stringifies it), booleans -> true/false, integers -> decimal, floats -> the
-// shortest round-trip form (std::to_chars), non-finite floats -> .inf/-.inf/.nan, DECIMAL -> its
+// shortest round-trip form (simdjson Dragonbox), non-finite floats -> .inf/-.inf/.nan, DECIMAL -> its
 // JSON-grammar digits, strings -> themselves. Short results are formatted into `buffer`.
-inline std::string_view key_text(const scalar& r, char (&buffer)[32]) {
+inline std::string_view key_text(const scalar& r, char (&buffer)[40]) {
   switch (r.kind) {
     case MYNA_VALUE_NULL: return {};
     case MYNA_VALUE_BOOL: return r.bits ? "true" : "false";
@@ -863,8 +865,11 @@ inline std::string_view key_text(const scalar& r, char (&buffer)[32]) {
       std::memcpy(&d, &r.bits, sizeof d);
       if (std::isnan(d)) return ".nan";
       if (std::isinf(d)) return d < 0 ? "-.inf" : ".inf";
-      auto out = std::to_chars(buffer, buffer + sizeof buffer, d);
-      return {buffer, size_t(out.ptr - buffer)};
+      // simdjson's bundled Dragonbox works on macOS 12; libc++ floating to_chars
+      // requires macOS 13.3. Use the same canonical spelling on every platform.
+      char* end = simdjson::internal::to_chars(buffer, buffer + sizeof buffer, d);
+      if (end - buffer >= 2 && end[-2] == '.' && end[-1] == '0') end -= 2;
+      return {buffer, size_t(end - buffer)};
     }
     default:
       return r.text;

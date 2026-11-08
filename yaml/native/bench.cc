@@ -4,8 +4,8 @@
 //   ryml-ints(scan)             rapidyaml's integer event handler (src_extra; benchmark only)
 //   ryml-tree                   rapidyaml's stock tree parser
 //   libyaml(scan)               libyaml 0.2.5 events, every scalar touched (the probe's row; benchmark only)
-//   td-session(decode+reset)    td_yaml_session_decode then td_yaml_session_reset
-//   td-session(retain+release)  td_yaml_session_decode, td_yaml_session_retain, td_yaml_release
+//   td-session(decode+reset)    td_session_decode then td_session_reset
+//   td-session(retain+release)  td_session_decode, td_session_retain, td_yaml_release
 //   td-stream(documents)        multi-document input: td_yaml_stream_* over the whole buffer
 //
 // Every variant parses a fresh copy of the input (rapidyaml filters in place; the session copies
@@ -22,6 +22,7 @@
 #include "yaml/native/api.h"
 #include "yaml/native/reference_tape.h"
 #include "yaml/native/sampler.h"
+#include "yaml/native/typed.h"
 
 #include <c4/yml/event_handler_tree.hpp>
 #include <c4/yml/parse.hpp>
@@ -77,6 +78,58 @@ YamlOptionsStruct options() {
   o.max_alias_expansion = 1000000;
   o.max_depth = 128;
   return o;
+}
+
+// The records fixture is a top-level sequence; a single enclosing field supplies the record-root
+// contract used by both typed backends. The identical wrapped bytes are used by every row.
+int typed_benchmark(const std::string& path, bool quick) {
+  using namespace truffledata::yaml;
+  auto record = [](const char* name, uint32_t child, bool repeated = false) {
+    scalar_field field{name, scalar_kind::record}; field.child = child; field.repeated = repeated;
+    return field;
+  };
+  auto array = [](const char* name, scalar_kind kind) {
+    scalar_field field{name, kind}; field.repeated = true; return field;
+  };
+  typed_plan plan(std::vector<std::vector<scalar_field>>{
+      {record("records", 1, true)},
+      {{"id", scalar_kind::int64}, {"name", scalar_kind::string}, {"price", scalar_kind::float64},
+       {"active", scalar_kind::boolean}, array("tags", scalar_kind::string), record("dims", 2),
+       array("scores", scalar_kind::int64), {"note", scalar_kind::string},
+       {"parent", scalar_kind::int64, true, true}},
+      {{"w", scalar_kind::int64}, {"h", scalar_kind::float64}, {"unit", scalar_kind::string}}}, "YAML");
+  std::istringstream lines(slurp(path));
+  std::string line, input = "records:\n";
+  while (std::getline(lines, line)) input += "  " + line + '\n';
+  auto bytes = reinterpret_cast<const uint8_t*>(input.data());
+  session_options options;
+  options.storage.index_bytes = 256u << 20;
+  truffledata::yaml::session generic(options);
+  int iters = quick ? 10 : 100;
+  double generic_ns = best_ns(iters, [&] {
+    auto document = generic.decode(bytes, input.size(), 0);
+    auto* retained = generic.retain();
+    uint64_t nodes = document.view.node_count;
+    retained->destroy();
+    return nodes;
+  });
+  double typed_ns = best_ns(iters, [&] {
+    typed_document document(plan, input, options);
+    return document.size();
+  });
+  truffledata::yaml::session source_session(options);
+  typed_source source(source_session.decode(bytes, input.size(), truffledata::yaml::session::retain_source),
+                      options.rules.schema, false);
+  double walk_ns = best_ns(iters, [&] {
+    truffledata::tape::tape_typed<scalar_slot, record_entry, typed_source> slots(
+        plan, source, options.storage.index_bytes - source_session.memory().current(), options.max_alias_expansion);
+    return slots.size();
+  });
+  std::printf("typed records-block bytes=%zu generic-retain-ns=%.0f typed-ns=%.0f walk-ns=%.0f typed/generic=%.3f walk/typed=%.3f\n",
+              input.size(), generic_ns, typed_ns, walk_ns, typed_ns / generic_ns, walk_ns / typed_ns);
+  std::printf("typed<=1.2*generic=%s direct-handler-trigger(walk>15%%)=%s\n",
+              typed_ns <= 1.2 * generic_ns ? "PASS" : "MISS", walk_ns > .15 * typed_ns ? "OPEN" : "closed");
+  return 0; // An exploratory hypothesis report, not a relaxation of the release performance gate.
 }
 
 // libyaml events over `src` (every document), touching every scalar: the probe's libyaml(scan).
@@ -145,15 +198,20 @@ int profile(const std::string& name, double seconds, const std::function<uint64_
 }  // namespace
 
 int main(int argc, char** argv) {
-  bool quick = false;
+  bool quick = false, typed = false;
   int passes = 1;
   double profile_seconds = 0;
   std::vector<std::string> files;
   for (int i = 1; i < argc; ++i) {
-    if (std::strcmp(argv[i], "--quick") == 0) quick = true;
+    if (std::strcmp(argv[i], "--typed") == 0) typed = true;
+    else if (std::strcmp(argv[i], "--quick") == 0) quick = true;
     else if (std::strncmp(argv[i], "--passes=", 9) == 0) passes = std::max(1, std::atoi(argv[i] + 9));
     else if (std::strncmp(argv[i], "--profile=", 10) == 0) profile_seconds = std::atof(argv[i] + 10);
     else files.push_back(argv[i]);
+  }
+  if (typed) {
+    if (files.size() != 1) return 2;
+    return typed_benchmark(files[0], quick);
   }
   if (profile_seconds > 0) {
     YamlOptionsStruct po = options();
