@@ -2,6 +2,7 @@
 #ifndef TRUFFLEDATA_JSON_BASELINE_SESSION_H
 #define TRUFFLEDATA_JSON_BASELINE_SESSION_H
 #include "json/native/decoder.h"
+#include "json/native/testing/ondemand_decoder.h"
 #include "tape/native/text_arena.h"
 #include <optional>
 
@@ -75,7 +76,7 @@ private:
   char* input_ = nullptr;
   size_t input_capacity_ = 0;
   size_t input_length_ = 0;
-  std::optional<tape_decoder<tape::ctape_writer>> decoder_;
+  std::optional<testing::ondemand_decoder<tape::ctape_writer>> decoder_;
   tape::key_shape_cache shapes_;
   td_tape_view view_{};
   bool live_ = false;
@@ -104,7 +105,7 @@ private:
       if (validate_only) {
         decode_hint hint = hint_for(length, values_, storage_);
         arena_.hint(hint.block);
-        tape_decoder<null_writer> decoder(&arena_, values_);
+        testing::ondemand_decoder<null_writer> decoder(&arena_, values_);
         decoder.shapes(&shapes_);
         decoder.start(input, hint, walked);
         auto&& root = open();

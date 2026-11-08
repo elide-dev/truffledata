@@ -1,6 +1,6 @@
 # Native JSON backend (unreleased)
 
-The `//json` module parses general JSON with simdjson 5.1.1 On-Demand directly
+The `//json` module parses general JSON with a checked stage2 walk over simdjson 5.1.1's structural index directly
 into a compact word tape, with no DOM, Serde value or Java object tree in
 between. Guests read that index in place through `InteropLibrary`, embedders can
 export it into their own objects in one pass, and `snapshot()` detaches it into
@@ -528,3 +528,5 @@ compiled interop and export loops on graph shape and a fixed per-document alloca
 budget. The first measurement found generic reads slower than reading Gson trees
 and snapshot reads allocating heavily; see that page before relying on either path
 for speed.
+
+The generic native producer, borrowed sessions and streams now share the structural stage2 walk. Flat scalar plans use the same walk with checked schema-key lookup and typed slot contracts; nested/repeated plans retain their On-Demand slot writer. The previous generic producer is a test-only differential oracle. Production string kernels remain portable: measured AVX2 and AVX-512 variants did not clear the adoption gate on unclemax. Current qualification and explicitly unmet criteria are recorded in the [producer ledger](superpowers/plans/2026-11-07-json-sota-ledger.md).

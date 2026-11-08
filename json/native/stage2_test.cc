@@ -1,5 +1,6 @@
 #include "json/native/stage2.h"
 #include "json/native/decoder.h"
+#include "json/native/testing/ondemand_decoder.h"
 #include "json/native/status.h"
 #include "tape/native/testing.h"
 #include <cstdio>
@@ -36,7 +37,7 @@ struct harness {
         return copy(view);
       }
     } else {
-      json::tape_decoder<Writer> decoder(&memory, limits);
+      json::testing::ondemand_decoder<Writer> decoder(&memory, limits);
       decoder.start({input.data(), input.size()}, json::hint_for(input.size(), {}, {}));
       auto root = oracle.iterate(input).value(); decoder.decode(root);
       if constexpr (std::is_same_v<Writer, tape::ctape_writer>) return copy(decoder.view());

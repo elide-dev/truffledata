@@ -2,6 +2,7 @@
 // the 200-document corpus, directory-fused duplicate detection, number classification, exact
 // spans, strict input, validate-only parity and allocation failure at every growth step.
 #include "json/native/decoder.h"
+#include "json/native/testing/ondemand_decoder.h"
 #include "json/native/testing/myna_oracle.h"
 #include "json/native/session.h"
 #include "json/native/status.h"
@@ -73,7 +74,7 @@ struct scratch {
 struct pair {
   simdjson::padded_string padded;
   scratch a, b;
-  json::tape_decoder<tape::ctape_writer> compact{&a.arena, {}};
+  json::testing::ondemand_decoder<tape::ctape_writer> compact{&a.arena, {}};
   json::legacy::tape_decoder<tape::tape_writer> reference{&b.arena, {}, 2};
   td_tape_view view{};
   myna_value_view_v4 myna{};
@@ -363,7 +364,7 @@ void spans_are_exact_tokens() {
       tokens(root, padded.data(), expected);
     }
     scratch s;
-    json::tape_decoder<tape::ctape_writer> decoder(&s.arena, {});
+    json::testing::ondemand_decoder<tape::ctape_writer> decoder(&s.arena, {});
     decoder.start(std::string_view(padded.data(), padded.size()), json::hint_for(padded.size(), {}, {}));
     simdjson::ondemand::parser second;
     auto doc = second.iterate(padded).value();
@@ -545,7 +546,7 @@ template<class Writer> void decode_with(std::pmr::memory_resource* upstream, con
   tape::block_arena blocks(&memory);
   owning_memory each(&memory);
   simdjson::padded_string padded(source);
-  json::tape_decoder<Writer> decoder(arena ? static_cast<std::pmr::memory_resource*>(&blocks) : &each, {});
+  json::testing::ondemand_decoder<Writer> decoder(arena ? static_cast<std::pmr::memory_resource*>(&blocks) : &each, {});
   decoder.start(std::string_view(padded.data(), padded.size()), hint);
   simdjson::ondemand::parser parser;
   auto root = parser.iterate(padded).value();

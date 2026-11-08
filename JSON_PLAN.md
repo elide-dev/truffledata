@@ -1,6 +1,6 @@
 # Native JSON and Java facade implementation plan
 
-Status: Myna foundation shipped in v0.7.0; TruffleData implementation planned, 2026-11-04. Myna supplies the producer-neutral native value ABI and readers. TruffleData owns the C++ simdjson backend, schema contracts, scoped guest objects, and Java JSON facade adapters. Existing Buffa support remains an independent protobuf backend.
+Status update, 2026-11-07: compact generic readers, the structural JSON producer, streams and flat typed specialization are implemented; final 0.10.0 qualification is tracked in [the producer ledger](docs/superpowers/plans/2026-11-07-json-sota-ledger.md). The original architecture plan below is retained as historical context. Myna foundation shipped in v0.7.0; TruffleData implementation was planned on 2026-11-04. Myna supplies the producer-neutral native value ABI and readers. TruffleData owns the C++ simdjson backend, schema contracts, scoped guest objects, and Java JSON facade adapters. Existing Buffa support remains an independent protobuf backend.
 
 The goal is direct JSON parsing into typed results or a stable Myna structural index, with adopted input and borrowed text wherever their lifetimes permit. The system must support arbitrary JSON and known schemas, and preserve enough information to implement JEP 540 faithfully.
 

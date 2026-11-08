@@ -191,6 +191,7 @@ extern "C" int32_t td_json_typed_decode(const void* plan_record, const uint8_t* 
         return TD_JSON_CONTRACT;
       return TD_JSON_SYNTAX;
     }
+    catch (const truffledata::json::stage2_detail::syntax_error&) { return TD_JSON_SYNTAX; }
     catch (const std::invalid_argument&) { return TD_JSON_CONTRACT; }
     catch (...) { return TD_JSON_INTERNAL; }
 }

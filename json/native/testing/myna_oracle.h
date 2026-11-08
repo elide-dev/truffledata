@@ -4,7 +4,7 @@
 #define TRUFFLEDATA_JSON_TESTING_MYNA_ORACLE_H
 
 #include "json/native/decoder.h"
-#include "json/native/parser_pool.h"
+#include "json/native/testing/ondemand_pool.h"
 #include "tape/native/key_table.h"
 #include "tape/native/tape_writer.h"
 

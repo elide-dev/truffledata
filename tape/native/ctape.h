@@ -536,8 +536,10 @@ template<bool Structural = false> class basic_ctape_writer final {
     else return words_.extend(memory_, n);
   }
   [[gnu::always_inline]] void pending(uint64_t entry) {
-    if constexpr (Structural) *pending_.extend_reserved(1) = entry;
-    else pending_.push(memory_, entry);
+    if constexpr (Structural) {
+      if (directories_) *pending_.extend_reserved(1) = entry;
+      else pending_.push(memory_, entry);
+    } else pending_.push(memory_, entry);
   }
   [[gnu::always_inline]] void charge(size_t length) {
     if (length > ctape::max_length) limit("tape text token limit");
@@ -702,19 +704,26 @@ template<bool Structural = false> class basic_ctape_writer final {
     pending_.reserve(memory_, directory_entries < 256 ? directory_entries : 256);
   }
 
-  // JSON stage-1 bounds; the pool includes readable scratch padding for scalar-root numbers.
+  // A complete JSON root needs at most structural_count+1 words. A malformed prefix can
+  // have one extra word per still-open container; stage2 opens at most 128 and checks limits_.
+  size_t structural_words(size_t count) const {
+    if (count > SIZE_MAX - 129) limit("tape structural count");
+    return std::min<size_t>(count + std::min<size_t>(count, std::min<size_t>(limits_.depth, 128)) + 1,
+                            ctape::max_words);
+  }
   void reserve_structural(size_t count, size_t input_bytes) {
-    if (count > (SIZE_MAX - 2) / 2) limit("tape structural count");
-    words_.reserve(memory_, std::min<size_t>(2 * count + 2, ctape::max_words));
-    pool_.reserve(memory_, input_bytes + 64);
+    words_.reserve(memory_, structural_words(count));
+    if (input_bytes > SIZE_MAX - 64) limit("tape input size");
+    pool_.reserve(memory_, std::min<size_t>(input_bytes + 64, 512));
     if (directories_) directory_.reserve(memory_, count / 2 + 1);
-    pending_.reserve(memory_, count / 2 + 1);
+    pending_.reserve(memory_, directories_ ? count / 2 + 1 : std::min<size_t>(count / 2 + 1, 256));
   }
 
-  // Read-only test for a directoryless walk that must not grow any writer allocation.
+  // A speculative stream walk may not grow storage. Pool/pending checks deliberately retain
+  // their complete worst-case bounds even though normal reservations are now smaller.
   bool has_structural_capacity(size_t count, size_t input_bytes) const {
-    return count <= (SIZE_MAX - 2) / 2 && input_bytes <= SIZE_MAX - 64
-        && words_.capacity() >= std::min<size_t>(2 * count + 2, ctape::max_words)
+    return count <= SIZE_MAX - 129 && input_bytes <= SIZE_MAX - 64
+        && words_.capacity() >= structural_words(count)
         && pool_.capacity() >= input_bytes + 64 && pending_.capacity() >= count / 2 + 1;
   }
 

@@ -1,4 +1,5 @@
 #include "json/native/decoder.h"
+#include "json/native/testing/ondemand_decoder.h"
 #include "json/native/testing/stage2_baseline_probe.h"
 #include "tape/native/testing.h"
 #include <chrono>
@@ -16,8 +17,8 @@ template<class Decoder> double measure(const std::string& input, bool cached, si
   auto once = [&] {
     arena.reset(); arena.hint(hint.block);
     Decoder decoder(&arena, {});
-    if constexpr (std::is_same_v<Decoder, json::tape_decoder<tape::ctape_writer>> ||
-                  std::is_same_v<Decoder, json::tape_decoder<json::null_writer>>) {
+    if constexpr (std::is_same_v<Decoder, json::testing::ondemand_decoder<tape::ctape_writer>> ||
+                  std::is_same_v<Decoder, json::testing::ondemand_decoder<json::null_writer>>) {
       if (cached) decoder.shapes(&cache);
       decoder.start({padded.data(), padded.size()}, hint);
     } else decoder.start({padded.data(), padded.size()}, json_baseline::hint_for(input.size(), {}, {}));

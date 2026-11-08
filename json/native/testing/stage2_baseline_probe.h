@@ -4,7 +4,7 @@
 // compact tape (tape/native/ctape.h) with embedded lexical spans, ASCII/KEY/OWNED flags and
 // per-object directories whose sort detects duplicate keys, or (validate-only) the same walk and
 // checks with nothing retained.
-#include "json/native/parser_pool.h"
+#include "json/native/testing/ondemand_pool.h"
 #include "tape/native/arena.h"
 #include "tape/native/ctape.h"
 #include "tape/native/index_memory.h"

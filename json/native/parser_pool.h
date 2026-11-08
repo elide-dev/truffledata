@@ -60,7 +60,5 @@ public:
 template<class Parser> inline basic_parser_lease<Parser>::~basic_parser_lease() {
   if (parser_) basic_parser_pool<Parser>::instance().release(std::move(parser_));
 }
-using parser_lease = basic_parser_lease<simdjson::ondemand::parser>;
-using parser_pool = basic_parser_pool<simdjson::ondemand::parser>;
 } // namespace truffledata::json
 #endif

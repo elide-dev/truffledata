@@ -8,7 +8,12 @@
 
 namespace truffledata::json {
 namespace stage2_detail {
-[[noreturn, gnu::noinline, gnu::cold]] inline void syntax(const char* what) { throw std::invalid_argument(what); }
+// Typed decoding distinguishes malformed syntax from a field-contract rejection.
+class syntax_error final : public std::invalid_argument {
+ public:
+  explicit syntax_error(const char* what) : std::invalid_argument(what) {}
+};
+[[noreturn, gnu::noinline, gnu::cold]] inline void syntax(const char* what) { throw syntax_error(what); }
 inline bool whitespace(uint8_t c) { return c == ' ' || c == '\n' || c == '\r' || c == '\t'; }
 inline bool terminator(uint8_t c) {
   return whitespace(c) || c == ',' || c == ']' || c == '}';
@@ -90,6 +95,10 @@ struct scan_hit { uint32_t length; bool quote, ascii; };
 #endif
   }
 }
+// Typed scalar slots retain literal spelling; compact JSON words deliberately do not.
+template<class Writer> inline auto literal_span(Writer& writer, tape::ctape::span token, int)
+    -> decltype(writer.literal_span(token), void()) { writer.literal_span(token); }
+template<class Writer> inline void literal_span(Writer&, tape::ctape::span, long) {}
 inline int hex(uint8_t c) {
   if (c >= '0' && c <= '9') return c - '0';
   if (c >= 'a' && c <= 'f') return c - 'a' + 10;
@@ -134,7 +143,10 @@ template<class Writer> class stage2_walk {
   };
   template<bool Copy = true> uint32_t unescape(const uint8_t* text, const uint8_t*& closing, stage2_detail::scan_hit run, bool& ascii) {
     uint8_t* first = nullptr;
-    if constexpr (Copy) first = writer_.pool_reserve(size_t(end_ - text));
+    // Stage1's following structural index follows this complete quoted token. Decoded bytes
+    // cannot exceed its raw body; reserving the rest of the document overallocates per escape.
+    const uint8_t* bound = at_ == count_ ? end_ : input_ + offset(at_);
+    if constexpr (Copy) first = writer_.pool_reserve(size_t(bound - text));
     uint8_t* out = first;
     uint32_t length = 0;
     auto emit = [&](uint8_t byte) {
@@ -301,9 +313,9 @@ template<class Writer> class stage2_walk {
           goto value;
         }
         case '"': string(start, false); goto after;
-        case 't': literal(start, "true", 4); writer_.boolean(true); goto after;
-        case 'f': literal(start, "false", 5); writer_.boolean(false); goto after;
-        case 'n': literal(start, "null", 4); writer_.null(); goto after;
+        case 't': literal(start, "true", 4); stage2_detail::literal_span(writer_, {start, 4}, 0); writer_.boolean(true); goto after;
+        case 'f': literal(start, "false", 5); stage2_detail::literal_span(writer_, {start, 5}, 0); writer_.boolean(false); goto after;
+        case 'n': literal(start, "null", 4); stage2_detail::literal_span(writer_, {start, 4}, 0); writer_.null(); goto after;
         default:
           if (token == '-' || (token >= '0' && token <= '9')) { number(start); goto after; }
           stage2_detail::syntax("unexpected JSON token");
