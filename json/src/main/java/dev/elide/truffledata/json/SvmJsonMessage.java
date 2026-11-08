@@ -2,6 +2,7 @@ package dev.elide.truffledata.json;
 
 import static dev.elide.truffledata.tape.TapeReader.*;
 import dev.elide.truffledata.tape.SvmTape;
+import dev.elide.truffledata.tape.TapeKey;
 import dev.elide.truffledata.tape.TapeReader;
 import org.graalvm.word.Pointer;
 import org.graalvm.word.WordFactory;
@@ -34,6 +35,11 @@ class SvmJsonMessage extends JsonMessage implements TapeReader {
   @Override public long directorySize() { return Integer.toUnsignedLong(directoryCount); }
   @Override public int flags() { return flags; }
   @Override public long readWord(long index) { return words.readLong(WordFactory.signed(index * 8)); }
+  // A hinted member read is one call of straight-line loads instead of one call per hook.
+  // (TapeReader.word stays a single default implementation so compiled generic reads inline it.)
+  @Override public final long directoryKey(long object, int rank, TapeKey key) {
+    return SvmTape.directoryKey(words, directory, input, object, rank, key);
+  }
   @Override public byte textByte(boolean owned, long offset) {
     if (offset < 0 || offset >= (owned ? poolSize() : inputSize())) throw new IndexOutOfBoundsException("Tape text");
     return (owned ? pool : input).readByte(WordFactory.signed(offset));

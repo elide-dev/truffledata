@@ -78,6 +78,12 @@ public final class TapeExportNode extends Node {
     }
   }
 
+  /** {@link TapeReader#word} against a count loaded once per walk: one storage call per word. */
+  private static long word(TapeReader tape, long index, long count) {
+    if (index < 0 || index >= count) throw new IndexOutOfBoundsException("Tape word");
+    return tape.readWord(index);
+  }
+
   /**
    * {@code text.ends} holds each open container's exclusive end node, sign bit set for objects;
    * {@code text} is bound to each key, string and decimal for exactly the duration of its event.
@@ -89,6 +95,8 @@ public final class TapeExportNode extends Node {
     boolean expectKey = false;
     long end = tape.next(root);
     long cursor = root;
+    // The tape is immutable while the owner is pinned: check node words against one count.
+    long words = tape.nodeCount();
     while (true) {
       while (depth > 0 && cursor == (ends[depth - 1] & ~OBJECT_BIT)) {
         sink.end();
@@ -96,43 +104,47 @@ public final class TapeExportNode extends Node {
         expectKey = depth > 0 && ends[depth - 1] < 0;
       }
       if (cursor >= end) return deepest;
+      // One header load per node: kind, count, extent and step decode from it statically, so the
+      // walk makes one storage call per node (two for 8-byte scalars) instead of one per accessor.
+      long word = word(tape, cursor, words);
       if (expectKey) {
-        text.bind(cursor);
+        text.bind(cursor, word);
         sink.key(text);
         text.unbind();
-        cursor = tape.step(cursor);
+        cursor = TapeReader.step(cursor, word);
         expectKey = false;
         continue;
       }
-      int tag = tape.kindAt(cursor);
+      int tag = TapeReader.valueKind(word);
       if (tag == ValueTape.OBJECT || tag == ValueTape.ARRAY) {
         if (depth == MAX_DEPTH) {
           CompilerDirectives.transferToInterpreter();
           throw new IllegalStateException(owner.format().name + " export depth limit");
         }
-        long count = tape.length(cursor);
+        int field = TapeReader.field(word);
+        long count = field == TapeReader.MAX_COUNT ? tape.length(cursor) : field;
         boolean object = tag == ValueTape.OBJECT;
         if (object) sink.beginObject(count);
         else sink.beginArray(count);
-        ends[depth++] = tape.next(cursor) | (object ? OBJECT_BIT : 0);
+        ends[depth++] = TapeReader.low(word) | (object ? OBJECT_BIT : 0);
         if (depth > deepest) deepest = depth;
-        cursor = tape.step(cursor);
+        cursor = TapeReader.step(cursor, word);
         expectKey = object;
         continue;
       }
       switch (tag) {
         case ValueTape.NULL -> sink.nullValue();
-        case ValueTape.BOOL -> sink.booleanValue(tape.booleanValue(cursor));
-        case ValueTape.I64 -> sink.longValue(tape.signedValue(cursor));
-        case ValueTape.U64 -> sink.unsignedValue(tape.unsignedBits(cursor));
-        case ValueTape.F64 -> sink.doubleValue(tape.doubleValue(cursor));
+        case ValueTape.BOOL -> sink.booleanValue(TapeReader.kind(word) == 2);
+        case ValueTape.I64 -> sink.longValue(word(tape, cursor + 1, words));
+        case ValueTape.U64 -> sink.unsignedValue(word(tape, cursor + 1, words));
+        case ValueTape.F64 -> sink.doubleValue(Double.longBitsToDouble(word(tape, cursor + 1, words)));
         case ValueTape.STRING -> {
-          text.bind(cursor);
+          text.bind(cursor, word);
           sink.stringValue(text);
           text.unbind();
         }
         case ValueTape.DECIMAL -> {
-          text.bind(cursor);
+          text.bind(cursor, word);
           sink.decimalValue(text);
           text.unbind();
         }
@@ -141,7 +153,7 @@ public final class TapeExportNode extends Node {
           throw new IllegalStateException("Unknown " + owner.format().name + " node kind");
         }
       }
-      cursor = tape.next(cursor);
+      cursor = TapeReader.step(cursor, word);
       expectKey = depth > 0 && ends[depth - 1] < 0;
     }
   }

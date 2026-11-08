@@ -979,7 +979,56 @@ public final class SvmAcceptance {
     }
   }
 
+  /** Native hint shortcuts must compare every decoded byte and reject stale ranks safely. */
+  private static void nativeDirectoryHints() {
+    String[] names = {"", "a", "abcdefg", "abcdefgh", "abcdefghi", "abcdefghijklmno",
+        "abcdefghijklmnop", "abcdefghijklmnopq", "é", "escaped"};
+    StringBuilder json = new StringBuilder("{");
+    for (int i = 0; i < names.length; i++) {
+      if (i != 0) json.append(',');
+      json.append('"').append(i == names.length - 1 ? "esc\\u0061ped" : names[i])
+          .append("\":").append(i);
+    }
+    json.append('}');
+    try (var message = dev.elide.truffledata.json.JsonSvm.decode(json.toString().getBytes(StandardCharsets.UTF_8))) {
+      checkNativeDirectoryHints((dev.elide.truffledata.tape.TapeReader) message, names);
+    }
+    VoidPointer result = UnmanagedMemory.calloc(Json.JsonResult.SIZE);
+    if (result.isNull()) throw new OutOfMemoryError();
+    try {
+      require(decode(json.toString(), result) == 0);
+      checkNativeDirectoryHints(
+          new dev.elide.truffledata.tape.SvmTape((Pointer) Json.JsonResult.view(result)), names);
+    } finally {
+      Json.release(result);
+      UnmanagedMemory.free(result);
+    }
+  }
+
+  private static void checkNativeDirectoryHints(dev.elide.truffledata.tape.TapeReader tape, String[] names) {
+    for (int i = 0; i < names.length; i++) {
+      var key = dev.elide.truffledata.tape.TapeKey.of(names[i]);
+      int hits = 0;
+      for (int rank = -1; rank <= names.length; rank++) {
+        long found = tape.directoryKey(0, rank, key);
+        if (found < 0) continue;
+        hits++;
+        require(tape.keyMatches(found, key));
+        require(tape.signedValue(found + 1) == i);
+        require(tape.directoryKey(found, rank, key) == -1); // a key is not an object
+        require(tape.directoryKey(found + 1, rank, key) == -1); // nor its scalar value
+      }
+      // Escaped and >16-byte keys deliberately take the checked search path.
+      require(hits == (i == names.length - 1 || key.utf8Length() > 16 ? 0 : 1));
+    }
+    for (String missing : new String[] {"z", "abcdefgZ", "abcdefghZ", "abcdefghijklmnoZ"}) {
+      var key = dev.elide.truffledata.tape.TapeKey.of(missing);
+      for (int rank = 0; rank < names.length; rank++) require(tape.directoryKey(0, rank, key) == -1);
+    }
+  }
+
   public static void main(String[] args) throws Exception {
+    nativeDirectoryHints();
     textBridge();
     textArenas();
     utf16Input();

@@ -241,6 +241,8 @@ SVM_ONLY_METHODS = {
         'SvmJsonMessage::directorySize ()J',
         'SvmJsonMessage::flags ()I',
         'SvmJsonMessage::readWord (J)J',
+        # Native pointer hint edge cases run in SvmAcceptance.nativeDirectoryHints.
+        'SvmJsonMessage::directoryKey (JILdev/elide/truffledata/tape/TapeKey;)J',
         'SvmJsonMessage::textByte (ZJ)B',
         'SvmJsonMessage::copyText (ZJ[BII)V',
         'SvmJsonMessage::textWord (ZJI)J',
@@ -318,6 +320,10 @@ SVM_ONLY_METHODS = {
         'SvmTape::flags ()I',
         'SvmTape::decodeUtf8 (Lorg/graalvm/word/Pointer;I)Ljava/lang/String;',
         'SvmTape::readWord (J)J',
+        # Both the standalone reader and fused owner are covered by nativeDirectoryHints.
+        'SvmTape::directoryKey (JILdev/elide/truffledata/tape/TapeKey;)J',
+        'SvmTape::directoryKey (Lorg/graalvm/word/Pointer;Lorg/graalvm/word/Pointer;'
+        'Lorg/graalvm/word/Pointer;JILdev/elide/truffledata/tape/TapeKey;)J',
         'SvmTape::textByte (ZJ)B',
         'SvmTape::copyText (ZJ[BII)V',
         'SvmTape::copyText (Lorg/graalvm/word/Pointer;JJ[BII)V',

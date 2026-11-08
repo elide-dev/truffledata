@@ -29,7 +29,8 @@ int main() {
   // not turn the unchanged keys into NULs and let later escaped-NUL duplicates match it.
   for (int mode : {0, 1, 2}) {
     json::session warm({}, {});
-    for (const char* source : {R"({"aa":1,"bb":2,"cc":3})", R"({"aa":1,"bb":2,"dd":3})"})
+    // The first object of a depth only primes it; the second installs the template.
+    for (const char* source : {R"({"aa":1,"bb":2,"cc":3})", R"({"aa":1,"bb":2,"cc":3})", R"({"aa":1,"bb":2,"dd":3})"})
       warm.decode(source, std::strlen(source), json::session::encoding::utf8, mode == 2, mode == 0);
     const std::string duplicate = R"({"\u0000\u0000":1,"\u0000\u0000":2,"dd":3})";
     int status = json::status_ok;

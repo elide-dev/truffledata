@@ -78,9 +78,13 @@ final class JsonInteropTest {
   }
 
   @Test
-  void rejectsReadsAfterClose() {
+  void rejectsReadsAfterClose() throws ReflectiveOperationException {
     try (Context context = context(); JsonDecoder decoder = JsonJvm.open(JvmScopedTest.library())) {
       JsonMessage message = decode(decoder);
+      // The class-constant compiled hook must agree with this owner's interpreter policy.
+      var confined = JsonMessage.class.getDeclaredMethod("confined");
+      confined.setAccessible(true);
+      assertEquals(true, confined.invoke(message));
       Value root = context.asValue(message.root());
       message.close();
       PolyglotException failure = assertThrows(PolyglotException.class, () -> root.getMember("z"));

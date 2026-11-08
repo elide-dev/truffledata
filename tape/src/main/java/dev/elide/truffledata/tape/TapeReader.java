@@ -44,8 +44,10 @@ public interface TapeReader extends TapeLexical {
   // Compact kinds differ from Myna only in their scalar ordering and the two boolean words.
   // A packed map keeps typed interop reads straight-line instead of expanding a switch per read.
   long VALUE_KINDS = 0xfffff97658432110L;
-  default int kindAt(long node) {
-    int mapped = (int) (VALUE_KINDS >>> (kind(word(node)) * 4)) & 15;
+  default int kindAt(long node) { return valueKind(word(node)); }
+  /** {@link #kindAt} of an already loaded header word, so hot walks load each header once. */
+  static int valueKind(long word) {
+    int mapped = (int) (VALUE_KINDS >>> (kind(word) * 4)) & 15;
     if (mapped == 15) throw new IllegalArgumentException("Invalid compact tape kind");
     return mapped;
   }

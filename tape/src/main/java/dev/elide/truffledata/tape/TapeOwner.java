@@ -50,8 +50,19 @@ public abstract class TapeOwner {
     this.thread = thread;
   }
 
-  /** Storage hook; fused owners return themselves so compiled reads preserve that identity. */
+  /**
+   * Storage hook; fused owners return themselves so compiled reads preserve that identity. Must
+   * return {@link #tape} (a fused owner's tape is itself): {@link #storage()} relies on it.
+   */
   protected TapeReader reader() { return tape; }
+
+  /**
+   * {@link #reader()} for specialized sites. Host-interpreted code loads the final field instead
+   * of making a virtual call; partially evaluated code keeps the inlined identity of the hook.
+   */
+  final TapeReader storage() {
+    return com.oracle.truffle.api.CompilerDirectives.inInterpreter() ? tape : reader();
+  }
 
   /** Throws when {@code format}'s alias tables (if any) do not cover {@code tape}. */
   protected static TapeFormat checkFormat(TapeReader tape, TapeFormat format) {
@@ -71,12 +82,17 @@ public abstract class TapeOwner {
   /** Exact-class interop sites can fold the confinement policy before their field checks. */
   final void checkSpecialized() {
     if (this instanceof TapeSnapshot) return;
-    if (confined() && Thread.currentThread() != thread)
+    // Host-interpreted code reads the field rather than calling the class-constant hook.
+    boolean confined = com.oracle.truffle.api.CompilerDirectives.inInterpreter() ? thread != null : confined();
+    if (confined && Thread.currentThread() != thread)
       throw new OwnerStateException(this, OwnerStateException.THREAD);
     if (pins < 0) throw new OwnerStateException(this, OwnerStateException.CLOSED);
   }
 
-  /** Whether this owner is confined; concrete retained owners make this a class property. */
+  /**
+   * Whether this owner is confined; concrete retained owners make this a class property. Must
+   * equal {@code thread != null} for the owner's thread: {@link #checkSpecialized()} relies on it.
+   */
   protected boolean confined() { return thread != null; }
 
   /** Thread confinement only; liveness is covered by the assumption at cached sites. */
@@ -176,10 +192,10 @@ public abstract class TapeOwner {
    * object word, payload, entry and the key's inline words, compared exactly (Myna zero-pads inline
    * text). No loop, no allocation; {@code object} must be a valid node.
    */
-  final long hinted(TapeReader reader, long object, int rank, TapeKey key) {
+  static long hinted(TapeReader reader, long object, int rank, TapeKey key, boolean aliases) {
     // Keys of at most 8 bytes have an all-zero high word (zero padding); the site's key is a
     // constant, so `wide` folds and short keys skip the third word.
-    return aliases() ? -1 : reader.directoryKey(object, rank, key);
+    return aliases ? -1 : reader.directoryKey(object, rank, key);
   }
 
   /**
@@ -233,11 +249,6 @@ public abstract class TapeOwner {
     for (long node = 0; node < tape.nodeCount(); node = tape.step(node))
       if (tape.kindAt(node) == ValueTape.OBJECT && tape.directory(node) != 0) count++;
     return count;
-  }
-
-  /** True when a string or key node's decoded bytes are all ASCII; false for other nodes. */
-  final boolean ascii(long node) {
-    return tape.isAscii(node);
   }
 
   @TruffleBoundary

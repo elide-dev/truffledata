@@ -50,6 +50,37 @@ public final class SvmTape implements TapeReader {
   @Override public long readWord(long index) {
     return words.readLong(WordFactory.signed(index * 8));
   }
+  // A hinted member read is one call of straight-line loads instead of one call per hook.
+  // (TapeReader.word stays a single default implementation so compiled generic reads inline it.)
+  @Override public long directoryKey(long object, int rank, TapeKey key) {
+    return directoryKey(words, directory, input, object, rank, key);
+  }
+
+  /**
+   * {@link TapeReader#directoryKey} over raw native storage, shared by native readers so a hinted
+   * member read is one call of straight-line loads. Same contract and checks as the default:
+   * validation proved the directory extent, relative key offsets and the padded input.
+   */
+  public static long directoryKey(Pointer words, Pointer directory, Pointer input, long object, int rank, TapeKey key) {
+    long w = words.readLong(WordFactory.signed(object * 8));
+    if (kind(w) != 9 || rank < 0 || rank >= field(w) || key.length > 16) return -1;
+    long start = words.readLong(WordFactory.signed(object * 8 + 8)) >>> 32;
+    if (start == 0) return -1;
+    long entry = directory.readLong(WordFactory.signed((start - 1 + rank) * 8));
+    long k = object + (entry >>> 32);
+    long kw = words.readLong(WordFactory.signed(k * 8));
+    long header = (7L << 28) | (KEY >>> 32) | key.length;
+    if (((kw & ~ASCII) >>> 32) != header) return -1;
+    long offset = low(kw);
+    int first = Math.min(8, key.length);
+    long low = first == 0 ? 0 : input.readLong(WordFactory.signed(offset));
+    if ((first >= 8 || first == 0 ? low : low & (-1L >>> (64 - first * 8))) != key.low) return -1;
+    if (key.length > 8) {
+      long high = input.readLong(WordFactory.signed(offset + 8));
+      if ((key.length == 16 ? high : high & (-1L >>> (128 - key.length * 8))) != key.high) return -1;
+    }
+    return k;
+  }
   @Override public byte textByte(boolean owned, long offset) {
     if (offset < 0 || offset >= (owned ? poolBytes : inputBytes)) throw new IndexOutOfBoundsException("Tape text");
     return (owned ? pool : input).readByte(WordFactory.signed(offset));

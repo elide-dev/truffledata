@@ -74,3 +74,30 @@ Correctness blocker found during the final audit and fixed: a validate-only shap
 Text-arena fusion disposition: the pinned RBE pair at5002235 measures median0.969×/0.964×/0.993× for single/medium/big, including a retained6.265× medium outlier. Adoption is rejected. Production uses the checked postpass again; the observer/session survive only under test-only headers with their reproducer and pair. Exact/status parity now compares the isolated candidate to the production session. See `benchmarks/results/json-text-fusion-followup/` for all rounds and sanitizer evidence. This closes the experiment with a measured regression, not a performance pass.
 
 Task2 duplicate-price comparator is now reproducible as `//json/native:duplicate_probe`: the test-only unchecked wrapper removes key announcements/templates/rejection while preserving grammar, numeric/text checks, limits and exact output. Valid corpus200 and duplicate discriminators2 pass ASan+UBSan; local paired medians1.029/1.067/1.086/1.058× remain diagnostic until pinned unclemax qualification. No unchecked production API was added. Evidence: `benchmarks/results/json-duplicate-price/`.
+
+
+Resume 2026-11-08 — CodSpeed regression closure (local, no push/CI): recovered the worker's
+post-checkpoint edits and 76 raw simulation measurements, then replayed main `223edf7`,
+`7e0167b^` (`0ff76f6`), `7e0167b` and the saved candidate under amd64 Valgrind 3.19.0;
+all eight export/read counts and checksums reproduced exactly. The directory-policy
+hypothesis is rejected for these cases: parent→commit export +0.14%, interop -0.99%.
+The final rebuilt source uses one header load per export node/text event, native short-key
+hint loads with the same validated-node contract, interpreter final-field owner checks
+while preserving compiled hooks, and installs shape templates only from the second
+eligible object at each depth. Unused owner wrappers were removed; tests pin hook/field
+agreement and native key lengths, rank/type/missing/escaped-key behavior in both readers.
+The shape policy adds one startup cache miss per depth; no steady session throughput
+claim is made, and no prior retained/validation/logical-memory gate is waived.
+
+Final simulation Ir vs main: Java export 71,313,261→60,138,974 (-15.67%); interop read
+34,545,961→31,656,185 (-8.36%); snapshot 55,956,519→53,497,031 (-4.40%). Gson control
+90,812,315→90,849,603 (+0.04%). These are instructions, not wall-clock throughput.
+The recovered other 24 cases move at most +0.61% (YAML Truffle export; other increases
+≤0.17%). Final JVM/native/compact/million-sequence and both smoke checks pass 9/9 in
+[cdcbc5cc](https://app.buildbuddy.io/invocation/cdcbc5cc-eddc-4c27-98e5-39b5666ea180):
+24 compiled graphs and nine allocation cells retain their original gates. Interop graphs
+1,954/1,898 nodes; snapshots 1,969/1,913; one loop, no calls/allocations. Generic ingest
+384 B/document (144 library + 240 harness) and snapshot 1,183.5 B/document. Evidence,
+binary/source hashes, commands and raw results: `benchmarks/results/json-codspeed-20261108/`.
+The earlier unclemax full-image timing table still predates the intervening source changes;
+only the simulation and final correctness/graph/allocation results above are fresh here.

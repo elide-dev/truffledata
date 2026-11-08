@@ -316,8 +316,14 @@ public class TapeValue implements TruffleObject {
 
   private static long memberNode(TapeOwner owner, TapeReader reader, long object, TapeKey key,
                                   int rank, int @org.jspecify.annotations.Nullable [] hint) {
+    return memberNode(owner, reader, object, key, rank, hint, owner.aliases());
+  }
+
+  /** As above with the owner's {@link TapeOwner#aliases()} already read once by the site. */
+  private static long memberNode(TapeOwner owner, TapeReader reader, long object, TapeKey key,
+                                  int rank, int @org.jspecify.annotations.Nullable [] hint, boolean aliases) {
     if (rank >= 0 && key.inline()) {
-      long k = owner.hinted(reader, object, rank, key);
+      long k = TapeOwner.hinted(reader, object, rank, key, aliases);
       if (k >= 0) return k + 1;
     }
     return miss(owner, object, key, hint);
@@ -361,8 +367,8 @@ public class TapeValue implements TruffleObject {
         @Cached(value = "readerClass(receiver)") Class<? extends TapeReader> tapeType) {
       TapeOwner owner = com.oracle.truffle.api.CompilerDirectives.castExact(receiver.owner, ownerType);
       owner.checkSpecialized();
-      TapeReader reader = com.oracle.truffle.api.CompilerDirectives.castExact(owner.reader(), tapeType);
-      return key != null && memberNode(owner, reader, receiver.node, key, rank, null) >= 0;
+      TapeReader reader = com.oracle.truffle.api.CompilerDirectives.castExact(owner.storage(), tapeType);
+      return key != null && memberNode(owner, reader, receiver.node, key, rank, null, owner.aliases()) >= 0;
     }
 
     @Specialization(replaces = "cached")
@@ -385,9 +391,10 @@ public class TapeValue implements TruffleObject {
         throws UnknownIdentifierException {
       TapeOwner owner = com.oracle.truffle.api.CompilerDirectives.castExact(receiver.owner, ownerType);
       owner.checkSpecialized();
-      TapeReader reader = com.oracle.truffle.api.CompilerDirectives.castExact(owner.reader(), tapeType);
-      long found = key == null ? -1 : memberNode(owner, reader, receiver.node, key, rank, null);
-      return readFound(owner, receiver.node, found, name, key);
+      TapeReader reader = com.oracle.truffle.api.CompilerDirectives.castExact(owner.storage(), tapeType);
+      boolean aliases = owner.aliases();
+      long found = key == null ? -1 : memberNode(owner, reader, receiver.node, key, rank, null, aliases);
+      return readFound(owner, receiver.node, found, name, key, aliases);
     }
 
     @Specialization(replaces = "cached")
@@ -403,8 +410,13 @@ public class TapeValue implements TruffleObject {
   static Class<? extends TapeOwner> ownerClass(TapeValue receiver) { return receiver.owner.getClass(); }
 
   private static Object readFound(TapeOwner owner, long object, long found, String name, @org.jspecify.annotations.Nullable TapeKey key) throws UnknownIdentifierException {
+    return readFound(owner, object, found, name, key, owner.aliases());
+  }
+
+  private static Object readFound(TapeOwner owner, long object, long found, String name,
+                                  @org.jspecify.annotations.Nullable TapeKey key, boolean aliases) throws UnknownIdentifierException {
     if (found < 0) throw unknown(name);
-    return owner.aliases() ? new AliasValue(owner, found, sourceMember(owner, object, key)) : new TapeValue(owner, found);
+    return aliases ? new AliasValue(owner, found, sourceMember(owner, object, key)) : new TapeValue(owner, found);
   }
 
   @TruffleBoundary
@@ -454,7 +466,7 @@ public class TapeValue implements TruffleObject {
         throws UnsupportedMessageException {
       TapeOwner owner = com.oracle.truffle.api.CompilerDirectives.castExact(receiver.owner, ownerType);
       owner.checkSpecialized();
-      TapeReader reader = com.oracle.truffle.api.CompilerDirectives.castExact(owner.reader(), tapeType);
+      TapeReader reader = com.oracle.truffle.api.CompilerDirectives.castExact(owner.storage(), tapeType);
       return arrayLength(reader, receiver.node);
     }
     @Specialization(replaces = "cached")
@@ -470,7 +482,7 @@ public class TapeValue implements TruffleObject {
         throws InvalidArrayIndexException, UnsupportedMessageException {
       TapeOwner owner = com.oracle.truffle.api.CompilerDirectives.castExact(receiver.owner, ownerType);
       owner.checkSpecialized();
-      TapeReader reader = com.oracle.truffle.api.CompilerDirectives.castExact(owner.reader(), tapeType);
+      TapeReader reader = com.oracle.truffle.api.CompilerDirectives.castExact(owner.storage(), tapeType);
       long length = arrayLength(reader, receiver.node);
       if (index < 0 || index >= length) throw InvalidArrayIndexException.create(index);
       return view(owner, elementNode(owner, receiver.node, index));
@@ -748,7 +760,7 @@ public class TapeValue implements TruffleObject {
       // another class check through its final interface field; other implementations still
       // verify the actual reader class below (or fail this identity check safely).
       TapeOwner owner = com.oracle.truffle.api.CompilerDirectives.castExact(receiver.owner, ownerType);
-      return owner.reader() == owner;
+      return owner.storage() == owner;
     }
     return receiver.owner.tape.getClass() == tapeType;
   }
@@ -763,7 +775,7 @@ public class TapeValue implements TruffleObject {
         throws UnsupportedMessageException {
       TapeOwner owner = com.oracle.truffle.api.CompilerDirectives.castExact(receiver.owner, ownerType);
       owner.checkSpecialized();
-      TapeReader tape = com.oracle.truffle.api.CompilerDirectives.castExact(owner.reader(), tapeClass);
+      TapeReader tape = com.oracle.truffle.api.CompilerDirectives.castExact(owner.storage(), tapeClass);
       if (kindIs(tape, receiver.node, ValueTape.I64))
         return tape.readWord(receiver.node + 1);
       return exactLong(receiver.owner, receiver.node);
@@ -781,7 +793,7 @@ public class TapeValue implements TruffleObject {
         throws UnsupportedMessageException {
       TapeOwner owner = com.oracle.truffle.api.CompilerDirectives.castExact(receiver.owner, ownerType);
       owner.checkSpecialized();
-      TapeReader tape = com.oracle.truffle.api.CompilerDirectives.castExact(owner.reader(), tapeClass);
+      TapeReader tape = com.oracle.truffle.api.CompilerDirectives.castExact(owner.storage(), tapeClass);
       if (kindIs(tape, receiver.node, ValueTape.F64))
         return Double.longBitsToDouble(tape.readWord(receiver.node + 1));
       double value = exactDouble(receiver.owner, receiver.node);
@@ -801,7 +813,7 @@ public class TapeValue implements TruffleObject {
         throws UnsupportedMessageException {
       TapeOwner owner = com.oracle.truffle.api.CompilerDirectives.castExact(receiver.owner, ownerType);
       owner.checkSpecialized();
-      TapeReader tape = com.oracle.truffle.api.CompilerDirectives.castExact(owner.reader(), tapeClass);
+      TapeReader tape = com.oracle.truffle.api.CompilerDirectives.castExact(owner.storage(), tapeClass);
       int kind = TapeReader.kind(tape.readWord(receiver.node));
       if (kind != 1 && kind != 2) throw UnsupportedMessageException.create();
       return kind == 2;
@@ -817,7 +829,7 @@ public class TapeValue implements TruffleObject {
         @Cached(value = "readerClass(receiver)") Class<? extends TapeReader> tapeClass) {
       TapeOwner owner = com.oracle.truffle.api.CompilerDirectives.castExact(receiver.owner, ownerType);
       owner.checkSpecialized();
-      TapeReader tape = com.oracle.truffle.api.CompilerDirectives.castExact(owner.reader(), tapeClass);
+      TapeReader tape = com.oracle.truffle.api.CompilerDirectives.castExact(owner.storage(), tapeClass);
       return kindIs(tape, receiver.node, ValueTape.STRING);
     }
     @Specialization(replaces = "cached")
@@ -832,7 +844,7 @@ public class TapeValue implements TruffleObject {
         @Cached(value = "readerClass(receiver)") Class<? extends TapeReader> tapeClass) {
       TapeOwner owner = com.oracle.truffle.api.CompilerDirectives.castExact(receiver.owner, ownerType);
       owner.checkSpecialized();
-      TapeReader tape = com.oracle.truffle.api.CompilerDirectives.castExact(owner.reader(), tapeClass);
+      TapeReader tape = com.oracle.truffle.api.CompilerDirectives.castExact(owner.storage(), tapeClass);
       return kindIs(tape, receiver.node, ValueTape.NULL);
     }
     @Specialization(replaces = "cached")
