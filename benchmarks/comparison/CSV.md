@@ -1,5 +1,8 @@
 # CSV comparison
 
+SVM is the performance admission target. JVM correctness, API and coverage tests remain
+required; historical JVM timings below are descriptive and do not veto SVM improvements.
+
 For a before/after SVM experiment, `:csv_pair` accepts an executable through
 `--//benchmarks/comparison:csv_svm_baseline=//path:binary`. Each of its eight
 fixture shards interleaves both binaries on the same worker with three fresh
@@ -14,7 +17,10 @@ The comparison cell for the CSV backend (plan Task 7, expanded). It measures the
 kernels (`csv/native`, `csv/kernel`) and the current pure-Java scanner against the Java CSV field
 and native references, on identical bytes and on the same worker.
 
-Raw samples, hosts, binary hashes and caveats are in [`csv-3f23d0c/`](../results/csv-3f23d0c/README.md) (latest, shipped paths),
+The latest paired change qualification is
+[`csv-span-only-20261108/`](../results/csv-span-only-20261108/README.md).
+The latest full cross-runtime matrix, with raw samples, hosts, binary hashes and caveats,
+is [`csv-3f23d0c/`](../results/csv-3f23d0c/README.md); earlier matrices are
 [`csv-b5bd173/`](../results/csv-b5bd173/README.md) and
 [`benchmarks/results/csv-f5daec1/`](../results/csv-f5daec1/README.md). **Shared-host timings are
 advisory. Compare only within one row**: each row is one dataset at one size, measured on one
@@ -40,6 +46,9 @@ worker.
   - truffledata:
     - `truffledata-scanner`: the current `CsvScanner`.
     - `truffledata-batch`: `Csv.parse` plus `getString`.
+    - `truffledata-batch-owned`: `Csv.parseOwned` plus the same complete retained-batch
+      `getString` loop. Fixture bytes remain immutable after ownership transfer. Its
+      `-native` and `-bytes` variants select the native index or per-byte scanner.
     - `truffledata-plan`: `CsvPlan` plus typed getters.
     - `kernel-<k>`: `IndexedScanner` over kernel `k`, falling back to the strict scanner for
       flagged records. Its `strings` and `typed` paths validate UTF-8 strictly first.
@@ -65,9 +74,46 @@ worker.
   - zsv: would need a third-party C build. The csv/native kernel is itself the simdcsv design
     (simdjson stage 1), so `native-indexed-scan` stands in for that class.
 
-## Current standing (csv-3f23d0c)
+## Admitted span-only SVM follow-up (2026-11-08)
 
-The latest run measures the shipped paths after the run-copy unescape (`a19119f`), with the
+`fef9ae5` selects a separate Java framing loop for fusable all-STRING bindings, keeping
+numeric conversion code out of that loop. The existing field mapping, partial-row stores,
+width/UTF-8 checks and per-record fallback remain. This specializes existing fused batch
+construction; kind-specialized typed writers and native column materialization did not ship.
+
+[Invocation 07bb26fb](https://app.buildbuddy.io/invocation/07bb26fb-e67e-4d68-b0fe-a2eb4cdf5d8b)
+compares preserved before/after x86 compatibility images on eight same-worker shards,
+with three fresh forks per binary for each of 78 cells (468 processes). Each pair uses
+one pinned CPU; co-located shards select different available CPUs. All input hashes,
+checksums and allocation values agree. No outlier forks were removed.
+
+| Retained strings | Geometric-mean candidate/baseline time |
+|---|---:|
+| Copied input, Java-SWAR | 0.9853 |
+| Copied input, native index | 0.9821 |
+| Owned input, Java-SWAR | 0.9836 |
+| Owned input, native index | 0.9802 |
+
+The result is a modest 1.5–2.0% aggregate time improvement, not a step-change. The
+baseline already has selected unescape and `parseOwned`; the latter's copy saving is
+not a gain from this patch. Both string workloads retain a batch and read every String
+cell. Copied `parse` protects the caller's input; `parseOwned` requires the backing array
+to remain unchanged while its batch or rows are reachable, including bytes outside a
+parsed window.
+
+Individual ranges overlap in several cells. Copied/native escaped 1 MiB has a 1.0036
+time ratio; its 128 MiB ratio is 0.9332 with overlapping ranges. Large allocating forks
+still show slow outliers. Unchanged external string controls have aggregate ratios
+1.0002 (FastCSV), 1.0003 (Jackson), and 1.0042 (kernel-native). The typed library control
+is also affected by builder fields/initialization and scan selection, so it cannot
+isolate span-dispatch cost. The [evidence](../results/csv-span-only-20261108/README.md)
+preserves all 78 cells, raw medians/ranges, bytes/row and source/SDK/binary hashes.
+JVM and forced-index suites passed, as did native checksum, graph and allocation gates.
+This measurement makes no Arm, x86-v3 or AVX2-only performance claim.
+
+## Full matrix (csv-3f23d0c)
+
+This full matrix measures the shipped paths after the run-copy unescape (`a19119f`), with the
 scan-only framing loop split from the fused batch loop (`24ac7fe`), on a harness that pre-touches
 a fixed JVM heap and takes three forks per cell (`3f23d0c`). Raw samples, every table and the
 caveats are in [`csv-3f23d0c/`](../results/csv-3f23d0c/README.md);

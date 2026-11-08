@@ -523,6 +523,9 @@ thread, shared arenas serve any. A `CsvReader` and a `CsvWriter` are single-thre
 
 ## Performance
 
+SVM / Native Image is the performance admission target. JVM correctness, API and
+coverage checks remain required; JVM timing regressions do not veto a measured SVM gain.
+
 ### Byte windows and ownership
 
 `Csv.parse(bytes, from, to, format, limits)` and `CsvPlan.parse(bytes, from, to, limits)`
@@ -582,10 +585,12 @@ same records, spans, return offsets and stops as the per-byte scanners.
   place (a grammar or constraint failure, a complex Commons span in a typed field, a width other
   than the binding's, UTF-8 outside the prevalidated range, `maxBatchRows`) goes through the
   per-record builder with the same spans, which reports the exact diagnostic or accepts it.
-  The fused loop (`IndexScan.frameFused`) is a host-inlining root (`@BytecodeInterpreterSwitch`),
-  so native images inline the conversions into it; every other consumer (`CsvScanner` callers,
-  readers, non-fusable batches) frames through a separate plain loop (`framePlain`) that carries
-  no conversion code.
+  At scan entry, a fusable binding whose retained fields are all STRING selects
+  `IndexScan.frameSpans`: it writes shifted spans through `BatchBuilder.putSpan`, using the
+  existing projection map and commit/fallback rules. Its separate host-inlining root keeps
+  numeric parsers out of the string loop. Other fusable bindings retain `frameFused`, where
+  `@BytecodeInterpreterSwitch` allows native images to inline the conversions. Other record
+  consumers and non-fusable batches use `framePlain`, which carries no conversion code.
 - **Reads.** Typed `CsvRow` getters read a dense column with one length test (nullable,
   optional, mapped and wrong-kind reads take a checked path); `getString` builds ASCII cells of
   up to 16 bytes as Latin-1 without the charset decoder, and unescapes strict doubled quotes into
@@ -637,12 +642,39 @@ The gates below are enforced; they bound shape and allocation, not throughput:
 
 ### Comparison results
 
+The [span-only follow-up](../benchmarks/results/csv-span-only-20261108/README.md), admitted
+locally as `fef9ae5`, measured complete retained batches followed by every String-cell read.
+Eight same-worker x86 SVM fixture/size pairs used three fresh forks per binary and cell,
+covering 78 cells and 468 processes including reference engines and typed-read controls.
+The geometric-mean candidate/baseline time ratios across the eight string cells were:
+
+| Input contract | Java-SWAR index | Native index |
+|---|---:|---:|
+| Copied `parse` input | 0.9853 | 0.9821 |
+| Transferred `parseOwned` input | 0.9836 | 0.9802 |
+
+This is a modest 1.5–2.0% aggregate reduction in elapsed time, with identical allocated
+bytes per row. `parseOwned` already existed: its saving over copied input is separate
+from this change, and the caller must keep the transferred array unchanged while any
+batch or row remains reachable. Both measured paths retain the batch and materialize
+every String cell. The paired baseline already includes the selected unescape path.
+
+Individual cells and fork ranges remain noisy: copied/native escaped 1 MiB has a
+1.0036 time ratio, and the apparent 0.9332 ratio at 128 MiB has overlapping ranges.
+No outlier was dropped. Unchanged external string controls have aggregate ratios
+1.0002 (FastCSV), 1.0003 (Jackson) and 1.0042 (kernel-native). Typed library paths
+also see the builder/scan-entry changes, so their shifts cannot isolate span-dispatch
+cost. The evidence records all ranges and hashes; it establishes neither a step-change
+nor an Arm, x86-v3 or AVX2-only speedup. Kind-specialized typed writers and a native
+column materializer remain deferred.
+
 `//benchmarks/comparison:csv_measure` compares truffledata with FastCSV 4.4.0, Jackson
 dataformat-csv 2.22.4, univocity-parsers 2.9.1 and Commons CSV 1.14.1. It runs on SVM (portable
 and x86-64-v3 images) and on the JVM, over four synthetic fixtures at 1 MiB and 128 MiB, with Rust
 `csv` and `csv-core` and a C++ consumer of the native index measured on the same worker. The
-latest run is `benchmarks/results/csv-3f23d0c/` (after the unescape fix and the scan-loop split,
-with a pre-touched JVM heap and three forks per cell); `standing.md` there lists every competitor
+latest full cross-runtime matrix is `benchmarks/results/csv-3f23d0c/` (after the run-copy
+unescape fix and the scan-loop split, with a pre-touched JVM heap and three forks per cell);
+`standing.md` there lists every competitor
 and reference per workload and runtime, and `delta.md` compares it with `csv-720f0c7` as
 same-shard ratios. Shared-host timings are advisory; only figures from one shard compare. Where
 the shipped native paths stand, as ratios within their shard:
@@ -668,6 +700,8 @@ the shipped native paths stand, as ratios within their shard:
 
 ## Deferred
 
+- Kind-specialized typed writers and a native index-to-column materializer. The current
+  native CSV producer emits structural indexes; Java framing builds retained columns.
 - A `MemorySegment`-native index consumer for mapped input (the window copy stays; see the
   comparison write-up for why it is not the mapped path's main cost).
 - Lazy text views for `getString` and TruffleString cells for guests (a `String` per cell remains
