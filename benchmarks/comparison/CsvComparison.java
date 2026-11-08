@@ -141,6 +141,7 @@ public final class CsvComparison {
         "strings",
         List.of(
             "truffledata-batch", "truffledata-batch-native", "truffledata-batch-bytes",
+            "truffledata-batch-owned", "truffledata-batch-owned-native", "truffledata-batch-owned-bytes",
             "truffledata-mapped", "truffledata-mapped-native", "sweep-batch-swar",
             "sweep-batch-native", "kernel-swar", "kernel-native", "fastcsv", "univocity",
             "commons-csv", "jackson"));
@@ -317,7 +318,10 @@ public final class CsvComparison {
     String path =
         switch (workload) {
           case "scan" -> "truffledata-scanner";
-          case "strings" -> engine.contains("mapped") ? "truffledata-mapped" : "truffledata-batch";
+          case "strings" ->
+              engine.contains("mapped")
+                  ? "truffledata-mapped"
+                  : engine.contains("owned") ? "truffledata-batch-owned" : "truffledata-batch";
           case "typed" -> "truffledata-plan";
           default -> throw new IllegalArgumentException("engine " + workload + "/" + engine);
         };
@@ -386,8 +390,13 @@ public final class CsvComparison {
       }
       case "strings" -> {
         return switch (engine) {
-          case "truffledata-batch" -> input -> {
-            CsvBatch batch = Csv.parse(input, FORMAT, BIG);
+          case "truffledata-batch", "truffledata-batch-owned" -> input -> {
+            // Generated fixture bytes stay immutable throughout measurement and afterward; the
+            // owned control may share them with successive retained batches without mutating them.
+            CsvBatch batch =
+                engine.equals("truffledata-batch-owned")
+                    ? Csv.parseOwned(input, FORMAT, BIG)
+                    : Csv.parse(input, FORMAT, BIG);
             retained = batch;
             long sum = 0;
             int width = batch.schema().size();
