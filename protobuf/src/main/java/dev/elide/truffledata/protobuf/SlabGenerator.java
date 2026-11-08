@@ -50,6 +50,9 @@ final class SlabGenerator {
     out.append(
         " default -> throw new ContractViolation(\"Unknown generated slab type\");\n };\n }\n");
     appendFastMethods(out, types, model);
+    // A bounded length/extent cache avoids repeated growth and trim copies for heterogeneous
+    // messages. Atomic opaque entries keep each key/value pair coherent across concurrent callers;
+    // hints retain no input or output and never replace the writer's bounds checks.
     for (int t = 0; t < types.size(); t++) {
       var type = types.get(t);
       String name = "SlabDecoder_" + type.name().replace('.', '$');
@@ -57,7 +60,9 @@ final class SlabGenerator {
           .append(name)
           .append(" {\n private final dev.elide.truffledata.protobuf.Layout layout;\n")
           .append(" private final dev.elide.truffledata.protobuf.SlabCodec.FieldLookup lookup;\n")
-          .append(" private volatile long slabHint;\n")
+          .append(
+              " private final java.util.concurrent.atomic.AtomicLongArray slabHints="
+                  + "new java.util.concurrent.atomic.AtomicLongArray(64);\n")
           .append(" public ")
           .append(name)
           .append("(ProtoPlan plan) {\n")
@@ -82,7 +87,9 @@ final class SlabGenerator {
           .append(
               " public byte[] decode(byte[] input,int offset,int"
                   + " length,dev.elide.truffledata.protobuf.SlabLimits limits) {\n")
-          .append(" long hint=slabHint; var writer=new ")
+          .append(
+              " int bucket=(length^(length>>>6))&63; long hint=slabHints.getOpaque(bucket); var"
+                  + " writer=new ")
           .append(WRITER)
           .append(
               "(layout,input,offset,length,limits,(int)(hint>>>32)==length?(int)hint:0);\n"
@@ -96,7 +103,7 @@ final class SlabGenerator {
           .append(
               "dev.elide.truffledata.protobuf.SlabCodec.decode(layout,input,offset,length,limits,lookup);"
                   + " }\n")
-          .append(" slabHint=((long)length<<32)|result.length; return result;\n")
+          .append(" slabHints.setOpaque(bucket,((long)length<<32)|result.length); return result;\n")
           .append(" }\n }\n");
     }
   }

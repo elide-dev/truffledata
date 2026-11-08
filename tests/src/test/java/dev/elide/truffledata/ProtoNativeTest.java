@@ -1309,6 +1309,51 @@ class ProtoNativeTest {
   }
 
   @Test
+  void generatedSlabHintsPreserveConcurrentOwnershipAndExactBudgets() throws Exception {
+    var contract = plan("truffledata.lossless.Sample");
+    var decoder = new TruffleDataContracts.SlabDecoder_truffledata$lossless$Sample(contract);
+    var inputs = new ArrayList<byte[]>();
+    var expected = new ArrayList<byte[]>();
+    // Same wire length can require different slab extents (ASCII and non-ASCII headers),
+    // and unrelated lengths share the bounded cache. Neither case may change output or budgets.
+    for (String text : List.of("abcdefgh", "λλλλ", "x", "y".repeat(65), "z".repeat(120))) {
+      byte[] utf8 = text.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+      byte[] wire = new byte[utf8.length + 2];
+      wire[0] = 122;
+      wire[1] = (byte) utf8.length;
+      System.arraycopy(utf8, 0, wire, 2, utf8.length);
+      inputs.add(wire);
+      expected.add(SlabCodec.decode(contract.layout(), wire));
+    }
+    try (var pool = java.util.concurrent.Executors.newFixedThreadPool(4)) {
+      var jobs = new ArrayList<java.util.concurrent.Future<?>>();
+      for (int worker = 0; worker < 4; worker++) {
+        final int first = worker;
+        jobs.add(
+            pool.submit(
+                () -> {
+                  byte[] retained = decoder.decode(inputs.get(first));
+                  for (int round = 0; round < 256; round++) {
+                    int index = (round + first) % inputs.size();
+                    byte[] wire = inputs.get(index), wanted = expected.get(index);
+                    byte[] decoded =
+                        decoder.decode(wire, 0, wire.length, new SlabLimits(128, wanted.length));
+                    assertArrayEquals(wanted, decoded);
+                    assertNotSame(retained, decoded);
+                    assertThrows(
+                        ContractViolation.class,
+                        () ->
+                            decoder.decode(
+                                wire, 0, wire.length, new SlabLimits(128, wanted.length - 1)));
+                  }
+                  assertArrayEquals(expected.get(first), retained);
+                }));
+      }
+      for (var job : jobs) job.get();
+    }
+  }
+
+  @Test
   void generatedSlabScalarAndListLoopsPreserveBitsAndBudgets() throws Exception {
     var random = new Random(0x51ab_1234);
     for (String name :
