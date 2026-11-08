@@ -21,7 +21,7 @@ presented as a fresh measurement of the final combined branch.
   `complete: true`. Every shard retains results, test log and XML.
 - [Assessment](assessment.json) includes full/sparse interpreter, peak, decode and resident
   timings, within-binary stock ratios, before/after ratios and observed fork ranges.
-- [Rejected patch](rejected-phase1.patch) includes the original implementation and the
+- [Rejected patch](rejected-phase1.patch.gz) includes the original implementation and the
   API-specific tests. Commits `d182a5d` and `38f7399` remain in branch history.
 
 All figures below are ns/row, lower is better. Brackets are observed ranges of three fresh
