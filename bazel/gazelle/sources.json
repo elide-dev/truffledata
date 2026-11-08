@@ -106,7 +106,8 @@
       "@maven//:org_xerial_sqlite_jdbc",
       "//benchmarks:benchmarks",
       "//tests:native_contracts",
-      "@maven//:com_google_protobuf_protobuf_java_util"
+      "@maven//:com_google_protobuf_protobuf_java_util",
+      ":explicit_host_java"
     ],
     "testonly": true,
     "plugins": []
@@ -127,7 +128,9 @@
       "@maven//:org_graalvm_sdk_nativeimage",
       "//benchmarks/comparison:json_fixture",
       "//json:json",
-      "@maven//:com_google_code_gson_gson"
+      "@maven//:com_google_code_gson_gson",
+      "//benchmarks/comparison:yaml_fixture",
+      "//yaml:yaml"
     ],
     "testonly": false,
     "plugins": [

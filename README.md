@@ -55,9 +55,9 @@ views enforce ownership, thread confinement, and lifetime. Java null stays at an
 ingestion boundaries; present null and missing fields have distinct representations.
 
 Use the JVM or Native Image. The optional Myna/Buffa backend supports JVM FFM and
-static SVM linkage, with Java fallback. The unreleased simdjson JSON backend supports
-the same linkage without a Java fallback. The unreleased CSV backend is pure Java and
-runs identically on both. Native attachments ship prebuilt for three platforms:
+static SVM linkage, with Java fallback. The JSON and YAML backends support
+the same linkage through native parsers. CSV runs on both runtimes in pure Java,
+with an optional native structural-index kernel. Native attachments ship prebuilt for three platforms:
 
 | Platform | Static archive | Shared library | LTO |
 | --- | --- | --- | --- |
@@ -66,8 +66,8 @@ runs identically on both. Native attachments ship prebuilt for three platforms:
 | macOS AArch64 (`macos-aarch64`) | `.a`, machine code | `.dylib` (`@rpath`) | ThinLTO with ld64.lld from `-bitcode.a` |
 
 See [representation and compilation guarantees](docs/TRUFFLE.md),
-[ownership and native setup](docs/BUFFA.md), the [JSON backend](docs/JSON.md) and the
-[CSV backend](docs/CSV.md).
+[ownership and native setup](docs/BUFFA.md), the [JSON backend](docs/JSON.md),
+[YAML backend](docs/YAML.md), and [CSV backend](docs/CSV.md).
 
 ## Choose an artifact
 
@@ -78,15 +78,22 @@ See [representation and compilation guarantees](docs/TRUFFLE.md),
 | `dev.elide:truffledata-jdbc-sqlite` | Native SQLite integration |
 | `dev.elide:truffledata-jdbc-mysql` | MySQL Connector/J integration |
 | `dev.elide:truffledata-jdbc-postgresql` | pgJDBC integration |
-| `dev.elide:truffledata-protobuf` | Protobuf contracts, Java codec, runtime schemas and generated getters |
-| `dev.elide:truffledata-protobuf-buffa` | Optional native parsing and borrowed typed views |
+| `dev.elide:truffledata-protobuf-runtime` | Stock-free protobuf plans, slab codecs and generated-record support |
+| `dev.elide:truffledata-protobuf` | Protobuf host compatibility, runtime schema compilation and contract generation |
+| `dev.elide:truffledata-protobuf-buffa` | Native slab decoding, projections and reusable borrowed sessions |
 | `dev.elide:truffledata-protobuf-buffa-bindings` | Myna bindings, pulled in by the Buffa adapter |
 | `dev.elide:truffledata-tape` | Shared native-tape values, sinks, export, snapshots, sessions, streams and typed records, with the Myna value ABI; pulled in by the JSON adapter |
 | `dev.elide:truffledata-tape-jvm` | JVM FFM tape reader, pulled in by the JSON JVM backend; keep it off native-image classpaths |
 | `dev.elide:truffledata-json` | Native simdjson JSON sessions, messages, streams, typed plans and the static SVM backend |
 | `dev.elide:truffledata-json-jvm` | JVM FFM backend for JSON; keep it off native-image classpaths |
 | `dev.elide:truffledata-json-bindings` | Myna JSON bindings, pulled in by the JSON adapter |
+| `dev.elide:truffledata-yaml` | Native YAML sessions, documents, streams, metadata and typed plans |
+| `dev.elide:truffledata-yaml-jvm` | YAML JVM FFM backend; keep it off native-image classpaths |
+| `dev.elide:truffledata-yaml-bindings` | Generated native YAML bindings |
 | `dev.elide:truffledata-csv` | Strict streaming CSV into immutable string and primitive column batches, typed plans and one-pass export; pure Java |
+| `dev.elide:truffledata-csv-native` | Optional native CSV kernel and static SVM backend |
+| `dev.elide:truffledata-csv-jvm` | CSV JVM FFM provider; keep it off native-image classpaths |
+| `dev.elide:truffledata-csv-bindings` | Generated native CSV bindings |
 | `dev.elide:truffledata-bom` | Aligned libraries, drivers and runtime dependencies |
 
 The runtime baseline is **Java 25** and **Elide GraalVM `25.5.5-elide.27`**.
@@ -100,25 +107,32 @@ repositories {
     maven("https://maven.elide.dev/gvm-elide/25.5.5-elide.27")
 }
 dependencies {
-    implementation(platform("dev.elide:truffledata-bom:0.9.0"))
+    implementation(platform("dev.elide:truffledata-bom:0.10.0"))
     implementation("dev.elide:truffledata-core")
     implementation("dev.elide:truffledata-protobuf")
     // Add JDBC integrations or protobuf-buffa as needed.
 }
 ```
 
-[Release 0.9.0](https://github.com/elide-dev/truffledata/releases/tag/v0.9.0) includes
-source JARs, consumer POMs, checksums, and Buffa, JSON and CSV native attachments. See
+[Release 0.10.0](https://github.com/elide-dev/truffledata/releases/tag/v0.10.0) includes
+source/Javadoc JARs, consumer POMs, Gradle metadata, signatures, checksums, and
+Buffa, JSON, YAML and CSV native attachments. See
 [publishing and consumption](docs/PUBLISHING.md) for Maven, Bazel and native linking.
 
-Release **0.9.0** adds prebuilt natives for Linux x86-64, Linux AArch64 and macOS
+Release **0.10.0** adds native YAML APIs, compact JSON readers and streaming,
+protobuf slab ownership and projections, allocation-free unknown-field queries,
+CSV input windows/channel mapping, and native CSV SDKs with musl builds. Artifacts
+are dual MIT/Apache-2.0 licensed and prepared for signed Maven Central publication.
+See the [0.10.0 notes](docs/RELEASE_0_10_0.md).
+
+Release **0.9.0** added prebuilt natives for Linux x86-64, Linux AArch64 and macOS
 AArch64, with static and shared libraries, Linux FatLTO objects and a separate
 macOS ThinLTO archive. It uses Myna 0.13.0 and GraalVM 25.5.5-elide.27. See the
 [0.9.0 notes](docs/RELEASE_0_9_0.md).
 
 Release **0.8.0** added native JSON (simdjson, scoped guest values, typed plans,
 sessions and streams), CSV (Commons CSV scope with SIMD structural-index kernels)
-and a shared tape layer, on Myna 0.13.0 and Elide toolchain 2026.11.5. See the
+and a shared tape layer, on Myna 0.11.0 and Elide toolchain 2026.11.5. See the
 [0.8.0 notes](docs/RELEASE_0_8_0.md).
 
 Release **0.7.0** added opt-in native-index typed views and cached shared primitive
@@ -299,7 +313,7 @@ Reusable CI workflows use pinned actions and runner hardening. They check:
 - GraalJS/GraalPy interop, real MySQL/PostgreSQL servers, and native SQLite.
 - JVM and SVM guest compilation, blocklist rejection controls, graph/AST budgets and allocation ceilings.
 - Static native linking, Java fallback, publication consumers, Codecov coverage and JUnit reports.
-- [Twenty CodSpeed simulation workloads](docs/BENCHMARKS.md), separate from the guest-JIT timing suite.
+- [Twenty-eight CodSpeed simulation workloads](docs/BENCHMARKS.md), separate from the guest-JIT timing suite.
 
 These gates exercise supported paths and enforce regression budgets. They do not certify
 arbitrary downstream guest code or every deployment configuration. See [Truffle checks and scope](docs/TRUFFLE.md).
@@ -311,6 +325,7 @@ arbitrary downstream guest code or every deployment configuration. See [Truffle 
 | [Contracts and samples](docs/CONTRACTS.md) | Schemas, nullity, protobuf presence, generated access and integration examples |
 | [Myna/Buffa](docs/BUFFA.md) | Native parsing, borrowed views, ownership, JVM and SVM setup |
 | [JSON](docs/JSON.md) | simdjson backend, ownership, number policy, interop and embedder export |
+| [YAML](docs/YAML.md) | Native YAML parsing, metadata, typed plans, sessions and streams |
 | [CSV](docs/CSV.md) | Strict CSV contract, limits, typed plans, streaming, interop and export |
 | [Truffle guarantees](docs/TRUFFLE.md) | Specialization, boundaries, compilation and allocation gates |
 | [Comparison benchmarks](docs/COMPARISON_BENCHMARKS.md) | Raw results, charts, caveats and reproduction |
