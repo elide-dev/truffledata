@@ -1467,11 +1467,15 @@ final class TypedAcceptance {
         var readers = Executors.newFixedThreadPool(8)) {
       for (var source : List.of(compiled, lazy)) {
         var sequential = source.decode(wire, 65536);
+        int initialRetained = sequential.retainedSlabBytes();
         ((SlabRow) sequential.get(childOrdinal)).get(childTextOrdinal);
         var expectedUsage = sequential.logicalUsage();
-        int expectedRetained = sequential.retainedSlabBytes();
+        int childRetained = sequential.retainedSlabBytes() - initialRetained;
         for (int round = 0; round < 8; round++) {
           var message = source.decode(wire, 65536);
+          // BuffaPlan learns its first-array capacity; compare the child's added retention,
+          // not an earlier decode's potentially larger retained capacity.
+          int expectedRetained = message.retainedSlabBytes() + childRetained;
           var start = new CountDownLatch(1);
           var results = new ArrayList<Future<Object[]>>();
           for (int worker = 0; worker < 8; worker++)
