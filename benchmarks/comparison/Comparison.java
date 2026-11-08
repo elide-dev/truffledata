@@ -182,10 +182,27 @@ public final class Comparison {
             long before = counter.getThreadAllocatedBytes(thread);
             measure(operation, 8, fixture.expected);
             double bytes = (counter.getThreadAllocatedBytes(thread) - before) / (8.0 * ROWS);
+            // Compact-scalar buffa ingest measured 312 B/message on 2026-11-08 against this 128 B
+            // gate (durable owning slab per Timestamp message, SVM compressed refs, 8 B object and
+            // 16 B array headers): owned slab byte[56] 72 (32 B header + 24 B record), SlabMessage
+            // 56, SlabVerifier 56 + its long[1] 24 + byte[0] 16, ProtoRow.Budget 32, SlabLimits 24,
+            // PinnedObject 16 = 296 derived, 16 unattributed. The gate stays: the verifier, budget,
+            // limits and pin objects are per-message work the design does not require.
             double budget =
                 engine.equals("buffa")
                     ? (stage.equals("ingest") ? 128 : 96)
                     : (stage.equals("ingest") ? 96 : 64);
+            // Evidence for the budget: the durable slab's own extent and retained capacity.
+            if (retained instanceof SlabMessage slab)
+              System.out.println(
+                  "ALLOCATION compact-scalar "
+                      + engine
+                      + " "
+                      + stage
+                      + " slabBytes="
+                      + slab.slabBytes()
+                      + " retainedSlabBytes="
+                      + slab.retainedSlabBytes());
             if (bytes < 0 || bytes > budget)
               throw new AssertionError(
                   "Compact scalar allocation budget: " + bytes + " > " + budget);
