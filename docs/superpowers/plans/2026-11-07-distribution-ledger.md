@@ -54,3 +54,9 @@ musl executables to run on the GNU Linux executors. CI and publication run these
 witnesses. YAML's three Java artifacts and three-platform native attachments are
 now included in publication staging, with ABI fingerprint and C consumer gates;
 qualification of those additions follows the compact YAML ABI cutover.
+
+Signing publication preflight: the selected public OpenPGP fingerprint is retrievable
+and matches on both `keys.openpgp.org` and `keyserver.ubuntu.com`; the signing
+identity itself is unchanged. These are supported distribution servers in
+[Central's signing requirements](https://central.sonatype.org/publish/requirements/gpg/).
+This checks public-key availability, not deployment permission or publication.

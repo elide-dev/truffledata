@@ -448,9 +448,10 @@ class GeneratedGraphTest {
         "hello", ((ProtoAccess) exact.decode(new byte[] {10, 2, 8, 1}).get_child()).get(1));
     assertThrows(
         ContractViolation.class, () -> exact.decode(new byte[] {18, 2, 8, 1, 18, 2, 8, 2}));
-    var bytesPlan = model(new Limits(1024, 256, 140, 1000), 8, 1000).type(PREFIX + "Sample");
+    // Leave room for the complete fixture descriptor graph; the payload alone exceeds maxCells.
+    var bytesPlan = model(new Limits(1024, 256, 256, 1000), 8, 1000).type(PREFIX + "Sample");
     var bytesAccess = new TruffleDataContracts.Access_truffledata$lossless$Sample(bytesPlan);
-    assertThrows(ContractViolation.class, () -> bytesAccess.decode(region(3, new byte[141])));
+    assertThrows(ContractViolation.class, () -> bytesAccess.decode(region(3, new byte[257])));
     byte[] oneof =
         concat(
             region(11, region(2, new byte[8])),
