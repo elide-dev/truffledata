@@ -63,6 +63,7 @@ public final class ConsumerComparison {
     "stock-interop",
     "generated-owned",
     "slab",
+    "slab-native",
     "slab-projected",
     "slab-lazy",
     "slab-session",
@@ -187,7 +188,7 @@ public final class ConsumerComparison {
         }
         System.out.printf(
             Locale.ROOT,
-            "{\"engine\":\"%s\",\"mode\":\"%s\",\"stage\":\"%s\",\"runtime\":\"%s\",\"rows\":%d,\"checksum\":%d,\"guest_compiled\":%s,\"shared_access\":%s,\"stock_boundary\":%s,\"native_index_retained\":%s,\"input_bytes_per_row\":%.3f,\"copied_input_bytes_per_row\":%.3f,\"decoded_native_index_capacity_bytes_per_row\":%.3f,\"decoded_native_result_header_bytes_per_row\":%d,\"slab_bytes_per_row\":%.3f,\"retained_slab_capacity_bytes_per_row\":%.3f,\"session_arena_capacity_bytes_per_row\":%.3f,\"retained_input_bytes_per_row\":%.3f,\"host_interop\":%s,\"host_interop_boundary\":%s,\"native_transient_peak_bytes\":null,\"native_allocation_count\":null,\"%s\":%s}%n",
+            "{\"engine\":\"%s\",\"mode\":\"%s\",\"stage\":\"%s\",\"runtime\":\"%s\",\"rows\":%d,\"checksum\":%d,\"guest_compiled\":%s,\"shared_access\":%s,\"stock_boundary\":%s,\"native_index_retained\":%s,\"input_bytes_per_row\":%.3f,\"copied_input_bytes_per_row\":%.3f,\"decoded_native_index_capacity_bytes_per_row\":%.3f,\"decoded_native_result_header_bytes_per_row\":%d,\"slab_bytes_per_row\":%.3f,\"retained_slab_capacity_bytes_per_row\":%.3f,\"session_arena_capacity_bytes_per_row\":%.3f,\"retained_input_bytes_per_row\":%.3f,\"host_interop\":%s,\"host_interop_boundary\":%s,\"producer_backend\":\"%s\",\"native_input\":\"%s\",\"native_transient_peak_bytes\":null,\"native_allocation_count\":null,\"%s\":%s}%n",
             engine,
             mode,
             stage,
@@ -208,6 +209,8 @@ public final class ConsumerComparison {
             fixture.retainedInputBytes / (double) ROWS,
             engine.equals("stock-interop"),
             engine.equals("stock-interop") && ImageInfo.inImageCode(),
+            fixture.producerBackend(),
+            engine.equals("slab-native") ? (stage.equals("heap") ? "heap" : "native") : "",
             metric.equals("memory") ? "java_bytes_per_row" : "ns_per_row",
             Arrays.toString(samples));
       } finally {
@@ -355,11 +358,20 @@ public final class ConsumerComparison {
             ? selected.decode(wires[index], 1 << 20)
             : selected.decode(java.util.Objects.requireNonNull(inputs[index]), 1 << 20);
       }
-      return ImageInfo.inImageCode()
+      return ImageInfo.inImageCode() || engine.equals("slab-native")
           ? (stage.equals("heap")
               ? nativePlan.decodeSlab(wires[index], 1 << 20)
               : nativePlan.decodeSlab(java.util.Objects.requireNonNull(inputs[index]), 1 << 20))
           : plan.decodeSlab(wires[index]);
+    }
+
+    String producerBackend() {
+      if (engine.equals("stock") || engine.equals("stock-interop")) return "protobuf-java";
+      if (sessionEngine(engine)
+          || engine.equals("slab-native")
+          || (owningSlabEngine(engine) && ImageInfo.inImageCode()))
+        return decoder.selected().name();
+      return "JAVA";
     }
 
     void prepare() throws Exception {

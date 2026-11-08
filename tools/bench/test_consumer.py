@@ -62,6 +62,21 @@ class ConsumerValidationTest(unittest.TestCase):
             with self.subTest(change=change), self.assertRaises(ValueError):
                 validate(dict(record, **change), ('slab', 'full', 'peak'), 'time', {})
 
+    def test_explicit_native_producer_cannot_report_java_or_hide_input_route(self):
+        record = dict(self.VALID, engine='slab-native', runtime='jvm',
+                      native_index_retained=False, slab_bytes_per_row=100,
+                      retained_slab_capacity_bytes_per_row=128, producer_backend='JVM_FFM',
+                      native_input='native')
+        cell = ('slab-native', 'full', 'peak')
+        validate(record, cell, 'time', {}, 'jvm')
+        for change in ({'producer_backend': 'JAVA'}, {'native_input': 'heap'}):
+            with self.subTest(change=change), self.assertRaises(ValueError):
+                validate(dict(record, **change), cell, 'time', {}, 'jvm')
+        record.update(stage='heap', native_input='heap')
+        validate(record, ('slab-native', 'full', 'heap'), 'time', {}, 'jvm')
+        record.update(runtime='svm', producer_backend='SVM_STATIC')
+        validate(record, ('slab-native', 'full', 'heap'), 'time', {})
+
     def test_session_storage_is_native_and_charges_arena_capacity(self):
         record = copy.deepcopy(self.VALID)
         record.update(engine='slab-session', stage='resident', native_index_retained=False,
@@ -77,6 +92,8 @@ class ConsumerValidationTest(unittest.TestCase):
         selected = select_engines(['candidate', 'baseline'],
                                   ['baseline=stock,generated-owned,native-view,native-eager'])
         self.assertIn('slab', selected['candidate'])
+        self.assertIn('slab-native', selected['candidate'])
+        self.assertNotIn('slab-native', selected['baseline'])
         self.assertNotIn('slab', selected['baseline'])
         for specification in ('missing=stock', 'candidate=absent', 'candidate=stock,stock',
                               'candidate='):

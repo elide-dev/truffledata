@@ -1097,7 +1097,7 @@ slabs, selected/lazy projections and explicit reusable sessions. A stock host-in
 executes actual protobuf getters through the same guest read nodes, while retaining the
 independent stock-boundary control. Historical baseline engines remain available only in
 preserved executables. The [consumer method](../benchmarks/comparison/CONSUMER.md) documents
-all 111 cells, retained-input/capacity accounting and the three-fork same-worker E1 ratios.
+all 132 cells, explicit JVM FFM producer selection, retained-input/capacity accounting and the three-fork same-worker E1 ratios.
 
 Local Java fallback/FFM acceptance and new compiled consumer cells pass with the existing graph
 budget; [qualification logs](../benchmarks/results/protobuf-java-retirement-local/README.md)

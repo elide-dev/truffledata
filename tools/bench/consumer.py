@@ -17,7 +17,7 @@ import statistics
 import subprocess
 
 LEGACY_ENGINES = ('stock', 'generated-owned', 'native-view', 'native-eager')
-ENGINES = ('stock', 'stock-interop', 'generated-owned', 'slab', 'slab-projected',
+ENGINES = ('stock', 'stock-interop', 'generated-owned', 'slab', 'slab-native', 'slab-projected',
            'slab-lazy', 'slab-session', 'slab-session-projected')
 KNOWN_ENGINES = tuple(dict.fromkeys((*ENGINES, *LEGACY_ENGINES)))
 STAGES = ('decode', 'resident', 'heap', 'detach', 'first', 'interpret', 'peak')
@@ -75,6 +75,11 @@ def validate(record, cell, metric, checksums, runtime='svm'):
                 or not isinstance(retained, (float, int)) or not math.isfinite(retained)
                 or retained < extent):
             raise ValueError(f'{cell}: invalid slab extent/capacity accounting')
+    if engine == 'slab-native':
+        if record.get('producer_backend') != ('JVM_FFM' if runtime == 'jvm' else 'SVM_STATIC'):
+            raise ValueError(f'{cell}: explicit native producer must identify its backend')
+        if record.get('native_input') != ('heap' if stage == 'heap' else 'native'):
+            raise ValueError(f'{cell}: explicit native producer must identify input ownership')
     if engine.startswith('slab-session'):
         extent = record.get('slab_bytes_per_row')
         capacity = record.get('session_arena_capacity_bytes_per_row')
@@ -155,6 +160,8 @@ def summarize(rows, labels):
                     binary=label, engine=engine, mode=mode, stage=stage,
                     ns_per_row=statistics.median(times), ns_min=min(times), ns_max=max(times),
                     java_bytes_per_row=statistics.median(memory),
+                    producer_backend=first.get('producer_backend', 'historical-unreported'),
+                    native_input=first.get('native_input', ''),
                     input_bytes_per_row=first['input_bytes_per_row'],
                     native_index_bytes_per_row=first['decoded_native_index_capacity_bytes_per_row'],
                     native_header_bytes_per_row=first['decoded_native_result_header_bytes_per_row'],

@@ -1197,3 +1197,18 @@ sh_test(
         ("consumer_projection_measure_jvm", "jvm", ":consumer_jvm"),
     ]
 ]
+
+# B4 diagnostic-only sampling; ordinary images remain the performance controls.
+sh_test(
+    name = "consumer_interpreter_profile",
+    size = "large",
+    timeout = "long",
+    srcs = ["consumer_interpreter_profile.sh"],
+    args = ["$(rootpath :consumer_profile)"],
+    data = [":consumer_profile"],
+    tags = ["manual"],
+    target_compatible_with = [
+        "@platforms//os:linux",
+        "@platforms//cpu:x86_64",
+    ],
+)

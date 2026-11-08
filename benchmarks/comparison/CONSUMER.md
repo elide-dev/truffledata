@@ -8,6 +8,7 @@
 | stock-interop | protobuf-java accessed through cached host messages and the shared guest nodes; interpreter/peak only |
 | generated-owned | generated Java decoder returning owned object records |
 | slab | generated Java owning slab on JVM; native owning slab on SVM |
+| slab-native | explicitly selected native producer: JVM FFM or SVM static library; owning slab |
 | slab-projected | selected fields, preserving omitted repeated counts; sparse modes only |
 | slab-lazy | selected fields plus deferred omitted message children; full work realizes them |
 | slab-session | one reusable native arena per live row slot; decode/resident only |
@@ -27,6 +28,14 @@ The ordinary cohort has 3–8 fields per message. `holdout` has 12–24 fields a
 | interpret | Repeated warm access with guest compilation disabled |
 | peak | Repeated warm access with helper-level compiled execution and stable last tier |
 
+`slab-native` measures C1's explicit JVM native route against `slab` in every matching cell.
+Its `heap` stage includes heap-input pin/copy decisions; other stages decode preallocated native
+input. Results identify `producer_backend` (`JVM_FFM` or `SVM_STATIC`) and `native_input`
+(`heap` or `native`), and retain copied-input and full slab-capacity counters. Native output
+copying and verification are inside decode/resident windows. On SVM it intentionally uses the
+same native producer as the default slab engine, providing a duplicate-route consistency check.
+Historical binaries explicitly omit this new engine.
+
 Plan/input setup, context startup and guest compilation are outside measurement. All controls prepare identical native plan/input fixtures even when their engine does not use them. Row order rotates, and every batch is checked against an independent checksum. Session cells consume each borrow before reset, and smoke tests verify expired-row rejection. Owning rows remain durable.
 
 ## Acceptance and measurement
@@ -38,7 +47,7 @@ bazel test //benchmarks/comparison:consumer_projection_measure \
   //benchmarks/comparison:consumer_projection_measure_jvm
 ```
 
-Both smoke tests cover all 111 supported engine/mode/stage cells. They require correct checksums, helper-level compilation, a 256-node AST ceiling and the unchanged 10,000-node Graal graph budget. Native images use the repository blocklist/reachability checks.
+Both smoke tests cover all 132 supported engine/mode/stage cells. They require correct checksums, helper-level compilation, a 256-node AST ceiling and the unchanged 10,000-node Graal graph budget. Native images use the repository blocklist/reachability checks.
 
 The E1 targets keep sparse/full holdout groups on one worker and run three fresh forks. They preserve complete results and fixed ratio verdicts in `projection-gates.json`: selected small sparse ≤0.85× ordinary sparse, selected/lazy holdout sparse ≤0.5× ordinary full holdout, with the projected/full native-session ratio reported separately as an informational observation. A required gate miss fails the target while retaining its evidence. These targets are intentionally unsharded because their denominators cross mode groups.
 
@@ -60,6 +69,12 @@ Every cell uses three fresh forks and separate timing/allocation processes. Each
 Current-thread Java allocation includes harness allocations and excludes native memory. Reports separately retain wire size, copied input, valid slab extent, retained heap slab capacity (including realized children), native session arena capacity, and immutable source input retained by lazy/external references. The original native index/header fields remain zero for current engines and are retained for historical report compatibility. Native transient peaks, allocator overhead, plan storage and total process retention are not measured.
 
 ## Profiling
+
+`//benchmarks/comparison:consumer_interpreter_profile` records the full interpreter cells for
+stock, stock-interop, generated-owned and slab in an ordinary unprofiled-build SVM image with
+JFR monitoring. Its separate diagnostic image starts sampling after host warmup, retains JFR
+and optional AOT symbol sizes, and never feeds those times into the comparison reports. This
+is sampling diagnosis for B4, not profile-guided optimization.
 
 ```sh
 bazel build //benchmarks/comparison:consumer_profile --remote_download_outputs=toplevel
