@@ -64,8 +64,27 @@ class AccessorTest {
   }
 
   @Test
+  void flatRowsBindLayoutAccessorsForEveryOrdinal() {
+    var plan = flat(false);
+    for (Object row :
+        List.of(generated(plan, 1, "λ😀"), owned(plan, 1, "λ😀"), slab(plan, 1, "λ😀"))) {
+      for (int ordinal = 0; ordinal < plan.size(); ordinal++) {
+        Accessor bound = Accessor.bind(row, ordinal);
+        assertNotNull(bound, row.getClass().getSimpleName() + " ordinal " + ordinal);
+        assertTrue(Accessor.bound(bound, row));
+      }
+    }
+  }
+
+  /**
+   * Each inline reader meets its own field first: the layout-bound specialization caches three
+   * entries, so reading mismatched ordinals first would exhaust it before the matching field and
+   * leave the accessed path exercised only through contract rejections.
+   */
+  @Test
   void inlineReadersPreserveCachedContractsAcrossLayoutChurn() {
     var target = new ReaderParityRoot().getCallTarget();
+    int[] home = {I64, REAL, FLAG, TEXT};
     for (int layout = 0; layout < 6; layout++) {
       var plan = flat(false);
       for (Object row :
@@ -73,20 +92,14 @@ class AccessorTest {
               generated(plan, layout, "λ😀"),
               owned(plan, layout, "λ😀"),
               slab(plan, layout, "λ😀"))) {
-        for (int ordinal = 0; ordinal < plan.size(); ordinal++) {
-          int index = ordinal;
-          assertEquals(
-              outcome(() -> target.call(row, index, 0, false)),
-              outcome(() -> target.call(row, index, 0, true)));
-          assertEquals(
-              outcome(() -> target.call(row, index, 1, false)),
-              outcome(() -> target.call(row, index, 1, true)));
-          assertEquals(
-              outcome(() -> target.call(row, index, 2, false)),
-              outcome(() -> target.call(row, index, 2, true)));
-          assertEquals(
-              outcome(() -> target.call(row, index, 3, false)),
-              outcome(() -> target.call(row, index, 3, true)));
+        for (int operation = 0; operation < home.length; operation++) {
+          int read = operation;
+          for (int step = -1; step < plan.size(); step++) {
+            int index = step < 0 ? home[operation] : step;
+            assertEquals(
+                outcome(() -> target.call(row, index, read, false)),
+                outcome(() -> target.call(row, index, read, true)));
+          }
         }
       }
     }
