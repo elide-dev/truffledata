@@ -151,7 +151,7 @@ public final class TapeText {
     }
     int length = word != 0 ? TapeReader.field(word) : Math.toIntExact(owner.tape.length(at));
     if (length == 0) return "";
-    boolean ascii = word != 0 ? (word & TapeReader.ASCII) != 0 : owner.ascii(at);
+    boolean ascii = word != 0 ? (word & TapeReader.ASCII) != 0 : owner.tape.isAscii(at);
     // Long non-ASCII strings: the tape's bulk transcoder (simdutf straight into the String's
     // UTF-16 on SVM). ASCII strings become Latin-1 Strings with one copy from scratch.
     if (!ascii && length >= BULK_THRESHOLD) return owner.tape.stringValue(at);

@@ -35,11 +35,8 @@ class SvmJsonMessage extends JsonMessage implements TapeReader {
   @Override public long directorySize() { return Integer.toUnsignedLong(directoryCount); }
   @Override public int flags() { return flags; }
   @Override public long readWord(long index) { return words.readLong(WordFactory.signed(index * 8)); }
-  // Concrete overrides of hot defaults: one dispatch per read instead of one per storage hook.
-  @Override public final long word(long index) {
-    if (index < 0 || index >= Integer.toUnsignedLong(count)) throw new IndexOutOfBoundsException("Tape word");
-    return words.readLong(WordFactory.signed(index * 8));
-  }
+  // A hinted member read is one call of straight-line loads instead of one call per hook.
+  // (TapeReader.word stays a single default implementation so compiled generic reads inline it.)
   @Override public final long directoryKey(long object, int rank, TapeKey key) {
     return SvmTape.directoryKey(words, directory, input, object, rank, key);
   }

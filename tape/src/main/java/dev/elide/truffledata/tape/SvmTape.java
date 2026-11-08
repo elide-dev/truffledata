@@ -50,11 +50,8 @@ public final class SvmTape implements TapeReader {
   @Override public long readWord(long index) {
     return words.readLong(WordFactory.signed(index * 8));
   }
-  // Concrete overrides of hot defaults: one dispatch per read instead of one per storage hook.
-  @Override public long word(long index) {
-    if (index < 0 || index >= count) throw new IndexOutOfBoundsException("Tape word");
-    return words.readLong(WordFactory.signed(index * 8));
-  }
+  // A hinted member read is one call of straight-line loads instead of one call per hook.
+  // (TapeReader.word stays a single default implementation so compiled generic reads inline it.)
   @Override public long directoryKey(long object, int rank, TapeKey key) {
     return directoryKey(words, directory, input, object, rank, key);
   }

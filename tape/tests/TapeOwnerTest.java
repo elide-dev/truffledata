@@ -223,6 +223,10 @@ class TapeOwnerTest {
     assertEquals(-1, tape.find(0, ValueTape.Utf8Key.of("x")));
     assertEquals(6, tape.find(4, ValueTape.Utf8Key.of("x")));
     Owner owner = new Owner(compact, TapeFormat.of("JSON"));
+    // Compiled hook identity must agree with the interpreter's direct final-field path.
+    assertSame(compact, owner.reader());
+    assertSame(compact, owner.storage());
+    assertTrue(owner.confined());
     assertEquals(2, owner.directories());
     assertEquals(1, owner.root().member("b").longValue());
     assertEquals(2, owner.root().member("a").member("x").longValue());
@@ -231,13 +235,15 @@ class TapeOwnerTest {
     assertEquals(6, owner.find(0, a, rank));
     assertTrue(rank[0] > 0);
     // A rank names a key only for an object with that many entries, and only its own keys.
-    assertEquals(5, owner.hinted(owner.tape, 0, rank[0] - 1, a));
-    assertEquals(-1, owner.hinted(owner.tape, 0, 2, a));
-    assertEquals(-1, owner.hinted(owner.tape, 2, 0, a));
-    assertEquals(-1, owner.hinted(owner.tape, 6, 0, a));
-    assertEquals(-1, owner.hinted(owner.tape, 0, rank[0] - 1, TapeKey.of("b")));
+    assertEquals(5, TapeOwner.hinted(owner.tape, 0, rank[0] - 1, a, false));
+    assertEquals(-1, TapeOwner.hinted(owner.tape, 0, 2, a, false));
+    assertEquals(-1, TapeOwner.hinted(owner.tape, 2, 0, a, false));
+    assertEquals(-1, TapeOwner.hinted(owner.tape, 6, 0, a, false));
+    assertEquals(-1, TapeOwner.hinted(owner.tape, 0, rank[0] - 1, TapeKey.of("b"), false));
     // A subtree snapshot copies and re-bases exactly its own directory.
     TapeSnapshot inner = owner.root().member("a").snapshot();
+    assertSame(inner.tape, inner.reader());
+    assertFalse(inner.confined());
     assertEquals(1, inner.directories());
     assertEquals(2, inner.root().member("x").longValue());
     // Arrays have no object directories.

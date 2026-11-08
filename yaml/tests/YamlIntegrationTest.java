@@ -31,12 +31,16 @@ final class YamlIntegrationTest {
   }
 
   @Test
-  void retainedMessageKeepsLibraryLoaded() {
+  void retainedMessageKeepsLibraryLoaded() throws ReflectiveOperationException {
     YamlMessage retained;
     try (YamlSession session = YamlJvm.openSession(library())) {
       retained = session.decode(SvmAcceptance.bytes("hello: world"));
     }
     try (retained) {
+      // The class-constant compiled hook must agree with this owner's interpreter policy.
+      var confined = YamlMessage.class.getDeclaredMethod("confined");
+      confined.setAccessible(true);
+      assertEquals(true, confined.invoke(retained));
       assertEquals("world", retained.root().member("hello").stringValue());
     }
     assertThrows(IllegalStateException.class, retained::root);

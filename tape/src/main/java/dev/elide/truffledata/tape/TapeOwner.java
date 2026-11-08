@@ -192,11 +192,6 @@ public abstract class TapeOwner {
    * object word, payload, entry and the key's inline words, compared exactly (Myna zero-pads inline
    * text). No loop, no allocation; {@code object} must be a valid node.
    */
-  final long hinted(TapeReader reader, long object, int rank, TapeKey key) {
-    return hinted(reader, object, rank, key, aliases());
-  }
-
-  /** {@link #hinted(TapeReader, long, int, TapeKey)} with the caller's {@link #aliases()}. */
   static long hinted(TapeReader reader, long object, int rank, TapeKey key, boolean aliases) {
     // Keys of at most 8 bytes have an all-zero high word (zero padding); the site's key is a
     // constant, so `wide` folds and short keys skip the third word.
@@ -254,11 +249,6 @@ public abstract class TapeOwner {
     for (long node = 0; node < tape.nodeCount(); node = tape.step(node))
       if (tape.kindAt(node) == ValueTape.OBJECT && tape.directory(node) != 0) count++;
     return count;
-  }
-
-  /** True when a string or key node's decoded bytes are all ASCII; false for other nodes. */
-  final boolean ascii(long node) {
-    return tape.isAscii(node);
   }
 
   @TruffleBoundary

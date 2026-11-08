@@ -491,8 +491,8 @@ struct key_shape_cache {
       std::memset(bytes + length, 0, sizeof bytes - length);
     }
   };
-  // `seen`: an object of this depth has closed before. Templates install from the second object
-  // of a depth on, so a document with one object per depth (the common one-shot decode, whose
+  // `seen`: a cache-eligible object of this depth has closed before. Templates install from the
+  // second eligible object on, so a document with one object per depth (one-shot decode, whose
   // session cache dies with it) never pays for an install it cannot use; arrays of one shape
   // still match from their third element, and long-lived sessions miss once more per depth.
   struct level { uint32_t count = 0; bool seen = false; key keys[max_keys]; uint8_t rank[max_keys]; };
