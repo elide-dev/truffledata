@@ -239,7 +239,13 @@ final class SlabGenerator {
                 .append(t)
                 .append("],")
                 .append(f)
-                .append(")) { slabScan")
+                .append(")) { if(projection.requiresEagerChild(typeIds[")
+                .append(t)
+                .append("],")
+                .append(f)
+                .append(")) throw ")
+                .append(WRITER)
+                .append(".fallback(); slabScan")
                 .append(child)
                 .append(
                     "(w,childEnd,depth+1,projection.laxValidation());"

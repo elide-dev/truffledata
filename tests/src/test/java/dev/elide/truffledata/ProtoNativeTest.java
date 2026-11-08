@@ -1414,6 +1414,7 @@ class ProtoNativeTest {
         List.of(
             "truffledata.lossless.Sample",
             "truffledata.lossless.Required",
+            "truffledata.lossless.OptionalRequired",
             "truffledata.lossless.Legacy")) {
       var complex = plan(name);
       var projection = Projection.builder(complex).build().lazyChildren();
@@ -1422,6 +1423,8 @@ class ProtoNativeTest {
               new byte[0],
               new byte[] {8, 1},
               new byte[] {18, 0},
+              new byte[] {10, 0},
+              new byte[] {10, 2, 10, 0},
               new byte[] {66, 2, 8, 1, 66, 2, 8, 2},
               new byte[] {(byte) 0x98, 6, 42}))
         projectedParity(
