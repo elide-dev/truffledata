@@ -32,6 +32,7 @@ data_java_library(
         "src/test/java/dev/elide/truffledata/package-info.java",
     ],
     deps = [
+        ":explicit_host_java",
         "//benchmarks",
         "//core",
         "//jdbc",
@@ -40,7 +41,6 @@ data_java_library(
         "//jdbc-sqlite",
         "//protobuf",
         "//tests:native_contracts",
-        ":explicit_host_java",
         "@maven//:com_google_protobuf_protobuf_java",
         "@maven//:com_google_protobuf_protobuf_java_util",
         "@maven//:com_mysql_mysql_connector_j",
