@@ -5,6 +5,9 @@ import dev.elide.truffledata.buffa.*;
 import dev.elide.truffledata.generated.TruffleDataContracts;
 import dev.elide.truffledata.protobuf.*;
 import java.util.*;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 
 /** The same typed/native semantic and ownership corpus runs on JVM and both SVM images. */
 @SuppressWarnings("removal")
@@ -1445,9 +1448,84 @@ final class TypedAcceptance {
     }
   }
 
+  /** Runs on JVM and both native ISAs: durable view publication is not thread-confined. */
+  private static void concurrentDurableSlabCaches(BuffaWire decoder) throws Exception {
+    var contract = plan("Sample");
+    int countOrdinal = contract.schema().indexOf("count");
+    int textOrdinal = contract.schema().indexOf("text");
+    int blobOrdinal = contract.schema().indexOf("blob");
+    int childOrdinal = contract.schema().indexOf("child");
+    int childValueOrdinal = contract.nested(childOrdinal).schema().indexOf("a");
+    int childTextOrdinal = contract.nested(childOrdinal).schema().indexOf("b");
+    byte[] wire =
+        contract.encode(
+            contract.parseText("count: 7 text: 'λ😀' blob: 'ab' child { a: 42 b: 'child-λ' }"));
+    var projection =
+        Projection.builder(contract).select("count", "text", "blob").build().lazyChildren();
+    try (var compiled = decoder.compile(contract, 65536);
+        var lazy = compiled.project(projection);
+        var readers = Executors.newFixedThreadPool(8)) {
+      for (var source : List.of(compiled, lazy)) {
+        var sequential = source.decode(wire, 65536);
+        ((SlabRow) sequential.get(childOrdinal)).get(childTextOrdinal);
+        var expectedUsage = sequential.logicalUsage();
+        int expectedRetained = sequential.retainedSlabBytes();
+        for (int round = 0; round < 8; round++) {
+          var message = source.decode(wire, 65536);
+          var start = new CountDownLatch(1);
+          var results = new ArrayList<Future<Object[]>>();
+          for (int worker = 0; worker < 8; worker++)
+            results.add(
+                readers.submit(
+                    () -> {
+                      start.await();
+                      var child = (SlabRow) message.get(childOrdinal);
+                      Object text = message.get(textOrdinal);
+                      var blob = (OwnedArray) message.get(blobOrdinal);
+                      Object childText = child.get(childTextOrdinal);
+                      for (int repeat = 0; repeat < 64; repeat++) {
+                        Acceptance.check(
+                            child == message.get(childOrdinal)
+                                && text == message.get(textOrdinal)
+                                && blob == message.get(blobOrdinal)
+                                && childText == child.get(childTextOrdinal),
+                            "durable cache warm identity");
+                        Acceptance.check(
+                            message.getLong(countOrdinal) == 7
+                                && child.getLong(childValueOrdinal) == 42
+                                && text.equals("λ😀")
+                                && childText.equals("child-λ")
+                                && blob.size() == 2
+                                && blob.get(0).equals(97L)
+                                && blob.get(1).equals(98L),
+                            "durable cache initialized contents");
+                        Acceptance.check(
+                            message.retainedSlabBytes() == expectedRetained,
+                            "lazy child publishes retained-byte accounting");
+                      }
+                      return new Object[] {child, text, blob, childText};
+                    }));
+          start.countDown();
+          Object[] first = results.getFirst().get();
+          for (var result : results) {
+            Object[] actual = result.get();
+            for (int i = 0; i < first.length; i++)
+              Acceptance.check(first[i] == actual[i], "durable cache cold identity across readers");
+          }
+          Acceptance.check(
+              message.logicalUsage().equals(expectedUsage)
+                  && message.retainedSlabBytes() == expectedRetained,
+              "concurrent lazy child charges the budget once");
+        }
+      }
+    }
+    System.out.println("BUFFA durable cache cold/warm publication passed");
+  }
+
   static void run(BuffaWire decoder) throws Exception {
     heapSlabOwnership(decoder);
     heapSlabGcStress(decoder);
+    concurrentDurableSlabCaches(decoder);
     slabSessions(decoder);
     slabProjections(decoder);
     projectedRetainBudgets(decoder);
