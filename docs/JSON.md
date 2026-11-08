@@ -528,4 +528,12 @@ budget. The first measurement found generic reads slower than reading Gson trees
 and snapshot reads allocating heavily; see that page before relying on either path
 for speed.
 
-The generic native producer, borrowed sessions and streams now share the structural stage2 walk. Flat scalar plans use the same walk with checked schema-key lookup and typed slot contracts; nested/repeated plans retain their On-Demand slot writer. The previous generic producer is a test-only differential oracle. Production string kernels remain portable: measured AVX2 and AVX-512 variants did not clear the adoption gate on unclemax. Current qualification and explicitly unmet criteria are recorded in the [producer ledger](superpowers/plans/2026-11-07-json-sota-ledger.md).
+The generic native producer, borrowed sessions and streams share the structural stage2 walk.
+Typed plans use the same walk with checked schema-key lookup and typed slot contracts;
+nested/repeated plans add bounded record/array frames. On-Demand remains the test oracle
+and runs after a failed nested decode to preserve error diagnostics; a structural failure
+cannot publish a result. The previous generic producer is a test-only differential oracle.
+Production string kernels remain portable: measured AVX2 and AVX-512 variants did not clear
+the adoption gate on unclemax. The [nested/repeated admission report](../benchmarks/results/json-typed-tranche-20261108/admission.md)
+records paired SVM ingest gains and control regressions. Earlier qualification and explicitly
+unmet criteria remain in the [producer ledger](superpowers/plans/2026-11-07-json-sota-ledger.md).

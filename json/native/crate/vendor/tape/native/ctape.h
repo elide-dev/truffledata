@@ -49,6 +49,7 @@
 #include <cstring>
 #include <stdexcept>
 #include <string_view>
+#include <utility>
 #include <vector>
 #if defined(__x86_64__)
 #include <emmintrin.h>
@@ -490,7 +491,11 @@ struct key_shape_cache {
       std::memset(bytes + length, 0, sizeof bytes - length);
     }
   };
-  struct level { uint32_t count = 0; key keys[max_keys]; uint8_t rank[max_keys]; };
+  // `seen`: a cache-eligible object of this depth has closed before. Templates install from the
+  // second eligible object on, so a document with one object per depth (one-shot decode, whose
+  // session cache dies with it) never pays for an install it cannot use; arrays of one shape
+  // still match from their third element, and long-lived sessions miss once more per depth.
+  struct level { uint32_t count = 0; bool seen = false; key keys[max_keys]; uint8_t rank[max_keys]; };
   struct frame { size_t object, first; uint32_t depth, count; bool matched; };
   level levels[depths];
   frame frames[depths];
@@ -652,7 +657,7 @@ template<bool Structural = false> class basic_ctape_writer final {
       }
       // Install only after every duplicate check has succeeded. Hash collisions preserve the
       // source-order tie break, so the rank permutation reproduces the sorted directory exactly.
-      if (shape && count <= key_shape_cache::max_keys) {
+      if (shape && count <= key_shape_cache::max_keys && std::exchange(shape->seen, true)) {
         bool fits = true;
         for (size_t i = 0; i < count; ++i)
           fits &= text_of(object + uint32_t(in[i])).size() <= key_shape_cache::max_bytes;

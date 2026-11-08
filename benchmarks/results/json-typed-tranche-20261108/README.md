@@ -97,3 +97,21 @@ Independent worker review found no concrete correctness defect in frame initiali
 plan-pointer lifetime, arena indexing, record-array scalar rejection or error replay. Its
 remaining performance lead is array lookahead (binary search and descendant rescans), to be
 judged by the paired results; the old On-Demand count also rescans descendants.
+
+## Final integration audit
+
+Review of integration `6ded68d` confirms the measured production/test sources match their
+recorded hashes, all six paired artifacts match the manifest, and `paired.md` reproduces
+exactly from all 408 raw records. The 34 allocation cells remain equal. This tranche adds
+no Java production access methods or coverage exemptions; the final combined coverage lane
+is still an integration check, not replaced by this source review.
+
+The audit also found pre-existing Cargo vendor drift: the canonical delayed shape-template
+installation from `6e1cfc1` was absent from `vendor/tape/native/ctape.h` at both baseline
+`9a1dcec` and integration `6ded68d`. The vendored header is now synchronized; all 21 vendored
+files with repository counterparts match exactly. This packages an already measured
+production optimization and does not change either preserved SVM image. The local Arm64
+Cargo build and link/fingerprint test pass after synchronization; see
+`cargo-vendor-sync-arm64.log` and its adjacent command/hash metadata. The stale producer
+description in `docs/JSON.md` now describes structural nested decoding and failure-only
+On-Demand diagnostics. No performance budget, fixture or admission claim changes.
