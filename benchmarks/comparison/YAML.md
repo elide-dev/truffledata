@@ -36,7 +36,7 @@ The planned hypotheses remain: native decode at least 0.8 times the paired rapid
 | Root | Maximum graph nodes | Loops | Unresolved calls | Graph allocations |
 |---|---:|---:|---:|---:|
 | `GenericReads[truffledata-yaml-interop]` | 2,000 | 1 | 0 | 0 |
-| `GenericReads[truffledata-yaml-export]` | 1,000 | 2 | 0 | 0 |
+| `GenericReads[truffledata-yaml-export]` | 1,000 | 1 | 0 | 0 |
 
 Each root must execute compiled guest code, stay within 192 AST nodes and allocate at most 1.0 Java byte per document, including call-result boxing. Closing one owner must make its read fail while a sibling remains valid. The dedicated borrowed TruffleSink cell has a predeclared 2,400 Java bytes/document budget on the same 32 records, covering fresh host collections and the shared text arena after warmup. Larger wrapper and stream workloads report their allocations separately. The YAML API tests additionally gate individual compiled reads at 0.05 bytes/read, including typed, alias and array paths.
 
