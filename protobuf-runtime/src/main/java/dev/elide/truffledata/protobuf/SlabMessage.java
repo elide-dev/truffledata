@@ -84,7 +84,7 @@ public final class SlabMessage extends SlabRow implements ProtoMessage {
     byte[] source =
         projection.requiresBorrow() ? Arrays.copyOfRange(input, offset, offset + length) : input;
     int start = projection.requiresBorrow() ? 0 : offset;
-    byte[] slab = SlabCodec.decode(plan.layout(), source, start, length, limits, projection);
+    byte[] slab = plan.decodeSlabBytes(source, start, length, limits, projection);
     byte[] retained = (getInt(slab, HEADER_FLAGS) & BORROWING) != 0 ? source : new byte[0];
     // Like ordinary Java decode, the internal producer already checked wire structure and
     // bounds. The constructor still checks required fields and aggregate logical budgets.

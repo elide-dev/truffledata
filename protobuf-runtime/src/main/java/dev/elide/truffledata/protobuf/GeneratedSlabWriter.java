@@ -30,6 +30,7 @@ public final class GeneratedSlabWriter {
   }
 
   private final byte[] input;
+  private final int inputStart;
   private final int maximum;
   private final int depthLimit;
   private final int fingerprint;
@@ -39,6 +40,7 @@ public final class GeneratedSlabWriter {
   private int handles;
   private long pending;
   private boolean certified = true;
+  private boolean borrowing;
 
   /** Cursor used by the generated loop; bounds are checked by each wire primitive. */
   public int position;
@@ -56,6 +58,7 @@ public final class GeneratedSlabWriter {
     if (offset < 0 || length < 0 || offset > input.length - length) throw invalidWindow();
     if (length > layout.plan(0).maxWireBytes()) throw SlabCodec.bad("Wire byte budget exceeded");
     this.input = input;
+    inputStart = offset;
     position = offset;
     maximum = limits.maxSlabBytes();
     depthLimit = Math.min(limits.maxDepth(), layout.plan(0).maxDepth() - 1);
@@ -156,6 +159,25 @@ public final class GeneratedSlabWriter {
     return SlabFormat.stringLength(output, header);
   }
 
+  /** Validate an omitted payload without allocating a header or copying its bytes. */
+  public int skipString(int end, boolean text, boolean lax) {
+    int bytes = length(end);
+    if (text && !lax) SlabCodec.utf16(input, position, bytes);
+    position += bytes;
+    return bytes;
+  }
+
+  /** Publish a checked lazy child using offsets relative to the supplied input window. */
+  public int lazyChild(int start, int length, int depth) {
+    int at = allocate(LAZY_HEADER_BYTES, 8);
+    putInt(output, at, start - inputStart);
+    putInt(output, at + 4, length);
+    putInt(output, at + 8, handles++);
+    putInt(output, at + 12, depth);
+    borrowing = true;
+    return at | LAZY_CHILD;
+  }
+
   public void put32(int at, int value) {
     putInt(output, at, value);
   }
@@ -226,6 +248,15 @@ public final class GeneratedSlabWriter {
     putInt(result, HEADER_HANDLES, handles);
     putInt(result, HEADER_ROOT, ROOT);
     putInt(result, HEADER_LAYOUT, fingerprint);
+    return result;
+  }
+
+  /** Keep ordinary owning output and projected/borrowing flags separate. */
+  public byte[] finishProjected(boolean lax) {
+    byte[] result = finish();
+    int flags = getInt(result, HEADER_FLAGS) | PROJECTED | (lax ? LAX : 0);
+    if (borrowing) flags = (flags & ~OWNING) | BORROWING;
+    putInt(result, HEADER_FLAGS, flags);
     return result;
   }
 }

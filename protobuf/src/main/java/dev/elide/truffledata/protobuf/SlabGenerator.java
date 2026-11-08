@@ -46,10 +46,28 @@ final class SlabGenerator {
           .append(ContractPlugin.quote(type.name()))
           .append(" -> new SlabDecoder_")
           .append(type.name().replace('.', '$'))
-          .append("(plan)::decode;\n");
+          .append("(plan);\n");
     out.append(
         " default -> throw new ContractViolation(\"Unknown generated slab type\");\n };\n }\n");
-    appendFastMethods(out, types, model);
+    appendFastMethods(out, types, model, false);
+    appendFastMethods(out, types, model, true);
+    appendScanMethods(out, types);
+    out.append(
+            " private static int[] slabTypeIds(dev.elide.truffledata.protobuf.Layout layout) {"
+                + " int[] ids=new int[")
+        .append(types.size())
+        .append(
+            "]; java.util.Arrays.fill(ids,-1); for(int i=0;i<layout.types();i++)"
+                + " switch(layout.plan(i).name()) {\n");
+    for (int t = 0; t < types.size(); t++)
+      out.append("case ")
+          .append(ContractPlugin.quote(types.get(t).name()))
+          .append(" -> ids[")
+          .append(t)
+          .append("]=i;\n");
+    out.append(
+        "default -> throw new ContractViolation(\"Generated slab type mismatch\"); } return ids;"
+            + " }\n");
     // A bounded length/extent cache avoids repeated growth and trim copies for heterogeneous
     // messages. Atomic opaque entries keep each key/value pair coherent across concurrent callers;
     // hints retain no input or output and never replace the writer's bounds checks.
@@ -58,11 +76,17 @@ final class SlabGenerator {
       String name = "SlabDecoder_" + type.name().replace('.', '$');
       out.append(" public static final class ")
           .append(name)
-          .append(" {\n private final dev.elide.truffledata.protobuf.Layout layout;\n")
+          .append(
+              " implements ProtoPlan.SlabDecoder {\n"
+                  + " private final dev.elide.truffledata.protobuf.Layout layout;\n")
+          .append(" private final int[] projectionTypeIds;\n")
           .append(" private final dev.elide.truffledata.protobuf.SlabCodec.FieldLookup lookup;\n")
           .append(
               " private final java.util.concurrent.atomic.AtomicLongArray slabHints="
                   + "new java.util.concurrent.atomic.AtomicLongArray(64);\n")
+          .append(
+              " private final java.util.concurrent.atomic.AtomicLongArray projectedHints=new"
+                  + " java.util.concurrent.atomic.AtomicLongArray(64);\n")
           .append(" public ")
           .append(name)
           .append("(ProtoPlan plan) {\n")
@@ -70,7 +94,7 @@ final class SlabGenerator {
           .append(t)
           .append("())) throw new ContractViolation(\"Generated slab root mismatch\");\n")
           .append(
-              " layout=plan.layout();\n"
+              " layout=plan.layout(); projectionTypeIds=slabTypeIds(layout);\n"
                   + " var entries=new"
                   + " dev.elide.truffledata.protobuf.SlabCodec.FieldLookup[layout.types()];\n")
           .append(" for(int i=0;i<entries.length;i++) entries[i]=slabLookup(layout.plan(i));\n")
@@ -104,6 +128,39 @@ final class SlabGenerator {
               "dev.elide.truffledata.protobuf.SlabCodec.decode(layout,input,offset,length,limits,lookup);"
                   + " }\n")
           .append(" slabHints.setOpaque(bucket,((long)length<<32)|result.length); return result;\n")
+          .append(" }\n")
+          .append(
+              " public byte[] decodeProjected(dev.elide.truffledata.protobuf.Layout expected,byte[]"
+                  + " input,int offset,int length,dev.elide.truffledata.protobuf.SlabLimits"
+                  + " limits,dev.elide.truffledata.protobuf.Projection projection) {\n")
+          .append(
+              " if(expected!=layout) throw new ContractViolation(\"Generated projection layout"
+                  + " mismatch\"); projection.requireLayout(layout);\n")
+          .append(
+              " if(!projection.lazyChildrenEnabled() || projection.borrowBytesThreshold()!=0)"
+                  + " return"
+                  + " dev.elide.truffledata.protobuf.SlabCodec.decode(layout,input,offset,length,limits,projection);\n")
+          .append(
+              " int bucket=(length^(length>>>6))&63; long hint=projectedHints.getOpaque(bucket);"
+                  + " var writer=new ")
+          .append(WRITER)
+          .append(
+              "(layout,input,offset,length,limits,(int)(hint>>>32)==length?(int)hint:0); byte[]"
+                  + " result;\n")
+          .append(" try { slabProjectedRead")
+          .append(t)
+          .append(
+              "(writer,offset+length,0,projection,projectionTypeIds);"
+                  + " result=writer.finishProjected(projection.laxValidation()); }\n")
+          .append(" catch(")
+          .append(WRITER)
+          .append(
+              ".Fallback restart) {"
+                  + " result=dev.elide.truffledata.protobuf.SlabCodec.decode(layout,input,offset,length,limits,projection);"
+                  + " }\n")
+          .append(
+              " projectedHints.setOpaque(bucket,((long)length<<32)|result.length); return"
+                  + " result;\n")
           .append(" }\n }\n");
     }
   }
@@ -111,19 +168,34 @@ final class SlabGenerator {
   private static final String WRITER = "dev.elide.truffledata.protobuf.GeneratedSlabWriter";
 
   private static void appendFastMethods(
-      StringBuilder out, List<ProtoPlan.Type> types, ProtoPlan.Model model) {
+      StringBuilder out, List<ProtoPlan.Type> types, ProtoPlan.Model model, boolean projected) {
     var indices = new java.util.HashMap<String, Integer>();
     for (int i = 0; i < types.size(); i++) indices.put(types.get(i).name(), i);
     for (int t = 0; t < types.size(); t++) {
       var type = types.get(t);
       var layout = model.type(type.name()).layout();
-      out.append(" private static int slabRead")
+      out.append(
+              projected ? " private static int slabProjectedRead" : " private static int slabRead")
           .append(t)
           .append("(")
           .append(WRITER)
-          .append(" w,int end,int depth) {\n");
+          .append(" w,int end,int depth")
+          .append(
+              projected
+                  ? ",dev.elide.truffledata.protobuf.Projection projection,int[] typeIds"
+                  : "")
+          .append(") {\n");
       // Large schemas avoid a JVM method-size cliff; map roots need map-entry close semantics.
-      if (type.mapEntry() || type.fields().size() > 128) {
+      if (type.mapEntry()
+          || type.fields().size() > 128
+          || (projected
+              && type.fields().stream()
+                  .anyMatch(
+                      f ->
+                          f.required()
+                              || f.map()
+                              || f.oneof() >= 0
+                              || f.kind() == ProtoPlan.Kind.GROUP))) {
         out.append(" throw ").append(WRITER).append(".fallback();\n }\n");
         continue;
       }
@@ -158,16 +230,67 @@ final class SlabGenerator {
                 .append(WRITER)
                 .append(".fallback();\n");
           }
-          out.append(
-                  " int length=w.length(end); int childEnd=w.position+length;\n long bits=slabRead")
-              .append(indices.get(field.typeName()))
-              .append("(w,childEnd,depth+1);\n");
+          if (projected) {
+            int child = java.util.Objects.requireNonNull(indices.get(field.typeName()));
+            out.append(
+                    " int length=w.length(end),start=w.position,childEnd=start+length; long"
+                        + " bits;\n")
+                .append(" if(!projection.wants(typeIds[")
+                .append(t)
+                .append("],")
+                .append(f)
+                .append(")) { slabScan")
+                .append(child)
+                .append(
+                    "(w,childEnd,depth+1,projection.laxValidation());"
+                        + " bits=w.lazyChild(start,length,depth+1); }\n")
+                .append(" else bits=slabProjectedRead")
+                .append(child)
+                .append("(w,childEnd,depth+1,projection,typeIds);\n");
+          } else {
+            out.append(
+                    " int length=w.length(end); int childEnd=w.position+length;\n"
+                        + " long bits=slabRead")
+                .append(indices.get(field.typeName()))
+                .append("(w,childEnd,depth+1);\n");
+          }
           appendStore(out, field, layout, f, true);
         } else {
+          boolean omitPayload =
+              projected
+                  && !field.repeated()
+                  && (field.kind() == ProtoPlan.Kind.STRING
+                      || field.kind() == ProtoPlan.Kind.BYTES);
+          if (omitPayload) {
+            int word = f >>> 5, mask = 1 << f;
+            out.append(" if(!projection.wants(typeIds[")
+                .append(t)
+                .append("],")
+                .append(f)
+                .append(")) { int length=w.skipString(end,")
+                .append(field.kind() == ProtoPlan.Kind.STRING)
+                .append(",projection.laxValidation());\n");
+            if (field.explicitPresence())
+              out.append(" presence").append(word).append("|=").append(mask).append(";\n");
+            else
+              out.append(" presence")
+                  .append(word)
+                  .append("=length!=0 ? presence")
+                  .append(word)
+                  .append("|")
+                  .append(mask)
+                  .append(" : presence")
+                  .append(word)
+                  .append("&~(")
+                  .append(mask)
+                  .append(");\n");
+            out.append(" } else {\n");
+          }
           appendScalar(out, field, "end");
           appendEnumCheck(out, field);
           if (!field.repeated()) appendSelection(out, type, layout, f);
           appendStore(out, field, layout, f, false);
+          if (omitPayload) out.append(" }\n");
         }
         out.append(" }\n");
         if (field.repeated() && field.kind().packable()) {
@@ -215,6 +338,56 @@ final class SlabGenerator {
             .append(word)
             .append(");\n");
       out.append(" return record;\n }\n");
+    }
+  }
+
+  /** The validation-only half of a lazy generated decode never allocates child records. */
+  private static void appendScanMethods(StringBuilder out, List<ProtoPlan.Type> types) {
+    var indices = new java.util.HashMap<String, Integer>();
+    for (int i = 0; i < types.size(); i++) indices.put(types.get(i).name(), i);
+    for (int t = 0; t < types.size(); t++) {
+      var type = types.get(t);
+      out.append(" private static void slabScan")
+          .append(t)
+          .append("(")
+          .append(WRITER)
+          .append(" w,int end,int depth,boolean lax) {\n");
+      if (type.mapEntry()
+          || type.fields().size() > 128
+          || type.fields().stream()
+              .anyMatch(
+                  f ->
+                      f.required()
+                          || f.map()
+                          || f.oneof() >= 0
+                          || f.kind() == ProtoPlan.Kind.GROUP)) {
+        out.append(" throw ").append(WRITER).append(".fallback(); }\n");
+        continue;
+      }
+      out.append(" while(w.position<end) switch(w.tag(end)) {\n");
+      for (var field : type.fields()) {
+        out.append(" case ").append((field.number() << 3) | field.kind().wire).append(" -> {\n");
+        if (field.kind().message()) {
+          out.append(" w.descend(depth); int length=w.length(end); slabScan")
+              .append(indices.get(field.typeName()))
+              .append("(w,w.position+length,depth+1,lax);\n");
+        } else if (field.kind() == ProtoPlan.Kind.STRING || field.kind() == ProtoPlan.Kind.BYTES) {
+          out.append(" w.skipString(end,")
+              .append(field.kind() == ProtoPlan.Kind.STRING)
+              .append(",lax);\n");
+        } else appendScalar(out, field, "end");
+        out.append(" }\n");
+        if (field.repeated() && field.kind().packable()) {
+          out.append(" case ")
+              .append((field.number() << 3) | 2)
+              .append(
+                  " -> { int length=w.length(end), packedEnd=w.position+length;"
+                      + " while(w.position<packedEnd) {\n");
+          appendScalar(out, field, "packedEnd");
+          out.append(" } }\n");
+        }
+      }
+      out.append(" default -> throw ").append(WRITER).append(".fallback(); } }\n");
     }
   }
 

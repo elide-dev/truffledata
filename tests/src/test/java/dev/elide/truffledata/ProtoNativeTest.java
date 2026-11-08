@@ -8,6 +8,7 @@ import dev.elide.truffledata.generated.TruffleDataContracts;
 import dev.elide.truffledata.protobuf.*;
 import java.nio.file.*;
 import java.util.*;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
 
 class ProtoNativeTest {
@@ -1306,6 +1307,131 @@ class ProtoNativeTest {
         () ->
             new TruffleDataContracts.SlabDecoder_truffledata$lossless$Sample(
                 plan("google.protobuf.Timestamp")));
+  }
+
+  private static DynamicMessage projectedTree(Descriptor descriptor, Random random, int depth) {
+    var message = DynamicMessage.newBuilder(descriptor);
+    message.setField(descriptor.findFieldByName("id"), random.nextInt());
+    message.setField(
+        descriptor.findFieldByName("text"), List.of("", "ascii", "λ", "😀").get(random.nextInt(4)));
+    message.setField(
+        descriptor.findFieldByName("blob"),
+        ByteString.copyFrom(new byte[] {(byte) random.nextInt(), -1, 0}));
+    for (int i = random.nextInt(8); i > 0; i--)
+      message.addRepeatedField(descriptor.findFieldByName("numbers"), random.nextInt());
+    for (int i = random.nextInt(4); i > 0; i--)
+      message.addRepeatedField(descriptor.findFieldByName("texts"), "text-λ-" + i);
+    if (depth > 0) {
+      if (random.nextBoolean())
+        message.setField(
+            descriptor.findFieldByName("child"), projectedTree(descriptor, random, depth - 1));
+      for (int i = random.nextInt(4); i > 0; i--)
+        message.addRepeatedField(
+            descriptor.findFieldByName("children"), projectedTree(descriptor, random, depth - 1));
+    }
+    return message.build();
+  }
+
+  private static byte @Nullable [] projectedParity(
+      ProtoPlan plan,
+      byte[] wire,
+      int offset,
+      int length,
+      SlabLimits limits,
+      Projection projection) {
+    byte[] expected;
+    try {
+      expected = SlabCodec.decode(plan.layout(), wire, offset, length, limits, projection);
+    } catch (ContractViolation invalid) {
+      assertThrows(
+          ContractViolation.class,
+          () -> plan.decodeSlabBytes(wire, offset, length, limits, projection));
+      return null;
+    }
+    byte[] actual = plan.decodeSlabBytes(wire, offset, length, limits, projection);
+    assertArrayEquals(expected, actual);
+    return actual;
+  }
+
+  @Test
+  void generatedLazyProjectionsPreserveBytesWindowsValidationAndBudgets() throws Exception {
+    var contract = plan("truffledata.lossless.ProjectedTree");
+    var descriptor = descriptor(contract.name());
+    var sparse = Projection.builder(contract).select("id", "text").build().lazyChildren();
+    var projections =
+        List.of(
+            sparse,
+            sparse.lax(),
+            sparse.borrowBytes(1),
+            Projection.builder(contract).build().lazyChildren(),
+            Projection.builder(contract).select("child", "children").build().lazyChildren(),
+            Projection.all(contract).lazyChildren());
+    var random = new Random(0x51ab_71ee);
+    for (int round = 0; round < 256; round++) {
+      byte[] wire = projectedTree(descriptor, random, 2).toByteArray();
+      byte[] window = new byte[wire.length + 11];
+      System.arraycopy(wire, 0, window, 5, wire.length);
+      var limits = SlabLimits.forInput(contract.layout(), wire.length);
+      for (var projection : projections) {
+        byte[] expected =
+            Objects.requireNonNull(
+                projectedParity(contract, wire, 0, wire.length, limits, projection));
+        assertArrayEquals(
+            expected, projectedParity(contract, window, 5, wire.length, limits, projection));
+        var exact = new SlabLimits(32, expected.length);
+        assertArrayEquals(
+            expected, projectedParity(contract, window, 5, wire.length, exact, projection));
+        assertNull(
+            projectedParity(
+                contract,
+                wire,
+                0,
+                wire.length,
+                new SlabLimits(32, expected.length - 1),
+                projection));
+        projectedParity(contract, wire, 0, wire.length, new SlabLimits(0, 1 << 20), projection);
+        byte[] corrupt = wire.clone();
+        corrupt[random.nextInt(corrupt.length)] = (byte) random.nextInt(256);
+        projectedParity(contract, corrupt, 0, corrupt.length, limits, projection);
+        projectedParity(contract, wire, 0, random.nextInt(wire.length), limits, projection);
+        // The second occurrence of a singular child requires a merged eager record.
+        if (round % 16 == 0) {
+          byte[] duplicate = new byte[wire.length * 2];
+          System.arraycopy(wire, 0, duplicate, 0, wire.length);
+          System.arraycopy(wire, 0, duplicate, wire.length, wire.length);
+          projectedParity(
+              contract,
+              duplicate,
+              0,
+              duplicate.length,
+              SlabLimits.forInput(contract.layout(), duplicate.length),
+              projection);
+        }
+      }
+    }
+    // Required fields, groups, oneofs and maps retain the complete table semantics.
+    for (String name :
+        List.of(
+            "truffledata.lossless.Sample",
+            "truffledata.lossless.Required",
+            "truffledata.lossless.Legacy")) {
+      var complex = plan(name);
+      var projection = Projection.builder(complex).build().lazyChildren();
+      for (byte[] wire :
+          List.of(
+              new byte[0],
+              new byte[] {8, 1},
+              new byte[] {18, 0},
+              new byte[] {66, 2, 8, 1, 66, 2, 8, 2},
+              new byte[] {(byte) 0x98, 6, 42}))
+        projectedParity(
+            complex,
+            wire,
+            0,
+            wire.length,
+            SlabLimits.forInput(complex.layout(), wire.length),
+            projection);
+    }
   }
 
   @Test

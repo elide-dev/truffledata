@@ -53,6 +53,17 @@ message Flat {
 }
 message Empty {}
 
+// A recursive tree without oneofs/maps exercises generated lazy projections directly.
+message ProjectedTree {
+  int32 id = 1;
+  string text = 2;
+  bytes blob = 3;
+  ProjectedTree child = 4;
+  repeated ProjectedTree children = 5;
+  repeated sint32 numbers = 6;
+  repeated string texts = 7;
+}
+
 // Direct primitive writers include multi-byte tags, signed/unsigned values and fixed widths.
 message PrimitiveWrites {
   int32 i32 = 1;

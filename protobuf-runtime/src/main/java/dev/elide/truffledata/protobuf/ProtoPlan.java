@@ -164,6 +164,17 @@ public final class ProtoPlan {
   @FunctionalInterface
   public interface SlabDecoder {
     byte[] decode(byte[] input, int offset, int length, SlabLimits limits);
+
+    /** Existing generated/custom producers retain the checked table fallback for projections. */
+    default byte[] decodeProjected(
+        Layout layout,
+        byte[] input,
+        int offset,
+        int length,
+        SlabLimits limits,
+        Projection projection) {
+      return SlabCodec.decode(layout, input, offset, length, limits, projection);
+    }
   }
 
   /** Immutable model hook that binds generated code to the complete checked type definition. */
@@ -356,6 +367,24 @@ public final class ProtoPlan {
       }
     }
     return decoder.decode(input, offset, length, limits);
+  }
+
+  /** Decode a projection through a prepared generated producer when it supports that shape. */
+  @TruffleBoundary
+  public byte[] decodeSlabBytes(
+      byte[] input, int offset, int length, SlabLimits limits, Projection projection) {
+    projection.requireLayout(layout());
+    SlabDecoderFactory factory = model.slabDecoders;
+    if (factory == null)
+      return SlabCodec.decode(layout(), input, offset, length, limits, projection);
+    SlabDecoder decoder = slabDecoder;
+    if (decoder == null) {
+      synchronized (this) {
+        decoder = slabDecoder;
+        if (decoder == null) slabDecoder = decoder = Objects.requireNonNull(factory.bind(this));
+      }
+    }
+    return decoder.decodeProjected(layout(), input, offset, length, limits, projection);
   }
 
   public ProtoJsonType jsonType() {
