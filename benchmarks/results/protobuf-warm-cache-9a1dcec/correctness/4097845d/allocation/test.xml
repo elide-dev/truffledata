@@ -1,0 +1,139 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="JUnit Jupiter" tests="13" skipped="0" failures="0" errors="0" time="5.189" hostname="&lt;unknown host&gt;" timestamp="2026-11-08T21:32:06">
+<properties>
+<property name="file.encoding" value="UTF-8"/>
+<property name="file.separator" value="/"/>
+<property name="java.class.path" value="tests/allocation.jar:tests/libtest_lib.jar:tests/libexplicit_host_java.jar:../rules_jvm_external++maven+maven/com/google/protobuf/protobuf-java/4.36.1/processed_protobuf-java-4.36.1.jar:../rules_jvm_external++maven+maven/org/jspecify/jspecify/1.0.1/processed_jspecify-1.0.1.jar:benchmarks/libbenchmarks.jar:benchmarks/comparison/libjson_fixture.jar:json/libjson.jar:tape/libtape.jar:core/libcore.jar:../rules_jvm_external++maven+maven/org/graalvm/truffle/truffle-api/25.5.5-elide.27/processed_truffle-api-25.5.5-elide.27.jar:../rules_jvm_external++maven+maven/org/graalvm/polyglot/polyglot/25.5.5-elide.27/processed_polyglot-25.5.5-elide.27.jar:../rules_jvm_external++maven+maven/org/graalvm/sdk/collections/25.5.5-elide.27/processed_collections-25.5.5-elide.27.jar:../rules_jvm_external++maven+maven/org/graalvm/sdk/nativeimage/25.5.5-elide.27/processed_nativeimage-25.5.5-elide.27.jar:../rules_jvm_external++maven+maven/org/graalvm/sdk/word/25.5.5-elide.27/processed_word-25.5.5-elide.27.jar:../rules_jvm_external++maven+maven/org/graalvm/sdk/jniutils/25.5.5-elide.27/processed_jniutils-25.5.5-elide.27.jar:../+http_archive+myna/libvalues.jar:json/libbindings.jar:../rules_jvm_external++maven+maven/com/google/code/gson/gson/2.8.9/processed_gson-2.8.9.jar:benchmarks/comparison/libyaml_fixture.jar:benchmarks/fixtures/libcontracts.jar:protobuf-runtime/libprotobuf-runtime.jar:jdbc/libjdbc.jar:protobuf/libprotobuf.jar:../rules_jvm_external++maven+maven/com/google/protobuf/protobuf-java-util/4.36.1/processed_protobuf-java-util-4.36.1.jar:../rules_jvm_external++maven+maven/com/google/code/findbugs/jsr305/3.0.2/processed_jsr305-3.0.2.jar:../rules_jvm_external++maven+maven/com/google/errorprone/error_prone_annotations/2.50.0/processed_error_prone_annotations-2.50.0.jar:yaml/libyaml.jar:yaml/libbindings.jar:../rules_jvm_external++maven+maven/org/openjdk/jmh/jmh-core/1.37/processed_jmh-core-1.37.jar:../rules_jvm_external++maven+maven/net/sf/jopt-simple/jopt-simple/5.0.4/processed_jopt-simple-5.0.4.jar:../rules_jvm_external++maven+maven/org/apache/commons/commons-math3/3.6.1/processed_commons-math3-3.6.1.jar:jdbc-mysql/libjdbc-mysql.jar:../rules_jvm_external++maven+maven/com/mysql/mysql-connector-j/26.10.0/processed_mysql-connector-j-26.10.0.jar:jdbc-postgresql/libjdbc-postgresql.jar:../rules_jvm_external++maven+maven/org/postgresql/postgresql/42.7.14/processed_postgresql-42.7.14.jar:../rules_jvm_external++maven+maven/org/checkerframework/checker-qual/4.2.3/processed_checker-qual-4.2.3.jar:jdbc-sqlite/libjdbc-sqlite.jar:../rules_jvm_external++maven+maven/org/xerial/sqlite-jdbc/3.53.4.0/processed_sqlite-jdbc-3.53.4.0.jar:tests/libnative_contracts.jar:../rules_jvm_external++maven+maven/org/graalvm/truffle/truffle-runtime/25.5.5-elide.27/processed_truffle-runtime-25.5.5-elide.27.jar:../rules_jvm_external++maven+maven/org/graalvm/truffle/truffle-compiler/25.5.5-elide.27/processed_truffle-compiler-25.5.5-elide.27.jar:../rules_jvm_external++maven+maven/org/junit/jupiter/junit-jupiter-api/5.11.4/processed_junit-jupiter-api-5.11.4.jar:../rules_jvm_external++maven+maven/org/apiguardian/apiguardian-api/1.1.2/processed_apiguardian-api-1.1.2.jar:../rules_jvm_external++maven+maven/org/junit/platform/junit-platform-commons/1.11.4/processed_junit-platform-commons-1.11.4.jar:../rules_jvm_external++maven+maven/org/opentest4j/opentest4j/1.3.0/processed_opentest4j-1.3.0.jar:bazel/junit/librunner.jar:../rules_jvm_external++maven+maven/org/junit/jupiter/junit-jupiter/5.11.4/processed_junit-jupiter-5.11.4.jar:../rules_jvm_external++maven+maven/org/junit/jupiter/junit-jupiter-engine/5.11.4/processed_junit-jupiter-engine-5.11.4.jar:../rules_jvm_external++maven+maven/org/junit/platform/junit-platform-engine/1.11.4/processed_junit-platform-engine-1.11.4.jar:../rules_jvm_external++maven+maven/org/junit/jupiter/junit-jupiter-params/5.11.4/processed_junit-jupiter-params-5.11.4.jar:../rules_jvm_external++maven+maven/org/junit/platform/junit-platform-launcher/1.11.4/processed_junit-platform-launcher-1.11.4.jar:../rules_jvm_external++maven+maven/org/junit/platform/junit-platform-reporting/1.11.4/processed_junit-platform-reporting-1.11.4.jar:../rules_jvm_external++maven+maven/com/h2database/h2/2.3.232/processed_h2-2.3.232.jar:../rules_jvm_external++maven+maven/org/graalvm/js/js-language/25.5.5-elide.27/processed_js-language-25.5.5-elide.27.jar:../rules_jvm_external++maven+maven/org/graalvm/regex/regex/25.5.5-elide.27/processed_regex-25.5.5-elide.27.jar:../rules_jvm_external++maven+maven/org/graalvm/shadowed/icu4j/25.5.5-elide.27/processed_icu4j-25.5.5-elide.27.jar:../rules_jvm_external++maven+maven/org/graalvm/shadowed/xz/25.5.5-elide.27/processed_xz-25.5.5-elide.27.jar:../rules_jvm_external++maven+maven/org/graalvm/python/python-language/25.5.5-elide.27/processed_python-language-25.5.5-elide.27.jar:../rules_jvm_external++maven+maven/org/graalvm/tools/profiler-tool/25.5.5-elide.27/processed_profiler-tool-25.5.5-elide.27.jar:../rules_jvm_external++maven+maven/org/graalvm/shadowed/json/25.5.5-elide.27/processed_json-25.5.5-elide.27.jar:../rules_jvm_external++maven+maven/org/graalvm/python/python-resources/25.5.5-elide.27/processed_python-resources-25.5.5-elide.27.jar"/>
+<property name="java.class.version" value="69.0"/>
+<property name="java.home" value="/workspace/bazel-out/rbe_linux_amd64-opt/bin/tests/allocation.runfiles/rules_graalvm++graalvm+graalvm_linux_amd64"/>
+<property name="java.io.tmpdir" value="/workspace/_tmp/ae655526f1a8a0124b85b4aec32efa50"/>
+<property name="java.library.path" value="/usr/java/packages/lib:/usr/lib64:/lib64:/lib:/usr/lib"/>
+<property name="java.runtime.name" value="OpenJDK Runtime Environment"/>
+<property name="java.runtime.version" value="25.0.4.1.1+1-jvmci-25.5-b24"/>
+<property name="java.specification.name" value="Java Platform API Specification"/>
+<property name="java.specification.vendor" value="Oracle Corporation"/>
+<property name="java.specification.version" value="25"/>
+<property name="java.vendor" value="GraalVM Community"/>
+<property name="java.vendor.url" value="https://www.graalvm.org/"/>
+<property name="java.vendor.url.bug" value="https://github.com/oracle/graal/issues"/>
+<property name="java.vendor.version" value="GraalVM CE 25.5.5-dev+1.1"/>
+<property name="java.version" value="25.0.4.1.1"/>
+<property name="java.version.date" value="2026-08-18"/>
+<property name="java.vm.compressedOopsMode" value="32-bit"/>
+<property name="java.vm.info" value="mixed mode, sharing"/>
+<property name="java.vm.name" value="OpenJDK 64-Bit Server VM"/>
+<property name="java.vm.specification.name" value="Java Virtual Machine Specification"/>
+<property name="java.vm.specification.vendor" value="Oracle Corporation"/>
+<property name="java.vm.specification.version" value="25"/>
+<property name="java.vm.vendor" value="GraalVM Community"/>
+<property name="java.vm.version" value="25.0.4.1.1+1-jvmci-25.5-b24"/>
+<property name="jdk.debug" value="release"/>
+<property name="line.separator" value="&#10;"/>
+<property name="native.encoding" value="UTF-8"/>
+<property name="os.arch" value="amd64"/>
+<property name="os.name" value="Linux"/>
+<property name="os.version" value="5.15.0"/>
+<property name="path.separator" value=":"/>
+<property name="polyglot.engine.BackgroundCompilation" value="false"/>
+<property name="polyglot.engine.WarnInterpreterOnly" value="false"/>
+<property name="stderr.encoding" value="UTF-8"/>
+<property name="stdin.encoding" value="UTF-8"/>
+<property name="stdout.encoding" value="UTF-8"/>
+<property name="sun.arch.data.model" value="64"/>
+<property name="sun.boot.library.path" value="/workspace/bazel-out/rbe_linux_amd64-opt/bin/tests/allocation.runfiles/rules_graalvm++graalvm+graalvm_linux_amd64/lib"/>
+<property name="sun.cpu.endian" value="little"/>
+<property name="sun.io.unicode.encoding" value="UnicodeLittle"/>
+<property name="sun.java.command" value="dev.elide.bazel.junit.BazelJUnitRunner --package dev.elide.truffledata --include-class dev.elide.truffledata.AllocationTest"/>
+<property name="sun.java.launcher" value="SUN_STANDARD"/>
+<property name="sun.jnu.encoding" value="UTF-8"/>
+<property name="sun.management.compiler" value="HotSpot 64-Bit Tiered Compilers"/>
+<property name="user.country" value="US"/>
+<property name="user.dir" value="/workspace/bazel-out/rbe_linux_amd64-opt/bin/tests/allocation.runfiles/_main"/>
+<property name="user.home" value="/root"/>
+<property name="user.language" value="en"/>
+<property name="user.name" value="root"/>
+<property name="user.timezone" value="UTC"/>
+</properties>
+<testcase name="nativeProtobufReadsAndBinaryIngestionStayWithinAllocationBudgets()" classname="dev.elide.truffledata.AllocationTest" time="0.22">
+<system-out><![CDATA[
+unique-id: [engine:junit-jupiter]/[class:dev.elide.truffledata.AllocationTest]/[method:nativeProtobufReadsAndBinaryIngestionStayWithinAllocationBudgets()]
+display-name: nativeProtobufReadsAndBinaryIngestionStayWithinAllocationBudgets()
+]]></system-out>
+</testcase>
+<testcase name="ingestionAndRowAllocationBudgets()" classname="dev.elide.truffledata.AllocationTest" time="0.142">
+<system-out><![CDATA[
+unique-id: [engine:junit-jupiter]/[class:dev.elide.truffledata.AllocationTest]/[method:ingestionAndRowAllocationBudgets()]
+display-name: ingestionAndRowAllocationBudgets()
+]]></system-out>
+</testcase>
+<testcase name="temporaryPrimitiveStaticRowsAreEliminatedInCompiledGuests()" classname="dev.elide.truffledata.AllocationTest" time="0.106">
+<system-out><![CDATA[
+unique-id: [engine:junit-jupiter]/[class:dev.elide.truffledata.AllocationTest]/[method:temporaryPrimitiveStaticRowsAreEliminatedInCompiledGuests()]
+display-name: temporaryPrimitiveStaticRowsAreEliminatedInCompiledGuests()
+]]></system-out>
+</testcase>
+<testcase name="scalarJdbcDecodingDoesNotAllocatePerCellBudgets()" classname="dev.elide.truffledata.AllocationTest" time="0.664">
+<system-out><![CDATA[
+unique-id: [engine:junit-jupiter]/[class:dev.elide.truffledata.AllocationTest]/[method:scalarJdbcDecodingDoesNotAllocatePerCellBudgets()]
+display-name: scalarJdbcDecodingDoesNotAllocatePerCellBudgets()
+]]></system-out>
+</testcase>
+<testcase name="primitiveReadsStayWithinAllocationBudget()" classname="dev.elide.truffledata.AllocationTest" time="0.375">
+<system-out><![CDATA[
+unique-id: [engine:junit-jupiter]/[class:dev.elide.truffledata.AllocationTest]/[method:primitiveReadsStayWithinAllocationBudget()]
+display-name: primitiveReadsStayWithinAllocationBudget()
+]]></system-out>
+</testcase>
+<testcase name="directColumnIngestionAvoidsIntermediateRowArrays()" classname="dev.elide.truffledata.AllocationTest" time="0.372">
+<system-out><![CDATA[
+unique-id: [engine:junit-jupiter]/[class:dev.elide.truffledata.AllocationTest]/[method:directColumnIngestionAvoidsIntermediateRowArrays()]
+display-name: directColumnIngestionAvoidsIntermediateRowArrays()
+]]></system-out>
+</testcase>
+<testcase name="nullableStaticPresentReadsStayPrimitiveAfterNullAndMissing()" classname="dev.elide.truffledata.AllocationTest" time="0.877">
+<system-out><![CDATA[
+unique-id: [engine:junit-jupiter]/[class:dev.elide.truffledata.AllocationTest]/[method:nullableStaticPresentReadsStayPrimitiveAfterNullAndMissing()]
+display-name: nullableStaticPresentReadsStayPrimitiveAfterNullAndMissing()
+]]></system-out>
+</testcase>
+<testcase name="nestedAccessAndDynamicMutationRemainCorrectAfterCompilation()" classname="dev.elide.truffledata.AllocationTest" time="0.337">
+<system-out><![CDATA[
+unique-id: [engine:junit-jupiter]/[class:dev.elide.truffledata.AllocationTest]/[method:nestedAccessAndDynamicMutationRemainCorrectAfterCompilation()]
+display-name: nestedAccessAndDynamicMutationRemainCorrectAfterCompilation()
+]]></system-out>
+</testcase>
+<testcase name="mixedRepresentationsSaturateCachesWithoutUnboundedGrowth()" classname="dev.elide.truffledata.AllocationTest" time="0.332">
+<system-out><![CDATA[
+unique-id: [engine:junit-jupiter]/[class:dev.elide.truffledata.AllocationTest]/[method:mixedRepresentationsSaturateCachesWithoutUnboundedGrowth()]
+display-name: mixedRepresentationsSaturateCachesWithoutUnboundedGrowth()
+]]></system-out>
+</testcase>
+<testcase name="narrowTypedReadsAndExactLengthCompileWithoutAllocation()" classname="dev.elide.truffledata.AllocationTest" time="0.161">
+<system-out><![CDATA[
+unique-id: [engine:junit-jupiter]/[class:dev.elide.truffledata.AllocationTest]/[method:narrowTypedReadsAndExactLengthCompileWithoutAllocation()]
+display-name: narrowTypedReadsAndExactLengthCompileWithoutAllocation()
+]]></system-out>
+</testcase>
+<testcase name="accessorReadsStayWithinAllocationBudget()" classname="dev.elide.truffledata.AllocationTest" time="1.053">
+<system-out><![CDATA[
+unique-id: [engine:junit-jupiter]/[class:dev.elide.truffledata.AllocationTest]/[method:accessorReadsStayWithinAllocationBudget()]
+display-name: accessorReadsStayWithinAllocationBudget()
+]]></system-out>
+</testcase>
+<testcase name="binarySnapshotsAllocateOneCompactPayload()" classname="dev.elide.truffledata.AllocationTest" time="0.199">
+<system-out><![CDATA[
+unique-id: [engine:junit-jupiter]/[class:dev.elide.truffledata.AllocationTest]/[method:binarySnapshotsAllocateOneCompactPayload()]
+display-name: binarySnapshotsAllocateOneCompactPayload()
+]]></system-out>
+</testcase>
+<testcase name="compactIntegerDecodingDoesNotAllocatePresenceOrScalarTuples()" classname="dev.elide.truffledata.AllocationTest" time="0.279">
+<system-out><![CDATA[
+unique-id: [engine:junit-jupiter]/[class:dev.elide.truffledata.AllocationTest]/[method:compactIntegerDecodingDoesNotAllocatePresenceOrScalarTuples()]
+display-name: compactIntegerDecodingDoesNotAllocatePresenceOrScalarTuples()
+]]></system-out>
+</testcase>
+<system-out><![CDATA[
+unique-id: [engine:junit-jupiter]
+display-name: JUnit Jupiter
+]]></system-out>
+</testsuite>
