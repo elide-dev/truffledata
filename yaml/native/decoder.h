@@ -334,6 +334,7 @@ class handler : public c4::yml::EventHandlerStack<handler, handler_state> {
   // Test hook: false routes every scalar through the general resolver and writers, so tests can
   // prove the fast paths produce identical tapes and side tables. Production never clears it.
   void fast_paths(bool on) { fast_paths_ = on; }
+  void fused_duplicates(bool on) { fused_duplicates_ = on; }
 
   const td_tape_view& view() const { return view_; }
   table_view<uint32_t> meta() const { return {meta_.data(), meta_.size()}; }
@@ -573,21 +574,13 @@ class handler : public c4::yml::EventHandlerStack<handler, handler_state> {
   static ct::span unpack(uint64_t span) { return {uint32_t(span >> 32), uint32_t(span)}; }
   // Metadata indexes compact word offsets; payload words always carry zero metadata. Raw spans
   // live beside owned strings and in scalar headers, so no lexical/hash side tables are needed.
-  [[gnu::always_inline]] void side(uint64_t lexical, uint32_t, uint32_t meta) {
+  [[gnu::always_inline]] void side(uint64_t, uint32_t, uint32_t meta) {
     size_t index = meta_.size(), count = writer_->word_count() - index;
     if (count == 0 || count > 2) throw error(status_internal, "YAML metadata alignment");
     uint32_t* entries = meta_.extend(memory_, count);
     entries[0] = meta;
     if (count == 2) entries[1] = 0;
-    uint64_t& w = writer_->words()[index];
-    uint32_t kind = ct::kind(w);
-    ct::span raw = unpack(lexical);
-    if (raw.length > ct::max_length) throw limit_error("text bytes");
-    if (kind == ct::kind_string || kind == ct::kind_decimal) {
-      if (w & ct::owned_flag) writer_->words()[index + 1] = lexical;
-    } else if (kind <= ct::kind_f64) {
-      w = ct::make(kind, w & ct::flag_mask, raw.length, raw.offset);
-    }
+
   }
   static uint32_t myna_kind(uint64_t word) {
     switch (ct::kind(word)) {
@@ -643,6 +636,11 @@ class handler : public c4::yml::EventHandlerStack<handler, handler_state> {
   }
 
   bool merges() const { return rules_.merge_keys || schema_ == schema::yaml11; }
+  // Ordinary REJECT mappings already sort and compare decoded keys in their compact directory.
+  // Rewrite policies still need the incremental table to locate earlier entries before closing.
+  bool fused_duplicates() const {
+    return fused_duplicates_ && !rules_.last_wins && !rules_.duplicate_keys_pairs && !rules_.complex_keys_pairs && !merges();
+  }
 
   // ---- tags -----------------------------------------------------------------------------------
   uint32_t intern(std::string_view uri) {
@@ -971,7 +969,7 @@ class handler : public c4::yml::EventHandlerStack<handler, handler_state> {
       templates_[level][f.record].count = 0;
     }
     const uint32_t hash = cached_hash(w, s.str, s.len);
-    if (C4_UNLIKELY(!f.keys.insert(memory_, hash, std::string_view(s.str, s.len)))) return false;
+    if (!fused_duplicates() && C4_UNLIKELY(!f.keys.insert(memory_, hash, std::string_view(s.str, s.len)))) return false;
     if (f.record != no_template) {
       key_template& t = templates_[level][f.record];
       if (t.count == f.count && t.count < template_keys) t.keys[t.count++] = {w.lo, w.hi, uint32_t(s.len), hash, s.str};
@@ -985,7 +983,10 @@ class handler : public c4::yml::EventHandlerStack<handler, handler_state> {
                                              uint32_t meta) {
     const bool plain = ((w.lo | w.hi) & 0x8080808080808080ull) == 0;
     const size_t node = writer_->word_count();
-    write_text(std::string_view(s.str, s.len), true, span, (meta & meta_style_mask) == 0);
+    if (fused_duplicates()) writer_->member_key(f.node, hash);
+    // short_plain/short_quoted already proved this padded input span and loaded its bytes.
+    if ((meta & meta_style_mask) == 0) writer_->string_ref(unpack(span), plain, true);
+    else writer_->string(std::string_view(s.str, s.len), {}, plain, true);
     side(span, tape::key_meta(hash, node - f.node, plain), meta);
     ++f.count;
   }
@@ -1002,7 +1003,7 @@ class handler : public c4::yml::EventHandlerStack<handler, handler_state> {
   void leave_template(frame& f) {
     if (f.follow != no_template) {
       const key_template& t = templates_[depth_index(f)][f.follow];
-      for (size_t k = 0; k < size_t(f.count); ++k)
+      if (!fused_duplicates()) for (size_t k = 0; k < size_t(f.count); ++k)
         f.keys.insert(memory_, t.keys[k].hash, std::string_view(t.keys[k].data, t.keys[k].length));
       f.follow = no_template;
     }
@@ -1028,8 +1029,9 @@ class handler : public c4::yml::EventHandlerStack<handler, handler_state> {
     frame& f = frames_[depth_ - 1];
     if (f.kind == frame_kind::pair || (f.kind == frame_kind::map && f.pairs)) return false;
     const size_t node = writer_->word_count();
-    write_text(std::string_view(s.str, s.len));
-    side(0, ((w.lo | w.hi) & 0x8080808080808080ull) == 0 ? tape::ascii_flag : 0, uint32_t(style));
+    const bool plain = ((w.lo | w.hi) & 0x8080808080808080ull) == 0;
+    writer_->string(std::string_view(s.str, s.len), {}, plain, false);
+    side(0, 0, uint32_t(style));
     if (f.kind == frame_kind::seq) {
       last_ = {true, node, std::string_view(s.str, s.len), style, false, tag_kind::none, 0, 0, no_anchor, false, 0};
       ++f.count;
@@ -1046,24 +1048,26 @@ class handler : public c4::yml::EventHandlerStack<handler, handler_state> {
     const std::string_view text(s.str, s.len);
     const size_t node = writer_->word_count();
     const bool plain = ((w.lo | w.hi) & 0x8080808080808080ull) == 0;
+    const uint64_t span = pack(size_t(s.str - input_), s.len);
+    const ct::span token = unpack(span);
     bool string = true;
     uint64_t digits;
     if (C4_LIKELY(core_string(w.lo, s.len))) {
-      write_text(text, false, pack(size_t(s.str - input_), s.len), true);
+      writer_->string_ref(token, plain, false);
     } else if (s.len <= 8 && decimal8(w.lo, s.len, digits)) {
-      writer_->integer(int64_t(digits), {});  // core_int: `[0-9]{1,8}` is that I64
+      writer_->integer(int64_t(digits), token);  // core_int: `[0-9]{1,8}` is that I64
       string = false;
     } else if (s.len <= 8 && decimal_point8(w.lo, s.len, digits)) {
       // `[0-9]*\.[0-9]*` with 1-7 digits: resolve_core_fast's exactly rounded quotient.
       double v = double(digits >> 8) / detail::exact_powers[digits & 0xff];
-      writer_->floating(v, {});
+      writer_->floating(v, token);
       string = false;
     } else if (s.len == 4 && (w.lo == word("null", 4) || w.lo == word("Null", 4) || w.lo == word("NULL", 4))) {
-      writer_->null();
+      writer_->null(token);
       string = false;
     } else if ((s.len == 4 && (w.lo == word("true", 4) || w.lo == word("True", 4) || w.lo == word("TRUE", 4))) ||
                (s.len == 5 && (w.lo == word("false", 5) || w.lo == word("False", 5) || w.lo == word("FALSE", 5)))) {
-      writer_->boolean(s.len == 4);
+      writer_->boolean(s.len == 4, token);
       string = false;
     } else {
       scalar r;
@@ -1071,7 +1075,6 @@ class handler : public c4::yml::EventHandlerStack<handler, handler_state> {
       write_value(r, pack(size_t(s.str - input_), s.len), scalar_style::plain);
       string = r.kind == MYNA_VALUE_STRING;
     }
-    const uint64_t span = pack(size_t(s.str - input_), s.len);
     side(span, string && plain ? tape::ascii_flag : 0, 0);
     if (f.kind == frame_kind::seq) {
       last_ = {true, node, text, scalar_style::plain, false, tag_kind::none, 0, span, no_anchor, false, 0};
@@ -1241,19 +1244,20 @@ class handler : public c4::yml::EventHandlerStack<handler, handler_state> {
   }
 
   [[gnu::always_inline]] void write_value(const scalar& r, uint64_t span, scalar_style style) {
+    const ct::span token = unpack(span);
     switch (r.kind) {
-      case MYNA_VALUE_NULL: writer_->null(); break;
-      case MYNA_VALUE_BOOL: writer_->boolean(r.bits != 0); break;
-      case MYNA_VALUE_I64: writer_->integer(int64_t(r.bits), {}); break;
-      case MYNA_VALUE_U64: writer_->unsigned_integer(r.bits, {}); break;
+      case MYNA_VALUE_NULL: writer_->null(token); break;
+      case MYNA_VALUE_BOOL: writer_->boolean(r.bits != 0, token); break;
+      case MYNA_VALUE_I64: writer_->integer(int64_t(r.bits), token); break;
+      case MYNA_VALUE_U64: writer_->unsigned_integer(r.bits, token); break;
       case MYNA_VALUE_F64: {
         double d;
         std::memcpy(&d, &r.bits, sizeof d);
-        if (r.nonfinite) writer_->nonfinite(d, {});
-        else writer_->floating(d, {});
+        if (r.nonfinite) writer_->nonfinite(d, token);
+        else writer_->floating(d, token);
         break;
       }
-      case MYNA_VALUE_DECIMAL: writer_->decimal(r.text, {}); break;
+      case MYNA_VALUE_DECIMAL: writer_->decimal(r.text, token); break;
       default: write_text(r.text, false, span, style == scalar_style::plain); break;
     }
   }
@@ -1417,7 +1421,7 @@ class handler : public c4::yml::EventHandlerStack<handler, handler_state> {
         if (!rules_.last_wins) duplicate(f);
         remove_merge_entry(f);
       }
-    } else if (!f.keys.insert(memory_, hash, canonical)) {
+    } else if (!fused_duplicates() && !f.keys.insert(memory_, hash, canonical)) {
       if (rules_.duplicate_keys_pairs) {
         convert_to_pairs(f);
         open_pair(f);
@@ -1429,6 +1433,7 @@ class handler : public c4::yml::EventHandlerStack<handler, handler_state> {
       }
     }
     size_t node = writer_->word_count();
+    if (fused_duplicates()) writer_->member_key(target->node, hash);
     write_text(canonical, target->kind == frame_kind::map, span, (extra_meta & meta_style_mask) == 0);
     uint32_t anchor = define_anchor(node, false);
     uint32_t hashes = target->kind == frame_kind::map ? tape::key_meta(hash, node - target->node, plain)
@@ -1515,9 +1520,21 @@ class handler : public c4::yml::EventHandlerStack<handler, handler_state> {
     frame* f = top();
     if (!f || f->kind == frame_kind::pair) throw error(status_internal, "YAML close without a collection");
     if (f->kind == frame_kind::map && f->merge != none) apply_merge(*f);
+    if (f->kind == frame_kind::map && !f->pairs) {
+      const key_template* cached = f->follow != no_template ? &templates_[depth_index(*f)][f->follow]
+          : f->record != no_template ? &templates_[depth_index(*f)][f->record] : nullptr;
+      if (cached && cached->count < f->count) cached = nullptr;
+      size_t index = 0;
+      try {
+        if (fused_duplicates()) writer_->end(f->node, f->count);
+        else writer_->end_rescan(f->node, [&](std::string_view text) {
+          return cached ? cached->keys[index++].hash : directory_hash(text);
+        });
+      }
+      catch (const ct::duplicate_key&) { duplicate(*f); }
+    } else writer_->end(f->node, f->count);
+    // A template only becomes reusable after its directory proves all keys distinct.
     if (f->record != no_template) finish_template(*f);
-    if (f->kind == frame_kind::map && !f->pairs) writer_->end_rescan(f->node, [&](std::string_view text) { return directory_hash(text); });
-    else writer_->end(f->node, f->count);
     validate_shape(*f);
     if (f->anchor != no_anchor) anchor_open_[f->anchor] = 0;
     size_t node = f->node;
@@ -1563,7 +1580,7 @@ class handler : public c4::yml::EventHandlerStack<handler, handler_state> {
     if (last_.valid && step(last_.node) == writer_->word_count()) {
       // A scalar or alias element.
       last_value saved = last_;
-      writer_->truncate(saved.node);
+      writer_->pop_scalar(saved.node);
       meta_.truncate(saved.node);
       uncount(f);
       size_t node = writer_->begin(ct::kind_object, nesting());
@@ -1783,6 +1800,7 @@ class handler : public c4::yml::EventHandlerStack<handler, handler_state> {
   key_template templates_[template_levels][2];
   uint8_t template_next_[template_levels] = {};
   bool fast_paths_ = true;
+  bool fused_duplicates_ = true;
 };
 
 }  // namespace truffledata::yaml

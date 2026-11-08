@@ -5,6 +5,7 @@ import org.jspecify.annotations.Nullable;
 
 /** Detached metadata for a document. Offsets identify header words in the native compact tape. */
 public final class YamlMetadata {
+  private static final TapeFormat FORMAT = TapeFormat.of("YAML");
   final TapeFormat format;
   final int[] words;
   final String[] tags;
@@ -25,8 +26,7 @@ public final class YamlMetadata {
     this.names = names;
     this.directives = directives;
     this.format =
-        TapeFormat.of("YAML")
-            .withMetadata(words)
+        FORMAT.withMetadata(words)
             .withEvents(anchors, names, tags, expansionBudget);
   }
 

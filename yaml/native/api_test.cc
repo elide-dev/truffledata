@@ -160,6 +160,48 @@ void sessions() {
   require(std::strcmp(reinterpret_cast<const char*>(td_yaml_fingerprint()), TRUFFLEDATA_YAML_SEAM_ABI) == 0);
 }
 
+void shared_text_capacity() {
+  YamlOptionsStruct options = defaults();
+  void* session = td_yaml_session_create(&options);
+  require(session);
+  YamlResult document{};
+  YamlTextResult text{};
+  require(td_yaml_session_write_text(session, nullptr, 0, &text) == TD_YAML_ARGUMENT);
+  std::string input = "anchor: &key " + std::string(1024, 'x') + "\nitems: [";
+  for (int i = 0; i < 20; ++i) input += std::string(i ? ", " : "") + "{*key : value}";
+  input += "]\nunicode: [café, 雪, 😀, '', ascii]\n";
+  require(run(session, input, document) == TD_YAML_OK);
+  require(td_yaml_session_write_text(session, nullptr, 0, &text) == TD_YAML_OK);
+  require(text.required_capacity > 2 * input.size() + 16 && !text.table && !text.bytes_written);
+  std::vector<uint8_t> bytes(text.required_capacity, 0xA5);
+  require(td_yaml_session_write_text(session, bytes.data(), 2, &text) == TD_YAML_TEXT_TOO_SMALL);
+  require(!text.table && !text.bytes_written && bytes[0] == 0xA5 && bytes[2] == 0xA5);
+  require(td_yaml_session_write_text(session, bytes.data(), bytes.size(), &text) == TD_YAML_OK);
+  require(text.table && text.bytes_written <= bytes.size());
+  const auto& view = *static_cast<const td_tape_view*>(document.view);
+  const auto* table = static_cast<const uint64_t*>(text.table);
+  for (uint64_t i = 0; i < view.word_count; i = ct::step(i, view.words[i])) {
+    uint64_t entry = table[i];
+    if (ct::kind(view.words[i]) != ct::kind_string) { require(entry == 0); continue; }
+    std::string_view source = ct::text(view, i);
+    size_t offset = entry >> 32, length = uint32_t(entry) >> 1;
+    require(offset + length <= text.bytes_written);
+    std::vector<char16_t> expected(source.size() + 1);
+    size_t count = simdutf::convert_valid_utf8_to_utf16le(source.data(), source.size(), expected.data());
+    if (entry & 1) {
+      require(length == 2 * count && std::memcmp(bytes.data() + offset, expected.data(), length) == 0);
+    } else {
+      require(length == count);
+      for (size_t j = 0; j < count; ++j) require(expected[j] == bytes[offset + j]);
+    }
+  }
+  td_yaml_session_reset(session);
+  require(td_yaml_session_write_text(session, nullptr, 0, &text) == TD_YAML_ARGUMENT && !text.table);
+  require(run(session, "null", document) == TD_YAML_OK);
+  require(td_yaml_session_write_text(session, nullptr, 0, &text) == TD_YAML_OK && text.required_capacity == 0);
+  td_yaml_session_release(session);
+}
+
 std::string deep(int depth) {
   std::string doc;
   for (int i = 0; i < depth; ++i) doc += std::string(size_t(i) * 2, ' ') + "k" + std::to_string(i) + ":\n";
@@ -184,6 +226,9 @@ void allocation_failures() {
       try {
         s.decode(reinterpret_cast<const uint8_t*>(doc.data()), doc.size(), 0);
         s.decode(reinterpret_cast<const uint8_t*>(wide.data()), wide.size(), yaml_session::retain_source);
+        const uint64_t* table = nullptr;
+        std::vector<uint8_t> text(s.text_capacity());
+        require(s.write_text(text.data(), text.size(), table) <= text.size());
         owner = s.retain();
         s.decode(reinterpret_cast<const uint8_t*>(nested.data()), nested.size(), 0);
         s.decode(reinterpret_cast<const uint8_t*>(big.data()), big.size(), 0);
@@ -246,6 +291,7 @@ int main() {
   try {
     sessions();
     typed_plans();
+    shared_text_capacity();
     allocation_failures();
   } catch (const std::exception& e) {
     std::fprintf(stderr, "api_test failure: %s\n", e.what());

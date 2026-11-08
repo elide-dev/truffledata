@@ -75,6 +75,17 @@ import session_decode symbol=td_yaml_session_decode return=i32 error=no_failure 
   param text_capacity type=u64
   param result type=ptr<void> nullable=false ownership=borrowed access=read_write
 end
+struct YamlTextResult size=24 align=8
+  field table type=ptr<void> offset=0
+  field required_capacity type=u64 offset=8
+  field bytes_written type=u64 offset=16
+end
+import session_write_text symbol=td_yaml_session_write_text return=i32 error=no_failure native_leaf=false@explicit_contract
+  param session type=ptr<void> nullable=false ownership=borrowed access=read_write
+  param text_out type=ptr<u8> nullable=true ownership=borrowed access=read_write
+  param text_capacity type=u64
+  param result type=ptr<void> nullable=false ownership=borrowed access=read_write
+end
 import session_retain symbol=td_yaml_session_retain return=i32 error=no_failure native_leaf=false@explicit_contract
   param session type=ptr<void> nullable=false ownership=borrowed access=read_write
   param result type=ptr<void> nullable=false ownership=borrowed access=read_write

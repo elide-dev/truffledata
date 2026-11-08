@@ -10,6 +10,7 @@
 // allocation; its error callbacks throw yaml::error with the line and column.
 #include "tape/native/arena.h"
 #include "tape/native/index_memory.h"
+#include "tape/native/text_arena.h"
 #include "yaml/native/decoder.h"
 #include "yaml/native/errors.h"
 #include "yaml/native/input.h"
@@ -197,9 +198,43 @@ class session final {
     return current(length, memory_.allocations() - before);
   }
 
+  // A bound from actual decoded strings, including canonical and aliased mapping keys. Input
+  // length alone does not bound these strings: a long anchored scalar can become many keys.
+  size_t text_capacity() const {
+    if (!live_) throw std::logic_error("no YAML session document");
+    const auto& v = view();
+    size_t capacity = 0;
+    for (uint64_t i = 0; i < v.word_count; i = ct::step(i, v.words[i])) {
+      uint64_t word = v.words[i];
+      if (ct::kind(word) != ct::kind_string) continue;
+      size_t length = ct::field(word);
+      if (!length) continue;
+      size_t add = word & ct::ascii_flag ? length : 2 * length + 1;
+      if (add > UINT32_MAX - capacity) throw limit_error("text arena bytes");
+      capacity += add;
+    }
+    return capacity;
+  }
+
+  // Capacity is checked before allocating or writing; a short caller buffer leaves the document
+  // live for a retry. The table is borrowed until reset/decode and charged to the index budget.
+  size_t write_text(uint8_t* out, size_t capacity, const uint64_t*& table) {
+    if (!live_) throw std::logic_error("no YAML session document");
+    if (capacity < text_capacity()) return tape::text_too_small;
+    try {
+      text_table_.truncate(0);
+      auto* entries = text_table_.extend(&arena_, view().word_count);
+      size_t used = tape::write_text_arena(view(), entries, out, capacity);
+      if (used == tape::text_too_small) throw std::logic_error("YAML text bound violated");
+      table = entries;
+      return used;
+    } catch (...) { recycle(); throw; }
+  }
+
   bool live() const { return live_; }
   // Test hook (handler::fast_paths): false decodes through the general scalar paths only.
   void fast_paths(bool on) { handler_.fast_paths(on); }
+  void fused_duplicates(bool on) { handler_.fused_duplicates(on); }
   // Invalidates the borrowed document without freeing: O(1), no allocation, no exception.
   void reset() noexcept { live_ = false; }
 
@@ -210,6 +245,7 @@ class session final {
     tape::block_arena::storage storage;
     td_tape_view view = handler_.view();
     handler_.clear();
+    text_table_.forget();
     size_t bytes = arena_.detach(storage, upstream_);
     memory_.forget(bytes);
     auto* owner = new (raw) retained(upstream_, std::move(storage), bytes, input_, input_capacity_, view);
@@ -289,6 +325,7 @@ class session final {
   void recycle() noexcept {
     live_ = false;
     handler_.clear();
+    text_table_.forget();
     arena_.reset();
     source_ = nullptr;
     source_length_ = 0;
@@ -299,6 +336,7 @@ class session final {
   session_options options_;
   index_memory memory_;
   tape::block_arena arena_;
+  tape::arena_vec<uint64_t> text_table_;
   handler handler_;
   c4::yml::ParseEngine<handler> engine_;
   char* input_ = nullptr;

@@ -242,12 +242,26 @@ int main(int argc, char** argv) {
                          m.name, at, fast.size(), general.size());
           }
           require(fast == general);
+          s.fused_duplicates(false);
+          std::string separate = run ? decode_one(s, input.second, flags, true) : decode_all(s, input.second, true);
+          s.fused_duplicates(true);
+          // Fused duplicate rejection happens at mapping close, so diagnostics may point later
+          // than the incremental key check; successful documents and rejection statuses agree.
+          auto status_only = [](std::string text) {
+            size_t error = text.find("#error ");
+            size_t detail = error == std::string::npos ? std::string::npos : text.find(':', error);
+            if (detail != std::string::npos) text.resize(detail);
+            return text;
+          };
+          if (status_only(fast) != status_only(separate))
+            std::fprintf(stderr, "%s [%s]: fused and separate duplicate checks differ\n", input.first.c_str(), m.name);
+          require(status_only(fast) == status_only(separate));
           ++compared;
           errors += fast.find("#error") != std::string::npos;
         }
       }
     }
-    std::printf("fast_path_test: %zu decodes equal with fast paths on and off (%zu ending in the same error)\n",
+    std::printf("fast_path_test: %zu decodes equal with fast paths and duplicate fusion on and off (%zu ending in the same error)\n",
                 compared, errors);
   } catch (const std::exception& e) {
     std::fprintf(stderr, "fast_path_test failure: %s\n", e.what());

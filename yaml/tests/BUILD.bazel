@@ -7,7 +7,7 @@ load("//bazel:jit.bzl", "TRUFFLE_JIT_CHECKS")
 data_java_library(
     name = "acceptance",
     testonly = True,
-    srcs = ["CompiledReads.java", "SvmAcceptance.java", "TypedAcceptance.java", "TestLanguage.java", "package-info.java"],
+    srcs = ["CompiledArrayReads.java", "CompiledReads.java", "SvmAcceptance.java", "TypedAcceptance.java", "TestLanguage.java", "package-info.java"],
     deps = ["//yaml", "//tape", "//core", "@maven//:org_graalvm_polyglot_polyglot", "@maven//:org_graalvm_truffle_truffle_api"],
 )
 

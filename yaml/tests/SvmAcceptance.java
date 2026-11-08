@@ -28,6 +28,7 @@ public final class SvmAcceptance {
   }
 
   public static void verify(YamlSession session) {
+    sharedText(session);
     TapeSnapshot snapshot;
     try (YamlMessage message =
         session.decode(
@@ -75,6 +76,34 @@ public final class SvmAcceptance {
         require(stream.next() == null);
         require(retained.root().member("x").longValue() == 1);
       }
+    }
+  }
+
+  private static void sharedText(YamlSession session) {
+    String key = "x".repeat(1024);
+    StringBuilder input = new StringBuilder("anchor: &key " + key + "\nitems: [");
+    for (int i = 0; i < 20; i++) input.append(i == 0 ? "" : ", ").append("{*key : value}");
+    input.append("]\nunicode: [café, 雪, 😀, '', ascii]\n");
+    var keys = new dev.elide.truffledata.tape.TruffleSink.KeyCache();
+    var sink = new dev.elide.truffledata.tape.TruffleSink(keys);
+    session.parse(bytes(input.toString()), sink);
+    Map<?, ?> first = (Map<?, ?>) java.util.Objects.requireNonNull(sink.result());
+    var utf16 = com.oracle.truffle.api.strings.TruffleString.Encoding.UTF_16;
+    var names = com.oracle.truffle.api.strings.TruffleString.fromJavaStringUncached("unicode", utf16);
+    var values = (java.util.List<?>) java.util.Objects.requireNonNull(first.get(names));
+    require(values.size() == 5);
+    for (int i = 0; i < 5; i++) require(((com.oracle.truffle.api.strings.TruffleString) values.get(i))
+        .toJavaStringUncached().equals(new String[] {"café", "雪", "😀", "", "ascii"}[i]));
+    // A second parse cannot overwrite arrays retained by strings in the first result.
+    session.parse(bytes("unicode: [other]"), new dev.elide.truffledata.tape.TruffleSink(keys));
+    require(((com.oracle.truffle.api.strings.TruffleString) values.get(1)).toJavaStringUncached().equals("雪"));
+    var items = (java.util.List<?>) java.util.Objects.requireNonNull(first.get(
+        com.oracle.truffle.api.strings.TruffleString.fromJavaStringUncached("items", utf16)));
+    require(items.size() == 20);
+    for (Object item : items) {
+      Map<?, ?> map = (Map<?, ?>) item;
+      require(map.size() == 1);
+      require(((com.oracle.truffle.api.strings.TruffleString) map.keySet().iterator().next()).toJavaStringUncached().equals(key));
     }
   }
 

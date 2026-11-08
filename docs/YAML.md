@@ -31,3 +31,8 @@ Typed fields resolve plain scalars according to their contract: `1.0` is preserv
 The native ABI publishes compact words with embedded scalar spans and object directories, plus one YAML metadata word per tape word. Value aliases use native REF words. Double-quoted surrogate pairs decode to one Unicode scalar; unpaired surrogates are rejected before text reaches the tape.
 
 The JVM differential suite compares 5,000 seeded YAML documents and the pinned yaml-test-suite with SnakeYAML Engine 3.2, explicitly disabling Engine's merge resolver. It also compares 2,000 shared JSON benchmark documents and the suite's 282 JSON fixture files against the JSON backend, including numeric kinds, member order, Unicode and escaped duplicate keys. The 45 measured Engine parser exclusions remain pinned; 14 custom-tag cases separately assert the documented preserve-versus-construction policy.
+
+On Native Image, `parse` into `TruffleSink` shares a document text buffer for small strings and
+copies large strings. The native producer negotiates capacity from decoded strings, including
+expanded canonical mapping keys; returned strings remain valid after the session parses again.
+The JVM FFM path currently copies text instead of sharing this arena.

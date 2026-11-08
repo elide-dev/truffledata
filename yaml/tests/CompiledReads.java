@@ -45,6 +45,7 @@ final class CompiledReads {
       context.enter();
       try {
         typed(session);
+        CompiledArrayReads.run(session);
         TapeValue value = first.root();
         Reads[] roots = {new Reads(value, false), new Reads(value, true)};
         for (Reads root : roots) {

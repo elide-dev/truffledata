@@ -181,7 +181,8 @@ public abstract class TapeSession<M extends TapeOwner> implements AutoCloseable 
   /** The text arena for the next shared-text parse of {@code length} input bytes, if any. */
   private @Nullable TapeTextArena textArena(int length) {
     Backend<M> open = check();
-    // 2 × length + 16 bytes hold any document's text (tape/native/text_arena.h).
+    // Initial estimate; JSON proves this bound. Other producers negotiate decoded text
+    // capacity and grow the arena before exposing any strings (tape/native/text_arena.h).
     long need = 2L * length + 16;
     if (need > Integer.MAX_VALUE) throw new IllegalArgumentException(format + " input limit");
     TapeTextArena text = arena;

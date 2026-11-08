@@ -14,12 +14,13 @@ enum td_yaml_status {
   TD_YAML_CONTRACT = 6,
   TD_YAML_MULTIPLE_DOCUMENTS = 7,
   TD_YAML_STREAM_EMPTY = 8,
-  TD_YAML_STREAM_TRUNCATED = 9
+  TD_YAML_STREAM_TRUNCATED = 9,
+  TD_YAML_TEXT_TOO_SMALL = 10
 };
 
-// session_decode flags. TD_YAML_WANT_UTF16_TEXT is reserved for the text arena (plan Task 5 with
-// JSON performance D2): until then it, any other bit, and a non-null text_out or nonzero
-// text_capacity are TD_YAML_ARGUMENT.
+// session_decode flags. TD_YAML_WANT_UTF16_TEXT and its inline output arguments remain reserved;
+// use session_write_text after decode. YAML must size text from decoded strings, because aliases
+// used as mapping keys can expand their text beyond any input-sized allocation estimate.
 #define TD_YAML_WANT_UTF16_TEXT 1u
 #define TD_YAML_RETAIN_SOURCE 2u
 
@@ -93,6 +94,13 @@ enum td_yaml_status {
 // that owns them (release with td_yaml_release). session_reset invalidates the borrowed document in
 // O(1) without freeing (a native leaf). session_release frees the session; retained results stay
 // valid.
+// session_write_text accepts a live session and a zeroed YamlTextResult. With null output and
+// zero capacity it reports required_capacity (a checked upper bound from decoded strings). With
+// an aligned output buffer it writes Latin-1/UTF-16LE bytes and publishes one entry per compact
+// word in table. TD_YAML_TEXT_TOO_SMALL reports the required capacity without invalidating the
+// document, so the caller can grow and retry. A successful table is borrowed until reset/decode;
+// the caller owns the byte buffer. No partial table is published on failure.
+//
 // ABI3 publishes td_tape_view through view. Scalar lexical spans and directory key hashes are
 // embedded in compact words; no parallel lexical or key-hash arrays are allocated or published.
 #endif

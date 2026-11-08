@@ -83,6 +83,34 @@ YamlOptionsStruct options() {
 
 // The records fixture is a top-level sequence; a single enclosing field supplies the record-root
 // contract used by both typed backends. The identical wrapped bytes are used by every row.
+int duplicate_benchmark(const std::string& path, bool quick) {
+  using namespace truffledata::yaml;
+  std::string input = slurp(path);
+  truffledata::yaml::session baseline(session_options{}), fused(session_options{});
+  baseline.fused_duplicates(false);
+  auto decode = [&](truffledata::yaml::session& parser) {
+    auto view = parser.decode(reinterpret_cast<const uint8_t*>(input.data()), input.size(), 0);
+    uint64_t count = view.view.word_count; parser.reset(); return count;
+  };
+  int iters = quick ? 10 : 100;
+  double old = 1e300, current = 1e300;
+  for (int pass = 0; pass < 5; pass++) {
+    double before, after;
+    if (pass & 1) {
+      after = best_ns(iters, [&] { return decode(fused); });
+      before = best_ns(iters, [&] { return decode(baseline); });
+    } else {
+      before = best_ns(iters, [&] { return decode(baseline); });
+      after = best_ns(iters, [&] { return decode(fused); });
+    }
+    old = std::min(old, before); current = std::min(current, after);
+    std::printf("duplicate-fusion %s pass=%d baseline-ns=%.0f fused-ns=%.0f speedup=%.4f\n",
+                path.c_str(), pass, before, after, before / after);
+  }
+  std::printf("duplicate-fusion best baseline-ns=%.0f fused-ns=%.0f speedup=%.4f\n", old, current, old / current);
+  return 0;
+}
+
 int typed_benchmark(const std::string& path, bool quick) {
   using namespace truffledata::yaml;
   auto record = [](const char* name, uint32_t child, bool repeated = false) {
@@ -199,16 +227,23 @@ int profile(const std::string& name, double seconds, const std::function<uint64_
 }  // namespace
 
 int main(int argc, char** argv) {
-  bool quick = false, typed = false;
+  bool quick = false, typed = false, duplicates = false;
+  double minimum_ratio = 0;
   int passes = 1;
   double profile_seconds = 0;
   std::vector<std::string> files;
   for (int i = 1; i < argc; ++i) {
     if (std::strcmp(argv[i], "--typed") == 0) typed = true;
+    else if (std::strcmp(argv[i], "--duplicates") == 0) duplicates = true;
+    else if (std::strncmp(argv[i], "--minimum-ratio=", 16) == 0) minimum_ratio = std::atof(argv[i] + 16);
     else if (std::strcmp(argv[i], "--quick") == 0) quick = true;
     else if (std::strncmp(argv[i], "--passes=", 9) == 0) passes = std::max(1, std::atoi(argv[i] + 9));
     else if (std::strncmp(argv[i], "--profile=", 10) == 0) profile_seconds = std::atof(argv[i] + 10);
     else files.push_back(argv[i]);
+  }
+  if (duplicates) {
+    if (files.size() != 1) return 2;
+    return duplicate_benchmark(files[0], quick);
   }
   if (typed) {
     if (files.size() != 1) return 2;
@@ -350,6 +385,10 @@ int main(int argc, char** argv) {
     std::printf("acceptance: records-block td-session(decode+reset) / ryml-ints(scan) = %.3f (best times over %d "
                 "passes; per pass min %.3f, median %.3f, max %.3f) (hypothesis >= 0.8): %s\n",
                 ratio, passes, gates.front(), gates[gates.size() / 2], gates.back(), ratio >= 0.8 ? "met" : "MISSED");
+    if (minimum_ratio > 0) {
+      std::printf("compact floor %.3f: %s\n", minimum_ratio, ratio >= minimum_ratio ? "PASS" : "FAIL");
+      if (ratio < minimum_ratio) return 1;
+    }
   }
   return 0;
 }

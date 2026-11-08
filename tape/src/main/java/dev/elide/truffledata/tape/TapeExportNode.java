@@ -1,6 +1,9 @@
 package dev.elide.truffledata.tape;
 
 import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
+import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
+import org.jspecify.annotations.Nullable;
 import com.oracle.truffle.api.nodes.Node;
 import dev.elide.myna.values.ValueTape;
 
@@ -17,6 +20,9 @@ public final class TapeExportNode extends Node {
 
   private static final long OBJECT_BIT = Long.MIN_VALUE;
   private int maxDepthSeen;
+  @CompilationFinal private @Nullable Class<? extends TapeOwner> ownerClass;
+  @CompilationFinal private @Nullable Class<? extends TapeReader> readerClass;
+  @CompilationFinal private boolean aliases;
 
   TapeExportNode() {}
 
@@ -30,16 +36,42 @@ public final class TapeExportNode extends Node {
   }
 
   public void execute(TapeValue value, TapeSink sink) {
-    int depth = walk(value.owner(), value.node(), sink);
+    TapeOwner owner = value.owner();
+    if (ownerClass == null) {
+      CompilerDirectives.transferToInterpreterAndInvalidate();
+      ownerClass = owner.getClass();
+      readerClass = owner.tape.getClass();
+      aliases = owner.format().hasAliases();
+    }
+    Class<? extends TapeOwner> ownerType = java.util.Objects.requireNonNull(ownerClass);
+    Class<? extends TapeReader> readerType = java.util.Objects.requireNonNull(readerClass);
+    int depth;
+    if (owner.getClass() == ownerType && owner.tape.getClass() == readerType) {
+      TapeOwner exact = CompilerDirectives.castExact(owner, ownerType);
+      depth = exact.aliases() == aliases
+          ? walk(exact, CompilerDirectives.castExact(owner.tape, readerType), value.node(), sink, aliases)
+          : generic(owner, value.node(), sink);
+    } else {
+      depth = generic(owner, value.node(), sink);
+    }
     if (depth > maxDepthSeen) maxDepthSeen = depth;
   }
 
   /** Returns the deepest container stack used. */
   static int walk(TapeOwner owner, long root, TapeSink sink) {
+    return walk(owner, owner.tape, root, sink, owner.format().hasAliases());
+  }
+
+  @TruffleBoundary
+  private static int generic(TapeOwner owner, long root, TapeSink sink) {
+    return walk(owner, root, sink);
+  }
+
+  private static int walk(TapeOwner owner, TapeReader tape, long root, TapeSink sink, boolean aliases) {
     owner.pin();
     TapeText text = owner.exportCursor();
     try {
-      return owner.format().hasAliases() ? AliasExport.walk(owner, root, sink, text) : loop(owner, root, sink, text);
+      return aliases ? AliasExport.walk(owner, root, sink, text) : loop(owner, tape, root, sink, text);
     } finally {
       text.unbind();
       owner.unpin();
@@ -50,9 +82,8 @@ public final class TapeExportNode extends Node {
    * {@code text.ends} holds each open container's exclusive end node, sign bit set for objects;
    * {@code text} is bound to each key, string and decimal for exactly the duration of its event.
    */
-  private static int loop(TapeOwner owner, long root, TapeSink sink, TapeText text) {
+  private static int loop(TapeOwner owner, TapeReader tape, long root, TapeSink sink, TapeText text) {
     long[] ends = text.ends;
-    TapeReader tape = owner.tape;
     int depth = 0;
     int deepest = 0;
     boolean expectKey = false;
@@ -73,7 +104,7 @@ public final class TapeExportNode extends Node {
         expectKey = false;
         continue;
       }
-      int tag = owner.tag(cursor);
+      int tag = tape.kindAt(cursor);
       if (tag == ValueTape.OBJECT || tag == ValueTape.ARRAY) {
         if (depth == MAX_DEPTH) {
           CompilerDirectives.transferToInterpreter();

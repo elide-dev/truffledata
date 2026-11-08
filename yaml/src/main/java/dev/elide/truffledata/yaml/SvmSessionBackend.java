@@ -7,6 +7,7 @@ import dev.elide.truffledata.tape.TypedLayout;
 import dev.elide.truffledata.yaml.generated.Yaml;
 import java.lang.foreign.MemorySegment;
 import org.graalvm.nativeimage.PinnedObject;
+import org.graalvm.nativeimage.StackValue;
 import org.graalvm.nativeimage.UnmanagedMemory;
 import org.graalvm.nativeimage.c.type.VoidPointer;
 import org.graalvm.word.Pointer;
@@ -101,6 +102,7 @@ final class SvmSessionBackend extends YamlSession.Backend {
               result);
     }
     check(status, result);
+    if (text != null) ((NativeText) text).write(session);
   }
 
   private static void check(int status, VoidPointer result) {
@@ -124,8 +126,38 @@ final class SvmSessionBackend extends YamlSession.Backend {
   }
 
   @Override
-  protected @Nullable TapeTextArena textArena(byte[] array) {
-    return null;
+  protected TapeTextArena textArena(byte[] array) {
+    return new NativeText(array);
+  }
+
+  private static final class NativeText extends TapeTextArena {
+    private Pointer table = WordFactory.nullPointer();
+    NativeText(byte[] bytes) { super(bytes); }
+
+    void write(VoidPointer session) {
+      VoidPointer output = StackValue.get(Yaml.YamlTextResult.SIZE);
+      for (;;) {
+        int status;
+        byte[] bytes = array();
+        try (PinnedObject pin = PinnedObject.create(bytes)) {
+          status = Yaml.session_write_text(session, pin.addressOfArrayElement(0), bytes.length, output);
+        }
+        if (status == 10) {
+          long required = Yaml.YamlTextResult.required_capacity(output);
+          if (required > Integer.MAX_VALUE || required <= bytes.length)
+            throw new IllegalArgumentException("YAML text arena capacity");
+          ensureCapacity((int) required);
+          continue;
+        }
+        YamlSvm.checkStatus(status);
+        table = (Pointer) Yaml.YamlTextResult.table(output);
+        return;
+      }
+    }
+
+    @Override protected long entry(long node) {
+      return table.readLong(WordFactory.signed(node * Long.BYTES));
+    }
   }
 
   private static final ResultMetadata.Memory MEMORY =

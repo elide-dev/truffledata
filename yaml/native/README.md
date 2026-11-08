@@ -50,6 +50,19 @@ Per-document tables hold interned tag URIs, anchors (word offset and name), dire
 Names and URIs index one `strings` table. Alias targets are carried by REF words and are not a
 published side array. The producer retains a private target table for key aliases and rewrites.
 
+Strict duplicate rejection announces each canonical key to the compact writer and checks equal
+keys while producing its sorted directory. Merge, last-wins and pairs policies retain incremental
+key checks and rebuild directories after rewrites. A duplicate under strict rejection is diagnosed
+when its mapping closes; the location can therefore follow the second key.
+
+`session_write_text` publishes a borrowed word-indexed table into a caller-owned Latin-1/UTF-16LE
+byte buffer. A null-buffer query reports a checked capacity bound from decoded string lengths;
+`TD_YAML_TEXT_TOO_SMALL` leaves the document live for a resize and retry. The initial Java buffer
+estimate is not a universal bound: canonical numeric keys and repeated aliased keys can expand
+beyond twice the input length. Native Image grows the buffer before any returned string shares it.
+The text table counts against the native index budget; a decode/reset invalidates the table, while
+strings already returned to Java retain their byte array.
+
 ## Anchors, aliases and merge keys
 
 A value alias is a REF word naming its anchored node, so readers resolve it without a side table

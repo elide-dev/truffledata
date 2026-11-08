@@ -126,9 +126,11 @@ final class AliasExport {
 
   private static TapeText tagCursor(String uri) {
     byte[] utf8 = uri.getBytes(StandardCharsets.UTF_8);
-    HeapValueTape tape = new HeapValueTape(
-        new long[] {ValueTape.STRING | ValueTape.REGION_TEXT | ((long) utf8.length << 32), 0, 1},
-        utf8, new byte[0][], new int[1]);
+    boolean ascii = true;
+    for (byte octet : utf8) ascii &= octet >= 0;
+    long header = 7L << 60 | TapeReader.WIDE | TapeReader.OWNED | ((long) utf8.length << 32)
+        | (ascii ? TapeReader.ASCII : 0);
+    HeapTape tape = new HeapTape(new long[] {header, 0}, utf8, new byte[0], new long[0], new int[0], 0);
     TapeOwner owner = new TapeOwner(tape, null) {
       @Override public TapeFormat format() { return TapeFormat.of("YAML tag"); }
       @Override public Assumption assumption() { return Assumption.ALWAYS_VALID; }

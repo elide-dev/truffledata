@@ -157,6 +157,29 @@ extern "C" int32_t td_yaml_session_decode(void* handle, const uint8_t* data, uin
   }
 }
 
+extern "C" int32_t td_yaml_session_write_text(void* handle, uint8_t* text_out,
+                                                uint64_t capacity, void* output) {
+  if (!handle || !aligned(output)) return TD_YAML_ARGUMENT;
+  auto& result = *static_cast<YamlTextResult*>(output);
+  result = {};
+  auto& s = *static_cast<yaml_session*>(handle);
+  if (!s.live() || (!text_out && capacity != 0) || (reinterpret_cast<uintptr_t>(text_out) & 1))
+    return TD_YAML_ARGUMENT;
+  try {
+    result.required_capacity = s.text_capacity();
+    if (!text_out) return TD_YAML_OK;
+    if (capacity < result.required_capacity) return TD_YAML_TEXT_TOO_SMALL;
+    const uint64_t* table = nullptr;
+    result.bytes_written = s.write_text(text_out, size_t(capacity), table);
+    result.table = const_cast<uint64_t*>(table);
+    return TD_YAML_OK;
+  } catch (...) {
+    result = {};
+    YamlResult diagnostic{};
+    return translate(diagnostic);
+  }
+}
+
 extern "C" int32_t td_yaml_session_retain(void* handle, void* output) {
   if (!handle || !aligned(output)) return TD_YAML_ARGUMENT;
   auto& result = *static_cast<YamlResult*>(output);

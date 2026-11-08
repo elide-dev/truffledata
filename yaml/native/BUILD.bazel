@@ -352,6 +352,43 @@ cc_test(
     ],
 )
 
+# Compact producer qualification: Task8 preserves the measured0.715 baseline as its hard floor.
+cc_test(
+    name = "compact_bench",
+    size = "large",
+    srcs = ["bench.cc"],
+    args = ["--passes=3", "--minimum-ratio=0.715"] + ["$(rootpaths :testdata)"],
+    copts = ["-std=c++17", "-O3"],
+    data = [":testdata"],
+    linkstatic = True,
+    tags = ["manual"],
+    deps = [":reference_tape", ":sampler", ":truffledata_yaml", "@libyaml"],
+)
+
+cc_test(
+    name = "duplicate_bench",
+    size = "large",
+    srcs = ["bench.cc"],
+    args = ["--duplicates", "$(rootpath testdata/records-block.yaml)"],
+    copts = ["-std=c++17", "-O3"],
+    data = ["testdata/records-block.yaml"],
+    linkstatic = True,
+    tags = ["manual"],
+    deps = [":reference_tape", ":sampler", ":truffledata_yaml", "@libyaml"],
+)
+
+cc_test(
+    name = "typed_bench",
+    size = "large",
+    srcs = ["bench.cc"],
+    args = ["--typed", "$(rootpath testdata/records-block.yaml)"],
+    copts = ["-std=c++17", "-O3"],
+    data = ["testdata/records-block.yaml"],
+    linkstatic = True,
+    tags = ["manual"],
+    deps = [":reference_tape", ":sampler", ":truffledata_yaml", "@libyaml"],
+)
+
 # The same binary sampling 40 s of td-session decode and of ryml-ints(scan) per record fixture on an RBE
 # worker (sampler.h; perf is unavailable there). Samples land in the test's undeclared outputs;
 # symbolize them against the binary as yaml/native/README.md describes.

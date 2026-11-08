@@ -54,6 +54,22 @@ public final class TapeFormat {
     this.meta = meta;
   }
 
+  // Document metadata changes, but the format's immutable diagnostic strings do not.
+  private TapeFormat(TapeFormat base, long @Nullable [] aliases, int @Nullable [] meta,
+      long[] anchors, String[] names, String[] tags, long budget) {
+    this.name = base.name;
+    this.closed = base.closed;
+    this.threadMismatch = base.threadMismatch;
+    this.recordClosed = base.recordClosed;
+    this.recordThreadMismatch = base.recordThreadMismatch;
+    this.aliasTargets = aliases;
+    this.meta = meta;
+    this.anchorNodes = anchors;
+    this.anchorNames = names;
+    this.tagUris = tags;
+    this.maxAliasExpansion = budget;
+  }
+
   /** A format without alias nodes, named {@code name} in messages. */
   public static TapeFormat of(String name) {
     return new TapeFormat(name, null, null);
@@ -64,13 +80,13 @@ public final class TapeFormat {
    * and {@code aliasTargets} one node index per alias ordinal. The arrays are not copied.
    */
   public TapeFormat withAliases(long[] aliasTargets, int[] meta) {
-    return new TapeFormat(name, Objects.requireNonNull(aliasTargets), Objects.requireNonNull(meta),
+    return new TapeFormat(this, Objects.requireNonNull(aliasTargets), Objects.requireNonNull(meta),
         anchorNodes, anchorNames, tagUris, maxAliasExpansion);
   }
 
   /** Metadata for a compact tape whose value aliases are native REF words. */
   public TapeFormat withMetadata(int[] meta) {
-    return new TapeFormat(name, null, Objects.requireNonNull(meta),
+    return new TapeFormat(this, null, Objects.requireNonNull(meta),
         anchorNodes, anchorNames, tagUris, maxAliasExpansion);
   }
 
@@ -78,7 +94,8 @@ public final class TapeFormat {
   public TapeFormat withEvents(long[] anchors, String[] names, String[] tags, long expansionBudget) {
     if (expansionBudget <= 0) throw new IllegalArgumentException("Alias expansion budget must be positive");
     if (anchors.length != names.length) throw new IllegalArgumentException("Anchor metadata length mismatch");
-    return new TapeFormat(name, aliasTargets, meta, anchors.clone(), names.clone(), tags.clone(), expansionBudget);
+    return new TapeFormat(this, aliasTargets, meta, anchors.length == 0 ? anchors : anchors.clone(),
+        names.length == 0 ? names : names.clone(), tags.length == 0 ? tags : tags.clone(), expansionBudget);
   }
 
   TapeFormat slice(long root, int count) {
@@ -90,7 +107,7 @@ public final class TapeFormat {
     if (rebased != null) for (int i = 0; i < rebased.length; i++) rebased[i] -= root;
     long[] anchors = anchorNodes.clone();
     for (int i = 0; i < anchors.length; i++) anchors[i] -= root;
-    return new TapeFormat(name, rebased, slice, anchors, anchorNames, tagUris, maxAliasExpansion);
+    return new TapeFormat(this, rebased, slice, anchors, anchorNames, tagUris, maxAliasExpansion);
   }
 
   int anchorId(long node) {

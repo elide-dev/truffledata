@@ -17,7 +17,7 @@ public abstract class TapeTextArena {
   /** Strings at least this long (in arena bytes) are copied out instead of shared. */
   static final int COPY_BYTES = 64 * 1024;
 
-  final byte[] array;
+  byte[] array;
   // A string references the array: the session must not overwrite it.
   boolean shared;
 
@@ -28,6 +28,13 @@ public abstract class TapeTextArena {
   /** The text array the native decode writes into. */
   protected final byte[] array() {
     return array;
+  }
+
+  /** Grow before any string shares this document's buffer, after native capacity negotiation. */
+  protected final void ensureCapacity(int capacity) {
+    if (capacity < 0) throw new IllegalArgumentException("Negative tape text capacity");
+    if (shared) throw new IllegalStateException("Tape text buffer already shared");
+    if (array.length < capacity) array = new byte[capacity];
   }
 
   /** Table entry of a string or key node of the borrowed document. */
