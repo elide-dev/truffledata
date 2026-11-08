@@ -5,6 +5,7 @@
     "com.dslplatform:dsl-json": -133221735,
     "com.fasterxml.jackson.core:jackson-databind": -1774975712,
     "com.fasterxml.jackson.dataformat:jackson-dataformat-csv": 807598545,
+    "com.fasterxml.jackson.dataformat:jackson-dataformat-yaml": 1702904928,
     "com.google.code.findbugs:jsr305": 495355163,
     "com.google.code.gson:gson": 597770368,
     "com.google.errorprone:error_prone_annotations": -1035138750,
@@ -40,6 +41,7 @@
     "org.simdjson:simdjson-java": 1367588115,
     "org.snakeyaml:snakeyaml-engine": 165899669,
     "org.xerial:sqlite-jdbc": 1866718706,
+    "org.yaml:snakeyaml": -1448162181,
     "repositories": 1264836482
   },
   "__RESOLVED_ARTIFACTS_HASH": {
@@ -49,6 +51,7 @@
     "com.fasterxml.jackson.core:jackson-core": -850624377,
     "com.fasterxml.jackson.core:jackson-databind": 593979767,
     "com.fasterxml.jackson.dataformat:jackson-dataformat-csv": -58999290,
+    "com.fasterxml.jackson.dataformat:jackson-dataformat-yaml": -1476380198,
     "com.github.ben-manes.caffeine:caffeine": 1818209270,
     "com.github.kevinstern:software-and-algorithms": -863567887,
     "com.google.auto.service:auto-service-annotations": 13343596,
@@ -118,7 +121,8 @@
     "org.postgresql:postgresql": -1836201652,
     "org.simdjson:simdjson-java": -90336737,
     "org.snakeyaml:snakeyaml-engine": 1070167874,
-    "org.xerial:sqlite-jdbc": -522066959
+    "org.xerial:sqlite-jdbc": -522066959,
+    "org.yaml:snakeyaml": 534683159
   },
   "conflict_resolution": {
     "com.google.errorprone:error_prone_annotations:2.5.1": "com.google.errorprone:error_prone_annotations:2.50.0",
@@ -161,6 +165,12 @@
     "com.fasterxml.jackson.dataformat:jackson-dataformat-csv": {
       "shasums": {
         "jar": "b05dfb63905b606e5c24d87700d79be1c95f37d7647f456041a594647aa4b454"
+      },
+      "version": "2.22.4"
+    },
+    "com.fasterxml.jackson.dataformat:jackson-dataformat-yaml": {
+      "shasums": {
+        "jar": "2f55e2b864f6354b24d4bcccd488f7c4a3fce4977f8c8dbad07242a68e11dde9"
       },
       "version": "2.22.4"
     },
@@ -583,6 +593,12 @@
         "jar": "bcb1f51e36f940867e83342f9efbf5968ac44a6bef4d397bb4af7b17b45cd2fb"
       },
       "version": "3.53.4.0"
+    },
+    "org.yaml:snakeyaml": {
+      "shasums": {
+        "jar": "2e194eba45a67dee19a4e272f4a04b18de8054e9f598b094382f6dae0b0e4b5e"
+      },
+      "version": "2.7"
     }
   },
   "dependencies": {
@@ -594,6 +610,11 @@
       "com.fasterxml.jackson.core:jackson-annotations",
       "com.fasterxml.jackson.core:jackson-core",
       "com.fasterxml.jackson.core:jackson-databind"
+    ],
+    "com.fasterxml.jackson.dataformat:jackson-dataformat-yaml": [
+      "com.fasterxml.jackson.core:jackson-core",
+      "com.fasterxml.jackson.core:jackson-databind",
+      "org.yaml:snakeyaml"
     ],
     "com.github.ben-manes.caffeine:caffeine": [
       "com.google.errorprone:error_prone_annotations",
@@ -841,6 +862,11 @@
     "com.fasterxml.jackson.dataformat:jackson-dataformat-csv": [
       "com.fasterxml.jackson.dataformat.csv",
       "com.fasterxml.jackson.dataformat.csv.impl"
+    ],
+    "com.fasterxml.jackson.dataformat:jackson-dataformat-yaml": [
+      "com.fasterxml.jackson.dataformat.yaml",
+      "com.fasterxml.jackson.dataformat.yaml.snakeyaml.error",
+      "com.fasterxml.jackson.dataformat.yaml.util"
     ],
     "com.github.ben-manes.caffeine:caffeine": [
       "com.github.benmanes.caffeine.cache",
@@ -1962,6 +1988,29 @@
       "org.sqlite.jdbc4",
       "org.sqlite.nativeimage",
       "org.sqlite.util"
+    ],
+    "org.yaml:snakeyaml": [
+      "org.yaml.snakeyaml",
+      "org.yaml.snakeyaml.comments",
+      "org.yaml.snakeyaml.composer",
+      "org.yaml.snakeyaml.constructor",
+      "org.yaml.snakeyaml.emitter",
+      "org.yaml.snakeyaml.env",
+      "org.yaml.snakeyaml.error",
+      "org.yaml.snakeyaml.events",
+      "org.yaml.snakeyaml.external.com.google.gdata.util.common.base",
+      "org.yaml.snakeyaml.inspector",
+      "org.yaml.snakeyaml.internal",
+      "org.yaml.snakeyaml.introspector",
+      "org.yaml.snakeyaml.nodes",
+      "org.yaml.snakeyaml.parser",
+      "org.yaml.snakeyaml.reader",
+      "org.yaml.snakeyaml.representer",
+      "org.yaml.snakeyaml.resolver",
+      "org.yaml.snakeyaml.scanner",
+      "org.yaml.snakeyaml.serializer",
+      "org.yaml.snakeyaml.tokens",
+      "org.yaml.snakeyaml.util"
     ]
   },
   "repositories": {
@@ -1972,6 +2021,7 @@
       "com.fasterxml.jackson.core:jackson-core",
       "com.fasterxml.jackson.core:jackson-databind",
       "com.fasterxml.jackson.dataformat:jackson-dataformat-csv",
+      "com.fasterxml.jackson.dataformat:jackson-dataformat-yaml",
       "com.github.ben-manes.caffeine:caffeine",
       "com.github.kevinstern:software-and-algorithms",
       "com.google.auto.service:auto-service-annotations",
@@ -2041,7 +2091,8 @@
       "org.postgresql:postgresql",
       "org.simdjson:simdjson-java",
       "org.snakeyaml:snakeyaml-engine",
-      "org.xerial:sqlite-jdbc"
+      "org.xerial:sqlite-jdbc",
+      "org.yaml:snakeyaml"
     ],
     "https://maven.elide.dev/gvm-elide/25.5.5-elide.27/": [
       "com.alibaba.fastjson2:fastjson2",
@@ -2050,6 +2101,7 @@
       "com.fasterxml.jackson.core:jackson-core",
       "com.fasterxml.jackson.core:jackson-databind",
       "com.fasterxml.jackson.dataformat:jackson-dataformat-csv",
+      "com.fasterxml.jackson.dataformat:jackson-dataformat-yaml",
       "com.github.ben-manes.caffeine:caffeine",
       "com.github.kevinstern:software-and-algorithms",
       "com.google.auto.service:auto-service-annotations",
@@ -2119,7 +2171,8 @@
       "org.postgresql:postgresql",
       "org.simdjson:simdjson-java",
       "org.snakeyaml:snakeyaml-engine",
-      "org.xerial:sqlite-jdbc"
+      "org.xerial:sqlite-jdbc",
+      "org.yaml:snakeyaml"
     ]
   },
   "services": {
@@ -2147,6 +2200,14 @@
       ],
       "com.fasterxml.jackson.core.ObjectCodec": [
         "com.fasterxml.jackson.dataformat.csv.CsvMapper"
+      ]
+    },
+    "com.fasterxml.jackson.dataformat:jackson-dataformat-yaml": {
+      "com.fasterxml.jackson.core.JsonFactory": [
+        "com.fasterxml.jackson.dataformat.yaml.YAMLFactory"
+      ],
+      "com.fasterxml.jackson.core.ObjectCodec": [
+        "com.fasterxml.jackson.dataformat.yaml.YAMLMapper"
       ]
     },
     "com.google.errorprone:error_prone_core": {

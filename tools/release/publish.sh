@@ -52,11 +52,11 @@ if [[ $mode == --publish ]]; then
   done
 fi
 # Gates, linux-x86_64 (RBE): the full suite and every native lane.
-"$bazel" test //... //benchmarks:native_smoke //benchmarks/comparison:consumer_native_smoke //protobuf-buffa/tests:native_test //protobuf-buffa/tests:native_non_strict_test //protobuf-buffa/tests:native_views_test //protobuf-buffa/tests:fallback_test //tools/release:buffa_native_test //tools/release:stock_free_native_test //tools/release:json_native_test //tools/release:csv_native_test //tools/release:csv_kernel_native_test //json/tests:native_test //yaml/tests:native_test //csv/tests:native_test //benchmarks/comparison:json_native_smoke //benchmarks/comparison:csv_native_smoke "$flag"
+"$bazel" test //... //benchmarks:native_smoke //benchmarks/comparison:consumer_native_smoke //protobuf-buffa/tests:native_test //protobuf-buffa/tests:native_non_strict_test //protobuf-buffa/tests:native_views_test //protobuf-buffa/tests:fallback_test //tools/release:buffa_native_test //tools/release:stock_free_native_test //tools/release:json_native_test //tools/release:yaml_native_test //tools/release:csv_native_test //tools/release:csv_kernel_native_test //json/tests:native_test //yaml/tests:native_test //csv/tests:native_test //benchmarks/comparison:json_native_smoke //benchmarks/comparison:yaml_native_smoke //benchmarks/comparison:csv_native_smoke "$flag"
 BAZEL="$bazel" python3 .github/scripts/jit_gate.py --probes-only
 # Gates per further platform: the C consumers of every release native (static archive with LTO off and ThinLTO, shared
 # library by dlopen) and the JVM consumers of the published shared libraries.
-platform_gates=(//tools/release:native_consumers //tools/release:buffa_consumer //tools/release:json_consumer //tools/release:csv_kernel_consumer)
+platform_gates=(//tools/release:native_consumers //tools/release:buffa_consumer //tools/release:json_consumer //tools/release:yaml_consumer //tools/release:csv_kernel_consumer)
 "$bazel" test --config=remote_arm64 "${platform_gates[@]}" "$flag"
 [[ $host != Darwin-arm64 ]] || "$bazel" test --config=local "${platform_gates[@]}" "$flag"
 for config in remote_musl remote_arm64_musl; do

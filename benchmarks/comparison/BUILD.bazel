@@ -880,6 +880,145 @@ sh_test(
     tags = ["manual"],
 )
 
+# YAML keeps JVM competitors separate from the statically linked implementation.
+data_java_library(
+    name = "yaml_fixture",
+    srcs = ["YamlFixture.java"],
+    visibility = ["//benchmarks:__pkg__"],
+    deps = [
+        ":json_fixture",
+        "//core",
+        "@maven//:com_google_code_gson_gson",
+    ],
+)
+
+data_java_library(
+    name = "yaml_comparison",
+    testonly = True,
+    srcs = [
+        "ComparisonLanguage.java",
+        "YamlComparison.java",
+    ],
+    deps = [
+        ":json_fixture",
+        ":yaml_fixture",
+        "//core",
+        "//json",
+        "//tape",
+        "//yaml",
+        "//yaml:jvm",
+        "@maven//:org_graalvm_polyglot_polyglot",
+        "@maven//:org_graalvm_sdk_nativeimage",
+        "@maven//:org_graalvm_truffle_truffle_api",
+        "@maven//:org_graalvm_truffle_truffle_runtime",
+    ],
+)
+
+data_java_library(
+    name = "yaml_competitors",
+    testonly = True,
+    srcs = [
+        "YamlCompetitors.java",
+        "YamlJvmComparison.java",
+    ],
+    deps = [
+        ":yaml_comparison",
+        ":yaml_fixture",
+        "@maven//:com_fasterxml_jackson_core_jackson_core",
+        "@maven//:com_fasterxml_jackson_core_jackson_databind",
+        "@maven//:com_fasterxml_jackson_dataformat_jackson_dataformat_yaml",
+        "@maven//:org_snakeyaml_snakeyaml_engine",
+        "@maven//:org_yaml_snakeyaml",
+    ],
+)
+
+java_binary(
+    name = "yaml_jvm",
+    testonly = True,
+    jvm_flags = [
+        "--enable-native-access=ALL-UNNAMED",
+        "-Xms512m",
+        "-Xmx512m",
+        "-XX:+UseSerialGC",
+    ],
+    main_class = "dev.elide.truffledata.comparison.YamlJvmComparison",
+    runtime_deps = [":yaml_competitors"],
+)
+
+native_image(
+    name = "yaml_svm",
+    testonly = True,
+    cc_deps = ["//yaml/native:svm", "//json/native:svm"],
+    exec_properties = {
+        "EstimatedCPU": "8",
+        "EstimatedMemory": "24GB",
+    },
+    executable_name = "yaml-comparison",
+    extra_args = [
+        "--gc=serial",
+        "--parallelism=8",
+        "-march=compatibility",
+        "--initialize-at-build-time=dev.elide.truffledata",
+        "--add-exports=org.graalvm.truffle.runtime/com.oracle.truffle.runtime=ALL-UNNAMED",
+        "-H:+UnlockExperimentalVMOptions",
+    ] + TRUFFLE_JIT_CHECKS + ["-H:-UnlockExperimentalVMOptions"],
+    graalvm_sdk = "@graalvm_linux_amd64//:gvm",
+    main_class = "dev.elide.truffledata.comparison.YamlComparison",
+    optimization_mode = "2",
+    tags = ["manual"],
+    target_compatible_with = [
+        "@platforms//os:linux",
+        "@platforms//cpu:x86_64",
+    ],
+    deps = [":yaml_comparison"],
+)
+
+sh_test(
+    name = "yaml_native_smoke",
+    size = "large",
+    srcs = ["yaml_smoke.sh"],
+    args = ["$(rootpath :yaml_svm)"],
+    data = [
+        "yaml_smoke.py",
+        ":yaml_svm",
+    ],
+    tags = ["manual"],
+    target_compatible_with = [
+        "@platforms//os:linux",
+        "@platforms//cpu:x86_64",
+    ],
+)
+
+sh_test(
+    name = "yaml_measure",
+    size = "large",
+    timeout = "eternal",
+    srcs = ["yaml_measure.sh"],
+    args = [
+        "$(rootpath :yaml_svm)",
+        "$(rootpath :yaml_jvm)",
+        "$(rootpath //yaml/native:shared)",
+    ],
+    data = [
+        "yaml_measure.py",
+        ":yaml_jvm",
+        ":yaml_svm",
+        "//yaml/native:shared",
+    ],
+    exec_properties = {
+        "EstimatedCPU": "4",
+        "EstimatedMemory": "4GB",
+    },
+    tags = [
+        "benchmark",
+        "manual",
+    ],
+    target_compatible_with = [
+        "@platforms//os:linux",
+        "@platforms//cpu:x86_64",
+    ],
+)
+
 # A4 evidence gate: keep the candidate isolated until compiled parity, graph and speed pass.
 data_java_library(
     name = "compiled_slab_probe",

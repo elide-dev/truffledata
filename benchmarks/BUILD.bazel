@@ -21,11 +21,13 @@ data_java_library(
     plugins = ["//bazel:jmh_processor"],
     deps = [
         "//benchmarks/comparison:json_fixture",
+        "//benchmarks/comparison:yaml_fixture",
         "//benchmarks/fixtures:contracts",
         "//core",
         "//jdbc",
         "//json",
         "//protobuf",
+        "//yaml",
         "@maven//:com_google_code_gson_gson",
         "@maven//:com_google_protobuf_protobuf_java",
         "@maven//:org_graalvm_polyglot_polyglot",
@@ -111,6 +113,7 @@ native_image(
     cc_deps = [
         "//benchmarks/native:hooks",
         "//json/native:svm",
+        "//yaml/native:svm",
     ],
     data = [
         "proxy-config.json",

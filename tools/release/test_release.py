@@ -106,13 +106,13 @@ class PublicationTest(unittest.TestCase):
                     backend = {n for n in names if n.startswith('dev/elide/truffledata/json/') and n not in generated}
                     shared = {n for n in names if n.startswith('dev/elide/truffledata/tape/')}
                     jvm = {'dev/elide/truffledata/json/JsonJvm.class', 'dev/elide/truffledata/json/JvmTypedOwner.class'}
-                    segment = 'dev/elide/truffledata/tape/SegmentValueTape.class'
+                    segment = 'dev/elide/truffledata/tape/SegmentTape.class'
                     if module == 'tape':
-                        # The shared tape travels with the exact Myna value ABI its tapes extend; static
-                        # images take it, so the FFM tape reader stays out.
+                        # The compact reader ships with Myna interchange support; static images
+                        # take it, while the FFM reader stays in the JVM artifact.
                         self.assertIn('dev/elide/truffledata/tape/TapeValue.class', names)
                         self.assertIn('dev/elide/truffledata/tape/TapeValueGen.class', names)
-                        self.assertIn('dev/elide/truffledata/tape/SvmValueTape.class', names)
+                        self.assertIn('dev/elide/truffledata/tape/SvmTape.class', names)
                         self.assertIn('dev/elide/myna/values/ValueTape.class', names)
                         self.assertNotIn(segment, names)
                         self.assertFalse(backend | generated)
