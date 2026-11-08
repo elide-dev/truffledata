@@ -46,26 +46,35 @@ public final class SlabMessage extends SlabRow implements ProtoMessage {
     this(layout, owned, owned.length, null);
   }
 
-  /** A slab {@link SlabVerifier#verifyOwning} accepted; {@code exact} runs the full accounting. */
-  private SlabMessage(Layout layout, byte[] owned, int extent, boolean exact) {
+  /** A verified slab; {@link SlabVerifier#EXACT} requests full logical accounting. */
+  private SlabMessage(Layout layout, byte[] owned, int extent, int verification) {
     super(layout);
     projected = null;
     bytes = owned;
-    if (exact) validate(0, ROOT, new ProtoRow.Budget(plan().limits()), 1);
+    if ((verification & SlabVerifier.EXACT) != 0)
+      validate(
+          0, ROOT, new ProtoRow.Budget(plan().limits()), 1,
+          (verification & SlabVerifier.SHARED) != 0 ? new HashMap<>() : null);
   }
 
   /** Publish an owning slab already verified by {@link SlabVerifier#verifyOwning}. */
-  static SlabMessage owning(Layout layout, byte[] verified, int extent, boolean exact) {
-    return new SlabMessage(layout, verified, extent, exact);
+  static SlabMessage owning(Layout layout, byte[] verified, int extent, int verification) {
+    return new SlabMessage(layout, verified, extent, verification);
   }
 
   private SlabMessage(Layout layout, byte[] owned, int extent, @Nullable Projected projected) {
+    this(layout, owned, extent, projected, false);
+  }
+
+  private SlabMessage(
+      Layout layout, byte[] owned, int extent, @Nullable Projected projected, boolean shared) {
     super(layout);
     this.projected = projected;
     bytes = owned;
     check(bytes, extent, layout);
     validate(
-        0, ROOT, projected == null ? new ProtoRow.Budget(plan().limits()) : projected.budget, 1);
+        0, ROOT, projected == null ? new ProtoRow.Budget(plan().limits()) : projected.budget, 1,
+        shared ? new HashMap<>() : null);
   }
 
   @TruffleBoundary
@@ -126,9 +135,10 @@ public final class SlabMessage extends SlabRow implements ProtoMessage {
     byte[] retained =
         (getInt(owned, HEADER_FLAGS) & BORROWING) != 0 ? new byte[input.remaining()] : new byte[0];
     if (retained.length != 0) input.duplicate().get(retained);
-    SlabVerifier.verify(owned, owned.length, plan.layout(), limits, projection, retained);
+    boolean shared =
+        SlabVerifier.verify(owned, owned.length, plan.layout(), limits, projection, retained);
     return new SlabMessage(
-        plan.layout(), owned, owned.length, new Projected(projection, retained, limits));
+        plan.layout(), owned, owned.length, new Projected(projection, retained, limits), shared);
   }
 
   /** Copy a reachable projected record, preserving its read mask and deferred payloads. */
@@ -234,7 +244,7 @@ public final class SlabMessage extends SlabRow implements ProtoMessage {
     if (projected != null)
       return new Usage(projected.budget.cellCount(), projected.budget.byteCount());
     var budget = new ProtoRow.Budget(plan().limits());
-    validate(0, ROOT, budget, 1);
+    validate(0, ROOT, budget, 1, new HashMap<>());
     return new Usage(budget.cellCount(), budget.byteCount());
   }
 
@@ -402,7 +412,26 @@ public final class SlabMessage extends SlabRow implements ProtoMessage {
 
   /** Every reachable record is checked; overwritten orphan records do not constrain the result. */
   private void validate(int type, int record, ProtoRow.Budget budget, int depth) {
+    validate(type, record, budget, depth, null);
+  }
+
+  private void validate(
+      int type, int record, ProtoRow.Budget budget, int depth, @Nullable Map<Long, Usage> completed) {
     if (depth > plan().maxDepth()) throw new ContractViolation("Protobuf nesting budget exceeded");
+    long key = ((long) record << 32) | Integer.toUnsignedLong(depth);
+    if (completed != null) {
+      Usage previous = completed.get(key);
+      if (previous != null
+          && previous.cells() <= plan().limits().maxCells() - budget.cellCount()
+          && previous.stringBytes() <= plan().limits().maxStringBytes() - budget.byteCount()) {
+        // Charge each occurrence. If either aggregate does not fit, descend in original order
+        // instead, so the first payload/cell/required-field violation stays unchanged.
+        budget.cells(previous.cells());
+        budget.bytes(previous.stringBytes());
+        return;
+      }
+    }
+    long cells = budget.cellCount(), stringBytes = budget.byteCount();
     ProtoPlan plan = layout.plan(type);
     budget.cells(plan.size());
     int unknown = unknown(bytes, record);
@@ -425,17 +454,22 @@ public final class SlabMessage extends SlabRow implements ProtoMessage {
         if (projected != null && getInt(bytes, list + 4) == COUNTS_ONLY) continue;
         int width = layout.kind(type, ordinal).element;
         for (int i = 0; i < count; i++)
-          validateValue(type, ordinal, listElement(list, width, i), budget, depth);
-      } else validateValue(type, ordinal, slot, budget, depth);
+          validateValue(type, ordinal, listElement(list, width, i), budget, depth, completed);
+      } else validateValue(type, ordinal, slot, budget, depth, completed);
     }
+    // Only successful complete subtrees are reusable; subtraction cannot overflow.
+    if (completed != null)
+      completed.put(key, new Usage(budget.cellCount() - cells, budget.byteCount() - stringBytes));
   }
 
-  private void validateValue(int type, int ordinal, int at, ProtoRow.Budget budget, int depth) {
+  private void validateValue(
+      int type, int ordinal, int at, ProtoRow.Budget budget, int depth,
+      @Nullable Map<Long, Usage> completed) {
     var field = layout.plan(type).field(ordinal);
     switch (field.kind()) {
       case MESSAGE, GROUP -> {
         int child = getInt(bytes, at);
-        if (child > 0) validate(layout.childType(type, ordinal), child, budget, depth + 1);
+        if (child > 0) validate(layout.childType(type, ordinal), child, budget, depth + 1, completed);
       }
       case STRING -> {
         int header = getInt(bytes, at);

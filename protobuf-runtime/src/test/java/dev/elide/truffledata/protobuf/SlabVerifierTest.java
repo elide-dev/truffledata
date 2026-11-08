@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import dev.elide.truffledata.ContractViolation;
 import dev.elide.truffledata.Limits;
 import java.nio.ByteBuffer;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
@@ -23,7 +24,7 @@ class SlabVerifierTest {
   private static String reference(ProtoPlan plan, byte[] slab, SlabLimits limits) {
     try {
       SlabVerifier.verify(slab, slab.length, plan.layout(), limits);
-      return accepted(SlabMessage.owning(plan.layout(), slab, slab.length, true));
+      return accepted(SlabMessage.owning(plan.layout(), slab, slab.length, SlabVerifier.EXACT));
     } catch (ContractViolation rejected) {
       return "rejected: " + rejected.getMessage();
     }
@@ -32,7 +33,7 @@ class SlabVerifierTest {
   /** The production path, optionally forcing identity tracking for small slabs. */
   private static String owning(ProtoPlan plan, byte[] slab, SlabLimits limits, boolean identity) {
     try {
-      boolean exact = SlabVerifier.verifyOwning(slab, slab.length, plan.layout(), limits, identity);
+      int exact = SlabVerifier.verifyOwning(slab, slab.length, plan.layout(), limits, identity);
       return accepted(SlabMessage.owning(plan.layout(), slab, slab.length, exact));
     } catch (ContractViolation rejected) {
       return "rejected: " + rejected.getMessage();
@@ -187,7 +188,7 @@ class SlabVerifierTest {
     // A bounded reproducer for shared-subgraph amplification: the physical wire is a chain
     // with one empty sibling at each level. Repoint each sibling to its nonempty brother,
     // obtaining an exponentially larger logical tree without increasing the slab extent.
-    // Keep this depth small: verification currently visits every logical occurrence.
+    // Keep this reference-comparison fixture small; the stress case below uses depth 28.
     int depth = 10;
     var wire = LayoutTest.wire();
     for (int i = 0; i < depth; i++)
@@ -207,6 +208,162 @@ class SlabVerifierTest {
     var bounded = withLimits(plan, new Limits(1024, 256, cells - 1, 1 << 20));
     assertAgree(bounded, slab, LIMITS, "recursive shared graph budget");
     assertEquals("rejected: Protobuf cell budget exceeded", copied(bounded, slab, LIMITS));
+  }
+
+  private static ProtoPlan sharedPlan() {
+    return LayoutTest.model(
+            LayoutTest.type("Node",
+                LayoutTest.message("children", 1, "Node", true),
+                LayoutTest.scalar("text", 2, ProtoPlan.Kind.STRING, false)))
+        .type("Node");
+  }
+
+  private static byte[] sharedSlab(ProtoPlan plan, int depth) {
+    var wire = LayoutTest.wire().string(2, "x");
+    for (int i = 0; i < depth; i++)
+      wire = LayoutTest.wire().message(1, wire).message(1, LayoutTest.wire()).string(2, "x");
+    byte[] slab = SlabCodec.decode(plan.layout(), wire.bytes());
+    int record = ROOT;
+    for (int i = 0; i < depth; i++) {
+      int list = getInt(slab, record + plan.layout().slot(0, 0));
+      int child = getInt(slab, listElement(list, 4, 0));
+      putInt(slab, listElement(list, 4, 1), child);
+      record = child;
+    }
+    return slab;
+  }
+
+  @Test
+  void exponentialAliasesAreBoundedAndStillChargedPerOccurrence() {
+    assertTimeoutPreemptively(Duration.ofSeconds(5), () -> {
+      int depth = 28;
+      long cells = 6L * (1L << depth) - 4;
+      long bytes = 2L * ((1L << (depth + 1)) - 1);
+      var source = sharedPlan();
+      byte[] slab = sharedSlab(source, depth);
+      assertTrue(slab.length < 8192);
+      var exact = withLimits(source, new Limits(1024, 256, cells, bytes));
+      var message = SlabMessage.copyOf(exact, ByteBuffer.wrap(slab), LIMITS);
+      assertEquals(new SlabMessage.Usage(cells, bytes), message.logicalUsage());
+      var children = (dev.elide.truffledata.OwnedArray) message.get(0);
+      assertSame(children.get(0), children.get(1));
+      int child = getInt(slab, listElement(getInt(slab, ROOT + exact.layout().slot(0, 0)), 4, 0));
+      assertEquals("x", SlabMessage.copyRecordOf(exact, ByteBuffer.wrap(slab), LIMITS, 0, child).get(1));
+      assertEquals("rejected: Protobuf cell budget exceeded",
+          copied(withLimits(source, new Limits(1024, 256, cells - 1, bytes)), slab, LIMITS));
+      assertEquals("rejected: Protobuf payload budget exceeded",
+          copied(withLimits(source, new Limits(1024, 256, cells, bytes - 1)), slab, LIMITS));
+      // Projected external graphs need the same bounded accounting.
+      byte[] projected = slab.clone();
+      putInt(projected, HEADER_FLAGS, OWNING | PROJECTED);
+      assertEquals(message.logicalUsage(), SlabMessage.copyProjectedOf(exact,
+          ByteBuffer.wrap(projected), ByteBuffer.allocate(0), Projection.all(exact), LIMITS)
+          .logicalUsage());
+      // This fault follows the exponential prefix, but must outrank even an immediate budget error.
+      int text = getInt(slab, ROOT + source.layout().slot(0, 1));
+      putInt(slab, text + STRING_HANDLE, -1);
+      var tiny = withLimits(source, new Limits(1024, 256, 1, 1));
+      assertEquals("rejected: Invalid slab structure", copied(tiny, slab, LIMITS));
+    });
+  }
+
+  @Test
+  void repeatedTextHeadersReuseValidationButKeepAccountingAndIdentityChecks() {
+    assertTimeoutPreemptively(Duration.ofSeconds(5), () -> {
+      int count = 4096;
+      String text = "λ😀".repeat(4096);
+      var source = LayoutTest.texts();
+      var wire = LayoutTest.wire().string(6, text);
+      for (int i = 1; i < count; i++) wire.string(6, "");
+      byte[] slab = SlabCodec.decode(source.layout(), wire.bytes());
+      int list = getInt(slab, ROOT + source.layout().slot(0, 5));
+      int first = getInt(slab, listElement(list, 4, 0));
+      int second = getInt(slab, listElement(list, 4, 1));
+      for (int i = 1; i < count; i++) putInt(slab, listElement(list, 4, i), first);
+      long cells = source.size() + count, bytes = 2L * text.length() * count;
+      var plan = withLimits(source, new Limits(1024, 256, cells, bytes));
+      var accepted = SlabMessage.copyOf(plan, ByteBuffer.wrap(slab), LIMITS);
+      assertEquals(new SlabMessage.Usage(cells, bytes), accepted.logicalUsage());
+      var values = (dev.elide.truffledata.OwnedArray) accepted.get(5);
+      assertSame(values.get(0), values.get(count - 1));
+      assertEquals("rejected: Protobuf payload budget exceeded",
+          copied(withLimits(source, new Limits(1024, 256, cells, bytes - 1)), slab, LIMITS));
+      byte[] broken = slab.clone();
+      broken[payload(broken, first)] = (byte) 0xff;
+      assertTrue(copied(plan, broken, LIMITS).startsWith("rejected:"));
+      // A reused handle at another header cannot borrow the first header's UTF-8 proof.
+      putInt(slab, second + STRING_HANDLE, stringHandle(slab, first));
+      putInt(slab, listElement(list, 4, count - 1), second);
+      assertEquals("rejected: Invalid slab structure", copied(plan, slab, LIMITS));
+    });
+  }
+
+  @Test
+  void sharedAccountingKeepsTheFirstCellOrPayloadFailure() {
+    var plan = sharedPlan();
+    byte[] slab = sharedSlab(plan, 2);
+    // Both totals can overflow their budgets. A cached aggregate may only skip a subtree
+    // when both fit, otherwise the original field/list traversal decides which fails first.
+    for (long cells = 1; cells <= 20; cells++)
+      for (long bytes = 1; bytes <= 14; bytes++)
+        assertAgree(withLimits(plan, new Limits(1024, 256, cells, bytes)), slab, LIMITS,
+            "shared budget order " + cells + "/" + bytes);
+  }
+
+  @Test
+  void sharedProjectionKeepsLastDfsSelectionAndChecksExpandedContexts() {
+    var plan = LayoutTest.model(
+        LayoutTest.type("Root", LayoutTest.message("first", 1, "Child", false),
+            LayoutTest.message("second", 2, "Child", false)),
+        LayoutTest.type("Child", LayoutTest.scalar("text", 1, ProtoPlan.Kind.STRING, false)))
+        .type("Root");
+    byte[] slab = SlabCodec.decode(plan.layout(), LayoutTest.wire()
+        .message(1, LayoutTest.wire().string(1, "x"))
+        .message(2, LayoutTest.wire().string(1, "y")).bytes());
+    int child = getInt(slab, ROOT + plan.layout().slot(0, 0));
+    int childType = plan.layout().childType(0, 0);
+    putInt(slab, ROOT + plan.layout().slot(0, 1), child);
+    putInt(slab, HEADER_FLAGS, OWNING | PROJECTED);
+    for (boolean lastExpanded : new boolean[] {false, true}) {
+      var projection = Projection.builder(plan).select(lastExpanded ? "first" : "second")
+          .build().lazyChildren();
+      assertEquals(lastExpanded,
+          SlabVerifier.verifyRecord(slab, plan.layout(), LIMITS, projection, new byte[0], childType, child));
+      var selected = SlabMessage.copyProjectedRecordOf(plan, ByteBuffer.wrap(slab),
+          ByteBuffer.allocate(0), projection, LIMITS, childType, child);
+      if (lastExpanded) assertEquals("x", selected.get(0));
+      else assertThrows(ContractViolation.class, () -> selected.get(0));
+    }
+    // A missing payload is legal for the first masked reach, illegal for the expanded reach.
+    putInt(slab, child + plan.layout().slot(childType, 0), 0);
+    var projection = Projection.builder(plan).select("first").build().lazyChildren();
+    assertEquals("Invalid slab structure", assertThrows(ContractViolation.class,
+        () -> SlabMessage.copyProjectedOf(plan, ByteBuffer.wrap(slab), ByteBuffer.allocate(0),
+            projection, LIMITS)).getMessage());
+  }
+
+  @Test
+  void sharedLazyRecordRechecksAbsoluteDepth() {
+    var plan = LayoutTest.model(
+        LayoutTest.type("Root", LayoutTest.message("direct", 1, "Child", false),
+            LayoutTest.message("bridge", 2, "Bridge", false)),
+        LayoutTest.type("Bridge", LayoutTest.message("child", 1, "Child", false)),
+        LayoutTest.type("Child", LayoutTest.message("next", 1, "Child", false)))
+        .type("Root");
+    var projection = Projection.builder(plan).select("direct", "bridge")
+        .selectType("Bridge", "child").build().lazyChildren();
+    var childWire = LayoutTest.wire().message(1, LayoutTest.wire());
+    byte[] wire = LayoutTest.wire().message(1, childWire)
+        .message(2, LayoutTest.wire().message(1, childWire)).bytes();
+    byte[] slab = SlabMessage.decode(plan, wire, 0, wire.length, LIMITS, projection).slabCopy();
+    int child = getInt(slab, ROOT + plan.layout().slot(0, 0));
+    int bridge = getInt(slab, ROOT + plan.layout().slot(0, 1));
+    int bridgeType = plan.layout().childType(0, 1);
+    putInt(slab, bridge + plan.layout().slot(bridgeType, 0), child);
+    // The same Child is legal at depth 2; its lazy header must not be reused at depth 3.
+    assertEquals("Invalid slab structure", assertThrows(ContractViolation.class,
+        () -> SlabMessage.copyProjectedOf(plan, ByteBuffer.wrap(slab), ByteBuffer.wrap(wire),
+            projection, LIMITS)).getMessage());
   }
 
   @Test
