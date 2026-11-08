@@ -475,13 +475,14 @@ class GeneratedGraphTest {
         new TruffleDataContracts.Access_truffledata$lossless$Sample(
             model(Limits.DEFAULT, 8, 1).type(PREFIX + "Sample"));
     assertThrows(ContractViolation.class, () -> shortWire.decode(new byte[] {8, 1}));
-    assertThrows(ContractViolation.class, () -> bytesAccess.decode(region(9, new byte[140])));
+    assertThrows(ContractViolation.class, () -> bytesAccess.decode(region(9, new byte[256])));
     var defaultBytes =
         new TruffleDataContracts.Access_truffledata$lossless$DefaultGraph(
-            model(new Limits(1024, 256, 140, 1000), 8, 1000).type(PREFIX + "DefaultGraph"));
-    byte[][] entries = new byte[20][];
+            model(new Limits(1024, 256, 256, 1000), 8, 1000).type(PREFIX + "DefaultGraph"));
+    byte[][] entries = new byte[32][];
     Arrays.fill(entries, new byte[] {18, 2, 8, 1});
-    // Parsing fits 140 cells. The retained default byte arrays bring the graph to 163.
+    // Parsing fits 256 cells. Retained defaults bring 31 entries to 251 cells, and 32 to 259.
+    assertDoesNotThrow(() -> defaultBytes.decode(concat(Arrays.copyOf(entries, 31))));
     assertThrows(ContractViolation.class, () -> defaultBytes.decode(concat(entries)));
   }
 
