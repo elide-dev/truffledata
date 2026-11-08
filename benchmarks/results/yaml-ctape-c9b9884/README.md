@@ -3,7 +3,7 @@
 Invocation `71870516-cb39-40e2-b2a7-b1a2d23dfe5f` samples the c9b9884 YAML
 producer on Linux x86-64 RBE with the pinned toolchain, ThinLTO and
 `--copt=-gline-tables-only`. The shared compact writer also includes the recorded
-`shared-writer.patch`; YAML keeps directories enabled. SHA-256 hashes identify the
+`shared-writer.patch.gz`; YAML keeps directories enabled. SHA-256 hashes identify the
 source headers and exact downloaded profiling executable.
 
 Each cell runs for five CPU seconds at 250 samples/second. These short profiles

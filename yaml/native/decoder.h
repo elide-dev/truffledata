@@ -36,6 +36,10 @@
 #include "yaml/native/scalars.h"
 #include "yaml/native/tags.h"
 
+#if defined(__x86_64__)
+#include <emmintrin.h>
+#endif
+
 #include <c4/yml/event_handler_stack.hpp>
 #include <c4/yml/parse_engine.hpp>
 #include <c4/yml/tag.hpp>
@@ -852,6 +856,16 @@ class handler : public c4::yml::EventHandlerStack<handler, handler_state> {
   [[gnu::always_inline]] bool short_plain(c4::csubstr s, short_text& w) const {
     if (!fast_paths_ || pending_tag_ != tag_kind::none || has_pending_anchor_ || schema_ != schema::core) return false;
     if (s.len == 0 || s.len > 16 || !in_input(s.str, s.len)) return false;
+#if defined(__x86_64__)
+    const __m128i positions = _mm_setr_epi8(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15);
+    const __m128i relevant = _mm_cmpgt_epi8(_mm_set1_epi8(char(s.len)), positions);
+    __m128i bytes = _mm_loadu_si128(reinterpret_cast<const __m128i*>(s.str));
+    // Unsigned saturated subtraction maps exactly the bytes <= space to zero.
+    const __m128i bad = _mm_cmpeq_epi8(_mm_subs_epu8(bytes, _mm_set1_epi8(0x20)), _mm_setzero_si128());
+    if (_mm_movemask_epi8(_mm_and_si128(bad, relevant))) return false;
+    bytes = _mm_and_si128(bytes, relevant);
+    w = {uint64_t(_mm_cvtsi128_si64(bytes)), uint64_t(_mm_cvtsi128_si64(_mm_srli_si128(bytes, 8)))};
+#else
     uint64_t lo, hi;
     std::memcpy(&lo, s.str, 8);
     std::memcpy(&hi, s.str + 8, 8);
@@ -861,6 +875,7 @@ class handler : public c4::yml::EventHandlerStack<handler, handler_state> {
     constexpr uint64_t ones = 0x0101010101010101ull, highs = 0x8080808080808080ull;
     if ((((lo - ones * 0x21) & ~lo & highs) & lo_mask) | (((hi - ones * 0x21) & ~hi & highs) & hi_mask)) return false;
     w = {lo & lo_mask, hi & hi_mask};
+#endif
     return true;
   }
 
