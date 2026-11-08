@@ -26,6 +26,7 @@ class SvmJsonMessage extends JsonMessage implements TapeReader {
     count = (int) n; poolBytes = (int) p; inputBytes = (int) i; directoryCount = (int) e;
     flags = d.readInt(4); this.resultAddress = resultAddress;
   }
+  @Override protected final TapeReader reader() { return this; }
   @Override protected void release() { JsonSvm.release(resultAddress); }
   @Override public long nodeCount() { return Integer.toUnsignedLong(count); }
   @Override public long poolSize() { return Integer.toUnsignedLong(poolBytes); }

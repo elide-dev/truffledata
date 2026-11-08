@@ -31,6 +31,8 @@ public abstract class JsonMessage extends TapeOwner implements AutoCloseable {
     @Override protected void release() { storage.run(); }
   }
 
+  @Override protected final boolean confined() { return true; }
+
   @Override protected final boolean aliases() { return false; }
 
   @Override

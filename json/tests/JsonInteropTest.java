@@ -279,6 +279,25 @@ final class JsonInteropTest {
   }
 
   @Test
+  void cachedMissingRankStillFindsLaterKeys() throws Exception {
+    try (JsonDecoder decoder = JsonJvm.open(JvmScopedTest.library());
+        JsonMessage missing = message(decoder, "{\"a\":1,\"b\":2}");
+        JsonMessage present = message(decoder, "{\"id\":7,\"b\":2}");
+        JsonMessage reordered = message(decoder, "{\"b\":2,\"id\":8}")) {
+      InteropLibrary site = site();
+      assertFalse(site.isMemberReadable(missing.root(), "id"));
+      assertThrows(com.oracle.truffle.api.interop.UnknownIdentifierException.class,
+          () -> site.readMember(missing.root(), "id"));
+      for (int round = 0; round < 20; round++) {
+        assertTrue(site.isMemberReadable(present.root(), "id"));
+        assertEquals(7L, site.asLong(site.readMember(present.root(), "id")));
+        assertEquals(8L, site.asLong(site.readMember(reordered.root(), "id")));
+        assertFalse(site.isMemberReadable(missing.root(), "id"));
+      }
+    }
+  }
+
+  @Test
   void escapedLongAndNonAsciiKeysMatchTheirDecodedBytes() throws Exception {
     String longKey = "a_member_name_longer_than_sixteen_bytes";
     try (JsonDecoder decoder = JsonJvm.open(JvmScopedTest.library());

@@ -50,6 +50,9 @@ public abstract class TapeOwner {
     this.thread = thread;
   }
 
+  /** Storage hook; fused owners return themselves so compiled reads preserve that identity. */
+  protected TapeReader reader() { return tape; }
+
   /** Throws when {@code format}'s alias tables (if any) do not cover {@code tape}. */
   protected static TapeFormat checkFormat(TapeReader tape, TapeFormat format) {
     int[] meta = format.meta;
@@ -65,9 +68,12 @@ public abstract class TapeOwner {
     if (pins < 0) throw new OwnerStateException(this, OwnerStateException.CLOSED);
   }
 
+  /** Whether this owner is confined; concrete retained owners make this a class property. */
+  protected boolean confined() { return thread != null; }
+
   /** Thread confinement only; liveness is covered by the assumption at cached sites. */
   protected final void checkThread() {
-    if (thread != null && Thread.currentThread() != thread)
+    if (confined() && Thread.currentThread() != thread)
       throw new OwnerStateException(this, OwnerStateException.THREAD);
   }
 

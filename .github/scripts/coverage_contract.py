@@ -212,6 +212,7 @@ SVM_ONLY_METHODS = {
     # //json/tests:native_test and the retained/interop allocation cells of json_native_smoke.
     **_json_methods(
         'SvmJsonMessage',
+        'SvmJsonMessage::reader ()Ldev/elide/truffledata/tape/TapeReader;',
         'SvmJsonMessage::release ()V',
         'SvmJsonMessage::nodeCount ()J',
         'SvmJsonMessage::poolSize ()J',

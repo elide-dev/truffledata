@@ -110,13 +110,15 @@ class PolicyTest {
             Map.entry("SvmTypedOwner.java", 1),
             Map.entry("JsonSession.java", 3), // open ×2 and stream; the rest is TapeSession's.
             Map.entry("JsonStream.java", 2), // skip and truncatedBytes; the rest is TapeStream's.
+            // YAML: native entry points, detached metadata, explicit materialization and the
+            // bounded alias export. Alias provenance stays behind existing read boundaries.
             Map.entry("AliasExport.java", 1),
             Map.entry("TapeReader.java", 1), // Explicit compatibility copy to Myna.
-            Map.entry("YamlSession.java", 5), // open ×2, stream, documents, compile.
+            Map.entry("YamlSession.java", 5), // open ×2, stream, complete documents, compile.
             Map.entry("YamlPlan.java", 4), // compile ×2, decode, close.
             Map.entry("YamlJvm.java", 2), // Library open ×2.
             Map.entry("YamlSvm.java", 3), // Native entry points.
-            Map.entry("YamlMessage.java", 4), // Directives, metadata, assumption, close.
+            Map.entry("YamlMessage.java", 4), // Directives, metadata, assumption and close.
             Map.entry("Yaml.java", 2), // Binary and timestamp materialization.
             // CSV: diagnostics, materialization and the export walk stay out of compiled reads.
             Map.entry("CsvScanner.java", 2), // Static syntax and limit failures.

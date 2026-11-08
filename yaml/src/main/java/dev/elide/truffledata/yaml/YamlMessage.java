@@ -23,6 +23,11 @@ public class YamlMessage extends TapeOwner implements AutoCloseable {
     this.metadata = metadata;
   }
 
+  @Override
+  protected final boolean confined() {
+    return true;
+  }
+
   // A class-constant absence of references keeps fresh child views scalar-replaceable.
   // Tags, anchors, styles and YAML numeric spelling still live in the full format metadata.
   @Override
