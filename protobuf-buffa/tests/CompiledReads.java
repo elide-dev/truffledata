@@ -6,6 +6,7 @@ import com.oracle.truffle.api.interop.*;
 import com.oracle.truffle.api.nodes.*;
 import dev.elide.truffledata.*;
 import dev.elide.truffledata.buffa.*;
+import dev.elide.truffledata.protobuf.Projection;
 import dev.elide.truffledata.protobuf.ProtoPlan;
 import java.util.List;
 import org.graalvm.nativeimage.ImageInfo;
@@ -94,6 +95,34 @@ final class CompiledReads {
       Acceptance.check(variable.compiled, "session parameter reads compiled");
       session.close();
       Acceptance.rejects(() -> variableTarget.call(current, 1), IllegalStateException.class);
+    }
+  }
+
+  private static void lazyProjectionReads(BuffaWire decoder) {
+    if (decoder.selected() == BuffaWire.Selected.JAVA) return;
+    var contract = TypedAcceptance.plan("Sample");
+    var selection = Projection.builder(contract).build().lazyChildren();
+    byte[] wire =
+        contract.encode(
+            contract
+                .newBuilder()
+                .set(7, contract.nested(7).newBuilder().set(0, 42L).build())
+                .build());
+    try (var base = decoder.compile(contract, 65536);
+        var plan = base.project(selection);
+        var input = decoder.allocate(wire.length).put(wire);
+        var session = plan.newSession(65536)) {
+      var message = session.decode(input);
+      Object child = message.get(7);
+      var root = new ConstantWktRoot(child);
+      var target = root.getCallTarget();
+      for (int i = 0; i < 200 && !root.compiled; i++) target.call(100000);
+      Acceptance.check(
+          root.compiled && (Long) target.call(1000) == 42000,
+          "lazy projected child reads compiled");
+      Acceptance.check(NodeUtil.countNodes(root) <= 192, "lazy projected access AST budget");
+      session.reset();
+      Acceptance.rejects(() -> target.call(1), IllegalStateException.class);
     }
   }
 
@@ -273,6 +302,7 @@ final class CompiledReads {
       try {
         nativeViewReads(decoder);
         slabSessionReads(decoder);
+        lazyProjectionReads(decoder);
         generatedReads(decoder);
         generatedOwnedReads();
         generatedProjection();

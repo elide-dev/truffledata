@@ -42,6 +42,15 @@ public final class SlabFormat {
   /** Every record's required fields are present and no singular message was merged. */
   public static final int CERTIFIED = 8;
 
+  /** The slab needs its immutable projection mask for field access. */
+  public static final int PROJECTED = 16;
+
+  /** Tagged child slot referring to a 16-byte input-span header. */
+  public static final int LAZY_CHILD = 0x8000_0000;
+
+  public static final int LAZY_HEADER_BYTES = 16;
+  public static final int COUNTS_ONLY = 1;
+
   /** The root record always follows the header. */
   public static final int ROOT = HEADER_BYTES;
 

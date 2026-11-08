@@ -18,14 +18,20 @@ public class BorrowedSlabRow extends AbstractRow implements ProtoAccess {
   final int type;
   final int record;
   final long epoch;
+  final boolean expanded;
 
   BorrowedSlabRow(SlabSession owner, long epoch, int type, int record) {
+    this(owner, epoch, type, record, false);
+  }
+
+  BorrowedSlabRow(SlabSession owner, long epoch, int type, int record, boolean expanded) {
     super(owner.layout.plan(type).schema());
     this.owner = owner;
     this.epoch = epoch;
     layout = owner.layout;
     this.type = type;
     this.record = record;
+    this.expanded = expanded;
   }
 
   @Override
@@ -58,17 +64,20 @@ public class BorrowedSlabRow extends AbstractRow implements ProtoAccess {
 
   private Object getChecked(int ordinal) {
     var field = plan().field(ordinal);
+    if (!field.repeated()) owner.requireValue(type, ordinal, expanded);
     if (!owner.present(record, ordinal)) return field.repeated() ? EMPTY : field.defaultValue();
     int at = record + layout.slot(type, ordinal);
-    if (field.repeated()) return owner.array(epoch, type, ordinal, owner.word(at));
-    return owner.value(epoch, type, ordinal, at);
+    if (field.repeated()) return owner.array(epoch, type, ordinal, owner.word(at), expanded);
+    return owner.value(epoch, type, ordinal, at, expanded);
   }
 
   @Override
   public final long getLong(int ordinal) {
+    owner.check(epoch);
+    owner.requireValue(type, ordinal, expanded);
     var field = plan().field(ordinal);
     if (field.repeated()) throw new ContractViolation("Expected INT64");
-    if (!has(ordinal)) {
+    if (!owner.present(record, ordinal)) {
       if (field.defaultValue() instanceof Long n) return n;
       throw new ContractViolation("Expected INT64");
     }
@@ -83,9 +92,12 @@ public class BorrowedSlabRow extends AbstractRow implements ProtoAccess {
 
   @Override
   public final double getDouble(int ordinal) {
+    owner.check(epoch);
+    owner.requireValue(type, ordinal, expanded);
     var field = plan().field(ordinal);
     if (field.repeated()) throw new ContractViolation("Expected FLOAT64");
-    if (!has(ordinal) && field.defaultValue() instanceof Double value) return value;
+    if (!owner.present(record, ordinal) && field.defaultValue() instanceof Double value)
+      return value;
     int at = record + layout.slot(type, ordinal);
     return switch (field.kind()) {
       case FLOAT -> (double) Float.intBitsToFloat(owner.word(at));
@@ -96,30 +108,37 @@ public class BorrowedSlabRow extends AbstractRow implements ProtoAccess {
 
   @Override
   public final boolean getBoolean(int ordinal) {
+    owner.check(epoch);
+    owner.requireValue(type, ordinal, expanded);
     var field = plan().field(ordinal);
     if (field.repeated() || field.kind() != ProtoPlan.Kind.BOOL)
       throw new ContractViolation("Expected BOOLEAN");
-    return has(ordinal)
+    return owner.present(record, ordinal)
         ? owner.word(record + layout.slot(type, ordinal)) != 0
         : (Boolean) field.defaultValue();
   }
 
   @Override
   public final int getSize(int ordinal) {
+    owner.check(epoch);
     var field = plan().field(ordinal);
+    if (!field.repeated()) owner.requireValue(type, ordinal, expanded);
     if (!field.repeated() && field.kind() != ProtoPlan.Kind.BYTES)
       throw new ContractViolation("Expected array");
-    if (!has(ordinal)) return field.repeated() ? 0 : ((OwnedArray) field.defaultValue()).size();
+    if (!owner.present(record, ordinal))
+      return field.repeated() ? 0 : ((OwnedArray) field.defaultValue()).size();
     int offset = owner.word(record + layout.slot(type, ordinal));
     return field.repeated() ? owner.word(offset) : owner.length(offset);
   }
 
   /** UTF-16 length, read directly from the validated string header. */
   public final int stringLength(int ordinal) {
+    owner.check(epoch);
+    owner.requireValue(type, ordinal, expanded);
     var field = plan().field(ordinal);
     if (field.repeated() || field.kind() != ProtoPlan.Kind.STRING)
       throw new ContractViolation("Expected string");
-    return has(ordinal)
+    return owner.present(record, ordinal)
         ? owner.utf16(owner.word(record + layout.slot(type, ordinal)))
         : ((String) field.defaultValue()).length();
   }
@@ -175,6 +194,7 @@ public class BorrowedSlabRow extends AbstractRow implements ProtoAccess {
     @Override
     public long readLong(Object value) throws UnexpectedResultException {
       BorrowedSlabRow r = row(value);
+      r.owner.requireValue(type, ordinal(), r.expanded);
       if (planField.repeated()) throw new UnexpectedResultException(r.get(ordinal()));
       if (!has(r) && planField.defaultValue() instanceof Long n) return n;
       int at = r.record + offset;
@@ -189,6 +209,7 @@ public class BorrowedSlabRow extends AbstractRow implements ProtoAccess {
     @Override
     public double readDouble(Object value) throws UnexpectedResultException {
       BorrowedSlabRow r = row(value);
+      r.owner.requireValue(type, ordinal(), r.expanded);
       if (planField.repeated()) throw new UnexpectedResultException(r.get(ordinal()));
       if (!has(r) && planField.defaultValue() instanceof Double n) return n;
       int at = r.record + offset;
@@ -202,6 +223,7 @@ public class BorrowedSlabRow extends AbstractRow implements ProtoAccess {
     @Override
     public boolean readBoolean(Object value) throws UnexpectedResultException {
       BorrowedSlabRow r = row(value);
+      r.owner.requireValue(type, ordinal(), r.expanded);
       if (planField.repeated() || planField.kind() != ProtoPlan.Kind.BOOL)
         throw new UnexpectedResultException(r.get(ordinal()));
       return has(r) ? r.owner.word(r.record + offset) != 0 : (Boolean) planField.defaultValue();
@@ -210,6 +232,7 @@ public class BorrowedSlabRow extends AbstractRow implements ProtoAccess {
     @Override
     public int length(Object value) {
       BorrowedSlabRow r = row(value);
+      if (!planField.repeated()) r.owner.requireValue(type, ordinal(), r.expanded);
       if (planField.repeated())
         return arrayLength(has(r) ? r.owner.word(r.owner.word(r.record + offset)) : 0);
       if (planField.kind() == ProtoPlan.Kind.BYTES)

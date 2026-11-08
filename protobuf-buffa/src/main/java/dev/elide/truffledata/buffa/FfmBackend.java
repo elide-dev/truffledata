@@ -376,10 +376,18 @@ final class FfmBackend implements BuffaWire.Backend {
   }
 
   @Override
-  public int writeSlab(Object compiled, WireInput input, WireInput output, SlabLimits limits) {
+  public int writeSlab(
+      Object compiled,
+      WireInput input,
+      WireInput output,
+      SlabLimits limits,
+      int flags,
+      @Nullable WireInput projection) {
     if (!(input.lease.attachment instanceof MemorySegment source)
         || !(output.lease.attachment instanceof MemorySegment destination))
       throw new IllegalArgumentException("Slab arena is not JVM native memory");
+    MemorySegment mask =
+        projection == null ? MemorySegment.NULL : (MemorySegment) projection.lease.attachment;
     acquireResult();
     try {
       int status;
@@ -390,8 +398,8 @@ final class FfmBackend implements BuffaWire.Backend {
                     (MemorySegment) compiled,
                     source,
                     (long) input.size(),
-                    1,
-                    MemorySegment.NULL,
+                    flags,
+                    mask,
                     destination,
                     (long) output.size(),
                     limits.maxDepth(),

@@ -15,6 +15,23 @@ import org.jspecify.annotations.Nullable;
 public final class SlabMessage extends SlabRow implements ProtoMessage {
   final byte[] bytes;
   private final int extent;
+  private final @Nullable Projected projected;
+
+  private static final class Projected {
+    final Projection selection;
+    final byte[] input;
+    final SlabLimits limits;
+    final ProtoRow.Budget budget;
+    int materializedBytes;
+
+    Projected(Projection selection, byte[] input, SlabLimits limits) {
+      this.selection = selection;
+      this.input = input;
+      this.limits = limits;
+      budget = new ProtoRow.Budget(selection.layout().plan(0).limits());
+    }
+  }
+
   private Object @Nullable [] handles;
   private @Nullable Map<Integer, SlabArray> arrays;
   private @Nullable Map<Integer, Object> unsigned;
@@ -24,11 +41,17 @@ public final class SlabMessage extends SlabRow implements ProtoMessage {
   }
 
   private SlabMessage(Layout layout, byte[] owned, int extent) {
+    this(layout, owned, extent, null);
+  }
+
+  private SlabMessage(Layout layout, byte[] owned, int extent, @Nullable Projected projected) {
     super(layout);
+    this.projected = projected;
     bytes = owned;
     this.extent = extent;
     check(bytes, extent, layout);
-    validate(0, ROOT, new ProtoRow.Budget(plan().limits()), 1);
+    validate(
+        0, ROOT, projected == null ? new ProtoRow.Budget(plan().limits()) : projected.budget, 1);
   }
 
   @TruffleBoundary
@@ -44,6 +67,75 @@ public final class SlabMessage extends SlabRow implements ProtoMessage {
       ProtoPlan plan, byte[] input, int offset, int length, SlabLimits limits) {
     Layout layout = plan.layout();
     return new SlabMessage(layout, plan.decodeSlabBytes(input, offset, length, limits));
+  }
+
+  /** Decode a selected view. Deferred payloads retain an immutable copy of this input window. */
+  @TruffleBoundary
+  public static SlabMessage decode(
+      ProtoPlan plan,
+      byte[] input,
+      int offset,
+      int length,
+      SlabLimits limits,
+      Projection projection) {
+    projection.requireLayout(plan.layout());
+    java.util.Objects.checkFromIndexSize(offset, length, input.length);
+    if (length > plan.maxWireBytes()) throw new ContractViolation("Wire byte budget exceeded");
+    byte[] source =
+        projection.requiresBorrow() ? Arrays.copyOfRange(input, offset, offset + length) : input;
+    int start = projection.requiresBorrow() ? 0 : offset;
+    byte[] slab = SlabCodec.decode(plan.layout(), source, start, length, limits, projection);
+    byte[] retained = (getInt(slab, HEADER_FLAGS) & BORROWING) != 0 ? source : new byte[0];
+    SlabVerifier.verify(slab, slab.length, plan.layout(), limits, projection, retained);
+    return new SlabMessage(
+        plan.layout(), slab, slab.length, new Projected(projection, retained, limits));
+  }
+
+  /** Copy an external projected slab and every input byte it may reference. */
+  @TruffleBoundary
+  public static SlabMessage copyProjectedOf(
+      ProtoPlan plan,
+      java.nio.ByteBuffer slab,
+      java.nio.ByteBuffer input,
+      Projection projection,
+      SlabLimits limits) {
+    projection.requireLayout(plan.layout());
+    if (slab.remaining() > limits.maxSlabBytes())
+      throw new ContractViolation("Slab byte budget exceeded");
+    if (input.remaining() > plan.maxWireBytes())
+      throw new ContractViolation("Wire byte budget exceeded");
+    byte[] owned = new byte[slab.remaining()];
+    slab.duplicate().get(owned);
+    if (owned.length < HEADER_BYTES) throw new ContractViolation("Invalid projected slab");
+    byte[] retained =
+        (getInt(owned, HEADER_FLAGS) & BORROWING) != 0 ? new byte[input.remaining()] : new byte[0];
+    if (retained.length != 0) input.duplicate().get(retained);
+    SlabVerifier.verify(owned, owned.length, plan.layout(), limits, projection, retained);
+    return new SlabMessage(
+        plan.layout(), owned, owned.length, new Projected(projection, retained, limits));
+  }
+
+  /** Copy a reachable projected record, preserving its read mask and deferred payloads. */
+  @TruffleBoundary
+  public static SlabRow copyProjectedRecordOf(
+      ProtoPlan plan,
+      java.nio.ByteBuffer slab,
+      java.nio.ByteBuffer input,
+      Projection projection,
+      SlabLimits limits,
+      int type,
+      int record) {
+    SlabMessage owner = copyProjectedOf(plan, slab, input, projection, limits);
+    boolean expanded =
+        SlabVerifier.verifyRecord(
+            owner.bytes,
+            owner.layout,
+            limits,
+            projection,
+            java.util.Objects.requireNonNull(owner.projected).input,
+            type,
+            record);
+    return type == 0 && record == ROOT ? owner : owner.row(type, record, expanded);
   }
 
   /** Copy an externally produced owning slab; the supplied buffer is never retained. */
@@ -105,7 +197,28 @@ public final class SlabMessage extends SlabRow implements ProtoMessage {
 
   /** Retained array capacity, including unused bytes after the valid slab extent. */
   public int retainedSlabBytes() {
-    return bytes.length;
+    return bytes.length + (projected == null ? 0 : projected.materializedBytes);
+  }
+
+  /** Immutable source capacity retained for external byte or lazy child references. */
+  public int retainedInputBytes() {
+    return projected == null ? 0 : projected.input.length;
+  }
+
+  public boolean projected() {
+    return projected != null;
+  }
+
+  /** Logical contract budget already materialized, without allocating child or text views. */
+  public record Usage(long cells, long stringBytes) {}
+
+  @TruffleBoundary
+  public synchronized Usage logicalUsage() {
+    if (projected != null)
+      return new Usage(projected.budget.cellCount(), projected.budget.byteCount());
+    var budget = new ProtoRow.Budget(plan().limits());
+    validate(0, ROOT, budget, 1);
+    return new Usage(budget.cellCount(), budget.byteCount());
   }
 
   public byte[] slabCopy() {
@@ -121,12 +234,17 @@ public final class SlabMessage extends SlabRow implements ProtoMessage {
     return values;
   }
 
+  SlabRow row(int type, int record) {
+    return row(type, record, false);
+  }
+
   @TruffleBoundary
-  synchronized SlabRow row(int type, int record) {
+  synchronized SlabRow row(int type, int record, boolean expanded) {
+    if (record < 0) return realize(type, record & ~LAZY_CHILD);
     int handle = handle(bytes, record);
     Object[] values = cache();
     if (values[handle] instanceof SlabRow row) return row;
-    SlabRow row = new SlabRow(this, type, record);
+    SlabRow row = new SlabRow(this, type, record, expanded);
     values[handle] = row;
     return row;
   }
@@ -157,12 +275,12 @@ public final class SlabMessage extends SlabRow implements ProtoMessage {
   }
 
   @TruffleBoundary
-  synchronized SlabArray array(int type, int ordinal, int list) {
+  synchronized SlabArray array(int type, int ordinal, int list, boolean expanded) {
     Map<Integer, SlabArray> values = arrays;
     if (values == null) arrays = values = new HashMap<>();
     SlabArray found = values.get(list);
     if (found != null) return found;
-    SlabArray result = new SlabArray(this, type, ordinal, list);
+    SlabArray result = new SlabArray(this, type, ordinal, list, expanded);
     values.put(list, result);
     return result;
   }
@@ -177,6 +295,66 @@ public final class SlabMessage extends SlabRow implements ProtoMessage {
       values.put(at, result);
     }
     return result;
+  }
+
+  private SlabMessage realize(int type, int header) {
+    Projected state = java.util.Objects.requireNonNull(projected);
+    int handle = getInt(bytes, header + 8);
+    Object[] cached = cache();
+    if (cached[handle] instanceof SlabMessage child) return child;
+    int depth = getInt(bytes, header + 12);
+    var childLimits =
+        new SlabLimits(
+            state.limits.maxDepth() - depth, state.limits.maxSlabBytes() - retainedSlabBytes(), 0);
+    SlabMessage child =
+        decode(
+            layout.plan(type),
+            state.input,
+            getInt(bytes, header),
+            getInt(bytes, header + 4),
+            childLimits);
+    // First account without changing the shared counters, so a rejected read is repeatable.
+    var childBudget = new ProtoRow.Budget(plan().limits());
+    child.validate(0, ROOT, childBudget, depth + 1);
+    if (childBudget.cellCount() > plan().limits().maxCells() - state.budget.cellCount()
+        || childBudget.byteCount() > plan().limits().maxStringBytes() - state.budget.byteCount())
+      throw new ContractViolation("Deferred protobuf payload budget exceeded");
+    state.budget.cells(childBudget.cellCount());
+    state.budget.bytes(childBudget.byteCount());
+    state.materializedBytes += child.retainedSlabBytes();
+    cached[handle] = child;
+    return child;
+  }
+
+  void requireValue(int type, int ordinal, boolean expanded) {
+    Projected state = projected;
+    if (state != null
+        && !expanded
+        && !state.selection.wants(type, ordinal)
+        && !(state.selection.lazyChildrenEnabled()
+            && layout.plan(type).field(ordinal).kind().message())) throw omitted();
+  }
+
+  boolean expandChild(int type, int ordinal) {
+    Projected state = projected;
+    return state != null
+        && state.selection.lazyChildrenEnabled()
+        && !state.selection.wants(type, ordinal);
+  }
+
+  @TruffleBoundary
+  private static ContractViolation omitted() {
+    return new ContractViolation("Field omitted by projection");
+  }
+
+  byte[] payloadBytes(int header) {
+    return external(bytes, header) ? java.util.Objects.requireNonNull(projected).input : bytes;
+  }
+
+  int payloadOffset(int header) {
+    return external(bytes, header)
+        ? getInt(bytes, header + STRING_HEADER_BYTES)
+        : payload(bytes, header);
   }
 
   /** Every reachable record is checked; overwritten orphan records do not constrain the result. */
@@ -201,6 +379,7 @@ public final class SlabMessage extends SlabRow implements ProtoMessage {
       if (field.repeated()) {
         int list = getInt(bytes, slot), count = listCount(bytes, list);
         budget.cells(count);
+        if (projected != null && getInt(bytes, list + 4) == COUNTS_ONLY) continue;
         int width = layout.kind(type, ordinal).element;
         for (int i = 0; i < count; i++)
           validateValue(type, ordinal, listElement(list, width, i), budget, depth);
@@ -211,10 +390,18 @@ public final class SlabMessage extends SlabRow implements ProtoMessage {
   private void validateValue(int type, int ordinal, int at, ProtoRow.Budget budget, int depth) {
     var field = layout.plan(type).field(ordinal);
     switch (field.kind()) {
-      case MESSAGE, GROUP ->
-          validate(layout.childType(type, ordinal), getInt(bytes, at), budget, depth + 1);
-      case STRING -> budget.bytes(2L * utf16Length(bytes, getInt(bytes, at)));
-      case BYTES -> budget.cells(SlabFormat.stringLength(bytes, getInt(bytes, at)));
+      case MESSAGE, GROUP -> {
+        int child = getInt(bytes, at);
+        if (child > 0) validate(layout.childType(type, ordinal), child, budget, depth + 1);
+      }
+      case STRING -> {
+        int header = getInt(bytes, at);
+        if (header != 0) budget.bytes(2L * utf16Length(bytes, header));
+      }
+      case BYTES -> {
+        int header = getInt(bytes, at);
+        if (header != 0) budget.cells(SlabFormat.stringLength(bytes, header));
+      }
       default -> {}
     }
   }
@@ -230,6 +417,8 @@ public final class SlabMessage extends SlabRow implements ProtoMessage {
   /** Re-encode known fields and unknown spans directly; no input retention or reparse. */
   @TruffleBoundary
   public byte[] encode() {
+    if (projected != null && !projected.selection.complete())
+      throw new ContractViolation("Cannot encode a partial projection");
     return encodeRecord(0, ROOT);
   }
 
@@ -268,7 +457,7 @@ public final class SlabMessage extends SlabRow implements ProtoMessage {
       case STRING, BYTES -> {
         int header = getInt(bytes, at), length = SlabFormat.stringLength(bytes, header);
         varint(output, length);
-        output.write(bytes, payload(bytes, header), length);
+        output.write(payloadBytes(header), payloadOffset(header), length);
       }
       case MESSAGE, GROUP -> {
         byte[] child = encodeRecord(layout.childType(type, ordinal), getInt(bytes, at));

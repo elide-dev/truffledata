@@ -29,10 +29,23 @@ public final class BuffaPlan implements AutoCloseable {
   private long slabLayout;
   private int slabCapacity;
   private final int maxSchemaBytes;
+  private final @Nullable Projection projection;
+  private @Nullable SlabSession projectedSession;
+  private @Nullable SlabLimits projectedLimits;
 
   private boolean open = true;
 
   BuffaPlan(BuffaWire decoder, ProtoPlan plan, int maxSchemaBytes, List<ProtoPlan> anyTypes) {
+    this(decoder, plan, maxSchemaBytes, anyTypes, null);
+  }
+
+  private BuffaPlan(
+      BuffaWire decoder,
+      ProtoPlan plan,
+      int maxSchemaBytes,
+      List<ProtoPlan> anyTypes,
+      @Nullable Projection projection) {
+    this.projection = projection;
     this.decoder = decoder;
     this.maxSchemaBytes = maxSchemaBytes;
     this.plan = Objects.requireNonNull(plan);
@@ -92,6 +105,14 @@ public final class BuffaPlan implements AutoCloseable {
     return decodeSlab(input, maxSlabBytes);
   }
 
+  /** Bind one immutable selection in an independently closeable compiled plan. */
+  @TruffleBoundary
+  public BuffaPlan project(Projection selection) {
+    check();
+    selection.requireLayout(plan.layout());
+    return new BuffaPlan(decoder, plan, maxSchemaBytes, anyTypes, selection);
+  }
+
   /** Create a native arena session; Java-only consumers use the durable decode methods. */
   @TruffleBoundary
   public SlabSession newSession(int maxSlabBytes) {
@@ -99,7 +120,11 @@ public final class BuffaPlan implements AutoCloseable {
     if (decoder.backend == null)
       throw new UnsupportedOperationException("Slab sessions require native memory");
     return new SlabSession(
-        decoder, plan, maxSchemaBytes, new SlabLimits(plan.maxDepth() - 1, maxSlabBytes, 0));
+        decoder,
+        plan,
+        maxSchemaBytes,
+        new SlabLimits(plan.maxDepth() - 1, maxSlabBytes, 0),
+        projection);
   }
 
   /** Transitional benchmark baseline; removed with the ABI 9 index implementation. */
@@ -116,6 +141,7 @@ public final class BuffaPlan implements AutoCloseable {
     check();
     if (input.size() > plan.maxWireBytes()) throw new ContractViolation("Typed input budget");
     var limits = new SlabLimits(plan.maxDepth() - 1, maxSlabBytes);
+    if (projection != null) return projected(input, limits);
     var source = input.retain();
     try {
       var backend = decoder.backend;
@@ -143,11 +169,38 @@ public final class BuffaPlan implements AutoCloseable {
       limits = new SlabLimits(plan.maxDepth() - 1, limits.maxSlabBytes(), limits.criticalBytes());
     if (input.length > plan.maxWireBytes()) throw new ContractViolation("Typed input budget");
     int maxSlabBytes = limits.maxSlabBytes();
+    if (projection != null) {
+      if (decoder.backend == null)
+        return SlabMessage.decode(plan, input, 0, input.length, limits, projection);
+      try (var nativeInput = decoder.allocate(input.length).put(input)) {
+        decoder.backend.recordSlabInputCopy(input.length);
+        return projected(nativeInput, limits);
+      }
+    }
     if (decoder.backend == null) return SlabMessage.decode(plan, input, 0, input.length, limits);
     int capacity = (int) Math.min(maxSlabBytes, Math.max(slabCapacity, 4L * input.length + 256));
     SlabMessage result = decoder.backend.slab(slabLayout(), input, plan, limits, capacity);
     slabCapacity = Math.max(slabCapacity, result.slabBytes());
     return result;
+  }
+
+  private SlabMessage projected(WireInput input, SlabLimits limits) {
+    Projection selection = Objects.requireNonNull(projection);
+    if (decoder.backend == null) {
+      byte[] bytes = new byte[input.size()];
+      input.lease.bytes.duplicate().get(bytes);
+      return SlabMessage.decode(plan, bytes, 0, bytes.length, limits, selection);
+    }
+    SlabSession session = projectedSession;
+    if (session == null || !limits.equals(projectedLimits)) {
+      if (session != null) session.close();
+      projectedSession =
+          session = new SlabSession(decoder, plan, maxSchemaBytes, limits, selection);
+      projectedLimits = limits;
+    }
+    try (var message = session.decode(input)) {
+      return message.retain();
+    }
   }
 
   private long slabLayout() {
@@ -471,6 +524,7 @@ public final class BuffaPlan implements AutoCloseable {
   public void close() {
     schema.lease.thread();
     if (open) {
+      if (projectedSession != null) projectedSession.close();
       open = false;
       long compiled = views;
       long layout = slabLayout;

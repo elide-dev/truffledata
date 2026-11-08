@@ -11,12 +11,14 @@ import java.util.Objects;
 @ExportLibrary(InteropLibrary.class)
 final class SlabBytes implements OwnedArray {
   private final SlabMessage owner;
+  private final byte[] bytes;
   private final int offset;
   private final int length;
 
   SlabBytes(SlabMessage owner, int header) {
     this.owner = owner;
-    offset = SlabFormat.payload(owner.bytes, header);
+    bytes = owner.payloadBytes(header);
+    offset = owner.payloadOffset(header);
     length = SlabFormat.stringLength(owner.bytes, header);
   }
 
@@ -33,13 +35,13 @@ final class SlabBytes implements OwnedArray {
   @Override
   public Object get(int index) {
     Objects.checkIndex(index, length);
-    return (long) Byte.toUnsignedInt(owner.bytes[offset + index]);
+    return (long) Byte.toUnsignedInt(bytes[offset + index]);
   }
 
   @Override
   public void copyBytesTo(byte[] target, int targetOffset) {
     Objects.checkFromIndexSize(targetOffset, length, target.length);
-    System.arraycopy(owner.bytes, offset, target, targetOffset, length);
+    System.arraycopy(bytes, offset, target, targetOffset, length);
   }
 
   @ExportMessage

@@ -29,6 +29,8 @@ ACCESS_SOURCES = {f'core/src/main/java/dev/elide/truffledata/{name}.java' for na
     'protobuf-buffa/src/main/java/dev/elide/truffledata/buffa/BorrowedSlabRow.java',
     'protobuf-buffa/src/main/java/dev/elide/truffledata/buffa/BorrowedSlabMessage.java',
     'protobuf-buffa/src/main/java/dev/elide/truffledata/buffa/BorrowedSlabArray.java',
+    'protobuf-buffa/src/main/java/dev/elide/truffledata/buffa/BorrowedMaterializedArray.java',
+    'protobuf-buffa/src/main/java/dev/elide/truffledata/buffa/BorrowedMaterializedRow.java',
     'protobuf-buffa/src/main/java/dev/elide/truffledata/buffa/SlabSession.java',
     'protobuf-buffa/src/main/java/dev/elide/truffledata/buffa/WireField.java',
     'protobuf-buffa/src/main/java/dev/elide/truffledata/buffa/WireInput.java',

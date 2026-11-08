@@ -19,6 +19,7 @@ data_java_library(
         "src/main/java/dev/elide/truffledata/protobuf/ProtoJson.java",
         "src/main/java/dev/elide/truffledata/protobuf/ProtoJsonType.java",
         "src/main/java/dev/elide/truffledata/protobuf/ProtoMessage.java",
+        "src/main/java/dev/elide/truffledata/protobuf/Projection.java",
         "src/main/java/dev/elide/truffledata/protobuf/ProtoPlan.java",
         "src/main/java/dev/elide/truffledata/protobuf/ProtoRow.java",
         "src/main/java/dev/elide/truffledata/protobuf/ProtoText.java",
@@ -48,6 +49,7 @@ java_test(
     srcs = [
         "src/test/java/dev/elide/truffledata/protobuf/LayoutTest.java",
         "src/test/java/dev/elide/truffledata/protobuf/SlabCodecTest.java",
+        "src/test/java/dev/elide/truffledata/protobuf/ProjectionTest.java",
         "src/test/java/dev/elide/truffledata/protobuf/SlabReference.java",
     ],
     args = [
@@ -55,6 +57,8 @@ java_test(
         "dev.elide.truffledata.protobuf.LayoutTest",
         "--class",
         "dev.elide.truffledata.protobuf.SlabCodecTest",
+        "--class",
+        "dev.elide.truffledata.protobuf.ProjectionTest",
     ],
     data = [":golden_slabs"],
     jvm_flags = [

@@ -21,6 +21,12 @@ public final class SlabSession implements AutoCloseable {
   private final BuffaWire decoder;
   private final BuffaWire.Backend backend;
   final Layout layout;
+  final @Nullable Projection projection;
+  private final @Nullable WireInput projectionInput;
+  private WireInput.@Nullable Lease source;
+  private long sourceAddress;
+  private int materializedBytes;
+  private @Nullable IdentityHashMap<Object, Object> materialized;
   private final SlabLimits limits;
   private final long compiled;
   private final Object callHandle;
@@ -37,6 +43,17 @@ public final class SlabSession implements AutoCloseable {
   private long payload;
 
   SlabSession(BuffaWire decoder, ProtoPlan plan, int maxSchemaBytes, SlabLimits limits) {
+    this(decoder, plan, maxSchemaBytes, limits, null);
+  }
+
+  SlabSession(
+      BuffaWire decoder,
+      ProtoPlan plan,
+      int maxSchemaBytes,
+      SlabLimits limits,
+      @Nullable Projection projection) {
+    this.projection = projection;
+    if (projection != null) projection.requireLayout(plan.layout());
     this.decoder = decoder;
     backend =
         Objects.requireNonNull(decoder.backend, "Native slab sessions require a native backend");
@@ -51,6 +68,12 @@ public final class SlabSession implements AutoCloseable {
     }
     try {
       callHandle = backend.prepareSlab(compiled);
+      if (projection == null) projectionInput = null;
+      else {
+        byte[] program = projection.program();
+        projectionInput = decoder.allocate(program.length).put(program);
+        projectionInput.retain().release();
+      }
     } catch (RuntimeException | Error failure) {
       backend.releaseLayout(compiled);
       throw failure;
@@ -99,26 +122,49 @@ public final class SlabSession implements AutoCloseable {
     invalidate();
     if (input.size() > layout.plan(0).maxWireBytes())
       throw new ContractViolation("Typed input budget");
-    var source = input.retain();
+    var retained = input.retain();
+    boolean transferred = false;
     try {
       if (arena == null) grow((int) Math.min(limits.maxSlabBytes(), 4L * input.size() + 256));
       WireInput output = Objects.requireNonNull(arena);
-      int written = backend.writeSlab(callHandle, input, output, limits);
+      int written =
+          backend.writeSlab(
+              callHandle,
+              input,
+              output,
+              limits,
+              projection == null ? 1 : projection.decodeFlags(),
+              projectionInput);
       if (written < 0) {
         grow(-written);
-        written = backend.writeSlab(callHandle, input, Objects.requireNonNull(arena), limits);
+        written =
+            backend.writeSlab(
+                callHandle,
+                input,
+                Objects.requireNonNull(arena),
+                limits,
+                projection == null ? 1 : projection.decodeFlags(),
+                projectionInput);
       }
       if (written <= 0) throw new ContractViolation("Slab capacity retry failed");
       extent = written;
+      if ((word(HEADER_FLAGS) & BORROWING) != 0) {
+        source = retained;
+        transferred = true;
+        sourceAddress =
+            ImageInfo.inImageCode()
+                ? ((BuffaSvm.Address) Objects.requireNonNull(input.lease.attachment)).value()
+                : FfmBackend.nativeAddress(input);
+      }
       try {
         validate();
         return new BorrowedSlabMessage(this, epoch);
       } catch (RuntimeException | Error failure) {
-        extent = 0;
+        invalidate();
         throw failure;
       }
     } finally {
-      source.release();
+      if (!transferred) retained.release();
     }
   }
 
@@ -145,6 +191,13 @@ public final class SlabSession implements AutoCloseable {
     extent = 0;
     if (handles != null) Arrays.fill(handles, null);
     other.clear();
+    if (materialized != null) materialized.clear();
+    materializedBytes = 0;
+    if (source != null) {
+      source.release();
+      source = null;
+    }
+    sourceAddress = 0;
   }
 
   /** Explicit reset invalidates borrows and retains arena capacity for the next decode. */
@@ -204,15 +257,30 @@ public final class SlabSession implements AutoCloseable {
   @TruffleBoundary
   SlabMessage retain(long expected) {
     check(expected);
-    return SlabMessage.copyOf(
-        layout.plan(0), Objects.requireNonNull(bytes).slice(0, extent), limits);
+    return projection == null
+        ? SlabMessage.copyOf(layout.plan(0), Objects.requireNonNull(bytes).slice(0, extent), limits)
+        : SlabMessage.copyProjectedOf(
+            layout.plan(0),
+            Objects.requireNonNull(bytes).slice(0, extent),
+            sourceBytes(),
+            projection,
+            limits);
   }
 
   @TruffleBoundary
   SlabRow retain(long expected, int type, int record) {
     check(expected);
-    return SlabMessage.copyRecordOf(
-        layout.plan(0), Objects.requireNonNull(bytes).slice(0, extent), limits, type, record);
+    return projection == null
+        ? SlabMessage.copyRecordOf(
+            layout.plan(0), Objects.requireNonNull(bytes).slice(0, extent), limits, type, record)
+        : SlabMessage.copyProjectedRecordOf(
+            layout.plan(0),
+            Objects.requireNonNull(bytes).slice(0, extent),
+            sourceBytes(),
+            projection,
+            limits,
+            type,
+            record);
   }
 
   @Override
@@ -225,10 +293,21 @@ public final class SlabSession implements AutoCloseable {
       open = false;
       try {
         if (arena != null) arena.close();
+        if (projectionInput != null) projectionInput.close();
       } finally {
         backend.releaseLayout(compiled);
       }
     }
+  }
+
+  private ByteBuffer sourceBytes() {
+    return source == null ? ByteBuffer.allocate(0) : source.bytes.asReadOnlyBuffer();
+  }
+
+  /** Native input capacity retained by this decode, separate from the slab arena. */
+  public int retainedInputBytes() {
+    thread();
+    return source == null ? 0 : source.bytes.capacity();
   }
 
   int word(int at) {
@@ -311,25 +390,27 @@ public final class SlabSession implements AutoCloseable {
   }
 
   @TruffleBoundary
-  Object row(long expected, int type, int record) {
+  Object row(long expected, int type, int record, boolean expanded) {
+    if (record < 0) return realize(expected, type, record & ~LAZY_CHILD);
     Object[] cache = cache();
     int handle = word(record);
     Object value = cache[handle];
-    if (value == null) cache[handle] = value = new BorrowedSlabRow(this, expected, type, record);
+    if (value == null)
+      cache[handle] = value = new BorrowedSlabRow(this, expected, type, record, expanded);
     return value;
   }
 
   @TruffleBoundary
-  Object array(long expected, int type, int ordinal, int list) {
+  Object array(long expected, int type, int ordinal, int list, boolean expanded) {
     Object value = other.get(list);
     if (value == null) {
-      value = new BorrowedSlabArray(this, expected, type, ordinal, list);
+      value = new BorrowedSlabArray(this, expected, type, ordinal, list, expanded);
       other.put(list, value);
     }
     return value;
   }
 
-  Object value(long expected, int type, int ordinal, int at) {
+  Object value(long expected, int type, int ordinal, int at, boolean expanded) {
     var kind = layout.plan(type).field(ordinal).kind();
     long bits =
         switch (kind) {
@@ -340,7 +421,12 @@ public final class SlabSession implements AutoCloseable {
     return switch (kind) {
       case STRING -> text((int) bits);
       case BYTES -> blob(expected, (int) bits);
-      case MESSAGE, GROUP -> row(expected, layout.childType(type, ordinal), (int) bits);
+      case MESSAGE, GROUP ->
+          row(
+              expected,
+              layout.childType(type, ordinal),
+              (int) bits,
+              expanded || expandChild(type, ordinal));
       case UINT64, FIXED64 -> unsigned(at, bits);
       case UINT32, FIXED32 -> bits & 0xffffffffL;
       case FLOAT -> (double) Float.intBitsToFloat((int) bits);
@@ -348,6 +434,87 @@ public final class SlabSession implements AutoCloseable {
       case BOOL -> bits != 0;
       default -> bits;
     };
+  }
+
+  void requireValue(int type, int ordinal, boolean expanded) {
+    Projection selection = projection;
+    if (selection != null
+        && !expanded
+        && !selection.wants(type, ordinal)
+        && !(selection.lazyChildrenEnabled() && layout.plan(type).field(ordinal).kind().message()))
+      throw omitted();
+  }
+
+  boolean expandChild(int type, int ordinal) {
+    Projection selection = projection;
+    return selection != null && selection.lazyChildrenEnabled() && !selection.wants(type, ordinal);
+  }
+
+  @TruffleBoundary
+  private static ContractViolation omitted() {
+    return new ContractViolation("Field omitted by projection");
+  }
+
+  int payloadByte(int header, int index) {
+    if ((word(header) & EXTERNAL) == 0) return octet(payloadAt(header) + index);
+    int offset = word(header + STRING_HEADER_BYTES) + index;
+    var retained = Objects.requireNonNull(source);
+    if (offset < 0 || offset >= retained.bytes.capacity()) throw outside();
+    if (ImageInfo.inImageCode())
+      return WordFactory.<Pointer>pointer(sourceAddress + offset).readByte(0) & 255;
+    int value = FfmBackend.readAddressByte(sourceAddress + offset);
+    java.lang.ref.Reference.reachabilityFence(this);
+    return value;
+  }
+
+  @TruffleBoundary
+  byte[] copyPayload(int header) {
+    int length = length(header);
+    if ((word(header) & EXTERNAL) == 0) return copy(payloadAt(header), length);
+    byte[] result = new byte[length];
+    Objects.requireNonNull(source).slice(word(header + STRING_HEADER_BYTES), length).get(result);
+    return result;
+  }
+
+  private Object realize(long expected, int type, int header) {
+    Object[] cache = cache();
+    int handle = word(header + 8);
+    Object found = cache[handle];
+    if (found != null) return found;
+    int depth = word(header + 12);
+    var remaining =
+        new SlabLimits(
+            limits.maxDepth() - depth, limits.maxSlabBytes() - arenaBytes() - materializedBytes, 0);
+    byte[] childWire = new byte[word(header + 4)];
+    Objects.requireNonNull(source).slice(word(header), childWire.length).get(childWire);
+    SlabMessage child =
+        SlabMessage.decode(layout.plan(type), childWire, 0, childWire.length, remaining);
+    var usage = child.logicalUsage();
+    if (usage.cells() > layout.plan(0).limits().maxCells() - cells
+        || usage.stringBytes() > layout.plan(0).limits().maxStringBytes() - payload)
+      throw new ContractViolation("Deferred protobuf payload budget exceeded");
+    cells(usage.cells());
+    payload(usage.stringBytes());
+    materializedBytes += child.retainedSlabBytes();
+    Object wrapped = wrap(expected, child);
+    cache[handle] = wrapped;
+    return wrapped;
+  }
+
+  @TruffleBoundary
+  Object wrap(long expected, Object value) {
+    check(expected);
+    if (!(value instanceof SlabRow) && !(value instanceof OwnedArray)) return value;
+    var cache = materialized;
+    if (cache == null) materialized = cache = new IdentityHashMap<>();
+    Object found = cache.get(value);
+    if (found != null) return found;
+    Object result =
+        value instanceof SlabRow row
+            ? new BorrowedMaterializedRow(this, expected, row)
+            : new BorrowedMaterializedArray(this, expected, (OwnedArray) value);
+    cache.put(value, result);
+    return result;
   }
 
   @TruffleBoundary
@@ -395,7 +562,9 @@ public final class SlabSession implements AutoCloseable {
         || word(HEADER_BYTES_USED) != extent
         || word(HEADER_ROOT) != ROOT
         || word(HEADER_LAYOUT) != layout.fingerprint()
-        || (word(HEADER_FLAGS) & (OWNING | BORROWING | LAX)) != OWNING)
+        || (projection == null
+            ? (word(HEADER_FLAGS) & (OWNING | BORROWING | LAX | PROJECTED)) != OWNING
+            : (word(HEADER_FLAGS) & PROJECTED) == 0))
       throw new ContractViolation("Invalid session slab");
     cells = payload = 0;
     validateRecord(0, ROOT, 1);
@@ -436,6 +605,7 @@ public final class SlabSession implements AutoCloseable {
       if (field.repeated()) {
         int list = word(at), count = word(list);
         cells(count);
+        if (projection != null && word(list + 4) == COUNTS_ONLY) continue;
         int width = layout.kind(type, ordinal).element;
         for (int i = 0; i < count; i++)
           validateValue(type, ordinal, listElement(list, width, i), depth);
@@ -445,9 +615,18 @@ public final class SlabSession implements AutoCloseable {
 
   private void validateValue(int type, int ordinal, int at, int depth) {
     switch (layout.plan(type).field(ordinal).kind()) {
-      case MESSAGE, GROUP -> validateRecord(layout.childType(type, ordinal), word(at), depth + 1);
-      case STRING -> payload(2L * utf16(word(at)));
-      case BYTES -> cells(length(word(at)));
+      case MESSAGE, GROUP -> {
+        int child = word(at);
+        if (child > 0) validateRecord(layout.childType(type, ordinal), child, depth + 1);
+      }
+      case STRING -> {
+        int header = word(at);
+        if (header != 0) payload(2L * utf16(header));
+      }
+      case BYTES -> {
+        int header = word(at);
+        if (header != 0) cells(length(header));
+      }
       default -> {}
     }
   }

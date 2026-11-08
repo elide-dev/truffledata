@@ -5,6 +5,7 @@ import static dev.elide.truffledata.protobuf.SlabFormat.*;
 import dev.elide.truffledata.ContractViolation;
 import java.util.HashMap;
 import java.util.Map;
+import org.jspecify.annotations.Nullable;
 
 /** Structural checks at the external slab boundary, before offsets or handle ids are exposed. */
 final class SlabVerifier {
@@ -13,17 +14,42 @@ final class SlabVerifier {
   private final int handles;
   private final int extent;
   private final int maxDepth;
+  private final @Nullable Projection projection;
+  private final byte[] input;
+  private final int flags;
+  private final Map<Long, Boolean> records = new HashMap<>();
   private final Map<Integer, Long> usedHandles = new HashMap<>();
 
   private SlabVerifier(byte[] bytes, int extent, Layout layout, SlabLimits limits) {
+    this(bytes, extent, layout, limits, null, new byte[0]);
+  }
+
+  private SlabVerifier(
+      byte[] bytes,
+      int extent,
+      Layout layout,
+      SlabLimits limits,
+      @Nullable Projection projection,
+      byte[] input) {
+    this.projection = projection;
+    this.input = input;
     this.bytes = bytes;
     this.extent = extent;
     this.layout = layout;
     maxDepth = Math.min(layout.plan(0).maxDepth(), limits.maxDepth() + 1);
-    int flags = check(bytes, extent, layout);
+    flags = check(bytes, extent, layout);
+    if (extent > limits.maxSlabBytes()) throw bad();
+    if (projection == null) {
+      if ((flags & ~(OWNING | CERTIFIED)) != 0 || (flags & OWNING) == 0) throw bad();
+    } else {
+      projection.requireLayout(layout);
+      if ((flags & PROJECTED) == 0
+          || (flags & ~(OWNING | BORROWING | LAX | CERTIFIED | PROJECTED)) != 0
+          || ((flags & LAX) != 0) != projection.laxValidation()
+          || ((flags & BORROWING) != 0 && !projection.requiresBorrow())) throw bad();
+    }
     handles = getInt(bytes, HEADER_HANDLES);
-    if ((flags & (OWNING | BORROWING | LAX)) != OWNING
-        || handles < 1
+    if (handles < 1
         || handles > extent / 4
         || getInt(bytes, HEADER_RECORDS) < 1
         || getInt(bytes, HEADER_RECORDS) > handles) throw bad();
@@ -37,7 +63,7 @@ final class SlabVerifier {
     try {
       var verifier = new SlabVerifier(bytes, extent, layout, limits);
       verifier.unknowns();
-      verifier.record(0, ROOT, 1);
+      verifier.record(0, ROOT, 1, false);
     } catch (IndexOutOfBoundsException failure) {
       throw bad();
     }
@@ -47,7 +73,7 @@ final class SlabVerifier {
     try {
       var verifier = new SlabVerifier(bytes, bytes.length, layout, limits);
       verifier.unknowns();
-      verifier.record(0, ROOT, 1);
+      verifier.record(0, ROOT, 1, false);
       long identity = ((long) type << 32) | Integer.toUnsignedLong(record);
       if (type < 0 || !verifier.usedHandles.containsValue(identity)) throw bad();
     } catch (IndexOutOfBoundsException failure) {
@@ -55,8 +81,44 @@ final class SlabVerifier {
     }
   }
 
+  static void verify(
+      byte[] bytes,
+      int extent,
+      Layout layout,
+      SlabLimits limits,
+      Projection projection,
+      byte[] input) {
+    try {
+      var verifier = new SlabVerifier(bytes, extent, layout, limits, projection, input);
+      verifier.unknowns();
+      verifier.record(0, ROOT, 1, false);
+    } catch (IndexOutOfBoundsException failure) {
+      throw bad();
+    }
+  }
+
+  static boolean verifyRecord(
+      byte[] bytes,
+      Layout layout,
+      SlabLimits limits,
+      Projection projection,
+      byte[] input,
+      int type,
+      int record) {
+    try {
+      var verifier = new SlabVerifier(bytes, bytes.length, layout, limits, projection, input);
+      verifier.unknowns();
+      verifier.record(0, ROOT, 1, false);
+      Boolean expanded = verifier.records.get(((long) type << 32) | Integer.toUnsignedLong(record));
+      if (type < 0 || expanded == null) throw bad();
+      return expanded;
+    } catch (IndexOutOfBoundsException failure) {
+      throw bad();
+    }
+  }
+
   private static ContractViolation bad() {
-    return new ContractViolation("Invalid owning slab structure");
+    return new ContractViolation("Invalid slab structure");
   }
 
   private void span(int at, long size, int alignment) {
@@ -92,10 +154,11 @@ final class SlabVerifier {
     }
   }
 
-  private void record(int type, int record, int depth) {
+  private void record(int type, int record, int depth, boolean expanded) {
     if (depth > maxDepth) throw bad();
     span(record, layout.recordBytes(type), 8);
     handle(SlabFormat.handle(bytes, record), record, type);
+    records.put(((long) type << 32) | Integer.toUnsignedLong(record), expanded);
     var plan = layout.plan(type);
     for (int ordinal = 0; ordinal < plan.size(); ordinal++) {
       if (!present(bytes, record, ordinal)) continue;
@@ -106,23 +169,69 @@ final class SlabVerifier {
         int list = getInt(bytes, slot);
         span(list, 8, 8);
         int count = listCount(bytes, list), width = layout.kind(type, ordinal).element;
-        if (count < 0) throw bad();
+        int marker = getInt(bytes, list + 4);
+        if (count < 0 || (marker != 0 && marker != COUNTS_ONLY)) throw bad();
+        if (marker == COUNTS_ONLY) {
+          if (projection == null || expanded || !projection.countsOnly(type, ordinal)) throw bad();
+          continue;
+        }
         span(list, 8L + (long) count * width, 8);
-        for (int i = 0; i < count; i++) value(type, ordinal, listElement(list, width, i), depth);
-      } else value(type, ordinal, slot, depth);
+        for (int i = 0; i < count; i++)
+          value(type, ordinal, listElement(list, width, i), depth, expanded);
+      } else value(type, ordinal, slot, depth, expanded);
     }
   }
 
-  private void value(int type, int ordinal, int at, int depth) {
+  private void inputSpan(int offset, int length) {
+    if (offset < 0 || length < 0 || offset > input.length - length) throw bad();
+  }
+
+  private void value(int type, int ordinal, int at, int depth, boolean expanded) {
+    boolean omitted = projection != null && !expanded && !projection.wants(type, ordinal);
     switch (layout.plan(type).field(ordinal).kind()) {
-      case MESSAGE, GROUP -> record(layout.childType(type, ordinal), getInt(bytes, at), depth + 1);
+      case MESSAGE, GROUP -> {
+        int child = getInt(bytes, at);
+        if (child == 0
+            && omitted
+            && projection != null
+            && !projection.requiresEagerChild(type, ordinal)
+            && !projection.lazyChildrenEnabled()) return;
+        if (child < 0) {
+          if (!omitted
+              || projection == null
+              || !projection.lazyChildrenEnabled()
+              || projection.requiresEagerChild(type, ordinal)
+              || (flags & BORROWING) == 0
+              || depth >= maxDepth
+              || layout.plan(type).field(ordinal).kind() != ProtoPlan.Kind.MESSAGE) throw bad();
+          int header = child & ~LAZY_CHILD;
+          span(header, LAZY_HEADER_BYTES, 8);
+          inputSpan(getInt(bytes, header), getInt(bytes, header + 4));
+          if (getInt(bytes, header + 12) != depth) throw bad();
+          handle(getInt(bytes, header + 8), header, -3 - layout.childType(type, ordinal));
+          return;
+        }
+        record(
+            layout.childType(type, ordinal),
+            child,
+            depth + 1,
+            expanded || (omitted && projection != null && projection.lazyChildrenEnabled()));
+      }
       case STRING, BYTES -> {
         int header = getInt(bytes, at);
+        if (header == 0 && omitted) return;
         span(header, ASCII_HEADER_BYTES, 4);
-        if (external(bytes, header)) throw bad();
         int length = stringLength(bytes, header);
-        span(header, (long) headerBytes(bytes, header) + length, 4);
         boolean string = layout.plan(type).field(ordinal).kind() == ProtoPlan.Kind.STRING;
+        if (external(bytes, header)) {
+          if (string
+              || projection == null
+              || projection.borrowBytesThreshold() == 0
+              || length < projection.borrowBytesThreshold()
+              || (flags & BORROWING) == 0) throw bad();
+          span(header, 16, 4);
+          inputSpan(getInt(bytes, header + STRING_HEADER_BYTES), length);
+        } else span(header, (long) headerBytes(bytes, header) + length, 4);
         handle(stringHandle(bytes, header), header, string ? -1 : -2);
         if (string) {
           int units = SlabCodec.utf16(bytes, payload(bytes, header), length);

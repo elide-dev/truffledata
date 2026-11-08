@@ -429,4 +429,21 @@ in [the slab results](../benchmarks/results/protobuf-slab-native-d3f778c/README.
 
 `message.pin()` returns an `AutoCloseable` guard. While pinned, decode, reset, message close and session close throw before changing the current result. Reads and pin release must occur on the session thread. Closing an already expired message cannot invalidate a newer result. Owning containers reject borrowed rows and arrays until explicitly retained or snapshotted.
 
-Sessions require a native backend; Java-only consumers use the durable slab methods. The arena reuses the existing ABI 10 caller-owned output buffer, rather than adding a second Rust session allocator or new ABI symbols. The producer writes owning payloads into that arena, so no input address escapes a decode. `arenaBytes()` reports retained native capacity, which stays bounded by `maxSlabBytes`; `slabBytes()` reports the current valid extent. This implementation does not yet borrow large bytes payloads from the input.
+Sessions require a native backend; Java-only consumers use the durable slab methods. The arena reuses the existing ABI 10 caller-owned output buffer, rather than adding a second Rust session allocator or new ABI symbols. The ordinary producer writes owning payloads into that arena. `arenaBytes()` reports retained native capacity, which stays bounded by `maxSlabBytes`; `slabBytes()` reports the current valid extent. Projected sessions can retain immutable source input for lazy children or large bytes; `retainedInputBytes()` reports that capacity separately. Deferred child slabs share the session's remaining retained-memory and logical budgets.
+
+
+### Selected fields and deferred children
+
+Bind `compiled.project(Projection.builder(contract).select("id").build())` to decode
+only the selected values. Presence and repeated-field counts remain available; omitted
+value reads fail explicitly. `.lazyChildren()` allows strict decoding of an omitted child
+on first access, and `.borrowBytes()` avoids copying selected bytes payloads of at least
+4 KiB into the slab. Both preserve immutable source input. `.lax()` explicitly defers UTF-8
+validation in omitted subtrees; malformed wire structure is always rejected.
+
+Owning `decode` returns a durable projected `SlabMessage` on both Java and native backends.
+A projected `newSession` returns scoped roots and children: first access to a lazy child
+returns `BorrowedMaterializedRow`, whose `snapshot()` is durable. Lazy grandchildren and
+arrays remain scoped too. Reset or the next decode invalidates them even if their bytes
+were already materialized. Pinning and root/child retention follow the ordinary session
+rules. Full format details and conservative eager fallbacks are in [SLAB.md](SLAB.md).

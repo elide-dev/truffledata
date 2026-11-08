@@ -18,12 +18,14 @@ final class SlabArray implements OwnedArray {
   private final int list;
   private final int count;
   private final int width;
+  private final boolean expanded;
 
-  SlabArray(SlabMessage owner, int type, int ordinal, int list) {
+  SlabArray(SlabMessage owner, int type, int ordinal, int list, boolean expanded) {
     this.owner = owner;
     this.type = type;
     this.ordinal = ordinal;
     this.list = list;
+    this.expanded = expanded;
     count = SlabFormat.listCount(owner.bytes, list);
     width = owner.layout.kind(type, ordinal).element;
   }
@@ -36,7 +38,9 @@ final class SlabArray implements OwnedArray {
   @Override
   public Object get(int index) {
     Objects.checkIndex(index, count);
-    return SlabRow.value(owner, type, ordinal, SlabFormat.listElement(list, width, index));
+    owner.requireValue(type, ordinal, expanded);
+    return SlabRow.value(
+        owner, type, ordinal, SlabFormat.listElement(list, width, index), expanded);
   }
 
   @ExportMessage

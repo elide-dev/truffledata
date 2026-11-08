@@ -42,7 +42,8 @@ class PolicyTest {
             Map.entry("ProtobufAdapter.java", 5),
             // Generated contract binding and the lazily compiled slab layout, outside reads.
             Map.entry("ProtoPlan.java", 16),
-            Map.entry("SlabMessage.java", 11), // Decode, lazy materialization, encoding.
+            Map.entry("SlabMessage.java", 16), // Decode/copy, projected lazy reads, usage and encoding.
+            Map.entry("Projection.java", 1), // Invalid field-index diagnostic.
             Map.entry("SlabCodec.java", 1), // Invalid UTF-8 diagnostic construction.
             Map.entry("GeneratedSlabWriter.java", 1), // Invalid input-window diagnostic.
             Map.entry("Layout.java", 3), // Slab layout compilation (×2) and TDL1 parsing.

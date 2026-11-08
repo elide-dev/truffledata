@@ -10,9 +10,10 @@ import java.util.*;
 import org.jspecify.annotations.Nullable;
 
 /**
- * Bounded, native-free producer of owning TDSLAB1 slabs. Wire order determines record and string
- * handles; lists and merged records are finalized in field order, matching the native producer. The
- * returned array owns all payload bytes and never retains the input.
+ * Bounded, native-free producer of TDSLAB1 slabs. Wire order determines record and string handles;
+ * lists and merged records are finalized in field order, matching the native producer. The ordinary
+ * result owns all payload bytes. Explicit projections may emit input-relative references, which
+ * require the matching immutable input window when the slab is consumed.
  */
 public final class SlabCodec {
   private final Layout layout;
@@ -25,6 +26,10 @@ public final class SlabCodec {
   private int records;
   private long pendingBytes;
   private boolean certified = true;
+  private @Nullable Projection projection;
+  private byte @Nullable [] input;
+  private int inputOffset;
+  private boolean external;
 
   /** (record, unknown span) pairs, in close order; sorted by record into the unknown table. */
   private final List<int[]> unknowns = new ArrayList<>();
@@ -62,12 +67,48 @@ public final class SlabCodec {
   /** Entry for generated decoders whose lookup is bound to this exact layout. */
   public static byte[] decode(
       Layout layout, byte[] wire, int offset, int length, SlabLimits limits, FieldLookup lookup) {
+    return decode(layout, wire, offset, length, limits, lookup, null);
+  }
+
+  /**
+   * Decode a selected view. External payload offsets are relative to the supplied input window;
+   * callers must retain that window unchanged while using a slab whose flags include BORROWING.
+   */
+  public static byte[] decode(
+      Layout layout,
+      byte[] wire,
+      int offset,
+      int length,
+      SlabLimits limits,
+      Projection projection) {
+    Objects.requireNonNull(projection).requireLayout(layout);
+    return decode(
+        layout,
+        wire,
+        offset,
+        length,
+        limits,
+        (type, number) -> layout.plan(type).ordinal(number),
+        projection);
+  }
+
+  private static byte[] decode(
+      Layout layout,
+      byte[] wire,
+      int offset,
+      int length,
+      SlabLimits limits,
+      FieldLookup lookup,
+      @Nullable Projection projection) {
     Objects.requireNonNull(layout);
     Objects.requireNonNull(limits);
     Objects.requireNonNull(lookup);
     Objects.checkFromIndexSize(offset, length, wire.length);
     if (length > layout.plan(0).maxWireBytes()) throw bad("Wire byte budget exceeded");
     var producer = new SlabCodec(layout, limits, lookup);
+    producer.projection = projection;
+    producer.input = wire;
+    producer.inputOffset = offset;
     var input = new Reader(wire);
     input.pos = offset;
     var root = producer.record(0, input, offset + length, 0, 0);
@@ -89,7 +130,13 @@ public final class SlabCodec {
     if (bytes > producer.maxBytes) throw bad("Slab byte budget exceeded");
     byte[] slab = Arrays.copyOf(producer.out, bytes);
     putInt(slab, HEADER_MAGIC, MAGIC);
-    putInt(slab, HEADER_FLAGS, OWNING | (producer.certified ? CERTIFIED : 0));
+    putInt(
+        slab,
+        HEADER_FLAGS,
+        (producer.external ? BORROWING : OWNING)
+            | (producer.certified ? CERTIFIED : 0)
+            | (projection != null ? PROJECTED : 0)
+            | (projection != null && projection.laxValidation() ? LAX : 0));
     putInt(slab, HEADER_BYTES_USED, bytes);
     putInt(slab, HEADER_RECORDS, producer.records);
     putInt(slab, HEADER_HANDLES, producer.handles);
@@ -196,17 +243,21 @@ public final class SlabCodec {
     final int at;
     final ProtoPlan plan;
     @Nullable Pending @Nullable [] pending;
-    @Nullable List<@Nullable List<byte[]>> merges;
+    @Nullable List<@Nullable List<Payload>> merges;
     @Nullable ByteArrayOutputStream unknown;
     boolean invalidMapEnum;
     int bodyEnd;
+    final boolean full;
 
-    Open(int type, int at, ProtoPlan plan, int maxBytes) {
+    Open(int type, int at, ProtoPlan plan, boolean full) {
       this.type = type;
       this.at = at;
       this.plan = plan;
+      this.full = full;
     }
   }
+
+  private record Payload(byte[] input, int start, int end) {}
 
   private void setPresence(Open r, int ordinal, boolean present) {
     int word = r.at + RECORD_PRESENCE + 4 * (ordinal >>> 5);
@@ -234,11 +285,28 @@ public final class SlabCodec {
   }
 
   private Open record(int type, Reader r, int end, int group, int depth) {
+    return record(type, r, end, group, depth, false);
+  }
+
+  private Open record(int type, Reader r, int end, int group, int depth, boolean full) {
+    Open open = open(type, depth, full);
+    body(open, r, end, group, depth);
+    close(open, depth);
+    return open;
+  }
+
+  private Open open(int type, int depth, boolean full) {
     if (depth > maxDepth) throw bad("Protobuf nesting budget exceeded");
     ProtoPlan plan = layout.plan(type);
-    var open = new Open(type, alloc(layout.recordBytes(type), 8), plan, maxBytes);
+    var open = new Open(type, alloc(layout.recordBytes(type), 8), plan, full);
     records++;
     putInt(out, open.at + RECORD_HANDLE, handles++);
+    return open;
+  }
+
+  private void body(Open open, Reader r, int end, int group, int depth) {
+    int type = open.type;
+    ProtoPlan plan = open.plan;
     boolean closed = false;
     while (r.pos < end) {
       int start = r.pos;
@@ -259,6 +327,46 @@ public final class SlabCodec {
         continue;
       }
       var enumeration = field.enumType();
+      boolean omitted = omitted(open, ordinal);
+      // Match the native producer's fast-field selection. Oneofs, maps, groups, repeated
+      // strings, and children with required descendants retain their eager representation.
+      if (omitted
+          && field.kind() == ProtoPlan.Kind.MESSAGE
+          && !field.map()
+          && layout.oneofIndex(type, ordinal) < 0
+          && !Objects.requireNonNull(projection).requiresEagerChild(type, ordinal)) {
+        int length = r.length(end), startBody = r.pos, childEnd = r.pos + length;
+        walk(
+            layout.childType(type, ordinal), r, childEnd, 0, depth + 1, projection.laxValidation());
+        int slot = open.at + slot(type, ordinal);
+        if (projection.lazyChildrenEnabled()) {
+          if (field.repeated())
+            pending(open, ordinal).append(lazyChild(startBody, length, depth + 1));
+          else {
+            if (getInt(out, slot) == 0) putInt(out, slot, lazyChild(startBody, length, depth + 1));
+            var payloads = merges(open).get(ordinal);
+            if (payloads == null) merges(open).set(ordinal, payloads = new ArrayList<>());
+            payloads.add(new Payload(r.in, startBody, childEnd));
+          }
+        } else if (field.repeated()) {
+          int count = getInt(out, slot);
+          if (count == Integer.MAX_VALUE) throw bad("Slab list budget exceeded");
+          putInt(out, slot, count + 1);
+        }
+        setPresence(open, ordinal, true);
+        continue;
+      }
+      if (omitted
+          && !field.repeated()
+          && layout.oneofIndex(type, ordinal) < 0
+          && (field.kind() == ProtoPlan.Kind.STRING || field.kind() == ProtoPlan.Kind.BYTES)) {
+        int length = r.length(end);
+        if (field.kind() == ProtoPlan.Kind.STRING
+            && !Objects.requireNonNull(projection).laxValidation()) utf16(r.in, r.pos, length);
+        r.pos += length;
+        setPresence(open, ordinal, field.explicitPresence() || length != 0);
+        continue;
+      }
       if (packed) {
         int packedLength = r.length(end);
         int packedEnd = r.pos + packedLength;
@@ -278,20 +386,22 @@ public final class SlabCodec {
         int childLength = isGroup ? 0 : r.length(end);
         int childEnd = isGroup ? end : r.pos + childLength;
         int bodyStart = r.pos;
+        boolean full =
+            open.full || (omitted && Objects.requireNonNull(projection).lazyChildrenEnabled());
         if (field.repeated()) {
-          Open nested = record(child, r, childEnd, isGroup ? number : 0, depth + 1);
+          Open nested = record(child, r, childEnd, isGroup ? number : 0, depth + 1, full);
           if (field.map() && nested.invalidMapEnum) unknown(open).write(r.in, start, r.pos - start);
           else pending(open, ordinal).append((long) nested.at);
           continue;
         }
         select(open, ordinal);
         int slot = open.at + slot(type, ordinal);
-        byte[] payload;
+        Payload payload;
         if (getInt(out, slot) == 0) {
-          Open nested = record(child, r, childEnd, isGroup ? number : 0, depth + 1);
+          Open nested = record(child, r, childEnd, isGroup ? number : 0, depth + 1, full);
           putInt(out, slot, nested.at);
           setPresence(open, ordinal, true);
-          payload = Arrays.copyOfRange(r.in, bodyStart, isGroup ? nested.bodyEnd : childEnd);
+          payload = new Payload(r.in, bodyStart, isGroup ? nested.bodyEnd : childEnd);
           merges(open).set(ordinal, new ArrayList<>());
         } else {
           // A later occurrence is validated by a full decode walk that writes nothing to this
@@ -299,7 +409,7 @@ public final class SlabCodec {
           Open walked =
               new SlabCodec(layout, new SlabLimits(maxDepth, maxBytes), lookup)
                   .record(child, r, childEnd, isGroup ? number : 0, depth + 1);
-          payload = Arrays.copyOfRange(r.in, bodyStart, isGroup ? walked.bodyEnd : childEnd);
+          payload = new Payload(r.in, bodyStart, isGroup ? walked.bodyEnd : childEnd);
         }
         Objects.requireNonNull(merges(open).get(ordinal)).add(payload);
         continue;
@@ -323,8 +433,77 @@ public final class SlabCodec {
     }
     if (group != 0 && !closed) throw bad("Unterminated group");
     if (group == 0) open.bodyEnd = end;
-    close(open, depth);
-    return open;
+  }
+
+  private boolean omitted(Open open, int ordinal) {
+    return projection != null
+        && !open.full
+        && !open.plan.definition().mapEntry()
+        && !projection.wants(open.type, ordinal);
+  }
+
+  private boolean countsOnly(Open open, int ordinal) {
+    var field = open.plan.field(ordinal);
+    return omitted(open, ordinal)
+        && !Objects.requireNonNull(projection).lazyChildrenEnabled()
+        && field.kind() == ProtoPlan.Kind.MESSAGE
+        && field.repeated()
+        && !field.map()
+        && layout.oneofIndex(open.type, ordinal) < 0
+        && !projection.requiresEagerChild(open.type, ordinal);
+  }
+
+  private int lazyChild(int start, int length, int depth) {
+    int at = alloc(16, 8);
+    putInt(out, at, start - inputOffset);
+    putInt(out, at + 4, length);
+    putInt(out, at + 8, handles++);
+    putInt(out, at + 12, depth);
+    external = true;
+    return at | LAZY_CHILD;
+  }
+
+  /** Wire-only validation for omitted children: no slab records, payload copies, or lists. */
+  private void walk(int type, Reader r, int end, int group, int depth, boolean lax) {
+    if (depth > maxDepth) throw bad("Protobuf nesting budget exceeded");
+    var plan = layout.plan(type);
+    boolean closed = false, mapValue = false;
+    while (r.pos < end) {
+      int tag = r.tag(end), number = tag >>> 3, wire = tag & 7;
+      if (wire == 4) {
+        if (group != number) throw bad("Unexpected end group");
+        closed = true;
+        break;
+      }
+      int ordinal = lookup.ordinal(type, number);
+      var field = ordinal < 0 ? null : plan.field(ordinal);
+      boolean packed = field != null && field.repeated() && field.kind().packable() && wire == 2;
+      if (field == null || (!packed && field.kind().wire != wire)) {
+        r.skip(tag, end, depth, maxDepth);
+        continue;
+      }
+      if (packed) {
+        int length = r.length(end), packedEnd = r.pos + length;
+        while (r.pos < packedEnd) scalar(r, field.kind(), packedEnd);
+      } else if (field.kind().message()) {
+        if (field.kind() == ProtoPlan.Kind.GROUP)
+          walk(layout.childType(type, ordinal), r, end, number, depth + 1, lax);
+        else {
+          int length = r.length(end);
+          walk(layout.childType(type, ordinal), r, r.pos + length, 0, depth + 1, lax);
+        }
+        if (ordinal == 1) mapValue = true;
+      } else if (field.kind() == ProtoPlan.Kind.STRING || field.kind() == ProtoPlan.Kind.BYTES) {
+        int length = r.length(end);
+        if (!lax && field.kind() == ProtoPlan.Kind.STRING) utf16(r.in, r.pos, length);
+        r.pos += length;
+      } else scalar(r, field.kind(), end);
+    }
+    if (group != 0 && !closed) throw bad("Unterminated group");
+    if (plan.definition().mapEntry()
+        && plan.field(1).kind().message()
+        && !mapValue
+        && depth >= maxDepth) throw bad("Protobuf nesting budget exceeded");
   }
 
   private ByteArrayOutputStream unknown(Open record) {
@@ -332,7 +511,7 @@ public final class SlabCodec {
     return record.unknown;
   }
 
-  private List<@Nullable List<byte[]>> merges(Open record) {
+  private List<@Nullable List<Payload>> merges(Open record) {
     if (record.merges == null)
       record.merges = new ArrayList<>(Collections.nCopies(record.plan.size(), null));
     return record.merges;
@@ -392,11 +571,16 @@ public final class SlabCodec {
       var payloads = r.merges == null ? null : r.merges.get(ordinal);
       // One occurrence was decoded in place; the list holds every payload since the last clear.
       if (payloads == null || payloads.size() < 2) continue;
-      var joined = new BoundedOutput(maxBytes);
-      for (byte[] payload : payloads) joined.writeBytes(payload);
-      byte[] bytes = joined.toByteArray();
-      Open merged =
-          record(layout.childType(r.type, ordinal), new Reader(bytes), bytes.length, 0, depth + 1);
+      boolean full =
+          r.full
+              || (omitted(r, ordinal) && Objects.requireNonNull(projection).lazyChildrenEnabled());
+      Open merged = open(layout.childType(r.type, ordinal), depth + 1, full);
+      for (Payload payload : payloads) {
+        Reader input = new Reader(payload.input);
+        input.pos = payload.start;
+        body(merged, input, payload.end, 0, depth + 1);
+      }
+      close(merged, depth + 1);
       putInt(out, r.at + slot(r.type, ordinal), merged.at);
       certified = false;
     }
@@ -405,12 +589,23 @@ public final class SlabCodec {
         && r.plan.field(1).kind().message()
         && getInt(out, r.at + slot(r.type, 1)) == 0) {
       if (depth >= maxDepth) throw bad("Protobuf nesting budget exceeded");
-      Open empty = record(layout.childType(r.type, 1), new Reader(new byte[0]), 0, 0, depth + 1);
+      Open empty =
+          record(layout.childType(r.type, 1), new Reader(new byte[0]), 0, 0, depth + 1, r.full);
       putInt(out, r.at + slot(r.type, 1), empty.at);
       setPresence(r, 1, true);
     }
     // 3. Lists in ordinal order; maps keep first-key order with the last entry per key.
     for (int ordinal = 0; ordinal < r.plan.size(); ordinal++) {
+      if (countsOnly(r, ordinal)) {
+        int slot = r.at + slot(r.type, ordinal), count = getInt(out, slot);
+        if (count != 0) {
+          int list = alloc(LIST_ELEMENTS, 8);
+          putInt(out, list + LIST_COUNT, count);
+          putInt(out, list + 4, COUNTS_ONLY);
+          putInt(out, slot, list);
+        }
+        continue;
+      }
       List<Long> items = r.pending == null ? null : r.pending[ordinal];
       if (items == null || items.isEmpty()) continue;
       var kind = layout.kind(r.type, ordinal);
@@ -502,6 +697,19 @@ public final class SlabCodec {
 
   private int string(byte[] in, int at, int count, boolean text) {
     if (count > LENGTH_MASK) throw bad("Slab payload length exceeded");
+    if (!text
+        && projection != null
+        && projection.borrowBytesThreshold() > 0
+        && count >= projection.borrowBytesThreshold()
+        && in == input) {
+      int header = alloc(16, 4);
+      putInt(out, header, count | EXTERNAL);
+      putInt(out, header + 4, handles++);
+      putInt(out, header + 8, 0);
+      putInt(out, header + 12, at - inputOffset);
+      external = true;
+      return header;
+    }
     int lengthWord = count, utf16 = 0;
     if (text) {
       utf16 = utf16(in, at, count);

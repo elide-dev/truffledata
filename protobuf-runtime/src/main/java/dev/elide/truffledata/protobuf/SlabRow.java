@@ -16,21 +16,28 @@ public class SlabRow extends AbstractRow implements ProtoAccess {
   final Layout layout;
   final int type;
   final int record;
+  final boolean expanded;
 
   SlabRow(Layout layout) {
     super(layout.plan(0).schema());
     this.layout = layout;
     type = 0;
     record = ROOT;
+    expanded = false;
     owner = (SlabMessage) this;
   }
 
   SlabRow(SlabMessage owner, int type, int record) {
+    this(owner, type, record, false);
+  }
+
+  SlabRow(SlabMessage owner, int type, int record, boolean expanded) {
     super(owner.layout.plan(type).schema());
     this.owner = owner;
     layout = owner.layout;
     this.type = type;
     this.record = record;
+    this.expanded = expanded;
   }
 
   @Override
@@ -48,13 +55,14 @@ public class SlabRow extends AbstractRow implements ProtoAccess {
   public final Object get(int ordinal) {
     Objects.checkIndex(ordinal, plan().size());
     var field = plan().field(ordinal);
+    if (!field.repeated()) owner.requireValue(type, ordinal, expanded);
     if (!has(ordinal)) return field.repeated() ? SlabArray.EMPTY : field.defaultValue();
     int at = record + layout.slot(type, ordinal);
-    if (field.repeated()) return owner.array(type, ordinal, getInt(owner.bytes, at));
-    return value(owner, type, ordinal, at);
+    if (field.repeated()) return owner.array(type, ordinal, getInt(owner.bytes, at), expanded);
+    return value(owner, type, ordinal, at, expanded);
   }
 
-  static Object value(SlabMessage owner, int type, int ordinal, int at) {
+  static Object value(SlabMessage owner, int type, int ordinal, int at, boolean expanded) {
     byte[] slab = owner.bytes;
     var field = owner.layout.plan(type).field(ordinal);
     var kind = field.kind();
@@ -67,7 +75,11 @@ public class SlabRow extends AbstractRow implements ProtoAccess {
     return switch (kind) {
       case STRING -> owner.text((int) bits);
       case BYTES -> owner.blob((int) bits);
-      case MESSAGE, GROUP -> owner.row(owner.layout.childType(type, ordinal), (int) bits);
+      case MESSAGE, GROUP ->
+          owner.row(
+              owner.layout.childType(type, ordinal),
+              (int) bits,
+              expanded || owner.expandChild(type, ordinal));
       case UINT64, FIXED64 -> owner.unsigned(at, bits);
       case UINT32, FIXED32 -> bits & 0xffffffffL;
       case FLOAT -> (double) Float.intBitsToFloat((int) bits);
@@ -86,6 +98,7 @@ public class SlabRow extends AbstractRow implements ProtoAccess {
 
   @Override
   public final long getLong(int ordinal) {
+    owner.requireValue(type, ordinal, expanded);
     var field = plan().field(ordinal);
     if (field.repeated()) throw new ContractViolation("Expected INT64");
     if (!has(ordinal)) {
@@ -103,6 +116,7 @@ public class SlabRow extends AbstractRow implements ProtoAccess {
 
   @Override
   public final double getDouble(int ordinal) {
+    owner.requireValue(type, ordinal, expanded);
     var field = plan().field(ordinal);
     if (field.repeated()) throw new ContractViolation("Expected FLOAT64");
     if (!has(ordinal) && field.defaultValue() instanceof Double value) return value;
@@ -116,6 +130,7 @@ public class SlabRow extends AbstractRow implements ProtoAccess {
 
   @Override
   public final boolean getBoolean(int ordinal) {
+    owner.requireValue(type, ordinal, expanded);
     var field = plan().field(ordinal);
     if (field.repeated() || field.kind() != ProtoPlan.Kind.BOOL)
       throw new ContractViolation("Expected BOOLEAN");
@@ -127,6 +142,7 @@ public class SlabRow extends AbstractRow implements ProtoAccess {
   @Override
   public final int getSize(int ordinal) {
     var field = plan().field(ordinal);
+    if (!field.repeated()) owner.requireValue(type, ordinal, expanded);
     if (!field.repeated() && field.kind() != ProtoPlan.Kind.BYTES)
       throw new ContractViolation("Expected array");
     if (!has(ordinal)) return field.repeated() ? 0 : ((OwnedArray) field.defaultValue()).size();
@@ -138,6 +154,7 @@ public class SlabRow extends AbstractRow implements ProtoAccess {
 
   /** UTF-16 length, read directly from the validated string header. */
   public final int stringLength(int ordinal) {
+    owner.requireValue(type, ordinal, expanded);
     var field = plan().field(ordinal);
     if (field.repeated() || field.kind() != ProtoPlan.Kind.STRING)
       throw new ContractViolation("Expected string");
@@ -192,6 +209,7 @@ public class SlabRow extends AbstractRow implements ProtoAccess {
     @Override
     public long readLong(Object value) throws UnexpectedResultException {
       SlabRow r = row(value);
+      r.owner.requireValue(type, ordinal(), r.expanded);
       if (planField.repeated()) throw new UnexpectedResultException(r.get(ordinal()));
       if (!has(r) && planField.defaultValue() instanceof Long n) return n;
       int at = r.record + offset;
@@ -206,6 +224,7 @@ public class SlabRow extends AbstractRow implements ProtoAccess {
     @Override
     public double readDouble(Object value) throws UnexpectedResultException {
       SlabRow r = row(value);
+      r.owner.requireValue(type, ordinal(), r.expanded);
       if (planField.repeated()) throw new UnexpectedResultException(r.get(ordinal()));
       if (!has(r) && planField.defaultValue() instanceof Double n) return n;
       int at = r.record + offset;
@@ -219,6 +238,7 @@ public class SlabRow extends AbstractRow implements ProtoAccess {
     @Override
     public boolean readBoolean(Object value) throws UnexpectedResultException {
       SlabRow r = row(value);
+      r.owner.requireValue(type, ordinal(), r.expanded);
       if (planField.repeated() || planField.kind() != ProtoPlan.Kind.BOOL)
         throw new UnexpectedResultException(r.get(ordinal()));
       return has(r)
@@ -229,6 +249,7 @@ public class SlabRow extends AbstractRow implements ProtoAccess {
     @Override
     public int length(Object value) {
       SlabRow r = row(value);
+      if (!planField.repeated()) r.owner.requireValue(type, ordinal(), r.expanded);
       if (planField.repeated())
         return arrayLength(
             has(r) ? listCount(r.owner.bytes, getInt(r.owner.bytes, r.record + offset)) : 0);

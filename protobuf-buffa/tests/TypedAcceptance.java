@@ -984,6 +984,139 @@ final class TypedAcceptance {
     }
   }
 
+  private static ProtoPlan.FieldPlan projectedField(
+      String name,
+      int number,
+      ProtoPlan.Kind kind,
+      boolean repeated,
+      String child,
+      Object defaultValue) {
+    return new ProtoPlan.FieldPlan(
+        name,
+        number,
+        kind,
+        repeated,
+        false,
+        !repeated,
+        false,
+        false,
+        -1,
+        child,
+        null,
+        defaultValue);
+  }
+
+  private static void slabProjections(BuffaWire decoder) throws Exception {
+    var i64 = ProtoPlan.Kind.INT64;
+    var text = ProtoPlan.Kind.STRING;
+    var message = ProtoPlan.Kind.MESSAGE;
+    var blob = ProtoPlan.Kind.BYTES;
+    var root =
+        new ProtoPlan.Type(
+            "ProjectionRoot",
+            false,
+            List.of(
+                projectedField("id", 1, i64, false, "", 0L),
+                projectedField("text", 2, text, false, "", ""),
+                projectedField("child", 3, message, false, "ProjectionChild", Missing.INSTANCE),
+                projectedField("children", 4, message, true, "ProjectionChild", Missing.INSTANCE),
+                projectedField("blob", 5, blob, false, "", DataArray.copyOfBytes(new byte[0]))));
+    var child =
+        new ProtoPlan.Type(
+            "ProjectionChild",
+            false,
+            List.of(
+                projectedField("value", 1, i64, false, "", 0L),
+                projectedField("text", 2, text, false, "", ""),
+                projectedField("blob", 3, blob, false, "", DataArray.copyOfBytes(new byte[0])),
+                projectedField("items", 4, i64, true, "", 0L),
+                projectedField("next", 5, message, false, "ProjectionChild", Missing.INSTANCE)));
+    var contract =
+        new ProtoPlan.Model(null, List.of(root, child), Limits.DEFAULT, 16, NATIVE)
+            .type("ProjectionRoot");
+    byte[] wire =
+        contract.encode(
+            contract.parseText(
+                "id: 7 text: 'omitted' child { value: 42 text: 'λ😀' blob: 'ab' items: 1 items: 2"
+                    + " next { value: 9 } } children { value: 21 } children { value: 22 } blob:"
+                    + " 'large'"));
+    var sparse = Projection.builder(contract).select("id").build();
+    var deferred =
+        Projection.builder(contract).select("id", "blob").build().lazyChildren().borrowBytes(2);
+    try (var compiled = decoder.compile(contract, 65536);
+        var selected = compiled.project(sparse);
+        var lazy = compiled.project(deferred);
+        var lax = compiled.project(deferred.lax())) {
+      var row = selected.decode(wire, 65536);
+      Acceptance.check(
+          row.getLong(0) == 7 && row.getSize(3) == 2 && row.has(2),
+          "projected owning counts and presence");
+      Acceptance.rejects(() -> row.get(2), ContractViolation.class);
+      var counts = (OwnedArray) row.get(3);
+      Acceptance.rejects(() -> counts.get(0), ContractViolation.class);
+      var owned = lazy.decode(wire, 65536);
+      Acceptance.check(((SlabRow) owned.get(2)).get(1).equals("λ😀"), "owning lazy child is full");
+      Acceptance.check(
+          owned.retainedInputBytes() == wire.length, "owning external input accounting");
+      byte[] bad = {26, 3, 18, 1, (byte) 0xc0};
+      Acceptance.rejects(() -> lazy.decode(bad, 65536), ContractViolation.class);
+      var laxRow = lax.decode(bad, 65536);
+      Acceptance.rejects(() -> laxRow.get(2), ContractViolation.class);
+      if (decoder.selected() == BuffaWire.Selected.JAVA) return;
+      try (var session = lazy.newSession(65536);
+          var input = decoder.allocate(wire.length).put(wire)) {
+        var borrowed = session.decode(input);
+        Acceptance.check(
+            session.retainedInputBytes() == wire.length, "session retains immutable source lease");
+        input.close(); // Only the session's immutable lease keeps external spans alive.
+        var nested = (BorrowedMaterializedRow) borrowed.get(2);
+        Acceptance.check(
+            nested.getLong(0) == 42 && nested.get(1).equals("λ😀"), "strict lazy child read");
+        Acceptance.check(borrowed.get(2) == nested, "lazy child cached by handle");
+        var numbers = (BorrowedArray) nested.get(3);
+        var childBlob = (BorrowedArray) nested.get(2);
+        var external = (BorrowedArray) borrowed.get(4);
+        var grandchildren = (BorrowedMaterializedRow) nested.get(4);
+        Acceptance.check(
+            numbers.element(1).equals(2L) && grandchildren.getLong(0) == 9,
+            "lazy descendants retain scope");
+        Acceptance.check(
+            childBlob.element(0).equals(97L) && external.element(0).equals(108L),
+            "lazy and external bytes readable");
+        Acceptance.rejects(() -> new DataArray(new Object[] {nested}), ContractViolation.class);
+        Acceptance.rejects(() -> new DataArray(new Object[] {numbers}), ContractViolation.class);
+        var retained = borrowed.retain();
+        var retainedChild = nested.snapshot();
+        var retainedNumbers = numbers.snapshot();
+        var retainedBlob = external.snapshot();
+        try (var pin = borrowed.pin()) {
+          Acceptance.rejects(session::reset, IllegalStateException.class);
+        }
+        session.reset();
+        Acceptance.check(session.retainedInputBytes() == 0, "reset releases source lease");
+        Acceptance.rejects(() -> nested.getLong(0), IllegalStateException.class);
+        Acceptance.rejects(numbers::size, IllegalStateException.class);
+        Acceptance.rejects(() -> grandchildren.getLong(0), IllegalStateException.class);
+        Acceptance.rejects(() -> external.element(0), IllegalStateException.class);
+        Acceptance.check(
+            retainedChild.getLong(0) == 42
+                && retainedNumbers.get(1).equals(2L)
+                && retainedBlob.get(0).equals(108L),
+            "explicit lazy and byte snapshots survive reset");
+        Acceptance.check(
+            ((SlabRow) retained.get(2)).get(1).equals("λ😀"),
+            "root retention preserves deferred input");
+      }
+      try (var session = lax.newSession(65536);
+          var badInput = decoder.allocate(bad.length).put(bad)) {
+        var scoped = session.decode(badInput);
+        badInput.close();
+        Acceptance.rejects(() -> scoped.get(2), ContractViolation.class);
+        Acceptance.rejects(() -> scoped.get(2), ContractViolation.class);
+      }
+    }
+  }
+
   private static void slabSessions(BuffaWire decoder) throws Exception {
     var contract = plan("Sample");
     try (var compiled = decoder.compile(contract, 65536)) {
@@ -1083,11 +1216,11 @@ final class TypedAcceptance {
       String text =
           name.equals("Flat")
               ? "i32: -3 i64: -4 u32: 4294967295 u64: 18446744073709551615 s32: -5 s64: -6 f32: 17"
-                    + " f64: 18446744073709551615 sf32: -7 sf64: -8 flag: true single: 1.5 real:"
-                    + " -2.5 text: 'λ' blob: 'ab' status: YES selected_text: 'choice'"
+                  + " f64: 18446744073709551615 sf32: -7 sf64: -8 flag: true single: 1.5 real:"
+                  + " -2.5 text: 'λ' blob: 'ab' status: YES selected_text: 'choice'"
               : "i32: -3 i64: -4 u32: 4294967295 u64: 18446744073709551615 s32: -5 s64: -6 f32: 17"
-                    + " f64: 18446744073709551615 sf32: -7 sf64: -8 flag: true single: 1.5 real:"
-                    + " -2.5 text: 'λ' blob: 'ab'";
+                  + " f64: 18446744073709551615 sf32: -7 sf64: -8 flag: true single: 1.5 real:"
+                  + " -2.5 text: 'λ' blob: 'ab'";
       var expected = scalars.parseText(text);
       byte[] wire = scalars.encode(expected);
       try (var compiled = decoder.compile(scalars, 65536);
@@ -1186,6 +1319,7 @@ final class TypedAcceptance {
     heapSlabOwnership(decoder);
     heapSlabGcStress(decoder);
     slabSessions(decoder);
+    slabProjections(decoder);
     schemaProgramGolden();
     nativeViews(decoder);
     nativeScalarViews(decoder);

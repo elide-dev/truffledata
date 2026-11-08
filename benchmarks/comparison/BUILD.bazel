@@ -1064,6 +1064,7 @@ native_image(
         "-march=compatibility",
         "--initialize-at-build-time=dev.elide.truffledata",
         "--initialize-at-run-time=dev.elide.truffledata.comparison.CompiledSlabProbe",
+        "--add-exports=org.graalvm.truffle.runtime/com.oracle.truffle.runtime=ALL-UNNAMED",
     ] + TRUFFLE_JIT_CHECKS,
     graalvm_sdk = "@graalvm_linux_amd64//:gvm",
     main_class = "dev.elide.truffledata.comparison.CompiledSlabProbe",

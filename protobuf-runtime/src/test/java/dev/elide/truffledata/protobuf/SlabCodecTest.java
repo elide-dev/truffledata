@@ -14,6 +14,47 @@ import org.junit.jupiter.api.Test;
 /** Production Java slabs against the independent format model and native producer goldens. */
 class SlabCodecTest {
   @Test
+  void projectedWindowsHaveExactBudgetsAndRelativeExternalOffsets() {
+    ProtoPlan plan = ProjectionTest.plan();
+    byte[] wire = ProjectionTest.input();
+    byte[] padded = new byte[wire.length + 13];
+    System.arraycopy(wire, 0, padded, 7, wire.length);
+    for (var projection :
+        List.of(
+            Projection.all(plan),
+            Projection.builder(plan).select("id").build(),
+            Projection.builder(plan).select("id", "blob").build().lazyChildren().borrowBytes(2))) {
+      byte[] expected =
+          SlabCodec.decode(
+              plan.layout(), wire, 0, wire.length, new SlabLimits(16, 65536), projection);
+      assertArrayEquals(
+          expected,
+          SlabCodec.decode(
+              plan.layout(),
+              padded,
+              7,
+              wire.length,
+              new SlabLimits(16, expected.length),
+              projection));
+      assertThrows(
+          ContractViolation.class,
+          () ->
+              SlabCodec.decode(
+                  plan.layout(),
+                  padded,
+                  7,
+                  wire.length,
+                  new SlabLimits(16, expected.length - 1),
+                  projection));
+      assertThrows(
+          ContractViolation.class,
+          () ->
+              SlabCodec.decode(
+                  plan.layout(), padded, 7, wire.length, new SlabLimits(0, 65536), projection));
+    }
+  }
+
+  @Test
   void goldenSlabsMatchNativeProducer() throws Exception {
     Path directory =
         Path.of(
@@ -146,6 +187,46 @@ class SlabCodecTest {
       assertEquals(
           0, number.decimal().compareTo(((dev.elide.truffledata.ExactNumber) actual).decimal()));
     } else assertEquals(expected, actual);
+  }
+
+  @Test
+  void projectionProgramIsBoundedImmutableAndLayoutBound() {
+    var plan = LayoutTest.timestamp();
+    var builder = Projection.builder(plan).select(plan.schema().field(0).name());
+    var projection = builder.build();
+    builder.select(plan.schema().field(1).name());
+    assertTrue(projection.wants(0, 0));
+    assertFalse(projection.wants(0, 1));
+    byte[] program = projection.program();
+    var header = java.nio.ByteBuffer.wrap(program).order(java.nio.ByteOrder.LITTLE_ENDIAN);
+    assertEquals(Projection.MAGIC, header.getInt(0));
+    assertEquals(program.length, header.getInt(4));
+    assertEquals(plan.layout().fingerprint(), header.getInt(8));
+    assertEquals(0, header.getInt(12));
+    assertEquals(1, header.getInt(16));
+    assertEquals(0, header.getInt(20));
+    assertEquals(plan.size(), header.getInt(24));
+    assertEquals(1, header.getInt(28));
+    Arrays.fill(program, (byte) 0);
+    assertEquals(
+        Projection.MAGIC,
+        java.nio.ByteBuffer.wrap(projection.program())
+            .order(java.nio.ByteOrder.LITTLE_ENDIAN)
+            .getInt());
+    var borrowing = projection.lax().lazyChildren().borrowBytes();
+    assertTrue(borrowing.requiresBorrow());
+    assertTrue(borrowing.laxValidation());
+    assertTrue(borrowing.lazyChildrenEnabled());
+    assertEquals(4096, borrowing.borrowBytesThreshold());
+    assertFalse(projection.requiresBorrow());
+    assertEquals(0, borrowing.borrowBytes(0).borrowBytesThreshold());
+    assertThrows(IllegalArgumentException.class, () -> projection.borrowBytes(-1));
+    assertThrows(IllegalArgumentException.class, () -> builder.select("missing"));
+    assertThrows(IllegalArgumentException.class, () -> builder.selectType("missing", "seconds"));
+    assertThrows(
+        ContractViolation.class, () -> projection.requireLayout(LayoutTest.timestamp().layout()));
+    projection.requireLayout(plan.layout());
+    assertTrue(Projection.all(plan).wants(0, 1));
   }
 
   @Test

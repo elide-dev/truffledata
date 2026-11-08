@@ -152,3 +152,27 @@ fix and the separate YAML parser performance gate also failed.
 The Java table producer now mirrors TDP1 masks, count-only lists, lazy child headers, input-relative bytes borrowing and strict/lax omitted-subtree validation. Singular merge scratch retains original input spans and decodes them sequentially into one record, preserving external offsets without payload concatenation. Native and Java eager fallbacks in lazy mode now expand the complete descendant subtree (required closures, oneofs, groups and merged children), matching what a strictly realised lazy child exposes. This is a representation/ownership rule, not permission to skip validation.
 
 Local macOS arm64 qualification passes 126,000 projected exact-byte/status pairs across nine modes and seven schema families, plus the existing 56,000 ordinary pairs and 11 Java codec tests. Nonzero input windows, exact output/depth budgets, partial masks, borrowed payloads, Unicode, merges, maps, groups, closed enums and required fields are covered. Native tests now pass 50/50 with AddressSanitizer and leak detection; the added regression checks full descendant expansion through required/oneof/group fallbacks, including merges. Raw evidence and source hashes are in `benchmarks/results/protobuf-projection-cross-language-20261107/`. Owning/scoped reader integration, remote qualification and sparse-resident performance remain separate gates; E1 is not yet complete.
+
+
+### E1 Java producer, owning readers and scoped input leases
+
+Immutable Projection masks now bind through BuffaPlan.project. Both producers emit
+TDP1-selected slabs; Java owning readers validate projected offsets/counts/handles,
+reject omitted value reads, retain counts/presence, and realize omitted lazy children
+as complete strictly validated subtrees. All-field projections re-encode external
+bytes; partial projection encoding rejects explicitly. Owning deferred results copy
+only the supplied input window and report retained input capacity separately.
+
+Native projected sessions retain the immutable WireInput lease while external bytes
+or lazy children refer to it. Closing the caller's input handle preserves reads;
+reset, next/failed decode and close invalidate all materialized descendant rows and
+arrays. Explicit retain/snapshot is durable. Lazy materializations charge cumulative
+logical budgets and retained slab capacity; absolute child depth cannot expand the
+original bound. SlabMessage.logicalUsage computes counters without materializing
+strings or wrapper graphs.
+
+Direct tests pass four owning ProjectionTest methods, full JAVA/FFM Buffa acceptance
+and fatal-warning compiled reads, including a compiled lazy child expiring on reset.
+Raw evidence is in benchmarks/results/protobuf-projection-java-local/. Linux native
+and JVM/SVM integrated qualification remains pending after nullability fixes. No E1
+sparse-resident speed gate is claimed; that measurement and ABI9 retirement remain.

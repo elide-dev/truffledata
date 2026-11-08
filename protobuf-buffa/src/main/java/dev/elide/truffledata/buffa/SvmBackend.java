@@ -237,7 +237,13 @@ final class SvmBackend implements BuffaWire.Backend {
   }
 
   @Override
-  public int writeSlab(Object compiled, WireInput input, WireInput output, SlabLimits limits) {
+  public int writeSlab(
+      Object compiled,
+      WireInput input,
+      WireInput output,
+      SlabLimits limits,
+      int flags,
+      @Nullable WireInput projection) {
     if (!(input.lease.attachment instanceof BuffaSvm.Address source)
         || !(output.lease.attachment instanceof BuffaSvm.Address destination))
       throw new IllegalArgumentException("Slab arena is not SVM native memory");
@@ -249,8 +255,13 @@ final class SvmBackend implements BuffaWire.Backend {
               WordFactory.pointer((Long) compiled),
               WordFactory.pointer(source.value()),
               input.size(),
-              1,
-              WordFactory.nullPointer(),
+              flags,
+              projection == null
+                  ? WordFactory.nullPointer()
+                  : WordFactory.pointer(
+                      ((BuffaSvm.Address)
+                              java.util.Objects.requireNonNull(projection.lease.attachment))
+                          .value()),
               WordFactory.pointer(destination.value()),
               output.size(),
               limits.maxDepth(),

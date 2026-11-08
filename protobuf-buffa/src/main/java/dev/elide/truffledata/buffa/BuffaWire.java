@@ -68,7 +68,17 @@ public final class BuffaWire implements AutoCloseable {
     }
 
     /** Write into a caller-owned native arena. Negative results request that exact capacity. */
-    int writeSlab(Object compiled, WireInput input, WireInput output, SlabLimits limits);
+    default int writeSlab(Object compiled, WireInput input, WireInput output, SlabLimits limits) {
+      return writeSlab(compiled, input, output, limits, 1, null);
+    }
+
+    int writeSlab(
+        Object compiled,
+        WireInput input,
+        WireInput output,
+        SlabLimits limits,
+        int flags,
+        @Nullable WireInput projection);
 
     default Object prepareSlab(long compiled) {
       return Long.valueOf(compiled);
