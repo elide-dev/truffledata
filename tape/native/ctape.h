@@ -705,20 +705,25 @@ class ctape_writer final {
   }
   // Closes the innermost open object, hashing its keys from their text (producers that rewrite
   // their children: YAML). Builds the directory and checks duplicates as end() does.
-  void end_rescan(size_t index) {
+  template<class Hash> void end_rescan(size_t index, Hash hash_of) {
     if (ctape::kind(words_[index]) != ctape::kind_object) misuse("end_rescan on a non-object");
     uint64_t members = 0;
     for (size_t k = index + 2; k < words_.size(); ++members) {
       uint64_t key = words_[k];
       if (ctape::kind(key) != ctape::kind_string || !(key & ctape::key_flag)) misuse("object key is not a KEY string");
       std::string_view t = text_of(k);
-      uint32_t hash = myna_value_hash(reinterpret_cast<const uint8_t*>(t.data()), t.size());
+      uint32_t hash = hash_of(t);
       pending_.push(memory_, uint64_t(hash) << 32 | (k - index));
       size_t v = ctape::step(k, key);
       if (v >= words_.size()) misuse("object key without a value");
       k = ctape::after(v, words_[v]);
     }
     end(index, members);
+  }
+  void end_rescan(size_t index) {
+    end_rescan(index, [](std::string_view text) {
+      return myna_value_hash(reinterpret_cast<const uint8_t*>(text.data()), text.size());
+    });
   }
   // Announces the word written next as a member key of the open object at `object`; `hash` is
   // myna_value_hash over the decoded key bytes.

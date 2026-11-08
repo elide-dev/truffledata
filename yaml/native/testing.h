@@ -4,6 +4,7 @@
 #pragma once
 
 #include <myna/values.h>
+#include "tape/native/ctape.h"
 #include <simdjson.h>
 
 #include <charconv>
@@ -122,6 +123,70 @@ inline std::string render(const myna_value_view& view) {
   std::string out;
   uint64_t end = render(view, 0, out);
   if (end != view.node_count) throw std::runtime_error("trailing nodes after the root");
+  return out;
+}
+
+// Compact test helpers walk word boundaries; ordinals are only a convenience for assertions.
+inline uint64_t ordinal(const td_tape_view& view, size_t n) {
+  uint64_t i = 0;
+  while (n-- && i < view.word_count) i = tape::ctape::step(i, view.words[i]);
+  if (i >= view.word_count) throw std::out_of_range("compact node ordinal");
+  return i;
+}
+inline size_t node_count(const td_tape_view& view) {
+  size_t n = 0;
+  for (size_t i = 0; i < view.word_count; i = tape::ctape::step(i, view.words[i])) ++n;
+  return n;
+}
+inline std::string_view node_text(const td_tape_view& view, uint64_t index) { return tape::ctape::text(view, index); }
+inline uint64_t render(const td_tape_view& view, uint64_t index, std::string& out) {
+  namespace ct = tape::ctape;
+  uint64_t w = view.words[index];
+  uint64_t next = ct::step(index, w);
+  switch (ct::kind(w)) {
+    case ct::kind_null: out += "null"; break;
+    case ct::kind_false: out += "false"; break;
+    case ct::kind_true: out += "true"; break;
+    case ct::kind_i64: out += std::to_string(int64_t(view.words[index + 1])); break;
+    case ct::kind_u64: out += "u" + std::to_string(view.words[index + 1]); break;
+    case ct::kind_f64: {
+      double d;
+      std::memcpy(&d, view.words + index + 1, sizeof d);
+      out += 'f';
+      if (std::isnan(d)) out += "nan";
+      else if (std::isinf(d)) out += d < 0 ? "-inf" : "inf";
+      else {
+        char b[40];
+        char* end = simdjson::internal::to_chars(b, b + sizeof b, d);
+        if (end - b >= 2 && end[-2] == '.' && end[-1] == '0') end -= 2;
+        out.append(b, end);
+      }
+      break;
+    }
+    case ct::kind_decimal: out += 'd'; out += node_text(view, index); break;
+    case ct::kind_string: quote(out, node_text(view, index)); break;
+    case ct::kind_ref: out += "null"; break;  // reference stays unexpanded in the structural oracle
+    case ct::kind_array: case ct::kind_object: {
+      bool object = ct::kind(w) == ct::kind_object;
+      out += object ? '{' : '[';
+      uint64_t at = index + 2;
+      for (uint32_t i = 0; i < ct::field(w); ++i) {
+        if (i) out += ',';
+        if (object) { at = render(view, at, out); out += ':'; }
+        at = render(view, at, out);
+      }
+      out += object ? '}' : ']';
+      if (at != ct::low(w)) throw std::runtime_error("compact container next mismatch");
+      return at;
+    }
+    default: throw std::runtime_error("unknown compact node kind");
+  }
+  return next;
+}
+inline std::string render(const td_tape_view& view) {
+  if (const char* problem = tape::ctape::validate(view)) throw std::runtime_error(problem);
+  std::string out;
+  if (render(view, 0, out) != view.word_count) throw std::runtime_error("trailing compact words");
   return out;
 }
 

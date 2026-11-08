@@ -50,15 +50,15 @@ struct decode_hint {
   size_t block;
 };
 inline decode_hint hint_for(size_t input, const myna::value_limits& limits, const storage_limits& storage) {
-  size_t cap = storage.index_bytes / 72 > 4096 ? storage.index_bytes / 72 : 4096;
+  size_t cap = storage.index_bytes / 32 > 4096 ? storage.index_bytes / 32 : 4096;
   size_t nodes = input / 6 + 8;
   if (nodes > cap) nodes = cap;
   if (nodes > limits.nodes) nodes = static_cast<size_t>(limits.nodes);
   size_t bytes = input / 8 + 64;
   if (bytes > cap * 8) bytes = cap * 8;
-  size_t block = 4 * sizeof(myna_value_region) + 256 + (input + 63) / 64 * 8;
-  for (size_t part : {nodes * sizeof(myna_value_node), nodes * sizeof(uint64_t), nodes * sizeof(uint32_t),
-                      nodes * sizeof(uint32_t), bytes})
+  size_t block = 256 + (input + 63) / 64 * 8;
+  for (size_t part : {nodes * 2 * sizeof(uint64_t), nodes * 2 * sizeof(uint32_t),
+                      nodes / 3 * sizeof(uint64_t), std::min(nodes / 3, size_t(256)) * sizeof(uint64_t), bytes})
     if (part <= tape::block_arena::large_threshold) block += part + alignof(std::max_align_t);
   return {nodes, bytes, block};
 }
@@ -72,9 +72,7 @@ class session final {
   static constexpr size_t input_padding = 64;
 
   struct document_view {
-    myna_value_view view;
-    table_view<uint64_t> lexical;
-    table_view<uint32_t> hashes;
+    td_tape_view view;
     table_view<uint32_t> meta;
     table_view<span_entry> tags;
     table_view<anchor_entry> anchors;
@@ -97,9 +95,9 @@ class session final {
     size_t bytes_;
 
    public:
-    myna_value_view view;
+    td_tape_view view;
     retained(std::pmr::memory_resource* upstream, tape::block_arena::storage storage, size_t bytes, char* input,
-             size_t input_capacity, myna_value_view view)
+             size_t input_capacity, td_tape_view view)
         : upstream_(upstream), storage_(std::move(storage)), input_(input), input_capacity_(input_capacity),
           bytes_(bytes), view(view) {}
     size_t bytes() const { return bytes_; }
@@ -171,8 +169,9 @@ class session final {
       std::memset(input_ + text, 0, input_padding);
       const char* pristine = nullptr;
       if (flags & retain_source) {
-        char* copy = static_cast<char*>(arena.allocate(text ? text : 1, 1));
+        char* copy = static_cast<char*>(arena.allocate(text + input_padding, 1));
         if (text) std::memcpy(copy, input_, text);
+        std::memset(copy + text, 0, input_padding);
         pristine = copy;
       }
       policy rules = options_.rules;
@@ -184,7 +183,7 @@ class session final {
         if (!failure.line) failure.at(handler_.line(), handler_.column());
         throw;
       } catch (const std::length_error& limit) {
-        // Myna node/text/depth/container limits and the index budget.
+        // Compact value/text/depth/container limits and the index budget.
         throw limit_error(limit.what()).at(handler_.line(), handler_.column());
       }
       handler_.finish();
@@ -209,7 +208,7 @@ class session final {
     if (!live_) throw std::logic_error("no YAML session document");
     void* raw = upstream_->allocate(sizeof(retained), alignof(retained));
     tape::block_arena::storage storage;
-    myna_value_view view = handler_.view();
+    td_tape_view view = handler_.view();
     handler_.clear();
     size_t bytes = arena_.detach(storage, upstream_);
     memory_.forget(bytes);
@@ -222,13 +221,11 @@ class session final {
 
   // The live document; valid only while live().
   document_view current(size_t input_length, size_t allocations) const {
-    return {handler_.view(), handler_.lexical_spans(), handler_.key_hashes(), handler_.meta(), handler_.tags(),
+    return {handler_.view(), handler_.meta(), handler_.tags(),
             handler_.anchors(), handler_.alias_targets(), handler_.directives(), handler_.strings(), source_,
             source_length_, input_length, allocations, handler_.document_flags(), handler_.version()};
   }
-  const myna_value_view& view() const { return handler_.view(); }
-  table_view<uint64_t> lexical_spans() const { return handler_.lexical_spans(); }
-  table_view<uint32_t> key_hashes() const { return handler_.key_hashes(); }
+  const td_tape_view& view() const { return handler_.view(); }
   table_view<uint32_t> meta() const { return handler_.meta(); }
   const char* source() const { return source_; }
   size_t source_length() const { return source_length_; }

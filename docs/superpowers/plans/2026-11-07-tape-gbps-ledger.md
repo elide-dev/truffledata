@@ -36,3 +36,31 @@ Task 3–5 Bazel evidence: tape JVM and JSON JVM now pass with annotation proces
 
 Followup qualification 523278e7: native producer/API/stream/differential and tape/JSON JVM tests pass. The packed-kind/raw-word changes reduce interop and snapshot graphs from4398 to3366 nodes, still above2000; scalar interop still leaves SvmTape.readWord calls during partial evaluation. A heap-only diagnostic reproduces the early virtual calls, independent of FFM. Caching the concrete reader Class in scalar export specializations and castExact exposes storage types during partial evaluation without adding fields to TapeValue; the local heap probe now passes fatal performance warnings. Native-backed JVM diagnostics reach JDK VarHandle calls instead; Native Image requalification remains pending. YAML's 10257ff4 native generic/alias/typed compiled checks pass with the scalar specializations. A corresponding owner-Class guard in ReadMember preserves early owner dispatch for nested YAML views.
 Shared YAML compact support: descriptor flag8 (TD_TAPE_YAML) makes clean unowned STRING spans name their plain tokens directly; quoted/folded/escaped values remain OWNED with explicit raw spans. BOOL/NULL can retain optional raw spans in their existing payload fields, with JSON's words remaining unchanged. Readers and subtree snapshots preserve/rebase these spans; rawText accepts boolean/null only when a lexical token exists. append now relocates REF targets only inside the copied source interval, preserving external targets beyond it. Native compact tests and nine local CompactTapeTest cases pass; formal requalification follows the YAML cutover.
+
+Task 8 compact YAML producer checkpoint: rapidyaml events now write ctape_writer
+words directly. Plain unfiltered strings reference input; filtered/normalized text
+is owned with embedded raw spans. Metadata indexes word offsets; lexical/hash side
+arrays are removed. Value aliases are REF words. Merge, last-wins, retroactive
+mappings and pair conversion operate on variable-width word ranges; pair conversion
+now applies anchor relocation once in original coordinates, preventing repeated
+moves when new offsets overlap later old blocks. A targeted regression covers this.
+Retained source is padded and becomes the descriptor input, preserving quoted raw
+text while owned decoded strings remain independent. YAML directories are built
+at mapping close after rewrites; a shared end_rescan hash callback reuses the exact
+short-key FNV cache without a new side array.
+
+Task 8 local evidence: four fixture tapes match the independent Myna builder;
+402/402 yaml-test-suite cases pass with whole/1-byte/7-byte feeding; 9,093 fast/general
+path decodes are byte-identical (2,740 matching errors). Decoder, semantic, corpus
+and parity suites also pass ASan+UBSan, including the anchor relocation regression.
+These runs preceded the final directory hash-cache overload; that small change is
+being requalified. No performance completion is claimed: a local paired smoke was
+noisy under concurrent builds (0.858/0.616/0.648 of ryml-ints), requiring isolated
+measurements. REJECT duplicate fusion and the 0.715 floor remain open, as do full
+Bazel/API/Java/release checks. The proposed text-arena bound 2*input+16 is not proven
+for YAML: very large hexadecimal mapping keys normalize to longer decimal text;
+size from actual decoded spans or report checked required capacity instead.
+The directory-cache requalification caught the legacy hash helper's 31-bit mask;
+compact directories require full unsigned FNV-1a. YAML now uses full 32-bit hashes
+consistently for its cache, duplicate checks and directories. ASan+UBSan parity
+again passes all 9,093 decodes with structural/directory validation after that fix.
