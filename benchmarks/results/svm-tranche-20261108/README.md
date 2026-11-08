@@ -2,12 +2,13 @@
 
 Production baseline: `9a1dcec` (restored B4 plus integrated JSON and slab work).
 SVM is the production performance target; JVM correctness and coverage remain
-required, while JVM timings do not veto an SVM gain. Work stays local on
-`feat/followup-v5`; no push, CI dispatch or publication is authorized.
+required, while JVM timings do not veto an SVM gain. The measurements below were
+completed locally on `feat/followup-v5` before release authorization.
 
 All three mechanisms are admitted locally. Combined coverage and native
-acceptance on Linux x86-64 and Arm64 pass. The tranche is complete and paused;
-release qualification remains separate.
+acceptance on Linux x86-64 and Arm64 pass. The tranche is complete. Sam subsequently
+authorized 0.10.0 for the TruffleCEL and Elide 1.6.3 integrations, deferring the
+remaining performance goals; release qualification remains separate.
 The performance evidence below is from isolated, preserved images, not a
 fresh timing capture of one combined application. The combined branch receives
 its own semantic, coverage and native acceptance checks.
@@ -58,8 +59,8 @@ interpreter has a large outlier, so its ratio needs the recorded ranges.
 Stock is AOT Java generated protobuf getters; the interpreter rows include guest
 node dispatch. Stock guest interop is a separate adapter over those protobuf
 objects and is slower than both library representations in these read cells.
-The B4 full interpreter target of ≤2.5× direct stock remains open for
-both slab (5.652×) and generated-owned (3.471×). Restored B4 Phase 1 remains in
+The B4 full interpreter target of ≤2.5× direct stock remains unmet and deferred
+from 0.10.0 for both slab (5.652×) and generated-owned (3.471×). Restored B4 Phase 1 remains in
 the baseline; this tranche does not attribute its earlier gain to cache changes.
 Warm-read gains do not imply equivalent decode or whole-pipeline gains. Full slab
 decode allocates 808 Java B/row versus stock 1,629.5; scoped sessions allocate
@@ -88,41 +89,55 @@ with acquire/release access and keeps synchronized miss rechecks; list/unsigned
 maps stay synchronized. Layout/lifetime checks and the ABI are unchanged.
 More typed CSV specialization, JSON snapshot work,
 protobuf list indexing and bulk scoped decode remain separate future experiments.
-The pre-existing slab verification-complexity risk, JSON throughput/memory goals,
-YAML release criteria and full distribution/release qualification are not closed
-by this tranche. No budgets or coverage exemptions are relaxed.
+The pre-existing slab verification-complexity risk and full distribution/release
+qualification are not closed by this tranche. JSON throughput/memory goals and
+YAML performance floors are explicitly deferred from 0.10.0 below, with their
+misses preserved. No allocation/graph budgets or coverage exemptions are relaxed.
 
-## Release readiness audit
+## 0.10.0 release disposition
 
-This tranche is not full 0.10.0 release qualification. The current
+Sam authorized the 0.10.0 release on 2026-11-08 to unblock TruffleCEL and Elide
+1.6.3. Remaining performance goals and standalone Buffa Cargo completion are
+deferred from this Maven/native release, not declared achieved. Future experiments
+carry no delivery commitment or promised gain. This tranche is not full release
+qualification; the current
 [release ledger](../../../docs/superpowers/plans/2026-11-08-release-resume.md)
-now distinguishes completed code from missing implementation and unrun checks:
+tracks safety remediation, normal CI and staged/public artifact checks. Recent
+native and coverage evidence is reused rather than repeating the benchmark matrix.
 
-- **Two implementation gaps:** shared-subgraph verification can amplify CPU
-  work at the external serialized-slab boundary; Buffa's standalone Cargo crate
-  still references an absent generated seam. The former has a bounded reproducer
-  and is an explicit release blocker. JSON/CSV Cargo crates already exist;
-  generated-seam/composed-link automation and the full Cargo matrix still remain.
-- **Protobuf performance:** the SVM B4 interpreter ceiling remains open. JVM
-  timing-only objections are superseded by the user's production priority.
+- **Safety:** remediation of shared-subgraph verification CPU amplification is
+  tracked separately in release work; performance deferral does not waive it. This
+  report's benchmark candidates do not establish that a later fix is qualified.
+- **Cargo:** Buffa's standalone generated-seam packaging is unfinished and
+  excluded from 0.10.0's Maven/native scope. JSON/CSV crates already exist, but
+  composed-link automation and the full Cargo matrix remain separate work. No
+  standalone Buffa Cargo readiness is claimed.
+- **Protobuf performance:** the unmet SVM B4 interpreter ceiling and remaining
+  sparse decode/cold costs are deferred. List indexing, dispatch specialization
+  and opt-in bulk scoped decode are possible experiments. JVM timing-only
+  objections are superseded by the user's production priority.
 - **JSON:** the last qualifying pinned native producer capture misses retained
   big/huge and validate small/huge floors; current-source recapture remains.
   The 1.5× logical index/input memory criterion remains structurally unmet.
   Duplicate-check price needs pinned qualification; broader end-to-end targets
-  also need current matched-host measurements. Existing correctness, graph and
-  allocation failures recorded earlier are closed, not new blockers.
+  also need current matched-host measurements. These performance goals are deferred
+  from 0.10.0; snapshot specialization and layout changes remain hypotheses.
+  Existing correctness, graph and allocation failures recorded earlier are closed.
 - **YAML:** four native decoder floors remain missed (config, block, flow,
   text). These are C++ session-decode/reset microbenchmarks against a rapidyaml
   scan handler, not JVM or end-to-end SVM figures. The stream floor and SVM
-  graph/allocation gates pass. Full comparison and prescribed native/sanitizer
-  qualification remain separate.
+  graph/allocation gates pass. The four misses and full comparison are deferred;
+  inspecting literal-filter code generation is a hypothesis, not a promised fix.
+  Native/sanitizer evidence and packaged-artifact checks remain distinct from timing.
 - **CSV:** no unmet mandatory throughput floor was identified. Original H1–H5
   hypotheses explicitly allow either measurement outcome without blocking
   release; the required semantic, coverage, graph and allocation gates pass.
+  Short-string/numeric gaps and host-fault sensitivity remain measured follow-ons;
+  typed specialization, direct sinks and column growth are unmeasured options.
 - **Distribution:** the final platform staging, packaged consumers, signatures/
-  metadata and green CI/main are still required before publication. The older
+  metadata and normal green CI/main checks remain release work. The older
   0.9.0 cross-platform fingerprint blocker was already resolved; it is not
-  counted again. All work in this tranche remains local.
+  counted again. Consult the release ledger for actual completion/publication status.
 
 ## Integrated qualification
 
@@ -153,9 +168,10 @@ protobuf candidate images remain available. The original checkout stays on
 
 All workers are finished. The Arm Bazel server was shut down after archiving;
 its separate case-sensitive cache and all preserved benchmark images remain
-available. The integration branch is committed locally. Nothing was pushed,
-dispatched to CI, merged remotely or published. The requested pause follows this
-report; additional optimization or release work needs a new instruction.
+available. At the measurement checkpoint the integration branch was committed
+locally; nothing had been pushed, dispatched to CI, merged remotely or published.
+The subsequent release authorization supersedes that pause for release work,
+without authorizing another performance cycle or changing these recorded results.
 
 ## Preserved baselines
 

@@ -8,8 +8,9 @@ or prebuilt-native distribution requirements. See the root `AGENTS.md`.
 
 Status: Sam authorized the first parallel tranche after compaction ("ok do it").
 All three measured mechanisms are integrated locally and qualified. Final combined
-coverage and x86/Arm native acceptance pass. This tranche is complete; Sam's
-requested pause follows the comparison report. B4 Phase 1 remains restored in `29aa408`.
+coverage and x86/Arm native acceptance pass. This tranche is complete. Sam
+subsequently authorized 0.10.0 to unblock TruffleCEL and Elide 1.6.3, deferring
+the remaining performance goals from that release. B4 Phase 1 remains restored in `29aa408`.
 The production baseline is `9a1dcec`. The
 [common comparison](../../../benchmarks/results/svm-tranche-20261108/README.md)
 records measured gains, regressions and workload boundaries. Follow-ons remain
@@ -23,7 +24,9 @@ SVM images and source/binary provenance are retained in the ignored local
 `build/svm-tranche-baseline/9a1dcec/` (build `bad1392b`). Benchmark-only additions
 for nested typed JSON and owned CSV are applied to the old production baseline
 before recapturing images; candidates must use the same workload definitions.
-No push, CI dispatch, publication, or main-branch merge is authorized.
+The historical stay-local instruction applied to these experiments. The current
+release authorization and execution status live in the distribution/resume
+ledgers; this performance plan does not claim publication is complete.
 
 ### Measured admission checkpoint
 
@@ -43,7 +46,8 @@ No push, CI dispatch, publication, or main-branch merge is authorized.
   penalty and all raw results remain preserved. Both seven-target validations
   pass, including 168/136 B scalar floors, 48 B owner and 132 native smoke cells.
   `598ce6f`/`4fd49c2` add cold/warm publication races to shared acceptance.
-  B4 remains open: full interpreter/stock is 5.652× slab and 3.471× generated.
+  B4 remains unmet and deferred from 0.10.0: full interpreter/stock is 5.652× slab
+  and 3.471× generated.
 - JSON `152dac5` (worker `a966cf2`) extends structural typed decoding to nested
   and repeated plans. Six paired SVM groups (`950032e5`) give 9.5–15.5% lower
   ingest time in all four new workloads, with separated fork ranges and all
@@ -61,7 +65,7 @@ No push, CI dispatch, publication, or main-branch merge is authorized.
   Only x86 SVM timing claims are made.
 
 Worker source, negative experiments, baselines and validation artifacts remain
-local. The common report records final qualification and the requested pause;
+local. The common report records final qualification and the release disposition;
 no release completion is implied by these admissions. The Arm server is stopped,
 the separate case-sensitive cache is preserved, and no build/benchmark remains active.
 
@@ -164,7 +168,16 @@ durable reads. Re-run full/sparse interpreter and peak pairs and native
 allocation/graph gates. The existing goal remains <=2.5x stock; cache changes
 alone are not assumed sufficient to get slab from 6.724x to 2.5x.
 
-## Follow-ons, ordered by measured leverage
+## Possible follow-on experiments
+
+The remaining B4, JSON throughput/memory and YAML native timing goals are
+explicitly deferred from 0.10.0. Their measured misses remain unchanged; this
+release decision does not pass them. The options below and in the owning ledgers
+are hypotheses, with no schedule, implementation commitment or promised gain.
+CSV's original throughput hypotheses were already non-blocking. Standalone Buffa
+Cargo completion is separately outside the Maven/native release scope. Recent
+native/coverage evidence and normal release checks are reused; another full
+performance matrix is not part of this release execution.
 
 1. **JSON native snapshot specialization.** The final snapshot callgrind trace
    attributes 25.97% of instructions to `HeapTape.copy` itself, another 3.29% to
@@ -193,7 +206,8 @@ alone are not assumed sufficient to get slab from 6.724x to 2.5x.
    per-message errors, capacity/depth limits, reset invalidation and opt-in retain.
    Do not change individual durable-message ownership implicitly.
 
-The existing shared-subgraph verification time risk also remains actionable:
+The existing shared-subgraph verification time risk is separate safety work in
+the release lane, not a deferred performance goal:
 memoizing structure requires preserving depth, identity, per-visit logical
 budgets and projected state. Keep the bounded reproducer and the common
 allocation-free path. This is correctness/complexity work, not permission to
@@ -219,4 +233,5 @@ skip validation on externally supplied slabs.
 
 Completed dispatch: JSON nested structural writer, CSV all-STRING batch
 construction, and protobuf warm handle caches, with serialized qualification.
-The follow-ons remain separate future work; no further cycle starts during the pause.
+The follow-ons remain optional future investigations; the 0.10.0 release
+authorization does not commit to or start another optimization cycle.
