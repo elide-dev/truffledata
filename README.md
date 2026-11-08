@@ -145,6 +145,43 @@ these results do not establish an overall performance win.
 
 ## Performance
 
+The **0.10.0** charts use the completed November 8 paired SVM runs: three fresh
+processes per image/cell, Linux x86-64, O2, serial GC, and no PGO. The baseline is
+`9a1dcec`; each format's candidate was measured in its own preserved image.
+These are workload-specific results, not a new timing capture of the combined release.
+They predate final release fixes and packaging; exact measured sources and images
+are recorded with the charts.
+
+- Nested/repeated typed JSON ingest takes **9.5–15.5% less time**. Generic JSON
+  ingest is **2.2% slower**; its compiled reads remain faster than the measured tree libraries.
+- Protobuf full slab reads take **16.2% less interpreter time / 32.1% less peak time**,
+  while direct stock getters remain faster and some cold reads regress.
+- CSV retained-string construction improves **1.5–2.0% in aggregate time**.
+  Retained batches and reference consumers have different ownership contracts.
+
+![Generic JSON: ingestion, compiled reads, and Java allocation on the same fixture](docs/images/svm-tranche-20261108/comparison-json-generic.svg)
+
+![Protobuf: warm reads versus direct stock and guest interop, with cold-read tradeoffs](docs/images/svm-tranche-20261108/comparison-protobuf.svg)
+
+<details>
+<summary>Typed JSON, CSV, and protobuf decode controls</summary>
+
+![Typed JSON ingest gains and the flat/generic control regressions](docs/images/svm-tranche-20261108/comparison-json-typed.svg)
+
+![CSV string fixture changes and retained-batch versus reference-consumer throughput](docs/images/svm-tranche-20261108/comparison-csv.svg)
+
+![Protobuf decode, resident consumption, and Java allocation with ownership differences](docs/images/svm-tranche-20261108/comparison-protobuf-controls.svg)
+
+</details>
+
+Whiskers retain every fork's range; they are not confidence intervals. Java heap
+figures exclude native storage. See the [current report and raw evidence](benchmarks/results/svm-tranche-20261108/README.md),
+[chart methodology and regeneration](docs/COMPARISON_BENCHMARKS.md#release-0100-paired-svm-charts),
+and [source/image/artifact hashes](docs/images/svm-tranche-20261108/comparison-manifest.json).
+
+<details>
+<summary>Historical 0.3.0–0.5.0 measurements</summary>
+
 The comparison suite measures **AOT, interpreter, peak guest JIT, and Java heap
 allocation** on SVM. It compares our generic and generated access APIs with protobuf
 Java, plus MySQL/Postgres INT4 decoder functions. All engines share one native executable.
@@ -215,6 +252,8 @@ See the [current 120-cell run and caveats](docs/COMPARISON_BENCHMARKS.md#current
 and the [independent runtime API and limits](docs/CONTRACTS.md#independent-protobuf-runtime-unreleased).
 Concrete generated binary decoders and serializers cover nested/repeated schemas when every
 reachable message has at most 64 fields. Editions, extensions and MessageSet remain unsupported.
+
+</details>
 
 </details>
 

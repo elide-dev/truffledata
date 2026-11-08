@@ -15,6 +15,12 @@ its own semantic, coverage and native acceptance checks.
 
 ## Performance against the baseline and other implementations
 
+[Rendered charts and regeneration](../../../docs/COMPARISON_BENCHMARKS.md#release-0100-paired-svm-charts)
+cover the JSON typed/control and generic comparisons, protobuf warm/cold and
+decode/ownership cases, and CSV retained-string fixtures. The
+[chart manifest](../../../docs/images/svm-tranche-20261108/comparison-manifest.json)
+links the exact input reports, image hashes and reproducible SVG/PNG artifacts.
+
 These are three-fork paired Linux x86-64 SVM measurements using the pinned SDK,
 O2, serial GC and no PGO. Lower ns is better; higher GB/s is better. Compare
 implementations within a row's workload, not between different format fixtures.

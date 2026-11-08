@@ -123,7 +123,13 @@ def main():
     parser.add_argument('input', type=Path)
     parser.add_argument('output', type=Path)
     parser.add_argument('--label', required=True)
+    parser.add_argument('--tranche', action='store_true',
+                        help='render the completed JSON/CSV/protobuf pairs from an input results directory')
     args = parser.parse_args()
+    if args.tranche:
+        from plot_tranche import render as render_tranche
+        render_tranche(args.input, args.output, args.label)
+        return
     data = json.loads(args.input.read_text())
     version = render(data, args.output, args.label)
     (args.output / 'comparison-manifest.json').write_text(json.dumps({

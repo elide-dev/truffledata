@@ -1,5 +1,83 @@
 # SVM comparison benchmarks
 
+## Release 0.10.0 paired SVM charts
+
+These charts use the completed **2026-11-08** experiments against production
+`9a1dcec`. JSON candidate `a966cf2`, CSV `234304c`, and protobuf `e4cec9f` were
+measured as separate preserved images with matching workloads. They are included
+in the release, but these are not new timings of one combined release image.
+The captures predate final release packaging and the external serialized-slab
+verification fix; those changes are not attributed any timing improvement here.
+Each before/after cell uses three fresh processes on one pinned logical CPU;
+different groups may use different hosts. All runs use Linux x86-64 SVM, the
+pinned `25.5.5-elide.27` SDK, O2, serial GC and no PGO.
+
+Bars show medians of fork medians; whiskers include the complete min–max range,
+not a confidence interval. No outlier is removed or used to normalize another
+engine. Timing and Java allocation are separate observations; Java heap excludes
+native storage and does not establish total retained memory. The CSV heatmap
+shows median elapsed-time changes, with every raw range retained in its report.
+
+![Typed JSON ingest and separate flat/generic controls](images/svm-tranche-20261108/comparison-json-typed.svg)
+
+The four typed workloads improve 9.5–15.5% in elapsed time. The generic ingest
+control regresses 2.20% with separated fork ranges; flat typed is +1.50% with
+overlap. These workloads are not compared numerically with the generic tree
+libraries below. All 34 Java allocation cells are unchanged.
+
+![Generic JSON comparisons on one fixture](images/svm-tranche-20261108/comparison-json-generic.svg)
+
+All generic engines consume the same fixture. TruffleData's ingest allocation
+is 384 Java B/document, including 240 B of ten AOT read views. Gson ingest is
+noisy; its range remains visible. [Full JSON report and original samples](../benchmarks/results/json-typed-tranche-20261108/admission.md).
+
+![Protobuf warm reads and cold-read tradeoffs](images/svm-tranche-20261108/comparison-protobuf.svg)
+
+Direct stock protobuf getter work stays AOT behind an explicit Truffle boundary.
+The shared guest access path and stock guest-interop adapter are separate cases.
+Full slab reads improve 16.2% in the interpreter and 32.1% at peak, but still cost
+5.652× and 2.001× direct stock time respectively. Native/lazy sparse first reads
+regress 4.5%/3.3%; the projected +2.4% ranges overlap.
+
+![Protobuf decode, resident consumption, and ownership controls](images/svm-tranche-20261108/comparison-protobuf-controls.svg)
+
+Warm reads do not establish decode or whole-pipeline gains. The owning resident
+cell retains its 17.4 µs candidate outlier. Scoped sessions and owning messages
+have different lifetimes; the 40 Java B/row session decode also retains an
+855.6 B native arena/row in this fixture. These ownership/allocation differences
+predate the cache optimization. All 132 allocation/retention pairs match.
+[Full protobuf report and original samples](../benchmarks/results/protobuf-warm-cache-9a1dcec/README.md).
+
+![CSV retained-string changes and reference-consumer throughput](images/svm-tranche-20261108/comparison-csv.svg)
+
+The eight string fixtures improve 1.5–2.0% in unweighted aggregate time; individual
+cells can overlap or regress. Every allocation cell is unchanged. Retained
+batches are not the same contract as reference consumers: `kernel-native` is a
+Java consumer over native indexes, not a retained typed materializer. Owned input
+already existed in the baseline. The selected native kernel was AVX-512; these
+measurements do not establish Arm or AVX2-only speed.
+[Full CSV report and original samples](../benchmarks/results/csv-span-only-20261108/README.md).
+
+The [common report](../benchmarks/results/svm-tranche-20261108/README.md) retains
+the complete comparison table, tradeoffs and integration qualification. Historical
+charts below remain attached to their original versions and fixtures.
+
+Regenerate all five SVG/PNG pairs and provenance files without running benchmarks:
+
+```sh
+python3 -m venv build/plot-venv
+build/plot-venv/bin/pip install -r tools/bench/plot-requirements.txt
+build/plot-venv/bin/python tools/bench/plot_comparison.py \
+  benchmarks/results docs/images/svm-tranche-20261108 --label 0.10.0 --tranche
+```
+
+The renderer reuses the CSV/protobuf work and execution-tier validators, checks
+JSON checksums and source report hashes, and recomputes all 244 paired cells from
+their three raw process medians. [Normalized chart data](images/svm-tranche-20261108/comparison-data.json)
+retain all cell ranges and allocation observations. The [manifest](images/svm-tranche-20261108/comparison-manifest.json)
+records every input report hash, both images per format, measured source revisions,
+invocation IDs, renderer hashes, plotting-library version and SVG/PNG hashes.
+
 ## Generated-access measurements
 
 The [88-cell SVM run](https://github.com/elide-dev/truffledata/actions/runs/41776420028)
