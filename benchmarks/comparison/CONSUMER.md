@@ -53,6 +53,11 @@ The E1 targets keep sparse/full holdout groups on one worker and run three fresh
 
 `consumer_measure` and `consumer_measure_jvm` run the full matrix in ten remote shards. Each `(mode, stage)` group retains every engine and binary on the same worker. Override `consumer_svm_baseline` / `consumer_jvm_baseline` with a preserved executable for a before/after pair. Historical baselines explicitly select their four legacy engines and omit the new `holdout-sparse` mode. Current candidate images contain no legacy native view engine.
 
+For a baseline built after the native-view retirement, declare its supported engines with
+`--test_env=TRUFFLEDATA_CONSUMER_BASELINE_ENGINES=stock,generated-owned,slab`. If needed, set
+`TRUFFLEDATA_CONSUMER_BASELINE_MODES` to its supported mode list as well. Both selections are
+recorded in the results; the default remains the historical four-engine/four-mode matrix.
+
 On a quiet Linux host, run serially with one CPU and both binaries interleaved:
 
 ```sh
