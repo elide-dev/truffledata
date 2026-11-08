@@ -80,11 +80,20 @@ final class CompiledReads {
             (com.sun.management.ThreadMXBean)
                 java.lang.management.ManagementFactory.getThreadMXBean();
         bean.setThreadAllocatedMemoryEnabled(true);
-        long thread = Thread.currentThread().threadId(),
-            before = bean.getThreadAllocatedBytes(thread);
-        target.call(1000000);
-        double bytes = (bean.getThreadAllocatedBytes(thread) - before) / 1000000.0;
-        Acceptance.check(bytes <= 0.05, "session compiled FFM allocation budget: " + bytes);
+        // The guest may compile before HotSpot compiles the FFM adapter methods it calls.
+        // Stabilize that host code before observing allocations; keep every measured round below
+        // the existing per-read ceiling, rather than choosing a best sample.
+        for (int i = 0; i < 8; i++) target.call(1000000);
+        long thread = Thread.currentThread().threadId();
+        double[] rounds = new double[3];
+        for (int i = 0; i < rounds.length; i++) {
+          long before = bean.getThreadAllocatedBytes(thread);
+          target.call(1000000);
+          rounds[i] = (bean.getThreadAllocatedBytes(thread) - before) / 1000000.0;
+        }
+        System.out.println("SESSION compiled FFM bytes/read=" + java.util.Arrays.toString(rounds));
+        for (double bytes : rounds)
+          Acceptance.check(bytes <= 0.05, "session compiled FFM allocation budget: " + bytes);
       }
       session.decode(input);
       Acceptance.rejects(() -> target.call(1), IllegalStateException.class);

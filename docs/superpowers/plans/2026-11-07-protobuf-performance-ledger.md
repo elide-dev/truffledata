@@ -206,3 +206,13 @@ three-fork sparse-resident/holdout gates remain pending.
 The final G1 seam also removes the obsolete `Scalars` result and `td_buffa_scalars` export. All 42 remaining native tests pass with ASan/leak detection; the scalar-only test is removed with that implementation. The final fingerprint is `5bd597bd050e2bf8bc22a54529dbfa28be83491afb14ab03d3a9a2c2e2a01e52`; refreshed symbols, descriptor policy and raw evidence accompany the native retirement record. Obsolete view-only CI/publication target aliases are removed after their coverage moved to the default slab path.
 
 Issue #35 adds allocation-free `hasUnknownFields()` and `unknownFieldByteCount()` to immutable, generated, owning slab and borrowed slab rows. Counts describe retained raw bytes, including empty unknown groups, independently of semantic equality. Borrowed queries retain epoch checks. Local compiled probes cover all four representations, allocation bounds and reset rejection; integrated JVM/Native Image verification is running in invocation `dab2dbc5-ae9d-4a8e-b29c-5d43be2cadc3`.
+
+
+### A4 closed under its evidence gate
+
+Formal invocation dab2dbc5-ae9d-4a8e-b29c-5d43be2cadc3 passes Type/wide64 compilation,
+unchanged 10,000-node graphs and decoder parity on JVM/SVM. Median compiled/generated
+is 181.1/155.6 ns (1.164×) on JVM and 9594.6/586.2 ns (16.367×) on SVM. The required
+≤1.2× gate on both runtimes fails. The amended A4 stop rule therefore keeps table-driven
+Java as the runtime-plan floor; no production compiled-decoder dispatch is adopted.
+Raw logs and the ruling are in benchmarks/results/protobuf-compiled-decoder-dab2dbc5/.

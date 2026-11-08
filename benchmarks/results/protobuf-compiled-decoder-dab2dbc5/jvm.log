@@ -1,0 +1,12 @@
+exec ${PAGER:-/usr/bin/less} "$0" || exit 1
+Executing tests from //benchmarks/comparison:compiled_slab_jvm
+-----------------------------------------------------------------------------
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by com.oracle.truffle.runtime.hotspot.HotSpotTruffleRuntime (file:/workspace/bazel-out/rbe_linux_amd64-opt/bin/benchmarks/comparison/compiled_slab_jvm.runfiles/rules_jvm_external++maven+maven/org/graalvm/truffle/truffle-runtime/25.5.5-elide.27/processed_truffle-runtime-25.5.5-elide.27.jar)
+WARNING: Please consider reporting this to the maintainers of class com.oracle.truffle.runtime.hotspot.HotSpotTruffleRuntime
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+{"case":"compile-type","runtime":"jvm","compiled":true,"graph_budget":10000}
+{"case":"generated","runtime":"jvm","ns_per_op":[158.91631863243518, 158.72865451036165, 155.50805275781764, 154.57343252280236, 155.61540166122222]}
+{"case":"table","runtime":"jvm","ns_per_op":[651.8225925037544, 636.8985387625336, 626.1583839264247, 624.796981207517, 626.5337284482758]}
+{"case":"compiled","runtime":"jvm","ns_per_op":[184.04171083627799, 180.76068346405683, 181.37768723591958, 180.72789193346904, 181.14981131747356]}
+{"case":"compile-wide64","runtime":"jvm","compiled":true,"graph_budget":10000}

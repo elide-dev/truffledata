@@ -82,8 +82,11 @@ def validate(record, cell, metric, checksums, runtime='svm'):
                 or not isinstance(capacity, (float, int)) or not math.isfinite(capacity)
                 or capacity < extent or record.get('retained_slab_capacity_bytes_per_row') != 0):
             raise ValueError(f'{cell}: invalid native session arena accounting')
-    if engine == 'stock-interop' and record.get('host_interop') is not True:
-        raise ValueError(f'{cell}: stock interop must execute host messages')
+    if engine == 'stock-interop':
+        if record.get('host_interop') is not True:
+            raise ValueError(f'{cell}: stock interop must execute host messages')
+        if record.get('host_interop_boundary') is not (runtime == 'svm'):
+            raise ValueError(f'{cell}: host reflection boundary must identify its runtime')
     if engine in ('slab-projected', 'slab-lazy', 'slab-session-projected'):
         retained_input = record.get('retained_input_bytes_per_row')
         if (not isinstance(retained_input, (float, int)) or not math.isfinite(retained_input)
@@ -161,6 +164,31 @@ def summarize(rows, labels):
                     retained_input_bytes_per_row=first.get('retained_input_bytes_per_row', 0),
                     mb_per_s=throughput(first['input_bytes_per_row'], statistics.median(times))))
     return summary
+
+
+def projection_gates(summary):
+    """Compare E1 cells measured by one unsharded, interleaved three-fork invocation."""
+    values = {(r['engine'], r['mode'], r['stage']): r['ns_per_row']
+              for r in summary if r['binary'] == 'candidate'}
+    comparisons = (
+        ('selected-small', ('slab-projected', 'sparse', 'resident'),
+         ('slab', 'sparse', 'resident'), 0.85),
+        ('selected-holdout', ('slab-projected', 'holdout-sparse', 'resident'),
+         ('slab', 'holdout', 'resident'), 0.5),
+        ('lazy-holdout', ('slab-lazy', 'holdout-sparse', 'resident'),
+         ('slab', 'holdout', 'resident'), 0.5),
+        ('session-lazy-holdout', ('slab-session-projected', 'holdout-sparse', 'resident'),
+         ('slab-session', 'holdout', 'resident'), 0.5),
+    )
+    results = []
+    for name, numerator, denominator, ceiling in comparisons:
+        if numerator not in values or denominator not in values or values[denominator] <= 0:
+            raise ValueError(f'Missing or invalid E1 measurement: {name}')
+        ratio = values[numerator] / values[denominator]
+        results.append(dict(name=name, numerator=numerator, denominator=denominator,
+                            ratio=ratio, ceiling=ceiling, passed=ratio <= ceiling,
+                            required=name != 'session-lazy-holdout'))
+    return results
 
 
 def markdown(rows, labels, runtime='svm'):
@@ -272,6 +300,8 @@ def run():
                         help='Supported engines for one binary; defaults to all current engines')
     parser.add_argument('--modes', action='append', default=[], metavar='LABEL=MODE,...')
     parser.add_argument('--groups', help='Optional measured subset: MODE:STAGE,...')
+    parser.add_argument('--projection-gates', action='store_true',
+                        help='Require same-worker E1 cells and report their fixed ratio gates')
     parser.add_argument('--runtime', choices=('svm', 'jvm'), default='svm')
     parser.add_argument('--pin', action='store_true',
                         help='Pin to the highest available CPU (remote workers); else require taskset')
@@ -283,6 +313,8 @@ def run():
         if not label or label in binaries:
             parser.error('Binary labels must be nonempty and unique')
         binaries[label] = Path(path).resolve(strict=True)
+    if args.projection_gates and int(os.environ.get('TEST_TOTAL_SHARDS', '1')) != 1:
+        parser.error('Projection ratios require every group on one worker; do not shard')
     if args.forks < 3:
         parser.error('At least three fresh forks are required')
     affinity = sorted(os.sched_getaffinity(0))
@@ -333,10 +365,17 @@ def run():
         print(label, *cell, fork, metric, flush=True)
     report['load_average_after'] = os.getloadavg()
     report['summary'] = summarize(report['measurements'], binaries)
+    if args.projection_gates:
+        report['projection_gates'] = projection_gates(report['summary'])
     (args.output / 'partial.json').write_text(json.dumps(report, indent=2) + '\n')
     (args.output / 'partial.json').rename(args.output / 'results.json')
     (args.output / 'results.md').write_text(
         markdown(report['measurements'], binaries, args.runtime))
+    if args.projection_gates:
+        (args.output / 'projection-gates.json').write_text(
+            json.dumps(report['projection_gates'], indent=2) + '\n')
+        if not all(gate['passed'] or not gate['required'] for gate in report['projection_gates']):
+            raise SystemExit('E1 performance gate missed; complete measurements and ratios retained')
 
 
 if __name__ == '__main__':

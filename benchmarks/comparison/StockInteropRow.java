@@ -9,6 +9,7 @@ import com.oracle.truffle.api.library.*;
 import com.oracle.truffle.api.nodes.UnexpectedResultException;
 import dev.elide.truffledata.*;
 import dev.elide.truffledata.protobuf.ProtoPlan;
+import org.graalvm.nativeimage.ImageInfo;
 import org.jspecify.annotations.NullMarked;
 import org.jspecify.annotations.Nullable;
 
@@ -41,25 +42,53 @@ final class StockInteropRow extends AbstractRow {
     try {
       if (kind == 0)
         return switch (index) {
-          case 0 -> values.asString(hosts.invokeMember(host, "getName"));
+          case 0 -> values.asString(invoke(hosts, host, "getName"));
           case 1 -> array(index, plan.nested(index));
           case 2 -> array(index, null);
           case 4 -> context(index);
-          case 5 -> values.asLong(hosts.invokeMember(host, "getSyntaxValue"));
+          case 5 -> values.asLong(invoke(hosts, host, "getSyntaxValue"));
           default -> throw new IllegalArgumentException("Unused Type benchmark field");
         };
-      if (kind == 2) return values.asString(hosts.invokeMember(host, "getFileName"));
+      if (kind == 2) return values.asString(invoke(hosts, host, "getFileName"));
       return switch (index) {
-        case 0 -> values.asLong(hosts.invokeMember(host, "getKindValue"));
-        case 1 -> values.asLong(hosts.invokeMember(host, "getCardinalityValue"));
-        case 2 -> values.asLong(hosts.invokeMember(host, "getNumber"));
-        case 3 -> values.asString(hosts.invokeMember(host, "getName"));
-        case 6 -> values.asBoolean(hosts.invokeMember(host, "getPacked"));
+        case 0 -> values.asLong(invoke(hosts, host, "getKindValue"));
+        case 1 -> values.asLong(invoke(hosts, host, "getCardinalityValue"));
+        case 2 -> values.asLong(invoke(hosts, host, "getNumber"));
+        case 3 -> values.asString(invoke(hosts, host, "getName"));
+        case 6 -> values.asBoolean(invoke(hosts, host, "getPacked"));
         default -> throw new IllegalArgumentException("Unused Field benchmark field");
       };
     } catch (InteropException failure) {
       throw failed(failure);
     }
+  }
+
+  private static Object invoke(InteropLibrary hosts, Object host, String method)
+      throws InteropException {
+    return ImageInfo.inImageCode()
+        ? nativeHostGetter(hosts, host, method)
+        : hosts.invokeMember(host, method);
+  }
+
+  private static Object invokeIndexed(InteropLibrary hosts, Object host, String method, int index)
+      throws InteropException {
+    return ImageInfo.inImageCode()
+        ? nativeHostIndexedGetter(hosts, host, method, index)
+        : hosts.invokeMember(host, method, index);
+  }
+
+  // Native Image's reflective host stub cannot enter the guest JIT. Keep that exact host call
+  // explicit and measured; the shared guest read nodes and result conversion still compile.
+  @TruffleBoundary
+  private static Object nativeHostGetter(InteropLibrary hosts, Object host, String method)
+      throws InteropException {
+    return hosts.invokeMember(host, method);
+  }
+
+  @TruffleBoundary
+  private static Object nativeHostIndexedGetter(
+      InteropLibrary hosts, Object host, String method, int index) throws InteropException {
+    return hosts.invokeMember(host, method, index);
   }
 
   @TruffleBoundary
@@ -197,7 +226,7 @@ final class StockInteropRow extends AbstractRow {
       if (!array.isArrayElementReadable(index)) throw InvalidArrayIndexException.create(index);
       try {
         return array.child == null
-            ? values.asString(lists.invokeMember(array.host, "getOneofs", (int) index))
+            ? values.asString(invokeIndexed(lists, array.host, "getOneofs", (int) index))
             : array.child((int) index);
       } catch (InteropException failure) {
         throw failed(failure);

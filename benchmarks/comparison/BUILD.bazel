@@ -1178,3 +1178,22 @@ sh_test(
         "@platforms//cpu:x86_64",
     ],
 )
+
+
+# E1 ratios span sparse/full holdout groups, so each runtime keeps all cells on one worker.
+[
+    sh_test(
+        name = name,
+        size = "enormous",
+        srcs = ["consumer_measure.sh"],
+        args = [runtime, "$(rootpath %s)" % binary, "$(rootpath %s)" % binary, "projection"],
+        data = [binary, "//tools/bench:consumer.py"],
+        exec_properties = {"EstimatedCPU": "4", "EstimatedMemory": "16GB"},
+        tags = ["benchmark", "manual"],
+        target_compatible_with = ["@platforms//os:linux", "@platforms//cpu:x86_64"],
+    )
+    for name, runtime, binary in [
+        ("consumer_projection_measure", "svm", ":consumer_svm"),
+        ("consumer_projection_measure_jvm", "jvm", ":consumer_jvm"),
+    ]
+]

@@ -1089,3 +1089,17 @@ The historical generated-getter harness (`measure`, and `measure_views` for opt-
 rerun unpaired. In it, views are at 1.09× projected, 1.92× full, 3.33× interpreter and 1.87× peak.
 See the [cycle README](../benchmarks/results/protobuf-f26678a/README.md) for every cell, Java
 and native bytes, JVM tables and caveats.
+
+## Protobuf slab consumer qualification (2026-11-07)
+
+The current shared consumer replaces the retired native view/eager candidates with owning
+slabs, selected/lazy projections and explicit reusable sessions. A stock host-interop cell
+executes actual protobuf getters through the same guest read nodes, while retaining the
+independent stock-boundary control. Historical baseline engines remain available only in
+preserved executables. The [consumer method](../benchmarks/comparison/CONSUMER.md) documents
+all 111 cells, retained-input/capacity accounting and the three-fork same-worker E1 ratios.
+
+Local Java fallback/FFM acceptance and new compiled consumer cells pass with the existing graph
+budget; [qualification logs](../benchmarks/results/protobuf-java-retirement-local/README.md)
+retain the evidence. These short runs establish behavior and tiers, not speed targets. Final
+Linux JVM/SVM qualification, paired historical results and E1 performance verdicts are pending.

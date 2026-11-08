@@ -2,7 +2,7 @@ import copy
 import os
 import unittest
 from unittest import mock
-from consumer import CELLS, ENGINES, GROUPS, command, markdown, select_engines, select_modes, select_groups, supported, shard, throughput, validate
+from consumer import CELLS, ENGINES, GROUPS, command, markdown, select_engines, select_modes, select_groups, supported, projection_gates, shard, throughput, validate
 
 
 class ConsumerValidationTest(unittest.TestCase):
@@ -102,10 +102,23 @@ class ConsumerValidationTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             validate(dict(record, retained_input_bytes_per_row=-1),
                      ('slab-lazy', 'full', 'peak'), 'time', {})
-        record.update(engine='stock-interop', host_interop=True)
+        record.update(engine='stock-interop', host_interop=True, host_interop_boundary=True)
         validate(record, ('stock-interop', 'full', 'peak'), 'time', {})
         with self.assertRaises(ValueError):
             validate(dict(record, host_interop=False), ('stock-interop', 'full', 'peak'), 'time', {})
+
+    def test_projection_gate_requires_complete_pairs_and_keeps_misses(self):
+        rows = [dict(binary='candidate', engine=engine, mode=mode, stage='resident', ns_per_row=ns)
+                for engine, mode, ns in (
+                    ('slab', 'sparse', 100), ('slab-projected', 'sparse', 80),
+                    ('slab', 'holdout', 200), ('slab-projected', 'holdout-sparse', 90),
+                    ('slab-lazy', 'holdout-sparse', 110), ('slab-session', 'holdout', 200),
+                    ('slab-session-projected', 'holdout-sparse', 100))]
+        gates = projection_gates(rows)
+        self.assertEqual([g['passed'] for g in gates], [True, True, False, True])
+        self.assertEqual(gates[2]['ceiling'], 0.5)
+        with self.assertRaises(ValueError):
+            projection_gates(rows[:-1])
 
     def test_commands_and_throughput(self):
         self.assertEqual(command('/b', 'svm', ('stock', 'full', 'peak'), 'time'),

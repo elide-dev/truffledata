@@ -187,7 +187,7 @@ public final class ConsumerComparison {
         }
         System.out.printf(
             Locale.ROOT,
-            "{\"engine\":\"%s\",\"mode\":\"%s\",\"stage\":\"%s\",\"runtime\":\"%s\",\"rows\":%d,\"checksum\":%d,\"guest_compiled\":%s,\"shared_access\":%s,\"stock_boundary\":%s,\"native_index_retained\":%s,\"input_bytes_per_row\":%.3f,\"copied_input_bytes_per_row\":%.3f,\"decoded_native_index_capacity_bytes_per_row\":%.3f,\"decoded_native_result_header_bytes_per_row\":%d,\"slab_bytes_per_row\":%.3f,\"retained_slab_capacity_bytes_per_row\":%.3f,\"session_arena_capacity_bytes_per_row\":%.3f,\"retained_input_bytes_per_row\":%.3f,\"host_interop\":%s,\"native_transient_peak_bytes\":null,\"native_allocation_count\":null,\"%s\":%s}%n",
+            "{\"engine\":\"%s\",\"mode\":\"%s\",\"stage\":\"%s\",\"runtime\":\"%s\",\"rows\":%d,\"checksum\":%d,\"guest_compiled\":%s,\"shared_access\":%s,\"stock_boundary\":%s,\"native_index_retained\":%s,\"input_bytes_per_row\":%.3f,\"copied_input_bytes_per_row\":%.3f,\"decoded_native_index_capacity_bytes_per_row\":%.3f,\"decoded_native_result_header_bytes_per_row\":%d,\"slab_bytes_per_row\":%.3f,\"retained_slab_capacity_bytes_per_row\":%.3f,\"session_arena_capacity_bytes_per_row\":%.3f,\"retained_input_bytes_per_row\":%.3f,\"host_interop\":%s,\"host_interop_boundary\":%s,\"native_transient_peak_bytes\":null,\"native_allocation_count\":null,\"%s\":%s}%n",
             engine,
             mode,
             stage,
@@ -207,6 +207,7 @@ public final class ConsumerComparison {
             fixture.sessionArenaBytes / (double) ROWS,
             fixture.retainedInputBytes / (double) ROWS,
             engine.equals("stock-interop"),
+            engine.equals("stock-interop") && ImageInfo.inImageCode(),
             metric.equals("memory") ? "java_bytes_per_row" : "ns_per_row",
             Arrays.toString(samples));
       } finally {
