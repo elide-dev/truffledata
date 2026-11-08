@@ -68,7 +68,6 @@ java_test(
     runtime_deps = [":comparison"],
 )
 
-
 native_image(
     name = "svm",
     testonly = True,
@@ -999,13 +998,13 @@ sh_test(
     args = [
         "$(rootpath :yaml_svm)",
         "$(rootpath :yaml_jvm)",
-        "$(rootpath //yaml/native:shared)",
+        "$(rootpath //yaml/native:yaml_shared.so)",
     ],
     data = [
         "yaml_measure.py",
         ":yaml_jvm",
         ":yaml_svm",
-        "//yaml/native:shared",
+        "//yaml/native:yaml_shared.so",
     ],
     exec_properties = {
         "EstimatedCPU": "4",
@@ -1179,18 +1178,34 @@ sh_test(
     ],
 )
 
-
 # E1 ratios span sparse/full holdout groups, so each runtime keeps all cells on one worker.
 [
     sh_test(
         name = name,
         size = "enormous",
         srcs = ["consumer_measure.sh"],
-        args = [runtime, "$(rootpath %s)" % binary, "$(rootpath %s)" % binary, "projection"],
-        data = [binary, "//tools/bench:consumer.py"],
-        exec_properties = {"EstimatedCPU": "4", "EstimatedMemory": "16GB"},
-        tags = ["benchmark", "manual"],
-        target_compatible_with = ["@platforms//os:linux", "@platforms//cpu:x86_64"],
+        args = [
+            runtime,
+            "$(rootpath %s)" % binary,
+            "$(rootpath %s)" % binary,
+            "projection",
+        ],
+        data = [
+            binary,
+            "//tools/bench:consumer.py",
+        ],
+        exec_properties = {
+            "EstimatedCPU": "4",
+            "EstimatedMemory": "16GB",
+        },
+        tags = [
+            "benchmark",
+            "manual",
+        ],
+        target_compatible_with = [
+            "@platforms//os:linux",
+            "@platforms//cpu:x86_64",
+        ],
     )
     for name, runtime, binary in [
         ("consumer_projection_measure", "svm", ":consumer_svm"),

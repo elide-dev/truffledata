@@ -7,36 +7,110 @@ load("//bazel:jit.bzl", "TRUFFLE_JIT_CHECKS")
 data_java_library(
     name = "acceptance",
     testonly = True,
-    srcs = ["CompiledArrayReads.java", "CompiledReads.java", "SvmAcceptance.java", "TypedAcceptance.java", "TestLanguage.java", "package-info.java"],
-    deps = ["//yaml", "//tape", "//core", "@maven//:org_graalvm_polyglot_polyglot", "@maven//:org_graalvm_truffle_truffle_api"],
+    srcs = [
+        "CompiledArrayReads.java",
+        "CompiledReads.java",
+        "SvmAcceptance.java",
+        "TestLanguage.java",
+        "TypedAcceptance.java",
+        "package-info.java",
+    ],
+    deps = [
+        "//core",
+        "//tape",
+        "//yaml",
+        "@maven//:org_graalvm_polyglot_polyglot",
+        "@maven//:org_graalvm_truffle_truffle_api",
+    ],
 )
 
 java_test(
     name = "jvm",
-    srcs = ["YamlContractTest.java", "YamlIntegrationTest.java", "YamlPlanTest.java", "YamlFuzz.java", "SnakeYamlDifferentialTest.java", "JsonSubsetDifferentialTest.java"],
-    args = ["--class", "dev.elide.truffledata.yaml.tests.YamlIntegrationTest", "--class", "dev.elide.truffledata.yaml.YamlContractTest", "--class", "dev.elide.truffledata.yaml.tests.YamlPlanTest", "--class", "dev.elide.truffledata.yaml.tests.SnakeYamlDifferentialTest", "--class", "dev.elide.truffledata.yaml.tests.JsonSubsetDifferentialTest"],
-    data = ["//yaml/native:yaml_shared.so", "//json/native:json_shared.so", "//yaml/native:testdata", "@yaml_test_suite//:cases", "snakeyaml_engine_excluded.txt"],
-    jvm_flags = ["--enable-native-access=ALL-UNNAMED", "-Dpolyglot.engine.WarnInterpreterOnly=false", "-ea"],
+    srcs = [
+        "JsonSubsetDifferentialTest.java",
+        "SnakeYamlDifferentialTest.java",
+        "YamlContractTest.java",
+        "YamlFuzz.java",
+        "YamlIntegrationTest.java",
+        "YamlPlanTest.java",
+    ],
+    args = [
+        "--class",
+        "dev.elide.truffledata.yaml.tests.YamlIntegrationTest",
+        "--class",
+        "dev.elide.truffledata.yaml.YamlContractTest",
+        "--class",
+        "dev.elide.truffledata.yaml.tests.YamlPlanTest",
+        "--class",
+        "dev.elide.truffledata.yaml.tests.SnakeYamlDifferentialTest",
+        "--class",
+        "dev.elide.truffledata.yaml.tests.JsonSubsetDifferentialTest",
+    ],
+    data = [
+        "snakeyaml_engine_excluded.txt",
+        "//json/native:json_shared.so",
+        "//yaml/native:testdata",
+        "//yaml/native:yaml_shared.so",
+        "@yaml_test_suite//:cases",
+    ],
+    jvm_flags = [
+        "--enable-native-access=ALL-UNNAMED",
+        "-Dpolyglot.engine.WarnInterpreterOnly=false",
+        "-ea",
+    ],
     main_class = "dev.elide.bazel.junit.BazelJUnitRunner",
     use_testrunner = False,
-    runtime_deps = ["//bazel/junit:runner", "@maven//:org_graalvm_truffle_truffle_runtime"],
-    deps = [":acceptance", "//benchmarks/comparison:json_fixture", "//json", "//json:jvm", "//yaml", "//yaml:jvm", "//tape", "//core", "@maven//:org_graalvm_truffle_truffle_api", "@maven//:org_junit_jupiter_junit_jupiter_api", "@maven//:org_snakeyaml_snakeyaml_engine"],
+    runtime_deps = [
+        "//bazel/junit:runner",
+        "@maven//:org_graalvm_truffle_truffle_runtime",
+    ],
+    deps = [
+        ":acceptance",
+        "//benchmarks/comparison:json_fixture",
+        "//core",
+        "//json",
+        "//json:jvm",
+        "//tape",
+        "//yaml",
+        "//yaml:jvm",
+        "@maven//:org_graalvm_truffle_truffle_api",
+        "@maven//:org_junit_jupiter_junit_jupiter_api",
+        "@maven//:org_snakeyaml_snakeyaml_engine",
+        "@myna//:values",
+    ],
 )
 
 native_image(
     name = "native",
     testonly = True,
     cc_deps = ["//yaml/native:svm"],
-    exec_properties = {"EstimatedCPU": "8", "EstimatedMemory": "24GB"},
+    exec_properties = {
+        "EstimatedCPU": "8",
+        "EstimatedMemory": "24GB",
+    },
     executable_name = "yaml_acceptance",
-    extra_args = ["--gc=serial", "--initialize-at-build-time=dev.elide.truffledata", "-ea", "--parallelism=8", "-march=compatibility", "-H:+UnlockExperimentalVMOptions"] + TRUFFLE_JIT_CHECKS + ["-H:-UnlockExperimentalVMOptions"],
+    extra_args = [
+        "--gc=serial",
+        "--initialize-at-build-time=dev.elide.truffledata",
+        "-ea",
+        "--parallelism=8",
+        "-march=compatibility",
+        "-H:+UnlockExperimentalVMOptions",
+    ] + TRUFFLE_JIT_CHECKS + ["-H:-UnlockExperimentalVMOptions"],
     graalvm_sdk = "@graalvm_linux_amd64//:gvm",
     main_class = "dev.elide.truffledata.yaml.tests.SvmAcceptance",
     optimization_mode = "2",
     tags = ["manual"],
-    target_compatible_with = ["@platforms//os:linux", "@platforms//cpu:x86_64"],
-    deps = [":acceptance", "@maven//:org_graalvm_truffle_truffle_runtime"],
+    target_compatible_with = [
+        "@platforms//os:linux",
+        "@platforms//cpu:x86_64",
+    ],
+    deps = [
+        ":acceptance",
+        "@maven//:org_graalvm_truffle_truffle_runtime",
+    ],
 )
+
 sh_test(
     name = "native_test",
     size = "large",
@@ -44,5 +118,8 @@ sh_test(
     args = ["$(rootpath :native)"],
     data = [":native"],
     tags = ["manual"],
-    target_compatible_with = ["@platforms//os:linux", "@platforms//cpu:x86_64"],
+    target_compatible_with = [
+        "@platforms//os:linux",
+        "@platforms//cpu:x86_64",
+    ],
 )
