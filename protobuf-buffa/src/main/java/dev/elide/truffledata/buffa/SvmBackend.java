@@ -272,7 +272,12 @@ final class SvmBackend implements BuffaWire.Backend {
         BuffaWire.status(status);
         if (bytes < 0 || bytes > capacity)
           throw new IllegalStateException("Invalid native slab extent");
-        return SlabMessage.takeOwnership(plan, output, Math.toIntExact(bytes), limits);
+        int extent = Math.toIntExact(bytes);
+        // The plan-wide learned capacity must not amplify small messages decoded after a large
+        // one: spare room beyond the slab's own size (plus a small slack) is trimmed away.
+        if (output.length - extent > Math.max(256, extent))
+          output = java.util.Arrays.copyOf(output, extent);
+        return SlabMessage.takeOwnership(plan, output, extent, limits);
       }
     } finally {
       busy = false;
@@ -317,7 +322,12 @@ final class SvmBackend implements BuffaWire.Backend {
         BuffaWire.status(status);
         if (bytes < 0 || bytes > capacity)
           throw new IllegalStateException("Invalid native slab extent");
-        return SlabMessage.takeOwnership(plan, output, Math.toIntExact(bytes), limits);
+        int extent = Math.toIntExact(bytes);
+        // The plan-wide learned capacity must not amplify small messages decoded after a large
+        // one: spare room beyond the slab's own size (plus a small slack) is trimmed away.
+        if (output.length - extent > Math.max(256, extent))
+          output = java.util.Arrays.copyOf(output, extent);
+        return SlabMessage.takeOwnership(plan, output, extent, limits);
       }
       throw new IllegalStateException("Native slab capacity retry failed");
     } finally {
