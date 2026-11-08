@@ -290,34 +290,34 @@ final class SvmBackend implements BuffaWire.Backend {
     try {
       VoidPointer result = WordFactory.pointer(resultAddress + SLAB);
       for (int attempt = 0; attempt < 2; attempt++) {
-        CCharPointer output = UnmanagedMemory.malloc(Math.max(1, capacity));
-        if (output.isNull()) throw new OutOfMemoryError("Native slab allocation");
-        try {
-          int status =
+        // The native producer writes straight into the heap array the durable message will own:
+        // no unmanaged scratch, no direct-buffer wrapper and no second copy per message.
+        byte[] output = new byte[Math.max(1, capacity)];
+        int status;
+        long bytes;
+        try (PinnedObject pinned = PinnedObject.create(output)) {
+          status =
               Buffa.decodeSlab(
                   WordFactory.pointer(compiled),
                   WordFactory.pointer(address.value()),
                   input.size(),
                   1,
                   WordFactory.nullPointer(),
-                  output,
+                  (CCharPointer) pinned.addressOfArrayElement(0),
                   capacity,
                   limits.maxDepth(),
                   limits.maxSlabBytes(),
                   result);
-          long bytes = Buffa.SlabResult.bytes(result);
-          if (status == 6 && attempt == 0 && bytes > capacity && bytes <= limits.maxSlabBytes()) {
-            capacity = Math.toIntExact(bytes);
-            continue;
-          }
-          BuffaWire.status(status);
-          if (bytes < 0 || bytes > capacity)
-            throw new IllegalStateException("Invalid native slab extent");
-          return SlabMessage.copyOf(
-              plan, CTypeConversion.asByteBuffer(output, Math.toIntExact(bytes)), limits);
-        } finally {
-          UnmanagedMemory.free(output);
+          bytes = Buffa.SlabResult.bytes(result);
         }
+        if (status == 6 && attempt == 0 && bytes > capacity && bytes <= limits.maxSlabBytes()) {
+          capacity = Math.toIntExact(bytes);
+          continue;
+        }
+        BuffaWire.status(status);
+        if (bytes < 0 || bytes > capacity)
+          throw new IllegalStateException("Invalid native slab extent");
+        return SlabMessage.takeOwnership(plan, output, Math.toIntExact(bytes), limits);
       }
       throw new IllegalStateException("Native slab capacity retry failed");
     } finally {

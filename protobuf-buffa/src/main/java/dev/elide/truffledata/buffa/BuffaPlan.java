@@ -63,6 +63,16 @@ public final class BuffaPlan implements AutoCloseable {
     if (!open) throw new IllegalStateException("Native plan closed");
   }
 
+  /**
+   * First-attempt slab capacity. The retained heap array is the message's own storage, so once
+   * a message of this plan has been decoded the learned extent is reused exactly; a larger message
+   * retries once with the extent the producer reports. The first decode sizes from the input.
+   */
+  private int firstCapacity(int maxSlabBytes, int inputBytes) {
+    long guess = slabCapacity > 0 ? slabCapacity : 4L * inputBytes + 256;
+    return (int) Math.min(maxSlabBytes, guess);
+  }
+
   @TruffleBoundary
   public SlabMessage decode(WireInput input, int maxSlabBytes) {
     return decodeSlab(input, maxSlabBytes);
@@ -107,7 +117,7 @@ public final class BuffaPlan implements AutoCloseable {
       var backend = decoder.backend;
       if (backend == null) return javaSlab(source.bytes, limits);
       long compiled = slabLayout();
-      int capacity = (int) Math.min(maxSlabBytes, Math.max(slabCapacity, 4L * input.size() + 256));
+      int capacity = firstCapacity(maxSlabBytes, input.size());
       SlabMessage result = backend.slab(compiled, input, plan, limits, capacity);
       slabCapacity = Math.max(slabCapacity, result.slabBytes());
       return result;
@@ -138,7 +148,7 @@ public final class BuffaPlan implements AutoCloseable {
       }
     }
     if (decoder.backend == null) return SlabMessage.decode(plan, input, 0, input.length, limits);
-    int capacity = (int) Math.min(maxSlabBytes, Math.max(slabCapacity, 4L * input.length + 256));
+    int capacity = firstCapacity(maxSlabBytes, input.length);
     SlabMessage result = decoder.backend.slab(slabLayout(), input, plan, limits, capacity);
     slabCapacity = Math.max(slabCapacity, result.slabBytes());
     return result;
