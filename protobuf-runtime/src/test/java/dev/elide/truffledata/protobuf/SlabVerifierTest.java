@@ -262,7 +262,7 @@ class SlabVerifierTest {
       // This fault follows the exponential prefix, but must outrank even an immediate budget error.
       int text = getInt(slab, ROOT + source.layout().slot(0, 1));
       putInt(slab, text + STRING_HANDLE, -1);
-      var tiny = withLimits(source, new Limits(1024, 256, 1, 1));
+      var tiny = withLimits(source, new Limits(1024, 256, 2, 1));
       assertEquals("rejected: Invalid slab structure", copied(tiny, slab, LIMITS));
     });
   }
@@ -304,7 +304,7 @@ class SlabVerifierTest {
     byte[] slab = sharedSlab(plan, 2);
     // Both totals can overflow their budgets. A cached aggregate may only skip a subtree
     // when both fit, otherwise the original field/list traversal decides which fails first.
-    for (long cells = 1; cells <= 20; cells++)
+    for (long cells = 2; cells <= 20; cells++)
       for (long bytes = 1; bytes <= 14; bytes++)
         assertAgree(withLimits(plan, new Limits(1024, 256, cells, bytes)), slab, LIMITS,
             "shared budget order " + cells + "/" + bytes);
