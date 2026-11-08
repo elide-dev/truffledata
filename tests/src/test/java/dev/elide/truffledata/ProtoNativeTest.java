@@ -54,11 +54,24 @@ class ProtoNativeTest {
       byte[] wire = {(byte) 0xa0, 6, (byte) 0x81, 0, 10, 1, 42};
       var row = plan.decode(wire);
       assertArrayEquals(wire, row.unknownFieldBytes());
+      assertTrue(row.hasUnknownFields());
+      assertEquals(wire.length, row.unknownFieldByteCount());
       byte[] exposed = row.unknownFieldBytes();
       exposed[0] = 0;
       wire[0] = 0;
       assertEquals((byte) 0xa0, row.unknownFieldBytes()[0]);
       assertArrayEquals(new byte[0], plan.newBuilder().build().unknownFieldBytes());
+      assertEquals(7, row.unknownFieldByteCount());
+      for (var known : List.of(plan.newBuilder().build(), plan.decode(new byte[] {8, 42}))) {
+        assertFalse(known.hasUnknownFields());
+        assertEquals(0, known.unknownFieldByteCount());
+      }
+      // Raw presence includes an empty unknown group even when semantic policies normalize it.
+      byte[] emptyGroup = {(byte) 0xa3, 6, (byte) 0xa4, 6};
+      var grouped = plan.decode(emptyGroup);
+      assertTrue(grouped.hasUnknownFields());
+      assertEquals(emptyGroup.length, grouped.unknownFieldByteCount());
+      assertArrayEquals(emptyGroup, grouped.unknownFieldBytes());
     }
   }
 
@@ -1075,6 +1088,8 @@ class ProtoNativeTest {
     assertEquals(42L, get(source.snapshot(DynamicMessage.newBuilder(d)), "count"));
     byte[] unknownEnum = new byte[] {24, 99, 34, 3, 1, 99, 2, (byte) 0xa0, 6, 7};
     var unknown = plan.decode(unknownEnum);
+    assertTrue(unknown.hasUnknownFields());
+    assertEquals(7, unknown.unknownFieldByteCount()); // Two rejected enum values and field100.
     assertFalse(has(unknown, "status"));
     assertEquals(2, ((DataArray) get(unknown, "statuses")).size());
     assertEquals(
@@ -1511,6 +1526,9 @@ class ProtoNativeTest {
     byte[] closedMap = {74, 5, 10, 1, 120, 16, 99};
     var reference = DynamicMessage.parseFrom(d, closedMap);
     var row = legacy.decode(closedMap);
+    assertTrue(row.hasUnknownFields());
+    assertEquals(closedMap.length, row.unknownFieldByteCount());
+    assertArrayEquals(closedMap, row.unknownFieldBytes());
     // The wire contract preserves the whole entry as unknown. DynamicMessage instead retains
     // a default-valued entry, so Source deliberately normalizes this case through the wire codec.
     assertEquals(0, ((DataArray) get(row, "states")).size());

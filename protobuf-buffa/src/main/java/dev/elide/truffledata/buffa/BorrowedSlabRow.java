@@ -150,6 +150,22 @@ public class BorrowedSlabRow extends AbstractRow implements ProtoAccess {
     return span == 0 ? new byte[0] : owner.copy(span + UNKNOWN_BYTES, owner.word(span));
   }
 
+  /** Whether this live record retains raw unknown wire bytes, without copying or allocating. */
+  public final boolean hasUnknownFields() {
+    return unknownFieldByteCount() != 0;
+  }
+
+  /**
+   * Number of raw unknown wire bytes retained by this live record, without copying or allocating.
+   * Includes empty unknown groups; excludes declared child records' unknown fields. This is a
+   * storage query, not a semantic equality or canonicalization operation.
+   */
+  public final int unknownFieldByteCount() {
+    owner.check(epoch);
+    int span = owner.unknown(record);
+    return span == 0 ? 0 : owner.word(span);
+  }
+
   @Override
   public final Accessor accessor(int ordinal) {
     return descriptor.accessor(BorrowedSlabRow.class, ordinal, i -> new Slot(layout, type, i));

@@ -164,6 +164,9 @@ class SlabCodecTest {
       assertArrayEquals(plan.encode(expected), message.encode(), golden.name());
       compareRows(expected, message);
       assertArrayEquals(expected.unknownFieldBytes(), message.unknownFieldBytes());
+      assertEquals(expected.unknownFieldByteCount(), message.unknownFieldByteCount());
+      assertEquals(expected.hasUnknownFields(), message.hasUnknownFields());
+      assertEquals(message.unknownFieldByteCount(), imported.unknownFieldByteCount());
     }
     assertThrows(
         ContractViolation.class, () -> SlabMessage.decode(LayoutTest.legacy(), new byte[0]));

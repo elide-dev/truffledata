@@ -62,6 +62,20 @@ public abstract class GeneratedMessage extends AbstractRow implements ProtoAcces
     return plan.size() <= 32 ? (int) ((presence >>> 32) - 1) : -1;
   }
 
+  /** Whether this record retains raw unknown wire bytes, without copying or allocating. */
+  public final boolean hasUnknownFields() {
+    return unknownFieldByteCount() != 0;
+  }
+
+  /**
+   * Number of raw unknown wire bytes retained by this record, without copying or allocating.
+   * Includes empty unknown groups; excludes declared child records' unknown fields. This is a
+   * storage query, not a semantic equality or canonicalization operation.
+   */
+  public final int unknownFieldByteCount() {
+    return unknown.length;
+  }
+
   protected final int unknownSize() {
     return unknown.length;
   }

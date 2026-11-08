@@ -222,6 +222,14 @@ byte[] wire = plan.encode(constructed);
 
 For runtime schemas, the `ProtoCompiler.compile` overload accepts a `FileDescriptorSet` and fully qualified message name, with the same language owner and budgets. `ProtoCompiler.bind` verifies the entire reachable graph once and enforces descriptor identity on subsequent snapshots. `ProtoCompiler.snapshot` is a convenient one-shot form; reuse a bound source for repeated ingestion. Schemas containing proto2 maps with closed-enum values use a preflighted serialization/decode compatibility path for source objects: protobuf-java `DynamicMessage` otherwise gives those unknown entries different semantics from wire parsing. This uncommon case incurs a temporary wire copy. Host construction accepts normalized TruffleData values. `uint64` and `fixed64` use `ExactNumber`, including small values; `Values.normalize(BigInteger)` constructs one. Builders are mutable host objects and must not be shared concurrently. Built rows are immutable snapshots, including binary payloads.
 
+`ProtoRow`, `GeneratedMessage`, `SlabRow` and `BorrowedSlabRow` expose
+`hasUnknownFields()` and `unknownFieldByteCount()` without copying, allocating or
+serializing. They query only the record's retained raw unknown bytes, including empty
+unknown groups, mismatched wire types, rejected closed-enum values and rejected map
+entries. Declared child records have their own counts. These storage queries do not
+implement semantic unknown-field equality or canonicalization. Borrowed rows enforce
+the same session lifetime checks as their other readers.
+
 `ProtoRow.unknownFieldBytes()` returns a defensive copy of that record's preserved unknown
 wire fields, including mismatched wire types, rejected closed-enum values and map entries,
 and unknown groups. Child records expose their own unknown fields. These bytes retain wire

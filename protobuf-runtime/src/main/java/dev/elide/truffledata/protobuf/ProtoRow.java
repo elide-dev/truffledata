@@ -113,6 +113,20 @@ public final class ProtoRow extends AbstractRow implements ProtoAccess {
     return unknown().clone();
   }
 
+  /** Whether this record retains raw unknown wire bytes, without copying or allocating. */
+  public final boolean hasUnknownFields() {
+    return unknownFieldByteCount() != 0;
+  }
+
+  /**
+   * Number of raw unknown wire bytes retained by this record, without copying or allocating.
+   * Includes empty unknown groups; excludes declared child records' unknown fields. This is a
+   * storage query, not a semantic equality or canonicalization operation.
+   */
+  public final int unknownFieldByteCount() {
+    return unknown().length;
+  }
+
   byte[] unknown() {
     return wireState instanceof WidePresence wide ? wide.unknown : (byte[]) wireState;
   }
@@ -455,7 +469,7 @@ public final class ProtoRow extends AbstractRow implements ProtoAccess {
       } else if (value instanceof SlabRow row) {
         if (depth >= maxDepth) throw new ContractViolation("Protobuf nesting budget exceeded");
         cells(row.plan().size());
-        bytes(row.unknownFieldBytes().length);
+        bytes(row.unknownFieldByteCount());
         for (int i = 0; i < row.plan().size(); i++) value(row.get(i), depth + 1, maxDepth);
       } else if (value instanceof ProtoRow row) {
         if (depth >= maxDepth) throw new ContractViolation("Protobuf nesting budget exceeded");
