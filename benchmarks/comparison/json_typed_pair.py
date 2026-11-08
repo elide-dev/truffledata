@@ -22,9 +22,9 @@ if os.environ.get('TEST_SHARD_STATUS_FILE'):
 # therefore shares its host and CPU; different shards are intentionally separate experiments.
 affinity = sorted(os.sched_getaffinity(0))
 os.sched_setaffinity(0, {affinity[shard % len(affinity)]})
-engines = ['simdjson-typed-' + kind for kind in ('nested', 'repeated', 'mixed', 'churn')]
+structural = ['simdjson-typed-' + kind for kind in ('nested', 'repeated', 'mixed', 'churn')]
 checksums = {}
-for mode, engine in enumerate(engines):
+for mode, engine in enumerate(structural):
     total = 0
     for i in range(32):
         count = 0 if mode == 0 else 16 if mode == 1 else 4 if mode == 2 else i % 9
@@ -32,21 +32,34 @@ for mode, engine in enumerate(engines):
         total += i + point(100 + i)
         total += sum(point(1000 + i * 17 + j) + j - i for j in range(count))
     checksums[engine] = total
-jobs = [(engine, stage, metric, fork)
-        for at, engine in enumerate(engines) if at % shards == shard
-        for stage, metric, fork in itertools.product(
-            ('ingest', 'read-aot', 'interpret', 'peak'), ('time', 'memory'), range(3))]
+workloads = {engine: 'json-' + engine.removeprefix('simdjson-') for engine in structural}
+flat = ('simdjson-typed', 'simdjson-specialized', 'gson-stream')
+generic = ('simdjson-generic-interop', 'gson-tree', 'jackson-tree', 'fastjson2-tree',
+           'dsljson-map', 'jsoniter-any')
+for names, workload, checksum in ((flat, 'json-scalar', 35984), (generic, 'json-generic', 38219)):
+    for engine in names:
+        workloads[engine] = workload
+        checksums[engine] = checksum
+groups = [(engine,) for engine in structural] + [flat, generic]
+if shards != len(groups) or not 0 <= shard < len(groups):
+    raise ValueError('expected six complete paired workload groups')
+engines = groups[shard]
+stages = ('ingest', 'read-aot', 'interpret', 'peak') if shard < 4 else ('ingest', 'peak')
+jobs = list(itertools.product(engines, stages, ('time', 'memory'), range(3)))
 rng = random.Random(2026110801 + shard)
 rng.shuffle(jobs)
 records = []
 report = {
     'schema': 1, 'complete': False, 'source': os.environ.get('TRUFFLEDATA_BENCH_REVISION', 'unrecorded'),
-    'platform': platform.platform(), 'cpu': Path('/proc/cpuinfo').read_text(),
+    'baseline_source': os.environ.get('TRUFFLEDATA_BENCH_BASELINE_REVISION', 'unrecorded'),
+    'platform': platform.platform(), 'hostname': platform.node(), 'cpu': Path('/proc/cpuinfo').read_text(),
     'affinity': sorted(os.sched_getaffinity(0)), 'shard': shard, 'shards': shards,
     'binary_sha256': {name: hashlib.sha256(path.read_bytes()).hexdigest() for name, path in binary.items()},
     # Both images must be built from the identical fixture commit, with only production differing.
     # The checksums below independently derive from this fixture's exact 32-document formulas.
     'fixture_source_sha256': hashlib.sha256(Path('benchmarks/comparison/JsonComparison.java').read_bytes()).hexdigest(),
+    'generic_fixture_source_sha256': hashlib.sha256(Path('benchmarks/comparison/JsonFixture.java').read_bytes()).hexdigest(),
+    'group': list(engines), 'stages': list(stages),
     'expected_checksums': checksums, 'measurements': records,
 }
 def save():
@@ -77,7 +90,7 @@ for engine, stage, mode, fork in jobs:
             raise AssertionError('Expected one measurement record')
         row = json.loads(lines[0])
         if (row['workload'], row['engine'], row['stage'], row['runtime'], row['checksum'], row['rows']) != (
-                'json-' + engine.removeprefix('simdjson-'), engine, stage, 'svm', checksums[engine], 32):
+                workloads[engine], engine, stage, 'svm', checksums[engine], 32):
             raise AssertionError('Fixture mismatch: ' + repr(row))
         if row['guest_compiled'] != (stage == 'peak'):
             raise AssertionError('Execution tier mismatch')
@@ -92,7 +105,7 @@ for engine, stage, mode, fork in jobs:
 report['complete'] = True
 summary = []
 for engine in engines:
-    for stage in ('ingest', 'read-aot', 'interpret', 'peak'):
+    for stage in stages:
         for metric in ('ns_per_row', 'allocated_bytes_per_row'):
             cells = {}
             for role in binary:
@@ -105,7 +118,7 @@ for engine in engines:
             if cells:
                 if len(cells) != 2:
                     raise AssertionError('Missing paired image')
-                summary.append({'engine': engine, 'stage': stage, 'metric': metric, **cells,
+                summary.append({'workload': workloads[engine], 'engine': engine, 'stage': stage, 'metric': metric, **cells,
                     'baseline_over_candidate': cells['baseline']['median'] / cells['candidate']['median'] if cells['candidate']['median'] else None})
 report['summary'] = summary
 save()
