@@ -1,0 +1,34 @@
+{
+  "status": "admitted",
+  "scope": "incremental x86 SVM warm-read cache improvement",
+  "baseline": "9a1dcec",
+  "initial_candidate": "f045f5c",
+  "refined_candidate": "e4cec9f",
+  "performance_invocation": "1159ca42-a11f-41d3-8f5f-4ef20be794c2",
+  "correctness_invocation": "4902bb19-0778-4e32-96cc-4a4fee73f708",
+  "integrated_production_and_test_commits": [
+    "de2e498",
+    "598ce6f",
+    "4fd49c2",
+    "7fca64b"
+  ],
+  "b4_status": "open",
+  "full_interpreter_over_stock": {
+    "slab": 5.651579748086321,
+    "generated": 3.470624549645843
+  },
+  "allocation_and_retention_pairs_unchanged": 132,
+  "owner_bytes": 48,
+  "scalar_bytes_per_message": {
+    "generic": 168,
+    "typed_generated": 136
+  },
+  "remaining_disjoint_sparse_first_read_cost_percent": {
+    "slab-native": 4.4887627961397,
+    "slab-lazy": 3.2503511135296037
+  },
+  "thresholds_relaxed": false,
+  "new_public_api": false,
+  "jvm_timing_gating": false,
+  "integration_coverage_and_x86_arm_acceptance": "owned by parent integration lane"
+}

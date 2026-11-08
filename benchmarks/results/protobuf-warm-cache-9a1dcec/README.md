@@ -1,18 +1,24 @@
-# Protobuf slab warm-cache experiment
+# Protobuf slab warm cache — admitted for SVM
 
 Baseline: `9a1dcec`, with B4 Phase 1 restored and the slab allocation work integrated.
 SVM is the performance target; JVM runs validate semantics and coverage. No PGO.
 
+**Refined candidate `e4cec9f` is admitted as an incremental x86 SVM warm-read win.**
+Full slab interpretation improves 16.2% and peak reads 32.1% in the final complete
+pair. All allocation/retention observations and existing correctness/native gates
+hold. B4 remains open: full slab interpretation is still 5.652× stock. The
+initial candidate, its cold-read cost and the refinement are preserved below.
+
 ## Restored baseline profile
 
 The [profile summary](baseline-profile/summary.json) comes from a fresh
-`consumer_interpreter_profile` run (`8bad3434`). The four original JFRs, JSONL
+`consumer_interpreter_profile` run (`8bad3434`). The four original JFRs (gzip), JSONL
 records, binary checksum and compressed symbols are retained alongside it.
 Each engine has 3,000 application execution samples. These samples identify
 where to experiment; they are not elapsed-time speedups.
 
 Generated interpretation no longer attributes a leading leaf cost to
-`Accessor.bound`. Slab still attributes 647/3,000 leaf samples (21.6%) there.
+`Accessor.bound`. The restored baseline slab image attributes 647/3,000 leaf samples (21.6%) there.
 Slab cache paths account for 281 inclusive samples in `row` (9.4%), 102 in
 `text` (3.4%) and 128 in `array` (4.3%). These inclusive counts may overlap.
 
@@ -62,9 +68,9 @@ below 0.05. Parent will run combined nine-target method coverage after admission
 The common preserved-image invocation `950032e5-dc4f-40f9-a67f-0a73f3b5dce3`
 passes all ten consumer shards. Both hashes in every report match the
 [pair manifest](svm/pair-manifest.json). The [complete report](svm/merged/results.md)
-and [raw JSON](svm/merged/results.json) contain **264 summary cells / 1,584 raw
+and [raw JSON](svm/merged/results.json.gz) contain **264 summary cells / 1,584 raw
 records**, all nine engines and five supported modes, three fresh forks per cell.
-[Assessment](assessment.json) preserves every before/after and stock ratio.
+[Assessment](assessment.json.gz) preserves every before/after and stock ratio.
 No Java-allocation or retained-memory metric changes in any of the 132 pairs.
 
 All times below are ns/row, lower is better. Ranges are observed ranges of three
@@ -125,4 +131,92 @@ publication 112 B (64 B array + 48 B owner), compiled reads 0.000044/0.000556 B.
 [Refined source/image provenance](refined-candidate-provenance.json) and
 [validation logs](correctness/4902bb19/) are preserved. Final x86/Arm acceptance
 and combined method coverage remain the integration lane's responsibility.
-The refined image requires its own paired SVM measurements before admission.
+The refined image was independently remeasured in the final pair below.
+
+## Final refined pair and admission
+
+Invocation `1159ca42-a11f-41d3-8f5f-4ef20be794c2` passes all ten consumer shards:
+**264 summary cells / 1,584 raw records**, complete, all nine engines/five modes,
+three fresh forks. Every shard matches the [refined manifest](refined-svm/pair-manifest.json).
+[Final report](refined-svm/merged/results.md), [raw JSON](refined-svm/merged/results.json.gz)
+and [assessment](refined-assessment.json.gz) retain every cell, range, checksum and
+memory observation. No fork is discarded. All 132 allocation/retention pairs are
+exactly unchanged. All four primary slab ranges below are disjoint.
+
+| SVM slab workload (ns/row) | Baseline | Refined | Change | Refined / stock |
+|---|---:|---:|---:|---:|
+| Full interpreter | 418.926 | 351.174 | −16.17% | 5.652× |
+| Full peak | 310.534 | 210.799 | −32.12% | 2.001× |
+| Sparse interpreter | 52.867 | 44.072 | −16.64% | 4.103× |
+| Sparse peak | 30.053 | 21.134 | −29.68% | 1.795× |
+
+Native and lazy counterparts improve too; native large peak improves 42,109.45 →
+23,323.20 ns (−44.61%, disjoint), and native large resident improves 370,253.13 →
+340,526.13 ns (−8.03%, disjoint). Ordinary slab large peak improves 41.0% in the
+median but its ranges overlap; it is not presented as equally conclusive.
+
+Controls (baseline → refined ns/row): full interpreter stock 61.783 → 62.137,
+generated 215.428 → 215.656; full peak stock 106.057 → 105.368, generated 48.605 →
+48.481. Sparse interpreter stock 10.796 → 10.742, generated 32.499 → 31.871;
+sparse peak stock 11.745 → 11.773, generated 10.916 → 10.749. Generated ranges
+all overlap. Sparse stock interpretation has a large outlier (candidate maximum
+451.49 ns), so its ratios should not be read as precise confidence bounds.
+Full generated interpretation remains 3.471× stock. The absolute B4 2.5× goal
+remains open; this is an incremental improvement, not completion of that goal.
+
+The avoidable duplicate handle load is removed. Projected sparse first read now
+measures 54.763 → 56.071 ns (+2.39%, ranges overlap), compared with the initial
++8.68% disjoint observation. Small direct cold-read costs remain: native sparse
+first 47.255 → 49.376 ns (+4.49%, disjoint), lazy sparse first 56.114 → 57.938 ns
+(+3.25%, disjoint). Full native first improves 8.36% with disjoint ranges.
+No final pair has a slowdown above 5% with disjoint ranges; that observation does
+not erase the smaller costs or create a new gate. Full resident ranges overlap
+for all owning variants. The earlier unprojected-session full-resident increase
+does not reproduce (now −1.57%, overlap); that path uses unchanged session caches.
+
+**Decision:** admit the refined warm-cache implementation with these cold-read
+tradeoffs disclosed. No threshold, lifetime/schema/projection validation, graph
+budget, allocation floor, or coverage requirement is relaxed. The list/unsigned
+map stays synchronized. JVM timing is non-gating; no JVM timing cycle was run.
+Parent integrates production/tests as `de2e498`, `598ce6f`, `4fd49c2`, `7fca64b`
+and owns final combined coverage plus x86/Arm native acceptance. These paired
+elapsed timings are x86 measurements, not an Arm performance claim.
+
+For the final preserved-image pair, use the integration harness's optional
+candidate override with `//build/svm-tranche-pair:consumer-refined` and baseline
+`//build/svm-tranche-pair:consumer-baseline`; keep all nine engines and five modes
+from the reproduction command above. The revision label is
+`protobuf-e4cec9f vs production-9a1dcec`. Invocation-only image labels and payloads
+remain ignored. See [decision metadata](decision.json).
+
+## Compact evidence and exact recovery
+
+Raw/merged result JSON, test/invocation logs, XML and JFRs are stored as deterministic
+gzip (`mtime=0`, no stored filename). Readable reports/tables and small provenance
+files remain plain. [Archive manifest](archive-manifest.json) records both compressed
+and original SHA256 hashes and lengths; every artifact was decompressed and checked
+before removing its plain duplicate. Both complete initial and refined experiments
+remain available. To restore exact originals under ignored `build/` for the merge
+or profile-summary tools:
+
+```python
+from pathlib import Path
+import gzip, shutil
+source = Path("benchmarks/results/protobuf-warm-cache-9a1dcec")
+output = Path("build/protobuf-warm-evidence")
+for item in source.rglob("*"):
+    if not item.is_file():
+        continue
+    relative = item.relative_to(source)
+    target = output / (relative.with_suffix("") if item.suffix == ".gz" else relative)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    if item.suffix == ".gz":
+        target.write_bytes(gzip.decompress(item.read_bytes()))
+    else:
+        shutil.copy2(item, target)
+```
+
+Merge the recovered `refined-svm/shards/shard_*/results.json` paths with
+`tools/bench/consumer.py merge`. For profile analysis, use the recovered
+`baseline-profile` directory with `tools/bench/json_profile_summary.py` and the
+consumer main class `dev.elide.truffledata.comparison.ConsumerComparison`.
