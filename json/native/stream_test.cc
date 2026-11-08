@@ -358,6 +358,30 @@ void errors_and_skip() {
   }
 }
 
+// Extent hints are only candidates. A shorter root followed by more roots, and a longer
+// root whose inner object closes at the hinted index, must both fall back to exact boundaries.
+void structural_extent_hints() {
+  {
+    harness h;
+    h.feed(R"({"long key to retain input capacity":[]} {} {} {})");
+    td_json_stream_finish(h.stream);
+    for (unsigned i = 0; i < 4; ++i) REQUIRE(h.next() == TD_JSON_OK);
+    REQUIRE(h.next() == TD_JSON_STREAM_EMPTY);
+  }
+  {
+    harness h;
+    h.feed(R"({"a":"retained capacity larger than the prefix"} {"a":{},"b":2} {"a":{},"b":} [3])");
+    td_json_stream_finish(h.stream);
+    REQUIRE(h.next() == TD_JSON_OK);
+    REQUIRE(h.next() == TD_JSON_OK && h.root_kind() == MYNA_VALUE_OBJECT);
+    REQUIRE(c::field(h.tape().words[0]) == 2);
+    REQUIRE(h.next() == TD_JSON_SYNTAX);
+    REQUIRE(td_json_stream_skip(h.stream) == TD_JSON_OK);
+    REQUIRE(h.next() == TD_JSON_OK && h.root_kind() == MYNA_VALUE_ARRAY);
+    REQUIRE(h.next() == TD_JSON_STREAM_EMPTY);
+  }
+}
+
 void backpressure_and_retain() {
   // The buffer holds at most 2 × max_document_bytes; feed accepts what fits.
   harness h(64, 64);
@@ -485,6 +509,7 @@ int main() {
   try {
     truncation_and_scalars();
     errors_and_skip();
+    structural_extent_hints();
     backpressure_and_retain();
     stream_boundary_exactness();
     allocations();

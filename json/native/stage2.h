@@ -105,7 +105,8 @@ template<class Writer> class stage2_walk {
   const uint8_t* input_;
   const uint8_t* end_;
   const uint32_t* indexes_;
-  uint32_t count_, at_ = 0;
+  uint32_t count_, at_ = 0, origin_;
+  uint32_t offset(uint32_t at) const { return indexes_[at] - origin_; }
   Writer& writer_;
   struct frame { size_t index; uint64_t count; bool object; };
   frame frames_[128];
@@ -234,7 +235,7 @@ template<class Writer> class stage2_walk {
     writer_.string_owned(offset, length, {start, root_end_ - start}, ascii, key);
   }
   [[gnu::always_inline]] void number(uint32_t start) {
-    uint32_t end = indexes_[at_];
+    uint32_t end = at_ == count_ ? uint32_t(end_ - input_) : offset(at_);
     while (end > start && stage2_detail::whitespace(input_[end - 1])) --end;
     if constexpr (!Writer::retains_values) {
       if (stage2_detail::bounded_number(input_ + start, end - start)) {
@@ -275,8 +276,9 @@ template<class Writer> class stage2_walk {
     root_end_ = start + length;
   }
  public:
-  stage2_walk(const uint8_t* input, size_t length, const uint32_t* indexes, uint32_t count, Writer& writer)
-      : input_(input), end_(input + length), indexes_(indexes), count_(count), writer_(writer) {}
+  stage2_walk(const uint8_t* input, size_t length, const uint32_t* indexes, uint32_t count, Writer& writer,
+              uint32_t origin = 0)
+      : input_(input), end_(input + length), indexes_(indexes), count_(count), origin_(origin), writer_(writer) {}
   uint32_t position() const { return at_; }
   uint32_t root_end() const { return root_end_; }
   void document() {
@@ -284,7 +286,7 @@ template<class Writer> class stage2_walk {
     goto value;
   value: {
       if (at_ >= count_) stage2_detail::syntax("missing JSON value");
-      uint32_t start = indexes_[at_++];
+      uint32_t start = offset(at_++);
       uint8_t token = input_[start];
       switch (token) {
         case '{': case '[': {
@@ -292,8 +294,8 @@ template<class Writer> class stage2_walk {
           bool object = token == '{';
           size_t index = writer_.begin(object ? tape::ctape::kind_object : tape::ctape::kind_array, depth_, start);
           frames_[depth_++] = {index, 0, object};
-          if (at_ < count_ && input_[indexes_[at_]] == (object ? '}' : ']')) {
-            root_end_ = indexes_[at_++] + 1; writer_.end(index, 0); --depth_; goto after;
+          if (at_ < count_ && input_[offset(at_)] == (object ? '}' : ']')) {
+            root_end_ = offset(at_++) + 1; writer_.end(index, 0); --depth_; goto after;
           }
           if (object) goto key;
           goto value;
@@ -312,7 +314,7 @@ template<class Writer> class stage2_walk {
         if (depth_ == 0) return;
         frame& current = frames_[depth_ - 1]; ++current.count;
         if (at_ >= count_) stage2_detail::syntax("unterminated JSON container");
-        uint32_t start = indexes_[at_++]; uint8_t token = input_[start];
+        uint32_t start = offset(at_++); uint8_t token = input_[start];
         if (token == ',') { if (current.object) goto key; goto value; }
         if (token == (current.object ? '}' : ']')) {
           writer_.end(current.index, current.count); root_end_ = start + 1; --depth_; continue;
@@ -321,9 +323,9 @@ template<class Writer> class stage2_walk {
       }
     }
   key: {
-      if (at_ >= count_ || input_[indexes_[at_]] != '"') stage2_detail::syntax("expected JSON key");
-      string(indexes_[at_++], true);
-      if (at_ >= count_ || input_[indexes_[at_++]] != ':') stage2_detail::syntax("expected JSON colon");
+      if (at_ >= count_ || input_[offset(at_)] != '"') stage2_detail::syntax("expected JSON key");
+      string(offset(at_++), true);
+      if (at_ >= count_ || input_[offset(at_++)] != ':') stage2_detail::syntax("expected JSON colon");
       goto value;
     }
   }

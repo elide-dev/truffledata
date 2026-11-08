@@ -711,6 +711,13 @@ template<bool Structural = false> class basic_ctape_writer final {
     pending_.reserve(memory_, count / 2 + 1);
   }
 
+  // Read-only test for a directoryless walk that must not grow any writer allocation.
+  bool has_structural_capacity(size_t count, size_t input_bytes) const {
+    return count <= (SIZE_MAX - 2) / 2 && input_bytes <= SIZE_MAX - 64
+        && words_.capacity() >= std::min<size_t>(2 * count + 2, ctape::max_words)
+        && pool_.capacity() >= input_bytes + 64 && pending_.capacity() >= count / 2 + 1;
+  }
+
   // Reuse the arrays between documents; the arena remains live until retain or capacity release.
   void clear() {
     words_.truncate(0); pool_.truncate(0); directory_.truncate(0); pending_.truncate(0);

@@ -225,3 +225,10 @@ cc_test(
     tags = ["manual"],
     deps = [":decoder", "//tape/native:testing"],
 )
+
+cc_test(
+    name = "stream_probe",
+    srcs = ["stream_probe.cc", "testing/ondemand_session.h", "testing/ondemand_stream.h"],
+    tags = ["manual"],
+    deps = [":decoder", "//tape/native:testing"],
+)

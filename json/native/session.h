@@ -69,11 +69,9 @@ private:
   std::optional<tape::structural_writer> writer_;
   std::optional<structural_null_writer> validator_;
   tape::arena_vec<uint64_t> text_table_;
-  bool streamed_ = false;
   char* input_ = nullptr;
   size_t input_capacity_ = 0;
   size_t input_length_ = 0;
-  std::optional<tape_decoder<tape::ctape_writer>> decoder_;
   tape::key_shape_cache shapes_;
   td_tape_view view_{};
   bool live_ = false;
@@ -92,53 +90,14 @@ private:
       input_capacity_ = need;
     }
   }
-  // Decodes the document `open()` positions on the input buffer (`walked`: see tape_decoder::start)
-  // and publishes it; validate-only walks it with nothing retained. On any exception the session
-  // holds no document.
-  template<class Open> document_view walk(size_t length, const char* walked, bool validate_only, Open&& open) {
-    size_t before = memory_.allocations();
-    std::string_view input(input_, length);
-    try {
-      if (validate_only) {
-        decode_hint hint = hint_for(length, values_, storage_);
-        arena_.hint(hint.block);
-        tape_decoder<null_writer> decoder(&arena_, values_);
-        decoder.shapes(&shapes_);
-        decoder.start(input, hint, walked);
-        auto&& root = open();
-        decoder.decode(root);
-      } else {
-        decode_hint hint = hint_for(length, values_, storage_);
-        arena_.hint(hint.block);
-        auto& decoder = decoder_.emplace(&arena_, values_);
-        decoder.shapes(&shapes_);
-        decoder.writer().directories(false);
-        decoder.start(input, hint, walked);
-        auto&& root = open();
-        decoder.decode(root);
-        view_ = decoder.view();
-
-      }
-    } catch (...) {
-      recycle();
-      throw;
-    }
-    size_t allocations = memory_.allocations() - before;
-    if (validate_only) {
-      recycle();
-      return {nullptr, length, allocations};
-    }
-    live_ = true;
-    return {&view_, length, allocations};
-  }
   void drop_arrays() noexcept {
-    decoder_.reset(); writer_.reset(); validator_.reset(); text_table_.forget();
-    arena_.reset(); scratch_.reset(); streamed_ = false;
+    writer_.reset(); validator_.reset(); text_table_.forget();
+    arena_.reset(); scratch_.reset();
   }
   // Borrowed arrays survive ordinary reuse. A retained/oversized document gives up its storage.
   void recycle() noexcept {
     live_ = false;
-    if (streamed_ || input_capacity_ > retained_input_limit) drop_arrays();
+    if (input_capacity_ > retained_input_limit) drop_arrays();
     else {
       if (writer_) writer_->clear();
       if (validator_) validator_->clear();
@@ -148,17 +107,17 @@ private:
     parser_.release_above(retained_input_limit);
   }
 
-  document_view walk_structural(size_t length, bool validate_only, bool directories) {
+  document_view walk_indexed(size_t length, bool validate_only, bool directories,
+                             const uint32_t* indexes, uint32_t count, uint32_t origin = 0) {
     size_t before = memory_.allocations();
     try {
-      parser_.run(reinterpret_cast<const uint8_t*>(input_), length);
       auto decode = [&](auto& writer) {
         writer.shapes(&shapes_);
         if constexpr (std::decay_t<decltype(writer)>::retains_values) writer.directories(directories);
         writer.input({input_, length});
-        writer.reserve_structural(parser_.size(), length);
+        writer.reserve_structural(count, length);
         stage2_walk<std::decay_t<decltype(writer)>> walk(reinterpret_cast<const uint8_t*>(input_), length,
-                                                         parser_.indexes(), parser_.size(), writer);
+                                                         indexes, count, writer, origin);
         walk.run();
       };
       if (validate_only) {
@@ -175,6 +134,12 @@ private:
     return {validate_only ? nullptr : &view_, length, allocations};
   }
 
+  document_view walk_structural(size_t length, bool validate_only, bool directories) {
+    try { parser_.run(reinterpret_cast<const uint8_t*>(input_), length); }
+    catch (...) { recycle(); throw; }
+    return walk_indexed(length, validate_only, directories, parser_.indexes(), parser_.size());
+  }
+
 public:
   session(myna::value_limits values, tape::storage_limits storage,
           std::pmr::memory_resource* upstream = std::pmr::get_default_resource())
@@ -185,7 +150,6 @@ public:
   session(const session&) = delete;
   session& operator=(const session&) = delete;
   ~session() {
-    decoder_.reset();
     arena_.release_all();
     free_input();
   }
@@ -222,22 +186,27 @@ public:
     return walk_structural(length, validate_only, directories);
   }
 
-  // Decodes one document of a stream (stream.h): `root` is the iterate_many document positioned on
-  // `data[0, length)` inside the stream's carry-over buffer. The bytes are copied into the session's
-  // input buffer, which becomes the document's input, so the borrowed (and retained) document never
-  // refers to the carry-over buffer; the walk itself reads the stream buffer in place, and spans are
-  // taken relative to `data`, so they index the session's copy. Same borrowing, failure and retain
-  // rules as decode().
-  document_view decode_streamed(const char* data, size_t length, simdjson::ondemand::document_reference& root) {
+  // A stream may test its previous structural extent only inside existing capacity. This
+  // prevents an incorrect extent hint from allocating or exhausting an otherwise valid root's
+  // index budget before the grammar rejects the hint and retries the exact extent.
+  bool can_decode_streamed(size_t length, uint32_t count) const {
+    return writer_ && input_capacity_ <= retained_input_limit
+        && length <= input_capacity_ && simdjson::SIMDJSON_PADDING <= input_capacity_ - length
+        && writer_->has_structural_capacity(count, length);
+  }
+
+  // A complete root from the stream's already-validated stage-1 index. Its bytes are copied
+  // before emission, so borrowed and retained results never reference the carry-over buffer.
+  // `origin` rebases the batch's structural offsets onto this document's retained input.
+  document_view decode_streamed(const char* data, size_t length, const uint32_t* indexes,
+                                 uint32_t count, uint32_t origin) {
     recycle();
-    drop_arrays();
-    streamed_ = true;
     if (length > UINT32_MAX || length > storage_.input_bytes) throw std::length_error("JSON input limit");
     reserve_input(length);
     std::memcpy(input_, data, length);
     std::memset(input_ + length, 0, simdjson::SIMDJSON_PADDING);
     input_length_ = length;
-    return walk(length, data, false, [&]() -> simdjson::ondemand::document_reference& { return root; });
+    return walk_indexed(length, false, false, indexes, count, origin);
   }
 
   // Writes the live document's text arena (Task D2, text_arena.h) into `out`; the table (one entry
@@ -269,8 +238,7 @@ public:
   retained* retain() {
     if (!live_) throw std::logic_error("no JSON session document");
     if (view_.flags & TD_TAPE_NO_DIRECTORIES) {
-      if (streamed_) { decoder_->writer().build_directories(); view_ = decoder_->view(); }
-      else { writer_->build_directories(); view_ = writer_->view(); }
+      writer_->build_directories(); view_ = writer_->view();
     }
     void* raw = upstream_->allocate(sizeof(retained), alignof(retained));
     tape::block_arena::storage storage;
@@ -280,7 +248,7 @@ public:
     input_ = nullptr;
     input_capacity_ = 0;
     live_ = false;
-    decoder_.reset(); writer_.reset(); text_table_.forget(); streamed_ = false;
+    writer_.reset(); text_table_.forget();
     return owner;
   }
 

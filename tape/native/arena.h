@@ -284,6 +284,7 @@ public:
   T* data() { return data_; }
   const T* data() const { return data_; }
   size_t size() const { return size_; }
+  size_t capacity() const { return capacity_; }
   T& operator[](size_t i) { return data_[i]; }
   const T& operator[](size_t i) const { return data_[i]; }
   T& back() { return data_[size_ - 1]; }
