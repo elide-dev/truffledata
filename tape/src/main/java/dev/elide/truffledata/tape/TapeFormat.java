@@ -68,6 +68,12 @@ public final class TapeFormat {
         anchorNodes, anchorNames, tagUris, maxAliasExpansion);
   }
 
+  /** Metadata for a compact tape whose value aliases are native REF words. */
+  public TapeFormat withMetadata(int[] meta) {
+    return new TapeFormat(name, null, Objects.requireNonNull(meta),
+        anchorNodes, anchorNames, tagUris, maxAliasExpansion);
+  }
+
   /** Attach detached YAML anchor/tag tables and the per-export expansion budget. */
   public TapeFormat withEvents(long[] anchors, String[] names, String[] tags, long expansionBudget) {
     if (expansionBudget <= 0) throw new IllegalArgumentException("Alias expansion budget must be positive");
@@ -78,10 +84,10 @@ public final class TapeFormat {
   TapeFormat slice(long root, int count) {
     int[] metadata = meta;
     long[] aliases = aliasTargets;
-    if (metadata == null || aliases == null) return this;
+    if (metadata == null) return this;
     int[] slice = java.util.Arrays.copyOfRange(metadata, Math.toIntExact(root), Math.toIntExact(root) + count);
-    long[] rebased = aliases.clone();
-    for (int i = 0; i < rebased.length; i++) rebased[i] -= root;
+    long[] rebased = aliases == null ? null : aliases.clone();
+    if (rebased != null) for (int i = 0; i < rebased.length; i++) rebased[i] -= root;
     long[] anchors = anchorNodes.clone();
     for (int i = 0; i < anchors.length; i++) anchors[i] -= root;
     return new TapeFormat(name, rebased, slice, anchors, anchorNames, tagUris, maxAliasExpansion);

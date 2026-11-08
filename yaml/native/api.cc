@@ -60,8 +60,6 @@ void tables(YamlResult& result, const yaml_session::document_view& d) {
   result.tag_count = d.tags.size();
   result.anchors = const_cast<truffledata::yaml::anchor_entry*>(d.anchors.data());
   result.anchor_count = d.anchors.size();
-  result.alias_targets = const_cast<uint64_t*>(d.alias_targets.data());
-  result.alias_count = d.alias_targets.size();
   result.strings = reinterpret_cast<uint8_t*>(const_cast<char*>(d.strings.data()));
   result.strings_length = d.strings.size();
   result.directives = const_cast<truffledata::yaml::directive_entry*>(d.directives.data());
@@ -74,7 +72,7 @@ static_assert(sizeof(truffledata::yaml::anchor_entry) == sizeof(YamlAnchor) &&
 static_assert(sizeof(truffledata::yaml::directive_entry) == sizeof(YamlTagDirective), "YamlTagDirective layout");
 
 void publish_document(YamlResult& result, const yaml_session::document_view& d, const yaml_session& s) {
-  result.view = const_cast<myna_value_view*>(&s.view());
+  result.view = const_cast<td_tape_view*>(&s.view());
   result.copied_input_bytes = d.input_length;
   result.padded_input_bytes = s.input_capacity();
   result.index_retained_bytes = s.memory().current();
@@ -82,9 +80,6 @@ void publish_document(YamlResult& result, const yaml_session::document_view& d, 
   result.index_allocations = d.index_allocations;
   result.parser_input_capacity = 0;
   result.control_bytes = sizeof(yaml_session);
-  result.lexical = const_cast<uint64_t*>(d.lexical.data());
-  result.lexical_count = d.lexical.size();
-  result.key_hashes = const_cast<uint32_t*>(d.hashes.data());
   tables(result, d);
   result.source = reinterpret_cast<uint8_t*>(const_cast<char*>(d.source));
   result.source_length = d.source_length;
@@ -181,9 +176,6 @@ extern "C" int32_t td_yaml_session_retain(void* handle, void* output) {
     result.index_retained_bytes = owner->bytes();
     result.index_peak_bytes = owner->bytes();
     result.control_bytes = sizeof(yaml_session::retained);
-    result.lexical = const_cast<uint64_t*>(d.lexical.data());
-    result.lexical_count = d.lexical.size();
-    result.key_hashes = const_cast<uint32_t*>(d.hashes.data());
     tables(result, d);
     result.source = reinterpret_cast<uint8_t*>(const_cast<char*>(d.source));
     result.source_length = d.source_length;

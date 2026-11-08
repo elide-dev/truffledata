@@ -268,7 +268,7 @@ sh_test(
 data_java_library(
     name = "json_fixture",
     srcs = ["JsonFixture.java"],
-    visibility = ["//benchmarks:__pkg__"],
+    visibility = ["//benchmarks:__pkg__", "//yaml/tests:__pkg__"],
     deps = [
         "//json",
         "@maven//:com_google_code_gson_gson",

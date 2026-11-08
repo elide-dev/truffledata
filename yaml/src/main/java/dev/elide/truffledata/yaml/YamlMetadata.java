@@ -3,14 +3,13 @@ package dev.elide.truffledata.yaml;
 import dev.elide.truffledata.tape.TapeFormat;
 import org.jspecify.annotations.Nullable;
 
-/** Detached metadata for a document. Node ordinals match the native tape. */
+/** Detached metadata for a document. Offsets identify header words in the native compact tape. */
 public final class YamlMetadata {
   final TapeFormat format;
   final int[] words;
   final String[] tags;
   final long[] anchors;
   final String[] names;
-  final long[] aliases;
   final YamlDirectives directives;
 
   YamlMetadata(
@@ -18,18 +17,16 @@ public final class YamlMetadata {
       String[] tags,
       long[] anchors,
       String[] names,
-      long[] aliases,
       YamlDirectives directives,
       long expansionBudget) {
     this.words = words;
     this.tags = tags;
     this.anchors = anchors;
     this.names = names;
-    this.aliases = aliases;
     this.directives = directives;
     this.format =
         TapeFormat.of("YAML")
-            .withAliases(aliases, words)
+            .withMetadata(words)
             .withEvents(anchors, names, tags, expansionBudget);
   }
 

@@ -1,6 +1,6 @@
 package dev.elide.truffledata.yaml;
 
-import dev.elide.truffledata.tape.SegmentValueTape;
+import dev.elide.truffledata.tape.SegmentTape;
 import dev.elide.truffledata.tape.TapeBorrow;
 import dev.elide.truffledata.tape.TapeTextArena;
 import dev.elide.truffledata.tape.TypedLayout;
@@ -132,16 +132,16 @@ final class JvmSessionBackend extends YamlSession.Backend {
 
   private static void check(int status, MemorySegment result) {
     if (status == 2 || status == 4 || status == 6 || status == 7) {
-      int length = result.get(ValueLayout.JAVA_INT, 224);
+      int length = result.get(ValueLayout.JAVA_INT, 184);
       String detail =
           new String(
-              result.asSlice(232, Math.min(255, length)).toArray(ValueLayout.JAVA_BYTE),
+              result.asSlice(192, Math.min(255, length)).toArray(ValueLayout.JAVA_BYTE),
               StandardCharsets.UTF_8);
       YamlSvm.checkDetailed(
           status,
           detail,
-          result.get(ValueLayout.JAVA_LONG, 208),
-          result.get(ValueLayout.JAVA_LONG, 216));
+          result.get(ValueLayout.JAVA_LONG, 168),
+          result.get(ValueLayout.JAVA_LONG, 176));
     }
     YamlSvm.checkStatus(status);
   }
@@ -174,21 +174,21 @@ final class JvmSessionBackend extends YamlSession.Backend {
         }
       };
 
-  private static SegmentValueTape tape(MemorySegment r) {
-    return SegmentValueTape.of(r.get(ValueLayout.ADDRESS, 8), r.get(ValueLayout.ADDRESS, 88));
+  private static SegmentTape tape(MemorySegment r) {
+    return new SegmentTape(r.get(ValueLayout.ADDRESS, 8));
   }
 
   private static class Storage implements YamlMessage.Storage {
-    final MemorySegment spans;
+    final SegmentTape tape;
     final MemorySegment source;
 
-    Storage(MemorySegment r) {
-      spans = r.get(ValueLayout.ADDRESS, 72).reinterpret(r.get(ValueLayout.JAVA_LONG, 80) * 8);
-      source = r.get(ValueLayout.ADDRESS, 184).reinterpret(r.get(ValueLayout.JAVA_LONG, 192));
+    Storage(SegmentTape tape, MemorySegment r) {
+      this.tape = tape;
+      source = r.get(ValueLayout.ADDRESS, 144).reinterpret(r.get(ValueLayout.JAVA_LONG, 152));
     }
 
     public long span(long node) {
-      return spans.get(ValueLayout.JAVA_LONG, node * 8);
+      return tape.span(node);
     }
 
     public byte inputByte(long offset) {
@@ -200,11 +200,11 @@ final class JvmSessionBackend extends YamlSession.Backend {
 
   @Override
   protected TapeBorrow borrow() {
-    SegmentValueTape tape = tape(result);
+    SegmentTape tape = tape(result);
     YamlMetadata meta =
         ResultMetadata.read(
             MEMORY, result.address(), tape.nodeCount(), options.limits().maxAliasExpansion());
-    return new TapeBorrow(tape, new Storage(result), meta.format);
+    return new TapeBorrow(tape, new Storage(tape, result), meta.format);
   }
 
   @Override
@@ -220,14 +220,14 @@ final class JvmSessionBackend extends YamlSession.Backend {
         throw YamlJvm.callFailure(failure);
       }
       check(status, owned);
-      SegmentValueTape tape = tape(owned);
+      SegmentTape tape = tape(owned);
       YamlMetadata meta =
           ResultMetadata.read(
               MEMORY, owned.address(), tape.nodeCount(), options.limits().maxAliasExpansion());
       YamlMessage message =
           new YamlMessage(
               tape,
-              new Storage(owned) {
+              new Storage(tape, owned) {
                 @Override
                 public void run() {
                   try {

@@ -3,7 +3,7 @@ package dev.elide.truffledata.yaml;
 import com.oracle.truffle.api.Assumption;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.Truffle;
-import dev.elide.myna.values.ValueTape;
+import dev.elide.truffledata.tape.TapeReader;
 import dev.elide.truffledata.tape.TapeFormat;
 import dev.elide.truffledata.tape.TapeLexical;
 import dev.elide.truffledata.tape.TapeOwner;
@@ -17,7 +17,7 @@ public final class YamlMessage extends TapeOwner implements AutoCloseable {
   private final YamlMetadata metadata;
   private @Nullable Assumption alive;
 
-  YamlMessage(ValueTape tape, Storage storage, YamlMetadata metadata) {
+  YamlMessage(TapeReader tape, Storage storage, YamlMetadata metadata) {
     super(tape, Thread.currentThread());
     this.storage = storage;
     this.metadata = metadata;

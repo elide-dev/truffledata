@@ -25,55 +25,56 @@ class typed_source final {
   session::document_view document_;
   schema schema_;
 
-  std::string_view text(uint64_t index) const {
-    const auto& view = document_.view;
-    const auto& node = view.nodes[index];
-    if (!(node.tag & MYNA_VALUE_REGION_TEXT))
-      return {reinterpret_cast<const char*>(&node.payload), node.length};
-    uint32_t region = uint32_t(node.payload >> 32);
-    auto* bytes = region ? view.regions[region - 1].data : view.bytes;
-    return {reinterpret_cast<const char*>(bytes + uint32_t(node.payload)), node.length};
+  std::string_view text(uint64_t index) const { return ct::text(document_.view, index); }
+  uint32_t scalar_kind_at(uint64_t index) const {
+    switch (ct::kind(document_.view.words[index])) {
+      case ct::kind_null: return MYNA_VALUE_NULL;
+      case ct::kind_false: case ct::kind_true: return MYNA_VALUE_BOOL;
+      case ct::kind_i64: return MYNA_VALUE_I64;
+      case ct::kind_u64: return MYNA_VALUE_U64;
+      case ct::kind_f64: return MYNA_VALUE_F64;
+      case ct::kind_decimal: return MYNA_VALUE_DECIMAL;
+      case ct::kind_string: return MYNA_VALUE_STRING;
+      default: throw std::invalid_argument("typed YAML scalar kind");
+    }
   }
   std::string_view token(uint64_t index) const {
-    uint64_t span = document_.lexical[index];
+    uint64_t span = lexical_span(document_.view, index);
     return {document_.source + (span >> 32), uint32_t(span)};
   }
 
  public:
-  typed_source(session::document_view document, schema mode, bool honor_version)
-      : document_(document), schema_(honor_version && document.version == 11 ? schema::yaml11 : mode) {}
+  typed_source(session::document_view document, schema mode, bool /*honor_version*/)
+      : document_(document), schema_((document.flags & doc_schema_1_1) ? schema::yaml11 : mode == schema::yaml11 ? schema::core : mode) {}
   uint64_t resolve(uint64_t index) const {
-    if (document_.meta[index] & meta_alias) {
-      uint64_t ordinal = document_.meta[index] >> meta_tag_shift;
-      if (ordinal >= document_.alias_targets.size()) throw std::invalid_argument("invalid typed YAML alias");
-      uint64_t target = document_.alias_targets[ordinal];
-      if (target >= index) throw std::invalid_argument("invalid typed YAML alias");
-      index = target;
-    }
     // Native tapes contain only backward references to completed subtrees. Keep the bounds here
     // so the walker is safe even if a future producer accidentally publishes a malformed ref.
-    while ((document_.view.nodes[index].tag & MYNA_VALUE_KIND_MASK) == MYNA_VALUE_REF) {
-      uint64_t target = document_.view.nodes[index].payload;
+    while (ct::kind(document_.view.words[index]) == ct::kind_ref) {
+      uint64_t target = ct::low(document_.view.words[index]);
       if (target >= index) throw std::invalid_argument("invalid typed YAML alias");
       index = target;
     }
     return index;
   }
   tape::typed_kind kind(uint64_t index) const {
-    switch (document_.view.nodes[index].tag & MYNA_VALUE_KIND_MASK) {
-      case MYNA_VALUE_NULL: return tape::typed_kind::null;
-      case MYNA_VALUE_ARRAY: return tape::typed_kind::array;
-      case MYNA_VALUE_OBJECT: return tape::typed_kind::object;
+    switch (ct::kind(document_.view.words[index])) {
+      case ct::kind_null: return tape::typed_kind::null;
+      case ct::kind_array: return tape::typed_kind::array;
+      case ct::kind_object: return tape::typed_kind::object;
       default: return tape::typed_kind::scalar;
     }
   }
-  size_t count(uint64_t index) const { return document_.view.nodes[index].length; }
-  uint64_t first(uint64_t index) const { return index + 1; }
-  uint64_t next(uint64_t index) const {
-    auto type = kind(index);
-    return type == tape::typed_kind::array || type == tape::typed_kind::object
-        ? document_.view.nodes[index].next : index + 1;
+  size_t count(uint64_t index) const {
+    size_t count = ct::field(document_.view.words[index]);
+    if (count != ct::max_length) return count;
+    bool object = kind(index) == tape::typed_kind::object;
+    count = 0;
+    for (uint64_t at = first(index), end = next(index); at < end; ++count)
+      at = next(object ? next(at) : at);
+    return count;
   }
+  uint64_t first(uint64_t index) const { return index + 2; }
+  uint64_t next(uint64_t index) const { return ct::after(index, document_.view.words[index]); }
   std::string_view key(uint64_t index) const { return text(index); }
   void lexical(uint64_t index, scalar_slot& slot) const {
     auto bytes = token(index);
@@ -84,7 +85,7 @@ class typed_source final {
               std::pmr::memory_resource* scratch) const {
     lexical(index, slot);
     auto style = scalar_style(document_.meta[index] & meta_style_mask);
-    uint32_t kind = document_.view.nodes[index].tag & MYNA_VALUE_KIND_MASK;
+    uint32_t kind = scalar_kind_at(index);
     if (field.kind == scalar_kind::string) {
       // Strings keep the decoded scalar text. Plain numeric scalars have no text node, so use
       // their original token; this preserves 1.0, hexadecimal notation and separators exactly.
@@ -118,7 +119,8 @@ class typed_source final {
       // Generic resolution already produced this exact scalar kind. Apply the schema's range
       // and width below without parsing the same spelling twice.
       value.kind = kind;
-      value.bits = document_.view.nodes[index].payload;
+      value.bits = kind == MYNA_VALUE_BOOL ? ct::kind(document_.view.words[index]) == ct::kind_true
+                                           : document_.view.words[index + 1];
     } else {
       value = resolve_tagged(token(index), tag, schema_, scratch);
     }

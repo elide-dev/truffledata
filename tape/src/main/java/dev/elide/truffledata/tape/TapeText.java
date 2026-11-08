@@ -28,6 +28,8 @@ public final class TapeText {
   private long node = -1;
   // Open containers of the export walk: exclusive end node, sign bit set for objects.
   final long[] ends = new long[TapeExportNode.MAX_DEPTH];
+  // YAML frames and tag cursors grow during warm-up, then exports reuse them without allocation.
+  AliasExport.@Nullable State aliasState;
   private byte[] scratch = EMPTY;
   // Text arena of the session parse this cursor serves (Task D2), else null.
   private @Nullable TapeTextArena arena;

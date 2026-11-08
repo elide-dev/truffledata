@@ -1,7 +1,7 @@
 # Native YAML decoder
 
-rapidyaml 0.16.0 drives `yaml::handler`, a `ParseEngine` event handler that writes Myna ABI v3
-nodes straight into the session arena through the shared presized `tape_writer` (`//tape/native`).
+rapidyaml 0.16.0 drives `yaml::handler`, a `ParseEngine` event handler that writes compact tape
+words straight into the session arena through the shared presized `ctape_writer` (`//tape/native`).
 There is no rapidyaml tree, event array or DOM in between. The plan is
 `docs/superpowers/plans/2026-11-06-yaml.md`; rulings are in its ledger.
 
@@ -12,13 +12,13 @@ There is no rapidyaml tree, event array or DOM in between. The plan is
 | `input.h` | BOM detection, UTF-16/UTF-32 transcoding, strict UTF-8 (simdutf) and c-printable validation in 64-byte SSE2/NEON blocks fused with the session copy, the LF bitmap |
 | `scalars.h` | `resolve(text, style, schema, tag)`: core, JSON, failsafe and YAML 1.1 schemas, explicit core tags, key stringification |
 | `tags.h` | Tag URIs and kinds; `!!binary` (simdutf base64) and `!!timestamp` validation |
-| `decoder.h` | `yaml::handler`: nodes, `lexical` spans, `key_hashes` and `yaml_meta` per node; anchors, aliases, tags, directives; duplicate keys, retroactive `[a: b]` mappings, the pairs representation |
+| `decoder.h` | `yaml::handler`: compact words with embedded spans/directories and `yaml_meta` per word; anchors, aliases, tags, directives; duplicate keys, retroactive `[a: b]` mappings, the pairs representation |
 | `merge.h` | Merge keys (`<<`), resolved when their mapping closes |
 | `session.h` | Sessions with the JSON session's semantics: decode, borrow, retain, reset |
 | `stream.h` | Multi-document streams: a line splitter over a carry-over buffer, one document decoded at a time |
 | `errors.h` | `yaml::error` (status, line, column, fixed 256-byte message) |
 | `api.h`, `api.cc` | The C ABI (`td_yaml_*`); no exception crosses it |
-| `yaml.seam` | Myna seam (`abi=1`): `YamlResult`, `YamlOptionsStruct` and the session imports |
+| `yaml.seam` | Myna seam (`abi=3`): compact `YamlResult`, options, session and typed-plan imports |
 | `bench.cc` | Native reference rows: rapidyaml's integer handler and tree, libyaml, the session and stream APIs (`bazel test //yaml/native:bench --test_output=all`, manual, RBE) |
 | `sampler.h` | Benchmark only: a SIGPROF frame-pointer sampler for RBE workers (`//yaml/native:bench_profile`) |
 | `testing.h`, `reference_tape.h` | Test-only helpers; the probe's reference tape (rapidyaml's integer handler into `myna::value_builder`) |
@@ -35,31 +35,25 @@ reference tape and the benchmark (`@rapidyaml//:ryml_ints`, testonly).
 
 ## Tape and side tables
 
-One tape per document, exactly as JSON. Scalars are inline up to 16 bytes, otherwise a region-1
-reference into the session input buffer that rapidyaml filtered in place; the few scalars that grow
-while filtering (rapidyaml moves them into its arena) are copied into the tape's owned text.
+One `td_tape_view` per document, shared with JSON. Plain unfiltered strings reference the
+retained input; quoted, folded and normalized strings use owned text with embedded source spans.
+Numbers and containers occupy two words; ordinary strings, booleans, nulls and references use one
+unless an owned/raw-span payload needs a second word. The `TD_TAPE_YAML` flag identifies plain
+string spans; `TD_TAPE_HAS_META` identifies the metadata table.
 
-Every node has three side-table entries:
+Scalar lexical spans, ASCII/KEY flags and object directory entries live in compact words. Plain
+single-line scalar spans are always retained; quoted, multiline and block source spellings require
+`TD_YAML_RETAIN_SOURCE`. Every word has one `yaml_meta` entry (payload entries are zero): style
+(bits 0–2), anchored (3), alias (4), key kind (5–7), tag index or private alias bookkeeping (8–31).
 
-- `lexical` (`uint64`, shared with JSON): `offset << 32 | length` into `source`. Plain single-line
-  scalars always; quoted, multi-line plain and block scalars only with `TD_YAML_RETAIN_SOURCE`
-  (which keeps a pristine copy, because rapidyaml filters in place); 0 otherwise. Multi-line plain
-  scalars are told apart from single-line ones by the LF bitmap recorded during validation.
-- `key_hashes` (`uint32`, shared with JSON): the ASCII bit, and on keys the low 15 bits of the
-  FNV-1a hash and the key's offset from its object, so JSON's position-hinted reads work unchanged.
-- `yaml_meta` (`uint32`, YAML only): style (bits 0-2; 7 marks a pair, below), anchored (3),
-  alias (4), key kind (5-7), tag index or alias ordinal (8-31).
-
-Per-document tables: `tags` (interned URIs without brackets, `tag:yaml.org,2002:str`, `!local`,
-`!`), `anchors` (node and name, in definition order, so an anchor's id is its index),
-`alias_targets` (the anchored node per alias ordinal), `directives` (`%TAG` handle and prefix) and
-the `%YAML` version; names and URIs index one `strings` byte table.
+Per-document tables hold interned tag URIs, anchors (word offset and name), directives and version.
+Names and URIs index one `strings` table. Alias targets are carried by REF words and are not a
+published side array. The producer retains a private target table for key aliases and rewrites.
 
 ## Anchors, aliases and merge keys
 
-An alias is a NULL node with the alias bit; its ordinal indexes `alias_targets`, which always
-names the anchored node itself, so readers resolve an alias with one load and nothing is expanded
-natively: a billion-laughs document decodes in O(input) (`alias_graph_is_linear`: 10 levels of 10
+A value alias is a REF word naming its anchored node, so readers resolve it without a side table
+and nothing is expanded natively: a billion-laughs document decodes in O(input) (`alias_graph_is_linear`: 10 levels of 10
 aliases are 121 nodes). An alias to an anchor whose collection is still open is "recursive YAML
 alias"; an unbound name is "undefined YAML alias"; a redefined anchor rebinds later aliases; the
 number of aliases is bounded by `maxAliases`. An alias used as a key is a STRING key node with its
@@ -100,13 +94,12 @@ yaml-test-suite target uses it to pass every case through this handler.
 Keys are STRING nodes holding the resolved key's canonical text (`null` -> `""`, booleans, decimal
 integers, shortest round-trip floats, `.inf`/`-.inf`/`.nan`), so duplicates are detected after
 resolution: `{1: a, 0x1: b}`, `{1: a, "1": b}` and `{null: a, ~: b}` are rejected. The original kind
-is in `yaml_meta`, and the source spelling in `lexical`.
+is in `yaml_meta`, and the source spelling is embedded in the scalar words.
 
-Non-finite floats (`.inf`, `-.inf`, `.nan`) are written as raw IEEE F64 bits through
-`tape_writer::nonfinite`, the single entry point; `TD_YAML_DOC_NONFINITE` marks such documents. Myna
-descriptor of such a document sets Myna 0.10.0's `MYNA_VALUE_ALLOW_NON_FINITE` (flag bit 0,
-elide-dev/myna#52), which value ABI v3 builders and Myna's Java readers honour; finite documents
-keep flags 0, exactly like JSON tapes.
+Non-finite floats (`.inf`, `-.inf`, `.nan`) use IEEE F64 bits and `TD_TAPE_NONFINITE`;
+`TD_YAML_DOC_NONFINITE` marks the document. Myna compatibility copies preserve
+`MYNA_VALUE_ALLOW_NON_FINITE`. Double-quoted text is validated after rapidyaml filtering: paired
+JSON surrogate escapes combine into one scalar; unpaired surrogates and values above U+10FFFF fail.
 
 ## Sessions and memory
 
@@ -125,8 +118,8 @@ once as two words: the session pads its input buffer with 64 zero bytes, so the 
 always in bounds, and bytes past the scalar are masked. The words give the lexical span (a plain
 scalar with no byte <= 0x20 is single-line, so its bytes are the source token), the class (first
 byte and length: strings, the null and bool spellings, 1-8 digit integers and `d*.d*` decimals by
-SWAR, the rest through `resolve_core_fast`), the ASCII bit, the inline node
-(`tape_writer::string_words`) and, for keys, a 256-slot FNV-1a memo. Duplicate keys go through a
+SWAR, the rest through `resolve_core_fast`), the ASCII bit and, for keys, a 256-slot FNV-1a memo.
+Compact directories use all 32 hash bits and are rebuilt at mapping close after rewrites. Duplicate keys go through a
 per-mapping `key_set` (16 inline keys behind a 64-bit hash filter, then `tape::key_table`), and
 mappings that repeat the keys of one of the last two mappings at their level (records) follow that
 key template: matching keys need neither the duplicate check nor the hash. Anything else takes the

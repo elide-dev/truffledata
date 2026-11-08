@@ -51,18 +51,17 @@ enum td_yaml_status {
 #define TD_YAML_DOC_PRESENT 16u           // the input held a document (otherwise the root is null)
 #define TD_YAML_DOC_SCHEMA_1_1 32u        // resolved with the YAML 1.1 schema (option or HONOR)
 
-// yaml_meta bits (one uint32_t per node): 0-2 style (0 plain, 1 single, 2 double, 3 literal,
+// yaml_meta bits (one uint32_t per compact word, payload entries zero): 0-2 style (0 plain, 1 single, 2 double, 3 literal,
 // 4 folded, 5 block collection, 6 flow collection, 7 pair), 3 anchored, 4 alias, 5-7 key kind
 // (0 string, 1 null, 2 bool, 3 int, 4 float), 8-31 tag index (1-based into `tags`; 0 none) or, on
-// aliases, the alias ordinal into `alias_targets`.
+// aliases, private producer bookkeeping (consumers resolve the REF word).
 //
 // Per-document tables (all borrowed like the tape): `tags` (YamlSpan: resolved tag URIs such as
 // `tag:yaml.org,2002:str` or `!local`, without brackets), `anchors` (YamlAnchor: node and name, in
-// definition order, so an anchor's id is its index), `alias_targets` (uint64 node per alias
-// ordinal: the anchored node, never another alias), `directives` (YamlTagDirective: %TAG handle and
-// prefix). Every name and URI is (offset, length) into `strings`. An alias is a NULL node with the
+// definition order, so an anchor's id is its index), `directives` (YamlTagDirective: %TAG handle and
+// prefix). Every name and URI is (offset, length) into `strings`. An alias is a compact REF word with the
 // alias bit; an alias used as a key is a STRING key node holding its target's key text with the
-// alias bit. Readers resolve aliases with one side-table load; nothing is expanded natively.
+// alias bit. Readers resolve aliases through REF words; nothing is expanded natively.
 //
 // Streams (td_yaml_stream_*): stream_create(session, max_document_bytes, buffer_bytes) splits
 // multi-document input at c-forbidden `---`/`...` lines and decodes one document at a time into
@@ -87,11 +86,13 @@ enum td_yaml_status {
 // c-printable before rapidyaml sees it. A second document is TD_YAML_MULTIPLE_DOCUMENTS. A failed
 // decode publishes nothing but error_line, error_column (1-based; 0 unknown) and error_message
 // (error_message_length bytes, at most 255, NUL-terminated, at offsetof(YamlResult, error_message)),
-// and leaves the session reusable. `lexical` spans index `source`: plain single-line scalars always;
+// and leaves the session reusable. Compact scalar spans index `source`: plain single-line scalars always;
 // quoted, multi-line and block scalars only with TD_YAML_RETAIN_SOURCE (else 0).
 //
 // session_retain moves the live document's arena blocks and input into a zero-initialized result
 // that owns them (release with td_yaml_release). session_reset invalidates the borrowed document in
 // O(1) without freeing (a native leaf). session_release frees the session; retained results stay
 // valid.
+// ABI3 publishes td_tape_view through view. Scalar lexical spans and directory key hashes are
+// embedded in compact words; no parallel lexical or key-hash arrays are allocated or published.
 #endif

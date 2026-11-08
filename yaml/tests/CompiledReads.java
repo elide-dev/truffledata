@@ -65,6 +65,10 @@ final class CompiledReads {
           check(bytes >= 0 && bytes <= 0.05, "YAML compiled bytes/read budget: " + bytes);
           System.out.println("YAML compiled=true aliases=" + root.aliases + " bytes/read=" + bytes);
         }
+        export(first.root());
+        session.with(SvmAcceptance.bytes("a: &a {n: 1000}\nb: *a\n"), borrowed -> {
+          export(borrowed); return 0;
+        });
         first.close();
         for (Reads root : roots) {
           try {
@@ -109,6 +113,54 @@ final class CompiledReads {
         throw new AssertionError("Compiled closed typed YAML read");
       } catch (IllegalStateException expected) {
       }
+    }
+  }
+
+  private static void export(TapeValue value) {
+    ExportReads root = new ExportReads(value);
+    var target = root.getCallTarget();
+    for (int i = 0; i < 200 && !root.compiled; i++) target.call(10000);
+    check(root.compiled, "YAML export must execute compiled code");
+    check(((Long) target.call(100000)) == 600300000L, "YAML export checksum");
+    check(NodeUtil.countNodes(root) <= 192, "YAML export AST budget");
+    var bean = (com.sun.management.ThreadMXBean) java.lang.management.ManagementFactory.getThreadMXBean();
+    bean.setThreadAllocatedMemoryEnabled(true);
+    long thread = Thread.currentThread().threadId(), before = bean.getThreadAllocatedBytes(thread);
+    target.call(100000);
+    double bytes = (bean.getThreadAllocatedBytes(thread) - before) / 100000.0;
+    check(bytes >= 0 && bytes <= 1.0, "YAML export bytes/document budget: " + bytes);
+    check(root.export.maxDepthSeen() == 2, "YAML export depth");
+    System.out.println("YAML compiled=true export=true bytes/document=" + bytes);
+  }
+
+  private static final class CountingSink implements dev.elide.truffledata.tape.TapeSink {
+    long sum;
+    public void beginObject(long count) { sum++; }
+    public void beginArray(long count) { sum++; }
+    public void key(dev.elide.truffledata.tape.TapeText key) { sum += 1000; }
+    public void end() {}
+    public void nullValue() { sum++; }
+    public void booleanValue(boolean value) { sum += value ? 1 : 0; }
+    public void longValue(long value) { sum += value; }
+    public void unsignedValue(long value) { sum += value; }
+    public void doubleValue(double value) { sum += (long) value; }
+    public void decimalValue(dev.elide.truffledata.tape.TapeText value) { sum++; }
+    public void stringValue(dev.elide.truffledata.tape.TapeText value) { sum++; }
+  }
+
+  private static final class ExportReads extends RootNode {
+    private final TapeValue value;
+    private final CountingSink sink = new CountingSink();
+    @Child private dev.elide.truffledata.tape.TapeExportNode export =
+        dev.elide.truffledata.tape.TapeExportNode.create();
+    boolean compiled;
+    ExportReads(TapeValue value) { super(TestLanguage.current()); this.value = value; }
+    @Override public Object execute(VirtualFrame frame) {
+      int count = (int) frame.getArguments()[0]; sink.sum = 0;
+      for (int i = 0; i < count; i++) export.execute(value, sink);
+      if (CompilerDirectives.inInterpreter()) LoopNode.reportLoopCount(this, count);
+      compiled |= CompilerDirectives.inCompiledCode();
+      return sink.sum;
     }
   }
 

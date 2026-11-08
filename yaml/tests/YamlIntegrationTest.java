@@ -377,14 +377,30 @@ final class YamlIntegrationTest {
       assertTrue(assumption.isValid());
       assertSame(assumption, message.assumption());
       var metadata = message.metadata();
-      assertEquals("a", metadata.anchor(2));
-      assertNull(metadata.anchor(1));
-      assertEquals(Yaml.tag(message.root().member("a")), metadata.tag(2));
-      assertTrue(metadata.isAlias(4));
-      assertNull(metadata.tag(4));
-      assertEquals(0, metadata.style(2));
-      assertEquals(0, metadata.keyKind(1));
+      assertEquals("a", metadata.anchor(3));
+      assertNull(metadata.anchor(2));
+      assertEquals(Yaml.tag(message.root().member("a")), metadata.tag(3));
+      assertTrue(metadata.isAlias(5));
+      assertNull(metadata.tag(5));
+      assertEquals(0, metadata.style(3));
+      assertEquals(0, metadata.keyKind(2));
     }
     assertFalse(assumption.isValid());
   }
+  @Test
+  void compactSubtreeSnapshotKeepsMetadataAndPristineSource() {
+    dev.elide.truffledata.tape.TapeSnapshot snapshot;
+    try (var session = YamlJvm.openSession(library(), YamlOptions.DEFAULT.withRetainSource(true));
+        var message = session.decode(SvmAcceptance.bytes(
+            "before: ignored\nchild:\n  tagged: !custom 'it''s'\n  a: &a {n: 17}\n  alias: *a\nafter: ignored\n"))) {
+      snapshot = message.root().member("child").snapshot();
+    }
+    var value = snapshot.root();
+    assertEquals("it's", value.member("tagged").stringValue());
+    assertEquals("'it''s'", value.member("tagged").rawText());
+    assertEquals("!custom", Yaml.tag(value.member("tagged")));
+    assertTrue(Yaml.isAlias(value.member("alias")));
+    assertEquals(17, value.member("alias").member("n").longValue());
+  }
+
 }

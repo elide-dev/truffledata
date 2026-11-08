@@ -1,6 +1,6 @@
 package dev.elide.truffledata.yaml;
 
-import dev.elide.truffledata.tape.SvmValueTape;
+import dev.elide.truffledata.tape.SvmTape;
 import dev.elide.truffledata.tape.TapeBorrow;
 import dev.elide.truffledata.tape.TapeTextArena;
 import dev.elide.truffledata.tape.TypedLayout;
@@ -106,14 +106,14 @@ final class SvmSessionBackend extends YamlSession.Backend {
   private static void check(int status, VoidPointer result) {
     if (status == 2 || status == 4 || status == 6 || status == 7) {
       Pointer data = (Pointer) result;
-      int length = Math.min(255, data.readInt(224));
+      int length = Math.min(255, data.readInt(184));
       byte[] message = new byte[length];
-      for (int i = 0; i < length; i++) message[i] = data.readByte(232 + i);
+      for (int i = 0; i < length; i++) message[i] = data.readByte(192 + i);
       YamlSvm.checkDetailed(
           status,
           new String(message, java.nio.charset.StandardCharsets.UTF_8),
-          data.readLong(208),
-          data.readLong(216));
+          data.readLong(168),
+          data.readLong(176));
     }
     YamlSvm.checkStatus(status);
   }
@@ -147,24 +147,23 @@ final class SvmSessionBackend extends YamlSession.Backend {
         }
       };
 
-  private static SvmValueTape tape(VoidPointer r) {
-    return new SvmValueTape(
-        (Pointer) Yaml.YamlResult.view(r), (Pointer) Yaml.YamlResult.key_hashes(r));
+  private static SvmTape tape(VoidPointer r) {
+    return new SvmTape((Pointer) Yaml.YamlResult.view(r));
   }
 
   private static class Storage implements YamlMessage.Storage {
-    final Pointer spans;
+    final SvmTape tape;
     final Pointer source;
     final long length;
 
-    Storage(VoidPointer r) {
-      spans = (Pointer) Yaml.YamlResult.lexical(r);
+    Storage(SvmTape tape, VoidPointer r) {
+      this.tape = tape;
       source = (Pointer) Yaml.YamlResult.source(r);
       length = Yaml.YamlResult.source_length(r);
     }
 
     public long span(long node) {
-      return spans.readLong(WordFactory.signed(node * 8));
+      return tape.span(node);
     }
 
     public byte inputByte(long offset) {
@@ -178,10 +177,10 @@ final class SvmSessionBackend extends YamlSession.Backend {
 
   @Override
   protected TapeBorrow borrow() {
-    SvmValueTape tape = tape(result);
+    SvmTape tape = tape(result);
     return new TapeBorrow(
         tape,
-        new Storage(result),
+        new Storage(tape, result),
         ResultMetadata.read(
                 MEMORY, result.rawValue(), tape.nodeCount(), options.limits().maxAliasExpansion())
             .format);
@@ -196,10 +195,10 @@ final class SvmSessionBackend extends YamlSession.Backend {
     }
     try {
       YamlSvm.checkStatus(Yaml.session_retain(session, owned));
-      SvmValueTape tape = tape(owned);
+      SvmTape tape = tape(owned);
       return new YamlMessage(
           tape,
-          new Storage(owned) {
+          new Storage(tape, owned) {
             @Override
             public void run() {
               Yaml.release(owned);

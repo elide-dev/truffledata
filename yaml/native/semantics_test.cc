@@ -267,6 +267,23 @@ void tags() {
   require(d.tags.size() == 100 && ct::field(d.view.words[0]) == 100);
 }
 
+void quoted_unicode_is_scalar_utf8() {
+  for (schema selected : {schema::core, schema::json}) {
+    policy rules; rules.schema = selected;
+    for (bool fast : {false, true}) {
+      yaml_session s(with(rules)); s.fast_paths(fast);
+      auto d = decode(s, R"(["\ud83d\ude00","prefix \ud83d\ude00 suffix","\U0001F600"])");
+      require(node_text(d.view, ordinal(d.view, 1)) == u8"😀");
+      require(node_text(d.view, ordinal(d.view, 2)) == u8"prefix 😀 suffix");
+      require(node_text(d.view, ordinal(d.view, 3)) == u8"😀");
+      require(ct::validate(d.view) == nullptr);
+      for (const char* invalid : {R"("\ud800")", R"("\udc00")", R"("\ud800x")", R"("\ud800\ud800")", R"("\U00110000")"})
+        require(failure(s, invalid).code == status_syntax);
+      require(failure(s, u8R"({"😀": 1, "\ud83d\ude00": 2})").code == status_syntax);
+    }
+  }
+}
+
 void non_string_keys_keep_kind() {
   yaml_session s(with());
   auto d = decode(s, "{~: a, true: b, 012: c, 1.50: d, .inf: e, 18446744073709551616: f, \"s\": g, !!str 3: h}");
@@ -332,6 +349,7 @@ int main() {
     anchor_redefinition_rebinds();
     merge_semantics();
     tags();
+    quoted_unicode_is_scalar_utf8();
     non_string_keys_keep_kind();
     nonfinite_floats();
     pairs_representation();

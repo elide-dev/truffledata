@@ -26,11 +26,11 @@ final class ResultMetadata {
 
   static YamlMetadata read(Memory m, long result, long nodeCount, long expansionBudget) {
     int[] words = new int[Math.toIntExact(nodeCount)];
-    long meta = m.pointer(result, 96);
+    long meta = m.pointer(result, 72);
     for (int i = 0; i < words.length; i++) words[i] = m.integer(meta, 4L * i);
-    long strings = m.pointer(result, 152);
-    long tagTable = m.pointer(result, 104);
-    String[] tags = new String[Math.toIntExact(m.word(result, 112))];
+    long strings = m.pointer(result, 112);
+    long tagTable = m.pointer(result, 80);
+    String[] tags = new String[Math.toIntExact(m.word(result, 88))];
     for (int i = 0; i < tags.length; i++)
       tags[i] =
           text(
@@ -38,8 +38,8 @@ final class ResultMetadata {
               strings,
               Integer.toUnsignedLong(m.integer(tagTable, 8L * i)),
               m.integer(tagTable, 8L * i + 4));
-    long anchorTable = m.pointer(result, 120);
-    long[] anchors = new long[Math.toIntExact(m.word(result, 128))];
+    long anchorTable = m.pointer(result, 96);
+    long[] anchors = new long[Math.toIntExact(m.word(result, 104))];
     String[] names = new String[anchors.length];
     for (int i = 0; i < anchors.length; i++) {
       anchors[i] = m.word(anchorTable, 16L * i);
@@ -50,11 +50,8 @@ final class ResultMetadata {
               Integer.toUnsignedLong(m.integer(anchorTable, 16L * i + 8)),
               m.integer(anchorTable, 16L * i + 12));
     }
-    long aliasTable = m.pointer(result, 136);
-    long[] aliases = new long[Math.toIntExact(m.word(result, 144))];
-    for (int i = 0; i < aliases.length; i++) aliases[i] = m.word(aliasTable, 8L * i);
-    long directiveTable = m.pointer(result, 168);
-    int count = Math.toIntExact(m.word(result, 176));
+    long directiveTable = m.pointer(result, 128);
+    int count = Math.toIntExact(m.word(result, 136));
     Map<String, String> directives = new LinkedHashMap<>();
     for (int i = 0; i < count; i++) {
       long at = 16L * i;
@@ -75,8 +72,7 @@ final class ResultMetadata {
         tags,
         anchors,
         names,
-        aliases,
-        new YamlDirectives(m.integer(result, 200), directives),
+        new YamlDirectives(m.integer(result, 160), directives),
         expansionBudget);
   }
 }

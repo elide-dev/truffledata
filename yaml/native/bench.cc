@@ -56,6 +56,7 @@ std::string basename(const std::string& path) {
   return slash == std::string::npos ? path : path.substr(slash + 1);
 }
 
+
 double best_ns(int iters, const std::function<uint64_t()>& f) {
   double best = 1e300;
   for (int round = 0; round < 7; ++round) {
@@ -109,7 +110,7 @@ int typed_benchmark(const std::string& path, bool quick) {
   double generic_ns = best_ns(iters, [&] {
     auto document = generic.decode(bytes, input.size(), 0);
     auto* retained = generic.retain();
-    uint64_t nodes = document.view.node_count;
+    uint64_t nodes = document.view.word_count;
     retained->destroy();
     return nodes;
   });
@@ -166,7 +167,7 @@ uint64_t stream_documents(void* session, const std::string& src) {
     int32_t status = td_yaml_stream_next(st, &r);
     if (status == TD_YAML_STREAM_EMPTY) break;
     if (status != TD_YAML_OK) std::abort();
-    nodes += static_cast<const myna_value_view*>(r.view)->node_count;
+    nodes += static_cast<const td_tape_view*>(r.view)->word_count;
   }
   td_yaml_stream_release(st);
   return nodes;
@@ -298,7 +299,7 @@ int main(int argc, char** argv) {
         row("td-session(decode+reset)", best_ns(iters, [&] {
           YamlResult r{};
           td_yaml_session_decode(session, reinterpret_cast<const uint8_t*>(src.data()), n, 0, nullptr, 0, &r);
-          uint64_t nodes = static_cast<const myna_value_view*>(r.view)->node_count;
+          uint64_t nodes = static_cast<const td_tape_view*>(r.view)->word_count;
           td_yaml_session_reset(session);
           return nodes;
         }));
@@ -306,7 +307,7 @@ int main(int argc, char** argv) {
           YamlResult r{}, kept{};
           td_yaml_session_decode(session, reinterpret_cast<const uint8_t*>(src.data()), n, 0, nullptr, 0, &r);
           td_yaml_session_retain(session, &kept);
-          uint64_t nodes = static_cast<const myna_value_view*>(kept.view)->node_count;
+          uint64_t nodes = static_cast<const td_tape_view*>(kept.view)->word_count;
           td_yaml_release(&kept);
           return nodes;
         }));

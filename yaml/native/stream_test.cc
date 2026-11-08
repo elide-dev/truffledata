@@ -15,6 +15,7 @@
 #include <vector>
 
 using namespace truffledata::yaml;
+using yaml_session = truffledata::yaml::session;
 using truffledata::yaml::testing::fault_memory;
 using truffledata::yaml::testing::render;
 
@@ -36,14 +37,14 @@ struct run {
 };
 
 // Feeds `text` in `chunk`-byte pieces (0: all at once) and renders every document.
-run documents(session& s, const std::string& text, size_t chunk, size_t max_document = size_t(1) << 20,
+run documents(yaml_session& s, const std::string& text, size_t chunk, size_t max_document = size_t(1) << 20,
               size_t buffer = size_t(1) << 20) {
   run r;
   stream st(s, max_document, buffer);
   size_t fed = 0;
   auto drain = [&]() {
     for (;;) {
-      session::document_view d;
+      yaml_session::document_view d;
       int32_t status = st.next(&d);
       if (status == status_stream_empty) return true;
       if (status != status_ok) {
@@ -65,7 +66,7 @@ run documents(session& s, const std::string& text, size_t chunk, size_t max_docu
 }
 
 void stream_split_matches_whole_parse(const std::vector<std::string>& fixtures) {
-  session s{session_options{}};
+  yaml_session s{session_options{}};
   std::vector<std::string> inputs;
   for (const auto& path : fixtures)
     if (basename(path) == "records-stream.yaml") inputs.push_back(slurp(path));
@@ -105,7 +106,7 @@ void stream_split_matches_whole_parse(const std::vector<std::string>& fixtures) 
 }
 
 void boundaries() {
-  session s{session_options{}};
+  yaml_session s{session_options{}};
   // `---` inside an indented block scalar is content; at column 0 it ends the document.
   require(documents(s, "a: |\n  ---\n  x\n---\nb\n", 0).documents ==
           std::vector<std::string>({"{\"a\":\"---\\nx\\n\"}", "\"b\""}));
@@ -124,7 +125,7 @@ void boundaries() {
 }
 
 void truncation_and_failure() {
-  session s{session_options{}};
+  yaml_session s{session_options{}};
   // The finished input ends inside the final document.
   run r = documents(s, "a: 1\n---\nb: [1, 2", 0);
   require(r.documents.size() == 1 && r.status == status_stream_truncated);
@@ -136,7 +137,7 @@ void truncation_and_failure() {
   std::string text = "a\n---\nb: : c\n---\nd\n";
   st.feed(reinterpret_cast<const uint8_t*>(text.data()), text.size());
   st.finish();
-  session::document_view d;
+  yaml_session::document_view d;
   require(st.next(&d) == status_ok && render(d.view) == "\"a\"");
   require(st.next(&d) == status_syntax && st.last_error() && st.last_error()->line > 0);
   require(st.next(&d) == status_syntax && st.failed());
@@ -147,7 +148,7 @@ void truncation_and_failure() {
 }
 
 void backpressure_and_limits() {
-  session s{session_options{}};
+  yaml_session s{session_options{}};
   std::string text;
   for (int i = 0; i < 50; ++i) text += "---\nitem: " + std::to_string(i) + "\n";
   // A 64-byte buffer accepts a little at a time; documents still come out in order.
@@ -159,11 +160,11 @@ void backpressure_and_limits() {
     size_t accepted = st.feed(reinterpret_cast<const uint8_t*>(text.data()) + fed, text.size() - fed);
     limited |= accepted < text.size() - fed;
     fed += accepted;
-    session::document_view d;
+    yaml_session::document_view d;
     while (st.next(&d) == status_ok) out.push_back(render(d.view));
   }
   st.finish();
-  session::document_view d;
+  yaml_session::document_view d;
   while (st.next(&d) == status_ok) out.push_back(render(d.view));
   require(limited && out.size() == 50 && out[49] == "{\"item\":49}");
   // A document larger than max_document_bytes is TD_YAML_LIMIT.
@@ -172,20 +173,20 @@ void backpressure_and_limits() {
 }
 
 void steady_state() {
-  session s{session_options{}};
+  yaml_session s{session_options{}};
   stream st(s, 1 << 20, 1 << 16);
   const std::string doc = "---\nid: 1007\nname: &n item\ntags: [*n, !!str 2, !x y]\nnote: \"text \\u00e9\"\n";
   size_t allocations = 0;
   for (int i = 0; i < 10000; ++i) {
     size_t accepted = st.feed(reinterpret_cast<const uint8_t*>(doc.data()), doc.size());
     require(accepted == doc.size());
-    session::document_view d;
+    yaml_session::document_view d;
     int32_t status = st.next(&d);
     if (i == 0) {
       require(status == status_stream_empty);  // the first document completes with the second `---`
       continue;
     }
-    require(status == status_ok && d.view.node_count == 12);
+    require(status == status_ok && testing::node_count(d.view) == 12);
     if (i == 3) allocations = s.memory().allocations();
     if (i > 3) require(d.index_allocations == 0);
   }
@@ -209,21 +210,23 @@ void c_abi() {
   require(td_yaml_stream_feed(st, reinterpret_cast<const uint8_t*>(text.data()), text.size()) == text.size());
   YamlResult r{};
   require(td_yaml_stream_next(st, &r) == TD_YAML_OK);
-  require(!r.owner && r.view && r.tag_count == 1 && r.anchor_count == 1 && r.alias_count == 1 && r.directive_count == 1);
+  require(!r.owner && r.view && r.tag_count == 1 && r.anchor_count == 1 && r.directive_count == 1);
   auto* tags = static_cast<const YamlSpan*>(r.tags);
   require(std::string(reinterpret_cast<const char*>(r.strings) + tags[0].offset, tags[0].length) == "tag:e.com,2000:m");
   auto* anchors = static_cast<const YamlAnchor*>(r.anchors);
-  require(anchors[0].node == 2 && std::string(reinterpret_cast<const char*>(r.strings) + anchors[0].offset, anchors[0].length) == "a");
-  require(static_cast<const uint64_t*>(r.alias_targets)[0] == 2);
+  const auto& view = *static_cast<const td_tape_view*>(r.view);
+  require(anchors[0].node == testing::ordinal(view, 2) && std::string(reinterpret_cast<const char*>(r.strings) + anchors[0].offset, anchors[0].length) == "a");
+  uint64_t alias = testing::ordinal(view, 5);
+  require(ct::kind(view.words[alias]) == ct::kind_ref && ct::low(view.words[alias]) == anchors[0].node);
   require(r.document_flags == (TD_YAML_DOC_PRESENT | TD_YAML_DOC_EXPLICIT_START | TD_YAML_DOC_EXPLICIT_END));
   // The stream's current document can be retained like any session document.
   YamlResult kept{};
-  require(td_yaml_session_retain(s, &kept) == TD_YAML_OK && kept.anchor_count == 1 && kept.alias_count == 1);
+  require(td_yaml_session_retain(s, &kept) == TD_YAML_OK && kept.anchor_count == 1);
   require(td_yaml_stream_next(st, &r) == TD_YAML_STREAM_EMPTY);
   td_yaml_stream_finish(st);
-  require(td_yaml_stream_next(st, &r) == TD_YAML_OK && render(*static_cast<const myna_value_view*>(r.view)) == "\"second\"");
+  require(td_yaml_stream_next(st, &r) == TD_YAML_OK && render(*static_cast<const td_tape_view*>(r.view)) == "\"second\"");
   require(td_yaml_stream_next(st, &r) == TD_YAML_STREAM_EMPTY);
-  require(render(*static_cast<const myna_value_view*>(kept.view)) == "{\"k\":[1],\"v\":null}");
+  require(render(*static_cast<const td_tape_view*>(kept.view)) == "{\"k\":[1],\"v\":null}");
   td_yaml_stream_release(st);
   // A failing document publishes its error.
   st = td_yaml_stream_create(s, 1 << 20, 1 << 20);
@@ -257,19 +260,19 @@ void allocation_failures() {
   session_options o;
   o.rules = p;
   auto sequence = [&](fault_memory& memory) {
-    session s(o, &memory);
+    yaml_session s(o, &memory);
     stream st(s, 1 << 20, 4096, &memory);
     size_t fed = 0, docs = 0;
     while (fed < text.size()) {
       fed += st.feed(reinterpret_cast<const uint8_t*>(text.data()) + fed, std::min<size_t>(1000, text.size() - fed));
-      session::document_view d;
+      yaml_session::document_view d;
       int32_t status;
       while ((status = st.next(&d)) == status_ok) ++docs;
       if (status == status_allocation) throw std::bad_alloc();
       require(status == status_stream_empty);
     }
     st.finish();
-    session::document_view d;
+    yaml_session::document_view d;
     int32_t status;
     while ((status = st.next(&d)) == status_ok) ++docs;
     if (status == status_allocation) throw std::bad_alloc();

@@ -419,11 +419,13 @@ class handler : public c4::yml::EventHandlerStack<handler, handler_state> {
     enable_<c4::yml::VAL | c4::yml::VAL_PLAIN>();
   }
   void set_key_scalar_dquoted(c4::csubstr s) {
+    s = unicode_dquoted(s);
     short_text w;
     if (!(short_quoted(s, w) && key_quoted_fast(s, w, scalar_style::double_quoted))) key(s, scalar_style::double_quoted, false);
     enable_<c4::yml::KEY | c4::yml::KEY_DQUO>();
   }
   void set_val_scalar_dquoted(c4::csubstr s) {
+    s = unicode_dquoted(s);
     short_text w;
     if (!(short_quoted(s, w) && value_quoted_fast(s, w, scalar_style::double_quoted))) value(s, scalar_style::double_quoted, false);
     enable_<c4::yml::VAL | c4::yml::VAL_DQUO>();
@@ -1178,6 +1180,29 @@ class handler : public c4::yml::EventHandlerStack<handler, handler_state> {
       }
     }
     return 0;
+  }
+
+  // rapidyaml filters JSON-style surrogate escapes as separate three-byte UTF-8 sequences.
+  // Accept a paired UTF-16 escape as one Unicode scalar (JSON compatibility), and reject all
+  // unpaired surrogates/out-of-range escapes before publishing validated text to the tape. The
+  // parser owns this mutable decoded buffer; repairing it only shrinks the scalar in place.
+  c4::csubstr unicode_dquoted(c4::csubstr s) {
+    if (s.empty() || simdutf::validate_utf8(s.str, s.len)) return s;
+    char* out = const_cast<char*>(s.str);
+    size_t read = 0, written = 0;
+    while (read < s.len) {
+      const auto* p = reinterpret_cast<const uint8_t*>(s.str + read);
+      if (s.len - read >= 3 && p[0] == 0xED && p[1] >= 0xA0 && p[1] <= 0xBF && (p[2] & 0xC0) == 0x80) {
+        if (p[1] >= 0xB0 || s.len - read < 6 || p[3] != 0xED || p[4] < 0xB0 || p[4] > 0xBF || (p[5] & 0xC0) != 0x80)
+          fail("unpaired surrogate in a YAML quoted scalar");
+        uint32_t high = 0xD000u | uint32_t(p[1] & 0x3F) << 6 | uint32_t(p[2] & 0x3F);
+        uint32_t low = 0xD000u | uint32_t(p[4] & 0x3F) << 6 | uint32_t(p[5] & 0x3F);
+        written += encode_utf8(0x10000u + ((high - 0xD800u) << 10) + (low - 0xDC00u), out + written);
+        read += 6;
+      } else out[written++] = s.str[read++];
+    }
+    if (!simdutf::validate_utf8(out, written)) fail("invalid Unicode escape in a YAML quoted scalar");
+    return {out, written};
   }
 
   // ---- node writing ---------------------------------------------------------------------------

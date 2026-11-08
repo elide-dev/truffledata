@@ -1,5 +1,5 @@
-module truffledata_yaml abi=2 target=x86_64-unknown-linux-gnu java_package=dev.elide.truffledata.yaml.generated java_class=Yaml c_library=truffledata_yaml c_library_static=true
-struct YamlResult size=488 align=8
+module truffledata_yaml abi=3 target=x86_64-unknown-linux-gnu java_package=dev.elide.truffledata.yaml.generated java_class=Yaml c_library=truffledata_yaml c_library_static=true
+struct YamlResult size=448 align=8
   field owner type=ptr<void> offset=0
   field view type=ptr<void> offset=8
   field copied_input_bytes type=u64 offset=16
@@ -9,28 +9,23 @@ struct YamlResult size=488 align=8
   field index_allocations type=u64 offset=48
   field parser_input_capacity type=u64 offset=56
   field control_bytes type=u64 offset=64
-  field lexical type=ptr<void> offset=72
-  field lexical_count type=u64 offset=80
-  field key_hashes type=ptr<void> offset=88
-  field yaml_meta type=ptr<void> offset=96
-  field tags type=ptr<void> offset=104
-  field tag_count type=u64 offset=112
-  field anchors type=ptr<void> offset=120
-  field anchor_count type=u64 offset=128
-  field alias_targets type=ptr<void> offset=136
-  field alias_count type=u64 offset=144
-  field strings type=ptr<u8> offset=152
-  field strings_length type=u64 offset=160
-  field directives type=ptr<void> offset=168
-  field directive_count type=u64 offset=176
-  field source type=ptr<u8> offset=184
-  field source_length type=u64 offset=192
-  field yaml_version type=u32 offset=200
-  field document_flags type=u32 offset=204
-  field error_line type=u64 offset=208
-  field error_column type=u64 offset=216
-  field error_message_length type=u32 offset=224
-  field error_message type=u8 offset=232
+  field yaml_meta type=ptr<void> offset=72
+  field tags type=ptr<void> offset=80
+  field tag_count type=u64 offset=88
+  field anchors type=ptr<void> offset=96
+  field anchor_count type=u64 offset=104
+  field strings type=ptr<u8> offset=112
+  field strings_length type=u64 offset=120
+  field directives type=ptr<void> offset=128
+  field directive_count type=u64 offset=136
+  field source type=ptr<u8> offset=144
+  field source_length type=u64 offset=152
+  field yaml_version type=u32 offset=160
+  field document_flags type=u32 offset=164
+  field error_line type=u64 offset=168
+  field error_column type=u64 offset=176
+  field error_message_length type=u32 offset=184
+  field error_message type=u8 offset=192
 end
 struct YamlOptionsStruct size=80 align=8
   field max_input_bytes type=u64 offset=0

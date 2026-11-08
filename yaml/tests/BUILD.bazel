@@ -13,14 +13,14 @@ data_java_library(
 
 java_test(
     name = "jvm",
-    srcs = ["YamlContractTest.java", "YamlIntegrationTest.java", "YamlPlanTest.java"],
-    args = ["--class", "dev.elide.truffledata.yaml.tests.YamlIntegrationTest", "--class", "dev.elide.truffledata.yaml.YamlContractTest", "--class", "dev.elide.truffledata.yaml.tests.YamlPlanTest"],
-    data = ["//yaml/native:yaml_shared.so"],
+    srcs = ["YamlContractTest.java", "YamlIntegrationTest.java", "YamlPlanTest.java", "YamlFuzz.java", "SnakeYamlDifferentialTest.java", "JsonSubsetDifferentialTest.java"],
+    args = ["--class", "dev.elide.truffledata.yaml.tests.YamlIntegrationTest", "--class", "dev.elide.truffledata.yaml.YamlContractTest", "--class", "dev.elide.truffledata.yaml.tests.YamlPlanTest", "--class", "dev.elide.truffledata.yaml.tests.SnakeYamlDifferentialTest", "--class", "dev.elide.truffledata.yaml.tests.JsonSubsetDifferentialTest"],
+    data = ["//yaml/native:yaml_shared.so", "//json/native:json_shared.so", "//yaml/native:testdata", "@yaml_test_suite//:cases", "snakeyaml_engine_excluded.txt"],
     jvm_flags = ["--enable-native-access=ALL-UNNAMED", "-Dpolyglot.engine.WarnInterpreterOnly=false", "-ea"],
     main_class = "dev.elide.bazel.junit.BazelJUnitRunner",
     use_testrunner = False,
     runtime_deps = ["//bazel/junit:runner", "@maven//:org_graalvm_truffle_truffle_runtime"],
-    deps = [":acceptance", "//yaml", "//yaml:jvm", "//tape", "//core", "@maven//:org_graalvm_truffle_truffle_api", "@maven//:org_junit_jupiter_junit_jupiter_api", "@maven//:org_snakeyaml_snakeyaml_engine"],
+    deps = [":acceptance", "//benchmarks/comparison:json_fixture", "//json", "//json:jvm", "//yaml", "//yaml:jvm", "//tape", "//core", "@maven//:org_graalvm_truffle_truffle_api", "@maven//:org_junit_jupiter_junit_jupiter_api", "@maven//:org_snakeyaml_snakeyaml_engine"],
 )
 
 native_image(

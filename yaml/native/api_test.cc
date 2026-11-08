@@ -19,8 +19,8 @@ using truffledata::yaml::testing::fault_memory;
 using truffledata::yaml::testing::render;
 
 namespace {
-static_assert(sizeof(YamlResult) == 488 && offsetof(YamlResult, error_message) == 232, "YamlResult ABI");
-static_assert(offsetof(YamlResult, key_hashes) == 88 && offsetof(YamlResult, yaml_meta) == 96, "shared JSON prefix");
+static_assert(sizeof(YamlResult) == 448 && offsetof(YamlResult, error_message) == 192, "YamlResult ABI");
+static_assert(offsetof(YamlResult, yaml_meta) == 72, "compact YAML metadata");
 static_assert(sizeof(YamlOptionsStruct) == 80, "YamlOptionsStruct ABI");
 
 YamlOptionsStruct defaults() {
@@ -42,7 +42,7 @@ std::string error_text(const YamlResult& r) {
   return std::string(reinterpret_cast<const char*>(&r) + offsetof(YamlResult, error_message), r.error_message_length);
 }
 bool nothing_published(const YamlResult& r) {
-  return !r.owner && !r.view && !r.lexical && !r.key_hashes && !r.yaml_meta && !r.source && r.lexical_count == 0;
+  return !r.owner && !r.view && !r.yaml_meta && !r.source;
 }
 
 void typed_plans() {
@@ -84,23 +84,23 @@ void sessions() {
   YamlResult borrowed{}, kept{};
   const std::string first = "s: first document text beyond inline\nn: 1\n";
   require(run(s, first, borrowed) == TD_YAML_OK);
-  require(!borrowed.owner && borrowed.view && borrowed.lexical_count == 5 && borrowed.key_hashes && borrowed.yaml_meta);
+  require(!borrowed.owner && borrowed.view && borrowed.yaml_meta);
   require(borrowed.document_flags == TD_YAML_DOC_PRESENT && borrowed.error_message_length == 0);
-  auto* view = static_cast<const myna_value_view*>(borrowed.view);
-  const myna_value_node* nodes = view->nodes;
+  auto* view = static_cast<const td_tape_view*>(borrowed.view);
+  const uint64_t* nodes = view->words;
   require(render(*view) == "{\"s\":\"first document text beyond inline\",\"n\":1}");
   // Retain moves storage: the retained descriptor points at the same nodes.
   require(td_yaml_session_retain(s, &kept) == TD_YAML_OK);
-  require(kept.owner && static_cast<const myna_value_view*>(kept.view)->nodes == nodes);
+  require(kept.owner && static_cast<const td_tape_view*>(kept.view)->words == nodes);
   require(td_yaml_session_retain(s, &kept) == TD_YAML_ARGUMENT);
   YamlResult other{};
   require(td_yaml_session_retain(s, &other) == TD_YAML_ARGUMENT);
   // The next decode reuses the session; the retained document is untouched.
   require(run(s, "s: second document overwrites session storage\nn: 2\n", borrowed) == TD_YAML_OK);
-  auto* retained = static_cast<const myna_value_view*>(kept.view);
+  auto* retained = static_cast<const td_tape_view*>(kept.view);
   require(render(*retained) == "{\"s\":\"first document text beyond inline\",\"n\":1}");
-  const uint64_t* spans = static_cast<const uint64_t*>(kept.lexical);
-  require(std::string(reinterpret_cast<const char*>(kept.source) + (spans[4] >> 32), uint32_t(spans[4])) == "1");
+  uint64_t span = lexical_span(*retained, testing::ordinal(*retained, 4));
+  require(std::string(reinterpret_cast<const char*>(kept.source) + (span >> 32), uint32_t(span)) == "1");
   // A failed decode publishes nothing but the error and leaves the session reusable.
   for (auto bad : {"a: [1, 2\n", "{a: 1, a: 2}", "\"unterminated\n", "a: b: c\n"}) {
     require(run(s, bad, borrowed) == TD_YAML_SYNTAX);
@@ -128,8 +128,9 @@ void sessions() {
   // Source retention publishes a pristine copy for quoted spans.
   require(run(s, "k: 'it''s'\n", borrowed, TD_YAML_RETAIN_SOURCE) == TD_YAML_OK);
   require(borrowed.document_flags & TD_YAML_DOC_SOURCE_RETAINED);
-  spans = static_cast<const uint64_t*>(borrowed.lexical);
-  require(std::string(reinterpret_cast<const char*>(borrowed.source) + (spans[2] >> 32), uint32_t(spans[2])) == "'it''s'");
+  const auto& quoted = *static_cast<const td_tape_view*>(borrowed.view);
+  span = lexical_span(quoted, testing::ordinal(quoted, 2));
+  require(std::string(reinterpret_cast<const char*>(borrowed.source) + (span >> 32), uint32_t(span)) == "'it''s'");
   // Non-finite floats are flagged.
   require(run(s, "[.inf, -.inf, .nan]", borrowed) == TD_YAML_OK && (borrowed.document_flags & TD_YAML_DOC_NONFINITE));
   // Input limits apply per document.

@@ -254,6 +254,7 @@ cc_test(
 filegroup(
     name = "testdata",
     srcs = glob(["testdata/*.yaml"]),
+    visibility = ["//yaml/tests:__pkg__"],
 )
 
 cc_test(
@@ -392,9 +393,9 @@ cc_library(
     copts = ["-std=c++17"],
 )
 
-# Myna's SIMD text bridge for SvmValueTape, shared with JSON.
+# Static YAML links the shared compact tape transcoder.
 cc_library(
     name = "svm",
     visibility = ["//visibility:public"],
-    deps = [":truffledata_yaml", "//json/native/bridge"],
+    deps = [":truffledata_yaml"],
 )
