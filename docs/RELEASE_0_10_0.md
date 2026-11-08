@@ -109,8 +109,8 @@ and compiled-graph behavior, not Arm speedups.
 
 ## Deferred performance work
 
-The user explicitly deferred the following performance goals from the 0.10.0
-release scope. The recorded misses remain misses; no timing or memory goal is
+The following performance goals remain future work beyond 0.10.0.
+The recorded misses remain misses; no timing or memory goal is
 marked achieved by this release decision. These are possible investigations,
 with no delivery date, implementation commitment or promised speedup:
 

@@ -4,6 +4,36 @@ The user authorized every open TruffleData issue and the unfinished JSON,
 protobuf and YAML plans, with an intermediate release to unblock TruffleCEL.
 The user selected `MIT OR Apache-2.0` for this follow-up.
 
+## Current release decision — 2026-11-08
+
+Sam authorized releasing the completed work as **0.10.0** to unblock TruffleCEL
+and Elide **1.6.3**, then continuing hill-climbing separately. This supersedes the
+historical pause/stay-local checkpoints below for the release lifecycle: branch
+push, PR/CI, merge, signed tag, Maven/Central publication, GitHub release and
+public verification. It does not authorize releasing the downstream projects.
+
+Remaining protobuf/JSON/YAML performance goals and standalone Buffa Cargo work
+are deferred, not declared achieved. The measured gains, regressions, comparisons
+and possible next investigations are in `docs/RELEASE_0_10_0.md`, the common
+`benchmarks/results/svm-tranche-20261108/README.md` report and the format ledgers.
+The five refreshed SVM charts use the preserved 244 paired cells, with exact
+source/image provenance and an explicit pre-final-release-fix measurement scope.
+
+Sam requested updated charts and no extensive re-verification. Reuse the recent
+455-test coverage, both Linux ISA native acceptance runs and prior native safety
+qualification. Run focused checks for the external serialized-slab verifier fix,
+normal candidate/main CI, five-platform artifact staging and actual staged/public
+integrity and consumer checks. Do not rerun broad benchmarks for packaging.
+
+Release preflight: existing `r2:elide-maven` is accessible; the selected signing
+key passes a detached-sign/verify check; authenticated Central preflight returns
+404 for a missing deployment (not an authentication failure). Credential values
+are not recorded. Python publication calls use the system CA bundle at
+`/etc/ssl/cert.pem`. No 0.10.0 artifact has been uploaded at this checkpoint.
+Native release packaging is in progress; the verifier fix and final CI/publication
+remain pending. Record concrete completion below rather than inferring it from
+these preflight checks.
+
 ## Intermediate release: complete
 
 - PR #34 merged to main `223edf71f66f33c37ea2eab4caf677a698074c72`.

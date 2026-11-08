@@ -18,3 +18,23 @@ optimization-admission gate.
 Current evidence and workflow checkpoints are in
 `docs/superpowers/plans/2026-11-08-release-resume.md`. Follow its serialized Bazel
 and stay-local rules; do not push, dispatch CI, or publish without user instruction.
+
+# 0.10.0 release authorization
+
+Sam subsequently authorized releasing the current work as `0.10.0` to unblock
+TruffleCEL and Elide `1.6.3`. This authorizes the necessary branch push, PR/CI,
+merge, signed tag, Maven/Central publication and GitHub release, followed by public
+artifact verification. It supersedes the preceding stay-local/pause restriction
+for this release. No additional permission round is needed for these steps.
+
+Record measured performance gains and open gaps honestly. The remaining
+performance goals are deferred from this unblock release; future approaches are
+hypotheses, not committed outcomes. Standalone Buffa Cargo completion remains
+follow-up work and must not be advertised as complete. Correctness, ownership,
+safety, artifact integrity and existing graph/allocation contracts remain intact.
+
+Keep bench charts current using the preserved measured data. Reuse the recent
+qualification; do not repeat broad benchmarks or extensive validation without a
+new change or failure that warrants it. Run focused checks for release fixes and
+validate the staged/published artifacts. Resume hill-climbing after the release
+as a separate tranche.

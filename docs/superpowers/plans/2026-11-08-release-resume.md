@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans. Steps use checkbox (`- [ ]`) syntax for tracking. The ledger is `docs/superpowers/plans/2026-11-07-distribution-ledger.md` (append "Resume" lines).
 
-**Goal:** Take `feat/followup-v5` from the 2026-11-07 pause checkpoint to a merged, green main and a published 0.10.0, closing the open issues (#24–#37) and the recorded performance gates or ruling on each with evidence.
+**Current goal:** Release `feat/followup-v5` as 0.10.0 to unblock TruffleCEL and Elide 1.6.3. Sam explicitly authorized this release after the completed SVM tranche, with remaining performance goals recorded as deferred investigations, not commitments. Push, normal CI, merge, signed tag, Maven/Central publication and GitHub release are authorized; earlier stay-local and pause checkpoints below are historical.
 
-**Architecture:** No new subsystems. Fix the CI blockers first, then the measured performance gates per format (protobuf B4/E1, JSON retained and GB/s, YAML floors, CodSpeed JSON regressions), then the Cargo-buildable crates (#37), then qualification and publication exactly as the distribution ledger prescribes.
+**Release scope:** Preserve the completed SVM gains and updated charts. Fix the external serialized-slab verification amplification issue, run its focused checks, then package and publish. Remaining protobuf/JSON/YAML performance goals and standalone Buffa Cargo completion (#37) are follow-up work; their misses remain visible. Do not repeat broad benchmarks or extensive qualification already completed. Reuse the recent evidence, normal candidate/main CI, and checks of actual staged and public artifacts.
 
 **Spec:** `docs/superpowers/plans/2026-11-07-distribution-ledger.md` (pause checkpoint, resume order, release authorization), plus the per-format plans it references.
 
@@ -15,7 +15,7 @@
 - Keep the shared Bazel volume above a few GiB free; delete only orphaned output bases (workspace directory gone), never shared caches, baselines (`build/protobuf-baseline-fecb39f`, `/private/tmp/td-json-ce7399f-baseline`) or release evidence.
 - No budget relaxation without a measured breakdown recorded in the owning ledger.
 - Publication only after: method coverage contract, explicit native/negative-JIT and sanitizer gates, five-platform staging, published Java/native/Gradle consumers, signatures/metadata, full CI green on main. Then `CENTRAL_CREDENTIALS_FILE="$HOME/.m2/settings-publishing.xml"`.
-- Commit messages end with `Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>`.
+- Attribute commits only to their actual contributors; the old Claude coauthor instruction is historical.
 
 ## Review Focus
 
@@ -44,7 +44,7 @@
 ### Task R4: CodSpeed JSON regressions
 - [x] Reproduce `json-generic-java-export` (-12%) and `json-generic-interop-read` (-10%) on the simulation image against main `223edf7`; bisect across the branch's tape/JSON commits; fix or rule with evidence. Fresh final-image callgrind counts improve versus main by 15.7% / 8.4%; native/JVM checks pass in `cdcbc5cc`. Evidence: `benchmarks/results/json-codspeed-20261108/`. This is instruction-count evidence, not a new full throughput qualification.
 
-### Task R5: Performance gates
+### Task R5: Performance goals (deferred from 0.10.0 by the current release decision)
 - [ ] Protobuf B4 on SVM: full interpreter ≤ 2.5× stock. Phase 1 and the warm-cache tranche are admitted, with a fresh profile and complete pairs; the latest ratios remain 3.471× generated and 5.652× slab. E1's old JVM selected-small 0.864-vs-0.85 miss is informational under the reaffirmed SVM priority, not a release blocker.
 - [ ] YAML native C++ decoder floors: config 0.561/0.597, block 0.693/0.715, flow 0.692/0.724, text 0.771/0.895 (observed/floor). These compare native session decode/reset with a rapidyaml scan handler, not JVM or end-to-end SVM. Stream 0.507 already exceeds 0.497. SVM graph/allocation gates pass; corrected native and full comparison qualification remain. See `benchmarks/results/yaml-ctape-5002235/README.md` and the YAML ledger.
 - [ ] JSON required native producer floors need current pinned recapture: the latest qualifying retained big/huge and validate small/huge results miss their thresholds. The 1.5× logical-memory criterion remains structurally unmet; duplicate-check price qualification remains unrun on the pinned host. Narrow typed gains do not close these broader criteria. See `benchmarks/results/json-sota-final-qualification/README.md` and the JSON ledger.
@@ -54,7 +54,7 @@ hypotheses explicitly permit confirmation or refutation without blocking release
 Correctness, coverage, graph and allocation gates pass. Recorded performance gaps
 remain follow-ups; final staged-artifact qualification is still required.
 
-### Task R6: #37 Cargo-buildable crates (partially implemented)
+### Task R6: #37 Cargo-buildable crates (partially implemented; remaining work deferred)
 - [x] JSON standalone crate and `cc` build honoring `CXXSTDLIB`, with vendored sources/seam and linked fingerprint test (`c74dd85`). Current macOS Arm64 Cargo build/link/fingerprint passes after vendor synchronization `de07d75`.
 - [x] CSV standalone crate with per-file ISA flags, shared simdutf option and fingerprint test (`c74dd85`).
 - [ ] Buffa Cargo seam packaging: `protobuf-buffa/native/lib.rs` includes `generated/seam.rs`, which is absent from a fresh checkout, and no Cargo build script supplies it. Production allocator ownership already complies: its allocator declaration is test-only.
@@ -63,7 +63,7 @@ remain follow-ups; final staged-artifact qualification is still required.
 
 ### Task R7: Qualification and release
 - [ ] Resolve the existing external serialized-slab verification time-complexity blocker. Repeated handles validate identity but recursively revisit shared subgraphs before the accumulated budget check; the bounded depth-10 test accounts for 4,093 logical cells. Preserve depth, identity, per-occurrence budgets, projection and error order. This affects attacker-controlled serialized slabs, not ordinary producer-generated wire trees. See `SlabVerifierTest.aliasedRecursiveRecordsKeepPerVisitBudgets` and the protobuf ledger.
-- [ ] Push, PR #36 ready, CI green; update the isolated qualification checkout; full native/negative-JIT/sanitizer gates; five-platform staging; consumers; signatures; merge; green main; publish 0.10.0; verify public artifacts; close issues.
+- [ ] Push, PR #36 ready, CI green; reuse the recent native/negative-JIT/sanitizer evidence; five-platform staging; artifact consumers/integrity; signatures; merge; green main; publish 0.10.0; verify public artifacts; close only issues actually completed. Do not rerun the full performance or qualification matrices without a new failure that warrants it.
 
 Resume 2026-11-08 (hill climb, three Opus workers, Fable briefing/review): worktrees td-climb-slab (climb/slab: allocation-free slab verification, plan-cached SlabLimits, no per-message Budget, leaf `decodeSlabSmall` without PinnedObject, then native_smoke gates from the measured floor), td-climb-b4 (climb/b4: B4 phase 1 per 2026-11-08-protobuf-b4-design.md, TDD, consumer_measure), td-climb-json (climb/json: CodSpeed JSON −12%/−10% reproduced locally via RBE simulation image + valgrind in an amd64 container, bisect 223edf7..1cfcb37, zero-cost fix). Bazel runs serialized through a scratchpad lock wrapper; nothing pushed. Results merge into feat/followup-v5 after review.
 
