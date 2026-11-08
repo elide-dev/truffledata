@@ -31,5 +31,5 @@ Platforms (`rbe_linux_arm64` if used), per-platform archive/shared targets, fat-
 The checker, consumer links per platform (LTO on and off), `publish.sh` multi-platform staging, `docs/PUBLISHING.md`, README platform table.
 
 ### Task R4: Verification
-- [x] Staged and checked on all three platforms; every gate passes except the ABI fingerprint check: the single bindings jars carry the linux-x86_64 fingerprint, so the aarch64 and macOS natives are not yet publishable (ledger, BLOCKED).
+- [x] Staged and checked on all three platforms with Myna 0.13.0 and GraalVM 25.5.5-elide.27; every archive, shared-library and bindings fingerprint check passes (ledger, 0.9.0 follow-up).
 Stage a full repository with every platform; run every consumer; record the checker output in the ledger.
