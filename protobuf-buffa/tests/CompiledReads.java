@@ -138,6 +138,15 @@ final class CompiledReads {
       unknownQueries(durable, 2, 4);
       unknownQueries(session.decode(empty), 3, 0);
     }
+    // The plan reuses its default slab limits; every budget still applies after another one.
+    try (var compiled = decoder.compile(plan, 65536);
+        var input = decoder.allocate(wire.length).put(wire)) {
+      int extent = compiled.decodeSlab(wire, 65536).slabBytes();
+      Acceptance.rejects(() -> compiled.decodeSlab(wire, extent - 8), RuntimeException.class);
+      Acceptance.check(compiled.decode(wire, extent).slabBytes() == extent, "cached byte limits");
+      Acceptance.rejects(() -> compiled.decodeSlab(input, extent - 8), RuntimeException.class);
+      Acceptance.check(compiled.decode(input, extent).slabBytes() == extent, "cached input limits");
+    }
   }
 
   private static UnknownQueryRoot unknownQueries(Object row, int kind, int bytes) {

@@ -321,3 +321,29 @@ The immutable `5002235` qualification completed: 86/93 test targets pass, four f
 Next protobuf work after resume: requalify the committed correctness/generated-projection/build fixes; address B4 structurally while preserving public mismatch/required/null and borrowed lifetime checks; close required E1 JVM selected-small and peak/allocation/coverage failures; then update final performance review/release status from fresh evidence. Full main/release qualification remains the parent task; this checkpoint is not release approval.
 
 Resume 2026-11-08: Measured (legacy native_smoke, https://app.buildbuddy.io/invocation/a50e95b8-5b36-49ce-bafe-7caef20cdee7 and https://app.buildbuddy.io/invocation/a347c92f-33e8-4c17-ada2-c5a22c44da84): compact-scalar buffa ingest 312 B/message and ingest-typed 280 B/message, slabBytes=retainedSlabBytes=56 (Timestamp: 32 B header + 24 B record). Breakdown (SVM compressed refs, 8 B object / 16 B array headers): owned slab byte[56] 72 + SlabMessage 56 + SlabVerifier 56 + verifier long[1] 24 + verifier byte[0] 16 + ProtoRow.Budget 32 + SlabLimits 24 + PinnedObject 16 = 296 derived, 16 unattributed. Ruling: the 128/96 B gates are NOT re-based — about 170 B of the cost is per-message verifier, budget, limits and pin objects the design does not need. Next climb: allocation-free slab verification (reuse a plan-held verifier or primitive-state verify), cache SlabLimits per plan/limit, avoid the per-call Budget, and drop the PinnedObject residue; floor is about 72 (array) + 56 (message) B, then set the gate from the measured floor.
+
+### Resume 2026-11-08: measured durable slab allocation floor
+
+`d529c56` + `961d479` reduce legacy compact-scalar Buffa ingest from **312 to
+168 B/message**. The original 128 B gate fails as expected in
+[226e5f97](https://app.buildbuddy.io/invocation/226e5f97-f7d7-4994-b66e-dcdc577089a0).
+A differential allocation probe in
+[c07af12f](https://app.buildbuddy.io/invocation/c07af12f-2f94-4f8e-9b9a-6a5493648c09)
+measures an escaping `byte[56]` clone at **64 B**, clone plus verified
+`takeOwnership` at **112 B** (48 B message), and typed native ingest at **136 B**.
+The **24 B native residue** is consistent with the retained output PinnedObject
+(source inspection plus differential measurement, not allocation-class profiling).
+Generic ingestion adds **32 B** for two harness-boxed Longs. This supersedes the
+older array-header and zero-pin assumptions behind the unmeasured 152/120 estimate.
+`Comparison.java` now gates the measured floor at **168 B generic / 136 B typed
+and generated**, with no change to other engines or performance gates. Full probe
+and test evidence: [`protobuf-slab-allocation-20261108`](../../../benchmarks/results/protobuf-slab-allocation-20261108/README.md).
+
+Full legacy native smoke passes in
+[7b240f5f](https://app.buildbuddy.io/invocation/7b240f5f-6a9f-40cd-ace9-a26bca831bd4),
+including the 168/136/136 B generic/typed/generated ingestion cells. Core, runtime
+and Buffa JVM suites pass in c07af12f. The new bounded recursive-alias
+test pins per-visit budget accounting. **The pre-existing shared-subgraph time
+amplification remains a separate release blocker**: structure verification can
+walk exponentially many logical occurrences before budget rejection. Memoization
+must retain depth, identity, budget, projection and error-order semantics.

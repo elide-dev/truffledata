@@ -13,8 +13,9 @@ import org.jspecify.annotations.Nullable;
 
 /** Durable owning slab result. Closing is a no-op and snapshot preserves identity. */
 public final class SlabMessage extends SlabRow implements ProtoMessage {
+  // The valid extent is the verified header word HEADER_BYTES_USED, not a field: the message
+  // object stays at 48 bytes on SVM (compressed references, 8-byte header).
   final byte[] bytes;
-  private final int extent;
   private final @Nullable Projected projected;
 
   private static final class Projected {
@@ -33,22 +34,30 @@ public final class SlabMessage extends SlabRow implements ProtoMessage {
   }
 
   private Object @Nullable [] handles;
-  private @Nullable Map<Integer, SlabArray> arrays;
-  private @Nullable Map<Integer, Object> unsigned;
+  /** Lazy views: a list at its slab offset, a boxed unsigned 64-bit value at {@code ~slot}. */
+  private @Nullable Map<Integer, Object> views;
 
   private SlabMessage(Layout layout, byte[] owned) {
-    this(layout, owned, owned.length);
+    this(layout, owned, owned.length, null);
   }
 
-  private SlabMessage(Layout layout, byte[] owned, int extent) {
-    this(layout, owned, extent, null);
+  /** A slab {@link SlabVerifier#verifyOwning} accepted; {@code exact} runs the full accounting. */
+  private SlabMessage(Layout layout, byte[] owned, int extent, boolean exact) {
+    super(layout);
+    projected = null;
+    bytes = owned;
+    if (exact) validate(0, ROOT, new ProtoRow.Budget(plan().limits()), 1);
+  }
+
+  /** Publish an owning slab already verified by {@link SlabVerifier#verifyOwning}. */
+  static SlabMessage owning(Layout layout, byte[] verified, int extent, boolean exact) {
+    return new SlabMessage(layout, verified, extent, exact);
   }
 
   private SlabMessage(Layout layout, byte[] owned, int extent, @Nullable Projected projected) {
     super(layout);
     this.projected = projected;
     bytes = owned;
-    this.extent = extent;
     check(bytes, extent, layout);
     validate(
         0, ROOT, projected == null ? new ProtoRow.Budget(plan().limits()) : projected.budget, 1);
@@ -148,8 +157,8 @@ public final class SlabMessage extends SlabRow implements ProtoMessage {
     byte[] owned = new byte[slab.remaining()];
     slab.duplicate().get(owned);
     Layout layout = plan.layout();
-    SlabVerifier.verify(owned, layout, limits);
-    return new SlabMessage(layout, owned);
+    return owning(
+        layout, owned, owned.length, SlabVerifier.verifyOwning(owned, owned.length, layout, limits));
   }
 
   /**
@@ -177,8 +186,9 @@ public final class SlabMessage extends SlabRow implements ProtoMessage {
     if (slab.length > limits.maxSlabBytes())
       throw new ContractViolation("Retained slab byte budget exceeded");
     Layout layout = plan.layout();
-    SlabVerifier.verify(slab, extent, layout, limits);
-    return new SlabMessage(layout, slab, extent);
+    // One walk verifies structure and decides the logical budget and required fields; the exact
+    // accounting runs only when that walk cannot rule a violation out.
+    return owning(layout, slab, extent, SlabVerifier.verifyOwning(slab, extent, layout, limits));
   }
 
   public SlabMessage row() {
@@ -194,7 +204,7 @@ public final class SlabMessage extends SlabRow implements ProtoMessage {
   }
 
   public int slabBytes() {
-    return extent;
+    return getInt(bytes, HEADER_BYTES_USED);
   }
 
   /** Retained array capacity, including unused bytes after the valid slab extent. */
@@ -224,7 +234,7 @@ public final class SlabMessage extends SlabRow implements ProtoMessage {
   }
 
   public byte[] slabCopy() {
-    return Arrays.copyOf(bytes, extent);
+    return Arrays.copyOf(bytes, slabBytes());
   }
 
   @Override
@@ -276,12 +286,16 @@ public final class SlabMessage extends SlabRow implements ProtoMessage {
     return array;
   }
 
+  private Map<Integer, Object> views() {
+    Map<Integer, Object> values = views;
+    if (values == null) views = values = new HashMap<>();
+    return values;
+  }
+
   @TruffleBoundary
   synchronized SlabArray array(int type, int ordinal, int list, boolean expanded) {
-    Map<Integer, SlabArray> values = arrays;
-    if (values == null) arrays = values = new HashMap<>();
-    SlabArray found = values.get(list);
-    if (found != null) return found;
+    Map<Integer, Object> values = views();
+    if (values.get(list) instanceof SlabArray found) return found;
     SlabArray result = new SlabArray(this, type, ordinal, list, expanded);
     values.put(list, result);
     return result;
@@ -289,12 +303,12 @@ public final class SlabMessage extends SlabRow implements ProtoMessage {
 
   @TruffleBoundary
   synchronized Object unsigned(int at, long bits) {
-    Map<Integer, Object> values = unsigned;
-    if (values == null) unsigned = values = new HashMap<>();
-    Object result = values.get(at);
+    Map<Integer, Object> values = views();
+    // List offsets are positive, so complemented slot offsets never collide with them.
+    Object result = values.get(~at);
     if (result == null) {
       result = SlabRow.unsigned(bits);
-      values.put(at, result);
+      values.put(~at, result);
     }
     return result;
   }

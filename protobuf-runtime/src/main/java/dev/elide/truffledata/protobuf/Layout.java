@@ -4,6 +4,8 @@ import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import dev.elide.truffledata.Accessor;
 import dev.elide.truffledata.ContractViolation;
+import dev.elide.truffledata.DataArray;
+import dev.elide.truffledata.Limits;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.*;
@@ -145,6 +147,16 @@ public final class Layout {
   private final byte[] program;
   private final int fingerprint;
 
+  /**
+   * Per-record logical budget terms, each the maximum over types: fields plus absent singular
+   * {@code bytes} defaults (cells), repeated slots, and absent singular string defaults (UTF-16
+   * bytes). {@link #withinBudget} bounds a verified owning slab with them.
+   */
+  private final long recordCells;
+
+  private final int repeatedSlots;
+  private final long recordDefaultBytes;
+
   private Layout(List<ProtoPlan> types) {
     if (types.isEmpty()) throw new ContractViolation("Empty slab layout");
     plans = types.toArray(ProtoPlan[]::new);
@@ -162,9 +174,22 @@ public final class Layout {
       if (indices.putIfAbsent(plans[t].name(), t) != null)
         throw new ContractViolation("Duplicate slab layout type: " + plans[t].name());
     long programBytes = PROGRAM_HEADER_BYTES;
+    long maxCells = 0, maxDefaultBytes = 0;
+    int maxRepeated = 0;
     for (int t = 0; t < count; t++) {
       ProtoPlan plan = plans[t];
       int fields = plan.size();
+      long cells = fields, defaultBytes = 0;
+      int repeated = 0;
+      for (int ordinal = 0; ordinal < fields; ordinal++) {
+        var field = plan.field(ordinal);
+        if (field.repeated()) repeated++;
+        else if (field.defaultValue() instanceof String text) defaultBytes += 2L * text.length();
+        else if (field.defaultValue() instanceof DataArray blob) cells += blob.size();
+      }
+      maxCells = Math.max(maxCells, cells);
+      maxDefaultBytes = Math.max(maxDefaultBytes, defaultBytes);
+      maxRepeated = Math.max(maxRepeated, repeated);
       accessors[t] = new Accessor[fields];
       int words = (fields + 31) >>> 5;
       int cases = 0;
@@ -212,6 +237,9 @@ public final class Layout {
       programBytes += 16 + 12L * fields;
     }
     if (programBytes > Integer.MAX_VALUE) throw new ContractViolation("Slab layout program budget");
+    recordCells = maxCells;
+    recordDefaultBytes = maxDefaultBytes;
+    repeatedSlots = maxRepeated;
     ByteBuffer out = ByteBuffer.allocate((int) programBytes).order(ByteOrder.LITTLE_ENDIAN);
     out.putInt(PROGRAM_MAGIC).putInt(PROGRAM_VERSION).putInt(count).putInt(0);
     for (int t = 0; t < count; t++) {
@@ -261,6 +289,19 @@ public final class Layout {
 
   public int types() {
     return plans.length;
+  }
+
+  /**
+   * True when no verified owning slab of {@code extent} bytes whose reachable records and strings
+   * each hold a distinct one of {@code handles} ids can exceed {@code limits} (the accounting of
+   * {@code SlabMessage.validate}). A record adds at most its fields, absent defaults, one list
+   * count per repeated slot and its unknown span; a string adds at most its payload; every count,
+   * span and payload lies inside the extent.
+   */
+  boolean withinBudget(int handles, int extent, Limits limits) {
+    long cells = recordCells + (repeatedSlots + 1L) * extent;
+    long bytes = recordDefaultBytes + 2L * extent;
+    return cells <= limits.maxCells() / handles && bytes <= limits.maxStringBytes() / handles;
   }
 
   public ProtoPlan plan(int type) {
