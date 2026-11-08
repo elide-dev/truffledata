@@ -176,3 +176,8 @@ and fatal-warning compiled reads, including a compiled lazy child expiring on re
 Raw evidence is in benchmarks/results/protobuf-projection-java-local/. Linux native
 and JVM/SVM integrated qualification remains pending after nullability fixes. No E1
 sparse-resident speed gate is claimed; that measurement and ABI9 retirement remain.
+
+
+### G1 native view retirement checkpoint
+
+The native view implementation, View struct and four view imports are removed in seam ABI 11. Slab/projection formats remain TDS1/TDP1. Binary typed indexes remain as a validation oracle and text/ProtoJSON infrastructure; retired format 3 is rejected. The 8,000-case native differential now scans the independent typed index directly instead of recreating deleted view directories. All 43 remaining native tests pass locally with AddressSanitizer and leak detection (seven obsolete view-specific tests were removed with their code). Myna 0.13.0 descriptor validation and symbol inspection pass; fingerprint and raw evidence are retained in `benchmarks/results/protobuf-view-retirement-20261107/`. Integrated Java retirement and final remote/platform checks remain pending.

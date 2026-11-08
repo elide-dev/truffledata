@@ -1,4 +1,4 @@
-//! Task A2: the native slab decoder against the Task A1 golden slabs, the ABI 9 view decoder
+//! Native slab decoder against golden slabs and the independent typed wire index
 //! (differential), and targeted semantics; capacity, budgets, allocation and failure injection.
 use super::*;
 use crate::allocation_probe;
@@ -619,9 +619,9 @@ fn compile_rejects_inconsistent_programs() {
     assert_eq!(c.types[0].find(4), None);
 }
 
-// ---- Differential against the ABI 9 view decoder ----
+// ---- Differential against the typed wire index ----
 
-/// The ABI 9 `nested` test schema (typed_view_tests.rs) with a TDL1 section. Field flags 0:
+/// Seeded nested schema with a TDL1 section. Field flags 0:
 /// implicit presence, which the slab keeps as ProtoRow's non-default rule.
 fn nested() -> Vec<T> {
     vec![
@@ -646,7 +646,7 @@ fn nested() -> Vec<T> {
     ]
 }
 
-fn view_child(rng: &mut Rng, depth: u32) -> Vec<u8> {
+fn corpus_child(rng: &mut Rng, depth: u32) -> Vec<u8> {
     let mut out = Vec::new();
     for _ in 0..rng.below(4) {
         match rng.below(4) {
@@ -657,7 +657,7 @@ fn view_child(rng: &mut Rng, depth: u32) -> Vec<u8> {
                 ["", "a", "λ", "😀x"][rng.below(4) as usize].as_bytes(),
             ),
             2 if depth < 9 => {
-                let inner = view_child(rng, depth + 1);
+                let inner = corpus_child(rng, depth + 1);
                 bytes(&mut out, 3, &inner);
             }
             _ => field(&mut out, 40 + rng.below(3) as u32, rng.next() >> rng.below(64)),
@@ -668,7 +668,7 @@ fn view_child(rng: &mut Rng, depth: u32) -> Vec<u8> {
 
 /// Mostly valid nested wire with repeated singular messages (merges), wrong wire types, unknown
 /// fields, deep nesting and rare corruption.
-fn view_wire(rng: &mut Rng) -> Vec<u8> {
+fn corpus_wire(rng: &mut Rng) -> Vec<u8> {
     let mut out = Vec::new();
     for _ in 0..rng.below(12) {
         match rng.below(13) {
@@ -682,7 +682,7 @@ fn view_wire(rng: &mut Rng) -> Vec<u8> {
                 bytes(&mut out, 2, &packed);
             }
             3 | 4 => {
-                let inner = view_child(rng, 1);
+                let inner = corpus_child(rng, 1);
                 bytes(&mut out, 3 + rng.below(2) as u32, &inner);
             }
             5 => {
@@ -696,7 +696,7 @@ fn view_wire(rng: &mut Rng) -> Vec<u8> {
             6 => field(&mut out, 6, rng.below(9)),
             7 => {
                 tag(&mut out, 7, 3);
-                out.extend(view_child(rng, 1));
+                out.extend(corpus_child(rng, 1));
                 tag(&mut out, if rng.below(30) == 0 { 8 } else { 7 }, 4);
             }
             8 => {
@@ -737,167 +737,104 @@ fn view_wire(rng: &mut Rng) -> Vec<u8> {
     out
 }
 
-/// One view message (entries, directory words) against one slab record.
+/// Compare a record against the independent typed wire index. The oracle scans its preorder
+/// entries directly; it does not recreate the retired ABI 9 directories or native view owners.
+/// Returns whether a singular message merge occurred anywhere in the compared subtree.
 #[allow(clippy::too_many_arguments)]
 fn same_record(
-    schema: &[T],
-    c: &Compiled,
-    input: &[u8],
-    entries: &[Field],
-    words: &[u32],
-    ty: usize,
-    dir: usize,
-    range: (usize, usize),
-    s: &[u8],
-    record: usize,
-) {
-    let fields = &schema[ty].1;
-    for (ordinal, x) in fields.iter().enumerate() {
-        let word = words[dir + ordinal] as usize;
+    schema: &[T], c: &Compiled, input: &[u8], entries: &[Field], ty: usize,
+    range: (usize, usize), s: &[u8], record: usize,
+) -> bool {
+    let mut merged = false;
+    for (ordinal, x) in schema[ty].1.iter().enumerate() {
+        let mut positions = Vec::new();
+        let mut index = range.0;
+        while index < range.1 {
+            if entries[index].number as usize == ordinal + 1 { positions.push(index); }
+            index = entries[index].end as usize;
+        }
         let at = record + slot(c, ty, ordinal);
-        let repeated = x.flags & REPEATED != 0;
-        if !repeated {
-            if word == 0 {
-                assert!(!present(s, record, ordinal), "{ty}.{ordinal} absent");
-                continue;
-            }
-            let entry = entries[word - 1];
+        if x.flags & REPEATED == 0 {
+            let Some(&index) = positions.last() else {
+                assert!(!present(s,record,ordinal), "{ty}.{ordinal} absent"); continue;
+            };
+            let entry=entries[index];
             match x.kind {
                 MESSAGE | GROUP => {
-                    assert!(present(s, record, ordinal));
-                    // Merged occurrences are covered by merge_matches_java_concatenation.
-                    let mut occurrences = 0;
-                    let mut i = range.0;
-                    while i < range.1 {
-                        occurrences += usize::from(entries[i].number as usize == ordinal + 1);
-                        i = entries[i].end as usize;
-                    }
-                    if occurrences == 1 {
-                        same_record(
-                            schema,
-                            c,
-                            input,
-                            entries,
-                            words,
-                            x.child as usize,
-                            entry.value as usize,
-                            (word, entry.end as usize),
-                            s,
-                            u32_at(s, at) as usize,
-                        );
+                    assert!(present(s,record,ordinal));
+                    if positions.len() == 1 {
+                        merged |= same_record(schema,c,input,entries,x.child as usize,
+                            (index+1,entry.end as usize),s,u32_at(s,at) as usize);
+                    } else {
+                        // Concatenation semantics are pinned independently by merge goldens.
+                        merged=true;
                     }
                 }
                 STRING | BYTES => {
-                    let expected =
-                        &input[entry.value as usize..entry.value as usize + entry.length as usize];
-                    assert_eq!(present(s, record, ordinal), !expected.is_empty());
-                    let (payload, ascii, units) = string_at(s, u32_at(s, at) as usize);
-                    assert_eq!(payload, expected);
-                    if x.kind == STRING {
-                        let text = std::str::from_utf8(expected).unwrap();
-                        assert_eq!(ascii, text.is_ascii());
-                        assert_eq!(units as usize, text.encode_utf16().count());
+                    let expected=&input[entry.value as usize..entry.value as usize+entry.length as usize];
+                    assert_eq!(present(s,record,ordinal),!expected.is_empty());
+                    let (payload,ascii,units)=string_at(s,u32_at(s,at) as usize);
+                    assert_eq!(payload,expected);
+                    if x.kind==STRING {
+                        let text=std::str::from_utf8(expected).unwrap();
+                        assert_eq!(ascii,text.is_ascii());
+                        assert_eq!(units as usize,text.encode_utf16().count());
                     }
                 }
                 _ => {
-                    let value = entry.value as u32;
-                    assert_eq!(u32_at(s, at), value, "{ty}.{ordinal}");
-                    assert_eq!(present(s, record, ordinal), value != 0);
+                    let value=entry.value as u32;
+                    assert_eq!(u32_at(s,at),value,"{ty}.{ordinal}");
+                    assert_eq!(present(s,record,ordinal),value!=0);
                 }
             }
-            continue;
-        }
-        if word == 0 {
-            assert!(!present(s, record, ordinal));
-            continue;
-        }
-        assert!(present(s, record, ordinal));
-        let n = words[word] as usize;
-        let list = u32_at(s, at) as usize;
-        let width = match x.kind {
-            INT64 => 8,
-            _ => 4,
-        };
-        let items = list_at(s, list, width);
-        assert_eq!(items.len(), n, "{ty}.{ordinal} count");
-        for (k, item) in items.iter().enumerate() {
-            let index = words[word + 1 + k] as usize;
-            let entry = entries[index];
-            match x.kind {
-                MESSAGE => same_record(
-                    schema,
-                    c,
-                    input,
-                    entries,
-                    words,
-                    x.child as usize,
-                    entry.value as usize,
-                    (index + 1, entry.end as usize),
-                    s,
-                    *item as usize,
-                ),
-                STRING | BYTES => {
-                    let (payload, _, _) = string_at(s, *item as usize);
-                    assert_eq!(
-                        payload,
-                        &input[entry.value as usize..entry.value as usize + entry.length as usize]
-                    );
+        } else if positions.is_empty() {
+            assert!(!present(s,record,ordinal));
+        } else {
+            assert!(present(s,record,ordinal));
+            let width=if x.kind==INT64 {8} else {4};
+            let items=list_at(s,u32_at(s,at) as usize,width);
+            assert_eq!(items.len(),positions.len(),"{ty}.{ordinal} count");
+            for (item,index) in items.iter().zip(positions) {
+                let entry=entries[index];
+                match x.kind {
+                    MESSAGE => merged |= same_record(schema,c,input,entries,x.child as usize,
+                        (index+1,entry.end as usize),s,*item as usize),
+                    STRING | BYTES => {
+                        let (payload,_,_)=string_at(s,*item as usize);
+                        assert_eq!(payload,&input[entry.value as usize..entry.value as usize+entry.length as usize]);
+                    }
+                    INT64 => assert_eq!(*item,entry.value),
+                    _ => assert_eq!(*item,entry.value as u32 as u64),
                 }
-                INT64 => assert_eq!(*item, entry.value),
-                _ => assert_eq!(*item, entry.value as u32 as u64),
             }
         }
     }
+    merged
 }
 
 #[test]
-fn entries_match_view_decoder() {
-    use crate::typed::view;
-    let schema = nested();
-    let p = program(&schema);
-    let v = view::compile(&p).unwrap();
-    let c = compile(&p).unwrap();
-    let mut rng = Rng(0xA2A2_5EED_0BAD_F00D);
-    let (mut accepted, mut merged) = (0, 0);
+fn entries_match_typed_index() {
+    let schema=nested();
+    let p=program(&schema);
+    let c=compile(&p).unwrap();
+    let mut rng=Rng(0xA2A2_5EED_0BAD_F00D);
+    let (mut accepted,mut merged)=(0,0);
     for _ in 0..8000 {
-        let input = view_wire(&mut rng);
-        let mut status = -1;
-        let (result, _) = view::view(&v, &input, 1 << 40, 1 << 40, 8, 1 << 26, Vec::new(), &mut status);
-        let ours = slab_depth(&c, &input, 7);
-        match (result, ours) {
-            (Ok(result), Ok(s)) => {
-                accepted += 1;
-                let certified = u32_at(&s, 4) & SLAB_CERTIFIED != 0;
-                assert_eq!(certified, status == 5, "certification of {input:?}");
-                merged += usize::from(!certified);
-                if result.count == 0 {
-                    // No field occurred: every presence word is zero.
-                    assert!((0..schema[0].1.len()).all(|i| !present(&s, 32, i)));
-                    continue;
-                }
-                let (entries, words) = unsafe {
-                    let e = std::slice::from_raw_parts(result.data, result.count);
-                    let w = std::slice::from_raw_parts(
-                        result.data.add(result.count).cast::<u32>(),
-                        result.words,
-                    );
-                    (e, w)
-                };
-                same_record(&schema, &c, &input, entries, words, 0, 0, (0, entries.len()), &s, 32);
-                unsafe { view::release(result.data, result.capacity) };
+        let input=corpus_wire(&mut rng);
+        let result=crate::typed::decode(&p,&input,0,&mut [],1<<40,1<<40,8,1<<26);
+        let ours=slab_depth(&c,&input,7);
+        match (result,ours) {
+            (Ok(entries),Ok(s)) => {
+                accepted+=1;
+                let has_merge=same_record(&schema,&c,&input,&entries,0,(0,entries.len()),&s,32);
+                assert_eq!(u32_at(&s,4)&SLAB_CERTIFIED!=0,!has_merge,"certification of {input:?}");
+                merged+=usize::from(has_merge);
             }
-            (Err(x), Err(y)) => assert_eq!(x, y, "status of {input:?}"),
-            (x, y) => panic!(
-                "view {:?} vs slab {:?} for {input:?}",
-                x.map(|r| {
-                    unsafe { view::release(r.data, r.capacity) };
-                    0
-                }),
-                y.map(|s| s.len())
-            ),
+            (Err(x),Err(y)) => assert_eq!(x,y,"status of {input:?}"),
+            (x,y) => panic!("typed index {:?} vs slab {:?} for {input:?}",x.map(|r|r.len()),y.map(|s|s.len())),
         }
     }
-    assert!(accepted > 4000 && merged > 100, "{accepted} accepted, {merged} merged");
+    assert!(accepted>4000 && merged>100,"{accepted} accepted, {merged} merged");
 }
 
 // ---- Capacity and budgets ----
@@ -909,7 +846,7 @@ fn corpus() -> Vec<(Vec<T>, Vec<u8>)> {
         .collect();
     let mut rng = Rng(0x5157_0000_0000_0001);
     for _ in 0..300 {
-        all.push((nested(), view_wire(&mut rng)));
+        all.push((nested(), corpus_wire(&mut rng)));
     }
     all
 }
@@ -1920,7 +1857,7 @@ fn projection_full_masks_and_strict_sparse_match_reference_corpus() {
     let lazy_mask = projection_program(&c,&none,Projection::LAZY,0);
     let mut rng = Rng(0x5052_4f4a_4543_5431);
     for _ in 0..8000 {
-        let wire = view_wire(&mut rng);
+        let wire = corpus_wire(&mut rng);
         let expected = slab(&c,&wire);
         let full = projected_slab(&c,&wire,&full_mask,FLAG_OWNING);
         match (&expected,full) {

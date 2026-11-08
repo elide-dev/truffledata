@@ -1,4 +1,4 @@
-//! Seam ABI 10: protobuf decoded into layout-compiled slabs (format `TDSLAB1`, docs/SLAB.md).
+//! Seam ABI 11: protobuf decoded into layout-compiled slabs (format `TDSLAB1`, docs/SLAB.md).
 //!
 //! A schema program (`TDB3` tables plus the `TDL1` layout section that Java appends) compiles
 //! once into checked descriptors; the layout is recomputed here and a program whose section

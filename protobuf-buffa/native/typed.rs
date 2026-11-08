@@ -6,8 +6,6 @@ use std::mem::size_of;
 
 #[path = "typed_json.rs"]
 mod json;
-#[path = "typed_view.rs"]
-pub mod view;
 
 type Result<T> = std::result::Result<T, i32>;
 #[derive(Clone, Copy)]
@@ -151,7 +149,6 @@ pub struct Decoder<'a, 'b> {
     strings: u64,
     depth: u32,
     native: u64,
-    view_ready: bool,
 }
 impl<'a, 'b> Decoder<'a, 'b> {
     fn charge(&mut self, n: u64) -> Result<()> {
@@ -216,12 +213,6 @@ impl<'a, 'b> Decoder<'a, 'b> {
         self.charge(count as u64)?;
         let table = self.schema.table(base, count)?;
         let flags = self.schema.word(base + 4)?;
-        // Bit 9 is a compiler-established fact: this type has no required fields. Java retains
-        // its semantic fallback for required-field graphs and unsupported schema shapes.
-        if self.view_ready && (count > 64 || flags & 512 == 0) {
-            self.view_ready = false;
-        }
-        let mut seen_messages = 0u64;
         let mut invalid_map = false;
         while !input.is_empty() {
             let tag = Tag::decode(input).map_err(|_| MALFORMED)?;
@@ -254,13 +245,6 @@ impl<'a, 'b> Decoder<'a, 'b> {
                 continue;
             }
             if kind == 10 || kind == 11 {
-                if self.view_ready && !f.repeated()? {
-                    let bit = 1u64 << f.ordinal;
-                    if seen_messages & bit != 0 {
-                        self.view_ready = false;
-                    }
-                    seen_messages |= bit;
-                }
                 let i = self.push(f, 0, 0)?;
                 let invalid = if kind == 11 {
                     let mut nested = take_bytes(input)?;
@@ -541,45 +525,14 @@ pub fn decode_reusing(
     strings: u64,
     depth: u32,
     native: u64,
-    fields: Vec<Field>,
-) -> Result<Vec<Field>> {
-    let mut status = 0;
-    decode_reusing_with_status(
-        schema,
-        input,
-        format,
-        payload,
-        cells,
-        strings,
-        depth,
-        native,
-        fields,
-        &mut status,
-    )
-}
-
-/// ABI 8: format 3 requests binary view certification; status 5 proves that visited types
-/// have no required fields and no singular-message fragments require merging. Status 0
-/// retains the ordinary Java semantic check. Schema facts come from the trusted compiler.
-pub fn decode_reusing_with_status(
-    schema: &[u8],
-    input: &[u8],
-    format: u32,
-    payload: &mut [u8],
-    cells: u64,
-    strings: u64,
-    depth: u32,
-    native: u64,
     mut fields: Vec<Field>,
-    status: &mut i32,
 ) -> Result<Vec<Field>> {
-    *status = 0;
     if depth == 0 || depth > 128 || native > i32::MAX as u64 {
         return Err(BUDGET);
     }
     // Reserve scratch headroom independently of index growth (including overlapping reallocations).
     // Text token/escape scratch is bounded by input length; the caller owns the payload region.
-    let reserve = if format == 0 || format == 3 {
+    let reserve = if format == 0 {
         0
     } else {
         (input.len() as u64).checked_mul(4).ok_or(BUDGET)?
@@ -606,10 +559,9 @@ pub fn decode_reusing_with_status(
         strings,
         depth,
         native,
-        view_ready: format == 3,
     };
     match format {
-        0 | 3 => {
+        0 => {
             decoder.binary(0, &mut &input[..], 0, 1)?;
         }
         1 => {
@@ -618,9 +570,6 @@ pub fn decode_reusing_with_status(
         }
         2 => decoder.json()?,
         _ => return Err(MALFORMED),
-    }
-    if decoder.view_ready {
-        *status = 5;
     }
     Ok(decoder.fields)
 }
@@ -658,7 +607,6 @@ pub fn scalars(
         strings: 0,
         depth,
         native: 0,
-        view_ready: false,
     };
     decoder.charge(count as u64)?;
     let mut result = super::seam::Scalars {
@@ -774,45 +722,8 @@ mod tests {
     }
 
     #[test]
-    fn binary_view_proof_requires_compiler_facts_and_no_message_merges() {
-        fn run(schema: &[u8], input: &[u8], cells: u64) -> (Result<Vec<Field>>, i32) {
-            let mut status = -1;
-            let result = decode_reusing_with_status(
-                schema,
-                input,
-                3,
-                &mut [],
-                cells,
-                1000,
-                16,
-                4096,
-                Vec::new(),
-                &mut status,
-            );
-            (result, status)
-        }
-        let mut scalar = schema(5);
-        assert_eq!(run(&scalar, &[8, 42], 100).1, 0);
-        scalar[16..20].copy_from_slice(&512u32.to_le_bytes());
-        let (fields, status) = run(&scalar, &[8, 42, 8, 7], 100);
-        assert_eq!(fields.unwrap().len(), 2);
-        assert_eq!(status, 5); // Duplicate scalars still use last-value semantics.
-        assert_eq!(run(&scalar, &[], 100).1, 5);
-        let (result, status) = run(&scalar, &[8, 128], 100);
-        assert!(result.is_err());
-        assert_eq!(status, 0);
-        let (result, status) = run(&scalar, &[8, 42], 1);
-        assert!(matches!(result, Err(BUDGET)));
-        assert_eq!(status, 0);
-        let mut message = schema(11);
-        message[16..20].copy_from_slice(&512u32.to_le_bytes());
-        message[40..44].copy_from_slice(&0u32.to_le_bytes());
-        assert_eq!(run(&message, &[10, 0], 100).1, 5);
-        assert_eq!(run(&message, &[10, 2, 10, 0], 100).1, 5);
-        assert_eq!(run(&message, &[10, 0, 10, 0], 100).1, 0);
-        assert_eq!(run(&message, &[10, 4, 10, 0, 10, 0], 100).1, 0);
-        message[36..40].copy_from_slice(&1u32.to_le_bytes()); // repeated messages do not merge
-        assert_eq!(run(&message, &[10, 0, 10, 0], 100).1, 5);
+    fn retired_view_format_is_rejected() {
+        assert!(matches!(decode(&schema(5), &[8, 42], 3, &mut [], 100, 100, 4, 4096), Err(MALFORMED)));
     }
 
     #[test]
