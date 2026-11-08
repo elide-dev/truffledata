@@ -1,3 +1,4 @@
+#include "json/native/testing/text_fusion_session.h"
 #include "json/native/session.h"
 #include "json/native/status.h"
 #include "tape/native/testing.h"
@@ -8,15 +9,21 @@ using namespace truffledata;
 namespace {
 void require(bool value) { if (!value) throw std::runtime_error("fused text mismatch"); }
 struct result { int status; size_t used; std::vector<uint64_t> words, table; std::vector<uint8_t> bytes; };
-result decode(json::session& session, const std::string& source, bool fused, size_t capacity) {
+template<class Session> result decode(Session& session, const std::string& source, bool fused, size_t capacity) {
   result out{};
   out.bytes.assign(capacity, 0xa5);
   // Capacity zero still receives a valid pointer, as the C API requires.
   uint8_t zero = 0;
   auto* bytes = capacity ? out.bytes.data() : &zero;
   try {
-    auto d = session.decode(source.data(), source.size(), json::session::encoding::utf8,
-                            false, false, fused ? bytes : nullptr, capacity);
+    auto d = [&] {
+      if constexpr (std::is_same_v<Session, json::session>) {
+        return session.decode(source.data(), source.size(), Session::encoding::utf8, false, false);
+      } else {
+        return session.decode(source.data(), source.size(), Session::encoding::utf8,
+                              false, false, fused ? bytes : nullptr, capacity);
+      }
+    }();
     const uint64_t* table;
     size_t used = session.write_text(bytes, capacity, table);
     if (used == tape::text_too_small) { out.status = json::status_text_too_small; return out; }
@@ -26,7 +33,7 @@ result decode(json::session& session, const std::string& source, bool fused, siz
   } catch (...) { out.status = json::current_exception_status(); }
   return out;
 }
-void compare(json::session& old, json::session& fresh, const std::string& source, size_t capacity) {
+void compare(json::session& old, json_text_fusion::session& fresh, const std::string& source, size_t capacity) {
   auto expected = decode(old, source, false, capacity), actual = decode(fresh, source, true, capacity);
   require(expected.status == actual.status);
   if (expected.status == json::status_ok) {
@@ -36,7 +43,8 @@ void compare(json::session& old, json::session& fresh, const std::string& source
 }
 }
 int main() {
-  json::session old({}, {}), fresh({}, {});
+  json::session old({}, {});
+  json_text_fusion::session fresh({}, {});
   auto corpus = tape::testing::corpus();
   corpus.insert(corpus.end(), {R"({"clé":"中文 😀","é":"é","x":"\u0000\n\t"})", R"(["","é","Ā","😀",null,1])"});
   size_t cases = 0;
@@ -58,7 +66,8 @@ int main() {
   // Exact budget and one-byte-below budget retain the postpass's limit behavior.
   for (size_t budget : {size_t(4096), size_t(8191), size_t(8192), size_t(16384)}) {
     tape::storage_limits limits{}; limits.index_bytes = budget;
-    json::session before({}, limits), after({}, limits);
+    json::session before({}, limits);
+    json_text_fusion::session after({}, limits);
     for (size_t i : {size_t(0), size_t(161), size_t(1), size_t(0)}) {
       compare(before, after, corpus[i], corpus[i].size() * 2 + 16); ++cases;
     }

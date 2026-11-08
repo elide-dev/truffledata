@@ -75,33 +75,6 @@ private:
   tape::key_shape_cache shapes_;
   td_tape_view view_{};
   bool live_ = false;
-  uint8_t* fused_text_out_ = nullptr;
-  size_t fused_text_bytes_ = 0;
-
-  // Writes into already allocated text-table storage only. A miss never allocates or aborts
-  // parsing: the ordinary postpass runs after successful validation, preserving error precedence.
-  struct fused_text {
-    uint64_t* entries;
-    size_t initialized;
-    uint8_t* out;
-    size_t capacity, used = 0;
-    bool complete = true;
-    fused_text(uint64_t* entries, size_t entries_capacity, uint8_t* out, size_t capacity, size_t word_bound)
-        : entries(entries), initialized(std::min(entries_capacity, word_bound)), out(out), capacity(capacity) {
-      std::fill(entries, entries + initialized, uint64_t(0));
-    }
-    void emit(const tape::structural_writer& writer, size_t node) {
-      if (!complete) return;
-      if (node >= initialized) { complete = false; return; }
-      uint64_t word = writer.words()[node];
-      auto decoded = writer.text_of(node);
-      if (!decoded.empty() && !tape::write_text_entry(decoded.data(), decoded.size(),
-              word & tape::ctape::ascii_flag, out, capacity, used, entries[node])) complete = false;
-    }
-    bool finish(size_t words) {
-      return complete && words <= initialized;
-    }
-  };
 
   void free_input() noexcept {
     if (input_) upstream_->deallocate(input_, input_capacity_, alignof(std::max_align_t));
@@ -123,7 +96,7 @@ private:
   }
   // Borrowed arrays survive ordinary reuse. A retained/oversized document gives up its storage.
   void recycle() noexcept {
-    live_ = false; fused_text_out_ = nullptr; fused_text_bytes_ = 0;
+    live_ = false;
     if (input_capacity_ > retained_input_limit) drop_arrays();
     else {
       if (writer_) writer_->clear();
@@ -135,8 +108,7 @@ private:
   }
 
   document_view walk_indexed(size_t length, bool validate_only, bool directories,
-                             const uint32_t* indexes, uint32_t count, uint32_t origin = 0,
-                             uint8_t* text_out = nullptr, size_t text_capacity = 0) {
+                             const uint32_t* indexes, uint32_t count, uint32_t origin = 0) {
     size_t before = memory_.allocations();
     try {
       auto decode = [&](auto& writer) {
@@ -144,21 +116,6 @@ private:
         if constexpr (std::decay_t<decltype(writer)>::retains_values) writer.directories(directories);
         writer.input({input_, length});
         writer.reserve_structural(count, length);
-        if constexpr (std::decay_t<decltype(writer)>::retains_values) {
-          if (text_out && text_table_.capacity() != 0) {
-            // Each consumed structural position emits at most two words. Only existing table
-            // capacity is touched; a larger result takes the checked postpass after validation.
-            fused_text text(text_table_.data(), text_table_.capacity(), text_out, text_capacity, size_t(count) * 2);
-            stage2_walk<std::decay_t<decltype(writer)>, fused_text> fused(
-                reinterpret_cast<const uint8_t*>(input_), length, indexes, count, writer, origin, &text);
-            fused.run();
-            if (text.finish(writer.word_count())) {
-              text_table_.extend_reserved(writer.word_count());
-              fused_text_out_ = text_out; fused_text_bytes_ = text.used;
-            }
-            return;
-          }
-        }
         stage2_walk<std::decay_t<decltype(writer)>> walk(reinterpret_cast<const uint8_t*>(input_), length,
                                                          indexes, count, writer, origin);
         walk.run();
@@ -177,11 +134,10 @@ private:
     return {validate_only ? nullptr : &view_, length, allocations};
   }
 
-  document_view walk_structural(size_t length, bool validate_only, bool directories,
-                                uint8_t* text_out, size_t text_capacity) {
+  document_view walk_structural(size_t length, bool validate_only, bool directories) {
     try { parser_.run(reinterpret_cast<const uint8_t*>(input_), length); }
     catch (...) { recycle(); throw; }
-    return walk_indexed(length, validate_only, directories, parser_.indexes(), parser_.size(), 0, text_out, text_capacity);
+    return walk_indexed(length, validate_only, directories, parser_.indexes(), parser_.size());
   }
 
 public:
@@ -207,7 +163,7 @@ public:
   // transcoded; Latin-1 is transcoded (every byte is one code point). Limits apply to the UTF-8
   // length, which is what spans and the tape describe.
   enum class encoding { utf8, utf16le, latin1 };
-  document_view decode(const char* data, size_t bytes, encoding input = encoding::utf8, bool validate_only = false, bool directories = true, uint8_t* text_out = nullptr, size_t text_capacity = 0) {
+  document_view decode(const char* data, size_t bytes, encoding input = encoding::utf8, bool validate_only = false, bool directories = true) {
     recycle();
     size_t length = bytes;
     const char16_t* units = reinterpret_cast<const char16_t*>(data);
@@ -227,7 +183,7 @@ public:
     if (written != length) throw std::logic_error("JSON input transcoding");
     std::memset(input_ + length, 0, simdjson::SIMDJSON_PADDING);
     input_length_ = length;
-    return walk_structural(length, validate_only, directories, text_out, text_capacity);
+    return walk_structural(length, validate_only, directories);
   }
 
   // A stream may test its previous structural extent only inside existing capacity. This
@@ -259,12 +215,6 @@ public:
   // reusable). On an exception the document is dropped too.
   size_t write_text(uint8_t* out, size_t capacity, const uint64_t*& table) {
     if (!live_) throw std::logic_error("no JSON session document");
-    if (fused_text_out_ == out && out != nullptr && capacity >= fused_text_bytes_) {
-      fused_text_out_ = nullptr;
-      table = text_table_.data();
-      return fused_text_bytes_;
-    }
-    fused_text_out_ = nullptr;
     try {
       size_t count = view_.word_count;
       if (!count) count = 1;

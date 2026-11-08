@@ -1,4 +1,4 @@
-#include "json/native/session.h"
+#include "json/native/testing/text_fusion_session.h"
 #include "tape/native/testing.h"
 #include <array>
 #include <chrono>
@@ -6,7 +6,7 @@
 using namespace truffledata;
 volatile uint64_t text_observed;
 double measure(bool fused, unsigned repetitions, unsigned records) {
-  json::session session({}, {});
+  json_text_fusion::session session({}, {});
   std::array<std::string, 32> inputs;
   size_t max_length = 0;
   for (unsigned i = 0; i < inputs.size(); ++i) {
@@ -26,7 +26,7 @@ double measure(bool fused, unsigned repetitions, unsigned records) {
   const size_t capacity = storage.size();
   auto consume = [&] {
     for (const auto& input : inputs) {
-      auto d = session.decode(input.data(), input.size(), json::session::encoding::utf8, false, false,
+      auto d = session.decode(input.data(), input.size(), json_text_fusion::session::encoding::utf8, false, false,
                               fused ? out : nullptr, capacity);
       const uint64_t* table;
       auto used = session.write_text(out, capacity, table);
