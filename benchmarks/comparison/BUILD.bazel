@@ -331,7 +331,13 @@ data_java_library(
     ]
 ]
 
-# Override with the preserved old-production image built from the identical typed fixtures.
+# Override with preserved images built from identical fixtures. Candidate overrides allow
+# independent worker images to share one paired-measurement invocation before integration.
+label_flag(
+    name = "json_typed_svm_candidate",
+    build_setting_default = ":json_svm",
+)
+
 label_flag(
     name = "json_typed_svm_baseline",
     build_setting_default = ":json_svm",
@@ -342,8 +348,8 @@ sh_test(
     size = "enormous",
     timeout = "long",
     srcs = ["json_typed_pair.sh"],
-    args = ["$(rootpath :json_svm)", "$(rootpath :json_typed_svm_baseline)"],
-    data = ["json_typed_pair.py", "JsonComparison.java", "JsonFixture.java", ":json_svm", ":json_typed_svm_baseline"],
+    args = ["$(rootpath :json_typed_svm_candidate)", "$(rootpath :json_typed_svm_baseline)"],
+    data = ["json_typed_pair.py", "JsonComparison.java", "JsonFixture.java", ":json_typed_svm_candidate", ":json_typed_svm_baseline"],
     shard_count = 6,
     exec_properties = {"EstimatedCPU": "4", "EstimatedMemory": "16GB"},
     tags = ["benchmark", "manual"],
@@ -546,6 +552,11 @@ java_binary(
 # Before/after baselines: override with an executable from an earlier revision; by default each
 # measurement runs only the current build. Labels are never committed for local baselines.
 label_flag(
+    name = "consumer_svm_candidate",
+    build_setting_default = ":consumer_svm",
+)
+
+label_flag(
     name = "consumer_svm_baseline",
     build_setting_default = ":consumer_svm",
 )
@@ -587,7 +598,7 @@ label_flag(
         ],
     )
     for name, runtime, candidate, baseline in [
-        ("consumer_measure", "svm", ":consumer_svm", ":consumer_svm_baseline"),
+        ("consumer_measure", "svm", ":consumer_svm_candidate", ":consumer_svm_baseline"),
         ("consumer_measure_jvm", "jvm", ":consumer_jvm", ":consumer_jvm_baseline"),
     ]
 ]
