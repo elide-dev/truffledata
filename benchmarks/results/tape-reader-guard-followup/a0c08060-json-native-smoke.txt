@@ -1,0 +1,212 @@
+exec ${PAGER:-/usr/bin/less} "$0" || exit 1
+Executing tests from //benchmarks/comparison:json_native_smoke
+-----------------------------------------------------------------------------
+{"workload":"json-scalar","engine":"gson-stream","stage":"ingest","runtime":"svm","guest_compiled":false,"checksum":35984,"rows":32,"allocated_bytes_per_row":[11288.0, 11288.0, 11288.0]}
+{"workload":"json-scalar","engine":"gson-stream","stage":"read-aot","runtime":"svm","guest_compiled":false,"checksum":35984,"rows":32,"allocated_bytes_per_row":[0.0, 0.0, 0.0]}
+{"workload":"json-scalar","engine":"gson-stream","stage":"interpret","runtime":"svm","guest_compiled":false,"checksum":35984,"rows":32,"allocated_bytes_per_row":[2.0, 2.0, 2.0]}
+{"workload":"json-scalar","engine":"gson-stream","stage":"peak","runtime":"svm","guest_compiled":true,"checksum":35984,"rows":32,"allocated_bytes_per_row":[1.0, 1.0, 1.0]}
+{"workload":"json-scalar","engine":"simdjson-typed","stage":"ingest","runtime":"svm","guest_compiled":false,"checksum":35984,"rows":32,"allocated_bytes_per_row":[112.0, 112.0, 112.0]}
+{"workload":"json-scalar","engine":"simdjson-typed","stage":"read-aot","runtime":"svm","guest_compiled":false,"checksum":35984,"rows":32,"allocated_bytes_per_row":[0.0, 0.0, 0.0]}
+{"workload":"json-scalar","engine":"simdjson-typed","stage":"interpret","runtime":"svm","guest_compiled":false,"checksum":35984,"rows":32,"allocated_bytes_per_row":[2.0, 2.0, 2.0]}
+{"workload":"json-scalar","engine":"simdjson-typed","stage":"peak","runtime":"svm","guest_compiled":true,"checksum":35984,"rows":32,"allocated_bytes_per_row":[1.0, 1.0, 1.0]}
+{"workload":"json-scalar","engine":"simdjson-specialized","stage":"ingest","runtime":"svm","guest_compiled":false,"checksum":35984,"rows":32,"allocated_bytes_per_row":[112.0, 112.0, 112.0]}
+{"workload":"json-scalar","engine":"simdjson-specialized","stage":"read-aot","runtime":"svm","guest_compiled":false,"checksum":35984,"rows":32,"allocated_bytes_per_row":[0.0, 0.0, 0.0]}
+{"workload":"json-scalar","engine":"simdjson-specialized","stage":"interpret","runtime":"svm","guest_compiled":false,"checksum":35984,"rows":32,"allocated_bytes_per_row":[2.0, 2.0, 2.0]}
+{"workload":"json-scalar","engine":"simdjson-specialized","stage":"peak","runtime":"svm","guest_compiled":true,"checksum":35984,"rows":32,"allocated_bytes_per_row":[1.0, 1.0, 1.0]}
+{"workload":"json-generic","engine":"gson-tree","stage":"ingest","runtime":"svm","guest_compiled":false,"checksum":38219,"rows":32,"allocated_bytes_per_row":[13404.0, 13404.0, 13404.0]}
+{"workload":"json-generic","engine":"gson-tree","stage":"read-aot","runtime":"svm","guest_compiled":false,"checksum":38219,"rows":32,"allocated_bytes_per_row":[80.0, 80.0, 80.0]}
+{"workload":"json-generic","engine":"gson-tree","stage":"interpret","runtime":"svm","guest_compiled":false,"checksum":38219,"rows":32,"allocated_bytes_per_row":[82.0, 82.0, 82.0]}
+{"workload":"json-generic","engine":"gson-tree","stage":"peak","runtime":"svm","guest_compiled":true,"checksum":38219,"rows":32,"allocated_bytes_per_row":[81.0, 81.0, 81.0]}
+{"workload":"json-generic","engine":"simdjson-generic-java","stage":"ingest","runtime":"svm","guest_compiled":false,"checksum":38219,"rows":32,"allocated_bytes_per_row":[2440.0, 2440.0, 2440.0]}
+{"workload":"json-generic","engine":"simdjson-generic-java","stage":"read-aot","runtime":"svm","guest_compiled":false,"checksum":38219,"rows":32,"allocated_bytes_per_row":[1176.0, 1176.0, 1176.0]}
+{"workload":"json-generic","engine":"simdjson-generic-java","stage":"interpret","runtime":"svm","guest_compiled":false,"checksum":38219,"rows":32,"allocated_bytes_per_row":[1178.0, 1178.0, 1178.0]}
+{"workload":"json-generic","engine":"simdjson-generic-java","stage":"peak","runtime":"svm","guest_compiled":true,"checksum":38219,"rows":32,"allocated_bytes_per_row":[1177.0, 1177.0, 1177.0]}
+{"workload":"json-generic","engine":"simdjson-generic-interop","stage":"ingest","runtime":"svm","guest_compiled":false,"checksum":38219,"rows":32,"allocated_bytes_per_row":[384.0, 384.0, 384.0]}
+{"workload":"json-generic","engine":"simdjson-generic-interop","stage":"read-aot","runtime":"svm","guest_compiled":false,"checksum":38219,"rows":32,"allocated_bytes_per_row":[240.0, 240.0, 240.0]}
+{"workload":"json-generic","engine":"simdjson-generic-interop","stage":"interpret","runtime":"svm","guest_compiled":false,"checksum":38219,"rows":32,"allocated_bytes_per_row":[242.0, 242.0, 242.0]}
+{"workload":"json-generic","engine":"simdjson-generic-interop","stage":"peak","runtime":"svm","guest_compiled":true,"checksum":38219,"rows":32,"allocated_bytes_per_row":[1.0, 1.0, 1.0]}
+{"workload":"json-generic","engine":"simdjson-snapshot","stage":"ingest","runtime":"svm","guest_compiled":false,"checksum":38219,"rows":32,"allocated_bytes_per_row":[1183.5, 1183.5, 1183.5]}
+{"workload":"json-generic","engine":"simdjson-snapshot","stage":"read-aot","runtime":"svm","guest_compiled":false,"checksum":38219,"rows":32,"allocated_bytes_per_row":[240.0, 240.0, 240.0]}
+{"workload":"json-generic","engine":"simdjson-snapshot","stage":"interpret","runtime":"svm","guest_compiled":false,"checksum":38219,"rows":32,"allocated_bytes_per_row":[242.0, 242.0, 242.0]}
+{"workload":"json-generic","engine":"simdjson-snapshot","stage":"peak","runtime":"svm","guest_compiled":true,"checksum":38219,"rows":32,"allocated_bytes_per_row":[1.0, 1.0, 1.0]}
+{"workload":"json-generic","engine":"simdjson-export-walk","stage":"peak","runtime":"svm","guest_compiled":true,"checksum":41019,"rows":32,"allocated_bytes_per_row":[1.0, 1.0, 1.0]}
+{"workload":"json-generic","engine":"simdjson-session-java","stage":"ingest","runtime":"svm","guest_compiled":false,"checksum":38219,"rows":32,"allocated_bytes_per_row":[1240.0, 1240.0, 1240.0]}
+{"workload":"json-generic","engine":"simdjson-session-truffle","stage":"ingest","runtime":"svm","guest_compiled":false,"checksum":38219,"rows":32,"allocated_bytes_per_row":[1652.5, 1652.5, 1652.5]}
+{"workload":"json-generic","engine":"gson-stream-lines","stage":"ingest","runtime":"svm","guest_compiled":false,"checksum":38219,"rows":32,"allocated_bytes_per_row":[13404.0, 13404.0, 13404.0]}
+{"workload":"json-generic","engine":"simdjson-stream-java","stage":"ingest","runtime":"svm","guest_compiled":false,"checksum":38219,"rows":32,"allocated_bytes_per_row":[1218.75, 1218.75, 1218.75]}
+{"workload":"json-generic","engine":"simdjson-stream-interop","stage":"ingest","runtime":"svm","guest_compiled":false,"checksum":38219,"rows":32,"allocated_bytes_per_row":[304.75, 304.75, 304.75]}
+{"workload":"json-generic","engine":"jackson-tree","stage":"ingest","runtime":"svm","guest_compiled":false,"checksum":38219,"rows":32,"allocated_bytes_per_row":[2245.0, 2245.0, 2245.0]}
+{"workload":"json-generic","engine":"jackson-tree","stage":"read-aot","runtime":"svm","guest_compiled":false,"checksum":38219,"rows":32,"allocated_bytes_per_row":[0.0, 0.0, 0.0]}
+{"workload":"json-generic","engine":"jackson-tree","stage":"interpret","runtime":"svm","guest_compiled":false,"checksum":38219,"rows":32,"allocated_bytes_per_row":[2.0, 2.0, 2.0]}
+{"workload":"json-generic","engine":"jackson-tree","stage":"peak","runtime":"svm","guest_compiled":true,"checksum":38219,"rows":32,"allocated_bytes_per_row":[1.0, 1.0, 1.0]}
+{"workload":"json-generic","engine":"jackson-stream","stage":"ingest","runtime":"svm","guest_compiled":false,"checksum":38219,"rows":32,"allocated_bytes_per_row":[808.0, 808.0, 808.0]}
+{"workload":"json-generic","engine":"fastjson2-tree","stage":"ingest","runtime":"svm","guest_compiled":false,"checksum":38219,"rows":32,"allocated_bytes_per_row":[1372.0, 1372.0, 1372.0]}
+{"workload":"json-generic","engine":"fastjson2-tree","stage":"read-aot","runtime":"svm","guest_compiled":false,"checksum":38219,"rows":32,"allocated_bytes_per_row":[32.0, 32.0, 32.0]}
+{"workload":"json-generic","engine":"fastjson2-tree","stage":"interpret","runtime":"svm","guest_compiled":false,"checksum":38219,"rows":32,"allocated_bytes_per_row":[34.0, 34.0, 34.0]}
+{"workload":"json-generic","engine":"fastjson2-tree","stage":"peak","runtime":"svm","guest_compiled":true,"checksum":38219,"rows":32,"allocated_bytes_per_row":[33.0, 33.0, 33.0]}
+{"workload":"json-generic","engine":"dsljson-map","stage":"ingest","runtime":"svm","guest_compiled":false,"checksum":38219,"rows":32,"allocated_bytes_per_row":[1080.0, 1080.0, 1080.0]}
+{"workload":"json-generic","engine":"dsljson-map","stage":"read-aot","runtime":"svm","guest_compiled":false,"checksum":38219,"rows":32,"allocated_bytes_per_row":[0.0, 0.0, 0.0]}
+{"workload":"json-generic","engine":"dsljson-map","stage":"interpret","runtime":"svm","guest_compiled":false,"checksum":38219,"rows":32,"allocated_bytes_per_row":[2.0, 2.0, 2.0]}
+{"workload":"json-generic","engine":"dsljson-map","stage":"peak","runtime":"svm","guest_compiled":true,"checksum":38219,"rows":32,"allocated_bytes_per_row":[1.0, 1.0, 1.0]}
+{"workload":"json-generic","engine":"jsoniter-any","stage":"ingest","runtime":"svm","guest_compiled":false,"checksum":38219,"rows":32,"allocated_bytes_per_row":[1508.0, 1508.0, 1508.0]}
+{"workload":"json-generic","engine":"jsoniter-any","stage":"read-aot","runtime":"svm","guest_compiled":false,"checksum":38219,"rows":32,"allocated_bytes_per_row":[80.0, 80.0, 80.0]}
+{"workload":"json-generic","engine":"jsoniter-any","stage":"interpret","runtime":"svm","guest_compiled":false,"checksum":38219,"rows":32,"allocated_bytes_per_row":[82.0, 82.0, 82.0]}
+{"workload":"json-generic","engine":"jsoniter-any","stage":"peak","runtime":"svm","guest_compiled":true,"checksum":38219,"rows":32,"allocated_bytes_per_row":[81.0, 81.0, 81.0]}
+SKIP simdjson-java: unavailable in this image
+[To redirect Truffle log output to a file use one of the following options:
+* '--log.file=<path>' if the option is passed using a guest language launcher.
+* '-Dpolyglot.log.file=<path>' if the option is passed using the host Java launcher.
+* Configure logging using the polyglot embedding API.]
+[engine] Expansion tree for JsonComparison.Reads@3f2c960f after truffleTier:
+Name         Frequency | Count    Size  Cycles   Ifs Loops Invokes Allocs | Self Count  Size Cycles   Ifs Loops Invokes Allocs | IRNode ASTNode Lang:File:Line:Chars 
+<root>            1.00 |   122     123      94     5     1       0      0 |        122   123     94     5     1       0      0 |  -  
+
+[engine] Expansion tree for JsonComparison.Reads@3f2c960f after truffleTier:
+Name         Frequency | Count    Size  Cycles   Ifs Loops Invokes Allocs | Self Count  Size Cycles   Ifs Loops Invokes Allocs | IRNode ASTNode Lang:File:Line:Chars 
+<root>            1.00 |    64      70      50     1     1       0      0 |         64    70     50     1     1       0      0 |  -  
+
+[To redirect Truffle log output to a file use one of the following options:
+* '--log.file=<path>' if the option is passed using a guest language launcher.
+* '-Dpolyglot.log.file=<path>' if the option is passed using the host Java launcher.
+* Configure logging using the polyglot embedding API.]
+[engine] Expansion tree for JsonComparison.Reads@7208a973 after truffleTier:
+Name         Frequency | Count    Size  Cycles   Ifs Loops Invokes Allocs | Self Count  Size Cycles   Ifs Loops Invokes Allocs | IRNode ASTNode Lang:File:Line:Chars 
+<root>            1.00 |   307     335     301     8     1       0      0 |        307   335    301     8     1       0      0 |  -  
+
+[engine] Expansion tree for JsonComparison.Reads@7208a973 after truffleTier:
+Name         Frequency | Count    Size  Cycles   Ifs Loops Invokes Allocs | Self Count  Size Cycles   Ifs Loops Invokes Allocs | IRNode ASTNode Lang:File:Line:Chars 
+<root>            1.00 |   250     283     257     4     1       0      0 |        250   283    257     4     1       0      0 |  -  
+
+[To redirect Truffle log output to a file use one of the following options:
+* '--log.file=<path>' if the option is passed using a guest language launcher.
+* '-Dpolyglot.log.file=<path>' if the option is passed using the host Java launcher.
+* Configure logging using the polyglot embedding API.]
+[engine] Expansion tree for JsonComparison.Reads@4a7705e1 after truffleTier:
+Name         Frequency | Count    Size  Cycles   Ifs Loops Invokes Allocs | Self Count  Size Cycles   Ifs Loops Invokes Allocs | IRNode ASTNode Lang:File:Line:Chars 
+<root>            1.00 |   240     232     188     8     1       0      0 |        240   232    188     8     1       0      0 |  -  
+
+[engine] Expansion tree for JsonComparison.Reads@4a7705e1 after truffleTier:
+Name         Frequency | Count    Size  Cycles   Ifs Loops Invokes Allocs | Self Count  Size Cycles   Ifs Loops Invokes Allocs | IRNode ASTNode Lang:File:Line:Chars 
+<root>            1.00 |   183     180     144     4     1       0      0 |        183   180    144     4     1       0      0 |  -  
+
+[To redirect Truffle log output to a file use one of the following options:
+* '--log.file=<path>' if the option is passed using a guest language launcher.
+* '-Dpolyglot.log.file=<path>' if the option is passed using the host Java launcher.
+* Configure logging using the polyglot embedding API.]
+[engine] Expansion tree for GenericReads[gson-tree] after truffleTier:
+Name         Frequency | Count    Size  Cycles   Ifs Loops Invokes Allocs | Self Count  Size Cycles   Ifs Loops Invokes Allocs | IRNode ASTNode Lang:File:Line:Chars 
+<root>            1.00 |   117     116      73     5     1       0      0 |        117   116     73     5     1       0      0 |  -  
+
+[engine] Expansion tree for GenericReads[gson-tree] after truffleTier:
+Name         Frequency | Count    Size  Cycles   Ifs Loops Invokes Allocs | Self Count  Size Cycles   Ifs Loops Invokes Allocs | IRNode ASTNode Lang:File:Line:Chars 
+<root>            1.00 |    59      63      29     1     1       0      0 |         59    63     29     1     1       0      0 |  -  
+
+[To redirect Truffle log output to a file use one of the following options:
+* '--log.file=<path>' if the option is passed using a guest language launcher.
+* '-Dpolyglot.log.file=<path>' if the option is passed using the host Java launcher.
+* Configure logging using the polyglot embedding API.]
+[engine] perf info    GenericReads[simdjson-generic-java]                         |Partial evaluation could not resolve virtual instanceof to an exact type due to: interface type check: SubstrateType<dev.elide.truffledata.tape.TapeReader>|Nodes [122|InstanceOf]
+  No stack trace available for [122|InstanceOf].
+[engine] Expansion tree for GenericReads[simdjson-generic-java] after truffleTier:
+Name         Frequency | Count    Size  Cycles   Ifs Loops Invokes Allocs | Self Count  Size Cycles   Ifs Loops Invokes Allocs | IRNode ASTNode Lang:File:Line:Chars 
+<root>            1.00 |   726     836     721    31     2       0      7 |        726   836    721    31     2       0      7 |  -  
+
+[engine] perf info    GenericReads[simdjson-generic-java]                         |Partial evaluation could not resolve virtual instanceof to an exact type due to: interface type check: SubstrateType<dev.elide.truffledata.tape.TapeReader>|Nodes [69|InstanceOf]
+  No stack trace available for [69|InstanceOf].
+[engine] Expansion tree for GenericReads[simdjson-generic-java] after truffleTier:
+Name         Frequency | Count    Size  Cycles   Ifs Loops Invokes Allocs | Self Count  Size Cycles   Ifs Loops Invokes Allocs | IRNode ASTNode Lang:File:Line:Chars 
+<root>            1.00 |   670     785     677    27     2       0      7 |        670   785    677    27     2       0      7 |  -  
+
+[To redirect Truffle log output to a file use one of the following options:
+* '--log.file=<path>' if the option is passed using a guest language launcher.
+* '-Dpolyglot.log.file=<path>' if the option is passed using the host Java launcher.
+* Configure logging using the polyglot embedding API.]
+[engine] Expansion tree for GenericReads[simdjson-generic-interop] after truffleTier:
+Name         Frequency | Count    Size  Cycles   Ifs Loops Invokes Allocs | Self Count  Size Cycles   Ifs Loops Invokes Allocs | IRNode ASTNode Lang:File:Line:Chars 
+<root>            1.00 |  1971    1873    1609   107     1       0      0 |       1971  1873   1609   107     1       0      0 |  -  
+
+[engine] Expansion tree for GenericReads[simdjson-generic-interop] after truffleTier:
+Name         Frequency | Count    Size  Cycles   Ifs Loops Invokes Allocs | Self Count  Size Cycles   Ifs Loops Invokes Allocs | IRNode ASTNode Lang:File:Line:Chars 
+<root>            1.00 |  1915    1822    1565   103     1       0      0 |       1915  1822   1565   103     1       0      0 |  -  
+
+[To redirect Truffle log output to a file use one of the following options:
+* '--log.file=<path>' if the option is passed using a guest language launcher.
+* '-Dpolyglot.log.file=<path>' if the option is passed using the host Java launcher.
+* Configure logging using the polyglot embedding API.]
+[engine] perf info    GenericReads[simdjson-snapshot]                             |Partial evaluation could not resolve virtual instanceof to an exact type due to: interface type check: SubstrateType<dev.elide.truffledata.tape.TapeReader>|Nodes [109|InstanceOf, 264|InstanceOf, 400|InstanceOf, 445|InstanceOf, 581|InstanceOf, 628|InstanceOf, 768|InstanceOf, 798|InstanceOf, 926|InstanceOf, 966|InstanceOf, 1093|InstanceOf, 1140|InstanceOf, 1278|InstanceOf, 1355|InstanceOf, 1491|InstanceOf, 1568|InstanceOf, 1705|InstanceOf, 1729|InstanceOf, 1866|InstanceOf]
+  No stack trace available for [109|InstanceOf, 264|InstanceOf, 400|InstanceOf, 445|InstanceOf, 581|InstanceOf, 628|InstanceOf, 768|InstanceOf, 798|InstanceOf, 926|InstanceOf, 966|InstanceOf, 1093|InstanceOf, 1140|InstanceOf, 1278|InstanceOf, 1355|InstanceOf, 1491|InstanceOf, 1568|InstanceOf, 1705|InstanceOf, 1729|InstanceOf, 1866|InstanceOf].
+[engine] Expansion tree for GenericReads[simdjson-snapshot] after truffleTier:
+Name         Frequency | Count    Size  Cycles   Ifs Loops Invokes Allocs | Self Count  Size Cycles   Ifs Loops Invokes Allocs | IRNode ASTNode Lang:File:Line:Chars 
+<root>            1.00 |  1961    2775    2498    98     1       0      0 |       1961  2775   2498    98     1       0      0 |  -  
+
+[engine] perf info    GenericReads[simdjson-snapshot]                             |Partial evaluation could not resolve virtual instanceof to an exact type due to: interface type check: SubstrateType<dev.elide.truffledata.tape.TapeReader>|Nodes [56|InstanceOf, 211|InstanceOf, 347|InstanceOf, 392|InstanceOf, 528|InstanceOf, 575|InstanceOf, 715|InstanceOf, 745|InstanceOf, 873|InstanceOf, 913|InstanceOf, 1040|InstanceOf, 1087|InstanceOf, 1225|InstanceOf, 1302|InstanceOf, 1438|InstanceOf, 1515|InstanceOf, 1652|InstanceOf, 1676|InstanceOf, 1813|InstanceOf]
+  No stack trace available for [56|InstanceOf, 211|InstanceOf, 347|InstanceOf, 392|InstanceOf, 528|InstanceOf, 575|InstanceOf, 715|InstanceOf, 745|InstanceOf, 873|InstanceOf, 913|InstanceOf, 1040|InstanceOf, 1087|InstanceOf, 1225|InstanceOf, 1302|InstanceOf, 1438|InstanceOf, 1515|InstanceOf, 1652|InstanceOf, 1676|InstanceOf, 1813|InstanceOf].
+[engine] Expansion tree for GenericReads[simdjson-snapshot] after truffleTier:
+Name         Frequency | Count    Size  Cycles   Ifs Loops Invokes Allocs | Self Count  Size Cycles   Ifs Loops Invokes Allocs | IRNode ASTNode Lang:File:Line:Chars 
+<root>            1.00 |  1905    2724    2454    94     1       0      0 |       1905  2724   2454    94     1       0      0 |  -  
+
+[To redirect Truffle log output to a file use one of the following options:
+* '--log.file=<path>' if the option is passed using a guest language launcher.
+* '-Dpolyglot.log.file=<path>' if the option is passed using the host Java launcher.
+* Configure logging using the polyglot embedding API.]
+[engine] perf info    GenericReads[simdjson-export-walk]                          |Partial evaluation could not resolve virtual instanceof to an exact type due to: interface type check: SubstrateType<dev.elide.truffledata.tape.TapeReader>|Nodes [122|InstanceOf]
+  No stack trace available for [122|InstanceOf].
+[engine] Expansion tree for GenericReads[simdjson-export-walk] after truffleTier:
+Name         Frequency | Count    Size  Cycles   Ifs Loops Invokes Allocs | Self Count  Size Cycles   Ifs Loops Invokes Allocs | IRNode ASTNode Lang:File:Line:Chars 
+<root>            1.00 |   646     658     534    31     2       0      0 |        646   658    534    31     2       0      0 |  -  
+
+[engine] perf info    GenericReads[simdjson-export-walk]                          |Partial evaluation could not resolve virtual instanceof to an exact type due to: interface type check: SubstrateType<dev.elide.truffledata.tape.TapeReader>|Nodes [69|InstanceOf]
+  No stack trace available for [69|InstanceOf].
+[engine] Expansion tree for GenericReads[simdjson-export-walk] after truffleTier:
+Name         Frequency | Count    Size  Cycles   Ifs Loops Invokes Allocs | Self Count  Size Cycles   Ifs Loops Invokes Allocs | IRNode ASTNode Lang:File:Line:Chars 
+<root>            1.00 |   590     607     490    27     2       0      0 |        590   607    490    27     2       0      0 |  -  
+
+[To redirect Truffle log output to a file use one of the following options:
+* '--log.file=<path>' if the option is passed using a guest language launcher.
+* '-Dpolyglot.log.file=<path>' if the option is passed using the host Java launcher.
+* Configure logging using the polyglot embedding API.]
+[engine] Expansion tree for GenericReads[jackson-tree] after truffleTier:
+Name         Frequency | Count    Size  Cycles   Ifs Loops Invokes Allocs | Self Count  Size Cycles   Ifs Loops Invokes Allocs | IRNode ASTNode Lang:File:Line:Chars 
+<root>            1.00 |   118     117      73     5     1       0      0 |        118   117     73     5     1       0      0 |  -  
+
+[engine] Expansion tree for GenericReads[jackson-tree] after truffleTier:
+Name         Frequency | Count    Size  Cycles   Ifs Loops Invokes Allocs | Self Count  Size Cycles   Ifs Loops Invokes Allocs | IRNode ASTNode Lang:File:Line:Chars 
+<root>            1.00 |    60      64      29     1     1       0      0 |         60    64     29     1     1       0      0 |  -  
+
+[To redirect Truffle log output to a file use one of the following options:
+* '--log.file=<path>' if the option is passed using a guest language launcher.
+* '-Dpolyglot.log.file=<path>' if the option is passed using the host Java launcher.
+* Configure logging using the polyglot embedding API.]
+[engine] Expansion tree for GenericReads[fastjson2-tree] after truffleTier:
+Name         Frequency | Count    Size  Cycles   Ifs Loops Invokes Allocs | Self Count  Size Cycles   Ifs Loops Invokes Allocs | IRNode ASTNode Lang:File:Line:Chars 
+<root>            1.00 |   118     117      73     5     1       0      0 |        118   117     73     5     1       0      0 |  -  
+
+[engine] Expansion tree for GenericReads[fastjson2-tree] after truffleTier:
+Name         Frequency | Count    Size  Cycles   Ifs Loops Invokes Allocs | Self Count  Size Cycles   Ifs Loops Invokes Allocs | IRNode ASTNode Lang:File:Line:Chars 
+<root>            1.00 |    60      64      29     1     1       0      0 |         60    64     29     1     1       0      0 |  -  
+
+[To redirect Truffle log output to a file use one of the following options:
+* '--log.file=<path>' if the option is passed using a guest language launcher.
+* '-Dpolyglot.log.file=<path>' if the option is passed using the host Java launcher.
+* Configure logging using the polyglot embedding API.]
+[engine] Expansion tree for GenericReads[dsljson-map] after truffleTier:
+Name         Frequency | Count    Size  Cycles   Ifs Loops Invokes Allocs | Self Count  Size Cycles   Ifs Loops Invokes Allocs | IRNode ASTNode Lang:File:Line:Chars 
+<root>            1.00 |   118     117      73     5     1       0      0 |        118   117     73     5     1       0      0 |  -  
+
+[engine] Expansion tree for GenericReads[dsljson-map] after truffleTier:
+Name         Frequency | Count    Size  Cycles   Ifs Loops Invokes Allocs | Self Count  Size Cycles   Ifs Loops Invokes Allocs | IRNode ASTNode Lang:File:Line:Chars 
+<root>            1.00 |    60      64      29     1     1       0      0 |         60    64     29     1     1       0      0 |  -  
+
+[To redirect Truffle log output to a file use one of the following options:
+* '--log.file=<path>' if the option is passed using a guest language launcher.
+* '-Dpolyglot.log.file=<path>' if the option is passed using the host Java launcher.
+* Configure logging using the polyglot embedding API.]
+[engine] Expansion tree for GenericReads[jsoniter-any] after truffleTier:
+Name         Frequency | Count    Size  Cycles   Ifs Loops Invokes Allocs | Self Count  Size Cycles   Ifs Loops Invokes Allocs | IRNode ASTNode Lang:File:Line:Chars 
+<root>            1.00 |   118     117      73     5     1       0      0 |        118   117     73     5     1       0      0 |  -  
+
+[engine] Expansion tree for GenericReads[jsoniter-any] after truffleTier:
+Name         Frequency | Count    Size  Cycles   Ifs Loops Invokes Allocs | Self Count  Size Cycles   Ifs Loops Invokes Allocs | IRNode ASTNode Lang:File:Line:Chars 
+<root>            1.00 |    60      64      29     1     1       0      0 |         60    64     29     1     1       0      0 |  -  
+
+JSON graph checks passed: 24 compilations; allocation budgets passed for 9 cells

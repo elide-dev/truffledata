@@ -68,12 +68,20 @@ public abstract class TapeOwner {
     if (pins < 0) throw new OwnerStateException(this, OwnerStateException.CLOSED);
   }
 
+  /** Exact-class interop sites can fold the confinement policy before their field checks. */
+  final void checkSpecialized() {
+    if (this instanceof TapeSnapshot) return;
+    if (confined() && Thread.currentThread() != thread)
+      throw new OwnerStateException(this, OwnerStateException.THREAD);
+    if (pins < 0) throw new OwnerStateException(this, OwnerStateException.CLOSED);
+  }
+
   /** Whether this owner is confined; concrete retained owners make this a class property. */
   protected boolean confined() { return thread != null; }
 
   /** Thread confinement only; liveness is covered by the assumption at cached sites. */
   protected final void checkThread() {
-    if (confined() && Thread.currentThread() != thread)
+    if (thread != null && Thread.currentThread() != thread)
       throw new OwnerStateException(this, OwnerStateException.THREAD);
   }
 
