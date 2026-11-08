@@ -53,6 +53,23 @@ class CompactTapeTest {
     assertEquals("A", myna.stringValue(myna.find(0, ValueTape.Utf8Key.of("s"))));
   }
 
+  @Test void heapMynaCopiesExposePooledTextBytesAndTextWords() {
+    byte[] pooled = "an owned string of twenty-four".getBytes(StandardCharsets.UTF_8);
+    HeapTape heap = new HeapTape(new long[]{w(7, TapeReader.ASCII | TapeReader.OWNED | TapeReader.WIDE, pooled.length, 0), 0},
+        pooled, new byte[0], new long[0], new int[0], 0);
+    assertEquals((long) pooled[0] | ((long) pooled[1] << 8) | ((long) pooled[2] << 16) | ((long) pooled[3] << 24)
+        | ((long) pooled[4] << 32) | ((long) pooled[5] << 40) | ((long) pooled[6] << 48) | ((long) pooled[7] << 56),
+        heap.textWord(0, 0));
+    assertEquals(heap.textWord(true, 8, 8), heap.textWord(0, 8));
+    Owner owner = new Owner(heap);
+    ValueTape myna = owner.snapshot().toMyna();
+    myna.validate();
+    assertEquals(pooled.length, myna.length(0));
+    assertEquals('a', (char) myna.stringByte(0, 0));
+    assertEquals('r', (char) myna.stringByte(0, pooled.length - 1));
+    assertEquals(new String(pooled, StandardCharsets.UTF_8), myna.stringValue(0));
+  }
+
   @Test void cachedScalarAndArrayInteropChecksTheValueKind() throws Exception {
     Owner owner = new Owner(new HeapTape(new long[]{w(8, TapeReader.WIDE, 2, 5), 0,
         w(2, 0, 0, 0), w(5, TapeReader.WIDE, 0, 0), Double.doubleToRawLongBits(2.5)},

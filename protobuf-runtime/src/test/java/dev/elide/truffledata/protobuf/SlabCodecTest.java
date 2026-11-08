@@ -165,6 +165,10 @@ class SlabCodecTest {
       compareRows(expected, message);
       assertArrayEquals(expected.unknownFieldBytes(), message.unknownFieldBytes());
       assertEquals(expected.unknownFieldByteCount(), message.unknownFieldByteCount());
+      var usage = message.logicalUsage();
+      assertEquals(usage, new SlabMessage.Usage(usage.cells(), usage.stringBytes()));
+      assertEquals(usage.hashCode(), new SlabMessage.Usage(usage.cells(), usage.stringBytes()).hashCode());
+      assertTrue(usage.toString().contains("cells"));
       assertEquals(expected.hasUnknownFields(), message.hasUnknownFields());
       assertEquals(message.unknownFieldByteCount(), imported.unknownFieldByteCount());
     }

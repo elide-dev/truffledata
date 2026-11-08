@@ -347,6 +347,11 @@ SVM_ONLY_METHODS = {
 # Methods the JVM coverage lane cannot reach on HotSpot although they are not SVM code. Each entry
 # names why; nothing else is exempt.
 JVM_UNREACHABLE_METHODS = {
+    # Defensive extent guard: every borrowed read follows a native-verified slab and a Java-side
+    # verifier, so no public call can present an offset outside the retained extent.
+    'protobuf-buffa/src/main/java/dev/elide/truffledata/buffa/SlabSession.java': {
+        'dev/elide/truffledata/buffa/SlabSession::outside ()Ljava/lang/IndexOutOfBoundsException;',
+    },
     # Synthetic tag cursors expose resolved URI text but no source token: lexical() is always0,
     # so rawText rejects before a byte accessor can run. Tag view/snapshot/lifetime hooks are tested.
     **_tape_methods('AliasExport', 'AliasExport$1::lexicalByte (J)B'),

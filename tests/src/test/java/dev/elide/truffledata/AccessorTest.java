@@ -64,6 +64,23 @@ class AccessorTest {
   }
 
   @Test
+  void generatedMessagesReportRetainedUnknownBytes() {
+    var plan = flat(false);
+    var access = new TruffleDataContracts.Access_truffledata$lossless$Flat(plan);
+    byte[] known = plan.encode((dev.elide.truffledata.protobuf.ProtoRow) owned(plan, 5, "x"));
+    byte[] wire = java.util.Arrays.copyOf(known, known.length + 3);
+    wire[known.length] = (byte) 0xa0; // field 20, varint
+    wire[known.length + 1] = 0x01;
+    wire[known.length + 2] = 42;
+    var generated = access.decode(wire);
+    assertTrue(generated.hasUnknownFields());
+    assertEquals(3, generated.unknownFieldByteCount());
+    var clean = access.decode(known);
+    assertFalse(clean.hasUnknownFields());
+    assertEquals(0, clean.unknownFieldByteCount());
+  }
+
+  @Test
   void flatRowsBindLayoutAccessorsForEveryOrdinal() {
     var plan = flat(false);
     for (Object row :

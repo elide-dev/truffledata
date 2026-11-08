@@ -153,6 +153,19 @@ class ProjectionTest {
             new SlabLimits(16, 65536));
     Arrays.fill(original, (byte) 0);
     assertEquals("λ😀", ((SlabRow) imported.get(2)).get(1));
+    assertTrue(imported.projected());
+    assertFalse(SlabMessage.decode(plan, input()).projected());
+    var rootRecord =
+        SlabMessage.copyProjectedRecordOf(
+            plan,
+            ByteBuffer.wrap(message.slabCopy()),
+            ByteBuffer.wrap(input()),
+            selection,
+            new SlabLimits(16, 65536),
+            0,
+            ROOT);
+    assertEquals(7, rootRecord.getLong(0));
+    assertEquals("λ😀", ((SlabRow) rootRecord.get(2)).get(1));
     var raw = message.slabCopy();
     int lazy = getInt(raw, ROOT + plan.layout().slot(0, 2)) & ~LAZY_CHILD;
     putInt(raw, lazy + 12, 0); // An attacker cannot reset absolute nesting depth.

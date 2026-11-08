@@ -34,6 +34,14 @@ final class TypedAcceptance {
         try (var parsed =
             compiled.parseText("count: 1234 text: 'hello' blob: 'abc' f: 1.5 flag: true", NATIVE)) {
           var row = parsed.row();
+          accessors(row);
+          // An adopted cached library site reaches the assumption-guarded owner check.
+          var cachedSite = new CachedLongRead().getCallTarget();
+          int countOrdinal = p.schema().indexOf("count");
+          Acceptance.check(
+              (Long) cachedSite.call(row, countOrdinal) == 1234
+                  && (Long) cachedSite.call(row, countOrdinal) == 1234,
+              "cached library scalar export");
           Acceptance.check(
               DATA.readDouble(row, p.schema().indexOf("f")) == 1.5, "primitive double export");
           Acceptance.rejects(
@@ -1027,7 +1035,9 @@ final class TypedAcceptance {
                 projectedField("text", 2, text, false, "", ""),
                 projectedField("blob", 3, blob, false, "", DataArray.copyOfBytes(new byte[0])),
                 projectedField("items", 4, i64, true, "", 0L),
-                projectedField("next", 5, message, false, "ProjectionChild", Missing.INSTANCE)));
+                projectedField("next", 5, message, false, "ProjectionChild", Missing.INSTANCE),
+                projectedField("real", 6, ProtoPlan.Kind.DOUBLE, false, "", 0.0),
+                projectedField("flag", 7, ProtoPlan.Kind.BOOL, false, "", false)));
     var contract =
         new ProtoPlan.Model(null, List.of(root, child), Limits.DEFAULT, 16, NATIVE)
             .type("ProjectionRoot");
@@ -1035,8 +1045,8 @@ final class TypedAcceptance {
         contract.encode(
             contract.parseText(
                 "id: 7 text: 'omitted' child { value: 42 text: 'λ😀' blob: 'ab' items: 1 items: 2"
-                    + " next { value: 9 } } children { value: 21 } children { value: 22 } blob:"
-                    + " 'large'"));
+                    + " next { value: 9 } real: 1.5 flag: true } children { value: 21 } children {"
+                    + " value: 22 } blob: 'large'"));
     var sparse = Projection.builder(contract).select("id").build();
     var deferred =
         Projection.builder(contract).select("id", "blob").build().lazyChildren().borrowBytes(2);
@@ -1069,6 +1079,35 @@ final class TypedAcceptance {
         var nested = (BorrowedMaterializedRow) borrowed.get(2);
         Acceptance.check(
             nested.getLong(0) == 42 && nested.get(1).equals("λ😀"), "strict lazy child read");
+        // Partial projections reject encoding; omitted fields reject reads.
+        Acceptance.check(borrowed.getSize(3) == 2, "borrowed repeated count");
+        Acceptance.rejects(borrowed::encode, ContractViolation.class);
+        Acceptance.rejects(() -> borrowed.get(1), ContractViolation.class);
+        // Materialized child surface: schema, presence, sizes, scalars and unknown bytes.
+        Acceptance.check(
+            nested.plan().name().equals("ProjectionChild")
+                && DATA.getSchema(nested) == nested.plan().schema()
+                && nested.has(0)
+                && nested.has(6)
+                && nested.getSize(3) == 2
+                && nested.getDouble(5) == 1.5
+                && nested.getBoolean(6)
+                && DATA.readLong(nested, 0) == 42
+                && DATA.readDouble(nested, 5) == 1.5
+                && DATA.readBoolean(nested, 6)
+                && DATA.read(nested, 5).equals(1.5)
+                && nested.unknownFieldBytes().length == 0,
+            "materialized child surface");
+        var arrays = com.oracle.truffle.api.interop.InteropLibrary.getUncached();
+        var items = nested.get(3);
+        Acceptance.check(
+            arrays.hasArrayElements(items)
+                && arrays.getArraySize(items) == 2
+                && arrays.isArrayElementReadable(items, 1)
+                && !arrays.isArrayElementReadable(items, 2)
+                && arrays.readArrayElement(items, 1).equals(2L)
+                && ((BorrowedArray) items).size() == 2,
+            "materialized array interop");
         Acceptance.check(borrowed.get(2) == nested, "lazy child cached by handle");
         var numbers = (BorrowedArray) nested.get(3);
         var childBlob = (BorrowedArray) nested.get(2);
@@ -1204,6 +1243,23 @@ final class TypedAcceptance {
         var blob = (BorrowedArray) first.get(2);
         equal(expected, first);
         accessors(first);
+        // Root flyweight surface: identity, extent, durable copies and unknown-field queries.
+        Acceptance.check(first.row() == first && first.slabBacked(), "root flyweight");
+        Acceptance.check(first.slabBytes() > 0, "borrowed slab extent");
+        Acceptance.check(
+            !first.hasUnknownFields() && first.unknownFieldByteCount() == 0,
+            "borrowed root unknown-field query");
+        Acceptance.check(
+            first.snapshot().getLong(0) == 42 && Arrays.equals(first.encode(), wire),
+            "borrowed durable copies agree");
+        // Covariant overrides reached through their supertypes.
+        ProtoMessage asMessage = first;
+        BorrowedSlabRow asRow = first;
+        Acceptance.check(
+            asMessage.row() == first
+                && ((SlabRow) asMessage.snapshot()).getLong(0) == 42
+                && asRow.snapshot().getLong(0) == 42,
+            "borrowed root supertype views");
         var retained = first.retain();
         var retainedChild = nested.snapshot();
         var retainedNumbers = numbers.snapshot();
@@ -1747,6 +1803,25 @@ final class TypedAcceptance {
    * Layout-bound accessors (Task B2) agree with the uncached library on every method: identity per
    * layout, values, presence, primitive rejections and contract lengths.
    */
+  /** Adopts a cached DataLibrary site so its owner-check specializations can execute. */
+  private static final class CachedLongRead extends com.oracle.truffle.api.nodes.RootNode {
+    @Child private DataLibrary data = DataLibrary.factory().createDispatched(3);
+
+    CachedLongRead() {
+      super(null);
+    }
+
+    @Override
+    public Object execute(com.oracle.truffle.api.frame.VirtualFrame frame) {
+      Object[] args = frame.getArguments();
+      try {
+        return data.readLong(args[0], (int) args[1]);
+      } catch (com.oracle.truffle.api.nodes.UnexpectedResultException failure) {
+        throw new AssertionError(failure);
+      }
+    }
+  }
+
   static void accessors(AbstractRow row) {
     for (int i = 0; i < row.schema().size(); i++) {
       int ordinal = i;

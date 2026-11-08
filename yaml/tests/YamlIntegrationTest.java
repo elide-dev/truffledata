@@ -154,6 +154,10 @@ final class YamlIntegrationTest {
       Object alias =
           com.oracle.truffle.api.interop.InteropLibrary.getUncached().readMember(root, "b");
       assertTrue(Yaml.isAlias((dev.elide.truffledata.tape.TapeValue) alias));
+      // An adopted cached site folds the owner's confinement policy before its field checks.
+      var cachedSite = new CachedMemberRead().getCallTarget();
+      assertTrue(Yaml.isAlias((dev.elide.truffledata.tape.TapeValue) cachedSite.call(root, "b")));
+      assertTrue(Yaml.isAlias((dev.elide.truffledata.tape.TapeValue) cachedSite.call(root, "b")));
       assertArrayEquals(SvmAcceptance.bytes("Hello"), Yaml.binary(root.member("b")));
       assertEquals(KeyKind.INT, Yaml.keyKind(root, 2));
       assertEquals(Style.SINGLE, Yaml.style(root.member("12")));
@@ -479,4 +483,25 @@ final class YamlIntegrationTest {
     assertEquals(17, value.member("alias").member("n").longValue());
   }
 
+
+  /** Adopts a cached InteropLibrary site so exact-class owner specializations can execute. */
+  private static final class CachedMemberRead extends com.oracle.truffle.api.nodes.RootNode {
+    @Child private com.oracle.truffle.api.interop.InteropLibrary interop =
+        com.oracle.truffle.api.interop.InteropLibrary.getFactory().createDispatched(3);
+
+    CachedMemberRead() {
+      super(null);
+    }
+
+    @Override
+    public Object execute(com.oracle.truffle.api.frame.VirtualFrame frame) {
+      Object[] args = frame.getArguments();
+      try {
+        if (!interop.isMemberReadable(args[0], (String) args[1])) throw new AssertionError("unreadable");
+        return interop.readMember(args[0], (String) args[1]);
+      } catch (com.oracle.truffle.api.interop.InteropException failure) {
+        throw new AssertionError(failure);
+      }
+    }
+  }
 }
