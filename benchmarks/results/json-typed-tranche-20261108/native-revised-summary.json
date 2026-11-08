@@ -1,0 +1,219 @@
+{
+  "source": "a966cf2",
+  "invocation": "a8ded6b6-9c8e-4abc-aa0c-adcfaeaf6afa",
+  "method": "Bazel pinned toolchain cc_test, five alternating in-process rounds on a remote worker; not a CPU-affinity-controlled SVM pair",
+  "rounds": [
+    {
+      "fixture": "typed",
+      "round": 0,
+      "ondemand_ns": 208.1,
+      "structural_ns": 114.24,
+      "ratio": 1.822
+    },
+    {
+      "fixture": "typed",
+      "round": 1,
+      "ondemand_ns": 210.9,
+      "structural_ns": 112.74,
+      "ratio": 1.871
+    },
+    {
+      "fixture": "typed",
+      "round": 2,
+      "ondemand_ns": 208.32,
+      "structural_ns": 110.77,
+      "ratio": 1.881
+    },
+    {
+      "fixture": "typed",
+      "round": 3,
+      "ondemand_ns": 208.52,
+      "structural_ns": 111.72,
+      "ratio": 1.867
+    },
+    {
+      "fixture": "typed",
+      "round": 4,
+      "ondemand_ns": 210.93,
+      "structural_ns": 112.86,
+      "ratio": 1.869
+    },
+    {
+      "fixture": "nested",
+      "round": 0,
+      "ondemand_ns": 406.7,
+      "structural_ns": 314.42,
+      "ratio": 1.294
+    },
+    {
+      "fixture": "nested",
+      "round": 1,
+      "ondemand_ns": 407.49,
+      "structural_ns": 312.41,
+      "ratio": 1.304
+    },
+    {
+      "fixture": "nested",
+      "round": 2,
+      "ondemand_ns": 411.77,
+      "structural_ns": 309.58,
+      "ratio": 1.33
+    },
+    {
+      "fixture": "nested",
+      "round": 3,
+      "ondemand_ns": 408.59,
+      "structural_ns": 308.06,
+      "ratio": 1.326
+    },
+    {
+      "fixture": "nested",
+      "round": 4,
+      "ondemand_ns": 424.59,
+      "structural_ns": 314.81,
+      "ratio": 1.349
+    },
+    {
+      "fixture": "repeated",
+      "round": 0,
+      "ondemand_ns": 3633.52,
+      "structural_ns": 3114.29,
+      "ratio": 1.167
+    },
+    {
+      "fixture": "repeated",
+      "round": 1,
+      "ondemand_ns": 3902.12,
+      "structural_ns": 3154.26,
+      "ratio": 1.237
+    },
+    {
+      "fixture": "repeated",
+      "round": 2,
+      "ondemand_ns": 3569.25,
+      "structural_ns": 2998.44,
+      "ratio": 1.19
+    },
+    {
+      "fixture": "repeated",
+      "round": 3,
+      "ondemand_ns": 3554.86,
+      "structural_ns": 2990.97,
+      "ratio": 1.189
+    },
+    {
+      "fixture": "repeated",
+      "round": 4,
+      "ondemand_ns": 3561.96,
+      "structural_ns": 2993.83,
+      "ratio": 1.19
+    },
+    {
+      "fixture": "mixed",
+      "round": 0,
+      "ondemand_ns": 1322.93,
+      "structural_ns": 1328.11,
+      "ratio": 0.996
+    },
+    {
+      "fixture": "mixed",
+      "round": 1,
+      "ondemand_ns": 1311.69,
+      "structural_ns": 1239.93,
+      "ratio": 1.058
+    },
+    {
+      "fixture": "mixed",
+      "round": 2,
+      "ondemand_ns": 1333.27,
+      "structural_ns": 1280.88,
+      "ratio": 1.041
+    },
+    {
+      "fixture": "mixed",
+      "round": 3,
+      "ondemand_ns": 1306.69,
+      "structural_ns": 1130.63,
+      "ratio": 1.156
+    },
+    {
+      "fixture": "mixed",
+      "round": 4,
+      "ondemand_ns": 1310.37,
+      "structural_ns": 1270.5,
+      "ratio": 1.031
+    },
+    {
+      "fixture": "churn",
+      "round": 0,
+      "ondemand_ns": 1497.28,
+      "structural_ns": 1077.18,
+      "ratio": 1.39
+    },
+    {
+      "fixture": "churn",
+      "round": 1,
+      "ondemand_ns": 1289.2,
+      "structural_ns": 1081.35,
+      "ratio": 1.192
+    },
+    {
+      "fixture": "churn",
+      "round": 2,
+      "ondemand_ns": 1362.9,
+      "structural_ns": 1202.22,
+      "ratio": 1.134
+    },
+    {
+      "fixture": "churn",
+      "round": 3,
+      "ondemand_ns": 1674.99,
+      "structural_ns": 1094.09,
+      "ratio": 1.531
+    },
+    {
+      "fixture": "churn",
+      "round": 4,
+      "ondemand_ns": 1290.52,
+      "structural_ns": 1076.91,
+      "ratio": 1.198
+    }
+  ],
+  "summary": {
+    "typed": {
+      "baseline_median_ns": 208.52,
+      "candidate_median_ns": 112.74,
+      "median_round_ratio": 1.869,
+      "minimum_round_ratio": 1.822,
+      "maximum_round_ratio": 1.881
+    },
+    "nested": {
+      "baseline_median_ns": 408.59,
+      "candidate_median_ns": 312.41,
+      "median_round_ratio": 1.326,
+      "minimum_round_ratio": 1.294,
+      "maximum_round_ratio": 1.349
+    },
+    "repeated": {
+      "baseline_median_ns": 3569.25,
+      "candidate_median_ns": 2998.44,
+      "median_round_ratio": 1.19,
+      "minimum_round_ratio": 1.167,
+      "maximum_round_ratio": 1.237
+    },
+    "mixed": {
+      "baseline_median_ns": 1311.69,
+      "candidate_median_ns": 1270.5,
+      "median_round_ratio": 1.041,
+      "minimum_round_ratio": 0.996,
+      "maximum_round_ratio": 1.156
+    },
+    "churn": {
+      "baseline_median_ns": 1362.9,
+      "candidate_median_ns": 1081.35,
+      "median_round_ratio": 1.198,
+      "minimum_round_ratio": 1.134,
+      "maximum_round_ratio": 1.531
+    }
+  }
+}

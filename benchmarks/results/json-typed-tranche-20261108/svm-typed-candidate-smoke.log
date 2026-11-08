@@ -1,0 +1,93 @@
+INFO: Invocation ID: e00f4947-0d2e-4fa1-ba2a-96b9fa1617fc
+INFO: Streaming build results to: https://app.buildbuddy.io/invocation/e00f4947-0d2e-4fa1-ba2a-96b9fa1617fc
+Computing main repo mapping: 
+Loading: 
+Loading: 0 packages loaded
+Analyzing: target //build/json-typed-tranche-candidate:typed_smoke (1 packages loaded, 0 targets configured)
+Analyzing: target //build/json-typed-tranche-candidate:typed_smoke (1 packages loaded, 0 targets configured)
+
+INFO: Analyzed target //build/json-typed-tranche-candidate:typed_smoke (1 packages loaded, 3 targets configured).
+[5 / 6] Testing //build/json-typed-tranche-candidate:typed_smoke; 1s remote, remote-cache
+[5 / 6] Testing //build/json-typed-tranche-candidate:typed_smoke; 7s remote, remote-cache
+[5 / 6] Testing //build/json-typed-tranche-candidate:typed_smoke; 8s remote, remote-cache
+[5 / 6] Testing //build/json-typed-tranche-candidate:typed_smoke; 11s remote, remote-cache
+[5 / 6] 1 / 1 tests; Testing //build/json-typed-tranche-candidate:typed_smoke; 12s remote, remote-cache
+INFO: From Testing //build/json-typed-tranche-candidate:typed_smoke:
+==================== Test output for //build/json-typed-tranche-candidate:typed_smoke:
+{"workload":"json-typed-nested","engine":"simdjson-typed-nested","stage":"ingest","runtime":"svm","guest_compiled":false,"checksum":7968,"rows":32,"allocated_bytes_per_row":[160.0, 160.0, 160.0]}
+{"workload":"json-typed-nested","engine":"simdjson-typed-nested","stage":"read-aot","runtime":"svm","guest_compiled":false,"checksum":7968,"rows":32,"allocated_bytes_per_row":[48.0, 48.0, 48.0]}
+{"workload":"json-typed-nested","engine":"simdjson-typed-nested","stage":"interpret","runtime":"svm","guest_compiled":false,"checksum":7968,"rows":32,"allocated_bytes_per_row":[50.0, 50.0, 50.0]}
+[To redirect Truffle log output to a file use one of the following options:
+* '--log.file=<path>' if the option is passed using a guest language launcher.
+* '-Dpolyglot.log.file=<path>' if the option is passed using the host Java launcher.
+* Configure logging using the polyglot embedding API.]
+[engine] Expansion tree for JsonComparison.StructuralReads@6e9b6ade after truffleTier:
+Name         Frequency | Count    Size  Cycles   Ifs Loops Invokes Allocs | Self Count  Size Cycles   Ifs Loops Invokes Allocs | IRNode ASTNode Lang:File:Line:Chars 
+<root>            1.00 |  1348    1544    1577    25     3       0      8 |       1348  1544   1577    25     3       0      8 |  -  
+
+[engine] Expansion tree for JsonComparison.StructuralReads@6e9b6ade after truffleTier:
+Name         Frequency | Count    Size  Cycles   Ifs Loops Invokes Allocs | Self Count  Size Cycles   Ifs Loops Invokes Allocs | IRNode ASTNode Lang:File:Line:Chars 
+<root>            1.00 |  1292    1493    1533    21     3       0      8 |       1292  1493   1533    21     3       0      8 |  -  
+
+{"workload":"json-typed-nested","engine":"simdjson-typed-nested","stage":"peak","runtime":"svm","guest_compiled":true,"checksum":7968,"rows":32,"allocated_bytes_per_row":[49.0, 49.0, 49.0]}
+{"workload":"json-typed-repeated","engine":"simdjson-typed-repeated","stage":"ingest","runtime":"svm","guest_compiled":false,"checksum":1306656,"rows":32,"allocated_bytes_per_row":[1568.0, 1568.0, 1568.0]}
+{"workload":"json-typed-repeated","engine":"simdjson-typed-repeated","stage":"read-aot","runtime":"svm","guest_compiled":false,"checksum":1306656,"rows":32,"allocated_bytes_per_row":[1456.0, 1456.0, 1456.0]}
+{"workload":"json-typed-repeated","engine":"simdjson-typed-repeated","stage":"interpret","runtime":"svm","guest_compiled":false,"checksum":1306656,"rows":32,"allocated_bytes_per_row":[1458.0, 1458.0, 1458.0]}
+[To redirect Truffle log output to a file use one of the following options:
+* '--log.file=<path>' if the option is passed using a guest language launcher.
+* '-Dpolyglot.log.file=<path>' if the option is passed using the host Java launcher.
+* Configure logging using the polyglot embedding API.]
+[engine] Expansion tree for JsonComparison.StructuralReads@26e7980f after truffleTier:
+Name         Frequency | Count    Size  Cycles   Ifs Loops Invokes Allocs | Self Count  Size Cycles   Ifs Loops Invokes Allocs | IRNode ASTNode Lang:File:Line:Chars 
+<root>            1.00 |  1348    1544    1577    25     3       0      8 |       1348  1544   1577    25     3       0      8 |  -  
+
+[engine] Expansion tree for JsonComparison.StructuralReads@26e7980f after truffleTier:
+Name         Frequency | Count    Size  Cycles   Ifs Loops Invokes Allocs | Self Count  Size Cycles   Ifs Loops Invokes Allocs | IRNode ASTNode Lang:File:Line:Chars 
+<root>            1.00 |  1292    1493    1533    21     3       0      8 |       1292  1493   1533    21     3       0      8 |  -  
+
+{"workload":"json-typed-repeated","engine":"simdjson-typed-repeated","stage":"peak","runtime":"svm","guest_compiled":true,"checksum":1306656,"rows":32,"allocated_bytes_per_row":[817.0, 817.0, 817.0]}
+{"workload":"json-typed-mixed","engine":"simdjson-typed-mixed","stage":"ingest","runtime":"svm","guest_compiled":false,"checksum":330336,"rows":32,"allocated_bytes_per_row":[592.0, 592.0, 592.0]}
+{"workload":"json-typed-mixed","engine":"simdjson-typed-mixed","stage":"read-aot","runtime":"svm","guest_compiled":false,"checksum":330336,"rows":32,"allocated_bytes_per_row":[480.0, 480.0, 480.0]}
+{"workload":"json-typed-mixed","engine":"simdjson-typed-mixed","stage":"interpret","runtime":"svm","guest_compiled":false,"checksum":330336,"rows":32,"allocated_bytes_per_row":[482.0, 482.0, 482.0]}
+[To redirect Truffle log output to a file use one of the following options:
+* '--log.file=<path>' if the option is passed using a guest language launcher.
+* '-Dpolyglot.log.file=<path>' if the option is passed using the host Java launcher.
+* Configure logging using the polyglot embedding API.]
+[engine] Expansion tree for JsonComparison.StructuralReads@2f18a9aa after truffleTier:
+Name         Frequency | Count    Size  Cycles   Ifs Loops Invokes Allocs | Self Count  Size Cycles   Ifs Loops Invokes Allocs | IRNode ASTNode Lang:File:Line:Chars 
+<root>            1.00 |  1348    1544    1577    25     3       0      8 |       1348  1544   1577    25     3       0      8 |  -  
+
+[engine] Expansion tree for JsonComparison.StructuralReads@2f18a9aa after truffleTier:
+Name         Frequency | Count    Size  Cycles   Ifs Loops Invokes Allocs | Self Count  Size Cycles   Ifs Loops Invokes Allocs | IRNode ASTNode Lang:File:Line:Chars 
+<root>            1.00 |  1292    1493    1533    21     3       0      8 |       1292  1493   1533    21     3       0      8 |  -  
+
+{"workload":"json-typed-mixed","engine":"simdjson-typed-mixed","stage":"peak","runtime":"svm","guest_compiled":true,"checksum":330336,"rows":32,"allocated_bytes_per_row":[321.0, 321.0, 321.0]}
+{"workload":"json-typed-churn","engine":"simdjson-typed-churn","stage":"ingest","runtime":"svm","guest_compiled":false,"checksum":307220,"rows":32,"allocated_bytes_per_row":[558.5, 558.5, 558.5]}
+{"workload":"json-typed-churn","engine":"simdjson-typed-churn","stage":"read-aot","runtime":"svm","guest_compiled":false,"checksum":307220,"rows":32,"allocated_bytes_per_row":[446.5, 446.5, 446.5]}
+{"workload":"json-typed-churn","engine":"simdjson-typed-churn","stage":"interpret","runtime":"svm","guest_compiled":false,"checksum":307220,"rows":32,"allocated_bytes_per_row":[448.5, 448.5, 448.5]}
+[To redirect Truffle log output to a file use one of the following options:
+* '--log.file=<path>' if the option is passed using a guest language launcher.
+* '-Dpolyglot.log.file=<path>' if the option is passed using the host Java launcher.
+* Configure logging using the polyglot embedding API.]
+[engine] Expansion tree for JsonComparison.StructuralReads@5c3c1948 after truffleTier:
+Name         Frequency | Count    Size  Cycles   Ifs Loops Invokes Allocs | Self Count  Size Cycles   Ifs Loops Invokes Allocs | IRNode ASTNode Lang:File:Line:Chars 
+<root>            1.00 |  1348    1544    1577    25     3       0      8 |       1348  1544   1577    25     3       0      8 |  -  
+
+[engine] Expansion tree for JsonComparison.StructuralReads@5c3c1948 after truffleTier:
+Name         Frequency | Count    Size  Cycles   Ifs Loops Invokes Allocs | Self Count  Size Cycles   Ifs Loops Invokes Allocs | IRNode ASTNode Lang:File:Line:Chars 
+<root>            1.00 |  1292    1493    1533    21     3       0      8 |       1292  1493   1533    21     3       0      8 |  -  
+
+{"workload":"json-typed-churn","engine":"simdjson-typed-churn","stage":"peak","runtime":"svm","guest_compiled":true,"checksum":307220,"rows":32,"allocated_bytes_per_row":[300.0, 300.0, 300.0]}
+================================================================================
+INFO: Found 1 test target...
+Target //build/json-typed-tranche-candidate:typed_smoke up-to-date:
+  bazel-bin/build/json-typed-tranche-candidate/typed_smoke
+INFO: Elapsed time: 13.466s, Critical Path: 13.32s
+INFO: 6 processes: 5 internal, 2 remote.
+INFO: Build completed successfully, 6 total actions
+INFO: 
+//build/json-typed-tranche-candidate:typed_smoke                         PASSED in 6.7s
+
+Executed 1 out of 1 test: 1 test passes.
+There were tests whose specified size is too big. Use the --test_verbose_timeout_warnings command line option to see which ones these are.
+INFO: Streaming build results to: https://app.buildbuddy.io/invocation/e00f4947-0d2e-4fa1-ba2a-96b9fa1617fc

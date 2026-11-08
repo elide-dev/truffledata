@@ -1,9 +1,9 @@
 # Nested/repeated structural typed JSON candidate
 
-Status: **unqualified candidate**. The first implementation passed correctness but lost on
-three native producer fixtures. The revised frame implementation passes local sanitizer and
-Cargo checks; pinned revised producer, JVM, SVM allocation/graph and paired image measurements
-remain pending. No SVM speedup is claimed here.
+Status: **unqualified candidate awaiting SVM pairs**. Revised native differential/API and
+64 JVM tests pass with the pinned toolchain. Native producer median round gains are
+1.326x nested, 1.190x repeated, 1.041x mixed, and 1.198x churn. Native timings are not
+end-to-end SVM speedups. SVM acceptance, existing allocation/graph gates and both image smokes pass. Paired SVM timing remains pending.
 
 The baseline image has production `9a1dcec` and the identical Java harness from `c43af1c`
 (integration `d3f40cf`). `baseline.json` records its image/source hashes. No PGO, ISA change,
@@ -33,12 +33,18 @@ production sources.
   The initial producer ratios (old/new, five rounds) were nested **1.075–1.140x**,
   repeated **0.977–0.985x**, mixed **0.958–0.987x**, churn **0.966–0.980x**.
   `initial-writer.patch` and `initial-sources.json` preserve this rejected version.
+- `native-revised-jvm.log`, `native-revised-summary.json`: invocation
+  [a8ded6b6](https://app.buildbuddy.io/invocation/a8ded6b6-9c8e-4abc-aa0c-adcfaeaf6afa),
+  all five targets pass: 155,647 exact native cases, typed/API tests and 64 JVM tests.
+  Five alternating native producer rounds give nested **1.294–1.349x**, repeated
+  **1.167–1.237x**, mixed **0.996–1.156x**, churn **1.134–1.531x**. This pins the repository
+  toolchain; these in-process probes do not pin a CPU or replace fresh-process SVM pairs.
 - `native-arm64-frame-revision.log`: Apple Clang 21, Arm64 diagnostic after caching schema,
   selected field/key pointers and slot indexes, and initializing only active frame members.
   Five-round native producer ratios were nested **1.347–1.450x**, repeated **1.029–1.059x**,
   mixed **1.044–1.057x**, churn **1.051–1.103x**. These are a different host/toolchain and
   do not establish pinned Linux or SVM gains. The subsequent expected-key wrap comparison
-  removes a dynamic modulo without changing its result; it still awaits pinned timing.
+  removes a dynamic modulo without changing its result; the revised pinned-toolchain result above includes it.
 - `native-arm64-wrap.log`: a later local diagnostic has substantial host variance (the
   unchanged On-Demand baseline is roughly 1.5–2x slower than the previous local run and
   repeated ratios span 0.904–1.193x). It is retained as inconclusive, not admission evidence.
@@ -49,6 +55,18 @@ production sources.
   empty-child/late-invalid-element cases pass ASan+UBSan: **155,647 cases**. For nested/repeated
   plans the differential compares exact status, slots/bits, decoded text, lexical bytes, record
   tables and index memory extents. The pre-existing flat corpus compares acceptance/output.
+- `svm-build-smokes.log`: invocation
+  [135dd53e](https://app.buildbuddy.io/invocation/135dd53e-6a25-410d-bccd-9e3fef05a2fc)
+  builds/downloads the candidate comparison image and passes Native Image acceptance,
+  the existing **24 compiled graph checks and nine allocation budgets**, and all 16 typed
+  baseline smoke cells. `sdk.json` records the pinned SDK archive and compilation settings;
+  `candidate-image.json` records the preserved candidate hash and source checkpoint.
+- `svm-typed-candidate-smoke.log`: invocation
+  [e00f4947](https://app.buildbuddy.io/invocation/e00f4947-0d2e-4fa1-ba2a-96b9fa1617fc)
+  passes all 16 candidate cells. `typed-smoke-allocations.json` verifies exact baseline/candidate
+  checksums, tier markers and Java allocations. Each new public read helper compiles; final
+  expansion rows have 1,292 nodes, three loops and zero unresolved invokes. This records
+  the new workloads without replacing or weakening the existing graph budgets.
 - `cargo-arm64.log`: the synchronized source package builds and passes its link/fingerprint test.
 
 The revised probe's exact fixture index storage matches the oracle: nested **736 B retained /
@@ -71,3 +89,8 @@ The nested/repeated fixtures are never compared numerically with generic competi
 The local baseline label is `//build/json-typed-tranche-baseline:json-comparison`, supplied through
 `--//benchmarks/comparison:json_typed_svm_baseline=...`. It is a hard link to the preserved image;
 no machine-specific baseline label or binary is committed.
+
+Independent worker review found no concrete correctness defect in frame initialization,
+plan-pointer lifetime, arena indexing, record-array scalar rejection or error replay. Its
+remaining performance lead is array lookahead (binary search and descendant rescans), to be
+judged by the paired results; the old On-Demand count also rescans descendants.

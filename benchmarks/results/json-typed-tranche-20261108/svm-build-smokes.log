@@ -1,0 +1,511 @@
+INFO: Invocation ID: 135dd53e-6a25-410d-bccd-9e3fef05a2fc
+INFO: Streaming build results to: https://app.buildbuddy.io/invocation/135dd53e-6a25-410d-bccd-9e3fef05a2fc
+Computing main repo mapping: 
+Loading: 
+Loading: 0 packages loaded
+Analyzing: 4 targets (2 packages loaded, 0 targets configured)
+Analyzing: 4 targets (2 packages loaded, 0 targets configured)
+
+INFO: Analyzed 4 targets (2 packages loaded, 13 targets configured).
+[19 / 29] Building json/tests/libacceptance.jar (5 source files) and running annotation processors (TruffleProcessor, VerifyTruffleProcessor, LanguageRegistrationProcessor, VerifyCompilationFinalProcessor); 1s remote, remote-cache ... (3 actions running)
+[19 / 29] Building json/tests/libacceptance.jar (5 source files) and running annotation processors (TruffleProcessor, VerifyTruffleProcessor, LanguageRegistrationProcessor, VerifyCompilationFinalProcessor); 5s remote, remote-cache ... (3 actions running)
+[19 / 29] Building json/tests/libacceptance.jar (5 source files) and running annotation processors (TruffleProcessor, VerifyTruffleProcessor, LanguageRegistrationProcessor, VerifyCompilationFinalProcessor); 7s remote, remote-cache ... (3 actions running)
+[20 / 29] Linking json/native/libtruffledata_json.pic.a; 8s remote, remote-cache ... (2 actions running)
+[20 / 29] 1 / 3 tests; Linking json/native/libtruffledata_json.pic.a; 11s remote, remote-cache ... (2 actions running)
+INFO: From Testing //build/json-typed-tranche-baseline:typed_smoke:
+==================== Test output for //build/json-typed-tranche-baseline:typed_smoke:
+{"workload":"json-typed-nested","engine":"simdjson-typed-nested","stage":"ingest","runtime":"svm","guest_compiled":false,"checksum":7968,"rows":32,"allocated_bytes_per_row":[160.0, 160.0, 160.0]}
+{"workload":"json-typed-nested","engine":"simdjson-typed-nested","stage":"read-aot","runtime":"svm","guest_compiled":false,"checksum":7968,"rows":32,"allocated_bytes_per_row":[48.0, 48.0, 48.0]}
+{"workload":"json-typed-nested","engine":"simdjson-typed-nested","stage":"interpret","runtime":"svm","guest_compiled":false,"checksum":7968,"rows":32,"allocated_bytes_per_row":[50.0, 50.0, 50.0]}
+{"workload":"json-typed-nested","engine":"simdjson-typed-nested","stage":"peak","runtime":"svm","guest_compiled":true,"checksum":7968,"rows":32,"allocated_bytes_per_row":[49.0, 49.0, 49.0]}
+{"workload":"json-typed-repeated","engine":"simdjson-typed-repeated","stage":"ingest","runtime":"svm","guest_compiled":false,"checksum":1306656,"rows":32,"allocated_bytes_per_row":[1568.0, 1568.0, 1568.0]}
+{"workload":"json-typed-repeated","engine":"simdjson-typed-repeated","stage":"read-aot","runtime":"svm","guest_compiled":false,"checksum":1306656,"rows":32,"allocated_bytes_per_row":[1456.0, 1456.0, 1456.0]}
+{"workload":"json-typed-repeated","engine":"simdjson-typed-repeated","stage":"interpret","runtime":"svm","guest_compiled":false,"checksum":1306656,"rows":32,"allocated_bytes_per_row":[1458.0, 1458.0, 1458.0]}
+{"workload":"json-typed-repeated","engine":"simdjson-typed-repeated","stage":"peak","runtime":"svm","guest_compiled":true,"checksum":1306656,"rows":32,"allocated_bytes_per_row":[817.0, 817.0, 817.0]}
+{"workload":"json-typed-mixed","engine":"simdjson-typed-mixed","stage":"ingest","runtime":"svm","guest_compiled":false,"checksum":330336,"rows":32,"allocated_bytes_per_row":[592.0, 592.0, 592.0]}
+{"workload":"json-typed-mixed","engine":"simdjson-typed-mixed","stage":"read-aot","runtime":"svm","guest_compiled":false,"checksum":330336,"rows":32,"allocated_bytes_per_row":[480.0, 480.0, 480.0]}
+{"workload":"json-typed-mixed","engine":"simdjson-typed-mixed","stage":"interpret","runtime":"svm","guest_compiled":false,"checksum":330336,"rows":32,"allocated_bytes_per_row":[482.0, 482.0, 482.0]}
+{"workload":"json-typed-mixed","engine":"simdjson-typed-mixed","stage":"peak","runtime":"svm","guest_compiled":true,"checksum":330336,"rows":32,"allocated_bytes_per_row":[321.0, 321.0, 321.0]}
+{"workload":"json-typed-churn","engine":"simdjson-typed-churn","stage":"ingest","runtime":"svm","guest_compiled":false,"checksum":307220,"rows":32,"allocated_bytes_per_row":[558.5, 558.5, 558.5]}
+{"workload":"json-typed-churn","engine":"simdjson-typed-churn","stage":"read-aot","runtime":"svm","guest_compiled":false,"checksum":307220,"rows":32,"allocated_bytes_per_row":[446.5, 446.5, 446.5]}
+{"workload":"json-typed-churn","engine":"simdjson-typed-churn","stage":"interpret","runtime":"svm","guest_compiled":false,"checksum":307220,"rows":32,"allocated_bytes_per_row":[448.5, 448.5, 448.5]}
+{"workload":"json-typed-churn","engine":"simdjson-typed-churn","stage":"peak","runtime":"svm","guest_compiled":true,"checksum":307220,"rows":32,"allocated_bytes_per_row":[300.0, 300.0, 300.0]}
+================================================================================
+[21 / 29] 1 / 3 tests; Linking json/native/libtruffledata_json.pic.a; 12s remote, remote-cache
+[24 / 29] 1 / 3 tests; Native Image [executable] (opt) //json/tests:native; 0s remote, remote-cache ... (2 actions running)
+[24 / 29] 1 / 3 tests; Native Image [executable] (opt) //json/tests:native; 11s remote, remote-cache ... (2 actions running)
+[24 / 29] 1 / 3 tests; Native Image [executable] (opt) //json/tests:native; 41s remote, remote-cache ... (2 actions running)
+[24 / 29] 1 / 3 tests; Native Image [executable] (opt) //json/tests:native; 101s remote, remote-cache ... (2 actions running)
+INFO: From Native Image [executable] (opt) //json/tests:native:
+WARNING: A restricted method in java.lang.System has been called
+WARNING: java.lang.System::load has been called by com.oracle.truffle.polyglot.JDKSupport in module org.graalvm.truffle (file:/workspace/bazel-out/rbe_linux_amd64-opt/bin/external/rules_jvm_external++maven+maven/org/graalvm/truffle/truffle-api/25.5.5-elide.27/processed_truffle-api-25.5.5-elide.27.jar)
+WARNING: Use --enable-native-access=org.graalvm.truffle to avoid a warning for callers in this module
+WARNING: Restricted methods will be blocked in a future release unless native access is enabled
+
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by com.oracle.truffle.api.object.DynamicObject (file:/workspace/bazel-out/rbe_linux_amd64-opt/bin/external/rules_jvm_external++maven+maven/org/graalvm/truffle/truffle-api/25.5.5-elide.27/processed_truffle-api-25.5.5-elide.27.jar)
+WARNING: Please consider reporting this to the maintainers of class com.oracle.truffle.api.object.DynamicObject
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+Warning: Using a deprecated option --no-fallback from command line. No effect, no replacement available
+Warning: The option '-H:Name=json_acceptance' is experimental and must be enabled via '-H:+UnlockExperimentalVMOptions' in the future.
+Warning: The option '-H:Path=bazel-out/rbe_linux_amd64-opt/bin/json/tests' is experimental and must be enabled via '-H:+UnlockExperimentalVMOptions' in the future.
+Warning: The option '-H:-CheckToolchain' is experimental and must be enabled via '-H:+UnlockExperimentalVMOptions' in the future.
+Warning: The option '-H:IncludeResources=' is experimental and must be enabled via '-H:+UnlockExperimentalVMOptions' in the future.
+Warning: Please re-evaluate whether any experimental option is required, and either remove or unlock it. The build output lists all active experimental options, including where they come from and possible alternatives. If you think an experimental option should be considered as stable, please file an issue.
+Warning: Option 'FallbackThreshold' is deprecated and might be removed in a future release: It no longer has any effect, and no replacement is available. Please refer to the GraalVM release notes.
+========================================================================================================================
+GraalVM Native Image: Generating 'json_acceptance' (executable)...
+========================================================================================================================
+For detailed information and explanations on the build output, visit:
+https://github.com/oracle/graal/blob/master/docs/reference-manual/native-image/BuildOutput.md
+------------------------------------------------------------------------------------------------------------------------
+[1/8] Initializing...                                                                                  (10.9s @ 0.22GiB)
+ Builder configuration:
+ - Java version: 25.0.4.1.1+1, vendor version: GraalVM CE 25.5.5-dev+1.1
+ - Graal compiler: optimization level: 2, target machine: compatibility
+ - C compiler: cc (null, null, 0.0.0)
+ - Assertions: disabled, system assertions: disabled
+ - 6 user-specific feature(s):
+   - com.oracle.svm.truffle.TruffleBaseFeature: Provides internal support for Truffle
+   - com.oracle.svm.truffle.TruffleFeature: Provides internal support for Truffle runtime compilation
+   - com.oracle.truffle.api.impl.TruffleAPIFeature: Provides basic support for Truffle
+   - com.oracle.truffle.api.object.DynamicObjectFeature: Provides support for DynamicObject
+   - com.oracle.truffle.polyglot.PolyglotProxyFeature
+   - org.graalvm.home.HomeFinderFeature: Finds GraalVM paths and its version number
+ Image configuration:
+ - Garbage collector: Serial GC (max heap size: 80% of RAM)
+ - Assertions: enabled (class-specific config may apply), system assertions: disabled
+------------------------------------------------------------------------------------------------------------------------
+ 7 experimental option(s) unlocked:
+ - '-H:Name' (alternative API option(s): -o json_acceptance; origin(s): command line)
+ - '-H:+TruffleCheckNeverPartOfCompilation' (origin(s): command line)
+ - '-H:CCompilerOption' (alternative API option(s): --native-compiler-options=-I/workspace/external/rules_rust++crate+crates__simdutf-0.7.0/cpp, --native-compiler-options=-I/workspace/bazel-out/rbe_linux_amd64-opt/bin/external/rules_rust++crate+crates__simdutf-0.7.0/cpp, --native-compiler-options=-I/workspace/external/+http_archive+myna/include, --native-compiler-options=-I/workspace/bazel-out/rbe_linux_amd64-opt/bin/external/+http_archive+myna/include, --native-compiler-options=-I/workspace/external/+http_archive+simdjson/singleheader, --native-compiler-options=-I/workspace/bazel-out/rbe_linux_amd64-opt/bin/external/+http_archive+simdjson/singleheader, --native-compiler-options=-I/workspace/., --native-compiler-options=-I/workspace/bazel-out/rbe_linux_amd64-opt/bin, --native-compiler-options=-I/workspace/external/rules_rust++crate+crates__simdutf-0.7.0, --native-compiler-options=-I/workspace/bazel-out/rbe_linux_amd64-opt/bin/external/rules_rust++crate+crates__simdutf-0.7.0, --native-compiler-options=-I/workspace/external/+http_archive+myna, --native-compiler-options=-I/workspace/bazel-out/rbe_linux_amd64-opt/bin/external/+http_archive+myna, --native-compiler-options=-I/workspace/external/+http_archive+simdjson, --native-compiler-options=-I/workspace/bazel-out/rbe_linux_amd64-opt/bin/external/+http_archive+simdjson, --native-compiler-options=-I/workspace/external/+http_archive+myna/include/myna, --native-compiler-options=-I/workspace/tape/native, --native-compiler-options=-I/workspace/json/native, --native-compiler-options=-I/workspace/bazel-out/rbe_linux_amd64-opt/bin/json/native/generated; origin(s): command line)
+ - '-H:Path': Use the '-o' option instead. (origin(s): command line)
+ - '-H:+TruffleCheckBlockListMethods' (origin(s): command line)
+ - '-H:-CheckToolchain' (origin(s): command line)
+ - '-H:IncludeResources': Use a resource-config.json in your META-INF/native-image/<groupID>/<artifactID> directory instead. (origin(s): command line)
+------------------------------------------------------------------------------------------------------------------------
+Build resources:
+ - 24.26GiB of memory (98.5% of system memory, using all available memory)
+ - 8 thread(s) (72.7% of 11 available processor(s), set via '--parallelism=8')
+[2/8] Performing analysis...  [*********]                                                              (34.4s @ 4.46GiB)
+   11,087 types,  15,431 fields, and  52,926 methods found reachable
+      291 types,      84 fields, and     626 methods registered for reflection
+       58 types,      59 fields, and      52 methods registered for JNI access
+       66 resource accesses registered with 172.20KiB total size
+        5 native libraries: dl, m, pthread, rt, z
+    2,193 runtime compiled methods (4.1% of all reachable methods)
+[3/8] Building universe...                                                                              (8.7s @ 2.02GiB)
+[4/8] Parsing methods...      [**]                                                                      (3.7s @ 1.09GiB)
+[5/8] Inlining methods...     [****]                                                                    (1.2s @ 3.43GiB)
+[6/8] Compiling methods...    [******]                                                                 (34.8s @ 6.69GiB)
+[7/8] Laying out methods...   [**]                                                                      (4.6s @ 1.78GiB)
+[8/8] Creating image...       [***]                                                                    (10.6s @ 1.39GiB)
+  18.99MiB (43.45%) for code area:    36,573 compilation units
+  18.50MiB (42.33%) for image heap:  302,248 objects and 15 resources
+   6.22MiB (14.22%) for other data
+  43.71MiB in total image size, 39.57MiB in total file size
+------------------------------------------------------------------------------------------------------------------------
+Top 10 origins of code area:                                Top 10 object types in image heap:
+   1.04MiB o.g.truffle/com.oracle.truffle.polyglot             4.41MiB byte[] for code metadata
+   0.99MiB o.g.truffle/com.oracle.truffle.api.interop          3.51MiB byte[] for string data
+ 970.12KiB j.g.compiler/jdk.graal.compiler.lir.amd64           1.93MiB java.base/java.lang.String
+ 942.44KiB o.g.truffle/com.oracle.truffle.host                 1.66MiB java.base/java.lang.Class
+ 861.64KiB java.base/java.util                               952.79KiB o.g.n.runtime/c.o.s.core.hub.DynamicHubCompanion
+ 470.78KiB dev.elide.truffledata.tape                        734.98KiB byte[] for general heap data
+ 452.70KiB o.g.truffle/com.oracle.truffle.api.strings        462.19KiB java.base/j.u.concurrent.ConcurrentHashMap$Node
+ 375.69KiB o.g.n.runtime/com.oracle.svm.core.code            455.52KiB byte[] for graph encodings
+ 371.56KiB j.g.compiler/jdk.graal.compiler.nodes             454.51KiB java.base/java.lang.Object[]
+ 365.21KiB java.base/java.lang                               361.41KiB o.g.t.r.svm/c.o.s.t.api.SubstrateTruffleMethod
+  12.26MiB for 367 more packages                               3.65MiB for 3001 more object types
+------------------------------------------------------------------------------------------------------------------------
+Recommendations:
+ FUTR: Use '--future-defaults=all' to prepare for future releases.
+ HEAP: Set max heap for improved and more predictable memory usage.
+------------------------------------------------------------------------------------------------------------------------
+                       12.1s (10.5% of total time) in 40 GCs | Peak RSS: 8.80GiB | CPU load: 6.93
+------------------------------------------------------------------------------------------------------------------------
+Build artifacts:
+ /workspace/bazel-out/rbe_linux_amd64-opt/bin/json/tests/json_acceptance (executable, 39.57MiB)
+========================================================================================================================
+Finished generating 'json_acceptance' in 1m 52s.
+
+The build process encountered 7 warnings.
+
+[25 / 29] 1 / 3 tests; Native Image [executable] (opt) //benchmarks/comparison:json_svm; 140s remote, remote-cache ... (2 actions, 1 running)
+[26 / 30] 1 / 3 tests; Native Image [executable] (opt) //benchmarks/comparison:json_svm; 141s remote, remote-cache ... (2 actions running)
+[26 / 30] 1 / 3 tests; Native Image [executable] (opt) //benchmarks/comparison:json_svm; 149s remote, remote-cache ... (2 actions running)
+[26 / 30] 1 / 3 tests; Native Image [executable] (opt) //benchmarks/comparison:json_svm; 150s remote, remote-cache ... (2 actions running)
+[26 / 30] 1 / 3 tests; Native Image [executable] (opt) //benchmarks/comparison:json_svm; 151s remote, remote-cache ... (2 actions running)
+[26 / 30] 2 / 3 tests; Native Image [executable] (opt) //benchmarks/comparison:json_svm; 154s remote, remote-cache ... (2 actions running)
+INFO: From Testing //json/tests:native_test:
+==================== Test output for //json/tests:native_test:
+JSON compiled=true constant=false specialized=false shared=false bytes/read=3.2E-5
+JSON compiled=true constant=true specialized=false shared=false bytes/read=3.2E-5
+JSON compiled=true constant=false specialized=true shared=false bytes/read=3.2E-5
+JSON compiled=true constant=true specialized=true shared=false bytes/read=3.2E-5
+JSON compiled=true constant=false specialized=false shared=true bytes/read=3.2E-5
+JSON compiled=true constant=true specialized=false shared=true bytes/read=3.2E-5
+[To redirect Truffle log output to a file use one of the following options:
+* '--log.file=<path>' if the option is passed using a guest language launcher.
+* '-Dpolyglot.log.file=<path>' if the option is passed using the host Java launcher.
+* Configure logging using the polyglot embedding API.]
+[engine] perf info    CompiledReads.GenericReads@446d7d9e                         |Partial evaluation could not resolve virtual instanceof to an exact type due to: interface type check: SubstrateType<dev.elide.truffledata.tape.TapeReader>|Nodes [198|InstanceOf, 292|InstanceOf, 387|InstanceOf]
+  No stack trace available for [198|InstanceOf, 292|InstanceOf, 387|InstanceOf].
+[engine] perf info    CompiledReads.GenericReads@446d7d9e                         |Partial evaluation could not resolve virtual instanceof to an exact type due to: interface type check: SubstrateType<dev.elide.truffledata.tape.TapeReader>|Nodes [143|InstanceOf, 237|InstanceOf, 332|InstanceOf]
+  No stack trace available for [143|InstanceOf, 237|InstanceOf, 332|InstanceOf].
+JSON generic compiled=true bytes/read=3.2E-5
+[engine] perf info    CompiledReads.GenericReads@446d7d9e                         |Partial evaluation could not resolve virtual instanceof to an exact type due to: interface type check: SubstrateType<dev.elide.truffledata.tape.TapeReader>|Nodes [171|InstanceOf, 265|InstanceOf, 360|InstanceOf]
+  No stack trace available for [171|InstanceOf, 265|InstanceOf, 360|InstanceOf].
+[engine] perf info    CompiledReads.GenericReads@446d7d9e                         |Partial evaluation could not resolve virtual instanceof to an exact type due to: interface type check: SubstrateType<dev.elide.truffledata.tape.TapeReader>|Nodes [116|InstanceOf, 210|InstanceOf, 305|InstanceOf]
+  No stack trace available for [116|InstanceOf, 210|InstanceOf, 305|InstanceOf].
+JSON interop compiled=true bytes/read=3.2E-5
+JSON borrowed interop compiled=true bytes/read=3.2E-5
+JSON export compiled=true bytes/export=3.2E-5 depth=1
+JSON message array interop compiled=true bytes/read=3.2E-5
+JSON snapshot array interop compiled=true bytes/read=3.2E-5
+JSON nested compiled=true dynamic=false bytes/read=3.2E-5
+JSON nested compiled=true dynamic=true bytes/read=3.2E-5
+JSON generated SVM binding and Myna reader acceptance passed
+================================================================================
+[27 / 30] 2 / 3 tests; Native Image [executable] (opt) //benchmarks/comparison:json_svm; 155s remote, remote-cache
+[27 / 30] 2 / 3 tests; Native Image [executable] (opt) //benchmarks/comparison:json_svm; 165s remote, remote-cache
+[27 / 30] 2 / 3 tests; Native Image [executable] (opt) //benchmarks/comparison:json_svm; 196s remote, remote-cache
+[27 / 30] 2 / 3 tests; Native Image [executable] (opt) //benchmarks/comparison:json_svm; 256s remote, remote-cache
+[27 / 30] 2 / 3 tests; Native Image [executable] (opt) //benchmarks/comparison:json_svm; 316s remote, remote-cache
+[27 / 30] 2 / 3 tests; Native Image [executable] (opt) //benchmarks/comparison:json_svm; 376s remote, remote-cache
+[27 / 30] 2 / 3 tests; Native Image [executable] (opt) //benchmarks/comparison:json_svm; Downloading benchmarks/comparison/json-comparison; 395s remote, remote-cache
+INFO: From Native Image [executable] (opt) //benchmarks/comparison:json_svm:
+WARNING: Using incubator modules: jdk.incubator.vector
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::arrayBaseOffset has been called by com.alibaba.fastjson2.util.JDKUtils (file:/workspace/bazel-out/rbe_linux_amd64-opt/bin/external/rules_jvm_external++maven+maven/com/alibaba/fastjson2/fastjson2/2.0.66/processed_fastjson2-2.0.66.jar)
+WARNING: Please consider reporting this to the maintainers of class com.alibaba.fastjson2.util.JDKUtils
+WARNING: sun.misc.Unsafe::arrayBaseOffset will be removed in a future release
+WARNING: A restricted method in java.lang.System has been called
+WARNING: java.lang.System::load has been called by com.oracle.truffle.polyglot.JDKSupport in module org.graalvm.truffle (file:/workspace/bazel-out/rbe_linux_amd64-opt/bin/external/rules_jvm_external++maven+maven/org/graalvm/truffle/truffle-api/25.5.5-elide.27/processed_truffle-api-25.5.5-elide.27.jar)
+WARNING: Use --enable-native-access=org.graalvm.truffle to avoid a warning for callers in this module
+WARNING: Restricted methods will be blocked in a future release unless native access is enabled
+
+Warning: Using a deprecated option --no-fallback from command line. No effect, no replacement available
+Warning: The option '-H:Name=json-comparison' is experimental and must be enabled via '-H:+UnlockExperimentalVMOptions' in the future.
+Warning: The option '-H:Path=bazel-out/rbe_linux_amd64-opt/bin/benchmarks/comparison' is experimental and must be enabled via '-H:+UnlockExperimentalVMOptions' in the future.
+Warning: The option '-H:-CheckToolchain' is experimental and must be enabled via '-H:+UnlockExperimentalVMOptions' in the future.
+Warning: The option '-H:IncludeResources=' is experimental and must be enabled via '-H:+UnlockExperimentalVMOptions' in the future.
+Warning: Please re-evaluate whether any experimental option is required, and either remove or unlock it. The build output lists all active experimental options, including where they come from and possible alternatives. If you think an experimental option should be considered as stable, please file an issue.
+Warning: Option 'FallbackThreshold' is deprecated and might be removed in a future release: It no longer has any effect, and no replacement is available. Please refer to the GraalVM release notes.
+========================================================================================================================
+GraalVM Native Image: Generating 'json-comparison' (executable)...
+========================================================================================================================
+For detailed information and explanations on the build output, visit:
+https://github.com/oracle/graal/blob/master/docs/reference-manual/native-image/BuildOutput.md
+------------------------------------------------------------------------------------------------------------------------
+[1/8] Initializing...                                                                                  (13.5s @ 0.36GiB)
+ Builder configuration:
+ - Java version: 25.0.4.1.1+1, vendor version: GraalVM CE 25.5.5-dev+1.1
+ - Graal compiler: optimization level: 2, target machine: compatibility
+ - C compiler: cc (null, null, 0.0.0)
+ - Assertions: disabled, system assertions: disabled
+ - 6 user-specific feature(s):
+   - com.oracle.svm.truffle.TruffleBaseFeature: Provides internal support for Truffle
+   - com.oracle.svm.truffle.TruffleFeature: Provides internal support for Truffle runtime compilation
+   - com.oracle.truffle.api.impl.TruffleAPIFeature: Provides basic support for Truffle
+   - com.oracle.truffle.api.object.DynamicObjectFeature: Provides support for DynamicObject
+   - com.oracle.truffle.polyglot.PolyglotProxyFeature
+   - org.graalvm.home.HomeFinderFeature: Finds GraalVM paths and its version number
+ Image configuration:
+ - Garbage collector: Serial GC (max heap size: 80% of RAM)
+ - Assertions: disabled (class-specific config may apply), system assertions: disabled
+------------------------------------------------------------------------------------------------------------------------
+ 7 experimental option(s) unlocked:
+ - '-H:Name' (alternative API option(s): -o json-comparison; origin(s): command line)
+ - '-H:+TruffleCheckNeverPartOfCompilation' (origin(s): command line)
+ - '-H:CCompilerOption' (alternative API option(s): --native-compiler-options=-I/workspace/external/rules_rust++crate+crates__simdutf-0.7.0/cpp, --native-compiler-options=-I/workspace/bazel-out/rbe_linux_amd64-opt/bin/external/rules_rust++crate+crates__simdutf-0.7.0/cpp, --native-compiler-options=-I/workspace/external/+http_archive+myna/include, --native-compiler-options=-I/workspace/bazel-out/rbe_linux_amd64-opt/bin/external/+http_archive+myna/include, --native-compiler-options=-I/workspace/external/+http_archive+simdjson/singleheader, --native-compiler-options=-I/workspace/bazel-out/rbe_linux_amd64-opt/bin/external/+http_archive+simdjson/singleheader, --native-compiler-options=-I/workspace/., --native-compiler-options=-I/workspace/bazel-out/rbe_linux_amd64-opt/bin, --native-compiler-options=-I/workspace/external/rules_rust++crate+crates__simdutf-0.7.0, --native-compiler-options=-I/workspace/bazel-out/rbe_linux_amd64-opt/bin/external/rules_rust++crate+crates__simdutf-0.7.0, --native-compiler-options=-I/workspace/external/+http_archive+myna, --native-compiler-options=-I/workspace/bazel-out/rbe_linux_amd64-opt/bin/external/+http_archive+myna, --native-compiler-options=-I/workspace/external/+http_archive+simdjson, --native-compiler-options=-I/workspace/bazel-out/rbe_linux_amd64-opt/bin/external/+http_archive+simdjson, --native-compiler-options=-I/workspace/external/+http_archive+myna/include/myna, --native-compiler-options=-I/workspace/tape/native, --native-compiler-options=-I/workspace/json/native, --native-compiler-options=-I/workspace/bazel-out/rbe_linux_amd64-opt/bin/json/native/generated; origin(s): command line)
+ - '-H:Path': Use the '-o' option instead. (origin(s): command line)
+ - '-H:+TruffleCheckBlockListMethods' (origin(s): command line)
+ - '-H:-CheckToolchain' (origin(s): command line)
+ - '-H:IncludeResources': Use a resource-config.json in your META-INF/native-image/<groupID>/<artifactID> directory instead. (origin(s): command line)
+------------------------------------------------------------------------------------------------------------------------
+Build resources:
+ - 24.26GiB of memory (98.5% of system memory, using all available memory)
+ - 8 thread(s) (72.7% of 11 available processor(s), set via '--parallelism=8')
+Warning: RecomputeFieldValue.FieldOffset automatic field value transformation failed. The automatic registration was attempted because a call to sun.misc.Unsafe.objectFieldOffset(Field) was detected in the class initializer of com.alibaba.fastjson2.util.JDKUtils. Detailed failure reason(s): Could not determine the field where the value produced by the call to sun.misc.Unsafe.objectFieldOffset(Field) for the field offset computation is stored. The call is not directly followed by a field store or by a sign extend node followed directly by a field store. 
+Warning: RecomputeFieldValue.FieldOffset automatic field value transformation failed. The automatic registration was attempted because a call to sun.misc.Unsafe.objectFieldOffset(Field) was detected in the class initializer of com.alibaba.fastjson2.util.JDKUtils. Detailed failure reason(s): Could not determine the field where the value produced by the call to sun.misc.Unsafe.objectFieldOffset(Field) for the field offset computation is stored. The call is not directly followed by a field store or by a sign extend node followed directly by a field store. 
+Warning: RecomputeFieldValue.FieldOffset automatic field value transformation failed. The automatic registration was attempted because a call to sun.misc.Unsafe.objectFieldOffset(Field) was detected in the class initializer of com.alibaba.fastjson2.util.JDKUtils. Detailed failure reason(s): Could not determine the field where the value produced by the call to sun.misc.Unsafe.objectFieldOffset(Field) for the field offset computation is stored. The call is not directly followed by a field store or by a sign extend node followed directly by a field store. 
+Warning: RecomputeFieldValue.FieldOffset automatic field value transformation failed. The automatic registration was attempted because a call to sun.misc.Unsafe.objectFieldOffset(Field) was detected in the class initializer of com.alibaba.fastjson2.util.JDKUtils. Detailed failure reason(s): The argument of sun.misc.Unsafe.objectFieldOffset(java.lang.reflect.Field) is not a constant value or a field load that can be constant-folded., Could not determine the field where the value produced by the call to sun.misc.Unsafe.objectFieldOffset(Field) for the field offset computation is stored. The call is not directly followed by a field store or by a sign extend node followed directly by a field store. 
+Warning: RecomputeFieldValue.FieldOffset automatic field value transformation failed. The automatic registration was attempted because a call to sun.misc.Unsafe.objectFieldOffset(Field) was detected in the class initializer of com.alibaba.fastjson2.util.JDKUtils. Detailed failure reason(s): Could not determine the field where the value produced by the call to sun.misc.Unsafe.objectFieldOffset(Field) for the field offset computation is stored. The call is not directly followed by a field store or by a sign extend node followed directly by a field store. 
+Warning: RecomputeFieldValue.FieldOffset automatic field value transformation failed. The automatic registration was attempted because a call to sun.misc.Unsafe.objectFieldOffset(Field) was detected in the class initializer of com.alibaba.fastjson2.writer.ObjectWriterImplMap. Detailed failure reason(s): The argument of sun.misc.Unsafe.objectFieldOffset(java.lang.reflect.Field) is not a constant value or a field load that can be constant-folded., Could not determine the field where the value produced by the call to sun.misc.Unsafe.objectFieldOffset(Field) for the field offset computation is stored. The call is not directly followed by a field store or by a sign extend node followed directly by a field store. 
+Warning: RecomputeFieldValue.FieldOffset automatic field value transformation failed. The automatic registration was attempted because a call to sun.misc.Unsafe.objectFieldOffset(Field) was detected in the class initializer of com.alibaba.fastjson2.writer.ObjectWriterImplMap. Detailed failure reason(s): The argument of sun.misc.Unsafe.objectFieldOffset(java.lang.reflect.Field) is not a constant value or a field load that can be constant-folded., Could not determine the field where the value produced by the call to sun.misc.Unsafe.objectFieldOffset(Field) for the field offset computation is stored. The call is not directly followed by a field store or by a sign extend node followed directly by a field store. 
+[2/8] Performing analysis...  [*********]                                                              (79.8s @ 3.85GiB)
+   16,033 types,  22,635 fields, and  78,801 methods found reachable
+      300 types,      90 fields, and   1,129 methods registered for reflection
+       58 types,      59 fields, and      52 methods registered for JNI access
+       68 resource accesses registered with 172.29KiB total size
+        5 native libraries: dl, m, pthread, rt, z
+    2,047 runtime compiled methods (2.6% of all reachable methods)
+[3/8] Building universe...                                                                             (16.1s @ 6.02GiB)
+[4/8] Parsing methods...      [******]                                                                 (40.4s @ 4.95GiB)
+[5/8] Inlining methods...     [****]                                                                    (6.2s @ 3.14GiB)
+[6/8] Compiling methods...    [************]                                                          (164.6s @ 7.45GiB)
+[7/8] Laying out methods...   [***]                                                                     (9.5s @ 8.87GiB)
+[8/8] Creating image...       [****]                                                                   (13.7s @ 6.61GiB)
+  28.98MiB (46.68%) for code area:    52,830 compilation units
+  25.63MiB (41.28%) for image heap:  404,647 objects and 17 resources
+   7.47MiB (12.04%) for other data
+  62.07MiB in total image size, 56.69MiB in total file size
+------------------------------------------------------------------------------------------------------------------------
+Top 10 origins of code area:                                Top 10 object types in image heap:
+   1.77MiB j.i.vector/jdk.incubator.vector                     6.42MiB byte[] for code metadata
+   1.07MiB o.g.truffle/com.oracle.truffle.polyglot             4.68MiB byte[] for string data
+   1.04MiB o.g.truffle/com.oracle.truffle.host                 2.68MiB java.base/java.lang.String
+ 970.47KiB j.g.compiler/jdk.graal.compiler.lir.amd64           2.39MiB java.base/java.lang.Class
+ 950.64KiB java.base/java.util                                 1.35MiB o.g.n.runtime/c.o.s.core.hub.DynamicHubCompanion
+ 877.16KiB com.alibaba.fastjson2                             998.35KiB byte[] for general heap data
+ 736.18KiB o.g.truffle/com.oracle.truffle.api.interop        615.28KiB java.base/j.u.concurrent.ConcurrentHashMap$Node
+ 720.38KiB com.alibaba.fastjson2.reader                      496.79KiB java.base/java.lang.Object[]
+ 546.39KiB com.alibaba.fastjson2.util                        491.73KiB heap alignment
+ 506.67KiB java.base/jdk.internal.classfile.impl             448.02KiB byte[] for graph encodings
+  19.91MiB for 485 more packages                               5.13MiB for 4688 more object types
+------------------------------------------------------------------------------------------------------------------------
+Recommendations:
+ FUTR: Use '--future-defaults=all' to prepare for future releases.
+ HEAP: Set max heap for improved and more predictable memory usage.
+------------------------------------------------------------------------------------------------------------------------
+                      65.2s (18.2% of total time) in 44 GCs | Peak RSS: 10.21GiB | CPU load: 8.06
+------------------------------------------------------------------------------------------------------------------------
+Build artifacts:
+ /workspace/bazel-out/rbe_linux_amd64-opt/bin/benchmarks/comparison/json-comparison (executable, 56.69MiB)
+========================================================================================================================
+Finished generating 'json-comparison' in 5m 54s.
+
+The build process encountered 14 warnings.
+
+[30 / 31] 2 / 3 tests; [Sched] Testing //benchmarks/comparison:json_native_smoke
+[30 / 31] 2 / 3 tests; Testing //benchmarks/comparison:json_native_smoke; 0s remote, remote-cache
+[30 / 31] 2 / 3 tests; Testing //benchmarks/comparison:json_native_smoke; 7s remote, remote-cache
+[30 / 31] 2 / 3 tests; Testing //benchmarks/comparison:json_native_smoke; 8s remote, remote-cache
+[30 / 31] 2 / 3 tests; Testing //benchmarks/comparison:json_native_smoke; 11s remote, remote-cache
+[30 / 31] 3 / 3 tests; Testing //benchmarks/comparison:json_native_smoke; 12s remote, remote-cache
+INFO: From Testing //benchmarks/comparison:json_native_smoke:
+==================== Test output for //benchmarks/comparison:json_native_smoke:
+{"workload":"json-scalar","engine":"gson-stream","stage":"ingest","runtime":"svm","guest_compiled":false,"checksum":35984,"rows":32,"allocated_bytes_per_row":[11288.0, 11288.0, 11288.0]}
+{"workload":"json-scalar","engine":"gson-stream","stage":"read-aot","runtime":"svm","guest_compiled":false,"checksum":35984,"rows":32,"allocated_bytes_per_row":[0.0, 0.0, 0.0]}
+{"workload":"json-scalar","engine":"gson-stream","stage":"interpret","runtime":"svm","guest_compiled":false,"checksum":35984,"rows":32,"allocated_bytes_per_row":[2.0, 2.0, 2.0]}
+{"workload":"json-scalar","engine":"gson-stream","stage":"peak","runtime":"svm","guest_compiled":true,"checksum":35984,"rows":32,"allocated_bytes_per_row":[1.0, 1.0, 1.0]}
+{"workload":"json-scalar","engine":"simdjson-typed","stage":"ingest","runtime":"svm","guest_compiled":false,"checksum":35984,"rows":32,"allocated_bytes_per_row":[112.0, 112.0, 112.0]}
+{"workload":"json-scalar","engine":"simdjson-typed","stage":"read-aot","runtime":"svm","guest_compiled":false,"checksum":35984,"rows":32,"allocated_bytes_per_row":[0.0, 0.0, 0.0]}
+{"workload":"json-scalar","engine":"simdjson-typed","stage":"interpret","runtime":"svm","guest_compiled":false,"checksum":35984,"rows":32,"allocated_bytes_per_row":[2.0, 2.0, 2.0]}
+{"workload":"json-scalar","engine":"simdjson-typed","stage":"peak","runtime":"svm","guest_compiled":true,"checksum":35984,"rows":32,"allocated_bytes_per_row":[1.0, 1.0, 1.0]}
+{"workload":"json-scalar","engine":"simdjson-specialized","stage":"ingest","runtime":"svm","guest_compiled":false,"checksum":35984,"rows":32,"allocated_bytes_per_row":[112.0, 112.0, 112.0]}
+{"workload":"json-scalar","engine":"simdjson-specialized","stage":"read-aot","runtime":"svm","guest_compiled":false,"checksum":35984,"rows":32,"allocated_bytes_per_row":[0.0, 0.0, 0.0]}
+{"workload":"json-scalar","engine":"simdjson-specialized","stage":"interpret","runtime":"svm","guest_compiled":false,"checksum":35984,"rows":32,"allocated_bytes_per_row":[2.0, 2.0, 2.0]}
+{"workload":"json-scalar","engine":"simdjson-specialized","stage":"peak","runtime":"svm","guest_compiled":true,"checksum":35984,"rows":32,"allocated_bytes_per_row":[1.0, 1.0, 1.0]}
+{"workload":"json-generic","engine":"gson-tree","stage":"ingest","runtime":"svm","guest_compiled":false,"checksum":38219,"rows":32,"allocated_bytes_per_row":[13404.0, 13404.0, 13404.0]}
+{"workload":"json-generic","engine":"gson-tree","stage":"read-aot","runtime":"svm","guest_compiled":false,"checksum":38219,"rows":32,"allocated_bytes_per_row":[80.0, 80.0, 80.0]}
+{"workload":"json-generic","engine":"gson-tree","stage":"interpret","runtime":"svm","guest_compiled":false,"checksum":38219,"rows":32,"allocated_bytes_per_row":[82.0, 82.0, 82.0]}
+{"workload":"json-generic","engine":"gson-tree","stage":"peak","runtime":"svm","guest_compiled":true,"checksum":38219,"rows":32,"allocated_bytes_per_row":[81.0, 81.0, 81.0]}
+{"workload":"json-generic","engine":"simdjson-generic-java","stage":"ingest","runtime":"svm","guest_compiled":false,"checksum":38219,"rows":32,"allocated_bytes_per_row":[2448.0, 2448.0, 2448.0]}
+{"workload":"json-generic","engine":"simdjson-generic-java","stage":"read-aot","runtime":"svm","guest_compiled":false,"checksum":38219,"rows":32,"allocated_bytes_per_row":[1176.0, 1176.0, 1176.0]}
+{"workload":"json-generic","engine":"simdjson-generic-java","stage":"interpret","runtime":"svm","guest_compiled":false,"checksum":38219,"rows":32,"allocated_bytes_per_row":[1178.0, 1178.0, 1178.0]}
+{"workload":"json-generic","engine":"simdjson-generic-java","stage":"peak","runtime":"svm","guest_compiled":true,"checksum":38219,"rows":32,"allocated_bytes_per_row":[1177.0, 1177.0, 1177.0]}
+{"workload":"json-generic","engine":"simdjson-generic-interop","stage":"ingest","runtime":"svm","guest_compiled":false,"checksum":38219,"rows":32,"allocated_bytes_per_row":[384.0, 384.0, 384.0]}
+{"workload":"json-generic","engine":"simdjson-generic-interop","stage":"read-aot","runtime":"svm","guest_compiled":false,"checksum":38219,"rows":32,"allocated_bytes_per_row":[240.0, 240.0, 240.0]}
+{"workload":"json-generic","engine":"simdjson-generic-interop","stage":"interpret","runtime":"svm","guest_compiled":false,"checksum":38219,"rows":32,"allocated_bytes_per_row":[242.0, 242.0, 242.0]}
+{"workload":"json-generic","engine":"simdjson-generic-interop","stage":"peak","runtime":"svm","guest_compiled":true,"checksum":38219,"rows":32,"allocated_bytes_per_row":[1.0, 1.0, 1.0]}
+{"workload":"json-generic","engine":"simdjson-snapshot","stage":"ingest","runtime":"svm","guest_compiled":false,"checksum":38219,"rows":32,"allocated_bytes_per_row":[1183.5, 1183.5, 1183.5]}
+{"workload":"json-generic","engine":"simdjson-snapshot","stage":"read-aot","runtime":"svm","guest_compiled":false,"checksum":38219,"rows":32,"allocated_bytes_per_row":[240.0, 240.0, 240.0]}
+{"workload":"json-generic","engine":"simdjson-snapshot","stage":"interpret","runtime":"svm","guest_compiled":false,"checksum":38219,"rows":32,"allocated_bytes_per_row":[242.0, 242.0, 242.0]}
+{"workload":"json-generic","engine":"simdjson-snapshot","stage":"peak","runtime":"svm","guest_compiled":true,"checksum":38219,"rows":32,"allocated_bytes_per_row":[1.0, 1.0, 1.0]}
+{"workload":"json-generic","engine":"simdjson-export-walk","stage":"peak","runtime":"svm","guest_compiled":true,"checksum":41019,"rows":32,"allocated_bytes_per_row":[1.0, 1.0, 1.0]}
+{"workload":"json-generic","engine":"simdjson-session-java","stage":"ingest","runtime":"svm","guest_compiled":false,"checksum":38219,"rows":32,"allocated_bytes_per_row":[1240.0, 1240.0, 1240.0]}
+{"workload":"json-generic","engine":"simdjson-session-truffle","stage":"ingest","runtime":"svm","guest_compiled":false,"checksum":38219,"rows":32,"allocated_bytes_per_row":[1652.5, 1652.5, 1652.5]}
+{"workload":"json-generic","engine":"gson-stream-lines","stage":"ingest","runtime":"svm","guest_compiled":false,"checksum":38219,"rows":32,"allocated_bytes_per_row":[13404.0, 13404.0, 13404.0]}
+{"workload":"json-generic","engine":"simdjson-stream-java","stage":"ingest","runtime":"svm","guest_compiled":false,"checksum":38219,"rows":32,"allocated_bytes_per_row":[1218.75, 1218.75, 1218.75]}
+{"workload":"json-generic","engine":"simdjson-stream-interop","stage":"ingest","runtime":"svm","guest_compiled":false,"checksum":38219,"rows":32,"allocated_bytes_per_row":[304.75, 304.75, 304.75]}
+{"workload":"json-generic","engine":"jackson-tree","stage":"ingest","runtime":"svm","guest_compiled":false,"checksum":38219,"rows":32,"allocated_bytes_per_row":[2245.0, 2245.0, 2245.0]}
+{"workload":"json-generic","engine":"jackson-tree","stage":"read-aot","runtime":"svm","guest_compiled":false,"checksum":38219,"rows":32,"allocated_bytes_per_row":[0.0, 0.0, 0.0]}
+{"workload":"json-generic","engine":"jackson-tree","stage":"interpret","runtime":"svm","guest_compiled":false,"checksum":38219,"rows":32,"allocated_bytes_per_row":[2.0, 2.0, 2.0]}
+{"workload":"json-generic","engine":"jackson-tree","stage":"peak","runtime":"svm","guest_compiled":true,"checksum":38219,"rows":32,"allocated_bytes_per_row":[1.0, 1.0, 1.0]}
+{"workload":"json-generic","engine":"jackson-stream","stage":"ingest","runtime":"svm","guest_compiled":false,"checksum":38219,"rows":32,"allocated_bytes_per_row":[808.0, 808.0, 808.0]}
+{"workload":"json-generic","engine":"fastjson2-tree","stage":"ingest","runtime":"svm","guest_compiled":false,"checksum":38219,"rows":32,"allocated_bytes_per_row":[1372.0, 1372.0, 1372.0]}
+{"workload":"json-generic","engine":"fastjson2-tree","stage":"read-aot","runtime":"svm","guest_compiled":false,"checksum":38219,"rows":32,"allocated_bytes_per_row":[32.0, 32.0, 32.0]}
+{"workload":"json-generic","engine":"fastjson2-tree","stage":"interpret","runtime":"svm","guest_compiled":false,"checksum":38219,"rows":32,"allocated_bytes_per_row":[34.0, 34.0, 34.0]}
+{"workload":"json-generic","engine":"fastjson2-tree","stage":"peak","runtime":"svm","guest_compiled":true,"checksum":38219,"rows":32,"allocated_bytes_per_row":[33.0, 33.0, 33.0]}
+{"workload":"json-generic","engine":"dsljson-map","stage":"ingest","runtime":"svm","guest_compiled":false,"checksum":38219,"rows":32,"allocated_bytes_per_row":[1080.0, 1080.0, 1080.0]}
+{"workload":"json-generic","engine":"dsljson-map","stage":"read-aot","runtime":"svm","guest_compiled":false,"checksum":38219,"rows":32,"allocated_bytes_per_row":[0.0, 0.0, 0.0]}
+{"workload":"json-generic","engine":"dsljson-map","stage":"interpret","runtime":"svm","guest_compiled":false,"checksum":38219,"rows":32,"allocated_bytes_per_row":[2.0, 2.0, 2.0]}
+{"workload":"json-generic","engine":"dsljson-map","stage":"peak","runtime":"svm","guest_compiled":true,"checksum":38219,"rows":32,"allocated_bytes_per_row":[1.0, 1.0, 1.0]}
+{"workload":"json-generic","engine":"jsoniter-any","stage":"ingest","runtime":"svm","guest_compiled":false,"checksum":38219,"rows":32,"allocated_bytes_per_row":[1508.0, 1508.0, 1508.0]}
+{"workload":"json-generic","engine":"jsoniter-any","stage":"read-aot","runtime":"svm","guest_compiled":false,"checksum":38219,"rows":32,"allocated_bytes_per_row":[80.0, 80.0, 80.0]}
+{"workload":"json-generic","engine":"jsoniter-any","stage":"interpret","runtime":"svm","guest_compiled":false,"checksum":38219,"rows":32,"allocated_bytes_per_row":[82.0, 82.0, 82.0]}
+{"workload":"json-generic","engine":"jsoniter-any","stage":"peak","runtime":"svm","guest_compiled":true,"checksum":38219,"rows":32,"allocated_bytes_per_row":[81.0, 81.0, 81.0]}
+SKIP simdjson-java: unavailable in this image
+[To redirect Truffle log output to a file use one of the following options:
+* '--log.file=<path>' if the option is passed using a guest language launcher.
+* '-Dpolyglot.log.file=<path>' if the option is passed using the host Java launcher.
+* Configure logging using the polyglot embedding API.]
+[engine] Expansion tree for JsonComparison.Reads@205cad4b after truffleTier:
+Name         Frequency | Count    Size  Cycles   Ifs Loops Invokes Allocs | Self Count  Size Cycles   Ifs Loops Invokes Allocs | IRNode ASTNode Lang:File:Line:Chars 
+<root>            1.00 |   122     123      94     5     1       0      0 |        122   123     94     5     1       0      0 |  -  
+
+[engine] Expansion tree for JsonComparison.Reads@205cad4b after truffleTier:
+Name         Frequency | Count    Size  Cycles   Ifs Loops Invokes Allocs | Self Count  Size Cycles   Ifs Loops Invokes Allocs | IRNode ASTNode Lang:File:Line:Chars 
+<root>            1.00 |    64      70      50     1     1       0      0 |         64    70     50     1     1       0      0 |  -  
+
+[To redirect Truffle log output to a file use one of the following options:
+* '--log.file=<path>' if the option is passed using a guest language launcher.
+* '-Dpolyglot.log.file=<path>' if the option is passed using the host Java launcher.
+* Configure logging using the polyglot embedding API.]
+[engine] Expansion tree for JsonComparison.Reads@73783bf7 after truffleTier:
+Name         Frequency | Count    Size  Cycles   Ifs Loops Invokes Allocs | Self Count  Size Cycles   Ifs Loops Invokes Allocs | IRNode ASTNode Lang:File:Line:Chars 
+<root>            1.00 |   307     335     301     8     1       0      0 |        307   335    301     8     1       0      0 |  -  
+
+[engine] Expansion tree for JsonComparison.Reads@73783bf7 after truffleTier:
+Name         Frequency | Count    Size  Cycles   Ifs Loops Invokes Allocs | Self Count  Size Cycles   Ifs Loops Invokes Allocs | IRNode ASTNode Lang:File:Line:Chars 
+<root>            1.00 |   250     283     257     4     1       0      0 |        250   283    257     4     1       0      0 |  -  
+
+[To redirect Truffle log output to a file use one of the following options:
+* '--log.file=<path>' if the option is passed using a guest language launcher.
+* '-Dpolyglot.log.file=<path>' if the option is passed using the host Java launcher.
+* Configure logging using the polyglot embedding API.]
+[engine] Expansion tree for JsonComparison.Reads@651976c1 after truffleTier:
+Name         Frequency | Count    Size  Cycles   Ifs Loops Invokes Allocs | Self Count  Size Cycles   Ifs Loops Invokes Allocs | IRNode ASTNode Lang:File:Line:Chars 
+<root>            1.00 |   240     232     188     8     1       0      0 |        240   232    188     8     1       0      0 |  -  
+
+[engine] Expansion tree for JsonComparison.Reads@651976c1 after truffleTier:
+Name         Frequency | Count    Size  Cycles   Ifs Loops Invokes Allocs | Self Count  Size Cycles   Ifs Loops Invokes Allocs | IRNode ASTNode Lang:File:Line:Chars 
+<root>            1.00 |   183     180     144     4     1       0      0 |        183   180    144     4     1       0      0 |  -  
+
+[To redirect Truffle log output to a file use one of the following options:
+* '--log.file=<path>' if the option is passed using a guest language launcher.
+* '-Dpolyglot.log.file=<path>' if the option is passed using the host Java launcher.
+* Configure logging using the polyglot embedding API.]
+[engine] Expansion tree for GenericReads[gson-tree] after truffleTier:
+Name         Frequency | Count    Size  Cycles   Ifs Loops Invokes Allocs | Self Count  Size Cycles   Ifs Loops Invokes Allocs | IRNode ASTNode Lang:File:Line:Chars 
+<root>            1.00 |   117     116      73     5     1       0      0 |        117   116     73     5     1       0      0 |  -  
+
+[engine] Expansion tree for GenericReads[gson-tree] after truffleTier:
+Name         Frequency | Count    Size  Cycles   Ifs Loops Invokes Allocs | Self Count  Size Cycles   Ifs Loops Invokes Allocs | IRNode ASTNode Lang:File:Line:Chars 
+<root>            1.00 |    59      63      29     1     1       0      0 |         59    63     29     1     1       0      0 |  -  
+
+[To redirect Truffle log output to a file use one of the following options:
+* '--log.file=<path>' if the option is passed using a guest language launcher.
+* '-Dpolyglot.log.file=<path>' if the option is passed using the host Java launcher.
+* Configure logging using the polyglot embedding API.]
+[engine] perf info    GenericReads[simdjson-generic-java]                         |Partial evaluation could not resolve virtual instanceof to an exact type due to: interface type check: SubstrateType<dev.elide.truffledata.tape.TapeReader>|Nodes [121|InstanceOf]
+  No stack trace available for [121|InstanceOf].
+[engine] Expansion tree for GenericReads[simdjson-generic-java] after truffleTier:
+Name         Frequency | Count    Size  Cycles   Ifs Loops Invokes Allocs | Self Count  Size Cycles   Ifs Loops Invokes Allocs | IRNode ASTNode Lang:File:Line:Chars 
+<root>            1.00 |   657     760     645    28     2       0      7 |        657   760    645    28     2       0      7 |  -  
+
+[engine] perf info    GenericReads[simdjson-generic-java]                         |Partial evaluation could not resolve virtual instanceof to an exact type due to: interface type check: SubstrateType<dev.elide.truffledata.tape.TapeReader>|Nodes [67|InstanceOf]
+  No stack trace available for [67|InstanceOf].
+[engine] Expansion tree for GenericReads[simdjson-generic-java] after truffleTier:
+Name         Frequency | Count    Size  Cycles   Ifs Loops Invokes Allocs | Self Count  Size Cycles   Ifs Loops Invokes Allocs | IRNode ASTNode Lang:File:Line:Chars 
+<root>            1.00 |   600     708     601    24     2       0      7 |        600   708    601    24     2       0      7 |  -  
+
+[To redirect Truffle log output to a file use one of the following options:
+* '--log.file=<path>' if the option is passed using a guest language launcher.
+* '-Dpolyglot.log.file=<path>' if the option is passed using the host Java launcher.
+* Configure logging using the polyglot embedding API.]
+[engine] Expansion tree for GenericReads[simdjson-generic-interop] after truffleTier:
+Name         Frequency | Count    Size  Cycles   Ifs Loops Invokes Allocs | Self Count  Size Cycles   Ifs Loops Invokes Allocs | IRNode ASTNode Lang:File:Line:Chars 
+<root>            1.00 |  1954    1856    1600   107     1       0      0 |       1954  1856   1600   107     1       0      0 |  -  
+
+[engine] Expansion tree for GenericReads[simdjson-generic-interop] after truffleTier:
+Name         Frequency | Count    Size  Cycles   Ifs Loops Invokes Allocs | Self Count  Size Cycles   Ifs Loops Invokes Allocs | IRNode ASTNode Lang:File:Line:Chars 
+<root>            1.00 |  1898    1805    1556   103     1       0      0 |       1898  1805   1556   103     1       0      0 |  -  
+
+[To redirect Truffle log output to a file use one of the following options:
+* '--log.file=<path>' if the option is passed using a guest language launcher.
+* '-Dpolyglot.log.file=<path>' if the option is passed using the host Java launcher.
+* Configure logging using the polyglot embedding API.]
+[engine] perf info    GenericReads[simdjson-snapshot]                             |Partial evaluation could not resolve virtual instanceof to an exact type due to: interface type check: SubstrateType<dev.elide.truffledata.tape.TapeReader>|Nodes [109|InstanceOf, 265|InstanceOf, 402|InstanceOf, 447|InstanceOf, 584|InstanceOf, 631|InstanceOf, 772|InstanceOf, 802|InstanceOf, 930|InstanceOf, 970|InstanceOf, 1097|InstanceOf, 1144|InstanceOf, 1283|InstanceOf, 1360|InstanceOf, 1497|InstanceOf, 1574|InstanceOf, 1712|InstanceOf, 1736|InstanceOf, 1874|InstanceOf]
+  No stack trace available for [109|InstanceOf, 265|InstanceOf, 402|InstanceOf, 447|InstanceOf, 584|InstanceOf, 631|InstanceOf, 772|InstanceOf, 802|InstanceOf, 930|InstanceOf, 970|InstanceOf, 1097|InstanceOf, 1144|InstanceOf, 1283|InstanceOf, 1360|InstanceOf, 1497|InstanceOf, 1574|InstanceOf, 1712|InstanceOf, 1736|InstanceOf, 1874|InstanceOf].
+[engine] Expansion tree for GenericReads[simdjson-snapshot] after truffleTier:
+Name         Frequency | Count    Size  Cycles   Ifs Loops Invokes Allocs | Self Count  Size Cycles   Ifs Loops Invokes Allocs | IRNode ASTNode Lang:File:Line:Chars 
+<root>            1.00 |  1969    2775    2498    98     1       0      0 |       1969  2775   2498    98     1       0      0 |  -  
+
+[engine] perf info    GenericReads[simdjson-snapshot]                             |Partial evaluation could not resolve virtual instanceof to an exact type due to: interface type check: SubstrateType<dev.elide.truffledata.tape.TapeReader>|Nodes [56|InstanceOf, 212|InstanceOf, 349|InstanceOf, 394|InstanceOf, 531|InstanceOf, 578|InstanceOf, 719|InstanceOf, 749|InstanceOf, 877|InstanceOf, 917|InstanceOf, 1044|InstanceOf, 1091|InstanceOf, 1230|InstanceOf, 1307|InstanceOf, 1444|InstanceOf, 1521|InstanceOf, 1659|InstanceOf, 1683|InstanceOf, 1821|InstanceOf]
+  No stack trace available for [56|InstanceOf, 212|InstanceOf, 349|InstanceOf, 394|InstanceOf, 531|InstanceOf, 578|InstanceOf, 719|InstanceOf, 749|InstanceOf, 877|InstanceOf, 917|InstanceOf, 1044|InstanceOf, 1091|InstanceOf, 1230|InstanceOf, 1307|InstanceOf, 1444|InstanceOf, 1521|InstanceOf, 1659|InstanceOf, 1683|InstanceOf, 1821|InstanceOf].
+[engine] Expansion tree for GenericReads[simdjson-snapshot] after truffleTier:
+Name         Frequency | Count    Size  Cycles   Ifs Loops Invokes Allocs | Self Count  Size Cycles   Ifs Loops Invokes Allocs | IRNode ASTNode Lang:File:Line:Chars 
+<root>            1.00 |  1913    2724    2454    94     1       0      0 |       1913  2724   2454    94     1       0      0 |  -  
+
+[To redirect Truffle log output to a file use one of the following options:
+* '--log.file=<path>' if the option is passed using a guest language launcher.
+* '-Dpolyglot.log.file=<path>' if the option is passed using the host Java launcher.
+* Configure logging using the polyglot embedding API.]
+[engine] perf info    GenericReads[simdjson-export-walk]                          |Partial evaluation could not resolve virtual instanceof to an exact type due to: interface type check: SubstrateType<dev.elide.truffledata.tape.TapeReader>|Nodes [121|InstanceOf]
+  No stack trace available for [121|InstanceOf].
+[engine] Expansion tree for GenericReads[simdjson-export-walk] after truffleTier:
+Name         Frequency | Count    Size  Cycles   Ifs Loops Invokes Allocs | Self Count  Size Cycles   Ifs Loops Invokes Allocs | IRNode ASTNode Lang:File:Line:Chars 
+<root>            1.00 |   587     590     474    28     2       0      0 |        587   590    474    28     2       0      0 |  -  
+
+[engine] perf info    GenericReads[simdjson-export-walk]                          |Partial evaluation could not resolve virtual instanceof to an exact type due to: interface type check: SubstrateType<dev.elide.truffledata.tape.TapeReader>|Nodes [67|InstanceOf]
+  No stack trace available for [67|InstanceOf].
+[engine] Expansion tree for GenericReads[simdjson-export-walk] after truffleTier:
+Name         Frequency | Count    Size  Cycles   Ifs Loops Invokes Allocs | Self Count  Size Cycles   Ifs Loops Invokes Allocs | IRNode ASTNode Lang:File:Line:Chars 
+<root>            1.00 |   530     538     430    24     2       0      0 |        530   538    430    24     2       0      0 |  -  
+
+[To redirect Truffle log output to a file use one of the following options:
+* '--log.file=<path>' if the option is passed using a guest language launcher.
+* '-Dpolyglot.log.file=<path>' if the option is passed using the host Java launcher.
+* Configure logging using the polyglot embedding API.]
+[engine] Expansion tree for GenericReads[jackson-tree] after truffleTier:
+Name         Frequency | Count    Size  Cycles   Ifs Loops Invokes Allocs | Self Count  Size Cycles   Ifs Loops Invokes Allocs | IRNode ASTNode Lang:File:Line:Chars 
+<root>            1.00 |   118     117      73     5     1       0      0 |        118   117     73     5     1       0      0 |  -  
+
+[engine] Expansion tree for GenericReads[jackson-tree] after truffleTier:
+Name         Frequency | Count    Size  Cycles   Ifs Loops Invokes Allocs | Self Count  Size Cycles   Ifs Loops Invokes Allocs | IRNode ASTNode Lang:File:Line:Chars 
+<root>            1.00 |    60      64      29     1     1       0      0 |         60    64     29     1     1       0      0 |  -  
+
+[To redirect Truffle log output to a file use one of the following options:
+* '--log.file=<path>' if the option is passed using a guest language launcher.
+* '-Dpolyglot.log.file=<path>' if the option is passed using the host Java launcher.
+* Configure logging using the polyglot embedding API.]
+[engine] Expansion tree for GenericReads[fastjson2-tree] after truffleTier:
+Name         Frequency | Count    Size  Cycles   Ifs Loops Invokes Allocs | Self Count  Size Cycles   Ifs Loops Invokes Allocs | IRNode ASTNode Lang:File:Line:Chars 
+<root>            1.00 |   118     117      73     5     1       0      0 |        118   117     73     5     1       0      0 |  -  
+
+[engine] Expansion tree for GenericReads[fastjson2-tree] after truffleTier:
+Name         Frequency | Count    Size  Cycles   Ifs Loops Invokes Allocs | Self Count  Size Cycles   Ifs Loops Invokes Allocs | IRNode ASTNode Lang:File:Line:Chars 
+<root>            1.00 |    60      64      29     1     1       0      0 |         60    64     29     1     1       0      0 |  -  
+
+[To redirect Truffle log output to a file use one of the following options:
+* '--log.file=<path>' if the option is passed using a guest language launcher.
+* '-Dpolyglot.log.file=<path>' if the option is passed using the host Java launcher.
+* Configure logging using the polyglot embedding API.]
+[engine] Expansion tree for GenericReads[dsljson-map] after truffleTier:
+Name         Frequency | Count    Size  Cycles   Ifs Loops Invokes Allocs | Self Count  Size Cycles   Ifs Loops Invokes Allocs | IRNode ASTNode Lang:File:Line:Chars 
+<root>            1.00 |   118     117      73     5     1       0      0 |        118   117     73     5     1       0      0 |  -  
+
+[engine] Expansion tree for GenericReads[dsljson-map] after truffleTier:
+Name         Frequency | Count    Size  Cycles   Ifs Loops Invokes Allocs | Self Count  Size Cycles   Ifs Loops Invokes Allocs | IRNode ASTNode Lang:File:Line:Chars 
+<root>            1.00 |    60      64      29     1     1       0      0 |         60    64     29     1     1       0      0 |  -  
+
+[To redirect Truffle log output to a file use one of the following options:
+* '--log.file=<path>' if the option is passed using a guest language launcher.
+* '-Dpolyglot.log.file=<path>' if the option is passed using the host Java launcher.
+* Configure logging using the polyglot embedding API.]
+[engine] Expansion tree for GenericReads[jsoniter-any] after truffleTier:
+Name         Frequency | Count    Size  Cycles   Ifs Loops Invokes Allocs | Self Count  Size Cycles   Ifs Loops Invokes Allocs | IRNode ASTNode Lang:File:Line:Chars 
+<root>            1.00 |   118     117      73     5     1       0      0 |        118   117     73     5     1       0      0 |  -  
+
+[engine] Expansion tree for GenericReads[jsoniter-any] after truffleTier:
+Name         Frequency | Count    Size  Cycles   Ifs Loops Invokes Allocs | Self Count  Size Cycles   Ifs Loops Invokes Allocs | IRNode ASTNode Lang:File:Line:Chars 
+<root>            1.00 |    60      64      29     1     1       0      0 |         60    64     29     1     1       0      0 |  -  
+
+JSON graph checks passed: 24 compilations; allocation budgets passed for 9 cells
+================================================================================
+INFO: Found 1 target and 3 test targets...
+INFO: Elapsed time: 423.082s, Critical Path: 422.94s
+INFO: 21 processes: 10 action cache hit, 2 remote cache hit, 12 internal, 10 remote.
+INFO: Build completed successfully, 21 total actions
+INFO: 
+//benchmarks/comparison:json_native_smoke                                PASSED in 6.6s
+//build/json-typed-tranche-baseline:typed_smoke                          PASSED in 5.2s
+//json/tests:native_test                                                 PASSED in 7.3s
+
+Executed 3 out of 3 tests: 3 tests pass.
+There were tests whose specified size is too big. Use the --test_verbose_timeout_warnings command line option to see which ones these are.
+INFO: Streaming build results to: https://app.buildbuddy.io/invocation/135dd53e-6a25-410d-bccd-9e3fef05a2fc
