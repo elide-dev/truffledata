@@ -484,8 +484,10 @@ struct key_shape_cache {
       length = uint8_t(text.size()); hash = value;
       ascii = clean = 1;
       for (uint8_t c : text) { ascii &= c < 128; clean &= c >= 32 && c != '"' && c != '\\'; }
-      std::memset(bytes, 0, sizeof bytes);
-      if (length) std::memcpy(bytes, text.data(), length);
+      // A null-writer shape miss materializes unchanged prefix keys as views of this
+      // template. Preserve an aliased source before clearing padding for word comparisons.
+      if (length) std::memmove(bytes, text.data(), length);
+      std::memset(bytes + length, 0, sizeof bytes - length);
     }
   };
   struct level { uint32_t count = 0; key keys[max_keys]; uint8_t rank[max_keys]; };

@@ -850,6 +850,23 @@ void producer_proofs_close_directoryless_objects() {
   require(c::validate(bad.view()) != nullptr);
 }
 
+void shape_key_replacement_preserves_aliased_bytes() {
+  key_shape_cache::key key;
+  for (const std::string text : {std::string("aa"), std::string("x\0y", 3), std::string(32, 'z')}) {
+    const uint32_t hash = myna_value_hash(reinterpret_cast<const uint8_t*>(text.data()), text.size());
+    key.set(text, hash);
+    key.set({reinterpret_cast<const char*>(key.bytes), key.length}, hash);
+    require(key.length == text.size() && key.hash == hash);
+    require(std::memcmp(key.bytes, text.data(), text.size()) == 0);
+    for (size_t i = text.size(); i < sizeof key.bytes; ++i) require(key.bytes[i] == 0);
+    if (text.size() > 1) {
+      std::string suffix = text.substr(1);
+      key.set({reinterpret_cast<const char*>(key.bytes + 1), text.size() - 1}, 0);
+      require(std::memcmp(key.bytes, suffix.data(), suffix.size()) == 0);
+    }
+  }
+}
+
 void permuted_directories_match_sorted() {
   key_shape_cache cache;
   std::vector<std::string> keys;
@@ -870,6 +887,7 @@ int main() {
       {"directoryless_shapes_still_check_duplicates", directoryless_shapes_still_check_duplicates},
       {"producer_proofs_close_directoryless_objects", producer_proofs_close_directoryless_objects},
       {"shape_cache_rejects_duplicates", shape_cache_rejects_duplicates},
+      {"shape_key_replacement_preserves_aliased_bytes", shape_key_replacement_preserves_aliased_bytes},
       {"permuted_directories_match_sorted", permuted_directories_match_sorted},
       {"words_follow_the_layout", words_follow_the_layout},
       {"pop_scalar_preserves_pending_keys", pop_scalar_preserves_pending_keys},

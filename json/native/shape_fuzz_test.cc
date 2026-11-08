@@ -17,7 +17,7 @@ uint32_t next_random() {
 std::string quote(const std::string& value, bool escaped) {
   std::string out = "\"";
   for (char c : value) {
-    if (escaped) { out += "\\u00"; out += "0123456789abcdef"[uint8_t(c) >> 4]; out += "0123456789abcdef"[c & 15]; }
+    if (escaped || uint8_t(c) < 32) { out += "\\u00"; out += "0123456789abcdef"[uint8_t(c) >> 4]; out += "0123456789abcdef"[c & 15]; }
     else out += c;
   }
   out += '"';
@@ -25,6 +25,18 @@ std::string quote(const std::string& value, bool escaped) {
 }
 }
 int main() {
+  // A changed suffix reuses prefix views into the same template. Reinstalling that shape must
+  // not turn the unchanged keys into NULs and let later escaped-NUL duplicates match it.
+  for (int mode : {0, 1, 2}) {
+    json::session warm({}, {});
+    for (const char* source : {R"({"aa":1,"bb":2,"cc":3})", R"({"aa":1,"bb":2,"dd":3})"})
+      warm.decode(source, std::strlen(source), json::session::encoding::utf8, mode == 2, mode == 0);
+    const std::string duplicate = R"({"\u0000\u0000":1,"\u0000\u0000":2,"dd":3})";
+    int status = json::status_ok;
+    try { warm.decode(duplicate.data(), duplicate.size(), json::session::encoding::utf8, mode == 2, mode == 0); }
+    catch (...) { status = json::current_exception_status(); }
+    if (status != json::status_syntax) throw std::runtime_error("aliased shape prefix accepted duplicate");
+  }
   json::session parser({}, {});
   std::vector<std::string> keys;
   std::string source;
@@ -34,6 +46,7 @@ int main() {
     bool escaped = iteration % 3 == 0;
     for (size_t i = 0; i < count; ++i) {
       std::string key = "k" + std::to_string(next_random() % 200);
+      if (iteration % 17 == 0) key.assign(next_random() % 17, '\0');
       if (iteration % 13 == 0) key += std::string(next_random() % 40, 'x');
       if (i && next_random() % 4 == 0) key = keys[next_random() % i];
       keys.push_back(key);
