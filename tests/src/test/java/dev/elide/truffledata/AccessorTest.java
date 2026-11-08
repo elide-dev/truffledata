@@ -613,6 +613,218 @@ class AccessorTest {
     return plan.decode(plan.encode(builder.build()));
   }
 
+  /** Every row of the plan's layout family, plus rows that share a plan's schema identity. */
+  private static List<Object> layoutFamily(ProtoPlan left, ProtoPlan right) {
+    var library = DataLibrary.factory().getUncached();
+    Object ownedLeft = owned(left, 10, "l");
+    Object[] values = new Object[left.size()];
+    for (int i = 0; i < values.length; i++) values[i] = library.read(ownedLeft, i);
+    return List.of(
+        generated(left, 10, "l"),
+        generated(right, 20, "rr"),
+        ownedLeft,
+        owned(right, 20, "rr"),
+        slab(left, 10, "l"),
+        slab(right, 20, "rr"),
+        // A batch row whose descriptor is the left plan's own schema: only the class differs.
+        batch(left.schema(), values),
+        "not a row");
+  }
+
+  /**
+   * The cached guard agrees with {@code accepts} for every accessor/row pair, including
+   * rows of the same generated class built with another plan and rows sharing a plan's schema.
+   */
+  @Test
+  void boundGuardMatchesAcceptsAcrossLayouts() {
+    try (Context context = context()) {
+      try {
+        var language = TestLanguage.current().language();
+        var left = flat(true);
+        var right = flat(true);
+        List<Object> rows = new ArrayList<>(layoutFamily(left, right));
+        Schema schema = Schema.of(Field.requiredLong("n"), Field.requiredLong("m"));
+        AbstractRow statics = new StaticLayout(language, schema, Limits.DEFAULT).create(1L, 2L);
+        rows.add(statics);
+        rows.add(new StaticLayout(language, schema, Limits.DEFAULT).create(3L, 4L));
+        rows.add(batch(schema, 5L, 6L));
+        rows.add(batch(Schema.of(Field.requiredLong("n"), Field.requiredLong("m")), 7L, 8L));
+        rows.add(compact(1));
+        rows.add(compact(2));
+        for (Object owner : rows) {
+          if (!(owner instanceof AbstractRow row)) continue;
+          for (int ordinal : new int[] {0, 1, I64, FLAG, REAL, TEXT}) {
+            if (ordinal >= row.schema().size()) continue;
+            Accessor accessor = row.accessor(ordinal);
+            for (Object candidate : rows)
+              assertEquals(
+                  accessor.accepts(candidate),
+                  Accessor.bound(accessor, candidate),
+                  accessor.getClass().getSimpleName() + " on " + candidate.getClass());
+          }
+        }
+      } finally {
+        context.leave();
+      }
+    }
+  }
+
+  /**
+   * Cached and inline node reads agree with the checked public reads for every
+   * representation and ordinal: equal values, equal rejected values for missing, null and
+   * wrong-type fields, and equal exception classes.
+   */
+  @Test
+  void cachedReadersMatchCheckedAccessorsAcrossRepresentations() throws Exception {
+    try (Context context = context()) {
+      try {
+        var language = TestLanguage.current().language();
+        Schema schema =
+            Schema.of(
+                Field.requiredLong("n"),
+                new Field("o", Field.Kind.INT64, true, true),
+                new Field("d", Field.Kind.FLOAT64, false, false)
+                    .withConstraints(Constraints.NONE.withFloatBits(32)),
+                new Field("e", Field.Kind.FLOAT64, true, true),
+                new Field("b", Field.Kind.BOOLEAN, true, true),
+                new Field("s", Field.Kind.STRING, true, true),
+                new Field("r", Field.Kind.RECORD, true, true),
+                new Field("x", Field.Kind.ANY, true, true),
+                Field.integer("narrow", 16, false, false, false));
+        AbstractRow nested = batch(Schema.of(Field.requiredLong("q")), 3L);
+        var layout = new StaticLayout(language, schema, Limits.DEFAULT);
+        List<Object> rows = new ArrayList<>();
+        for (Object[] values :
+            new Object[][] {
+              {1L, 2L, 1.5, 2.5, true, "s", nested, 9L, 65535L},
+              {
+                1L,
+                DataNull.INSTANCE,
+                1.5,
+                Missing.INSTANCE,
+                DataNull.INSTANCE,
+                Missing.INSTANCE,
+                Missing.INSTANCE,
+                "x",
+                0L
+              },
+            }) {
+          rows.add(layout.create(values));
+          rows.add(batch(schema, values));
+        }
+        for (ProtoPlan plan : new ProtoPlan[] {flat(true), flat(false)}) {
+          rows.add(generated(plan, 4, "λ😀"));
+          rows.add(owned(plan, 4, "λ😀"));
+          rows.add(slab(plan, 4, "λ😀"));
+          for (int copy = 0; copy < 2; copy++) {
+            var sparse =
+                plan.newBuilder()
+                    .set(PRESENT, 3L)
+                    .set(U64, java.math.BigInteger.valueOf(7))
+                    .build();
+            rows.add(copy == 0 ? sparse : plan.decodeSlab(plan.encode(sparse)));
+          }
+        }
+        rows.add(compact(1));
+        rows.add(compact(2));
+        int fields = 0;
+        for (Object candidate : rows) {
+          AbstractRow row = (AbstractRow) candidate;
+          for (int i = 0; i < row.schema().size(); i++) {
+            Accessor accessor = row.accessor(i);
+            if (accessor instanceof LibraryAccessor) continue;
+            fields++;
+            String where = row.getClass().getSimpleName() + " ordinal " + i;
+            Object longs = outcome(() -> accessor.readLong(row));
+            Object doubles = outcome(() -> accessor.readDouble(row));
+            Object flags = outcome(() -> accessor.readBoolean(row));
+            Object lengths = outcome(() -> accessor.length(row));
+            // A fresh adopted site per field keeps every read on the accessed specialization.
+            int ordinal = i;
+            Object[] expected = {longs, doubles, flags, lengths};
+            for (boolean inline : new boolean[] {false, true}) {
+              var target = new ReaderParityRoot().getCallTarget();
+              for (int operation = 0; operation < 4; operation++) {
+                int read = operation;
+                Object want = expected[operation];
+                if (want instanceof Rejected) want = ContractViolation.class;
+                assertEquals(
+                    want,
+                    outcome(() -> target.call(row, ordinal, read, inline)),
+                    where + " op " + read);
+              }
+            }
+          }
+        }
+        assertTrue(fields > 100, "Cached readers were not exercised across representations");
+      } finally {
+        context.leave();
+      }
+    }
+  }
+
+  /**
+   * A site warmed on one layout still rejects rows of another layout that share its generated class
+   * or its schema identity: the cached accessor never reads them, the public read raises {@link
+   * ContractViolation}, and the site respecializes to the correct value, for the shared nodes and
+   * the inline readers alike.
+   */
+  @Test
+  void foreignLayoutStillRejectedThroughNodes() {
+    try (Context context = context()) {
+      try {
+        var left = flat(false);
+        var right = flat(false);
+        List<Object> rows = layoutFamily(left, right);
+        Object home = rows.get(0);
+        // Home ordinals first so each reader meets its own field before any rejection.
+        int[] ordinals = {I64, REAL, FLAG, TEXT};
+        for (boolean inline : new boolean[] {false, true}) {
+          for (int operation = 0; operation < 4; operation++) {
+            int read = operation, ordinal = ordinals[operation];
+            var root = new ReaderParityRoot();
+            var target = root.getCallTarget();
+            for (int warm = 0; warm < 3; warm++) target.call(home, ordinal, read, inline);
+            Accessor cached = ((AbstractRow) home).accessor(ordinal);
+            for (Object row : rows) {
+              if (!(row instanceof AbstractRow foreign)) continue;
+              Object expected = expected(foreign.accessor(ordinal), foreign, read);
+              if (row != home) {
+                assertFalse(cached.accepts(row), foreign.getClass().getSimpleName());
+                assertEquals(ContractViolation.class, outcome(() -> cached.read(row)));
+                assertEquals(ContractViolation.class, expected(cached, foreign, read));
+              }
+              assertEquals(expected, outcome(() -> target.call(row, ordinal, read, inline)));
+              // The home row still reads its own value after the site saw the foreign layout.
+              assertEquals(
+                  expected(cached, (AbstractRow) home, read),
+                  outcome(() -> target.call(home, ordinal, read, inline)));
+            }
+          }
+        }
+        // The shared ReadLongNode keeps one accessed instance per layout until its limit.
+        assertSites(List.of(rows.get(0), rows.get(1)), new long[] {10, 20}, I64);
+        assertSites(List.of(rows.get(0), rows.get(4), rows.get(6)), new long[] {10, 10, 10}, I64);
+      } finally {
+        context.leave();
+      }
+    }
+  }
+
+  /** The checked public value a node read of {@code operation} reports, rejections as classes. */
+  private static Object expected(Accessor accessor, AbstractRow row, int operation) {
+    Object value =
+        outcome(
+            () ->
+                switch (operation) {
+                  case 0 -> accessor.readLong(row);
+                  case 1 -> accessor.readDouble(row);
+                  case 2 -> accessor.readBoolean(row);
+                  default -> accessor.length(row);
+                });
+    return value instanceof Rejected ? ContractViolation.class : value;
+  }
+
   /** Each accessor method returns or rejects exactly what the uncached library does. */
   static void agree(AbstractRow row) throws Exception {
     var library = DataLibrary.factory().getUncached();

@@ -347,3 +347,12 @@ test pins per-visit budget accounting. **The pre-existing shared-subgraph time
 amplification remains a separate release blocker**: structure verification can
 walk exponentially many logical occurrences before budget rejection. Memoization
 must retain depth, identity, budget, projection and error-order semantics.
+
+
+### B4 exact-layout guards and bound hooks — measured rejection (2026-11-08)
+
+- Candidate `38f7399` versus exact `1cfcb37`, both SDK `.27`; harness `6edd5e3` supports explicit modern baseline engine/mode selections while preserving historical defaults. SVM invocation `213a289b`, JVM `d12b5d0b`: all 20 shards pass; each runtime merges to complete=true, 195 cells / 1,170 raw records. [Evidence and rejected patch](../../../benchmarks/results/protobuf-b4-213a289b/README.md). These captures precede the separate slab-allocation integration.
+- SVM full generated interpreter 259.36 → 213.56 ns (−17.7%); generated/stock 4.229× → 3.501×. Slab 415.16 → 410.13 ns; slab/stock 6.769× → 6.724×. Both still miss 2.5×. Sparse generated 36.36 → 31.83 ns (−12.4%), slab 52.64 → 52.29 ns.
+- Full generated peak 49.22 → 50.17 ns SVM (ranges overlap), 20.01 → 17.33 ns JVM (improves). Full slab peak 312.70 → 311.65 ns SVM, 130.07 → 131.40 ns JVM (ranges overlap). Candidate generated accessor allocation remains 0.000044 B/read; unchanged 0.05 ceiling. Both 132-cell consumer smokes pass (`7f8ce7c9`).
+- Rejection: JVM full generated interpreter 50.07 [49.95, 50.70] → 60.17 [59.31, 62.76] ns (+20.2%); JVM full slab resident 2116.13 [1050.14, 2274.72] → 2977.25 [2798.34, 3397.35] ns (+40.7%). The narrower design §4 SVM interpreter criterion does not authorize accepting these measured JVM regressions. Production restored; no protected Accessor API ships. Useful cached/inline parity, layout and interpreted lifetime tests stay; API-specific tests are archived with the rejected patch.
+- Verdict: **B4 open; Phase 1 rejected.** No budget relaxed, no Phase 2/profiling cycle started. Final combined-branch coverage and release qualification remain separate.
