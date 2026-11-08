@@ -1,0 +1,7 @@
+# Projected protobuf producer qualification
+
+Local macOS arm64 qualification on 2026-11-07. `java-native-parity.txt` records 13 passing JUnit tests: 11 Java codec tests and the ordinary plus projected cross-language producer gates. The projected gate compares exact slab bytes/status over 2,000 seeded inputs for each of seven schemas in nine modes (126,000 pairs): full, empty, lazy-empty, full bytes-borrowing, lazy-empty bytes-borrowing, lax-empty, partial, lazy-partial bytes-borrowing, and lax-lazy-partial. The ordinary gate retains its 56,000 pairs. Schema coverage includes oneofs, unknowns/closed enums, singular merges, maps, repeated scalars, Unicode/bytes and legacy required/groups. The Java producer tests additionally check nonzero input windows and exact slab/depth budgets.
+
+`native-asan.txt` records all 50 native tests passing with AddressSanitizer and leak detection (pinned Rust nightly 2026-10-09). The new regression checks that required-field, oneof and group eager fallbacks in lazy mode expose complete grandchildren, including after singular merges. Native frames stay within the existing 64-byte assertion. The cross-language FFI library was built from these native sources in an isolated Cargo target; GraalVM 25.5.5-elide.27 executed Java tests. Source hashes are retained alongside the logs.
+
+These are local functional and sanitizer results, not throughput or compiled-read acceptance. Formal remote producer/session qualification, lazy-read lifetime coverage and sparse-resident performance remain separate release gates.

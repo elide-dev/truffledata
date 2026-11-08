@@ -42,7 +42,7 @@ class PublicationTest(unittest.TestCase):
                     expected.update(('org.graalvm.sdk:nativeimage', 'org.graalvm.sdk:word'))
                 if module == 'protobuf-buffa':
                     expected.update(('dev.elide:truffledata-protobuf-runtime', 'dev.elide:truffledata-protobuf-buffa-bindings'))
-                if module in ('tape', 'json', 'json-bindings'):
+                if module in ('tape', 'json', 'json-bindings', 'yaml', 'yaml-bindings'):
                     expected.update(('org.graalvm.sdk:nativeimage', 'org.graalvm.sdk:word'))
                 if module == 'tape-jvm':
                     expected.add('dev.elide:truffledata-tape')
@@ -50,6 +50,10 @@ class PublicationTest(unittest.TestCase):
                     expected.update(('dev.elide:truffledata-json-bindings', 'dev.elide:truffledata-tape'))
                 if module == 'json-jvm':
                     expected.update(('dev.elide:truffledata-json', 'dev.elide:truffledata-json-bindings', 'dev.elide:truffledata-tape-jvm'))
+                if module == 'yaml':
+                    expected.update(('dev.elide:truffledata-yaml-bindings', 'dev.elide:truffledata-tape'))
+                if module == 'yaml-jvm':
+                    expected.update(('dev.elide:truffledata-yaml', 'dev.elide:truffledata-yaml-bindings', 'dev.elide:truffledata-tape-jvm'))
                 if module in ('csv-bindings', 'csv-native'):
                     expected.update(('org.graalvm.sdk:nativeimage', 'org.graalvm.sdk:word'))
                 if module in ('csv-native', 'csv-jvm'):

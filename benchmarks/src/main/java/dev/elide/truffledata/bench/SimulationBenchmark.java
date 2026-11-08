@@ -101,8 +101,8 @@ public final class SimulationBenchmark {
                   + "}");
           count++;
         }
-        // The JSON cases link the static simdjson backend, so the JVM smoke runs the other 20.
-        int all = ImageInfo.inImageRuntimeCode() ? 24 : 20;
+        // JSON and YAML cases link static native backends; the JVM smoke runs the other 20.
+        int all = ImageInfo.inImageRuntimeCode() ? 28 : 20;
         if (count != (smoke ? all : 1)) throw new AssertionError("Unexpected case count " + count);
       } finally {
         context.leave();

@@ -1858,6 +1858,34 @@ fn projection_required_closures_stay_eager() {
 }
 
 #[test]
+fn lazy_eager_fallback_exposes_complete_descendants() {
+    // Required, oneof and group fallbacks must expose the same complete child as lazy decoding,
+    // including a grandchild whose own mask is empty. A later merge keeps that expansion.
+    for field in [m(1,MESSAGE,EXPLICIT,1),o(m(1,MESSAGE,EXPLICIT,1),0),m(1,GROUP,EXPLICIT,1)] {
+        let grouped = field.kind == GROUP;
+        let required = if field.oneof == NONE && !grouped { REQUIRED | EXPLICIT } else { 0 };
+        let c = compiled(&[
+            (0,vec![field]),
+            (0,vec![f(1,INT64,required),m(2,MESSAGE,EXPLICIT,2)]),
+            (0,vec![f(1,STRING,0)]),
+        ]);
+        let mask = projection_program(&c,&[&[],&[],&[]],Projection::LAZY,0);
+        let wire = if grouped { vec![11,8,1,18,3,10,1,b'x',12] }
+            else { vec![10,7,8,1,18,3,10,1,b'x'] };
+        for repeated in [false,true] {
+            let input = if repeated { [wire.as_slice(),wire.as_slice()].concat() } else { wire.clone() };
+            let result=projected_slab(&c,&input,&mask,FLAG_BORROWING).unwrap();
+            let child=projected_slot(&c,&result,0) as usize;
+            assert_ne!(child,0); assert_eq!(child as u32 & LAZY_CHILD,0);
+            let grand=projected_word(&result,child+c.types[1].fields[1].slot as usize) as usize;
+            assert_ne!(grand,0); assert_eq!(grand as u32 & LAZY_CHILD,0);
+            let text=projected_word(&result,grand+c.types[2].fields[0].slot as usize) as usize;
+            assert_ne!(text,0); assert_eq!(result[text+8],b'x');
+        }
+    }
+}
+
+#[test]
 fn projection_external_bytes_require_explicit_input_lease() {
     let c = projected_schema();
     let mask = projection_program(&c, &[&[4], &[]], Projection::BORROW_BYTES,4);

@@ -145,3 +145,10 @@ blocked JDK code; cold helper fixes are pending the next formal retry. Raw logs
 are retained in `benchmarks/results/protobuf-session-78b45781/`. This invocation
 is not whole-repository green: core depended on a new YAML benchmark nullability
 fix and the separate YAML parser performance gate also failed.
+
+
+### E1 cross-language producer qualification
+
+The Java table producer now mirrors TDP1 masks, count-only lists, lazy child headers, input-relative bytes borrowing and strict/lax omitted-subtree validation. Singular merge scratch retains original input spans and decodes them sequentially into one record, preserving external offsets without payload concatenation. Native and Java eager fallbacks in lazy mode now expand the complete descendant subtree (required closures, oneofs, groups and merged children), matching what a strictly realised lazy child exposes. This is a representation/ownership rule, not permission to skip validation.
+
+Local macOS arm64 qualification passes 126,000 projected exact-byte/status pairs across nine modes and seven schema families, plus the existing 56,000 ordinary pairs and 11 Java codec tests. Nonzero input windows, exact output/depth budgets, partial masks, borrowed payloads, Unicode, merges, maps, groups, closed enums and required fields are covered. Native tests now pass 50/50 with AddressSanitizer and leak detection; the added regression checks full descendant expansion through required/oneof/group fallbacks, including merges. Raw evidence and source hashes are in `benchmarks/results/protobuf-projection-cross-language-20261107/`. Owning/scoped reader integration, remote qualification and sparse-resident performance remain separate gates; E1 is not yet complete.

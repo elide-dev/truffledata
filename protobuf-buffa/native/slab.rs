@@ -991,6 +991,8 @@ struct Frame {
     mark: Mark,
     invalid_map: bool,
     merged: bool,
+    /// An omitted lazy child that requires eager handling exposes its complete subtree.
+    full: bool,
 }
 
 /// `Frame::start` of the root: no field of a parent to charge.
@@ -1391,6 +1393,11 @@ impl<'a, 's> Decoder<'a, 's> {
         self.records += 1;
         write32(base, self.handles as u32);
         self.handles += 1;
+        let full = self.projection.is_some_and(|p| k > 0 && unsafe {
+            let parent = &*self.frame(k - 1);
+            parent.full || (ordinal != NONE && p.flags & Projection::LAZY != 0
+                && !p.wanted(parent.ty, ordinal as usize))
+        });
         // SAFETY: frame `k` lies inside the stack (see `frame`).
         unsafe {
             self.frame(k).write(Frame {
@@ -1409,6 +1416,7 @@ impl<'a, 's> Decoder<'a, 's> {
                 mark,
                 invalid_map: false,
                 merged: false,
+                full,
             })
         };
         Ok(base)
@@ -1426,7 +1434,7 @@ impl<'a, 's> Decoder<'a, 's> {
             (f.ty, f.merged, f.pending as usize, f.merges as usize, f.unknown as usize)
         };
         let t = &c.types[ty as usize];
-        if merged || t.closes || self.has_projected_counts(ty) || self.pending.len() > pending || self.unknown.len() > unknown {
+        if merged || t.closes || self.has_projected_counts(k) || self.pending.len() > pending || self.unknown.len() > unknown {
             self.close(k)?;
         } else {
             self.merges.truncate(merges);
@@ -1672,9 +1680,10 @@ impl<'a, 's> Decoder<'a, 's> {
             && !self.c.types[f.child as usize].required_closure
     }
 
-    fn has_projected_counts(&self, ty: u32) -> bool {
-        self.projection.is_some() && self.c.types[ty as usize].lists.iter()
-            .any(|&ordinal| self.counts_only(ty, ordinal as usize))
+    fn has_projected_counts(&self, k: usize) -> bool {
+        let frame = unsafe { &*self.frame(k) };
+        self.projection.is_some() && !frame.full && self.c.types[frame.ty as usize].lists.iter()
+            .any(|&ordinal| self.counts_only(frame.ty, ordinal as usize))
     }
 
     /// Validate an omitted payload without allocating output. Ordinary merge validation keeps
@@ -1880,7 +1889,7 @@ impl<'a, 's> Decoder<'a, 's> {
                 let slot = unsafe { base.add(e.slot as usize) };
                 if let Some(projection) = self.projection {
                     let ty = unsafe { (*self.frame(k)).ty };
-                    if !projection.wanted(ty, ordinal) && !t.map_entry {
+                    if !unsafe { (*self.frame(k)).full } && !projection.wanted(ty, ordinal) && !t.map_entry {
                         if matches!(e.op, H_MSG | H_RMSG) && e.flags & E_MAP == 0
                             && !self.c.types[e.child as usize].required_closure {
                             flush!();
@@ -2002,7 +2011,7 @@ impl<'a, 's> Decoder<'a, 's> {
             let f = unsafe { &*self.frame(k) };
             let (cstart, cordinal, cbody) = (f.start(), f.ordinal as usize, f.body);
             let closed = if t.simple
-                && !self.has_projected_counts(f.ty)
+                && !self.has_projected_counts(k)
                 && !f.merged
                 && self.pending.len() == (f.pending as usize)
                 && self.unknown.len() == (f.unknown as usize)
@@ -2316,7 +2325,7 @@ impl<'a, 's> Decoder<'a, 's> {
                 Self::set_presence(o.base, 1, true);
             }
         }
-        if self.pending.len() > (o.pending as usize) || self.has_projected_counts(o.ty) {
+        if self.pending.len() > (o.pending as usize) || self.has_projected_counts(k) {
             self.lists(&o, t)?;
         }
         if self.unknown.len() > (o.unknown as usize) {
@@ -2372,12 +2381,13 @@ impl<'a, 's> Decoder<'a, 's> {
             }
             floor = ordinal + 1;
             let f = &t.fields[ordinal as usize];
-            let omitted = self.projection.is_some_and(|p| !p.wanted(o.ty, ordinal as usize))
-                && !t.map_entry && t.entries[ordinal as usize].op == H_MSG
-                && !self.c.types[f.child as usize].required_closure;
+            let full = o.full || self.projection.is_some_and(|p|
+                p.flags & Projection::LAZY != 0 && !p.wanted(o.ty, ordinal as usize) && !t.map_entry);
             if count < 2 { continue; }
-            let restore = if omitted { self.projection.take() } else { None };
             self.open(k + 1, f.child, 0, 0, NONE, o.start(), 0)?;
+            if full {
+                unsafe { (*self.frame(k + 1)).full = true; }
+            }
             for i in first..last {
                 let p = self.merges.get(i);
                 if p.ordinal == ordinal {
@@ -2392,7 +2402,6 @@ impl<'a, 's> Decoder<'a, 's> {
             let closed = self.finish(k + 1, self.pos)?;
             write32(unsafe { o.base.add(f.slot as usize) }, closed.at);
             self.certified = false;
-            if restore.is_some() { self.projection = restore; }
         }
     }
 
@@ -2432,7 +2441,7 @@ impl<'a, 's> Decoder<'a, 's> {
         let mut cursors = [0usize; DENSE_LISTS];
         for (index, &ordinal) in t.lists.iter().enumerate() {
             let f = &t.fields[ordinal as usize];
-            let counts_only = self.counts_only(o.ty, ordinal as usize);
+            let counts_only = !o.full && self.counts_only(o.ty, ordinal as usize);
             let count = if counts_only { read32(unsafe { o.base.add(f.slot as usize) }) as usize } else { counts[index] as usize };
             if count == 0 {
                 continue;
@@ -2484,7 +2493,7 @@ impl<'a, 's> Decoder<'a, 's> {
             for i in first..last {
                 count += usize::from(self.pending.get(i).ordinal == ordinal);
             }
-            let counts_only = self.counts_only(o.ty, ordinal as usize);
+            let counts_only = !o.full && self.counts_only(o.ty, ordinal as usize);
             if counts_only { count = read32(unsafe { o.base.add(f.slot as usize) }) as usize; }
             if count == 0 {
                 continue;
