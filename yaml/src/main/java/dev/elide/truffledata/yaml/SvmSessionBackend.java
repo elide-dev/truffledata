@@ -16,6 +16,7 @@ import org.jspecify.annotations.Nullable;
 
 final class SvmSessionBackend extends YamlSession.Backend {
   private final YamlOptions options;
+  private boolean directories = true;
   private final VoidPointer session;
   private final VoidPointer result;
 
@@ -84,6 +85,9 @@ final class SvmSessionBackend extends YamlSession.Backend {
   }
 
   @Override
+  protected void directories(boolean enabled) { directories = enabled; }
+
+  @Override
   protected void decode(
       byte[] data, int offset, int length, int encoding, @Nullable TapeTextArena text) {
     byte[] input = YamlSvm.utf8(data, offset, length, encoding);
@@ -96,7 +100,7 @@ final class SvmSessionBackend extends YamlSession.Backend {
               session,
               pin.addressOfArrayElement(0),
               input.length,
-              options.retainSource() ? 2 : 0,
+              (options.retainSource() ? 2 : 0) | (directories ? 4 : 0),
               WordFactory.nullPointer(),
               0,
               result);

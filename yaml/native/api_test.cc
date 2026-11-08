@@ -160,6 +160,65 @@ void sessions() {
   require(std::strcmp(reinterpret_cast<const char*>(td_yaml_fingerprint()), TRUFFLEDATA_YAML_SEAM_ABI) == 0);
 }
 
+void directory_policy() {
+  auto options = defaults();
+  void* s = td_yaml_session_create(&options);
+  require(s != nullptr);
+  YamlResult borrowed{}, kept{};
+  const std::string doc = "[{a: 1, b: 2}, {a: 3, b: 4}, {b: 5, a: 6}, {a: 7, b: 8}, {a: 9}]";
+  require(run(s, doc, borrowed) == TD_YAML_OK);
+  const auto& before = *static_cast<const td_tape_view*>(borrowed.view);
+  require((before.flags & TD_TAPE_NO_DIRECTORIES) && before.directory_count == 0);
+  require(ct::validate(before) == nullptr);
+  auto expected = render(before);
+  const uint64_t* words = before.words;
+  require(td_yaml_session_retain(s, &kept) == TD_YAML_OK);
+  const auto& owned = *static_cast<const td_tape_view*>(kept.view);
+  require(!(owned.flags & TD_TAPE_NO_DIRECTORIES) && owned.directory_count == 8 && owned.words == words);
+  require(ct::validate(owned) == nullptr && render(owned) == expected);
+  td_yaml_release(&kept);
+  require(run(s, doc, borrowed, TD_YAML_WANT_DIRECTORIES) == TD_YAML_OK);
+  const auto& direct = *static_cast<const td_tape_view*>(borrowed.view);
+  require(!(direct.flags & TD_TAPE_NO_DIRECTORIES) && direct.directory_count == 8);
+  require(render(direct) == expected && ct::validate(direct) == nullptr);
+  for (const auto& bad : {"[{a: 1, b: 2}, {a: 3, a: 4}]", "[{a: 1, b: 2}, {a: 3, b: 4, a: 5}]"})
+    for (uint32_t flags : {0u, TD_YAML_WANT_DIRECTORIES})
+      require(run(s, bad, borrowed, flags) == TD_YAML_SYNTAX);
+  require(run(s, "{}", borrowed, 8) == TD_YAML_ARGUMENT);
+  td_yaml_session_release(s);
+
+  // Directory allocation failure preserves a complete borrowed tape for a retry.
+  std::string wide = "{";
+  for (int i = 0; i < 5000; ++i) wide += "k" + std::to_string(i) + ": 1, ";
+  wide += "}";
+  auto exercise = [&](size_t fail) {
+    fault_memory memory;
+    size_t allocations = 0;
+    {
+      yaml_session session(session_options{}, &memory);
+      session.decode(reinterpret_cast<const uint8_t*>(wide.data()), wide.size(), 0);
+      size_t start = memory.calls;
+      if (fail != SIZE_MAX) memory.fail_at = start + fail;
+      yaml_session::retained* owner = nullptr;
+      try { owner = session.retain(); }
+      catch (const std::bad_alloc&) {
+        require(fail != SIZE_MAX && session.live());
+        require((session.view().flags & TD_TAPE_NO_DIRECTORIES) && ct::validate(session.view()) == nullptr);
+        memory.fail_at = SIZE_MAX;
+        owner = session.retain();
+      }
+      allocations = memory.calls - start;
+      require(owner && !(owner->view.flags & TD_TAPE_NO_DIRECTORIES) && ct::validate(owner->view) == nullptr);
+      owner->destroy();
+    }
+    require(memory.live == 0);
+    return allocations;
+  };
+  size_t allocations = exercise(SIZE_MAX);
+  require(allocations >= 2);
+  for (size_t fail = 0; fail < allocations; ++fail) exercise(fail);
+}
+
 void shared_text_capacity() {
   YamlOptionsStruct options = defaults();
   void* session = td_yaml_session_create(&options);
@@ -292,6 +351,7 @@ int main() {
     sessions();
     typed_plans();
     shared_text_capacity();
+    directory_policy();
     allocation_failures();
   } catch (const std::exception& e) {
     std::fprintf(stderr, "api_test failure: %s\n", e.what());

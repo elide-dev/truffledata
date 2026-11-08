@@ -139,7 +139,7 @@ extern "C" int32_t td_yaml_session_decode(void* handle, const uint8_t* data, uin
   if (!handle || !aligned(output)) return TD_YAML_ARGUMENT;
   auto& result = *static_cast<YamlResult*>(output);
   result = {};
-  if (!data || (flags & ~uint32_t(TD_YAML_RETAIN_SOURCE)) || text_out || text_capacity) {
+  if (!data || (flags & ~uint32_t(TD_YAML_RETAIN_SOURCE | TD_YAML_WANT_DIRECTORIES)) || text_out || text_capacity) {
     message(result, "invalid YAML decode arguments", 29);
     return TD_YAML_ARGUMENT;
   }
@@ -149,7 +149,8 @@ extern "C" int32_t td_yaml_session_decode(void* handle, const uint8_t* data, uin
     return TD_YAML_LIMIT;
   }
   try {
-    auto d = s.decode(data, size_t(length), flags & TD_YAML_RETAIN_SOURCE ? yaml_session::retain_source : 0);
+    auto d = s.decode(data, size_t(length), ((flags & TD_YAML_RETAIN_SOURCE) ? yaml_session::retain_source : 0) |
+        ((flags & TD_YAML_WANT_DIRECTORIES) ? yaml_session::want_directories : 0));
     publish_document(result, d, s);
     return TD_YAML_OK;
   } catch (...) {

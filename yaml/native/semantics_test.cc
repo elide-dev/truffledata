@@ -307,9 +307,9 @@ void nonfinite_floats() {
     std::memcpy(&v[i], d.view.words + ordinal(d.view, 1 + i) + 1, sizeof(double));
   }
   require(std::isinf(v[0]) && v[0] > 0 && std::isinf(v[1]) && v[1] < 0 && std::isnan(v[2]));
-  require(d.view.flags == (TD_TAPE_NONFINITE | TD_TAPE_HAS_META | TD_TAPE_YAML));
+  require(d.view.flags == (TD_TAPE_NONFINITE | TD_TAPE_HAS_META | TD_TAPE_YAML | TD_TAPE_NO_DIRECTORIES));
   auto finite = decode(s, "[1.5]");
-  require(!(finite.flags & doc_nonfinite) && finite.view.flags == (TD_TAPE_HAS_META | TD_TAPE_YAML));
+  require(!(finite.flags & doc_nonfinite) && finite.view.flags == (TD_TAPE_HAS_META | TD_TAPE_YAML | TD_TAPE_NO_DIRECTORIES));
 }
 
 void pairs_representation() {

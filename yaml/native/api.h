@@ -23,6 +23,9 @@ enum td_yaml_status {
 // used as mapping keys can expand their text beyond any input-sized allocation estimate.
 #define TD_YAML_WANT_UTF16_TEXT 1u
 #define TD_YAML_RETAIN_SOURCE 2u
+// Borrowed scan/export documents omit directories by default; key lookup still scans keys.
+// Set this for random access. Retain always publishes directories, building them if needed.
+#define TD_YAML_WANT_DIRECTORIES 4u
 
 // YamlOptionsStruct enumerations (YamlOptions on the Java side).
 #define TD_YAML_SCHEMA_CORE 0u
@@ -90,7 +93,7 @@ enum td_yaml_status {
 // and leaves the session reusable. Compact scalar spans index `source`: plain single-line scalars always;
 // quoted, multi-line and block scalars only with TD_YAML_RETAIN_SOURCE (else 0).
 //
-// session_retain moves the live document's arena blocks and input into a zero-initialized result
+// session_retain builds missing lookup directories, then moves arena blocks and input into a zero-initialized result
 // that owns them (release with td_yaml_release). session_reset invalidates the borrowed document in
 // O(1) without freeing (a native leaf). session_release frees the session; retained results stay
 // valid.
@@ -101,6 +104,6 @@ enum td_yaml_status {
 // document, so the caller can grow and retry. A successful table is borrowed until reset/decode;
 // the caller owns the byte buffer. No partial table is published on failure.
 //
-// ABI3 publishes td_tape_view through view. Scalar lexical spans and directory key hashes are
+// ABI4 publishes td_tape_view through view. Scalar lexical spans and directory key hashes are
 // embedded in compact words; no parallel lexical or key-hash arrays are allocated or published.
 #endif

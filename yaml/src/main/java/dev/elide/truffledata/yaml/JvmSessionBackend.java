@@ -13,6 +13,7 @@ import org.jspecify.annotations.Nullable;
 
 final class JvmSessionBackend extends YamlSession.Backend {
   private final YamlOptions options;
+  private boolean directories = true;
   private final YamlFFM.LibraryBinding calls;
   private final Arena library;
   private final Arena arena = Arena.ofConfined();
@@ -99,6 +100,9 @@ final class JvmSessionBackend extends YamlSession.Backend {
   }
 
   @Override
+  protected void directories(boolean enabled) { directories = enabled; }
+
+  @Override
   protected void decode(
       byte[] bytes, int offset, int length, int encoding, @Nullable TapeTextArena text) {
     byte[] utf8 = YamlSvm.utf8(bytes, offset, length, encoding);
@@ -120,7 +124,7 @@ final class JvmSessionBackend extends YamlSession.Backend {
               session,
               data,
               length,
-              options.retainSource() ? 2 : 0,
+              (options.retainSource() ? 2 : 0) | (directories ? 4 : 0),
               MemorySegment.NULL,
               0L,
               result);

@@ -18,7 +18,7 @@ There is no rapidyaml tree, event array or DOM in between. The plan is
 | `stream.h` | Multi-document streams: a line splitter over a carry-over buffer, one document decoded at a time |
 | `errors.h` | `yaml::error` (status, line, column, fixed 256-byte message) |
 | `api.h`, `api.cc` | The C ABI (`td_yaml_*`); no exception crosses it |
-| `yaml.seam` | Myna seam (`abi=3`): compact `YamlResult`, options, session and typed-plan imports |
+| `yaml.seam` | Myna seam (`abi=4`): compact `YamlResult`, options, session and typed-plan imports |
 | `bench.cc` | Native reference rows: rapidyaml's integer handler and tree, libyaml, the session and stream APIs (`bazel test //yaml/native:bench --test_output=all`, manual, RBE) |
 | `sampler.h` | Benchmark only: a SIGPROF frame-pointer sampler for RBE workers (`//yaml/native:bench_profile`) |
 | `testing.h`, `reference_tape.h` | Test-only helpers; the probe's reference tape (rapidyaml's integer handler into `myna::value_builder`) |
@@ -165,3 +165,10 @@ bazel test //yaml/native:all //tape/native:all \
   --copt=-fsanitize=address,undefined --copt=-fno-sanitize-recover=all --linkopt=-fsanitize=address,undefined
 bazel test //yaml/native:bench --test_output=all   # manual; RBE; three passes, best per variant
 ```
+
+Borrowed native session and stream documents omit lookup directories unless session decode sets
+`TD_YAML_WANT_DIRECTORIES` (4). All duplicate policies still apply, and generic key lookup scans
+when no directory is present. Retain builds missing directories without moving tape words; a
+failed build leaves the borrowed descriptor valid for retry. Java retained and callback reads
+request directories before decode, while sink export and validation omit them. ABI4 gives this
+policy a distinct fingerprint from ABI3.

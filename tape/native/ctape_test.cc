@@ -790,6 +790,41 @@ void directoryless_shapes_still_check_duplicates() {
   require(c::validate(writer.view()) == nullptr && writer.view().directory_count == 2);
 }
 
+void producer_proofs_close_directoryless_objects() {
+  scratch storage;
+  ctape_writer writer(&storage.arena, {});
+  writer.directories(false); writer.input({});
+  size_t root = writer.begin(c::kind_object, 0);
+  writer.string("first", {}, true, true); writer.integer(1, {});
+  writer.string("second", {}, true, true); writer.integer(2, {});
+  writer.end_distinct(root, 2);
+  require(c::validate(writer.view()) == nullptr && writer.view().directory_count == 0);
+  const auto* words = writer.words();
+  writer.build_directories();
+  require(writer.words() == words && writer.view().directory_count == 2 && c::validate(writer.view()) == nullptr);
+
+  for (unsigned misuse = 0; misuse < 4; ++misuse) {
+    scratch state;
+    ctape_writer bad(&state.arena, {});
+    bad.directories(misuse == 0); bad.input({});
+    key_shape_cache cache;
+    if (misuse == 1) bad.shapes(&cache);
+    size_t object = bad.begin(misuse == 2 ? c::kind_array : c::kind_object, 0);
+    if (misuse == 3) bad.member_key(object, 0);
+    require(throws_as<std::logic_error>([&] { bad.end_distinct(object, 0); }));
+  }
+  // Validation is independent of the producer proof. A deliberately false proof cannot
+  // make duplicate decoded keys pass the full structural/directoryless validator.
+  scratch invalid;
+  ctape_writer bad(&invalid.arena, {});
+  bad.directories(false); bad.input({});
+  size_t object = bad.begin(c::kind_object, 0);
+  bad.string("same", {}, true, true); bad.null();
+  bad.string("same", {}, true, true); bad.null();
+  bad.end_distinct(object, 2);
+  require(c::validate(bad.view()) != nullptr);
+}
+
 void permuted_directories_match_sorted() {
   key_shape_cache cache;
   std::vector<std::string> keys;
@@ -808,6 +843,7 @@ int main() {
   struct test { const char* name; void (*run)(); };
   const test tests[] = {
       {"directoryless_shapes_still_check_duplicates", directoryless_shapes_still_check_duplicates},
+      {"producer_proofs_close_directoryless_objects", producer_proofs_close_directoryless_objects},
       {"shape_cache_rejects_duplicates", shape_cache_rejects_duplicates},
       {"permuted_directories_match_sorted", permuted_directories_match_sorted},
       {"words_follow_the_layout", words_follow_the_layout},

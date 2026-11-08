@@ -143,6 +143,7 @@ SVM_ONLY_METHODS = {
         'SvmSessionBackend$NativeText::write (Lorg/graalvm/nativeimage/c/type/VoidPointer;)V',
         'SvmSessionBackend::borrow ()Ldev/elide/truffledata/tape/TapeBorrow;',
         'SvmSessionBackend::check (ILorg/graalvm/nativeimage/c/type/VoidPointer;)V',
+        'SvmSessionBackend::directories (Z)V',
         'SvmSessionBackend::decode (Ljava/lang/foreign/MemorySegment;J)V',
         'SvmSessionBackend::decode ([BIIILdev/elide/truffledata/tape/TapeTextArena;)V',
         'SvmSessionBackend::release ()V',

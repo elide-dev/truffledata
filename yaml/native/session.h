@@ -116,6 +116,7 @@ class session final {
   // Decode flags.
   static constexpr uint32_t want_utf16_text = 1u << 0;  // reserved (text arena, plan Task 5)
   static constexpr uint32_t retain_source = 1u << 1;
+  static constexpr uint32_t want_directories = 1u << 2;
 
   session(const session_options& options, std::pmr::memory_resource* upstream = std::pmr::get_default_resource())
       : upstream_(upstream),
@@ -138,7 +139,7 @@ class session final {
   // session holds no document and stays reusable.
   document_view decode(const uint8_t* data, size_t length, uint32_t flags) {
     recycle();
-    if (flags & ~retain_source) throw error(status_argument, "unsupported YAML decode flags");
+    if (flags & ~(retain_source | want_directories)) throw error(status_argument, "unsupported YAML decode flags");
     if (length > storage_limit()) throw limit_error("input bytes");
     size_t before = memory_.allocations();
     try {
@@ -177,7 +178,8 @@ class session final {
       }
       policy rules = options_.rules;
       rules.retain_source = pristine != nullptr;
-      handler_.start(&arena_, input_, text, newlines, pristine, rules, options_.values, hint.nodes, hint.bytes);
+      handler_.start(&arena_, input_, text, newlines, pristine, rules, options_.values, hint.nodes, hint.bytes,
+                     (flags & want_directories) != 0);
       try {
         engine_.parse_in_place_ev("yaml", c4::substr(input_, text));
       } catch (error& failure) {
@@ -242,6 +244,8 @@ class session final {
   retained* retain() {
     if (!live_) throw std::logic_error("no YAML session document");
     void* raw = upstream_->allocate(sizeof(retained), alignof(retained));
+    try { handler_.ensure_directories(); }
+    catch (...) { upstream_->deallocate(raw, sizeof(retained), alignof(retained)); throw; }
     tape::block_arena::storage storage;
     td_tape_view view = handler_.view();
     handler_.clear();

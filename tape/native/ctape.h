@@ -770,6 +770,17 @@ template<bool Structural = false> class basic_ctape_writer final {
                                 uint32_t(count < ctape::max_length ? count : ctape::max_length),
                                 uint32_t(words_.size()));
   }
+  // A producer may close a directoryless object through its independently checked complete
+  // key template. Every decoded key and the final count must match that template, which was
+  // installed only after duplicate rejection. No key announcements may be pending; misses
+  // must use end_rescan() instead. Structural validation checks uniqueness independently.
+  void end_distinct(size_t index, uint64_t count) {
+    uint64_t w = words_[index];
+    if (directories_ || shapes_ || pending_.size() || ctape::kind(w) != ctape::kind_object)
+      misuse("distinct close requires a directoryless object");
+    words_[index] = ctape::make(ctape::kind_object, ctape::wide_flag,
+        uint32_t(count < ctape::max_length ? count : ctape::max_length), uint32_t(words_.size()));
+  }
   // Closes the innermost open object, hashing its keys from their text (producers that rewrite
   // their children: YAML). Builds the directory and checks duplicates as end() does.
   template<class Hash> void end_rescan(size_t index, Hash hash_of) {

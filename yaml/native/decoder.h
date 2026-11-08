@@ -268,7 +268,7 @@ class handler : public c4::yml::EventHandlerStack<handler, handler_state> {
   // Prepares a parse of `input` (validated UTF-8 that rapidyaml filters in place; `newlines` its LF
   // bitmap; `pristine` an unfiltered copy or null). Storage comes from `memory` (the session arena).
   void start(block_arena* memory, char* input, size_t length, const uint64_t* newlines, const char* pristine,
-             const policy& rules, const myna::value_limits& limits, size_t node_hint, size_t byte_hint) {
+             const policy& rules, const myna::value_limits& limits, size_t node_hint, size_t byte_hint, bool directories = true) {
     clear();
     // Templates point into the previous input: never carried across decodes.
     for (auto& level : templates_)
@@ -281,7 +281,9 @@ class handler : public c4::yml::EventHandlerStack<handler, handler_state> {
     rules_ = rules;
     limits_ = limits;
     schema_ = rules.schema;
+    lookup_directories_ = directories;
     writer_.emplace(memory, limits);
+    writer_->directories(directories);
     writer_->input(std::string_view(pristine ? pristine : input, length));
     writer_->reserve(node_hint * 2, byte_hint, node_hint / 3);
     sparse_meta_ = !rules_.last_wins && !rules_.duplicate_keys_pairs && !rules_.complex_keys_pairs &&
@@ -311,6 +313,14 @@ class handler : public c4::yml::EventHandlerStack<handler, handler_state> {
     view_.flags |= TD_TAPE_HAS_META | TD_TAPE_YAML;
     view_.meta = meta_.data();
     view_.meta_count = meta_.size();
+  }
+  // Retained messages always carry lookup directories; publication remains unchanged on a
+  // failed build because the writer rolls back directory words and descriptor flags.
+  void ensure_directories() {
+    if (view_.flags & TD_TAPE_NO_DIRECTORIES) {
+      writer_->build_directories();
+      finish();
+    }
   }
   // Drops the per-decode state before the arena is reset (key tables free into the arena).
   void clear() noexcept {
@@ -1025,7 +1035,7 @@ class handler : public c4::yml::EventHandlerStack<handler, handler_state> {
                                              uint32_t meta) {
     const bool plain = ((w.lo | w.hi) & 0x8080808080808080ull) == 0;
     const size_t node = writer_->word_count();
-    if (fused_duplicates()) writer_->member_key(f.node, hash);
+    if (fused_duplicates() && lookup_directories_) writer_->member_key(f.node, hash);
     // short_plain/short_quoted already proved this padded input span and loaded its bytes.
     if ((meta & meta_style_mask) == 0) writer_->string_ref(unpack(span), plain, true);
     else writer_->string(std::string_view(s.str, s.len), {}, plain, true);
@@ -1467,7 +1477,7 @@ class handler : public c4::yml::EventHandlerStack<handler, handler_state> {
       }
     }
     size_t node = writer_->word_count();
-    if (fused_duplicates()) writer_->member_key(target->node, hash);
+    if (fused_duplicates() && lookup_directories_) writer_->member_key(target->node, hash);
     write_text(canonical, target->kind == frame_kind::map, span, (extra_meta & meta_style_mask) == 0);
     uint32_t anchor = define_anchor(node, false);
     side(node, extra_meta | (anchor != no_anchor ? meta_anchored : 0));
@@ -1558,7 +1568,9 @@ class handler : public c4::yml::EventHandlerStack<handler, handler_state> {
       if (cached && cached->count < f->count) cached = nullptr;
       size_t index = 0;
       try {
-        if (fused_duplicates()) writer_->end(f->node, f->count);
+        if (fused_duplicates() && lookup_directories_) writer_->end(f->node, f->count);
+        else if (fused_duplicates() && f->follow != no_template && cached && cached->count == f->count)
+          writer_->end_distinct(f->node, f->count);
         else writer_->end_rescan(f->node, [&](std::string_view text) {
           return cached ? cached->keys[index++].hash : directory_hash(text);
         });
@@ -1803,6 +1815,7 @@ class handler : public c4::yml::EventHandlerStack<handler, handler_state> {
   yaml::schema schema_ = yaml::schema::core;
   myna::value_limits limits_;
   std::optional<ctape_writer> writer_;
+  bool lookup_directories_ = true;
   arena_vec<uint32_t> meta_;
   bool sparse_meta_ = false;
   arena_vec<char> strings_;
