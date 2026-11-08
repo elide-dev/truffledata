@@ -5,8 +5,9 @@ SVM is the production performance target; JVM correctness and coverage remain
 required, while JVM timings do not veto an SVM gain. Work stays local on
 `feat/followup-v5`; no push, CI dispatch or publication is authorized.
 
-All three mechanisms are admitted locally. Combined coverage and x86 native
-acceptance pass; Arm native acceptance is still in progress.
+All three mechanisms are admitted locally. Combined coverage and native
+acceptance on Linux x86-64 and Arm64 pass. The tranche is complete and paused;
+release qualification remains separate.
 The performance evidence below is from isolated, preserved images, not a
 fresh timing capture of one combined application. The combined branch receives
 its own semantic, coverage and native acceptance checks.
@@ -91,6 +92,38 @@ The pre-existing slab verification-complexity risk, JSON throughput/memory goals
 YAML release criteria and full distribution/release qualification are not closed
 by this tranche. No budgets or coverage exemptions are relaxed.
 
+## Release readiness audit
+
+This tranche is not full 0.10.0 release qualification. The current
+[release ledger](../../../docs/superpowers/plans/2026-11-08-release-resume.md)
+now distinguishes completed code from missing implementation and unrun checks:
+
+- **Two implementation gaps:** shared-subgraph verification can amplify CPU
+  work at the external serialized-slab boundary; Buffa's standalone Cargo crate
+  still references an absent generated seam. The former has a bounded reproducer
+  and is an explicit release blocker. JSON/CSV Cargo crates already exist;
+  generated-seam/composed-link automation and the full Cargo matrix still remain.
+- **Protobuf performance:** the SVM B4 interpreter ceiling remains open. JVM
+  timing-only objections are superseded by the user's production priority.
+- **JSON:** the last qualifying pinned native producer capture misses retained
+  big/huge and validate small/huge floors; current-source recapture remains.
+  The 1.5× logical index/input memory criterion remains structurally unmet.
+  Duplicate-check price needs pinned qualification; broader end-to-end targets
+  also need current matched-host measurements. Existing correctness, graph and
+  allocation failures recorded earlier are closed, not new blockers.
+- **YAML:** four native decoder floors remain missed (config, block, flow,
+  text). These are C++ session-decode/reset microbenchmarks against a rapidyaml
+  scan handler, not JVM or end-to-end SVM figures. The stream floor and SVM
+  graph/allocation gates pass. Full comparison and prescribed native/sanitizer
+  qualification remain separate.
+- **CSV:** no unmet mandatory throughput floor was identified. Original H1–H5
+  hypotheses explicitly allow either measurement outcome without blocking
+  release; the required semantic, coverage, graph and allocation gates pass.
+- **Distribution:** the final platform staging, packaged consumers, signatures/
+  metadata and green CI/main are still required before publication. The older
+  0.9.0 cross-platform fingerprint blocker was already resolved; it is not
+  counted again. All work in this tranche remains local.
+
 ## Integrated qualification
 
 Production/test integration is `7fca64b`: CSV `fef9ae5` plus large acceptance
@@ -110,10 +143,19 @@ protobuf candidate images remain available. The original checkout stays on
   `6227eb3c-34a5-4bd0-9c95-37f33ca1b1b7`: CSV, JSON, protobuf strict/non-strict,
   and protobuf Java fallback. Shared publication races pass in all three
   protobuf images. [Manifest and original logs](final-native-x86/manifest.json).
-- Arm64 runs the same five targets in `0de92e3b-a02f-4532-ac98-eed245afec71`;
-  CSV acceptance has passed, the remaining targets are building. These tests
+- Arm64 passes the same five targets in `0de92e3b-a02f-4532-ac98-eed245afec71`,
+  including all three protobuf publication races. The fresh toolchain/dependency
+  and image build took 2,268.607 seconds; the final tests took 9.5–18.2 seconds.
+  [Manifest and original logs](final-native-arm64/manifest.json). Both ISA archives
+  have verified hashes and identical production source hashes. These tests
   exercise semantic, ownership/lifetime and compiled-graph contracts; they do
   not measure Arm throughput.
+
+All workers are finished. The Arm Bazel server was shut down after archiving;
+its separate case-sensitive cache and all preserved benchmark images remain
+available. The integration branch is committed locally. Nothing was pushed,
+dispatched to CI, merged remotely or published. The requested pause follows this
+report; additional optimization or release work needs a new instruction.
 
 ## Preserved baselines
 

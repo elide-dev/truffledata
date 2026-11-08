@@ -124,3 +124,6 @@ differential/sanitizer, JVM correctness and SVM acceptance checks. The historica
 the unmet 1.5× logical-memory criterion and physical-memory goals remain open; this is
 neither a universal JSON speedup nor full release qualification. No PGO, ABI, retained-layout
 or prebuilt-native distribution contract changes.
+
+
+Final SVM tranche integration (2026-11-08): production/test tip `7fca64b`; combined coverage `b436036f` passes nine targets / 455 tests, 201 production files across 12 modules and the existing access-method contract. All five native acceptance targets pass on Linux x86-64 (`6227eb3c`) and Arm64 (`0de92e3b`), including strict/non-strict/fallback protobuf publication races. Production source hashes agree across both native archives. No coverage exemption, allocation or graph budget changed. [Final comparison, qualification and release status](../../../benchmarks/results/svm-tranche-20261108/README.md). This completes the local tranche, not full release qualification. Nothing pushed or published; pause requested.

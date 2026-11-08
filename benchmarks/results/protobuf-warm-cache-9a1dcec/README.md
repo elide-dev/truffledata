@@ -220,3 +220,8 @@ Merge the recovered `refined-svm/shards/shard_*/results.json` paths with
 `tools/bench/consumer.py merge`. For profile analysis, use the recovered
 `baseline-profile` directory with `tools/bench/json_profile_summary.py` and the
 consumer main class `dev.elide.truffledata.comparison.ConsumerComparison`.
+
+
+## Final integrated qualification
+
+The final combined source at `7fca64b` passes nine coverage suites (455 tests), the 201-file / 12-module coverage validation and the access-method contract in `b436036f`. All five native acceptance targets pass on x86 (`6227eb3c`) and Arm (`0de92e3b`), including the large CSV projection cases and protobuf strict/non-strict/fallback publication races. Both ISA source hashes match. The conditional integration checks above are satisfied; performance claims remain the isolated x86 pairs. [Common report and preserved final artifacts](../svm-tranche-20261108/README.md). Full release criteria remain open and no publication occurred.

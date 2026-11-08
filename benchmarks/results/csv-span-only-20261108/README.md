@@ -166,3 +166,8 @@ bzl test //benchmarks/comparison:csv_pair \
 The measured runner includes the shard affinity fix at `459625b` (parent commit
 `32d5245`). Both images and the original source commits remain local; nothing
 was pushed or published.
+
+
+## Final integrated qualification
+
+The final combined source at `7fca64b` passes nine coverage suites (455 tests), the 201-file / 12-module coverage validation and the access-method contract in `b436036f`. All five native acceptance targets pass on x86 (`6227eb3c`) and Arm (`0de92e3b`), including the large CSV projection cases and protobuf strict/non-strict/fallback publication races. Both ISA source hashes match. The conditional integration checks above are satisfied; performance claims remain the isolated x86 pairs. [Common report and preserved final artifacts](../svm-tranche-20261108/README.md). Full release criteria remain open and no publication occurred.

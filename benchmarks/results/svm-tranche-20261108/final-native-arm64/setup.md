@@ -15,9 +15,10 @@ hdiutil attach -nobrowse -mountpoint /private/tmp/truffledata-svm-arm64-20261108
   /private/tmp/truffledata-svm-arm64-20261108.sparsebundle
 ```
 
-A case-distinct filename probe passed before rerunning. The final build's
-exact command, platform, pinned SDK archive hash, source hashes and invocation
-will be recorded in `manifest.json` when the run completes. Both target and execution platforms use
+A case-distinct filename probe passed before rerunning. All five targets passed
+in `0de92e3b-a02f-4532-ac98-eed245afec71` (2,268.607 seconds including the fresh
+toolchain/dependency build). The exact command, platform, pinned SDK archive hash,
+source hashes and invocation are recorded in `manifest.json`. Both target and execution platforms use
 `--config=remote_arm64`; the output and repository caches are on this separate
 volume. The cache and original shared volume are preserved. This is native
 semantic/graph qualification, not an Arm performance measurement.

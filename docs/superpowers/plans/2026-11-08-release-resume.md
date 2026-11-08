@@ -45,17 +45,24 @@
 - [x] Reproduce `json-generic-java-export` (-12%) and `json-generic-interop-read` (-10%) on the simulation image against main `223edf7`; bisect across the branch's tape/JSON commits; fix or rule with evidence. Fresh final-image callgrind counts improve versus main by 15.7% / 8.4%; native/JVM checks pass in `cdcbc5cc`. Evidence: `benchmarks/results/json-codspeed-20261108/`. This is instruction-count evidence, not a new full throughput qualification.
 
 ### Task R5: Performance gates
-- [ ] Protobuf B4 on SVM (interpreter ≤ 2.5× stock; reprofile after Phase 1 restoration) — design note first, then measured change. E1's old JVM selected-small 0.864-vs-0.85 miss is informational under the reaffirmed SVM priority, not a release blocker.
-- [ ] YAML throughput floors (config/block/flow/text at 0.51–0.77).
-- [ ] JSON retained big/huge and the 1.5× logical-memory criterion; duplicate-check price qualification.
+- [ ] Protobuf B4 on SVM: full interpreter ≤ 2.5× stock. Phase 1 and the warm-cache tranche are admitted, with a fresh profile and complete pairs; the latest ratios remain 3.471× generated and 5.652× slab. E1's old JVM selected-small 0.864-vs-0.85 miss is informational under the reaffirmed SVM priority, not a release blocker.
+- [ ] YAML native C++ decoder floors: config 0.561/0.597, block 0.693/0.715, flow 0.692/0.724, text 0.771/0.895 (observed/floor). These compare native session decode/reset with a rapidyaml scan handler, not JVM or end-to-end SVM. Stream 0.507 already exceeds 0.497. SVM graph/allocation gates pass; corrected native and full comparison qualification remain. See `benchmarks/results/yaml-ctape-5002235/README.md` and the YAML ledger.
+- [ ] JSON required native producer floors need current pinned recapture: the latest qualifying retained big/huge and validate small/huge results miss their thresholds. The 1.5× logical-memory criterion remains structurally unmet; duplicate-check price qualification remains unrun on the pinned host. Narrow typed gains do not close these broader criteria. See `benchmarks/results/json-sota-final-qualification/README.md` and the JSON ledger.
 
-### Task R6: #37 Cargo-buildable crates
-- [ ] `json/native` crate: `build.rs` compiles `api.cc`, `tape/native/text.cc`, vendored simdjson 5.1.1 and simdutf 0.7.0 with `cc`, honoring `CXXSTDLIB`; generated `seam.h` vendored with a CI check against the Myna generator output.
-- [ ] `csv/native` crate with per-file ISA flags (`index_avx2.cc` -mavx2, `index_avx512.cc` -mavx512f/bw, `index_neon.cc`).
-- [ ] Buffa crate consumable as a git dependency at release tags; no `#[global_allocator]`; simdutf stays in the crate graph.
-- [ ] CI: `cargo build -p` on Linux x86-64/AArch64 and macOS AArch64; a link test combining two crates with a dummy Rust staticlib; ABI fingerprint check against the bindings jars.
+CSV has no unmet mandatory throughput floor identified: its original H1–H5
+hypotheses explicitly permit confirmation or refutation without blocking release.
+Correctness, coverage, graph and allocation gates pass. Recorded performance gaps
+remain follow-ups; final staged-artifact qualification is still required.
+
+### Task R6: #37 Cargo-buildable crates (partially implemented)
+- [x] JSON standalone crate and `cc` build honoring `CXXSTDLIB`, with vendored sources/seam and linked fingerprint test (`c74dd85`). Current macOS Arm64 Cargo build/link/fingerprint passes after vendor synchronization `de07d75`.
+- [x] CSV standalone crate with per-file ISA flags, shared simdutf option and fingerprint test (`c74dd85`).
+- [ ] Buffa Cargo seam packaging: `protobuf-buffa/native/lib.rs` includes `generated/seam.rs`, which is absent from a fresh checkout, and no Cargo build script supplies it. Production allocator ownership already complies: its allocator declaration is test-only.
+- [ ] Automated generated-header/seam consistency and bindings ABI checks; a link test combining crates with a dummy Rust staticlib.
+- [ ] Complete Cargo qualification/CI on Linux x86-64/AArch64 and macOS AArch64. One local JSON Cargo result does not establish this matrix.
 
 ### Task R7: Qualification and release
+- [ ] Resolve the existing external serialized-slab verification time-complexity blocker. Repeated handles validate identity but recursively revisit shared subgraphs before the accumulated budget check; the bounded depth-10 test accounts for 4,093 logical cells. Preserve depth, identity, per-occurrence budgets, projection and error order. This affects attacker-controlled serialized slabs, not ordinary producer-generated wire trees. See `SlabVerifierTest.aliasedRecursiveRecordsKeepPerVisitBudgets` and the protobuf ledger.
 - [ ] Push, PR #36 ready, CI green; update the isolated qualification checkout; full native/negative-JIT/sanitizer gates; five-platform staging; consumers; signatures; merge; green main; publish 0.10.0; verify public artifacts; close issues.
 
 Resume 2026-11-08 (hill climb, three Opus workers, Fable briefing/review): worktrees td-climb-slab (climb/slab: allocation-free slab verification, plan-cached SlabLimits, no per-message Budget, leaf `decodeSlabSmall` without PinnedObject, then native_smoke gates from the measured floor), td-climb-b4 (climb/b4: B4 phase 1 per 2026-11-08-protobuf-b4-design.md, TDD, consumer_measure), td-climb-json (climb/json: CodSpeed JSON −12%/−10% reproduced locally via RBE simulation image + valgrind in an amd64 container, bisect 223edf7..1cfcb37, zero-cost fix). Bazel runs serialized through a scratchpad lock wrapper; nothing pushed. Results merge into feat/followup-v5 after review.
@@ -197,3 +204,39 @@ then give Sam the requested performance table and pause. Workers have finished
 and require no further work. Original `main` stays clean at `223edf7`. Nothing
 has been pushed, dispatched to CI, merged remotely or published. No further
 optimization tranche or release qualification is authorized by this checkpoint.
+
+
+## Tranche complete; requested pause — 2026-11-08
+
+All three optimizations and final evidence are integrated into `feat/followup-v5`
+in `/Users/sam/workspace/graalvm/truffledata-followup`. Production/test tip remains
+`7fca64b`; this final checkpoint follows the interim `ede2ece`. The original
+checkout stays on clean `main` at `223edf7`. Worker branches `tranche/csv`,
+`tranche/json` and `tranche/protobuf` and their measured images remain preserved.
+
+The final Arm invocation `0de92e3b-a02f-4532-ac98-eed245afec71` passes all five
+acceptance targets, closing the only pending tranche gate. Both native archives
+have verified hashes and identical production source hashes; all six protobuf
+strict/non-strict/fallback publication races pass across x86 and Arm. Combined
+coverage remains 455 passing tests / nine suites with the existing method contract.
+No production fix was needed during final integration checks. Exact results, raw
+logs, comparison tables and source/SDK provenance are in
+`benchmarks/results/svm-tranche-20261108/README.md`. Arm qualification establishes
+semantics and compiled graphs, not Arm throughput.
+
+Sam asked about release proximity during the run. R5/R6/R7 above are corrected
+after a source/evidence audit: CSV has no remaining mandatory throughput blocker;
+YAML's four misses are native C++ producer floors; JSON broader producer/memory
+and duplicate-price criteria remain open; protobuf B4 remains above its SVM
+ceiling. Two actual implementation gaps remain: external shared-subgraph slab
+verification complexity and standalone Buffa Cargo seam packaging. JSON/CSV
+Cargo crates already exist, while automated seam/composed-link checks and full
+Cargo qualification remain. Final staged-artifact/platform/CI/main/publication
+checks are still required. JVM timing alone is not a blocker. Full 0.10.0 release
+readiness is not claimed.
+
+The Arm Bazel server is shut down, its separate case-sensitive cache is preserved,
+and no build/benchmark invocation remains active. Workers are finished. The tree
+is committed locally; no push, CI dispatch, remote merge or publication occurred.
+Give the measured performance table and pause as requested. Do not start the
+conditional follow-on experiments or release work without a new instruction.

@@ -7,9 +7,9 @@ release gates; it does not waive semantic, lifetime, SVM graph/allocation, no-PG
 or prebuilt-native distribution requirements. See the root `AGENTS.md`.
 
 Status: Sam authorized the first parallel tranche after compaction ("ok do it").
-All three measured mechanisms are now integrated locally. Final combined coverage
-and x86 native acceptance pass; Arm native acceptance is in progress. B4 Phase 1
-remains restored in `29aa408`.
+All three measured mechanisms are integrated locally and qualified. Final combined
+coverage and x86/Arm native acceptance pass. This tranche is complete; Sam's
+requested pause follows the comparison report. B4 Phase 1 remains restored in `29aa408`.
 The production baseline is `9a1dcec`. The
 [common comparison](../../../benchmarks/results/svm-tranche-20261108/README.md)
 records measured gains, regressions and workload boundaries. Follow-ons remain
@@ -56,12 +56,14 @@ No push, CI dispatch, publication, or main-branch merge is authorized.
 - `c5d237f` selects the pinned Linux Arm64 SDK for native acceptance. Combined
   coverage `b436036f` passes all nine suites (455 tests), 201 production files /
   12 modules and the access-method contract. All five x86 native targets pass
-  in `6227eb3c`. Arm invocation `0de92e3b` is still running; CSV has passed.
+  in `6227eb3c`. All five Arm native targets pass in `0de92e3b`, including strict,
+  non-strict and fallback protobuf publication races. Both ISA source hashes match.
   Only x86 SVM timing claims are made.
 
 Worker source, negative experiments, baselines and validation artifacts remain
-local. Final common qualification and the requested pause are recorded below
-when complete; no release completion is implied by these admissions.
+local. The common report records final qualification and the requested pause;
+no release completion is implied by these admissions. The Arm server is stopped,
+the separate case-sensitive cache is preserved, and no build/benchmark remains active.
 
 ## Restore and audit
 
@@ -77,7 +79,11 @@ when complete; no release completion is implied by these admissions.
   has only JVM measurements; it is unmeasured on SVM, not a known win to restore.
   The selected CSV unescape path already beats the rejected SWAR alternative on SVM.
 
-## First parallel tranche
+## First parallel tranche (design record)
+
+The following design descriptions refer to baseline `9a1dcec`; the measured
+admission checkpoint above and the owning format documentation describe the
+implemented result. Do not redispatch these completed experiments on resume.
 
 ### JSON: structural typed decoding for nested and repeated schemas
 
@@ -211,6 +217,6 @@ skip validation on externally supplied slabs.
   measured SVM wins even at a JVM timing cost, and retain measured negatives.
   No new PGO or consumer-side native-code-generation requirement is authorized.
 
-Recommended dispatch: JSON nested structural writer, CSV plan-specialized batch
-construction, and protobuf warm-read caches/dispatch in parallel, with serialized
-qualification. The follow-ons remain conditional on the first tranche's results.
+Completed dispatch: JSON nested structural writer, CSV all-STRING batch
+construction, and protobuf warm handle caches, with serialized qualification.
+The follow-ons remain separate future work; no further cycle starts during the pause.
