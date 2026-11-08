@@ -331,6 +331,25 @@ data_java_library(
     ]
 ]
 
+# Override with the preserved old-production image built from the identical typed fixtures.
+label_flag(
+    name = "json_typed_svm_baseline",
+    build_setting_default = ":json_svm",
+)
+
+sh_test(
+    name = "json_typed_pair",
+    size = "enormous",
+    timeout = "long",
+    srcs = ["json_typed_pair.sh"],
+    args = ["$(rootpath :json_svm)", "$(rootpath :json_typed_svm_baseline)"],
+    data = ["json_typed_pair.py", "JsonComparison.java", ":json_svm", ":json_typed_svm_baseline"],
+    shard_count = 4,
+    exec_properties = {"EstimatedCPU": "4", "EstimatedMemory": "16GB"},
+    tags = ["benchmark", "manual"],
+    target_compatible_with = ["@platforms//os:linux", "@platforms//cpu:x86_64"],
+)
+
 sh_test(
     name = "json_native_smoke",
     size = "large",
