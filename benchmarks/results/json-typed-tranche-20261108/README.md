@@ -39,6 +39,9 @@ production sources.
   mixed **1.044–1.057x**, churn **1.051–1.103x**. These are a different host/toolchain and
   do not establish pinned Linux or SVM gains. The subsequent expected-key wrap comparison
   removes a dynamic modulo without changing its result; it still awaits pinned timing.
+- `native-arm64-wrap.log`: a later local diagnostic has substantial host variance (the
+  unchanged On-Demand baseline is roughly 1.5–2x slower than the previous local run and
+  repeated ratios span 0.904–1.193x). It is retained as inconclusive, not admission evidence.
 - `sanitizers-arm64.log`, `sanitizer-metadata.json`, `sanitize.py`: all dependencies and five
   tests compiled with ASan+UBSan. Typed exact differential, typed/API contracts, generic
   200-document/60-malformed corpus, and one million decoded-key shape sequences pass.
