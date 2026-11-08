@@ -220,6 +220,13 @@ cc_test(
 )
 
 cc_test(
+    name = "duplicate_probe",
+    srcs = ["duplicate_probe.cc"],
+    tags = ["manual"],
+    deps = [":decoder", "//tape/native:testing"],
+)
+
+cc_test(
     name = "text_fusion_test",
     srcs = ["text_fusion_test.cc", "testing/text_fusion_session.h", "testing/text_fusion_stage2.h"],
     deps = [":decoder", "//tape/native:testing"],
