@@ -26,22 +26,22 @@
 
 ---
 
-### Task R1: CI coverage contract (DONE for the inline readers; remaining gaps in progress)
+### Task R1: CI coverage contract (DONE locally)
 - [x] Reorder the inline-reader parity test so each reader meets its field first (commit efdc900).
-- [ ] Cover Csv/CsvPlan overloads, Buffa borrowed/materialized/session surface, TypedRow text-path accessors and cached ViewOwner checks, runtime GeneratedMessage unknown queries, SlabMessage projected/copyProjectedRecordOf/Usage, HeapValueTape region bytes, TapeReader node text word, YamlMessage confined; exempt `SlabSession::outside` with its reason.
-- [ ] Verify: `bazelisk coverage <nine JVM targets> --config=codecov && python3 .github/scripts/reports.py coverage && python3 .github/scripts/coverage_contract.py` → no `Uncovered access methods`.
-- [ ] Commit.
+- [x] Cover Csv/CsvPlan overloads, Buffa borrowed/materialized/session surface, TypedRow text-path accessors and cached ViewOwner checks, runtime GeneratedMessage unknown queries, SlabMessage projected/copyProjectedRecordOf/Usage, HeapValueTape region bytes, TapeReader node text word, YamlMessage confined; exempt `SlabSession::outside` with its reason.
+- [x] Verify: `bazelisk coverage <nine JVM targets> --config=codecov && python3 .github/scripts/reports.py coverage && python3 .github/scripts/coverage_contract.py` → no `Uncovered access methods`.
+- [x] Commit.
 
 ### Task R2: macOS CSV CI (DONE)
 - [x] `bazel/patches/elide-toolchain-cc.patch` canonicalizes the SDK path (commit 9c53f2e); local `--config=local //csv/native:api_test //csv/native:index_test` pass.
 - [ ] Confirm on CI after push (Native targets / CSV / aarch64-apple-darwin).
 
-### Task R3: legacy `native_smoke` compact-scalar allocation (416 B > 128 B)
-- [ ] Decode SVM slabs into a pinned heap array and `SlabMessage.takeOwnership` (drops the DirectByteBuffer wrapper and the second copy); size the first attempt from the learned `slabCapacity` with a small floor so the retained array is the slab's exact extent after the first message.
-- [ ] Run `bazel test //benchmarks/comparison:native_smoke` and record `ALLOCATION compact-scalar buffa ingest bytes/message`; re-base the budget in `benchmarks/comparison/Comparison.java` to the measured design cost with the breakdown in the protobuf ledger.
+### Task R3: legacy `native_smoke` compact-scalar allocation (DONE locally)
+- [x] Decode SVM slabs into a pinned heap array and `SlabMessage.takeOwnership` (drops the DirectByteBuffer wrapper and the second copy); size the first attempt from the learned `slabCapacity` with a small floor so the retained array is the slab's exact extent after the first message.
+- [x] Run `bazel test //benchmarks/comparison:native_smoke` and record `ALLOCATION compact-scalar buffa ingest bytes/message`; re-base the budget in `benchmarks/comparison/Comparison.java` to the measured design cost with the breakdown in the protobuf ledger. Final 168 B generic / 136 B typed/generated, invocation `7b240f5f`; evidence: `benchmarks/results/protobuf-slab-allocation-20261108/`.
 
 ### Task R4: CodSpeed JSON regressions
-- [ ] Reproduce `json-generic-java-export` (-12%) and `json-generic-interop-read` (-10%) on the simulation image against main `223edf7`; bisect across the branch's tape/JSON commits; fix or rule with evidence.
+- [x] Reproduce `json-generic-java-export` (-12%) and `json-generic-interop-read` (-10%) on the simulation image against main `223edf7`; bisect across the branch's tape/JSON commits; fix or rule with evidence. Fresh final-image callgrind counts improve versus main by 15.7% / 8.4%; native/JVM checks pass in `cdcbc5cc`. Evidence: `benchmarks/results/json-codspeed-20261108/`. This is instruction-count evidence, not a new full throughput qualification.
 
 ### Task R5: Performance gates
 - [ ] Protobuf B4 (interpreter ≤ 2.5× stock; `Accessor.bound` 18.7% of samples) and E1 JVM selected-small (0.864 vs 0.85) — design note first, then measured change.
@@ -66,3 +66,64 @@ Pause 2026-11-08 10:55 PST (hill-climb handoff; Sam ordered wrap-up). Nothing pu
 Bazel lock wrapper for serialized runs across worktrees: /private/tmp/claude-501/-Users-sam-workspace-graalvm-truffledata/ec457008-2747-4509-875f-1a245e27aa8e/scratchpad/bzl (mkdir lock + JAVA_HOME + PATH=/usr/bin first); recreate if the scratchpad is gone.
 Worker reports after the handoff confirm the above (slab: 961d479, JVM suites green, after-run unmeasured; B4: 38f7399, five JVM suites green, unmeasured). New pre-existing risk noted by the slab worker, to triage before release: an untrusted slab whose records repeatedly point at the same child record can make verification exponential in time (the new walk keeps the old per-handle table for a record reached twice; the cost was already there before d529c56). Candidate fix: memoize verified records by handle id in the walk.
 Final checkpoint 2026-11-08 10:58 PST (context at 98%): feat/followup-v5 head is the commit after 1b5a4ec; tree clean; nothing pushed; no Bazel run active; three worker worktrees retained (td-climb-slab 961d479, td-climb-b4 38f7399, td-climb-json 57a4215). Resume order: (1) climb/slab native_smoke after-run → set gates → merge; (2) climb/b4 consumer_smoke/native_smoke + consumer_measure before/after → ledger entry → merge or revert per design §4; (3) climb/json: inspect 57a4215 diff, measure 7e0167b^ vs 7e0167b under valgrind in the amd64 container, then fix. Standing rules unchanged: stay local, no push, no CI until Sam says.
+
+## Recovery 2026-11-08 (Codex)
+
+The integration checkout is `/Users/sam/workspace/graalvm/truffledata-followup`;
+the original checkout remains on `main`. Three workers resumed the retained
+branches with serialized Bazel access and independent source reviews. The JSON
+worker had continued after the checkpoint: three uncommitted source edits and
+completed simulation/test evidence were recovered and preserved, rather than
+discarded as unexpected changes. Nine output bases belonging to deleted worker
+workspaces were removed after checking workspace absence and preservation of
+their binaries/logs, increasing shared-volume headroom from 2.1 to 3.9 GiB;
+shared caches and historical baselines were left intact.
+
+The slab candidate first measured 168 B/message versus the saved 312 B baseline
+(`226e5f97-f7d7-4994-b66e-dcdc577089a0`), above the handoff's unverified 152 B
+estimate. Separate allocation probes were required before setting new gates.
+The previously recorded shared-subgraph verification complexity remains a
+separate release blocker; a bounded alias fixture pins its logical accounting.
+This recovery does not authorize a push, CI dispatch, main merge or publication.
+
+Slab completion `6e65ff7` is merged locally with its measured 168/136/136 B smoke
+gates. B4 completion `c6474e4` is also merged, but **the Phase 1 production
+optimization is rejected and restored**: complete paired JVM/SVM captures show
+a 17.7% SVM generated-interpreter gain alongside 20.2% slower JVM generated
+interpreter reads and 40.7% slower JVM slab resident work, with nonoverlapping
+observed ranges for the regressions. Modern-baseline harness support, useful
+contract/lifetime tests, and all 20 measurement shards are retained in
+`benchmarks/results/protobuf-b4-213a289b/`. The rejected protected Accessor API
+does not ship. B4's original performance gate remains open; no Phase 2 work was
+started.
+
+
+## Requested pause after local landing — 2026-11-08
+
+All three worker branches are integrated into `feat/followup-v5`: slab completion
+`6e65ff7`, B4 measured rejection `c6474e4`, and JSON completion `6e1cfc1`.
+Integration production tip is `151c1d7`; this checkpoint adds the final ASCII
+reader/cursor parity test and documentation. Worker branches and evidence remain
+available. The original checkout remains on `main`; the integration checkout is
+`/Users/sam/workspace/graalvm/truffledata-followup`.
+
+JSON final native/JVM checks pass 9/9 (`cdcbc5cc`), including 24 compiled graphs
+and nine allocation budgets. Fresh final-image instruction counts versus main
+`223edf7`: export 71,313,261 → 60,138,974 (−15.67%); interop read
+34,545,961 → 31,656,185 (−8.36%). The suspected `7e0167b` regression was disproved.
+Full throughput and logical-memory qualification are not implied by these counts.
+
+Final combined coverage passes all nine JVM suites (`018a698d`), LCOV validation
+for 201 production files across 12 modules, and the access-method coverage contract.
+The initial combined run exposed only `TapeReader.isAscii`; an input/pooled,
+ASCII/non-ASCII reader/cursor parity test closes it without production changes.
+All 14 reporting-tool tests pass. Raw final coverage evidence and test provenance:
+`benchmarks/results/followup-integration-20261108/`.
+
+Pause requested by Sam after the performance comparison. No push, CI dispatch,
+remote merge, publication or new optimization cycle was performed. All workers
+and active build/benchmark invocations are stopped. Future work remains explicit:
+B4 interpreter target, E1 JVM selected-small qualification, JSON retained and
+validation floors/logical-memory criterion/duplicate-price qualification, YAML
+throughput floors, the pre-existing slab shared-subgraph verification time risk,
+and complete platform/release qualification. These are not waived or marked done.

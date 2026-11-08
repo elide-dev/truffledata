@@ -70,6 +70,29 @@ class CompactTapeTest {
     assertEquals(new String(pooled, StandardCharsets.UTF_8), myna.stringValue(0));
   }
 
+  @Test void asciiMetadataMatchesTextCursorForInputAndOwnedStrings() {
+    for (String value : new String[]{"", "plain", "café", "中😀"}) {
+      byte[] utf8 = value.getBytes(StandardCharsets.UTF_8);
+      byte[] input = ("\"" + value + "\"").getBytes(StandardCharsets.UTF_8);
+      boolean ascii = value.chars().allMatch(c -> c < 128);
+      for (boolean owned : new boolean[]{false, true}) {
+        long flags = (ascii ? TapeReader.ASCII : 0) | (owned ? TapeReader.OWNED | TapeReader.WIDE : 0);
+        long header = w(7, flags, utf8.length, owned ? 0 : 1);
+        HeapTape tape = new HeapTape(owned ? new long[]{header, input.length} : new long[]{header},
+            owned ? utf8 : new byte[0], input, new long[0], new int[0], 0);
+        assertEquals(ascii, tape.isAscii(0), value);
+        TapeText cursor = new TapeText(new Owner(tape));
+        // Export supplies its loaded header; other text events load it lazily.
+        for (boolean preloaded : new boolean[]{false, true}) {
+          if (preloaded) cursor.bind(0, header); else cursor.bind(0);
+          assertEquals(tape.isAscii(0), cursor.isAscii(), value);
+          assertEquals(value, cursor.toJavaString());
+          cursor.unbind();
+        }
+      }
+    }
+  }
+
   @Test void cachedScalarAndArrayInteropChecksTheValueKind() throws Exception {
     Owner owner = new Owner(new HeapTape(new long[]{w(8, TapeReader.WIDE, 2, 5), 0,
         w(2, 0, 0, 0), w(5, TapeReader.WIDE, 0, 0), Double.doubleToRawLongBits(2.5)},
