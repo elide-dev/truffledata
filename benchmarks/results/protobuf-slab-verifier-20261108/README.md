@@ -25,7 +25,25 @@ headers reached at different absolute depths. The existing mutation corpus remai
 
 ## Validation
 
-Pending local `//protobuf-runtime:test` and `//tests:allocation` through the serialized
-release wrapper. The exact release candidate's normal CI supplies native correctness and
-`//benchmarks/comparison:native_smoke` (including the SVM allocation floor); it is deliberately
-not duplicated by this worker. No performance timing matrix is required for this boundary fix.
+Source fix `7a90ea6` and fixture correction `0a22a11` were integrated as `d37d646` and
+`afa0d3b`. Validation ran from the integration checkout through
+`build/release-010-tools/bzl`, using the shared release output root:
+
+- `test //protobuf-runtime:test //tests:allocation --test_output=errors`, invocation
+  [9a6b979f](https://app.buildbuddy.io/invocation/9a6b979f-e48d-41aa-87e1-410e20b42fc2):
+  allocation passed **13/13**. Runtime initially passed 39/41; two new test fixtures selected
+  `maxCells=1`, below their schema's two-field construction minimum. No production failure
+  occurred. The fixture correction raises only those lower bounds to 2.
+- `test //protobuf-runtime:test --test_output=errors`, invocation
+  [c61145d9](https://app.buildbuddy.io/invocation/c61145d9-ecf9-4a91-9b80-a06caaa1a4ee):
+  runtime passed **41/41**, zero failures/errors. The allocation target was not repeated
+  because the follow-up changed only fixtures.
+
+Original test logs and XML, including the initial fixture failures, are stored as deterministic
+`gzip` files (`mtime=0`). `artifacts.json` records original sizes and SHA-256 hashes of both
+original and compressed bytes.
+
+**Pending exact candidate CI:** native correctness and
+`//benchmarks/comparison:native_smoke` (including the SVM allocation floor). Those checks are
+deliberately not duplicated by this worker. No performance timing matrix is required for this
+boundary fix; the existing SVM allocations have not yet been requalified for these exact sources.
