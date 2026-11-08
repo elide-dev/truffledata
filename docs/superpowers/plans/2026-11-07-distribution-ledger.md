@@ -13,11 +13,17 @@ The user selected `MIT OR Apache-2.0` for this follow-up.
 - Negative probes rejected the expected call paths: `01d42d26-dfdc-4966-8582-c336fa15f138` and `c177c362-fae8-44f6-957a-2774874f58e7`.
 - Linux AArch64 and macOS consumer lanes passed; archive, dependency and fingerprint checks passed for all three native modules on all three platforms.
 - [GitHub v0.9.0](https://github.com/elide-dev/truffledata/releases/tag/v0.9.0) has a signed OpenPGP tag, 22 native payloads, their SHA-256 sidecars and a signed SHA256SUMS file. All 46 GitHub asset digests match local bytes.
-- Issues #2 and #27 closed by the merged release PR. Nine issues remain open.
+- Issues #2 and #27 closed by the merged release PR. Ten issues remain open after
+  the subsequent raw unknown-field query request (#35).
 
 ## Implemented, still awaiting full follow-up qualification
 
 - #32: eager immutable name-to-ordinal index; duplicate names resolve to -1. Collision and wide-schema checks added.
+- #35: `hasUnknownFields()` and `unknownFieldByteCount()` expose raw retained
+  node-local bytes on immutable, generated, owning-slab and borrowed-slab rows.
+  Empty groups, wrong wire types, closed enums and rejected map entries retain
+  their raw-byte semantics. Native compiled reads pass the unchanged allocation
+  budget; borrowed queries check the session epoch before reading.
 - #30/#31: caller-owned FileChannel mapping and byte-array windows/owned input APIs. Twenty focused CSV tests passed directly; integrated CSV JVM tests passed with the protobuf check.
 - #26: CSV runtime-provider installation, backend, channel and ownership documentation updated.
 - #24: CSV release archive links LLVM IR and internalizes everything except five seam entry points. macOS machine-code and bitcode symbol inspection reports exactly those functions. Shared-library export lists added. GNU and macOS static/shared/ThinLTO consumers pass; GNU gate `59c64a55-460e-4dfc-b39d-64ecef3c0387`. Direct inspection confirms the exact five-symbol public set on GNU/macOS machine/shared libraries and the macOS bitcode twin. Full staged matrix qualification remains pending.

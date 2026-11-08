@@ -3,8 +3,9 @@
 
 Protocol: https://central.sonatype.org/publish/publish-portal-api/
 Upload is USER_MANAGED. Publication is a separate explicit command after validation.
-Credentials are read only from SONATYPE_USERNAME / SONATYPE_TOKEN; signing uses
-SIGNING_KEY_ID and an already unlocked GPG key. Secrets never enter command lines.
+Credentials are read from CENTRAL_CREDENTIALS_FILE (private Maven XML or JSON),
+or SONATYPE_USERNAME / SONATYPE_TOKEN; signing uses SIGNING_KEY_ID and an already
+unlocked GPG key. Secrets never enter command lines.
 """
 import argparse
 import base64
@@ -130,7 +131,7 @@ def request(path, data=b'', content_type='application/json'):
     username = credentials.get('username') or os.environ.get('SONATYPE_USERNAME')
     password = credentials.get('token') or os.environ.get('SONATYPE_TOKEN')
     if not username or not password:
-        raise ValueError('SONATYPE_USERNAME and SONATYPE_TOKEN are required')
+        raise ValueError('Central credentials are required: CENTRAL_CREDENTIALS_FILE or SONATYPE_USERNAME and SONATYPE_TOKEN')
     token = base64.b64encode((username + ':' + password).encode()).decode()
     req = urllib.request.Request(API + path, data=data, method='POST', headers={
         'Authorization': 'Bearer ' + token, 'Content-Type': content_type,
