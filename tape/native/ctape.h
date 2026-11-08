@@ -79,6 +79,7 @@ typedef struct td_tape_view {
 #define TD_TAPE_VIEW_VERSION 1u
 #define TD_TAPE_NONFINITE 1u
 #define TD_TAPE_HAS_META 2u
+#define TD_TAPE_NO_DIRECTORIES 4u
 #define TD_TAPE_YAML 8u
 static_assert(sizeof(td_tape_view) == 88, "td_tape_view layout");
 static_assert(offsetof(td_tape_view, words) == 8 && offsetof(td_tape_view, pool) == 24, "td_tape_view layout");
@@ -185,7 +186,8 @@ inline bool within(uint64_t offset, uint64_t length, uint64_t size) { return off
 inline const char* validate(const td_tape_view& v) {
   using detail::within;
   if (v.version != TD_TAPE_VIEW_VERSION) return "tape view version";
-  if (v.flags & ~uint32_t(TD_TAPE_NONFINITE | TD_TAPE_HAS_META | TD_TAPE_YAML)) return "unknown tape view flags";
+  if (v.flags & ~uint32_t(TD_TAPE_NONFINITE | TD_TAPE_HAS_META | TD_TAPE_NO_DIRECTORIES | TD_TAPE_YAML)) return "unknown tape view flags";
+  if ((v.flags & TD_TAPE_NO_DIRECTORIES) && v.directory_count) return "directory entries on directoryless tape";
   if (v.word_count == 0 || !v.words) return "empty tape";
   if (v.word_count > max_words) return "tape word count";
   if ((v.pool_bytes && !v.pool) || (v.input_bytes && !v.input) || (v.directory_count && !v.directory))
@@ -216,6 +218,12 @@ inline const char* validate(const td_tape_view& v) {
         uint32_t dir = directory_of(v.words[f.index + 1]);
         if (count < 2) {
           if (dir) return "directory on an object below two members";
+        } else if (v.flags & TD_TAPE_NO_DIRECTORIES) {
+          if (dir) return "directory on directoryless object";
+          offsets.assign(keys.begin() + f.keys, keys.end());
+          std::sort(offsets.begin(), offsets.end(), [&](uint64_t a, uint64_t b) { return text(v, a) < text(v, b); });
+          for (size_t k = 1; k < offsets.size(); ++k)
+            if (text(v, offsets[k - 1]) == text(v, offsets[k])) return "duplicate key";
         } else {
           if (!dir) return "object of two or more members without a directory";
           if (!within(uint64_t(dir) - 1, count, v.directory_count)) return "directory run out of range";
@@ -290,6 +298,7 @@ inline const char* validate(const td_tape_view& v) {
       case kind_object: {
         if (flags != wide_flag) return "container word flags";
         uint64_t second = v.words[i + 1];
+        if ((v.flags & TD_TAPE_NO_DIRECTORIES) && directory_of(second)) return "directory on directoryless object";
         if (k == kind_array && directory_of(second)) return "directory on an array";
         if (low(second) > v.input_bytes) return "container raw offset past the input";
         uint64_t next = low(w);
@@ -510,7 +519,7 @@ template<bool Structural = false> class basic_ctape_writer final {
   uint64_t input_bytes_ = 0;
   myna::value_limits limits_;
   uint64_t values_ = 0, text_bytes_ = 0;
-  bool nonfinite_ = false;
+  bool nonfinite_ = false, directories_ = true;
   key_shape_cache* shapes_ = nullptr;
 
   [[noreturn, gnu::noinline, gnu::cold]] static void limit(const char* what) { throw std::length_error(what); }
@@ -568,23 +577,48 @@ template<bool Structural = false> class basic_ctape_writer final {
   // its directory run (sorted, then checked for duplicates within equal-hash runs).
   [[gnu::noinline, gnu::cold]] void materialize(key_shape_cache::frame& frame) {
     const auto& shape = shapes_->levels[frame.depth];
-    for (uint32_t i = 0; i < frame.count; ++i)
-      pending_[frame.first + i] |= uint64_t(shape.keys[i].hash) << 32;
+    if (directories_) {
+      for (uint32_t i = 0; i < frame.count; ++i)
+        pending_[frame.first + i] |= uint64_t(shape.keys[i].hash) << 32;
+    } else {
+      // Matching directoryless objects need no offset scratch. On the first mismatch,
+      // recover the already-closed prefix from its tape before checking all keys normally.
+      size_t key = frame.object + 2;
+      for (uint32_t i = 0; i < frame.count; ++i) {
+        pending(uint64_t(shape.keys[i].hash) << 32 | (key - frame.object));
+        size_t value = ctape::step(key, words_[key]);
+        key = ctape::after(value, words_[value]);
+      }
+    }
     frame.matched = false;
   }
   void close_directory(size_t object, uint64_t count) {
-    if (count > pending_.size()) misuse("object key not announced");
-    size_t first = pending_.size() - count;
     auto* frame = shapes_ ? shapes_->current(object) : nullptr;
     auto* shape = frame ? &shapes_->levels[frame->depth] : nullptr;
-    if (frame && (frame->count != count || frame->first != first)) misuse("object key count mismatch");
+    if (frame && frame->count != count) misuse("object key count mismatch");
     bool hit = frame && frame->matched && count == shape->count;
+    if (!directories_ && hit) {
+      if (frame->first != pending_.size()) misuse("object key count mismatch");
+      --shapes_->active;
+      return;
+    }
     if (frame && frame->matched && !hit) materialize(*frame);
-    if (count >= 2) {
+    if (count > pending_.size()) misuse("object key not announced");
+    size_t first = pending_.size() - count;
+    if (frame && frame->first != first) misuse("object key count mismatch");
+    if (count >= 2 && (directories_ || !hit)) {
       size_t start = directory_.size();
-      if (start >= UINT32_MAX - count) limit("tape directory limit");
-      uint64_t* out = directory_.extend(memory_, count);
-      const uint64_t* in = pending_.data() + first;
+      if (directories_ && start >= UINT32_MAX - count) limit("tape directory limit");
+      uint64_t* scratch = pending_.data() + first;
+      uint64_t* out = directories_ ? directory_.extend(memory_, count) : scratch;
+      const uint64_t* in = scratch;
+      // Directoryless misses sort the pending range itself. Preserve at most one template's
+      // original key order so installation still names source positions after the sort.
+      uint64_t original[key_shape_cache::max_keys];
+      if (!directories_ && shape && count <= key_shape_cache::max_keys) {
+        std::memcpy(original, in, count * sizeof(uint64_t));
+        in = original;
+      }
       if (hit) {
         for (size_t i = 0; i < count; ++i)
           out[shape->rank[i]] = ctape::entry(shape->keys[i].hash, uint32_t(in[i]));
@@ -598,7 +632,7 @@ template<bool Structural = false> class basic_ctape_writer final {
           out[j] = e;
         }
       } else {
-        std::memcpy(out, in, count * sizeof(uint64_t));
+        if (out != in) std::memcpy(out, in, count * sizeof(uint64_t));
         std::sort(out, out + count);
       }
       // Equal decoded keys have equal hashes, so they sit in one equal-hash run; compare each key
@@ -624,10 +658,12 @@ template<bool Structural = false> class basic_ctape_writer final {
           shape->count = uint32_t(count);
         }
       }
-      for (size_t i = 0; i < count; ++i) out[i] = ctape::entry(uint32_t(out[i] >> 32), uint32_t(out[i]));
+      if (directories_) for (size_t i = 0; i < count; ++i) out[i] = ctape::entry(uint32_t(out[i] >> 32), uint32_t(out[i]));
       }
-      uint64_t& second = words_[object + 1];
-      second = uint64_t(start + 1) << 32 | uint32_t(second);
+      if (directories_) {
+        uint64_t& second = words_[object + 1];
+        second = uint64_t(start + 1) << 32 | uint32_t(second);
+      }
     }
     pending_.truncate(first);
     if (frame) --shapes_->active;
@@ -640,6 +676,11 @@ template<bool Structural = false> class basic_ctape_writer final {
 
   basic_ctape_writer(std::pmr::memory_resource* memory, myna::value_limits limits) : memory_(memory), limits_(limits) {
     if (!memory) throw std::invalid_argument("null tape allocator");
+  }
+  // Select before a fresh document. Duplicate checks run in either mode.
+  void directories(bool enabled) {
+    if (words_.size() || pending_.size()) misuse("directory policy after emission");
+    directories_ = enabled;
   }
   void shapes(key_shape_cache* cache) { shapes_ = cache; if (cache) cache->start(); }
   basic_ctape_writer(const basic_ctape_writer&) = delete;
@@ -657,7 +698,7 @@ template<bool Structural = false> class basic_ctape_writer final {
   void reserve(size_t words, size_t pool_bytes, size_t directory_entries) {
     words_.reserve(memory_, words);
     pool_.reserve(memory_, pool_bytes);
-    directory_.reserve(memory_, directory_entries);
+    if (directories_) directory_.reserve(memory_, directory_entries);
     pending_.reserve(memory_, directory_entries < 256 ? directory_entries : 256);
   }
 
@@ -666,7 +707,7 @@ template<bool Structural = false> class basic_ctape_writer final {
     if (count > (SIZE_MAX - 2) / 2) limit("tape structural count");
     words_.reserve(memory_, std::min<size_t>(2 * count + 2, ctape::max_words));
     pool_.reserve(memory_, input_bytes + 64);
-    directory_.reserve(memory_, count / 2 + 1);
+    if (directories_) directory_.reserve(memory_, count / 2 + 1);
     pending_.reserve(memory_, count / 2 + 1);
   }
 
@@ -751,7 +792,7 @@ template<bool Structural = false> class basic_ctape_writer final {
       uint32_t ordinal = frame->count;
       if (frame->matched) {
         if (ordinal < shape.count && shape.keys[ordinal].equals(text, length, padded)) {
-          pending(offset);
+          if (directories_) pending(offset);
           ++frame->count;
           return;
         }
@@ -774,7 +815,7 @@ template<bool Structural = false> class basic_ctape_writer final {
     const uint8_t* text = input_ + offset;
     if (!key.clean || available <= key.length || text[key.length] != '"' || !key.equals(text, key.length, true))
       return UINT32_MAX;
-    pending(words_.size() - object);
+    if (directories_) pending(words_.size() - object);
     ++frame->count;
     string_ref({offset, key.length}, key.ascii, true);
     return key.length;
@@ -936,10 +977,41 @@ template<bool Structural = false> class basic_ctape_writer final {
     uint64_t w = words_[index];
     return ctape::text_at((w & ctape::owned_flag) ? pool_.data() : input_, ctape::low(w), ctape::field(w));
   }
+  // Retaining a sink document opts into lookup directories. Each object is closed already;
+  // rescan only its own extent, without rewriting next/count or expanding references.
+  void build_directories() {
+    if (directories_) return;
+    directories_ = true;
+    auto* cache = shapes_;
+    shapes_ = nullptr;
+    try {
+      for (size_t object = 0; object < words_.size(); object = ctape::step(object, words_[object])) {
+        if (ctape::kind(words_[object]) != ctape::kind_object) continue;
+        uint64_t count = 0;
+        size_t end = ctape::low(words_[object]);
+        for (size_t key = object + 2; key < end; ++count) {
+          std::string_view text = text_of(key);
+          uint32_t hash = myna_value_hash(reinterpret_cast<const uint8_t*>(text.data()), text.size());
+          pending(uint64_t(hash) << 32 | (key - object));
+          size_t value = ctape::step(key, words_[key]);
+          key = ctape::after(value, words_[value]);
+        }
+        close_directory(object, count);
+      }
+    } catch (...) {
+      // A failed retain leaves the original borrowed tape valid and retryable.
+      for (size_t i = 0; i < words_.size(); i = ctape::step(i, words_[i]))
+        if (ctape::kind(words_[i]) == ctape::kind_object) words_[i + 1] &= UINT32_MAX;
+      pending_.truncate(0); directory_.truncate(0); directories_ = false; shapes_ = cache;
+      throw;
+    }
+    shapes_ = cache;
+  }
+
   // The descriptor (no meta: a producer with a meta table sets meta, meta_count and HAS_META).
   td_tape_view view() const {
     if (words_.size() == 0) misuse("empty compact tape");
-    return {TD_TAPE_VIEW_VERSION, nonfinite_ ? TD_TAPE_NONFINITE : 0u, words_.data(), words_.size(),
+    return {TD_TAPE_VIEW_VERSION, (nonfinite_ ? TD_TAPE_NONFINITE : 0u) | (directories_ ? 0u : TD_TAPE_NO_DIRECTORIES), words_.data(), words_.size(),
             pool_.data(), pool_.size(), input_, input_bytes_, directory_.data(), directory_.size(), nullptr, 0};
   }
 };

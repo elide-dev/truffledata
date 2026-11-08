@@ -35,7 +35,7 @@ template<class Decoder> double measure(const std::string& input, bool cached, si
   }
   return best;
 }
-template<class Writer> double structural(const std::string& input, size_t reps) {
+template<class Writer> double structural(const std::string& input, size_t reps, bool directories = true) {
   simdjson::padded_string padded(input);
   json::stage1_index parser;
   tape::index_memory memory(SIZE_MAX, std::pmr::new_delete_resource());
@@ -44,6 +44,7 @@ template<class Writer> double structural(const std::string& input, size_t reps) 
   Writer writer(&arena, {});
   auto once = [&] {
     writer.clear(); writer.shapes(&cache); writer.input({padded.data(), padded.size()});
+    if constexpr (Writer::retains_values) writer.directories(directories);
     parser.run(reinterpret_cast<const uint8_t*>(padded.data()), padded.size());
     writer.reserve_structural(parser.size(), padded.size());
     json::stage2_walk<Writer> walk(reinterpret_cast<const uint8_t*>(padded.data()), padded.size(), parser.indexes(), parser.size(), writer);
@@ -70,8 +71,10 @@ int main() {
     size_t reps = std::max<size_t>(5, 20000000 / input.size());
     double baseline = measure<json_baseline::tape_decoder<tape::ctape_writer>>(input, false, reps);
     double cached = structural<tape::structural_writer>(input, reps);
+    double no_directories = structural<tape::structural_writer>(input, reps, false);
     double validate_base = measure<json_baseline::tape_decoder<json_baseline::null_writer>>(input, false, reps);
     double validate_cached = structural<json::structural_null_writer>(input, reps);
+    std::printf("%zu bytes no-directories %.0fns directory-speedup %.3f\n", input.size(), no_directories, cached/no_directories);
     std::printf("%zu bytes baseline %.0fns cached %.0fns ratio %.3f validate-baseline %.0fns cached %.0fns ratio %.3f\n",
         input.size(), baseline, cached, baseline/cached, validate_base, validate_cached, validate_base/validate_cached);
   }

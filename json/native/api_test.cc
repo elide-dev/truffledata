@@ -571,18 +571,28 @@ void compact_sessions() {
   require(run(first, borrowed) == TD_JSON_OK);
   require(!borrowed.owner && borrowed.view);
   const td_tape_view& view = tape_of(borrowed);
-  require(view.version == TD_TAPE_VIEW_VERSION && c::validate(view) == nullptr && view.directory_count == 3);
+  require(view.version == TD_TAPE_VIEW_VERSION && c::validate(view) == nullptr && view.directory_count == 0
+          && (view.flags & TD_TAPE_NO_DIRECTORIES));
   require(view.input_bytes == first.size() && borrowed.copied_input_bytes == first.size());
   require(word_text(borrowed, 3) == "first document text beyond inline");
   require(word_text(borrowed, 8) == "\xc3\xa9t\xc3\xa9" && (view.words[8] & c::owned_flag));
   // The number word's span is its token in the retained input.
   require(c::kind(view.words[5]) == c::kind_i64
           && std::string(c::text_at(view.input, c::low(view.words[5]), c::field(view.words[5]))) == "1");
+  JsonResult unindexed{};
+  require(td_json_result_myna(&borrowed, &unindexed) == TD_JSON_OK);
+  const auto* plain_myna = static_cast<const myna_value_view_v4*>(unindexed.view);
+  require(plain_myna->directory_count == 0 && plain_myna->base.nodes[0].payload == 0);
+  td_json_release(&unindexed);
   td_json_release(&borrowed);  // a borrowed result: harmless no-op
+  require(run(first, borrowed, TD_JSON_WANT_DIRECTORIES) == TD_JSON_OK);
+  require(tape_of(borrowed).directory_count == 3 && !(tape_of(borrowed).flags & TD_TAPE_NO_DIRECTORIES));
+  td_json_release(&borrowed);
   require(run(first, borrowed) == TD_JSON_OK);
   // Retain moves storage: the retained descriptor points at the very same words.
   require(td_json_session_retain(s, &kept) == TD_JSON_OK);
   require(kept.owner && tape_of(kept).words == tape_of(borrowed).words);
+  require(tape_of(kept).directory_count == 3 && !(tape_of(kept).flags & TD_TAPE_NO_DIRECTORIES));
   require(td_json_session_retain(s, &kept) == TD_JSON_ARGUMENT);
   require(run(R"({"s":"second document overwrites session storage","n":2})", borrowed) == TD_JSON_OK);
   require(word_text(kept, 3) == "first document text beyond inline" && c::validate(tape_of(kept)) == nullptr);
@@ -645,7 +655,7 @@ void compact_sessions() {
   // td_json_result_myna: an owned Myna v4 copy (threshold-2 directories, its own input), equal to
   // the 0.8.0 decoder's tape at threshold 2, valid after the session moves on and is released.
   {
-    require(run(doc, borrowed) == TD_JSON_OK);
+    require(run(doc, borrowed, TD_JSON_WANT_DIRECTORIES) == TD_JSON_OK);
     JsonResult myna{};
     require(td_json_result_myna(&borrowed, &myna) == TD_JSON_OK);
     require(myna.owner && myna.view && myna.copied_input_bytes == doc.size());

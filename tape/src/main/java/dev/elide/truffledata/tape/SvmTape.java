@@ -13,7 +13,7 @@ public final class SvmTape implements TapeReader {
       input = WordFactory.nullPointer(), directory = WordFactory.nullPointer(), meta = WordFactory.nullPointer();
   public SvmTape(Pointer descriptor) { rebind(descriptor); }
   public void rebind(Pointer d) {
-    if (d.isNull() || (d.rawValue() & 7) != 0 || d.readInt(0) != 1 || (d.readInt(4) & ~11) != 0)
+    if (d.isNull() || (d.rawValue() & 7) != 0 || d.readInt(0) != 1 || (d.readInt(4) & ~15) != 0)
       throw new IllegalArgumentException("Invalid compact tape descriptor");
     long n = d.readLong(16), p = d.readLong(32), i = d.readLong(48), e = d.readLong(64), m = d.readLong(80);
     Pointer w = d.readWord(8), pb = d.readWord(24), ib = d.readWord(40), dir = d.readWord(56), mt = d.readWord(72);
@@ -57,7 +57,6 @@ public final class SvmTape implements TapeReader {
   @Override public long textWord(boolean owned, long offset, int length) {
     if (length == 0) return 0;
     long size = owned ? poolBytes : inputBytes;
-    if (offset < 0 || offset > size - length) throw new IndexOutOfBoundsException("Tape text");
     Pointer data = owned ? pool : input;
     if (!owned || offset <= size - 8) {
       long value = data.readLong(WordFactory.signed(offset));
@@ -68,7 +67,6 @@ public final class SvmTape implements TapeReader {
     return value;
   }
   @Override public long directoryEntry(long index) {
-    if (index < 0 || index >= directoryCount) throw new IndexOutOfBoundsException("Tape directory");
     return directory.readLong(WordFactory.signed(index * 8));
   }
   @Override public int metadata(long index) {

@@ -147,6 +147,7 @@ template<class Writer> class tape_decoder final {
   // The published descriptor (compact writer only).
   td_tape_view view() const { return writer_.view(); }
   const Writer& writer() const { return writer_; }
+  Writer& writer() { return writer_; }
 };
 
 // A one-shot compact document, used by td_json_decode, tests, and benchmarks. The

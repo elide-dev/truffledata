@@ -107,6 +107,7 @@ final class JvmSessionBackend extends JsonSession.Backend {
   /** One normal session_decode over native memory the caller keeps alive for the call. */
   void call(MemorySegment data, long length, int input) {
     int status;
+    input |= directoryFlag();
     try {
       if (length <= criticalLimit) {
         status = critical.session_decode_small(session, data, length, input, MemorySegment.NULL, 0L, result);

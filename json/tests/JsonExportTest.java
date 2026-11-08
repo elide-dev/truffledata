@@ -83,6 +83,27 @@ final class JsonExportTest {
     }
   }
 
+  @Test
+  void sinkAndReaderModesPreserveValuesAndRetainedDirectories() {
+    byte[] source = JvmScopedTest.utf8("{\"b\":1,\"a\":{\"x\":2,\"y\":3}}");
+    try (var session = JsonJvm.openSession(JvmScopedTest.library(), dev.elide.truffledata.json.JsonLimits.DEFAULT)) {
+      int[] observedKeys = {0};
+      session.parse(source, new Counting() {
+        @Override public void key(TapeText key) {
+          assertFalse(key.view().stringValue().isEmpty());
+          observedKeys[0]++;
+        }
+      });
+      assertEquals(4, observedKeys[0]);
+      long value = session.with(source, root -> root.member("a").member("y").longValue());
+      assertEquals(3L, value);
+      try (var retained = session.decode(source)) {
+        assertEquals(2, retained.directories());
+        assertEquals(2, retained.root().member("a").member("x").longValue());
+      }
+    }
+  }
+
   /** Counts events without materializing anything. */
   private static class Counting implements TapeSink {
     long keys, values, begins, ends;

@@ -211,7 +211,7 @@ using json_session = truffledata::json::session;
 // The 4 KiB bound of the leaf decode: at the probe's ≈ 150 MB/s worst case this is ≈ 30 µs.
 constexpr uint64_t critical_limit = TD_JSON_CRITICAL_LIMIT;
 
-constexpr uint32_t known_flags = TD_JSON_WANT_TEXT | TD_JSON_UTF16_INPUT | TD_JSON_LATIN1_INPUT | TD_JSON_VALIDATE_ONLY;
+constexpr uint32_t known_flags = TD_JSON_WANT_TEXT | TD_JSON_UTF16_INPUT | TD_JSON_LATIN1_INPUT | TD_JSON_VALIDATE_ONLY | TD_JSON_WANT_DIRECTORIES;
 
 // Borrowed: no owner, so td_json_release never frees session storage. Documents publish their
 // compact descriptor; a validate-only decode publishes no view.
@@ -243,7 +243,7 @@ int32_t session_decode(json_session& s, const uint8_t* data, uint64_t length, ui
                       utf16    ? json_session::encoding::utf16le
                       : latin1 ? json_session::encoding::latin1
                                : json_session::encoding::utf8,
-                      validate_only);
+                      validate_only, bool(flags & TD_JSON_WANT_DIRECTORIES));
     const uint64_t* table = nullptr;
     size_t text_bytes = 0;
     if (text) {

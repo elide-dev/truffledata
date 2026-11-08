@@ -44,6 +44,9 @@ public abstract class TapeSession<M extends TapeOwner> implements AutoCloseable 
   public abstract static class Backend<M extends TapeOwner> {
     protected Backend() {}
 
+    /** Whether the next decode will be read by member name; formats may omit optional indexes. */
+    protected void directories(boolean enabled) {}
+
     /**
      * Decodes {@code length} bytes at {@code offset} into the session ({@code encoding}: {@link
      * #UTF8}, {@link #UTF16} or {@link #LATIN1}), and its text arena into {@code text} when given.
@@ -167,13 +170,14 @@ public abstract class TapeSession<M extends TapeOwner> implements AutoCloseable 
 
   /** Decodes into the session; the borrowed result is valid until the next session call. */
   private Backend<M> decodeInto(
-      byte[] data, int offset, int length, int encoding, @Nullable TapeTextArena shared) {
+      byte[] data, int offset, int length, int encoding, @Nullable TapeTextArena shared, boolean directories) {
     Backend<M> open = check();
     Objects.checkFromIndexSize(offset, length, data.length);
     if (length == 0 && !allowsEmptyInput()) throw new IllegalArgumentException("Empty " + format + " input");
     // UTF-16 input is at least half as long in UTF-8; the native side checks the exact length.
     if (length > (encoding == UTF16 ? 2L : 1L) * maxInputBytes)
       throw new IllegalArgumentException(format + " input limit");
+    open.directories(directories);
     open.decode(data, offset, length, encoding, shared);
     return open;
   }
@@ -329,7 +333,7 @@ public abstract class TapeSession<M extends TapeOwner> implements AutoCloseable 
     Objects.requireNonNull(sink);
     Objects.checkFromIndexSize(offset, length, data.length);
     TapeTextArena shared = sink.sharedText() ? textArena(length) : null;
-    export(decodeInto(data, offset, length, encoding, shared), shared, sink);
+    export(decodeInto(data, offset, length, encoding, shared, false), shared, sink);
   }
 
   /**
@@ -346,6 +350,7 @@ public abstract class TapeSession<M extends TapeOwner> implements AutoCloseable 
     if (length > data.byteSize())
       throw new IllegalArgumentException(format + " length exceeds the segment");
     if (length > maxInputBytes) throw new IllegalArgumentException(format + " input limit");
+    open.directories(false);
     open.decode(data, length);
     export(open, null, sink);
   }
@@ -357,7 +362,7 @@ public abstract class TapeSession<M extends TapeOwner> implements AutoCloseable 
   @TruffleBoundary
   public final <R> R with(byte[] utf8, Function<TapeValue, R> reader) {
     Objects.requireNonNull(reader);
-    Backend<M> open = decodeInto(utf8, 0, utf8.length, UTF8, null);
+    Backend<M> open = decodeInto(utf8, 0, utf8.length, UTF8, null, true);
     TapeBorrow lent = lend(open, null);
     try {
       return reader.apply(lent.root());
@@ -375,13 +380,13 @@ public abstract class TapeSession<M extends TapeOwner> implements AutoCloseable 
   /** Decodes {@code length} bytes at {@code offset} into an independently owned message. */
   @TruffleBoundary
   public final M decode(byte[] utf8, int offset, int length) {
-    return decodeInto(utf8, offset, length, UTF8, null).retain();
+    return decodeInto(utf8, offset, length, UTF8, null, true).retain();
   }
 
   /** Validates {@code utf8} under the session's limits and retains nothing. */
   @TruffleBoundary
   public final void validate(byte[] utf8) {
-    decodeInto(utf8, 0, utf8.length, UTF8, null).reset();
+    decodeInto(utf8, 0, utf8.length, UTF8, null, false).reset();
   }
 
   /** Diagnostic: decodes that took the JVM's bounded critical path; 0 on SVM. */

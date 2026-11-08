@@ -17,6 +17,7 @@ public interface TapeReader extends TapeLexical {
   long directorySize();
   int flags();
 
+  /** Raw storage hooks: callers supply validated node/directory offsets and text extents. */
   long readWord(long index);
   default long word(long index) {
     if (index < 0 || index >= nodeCount()) throw new IndexOutOfBoundsException("Tape word");
@@ -103,8 +104,9 @@ public interface TapeReader extends TapeLexical {
     // rank and key identity can vary here; raw storage loads retain their array checks on heap.
     long entry = directoryEntry(start - 1 + rank);
     long k = object + (entry >>> 32);
-    if ((int) entry != key.hash) return -1;
     long kw = readWord(k);
+    // The complete decoded bytes below verify identity; the stored hash is redundant for a
+    // rank hint (it still selects the binary-search range on a miss).
     // Hints cover clean single-word keys only. Escaped keys use the checked miss path;
     // this keeps the hot path to the directory, key header and one or two input loads.
     long header = (7L << 28) | (KEY >>> 32) | key.length;

@@ -40,7 +40,6 @@ class SvmJsonMessage extends JsonMessage implements TapeReader {
   @Override public long textWord(boolean owned, long offset, int length) {
     if (length == 0) return 0;
     long size = owned ? poolSize() : inputSize();
-    if (offset < 0 || offset > size - length) throw new IndexOutOfBoundsException("Tape text");
     Pointer data = owned ? pool : input;
     if (!owned || offset <= size - 8) {
       long value = data.readLong(WordFactory.signed(offset));
@@ -51,7 +50,6 @@ class SvmJsonMessage extends JsonMessage implements TapeReader {
     return value;
   }
   @Override public long directoryEntry(long index) {
-    if (index < 0 || index >= directorySize()) throw new IndexOutOfBoundsException("Tape directory");
     return directory.readLong(WordFactory.signed(index * 8));
   }
   @Override public int metadata(long index) {

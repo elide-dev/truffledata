@@ -7,7 +7,9 @@ import subprocess
 import sys
 
 process = subprocess.run(
-    [sys.argv[1], '-Dpolyglot.compiler.TraceMethodExpansion=truffleTier', '--smoke'],
+    [sys.argv[1], '-Dpolyglot.compiler.TraceMethodExpansion=truffleTier']
+    + (['-Dpolyglot.compiler.NodeSourcePositions=true']
+       if os.environ.get('TRUFFLEDATA_JSON_TRACE_POSITIONS') == '1' else []) + ['--smoke'],
     capture_output=True, text=True)
 print(process.stdout, end='')
 print(process.stderr, end='', file=sys.stderr)

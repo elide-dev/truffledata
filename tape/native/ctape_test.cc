@@ -693,10 +693,11 @@ void allocation_failure_at_every_growth() {
 // Build through the decoded-key API with optional cache. Separate writers and arenas ensure
 // templates cannot accidentally retain prior document pointers.
 struct shape_document { std::vector<uint64_t> words, directory; std::vector<uint8_t> pool; };
-shape_document write_shape(const std::vector<std::string>& keys, key_shape_cache* cache, bool wide = false, unsigned depth = 0) {
+shape_document write_shape(const std::vector<std::string>& keys, key_shape_cache* cache, bool wide = false, unsigned depth = 0, bool directories = true, bool retain = false) {
   std::pmr::monotonic_buffer_resource memory;
   ctape_writer writer(&memory, {});
   writer.input({});
+  writer.directories(directories);
   writer.shapes(cache);
   std::vector<size_t> arrays;
   for (unsigned d = 0; d < depth; ++d) arrays.push_back(writer.begin(c::kind_array, d));
@@ -713,8 +714,11 @@ shape_document write_shape(const std::vector<std::string>& keys, key_shape_cache
   }
   writer.end(object, keys.size());
   for (size_t i = arrays.size(); i > 0; --i) writer.end(arrays[i - 1], 1);
+  if (retain) writer.build_directories();
   auto view = writer.view();
   require(c::validate(view) == nullptr);
+  require(bool(view.flags & TD_TAPE_NO_DIRECTORIES) == (!directories && !retain));
+  if (!directories && !retain) require(view.directory_count == 0);
   return {{view.words, view.words + view.word_count}, {view.directory, view.directory + view.directory_count},
           {view.pool, view.pool + view.pool_bytes}};
 }
@@ -747,6 +751,45 @@ void shape_cache_rejects_duplicates() {
   require(throws_as<c::duplicate_key>([&] { write_shape({"a", "a"}, &cache, false, 32); }));
 }
 
+void directoryless_shapes_still_check_duplicates() {
+  key_shape_cache cache;
+  for (unsigned count : {2u, 3u, 24u, 32u, 33u, 100u}) {
+    std::vector<std::string> keys;
+    for (unsigned i = 0; i < count; ++i) keys.push_back("field" + std::to_string(i));
+    for (unsigned round = 0; round < 3; ++round) {
+      write_shape(keys, &cache, round % 2, 0, false);
+      auto retained = write_shape(keys, &cache, round % 2, 0, false, true);
+      auto normal = write_shape(keys, nullptr, round % 2);
+      require(retained.words == normal.words && retained.directory == normal.directory && retained.pool == normal.pool);
+      for (unsigned duplicate = 0; duplicate < count; ++duplicate) {
+        auto bad = keys; bad.insert(bad.begin() + duplicate, keys.back());
+        require(throws_as<c::duplicate_key>([&] { write_shape(bad, &cache, false, 0, false); }));
+      }
+      std::reverse(keys.begin(), keys.end());
+    }
+  }
+  // Directory construction can fail after a borrowed document succeeded. Roll back every
+  // partially published object pointer and permit a retry on the same live words.
+  fault_memory memory(SIZE_MAX);
+  block_arena arena(&memory);
+  block_arena::storage original;
+  ctape_writer writer(&arena, {});
+  writer.directories(false); writer.input({});
+  size_t root = writer.begin(c::kind_object, 0);
+  for (std::string key : {"first", "second"}) {
+    writer.key_text(root, reinterpret_cast<const uint8_t*>(key.data()), key.size());
+    writer.string(key, {}, true, true); writer.null();
+  }
+  writer.end(root, 2);
+  arena.detach(original, &memory);  // keep original words live; directories need a fresh block
+  memory.fail_at = memory.calls;
+  require(throws_as<std::bad_alloc>([&] { writer.build_directories(); }));
+  require(c::validate(writer.view()) == nullptr && writer.view().directory_count == 0);
+  memory.fail_at = SIZE_MAX;
+  writer.build_directories();
+  require(c::validate(writer.view()) == nullptr && writer.view().directory_count == 2);
+}
+
 void permuted_directories_match_sorted() {
   key_shape_cache cache;
   std::vector<std::string> keys;
@@ -764,6 +807,7 @@ void permuted_directories_match_sorted() {
 int main() {
   struct test { const char* name; void (*run)(); };
   const test tests[] = {
+      {"directoryless_shapes_still_check_duplicates", directoryless_shapes_still_check_duplicates},
       {"shape_cache_rejects_duplicates", shape_cache_rejects_duplicates},
       {"permuted_directories_match_sorted", permuted_directories_match_sorted},
       {"words_follow_the_layout", words_follow_the_layout},

@@ -112,6 +112,7 @@ private:
         arena_.hint(hint.block);
         auto& decoder = decoder_.emplace(&arena_, values_);
         decoder.shapes(&shapes_);
+        decoder.writer().directories(false);
         decoder.start(input, hint, walked);
         auto&& root = open();
         decoder.decode(root);
@@ -147,12 +148,13 @@ private:
     parser_.release_above(retained_input_limit);
   }
 
-  document_view walk_structural(size_t length, bool validate_only) {
+  document_view walk_structural(size_t length, bool validate_only, bool directories) {
     size_t before = memory_.allocations();
     try {
       parser_.run(reinterpret_cast<const uint8_t*>(input_), length);
       auto decode = [&](auto& writer) {
         writer.shapes(&shapes_);
+        if constexpr (std::decay_t<decltype(writer)>::retains_values) writer.directories(directories);
         writer.input({input_, length});
         writer.reserve_structural(parser_.size(), length);
         stage2_walk<std::decay_t<decltype(writer)>> walk(reinterpret_cast<const uint8_t*>(input_), length,
@@ -197,7 +199,7 @@ public:
   // transcoded; Latin-1 is transcoded (every byte is one code point). Limits apply to the UTF-8
   // length, which is what spans and the tape describe.
   enum class encoding { utf8, utf16le, latin1 };
-  document_view decode(const char* data, size_t bytes, encoding input = encoding::utf8, bool validate_only = false) {
+  document_view decode(const char* data, size_t bytes, encoding input = encoding::utf8, bool validate_only = false, bool directories = true) {
     recycle();
     size_t length = bytes;
     const char16_t* units = reinterpret_cast<const char16_t*>(data);
@@ -217,7 +219,7 @@ public:
     if (written != length) throw std::logic_error("JSON input transcoding");
     std::memset(input_ + length, 0, simdjson::SIMDJSON_PADDING);
     input_length_ = length;
-    return walk_structural(length, validate_only);
+    return walk_structural(length, validate_only, directories);
   }
 
   // Decodes one document of a stream (stream.h): `root` is the iterate_many document positioned on
@@ -266,6 +268,10 @@ public:
   // Moves the live document's blocks and input into a new owner, O(blocks), without copying.
   retained* retain() {
     if (!live_) throw std::logic_error("no JSON session document");
+    if (view_.flags & TD_TAPE_NO_DIRECTORIES) {
+      if (streamed_) { decoder_->writer().build_directories(); view_ = decoder_->view(); }
+      else { writer_->build_directories(); view_ = writer_->view(); }
+    }
     void* raw = upstream_->allocate(sizeof(retained), alignof(retained));
     tape::block_arena::storage storage;
     size_t bytes = arena_.detach(storage, upstream_);

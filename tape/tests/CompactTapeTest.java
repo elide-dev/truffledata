@@ -20,7 +20,9 @@ class CompactTapeTest {
     @Override public byte lexicalByte(long offset) { return tape.inputByte(offset); }
   }
 
-  private static Owner document() {
+  private static Owner document() { return document(true); }
+
+  private static Owner document(boolean directories) {
     byte[] input = "{\"n\":42,\"s\":\"\\u0041\"}".getBytes(StandardCharsets.UTF_8);
     long[] words = {
       w(9, TapeReader.WIDE, 2, 7), 1L << 32,
@@ -33,7 +35,22 @@ class CompactTapeTest {
     long n = (2L << 32) | Integer.toUnsignedLong(ValueTape.hashUtf8(new byte[]{'n'}));
     long s = (5L << 32) | Integer.toUnsignedLong(ValueTape.hashUtf8(new byte[]{'s'}));
     long[] dirs = Integer.compareUnsigned((int) n, (int) s) < 0 ? new long[]{n, s} : new long[]{s, n};
-    return new Owner(new HeapTape(words, new byte[]{'A'}, input, dirs, new int[0], 0));
+    if (!directories) words[1] = 0;
+    return new Owner(new HeapTape(words, new byte[]{'A'}, input, directories ? dirs : new long[0], new int[0], directories ? 0 : 4));
+  }
+
+  @Test void directorylessObjectsReadAndDetachThroughTheLinearPath() {
+    Owner owner = document(false);
+    assertEquals(0, owner.directories());
+    assertEquals(42, owner.root().member("n").longValue());
+    assertEquals("A", owner.root().member("s").stringValue());
+    assertThrows(java.util.NoSuchElementException.class, () -> owner.root().member("absent"));
+    TapeSnapshot snapshot = owner.snapshot();
+    assertEquals(0, snapshot.directories());
+    assertEquals(42, snapshot.root().member("n").longValue());
+    ValueTape myna = snapshot.toMyna();
+    myna.validate();
+    assertEquals("A", myna.stringValue(myna.find(0, ValueTape.Utf8Key.of("s"))));
   }
 
   @Test void cachedScalarAndArrayInteropChecksTheValueKind() throws Exception {

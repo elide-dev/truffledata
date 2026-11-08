@@ -3,14 +3,12 @@ package dev.elide.truffledata.tape;
 import static dev.elide.truffledata.tape.TapeReader.*;
 
 import dev.elide.myna.values.ValueTape;
-import java.lang.invoke.MethodHandles;
-import java.lang.invoke.VarHandle;
-import java.nio.ByteOrder;
+import com.oracle.truffle.api.memory.ByteArraySupport;
 import java.util.Arrays;
 
 /** Detached compact words, directories and only the input/pool ranges referenced by the subtree. */
 public final class HeapTape implements TapeReader {
-  private static final VarHandle WORD = MethodHandles.byteArrayViewVarHandle(long[].class, ByteOrder.LITTLE_ENDIAN);
+  private static final ByteArraySupport WORD = ByteArraySupport.littleEndian();
   private final long[] words, directory;
   private final byte[] pool, input;
   private final int[] meta;
@@ -32,7 +30,7 @@ public final class HeapTape implements TapeReader {
     // Every input has seven private padding bytes. A valid short key therefore needs one
     // word load even at the logical end; the mask excludes padding from comparison.
     if (!owned || at <= bytes.length - 8) {
-      long value = (long) WORD.get(bytes, at);
+      long value = WORD.getLong(bytes, at);
       return length == 8 ? value : value & (-1L >>> (64 - length * 8));
     }
     // A snapshot keeps exactly its referenced bytes. Its final short word has no padding;

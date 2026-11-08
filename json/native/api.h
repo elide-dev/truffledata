@@ -20,6 +20,8 @@ enum td_json_status {
 // session_decode flags.
 // TD_JSON_WANT_TEXT (Task D2): also write the document's text arena into text_out (see below).
 #define TD_JSON_WANT_TEXT 1u
+// Retained/member-read paths request lookup directories; sink-only borrows omit them.
+#define TD_JSON_WANT_DIRECTORIES 32u
 // TD_JSON_UTF16_INPUT (Task D3): `data` is UTF-16LE (`length` bytes, even; `data` 2-byte aligned),
 // validated and transcoded to UTF-8 natively; an unpaired surrogate is TD_JSON_SYNTAX. Limits,
 // lexical spans and copied_input_bytes refer to the UTF-8 form.

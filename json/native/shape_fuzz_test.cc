@@ -44,13 +44,14 @@ int main() {
     source += '}';
     std::sort(keys.begin(), keys.end());
     bool duplicate = std::adjacent_find(keys.begin(), keys.end()) != keys.end();
-    for (bool validate : {false, true}) {
+    for (int mode : {0, 1, 2}) {
+      bool validate = mode == 2, directories = mode == 0;
       int status = json::status_ok;
-      try { parser.decode(source.data(), source.size(), json::session::encoding::utf8, validate); }
+      try { parser.decode(source.data(), source.size(), json::session::encoding::utf8, validate, directories); }
       catch (...) { status = json::current_exception_status(); }
       if (status != (duplicate ? json::status_syntax : json::status_ok)) {
         std::fprintf(stderr, "shape fuzz mismatch at %zu mode=%d status=%d duplicate=%d: %s\n",
-                     iteration, validate, status, duplicate, source.c_str());
+                     iteration, mode, status, duplicate, source.c_str());
         return 1;
       }
       if (!duplicate && !validate && tape::ctape::validate(parser.view())) {
@@ -58,5 +59,5 @@ int main() {
       }
     }
   }
-  std::puts("1,000,000 generated key sequences agree with a sorted decoded-key oracle in retained and validate-only modes");
+  std::puts("1,000,000 generated key sequences agree with a sorted decoded-key oracle in indexed, directoryless and validate-only modes");
 }
