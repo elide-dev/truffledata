@@ -22,6 +22,34 @@ for nested typed JSON and owned CSV are applied to the old production baseline
 before recapturing images; candidates must use the same workload definitions.
 No push, CI dispatch, publication, or main-branch merge is authorized.
 
+### Execution checkpoint (qualification in progress)
+
+- CSV candidate `234304c` isolates all-STRING framing; regular and forced-index
+  JVM suites pass 121/121 each, native comparison smoke passes 162 cells, and
+  typed compiled reads retain zero invokes/allocation sites (`b7b8fae5`). Eight
+  paired SVM shards are running in `07bb26fb`; completed small-input cells show
+  modest/neutral results, not a step-change conclusion. Test-only `6992a00`
+  extends native acceptance to a large projected/owned string fixture.
+- Protobuf candidate `f045f5c`, evidence `f3f9a3f`, removes monitors from warm
+  handle-cache reads with acquire/release publication and synchronized misses.
+  All seven correctness/allocation/native smoke targets pass (`4097845d`),
+  including unchanged 168/136 B scalar floors and 48 B owner. Paired timing is
+  pending. Test-only `30e4b7f` plus `fadf9e4` adds shared JVM/SVM publication races.
+- JSON candidate checkpoint `a966cf2` is unqualified. The initial exact native
+  differential passed, but its array-heavy producer probes lost 1–4%; that
+  negative evidence is retained. The revised frame writer passes 155,647 exact
+  Arm64 ASan/UBSan cases and Cargo link/fingerprint checks. Revised pinned native,
+  JVM and six-shard SVM pairs (including flat/generic competitor controls) remain.
+- Parent test infrastructure `c5d237f` selects the pinned Linux Arm64 SDK for
+  existing format native acceptance targets; these new configurations are not
+  yet executed. Final integration requires nine-suite method coverage plus
+  native acceptance on both Linux ISAs; only x86 SVM timing claims are planned.
+
+Current queue: finish CSV pair, revised JSON native/JVM/build, protobuf full
+paired matrix, JSON pairs, then admission/integration and final common checks.
+No candidate production change is integrated at this checkpoint. Worker source,
+negative experiments, baselines and validation artifacts remain local.
+
 ## Restore and audit
 
 - Restore the exact B4 guard/bound-hook implementation and its API-specific tests.
