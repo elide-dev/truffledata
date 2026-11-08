@@ -169,6 +169,42 @@ final class YamlIntegrationTest {
   }
 
   @Test
+  void aliasFreeReadsKeepTagAnchorAndNumberSemantics() {
+    var export = dev.elide.truffledata.tape.TapeExportNode.create();
+    try (YamlSession session = YamlJvm.openSession(library())) {
+      for (String input : new String[] {"[&a !!int 0x1F]", "[&a !!int 0x1F, *a]"}) {
+        try (YamlMessage message = session.decode(SvmAcceptance.bytes(input))) {
+          var value = message.root().element(0);
+          assertEquals("31", value.numberText());
+          assertEquals("a", Yaml.anchor(value));
+          assertEquals("tag:yaml.org,2002:int", Yaml.tag(value));
+          var events = new java.util.ArrayList<String>();
+          TapeSink sink = new TapeSink() {
+            public void beginObject(long n) {}
+            public void key(TapeText t) {}
+            public void beginArray(long n) {}
+            public void end() {}
+            public void nullValue() {}
+            public void booleanValue(boolean b) {}
+            public void longValue(long n) { events.add("int:" + n); }
+            public void doubleValue(double n) {}
+            public void unsignedValue(long n) {}
+            public void decimalValue(TapeText t) {}
+            public void stringValue(TapeText t) {}
+            public void tag(TapeText t) { events.add("tag:" + t.toJavaString()); }
+            public void anchor(int id) { events.add("anchor:" + id); }
+          };
+          export.execute(message.root(), sink);
+          assertTrue(events.contains("tag:tag:yaml.org,2002:int"));
+          assertTrue(events.contains("anchor:0"));
+          assertTrue(events.contains("int:31"));
+          assertEquals("31", message.snapshot().root().element(0).numberText());
+        }
+      }
+    }
+  }
+
+  @Test
   void aliasArrayViewsKeepProvenance() throws Exception {
     try (YamlSession session = YamlJvm.openSession(library());
         YamlMessage message = session.decode(SvmAcceptance.bytes("[&a 42, *a, *a]"))) {

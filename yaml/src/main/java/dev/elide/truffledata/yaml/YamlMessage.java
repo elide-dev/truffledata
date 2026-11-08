@@ -10,17 +10,41 @@ import dev.elide.truffledata.tape.TapeOwner;
 import org.jspecify.annotations.Nullable;
 
 /** Owned YAML document. Every derived view is invalidated when the message closes. */
-public final class YamlMessage extends TapeOwner implements AutoCloseable {
+public class YamlMessage extends TapeOwner implements AutoCloseable {
   interface Storage extends TapeLexical, Runnable {}
 
   private final Storage storage;
   private final YamlMetadata metadata;
   private @Nullable Assumption alive;
 
-  YamlMessage(TapeReader tape, Storage storage, YamlMetadata metadata) {
+  private YamlMessage(TapeReader tape, Storage storage, YamlMetadata metadata) {
     super(tape, Thread.currentThread());
     this.storage = storage;
     this.metadata = metadata;
+  }
+
+  // A class-constant absence of references keeps fresh child views scalar-replaceable.
+  // Tags, anchors, styles and YAML numeric spelling still live in the full format metadata.
+  @Override
+  protected boolean aliases() {
+    return true;
+  }
+
+  private static final class Plain extends YamlMessage {
+    Plain(TapeReader tape, Storage storage, YamlMetadata metadata) {
+      super(tape, storage, metadata);
+    }
+
+    @Override
+    protected boolean aliases() {
+      return false;
+    }
+  }
+
+  static YamlMessage create(TapeReader tape, Storage storage, YamlMetadata metadata) {
+    for (int word : metadata.words)
+      if ((word & 16) != 0) return new YamlMessage(tape, storage, metadata);
+    return new Plain(tape, storage, metadata);
   }
 
   @Override

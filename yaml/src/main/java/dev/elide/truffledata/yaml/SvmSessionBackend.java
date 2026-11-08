@@ -228,7 +228,7 @@ final class SvmSessionBackend extends YamlSession.Backend {
     try {
       YamlSvm.checkStatus(Yaml.session_retain(session, owned));
       SvmTape tape = tape(owned);
-      return new YamlMessage(
+      return YamlMessage.create(
           tape,
           new Storage(tape, owned) {
             @Override

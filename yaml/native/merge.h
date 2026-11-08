@@ -62,7 +62,6 @@ inline void handler::apply_merge(frame& f) {
     return i >= start && i < end ? s->nodes[i - start] : writer_->words()[i];
   };
   auto meta_at = [&](size_t i) { return i >= start && i < end ? s->meta[i - start] : meta_[i]; };
-  auto lexical_at = [&](size_t i) { return i >= start && i < end ? raw_span(s->nodes, i - start) : raw_span(writer_->words(), i); };
   auto next_at = [&](size_t i) { return ct::after(i, node_at(i)); };
   restore_truncate(start);
 
@@ -103,7 +102,7 @@ inline void handler::apply_merge(frame& f) {
           size_t at = writer_->word_count();
           uint64_t key[2] = {key_word, ct::is_wide(key_word) ? node_at(kj + 1) : 0};
           writer_->append(key, ct::is_wide(key_word) ? 2 : 1, int64_t(at) - int64_t(kj));
-          side(lexical_at(kj), tape::key_meta(hash, at - map, plain), meta_at(kj) & ~meta_anchored);
+          side(at, meta_at(kj) & ~meta_anchored);
           if (src.inline_map) {
             move(vj, after_value);
           } else {
@@ -112,7 +111,7 @@ inline void handler::apply_merge(frame& f) {
               throw limit_error("aliases");
             uint32_t ordinal = add_alias_target(target);
             writer_->ref(target);
-            side(0, 0, meta_alias | (ordinal << meta_tag_shift));
+            side(writer_->word_count() - 1, meta_alias | (ordinal << meta_tag_shift));
           }
           ++entries;
         }

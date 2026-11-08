@@ -80,6 +80,7 @@ class PolicyTest {
             // folded into TapeOwner.find behind the miss boundary (V1: 26 -> 25).
             Map.entry("TapeValue.java", 26),
             Map.entry("TapeBorrow.java", 1), // Borrowed-result assumption.
+            Map.entry("TapeExportNode.java", 1), // Cold fallback for heterogeneous export owners.
             // Key preparation from a String or from Myna's prepared Utf8Key (V1: 1 -> 2).
             Map.entry("TapeKey.java", 2),
             Map.entry(

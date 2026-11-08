@@ -74,7 +74,7 @@ public abstract class TapeOwner {
   /** The format that produced this owner's tape: its name for messages and any alias tables. */
   public abstract TapeFormat format();
 
-  /** Whether this owner can expose format aliases; immutable/plain variants make it constant. */
+  /** Whether reads need reference provenance; immutable/plain variants make it constant. */
   protected boolean aliases() { return format().hasAliases(); }
 
   /**
@@ -229,7 +229,7 @@ public abstract class TapeOwner {
   @TruffleBoundary
   final String numberText(long node) {
     check();
-    if (!aliases()) return lexicalText(node);
+    if (!format().hasAliases()) return lexicalText(node);
     // Preserve exact decimal digits when the input already has JSON grammar. YAML-specific
     // spellings normalize without rounding through binary64; radix/sexagesimal forms use bits.
     String spelling = lexicalText(node).replace("_", "");

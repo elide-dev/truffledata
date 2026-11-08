@@ -48,7 +48,7 @@ public final class TapeExportNode extends Node {
     int depth;
     if (owner.getClass() == ownerType && owner.tape.getClass() == readerType) {
       TapeOwner exact = CompilerDirectives.castExact(owner, ownerType);
-      depth = exact.aliases() == aliases
+      depth = exact.format().hasAliases() == aliases
           ? walk(exact, CompilerDirectives.castExact(owner.tape, readerType), value.node(), sink, aliases)
           : generic(owner, value.node(), sink);
     } else {

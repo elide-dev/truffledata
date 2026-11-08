@@ -1,0 +1,39 @@
+pass 1 of 3
+variant                      fixture                   bytes        best ns       MB/s
+memcpy                       records-block.yaml       242028           4900    49391.9
+ryml-ints(scan)              records-block.yaml       242028         582101      415.8
+ryml-tree                    records-block.yaml       242028         716373      337.9
+libyaml(scan)                records-block.yaml       242028        2942859       82.2
+td-session(decode+reset)     records-block.yaml       242028         821141      294.7
+td-session(retain+release)   records-block.yaml       242028         817097      296.2
+pass 1 gate: records-block td-session(decode+reset) / ryml-ints(scan) = 0.709
+
+pass 2 of 3
+variant                      fixture                   bytes        best ns       MB/s
+memcpy                       records-block.yaml       242028           2450    98778.6
+ryml-ints(scan)              records-block.yaml       242028         583124      415.1
+ryml-tree                    records-block.yaml       242028         712996      339.5
+libyaml(scan)                records-block.yaml       242028        2818968       85.9
+td-session(decode+reset)     records-block.yaml       242028         821090      294.8
+td-session(retain+release)   records-block.yaml       242028         817591      296.0
+pass 2 gate: records-block td-session(decode+reset) / ryml-ints(scan) = 0.710
+
+pass 3 of 3
+variant                      fixture                   bytes        best ns       MB/s
+memcpy                       records-block.yaml       242028           2474    97815.4
+ryml-ints(scan)              records-block.yaml       242028         586390      412.7
+ryml-tree                    records-block.yaml       242028         720822      335.8
+libyaml(scan)                records-block.yaml       242028        2821516       85.8
+td-session(decode+reset)     records-block.yaml       242028         821274      294.7
+td-session(retain+release)   records-block.yaml       242028         818418      295.7
+pass 3 gate: records-block td-session(decode+reset) / ryml-ints(scan) = 0.714
+
+best over 3 passes
+variant                      fixture                   bytes        best ns       MB/s    /ints    /tree /libyaml
+ryml-ints(scan)              records-block.yaml       242028         582101      415.8    1.000    1.225    4.843
+ryml-tree                    records-block.yaml       242028         712996      339.5    0.816    1.000    3.954
+libyaml(scan)                records-block.yaml       242028        2818968       85.9    0.206    0.253    1.000
+td-session(decode+reset)     records-block.yaml       242028         821090      294.8    0.709    0.868    3.433
+td-session(retain+release)   records-block.yaml       242028         817097      296.2    0.712    0.873    3.450
+acceptance: records-block td-session(decode+reset) / ryml-ints(scan) = 0.709 (best times over 3 passes; per pass min 0.709, median 0.710, max 0.714) (hypothesis >= 0.8): MISSED
+compact floor 0.715: FAIL

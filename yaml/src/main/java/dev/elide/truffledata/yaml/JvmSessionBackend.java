@@ -225,7 +225,7 @@ final class JvmSessionBackend extends YamlSession.Backend {
           ResultMetadata.read(
               MEMORY, owned.address(), tape.nodeCount(), options.limits().maxAliasExpansion());
       YamlMessage message =
-          new YamlMessage(
+          YamlMessage.create(
               tape,
               new Storage(tape, owned) {
                 @Override
