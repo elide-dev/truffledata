@@ -52,20 +52,6 @@ import typedReuse symbol=td_buffa_typed_reuse return=i32 error=no_failure native
   param max_native_bytes type=u64
   param result type=ptr<void> nullable=false ownership=borrowed access=read_write
 end
-struct Scalars size=24 align=8
-  field first type=u64 offset=0
-  field second type=u64 offset=8
-  field present type=u64 offset=16
-end
-import scalars symbol=td_buffa_scalars return=i32 error=no_failure native_leaf=false@explicit_contract
-  param schema type=ptr<u8> nullable=false ownership=borrowed access=read
-  param schema_length type=u64
-  param data type=ptr<u8> nullable=false ownership=borrowed access=read
-  param length type=u64
-  param max_cells type=u64
-  param max_depth type=u32
-  param result type=ptr<void> nullable=false ownership=borrowed access=write
-end
 import utf8_to_utf16 symbol=td_buffa_utf8_to_utf16 return=i64 error=no_failure native_leaf=false@explicit_contract
   param data type=ptr<u8> nullable=false ownership=borrowed access=read
   param length type=u64

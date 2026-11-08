@@ -200,3 +200,9 @@ raw logs are in benchmarks/results/protobuf-java-retirement-local/. The ten orch
 pass, including baseline mode selection and projection/input accounting checks. No E1 performance
 claim follows from these short qualification runs. Final Linux JVM/SVM, coverage and paired
 three-fork sparse-resident/holdout gates remain pending.
+
+### Native ABI 11 scalar retirement and raw unknown queries
+
+The final G1 seam also removes the obsolete `Scalars` result and `td_buffa_scalars` export. All 42 remaining native tests pass with ASan/leak detection; the scalar-only test is removed with that implementation. The final fingerprint is `5bd597bd050e2bf8bc22a54529dbfa28be83491afb14ab03d3a9a2c2e2a01e52`; refreshed symbols, descriptor policy and raw evidence accompany the native retirement record. Obsolete view-only CI/publication target aliases are removed after their coverage moved to the default slab path.
+
+Issue #35 adds allocation-free `hasUnknownFields()` and `unknownFieldByteCount()` to immutable, generated, owning slab and borrowed slab rows. Counts describe retained raw bytes, including empty unknown groups, independently of semantic equality. Borrowed queries retain epoch checks. Local compiled probes cover all four representations, allocation bounds and reset rejection; integrated JVM/Native Image verification is running in invocation `dab2dbc5-ae9d-4a8e-b29c-5d43be2cadc3`.

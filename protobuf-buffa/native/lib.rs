@@ -346,56 +346,6 @@ unsafe fn typed_impl(
 }
 
 /// # Safety
-/// Schema/input must be valid immutable regions; result must be a disjoint, aligned
-/// writable Scalars region. No returned value owns native memory; never call release on it.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn td_buffa_scalars(
-    schema: *const u8,
-    schema_length: u64,
-    data: *const u8,
-    length: u64,
-    max_cells: u64,
-    max_depth: u32,
-    result: *mut std::ffi::c_void,
-) -> i32 {
-    if result.is_null() {
-        return MALFORMED;
-    }
-    let result = result.cast::<seam::Scalars>();
-    unsafe {
-        result.write(seam::Scalars {
-            first: 0,
-            second: 0,
-            present: 0,
-        });
-    }
-    if schema.is_null()
-        || data.is_null()
-        || schema_length > i32::MAX as u64
-        || length > i32::MAX as u64
-    {
-        return MALFORMED;
-    }
-    match catch_unwind(AssertUnwindSafe(|| unsafe {
-        typed::scalars(
-            slice::from_raw_parts(schema, schema_length as usize),
-            slice::from_raw_parts(data, length as usize),
-            max_cells,
-            max_depth,
-        )
-    })) {
-        Ok(Ok(value)) => {
-            unsafe {
-                result.write(value);
-            }
-            0
-        }
-        Ok(Err(code)) => code,
-        Err(_) => PANIC,
-    }
-}
-
-/// # Safety
 /// result is a live, aligned result of td_buffa_decode, released exactly once.
 /// Its fields must not have been modified. Zero/error results may also be released.
 #[unsafe(no_mangle)]

@@ -18,7 +18,7 @@ def verify(descriptor, archive):
                              "stream_create", "stream_feed", "stream_finish", "stream_next", "stream_skip",
                              "stream_truncated_bytes", "stream_release", "result_myna"},
         # ABI 11 retires view imports; layout-compiled slabs and typed text indexes remain.
-        "truffledata_buffa": {"fingerprint", "decode", "release", "typed", "typedReuse", "scalars", "utf8_to_utf16",
+        "truffledata_buffa": {"fingerprint", "decode", "release", "typed", "typedReuse", "utf8_to_utf16",
                               "compileLayout", "releaseLayout", "decodeSlab", "decodeSlabSmall"},
         "truffledata_yaml": {"fingerprint", "release", "session_create", "session_decode", "session_retain",
                              "session_write_text", "plan_create", "plan_release", "typed_decode", "typed_release",
