@@ -685,10 +685,9 @@ unsafe fn decode_slab_impl(
     if small && (length > slab::SMALL_LIMIT || capacity > slab::SMALL_LIMIT) {
         return BUDGET;
     }
-    // Projection is Phase E (Task E1); until then only a null projection is defined.
+    // A projection is an aligned TDP1 buffer matching this compiled layout.
     if compiled.is_null()
         || data.is_null()
-        || !projection.is_null()
         || length > i32::MAX as u64
         || capacity > isize::MAX as u64
         || (out.is_null() && capacity != 0)
@@ -698,10 +697,14 @@ unsafe fn decode_slab_impl(
     let mut error_at = 0usize;
     let outcome = catch_unwind(AssertUnwindSafe(|| {
         let compiled = unsafe { &*compiled.cast::<slab::Compiled>() }.checked()?;
-        slab::decode(
+        let projection = if projection.is_null() { None } else {
+            Some(unsafe { slab::Projection::from_raw(compiled, projection) }?)
+        };
+        slab::decode_projected(
             compiled,
             unsafe { slice::from_raw_parts(data, length as usize) },
             flags,
+            projection,
             out,
             capacity as usize,
             max_depth,
@@ -740,13 +743,18 @@ unsafe fn decode_slab_impl(
 /// ABI 10: decode one protobuf message into a slab (docs/SLAB.md) written to `out[..capacity]`.
 /// Returns 0 with `result.bytes` the slab length, `NEEDS_CAPACITY` with the exact length when it
 /// did not fit (or under `SIZING_ONLY`), or an error status with `result.error` the input offset
-/// of the rejecting field (of the string payload for invalid UTF-8). Flags: `OWNING = 1`
-/// (required), `LAX = 2` (rejected until Phase E), `SIZING_ONLY = 4`.
+/// of the rejecting field (of the string payload for invalid UTF-8). Flags: exactly one of
+/// `OWNING = 1` or `BORROWING = 8`, plus optional `LAX = 2` and `SIZING_ONLY = 4`.
+/// A non-null projection is the matching immutable TDP1 mask; LAX must match its header.
+/// Borrowing permits lazy children and external byte payloads; the caller retains immutable
+/// input until every consumer of the resulting slab is closed or has copied those payloads.
 ///
 /// # Safety
 /// compiled is a live handle from td_buffa_compile_layout; data a live immutable region of
 /// `length` bytes; out null (capacity 0) or `capacity` writable bytes disjoint from every other
-/// region; result an aligned, writable seam::SlabResult. No callback.
+/// region; result an aligned, writable seam::SlabResult. A non-null projection points to a
+/// 4-byte-aligned readable 24-byte TDP1 header and its declared complete mask extent, disjoint
+/// from output. Borrowed slabs retain input offsets, never raw input addresses. No callback.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn td_buffa_decode_slab(
     compiled: *const u8,

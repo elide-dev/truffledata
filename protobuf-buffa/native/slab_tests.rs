@@ -1741,3 +1741,203 @@ fn failure_injection_leaks_nothing() {
         });
     }
 }
+
+// ---- Parse-time projection and explicit input borrowing ----
+fn projection_program(c: &Compiled, wanted: &[&[usize]], flags: u32, borrow: u32) -> Vec<u8> {
+    assert_eq!(wanted.len(), c.types.len());
+    let mut words = vec![Projection::MAGIC, 0, c.fingerprint, flags, wanted.len() as u32, borrow];
+    for (ty, ordinals) in c.types.iter().zip(wanted) {
+        words.push(ty.fields.len() as u32);
+        let start = words.len();
+        words.resize(start + ty.fields.len().div_ceil(32), 0);
+        for &ordinal in ordinals.iter() { words[start + ordinal / 32] |= 1 << (ordinal % 32); }
+    }
+    words[1] = (words.len() * 4) as u32;
+    words.into_iter().flat_map(u32::to_le_bytes).collect()
+}
+
+fn projected_slab(c: &Compiled, wire: &[u8], program: &[u8], flags: u32) -> std::result::Result<Vec<u8>, i32> {
+    let projection = Projection::parse(c, program)?;
+    let mut at = 0;
+    let sized = decode_projected(c, wire, flags | FLAG_SIZING_ONLY, Some(projection), std::ptr::null_mut(), 0, DEPTH, MAX_SLAB, true, &mut at)?;
+    let mut bytes = vec![0xA5; sized.bytes as usize];
+    let result = decode_projected(c, wire, flags, Some(projection), bytes.as_mut_ptr(), bytes.len(), DEPTH, MAX_SLAB, true, &mut at)?;
+    assert_eq!(sized, result);
+    Ok(bytes)
+}
+
+fn projected_schema() -> Compiled {
+    compiled(&[
+        (0, vec![f(1, INT64, 0), f(2, STRING, 0), m(3, MESSAGE, EXPLICIT, 1), m(4, MESSAGE, REPEATED, 1), f(5, BYTES, 0)]),
+        (0, vec![f(1, STRING, 0), f(2, INT64, 0)]),
+    ])
+}
+fn projected_word(bytes: &[u8], offset: usize) -> u32 { u32::from_le_bytes(bytes[offset..offset + 4].try_into().unwrap()) }
+fn projected_slot(c: &Compiled, bytes: &[u8], ordinal: usize) -> u32 { projected_word(bytes, HEADER_BYTES + c.types[0].fields[ordinal].slot as usize) }
+
+#[test]
+fn projection_omits_payloads_and_counts_without_records() {
+    let c = projected_schema();
+    let mask = projection_program(&c, &[&[0], &[]], 0, 0);
+    let wire = [8,7,18,4,b't',b'e',b'x',b't',26,3,10,1,b'a',34,3,10,1,b'b',34,3,10,1,b'c'];
+    let full = slab(&c, &wire).unwrap();
+    let projected = projected_slab(&c, &wire, &mask, FLAG_OWNING).unwrap();
+    assert!(projected.len() < full.len());
+    assert_eq!(projected_word(&projected, 12), 1);
+    assert_eq!(projected_slot(&c, &projected, 0), 7);
+    assert_eq!(projected_slot(&c, &projected, 1), 0);
+    assert_eq!(projected_slot(&c, &projected, 2), 0);
+    let list = projected_slot(&c, &projected, 3) as usize;
+    assert_eq!((projected_word(&projected, list), projected_word(&projected, list + 4)), (2, COUNTS_ONLY));
+    assert_eq!(projected_word(&projected, 4), SLAB_OWNING | SLAB_PROJECTED | SLAB_CERTIFIED);
+}
+
+#[test]
+fn projection_lax_defers_only_omitted_utf8() {
+    let c = projected_schema();
+    let strict = projection_program(&c, &[&[0], &[]], 0, 0);
+    let lax = projection_program(&c, &[&[0], &[]], Projection::LAX, 0);
+    let malformed_text = [26,3,10,1,0xff];
+    assert_eq!(projected_slab(&c, &malformed_text, &strict, FLAG_OWNING), Err(MALFORMED));
+    let accepted = projected_slab(&c, &malformed_text, &lax, FLAG_OWNING | FLAG_LAX).unwrap();
+    assert_ne!(projected_word(&accepted, 4) & SLAB_LAX, 0);
+    for wire in [&[26,3,10,3,0xff][..], &[26,2,16,0x80][..], &[26,1,0][..]] {
+        assert_eq!(projected_slab(&c, wire, &lax, FLAG_OWNING | FLAG_LAX), Err(MALFORMED));
+    }
+    let wanted = projection_program(&c, &[&[2], &[0]], Projection::LAX, 0);
+    assert_eq!(projected_slab(&c, &malformed_text, &wanted, FLAG_OWNING | FLAG_LAX), Err(MALFORMED));
+}
+
+#[test]
+fn projection_lazy_headers_borrow_exact_child_spans() {
+    let c = projected_schema();
+    let mask = projection_program(&c, &[&[0], &[]], Projection::LAZY, 0);
+    let wire = [26,3,10,1,b'a',34,3,10,1,b'b',34,3,10,1,b'c'];
+    assert_eq!(projected_slab(&c, &wire, &mask, FLAG_OWNING), Err(MALFORMED));
+    let result = projected_slab(&c, &wire, &mask, FLAG_BORROWING).unwrap();
+    assert_eq!(projected_word(&result, 12), 1);
+    assert_eq!(projected_word(&result, 16), 4);
+    let child = projected_slot(&c, &result, 2);
+    assert_ne!(child & LAZY_CHILD, 0);
+    let child = (child & !LAZY_CHILD) as usize;
+    assert_eq!((projected_word(&result, child), projected_word(&result, child + 4), projected_word(&result, child + 12)), (2, 3, 1));
+    let list = projected_slot(&c, &result, 3) as usize;
+    assert_eq!((projected_word(&result, list), projected_word(&result, list + 4)), (2, 0));
+    for (i, offset) in [7u32,12].iter().enumerate() {
+        let pointer = projected_word(&result, list + 8 + 4 * i);
+        assert_ne!(pointer & LAZY_CHILD, 0);
+        assert_eq!(projected_word(&result, (pointer & !LAZY_CHILD) as usize), *offset);
+    }
+    assert_eq!(projected_word(&result, 4), SLAB_BORROWING | SLAB_PROJECTED | SLAB_CERTIFIED);
+}
+
+#[test]
+fn projection_lazy_singular_merges_materialize_complete_child() {
+    let c = projected_schema();
+    let mask = projection_program(&c, &[&[], &[]], Projection::LAZY, 0);
+    let wire = [26,3,10,1,b'a',26,3,10,1,b'b'];
+    let result = projected_slab(&c, &wire, &mask, FLAG_BORROWING).unwrap();
+    let child = projected_slot(&c, &result, 2);
+    assert_eq!(child & LAZY_CHILD, 0);
+    assert_ne!(child, 0);
+    let text = projected_word(&result, child as usize + c.types[1].fields[0].slot as usize) as usize;
+    assert_eq!(result[text + 8], b'b');
+}
+
+#[test]
+fn projection_required_closures_stay_eager() {
+    let c = compiled(&[(0,vec![m(1,MESSAGE,EXPLICIT,1)]),(0,vec![f(1,INT64,REQUIRED | EXPLICIT)])]);
+    let mask = projection_program(&c, &[&[], &[]], Projection::LAZY, 0);
+    let result = projected_slab(&c, &[10,0], &mask, FLAG_BORROWING).unwrap();
+    let child = projected_slot(&c, &result, 0);
+    assert_ne!(child,0); assert_eq!(child & LAZY_CHILD,0);
+    assert_eq!(projected_word(&result,4) & SLAB_CERTIFIED,0);
+    let merged = projected_slab(&c, &[10,0,10,2,8,9], &mask, FLAG_BORROWING).unwrap();
+    let child = projected_slot(&c, &merged, 0) as usize;
+    assert_eq!(projected_word(&merged,child + c.types[1].fields[0].slot as usize),9);
+}
+
+#[test]
+fn projection_external_bytes_require_explicit_input_lease() {
+    let c = projected_schema();
+    let mask = projection_program(&c, &[&[4], &[]], Projection::BORROW_BYTES,4);
+    let wire = [42,8,1,2,3,4,5,6,7,8];
+    assert_eq!(projected_slab(&c,&wire,&mask,FLAG_OWNING),Err(MALFORMED));
+    let result=projected_slab(&c,&wire,&mask,FLAG_BORROWING).unwrap();
+    let header=projected_slot(&c,&result,4) as usize;
+    assert_eq!(projected_word(&result,header),8 | EXTERNAL);
+    assert_eq!(projected_word(&result,header+12),2);
+    assert_ne!(projected_word(&result,4) & SLAB_BORROWING,0);
+}
+
+#[test]
+fn projection_program_rejects_wrong_layout_and_masks() {
+    let c = projected_schema();
+    let program=projection_program(&c,&[&[0],&[]],0,0);
+    for end in 0..program.len() { assert!(Projection::parse(&c,&program[..end]).is_err()); }
+    for (at,value) in [(0,0),(4,0),(8,c.fingerprint^1),(12,8),(16,99),(20,4),(24,99),(28,1<<31)] {
+        let mut bad=program.clone();bad[at..at+4].copy_from_slice(&value.to_le_bytes());
+        assert!(Projection::parse(&c,&bad).is_err(),"{at}");
+    }
+}
+
+#[test]
+fn projection_full_masks_and_strict_sparse_match_reference_corpus() {
+    let c = compiled(&nested());
+    let all: Vec<Vec<usize>> = c.types.iter().map(|t| (0..t.fields.len()).collect()).collect();
+    let all_refs: Vec<&[usize]> = all.iter().map(Vec::as_slice).collect();
+    let none: Vec<&[usize]> = c.types.iter().map(|_| &[][..]).collect();
+    let full_mask = projection_program(&c,&all_refs,0,0);
+    let sparse_mask = projection_program(&c,&none,0,0);
+    let lazy_mask = projection_program(&c,&none,Projection::LAZY,0);
+    let mut rng = Rng(0x5052_4f4a_4543_5431);
+    for _ in 0..8000 {
+        let wire = view_wire(&mut rng);
+        let expected = slab(&c,&wire);
+        let full = projected_slab(&c,&wire,&full_mask,FLAG_OWNING);
+        match (&expected,full) {
+            (Ok(expected),Ok(mut actual)) => {
+                let flags = projected_word(&actual,4) & !SLAB_PROJECTED;
+                actual[4..8].copy_from_slice(&flags.to_le_bytes());
+                assert_eq!(&actual,expected,"full-mask byte parity {wire:?}");
+            }
+            (Err(expected),Err(actual)) => assert_eq!(*expected,actual),
+            (a,b) => panic!("full mask status {a:?} vs {b:?} for {wire:?}"),
+        }
+        for (mask,flags) in [(&sparse_mask,FLAG_OWNING),(&lazy_mask,FLAG_BORROWING)] {
+            let actual = projected_slab(&c,&wire,mask,flags);
+            assert_eq!(expected.as_ref().err(),actual.as_ref().err(),"strict projected status for {wire:?}");
+        }
+    }
+}
+
+#[test]
+fn projection_small_path_allocates_nothing_and_checks_budgets() {
+    let c = projected_schema();
+    let mask = projection_program(&c,&[&[0],&[]],Projection::LAZY,0);
+    let projection=Projection::parse(&c,&mask).unwrap();
+    let wire=[8,7,26,3,10,1,b'x',34,3,10,1,b'y'];
+    let mut output=vec![0;4096];let mut error=0;
+    let (result,allocations)=allocation_probe::allocations(|| decode_projected(&c,&wire,FLAG_BORROWING,Some(projection),output.as_mut_ptr(),output.len(),DEPTH,MAX_SLAB,false,&mut error));
+    let result=result.unwrap();assert_eq!(allocations,0);
+    assert_eq!(decode_projected(&c,&wire,FLAG_BORROWING,Some(projection),output.as_mut_ptr(),output.len(),0,MAX_SLAB,false,&mut error),Err(BUDGET));
+    assert_eq!(decode_projected(&c,&wire,FLAG_BORROWING,Some(projection),output.as_mut_ptr(),output.len(),DEPTH,result.bytes-1,false,&mut error),Err(BUDGET));
+}
+
+#[test]
+fn projection_ffi_normal_and_critical_match_without_allocations() {
+    let c=projected_schema();
+    let mask=projection_program(&c,&[&[0],&[]],Projection::LAZY,0);
+    let wire=[8,7,26,3,10,1,b'x',34,3,10,1,b'y'];
+    let expected=projected_slab(&c,&wire,&mask,FLAG_BORROWING).unwrap();
+    let mut output=vec![0xa5;expected.len()];
+    let mut result=seam::SlabResult {bytes:0,records:0,handles:0,flags:0,error:0,reserved:0};
+    for call in [crate::td_buffa_decode_slab,crate::td_buffa_decode_slab_small] {
+        let (status,allocations)=allocation_probe::allocations(|| unsafe {
+            call((&c as *const Compiled).cast(),wire.as_ptr(),wire.len() as u64,FLAG_BORROWING,
+                mask.as_ptr(),output.as_mut_ptr(),output.len() as u64,DEPTH,MAX_SLAB,(&mut result as *mut seam::SlabResult).cast())
+        });
+        assert_eq!((status,allocations),(0,0)); assert_eq!(output,expected);
+        assert_eq!(result.bytes,expected.len() as u64);
+    }
+}
