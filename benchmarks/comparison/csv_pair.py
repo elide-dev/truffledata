@@ -109,11 +109,14 @@ def main(argv):
     jobs = [(cell, fork) for cell in cells for fork in range(3)]
     rng = random.Random(20261108 + shard)
     rng.shuffle(jobs)
+    affinity = sorted(os.sched_getaffinity(0))
+    os.sched_setaffinity(0, {affinity[0]})
     output = Path(os.environ['TEST_UNDECLARED_OUTPUTS_DIR'])
     output.mkdir(parents=True, exist_ok=True)
     report = {'schema': 'csv-pair-1', 'runtime': 'svm', 'group': [dataset, size],
               'platform': platform.platform(),
               'cpu': Path('/proc/cpuinfo').read_text(), 'started_unix': time.time(),
+              'original_cpu_affinity': affinity, 'measured_cpu': affinity[0],
               'selection': select, 'forks': 3,
               'binary_sha256': {k: hashlib.sha256(p.read_bytes()).hexdigest()
                                 for k, p in binaries.items()},
