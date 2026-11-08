@@ -27,6 +27,7 @@ public final class BuffaPlan implements AutoCloseable {
 
   /** Immutable default limits of the last {@code maxSlabBytes}, reused instead of per decode. */
   private @Nullable SlabLimits slabLimits;
+
   private final int maxSchemaBytes;
   private final @Nullable Projection projection;
   private @Nullable SlabSession projectedSession;
@@ -66,11 +67,7 @@ public final class BuffaPlan implements AutoCloseable {
     if (!open) throw new IllegalStateException("Native plan closed");
   }
 
-  /**
-   * First-attempt slab capacity. The retained heap array is the message's own storage, so once
-   * a message of this plan has been decoded the learned extent is reused exactly; a larger message
-   * retries once with the extent the producer reports. The first decode sizes from the input.
-   */
+  /** Cache immutable default limits for the current byte bound. */
   private SlabLimits slabLimits(int maxSlabBytes) {
     SlabLimits limits = slabLimits;
     if (limits == null || limits.maxSlabBytes() != maxSlabBytes)
@@ -78,6 +75,11 @@ public final class BuffaPlan implements AutoCloseable {
     return limits;
   }
 
+  /**
+   * First-attempt slab capacity. The retained heap array is the message's own storage, so once a
+   * message of this plan has been decoded the learned extent is reused exactly; a larger message
+   * retries once with the extent the producer reports. The first decode sizes from the input.
+   */
   private int firstCapacity(int maxSlabBytes, int inputBytes) {
     long guess = slabCapacity > 0 ? slabCapacity : 4L * inputBytes + 256;
     return (int) Math.min(maxSlabBytes, guess);

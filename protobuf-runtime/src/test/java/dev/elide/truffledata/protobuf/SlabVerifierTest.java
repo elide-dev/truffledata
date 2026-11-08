@@ -13,8 +13,8 @@ import org.junit.jupiter.api.Test;
 
 /**
  * The owning-slab walk (bitmap handles, folded logical budget) against the reference verifier
- * followed by the exact {@code validate} accounting it replaces: same accept/reject decisions,
- * same exception messages, same logical usage.
+ * followed by the exact {@code validate} accounting it replaces: same accept/reject decisions, same
+ * exception messages, same logical usage.
  */
 class SlabVerifierTest {
   private static final SlabLimits LIMITS = new SlabLimits(31, 1 << 20);
@@ -32,8 +32,7 @@ class SlabVerifierTest {
   /** The production path, optionally forcing identity tracking for small slabs. */
   private static String owning(ProtoPlan plan, byte[] slab, SlabLimits limits, boolean identity) {
     try {
-      boolean exact =
-          SlabVerifier.verifyOwning(slab, slab.length, plan.layout(), limits, identity);
+      boolean exact = SlabVerifier.verifyOwning(slab, slab.length, plan.layout(), limits, identity);
       return accepted(SlabMessage.owning(plan.layout(), slab, slab.length, exact));
     } catch (ContractViolation rejected) {
       return "rejected: " + rejected.getMessage();
@@ -163,7 +162,8 @@ class SlabVerifierTest {
     var entry1 = LayoutTest.wire().field(1, 1).message(2, LayoutTest.wire().field(1, 7));
     var entry2 = LayoutTest.wire().field(1, 2);
     byte[] slab =
-        SlabCodec.decode(plan.layout(), LayoutTest.wire().message(2, entry1).message(2, entry2).bytes());
+        SlabCodec.decode(
+            plan.layout(), LayoutTest.wire().message(2, entry1).message(2, entry2).bytes());
     int list = getInt(slab, ROOT + plan.layout().slot(0, 1));
     assertEquals(2, listCount(slab, list));
     // The same record reached twice keeps one identity: accepted, and counted per visit.
@@ -177,6 +177,36 @@ class SlabVerifierTest {
     putInt(collision, second + RECORD_HANDLE, getInt(slab, ROOT + RECORD_HANDLE));
     assertAgree(plan, collision, LIMITS, "collision");
     assertEquals("rejected: Invalid slab structure", copied(plan, collision, LIMITS));
+  }
+
+  @Test
+  void aliasedRecursiveRecordsKeepPerVisitBudgets() {
+    var plan =
+        LayoutTest.model(LayoutTest.type("Node", LayoutTest.message("children", 1, "Node", true)))
+            .type("Node");
+    // A bounded reproducer for shared-subgraph amplification: the physical wire is a chain
+    // with one empty sibling at each level. Repoint each sibling to its nonempty brother,
+    // obtaining an exponentially larger logical tree without increasing the slab extent.
+    // Keep this depth small: verification currently visits every logical occurrence.
+    int depth = 10;
+    var wire = LayoutTest.wire();
+    for (int i = 0; i < depth; i++)
+      wire = LayoutTest.wire().message(1, wire).message(1, LayoutTest.wire());
+    byte[] slab = SlabCodec.decode(plan.layout(), wire.bytes());
+    int record = ROOT;
+    for (int i = 0; i < depth; i++) {
+      int list = getInt(slab, record + plan.layout().slot(0, 0));
+      int child = getInt(slab, listElement(list, 4, 0));
+      putInt(slab, listElement(list, 4, 1), child);
+      record = child;
+    }
+    long cells = 4L * (1L << depth) - 3; // One field per record, plus two cells per list.
+    assertEquals(
+        cells, SlabMessage.copyOf(plan, ByteBuffer.wrap(slab), LIMITS).logicalUsage().cells());
+    assertAgree(plan, slab, LIMITS, "recursive shared graph");
+    var bounded = withLimits(plan, new Limits(1024, 256, cells - 1, 1 << 20));
+    assertAgree(bounded, slab, LIMITS, "recursive shared graph budget");
+    assertEquals("rejected: Protobuf cell budget exceeded", copied(bounded, slab, LIMITS));
   }
 
   @Test
