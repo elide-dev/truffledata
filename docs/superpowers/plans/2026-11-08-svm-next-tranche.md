@@ -6,10 +6,21 @@ measured SVM wins. This supersedes the earlier B4 rejection and JVM performance
 release gates; it does not waive semantic, lifetime, SVM graph/allocation, no-PGO,
 or prebuilt-native distribution requirements. See the root `AGENTS.md`.
 
-Status: B4 Phase 1 is restored in `29aa408`; seven validation targets (including
-both native smokes) and all nine coverage suites/method contracts pass. The new
-experiments below are a proposed tranche, not implemented optimizations or
-promised speedups. Capture paired SVM baselines from the restored committed tree.
+Status: Sam authorized the first parallel tranche after compaction ("ok do it").
+B4 Phase 1 is restored in `29aa408`; seven validation targets (including both
+native smokes) and all nine coverage suites/method contracts pass. The experiments
+below are in progress, not admitted optimizations or promised speedups. The
+production baseline is `9a1dcec`. Follow-ons remain conditional on these results.
+
+Execution branches start at that baseline: `tranche/json` in `td-climb-json`,
+`tranche/csv` in `td-climb-slab`, and `tranche/protobuf` in `td-climb-b4`.
+The parent integrates into `feat/followup-v5` in `truffledata-followup`.
+Builds and tests remain serialized through the shared wrapper. Initial portable
+SVM images and source/binary provenance are retained in the ignored local
+`build/svm-tranche-baseline/9a1dcec/` (build `bad1392b`). Benchmark-only additions
+for nested typed JSON and owned CSV are applied to the old production baseline
+before recapturing images; candidates must use the same workload definitions.
+No push, CI dispatch, publication, or main-branch merge is authorized.
 
 ## Restore and audit
 
