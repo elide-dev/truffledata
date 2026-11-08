@@ -131,6 +131,16 @@ class PolicyTest {
             Map.entry("Numbers.java", 1), // Static Double.parseDouble fallback.
             Map.entry("CsvMapping.java", 1)); // Static closed-mapping failure.
     Pattern limit = Pattern.compile("limit\\s*=\\s*\"(\\d+)\"");
+    // Bound accessor hooks skip the layout check, so only a guard-dominated accessed
+    // specialization may call one (protobuf B4): one call in each of the four read nodes.
+    Pattern boundCall = Pattern.compile("\\.(readLong|readDouble|readBoolean|length)Bound\\(");
+    Set<String> boundCallers =
+        Set.of(
+            "ReadLongNode.java",
+            "ReadDoubleNode.java",
+            "ReadBooleanNode.java",
+            "ReadLengthNode.java");
+    int boundCalls = 0;
     Map<String, Integer> exportedMessages =
         new HashMap<>(
             Map.of(
@@ -205,6 +215,13 @@ class PolicyTest {
               budgets.getOrDefault(path.getFileName().toString(), 0).intValue(),
               boundaries,
               "Review the boundary budget for " + path);
+          var hooks = boundCall.matcher(source);
+          while (hooks.find()) {
+            assertTrue(
+                boundCallers.contains(path.getFileName().toString()),
+                "Bound accessor hooks are for the read nodes' accessed specializations: " + path);
+            boundCalls++;
+          }
           var matches = limit.matcher(source);
           while (matches.find())
             assertTrue(Integer.parseInt(matches.group(1)) <= 3, "PIC budget: " + path);
@@ -214,6 +231,7 @@ class PolicyTest {
     }
     assertEquals(accessSurfaces, seenSurfaces, "Exported surface inventory changed");
     assertTrue(checked >= 18, "Missing policy inputs");
+    assertEquals(4, boundCalls, "One bound hook call per read node");
     String policy = Files.readString(root.resolve("bazel/java.bzl"));
     assertTrue(policy.contains("-Xep:NullAway:ERROR"));
     assertTrue(policy.contains("-XepOpt:NullAway:JSpecifyMode=true"));

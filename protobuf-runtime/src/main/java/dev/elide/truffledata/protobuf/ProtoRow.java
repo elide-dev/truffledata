@@ -202,12 +202,16 @@ public final class ProtoRow extends AbstractRow implements ProtoAccess {
                 plan, i, plan.compactScalars ? null : ((AbstractRow) rowStorage).accessor(i)));
   }
 
+  /**
+   * Layout (plan): ProtoRow is final and each plan owns its schema, so the layout is exactly
+   * (class, schema identity). Delegated storage reads stay checked against the stored layout.
+   */
   private static final class Owned extends Accessor {
     private final ProtoPlan plan;
     private final @Nullable Accessor stored;
 
     Owned(ProtoPlan plan, int ordinal, @Nullable Accessor stored) {
-      super(plan.schema(), ordinal);
+      super(plan.schema(), ordinal, ProtoRow.class);
       this.plan = plan;
       this.stored = stored;
     }
@@ -220,6 +224,12 @@ public final class ProtoRow extends AbstractRow implements ProtoAccess {
     private ProtoRow row(Object row) {
       if (row instanceof ProtoRow r && r.plan == plan) return r;
       throw mismatch();
+    }
+
+    /** A row the read node's exact-layout guard already admitted. */
+    private ProtoRow trusted(Object row) {
+      assertAccepted(row);
+      return (ProtoRow) row;
     }
 
     @Override
@@ -236,27 +246,59 @@ public final class ProtoRow extends AbstractRow implements ProtoAccess {
 
     @Override
     public long readLong(Object row) throws UnexpectedResultException {
-      var r = row(row);
+      return longOf(row(row));
+    }
+
+    @Override
+    protected long readLongBound(Object row) throws UnexpectedResultException {
+      return longOf(trusted(row));
+    }
+
+    private long longOf(ProtoRow r) throws UnexpectedResultException {
       return stored == null ? r.scalarUnchecked(ordinal()) : stored.readLong(r.storage);
     }
 
     @Override
     public double readDouble(Object row) throws UnexpectedResultException {
-      var r = row(row);
+      return doubleOf(row(row));
+    }
+
+    @Override
+    protected double readDoubleBound(Object row) throws UnexpectedResultException {
+      return doubleOf(trusted(row));
+    }
+
+    private double doubleOf(ProtoRow r) throws UnexpectedResultException {
       if (stored == null) throw new UnexpectedResultException(r.scalarUnchecked(ordinal()));
       return stored.readDouble(r.storage);
     }
 
     @Override
     public boolean readBoolean(Object row) throws UnexpectedResultException {
-      var r = row(row);
+      return booleanOf(row(row));
+    }
+
+    @Override
+    protected boolean readBooleanBound(Object row) throws UnexpectedResultException {
+      return booleanOf(trusted(row));
+    }
+
+    private boolean booleanOf(ProtoRow r) throws UnexpectedResultException {
       if (stored == null) throw new UnexpectedResultException(r.scalarUnchecked(ordinal()));
       return stored.readBoolean(r.storage);
     }
 
     @Override
     public int length(Object row) {
-      var r = row(row);
+      return lengthIn(row(row));
+    }
+
+    @Override
+    protected int lengthBound(Object row) {
+      return lengthIn(trusted(row));
+    }
+
+    private int lengthIn(ProtoRow r) {
       return stored == null ? lengthOf(r.boxedScalar(ordinal())) : stored.length(r.storage);
     }
   }

@@ -117,6 +117,14 @@ public final class StaticLayout {
       throw mismatch();
     }
 
+    /**
+     * Storage of a row the read node's guard already admitted; only the layout check is skipped.
+     */
+    private Object trusted(Object row) {
+      assertAccepted(row);
+      return ((Record) row).storage;
+    }
+
     @Override
     public Object read(Object row) {
       return value(storage(row), property, kind, state);
@@ -139,7 +147,15 @@ public final class StaticLayout {
 
     @Override
     public long readLong(Object row) throws UnexpectedResultException {
-      Object storage = storage(row);
+      return longOf(storage(row));
+    }
+
+    @Override
+    protected long readLongBound(Object row) throws UnexpectedResultException {
+      return longOf(trusted(row));
+    }
+
+    private long longOf(Object storage) throws UnexpectedResultException {
       checkPresent(storage);
       if (field().kind() == Field.Kind.INT64) return integer(storage, property, kind);
       Object value = value(storage, property, kind, null);
@@ -149,7 +165,15 @@ public final class StaticLayout {
 
     @Override
     public double readDouble(Object row) throws UnexpectedResultException {
-      Object storage = storage(row);
+      return doubleOf(storage(row));
+    }
+
+    @Override
+    protected double readDoubleBound(Object row) throws UnexpectedResultException {
+      return doubleOf(trusted(row));
+    }
+
+    private double doubleOf(Object storage) throws UnexpectedResultException {
       checkPresent(storage);
       if (kind == Storage.FLOAT) return property.getFloat(storage);
       if (kind == Storage.DOUBLE) return property.getDouble(storage);
@@ -160,12 +184,25 @@ public final class StaticLayout {
 
     @Override
     public boolean readBoolean(Object row) throws UnexpectedResultException {
-      Object storage = storage(row);
+      return booleanOf(storage(row));
+    }
+
+    @Override
+    protected boolean readBooleanBound(Object row) throws UnexpectedResultException {
+      return booleanOf(trusted(row));
+    }
+
+    private boolean booleanOf(Object storage) throws UnexpectedResultException {
       checkPresent(storage);
       if (kind == Storage.BOOLEAN) return property.getBoolean(storage);
       Object value = value(storage, property, kind, null);
       if (value instanceof Boolean b) return b;
       throw new UnexpectedResultException(value);
+    }
+
+    @Override
+    protected int lengthBound(Object row) {
+      return lengthOf(value(trusted(row), property, kind, state));
     }
   }
 

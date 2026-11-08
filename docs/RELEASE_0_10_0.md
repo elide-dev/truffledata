@@ -39,6 +39,12 @@ five-function public C ABI.
 
 ## Compatibility and measurement
 
+`Accessor` adds an optional protected constructor for layouts identified by exact row class and
+schema identity, plus protected `readLongBound`, `readDoubleBound`, `readBooleanBound`,
+`lengthBound` and `assertAccepted` hooks. Existing subclasses retain checked defaults. Bound
+reads skip only a repeated layout check; lifetime, projection, presence and type checks remain.
+Public accessor methods stay checked. This is an additive API change.
+
 Native protobuf ABI11 retires the old binary view and scalar entry points.
 Public migration aliases delegate to owning slabs; protobuf text/JSON parsing
 retains its separate typed support. Compiled runtime-schema decoders were

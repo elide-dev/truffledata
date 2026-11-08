@@ -191,11 +191,23 @@ public class BorrowedSlabRow extends AbstractRow implements ProtoAccess {
     }
 
     private BorrowedSlabRow row(Object value) {
-      if (value instanceof BorrowedSlabRow r && r.layout == layout && r.type == type) {
-        r.owner.check(r.epoch);
-        return r;
-      }
+      if (value instanceof BorrowedSlabRow r && r.layout == layout && r.type == type)
+        return live(r);
       throw mismatch();
+    }
+
+    /**
+     * A row the read node's guard already admitted. Only the layout check is skipped: the borrowed
+     * lifetime is still checked against the owner's epoch on every read.
+     */
+    private BorrowedSlabRow trusted(Object value) {
+      assertAccepted(value);
+      return live((BorrowedSlabRow) value);
+    }
+
+    private static BorrowedSlabRow live(BorrowedSlabRow r) {
+      r.owner.check(r.epoch);
+      return r;
     }
 
     @Override
@@ -209,7 +221,15 @@ public class BorrowedSlabRow extends AbstractRow implements ProtoAccess {
 
     @Override
     public long readLong(Object value) throws UnexpectedResultException {
-      BorrowedSlabRow r = row(value);
+      return longOf(row(value));
+    }
+
+    @Override
+    protected long readLongBound(Object value) throws UnexpectedResultException {
+      return longOf(trusted(value));
+    }
+
+    private long longOf(BorrowedSlabRow r) throws UnexpectedResultException {
       r.owner.requireValue(type, ordinal(), r.expanded);
       if (planField.repeated()) throw new UnexpectedResultException(r.get(ordinal()));
       if (!has(r) && planField.defaultValue() instanceof Long n) return n;
@@ -224,7 +244,15 @@ public class BorrowedSlabRow extends AbstractRow implements ProtoAccess {
 
     @Override
     public double readDouble(Object value) throws UnexpectedResultException {
-      BorrowedSlabRow r = row(value);
+      return doubleOf(row(value));
+    }
+
+    @Override
+    protected double readDoubleBound(Object value) throws UnexpectedResultException {
+      return doubleOf(trusted(value));
+    }
+
+    private double doubleOf(BorrowedSlabRow r) throws UnexpectedResultException {
       r.owner.requireValue(type, ordinal(), r.expanded);
       if (planField.repeated()) throw new UnexpectedResultException(r.get(ordinal()));
       if (!has(r) && planField.defaultValue() instanceof Double n) return n;
@@ -238,7 +266,15 @@ public class BorrowedSlabRow extends AbstractRow implements ProtoAccess {
 
     @Override
     public boolean readBoolean(Object value) throws UnexpectedResultException {
-      BorrowedSlabRow r = row(value);
+      return booleanOf(row(value));
+    }
+
+    @Override
+    protected boolean readBooleanBound(Object value) throws UnexpectedResultException {
+      return booleanOf(trusted(value));
+    }
+
+    private boolean booleanOf(BorrowedSlabRow r) throws UnexpectedResultException {
       r.owner.requireValue(type, ordinal(), r.expanded);
       if (planField.repeated() || planField.kind() != ProtoPlan.Kind.BOOL)
         throw new UnexpectedResultException(r.get(ordinal()));
@@ -247,7 +283,15 @@ public class BorrowedSlabRow extends AbstractRow implements ProtoAccess {
 
     @Override
     public int length(Object value) {
-      BorrowedSlabRow r = row(value);
+      return lengthIn(row(value));
+    }
+
+    @Override
+    protected int lengthBound(Object value) {
+      return lengthIn(trusted(value));
+    }
+
+    private int lengthIn(BorrowedSlabRow r) {
       if (!planField.repeated()) r.owner.requireValue(type, ordinal(), r.expanded);
       if (planField.repeated())
         return arrayLength(has(r) ? r.owner.word(r.owner.word(r.record + offset)) : 0);

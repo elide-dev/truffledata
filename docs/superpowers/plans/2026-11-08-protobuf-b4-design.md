@@ -1,10 +1,12 @@
 # Protobuf B4 — interpreter read design (2026-11-08)
 
-Status: Phase 1 measured and rejected on 2026-11-08. SVM generated interpreter reads improved
-17.7%, but JVM generated interpreter reads regressed 20.2% and slab resident reads 40.7%, with
-nonoverlapping observed fork ranges. Production was restored; representation/lifetime tests and
-[complete paired evidence](../../../benchmarks/results/protobuf-b4-213a289b/README.md) remain.
-B4 is still open. The design below records the rejected hypothesis; Phase 2 was not started.
+Status: Phase 1 reinstated on 2026-11-08 under the user's explicit priority: SVM is the
+production performance target; JVM runs provide correctness/testing coverage. The same measured
+candidate improves SVM generated interpreter reads 17.7%, with overlapping SVM full/sparse peak
+fork ranges. The earlier rejection based on JVM timing regressions is superseded; those results
+remain disclosed in the [paired evidence](../../../benchmarks/results/protobuf-b4-213a289b/README.md).
+B4 remains open because generated/slab full SVM interpretation still exceeds 2.5× stock. No
+Phase 2 implementation is included in this restoration.
 
 ## 0. Gate and evidence
 
@@ -310,6 +312,11 @@ Code:
    ```
 
 ## 4. Risks and rejection criteria
+
+Priority clarification (user, 2026-11-08): performance admission is based on SVM. JVM timing
+regressions are reported but do not veto a SVM improvement; JVM correctness, lifetime and
+coverage requirements remain mandatory. The measured full/sparse SVM peak ranges below support
+admitting Phase 1 without a demonstrated peak regression, not a claim of statistical equivalence.
 
 - **Wrong equivalence.** If any code path builds a `GeneratedMessage` whose descriptor is not its
   plan's schema, or ever shares a `Schema` between two plans, (a) would accept a foreign layout.

@@ -1,0 +1,264 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="JUnit Jupiter" tests="34" skipped="0" failures="0" errors="0" time="3.664" hostname="&lt;unknown host&gt;" timestamp="2026-11-08T20:55:46">
+<properties>
+<property name="file.encoding" value="UTF-8"/>
+<property name="file.separator" value="/"/>
+<property name="java.class.path" value="protobuf-runtime/test.jar:bazel/junit/librunner.jar:../rules_jvm_external++maven+maven/org/junit/jupiter/junit-jupiter/5.11.4/processed_junit-jupiter-5.11.4.jar:../rules_jvm_external++maven+maven/org/junit/jupiter/junit-jupiter-api/5.11.4/processed_junit-jupiter-api-5.11.4.jar:../rules_jvm_external++maven+maven/org/apiguardian/apiguardian-api/1.1.2/processed_apiguardian-api-1.1.2.jar:../rules_jvm_external++maven+maven/org/junit/platform/junit-platform-commons/1.11.4/processed_junit-platform-commons-1.11.4.jar:../rules_jvm_external++maven+maven/org/opentest4j/opentest4j/1.3.0/processed_opentest4j-1.3.0.jar:../rules_jvm_external++maven+maven/org/junit/jupiter/junit-jupiter-engine/5.11.4/processed_junit-jupiter-engine-5.11.4.jar:../rules_jvm_external++maven+maven/org/junit/platform/junit-platform-engine/1.11.4/processed_junit-platform-engine-1.11.4.jar:../rules_jvm_external++maven+maven/org/junit/jupiter/junit-jupiter-params/5.11.4/processed_junit-jupiter-params-5.11.4.jar:../rules_jvm_external++maven+maven/org/junit/platform/junit-platform-launcher/1.11.4/processed_junit-platform-launcher-1.11.4.jar:../rules_jvm_external++maven+maven/org/junit/platform/junit-platform-reporting/1.11.4/processed_junit-platform-reporting-1.11.4.jar:../rules_jvm_external++maven+maven/org/graalvm/truffle/truffle-runtime/25.5.5-elide.27/processed_truffle-runtime-25.5.5-elide.27.jar:../rules_jvm_external++maven+maven/org/graalvm/truffle/truffle-api/25.5.5-elide.27/processed_truffle-api-25.5.5-elide.27.jar:../rules_jvm_external++maven+maven/org/graalvm/polyglot/polyglot/25.5.5-elide.27/processed_polyglot-25.5.5-elide.27.jar:../rules_jvm_external++maven+maven/org/graalvm/sdk/collections/25.5.5-elide.27/processed_collections-25.5.5-elide.27.jar:../rules_jvm_external++maven+maven/org/graalvm/sdk/nativeimage/25.5.5-elide.27/processed_nativeimage-25.5.5-elide.27.jar:../rules_jvm_external++maven+maven/org/graalvm/sdk/word/25.5.5-elide.27/processed_word-25.5.5-elide.27.jar:../rules_jvm_external++maven+maven/org/graalvm/sdk/jniutils/25.5.5-elide.27/processed_jniutils-25.5.5-elide.27.jar:../rules_jvm_external++maven+maven/org/graalvm/truffle/truffle-compiler/25.5.5-elide.27/processed_truffle-compiler-25.5.5-elide.27.jar:protobuf-runtime/libprotobuf-runtime.jar:core/libcore.jar:../rules_jvm_external++maven+maven/org/jspecify/jspecify/1.0.1/processed_jspecify-1.0.1.jar:../rules_jvm_external++maven+maven/com/google/code/gson/gson/2.8.9/processed_gson-2.8.9.jar:../rules_jvm_external++maven+maven/com/google/protobuf/protobuf-java/4.36.1/processed_protobuf-java-4.36.1.jar"/>
+<property name="java.class.version" value="69.0"/>
+<property name="java.home" value="/workspace/bazel-out/rbe_linux_amd64-opt/bin/protobuf-runtime/test.runfiles/rules_graalvm++graalvm+graalvm_linux_amd64"/>
+<property name="java.io.tmpdir" value="/workspace/_tmp/cb4094f42c3c0e0b9d4ce686da23f68e"/>
+<property name="java.library.path" value="/usr/java/packages/lib:/usr/lib64:/lib64:/lib:/usr/lib"/>
+<property name="java.runtime.name" value="OpenJDK Runtime Environment"/>
+<property name="java.runtime.version" value="25.0.4.1.1+1-jvmci-25.5-b24"/>
+<property name="java.specification.name" value="Java Platform API Specification"/>
+<property name="java.specification.vendor" value="Oracle Corporation"/>
+<property name="java.specification.version" value="25"/>
+<property name="java.vendor" value="GraalVM Community"/>
+<property name="java.vendor.url" value="https://www.graalvm.org/"/>
+<property name="java.vendor.url.bug" value="https://github.com/oracle/graal/issues"/>
+<property name="java.vendor.version" value="GraalVM CE 25.5.5-dev+1.1"/>
+<property name="java.version" value="25.0.4.1.1"/>
+<property name="java.version.date" value="2026-08-18"/>
+<property name="java.vm.compressedOopsMode" value="32-bit"/>
+<property name="java.vm.info" value="mixed mode, sharing"/>
+<property name="java.vm.name" value="OpenJDK 64-Bit Server VM"/>
+<property name="java.vm.specification.name" value="Java Virtual Machine Specification"/>
+<property name="java.vm.specification.vendor" value="Oracle Corporation"/>
+<property name="java.vm.specification.version" value="25"/>
+<property name="java.vm.vendor" value="GraalVM Community"/>
+<property name="java.vm.version" value="25.0.4.1.1+1-jvmci-25.5-b24"/>
+<property name="jdk.debug" value="release"/>
+<property name="line.separator" value="&#10;"/>
+<property name="native.encoding" value="UTF-8"/>
+<property name="os.arch" value="amd64"/>
+<property name="os.name" value="Linux"/>
+<property name="os.version" value="5.15.0"/>
+<property name="path.separator" value=":"/>
+<property name="polyglot.engine.WarnInterpreterOnly" value="false"/>
+<property name="stderr.encoding" value="UTF-8"/>
+<property name="stdin.encoding" value="UTF-8"/>
+<property name="stdout.encoding" value="UTF-8"/>
+<property name="sun.arch.data.model" value="64"/>
+<property name="sun.boot.library.path" value="/workspace/bazel-out/rbe_linux_amd64-opt/bin/protobuf-runtime/test.runfiles/rules_graalvm++graalvm+graalvm_linux_amd64/lib"/>
+<property name="sun.cpu.endian" value="little"/>
+<property name="sun.io.unicode.encoding" value="UnicodeLittle"/>
+<property name="sun.java.command" value="dev.elide.bazel.junit.BazelJUnitRunner --class dev.elide.truffledata.protobuf.LayoutTest --class dev.elide.truffledata.protobuf.SlabCodecTest --class dev.elide.truffledata.protobuf.ProjectionTest --class dev.elide.truffledata.protobuf.SlabVerifierTest"/>
+<property name="sun.java.launcher" value="SUN_STANDARD"/>
+<property name="sun.jnu.encoding" value="UTF-8"/>
+<property name="sun.management.compiler" value="HotSpot 64-Bit Tiered Compilers"/>
+<property name="user.country" value="US"/>
+<property name="user.dir" value="/workspace/bazel-out/rbe_linux_amd64-opt/bin/protobuf-runtime/test.runfiles/_main"/>
+<property name="user.home" value="/root"/>
+<property name="user.language" value="en"/>
+<property name="user.name" value="root"/>
+<property name="user.timezone" value="UTC"/>
+</properties>
+<testcase name="layout_identity_stable()" classname="dev.elide.truffledata.protobuf.LayoutTest" time="0.035">
+<system-out><![CDATA[
+unique-id: [engine:junit-jupiter]/[class:dev.elide.truffledata.protobuf.LayoutTest]/[method:layout_identity_stable()]
+display-name: layout_identity_stable()
+]]></system-out>
+</testcase>
+<testcase name="utf8ValidationAndUnitsMatchStrictDecoder()" classname="dev.elide.truffledata.protobuf.SlabCodecTest" time="0.104">
+<system-out><![CDATA[
+unique-id: [engine:junit-jupiter]/[class:dev.elide.truffledata.protobuf.SlabCodecTest]/[method:utf8ValidationAndUnitsMatchStrictDecoder()]
+display-name: utf8ValidationAndUnitsMatchStrictDecoder()
+]]></system-out>
+</testcase>
+<testcase name="owningWalkAgreesWithReferenceUnderMutation()" classname="dev.elide.truffledata.protobuf.SlabVerifierTest" time="0.246">
+<system-out><![CDATA[
+unique-id: [engine:junit-jupiter]/[class:dev.elide.truffledata.protobuf.SlabVerifierTest]/[method:owningWalkAgreesWithReferenceUnderMutation()]
+display-name: owningWalkAgreesWithReferenceUnderMutation()
+]]></system-out>
+</testcase>
+<testcase name="aliasedRecursiveRecordsKeepPerVisitBudgets()" classname="dev.elide.truffledata.protobuf.SlabVerifierTest" time="0.008">
+<system-out><![CDATA[
+unique-id: [engine:junit-jupiter]/[class:dev.elide.truffledata.protobuf.SlabVerifierTest]/[method:aliasedRecursiveRecordsKeepPerVisitBudgets()]
+display-name: aliasedRecursiveRecordsKeepPerVisitBudgets()
+]]></system-out>
+</testcase>
+<testcase name="externalProjectionRejectsHandleCollisionsBeforePublishing()" classname="dev.elide.truffledata.protobuf.ProjectionTest" time="0.001">
+<system-out><![CDATA[
+unique-id: [engine:junit-jupiter]/[class:dev.elide.truffledata.protobuf.ProjectionTest]/[method:externalProjectionRejectsHandleCollisionsBeforePublishing()]
+display-name: externalProjectionRejectsHandleCollisionsBeforePublishing()
+]]></system-out>
+</testcase>
+<testcase name="exactBudgetAndInputSlice()" classname="dev.elide.truffledata.protobuf.SlabCodecTest" time="0.025">
+<system-out><![CDATA[
+unique-id: [engine:junit-jupiter]/[class:dev.elide.truffledata.protobuf.SlabCodecTest]/[method:exactBudgetAndInputSlice()]
+display-name: exactBudgetAndInputSlice()
+]]></system-out>
+</testcase>
+<testcase name="golden_slabs_decode_by_hand()" classname="dev.elide.truffledata.protobuf.LayoutTest" time="0.248">
+<system-out><![CDATA[
+unique-id: [engine:junit-jupiter]/[class:dev.elide.truffledata.protobuf.LayoutTest]/[method:golden_slabs_decode_by_hand()]
+display-name: golden_slabs_decode_by_hand()
+]]></system-out>
+</testcase>
+<testcase name="laxSkipsOnlyUtf8AndLazyReadValidatesStrictly()" classname="dev.elide.truffledata.protobuf.ProjectionTest" time="0.003">
+<system-out><![CDATA[
+unique-id: [engine:junit-jupiter]/[class:dev.elide.truffledata.protobuf.ProjectionTest]/[method:laxSkipsOnlyUtf8AndLazyReadValidatesStrictly()]
+display-name: laxSkipsOnlyUtf8AndLazyReadValidatesStrictly()
+]]></system-out>
+</testcase>
+<testcase name="program_round_trips()" classname="dev.elide.truffledata.protobuf.LayoutTest" time="0.024">
+<system-out><![CDATA[
+unique-id: [engine:junit-jupiter]/[class:dev.elide.truffledata.protobuf.LayoutTest]/[method:program_round_trips()]
+display-name: program_round_trips()
+]]></system-out>
+</testcase>
+<testcase name="duplicateAndOutOfRangeHandlesRejectOnBothSidesOfTheBitmapBound()" classname="dev.elide.truffledata.protobuf.SlabVerifierTest" time="0.004">
+<system-out><![CDATA[
+unique-id: [engine:junit-jupiter]/[class:dev.elide.truffledata.protobuf.SlabVerifierTest]/[method:duplicateAndOutOfRangeHandlesRejectOnBothSidesOfTheBitmapBound()]
+display-name: duplicateAndOutOfRangeHandlesRejectOnBothSidesOfTheBitmapBound()
+]]></system-out>
+</testcase>
+<testcase name="oneof_case_bytes_assigned()" classname="dev.elide.truffledata.protobuf.LayoutTest" time="0.002">
+<system-out><![CDATA[
+unique-id: [engine:junit-jupiter]/[class:dev.elide.truffledata.protobuf.LayoutTest]/[method:oneof_case_bytes_assigned()]
+display-name: oneof_case_bytes_assigned()
+]]></system-out>
+</testcase>
+<testcase name="unknownFieldBytesAreOwnedAndPreserveEveryWireKind()" classname="dev.elide.truffledata.protobuf.LayoutTest" time="0.192">
+<system-out><![CDATA[
+unique-id: [engine:junit-jupiter]/[class:dev.elide.truffledata.protobuf.LayoutTest]/[method:unknownFieldBytesAreOwnedAndPreserveEveryWireKind()]
+display-name: unknownFieldBytesAreOwnedAndPreserveEveryWireKind()
+]]></system-out>
+</testcase>
+<testcase name="copiedChildSelectionRejectsNonRecordsAndWrongTypes()" classname="dev.elide.truffledata.protobuf.SlabCodecTest" time="0.02">
+<system-out><![CDATA[
+unique-id: [engine:junit-jupiter]/[class:dev.elide.truffledata.protobuf.SlabCodecTest]/[method:copiedChildSelectionRejectsNonRecordsAndWrongTypes()]
+display-name: copiedChildSelectionRejectsNonRecordsAndWrongTypes()
+]]></system-out>
+</testcase>
+<testcase name="boundSizeReadsSupportConcreteAndSlabBackedDurableArrays()" classname="dev.elide.truffledata.protobuf.ProjectionTest" time="0.002">
+<system-out><![CDATA[
+unique-id: [engine:junit-jupiter]/[class:dev.elide.truffledata.protobuf.ProjectionTest]/[method:boundSizeReadsSupportConcreteAndSlabBackedDurableArrays()]
+display-name: boundSizeReadsSupportConcreteAndSlabBackedDurableArrays()
+]]></system-out>
+</testcase>
+<testcase name="externalSlabsRejectBadOffsetsHandlesAndOwnership()" classname="dev.elide.truffledata.protobuf.SlabCodecTest" time="0.001">
+<system-out><![CDATA[
+unique-id: [engine:junit-jupiter]/[class:dev.elide.truffledata.protobuf.SlabCodecTest]/[method:externalSlabsRejectBadOffsetsHandlesAndOwnership()]
+display-name: externalSlabsRejectBadOffsetsHandlesAndOwnership()
+]]></system-out>
+</testcase>
+<testcase name="producersAgreeOverEightThousandInputsPerSchema()" classname="dev.elide.truffledata.protobuf.SlabCodecTest" time="1.56">
+<system-out><![CDATA[
+unique-id: [engine:junit-jupiter]/[class:dev.elide.truffledata.protobuf.SlabCodecTest]/[method:producersAgreeOverEightThousandInputsPerSchema()]
+display-name: producersAgreeOverEightThousandInputsPerSchema()
+]]></system-out>
+</testcase>
+<testcase name="projectionProgramIsBoundedImmutableAndLayoutBound()" classname="dev.elide.truffledata.protobuf.SlabCodecTest" time="0.005">
+<system-out><![CDATA[
+unique-id: [engine:junit-jupiter]/[class:dev.elide.truffledata.protobuf.SlabCodecTest]/[method:projectionProgramIsBoundedImmutableAndLayoutBound()]
+display-name: projectionProgramIsBoundedImmutableAndLayoutBound()
+]]></system-out>
+</testcase>
+<testcase name="projectedWindowsHaveExactBudgetsAndRelativeExternalOffsets()" classname="dev.elide.truffledata.protobuf.SlabCodecTest" time="0.004">
+<system-out><![CDATA[
+unique-id: [engine:junit-jupiter]/[class:dev.elide.truffledata.protobuf.SlabCodecTest]/[method:projectedWindowsHaveExactBudgetsAndRelativeExternalOffsets()]
+display-name: projectedWindowsHaveExactBudgetsAndRelativeExternalOffsets()
+]]></system-out>
+</testcase>
+<testcase name="sparseReadsPreservePresenceAndCountsButRejectOmittedValues()" classname="dev.elide.truffledata.protobuf.ProjectionTest" time="0.002">
+<system-out><![CDATA[
+unique-id: [engine:junit-jupiter]/[class:dev.elide.truffledata.protobuf.ProjectionTest]/[method:sparseReadsPreservePresenceAndCountsButRejectOmittedValues()]
+display-name: sparseReadsPreservePresenceAndCountsButRejectOmittedValues()
+]]></system-out>
+</testcase>
+<testcase name="goldenSlabsMatchNativeProducer()" classname="dev.elide.truffledata.protobuf.SlabCodecTest" time="0.017">
+<system-out><![CDATA[
+unique-id: [engine:junit-jupiter]/[class:dev.elide.truffledata.protobuf.SlabCodecTest]/[method:goldenSlabsMatchNativeProducer()]
+display-name: goldenSlabsMatchNativeProducer()
+]]></system-out>
+</testcase>
+<testcase name="slabAccessorRejectsOtherLayoutsAndReadsStringLength()" classname="dev.elide.truffledata.protobuf.SlabCodecTest" time="0.003">
+<system-out><![CDATA[
+unique-id: [engine:junit-jupiter]/[class:dev.elide.truffledata.protobuf.SlabCodecTest]/[method:slabAccessorRejectsOtherLayoutsAndReadsStringLength()]
+display-name: slabAccessorRejectsOtherLayoutsAndReadsStringLength()
+]]></system-out>
+</testcase>
+<testcase name="fullSelectionRoundTripsExternalBytesAndWindowCopy()" classname="dev.elide.truffledata.protobuf.ProjectionTest" time="0.001">
+<system-out><![CDATA[
+unique-id: [engine:junit-jupiter]/[class:dev.elide.truffledata.protobuf.ProjectionTest]/[method:fullSelectionRoundTripsExternalBytesAndWindowCopy()]
+display-name: fullSelectionRoundTripsExternalBytesAndWindowCopy()
+]]></system-out>
+</testcase>
+<testcase name="explicitSlabLimitsCannotExpandThePlanDepthBudget()" classname="dev.elide.truffledata.protobuf.SlabCodecTest" time="0.004">
+<system-out><![CDATA[
+unique-id: [engine:junit-jupiter]/[class:dev.elide.truffledata.protobuf.SlabCodecTest]/[method:explicitSlabLimitsCannotExpandThePlanDepthBudget()]
+display-name: explicitSlabLimitsCannotExpandThePlanDepthBudget()
+]]></system-out>
+</testcase>
+<testcase name="childAccessorsRemainBoundWhenTheSamePlanHasDifferentRootLayouts()" classname="dev.elide.truffledata.protobuf.ProjectionTest" time="0.001">
+<system-out><![CDATA[
+unique-id: [engine:junit-jupiter]/[class:dev.elide.truffledata.protobuf.ProjectionTest]/[method:childAccessorsRemainBoundWhenTheSamePlanHasDifferentRootLayouts()]
+display-name: childAccessorsRemainBoundWhenTheSamePlanHasDifferentRootLayouts()
+]]></system-out>
+</testcase>
+<testcase name="depthAndExtentLimitsStillApply()" classname="dev.elide.truffledata.protobuf.SlabVerifierTest" time="0">
+<system-out><![CDATA[
+unique-id: [engine:junit-jupiter]/[class:dev.elide.truffledata.protobuf.SlabVerifierTest]/[method:depthAndExtentLimitsStillApply()]
+display-name: depthAndExtentLimitsStillApply()
+]]></system-out>
+</testcase>
+<testcase name="lazySingularSlotSurvivesOutputGrowth()" classname="dev.elide.truffledata.protobuf.ProjectionTest" time="0">
+<system-out><![CDATA[
+unique-id: [engine:junit-jupiter]/[class:dev.elide.truffledata.protobuf.ProjectionTest]/[method:lazySingularSlotSurvivesOutputGrowth()]
+display-name: lazySingularSlotSurvivesOutputGrowth()
+]]></system-out>
+</testcase>
+<testcase name="offsets_are_aligned_and_disjoint()" classname="dev.elide.truffledata.protobuf.LayoutTest" time="0.081">
+<system-out><![CDATA[
+unique-id: [engine:junit-jupiter]/[class:dev.elide.truffledata.protobuf.LayoutTest]/[method:offsets_are_aligned_and_disjoint()]
+display-name: offsets_are_aligned_and_disjoint()
+]]></system-out>
+</testcase>
+<testcase name="internalProjectionEnforcesRequiredFieldsAndLogicalBudgets()" classname="dev.elide.truffledata.protobuf.ProjectionTest" time="0.003">
+<system-out><![CDATA[
+unique-id: [engine:junit-jupiter]/[class:dev.elide.truffledata.protobuf.ProjectionTest]/[method:internalProjectionEnforcesRequiredFieldsAndLogicalBudgets()]
+display-name: internalProjectionEnforcesRequiredFieldsAndLogicalBudgets()
+]]></system-out>
+</testcase>
+<testcase name="presence_words_scale_past_64_fields()" classname="dev.elide.truffledata.protobuf.LayoutTest" time="0.008">
+<system-out><![CDATA[
+unique-id: [engine:junit-jupiter]/[class:dev.elide.truffledata.protobuf.LayoutTest]/[method:presence_words_scale_past_64_fields()]
+display-name: presence_words_scale_past_64_fields()
+]]></system-out>
+</testcase>
+<testcase name="lazyChildrenAreFullCachedDurableAndBounded()" classname="dev.elide.truffledata.protobuf.ProjectionTest" time="0.001">
+<system-out><![CDATA[
+unique-id: [engine:junit-jupiter]/[class:dev.elide.truffledata.protobuf.ProjectionTest]/[method:lazyChildrenAreFullCachedDurableAndBounded()]
+display-name: lazyChildrenAreFullCachedDurableAndBounded()
+]]></system-out>
+</testcase>
+<testcase name="owningSlabsReadAndEncodeWithoutRetainingInput()" classname="dev.elide.truffledata.protobuf.SlabCodecTest" time="0.088">
+<system-out><![CDATA[
+unique-id: [engine:junit-jupiter]/[class:dev.elide.truffledata.protobuf.SlabCodecTest]/[method:owningSlabsReadAndEncodeWithoutRetainingInput()]
+display-name: owningSlabsReadAndEncodeWithoutRetainingInput()
+]]></system-out>
+</testcase>
+<testcase name="reference_model_matches_proto_codec()" classname="dev.elide.truffledata.protobuf.LayoutTest" time="0.798">
+<system-out><![CDATA[
+unique-id: [engine:junit-jupiter]/[class:dev.elide.truffledata.protobuf.LayoutTest]/[method:reference_model_matches_proto_codec()]
+display-name: reference_model_matches_proto_codec()
+]]></system-out>
+</testcase>
+<testcase name="sharedSubgraphsKeepTheirIdentitySemantics()" classname="dev.elide.truffledata.protobuf.SlabVerifierTest" time="0">
+<system-out><![CDATA[
+unique-id: [engine:junit-jupiter]/[class:dev.elide.truffledata.protobuf.SlabVerifierTest]/[method:sharedSubgraphsKeepTheirIdentitySemantics()]
+display-name: sharedSubgraphsKeepTheirIdentitySemantics()
+]]></system-out>
+</testcase>
+<testcase name="requiredFieldsAndBudgetsKeepTheirMessages()" classname="dev.elide.truffledata.protobuf.SlabVerifierTest" time="0.002">
+<system-out><![CDATA[
+unique-id: [engine:junit-jupiter]/[class:dev.elide.truffledata.protobuf.SlabVerifierTest]/[method:requiredFieldsAndBudgetsKeepTheirMessages()]
+display-name: requiredFieldsAndBudgetsKeepTheirMessages()
+]]></system-out>
+</testcase>
+<system-out><![CDATA[
+unique-id: [engine:junit-jupiter]
+display-name: JUnit Jupiter
+]]></system-out>
+</testsuite>

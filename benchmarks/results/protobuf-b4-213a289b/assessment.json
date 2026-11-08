@@ -1,7 +1,7 @@
 {
   "candidate": "38f7399",
   "baseline": "1cfcb37",
-  "verdict": "reject-production-keep-tests",
+  "verdict": "admit-phase1-svm-priority",
   "sdk": "25.5.5-elide.27",
   "runtimes": {
     "svm": {
@@ -594,5 +594,7 @@
         }
       ]
     }
-  }
+  },
+  "previous_verdict": "reject-production-keep-tests",
+  "priority_ruling": "2026-11-08 user: SVM is the production performance target; JVM is correctness/testing. JVM timing regressions remain disclosed but non-gating."
 }
