@@ -1,0 +1,67 @@
+exec ${PAGER:-/usr/bin/less} "$0" || exit 1
+Executing tests from //tests:allocation
+-----------------------------------------------------------------------------
+ALLOCATION binary-snapshot 65568.000 bytes/65536-byte payload
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by com.oracle.truffle.runtime.hotspot.HotSpotTruffleRuntime (file:/workspace/bazel-out/rbe_linux_amd64-opt/bin/tests/allocation.runfiles/rules_jvm_external++maven+maven/org/graalvm/truffle/truffle-runtime/25.5.5-elide.27/processed_truffle-runtime-25.5.5-elide.27.jar)
+WARNING: Please consider reporting this to the maintainers of class com.oracle.truffle.runtime.hotspot.HotSpotTruffleRuntime
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+ALLOCATION nullable-static 0.000064 bytes/read compiled=true
+ALLOCATION nullable-static-after-null-and-missing 0.000064 bytes/read compiled=true
+ALLOCATION protobuf-batch 0.000064 bytes/read compiled=true
+ALLOCATION protobuf-wire static=false 67496.000 bytes/message payload=65540
+ALLOCATION protobuf-static 0.000064 bytes/read compiled=true
+ALLOCATION protobuf-wire static=true 66224.000 bytes/message payload=65540
+ALLOCATION ingestion 8.250 bytes/cell
+ALLOCATION row-view 24.000 bytes/row
+ALLOCATION static-typed 0.000016 bytes/read compiled=true
+ALLOCATION static-ingestion 104.000 bytes/row
+ALLOCATION static-direct-ingestion 88.000 bytes/row
+ALLOCATION static-create-long nullable=false 0.001120 bytes/row compiled=true
+ALLOCATION static-create-long nullable=true 0.001120 bytes/row compiled=true
+ALLOCATION direct-column batch 8320.000 bytes/1024 longs cumulative=false
+ALLOCATION direct-column batch 8320.000 bytes/1024 longs cumulative=true
+ALLOCATION nested-mutation 0.000088 bytes/read compiled=true
+ALLOCATION batch 0.000064 bytes/read compiled=true
+ALLOCATION dynamic 0.000064 bytes/read compiled=true
+ALLOCATION static 0.000064 bytes/read compiled=true
+ALLOCATION compact-integer width=1 second=0 40.002 bytes/message
+ALLOCATION compact-integer-encode width=1 second=0 attempt=0 24.004 bytes/message
+ALLOCATION compact-integer-encode width=1 second=0 attempt=1 24.000 bytes/message
+ALLOCATION compact-integer-encode width=1 second=0 attempt=2 24.000 bytes/message
+ALLOCATION compact-integer width=2 second=0 40.000 bytes/message
+ALLOCATION compact-integer-encode width=2 second=0 attempt=0 24.013 bytes/message
+ALLOCATION compact-integer-encode width=2 second=0 attempt=1 24.000 bytes/message
+ALLOCATION compact-integer-encode width=2 second=0 attempt=2 24.000 bytes/message
+ALLOCATION compact-integer width=2 second=1000 64.000 bytes/message
+ALLOCATION compact-integer-encode width=2 second=1000 attempt=0 32.000 bytes/message
+ALLOCATION compact-integer-encode width=2 second=1000 attempt=1 32.000 bytes/message
+ALLOCATION compact-integer-encode width=2 second=1000 attempt=2 32.000 bytes/message
+ALLOCATION JDBC scalar 0.000000 extra bytes/cell
+ALLOCATION accessor-static 0.000556 bytes/read compiled=true
+ALLOCATION accessor-batch 0.000556 bytes/read compiled=true
+ALLOCATION accessor-protobuf-owned-batch 0.000556 bytes/read compiled=true
+ALLOCATION accessor-protobuf-slab-batch 0.000556 bytes/read compiled=true
+ALLOCATION accessor-protobuf-generated-batch 0.000044 bytes/read compiled=true
+ALLOCATION accessor-protobuf-owned-static 0.000556 bytes/read compiled=true
+ALLOCATION accessor-protobuf-slab-static 0.000556 bytes/read compiled=true
+ALLOCATION accessor-protobuf-generated-static 0.000044 bytes/read compiled=true
+ALLOCATION mixed-width-1 0.000088 bytes/read nodes=2 compiled=true
+ALLOCATION mixed-width-2 0.000088 bytes/read nodes=2 compiled=true
+ALLOCATION mixed-width-4 0.000088 bytes/read nodes=6 compiled=true
+ALLOCATION mixed-width-8 12.000088 bytes/read nodes=12 compiled=true
+
+Test run finished after 5346 ms
+[         2 containers found      ]
+[         0 containers skipped    ]
+[         2 containers started    ]
+[         0 containers aborted    ]
+[         2 containers successful ]
+[         0 containers failed     ]
+[        13 tests found           ]
+[         0 tests skipped         ]
+[        13 tests started         ]
+[         0 tests aborted         ]
+[        13 tests successful      ]
+[         0 tests failed          ]
+

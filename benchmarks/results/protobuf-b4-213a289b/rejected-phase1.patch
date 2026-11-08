@@ -1,0 +1,1343 @@
+diff --git a/core/src/main/java/dev/elide/truffledata/Accessor.java b/core/src/main/java/dev/elide/truffledata/Accessor.java
+index 8b74dea..b6f790e 100644
+--- a/core/src/main/java/dev/elide/truffledata/Accessor.java
++++ b/core/src/main/java/dev/elide/truffledata/Accessor.java
+@@ -28,10 +28,32 @@ public abstract class Accessor {
+   private final int ordinal;
+   private final Field field;
+ 
++  /**
++   * When set, this accessor's layout is exactly (row class, schema identity): it accepts a row iff
++   * {@code row.getClass() == exactRowClass} and the row's descriptor is {@link #schema}. Read nodes
++   * then guard with that hub compare and one field compare instead of a virtual {@link #accepts}.
++   */
++  final @Nullable Class<? extends AbstractRow> exactRowClass;
++
+   protected Accessor(Schema schema, int ordinal) {
+     this.schema = Objects.requireNonNull(schema);
+     this.ordinal = Objects.checkIndex(ordinal, schema.size());
+     this.field = schema.field(ordinal);
++    this.exactRowClass = null;
++  }
++
++  /**
++   * An accessor whose layout is exactly (exact row class, schema identity): {@link #accepts} must
++   * hold for a row iff its class is {@code exactRowClass} and its descriptor is {@code schema}.
++   * Only representations whose schema identity is unique per layout qualify; layouts that share a
++   * schema (several static layouts, several slab root layouts) must use the two-argument
++   * constructor. Binding verifies the claim against {@link #accepts} on every specialization.
++   */
++  protected Accessor(Schema schema, int ordinal, Class<? extends AbstractRow> exactRowClass) {
++    this.schema = Objects.requireNonNull(schema);
++    this.ordinal = Objects.checkIndex(ordinal, schema.size());
++    this.field = schema.field(ordinal);
++    this.exactRowClass = Objects.requireNonNull(exactRowClass);
+   }
+ 
+   public final Schema schema() {
+@@ -73,6 +95,43 @@ public abstract class Accessor {
+     throw new UnexpectedResultException(value);
+   }
+ 
++  /**
++   * {@link #readLong} of a row read nodes have already bound to this accessor ({@code bound(this,
++   * row)} held). Called only by the read nodes' layout-bound specializations; overrides may skip
++   * the layout re-check and nothing else (lifetime, projection, presence and type checks stay).
++   * Strict mode asserts the guard.
++   */
++  protected long readLongBound(Object row) throws UnexpectedResultException {
++    assertAccepted(row);
++    return readLong(row);
++  }
++
++  /** {@link #readDouble} of a bound row; see {@link #readLongBound}. */
++  protected double readDoubleBound(Object row) throws UnexpectedResultException {
++    assertAccepted(row);
++    return readDouble(row);
++  }
++
++  /** {@link #readBoolean} of a bound row; see {@link #readLongBound}. */
++  protected boolean readBooleanBound(Object row) throws UnexpectedResultException {
++    assertAccepted(row);
++    return readBoolean(row);
++  }
++
++  /** {@link #length} of a bound row; see {@link #readLongBound}. */
++  protected int lengthBound(Object row) {
++    assertAccepted(row);
++    return length(row);
++  }
++
++  /** Strict-mode audit that a bound hook received a row this accessor accepts. */
++  protected final void assertAccepted(Object row) {
++    if (STRICT && !accepts(row)) {
++      CompilerDirectives.transferToInterpreterAndInvalidate();
++      throw new AssertionError("Bound accessor read of a row it does not accept");
++    }
++  }
++
+   /**
+    * Contract length of a present, non-null string (UTF-16 units unless the field declares code
+    * points) or array (elements). Exact length contracts fold to their bound after the read, so
+@@ -135,11 +194,24 @@ public abstract class Accessor {
+   static @Nullable Accessor bind(Object row, int ordinal) {
+     if (!(row instanceof AbstractRow r) || ordinal < 0 || ordinal >= r.schema().size()) return null;
+     Accessor accessor = r.accessor(ordinal);
+-    return accessor instanceof LibraryAccessor || !accessor.accepts(row) ? null : accessor;
++    if (accessor instanceof LibraryAccessor) return null;
++    boolean accepted = accessor.accepts(row);
++    var exact = accessor.exactRowClass;
++    if (exact != null && accepted != (r.getClass() == exact && r.descriptor == accessor.schema))
++      throw new IllegalStateException("Exact-layout accessor guard disagrees with accepts");
++    return accepted ? accessor : null;
+   }
+ 
++  /**
++   * The read nodes' layout guard. Exact-layout accessors compile to a hub compare and one field
++   * compare with no virtual call; others ask {@link #accepts}.
++   */
+   static boolean bound(@Nullable Accessor accessor, Object row) {
+-    return accessor != null && accessor.accepts(row);
++    if (accessor == null) return false;
++    var exact = accessor.exactRowClass;
++    if (exact != null)
++      return row.getClass() == exact && ((AbstractRow) row).descriptor == accessor.schema;
++    return accessor.accepts(row);
+   }
+ 
+   /** Strict-mode contract audit of an accessor result, mirroring DataLibrary's assertions. */
+diff --git a/core/src/main/java/dev/elide/truffledata/Batch.java b/core/src/main/java/dev/elide/truffledata/Batch.java
+index 44d5dc1..2bc980e 100644
+--- a/core/src/main/java/dev/elide/truffledata/Batch.java
++++ b/core/src/main/java/dev/elide/truffledata/Batch.java
+@@ -133,12 +133,16 @@ public final class Batch {
+     }
+   }
+ 
+-  /** Column reads of one schema's batches; the required INT64 path loads the long array alone. */
++  /**
++   * Column reads of one schema's batches; the required INT64 path loads the long array alone. Rows
++   * are the final {@link Row} class and the layout is the schema, so the layout is exactly (class,
++   * schema identity).
++   */
+   private static final class ColumnAccessor extends Accessor {
+     private final boolean requiredLong;
+ 
+     ColumnAccessor(Schema schema, int ordinal) {
+-      super(schema, ordinal);
++      super(schema, ordinal, Row.class);
+       requiredLong = schema.requiredLong(ordinal);
+     }
+ 
+@@ -152,10 +156,19 @@ public final class Batch {
+       throw mismatch();
+     }
+ 
++    /** A row the read node's exact-layout guard already admitted. */
++    private Row trusted(Object row) {
++      assertAccepted(row);
++      return (Row) row;
++    }
++
++    private Object valueOf(Row r) {
++      return r.batch.columns[ordinal()].read(r.index);
++    }
++
+     @Override
+     public Object read(Object row) {
+-      Row r = row(row);
+-      return r.batch.columns[ordinal()].read(r.index);
++      return valueOf(row(row));
+     }
+ 
+     @Override
+@@ -167,11 +180,38 @@ public final class Batch {
+ 
+     @Override
+     public long readLong(Object row) throws UnexpectedResultException {
+-      Row r = row(row);
++      return longOf(row(row));
++    }
++
++    @Override
++    protected long readLongBound(Object row) throws UnexpectedResultException {
++      return longOf(trusted(row));
++    }
++
++    private long longOf(Row r) throws UnexpectedResultException {
+       Column column = r.batch.columns[ordinal()];
+       if (requiredLong) return Objects.requireNonNull(column.longs)[r.index];
+       return column.readLong(r.index);
+     }
++
++    @Override
++    protected double readDoubleBound(Object row) throws UnexpectedResultException {
++      Object value = valueOf(trusted(row));
++      if (value instanceof Double n) return n;
++      throw new UnexpectedResultException(value);
++    }
++
++    @Override
++    protected boolean readBooleanBound(Object row) throws UnexpectedResultException {
++      Object value = valueOf(trusted(row));
++      if (value instanceof Boolean b) return b;
++      throw new UnexpectedResultException(value);
++    }
++
++    @Override
++    protected int lengthBound(Object row) {
++      return lengthOf(valueOf(trusted(row)));
++    }
+   }
+ 
+   @ExportLibrary(DataLibrary.class)
+diff --git a/core/src/main/java/dev/elide/truffledata/ReadBooleanNode.java b/core/src/main/java/dev/elide/truffledata/ReadBooleanNode.java
+index be82e5b..3757236 100644
+--- a/core/src/main/java/dev/elide/truffledata/ReadBooleanNode.java
++++ b/core/src/main/java/dev/elide/truffledata/ReadBooleanNode.java
+@@ -31,7 +31,7 @@ public abstract class ReadBooleanNode extends Node {
+       @Cached("bind(row, cachedIndex)") Accessor accessor) {
+     com.oracle.truffle.api.CompilerAsserts.partialEvaluationConstant(accessor);
+     try {
+-      boolean value = accessor.readBoolean(row);
++      boolean value = accessor.readBooleanBound(row);
+       if (Accessor.STRICT) Accessor.audit(accessor, value);
+       return value;
+     } catch (UnexpectedResultException e) {
+diff --git a/core/src/main/java/dev/elide/truffledata/ReadDoubleNode.java b/core/src/main/java/dev/elide/truffledata/ReadDoubleNode.java
+index 11d4677..973504d 100644
+--- a/core/src/main/java/dev/elide/truffledata/ReadDoubleNode.java
++++ b/core/src/main/java/dev/elide/truffledata/ReadDoubleNode.java
+@@ -31,7 +31,7 @@ public abstract class ReadDoubleNode extends Node {
+       @Cached("bind(row, cachedIndex)") Accessor accessor) {
+     com.oracle.truffle.api.CompilerAsserts.partialEvaluationConstant(accessor);
+     try {
+-      double value = accessor.readDouble(row);
++      double value = accessor.readDoubleBound(row);
+       if (Accessor.STRICT) Accessor.audit(accessor, value);
+       return value;
+     } catch (UnexpectedResultException e) {
+diff --git a/core/src/main/java/dev/elide/truffledata/ReadLengthNode.java b/core/src/main/java/dev/elide/truffledata/ReadLengthNode.java
+index 2ae072d..e599403 100644
+--- a/core/src/main/java/dev/elide/truffledata/ReadLengthNode.java
++++ b/core/src/main/java/dev/elide/truffledata/ReadLengthNode.java
+@@ -34,7 +34,7 @@ public abstract class ReadLengthNode extends Node {
+       @Cached("index") int cachedIndex,
+       @Cached("bind(row, cachedIndex)") Accessor accessor) {
+     CompilerAsserts.partialEvaluationConstant(accessor);
+-    return accessor.length(row);
++    return accessor.lengthBound(row);
+   }
+ 
+   @Specialization(
+diff --git a/core/src/main/java/dev/elide/truffledata/ReadLongNode.java b/core/src/main/java/dev/elide/truffledata/ReadLongNode.java
+index 83b1374..6df318f 100644
+--- a/core/src/main/java/dev/elide/truffledata/ReadLongNode.java
++++ b/core/src/main/java/dev/elide/truffledata/ReadLongNode.java
+@@ -31,7 +31,7 @@ public abstract class ReadLongNode extends Node {
+       @Cached("bind(row, cachedIndex)") Accessor accessor) {
+     com.oracle.truffle.api.CompilerAsserts.partialEvaluationConstant(accessor);
+     try {
+-      long value = accessor.readLong(row);
++      long value = accessor.readLongBound(row);
+       if (Accessor.STRICT) Accessor.audit(accessor, value);
+       return value;
+     } catch (UnexpectedResultException e) {
+diff --git a/core/src/main/java/dev/elide/truffledata/StaticLayout.java b/core/src/main/java/dev/elide/truffledata/StaticLayout.java
+index aef0609..51c27e4 100644
+--- a/core/src/main/java/dev/elide/truffledata/StaticLayout.java
++++ b/core/src/main/java/dev/elide/truffledata/StaticLayout.java
+@@ -117,6 +117,14 @@ public final class StaticLayout {
+       throw mismatch();
+     }
+ 
++    /**
++     * Storage of a row the read node's guard already admitted; only the layout check is skipped.
++     */
++    private Object trusted(Object row) {
++      assertAccepted(row);
++      return ((Record) row).storage;
++    }
++
+     @Override
+     public Object read(Object row) {
+       return value(storage(row), property, kind, state);
+@@ -139,7 +147,15 @@ public final class StaticLayout {
+ 
+     @Override
+     public long readLong(Object row) throws UnexpectedResultException {
+-      Object storage = storage(row);
++      return longOf(storage(row));
++    }
++
++    @Override
++    protected long readLongBound(Object row) throws UnexpectedResultException {
++      return longOf(trusted(row));
++    }
++
++    private long longOf(Object storage) throws UnexpectedResultException {
+       checkPresent(storage);
+       if (field().kind() == Field.Kind.INT64) return integer(storage, property, kind);
+       Object value = value(storage, property, kind, null);
+@@ -149,7 +165,15 @@ public final class StaticLayout {
+ 
+     @Override
+     public double readDouble(Object row) throws UnexpectedResultException {
+-      Object storage = storage(row);
++      return doubleOf(storage(row));
++    }
++
++    @Override
++    protected double readDoubleBound(Object row) throws UnexpectedResultException {
++      return doubleOf(trusted(row));
++    }
++
++    private double doubleOf(Object storage) throws UnexpectedResultException {
+       checkPresent(storage);
+       if (kind == Storage.FLOAT) return property.getFloat(storage);
+       if (kind == Storage.DOUBLE) return property.getDouble(storage);
+@@ -160,13 +184,26 @@ public final class StaticLayout {
+ 
+     @Override
+     public boolean readBoolean(Object row) throws UnexpectedResultException {
+-      Object storage = storage(row);
++      return booleanOf(storage(row));
++    }
++
++    @Override
++    protected boolean readBooleanBound(Object row) throws UnexpectedResultException {
++      return booleanOf(trusted(row));
++    }
++
++    private boolean booleanOf(Object storage) throws UnexpectedResultException {
+       checkPresent(storage);
+       if (kind == Storage.BOOLEAN) return property.getBoolean(storage);
+       Object value = value(storage, property, kind, null);
+       if (value instanceof Boolean b) return b;
+       throw new UnexpectedResultException(value);
+     }
++
++    @Override
++    protected int lengthBound(Object row) {
++      return lengthOf(value(trusted(row), property, kind, state));
++    }
+   }
+ 
+   private static Storage storage(Field field) {
+diff --git a/protobuf-buffa/src/main/java/dev/elide/truffledata/buffa/BorrowedSlabRow.java b/protobuf-buffa/src/main/java/dev/elide/truffledata/buffa/BorrowedSlabRow.java
+index cc328eb..1a17854 100644
+--- a/protobuf-buffa/src/main/java/dev/elide/truffledata/buffa/BorrowedSlabRow.java
++++ b/protobuf-buffa/src/main/java/dev/elide/truffledata/buffa/BorrowedSlabRow.java
+@@ -191,13 +191,25 @@ public class BorrowedSlabRow extends AbstractRow implements ProtoAccess {
+     }
+ 
+     private BorrowedSlabRow row(Object value) {
+-      if (value instanceof BorrowedSlabRow r && r.layout == layout && r.type == type) {
+-        r.owner.check(r.epoch);
+-        return r;
+-      }
++      if (value instanceof BorrowedSlabRow r && r.layout == layout && r.type == type)
++        return live(r);
+       throw mismatch();
+     }
+ 
++    /**
++     * A row the read node's guard already admitted. Only the layout check is skipped: the borrowed
++     * lifetime is still checked against the owner's epoch on every read.
++     */
++    private BorrowedSlabRow trusted(Object value) {
++      assertAccepted(value);
++      return live((BorrowedSlabRow) value);
++    }
++
++    private static BorrowedSlabRow live(BorrowedSlabRow r) {
++      r.owner.check(r.epoch);
++      return r;
++    }
++
+     @Override
+     public Object read(Object value) {
+       return row(value).getChecked(ordinal());
+@@ -209,7 +221,15 @@ public class BorrowedSlabRow extends AbstractRow implements ProtoAccess {
+ 
+     @Override
+     public long readLong(Object value) throws UnexpectedResultException {
+-      BorrowedSlabRow r = row(value);
++      return longOf(row(value));
++    }
++
++    @Override
++    protected long readLongBound(Object value) throws UnexpectedResultException {
++      return longOf(trusted(value));
++    }
++
++    private long longOf(BorrowedSlabRow r) throws UnexpectedResultException {
+       r.owner.requireValue(type, ordinal(), r.expanded);
+       if (planField.repeated()) throw new UnexpectedResultException(r.get(ordinal()));
+       if (!has(r) && planField.defaultValue() instanceof Long n) return n;
+@@ -224,7 +244,15 @@ public class BorrowedSlabRow extends AbstractRow implements ProtoAccess {
+ 
+     @Override
+     public double readDouble(Object value) throws UnexpectedResultException {
+-      BorrowedSlabRow r = row(value);
++      return doubleOf(row(value));
++    }
++
++    @Override
++    protected double readDoubleBound(Object value) throws UnexpectedResultException {
++      return doubleOf(trusted(value));
++    }
++
++    private double doubleOf(BorrowedSlabRow r) throws UnexpectedResultException {
+       r.owner.requireValue(type, ordinal(), r.expanded);
+       if (planField.repeated()) throw new UnexpectedResultException(r.get(ordinal()));
+       if (!has(r) && planField.defaultValue() instanceof Double n) return n;
+@@ -238,7 +266,15 @@ public class BorrowedSlabRow extends AbstractRow implements ProtoAccess {
+ 
+     @Override
+     public boolean readBoolean(Object value) throws UnexpectedResultException {
+-      BorrowedSlabRow r = row(value);
++      return booleanOf(row(value));
++    }
++
++    @Override
++    protected boolean readBooleanBound(Object value) throws UnexpectedResultException {
++      return booleanOf(trusted(value));
++    }
++
++    private boolean booleanOf(BorrowedSlabRow r) throws UnexpectedResultException {
+       r.owner.requireValue(type, ordinal(), r.expanded);
+       if (planField.repeated() || planField.kind() != ProtoPlan.Kind.BOOL)
+         throw new UnexpectedResultException(r.get(ordinal()));
+@@ -247,7 +283,15 @@ public class BorrowedSlabRow extends AbstractRow implements ProtoAccess {
+ 
+     @Override
+     public int length(Object value) {
+-      BorrowedSlabRow r = row(value);
++      return lengthIn(row(value));
++    }
++
++    @Override
++    protected int lengthBound(Object value) {
++      return lengthIn(trusted(value));
++    }
++
++    private int lengthIn(BorrowedSlabRow r) {
+       if (!planField.repeated()) r.owner.requireValue(type, ordinal(), r.expanded);
+       if (planField.repeated())
+         return arrayLength(has(r) ? r.owner.word(r.owner.word(r.record + offset)) : 0);
+diff --git a/protobuf-buffa/src/main/java/dev/elide/truffledata/buffa/TypedRow.java b/protobuf-buffa/src/main/java/dev/elide/truffledata/buffa/TypedRow.java
+index 9f0e941..6a1b339 100644
+--- a/protobuf-buffa/src/main/java/dev/elide/truffledata/buffa/TypedRow.java
++++ b/protobuf-buffa/src/main/java/dev/elide/truffledata/buffa/TypedRow.java
+@@ -49,11 +49,15 @@ public abstract sealed class TypedRow extends AbstractRow implements ProtoAccess
+     }
+   }
+ 
++  /**
++   * Layout (plan): ArrayRow is final and each plan owns its schema, so the layout is exactly
++   * (class, schema identity). Every read, bound or checked, still checks the owner's lifetime.
++   */
+   private static final class Eager extends Accessor {
+     private final ProtoPlan plan;
+ 
+     Eager(ProtoPlan plan, int ordinal) {
+-      super(plan.schema(), ordinal);
++      super(plan.schema(), ordinal, ArrayRow.class);
+       this.plan = plan;
+     }
+ 
+@@ -68,6 +72,14 @@ public abstract sealed class TypedRow extends AbstractRow implements ProtoAccess
+       return r;
+     }
+ 
++    /** A row the read node's guard already admitted: only the layout check is skipped. */
++    private ArrayRow trusted(Object row) {
++      assertAccepted(row);
++      var r = (ArrayRow) row;
++      r.owner.check();
++      return r;
++    }
++
+     private Object resolved(ArrayRow row) {
+       Object value = row.values[ordinal()];
+       return value instanceof Utf8 text ? text.value(row.owner) : value;
+@@ -80,7 +92,15 @@ public abstract sealed class TypedRow extends AbstractRow implements ProtoAccess
+ 
+     @Override
+     public long readLong(Object row) throws UnexpectedResultException {
+-      var r = open(row);
++      return longOf(open(row));
++    }
++
++    @Override
++    protected long readLongBound(Object row) throws UnexpectedResultException {
++      return longOf(trusted(row));
++    }
++
++    private long longOf(ArrayRow r) throws UnexpectedResultException {
+       Object value = r.values[ordinal()];
+       if (value instanceof Long number) return number;
+       throw new UnexpectedResultException(resolved(r));
+@@ -89,7 +109,16 @@ public abstract sealed class TypedRow extends AbstractRow implements ProtoAccess
+     /** Scoped arrays and bytes report their size directly; strings resolve once per row. */
+     @Override
+     public int length(Object row) {
+-      Object value = resolved(open(row));
++      return lengthIn(open(row));
++    }
++
++    @Override
++    protected int lengthBound(Object row) {
++      return lengthIn(trusted(row));
++    }
++
++    private int lengthIn(ArrayRow r) {
++      Object value = resolved(r);
+       if (value instanceof TypedArray array) return arrayLength(array.size());
+       if (value instanceof BorrowedBytes bytes) return arrayLength(bytes.size());
+       return lengthOf(value);
+@@ -97,14 +126,32 @@ public abstract sealed class TypedRow extends AbstractRow implements ProtoAccess
+ 
+     @Override
+     public double readDouble(Object row) throws UnexpectedResultException {
+-      Object value = resolved(open(row));
++      return doubleOf(open(row));
++    }
++
++    @Override
++    protected double readDoubleBound(Object row) throws UnexpectedResultException {
++      return doubleOf(trusted(row));
++    }
++
++    private double doubleOf(ArrayRow r) throws UnexpectedResultException {
++      Object value = resolved(r);
+       if (value instanceof Double number) return number;
+       throw new UnexpectedResultException(value);
+     }
+ 
+     @Override
+     public boolean readBoolean(Object row) throws UnexpectedResultException {
+-      Object value = resolved(open(row));
++      return booleanOf(open(row));
++    }
++
++    @Override
++    protected boolean readBooleanBound(Object row) throws UnexpectedResultException {
++      return booleanOf(trusted(row));
++    }
++
++    private boolean booleanOf(ArrayRow r) throws UnexpectedResultException {
++      Object value = resolved(r);
+       if (value instanceof Boolean flag) return flag;
+       throw new UnexpectedResultException(value);
+     }
+diff --git a/protobuf-buffa/tests/CompiledReads.java b/protobuf-buffa/tests/CompiledReads.java
+index 628a82e..22cf797 100644
+--- a/protobuf-buffa/tests/CompiledReads.java
++++ b/protobuf-buffa/tests/CompiledReads.java
+@@ -30,6 +30,7 @@ final class CompiledReads {
+       try {
+         cachedPlans(decoder);
+         arrayViews(decoder);
++        interpretedLifetimes(decoder);
+         var cachedRoot = new WktRoot(false);
+         var cachedTarget = cachedRoot.getCallTarget();
+         try (var message = plan.parseJson("7", 4096)) {
+@@ -63,6 +64,103 @@ final class CompiledReads {
+     }
+   }
+ 
++  /**
++   * Interpreter-tier lifetimes (the enclosing context disables compilation): adopted read nodes
++   * cache each layout's accessor, and their bound reads still reject a closed typed message and a
++   * reset or closed slab session through ReadLongNode, ReadDoubleNode, ReadBooleanNode and
++   * ReadLengthNode.
++   */
++  private static void interpretedLifetimes(BuffaWire decoder) {
++    var sample = TypedAcceptance.plan("Sample");
++    int[] typedOrdinals = {
++      sample.schema().indexOf("count"),
++      sample.schema().indexOf("f"),
++      sample.schema().indexOf("flag"),
++      sample.schema().indexOf("text")
++    };
++    Object[] typedValues = {1234L, 1.5, true, 5};
++    try (var compiled = decoder.compile(sample, 65536)) {
++      var root = new LifetimeRoot();
++      var target = root.getCallTarget();
++      for (int round = 0; round < 3; round++) {
++        var message =
++            compiled.parseText("count: 1234 text: 'hello' blob: 'abc' f: 1.5 flag: true", 4096);
++        Object row = message.row();
++        interpretedReads(target, row, typedOrdinals, typedValues, "typed");
++        message.close();
++        interpretedRejections(target, row, typedOrdinals, "closed typed message");
++      }
++      Acceptance.check(NodeUtil.countNodes(root) <= 64, "interpreted lifetime AST budget");
++    }
++    if (decoder.selected() == BuffaWire.Selected.JAVA) return;
++    var model =
++        dev.elide.truffledata.generated.TruffleDataContracts.create(
++            TestLanguage.current(), Limits.DEFAULT, 16, 65536);
++    var flat = model.type("truffledata.lossless.Flat");
++    // Flat ordinals: i64, real, flag, text.
++    int[] slabOrdinals = {1, 12, 10, 13};
++    Object[] slabValues = {7L, 2.5, true, 3};
++    byte[] wire =
++        flat.encode(flat.newBuilder().set(1, 7L).set(12, 2.5).set(10, true).set(13, "λ😀").build());
++    try (var plan = decoder.compile(flat, 65536);
++        var input = decoder.allocate(wire.length).put(wire);
++        var session = plan.newSession(4096)) {
++      var root = new LifetimeRoot();
++      var target = root.getCallTarget();
++      Object row = session.decode(input);
++      Acceptance.check(row instanceof BorrowedSlabRow, "slab session yields borrowed rows");
++      interpretedReads(target, row, slabOrdinals, slabValues, "slab session");
++      session.reset();
++      interpretedRejections(target, row, slabOrdinals, "reset slab session");
++      Object current = session.decode(input);
++      interpretedReads(target, current, slabOrdinals, slabValues, "slab session after reset");
++      session.close();
++      interpretedRejections(target, current, slabOrdinals, "closed slab session");
++      Acceptance.check(NodeUtil.countNodes(root) <= 64, "interpreted slab AST budget");
++    }
++  }
++
++  private static void interpretedReads(
++      CallTarget target, Object row, int[] ordinals, Object[] values, String what) {
++    for (int warm = 0; warm < 3; warm++)
++      for (int operation = 0; operation < ordinals.length; operation++)
++        Acceptance.check(
++            values[operation].equals(target.call(row, operation, ordinals[operation])),
++            what + " interpreted read " + operation);
++  }
++
++  private static void interpretedRejections(
++      CallTarget target, Object row, int[] ordinals, String what) {
++    for (int operation = 0; operation < ordinals.length; operation++) {
++      int read = operation;
++      Acceptance.rejects(() -> target.call(row, read, ordinals[read]), IllegalStateException.class);
++    }
++  }
++
++  private static final class LifetimeRoot extends RootNode {
++    @Child private ReadLongNode longs = ReadLongNode.create();
++    @Child private ReadDoubleNode doubles = ReadDoubleNode.create();
++    @Child private ReadBooleanNode booleans = ReadBooleanNode.create();
++    @Child private ReadLengthNode lengths = ReadLengthNode.create();
++
++    LifetimeRoot() {
++      super(null);
++    }
++
++    @Override
++    public Object execute(VirtualFrame frame) {
++      Object[] args = frame.getArguments();
++      Object row = args[0];
++      int operation = (Integer) args[1], ordinal = (Integer) args[2];
++      return switch (operation) {
++        case 0 -> longs.execute(row, ordinal);
++        case 1 -> doubles.execute(row, ordinal);
++        case 2 -> booleans.execute(row, ordinal);
++        default -> lengths.execute(row, ordinal);
++      };
++    }
++  }
++
+   private static void slabSessionReads(BuffaWire decoder) {
+     if (decoder.selected() == BuffaWire.Selected.JAVA) return;
+     var contract = WellKnownAcceptance.model().type("google.protobuf.Int64Value");
+diff --git a/protobuf-runtime/src/main/java/dev/elide/truffledata/protobuf/GeneratedMessage.java b/protobuf-runtime/src/main/java/dev/elide/truffledata/protobuf/GeneratedMessage.java
+index f7c6c63..889b4c2 100644
+--- a/protobuf-runtime/src/main/java/dev/elide/truffledata/protobuf/GeneratedMessage.java
++++ b/protobuf-runtime/src/main/java/dev/elide/truffledata/protobuf/GeneratedMessage.java
+@@ -119,19 +119,29 @@ public abstract class GeneratedMessage extends AbstractRow implements ProtoAcces
+     return descriptor.accessor(type, ordinal, i -> new Generated(type, plan, i));
+   }
+ 
++  /**
++   * Layout (generated class, plan). Each plan owns its schema, and generated rows take it as their
++   * descriptor, so the layout is exactly (class, schema identity) and read nodes guard it without a
++   * virtual call. The bound hooks skip only the repeated layout check.
++   */
+   private static final class Generated extends Accessor {
+     private final Class<? extends GeneratedMessage> type;
+-    private final ProtoPlan plan;
++    private final boolean int64;
++    private final boolean float64;
++    private final boolean flag;
+ 
+     Generated(Class<? extends GeneratedMessage> type, ProtoPlan plan, int ordinal) {
+-      super(plan.schema(), ordinal);
++      super(plan.schema(), ordinal, type);
+       this.type = type;
+-      this.plan = plan;
++      var kind = field().kind();
++      int64 = kind == Field.Kind.INT64;
++      float64 = kind == Field.Kind.FLOAT64;
++      flag = kind == Field.Kind.BOOLEAN;
+     }
+ 
+     @Override
+     public boolean accepts(Object row) {
+-      return row.getClass() == type && ((GeneratedMessage) row).plan == plan;
++      return row.getClass() == type && ((GeneratedMessage) row).descriptor == schema();
+     }
+ 
+     private GeneratedMessage message(Object row) {
+@@ -139,6 +149,12 @@ public abstract class GeneratedMessage extends AbstractRow implements ProtoAcces
+       return CompilerDirectives.castExact(row, type);
+     }
+ 
++    /** A row the read node's exact-layout guard already admitted. */
++    private GeneratedMessage trusted(Object row) {
++      assertAccepted(row);
++      return CompilerDirectives.castExact(row, type);
++    }
++
+     @Override
+     public Object read(Object row) {
+       return message(row).get(ordinal());
+@@ -146,8 +162,16 @@ public abstract class GeneratedMessage extends AbstractRow implements ProtoAcces
+ 
+     @Override
+     public long readLong(Object row) throws UnexpectedResultException {
+-      var message = message(row);
+-      if (field().kind() == Field.Kind.INT64) return message.getLong(ordinal());
++      return longOf(message(row));
++    }
++
++    @Override
++    protected long readLongBound(Object row) throws UnexpectedResultException {
++      return longOf(trusted(row));
++    }
++
++    private long longOf(GeneratedMessage message) throws UnexpectedResultException {
++      if (int64) return message.getLong(ordinal());
+       Object value = message.get(ordinal());
+       if (value instanceof Long number) return number;
+       throw new UnexpectedResultException(value);
+@@ -155,17 +179,38 @@ public abstract class GeneratedMessage extends AbstractRow implements ProtoAcces
+ 
+     @Override
+     public double readDouble(Object row) throws UnexpectedResultException {
+-      var message = message(row);
+-      if (field().kind() == Field.Kind.FLOAT64) return message.getDouble(ordinal());
++      return doubleOf(message(row));
++    }
++
++    @Override
++    protected double readDoubleBound(Object row) throws UnexpectedResultException {
++      return doubleOf(trusted(row));
++    }
++
++    private double doubleOf(GeneratedMessage message) throws UnexpectedResultException {
++      if (float64) return message.getDouble(ordinal());
+       throw new UnexpectedResultException(message.get(ordinal()));
+     }
+ 
+     @Override
+     public boolean readBoolean(Object row) throws UnexpectedResultException {
+-      var message = message(row);
+-      if (field().kind() == Field.Kind.BOOLEAN) return message.getBoolean(ordinal());
++      return booleanOf(message(row));
++    }
++
++    @Override
++    protected boolean readBooleanBound(Object row) throws UnexpectedResultException {
++      return booleanOf(trusted(row));
++    }
++
++    private boolean booleanOf(GeneratedMessage message) throws UnexpectedResultException {
++      if (flag) return message.getBoolean(ordinal());
+       throw new UnexpectedResultException(message.get(ordinal()));
+     }
++
++    @Override
++    protected int lengthBound(Object row) {
++      return lengthOf(trusted(row).get(ordinal()));
++    }
+   }
+ 
+   @ExportMessage
+diff --git a/protobuf-runtime/src/main/java/dev/elide/truffledata/protobuf/ProtoRow.java b/protobuf-runtime/src/main/java/dev/elide/truffledata/protobuf/ProtoRow.java
+index 5230569..2a730e1 100644
+--- a/protobuf-runtime/src/main/java/dev/elide/truffledata/protobuf/ProtoRow.java
++++ b/protobuf-runtime/src/main/java/dev/elide/truffledata/protobuf/ProtoRow.java
+@@ -202,12 +202,16 @@ public final class ProtoRow extends AbstractRow implements ProtoAccess {
+                 plan, i, plan.compactScalars ? null : ((AbstractRow) rowStorage).accessor(i)));
+   }
+ 
++  /**
++   * Layout (plan): ProtoRow is final and each plan owns its schema, so the layout is exactly
++   * (class, schema identity). Delegated storage reads stay checked against the stored layout.
++   */
+   private static final class Owned extends Accessor {
+     private final ProtoPlan plan;
+     private final @Nullable Accessor stored;
+ 
+     Owned(ProtoPlan plan, int ordinal, @Nullable Accessor stored) {
+-      super(plan.schema(), ordinal);
++      super(plan.schema(), ordinal, ProtoRow.class);
+       this.plan = plan;
+       this.stored = stored;
+     }
+@@ -222,6 +226,12 @@ public final class ProtoRow extends AbstractRow implements ProtoAccess {
+       throw mismatch();
+     }
+ 
++    /** A row the read node's exact-layout guard already admitted. */
++    private ProtoRow trusted(Object row) {
++      assertAccepted(row);
++      return (ProtoRow) row;
++    }
++
+     @Override
+     public Object read(Object row) {
+       var r = row(row);
+@@ -236,27 +246,59 @@ public final class ProtoRow extends AbstractRow implements ProtoAccess {
+ 
+     @Override
+     public long readLong(Object row) throws UnexpectedResultException {
+-      var r = row(row);
++      return longOf(row(row));
++    }
++
++    @Override
++    protected long readLongBound(Object row) throws UnexpectedResultException {
++      return longOf(trusted(row));
++    }
++
++    private long longOf(ProtoRow r) throws UnexpectedResultException {
+       return stored == null ? r.scalarUnchecked(ordinal()) : stored.readLong(r.storage);
+     }
+ 
+     @Override
+     public double readDouble(Object row) throws UnexpectedResultException {
+-      var r = row(row);
++      return doubleOf(row(row));
++    }
++
++    @Override
++    protected double readDoubleBound(Object row) throws UnexpectedResultException {
++      return doubleOf(trusted(row));
++    }
++
++    private double doubleOf(ProtoRow r) throws UnexpectedResultException {
+       if (stored == null) throw new UnexpectedResultException(r.scalarUnchecked(ordinal()));
+       return stored.readDouble(r.storage);
+     }
+ 
+     @Override
+     public boolean readBoolean(Object row) throws UnexpectedResultException {
+-      var r = row(row);
++      return booleanOf(row(row));
++    }
++
++    @Override
++    protected boolean readBooleanBound(Object row) throws UnexpectedResultException {
++      return booleanOf(trusted(row));
++    }
++
++    private boolean booleanOf(ProtoRow r) throws UnexpectedResultException {
+       if (stored == null) throw new UnexpectedResultException(r.scalarUnchecked(ordinal()));
+       return stored.readBoolean(r.storage);
+     }
+ 
+     @Override
+     public int length(Object row) {
+-      var r = row(row);
++      return lengthIn(row(row));
++    }
++
++    @Override
++    protected int lengthBound(Object row) {
++      return lengthIn(trusted(row));
++    }
++
++    private int lengthIn(ProtoRow r) {
+       return stored == null ? lengthOf(r.boxedScalar(ordinal())) : stored.length(r.storage);
+     }
+   }
+diff --git a/protobuf-runtime/src/main/java/dev/elide/truffledata/protobuf/SlabRow.java b/protobuf-runtime/src/main/java/dev/elide/truffledata/protobuf/SlabRow.java
+index 7e9e516..a3ee8d6 100644
+--- a/protobuf-runtime/src/main/java/dev/elide/truffledata/protobuf/SlabRow.java
++++ b/protobuf-runtime/src/main/java/dev/elide/truffledata/protobuf/SlabRow.java
+@@ -212,6 +212,15 @@ public class SlabRow extends AbstractRow implements ProtoAccess {
+       throw mismatch();
+     }
+ 
++    /**
++     * A row the read node's guard already admitted: only the layout check is skipped, projection
++     * ({@code requireValue}), presence and kind handling stay in the shared readers.
++     */
++    private SlabRow trusted(Object value) {
++      assertAccepted(value);
++      return (SlabRow) value;
++    }
++
+     @Override
+     public Object read(Object value) {
+       return row(value).get(ordinal());
+@@ -223,7 +232,15 @@ public class SlabRow extends AbstractRow implements ProtoAccess {
+ 
+     @Override
+     public long readLong(Object value) throws UnexpectedResultException {
+-      SlabRow r = row(value);
++      return longOf(row(value));
++    }
++
++    @Override
++    protected long readLongBound(Object value) throws UnexpectedResultException {
++      return longOf(trusted(value));
++    }
++
++    private long longOf(SlabRow r) throws UnexpectedResultException {
+       r.owner.requireValue(type, ordinal(), r.expanded);
+       if (planField.repeated()) throw new UnexpectedResultException(r.get(ordinal()));
+       if (!has(r) && planField.defaultValue() instanceof Long n) return n;
+@@ -238,7 +255,15 @@ public class SlabRow extends AbstractRow implements ProtoAccess {
+ 
+     @Override
+     public double readDouble(Object value) throws UnexpectedResultException {
+-      SlabRow r = row(value);
++      return doubleOf(row(value));
++    }
++
++    @Override
++    protected double readDoubleBound(Object value) throws UnexpectedResultException {
++      return doubleOf(trusted(value));
++    }
++
++    private double doubleOf(SlabRow r) throws UnexpectedResultException {
+       r.owner.requireValue(type, ordinal(), r.expanded);
+       if (planField.repeated()) throw new UnexpectedResultException(r.get(ordinal()));
+       if (!has(r) && planField.defaultValue() instanceof Double n) return n;
+@@ -252,7 +277,15 @@ public class SlabRow extends AbstractRow implements ProtoAccess {
+ 
+     @Override
+     public boolean readBoolean(Object value) throws UnexpectedResultException {
+-      SlabRow r = row(value);
++      return booleanOf(row(value));
++    }
++
++    @Override
++    protected boolean readBooleanBound(Object value) throws UnexpectedResultException {
++      return booleanOf(trusted(value));
++    }
++
++    private boolean booleanOf(SlabRow r) throws UnexpectedResultException {
+       r.owner.requireValue(type, ordinal(), r.expanded);
+       if (planField.repeated() || planField.kind() != ProtoPlan.Kind.BOOL)
+         throw new UnexpectedResultException(r.get(ordinal()));
+@@ -263,7 +296,15 @@ public class SlabRow extends AbstractRow implements ProtoAccess {
+ 
+     @Override
+     public int length(Object value) {
+-      SlabRow r = row(value);
++      return lengthIn(row(value));
++    }
++
++    @Override
++    protected int lengthBound(Object value) {
++      return lengthIn(trusted(value));
++    }
++
++    private int lengthIn(SlabRow r) {
+       if (!planField.repeated()) r.owner.requireValue(type, ordinal(), r.expanded);
+       if (planField.repeated())
+         return arrayLength(
+diff --git a/tests/src/test/java/dev/elide/truffledata/AccessorTest.java b/tests/src/test/java/dev/elide/truffledata/AccessorTest.java
+index 51e4a63..5fa937e 100644
+--- a/tests/src/test/java/dev/elide/truffledata/AccessorTest.java
++++ b/tests/src/test/java/dev/elide/truffledata/AccessorTest.java
+@@ -613,6 +613,345 @@ class AccessorTest {
+     return plan.decode(plan.encode(builder.build()));
+   }
+ 
++  /** Every row of the plan's layout family, plus rows that share a plan's schema identity. */
++  private static List<Object> layoutFamily(ProtoPlan left, ProtoPlan right) {
++    var library = DataLibrary.factory().getUncached();
++    Object ownedLeft = owned(left, 10, "l");
++    Object[] values = new Object[left.size()];
++    for (int i = 0; i < values.length; i++) values[i] = library.read(ownedLeft, i);
++    return List.of(
++        generated(left, 10, "l"),
++        generated(right, 20, "rr"),
++        ownedLeft,
++        owned(right, 20, "rr"),
++        slab(left, 10, "l"),
++        slab(right, 20, "rr"),
++        // A batch row whose descriptor is the left plan's own schema: only the class differs.
++        batch(left.schema(), values),
++        "not a row");
++  }
++
++  /**
++   * The exact-layout guard is the virtual {@code accepts} for every accessor/row pair, including
++   * rows of the same generated class built with another plan and rows sharing a plan's schema.
++   */
++  @Test
++  void exactLayoutGuardMatchesAccepts() {
++    try (Context context = context()) {
++      try {
++        var language = TestLanguage.current().language();
++        var left = flat(true);
++        var right = flat(true);
++        List<Object> rows = new ArrayList<>(layoutFamily(left, right));
++        Schema schema = Schema.of(Field.requiredLong("n"), Field.requiredLong("m"));
++        AbstractRow statics = new StaticLayout(language, schema, Limits.DEFAULT).create(1L, 2L);
++        rows.add(statics);
++        rows.add(new StaticLayout(language, schema, Limits.DEFAULT).create(3L, 4L));
++        rows.add(batch(schema, 5L, 6L));
++        rows.add(batch(Schema.of(Field.requiredLong("n"), Field.requiredLong("m")), 7L, 8L));
++        rows.add(compact(1));
++        rows.add(compact(2));
++        Schema exactSchema = Schema.of(Field.requiredLong("n"));
++        rows.add(new ExactRow(exactSchema, ExactRow.HONEST));
++        rows.add(new ExactRow(exactSchema, ExactRow.HONEST));
++        rows.add(new ExactRow(Schema.of(Field.requiredLong("n")), ExactRow.HONEST));
++        int exact = 0;
++        for (Object owner : rows) {
++          if (!(owner instanceof AbstractRow row)) continue;
++          for (int ordinal : new int[] {0, 1, I64, FLAG, REAL, TEXT}) {
++            if (ordinal >= row.schema().size()) continue;
++            Accessor accessor = row.accessor(ordinal);
++            if (accessor.exactRowClass != null) {
++              exact++;
++              assertSame(row.getClass(), accessor.exactRowClass);
++            }
++            for (Object candidate : rows)
++              assertEquals(
++                  accessor.accepts(candidate),
++                  Accessor.bound(accessor, candidate),
++                  accessor.getClass().getSimpleName() + " on " + candidate.getClass());
++          }
++        }
++        assertTrue(exact > 0, "No exact-layout accessor was exercised");
++        // Generated layouts are (class, plan): the accessor reports the generated class.
++        var generated = (AbstractRow) generated(left, 1, "x");
++        assertSame(generated.getClass(), generated.accessor(I64).exactRowClass);
++        assertNotSame(
++            generated.accessor(I64), ((AbstractRow) generated(right, 1, "x")).accessor(I64));
++        // Slab and static layouts share schemas across layouts, so they keep the virtual guard.
++        assertNull(((AbstractRow) slab(left, 1, "x")).accessor(I64).exactRowClass);
++        assertNull(statics.accessor(0).exactRowClass);
++        // bind keeps the fast guard honest: an exact accessor that disagrees with accepts fails,
++        // whether accepts rejects a row the guard admits or admits a row the guard rejects.
++        var rejecting = new ExactRow(exactSchema, ExactRow.REJECTS);
++        assertThrows(IllegalStateException.class, () -> Accessor.bind(rejecting, 0));
++        var admitting = new ExactRow(exactSchema, ExactRow.HONEST);
++        admitting.accessor = ExactRow.accessor(Schema.of(Field.requiredLong("n")), ExactRow.ADMITS);
++        assertThrows(IllegalStateException.class, () -> Accessor.bind(admitting, 0));
++        assertNotNull(Accessor.bind(rows.get(rows.size() - 3), 0));
++      } finally {
++        context.leave();
++      }
++    }
++  }
++
++  /**
++   * Node reads go through the bound hooks; they agree with the checked public reads for every
++   * representation and ordinal: equal values, equal rejected values for missing, null and
++   * wrong-type fields, and equal exception classes.
++   */
++  @Test
++  void boundHooksOnlySkipTheLayoutCheck() throws Exception {
++    try (Context context = context()) {
++      try {
++        var language = TestLanguage.current().language();
++        Schema schema =
++            Schema.of(
++                Field.requiredLong("n"),
++                new Field("o", Field.Kind.INT64, true, true),
++                new Field("d", Field.Kind.FLOAT64, false, false)
++                    .withConstraints(Constraints.NONE.withFloatBits(32)),
++                new Field("e", Field.Kind.FLOAT64, true, true),
++                new Field("b", Field.Kind.BOOLEAN, true, true),
++                new Field("s", Field.Kind.STRING, true, true),
++                new Field("r", Field.Kind.RECORD, true, true),
++                new Field("x", Field.Kind.ANY, true, true),
++                Field.integer("narrow", 16, false, false, false));
++        AbstractRow nested = batch(Schema.of(Field.requiredLong("q")), 3L);
++        var layout = new StaticLayout(language, schema, Limits.DEFAULT);
++        List<Object> rows = new ArrayList<>();
++        for (Object[] values :
++            new Object[][] {
++              {1L, 2L, 1.5, 2.5, true, "s", nested, 9L, 65535L},
++              {
++                1L,
++                DataNull.INSTANCE,
++                1.5,
++                Missing.INSTANCE,
++                DataNull.INSTANCE,
++                Missing.INSTANCE,
++                Missing.INSTANCE,
++                "x",
++                0L
++              },
++            }) {
++          rows.add(layout.create(values));
++          rows.add(batch(schema, values));
++        }
++        for (ProtoPlan plan : new ProtoPlan[] {flat(true), flat(false)}) {
++          rows.add(generated(plan, 4, "λ😀"));
++          rows.add(owned(plan, 4, "λ😀"));
++          rows.add(slab(plan, 4, "λ😀"));
++          for (int copy = 0; copy < 2; copy++) {
++            var sparse =
++                plan.newBuilder()
++                    .set(PRESENT, 3L)
++                    .set(U64, java.math.BigInteger.valueOf(7))
++                    .build();
++            rows.add(copy == 0 ? sparse : plan.decodeSlab(plan.encode(sparse)));
++          }
++        }
++        rows.add(compact(1));
++        rows.add(compact(2));
++        rows.add(new ExactRow(Schema.of(Field.requiredLong("n")), ExactRow.HONEST));
++        int hooks = 0;
++        for (Object candidate : rows) {
++          AbstractRow row = (AbstractRow) candidate;
++          for (int i = 0; i < row.schema().size(); i++) {
++            Accessor accessor = row.accessor(i);
++            if (accessor instanceof LibraryAccessor) continue;
++            hooks++;
++            String where = row.getClass().getSimpleName() + " ordinal " + i;
++            Object longs = outcome(() -> accessor.readLong(row));
++            Object doubles = outcome(() -> accessor.readDouble(row));
++            Object flags = outcome(() -> accessor.readBoolean(row));
++            Object lengths = outcome(() -> accessor.length(row));
++            assertEquals(longs, outcome(() -> accessor.readLongBound(row)), where);
++            assertEquals(doubles, outcome(() -> accessor.readDoubleBound(row)), where);
++            assertEquals(flags, outcome(() -> accessor.readBooleanBound(row)), where);
++            assertEquals(lengths, outcome(() -> accessor.lengthBound(row)), where);
++            // A fresh adopted site per field keeps every read on the accessed specialization.
++            int ordinal = i;
++            Object[] expected = {longs, doubles, flags, lengths};
++            for (boolean inline : new boolean[] {false, true}) {
++              var target = new ReaderParityRoot().getCallTarget();
++              for (int operation = 0; operation < 4; operation++) {
++                int read = operation;
++                Object want = expected[operation];
++                if (want instanceof Rejected) want = ContractViolation.class;
++                assertEquals(
++                    want,
++                    outcome(() -> target.call(row, ordinal, read, inline)),
++                    where + " op " + read);
++              }
++            }
++          }
++        }
++        assertTrue(hooks > 100, "Bound hooks were not exercised across representations");
++      } finally {
++        context.leave();
++      }
++    }
++  }
++
++  /**
++   * A site warmed on one layout still rejects rows of another layout that share its generated class
++   * or its schema identity: the cached accessor never reads them, the public read raises {@link
++   * ContractViolation}, and the site respecializes to the correct value, for the shared nodes and
++   * the inline readers alike.
++   */
++  @Test
++  void foreignLayoutStillRejectedThroughNodes() {
++    try (Context context = context()) {
++      try {
++        var left = flat(false);
++        var right = flat(false);
++        List<Object> rows = layoutFamily(left, right);
++        Object home = rows.get(0);
++        // Home ordinals first so each reader meets its own field before any rejection.
++        int[] ordinals = {I64, REAL, FLAG, TEXT};
++        for (boolean inline : new boolean[] {false, true}) {
++          for (int operation = 0; operation < 4; operation++) {
++            int read = operation, ordinal = ordinals[operation];
++            var root = new ReaderParityRoot();
++            var target = root.getCallTarget();
++            for (int warm = 0; warm < 3; warm++) target.call(home, ordinal, read, inline);
++            Accessor cached = ((AbstractRow) home).accessor(ordinal);
++            for (Object row : rows) {
++              if (!(row instanceof AbstractRow foreign)) continue;
++              Object expected = expected(foreign.accessor(ordinal), foreign, read);
++              if (row != home) {
++                assertFalse(cached.accepts(row), foreign.getClass().getSimpleName());
++                assertEquals(ContractViolation.class, outcome(() -> cached.read(row)));
++                assertEquals(ContractViolation.class, expected(cached, foreign, read));
++              }
++              assertEquals(expected, outcome(() -> target.call(row, ordinal, read, inline)));
++              // The home row still reads its own value after the site saw the foreign layout.
++              assertEquals(
++                  expected(cached, (AbstractRow) home, read),
++                  outcome(() -> target.call(home, ordinal, read, inline)));
++            }
++          }
++        }
++        // The shared ReadLongNode keeps one accessed instance per layout until its limit.
++        assertSites(List.of(rows.get(0), rows.get(1)), new long[] {10, 20}, I64);
++        assertSites(List.of(rows.get(0), rows.get(4), rows.get(6)), new long[] {10, 10, 10}, I64);
++      } finally {
++        context.leave();
++      }
++    }
++  }
++
++  /** The checked public value a node read of {@code operation} reports, rejections as classes. */
++  private static Object expected(Accessor accessor, AbstractRow row, int operation) {
++    Object value =
++        outcome(
++            () ->
++                switch (operation) {
++                  case 0 -> accessor.readLong(row);
++                  case 1 -> accessor.readDouble(row);
++                  case 2 -> accessor.readBoolean(row);
++                  default -> accessor.length(row);
++                });
++    return value instanceof Rejected ? ContractViolation.class : value;
++  }
++
++  /** Strict mode turns a bound hook called on a row its accessor rejects into an assertion. */
++  @Test
++  void strictBoundHooksAssertTheirGuard() {
++    assertTrue(Accessor.STRICT, "Correctness suite must enable strict mode");
++    try (Context context = context()) {
++      try {
++        var language = TestLanguage.current().language();
++        var left = flat(true);
++        var right = flat(true);
++        Schema schema = Schema.of(Field.requiredLong("n"), Field.requiredLong("m"));
++        Object[][] pairs = {
++          {generated(left, 1, "a"), generated(right, 2, "b")},
++          {owned(left, 1, "a"), owned(right, 2, "b")},
++          {slab(left, 1, "a"), slab(right, 2, "b")},
++          {
++            new StaticLayout(language, schema, Limits.DEFAULT).create(1L, 2L),
++            new StaticLayout(language, schema, Limits.DEFAULT).create(1L, 2L)
++          },
++          {
++            batch(schema, 1L, 2L),
++            batch(Schema.of(Field.requiredLong("n"), Field.requiredLong("m")), 1L, 2L)
++          },
++          {
++            new ExactRow(Schema.of(Field.requiredLong("n")), ExactRow.HONEST),
++            new ExactRow(Schema.of(Field.requiredLong("n")), ExactRow.HONEST)
++          },
++        };
++        for (Object[] pair : pairs) {
++          AbstractRow owner = (AbstractRow) pair[0];
++          Object foreign = pair[1];
++          Accessor accessor = owner.accessor(0);
++          String where = owner.getClass().getSimpleName();
++          assertThrows(AssertionError.class, () -> accessor.readLongBound(foreign), where);
++          assertThrows(AssertionError.class, () -> accessor.readDoubleBound(foreign), where);
++          assertThrows(AssertionError.class, () -> accessor.readBooleanBound(foreign), where);
++          assertThrows(AssertionError.class, () -> accessor.lengthBound(foreign), where);
++          assertThrows(AssertionError.class, () -> accessor.readLongBound("not a row"), where);
++        }
++      } finally {
++        context.leave();
++      }
++    }
++  }
++
++  /**
++   * A one-field row whose layout is (exact class, schema identity). An {@link #HONEST} accessor
++   * accepts exactly that layout; {@link #REJECTS} and {@link #ADMITS} claim the exact guard but
++   * disagree with it, which bind refuses.
++   */
++  @com.oracle.truffle.api.library.ExportLibrary(DataLibrary.class)
++  static final class ExactRow extends AbstractRow {
++    static final int HONEST = 0, REJECTS = 1, ADMITS = 2;
++    Accessor accessor;
++
++    ExactRow(Schema schema, int mode) {
++      super(schema);
++      accessor = accessor(schema, mode);
++    }
++
++    static Accessor accessor(Schema schema, int mode) {
++      return new Accessor(schema, 0, ExactRow.class) {
++        @Override
++        public boolean accepts(Object row) {
++          return mode == ADMITS
++              || (mode == HONEST && row instanceof ExactRow r && r.descriptor == schema());
++        }
++
++        @Override
++        public Object read(Object row) {
++          if (!accepts(row)) throw mismatch();
++          return 5L;
++        }
++      };
++    }
++
++    @Override
++    public Accessor accessor(int ordinal) {
++      return accessor;
++    }
++
++    @com.oracle.truffle.api.library.ExportMessage
++    Schema getSchema() {
++      return descriptor;
++    }
++
++    @com.oracle.truffle.api.library.ExportMessage
++    Object read(int index) {
++      return 5L;
++    }
++
++    @com.oracle.truffle.api.library.ExportMessage
++    boolean isPresent(int index) {
++      return true;
++    }
++  }
++
+   /** Each accessor method returns or rejects exactly what the uncached library does. */
+   static void agree(AbstractRow row) throws Exception {
+     var library = DataLibrary.factory().getUncached();
+diff --git a/tests/src/test/java/dev/elide/truffledata/PolicyTest.java b/tests/src/test/java/dev/elide/truffledata/PolicyTest.java
+index 28c5376..3d859be 100644
+--- a/tests/src/test/java/dev/elide/truffledata/PolicyTest.java
++++ b/tests/src/test/java/dev/elide/truffledata/PolicyTest.java
+@@ -131,6 +131,16 @@ class PolicyTest {
+             Map.entry("Numbers.java", 1), // Static Double.parseDouble fallback.
+             Map.entry("CsvMapping.java", 1)); // Static closed-mapping failure.
+     Pattern limit = Pattern.compile("limit\\s*=\\s*\"(\\d+)\"");
++    // Bound accessor hooks skip the layout check, so only a guard-dominated accessed
++    // specialization may call one (protobuf B4): one call in each of the four read nodes.
++    Pattern boundCall = Pattern.compile("\\.(readLong|readDouble|readBoolean|length)Bound\\(");
++    Set<String> boundCallers =
++        Set.of(
++            "ReadLongNode.java",
++            "ReadDoubleNode.java",
++            "ReadBooleanNode.java",
++            "ReadLengthNode.java");
++    int boundCalls = 0;
+     Map<String, Integer> exportedMessages =
+         new HashMap<>(
+             Map.of(
+@@ -205,6 +215,13 @@ class PolicyTest {
+               budgets.getOrDefault(path.getFileName().toString(), 0).intValue(),
+               boundaries,
+               "Review the boundary budget for " + path);
++          var hooks = boundCall.matcher(source);
++          while (hooks.find()) {
++            assertTrue(
++                boundCallers.contains(path.getFileName().toString()),
++                "Bound accessor hooks are for the read nodes' accessed specializations: " + path);
++            boundCalls++;
++          }
+           var matches = limit.matcher(source);
+           while (matches.find())
+             assertTrue(Integer.parseInt(matches.group(1)) <= 3, "PIC budget: " + path);
+@@ -214,6 +231,7 @@ class PolicyTest {
+     }
+     assertEquals(accessSurfaces, seenSurfaces, "Exported surface inventory changed");
+     assertTrue(checked >= 18, "Missing policy inputs");
++    assertEquals(4, boundCalls, "One bound hook call per read node");
+     String policy = Files.readString(root.resolve("bazel/java.bzl"));
+     assertTrue(policy.contains("-Xep:NullAway:ERROR"));
+     assertTrue(policy.contains("-XepOpt:NullAway:JSpecifyMode=true"));

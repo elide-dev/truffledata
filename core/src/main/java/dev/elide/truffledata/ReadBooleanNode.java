@@ -31,7 +31,7 @@ public abstract class ReadBooleanNode extends Node {
       @Cached("bind(row, cachedIndex)") Accessor accessor) {
     com.oracle.truffle.api.CompilerAsserts.partialEvaluationConstant(accessor);
     try {
-      boolean value = accessor.readBooleanBound(row);
+      boolean value = accessor.readBoolean(row);
       if (Accessor.STRICT) Accessor.audit(accessor, value);
       return value;
     } catch (UnexpectedResultException e) {

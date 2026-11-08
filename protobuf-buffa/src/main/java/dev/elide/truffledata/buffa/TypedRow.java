@@ -49,15 +49,11 @@ public abstract sealed class TypedRow extends AbstractRow implements ProtoAccess
     }
   }
 
-  /**
-   * Layout (plan): ArrayRow is final and each plan owns its schema, so the layout is exactly
-   * (class, schema identity). Every read, bound or checked, still checks the owner's lifetime.
-   */
   private static final class Eager extends Accessor {
     private final ProtoPlan plan;
 
     Eager(ProtoPlan plan, int ordinal) {
-      super(plan.schema(), ordinal, ArrayRow.class);
+      super(plan.schema(), ordinal);
       this.plan = plan;
     }
 
@@ -68,14 +64,6 @@ public abstract sealed class TypedRow extends AbstractRow implements ProtoAccess
 
     private ArrayRow open(Object row) {
       if (!(row instanceof ArrayRow r && r.plan() == plan)) throw mismatch();
-      r.owner.check();
-      return r;
-    }
-
-    /** A row the read node's guard already admitted: only the layout check is skipped. */
-    private ArrayRow trusted(Object row) {
-      assertAccepted(row);
-      var r = (ArrayRow) row;
       r.owner.check();
       return r;
     }
@@ -92,15 +80,7 @@ public abstract sealed class TypedRow extends AbstractRow implements ProtoAccess
 
     @Override
     public long readLong(Object row) throws UnexpectedResultException {
-      return longOf(open(row));
-    }
-
-    @Override
-    protected long readLongBound(Object row) throws UnexpectedResultException {
-      return longOf(trusted(row));
-    }
-
-    private long longOf(ArrayRow r) throws UnexpectedResultException {
+      var r = open(row);
       Object value = r.values[ordinal()];
       if (value instanceof Long number) return number;
       throw new UnexpectedResultException(resolved(r));
@@ -109,16 +89,7 @@ public abstract sealed class TypedRow extends AbstractRow implements ProtoAccess
     /** Scoped arrays and bytes report their size directly; strings resolve once per row. */
     @Override
     public int length(Object row) {
-      return lengthIn(open(row));
-    }
-
-    @Override
-    protected int lengthBound(Object row) {
-      return lengthIn(trusted(row));
-    }
-
-    private int lengthIn(ArrayRow r) {
-      Object value = resolved(r);
+      Object value = resolved(open(row));
       if (value instanceof TypedArray array) return arrayLength(array.size());
       if (value instanceof BorrowedBytes bytes) return arrayLength(bytes.size());
       return lengthOf(value);
@@ -126,32 +97,14 @@ public abstract sealed class TypedRow extends AbstractRow implements ProtoAccess
 
     @Override
     public double readDouble(Object row) throws UnexpectedResultException {
-      return doubleOf(open(row));
-    }
-
-    @Override
-    protected double readDoubleBound(Object row) throws UnexpectedResultException {
-      return doubleOf(trusted(row));
-    }
-
-    private double doubleOf(ArrayRow r) throws UnexpectedResultException {
-      Object value = resolved(r);
+      Object value = resolved(open(row));
       if (value instanceof Double number) return number;
       throw new UnexpectedResultException(value);
     }
 
     @Override
     public boolean readBoolean(Object row) throws UnexpectedResultException {
-      return booleanOf(open(row));
-    }
-
-    @Override
-    protected boolean readBooleanBound(Object row) throws UnexpectedResultException {
-      return booleanOf(trusted(row));
-    }
-
-    private boolean booleanOf(ArrayRow r) throws UnexpectedResultException {
-      Object value = resolved(r);
+      Object value = resolved(open(row));
       if (value instanceof Boolean flag) return flag;
       throw new UnexpectedResultException(value);
     }

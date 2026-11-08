@@ -1,8 +1,10 @@
 # Protobuf B4 — interpreter read design (2026-11-08)
 
-Status: design only. No code, Bazel run or measurement was made for this note. It answers the
-ledger's "address B4 structurally while preserving public mismatch/required/null and borrowed
-lifetime checks" (`2026-11-07-protobuf-performance-ledger.md:321`).
+Status: Phase 1 measured and rejected on 2026-11-08. SVM generated interpreter reads improved
+17.7%, but JVM generated interpreter reads regressed 20.2% and slab resident reads 40.7%, with
+nonoverlapping observed fork ranges. Production was restored; representation/lifetime tests and
+[complete paired evidence](../../../benchmarks/results/protobuf-b4-213a289b/README.md) remain.
+B4 is still open. The design below records the rejected hypothesis; Phase 2 was not started.
 
 ## 0. Gate and evidence
 

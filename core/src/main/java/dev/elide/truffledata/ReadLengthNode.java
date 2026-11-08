@@ -34,7 +34,7 @@ public abstract class ReadLengthNode extends Node {
       @Cached("index") int cachedIndex,
       @Cached("bind(row, cachedIndex)") Accessor accessor) {
     CompilerAsserts.partialEvaluationConstant(accessor);
-    return accessor.lengthBound(row);
+    return accessor.length(row);
   }
 
   @Specialization(

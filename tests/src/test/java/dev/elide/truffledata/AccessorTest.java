@@ -632,11 +632,11 @@ class AccessorTest {
   }
 
   /**
-   * The exact-layout guard is the virtual {@code accepts} for every accessor/row pair, including
+   * The cached guard agrees with {@code accepts} for every accessor/row pair, including
    * rows of the same generated class built with another plan and rows sharing a plan's schema.
    */
   @Test
-  void exactLayoutGuardMatchesAccepts() {
+  void boundGuardMatchesAcceptsAcrossLayouts() {
     try (Context context = context()) {
       try {
         var language = TestLanguage.current().language();
@@ -651,20 +651,11 @@ class AccessorTest {
         rows.add(batch(Schema.of(Field.requiredLong("n"), Field.requiredLong("m")), 7L, 8L));
         rows.add(compact(1));
         rows.add(compact(2));
-        Schema exactSchema = Schema.of(Field.requiredLong("n"));
-        rows.add(new ExactRow(exactSchema, ExactRow.HONEST));
-        rows.add(new ExactRow(exactSchema, ExactRow.HONEST));
-        rows.add(new ExactRow(Schema.of(Field.requiredLong("n")), ExactRow.HONEST));
-        int exact = 0;
         for (Object owner : rows) {
           if (!(owner instanceof AbstractRow row)) continue;
           for (int ordinal : new int[] {0, 1, I64, FLAG, REAL, TEXT}) {
             if (ordinal >= row.schema().size()) continue;
             Accessor accessor = row.accessor(ordinal);
-            if (accessor.exactRowClass != null) {
-              exact++;
-              assertSame(row.getClass(), accessor.exactRowClass);
-            }
             for (Object candidate : rows)
               assertEquals(
                   accessor.accepts(candidate),
@@ -672,23 +663,6 @@ class AccessorTest {
                   accessor.getClass().getSimpleName() + " on " + candidate.getClass());
           }
         }
-        assertTrue(exact > 0, "No exact-layout accessor was exercised");
-        // Generated layouts are (class, plan): the accessor reports the generated class.
-        var generated = (AbstractRow) generated(left, 1, "x");
-        assertSame(generated.getClass(), generated.accessor(I64).exactRowClass);
-        assertNotSame(
-            generated.accessor(I64), ((AbstractRow) generated(right, 1, "x")).accessor(I64));
-        // Slab and static layouts share schemas across layouts, so they keep the virtual guard.
-        assertNull(((AbstractRow) slab(left, 1, "x")).accessor(I64).exactRowClass);
-        assertNull(statics.accessor(0).exactRowClass);
-        // bind keeps the fast guard honest: an exact accessor that disagrees with accepts fails,
-        // whether accepts rejects a row the guard admits or admits a row the guard rejects.
-        var rejecting = new ExactRow(exactSchema, ExactRow.REJECTS);
-        assertThrows(IllegalStateException.class, () -> Accessor.bind(rejecting, 0));
-        var admitting = new ExactRow(exactSchema, ExactRow.HONEST);
-        admitting.accessor = ExactRow.accessor(Schema.of(Field.requiredLong("n")), ExactRow.ADMITS);
-        assertThrows(IllegalStateException.class, () -> Accessor.bind(admitting, 0));
-        assertNotNull(Accessor.bind(rows.get(rows.size() - 3), 0));
       } finally {
         context.leave();
       }
@@ -696,12 +670,12 @@ class AccessorTest {
   }
 
   /**
-   * Node reads go through the bound hooks; they agree with the checked public reads for every
+   * Cached and inline node reads agree with the checked public reads for every
    * representation and ordinal: equal values, equal rejected values for missing, null and
    * wrong-type fields, and equal exception classes.
    */
   @Test
-  void boundHooksOnlySkipTheLayoutCheck() throws Exception {
+  void cachedReadersMatchCheckedAccessorsAcrossRepresentations() throws Exception {
     try (Context context = context()) {
       try {
         var language = TestLanguage.current().language();
@@ -753,23 +727,18 @@ class AccessorTest {
         }
         rows.add(compact(1));
         rows.add(compact(2));
-        rows.add(new ExactRow(Schema.of(Field.requiredLong("n")), ExactRow.HONEST));
-        int hooks = 0;
+        int fields = 0;
         for (Object candidate : rows) {
           AbstractRow row = (AbstractRow) candidate;
           for (int i = 0; i < row.schema().size(); i++) {
             Accessor accessor = row.accessor(i);
             if (accessor instanceof LibraryAccessor) continue;
-            hooks++;
+            fields++;
             String where = row.getClass().getSimpleName() + " ordinal " + i;
             Object longs = outcome(() -> accessor.readLong(row));
             Object doubles = outcome(() -> accessor.readDouble(row));
             Object flags = outcome(() -> accessor.readBoolean(row));
             Object lengths = outcome(() -> accessor.length(row));
-            assertEquals(longs, outcome(() -> accessor.readLongBound(row)), where);
-            assertEquals(doubles, outcome(() -> accessor.readDoubleBound(row)), where);
-            assertEquals(flags, outcome(() -> accessor.readBooleanBound(row)), where);
-            assertEquals(lengths, outcome(() -> accessor.lengthBound(row)), where);
             // A fresh adopted site per field keeps every read on the accessed specialization.
             int ordinal = i;
             Object[] expected = {longs, doubles, flags, lengths};
@@ -787,7 +756,7 @@ class AccessorTest {
             }
           }
         }
-        assertTrue(hooks > 100, "Bound hooks were not exercised across representations");
+        assertTrue(fields > 100, "Cached readers were not exercised across representations");
       } finally {
         context.leave();
       }
@@ -854,102 +823,6 @@ class AccessorTest {
                   default -> accessor.length(row);
                 });
     return value instanceof Rejected ? ContractViolation.class : value;
-  }
-
-  /** Strict mode turns a bound hook called on a row its accessor rejects into an assertion. */
-  @Test
-  void strictBoundHooksAssertTheirGuard() {
-    assertTrue(Accessor.STRICT, "Correctness suite must enable strict mode");
-    try (Context context = context()) {
-      try {
-        var language = TestLanguage.current().language();
-        var left = flat(true);
-        var right = flat(true);
-        Schema schema = Schema.of(Field.requiredLong("n"), Field.requiredLong("m"));
-        Object[][] pairs = {
-          {generated(left, 1, "a"), generated(right, 2, "b")},
-          {owned(left, 1, "a"), owned(right, 2, "b")},
-          {slab(left, 1, "a"), slab(right, 2, "b")},
-          {
-            new StaticLayout(language, schema, Limits.DEFAULT).create(1L, 2L),
-            new StaticLayout(language, schema, Limits.DEFAULT).create(1L, 2L)
-          },
-          {
-            batch(schema, 1L, 2L),
-            batch(Schema.of(Field.requiredLong("n"), Field.requiredLong("m")), 1L, 2L)
-          },
-          {
-            new ExactRow(Schema.of(Field.requiredLong("n")), ExactRow.HONEST),
-            new ExactRow(Schema.of(Field.requiredLong("n")), ExactRow.HONEST)
-          },
-        };
-        for (Object[] pair : pairs) {
-          AbstractRow owner = (AbstractRow) pair[0];
-          Object foreign = pair[1];
-          Accessor accessor = owner.accessor(0);
-          String where = owner.getClass().getSimpleName();
-          assertThrows(AssertionError.class, () -> accessor.readLongBound(foreign), where);
-          assertThrows(AssertionError.class, () -> accessor.readDoubleBound(foreign), where);
-          assertThrows(AssertionError.class, () -> accessor.readBooleanBound(foreign), where);
-          assertThrows(AssertionError.class, () -> accessor.lengthBound(foreign), where);
-          assertThrows(AssertionError.class, () -> accessor.readLongBound("not a row"), where);
-        }
-      } finally {
-        context.leave();
-      }
-    }
-  }
-
-  /**
-   * A one-field row whose layout is (exact class, schema identity). An {@link #HONEST} accessor
-   * accepts exactly that layout; {@link #REJECTS} and {@link #ADMITS} claim the exact guard but
-   * disagree with it, which bind refuses.
-   */
-  @com.oracle.truffle.api.library.ExportLibrary(DataLibrary.class)
-  static final class ExactRow extends AbstractRow {
-    static final int HONEST = 0, REJECTS = 1, ADMITS = 2;
-    Accessor accessor;
-
-    ExactRow(Schema schema, int mode) {
-      super(schema);
-      accessor = accessor(schema, mode);
-    }
-
-    static Accessor accessor(Schema schema, int mode) {
-      return new Accessor(schema, 0, ExactRow.class) {
-        @Override
-        public boolean accepts(Object row) {
-          return mode == ADMITS
-              || (mode == HONEST && row instanceof ExactRow r && r.descriptor == schema());
-        }
-
-        @Override
-        public Object read(Object row) {
-          if (!accepts(row)) throw mismatch();
-          return 5L;
-        }
-      };
-    }
-
-    @Override
-    public Accessor accessor(int ordinal) {
-      return accessor;
-    }
-
-    @com.oracle.truffle.api.library.ExportMessage
-    Schema getSchema() {
-      return descriptor;
-    }
-
-    @com.oracle.truffle.api.library.ExportMessage
-    Object read(int index) {
-      return 5L;
-    }
-
-    @com.oracle.truffle.api.library.ExportMessage
-    boolean isPresent(int index) {
-      return true;
-    }
   }
 
   /** Each accessor method returns or rejects exactly what the uncached library does. */
