@@ -343,7 +343,10 @@ public final class SlabCodec {
           if (field.repeated())
             pending(open, ordinal).append(lazyChild(startBody, length, depth + 1));
           else {
-            if (getInt(out, slot) == 0) putInt(out, slot, lazyChild(startBody, length, depth + 1));
+            if (getInt(out, slot) == 0) {
+              int lazy = lazyChild(startBody, length, depth + 1);
+              putInt(out, slot, lazy);
+            }
             var payloads = merges(open).get(ordinal);
             if (payloads == null) merges(open).set(ordinal, payloads = new ArrayList<>());
             payloads.add(new Payload(r.in, startBody, childEnd));
@@ -606,16 +609,18 @@ public final class SlabCodec {
         }
         continue;
       }
-      List<Long> items = r.pending == null ? null : r.pending[ordinal];
-      if (items == null || items.isEmpty()) continue;
+      Pending items = r.pending == null ? null : r.pending[ordinal];
+      if (items == null || items.size == 0) continue;
       var kind = layout.kind(r.type, ordinal);
-      pendingBytes -= (long) items.size() * (kind == Layout.SlotKind.MAP ? 0 : kind.element);
-      if (kind == Layout.SlotKind.MAP) items = dedup(layout.childType(r.type, ordinal), items);
-      int list = alloc(LIST_ELEMENTS + kind.element * items.size(), 8);
-      putInt(out, list + LIST_COUNT, items.size());
-      for (int i = 0; i < items.size(); i++) {
+      pendingBytes -= (long) items.size * (kind == Layout.SlotKind.MAP ? 0 : kind.element);
+      List<Long> mapped =
+          kind == Layout.SlotKind.MAP ? dedup(layout.childType(r.type, ordinal), items) : null;
+      int count = mapped == null ? items.size : mapped.size();
+      int list = alloc(LIST_ELEMENTS + kind.element * count, 8);
+      putInt(out, list + LIST_COUNT, count);
+      for (int i = 0; i < count; i++) {
         int at = listElement(list, kind.element, i);
-        long bits = items.get(i);
+        long bits = mapped == null ? items.values[i] : mapped.get(i);
         switch (kind.element) {
           case 1 -> out[at] = (byte) bits;
           case 4 -> putInt(out, at, (int) bits);

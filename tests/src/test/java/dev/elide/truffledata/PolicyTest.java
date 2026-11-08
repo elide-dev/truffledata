@@ -40,8 +40,8 @@ class PolicyTest {
             Map.entry("JdbcCursor.java", 7),
             Map.entry("JdbcSource.java", 6),
             Map.entry("ProtobufAdapter.java", 5),
-            // Generated binding, lazy slab layout and the cold durable-array size fallback.
-            Map.entry("ProtoPlan.java", 17),
+            // Generated binding/decoding, lazy layout and the cold durable-array size fallback.
+            Map.entry("ProtoPlan.java", 18),
             Map.entry("SlabMessage.java", 16), // Decode/copy, projected lazy reads, usage and encoding.
             Map.entry("Projection.java", 1), // Invalid field-index diagnostic.
             Map.entry("SlabCodec.java", 1), // Invalid UTF-8 diagnostic construction.

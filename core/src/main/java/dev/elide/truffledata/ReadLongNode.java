@@ -69,4 +69,45 @@ public abstract class ReadLongNode extends Node {
       throw new ContractViolation("Expected a present, non-null INT64");
     }
   }
+
+  /** Bounded reader whose DSL caches can be stored in a caller node. */
+  @GenerateInline
+  @GenerateCached(false)
+  @GenerateUncached
+  @ImportStatic(Accessor.class)
+  public abstract static class InlineReader extends Node {
+    public abstract long execute(Node node, Object row, int index);
+
+    @Specialization(
+        guards = {"index == cachedIndex", "bound(accessor, row)"},
+        limit = "3")
+    static long accessedInline(
+        Object row,
+        int index,
+        @Cached("index") int cachedIndex,
+        @Cached("bind(row, cachedIndex)") Accessor accessor) {
+      return ReadLongNode.accessed(row, index, cachedIndex, accessor);
+    }
+
+    @Specialization(
+        guards = {
+          "data.getSchema(row) == schema",
+          "index == cachedIndex",
+          "schema.requiredLong(cachedIndex)"
+        },
+        limit = "3")
+    static long requiredInline(
+        Object row,
+        int index,
+        @CachedLibrary("row") DataLibrary data,
+        @Cached("data.getSchema(row)") Schema schema,
+        @Cached("index") int cachedIndex) {
+      return ReadLongNode.required(row, index, data, schema, cachedIndex);
+    }
+
+    @Specialization(replaces = {"accessedInline", "requiredInline"})
+    static long genericInline(Object row, int index, @CachedLibrary(limit = "3") DataLibrary data) {
+      return ReadLongNode.generic(row, index, data);
+    }
+  }
 }

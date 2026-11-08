@@ -81,4 +81,46 @@ public abstract class ReadLengthNode extends Node {
     }
     throw new ContractViolation("Expected a present non-null string or array");
   }
+
+  /** Bounded length reader whose DSL caches can be stored in a caller node. */
+  @GenerateInline
+  @GenerateCached(false)
+  @GenerateUncached
+  @ImportStatic(Accessor.class)
+  public abstract static class InlineReader extends Node {
+    public abstract int execute(Node node, Object row, int index);
+
+    @Specialization(
+        guards = {"index == cachedIndex", "bound(accessor, row)"},
+        limit = "3")
+    static int accessedInline(
+        Object row,
+        int index,
+        @Cached("index") int cachedIndex,
+        @Cached("bind(row, cachedIndex)") Accessor accessor) {
+      return ReadLengthNode.accessed(row, index, cachedIndex, accessor);
+    }
+
+    @Specialization(
+        guards = {"data.getSchema(row) == schema", "index == cachedIndex"},
+        limit = "3")
+    static int cachedInline(
+        Object row,
+        int index,
+        @CachedLibrary("row") DataLibrary data,
+        @Cached("data.getSchema(row)") Schema schema,
+        @Cached("index") int cachedIndex,
+        @Cached.Shared("arrays") @CachedLibrary(limit = "3") InteropLibrary arrays) {
+      return ReadLengthNode.cached(row, index, data, schema, cachedIndex, arrays);
+    }
+
+    @Specialization(replaces = {"accessedInline", "cachedInline"})
+    static int genericInline(
+        Object row,
+        int index,
+        @CachedLibrary(limit = "3") DataLibrary data,
+        @Cached.Shared("arrays") @CachedLibrary(limit = "3") InteropLibrary arrays) {
+      return ReadLengthNode.generic(row, index, data, arrays);
+    }
+  }
 }

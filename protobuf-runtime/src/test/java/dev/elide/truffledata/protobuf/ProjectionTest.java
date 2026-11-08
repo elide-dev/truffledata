@@ -147,6 +147,53 @@ class ProjectionTest {
   }
 
   @Test
+  void externalProjectionRejectsHandleCollisionsBeforePublishing() {
+    var plan = plan();
+    byte[] wire = input();
+    var projection = Projection.all(plan);
+    byte[] valid = decode(plan, wire, projection).slabCopy();
+    int name = getInt(valid, ROOT + plan.layout().slot(0, 1));
+    int child = getInt(valid, ROOT + plan.layout().slot(0, 2));
+    for (int at : new int[] {name + STRING_HANDLE, child + RECORD_HANDLE, HEADER_HANDLES}) {
+      byte[] invalid = valid.clone();
+      putInt(invalid, at, at == HEADER_HANDLES ? invalid.length / 4 + 1 : 0);
+      assertThrows(
+          ContractViolation.class,
+          () ->
+              SlabMessage.copyProjectedOf(
+                  plan,
+                  ByteBuffer.wrap(invalid),
+                  ByteBuffer.wrap(wire),
+                  projection,
+                  new SlabLimits(16, 65536)));
+    }
+  }
+
+  @Test
+  void lazySingularSlotSurvivesOutputGrowth() {
+    var plan = plan();
+    int prefixLength = 256 - ROOT - plan.layout().recordBytes(0) - ASCII_HEADER_BYTES - 8;
+    byte[] wire =
+        LayoutTest.wire()
+            .field(1, 7)
+            .string(2, "x".repeat(prefixLength))
+            .message(3, LayoutTest.wire().field(1, 42))
+            .bytes();
+    var projection = Projection.builder(plan).select("id", "name").build().lazyChildren();
+    var message = decode(plan, wire, projection);
+    assertTrue(message.slabBytes() > 256);
+    assertEquals(42, ((SlabRow) message.get(2)).getLong(0));
+    var imported =
+        SlabMessage.copyProjectedOf(
+            plan,
+            ByteBuffer.wrap(message.slabCopy()),
+            ByteBuffer.wrap(wire),
+            projection,
+            new SlabLimits(16, 65536));
+    assertEquals(42, ((SlabRow) imported.get(2)).getLong(0));
+  }
+
+  @Test
   void laxSkipsOnlyUtf8AndLazyReadValidatesStrictly() {
     var plan = plan();
     var projection = Projection.builder(plan).select("id").build().lazyChildren();

@@ -5,6 +5,10 @@ import com.google.protobuf.Syntax;
 import com.google.protobuf.Type;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
+import com.oracle.truffle.api.dsl.Bind;
+import com.oracle.truffle.api.dsl.Cached;
+import com.oracle.truffle.api.dsl.GenerateInline;
+import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.nodes.Node;
@@ -499,7 +503,7 @@ public final class ConsumerComparison {
     @Child private ReadLengthNode fieldsCount = ReadLengthNode.create();
     @Child private ReadLengthNode groupsCount = ReadLengthNode.create();
     @Child private ReadLongNode syntax = ReadLongNode.create();
-    @Child private FieldAudit field = new FieldAudit();
+    @Child private FieldAudit field = ConsumerComparisonFactory.FieldAuditNodeGen.create();
     @Child private InteropLibrary arrays = InteropLibrary.getFactory().createDispatched(3);
 
     SharedRoot(boolean full) {
@@ -517,7 +521,7 @@ public final class ConsumerComparison {
       if (full) {
         Object fields = data.read(row, 1), groups = data.read(row, 2);
         int n = Math.toIntExact(arrays.getArraySize(fields));
-        for (int i = 0; i < n; i++) sum += field.score(arrays.readArrayElement(fields, i));
+        for (int i = 0; i < n; i++) sum += field.execute(arrays.readArrayElement(fields, i));
         int m = Math.toIntExact(arrays.getArraySize(groups));
         for (int i = 0; i < m; i++) sum += ((String) arrays.readArrayElement(groups, i)).length();
       }
@@ -545,17 +549,25 @@ public final class ConsumerComparison {
     }
   }
 
-  private static final class FieldAudit extends Node {
-    @Child private ReadLengthNode name = ReadLengthNode.create();
-    @Child private ReadBooleanNode packed = ReadBooleanNode.create();
-    @Child private ReadLongNode number = ReadLongNode.create();
-    @Child private ReadLongNode kind = ReadLongNode.create();
-    @Child private ReadLongNode cardinality = ReadLongNode.create();
+  @GenerateInline(false)
+  abstract static class FieldAudit extends Node {
+    abstract long execute(Object row);
 
-    long score(Object row) {
-      long sum = name.execute(row, 3);
-      if (packed.execute(row, 6))
-        sum += number.execute(row, 2) * 31L + kind.execute(row, 0) + cardinality.execute(row, 1);
+    @Specialization
+    static long read(
+        Object row,
+        @Bind Node node,
+        @Cached ReadLengthNode.InlineReader name,
+        @Cached ReadBooleanNode.InlineReader packed,
+        @Cached ReadLongNode.InlineReader number,
+        @Cached ReadLongNode.InlineReader kind,
+        @Cached ReadLongNode.InlineReader cardinality) {
+      long sum = name.execute(node, row, 3);
+      if (packed.execute(node, row, 6))
+        sum +=
+            number.execute(node, row, 2) * 31L
+                + kind.execute(node, row, 0)
+                + cardinality.execute(node, row, 1);
       return sum;
     }
   }

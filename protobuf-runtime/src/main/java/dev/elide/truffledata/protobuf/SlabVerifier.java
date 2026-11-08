@@ -3,8 +3,6 @@ package dev.elide.truffledata.protobuf;
 import static dev.elide.truffledata.protobuf.SlabFormat.*;
 
 import dev.elide.truffledata.ContractViolation;
-import java.util.HashMap;
-import java.util.Map;
 import org.jspecify.annotations.Nullable;
 
 /** Structural checks at the external slab boundary, before offsets or handle ids are exposed. */
@@ -17,8 +15,11 @@ final class SlabVerifier {
   private final @Nullable Projection projection;
   private final byte[] input;
   private final int flags;
-  private final Map<Long, Boolean> records = new HashMap<>();
-  private final Map<Integer, Long> usedHandles = new HashMap<>();
+  private final long[] usedHandles;
+  private int soughtType = -1;
+  private int soughtRecord;
+  private boolean foundRecord;
+  private boolean expandedRecord;
 
   private SlabVerifier(byte[] bytes, int extent, Layout layout, SlabLimits limits) {
     this(bytes, extent, layout, limits, null, new byte[0]);
@@ -53,6 +54,8 @@ final class SlabVerifier {
         || handles > extent / 4
         || getInt(bytes, HEADER_RECORDS) < 1
         || getInt(bytes, HEADER_RECORDS) > handles) throw bad();
+    // IDs are dense producer indices, bounded above by the slab extent before allocating.
+    usedHandles = new long[handles];
   }
 
   static void verify(byte[] bytes, Layout layout, SlabLimits limits) {
@@ -72,10 +75,11 @@ final class SlabVerifier {
   static void verifyRecord(byte[] bytes, Layout layout, SlabLimits limits, int type, int record) {
     try {
       var verifier = new SlabVerifier(bytes, bytes.length, layout, limits);
+      verifier.soughtType = type;
+      verifier.soughtRecord = record;
       verifier.unknowns();
       verifier.record(0, ROOT, 1, false);
-      long identity = ((long) type << 32) | Integer.toUnsignedLong(record);
-      if (type < 0 || !verifier.usedHandles.containsValue(identity)) throw bad();
+      if (type < 0 || !verifier.foundRecord) throw bad();
     } catch (IndexOutOfBoundsException failure) {
       throw bad();
     }
@@ -107,11 +111,12 @@ final class SlabVerifier {
       int record) {
     try {
       var verifier = new SlabVerifier(bytes, bytes.length, layout, limits, projection, input);
+      verifier.soughtType = type;
+      verifier.soughtRecord = record;
       verifier.unknowns();
       verifier.record(0, ROOT, 1, false);
-      Boolean expanded = verifier.records.get(((long) type << 32) | Integer.toUnsignedLong(record));
-      if (type < 0 || expanded == null) throw bad();
-      return expanded;
+      if (type < 0 || !verifier.foundRecord) throw bad();
+      return verifier.expandedRecord;
     } catch (IndexOutOfBoundsException failure) {
       throw bad();
     }
@@ -129,8 +134,9 @@ final class SlabVerifier {
   private void handle(int id, int at, int kind) {
     if (id < 0 || id >= handles) throw bad();
     long identity = ((long) kind << 32) | Integer.toUnsignedLong(at);
-    Long previous = usedHandles.putIfAbsent(id, identity);
-    if (previous != null && previous != identity) throw bad();
+    long previous = usedHandles[id];
+    if (previous != 0 && previous != identity) throw bad();
+    usedHandles[id] = identity;
   }
 
   private void unknowns() {
@@ -158,7 +164,10 @@ final class SlabVerifier {
     if (depth > maxDepth) throw bad();
     span(record, layout.recordBytes(type), 8);
     handle(SlabFormat.handle(bytes, record), record, type);
-    records.put(((long) type << 32) | Integer.toUnsignedLong(record), expanded);
+    if (type == soughtType && record == soughtRecord) {
+      foundRecord = true;
+      expandedRecord = expanded;
+    }
     var plan = layout.plan(type);
     for (int ordinal = 0; ordinal < plan.size(); ordinal++) {
       if (!present(bytes, record, ordinal)) continue;

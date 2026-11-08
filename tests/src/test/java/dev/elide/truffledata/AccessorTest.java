@@ -4,9 +4,10 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives;
-import com.oracle.truffle.api.dsl.Introspection;
+import com.oracle.truffle.api.dsl.*;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.LoopNode;
+import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.NodeUtil;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.nodes.UnexpectedResultException;
@@ -60,6 +61,62 @@ class AccessorTest {
   private static Object slab(ProtoPlan plan, long i64, String text) {
     return plan.decodeSlab(
         plan.encode((dev.elide.truffledata.protobuf.ProtoRow) owned(plan, i64, text)));
+  }
+
+  @Test
+  void inlineReadersPreserveCachedContractsAcrossLayoutChurn() {
+    var inline = AccessorTestFactory.InlineSiteNodeGen.create();
+    var longs = ReadLongNode.create();
+    var doubles = ReadDoubleNode.create();
+    var booleans = ReadBooleanNode.create();
+    var lengths = ReadLengthNode.create();
+    for (int layout = 0; layout < 6; layout++) {
+      var plan = flat(false);
+      for (Object row :
+          List.of(
+              generated(plan, layout, "λ😀"),
+              owned(plan, layout, "λ😀"),
+              slab(plan, layout, "λ😀"))) {
+        for (int ordinal = 0; ordinal < plan.size(); ordinal++) {
+          int index = ordinal;
+          assertEquals(
+              outcome(() -> longs.execute(row, index)),
+              outcome(() -> inline.execute(row, index, 0)));
+          assertEquals(
+              outcome(() -> doubles.execute(row, index)),
+              outcome(() -> inline.execute(row, index, 1)));
+          assertEquals(
+              outcome(() -> booleans.execute(row, index)),
+              outcome(() -> inline.execute(row, index, 2)));
+          assertEquals(
+              outcome(() -> lengths.execute(row, index)),
+              outcome(() -> inline.execute(row, index, 3)));
+        }
+      }
+    }
+  }
+
+  @GenerateInline(false)
+  abstract static class InlineSite extends Node {
+    abstract Object execute(Object row, int ordinal, int operation);
+
+    @Specialization
+    static Object read(
+        Object row,
+        int ordinal,
+        int operation,
+        @Bind Node node,
+        @Cached ReadLongNode.InlineReader longs,
+        @Cached ReadDoubleNode.InlineReader doubles,
+        @Cached ReadBooleanNode.InlineReader booleans,
+        @Cached ReadLengthNode.InlineReader lengths) {
+      return switch (operation) {
+        case 0 -> longs.execute(node, row, ordinal);
+        case 1 -> doubles.execute(node, row, ordinal);
+        case 2 -> booleans.execute(node, row, ordinal);
+        default -> lengths.execute(node, row, ordinal);
+      };
+    }
   }
 
   @Test
