@@ -96,7 +96,7 @@ inline constexpr uint32_t doc_schema_1_1 = 1u << 5;       // resolved with the Y
 inline uint64_t lexical_span(const td_tape_view& view, size_t index) {
   uint64_t w = view.words[index];
   uint32_t kind = ct::kind(w);
-  if ((kind == ct::kind_string || kind == ct::kind_decimal) && (w & ct::owned_flag)) return view.words[index + 1];
+  if ((kind == ct::kind_string || kind == ct::kind_decimal) && (w & ct::wide_flag)) return view.words[index + 1];
   if (kind <= ct::kind_string) return uint64_t(ct::low(w)) << 32 | ct::field(w);
   return 0;
 }
@@ -270,9 +270,6 @@ class handler : public c4::yml::EventHandlerStack<handler, handler_state> {
   void start(block_arena* memory, char* input, size_t length, const uint64_t* newlines, const char* pristine,
              const policy& rules, const myna::value_limits& limits, size_t node_hint, size_t byte_hint, bool directories = true) {
     clear();
-    // Templates point into the previous input: never carried across decodes.
-    for (auto& level : templates_)
-      for (key_template& t : level) t.count = 0;
     memory_ = memory;
     input_ = input;
     length_ = length;
@@ -322,9 +319,14 @@ class handler : public c4::yml::EventHandlerStack<handler, handler_state> {
       finish();
     }
   }
-  // Drops the per-decode state before the arena is reset (key tables free into the arena).
+  // Drops per-decode state before arena reset. Incomplete templates are invalidated; checked
+  // templates own their bytes and can be reused by the next document.
   void clear() noexcept {
-    while (depth_) frames_[--depth_].keys.clear();
+    while (depth_) {
+      frame& f = frames_[--depth_];
+      drop_record(f);  // Incomplete/failed mappings never publish a reusable template.
+      f.keys.clear();
+    }
     writer_.reset();
     meta_.forget();
     strings_.forget();
@@ -638,7 +640,7 @@ class handler : public c4::yml::EventHandlerStack<handler, handler_state> {
   static uint64_t raw_span(const uint64_t* words, size_t index) {
     uint64_t w = words[index];
     uint32_t kind = ct::kind(w);
-    if ((kind == ct::kind_string || kind == ct::kind_decimal) && (w & ct::owned_flag)) return words[index + 1];
+    if ((kind == ct::kind_string || kind == ct::kind_decimal) && (w & ct::wide_flag)) return words[index + 1];
     if (kind <= ct::kind_string) return pack(ct::low(w), ct::field(w));
     return 0;
   }
@@ -860,7 +862,7 @@ class handler : public c4::yml::EventHandlerStack<handler, handler_state> {
   struct template_key {
     uint64_t lo, hi;
     uint32_t length, hash;
-    const char* data;
+    const char* data() const { return reinterpret_cast<const char*>(&lo); }
   };
   struct key_template {
     uint32_t count = 0;
@@ -1024,7 +1026,7 @@ class handler : public c4::yml::EventHandlerStack<handler, handler_state> {
     if (!fused_duplicates() && C4_UNLIKELY(!f.keys.insert(memory_, hash, std::string_view(s.str, s.len)))) return false;
     if (f.record != no_template) {
       key_template& t = templates_[level][f.record];
-      if (t.count == f.count && t.count < template_keys) t.keys[t.count++] = {w.lo, w.hi, uint32_t(s.len), hash, s.str};
+      if (t.count == f.count && t.count < template_keys) t.keys[t.count++] = {w.lo, w.hi, uint32_t(s.len), hash};
       else drop_record(f);
     }
     place_fast_key(f, s, w, hash, span, meta);
@@ -1038,7 +1040,7 @@ class handler : public c4::yml::EventHandlerStack<handler, handler_state> {
     if (fused_duplicates() && lookup_directories_) writer_->member_key(f.node, hash);
     // short_plain/short_quoted already proved this padded input span and loaded its bytes.
     if ((meta & meta_style_mask) == 0) writer_->string_ref(unpack(span), plain, true);
-    else writer_->string(std::string_view(s.str, s.len), {}, plain, true);
+    else writer_->string_ref({uint32_t(s.str - input_), uint32_t(s.len)}, {}, plain, true);
     side(node, meta);
     ++f.count;
   }
@@ -1051,12 +1053,12 @@ class handler : public c4::yml::EventHandlerStack<handler, handler_state> {
   // length) the keys so far are a copy of a distinct prefix, so neither the duplicate check nor the
   // hash is needed; the hash comes from the template. On the first difference (or any key taking
   // the general path) the matched prefix is inserted into the mapping's key set from the template
-  // (same bytes) and decoding continues as usual. Templates never outlive a decode.
+  // (same bytes) and decoding continues as usual. Template bytes are owned inline, so a checked template survives input reuse and retain.
   void leave_template(frame& f) {
     if (f.follow != no_template) {
       const key_template& t = templates_[depth_index(f)][f.follow];
       if (!fused_duplicates()) for (size_t k = 0; k < size_t(f.count); ++k)
-        f.keys.insert(memory_, t.keys[k].hash, std::string_view(t.keys[k].data, t.keys[k].length));
+        f.keys.insert(memory_, t.keys[k].hash, std::string_view(t.keys[k].data(), t.keys[k].length));
       f.follow = no_template;
     }
     drop_record(f);
@@ -1082,7 +1084,7 @@ class handler : public c4::yml::EventHandlerStack<handler, handler_state> {
     if (f.kind == frame_kind::pair || (f.kind == frame_kind::map && f.pairs)) return false;
     const size_t node = writer_->word_count();
     const bool plain = ((w.lo | w.hi) & 0x8080808080808080ull) == 0;
-    writer_->string(std::string_view(s.str, s.len), {}, plain, false);
+    writer_->string_ref({uint32_t(s.str - input_), uint32_t(s.len)}, {}, plain, false);
     side(node, uint32_t(style));
     if (f.kind == frame_kind::seq) {
       last_ = {true, node, std::string_view(s.str, s.len), style, false, tag_kind::none, 0, 0, no_anchor, false, 0};
@@ -1286,6 +1288,8 @@ class handler : public c4::yml::EventHandlerStack<handler, handler_state> {
     ct::span raw = unpack(span);
     if (plain && in_input(text.data(), text.size()) && raw.offset == size_t(text.data() - input_) && raw.length == text.size())
       writer_->string_ref(raw, ascii_text(text), key);
+    else if (!pristine_ && in_input(text.data(), text.size()))
+      writer_->string_ref({uint32_t(text.data() - input_), uint32_t(text.size())}, raw, ascii_text(text), key);
     else writer_->string(text, raw, ascii_text(text), key);
   }
 

@@ -12,7 +12,7 @@
 //   I64 3/U64 4/   2            token offset (input)         token length      WIDE; word 1 = value bits
 //   F64 5
 //   DECIMAL 6      1 (2 OWNED)  token offset (input/pool)    token length      OWNED => WIDE, word 1 = raw span
-//   STRING 7       1 (2 OWNED)  decoded offset (input/pool)  decoded length    ASCII, KEY, OWNED => WIDE,
+//   STRING 7       1 (2 WIDE)   decoded offset (input/pool)  decoded length    ASCII, KEY, OWNED => WIDE,
 //                                                                              word 1 = raw span
 //   ARRAY 8/       2            next: the word after the     count (saturates  WIDE; word 1 = (directory
 //   OBJECT 9                    subtree                      at 0xFFFFFF)      index + 1) << 32 | raw offset
@@ -22,7 +22,9 @@
 // Flags: WIDE (bit 59) a second word follows; OWNED (58) text lives in the pool; KEY (57) a STRING
 // in key position; ASCII (56) every decoded byte < 0x80 (a claim: absent means "not known").
 // In a TD_TAPE_YAML view an unowned STRING spans its plain source token directly; other
-// views reference the body inside JSON quotes. Quoted/escaped YAML strings are OWNED.
+// views reference the body inside JSON quotes. YAML alone may combine WIDE with non-OWNED:
+// its decoded text is in the filtered input and word 1 carries an independent raw span (often 0).
+// With pristine source retention, filtered YAML text stays OWNED in the pool.
 // A raw span word is `offset << 32 | length` of the source token in the input (quotes included),
 // 0 when the producer has none. Traversal: a node's successor is `wide ? i + 2 : i + 1`, except a
 // container's, which is its `next`; a container's first child is `container + 2`. Objects
@@ -286,9 +288,10 @@ inline const char* validate(const td_tape_view& v) {
         break;
       case kind_decimal:
       case kind_string:
-        if (wide != owned) return "WIDE differs from OWNED on text";
+        if (wide != owned && !(wide && !owned && k == kind_string && (v.flags & TD_TAPE_YAML)))
+          return "WIDE differs from OWNED on text";
         if (!within(low(w), field(w), owned ? v.pool_bytes : v.input_bytes)) return "text span past its storage";
-        if (owned) {
+        if (wide) {
           uint64_t raw = v.words[i + 1];
           if (!within(raw >> 32, uint32_t(raw), v.input_bytes)) return "raw span past the input";
         }
@@ -902,6 +905,17 @@ template<bool Structural = false> class basic_ctape_writer final {
     in_input(decoded);
     value();
     *push(1) = ctape::make(ctape::kind_string, flags(ascii, key), decoded.length, decoded.offset);
+  }
+  // YAML filtered text in the retained input with an independent raw span. The descriptor
+  // must carry TD_TAPE_YAML; this WIDE/non-OWNED combination remains invalid for JSON.
+  [[gnu::always_inline]] void string_ref(ctape::span decoded, ctape::span raw, bool ascii, bool key) {
+    charge(decoded.length);
+    in_input(decoded);
+    in_input(raw);
+    value();
+    uint64_t* w = push(2);
+    w[0] = ctape::make(ctape::kind_string, flags(ascii, key) | ctape::wide_flag, decoded.length, decoded.offset);
+    w[1] = ctape::raw_word(raw);
   }
   // A STRING with owned decoded text (copied into the pool); `raw` is its source token.
   void string(std::string_view decoded, ctape::span raw, bool ascii, bool key) {

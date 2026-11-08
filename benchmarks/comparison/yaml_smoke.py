@@ -15,7 +15,7 @@ output.mkdir(parents=True, exist_ok=True)
 process.check_returncode()
 rules = {
     'GenericReads[truffledata-yaml-interop]': (2000, 1, 0),
-    'GenericReads[truffledata-yaml-export]': (1000, 2, 0),
+    'GenericReads[truffledata-yaml-export]': (1000, 1, 0),
 }
 seen = set()
 name = None

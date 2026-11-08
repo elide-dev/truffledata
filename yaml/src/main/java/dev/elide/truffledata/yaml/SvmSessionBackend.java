@@ -283,8 +283,14 @@ final class SvmSessionBackend extends YamlSession.Backend {
   }
 
   @Override
+  protected int streamNext(long stream, boolean byKey) {
+    directories(byKey);
+    return streamNext(stream);
+  }
+
+  @Override
   protected int streamNext(long stream) {
-    int status = Yaml.stream_next(WordFactory.pointer(stream), result);
+    int status = Yaml.stream_next(WordFactory.pointer(stream), (options.retainSource() ? 2 : 0) | (directories ? 4 : 0), result);
     if (status != 8 && status != 9) check(status, result);
     return status;
   }

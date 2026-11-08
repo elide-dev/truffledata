@@ -36,7 +36,9 @@ reference tape and the benchmark (`@rapidyaml//:ryml_ints`, testonly).
 ## Tape and side tables
 
 One `td_tape_view` per document, shared with JSON. Plain unfiltered strings reference the
-retained input; quoted, folded and normalized strings use owned text with embedded source spans.
+retained input. Quoted/folded strings filtered in place use a YAML-only WIDE/non-OWNED word
+pair: decoded input span plus independent raw span. Normalized strings, or filtered strings
+with pristine-source retention, use owned text with embedded source spans.
 Numbers and containers occupy two words; ordinary strings, booleans, nulls and references use one
 unless an owned/raw-span payload needs a second word. The `TD_TAPE_YAML` flag identifies plain
 string spans; `TD_TAPE_HAS_META` identifies the metadata table.
@@ -172,3 +174,10 @@ when no directory is present. Retain builds missing directories without moving t
 failed build leaves the borrowed descriptor valid for retry. Java retained and callback reads
 request directories before decode, while sink export and validation omit them. ABI4 gives this
 policy a distinct fingerprint from ABI3.
+
+ABI 5 gives `stream_next` per-document flags: by-key iterators request lookup directories,
+while sequential sink traversal omits them. Both honor source retention. Reserved flags fail
+before consuming buffered input.
+
+Checked short-key templates own their inline bytes and survive stream document/input reuse.
+Incomplete templates are invalidated on errors before reuse; cache misses still check every key.

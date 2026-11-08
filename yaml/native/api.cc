@@ -242,13 +242,15 @@ extern "C" void td_yaml_stream_finish(void* handle) {
   if (handle) static_cast<truffledata::yaml::stream*>(handle)->finish();
 }
 
-extern "C" int32_t td_yaml_stream_next(void* handle, void* output) {
+extern "C" int32_t td_yaml_stream_next(void* handle, uint32_t flags, void* output) {
   if (!handle || !aligned(output)) return TD_YAML_ARGUMENT;
   auto& result = *static_cast<YamlResult*>(output);
   result = {};
+  if (flags & ~uint32_t(TD_YAML_RETAIN_SOURCE | TD_YAML_WANT_DIRECTORIES)) return TD_YAML_ARGUMENT;
   auto& st = *static_cast<truffledata::yaml::stream*>(handle);
   yaml_session::document_view d;
-  int32_t status = st.next(&d);
+  int32_t status = st.next(&d, ((flags & TD_YAML_RETAIN_SOURCE) ? yaml_session::retain_source : 0) |
+      ((flags & TD_YAML_WANT_DIRECTORIES) ? yaml_session::want_directories : 0));
   if (status == TD_YAML_OK) {
     publish_document(result, d, st.owner());
     return status;

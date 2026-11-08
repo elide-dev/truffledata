@@ -192,7 +192,7 @@ uint64_t stream_documents(void* session, const std::string& src) {
   uint64_t nodes = 0;
   for (;;) {
     YamlResult r{};
-    int32_t status = td_yaml_stream_next(st, &r);
+    int32_t status = td_yaml_stream_next(st, 0, &r);
     if (status == TD_YAML_STREAM_EMPTY) break;
     if (status != TD_YAML_OK) std::abort();
     nodes += static_cast<const td_tape_view*>(r.view)->word_count;

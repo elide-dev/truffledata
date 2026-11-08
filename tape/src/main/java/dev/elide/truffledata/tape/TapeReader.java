@@ -130,7 +130,7 @@ public interface TapeReader extends TapeLexical {
     long w = word(node);
     int k = kind(w);
     if (k == 7 || k == 6) {
-      if ((w & OWNED) != 0) return word(node + 1);
+      if ((w & WIDE) != 0) return word(node + 1);
       return k == 7 && (flags() & 8) == 0 ? ((low(w) - 1) << 32) | (field(w) + 2L) : (low(w) << 32) | field(w);
     }
     return k <= 5 ? (low(w) << 32) | field(w) : 0;

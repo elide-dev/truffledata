@@ -73,7 +73,7 @@ class stream final {
   // (more input needed, or the finished stream is exhausted), status_stream_truncated when the
   // finished stream ends inside an incomplete final document, and any decode status otherwise.
   // A failed stream stays failed.
-  int32_t next(session::document_view* out) {
+  int32_t next(session::document_view* out, uint32_t flags = 0) {
     for (;;) {
       if (failed_) return failed_;
       size_t end;
@@ -97,7 +97,7 @@ class stream final {
       if (length > max_document_) return fail(status_limit);
       if (last && incomplete_utf8(chunk, length)) return fail(status_stream_truncated);
       try {
-        *out = session_.decode(chunk, length, 0);
+        *out = session_.decode(chunk, length, flags);
       } catch (const error& e) {
         last_error_ = e;
         // rapidyaml reporting a syntax error on the last line of the final document: the input

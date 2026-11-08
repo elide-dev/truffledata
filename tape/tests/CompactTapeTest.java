@@ -115,6 +115,29 @@ class CompactTapeTest {
     assertEquals(TapeValue.Kind.NULL, owner.root().element(2).kind());
   }
 
+  @Test void yamlInputTextKeepsIndependentRawSpansInSubtreeSnapshots() {
+    byte[] input = "prefix decoded raw-token".getBytes(StandardCharsets.UTF_8);
+    for (long raw : new long[]{0, (15L << 32) | 9}) {
+      Owner owner = new Owner(new HeapTape(new long[]{w(8, TapeReader.WIDE, 1, 4), 0,
+          w(7, TapeReader.WIDE | TapeReader.ASCII, 7, 7), raw},
+          new byte[0], input, new long[0], new int[0], 8));
+      var live = owner.root().element(0);
+      var copy = live.snapshot();
+      assertEquals("decoded", live.stringValue());
+      assertEquals("decoded", copy.root().stringValue());
+      var myna = copy.toMyna();
+      myna.validate();
+      assertEquals("decoded", myna.stringValue(0));
+      if (raw == 0) {
+        assertThrows(IllegalStateException.class, live::rawText);
+        assertThrows(IllegalStateException.class, copy.root()::rawText);
+      } else {
+        assertEquals("raw-token", live.rawText());
+        assertEquals("raw-token", copy.root().rawText());
+      }
+    }
+  }
+
   @Test void readsWideScalarsAndEscapedStrings() {
     Owner owner = document();
     assertEquals(2, owner.root().size());

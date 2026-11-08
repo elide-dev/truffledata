@@ -72,7 +72,8 @@ enum td_yaml_status {
 // the session (the stream borrows the session, which must outlive it). stream_feed copies up to
 // `length` bytes into the carry-over buffer and returns how many it accepted (fewer: backpressure;
 // call stream_next, then feed the rest). stream_finish marks the end of input. stream_next writes the
-// next document as a borrowed result (as session_decode does) and returns TD_YAML_OK,
+// next document as a borrowed result (as session_decode does). Its flags accept TD_YAML_RETAIN_SOURCE
+// and TD_YAML_WANT_DIRECTORIES independently for each document. It returns TD_YAML_OK,
 // TD_YAML_STREAM_EMPTY (no complete document buffered yet, or the finished stream is exhausted),
 // TD_YAML_STREAM_TRUNCATED (the finished input ended inside the final document) or the failing
 // document's status; a failed stream stays failed. documents(byte[]) is a stream fed the whole

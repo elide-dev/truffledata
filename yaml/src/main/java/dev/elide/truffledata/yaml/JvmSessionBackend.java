@@ -330,9 +330,15 @@ final class JvmSessionBackend extends YamlSession.Backend {
   }
 
   @Override
+  protected int streamNext(long stream, boolean byKey) {
+    directories(byKey);
+    return streamNext(stream);
+  }
+
+  @Override
   protected int streamNext(long stream) {
     try {
-      int status = calls.stream_next(MemorySegment.ofAddress(stream), result);
+      int status = calls.stream_next(MemorySegment.ofAddress(stream), (options.retainSource() ? 2 : 0) | (directories ? 4 : 0), result);
       if (status != 8 && status != 9) check(status, result);
       return status;
     } catch (Throwable failure) {

@@ -88,7 +88,7 @@ public final class HeapTape implements TapeReader {
         long base = (w & OWNED) == 0 ? inputFirst : poolFirst;
         // Synthetic scalar values have no lexical span and therefore no input offset.
         if (k >= 6 || field(w) != 0) w = (w & ~0xffffffffL) | (low(w) - base);
-        if ((w & OWNED) != 0 && second != 0) second -= inputFirst << 32;
+        if (k >= 6 && (w & WIDE) != 0 && second != 0) second -= inputFirst << 32;
       }
       words[at] = w;
       if ((w & WIDE) != 0) words[at + 1] = second;

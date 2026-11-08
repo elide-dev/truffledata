@@ -221,6 +221,46 @@ final class YamlIntegrationTest {
   }
 
   @Test
+  void filteredInputStringsSurviveSnapshotsMynaAndRetain() {
+    String input = "prefix: ignore\nchild: {'ke''y': \"caf\\u00E9\\n\", short: 'it''s', long: 'decoded string longer than sixteen bytes'}\nblock: |\n  first line\n  second line\n";
+    dev.elide.truffledata.tape.TapeSnapshot child;
+    try (YamlSession session = YamlJvm.openSession(library());
+        YamlMessage message = session.decode(SvmAcceptance.bytes(input))) {
+      var value = message.root().member("child");
+      assertEquals("café\n", value.member("ke'y").stringValue());
+      assertThrows(IllegalStateException.class, () -> value.member("ke'y").rawText());
+      child = value.snapshot();
+      message.toMyna().validate();
+      var sink = new JavaSink();
+      dev.elide.truffledata.tape.TapeExportNode.create().execute(value, sink);
+      assertEquals(java.util.Map.of("ke'y", "café\n", "short", "it's", "long", "decoded string longer than sixteen bytes"), sink.result());
+      session.validate(SvmAcceptance.bytes("replacement: 'overwrites session input'"));
+      assertEquals("first line\nsecond line\n", message.root().member("block").stringValue());
+    }
+    assertEquals("it's", child.root().member("short").stringValue());
+    assertEquals("café\n", child.root().member("ke'y").stringValue());
+    var myna = child.toMyna();
+    myna.validate();
+    assertEquals("decoded string longer than sixteen bytes", myna.stringValue(myna.find(0, dev.elide.myna.values.ValueTape.Utf8Key.of("long"))));
+  }
+
+  @Test
+  void streamOptionsPreserveSourceAcrossIteratorAndSink() {
+    try (YamlSession session = YamlJvm.openSession(library(), YamlOptions.DEFAULT.retainSource(true));
+        YamlStream documents = session.documents(SvmAcceptance.bytes("--- {a: 'it''s', b: 2}\n--- {a: 'next', b: 3}\n"))) {
+      var first = java.util.Objects.requireNonNull(documents.next());
+      assertEquals("it's", first.member("a").stringValue());
+      assertEquals("'it''s'", first.member("a").rawText());
+      var snapshot = first.snapshot();
+      var sink = new JavaSink();
+      assertTrue(documents.next(sink));
+      assertEquals(java.util.Map.of("a", "next", "b", 3L), sink.result());
+      assertEquals("'it''s'", snapshot.root().member("a").rawText());
+      assertNull(documents.next());
+    }
+  }
+
+  @Test
   void completeDocumentsAndInputValidation() {
     try (YamlSession session = YamlJvm.openSession(library());
         YamlStream documents = session.documents(SvmAcceptance.bytes("---\none\n---\ntwo\n"))) {

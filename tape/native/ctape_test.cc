@@ -84,6 +84,31 @@ void yaml_plain_and_constant_spans() {
   require(throws([&] { w.boolean(false, {14, 1}); }));
 }
 
+void yaml_filtered_input_strings() {
+  const std::string input = "prefix decoded string longer than sixteen bytes raw-token";
+  scratch s;
+  ctape_writer w(&s.arena, {});
+  w.input(input);
+  w.string_ref({7, 40}, {48, 9}, true, false);
+  auto view = w.view();
+  require(c::validate(view) != nullptr);  // Existing JSON combination remains invalid.
+  view.flags |= TD_TAPE_YAML;
+  require(c::validate(view) == nullptr && view.pool_bytes == 0 && view.word_count == 2);
+  require(c::text(view, 0) == input.substr(7, 40));
+  require(view.words[1] == (uint64_t(48) << 32 | 9));
+  auto copied = c::to_myna(view, &s.arena);
+  const auto& value = copied.base.nodes[0];
+  require(value.tag == (MYNA_VALUE_STRING | MYNA_VALUE_REGION_TEXT));
+  require(myna_value_region_id(&value) == 1 && myna_value_offset(&value) == 7 && value.length == 40);
+  uint64_t words[] = {view.words[0], view.words[1]};
+  view.words = words;
+  words[1] = uint64_t(input.size()) << 32 | 1;
+  require(c::validate(view) != nullptr);  // The independent raw span is checked too.
+  words[1] = 0;
+  words[0] = c::make(c::kind_decimal, c::wide_flag, 1, 0);
+  require(c::validate(view) != nullptr);  // DECIMAL retains its original allowed combinations.
+}
+
 void pop_scalar_preserves_pending_keys() {
   scratch s;
   ctape_writer w(&s.arena, {});
@@ -849,6 +874,7 @@ int main() {
       {"words_follow_the_layout", words_follow_the_layout},
       {"pop_scalar_preserves_pending_keys", pop_scalar_preserves_pending_keys},
       {"yaml_plain_and_constant_spans", yaml_plain_and_constant_spans},
+      {"yaml_filtered_input_strings", yaml_filtered_input_strings},
       {"duplicates_detected_in_sorted_directory", duplicates_detected_in_sorted_directory},
       {"singleton_objects_have_no_directory", singleton_objects_have_no_directory},
       {"counts_saturate_and_validate", counts_saturate_and_validate},

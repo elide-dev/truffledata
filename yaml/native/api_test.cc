@@ -219,6 +219,31 @@ void directory_policy() {
   for (size_t fail = 0; fail < allocations; ++fail) exercise(fail);
 }
 
+void persistent_templates() {
+  auto options = defaults();
+  void* s = td_yaml_session_create(&options);
+  require(s);
+  YamlResult borrowed{}, kept{};
+  for (uint32_t flags : {0u, TD_YAML_WANT_DIRECTORIES}) {
+    // A partial mapping may have recorded a duplicate prefix but never checked it at close.
+    for (const char* partial : {"{x: 1, x: [", "{x: 1, y: [", "[{x: 1, y: 2}, {x: 3, x: ["}) {
+      require(run(s, partial, borrowed, flags) == TD_YAML_SYNTAX);
+      require(run(s, "{x: 1, x: 2}", borrowed, flags) == TD_YAML_SYNTAX);
+      require(run(s, "{x: 1, y: 2, x: 3}", borrowed, flags) == TD_YAML_SYNTAX);
+    }
+    require(run(s, "{x: 1, y: 2}", borrowed, flags) == TD_YAML_OK);
+    require(td_yaml_session_retain(s, &kept) == TD_YAML_OK);
+    // Retaining detaches the old input. Mismatch recovery must read the template's owned bytes.
+    require(run(s, "{x: 3, z: 4}", borrowed, flags) == TD_YAML_OK);
+    require(run(s, "{y: 5, x: 6}", borrowed, flags) == TD_YAML_OK);
+    require(run(s, "{x: 1, !!str x: 2}", borrowed, flags) == TD_YAML_SYNTAX);
+    require(run(s, "{x: 1, 'x': 2}", borrowed, flags) == TD_YAML_SYNTAX);
+    require(render(*static_cast<const td_tape_view*>(kept.view)) == "{\"x\":1,\"y\":2}");
+    td_yaml_release(&kept);
+  }
+  td_yaml_session_release(s);
+}
+
 void shared_text_capacity() {
   YamlOptionsStruct options = defaults();
   void* session = td_yaml_session_create(&options);
@@ -352,6 +377,7 @@ int main() {
     typed_plans();
     shared_text_capacity();
     directory_policy();
+    persistent_templates();
     allocation_failures();
   } catch (const std::exception& e) {
     std::fprintf(stderr, "api_test failure: %s\n", e.what());

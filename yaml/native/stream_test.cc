@@ -209,7 +209,7 @@ void c_abi() {
   const std::string text = "%TAG !e! tag:e.com,2000:\n--- !e!m\nk: &a [1]\nv: *a\n...\n--- second\n";
   require(td_yaml_stream_feed(st, reinterpret_cast<const uint8_t*>(text.data()), text.size()) == text.size());
   YamlResult r{};
-  require(td_yaml_stream_next(st, &r) == TD_YAML_OK);
+  require(td_yaml_stream_next(st, 0, &r) == TD_YAML_OK);
   require(!r.owner && r.view && r.tag_count == 1 && r.anchor_count == 1 && r.directive_count == 1);
   auto* tags = static_cast<const YamlSpan*>(r.tags);
   require(std::string(reinterpret_cast<const char*>(r.strings) + tags[0].offset, tags[0].length) == "tag:e.com,2000:m");
@@ -222,10 +222,10 @@ void c_abi() {
   // The stream's current document can be retained like any session document.
   YamlResult kept{};
   require(td_yaml_session_retain(s, &kept) == TD_YAML_OK && kept.anchor_count == 1);
-  require(td_yaml_stream_next(st, &r) == TD_YAML_STREAM_EMPTY);
+  require(td_yaml_stream_next(st, 0, &r) == TD_YAML_STREAM_EMPTY);
   td_yaml_stream_finish(st);
-  require(td_yaml_stream_next(st, &r) == TD_YAML_OK && render(*static_cast<const td_tape_view*>(r.view)) == "\"second\"");
-  require(td_yaml_stream_next(st, &r) == TD_YAML_STREAM_EMPTY);
+  require(td_yaml_stream_next(st, 0, &r) == TD_YAML_OK && render(*static_cast<const td_tape_view*>(r.view)) == "\"second\"");
+  require(td_yaml_stream_next(st, 0, &r) == TD_YAML_STREAM_EMPTY);
   require(render(*static_cast<const td_tape_view*>(kept.view)) == "{\"k\":[1],\"v\":null}");
   td_yaml_stream_release(st);
   // A failing document publishes its error.
@@ -233,8 +233,23 @@ void c_abi() {
   const std::string bad = "a\n---\n[1, 2\n";
   td_yaml_stream_feed(st, reinterpret_cast<const uint8_t*>(bad.data()), bad.size());
   td_yaml_stream_finish(st);
-  require(td_yaml_stream_next(st, &r) == TD_YAML_OK);
-  require(td_yaml_stream_next(st, &r) == TD_YAML_STREAM_TRUNCATED && r.error_line > 0 && r.error_message_length > 0 && !r.view);
+  require(td_yaml_stream_next(st, 0, &r) == TD_YAML_OK);
+  require(td_yaml_stream_next(st, 0, &r) == TD_YAML_STREAM_TRUNCATED && r.error_line > 0 && r.error_message_length > 0 && !r.view);
+  td_yaml_stream_release(st);
+  // Flags apply per document; rejected flags do not consume buffered input.
+  st = td_yaml_stream_create(s, 1 << 20, 1 << 20);
+  const std::string flagged = "--- {a: 'it''s', b: 2}\n--- {a: 3, b: 4}\n";
+  require(td_yaml_stream_feed(st, reinterpret_cast<const uint8_t*>(flagged.data()), flagged.size()) == flagged.size());
+  td_yaml_stream_finish(st);
+  require(td_yaml_stream_next(st, 8, &r) == TD_YAML_ARGUMENT && !r.view);
+  require(td_yaml_stream_next(st, TD_YAML_RETAIN_SOURCE | TD_YAML_WANT_DIRECTORIES, &r) == TD_YAML_OK);
+  const auto& indexed = *static_cast<const td_tape_view*>(r.view);
+  require(!(indexed.flags & TD_TAPE_NO_DIRECTORIES) && indexed.directory_count == 2);
+  uint64_t raw = lexical_span(indexed, testing::ordinal(indexed, 2));
+  require(std::string(reinterpret_cast<const char*>(r.source) + (raw >> 32), uint32_t(raw)) == "'it''s'");
+  require(td_yaml_stream_next(st, 0, &r) == TD_YAML_OK);
+  const auto& scanned = *static_cast<const td_tape_view*>(r.view);
+  require((scanned.flags & TD_TAPE_NO_DIRECTORIES) && scanned.directory_count == 0);
   td_yaml_stream_release(st);
   td_yaml_session_release(s);
   td_yaml_release(&kept);

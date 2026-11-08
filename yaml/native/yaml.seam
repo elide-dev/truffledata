@@ -1,4 +1,4 @@
-module truffledata_yaml abi=4 target=x86_64-unknown-linux-gnu java_package=dev.elide.truffledata.yaml.generated java_class=Yaml c_library=truffledata_yaml c_library_static=true
+module truffledata_yaml abi=5 target=x86_64-unknown-linux-gnu java_package=dev.elide.truffledata.yaml.generated java_class=Yaml c_library=truffledata_yaml c_library_static=true
 struct YamlResult size=448 align=8
   field owner type=ptr<void> offset=0
   field view type=ptr<void> offset=8
@@ -111,6 +111,7 @@ import stream_finish symbol=td_yaml_stream_finish return=void error=no_failure n
 end
 import stream_next symbol=td_yaml_stream_next return=i32 error=no_failure native_leaf=false@explicit_contract
   param stream type=ptr<void> nullable=false ownership=borrowed access=read_write
+  param flags type=u32
   param result type=ptr<void> nullable=false ownership=borrowed access=read_write
 end
 import stream_release symbol=td_yaml_stream_release return=void error=no_failure native_leaf=false@explicit_contract
