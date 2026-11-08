@@ -213,3 +213,16 @@ Resume 2026-11-08 (CodSpeed JSON regressions, analysis only): the simulation's J
 Resume 2026-11-08 (Codex local landing and requested pause): integrated slab `6e65ff7`, B4 `c6474e4` and JSON `6e1cfc1` into `feat/followup-v5`. Slab native smoke passes at measured 168 B generic / 136 B typed/generated, down from 312 B generic; measured breakdown retained. B4 production prototype rejected after complete paired JVM/SVM evidence (+20.2% JVM generated interpreter and +40.7% JVM slab resident); tests/harness/evidence retained, checked production accessors restored. JSON final simulation export/read instructions beat main by 15.67%/8.36%; native/JVM 9/9, 24 graph and nine allocation gates pass. Combined nine-suite JVM coverage, 201-file LCOV validation, access-method contract and 14 reporting-tool tests pass (`018a698d`). See release-resume pause checkpoint and `benchmarks/results/followup-integration-20261108/`. All workers/builds stopped; nothing pushed or published. Remaining performance, verification-time and release gates stay open.
 
 Resume 2026-11-08 (explicit SVM priority): Sam instructs SVM performance to determine optimization admission, with JVM as correctness/test target. Root AGENTS.md records this and supersedes older JVM timing gates. The prior B4 rejection is superseded: exact measured Phase1 production code/API-specific tests are reinstated, retaining the documented JVM tradeoff. Paired SVM full/sparse generated interpretation improves17.7%/12.4%, with overlapping peak ranges; the2.5x SVM target remains open. Seven integrated validation targets passd19a0431 (both native smokes, correctness/allocation); nine coverage suites and the method contract passf2c1f687 with no added exemptions. JSON/CSV audits found no additional proven SVM winner rejected solely for JVM timing. Next-tranche proposals are in docs/superpowers/plans/2026-11-08-svm-next-tranche.md; no new tranche implementation or remote publication started.
+
+
+Resume 2026-11-08 — 0.10.0 release candidate: the five SVM chart sets are integrated
+in `49c3cc1`, with gains, comparisons, tradeoffs and deferred scope in the release
+notes. The external slab verifier fix (`d37d646`, fixture `afa0d3b`) passes independent
+source review, 41 runtime tests (`c61145d9`) and 13 allocation tests (`9a6b979f`);
+original fixture failures and final evidence are preserved. Normal candidate CI
+will supply its SVM allocation/native qualification. All 22 absent-version checks
+and historical Maven metadata imports pass. Linux x86-64 native artifacts were
+built for 0.10.0 (`808b7550`), copied and hashed before changing configuration;
+remaining platform packaging is running. No release artifact is published yet.
+The candidate is ready for the authorized PR push and CI, without repeating the
+performance matrix.
