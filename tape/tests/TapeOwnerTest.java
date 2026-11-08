@@ -16,6 +16,32 @@ import org.junit.jupiter.api.Test;
  */
 class TapeOwnerTest {
   @Test
+  void legacyStreamBackendKeepsItsPolicyForBothAccessModes() {
+    class Legacy extends TapeSession.Backend<TapeOwner> {
+      long last;
+      int calls;
+      @Override protected int streamNext(long stream) { last = stream; return ++calls; }
+      @Override protected void decode(byte[] b, int o, int n, int e, TapeTextArena t) { throw new AssertionError(); }
+      @Override protected void decode(java.lang.foreign.MemorySegment b, long n) { throw new AssertionError(); }
+      @Override protected TapeTextArena textArena(byte[] b) { throw new AssertionError(); }
+      @Override protected TapeBorrow borrow() { throw new AssertionError(); }
+      @Override protected TapeOwner retain() { throw new AssertionError(); }
+      @Override protected void reset() { throw new AssertionError(); }
+      @Override protected void release() { throw new AssertionError(); }
+      @Override protected long streamCreate(int a, int b) { throw new AssertionError(); }
+      @Override protected int streamFeed(long s, byte[] b, int o, int n) { throw new AssertionError(); }
+      @Override protected long streamFeed(long s, java.lang.foreign.MemorySegment b) { throw new AssertionError(); }
+      @Override protected void streamFinish(long s) { throw new AssertionError(); }
+      @Override protected void streamRelease(long s) { throw new AssertionError(); }
+    }
+    Legacy backend = new Legacy();
+    assertEquals(1, backend.streamNext(19, true));
+    assertEquals(19, backend.last);
+    assertEquals(2, backend.streamNext(23, false));
+    assertEquals(23, backend.last);
+  }
+
+  @Test
   void textArenaGrowsOnlyBeforeSharing() {
     class Arena extends TapeTextArena {
       Arena() { super(new byte[2]); }

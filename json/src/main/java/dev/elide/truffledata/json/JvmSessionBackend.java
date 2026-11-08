@@ -220,11 +220,6 @@ final class JvmSessionBackend extends JsonSession.Backend {
     }
   }
 
-  @Override
-  protected int streamNext(long stream, boolean byKey) {
-    directories(byKey);
-    return streamNext(stream);
-  }
 
   @Override
   int streamSkip(long stream) {

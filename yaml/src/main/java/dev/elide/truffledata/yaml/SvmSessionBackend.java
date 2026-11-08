@@ -282,11 +282,6 @@ final class SvmSessionBackend extends YamlSession.Backend {
     Yaml.stream_finish(WordFactory.pointer(stream));
   }
 
-  @Override
-  protected int streamNext(long stream, boolean byKey) {
-    directories(byKey);
-    return streamNext(stream);
-  }
 
   @Override
   protected int streamNext(long stream) {

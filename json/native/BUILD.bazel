@@ -220,6 +220,19 @@ cc_test(
 )
 
 cc_test(
+    name = "text_fusion_test",
+    srcs = ["text_fusion_test.cc"],
+    deps = [":decoder", "//tape/native:testing"],
+)
+
+cc_test(
+    name = "text_fusion_probe",
+    srcs = ["text_fusion_probe.cc"],
+    tags = ["manual"],
+    deps = [":decoder", "//tape/native:testing"],
+)
+
+cc_test(
     name = "stage2_probe",
     srcs = ["stage2_probe.cc", "testing/stage2_baseline_probe.h", "testing/ondemand_decoder.h", "testing/ondemand_pool.h"],
     tags = ["manual"],

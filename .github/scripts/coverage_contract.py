@@ -155,7 +155,6 @@ SVM_ONLY_METHODS = {
         'SvmSessionBackend::streamFeed (J[BII)I',
         'SvmSessionBackend::streamFinish (J)V',
         'SvmSessionBackend::streamNext (J)I',
-        'SvmSessionBackend::streamNext (JZ)I',
         'SvmSessionBackend::streamRelease (J)V',
         'SvmSessionBackend::tape (Lorg/graalvm/nativeimage/c/type/VoidPointer;)Ldev/elide/truffledata/tape/SvmTape;',
         'SvmSessionBackend::textArena ([B)Ldev/elide/truffledata/tape/TapeTextArena;'),

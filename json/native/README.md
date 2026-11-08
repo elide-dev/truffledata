@@ -105,8 +105,9 @@ per-thread state).
 ### Text arenas
 
 With `TD_JSON_WANT_TEXT`, `session_decode` also writes every key and string once into the
-caller's buffer (`tape/native/text_arena.h`, shared with YAML; a post-pass over the finished
-tape): Latin-1 when all code points are at most U+00FF, UTF-16LE (even offset) otherwise, with
+caller's buffer (`tape/native/text_arena.h`, shared with YAML). Warm sessions fuse text writes
+into stage2 while their existing table capacity suffices; first use and capacity misses take the
+post-pass after full validation. Fusion never allocates or skips grammar checks. The representation is Latin-1 when all code points are at most U+00FF, UTF-16LE (even offset) otherwise, with
 one `offset << 32 | bytes << 1 | utf16` entry per node in `JsonResult.text_table` (session arena, valid like the borrowed result).
 `2 × length + 16` bytes always suffice; `TD_JSON_TEXT_TOO_SMALL` reports a smaller buffer and
 leaves the session reusable. Java's `TruffleSink` builds `TruffleString`s over that array without

@@ -244,7 +244,7 @@ int32_t session_decode(json_session& s, const uint8_t* data, uint64_t length, ui
                       utf16    ? json_session::encoding::utf16le
                       : latin1 ? json_session::encoding::latin1
                                : json_session::encoding::utf8,
-                      validate_only, bool(flags & TD_JSON_WANT_DIRECTORIES));
+                      validate_only, bool(flags & TD_JSON_WANT_DIRECTORIES), text_out, size_t(text_capacity));
     const uint64_t* table = nullptr;
     size_t text_bytes = 0;
     if (text) {

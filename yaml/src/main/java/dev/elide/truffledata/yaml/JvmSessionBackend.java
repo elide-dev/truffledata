@@ -329,11 +329,6 @@ final class JvmSessionBackend extends YamlSession.Backend {
     }
   }
 
-  @Override
-  protected int streamNext(long stream, boolean byKey) {
-    directories(byKey);
-    return streamNext(stream);
-  }
 
   @Override
   protected int streamNext(long stream) {

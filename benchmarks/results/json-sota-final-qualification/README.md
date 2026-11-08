@@ -4,7 +4,7 @@ The complete fresh-process runs compare the exact `ce7399f` compatibility image 
 
 ## Pinned native probes
 
-The four `*.bazel.log` files are the exact Bazel-built executables from invocation `b421e652-0695-4e45-aa09-34f336994916`, using their matching `libtape`, simdjson and simdutf shared libraries. They ran sequentially on the same unclemax CPU set. Retained stage2 ratios over the four exact fixtures are 1.346/1.426/1.383/1.377×; validation ratios are 1.486/1.660/1.610/1.583×. Directoryless big/huge ratios are both 1.055×, passing the 1.04× requirement.
+The four `*.bazel.log` files are the exact Bazel-built executables from invocation `b421e652-0695-4e45-aa09-34f336994916`, using their matching `libtape`, simdjson and simdutf shared libraries. They ran sequentially on the same unclemax CPU set. Retained stage2 ratios over the four exact fixtures are 1.346/1.426/1.383/1.377×; validation ratios are 1.486/1.660/1.610/1.583×. Directoryless big/huge ratios are both 1.055×, passing the 1.04× requirement. Retained big/huge miss the original 1.4× threshold; validation small/huge miss 1.6×. The other retained/validation fixture gates pass. A fresh S3n/S3x duplicate-price measurement remains pending.
 
 Streams pass the unchanged 1.45× gate in all five rounds: 1.499/1.505/1.513/1.513/1.517×, at 1.216–1.227 GB/s. Typed flat scalar plans pass 1.1×: 1.882/1.703/1.692/1.734/1.681×. Each ISA candidate passes 30,280 exact-tape/malformed comparisons, but AVX2 gains only 0.1–2.2% and AVX-512 regresses. Both remain test-only under the 3% adoption rule.
 

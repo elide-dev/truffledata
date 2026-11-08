@@ -110,13 +110,14 @@ inline int hex(uint8_t c) {
 
 // Grammar and token semantics over a stage-1 structural index. Writer sees the same events as
 // the On-Demand oracle. One invocation publishes nothing until the whole root passes.
-template<class Writer> class stage2_walk {
+template<class Writer, class Text = void> class stage2_walk {
   const uint8_t* input_;
   const uint8_t* end_;
   const uint32_t* indexes_;
   uint32_t count_, at_ = 0, origin_;
   uint32_t offset(uint32_t at) const { return indexes_[at] - origin_; }
   Writer& writer_;
+  Text* text_;
   struct frame { size_t index; uint64_t count; bool object; };
   frame frames_[128];
   uint32_t depth_ = 0;
@@ -214,16 +215,25 @@ template<class Writer> class stage2_walk {
     }
     return length;
   }
+  [[gnu::always_inline]] size_t text_node() const {
+    if constexpr (!std::is_void_v<Text>) return writer_.word_count();
+    else return 0;
+  }
+  [[gnu::always_inline]] void emitted_text(size_t node) {
+    if constexpr (!std::is_void_v<Text>) text_->emit(writer_, node);
+  }
   [[gnu::always_inline]] void string(uint32_t start, bool key) {
+    const size_t node = text_node();
     const uint8_t* text = input_ + start + 1;
     if (key) {
       uint32_t length = writer_.cached_key_ref(frames_[depth_ - 1].index, start + 1, uint32_t(end_ - text));
-      if (length != UINT32_MAX) { root_end_ = start + length + 2; return; }
+      if (length != UINT32_MAX) { emitted_text(node); root_end_ = start + length + 2; return; }
     }
     auto scan = stage2_detail::scan_string(text, end_);
     if (scan.quote) {
       if (key) writer_.key_text(frames_[depth_ - 1].index, text, scan.length, true);
       writer_.string_ref({start + 1, scan.length}, scan.ascii, key);
+      emitted_text(node);
       root_end_ = start + scan.length + 2;
       return;
     }
@@ -245,6 +255,7 @@ template<class Writer> class stage2_walk {
     if (key) writer_.key_text(frames_[depth_ - 1].index, decoded, length);
     root_end_ = uint32_t(closing + 1 - input_);
     writer_.string_owned(offset, length, {start, root_end_ - start}, ascii, key);
+    emitted_text(node);
   }
   [[gnu::always_inline]] void number(uint32_t start) {
     uint32_t end = at_ == count_ ? uint32_t(end_ - input_) : offset(at_);
@@ -289,8 +300,8 @@ template<class Writer> class stage2_walk {
   }
  public:
   stage2_walk(const uint8_t* input, size_t length, const uint32_t* indexes, uint32_t count, Writer& writer,
-              uint32_t origin = 0)
-      : input_(input), end_(input + length), indexes_(indexes), count_(count), origin_(origin), writer_(writer) {}
+              uint32_t origin = 0, Text* text = nullptr)
+      : input_(input), end_(input + length), indexes_(indexes), count_(count), origin_(origin), writer_(writer), text_(text) {}
   uint32_t position() const { return at_; }
   uint32_t root_end() const { return root_end_; }
   void document() {

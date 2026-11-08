@@ -1,0 +1,7 @@
+# Bounded warm-session text fusion candidate
+
+The optional stage2 observer writes text into the caller buffer and an already allocated session table. It zeros at most the smaller of existing capacity and twice the structural count (a complete compact node emits at most two words per consumed structural position). Capacity misses stop the observer, not parsing; the original postpass runs after full validation. No observer allocation or new limit/status precedence is introduced. Non-text, validate-only and stream instantiations retain the observer-free grammar.
+
+The first prototype zeroed each inter-string gap and regressed the local native pair by about7%; it was rejected. The revised observer zeros the bounded table once. The seven-round paired probe on the same fixture records improves steady single records by1.014–1.058× (one cold round0.999×),20-record arrays by1.058–1.073×, and1,000-record arrays by1.068–1.097×. These local compiler results qualify it for the pinned-toolchain probe, not final adoption.
+
+`//json/native:text_fusion_test` passes3,070 exact words/table/output and status comparisons under ASan+UBSan, covering growth/reuse, empty text, Latin-1/UTF-16/escapes, exact/insufficient output capacity, malformed/duplicate input, reuse after failures and bounded index memory. Existing native API and stream sanitizer tests pass; the unchanged stage2 corpus200/malformed60 and typed143,054-case oracle pass. The manual pair is `//json/native:text_fusion_probe`. Pinned RBE, unclemax and complete TruffleSink image comparisons remain required.

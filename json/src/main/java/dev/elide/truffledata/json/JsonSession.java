@@ -235,11 +235,6 @@ public final class JsonSession extends TapeSession<JsonMessage> {
       return Json.stream_next(WordFactory.pointer(stream), directoryFlag(), result);
     }
 
-    @Override
-    protected int streamNext(long stream, boolean byKey) {
-      directories(byKey);
-      return streamNext(stream);
-    }
 
     @Override
     int streamSkip(long stream) {
