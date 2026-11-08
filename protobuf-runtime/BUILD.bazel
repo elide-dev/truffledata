@@ -51,6 +51,7 @@ java_test(
         "src/test/java/dev/elide/truffledata/protobuf/ProjectionTest.java",
         "src/test/java/dev/elide/truffledata/protobuf/SlabCodecTest.java",
         "src/test/java/dev/elide/truffledata/protobuf/SlabReference.java",
+        "src/test/java/dev/elide/truffledata/protobuf/SlabVerifierTest.java",
     ],
     args = [
         "--class",
@@ -59,6 +60,8 @@ java_test(
         "dev.elide.truffledata.protobuf.SlabCodecTest",
         "--class",
         "dev.elide.truffledata.protobuf.ProjectionTest",
+        "--class",
+        "dev.elide.truffledata.protobuf.SlabVerifierTest",
     ],
     data = [":golden_slabs"],
     jvm_flags = [

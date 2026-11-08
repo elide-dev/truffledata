@@ -37,11 +37,21 @@ public final class SlabMessage extends SlabRow implements ProtoMessage {
   private @Nullable Map<Integer, Object> unsigned;
 
   private SlabMessage(Layout layout, byte[] owned) {
-    this(layout, owned, owned.length);
+    this(layout, owned, owned.length, null);
   }
 
-  private SlabMessage(Layout layout, byte[] owned, int extent) {
-    this(layout, owned, extent, null);
+  /** A slab {@link SlabVerifier#verifyOwning} accepted; {@code exact} runs the full accounting. */
+  private SlabMessage(Layout layout, byte[] owned, int extent, boolean exact) {
+    super(layout);
+    projected = null;
+    bytes = owned;
+    this.extent = extent;
+    if (exact) validate(0, ROOT, new ProtoRow.Budget(plan().limits()), 1);
+  }
+
+  /** Publish an owning slab already verified by {@link SlabVerifier#verifyOwning}. */
+  static SlabMessage owning(Layout layout, byte[] verified, int extent, boolean exact) {
+    return new SlabMessage(layout, verified, extent, exact);
   }
 
   private SlabMessage(Layout layout, byte[] owned, int extent, @Nullable Projected projected) {
@@ -148,8 +158,8 @@ public final class SlabMessage extends SlabRow implements ProtoMessage {
     byte[] owned = new byte[slab.remaining()];
     slab.duplicate().get(owned);
     Layout layout = plan.layout();
-    SlabVerifier.verify(owned, layout, limits);
-    return new SlabMessage(layout, owned);
+    return owning(
+        layout, owned, owned.length, SlabVerifier.verifyOwning(owned, owned.length, layout, limits));
   }
 
   /**
@@ -177,8 +187,9 @@ public final class SlabMessage extends SlabRow implements ProtoMessage {
     if (slab.length > limits.maxSlabBytes())
       throw new ContractViolation("Retained slab byte budget exceeded");
     Layout layout = plan.layout();
-    SlabVerifier.verify(slab, extent, layout, limits);
-    return new SlabMessage(layout, slab, extent);
+    // One walk verifies structure and decides the logical budget and required fields; the exact
+    // accounting runs only when that walk cannot rule a violation out.
+    return owning(layout, slab, extent, SlabVerifier.verifyOwning(slab, extent, layout, limits));
   }
 
   public SlabMessage row() {
