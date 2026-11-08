@@ -315,7 +315,6 @@ proto_contract_library(
     proto_deps = [":wkt_proto"],
 )
 
-
 genrule(
     name = "explicit_host_source",
     testonly = True,
@@ -328,6 +327,9 @@ genrule(
 data_java_library(
     name = "explicit_host_java",
     testonly = True,
-    srcs = [":explicit_host_source", "explicit_host/package-info.java"],
+    srcs = [
+        "explicit_host/package-info.java",
+        ":explicit_host_source",
+    ],
     deps = ["@maven//:com_google_protobuf_protobuf_java"],
 )

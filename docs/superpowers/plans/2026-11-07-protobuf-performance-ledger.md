@@ -216,3 +216,40 @@ is 181.1/155.6 ns (1.164×) on JVM and 9594.6/586.2 ns (16.367×) on SVM. The re
 ≤1.2× gate on both runtimes fails. The amended A4 stop rule therefore keeps table-driven
 Java as the runtime-plan floor; no production compiled-decoder dispatch is adopted.
 Raw logs and the ruling are in benchmarks/results/protobuf-compiled-decoder-dab2dbc5/.
+
+
+### G2 producer matrix documented
+
+BUFFA.md and SLAB.md now distinguish generated contracts, runtime tables, JVM/SVM defaults,
+native-free fallback, selected-field Java tables, native sessions and unchanged text parsing.
+They record the A4 non-adoption ruling and the bounded 64-entry length/extent hint cache,
+including fresh output ownership and per-call capacity limits. No unmeasured speed target
+is presented as achieved. Full G1/E1 measurements and final release qualification remain open.
+
+### E1 first complete resident measurements and concrete follow-up
+
+Invocation `a0c08060-b429-4a00-829e-4d2b4c726df6` runs three fresh processes for every
+projection cell on each runtime. The full results are retained in
+`benchmarks/results/protobuf-projection-a0c08060/`. Native selected-small and selected-holdout
+pass at 0.673× and 0.343×, but lazy holdout misses at 0.503×. JVM selected-small, selected-holdout
+and lazy holdout miss at 1.201×, 0.553× and 0.902×. The additional session-lazy ratios are
+informational, not new release gates. E1 remains open.
+
+Two measured-path inefficiencies are corrected before another qualification: Java's internal
+projected producer no longer runs the external offset/handle verifier in addition to its wire
+checks and logical-budget validation; external slab imports still do. Native owning projected
+decode no longer allocates a temporary borrowed message just to retain and release it. The
+shared session operation preserves its source lease, pin, epoch and failure-release behavior.
+New internal-projection tests cover missing required roots/children, string/cell limits and depth.
+
+### Issue #33 prepared-source qualification
+
+The same invocation passes `//tests:test` and the separate ordinary JVM/SVM ingestion probes.
+The full explicit-plan acceptance matrix covers Editions, scalar/repeated/message extensions,
+known and unknown nested MessageSet, closed-enum-map normalization, preparation eligibility,
+and preflight budget rejection before recursive host sizing. Complete raw samples and the
+methodological limits are retained in `benchmarks/results/protobuf-prepared-source-a0c08060/`.
+Direct generated snapshots are 1.95× JVM / 2.07× SVM the wire route's time on this fixture;
+wire-normalized fallback is 1.37× / 1.41×. Binding samples remain startup-sensitive and are
+reported separately without suppressing outliers. #33 defines no numeric speed threshold;
+its semantic and disclosure requirements are qualified, with no throughput improvement claimed.

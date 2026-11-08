@@ -126,7 +126,7 @@ public class BorrowedSlabRow extends AbstractRow implements ProtoAccess {
     if (!field.repeated() && field.kind() != ProtoPlan.Kind.BYTES)
       throw new ContractViolation("Expected array");
     if (!owner.present(record, ordinal))
-      return field.repeated() ? 0 : ((OwnedArray) field.defaultValue()).size();
+      return field.repeated() ? 0 : ((DataArray) field.defaultValue()).size();
     int offset = owner.word(record + layout.slot(type, ordinal));
     return field.repeated() ? owner.word(offset) : owner.length(offset);
   }

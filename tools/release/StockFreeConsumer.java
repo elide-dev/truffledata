@@ -113,16 +113,16 @@ public final class StockFreeConsumer {
       var durableBackend = plan.decodeSlab(input, 4096);
       check(durableBackend.getLong(0) == 123, "durable backend slab");
       check(Arrays.equals(wire, durableBackend.encode()), "durable backend serialization");
-      SlabMessage durable;
+      SlabMessage durableAfterClose;
       try (var message = plan.decode(input, 4096)) {
-        durable = message;
+        durableAfterClose = message;
         check(getters.get_seconds(message.row()) == 123, "durable scalar");
         check(getters.get_nanos(message.row()) == 456, "durable nanos");
         check(message.snapshot() == message, "identity snapshot");
         check(Arrays.equals(wire, timestamp.encode(message.snapshot())), "detach");
         check(Arrays.equals(wire, message.encode()), "durable serialization");
       }
-      check(getters.get_seconds(durable) == 123, "durable row survives close");
+      check(getters.get_seconds(durableAfterClose) == 123, "durable row survives close");
       try (var text = plan.parseText("seconds: 123 nanos: 456", 4096);
           var json = plan.parseJson("\"1970-01-01T00:02:03.000000456Z\"", 4096)) {
         check(Arrays.equals(wire, text.encode()), "text serialization");

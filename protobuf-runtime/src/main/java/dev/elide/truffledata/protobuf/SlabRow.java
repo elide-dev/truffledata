@@ -145,7 +145,7 @@ public class SlabRow extends AbstractRow implements ProtoAccess {
     if (!field.repeated()) owner.requireValue(type, ordinal, expanded);
     if (!field.repeated() && field.kind() != ProtoPlan.Kind.BYTES)
       throw new ContractViolation("Expected array");
-    if (!has(ordinal)) return field.repeated() ? 0 : ((OwnedArray) field.defaultValue()).size();
+    if (!has(ordinal)) return field.repeated() ? 0 : ((DataArray) field.defaultValue()).size();
     int offset = getInt(owner.bytes, record + layout.slot(type, ordinal));
     return field.repeated()
         ? listCount(owner.bytes, offset)

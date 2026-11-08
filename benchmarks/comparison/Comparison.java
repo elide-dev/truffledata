@@ -898,7 +898,7 @@ public final class Comparison {
     private static Object element(Object array, int index) {
       return array instanceof BorrowedArray borrowed
           ? borrowed.element(index)
-          : ((DataArray) array).get(index);
+          : ((OwnedArray) array).get(index);
     }
 
     public long read(ProtoAccess row) {

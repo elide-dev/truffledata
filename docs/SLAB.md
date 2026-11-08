@@ -33,6 +33,21 @@ A capacity-backed array may be larger than the header's valid extent. Offset val
 uses that extent, `slabCopy()` returns exactly it, and `retainedSlabBytes()` accounts
 for the full array against `maxSlabBytes`.
 
+### Producer selection
+
+Generated contract models bind their Java slab decoder once; runtime-created models use
+`SlabCodec`. `ProtoPlan.decodeSlab` always follows this native-free route. Buffa JVM `AUTO`
+uses Java, while SVM `AUTO` uses the linked native archive when present and otherwise the
+same Java fallback. Explicit native mode can use FFM on the JVM. Selected Java decodes use
+the table producer; native selected decodes use TDP1 with the compiled layout. Native
+sessions reuse caller-owned storage and return epoch-checked borrows rather than changing
+ordinary decode ownership. See the [producer matrix](BUFFA.md#producer-and-ownership-matrix)
+for text and explicit retention behavior.
+
+The experimental Truffle-compiled decoder is not a production dispatch option: its joint
+JVM/SVM speed gate failed. This does not change the generated-contract path or the required
+native-free fallback.
+
 ## Conventions
 
 - All integers are little-endian. `u16`/`u32`/`u64` are unsigned unless stated; slot values keep
@@ -288,7 +303,7 @@ back field by field against `ProtoRow`.
 
 ### Generated decoder selection
 
-`ContractPlugin.create` supplies immutable per-type decoder factories in the generated `ProtoPlan.Model`. The first slab decode binds that type's generated decoder once; subsequent `SlabMessage.decode` and Buffa Java-backend calls reuse the binding. Runtime-created models retain the table producer. Generated fast loops cover ordinary scalar, oneof, repeated and nested-message cases and restart through the table producer for unknown fields, maps, groups and singular-message merges. Both paths write the same format and preserve byte parity. A capacity hint retains only the previous wire length and slab extent; output arrays are never cached.
+`ContractPlugin.create` supplies immutable per-type decoder factories in the generated `ProtoPlan.Model`. The first slab decode binds that type's generated decoder once; subsequent `SlabMessage.decode` and Buffa Java-backend calls reuse the binding. Runtime-created models retain the table producer. Generated fast loops cover ordinary scalar, oneof, repeated and nested-message cases and restart through the table producer for unknown fields, maps, groups and singular-message merges. Both paths write the same format and preserve byte parity. A bounded 64-entry atomic hint table retains wire-length/slab-extent pairs, avoiding repeated growth for varied input sizes. Each candidate capacity is checked against the current limits before allocation; collisions or concurrent updates affect capacity estimates only. Input and output arrays are never cached, and every returned slab owns fresh storage.
 
 ### Native arena borrows
 

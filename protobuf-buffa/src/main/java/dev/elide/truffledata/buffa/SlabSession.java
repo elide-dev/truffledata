@@ -117,6 +117,21 @@ public final class SlabSession implements AutoCloseable {
   /** Reuse the arena. Failed attempts also invalidate previous results; pinned attempts do not. */
   @TruffleBoundary
   public BorrowedSlabMessage decode(WireInput input) {
+    decodeInto(input);
+    return new BorrowedSlabMessage(this, epoch);
+  }
+
+  // The owning plan copies immediately, so it does not need a temporary borrow wrapper.
+  SlabMessage decodeRetained(WireInput input) {
+    decodeInto(input);
+    try {
+      return retain(epoch);
+    } finally {
+      release(epoch);
+    }
+  }
+
+  private void decodeInto(WireInput input) {
     writable();
     decoder.check();
     invalidate();
@@ -158,7 +173,6 @@ public final class SlabSession implements AutoCloseable {
       }
       try {
         validate();
-        return new BorrowedSlabMessage(this, epoch);
       } catch (RuntimeException | Error failure) {
         invalidate();
         throw failure;

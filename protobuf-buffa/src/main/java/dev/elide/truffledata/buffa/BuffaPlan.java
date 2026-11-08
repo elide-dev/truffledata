@@ -158,9 +158,7 @@ public final class BuffaPlan implements AutoCloseable {
           session = new SlabSession(decoder, plan, maxSchemaBytes, limits, selection);
       projectedLimits = limits;
     }
-    try (var message = session.decode(input)) {
-      return message.retain();
-    }
+    return session.decodeRetained(input);
   }
 
   private long slabLayout() {

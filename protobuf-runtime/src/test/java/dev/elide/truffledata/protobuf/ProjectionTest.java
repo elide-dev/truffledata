@@ -5,9 +5,11 @@ import static dev.elide.truffledata.protobuf.SlabFormat.*;
 import static org.junit.jupiter.api.Assertions.*;
 
 import dev.elide.truffledata.ContractViolation;
+import dev.elide.truffledata.Limits;
 import dev.elide.truffledata.OwnedArray;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 
 class ProjectionTest {
@@ -143,6 +145,50 @@ class ProjectionTest {
     assertThrows(ContractViolation.class, () -> deferred.get(2));
     byte[] malformed = {26, 2, 18, 4};
     assertThrows(ContractViolation.class, () -> decode(plan, malformed, projection.lax()));
+  }
+
+  @Test
+  void internalProjectionEnforcesRequiredFieldsAndLogicalBudgets() {
+    var root =
+        LayoutTest.type(
+            "Root",
+            LayoutTest.required("id", 1, INT32),
+            LayoutTest.scalar("name", 2, STRING, false),
+            LayoutTest.message("child", 3, "Child", false));
+    var child = LayoutTest.type("Child", LayoutTest.required("value", 1, INT32));
+    var plan = LayoutTest.model(root, child).type("Root");
+    var selection = Projection.builder(plan).select("name").build().lazyChildren();
+    assertThrows(ContractViolation.class, () -> decode(plan, new byte[0], selection));
+    byte[] missingChild = LayoutTest.wire().field(1, 1).message(3, LayoutTest.wire()).bytes();
+    assertThrows(ContractViolation.class, () -> decode(plan, missingChild, selection));
+    var valid = LayoutTest.wire().field(1, 1).string(2, "abc");
+    var limited =
+        new ProtoPlan.Model(null, List.of(root, child), new Limits(16, 16, 16, 5), 8, 1024)
+            .type("Root");
+    assertThrows(
+        ContractViolation.class,
+        () -> decode(limited, valid.bytes(), Projection.builder(limited).select("name").build()));
+    var lowCells =
+        new ProtoPlan.Model(
+                null,
+                List.of(LayoutTest.type("Values", LayoutTest.repeated("values", 1, INT32, false))),
+                new Limits(16, 16, 2, 1024),
+                8,
+                1024)
+            .type("Values");
+    assertThrows(
+        ContractViolation.class,
+        () ->
+            decode(
+                lowCells,
+                LayoutTest.wire().field(1, 1).field(1, 2).bytes(),
+                Projection.all(lowCells)));
+    byte[] nested = valid.message(3, LayoutTest.wire().field(1, 7)).bytes();
+    assertThrows(
+        ContractViolation.class,
+        () ->
+            SlabMessage.decode(
+                plan, nested, 0, nested.length, new SlabLimits(0, 65536), selection));
   }
 
   @Test

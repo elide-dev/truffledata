@@ -1243,21 +1243,36 @@ final class TypedAcceptance {
     try (var compiled = decoder.compile(scalar, 65536);
         var input = decoder.allocate(2).put(new byte[] {8, 42});
         var session = compiled.newSession(4096)) {
-      for (int i = 0; i < 20000; i++) session.decode(input).getLong(0);
+      // Warm the same call site that measurement uses, including its host FFM adapter profile.
+      long until = System.nanoTime() + 1_500_000_000L;
+      do {
+        sessionDecodeSum(session, input, 20000);
+      } while (System.nanoTime() < until);
       if (!org.graalvm.nativeimage.ImageInfo.inImageCode()) {
         var bean =
             (com.sun.management.ThreadMXBean)
                 java.lang.management.ManagementFactory.getThreadMXBean();
         bean.setThreadAllocatedMemoryEnabled(true);
-        long id = Thread.currentThread().threadId(), before = bean.getThreadAllocatedBytes(id);
-        long sum = 0;
-        for (int i = 0; i < 20000; i++) sum += session.decode(input).getLong(0);
-        double allocated = (bean.getThreadAllocatedBytes(id) - before) / 20000.0;
-        Acceptance.check(
-            sum == 840000 && allocated <= 48.1,
-            "session decode Java allocation <=48 bytes: " + allocated);
+        long id = Thread.currentThread().threadId();
+        double[] rounds = new double[3];
+        for (int round = 0; round < rounds.length; round++) {
+          long before = bean.getThreadAllocatedBytes(id);
+          long sum = sessionDecodeSum(session, input, 20000);
+          rounds[round] = (bean.getThreadAllocatedBytes(id) - before) / 20000.0;
+          Acceptance.check(sum == 840000, "session decode checksum");
+        }
+        System.out.println("SESSION decode bytes/message=" + Arrays.toString(rounds));
+        for (double allocated : rounds)
+          Acceptance.check(
+              allocated <= 48.1, "session decode Java allocation <=48 bytes: " + allocated);
       }
     }
+  }
+
+  private static long sessionDecodeSum(SlabSession session, WireInput input, int count) {
+    long sum = 0;
+    for (int i = 0; i < count; i++) sum += session.decode(input).getLong(0);
+    return sum;
   }
 
   private static void heapSlabGcStress(BuffaWire decoder) {
