@@ -23,3 +23,9 @@ Task 2 followup: the checked writer remains the shared YAML/On-Demand default. A
 Ordinary numeric shortcuts preserve typing and limit classification: signed integers with at most18 digits fit I64 (negative zero remains F64); validate-only fixed-point tokens with at most18 digits cannot overflow or underflow binary64. Every other token still uses the pinned number parser and exact DECIMAL fallback. Boundary-number, repeated escaped-key and every-prefix truncation differentials pass. Local ASan+UBSan passes the structural corpus and million-key test after reserved appends/deferred scratch, and the corpus again after the carried-string scan change.
 
 The paired RBE result in [c8037437](https://app.buildbuddy.io/invocation/c8037437-590f-4105-b0dc-564b25845ab5) is retained1.349/1.460/1.447/1.394× and validate1.491/1.738/1.719/1.646×. Small validate and huge retained still miss their unchanged targets, so Task2 remains open. Results and harness: `benchmarks/results/json-sota-structural-followup/`. The earlier [d6a84c7b](https://app.buildbuddy.io/invocation/d6a84c7b-b2d0-415a-bfca-4b982f54b6cf) also passes the native API, compact writer and million-key gates; current corpus and Java Native Image acceptance pass in c8037437. Directories opt-in, structural streams, typed qualification, ISA and unclemax measurements remain unimplemented.
+
+Validate-only escaped value strings now validate every escape, Unicode surrogate pair and decoded
+length without copying bytes into a discarded pool. Escaped keys still materialize for duplicate
+comparison, and retained strings keep their original emission. Local Apple clang ASan+UBSan
+structural differentials pass; paired RBE measurement remains pending, so the small-validate and
+huge-retained gaps above are still open.

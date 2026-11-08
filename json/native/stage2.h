@@ -131,25 +131,33 @@ template<class Writer> class stage2_walk {
       }
     }
   };
-  uint32_t unescape(const uint8_t* text, const uint8_t*& closing, stage2_detail::scan_hit run, bool& ascii) {
-    uint8_t* first = writer_.pool_reserve(size_t(end_ - text));
+  template<bool Copy = true> uint32_t unescape(const uint8_t* text, const uint8_t*& closing, stage2_detail::scan_hit run, bool& ascii) {
+    uint8_t* first = nullptr;
+    if constexpr (Copy) first = writer_.pool_reserve(size_t(end_ - text));
     uint8_t* out = first;
+    uint32_t length = 0;
+    auto emit = [&](uint8_t byte) {
+      if constexpr (Copy) *out++ = byte;
+      else ++length;
+    };
     ascii = true;
     for (;;) {
       ascii &= run.ascii;
-      std::memcpy(out, text, run.length); out += run.length; text += run.length;
+      if constexpr (Copy) { std::memcpy(out, text, run.length); out += run.length; }
+      else length += run.length;
+      text += run.length;
       if (run.quote) { closing = text; break; }
       if (end_ - text < 2) stage2_detail::syntax("truncated JSON escape");
       uint8_t escape = text[1]; text += 2;
       switch (escape) {
-        case '"': *out++ = '"'; break;
-        case '\\': *out++ = '\\'; break;
-        case '/': *out++ = '/'; break;
-        case 'b': *out++ = '\b'; break;
-        case 'f': *out++ = '\f'; break;
-        case 'n': *out++ = '\n'; break;
-        case 'r': *out++ = '\r'; break;
-        case 't': *out++ = '\t'; break;
+        case '"': emit('"'); break;
+        case '\\': emit('\\'); break;
+        case '/': emit('/'); break;
+        case 'b': emit('\b'); break;
+        case 'f': emit('\f'); break;
+        case 'n': emit('\n'); break;
+        case 'r': emit('\r'); break;
+        case 't': emit('\t'); break;
         case 'u': {
           auto read4 = [&](const uint8_t* p) {
             if (end_ - p < 4) stage2_detail::syntax("truncated JSON Unicode escape");
@@ -171,15 +179,15 @@ template<class Writer> class stage2_walk {
             text += 6;
           } else if (codepoint >= 0xdc00 && codepoint <= 0xdfff) stage2_detail::syntax("unpaired JSON surrogate");
           ascii &= codepoint < 0x80;
-          if (codepoint < 0x80) *out++ = uint8_t(codepoint);
+          if (codepoint < 0x80) emit(uint8_t(codepoint));
           else if (codepoint < 0x800) {
-            *out++ = uint8_t(0xc0 | (codepoint >> 6)); *out++ = uint8_t(0x80 | (codepoint & 63));
+            emit(uint8_t(0xc0 | (codepoint >> 6))); emit(uint8_t(0x80 | (codepoint & 63)));
           } else if (codepoint < 0x10000) {
-            *out++ = uint8_t(0xe0 | (codepoint >> 12)); *out++ = uint8_t(0x80 | ((codepoint >> 6) & 63));
-            *out++ = uint8_t(0x80 | (codepoint & 63));
+            emit(uint8_t(0xe0 | (codepoint >> 12))); emit(uint8_t(0x80 | ((codepoint >> 6) & 63)));
+            emit(uint8_t(0x80 | (codepoint & 63)));
           } else {
-            *out++ = uint8_t(0xf0 | (codepoint >> 18)); *out++ = uint8_t(0x80 | ((codepoint >> 12) & 63));
-            *out++ = uint8_t(0x80 | ((codepoint >> 6) & 63)); *out++ = uint8_t(0x80 | (codepoint & 63));
+            emit(uint8_t(0xf0 | (codepoint >> 18))); emit(uint8_t(0x80 | ((codepoint >> 12) & 63)));
+            emit(uint8_t(0x80 | ((codepoint >> 6) & 63))); emit(uint8_t(0x80 | (codepoint & 63)));
           }
           break;
         }
@@ -187,8 +195,10 @@ template<class Writer> class stage2_walk {
       }
       run = stage2_detail::scan_string(text, end_);
     }
-    uint32_t length = uint32_t(out - first);
-    writer_.pool_commit(length);
+    if constexpr (Copy) {
+      length = uint32_t(out - first);
+      writer_.pool_commit(length);
+    }
     return length;
   }
   [[gnu::always_inline]] void string(uint32_t start, bool key) {
@@ -203,6 +213,16 @@ template<class Writer> class stage2_walk {
       writer_.string_ref({start + 1, scan.length}, scan.ascii, key);
       root_end_ = start + scan.length + 2;
       return;
+    }
+    if constexpr (!Writer::retains_values) {
+      if (!key) {
+        const uint8_t* closing;
+        bool ascii;
+        uint32_t length = unescape<false>(text, closing, scan, ascii);
+        root_end_ = uint32_t(closing + 1 - input_);
+        writer_.string_owned(0, length, {start, root_end_ - start}, ascii, false);
+        return;
+      }
     }
     uint32_t offset = uint32_t(writer_.pool_size());
     const uint8_t* closing;
