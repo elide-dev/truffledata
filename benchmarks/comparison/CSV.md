@@ -1,5 +1,15 @@
 # CSV comparison
 
+For a before/after SVM experiment, `:csv_pair` accepts an executable through
+`--//benchmarks/comparison:csv_svm_baseline=//path:binary`. Each of its eight
+fixture shards interleaves both binaries on the same worker with three fresh
+forks, verifies complete result checksums and input hashes, and retains raw
+timing/allocation records plus medians and fork ranges. `CSV_PAIR_SHARDS` and
+`CSV_PAIR_ENGINES` select an explicit subset; source revisions can be supplied as
+`CSV_PAIR_BASELINE_REVISION` and `CSV_PAIR_CANDIDATE_REVISION`. Output uses the
+separate `csv-pair-1` schema, not the older single-binary report format. The
+default includes owned-input string batches and retained typed read controls.
+
 The comparison cell for the CSV backend (plan Task 7, expanded). It measures the structural-index
 kernels (`csv/native`, `csv/kernel`) and the current pure-Java scanner against the Java CSV field
 and native references, on identical bytes and on the same worker.

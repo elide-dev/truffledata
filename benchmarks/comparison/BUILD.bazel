@@ -575,6 +575,23 @@ label_flag(
 
 # ---- CSV comparison (benchmarks/comparison/CSV.md). Competitors are benchmark-only dependencies.
 
+label_flag(
+    name = "csv_svm_baseline",
+    build_setting_default = ":csv_svm",
+)
+
+sh_test(
+    name = "csv_pair",
+    size = "enormous",
+    srcs = ["csv_pair.sh"],
+    args = ["$(rootpath :csv_svm)", "$(rootpath :csv_svm_baseline)"],
+    data = ["csv_pair.py", ":csv_svm", ":csv_svm_baseline"],
+    exec_properties = {"EstimatedCPU": "4", "EstimatedMemory": "16GB"},
+    shard_count = 8,
+    tags = ["benchmark", "manual"],
+    target_compatible_with = ["@platforms//os:linux", "@platforms//cpu:x86_64"],
+)
+
 # Benchmark-only access to package-private CSV internals (the strict scanner, UTF-8 validator and
 # number parsers); never part of a published artifact.
 data_java_library(
