@@ -613,6 +613,345 @@ class AccessorTest {
     return plan.decode(plan.encode(builder.build()));
   }
 
+  /** Every row of the plan's layout family, plus rows that share a plan's schema identity. */
+  private static List<Object> layoutFamily(ProtoPlan left, ProtoPlan right) {
+    var library = DataLibrary.factory().getUncached();
+    Object ownedLeft = owned(left, 10, "l");
+    Object[] values = new Object[left.size()];
+    for (int i = 0; i < values.length; i++) values[i] = library.read(ownedLeft, i);
+    return List.of(
+        generated(left, 10, "l"),
+        generated(right, 20, "rr"),
+        ownedLeft,
+        owned(right, 20, "rr"),
+        slab(left, 10, "l"),
+        slab(right, 20, "rr"),
+        // A batch row whose descriptor is the left plan's own schema: only the class differs.
+        batch(left.schema(), values),
+        "not a row");
+  }
+
+  /**
+   * The exact-layout guard is the virtual {@code accepts} for every accessor/row pair, including
+   * rows of the same generated class built with another plan and rows sharing a plan's schema.
+   */
+  @Test
+  void exactLayoutGuardMatchesAccepts() {
+    try (Context context = context()) {
+      try {
+        var language = TestLanguage.current().language();
+        var left = flat(true);
+        var right = flat(true);
+        List<Object> rows = new ArrayList<>(layoutFamily(left, right));
+        Schema schema = Schema.of(Field.requiredLong("n"), Field.requiredLong("m"));
+        AbstractRow statics = new StaticLayout(language, schema, Limits.DEFAULT).create(1L, 2L);
+        rows.add(statics);
+        rows.add(new StaticLayout(language, schema, Limits.DEFAULT).create(3L, 4L));
+        rows.add(batch(schema, 5L, 6L));
+        rows.add(batch(Schema.of(Field.requiredLong("n"), Field.requiredLong("m")), 7L, 8L));
+        rows.add(compact(1));
+        rows.add(compact(2));
+        Schema exactSchema = Schema.of(Field.requiredLong("n"));
+        rows.add(new ExactRow(exactSchema, ExactRow.HONEST));
+        rows.add(new ExactRow(exactSchema, ExactRow.HONEST));
+        rows.add(new ExactRow(Schema.of(Field.requiredLong("n")), ExactRow.HONEST));
+        int exact = 0;
+        for (Object owner : rows) {
+          if (!(owner instanceof AbstractRow row)) continue;
+          for (int ordinal : new int[] {0, 1, I64, FLAG, REAL, TEXT}) {
+            if (ordinal >= row.schema().size()) continue;
+            Accessor accessor = row.accessor(ordinal);
+            if (accessor.exactRowClass != null) {
+              exact++;
+              assertSame(row.getClass(), accessor.exactRowClass);
+            }
+            for (Object candidate : rows)
+              assertEquals(
+                  accessor.accepts(candidate),
+                  Accessor.bound(accessor, candidate),
+                  accessor.getClass().getSimpleName() + " on " + candidate.getClass());
+          }
+        }
+        assertTrue(exact > 0, "No exact-layout accessor was exercised");
+        // Generated layouts are (class, plan): the accessor reports the generated class.
+        var generated = (AbstractRow) generated(left, 1, "x");
+        assertSame(generated.getClass(), generated.accessor(I64).exactRowClass);
+        assertNotSame(
+            generated.accessor(I64), ((AbstractRow) generated(right, 1, "x")).accessor(I64));
+        // Slab and static layouts share schemas across layouts, so they keep the virtual guard.
+        assertNull(((AbstractRow) slab(left, 1, "x")).accessor(I64).exactRowClass);
+        assertNull(statics.accessor(0).exactRowClass);
+        // bind keeps the fast guard honest: an exact accessor that disagrees with accepts fails,
+        // whether accepts rejects a row the guard admits or admits a row the guard rejects.
+        var rejecting = new ExactRow(exactSchema, ExactRow.REJECTS);
+        assertThrows(IllegalStateException.class, () -> Accessor.bind(rejecting, 0));
+        var admitting = new ExactRow(exactSchema, ExactRow.HONEST);
+        admitting.accessor = ExactRow.accessor(Schema.of(Field.requiredLong("n")), ExactRow.ADMITS);
+        assertThrows(IllegalStateException.class, () -> Accessor.bind(admitting, 0));
+        assertNotNull(Accessor.bind(rows.get(rows.size() - 3), 0));
+      } finally {
+        context.leave();
+      }
+    }
+  }
+
+  /**
+   * Node reads go through the bound hooks; they agree with the checked public reads for every
+   * representation and ordinal: equal values, equal rejected values for missing, null and
+   * wrong-type fields, and equal exception classes.
+   */
+  @Test
+  void boundHooksOnlySkipTheLayoutCheck() throws Exception {
+    try (Context context = context()) {
+      try {
+        var language = TestLanguage.current().language();
+        Schema schema =
+            Schema.of(
+                Field.requiredLong("n"),
+                new Field("o", Field.Kind.INT64, true, true),
+                new Field("d", Field.Kind.FLOAT64, false, false)
+                    .withConstraints(Constraints.NONE.withFloatBits(32)),
+                new Field("e", Field.Kind.FLOAT64, true, true),
+                new Field("b", Field.Kind.BOOLEAN, true, true),
+                new Field("s", Field.Kind.STRING, true, true),
+                new Field("r", Field.Kind.RECORD, true, true),
+                new Field("x", Field.Kind.ANY, true, true),
+                Field.integer("narrow", 16, false, false, false));
+        AbstractRow nested = batch(Schema.of(Field.requiredLong("q")), 3L);
+        var layout = new StaticLayout(language, schema, Limits.DEFAULT);
+        List<Object> rows = new ArrayList<>();
+        for (Object[] values :
+            new Object[][] {
+              {1L, 2L, 1.5, 2.5, true, "s", nested, 9L, 65535L},
+              {
+                1L,
+                DataNull.INSTANCE,
+                1.5,
+                Missing.INSTANCE,
+                DataNull.INSTANCE,
+                Missing.INSTANCE,
+                Missing.INSTANCE,
+                "x",
+                0L
+              },
+            }) {
+          rows.add(layout.create(values));
+          rows.add(batch(schema, values));
+        }
+        for (ProtoPlan plan : new ProtoPlan[] {flat(true), flat(false)}) {
+          rows.add(generated(plan, 4, "λ😀"));
+          rows.add(owned(plan, 4, "λ😀"));
+          rows.add(slab(plan, 4, "λ😀"));
+          for (int copy = 0; copy < 2; copy++) {
+            var sparse =
+                plan.newBuilder()
+                    .set(PRESENT, 3L)
+                    .set(U64, java.math.BigInteger.valueOf(7))
+                    .build();
+            rows.add(copy == 0 ? sparse : plan.decodeSlab(plan.encode(sparse)));
+          }
+        }
+        rows.add(compact(1));
+        rows.add(compact(2));
+        rows.add(new ExactRow(Schema.of(Field.requiredLong("n")), ExactRow.HONEST));
+        int hooks = 0;
+        for (Object candidate : rows) {
+          AbstractRow row = (AbstractRow) candidate;
+          for (int i = 0; i < row.schema().size(); i++) {
+            Accessor accessor = row.accessor(i);
+            if (accessor instanceof LibraryAccessor) continue;
+            hooks++;
+            String where = row.getClass().getSimpleName() + " ordinal " + i;
+            Object longs = outcome(() -> accessor.readLong(row));
+            Object doubles = outcome(() -> accessor.readDouble(row));
+            Object flags = outcome(() -> accessor.readBoolean(row));
+            Object lengths = outcome(() -> accessor.length(row));
+            assertEquals(longs, outcome(() -> accessor.readLongBound(row)), where);
+            assertEquals(doubles, outcome(() -> accessor.readDoubleBound(row)), where);
+            assertEquals(flags, outcome(() -> accessor.readBooleanBound(row)), where);
+            assertEquals(lengths, outcome(() -> accessor.lengthBound(row)), where);
+            // A fresh adopted site per field keeps every read on the accessed specialization.
+            int ordinal = i;
+            Object[] expected = {longs, doubles, flags, lengths};
+            for (boolean inline : new boolean[] {false, true}) {
+              var target = new ReaderParityRoot().getCallTarget();
+              for (int operation = 0; operation < 4; operation++) {
+                int read = operation;
+                Object want = expected[operation];
+                if (want instanceof Rejected) want = ContractViolation.class;
+                assertEquals(
+                    want,
+                    outcome(() -> target.call(row, ordinal, read, inline)),
+                    where + " op " + read);
+              }
+            }
+          }
+        }
+        assertTrue(hooks > 100, "Bound hooks were not exercised across representations");
+      } finally {
+        context.leave();
+      }
+    }
+  }
+
+  /**
+   * A site warmed on one layout still rejects rows of another layout that share its generated
+   * class or its schema identity: the cached accessor never reads them, the public read raises
+   * {@link ContractViolation}, and the site respecializes to the correct value, for the shared
+   * nodes and the inline readers alike.
+   */
+  @Test
+  void foreignLayoutStillRejectedThroughNodes() {
+    try (Context context = context()) {
+      try {
+        var left = flat(false);
+        var right = flat(false);
+        List<Object> rows = layoutFamily(left, right);
+        Object home = rows.get(0);
+        // Home ordinals first so each reader meets its own field before any rejection.
+        int[] ordinals = {I64, REAL, FLAG, TEXT};
+        for (boolean inline : new boolean[] {false, true}) {
+          for (int operation = 0; operation < 4; operation++) {
+            int read = operation, ordinal = ordinals[operation];
+            var root = new ReaderParityRoot();
+            var target = root.getCallTarget();
+            for (int warm = 0; warm < 3; warm++) target.call(home, ordinal, read, inline);
+            Accessor cached = ((AbstractRow) home).accessor(ordinal);
+            for (Object row : rows) {
+              if (!(row instanceof AbstractRow foreign)) continue;
+              Object expected = expected(foreign.accessor(ordinal), foreign, read);
+              if (row != home) {
+                assertFalse(cached.accepts(row), foreign.getClass().getSimpleName());
+                assertEquals(ContractViolation.class, outcome(() -> cached.read(row)));
+                assertEquals(ContractViolation.class, expected(cached, foreign, read));
+              }
+              assertEquals(expected, outcome(() -> target.call(row, ordinal, read, inline)));
+              // The home row still reads its own value after the site saw the foreign layout.
+              assertEquals(
+                  expected(cached, (AbstractRow) home, read),
+                  outcome(() -> target.call(home, ordinal, read, inline)));
+            }
+          }
+        }
+        // The shared ReadLongNode keeps one accessed instance per layout until its limit.
+        assertSites(List.of(rows.get(0), rows.get(1)), new long[] {10, 20}, I64);
+        assertSites(List.of(rows.get(0), rows.get(4), rows.get(6)), new long[] {10, 10, 10}, I64);
+      } finally {
+        context.leave();
+      }
+    }
+  }
+
+  /** The checked public value a node read of {@code operation} reports, rejections as classes. */
+  private static Object expected(Accessor accessor, AbstractRow row, int operation) {
+    Object value =
+        outcome(
+            () ->
+                switch (operation) {
+                  case 0 -> accessor.readLong(row);
+                  case 1 -> accessor.readDouble(row);
+                  case 2 -> accessor.readBoolean(row);
+                  default -> accessor.length(row);
+                });
+    return value instanceof Rejected ? ContractViolation.class : value;
+  }
+
+  /** Strict mode turns a bound hook called on a row its accessor rejects into an assertion. */
+  @Test
+  void strictBoundHooksAssertTheirGuard() {
+    assertTrue(Accessor.STRICT, "Correctness suite must enable strict mode");
+    try (Context context = context()) {
+      try {
+        var language = TestLanguage.current().language();
+        var left = flat(true);
+        var right = flat(true);
+        Schema schema = Schema.of(Field.requiredLong("n"), Field.requiredLong("m"));
+        Object[][] pairs = {
+          {generated(left, 1, "a"), generated(right, 2, "b")},
+          {owned(left, 1, "a"), owned(right, 2, "b")},
+          {slab(left, 1, "a"), slab(right, 2, "b")},
+          {
+            new StaticLayout(language, schema, Limits.DEFAULT).create(1L, 2L),
+            new StaticLayout(language, schema, Limits.DEFAULT).create(1L, 2L)
+          },
+          {
+            batch(schema, 1L, 2L),
+            batch(Schema.of(Field.requiredLong("n"), Field.requiredLong("m")), 1L, 2L)
+          },
+          {
+            new ExactRow(Schema.of(Field.requiredLong("n")), ExactRow.HONEST),
+            new ExactRow(Schema.of(Field.requiredLong("n")), ExactRow.HONEST)
+          },
+        };
+        for (Object[] pair : pairs) {
+          AbstractRow owner = (AbstractRow) pair[0];
+          Object foreign = pair[1];
+          Accessor accessor = owner.accessor(0);
+          String where = owner.getClass().getSimpleName();
+          assertThrows(AssertionError.class, () -> accessor.readLongBound(foreign), where);
+          assertThrows(AssertionError.class, () -> accessor.readDoubleBound(foreign), where);
+          assertThrows(AssertionError.class, () -> accessor.readBooleanBound(foreign), where);
+          assertThrows(AssertionError.class, () -> accessor.lengthBound(foreign), where);
+          assertThrows(AssertionError.class, () -> accessor.readLongBound("not a row"), where);
+        }
+      } finally {
+        context.leave();
+      }
+    }
+  }
+
+  /**
+   * A one-field row whose layout is (exact class, schema identity). An {@link #HONEST} accessor
+   * accepts exactly that layout; {@link #REJECTS} and {@link #ADMITS} claim the exact guard but
+   * disagree with it, which bind refuses.
+   */
+  @com.oracle.truffle.api.library.ExportLibrary(DataLibrary.class)
+  static final class ExactRow extends AbstractRow {
+    static final int HONEST = 0, REJECTS = 1, ADMITS = 2;
+    Accessor accessor;
+
+    ExactRow(Schema schema, int mode) {
+      super(schema);
+      accessor = accessor(schema, mode);
+    }
+
+    static Accessor accessor(Schema schema, int mode) {
+      return new Accessor(schema, 0, ExactRow.class) {
+        @Override
+        public boolean accepts(Object row) {
+          return mode == ADMITS
+              || (mode == HONEST && row instanceof ExactRow r && r.descriptor == schema());
+        }
+
+        @Override
+        public Object read(Object row) {
+          if (!accepts(row)) throw mismatch();
+          return 5L;
+        }
+      };
+    }
+
+    @Override
+    public Accessor accessor(int ordinal) {
+      return accessor;
+    }
+
+    @com.oracle.truffle.api.library.ExportMessage
+    Schema getSchema() {
+      return descriptor;
+    }
+
+    @com.oracle.truffle.api.library.ExportMessage
+    Object read(int index) {
+      return 5L;
+    }
+
+    @com.oracle.truffle.api.library.ExportMessage
+    boolean isPresent(int index) {
+      return true;
+    }
+  }
+
   /** Each accessor method returns or rejects exactly what the uncached library does. */
   static void agree(AbstractRow row) throws Exception {
     var library = DataLibrary.factory().getUncached();

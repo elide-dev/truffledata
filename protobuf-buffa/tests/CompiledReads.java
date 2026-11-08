@@ -30,6 +30,7 @@ final class CompiledReads {
       try {
         cachedPlans(decoder);
         arrayViews(decoder);
+        interpretedLifetimes(decoder);
         var cachedRoot = new WktRoot(false);
         var cachedTarget = cachedRoot.getCallTarget();
         try (var message = plan.parseJson("7", 4096)) {
@@ -60,6 +61,105 @@ final class CompiledReads {
       } finally {
         context.leave();
       }
+    }
+  }
+
+  /**
+   * Interpreter-tier lifetimes (the enclosing context disables compilation): adopted read nodes
+   * cache each layout's accessor, and their bound reads still reject a closed typed message and a
+   * reset or closed slab session through ReadLongNode, ReadDoubleNode, ReadBooleanNode and
+   * ReadLengthNode.
+   */
+  private static void interpretedLifetimes(BuffaWire decoder) {
+    var sample = TypedAcceptance.plan("Sample");
+    int[] typedOrdinals = {
+      sample.schema().indexOf("count"),
+      sample.schema().indexOf("f"),
+      sample.schema().indexOf("flag"),
+      sample.schema().indexOf("text")
+    };
+    Object[] typedValues = {1234L, 1.5, true, 5};
+    try (var compiled = decoder.compile(sample, 65536)) {
+      var root = new LifetimeRoot();
+      var target = root.getCallTarget();
+      for (int round = 0; round < 3; round++) {
+        var message =
+            compiled.parseText("count: 1234 text: 'hello' blob: 'abc' f: 1.5 flag: true", 4096);
+        Object row = message.row();
+        interpretedReads(target, row, typedOrdinals, typedValues, "typed");
+        message.close();
+        interpretedRejections(target, row, typedOrdinals, "closed typed message");
+      }
+      Acceptance.check(NodeUtil.countNodes(root) <= 64, "interpreted lifetime AST budget");
+    }
+    if (decoder.selected() == BuffaWire.Selected.JAVA) return;
+    var model =
+        dev.elide.truffledata.generated.TruffleDataContracts.create(
+            TestLanguage.current(), Limits.DEFAULT, 16, 65536);
+    var flat = model.type("truffledata.lossless.Flat");
+    // Flat ordinals: i64, real, flag, text.
+    int[] slabOrdinals = {1, 12, 10, 13};
+    Object[] slabValues = {7L, 2.5, true, 3};
+    byte[] wire =
+        flat.encode(
+            flat.newBuilder().set(1, 7L).set(12, 2.5).set(10, true).set(13, "λ😀").build());
+    try (var plan = decoder.compile(flat, 65536);
+        var input = decoder.allocate(wire.length).put(wire);
+        var session = plan.newSession(4096)) {
+      var root = new LifetimeRoot();
+      var target = root.getCallTarget();
+      Object row = session.decode(input);
+      Acceptance.check(row instanceof BorrowedSlabRow, "slab session yields borrowed rows");
+      interpretedReads(target, row, slabOrdinals, slabValues, "slab session");
+      session.reset();
+      interpretedRejections(target, row, slabOrdinals, "reset slab session");
+      Object current = session.decode(input);
+      interpretedReads(target, current, slabOrdinals, slabValues, "slab session after reset");
+      session.close();
+      interpretedRejections(target, current, slabOrdinals, "closed slab session");
+      Acceptance.check(NodeUtil.countNodes(root) <= 64, "interpreted slab AST budget");
+    }
+  }
+
+  private static void interpretedReads(
+      CallTarget target, Object row, int[] ordinals, Object[] values, String what) {
+    for (int warm = 0; warm < 3; warm++)
+      for (int operation = 0; operation < ordinals.length; operation++)
+        Acceptance.check(
+            values[operation].equals(target.call(row, operation, ordinals[operation])),
+            what + " interpreted read " + operation);
+  }
+
+  private static void interpretedRejections(
+      CallTarget target, Object row, int[] ordinals, String what) {
+    for (int operation = 0; operation < ordinals.length; operation++) {
+      int read = operation;
+      Acceptance.rejects(
+          () -> target.call(row, read, ordinals[read]), IllegalStateException.class);
+    }
+  }
+
+  private static final class LifetimeRoot extends RootNode {
+    @Child private ReadLongNode longs = ReadLongNode.create();
+    @Child private ReadDoubleNode doubles = ReadDoubleNode.create();
+    @Child private ReadBooleanNode booleans = ReadBooleanNode.create();
+    @Child private ReadLengthNode lengths = ReadLengthNode.create();
+
+    LifetimeRoot() {
+      super(null);
+    }
+
+    @Override
+    public Object execute(VirtualFrame frame) {
+      Object[] args = frame.getArguments();
+      Object row = args[0];
+      int operation = (Integer) args[1], ordinal = (Integer) args[2];
+      return switch (operation) {
+        case 0 -> longs.execute(row, ordinal);
+        case 1 -> doubles.execute(row, ordinal);
+        case 2 -> booleans.execute(row, ordinal);
+        default -> lengths.execute(row, ordinal);
+      };
     }
   }
 
