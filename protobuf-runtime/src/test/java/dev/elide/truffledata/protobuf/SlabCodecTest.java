@@ -9,10 +9,58 @@ import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Random;
+import java.util.concurrent.Callable;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
 import org.junit.jupiter.api.Test;
 
 /** Production Java slabs against the independent format model and native producer goldens. */
 class SlabCodecTest {
+  @Test
+  void concurrentColdAndWarmHandleReadsKeepOneFullyInitializedView() throws Exception {
+    var plan = ProjectionTest.plan();
+    try (var pool = Executors.newFixedThreadPool(8)) {
+      for (int round = 0; round < 20; round++) {
+        var message = SlabMessage.decode(plan, ProjectionTest.input());
+        var start = new CountDownLatch(1);
+        Callable<Object[]> read =
+            () -> {
+              start.await();
+              Object child = message.get(2);
+              Object name = message.get(1);
+              Object blob = message.get(4);
+              Object children = message.get(3);
+              for (int repeat = 0; repeat < 100; repeat++) {
+                assertSame(child, message.get(2));
+                assertSame(name, message.get(1));
+                assertSame(blob, message.get(4));
+                assertSame(children, message.get(3));
+                var row = (SlabRow) child;
+                assertEquals(42L, row.getLong(0));
+                assertEquals("λ😀", row.get(1));
+                assertEquals("hidden", name);
+                var bytes = (dev.elide.truffledata.OwnedArray) blob;
+                assertEquals(4, bytes.size());
+                assertEquals(1L, bytes.get(0));
+                // Child/text misses race with hits on the already published root entries.
+                var array = (dev.elide.truffledata.OwnedArray) children;
+                assertEquals(2, array.size());
+                assertEquals("λ😀", ((SlabRow) array.get(repeat & 1)).get(1));
+              }
+              return new Object[] {child, name, blob, children};
+            };
+        var readers = new java.util.ArrayList<java.util.concurrent.Future<Object[]>>();
+        for (int worker = 0; worker < 8; worker++) readers.add(pool.submit(read));
+        start.countDown();
+        Object[] expected = readers.getFirst().get();
+        for (var reader : readers) {
+          Object[] actual = reader.get();
+          for (int i = 0; i < expected.length; i++) assertSame(expected[i], actual[i]);
+        }
+      }
+    }
+  }
+
   @Test
   void projectedWindowsHaveExactBudgetsAndRelativeExternalOffsets() {
     ProtoPlan plan = ProjectionTest.plan();

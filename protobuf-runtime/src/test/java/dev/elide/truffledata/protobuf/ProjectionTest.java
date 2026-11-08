@@ -10,9 +10,49 @@ import dev.elide.truffledata.OwnedArray;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
 import org.junit.jupiter.api.Test;
 
 class ProjectionTest {
+  @Test
+  void concurrentLazyChildPublicationChargesTheBudgetOnce() throws Exception {
+    var plan = plan();
+    var projection = Projection.builder(plan).select("id", "blob").build().lazyChildren();
+    var sequential = decode(plan, input(), projection);
+    var expectedChild = (SlabRow) sequential.get(2);
+    assertEquals("λ😀", expectedChild.get(1));
+    var expectedUsage = sequential.logicalUsage();
+    int expectedRetained = sequential.retainedSlabBytes();
+    try (var pool = Executors.newFixedThreadPool(8)) {
+      for (int round = 0; round < 20; round++) {
+        var message = decode(plan, input(), projection);
+        var start = new CountDownLatch(1);
+        var readers = new java.util.ArrayList<java.util.concurrent.Future<SlabRow>>();
+        for (int worker = 0; worker < 8; worker++)
+          readers.add(
+              pool.submit(
+                  () -> {
+                    start.await();
+                    var child = (SlabRow) message.get(2);
+                    for (int repeat = 0; repeat < 100; repeat++) {
+                      assertSame(child, message.get(2));
+                      assertEquals(42L, child.getLong(0));
+                      assertEquals("λ😀", child.get(1));
+                      assertEquals(expectedRetained, message.retainedSlabBytes());
+                    }
+                    return child;
+                  }));
+        start.countDown();
+        var first = readers.getFirst().get();
+        for (var reader : readers) assertSame(first, reader.get());
+        assertEquals(expectedUsage, message.logicalUsage());
+        assertEquals(expectedRetained, message.retainedSlabBytes());
+        assertThrows(ContractViolation.class, () -> message.get(1));
+      }
+    }
+  }
+
   static ProtoPlan plan() {
     return LayoutTest.model(
             LayoutTest.type(

@@ -5,6 +5,8 @@ import static dev.elide.truffledata.protobuf.SlabFormat.*;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import dev.elide.truffledata.*;
 import java.io.ByteArrayOutputStream;
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.VarHandle;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -13,6 +15,8 @@ import org.jspecify.annotations.Nullable;
 
 /** Durable owning slab result. Closing is a no-op and snapshot preserves identity. */
 public final class SlabMessage extends SlabRow implements ProtoMessage {
+  private static final VarHandle HANDLE_SLOT = MethodHandles.arrayElementVarHandle(Object[].class);
+
   // The valid extent is the verified header word HEADER_BYTES_USED, not a field: the message
   // object stays at 48 bytes on SVM (compressed references, 8-byte header).
   final byte[] bytes;
@@ -33,7 +37,8 @@ public final class SlabMessage extends SlabRow implements ProtoMessage {
     }
   }
 
-  private Object @Nullable [] handles;
+  // Publishing the table is separate from publishing each lazily initialized entry.
+  private volatile Object @Nullable [] handles;
   /** Lazy views: a list at its slab offset, a boxed unsigned 64-bit value at {@code ~slot}. */
   private @Nullable Map<Integer, Object> views;
 
@@ -240,29 +245,47 @@ public final class SlabMessage extends SlabRow implements ProtoMessage {
   @Override
   public void close() {}
 
+  /** Miss paths hold this message's monitor while allocating the table and publishing entries. */
   private Object[] cache() {
     Object[] values = handles;
     if (values == null) handles = values = new Object[getInt(bytes, HEADER_HANDLES)];
     return values;
   }
 
+  private @Nullable Object cached(int handle) {
+    Object[] values = handles;
+    return values == null ? null : HANDLE_SLOT.getAcquire(values, handle);
+  }
+
   SlabRow row(int type, int record) {
     return row(type, record, false);
   }
 
+  SlabRow row(int type, int record, boolean expanded) {
+    int handle =
+        record < 0 ? getInt(bytes, (record & ~LAZY_CHILD) + 8) : handle(bytes, record);
+    if (cached(handle) instanceof SlabRow row) return row;
+    return createRow(type, record, expanded);
+  }
+
   @TruffleBoundary
-  synchronized SlabRow row(int type, int record, boolean expanded) {
+  private synchronized SlabRow createRow(int type, int record, boolean expanded) {
     if (record < 0) return realize(type, record & ~LAZY_CHILD);
     int handle = handle(bytes, record);
     Object[] values = cache();
     if (values[handle] instanceof SlabRow row) return row;
     SlabRow row = new SlabRow(this, type, record, expanded);
-    values[handle] = row;
+    HANDLE_SLOT.setRelease(values, handle, row);
     return row;
   }
 
+  String text(int header) {
+    if (cached(stringHandle(bytes, header)) instanceof String text) return text;
+    return createText(header);
+  }
+
   @TruffleBoundary
-  synchronized String text(int header) {
+  private synchronized String createText(int header) {
     int handle = stringHandle(bytes, header);
     Object[] values = cache();
     if (values[handle] instanceof String text) return text;
@@ -272,17 +295,22 @@ public final class SlabMessage extends SlabRow implements ProtoMessage {
             payload(bytes, header),
             SlabFormat.stringLength(bytes, header),
             StandardCharsets.UTF_8);
-    values[handle] = text;
+    HANDLE_SLOT.setRelease(values, handle, text);
     return text;
   }
 
+  SlabBytes blob(int header) {
+    if (cached(stringHandle(bytes, header)) instanceof SlabBytes array) return array;
+    return createBlob(header);
+  }
+
   @TruffleBoundary
-  synchronized SlabBytes blob(int header) {
+  private synchronized SlabBytes createBlob(int header) {
     int handle = stringHandle(bytes, header);
     Object[] values = cache();
     if (values[handle] instanceof SlabBytes array) return array;
     SlabBytes array = new SlabBytes(this, header);
-    values[handle] = array;
+    HANDLE_SLOT.setRelease(values, handle, array);
     return array;
   }
 
@@ -338,7 +366,8 @@ public final class SlabMessage extends SlabRow implements ProtoMessage {
     state.budget.cells(childBudget.cellCount());
     state.budget.bytes(childBudget.byteCount());
     state.materializedBytes += child.retainedSlabBytes();
-    cached[handle] = child;
+    // The release also publishes the committed lazy budget and retained-byte accounting.
+    HANDLE_SLOT.setRelease(cached, handle, child);
     return child;
   }
 
