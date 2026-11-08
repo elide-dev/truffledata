@@ -265,13 +265,12 @@ public final class SlabMessage extends SlabRow implements ProtoMessage {
     int handle =
         record < 0 ? getInt(bytes, (record & ~LAZY_CHILD) + 8) : handle(bytes, record);
     if (cached(handle) instanceof SlabRow row) return row;
-    return createRow(type, record, expanded);
+    return createRow(type, record, expanded, handle);
   }
 
   @TruffleBoundary
-  private synchronized SlabRow createRow(int type, int record, boolean expanded) {
-    if (record < 0) return realize(type, record & ~LAZY_CHILD);
-    int handle = handle(bytes, record);
+  private synchronized SlabRow createRow(int type, int record, boolean expanded, int handle) {
+    if (record < 0) return realize(type, record & ~LAZY_CHILD, handle);
     Object[] values = cache();
     if (values[handle] instanceof SlabRow row) return row;
     SlabRow row = new SlabRow(this, type, record, expanded);
@@ -280,13 +279,13 @@ public final class SlabMessage extends SlabRow implements ProtoMessage {
   }
 
   String text(int header) {
-    if (cached(stringHandle(bytes, header)) instanceof String text) return text;
-    return createText(header);
+    int handle = stringHandle(bytes, header);
+    if (cached(handle) instanceof String text) return text;
+    return createText(header, handle);
   }
 
   @TruffleBoundary
-  private synchronized String createText(int header) {
-    int handle = stringHandle(bytes, header);
+  private synchronized String createText(int header, int handle) {
     Object[] values = cache();
     if (values[handle] instanceof String text) return text;
     String text =
@@ -300,13 +299,13 @@ public final class SlabMessage extends SlabRow implements ProtoMessage {
   }
 
   SlabBytes blob(int header) {
-    if (cached(stringHandle(bytes, header)) instanceof SlabBytes array) return array;
-    return createBlob(header);
+    int handle = stringHandle(bytes, header);
+    if (cached(handle) instanceof SlabBytes array) return array;
+    return createBlob(header, handle);
   }
 
   @TruffleBoundary
-  private synchronized SlabBytes createBlob(int header) {
-    int handle = stringHandle(bytes, header);
+  private synchronized SlabBytes createBlob(int header, int handle) {
     Object[] values = cache();
     if (values[handle] instanceof SlabBytes array) return array;
     SlabBytes array = new SlabBytes(this, header);
@@ -341,9 +340,8 @@ public final class SlabMessage extends SlabRow implements ProtoMessage {
     return result;
   }
 
-  private SlabMessage realize(int type, int header) {
+  private SlabMessage realize(int type, int header, int handle) {
     Projected state = java.util.Objects.requireNonNull(projected);
-    int handle = getInt(bytes, header + 8);
     Object[] cached = cache();
     if (cached[handle] instanceof SlabMessage child) return child;
     int depth = getInt(bytes, header + 12);
