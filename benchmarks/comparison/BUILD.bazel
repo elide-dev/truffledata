@@ -1082,3 +1082,88 @@ sh_test(
     data = [":compiled_slab_native"],
     tags = ["manual"],
 )
+
+# A3 diagnostics: identical input bytes, fresh production output, and isolated writer variants.
+data_java_library(
+    name = "slab_writer_probe",
+    testonly = True,
+    srcs = [
+        "SlabWriterProbe.java",
+        "SourceIngestionFeature.java",
+    ],
+    deps = [
+        ":contracts",
+        "//core",
+        "//protobuf-runtime",
+        "@maven//:com_google_protobuf_protobuf_java",
+        "@maven//:org_graalvm_sdk_nativeimage",
+    ],
+)
+
+java_binary(
+    name = "slab_writer_jvm",
+    testonly = True,
+    jvm_flags = [
+        "--enable-native-access=ALL-UNNAMED",
+        "-Dpolyglot.engine.WarnInterpreterOnly=false",
+        "-Xms512m",
+        "-Xmx512m",
+        "-XX:+UseSerialGC",
+    ],
+    main_class = "dev.elide.truffledata.comparison.SlabWriterProbe",
+    runtime_deps = [":slab_writer_probe"],
+)
+
+native_image(
+    name = "slab_writer_svm",
+    testonly = True,
+    exec_properties = {
+        "EstimatedCPU": "4",
+        "EstimatedMemory": "8GB",
+    },
+    executable_name = "slab-writer-probe",
+    extra_args = [
+        "--gc=serial",
+        "--parallelism=4",
+        "-march=compatibility",
+        "--initialize-at-build-time=dev.elide.truffledata",
+        "--features=dev.elide.truffledata.comparison.SourceIngestionFeature",
+    ],
+    graalvm_sdk = "@graalvm_linux_amd64//:gvm",
+    main_class = "dev.elide.truffledata.comparison.SlabWriterProbe",
+    optimization_mode = "2",
+    tags = ["manual"],
+    target_compatible_with = [
+        "@platforms//os:linux",
+        "@platforms//cpu:x86_64",
+    ],
+    deps = [":slab_writer_probe"],
+)
+
+sh_test(
+    name = "slab_writer_measure",
+    size = "large",
+    timeout = "eternal",
+    srcs = ["slab_writer_measure.sh"],
+    args = [
+        "$(rootpath :slab_writer_jvm)",
+        "$(rootpath :slab_writer_svm)",
+    ],
+    data = [
+        "slab_writer_measure.py",
+        ":slab_writer_jvm",
+        ":slab_writer_svm",
+    ],
+    exec_properties = {
+        "EstimatedCPU": "4",
+        "EstimatedMemory": "4GB",
+    },
+    tags = [
+        "benchmark",
+        "manual",
+    ],
+    target_compatible_with = [
+        "@platforms//os:linux",
+        "@platforms//cpu:x86_64",
+    ],
+)

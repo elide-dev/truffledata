@@ -1,0 +1,11 @@
+# Java slab writer diagnosis
+
+`//benchmarks/comparison:slab_writer_measure` compares the real generated/table Java producers with stock protobuf-java on the same 32-message small, supplementary-Unicode holdout, and 52 KB large fixtures used by the retained SOTA probes. Production results own a fresh array on each call. The separate span/slab shape probes reuse private buffers and scratch arrays; their zero allocations must not be attributed to production.
+
+The probe writer comes from the retained `protobuf-sota-probe-ce7399f/SotaProbe.java`, and the span shape from `protobuf-probe-fecb39f/ProtoProbe.java`. The writer now includes the current Type schema's default edition slot (40-byte root) and zeros final slab alignment padding after reuse. Every fixture is byte-compared with both production producers before timing; SHA-256 hashes also require all writer variants/runtimes to agree.
+
+The JVM starts a fresh process per variant. A startup constant isolates one change at a time: variant 0 is the VarHandle/arraycopy/Arrays.fill baseline; 1 uses exact-bounds word copies for payloads up to 16 bytes; 2 writes record zeros in eight-byte words; 3 uses ordinary byte-array stores instead of VarHandle stores; 4 changes only the varint cursor from a local with a final writeback to a field, preserving the one-/two-byte fast paths. Native Image measures the baseline span/slab shapes and real owning producers on an ordinary `-O2`, compatibility-ISA, serial-GC image. No PGO is used.
+
+Each cell warms for six seconds, then records seven 200 ms samples. The driver randomizes jobs and defaults to three fresh-process forks (`SLAB_PROBE_FORKS=1` is an explicitly advisory initial diagnosis). Every sample, CPU identity, allocation counter calibration, exact output digest, and within-fork spread is retained. The report uses medians of fork medians and includes the worst within-fork max/min ratio; noisy stock samples cannot establish a producer speedup.
+
+Task A3's x86 hypotheses are unchanged: reusable slab shape at most 1.2 times span shape; production generated at most 0.55 times stock on small and 0.8 on large; runtime table at most stock. SVM generated is reported, with native slabs remaining the SVM default. These measurements are pending; this harness is not a completion or performance claim.
