@@ -38,3 +38,13 @@ deployment.
 Next release is 0.10.0 after the follow-up work and all required gates are green on
 main. JSON, protobuf and YAML each retain their own plan and evidence ledgers;
 this ledger does not mark those incomplete cutovers or performance goals complete.
+
+Follow-up qualification: static musl C consumers now prove both ordinary linking
+and ThinLTO consumption of the isolated CSV archive on x86-64 (`ea2430cb-e1d1-4a83-8c9b-008b088973f7`)
+and AArch64 (`9a7b9a14-8129-4906-8746-337bb92d2f8e`), two passing tests per architecture.
+The first shell-test analysis exposed Bazel 9's default execution-platform libc
+constraint; explicit architecture-constrained test toolchains now allow the static
+musl executables to run on the GNU Linux executors. CI and publication run these
+witnesses. YAML's three Java artifacts and three-platform native attachments are
+now included in publication staging, with ABI fingerprint and C consumer gates;
+qualification of those additions follows the compact YAML ABI cutover.

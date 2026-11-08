@@ -44,11 +44,12 @@ LINUX_WEAK = {'__gmon_start__', '_ITM_registerTMCloneTable', '_ITM_deregisterTMC
 MACOS_DYLIBS = re.compile(r'^/usr/lib/(libSystem\.B|libc\+\+\.1)\.dylib$')
 MACOS_ORIGINS = {'libSystem', 'libc++'}
 MACHINES = {'linux-x86_64': 'EM_X86_64', 'linux-aarch64': 'EM_AARCH64'}
-FINGERPRINT = {'protobuf-buffa': 'td_buffa_fingerprint', 'json': 'td_json_fingerprint', 'csv-native': 'td_csv_fingerprint'}
+FINGERPRINT = {'protobuf-buffa': 'td_buffa_fingerprint', 'json': 'td_json_fingerprint', 'yaml': 'td_yaml_fingerprint', 'csv-native': 'td_csv_fingerprint'}
 # The generated bindings (published once, from the linux-x86_64 build) and the ABI fingerprint they verify at run time.
 BINDINGS = {
     'protobuf-buffa': ('protobuf-buffa-bindings', 'dev/elide/truffledata/buffa/generated/Buffa.class'),
     'json': ('json-bindings', 'dev/elide/truffledata/json/generated/Json.class'),
+    'yaml': ('yaml-bindings', 'dev/elide/truffledata/yaml/generated/Yaml.class'),
     'csv-native': ('csv-bindings', 'dev/elide/truffledata/csv/kernel/generated/CsvNative.class'),
 }
 CSV_EXPORTS = {'td_csv_fingerprint', 'td_csv_kernel', 'td_csv_index', 'td_csv_index_leaf', 'td_csv_validate_utf8'}

@@ -21,7 +21,7 @@ if 'SNAPSHOT' in sys.argv[1].upper():
 PY
 bucket=${MAVEN_BUCKET:-elide:elide-maven}
 public=https://maven.elide.dev
-modules=(core jdbc jdbc-sqlite jdbc-mysql jdbc-postgresql protobuf protobuf-runtime protobuf-buffa protobuf-buffa-bindings tape tape-jvm json json-bindings json-jvm csv csv-bindings csv-native csv-jvm bom)
+modules=(core jdbc jdbc-sqlite jdbc-mysql jdbc-postgresql protobuf protobuf-runtime protobuf-buffa protobuf-buffa-bindings tape tape-jvm json json-bindings json-jvm yaml yaml-bindings yaml-jvm csv csv-bindings csv-native csv-jvm bom)
 bazel=${BAZEL:-$(command -v bazelisk || command -v bazel)}
 flag=--//tools/release:version=$version
 host=$(uname -s)-$(uname -m)
@@ -52,7 +52,7 @@ if [[ $mode == --publish ]]; then
   done
 fi
 # Gates, linux-x86_64 (RBE): the full suite and every native lane.
-"$bazel" test //... //benchmarks:native_smoke //benchmarks/comparison:consumer_native_smoke //protobuf-buffa/tests:native_test //protobuf-buffa/tests:native_non_strict_test //protobuf-buffa/tests:native_views_test //protobuf-buffa/tests:fallback_test //tools/release:buffa_native_test //tools/release:stock_free_native_test //tools/release:json_native_test //tools/release:csv_native_test //tools/release:csv_kernel_native_test //json/tests:native_test //csv/tests:native_test //benchmarks/comparison:json_native_smoke //benchmarks/comparison:csv_native_smoke "$flag"
+"$bazel" test //... //benchmarks:native_smoke //benchmarks/comparison:consumer_native_smoke //protobuf-buffa/tests:native_test //protobuf-buffa/tests:native_non_strict_test //protobuf-buffa/tests:native_views_test //protobuf-buffa/tests:fallback_test //tools/release:buffa_native_test //tools/release:stock_free_native_test //tools/release:json_native_test //tools/release:csv_native_test //tools/release:csv_kernel_native_test //json/tests:native_test //yaml/tests:native_test //csv/tests:native_test //benchmarks/comparison:json_native_smoke //benchmarks/comparison:csv_native_smoke "$flag"
 BAZEL="$bazel" python3 .github/scripts/jit_gate.py --probes-only
 # Gates per further platform: the C consumers of every release native (static archive with LTO off and ThinLTO, shared
 # library by dlopen) and the JVM consumers of the published shared libraries.
@@ -60,7 +60,7 @@ platform_gates=(//tools/release:native_consumers //tools/release:buffa_consumer 
 "$bazel" test --config=remote_arm64 "${platform_gates[@]}" "$flag"
 [[ $host != Darwin-arm64 ]] || "$bazel" test --config=local "${platform_gates[@]}" "$flag"
 for config in remote_musl remote_arm64_musl; do
-  "$bazel" test --config="$config" //csv/native:api_test //csv/native:index_test //tools/release:csv_archive_test "$flag"
+  "$bazel" test --config="$config" //csv/native:api_test //csv/native:index_test //tools/release:csv_archive_test //tools/release:csv_musl_c_static_test //tools/release:csv_musl_c_thinlto_test "$flag"
 done
 
 # One platform's //tools/release:natives build, copied out of bazel-out before the next invocation.
@@ -140,4 +140,4 @@ done
 rm -f "$repo/public-check"
 python3 tools/release/central.py publish --state "$repo.central.json"
 python3 tools/release/central.py wait --state "$repo.central.json" --until PUBLISHED
-echo "Published dev.elide:truffledata-{core,jdbc,jdbc-sqlite,jdbc-mysql,jdbc-postgresql,protobuf,protobuf-runtime,protobuf-buffa,protobuf-buffa-bindings,tape,tape-jvm,json,json-bindings,json-jvm,csv,csv-bindings,csv-native,csv-jvm,bom}:$version at $public"
+echo "Published dev.elide:truffledata-{core,jdbc,jdbc-sqlite,jdbc-mysql,jdbc-postgresql,protobuf,protobuf-runtime,protobuf-buffa,protobuf-buffa-bindings,tape,tape-jvm,json,json-bindings,json-jvm,yaml,yaml-bindings,yaml-jvm,csv,csv-bindings,csv-native,csv-jvm,bom}:$version at $public"

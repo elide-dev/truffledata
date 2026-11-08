@@ -10,7 +10,7 @@ import shutil
 import xml.etree.ElementTree as ET
 import zipfile
 
-MODULES = ('core', 'jdbc', 'jdbc-sqlite', 'jdbc-mysql', 'jdbc-postgresql', 'protobuf', 'protobuf-runtime', 'protobuf-buffa', 'protobuf-buffa-bindings', 'tape', 'tape-jvm', 'json', 'json-bindings', 'json-jvm', 'csv', 'csv-bindings', 'csv-native', 'csv-jvm', 'bom')
+MODULES = ('core', 'jdbc', 'jdbc-sqlite', 'jdbc-mysql', 'jdbc-postgresql', 'protobuf', 'protobuf-runtime', 'protobuf-buffa', 'protobuf-buffa-bindings', 'tape', 'tape-jvm', 'json', 'json-bindings', 'json-jvm', 'yaml', 'yaml-bindings', 'yaml-jvm', 'csv', 'csv-bindings', 'csv-native', 'csv-jvm', 'bom')
 NAMESPACE = {'m': 'http://maven.apache.org/POM/4.0.0'}
 
 
@@ -31,7 +31,7 @@ TRIPLES = {
     'linux-x86_64-musl': 'x86_64-unknown-linux-musl',
     'linux-aarch64-musl': 'aarch64-unknown-linux-musl',
 }
-NATIVE_MODULES = ('protobuf-buffa', 'json', 'csv-native')
+NATIVE_MODULES = ('protobuf-buffa', 'json', 'yaml', 'csv-native')
 # ELF e_machine per Linux classifier.
 ELF_MACHINES = {'linux-x86_64': 0x3e, 'linux-aarch64': 0xb7}
 

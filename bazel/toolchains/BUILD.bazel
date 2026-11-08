@@ -59,3 +59,23 @@ default_java_toolchain(
     ("amd64", "x86_64"),
     ("arm64", "aarch64"),
 ]]
+
+# Static musl consumers have no loader dependency and run on the matching GNU Linux executor.
+# Bazel 9's default shell-test toolchain otherwise insists on a musl execution platform.
+[toolchain(
+    name = "musl_static_tests_" + cpu,
+    exec_compatible_with = [
+        "@platforms//os:linux",
+        "@platforms//cpu:" + arch,
+    ],
+    target_compatible_with = [
+        "@platforms//os:linux",
+        "@platforms//cpu:" + arch,
+        "//bazel/platforms:musl",
+    ],
+    toolchain = "@bazel_tools//tools/test:empty_toolchain",
+    toolchain_type = "@bazel_tools//tools/test:default_test_toolchain_type",
+) for cpu, arch in [
+    ("amd64", "x86_64"),
+    ("arm64", "aarch64"),
+]]

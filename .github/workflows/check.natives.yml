@@ -58,6 +58,11 @@ jobs:
       - name: Shared loading and ThinLTO acceptance
         if: matrix.shared
         run: bazel test --config=local //tools/release:csv_c_static_test //tools/release:csv_c_thinlto_test
+      - name: Musl static ThinLTO acceptance
+        if: ${{ !matrix.shared }}
+        env:
+          TARGET_PLATFORM: ${{ matrix.platform }}
+        run: bazel test --config=local $TARGET_PLATFORM //tools/release:csv_musl_c_static_test //tools/release:csv_musl_c_thinlto_test
       - name: Remove BuildBuddy credentials
         if: always()
         run: rm -f user.bazelrc

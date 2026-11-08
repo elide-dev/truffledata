@@ -35,6 +35,9 @@ MODULES = [
     "json",
     "json-bindings",
     "json-jvm",
+    "yaml",
+    "yaml-bindings",
+    "yaml-jvm",
     "csv",
     "csv-bindings",
     "csv-native",
@@ -51,6 +54,8 @@ LIBRARIES = {
     "json-bindings": ":json_bindings_library",
     # JVM-only FFM backend, published separately so static images never carry it.
     "json-jvm": "//json:jvm",
+    "yaml-bindings": "//yaml:bindings",
+    "yaml-jvm": "//yaml:jvm",
     # Optional native CSV kernel: generated bindings, the static-image backend (with the native
     # attachments) and the JVM FFM backend; truffledata-csv itself stays pure Java.
     "csv-bindings": "//csv/kernel:bindings",
@@ -106,7 +111,7 @@ cc_static_library(
     deps = ["//csv/native:truffledata_csv"],
 )
 
-# The YAML C ABI, decoder and rapidyaml. Not published yet; built per platform so it can be.
+# The compact YAML C ABI, decoder, rapidyaml and shared text bridge.
 cc_static_library(
     name = "yaml_objects",
     deps = ["//yaml/native:truffledata_yaml"],
@@ -161,7 +166,7 @@ release_archive(
 ]]
 
 # Native modules: (static archive, shared library, platform-neutral attachments); classifiers per target platform are
-# CLASSIFIERS in //bazel:maven.bzl. YAML is built, not yet published.
+# CLASSIFIERS in //bazel:maven.bzl.
 NATIVES = {
     "protobuf-buffa": (
         ":buffa_archive",
@@ -203,18 +208,20 @@ NATIVES = {
 
 filegroup(
     name = "natives",
-    # YAML (unpublished) does not build for macOS yet: its scalars use floating-point std::from_chars, which the macOS
-    # SDK's libc++ marks available from macOS 26, above --macos_minimum_os=12.0.
-    srcs = [":%s_natives" % module for module in NATIVES if module != "yaml"] + select({
-        "@platforms//os:macos": [],
-        "//conditions:default": [":yaml_natives"],
-    }),
+    srcs = [":%s_natives" % module for module in NATIVES],
 )
 
 # C consumers of each published native on the target platform (tools/release/native_consumer.bzl): the release static
 # archive linked with LTO off and with ThinLTO (on macOS, the bitcode twin with ld64.lld), each checked by its LTO
 # witness, and the release shared library loaded with dlopen. Linux runs them on RBE (--config=remote and
 # --config=remote_arm64), macOS locally (--config=local).
+native_consumers(
+    name = "yaml_c",
+    archive = ":yaml_archive",
+    fingerprint = "td_yaml_fingerprint",
+    shared = "//yaml/native:yaml_shared.so",
+)
+
 native_consumers(
     name = "buffa_c",
     archive = ":buffa_archive",
@@ -268,6 +275,13 @@ test_suite(
         "dev.elide:truffledata-json-bindings:{version}",
         "dev.elide:truffledata-tape-jvm:{version}",
     ] if module == "json-jvm" else []) + ([
+        "dev.elide:truffledata-yaml-bindings:{version}",
+        "dev.elide:truffledata-tape:{version}",
+    ] if module == "yaml" else []) + ([
+        "dev.elide:truffledata-yaml:{version}",
+        "dev.elide:truffledata-yaml-bindings:{version}",
+        "dev.elide:truffledata-tape-jvm:{version}",
+    ] if module == "yaml-jvm" else []) + ([
         "dev.elide:truffledata-csv:{version}",
         "dev.elide:truffledata-csv-bindings:{version}",
     ] if module in [
@@ -282,6 +296,8 @@ test_suite(
         "tape",
         "json",
         "json-bindings",
+        "yaml",
+        "yaml-bindings",
         "csv-bindings",
         "csv-native",
     ] else []) + ([
@@ -378,6 +394,13 @@ sh_test(
         ":json_import",
         ":tape-jvm_import",
     ] if module == "json-jvm" else []) + ([
+        ":yaml-bindings_import",
+        ":tape_import",
+    ] if module == "yaml" else []) + ([
+        ":yaml-bindings_import",
+        ":yaml_import",
+        ":tape-jvm_import",
+    ] if module == "yaml-jvm" else []) + ([
         ":csv-bindings_import",
         ":csv_import",
     ] if module in [
@@ -392,6 +415,8 @@ sh_test(
         "tape",
         "json",
         "json-bindings",
+        "yaml",
+        "yaml-bindings",
         "csv-bindings",
         "csv-native",
     ] else []) + ([
@@ -854,4 +879,16 @@ native_attachments(
     }),
     module = "csv-native",
     tags = ["manual"],
+)
+
+# Musl has no shared attachment; prove both ordinary and ThinLTO static links.
+native_consumers(
+    name = "csv_musl_c",
+    archive = ":csv_archive",
+    fingerprint = "td_csv_fingerprint",
+    shared = None,
+    tags = [
+        "manual",
+        "musl-consumer",
+    ],
 )
