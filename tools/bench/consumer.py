@@ -55,8 +55,9 @@ def validate(record, cell, metric, checksums, runtime='svm'):
         if record.get(key) != value:
             raise ValueError(f'{cell}: expected {key}={value!r}, got {record.get(key)!r}')
     checksum = record.get('checksum')
-    if not isinstance(checksum, int) or (mode in checksums and checksums[mode] != checksum):
-        raise ValueError(f'{cell}: inconsistent consumer checksum')
+    work = (checksum, record.get('input_bytes_per_row'))
+    if not isinstance(checksum, int) or (mode in checksums and checksums[mode] != work):
+        raise ValueError(f'{cell}: inconsistent consumer checksum or wire size')
     key = 'ns_per_row' if metric == 'time' else 'java_bytes_per_row'
     values = record.get(key, [])
     if len(values) != 3 or not all(isinstance(v, (float, int)) and math.isfinite(v)
@@ -97,7 +98,7 @@ def validate(record, cell, metric, checksums, runtime='svm'):
         if (not isinstance(retained_input, (float, int)) or not math.isfinite(retained_input)
                 or retained_input < 0):
             raise ValueError(f'{cell}: invalid retained immutable input accounting')
-    checksums[mode] = checksum
+    checksums[mode] = work
 
 
 def throughput(input_bytes, ns):
@@ -269,21 +270,23 @@ def merge(argv):
     args = parser.parse_args(argv)
     reports = [json.loads((s if s.is_file() else s / 'results.json').read_text())
                for s in args.shards]
-    runtime = reports[0]['runtime']
-    labels = list(reports[0]['binary_sha256']) or ['candidate']
+    provenance = ('schema', 'runtime', 'source', 'seed', 'forks', 'binary_sha256',
+                  'engines', 'modes')
+    first = reports[0]
+    runtime = first['runtime']
+    labels = list(first['binary_sha256']) or ['candidate']
     seen = set()
     measurements = []
     for report in reports:
-        if report['runtime'] != runtime or list(report['binary_sha256']) != labels:
-            raise ValueError('Shards measured different runtimes or binaries')
+        if any(report.get(key) != first.get(key) for key in provenance):
+            raise ValueError('Shards measured different builds or measurement configurations')
         for group in report['groups']:
             if tuple(group) in seen:
                 raise ValueError(f'Duplicate shard group {group}')
             seen.add(tuple(group))
         measurements += report['measurements']
     labels = list(dict.fromkeys(m['binary'] for m in measurements))
-    merged = dict(schema=2, runtime=runtime, source=reports[0]['source'], seed=SEED,
-                  binary_sha256=reports[0]['binary_sha256'],
+    merged = dict({key: first[key] for key in provenance if key in first},
                   shards=[{k: r[k] for k in ('shard', 'groups', 'host', 'cpu_model', 'affinity',
                                              'logical_cpus', 'load_average',
                                              'load_average_after') if k in r}

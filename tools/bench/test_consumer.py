@@ -1,8 +1,11 @@
 import copy
 import os
+import json
+from pathlib import Path
+import tempfile
 import unittest
 from unittest import mock
-from consumer import CELLS, ENGINES, GROUPS, command, markdown, select_engines, select_modes, select_groups, supported, projection_gates, shard, throughput, validate
+from consumer import CELLS, ENGINES, GROUPS, command, markdown, merge, select_engines, select_modes, select_groups, supported, projection_gates, shard, throughput, validate
 
 
 class ConsumerValidationTest(unittest.TestCase):
@@ -18,6 +21,7 @@ class ConsumerValidationTest(unittest.TestCase):
         checksums = {}
         validate(self.VALID, cell, 'time', checksums)
         for change in ({'guest_compiled': False}, {'checksum': 124}, {'runtime': 'jvm'},
+                       {'input_bytes_per_row': 101},
                        {'ns_per_row': [1, float('nan'), 3]}, {'ns_per_row': [1, -1, 3]},
                        {'ns_per_row': [1, 2]}, {'stock_boundary': True}, {'shared_access': False},
                        {'native_index_retained': False},
@@ -144,6 +148,38 @@ class ConsumerValidationTest(unittest.TestCase):
         self.assertIn('--jvm_flag=-XX:+UseSerialGC', jvm)
         self.assertEqual(jvm[-4:], ['stock', 'full', 'peak', 'memory'])
         self.assertAlmostEqual(throughput(1000, 1000), 1000.0)
+
+    def test_merge_rejects_mixed_builds_and_preserves_provenance(self):
+        reports = []
+        for index, mode in enumerate(('full', 'sparse')):
+            rows = [dict(self.VALID, binary='candidate', mode=mode, metric=metric,
+                         java_bytes_per_row=[8, 8, 8]) for metric in ('time', 'memory')]
+            reports.append(dict(schema=4, runtime='svm', source='commit+patch', seed=20261105,
+                                forks=3, binary_sha256={'candidate': 'original-hash'},
+                                engines={'candidate': ['native-view']},
+                                modes={'candidate': ['full', 'sparse']},
+                                groups=[[mode, 'peak']], shard=dict(index=index, total=2),
+                                measurements=rows))
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            inputs = [root / 'first.json', root / 'second.json']
+            for path, report in zip(inputs, reports):
+                path.write_text(json.dumps(report))
+            output = root / 'merged'
+            merge(['--output', str(output), *map(str, inputs)])
+            result = json.loads((output / 'results.json').read_text())
+            self.assertFalse(result['complete'])
+            for key in ('schema', 'runtime', 'source', 'seed', 'forks', 'binary_sha256',
+                        'engines', 'modes'):
+                self.assertEqual(result[key], reports[0][key])
+            for key, value in (
+                    ('schema', 3), ('runtime', 'jvm'), ('source', 'other-commit'),
+                    ('seed', 1), ('forks', 5), ('binary_sha256', {'candidate': 'other-hash'}),
+                    ('engines', {'candidate': ['stock']}), ('modes', {'candidate': ['full']})):
+                with self.subTest(key=key), self.assertRaisesRegex(ValueError, 'different builds'):
+                    changed = dict(reports[1], **{key: value})
+                    inputs[1].write_text(json.dumps(changed))
+                    merge(['--output', str(root / ('reject-' + key)), *map(str, inputs)])
 
     def test_markdown_reports_stock_ratio_and_native_bytes(self):
         rows = []
