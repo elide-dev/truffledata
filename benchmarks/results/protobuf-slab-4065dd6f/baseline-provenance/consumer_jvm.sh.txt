@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+set -euo pipefail
+base="${TEST_SRCDIR}/${TEST_WORKSPACE}/build/protobuf-baseline-fecb39f"
+flags=(--enable-native-access=ALL-UNNAMED)
+args=()
+for arg in "$@"; do
+  case "$arg" in
+    --jvm_flag=*) flags+=("${arg#--jvm_flag=}") ;;
+    *) args+=("$arg") ;;
+  esac
+done
+export TRUFFLEDATA_BUFFA_LIBRARY="$base/libtruffledata_buffa.so"
+exec "$base/sdk/bin/java" "${flags[@]}" -cp "$base/consumer_jvm_deploy.jar" \
+  dev.elide.truffledata.comparison.ConsumerComparison "${args[@]}"

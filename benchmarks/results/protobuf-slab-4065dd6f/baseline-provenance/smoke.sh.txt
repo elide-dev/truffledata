@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+set -euo pipefail
+cd "${TEST_SRCDIR}/${TEST_WORKSPACE}"
+export JAVA_RUNFILES="${TEST_SRCDIR}"
+python3 - "$PWD/$1" "$PWD/$2" <<'PYCODE'
+import json,subprocess,sys
+sys.path.insert(0,'tools/bench')
+from consumer import command,validate
+checksums={}
+for runtime,binary in zip(('svm','jvm'),sys.argv[1:]):
+    for engine,stage in [('stock','decode'),('native-view','peak'),('native-eager','resident'),('generated-owned','peak')]:
+        cell=(engine,'full',stage)
+        result=subprocess.run(command(binary,runtime,cell,'time'),capture_output=True,text=True)
+        if result.returncode:raise RuntimeError(result.stdout+'\n'+result.stderr)
+        records=[json.loads(line) for line in result.stdout.splitlines() if line.startswith('{')]
+        if len(records)!=1:raise AssertionError(result.stdout)
+        validate(records[0],cell,'time',checksums,runtime)
+        print('BASELINE',runtime,engine,stage,'checksum='+str(records[0]['checksum']),flush=True)
+PYCODE
