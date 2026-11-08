@@ -1,0 +1,31 @@
+[package]
+name = "truffledata-csv-native"
+version = "0.9.0"
+edition = "2024"
+publish = false
+description = "TruffleData CSV structural indexer C ABI, built from source with Cargo"
+license = "MIT OR Apache-2.0"
+# One copy of the native CSV library per link.
+links = "truffledata_csv"
+build = "build.rs"
+# Only what the build compiles ships in the package.
+include = ["Cargo.toml", "README.md", "build.rs", "lib.rs", "vendor/**", "tests/**"]
+
+[lib]
+path = "lib.rs"
+
+[features]
+default = ["bundled-simdutf"]
+# Compile the vendored simdutf 0.7.0 C++ library into this crate.
+bundled-simdutf = []
+# Resolve simdutf from the `simdutf` crate in the dependency graph instead (disable default features).
+simdutf-crate = ["dep:simdutf"]
+
+[dependencies]
+simdutf = { version = "=0.7.0", optional = true }
+
+[build-dependencies]
+cc = "=1.11.0"
+
+# Standalone: usable as a git dependency without the repository workspace.
+[workspace]
