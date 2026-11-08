@@ -7,6 +7,7 @@ import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.runtime.OptimizedCallTarget;
 import com.sun.management.ThreadMXBean;
+import dev.elide.truffledata.Constraints;
 import dev.elide.truffledata.Field;
 import dev.elide.truffledata.Schema;
 import dev.elide.truffledata.json.JsonMessage;
@@ -30,6 +31,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
 import org.graalvm.polyglot.Context;
 import org.jspecify.annotations.NullMarked;
@@ -94,6 +96,10 @@ public final class JsonComparison {
 
   static final List<String> SCALAR =
       List.of("gson-stream", "simdjson-typed", "simdjson-specialized");
+  // Separate nested/repeated typed fixtures; the old producer can run this identical harness.
+  static final List<String> STRUCTURAL =
+      List.of("simdjson-typed-nested", "simdjson-typed-repeated", "simdjson-typed-mixed",
+          "simdjson-typed-churn");
   static final List<String> GENERIC =
       List.of("gson-tree", "simdjson-generic-java", "simdjson-generic-interop", "simdjson-snapshot");
   // Smoke-only: export into a constant non-materializing sink, so the graph holds only the walk.
@@ -155,6 +161,8 @@ public final class JsonComparison {
         for (String stage : STAGES)
           if (!COMPETITORS_INGEST_ONLY.contains(engine) || stage.equals("ingest")) run(engine, stage, true, true);
       }
+    } else if (args.length == 1 && args[0].equals("--typed-smoke")) {
+      for (String engine : STRUCTURAL) for (String stage : STAGES) run(engine, stage, true, true);
     } else if (args.length == 2 && args[0].equals("--available")) {
       // Exit status 0 when the engine can run here (json_measure.py asks before measuring).
       System.exit(!COMPETITORS.contains(args[1]) || JsonCompetitors.available(args[1]) ? 0 : 3);
@@ -166,6 +174,10 @@ public final class JsonComparison {
 
   private static void run(String engine, String stage, boolean memory, boolean smoke)
       throws Exception {
+    if (STRUCTURAL.contains(engine)) {
+      structural(engine, stage, memory, smoke);
+      return;
+    }
     if (GENERIC.contains(engine)
         || engine.equals(WALK)
         || engine.equals(SESSION_JAVA)
@@ -237,6 +249,124 @@ public final class JsonComparison {
         for (Object row : rows) if (row instanceof TypedRecord record) record.close();
         context.leave();
       }
+    }
+  }
+
+  private static Field recordField(String name, String type) {
+    return new Field(name, Field.Kind.RECORD, false, false,
+        Constraints.NONE.withRecordType(type));
+  }
+
+  private static Field arrayField(String name, Field element) {
+    return new Field(name, Field.Kind.ARRAY, false, false,
+        Constraints.NONE.withElement(element));
+  }
+
+  private static String pointJson(int n, boolean escaped, boolean reverse) {
+    String x = (escaped ? "\"\\u0078\":" : "\"x\":") + n;
+    String d = "\"d\":" + n + ".5";
+    String tag = "\"tag\":" + (escaped ? "\"\\u4e2d\\n\"" : "\"ab\"");
+    String meta = "\"meta\":{\"active\":" + ((n & 1) == 0) + "}";
+    return reverse ? "{" + meta + "," + tag + "," + d + "," + x + "}"
+        : "{" + x + "," + d + "," + tag + "," + meta + "}";
+  }
+
+  private static long pointChecksum(int n) {
+    return 2L * n + 2 + ((n & 1) == 0 ? 1 : 0);
+  }
+
+  /** Durable typed decode and complete public reads, with no producer-specific shortcut. */
+  private static void structural(String engine, String stage, boolean memory, boolean smoke)
+      throws Exception {
+    if (!STAGES.contains(stage)) throw new IllegalArgumentException("stage");
+    int mode = STRUCTURAL.indexOf(engine);
+    boolean peak = stage.equals("peak"), ingest = stage.equals("ingest");
+    boolean guest = peak || stage.equals("interpret");
+    var meta = new Schema("Meta", List.of(new Field("active", Field.Kind.BOOLEAN, false, false)));
+    var point = new Schema("Point", List.of(Field.requiredLong("x"),
+        new Field("d", Field.Kind.FLOAT64, false, false),
+        new Field("tag", Field.Kind.STRING, false, false), recordField("meta", "Meta")));
+    var schema = Schema.of(Field.requiredLong("id"), recordField("head", "Point"),
+        arrayField("items", recordField("item", "Point")),
+        arrayField("values", Field.requiredLong("value")));
+    try (var context = context(peak);
+        var plan = JsonPlan.compile(schema, Map.of("Point", point, "Meta", meta))) {
+      context.initialize("td-compare");
+      context.enter();
+      Object[] rows = new Object[ROWS];
+      try {
+        byte[][] inputs = new byte[ROWS][];
+        long expected = 0;
+        for (int i = 0; i < ROWS; i++) {
+          int count = mode == 0 ? 0 : mode == 1 ? 16 : mode == 2 ? 4 : i % 9;
+          boolean escaped = mode >= 2 && (i & 1) == 1;
+          StringBuilder items = new StringBuilder("[");
+          StringBuilder values = new StringBuilder("[");
+          long checksum = i + pointChecksum(100 + i);
+          for (int j = 0; j < count; j++) {
+            if (j != 0) { items.append(','); values.append(','); }
+            int n = 1000 + i * 17 + j;
+            items.append(pointJson(n, escaped, mode >= 2 && (j & 1) == 1));
+            values.append(j - i);
+            checksum += pointChecksum(n) + j - i;
+          }
+          items.append(']'); values.append(']');
+          String head = "\"head\":" + pointJson(100 + i, escaped, mode >= 2);
+          String json = mode >= 2 && (i & 1) == 1
+              ? "{\"values\":" + values + ",\"items\":" + items + "," + head + ",\"id\":" + i + "}"
+              : "{\"id\":" + i + "," + head + ",\"items\":" + items + ",\"values\":" + values + "}";
+          inputs[i] = json.getBytes(StandardCharsets.UTF_8);
+          rows[i] = plan.decode(inputs[i]);
+          if (StructuralReads.value((TypedRecord) rows[i]) != checksum)
+            throw new AssertionError("Nested fixture values");
+          expected += checksum;
+        }
+        var root = new StructuralReads(engine);
+        var target = (OptimizedCallTarget) root.getCallTarget();
+        Operation operation = rotation -> {
+          if (!ingest) return guest
+              ? ((Long) target.call(rows, rotation)) & ~COMPILED_READ : root.read(rows, rotation);
+          long sum = 0;
+          for (int i = 0; i < ROWS; i++) {
+            try (var row = plan.decode(inputs[(i + rotation) & (ROWS - 1)])) {
+              retained = row;
+              sum += StructuralReads.value(row);
+            }
+          }
+          return sum;
+        };
+        sample("json-typed-" + engine.substring("simdjson-typed-".length()), engine, stage,
+            memory, smoke, target, rows, operation, expected);
+      } finally {
+        for (Object row : rows) if (row instanceof TypedRecord record) record.close();
+        context.leave();
+      }
+    }
+  }
+
+  private static final class StructuralReads extends RootNode {
+    private final String name;
+    StructuralReads(String name) { super(ComparisonLanguage.current()); this.name = name; }
+    @Override public String getName() { return "StructuralReads[" + name + "]"; }
+    @Override public Object execute(VirtualFrame frame) {
+      return read((Object[]) frame.getArguments()[0], (Integer) frame.getArguments()[1]);
+    }
+    private static long point(TypedRecord row) {
+      return row.longValue(0) + (long) row.doubleValue(1) + row.stringValue(2).length()
+          + (row.record(3).booleanValue(0) ? 1 : 0);
+    }
+    static long value(TypedRecord row) {
+      long sum = row.longValue(0) + point(row.record(1));
+      var items = row.array(2);
+      for (int i = 0; i < items.size(); i++) sum += point(items.record(i));
+      var values = row.array(3);
+      for (int i = 0; i < values.size(); i++) sum += values.longValue(i);
+      return sum;
+    }
+    long read(Object[] rows, int rotation) {
+      long sum = 0;
+      for (int i = 0; i < ROWS; i++) sum += value((TypedRecord) rows[(i + rotation) & (ROWS - 1)]);
+      return sum | (CompilerDirectives.inCompiledCode() ? COMPILED_READ : 0);
     }
   }
 
