@@ -92,6 +92,33 @@ class AccessorTest {
     }
   }
 
+  @Test
+  void inlineLibraryFallbackRevalidatesLiveRowsAcrossSchemaChurn() {
+    var kinds =
+        new Field.Kind[] {
+          Field.Kind.INT64, Field.Kind.FLOAT64, Field.Kind.BOOLEAN, Field.Kind.STRING
+        };
+    Object[] values = {7L, 2.5, true, "λ😀"};
+    for (int operation = 0; operation < kinds.length; operation++) {
+      int read = operation;
+      var target = new ReaderParityRoot().getCallTarget();
+      for (int layout = 0; layout < 6; layout++) {
+        var schema = Schema.of(new Field("value", kinds[operation], false, false));
+        DynamicObject object = new DynamicObject(Shape.newBuilder().build()) {};
+        var put = DynamicObject.PutNode.getUncached();
+        put.execute(object, "value", values[operation]);
+        var row = new DynamicRecord(object, schema);
+        assertInstanceOf(LibraryAccessor.class, row.accessor(0));
+        assertEquals(
+            outcome(() -> target.call(row, 0, read, false)),
+            outcome(() -> target.call(row, 0, read, true)));
+        put.execute(object, "value", DataNull.INSTANCE);
+        assertEquals(ContractViolation.class, outcome(() -> target.call(row, 0, read, false)));
+        assertEquals(ContractViolation.class, outcome(() -> target.call(row, 0, read, true)));
+      }
+    }
+  }
+
   private static final class ReaderParityRoot extends RootNode {
     @Child private InlineSite inline = AccessorTestFactory.InlineSiteNodeGen.create();
     @Child private ReadLongNode longs = ReadLongNode.create();
