@@ -168,12 +168,11 @@ bazel test //yaml/native:all //tape/native:all \
 bazel test //yaml/native:bench --test_output=all   # manual; RBE; three passes, best per variant
 ```
 
-Borrowed native session and stream documents omit lookup directories unless session decode sets
+Borrowed native session and stream documents omit lookup directories unless decode or stream-next sets
 `TD_YAML_WANT_DIRECTORIES` (4). All duplicate policies still apply, and generic key lookup scans
 when no directory is present. Retain builds missing directories without moving tape words; a
 failed build leaves the borrowed descriptor valid for retry. Java retained and callback reads
-request directories before decode, while sink export and validation omit them. ABI4 gives this
-policy a distinct fingerprint from ABI3.
+request directories before decode, while sink export and validation omit them.
 
 ABI 5 gives `stream_next` per-document flags: by-key iterators request lookup directories,
 while sequential sink traversal omits them. Both honor source retention. Reserved flags fail
