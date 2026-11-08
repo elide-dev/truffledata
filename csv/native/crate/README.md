@@ -12,6 +12,10 @@ truffledata-csv-native = { git = "https://github.com/elide-dev/truffledata", tag
 The crate exposes the raw `extern "C"` seam (`td_csv_*`), `SEAM_ABI` and
 `BINDING_ABI_VERSION`. It sets `links = "truffledata_csv"`, so a graph holds one copy.
 
+The crate is a standalone package with an empty `[workspace]` table. It is not a member of the
+repository root workspace, whose Cargo.lock feeds Bazel crate_universe. Build and test it from
+this directory.
+
 ## What it compiles
 
 Everything is vendored under `vendor/`, so a git checkout at a tag builds without Bazel:
@@ -73,5 +77,5 @@ To refresh every vendored file after changing the decoder, the seam or a pinned 
 ```sh
 bazel build //csv/native:bindings
 EXTERNAL="$(bazel info output_base)/external" csv/native/crate/vendor.sh
-cargo test -p truffledata-csv-native
+(cd csv/native/crate && cargo test)
 ```
