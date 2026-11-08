@@ -122,9 +122,9 @@ public abstract class TapeReader implements TapeLexical {
     int k = kind(w);
     if (k == 7 || k == 6) {
       if ((w & OWNED) != 0) return word(node + 1);
-      return k == 7 ? ((low(w) - 1) << 32) | (field(w) + 2L) : (low(w) << 32) | field(w);
+      return k == 7 && (flags & 8) == 0 ? ((low(w) - 1) << 32) | (field(w) + 2L) : (low(w) << 32) | field(w);
     }
-    return k >= 3 && k <= 5 ? (low(w) << 32) | field(w) : 0;
+    return k <= 5 ? (low(w) << 32) | field(w) : 0;
   }
   @Override public byte inputByte(long offset) {
     if (offset < 0 || offset >= inputBytes) throw new IndexOutOfBoundsException("Input offset");

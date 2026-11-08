@@ -14,8 +14,8 @@ struct result_owner {
   virtual void destroy() noexcept = 0;
 };
 
-// Thread-confined decode context: one On-Demand parser, a padded input buffer and a block arena,
-// reused across documents. A decoded document is borrowed: valid until the next call on the
+// Thread-confined decode context: one stage-1 parser, padded input, and capacity-retained writer
+// arrays reused across documents. A decoded document is borrowed: valid until the next call on the
 // session. retain() moves the document's arena blocks and input into an independent owner.
 class session final {
 public:
@@ -64,7 +64,12 @@ private:
   tape::storage_limits storage_;
   tape::index_memory memory_;
   tape::block_arena arena_;
-  simdjson::ondemand::parser parser_;
+  stage1_index parser_;
+  tape::block_arena scratch_;
+  std::optional<tape::ctape_writer> writer_;
+  std::optional<null_writer> validator_;
+  tape::arena_vec<uint64_t> text_table_;
+  bool streamed_ = false;
   char* input_ = nullptr;
   size_t input_capacity_ = 0;
   size_t input_length_ = 0;
@@ -125,20 +130,54 @@ private:
     live_ = true;
     return {&view_, length, allocations};
   }
-  // Drops the previous document and bounds what the session keeps between documents.
+  void drop_arrays() noexcept {
+    decoder_.reset(); writer_.reset(); validator_.reset(); text_table_.forget();
+    arena_.reset(); scratch_.reset(); streamed_ = false;
+  }
+  // Borrowed arrays survive ordinary reuse. A retained/oversized document gives up its storage.
   void recycle() noexcept {
     live_ = false;
-    decoder_.reset();
-    arena_.reset();
+    if (streamed_ || input_capacity_ > retained_input_limit) drop_arrays();
+    else {
+      if (writer_) writer_->clear();
+      if (validator_) validator_->clear();
+      text_table_.truncate(0);
+    }
     if (input_capacity_ > retained_input_limit) free_input();
-    if (parser_.capacity() > retained_input_limit) parser_ = simdjson::ondemand::parser();
+    parser_.release_above(retained_input_limit);
+  }
+
+  document_view walk_structural(size_t length, bool validate_only) {
+    size_t before = memory_.allocations();
+    try {
+      parser_.run(reinterpret_cast<const uint8_t*>(input_), length);
+      auto decode = [&](auto& writer) {
+        writer.shapes(&shapes_);
+        writer.input({input_, length});
+        writer.reserve_structural(parser_.size(), length);
+        stage2_walk<std::decay_t<decltype(writer)>> walk(reinterpret_cast<const uint8_t*>(input_), length,
+                                                         parser_.indexes(), parser_.size(), writer);
+        walk.run();
+      };
+      if (validate_only) {
+        if (!validator_) validator_.emplace(&scratch_, values_);
+        decode(*validator_);
+      } else {
+        if (!writer_) writer_.emplace(&arena_, values_);
+        decode(*writer_);
+        view_ = writer_->view();
+      }
+    } catch (...) { recycle(); throw; }
+    size_t allocations = memory_.allocations() - before;
+    live_ = !validate_only;
+    return {validate_only ? nullptr : &view_, length, allocations};
   }
 
 public:
   session(myna::value_limits values, tape::storage_limits storage,
           std::pmr::memory_resource* upstream = std::pmr::get_default_resource())
       : upstream_(upstream), values_(values), storage_(storage),
-        memory_(storage.index_bytes, upstream), arena_(&memory_) {
+        memory_(storage.index_bytes, upstream), arena_(&memory_), scratch_(&memory_) {
     if (values.depth > 128) throw std::invalid_argument("JSON depth limit above 128");
   }
   session(const session&) = delete;
@@ -178,9 +217,7 @@ public:
     if (written != length) throw std::logic_error("JSON input transcoding");
     std::memset(input_ + length, 0, simdjson::SIMDJSON_PADDING);
     input_length_ = length;
-    return walk(length, nullptr, validate_only, [&]() -> simdjson::ondemand::document {
-      return parser_.iterate(simdjson::padded_string_view(input_, length, input_capacity_)).value();
-    });
+    return walk_structural(length, validate_only);
   }
 
   // Decodes one document of a stream (stream.h): `root` is the iterate_many document positioned on
@@ -191,6 +228,8 @@ public:
   // rules as decode().
   document_view decode_streamed(const char* data, size_t length, simdjson::ondemand::document_reference& root) {
     recycle();
+    drop_arrays();
+    streamed_ = true;
     if (length > UINT32_MAX || length > storage_.input_bytes) throw std::length_error("JSON input limit");
     reserve_input(length);
     std::memcpy(input_, data, length);
@@ -208,7 +247,8 @@ public:
     try {
       size_t count = view_.word_count;
       if (!count) count = 1;
-      auto* entries = static_cast<uint64_t*>(arena_.allocate(count * sizeof(uint64_t), alignof(uint64_t)));
+      text_table_.truncate(0);
+      auto* entries = text_table_.extend(&arena_, count);
       size_t used = tape::write_text_arena(view_, entries, out, capacity);
       if (used == tape::text_too_small) recycle();
       table = entries;
@@ -234,7 +274,7 @@ public:
     input_ = nullptr;
     input_capacity_ = 0;
     live_ = false;
-    decoder_.reset();
+    decoder_.reset(); writer_.reset(); text_table_.forget(); streamed_ = false;
     return owner;
   }
 

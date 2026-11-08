@@ -12,7 +12,7 @@ public final class SegmentTape extends TapeReader {
     if (descriptor.address() == 0 || (descriptor.address() & 7) != 0)
       throw new IllegalArgumentException("Invalid compact tape descriptor");
     MemorySegment d = descriptor.reinterpret(88);
-    if (d.get(ValueLayout.JAVA_INT, 0) != 1 || (d.get(ValueLayout.JAVA_INT, 4) & ~3) != 0)
+    if (d.get(ValueLayout.JAVA_INT, 0) != 1 || (d.get(ValueLayout.JAVA_INT, 4) & ~11) != 0)
       throw new IllegalArgumentException("Unsupported compact tape descriptor");
     long n = d.get(ValueLayout.JAVA_LONG, 16), p = d.get(ValueLayout.JAVA_LONG, 32), i = d.get(ValueLayout.JAVA_LONG, 48);
     long e = d.get(ValueLayout.JAVA_LONG, 64), m = d.get(ValueLayout.JAVA_LONG, 80);

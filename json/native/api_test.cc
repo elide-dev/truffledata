@@ -11,7 +11,7 @@
 #include <simdutf.h>
 #include <vector>
 
-void require(bool condition) { if (!condition) throw std::runtime_error("ABI check failed"); }
+#define require(condition) do { if (!(condition)) throw std::runtime_error("ABI check failed at line " + std::to_string(__LINE__) + ": " #condition); } while (false)
 int32_t decode(const std::string& source, JsonResult& result, uint64_t budget = 1024 * 1024) {
   return td_json_decode(reinterpret_cast<const uint8_t*>(source.data()), source.size(),
                         1024 * 1024, budget, 10000, 1024 * 1024, 128, &result);
@@ -389,16 +389,20 @@ void session_allocations() {
   // Steady state: after warm-up a session decodes without any upstream allocation, and keeps a
   // bounded number of blocks.
   session s(myna::value_limits{}, truffledata::tape::storage_limits{});
-  for (int i = 0; i < 3; ++i) s.decode(doc.data(), doc.size());
+  for (const auto& source : {doc, wide}) s.decode(source.data(), source.size());
   size_t blocks = s.arena_blocks(), allocations = s.memory().allocations();
   for (int i = 0; i < 10000; ++i) {
-    auto d = s.decode(doc.data(), doc.size());
+    const auto& source = i % 2 ? doc : wide;
+    auto d = s.decode(source.data(), source.size());
     require(d.index_allocations == 0);
   }
   require(s.memory().allocations() == allocations && s.arena_blocks() == blocks);
-  // Validate-only walks are allocation-free in steady state too.
+  // Validate-only has independent scratch capacity, also retained after its own warm-up.
+  for (const auto& source : {doc, wide}) s.decode(source.data(), source.size(), session::encoding::utf8, true);
+  allocations = s.memory().allocations();
   for (int i = 0; i < 10000; ++i) {
-    auto d = s.decode(doc.data(), doc.size(), session::encoding::utf8, true);
+    const auto& source = i % 2 ? doc : wide;
+    auto d = s.decode(source.data(), source.size(), session::encoding::utf8, true);
     require(d.index_allocations == 0 && !d.tape && !s.live());
   }
   require(s.memory().allocations() == allocations && s.arena_blocks() == blocks);

@@ -489,8 +489,8 @@ void documents_and_hints() {
     json::legacy::document reference(big);
     require(large.allocations().index_retained_bytes < reference.allocations().index_retained_bytes);
   }
-  // Growth past the hint (one word per input byte) moves to larger spans; the overlap is charged
-  // to the peak, the exact peak budget decodes and one byte less is a limit.
+  // Structural presizing handles dense input without array growth: peak equals retained bytes.
+  // The exact peak budget decodes and one byte less remains a limit.
   {
     std::string dense = "[";
     for (int i = 0; i < 40000; ++i) dense += i ? ",1" : "1";
@@ -498,7 +498,7 @@ void documents_and_hints() {
     document grown(dense);
     auto stats = grown.allocations();
     require(grown.value_count() == 40001 && grown.view().word_count == 80002);
-    require(stats.index_peak_bytes > stats.index_retained_bytes);
+    require(stats.index_peak_bytes == stats.index_retained_bytes);
     { document exact(dense, {}, tape::storage_limits{dense.size(), stats.index_peak_bytes}); }
     require(throws([&] { document d(dense, {}, tape::storage_limits{dense.size(), stats.index_peak_bytes - 1}); }));
     require(throws([&] { document d(dense, {}, tape::storage_limits{dense.size() - 1, SIZE_MAX}); }));

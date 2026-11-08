@@ -57,9 +57,9 @@ public final class HeapTape extends TapeReader {
       } else if (k == 10) {
         long target = low(w);
         w = (w & ~0xffffffffL) | (target < root ? 0xffffffffL : target - root);
-      } else if (k >= 3 && k <= 7) {
+      } else if (k <= 7) {
         long base = (w & OWNED) == 0 ? inputFirst : poolFirst;
-        // Synthetic numeric values have no lexical span and therefore no input offset.
+        // Synthetic scalar values have no lexical span and therefore no input offset.
         if (k >= 6 || field(w) != 0) w = (w & ~0xffffffffL) | (low(w) - base);
         if ((w & OWNED) != 0 && second != 0) second -= inputFirst << 32;
       }

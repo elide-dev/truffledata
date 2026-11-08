@@ -7,8 +7,8 @@
 // are the kind, bits 56-59 flags, bits 32-55 a 24-bit field, bits 0-31 a 32-bit field:
 //
 //   kind           words        bits 0-31                    bits 32-55        flags
-//   NULL 0         1            0                            0
-//   FALSE 1/TRUE 2 1            0                            0
+//   NULL 0         1            optional raw token offset    token length
+//   FALSE 1/TRUE 2 1            optional raw token offset    token length
 //   I64 3/U64 4/   2            token offset (input)         token length      WIDE; word 1 = value bits
 //   F64 5
 //   DECIMAL 6      1 (2 OWNED)  token offset (input/pool)    token length      OWNED => WIDE, word 1 = raw span
@@ -21,6 +21,8 @@
 //
 // Flags: WIDE (bit 59) a second word follows; OWNED (58) text lives in the pool; KEY (57) a STRING
 // in key position; ASCII (56) every decoded byte < 0x80 (a claim: absent means "not known").
+// In a TD_TAPE_YAML view an unowned STRING spans its plain source token directly; other
+// views reference the body inside JSON quotes. Quoted/escaped YAML strings are OWNED.
 // A raw span word is `offset << 32 | length` of the source token in the input (quotes included),
 // 0 when the producer has none. Traversal: a node's successor is `wide ? i + 2 : i + 1`, except a
 // container's, which is its `next`; a container's first child is `container + 2`. Objects
@@ -61,7 +63,7 @@ extern "C" {
 // Borrowed: the producer keeps every array immutable and live while the view is in use.
 typedef struct td_tape_view {
   uint32_t version;  // TD_TAPE_VIEW_VERSION
-  uint32_t flags;    // TD_TAPE_NONFINITE, TD_TAPE_HAS_META
+  uint32_t flags;    // TD_TAPE_NONFINITE, TD_TAPE_HAS_META, TD_TAPE_YAML
   const uint64_t* words;
   uint64_t word_count;
   const uint8_t* pool;  // owned text (escaped strings, YAML spellings)
@@ -77,6 +79,7 @@ typedef struct td_tape_view {
 #define TD_TAPE_VIEW_VERSION 1u
 #define TD_TAPE_NONFINITE 1u
 #define TD_TAPE_HAS_META 2u
+#define TD_TAPE_YAML 8u
 static_assert(sizeof(td_tape_view) == 88, "td_tape_view layout");
 static_assert(offsetof(td_tape_view, words) == 8 && offsetof(td_tape_view, pool) == 24, "td_tape_view layout");
 static_assert(offsetof(td_tape_view, input) == 40 && offsetof(td_tape_view, directory) == 56, "td_tape_view layout");
@@ -182,7 +185,7 @@ inline bool within(uint64_t offset, uint64_t length, uint64_t size) { return off
 inline const char* validate(const td_tape_view& v) {
   using detail::within;
   if (v.version != TD_TAPE_VIEW_VERSION) return "tape view version";
-  if (v.flags & ~uint32_t(TD_TAPE_NONFINITE | TD_TAPE_HAS_META)) return "unknown tape view flags";
+  if (v.flags & ~uint32_t(TD_TAPE_NONFINITE | TD_TAPE_HAS_META | TD_TAPE_YAML)) return "unknown tape view flags";
   if (v.word_count == 0 || !v.words) return "empty tape";
   if (v.word_count > max_words) return "tape word count";
   if ((v.pool_bytes && !v.pool) || (v.input_bytes && !v.input) || (v.directory_count && !v.directory))
@@ -259,7 +262,8 @@ inline const char* validate(const td_tape_view& v) {
       case kind_null:
       case kind_false:
       case kind_true:
-        if (w != make(k, 0, 0, 0)) return "payload on a constant word";
+        if (flags != 0) return "flags on a constant word";
+        if (!within(low(w), field(w), v.input_bytes)) return "constant span past the input";
         break;
       case kind_i64:
       case kind_u64:
@@ -527,12 +531,8 @@ class ctape_writer final {
     if (!ctape::detail::within(s.offset, s.length, input_bytes_)) range("tape input span");
   }
   void number(uint32_t kind, uint64_t bits, ctape::span token) {
-    if (token.length > ctape::max_length) limit("tape text token limit");
-    in_input(token);
-    value();
-    uint64_t* w = push(2);
-    w[0] = ctape::make(kind, ctape::wide_flag, token.length, token.offset);
-    w[1] = bits;
+    commit_number(token);
+    parsed_number(kind, bits, token);
   }
   uint32_t own(std::string_view text) {
     if (text.size() > UINT32_MAX - pool_.size()) limit("tape pool limit");
@@ -558,7 +558,7 @@ class ctape_writer final {
   }
   // The object at `object` closes with `count` keys on top of pending_: at two or more they become
   // its directory run (sorted, then checked for duplicates within equal-hash runs).
-  void materialize(key_shape_cache::frame& frame) {
+  [[gnu::noinline, gnu::cold]] void materialize(key_shape_cache::frame& frame) {
     const auto& shape = shapes_->levels[frame.depth];
     for (uint32_t i = 0; i < frame.count; ++i)
       pending_[frame.first + i] |= uint64_t(shape.keys[i].hash) << 32;
@@ -652,6 +652,35 @@ class ctape_writer final {
     pending_.reserve(memory_, directory_entries < 256 ? directory_entries : 256);
   }
 
+  // JSON stage-1 bounds; the pool includes readable scratch padding for scalar-root numbers.
+  void reserve_structural(size_t count, size_t input_bytes) {
+    words_.reserve(memory_, 2 * count + 2);
+    pool_.reserve(memory_, input_bytes + 64);
+    directory_.reserve(memory_, count / 2 + 1);
+    pending_.reserve(memory_, count / 2 + 1);
+  }
+
+  // Reuse the arrays between documents; the arena remains live until retain or capacity release.
+  void clear() {
+    words_.truncate(0); pool_.truncate(0); directory_.truncate(0); pending_.truncate(0);
+    values_ = text_bytes_ = 0; nonfinite_ = false;
+    if (shapes_) shapes_->start();
+  }
+  uint8_t* pool_reserve(size_t bytes) {
+    if (bytes > UINT32_MAX - pool_.size()) limit("tape pool limit");
+    pool_.reserve(memory_, pool_.size() + bytes);
+    return pool_.data() + pool_.size();
+  }
+  void pool_commit(size_t bytes) { pool_.extend(memory_, bytes); }
+  size_t pool_size() const { return pool_.size(); }
+  const uint8_t* pool_data() const { return pool_.data(); }
+  [[gnu::always_inline]] void string_owned(uint32_t offset, uint32_t length, ctape::span raw, bool ascii, bool key) {
+    charge(length); in_input(raw); value();
+    uint64_t* w = push(2);
+    w[0] = ctape::make(ctape::kind_string, flags(ascii, key) | ctape::owned_flag | ctape::wide_flag, length, offset);
+    w[1] = ctape::raw_word(raw);
+  }
+
   // Opens an ARRAY or OBJECT; `depth` counts the containers already open around it (0 for the root)
   // and `raw_offset` is its opening token's input offset (0 when it has none). Returns its index.
   size_t begin(uint32_t kind, uint32_t depth, uint32_t raw_offset = 0) {
@@ -718,14 +747,28 @@ class ctape_writer final {
     pending_.push(memory_, uint64_t(myna_value_hash(text, length)) << 32 | offset);
   }
 
-  void null() {
-    value();
-    *push(1) = ctape::make(ctape::kind_null, 0, 0, 0);
+  void null(ctape::span token = {}) {
+    if (token.length > ctape::max_length) limit("tape text token limit");
+    in_input(token); value();
+    *push(1) = ctape::make(ctape::kind_null, 0, token.length, token.offset);
   }
-  void boolean(bool b) {
-    value();
-    *push(1) = ctape::make(b ? ctape::kind_true : ctape::kind_false, 0, 0, 0);
+  void boolean(bool b, ctape::span token = {}) {
+    if (token.length > ctape::max_length) limit("tape text token limit");
+    in_input(token); value();
+    *push(1) = ctape::make(b ? ctape::kind_true : ctape::kind_false, 0, token.length, token.offset);
   }
+  // The numeric parser can invoke its callback before reporting a grammar error. Provisional
+  // words are not counted/published until commit_number; errors roll back before DECIMAL fallback.
+  [[gnu::always_inline]] void parsed_number(uint32_t kind, uint64_t bits, ctape::span token) {
+    uint64_t* w = push(2);
+    w[0] = ctape::make(kind, ctape::wide_flag, token.length, token.offset);
+    w[1] = bits;
+  }
+  [[gnu::always_inline]] void commit_number(ctape::span token) {
+    if (token.length > ctape::max_length) limit("tape text token limit");
+    in_input(token); value();
+  }
+  void rollback_number() { words_.truncate(words_.size() - 2); }
   void integer(int64_t v, ctape::span token) { number(ctape::kind_i64, uint64_t(v), token); }
   void unsigned_integer(uint64_t v, ctape::span token) { number(ctape::kind_u64, v, token); }
   void floating(double v, ctape::span token) {
@@ -829,7 +872,7 @@ class ctape_writer final {
     values_ += nodes;
     for (size_t i = 0; i < count; i = ctape::step(i, out[i])) {
       uint32_t k = ctape::kind(out[i]);
-      if (ctape::is_container(k) || (k == ctape::kind_ref && ctape::low(out[i]) >= origin)) {
+      if (ctape::is_container(k) || (k == ctape::kind_ref && ctape::low(out[i]) >= origin && ctape::low(out[i]) - origin < count)) {
         uint64_t moved = uint64_t(int64_t(ctape::low(out[i])) + shift);
         if (moved > ctape::max_words) range("appended index out of range");
         out[i] = (out[i] & ~uint64_t(UINT32_MAX)) | moved;

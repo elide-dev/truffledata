@@ -4,8 +4,11 @@ cc_library(
     name = "decoder",
     hdrs = [
         "decoder.h",
+        "decoder_common.h",
         "parser_pool.h",
         "session.h",
+        "stage1.h",
+        "stage2.h",
         "status.h",
         "stream.h",
     ],
@@ -202,4 +205,23 @@ cc_test(
         ":typed",
         "//protobuf-buffa/native:truffledata_buffa",
     ],
+)
+
+cc_test(
+    name = "stage2_test",
+    srcs = ["stage2_test.cc"],
+    deps = [":decoder", "//tape/native:testing"],
+)
+
+cc_test(
+    name = "shape_fuzz_test",
+    srcs = ["shape_fuzz_test.cc"],
+    deps = [":decoder"],
+)
+
+cc_test(
+    name = "stage2_probe",
+    srcs = ["stage2_probe.cc", "testing/stage2_baseline_probe.h"],
+    tags = ["manual"],
+    deps = [":decoder", "//tape/native:testing"],
 )

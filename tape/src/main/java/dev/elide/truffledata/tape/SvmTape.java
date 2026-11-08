@@ -9,7 +9,7 @@ public final class SvmTape extends TapeReader {
       input = WordFactory.nullPointer(), directory = WordFactory.nullPointer(), meta = WordFactory.nullPointer();
   public SvmTape(Pointer descriptor) { rebind(descriptor); }
   public void rebind(Pointer d) {
-    if (d.isNull() || (d.rawValue() & 7) != 0 || d.readInt(0) != 1 || (d.readInt(4) & ~3) != 0)
+    if (d.isNull() || (d.rawValue() & 7) != 0 || d.readInt(0) != 1 || (d.readInt(4) & ~11) != 0)
       throw new IllegalArgumentException("Invalid compact tape descriptor");
     long n = d.readLong(16), p = d.readLong(32), i = d.readLong(48), e = d.readLong(64), m = d.readLong(80);
     Pointer w = d.readWord(8), pb = d.readWord(24), ib = d.readWord(40), dir = d.readWord(56), mt = d.readWord(72);

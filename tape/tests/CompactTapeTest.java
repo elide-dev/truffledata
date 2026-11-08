@@ -36,6 +36,21 @@ class CompactTapeTest {
     return new Owner(new HeapTape(words, new byte[]{'A'}, input, dirs, new int[0], 0));
   }
 
+  @Test void yamlPlainAndConstantSpansSurviveSubtreeSnapshots() {
+    byte[] input = "prefix plain yes null".getBytes(StandardCharsets.UTF_8);
+    Owner owner = new Owner(new HeapTape(new long[]{w(8, TapeReader.WIDE, 3, 5), 0,
+        w(7, TapeReader.ASCII, 5, 7), w(2, 0, 3, 13), w(0, 0, 4, 17)},
+        new byte[0], input, new long[0], new int[0], 8));
+    String[] text = {"plain", "yes", "null"};
+    for (int i = 0; i < text.length; i++) {
+      assertEquals(text[i], owner.root().element(i).rawText());
+      assertEquals(text[i], owner.root().element(i).snapshot().root().rawText());
+    }
+    assertEquals("plain", owner.root().element(0).stringValue());
+    assertTrue(owner.root().element(1).booleanValue());
+    assertEquals(TapeValue.Kind.NULL, owner.root().element(2).kind());
+  }
+
   @Test void readsWideScalarsAndEscapedStrings() {
     Owner owner = document();
     assertEquals(2, owner.root().size());

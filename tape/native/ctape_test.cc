@@ -69,6 +69,21 @@ struct scratch {
 
 // ---- tests ----------------------------------------------------------------------------------
 
+void yaml_plain_and_constant_spans() {
+  const std::string input = "plain yes null";
+  scratch s;
+  ctape_writer w(&s.arena, {});
+  w.input(input);
+  size_t root = w.begin(c::kind_array, 0);
+  w.string_ref({0, 5}, true, false); w.boolean(true, {6, 3}); w.null({10, 4});
+  w.end(root, 3);
+  auto view = w.view(); view.flags |= TD_TAPE_YAML;
+  require(c::validate(view) == nullptr);
+  require(c::field(view.words[3]) == 3 && c::low(view.words[3]) == 6);
+  require(c::field(view.words[4]) == 4 && c::low(view.words[4]) == 10);
+  require(throws([&] { w.boolean(false, {14, 1}); }));
+}
+
 void words_follow_the_layout() {
   const std::string input = R"({"a":1,"bb":[true,null,"x\n"],"c":1.5})";
   scratch s;
@@ -433,6 +448,19 @@ void erase_append_truncate_renumber() {
     require(c::after(5, v.words[5]) == 11 && c::low(v.words[9]) == 7 && c::low(v.words[10]) == 2);
     require(throws([&] { w.append(saved.data(), 1, 0); }));  // half a container
   }
+  // A rewrite's copied REF can name an already-emitted target beyond the source slice.
+  // Only targets inside [origin, origin+count) relocate with the slice.
+  {
+    scratch s;
+    ctape_writer w(&s.arena, {});
+    w.input(input);
+    size_t root = w.begin(c::kind_array, 0);
+    w.boolean(false); w.boolean(true);
+    uint64_t external = c::make(c::kind_ref, 0, 0, 2);
+    w.append(&external, 1, 3); // destination4, origin1, source slice[1,2)
+    w.end(root, 3);
+    require(c::low(w.words()[4]) == 2 && c::validate(w.view()) == nullptr);
+  }
   // Rewrites refuse to run while announced keys are pending (JSON never rewrites).
   {
     scratch s;
@@ -547,7 +575,7 @@ void validate_rejects_corruption() {
   corrupt([](W& x, W&, td_tape_view&) { x[9] = c::make(c::kind_ref, 0, 0, 6); });   // REF to an open ancestor
   corrupt([](W& x, W&, td_tape_view&) { x[8] = c::make(c::kind_ref, 0, 0, 9); });   // REF forward
   corrupt([](W& x, W&, td_tape_view&) { x[8] = c::make(c::kind_ref, 0, 0, 4); });   // REF to a second word
-  corrupt([](W& x, W&, td_tape_view&) { x[8] = c::make(c::kind_true, 0, 1, 0); });  // payload on a constant
+  corrupt([](W& x, W&, td_tape_view&) { x[8] = c::make(c::kind_true, 0, 1, UINT32_MAX); });  // constant span past input
   corrupt([](W& x, W&, td_tape_view&) { x[9] |= c::owned_flag | c::wide_flag; });  // OWNED text without its raw word
   corrupt([](W& x, W&, td_tape_view&) {                                          // ASCII claimed for non-ASCII text
     x[11] = c::make(c::kind_string, c::owned_flag | c::wide_flag | c::ascii_flag, 2, 0);
@@ -709,6 +737,7 @@ int main() {
       {"shape_cache_rejects_duplicates", shape_cache_rejects_duplicates},
       {"permuted_directories_match_sorted", permuted_directories_match_sorted},
       {"words_follow_the_layout", words_follow_the_layout},
+      {"yaml_plain_and_constant_spans", yaml_plain_and_constant_spans},
       {"duplicates_detected_in_sorted_directory", duplicates_detected_in_sorted_directory},
       {"singleton_objects_have_no_directory", singleton_objects_have_no_directory},
       {"counts_saturate_and_validate", counts_saturate_and_validate},
