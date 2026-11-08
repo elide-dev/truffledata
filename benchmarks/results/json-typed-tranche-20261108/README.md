@@ -1,9 +1,12 @@
 # Nested/repeated structural typed JSON candidate
 
-Status: **unqualified candidate awaiting SVM pairs**. Revised native differential/API and
-64 JVM tests pass with the pinned toolchain. Native producer median round gains are
-1.326x nested, 1.190x repeated, 1.041x mixed, and 1.198x churn. Native timings are not
-end-to-end SVM speedups. SVM acceptance, existing allocation/graph gates and both image smokes pass. Paired SVM timing remains pending.
+Status: **qualified specifically for nested/repeated typed ingestion**. The paired SVM run
+measures 1.105–1.184x ingest gains across four workloads, with unchanged Java allocations and
+all existing semantic/graph/allocation checks passing. Generic interop ingest regresses 2.20%,
+flat typed ingest moves +1.50% with overlapping ranges, and read-tier changes remain disclosed.
+No universal JSON speedup, full release qualification or total-memory win is claimed.
+See [admission.md](admission.md) for the decision, tradeoffs and current competitor table,
+and [paired.md](paired.md) for every measured cell.
 
 The baseline image has production `9a1dcec` and the identical Java harness from `c43af1c`
 (integration `d3f40cf`). `baseline.json` records its image/source hashes. No PGO, ISA change,
