@@ -47,6 +47,19 @@ class ProjectionTest {
   }
 
   @Test
+  void boundSizeReadsSupportConcreteAndSlabBackedDurableArrays() {
+    var plan = plan();
+    var slab = SlabMessage.decode(plan, input());
+    var row = plan.newBuilder().set(3, slab.get(3)).build();
+    assertSame(slab.get(3), row.get(3));
+    assertEquals(2, plan.getSize(row, 3));
+    assertEquals(2, plan.getSize(slab, 3));
+    assertEquals(0, plan.getSize(plan.newBuilder().build(), 3));
+    assertThrows(ContractViolation.class, () -> plan.getSize(row, 0));
+    assertThrows(ContractViolation.class, () -> plan().getSize(row, 3));
+  }
+
+  @Test
   void sparseReadsPreservePresenceAndCountsButRejectOmittedValues() throws Exception {
     var plan = plan();
     var input = input();

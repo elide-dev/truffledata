@@ -542,11 +542,19 @@ public final class ProtoPlan {
   public int getSize(ProtoAccess row, int ordinal) {
     if (row instanceof ProtoRow) {
       Object value = get(row, ordinal);
-      if (value instanceof OwnedArray array) return array.size();
-      throw new ContractViolation("Expected array");
+      if (value instanceof DataArray array) return array.size();
+      return durableArraySize(value);
     }
     if (row.plan() != this) throw new ContractViolation("Generated plan mismatch");
     return row.getSize(ordinal);
+  }
+
+  // The ordinary ProtoRow representation stores concrete DataArray values. Other durable
+  // arrays remain supported without leaving an opaque interface call in the guest graph.
+  @TruffleBoundary
+  private static int durableArraySize(Object value) {
+    if (value instanceof OwnedArray array) return array.size();
+    throw new ContractViolation("Expected array");
   }
 
   Object directValue(Object storage, int ordinal) {
