@@ -1,0 +1,48 @@
+{
+  "production_commit": "7fca64bed6bf995f6b79f4c352aca145cadd7b79",
+  "git_tree": "b8341b44bd05ac036e8a532caccff7df5dbe8ef1",
+  "coverage_invocation": "b436036f-46bf-4662-b8ff-c9d65a474d7e",
+  "captured_utc": "2026-11-08T22:28:43.699079+00:00",
+  "working_tree_before": [
+    " M benchmarks/results/svm-tranche-20261108/README.md",
+    "?? benchmarks/results/svm-tranche-20261108/paired-images/invocation-1159ca42.log.gz",
+    "?? benchmarks/results/svm-tranche-20261108/paired-images/refined-protobuf-manifest.json",
+    "?? benchmarks/results/svm-tranche-20261108/report-tests/"
+  ],
+  "source_sha256": {
+    "MODULE.bazel": "bbdf7e419a348876e877704ea98ec035528ee079bca7321ed0d4dcd8563e3f4c",
+    "MODULE.bazel.lock": "b2896a5c8034d387010517361724e82bab73c7af3a1920c05911bcaafd9f9b2f",
+    ".bazelrc": "4325ac64a84ec5b0689cc3986c9443732c52255d38916066b83439272695f642",
+    ".github/scripts/reports.py": "8d03541f1c30edb9efddf81095008b0fb34a191e996b541af88bd311dd13a029",
+    ".github/scripts/coverage_contract.py": "18b5ee59991fae7b26f223936324c7f92219c99ae384174914a493328a710e43",
+    "csv/src/main/java/dev/elide/truffledata/csv/BatchBuilder.java": "8d49e219f89c35e0d42bd81ac1a72083c4ce3139bb602ff0474201cc05ec5ac0",
+    "csv/src/main/java/dev/elide/truffledata/csv/IndexScan.java": "8299d2f4718fce369f96f5e07f7234422ce110ac7175025b59fe39da2311afac",
+    "json/native/typed.h": "de27b8ad78bdeb7c5f29bc96f58ea098d87b3557c085c54287506248648bfd56",
+    "json/native/decoder.h": "b1825c6419f9b44399fa0fd641370d6e9a7d30fb25f4ee6fa873ab716c0e9a7e",
+    "protobuf-runtime/src/main/java/dev/elide/truffledata/protobuf/SlabMessage.java": "371f1afbf228f03ba4ad1081531a8724d8fe4505a41515478586c33f7eaee682"
+  },
+  "sdk": {
+    "version": "25.5.5-elide.27",
+    "archive": "graalvm-ce-25.5.5-elide.27-linux-amd64.tar.gz",
+    "archive_sha256": "b6d316ed0b81354949704afe632e1e2a1551d637736df5b6b03088cc5b09c852"
+  },
+  "targets": [
+    "//tests:test",
+    "//protobuf-runtime:test",
+    "//protobuf-buffa/tests:jvm",
+    "//protobuf-buffa/tests:jvm_non_strict",
+    "//protobuf-buffa/tests:jvm_no_native_access",
+    "//json/tests:jvm",
+    "//yaml/tests:jvm",
+    "//tape/tests:jvm",
+    "//csv/tests:jvm"
+  ],
+  "flags": [
+    "--config=codecov",
+    "--test_output=errors"
+  ],
+  "notes": [
+    "Pending workspace changes are parent-owned documentation and evidence; production sources match the recorded commit.",
+    "Coverage excludes allocation/JIT-tagged tests as configured by the existing codecov lane; no new exemption or gate change."
+  ]
+}
