@@ -1,5 +1,5 @@
 {
-  "checksum": "819a6bdd1fb409c9257c1f2619c638e8752d4992b3cc46272dec687c6405c2b7",
+  "checksum": "bb9cf8f1b3e8ef7b76b2c9ce8c973fceb1399e7d63c1c51a4912b440177ade0a",
   "conditions": {
     "aarch64-apple-darwin": [
       "aarch64-apple-darwin"
@@ -13,40 +13,6 @@
     ]
   },
   "crates": {
-    "allocator-api2 0.2.21": {
-      "common_attrs": {
-        "crate_features": [
-          "alloc",
-          "default",
-          "std"
-        ],
-        "edition": "2018"
-      },
-      "library_target_name": "allocator_api2",
-      "license": "MIT OR Apache-2.0",
-      "license_file": "LICENSE-APACHE",
-      "license_ids": [
-        "Apache-2.0",
-        "MIT"
-      ],
-      "name": "allocator-api2",
-      "package_url": "https://github.com/zakarumych/allocator-api2",
-      "repository": {
-        "Http": {
-          "sha256": "683d7910e743518b0e34f1186f92494becacb047c7b6bf616c96772180fef923",
-          "url": "https://static.crates.io/crates/allocator-api2/0.2.21/download"
-        }
-      },
-      "targets": [
-        {
-          "Library": {
-            "crate_name": "allocator_api2",
-            "crate_root": "src/lib.rs"
-          }
-        }
-      ],
-      "version": "0.2.21"
-    },
     "bitflags 2.13.2": {
       "common_attrs": {
         "edition": "2021"
@@ -135,45 +101,6 @@
         }
       ],
       "version": "0.9.2"
-    },
-    "bumpalo 3.20.3": {
-      "common_attrs": {
-        "crate_features": [
-          "allocator-api2",
-          "default"
-        ],
-        "deps": [
-          {
-            "id": "allocator-api2 0.2.21",
-            "target": "allocator_api2"
-          }
-        ],
-        "edition": "2021"
-      },
-      "library_target_name": "bumpalo",
-      "license": "MIT OR Apache-2.0",
-      "license_file": "LICENSE-APACHE",
-      "license_ids": [
-        "Apache-2.0",
-        "MIT"
-      ],
-      "name": "bumpalo",
-      "package_url": "https://github.com/fitzgen/bumpalo",
-      "repository": {
-        "Http": {
-          "sha256": "72f5acc6cb2ba439de613abc23857ec3d78374d8ed5ac84e9d11336e87da8649",
-          "url": "https://static.crates.io/crates/bumpalo/3.20.3/download"
-        }
-      },
-      "targets": [
-        {
-          "Library": {
-            "crate_name": "bumpalo",
-            "crate_root": "src/lib.rs"
-          }
-        }
-      ],
-      "version": "3.20.3"
     },
     "bytes 1.11.1": {
       "common_attrs": {
@@ -458,352 +385,6 @@
       ],
       "version": "1.0.18"
     },
-    "json-number 0.4.10": {
-      "common_attrs": {
-        "crate_features": [
-          "default"
-        ],
-        "deps": [
-          {
-            "id": "lexical 7.0.5",
-            "target": "lexical"
-          }
-        ],
-        "edition": "2021"
-      },
-      "library_target_name": "json_number",
-      "license": "MIT/Apache-2.0",
-      "license_file": "LICENSE-APACHE",
-      "license_ids": [
-        "Apache-2.0",
-        "MIT"
-      ],
-      "name": "json-number",
-      "package_url": "https://github.com/timothee-haudebourg/json-number",
-      "repository": {
-        "Http": {
-          "sha256": "479dfd2ad8e4b4ae076b031f72ef2f3791f65e2a0f51e5f3408dbf716c4c2f82",
-          "url": "https://static.crates.io/crates/json-number/0.4.10/download"
-        }
-      },
-      "targets": [
-        {
-          "Library": {
-            "crate_name": "json_number",
-            "crate_root": "src/lib.rs"
-          }
-        }
-      ],
-      "version": "0.4.10"
-    },
-    "lexical 7.0.5": {
-      "common_attrs": {
-        "crate_features": [
-          "default",
-          "format",
-          "parse-floats",
-          "parse-integers",
-          "std",
-          "write-floats",
-          "write-integers"
-        ],
-        "deps": [
-          {
-            "id": "lexical-core 1.0.6",
-            "target": "lexical_core"
-          }
-        ],
-        "edition": "2021"
-      },
-      "library_target_name": "lexical",
-      "license": "MIT/Apache-2.0",
-      "license_file": "LICENSE-APACHE",
-      "license_ids": [
-        "Apache-2.0",
-        "MIT"
-      ],
-      "name": "lexical",
-      "package_url": "https://github.com/Alexhuszagh/rust-lexical",
-      "repository": {
-        "Http": {
-          "sha256": "1bc8a009b2ff1f419ccc62706f04fe0ca6e67b37460513964a3dfdb919bb37d6",
-          "url": "https://static.crates.io/crates/lexical/7.0.5/download"
-        }
-      },
-      "targets": [
-        {
-          "Library": {
-            "crate_name": "lexical",
-            "crate_root": "src/lib.rs"
-          }
-        }
-      ],
-      "version": "7.0.5"
-    },
-    "lexical-core 1.0.6": {
-      "common_attrs": {
-        "crate_features": [
-          "format",
-          "lexical-parse-float",
-          "lexical-parse-integer",
-          "lexical-write-float",
-          "lexical-write-integer",
-          "parse-floats",
-          "parse-integers",
-          "std",
-          "write-floats",
-          "write-integers"
-        ],
-        "deps": [
-          {
-            "id": "lexical-parse-float 1.0.6",
-            "target": "lexical_parse_float"
-          },
-          {
-            "id": "lexical-parse-integer 1.0.6",
-            "target": "lexical_parse_integer"
-          },
-          {
-            "id": "lexical-util 1.0.7",
-            "target": "lexical_util"
-          },
-          {
-            "id": "lexical-write-float 1.0.6",
-            "target": "lexical_write_float"
-          },
-          {
-            "id": "lexical-write-integer 1.0.6",
-            "target": "lexical_write_integer"
-          }
-        ],
-        "edition": "2021"
-      },
-      "library_target_name": "lexical_core",
-      "license": "MIT/Apache-2.0",
-      "license_file": "LICENSE-APACHE",
-      "license_ids": [
-        "Apache-2.0",
-        "MIT"
-      ],
-      "name": "lexical-core",
-      "package_url": "https://github.com/Alexhuszagh/rust-lexical",
-      "repository": {
-        "Http": {
-          "sha256": "7d8d125a277f807e55a77304455eb7b1cb52f2b18c143b60e766c120bd64a594",
-          "url": "https://static.crates.io/crates/lexical-core/1.0.6/download"
-        }
-      },
-      "targets": [
-        {
-          "Library": {
-            "crate_name": "lexical_core",
-            "crate_root": "src/lib.rs"
-          }
-        }
-      ],
-      "version": "1.0.6"
-    },
-    "lexical-parse-float 1.0.6": {
-      "common_attrs": {
-        "crate_features": [
-          "format",
-          "std"
-        ],
-        "deps": [
-          {
-            "id": "lexical-parse-integer 1.0.6",
-            "target": "lexical_parse_integer"
-          },
-          {
-            "id": "lexical-util 1.0.7",
-            "target": "lexical_util"
-          }
-        ],
-        "edition": "2021"
-      },
-      "library_target_name": "lexical_parse_float",
-      "license": "MIT/Apache-2.0",
-      "license_file": "LICENSE-APACHE",
-      "license_ids": [
-        "Apache-2.0",
-        "MIT"
-      ],
-      "name": "lexical-parse-float",
-      "package_url": "https://github.com/Alexhuszagh/rust-lexical",
-      "repository": {
-        "Http": {
-          "sha256": "52a9f232fbd6f550bc0137dcb5f99ab674071ac2d690ac69704593cb4abbea56",
-          "url": "https://static.crates.io/crates/lexical-parse-float/1.0.6/download"
-        }
-      },
-      "targets": [
-        {
-          "Library": {
-            "crate_name": "lexical_parse_float",
-            "crate_root": "src/lib.rs"
-          }
-        }
-      ],
-      "version": "1.0.6"
-    },
-    "lexical-parse-integer 1.0.6": {
-      "common_attrs": {
-        "crate_features": [
-          "format",
-          "std"
-        ],
-        "deps": [
-          {
-            "id": "lexical-util 1.0.7",
-            "target": "lexical_util"
-          }
-        ],
-        "edition": "2021"
-      },
-      "library_target_name": "lexical_parse_integer",
-      "license": "MIT/Apache-2.0",
-      "license_file": "LICENSE-APACHE",
-      "license_ids": [
-        "Apache-2.0",
-        "MIT"
-      ],
-      "name": "lexical-parse-integer",
-      "package_url": "https://github.com/Alexhuszagh/rust-lexical",
-      "repository": {
-        "Http": {
-          "sha256": "9a7a039f8fb9c19c996cd7b2fcce303c1b2874fe1aca544edc85c4a5f8489b34",
-          "url": "https://static.crates.io/crates/lexical-parse-integer/1.0.6/download"
-        }
-      },
-      "targets": [
-        {
-          "Library": {
-            "crate_name": "lexical_parse_integer",
-            "crate_root": "src/lib.rs"
-          }
-        }
-      ],
-      "version": "1.0.6"
-    },
-    "lexical-util 1.0.7": {
-      "common_attrs": {
-        "crate_features": [
-          "format",
-          "parse-floats",
-          "parse-integers",
-          "std",
-          "write-floats",
-          "write-integers"
-        ],
-        "edition": "2021"
-      },
-      "library_target_name": "lexical_util",
-      "license": "MIT/Apache-2.0",
-      "license_file": "LICENSE-APACHE",
-      "license_ids": [
-        "Apache-2.0",
-        "MIT"
-      ],
-      "name": "lexical-util",
-      "package_url": "https://github.com/Alexhuszagh/rust-lexical",
-      "repository": {
-        "Http": {
-          "sha256": "2604dd126bb14f13fb5d1bd6a66155079cb9fa655b37f875b3a742c705dbed17",
-          "url": "https://static.crates.io/crates/lexical-util/1.0.7/download"
-        }
-      },
-      "targets": [
-        {
-          "Library": {
-            "crate_name": "lexical_util",
-            "crate_root": "src/lib.rs"
-          }
-        }
-      ],
-      "version": "1.0.7"
-    },
-    "lexical-write-float 1.0.6": {
-      "common_attrs": {
-        "crate_features": [
-          "format",
-          "std"
-        ],
-        "deps": [
-          {
-            "id": "lexical-util 1.0.7",
-            "target": "lexical_util"
-          },
-          {
-            "id": "lexical-write-integer 1.0.6",
-            "target": "lexical_write_integer"
-          }
-        ],
-        "edition": "2021"
-      },
-      "library_target_name": "lexical_write_float",
-      "license": "MIT/Apache-2.0",
-      "license_file": "LICENSE-APACHE",
-      "license_ids": [
-        "Apache-2.0",
-        "MIT"
-      ],
-      "name": "lexical-write-float",
-      "package_url": "https://github.com/Alexhuszagh/rust-lexical",
-      "repository": {
-        "Http": {
-          "sha256": "50c438c87c013188d415fbabbb1dceb44249ab81664efbd31b14ae55dabb6361",
-          "url": "https://static.crates.io/crates/lexical-write-float/1.0.6/download"
-        }
-      },
-      "targets": [
-        {
-          "Library": {
-            "crate_name": "lexical_write_float",
-            "crate_root": "src/lib.rs"
-          }
-        }
-      ],
-      "version": "1.0.6"
-    },
-    "lexical-write-integer 1.0.6": {
-      "common_attrs": {
-        "crate_features": [
-          "format",
-          "std"
-        ],
-        "deps": [
-          {
-            "id": "lexical-util 1.0.7",
-            "target": "lexical_util"
-          }
-        ],
-        "edition": "2021"
-      },
-      "library_target_name": "lexical_write_integer",
-      "license": "MIT/Apache-2.0",
-      "license_file": "LICENSE-APACHE",
-      "license_ids": [
-        "Apache-2.0",
-        "MIT"
-      ],
-      "name": "lexical-write-integer",
-      "package_url": "https://github.com/Alexhuszagh/rust-lexical",
-      "repository": {
-        "Http": {
-          "sha256": "409851a618475d2d5796377cad353802345cba92c867d9fbcde9cf4eac4e14df",
-          "url": "https://static.crates.io/crates/lexical-write-integer/1.0.6/download"
-        }
-      },
-      "targets": [
-        {
-          "Library": {
-            "crate_name": "lexical_write_integer",
-            "crate_root": "src/lib.rs"
-          }
-        }
-      ],
-      "version": "1.0.6"
-    },
     "memchr 2.8.3": {
       "common_attrs": {
         "crate_features": [
@@ -836,64 +417,6 @@
         }
       ],
       "version": "2.8.3"
-    },
-    "myna-values 0.13.0": {
-      "common_attrs": {
-        "deps": [
-          {
-            "id": "allocator-api2 0.2.21",
-            "target": "allocator_api2"
-          },
-          {
-            "id": "bumpalo 3.20.3",
-            "target": "bumpalo"
-          },
-          {
-            "id": "json-number 0.4.10",
-            "target": "json_number"
-          },
-          {
-            "id": "serde 1.0.229",
-            "target": "serde"
-          },
-          {
-            "id": "simdutf 0.7.0",
-            "target": "simdutf"
-          },
-          {
-            "id": "thiserror 2.0.21",
-            "target": "thiserror"
-          }
-        ],
-        "edition": "2024"
-      },
-      "library_target_name": "myna_values",
-      "license": "Apache-2.0 OR MIT",
-      "license_file": "LICENSE-APACHE",
-      "license_ids": [
-        "Apache-2.0",
-        "MIT"
-      ],
-      "name": "myna-values",
-      "package_url": "https://github.com/elide-dev/myna",
-      "repository": {
-        "Git": {
-          "commitish": {
-            "Rev": "2a4223a83570250bc2678a4f3a0244addd2c50e5"
-          },
-          "remote": "https://github.com/elide-dev/myna",
-          "strip_prefix": "crates/myna-values"
-        }
-      },
-      "targets": [
-        {
-          "Library": {
-            "crate_name": "myna_values",
-            "crate_root": "src/lib.rs"
-          }
-        }
-      ],
-      "version": "0.13.0"
     },
     "once_cell 1.21.4": {
       "common_attrs": {
@@ -1097,10 +620,6 @@
     "serde 1.0.229": {
       "build_script_attrs": {},
       "common_attrs": {
-        "crate_features": [
-          "default",
-          "std"
-        ],
         "deps": [
           {
             "id": "serde_core 1.0.229",
@@ -1498,7 +1017,6 @@
       "build_script_attrs": {},
       "common_attrs": {
         "crate_features": [
-          "default",
           "std"
         ],
         "edition": "2021",
@@ -1640,29 +1158,6 @@
       "targets": [],
       "version": "0.1.0"
     },
-    "truffledata-json-bridge 0.1.0": {
-      "common_attrs": {
-        "deps": [
-          {
-            "id": "myna-values 0.13.0",
-            "target": "myna_values"
-          }
-        ],
-        "edition": "2024"
-      },
-      "library_target_name": "truffledata_json_bridge",
-      "name": "truffledata-json-bridge",
-      "repository": null,
-      "targets": [
-        {
-          "Library": {
-            "crate_name": "truffledata_json_bridge",
-            "crate_root": "lib.rs"
-          }
-        }
-      ],
-      "version": "0.1.0"
-    },
     "unicode-ident 1.0.27": {
       "common_attrs": {
         "edition": "2021"
@@ -1737,14 +1232,12 @@
     "bytes 1.11.1",
     "csv 1.4.0",
     "csv-core 0.1.13",
-    "myna-values 0.13.0",
     "serde_json 1.0.154",
     "simdutf 0.7.0"
   ],
   "direct_dev_deps": [],
   "workspace_members": {
     "truffledata-buffa 0.2.0": "protobuf-buffa/native",
-    "truffledata-csv-probe 0.1.0": "benchmarks/comparison/csv-probe",
-    "truffledata-json-bridge 0.1.0": "json/native/bridge"
+    "truffledata-csv-probe 0.1.0": "benchmarks/comparison/csv-probe"
   }
 }

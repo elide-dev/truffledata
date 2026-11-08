@@ -95,3 +95,8 @@ The full32-row fixture's local HotSpot graph drops2431→1952nodes with1loop,0ca
 harness return-box allocation. This is diagnostic evidence, not the Native Image graph gate;
 new image/coverage/allocation requalification remains pending. Logs and harness are retained in
 benchmarks/results/tape-reader-followup/. No budget is relaxed.
+
+Task5 retirement: json/native/bridge is removed after its last SVM caller was retired. Cargo.toml,
+Cargo.lock and Cargo.Bazel.lock drop the unused Myna Rust text bridge and its exclusive transitive
+dependencies (Cargo offline resolution and Bazel repin442d1633). JSON/YAML use the shared C++
+simdutf transcoder; explicit Java/C Myna interchange remains. Generated bindings still use Myna.
