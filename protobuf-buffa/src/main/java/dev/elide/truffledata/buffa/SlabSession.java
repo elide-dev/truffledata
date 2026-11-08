@@ -117,13 +117,14 @@ public final class SlabSession implements AutoCloseable {
   /** Reuse the arena. Failed attempts also invalidate previous results; pinned attempts do not. */
   @TruffleBoundary
   public BorrowedSlabMessage decode(WireInput input) {
-    decodeInto(input);
+    decodeInto(input, true);
     return new BorrowedSlabMessage(this, epoch);
   }
 
-  // The owning plan copies immediately, so it does not need a temporary borrow wrapper.
+  // Immediate retention publishes only the copied owner, whose import performs structural and
+  // logical validation. Avoid validating the unpublished borrow a second time.
   SlabMessage decodeRetained(WireInput input) {
-    decodeInto(input);
+    decodeInto(input, false);
     try {
       return retain(epoch);
     } finally {
@@ -131,7 +132,7 @@ public final class SlabSession implements AutoCloseable {
     }
   }
 
-  private void decodeInto(WireInput input) {
+  private void decodeInto(WireInput input, boolean validateBorrow) {
     writable();
     decoder.check();
     invalidate();
@@ -172,7 +173,7 @@ public final class SlabSession implements AutoCloseable {
                 : FfmBackend.nativeAddress(input);
       }
       try {
-        validate();
+        if (validateBorrow) validate();
       } catch (RuntimeException | Error failure) {
         invalidate();
         throw failure;

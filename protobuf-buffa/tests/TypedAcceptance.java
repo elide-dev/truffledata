@@ -1114,6 +1114,68 @@ final class TypedAcceptance {
     }
   }
 
+  static ProtoPlan projectedBudgetPlan() {
+    var i64 = ProtoPlan.Kind.INT64;
+    var type =
+        new ProtoPlan.Type(
+            "ProjectedBudget",
+            false,
+            List.of(
+                projectedField("id", 1, i64, false, "", 0L),
+                projectedField("text", 2, ProtoPlan.Kind.STRING, false, "", ""),
+                projectedField(
+                    "blob", 3, ProtoPlan.Kind.BYTES, false, "", DataArray.copyOfBytes(new byte[0])),
+                projectedField(
+                    "child",
+                    4,
+                    ProtoPlan.Kind.MESSAGE,
+                    false,
+                    "ProjectedBudget",
+                    Missing.INSTANCE)));
+    return new ProtoPlan.Model(null, List.of(type), new Limits(1, 4, 4, 0), 8, NATIVE)
+        .type("ProjectedBudget");
+  }
+
+  private static void projectedRetainBudgets(BuffaWire decoder) {
+    var contract = projectedBudgetPlan();
+    var projection =
+        Projection.builder(contract)
+            .select("id", "text", "blob")
+            .build()
+            .lazyChildren()
+            .borrowBytes(1);
+    byte[] valid = {8, 7, 34, 0};
+    try (var compiled = decoder.compile(contract, 65536);
+        var selected = compiled.project(projection)) {
+      // The omitted child makes this a borrowing slab. Failure occurs only when the copied
+      // owner applies the logical payload/cell limit, after native production succeeds.
+      for (byte[] invalid : new byte[][] {{18, 1, 120, 34, 0}, {26, 1, 120, 34, 0}}) {
+        Acceptance.rejects(() -> selected.decode(invalid, 65536), ContractViolation.class);
+        var recovered = selected.decode(valid, 65536);
+        Acceptance.check(
+            recovered.getLong(0) == 7, "projected owning recovery after budget failure");
+        if (decoder.selected() != BuffaWire.Selected.JAVA) {
+          try (var session = selected.newSession(65536);
+              var bad = decoder.allocate(invalid.length).put(invalid);
+              var good = decoder.allocate(valid.length).put(valid)) {
+            Acceptance.rejects(() -> session.decode(bad), ContractViolation.class);
+            Acceptance.check(
+                session.retainedInputBytes() == 0, "failed borrow releases its source");
+            Acceptance.check(session.decode(good).getLong(0) == 7, "borrow budget recovery");
+          }
+        }
+      }
+    }
+    var required = plan("Required");
+    try (var compiled = decoder.compile(required, 65536);
+        var selected = compiled.project(Projection.builder(required).build().lazyChildren())) {
+      Acceptance.rejects(() -> selected.decode(new byte[0], 65536), ContractViolation.class);
+      Acceptance.check(
+          selected.decode(new byte[] {8, 7}, 65536).has(0),
+          "projected owning required presence remains checked");
+    }
+  }
+
   private static void slabSessions(BuffaWire decoder) throws Exception {
     var contract = plan("Sample");
     try (var compiled = decoder.compile(contract, 65536)) {
@@ -1332,6 +1394,7 @@ final class TypedAcceptance {
     heapSlabGcStress(decoder);
     slabSessions(decoder);
     slabProjections(decoder);
+    projectedRetainBudgets(decoder);
     schemaProgramGolden();
     nativeViews(decoder);
     nativeScalarViews(decoder);

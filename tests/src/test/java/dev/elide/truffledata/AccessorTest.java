@@ -65,11 +65,7 @@ class AccessorTest {
 
   @Test
   void inlineReadersPreserveCachedContractsAcrossLayoutChurn() {
-    var inline = AccessorTestFactory.InlineSiteNodeGen.create();
-    var longs = ReadLongNode.create();
-    var doubles = ReadDoubleNode.create();
-    var booleans = ReadBooleanNode.create();
-    var lengths = ReadLengthNode.create();
+    var target = new ReaderParityRoot().getCallTarget();
     for (int layout = 0; layout < 6; layout++) {
       var plan = flat(false);
       for (Object row :
@@ -80,19 +76,45 @@ class AccessorTest {
         for (int ordinal = 0; ordinal < plan.size(); ordinal++) {
           int index = ordinal;
           assertEquals(
-              outcome(() -> longs.execute(row, index)),
-              outcome(() -> inline.execute(row, index, 0)));
+              outcome(() -> target.call(row, index, 0, false)),
+              outcome(() -> target.call(row, index, 0, true)));
           assertEquals(
-              outcome(() -> doubles.execute(row, index)),
-              outcome(() -> inline.execute(row, index, 1)));
+              outcome(() -> target.call(row, index, 1, false)),
+              outcome(() -> target.call(row, index, 1, true)));
           assertEquals(
-              outcome(() -> booleans.execute(row, index)),
-              outcome(() -> inline.execute(row, index, 2)));
+              outcome(() -> target.call(row, index, 2, false)),
+              outcome(() -> target.call(row, index, 2, true)));
           assertEquals(
-              outcome(() -> lengths.execute(row, index)),
-              outcome(() -> inline.execute(row, index, 3)));
+              outcome(() -> target.call(row, index, 3, false)),
+              outcome(() -> target.call(row, index, 3, true)));
         }
       }
+    }
+  }
+
+  private static final class ReaderParityRoot extends RootNode {
+    @Child private InlineSite inline = AccessorTestFactory.InlineSiteNodeGen.create();
+    @Child private ReadLongNode longs = ReadLongNode.create();
+    @Child private ReadDoubleNode doubles = ReadDoubleNode.create();
+    @Child private ReadBooleanNode booleans = ReadBooleanNode.create();
+    @Child private ReadLengthNode lengths = ReadLengthNode.create();
+
+    ReaderParityRoot() {
+      super(null);
+    }
+
+    @Override
+    public Object execute(VirtualFrame frame) {
+      Object[] args = frame.getArguments();
+      Object row = args[0];
+      int ordinal = (int) args[1], operation = (int) args[2];
+      if ((boolean) args[3]) return inline.execute(row, ordinal, operation);
+      return switch (operation) {
+        case 0 -> longs.execute(row, ordinal);
+        case 1 -> doubles.execute(row, ordinal);
+        case 2 -> booleans.execute(row, ordinal);
+        default -> lengths.execute(row, ordinal);
+      };
     }
   }
 

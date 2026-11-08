@@ -38,8 +38,9 @@ for the full array against `maxSlabBytes`.
 Generated contract models bind their Java slab decoder once; runtime-created models use
 `SlabCodec`. `ProtoPlan.decodeSlab` always follows this native-free route. Buffa JVM `AUTO`
 uses Java, while SVM `AUTO` uses the linked native archive when present and otherwise the
-same Java fallback. Explicit native mode can use FFM on the JVM. Selected Java decodes use
-the table producer; native selected decodes use TDP1 with the compiled layout. Native
+same Java fallback. Explicit native mode can use FFM on the JVM. Generated Java also supports
+eligible lazy projections; other selected Java decodes use the table producer. Native selected
+decodes use TDP1 with the compiled layout. Native
 sessions reuse caller-owned storage and return epoch-checked borrows rather than changing
 ordinary decode ownership. See the [producer matrix](BUFFA.md#producer-and-ownership-matrix)
 for text and explicit retention behavior.
@@ -305,6 +306,14 @@ back field by field against `ProtoRow`.
 
 `ContractPlugin.create` supplies immutable per-type decoder factories in the generated `ProtoPlan.Model`. The first slab decode binds that type's generated decoder once; subsequent `SlabMessage.decode` and Buffa Java-backend calls reuse the binding. Runtime-created models retain the table producer. Generated fast loops cover ordinary scalar, oneof, repeated and nested-message cases and restart through the table producer for unknown fields, maps, groups and singular-message merges. Both paths write the same format and preserve byte parity. A bounded 64-entry atomic hint table retains wire-length/slab-extent pairs, avoiding repeated growth for varied input sizes. Each candidate capacity is checked against the current limits before allocation; collisions or concurrent updates affect capacity estimates only. Input and output arrays are never cached, and every returned slab owns fresh storage.
 
+Generated lazy projections have a separate checked loop and capacity-hint table. They require
+`lazyChildren()` without byte borrowing; omitted children use a validation-only scan before
+publishing input-relative spans. Required descendants, maps, groups, oneofs, unknown fields and
+singular-message merges restart the table producer when encountered. Required descendant
+eligibility comes from the complete type closure, including optional descendants absent from
+the wire. Runtime-created models and custom decoder lambdas retain the table fallback. These
+routes share strict/lax validation, depth limits, flags and slab-budget behavior.
+
 ### Native arena borrows
 
 `SlabSession` retains a reusable native buffer containing the same owning slab format. Its rows carry the session's decode epoch, and every value read checks that epoch and thread before loading native memory. No assumption object is allocated per decode. A new decode or reset invalidates previous rows, including compiled constant receivers. A pin prevents buffer recycling until released. Root retain copies the valid extent once into an owning slab; child snapshots additionally verify that the requested record/type is reachable in the copied graph. Arbitrary offsets and overwritten orphan records cannot be selected.
@@ -346,8 +355,8 @@ by a field-count word and `ceil(fieldCount/32)` wanted words per type. Flags are
 LAZY_CHILDREN=2 and BORROW_BYTES=4; unused tail bits must be zero and byteLength exact.
 These program bits differ from the decode and result flags.
 
-Owning projected messages defensively copy source input only when the produced slab contains
-external references. `retainedInputBytes()` reports that separate capacity;
+Owning projected messages retain a defensive source-input copy only when the produced slab
+contains external references. `retainedInputBytes()` reports that separate capacity;
 `retainedSlabBytes()` includes materialized lazy children. `logicalUsage()` reports budgeted
 cells/string bytes without materializing text or child wrappers. External projected imports
 use `copyProjectedOf` or `copyProjectedRecordOf`; plain `copyOf` and `takeOwnership` reject
@@ -360,3 +369,8 @@ Native sessions retain an immutable source lease only while the current slab ref
 Closing the caller's input handle is safe. Reset, next decode, failed decode or close releases
 that lease and invalidates lazy materializations and their nested row/array wrappers. Explicit
 root/child/array snapshots copy or own every retained dependency and survive session closure.
+
+An immediate owning decode through a native projected session copies and validates the final
+owner before returning. It does not first publish or validate an intermediate borrowed row.
+Public session decoding still checks required fields and logical budgets before returning a
+borrow; failures in either route release the retained source and invalidate the attempted epoch.

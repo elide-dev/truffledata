@@ -42,6 +42,36 @@ final class AcceptanceTest {
   }
 
   @Test
+  void projectedOwningValidationFailureReleasesAdoptedInput() throws Exception {
+    var released = new java.util.concurrent.atomic.AtomicInteger();
+    var contract = TypedAcceptance.projectedBudgetPlan();
+    var projection =
+        dev.elide.truffledata.protobuf.Projection.builder(contract)
+            .select("id", "text", "blob")
+            .build()
+            .lazyChildren()
+            .borrowBytes(1);
+    try (var decoder = BuffaWire.open(BuffaWire.Mode.NATIVE, library());
+        var compiled = decoder.compile(contract, 65536);
+        var selected = compiled.project(projection);
+        var arena = java.lang.foreign.Arena.ofConfined()) {
+      byte[] invalid = {18, 1, 120, 34, 0};
+      var segment = arena.allocate(invalid.length);
+      segment.copyFrom(java.lang.foreign.MemorySegment.ofArray(invalid));
+      try (var input = BuffaJvm.adopt(segment, released::incrementAndGet)) {
+        Acceptance.rejects(
+            () -> selected.decode(input, 65536), dev.elide.truffledata.ContractViolation.class);
+        Acceptance.check(released.get() == 0, "caller still owns failed input");
+      }
+      Acceptance.check(released.get() == 1, "failed owning validation released its source lease");
+      var recovered = selected.decode(new byte[] {8, 7, 34, 0}, 65536);
+      Acceptance.check(
+          recovered.getLong(0) == 7, "cached projected session recovers after failure");
+    }
+    Acceptance.check(released.get() == 1, "adopted source released exactly once");
+  }
+
+  @Test
   void cachedLifetimeChecksSurviveCloseAndCacheSaturation() throws Exception {
     try (var decoder = BuffaWire.open(BuffaWire.Mode.NATIVE, library())) {
       CompiledReads.cachedLifetimes(decoder);

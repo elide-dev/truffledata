@@ -76,12 +76,15 @@ native symbols. The native-enabled image uses `BuffaFeature`, not runtime FFM re
 | Buffa `JAVA`, or JVM `AUTO` | Same Java producer selection | Durable owning heap slab |
 | Buffa SVM `AUTO` with linked archive, or explicit `NATIVE` | Native compiled layout | Durable owning heap slab |
 | Buffa SVM `AUTO` without archive | Generated Java for contracts, table Java for runtime models | Durable owning heap slab; native-free release gate |
-| `compiled.project(selection).decode` | Native selected-field producer, or table Java producer | Durable selected slab; immutable input retained only for external bytes/lazy children |
+| `compiled.project(selection).decode` | Native selected-field producer; generated Java for eligible lazy selections, table Java otherwise | Durable selected slab; immutable input retained only for external bytes/lazy children |
 | `compiled.newSession(...).decode` | Native compiled layout into a reusable arena | Scoped borrow; explicit `retain()` produces a durable owner |
 | Text / ProtoJSON | Native typed-index scratch plus eager Java values, or bounded Java parser | Scoped text result with an input lease |
 
 Generated Java fast loops restart through the table producer for unknown fields, maps, groups
-and singular-message merges. Projection uses the table Java producer even for generated contracts.
+and singular-message merges. Generated lazy selections without byte borrowing use specialized
+validation scans and lazy headers; unsupported shapes restart the table producer. Required
+descendant closures remain eager, including when the required descendant is absent. Runtime
+models and other selected Java decodes use the table producer.
 The optional compiled-runtime-decoder experiment missed its joint JVM/SVM speed gate and is not
 selected in production; runtime-created models keep the table fallback. The measured ruling is
 in [the A4 evidence](../benchmarks/results/protobuf-compiled-decoder-dab2dbc5/README.md).
