@@ -10,6 +10,7 @@
 
 ## Global Constraints
 
+- **SVM is the production performance target; JVM is a correctness/test target.** Sam reaffirmed this on 2026-11-08 after the local pause. JVM timing regressions do not veto measured SVM wins, and older JVM performance release gates are informational. Correctness, API, lifetime, coverage, and SVM allocation/graph contracts remain required. See `AGENTS.md` and `2026-11-08-svm-next-tranche.md`.
 - One local Bazel invocation at a time across all worktrees; `JAVA_HOME=/Library/Java/JavaVirtualMachines/gvm.jdk25/Contents/Home`; real `bazelisk` for `coverage` (the aspect CLI has no coverage verb).
 - Keep the shared Bazel volume above a few GiB free; delete only orphaned output bases (workspace directory gone), never shared caches, baselines (`build/protobuf-baseline-fecb39f`, `/private/tmp/td-json-ce7399f-baseline`) or release evidence.
 - No budget relaxation without a measured breakdown recorded in the owning ledger.
@@ -44,7 +45,7 @@
 - [x] Reproduce `json-generic-java-export` (-12%) and `json-generic-interop-read` (-10%) on the simulation image against main `223edf7`; bisect across the branch's tape/JSON commits; fix or rule with evidence. Fresh final-image callgrind counts improve versus main by 15.7% / 8.4%; native/JVM checks pass in `cdcbc5cc`. Evidence: `benchmarks/results/json-codspeed-20261108/`. This is instruction-count evidence, not a new full throughput qualification.
 
 ### Task R5: Performance gates
-- [ ] Protobuf B4 (interpreter ≤ 2.5× stock; `Accessor.bound` 18.7% of samples) and E1 JVM selected-small (0.864 vs 0.85) — design note first, then measured change.
+- [ ] Protobuf B4 on SVM (interpreter ≤ 2.5× stock; reprofile after Phase 1 restoration) — design note first, then measured change. E1's old JVM selected-small 0.864-vs-0.85 miss is informational under the reaffirmed SVM priority, not a release blocker.
 - [ ] YAML throughput floors (config/block/flow/text at 0.51–0.77).
 - [ ] JSON retained big/huge and the 1.5× logical-memory criterion; duplicate-check price qualification.
 
@@ -127,3 +128,33 @@ B4 interpreter target, E1 JVM selected-small qualification, JSON retained and
 validation floors/logical-memory criterion/duplicate-price qualification, YAML
 throughput floors, the pre-existing slab shared-subgraph verification time risk,
 and complete platform/release qualification. These are not waived or marked done.
+
+
+## SVM priority reaffirmed; B4 reinstated — 2026-11-08
+
+Sam clarified after the pause that SVM is the main target and JVM is simply a test
+target, and instructed restoration of optimizations that help SVM even at a JVM
+performance cost. This supersedes the preceding B4 rejection and older JVM
+performance release/admission criteria. The policy is now in the root `AGENTS.md`.
+JVM semantic, lifetime/API and coverage tests remain required.
+
+The exact B4 production delta measured at `38f7399` is reinstated in `29aa408` alongside the
+integrated slab/JSON work, including API-specific tests and the release note for
+its additive protected hooks. Existing paired SVM evidence shows full generated
+interpretation 259.36 → 213.56 ns (−17.7%), sparse 36.36 → 31.83 ns (−12.4%), and
+no demonstrated full/sparse peak regression (overlapping ranges). These are the
+prior paired measurements, not a fresh timing capture of the combined branch.
+The 2.5x full interpreter/stock target is still open (3.501x generated, 6.724x slab).
+
+Integrated restoration validation passes seven targets in `d19a0431`, including
+both native smokes, JVM correctness and allocation tests. The 168/136/136 B scalar
+slab allocation gates remain unchanged. All nine coverage targets and the access-
+method contract pass in `f2c1f687`, without adding coverage exemptions. Evidence
+is retained under `benchmarks/results/protobuf-b4-213a289b/`.
+
+No other proven JSON/CSV SVM winner was found rejected solely on JVM performance.
+The proposed next work is recorded in `2026-11-08-svm-next-tranche.md`: nested
+structural typed JSON, plan-specialized CSV batch construction, and protobuf
+warm-read caches/dispatch, followed by evidence-driven snapshot/streaming/bulk
+experiments. Those new optimizations are not implemented by this restoration.
+The stay-local/no-push/no-CI/no-publication rule remains in force.
