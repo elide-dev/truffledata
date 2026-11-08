@@ -2,11 +2,13 @@ package dev.elide.truffledata.protobuf;
 
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
+import dev.elide.truffledata.Accessor;
 import dev.elide.truffledata.ContractViolation;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.*;
 import java.util.zip.CRC32;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Fixed slab layout of a closed set of protobuf types (format {@code TDSLAB1}, {@code
@@ -15,6 +17,16 @@ import java.util.zip.CRC32;
  * record base. Type 0 is the root; message slots name their child type by index. Immutable.
  */
 public final class Layout {
+  /** Cache identity follows the root closure; a child schema may occur in multiple layouts. */
+  @TruffleBoundary
+  synchronized Accessor accessor(int type, int ordinal) {
+    var table = accessors[Objects.checkIndex(type, accessors.length)];
+    Objects.checkIndex(ordinal, table.length);
+    var accessor = table[ordinal];
+    if (accessor == null) table[ordinal] = accessor = new SlabRow.Slot(this, type, ordinal);
+    return accessor;
+  }
+
   /** Slot kind of one field. Codes in the {@code TDL1} program are {@code ordinal() + 1}. */
   public enum SlotKind {
     I32(4, 4),
@@ -128,6 +140,8 @@ public final class Layout {
   @CompilationFinal(dimensions = 2)
   private final int[][] childTypes;
 
+  private final @Nullable Accessor[][] accessors;
+
   private final byte[] program;
   private final int fingerprint;
 
@@ -135,6 +149,7 @@ public final class Layout {
     if (types.isEmpty()) throw new ContractViolation("Empty slab layout");
     plans = types.toArray(ProtoPlan[]::new);
     int count = plans.length;
+    accessors = new Accessor[count][];
     recordBytes = new int[count];
     presenceWords = new int[count];
     oneofs = new int[count];
@@ -150,6 +165,7 @@ public final class Layout {
     for (int t = 0; t < count; t++) {
       ProtoPlan plan = plans[t];
       int fields = plan.size();
+      accessors[t] = new Accessor[fields];
       int words = (fields + 31) >>> 5;
       int cases = 0;
       int[] slot = new int[fields];
@@ -172,7 +188,8 @@ public final class Layout {
           child[ordinal] = index;
         } else child[ordinal] = -1;
       }
-      // handle · u32 presence words · u16 case entries · 8-byte slots (aligned to 8) · 4-byte slots.
+      // handle · u32 presence words · u16 case entries · 8-byte slots (aligned to 8) · 4-byte
+      // slots.
       boolean wide = false;
       for (SlotKind k : kind) wide |= k.width == 8;
       long cursor = PRESENCE_OFFSET + 4L * words + 2L * cases;

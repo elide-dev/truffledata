@@ -47,6 +47,31 @@ class ProjectionTest {
   }
 
   @Test
+  void childAccessorsRemainBoundWhenTheSamePlanHasDifferentRootLayouts() throws Exception {
+    for (boolean rootFirst : new boolean[] {false, true}) {
+      var plan = plan();
+      var nested = (SlabRow) SlabMessage.decode(plan, input()).get(2);
+      var standalone = SlabMessage.decode(nested.plan(), LayoutTest.wire().field(1, 9).bytes());
+      assertSame(nested.plan(), standalone.plan());
+      assertSame(nested.schema(), standalone.schema());
+      var first = rootFirst ? standalone : nested;
+      var second = rootFirst ? nested : standalone;
+      var a = first.accessor(0);
+      var b = second.accessor(0);
+      assertTrue(a.accepts(first));
+      assertTrue(b.accepts(second));
+      assertNotSame(a, b);
+      assertSame(a, first.accessor(0));
+      assertEquals(first.getLong(0), a.readLong(first));
+      assertEquals(second.getLong(0), b.readLong(second));
+      assertFalse(a.accepts(second));
+      assertFalse(b.accepts(first));
+      assertThrows(ContractViolation.class, () -> a.readLong(second));
+      assertThrows(ContractViolation.class, () -> b.readLong(first));
+    }
+  }
+
+  @Test
   void boundSizeReadsSupportConcreteAndSlabBackedDurableArrays() {
     var plan = plan();
     var slab = SlabMessage.decode(plan, input());

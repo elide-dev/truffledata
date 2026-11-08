@@ -42,11 +42,14 @@ class PolicyTest {
             Map.entry("ProtobufAdapter.java", 5),
             // Generated binding/decoding, lazy layout and the cold durable-array size fallback.
             Map.entry("ProtoPlan.java", 18),
-            Map.entry("SlabMessage.java", 16), // Decode/copy, projected lazy reads, usage and encoding.
+            Map.entry(
+                "SlabMessage.java", 16), // Decode/copy, projected lazy reads, usage and encoding.
             Map.entry("Projection.java", 1), // Invalid field-index diagnostic.
             Map.entry("SlabCodec.java", 1), // Invalid UTF-8 diagnostic construction.
             Map.entry("GeneratedSlabWriter.java", 1), // Invalid input-window diagnostic.
-            Map.entry("Layout.java", 3), // Slab layout compilation (×2) and TDL1 parsing.
+            Map.entry(
+                "Layout.java",
+                4), // Compilation (×2), TDL1 parsing and layout-local accessor cache.
             Map.entry("ProtoRow.java", 3),
             Map.entry("ProtoCompiler.java", 9),
             Map.entry("ProtoDescriptors.java", 1),

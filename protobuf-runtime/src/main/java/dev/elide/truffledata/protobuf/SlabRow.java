@@ -185,10 +185,10 @@ public class SlabRow extends AbstractRow implements ProtoAccess {
 
   @Override
   public final Accessor accessor(int ordinal) {
-    return descriptor.accessor(SlabRow.class, ordinal, i -> new Slot(layout, type, i));
+    return layout.accessor(type, ordinal);
   }
 
-  private static final class Slot extends Accessor {
+  static final class Slot extends Accessor {
     private final Layout layout;
     private final int type;
     private final int offset;
