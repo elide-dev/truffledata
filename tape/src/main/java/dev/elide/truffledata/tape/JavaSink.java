@@ -42,7 +42,7 @@ public final class JavaSink implements TapeSink {
    */
   public static final class KeyCache {
     static final int CAPACITY = 1024;
-    // Open addressing at load factor ≤ 1/2, indexed by the 15-bit key hash.
+    // Open addressing at load factor ≤ 1/2, using decoded inline words or the key hash.
     private final String[] names = new String[2 * CAPACITY];
     private final byte[][] utf8 = new byte[2 * CAPACITY][];
     // Node words of names stored inline (at most 16 bytes): three per slot, word 0 nonzero; other
@@ -59,9 +59,9 @@ public final class JavaSink implements TapeSink {
     @TruffleBoundary
     String intern(TapeText key) {
       int mask = names.length - 1;
-      int slot = key.hash() & mask;
       long[] w = probe;
       boolean inline = key.inlineWords(w, 0);
+      int slot = (inline ? TapeText.inlineHash(w) : key.hash()) & mask;
       for (String name; (name = names[slot]) != null; slot = (slot + 1) & mask) {
         int at = 3 * slot;
         if (inline

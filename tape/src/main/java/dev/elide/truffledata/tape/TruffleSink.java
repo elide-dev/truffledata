@@ -58,9 +58,9 @@ public final class TruffleSink implements TapeSink {
     @TruffleBoundary
     TruffleString intern(TapeText key) {
       int mask = names.length - 1;
-      int slot = key.hash() & mask;
       long[] w = probe;
       boolean inline = key.inlineWords(w, 0);
+      int slot = (inline ? TapeText.inlineHash(w) : key.hash()) & mask;
       for (TruffleString name; (name = names[slot]) != null; slot = (slot + 1) & mask) {
         int at = 3 * slot;
         if (inline

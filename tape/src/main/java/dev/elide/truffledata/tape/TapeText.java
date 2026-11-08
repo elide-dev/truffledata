@@ -90,12 +90,23 @@ public final class TapeText {
    */
   boolean inlineWords(long[] words, int offset) {
     long at = node();
-    long length = owner.tape.length(at);
-    if (owner.tag(at) != ValueTape.STRING || length > TapeKey.INLINE_BYTES) return false;
-    words[offset] = ValueTape.STRING | (length << 32);
-    words[offset + 1] = owner.tape.textWord(at, 0);
-    words[offset + 2] = owner.tape.textWord(at, 8);
+    TapeReader tape = owner.tape;
+    long header = tape.word(at);
+    int length = TapeReader.field(header);
+    if (TapeReader.kind(header) != 7 || length > TapeKey.INLINE_BYTES) return false;
+    boolean owned = (header & TapeReader.OWNED) != 0;
+    long start = TapeReader.low(header);
+    words[offset] = ValueTape.STRING | ((long) length << 32);
+    words[offset + 1] = tape.textWord(owned, start, Math.min(8, length));
+    words[offset + 2] = tape.textWord(owned, start + 8, Math.max(0, length - 8));
     return true;
+  }
+
+  /** Private cache hash of decoded inline words; full words still decide key equality. */
+  static int inlineHash(long[] words) {
+    long hash = words[1] ^ Long.rotateLeft(words[2], 29) ^ ((words[0] >>> 32) * 0x9e3779b97f4a7c15L);
+    hash = (hash ^ (hash >>> 33)) * 0xc4ceb9fe1a85ec53L;
+    return (int) (hash ^ (hash >>> 32));
   }
 
   private boolean copyInline(long at, int length, byte[] output, int offset) {

@@ -155,8 +155,7 @@ public interface TapeReader extends TapeLexical {
     long w = word(node);
     if (kind(w) != 7 && kind(w) != 6) throw new IllegalStateException("Not text");
     int n = field(w);
-    java.util.Objects.checkFromIndexSize(offset, n, output.length);
-    for (int i = 0; i < n; i++) output[offset + i] = textByte((w & OWNED) != 0, low(w) + i);
+    copyText((w & OWNED) != 0, low(w), output, offset, n);
     return n;
   }
   default String decimalText(long node) { return stringValue(node); }
