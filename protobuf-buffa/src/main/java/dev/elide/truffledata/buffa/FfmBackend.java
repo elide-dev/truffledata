@@ -45,34 +45,16 @@ final class FfmBackend implements BuffaWire.Backend {
     return ((byte) SLAB_BYTE.get(MemorySegment.ofAddress(address).reinterpret(1), 0L)) & 255;
   }
 
-  static long readIndexLong(ByteBuffer buffer, int offset) {
-    if (buffer.getClass() == INDEX_BUFFER_TYPE)
-      return CompilerDirectives.castExact(buffer, INDEX_BUFFER_TYPE).getLong(offset);
-    return readOtherIndexLong(buffer, offset);
-  }
-
-  @CompilerDirectives.TruffleBoundary
-  private static long readOtherIndexLong(ByteBuffer buffer, int offset) {
-    return buffer.getLong(offset);
-  }
-
   private final Arena libraryArena = Arena.ofConfined();
   private final MethodHandle decode;
   private final MethodHandle release;
   private final MethodHandle typed;
-  private final MethodHandle scalars;
-  private final MethodHandle compileView;
-  private final MethodHandle releaseCompiled;
-  private final MethodHandle decodeView;
-  private final MethodHandle releaseView;
   private final MethodHandle compileLayout;
   private final MethodHandle releaseLayout;
   private final MethodHandle decodeSlab;
   private final MethodHandle decodeSlabSmall;
   private final MemorySegment slabResult;
-  private final MemorySegment scalarResult;
   private final MemorySegment result;
-  private final MemorySegment viewResult;
   private long copiedSlabInputBytes;
 
   @Override
@@ -88,9 +70,8 @@ final class FfmBackend implements BuffaWire.Backend {
   private boolean busy;
   private boolean cached;
   private boolean closed;
-  // Live compiled plans and views keep the library mapped after this backend closes.
+  // Live compiled layouts keep the library mapped after this backend closes.
   private int detached;
-  private final BuffaWire.Scalars scalarValues = new BuffaWire.Scalars();
   private final Runnable releaseAction = this::releaseResult;
   private final Runnable retainAction = this::retainResult;
 
@@ -135,11 +116,6 @@ final class FfmBackend implements BuffaWire.Backend {
       decode = BuffaFFM.decode(symbols);
       release = BuffaFFM.release(symbols);
       typed = BuffaFFM.typedReuse(symbols);
-      scalars = BuffaFFM.scalars(symbols);
-      compileView = BuffaFFM.compileView(symbols);
-      releaseCompiled = BuffaFFM.releaseCompiled(symbols);
-      decodeView = BuffaFFM.decodeView(symbols);
-      releaseView = BuffaFFM.releaseView(symbols);
       compileLayout = BuffaFFM.compileLayout(symbols);
       releaseLayout = BuffaFFM.releaseLayout(symbols);
       decodeSlab = BuffaFFM.decodeSlab(symbols);
@@ -152,9 +128,7 @@ final class FfmBackend implements BuffaWire.Backend {
                   BuffaFFM.decodeSlabSmall_DESCRIPTOR,
                   Linker.Option.critical(true));
       slabResult = libraryArena.allocate(BuffaFFM.SlabResult_LAYOUT);
-      scalarResult = libraryArena.allocate(BuffaFFM.Scalars_LAYOUT);
       result = libraryArena.allocate(BuffaFFM.Result_LAYOUT);
-      viewResult = libraryArena.allocate(BuffaFFM.View_LAYOUT);
     } catch (RuntimeException | Error failure) {
       libraryArena.close();
       throw failure;
@@ -251,7 +225,7 @@ final class FfmBackend implements BuffaWire.Backend {
       } catch (Throwable failure) {
         throw callFailure(failure);
       }
-      boolean viewReady = BuffaWire.typedStatus(status, format);
+      BuffaWire.status(status);
       long count = result.get(ValueLayout.JAVA_LONG, BuffaFFM.Result_count_OFFSET);
       long capacity = result.get(ValueLayout.JAVA_LONG, BuffaFFM.Result_capacity_OFFSET);
       ByteBuffer tape =
@@ -264,76 +238,10 @@ final class FfmBackend implements BuffaWire.Backend {
                       libraryArena,
                       null)
                   .asByteBuffer();
-      return new BuffaWire.Tape(tape, count, capacity, retainAction, viewReady, 0);
+      return new BuffaWire.Tape(tape, count, capacity, retainAction, 0);
     } catch (RuntimeException | Error failure) {
       releaseResult();
       throw failure;
-    }
-  }
-
-  @Override
-  public BuffaWire.Scalars scalars(
-      WireInput schema, WireInput input, dev.elide.truffledata.protobuf.ProtoPlan plan) {
-    if (!(schema.lease.attachment instanceof MemorySegment schemaMemory)
-        || !(input.lease.attachment instanceof MemorySegment inputMemory))
-      throw new IllegalArgumentException("Inputs are not JVM native memory");
-    acquireResult();
-    try {
-      int status;
-      try {
-        status =
-            (int)
-                scalars.invokeExact(
-                    schemaMemory,
-                    (long) schema.size(),
-                    inputMemory,
-                    (long) input.size(),
-                    plan.limits().maxCells(),
-                    plan.maxDepth(),
-                    scalarResult);
-      } catch (Throwable failure) {
-        throw callFailure(failure);
-      }
-      BuffaWire.status(status);
-      return scalarValues.set(
-          scalarResult.get(ValueLayout.JAVA_LONG, BuffaFFM.Scalars_first_OFFSET),
-          scalarResult.get(ValueLayout.JAVA_LONG, BuffaFFM.Scalars_second_OFFSET),
-          scalarResult.get(ValueLayout.JAVA_LONG, BuffaFFM.Scalars_present_OFFSET));
-    } finally {
-      busy = false;
-    }
-  }
-
-  @Override
-  public long compileView(WireInput schema) {
-    if (!(schema.lease.attachment instanceof MemorySegment schemaMemory))
-      throw new IllegalArgumentException("Schema is not JVM native memory");
-    acquireResult();
-    try {
-      int status;
-      try {
-        status = (int) compileView.invokeExact(schemaMemory, (long) schema.size(), viewResult);
-      } catch (Throwable failure) {
-        throw callFailure(failure);
-      }
-      BuffaWire.status(status);
-      long handle = viewResult.get(ValueLayout.ADDRESS, BuffaFFM.Result_data_OFFSET).address();
-      if (handle == 0) throw new IllegalStateException("Native view compilation returned null");
-      detached++;
-      return handle;
-    } finally {
-      busy = false;
-    }
-  }
-
-  @Override
-  public void releaseCompiled(long compiled) {
-    try {
-      releaseCompiled.invokeExact(MemorySegment.ofAddress(compiled));
-    } catch (Throwable failure) {
-      throw callFailure(failure);
-    } finally {
-      detach();
     }
   }
 
@@ -521,64 +429,6 @@ final class FfmBackend implements BuffaWire.Backend {
       throw new IllegalStateException("Native slab capacity retry failed");
     } finally {
       busy = false;
-    }
-  }
-
-  @Override
-  public BuffaWire.@Nullable Tape view(
-      long compiled,
-      WireInput input,
-      dev.elide.truffledata.protobuf.ProtoPlan plan,
-      int nativeBytes,
-      boolean budgetFallback) {
-    if (!(input.lease.attachment instanceof MemorySegment inputMemory))
-      throw new IllegalArgumentException("Input is not JVM native memory");
-    MemorySegment scratch = acquireResult();
-    try {
-      int status;
-      try {
-        status =
-            (int)
-                decodeView.invokeExact(
-                    MemorySegment.ofAddress(compiled),
-                    inputMemory,
-                    (long) input.size(),
-                    plan.limits().maxCells(),
-                    plan.limits().maxStringBytes(),
-                    plan.maxDepth(),
-                    (long) nativeBytes,
-                    scratch,
-                    viewResult);
-      } catch (Throwable failure) {
-        throw callFailure(failure);
-      }
-      // Scratch now holds the reusable index (or nothing after a failure).
-      cached = true;
-      if (budgetFallback && status == 2) return null;
-      boolean viewReady = BuffaWire.typedStatus(status, 3);
-      long count = viewResult.get(ValueLayout.JAVA_LONG, BuffaFFM.View_count_OFFSET);
-      long words = viewResult.get(ValueLayout.JAVA_LONG, BuffaFFM.View_words_OFFSET);
-      long bytes = viewResult.get(ValueLayout.JAVA_LONG, BuffaFFM.View_bytes_OFFSET);
-      MemorySegment data = viewResult.get(ValueLayout.ADDRESS, BuffaFFM.View_data_OFFSET);
-      ByteBuffer buffer =
-          bytes == 0
-              ? ByteBuffer.allocate(0)
-              : data.reinterpret(bytes, libraryArena, null).asByteBuffer();
-      if (bytes != 0) detached++;
-      return BuffaWire.Tape.view(buffer, count, words, bytes, viewReady, data.address(), this);
-    } finally {
-      busy = false;
-    }
-  }
-
-  @Override
-  public void releaseView(long data, long bytes) {
-    try {
-      releaseView.invokeExact(MemorySegment.ofAddress(data), bytes);
-    } catch (Throwable failure) {
-      throw callFailure(failure);
-    } finally {
-      detach();
     }
   }
 

@@ -359,69 +359,35 @@ materialize strings earlier. The acceptance corpus runs with strict mode both on
 and off; performance measurements use the shipping, non-strict path. For SVM, set
 the property at image build time with the other strict-test options.
 
-## Seam ABI 9: schema-compiled views with native field directories
+## Seam ABI 11: layout-compiled slabs
 
-ABI 9 replaces the ABI 8 view path (index decode, then a detached `Result` header and Java-built
-field directories). `BuffaPlan` compiles a view-eligible schema once (`compileView`) into checked
-native descriptors: per-type field tables, a direct number-to-ordinal table for numbers up to
-2,048, and closed-enum ranges or sorted value sets. Decoding (`decodeView`) reads no schema
-bytes. `releaseCompiled` frees the handle when the plan closes; it remains valid after the
-decoder closes.
+Binary `BuffaPlan.decode` uses the owning slab representation. `newSession` explicitly
+selects a reusable native arena, and `project` binds selected fields and deferred children.
+The deprecated Java `decodeView` spelling delegates to durable owning decode; it does not
+retain a native field-directory view.
 
-Each view is **one native allocation**: the 24-byte index entries followed by `u32` directory
-words. Every message instance owns one word per schema field, in pre-order with the root at word
-0. A singular word is the last occurrence's entry index plus one (zero: absent); a repeated word is
-zero or the offset of `[count, entry indices...]`. A message entry's `value` is its directory's
-word offset. Java therefore locates any field or repeated element with bounded loads; it no
-longer walks siblings, allocates position arrays or builds per-row directories. SVM reads words
-from native memory. The JVM adapter copies the words once per view into an `int[]`, keeping FFM
-buffer access out of compiled guest code.
+ABI 11 removes the earlier `View`/`Scalars` result structures, compiled-view imports,
+scalar-only producer, and the binary format-3 typed-index path. The Java `NativeRow` and
+`ScalarRow` readers and their retained directory/index allocations are gone. Ordinary
+wire scanning and typed text/ProtoJSON decoding still use the bounded typed-index scratch;
+those are separate APIs. Text results materialize `TypedRow.ArrayRow` values before releasing
+the scratch, and their string/bytes views retain their input lease.
 
-The decoder reuses its scratch index between calls. In the steady state, the result is copied
-into one exact allocation (one native allocation per message; Rust tests assert this). Only
-when scratch plus result would exceed the per-call native budget is the scratch itself
-transferred in place. If retained scratch capacity alone causes the budget failure, the decoder
-releases it and decodes once more from empty scratch, so reuse never rejects input that a fresh
-decoder accepts. A message with no fields needs no allocation and fits a zero budget. Views
-release with `releaseView`, which is also valid after the decoder closes. Certification (status
-5: no required fields, no singular-message merges) is unchanged from ABI 8. Uncertified views
-still use the general Java semantic check, and merges fall back to the eager path.
+The `TDS1` slab and `TDP1` projection formats remain unchanged. `compileLayout`/
+`releaseLayout` compile a schema program's `TDB3` tables and `TDL1` section once, recomputing
+the layout and rejecting disagreement. `decodeSlab` writes one message into caller-provided
+storage and reports its exact required length (`NEEDS_CAPACITY = 6`); `decodeSlabSmall` is
+its bounded native leaf (input and capacity at most 64 KiB, no heap allocation or lock).
+Bindings, native attachments and the Java JAR must be upgraded together because the seam
+fingerprint changes with removed exports. See [SLAB.md](SLAB.md) for the wire layout and
+projection contract.
 
-Compilation rejects types with more than 64 fields or map entries. Java's view eligibility
-already excludes these. Rust tests compare compiled views with the interpreted decoder over
-8,000 generated inputs: entries, statuses, error codes, and every directory word must match a
-naive recomputation. They also enforce budgets against fresh decoders across retained
-capacities. A failure-injecting allocator fails every allocation from the *n*th onward in
-compilation, index growth, the exact copy and in-place transfer, and checks that nothing leaks.
-The ABI 8 `Result` detachment path was removed, and
-`NativeTapeAcceptance` now covers view ownership across scratch reuse and decoder closure.
-Bindings, native attachments and the Java JAR must be upgraded together. Measurements are in
-[the protobuf results](../benchmarks/results/protobuf-f26678a/README.md).
-
-Since the slab layout work (protobuf performance plan, Task A1), `NativeSchema` appends a `TDL1`
-section, the plan's fixed slab layout, after the last TDB3 byte, located by an 8-byte trailer.
-The `TDB3` magic and every existing offset are unchanged and ABI 9 never reads past its own
-tables, so this library keeps working; a Rust test compiles programs with and without the
-section and compares the descriptors and decodes. The slab format and the section are specified
-in [SLAB.md](SLAB.md).
-
-## Seam ABI 10: layout-compiled slabs (native producer)
-
-ABI 10 (protobuf performance plan, Task A2) adds the native producer of the `TDSLAB1` slabs
-specified in [SLAB.md](SLAB.md): `compileLayout`/`releaseLayout` compile a schema program's
-`TDB3` tables and `TDL1` section once (recomputing the layout and rejecting any disagreement),
-`decodeSlab` decodes one message into a caller-provided buffer and reports the exact length
-(`NEEDS_CAPACITY = 6`) when it does not fit, and `decodeSlabSmall` is the same decode as a
-bounded native leaf (input and capacity at most 64 KiB, no heap allocation, no lock). The ABI 9
-imports are unchanged and the Java backends keep using views until Task B1 adopts slabs; the
-ABI 9 view imports are retired in Task G1. Bindings and native attachments must again be upgraded
-together (the fingerprint changed with the ABI).
-
-The slab decoder reproduces the ten Task A1 golden slabs byte for byte and is compared with the
-ABI 9 view decoder over 8,000 generated inputs; Rust tests also cover capacity retries, budgets,
-UTF-8 rejection offsets, merges, oneofs, maps, unknown fields, depth, allocation (the small
-entry point allocates nothing) and failure injection. Measurements against the decode probe are
-in [the slab results](../benchmarks/results/protobuf-slab-native-d3f778c/README.md).
+Rust tests retain byte-exact golden slabs, an 8,000-input differential against the independent
+typed-wire decoder, capacity retries, budgets, UTF-8 rejection offsets, merges, oneofs, maps,
+unknown fields, depth, allocation and failure injection. `NativeTapeAcceptance` verifies that
+durable slab rows survive typed-index scratch reuse and decoder closure. Historical view
+measurements remain available in [the protobuf results](../benchmarks/results/protobuf-f26678a/README.md);
+current comparison cells exercise slabs and sessions.
 
 ### Reusable native slab sessions
 
@@ -429,7 +395,7 @@ in [the slab results](../benchmarks/results/protobuf-slab-native-d3f778c/README.
 
 `message.pin()` returns an `AutoCloseable` guard. While pinned, decode, reset, message close and session close throw before changing the current result. Reads and pin release must occur on the session thread. Closing an already expired message cannot invalidate a newer result. Owning containers reject borrowed rows and arrays until explicitly retained or snapshotted.
 
-Sessions require a native backend; Java-only consumers use the durable slab methods. The arena reuses the existing ABI 10 caller-owned output buffer, rather than adding a second Rust session allocator or new ABI symbols. The ordinary producer writes owning payloads into that arena. `arenaBytes()` reports retained native capacity, which stays bounded by `maxSlabBytes`; `slabBytes()` reports the current valid extent. Projected sessions can retain immutable source input for lazy children or large bytes; `retainedInputBytes()` reports that capacity separately. Deferred child slabs share the session's remaining retained-memory and logical budgets.
+Sessions require a native backend; Java-only consumers use the durable slab methods. The arena reuses the caller-owned slab output buffer introduced in ABI 10, rather than adding a second Rust session allocator or new ABI symbols. The ordinary producer writes owning payloads into that arena. `arenaBytes()` reports retained native capacity, which stays bounded by `maxSlabBytes`; `slabBytes()` reports the current valid extent. Projected sessions can retain immutable source input for lazy children or large bytes; `retainedInputBytes()` reports that capacity separately. Deferred child slabs share the session's remaining retained-memory and logical budgets.
 
 
 ### Selected fields and deferred children

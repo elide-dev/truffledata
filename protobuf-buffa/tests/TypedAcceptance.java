@@ -15,10 +15,7 @@ final class TypedAcceptance {
   private TypedAcceptance() {}
 
   static SlabMessage decode(BuffaPlan plan, WireInput input, int budget) {
-    var message =
-        Boolean.getBoolean("truffledata.tests.nativeViews")
-            ? plan.decodeView(input, budget)
-            : plan.decode(input, budget);
+    var message = plan.decode(input, budget);
     Acceptance.check(message.snapshot() == message, "slab identity snapshot");
     Acceptance.check(message.slabBacked(), "binary decode returns owning slab");
     return message;

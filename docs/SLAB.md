@@ -11,7 +11,7 @@ Sources: `protobuf-runtime/.../Layout.java` (layout compiler and the `TDL1` prog
 `SlabFormat.java` (constants and accessors), the executable model of this document,
 `protobuf-runtime/src/test/.../SlabReference.java`, which the golden slabs in
 `protobuf-runtime/src/test/resources/slab/` are checked against, and the native producer
-`protobuf-buffa/native/slab.rs` (seam ABI 10, below), which reproduces every golden byte for byte.
+`protobuf-buffa/native/slab.rs` (seam ABI 11, below), which reproduces every golden byte for byte.
 
 ## Java ownership
 
@@ -204,10 +204,10 @@ map entry gets at close). Deeper nesting is a budget error.
 The header's `records` and `handles` count orphans. Producers must agree byte for byte, orphans
 and padding included; this is what `producers_agree_byte_for_byte` (Task A3) compares.
 
-## Native producer (seam ABI 10)
+## Native producer (seam ABI 11)
 
-`protobuf-buffa/native/slab.rs` behind four `buffa.seam` imports (the ABI 9 view imports stay
-until Task G1):
+`protobuf-buffa/native/slab.rs` exposes four `buffa.seam` imports. ABI 11 retires the
+earlier native view and scalar-only producers; `TDS1` and `TDP1` remain unchanged:
 
 - `compileLayout(schema, length, result)`: compiles a schema program (`TDB3` + `TDL1`) once into
   an owned handle (`result.data`; `result.count` types). The layout is recomputed from the TDB3
@@ -225,7 +225,7 @@ until Task G1):
   written, but the walk continues to the end (records that do not fit are kept in decoder
   frames), so the count is exact and errors are reported exactly as with room. A slab longer
   than `maxSlabBytes` is `BUDGET` (2), never `NEEDS_CAPACITY`, so the caller never allocates for
-  it; `maxDepth` above 128 (the ABI 9 bound) and `maxSlabBytes` above `Integer.MAX_VALUE` are
+  it; `maxDepth` above the native bound of 128 and `maxSlabBytes` above `Integer.MAX_VALUE` are
   `BUDGET` up front. `result` (`SlabResult`, 32 B): `bytes u64 · records u32 · handles u32 · flags u32 · error u32 ·
   reserved u64`; on a rejection `error` is the input offset of the innermost field being decoded
   (for invalid UTF-8, of the string's first payload byte, which is where protobuf-java fails:
@@ -239,10 +239,10 @@ until Task G1):
 
 ## Schema program section (`TDL1`)
 
-`NativeSchema` appends the layout of its type list to the ABI 9 `TDB3` schema program, after the
-last TDB3 byte (enum tables and strings), at the next multiple of 4 (zero padding). TDB3 readers
-reach data only through header offsets and never look past it, so the ABI 9 library is unaffected
-(`appended_layout_section_is_invisible_to_abi9` in `typed_view_tests.rs`).
+`NativeSchema` appends the layout of its type list to the `TDB3` schema program, after the
+last TDB3 byte (enum tables and strings), at the next multiple of 4 (zero padding).
+Ordinary typed-index readers reach data through TDB3 offsets; the slab compiler reads and
+validates the appended layout section. No retired view decoder is required.
 
 ```
 section

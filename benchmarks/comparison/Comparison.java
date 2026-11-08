@@ -72,8 +72,6 @@ public final class Comparison {
     }
   }
 
-  private static final boolean NATIVE_VIEWS = Boolean.getBoolean("truffledata.buffa.views");
-
   static List<String> engines(String workload) {
     if (workload.equals("proto-bytes"))
       return List.of("stock", "stock-aliased", "owned", "buffa", "generated-owned");
@@ -249,7 +247,7 @@ public final class Comparison {
             stage,
             ImageInfo.inImageRuntimeCode() ? "svm" : "jvm",
             fixture.decoder == null ? "none" : fixture.decoder.selected(),
-            NATIVE_VIEWS,
+            false,
             peak,
             ROWS,
             fixture.expected,
@@ -462,11 +460,7 @@ public final class Comparison {
     ProtoMessage parseNative(int i) {
       return workload.equals("timestamp-json")
           ? Objects.requireNonNull(nativePlan).parseJson(json[i], 1 << 20)
-          : NATIVE_VIEWS
-              ? Objects.requireNonNull(nativePlan)
-                  .decodeView(Objects.requireNonNull(inputs[i]), 1 << 20)
-              : Objects.requireNonNull(nativePlan)
-                  .decode(Objects.requireNonNull(inputs[i]), 1 << 20);
+          : Objects.requireNonNull(nativePlan).decode(Objects.requireNonNull(inputs[i]), 1 << 20);
     }
 
     long project(int rotation) {

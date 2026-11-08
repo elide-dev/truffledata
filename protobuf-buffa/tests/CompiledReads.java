@@ -98,6 +98,107 @@ final class CompiledReads {
     }
   }
 
+  private static void unknownFieldReads(BuffaWire decoder) {
+    var model =
+        dev.elide.truffledata.generated.TruffleDataContracts.create(
+            TestLanguage.current(), Limits.DEFAULT, 16, 65536);
+    var plan = model.type("truffledata.lossless.Flat");
+    var access =
+        new dev.elide.truffledata.generated.TruffleDataContracts.Access_truffledata$lossless$Flat(
+            plan);
+    // An empty unknown group has four raw bytes although it contains no nested values.
+    byte[] wire = {(byte) 0x9b, 6, (byte) 0x9c, 6};
+    unknownQueries(plan.decode(wire), 0, 4);
+    unknownQueries(access.decode(wire), 1, 4);
+    unknownQueries(plan.decodeSlab(wire), 2, 4);
+    unknownQueries(plan.decode(new byte[0]), 0, 0);
+    unknownQueries(access.decode(new byte[0]), 1, 0);
+    unknownQueries(plan.decodeSlab(new byte[0]), 2, 0);
+    if (decoder.selected() == BuffaWire.Selected.JAVA) return;
+    try (var compiled = decoder.compile(plan, 65536);
+        var input = decoder.allocate(wire.length).put(wire);
+        var empty = decoder.allocate(0);
+        var session = compiled.newSession(4096)) {
+      var row = session.decode(input);
+      var root = unknownQueries(row, 3, 4);
+      var durable = row.retain();
+      session.reset();
+      Acceptance.rejects(row::hasUnknownFields, IllegalStateException.class);
+      Acceptance.rejects(row::unknownFieldByteCount, IllegalStateException.class);
+      Acceptance.rejects(() -> root.getCallTarget().call(row, 1), IllegalStateException.class);
+      unknownQueries(durable, 2, 4);
+      unknownQueries(session.decode(empty), 3, 0);
+    }
+  }
+
+  private static UnknownQueryRoot unknownQueries(Object row, int kind, int bytes) {
+    var root = new UnknownQueryRoot(kind);
+    var target = root.getCallTarget();
+    long value = bytes + (bytes == 0 ? 0 : 1);
+    for (int i = 0; i < 200 && !root.compiled; i++) target.call(row, 100000);
+    Acceptance.check(root.compiled, "unknown-byte queries compiled kind " + kind);
+    Acceptance.check(
+        (Long) target.call(row, 1000) == value * 1000,
+        "raw unknown-byte count and presence kind " + kind);
+    var bean =
+        (com.sun.management.ThreadMXBean) java.lang.management.ManagementFactory.getThreadMXBean();
+    Acceptance.check(bean.isThreadAllocatedMemorySupported(), "unknown query allocation counter");
+    bean.setThreadAllocatedMemoryEnabled(true);
+    long thread = Thread.currentThread().threadId();
+    target.call(row, 1000000);
+    long before = bean.getThreadAllocatedBytes(thread);
+    long observed = (Long) target.call(row, 1000000);
+    double allocation = (bean.getThreadAllocatedBytes(thread) - before) / 1000000.0;
+    Acceptance.check(
+        observed == value * 1000000 && allocation <= 0.05,
+        "unknown queries allocate no per-read storage: kind " + kind + " bytes/read=" + allocation);
+    System.out.println(
+        "UNKNOWN kind=" + kind + " raw_bytes=" + bytes + " compiled=true bytes/read=" + allocation);
+    Acceptance.check(NodeUtil.countNodes(root) <= 16, "unknown query AST budget");
+    return root;
+  }
+
+  private static final class UnknownQueryRoot extends RootNode {
+    final int kind;
+    boolean compiled;
+
+    UnknownQueryRoot(int kind) {
+      super(TestLanguage.current());
+      this.kind = kind;
+    }
+
+    @Override
+    public Object execute(VirtualFrame frame) {
+      Object row = frame.getArguments()[0];
+      int count = (Integer) frame.getArguments()[1];
+      long sum = 0;
+      for (int i = 0; i < count; i++) {
+        sum +=
+            switch (kind) {
+              case 0 -> {
+                var value = (dev.elide.truffledata.protobuf.ProtoRow) row;
+                yield value.unknownFieldByteCount() + (value.hasUnknownFields() ? 1 : 0);
+              }
+              case 1 -> {
+                var value = (dev.elide.truffledata.protobuf.GeneratedMessage) row;
+                yield value.unknownFieldByteCount() + (value.hasUnknownFields() ? 1 : 0);
+              }
+              case 2 -> {
+                var value = (dev.elide.truffledata.protobuf.SlabRow) row;
+                yield value.unknownFieldByteCount() + (value.hasUnknownFields() ? 1 : 0);
+              }
+              default -> {
+                var value = (BorrowedSlabRow) row;
+                yield value.unknownFieldByteCount() + (value.hasUnknownFields() ? 1 : 0);
+              }
+            };
+      }
+      if (CompilerDirectives.inInterpreter()) LoopNode.reportLoopCount(this, count);
+      compiled |= CompilerDirectives.inCompiledCode();
+      return sum;
+    }
+  }
+
   private static void lazyProjectionReads(BuffaWire decoder) {
     if (decoder.selected() == BuffaWire.Selected.JAVA) return;
     var contract = TypedAcceptance.plan("Sample");
@@ -302,6 +403,7 @@ final class CompiledReads {
       try {
         nativeViewReads(decoder);
         slabSessionReads(decoder);
+        unknownFieldReads(decoder);
         lazyProjectionReads(decoder);
         generatedReads(decoder);
         generatedOwnedReads();

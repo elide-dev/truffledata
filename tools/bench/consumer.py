@@ -17,16 +17,25 @@ import statistics
 import subprocess
 
 LEGACY_ENGINES = ('stock', 'generated-owned', 'native-view', 'native-eager')
-ENGINES = (*LEGACY_ENGINES, 'slab', 'slab-session')
+ENGINES = ('stock', 'stock-interop', 'generated-owned', 'slab', 'slab-projected',
+           'slab-lazy', 'slab-session', 'slab-session-projected')
+KNOWN_ENGINES = tuple(dict.fromkeys((*ENGINES, *LEGACY_ENGINES)))
 STAGES = ('decode', 'resident', 'heap', 'detach', 'first', 'interpret', 'peak')
 MODE_STAGES = (('sparse', STAGES), ('full', STAGES), ('holdout', ('resident', 'peak')),
-               ('large', ('decode', 'resident', 'peak')))
+               ('holdout-sparse', ('resident', 'peak')), ('large', ('decode', 'resident', 'peak')))
+MODES = tuple(mode for mode, _ in MODE_STAGES)
 GROUPS = [(m, s) for m, stages in MODE_STAGES for s in stages]
-def supported(engine, stage):
-    return engine != 'slab-session' or stage in ('decode', 'resident')
 
 
-CELLS = [(e, m, s) for m, s in GROUPS for e in ENGINES if supported(e, s)]
+def supported(engine, stage, mode):
+    if engine.startswith('slab-session') and stage not in ('decode', 'resident'):
+        return False
+    if engine == 'stock-interop' and stage not in ('interpret', 'peak'):
+        return False
+    return engine not in ('slab-projected', 'slab-session-projected') or mode.endswith('sparse')
+
+
+CELLS = [(e, m, s) for m, s in GROUPS for e in ENGINES if supported(e, s, m)]
 SEED = 20261105
 # HotSpot needs a longer host warmup than a closed-world image before samples are meaningful.
 JVM_PROPERTIES = ('-Dconsumer.warmupMillis=1500', '-Dconsumer.sampleMillis=100')
@@ -59,20 +68,27 @@ def validate(record, cell, metric, checksums, runtime='svm'):
         value = record.get(name)
         if not isinstance(value, (float, int)) or not math.isfinite(value) or value < 0:
             raise ValueError(f'{cell}: invalid memory observation {name}')
-    if engine == 'slab':
+    if engine.startswith('slab') and not engine.startswith('slab-session'):
         extent = record.get('slab_bytes_per_row')
         retained = record.get('retained_slab_capacity_bytes_per_row')
         if (not isinstance(extent, (float, int)) or not math.isfinite(extent) or extent <= 0
                 or not isinstance(retained, (float, int)) or not math.isfinite(retained)
                 or retained < extent):
             raise ValueError(f'{cell}: invalid slab extent/capacity accounting')
-    if engine == 'slab-session':
+    if engine.startswith('slab-session'):
         extent = record.get('slab_bytes_per_row')
         capacity = record.get('session_arena_capacity_bytes_per_row')
         if (not isinstance(extent, (float, int)) or not math.isfinite(extent) or extent <= 0
                 or not isinstance(capacity, (float, int)) or not math.isfinite(capacity)
                 or capacity < extent or record.get('retained_slab_capacity_bytes_per_row') != 0):
             raise ValueError(f'{cell}: invalid native session arena accounting')
+    if engine == 'stock-interop' and record.get('host_interop') is not True:
+        raise ValueError(f'{cell}: stock interop must execute host messages')
+    if engine in ('slab-projected', 'slab-lazy', 'slab-session-projected'):
+        retained_input = record.get('retained_input_bytes_per_row')
+        if (not isinstance(retained_input, (float, int)) or not math.isfinite(retained_input)
+                or retained_input < 0):
+            raise ValueError(f'{cell}: invalid retained immutable input accounting')
     checksums[mode] = checksum
 
 
@@ -89,10 +105,32 @@ def select_engines(labels, specifications):
         engines = tuple(raw.split(','))
         if label not in selected or not engines or len(set(engines)) != len(engines):
             raise ValueError('Engine selection requires a known binary and unique engines')
-        if any(engine not in ENGINES for engine in engines):
+        if any(engine not in KNOWN_ENGINES for engine in engines):
             raise ValueError('Unknown consumer engine')
         selected[label] = engines
     return selected
+
+
+def select_modes(labels, specifications):
+    """Historical binaries explicitly omit fixture modes added after they were built."""
+    selected = {label: MODES for label in labels}
+    for specification in specifications:
+        label, raw = specification.split('=', 1)
+        modes = tuple(raw.split(','))
+        if (label not in selected or not modes or len(set(modes)) != len(modes)
+                or any(mode not in MODES for mode in modes)):
+            raise ValueError('Mode selection requires a known binary and unique known modes')
+        selected[label] = modes
+    return selected
+
+
+def select_groups(specification):
+    if specification is None:
+        return GROUPS
+    groups = [tuple(group.split(':')) for group in specification.split(',')]
+    if len(set(groups)) != len(groups) or any(group not in GROUPS for group in groups):
+        raise ValueError('Groups must be unique known mode:stage pairs')
+    return groups
 
 
 def summarize(rows, labels):
@@ -100,7 +138,7 @@ def summarize(rows, labels):
     summary = []
     for label in labels:
         for mode, stage in GROUPS:
-            for engine in ENGINES:
+            for engine in KNOWN_ENGINES:
                 chosen = [r for r in rows if (r['binary'], r['engine'], r['mode'], r['stage'])
                           == (label, engine, mode, stage)]
                 times = [statistics.median(r['ns_per_row']) for r in chosen
@@ -120,6 +158,7 @@ def summarize(rows, labels):
                     slab_bytes_per_row=first.get('slab_bytes_per_row', 0),
                     retained_slab_capacity_bytes_per_row=first.get('retained_slab_capacity_bytes_per_row', 0),
                     session_arena_capacity_bytes_per_row=first.get('session_arena_capacity_bytes_per_row', 0),
+                    retained_input_bytes_per_row=first.get('retained_input_bytes_per_row', 0),
                     mb_per_s=throughput(first['input_bytes_per_row'], statistics.median(times))))
     return summary
 
@@ -130,19 +169,19 @@ def markdown(rows, labels, runtime='svm'):
              if s['engine'] == 'stock'}
     lines = [f'# Consumer comparison ({runtime})', '',
              'Fresh-process fork medians; ranges are not confidence intervals. Java allocation '
-             'excludes native storage, reported separately as retained index/header bytes. Stock '
+             'excludes native storage, reported separately as arena, retained input and slab capacity. Stock '
              'guest projection has an explicit boundary. MB/s divides wire input bytes by the '
              'whole cell (decode cells: decode and release only). Native transient allocation '
              'peaks are not measured.', '']
     index = {(s['binary'], s['engine'], s['mode'], s['stage']): s for s in summary}
     for label in labels:
         lines += [f'## {label}: ns/row (× stock)', '',
-                  '| Mode | Stage | ' + ' | '.join(ENGINES) + ' |',
-                  '|---|---|' + '---:|' * len(ENGINES)]
+                  '| Mode | Stage | ' + ' | '.join(KNOWN_ENGINES) + ' |',
+                  '|---|---|' + '---:|' * len(KNOWN_ENGINES)]
         for mode, stage in GROUPS:
             base = stock.get((label, mode, stage))
             cells = []
-            for engine in ENGINES:
+            for engine in KNOWN_ENGINES:
                 s = index.get((label, engine, mode, stage))
                 if s is None:
                     cells.append('—')
@@ -154,8 +193,8 @@ def markdown(rows, labels, runtime='svm'):
         lines.append('')
     lines += ['## All cells', '',
               '| Binary | Mode | Stage | Engine | ns/row (fork range) | × stock | MB/s | '
-              'Java B/row | Native index+header B/row | Slab extent / heap capacity B/row | Native arena B/row |',
-              '|---|---|---|---|---:|---:|---:|---:|---:|---:|---:|']
+              'Java B/row | Native index+header B/row | Slab extent / heap capacity B/row | Native arena B/row | Retained input B/row |',
+              '|---|---|---|---|---:|---:|---:|---:|---:|---:|---:|---:|']
     for s in summary:
         base = stock.get((s['binary'], s['mode'], s['stage']))
         ratio = f"{s['ns_per_row'] / base:.2f}" if base else '—'
@@ -164,7 +203,7 @@ def markdown(rows, labels, runtime='svm'):
                      f"{s['ns_per_row']:.3f} ({s['ns_min']:.3f}–{s['ns_max']:.3f}) | {ratio} | "
                      f"{s['mb_per_s']:.1f} | {s['java_bytes_per_row']:.2f} | {native:.1f} | "
                      f"{s['slab_bytes_per_row']:.1f} / {s['retained_slab_capacity_bytes_per_row']:.1f} | "
-                     f"{s['session_arena_capacity_bytes_per_row']:.1f} |")
+                     f"{s['session_arena_capacity_bytes_per_row']:.1f} | {s['retained_input_bytes_per_row']:.1f} |")
     return '\n'.join(lines) + '\n'
 
 
@@ -231,6 +270,8 @@ def run():
     parser.add_argument('--forks', type=int, default=3)
     parser.add_argument('--engines', action='append', default=[], metavar='LABEL=ENGINE,...',
                         help='Supported engines for one binary; defaults to all current engines')
+    parser.add_argument('--modes', action='append', default=[], metavar='LABEL=MODE,...')
+    parser.add_argument('--groups', help='Optional measured subset: MODE:STAGE,...')
     parser.add_argument('--runtime', choices=('svm', 'jvm'), default='svm')
     parser.add_argument('--pin', action='store_true',
                         help='Pin to the highest available CPU (remote workers); else require taskset')
@@ -250,14 +291,15 @@ def run():
         affinity = sorted(os.sched_getaffinity(0))
     if len(affinity) != 1:
         parser.error('Pin the runner to one CPU with taskset (or --pin)')
-    groups = shard(GROUPS)
     try:
+        groups = shard(select_groups(args.groups))
         selected = select_engines(binaries, args.engines)
+        modes = select_modes(binaries, args.modes)
     except ValueError as failure:
         parser.error(str(failure))
     args.output.mkdir(parents=True, exist_ok=False)
     cpu_info = Path('/proc/cpuinfo').read_text()
-    report = dict(schema=3, engines=selected, source=args.source, seed=SEED, forks=args.forks, runtime=args.runtime,
+    report = dict(schema=4, engines=selected, modes=modes, source=args.source, seed=SEED, forks=args.forks, runtime=args.runtime,
                   groups=groups, shard=dict(index=int(os.environ.get('TEST_SHARD_INDEX', '0')),
                                             total=int(os.environ.get('TEST_TOTAL_SHARDS', '1'))),
                   binary_sha256={k: hashlib.sha256(v.read_bytes()).hexdigest()
@@ -270,7 +312,7 @@ def run():
                   measurements=[])
     jobs = [(label, (engine, mode, stage), fork, metric)
             for label in binaries for engine in selected[label] for mode, stage in groups
-            if supported(engine, stage)
+            if mode in modes[label] and supported(engine, stage, mode)
             for fork in range(args.forks) for metric in ('time', 'memory')]
     random.Random(SEED).shuffle(jobs)
     checksums = {}

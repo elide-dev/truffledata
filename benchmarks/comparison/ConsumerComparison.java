@@ -14,9 +14,10 @@ import com.oracle.truffle.runtime.OptimizedCallTarget;
 import com.sun.management.ThreadMXBean;
 import dev.elide.truffledata.*;
 import dev.elide.truffledata.buffa.*;
-import dev.elide.truffledata.buffa.generated.Buffa;
 import dev.elide.truffledata.generated.ComparisonContracts;
+import dev.elide.truffledata.protobuf.Projection;
 import dev.elide.truffledata.protobuf.ProtoPlan;
+import dev.elide.truffledata.protobuf.SlabLimits;
 import dev.elide.truffledata.protobuf.SlabMessage;
 import java.lang.management.ManagementFactory;
 import java.nio.file.Files;
@@ -25,6 +26,7 @@ import java.util.Arrays;
 import java.util.Locale;
 import org.graalvm.nativeimage.ImageInfo;
 import org.graalvm.polyglot.Context;
+import org.graalvm.polyglot.HostAccess;
 import org.jspecify.annotations.NullMarked;
 import org.jspecify.annotations.Nullable;
 
@@ -51,14 +53,22 @@ public final class ConsumerComparison {
       return;
     }
     if (args.length != 4)
-      throw new IllegalArgumentException("engine sparse|full|holdout|large stage time|memory");
+      throw new IllegalArgumentException(
+          "engine sparse|full|holdout|holdout-sparse|large stage time|memory");
     run(args[0], args[1], args[2], args[3], false);
   }
 
   static final String[] ENGINES = {
-    "stock", "generated-owned", "native-view", "native-eager", "slab", "slab-session"
+    "stock",
+    "stock-interop",
+    "generated-owned",
+    "slab",
+    "slab-projected",
+    "slab-lazy",
+    "slab-session",
+    "slab-session-projected"
   };
-  static final String[] MODES = {"sparse", "full", "holdout", "large"};
+  static final String[] MODES = {"sparse", "full", "holdout", "holdout-sparse", "large"};
   static final String[] STAGES = {
     "decode", "resident", "heap", "detach", "first", "interpret", "peak"
   };
@@ -66,7 +76,7 @@ public final class ConsumerComparison {
   /** Holdout and large-message data sets measure a deliberately smaller matrix. */
   static boolean cell(String mode, String stage) {
     return switch (mode) {
-      case "holdout" -> stage.equals("resident") || stage.equals("peak");
+      case "holdout", "holdout-sparse" -> stage.equals("resident") || stage.equals("peak");
       case "large" -> stage.equals("decode") || stage.equals("resident") || stage.equals("peak");
       default -> true;
     };
@@ -74,11 +84,24 @@ public final class ConsumerComparison {
 
   static boolean cell(String engine, String mode, String stage) {
     return cell(mode, stage)
-        && (!engine.equals("slab-session") || stage.equals("decode") || stage.equals("resident"));
+        && (!sessionEngine(engine) || stage.equals("decode") || stage.equals("resident"))
+        && (!engine.equals("stock-interop") || stage.equals("interpret") || stage.equals("peak"))
+        && (!(engine.equals("slab-projected") || engine.equals("slab-session-projected"))
+            || mode.endsWith("sparse"));
   }
 
-  private static boolean nativeEngine(String engine) {
-    return engine.equals("native-view") || engine.equals("native-eager");
+  private static boolean sessionEngine(String engine) {
+    return engine.startsWith("slab-session");
+  }
+
+  private static boolean owningSlabEngine(String engine) {
+    return engine.startsWith("slab") && !sessionEngine(engine);
+  }
+
+  private static boolean projectedEngine(String engine) {
+    return engine.equals("slab-projected")
+        || engine.equals("slab-lazy")
+        || engine.equals("slab-session-projected");
   }
 
   private static void run(String engine, String mode, String stage, String metric, boolean smoke)
@@ -97,6 +120,7 @@ public final class ConsumerComparison {
     try (var context =
         Context.newBuilder("td-compare")
             .allowExperimentalOptions(true)
+            .allowHostAccess(HostAccess.ALL)
             .option("engine.Compilation", Boolean.toString(peak))
             .option("engine.BackgroundCompilation", "false")
             .option("engine.CompilationFailureAction", "Throw")
@@ -163,7 +187,7 @@ public final class ConsumerComparison {
         }
         System.out.printf(
             Locale.ROOT,
-            "{\"engine\":\"%s\",\"mode\":\"%s\",\"stage\":\"%s\",\"runtime\":\"%s\",\"rows\":%d,\"checksum\":%d,\"guest_compiled\":%s,\"shared_access\":%s,\"stock_boundary\":%s,\"native_index_retained\":%s,\"input_bytes_per_row\":%.3f,\"copied_input_bytes_per_row\":%.3f,\"decoded_native_index_capacity_bytes_per_row\":%.3f,\"decoded_native_result_header_bytes_per_row\":%d,\"slab_bytes_per_row\":%.3f,\"retained_slab_capacity_bytes_per_row\":%.3f,\"session_arena_capacity_bytes_per_row\":%.3f,\"native_transient_peak_bytes\":null,\"native_allocation_count\":null,\"%s\":%s}%n",
+            "{\"engine\":\"%s\",\"mode\":\"%s\",\"stage\":\"%s\",\"runtime\":\"%s\",\"rows\":%d,\"checksum\":%d,\"guest_compiled\":%s,\"shared_access\":%s,\"stock_boundary\":%s,\"native_index_retained\":%s,\"input_bytes_per_row\":%.3f,\"copied_input_bytes_per_row\":%.3f,\"decoded_native_index_capacity_bytes_per_row\":%.3f,\"decoded_native_result_header_bytes_per_row\":%d,\"slab_bytes_per_row\":%.3f,\"retained_slab_capacity_bytes_per_row\":%.3f,\"session_arena_capacity_bytes_per_row\":%.3f,\"retained_input_bytes_per_row\":%.3f,\"host_interop\":%s,\"native_transient_peak_bytes\":null,\"native_allocation_count\":null,\"%s\":%s}%n",
             engine,
             mode,
             stage,
@@ -173,18 +197,16 @@ public final class ConsumerComparison {
             peak,
             !engine.equals("stock") && !stage.equals("decode"),
             engine.equals("stock") && !stage.equals("decode"),
-            engine.equals("native-view"),
+            false,
             fixture.inputBytes / (double) ROWS,
-            engine.equals("slab")
-                ? fixture.copiedSlabInputBytes / (double) ROWS
-                : nativeEngine(engine) && stage.equals("heap")
-                    ? fixture.inputBytes / (double) ROWS
-                    : 0,
+            fixture.copiedSlabInputBytes / (double) ROWS,
             fixture.indexBytes / (double) ROWS,
             fixture.headerBytes,
             fixture.slabBytes / (double) ROWS,
             fixture.retainedSlabBytes / (double) ROWS,
             fixture.sessionArenaBytes / (double) ROWS,
+            fixture.retainedInputBytes / (double) ROWS,
+            engine.equals("stock-interop"),
             metric.equals("memory") ? "java_bytes_per_row" : "ns_per_row",
             Arrays.toString(samples));
       } finally {
@@ -214,11 +236,12 @@ public final class ConsumerComparison {
     final String engine, stage;
     final byte[][] wires = new byte[ROWS][];
     final @Nullable WireInput[] inputs;
-    final @Nullable TypedMessage[] messages;
     final @Nullable SlabSession[] sessions = new SlabSession[ROWS];
     final Object[] rows = new Object[ROWS];
     final BuffaWire decoder;
     final BuffaPlan nativePlan;
+    final @Nullable BuffaPlan selectedPlan;
+    final @Nullable Projection selection;
     final ProtoPlan plan;
     final ComparisonContracts.Access_google$protobuf$Type generated;
     final ConsumerRoot root;
@@ -230,7 +253,8 @@ public final class ConsumerComparison {
         slabBytes,
         retainedSlabBytes,
         copiedSlabInputBytes,
-        sessionArenaBytes;
+        sessionArenaBytes,
+        retainedInputBytes;
     int rotation;
 
     Fixture(String engine, String mode, String stage) throws Exception {
@@ -244,19 +268,27 @@ public final class ConsumerComparison {
       // reachability.
       decoder = BuffaWire.open(BuffaWire.Mode.NATIVE, library());
       nativePlan = decoder.compile(plan, 65536);
+      Projection wanted =
+          Projection.builder(plan)
+              .select("name", "oneofs", "source_context", "syntax")
+              .selectType("google.protobuf.SourceContext", "file_name")
+              .build();
+      if (engine.equals("slab-lazy") || engine.equals("slab-session-projected"))
+        wanted = wanted.lazyChildren();
+      selection = projectedEngine(engine) ? wanted : null;
+      selectedPlan = selection == null ? null : nativePlan.project(selection);
       inputs = new WireInput[ROWS];
-      messages = new TypedMessage[ROWS];
       root =
           engine.equals("stock")
-              ? new StockRoot(!mode.equals("sparse"))
-              : new SharedRoot(!mode.equals("sparse"));
+              ? new StockRoot(!mode.endsWith("sparse"))
+              : new SharedRoot(!mode.endsWith("sparse"));
       target = (OptimizedCallTarget) root.getCallTarget();
       long sum = 0;
       for (int i = 0; i < ROWS; i++) {
         var b = Type.newBuilder().setName("catalog-" + i + "-λ").setSyntax(Syntax.SYNTAX_PROTO3);
         int count =
             switch (mode) {
-              case "holdout" -> 12 + i % 13;
+              case "holdout", "holdout-sparse" -> 12 + i % 13;
               // About 50 KB per message: a throughput cohort for large repeated payloads.
               case "large" -> 2048 + (i % 8) * 64;
               default -> 3 + i % 6;
@@ -269,7 +301,7 @@ public final class ConsumerComparison {
         for (int j = 0; j < count; j++) {
           b.addFields(
               com.google.protobuf.Field.newBuilder()
-                  .setName("column-" + j + (mode.equals("holdout") ? "-λ😀" : ""))
+                  .setName("column-" + j + (mode.startsWith("holdout") ? "-λ😀" : ""))
                   .setNumber(j + 1)
                   .setKind(com.google.protobuf.Field.Kind.TYPE_INT64)
                   .setCardinality(com.google.protobuf.Field.Cardinality.CARDINALITY_REPEATED)
@@ -279,44 +311,49 @@ public final class ConsumerComparison {
         wires[i] = value.toByteArray();
         inputBytes += wires[i].length;
         inputs[i] = decoder.allocate(wires[i].length).put(wires[i]);
-        sum += expected(value, !mode.equals("sparse"));
+        sum += expected(value, !mode.endsWith("sparse"));
       }
       expected = sum;
-      // Observe representative native capacity outside measured operations, including detach cells.
-      if (nativeEngine(engine))
-        for (var input : inputs)
-          try (var message = decode(java.util.Objects.requireNonNull(input))) {
-            indexBytes += message.nativeIndexBytes();
-          }
-      if (engine.equals("slab")) {
-        long copiedBefore = decoder.copiedSlabInputBytes();
+      if (sessionEngine(engine))
         for (int i = 0; i < ROWS; i++) {
-          SlabMessage value = slab(i);
-          slabBytes += value.slabBytes();
-          retainedSlabBytes += value.retainedSlabBytes();
+          var selected = selectedPlan == null ? nativePlan : selectedPlan;
+          sessions[i] = selected.newSession(1 << 20);
         }
-        copiedSlabInputBytes = decoder.copiedSlabInputBytes() - copiedBefore;
-      }
-      if (engine.equals("slab-session"))
-        for (int i = 0; i < ROWS; i++) {
-          var session = nativePlan.newSession(1 << 20);
-          sessions[i] = session;
-          slabBytes += session.decode(java.util.Objects.requireNonNull(inputs[i])).slabBytes();
-          sessionArenaBytes += session.arenaBytes();
-        }
-      headerBytes = engine.equals("native-view") ? Buffa.Result.SIZE : 0;
+      long copiedBefore = decoder.copiedSlabInputBytes();
       prepare();
+      if (!stage.equals("decode")) consume();
+      for (int i = 0; i < ROWS; i++) {
+        if (rows[i] instanceof SlabMessage slab) {
+          slabBytes += slab.slabBytes();
+          retainedSlabBytes += slab.retainedSlabBytes();
+          retainedInputBytes += slab.retainedInputBytes();
+        }
+        var session = sessions[i];
+        if (session != null) {
+          slabBytes += ((BorrowedSlabMessage) rows[i]).slabBytes();
+          sessionArenaBytes += session.arenaBytes();
+          retainedInputBytes += session.retainedInputBytes();
+        }
+      }
+      copiedSlabInputBytes = decoder.copiedSlabInputBytes() - copiedBefore;
       if (!stage.equals("interpret") && !stage.equals("peak")) release();
     }
 
-    /** The opt-in scoped view, or the default eager native decode into Java rows. */
-    TypedMessage decode(WireInput input) {
-      return engine.equals("native-view")
-          ? nativePlan.decodeLegacy(input, 1 << 20, true)
-          : nativePlan.decodeLegacy(input, 1 << 20, false);
-    }
-
     private SlabMessage slab(int index) {
+      if (selection != null) {
+        if (!ImageInfo.inImageCode())
+          return SlabMessage.decode(
+              plan,
+              wires[index],
+              0,
+              wires[index].length,
+              SlabLimits.forInput(plan.layout(), wires[index].length),
+              selection);
+        var selected = java.util.Objects.requireNonNull(selectedPlan);
+        return stage.equals("heap")
+            ? selected.decode(wires[index], 1 << 20)
+            : selected.decode(java.util.Objects.requireNonNull(inputs[index]), 1 << 20);
+      }
       return ImageInfo.inImageCode()
           ? (stage.equals("heap")
               ? nativePlan.decodeSlab(wires[index], 1 << 20)
@@ -326,27 +363,14 @@ public final class ConsumerComparison {
 
     void prepare() throws Exception {
       for (int i = 0; i < ROWS; i++) {
-        if (engine.equals("slab-session")) {
+        if (sessionEngine(engine))
           rows[i] =
               java.util.Objects.requireNonNull(sessions[i])
                   .decode(java.util.Objects.requireNonNull(inputs[i]));
-        } else if (engine.equals("slab")) {
-          rows[i] = slab(i);
-        } else if (nativeEngine(engine)) {
-          if (stage.equals("heap")) {
-            try (var input = decoder.allocate(wires[i].length).put(wires[i])) {
-              messages[i] = decode(input);
-            }
-          } else messages[i] = decode(java.util.Objects.requireNonNull(inputs[i]));
-          var message = java.util.Objects.requireNonNull(messages[i]);
-          if (message.nativeBacked() != engine.equals("native-view"))
-            throw new AssertionError("Unexpected native representation");
-          rows[i] = stage.equals("detach") ? message.snapshot() : message.row();
-          if (stage.equals("detach")) {
-            message.close();
-            messages[i] = null;
-          }
-        } else
+        else if (owningSlabEngine(engine)) rows[i] = slab(i);
+        else if (engine.equals("stock-interop"))
+          rows[i] = StockInteropRow.create(Type.parseFrom(wires[i]), plan);
+        else
           rows[i] = engine.equals("stock") ? Type.parseFrom(wires[i]) : generated.decode(wires[i]);
       }
     }
@@ -380,11 +404,6 @@ public final class ConsumerComparison {
 
     void release() {
       for (int i = 0; i < ROWS; i++) {
-        var message = messages[i];
-        if (message != null) {
-          message.close();
-          messages[i] = null;
-        }
         var session = sessions[i];
         if (session != null) session.reset();
         rows[i] = Missing.INSTANCE;
@@ -392,18 +411,15 @@ public final class ConsumerComparison {
     }
 
     void closedReadCheck() throws Exception {
-      if ((!nativeEngine(engine) && !engine.equals("slab-session")) || stage.equals("detach"))
-        return;
+      if (!sessionEngine(engine)) return;
       release();
       prepare();
-      if (engine.equals("slab-session")) {
-        for (var session : sessions) java.util.Objects.requireNonNull(session).reset();
-      } else for (var message : messages) java.util.Objects.requireNonNull(message).close();
+      for (var session : sessions) java.util.Objects.requireNonNull(session).reset();
       try {
         consume();
-        throw new AssertionError("Closed view was readable");
+        throw new AssertionError("Closed session was readable");
       } catch (IllegalStateException expected) {
-        /* owner rejection */
+        /* scoped epoch rejection */
       }
     }
 
@@ -412,6 +428,7 @@ public final class ConsumerComparison {
       release();
       for (var session : sessions) if (session != null) session.close();
       for (var input : inputs) if (input != null) input.close();
+      if (selectedPlan != null) selectedPlan.close();
       nativePlan.close();
       decoder.close();
     }

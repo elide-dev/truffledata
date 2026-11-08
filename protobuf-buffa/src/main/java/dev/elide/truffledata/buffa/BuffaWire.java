@@ -45,13 +45,6 @@ public final class BuffaWire implements AutoCloseable {
         ProtoPlan plan,
         int nativeBytes);
 
-    Scalars scalars(WireInput schema, WireInput input, ProtoPlan plan);
-
-    /** ABI 9: compile a view-eligible schema program once; release with releaseCompiled. */
-    long compileView(WireInput schema);
-
-    void releaseCompiled(long compiled);
-
     long compileLayout(WireInput schema);
 
     void releaseLayout(long compiled);
@@ -88,44 +81,8 @@ public final class BuffaWire implements AutoCloseable {
 
     long copiedSlabInputBytes();
 
-    /**
-     * ABI 9: one owned native allocation holding the typed index and every message's field
-     * directory. Decoder scratch is reused across calls and never retained by the result.
-     */
-    @Nullable Tape view(
-        long compiled, WireInput input, ProtoPlan plan, int nativeBytes, boolean budgetFallback);
-
-    /** Release one view allocation; valid after the backend itself has closed. */
-    void releaseView(long data, long bytes);
-
     @Override
     void close();
-  }
-
-  /** Thread-confined backend scratch, consumed synchronously and never retained by a message. */
-  static final class Scalars {
-    private long first;
-    private long second;
-    private long present;
-
-    Scalars set(long first, long second, long present) {
-      this.first = first;
-      this.second = second;
-      this.present = present;
-      return this;
-    }
-
-    long first() {
-      return first;
-    }
-
-    long second() {
-      return second;
-    }
-
-    long present() {
-      return present;
-    }
   }
 
   interface NativeFactory {
@@ -312,12 +269,6 @@ public final class BuffaWire implements AutoCloseable {
     }
   }
 
-  static boolean typedStatus(int code, int format) {
-    if (format == 3 && code == 5) return true;
-    status(code);
-    return false;
-  }
-
   static void status(int code) {
     if (code == 1) throw new ContractViolation("Malformed protobuf input");
     if (code == 2)
@@ -325,29 +276,17 @@ public final class BuffaWire implements AutoCloseable {
     if (code != 0) throw new IllegalStateException("Buffa decoder failure: " + code);
   }
 
-  /**
-   * A native typed index. Scratch tapes borrow decoder storage until closed; ABI 9 view tapes own
-   * one allocation (entries, then {@link #words} u32 directory words) released through their
-   * backend, which remains valid after the decoder closes.
-   */
+  /** Decoder-owned typed-index scratch, consumed synchronously before its next use. */
   static final class Tape implements AutoCloseable {
     private static final ByteBuffer EMPTY = ByteBuffer.allocate(0).order(ByteOrder.nativeOrder());
     private @Nullable ByteBuffer bytes;
     final long nativeAddress;
-    private final int countAndFlags;
+    private final int count;
     final long allocated;
-
-    /** Byte offset of the first directory word (the end of the entries) and the word count. */
-    final int directory;
-
-    final int words;
-
     private @Nullable Runnable release;
-    private @Nullable Backend view;
-    private int @Nullable [] directoryWords;
 
     Tape(ByteBuffer bytes, long count, long capacity, Runnable release) {
-      this(bytes, count, capacity, release, false, 0);
+      this(bytes, count, capacity, release, 0);
     }
 
     Tape(
@@ -355,54 +294,13 @@ public final class BuffaWire implements AutoCloseable {
         long count,
         long capacity,
         Runnable release,
-        boolean viewReady,
         long nativeAddress) {
-      this(
-          bytes,
-          count,
-          Math.multiplyExact(capacity, Buffa.Field.SIZE),
-          0,
-          viewReady,
-          nativeAddress,
-          release,
-          null);
-    }
-
-    private Tape(
-        @Nullable ByteBuffer bytes,
-        long count,
-        long allocated,
-        long words,
-        boolean viewReady,
-        long nativeAddress,
-        @Nullable Runnable release,
-        @Nullable Backend view) {
       this.nativeAddress = nativeAddress;
       this.bytes = bytes == null ? null : bytes.order(ByteOrder.nativeOrder());
-      int entries = Math.toIntExact(count);
-      if (entries < 0 || words < 0 || allocated < 0)
-        throw new IllegalArgumentException("Negative index extent");
-      countAndFlags = entries | (viewReady ? Integer.MIN_VALUE : 0);
-      this.allocated = allocated;
-      this.words = Math.toIntExact(words);
-      directory = Math.multiplyExact(entries, Buffa.Field.SIZE);
-      // Directory words follow the entries inside the same, bounded allocation.
-      if (allocated < directory + 4L * this.words)
-        throw new IllegalArgumentException("Native view extent exceeds its allocation");
+      this.count = Math.toIntExact(count);
+      allocated = Math.multiplyExact(capacity, Buffa.Field.SIZE);
+      if (count < 0 || capacity < count) throw new IllegalArgumentException("Invalid index extent");
       this.release = release;
-      this.view = view;
-    }
-
-    /** An owned ABI 9 view allocation; {@code owner.releaseView} frees it exactly once. */
-    static Tape view(
-        @Nullable ByteBuffer bytes,
-        long count,
-        long words,
-        long allocated,
-        boolean viewReady,
-        long nativeAddress,
-        Backend owner) {
-      return new Tape(bytes, count, allocated, words, viewReady, nativeAddress, null, owner);
     }
 
     ByteBuffer bytes() {
@@ -412,49 +310,22 @@ public final class BuffaWire implements AutoCloseable {
 
     @TruffleBoundary
     private ByteBuffer materializeBuffer() {
-      if (release == null && view == null) throw new IllegalStateException("Native index closed");
-      if (count() == 0) return bytes = EMPTY;
+      if (release == null) throw new IllegalStateException("Native index closed");
+      if (count == 0) return bytes = EMPTY;
       if (!ImageInfo.inImageCode() || nativeAddress == 0)
         throw new IllegalStateException("Native index has no buffer or address");
-      return bytes = SvmBackend.indexBuffer(nativeAddress, count()).order(ByteOrder.nativeOrder());
+      return bytes = SvmBackend.indexBuffer(nativeAddress, count).order(ByteOrder.nativeOrder());
     }
 
-    /** Directory words copied once for buffer-backed (JVM or empty) views. */
-    int[] directoryWords() {
-      var result = directoryWords;
-      return result == null ? copyDirectory() : result;
-    }
-
-    @TruffleBoundary
-    private int[] copyDirectory() {
-      int[] result = new int[words];
-      if (words != 0)
-        bytes()
-            .slice(directory, Math.multiplyExact(words, 4))
-            .order(ByteOrder.nativeOrder())
-            .asIntBuffer()
-            .get(result);
-      return directoryWords = result;
-    }
-
-    // Counts are nonnegative Java indices. Reuse the sign bit for the optional certificate
-    // instead of adding a padded boolean to every tape, including eager decodes.
     int count() {
-      return countAndFlags & Integer.MAX_VALUE;
-    }
-
-    boolean viewReady() {
-      return countAndFlags < 0;
+      return count;
     }
 
     @Override
     public void close() {
       var action = release;
-      var owner = view;
       release = null;
-      view = null;
       if (action != null) action.run();
-      else if (owner != null && allocated != 0) owner.releaseView(nativeAddress, allocated);
     }
   }
 }

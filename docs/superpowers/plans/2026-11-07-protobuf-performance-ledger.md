@@ -181,3 +181,22 @@ sparse-resident speed gate is claimed; that measurement and ABI9 retirement rema
 ### G1 native view retirement checkpoint
 
 The native view implementation, View struct and four view imports are removed in seam ABI 11. Slab/projection formats remain TDS1/TDP1. Binary typed indexes remain as a validation oracle and text/ProtoJSON infrastructure; retired format 3 is rejected. The 8,000-case native differential now scans the independent typed index directly instead of recreating deleted view directories. All 43 remaining native tests pass locally with AddressSanitizer and leak detection (seven obsolete view-specific tests were removed with their code). Myna 0.13.0 descriptor validation and symbol inspection pass; fingerprint and raw evidence are retained in `benchmarks/results/protobuf-view-retirement-20261107/`. Integrated Java retirement and final remote/platform checks remain pending.
+
+
+### G1 Java retirement and current consumer matrix
+
+Removed NativeRow/ScalarRow, retained native view directories, view/scalar backend calls and
+format-3 typed-index certification from Java production. Binary decode uses slabs; text and
+ProtoJSON retain ArrayRow values with input leases. The deprecated decodeView Java spelling
+remains a durable decode alias. Duplicate legacy-view acceptance/benchmark targets are retired.
+Current consumer cells cover owning/full/projected/lazy slabs and reusable sessions; historical
+baseline engines and modes are explicitly selectable without requesting removed candidate paths.
+A stock host-interop bridge exercises the same shared read nodes and real cached protobuf getters,
+with immutable child wrapper/count caching. Its compiled full fixture remains within the unchanged
+10,000 graph budget. Retained input, slab extent/capacity and native arena capacity are separate.
+
+Local Java fallback, FFM acceptance, compiled query/lifetime suite and five new consumer cells pass;
+raw logs are in benchmarks/results/protobuf-java-retirement-local/. The ten orchestration tests
+pass, including baseline mode selection and projection/input accounting checks. No E1 performance
+claim follows from these short qualification runs. Final Linux JVM/SVM, coverage and paired
+three-fork sparse-resident/holdout gates remain pending.

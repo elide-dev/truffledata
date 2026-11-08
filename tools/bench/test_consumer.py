@@ -2,7 +2,7 @@ import copy
 import os
 import unittest
 from unittest import mock
-from consumer import CELLS, ENGINES, GROUPS, command, markdown, select_engines, shard, throughput, validate
+from consumer import CELLS, ENGINES, GROUPS, command, markdown, select_engines, select_modes, select_groups, supported, shard, throughput, validate
 
 
 class ConsumerValidationTest(unittest.TestCase):
@@ -45,7 +45,10 @@ class ConsumerValidationTest(unittest.TestCase):
             with mock.patch.dict(os.environ, TEST_TOTAL_SHARDS='7', TEST_SHARD_INDEX=str(index)):
                 seen += shard(GROUPS)
         self.assertEqual(sorted(seen), sorted(GROUPS))
-        self.assertEqual(len(CELLS), 102)
+        self.assertNotIn('native-view', {e for e, _, _ in CELLS})
+        self.assertIn(('slab-projected', 'holdout-sparse', 'resident'), CELLS)
+        self.assertNotIn(('slab-projected', 'holdout', 'resident'), CELLS)
+        self.assertTrue(all(s in ('peak', 'interpret') for e, _, s in CELLS if e == 'stock-interop'))
         self.assertEqual({stage for engine, mode, stage in CELLS if engine == 'slab-session'},
                          {'decode', 'resident'})
 
@@ -79,6 +82,30 @@ class ConsumerValidationTest(unittest.TestCase):
                               'candidate='):
             with self.subTest(specification=specification), self.assertRaises(ValueError):
                 select_engines(['candidate'], [specification])
+
+    def test_historical_modes_and_subset_groups_are_explicit(self):
+        selected = select_modes(['candidate', 'baseline'], ['baseline=sparse,full,holdout,large'])
+        self.assertIn('holdout-sparse', selected['candidate'])
+        self.assertNotIn('holdout-sparse', selected['baseline'])
+        self.assertEqual(select_groups('holdout-sparse:resident'), [('holdout-sparse', 'resident')])
+        for specification in ('candidate=unknown', 'missing=full', 'candidate=full,full'):
+            with self.subTest(specification=specification), self.assertRaises(ValueError):
+                select_modes(['candidate'], [specification])
+        with self.assertRaises(ValueError):
+            select_groups('holdout-sparse:decode')
+
+    def test_projection_and_host_metadata_are_required(self):
+        record = dict(self.VALID, engine='slab-lazy', native_index_retained=False,
+                      slab_bytes_per_row=128, retained_slab_capacity_bytes_per_row=256,
+                      retained_input_bytes_per_row=512)
+        validate(record, ('slab-lazy', 'full', 'peak'), 'time', {})
+        with self.assertRaises(ValueError):
+            validate(dict(record, retained_input_bytes_per_row=-1),
+                     ('slab-lazy', 'full', 'peak'), 'time', {})
+        record.update(engine='stock-interop', host_interop=True)
+        validate(record, ('stock-interop', 'full', 'peak'), 'time', {})
+        with self.assertRaises(ValueError):
+            validate(dict(record, host_interop=False), ('stock-interop', 'full', 'peak'), 'time', {})
 
     def test_commands_and_throughput(self):
         self.assertEqual(command('/b', 'svm', ('stock', 'full', 'peak'), 'time'),

@@ -37,8 +37,6 @@ ACCESS_SOURCES = {f'core/src/main/java/dev/elide/truffledata/{name}.java' for na
     'protobuf-buffa/src/main/java/dev/elide/truffledata/buffa/WireMessage.java',
     'protobuf-buffa/src/main/java/dev/elide/truffledata/buffa/ViewOwner.java',
     'protobuf-buffa/src/main/java/dev/elide/truffledata/buffa/TypedRow.java',
-    'protobuf-buffa/src/main/java/dev/elide/truffledata/buffa/NativeRow.java',
-    'protobuf-buffa/src/main/java/dev/elide/truffledata/buffa/ScalarRow.java',
     'protobuf-buffa/src/main/java/dev/elide/truffledata/buffa/TypedArray.java',
     'protobuf-buffa/src/main/java/dev/elide/truffledata/buffa/TypedMessage.java',
 } | {
@@ -115,7 +113,7 @@ def _yaml_methods(source, *signatures):
 
 
 # JVM LCOV cannot execute an SVM pointer intrinsic. Keep the exact method visible in gap reports;
-# native_views_test and consumer_native_smoke exercise these loads under SVM's JIT checks.
+# native_test and consumer_native_smoke exercise these loads under SVM's JIT checks.
 # JSON: these run only in a static image (//json/tests:native_test, json_native_smoke and
 # //tools/release:json_native_test). On the JVM, JsonSvm.requireRuntime rejects every entry point
 # before native code runs, and the word-typed tapes and owners below exist only behind it.
@@ -184,10 +182,6 @@ SVM_ONLY_METHODS = {
     # //tools/release:csv_kernel_native_test runs it in an image.
     'csv/src/main/java/dev/elide/truffledata/csv/CsvIndexing.java': {
         'dev/elide/truffledata/csv/CsvIndexing::loadNative ()Ldev/elide/truffledata/csv/CsvIndexing$Provider;',
-    },
-    'protobuf-buffa/src/main/java/dev/elide/truffledata/buffa/NativeRow.java': {
-        'dev/elide/truffledata/buffa/NativeRow::entry '
-        '(Ldev/elide/truffledata/buffa/BuffaWire$Tape;I)Lorg/graalvm/word/Pointer;',
     },
     # Static entry points: each throws from requireRuntime (a callee) on the JVM, so JaCoCo records
     # no probe even though JvmScopedTest and FfmAcceptanceTest call them; the rest is the native
