@@ -122,3 +122,26 @@ ABI 10's existing projection argument now accepts a checked immutable TDP1 mask 
 Ruling: lazy child references are high-bit-tagged slab offsets to aligned 16-byte headers containing input offset, length, handle and absolute depth. Count-only lists use reserved list word 1. External bytes use the existing EXTERNAL bit with a 16-byte header containing length, handle, zero UTF-16 count and input offset. The caller must retain immutable input for borrowed slabs. Lazy singular merges, groups, oneofs and maps conservatively use eager handling. Message closures containing required fields also stay eager: a global missing-required flag cannot distinguish an incomplete child later orphaned by a oneof/map replacement from a live invalid child. The owner validates reachable eager children. Fixed scalar slots and repeated scalar payloads remain physically stored in this iteration; the projection's read mask makes omitted values inaccessible.
 
 Direct macOS arm64 Rust qualification passes 49 tests, including all previous 39 native tests, 8,000 generated inputs in full-mask/strict-sparse/lazy modes, exact full-mask bytes, omitted payload/counts, lazy span/depth metadata, merge and required-closure fallbacks, invalid UTF-8 and malformed structure, mask validation, exact budgets, and normal/critical FFI parity with zero measured native heap allocations. All 49 also pass AddressSanitizer with leak detection using pinned nightly 2026-10-09. Raw output is retained in `benchmarks/results/protobuf-projection-native-macos-20261107/`. Java producers/readers, borrowed-input lifetime integration, cross-language projected parity and sparse-resident performance remain pending; this native checkpoint does not complete E1 or its performance gates.
+
+
+### D1 session gates and A4 compiled-producer experiment
+
+Invocation `78b45781-b0ce-4712-a70b-026f3c9fbc0d` passes the complete JVM/SVM
+consumer smoke with the session engine, Buffa JVM/SVM acceptance, native-free
+fallback, 56,000 producer pairs, runtime tests and all 49 native tests. Session
+scalar decode allocation remains <=48 B/message and compiled reads <=0.05 B/read;
+stale roots/children/arrays, reset/failed decode, pins and independently retained
+children are covered. The full resident session consumer compiles under the
+unchanged 10,000-node budget. JVM foreign-memory loads use three narrow memory
+entry boundaries; Native Image reads retain direct pointer loads. Cold lifetime
+and range diagnostics stay outside compiled read graphs.
+
+A4's isolated runtime-schema decoder passed 2,048 mutated/truncated inputs and
+compiled representative Type and 64-field layouts within 10,000 nodes on JVM.
+Linux x86-64 short-run median was 389.7 ns/op versus generated 156.6 ns/op (~2.49x),
+missing the <=1.2x adoption gate. No production decoder selection changed. A4's
+Native Image build exposed input-window and malformed-UTF8 diagnostics reaching
+blocked JDK code; cold helper fixes are pending the next formal retry. Raw logs
+are retained in `benchmarks/results/protobuf-session-78b45781/`. This invocation
+is not whole-repository green: core depended on a new YAML benchmark nullability
+fix and the separate YAML parser performance gate also failed.

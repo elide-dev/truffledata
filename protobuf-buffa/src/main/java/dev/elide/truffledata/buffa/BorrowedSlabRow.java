@@ -53,8 +53,12 @@ public class BorrowedSlabRow extends AbstractRow implements ProtoAccess {
   public final Object get(int ordinal) {
     owner.check(epoch);
     Objects.checkIndex(ordinal, plan().size());
+    return getChecked(ordinal);
+  }
+
+  private Object getChecked(int ordinal) {
     var field = plan().field(ordinal);
-    if (!has(ordinal)) return field.repeated() ? EMPTY : field.defaultValue();
+    if (!owner.present(record, ordinal)) return field.repeated() ? EMPTY : field.defaultValue();
     int at = record + layout.slot(type, ordinal);
     if (field.repeated()) return owner.array(epoch, type, ordinal, owner.word(at));
     return owner.value(epoch, type, ordinal, at);
@@ -161,11 +165,10 @@ public class BorrowedSlabRow extends AbstractRow implements ProtoAccess {
 
     @Override
     public Object read(Object value) {
-      return row(value).get(ordinal());
+      return row(value).getChecked(ordinal());
     }
 
     private boolean has(BorrowedSlabRow row) {
-      row.owner.check(row.epoch);
       return row.owner.present(row.record, ordinal());
     }
 

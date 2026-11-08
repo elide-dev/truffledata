@@ -879,3 +879,66 @@ sh_test(
     data = [":protobuf_ingestion_native"],
     tags = ["manual"],
 )
+
+# A4 evidence gate: keep the candidate isolated until compiled parity, graph and speed pass.
+data_java_library(
+    name = "compiled_slab_probe",
+    testonly = True,
+    srcs = ["CompiledSlabProbe.java"],
+    deps = [
+        ":comparison",
+        ":contracts",
+        "//core",
+        "//protobuf-runtime",
+        "@maven//:com_google_protobuf_protobuf_java",
+        "@maven//:org_graalvm_polyglot_polyglot",
+        "@maven//:org_graalvm_sdk_nativeimage",
+        "@maven//:org_graalvm_truffle_truffle_api",
+        "@maven//:org_graalvm_truffle_truffle_runtime",
+    ],
+)
+
+java_test(
+    name = "compiled_slab_jvm",
+    size = "large",
+    exec_properties = {"EstimatedCPU": "4", "EstimatedMemory": "4GB"},
+    jvm_flags = [
+        "--enable-native-access=ALL-UNNAMED",
+        "-Xms512m",
+        "-Xmx512m",
+        "-XX:+UseSerialGC",
+    ],
+    main_class = "dev.elide.truffledata.comparison.CompiledSlabProbe",
+    tags = ["manual"],
+    use_testrunner = False,
+    runtime_deps = [":compiled_slab_probe"],
+)
+
+native_image(
+    name = "compiled_slab_native",
+    testonly = True,
+    exec_properties = {"EstimatedCPU": "4", "EstimatedMemory": "12GB"},
+    executable_name = "compiled-slab-probe",
+    extra_args = [
+        "--gc=serial",
+        "--parallelism=4",
+        "-march=compatibility",
+        "--initialize-at-build-time=dev.elide.truffledata",
+        "--initialize-at-run-time=dev.elide.truffledata.comparison.CompiledSlabProbe",
+    ] + TRUFFLE_JIT_CHECKS,
+    graalvm_sdk = "@graalvm_linux_amd64//:gvm",
+    main_class = "dev.elide.truffledata.comparison.CompiledSlabProbe",
+    optimization_mode = "2",
+    tags = ["manual"],
+    target_compatible_with = ["@platforms//os:linux", "@platforms//cpu:x86_64"],
+    deps = [":compiled_slab_probe"],
+)
+
+sh_test(
+    name = "compiled_slab_svm",
+    size = "large",
+    srcs = ["protobuf_ingestion.sh"],
+    args = ["$(location :compiled_slab_native)"],
+    data = [":compiled_slab_native"],
+    tags = ["manual"],
+)

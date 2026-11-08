@@ -74,6 +74,17 @@ final class CompiledReads {
       for (int i = 0; i < 200 && !root.compiled; i++) target.call(100000);
       Acceptance.check(root.compiled, "session constant reads compiled");
       Acceptance.check((Long) target.call(1000) == 42000, "session compiled scalar");
+      if (!ImageInfo.inImageCode()) {
+        var bean =
+            (com.sun.management.ThreadMXBean)
+                java.lang.management.ManagementFactory.getThreadMXBean();
+        bean.setThreadAllocatedMemoryEnabled(true);
+        long thread = Thread.currentThread().threadId(),
+            before = bean.getThreadAllocatedBytes(thread);
+        target.call(1000000);
+        double bytes = (bean.getThreadAllocatedBytes(thread) - before) / 1000000.0;
+        Acceptance.check(bytes <= 0.05, "session compiled FFM allocation budget: " + bytes);
+      }
       session.decode(input);
       Acceptance.rejects(() -> target.call(1), IllegalStateException.class);
       var current = session.decode(input);

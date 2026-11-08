@@ -112,6 +112,38 @@ class ProtoExplicitSourceTest {
   }
 
   @Test
+  void ordinaryPreparedSourcesAvoidPopulatedFieldMapsButStillRejectUnboundExtensions() {
+    var host = ExplicitHost.Payload.newBuilder().setN(42).build();
+    var plan = ProtoCompiler.compile(null, host.getDescriptorForType(), Limits.DEFAULT, 8, 1024);
+    var source = ProtoCompiler.bind(plan, host.getDescriptorForType());
+    Message guarded =
+        (Message)
+            java.lang.reflect.Proxy.newProxyInstance(
+                Message.class.getClassLoader(),
+                new Class<?>[] {Message.class},
+                (proxy, method, args) -> {
+                  if (method.getName().equals("getAllFields"))
+                    throw new AssertionError("Ordinary source built a populated-field map");
+                  return method.invoke(host, args);
+                });
+    assertEquals(42, source.snapshot(guarded).getLong(0));
+    var emptyBox =
+        new ProtoPlan.Model(
+                null,
+                List.of(new ProtoPlan.Type("explicit.Box", false, List.of())),
+                Limits.DEFAULT,
+                8,
+                1024)
+            .type("explicit.Box");
+    var unbound = ProtoCompiler.bind(emptyBox, ExplicitHost.Box.getDescriptor());
+    assertThrows(
+        UnsupportedOperationException.class,
+        () ->
+            unbound.snapshot(
+                ExplicitHost.Box.newBuilder().setExtension(ExplicitHost.payload, host).build()));
+  }
+
+  @Test
   void generatedAndDynamicHostsShareExplicitExtensionAndMessageSetSemantics() throws Exception {
     var payload = ExplicitHost.Payload.newBuilder().setN(42).build();
     var box = ExplicitHost.Box.newBuilder().setExtension(ExplicitHost.payload, payload).build();

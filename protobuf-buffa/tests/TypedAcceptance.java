@@ -1010,6 +1010,8 @@ final class TypedAcceptance {
         var nested = (BorrowedSlabRow) first.get(7);
         var numbers = (BorrowedArray) first.get(8);
         var blob = (BorrowedArray) first.get(2);
+        equal(expected, first);
+        accessors(first);
         var retained = first.retain();
         var retainedChild = nested.snapshot();
         var retainedNumbers = numbers.snapshot();
@@ -1074,6 +1076,37 @@ final class TypedAcceptance {
             "child snapshot preserves unknowns after close");
         Acceptance.check(
             retainedNumbers.get(1).equals(-3L), "array snapshot survives session close");
+      }
+    }
+    for (String name : List.of("Flat", "RepeatedScalars")) {
+      var scalars = plan(name);
+      String text =
+          name.equals("Flat")
+              ? "i32: -3 i64: -4 u32: 4294967295 u64: 18446744073709551615 s32: -5 s64: -6 f32: 17"
+                    + " f64: 18446744073709551615 sf32: -7 sf64: -8 flag: true single: 1.5 real:"
+                    + " -2.5 text: 'λ' blob: 'ab' status: YES selected_text: 'choice'"
+              : "i32: -3 i64: -4 u32: 4294967295 u64: 18446744073709551615 s32: -5 s64: -6 f32: 17"
+                    + " f64: 18446744073709551615 sf32: -7 sf64: -8 flag: true single: 1.5 real:"
+                    + " -2.5 text: 'λ' blob: 'ab'";
+      var expected = scalars.parseText(text);
+      byte[] wire = scalars.encode(expected);
+      try (var compiled = decoder.compile(scalars, 65536);
+          var input = decoder.allocate(wire.length).put(wire);
+          var session = compiled.newSession(65536)) {
+        var row = session.decode(input);
+        equal(expected, row);
+        accessors(row);
+        var interop = com.oracle.truffle.api.interop.InteropLibrary.getUncached();
+        for (int i = 0; i < scalars.size(); i++) {
+          Object value = row.get(i);
+          if (value instanceof BorrowedArray array) {
+            Acceptance.check(interop.hasArrayElements(array), "session array interop");
+            Acceptance.check(
+                interop.getArraySize(array) == array.size(), "session array interop size");
+            if (array.size() != 0) equal(array.element(0), interop.readArrayElement(array, 0));
+            equal(array.snapshot(), value);
+          }
+        }
       }
     }
     var scalar = WellKnownAcceptance.model().type("google.protobuf.Int64Value");

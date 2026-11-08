@@ -49,18 +49,40 @@ public final class SlabSession implements AutoCloseable {
     try (var input = decoder.allocate(schema.length).put(schema)) {
       compiled = backend.compileLayout(input);
     }
-    callHandle = backend.prepareSlab(compiled);
+    try {
+      callHandle = backend.prepareSlab(compiled);
+    } catch (RuntimeException | Error failure) {
+      backend.releaseLayout(compiled);
+      throw failure;
+    }
   }
 
   private void thread() {
-    if (Thread.currentThread() != thread)
-      throw new IllegalStateException("Slab session is thread-confined");
+    if (Thread.currentThread() != thread) throw wrongThread();
   }
 
   void check(long expected) {
     thread();
-    if (!open || extent == 0 || expected != epoch)
-      throw new IllegalStateException("Borrowed slab expired");
+    if (!open || extent == 0 || expected != epoch) throw expired();
+  }
+
+  @TruffleBoundary
+  private static IllegalStateException wrongThread() {
+    return new IllegalStateException("Slab session is thread-confined");
+  }
+
+  @TruffleBoundary
+  private static IllegalStateException expired() {
+    return new IllegalStateException("Borrowed slab expired");
+  }
+
+  @TruffleBoundary
+  private static IndexOutOfBoundsException outside() {
+    return new IndexOutOfBoundsException("Slab load outside valid extent");
+  }
+
+  private void span(int at, int length) {
+    if (at < 0 || at > extent - length) throw outside();
   }
 
   private void writable() {
@@ -102,10 +124,18 @@ public final class SlabSession implements AutoCloseable {
 
   private void grow(int capacity) {
     WireInput next = backend.allocate(capacity);
+    long nativeAddress =
+        ImageInfo.inImageCode()
+            ? ((BuffaSvm.Address) Objects.requireNonNull(next.lease.attachment)).value()
+            : FfmBackend.nativeAddress(next);
+    if (ImageInfo.inImageCode() && nativeAddress == 0) {
+      next.close();
+      throw new IllegalStateException("Native Image session arena has no native address");
+    }
     var previous = arena;
     arena = next;
     bytes = next.lease.bytes.order(ByteOrder.LITTLE_ENDIAN);
-    address = next.lease.attachment instanceof BuffaSvm.Address pointer ? pointer.value() : 0;
+    address = nativeAddress;
     if (previous != null) previous.close();
   }
 
@@ -202,28 +232,38 @@ public final class SlabSession implements AutoCloseable {
   }
 
   int word(int at) {
-    Objects.checkFromIndexSize(at, 4, extent);
-    if (ImageInfo.inImageCode() && address != 0) {
+    if (ImageInfo.inImageCode()) {
+      span(at, 4);
       int value = WordFactory.<Pointer>pointer(address + at).readInt(0);
       return LITTLE_ENDIAN ? value : Integer.reverseBytes(value);
     }
-    return Objects.requireNonNull(bytes).getInt(at);
+    span(at, 4);
+    int value = FfmBackend.readAddressInt(address + at);
+    java.lang.ref.Reference.reachabilityFence(this);
+    return value;
   }
 
   long wide(int at) {
-    Objects.checkFromIndexSize(at, 8, extent);
-    if (ImageInfo.inImageCode() && address != 0) {
+    if (ImageInfo.inImageCode()) {
+      span(at, 8);
       long value = WordFactory.<Pointer>pointer(address + at).readLong(0);
       return LITTLE_ENDIAN ? value : Long.reverseBytes(value);
     }
-    return Objects.requireNonNull(bytes).getLong(at);
+    span(at, 8);
+    long value = FfmBackend.readAddressLong(address + at);
+    java.lang.ref.Reference.reachabilityFence(this);
+    return value;
   }
 
   int octet(int at) {
-    Objects.checkIndex(at, extent);
-    if (ImageInfo.inImageCode() && address != 0)
+    if (ImageInfo.inImageCode()) {
+      span(at, 1);
       return WordFactory.<Pointer>pointer(address + at).readByte(0) & 255;
-    return Objects.requireNonNull(bytes).get(at) & 255;
+    }
+    span(at, 1);
+    int value = FfmBackend.readAddressByte(address + at);
+    java.lang.ref.Reference.reachabilityFence(this);
+    return value;
   }
 
   boolean present(int record, int ordinal) {

@@ -11,6 +11,7 @@ import java.lang.invoke.MethodHandle;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
+import java.util.Objects;
 import org.jspecify.annotations.Nullable;
 
 /** JVM-only adapter. Its arena owns the library, not input buffers or returned views. */
@@ -18,6 +19,31 @@ final class FfmBackend implements BuffaWire.Backend {
   // Derive the JVM's concrete FFM buffer class without retaining an arena or native allocation.
   private static final Class<? extends ByteBuffer> INDEX_BUFFER_TYPE =
       MemorySegment.NULL.asByteBuffer().getClass();
+
+  private static final java.lang.invoke.VarHandle SLAB_INT =
+      ValueLayout.JAVA_INT_UNALIGNED.withOrder(java.nio.ByteOrder.LITTLE_ENDIAN).varHandle();
+  private static final java.lang.invoke.VarHandle SLAB_LONG =
+      ValueLayout.JAVA_LONG_UNALIGNED.withOrder(java.nio.ByteOrder.LITTLE_ENDIAN).varHandle();
+  private static final java.lang.invoke.VarHandle SLAB_BYTE = ValueLayout.JAVA_BYTE.varHandle();
+
+  static long nativeAddress(WireInput memory) {
+    return ((MemorySegment) Objects.requireNonNull(memory.lease.attachment)).address();
+  }
+
+  @CompilerDirectives.TruffleBoundary(allowInlining = true)
+  static int readAddressInt(long address) {
+    return (int) SLAB_INT.get(MemorySegment.ofAddress(address).reinterpret(4), 0L);
+  }
+
+  @CompilerDirectives.TruffleBoundary(allowInlining = true)
+  static long readAddressLong(long address) {
+    return (long) SLAB_LONG.get(MemorySegment.ofAddress(address).reinterpret(8), 0L);
+  }
+
+  @CompilerDirectives.TruffleBoundary(allowInlining = true)
+  static int readAddressByte(long address) {
+    return ((byte) SLAB_BYTE.get(MemorySegment.ofAddress(address).reinterpret(1), 0L)) & 255;
+  }
 
   static long readIndexLong(ByteBuffer buffer, int offset) {
     if (buffer.getClass() == INDEX_BUFFER_TYPE)

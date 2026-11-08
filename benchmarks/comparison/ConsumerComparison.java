@@ -385,7 +385,8 @@ public final class ConsumerComparison {
           message.close();
           messages[i] = null;
         }
-        if (sessions[i] != null) sessions[i].reset();
+        var session = sessions[i];
+        if (session != null) session.reset();
         rows[i] = Missing.INSTANCE;
       }
     }

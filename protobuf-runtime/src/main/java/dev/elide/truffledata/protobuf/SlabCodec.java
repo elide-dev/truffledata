@@ -2,6 +2,7 @@ package dev.elide.truffledata.protobuf;
 
 import static dev.elide.truffledata.protobuf.SlabFormat.*;
 
+import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import dev.elide.truffledata.*;
 import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
@@ -516,6 +517,11 @@ public final class SlabCodec {
     return header;
   }
 
+  @TruffleBoundary
+  private static ContractViolation invalidUtf8(int offset) {
+    return bad("Invalid UTF-8 at byte " + offset);
+  }
+
   /** Strict UTF-8 validation and UTF-16 sizing, with an eight-byte ASCII fast path. */
   static int utf16(byte[] in, int at, int count) {
     int end = at + count, units = 0;
@@ -534,14 +540,13 @@ public final class SlabCodec {
           first >= 0xC2 && first <= 0xDF
               ? 1
               : first >= 0xE0 && first <= 0xEF ? 2 : first >= 0xF0 && first <= 0xF4 ? 3 : -1;
-      if (extra < 0 || end - at < extra) throw bad("Invalid UTF-8 at byte " + start);
+      if (extra < 0 || end - at < extra) throw invalidUtf8(start);
       int second = in[at] & 255;
       if ((first == 0xE0 && second < 0xA0)
           || (first == 0xED && second >= 0xA0)
           || (first == 0xF0 && second < 0x90)
-          || (first == 0xF4 && second >= 0x90)) throw bad("Invalid UTF-8 at byte " + start);
-      for (int i = 0; i < extra; i++)
-        if ((in[at++] & 0xC0) != 0x80) throw bad("Invalid UTF-8 at byte " + start);
+          || (first == 0xF4 && second >= 0x90)) throw invalidUtf8(start);
+      for (int i = 0; i < extra; i++) if ((in[at++] & 0xC0) != 0x80) throw invalidUtf8(start);
       units += extra == 3 ? 2 : 1;
     }
     return units;

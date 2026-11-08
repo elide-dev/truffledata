@@ -28,7 +28,7 @@ public final class SlabMessage extends SlabRow implements ProtoMessage {
     bytes = owned;
     this.extent = extent;
     check(bytes, extent, layout);
-    validate(this, new ProtoRow.Budget(plan().limits()), 1);
+    validate(0, ROOT, new ProtoRow.Budget(plan().limits()), 1);
   }
 
   @TruffleBoundary
@@ -180,15 +180,15 @@ public final class SlabMessage extends SlabRow implements ProtoMessage {
   }
 
   /** Every reachable record is checked; overwritten orphan records do not constrain the result. */
-  private void validate(SlabRow row, ProtoRow.Budget budget, int depth) {
+  private void validate(int type, int record, ProtoRow.Budget budget, int depth) {
     if (depth > plan().maxDepth()) throw new ContractViolation("Protobuf nesting budget exceeded");
-    ProtoPlan plan = row.plan();
+    ProtoPlan plan = layout.plan(type);
     budget.cells(plan.size());
-    int unknown = unknown(bytes, row.record);
+    int unknown = unknown(bytes, record);
     if (unknown != 0) budget.bytes(unknownLength(bytes, unknown));
     for (int ordinal = 0; ordinal < plan.size(); ordinal++) {
       var field = plan.field(ordinal);
-      if (!row.has(ordinal)) {
+      if (!present(bytes, record, ordinal)) {
         if (field.required())
           throw new ContractViolation("Missing required field: " + field.name());
         if (!field.repeated() && field.defaultValue() instanceof String text)
@@ -197,25 +197,22 @@ public final class SlabMessage extends SlabRow implements ProtoMessage {
           budget.cells(blob.size());
         continue;
       }
-      int slot = row.record + layout.slot(row.type, ordinal);
+      int slot = record + layout.slot(type, ordinal);
       if (field.repeated()) {
         int list = getInt(bytes, slot), count = listCount(bytes, list);
         budget.cells(count);
-        int width = layout.kind(row.type, ordinal).element;
+        int width = layout.kind(type, ordinal).element;
         for (int i = 0; i < count; i++)
-          validateValue(row, ordinal, listElement(list, width, i), budget, depth);
-      } else validateValue(row, ordinal, slot, budget, depth);
+          validateValue(type, ordinal, listElement(list, width, i), budget, depth);
+      } else validateValue(type, ordinal, slot, budget, depth);
     }
   }
 
-  private void validateValue(SlabRow row, int ordinal, int at, ProtoRow.Budget budget, int depth) {
-    var field = row.plan().field(ordinal);
+  private void validateValue(int type, int ordinal, int at, ProtoRow.Budget budget, int depth) {
+    var field = layout.plan(type).field(ordinal);
     switch (field.kind()) {
       case MESSAGE, GROUP ->
-          validate(
-              new SlabRow(this, layout.childType(row.type, ordinal), getInt(bytes, at)),
-              budget,
-              depth + 1);
+          validate(layout.childType(type, ordinal), getInt(bytes, at), budget, depth + 1);
       case STRING -> budget.bytes(2L * utf16Length(bytes, getInt(bytes, at)));
       case BYTES -> budget.cells(SlabFormat.stringLength(bytes, getInt(bytes, at)));
       default -> {}

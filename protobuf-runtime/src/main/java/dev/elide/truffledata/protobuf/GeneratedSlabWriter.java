@@ -2,6 +2,7 @@ package dev.elide.truffledata.protobuf;
 
 import static dev.elide.truffledata.protobuf.SlabFormat.*;
 
+import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import java.util.Arrays;
 import java.util.Objects;
 
@@ -52,7 +53,7 @@ public final class GeneratedSlabWriter {
       Layout layout, byte[] input, int offset, int length, SlabLimits limits, int preferredBytes) {
     Objects.requireNonNull(layout);
     Objects.requireNonNull(limits);
-    Objects.checkFromIndexSize(offset, length, input.length);
+    if (offset < 0 || length < 0 || offset > input.length - length) throw invalidWindow();
     if (length > layout.plan(0).maxWireBytes()) throw SlabCodec.bad("Wire byte budget exceeded");
     this.input = input;
     position = offset;
@@ -65,6 +66,11 @@ public final class GeneratedSlabWriter {
             ? preferredBytes
             : Math.max(256L, 3L * length + HEADER_BYTES);
     output = new byte[(int) Math.min(maximum, capacity)];
+  }
+
+  @TruffleBoundary
+  private static IndexOutOfBoundsException invalidWindow() {
+    return new IndexOutOfBoundsException("Wire input window");
   }
 
   private int allocate(int bytes, int alignment) {
