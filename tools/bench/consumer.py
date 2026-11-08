@@ -7,7 +7,6 @@ groups; all engines and binaries of one group stay in one shard.
 """
 import argparse
 import hashlib
-import itertools
 import json
 import math
 import os
@@ -17,12 +16,17 @@ import random
 import statistics
 import subprocess
 
-ENGINES = ('stock', 'generated-owned', 'native-view', 'native-eager')
+LEGACY_ENGINES = ('stock', 'generated-owned', 'native-view', 'native-eager')
+ENGINES = (*LEGACY_ENGINES, 'slab', 'slab-session')
 STAGES = ('decode', 'resident', 'heap', 'detach', 'first', 'interpret', 'peak')
 MODE_STAGES = (('sparse', STAGES), ('full', STAGES), ('holdout', ('resident', 'peak')),
                ('large', ('decode', 'resident', 'peak')))
 GROUPS = [(m, s) for m, stages in MODE_STAGES for s in stages]
-CELLS = [(e, m, s) for m, s in GROUPS for e in ENGINES]
+def supported(engine, stage):
+    return engine != 'slab-session' or stage in ('decode', 'resident')
+
+
+CELLS = [(e, m, s) for m, s in GROUPS for e in ENGINES if supported(e, s)]
 SEED = 20261105
 # HotSpot needs a longer host warmup than a closed-world image before samples are meaningful.
 JVM_PROPERTIES = ('-Dconsumer.warmupMillis=1500', '-Dconsumer.sampleMillis=100')
@@ -55,12 +59,40 @@ def validate(record, cell, metric, checksums, runtime='svm'):
         value = record.get(name)
         if not isinstance(value, (float, int)) or not math.isfinite(value) or value < 0:
             raise ValueError(f'{cell}: invalid memory observation {name}')
+    if engine == 'slab':
+        extent = record.get('slab_bytes_per_row')
+        retained = record.get('retained_slab_capacity_bytes_per_row')
+        if (not isinstance(extent, (float, int)) or not math.isfinite(extent) or extent <= 0
+                or not isinstance(retained, (float, int)) or not math.isfinite(retained)
+                or retained < extent):
+            raise ValueError(f'{cell}: invalid slab extent/capacity accounting')
+    if engine == 'slab-session':
+        extent = record.get('slab_bytes_per_row')
+        capacity = record.get('session_arena_capacity_bytes_per_row')
+        if (not isinstance(extent, (float, int)) or not math.isfinite(extent) or extent <= 0
+                or not isinstance(capacity, (float, int)) or not math.isfinite(capacity)
+                or capacity < extent or record.get('retained_slab_capacity_bytes_per_row') != 0):
+            raise ValueError(f'{cell}: invalid native session arena accounting')
     checksums[mode] = checksum
 
 
 def throughput(input_bytes, ns):
     """Decimal MB/s of wire input per row; 1,000 MB/s is 1 GB/s."""
     return input_bytes / ns * 1000 if ns > 0 else float('nan')
+
+
+def select_engines(labels, specifications):
+    """Each binary declares its supported engines; historical baselines can omit newer ones."""
+    selected = {label: ENGINES for label in labels}
+    for specification in specifications:
+        label, raw = specification.split('=', 1)
+        engines = tuple(raw.split(','))
+        if label not in selected or not engines or len(set(engines)) != len(engines):
+            raise ValueError('Engine selection requires a known binary and unique engines')
+        if any(engine not in ENGINES for engine in engines):
+            raise ValueError('Unknown consumer engine')
+        selected[label] = engines
+    return selected
 
 
 def summarize(rows, labels):
@@ -85,6 +117,9 @@ def summarize(rows, labels):
                     input_bytes_per_row=first['input_bytes_per_row'],
                     native_index_bytes_per_row=first['decoded_native_index_capacity_bytes_per_row'],
                     native_header_bytes_per_row=first['decoded_native_result_header_bytes_per_row'],
+                    slab_bytes_per_row=first.get('slab_bytes_per_row', 0),
+                    retained_slab_capacity_bytes_per_row=first.get('retained_slab_capacity_bytes_per_row', 0),
+                    session_arena_capacity_bytes_per_row=first.get('session_arena_capacity_bytes_per_row', 0),
                     mb_per_s=throughput(first['input_bytes_per_row'], statistics.median(times))))
     return summary
 
@@ -119,15 +154,17 @@ def markdown(rows, labels, runtime='svm'):
         lines.append('')
     lines += ['## All cells', '',
               '| Binary | Mode | Stage | Engine | ns/row (fork range) | × stock | MB/s | '
-              'Java B/row | Native index+header B/row |',
-              '|---|---|---|---|---:|---:|---:|---:|---:|']
+              'Java B/row | Native index+header B/row | Slab extent / heap capacity B/row | Native arena B/row |',
+              '|---|---|---|---|---:|---:|---:|---:|---:|---:|---:|']
     for s in summary:
         base = stock.get((s['binary'], s['mode'], s['stage']))
         ratio = f"{s['ns_per_row'] / base:.2f}" if base else '—'
         native = s['native_index_bytes_per_row'] + s['native_header_bytes_per_row']
         lines.append(f"| {s['binary']} | {s['mode']} | {s['stage']} | {s['engine']} | "
                      f"{s['ns_per_row']:.3f} ({s['ns_min']:.3f}–{s['ns_max']:.3f}) | {ratio} | "
-                     f"{s['mb_per_s']:.1f} | {s['java_bytes_per_row']:.2f} | {native:.1f} |")
+                     f"{s['mb_per_s']:.1f} | {s['java_bytes_per_row']:.2f} | {native:.1f} | "
+                     f"{s['slab_bytes_per_row']:.1f} / {s['retained_slab_capacity_bytes_per_row']:.1f} | "
+                     f"{s['session_arena_capacity_bytes_per_row']:.1f} |")
     return '\n'.join(lines) + '\n'
 
 
@@ -192,6 +229,8 @@ def run():
     parser.add_argument('--binary', action='append', required=True, help='label=/absolute/executable')
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--forks', type=int, default=3)
+    parser.add_argument('--engines', action='append', default=[], metavar='LABEL=ENGINE,...',
+                        help='Supported engines for one binary; defaults to all current engines')
     parser.add_argument('--runtime', choices=('svm', 'jvm'), default='svm')
     parser.add_argument('--pin', action='store_true',
                         help='Pin to the highest available CPU (remote workers); else require taskset')
@@ -212,10 +251,13 @@ def run():
     if len(affinity) != 1:
         parser.error('Pin the runner to one CPU with taskset (or --pin)')
     groups = shard(GROUPS)
-    cells = [(e, m, s) for m, s in groups for e in ENGINES]
+    try:
+        selected = select_engines(binaries, args.engines)
+    except ValueError as failure:
+        parser.error(str(failure))
     args.output.mkdir(parents=True, exist_ok=False)
     cpu_info = Path('/proc/cpuinfo').read_text()
-    report = dict(schema=2, source=args.source, seed=SEED, forks=args.forks, runtime=args.runtime,
+    report = dict(schema=3, engines=selected, source=args.source, seed=SEED, forks=args.forks, runtime=args.runtime,
                   groups=groups, shard=dict(index=int(os.environ.get('TEST_SHARD_INDEX', '0')),
                                             total=int(os.environ.get('TEST_TOTAL_SHARDS', '1'))),
                   binary_sha256={k: hashlib.sha256(v.read_bytes()).hexdigest()
@@ -226,7 +268,10 @@ def run():
                   cpu_model=next((line.split(':', 1)[1].strip() for line in cpu_info.splitlines()
                                   if line.startswith('model name')), platform.processor()),
                   measurements=[])
-    jobs = list(itertools.product(binaries, cells, range(args.forks), ('time', 'memory')))
+    jobs = [(label, (engine, mode, stage), fork, metric)
+            for label in binaries for engine in selected[label] for mode, stage in groups
+            if supported(engine, stage)
+            for fork in range(args.forks) for metric in ('time', 'memory')]
     random.Random(SEED).shuffle(jobs)
     checksums = {}
     for label, cell, fork, metric in jobs:

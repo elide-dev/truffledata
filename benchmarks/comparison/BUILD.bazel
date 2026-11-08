@@ -814,3 +814,68 @@ java_binary(
         ("csv_measure_jvm", "jvm", ":csv_jvm"),
     ]
 ]
+
+
+# Reproducible host ingestion and pure-Java producer measurements; setup is outside timed cells.
+data_java_library(
+    name = "protobuf_ingestion",
+    testonly = True,
+    srcs = ["SourceIngestionProbe.java", "SourceIngestionFeature.java"],
+    deps = [
+        ":contracts",
+        "//core",
+        "//protobuf",
+        "@maven//:com_google_protobuf_protobuf_java",
+        "@maven//:org_graalvm_sdk_nativeimage",
+        "@maven//:org_graalvm_truffle_truffle_api",
+    ],
+)
+
+java_test(
+    name = "protobuf_ingestion_jvm",
+    size = "medium",
+    exec_properties = {"EstimatedCPU": "4", "EstimatedMemory": "4GB"},
+    jvm_flags = [
+        "--enable-native-access=ALL-UNNAMED",
+        "-Dpolyglot.engine.WarnInterpreterOnly=false",
+        "-Xms512m",
+        "-Xmx512m",
+        "-XX:+UseSerialGC",
+        "-Dingestion.warmupMillis=3000",
+        "-Dingestion.sampleMillis=250",
+    ],
+    main_class = "dev.elide.truffledata.comparison.SourceIngestionProbe",
+    tags = ["manual"],
+    use_testrunner = False,
+    runtime_deps = [":protobuf_ingestion"],
+)
+
+native_image(
+    name = "protobuf_ingestion_native",
+    testonly = True,
+    exec_properties = {"EstimatedCPU": "4", "EstimatedMemory": "8GB"},
+    executable_name = "protobuf-ingestion",
+    extra_args = [
+        "--gc=serial",
+        "--parallelism=4",
+        "-march=compatibility",
+        "--initialize-at-build-time=dev.elide.truffledata",
+        "--initialize-at-run-time=dev.elide.truffledata.comparison.SourceIngestionProbe",
+        "--features=dev.elide.truffledata.comparison.SourceIngestionFeature",
+    ],
+    graalvm_sdk = "@graalvm_linux_amd64//:gvm",
+    main_class = "dev.elide.truffledata.comparison.SourceIngestionProbe",
+    optimization_mode = "2",
+    tags = ["manual"],
+    target_compatible_with = ["@platforms//os:linux", "@platforms//cpu:x86_64"],
+    deps = [":protobuf_ingestion"],
+)
+
+sh_test(
+    name = "protobuf_ingestion_svm",
+    size = "medium",
+    srcs = ["protobuf_ingestion.sh"],
+    args = ["$(location :protobuf_ingestion_native)"],
+    data = [":protobuf_ingestion_native"],
+    tags = ["manual"],
+)

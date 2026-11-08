@@ -2,7 +2,7 @@ import copy
 import os
 import unittest
 from unittest import mock
-from consumer import CELLS, ENGINES, GROUPS, command, markdown, shard, throughput, validate
+from consumer import CELLS, ENGINES, GROUPS, command, markdown, select_engines, shard, throughput, validate
 
 
 class ConsumerValidationTest(unittest.TestCase):
@@ -45,7 +45,40 @@ class ConsumerValidationTest(unittest.TestCase):
             with mock.patch.dict(os.environ, TEST_TOTAL_SHARDS='7', TEST_SHARD_INDEX=str(index)):
                 seen += shard(GROUPS)
         self.assertEqual(sorted(seen), sorted(GROUPS))
-        self.assertEqual(len(CELLS), len(GROUPS) * len(ENGINES))
+        self.assertEqual(len(CELLS), 102)
+        self.assertEqual({stage for engine, mode, stage in CELLS if engine == 'slab-session'},
+                         {'decode', 'resident'})
+
+    def test_slab_storage_requires_full_capacity_accounting(self):
+        record = copy.deepcopy(self.VALID)
+        record.update(engine='slab', native_index_retained=False, slab_bytes_per_row=100,
+                      retained_slab_capacity_bytes_per_row=128)
+        validate(record, ('slab', 'full', 'peak'), 'time', {})
+        for change in ({'slab_bytes_per_row': 0}, {'retained_slab_capacity_bytes_per_row': 99},
+                       {'retained_slab_capacity_bytes_per_row': float('nan')}):
+            with self.subTest(change=change), self.assertRaises(ValueError):
+                validate(dict(record, **change), ('slab', 'full', 'peak'), 'time', {})
+
+    def test_session_storage_is_native_and_charges_arena_capacity(self):
+        record = copy.deepcopy(self.VALID)
+        record.update(engine='slab-session', stage='resident', native_index_retained=False,
+                      slab_bytes_per_row=100, retained_slab_capacity_bytes_per_row=0,
+                      session_arena_capacity_bytes_per_row=128)
+        validate(record, ('slab-session', 'full', 'resident'), 'time', {})
+        for change in ({'session_arena_capacity_bytes_per_row': 99},
+                       {'retained_slab_capacity_bytes_per_row': 128}):
+            with self.subTest(change=change), self.assertRaises(ValueError):
+                validate(dict(record, **change), ('slab-session', 'full', 'resident'), 'time', {})
+
+    def test_new_engines_do_not_run_against_historical_baselines(self):
+        selected = select_engines(['candidate', 'baseline'],
+                                  ['baseline=stock,generated-owned,native-view,native-eager'])
+        self.assertIn('slab', selected['candidate'])
+        self.assertNotIn('slab', selected['baseline'])
+        for specification in ('missing=stock', 'candidate=absent', 'candidate=stock,stock',
+                              'candidate='):
+            with self.subTest(specification=specification), self.assertRaises(ValueError):
+                select_engines(['candidate'], [specification])
 
     def test_commands_and_throughput(self):
         self.assertEqual(command('/b', 'svm', ('stock', 'full', 'peak'), 'time'),

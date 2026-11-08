@@ -33,7 +33,7 @@ public interface ProtoAccess {
 
   default int getSize(int ordinal) {
     Object value = get(ordinal);
-    if (value instanceof DataArray array) return array.size();
+    if (value instanceof OwnedArray array) return array.size();
     throw new ContractViolation("Expected array");
   }
 }

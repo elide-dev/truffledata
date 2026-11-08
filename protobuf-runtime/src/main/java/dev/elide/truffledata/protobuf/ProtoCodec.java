@@ -110,7 +110,7 @@ final class ProtoCodec {
 
     private void retained(Object value, int depth) {
       if (value instanceof String text) bytes(2L * text.length());
-      else if (value instanceof DataArray array) {
+      else if (value instanceof OwnedArray array) {
         cells(array.size());
         if (!array.isBytes()) for (int i = 0; i < array.size(); i++) retained(array.get(i), depth);
       } else if (value instanceof ProtoAccess) {
@@ -579,7 +579,7 @@ final class ProtoCodec {
         var field = row.plan().field(i);
         Object value = row.get(i);
         if (field.repeated()) {
-          DataArray array = (DataArray) value;
+          OwnedArray array = (OwnedArray) value;
           if (field.packed()) {
             Writer size = new Writer(null, limit);
             for (int j = 0; j < array.size(); j++) size.scalar(field.kind(), array.get(j));
@@ -590,7 +590,11 @@ final class ProtoCodec {
         } else field(field, value);
       }
       byte[] unknown =
-          row instanceof ProtoRow owned ? owned.unknown() : ((GeneratedMessage) row).unknown;
+          row instanceof ProtoRow owned
+              ? owned.unknown()
+              : row instanceof SlabRow slab
+                  ? slab.unknownFieldBytes()
+                  : ((GeneratedMessage) row).unknown;
       raw(unknown);
     }
 
@@ -657,7 +661,7 @@ final class ProtoCodec {
                   : GeneratedOutput.utf8Contents(target, position, text, length);
         }
         case BYTES -> {
-          DataArray bytes = (DataArray) value;
+          OwnedArray bytes = (OwnedArray) value;
           varint(bytes.size());
           int length = bytes.size();
           if (length > limit - position) throw bad("Encoded wire budget exceeded");

@@ -24,6 +24,21 @@ import org.junit.jupiter.api.Test;
 
 /** Task A1: the layout compiler, the TDL1 program and the TDSLAB1 golden slabs (docs/SLAB.md). */
 class LayoutTest {
+  @Test
+  void unknownFieldBytesAreOwnedAndPreserveEveryWireKind() {
+    var plan = unknowns();
+    byte[] wire = {
+      40, 7, 49, 1, 2, 3, 4, 5, 6, 7, 8, 58, 2, 11, 12, 67, 8, 1, 68, 77, 1, 2, 3, 4, 16, 9
+    };
+    var row = plan.decode(wire);
+    assertArrayEquals(wire, row.unknownFieldBytes());
+    byte[] exposed = row.unknownFieldBytes();
+    exposed[0] = 0;
+    wire[0] = 0;
+    assertEquals(40, row.unknownFieldBytes()[0]);
+    assertArrayEquals(new byte[0], plan.decode(new byte[] {8, 1}).unknownFieldBytes());
+  }
+
   private static final Limits LIMITS = new Limits(1024, 256, 1 << 22, 64L << 20);
 
   // ---- Schema construction ----

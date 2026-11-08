@@ -13,6 +13,26 @@ Sources: `protobuf-runtime/.../Layout.java` (layout compiler and the `TDL1` prog
 `protobuf-runtime/src/test/resources/slab/` are checked against, and the native producer
 `protobuf-buffa/native/slab.rs` (seam ABI 10, below), which reproduces every golden byte for byte.
 
+## Java ownership
+
+`ProtoPlan.decodeSlab` is native-free. Generated `SlabDecoder_<Type>` classes select
+constant field-number and slot dispatch after checking the supplied schema. Both produce
+the same owning bytes as the native decoder. `BuffaPlan.decode` returns the runtime
+`SlabMessage` owner using the selected producer.
+
+Owning `SlabMessage`/`SlabRow` values are immutable and may be read across threads.
+`row()` and `snapshot()` return the root owner itself; `close()` has no effect.
+Children, strings, byte arrays and repeated arrays are lazy cached views of immutable
+slab bytes. Byte/repeated values implement `OwnedArray`; a `String` copies UTF-8 once
+when materialized. UTF-16 lengths are available without materializing strings.
+
+`copyOf` defensively copies an external buffer. `takeOwnership` is a trusted bridge
+operation: it transfers exclusive ownership of a freshly produced array, and the caller
+must discard every writable alias. Both validate structure before publishing a row.
+A capacity-backed array may be larger than the header's valid extent. Offset validation
+uses that extent, `slabCopy()` returns exactly it, and `retainedSlabBytes()` accounts
+for the full array against `maxSlabBytes`.
+
 ## Conventions
 
 - All integers are little-endian. `u16`/`u32`/`u64` are unsigned unless stated; slot values keep
@@ -262,3 +282,11 @@ slab. Schemas are the `LayoutTest` factories of the same name (`timestamp`, `goo
 `LayoutTest.golden_slabs_decode_by_hand` holds the timestamp, map, oneof, unknown and merge slabs
 as hand-written words, compares every golden with the reference model, and reads every golden
 back field by field against `ProtoRow`.
+
+### Generated decoder selection
+
+`ContractPlugin.create` supplies immutable per-type decoder factories in the generated `ProtoPlan.Model`. The first slab decode binds that type's generated decoder once; subsequent `SlabMessage.decode` and Buffa Java-backend calls reuse the binding. Runtime-created models retain the table producer. Generated fast loops cover ordinary scalar, oneof, repeated and nested-message cases and restart through the table producer for unknown fields, maps, groups and singular-message merges. Both paths write the same format and preserve byte parity. A capacity hint retains only the previous wire length and slab extent; output arrays are never cached.
+
+### Native arena borrows
+
+`SlabSession` retains a reusable native buffer containing the same owning slab format. Its rows carry the session's decode epoch, and every value read checks that epoch and thread before loading native memory. No assumption object is allocated per decode. A new decode or reset invalidates previous rows, including compiled constant receivers. A pin prevents buffer recycling until released. Root retain copies the valid extent once into an owning slab; child snapshots additionally verify that the requested record/type is reachable in the copied graph. Arbitrary offsets and overwritten orphan records cannot be selected.

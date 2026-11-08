@@ -1,0 +1,25 @@
+syntax = "proto2";
+package explicit;
+option java_package = "dev.elide.truffledata.host";
+option java_outer_classname = "ExplicitHost";
+message Payload { optional int32 n = 1; }
+message Box { extensions 100 to 199; }
+extend Box { optional Payload payload = 100; }
+message MessageBox {
+  option message_set_wire_format = true;
+  extensions 100 to 199;
+}
+extend MessageBox { optional Payload message_payload = 100; }
+message ScalarBox { extensions 100 to 199; }
+extend ScalarBox {
+  optional int32 count = 100;
+  repeated string text = 101;
+}
+message ClosedMaps {
+  enum Color { RED = 0; GREEN = 1; }
+  map<string, Color> items = 1;
+}
+message Combined {
+  optional MessageBox box = 1;
+  optional ClosedMaps maps = 2;
+}

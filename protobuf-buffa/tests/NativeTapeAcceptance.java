@@ -8,6 +8,7 @@ import java.util.Objects;
 import org.jspecify.annotations.Nullable;
 
 /** Internal ownership transfer checks, shared by the JVM and static SVM acceptance images. */
+@SuppressWarnings("removal")
 public final class NativeTapeAcceptance {
   private NativeTapeAcceptance() {}
 
@@ -74,14 +75,13 @@ public final class NativeTapeAcceptance {
       // is reused underneath them without ever being retained by a result.
       long views = backend.compileView(schema);
       try (var compiled = decoder.compile(plan, 65536);
-          var view = compiled.decodeView(first, 65536);
+          var view = compiled.decodeLegacy(first, 65536, true);
           var retained = Objects.requireNonNull(backend.view(views, first, plan, 65536, false))) {
         if (!view.nativeBacked()) throw new AssertionError("native view selected");
         if (!retained.viewReady() || retained.count() != 1 || retained.words != 3)
           throw new AssertionError("view directory extent");
         // One 24-byte entry plus three directory words, rounded up to whole entry slots.
-        if (retained.allocated != 48)
-          throw new AssertionError("exact view allocation");
+        if (retained.allocated != 48) throw new AssertionError("exact view allocation");
         // Default decodes ask for a budget fallback instead of a ContractViolation; views do not.
         if (backend.view(views, second, plan, 1, true) != null)
           throw new AssertionError("budget fallback signal");
@@ -97,7 +97,8 @@ public final class NativeTapeAcceptance {
           try (var scratch = backend.typed(schema, second, 0, empty, plan, 65536)) {
             if (scratch.count() != 1) throw new AssertionError("scratch count");
           }
-          try (var again = Objects.requireNonNull(backend.view(views, second, plan, 65536, false))) {
+          try (var again =
+              Objects.requireNonNull(backend.view(views, second, plan, 65536, false))) {
             if (again.count() != 1) throw new AssertionError("view scratch count");
           }
         }

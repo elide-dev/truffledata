@@ -27,6 +27,7 @@ import org.postgresql.util.ByteConverter;
 
 /** Fixed-work comparisons; orchestration forks each cell and separates timing from allocations. */
 @NullMarked
+@SuppressWarnings("removal")
 public final class Comparison {
   static final int ROWS = 32;
   static Runnable beforeSamples = () -> {};
@@ -308,7 +309,7 @@ public final class Comparison {
     final String[] json = new String[ROWS];
     final ByteString[] immutableWire = new ByteString[ROWS];
     final Object[] rows = new Object[ROWS];
-    final @Nullable TypedMessage[] messages = new TypedMessage[ROWS];
+    final @Nullable ProtoMessage[] messages = new ProtoMessage[ROWS];
     final @Nullable WireInput[] inputs = new WireInput[ROWS];
     final JsonFormat.Parser jsonParser = JsonFormat.parser();
     final ProtoPlan plan;
@@ -421,8 +422,8 @@ public final class Comparison {
         if (decoder != null) {
           inputs[i] = decoder.allocate(wire[i].length).put(wire[i]);
           messages[i] = parseNative(i);
-          if (NATIVE_VIEWS && mixed && !Objects.requireNonNull(messages[i]).nativeBacked())
-            throw new AssertionError("Mixed native-view benchmark fell back to eager decoding");
+          if (mixed && !(messages[i] instanceof SlabMessage))
+            throw new AssertionError("Binary benchmark must use an owning slab");
           rows[i] = Objects.requireNonNull(messages[i]).row();
         } else rows[i] = parse(i);
       }
@@ -458,7 +459,7 @@ public final class Comparison {
       return Timestamp.parseFrom(wire[i]);
     }
 
-    TypedMessage parseNative(int i) {
+    ProtoMessage parseNative(int i) {
       return workload.equals("timestamp-json")
           ? Objects.requireNonNull(nativePlan).parseJson(json[i], 1 << 20)
           : NATIVE_VIEWS

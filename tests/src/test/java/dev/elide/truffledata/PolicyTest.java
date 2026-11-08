@@ -21,7 +21,7 @@ class PolicyTest {
             Objects.requireNonNull(System.getenv("TEST_WORKSPACE")));
     Map<String, Integer> budgets =
         Map.ofEntries(
-            Map.entry("Values.java", 6),
+            Map.entry("Values.java", 7),
             Map.entry("DataLibrary.java", 1),
             Map.entry("PayloadBudget.java", 1), // Strict-only immutable-backing diagnostics.
             // Name lookup, plus the two accessor-table lookups (Task B2), taken on specialization
@@ -41,10 +41,11 @@ class PolicyTest {
             Map.entry("JdbcSource.java", 6),
             Map.entry("ProtobufAdapter.java", 5),
             // Generated contract binding and the lazily compiled slab layout, outside reads.
-            Map.entry("ProtoPlan.java", 12),
+            Map.entry("ProtoPlan.java", 14),
+            Map.entry("SlabMessage.java", 11), // Decode, lazy materialization, encoding.
             Map.entry("Layout.java", 3), // Slab layout compilation (×2) and TDL1 parsing.
             Map.entry("ProtoRow.java", 3),
-            Map.entry("ProtoCompiler.java", 8),
+            Map.entry("ProtoCompiler.java", 9),
             Map.entry("ProtoDescriptors.java", 1),
             Map.entry("ProtoWire.java", 1),
             Map.entry("GeneratedMessage.java", 1),
@@ -145,6 +146,9 @@ class PolicyTest {
                 "JdbcCursor.java",
                 9));
     exportedMessages.put("GeneratedMessage.java", 5);
+    exportedMessages.put("SlabRow.java", 5);
+    exportedMessages.put("SlabArray.java", 4);
+    exportedMessages.put("SlabBytes.java", 4);
     exportedMessages.put("TapeValue.java", 29);
     exportedMessages.put("TypedArray.java", 4);
     exportedMessages.put("TypedRecord.java", 6);

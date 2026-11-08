@@ -7,7 +7,7 @@ import java.util.Objects;
 import org.jspecify.annotations.Nullable;
 
 /** Explicit lifetime for native typed rows and payloads. Closing invalidates compiled readers. */
-public final class TypedMessage extends ViewOwner implements AutoCloseable {
+public final class TypedMessage extends ViewOwner implements ProtoMessage {
   @CompilationFinal private @Nullable TypedRow row;
   private final boolean binary;
   private BuffaWire.@Nullable Tape index;

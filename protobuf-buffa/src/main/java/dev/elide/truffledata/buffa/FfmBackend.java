@@ -3,6 +3,9 @@ package dev.elide.truffledata.buffa;
 import com.oracle.truffle.api.CompilerDirectives;
 import dev.elide.truffledata.Limits;
 import dev.elide.truffledata.buffa.generated.BuffaFFM;
+import dev.elide.truffledata.protobuf.ProtoPlan;
+import dev.elide.truffledata.protobuf.SlabLimits;
+import dev.elide.truffledata.protobuf.SlabMessage;
 import java.lang.foreign.*;
 import java.lang.invoke.MethodHandle;
 import java.nio.ByteBuffer;
@@ -36,9 +39,26 @@ final class FfmBackend implements BuffaWire.Backend {
   private final MethodHandle releaseCompiled;
   private final MethodHandle decodeView;
   private final MethodHandle releaseView;
+  private final MethodHandle compileLayout;
+  private final MethodHandle releaseLayout;
+  private final MethodHandle decodeSlab;
+  private final MethodHandle decodeSlabSmall;
+  private final MemorySegment slabResult;
   private final MemorySegment scalarResult;
   private final MemorySegment result;
   private final MemorySegment viewResult;
+  private long copiedSlabInputBytes;
+
+  @Override
+  public void recordSlabInputCopy(int bytes) {
+    copiedSlabInputBytes += bytes;
+  }
+
+  @Override
+  public long copiedSlabInputBytes() {
+    return copiedSlabInputBytes;
+  }
+
   private boolean busy;
   private boolean cached;
   private boolean closed;
@@ -74,7 +94,7 @@ final class FfmBackend implements BuffaWire.Backend {
   FfmBackend(Path library) {
     try {
       var symbols = SymbolLookup.libraryLookup(library.toAbsolutePath(), libraryArena);
-      var fingerprint = BuffaFFM.fingerprint(symbols);
+      var fingerprint = BuffaFFM.fingerprint(symbols, true);
       MemorySegment address;
       try {
         address = (MemorySegment) fingerprint.invokeExact();
@@ -94,6 +114,18 @@ final class FfmBackend implements BuffaWire.Backend {
       releaseCompiled = BuffaFFM.releaseCompiled(symbols);
       decodeView = BuffaFFM.decodeView(symbols);
       releaseView = BuffaFFM.releaseView(symbols);
+      compileLayout = BuffaFFM.compileLayout(symbols);
+      releaseLayout = BuffaFFM.releaseLayout(symbols);
+      decodeSlab = BuffaFFM.decodeSlab(symbols);
+      // Myna's generated critical binding uses critical(false). Heap arrays need the explicit
+      // allow-heap variant, using that same generated ABI descriptor. Calls are bounded below.
+      decodeSlabSmall =
+          Linker.nativeLinker()
+              .downcallHandle(
+                  symbols.find("td_buffa_decode_slab_small").orElseThrow(),
+                  BuffaFFM.decodeSlabSmall_DESCRIPTOR,
+                  Linker.Option.critical(true));
+      slabResult = libraryArena.allocate(BuffaFFM.SlabResult_LAYOUT);
       scalarResult = libraryArena.allocate(BuffaFFM.Scalars_LAYOUT);
       result = libraryArena.allocate(BuffaFFM.Result_LAYOUT);
       viewResult = libraryArena.allocate(BuffaFFM.View_LAYOUT);
@@ -276,6 +308,185 @@ final class FfmBackend implements BuffaWire.Backend {
       throw callFailure(failure);
     } finally {
       detach();
+    }
+  }
+
+  @Override
+  public long compileLayout(WireInput schema) {
+    if (!(schema.lease.attachment instanceof MemorySegment memory))
+      throw new IllegalArgumentException("Schema is not JVM native memory");
+    acquireResult();
+    try {
+      int status;
+      try {
+        status = (int) compileLayout.invokeExact(memory, (long) schema.size(), slabResult);
+      } catch (Throwable failure) {
+        throw callFailure(failure);
+      }
+      BuffaWire.status(status);
+      long handle = slabResult.get(ValueLayout.ADDRESS, BuffaFFM.Result_data_OFFSET).address();
+      if (handle == 0) throw new IllegalStateException("Native layout compilation returned null");
+      detached++;
+      return handle;
+    } finally {
+      busy = false;
+    }
+  }
+
+  @Override
+  public void releaseLayout(long compiled) {
+    try {
+      releaseLayout.invokeExact(MemorySegment.ofAddress(compiled));
+    } catch (Throwable failure) {
+      throw callFailure(failure);
+    } finally {
+      detach();
+    }
+  }
+
+  @Override
+  public Object prepareSlab(long compiled) {
+    return MemorySegment.ofAddress(compiled);
+  }
+
+  @Override
+  public int writeSlab(Object compiled, WireInput input, WireInput output, SlabLimits limits) {
+    if (!(input.lease.attachment instanceof MemorySegment source)
+        || !(output.lease.attachment instanceof MemorySegment destination))
+      throw new IllegalArgumentException("Slab arena is not JVM native memory");
+    acquireResult();
+    try {
+      int status;
+      try {
+        status =
+            (int)
+                decodeSlab.invokeExact(
+                    (MemorySegment) compiled,
+                    source,
+                    (long) input.size(),
+                    1,
+                    MemorySegment.NULL,
+                    destination,
+                    (long) output.size(),
+                    limits.maxDepth(),
+                    (long) limits.maxSlabBytes(),
+                    slabResult);
+      } catch (Throwable failure) {
+        throw callFailure(failure);
+      }
+      long bytes = slabResult.get(ValueLayout.JAVA_LONG, BuffaFFM.SlabResult_bytes_OFFSET);
+      if (status == 6 && bytes > output.size() && bytes <= limits.maxSlabBytes())
+        return -Math.toIntExact(bytes);
+      BuffaWire.status(status);
+      if (bytes < 0 || bytes > output.size())
+        throw new IllegalStateException("Invalid slab extent");
+      return Math.toIntExact(bytes);
+    } finally {
+      busy = false;
+    }
+  }
+
+  @Override
+  public SlabMessage slab(
+      long compiled, byte[] input, ProtoPlan plan, SlabLimits limits, int capacity) {
+    if (limits.criticalBytes() == 0
+        || input.length > limits.criticalBytes()
+        || capacity > limits.criticalBytes())
+      return BuffaWire.Backend.super.slab(compiled, input, plan, limits, capacity);
+    acquireResult();
+    boolean scratch = false;
+    try {
+      for (int attempt = 0; attempt < 2; attempt++) {
+        byte[] output = new byte[capacity];
+        int status;
+        MemorySegment inputMemory =
+            input.length == 0 ? slabResult.asSlice(0, 0) : MemorySegment.ofArray(input);
+        try {
+          status =
+              (int)
+                  decodeSlabSmall.invokeExact(
+                      MemorySegment.ofAddress(compiled),
+                      inputMemory,
+                      (long) input.length,
+                      1,
+                      MemorySegment.NULL,
+                      MemorySegment.ofArray(output),
+                      (long) capacity,
+                      limits.maxDepth(),
+                      (long) limits.maxSlabBytes(),
+                      slabResult);
+        } catch (Throwable failure) {
+          throw callFailure(failure);
+        }
+        long bytes = slabResult.get(ValueLayout.JAVA_LONG, BuffaFFM.SlabResult_bytes_OFFSET);
+        // Fixed stack scratch can overflow within the size bound; retry the same native
+        // producer with its ordinary transition and bounded dynamic scratch, never Java.
+        if (status == 2) {
+          scratch = true;
+          break;
+        }
+        if (status == 6 && attempt == 0 && bytes > capacity && bytes <= limits.maxSlabBytes()) {
+          capacity = Math.toIntExact(bytes);
+          if (capacity > limits.criticalBytes()) {
+            scratch = true;
+            break;
+          }
+          continue;
+        }
+        BuffaWire.status(status);
+        if (bytes < 0 || bytes > capacity)
+          throw new IllegalStateException("Invalid native slab extent");
+        return SlabMessage.takeOwnership(plan, output, Math.toIntExact(bytes), limits);
+      }
+    } finally {
+      busy = false;
+    }
+    if (scratch) return BuffaWire.Backend.super.slab(compiled, input, plan, limits, capacity);
+    throw new IllegalStateException("Native slab capacity retry failed");
+  }
+
+  @Override
+  public SlabMessage slab(
+      long compiled, WireInput input, ProtoPlan plan, SlabLimits limits, int capacity) {
+    if (!(input.lease.attachment instanceof MemorySegment memory))
+      throw new IllegalArgumentException("Input is not JVM native memory");
+    acquireResult();
+    try {
+      for (int attempt = 0; attempt < 2; attempt++) {
+        try (Arena arena = Arena.ofConfined()) {
+          MemorySegment output = arena.allocate(Math.max(1, capacity), 8);
+          int status;
+          try {
+            status =
+                (int)
+                    decodeSlab.invokeExact(
+                        MemorySegment.ofAddress(compiled),
+                        memory,
+                        (long) input.size(),
+                        1,
+                        MemorySegment.NULL,
+                        output,
+                        (long) capacity,
+                        limits.maxDepth(),
+                        (long) limits.maxSlabBytes(),
+                        slabResult);
+          } catch (Throwable failure) {
+            throw callFailure(failure);
+          }
+          long bytes = slabResult.get(ValueLayout.JAVA_LONG, BuffaFFM.SlabResult_bytes_OFFSET);
+          if (status == 6 && attempt == 0 && bytes > capacity && bytes <= limits.maxSlabBytes()) {
+            capacity = Math.toIntExact(bytes);
+            continue;
+          }
+          BuffaWire.status(status);
+          if (bytes < 0 || bytes > capacity)
+            throw new IllegalStateException("Invalid native slab extent");
+          return SlabMessage.copyOf(plan, output.asSlice(0, bytes).asByteBuffer(), limits);
+        }
+      }
+      throw new IllegalStateException("Native slab capacity retry failed");
+    } finally {
+      busy = false;
     }
   }
 

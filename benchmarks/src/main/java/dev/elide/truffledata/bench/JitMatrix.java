@@ -387,41 +387,43 @@ public final class JitMatrix {
       }
     }
     for (boolean useStatic : new boolean[] {false, true}) {
-      String prefix = "generated-graph/" + (useStatic ? "static" : "batch");
-      var plan =
-          dev.elide.truffledata.bench.generated.NativeContracts.create(
-                  useStatic ? BenchmarkLanguage.current().language() : null,
-                  Limits.DEFAULT,
-                  16,
-                  1024)
-              .type("truffledata.benchdata.Graph");
-      var access =
-          new dev.elide.truffledata.bench.generated.NativeContracts
-              .Access_truffledata$benchdata$Graph(plan);
-      var row =
-          access.decode(
-              plan.encode(
-                  plan.parseText(
-                      "number: 42 score: 1.5 active: true name: 'graph' payload: 'abc' child {name:"
-                          + " 'child'} children {name: 'first'} children {name: 'second'}")));
-      var absent = access.decode(new byte[0]);
-      add(cases, prefix + "/long", Op.DATA_LONG, row, 0, "", 42L);
-      add(cases, prefix + "/double", Op.DATA_DOUBLE, row, 1, "", 1.5);
-      add(cases, prefix + "/boolean", Op.DATA_BOOLEAN, row, 2, "", true);
-      add(cases, prefix + "/string", Op.READ, row, 3, "", "graph");
-      add(cases, prefix + "/bytes-length", Op.LENGTH, row, 4, "", 3);
-      add(cases, prefix + "/children-length", Op.LENGTH, row, 6, "", 2);
-      add(cases, prefix + "/nested", Op.PROTO_NESTED, row, 6, "", "first");
-      add(cases, prefix + "/member", Op.MEMBER, row, 3, "name", "graph");
-      add(cases, prefix + "/ordinal", Op.ORDINAL, row, 0, "", 42L);
-      add(cases, prefix + "/has", Op.PROTO_HAS, row, 0, "", true);
-      add(cases, prefix + "/absent", Op.PROTO_HAS, absent, 5, "", false);
-      add(cases, prefix + "/absent-readable", Op.PRESENT, absent, 5, "", false);
-      add(cases, prefix + "/missing", Op.READ, absent, 5, "", Missing.INSTANCE);
-      add(cases, prefix + "/wrong-long", Op.DATA_LONG, row, 3, "", Failure.UNEXPECTED);
-      add(cases, prefix + "/wrong-double", Op.DATA_DOUBLE, row, 0, "", Failure.UNEXPECTED);
-      add(cases, prefix + "/wrong-boolean", Op.DATA_BOOLEAN, row, 0, "", Failure.UNEXPECTED);
-      add(cases, prefix + "/invalid", Op.ORDINAL, row, -1, "", Failure.INDEX);
+      for (boolean slab : new boolean[] {false, true}) {
+        String prefix = (slab ? "slab/" : "generated-graph/") + (useStatic ? "static" : "batch");
+        var plan =
+            dev.elide.truffledata.bench.generated.NativeContracts.create(
+                    useStatic ? BenchmarkLanguage.current().language() : null,
+                    Limits.DEFAULT,
+                    16,
+                    1024)
+                .type("truffledata.benchdata.Graph");
+        var access =
+            new dev.elide.truffledata.bench.generated.NativeContracts
+                .Access_truffledata$benchdata$Graph(plan);
+        byte[] wire =
+            plan.encode(
+                plan.parseText(
+                    "number: 42 score: 1.5 active: true name: 'graph' payload: 'abc' child {name:"
+                        + " 'child'} children {name: 'first'} children {name: 'second'}"));
+        ProtoAccess row = slab ? plan.decodeSlab(wire) : access.decode(wire);
+        ProtoAccess absent = slab ? plan.decodeSlab(new byte[0]) : access.decode(new byte[0]);
+        add(cases, prefix + "/long", Op.DATA_LONG, row, 0, "", 42L);
+        add(cases, prefix + "/double", Op.DATA_DOUBLE, row, 1, "", 1.5);
+        add(cases, prefix + "/boolean", Op.DATA_BOOLEAN, row, 2, "", true);
+        add(cases, prefix + "/string", Op.READ, row, 3, "", "graph");
+        add(cases, prefix + "/bytes-length", Op.LENGTH, row, 4, "", 3);
+        add(cases, prefix + "/children-length", Op.LENGTH, row, 6, "", 2);
+        add(cases, prefix + "/nested", Op.PROTO_NESTED, row, 6, "", "first");
+        add(cases, prefix + "/member", Op.MEMBER, row, 3, "name", "graph");
+        add(cases, prefix + "/ordinal", Op.ORDINAL, row, 0, "", 42L);
+        add(cases, prefix + "/has", Op.PROTO_HAS, row, 0, "", true);
+        add(cases, prefix + "/absent", Op.PROTO_HAS, absent, 5, "", false);
+        add(cases, prefix + "/absent-readable", Op.PRESENT, absent, 5, "", false);
+        add(cases, prefix + "/missing", Op.READ, absent, 5, "", Missing.INSTANCE);
+        add(cases, prefix + "/wrong-long", Op.DATA_LONG, row, 3, "", Failure.UNEXPECTED);
+        add(cases, prefix + "/wrong-double", Op.DATA_DOUBLE, row, 0, "", Failure.UNEXPECTED);
+        add(cases, prefix + "/wrong-boolean", Op.DATA_BOOLEAN, row, 0, "", Failure.UNEXPECTED);
+        add(cases, prefix + "/invalid", Op.ORDINAL, row, -1, "", Failure.INDEX);
+      }
     }
     // Reuse one adopted accessor across more schema identities than its PIC can hold.
     List<Field> fields = new ArrayList<>();

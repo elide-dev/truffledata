@@ -11,6 +11,7 @@ import java.util.List;
 import org.graalvm.nativeimage.ImageInfo;
 import org.graalvm.polyglot.Context;
 
+@SuppressWarnings("removal")
 final class CompiledReads {
   private CompiledReads() {}
 
@@ -61,6 +62,30 @@ final class CompiledReads {
     }
   }
 
+  private static void slabSessionReads(BuffaWire decoder) {
+    if (decoder.selected() == BuffaWire.Selected.JAVA) return;
+    var contract = WellKnownAcceptance.model().type("google.protobuf.Int64Value");
+    try (var plan = decoder.compile(contract, 65536);
+        var input = decoder.allocate(2).put(new byte[] {8, 42});
+        var session = plan.newSession(4096)) {
+      var row = session.decode(input);
+      var root = new ConstantWktRoot(row);
+      var target = root.getCallTarget();
+      for (int i = 0; i < 200 && !root.compiled; i++) target.call(100000);
+      Acceptance.check(root.compiled, "session constant reads compiled");
+      Acceptance.check((Long) target.call(1000) == 42000, "session compiled scalar");
+      session.decode(input);
+      Acceptance.rejects(() -> target.call(1), IllegalStateException.class);
+      var current = session.decode(input);
+      var variable = new WktRoot(false);
+      var variableTarget = variable.getCallTarget();
+      for (int i = 0; i < 200 && !variable.compiled; i++) variableTarget.call(current, 100000);
+      Acceptance.check(variable.compiled, "session parameter reads compiled");
+      session.close();
+      Acceptance.rejects(() -> variableTarget.call(current, 1), IllegalStateException.class);
+    }
+  }
+
   private static void arrayViews(BuffaWire decoder) {
     var contract = TypedAcceptance.plan("RepeatedScalars");
     var root = new ArrayLengthRoot();
@@ -81,16 +106,13 @@ final class CompiledReads {
         var empty = plan.decodeView(emptyInput, 65536)) {
       Acceptance.check((Integer) target.call(message.row()) == 2, "shared native array length");
       Acceptance.check((Integer) target.call(empty.row()) == 0, "empty native array length");
-      var rejected = new java.util.concurrent.atomic.AtomicInteger();
+      var successful = new java.util.concurrent.atomic.AtomicInteger();
       Object countedRow = message.row();
       var other =
           new Thread(
               () -> {
-                try {
-                  ((BorrowedArray) data.read(countedRow, 0)).size();
-                } catch (IllegalStateException expected) {
-                  rejected.incrementAndGet();
-                }
+                if (((OwnedArray) data.read(countedRow, 0)).size() == 2)
+                  successful.incrementAndGet();
               });
       other.start();
       try {
@@ -99,7 +121,7 @@ final class CompiledReads {
         Thread.currentThread().interrupt();
         throw new AssertionError(failure);
       }
-      Acceptance.check(rejected.get() == 1, "array access enforces thread ownership");
+      Acceptance.check(successful.get() == 1, "durable array supports cross-thread reads");
       Acceptance.rejects(() -> message.row().get(-1), IndexOutOfBoundsException.class);
       Acceptance.rejects(() -> message.row().get(contract.size()), IndexOutOfBoundsException.class);
       Object array = data.read(message.row(), 0);
@@ -123,14 +145,13 @@ final class CompiledReads {
       } catch (InvalidArrayIndexException failure) {
         throw new AssertionError(failure);
       }
-      DataArray detached = ((BorrowedArray) data.read(message.row(), 14)).snapshot();
+      OwnedArray detached = (OwnedArray) data.read(message.row(), 14);
       Object row = message.row();
       message.close();
-      Acceptance.rejects(() -> target.call(row), IllegalStateException.class);
-      Acceptance.rejects(() -> ((BorrowedArray) array).size(), IllegalStateException.class);
-      Acceptance.rejects(() -> ((BorrowedArray) array).snapshot(), IllegalStateException.class);
+      Acceptance.check((Integer) target.call(row) == 2, "durable cached array survives close");
+      Acceptance.check(((OwnedArray) array).size() == 2, "durable array size after close");
       Acceptance.check(
-          ((DataArray) detached.get(0)).get(0).equals(7L), "nested array snapshot survives close");
+          ((OwnedArray) detached.get(0)).get(0).equals(7L), "nested array snapshot survives close");
     }
   }
 
@@ -199,7 +220,9 @@ final class CompiledReads {
         }
         Object closed = message.row();
         message.close();
-        Acceptance.rejects(() -> target.call(closed), IllegalStateException.class);
+        Acceptance.check(
+            (Long) target.call(closed) == value + (!flag ? 100 : 0),
+            "durable cached plan after close");
         Acceptance.check(
             (Long) target.call(defaults.row()) == fallback + (flag ? 100 : 0),
             "independent owner after close");
@@ -238,6 +261,7 @@ final class CompiledReads {
       context.enter();
       try {
         nativeViewReads(decoder);
+        slabSessionReads(decoder);
         generatedReads(decoder);
         generatedOwnedReads();
         generatedProjection();
@@ -262,7 +286,13 @@ final class CompiledReads {
                   "typed compiled value");
               Acceptance.check(NodeUtil.countNodes(typedRoot) <= 192, "typed access AST budget");
               typed.close();
-              Acceptance.rejects(() -> typedTarget.call(typedRow, 1), IllegalStateException.class);
+              if (format == 0)
+                Acceptance.check(
+                    ((Long) typedTarget.call(typedRow, 1)) == 255,
+                    "durable compiled value after close");
+              else
+                Acceptance.rejects(
+                    () -> typedTarget.call(typedRow, 1), IllegalStateException.class);
             }
           }
         }
@@ -615,9 +645,7 @@ final class CompiledReads {
     try (var plan = decoder.compile(contract, 65536);
         var input = decoder.allocate(6).put(new byte[] {8, (byte) 0xe8, 7, 26, 1, (byte) 255});
         var message = plan.decodeView(input, 4096)) {
-      Acceptance.check(
-          message.nativeBacked() == (decoder.selected() != BuffaWire.Selected.JAVA),
-          "compiled native view selected");
+      Acceptance.check(message.slabBacked(), "compiled native view selected");
       Object row = message.row();
       Object originalBytes = message.row().get(2);
       var constant = new ConstantValueRoot(row);
@@ -626,8 +654,7 @@ final class CompiledReads {
       Acceptance.check(constant.compiled, "constant native value reader compiled");
       // Host access promotes the single-value cache after the guest captured this row.
       Acceptance.check(
-          ((BorrowedArray) message.row().get(3)).size() == 0,
-          "empty repeated field promotes cache");
+          ((OwnedArray) message.row().get(3)).size() == 0, "empty repeated field promotes cache");
       constant.compiled = false;
       Acceptance.check(
           constantTarget.call(1000) == originalBytes,
@@ -649,9 +676,9 @@ final class CompiledReads {
           NodeUtil.countNodes(bytes) <= 192 && NodeUtil.countNodes(integer) <= 192,
           "native view AST budget");
       message.close();
-      Acceptance.rejects(() -> constantTarget.call(1), IllegalStateException.class);
-      Acceptance.rejects(() -> byteTarget.call(row, 1), IllegalStateException.class);
-      Acceptance.rejects(() -> integerTarget.call(row, 1), IllegalStateException.class);
+      Acceptance.check(constantTarget.call(1) == originalBytes, "durable constant after close");
+      Acceptance.check((Long) byteTarget.call(row, 1) == 255, "durable byte after close");
+      Acceptance.check((Long) integerTarget.call(row, 1) == 1000, "durable integer after close");
     }
   }
 

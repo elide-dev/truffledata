@@ -17,6 +17,7 @@ import dev.elide.truffledata.buffa.*;
 import dev.elide.truffledata.buffa.generated.Buffa;
 import dev.elide.truffledata.generated.ComparisonContracts;
 import dev.elide.truffledata.protobuf.ProtoPlan;
+import dev.elide.truffledata.protobuf.SlabMessage;
 import java.lang.management.ManagementFactory;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -29,6 +30,7 @@ import org.jspecify.annotations.Nullable;
 
 /** Consumer-level schema audit; all TD representations execute identical shared access nodes. */
 @NullMarked
+@SuppressWarnings("removal")
 public final class ConsumerComparison {
   private static final int ROWS = 32;
   private static final long COMPILED = 1L << 60;
@@ -42,7 +44,7 @@ public final class ConsumerComparison {
       for (String engine : ENGINES)
         for (String mode : MODES)
           for (String stage : STAGES) {
-            if (!cell(mode, stage)) continue;
+            if (!cell(engine, mode, stage)) continue;
             System.out.println("SMOKE " + engine + " " + mode + " " + stage);
             run(engine, mode, stage, "time", true);
           }
@@ -53,7 +55,9 @@ public final class ConsumerComparison {
     run(args[0], args[1], args[2], args[3], false);
   }
 
-  static final String[] ENGINES = {"stock", "generated-owned", "native-view", "native-eager"};
+  static final String[] ENGINES = {
+    "stock", "generated-owned", "native-view", "native-eager", "slab", "slab-session"
+  };
   static final String[] MODES = {"sparse", "full", "holdout", "large"};
   static final String[] STAGES = {
     "decode", "resident", "heap", "detach", "first", "interpret", "peak"
@@ -68,6 +72,11 @@ public final class ConsumerComparison {
     };
   }
 
+  static boolean cell(String engine, String mode, String stage) {
+    return cell(mode, stage)
+        && (!engine.equals("slab-session") || stage.equals("decode") || stage.equals("resident"));
+  }
+
   private static boolean nativeEngine(String engine) {
     return engine.equals("native-view") || engine.equals("native-eager");
   }
@@ -77,7 +86,7 @@ public final class ConsumerComparison {
     if (!Arrays.asList(ENGINES).contains(engine)
         || !Arrays.asList(MODES).contains(mode)
         || !Arrays.asList(STAGES).contains(stage)
-        || !cell(mode, stage)
+        || !cell(engine, mode, stage)
         || !Arrays.asList("time", "memory").contains(metric))
       throw new IllegalArgumentException("Unknown consumer cell");
     // Decode-only cells run no guest code; their parsing is host code on both runtimes.
@@ -148,15 +157,13 @@ public final class ConsumerComparison {
                     - from;
             if (stage.equals("first")) fixture.release();
             count++;
-          } while (metric.equals("memory")
-              ? count < 64
-              : System.nanoTime() - start < sampleWindow);
+          } while (metric.equals("memory") ? count < 64 : System.nanoTime() - start < sampleWindow);
           samples[s] = (double) total / (count * ROWS);
           fixture.tier(peak);
         }
         System.out.printf(
             Locale.ROOT,
-            "{\"engine\":\"%s\",\"mode\":\"%s\",\"stage\":\"%s\",\"runtime\":\"%s\",\"rows\":%d,\"checksum\":%d,\"guest_compiled\":%s,\"shared_access\":%s,\"stock_boundary\":%s,\"native_index_retained\":%s,\"input_bytes_per_row\":%.3f,\"copied_input_bytes_per_row\":%.3f,\"decoded_native_index_capacity_bytes_per_row\":%.3f,\"decoded_native_result_header_bytes_per_row\":%d,\"native_transient_peak_bytes\":null,\"native_allocation_count\":null,\"%s\":%s}%n",
+            "{\"engine\":\"%s\",\"mode\":\"%s\",\"stage\":\"%s\",\"runtime\":\"%s\",\"rows\":%d,\"checksum\":%d,\"guest_compiled\":%s,\"shared_access\":%s,\"stock_boundary\":%s,\"native_index_retained\":%s,\"input_bytes_per_row\":%.3f,\"copied_input_bytes_per_row\":%.3f,\"decoded_native_index_capacity_bytes_per_row\":%.3f,\"decoded_native_result_header_bytes_per_row\":%d,\"slab_bytes_per_row\":%.3f,\"retained_slab_capacity_bytes_per_row\":%.3f,\"session_arena_capacity_bytes_per_row\":%.3f,\"native_transient_peak_bytes\":null,\"native_allocation_count\":null,\"%s\":%s}%n",
             engine,
             mode,
             stage,
@@ -168,11 +175,16 @@ public final class ConsumerComparison {
             engine.equals("stock") && !stage.equals("decode"),
             engine.equals("native-view"),
             fixture.inputBytes / (double) ROWS,
-            nativeEngine(engine) && stage.equals("heap")
-                ? fixture.inputBytes / (double) ROWS
-                : 0,
+            engine.equals("slab")
+                ? fixture.copiedSlabInputBytes / (double) ROWS
+                : nativeEngine(engine) && stage.equals("heap")
+                    ? fixture.inputBytes / (double) ROWS
+                    : 0,
             fixture.indexBytes / (double) ROWS,
             fixture.headerBytes,
+            fixture.slabBytes / (double) ROWS,
+            fixture.retainedSlabBytes / (double) ROWS,
+            fixture.sessionArenaBytes / (double) ROWS,
             metric.equals("memory") ? "java_bytes_per_row" : "ns_per_row",
             Arrays.toString(samples));
       } finally {
@@ -203,14 +215,22 @@ public final class ConsumerComparison {
     final byte[][] wires = new byte[ROWS][];
     final @Nullable WireInput[] inputs;
     final @Nullable TypedMessage[] messages;
+    final @Nullable SlabSession[] sessions = new SlabSession[ROWS];
     final Object[] rows = new Object[ROWS];
     final BuffaWire decoder;
     final BuffaPlan nativePlan;
+    final ProtoPlan plan;
     final ComparisonContracts.Access_google$protobuf$Type generated;
     final ConsumerRoot root;
     final OptimizedCallTarget target;
     final long expected;
-    long inputBytes, indexBytes, headerBytes;
+    long inputBytes,
+        indexBytes,
+        headerBytes,
+        slabBytes,
+        retainedSlabBytes,
+        copiedSlabInputBytes,
+        sessionArenaBytes;
     int rotation;
 
     Fixture(String engine, String mode, String stage) throws Exception {
@@ -218,7 +238,7 @@ public final class ConsumerComparison {
       this.stage = stage;
       var model =
           ComparisonContracts.create(ComparisonLanguage.current(), Limits.DEFAULT, 16, 1 << 20);
-      ProtoPlan plan = model.type("google.protobuf.Type");
+      plan = model.type("google.protobuf.Type");
       generated = new ComparisonContracts.Access_google$protobuf$Type(plan);
       // Native setup is excluded for every engine; keeping it identical also controls image
       // reachability.
@@ -268,6 +288,22 @@ public final class ConsumerComparison {
           try (var message = decode(java.util.Objects.requireNonNull(input))) {
             indexBytes += message.nativeIndexBytes();
           }
+      if (engine.equals("slab")) {
+        long copiedBefore = decoder.copiedSlabInputBytes();
+        for (int i = 0; i < ROWS; i++) {
+          SlabMessage value = slab(i);
+          slabBytes += value.slabBytes();
+          retainedSlabBytes += value.retainedSlabBytes();
+        }
+        copiedSlabInputBytes = decoder.copiedSlabInputBytes() - copiedBefore;
+      }
+      if (engine.equals("slab-session"))
+        for (int i = 0; i < ROWS; i++) {
+          var session = nativePlan.newSession(1 << 20);
+          sessions[i] = session;
+          slabBytes += session.decode(java.util.Objects.requireNonNull(inputs[i])).slabBytes();
+          sessionArenaBytes += session.arenaBytes();
+        }
       headerBytes = engine.equals("native-view") ? Buffa.Result.SIZE : 0;
       prepare();
       if (!stage.equals("interpret") && !stage.equals("peak")) release();
@@ -276,13 +312,27 @@ public final class ConsumerComparison {
     /** The opt-in scoped view, or the default eager native decode into Java rows. */
     TypedMessage decode(WireInput input) {
       return engine.equals("native-view")
-          ? nativePlan.decodeView(input, 1 << 20)
-          : nativePlan.decode(input, 1 << 20);
+          ? nativePlan.decodeLegacy(input, 1 << 20, true)
+          : nativePlan.decodeLegacy(input, 1 << 20, false);
+    }
+
+    private SlabMessage slab(int index) {
+      return ImageInfo.inImageCode()
+          ? (stage.equals("heap")
+              ? nativePlan.decodeSlab(wires[index], 1 << 20)
+              : nativePlan.decodeSlab(java.util.Objects.requireNonNull(inputs[index]), 1 << 20))
+          : plan.decodeSlab(wires[index]);
     }
 
     void prepare() throws Exception {
       for (int i = 0; i < ROWS; i++) {
-        if (nativeEngine(engine)) {
+        if (engine.equals("slab-session")) {
+          rows[i] =
+              java.util.Objects.requireNonNull(sessions[i])
+                  .decode(java.util.Objects.requireNonNull(inputs[i]));
+        } else if (engine.equals("slab")) {
+          rows[i] = slab(i);
+        } else if (nativeEngine(engine)) {
           if (stage.equals("heap")) {
             try (var input = decoder.allocate(wires[i].length).put(wires[i])) {
               messages[i] = decode(input);
@@ -335,15 +385,19 @@ public final class ConsumerComparison {
           message.close();
           messages[i] = null;
         }
+        if (sessions[i] != null) sessions[i].reset();
         rows[i] = Missing.INSTANCE;
       }
     }
 
     void closedReadCheck() throws Exception {
-      if (!nativeEngine(engine) || stage.equals("detach")) return;
+      if ((!nativeEngine(engine) && !engine.equals("slab-session")) || stage.equals("detach"))
+        return;
       release();
       prepare();
-      for (var message : messages) java.util.Objects.requireNonNull(message).close();
+      if (engine.equals("slab-session")) {
+        for (var session : sessions) java.util.Objects.requireNonNull(session).reset();
+      } else for (var message : messages) java.util.Objects.requireNonNull(message).close();
       try {
         consume();
         throw new AssertionError("Closed view was readable");
@@ -355,6 +409,7 @@ public final class ConsumerComparison {
     @Override
     public void close() {
       release();
+      for (var session : sessions) if (session != null) session.close();
       for (var input : inputs) if (input != null) input.close();
       nativePlan.close();
       decoder.close();

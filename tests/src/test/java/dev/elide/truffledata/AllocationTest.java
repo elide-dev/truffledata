@@ -651,6 +651,14 @@ class AllocationTest {
               "protobuf-owned-" + (useStatic ? "static" : "batch"),
               new Object[] {plan.newBuilder().set(1, 1000L).set(13, "ab😀").build(), 1, 13});
           rows.put(
+              "protobuf-slab-" + (useStatic ? "static" : "batch"),
+              new Object[] {
+                plan.decodeSlab(
+                    plan.encode(plan.newBuilder().set(1, 1000L).set(13, "ab😀").build())),
+                1,
+                13
+              });
+          rows.put(
               "protobuf-generated-" + (useStatic ? "static" : "batch"),
               new Object[] {
                 new dev.elide.truffledata.generated.TruffleDataContracts

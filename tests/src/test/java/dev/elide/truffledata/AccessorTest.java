@@ -57,6 +57,11 @@ class AccessorTest {
     return plan.newBuilder().set(I64, i64).set(TEXT, text).set(FLAG, true).set(REAL, 2.5).build();
   }
 
+  private static Object slab(ProtoPlan plan, long i64, String text) {
+    return plan.decodeSlab(
+        plan.encode((dev.elide.truffledata.protobuf.ProtoRow) owned(plan, i64, text)));
+  }
+
   @Test
   void accessor_rejects_foreign_layout() {
     try (Context context = context()) {
@@ -87,9 +92,15 @@ class AccessorTest {
         var left = flat(true);
         var right = flat(true);
         assertNotSame(left.schema(), right.schema());
-        for (boolean generated : new boolean[] {false, true}) {
-          Object l = generated ? generated(left, 10, "l") : owned(left, 10, "l");
-          Object r = generated ? generated(right, 20, "r") : owned(right, 20, "r");
+        for (int representation = 0; representation < 3; representation++) {
+          Object l =
+              representation == 0
+                  ? generated(left, 10, "l")
+                  : representation == 1 ? owned(left, 10, "l") : slab(left, 10, "l");
+          Object r =
+              representation == 0
+                  ? generated(right, 20, "r")
+                  : representation == 1 ? owned(right, 20, "r") : slab(right, 20, "r");
           Accessor accessor = ((AbstractRow) l).accessor(I64);
           assertFalse(accessor.accepts(r));
           assertThrows(ContractViolation.class, () -> accessor.readLong(r));
@@ -159,7 +170,10 @@ class AccessorTest {
               batch(schema, 5L, 2.5, true, "ab😀"),
             };
         var plan = flat(true);
-        var protobuf = new Object[] {owned(plan, 5, "ab😀"), generated(plan, 5, "ab😀")};
+        var protobuf =
+            new Object[] {
+              owned(plan, 5, "ab😀"), generated(plan, 5, "ab😀"), slab(plan, 5, "ab😀")
+            };
         for (Object[] set : new Object[][] {rows, protobuf}) {
           boolean flat = set == protobuf;
           var root =
@@ -269,7 +283,10 @@ class AccessorTest {
             assertEquals(i, lengths.getCallTarget().call(row, 2));
           }
           var plan = flat(i % 2 == 0);
-          for (Object row : new Object[] {owned(plan, 1, texts[i]), generated(plan, 1, texts[i])}) {
+          for (Object row :
+              new Object[] {
+                owned(plan, 1, texts[i]), generated(plan, 1, texts[i]), slab(plan, 1, texts[i])
+              }) {
             assertEquals(utf16[i], ((AbstractRow) row).accessor(TEXT).length(row));
             assertEquals(utf16[i], lengths.getCallTarget().call(row, TEXT));
             assertEquals(0, ((AbstractRow) row).accessor(BLOB).length(row));
@@ -376,6 +393,7 @@ class AccessorTest {
         for (ProtoPlan p : new ProtoPlan[] {plan, unlaid}) {
           agree((AbstractRow) owned(p, 4, "t"));
           agree((AbstractRow) generated(p, 4, "t"));
+          agree((AbstractRow) slab(p, 4, "t"));
           agree(
               (AbstractRow)
                   p.newBuilder()

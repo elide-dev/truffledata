@@ -43,7 +43,7 @@ public abstract class GeneratedMessage extends AbstractRow implements ProtoAcces
     var field = plan.field(ordinal);
     Values.validate(field.contract(), value);
     if (value instanceof String text) ProtoPlan.validateString(text);
-    if (field.kind() == ProtoPlan.Kind.BYTES && !((DataArray) value).isBytes())
+    if (field.kind() == ProtoPlan.Kind.BYTES && !((OwnedArray) value).isBytes())
       throw new ContractViolation("Expected byte storage");
     var enumeration = field.enumType();
     if (enumeration != null && !enumeration.accepts(((Long) value).intValue()))

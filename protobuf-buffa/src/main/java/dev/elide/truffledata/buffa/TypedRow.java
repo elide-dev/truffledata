@@ -165,7 +165,7 @@ public abstract sealed class TypedRow extends AbstractRow implements ProtoAccess
     if (value instanceof TypedArray array) return array.size();
     if (value instanceof NativeRow.NativeArray array) return array.size();
     if (value instanceof BorrowedBytes bytes) return bytes.size();
-    if (value instanceof DataArray array) return array.size();
+    if (value instanceof OwnedArray array) return array.size();
     throw new ContractViolation("Expected array");
   }
 

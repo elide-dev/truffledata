@@ -5,7 +5,7 @@ cd "${TEST_SRCDIR}/${TEST_WORKSPACE}"
 runtime=$1
 binaries=(--binary "candidate=$PWD/$2")
 if [[ "$3" != "$2" ]]; then
-  binaries+=(--binary "baseline=$PWD/$3")
+  binaries+=(--binary "baseline=$PWD/$3" --engines "baseline=stock,generated-owned,native-view,native-eager")
 fi
 # java_binary launchers resolve their classpath through the enclosing test's runfiles.
 export JAVA_RUNFILES="${TEST_SRCDIR}"

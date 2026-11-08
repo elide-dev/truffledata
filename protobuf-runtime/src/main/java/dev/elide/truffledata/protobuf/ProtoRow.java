@@ -103,6 +103,16 @@ public final class ProtoRow extends AbstractRow implements ProtoAccess {
     return presence;
   }
 
+  /**
+   * A defensive copy of the preserved unknown wire fields of this record, in wire order. Includes
+   * unknown numbers, mismatched wire types, rejected closed-enum values and map entries, and
+   * unknown groups. Declared child messages expose their own unknown bytes. Bytes are not
+   * canonicalized: equality policies may parse these fields independently.
+   */
+  public byte[] unknownFieldBytes() {
+    return unknown().clone();
+  }
+
   byte[] unknown() {
     return wireState instanceof WidePresence wide ? wide.unknown : (byte[]) wireState;
   }
@@ -314,7 +324,7 @@ public final class ProtoRow extends AbstractRow implements ProtoAccess {
 
     private void validateType(ProtoPlan.FieldPlan field, Object value) {
       if (field.repeated()) {
-        DataArray items = (DataArray) value;
+        OwnedArray items = (OwnedArray) value;
         if (items.size() > plan.model.limits.maxCells())
           throw new ContractViolation("Repeated budget");
         Set<Object> keys = new HashSet<>();
@@ -331,10 +341,12 @@ public final class ProtoRow extends AbstractRow implements ProtoAccess {
       if (value instanceof String text) ProtoPlan.validateString(text);
       if (field.kind().message()) {
         if (!(value instanceof ProtoAccess row)
-            || !(row instanceof ProtoRow || row instanceof GeneratedMessage)
+            || !(row instanceof ProtoRow
+                || row instanceof GeneratedMessage
+                || row instanceof SlabRow)
             || row.plan() != plan.model.type(field.typeName()))
           throw new ContractViolation("Nested message plan mismatch");
-      } else if (field.kind() == ProtoPlan.Kind.BYTES && !((DataArray) value).isBytes()) {
+      } else if (field.kind() == ProtoPlan.Kind.BYTES && !((OwnedArray) value).isBytes()) {
         throw new ContractViolation("Protobuf bytes require compact binary storage");
       } else if (field.enumType() != null && !field.enumType().accepts(((Long) value).intValue())) {
         throw new ContractViolation("Unknown closed-enum value");
@@ -394,7 +406,7 @@ public final class ProtoRow extends AbstractRow implements ProtoAccess {
   }
 
   static boolean nonDefault(ProtoPlan.FieldPlan field, Object value) {
-    if (value instanceof DataArray array) return array.size() != 0;
+    if (value instanceof OwnedArray array) return array.size() != 0;
     if (value instanceof ExactNumber number && field.defaultValue() instanceof ExactNumber other)
       return number.decimal().compareTo(other.decimal()) != 0;
     return !value.equals(field.defaultValue());
@@ -431,7 +443,7 @@ public final class ProtoRow extends AbstractRow implements ProtoAccess {
 
     void value(Object value, int depth, int maxDepth) {
       if (value instanceof String s) bytes(2L * s.length());
-      else if (value instanceof DataArray array) {
+      else if (value instanceof OwnedArray array) {
         cells(array.size());
         if (!array.isBytes())
           for (int i = 0; i < array.size(); i++) value(array.get(i), depth, maxDepth);
@@ -439,6 +451,11 @@ public final class ProtoRow extends AbstractRow implements ProtoAccess {
         if (depth >= maxDepth) throw new ContractViolation("Protobuf nesting budget exceeded");
         cells(row.plan().size());
         bytes(row.unknown.length);
+        for (int i = 0; i < row.plan().size(); i++) value(row.get(i), depth + 1, maxDepth);
+      } else if (value instanceof SlabRow row) {
+        if (depth >= maxDepth) throw new ContractViolation("Protobuf nesting budget exceeded");
+        cells(row.plan().size());
+        bytes(row.unknownFieldBytes().length);
         for (int i = 0; i < row.plan().size(); i++) value(row.get(i), depth + 1, maxDepth);
       } else if (value instanceof ProtoRow row) {
         if (depth >= maxDepth) throw new ContractViolation("Protobuf nesting budget exceeded");

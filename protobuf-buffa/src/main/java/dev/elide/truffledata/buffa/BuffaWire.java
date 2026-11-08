@@ -7,6 +7,8 @@ import dev.elide.truffledata.buffa.generated.BuffaFFM;
 import dev.elide.truffledata.protobuf.ProtoPlan;
 import dev.elide.truffledata.protobuf.ProtoRow;
 import dev.elide.truffledata.protobuf.ProtoWire;
+import dev.elide.truffledata.protobuf.SlabLimits;
+import dev.elide.truffledata.protobuf.SlabMessage;
 import java.math.BigInteger;
 import java.nio.*;
 import java.nio.file.*;
@@ -49,6 +51,32 @@ public final class BuffaWire implements AutoCloseable {
     long compileView(WireInput schema);
 
     void releaseCompiled(long compiled);
+
+    long compileLayout(WireInput schema);
+
+    void releaseLayout(long compiled);
+
+    SlabMessage slab(
+        long compiled, WireInput input, ProtoPlan plan, SlabLimits limits, int capacity);
+
+    default SlabMessage slab(
+        long compiled, byte[] input, ProtoPlan plan, SlabLimits limits, int capacity) {
+      try (var nativeInput = allocate(input.length).put(input)) {
+        recordSlabInputCopy(input.length);
+        return slab(compiled, nativeInput, plan, limits, capacity);
+      }
+    }
+
+    /** Write into a caller-owned native arena. Negative results request that exact capacity. */
+    int writeSlab(Object compiled, WireInput input, WireInput output, SlabLimits limits);
+
+    default Object prepareSlab(long compiled) {
+      return Long.valueOf(compiled);
+    }
+
+    void recordSlabInputCopy(int bytes);
+
+    long copiedSlabInputBytes();
 
     /**
      * ABI 9: one owned native allocation holding the typed index and every message's field
@@ -116,7 +144,11 @@ public final class BuffaWire implements AutoCloseable {
   @TruffleBoundary
   public static BuffaWire open(Mode mode, @Nullable Path library) {
     Objects.requireNonNull(mode);
-    if (mode == Mode.JAVA) return new BuffaWire(null, Selected.JAVA);
+    if (mode == Mode.JAVA
+        || (mode == Mode.AUTO
+            && !ImageInfo.inImageCode()
+            && !Boolean.getBoolean("truffledata.buffa.jvmNative")))
+      return new BuffaWire(null, Selected.JAVA);
     if (ImageInfo.inImageCode()) {
       if (ImageSingletons.contains(NativeFactory.class))
         return new BuffaWire(
@@ -135,6 +167,12 @@ public final class BuffaWire implements AutoCloseable {
       throw new UnsupportedOperationException(
           "Buffa backend unavailable; enable the SVM Feature or supply a JVM library");
     return new BuffaWire(null, Selected.JAVA);
+  }
+
+  /** Cumulative heap input bytes copied by native slab decoding on this decoder. */
+  public long copiedSlabInputBytes() {
+    check();
+    return backend == null ? 0 : backend.copiedSlabInputBytes();
   }
 
   public Selected selected() {

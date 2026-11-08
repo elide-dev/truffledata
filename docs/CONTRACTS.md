@@ -222,6 +222,33 @@ byte[] wire = plan.encode(constructed);
 
 For runtime schemas, the `ProtoCompiler.compile` overload accepts a `FileDescriptorSet` and fully qualified message name, with the same language owner and budgets. `ProtoCompiler.bind` verifies the entire reachable graph once and enforces descriptor identity on subsequent snapshots. `ProtoCompiler.snapshot` is a convenient one-shot form; reuse a bound source for repeated ingestion. Schemas containing proto2 maps with closed-enum values use a preflighted serialization/decode compatibility path for source objects: protobuf-java `DynamicMessage` otherwise gives those unknown entries different semantics from wire parsing. This uncommon case incurs a temporary wire copy. Host construction accepts normalized TruffleData values. `uint64` and `fixed64` use `ExactNumber`, including small values; `Values.normalize(BigInteger)` constructs one. Builders are mutable host objects and must not be shared concurrently. Built rows are immutable snapshots, including binary payloads.
 
+`ProtoRow.unknownFieldBytes()` returns a defensive copy of that record's preserved unknown
+wire fields, including mismatched wire types, rejected closed-enum values and map entries,
+and unknown groups. Child records expose their own unknown fields. These bytes retain wire
+order (packed rejected enum values are re-encoded as unpacked fields); they are not a canonical
+equality or hash representation. Consumers can apply their own protobuf equality policy without
+re-encoding the declared fields, and mutating the returned array never changes the row.
+
+For a descriptor graph with Editions, extension ranges or MessageSet, bind an already resolved
+plan with `ProtoCompiler.bind(plan, descriptor, extensions)`. Supply the extension descriptors in
+plan ordinal order, after declared fields; extension names use their full name and JSON spelling
+`[full.name]`. Binding validates resolved presence, packed encoding, enum openness, defaults,
+oneofs and the reachable graph. Duplicate or unreachable extensions and incompatible plans fail
+at preparation. Snapshotting rejects a populated extension outside the supplied list with
+`UnsupportedOperationException`, rather than dropping it.
+
+`Source.ingestion()` reports `DIRECT`, `WIRE_NORMALIZED`, or `UNSUPPORTED` before any input is
+processed. Ordinary resolved Editions graphs and known/unknown MessageSet payloads use direct
+owned snapshots: MessageSet unknowns become the corresponding ordinary length-delimited unknown
+fields used by the explicit plan. Closed-enum maps retain the existing bounded wire-normalization
+path. A graph combining MessageSet and closed-enum maps currently reports `UNSUPPORTED`, because
+that fallback needs recursive MessageSet wire normalization; `snapshot` raises
+`UnsupportedOperationException` for this combination. Preflight checks depth, aggregate cells,
+string/payload bytes and unknown groups before fallback host sizing or serialization. The returned
+`ProtoRow` remains independent of host messages, builders and collections. `Source.snapshot` is
+stable while the separate `ProtoPlan.decodeSlab` API is introduced; the latter returns a durable
+slab and needs no native library.
+
 Read values using cached `DataLibrary` dispatch, as with other rows. `row.has(ordinal)` reports protobuf presence separately: explicit fields retain their set bit, implicit fields use non-default values, and repeated/map fields use non-emptiness. Absent scalar fields remain readable with declared defaults (including proto2 defaults); an absent message reads `Missing.INSTANCE`. Thus `DataLibrary.isPresent` describes readability, while `ProtoRow.has` describes protobuf presence. Closed-enum unknown numbers remain unknown wire fields; open-enum numbers are returned as signed INT32 values without losing unknown numbers. `FieldPlan.kind() == BYTES` and `DataArray.isBytes()` distinguish binary payloads from numeric repeated fields. Maps remain sequences of typed entry rows with last-key-wins decoding; map construction rejects duplicate keys. Nested message plans are available through `plan.nested(ordinal)`.
 
 Generic rows, builders and decoder states keep their first 64 protobuf presence bits
@@ -400,3 +427,13 @@ can be installed in a generic builder when they belong to the exact same model.
 Borrowed `TypedMessage.encode()` forwards validated binary wire bytes into an owned output
 array, preserving unknown fields. Text/JSON views encode their semantic snapshot. Both paths
 check the view's lifetime, including after owner closure.
+
+Durable array implementations can implement `OwnedArray`; `DataArray` remains the compact eager implementation. Ownership transfer rejects scoped elements nested inside an `OwnedArray`, and payload and constraint budgets traverse its elements. Slab repeated fields and bytes expose lazy `OwnedArray` values whose lifetime is that of the immutable owning slab. Consumers that need array elements should use this interface or interop instead of casting every array to `DataArray`.
+
+
+Durable arrays implement `OwnedArray`; `DataArray` is one implementation, while protobuf
+slabs supply lazy immutable arrays and byte spans. Owned normalization walks other
+implementations and rejects any nested scoped value, including a `BorrowedArray` hidden
+inside another durable-array wrapper. Payload and cell budgets traverse these arrays.
+A durable protobuf slab snapshot preserves identity and can be placed in owned rows,
+arrays or batches; scoped text/JSON results require detachment first.

@@ -23,6 +23,10 @@ public final class Values {
   }
 
   public static void requireInterop(Object value) {
+    if (value instanceof OwnedArray array && !(value instanceof DataArray)) {
+      requireOwnedArray(array, 0);
+      return;
+    }
     if (!(value instanceof String
         || value instanceof Long
         || value instanceof Double
@@ -37,6 +41,22 @@ public final class Values {
             "Scoped rows require an explicit snapshot before ownership transfer");
       throw new ContractViolation(
           "Unsupported value representation: " + value.getClass().getName());
+    }
+  }
+
+  // External immutable-array implementations are checked at ownership-transfer boundaries.
+  // DataArray already checks each element when it takes its defensive copy.
+  @TruffleBoundary
+  private static void requireOwnedArray(OwnedArray array, int depth) {
+    if (depth > 128 || array.size() < 0)
+      throw new ContractViolation("Array nesting or size budget");
+    for (int i = 0; i < array.size(); i++) {
+      Object value = array.get(i);
+      if (value instanceof OwnedArray nested && !(value instanceof DataArray))
+        requireOwnedArray(nested, depth + 1);
+      else requireInterop(value);
+      if (array.isBytes() && (!(value instanceof Long n) || n < 0 || n > 255))
+        throw new ContractViolation("Invalid unsigned byte element");
     }
   }
 
@@ -58,7 +78,7 @@ public final class Values {
             case BOOLEAN -> value instanceof Boolean;
             case STRING -> value instanceof String;
             case EXACT -> value instanceof ExactNumber;
-            case ARRAY -> value instanceof DataArray || value instanceof BorrowedArray;
+            case ARRAY -> value instanceof OwnedArray || value instanceof BorrowedArray;
             case RECORD -> value instanceof AbstractRow;
             case ANY -> true;
           };
@@ -94,7 +114,7 @@ public final class Values {
     var length = facts.length();
     if (length != null) {
       int size =
-          value instanceof DataArray a
+          value instanceof OwnedArray a
               ? a.size()
               : value instanceof BorrowedArray a
                   ? a.size()
@@ -103,7 +123,7 @@ public final class Values {
     }
     var element = facts.element();
     if (element != null
-        && value instanceof DataArray array
+        && value instanceof OwnedArray array
         && !(depth < 128 && array.isBytes() && acceptsUnsignedBytes(element)))
       validateElements(element, array, depth);
     if (element != null && value instanceof BorrowedArray array) {
@@ -122,7 +142,7 @@ public final class Values {
   // Variable-size recursive walks must not expand into an unbounded guest compilation graph.
   // Scalar validation and the compact-byte fast path remain inline; no data is copied here.
   @TruffleBoundary
-  private static void validateElements(Field element, DataArray array, int depth) {
+  private static void validateElements(Field element, OwnedArray array, int depth) {
     for (int i = 0; i < array.size(); i++) validate(element, array.get(i), depth + 1);
   }
 
