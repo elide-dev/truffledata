@@ -107,3 +107,22 @@ The initial image is 43,978,864 bytes versus 43,126,896 baseline (+1.98%). Both
 preserved images remain ignored. These are x86 SVM timings; final shared JVM and
 x86/Arm native acceptance, including cold/warm publication races, is separate.
 
+
+## Handle-forwarding refinement checkpoint
+
+Separate production commit `e4cec9f` forwards the already decoded handle into the
+synchronized row/text/blob miss helpers and lazy realization. Acquire/release
+publication, synchronized rechecks, validation, and the warm-hit branch remain
+unchanged. An independent review verified every forwarded handle uses the same
+immutable-slab offset as the removed reload. The initial `f045f5c` image remains
+preserved; no initial measurements are silently reassigned to this refinement.
+
+All seven correctness/allocation/native targets pass again in
+`4902bb19-0778-4e32-96cc-4a4fee73f708`, including 132 consumer native cells and the
+new shared `TypedAcceptance` cold/warm races on native-backed and Java-backed
+JVM decoders in strict and non-strict modes. Scalar allocation remains 168/136 B,
+publication 112 B (64 B array + 48 B owner), compiled reads 0.000044/0.000556 B.
+[Refined source/image provenance](refined-candidate-provenance.json) and
+[validation logs](correctness/4902bb19/) are preserved. Final x86/Arm acceptance
+and combined method coverage remain the integration lane's responsibility.
+The refined image requires its own paired SVM measurements before admission.
