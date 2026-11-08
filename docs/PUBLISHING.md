@@ -36,7 +36,7 @@ bazel build //tools/release:publications --//tools/release:version=0.9.0
 tools/release/publish.sh 0.9.0
 ```
 
-The staging command builds the prebuilt natives of all three platforms (Linux amd64 and arm64 on BuildBuddy RBE, macOS locally, so run it on an Apple silicon Mac; see [Prebuilt natives](#prebuilt-natives)), gates them with `tools/release/check_natives.py`, and prints a unique directory under `build/release-repo.*`; the collected per-platform build outputs and member manifests stay beside it in `build/release-repo.*.natives`. Each library artifact includes its binary jar (including generated Truffle implementations), source jar, POM, and MD5/SHA-1/SHA-256/SHA-512 checksums. Source jars come from the library's JavaInfo, rather than an independently maintained source list. The default Bazel version is `0.9.0-SNAPSHOT` for checks; the release script requires an explicit immutable version and refuses snapshots.
+The staging command builds the prebuilt natives of all three platforms (Linux amd64 and arm64 on BuildBuddy RBE, macOS locally, so run it on an Apple silicon Mac; see [Prebuilt natives](#prebuilt-natives)), gates them with `tools/release/check_natives.py`, and prints a unique directory under `build/release-repo.*`; the collected per-platform build outputs and member manifests stay beside it in `build/release-repo.*.natives`. Each library artifact includes its binary jar (including generated Truffle implementations), source jar, POM, and MD5/SHA-1/SHA-256/SHA-512 checksums. Source jars come from the library's JavaInfo, rather than an independently maintained source list. The default Bazel version is `0.10.0-SNAPSHOT` for checks; the release script requires an explicit immutable version and refuses snapshots.
 
 ## Upload
 
