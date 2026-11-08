@@ -305,11 +305,20 @@ The same generated class supports static storage with a language owner and batch
 
 `ProtoWire.decode(bytes, limits, maxDepth, maxWireBytes)` returns an ordered `DataArray` of rows with `number`, `wireType`, and `value`. Duplicate fields stay separate. Varints and fixed-width values expose raw unsigned numeric bits, length-delimited fields remain compact bytes, and groups contain nested wire rows. No schema means no reliable field names, declared signedness, defaults, presence discipline, or distinction between strings, bytes, packed arrays, and embedded messages. Text formats with named fields require a schema.
 
-The direct codec is Java code suitable for JVM and Native Image execution. Buffa/Myna is not a bundled backend. A future optional native decoder should consume the same generated contracts, cross the ABI once per message/batch, and materialize the same native-row semantics. Its ownership contract must keep borrowed Buffa views alive until consumption completes; guest reads must not make a native call per field. Myna can generate direct Substrate VM C bindings and JVM FFM bindings, but those crossings, lifetimes, and platform artifacts need their own tests and measurements before claiming a performance improvement. The current Java path provides the differential oracle and allocation baselines for that experiment.
+The Java codecs support JVM and Native Image execution without a native library. The optional
+`truffledata-buffa` module supplies the native backend and platform artifacts through Myna
+bindings. Binary `BuffaPlan.decode` returns a durable owning `SlabMessage`; `newSession().decode`
+provides explicit scoped borrows with epoch checks and durable `retain()`. Guest field reads
+load the slab and do not cross the native ABI. Generated contracts use a specialized Java slab
+producer on the JVM, including eligible lazy selections. Runtime plans and other selected
+views use the table producer.
 
-
-SVM is the primary target for an optional Myna backend: native parser code must be statically linked, with direct generated C bindings and no runtime shared-library discovery. JVM support may use Myna's JVM binding route where the runtime/platform supports it. Backend selection must retain the Java codec when native support is absent or disabled on either runtime. A malformed input or contract failure must propagate, never trigger a retry through a more permissive parser. Native enablement requires differential tests and allocation/ownership checks on JVM and SVM, including an explicit Java-only fallback run. These are requirements for a future backend, not capabilities of a bundled Buffa implementation today.
-
+On Native Image, Buffa links statically and uses direct generated C bindings. Explicit JVM native
+selection uses FFM; JVM AUTO defaults to Java unless native selection is requested. Missing native
+support can select the Java backend during initialization, but malformed input and contract
+failures never trigger a parser fallback. Owning, scoped, native-free, JVM and Native Image
+acceptance suites qualify these routes. Producer selection, ABI/platform requirements and current
+performance limitations are documented in [BUFFA.md](BUFFA.md) and [SLAB.md](SLAB.md).
 
 ### Descriptor-free text input
 
@@ -445,3 +454,11 @@ implementations and rejects any nested scoped value, including a `BorrowedArray`
 inside another durable-array wrapper. Payload and cell budgets traverse these arrays.
 A durable protobuf slab snapshot preserves identity and can be placed in owned rows,
 arrays or batches; scoped text/JSON results require detachment first.
+
+## Compact JSON tapes and explicit Myna interchange
+
+JSON generic decodes publish a validated compact word tape only after the complete input passes UTF-8, grammar, decoded-key uniqueness and configured limits. Native words retain exact number tokens and string source spans; escaped strings live in owned decoded storage. A retained owner checks confinement and closure. A borrowed session/stream view expires on the next operation, and an immutable snapshot owns its copied words/text. Directory hints verify the current decoded key before using a cached rank; a missing/stale hint uses checked lookup. Directoryless sink tapes retain linear member lookup and acquire directories transactionally when retained.
+
+Myna ABI4 is an explicit interchange surface. `TapeOwner.toMyna()` (including retained JSON messages and snapshots) returns independent heap storage. Native `td_json_result_myna` accepts a live compact result and creates an owned ABI4 descriptor with its own input copy; callers release it with `td_json_release`. The converted result can outlive its source. Neither conversion changes the source representation or its lifetime. JSON's hot readers and text transcoder do not require the retired Myna Rust bridge.
+
+Known scalar schemas write fixed typed slots with exact integer/float bits, presence/null masks, source tokens and checked scalar constraints. Flat scalar plans use structural stage2 with immutable schema-key matching. Nested/repeated plans retain their On-Demand slot writer and contiguous child-record/element layout. A malformed input or contract violation publishes no result; neither path falls back to a more permissive decoder after failure.

@@ -35,7 +35,7 @@ enum td_json_status {
 // are set. Exclusive with TD_JSON_WANT_TEXT.
 #define TD_JSON_VALIDATE_ONLY 16u
 
-// ABI 8: every decoded result publishes td_tape_view (TapeView in json.seam).
+// ABI 10: every decoded result publishes td_tape_view (TapeView in json.seam).
 // Spans and key flags are embedded in words; text_table has one entry per word,
 // with zero entries for second words. JsonLimitsStruct.flags is reserved and must be zero.
 
@@ -47,7 +47,7 @@ enum td_json_status {
 // result) or a live `output` is TD_JSON_ARGUMENT.
 
 // Sessions (td_json_session_*). A session is a thread-confined decode context: one simdjson
-// On-Demand parser, a padded input buffer and a block arena reused across documents. Callers
+// stage1 structural parser, a padded input buffer and a block arena reused across documents. Callers
 // serialize every call on one session. session_create copies JsonLimitsStruct (max_depth ≤ 128)
 // and returns null on invalid limits or allocation failure.
 // session_decode copies `data` into the session and writes a *borrowed* JsonResult: owner is
@@ -79,11 +79,12 @@ enum td_json_status {
 // (NDJSON, JSON Lines, concatenated JSON) decoded one at a time into a session, with the carry-over
 // contract of td_yaml_stream_*. stream_create(session, max_document_bytes, batch_bytes) borrows the
 // session (which must outlive the stream) and returns null when max_document_bytes is 0 or above
-// UINT32_MAX / 2, batch_bytes (simdjson's iterate_many batch) is below max_document_bytes or above
+// UINT32_MAX / 2, batch_bytes (the stage1 batch limit) is below max_document_bytes or above
 // UINT32_MAX, or allocation fails. The carry-over buffer holds at most 2 × max_document_bytes.
 // stream_feed copies up to `length` bytes and returns how many it accepted: fewer means the buffer
 // is full or still being read; call stream_next until TD_JSON_STREAM_EMPTY, then feed the rest. A
 // finished or failed stream accepts nothing. stream_finish marks the end of input. stream_next
+// accepts only TD_JSON_WANT_DIRECTORIES: set it for borrowed by-key reads, omit it for sinks. It
 // writes the next document as a borrowed result (as session_decode does: owner null, valid until
 // the next stream_next/stream_skip or any call on the session; feeding does not invalidate it; no
 // text arena) and returns TD_JSON_OK, TD_JSON_STREAM_EMPTY (no complete document buffered yet, or

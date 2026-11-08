@@ -189,24 +189,24 @@ public:
   // A stream may test its previous structural extent only inside existing capacity. This
   // prevents an incorrect extent hint from allocating or exhausting an otherwise valid root's
   // index budget before the grammar rejects the hint and retries the exact extent.
-  bool can_decode_streamed(size_t length, uint32_t count) const {
+  bool can_decode_streamed(size_t length, uint32_t count, bool directories = false) const {
     return writer_ && input_capacity_ <= retained_input_limit
         && length <= input_capacity_ && simdjson::SIMDJSON_PADDING <= input_capacity_ - length
-        && writer_->has_structural_capacity(count, length);
+        && writer_->has_structural_capacity(count, length, directories);
   }
 
   // A complete root from the stream's already-validated stage-1 index. Its bytes are copied
   // before emission, so borrowed and retained results never reference the carry-over buffer.
   // `origin` rebases the batch's structural offsets onto this document's retained input.
   document_view decode_streamed(const char* data, size_t length, const uint32_t* indexes,
-                                 uint32_t count, uint32_t origin) {
+                                 uint32_t count, uint32_t origin, bool directories = false) {
     recycle();
     if (length > UINT32_MAX || length > storage_.input_bytes) throw std::length_error("JSON input limit");
     reserve_input(length);
     std::memcpy(input_, data, length);
     std::memset(input_ + length, 0, simdjson::SIMDJSON_PADDING);
     input_length_ = length;
-    return walk_indexed(length, false, false, indexes, count, origin);
+    return walk_indexed(length, false, directories, indexes, count, origin);
   }
 
   // Writes the live document's text arena (Task D2, text_arena.h) into `out`; the table (one entry

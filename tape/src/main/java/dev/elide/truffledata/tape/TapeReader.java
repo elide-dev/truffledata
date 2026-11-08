@@ -25,6 +25,14 @@ public interface TapeReader extends TapeLexical {
   }
   byte textByte(boolean owned, long offset);
   long textWord(boolean owned, long offset, int length);
+  /** Copies a validated text extent into caller-owned storage without exposing native memory. */
+  default void copyText(boolean owned, long offset, byte[] output, int at, int length) {
+    long size = owned ? poolSize() : inputSize();
+    if (offset < 0 || length < 0 || offset > size - length
+        || at < 0 || at > output.length - length) throw new IndexOutOfBoundsException("Tape text copy");
+    for (int i = 0; i < length; i++) output[at + i] = textByte(owned, offset + i);
+  }
+
   long directoryEntry(long index);
   int metadata(long index);
 
@@ -128,10 +136,14 @@ public interface TapeReader extends TapeLexical {
   }
   @Override default long span(long node) {
     long w = word(node);
+    return rawSpan(w, (kind(w) == 6 || kind(w) == 7) && (w & WIDE) != 0 ? word(node + 1) : 0, flags());
+  }
+  /** Lexical extent from an already loaded compact header and its text payload, if any. */
+  static long rawSpan(long w, long second, int flags) {
     int k = kind(w);
     if (k == 7 || k == 6) {
-      if ((w & WIDE) != 0) return word(node + 1);
-      return k == 7 && (flags() & 8) == 0 ? ((low(w) - 1) << 32) | (field(w) + 2L) : (low(w) << 32) | field(w);
+      if ((w & WIDE) != 0) return second;
+      return k == 7 && (flags & 8) == 0 ? ((low(w) - 1) << 32) | (field(w) + 2L) : (low(w) << 32) | field(w);
     }
     return k <= 5 ? (low(w) << 32) | field(w) : 0;
   }

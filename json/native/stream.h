@@ -87,7 +87,7 @@ class stream final {
   // Decodes the next complete document into the session (borrowed: valid until the next call on
   // this stream or the session). Returns status_ok, status_stream_empty (more input needed, or the
   // finished stream is exhausted), status_stream_truncated, or the failing status.
-  int32_t next(session::document_view& out) noexcept {
+  int32_t next(session::document_view& out, bool directories = false) noexcept {
     for (;;) {
       if (failed_) return failed_;
       if (!active_) {
@@ -116,10 +116,10 @@ class stream final {
           size_t candidate_end = region_start_ + indexes[candidate - 1] + 1;
           if (data_[candidate_end - 1] == (token == '{' ? '}' : ']')
               && candidate_end - at <= max_document_
-              && session_.can_decode_streamed(candidate_end - at, previous_count)) {
+              && session_.can_decode_streamed(candidate_end - at, previous_count, directories)) {
             try {
               out = session_.decode_streamed(data_ + at, candidate_end - at, indexes + first,
-                                             previous_count, indexes[first]);
+                                             previous_count, indexes[first], directories);
               end = candidate_end; next = candidate; decoded = true;
             } catch (...) {
               hinted_error = current_exception_status();
@@ -155,7 +155,7 @@ class stream final {
       }
       try {
         if (!decoded)
-          out = session_.decode_streamed(data_ + at, end - at, indexes + first, next - first, indexes[first]);
+          out = session_.decode_streamed(data_ + at, end - at, indexes + first, next - first, indexes[first], directories);
       } catch (...) {
         int32_t status = current_exception_status();
         abandon(at);

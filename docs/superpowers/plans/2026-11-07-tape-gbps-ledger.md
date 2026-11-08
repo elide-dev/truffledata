@@ -100,3 +100,7 @@ Task5 retirement: json/native/bridge is removed after its last SVM caller was re
 Cargo.lock and Cargo.Bazel.lock drop the unused Myna Rust text bridge and its exclusive transitive
 dependencies (Cargo offline resolution and Bazel repin442d1633). JSON/YAML use the shared C++
 simdutf transcoder; explicit Java/C Myna interchange remains. Generated bindings still use Myna.
+
+Task5 upstream audit: pinned Myna0.13.0 supplies the earlier YAML nonfinite/REF requests (#52/#53), ABI4 directories (#45), and whole-tape text export (#48), but not the new compact-ABI, fused-duplicate option or compact-text-export requests named M6–M8 in this plan. Exact drafts and source/API evidence are in `2026-11-07-myna-upstream-drafts.md`. They remain unfiled by coordinator instruction; none blocks TruffleData because ABI4 conversion and compact text export are implemented. No upstream request number is invented or marked resolved.
+
+Task3 reader final graph checkpoint: a0c08060 passes all24 JSON Native Image compilation cells and nine allocation cells. Retained interop1971/1915 and snapshots1961/1905 nodes (first/warm), with1loop,0calls,0allocations, clear the original2000limit. The subsequent generic lifetime-check fix is checkpoint65704aa and still needs its dedicated native acceptance recapture. Final image pairs/coverage/release gates remain open in the superseding producer ledger.

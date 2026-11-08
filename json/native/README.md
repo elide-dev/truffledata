@@ -1,12 +1,12 @@
 # Native JSON decoder
 
 The C++ decoder runs its checked stage2 grammar over simdjson 5.1.1's stage1 structural index into the compact tape, without an intermediate DOM. Myna ABI v4 is available on demand for interchange. Typed plans write fixed scalar
-slots instead. Both sit behind one versioned C ABI, `json.seam` (application ABI 9),
+slots instead. Both sit behind one versioned C ABI, `json.seam` (application ABI 10),
 which generates the direct SVM `@CFunction` bindings and JVM FFM handles. The Java
 owners, guest interop, export and snapshot contracts are described in
 [docs/JSON.md](../../docs/JSON.md).
 
-## Compact tape (ABI 9)
+## Compact tape (ABI 10)
 
 `decoder.h` drives the structural walk into the compact tape of `//tape/native:ctape.h` (plan
 `docs/superpowers/plans/2026-11-07-tape-gbps.md` §3): one 64-bit word per value, a second
@@ -86,14 +86,14 @@ on the 200-document corpus, including duplicate keys, malformed input and alloca
 
 ## Sessions
 
-`session.h` keeps one On-Demand parser, a padded input buffer and a block arena per
+`session.h` keeps one stage1 structural parser, a padded input buffer and a block arena per
 thread-confined session, so a small document costs no native allocation in steady
 state (`//json/native:api_test` decodes 10,000 documents with zero index
 allocations after warm-up). `td_json_session_decode` copies the input into the
 session and writes a *borrowed* `JsonResult` (null owner) that stays valid until
 the next call on the session. `td_json_session_retain` moves the document's arena
 blocks, large allocations and input buffer into a new owner in O(blocks): node
-pointers are unchanged and nothing is copied. `td_json_session_reset` is an O(1)
+pointers and input bytes are unchanged. A directoryless document first builds its directories by a checked rescan; allocation failure leaves the borrow live and permits retry. `td_json_session_reset` is an O(1)
 native leaf that only invalidates the borrow; the next decode recycles storage,
 keeps at most four arena blocks, and drops parsers and input buffers that grew past
 1 MiB. `td_json_session_decode_small` is the same decode bounded by
@@ -118,13 +118,11 @@ copying.
 concatenated JSON) one at a time into a session, with the carry-over contract of YAML's
 `td_yaml_stream_*`. `stream_feed` copies into a carry-over buffer of at most
 `2 × max_document_bytes` and returns the bytes it accepted (fewer: drain with `stream_next`, then
-feed the rest). Each region of buffered bytes runs through the stream's own simdjson parser with
-`iterate_many` (batch at least the maximum document); when its documents are delivered, its
-`truncated_bytes()` tail moves to the front of the buffer. Until `stream_finish`, a region never ends
+feed the rest). Each region runs through the stream's own stage1 parser in partial or final streaming mode (batch at least the maximum document). Structural sentinels identify complete roots and the incomplete tail; delivered bytes are dropped and the tail moves to the front. Stage2 validates each root before publication. Until `stream_finish`, a region never ends
 inside a UTF-8 sequence and a root number or literal touching the end is held back. Each document's
 bytes are copied into the session's input buffer, which becomes its region, so a borrowed document
 survives later feeds and `session_retain` works as for `session_decode`. Only whitespace separates
-documents (simdjson's comma format accepts doubled and missing commas); a BOM is skipped only at the
+documents; a BOM is skipped only at the
 start of the stream. Document-level errors can be skipped with `stream_skip`; stage-1 errors
 (invalid UTF-8, raw control bytes) fail a whole batch and cannot.
 

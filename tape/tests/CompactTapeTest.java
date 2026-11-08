@@ -138,6 +138,43 @@ class CompactTapeTest {
     }
   }
 
+  @Test void bulkTextCopiesOnlyTheRequestedExtent() {
+    HeapTape heap = new HeapTape(new long[]{0}, "escaped text".getBytes(StandardCharsets.UTF_8),
+        "prefix\"plain text\"suffix".getBytes(StandardCharsets.UTF_8), new long[0], new int[0], 0);
+    TapeReader fallback = new TapeReader() {
+      @Override public long nodeCount() { return heap.nodeCount(); }
+      @Override public long poolSize() { return heap.poolSize(); }
+      @Override public long inputSize() { return heap.inputSize(); }
+      @Override public long directorySize() { return 0; }
+      @Override public int flags() { return 0; }
+      @Override public long readWord(long i) { return heap.readWord(i); }
+      @Override public byte textByte(boolean owned, long i) { return heap.textByte(owned, i); }
+      @Override public long textWord(boolean owned, long i, int n) { return heap.textWord(owned, i, n); }
+      @Override public long directoryEntry(long i) { throw new AssertionError(); }
+      @Override public int metadata(long i) { return 0; }
+    };
+    for (TapeReader reader : new TapeReader[]{heap, fallback}) {
+      for (boolean owned : new boolean[]{false, true}) {
+        int size = Math.toIntExact(owned ? reader.poolSize() : reader.inputSize());
+        for (int offset = 0; offset <= size; offset++) {
+          for (int length = 0; length <= size - offset; length++) {
+            byte[] output = new byte[length + 2];
+            java.util.Arrays.fill(output, (byte) 123);
+            reader.copyText(owned, offset, output, 1, length);
+            assertEquals(123, output[0]);
+            assertEquals(123, output[output.length - 1]);
+            for (int i = 0; i < length; i++) assertEquals(reader.textByte(owned, offset + i), output[i + 1]);
+          }
+        }
+        assertThrows(IndexOutOfBoundsException.class, () -> reader.copyText(owned, -1, new byte[1], 0, 1));
+        assertThrows(IndexOutOfBoundsException.class, () -> reader.copyText(owned, size, new byte[1], 0, 1));
+        assertThrows(IndexOutOfBoundsException.class, () -> reader.copyText(owned, 0, new byte[1], -1, 1));
+        assertThrows(IndexOutOfBoundsException.class, () -> reader.copyText(owned, 0, new byte[1], 1, 1));
+        assertThrows(IndexOutOfBoundsException.class, () -> reader.copyText(owned, 0, new byte[1], 0, -1));
+      }
+    }
+  }
+
   @Test void readsWideScalarsAndEscapedStrings() {
     Owner owner = document();
     assertEquals(2, owner.root().size());

@@ -54,6 +54,21 @@ public final class SvmTape implements TapeReader {
     if (offset < 0 || offset >= (owned ? poolBytes : inputBytes)) throw new IndexOutOfBoundsException("Tape text");
     return (owned ? pool : input).readByte(WordFactory.signed(offset));
   }
+  @Override public void copyText(boolean owned, long offset, byte[] output, int at, int length) {
+    copyText(owned ? pool : input, owned ? poolBytes : inputBytes, offset, output, at, length);
+  }
+
+  /** Checked word-at-a-time copy; no pinning object or temporary native/Java buffer is needed. */
+  public static void copyText(Pointer data, long size, long offset, byte[] output, int at, int length) {
+    if (offset < 0 || length < 0 || offset > size - length
+        || at < 0 || at > output.length - length) throw new IndexOutOfBoundsException("Tape text copy");
+    int i = 0;
+    for (; i <= length - 8; i += 8)
+      com.oracle.truffle.api.memory.ByteArraySupport.littleEndian().putLong(
+          output, at + i, data.readLong(WordFactory.signed(offset + i)));
+    for (; i < length; i++) output[at + i] = data.readByte(WordFactory.signed(offset + i));
+  }
+
   @Override public long textWord(boolean owned, long offset, int length) {
     if (length == 0) return 0;
     long size = owned ? poolBytes : inputBytes;

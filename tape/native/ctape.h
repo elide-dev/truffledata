@@ -724,10 +724,11 @@ template<bool Structural = false> class basic_ctape_writer final {
 
   // A speculative stream walk may not grow storage. Pool/pending checks deliberately retain
   // their complete worst-case bounds even though normal reservations are now smaller.
-  bool has_structural_capacity(size_t count, size_t input_bytes) const {
+  bool has_structural_capacity(size_t count, size_t input_bytes, bool directories = false) const {
     return count <= SIZE_MAX - 129 && input_bytes <= SIZE_MAX - 64
         && words_.capacity() >= structural_words(count)
-        && pool_.capacity() >= input_bytes + 64 && pending_.capacity() >= count / 2 + 1;
+        && pool_.capacity() >= input_bytes + 64 && pending_.capacity() >= count / 2 + 1
+        && (!directories || directory_.capacity() >= count / 2 + 1);
   }
 
   // Reuse the arrays between documents; the arena remains live until retain or capacity release.

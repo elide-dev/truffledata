@@ -725,6 +725,23 @@ public final class SvmAcceptance {
     dev.elide.truffledata.json.JsonMessage kept;
     var session = dev.elide.truffledata.json.JsonSession.open();
     try {
+
+      String indexed = "{\"a\":1,\"b\":2,\"c\":3,\"d\":4,\"e\":5,\"f\":6,\"g\":7,\"h\":8,\"nested\":{\"z\":9,\"y\":10}}\n";
+      byte[] alternating = indexed.repeat(16).getBytes(StandardCharsets.UTF_8);
+      try (var stream = session.stream(new dev.elide.truffledata.json.JsonStreamOptions(1024, 1024))) {
+        require(stream.feed(alternating) == alternating.length);
+        stream.finish();
+        for (int i = 0; i < 8; i++) {
+          var sink = new dev.elide.truffledata.tape.JavaSink();
+          require(stream.next(sink));
+          require(Long.valueOf(8).equals(((java.util.Map<?, ?>) java.util.Objects.requireNonNull(sink.result())).get("h")));
+          var borrowed = java.util.Objects.requireNonNull(stream.next());
+          require(borrowed.snapshot().directories() == 2);
+          require(borrowed.member("nested").member("z").longValue() == 9);
+          require(borrowed.member("a").longValue() == 1);
+        }
+        require(stream.next() == null && stream.documents() == 16);
+      }
       for (int chunk : new int[] {1, 13, 4096}) {
         try (var stream = session.stream(options)) {
           long sum = 0;

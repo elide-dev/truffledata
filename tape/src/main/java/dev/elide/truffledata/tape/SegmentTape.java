@@ -36,6 +36,9 @@ public final class SegmentTape implements TapeReader {
   }
   @Override public long readWord(long index) { return words.get(ValueLayout.JAVA_LONG, Math.multiplyExact(index, 8)); }
   @Override public byte textByte(boolean owned, long offset) { return (owned ? pool : input).get(ValueLayout.JAVA_BYTE, offset); }
+  @Override public void copyText(boolean owned, long offset, byte[] output, int at, int length) {
+    MemorySegment.copy(owned ? pool : input, ValueLayout.JAVA_BYTE, offset, output, at, length);
+  }
   @Override public long textWord(boolean owned, long offset, int length) {
     if (length == 0) return 0;
     MemorySegment bytes = owned ? pool : input;

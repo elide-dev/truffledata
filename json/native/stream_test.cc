@@ -124,7 +124,7 @@ std::vector<uint64_t> run_stream(void* stream, const std::string& input, size_t 
   size_t at = 0;
   auto drain = [&]() {
     for (;;) {
-      int32_t status = td_json_stream_next(stream, &r);
+      int32_t status = td_json_stream_next(stream, 0, &r);
       if (status == TD_JSON_OK) {
         out.push_back(digest(r));
         continue;
@@ -187,7 +187,7 @@ struct harness {
   uint64_t feed(const std::string& bytes) {
     return td_json_stream_feed(stream, reinterpret_cast<const uint8_t*>(bytes.data()), bytes.size());
   }
-  int32_t next() { return td_json_stream_next(stream, &result); }
+  int32_t next() { return td_json_stream_next(stream, 0, &result); }
   const td_tape_view& tape() const { return *static_cast<const td_tape_view*>(result.view); }
   std::string root_text() { return std::string(c::text(tape(), 0)); }
   uint64_t root_payload() { return tape().words[1]; }
@@ -202,6 +202,33 @@ struct harness {
     }
   }
 };
+
+
+// Access intent is per document, including speculative structural extents on a warm session.
+// A rejected flag must not consume input or disturb the previously selected storage mode.
+void directory_modes() {
+  const std::string doc = R"({"a":1,"b":2,"c":3,"d":4,"e":5,"f":6,"g":7,"h":8,"nested":{"z":9,"y":10}})";
+  std::string batch;
+  for (int i = 0; i < 200; ++i) batch += doc + '\n';
+  harness h;
+  REQUIRE(h.feed(batch) == batch.size());
+  td_json_stream_finish(h.stream);
+  void* expected_session = td_json_session_create(&limits);
+  for (int i = 0; i < 200; ++i) {
+    JsonResult invalid{};
+    REQUIRE(td_json_stream_next(h.stream, TD_JSON_WANT_TEXT, &invalid) == TD_JSON_ARGUMENT);
+    REQUIRE(invalid.view == nullptr && invalid.owner == nullptr);
+    const uint32_t flags = i % 2 ? TD_JSON_WANT_DIRECTORIES : 0;
+    REQUIRE(td_json_stream_next(h.stream, flags, &h.result) == TD_JSON_OK);
+    REQUIRE((h.tape().directory_count != 0) == (flags != 0));
+    JsonResult expected{};
+    REQUIRE(td_json_session_decode(expected_session, reinterpret_cast<const uint8_t*>(doc.data()),
+                                   doc.size(), flags, nullptr, 0, &expected) == TD_JSON_OK);
+    REQUIRE(digest(h.result) == digest(expected));
+  }
+  REQUIRE(td_json_stream_next(h.stream, TD_JSON_WANT_DIRECTORIES, &h.result) == TD_JSON_STREAM_EMPTY);
+  td_json_session_release(expected_session);
+}
 
 void truncation_and_scalars() {
   {
@@ -332,9 +359,9 @@ void errors_and_skip() {
     td_json_stream_feed(stream, reinterpret_cast<const uint8_t*>("[[[1]]] [[1]]"), 13);
     td_json_stream_finish(stream);
     JsonResult r{};
-    REQUIRE(td_json_stream_next(stream, &r) == TD_JSON_LIMIT);
+    REQUIRE(td_json_stream_next(stream, 0, &r) == TD_JSON_LIMIT);
     REQUIRE(td_json_stream_skip(stream) == TD_JSON_OK);
-    REQUIRE(td_json_stream_next(stream, &r) == TD_JSON_OK);
+    REQUIRE(td_json_stream_next(stream, 0, &r) == TD_JSON_OK);
     td_json_stream_release(stream);
     td_json_session_release(s);
   }
@@ -347,8 +374,8 @@ void errors_and_skip() {
     REQUIRE(td_json_stream_create(nullptr, 64, 64) == nullptr);
     void* stream = td_json_stream_create(s, 64, 64);
     JsonResult misaligned[2]{};
-    REQUIRE(td_json_stream_next(stream, reinterpret_cast<uint8_t*>(misaligned) + 1) == TD_JSON_ARGUMENT);
-    REQUIRE(td_json_stream_next(nullptr, misaligned) == TD_JSON_ARGUMENT);
+    REQUIRE(td_json_stream_next(stream, 0, reinterpret_cast<uint8_t*>(misaligned) + 1) == TD_JSON_ARGUMENT);
+    REQUIRE(td_json_stream_next(nullptr, 0, misaligned) == TD_JSON_ARGUMENT);
     REQUIRE(td_json_stream_feed(stream, nullptr, 4) == 0);
     REQUIRE(td_json_stream_skip(nullptr) == TD_JSON_ARGUMENT);
     REQUIRE(td_json_stream_truncated_bytes(nullptr) == 0);
@@ -507,6 +534,7 @@ void allocations() {
 
 int main() {
   try {
+    directory_modes();
     truncation_and_scalars();
     errors_and_skip();
     structural_extent_hints();

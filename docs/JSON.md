@@ -1,4 +1,4 @@
-# Native JSON backend (unreleased)
+# Native JSON backend
 
 The `//json` module parses general JSON with a checked stage2 walk over simdjson 5.1.1's structural index directly
 into a compact word tape, with no DOM, Serde value or Java object tree in
@@ -170,8 +170,7 @@ try (JsonSession session = JsonSession.open();
 }
 ```
 
-- The carry-over buffer holds at most `2 × maxDocumentBytes`; `batchBytes` (simdjson's
-  `iterate_many` batch) must be at least `maxDocumentBytes`. `feed` accepts nothing while
+- The carry-over buffer holds at most `2 × maxDocumentBytes`; `batchBytes` (the stage1 streaming batch limit) must be at least `maxDocumentBytes`. `feed` accepts nothing while
   buffered documents are still being read: drain with `next` until it returns `false` or
   `null`, then feed the rest.
 - `next(TapeSink)` exports a document; `next()` lends its root until the next call on the

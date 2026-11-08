@@ -214,10 +214,16 @@ final class JvmSessionBackend extends JsonSession.Backend {
   @Override
   protected int streamNext(long stream) {
     try {
-      return calls.stream_next(MemorySegment.ofAddress(stream), result);
+      return calls.stream_next(MemorySegment.ofAddress(stream), directoryFlag(), result);
     } catch (Throwable failure) {
       throw JsonJvm.callFailure(failure);
     }
+  }
+
+  @Override
+  protected int streamNext(long stream, boolean byKey) {
+    directories(byKey);
+    return streamNext(stream);
   }
 
   @Override

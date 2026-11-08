@@ -329,13 +329,14 @@ extern "C" void td_json_stream_finish(void* handle) {
   if (handle) static_cast<truffledata::json::stream*>(handle)->finish();
 }
 
-extern "C" int32_t td_json_stream_next(void* handle, void* output) {
+extern "C" int32_t td_json_stream_next(void* handle, uint32_t flags, void* output) {
   if (!handle || !aligned(output)) return TD_JSON_ARGUMENT;
   auto& result = *static_cast<JsonResult*>(output);
   result = {};
   auto& s = *static_cast<truffledata::json::stream*>(handle);
   json_session::document_view d{};
-  int32_t status = s.next(d);
+  if (flags & ~TD_JSON_WANT_DIRECTORIES) return TD_JSON_ARGUMENT;
+  int32_t status = s.next(d, (flags & TD_JSON_WANT_DIRECTORIES) != 0);
   if (status == TD_JSON_OK) publish_borrowed(s.owner(), d, result);
   return status;
 }

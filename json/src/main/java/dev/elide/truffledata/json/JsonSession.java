@@ -232,7 +232,13 @@ public final class JsonSession extends TapeSession<JsonMessage> {
 
     @Override
     protected int streamNext(long stream) {
-      return Json.stream_next(WordFactory.pointer(stream), result);
+      return Json.stream_next(WordFactory.pointer(stream), directoryFlag(), result);
+    }
+
+    @Override
+    protected int streamNext(long stream, boolean byKey) {
+      directories(byKey);
+      return streamNext(stream);
     }
 
     @Override

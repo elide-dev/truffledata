@@ -100,6 +100,11 @@ public abstract class TapeSession<M extends TapeOwner> implements AutoCloseable 
      */
     protected abstract int streamNext(long stream);
 
+    /** Decode by access intent; older backends retain their existing stream policy. */
+    protected int streamNext(long stream, boolean byKey) {
+      return streamNext(stream);
+    }
+
     protected abstract void streamRelease(long stream);
   }
 

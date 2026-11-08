@@ -23,6 +23,11 @@ public final class HeapTape implements TapeReader {
   }
   @Override public long readWord(long index) { return words[(int) index]; }
   @Override public byte textByte(boolean owned, long offset) { return (owned ? pool : input)[(int) offset]; }
+  @Override public void copyText(boolean owned, long offset, byte[] output, int at, int length) {
+    if (offset < 0 || offset > (owned ? poolSize() : inputSize()) - length)
+      throw new IndexOutOfBoundsException("Tape text copy");
+    System.arraycopy(owned ? pool : input, Math.toIntExact(offset), output, at, length);
+  }
   @Override public long textWord(boolean owned, long offset, int length) {
     if (length == 0) return 0;
     byte[] bytes = owned ? pool : input;
@@ -53,27 +58,34 @@ public final class HeapTape implements TapeReader {
     long end = source.next(root);
     long inputFirst = source.inputSize(), inputLast = 0, poolFirst = source.poolSize(), poolLast = 0;
     long dirFirst = source.directorySize(), dirLast = 0;
-    for (long i = root; i < end; i = source.step(i)) {
-      long w = source.word(i), span = source.span(i);
+    int flags = source.flags();
+    for (long i = root; i < end;) {
+      long w = source.word(i);
       int k = kind(w), len = field(w);
+      long second = ((k == 6 || k == 7 || k == 9) && (w & WIDE) != 0) ? source.word(i + 1) : 0;
+      long span = rawSpan(w, second, flags);
       if (span != 0) { inputFirst = Math.min(inputFirst, span >>> 32); inputLast = Math.max(inputLast, (span >>> 32) + (span & 0xffffffffL)); }
       if (k == 6 || k == 7) {
         if ((w & OWNED) != 0) { poolFirst = Math.min(poolFirst, low(w)); poolLast = Math.max(poolLast, low(w) + len); }
         else { inputFirst = Math.min(inputFirst, low(w)); inputLast = Math.max(inputLast, low(w) + len); }
       }
-      long dir = source.directory(i);
-      if (dir != 0) { dirFirst = Math.min(dirFirst, dir - 1); dirLast = Math.max(dirLast, dir - 1 + source.length(i)); }
+      long dir = k == 9 ? second >>> 32 : 0;
+      if (dir != 0) {
+        dirFirst = Math.min(dirFirst, dir - 1);
+        dirLast = Math.max(dirLast, dir - 1 + (len == MAX_COUNT ? source.length(i) : len));
+      }
+      i = TapeReader.step(i, w);
     }
     if (inputLast == 0) inputFirst = 0;
     if (poolLast == 0) poolFirst = 0;
     if (dirLast == 0) dirFirst = 0;
     byte[] input = new byte[Math.addExact(Math.toIntExact(inputLast - inputFirst), 7)], pool = new byte[Math.toIntExact(poolLast - poolFirst)];
-    for (int i = 0; i < input.length - 7; i++) input[i] = source.textByte(false, inputFirst + i);
-    for (int i = 0; i < pool.length; i++) pool[i] = source.textByte(true, poolFirst + i);
+    source.copyText(false, inputFirst, input, 0, input.length - 7);
+    source.copyText(true, poolFirst, pool, 0, pool.length);
     long[] words = new long[Math.toIntExact(end - root)], dirs = new long[Math.toIntExact(dirLast - dirFirst)];
-    int[] meta = (source.flags() & 2) == 0 ? new int[0] : new int[words.length];
+    int[] meta = (flags & 2) == 0 ? new int[0] : new int[words.length];
     for (int i = 0; i < dirs.length; i++) dirs[i] = source.directoryEntry(dirFirst + i);
-    for (long i = root; i < end; i = source.step(i)) {
+    for (long i = root; i < end;) {
       int at = Math.toIntExact(i - root);
       long w = source.word(i), second = (w & WIDE) == 0 ? 0 : source.word(i + 1);
       int k = kind(w);
@@ -93,8 +105,9 @@ public final class HeapTape implements TapeReader {
       words[at] = w;
       if ((w & WIDE) != 0) words[at + 1] = second;
       if (meta.length != 0) meta[at] = source.metadata(i);
+      i = TapeReader.step(i, w);
     }
-    return new HeapTape(words, pool, input, dirs, meta, source.flags(), true);
+    return new HeapTape(words, pool, input, dirs, meta, flags, true);
   }
 
   ValueTape toMyna() {

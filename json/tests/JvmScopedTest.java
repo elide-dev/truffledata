@@ -1117,6 +1117,30 @@ final class JvmScopedTest {
           () -> JsonJvm.openSession(library(), dev.elide.truffledata.json.JsonLimits.DEFAULT, bad));
   }
 
+
+  @Test
+  void streamsSelectDirectoriesForEachBorrowedDocument() throws Exception {
+    String doc = "{\"a\":1,\"b\":2,\"c\":3,\"d\":4,\"e\":5,\"f\":6,\"g\":7,\"h\":8,\"nested\":{\"z\":9,\"y\":10}}\n";
+    byte[] input = utf8(doc.repeat(16));
+    try (JsonSession session = JsonJvm.openSession(library(), dev.elide.truffledata.json.JsonLimits.DEFAULT);
+        var stream = session.stream(new dev.elide.truffledata.json.JsonStreamOptions(1024, 1024))) {
+      assertEquals(input.length, stream.feed(input));
+      stream.finish();
+      for (int i = 0; i < 8; i++) {
+        var sink = new dev.elide.truffledata.tape.JavaSink();
+        assertTrue(stream.next(sink));
+        assertEquals(8L, tree(sink).get("h"));
+        TapeValue borrowed = stream.next();
+        assertNotNull(borrowed);
+        assertEquals(2, borrowed.snapshot().directories());
+        assertEquals(9L, borrowed.member("nested").member("z").longValue());
+        assertEquals(1L, borrowed.member("a").longValue());
+      }
+      assertNull(stream.next());
+      assertEquals(16, stream.documents());
+    }
+  }
+
   /** Performance plan Task F2: JSON streams over a JVM session (mirrors json/native/stream_test). */
   @Test
   void jvmStreamsCarryOverBorrowRetainAndSkip() throws Exception {
