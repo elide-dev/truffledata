@@ -101,3 +101,26 @@ The recovered other 24 cases move at most +0.61% (YAML Truffle export; other inc
 binary/source hashes, commands and raw results: `benchmarks/results/json-codspeed-20261108/`.
 The earlier unclemax full-image timing table still predates the intervening source changes;
 only the simulation and final correctness/graph/allocation results above are fresh here.
+
+2026-11-08 — Nested/repeated typed SVM tranche: admit the bounded structural record/array
+writer specifically for typed ingestion. On-Demand remains the independent test oracle and
+failure-only diagnostic replay; failed structural validation cannot publish a result.
+The [final admission report](../../../benchmarks/results/json-typed-tranche-20261108/admission.md)
+records production `9a1dcec` versus `a966cf2` with identical fixtures, three fresh forks per
+image/cell and paired CPU affinity in invocation
+[950032e5](https://app.buildbuddy.io/invocation/950032e5-dc4f-40f9-a67f-0a73f3b5dce3).
+Ingest medians (ns/document) are nested 829.097→700.302 (**1.184×**), repeated
+4,209.473→3,639.223 (**1.157×**), mixed 1,677.520→1,517.453 (**1.105×**), and churn
+2,639.500→2,286.197 (**1.155×**). Every candidate ingest fork beats every baseline fork
+in these four workloads, including the retained churn outlier.
+
+The separate generic control regresses 866.279→885.299 ns/document (**+2.20%**, observed
+fork ranges do not overlap); flat typed ingest moves **+1.50%** with overlapping ranges.
+Read-tier changes and noisy Gson controls remain disclosed without normalization or
+mixed-workload competitor comparisons. All **34 Java allocation cells match**; the existing
+**24 compiled graph checks and nine allocation budgets pass unchanged**, alongside native
+differential/sanitizer, JVM correctness and SVM acceptance checks. The historical scalar
+≥1.1× admission threshold is unchanged. Earlier generic throughput/absolute-time gaps,
+the unmet 1.5× logical-memory criterion and physical-memory goals remain open; this is
+neither a universal JSON speedup nor full release qualification. No PGO, ABI, retained-layout
+or prebuilt-native distribution contract changes.
