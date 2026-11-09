@@ -798,7 +798,9 @@ class handler : public c4::yml::EventHandlerStack<handler, handler_state> {
 
   void write_alias_key(uint32_t ordinal) {
     frame* f = top();
-    if (!f || f->kind != frame_kind::map) throw error(status_internal, "YAML key outside a mapping");
+    // rapidyaml 0.16.0 emits a key inside a flow sequence for an empty implicit key closed by
+    // the wrong bracket (`k: [1, : [1, 2]}`, fuzz finding): malformed input, not an invariant.
+    if (!f || f->kind != frame_kind::map) fail("YAML key outside a mapping");
     uint64_t target = alias_targets_[ordinal];
     uint32_t tag = myna_kind(writer_->words()[target]);
     if (tag == MYNA_VALUE_ARRAY || tag == MYNA_VALUE_OBJECT) {
@@ -1453,7 +1455,9 @@ class handler : public c4::yml::EventHandlerStack<handler, handler_state> {
 
   void write_key(std::string_view text, scalar_style style, bool empty, taken_tag tag, uint64_t span) {
     frame* f = top();
-    if (!f || f->kind != frame_kind::map) throw error(status_internal, "YAML key outside a mapping");
+    // rapidyaml 0.16.0 emits a key inside a flow sequence for an empty implicit key closed by
+    // the wrong bracket (`k: [1, : [1, 2]}`, fuzz finding): malformed input, not an invariant.
+    if (!f || f->kind != frame_kind::map) fail("YAML key outside a mapping");
     (void)empty;
     scalar r;
     if (!(fast_paths_ && tag.kind == tag_kind::none && style == scalar_style::plain && schema_ == schema::core &&
@@ -1548,7 +1552,9 @@ class handler : public c4::yml::EventHandlerStack<handler, handler_state> {
   // A collection used as a key: a complex key (rejected, or a new pair of a pairs mapping).
   void open_key(uint32_t kind, uint32_t style, c4::yml::type_bits bits) {
     frame* f = top();
-    if (!f || f->kind != frame_kind::map) throw error(status_internal, "YAML key outside a mapping");
+    // rapidyaml 0.16.0 emits a key inside a flow sequence for an empty implicit key closed by
+    // the wrong bracket (`k: [1, : [1, 2]}`, fuzz finding): malformed input, not an invariant.
+    if (!f || f->kind != frame_kind::map) fail("YAML key outside a mapping");
     complex_key_start(*f);
     begin_collection(kind, style);
     if (m_parent) m_parent->has_children = true;

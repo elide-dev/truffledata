@@ -129,6 +129,12 @@ void values() {
     error e = failure(s, two);
     require(e.code == status_syntax && std::string(e.what()) == "YAML second root value");
   }
+  // An empty implicit key in a flow sequence closed by the wrong bracket: rapidyaml emits a key
+  // outside any mapping (fuzz finding).
+  for (const char* doc : {"k: [1, : [1, 2]}", "}&ok\": [1,iii\", : [1,iii\",i\"\"]}", "k: [1, : [1,i\"]}"}) {
+    error e = failure(s, doc);
+    require(e.code == status_syntax);
+  }
   // Keys keep the resolved kind in yaml_meta bits 5-7.
   auto d = decode(s, "{~: a, true: b, 0x1F: c, 1.50: d, s: e, \"1\": f}");
   require(render(d.view) == "{\"\":\"a\",\"true\":\"b\",\"31\":\"c\",\"1.5\":\"d\",\"s\":\"e\",\"1\":\"f\"}");
