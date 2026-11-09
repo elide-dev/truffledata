@@ -168,7 +168,7 @@ public class BorrowedSlabRow extends AbstractRow implements ProtoAccess {
 
   @Override
   public final Accessor accessor(int ordinal) {
-    return descriptor.accessor(BorrowedSlabRow.class, ordinal, i -> new Slot(layout, type, i));
+    return descriptor.accessor(layout, ordinal, i -> new Slot(layout, type, i));
   }
 
   private static final class Slot extends Accessor {

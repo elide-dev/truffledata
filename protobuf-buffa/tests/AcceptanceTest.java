@@ -1,7 +1,12 @@
 package dev.elide.truffledata.buffa.tests;
 
+import static org.junit.jupiter.api.Assertions.*;
+
+import dev.elide.truffledata.*;
 import dev.elide.truffledata.buffa.*;
+import dev.elide.truffledata.protobuf.*;
 import java.nio.file.*;
+import java.util.List;
 import java.util.Objects;
 import org.junit.jupiter.api.Test;
 
@@ -165,5 +170,100 @@ final class AcceptanceTest {
             "protobuf-buffa/tests/wrong_abi.so");
     Acceptance.rejects(
         () -> BuffaWire.open(BuffaWire.Mode.NATIVE, library), IllegalStateException.class);
+  }
+
+  @Test
+  void borrowedSlabAccessorsRemainBoundPerLayoutWhenNestedSchemasAreShared() throws Exception {
+    var midType =
+        new ProtoPlan.Type(
+            "Mid",
+            false,
+            List.of(
+                new ProtoPlan.FieldPlan(
+                    "n",
+                    1,
+                    ProtoPlan.Kind.INT32,
+                    false,
+                    false,
+                    false,
+                    false,
+                    false,
+                    -1,
+                    "",
+                    null,
+                    0L)));
+    var root1Type =
+        new ProtoPlan.Type(
+            "Root1",
+            false,
+            List.of(
+                new ProtoPlan.FieldPlan(
+                    "mid",
+                    1,
+                    ProtoPlan.Kind.MESSAGE,
+                    false,
+                    false,
+                    true,
+                    false,
+                    false,
+                    -1,
+                    "Mid",
+                    null,
+                    Missing.INSTANCE)));
+    var root2Type =
+        new ProtoPlan.Type(
+            "Root2",
+            false,
+            List.of(
+                new ProtoPlan.FieldPlan(
+                    "mid",
+                    1,
+                    ProtoPlan.Kind.MESSAGE,
+                    false,
+                    false,
+                    true,
+                    false,
+                    false,
+                    -1,
+                    "Mid",
+                    null,
+                    Missing.INSTANCE)));
+    var model =
+        new ProtoPlan.Model(null, List.of(root1Type, root2Type, midType), Limits.DEFAULT, 16, 65536);
+    var plan1 = model.type("Root1");
+    var plan2 = model.type("Root2");
+    assertSame(plan1.nested(0), plan2.nested(0), "shared nested plan");
+    var midPlan = plan1.nested(0);
+    byte[] wire =
+        plan1.encode(
+            plan1.newBuilder().set(0, midPlan.newBuilder().set(0, 42L).build()).build());
+    try (var decoder = BuffaWire.open(BuffaWire.Mode.NATIVE, library());
+        var compiled1 = decoder.compile(plan1, 65536);
+        var compiled2 = decoder.compile(plan2, 65536);
+        var session1 = compiled1.newSession(65536);
+        var session2 = compiled2.newSession(65536);
+        var input1 = decoder.allocate(wire.length).put(wire);
+        var input2 = decoder.allocate(wire.length).put(wire)) {
+      var nested1 = (BorrowedSlabRow) session1.decode(input1).get(0);
+      var nested2 = (BorrowedSlabRow) session2.decode(input2).get(0);
+      assertSame(nested1.schema(), nested2.schema(), "shared Mid schema across layouts");
+      assertSame(nested1.plan(), nested2.plan(), "shared Mid plan across layouts");
+      for (boolean session1First : new boolean[] {false, true}) {
+        var first = session1First ? nested1 : nested2;
+        var second = session1First ? nested2 : nested1;
+        var a = first.accessor(0);
+        var b = second.accessor(0);
+        assertTrue(a.accepts(first), "first accessor accepts first row");
+        assertTrue(b.accepts(second), "second accessor accepts second row");
+        assertNotSame(a, b, "accessors are distinct per layout");
+        assertSame(a, first.accessor(0), "accessor identity-stable per layout");
+        assertEquals(first.getLong(0), a.readLong(first), "first row reads through its accessor");
+        assertEquals(second.getLong(0), b.readLong(second), "second row reads through its accessor");
+        assertFalse(a.accepts(second), "first accessor rejects second row");
+        assertFalse(b.accepts(first), "second accessor rejects first row");
+        assertThrows(ContractViolation.class, () -> a.readLong(second), "foreign read throws");
+        assertThrows(ContractViolation.class, () -> b.readLong(first), "foreign read throws");
+      }
+    }
   }
 }
