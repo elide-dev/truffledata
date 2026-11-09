@@ -78,9 +78,12 @@ JVM_SRCS = [
     "CsvPlanTest.java",
     "CsvReaderTest.java",
     "CsvScannerTest.java",
+    "CsvTextTest.java",
     "Differential.java",
     "IndexedDifferentialTest.java",
     "ListSink.java",
+    "NumbersDifferentialTest.java",
+    "NumbersReference.java",
     "NumbersTest.java",
     "RecordGenerator.java",
     "CsvWriterTest.java",
@@ -104,8 +107,10 @@ JVM_CLASSES = [
     "CsvPlanTest",
     "CsvReaderTest",
     "CsvScannerTest",
+    "CsvTextTest",
     "CsvWriterTest",
     "IndexedDifferentialTest",
+    "NumbersDifferentialTest",
     "NumbersTest",
     "Utf8Test",
 ]
@@ -120,6 +125,7 @@ JVM_ARGS = [
 ]
 
 JVM_DEPS = [
+    "//benchmarks/comparison:csv_fixtures",
     "//core",
     "//csv",
     "@maven//:org_apache_commons_commons_csv",

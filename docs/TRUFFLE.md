@@ -125,6 +125,26 @@ Generated metadata passed the native simulation executable, including generated 
 wire-decoded Protobuf paths. Consumer-specific native executables and additional schema
 features still require acceptance; image construction alone is insufficient evidence.
 
+## Host inlining budgets for downstream images
+
+TruffleData sets no Truffle host-inlining option (the only `native-image.properties` it ships are
+Myna's generated binding metadata and, in the opt-in `truffledata-protobuf-buffa-cells`, the
+cells' class-initialization metadata; none sets an inlining option), so a consumer image uses the Native Image defaults
+(`-H:TruffleHostInliningMaxSubtreeInvokes=32`, `-H:TruffleHostInliningBaseBudget=5000`).
+On the protobuf consumer benchmark (x86-64 SVM, paired images, three forks; see
+`benchmarks/results/protobuf-dispatch-5815c56/`), building the *image* with
+`-H:TruffleHostInliningMaxSubtreeInvokes=64 -H:TruffleHostInliningBaseBudget=20000`
+let the benchmark's own guest root inline one more node and moved the full-fixture
+interpreter cell -3.7% (disjoint), but also moved the stock-interop control -6 to -16%,
+regressed a sparse interpreter cell +10% and grew the image 2.2%. The effect comes from
+the consumer's own interpreter nodes, not from TruffleData's. Image builders (Elide,
+TruffleCEL) who run large guest interpreters may evaluate these two options on their
+own paired measurements; TruffleData does not ship them and makes no claim for other
+guests. This note records the 2026-11-09 ruling that the B4 interpreter gate is judged
+against the stock-interop cell (the like-for-like interpreter path), not against direct
+AOT getters behind a single boundary, because harness and dispatch alone sit at about
+2.0x of the direct-getter cell before any library body runs.
+
 ## JIT assurance gate
 
 The supported guarantee is scoped to the pinned Elide GraalVM runtime and the checked-in

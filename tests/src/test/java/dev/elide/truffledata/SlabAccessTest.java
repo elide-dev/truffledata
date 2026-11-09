@@ -124,4 +124,159 @@ class SlabAccessTest {
     assertThrows(UnexpectedResultException.class, () -> row.accessor(14).readDouble(row));
     assertThrows(UnexpectedResultException.class, () -> row.accessor(14).readBoolean(row));
   }
+
+  /**
+   * Generated slab rows (plan 2026-11-08-beat-stock-svm WS1): one final class per (type,
+   * root-or-child) of an unprojected owning slab, whose accessors guard with the exact class and
+   * the plan schema. Record offsets depend on the type alone, so a child type reached through
+   * different root layouts shares its class, its record layout and its accessors; the root of that
+   * type, a projected slab's generic rows and a runtime plan's rows are other layouts and are
+   * rejected. Every generated accessor agrees with the generic slot accessor and the public reads.
+   */
+  @Test
+  void generatedSlabRowsAreExactClassesPerTypeAndRejectOtherLayouts() throws Exception {
+    var model = TruffleDataContracts.create(null, Limits.DEFAULT, 16, 65536);
+    var sample = model.type("truffledata.lossless.Sample");
+    var childPlan = model.type("truffledata.lossless.Sample.Child");
+    byte[] wire =
+        sample.encode(
+            sample.parseText(
+                "count: 1 text: 'λ' child { a: 7 b: 'x' child { a: 9 b: 'yy' } }"
+                    + " children { key: 'k' value { a: 8 } }"));
+    var root = sample.decodeSlab(wire);
+    assertEquals("SlabMessage_truffledata$lossless$Sample", root.getClass().getSimpleName());
+    var child = (SlabRow) root.get(7);
+    assertEquals("SlabRow_truffledata$lossless$Sample$Child", child.getClass().getSimpleName());
+    var grandchild = (SlabRow) child.get(2);
+    assertSame(child.getClass(), grandchild.getClass());
+    // The child type as its own root: another root layout, the same child class underneath.
+    var standalone =
+        childPlan.decodeSlab(childPlan.encode(childPlan.parseText("a: 7 b: 'x' child { a: 9 }")));
+    assertEquals(
+        "SlabMessage_truffledata$lossless$Sample$Child", standalone.getClass().getSimpleName());
+    var standaloneChild = (SlabRow) standalone.get(2);
+    assertSame(child.getClass(), standaloneChild.getClass());
+    assertSame(child.schema(), standaloneChild.schema());
+    Layout sampleLayout = sample.layout(), childLayout = childPlan.layout();
+    assertNotSame(sampleLayout, childLayout);
+    int childType = -1;
+    for (int t = 0; t < sampleLayout.types(); t++)
+      if (sampleLayout.plan(t) == childPlan) childType = t;
+    assertTrue(childType > 0, "child type index in the Sample layout");
+    for (int ordinal = 0; ordinal < childPlan.size(); ordinal++) {
+      assertEquals(sampleLayout.slot(childType, ordinal), childLayout.slot(0, ordinal));
+      assertEquals(sampleLayout.kind(childType, ordinal), childLayout.kind(0, ordinal));
+    }
+    assertEquals(sampleLayout.recordBytes(childType), childLayout.recordBytes(0));
+    // Projected slabs keep the generic classes; runtime plans have no generated classes.
+    var projected =
+        SlabMessage.decode(
+            sample,
+            wire,
+            0,
+            wire.length,
+            SlabLimits.forInput(sampleLayout, wire.length),
+            Projection.all(sample));
+    assertSame(SlabMessage.class, projected.getClass());
+    var projectedChild = (SlabRow) projected.get(7);
+    assertSame(SlabRow.class, projectedChild.getClass());
+    var runtime =
+        new ProtoPlan.Model(null, java.util.List.of(childPlan.definition()), Limits.DEFAULT, 16, 65536)
+            .type("truffledata.lossless.Sample.Child");
+    var runtimeRoot = runtime.decodeSlab(runtime.encode(runtime.parseText("a: 7 b: 'x'")));
+    assertSame(SlabMessage.class, runtimeRoot.getClass());
+    Object[] rows = {
+      child, grandchild, standaloneChild, standalone, root, projected, projectedChild, runtimeRoot
+    };
+    for (int ordinal = 0; ordinal < childPlan.size(); ordinal++) {
+      Accessor exact = child.accessor(ordinal);
+      assertSame(exact, standaloneChild.accessor(ordinal));
+      assertSame(child.getClass(), exact.exactRowClass);
+      assertTrue(exact.accepts(child) && exact.accepts(grandchild));
+      assertTrue(exact.accepts(standaloneChild));
+      // The root of the same type, projected rows and runtime rows are other layouts.
+      Accessor rootExact = standalone.accessor(ordinal);
+      assertNotSame(exact, rootExact);
+      assertSame(standalone.getClass(), rootExact.exactRowClass);
+      for (Object other : new Object[] {standalone, root, projected, projectedChild, runtimeRoot}) {
+        assertFalse(exact.accepts(other), other.getClass() + " at " + ordinal);
+        assertThrows(ContractViolation.class, () -> exact.read(other));
+      }
+      assertFalse(rootExact.accepts(child));
+      assertFalse(runtimeRoot.accessor(ordinal).accepts(standalone));
+      assertFalse(projectedChild.accessor(ordinal).accepts(runtimeRoot));
+      for (Object candidate : rows)
+        assertEquals(exact.accepts(candidate), Accessor.bound(exact, candidate));
+      // The generic slot of the shared layout still accepts every row of its (layout, type); the
+      // generated accessor is the strict side, and both agree on every value.
+      Accessor generic = projectedChild.accessor(ordinal);
+      assertNull(generic.exactRowClass);
+      assertTrue(generic.accepts(child));
+      // The generic slot is bound to its layout, the generated accessor to the type: the same
+      // child type under the Child-root layout is rejected by one and read by the other.
+      assertFalse(generic.accepts(standaloneChild));
+      assertThrows(ContractViolation.class, () -> generic.read(standaloneChild));
+      assertEquals(
+          outcome(() -> standaloneChild.get(exact.ordinal())),
+          outcome(() -> exact.read(standaloneChild)));
+      for (SlabRow r : new SlabRow[] {child, grandchild}) {
+        assertEquals(outcome(() -> r.get(exact.ordinal())), outcome(() -> exact.read(r)));
+        assertEquals(outcome(() -> generic.read(r)), outcome(() -> exact.read(r)));
+        assertEquals(outcome(() -> generic.readLong(r)), outcome(() -> exact.readLong(r)));
+        assertEquals(outcome(() -> generic.readDouble(r)), outcome(() -> exact.readDouble(r)));
+        assertEquals(outcome(() -> generic.readBoolean(r)), outcome(() -> exact.readBoolean(r)));
+        assertEquals(outcome(() -> generic.length(r)), outcome(() -> exact.length(r)));
+        assertEquals(r.has(exact.ordinal()), exact.present(r));
+      }
+    }
+    // Root reads agree with the generic root for every Sample ordinal, present or absent.
+    for (int ordinal = 0; ordinal < sample.size(); ordinal++) {
+      int o = ordinal;
+      Accessor exact = root.accessor(o), generic = projected.accessor(o);
+      assertSame(root.getClass(), exact.exactRowClass);
+      assertEquals(outcome(() -> projected.get(o)), outcome(() -> root.get(o)));
+      assertEquals(outcome(() -> projected.getLong(o)), outcome(() -> root.getLong(o)));
+      assertEquals(outcome(() -> projected.getDouble(o)), outcome(() -> root.getDouble(o)));
+      assertEquals(outcome(() -> projected.getBoolean(o)), outcome(() -> root.getBoolean(o)));
+      assertEquals(outcome(() -> projected.getSize(o)), outcome(() -> root.getSize(o)));
+      assertEquals(outcome(() -> projected.stringLength(o)), outcome(() -> root.stringLength(o)));
+      assertEquals(outcome(() -> generic.read(projected)), outcome(() -> exact.read(root)));
+      assertEquals(outcome(() -> generic.readLong(projected)), outcome(() -> exact.readLong(root)));
+      assertEquals(outcome(() -> generic.length(projected)), outcome(() -> exact.length(root)));
+      assertEquals(outcome(() -> generic.readDouble(projected)), outcome(() -> exact.readDouble(root)));
+      assertEquals(
+          outcome(() -> generic.readBoolean(projected)), outcome(() -> exact.readBoolean(root)));
+      // The layout-bound hooks the read nodes call agree with the checked reads.
+      assertEquals(
+          outcome(() -> generic.readLongBound(projected)), outcome(() -> exact.readLong(root)));
+      assertEquals(
+          outcome(() -> generic.readDoubleBound(projected)), outcome(() -> exact.readDouble(root)));
+      assertEquals(
+          outcome(() -> generic.readBooleanBound(projected)),
+          outcome(() -> exact.readBoolean(root)));
+      assertEquals(
+          outcome(() -> generic.lengthBound(projected)), outcome(() -> exact.length(root)));
+      assertEquals(projected.has(o), root.has(o));
+    }
+    assertThrows(IndexOutOfBoundsException.class, () -> root.get(sample.size()));
+    assertThrows(IndexOutOfBoundsException.class, () -> root.has(-1));
+    assertThrows(IndexOutOfBoundsException.class, () -> root.accessor(sample.size()));
+  }
+
+  /** A read's value, or the class of the exception it throws; structural values compare by content. */
+  private static Object outcome(java.util.concurrent.Callable<Object> read) {
+    try {
+      Object value = read.call();
+      if (value instanceof OwnedArray array) {
+        var items = new Object[array.size()];
+        for (int i = 0; i < items.length; i++) { int at = i; items[i] = outcome(() -> array.get(at)); }
+        return java.util.Arrays.asList(items);
+      }
+      if (value instanceof SlabRow row) return row.plan().name() + "@" + row.schema().size();
+      if (value instanceof ExactNumber number) return number.decimal().toPlainString();
+      return value;
+    } catch (Exception e) {
+      return e.getClass();
+    }
+  }
 }

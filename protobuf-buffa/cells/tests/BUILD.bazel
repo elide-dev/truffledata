@@ -1,0 +1,129 @@
+load("@rules_graalvm//graalvm:defs.bzl", "native_image")
+load("@rules_java//java:defs.bzl", "java_test")
+load("@rules_shell//shell:sh_test.bzl", "sh_test")
+load("//bazel:java.bzl", "data_java_library")
+load("//bazel:jit.bzl", "LINUX_SVM_PLATFORMS", "LINUX_SVM_SDK", "TRUFFLE_JIT_CHECKS")
+
+# The Myna cells route (truffledata.buffa.cells; docs/BUFFA.md). The flag-off suites are the
+# existing //protobuf-buffa/tests targets, which do not see this artifact.
+
+data_java_library(
+    name = "parity",
+    testonly = True,
+    srcs = [
+        # Split packages: test-only bridges to package-private backends and layout fixtures.
+        "CellsAcceptance.java",
+        "CellsFixtures.java",
+        "CellsParity.java",
+    ],
+    deps = [
+        "//core",
+        "//protobuf-buffa",
+        "//protobuf-buffa/cells",
+        "//protobuf-buffa/tests:acceptance",
+        "//protobuf-runtime",
+        "//protobuf-runtime:slab_test_fixtures",
+        "@maven//:org_graalvm_sdk_nativeimage",
+    ],
+)
+
+# HotSpot. `jvm`: the shared acceptance suite with the flag on, plus the route and byte-identity
+# checks; `jvm_off`: the artifact present with the flag off (route stays FFM; parity still runs,
+# constructing both backends directly).
+[
+    java_test(
+        name = name,
+        size = "large",
+        srcs = [
+            "CellsRouteTest.java",
+            "//protobuf-buffa/tests:AcceptanceTest.java",
+        ],
+        args = [
+            "--class",
+            "dev.elide.truffledata.buffa.CellsRouteTest",
+        ] + ([
+            "--class",
+            "dev.elide.truffledata.buffa.tests.AcceptanceTest",
+        ] if flag == "true" else []),
+        data = [
+            "//protobuf-buffa/native:shared",
+            "//protobuf-buffa/tests:wrong_abi.so",
+        ],
+        jvm_flags = [
+            "--enable-native-access=ALL-UNNAMED",
+            "-Dtruffledata.strict=true",
+            "-Dtruffledata.buffa.cells=" + flag,
+            "-Dtruffledata.buffa.cells.expected=" + flag,
+            "-ea",
+        ],
+        main_class = "dev.elide.bazel.junit.BazelJUnitRunner",
+        use_testrunner = False,
+        runtime_deps = [
+            "//bazel/junit:runner",
+            "@maven//:org_graalvm_truffle_truffle_runtime",
+        ],
+        deps = [
+            ":parity",
+            "//core",
+            "//protobuf-buffa",
+            "//protobuf-buffa/cells",
+            "//protobuf-buffa/tests:acceptance",
+            "//protobuf-runtime",
+            "//protobuf-runtime:slab_test_fixtures",
+            "@maven//:org_junit_jupiter_junit_jupiter_api",
+        ],
+    )
+    for name, flag in [
+        ("jvm", "true"),
+        ("jvm_off", "false"),
+    ]
+]
+
+# Native Image built with the flag: the shared native acceptance on the cells route, the route
+# check and the byte-identity check against the static backend, with the runtime-compilation
+# blocklist checks on.
+native_image(
+    name = "native",
+    testonly = True,
+    cc_deps = ["//protobuf-buffa/native:truffledata_buffa"],
+    exec_properties = {
+        "EstimatedCPU": "8",
+        "EstimatedMemory": "24GB",
+    },
+    executable_name = "native_cells",
+    extra_args = [
+        "--gc=serial",
+        "-ea",
+        "-Dtruffledata.strict=true",
+        "-Dtruffledata.buffa.cells=true",
+        "--initialize-at-build-time=dev.elide.truffledata",
+        "--parallelism=8",
+        "-march=compatibility",
+        "-H:+UnlockExperimentalVMOptions",
+    ] + TRUFFLE_JIT_CHECKS + [
+        "-H:-UnlockExperimentalVMOptions",
+        "--features=dev.elide.truffledata.buffa.BuffaFeature",
+    ],
+    graalvm_sdk = LINUX_SVM_SDK,
+    main_class = "dev.elide.truffledata.buffa.CellsAcceptance",
+    optimization_mode = "2",
+    tags = ["manual"],
+    target_compatible_with = LINUX_SVM_PLATFORMS,
+    deps = [
+        ":parity",
+        "@maven//:org_graalvm_truffle_truffle_runtime",
+    ],
+)
+
+sh_test(
+    name = "native_test",
+    size = "large",
+    srcs = ["//protobuf-buffa/tests:native_test.sh"],
+    args = [
+        "$(rootpath :native)",
+        "native",
+    ],
+    data = [":native"],
+    tags = ["manual"],
+    target_compatible_with = LINUX_SVM_PLATFORMS,
+)

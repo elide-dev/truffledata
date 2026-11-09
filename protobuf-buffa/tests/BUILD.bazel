@@ -7,6 +7,12 @@ load("//bazel:jit.bzl", "LINUX_SVM_PLATFORMS", "LINUX_SVM_SDK", "TRUFFLE_JIT_CHE
 
 package(default_visibility = ["//visibility:public"])
 
+# Reused by the cells route suites (//protobuf-buffa/cells/tests).
+exports_files([
+    "AcceptanceTest.java",
+    "native_test.sh",
+])
+
 data_java_library(
     name = "acceptance",
     testonly = True,

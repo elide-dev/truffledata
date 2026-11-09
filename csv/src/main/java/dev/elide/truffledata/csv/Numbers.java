@@ -14,8 +14,11 @@ import java.nio.charset.StandardCharsets;
  * <ul>
  *   <li>Integers of up to 16 digits convert eight digits per step (SWAR: one little-endian load
  *       of the bytes that end the field, one digit test, three multiplies).
- *   <li>Decimals {@code [+-]?d{0,8}(.d{0,8})?} find the dot with one SWAR test and convert both
- *       parts the same way, then divide exactly (Clinger) when the significand fits 2^53.
+ *   <li>Decimals of up to 16 bytes after the sign ({@code d+} or {@code d*.d*}) load the one or
+ *       two words that end the field, find the dot with one SWAR test per word, shift it out, and
+ *       convert the remaining digits as integers do; with a dot at most fifteen digits remain, so
+ *       the significand and the power of ten are exact doubles and one division rounds exactly
+ *       (Clinger).
  *   <li>Other finite tokens use the Eisel-Lemire algorithm (fast_float's {@code compute_float}: a
  *       128-bit product with a truncated power of five) on a significand of up to 19 digits; a
  *       longer significand is truncated, and the result is accepted when the truncated value and
@@ -29,9 +32,6 @@ final class Numbers {
   private static final double[] POWERS = {
     1e0, 1e1, 1e2, 1e3, 1e4, 1e5, 1e6, 1e7, 1e8, 1e9, 1e10, 1e11, 1e12, 1e13, 1e14, 1e15, 1e16,
     1e17, 1e18, 1e19, 1e20, 1e21, 1e22
-  };
-  private static final long[] TENS = {
-    1L, 10L, 100L, 1_000L, 10_000L, 100_000L, 1_000_000L, 10_000_000L, 100_000_000L
   };
   private static final long MAX_EXACT = 1L << 53;
   private static final int EXPONENT_CAP = 100_000; // far beyond any finite or nonzero binary64
@@ -113,52 +113,107 @@ final class Numbers {
     boolean negative = false;
     if (i < end && (b[i] == '+' || b[i] == '-')) negative = b[i++] == '-';
     int n = end - i;
-    if (n > 0 && n <= 16 && i >= 8 && end >= 16) {
-      // At most one dot, at most eight digits on each side, nothing else (else the full grammar).
-      int dot = dot(b, i, end);
-      int whole = dot - i;
-      int fraction = dot == end ? 0 : end - dot - 1;
-      if (dot >= 0 && whole <= 8 && fraction <= 8 && whole + fraction > 0) {
-        long high = digits(b, dot, whole);
-        long low = fraction == 0 ? 0 : digits(b, end, fraction);
-        if ((high | low) >= 0) {
-          long significand = high * TENS[fraction] + low;
-          if (significand <= MAX_EXACT) {
-            double value = significand / POWERS[fraction];
-            return negative ? -value : value;
-          }
-          long bits = eiselLemire(significand, -fraction);
-          if (bits >= 0) {
-            double value = Double.longBitsToDouble(bits);
-            return negative ? -value : value;
-          }
-        }
-      }
+    if (n > 0 && n <= 8 && end >= 8) {
+      double value = shortDecimal((long) LONGS.get(b, end - 8), n);
+      if (value == value) return negative ? -value : value;
+    } else if (n > 8 && n <= 16 && end >= 16) {
+      double value = longDecimal((long) LONGS.get(b, end - 16), (long) LONGS.get(b, end - 8), n);
+      if (value == value) return negative ? -value : value;
     }
     return grammar(b, off, len, i, end, negative);
   }
 
   /**
-   * The offset of the only dot in [from, to), {@code to} when there is none, or -1 when there are
-   * two or more. Requires {@code to - from <= 16} and {@code to >= 16}.
+   * {@code [0-9]+} or {@code [0-9]*\.[0-9]*} with at least one digit, held in the top {@code n}
+   * (1..8) bytes of {@code w} (the eight bytes that end the field), as an exactly rounded double;
+   * NaN when the bytes are anything else. The dot is removed by shifting the bytes below it up one
+   * byte, so the at most seven remaining digits convert in one SWAR step and divide exactly by a
+   * power of ten (Clinger: significand and divisor are both exact doubles).
    */
-  private static int dot(byte[] b, int from, int to) {
-    long low = dots((long) LONGS.get(b, to - 8));
-    long high = dots((long) LONGS.get(b, to - 16));
-    int before = 16 - (to - from); // window bytes before the field
-    if (before >= 8) {
-      low &= -1L << ((before - 8) << 3);
-      high = 0;
-    } else high &= -1L << (before << 3);
-    int count = Long.bitCount(low) + Long.bitCount(high);
-    if (count == 0) return to;
-    if (count > 1) return -1;
-    return low != 0
-        ? to - 8 + (Long.numberOfTrailingZeros(low) >>> 3)
-        : to - 16 + (Long.numberOfTrailingZeros(high) >>> 3);
+  private static double shortDecimal(long w, int n) {
+    long keep = -1L << ((8 - n) << 3);
+    long marks = dots(w) & keep;
+    if (marks == 0) {
+      long t = (w & keep) - (ZEROS & keep);
+      return eightDigits(t) ? (double) swar(t) : Double.NaN;
+    }
+    if ((marks & (marks - 1)) != 0 || n == 1) return Double.NaN;
+    long point = marks >>> 7; // the low bit of the dot's byte
+    long t = undot(w, point) & (keep << 8);
+    t -= ZEROS & (keep << 8);
+    if (!eightDigits(t)) return Double.NaN;
+    return swar(t) / POWERS[Long.numberOfLeadingZeros(marks) >>> 3];
   }
 
-  /** The high bit of every byte of {@code w} that is '.' (exact zero-byte test). */
+  /**
+   * {@link #shortDecimal} for {@code n} in 9..16 over the sixteen bytes {@code low, high} that end
+   * the field. With a dot, at most fifteen digits remain (below 2^53, exactly divided by at most
+   * 10^15); without one, the up to sixteen digits convert as a long.
+   */
+  private static double longDecimal(long low, long high, int n) {
+    long keep = -1L << ((16 - n) << 3);
+    long lowMarks = dots(low) & keep;
+    long highMarks = dots(high);
+    if ((lowMarks | highMarks) == 0) {
+      long tl = (low & keep) - (ZEROS & keep);
+      long th = high - ZEROS;
+      if (!sixteenDigits(tl, th)) return Double.NaN;
+      // Long-to-double conversion rounds to nearest even (JLS 5.1.2), so it is exact here too.
+      return (double) (swar(tl) * 100_000_000L + swar(th));
+    }
+    if ((lowMarks & (lowMarks - 1)) != 0 || (highMarks & (highMarks - 1)) != 0) return Double.NaN;
+    int fraction;
+    if (highMarks != 0) {
+      if (lowMarks != 0) return Double.NaN;
+      high = undot(high, highMarks >>> 7) | (low >>> 56);
+      low <<= 8;
+      fraction = Long.numberOfLeadingZeros(highMarks) >>> 3;
+    } else {
+      low = undot(low, lowMarks >>> 7);
+      fraction = 8 + (Long.numberOfLeadingZeros(lowMarks) >>> 3);
+    }
+    long tl = (low & (keep << 8)) - (ZEROS & (keep << 8));
+    long th = high - ZEROS;
+    if (!sixteenDigits(tl, th)) return Double.NaN;
+    return (swar(tl) * 100_000_000L + swar(th)) / POWERS[fraction];
+  }
+
+  /**
+   * {@code w} without the byte whose low bit is {@code point}: the bytes below it move up one byte
+   * (the lowest byte becomes zero), the bytes above it stay.
+   */
+  private static long undot(long w, long point) {
+    return ((w & (point - 1)) << 8) | (w & -(point << 8));
+  }
+
+  /**
+   * Whether every byte of {@code t} (bytes minus '0', computed only over bytes that were digits or
+   * zeroed) is 0..9. The lowest offending byte has no borrow from below, so it is at least 0x80
+   * (below '0' or above 0xAF) or 0x0A..0x7F, which adding 0x76 lifts to the high bit.
+   */
+  private static boolean eightDigits(long t) {
+    return (((t + 0x7676_7676_7676_7676L) | t) & 0x8080_8080_8080_8080L) == 0;
+  }
+
+  /** {@link #eightDigits} for two words, tested separately (an OR of two digits can exceed 9). */
+  private static boolean sixteenDigits(long low, long high) {
+    return (((low + 0x7676_7676_7676_7676L) | low | (high + 0x7676_7676_7676_7676L) | high)
+            & 0x8080_8080_8080_8080L)
+        == 0;
+  }
+
+  /** The value of eight decimal digit values (0..9, most significant in the low byte). */
+  private static long swar(long t) {
+    t = (t * 2561) >>> 8;
+    t = ((t & 0x00FF_00FF_00FF_00FFL) * 6553601) >>> 16;
+    return ((t & 0x0000_FFFF_0000_FFFFL) * 42949672960001L) >>> 32;
+  }
+
+  /**
+   * The high bit of every byte of {@code w} that is '.' (exact zero-byte test). At most one marked
+   * byte is tested with {@code x & (x - 1)}, not {@code Long.bitCount}: -march=compatibility images
+   * have no POPCNT and compute each count in software (about 30 instructions).
+   */
   private static long dots(long w) {
     long t = w ^ DOTS;
     return ~(((t & LOW7) + LOW7) | t | LOW7);

@@ -1,6 +1,6 @@
 # Maven publishing
 
-The release publishes twenty-one thin libraries and a dependency-management BOM, with source jars and POMs. The protobuf runtime can be consumed without protobuf-java. Version 0.7.0 shipped the first nine libraries; 0.8.0 adds the two shared tape artifacts, the three JSON artifacts and the four CSV artifacts, all in the BOM. Version 0.10.0 adds the three YAML artifacts, Javadoc jars, Gradle metadata and signed publication.
+The release publishes twenty-two thin libraries and a dependency-management BOM, with source jars and POMs. The protobuf runtime can be consumed without protobuf-java. Version 0.7.0 shipped the first nine libraries; 0.8.0 adds the two shared tape artifacts, the three JSON artifacts and the four CSV artifacts, all in the BOM. Version 0.10.0 adds the three YAML artifacts, Javadoc jars, Gradle metadata and signed publication. Version 0.11.0 adds the opt-in `truffledata-protobuf-buffa-cells` artifact.
 
 | Coordinate | Contents |
 | --- | --- |
@@ -11,6 +11,7 @@ The release publishes twenty-one thin libraries and a dependency-management BOM,
 | `dev.elide:truffledata-jdbc-postgresql:<version>` | pgJDBC integration; depends on JDBC, core and postgresql |
 | `dev.elide:truffledata-protobuf-buffa:<version>` | Optional native protobuf decoder and typed views; includes [prebuilt natives](#prebuilt-natives) |
 | `dev.elide:truffledata-protobuf-buffa-bindings:<version>` | Generated Myna bindings for JVM FFM and static SVM |
+| `dev.elide:truffledata-protobuf-buffa-cells:<version>` | Opt-in: Buffa slab decoding through Myna Truffle cells (`-Dtruffledata.buffa.cells=true`), with the generated cells and the bundled `myna-truffle` runtime; depends on truffledata-protobuf-buffa. Not needed with the flag off |
 | `dev.elide:truffledata-tape:<version>` | Format-neutral native tape layer shared by JSON and YAML: owners, values, sinks, export, snapshots, sessions, streams and typed records, plus the Myna value ABI runtime they extend; depends on core |
 | `dev.elide:truffledata-tape-jvm:<version>` | JVM FFM compact tape reader (`SegmentTape`); depends on truffledata-tape. Keep it out of native-image classpaths |
 | `dev.elide:truffledata-json:<version>` | Native simdjson JSON entry points (`JsonSession`, `JsonMessage`, `JsonStream`, typed plans), with the static SVM backend; depends on truffledata-tape; includes [prebuilt natives](#prebuilt-natives) |
@@ -47,21 +48,21 @@ Central deployment and exact ZIP hash for a later authorized retry. Do not rerun
 
 ```sh
 # Build publication outputs only, with the normal remote execution/cache configuration:
-bazel build //tools/release:publications --//tools/release:version=0.10.0
+bazel build //tools/release:publications --//tools/release:version=0.11.0
 
 # Run all checks and stage jars, POMs, metadata and checksums without network writes:
-tools/release/publish.sh 0.10.0
+tools/release/publish.sh 0.11.0
 ```
 
-The staging command builds the prebuilt natives for Linux amd64 and arm64 GNU, CSV and YAML static musl on both Linux architectures, and macOS Arm64 (Linux on BuildBuddy RBE, macOS locally, so run it on an Apple silicon Mac; see [Prebuilt natives](#prebuilt-natives)), gates them with `tools/release/check_natives.py`, and prints a unique directory under `build/release-repo.*`; the collected per-platform build outputs and member manifests stay beside it in `build/release-repo.*.natives`. Each library artifact includes its binary jar (including generated Truffle implementations), source jar, POM, and MD5/SHA-1/SHA-256/SHA-512 checksums. Source jars come from the library's JavaInfo, rather than an independently maintained source list. The default Bazel version is `0.10.0-SNAPSHOT` for checks; the release script requires an explicit immutable version and refuses snapshots.
+The staging command builds the prebuilt natives for Linux amd64 and arm64 GNU, CSV and YAML static musl on both Linux architectures, and macOS Arm64 (Linux on BuildBuddy RBE, macOS locally, so run it on an Apple silicon Mac; see [Prebuilt natives](#prebuilt-natives)), gates them with `tools/release/check_natives.py`, and prints a unique directory under `build/release-repo.*`; the collected per-platform build outputs and member manifests stay beside it in `build/release-repo.*.natives`. Each library artifact includes its binary jar (including generated Truffle implementations), source jar, POM, and MD5/SHA-1/SHA-256/SHA-512 checksums. Source jars come from the library's JavaInfo, rather than an independently maintained source list. The default Bazel version is `0.11.0-SNAPSHOT` for checks; the release script requires an explicit immutable version and refuses snapshots.
 
 ## Upload
 
-The publisher follows Komodo's deployment: `rclone` remote `elide:`, bucket `elide-maven`, public URL `https://maven.elide.dev`. Provision rclone credentials outside the repository. If your configured remote has a different name, set `MAVEN_BUCKET`, for example `MAVEN_BUCKET=r2:elide-maven tools/release/publish.sh 0.10.0 --publish`. The publishing host needs Bash, Python 3, curl, rclone and Bazelisk; compilation and tests retain the normal hermetic Bazel toolchains and RBE settings. The small repository-layout check runs with Python 3 from the pinned remote executor image.
+The publisher follows Komodo's deployment: `rclone` remote `elide:`, bucket `elide-maven`, public URL `https://maven.elide.dev`. Provision rclone credentials outside the repository. If your configured remote has a different name, set `MAVEN_BUCKET`, for example `MAVEN_BUCKET=r2:elide-maven tools/release/publish.sh 0.11.0 --publish`. The publishing host needs Bash, Python 3, curl, rclone and Bazelisk; compilation and tests retain the normal hermetic Bazel toolchains and RBE settings. The small repository-layout check runs with Python 3 from the pinned remote executor image.
 
 ```sh
 # Run from a clean, committed checkout. This command writes to the public repository.
-tools/release/publish.sh 0.10.0 --publish
+tools/release/publish.sh 0.11.0 --publish
 ```
 
 The command runs the full test suite, the explicit native JIT smoke target, and both expected-failure native safety controls before staging artifacts. Native checks use the normal Linux RBE platform; the per-platform native gates and the native release check are described under [Prebuilt natives](#prebuilt-natives). It then merges existing metadata, uploads immutable payloads, verifies bucket contents and public payload bytes, and uploads metadata and checksums. Missing credentials, failed listings and malformed existing metadata fail the release; they are never interpreted as an empty repository. It neither tags nor pushes Git history. CI already exercises publication validation through `bazel test //...`; uploading is an explicit release operation, not a pull-request action.
@@ -70,7 +71,7 @@ The command runs the full test suite, the explicit native JIT smoke target, and 
 
 ## Consume
 
-For version `0.10.0`, Gradle consumers can use:
+For version `0.11.0`, Gradle consumers can use:
 
 ```kotlin
 repositories {
@@ -79,14 +80,14 @@ repositories {
     maven("https://maven.elide.dev/gvm-elide/25.5.5-elide.27")
 }
 dependencies {
-    implementation(platform("dev.elide:truffledata-bom:0.10.0"))
+    implementation(platform("dev.elide:truffledata-bom:0.11.0"))
     implementation("dev.elide:truffledata-jdbc-sqlite")
     implementation("dev.elide:truffledata-protobuf")
     // Select truffledata-jdbc-mysql or truffledata-jdbc-postgresql as needed.
 }
 ```
 
-For Maven, declare `https://maven.elide.dev` in `<repositories>` and the same coordinates in `<dependencies>`. Published POMs also declare the fork repository; Gradle and Bazel consumers must explicitly configure it. For Bazel, add the two repositories and desired coordinates to `maven.install`, then repin. Use core alone if neither adapter is needed. The release contains twenty-one libraries and the BOM. Publishing verifies public artifact bytes and metadata; isolated consumers check Maven resolution and JVM/static SVM execution. The staging examples can reproduce that version locally. Choose a new version for the next upload: published versions are immutable.
+For Maven, declare `https://maven.elide.dev` in `<repositories>` and the same coordinates in `<dependencies>`. Published POMs also declare the fork repository; Gradle and Bazel consumers must explicitly configure it. For Bazel, add the two repositories and desired coordinates to `maven.install`, then repin. Use core alone if neither adapter is needed. The release contains twenty-two libraries and the BOM. Publishing verifies public artifact bytes and metadata; isolated consumers check Maven resolution and JVM/static SVM execution. The staging examples can reproduce that version locally. Choose a new version for the next upload: published versions are immutable.
 
 
 ## BOM and consumer acceptance
@@ -124,13 +125,24 @@ The Buffa artifact publishes these additional files, each with the normal checks
 | `native` | `h` | Generated C ABI declarations |
 
 Resolve an attachment with Maven's dependency plugin using
-`dev.elide:truffledata-protobuf-buffa:0.10.0:a:linux-x86_64` (or `so`, or another platform), or use the
+`dev.elide:truffledata-protobuf-buffa:0.11.0:a:linux-x86_64` (or `so`, or another platform), or use the
 matching classifier/type in your build. For a standalone native-image build, stage the
 archive as `libtruffledata_buffa.a`, add its directory to `-H:CLibraryPath`, and enable
 `--features=dev.elide.truffledata.buffa.BuffaFeature`. Keep the release's Java jars and
 native attachment together: the backend verifies the generated ABI fingerprint.
 No native library is automatically extracted or loaded. JVM native use requires
 `--enable-native-access=ALL-UNNAMED`.
+
+### Optional Truffle cells route
+
+`dev.elide:truffledata-protobuf-buffa-cells` is never pulled in by the Buffa artifacts. Add it
+only to build with `-Dtruffledata.buffa.cells=true` (see [BUFFA.md](BUFFA.md#myna-truffle-cells-truffledatabuffacells)):
+on Native Image pass the property to `native-image` together with `BuffaFeature`; on the JVM pass
+it to the JVM. It uses the same native attachments as `truffledata-protobuf-buffa`. The jar
+bundles the exact Myna `myna-truffle` runtime its cells were generated against (Myna is not
+published to Maven), under `dev.elide.myna.truffle`; an application that already carries another
+`myna-truffle` must align the versions. It also carries Myna's generated Native Image metadata for
+its cell classes.
 
 `//tools/release:buffa_consumer` tests both native and fallback binary/text/JSON ingestion
 using publication jars and the published shared-library attachment. The explicit
@@ -237,7 +249,7 @@ published static archive into an image through `truffledata-csv-native` (without
 compare generic, typed and streamed parses and malformed-input diagnostics with the
 built-in kernel's. Release publishing and native CI require both static checks.
 
-The publisher includes all twenty-one Java libraries and the BOM, plus Buffa, JSON, YAML and CSV native attachments.
+The publisher includes all twenty-two Java libraries and the BOM, plus Buffa, JSON, YAML and CSV native attachments.
 
 ## Prebuilt natives
 

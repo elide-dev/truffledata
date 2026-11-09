@@ -7,18 +7,26 @@ final class HeapValueTape extends ValueTape {
   private final long[] nodes, directory;
   private final byte[] bytes;
   private final byte[][] regions;
+  // Per-node metadata re-indexed from the compact tape's per-word table under HAS_META;
+  // empty (length 0) for tapes without that flag, so readMetadata returns 0 unchanged.
+  private final int[] meta;
 
-  HeapValueTape(long[] nodes, byte[] bytes, byte[][] regions, long[] directory, int flags) {
+  HeapValueTape(long[] nodes, byte[] bytes, byte[][] regions, long[] directory, int flags, int[] meta) {
     super(nodes.length / (NODE_SIZE / Long.BYTES), bytes.length, ABI_VERSION_V4, flags);
     this.nodes = nodes;
     this.bytes = bytes;
     this.regions = regions;
     this.directory = directory;
+    this.meta = meta;
   }
 
   @Override protected long directoryCount() { return directory.length; }
   @Override protected int directoryHash(long index) { return (int) directory[Math.toIntExact(index)]; }
   @Override protected long directoryKeyOffset(long index) { return directory[Math.toIntExact(index)] >>> 32; }
+
+  @Override protected int readMetadata(long node) {
+    return meta.length == 0 ? 0 : meta[(int) node];
+  }
 
   private byte[] region(long region) {
     if (region == 0) return bytes;

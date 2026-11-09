@@ -1,6 +1,7 @@
 package dev.elide.truffledata.comparison;
 
 import com.alibaba.fastjson2.JSON;
+import com.alibaba.fastjson2.JSONArray;
 import com.alibaba.fastjson2.JSONObject;
 import com.dslplatform.json.DslJson;
 import com.fasterxml.jackson.core.JsonFactory;
@@ -124,6 +125,59 @@ final class JsonCompetitors {
         yield read(engine, tree);
       }
     };
+  }
+
+  /** The numeric fixture's engines (WS8): Jackson and fastjson2 trees with their defaults. */
+  static JsonComparison.Competitor numeric(String engine) {
+    return new JsonComparison.Competitor() {
+      @Override
+      @TruffleBoundary
+      public long read(Object tree) {
+        throw new UnsupportedOperationException("numeric engines measure ingest only");
+      }
+
+      @Override
+      @TruffleBoundary
+      public long ingest(byte[] input) throws Exception {
+        return JsonCompetitors.numericIngest(engine, input);
+      }
+    };
+  }
+
+  /**
+   * Parses one numeric document into the engine's tree and reads {@link
+   * JsonFixture#numericChecksum}'s members. Both libraries parse every coordinate at tree build
+   * (Jackson's {@code DoubleNode}; fastjson2's default {@code BigDecimal} decimals).
+   */
+  @TruffleBoundary
+  static long numericIngest(String engine, byte[] input) throws Exception {
+    switch (engine) {
+      case "jackson-numeric" -> {
+        JsonNode o = JACKSON.readTree(input);
+        JsonComparison.retain(o);
+        JsonNode ring = o.get("geometry").get("coordinates").get(0);
+        JsonNode first = ring.get(0), last = ring.get(ring.size() - 1);
+        return o.get("properties").get("id").asLong()
+            + ring.size()
+            + JsonFixture.micros(first.get(0).asDouble())
+            + JsonFixture.micros(first.get(1).asDouble())
+            + JsonFixture.micros(last.get(0).asDouble())
+            + JsonFixture.micros(last.get(1).asDouble());
+      }
+      case "fastjson2-numeric" -> {
+        JSONObject o = JSON.parseObject(input);
+        JsonComparison.retain(o);
+        JSONArray ring = o.getJSONObject("geometry").getJSONArray("coordinates").getJSONArray(0);
+        JSONArray first = ring.getJSONArray(0), last = ring.getJSONArray(ring.size() - 1);
+        return o.getJSONObject("properties").getLongValue("id")
+            + ring.size()
+            + JsonFixture.micros(first.getDoubleValue(0))
+            + JsonFixture.micros(first.getDoubleValue(1))
+            + JsonFixture.micros(last.getDoubleValue(0))
+            + JsonFixture.micros(last.getDoubleValue(1));
+      }
+      default -> throw new IllegalArgumentException("Not a numeric engine: " + engine);
+    }
   }
 
   private static long jackson(JsonNode o) {

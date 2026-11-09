@@ -163,9 +163,405 @@ final class SlabGenerator {
                   + " result;\n")
           .append(" }\n }\n");
     }
+    appendRowFactory(out, types);
+    for (var type : types) {
+      var layout = model.type(type.name()).layout();
+      appendRowClass(out, type, layout, false);
+      appendRowClass(out, type, layout, true);
+    }
   }
 
   private static final String WRITER = "dev.elide.truffledata.protobuf.GeneratedSlabWriter";
+  private static final String RUNTIME = "dev.elide.truffledata.protobuf.";
+  private static final String URE = "com.oracle.truffle.api.nodes.UnexpectedResultException";
+
+  static String rowClass(ProtoPlan.Type type, boolean root) {
+    return (root ? "SlabMessage_" : "SlabRow_") + type.name().replace('.', '$');
+  }
+
+  /**
+   * Binds the generated row classes to a layout whose every type matches a generated definition by
+   * name and structure; any other layout keeps the generic rows (plan 2026-11-08-beat-stock-svm
+   * WS1). Child type indices are the layout's, read from the row's owner at run time, because one
+   * generated child class serves every root layout containing its type: record offsets depend on
+   * the type alone.
+   */
+  private static void appendRowFactory(StringBuilder out, List<ProtoPlan.Type> types) {
+    out.append(
+            " private static ProtoPlan.@org.jspecify.annotations.Nullable SlabRows"
+                + " generatedSlabRows(")
+        .append(RUNTIME)
+        .append("Layout layout) {\n int[] ids=new int[layout.types()];\n")
+        .append(" for(int i=0;i<ids.length;i++) { var plan=layout.plan(i); switch(plan.name()) {\n");
+    for (int t = 0; t < types.size(); t++)
+      out.append(" case ")
+          .append(ContractPlugin.quote(types.get(t).name()))
+          .append(" -> { if(!plan.matchesDefinition(type")
+          .append(t)
+          .append("())) return null; ids[i]=")
+          .append(t)
+          .append("; }\n");
+    out.append(" default -> { return null; }\n } }\n")
+        .append(" return new ProtoPlan.SlabRows() {\n")
+        .append(" @Override public ")
+        .append(RUNTIME)
+        .append("SlabMessage root(")
+        .append(RUNTIME)
+        .append("Layout l,byte[] slab,int extent,int verification) { return switch(ids[0]) {\n");
+    for (int t = 0; t < types.size(); t++)
+      out.append(" case ")
+          .append(t)
+          .append(" -> new ")
+          .append(rowClass(types.get(t), true))
+          .append("(l,slab,extent,verification);\n");
+    out.append(" default -> throw new ContractViolation(\"Generated slab root mismatch\"); }; }\n")
+        .append(" @Override public ")
+        .append(RUNTIME)
+        .append("SlabRow child(")
+        .append(RUNTIME)
+        .append("SlabMessage owner,int type,int record) { return switch(ids[type]) {\n");
+    for (int t = 0; t < types.size(); t++)
+      out.append(" case ")
+          .append(t)
+          .append(" -> new ")
+          .append(rowClass(types.get(t), false))
+          .append("(owner,type,record);\n");
+    out.append(" default -> throw new ContractViolation(\"Generated slab type mismatch\"); }; }\n")
+        .append(" };\n }\n");
+  }
+
+  private static boolean inlineDefault(ProtoPlan.FieldPlan field) {
+    return field.repeated()
+        || switch (field.kind()) {
+          case STRING, BYTES, UINT64, FIXED64 -> false;
+          default -> true;
+        };
+  }
+
+  /** Java literal of a scalar default (long/double/boolean kinds; messages are Missing). */
+  private static String scalarDefault(ProtoPlan.FieldPlan field) {
+    try {
+      return ContractPlugin.literal(field.defaultValue());
+    } catch (Exception e) {
+      throw new IllegalStateException(e);
+    }
+  }
+
+  /** The value read of a present field through the protected slot readers of {@code r}. */
+  private static String presentValue(ProtoPlan.FieldPlan field, int ordinal, int slot, String r) {
+    String at = r + "int32At(" + slot + ")";
+    String wide = r + "int64At(" + slot + ")";
+    if (field.repeated()) return r + "listAt(" + slot + "," + ordinal + ")";
+    return switch (field.kind()) {
+      case MESSAGE, GROUP -> r + "rowAt(" + slot + "," + ordinal + ")";
+      case STRING -> r + "textAt(" + slot + ")";
+      case BYTES -> r + "blobAt(" + slot + ")";
+      case UINT64, FIXED64 -> r + "unsignedAt(" + slot + ")";
+      case UINT32, FIXED32 -> "Integer.toUnsignedLong(" + at + ")";
+      case INT64, SINT64, SFIXED64 -> wide;
+      case FLOAT -> "(double) Float.intBitsToFloat(" + at + ")";
+      case DOUBLE -> "Double.longBitsToDouble(" + wide + ")";
+      case BOOL -> at + " != 0";
+      default -> "(long) " + at;
+    };
+  }
+
+  /** The default of an absent field as an expression inside the row class. */
+  private static String absentValue(ProtoPlan.FieldPlan field, int ordinal) {
+    if (field.repeated()) return "emptyList()";
+    if (field.kind().message()) return "Missing.INSTANCE";
+    return inlineDefault(field) ? scalarDefault(field) : "D" + ordinal;
+  }
+
+  private static boolean longKind(ProtoPlan.FieldPlan f) {
+    return !f.repeated()
+        && switch (f.kind()) {
+          case INT32, SINT32, SFIXED32, ENUM, UINT32, FIXED32, INT64, SINT64, SFIXED64 -> true;
+          default -> false;
+        };
+  }
+
+  private static boolean doubleKind(ProtoPlan.FieldPlan f) {
+    return !f.repeated() && (f.kind() == ProtoPlan.Kind.FLOAT || f.kind() == ProtoPlan.Kind.DOUBLE);
+  }
+
+  /**
+   * One final row class per (type, root-or-child): constant-ordinal dispatch for the host reads
+   * and a nested exact-class accessor per field for the read nodes. Semantics mirror SlabRow and
+   * SlabRow.Slot for an unprojected owner (no projection check, which the owner guarantees).
+   */
+  private static void appendRowClass(
+      StringBuilder out, ProtoPlan.Type type, Layout layout, boolean root) {
+    String name = rowClass(type, root);
+    var fields = type.fields();
+    int count = fields.size();
+    out.append(" public static final class ")
+        .append(name)
+        .append(" extends ")
+        .append(RUNTIME)
+        .append(root ? "SlabMessage" : "SlabRow")
+        .append(" {\n");
+    if (root)
+      out.append(" public ")
+          .append(name)
+          .append("(")
+          .append(RUNTIME)
+          .append("Layout layout,byte[] slab,int extent,int verification) {"
+                  + " super(layout,slab,extent,verification); }\n");
+    else
+      out.append(" public ")
+          .append(name)
+          .append("(")
+          .append(RUNTIME)
+          .append("SlabMessage owner,int type,int record) { super(owner,type,record,false); }\n");
+    for (int f = 0; f < count; f++)
+      if (!inlineDefault(fields.get(f)) && !fields.get(f).kind().message())
+        out.append(" private static final Object D")
+            .append(f)
+            .append("=")
+            .append(scalarDefault(fields.get(f)))
+            .append(";\n");
+    out.append(" @Override public boolean has(int ordinal) { java.util.Objects.checkIndex(ordinal,")
+        .append(count)
+        .append("); return present(ordinal); }\n");
+    // Host reads: constant-ordinal dispatch; a kind with no field of that type is one throw.
+    var get = new StringBuilder();
+    var getLong = new StringBuilder();
+    var getDouble = new StringBuilder();
+    var getBoolean = new StringBuilder();
+    var getSize = new StringBuilder();
+    var stringLength = new StringBuilder();
+    for (int f = 0; f < count; f++) {
+      var field = fields.get(f);
+      int slot = layout.slot(0, f);
+      String present = " case " + f + " -> present(" + f + ") ? ";
+      get.append(present)
+          .append(presentValue(field, f, slot, ""))
+          .append(" : ")
+          .append(absentValue(field, f))
+          .append(";\n");
+      if (longKind(field))
+        getLong
+            .append(present)
+            .append(presentValue(field, f, slot, ""))
+            .append(" : ")
+            .append(scalarDefault(field))
+            .append(";\n");
+      if (doubleKind(field))
+        getDouble
+            .append(present)
+            .append(presentValue(field, f, slot, ""))
+            .append(" : ")
+            .append(scalarDefault(field))
+            .append(";\n");
+      if (!field.repeated() && field.kind() == ProtoPlan.Kind.BOOL)
+        getBoolean
+            .append(present)
+            .append("int32At(")
+            .append(slot)
+            .append(") != 0 : ")
+            .append(scalarDefault(field))
+            .append(";\n");
+      if (field.repeated())
+        getSize.append(present).append("listCountAt(").append(slot).append(") : 0;\n");
+      else if (field.kind() == ProtoPlan.Kind.BYTES)
+        getSize
+            .append(present)
+            .append("bytesLengthAt(")
+            .append(slot)
+            .append(") : ((DataArray) D")
+            .append(f)
+            .append(").size();\n");
+      if (!field.repeated() && field.kind() == ProtoPlan.Kind.STRING)
+        stringLength
+            .append(present)
+            .append("utf16LengthAt(")
+            .append(slot)
+            .append(") : ((String) D")
+            .append(f)
+            .append(").length();\n");
+    }
+    dispatch(out, "public Object get(int ordinal)", get,
+        "new IndexOutOfBoundsException(\"Field ordinal \"+ordinal)");
+    dispatch(out, "public long getLong(int ordinal)", getLong,
+        "new ContractViolation(\"Expected INT64\")");
+    dispatch(out, "public double getDouble(int ordinal)", getDouble,
+        "new ContractViolation(\"Expected FLOAT64\")");
+    dispatch(out, "public boolean getBoolean(int ordinal)", getBoolean,
+        "new ContractViolation(\"Expected BOOLEAN\")");
+    dispatch(out, "public int getSize(int ordinal)", getSize,
+        "new ContractViolation(\"Expected array\")");
+    dispatch(out, "public int stringLength(int ordinal)", stringLength,
+        "new ContractViolation(\"Expected string\")");
+    // accessor
+    if (count == 0)
+      out.append(
+          " @Override public Accessor accessor(int ordinal) { throw new"
+              + " IndexOutOfBoundsException(\"Field ordinal \"+ordinal); }\n");
+    else {
+      out.append(" @Override public Accessor accessor(int ordinal) { return schema().accessor(")
+          .append(name)
+          .append(".class,ordinal,i -> switch(i) {\n");
+      for (int f = 0; f < count; f++)
+        out.append(" case ")
+            .append(f)
+            .append(" -> (Accessor) new A")
+            .append(f)
+            .append("(plan());\n");
+      out.append(" default -> throw new IndexOutOfBoundsException(\"Field ordinal \"+i); }); }\n");
+    }
+    for (int f = 0; f < count; f++) appendAccessor(out, name, fields.get(f), f, layout.slot(0, f));
+    out.append(" }\n");
+  }
+
+  /** An ordinal switch over {@code cases}, or the fallback throw alone when there are none. */
+  private static void dispatch(
+      StringBuilder out, String signature, StringBuilder cases, String fallback) {
+    out.append(" @Override ").append(signature);
+    if (cases.isEmpty()) out.append(" { throw ").append(fallback).append("; }\n");
+    else
+      out.append(" { return switch(ordinal) {\n")
+          .append(cases)
+          .append(" default -> throw ")
+          .append(fallback)
+          .append("; }; }\n");
+  }
+
+  /** Exact-class accessor of one field: layout is (row class, plan schema). */
+  private static void appendAccessor(
+      StringBuilder out, String row, ProtoPlan.FieldPlan field, int f, int slot) {
+    String r = "r.";
+    out.append(" private static final class A")
+        .append(f)
+        .append(" extends Accessor {\n")
+        .append(" private final boolean plainText;\n")
+        .append(" A")
+        .append(f)
+        .append("(ProtoPlan plan) { super(plan.schema(),")
+        .append(f)
+        .append(",")
+        .append(row)
+        .append(".class); plainText=field().constraints().length()==null; }\n")
+        .append(" @Override public boolean accepts(Object row) { return row.getClass()==")
+        .append(row)
+        .append(".class && ((")
+        .append(row)
+        .append(") row).schema()==schema(); }\n")
+        .append(" private ")
+        .append(row)
+        .append(" row(Object value) { if(!accepts(value)) throw mismatch(); return (")
+        .append(row)
+        .append(") value; }\n")
+        .append(" private ")
+        .append(row)
+        .append(" trusted(Object value) { assertAccepted(value); return"
+                + " com.oracle.truffle.api.CompilerDirectives.castExact(value,")
+        .append(row)
+        .append(".class); }\n")
+        .append(" @Override public Object read(Object value) { return row(value).get(")
+        .append(f)
+        .append("); }\n")
+        .append(" @Override public long readLong(Object value) throws ")
+        .append(URE)
+        .append(" { return longOf(row(value)); }\n")
+        .append(" @Override protected long readLongBound(Object value) throws ")
+        .append(URE)
+        .append(" { return longOf(trusted(value)); }\n")
+        .append(" private static long longOf(")
+        .append(row)
+        .append(" r) throws ")
+        .append(URE)
+        .append(" { ");
+    if (longKind(field))
+      out.append("return r.present(")
+          .append(f)
+          .append(") ? ")
+          .append(presentValue(field, f, slot, r))
+          .append(" : ")
+          .append(scalarDefault(field))
+          .append(";");
+    else out.append("throw new ").append(URE).append("(r.get(").append(f).append("));");
+    out.append(" }\n")
+        .append(" @Override public double readDouble(Object value) throws ")
+        .append(URE)
+        .append(" { return doubleOf(row(value)); }\n")
+        .append(" @Override protected double readDoubleBound(Object value) throws ")
+        .append(URE)
+        .append(" { return doubleOf(trusted(value)); }\n")
+        .append(" private static double doubleOf(")
+        .append(row)
+        .append(" r) throws ")
+        .append(URE)
+        .append(" { ");
+    if (doubleKind(field))
+      out.append("return r.present(")
+          .append(f)
+          .append(") ? ")
+          .append(presentValue(field, f, slot, r))
+          .append(" : ")
+          .append(scalarDefault(field))
+          .append(";");
+    else out.append("throw new ").append(URE).append("(r.get(").append(f).append("));");
+    out.append(" }\n")
+        .append(" @Override public boolean readBoolean(Object value) throws ")
+        .append(URE)
+        .append(" { return booleanOf(row(value)); }\n")
+        .append(" @Override protected boolean readBooleanBound(Object value) throws ")
+        .append(URE)
+        .append(" { return booleanOf(trusted(value)); }\n")
+        .append(" private static boolean booleanOf(")
+        .append(row)
+        .append(" r) throws ")
+        .append(URE)
+        .append(" { ");
+    if (!field.repeated() && field.kind() == ProtoPlan.Kind.BOOL)
+      out.append("return r.present(")
+          .append(f)
+          .append(") ? r.int32At(")
+          .append(slot)
+          .append(") != 0 : ")
+          .append(scalarDefault(field))
+          .append(";");
+    else out.append("throw new ").append(URE).append("(r.get(").append(f).append("));");
+    out.append(" }\n")
+        .append(" @Override public int length(Object value) { return lengthIn(row(value)); }\n")
+        .append(
+            " @Override protected int lengthBound(Object value) { return lengthIn(trusted(value));"
+                + " }\n")
+        .append(" private int lengthIn(")
+        .append(row)
+        .append(" r) { ");
+    if (field.repeated())
+      out.append("return arrayLength(r.present(")
+          .append(f)
+          .append(") ? r.listCountAt(")
+          .append(slot)
+          .append(") : 0);");
+    else if (field.kind() == ProtoPlan.Kind.BYTES)
+      out.append("return arrayLength(r.present(")
+          .append(f)
+          .append(") ? r.bytesLengthAt(")
+          .append(slot)
+          .append(") : ((DataArray) ")
+          .append(row)
+          .append(".D")
+          .append(f)
+          .append(").size());");
+    else if (field.kind() == ProtoPlan.Kind.STRING)
+      out.append("if(plainText) return r.present(")
+          .append(f)
+          .append(") ? r.utf16LengthAt(")
+          .append(slot)
+          .append(") : ((String) ")
+          .append(row)
+          .append(".D")
+          .append(f)
+          .append(").length(); return lengthOf(r.get(")
+          .append(f)
+          .append("));");
+    else out.append("return lengthOf(r.get(").append(f).append("));");
+    out.append(" }\n }\n");
+  }
 
   private static void appendFastMethods(
       StringBuilder out, List<ProtoPlan.Type> types, ProtoPlan.Model model, boolean projected) {

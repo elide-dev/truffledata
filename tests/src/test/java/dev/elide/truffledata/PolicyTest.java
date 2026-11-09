@@ -42,8 +42,9 @@ class PolicyTest {
             Map.entry("ProtobufAdapter.java", 5),
             // Generated binding/decoding, lazy layout and the cold durable-array size fallback.
             Map.entry("ProtoPlan.java", 18),
-            Map.entry(
-                "SlabMessage.java", 16), // Decode/copy, projected lazy reads, usage and encoding.
+            // Decode/copy, trusted in-process publication (WS2), projected lazy reads, usage and
+            // encoding.
+            Map.entry("SlabMessage.java", 17),
             Map.entry("Projection.java", 1), // Invalid field-index diagnostic.
             Map.entry("SlabCodec.java", 1), // Invalid UTF-8 diagnostic construction.
             Map.entry("GeneratedSlabWriter.java", 1), // Invalid input-window diagnostic.
@@ -129,7 +130,7 @@ class PolicyTest {
             Map.entry("CsvScanner.java", 2), // Static syntax and limit failures.
             Map.entry("CsvBatch.java", 2), // Static STRING materialization and the export walk.
             Map.entry("CsvRow.java", 1), // Static typed-read contract failure.
-            Map.entry("CsvText.java", 2), // Sink-side String and TruffleString copies.
+            Map.entry("CsvText.java", 6), // Cold paths, copies, interop.
             Map.entry("Numbers.java", 1), // Static Double.parseDouble fallback.
             Map.entry("CsvMapping.java", 1)); // Static closed-mapping failure.
     Pattern limit = Pattern.compile("limit\\s*=\\s*\"(\\d+)\"");
@@ -175,6 +176,7 @@ class PolicyTest {
     exportedMessages.put("TypedRecord.java", 6);
     exportedMessages.put("CsvBatch.java", 4);
     exportedMessages.put("CsvRow.java", 6);
+    exportedMessages.put("CsvText.java", 4);
     Set<String> accessSurfaces = exportedMessages.keySet();
     Set<String> seenSurfaces = new HashSet<>();
     int checked = 0;

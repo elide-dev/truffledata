@@ -173,6 +173,32 @@ void backpressure_and_limits() {
   // A document larger than max_document_bytes is TD_YAML_LIMIT.
   require(documents(s, "---\nsmall\n---\n" + std::string(200, 'x') + "\n---\nafter\n", 0, 100).status == status_limit);
   require(documents(s, std::string(200, 'x'), 7, 100).status == status_limit);
+  // An exactly-at-limit non-final document (and one a few bytes below it) followed by another
+  // document must not false-fail: the marker bytes of the following `---` line may be buffered
+  // before scan() can classify them, and must not count toward the open document's limit. The
+  // document extent is the content plus the trailing LF that separates it from the next `---`,
+  // so "at limit" means content + LF == max_document_bytes.
+  for (size_t slack : {size_t(0), size_t(1), size_t(2), size_t(3), size_t(4)}) {
+    for (size_t chunk : {size_t(0), size_t(1), size_t(7), size_t(64), size_t(1000000)}) {
+      std::string doc1 = std::string(100 - 1 - slack, 'x');
+      std::string text = doc1 + "\n---\nsecond\n";
+      run r = documents(s, text, chunk, 100, 100);
+      require(r.status == status_ok && r.documents.size() == 2);
+      require(r.documents[0] == std::string("\"") + doc1 + "\"");
+      require(r.documents[1] == "\"second\"");
+    }
+  }
+  // A `...`-terminated mid-stream document counts the terminator line toward the document extent
+  // (the authoritative decode-time check decides), so it is subject to max_document_bytes like any
+  // other document; an under-limit one is accepted.
+  for (size_t slack : {size_t(5), size_t(6), size_t(7)}) {
+    for (size_t chunk : {size_t(0), size_t(1), size_t(7), size_t(64)}) {
+      std::string text = std::string(100 - slack, 'x') + "\n...\n---\nsecond\n";
+      run r = documents(s, text, chunk, 100, 100);
+      require(r.status == status_ok && r.documents.size() == 2);
+      require(r.documents[1] == "\"second\"");
+    }
+  }
 }
 
 void steady_state() {

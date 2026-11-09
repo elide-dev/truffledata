@@ -1,0 +1,46 @@
+exec ${PAGER:-/usr/bin/less} "$0" || exit 1
+Executing tests from //json/native:number_kernel_probe
+-----------------------------------------------------------------------------
+simdjson active icelake; kernel tier haswell
+cpu model name	: AMD EPYC
+cpu flags		: fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ht syscall nx mmxext fxsr_opt pdpe1gb rdtscp lm rep_good nopl cpuid extd_apicid tsc_known_freq pni pclmulqdq ssse3 fma cx16 pcid sse4_1 sse4_2 x2apic movbe popcnt tsc_deadline_timer aes xsave avx f16c rdrand hypervisor lahf_lm cmp_legacy svm cr8_legacy abm sse4a misalignsse 3dnowprefetch osvw topoext perfctr_core invpcid_single ssbd ibrs ibpb stibp vmmcall fsgsbase tsc_adjust bmi1 avx2 smep bmi2 erms invpcid avx512f avx512dq rdseed adx smap avx512ifma clflushopt clwb avx512cd sha_ni avx512bw avx512vl xsaveopt xsavec xgetbv1 xsaves avx512_bf16 clzero xsaveerptr wbnoinvd arat npt lbrv nrip_save tsc_scale vmcb_clean flushbyasid pausefilter pfthreshold v_vmsave_vmload vgif avx512vbmi umip pku avx512_vbmi2 gfni vaes vpclmulqdq avx512_vnni avx512_bitalg avx512_vpopcntdq rdpid fsrm flush_l1d
+NUMBER small bytes 203 round 0 builtin 441 ns haswell 494 ns builtin/kernel 0.8924
+NUMBER small bytes 203 round 1 builtin 579 ns haswell 543 ns builtin/kernel 1.0657
+NUMBER small bytes 203 round 2 builtin 578 ns haswell 468 ns builtin/kernel 1.2364
+NUMBER small bytes 203 round 3 builtin 612 ns haswell 494 ns builtin/kernel 1.2390
+NUMBER small bytes 203 round 4 builtin 462 ns haswell 441 ns builtin/kernel 1.0484
+NUMBER small bytes 203 round 5 builtin 455 ns haswell 428 ns builtin/kernel 1.0623
+NUMBER small bytes 203 round 6 builtin 374 ns haswell 381 ns builtin/kernel 0.9816
+NUMBER small median builtin/kernel 1.0623 (range 0.8924-1.2390)
+NUMBER medium bytes 4330 round 0 builtin 8249 ns haswell 9105 ns builtin/kernel 0.9060
+NUMBER medium bytes 4330 round 1 builtin 9457 ns haswell 8978 ns builtin/kernel 1.0534
+NUMBER medium bytes 4330 round 2 builtin 8318 ns haswell 8250 ns builtin/kernel 1.0081
+NUMBER medium bytes 4330 round 3 builtin 11088 ns haswell 10084 ns builtin/kernel 1.0995
+NUMBER medium bytes 4330 round 4 builtin 8647 ns haswell 8228 ns builtin/kernel 1.0509
+NUMBER medium bytes 4330 round 5 builtin 8031 ns haswell 8386 ns builtin/kernel 0.9577
+NUMBER medium bytes 4330 round 6 builtin 8201 ns haswell 8608 ns builtin/kernel 0.9527
+NUMBER medium median builtin/kernel 1.0081 (range 0.9060-1.0995)
+NUMBER big bytes 228485 round 0 builtin 421138 ns haswell 433727 ns builtin/kernel 0.9710
+NUMBER big bytes 228485 round 1 builtin 483282 ns haswell 455235 ns builtin/kernel 1.0616
+NUMBER big bytes 228485 round 2 builtin 418102 ns haswell 424418 ns builtin/kernel 0.9851
+NUMBER big bytes 228485 round 3 builtin 464912 ns haswell 428956 ns builtin/kernel 1.0838
+NUMBER big bytes 228485 round 4 builtin 516228 ns haswell 427246 ns builtin/kernel 1.2083
+NUMBER big bytes 228485 round 5 builtin 418060 ns haswell 460328 ns builtin/kernel 0.9082
+NUMBER big bytes 228485 round 6 builtin 419211 ns haswell 486441 ns builtin/kernel 0.8618
+NUMBER big median builtin/kernel 0.9851 (range 0.8618-1.2083)
+NUMBER huge bytes 4850894 round 0 builtin 9558100 ns haswell 9881894 ns builtin/kernel 0.9672
+NUMBER huge bytes 4850894 round 1 builtin 8947229 ns haswell 15555823 ns builtin/kernel 0.5752
+NUMBER huge bytes 4850894 round 2 builtin 9664005 ns haswell 8747920 ns builtin/kernel 1.1047
+NUMBER huge bytes 4850894 round 3 builtin 8653168 ns haswell 8890258 ns builtin/kernel 0.9733
+NUMBER huge bytes 4850894 round 4 builtin 8720158 ns haswell 10741860 ns builtin/kernel 0.8118
+NUMBER huge bytes 4850894 round 5 builtin 8540422 ns haswell 8865013 ns builtin/kernel 0.9634
+NUMBER huge bytes 4850894 round 6 builtin 8888104 ns haswell 9819769 ns builtin/kernel 0.9051
+NUMBER huge median builtin/kernel 0.9634 (range 0.5752-1.1047)
+NUMBER numeric bytes 210997 round 0 builtin 385455 ns haswell 422536 ns builtin/kernel 0.9122
+NUMBER numeric bytes 210997 round 1 builtin 386767 ns haswell 413072 ns builtin/kernel 0.9363
+NUMBER numeric bytes 210997 round 2 builtin 387171 ns haswell 416727 ns builtin/kernel 0.9291
+NUMBER numeric bytes 210997 round 3 builtin 412250 ns haswell 412686 ns builtin/kernel 0.9989
+NUMBER numeric bytes 210997 round 4 builtin 395411 ns haswell 496580 ns builtin/kernel 0.7963
+NUMBER numeric bytes 210997 round 5 builtin 583025 ns haswell 560670 ns builtin/kernel 1.0399
+NUMBER numeric bytes 210997 round 6 builtin 811797 ns haswell 416978 ns builtin/kernel 1.9469
+NUMBER numeric median builtin/kernel 0.9363 (range 0.7963-1.9469)

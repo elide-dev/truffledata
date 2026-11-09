@@ -183,6 +183,29 @@ public final class ProtoPlan {
     SlabDecoder bind(ProtoPlan plan);
   }
 
+  /**
+   * Schema-generated slab row classes of one {@link Layout}: a final class per (layout type,
+   * root-or-child), so a read node's layout guard is an exact class compare and every field read is
+   * a constant-offset load. Generated rows exist only on unprojected owning slabs; projected and
+   * lazily expanded rows keep the generic {@link SlabRow}.
+   */
+  public interface SlabRows {
+    /** The root message of a verified owning slab (see {@code SlabMessage} verification bits). */
+    SlabMessage root(Layout layout, byte[] slab, int extent, int verification);
+
+    /** A child record of {@code owner} at {@code record} whose layout type is {@code type}. */
+    SlabRow child(SlabMessage owner, int type, int record);
+  }
+
+  /**
+   * Binds generated row classes to a layout whose every type matches the generated definitions, or
+   * returns null so that layout keeps the generic rows.
+   */
+  @FunctionalInterface
+  public interface SlabRowsFactory {
+    @Nullable SlabRows bind(Layout layout);
+  }
+
   /** All graph references resolve once when the model is built, including recursive messages. */
   public static final class Model {
     private final Map<String, ProtoPlan> types;
@@ -190,6 +213,7 @@ public final class ProtoPlan {
     final int maxDepth;
     final int maxWireBytes;
     final @Nullable SlabDecoderFactory slabDecoders;
+    final @Nullable SlabRowsFactory slabRows;
 
     @TruffleBoundary
     public Model(
@@ -198,11 +222,10 @@ public final class ProtoPlan {
         Limits limits,
         int maxDepth,
         int maxWireBytes) {
-      this(language, definitions, limits, maxDepth, maxWireBytes, null);
+      this(language, definitions, limits, maxDepth, maxWireBytes, null, null);
     }
 
     /** Generated contracts supply their producer factory; runtime models use the table decoder. */
-    @TruffleBoundary
     public Model(
         @Nullable TruffleLanguage<?> language,
         List<Type> definitions,
@@ -210,7 +233,21 @@ public final class ProtoPlan {
         int maxDepth,
         int maxWireBytes,
         @Nullable SlabDecoderFactory slabDecoders) {
+      this(language, definitions, limits, maxDepth, maxWireBytes, slabDecoders, null);
+    }
+
+    /** Generated contracts also supply their slab row classes; runtime models use generic rows. */
+    @TruffleBoundary
+    public Model(
+        @Nullable TruffleLanguage<?> language,
+        List<Type> definitions,
+        Limits limits,
+        int maxDepth,
+        int maxWireBytes,
+        @Nullable SlabDecoderFactory slabDecoders,
+        @Nullable SlabRowsFactory slabRows) {
       this.slabDecoders = slabDecoders;
+      this.slabRows = slabRows;
       this.limits = Objects.requireNonNull(limits);
       if (maxDepth < 1 || maxDepth > 128 || maxWireBytes < 0)
         throw new ContractViolation("Invalid protobuf decoding budgets");
@@ -336,6 +373,11 @@ public final class ProtoPlan {
     schema = new Schema(definition.name(), contracts);
     layout = language == null ? null : new StaticLayout(language, schema, model.limits);
     jsonType = ProtoJsonType.classify(this);
+  }
+
+  /** The model's generated slab row classes, bound per layout; null for runtime models. */
+  @Nullable SlabRowsFactory slabRows() {
+    return model.slabRows;
   }
 
   /** The slab layout rooted at this plan (type 0), compiled once; identity-stable per plan. */

@@ -50,8 +50,11 @@ class stream final {
     compact();
     size_t pending = size_ - start_;
     size_t limit = buffer_bytes_;
-    // An open document may grow the buffer, a buffer at a time, up to max_document_bytes + 1.
-    if (!complete_ && pending >= limit) limit = std::min(pending + buffer_bytes_, max_document_ + 1);
+    // An open document may grow the buffer, a buffer at a time, up to max_document_bytes + 5: the
+    // +5 lets a full terminating `---`/`...` marker line (the 3-byte marker, an optional CR, and its
+    // LF) be buffered before scan() can classify it (a line needs its LF), without counting the
+    // marker bytes toward the document (next() bounds the classified extent, not total pending).
+    if (!complete_ && pending >= limit) limit = std::min(pending + buffer_bytes_, max_document_ + 5);
     size_t room = pending < limit ? limit - pending : 0;
     size_t take = length < room ? length : room;
     if (!take) return 0;
@@ -84,7 +87,11 @@ class stream final {
         end = size_;
         if (end == start_) return status_stream_empty;
       } else {
-        if (size_ - start_ > max_document_) return fail(status_limit);
+        // The open document itself is bounded by the classified extent (scan_ - start_), not total
+        // pending (size_ - start_): trailing unclassified bytes of a not-yet-complete terminating
+        // `---`/`...` marker line are not part of the document. The authoritative length check below
+        // decides at decode time, so only a document larger than max_document_bytes is TD_YAML_LIMIT.
+        if (scan_ - start_ > max_document_) return fail(status_limit);
         return status_stream_empty;
       }
       const uint8_t* chunk = reinterpret_cast<const uint8_t*>(data_ + start_);

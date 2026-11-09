@@ -1,0 +1,32 @@
+| Symbol | Instructions | Calls | Frame B | Stack loads | Stack stores |
+|---|---:|---:|---:|---:|---:|
+| `BatchBuilder_advance` | 39 | 1 | 24 | 1 | 1 |
+| `BatchBuilder_bool` | 187 | 11 | 24 | 0 | 0 |
+| `BatchBuilder_columns` | 475 | 31 | 104 | 54 | 29 |
+| `BatchBuilder_grow` | 75 | 4 | 24 | 0 | 0 |
+| `BatchBuilder_record` | 561 | 51 | 104 | 131 | 26 |
+| `BatchBuilder_resize` | 623 | 22 | 104 | 77 | 29 |
+| `BatchBuilder_toBoolean` | 57 | 4 | 40 | 4 | 3 |
+| `BatchBuilder_toDouble` | 107 | 9 | 40 | 12 | 5 |
+| `BatchBuilder_toLong` | 131 | 12 | 40 | 13 | 5 |
+| `BatchBuilder_trim` | 36 | 1 | 24 | 0 | 0 |
+| `CsvBatch_string` | 171 | 11 | 72 | 22 | 9 |
+| `CsvBatch_stringAt` | 102 | 8 | 24 | 0 | 0 |
+| `CsvPlan_parseBytes` | 409 | 23 | 136 | 71 | 28 |
+| `CsvRow_getBoolean` | 81 | 7 | 24 | 0 | 0 |
+| `CsvRow_getDouble` | 80 | 7 | 24 | 0 | 0 |
+| `CsvRow_getLong` | 81 | 7 | 24 | 0 | 0 |
+| `CsvScanner_scan` | 125 | 5 | 72 | 6 | 8 |
+| `CsvScanner_scanIndexed` | 152 | 4 | 104 | 31 | 14 |
+| `IndexScan_frameFused` | 7750 | 296 | 344 | 1090 | 459 |
+| `IndexScan_framePlain` | 1133 | 25 | 200 | 300 | 127 |
+| `IndexScan_frameSpans` | 3252 | 118 | 328 | 628 | 257 |
+| `IndexScan_scan` | 226 | 12 | 104 | 47 | 23 |
+| `Numbers_digits` | 85 | 3 | 40 | 0 | 2 |
+| `Numbers_dot` | 195 | 4 | 40 | 0 | 4 |
+| `Numbers_eiselLemire` | 162 | 0 | 8 | 0 | 0 |
+| `Numbers_grammar` | 503 | 25 | 88 | 18 | 48 |
+| `Numbers_parseDouble` | 215 | 10 | 56 | 33 | 24 |
+| `Numbers_parseLong` | 349 | 20 | 56 | 12 | 22 |
+| `Utf8_invalidOffset` | 306 | 16 | 40 | 0 | 21 |
+| `Utf8_string` | 163 | 8 | 56 | 8 | 8 |

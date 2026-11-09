@@ -308,6 +308,7 @@ are their own snapshot; share them across threads freely. The batch keeps its in
 | `record()` | Stream data-record index, 0-based |
 | `isNull(c)` | True only for a null (not a missing) field |
 | `getString(c)`, `getLong(c)`, `getDouble(c)`, `getBoolean(c)` | The value; `ContractViolation` when the field is null, missing or of another kind |
+| `getText(c)`, `getText(c, into)` | The STRING cell as a lazy `CsvText` bound to the batch ([Text cells](#text-cells)); the second form rebinds the caller's reusable text and allocates nothing. Same `ContractViolation` rules |
 
 Memory for a generic batch is the input plus 8 bytes per field plus array headers.
 Typed columns cost 8 bytes (BOOLEAN: 1 byte) per cell, plus 1 byte per cell for
@@ -331,13 +332,48 @@ public interface CsvSink {
 }
 ```
 
-`CsvText` is a reusable view of one cell's UTF-8 bytes after unescaping, valid only
-during the `text` call: `length()`, `byteAt(i)`, `copyTo(target, offset)`,
-`contentEquals(utf8)`, `toTruffleString()` (UTF-8, one copy, no intermediate `String`) and
-`toString()`. Unescaped fields view the batch input directly; escaped fields view a
-scratch buffer. An export allocates one `CsvText` and, only when the batch has escaped
-fields, one scratch buffer that grows to the longest escaped field. Nothing is allocated
-per row or per field. Exceptions from the sink propagate unchanged.
+The export's `CsvText` is one reusable view of each cell's UTF-8 bytes after unescaping,
+valid only during the `text` call (the same type as the retained text cells below).
+Unescaped fields view the batch input directly; escaped fields view a scratch buffer. An
+export allocates one `CsvText` and, only when the batch has escaped fields, one scratch
+buffer that grows to the longest escaped field. Nothing is allocated per row or per field.
+Exceptions from the sink propagate unchanged.
+
+### Text cells
+
+`CsvText` is a lazy STRING cell: the cell's UTF-8 bytes after unescaping, without a
+`String`. `CsvRow.getText(c)` returns a new text bound to the batch; `getText(c, into)`
+rebinds a text the caller already holds (`new CsvText()` is unbound until then) and returns
+it, so one text can walk a whole batch without allocating, the way a Rust `StringRecord` is
+reused. Reads: `length()` (bytes), `charLength()` (the `String` length in UTF-16 units,
+counted from the bytes), `byteAt(i)`, `copyTo(target, offset)`, `contentEquals(utf8)`,
+`toTruffleString()` (UTF-8, one copy, no intermediate `String`) and `toString()` (built
+exactly as `getString` builds it, cached per binding).
+
+- **No copy by default.** An unescaped cell of a heap batch views the batch input. Escaped
+  cells and cells of a mapped batch fetch one decoded copy of their bytes on the first
+  byte-level read (`length()` of an escaped cell, `charLength`, `byteAt`, `copyTo`,
+  `contentEquals`, `toTruffleString`, `equals`, `hashCode`); `toString()` never takes that
+  copy.
+- **Batch lifetime.** A text lives as long as its batch: every read of a text over a mapped
+  batch throws `IllegalStateException("CSV mapping closed")` once the mapping is closed
+  (including a reader-owned mapping closed with the reader), even for bytes it had already
+  fetched. Heap batches never close. An unbound text throws `IllegalStateException` on every
+  read.
+- **Equality and hashing are by content.** Two texts are equal when their unescaped UTF-8
+  bytes are equal, whatever their batches; `hashCode` is the polynomial (31) hash of those
+  bytes, consistent with `equals` but not with `String.hashCode`. A text never equals a
+  `String` (use `contentEquals` or `toString`). A reused text changes content when rebound,
+  so do not key collections by one.
+- **Interop.** `CsvText` is an interop string: `isString`, `asString`, `asTruffleString`
+  and `toDisplayString`. By default DataLibrary and interop reads still return Java
+  `String`s; `CsvPlan.withTextCells(true)` (also on `CsvPlan.generic(format)`, the plan
+  behind `Csv.parse`) makes them return `CsvText` instead. `getString`/`getText` do not
+  depend on the option. Core contracts that require a Java `String` for STRING values
+  (strict `Values.validate`, STRING length constraints, payload budgets) treat a `CsvText`
+  as a type mismatch, so the option is for guests that consume the cell as an interop string.
+- **Threads.** A text is as shareable as its batch for reads that do not fetch; fetching
+  and `toString` caching write the text's fields, so a reusable text belongs to one thread.
 
 ## Null and missing
 
@@ -472,9 +508,10 @@ Both types are read-only.
 | `CsvBatch` | `hasArrayElements`, `getArraySize`, `isArrayElementReadable`, `readArrayElement` | An array of `CsvRow`s. `readArrayElement` is inline (no boundary), so compiled loops can virtualize the row |
 | `CsvRow` | `hasMembers`, `getMembers`, `isMemberReadable`, `readMember` | Members named by the schema (the header), in header order |
 | `CsvRow` | `hasArrayElements`, `getArraySize`, `isArrayElementReadable`, `readArrayElement` | Elements by ordinal; size is `schema.size()` |
+| `CsvText` | `isString`, `asString`, `asTruffleString`, `toDisplayString` | A lazy STRING cell ([Text cells](#text-cells)); reads fail once its mapped batch is closed |
 
-Field values are Java `String`, `Long`, `Double` or `Boolean`, or `DataNull` (interop
-null). A missing field is not readable: `isMemberReadable` and `isArrayElementReadable`
+Field values are Java `String` (or `CsvText` under `CsvPlan.withTextCells(true)`), `Long`,
+`Double` or `Boolean`, or `DataNull` (interop null). A missing field is not readable: `isMemberReadable` and `isArrayElementReadable`
 are false, and reads throw `UnknownIdentifierException` or
 `InvalidArrayIndexException`. Polyglot callers see `hasMember` false and `getMember`
 null. Names that occur twice in the header are not readable by name.
@@ -486,7 +523,7 @@ null. Names that occur twice in the header are not readable by name.
 | Message | Behavior |
 | --- | --- |
 | `getSchema` | The batch schema (the plan's schema for typed batches) |
-| `read(i)` | `String`, `Long`, `Double`, `Boolean`, `DataNull` or `Missing`. STRING fields materialize through a static boundary |
+| `read(i)` | `String`, `Long`, `Double`, `Boolean`, `DataNull` or `Missing`. STRING fields materialize through a static boundary, or return a `CsvText` for plans with `withTextCells(true)` |
 | `readLong`, `readDouble`, `readBoolean` | A cached specialization (schema identity, constant field, required non-nullable field of that kind) reads the primitive array directly; the generic replacement throws `UnexpectedResultException` carrying the `read` value for null, missing or another kind |
 | `isPresent(i)` | False only for missing fields |
 
@@ -518,8 +555,9 @@ and its messages name the record and field but never include field text.
 
 Formats, limits, plans, and heap batches and rows are immutable and safe to share across
 threads. Mapped batches are as thread-safe as their arena: confined arenas serve one
-thread, shared arenas serve any. A `CsvReader` and a `CsvWriter` are single-threaded. A
-`CsvText` belongs to the export that passes it.
+thread, shared arenas serve any. A `CsvReader` and a `CsvWriter` are single-threaded. The export's `CsvText` belongs to the
+export that passes it; a text cell is as shareable as its batch for reads that do not fetch
+or cache, and a reusable text belongs to one thread ([Text cells](#text-cells)).
 
 ## Performance
 
@@ -704,8 +742,8 @@ the shipped native paths stand, as ratios within their shard:
   native CSV producer emits structural indexes; Java framing builds retained columns.
 - A `MemorySegment`-native index consumer for mapped input (the window copy stays; see the
   comparison write-up for why it is not the mapped path's main cost).
-- Lazy text views for `getString` and TruffleString cells for guests (a `String` per cell remains
-  the API; see the CSV ledger rulings).
+- Widening core's STRING contract (`Values.validate`, length constraints) to interop strings so
+  `CsvText` cells pass strict validation; today the text-cells option is CSV-only.
 - Buffer recycling across heap batches.
 - Wider boolean spellings, STRING length constraints, other encodings, type inference.
 - Primitive and text columns in core `Batch`, so CSV and JDBC share column storage.

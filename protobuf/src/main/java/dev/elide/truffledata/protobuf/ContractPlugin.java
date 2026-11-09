@@ -75,7 +75,11 @@ public final class ContractPlugin {
       source.append("type").append(i).append("()");
     }
     source.append(
-        "), limits, maxDepth, maxWireBytes, " + className + "::generatedSlabDecoder);\n }\n");
+        "), limits, maxDepth, maxWireBytes, "
+            + className
+            + "::generatedSlabDecoder, "
+            + className
+            + "::generatedSlabRows);\n }\n");
     for (int i = 0; i < definitions.size(); i++) {
       var type = definitions.get(i);
       source

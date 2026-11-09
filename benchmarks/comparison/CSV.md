@@ -4,7 +4,10 @@ SVM is the performance admission target. JVM correctness, API and coverage tests
 required; historical JVM timings below are descriptive and do not veto SVM improvements.
 
 For a before/after SVM experiment, `:csv_pair` accepts an executable through
-`--//benchmarks/comparison:csv_svm_baseline=//path:binary`. Each of its eight
+`--//benchmarks/comparison:csv_svm_baseline=//path:binary` (and the candidate through
+`--//benchmarks/comparison:csv_svm_candidate=…`, default the tree's image, so two preserved
+images can be paired without rebuilding; a cell the baseline binary predates is recorded
+candidate-only). Each of its eight
 fixture shards interleaves both binaries on the same worker with three fresh
 forks, verifies complete result checksums and input hashes, and retains raw
 timing/allocation records plus medians and fork ranges. `CSV_PAIR_SHARDS` and
@@ -17,7 +20,10 @@ The comparison cell for the CSV backend (plan Task 7, expanded). It measures the
 kernels (`csv/native`, `csv/kernel`) and the current pure-Java scanner against the Java CSV field
 and native references, on identical bytes and on the same worker.
 
-The latest paired change qualification is
+The latest paired change qualification is [`csv-lazy-text-3c1d175/`](../results/csv-lazy-text-3c1d175/README.md)
+(with the killed probe [`csv-row-inline-899ee9c/`](../results/csv-row-inline-899ee9c/README.md)); the previous ones are
+[`csv-numbers-5f0406d/`](../results/csv-numbers-5f0406d/README.md),
+[`csv-writers-afa4aa5/`](../results/csv-writers-afa4aa5/README.md) and
 [`csv-span-only-20261108/`](../results/csv-span-only-20261108/README.md).
 The latest full cross-runtime matrix, with raw samples, hosts, binary hashes and caveats,
 is [`csv-3f23d0c/`](../results/csv-3f23d0c/README.md); earlier matrices are
@@ -73,6 +79,88 @@ worker.
   - SimpleFlatMapper: unmaintained.
   - zsv: would need a third-party C build. The csv/native kernel is itself the simdcsv design
     (simdjson stage 1), so `native-indexed-scan` stands in for that class.
+
+## Lazy `CsvText` cells (wave 4, 2026-11-09)
+
+`6d5f938` + `050bccd` add a retained lazy STRING cell: `CsvRow.getText(c, into)` rebinds one
+caller-owned `CsvText` to each cell (no allocation, no copy for unescaped heap cells); the text
+reads bytes, counts UTF-16 units, compares, hashes, or materializes a `String`/`TruffleString`
+on demand, and fails every read once its mapped batch is closed. Two new `strings` cells,
+compared with the copied-strings cell of the same shard, run and binary (the baseline binary
+predates them), x86 SVM, invocation
+[07be4722](https://app.buildbuddy.io/invocation/07be4722-6aa2-4c07-ae91-98d8d3330f46), native
+index, loaded workers (ratios only):
+
+| Cell | Lazy text / copied strings (time) | Materializing through the text / `getString` | B/row text vs copied |
+|---|---:|---:|---:|
+| strings numeric 1 MiB | 0.751 (separate) | 0.931 (overlap) | 148 vs 404 |
+| strings mixed 1 MiB | 0.764 (separate) | 0.942 (overlap) | 464 vs 1,363 |
+| strings numeric 128 MiB | 0.670 (overlap, one fork) | 1.066 (overlap) | 217 vs 473 |
+| strings mixed 128 MiB | 0.649 (separate) | 0.933 (overlap) | 464 vs 1,362 |
+
+The per-cell `String`s (256 B/row numeric, 899 B/row mixed) are gone from the lazy path; what
+remains is the batch and the row view. A first image paid two out-of-line calls per cell on the
+materializing path (1.11–1.35× `getString`); making `textAt`, `toString` and `charLength`
+host-inlining roots like `stringAt` removed that. The companion probe, force-inlining
+`CsvBatch.row` and the typed getters (JDK-internal `ForceInline`), scalar-replaces the row
+(exactly −24 B/row on every typed and strings cell) but never separated from worker noise in
+four pairs (typed numeric native 0.85–1.03, all overlapping) and was reverted under Sam's
+ruling. Details: [`csv-lazy-text-3c1d175/`](../results/csv-lazy-text-3c1d175/README.md),
+[`csv-row-inline-899ee9c/`](../results/csv-row-inline-899ee9c/README.md).
+
+## FLOAT64 conversion from the field's words (WS10b, 2026-11-09)
+
+`5f0406d` converts a FLOAT64 field of up to 16 bytes from the one or two words that end it: one
+zero-byte test finds the dot, a byte shift removes it, one digit test and one SWAR conversion read
+the digits, and one division by an exact power of ten rounds exactly (Clinger). Other tokens keep
+the full grammar with Eisel-Lemire. Per value 264 → 149 instructions (numeric), 268 → 175
+(mixed); a differential test against the previous parsers (2.65M placed tokens, 291k fixture
+fields) finds no divergence. Paired x86 SVM against the preserved `f775a9a` image
+([invocation e5236b2b](https://app.buildbuddy.io/invocation/e5236b2b-fb7c-45c0-a145-74ffd46e3840)),
+native index:
+
+| Cell | Before GB/s | After GB/s | Time ratio | vs FastCSV after |
+|---|---:|---:|---:|---:|
+| typed numeric 1 MiB | 0.3797 | 0.4178 | 0.909 | 3.84× |
+| typed mixed 1 MiB | 0.5434 | 0.5708 | 0.952 | 3.23× |
+| typed numeric 128 MiB | 0.3360 | 0.3622 | 0.928 | |
+| typed mixed 128 MiB | 0.4939 | 0.5156 | 0.958 | |
+
+Every listed range separates; bytes/row, compiled read graphs and allocation gates are unchanged.
+`kernel-native` typed shares `Numbers` and gains more (0.84–0.91×), so the ratio to that bound
+falls (numeric 0.817× → 0.760×). The same treatment for INT64 (sign read from the field's word)
+cut 14% of its instructions but showed no time change (0.934× overlapping, then 1.007×) and was
+not admitted. Details, attribution and AOT shapes:
+[`csv-numbers-5f0406d/`](../results/csv-numbers-5f0406d/README.md).
+
+## Plain framing, staged column writers and getString (WS10, 2026-11-08)
+
+`afa4aa5` frames every batch with the scan loop (`framePlain`): while the index scan frames, a
+complete valid record only copies its spans into per-thread 64-row chunks, and each field is
+converted (or, for STRING, shifted) over the chunk in one monomorphic pass; declined records and
+per-byte scans take the per-record path after the staged rows convert, so diagnostics and their
+order are unchanged. `Numbers.dot` drops two software popcounts, and `getString` builds its
+String in one host-inlining root. The fused and span-only loops are gone.
+
+Paired x86 SVM against the preserved `e650d87` image, all eight shards, three forks
+([invocation ab5c9c3b](https://app.buildbuddy.io/invocation/ab5c9c3b-216c-497d-afb0-7d01d2f41b2c)),
+1 MiB native index:
+
+| Cell | Before GB/s | After GB/s | Time ratio | vs FastCSV after |
+|---|---:|---:|---:|---:|
+| typed numeric | 0.3233 | 0.3804 | 0.850 | 3.54× |
+| typed mixed | 0.4841 | 0.5468 | 0.885 | 3.15× |
+| copied strings numeric | 0.2316 | 0.2779 | 0.833 | 0.93× |
+| copied strings mixed | 0.2737 | 0.3246 | 0.843 | 1.03× |
+| owned strings numeric | 0.2606 | 0.3176 | 0.821 | 1.06× |
+| owned strings mixed | 0.3114 | 0.3767 | 0.827 | 1.19× |
+
+Every listed range separates; 128 MiB typed improves 12.8–13.2%, long quoted/escaped strings
+0–5%. Bytes/row, compiled read graphs and read-allocation gates are unchanged; competitors stay
+within ±2.3% (`kernel-native` typed gains 3.3% because it shares `Numbers`). The plan's typed
+≥0.7 GB/s and copied-strings ≥0.35 GB/s hypotheses are not reached. Instruction attribution,
+AOT shapes, the rejected conversion-only probe and all raw records:
+[`csv-writers-afa4aa5/`](../results/csv-writers-afa4aa5/README.md).
 
 ## Admitted span-only SVM follow-up (2026-11-08)
 

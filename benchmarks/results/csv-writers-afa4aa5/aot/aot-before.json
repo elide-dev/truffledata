@@ -1,0 +1,599 @@
+{
+  "image": "build/csv-writers-before/csv-comparison-profile",
+  "nm": "/Users/sam/.local/share/mise/shims/llvm-nm",
+  "objdump": "/Users/sam/.local/share/mise/shims/llvm-objdump",
+  "symbols": [
+    {
+      "pattern": "^BatchBuilder_(record|put|putSpan|commit|advance|grow|resize|trim|columns|toLong|toDouble|toBoolean|bool)$",
+      "symbol": "BatchBuilder_advance_J8QxuIlQR91RcmNue6eoRA",
+      "name": "BatchBuilder_advance",
+      "address": 7904736,
+      "size": 127,
+      "instructions": 39,
+      "calls": 1,
+      "frame": 24,
+      "stack_loads": 1,
+      "stack_stores": 1,
+      "call_targets": [
+        "BatchBuilder_grow"
+      ]
+    },
+    {
+      "pattern": "^BatchBuilder_(record|put|putSpan|commit|advance|grow|resize|trim|columns|toLong|toDouble|toBoolean|bool)$",
+      "symbol": "BatchBuilder_bool_nOD1TRUK0kDrBiU6rIW53I",
+      "name": "BatchBuilder_bool",
+      "address": 7904864,
+      "size": 591,
+      "instructions": 187,
+      "calls": 11,
+      "frame": 24,
+      "stack_loads": 0,
+      "stack_stores": 0,
+      "call_targets": [
+        "ImplicitExceptions_throwNewNullPointerException",
+        "ImplicitExceptions_throwNewOutOfBoundsExceptionWithArgs"
+      ]
+    },
+    {
+      "pattern": "^BatchBuilder_(record|put|putSpan|commit|advance|grow|resize|trim|columns|toLong|toDouble|toBoolean|bool)$",
+      "symbol": "BatchBuilder_columns_GnRODSiZpOA9dET2gdffSA",
+      "name": "BatchBuilder_columns",
+      "address": 7906400,
+      "size": 1990,
+      "instructions": 475,
+      "calls": 31,
+      "frame": 104,
+      "stack_loads": 54,
+      "stack_stores": 29,
+      "call_targets": [
+        "Column",
+        "GenScavengeAllocationSupport_slowNewArray",
+        "GenScavengeAllocationSupport_slowNewInstance",
+        "ImplicitExceptions_throwNewNullPointerException",
+        "ImplicitExceptions_throwNewOutOfBoundsExceptionWithArgs",
+        "SafepointSlowpath_enterSlowPathSafepointCheckCalleeSavedCCONV"
+      ]
+    },
+    {
+      "pattern": "^BatchBuilder_(record|put|putSpan|commit|advance|grow|resize|trim|columns|toLong|toDouble|toBoolean|bool)$",
+      "symbol": "BatchBuilder_grow_U7YbQJed7UDptGS2Oad4HG",
+      "name": "BatchBuilder_grow",
+      "address": 7908416,
+      "size": 252,
+      "instructions": 75,
+      "calls": 4,
+      "frame": 24,
+      "stack_loads": 0,
+      "stack_stores": 0,
+      "call_targets": [
+        "BatchBuilder_resize",
+        "ImplicitExceptions_throwNewDivisionByZeroException"
+      ]
+    },
+    {
+      "pattern": "^BatchBuilder_(record|put|putSpan|commit|advance|grow|resize|trim|columns|toLong|toDouble|toBoolean|bool)$",
+      "symbol": "BatchBuilder_record_4OM7NPM7NC2kt8vh6OY9jD",
+      "name": "BatchBuilder_record",
+      "address": 7909536,
+      "size": 2330,
+      "instructions": 561,
+      "calls": 51,
+      "frame": 104,
+      "stack_loads": 131,
+      "stack_stores": 26,
+      "call_targets": [
+        "BatchBuilder_advance",
+        "BatchBuilder_grow",
+        "BatchBuilder_nullToken",
+        "BatchBuilder_toBoolean",
+        "BatchBuilder_toDouble",
+        "BatchBuilder_toLong",
+        "BatchBuilder_violation",
+        "CsvScanner_syntax",
+        "ExceptionUnwind_unwindExceptionWithoutCalleeSavedRegisters",
+        "ImplicitExceptions_throwNewNullPointerException",
+        "ImplicitExceptions_throwNewOutOfBoundsExceptionWithArgs",
+        "OutlinedSBMethodHolder_String_AIAI",
+        "Utf8_invalidOffset"
+      ]
+    },
+    {
+      "pattern": "^BatchBuilder_(record|put|putSpan|commit|advance|grow|resize|trim|columns|toLong|toDouble|toBoolean|bool)$",
+      "symbol": "BatchBuilder_resize_6vInfzYkfQ4HztDbK03onB",
+      "name": "BatchBuilder_resize",
+      "address": 7911872,
+      "size": 2647,
+      "instructions": 623,
+      "calls": 22,
+      "frame": 104,
+      "stack_loads": 77,
+      "stack_stores": 29,
+      "call_targets": [
+        "Arrays_copyOf",
+        "GenScavengeAllocationSupport_slowNewArray",
+        "ImplicitExceptions_throwNewNullPointerException",
+        "ImplicitExceptions_throwNewOutOfBoundsExceptionWithArgs",
+        "SafepointSlowpath_enterSlowPathSafepointCheckCalleeSavedCCONV"
+      ]
+    },
+    {
+      "pattern": "^BatchBuilder_(record|put|putSpan|commit|advance|grow|resize|trim|columns|toLong|toDouble|toBoolean|bool)$",
+      "symbol": "BatchBuilder_toBoolean_eH2njS94aMHA0UjOaOEp2L",
+      "name": "BatchBuilder_toBoolean",
+      "address": 7914528,
+      "size": 141,
+      "instructions": 57,
+      "calls": 4,
+      "frame": 40,
+      "stack_loads": 4,
+      "stack_stores": 3,
+      "call_targets": [
+        "BatchBuilder_bool",
+        "BatchBuilder_view",
+        "BatchBuilder_violation",
+        "ExceptionUnwind_unwindExceptionWithoutCalleeSavedRegisters"
+      ]
+    },
+    {
+      "pattern": "^BatchBuilder_(record|put|putSpan|commit|advance|grow|resize|trim|columns|toLong|toDouble|toBoolean|bool)$",
+      "symbol": "BatchBuilder_toDouble_s9AWcVvxZi7hXaXXStJPmF",
+      "name": "BatchBuilder_toDouble",
+      "address": 7914688,
+      "size": 415,
+      "instructions": 107,
+      "calls": 9,
+      "frame": 40,
+      "stack_loads": 12,
+      "stack_stores": 5,
+      "call_targets": [
+        "BatchBuilder_view",
+        "BatchBuilder_violation",
+        "ExceptionUnwind_unwindExceptionWithoutCalleeSavedRegisters",
+        "ImplicitExceptions_throwNewNullPointerException",
+        "ImplicitExceptions_throwNewOutOfBoundsExceptionWithArgs",
+        "Numbers_parseDouble"
+      ]
+    },
+    {
+      "pattern": "^BatchBuilder_(record|put|putSpan|commit|advance|grow|resize|trim|columns|toLong|toDouble|toBoolean|bool)$",
+      "symbol": "BatchBuilder_toLong_2yGDvWkU7A0R9ySAwKfR21",
+      "name": "BatchBuilder_toLong",
+      "address": 7915104,
+      "size": 471,
+      "instructions": 131,
+      "calls": 12,
+      "frame": 40,
+      "stack_loads": 13,
+      "stack_stores": 5,
+      "call_targets": [
+        "BatchBuilder_view",
+        "BatchBuilder_violation",
+        "ExceptionUnwind_unwindExceptionWithoutCalleeSavedRegisters",
+        "ImplicitExceptions_throwNewNullPointerException",
+        "ImplicitExceptions_throwNewOutOfBoundsExceptionWithArgs",
+        "Numbers_parseLong"
+      ]
+    },
+    {
+      "pattern": "^BatchBuilder_(record|put|putSpan|commit|advance|grow|resize|trim|columns|toLong|toDouble|toBoolean|bool)$",
+      "symbol": "BatchBuilder_trim_od6M8ZGnNcF1DlPaf5ZXCL",
+      "name": "BatchBuilder_trim",
+      "address": 7915584,
+      "size": 89,
+      "instructions": 36,
+      "calls": 1,
+      "frame": 24,
+      "stack_loads": 0,
+      "stack_stores": 0,
+      "call_targets": [
+        "BatchBuilder_resize"
+      ]
+    },
+    {
+      "pattern": "^CsvBatch_(stringAt|string)$",
+      "symbol": "CsvBatch_string_KV6mwhaYsh1WbwKRPlUn35",
+      "name": "CsvBatch_string",
+      "address": 7931648,
+      "size": 700,
+      "instructions": 171,
+      "calls": 11,
+      "frame": 72,
+      "stack_loads": 22,
+      "stack_stores": 9,
+      "call_targets": [
+        "CsvMapping_copy",
+        "Dialect_string",
+        "GenScavengeAllocationSupport_slowNewArray",
+        "ImplicitExceptions_throwNewClassCastExceptionWithArgs",
+        "ImplicitExceptions_throwNewNullPointerException",
+        "ThreadLocal_get",
+        "ThreadLocal_set"
+      ]
+    },
+    {
+      "pattern": "^CsvBatch_(stringAt|string)$",
+      "symbol": "CsvBatch_stringAt_WT5DgQRVrqJrwrzldR6E1I",
+      "name": "CsvBatch_stringAt",
+      "address": 7932352,
+      "size": 262,
+      "instructions": 102,
+      "calls": 8,
+      "frame": 24,
+      "stack_loads": 0,
+      "stack_stores": 0,
+      "call_targets": [
+        "CsvBatch_string",
+        "CsvBatch_stringSlow",
+        "ImplicitExceptions_throwNewNullPointerException",
+        "ImplicitExceptions_throwNewOutOfBoundsExceptionWithArgs",
+        "Utf8_string"
+      ]
+    },
+    {
+      "pattern": "^CsvPlan_parseBytes$",
+      "symbol": "CsvPlan_parseBytes_4EbJdadVAfGub8dM6Zxr7K",
+      "name": "CsvPlan_parseBytes",
+      "address": 7961248,
+      "size": 1811,
+      "instructions": 409,
+      "calls": 23,
+      "frame": 136,
+      "stack_loads": 71,
+      "stack_stores": 28,
+      "call_targets": [
+        "Arrays_copyOfRange",
+        "BatchBuilder",
+        "BatchBuilder_build",
+        "BatchBuilder_buildDetached",
+        "BatchBuilder_prevalidate",
+        "CsvPlan$Binder_bind",
+        "CsvPlan_hasBom",
+        "CsvScanner",
+        "CsvScanner_limit",
+        "CsvScanner_scan",
+        "ExceptionUnwind_unwindExceptionWithoutCalleeSavedRegisters",
+        "GenScavengeAllocationSupport_slowNewArray",
+        "GenScavengeAllocationSupport_slowNewInstance",
+        "ImplicitExceptions_throwNewNullPointerException",
+        "Preconditions_checkFromToIndex",
+        "Throwable_fillInStackTrace"
+      ]
+    },
+    {
+      "pattern": "^CsvRow_get",
+      "symbol": "CsvRow_getBoolean_Z9DUdbOfFBJZQikcLBdUC6",
+      "name": "CsvRow_getBoolean",
+      "address": 7976096,
+      "size": 201,
+      "instructions": 81,
+      "calls": 7,
+      "frame": 24,
+      "stack_loads": 0,
+      "stack_stores": 0,
+      "call_targets": [
+        "CsvBatch_booleanSlow",
+        "ImplicitExceptions_throwNewNullPointerException",
+        "ImplicitExceptions_throwNewOutOfBoundsExceptionWithArgs"
+      ]
+    },
+    {
+      "pattern": "^CsvRow_get",
+      "symbol": "CsvRow_getDouble_TmmAe85lD08nLMcqih2Wo5",
+      "name": "CsvRow_getDouble",
+      "address": 7976320,
+      "size": 201,
+      "instructions": 80,
+      "calls": 7,
+      "frame": 24,
+      "stack_loads": 0,
+      "stack_stores": 0,
+      "call_targets": [
+        "CsvBatch_doubleSlow",
+        "ImplicitExceptions_throwNewNullPointerException",
+        "ImplicitExceptions_throwNewOutOfBoundsExceptionWithArgs"
+      ]
+    },
+    {
+      "pattern": "^CsvRow_get",
+      "symbol": "CsvRow_getLong_ZMRFgOan1i3aJIKNPzYvL4",
+      "name": "CsvRow_getLong",
+      "address": 7976544,
+      "size": 201,
+      "instructions": 81,
+      "calls": 7,
+      "frame": 24,
+      "stack_loads": 0,
+      "stack_stores": 0,
+      "call_targets": [
+        "CsvBatch_longSlow",
+        "ImplicitExceptions_throwNewNullPointerException",
+        "ImplicitExceptions_throwNewOutOfBoundsExceptionWithArgs"
+      ]
+    },
+    {
+      "pattern": "^CsvScanner_(scan|scanIndexed)$",
+      "symbol": "CsvScanner_scan_18LRnPkLePBD9AUk7ghiR0",
+      "name": "CsvScanner_scan",
+      "address": 7993984,
+      "size": 396,
+      "instructions": 125,
+      "calls": 5,
+      "frame": 72,
+      "stack_loads": 6,
+      "stack_stores": 8,
+      "call_targets": [
+        "CsvIndexing_scanner",
+        "CsvScanner_scanBytes",
+        "CsvScanner_scanIndexed"
+      ]
+    },
+    {
+      "pattern": "^CsvScanner_(scan|scanIndexed)$",
+      "symbol": "CsvScanner_scanIndexed_sNZzJMULOfI6y2rp8ewe88",
+      "name": "CsvScanner_scanIndexed",
+      "address": 7997664,
+      "size": 599,
+      "instructions": 152,
+      "calls": 4,
+      "frame": 104,
+      "stack_loads": 31,
+      "stack_stores": 14,
+      "call_targets": [
+        "CsvScanner_scanBytes",
+        "ExceptionUnwind_unwindExceptionWithoutCalleeSavedRegisters",
+        "GenScavengeAllocationSupport_slowNewInstance",
+        "IndexScan_scan"
+      ]
+    },
+    {
+      "pattern": "^IndexScan_frame",
+      "symbol": "IndexScan_frameFused_nmCBoQzeJ8900tFCN8oYP2",
+      "name": "IndexScan_frameFused",
+      "address": 8001984,
+      "size": 37329,
+      "instructions": 7750,
+      "calls": 296,
+      "frame": 344,
+      "stack_loads": 1090,
+      "stack_stores": 459,
+      "call_targets": [
+        "*%rax",
+        "Arrays_copyOf",
+        "BatchBuilder_record",
+        "ExceptionUnwind_unwindExceptionWithoutCalleeSavedRegisters",
+        "GenScavengeAllocationSupport_slowNewArray",
+        "GenScavengeAllocationSupport_slowNewInstance",
+        "ImplicitExceptions_createNullPointerException",
+        "ImplicitExceptions_createOutOfBoundsException",
+        "ImplicitExceptions_throwNewDivisionByZeroException",
+        "ImplicitExceptions_throwNewNegativeArraySizeException",
+        "ImplicitExceptions_throwNewNullPointerException",
+        "ImplicitExceptions_throwNewOutOfBoundsExceptionWithArgs",
+        "Numbers_fallback",
+        "Preconditions_outOfBoundsCheckIndex",
+        "SafepointSlowpath_enterSlowPathSafepointCheckCalleeSavedCCONV",
+        "SubstrateArraycopySnippets_doArraycopy",
+        "Throwable_fillInStackTrace"
+      ]
+    },
+    {
+      "pattern": "^IndexScan_frame",
+      "symbol": "IndexScan_framePlain_g6QQEkyBvyGqW1nMjmZO7C",
+      "name": "IndexScan_framePlain",
+      "address": 8039328,
+      "size": 5229,
+      "instructions": 1133,
+      "calls": 25,
+      "frame": 200,
+      "stack_loads": 300,
+      "stack_stores": 127,
+      "call_targets": [
+        "*%rax",
+        "GenScavengeAllocationSupport_slowNewArray",
+        "ImplicitExceptions_throwNewNegativeArraySizeException",
+        "ImplicitExceptions_throwNewNullPointerException",
+        "ImplicitExceptions_throwNewOutOfBoundsExceptionWithArgs",
+        "SafepointSlowpath_enterSlowPathSafepointCheckCalleeSavedCCONV",
+        "SubstrateArraycopySnippets_doArraycopy"
+      ]
+    },
+    {
+      "pattern": "^IndexScan_frame",
+      "symbol": "IndexScan_frameSpans_mj6XEjTh8sAW3vwQ8DXsW1",
+      "name": "IndexScan_frameSpans",
+      "address": 8044576,
+      "size": 16203,
+      "instructions": 3252,
+      "calls": 118,
+      "frame": 328,
+      "stack_loads": 628,
+      "stack_stores": 257,
+      "call_targets": [
+        "*%rax",
+        "Arrays_copyOf",
+        "BatchBuilder_record",
+        "ExceptionUnwind_unwindExceptionWithoutCalleeSavedRegisters",
+        "GenScavengeAllocationSupport_slowNewArray",
+        "ImplicitExceptions_throwNewDivisionByZeroException",
+        "ImplicitExceptions_throwNewNegativeArraySizeException",
+        "ImplicitExceptions_throwNewNullPointerException",
+        "ImplicitExceptions_throwNewOutOfBoundsExceptionWithArgs",
+        "Preconditions_outOfBoundsCheckIndex",
+        "SafepointSlowpath_enterSlowPathSafepointCheckCalleeSavedCCONV",
+        "SubstrateArraycopySnippets_doArraycopy"
+      ]
+    },
+    {
+      "pattern": "^IndexScan_scan$",
+      "symbol": "IndexScan_scan_YCHSlqpJ3X4t7BG9HsMvr7",
+      "name": "IndexScan_scan",
+      "address": 8060960,
+      "size": 904,
+      "instructions": 226,
+      "calls": 12,
+      "frame": 104,
+      "stack_loads": 47,
+      "stack_stores": 23,
+      "call_targets": [
+        "ExceptionUnwind_unwindExceptionWithoutCalleeSavedRegisters",
+        "GenScavengeAllocationSupport_slowNewArray",
+        "ImplicitExceptions_throwNewClassCastExceptionWithArgs",
+        "ImplicitExceptions_throwNewNegativeArraySizeException",
+        "IndexScan_frameFused",
+        "IndexScan_framePlain",
+        "IndexScan_frameSpans",
+        "ThreadLocal_get",
+        "ThreadLocal_set"
+      ]
+    },
+    {
+      "pattern": "^Numbers_(parseLong|parseDouble|digits|dot|grammar|eiselLemire)$",
+      "symbol": "Numbers_digits_vEynT5EwKMBIdQU0bVEgd6",
+      "name": "Numbers_digits",
+      "address": 8063968,
+      "size": 346,
+      "instructions": 85,
+      "calls": 3,
+      "frame": 40,
+      "stack_loads": 0,
+      "stack_stores": 2,
+      "call_targets": [
+        "ExceptionUnwind_unwindExceptionWithoutCalleeSavedRegisters",
+        "ImplicitExceptions_throwNewNullPointerException",
+        "Preconditions_outOfBoundsCheckIndex"
+      ]
+    },
+    {
+      "pattern": "^Numbers_(parseLong|parseDouble|digits|dot|grammar|eiselLemire)$",
+      "symbol": "Numbers_dot_vJ1fLcF9EW9kvIVBzBPEWI",
+      "name": "Numbers_dot",
+      "address": 8064320,
+      "size": 648,
+      "instructions": 195,
+      "calls": 4,
+      "frame": 40,
+      "stack_loads": 0,
+      "stack_stores": 4,
+      "call_targets": [
+        "ExceptionUnwind_unwindExceptionWithoutCalleeSavedRegisters",
+        "ImplicitExceptions_throwNewNullPointerException",
+        "Preconditions_outOfBoundsCheckIndex"
+      ]
+    },
+    {
+      "pattern": "^Numbers_(parseLong|parseDouble|digits|dot|grammar|eiselLemire)$",
+      "symbol": "Numbers_eiselLemire_jLipv3onqrKuWcff2avdp3",
+      "name": "Numbers_eiselLemire",
+      "address": 8064992,
+      "size": 628,
+      "instructions": 162,
+      "calls": 0,
+      "frame": 8,
+      "stack_loads": 0,
+      "stack_stores": 0,
+      "call_targets": []
+    },
+    {
+      "pattern": "^Numbers_(parseLong|parseDouble|digits|dot|grammar|eiselLemire)$",
+      "symbol": "Numbers_grammar_uMyRf6jhrI5ImubdhRbzZ7",
+      "name": "Numbers_grammar",
+      "address": 8065824,
+      "size": 2128,
+      "instructions": 503,
+      "calls": 25,
+      "frame": 88,
+      "stack_loads": 18,
+      "stack_stores": 48,
+      "call_targets": [
+        "ExceptionUnwind_unwindExceptionWithoutCalleeSavedRegisters",
+        "GenScavengeAllocationSupport_slowNewInstance",
+        "ImplicitExceptions_throwNewNullPointerException",
+        "ImplicitExceptions_throwNewOutOfBoundsExceptionWithArgs",
+        "Numbers_eiselLemire",
+        "Numbers_fallback",
+        "Throwable_fillInStackTrace"
+      ]
+    },
+    {
+      "pattern": "^Numbers_(parseLong|parseDouble|digits|dot|grammar|eiselLemire)$",
+      "symbol": "Numbers_parseDouble_XtkfllpcPwGpij0mAszcjF",
+      "name": "Numbers_parseDouble",
+      "address": 8067968,
+      "size": 827,
+      "instructions": 215,
+      "calls": 10,
+      "frame": 56,
+      "stack_loads": 33,
+      "stack_stores": 24,
+      "call_targets": [
+        "ImplicitExceptions_throwNewNullPointerException",
+        "ImplicitExceptions_throwNewOutOfBoundsExceptionWithArgs",
+        "Numbers_digits",
+        "Numbers_dot",
+        "Numbers_eiselLemire",
+        "Numbers_grammar"
+      ]
+    },
+    {
+      "pattern": "^Numbers_(parseLong|parseDouble|digits|dot|grammar|eiselLemire)$",
+      "symbol": "Numbers_parseLong_1zcjD3xEeE5rmfk4iyIcw1",
+      "name": "Numbers_parseLong",
+      "address": 8068800,
+      "size": 1517,
+      "instructions": 349,
+      "calls": 20,
+      "frame": 56,
+      "stack_loads": 12,
+      "stack_stores": 22,
+      "call_targets": [
+        "ExceptionUnwind_unwindExceptionWithoutCalleeSavedRegisters",
+        "GenScavengeAllocationSupport_slowNewInstance",
+        "ImplicitExceptions_throwNewNullPointerException",
+        "ImplicitExceptions_throwNewOutOfBoundsExceptionWithArgs",
+        "Numbers_digits",
+        "Throwable_fillInStackTrace"
+      ]
+    },
+    {
+      "pattern": "^Utf8_(string|invalidOffset)$",
+      "symbol": "Utf8_invalidOffset_ov4T2CodfO99TVPFF7Whs7",
+      "name": "Utf8_invalidOffset",
+      "address": 8070336,
+      "size": 1190,
+      "instructions": 306,
+      "calls": 16,
+      "frame": 40,
+      "stack_loads": 0,
+      "stack_stores": 21,
+      "call_targets": [
+        "ExceptionUnwind_unwindExceptionWithoutCalleeSavedRegisters",
+        "ImplicitExceptions_throwNewNullPointerException",
+        "ImplicitExceptions_throwNewOutOfBoundsExceptionWithArgs",
+        "Preconditions_outOfBoundsCheckIndex",
+        "SafepointSlowpath_enterSlowPathSafepointCheckCalleeSavedCCONV"
+      ]
+    },
+    {
+      "pattern": "^Utf8_(string|invalidOffset)$",
+      "symbol": "Utf8_string_hiRguFrsRNF86k0bWhawB8",
+      "name": "Utf8_string",
+      "address": 8071552,
+      "size": 583,
+      "instructions": 163,
+      "calls": 8,
+      "frame": 56,
+      "stack_loads": 8,
+      "stack_stores": 8,
+      "call_targets": [
+        "ExceptionUnwind_unwindExceptionWithoutCalleeSavedRegisters",
+        "GenScavengeAllocationSupport_slowNewInstance",
+        "ImplicitExceptions_throwNewNullPointerException",
+        "Preconditions_outOfBoundsCheckIndex",
+        "String"
+      ]
+    }
+  ],
+  "unmatched": [],
+  "budgets": {},
+  "failures": []
+}

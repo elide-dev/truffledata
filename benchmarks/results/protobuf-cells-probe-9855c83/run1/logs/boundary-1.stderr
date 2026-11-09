@@ -1,0 +1,143 @@
+[To redirect Truffle log output to a file use one of the following options:
+* '--log.file=<path>' if the option is passed using a guest language launcher.
+* '-Dpolyglot.log.file=<path>' if the option is passed using the host Java launcher.
+* Configure logging using the polyglot embedding API.]
+[engine] opt done   engine=1  id=1     CellsProbe.ProbeRoot@20a7102a                      |Tier 2|Time    14(   4+10  )ms|AST    2|Inlined   0Y   0N|IR     52/  1467|CodeSize    5129|Addr 0x0238a2fec000|CompId 1289   |UTC 2026-11-09T12:02:47.414|Src n/a
+[engine] Truffle runtime statistics for engine 1
+    Compilations                : 1
+      Success                   : 1
+      Temporary Bailouts        : 0
+      Permanent Bailouts        : 0
+      Failed                    : 0
+      Interrupted               : 0
+    Invalidated                 : 0
+    Queues                      : 1
+    Dequeues                    : 0
+    Splits                      : 0
+    Compilation Accuracy        : 1.000000
+    Queue Accuracy              : 1.000000
+    Compilation Utilization     : 0.009174
+    Remaining Compilation Queue : 0
+    Time to queue               : count=   1, sum=      4321, min=    4321, average=     4321.09, max=    4321, maxTarget=CellsProbe.ProbeRoot@20a7102a
+    Time waiting in queue       : count=   1, sum=        33, min=      33, average=       33.55, max=      33, maxTarget=CellsProbe.ProbeRoot@20a7102a
+  ---------------------------   :
+  AST node statistics           :
+    Truffle node count          : count=   1, sum=         2, min=       2, average=        2.00, max=       2, maxTarget=CellsProbe.ProbeRoot@20a7102a
+    Truffle call count          : count=   1, sum=         0, min=       0, average=        0.00, max=       0, maxTarget=CellsProbe.ProbeRoot@20a7102a
+      Indirect                  : count=   1, sum=         0, min=       0, average=        0.00, max=       0, maxTarget=CellsProbe.ProbeRoot@20a7102a
+      Direct                    : count=   1, sum=         0, min=       0, average=        0.00, max=       0, maxTarget=CellsProbe.ProbeRoot@20a7102a
+        Dispatched              : count=   1, sum=         0, min=       0, average=        0.00, max=       0, maxTarget=CellsProbe.ProbeRoot@20a7102a
+        Inlined                 : count=   1, sum=         0, min=       0, average=        0.00, max=       0, maxTarget=CellsProbe.ProbeRoot@20a7102a
+        ----------              :
+        Cloned                  : count=   1, sum=         0, min=       0, average=        0.00, max=       0, maxTarget=CellsProbe.ProbeRoot@20a7102a
+        Not Cloned              : count=   1, sum=         0, min=       0, average=        0.00, max=       0, maxTarget=CellsProbe.ProbeRoot@20a7102a
+    Truffle loops               : count=   1, sum=         0, min=       0, average=        0.00, max=       0, maxTarget=CellsProbe.ProbeRoot@20a7102a
+  Truffle nodes                 :
+        ProbeRoot               : count=   1, sum=         1, min=       1, average=        1.00, max=       1, maxTarget=CellsProbe.ProbeRoot@20a7102a
+        Boundary                : count=   1, sum=         1, min=       1, average=        1.00, max=       1, maxTarget=CellsProbe.ProbeRoot@20a7102a
+  ---------------------------   :
+  Compilation Tier 1            :
+    Compilation Rate            :         0.00 bytes/second
+      Truffle Tier Rate         :         0.00 bytes/second
+      Graal Tier Rate           :         0.00 bytes/second
+      Installation Rate         :         0.00 bytes/second
+    Time for compilation (us)   : count=   0, sum=         0, min=9223372036854775, average=        0.00, max=-9223372036854775, maxTarget=null
+      Truffle Tier (us)         : count=   0, sum=         0, min=9223372036854775, average=        0.00, max=-9223372036854775, maxTarget=null
+      Graal Tier (us)           : count=   0, sum=         0, min=9223372036854775, average=        0.00, max=-9223372036854775, maxTarget=null
+      Code Installation (us)    : count=   0, sum=         0, min=9223372036854775, average=        0.00, max=-9223372036854775, maxTarget=null
+    Graal node count            :
+      After Truffle Tier        : count=   0, sum=         0, min=2147483647, average=        0.00, max=-2147483648, maxTarget=null
+      After Graal Tier          : count=   0, sum=         0, min=2147483647, average=        0.00, max=-2147483648, maxTarget=null
+    Graal compilation result    :
+      Code size                 : count=   0, sum=         0, min=2147483647, average=        0.00, max=-2147483648, maxTarget=null
+      Total frame size          : count=   0, sum=         0, min=2147483647, average=        0.00, max=-2147483648, maxTarget=null
+      Exception handlers        : count=   0, sum=         0, min=2147483647, average=        0.00, max=-2147483648, maxTarget=null
+      Infopoints                : count=   0, sum=         0, min=2147483647, average=        0.00, max=-2147483648, maxTarget=null
+    Marks                       : count=   0, sum=         0, min=2147483647, average=        0.00, max=-2147483648, maxTarget=null
+    Data references             : count=   0, sum=         0, min=2147483647, average=        0.00, max=-2147483648, maxTarget=null
+    Graal nodes after Truffle tier:
+    Graal nodes after Graal tier:
+  ---------------------------   :
+  Compilation Tier 2            :
+    Compilation Rate            :    366639.95 bytes/second
+      Truffle Tier Rate         :   1331653.69 bytes/second
+      Graal Tier Rate           :    584076.30 bytes/second
+      Installation Rate         :   3781857.11 bytes/second
+    Time for compilation (us)   : count=   1, sum=     13989, min=   13989, average=    13989.20, max=   13989, maxTarget=CellsProbe.ProbeRoot@20a7102a
+      Truffle Tier (us)         : count=   1, sum=      3851, min=    3851, average=     3851.60, max=    3851, maxTarget=CellsProbe.ProbeRoot@20a7102a
+      Graal Tier (us)           : count=   1, sum=      8781, min=    8781, average=     8781.39, max=    8781, maxTarget=CellsProbe.ProbeRoot@20a7102a
+      Code Installation (us)    : count=   1, sum=      1356, min=    1356, average=     1356.21, max=    1356, maxTarget=CellsProbe.ProbeRoot@20a7102a
+    Graal node count            :
+      After Truffle Tier        : count=   1, sum=        52, min=      52, average=       52.00, max=      52, maxTarget=CellsProbe.ProbeRoot@20a7102a
+      After Graal Tier          : count=   1, sum=      1467, min=    1467, average=     1467.00, max=    1467, maxTarget=CellsProbe.ProbeRoot@20a7102a
+    Graal compilation result    :
+      Code size                 : count=   1, sum=      5129, min=    5129, average=     5129.00, max=    5129, maxTarget=CellsProbe.ProbeRoot@20a7102a
+      Total frame size          : count=   1, sum=        48, min=      48, average=       48.00, max=      48, maxTarget=CellsProbe.ProbeRoot@20a7102a
+      Exception handlers        : count=   1, sum=        32, min=      32, average=       32.00, max=      32, maxTarget=CellsProbe.ProbeRoot@20a7102a
+      Infopoints                : count=   1, sum=        67, min=      67, average=       67.00, max=      67, maxTarget=CellsProbe.ProbeRoot@20a7102a
+        CALL                    : count=   1, sum=        67, min=      67, average=       67.00, max=      67, maxTarget=CellsProbe.ProbeRoot@20a7102a
+    Marks                       : count=   1, sum=         5, min=       5, average=        5.00, max=       5, maxTarget=CellsProbe.ProbeRoot@20a7102a
+    Data references             : count=   1, sum=        67, min=      67, average=       67.00, max=      67, maxTarget=CellsProbe.ProbeRoot@20a7102a
+    Graal nodes after Truffle tier:
+        ConstantNode            : count=   1, sum=        14, min=      14, average=       14.00, max=      14, maxTarget=CellsProbe.ProbeRoot@20a7102a
+        FrameState              : count=   1, sum=        10, min=      10, average=       10.00, max=      10, maxTarget=CellsProbe.ProbeRoot@20a7102a
+        VirtualObjectState      : count=   1, sum=         3, min=       3, average=        3.00, max=       3, maxTarget=CellsProbe.ProbeRoot@20a7102a
+        BeginNode               : count=   1, sum=         3, min=       3, average=        3.00, max=       3, maxTarget=CellsProbe.ProbeRoot@20a7102a
+        VirtualArrayNode        : count=   1, sum=         2, min=       2, average=        2.00, max=       2, maxTarget=CellsProbe.ProbeRoot@20a7102a
+        StartNode               : count=   1, sum=         1, min=       1, average=        1.00, max=       1, maxTarget=CellsProbe.ProbeRoot@20a7102a
+        StoreIndexedNode        : count=   1, sum=         1, min=       1, average=        1.00, max=       1, maxTarget=CellsProbe.ProbeRoot@20a7102a
+        LoopExitNode            : count=   1, sum=         1, min=       1, average=        1.00, max=       1, maxTarget=CellsProbe.ProbeRoot@20a7102a
+        ValuePhiNode            : count=   1, sum=         1, min=       1, average=        1.00, max=       1, maxTarget=CellsProbe.ProbeRoot@20a7102a
+        ExceptionObjectNode     : count=   1, sum=         1, min=       1, average=        1.00, max=       1, maxTarget=CellsProbe.ProbeRoot@20a7102a
+        IfNode                  : count=   1, sum=         1, min=       1, average=        1.00, max=       1, maxTarget=CellsProbe.ProbeRoot@20a7102a
+        PiNode                  : count=   1, sum=         1, min=       1, average=        1.00, max=       1, maxTarget=CellsProbe.ProbeRoot@20a7102a
+        LoopEndNode             : count=   1, sum=         1, min=       1, average=        1.00, max=       1, maxTarget=CellsProbe.ProbeRoot@20a7102a
+        ReturnNode              : count=   1, sum=         1, min=       1, average=        1.00, max=       1, maxTarget=CellsProbe.ProbeRoot@20a7102a
+        LoopBeginNode           : count=   1, sum=         1, min=       1, average=        1.00, max=       1, maxTarget=CellsProbe.ProbeRoot@20a7102a
+        EndNode                 : count=   1, sum=         1, min=       1, average=        1.00, max=       1, maxTarget=CellsProbe.ProbeRoot@20a7102a
+        InvokeWithExceptionNode : count=   1, sum=         1, min=       1, average=        1.00, max=       1, maxTarget=CellsProbe.ProbeRoot@20a7102a
+        LoadIndexedNode         : count=   1, sum=         1, min=       1, average=        1.00, max=       1, maxTarget=CellsProbe.ProbeRoot@20a7102a
+        ValueProxyNode          : count=   1, sum=         1, min=       1, average=        1.00, max=       1, maxTarget=CellsProbe.ProbeRoot@20a7102a
+        IntegerLessThanNode     : count=   1, sum=         1, min=       1, average=        1.00, max=       1, maxTarget=CellsProbe.ProbeRoot@20a7102a
+        ValueAnchorNode         : count=   1, sum=         1, min=       1, average=        1.00, max=       1, maxTarget=CellsProbe.ProbeRoot@20a7102a
+        VirtualInstanceNode     : count=   1, sum=         1, min=       1, average=        1.00, max=       1, maxTarget=CellsProbe.ProbeRoot@20a7102a
+        DeoptimizeNode          : count=   1, sum=         1, min=       1, average=        1.00, max=       1, maxTarget=CellsProbe.ProbeRoot@20a7102a
+        SubstrateMethodCallTargetNode: count=   1, sum=         1, min=       1, average=        1.00, max=       1, maxTarget=CellsProbe.ProbeRoot@20a7102a
+        AddNode                 : count=   1, sum=         1, min=       1, average=        1.00, max=       1, maxTarget=CellsProbe.ProbeRoot@20a7102a
+    Graal nodes after Graal tier:
+        BeginNode               : count=   1, sum=       198, min=     198, average=      198.00, max=     198, maxTarget=CellsProbe.ProbeRoot@20a7102a
+        FrameState              : count=   1, sum=       194, min=     194, average=      194.00, max=     194, maxTarget=CellsProbe.ProbeRoot@20a7102a
+        AMD64AddressNode        : count=   1, sum=       130, min=     130, average=      130.00, max=     130, maxTarget=CellsProbe.ProbeRoot@20a7102a
+        EndNode                 : count=   1, sum=       100, min=     100, average=      100.00, max=     100, maxTarget=CellsProbe.ProbeRoot@20a7102a
+        ReadNode                : count=   1, sum=        98, min=      98, average=       98.00, max=      98, maxTarget=CellsProbe.ProbeRoot@20a7102a
+        ConstantNode            : count=   1, sum=        80, min=      80, average=       80.00, max=      80, maxTarget=CellsProbe.ProbeRoot@20a7102a
+        IfNode                  : count=   1, sum=        67, min=      67, average=       67.00, max=      67, maxTarget=CellsProbe.ProbeRoot@20a7102a
+        WriteNode               : count=   1, sum=        64, min=      64, average=       64.00, max=      64, maxTarget=CellsProbe.ProbeRoot@20a7102a
+        MergeNode               : count=   1, sum=        34, min=      34, average=       34.00, max=      34, maxTarget=CellsProbe.ProbeRoot@20a7102a
+        MemoryAnchorNode        : count=   1, sum=        34, min=      34, average=       34.00, max=      34, maxTarget=CellsProbe.ProbeRoot@20a7102a
+        IntegerEqualsNode       : count=   1, sum=        33, min=      33, average=       33.00, max=      33, maxTarget=CellsProbe.ProbeRoot@20a7102a
+        AddNode                 : count=   1, sum=        33, min=      33, average=       33.00, max=      33, maxTarget=CellsProbe.ProbeRoot@20a7102a
+        FixedValueAnchorNode    : count=   1, sum=        32, min=      32, average=       32.00, max=      32, maxTarget=CellsProbe.ProbeRoot@20a7102a
+        WordCastNode            : count=   1, sum=        32, min=      32, average=       32.00, max=      32, maxTarget=CellsProbe.ProbeRoot@20a7102a
+        SubstrateCompressionNode: count=   1, sum=        32, min=      32, average=       32.00, max=      32, maxTarget=CellsProbe.ProbeRoot@20a7102a
+        SubstrateIndirectCallTargetNode: count=   1, sum=        32, min=      32, average=       32.00, max=      32, maxTarget=CellsProbe.ProbeRoot@20a7102a
+        AndNode                 : count=   1, sum=        32, min=      32, average=       32.00, max=      32, maxTarget=CellsProbe.ProbeRoot@20a7102a
+        SubNode                 : count=   1, sum=        32, min=      32, average=       32.00, max=      32, maxTarget=CellsProbe.ProbeRoot@20a7102a
+        DeoptimizeNode          : count=   1, sum=        32, min=      32, average=       32.00, max=      32, maxTarget=CellsProbe.ProbeRoot@20a7102a
+        UnsignedRightShiftNode  : count=   1, sum=        32, min=      32, average=       32.00, max=      32, maxTarget=CellsProbe.ProbeRoot@20a7102a
+        ZeroExtendNode          : count=   1, sum=        32, min=      32, average=       32.00, max=      32, maxTarget=CellsProbe.ProbeRoot@20a7102a
+        ReadExceptionObjectNode : count=   1, sum=        32, min=      32, average=       32.00, max=      32, maxTarget=CellsProbe.ProbeRoot@20a7102a
+        InvokeWithExceptionNode : count=   1, sum=        32, min=      32, average=       32.00, max=      32, maxTarget=CellsProbe.ProbeRoot@20a7102a
+        IntegerTestNode         : count=   1, sum=        32, min=      32, average=       32.00, max=      32, maxTarget=CellsProbe.ProbeRoot@20a7102a
+        VirtualObjectState      : count=   1, sum=         3, min=       3, average=        3.00, max=       3, maxTarget=CellsProbe.ProbeRoot@20a7102a
+        ForeignCallNode         : count=   1, sum=         3, min=       3, average=        3.00, max=       3, maxTarget=CellsProbe.ProbeRoot@20a7102a
+        VirtualArrayNode        : count=   1, sum=         2, min=       2, average=        2.00, max=       2, maxTarget=CellsProbe.ProbeRoot@20a7102a
+        ReadReservedRegisterFloatingNode: count=   1, sum=         2, min=       2, average=        2.00, max=       2, maxTarget=CellsProbe.ProbeRoot@20a7102a
+        DeoptSourcePositionInfoNode: count=   1, sum=         1, min=       1, average=        1.00, max=       1, maxTarget=CellsProbe.ProbeRoot@20a7102a
+        AMD64ImageHeapAddressNode: count=   1, sum=         1, min=       1, average=        1.00, max=       1, maxTarget=CellsProbe.ProbeRoot@20a7102a
+        StartNode               : count=   1, sum=         1, min=       1, average=        1.00, max=       1, maxTarget=CellsProbe.ProbeRoot@20a7102a
+        IntegerBelowNode        : count=   1, sum=         1, min=       1, average=        1.00, max=       1, maxTarget=CellsProbe.ProbeRoot@20a7102a
+        LoweredDeadEndNode      : count=   1, sum=         1, min=       1, average=        1.00, max=       1, maxTarget=CellsProbe.ProbeRoot@20a7102a
+        SafepointCheckNode      : count=   1, sum=         1, min=       1, average=        1.00, max=       1, maxTarget=CellsProbe.ProbeRoot@20a7102a
+        ReturnNode              : count=   1, sum=         1, min=       1, average=        1.00, max=       1, maxTarget=CellsProbe.ProbeRoot@20a7102a
+        VirtualInstanceNode     : count=   1, sum=         1, min=       1, average=        1.00, max=       1, maxTarget=CellsProbe.ProbeRoot@20a7102a

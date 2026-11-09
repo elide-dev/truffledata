@@ -56,6 +56,10 @@ public final class ConsumerComparison {
           }
       return;
     }
+    if (args.length == 3 && args[0].equals("--dump-fixture")) {
+      dumpFixture(args[1], Path.of(args[2]));
+      return;
+    }
     if (args.length != 4)
       throw new IllegalArgumentException(
           "engine sparse|full|holdout|holdout-sparse|large stage time|memory");
@@ -73,6 +77,25 @@ public final class ConsumerComparison {
     "slab-session",
     "slab-session-projected"
   };
+  /**
+   * Benchmark-only decode pipeline probes (plan 2026-11-08-beat-stock-svm P0.1, SVM only): never in
+   * the smoke matrix or the default measurement, decode stage of the full and holdout fixtures only.
+   * {@code probe-plan}/{@code probe-plan-heap}/{@code probe-session} are the production durable
+   * (native and heap input) and session decodes, so the holdout fixture has its own references.
+   */
+  static final java.util.List<String> PROBES = probes();
+
+  private static java.util.List<String> probes() {
+    var names = new java.util.ArrayList<String>();
+    for (String kind : DecodeProbe.KINDS) names.add("probe-" + kind);
+    names.addAll(java.util.List.of("probe-plan", "probe-plan-heap", "probe-session"));
+    return java.util.List.copyOf(names);
+  }
+
+  private static boolean probe(String engine) {
+    return PROBES.contains(engine);
+  }
+
   static final String[] MODES = {"sparse", "full", "holdout", "holdout-sparse", "large"};
   static final String[] STAGES = {
     "decode", "resident", "heap", "detach", "first", "interpret", "peak"
@@ -88,6 +111,8 @@ public final class ConsumerComparison {
   }
 
   static boolean cell(String engine, String mode, String stage) {
+    if (probe(engine))
+      return stage.equals("decode") && (mode.equals("full") || mode.equals("holdout"));
     return cell(mode, stage)
         && (!sessionEngine(engine) || stage.equals("decode") || stage.equals("resident"))
         && (!engine.equals("stock-interop") || stage.equals("interpret") || stage.equals("peak"))
@@ -111,7 +136,7 @@ public final class ConsumerComparison {
 
   private static void run(String engine, String mode, String stage, String metric, boolean smoke)
       throws Exception {
-    if (!Arrays.asList(ENGINES).contains(engine)
+    if (!(Arrays.asList(ENGINES).contains(engine) || probe(engine))
         || !Arrays.asList(MODES).contains(mode)
         || !Arrays.asList(STAGES).contains(stage)
         || !cell(engine, mode, stage)
@@ -192,7 +217,7 @@ public final class ConsumerComparison {
         }
         System.out.printf(
             Locale.ROOT,
-            "{\"engine\":\"%s\",\"mode\":\"%s\",\"stage\":\"%s\",\"runtime\":\"%s\",\"rows\":%d,\"checksum\":%d,\"guest_compiled\":%s,\"shared_access\":%s,\"stock_boundary\":%s,\"native_index_retained\":%s,\"input_bytes_per_row\":%.3f,\"copied_input_bytes_per_row\":%.3f,\"decoded_native_index_capacity_bytes_per_row\":%.3f,\"decoded_native_result_header_bytes_per_row\":%d,\"slab_bytes_per_row\":%.3f,\"retained_slab_capacity_bytes_per_row\":%.3f,\"session_arena_capacity_bytes_per_row\":%.3f,\"retained_input_bytes_per_row\":%.3f,\"host_interop\":%s,\"host_interop_boundary\":%s,\"producer_backend\":\"%s\",\"native_input\":\"%s\",\"native_transient_peak_bytes\":null,\"native_allocation_count\":null,\"%s\":%s}%n",
+            "{\"engine\":\"%s\",\"mode\":\"%s\",\"stage\":\"%s\",\"runtime\":\"%s\",\"rows\":%d,\"checksum\":%d,\"guest_compiled\":%s,\"shared_access\":%s,\"stock_boundary\":%s,\"native_index_retained\":%s,\"input_bytes_per_row\":%.3f,\"copied_input_bytes_per_row\":%.3f,\"decoded_native_index_capacity_bytes_per_row\":%.3f,\"decoded_native_result_header_bytes_per_row\":%d,\"slab_bytes_per_row\":%.3f,\"retained_slab_capacity_bytes_per_row\":%.3f,\"session_arena_capacity_bytes_per_row\":%.3f,\"retained_input_bytes_per_row\":%.3f,\"host_interop\":%s,\"host_interop_boundary\":%s,\"producer_backend\":\"%s\",\"native_input\":\"%s\",\"native_transient_peak_bytes\":null,\"native_allocation_count\":null,%s\"%s\":%s}%n",
             engine,
             mode,
             stage,
@@ -215,8 +240,33 @@ public final class ConsumerComparison {
             engine.equals("stock-interop") && ImageInfo.inImageCode(),
             fixture.producerBackend(),
             engine.equals("slab-native") ? (stage.equals("heap") ? "heap" : "native") : "",
+            fixture.probeFields(),
             metric.equals("memory") ? "java_bytes_per_row" : "ns_per_row",
             Arrays.toString(samples));
+      } finally {
+        context.leave();
+      }
+    }
+  }
+
+  /** Write the fixture for the same-worker standalone native decode run (P0.1). */
+  private static void dumpFixture(String mode, Path directory) throws Exception {
+    try (var context = Context.newBuilder("td-compare").allowExperimentalOptions(true).build()) {
+      context.initialize("td-compare");
+      context.enter();
+      try (var fixture = new Fixture("probe-empty", mode, "decode")) {
+        Files.createDirectories(directory);
+        Files.write(directory.resolve("schema.bin"), DecodeProbe.program(fixture.plan));
+        var limits = java.util.Objects.requireNonNull(fixture.probe).limits();
+        var params = new StringBuilder();
+        params.append(limits.maxDepth()).append(' ').append(limits.maxSlabBytes()).append(' ');
+        params.append(fixture.probeCapacity).append('\n');
+        for (int i = 0; i < ROWS; i++) {
+          Files.write(
+              directory.resolve(String.format(Locale.ROOT, "wire-%02d.bin", i)), fixture.wires[i]);
+          params.append(fixture.probeExtents[i]).append('\n');
+        }
+        Files.writeString(directory.resolve("params.txt"), params.toString());
       } finally {
         context.leave();
       }
@@ -255,6 +305,10 @@ public final class ConsumerComparison {
     final ConsumerRoot root;
     final OptimizedCallTarget target;
     final long expected;
+    final @Nullable DecodeProbe probe;
+    final int probeKind;
+    int probeCapacity, probeTrims;
+    final int[] probeExtents = new int[ROWS];
     long inputBytes,
         indexBytes,
         headerBytes,
@@ -322,13 +376,31 @@ public final class ConsumerComparison {
         sum += expected(value, !mode.endsWith("sparse"));
       }
       expected = sum;
-      if (sessionEngine(engine))
+      probeKind = DecodeProbe.KINDS.indexOf(engine.startsWith("probe-") ? engine.substring(6) : "");
+      if (probe(engine)) {
+        if (!ImageInfo.inImageCode()) throw new UnsupportedOperationException("SVM-only probe");
+        // The production steady state: the plan's learned capacity is the largest extent.
+        int maxWire = 0;
+        var production = new SlabMessage[ROWS];
+        for (int i = 0; i < ROWS; i++) {
+          production[i] =
+              nativePlan.decodeSlab(java.util.Objects.requireNonNull(inputs[i]), 1 << 20);
+          probeExtents[i] = production[i].slabBytes();
+          probeCapacity = Math.max(probeCapacity, probeExtents[i]);
+          maxWire = Math.max(maxWire, wires[i].length);
+        }
+        probe = new DecodeProbe(decoder, plan, 1 << 20, probeCapacity, maxWire);
+        for (int i = 0; i < ROWS; i++)
+          probe.check(java.util.Objects.requireNonNull(inputs[i]), production[i]);
+      } else probe = null;
+      if (sessionEngine(engine) || engine.equals("probe-session"))
         for (int i = 0; i < ROWS; i++) {
           var selected = selectedPlan == null ? nativePlan : selectedPlan;
           sessions[i] = selected.newSession(1 << 20);
         }
       long copiedBefore = decoder.copiedSlabInputBytes();
       prepare();
+      if (probe != null) probeTrims = probe.trims();
       if (!stage.equals("decode")) consume();
       for (int i = 0; i < ROWS; i++) {
         if (rows[i] instanceof SlabMessage slab) {
@@ -371,6 +443,7 @@ public final class ConsumerComparison {
 
     String producerBackend() {
       if (engine.equals("stock") || engine.equals("stock-interop")) return "protobuf-java";
+      if (probe(engine)) return decoder.selected().name();
       if (sessionEngine(engine)
           || engine.equals("slab-native")
           || (owningSlabEngine(engine) && ImageInfo.inImageCode()))
@@ -378,9 +451,30 @@ public final class ConsumerComparison {
       return "JAVA";
     }
 
+    /** Probe-only observations: learned capacity and rows trimmed by the production rule. */
+    String probeFields() {
+      if (!probe(engine)) return "";
+      return String.format(
+          Locale.ROOT,
+          "\"probe_capacity_bytes\":%d,\"probe_trim_rows\":%d,\"probe_sink\":%d,",
+          probeCapacity,
+          probeTrims,
+          probe == null ? 0 : probe.sink() & 1);
+    }
+
     void prepare() throws Exception {
+      var probe = this.probe;
+      if (probe != null && probeKind >= 0) {
+        for (int i = 0; i < ROWS; i++)
+          rows[i] = probe.run(probeKind, java.util.Objects.requireNonNull(inputs[i]), wires[i]);
+        return;
+      }
       for (int i = 0; i < ROWS; i++) {
-        if (sessionEngine(engine))
+        if (engine.equals("probe-plan"))
+          rows[i] = nativePlan.decodeSlab(java.util.Objects.requireNonNull(inputs[i]), 1 << 20);
+        else if (engine.equals("probe-plan-heap"))
+          rows[i] = nativePlan.decodeSlab(wires[i], 1 << 20);
+        else if (sessionEngine(engine) || engine.equals("probe-session"))
           rows[i] =
               java.util.Objects.requireNonNull(sessions[i])
                   .decode(java.util.Objects.requireNonNull(inputs[i]));
@@ -443,6 +537,7 @@ public final class ConsumerComparison {
     @Override
     public void close() {
       release();
+      if (probe != null) probe.close();
       for (var session : sessions) if (session != null) session.close();
       for (var input : inputs) if (input != null) input.close();
       if (selectedPlan != null) selectedPlan.close();

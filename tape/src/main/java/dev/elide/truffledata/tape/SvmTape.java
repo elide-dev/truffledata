@@ -100,6 +100,24 @@ public final class SvmTape implements TapeReader {
     for (; i < length; i++) output[at + i] = data.readByte(WordFactory.signed(offset + i));
   }
 
+  @Override public void copyWords(long from, long[] output, int at, int count) {
+    copyWords(words, this.count, from, output, at, count);
+  }
+  @Override public void copyDirectory(long from, long[] output, int at, int count) {
+    copyWords(directory, directoryCount, from, output, at, count);
+  }
+  @Override public void copyMetadata(long from, int[] output, int at, int count) {
+    TapeReader.checkCopy(from, this.count, output.length, at, count, "Tape metadata copy");
+    if ((flags & 2) == 0) java.util.Arrays.fill(output, at, at + count, 0);
+    else for (int i = 0; i < count; i++) output[at + i] = meta.readInt(WordFactory.signed((from + i) * 4));
+  }
+
+  /** Checked word-at-a-time copy of {@code count} native words out of a {@code size}-word table. */
+  public static void copyWords(Pointer table, long size, long from, long[] output, int at, int count) {
+    TapeReader.checkCopy(from, size, output.length, at, count, "Tape word copy");
+    for (int i = 0; i < count; i++) output[at + i] = table.readLong(WordFactory.signed((from + i) * 8));
+  }
+
   @Override public long textWord(boolean owned, long offset, int length) {
     if (length == 0) return 0;
     long size = owned ? poolBytes : inputBytes;

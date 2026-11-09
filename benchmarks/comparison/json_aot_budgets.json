@@ -1,0 +1,15 @@
+{
+  "_comment": "Instruction/call ceilings for the JSON typed readers, the snapshot copy and the interop read bodies in the json_svm_profile image (x86-64, -O2, -march=compatibility). Pinned on 2026-11-08 from the WS7 image (a1d8782) with ~10% headroom; a change that lowers a value re-pins it downward (never upward without a ledger ruling). Before WS7: HeapTape_copy 815/32 (its extent scan and rebase called the checked `word` hook per word; the WS7 body inlines both passes over the heap copy and reads the source once through SvmTape_copyWords). Shape only; timings come from json_typed_pair.",
+  "^HeapTape_copy$": {"instructions": 1100, "calls": 38},
+  "^SvmTape_copyWords$": {"instructions": 82, "calls": 4},
+  "^TapeSnapshot_copy$": {"instructions": 60, "calls": 6},
+  "^TypedRecord_bits$": {"instructions": 280, "calls": 14},
+  "^TypedRecord_leaf$": {"instructions": 113, "calls": 5},
+  "^TypedRecord_slotBits$": {"instructions": 332, "calls": 18},
+  "^TypedAccess_longValue$": {"instructions": 332, "calls": 17},
+  "^TypedOwner_check$": {"instructions": 153, "calls": 6},
+  "^SvmTypedOwner_bits$": {"instructions": 28, "calls": 1},
+  "^SvmJsonMessage_directoryKey$": {"instructions": 155, "calls": 1},
+  "^TapeOwner_find$": {"instructions": 474, "calls": 38},
+  "^JsonFixture\\$InteropReader_read$": {"instructions": 646, "calls": 44}
+}

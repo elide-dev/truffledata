@@ -1,0 +1,930 @@
+{
+  "image": "build/csv-text-6d5f938/csv-comparison-profile",
+  "nm": "/Users/sam/.local/share/mise/shims/llvm-nm",
+  "objdump": "/Users/sam/.local/share/mise/shims/llvm-objdump",
+  "symbols": [
+    {
+      "pattern": "^CsvBatch_(textAt|textSlow|cellBytes|stringAt|row|checkLive)$",
+      "symbol": "CsvBatch_cellBytes_rxrirSs1OOI4PZWrzTjvv4",
+      "name": "CsvBatch_cellBytes",
+      "address": 7950944,
+      "size": 1349,
+      "instructions": 335,
+      "calls": 11,
+      "frame": 88,
+      "stack_loads": 37,
+      "stack_stores": 23,
+      "call_targets": [
+        "Arrays_copyOf",
+        "CsvMapping_copy",
+        "Dialect_decode",
+        "Dialect_decoder",
+        "ExceptionUnwind_unwindExceptionWithoutCalleeSavedRegisters",
+        "GenScavengeAllocationSupport_slowNewArray",
+        "GenScavengeAllocationSupport_slowNewInstance",
+        "ImplicitExceptions_throwNewNullPointerException",
+        "Throwable_fillInStackTrace"
+      ]
+    },
+    {
+      "pattern": "^CsvBatch_(textAt|textSlow|cellBytes|stringAt|row|checkLive)$",
+      "symbol": "CsvBatch_checkLive_G8hi0GAAXq0ECgKrxx5JTD",
+      "name": "CsvBatch_checkLive",
+      "address": 7952448,
+      "size": 83,
+      "instructions": 36,
+      "calls": 2,
+      "frame": 24,
+      "stack_loads": 0,
+      "stack_stores": 0,
+      "call_targets": [
+        "CsvMapping_closed",
+        "ExceptionUnwind_unwindExceptionWithoutCalleeSavedRegisters"
+      ]
+    },
+    {
+      "pattern": "^CsvBatch_(textAt|textSlow|cellBytes|stringAt|row|checkLive)$",
+      "symbol": "CsvBatch_stringAt_WT5DgQRVrqJrwrzldR6E1I",
+      "name": "CsvBatch_stringAt",
+      "address": 7955168,
+      "size": 7023,
+      "instructions": 1618,
+      "calls": 75,
+      "frame": 104,
+      "stack_loads": 154,
+      "stack_stores": 89,
+      "call_targets": [
+        "Arrays_copyOf",
+        "Arrays_copyOfRange",
+        "CsvBatch_string",
+        "CsvRow_expected",
+        "ExceptionUnwind_unwindExceptionWithoutCalleeSavedRegisters",
+        "GenScavengeAllocationSupport_slowNewArray",
+        "GenScavengeAllocationSupport_slowNewInstance",
+        "ImplicitExceptions_throwNewIntrinsicOutOfBoundsException",
+        "ImplicitExceptions_throwNewNullPointerException",
+        "ImplicitExceptions_throwNewOutOfBoundsExceptionWithArgs",
+        "OutlinedSBMethodHolder_String_AIAI",
+        "Preconditions_outOfBounds",
+        "Preconditions_outOfBoundsCheckIndex",
+        "SVMIntrinsicStubsGen_stringCodingCountPositives",
+        "SVMIntrinsicStubsGen_stringLatin1Inflate",
+        "SafepointSlowpath_enterSlowPathSafepointCheckCalleeSavedCCONV",
+        "Throwable_fillInStackTrace"
+      ]
+    },
+    {
+      "pattern": "^CsvBatch_(textAt|textSlow|cellBytes|stringAt|row|checkLive)$",
+      "symbol": "CsvBatch_textAt_DoPVraB4aQLGa3Lm1Lyn17",
+      "name": "CsvBatch_textAt",
+      "address": 7962208,
+      "size": 250,
+      "instructions": 74,
+      "calls": 7,
+      "frame": 24,
+      "stack_loads": 3,
+      "stack_stores": 6,
+      "call_targets": [
+        "CsvBatch_textSlow",
+        "CsvText_bind",
+        "ImplicitExceptions_throwNewNullPointerException",
+        "ImplicitExceptions_throwNewOutOfBoundsExceptionWithArgs"
+      ]
+    },
+    {
+      "pattern": "^CsvBatch_(textAt|textSlow|cellBytes|stringAt|row|checkLive)$",
+      "symbol": "CsvBatch_textSlow_mssW0EWHqG7O08HdJXSEZJ",
+      "name": "CsvBatch_textSlow",
+      "address": 7962464,
+      "size": 596,
+      "instructions": 159,
+      "calls": 10,
+      "frame": 56,
+      "stack_loads": 4,
+      "stack_stores": 16,
+      "call_targets": [
+        "CsvRow_expected",
+        "CsvText_bind",
+        "ExceptionUnwind_unwindExceptionWithoutCalleeSavedRegisters",
+        "GenScavengeAllocationSupport_slowNewInstance",
+        "ImplicitExceptions_throwNewNullPointerException",
+        "ImplicitExceptions_throwNewOutOfBoundsExceptionWithArgs",
+        "Throwable_fillInStackTrace"
+      ]
+    },
+    {
+      "pattern": "^CsvComparison_lambda\\$base\\$[0-9]+$",
+      "symbol": "CsvComparison_lambda$base$0_PL9lsOH9n71kUCSShvzXUE",
+      "name": "CsvComparison_lambda$base$0",
+      "address": 7847552,
+      "size": 342,
+      "instructions": 87,
+      "calls": 3,
+      "frame": 40,
+      "stack_loads": 4,
+      "stack_stores": 4,
+      "call_targets": [
+        "CsvBench_scan",
+        "GenScavengeAllocationSupport_slowNewArray",
+        "GenScavengeAllocationSupport_slowNewInstance"
+      ]
+    },
+    {
+      "pattern": "^CsvComparison_lambda\\$base\\$[0-9]+$",
+      "symbol": "CsvComparison_lambda$base$1_2ZDatHnh542AmP4QuD7aZA",
+      "name": "CsvComparison_lambda$base$1",
+      "address": 7847904,
+      "size": 105,
+      "instructions": 53,
+      "calls": 3,
+      "frame": 24,
+      "stack_loads": 0,
+      "stack_stores": 0,
+      "call_targets": [
+        "ImplicitExceptions_throwNewNullPointerException",
+        "ImplicitExceptions_throwNewOutOfBoundsExceptionWithArgs"
+      ]
+    },
+    {
+      "pattern": "^CsvComparison_lambda\\$base\\$[0-9]+$",
+      "symbol": "CsvComparison_lambda$base$10_jiBZYcC5zTFFbqYY97QjZ1",
+      "name": "CsvComparison_lambda$base$10",
+      "address": 7848032,
+      "size": 884,
+      "instructions": 202,
+      "calls": 20,
+      "frame": 56,
+      "stack_loads": 23,
+      "stack_stores": 12,
+      "call_targets": [
+        "ClassInitializationInfo_slowPath",
+        "CsvParser_close",
+        "CsvParser_nextToken",
+        "ExceptionUnwind_unwindExceptionWithoutCalleeSavedRegisters",
+        "ImplicitExceptions_createNullPointerException",
+        "ImplicitExceptions_throwNewNullPointerException",
+        "JsonFactory_createParser",
+        "SafepointSlowpath_enterSlowPathSafepointCheckCalleeSavedCCONV",
+        "Throwable_addSuppressed"
+      ]
+    },
+    {
+      "pattern": "^CsvComparison_lambda\\$base\\$[0-9]+$",
+      "symbol": "CsvComparison_lambda$base$11_AAaDJAKmVfJSfvUijOO8uJ",
+      "name": "CsvComparison_lambda$base$11",
+      "address": 7848928,
+      "size": 2087,
+      "instructions": 486,
+      "calls": 27,
+      "frame": 104,
+      "stack_loads": 87,
+      "stack_stores": 41,
+      "call_targets": [
+        "CsvBatch_booleanSlow",
+        "CsvBatch_doubleSlow",
+        "CsvBatch_longSlow",
+        "CsvPlan_parseBytes",
+        "ExceptionUnwind_unwindExceptionWithoutCalleeSavedRegisters",
+        "GenScavengeAllocationSupport_slowNewInstance",
+        "ImplicitExceptions_throwNewNullPointerException",
+        "ImplicitExceptions_throwNewOutOfBoundsExceptionWithArgs",
+        "Preconditions_outOfBoundsCheckIndex",
+        "SafepointSlowpath_enterSlowPathSafepointCheckCalleeSavedCCONV",
+        "Throwable_fillInStackTrace"
+      ]
+    },
+    {
+      "pattern": "^CsvComparison_lambda\\$base\\$[0-9]+$",
+      "symbol": "CsvComparison_lambda$base$12_vTS2Mm8F556XiXglBjDV32",
+      "name": "CsvComparison_lambda$base$12",
+      "address": 7851040,
+      "size": 1222,
+      "instructions": 293,
+      "calls": 22,
+      "frame": 72,
+      "stack_loads": 36,
+      "stack_stores": 26,
+      "call_targets": [
+        "*%rax",
+        "CsvComparison$Typed_add",
+        "CsvReader$CsvReaderBuilder_ofCsvRecord",
+        "CsvReader$CsvRecordIterator_hasNext",
+        "CsvReader$CsvRecordIterator_next",
+        "ExceptionUnwind_unwindExceptionWithoutCalleeSavedRegisters",
+        "GenScavengeAllocationSupport_slowNewInstance",
+        "ImplicitExceptions_createClassCastException",
+        "ImplicitExceptions_createNullPointerException",
+        "ImplicitExceptions_createOutOfBoundsException",
+        "ImplicitExceptions_throwNewNullPointerException",
+        "Throwable_addSuppressed"
+      ]
+    },
+    {
+      "pattern": "^CsvComparison_lambda\\$base\\$[0-9]+$",
+      "symbol": "CsvComparison_lambda$base$13_lOYpsN4Sg7EUJUklMMue26",
+      "name": "CsvComparison_lambda$base$13",
+      "address": 7852288,
+      "size": 762,
+      "instructions": 176,
+      "calls": 15,
+      "frame": 72,
+      "stack_loads": 19,
+      "stack_stores": 11,
+      "call_targets": [
+        "AbstractParser_beginParsing",
+        "AbstractParser_parseNext",
+        "AbstractParser_stopParsing",
+        "CsvComparison$Typed_add",
+        "CsvComparison_univocity",
+        "CsvParser",
+        "GenScavengeAllocationSupport_slowNewInstance",
+        "ImplicitExceptions_throwNewNullPointerException",
+        "ImplicitExceptions_throwNewOutOfBoundsExceptionWithArgs",
+        "SafepointSlowpath_enterSlowPathSafepointCheckCalleeSavedCCONV"
+      ]
+    },
+    {
+      "pattern": "^CsvComparison_lambda\\$base\\$[0-9]+$",
+      "symbol": "CsvComparison_lambda$base$14_LACqSa8x42FD7LHLkZWdL6",
+      "name": "CsvComparison_lambda$base$14",
+      "address": 7853056,
+      "size": 1082,
+      "instructions": 240,
+      "calls": 22,
+      "frame": 72,
+      "stack_loads": 36,
+      "stack_stores": 22,
+      "call_targets": [
+        "CSVFormat_parse",
+        "CSVParser$CSVRecordIterator_hasNext",
+        "CSVParser$CSVRecordIterator_next",
+        "ClassInitializationInfo_slowPath",
+        "CsvComparison$Typed_add",
+        "ExceptionUnwind_unwindExceptionWithoutCalleeSavedRegisters",
+        "GenScavengeAllocationSupport_slowNewInstance",
+        "ImplicitExceptions_createNullPointerException",
+        "ImplicitExceptions_createOutOfBoundsException",
+        "ImplicitExceptions_throwNewNullPointerException",
+        "InputStreamReader",
+        "Throwable_addSuppressed",
+        "UnsynchronizedBufferedReader_close"
+      ]
+    },
+    {
+      "pattern": "^CsvComparison_lambda\\$base\\$[0-9]+$",
+      "symbol": "CsvComparison_lambda$base$15_tTkW9xzLvd45YFE9MAetx3",
+      "name": "CsvComparison_lambda$base$15",
+      "address": 7854144,
+      "size": 1285,
+      "instructions": 295,
+      "calls": 23,
+      "frame": 72,
+      "stack_loads": 39,
+      "stack_stores": 29,
+      "call_targets": [
+        "ClassInitializationInfo_slowPath",
+        "CsvComparison$Typed_add",
+        "CsvParser_close",
+        "CsvParser_nextToken",
+        "ExceptionUnwind_unwindExceptionWithoutCalleeSavedRegisters",
+        "GenScavengeAllocationSupport_slowNewInstance",
+        "ImplicitExceptions_createNullPointerException",
+        "ImplicitExceptions_createOutOfBoundsException",
+        "ImplicitExceptions_throwNewNullPointerException",
+        "JsonFactory_createParser",
+        "SafepointSlowpath_enterSlowPathSafepointCheckCalleeSavedCCONV",
+        "Throwable_addSuppressed"
+      ]
+    },
+    {
+      "pattern": "^CsvComparison_lambda\\$base\\$[0-9]+$",
+      "symbol": "CsvComparison_lambda$base$16_LezVBZ39cr3BYj85OSleB9",
+      "name": "CsvComparison_lambda$base$16",
+      "address": 7855456,
+      "size": 267,
+      "instructions": 86,
+      "calls": 4,
+      "frame": 24,
+      "stack_loads": 0,
+      "stack_stores": 1,
+      "call_targets": [
+        "CsvPlan_parseBytes",
+        "ImplicitExceptions_throwNewNullPointerException"
+      ]
+    },
+    {
+      "pattern": "^CsvComparison_lambda\\$base\\$[0-9]+$",
+      "symbol": "CsvComparison_lambda$base$2_th3SlwrCyvHwyiEI3oCL69",
+      "name": "CsvComparison_lambda$base$2",
+      "address": 7855744,
+      "size": 795,
+      "instructions": 182,
+      "calls": 15,
+      "frame": 56,
+      "stack_loads": 22,
+      "stack_stores": 14,
+      "call_targets": [
+        "*%rax",
+        "CsvReader$CsvReaderBuilder_build",
+        "CsvReader$CsvRecordIterator_hasNext",
+        "CsvReader$CsvRecordIterator_next",
+        "ExceptionUnwind_unwindExceptionWithoutCalleeSavedRegisters",
+        "GenScavengeAllocationSupport_slowNewInstance",
+        "ImplicitExceptions_createNullPointerException",
+        "ImplicitExceptions_throwNewNullPointerException",
+        "Throwable_addSuppressed"
+      ]
+    },
+    {
+      "pattern": "^CsvComparison_lambda\\$base\\$[0-9]+$",
+      "symbol": "CsvComparison_lambda$base$3_YKbzzvgghNBxuYkg4r1M5L",
+      "name": "CsvComparison_lambda$base$3",
+      "address": 7856544,
+      "size": 549,
+      "instructions": 145,
+      "calls": 14,
+      "frame": 56,
+      "stack_loads": 20,
+      "stack_stores": 13,
+      "call_targets": [
+        "ClassInitializationInfo_slowPath",
+        "CsvParser_close",
+        "CsvParser_getTextLength",
+        "CsvParser_nextToken",
+        "ExceptionUnwind_unwindExceptionWithoutCalleeSavedRegisters",
+        "ImplicitExceptions_createAssertionErrorNullary",
+        "ImplicitExceptions_throwNewNullPointerException",
+        "JsonFactory_createParser",
+        "SafepointSlowpath_enterSlowPathSafepointCheckCalleeSavedCCONV",
+        "Throwable_addSuppressed"
+      ]
+    },
+    {
+      "pattern": "^CsvComparison_lambda\\$base\\$[0-9]+$",
+      "symbol": "CsvComparison_lambda$base$4_1gN7s5EdCWFQc76jM3L7L6",
+      "name": "CsvComparison_lambda$base$4",
+      "address": 7857120,
+      "size": 1018,
+      "instructions": 233,
+      "calls": 14,
+      "frame": 56,
+      "stack_loads": 23,
+      "stack_stores": 23,
+      "call_targets": [
+        "CsvBatch_stringAt",
+        "Csv_parse",
+        "Csv_parseOwned",
+        "ExceptionUnwind_unwindExceptionWithoutCalleeSavedRegisters",
+        "GenScavengeAllocationSupport_slowNewInstance",
+        "ImplicitExceptions_throwNewNullPointerException",
+        "Preconditions_outOfBoundsCheckIndex",
+        "SVMIntrinsicStubsGen_arrayRegionEqualsS1S1",
+        "SafepointSlowpath_enterSlowPathSafepointCheckCalleeSavedCCONV",
+        "Throwable_fillInStackTrace"
+      ]
+    },
+    {
+      "pattern": "^CsvComparison_lambda\\$base\\$[0-9]+$",
+      "symbol": "CsvComparison_lambda$base$5_PvzbXHmCdS6rHTaEEr4DBI",
+      "name": "CsvComparison_lambda$base$5",
+      "address": 7858144,
+      "size": 908,
+      "instructions": 221,
+      "calls": 11,
+      "frame": 72,
+      "stack_loads": 22,
+      "stack_stores": 15,
+      "call_targets": [
+        "CsvBatch_textAt",
+        "CsvText_charLength",
+        "Csv_parse",
+        "ExceptionUnwind_unwindExceptionWithoutCalleeSavedRegisters",
+        "GenScavengeAllocationSupport_slowNewInstance",
+        "ImplicitExceptions_throwNewNullPointerException",
+        "Preconditions_outOfBoundsCheckIndex",
+        "SafepointSlowpath_enterSlowPathSafepointCheckCalleeSavedCCONV",
+        "Throwable_fillInStackTrace"
+      ]
+    },
+    {
+      "pattern": "^CsvComparison_lambda\\$base\\$[0-9]+$",
+      "symbol": "CsvComparison_lambda$base$6_5aRWNCNEy6JxFbqjyFCKN1",
+      "name": "CsvComparison_lambda$base$6",
+      "address": 7859072,
+      "size": 934,
+      "instructions": 235,
+      "calls": 12,
+      "frame": 72,
+      "stack_loads": 23,
+      "stack_stores": 15,
+      "call_targets": [
+        "CsvBatch_textAt",
+        "CsvText_toString",
+        "Csv_parse",
+        "ExceptionUnwind_unwindExceptionWithoutCalleeSavedRegisters",
+        "GenScavengeAllocationSupport_slowNewInstance",
+        "ImplicitExceptions_throwNewNullPointerException",
+        "Preconditions_outOfBoundsCheckIndex",
+        "SafepointSlowpath_enterSlowPathSafepointCheckCalleeSavedCCONV",
+        "Throwable_fillInStackTrace"
+      ]
+    },
+    {
+      "pattern": "^CsvComparison_lambda\\$base\\$[0-9]+$",
+      "symbol": "CsvComparison_lambda$base$7_TUzcZKKb3OANOEXiJ2CgL5",
+      "name": "CsvComparison_lambda$base$7",
+      "address": 7860032,
+      "size": 1018,
+      "instructions": 235,
+      "calls": 20,
+      "frame": 56,
+      "stack_loads": 22,
+      "stack_stores": 12,
+      "call_targets": [
+        "*%rax",
+        "CsvReader$CsvReaderBuilder_ofCsvRecord",
+        "CsvReader$CsvRecordIterator_hasNext",
+        "CsvReader$CsvRecordIterator_next",
+        "ExceptionUnwind_unwindExceptionWithoutCalleeSavedRegisters",
+        "GenScavengeAllocationSupport_slowNewInstance",
+        "ImplicitExceptions_createClassCastException",
+        "ImplicitExceptions_createNullPointerException",
+        "ImplicitExceptions_throwNewNullPointerException",
+        "SafepointSlowpath_enterSlowPathSafepointCheckCalleeSavedCCONV",
+        "Throwable_addSuppressed"
+      ]
+    },
+    {
+      "pattern": "^CsvComparison_lambda\\$base\\$[0-9]+$",
+      "symbol": "CsvComparison_lambda$base$8_qNdA73blIfGrnWHjORjyf6",
+      "name": "CsvComparison_lambda$base$8",
+      "address": 7861056,
+      "size": 663,
+      "instructions": 155,
+      "calls": 12,
+      "frame": 56,
+      "stack_loads": 10,
+      "stack_stores": 9,
+      "call_targets": [
+        "AbstractParser_beginParsing",
+        "AbstractParser_parseNext",
+        "AbstractParser_stopParsing",
+        "CsvComparison_univocity",
+        "CsvParser",
+        "GenScavengeAllocationSupport_slowNewInstance",
+        "ImplicitExceptions_throwNewNullPointerException",
+        "SafepointSlowpath_enterSlowPathSafepointCheckCalleeSavedCCONV"
+      ]
+    },
+    {
+      "pattern": "^CsvComparison_lambda\\$base\\$[0-9]+$",
+      "symbol": "CsvComparison_lambda$base$9_xwwdRvZWuICiQvFjqd3fv8",
+      "name": "CsvComparison_lambda$base$9",
+      "address": 7861728,
+      "size": 1017,
+      "instructions": 231,
+      "calls": 24,
+      "frame": 56,
+      "stack_loads": 22,
+      "stack_stores": 12,
+      "call_targets": [
+        "CSVFormat_parse",
+        "CSVParser$CSVRecordIterator_hasNext",
+        "CSVParser$CSVRecordIterator_next",
+        "ClassInitializationInfo_slowPath",
+        "ExceptionUnwind_unwindExceptionWithoutCalleeSavedRegisters",
+        "GenScavengeAllocationSupport_slowNewInstance",
+        "ImplicitExceptions_createNullPointerException",
+        "ImplicitExceptions_throwNewNullPointerException",
+        "InputStreamReader",
+        "SafepointSlowpath_enterSlowPathSafepointCheckCalleeSavedCCONV",
+        "Throwable_addSuppressed",
+        "UnsynchronizedBufferedReader_close"
+      ]
+    },
+    {
+      "pattern": "^CsvText_",
+      "symbol": "CsvText_asString_oxeOoURkLC0TIY6LM8y4E3",
+      "name": "CsvText_asString",
+      "address": 8029152,
+      "size": 44,
+      "instructions": 32,
+      "calls": 1,
+      "frame": 24,
+      "stack_loads": 0,
+      "stack_stores": 0,
+      "call_targets": [
+        "CsvText_toString"
+      ]
+    },
+    {
+      "pattern": "^CsvText_",
+      "symbol": "CsvText_asTruffleString_WefONQo7zrD91fRVTJYaxK",
+      "name": "CsvText_asTruffleString",
+      "address": 8029312,
+      "size": 44,
+      "instructions": 32,
+      "calls": 1,
+      "frame": 24,
+      "stack_loads": 0,
+      "stack_stores": 0,
+      "call_targets": [
+        "CsvText_toTruffleString"
+      ]
+    },
+    {
+      "pattern": "^CsvText_",
+      "symbol": "CsvText_bind_5kpKXX7GVL0zGPs5S4IjbF",
+      "name": "CsvText_bind",
+      "address": 8029376,
+      "size": 421,
+      "instructions": 124,
+      "calls": 0,
+      "frame": 8,
+      "stack_loads": 0,
+      "stack_stores": 0,
+      "call_targets": []
+    },
+    {
+      "pattern": "^CsvText_",
+      "symbol": "CsvText_charLength_QywWPhHJLBCnUiZzL6wF06",
+      "name": "CsvText_charLength",
+      "address": 8029824,
+      "size": 625,
+      "instructions": 179,
+      "calls": 9,
+      "frame": 56,
+      "stack_loads": 22,
+      "stack_stores": 17,
+      "call_targets": [
+        "CsvText_fetch",
+        "CsvText_live",
+        "ImplicitExceptions_throwNewNullPointerException",
+        "ImplicitExceptions_throwNewOutOfBoundsExceptionWithArgs",
+        "SafepointSlowpath_enterSlowPathSafepointCheckCalleeSavedCCONV",
+        "Utf8_ascii",
+        "Utf8_asciiWord"
+      ]
+    },
+    {
+      "pattern": "^CsvText_",
+      "symbol": "CsvText_equals_71Myu1Qss5DnF8zdArzLM6",
+      "name": "CsvText_equals",
+      "address": 8030464,
+      "size": 350,
+      "instructions": 97,
+      "calls": 6,
+      "frame": 40,
+      "stack_loads": 9,
+      "stack_stores": 4,
+      "call_targets": [
+        "Arrays_equals",
+        "CsvText_fetch",
+        "CsvText_live"
+      ]
+    },
+    {
+      "pattern": "^CsvText_",
+      "symbol": "CsvText_fetch_tmR9IjVBDpB5kcwlfeN60F",
+      "name": "CsvText_fetch",
+      "address": 8030816,
+      "size": 308,
+      "instructions": 85,
+      "calls": 4,
+      "frame": 40,
+      "stack_loads": 2,
+      "stack_stores": 2,
+      "call_targets": [
+        "CsvBatch_cellBytes",
+        "ExceptionUnwind_unwindExceptionWithoutCalleeSavedRegisters",
+        "GenScavengeAllocationSupport_slowNewInstance",
+        "Throwable_fillInStackTrace"
+      ]
+    },
+    {
+      "pattern": "^CsvText_",
+      "symbol": "CsvText_hashCode_wR7AWah2O1748Bv5P5Ci7J",
+      "name": "CsvText_hashCode",
+      "address": 8031136,
+      "size": 302,
+      "instructions": 99,
+      "calls": 6,
+      "frame": 40,
+      "stack_loads": 3,
+      "stack_stores": 2,
+      "call_targets": [
+        "CsvText_fetch",
+        "CsvText_live",
+        "ImplicitExceptions_throwNewNullPointerException",
+        "ImplicitExceptions_throwNewOutOfBoundsExceptionWithArgs",
+        "SafepointSlowpath_enterSlowPathSafepointCheckCalleeSavedCCONV"
+      ]
+    },
+    {
+      "pattern": "^CsvText_",
+      "symbol": "CsvText_live_Pck4hUDVwN6495wPz9tC03",
+      "name": "CsvText_live",
+      "address": 8031456,
+      "size": 506,
+      "instructions": 116,
+      "calls": 5,
+      "frame": 24,
+      "stack_loads": 2,
+      "stack_stores": 3,
+      "call_targets": [
+        "ExceptionUnwind_unwindExceptionWithoutCalleeSavedRegisters",
+        "GenScavengeAllocationSupport_slowNewInstance",
+        "Throwable_fillInStackTrace"
+      ]
+    },
+    {
+      "pattern": "^CsvText_",
+      "symbol": "CsvText_toDisplayString_1pbpam5NMpKan40OLlb6C8",
+      "name": "CsvText_toDisplayString",
+      "address": 8032064,
+      "size": 44,
+      "instructions": 32,
+      "calls": 1,
+      "frame": 24,
+      "stack_loads": 0,
+      "stack_stores": 0,
+      "call_targets": [
+        "CsvText_toString"
+      ]
+    },
+    {
+      "pattern": "^CsvText_",
+      "symbol": "CsvText_toString_9bDozDnGnw4okaGjG1KdqF",
+      "name": "CsvText_toString",
+      "address": 8032128,
+      "size": 421,
+      "instructions": 135,
+      "calls": 4,
+      "frame": 24,
+      "stack_loads": 4,
+      "stack_stores": 1,
+      "call_targets": [
+        "CsvBatch_string",
+        "CsvText_live",
+        "Utf8_string"
+      ]
+    },
+    {
+      "pattern": "^CsvText_",
+      "symbol": "CsvText_toTruffleString_3NV43JyFUN0idr6fkhbps3",
+      "name": "CsvText_toTruffleString",
+      "address": 8032576,
+      "size": 278,
+      "instructions": 76,
+      "calls": 4,
+      "frame": 88,
+      "stack_loads": 5,
+      "stack_stores": 14,
+      "call_targets": [
+        "CsvText_fetch",
+        "CsvText_live",
+        "TruffleString$FromByteArrayNode_fromByteArray"
+      ]
+    },
+    {
+      "pattern": "^Utf8_",
+      "symbol": "Utf8_ascii_wkyXfEVpLh7T1RjxVnacwC",
+      "name": "Utf8_ascii",
+      "address": 8052256,
+      "size": 309,
+      "instructions": 86,
+      "calls": 3,
+      "frame": 56,
+      "stack_loads": 0,
+      "stack_stores": 5,
+      "call_targets": [
+        "ExceptionUnwind_unwindExceptionWithoutCalleeSavedRegisters",
+        "Preconditions_outOfBoundsCheckIndex"
+      ]
+    },
+    {
+      "pattern": "^Utf8_",
+      "symbol": "Utf8_asciiWord_sTP2MZPDO5FXNWckSIweG5",
+      "name": "Utf8_asciiWord",
+      "address": 8052576,
+      "size": 140,
+      "instructions": 57,
+      "calls": 3,
+      "frame": 24,
+      "stack_loads": 0,
+      "stack_stores": 1,
+      "call_targets": [
+        "ExceptionUnwind_unwindExceptionWithoutCalleeSavedRegisters",
+        "ImplicitExceptions_throwNewNullPointerException",
+        "Preconditions_outOfBoundsCheckIndex"
+      ]
+    },
+    {
+      "pattern": "^Utf8_",
+      "symbol": "Utf8_invalidOffset_ov4T2CodfO99TVPFF7Whs7",
+      "name": "Utf8_invalidOffset",
+      "address": 8052736,
+      "size": 1190,
+      "instructions": 306,
+      "calls": 16,
+      "frame": 40,
+      "stack_loads": 0,
+      "stack_stores": 21,
+      "call_targets": [
+        "ExceptionUnwind_unwindExceptionWithoutCalleeSavedRegisters",
+        "ImplicitExceptions_throwNewNullPointerException",
+        "ImplicitExceptions_throwNewOutOfBoundsExceptionWithArgs",
+        "Preconditions_outOfBoundsCheckIndex",
+        "SafepointSlowpath_enterSlowPathSafepointCheckCalleeSavedCCONV"
+      ]
+    },
+    {
+      "pattern": "^Utf8_",
+      "symbol": "Utf8_string_hiRguFrsRNF86k0bWhawB8",
+      "name": "Utf8_string",
+      "address": 8053952,
+      "size": 499,
+      "instructions": 129,
+      "calls": 8,
+      "frame": 40,
+      "stack_loads": 12,
+      "stack_stores": 12,
+      "call_targets": [
+        "GenScavengeAllocationSupport_slowNewInstance",
+        "ImplicitExceptions_throwNewNullPointerException",
+        "String",
+        "Utf8_ascii"
+      ]
+    },
+    {
+      "pattern": "^Utf8_",
+      "symbol": "Utf8_stringToUtf8_vQNkvni3hlHvMDvu3hCeJ7",
+      "name": "Utf8_stringToUtf8",
+      "address": 2864672,
+      "size": 138,
+      "instructions": 60,
+      "calls": 5,
+      "frame": 24,
+      "stack_loads": 2,
+      "stack_stores": 2,
+      "call_targets": [
+        "ByteBuffer_allocate",
+        "ByteBuffer_array",
+        "ImplicitExceptions_throwNewNullPointerException",
+        "Utf8_substringToUtf8",
+        "Utf8_utf8Length"
+      ]
+    },
+    {
+      "pattern": "^Utf8_",
+      "symbol": "Utf8_substringToUtf8_BMNx1rxMX83GeYDIj0zA2H",
+      "name": "Utf8_substringToUtf8",
+      "address": 2864832,
+      "size": 650,
+      "instructions": 176,
+      "calls": 14,
+      "frame": 72,
+      "stack_loads": 36,
+      "stack_stores": 10,
+      "call_targets": [
+        "*%rax",
+        "ExceptionUnwind_unwindExceptionWithoutCalleeSavedRegisters",
+        "GenScavengeAllocationSupport_slowNewInstance",
+        "ImplicitExceptions_throwNewNullPointerException",
+        "String_charAt",
+        "Throwable_fillInStackTrace"
+      ]
+    },
+    {
+      "pattern": "^Utf8_",
+      "symbol": "Utf8_utf8Length_gULf9inET01dG5XeLV1NLI",
+      "name": "Utf8_utf8Length",
+      "address": 2865504,
+      "size": 87,
+      "instructions": 35,
+      "calls": 3,
+      "frame": 24,
+      "stack_loads": 0,
+      "stack_stores": 0,
+      "call_targets": [
+        "ImplicitExceptions_throwNewNullPointerException",
+        "Utf8_utf8Length"
+      ]
+    },
+    {
+      "pattern": "^Utf8_",
+      "symbol": "Utf8_utf8Length_oI5kC18PNx6N34UICqzLTB",
+      "name": "Utf8_utf8Length",
+      "address": 2865600,
+      "size": 450,
+      "instructions": 138,
+      "calls": 5,
+      "frame": 40,
+      "stack_loads": 12,
+      "stack_stores": 7,
+      "call_targets": [
+        "ExceptionUnwind_unwindExceptionWithoutCalleeSavedRegisters",
+        "GenScavengeAllocationSupport_slowNewInstance",
+        "ImplicitExceptions_throwNewNullPointerException",
+        "String_charAt",
+        "Throwable_fillInStackTrace"
+      ]
+    },
+    {
+      "pattern": "^Utf8_",
+      "symbol": "Utf8_utf8LengthAsLong_DszP0WL9RH4SblHIFYcvxJ",
+      "name": "Utf8_utf8LengthAsLong",
+      "address": 2866080,
+      "size": 87,
+      "instructions": 35,
+      "calls": 3,
+      "frame": 24,
+      "stack_loads": 0,
+      "stack_stores": 0,
+      "call_targets": [
+        "ImplicitExceptions_throwNewNullPointerException",
+        "Utf8_utf8LengthAsLong"
+      ]
+    },
+    {
+      "pattern": "^Utf8_",
+      "symbol": "Utf8_utf8LengthAsLong_rbQMBXCPeJI4k5Oq4PoJ05",
+      "name": "Utf8_utf8LengthAsLong",
+      "address": 2866176,
+      "size": 362,
+      "instructions": 108,
+      "calls": 5,
+      "frame": 40,
+      "stack_loads": 9,
+      "stack_stores": 7,
+      "call_targets": [
+        "ExceptionUnwind_unwindExceptionWithoutCalleeSavedRegisters",
+        "GenScavengeAllocationSupport_slowNewInstance",
+        "ImplicitExceptions_throwNewNullPointerException",
+        "String_charAt",
+        "Throwable_fillInStackTrace"
+      ]
+    },
+    {
+      "pattern": "^Utf8_",
+      "symbol": "Utf8_utf8ToString_7PcSXOaaGQ97SDVefE1L6B",
+      "name": "Utf8_utf8ToString",
+      "address": 2866560,
+      "size": 793,
+      "instructions": 191,
+      "calls": 16,
+      "frame": 56,
+      "stack_loads": 18,
+      "stack_stores": 7,
+      "call_targets": [
+        "*(%rax)",
+        "*-0x1(%rax)",
+        "AbstractStringBuilder_append",
+        "Buffer_nextGetIndex",
+        "ExceptionUnwind_unwindExceptionWithoutCalleeSavedRegisters",
+        "GenScavengeAllocationSupport_slowNewInstance",
+        "OutlinedSBMethodHolder_StringBuilder_I",
+        "String"
+      ]
+    },
+    {
+      "pattern": "^Utf8_",
+      "symbol": "Utf8_utf8ToString_TCVFBy1LZRIW7ANQ1fi5HH",
+      "name": "Utf8_utf8ToString",
+      "address": 2867360,
+      "size": 239,
+      "instructions": 69,
+      "calls": 3,
+      "frame": 24,
+      "stack_loads": 2,
+      "stack_stores": 2,
+      "call_targets": [
+        "DirectByteBuffer",
+        "GenScavengeAllocationSupport_slowNewInstance",
+        "Utf8_utf8ToString"
+      ]
+    },
+    {
+      "pattern": "^Utf8_",
+      "symbol": "Utf8_wrapUtf8CString_D2dUOskoFqIyboxDCtE3AA",
+      "name": "Utf8_wrapUtf8CString",
+      "address": 2867616,
+      "size": 315,
+      "instructions": 91,
+      "calls": 3,
+      "frame": 40,
+      "stack_loads": 3,
+      "stack_stores": 3,
+      "call_targets": [
+        "GenScavengeAllocationSupport_slowNewInstance",
+        "SafepointSlowpath_enterSlowPathSafepointCheckCalleeSavedCCONV",
+        "Utf8_utf8ToString"
+      ]
+    }
+  ],
+  "unmatched": [
+    "^CsvRow_getText"
+  ],
+  "budgets": {},
+  "failures": []
+}

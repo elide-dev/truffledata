@@ -13,9 +13,21 @@ import java.util.HashMap;
 import java.util.Map;
 import org.jspecify.annotations.Nullable;
 
-/** Durable owning slab result. Closing is a no-op and snapshot preserves identity. */
-public final class SlabMessage extends SlabRow implements ProtoMessage {
+/**
+ * Durable owning slab result. Closing is a no-op and snapshot preserves identity. Schema-generated
+ * subclasses (see {@link ProtoPlan.SlabRows}) are the roots of unprojected owning slabs; projected
+ * slabs are always this generic class.
+ */
+public class SlabMessage extends SlabRow implements ProtoMessage {
   private static final VarHandle HANDLE_SLOT = MethodHandles.arrayElementVarHandle(Object[].class);
+
+  /**
+   * Verification bit for {@link #SlabMessage(Layout, byte[], int, int)}: the slab was produced by
+   * this process's own checked producer, so check the header against the layout and run the full
+   * logical validation (the path of {@link #decode(ProtoPlan, byte[])}). Disjoint from the {@link
+   * SlabVerifier} bits of an externally verified slab.
+   */
+  protected static final int INTERNAL = 1 << 30;
 
   // The valid extent is the verified header word HEADER_BYTES_USED, not a field: the message
   // object stays at 48 bytes on SVM (compressed references, 8-byte header).
@@ -39,27 +51,58 @@ public final class SlabMessage extends SlabRow implements ProtoMessage {
 
   // Publishing the table is separate from publishing each lazily initialized entry.
   private volatile Object @Nullable [] handles;
-  /** Lazy views: a list at its slab offset, a boxed unsigned 64-bit value at {@code ~slot}. */
-  private @Nullable Map<Integer, Object> views;
 
-  private SlabMessage(Layout layout, byte[] owned) {
-    this(layout, owned, owned.length, null);
+  /**
+   * Lazy views without handle ids (lists and boxed unsigned 64-bit values), in an open-addressed
+   * table keyed by slab offset: a list at {@code offset << 1 | expanded}, an unsigned value at
+   * {@code -slot}. Keys are published with release semantics after their view; the table reference
+   * itself is volatile, grows under this message's monitor and never removes an entry, so a warm
+   * hit is one acquire load and a stale table only produces a miss that rechecks under the lock.
+   */
+  private volatile @Nullable ViewTable views;
+
+  private static final VarHandle VIEW_KEY = MethodHandles.arrayElementVarHandle(long[].class);
+
+  private static final class ViewTable {
+    final long[] keys;
+    final Object[] values;
+    int size;
+
+    ViewTable(int capacity) {
+      keys = new long[capacity];
+      values = new Object[capacity];
+    }
   }
 
-  /** A verified slab; {@link SlabVerifier#EXACT} requests full logical accounting. */
-  private SlabMessage(Layout layout, byte[] owned, int extent, int verification) {
+  /**
+   * An unprojected owning slab. With {@link #INTERNAL} the slab comes from this process's checked
+   * producer: the header is checked against the layout and the logical budgets, required fields
+   * and nesting are validated. Otherwise the slab was verified by {@link SlabVerifier#verifyOwning}
+   * and {@link SlabVerifier#EXACT} requests the full logical accounting. Generated roots delegate
+   * here and add nothing.
+   */
+  protected SlabMessage(Layout layout, byte[] owned, int extent, int verification) {
     super(layout);
     projected = null;
     bytes = owned;
-    if ((verification & SlabVerifier.EXACT) != 0)
+    if ((verification & INTERNAL) != 0) check(bytes, extent, layout);
+    if ((verification & (INTERNAL | SlabVerifier.EXACT)) != 0)
       validate(
           0, ROOT, new ProtoRow.Budget(plan().limits()), 1,
           (verification & SlabVerifier.SHARED) != 0 ? new HashMap<>() : null);
   }
 
+  /** The root of an unprojected owning slab: the layout's generated root class when it has one. */
+  private static SlabMessage create(Layout layout, byte[] owned, int extent, int verification) {
+    ProtoPlan.SlabRows rows = layout.rows();
+    return rows == null
+        ? new SlabMessage(layout, owned, extent, verification)
+        : rows.root(layout, owned, extent, verification);
+  }
+
   /** Publish an owning slab already verified by {@link SlabVerifier#verifyOwning}. */
   static SlabMessage owning(Layout layout, byte[] verified, int extent, int verification) {
-    return new SlabMessage(layout, verified, extent, verification);
+    return create(layout, verified, extent, verification);
   }
 
   private SlabMessage(Layout layout, byte[] owned, int extent, @Nullable Projected projected) {
@@ -80,16 +123,17 @@ public final class SlabMessage extends SlabRow implements ProtoMessage {
   @TruffleBoundary
   public static SlabMessage decode(ProtoPlan plan, byte[] input) {
     Layout layout = plan.layout();
-    return new SlabMessage(
-        layout,
-        plan.decodeSlabBytes(input, 0, input.length, SlabLimits.forInput(layout, input.length)));
+    byte[] slab =
+        plan.decodeSlabBytes(input, 0, input.length, SlabLimits.forInput(layout, input.length));
+    return create(layout, slab, slab.length, INTERNAL);
   }
 
   @TruffleBoundary
   public static SlabMessage decode(
       ProtoPlan plan, byte[] input, int offset, int length, SlabLimits limits) {
     Layout layout = plan.layout();
-    return new SlabMessage(layout, plan.decodeSlabBytes(input, offset, length, limits));
+    byte[] slab = plan.decodeSlabBytes(input, offset, length, limits);
+    return create(layout, slab, slab.length, INTERNAL);
   }
 
   /** Decode a selected view. Deferred payloads retain an immutable copy of this input window. */
@@ -206,6 +250,49 @@ public final class SlabMessage extends SlabRow implements ProtoMessage {
     return owning(layout, slab, extent, SlabVerifier.verifyOwning(slab, extent, layout, limits));
   }
 
+  /** Native accounting value meaning "unknown or saturated": never within a budget. */
+  private static final long UNKNOWN_TOTAL = 0xFFFF_FFFFL;
+
+  /**
+   * Publish a slab that this process's own native producer (seam ABI 12 {@code decodeSlab}) wrote
+   * into {@code slab}, an array the caller allocated for this decode and never exposed. The
+   * producer's reported header flags and logical totals ({@code SlabResult.cells} and {@code
+   * string_bytes}, unsigned, {@code 0xFFFFFFFF} when unknown) decide the verification: a {@code
+   * CERTIFIED} owning slab whose totals lie within the plan's limits is published after the O(1)
+   * header check alone, exactly as the Java verifier would have accepted it; anything else takes
+   * the {@link #INTERNAL} path (header check plus the exact {@code validate} walk), so a violation
+   * is reported with the same message and ordering as before.
+   *
+   * <p>This is the in-process producer entry (the Buffa backends' allocate-and-fill paths and
+   * their scratch retries). It trusts the array's provenance, not its bytes: external, shared,
+   * copied or projected slabs use {@link #copyOf}, {@link #copyProjectedOf} or {@link
+   * #takeOwnership}, which keep the full verifier.
+   */
+  @TruffleBoundary
+  public static SlabMessage produced(
+      ProtoPlan plan,
+      byte[] slab,
+      int extent,
+      int flags,
+      int cells,
+      int stringBytes,
+      SlabLimits limits) {
+    if (slab.length > limits.maxSlabBytes())
+      throw new ContractViolation("Retained slab byte budget exceeded");
+    Layout layout = plan.layout();
+    int header = check(slab, extent, layout);
+    long reportedCells = Integer.toUnsignedLong(cells);
+    long reportedBytes = Integer.toUnsignedLong(stringBytes);
+    Limits budget = plan.limits();
+    if (header == (OWNING | CERTIFIED)
+        && flags == header
+        && reportedCells != UNKNOWN_TOTAL
+        && reportedBytes != UNKNOWN_TOTAL
+        && reportedCells <= budget.maxCells()
+        && reportedBytes <= budget.maxStringBytes()) return create(layout, slab, extent, 0);
+    return create(layout, slab, extent, INTERNAL);
+  }
+
   public SlabMessage row() {
     return this;
   }
@@ -283,7 +370,10 @@ public final class SlabMessage extends SlabRow implements ProtoMessage {
     if (record < 0) return realize(type, record & ~LAZY_CHILD, handle);
     Object[] values = cache();
     if (values[handle] instanceof SlabRow row) return row;
-    SlabRow row = new SlabRow(this, type, record, expanded);
+    // Generated classes read without the projection check, so only unprojected owners use them.
+    ProtoPlan.SlabRows rows = projected == null ? layout.rows() : null;
+    SlabRow row =
+        rows == null ? new SlabRow(this, type, record, expanded) : rows.child(this, type, record);
     HANDLE_SLOT.setRelease(values, handle, row);
     return row;
   }
@@ -323,29 +413,75 @@ public final class SlabMessage extends SlabRow implements ProtoMessage {
     return array;
   }
 
-  private Map<Integer, Object> views() {
-    Map<Integer, Object> values = views;
-    if (values == null) views = values = new HashMap<>();
-    return values;
+  private static int viewSlot(long key, int mask) {
+    return (int) ((key * 0x9E3779B97F4A7C15L) >>> 32) & mask;
+  }
+
+  /** Warm view lookup: one volatile table load and acquire key loads, no lock. */
+  private @Nullable Object view(long key) {
+    ViewTable table = views;
+    if (table == null) return null;
+    long[] keys = table.keys;
+    int mask = keys.length - 1;
+    for (int slot = viewSlot(key, mask); ; slot = (slot + 1) & mask) {
+      long found = (long) VIEW_KEY.getAcquire(keys, slot);
+      if (found == key) return table.values[slot];
+      if (found == 0) return null;
+    }
+  }
+
+  /** Miss path: holds this message's monitor; grows the table before it is half full. */
+  private void publishView(long key, Object value) {
+    ViewTable table = views;
+    if (table == null || (table.size + 1) * 2 > table.keys.length) {
+      ViewTable grown = new ViewTable(table == null ? 8 : table.keys.length * 2);
+      if (table != null)
+        for (int i = 0; i < table.keys.length; i++)
+          if (table.keys[i] != 0) insertView(grown, table.keys[i], table.values[i]);
+      insertView(grown, key, value);
+      grown.size = (table == null ? 0 : table.size) + 1;
+      // The volatile write publishes every plain write to the new arrays.
+      views = grown;
+      return;
+    }
+    insertView(table, key, value);
+    table.size++;
+  }
+
+  private static void insertView(ViewTable table, long key, Object value) {
+    long[] keys = table.keys;
+    int mask = keys.length - 1;
+    int slot = viewSlot(key, mask);
+    while (keys[slot] != 0) slot = (slot + 1) & mask;
+    table.values[slot] = value;
+    VIEW_KEY.setRelease(keys, slot, key);
+  }
+
+  private static long listKey(int list, boolean expanded) {
+    // List offsets are positive multiples of 8; unsigned slots use the negative range.
+    return ((long) list << 1) | (expanded ? 1 : 0);
+  }
+
+  SlabArray array(int type, int ordinal, int list, boolean expanded) {
+    if (view(listKey(list, expanded)) instanceof SlabArray found) return found;
+    return createArray(type, ordinal, list, expanded);
   }
 
   @TruffleBoundary
-  synchronized SlabArray array(int type, int ordinal, int list, boolean expanded) {
-    Map<Integer, Object> values = views();
-    if (values.get(list) instanceof SlabArray found) return found;
+  private synchronized SlabArray createArray(int type, int ordinal, int list, boolean expanded) {
+    long key = listKey(list, expanded);
+    if (view(key) instanceof SlabArray found) return found;
     SlabArray result = new SlabArray(this, type, ordinal, list, expanded);
-    values.put(list, result);
+    publishView(key, result);
     return result;
   }
 
   @TruffleBoundary
   synchronized Object unsigned(int at, long bits) {
-    Map<Integer, Object> values = views();
-    // List offsets are positive, so complemented slot offsets never collide with them.
-    Object result = values.get(~at);
+    Object result = view(-(long) at);
     if (result == null) {
       result = SlabRow.unsigned(bits);
-      values.put(~at, result);
+      publishView(-(long) at, result);
     }
     return result;
   }
@@ -380,12 +516,17 @@ public final class SlabMessage extends SlabRow implements ProtoMessage {
   }
 
   void requireValue(int type, int ordinal, boolean expanded) {
+    if (omitted(type, ordinal, expanded)) throw omitted();
+  }
+
+  /** Whether a projection omits the field's value; constant per (type, ordinal, expanded). */
+  boolean omitted(int type, int ordinal, boolean expanded) {
     Projected state = projected;
-    if (state != null
+    return state != null
         && !expanded
         && !state.selection.wants(type, ordinal)
         && !(state.selection.lazyChildrenEnabled()
-            && layout.plan(type).field(ordinal).kind().message())) throw omitted();
+            && layout.plan(type).field(ordinal).kind().message());
   }
 
   boolean expandChild(int type, int ordinal) {
@@ -396,7 +537,7 @@ public final class SlabMessage extends SlabRow implements ProtoMessage {
   }
 
   @TruffleBoundary
-  private static ContractViolation omitted() {
+  static ContractViolation omitted() {
     return new ContractViolation("Field omitted by projection");
   }
 
@@ -438,7 +579,7 @@ public final class SlabMessage extends SlabRow implements ProtoMessage {
     if (unknown != 0) budget.bytes(unknownLength(bytes, unknown));
     for (int ordinal = 0; ordinal < plan.size(); ordinal++) {
       var field = plan.field(ordinal);
-      if (!present(bytes, record, ordinal)) {
+      if (!SlabFormat.present(bytes, record, ordinal)) {
         if (field.required())
           throw new ContractViolation("Missing required field: " + field.name());
         if (!field.repeated() && field.defaultValue() instanceof String text)
@@ -503,7 +644,7 @@ public final class SlabMessage extends SlabRow implements ProtoMessage {
     var output = new BoundedOutput(plan().maxWireBytes());
     ProtoPlan plan = layout.plan(type);
     for (int ordinal = 0; ordinal < plan.size(); ordinal++) {
-      if (!present(bytes, record, ordinal)) continue;
+      if (!SlabFormat.present(bytes, record, ordinal)) continue;
       var field = plan.field(ordinal);
       int at = record + layout.slot(type, ordinal);
       if (field.repeated()) {
