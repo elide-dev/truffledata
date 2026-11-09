@@ -144,6 +144,9 @@ public final class Layout {
 
   private final @Nullable Accessor[][] accessors;
 
+  /** Generated row classes bound to this layout, or null for generic rows. Assigned last. */
+  private final ProtoPlan.@Nullable SlabRows rows;
+
   private final byte[] program;
   private final int fingerprint;
 
@@ -254,6 +257,14 @@ public final class Layout {
     crc.update(program, PROGRAM_HEADER_BYTES, program.length - PROGRAM_HEADER_BYTES);
     fingerprint = (int) crc.getValue();
     ByteBuffer.wrap(program).order(ByteOrder.LITTLE_ENDIAN).putInt(12, fingerprint);
+    // Every table above is final before generated code sees this layout; rows is assigned last.
+    ProtoPlan.SlabRowsFactory factory = plans[0].slabRows();
+    rows = factory == null ? null : factory.bind(this);
+  }
+
+  /** Generated row classes for unprojected owning slabs of this layout, or null. */
+  ProtoPlan.@Nullable SlabRows rows() {
+    return rows;
   }
 
   private static long align8(long value) {

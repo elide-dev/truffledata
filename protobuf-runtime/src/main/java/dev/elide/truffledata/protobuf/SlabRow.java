@@ -9,7 +9,12 @@ import dev.elide.truffledata.*;
 import java.math.BigInteger;
 import java.util.Objects;
 
-/** Immutable record flyweight over a durable owning slab. */
+/**
+ * Immutable record flyweight over a durable owning slab. Schema-generated subclasses (one final
+ * class per layout type of an unprojected owning slab, see {@link ProtoPlan.SlabRows}) override
+ * the ordinal-dispatched reads with constant-offset loads through the protected slot readers; the
+ * generic reads below serve runtime plans, projected slabs and lazily expanded rows.
+ */
 @ExportLibrary(DataLibrary.class)
 public class SlabRow extends AbstractRow implements ProtoAccess {
   final SlabMessage owner;
@@ -31,7 +36,8 @@ public class SlabRow extends AbstractRow implements ProtoAccess {
     this(owner, type, record, false);
   }
 
-  SlabRow(SlabMessage owner, int type, int record, boolean expanded) {
+  /** A child record of {@code owner}; generated subclasses are created only with {@code expanded} false. */
+  protected SlabRow(SlabMessage owner, int type, int record, boolean expanded) {
     super(owner.layout.plan(type).schema());
     this.owner = owner;
     layout = owner.layout;
@@ -45,14 +51,76 @@ public class SlabRow extends AbstractRow implements ProtoAccess {
     return layout.plan(type);
   }
 
-  @Override
-  public final boolean has(int ordinal) {
-    Objects.checkIndex(ordinal, plan().size());
-    return present(owner.bytes, record, ordinal);
+  // Slot readers for generated subclasses. Offsets are per-type record offsets (identical in every
+  // layout containing the type); they never consult the projection, which is why generated rows
+  // exist only on unprojected owners.
+
+  /** Presence bit of {@code ordinal} in this record. */
+  protected final boolean present(int ordinal) {
+    return SlabFormat.present(owner.bytes, record, ordinal);
+  }
+
+  protected final int int32At(int slot) {
+    return getInt(owner.bytes, record + slot);
+  }
+
+  protected final long int64At(int slot) {
+    return SlabFormat.getLong(owner.bytes, record + slot);
+  }
+
+  /** The owner's cached string view of a present string slot. */
+  protected final String textAt(int slot) {
+    return owner.text(int32At(slot));
+  }
+
+  /** The owner's cached bytes view of a present bytes slot. */
+  protected final OwnedArray blobAt(int slot) {
+    return owner.blob(int32At(slot));
+  }
+
+  /** The owner's cached child row of a present message slot. */
+  protected final SlabRow rowAt(int slot, int ordinal) {
+    return owner.row(layout.childType(type, ordinal), int32At(slot), false);
+  }
+
+  /** The owner's cached list view of a present repeated slot. */
+  protected final OwnedArray listAt(int slot, int ordinal) {
+    return owner.array(type, ordinal, int32At(slot), false);
+  }
+
+  /** The owner's cached boxed unsigned 64-bit value of a present slot. */
+  protected final Object unsignedAt(int slot) {
+    return owner.unsigned(record + slot, int64At(slot));
+  }
+
+  /** UTF-16 length of a present string slot, from its validated header. */
+  protected final int utf16LengthAt(int slot) {
+    return utf16Length(owner.bytes, int32At(slot));
+  }
+
+  /** Payload length of a present bytes slot. */
+  protected final int bytesLengthAt(int slot) {
+    return SlabFormat.stringLength(owner.bytes, int32At(slot));
+  }
+
+  /** Element count of a present repeated slot. */
+  protected final int listCountAt(int slot) {
+    return listCount(owner.bytes, int32At(slot));
+  }
+
+  /** The shared empty list of an absent repeated field. */
+  protected static OwnedArray emptyList() {
+    return SlabArray.EMPTY;
   }
 
   @Override
-  public final Object get(int ordinal) {
+  public boolean has(int ordinal) {
+    Objects.checkIndex(ordinal, plan().size());
+    return SlabFormat.present(owner.bytes, record, ordinal);
+  }
+
+  @Override
+  public Object get(int ordinal) {
     Objects.checkIndex(ordinal, plan().size());
     var field = plan().field(ordinal);
     if (!field.repeated()) owner.requireValue(type, ordinal, expanded);
@@ -97,7 +165,7 @@ public class SlabRow extends AbstractRow implements ProtoAccess {
   }
 
   @Override
-  public final long getLong(int ordinal) {
+  public long getLong(int ordinal) {
     owner.requireValue(type, ordinal, expanded);
     var field = plan().field(ordinal);
     if (field.repeated()) throw new ContractViolation("Expected INT64");
@@ -115,7 +183,7 @@ public class SlabRow extends AbstractRow implements ProtoAccess {
   }
 
   @Override
-  public final double getDouble(int ordinal) {
+  public double getDouble(int ordinal) {
     owner.requireValue(type, ordinal, expanded);
     var field = plan().field(ordinal);
     if (field.repeated()) throw new ContractViolation("Expected FLOAT64");
@@ -129,7 +197,7 @@ public class SlabRow extends AbstractRow implements ProtoAccess {
   }
 
   @Override
-  public final boolean getBoolean(int ordinal) {
+  public boolean getBoolean(int ordinal) {
     owner.requireValue(type, ordinal, expanded);
     var field = plan().field(ordinal);
     if (field.repeated() || field.kind() != ProtoPlan.Kind.BOOL)
@@ -140,7 +208,7 @@ public class SlabRow extends AbstractRow implements ProtoAccess {
   }
 
   @Override
-  public final int getSize(int ordinal) {
+  public int getSize(int ordinal) {
     var field = plan().field(ordinal);
     if (!field.repeated()) owner.requireValue(type, ordinal, expanded);
     if (!field.repeated() && field.kind() != ProtoPlan.Kind.BYTES)
@@ -153,7 +221,7 @@ public class SlabRow extends AbstractRow implements ProtoAccess {
   }
 
   /** UTF-16 length, read directly from the validated string header. */
-  public final int stringLength(int ordinal) {
+  public int stringLength(int ordinal) {
     owner.requireValue(type, ordinal, expanded);
     var field = plan().field(ordinal);
     if (field.repeated() || field.kind() != ProtoPlan.Kind.STRING)
@@ -184,7 +252,7 @@ public class SlabRow extends AbstractRow implements ProtoAccess {
   }
 
   @Override
-  public final Accessor accessor(int ordinal) {
+  public Accessor accessor(int ordinal) {
     return layout.accessor(type, ordinal);
   }
 

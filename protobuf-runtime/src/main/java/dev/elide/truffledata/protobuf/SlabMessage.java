@@ -13,9 +13,21 @@ import java.util.HashMap;
 import java.util.Map;
 import org.jspecify.annotations.Nullable;
 
-/** Durable owning slab result. Closing is a no-op and snapshot preserves identity. */
-public final class SlabMessage extends SlabRow implements ProtoMessage {
+/**
+ * Durable owning slab result. Closing is a no-op and snapshot preserves identity. Schema-generated
+ * subclasses (see {@link ProtoPlan.SlabRows}) are the roots of unprojected owning slabs; projected
+ * slabs are always this generic class.
+ */
+public class SlabMessage extends SlabRow implements ProtoMessage {
   private static final VarHandle HANDLE_SLOT = MethodHandles.arrayElementVarHandle(Object[].class);
+
+  /**
+   * Verification bit for {@link #SlabMessage(Layout, byte[], int, int)}: the slab was produced by
+   * this process's own checked producer, so check the header against the layout and run the full
+   * logical validation (the path of {@link #decode(ProtoPlan, byte[])}). Disjoint from the {@link
+   * SlabVerifier} bits of an externally verified slab.
+   */
+  protected static final int INTERNAL = 1 << 30;
 
   // The valid extent is the verified header word HEADER_BYTES_USED, not a field: the message
   // object stays at 48 bytes on SVM (compressed references, 8-byte header).
@@ -62,24 +74,35 @@ public final class SlabMessage extends SlabRow implements ProtoMessage {
     }
   }
 
-  private SlabMessage(Layout layout, byte[] owned) {
-    this(layout, owned, owned.length, null);
-  }
-
-  /** A verified slab; {@link SlabVerifier#EXACT} requests full logical accounting. */
-  private SlabMessage(Layout layout, byte[] owned, int extent, int verification) {
+  /**
+   * An unprojected owning slab. With {@link #INTERNAL} the slab comes from this process's checked
+   * producer: the header is checked against the layout and the logical budgets, required fields
+   * and nesting are validated. Otherwise the slab was verified by {@link SlabVerifier#verifyOwning}
+   * and {@link SlabVerifier#EXACT} requests the full logical accounting. Generated roots delegate
+   * here and add nothing.
+   */
+  protected SlabMessage(Layout layout, byte[] owned, int extent, int verification) {
     super(layout);
     projected = null;
     bytes = owned;
-    if ((verification & SlabVerifier.EXACT) != 0)
+    if ((verification & INTERNAL) != 0) check(bytes, extent, layout);
+    if ((verification & (INTERNAL | SlabVerifier.EXACT)) != 0)
       validate(
           0, ROOT, new ProtoRow.Budget(plan().limits()), 1,
           (verification & SlabVerifier.SHARED) != 0 ? new HashMap<>() : null);
   }
 
+  /** The root of an unprojected owning slab: the layout's generated root class when it has one. */
+  private static SlabMessage create(Layout layout, byte[] owned, int extent, int verification) {
+    ProtoPlan.SlabRows rows = layout.rows();
+    return rows == null
+        ? new SlabMessage(layout, owned, extent, verification)
+        : rows.root(layout, owned, extent, verification);
+  }
+
   /** Publish an owning slab already verified by {@link SlabVerifier#verifyOwning}. */
   static SlabMessage owning(Layout layout, byte[] verified, int extent, int verification) {
-    return new SlabMessage(layout, verified, extent, verification);
+    return create(layout, verified, extent, verification);
   }
 
   private SlabMessage(Layout layout, byte[] owned, int extent, @Nullable Projected projected) {
@@ -100,16 +123,17 @@ public final class SlabMessage extends SlabRow implements ProtoMessage {
   @TruffleBoundary
   public static SlabMessage decode(ProtoPlan plan, byte[] input) {
     Layout layout = plan.layout();
-    return new SlabMessage(
-        layout,
-        plan.decodeSlabBytes(input, 0, input.length, SlabLimits.forInput(layout, input.length)));
+    byte[] slab =
+        plan.decodeSlabBytes(input, 0, input.length, SlabLimits.forInput(layout, input.length));
+    return create(layout, slab, slab.length, INTERNAL);
   }
 
   @TruffleBoundary
   public static SlabMessage decode(
       ProtoPlan plan, byte[] input, int offset, int length, SlabLimits limits) {
     Layout layout = plan.layout();
-    return new SlabMessage(layout, plan.decodeSlabBytes(input, offset, length, limits));
+    byte[] slab = plan.decodeSlabBytes(input, offset, length, limits);
+    return create(layout, slab, slab.length, INTERNAL);
   }
 
   /** Decode a selected view. Deferred payloads retain an immutable copy of this input window. */
@@ -303,7 +327,10 @@ public final class SlabMessage extends SlabRow implements ProtoMessage {
     if (record < 0) return realize(type, record & ~LAZY_CHILD, handle);
     Object[] values = cache();
     if (values[handle] instanceof SlabRow row) return row;
-    SlabRow row = new SlabRow(this, type, record, expanded);
+    // Generated classes read without the projection check, so only unprojected owners use them.
+    ProtoPlan.SlabRows rows = projected == null ? layout.rows() : null;
+    SlabRow row =
+        rows == null ? new SlabRow(this, type, record, expanded) : rows.child(this, type, record);
     HANDLE_SLOT.setRelease(values, handle, row);
     return row;
   }
@@ -509,7 +536,7 @@ public final class SlabMessage extends SlabRow implements ProtoMessage {
     if (unknown != 0) budget.bytes(unknownLength(bytes, unknown));
     for (int ordinal = 0; ordinal < plan.size(); ordinal++) {
       var field = plan.field(ordinal);
-      if (!present(bytes, record, ordinal)) {
+      if (!SlabFormat.present(bytes, record, ordinal)) {
         if (field.required())
           throw new ContractViolation("Missing required field: " + field.name());
         if (!field.repeated() && field.defaultValue() instanceof String text)
@@ -574,7 +601,7 @@ public final class SlabMessage extends SlabRow implements ProtoMessage {
     var output = new BoundedOutput(plan().maxWireBytes());
     ProtoPlan plan = layout.plan(type);
     for (int ordinal = 0; ordinal < plan.size(); ordinal++) {
-      if (!present(bytes, record, ordinal)) continue;
+      if (!SlabFormat.present(bytes, record, ordinal)) continue;
       var field = plan.field(ordinal);
       int at = record + layout.slot(type, ordinal);
       if (field.repeated()) {
