@@ -111,9 +111,10 @@ final class IndexScan {
     SHARED.set(null); // a scan nested in a callback allocates its own
     try {
       if (records instanceof BatchBuilder b && b.fusable()) {
-        return b.spanOnly()
-            ? frameSpans(idx, input, from, to, eof, b, recordBase, stopAfter)
-            : frameFused(idx, input, from, to, eof, b, recordBase, stopAfter);
+        if (b.spanOnly()) return frameSpans(idx, input, from, to, eof, b, recordBase, stopAfter);
+        int end = frameFused(idx, input, from, to, eof, b, recordBase, stopAfter);
+        b.convert(); // staged rows convert before any later record can report an error
+        return end;
       }
       return framePlain(idx, input, from, to, eof, records, recordBase, stopAfter);
     } finally {
@@ -348,7 +349,7 @@ final class IndexScan {
         }
         if (count == spans.length) grow();
         spans[count] = span;
-        if (converted) converted = records.put(count, span);
+        if (converted) converted = records.stage(count, span);
         count++;
         if (b == delim) {
           fieldStart = p + 1;
@@ -362,7 +363,7 @@ final class IndexScan {
           if (input[end] == LF) skip = end++;
         } else if (eof) end = p + 1;
         else return resume; // a final CR may be the first half of CRLF
-        if (!(converted && records.commit(count, recordStart, end))
+        if (!(converted && records.commitStaged(count, recordStart, end))
             && !records.record(spans, count, recordStart, end)) return resume;
         converted = true;
         reported++;
@@ -402,9 +403,9 @@ final class IndexScan {
     }
     if (count == spans.length) grow();
     spans[count] = span;
-    if (converted) converted = records.put(count, span);
+    if (converted) converted = records.stage(count, span);
     count++;
-    if (!(converted && records.commit(count, recordStart, to))
+    if (!(converted && records.commitStaged(count, recordStart, to))
         && !records.record(spans, count, recordStart, to)) return resume;
     reported++;
     if (commonsFraming && recordBase + reported >= stopAfter) stopped = true;

@@ -2,6 +2,7 @@ package dev.elide.truffledata.csv;
 
 import com.oracle.truffle.api.HostCompilerDirectives.InliningCutoff;
 import dev.elide.truffledata.ContractViolation;
+import dev.elide.truffledata.Field;
 import dev.elide.truffledata.Values;
 import java.util.Arrays;
 import org.jspecify.annotations.Nullable;
@@ -72,6 +73,26 @@ final class BatchBuilder implements CsvScanner.Records {
   /** Whether row {@link #rows} has capacity (false once the batch reaches maxBatchRows). */
   private boolean writable;
 
+  /** Rows per deferred conversion chunk ({@link #stage}). */
+  static final int CHUNK = 64;
+
+  /**
+   * Deferred conversion (fusable bindings with a non-STRING field): per record column, the spans
+   * of the rows framed since {@link #chunkBase}; projected-away columns share one discarded
+   * buffer. Framing only stores spans ({@link #stage}); {@link #convert} converts each field over
+   * the chunk in one monomorphic pass, so no number parser is inlined into the framing loop.
+   * Empty unless deferred.
+   */
+  private final long[][] staged;
+
+  /** First row of the staged chunk; rows [chunkBase, chunkBase + pending) are not converted yet. */
+  private int chunkBase;
+
+  private int pending;
+
+  /** Per-record scratch for {@link #replay}, allocated on the first declined chunk. */
+  private long[] replayRow = NO_WORDS;
+
   /**
    * @param firstRecord data-record index of the first row
    * @param recordBase physical records (header included) before the scanned range
@@ -132,6 +153,14 @@ final class BatchBuilder implements CsvScanner.Records {
     }
     fusable = simple;
     spanOnly = strings;
+    if (simple && !strings) {
+      staged = new long[binding.width][];
+      long[] discarded = new long[CHUNK];
+      for (int column = 0; column < binding.width; column++)
+        staged[column] = fuseKind[column] == SKIP ? discarded : new long[CHUNK];
+    } else {
+      staged = new long[0][];
+    }
   }
 
   /** Whether the index path may fill this batch through {@link #put} and {@link #commit}. */
@@ -150,6 +179,125 @@ final class BatchBuilder implements CsvScanner.Records {
     int f = fuseField[column];
     if (f >= 0) words[f][rows] = span + spanShift;
     return true;
+  }
+
+  /**
+   * The deferred form of {@link #put}: stores the span of field {@code column} of the record being
+   * framed; {@link #commitStaged} counts the record and {@link #convert} converts its chunk.
+   */
+  boolean stage(int column, long span) {
+    long[][] s = staged;
+    if (column >= s.length || !writable) return false;
+    s[column][pending] = span;
+    return true;
+  }
+
+  /** {@link #commit} for {@link #stage}d records; converts the chunk once it is full. */
+  boolean commitStaged(int count, int start, int end) {
+    if (!commit(count, start, end)) return false;
+    if (++pending == CHUNK) convert();
+    return true;
+  }
+
+  /**
+   * Converts the staged rows field by field. The first value no grammar accepts (or a constraint,
+   * or a complex Commons span) sends the whole chunk through {@link #replay}, which converts it
+   * row by row in record and field order as {@link #record} does, so diagnostics and their order
+   * are the per-record path's. Called when a chunk fills, before {@link #record} writes a row, and
+   * when the index scan returns, so no later framing error can overtake a staged one.
+   */
+  @InliningCutoff
+  void convert() {
+    int n = pending;
+    if (n == 0) return;
+    int base = chunkBase;
+    CsvPlan.Binding b = binding;
+    byte[] kinds = b.kinds;
+    int[] fieldToColumn = b.fieldToColumn;
+    boolean commons = decoder != null;
+    for (int f = 0; f < kinds.length; f++) {
+      long[] spans = staged[fieldToColumn[f]];
+      boolean converted =
+          switch (kinds[f]) {
+            case CsvPlan.STRING -> shiftSpans(spans, n, words[f], base, spanShift);
+            case CsvPlan.INT64 ->
+                convertLongs(input, spans, n, words[f], base, commons, b.constrained[f] ? b.fields[f] : null);
+            case CsvPlan.FLOAT64 ->
+                convertDoubles(input, spans, n, doubles[f], base, commons, b.binary32[f]);
+            default -> convertBooleans(input, spans, n, booleans[f], base, commons);
+          };
+      if (!converted) {
+        replay(base, n);
+        return;
+      }
+    }
+    chunkBase = base + n;
+    pending = 0;
+  }
+
+  private static boolean shiftSpans(long[] spans, int n, long[] out, int base, long shift) {
+    for (int i = 0; i < n; i++) out[base + i] = spans[i] + shift;
+    return true;
+  }
+
+  // One field over a chunk. False on the first value the fused path would decline (no grammar
+  // accepts it, a constraint, a complex Commons span): the chunk is then replayed per record.
+
+  private static boolean convertLongs(
+      byte[] input, long[] spans, int n, long[] out, int base, boolean commons, @Nullable Field constrained) {
+    try {
+      for (int i = 0; i < n; i++) {
+        long span = spans[i];
+        if (commons && CsvScanner.escaped(span)) return false;
+        long value = Numbers.parseLong(input, CsvScanner.offset(span), CsvScanner.length(span));
+        if (constrained != null) Values.validateLong(constrained, value);
+        out[base + i] = value;
+      }
+      return true;
+    } catch (NumberFormatException | ContractViolation e) {
+      return false;
+    }
+  }
+
+  private static boolean convertDoubles(
+      byte[] input, long[] spans, int n, double[] out, int base, boolean commons, boolean binary32) {
+    try {
+      for (int i = 0; i < n; i++) {
+        long span = spans[i];
+        if (commons && CsvScanner.escaped(span)) return false;
+        double value = Numbers.parseDouble(input, CsvScanner.offset(span), CsvScanner.length(span));
+        if (binary32 && (double) (float) value != value) return false;
+        out[base + i] = value;
+      }
+      return true;
+    } catch (NumberFormatException e) {
+      return false;
+    }
+  }
+
+  private static boolean convertBooleans(
+      byte[] input, long[] spans, int n, boolean[] out, int base, boolean commons) {
+    for (int i = 0; i < n; i++) {
+      long span = spans[i];
+      if (commons && CsvScanner.escaped(span)) return false;
+      int b = bool(input, CsvScanner.offset(span), CsvScanner.length(span));
+      if (b < 0) return false;
+      out[base + i] = b != 0;
+    }
+    return true;
+  }
+
+  /** The staged chunk through the per-record conversion ({@link #fill}), row by row. */
+  private void replay(int base, int n) {
+    int width = binding.width;
+    if (replayRow.length < width) replayRow = new long[width];
+    long[] row = replayRow;
+    for (int i = 0; i < n; i++) {
+      for (int column = 0; column < width; column++) row[column] = staged[column][i];
+      fill(base + i, row, width, recordBase + base + i + 1);
+    }
+    chunkBase = base + n;
+    pending = 0;
   }
 
   /**
@@ -278,6 +426,7 @@ final class BatchBuilder implements CsvScanner.Records {
   @Override
   @InliningCutoff
   public boolean record(long[] spans, int count, int start, int end) {
+    if (pending != 0) convert();
     if (rows == maxRows) {
       full = true;
       return false;
@@ -292,7 +441,15 @@ final class BatchBuilder implements CsvScanner.Records {
       throw CsvScanner.syntax(
           number, byteBase + start, "record has " + count + " fields, expected " + b.width);
     if (rows == capacity) grow(start);
-    int row = rows;
+    fill(rows, spans, count, number);
+    advance(end);
+    if (staged.length != 0) chunkBase = rows;
+    return true;
+  }
+
+  /** Converts and stores one accepted record's fields into {@code row}; throws its diagnostic. */
+  private void fill(int row, long[] spans, int count, long number) {
+    CsvPlan.Binding b = binding;
     int[] fieldToColumn = b.fieldToColumn;
     for (int f = 0; f < fieldToColumn.length; f++) {
       int column = fieldToColumn[f];
@@ -318,8 +475,6 @@ final class BatchBuilder implements CsvScanner.Records {
         default -> booleans[f][row] = toBoolean(number, f, span);
       }
     }
-    advance(end);
-    return true;
   }
 
   // Escaped content holds quote bytes, which no numeric or boolean grammar accepts.
@@ -436,6 +591,7 @@ final class BatchBuilder implements CsvScanner.Records {
 
   /** Continues the batch over the next window: {@code shift} is its batch offset. */
   void window(byte[] input, int shift, long byteBase) {
+    convert();
     this.input = input;
     this.spanShift = (long) shift << 32;
     this.byteBase = byteBase;
@@ -450,6 +606,7 @@ final class BatchBuilder implements CsvScanner.Records {
   }
 
   private void trim() {
+    convert();
     if (capacity - rows > capacity / 8) resize(rows);
   }
 
