@@ -102,6 +102,8 @@ def run():
     parser.add_argument('--routes', default=','.join(ROUTES))
     parser.add_argument('--pin', action='store_true', help='Pin to the highest available CPU')
     parser.add_argument('--source', required=True)
+    parser.add_argument('--seed', type=int, default=SEED,
+                        help='Route-order seed; vary it between runs so a different route runs first')
     args = parser.parse_args()
     if args.forks < 3:
         parser.error('At least three fresh forks are required')
@@ -118,13 +120,13 @@ def run():
     logs = args.output / 'logs'
     logs.mkdir()
     cpu_info = Path('/proc/cpuinfo').read_text() if Path('/proc/cpuinfo').exists() else ''
-    meta = dict(schema=1, source=args.source, seed=SEED, forks=args.forks, routes=routes,
+    meta = dict(schema=1, source=args.source, seed=args.seed, forks=args.forks, routes=routes,
                 binary_sha256=hashlib.sha256(binary.read_bytes()).hexdigest(),
                 host=platform.uname()._asdict(), affinity=affinity, logical_cpus=os.cpu_count(),
                 load_average=os.getloadavg(),
                 cpu_model=next((line.split(':', 1)[1].strip() for line in cpu_info.splitlines()
                                 if line.startswith('model name')), platform.processor()))
-    rng = random.Random(SEED)
+    rng = random.Random(args.seed)
     jobs = []
     for fork in range(args.forks):
         order = list(routes)
