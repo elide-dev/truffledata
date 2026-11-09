@@ -17,7 +17,8 @@ The comparison cell for the CSV backend (plan Task 7, expanded). It measures the
 kernels (`csv/native`, `csv/kernel`) and the current pure-Java scanner against the Java CSV field
 and native references, on identical bytes and on the same worker.
 
-The latest paired change qualification is [`csv-writers-afa4aa5/`](../results/csv-writers-afa4aa5/README.md); the previous one is
+The latest paired change qualification is [`csv-numbers-5f0406d/`](../results/csv-numbers-5f0406d/README.md); the previous ones are
+[`csv-writers-afa4aa5/`](../results/csv-writers-afa4aa5/README.md) and
 [`csv-span-only-20261108/`](../results/csv-span-only-20261108/README.md).
 The latest full cross-runtime matrix, with raw samples, hosts, binary hashes and caveats,
 is [`csv-3f23d0c/`](../results/csv-3f23d0c/README.md); earlier matrices are
@@ -73,6 +74,31 @@ worker.
   - SimpleFlatMapper: unmaintained.
   - zsv: would need a third-party C build. The csv/native kernel is itself the simdcsv design
     (simdjson stage 1), so `native-indexed-scan` stands in for that class.
+
+## FLOAT64 conversion from the field's words (WS10b, 2026-11-09)
+
+`5f0406d` converts a FLOAT64 field of up to 16 bytes from the one or two words that end it: one
+zero-byte test finds the dot, a byte shift removes it, one digit test and one SWAR conversion read
+the digits, and one division by an exact power of ten rounds exactly (Clinger). Other tokens keep
+the full grammar with Eisel-Lemire. Per value 264 → 149 instructions (numeric), 268 → 175
+(mixed); a differential test against the previous parsers (2.65M placed tokens, 291k fixture
+fields) finds no divergence. Paired x86 SVM against the preserved `f775a9a` image
+([invocation e5236b2b](https://app.buildbuddy.io/invocation/e5236b2b-fb7c-45c0-a145-74ffd46e3840)),
+native index:
+
+| Cell | Before GB/s | After GB/s | Time ratio | vs FastCSV after |
+|---|---:|---:|---:|---:|
+| typed numeric 1 MiB | 0.3797 | 0.4178 | 0.909 | 3.84× |
+| typed mixed 1 MiB | 0.5434 | 0.5708 | 0.952 | 3.23× |
+| typed numeric 128 MiB | 0.3360 | 0.3622 | 0.928 | |
+| typed mixed 128 MiB | 0.4939 | 0.5156 | 0.958 | |
+
+Every listed range separates; bytes/row, compiled read graphs and allocation gates are unchanged.
+`kernel-native` typed shares `Numbers` and gains more (0.84–0.91×), so the ratio to that bound
+falls (numeric 0.817× → 0.760×). The same treatment for INT64 (sign read from the field's word)
+cut 14% of its instructions but showed no time change (0.934× overlapping, then 1.007×) and was
+not admitted. Details, attribution and AOT shapes:
+[`csv-numbers-5f0406d/`](../results/csv-numbers-5f0406d/README.md).
 
 ## Plain framing, staged column writers and getString (WS10, 2026-11-08)
 

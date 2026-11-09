@@ -1,0 +1,295 @@
+symbol _ZN38dev.elide.truffledata.csv.BatchBuilder14convertDoublesEJ7booleanP6byte[]P6long[]iP8double[]iS0_S0_ self Ir 32358198
+      1902 78b100  leaq	-0x78(%rsp), %rbx
+      1902 78b105  cmpq	0x8(%r15), %rbx
+      1902 78b109  jbe	0x1a8fc0 <_ZN57com.oracle.svm.core.graal.snippets.StackOverflowCheckImpl26throwNewStackOverflowErrorEJvv>
+      1902 78b10f  pushq	%rbp
+      1902 78b110  movq	%rsp, %rbp
+      1902 78b113  movq	%rbx, %rsp
+      1902 78b116  movq	%rdi, 0x10(%rsp)
+      1902 78b11b  movl	%edx, 0x54(%rsp)
+      1902 78b11f  movq	%rcx, 0x20(%rsp)
+      1902 78b124  movl	%r8d, 0x60(%rsp)
+      1902 78b129  movl	%r9d, 0x5c(%rsp)
+      1902 78b12e  cmpq	%r14, %rsi
+      1902 78b131  je	0x78c458 <_ZN38dev.elide.truffledata.csv.BatchBuilder14convertDoublesEJ7booleanP6byte[]P6long[]iP8double[]iS0_S0_+0x1
+      1902 78b137  movq	%rsi, 0x18(%rsp)
+      1902 78b13c  movl	0x4(%rsi), %ebx
+      1902 78b13f  movl	%ebx, 0x44(%rsp)
+      1902 78b143  movabsq	$0x7ff0000000000000, %r10 # imm = 0x7FF0000000000000
+      1902 78b14d  movq	%r10, 0x8(%rsp)
+      1902 78b152  movl	$0x0, %r8d
+      1902 78b158  nopl	(%rax,%rax)
+    123342 78b160  cmpl	%r8d, %edx
+    123342 78b163  jle	0x78c84a <_ZN38dev.elide.truffledata.csv.BatchBuilder14convertDoublesEJ7booleanP6byte[]P6long[]iP8double[]iS0_S0_+0x
+    121440 78b169  movl	%r8d, 0x58(%rsp)
+    121440 78b16e  cmpl	%r8d, %ebx
+    121440 78b171  jbe	0x78c327 <_ZN38dev.elide.truffledata.csv.BatchBuilder14convertDoublesEJ7booleanP6byte[]P6long[]iP8double[]iS0_S0_+0x
+    121440 78b177  movq	0x8(%rsi,%r8,8), %rax
+    121440 78b17c  movq	%rax, %rbx
+    121440 78b17f  shrq	$0x20, %rbx
+    121440 78b183  movl	%ebx, %esi
+    121440 78b185  movq	%rax, %r8
+    121440 78b188  shrq	$0x2, %r8
+    121440 78b18c  movl	%r8d, %r8d
+    121440 78b18f  andl	$0x3fffffff, %r8d       # imm = 0x3FFFFFFF
+    121440 78b196  movl	%esi, %r11d
+    121440 78b199  addl	%r8d, %r11d
+    121440 78b19c  nopl	(%rax)
+    121440 78b1a0  testl	%r9d, %r9d
+    121440 78b1a3  je	0x78b3e5 <_ZN38dev.elide.truffledata.csv.BatchBuilder14convertDoublesEJ7booleanP6byte[]P6long[]iP8double[]iS0_S0_+0x2
+    121440 78b1c5  movl	%r8d, 0x4c(%rsp)
+    121440 78b1ca  movl	%esi, 0x3c(%rsp)
+    121440 78b1ce  movl	%r11d, 0x50(%rsp)
+    121440 78b1d3  movl	%r11d, %r8d
+    121440 78b1d6  subl	%eax, %r8d
+    121440 78b1d9  movl	%r8d, %esi
+    121440 78b1dc  decl	%esi
+    121440 78b1de  nop
+    121440 78b1e0  cmpl	$0x10, %esi
+    121440 78b1e3  jb	0x78b625 <_ZN38dev.elide.truffledata.csv.BatchBuilder14convertDoublesEJ7booleanP6byte[]P6long[]iP8double[]iS0_S0_+0x5
+    121440 78b357  movl	0x88(%rsp), %ebx
+    121440 78b35e  nop
+    121440 78b360  testl	%ebx, %ebx
+    121440 78b362  je	0x78b3fd <_ZN38dev.elide.truffledata.csv.BatchBuilder14convertDoublesEJ7booleanP6byte[]P6long[]iP8double[]iS0_S0_+0x2
+    121440 78b3e5  cmpl	%esi, %r11d
+    121440 78b3e8  jg	0x78b5db <_ZN38dev.elide.truffledata.csv.BatchBuilder14convertDoublesEJ7booleanP6byte[]P6long[]iP8double[]iS0_S0_+0x4
+    121440 78b3fd  movq	0x20(%rsp), %rcx
+    121440 78b402  cmpq	%r14, %rcx
+    121440 78b405  je	0x78c49f <_ZN38dev.elide.truffledata.csv.BatchBuilder14convertDoublesEJ7booleanP6byte[]P6long[]iP8double[]iS0_S0_+0x1
+    121440 78b40b  movl	0x4(%rcx), %eax
+    121440 78b40e  movl	0x60(%rsp), %r8d
+    121440 78b413  addl	0x58(%rsp), %r8d
+    121440 78b418  nopl	(%rax,%rax)
+    121440 78b420  cmpl	%r8d, %eax
+    121440 78b423  jbe	0x78c4a5 <_ZN38dev.elide.truffledata.csv.BatchBuilder14convertDoublesEJ7booleanP6byte[]P6long[]iP8double[]iS0_S0_+0x
+    121440 78b429  movsd	%xmm0, 0x8(%rcx,%r8,8)
+    121440 78b430  movl	0x58(%rsp), %r8d
+    121440 78b435  incl	%r8d
+    121440 78b438  cmpl	$0x0, 0x10(%r15)
+    121440 78b43d  nop
+    121440 78b440  jle	0x78c17a <_ZN38dev.elide.truffledata.csv.BatchBuilder14convertDoublesEJ7booleanP6byte[]P6long[]iP8double[]iS0_S0_+0x
+    121440 78b446  movl	0x5c(%rsp), %r9d
+    121440 78b44b  movl	0x54(%rsp), %edx
+    121440 78b44f  movq	0x18(%rsp), %rsi
+    121440 78b454  movq	0x10(%rsp), %rdi
+    121440 78b459  movl	0x44(%rsp), %ebx
+    121440 78b45d  nop
+    121440 78b460  jmp	0x78b160 <_ZN38dev.elide.truffledata.csv.BatchBuilder14convertDoublesEJ7booleanP6byte[]P6long[]iP8double[]iS0_S0_+0x
+    121440 78b5db  nopl	(%rax,%rax)
+    121440 78b5e0  cmpq	%r14, %rdi
+    121440 78b5e3  je	0x78c46b <_ZN38dev.elide.truffledata.csv.BatchBuilder14convertDoublesEJ7booleanP6byte[]P6long[]iP8double[]iS0_S0_+0x1
+    121440 78b5e9  movl	0x4(%rdi), %eax
+    121440 78b5ec  cmpl	%esi, %eax
+    121440 78b5ee  jbe	0x78c485 <_ZN38dev.elide.truffledata.csv.BatchBuilder14convertDoublesEJ7booleanP6byte[]P6long[]iP8double[]iS0_S0_+0x
+    121440 78b5f4  movsbl	0x8(%rdi,%rbx), %eax
+    121440 78b5f9  nopl	(%rax)
+    121440 78b600  cmpl	$0x2b, %eax
+    121440 78b603  je	0x78b747 <_ZN38dev.elide.truffledata.csv.BatchBuilder14convertDoublesEJ7booleanP6byte[]P6long[]iP8double[]iS0_S0_+0x6
+    121440 78b609  cmpl	$0x2d, %eax
+    121440 78b60c  je	0x78b905 <_ZN38dev.elide.truffledata.csv.BatchBuilder14convertDoublesEJ7booleanP6byte[]P6long[]iP8double[]iS0_S0_+0x8
+    121440 78b612  movl	$0x0, 0x38(%rsp)
+    121440 78b61a  movl	%esi, %eax
+    121440 78b61c  nopl	(%rax)
+    121440 78b620  jmp	0x78b1c5 <_ZN38dev.elide.truffledata.csv.BatchBuilder14convertDoublesEJ7booleanP6byte[]P6long[]iP8double[]iS0_S0_+0x
+    121440 78b625  cmpl	$0x8, %eax
+    121440 78b628  jl	0x78b8f3 <_ZN38dev.elide.truffledata.csv.BatchBuilder14convertDoublesEJ7booleanP6byte[]P6long[]iP8double[]iS0_S0_+0x7
+    121440 78b62e  cmpl	$0x10, %r11d
+    121440 78b632  jl	0x78badd <_ZN38dev.elide.truffledata.csv.BatchBuilder14convertDoublesEJ7booleanP6byte[]P6long[]iP8double[]iS0_S0_+0x9
+    121440 78b638  nopl	(%rax,%rax)
+    121440 78b640  cmpq	%r14, %rdi
+    121440 78b643  je	0x78c6f6 <_ZN38dev.elide.truffledata.csv.BatchBuilder14convertDoublesEJ7booleanP6byte[]P6long[]iP8double[]iS0_S0_+0x1
+    121440 78b649  leal	-0x8(%r11), %esi
+    121440 78b64d  movl	$0xfffffff9, %r9d       # imm = 0xFFFFFFF9
+    121440 78b653  addl	0x4(%rdi), %r9d
+    121440 78b657  nopw	(%rax,%rax)
+    121440 78b660  cmpl	%esi, %r9d
+    121440 78b663  jle	0x78c70b <_ZN38dev.elide.truffledata.csv.BatchBuilder14convertDoublesEJ7booleanP6byte[]P6long[]iP8double[]iS0_S0_+0x
+    121440 78b669  movq	0x8(%rdi,%rsi), %r12
+    121440 78b66e  movabsq	$0x2e2e2e2e2e2e2e2e, %r10 # imm = 0x2E2E2E2E2E2E2E2E
+    121440 78b678  movq	%r12, %rbx
+    121440 78b67b  xorq	%r10, %rbx
+    121440 78b67e  movabsq	$0x7f7f7f7f7f7f7f7f, %rdx # imm = 0x7F7F7F7F7F7F7F7F
+    121440 78b688  movq	%r12, 0x28(%rsp)
+    121440 78b68d  movq	%rbx, %r12
+    121440 78b690  andq	%rdx, %r12
+    121440 78b693  addq	%rdx, %r12
+    121440 78b696  orq	%r12, %rbx
+    121440 78b699  orq	%rdx, %rbx
+    121440 78b69c  notq	%rbx
+    121440 78b69f  leal	-0x10(%r11), %r12d
+    121440 78b6a3  cmpl	%r12d, %r9d
+    121440 78b6a6  jle	0x78c72a <_ZN38dev.elide.truffledata.csv.BatchBuilder14convertDoublesEJ7booleanP6byte[]P6long[]iP8double[]iS0_S0_+0x
+    121440 78b6ac  xorq	0x8(%rdi,%r12), %r10
+    121440 78b6b1  movl	$0x10, %edi
+    121440 78b6b6  subl	%r8d, %edi
+    121440 78b6b9  nopl	(%rax)
+    121440 78b6c0  cmpl	$0x8, %edi
+    121440 78b6c3  jl	0x78bc45 <_ZN38dev.elide.truffledata.csv.BatchBuilder14convertDoublesEJ7booleanP6byte[]P6long[]iP8double[]iS0_S0_+0xb
+    121440 78b6c9  movl	$0x8, %edx
+    121440 78b6ce  subl	%r8d, %edx
+    121440 78b6d1  shll	$0x3, %edx
+    121440 78b6d4  movl	%edx, %ecx
+    121440 78b6d6  movq	$-0x1, %rdx
+    121440 78b6dd  shlq	%cl, %rdx
+    121440 78b6e0  andq	%rdx, %rbx
+    121440 78b6e3  movl	$0x0, %r10d
+    121440 78b6e9  movl	%r9d, 0x40(%rsp)
+    121440 78b6ee  movq	%rbx, %rcx
+    121440 78b6f1  orq	%r10, %rcx
+    121440 78b6f4  testq	%rcx, %rcx
+    121440 78b6f7  je	0x78bc73 <_ZN38dev.elide.truffledata.csv.BatchBuilder14convertDoublesEJ7booleanP6byte[]P6long[]iP8double[]iS0_S0_+0xb
+    121440 78b6fd  movq	%rbx, %rcx
+    121440 78b700  decq	%rcx
+    121440 78b703  testq	%rcx, %rbx
+    121440 78b706  je	0x78bd72 <_ZN38dev.elide.truffledata.csv.BatchBuilder14convertDoublesEJ7booleanP6byte[]P6long[]iP8double[]iS0_S0_+0xc
+    121440 78b711  movl	%ecx, %edx
+    121440 78b713  subl	%eax, %edx
+    121440 78b715  cmpl	%r11d, %ecx
+    121440 78b718  je	0x78bd65 <_ZN38dev.elide.truffledata.csv.BatchBuilder14convertDoublesEJ7booleanP6byte[]P6long[]iP8double[]iS0_S0_+0xc
+    121440 78b71e  movl	%r11d, %edi
+    121440 78b721  subl	%ecx, %edi
+    121440 78b723  decl	%edi
+    121440 78b725  movl	%edx, %r8d
+    121440 78b728  testl	%ecx, %ecx
+    121440 78b72a  jl	0x78bc33 <_ZN38dev.elide.truffledata.csv.BatchBuilder14convertDoublesEJ7booleanP6byte[]P6long[]iP8double[]iS0_S0_+0xb
+    121440 78b730  cmpl	$0x9, %r8d
+    121440 78b734  jl	0x78bd8f <_ZN38dev.elide.truffledata.csv.BatchBuilder14convertDoublesEJ7booleanP6byte[]P6long[]iP8double[]iS0_S0_+0xc
+    121440 78bd72  movq	%r10, %rcx
+    121440 78bd75  decq	%rcx
+    121440 78bd78  nopl	(%rax,%rax)
+    121440 78bd80  testq	%rcx, %r10
+    121440 78bd83  je	0x78bda5 <_ZN38dev.elide.truffledata.csv.BatchBuilder14convertDoublesEJ7booleanP6byte[]P6long[]iP8double[]iS0_S0_+0xc
+    121440 78bd8f  cmpl	$0x9, %edi
+    121440 78bd92  jl	0x78bdc5 <_ZN38dev.elide.truffledata.csv.BatchBuilder14convertDoublesEJ7booleanP6byte[]P6long[]iP8double[]iS0_S0_+0xc
+    121440 78bda5  testq	%rbx, %rbx
+    121440 78bda8  je	0x78bf72 <_ZN38dev.elide.truffledata.csv.BatchBuilder14convertDoublesEJ7booleanP6byte[]P6long[]iP8double[]iS0_S0_+0xe
+    121440 78bdae  testq	%r10, %r10
+    121440 78bdb1  je	0x78bf99 <_ZN38dev.elide.truffledata.csv.BatchBuilder14convertDoublesEJ7booleanP6byte[]P6long[]iP8double[]iS0_S0_+0xe
+    121440 78bdc5  movl	%edi, %edx
+    121440 78bdc7  addl	%r8d, %edx
+    121440 78bdca  cmpl	$0x1, %edx
+    121440 78bdcd  jl	0x78bf8c <_ZN38dev.elide.truffledata.csv.BatchBuilder14convertDoublesEJ7booleanP6byte[]P6long[]iP8double[]iS0_S0_+0xe
+    121440 78bdd3  movl	%edi, 0x48(%rsp)
+    121440 78bdd7  leal	-0x8(%rcx), %edx
+    121440 78bdda  nopw	(%rax,%rax)
+    121440 78bde0  testl	%edx, %edx
+    121440 78bde2  jl	0x78c7ae <_ZN38dev.elide.truffledata.csv.BatchBuilder14convertDoublesEJ7booleanP6byte[]P6long[]iP8double[]iS0_S0_+0x1
+    121440 78bde8  movl	0x40(%rsp), %ebx
+    121440 78bdec  cmpl	%edx, %ebx
+    121440 78bdee  jle	0x78c7d3 <_ZN38dev.elide.truffledata.csv.BatchBuilder14convertDoublesEJ7booleanP6byte[]P6long[]iP8double[]iS0_S0_+0x
+    121440 78bdf4  movq	0x10(%rsp), %rsi
+    121440 78bdf9  movq	0x8(%rsi,%rdx), %rdx
+    121440 78bdfe  movabsq	$0xf0f0f0f0f0f0f0f, %rbx # imm = 0xF0F0F0F0F0F0F0F
+    121440 78be08  movabsq	$0xff00ff00ff00ff, %r10 # imm = 0xFF00FF00FF00FF
+    121440 78be12  movabsq	$0xffff0000ffff, %r12   # imm = 0xFFFF0000FFFF
+    121440 78be1c  movabsq	$0x271000000001, %r9    # imm = 0x271000000001
+    121440 78be26  movabsq	$0x3030303030303030, %rsi # imm = 0x3030303030303030
+    121440 78be30  movabsq	$0x606060606060606, %r11 # imm = 0x606060606060606
+    121440 78be3a  movabsq	$-0xf0f0f0f0f0f0f10, %rdi # imm = 0xF0F0F0F0F0F0F0F0
+    121440 78be44  movq	%r9, 0x30(%rsp)
+    121440 78be49  movabsq	$0x3333333333333333, %r9 # imm = 0x3333333333333333
+    121440 78be53  cmpl	%eax, %ecx
+    121440 78be55  je	0x78bfb2 <_ZN38dev.elide.truffledata.csv.BatchBuilder14convertDoublesEJ7booleanP6byte[]P6long[]iP8double[]iS0_S0_+0xe
+    121440 78be5b  movl	$0x8, %ecx
+    121440 78be60  subl	%r8d, %ecx
+    121440 78be63  shll	$0x3, %ecx
+    121440 78be66  movq	$-0x1, %r8
+    121440 78be6d  shlq	%cl, %r8
+    121440 78be70  movq	%r8, %rcx
+    121440 78be73  andq	%rdx, %rcx
+    121440 78be76  notq	%r8
+    121440 78be79  andq	%rsi, %r8
+    121440 78be7c  movq	%rcx, %rdx
+    121440 78be7f  orq	%r8, %rdx
+    121440 78be82  movq	%rdx, %r8
+    121440 78be85  andq	%rdi, %r8
+    121440 78be88  addq	%r11, %rdx
+    121440 78be8b  andq	%rdi, %rdx
+    121440 78be8e  shrq	$0x4, %rdx
+    121440 78be92  addq	%rdx, %r8
+    121440 78be95  cmpq	%r8, %r9
+    121440 78be98  jne	0x78c13b <_ZN38dev.elide.truffledata.csv.BatchBuilder14convertDoublesEJ7booleanP6byte[]P6long[]iP8double[]iS0_S0_+0x
+    121440 78be9e  andq	%rbx, %rcx
+    121440 78bea1  imulq	$0xa01, %rcx, %rcx      # imm = 0xA01
+    121440 78bea8  shrq	$0x8, %rcx
+    121440 78beac  andq	%r10, %rcx
+    121440 78beaf  imulq	$0x640001, %rcx, %rcx   # imm = 0x640001
+    121440 78beb6  shrq	$0x10, %rcx
+    121440 78beba  andq	%r12, %rcx
+    121440 78bebd  imulq	0x30(%rsp), %rcx
+    121440 78bec3  shrq	$0x20, %rcx
+    121440 78bec7  movq	%rcx, %rdx
+    121440 78beca  movl	0x48(%rsp), %r8d
+    121440 78becf  testl	%r8d, %r8d
+    121440 78bed2  je	0x78bfbc <_ZN38dev.elide.truffledata.csv.BatchBuilder14convertDoublesEJ7booleanP6byte[]P6long[]iP8double[]iS0_S0_+0xe
+    121440 78bed8  movq	0x28(%rsp), %rcx
+    121440 78bedd  movl	%eax, 0x40(%rsp)
+    121440 78bee1  movl	$0x8, %eax
+    121440 78bee6  subl	%r8d, %eax
+    121440 78bee9  shll	$0x3, %eax
+    121440 78beec  movq	%rcx, %r8
+    121440 78beef  movl	%eax, %ecx
+    121440 78bef1  movq	$-0x1, %rax
+    121440 78bef8  shlq	%cl, %rax
+    121440 78befb  movq	%rax, %rcx
+    121440 78befe  andq	%r8, %rcx
+    121440 78bf01  notq	%rax
+    121440 78bf04  andq	%rsi, %rax
+    121440 78bf07  orq	%rcx, %rax
+    121440 78bf0a  movq	%rax, %rsi
+    121440 78bf0d  andq	%rdi, %rsi
+    121440 78bf10  addq	%r11, %rax
+    121440 78bf13  andq	%rdi, %rax
+    121440 78bf16  shrq	$0x4, %rax
+    121440 78bf1a  addq	%rax, %rsi
+    121440 78bf1d  nop
+    121440 78bf20  cmpq	%rsi, %r9
+    121440 78bf23  je	0x78c10a <_ZN38dev.elide.truffledata.csv.BatchBuilder14convertDoublesEJ7booleanP6byte[]P6long[]iP8double[]iS0_S0_+0x1
+    121440 78bf99  bsfq	%rbx, %rcx
+    121440 78bf9d  testq	%rbx, %rbx
+    121440 78bfa0  movl	$0x40, %edx
+    121440 78bfa5  cmovel	%edx, %ecx
+    121440 78bfa8  shrl	$0x3, %ecx
+    121440 78bfab  addl	%esi, %ecx
+    121440 78bfad  jmp	0x78b711 <_ZN38dev.elide.truffledata.csv.BatchBuilder14convertDoublesEJ7booleanP6byte[]P6long[]iP8double[]iS0_S0_+0x
+    121440 78bfc5  movq	%rcx, %rax
+    121440 78bfc8  orq	%rdx, %rax
+    121440 78bfcb  cmpq	$-0x1, %rax
+    121440 78bfcf  je	0x78c0fb <_ZN38dev.elide.truffledata.csv.BatchBuilder14convertDoublesEJ7booleanP6byte[]P6long[]iP8double[]iS0_S0_+0xf
+    121440 78bfd5  cmpl	$0x9, 0x48(%rsp)
+    121440 78bfda  nopw	(%rax,%rax)
+    121440 78bfe0  jae	0x78c82d <_ZN38dev.elide.truffledata.csv.BatchBuilder14convertDoublesEJ7booleanP6byte[]P6long[]iP8double[]iS0_S0_+0x
+    121440 78bfe6  movl	0x48(%rsp), %edi
+    121440 78bfea  movabsq	$0x20000000000001, %rax # imm = 0x20000000000001
+    121440 78bff4  imulq	0xc1ee40(%r14,%rdi,8), %rdx
+    121440 78bffd  addq	%rcx, %rdx
+    121440 78c000  cmpq	%rdx, %rax
+    121440 78c003  jg	0x78c147 <_ZN38dev.elide.truffledata.csv.BatchBuilder14convertDoublesEJ7booleanP6byte[]P6long[]iP8double[]iS0_S0_+0x1
+    121440 78c10a  movq	0x30(%rsp), %r9
+    121440 78c10f  andq	%rbx, %rcx
+    121440 78c112  imulq	$0xa01, %rcx, %rcx      # imm = 0xA01
+    121440 78c119  shrq	$0x8, %rcx
+    121440 78c11d  andq	%r10, %rcx
+    121440 78c120  imulq	$0x640001, %rcx, %rcx   # imm = 0x640001
+    121440 78c127  shrq	$0x10, %rcx
+    121440 78c12b  andq	%r12, %rcx
+    121440 78c12e  imulq	%r9, %rcx
+    121440 78c132  shrq	$0x20, %rcx
+    121440 78c136  jmp	0x78bfc5 <_ZN38dev.elide.truffledata.csv.BatchBuilder14convertDoublesEJ7booleanP6byte[]P6long[]iP8double[]iS0_S0_+0x
+    121440 78c147  movl	0x38(%rsp), %r12d
+    121440 78c14c  movsd	0xc1ed78(%r14,%rdi,8), %xmm0
+    121440 78c156  cvtsi2sd	%rdx, %xmm1
+    121440 78c15b  divsd	%xmm0, %xmm1
+    121440 78c15f  nop
+    121440 78c160  testl	%r12d, %r12d
+    121440 78c163  je	0x78c20a <_ZN38dev.elide.truffledata.csv.BatchBuilder14convertDoublesEJ7booleanP6byte[]P6long[]iP8double[]iS0_S0_+0x1
+    121440 78c20a  movapd	%xmm1, %xmm0
+    121440 78c20e  jmp	0x78b357 <_ZN38dev.elide.truffledata.csv.BatchBuilder14convertDoublesEJ7booleanP6byte[]P6long[]iP8double[]iS0_S0_+0x
+      1902 78c84a  movl	$0x1, %eax
+      1902 78c84f  addq	$0x70, %rsp
+      1902 78c853  popq	%rbp
+      1902 78c854  cmpl	$0x0, 0x10(%r15)
+      1902 78c859  jle	0x251340 <_ZN44com.oracle.svm.core.thread.SafepointSlowpath43enterSlowPathSafepointCheckCalleeSavedCCONVEJvv>
+      1902 78c85f  nop
+      1902 78c860  retq
+instructions 1414
