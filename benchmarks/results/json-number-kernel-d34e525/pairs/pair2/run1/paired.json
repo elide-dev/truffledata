@@ -1,0 +1,338 @@
+[
+  {
+    "shard": 8,
+    "workload": "json-numeric",
+    "engine": "gson-numeric",
+    "stage": "ingest",
+    "candidate": {
+      "median": 56711.9619140625,
+      "min": 55945.150390625,
+      "max": 62023.583984375,
+      "fork_medians": [
+        56711.9619140625,
+        62023.583984375,
+        55945.150390625
+      ]
+    },
+    "candidate_bytes": {
+      "median": 59398.5,
+      "min": 59398.5,
+      "max": 59398.5,
+      "fork_medians": [
+        59398.5,
+        59398.5,
+        59398.5
+      ]
+    },
+    "baseline": {
+      "median": 60101.40625,
+      "min": 55580.759765625,
+      "max": 61937.6708984375,
+      "fork_medians": [
+        60101.40625,
+        61937.6708984375,
+        55580.759765625
+      ]
+    },
+    "baseline_bytes": {
+      "median": 59398.5,
+      "min": 59398.5,
+      "max": 59398.5,
+      "fork_medians": [
+        59398.5,
+        59398.5,
+        59398.5
+      ]
+    },
+    "baseline_over_candidate": 1.0597659509835622,
+    "disjoint": false
+  },
+  {
+    "shard": 8,
+    "workload": "json-numeric",
+    "engine": "simdjson-numeric-interop",
+    "stage": "ingest",
+    "candidate": {
+      "median": 17371.780924479168,
+      "min": 17306.6103515625,
+      "max": 20921.203125,
+      "fork_medians": [
+        20921.203125,
+        17306.6103515625,
+        17371.780924479168
+      ]
+    },
+    "candidate_bytes": {
+      "median": 2144.0,
+      "min": 2144.0,
+      "max": 2144.0,
+      "fork_medians": [
+        2144.0,
+        2144.0,
+        2144.0
+      ]
+    },
+    "baseline": {
+      "median": 16392.575846354168,
+      "min": 15071.639423076924,
+      "max": 16710.164388020832,
+      "fork_medians": [
+        16710.164388020832,
+        16392.575846354168,
+        15071.639423076924
+      ]
+    },
+    "baseline_bytes": {
+      "median": 2144.0,
+      "min": 2144.0,
+      "max": 2144.0,
+      "fork_medians": [
+        2144.0,
+        2144.0,
+        2144.0
+      ]
+    },
+    "baseline_over_candidate": 0.9436324299516597,
+    "disjoint": true
+  },
+  {
+    "shard": 8,
+    "workload": "json-numeric",
+    "engine": "simdjson-numeric-decode",
+    "stage": "ingest",
+    "candidate": {
+      "median": 14534.696707589286,
+      "min": 13334.336197916668,
+      "max": 15513.576622596154,
+      "fork_medians": [
+        15513.576622596154,
+        14534.696707589286,
+        13334.336197916668
+      ]
+    },
+    "candidate_bytes": {
+      "median": 120.0,
+      "min": 120.0,
+      "max": 120.0,
+      "fork_medians": [
+        120.0,
+        120.0,
+        120.0
+      ]
+    },
+    "baseline": {
+      "median": 13663.932552083334,
+      "min": 12461.991943359375,
+      "max": 14099.275669642857,
+      "fork_medians": [
+        13663.932552083334,
+        14099.275669642857,
+        12461.991943359375
+      ]
+    },
+    "baseline_bytes": {
+      "median": 120.0,
+      "min": 120.0,
+      "max": 120.0,
+      "fork_medians": [
+        120.0,
+        120.0,
+        120.0
+      ]
+    },
+    "baseline_over_candidate": 0.9400906552765368,
+    "disjoint": false
+  },
+  {
+    "shard": 8,
+    "workload": "json-numeric",
+    "engine": "jackson-numeric",
+    "stage": "ingest",
+    "candidate": {
+      "median": 230333.6328125,
+      "min": 160499.734375,
+      "max": 248443.08203125,
+      "fork_medians": [
+        248443.08203125,
+        230333.6328125,
+        160499.734375
+      ]
+    },
+    "candidate_bytes": {
+      "median": 106516.5,
+      "min": 106516.5,
+      "max": 106516.5,
+      "fork_medians": [
+        106516.5,
+        106516.5,
+        106516.5
+      ]
+    },
+    "baseline": {
+      "median": 163484.69140625,
+      "min": 161518.90625,
+      "max": 256924.58203125,
+      "fork_medians": [
+        161518.90625,
+        256924.58203125,
+        163484.69140625
+      ]
+    },
+    "baseline_bytes": {
+      "median": 106516.5,
+      "min": 106516.5,
+      "max": 106516.5,
+      "fork_medians": [
+        106516.5,
+        106516.5,
+        106516.5
+      ]
+    },
+    "baseline_over_candidate": 0.709773424792603,
+    "disjoint": false
+  },
+  {
+    "shard": 8,
+    "workload": "json-numeric",
+    "engine": "fastjson2-numeric",
+    "stage": "ingest",
+    "candidate": {
+      "median": 36743.182291666664,
+      "min": 35496.5,
+      "max": 38084.00390625,
+      "fork_medians": [
+        36743.182291666664,
+        38084.00390625,
+        35496.5
+      ]
+    },
+    "candidate_bytes": {
+      "median": 23201.0,
+      "min": 23201.0,
+      "max": 23201.0,
+      "fork_medians": [
+        23201.0,
+        23201.0,
+        23201.0
+      ]
+    },
+    "baseline": {
+      "median": 37100.483072916664,
+      "min": 35396.156901041664,
+      "max": 39484.80703125,
+      "fork_medians": [
+        39484.80703125,
+        37100.483072916664,
+        35396.156901041664
+      ]
+    },
+    "baseline_bytes": {
+      "median": 23201.0,
+      "min": 23201.0,
+      "max": 23201.0,
+      "fork_medians": [
+        23201.0,
+        23201.0,
+        23201.0
+      ]
+    },
+    "baseline_over_candidate": 1.0097242742453214,
+    "disjoint": false
+  },
+  {
+    "shard": 8,
+    "workload": "json-generic",
+    "engine": "simdjson-generic-interop",
+    "stage": "ingest",
+    "candidate": {
+      "median": 1999.1143973214287,
+      "min": 1866.1176297169811,
+      "max": 2336.339332217262,
+      "fork_medians": [
+        2336.339332217262,
+        1866.1176297169811,
+        1999.1143973214287
+      ]
+    },
+    "candidate_bytes": {
+      "median": 384.0,
+      "min": 384.0,
+      "max": 384.0,
+      "fork_medians": [
+        384.0,
+        384.0,
+        384.0
+      ]
+    },
+    "baseline": {
+      "median": 2289.3196311773254,
+      "min": 1997.486607142857,
+      "max": 2765.278113996479,
+      "fork_medians": [
+        2765.278113996479,
+        2289.3196311773254,
+        1997.486607142857
+      ]
+    },
+    "baseline_bytes": {
+      "median": 384.0,
+      "min": 384.0,
+      "max": 384.0,
+      "fork_medians": [
+        384.0,
+        384.0,
+        384.0
+      ]
+    },
+    "baseline_over_candidate": 1.1451668970243707,
+    "disjoint": false
+  },
+  {
+    "shard": 8,
+    "workload": "json-generic",
+    "engine": "simdjson-generic-decode",
+    "stage": "ingest",
+    "candidate": {
+      "median": 1132.6571080202311,
+      "min": 1091.5772957402235,
+      "max": 1166.2649507068452,
+      "fork_medians": [
+        1132.6571080202311,
+        1091.5772957402235,
+        1166.2649507068452
+      ]
+    },
+    "candidate_bytes": {
+      "median": 120.0,
+      "min": 120.0,
+      "max": 120.0,
+      "fork_medians": [
+        120.0,
+        120.0,
+        120.0
+      ]
+    },
+    "baseline": {
+      "median": 1078.0067178914835,
+      "min": 1052.313004032258,
+      "max": 1079.1519552831492,
+      "fork_medians": [
+        1079.1519552831492,
+        1052.313004032258,
+        1078.0067178914835
+      ]
+    },
+    "baseline_bytes": {
+      "median": 120.0,
+      "min": 120.0,
+      "max": 120.0,
+      "fork_medians": [
+        120.0,
+        120.0,
+        120.0
+      ]
+    },
+    "baseline_over_candidate": 0.9517502784013152,
+    "disjoint": true
+  }
+]
