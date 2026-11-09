@@ -44,9 +44,12 @@ def main():
     reports.mkdir(parents=True, exist_ok=True)
     suite = ET.Element('testsuite', name='native-jit')
     failed = False
+    # The negative controls must fail to build; this gate verifies the specific rejection. Their
+    # BuildBuddy invocations must not post commit statuses, or an expected failure turns the commit red.
+    quiet = '--build_metadata=DISABLE_COMMIT_STATUS_REPORTING=true'
     commands = [
-        ('blocklist-negative-control', [bazel, 'build', '//tests/jit-negative:native'], 1200),
-        ('never-compile-negative-control', [bazel, 'build', '//tests/jit-negative:never_compile'], 1200),
+        ('blocklist-negative-control', [bazel, 'build', quiet, '//tests/jit-negative:native'], 1200),
+        ('never-compile-negative-control', [bazel, 'build', quiet, '//tests/jit-negative:never_compile'], 1200),
     ]
     if not args.probes_only:
         commands.append(('compiled-matrix', ['build/simulation/truffledata-simulation', '--jit-check'], 600))
