@@ -28,9 +28,20 @@ Read F1's ledger entry in `docs/superpowers/plans/2026-11-09-myna-0.14-ledger.md
    (production seam unchanged, cells from a build-derived seam) is an option, not a
    requirement. 0.14.0 changes every fingerprint anyway, so choose the simplest correct
    layout and record why.
-2. **Typed `execute*`.** Hot call sites hold the concrete `*_Cell` and call
-   `executeInt`/`executeLong`/`executeDouble`/`executeBoolean`, with no result box or
-   `UnexpectedResultException` handler on the hot path.
+2. **Specialized `NativeCell` calls (Sam, 2026-11-09: "we should adopt specialized calls
+   present in `NativeCell`").** Mandatory, not just for hot paths. Every TruffleData call site
+   of a scalar-result cell holds the concrete generated `*_Cell` type and calls the
+   specialized method the generator overrides (`TruffleCells.typed`): `i32` status returns
+   (`decode`, `typed`, `session_decode`, `plan_create`, `index_leaf`'s peers, …) through
+   `executeInt`; `i64`/`u64`/`usize`/`u32` returns (`stream_feed`, `stream_truncated_bytes`,
+   `index`, `index_leaf`, `validate_utf8`, `utf8_to_utf16`, …) through `executeLong`; `bool`
+   through `executeBoolean`; floats through `executeDouble`. Generic `execute(Object[])` is
+   used only for pointer/`void`/resource results, and never where a typed method exists.
+   There must be no result box and no `UnexpectedResultException` handler on any decode path.
+   Prove it: the AOT symbol inspection of each flag-on image shows no `execute(Object[])` call
+   and no boxing (`Integer.valueOf`/`Long.valueOf`) on those call sites, and a unit test fails
+   if a scalar cell call site is routed through `execute` (for example, a source scan or a
+   wrapper that rejects it).
 3. **`resource` declarations** for every create/release pair (sessions, streams, plans,
    layouts, typed owners, decode results that own native memory): the create cell returns a
    `NativeResource` (exactly-once close, thread confinement where the owner is confined). Map
