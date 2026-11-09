@@ -6,9 +6,11 @@ import dev.elide.myna.values.NativeValueTape;
 import dev.elide.myna.values.ValueTape;
 import dev.elide.truffledata.*;
 import dev.elide.truffledata.json.generated.Json;
+import dev.elide.truffledata.json.generated.JsonAbi;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import org.graalvm.nativeimage.PinnedObject;
+import org.graalvm.nativeimage.Platform;
 import org.graalvm.nativeimage.UnmanagedMemory;
 import org.graalvm.nativeimage.c.type.CTypeConversion;
 import org.graalvm.nativeimage.c.type.VoidPointer;
@@ -1040,7 +1042,11 @@ public final class SvmAcceptance {
     nested();
     CompiledReads.run();
     scoped();
-    require(CTypeConversion.toJavaString(Json.fingerprint()).equals(Json.ABI_FINGERPRINT));
+    // The linked archive reports the image's ABI class fingerprint, and only that class's.
+    boolean charUnsigned = Platform.includedIn(Platform.LINUX_AARCH64.class);
+    String linked = CTypeConversion.toJavaString(Json.fingerprint());
+    require(linked.equals(JsonAbi.fingerprint(charUnsigned)));
+    require(!linked.equals(JsonAbi.fingerprint(!charUnsigned)));
     VoidPointer first = UnmanagedMemory.calloc(Json.JsonResult.SIZE);
     if (first.isNull()) throw new OutOfMemoryError();
     VoidPointer second = UnmanagedMemory.calloc(Json.JsonResult.SIZE);

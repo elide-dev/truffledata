@@ -87,12 +87,36 @@ sh_test(
     name = "myna_contract",
     srcs = ["myna_contract.py"],
     args = [
+        # Production seams: descriptor, bindings jar, then each ABI class's descriptor and fingerprint
+        # (bazel/myna.bzl): the jar's <Class>Abi constants must be exactly those fingerprints.
         "$(rootpath //json/native:descriptor)",
         "$(rootpath //json:libbindings.jar)",
+        "--classes",
+        "$(rootpath //json/native:generated/abi/lp64_little/seam.json)",
+        "$(rootpath //json/native:generated/abi/lp64_little/seam.abi)",
+        "$(rootpath //json/native:generated/abi/lp64_little_aapcs64/seam.json)",
+        "$(rootpath //json/native:generated/abi/lp64_little_aapcs64/seam.abi)",
         "$(rootpath //protobuf-buffa/native:descriptor)",
         "$(rootpath //protobuf-buffa:libbindings.jar)",
+        "--classes",
+        "$(rootpath //protobuf-buffa/native:generated/abi/lp64_little/seam.json)",
+        "$(rootpath //protobuf-buffa/native:generated/abi/lp64_little/seam.abi)",
+        "$(rootpath //protobuf-buffa/native:generated/abi/lp64_little_aapcs64/seam.json)",
+        "$(rootpath //protobuf-buffa/native:generated/abi/lp64_little_aapcs64/seam.abi)",
         "$(rootpath //yaml/native:descriptor)",
-        "-",
+        "$(rootpath //yaml:libbindings.jar)",
+        "--classes",
+        "$(rootpath //yaml/native:generated/abi/lp64_little/seam.json)",
+        "$(rootpath //yaml/native:generated/abi/lp64_little/seam.abi)",
+        "$(rootpath //yaml/native:generated/abi/lp64_little_aapcs64/seam.json)",
+        "$(rootpath //yaml/native:generated/abi/lp64_little_aapcs64/seam.abi)",
+        "$(rootpath //csv/native:descriptor)",
+        "$(rootpath //csv/kernel:libbindings.jar)",
+        "--classes",
+        "$(rootpath //csv/native:generated/abi/lp64_little/seam.json)",
+        "$(rootpath //csv/native:generated/abi/lp64_little/seam.abi)",
+        "$(rootpath //csv/native:generated/abi/lp64_little_aapcs64/seam.json)",
+        "$(rootpath //csv/native:generated/abi/lp64_little_aapcs64/seam.abi)",
         # The opt-in Truffle cells bindings (protobuf-buffa/cells): derived from the production seam.
         "$(rootpath //protobuf-buffa/cells:generated/svm/seam.json)",
         "$(rootpath //protobuf-buffa/cells:libbindings.jar)",
@@ -104,6 +128,8 @@ sh_test(
         "$(rootpath //protobuf-buffa/cells:generated/jvm/seam.json)",
     ],
     data = [
+        "//csv/kernel:libbindings.jar",
+        "//csv/native:descriptor",
         "//json:libbindings.jar",
         "//json/native:descriptor",
         "//protobuf-buffa:libbindings.jar",
@@ -111,7 +137,24 @@ sh_test(
         "//protobuf-buffa/cells:generated/svm/seam.json",
         "//protobuf-buffa/cells:libbindings.jar",
         "//protobuf-buffa/native:descriptor",
+        "//yaml:libbindings.jar",
         "//yaml/native:descriptor",
+    ] + [
+        "//%s:generated/abi/%s/%s" % (pkg, cls, file)
+        for pkg in [
+            "csv/native",
+            "json/native",
+            "protobuf-buffa/native",
+            "yaml/native",
+        ]
+        for cls in [
+            "lp64_little",
+            "lp64_little_aapcs64",
+        ]
+        for file in [
+            "seam.abi",
+            "seam.json",
+        ]
     ],
 )
 

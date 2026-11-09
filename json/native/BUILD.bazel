@@ -1,6 +1,6 @@
 load("//tools/fuzz:defs.bzl", "native_fuzzer")
 load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_library", "cc_test")
-load("//bazel:myna.bzl", "myna_bindings")
+load("//bazel:myna.bzl", "myna_bindings", "myna_other_class_stub")
 
 cc_library(
     name = "decoder",
@@ -265,4 +265,13 @@ native_fuzzer(
     name = "session",
     src = "session_fuzz.cc",
     deps = [":decoder"],
+)
+
+# Test-only: a library reporting the fingerprint of the ABI class this host is not, which JSON's
+# bindings must reject (and the per-class fingerprints the bindings' constants are checked against).
+myna_other_class_stub(
+    name = "other_abi_class",
+    abi = ":generated/abi",
+    symbol = "td_json_fingerprint",
+    visibility = ["//json/tests:__pkg__"],
 )

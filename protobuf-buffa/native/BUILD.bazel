@@ -1,6 +1,6 @@
 load("@rules_cc//cc:defs.bzl", "cc_library")
 load("@rules_rust//rust:defs.bzl", "rust_library", "rust_shared_library", "rust_static_library", "rust_test")
-load("//bazel:myna.bzl", "myna_bindings")
+load("//bazel:myna.bzl", "myna_bindings", "myna_other_class_stub")
 
 package(default_visibility = ["//visibility:public"])
 
@@ -139,4 +139,12 @@ filegroup(
     name = "descriptor",
     srcs = ["generated/seam.json"],
     visibility = ["//visibility:public"],
+)
+
+# Test-only: a library reporting the fingerprint of the ABI class this host is not, which Buffa's
+# bindings must reject (and the per-class fingerprints the bindings' constants are checked against).
+myna_other_class_stub(
+    name = "other_abi_class",
+    abi = ":generated/abi",
+    symbol = "td_buffa_fingerprint",
 )

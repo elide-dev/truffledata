@@ -10,6 +10,8 @@ fingerprints into one `seam.h` selected by `__CHAR_UNSIGNED__`, and keeps each c
 `seam.json` under `<out>/abi/<class>/` for the contract check and tests.
 """
 
+load("@rules_cc//cc:defs.bzl", "cc_binary")
+
 LP64_LITTLE_TARGETS = [
     "x86_64-unknown-linux-gnu",
     "aarch64-apple-darwin",
@@ -92,7 +94,7 @@ def myna_bindings(name, seam, java_class, java_package, out = "generated", abi =
     )
 
 def myna_other_class_stub(name, abi, symbol, **kwargs):
-    """A test-only shared library whose `symbol` reports the fingerprint of the ABI class this host is *not*.
+    """A test-only shared library `<name>.so` whose `symbol` reports the fingerprint of the ABI class this host is *not*.
 
     `abi` is the bindings genrule's output directory label prefix (for example `:generated/abi`); the stub takes
     each class's `seam.abi` from it and selects the other class with `__CHAR_UNSIGNED__`, so on every host a
@@ -115,10 +117,19 @@ def myna_other_class_stub(name, abi, symbol, **kwargs):
                "\"const char *%s(void) { return \\\"$$(cat $(location %s/lp64_little_aapcs64/seam.abi))\\\"; }\" " +
                "'#endif' > $@") % (symbol, abi, symbol, abi),
     )
-    native.cc_binary(
-        name = name,
+    cc_binary(
+        name = name + ".so",
         testonly = True,
         srcs = [source],
         linkshared = True,
+        **kwargs
+    )
+    native.filegroup(
+        name = name + "_fingerprints",
+        testonly = True,
+        srcs = [
+            abi + "/lp64_little/seam.abi",
+            abi + "/lp64_little_aapcs64/seam.abi",
+        ],
         **kwargs
     )

@@ -1,6 +1,6 @@
 load("//tools/fuzz:defs.bzl", "native_fuzzer")
 load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_library", "cc_test")
-load("//bazel:myna.bzl", "myna_bindings")
+load("//bazel:myna.bzl", "myna_bindings", "myna_other_class_stub")
 
 # CSV structural indexer (simdjson stage-1 style) and its Myna seam. The optional
 # truffledata-csv-native provider supplies it to //csv scanners (csv/native/README.md).
@@ -141,6 +141,12 @@ filegroup(
 )
 
 filegroup(
+    name = "descriptor",
+    srcs = ["generated/seam.json"],
+    visibility = ["//visibility:public"],
+)
+
+filegroup(
     name = "native_resources",
     srcs = ["generated/META-INF/native-image/dev.elide.myna/dev.elide.truffledata.csv.kernel.generated.CsvNative/native-image.properties"],
     visibility = ["//visibility:public"],
@@ -175,4 +181,13 @@ native_fuzzer(
     name = "index",
     src = "index_fuzz.cc",
     deps = [":index"],
+)
+
+# Test-only: a library reporting the fingerprint of the ABI class this host is not, which the CSV
+# kernel's bindings must reject (and the per-class fingerprints the bindings' constants are checked against).
+myna_other_class_stub(
+    name = "other_abi_class",
+    abi = ":generated/abi",
+    symbol = "td_csv_fingerprint",
+    visibility = ["//csv/tests:__pkg__"],
 )

@@ -83,7 +83,11 @@ java_test(
         "--class",
         "dev.elide.truffledata.json.tests.JvmScopedTest",
     ],
-    data = ["//json/native:json_shared.so"],
+    data = [
+        "//json/native:json_shared.so",
+        "//json/native:other_abi_class.so",
+        "//json/native:other_abi_class_fingerprints",
+    ],
     jvm_flags = [
         "--enable-native-access=ALL-UNNAMED",
         "-Dpolyglot.engine.WarnInterpreterOnly=false",

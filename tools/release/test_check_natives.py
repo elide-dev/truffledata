@@ -2,7 +2,7 @@
 import unittest
 from unittest.mock import patch
 
-from check_natives import Checker, CSV_EXPORTS, YAML_EXPORTS
+from check_natives import abi_fingerprints, ABI_CLASS, Checker, CSV_EXPORTS, YAML_EXPORTS
 
 
 def listing(symbols):
@@ -29,6 +29,30 @@ class ExportsTest(unittest.TestCase):
 
     def test_json_needs_only_its_fingerprint(self):
         self.assertEqual(self.check('json', {'td_json_fingerprint', 'anything'}), [])
+
+
+SIGNED, UNSIGNED = 'a' * 64, 'b' * 64
+ABI_SOURCE = ('public final class JsonAbi {\n  public static final String LP64_LITTLE = "%s";\n'
+              '  public static final String LP64_LITTLE_AAPCS64 = "%s";\n}\n')
+
+
+class AbiClassTest(unittest.TestCase):
+    """The bindings' generated <Class>Abi must hold exactly one fingerprint per Myna 0.14.0 ABI class."""
+
+    def test_each_class_has_its_fingerprint(self):
+        found = abi_fingerprints(ABI_SOURCE % (SIGNED, UNSIGNED), b'\x00' + SIGNED.encode() + b'\x00' + UNSIGNED.encode())
+        self.assertEqual(found, {'LP64_LITTLE': SIGNED, 'LP64_LITTLE_AAPCS64': UNSIGNED})
+        self.assertEqual(found[ABI_CLASS['linux-aarch64']], UNSIGNED)
+        self.assertEqual(found[ABI_CLASS['linux-aarch64-musl']], UNSIGNED)
+        for classifier in ('linux-x86_64', 'linux-x86_64-musl', 'macos-aarch64'):
+            self.assertEqual(found[ABI_CLASS[classifier]], SIGNED)
+
+    def test_inconsistent_bindings_are_rejected(self):
+        # A class missing from the sources, the classes sharing one fingerprint, or the compiled class holding others.
+        self.assertIsNone(abi_fingerprints('public static final String LP64_LITTLE = "%s";' % SIGNED, SIGNED.encode()))
+        self.assertIsNone(abi_fingerprints(ABI_SOURCE % (SIGNED, SIGNED), SIGNED.encode()))
+        self.assertIsNone(abi_fingerprints(ABI_SOURCE % (SIGNED, UNSIGNED), SIGNED.encode()))
+        self.assertIsNone(abi_fingerprints(ABI_SOURCE % (SIGNED, UNSIGNED), (SIGNED + ' ' + UNSIGNED + ' ' + 'c' * 64).encode()))
 
 
 if __name__ == '__main__':

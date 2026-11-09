@@ -474,9 +474,10 @@ messages and order, ownership and lifetimes — is the backend's own; the slabs 
   `native`/`ffm`, `truffle_transitions=direct`, and the Java package/class). The production seam,
   bindings, ABI fingerprint and natives are unchanged. Myna folds the cells options into the
   derived bindings' own fingerprint constant, which is never compared with the library; the
-  backends keep checking the library against the production fingerprint, and
-  `//bazel:myna_contract` checks that each derived descriptor equals the production descriptor
-  apart from those options.
+  backends keep checking the library against the production fingerprint of the ABI class they
+  run on (`BuffaAbi`; Myna 0.14.0 gives Linux AArch64 its own, see
+  [PUBLISHING.md](PUBLISHING.md#prebuilt-natives)), and `//bazel:myna_contract` checks that each
+  derived descriptor equals the production descriptor apart from those options.
 - **Shape.** The cells are called directly from the boundary-entered decode (one adopted cell per
   backend), as Myna's generic `NativeCell.execute(Object[])`; heap arrays are pinned around the call
   with plain `try/finally` (javac's try-with-resources reaches `Throwable.addSuppressed`, which the

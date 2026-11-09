@@ -5,10 +5,16 @@ use core::ffi::CStr;
 #[test]
 fn fingerprint_matches_vendored_seam() {
     let header = include_str!("../vendor/csv/native/generated/seam.h");
-    let expected = header
+    // One define per Myna ABI class, `#ifdef __CHAR_UNSIGNED__` first (aarch64 Linux), then `#else`.
+    let defines: Vec<&str> = header
         .lines()
-        .find_map(|l| l.strip_prefix("#define TRUFFLEDATA_CSV_SEAM_ABI \"")?.strip_suffix('"'))
-        .expect("ABI define in seam.h");
+        .filter_map(|l| l.strip_prefix("#define TRUFFLEDATA_CSV_SEAM_ABI \"")?.strip_suffix('"'))
+        .collect();
+    assert_eq!(defines.len(), 2, "ABI defines in seam.h");
+    assert_ne!(defines[0], defines[1]);
+    let char_unsigned = cfg!(all(target_os = "linux", target_arch = "aarch64"));
+    let expected = if char_unsigned { defines[0] } else { defines[1] };
+    // The compiled C++ took the compiler's `__CHAR_UNSIGNED__` branch; build.rs mirrored it from the target.
     let actual = unsafe { CStr::from_ptr(truffledata_csv_native::td_csv_fingerprint().cast()) };
     assert_eq!(actual.to_str().unwrap(), expected);
     assert_eq!(truffledata_csv_native::SEAM_ABI, expected);

@@ -1,8 +1,10 @@
 package dev.elide.truffledata.csv.kernel.jvm;
 
+import dev.elide.truffledata.TargetAbi;
 import dev.elide.truffledata.csv.CsvIndexing;
 import dev.elide.truffledata.csv.kernel.CsvIndex;
 import dev.elide.truffledata.csv.kernel.CsvIndexer;
+import dev.elide.truffledata.csv.kernel.generated.CsvNativeAbi;
 import dev.elide.truffledata.csv.kernel.generated.CsvNativeFFM;
 import java.lang.foreign.Arena;
 import java.lang.foreign.Linker;
@@ -56,10 +58,12 @@ public final class FfmIndexer extends CsvIndexer implements AutoCloseable {
         SymbolLookup symbols = SymbolLookup.libraryLookup(library.toAbsolutePath(), arena);
         MemorySegment fingerprint =
             (MemorySegment) CsvNativeFFM.fingerprint(symbols).invokeExact();
-        String actual =
-            fingerprint.reinterpret(CsvNativeFFM.ABI_FINGERPRINT.length() + 1).getString(0);
-        if (!actual.equals(CsvNativeFFM.ABI_FINGERPRINT))
-          throw new IllegalStateException("Myna/CSV ABI fingerprint mismatch");
+        // The host's ABI class fingerprint (Myna 0.14.0: Linux AArch64 has its own); never a fallback.
+        String expected = CsvNativeAbi.fingerprint(TargetAbi.HOST.charUnsigned());
+        String actual = fingerprint.reinterpret(expected.length() + 1).getString(0);
+        if (!actual.equals(expected))
+          throw new IllegalStateException(
+              "Myna/CSV ABI fingerprint mismatch (expected the " + TargetAbi.HOST + " class)");
         select = CsvNativeFFM.kernel(symbols);
         best = (int) select.invokeExact(0);
         index = CsvNativeFFM.index(symbols);

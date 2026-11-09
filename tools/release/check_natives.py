@@ -45,13 +45,19 @@ MACOS_DYLIBS = re.compile(r'^/usr/lib/(libSystem\.B|libc\+\+\.1)\.dylib$')
 MACOS_ORIGINS = {'libSystem', 'libc++'}
 MACHINES = {'linux-x86_64': 'EM_X86_64', 'linux-aarch64': 'EM_AARCH64'}
 FINGERPRINT = {'protobuf-buffa': 'td_buffa_fingerprint', 'json': 'td_json_fingerprint', 'yaml': 'td_yaml_fingerprint', 'csv-native': 'td_csv_fingerprint'}
-# The generated bindings (published once, from the linux-x86_64 build) and the ABI fingerprint they verify at run time.
+# The generated bindings (published once, from the linux-x86_64 build) and the generated <Class>Abi holding the ABI
+# fingerprint of each Myna 0.14.0 target ABI class, which the bindings verify at run time against the class they run on.
 BINDINGS = {
-    'protobuf-buffa': ('protobuf-buffa-bindings', 'dev/elide/truffledata/buffa/generated/Buffa.class'),
-    'json': ('json-bindings', 'dev/elide/truffledata/json/generated/Json.class'),
-    'yaml': ('yaml-bindings', 'dev/elide/truffledata/yaml/generated/Yaml.class'),
-    'csv-native': ('csv-bindings', 'dev/elide/truffledata/csv/kernel/generated/CsvNative.class'),
+    'protobuf-buffa': ('protobuf-buffa-bindings', 'dev/elide/truffledata/buffa/generated/BuffaAbi'),
+    'json': ('json-bindings', 'dev/elide/truffledata/json/generated/JsonAbi'),
+    'yaml': ('yaml-bindings', 'dev/elide/truffledata/yaml/generated/YamlAbi'),
+    'csv-native': ('csv-bindings', 'dev/elide/truffledata/csv/kernel/generated/CsvNativeAbi'),
 }
+# The ABI class of each platform classifier (bazel/myna.bzl): AAPCS64 Linux (aarch64, unsigned char) is its own class;
+# musl shares the GNU class of its architecture.
+ABI_CLASS = {'linux-x86_64': 'LP64_LITTLE', 'linux-x86_64-musl': 'LP64_LITTLE', 'macos-aarch64': 'LP64_LITTLE',
+             'linux-aarch64': 'LP64_LITTLE_AAPCS64', 'linux-aarch64-musl': 'LP64_LITTLE_AAPCS64'}
+ABI_CONSTANT = re.compile(r'public static final String (LP64_LITTLE(?:_AAPCS64)?) = "([0-9a-f]{64})";')
 CSV_EXPORTS = {'td_csv_fingerprint', 'td_csv_kernel', 'td_csv_index', 'td_csv_index_leaf', 'td_csv_validate_utf8'}
 # The YAML seam's imports (yaml/native/yaml.seam). Its archive is not internalized, so these are required, not exact.
 YAML_EXPORTS = {'td_yaml_fingerprint', 'td_yaml_release', 'td_yaml_session_create', 'td_yaml_session_decode',
@@ -60,6 +66,17 @@ YAML_EXPORTS = {'td_yaml_fingerprint', 'td_yaml_release', 'td_yaml_session_creat
                 'td_yaml_stream_release', 'td_yaml_plan_create', 'td_yaml_plan_release', 'td_yaml_typed_decode',
                 'td_yaml_typed_release'}
 HEX64 = re.compile(rb'(?<![0-9a-f])[0-9a-f]{64}(?![0-9a-f])')
+
+
+def abi_fingerprints(source, binary):
+    """{ABI class: fingerprint} from a bindings jar's generated <Class>Abi: the constants named in its sources jar,
+    which must be exactly the 64-hex strings its compiled class holds. None when either is inconsistent."""
+    found = dict(ABI_CONSTANT.findall(source))
+    if set(found) != set(ABI_CLASS.values()) or len(set(found.values())) != len(found):
+        return None
+    if set(HEX64.findall(binary)) != {f.encode() for f in found.values()}:
+        return None
+    return found
 
 
 class Checker:
@@ -252,19 +269,19 @@ def main():
     for module in NATIVE_MODULES:
         artifact = 'truffledata-' + module
         prefix = args.repository / 'dev/elide' / artifact / args.version / ('%s-%s' % (artifact, args.version))
-        # Every platform's library must report the ABI fingerprint the published bindings check before first use.
+        # Every platform's library must report the ABI fingerprint of its ABI class, which the published bindings check
+        # before first use (the bindings carry one constant per class and select the class they run on).
         bindings, entry = BINDINGS[module]
-        jar = args.repository / 'dev/elide' / ('truffledata-' + bindings) / args.version / ('truffledata-%s-%s.jar' % (bindings, args.version))
-        expected = None
-        if jar.is_file():
-            with zipfile.ZipFile(jar) as archive:
-                found = set(HEX64.findall(archive.read(entry)))
-            if len(found) == 1:
-                expected = found.pop()
-            else:
-                checker.fail(jar.name, '%s holds %d ABI fingerprints' % (entry, len(found)))
+        prefix_jar = args.repository / 'dev/elide' / ('truffledata-' + bindings) / args.version / ('truffledata-%s-%s' % (bindings, args.version))
+        jar, sources = Path(str(prefix_jar) + '.jar'), Path(str(prefix_jar) + '-sources.jar')
+        fingerprints = None
+        if jar.is_file() and sources.is_file():
+            with zipfile.ZipFile(jar) as archive, zipfile.ZipFile(sources) as source_archive:
+                fingerprints = abi_fingerprints(source_archive.read(entry + '.java').decode(), archive.read(entry + '.class'))
+            if fingerprints is None:
+                checker.fail(jar.name, '%s does not hold exactly one fingerprint per ABI class %s' % (entry, sorted(set(ABI_CLASS.values()))))
         else:
-            checker.fail(jar.name, 'missing bindings jar')
+            checker.fail(jar.name, 'missing bindings jar or sources jar')
         for classifier in args.classifiers:
             if classifier.endswith('-musl') and module not in MUSL_MODULES:
                 continue
@@ -299,11 +316,18 @@ def main():
                     if module in MUSL_MODULES:
                         checker.exports(twin, module, where, ['--extern-only'])
             shared, where = attachment('-%s%s' % (classifier, extension)) if extension else (None, '')
+            expected = fingerprints[ABI_CLASS[classifier]].encode() if fingerprints else None
+            others = {f.encode() for cls, f in (fingerprints or {}).items() if cls != ABI_CLASS[classifier]}
             for path, name in ((static, 'static archive'), (shared, 'shared library')):
-                if path and expected and expected not in path.read_bytes():
-                    reported = sorted(set(HEX64.findall(path.read_bytes())) - {expected})
-                    checker.fail(path.name, '%s lacks the bindings\' ABI fingerprint %s (64-hex strings it holds: %s)'
-                                 % (name, expected.decode(), ', '.join(f.decode()[:12] + '...' for f in reported[:3]) or 'none'))
+                if path and expected:
+                    held = set(HEX64.findall(path.read_bytes()))
+                    if expected not in held:
+                        reported = sorted(held - {expected})
+                        checker.fail(path.name, '%s lacks the bindings\' %s ABI fingerprint %s (64-hex strings it holds: %s)'
+                                     % (name, ABI_CLASS[classifier], expected.decode(), ', '.join(f.decode()[:12] + '...' for f in reported[:3]) or 'none'))
+                    # A library built for one class must not also report another class's fingerprint.
+                    if held & others:
+                        checker.fail(path.name, '%s holds another ABI class\'s fingerprint %s' % (name, ', '.join(f.decode()[:12] + '...' for f in sorted(held & others))))
             if shared:
                 if linux:
                     checker.linux_shared(shared, classifier, module, where)
