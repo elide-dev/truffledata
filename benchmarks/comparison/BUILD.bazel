@@ -712,6 +712,15 @@ CSV_COMPETITORS = [
     "@maven//:org_apache_commons_commons_csv",
 ]
 
+# The fixture generator alone, for the CSV number-parser differential test (//csv/tests).
+data_java_library(
+    name = "csv_fixtures",
+    testonly = True,
+    srcs = ["CsvFixture.java"],
+    visibility = ["//csv/tests:__pkg__"],
+    deps = ["//core"],
+)
+
 data_java_library(
     name = "csv_comparison",
     testonly = True,
