@@ -32,20 +32,10 @@ public abstract class TypedOwner implements AutoCloseable {
   /** The format that produced this result, named in its messages. */
   protected abstract TapeFormat format();
 
-  /**
-   * Rejects closed or cross-thread access. The final thread compare stays first so partial
-   * evaluation folds the checks of one record's reads to one (a single mutable "gate" field
-   * measured 0.79x at peak, WS6 ledger); only the rejection is outlined.
-   */
+  /** Rejects closed or cross-thread access. */
   final void check() {
-    if (Thread.currentThread() != thread || !open) throw rejected();
-  }
-
-  // Cross-thread access is reported as such even on a closed owner, as before.
-  @TruffleBoundary
-  private OwnerStateException rejected() {
-    return new OwnerStateException(this, Thread.currentThread() != thread
-        ? OwnerStateException.RECORD_THREAD : OwnerStateException.RECORD_CLOSED);
+    checkThread();
+    if (!open) throw new OwnerStateException(this, OwnerStateException.RECORD_CLOSED);
   }
 
   // Failures name the format lazily, so owners hold no format reference.
