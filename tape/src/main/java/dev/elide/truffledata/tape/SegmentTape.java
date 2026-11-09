@@ -50,6 +50,14 @@ public final class SegmentTape implements TapeReader {
     for (int j = 0; j < length; j++) value |= (bytes.get(ValueLayout.JAVA_BYTE, offset + j) & 255L) << (j * 8);
     return value;
   }
+  @Override public void copyWords(long from, long[] output, int at, int count) {
+    TapeReader.checkCopy(from, nodeCount(), output.length, at, count, "Tape word copy");
+    MemorySegment.copy(words, ValueLayout.JAVA_LONG, from * 8, output, at, count);
+  }
+  @Override public void copyDirectory(long from, long[] output, int at, int count) {
+    TapeReader.checkCopy(from, directorySize(), output.length, at, count, "Tape directory copy");
+    MemorySegment.copy(directory, ValueLayout.JAVA_LONG, from * 8, output, at, count);
+  }
   @Override public long directoryEntry(long index) { return directory.get(ValueLayout.JAVA_LONG, Math.multiplyExact(index, 8)); }
   @Override public int metadata(long index) { return (flags & 2) == 0 ? 0 : meta.get(ValueLayout.JAVA_INT, Math.multiplyExact(index, 4)); }
   @Override public long nodeCount() { return words.byteSize() / 8; }
