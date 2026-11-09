@@ -107,7 +107,7 @@ final class ScalarResolverTest {
     }
   }
 
-  private static Set<String> corpus() {
+  static Set<String> corpus() {
     Set<String> out = new LinkedHashSet<>();
     for (String s :
         new String[] {
