@@ -1,4 +1,4 @@
-//! Wire indexes and layout-compiled slabs (ABI 11, slab.rs): Buffa reads the
+//! Wire indexes and layout-compiled slabs (ABI 12, slab.rs): Buffa reads the
 //! caller's slice; index payloads stay in that slice, slabs copy them into the caller's buffer.
 //! The caller owns input memory and lends it immutably for the duration of the call.
 //! Only the bounded field index is allocated in Rust. No unwind may cross the ABI.
@@ -368,7 +368,7 @@ pub unsafe extern "C" fn td_buffa_release(result: *mut std::ffi::c_void) {
     result.capacity = 0;
 }
 
-/// ABI 11: compile a schema program (TDB3 tables and the TDL1 layout section) into slab
+/// ABI 12: compile a schema program (TDB3 tables and the TDL1 layout section) into slab
 /// descriptors once. On success `result.data` is an owned handle (released by
 /// td_buffa_release_layout) and `result.count` the number of types.
 ///
@@ -460,7 +460,8 @@ unsafe fn decode_slab_impl(
             handles: 0,
             flags: 0,
             error: 0,
-            reserved: 0,
+            cells: u32::MAX,
+            string_bytes: u32::MAX,
         });
     }
     if small && (length > slab::SMALL_LIMIT || capacity > slab::SMALL_LIMIT) {
@@ -501,7 +502,8 @@ unsafe fn decode_slab_impl(
             handles: o.handles,
             flags: o.flags,
             error: error as u32,
-            reserved: 0,
+            cells: o.cells,
+            string_bytes: o.string_bytes,
         });
     };
     match outcome {
@@ -521,7 +523,7 @@ unsafe fn decode_slab_impl(
     }
 }
 
-/// ABI 11: decode one protobuf message into a slab (docs/SLAB.md) written to `out[..capacity]`.
+/// ABI 12: decode one protobuf message into a slab (docs/SLAB.md) written to `out[..capacity]`.
 /// Returns 0 with `result.bytes` the slab length, `NEEDS_CAPACITY` with the exact length when it
 /// did not fit (or under `SIZING_ONLY`), or an error status with `result.error` the input offset
 /// of the rejecting field (of the string payload for invalid UTF-8). Flags: exactly one of
@@ -566,7 +568,7 @@ pub unsafe extern "C" fn td_buffa_decode_slab(
     }
 }
 
-/// ABI 11 bounded leaf: td_buffa_decode_slab for `length` and `capacity` at most 64 KiB (else
+/// ABI 12 bounded leaf: td_buffa_decode_slab for `length` and `capacity` at most 64 KiB (else
 /// `BUDGET` before any work). It performs no heap allocation and takes no lock: scratch is fixed
 /// stack storage, and an input that overflows it returns `BUDGET` (the caller retries through
 /// td_buffa_decode_slab). No panic escapes.

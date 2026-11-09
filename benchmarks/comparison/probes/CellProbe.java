@@ -27,7 +27,7 @@ import org.jspecify.annotations.NullMarked;
  * plumbing); no production class can reach it, and the shipped bindings are unchanged.
  *
  * <p>What stays behind a boundary is exactly what the production path keeps there:
- * {@link SlabMessage#takeOwnership} (the verifier and owner publication) is itself a
+ * {@link SlabMessage#produced} (the trusted in-process publication since WS2) is itself a
  * {@code @TruffleBoundary} public API, so every route pays it as one AOT call.
  */
 @NullMarked
@@ -191,7 +191,18 @@ public final class CellProbe implements AutoCloseable {
     // The plan-wide learned capacity must not amplify small messages decoded after a large one:
     // spare room beyond the slab's own size (plus a small slack) is trimmed away.
     if (output.length - extent > Math.max(256, extent)) output = Arrays.copyOf(output, extent);
-    return SlabMessage.takeOwnership(plan, output, extent, limits);
+    // WS2: the production backends publish their own decoder's output through the trusted
+    // in-process entry with the result slot's certification and logical totals (seam ABI 12);
+    // the slot is still held by this probe here, on every route.
+    VoidPointer slot = WordFactory.pointer(result);
+    return SlabMessage.produced(
+        plan,
+        output,
+        extent,
+        Buffa.SlabResult.flags(slot),
+        Buffa.SlabResult.cells(slot),
+        Buffa.SlabResult.string_bytes(slot),
+        limits);
   }
 
   @TruffleBoundary

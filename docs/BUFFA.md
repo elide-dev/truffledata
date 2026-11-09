@@ -381,7 +381,16 @@ materialize strings earlier. The acceptance corpus runs with strict mode both on
 and off; performance measurements use the shipping, non-strict path. For SVM, set
 the property at image build time with the other strict-test options.
 
-## Seam ABI 11: layout-compiled slabs
+## Seam ABI 12: layout-compiled slabs
+
+ABI 12 (over ABI 11) changes only the `SlabResult` structure: its reserved word becomes the
+decoded slab's logical totals (`cells u32 · string_bytes u32`, `0xFFFFFFFF` when unknown; see
+[SLAB.md](SLAB.md)). The native backends publish a slab their own decoder wrote into an array they
+allocated and never exposed through `SlabMessage.produced`: a `CERTIFIED` owning slab whose totals
+lie within the plan's limits skips the Java `SlabVerifier.verifyOwning` walk and the exact
+accounting walk, keeping the O(1) header check; anything else takes the previous checked path with
+unchanged messages. External, copied (`copyOf`, `copyRecordOf`, session `retain`), projected and
+`takeOwnership` slabs keep the full verifier. The slab bytes and goldens are unchanged.
 
 Binary `BuffaPlan.decode` uses the owning slab representation. `newSession` explicitly
 selects a reusable native arena, and `project` binds selected fields and deferred children.

@@ -1,6 +1,7 @@
 package dev.elide.truffledata.buffa;
 
 import dev.elide.truffledata.ContractViolation;
+import dev.elide.truffledata.DataArray;
 import dev.elide.truffledata.protobuf.Layout;
 import dev.elide.truffledata.protobuf.ProtoPlan;
 import java.nio.*;
@@ -90,6 +91,13 @@ final class NativeSchema {
           out.putInt(at + 8, flags)
               .putInt(at + 12, f.kind().message() ? indices.get(f.typeName()) : -1);
           var enumeration = f.enumType();
+          // Singular string/bytes entries carry their default's logical size at +16 (UTF-16
+          // bytes of a string default, cells of a bytes default), which the slab producer adds for
+          // absent fields exactly as SlabMessage.validate does; zero for the usual empty default.
+          if (!f.repeated() && f.defaultValue() instanceof String text)
+            out.putInt(at + 16, Math.multiplyExact(2, text.length()));
+          else if (!f.repeated() && f.defaultValue() instanceof DataArray blob)
+            out.putInt(at + 16, Math.toIntExact(blob.size()));
           if (enumeration != null) {
             int table = out.position();
             out.putInt(at + 16, table).putInt(at + 20, enumeration.values().size());

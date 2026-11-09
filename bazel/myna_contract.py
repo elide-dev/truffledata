@@ -17,7 +17,7 @@ def verify(descriptor, archive):
                              "session_create", "session_decode", "session_decode_small", "session_retain", "session_reset", "session_release",
                              "stream_create", "stream_feed", "stream_finish", "stream_next", "stream_skip",
                              "stream_truncated_bytes", "stream_release", "result_myna"},
-        # ABI 11 retires view imports; layout-compiled slabs and typed text indexes remain.
+        # ABI 12 (ABI 11 retired the view imports; 12 adds logical totals to SlabResult): layout-compiled slabs and typed text indexes.
         "truffledata_buffa": {"fingerprint", "decode", "release", "typed", "typedReuse", "utf8_to_utf16",
                               "compileLayout", "releaseLayout", "decodeSlab", "decodeSlabSmall"},
         "truffledata_yaml": {"fingerprint", "release", "session_create", "session_decode", "session_retain",

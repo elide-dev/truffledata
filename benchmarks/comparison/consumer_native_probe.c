@@ -26,7 +26,7 @@ struct result {
 struct slab_result {
   uint64_t bytes;
   uint32_t records, handles, flags, error;
-  uint64_t reserved;
+  uint32_t cells, string_bytes;
 };
 
 #define ROWS 32
