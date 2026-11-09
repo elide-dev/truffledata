@@ -38,6 +38,8 @@ MODULES = [
     "yaml",
     "yaml-bindings",
     "yaml-jvm",
+    "yaml-java",
+    "yaml-snakeyaml",
     "csv",
     "csv-bindings",
     "csv-native",
@@ -56,6 +58,9 @@ LIBRARIES = {
     "json-jvm": "//json:jvm",
     "yaml-bindings": "//yaml:bindings",
     "yaml-jvm": "//yaml:jvm",
+    # The pure-Java YAML kernel (no native library) and its SnakeYAML Engine event source.
+    "yaml-java": "//yaml:java",
+    "yaml-snakeyaml": "//yaml:snakeyaml",
     # Optional native CSV kernel: generated bindings, the static-image backend (with the native
     # attachments) and the JVM FFM backend; truffledata-csv itself stays pure Java.
     "csv-bindings": "//csv/kernel:bindings",
@@ -282,6 +287,12 @@ test_suite(
         "dev.elide:truffledata-yaml-bindings:{version}",
         "dev.elide:truffledata-tape-jvm:{version}",
     ] if module == "yaml-jvm" else []) + ([
+        "dev.elide:truffledata-yaml:{version}",
+        "dev.elide:truffledata-tape:{version}",
+    ] if module == "yaml-java" else []) + ([
+        "dev.elide:truffledata-yaml-java:{version}",
+        "org.snakeyaml:snakeyaml-engine:3.2",
+    ] if module == "yaml-snakeyaml" else []) + ([
         "dev.elide:truffledata-csv:{version}",
         "dev.elide:truffledata-csv-bindings:{version}",
     ] if module in [
@@ -325,6 +336,7 @@ maven_bom(
         "org.xerial:sqlite-jdbc:3.53.4.0",
         "com.google.protobuf:protobuf-java:4.36.1",
         "com.google.protobuf:protobuf-java-util:4.36.1",
+        "org.snakeyaml:snakeyaml-engine:3.2",
     ] + [coordinate + ":25.5.5-elide.27" for coordinate in [
         "org.graalvm.truffle:truffle-runtime",
         "org.graalvm.polyglot:polyglot",
@@ -401,6 +413,12 @@ sh_test(
         ":yaml_import",
         ":tape-jvm_import",
     ] if module == "yaml-jvm" else []) + ([
+        ":tape_import",
+        ":yaml_import",
+    ] if module == "yaml-java" else []) + ([
+        ":yaml-java_import",
+        "@maven//:org_snakeyaml_snakeyaml_engine",
+    ] if module == "yaml-snakeyaml" else []) + ([
         ":csv-bindings_import",
         ":csv_import",
     ] if module in [
@@ -740,6 +758,23 @@ java_library(
         ":yaml-jvm_compile",
         ":yaml_import",
         "@maven//:org_graalvm_sdk_nativeimage",
+    ],
+)
+
+# The Java kernel from the published jars alone: no yaml_shared library on the JVM, so
+# YamlSession.open() selects truffledata-yaml-java with the SnakeYAML Engine event source.
+java_test(
+    name = "yaml_java_consumer",
+    srcs = ["YamlJavaConsumer.java"],
+    javacopts = ["-XepDisableAllChecks"],
+    main_class = "YamlJavaConsumer",
+    use_testrunner = False,
+    deps = [
+        ":core_import",
+        ":tape_import",
+        ":yaml-java_import",
+        ":yaml-snakeyaml_import",
+        ":yaml_import",
     ],
 )
 
