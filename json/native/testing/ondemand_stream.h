@@ -114,8 +114,8 @@ class stream final {
       // A stray closer is a one-byte document (source() would run on to the next closer).
       if (!source.empty() && (source[0] == '}' || source[0] == ']')) source = source.substr(0, 1);
       size_t end = at + source.size();
-      if (!scanned_finished_ && end == region_end_ && !source.empty() && source[0] != '{' &&
-          source[0] != '[' && source[0] != '"') {
+      if (!finished_ && !scanned_finished_ && end == region_end_ && !source.empty() &&
+          source[0] != '{' && source[0] != '[' && source[0] != '"') {
         // A root number or literal touching the end of the buffered bytes may continue.
         abandon(at);
         return idle();
