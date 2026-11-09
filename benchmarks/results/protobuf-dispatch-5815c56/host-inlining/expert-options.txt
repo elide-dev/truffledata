@@ -1,0 +1,36 @@
+  -H:±TruffleHostInlining                      Whether Truffle host inlining is enabled. Default: + (enabled).
+  -H:TruffleHostInliningBaseBudget=5000        Maximum budget for Truffle host inlining for runtime compiled methods.
+  -H:TruffleHostInliningByteCodeHandlerBudget=100000
+                                               Maximum budget for Truffle host inlining for runtime compiled methods with a BytecodeInterpreterHandler annotation.
+  -H:TruffleHostInliningByteCodeHandlerMaxSubtreeInvokes=256
+                                               Maximum number of subtree invokes for a subtree to get inlined until it is considered too complex. Only applies to
+                                               runtime compiled methods with a BytecodeInterpreterHandler annotation.
+  -H:TruffleHostInliningByteCodeInterpreterBudget=100000
+                                               Maximum budget for Truffle host inlining for runtime compiled methods with a BytecodeInterpreterSwitch annotation.
+  -H:TruffleHostInliningExploreBudget=10000    Maximum exploration budget for Truffle host inlining when exploring inlining candidates.
+  -H:TruffleHostInliningMaxExplorationDepth=1000
+                                               Determines the maximum call depth for exploration during host inlining.
+  -H:TruffleHostInliningMaxSubtreeInvokes=32   Maximum number of subtree invokes for a subtree to get inlined until it is considered too complex.
+  -H:TruffleHostInliningMinFrequency=0.001     Minimum relative frequency for calls to get inlined. Default 0.001 on HotSpot and no minimum frequency on SVM.
+  -H:±TruffleHostInliningPrintExplored         When logging is activated for this phase enables printing of only explored, but ultimately not inlined call trees.
+                                               Default: - (disabled).
+  -H:±TruffleTrustedFinalFrameFields           Whether Truffle frame field reads are trusted final. Default: + (enabled).
+--
+--
+  -R:±TruffleHostInlining                      Whether Truffle host inlining is enabled. Default: + (enabled).
+  -R:TruffleHostInliningBaseBudget=5000        Maximum budget for Truffle host inlining for runtime compiled methods.
+  -R:TruffleHostInliningByteCodeHandlerBudget=100000
+                                               Maximum budget for Truffle host inlining for runtime compiled methods with a BytecodeInterpreterHandler annotation.
+  -R:TruffleHostInliningByteCodeHandlerMaxSubtreeInvokes=256
+                                               Maximum number of subtree invokes for a subtree to get inlined until it is considered too complex. Only applies to
+                                               runtime compiled methods with a BytecodeInterpreterHandler annotation.
+  -R:TruffleHostInliningByteCodeInterpreterBudget=100000
+                                               Maximum budget for Truffle host inlining for runtime compiled methods with a BytecodeInterpreterSwitch annotation.
+  -R:TruffleHostInliningExploreBudget=10000    Maximum exploration budget for Truffle host inlining when exploring inlining candidates.
+  -R:TruffleHostInliningMaxExplorationDepth=1000
+                                               Determines the maximum call depth for exploration during host inlining.
+  -R:TruffleHostInliningMaxSubtreeInvokes=32   Maximum number of subtree invokes for a subtree to get inlined until it is considered too complex.
+  -R:TruffleHostInliningMinFrequency=0.001     Minimum relative frequency for calls to get inlined. Default 0.001 on HotSpot and no minimum frequency on SVM.
+  -R:±TruffleHostInliningPrintExplored         When logging is activated for this phase enables printing of only explored, but ultimately not inlined call trees.
+                                               Default: - (disabled).
+  -R:±TruffleTrustedFinalFrameFields           Whether Truffle frame field reads are trusted final. Default: + (enabled).
