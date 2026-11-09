@@ -13,6 +13,7 @@ import dev.elide.truffledata.DataNull;
 import dev.elide.truffledata.Missing;
 import dev.elide.truffledata.Schema;
 import java.util.Objects;
+import jdk.internal.vm.annotation.ForceInline;
 
 /**
  * A view of one batch row. Rows are immutable and unconfined; members are named by the schema (the
@@ -49,24 +50,30 @@ public final class CsvRow extends AbstractRow {
   }
 
   // Each typed getter's fast path is a few loads and one length test (Column.present* is empty
-  // unless every row is present on the heap), small enough for ahead-of-time compilers to inline
-  // into a caller's loop; everything else takes the batch's checked path.
+  // unless every row is present on the heap); everything else takes the batch's checked path.
+  // Native Image's AOT compiler inlines a callee only when it is "trivial" (at most 20 graph nodes
+  // with one call), which the getters' explicit null and bounds checks exceed, so every typed cell
+  // read was an out-of-line call that spilled the caller's loop state. @ForceInline is honored by
+  // Native Image (HostedMethod.shouldBeInlined) and ignored by HotSpot outside the JDK.
 
   /** Throws {@link ContractViolation} on null, missing or non-STRING. */
   public String getString(int column) {
     return batch.stringAt(index, column);
   }
 
+  @ForceInline
   public long getLong(int column) {
     long[] v = batch.columns[column].presentLongs;
     return index < v.length ? v[index] : batch.longSlow(index, column);
   }
 
+  @ForceInline
   public double getDouble(int column) {
     double[] v = batch.columns[column].presentDoubles;
     return index < v.length ? v[index] : batch.doubleSlow(index, column);
   }
 
+  @ForceInline
   public boolean getBoolean(int column) {
     boolean[] v = batch.columns[column].presentBooleans;
     return index < v.length ? v[index] : batch.booleanSlow(index, column);
