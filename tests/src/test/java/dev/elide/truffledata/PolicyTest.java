@@ -130,7 +130,7 @@ class PolicyTest {
             Map.entry("CsvScanner.java", 2), // Static syntax and limit failures.
             Map.entry("CsvBatch.java", 2), // Static STRING materialization and the export walk.
             Map.entry("CsvRow.java", 1), // Static typed-read contract failure.
-            Map.entry("CsvText.java", 2), // Sink-side String and TruffleString copies.
+            Map.entry("CsvText.java", 6), // Cold paths, copies, interop.
             Map.entry("Numbers.java", 1), // Static Double.parseDouble fallback.
             Map.entry("CsvMapping.java", 1)); // Static closed-mapping failure.
     Pattern limit = Pattern.compile("limit\\s*=\\s*\"(\\d+)\"");
@@ -176,6 +176,7 @@ class PolicyTest {
     exportedMessages.put("TypedRecord.java", 6);
     exportedMessages.put("CsvBatch.java", 4);
     exportedMessages.put("CsvRow.java", 6);
+    exportedMessages.put("CsvText.java", 4);
     Set<String> accessSurfaces = exportedMessages.keySet();
     Set<String> seenSurfaces = new HashSet<>();
     int checked = 0;

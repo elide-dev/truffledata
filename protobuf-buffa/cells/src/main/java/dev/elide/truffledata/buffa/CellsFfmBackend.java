@@ -151,7 +151,11 @@ final class CellsFfmBackend implements BuffaWire.Backend {
         BuffaWire.status(status);
         if (bytes < 0 || bytes > capacity)
           throw new IllegalStateException("Invalid native slab extent");
-        return backend.produced(plan, output, Math.toIntExact(bytes), limits);
+        int extent = Math.toIntExact(bytes);
+        // The same trim rule as FfmBackend: no high-water amplification of small messages.
+        if (output.length - extent > Math.max(256, extent))
+          output = java.util.Arrays.copyOf(output, extent);
+        return backend.produced(plan, output, extent, limits);
       }
     } finally {
       backend.endSlab();

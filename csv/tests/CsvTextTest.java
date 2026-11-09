@@ -2,6 +2,7 @@ package dev.elide.truffledata.csv;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.strings.TruffleString;
 import dev.elide.truffledata.ContractViolation;
 import dev.elide.truffledata.DataLibrary;
@@ -260,5 +261,20 @@ final class CsvTextTest {
     assertEquals(expected, sum);
     // 10,000 CsvRow views may escape on the JVM (240 KB); nothing per cell.
     assertTrue(allocated < 10_000 * 32, "allocated " + allocated + " bytes for 10,000 rows");
+  }
+
+  @Test
+  void interopMessagesMatchGetString() throws Exception {
+    CsvBatch batch = Csv.parse(utf8(SAMPLE), CsvFormat.RFC4180);
+    InteropLibrary interop = InteropLibrary.getUncached();
+    for (int r = 0; r < batch.size(); r++)
+      for (int c = 0; c < 3; c++) {
+        CsvText text = batch.row(r).getText(c);
+        String expected = batch.row(r).getString(c);
+        assertTrue(interop.isString(text));
+        assertEquals(expected, interop.asString(text));
+        assertEquals(expected, interop.asTruffleString(text).toJavaStringUncached());
+        assertEquals(expected, interop.toDisplayString(text, false));
+      }
   }
 }
