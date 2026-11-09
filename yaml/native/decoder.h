@@ -157,7 +157,8 @@ class string_map {
     for (size_t i = hash & (capacity_ - 1);; i = (i + 1) & (capacity_ - 1)) {
       const slot& s = slots_[i];
       if (s.value == UINT32_MAX) return UINT32_MAX;
-      if (s.hash == hash && s.length == key.size() && std::memcmp(strings + s.offset, key.data(), key.size()) == 0)
+      // An empty name (`& [`) compares no bytes; its string table may still be null (UBSan, fuzz finding).
+      if (s.hash == hash && s.length == key.size() && (key.empty() || std::memcmp(strings + s.offset, key.data(), key.size()) == 0))
         return s.value;
     }
   }
@@ -172,7 +173,7 @@ class string_map {
         ++used_;
         return;
       }
-      if (s.hash == hash && s.length == length && std::memcmp(strings + s.offset, strings + offset, length) == 0) {
+      if (s.hash == hash && s.length == length && (length == 0 || std::memcmp(strings + s.offset, strings + offset, length) == 0)) {
         s.value = value;
         s.offset = offset;
         return;
