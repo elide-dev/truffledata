@@ -528,9 +528,6 @@ java_test(
             "--initialize-at-run-time=dev.elide.truffledata.comparison.Comparison",
             "--features=dev.elide.truffledata.buffa.BuffaFeature,dev.elide.truffledata.comparison.StockInteropFeature",
             "-H:+UnlockExperimentalVMOptions",
-            # WS5 probe (a): host-inlining budgets; FieldAudit.read is cut at 33 > 32 subtree invokes.
-            "-H:TruffleHostInliningMaxSubtreeInvokes=64",
-            "-H:TruffleHostInliningBaseBudget=20000",
         ] + TRUFFLE_JIT_CHECKS + ([
             "--enable-monitoring=jfr",
             "-H:-DeleteLocalSymbols",
