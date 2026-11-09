@@ -22,12 +22,11 @@ Everything is vendored under `vendor/`, so a git checkout at a tag builds withou
 
 | Path | Source |
 | --- | --- |
-| `vendor/json/native` | `json/native/api.cc`, `number_kernel.cc` and the decoder headers |
+| `vendor/json/native` | `json/native/api.cc` and the decoder headers |
 | `vendor/json/native/generated/seam.h` | Myna generator output for `json/native/json.seam` |
 | `vendor/tape/native` | `tape/native/*.h` and `text.cc` |
 | `vendor/myna/include` | Myna 0.13.0 value headers |
-| `vendor/simdjson` | simdjson 5.1.1 single header, its `LICENSE`/`LICENSE-MIT` (Apache-2.0 OR MIT) |
-| `vendor/simdjson/simdjson_generic` | simdjson 5.1.1 `include/simdjson/generic/{atomparsing,base,jsoncharutils,numberparsing}.h`, unmodified: the number parser `number_kernel.cc` instantiates for SSE4.2/AVX2 |
+| `vendor/simdjson` | simdjson 5.1.1 single header |
 | `vendor/simdutf` | simdutf from the `simdutf` 0.7.0 crate's bundled C++ |
 
 Copts match `json/native/BUILD.bazel`: `-std=c++17 -O3`, in every Cargo profile.

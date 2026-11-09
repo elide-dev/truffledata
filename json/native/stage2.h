@@ -1,7 +1,6 @@
 #ifndef TRUFFLEDATA_JSON_STAGE2_H
 #define TRUFFLEDATA_JSON_STAGE2_H
 #include "json/native/decoder_common.h"
-#include "json/native/number_kernel.h"
 #include "json/native/stage1.h"
 #include <cstdint>
 #include <cstring>
@@ -122,8 +121,6 @@ template<class Writer> class stage2_walk {
   frame frames_[128];
   uint32_t depth_ = 0;
   uint32_t root_end_ = 0;
-  // The pinned number parser's kernel for this CPU (number_kernel.h), read once per document.
-  number_kernel::tier kernel_ = number_kernel::active();
   using span = tape::ctape::span;
 
   struct number_writer {
@@ -277,7 +274,7 @@ template<class Writer> class stage2_walk {
       std::memset(copy + length, ' ', simdjson::SIMDJSON_PADDING);
       source = copy;
     }
-    if (number_kernel::parse_number(kernel_, source, out) != simdjson::SUCCESS || !out.finite) {
+    if (simdjson::builtin::numberparsing::parse_number(source, out) != simdjson::SUCCESS || !out.finite) {
       if (out.emitted) writer_.rollback_number();
       if (!json::number({reinterpret_cast<const char*>(input_ + start), end - start}))
         stage2_detail::syntax("invalid JSON number");

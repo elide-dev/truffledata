@@ -1,22 +1,6 @@
 load("//tools/fuzz:defs.bzl", "native_fuzzer")
 load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_library", "cc_test")
 
-# simdjson's generic number parser under the westmere/haswell target regions, dispatched at run
-# time on simdjson's own CPU detection (number_kernel.h; plan 2026-11-08-beat-stock-svm WS8).
-cc_library(
-    name = "number_kernel",
-    srcs = ["number_kernel.cc"],
-    hdrs = ["number_kernel.h"],
-    copts = [
-        "-std=c++17",
-        "-O3",
-    ],
-    deps = [
-        "@simdjson",
-        "@simdjson//:generic_numberparsing",
-    ],
-)
-
 cc_library(
     name = "decoder",
     hdrs = [
@@ -31,7 +15,6 @@ cc_library(
     ],
     copts = ["-std=c++17"],
     deps = [
-        ":number_kernel",
         "//bazel:unicode",
         "//tape/native:tape",
         "@myna//:values_headers",
@@ -304,25 +287,4 @@ native_fuzzer(
     name = "session",
     src = "session_fuzz.cc",
     deps = [":decoder"],
-)
-
-# Boundary-number parity of every number kernel the CPU runs against the builtin parser, per
-# token and through whole stage-2 decodes (WS8). The log records the selected tier and CPU flags.
-cc_test(
-    name = "number_kernel_test",
-    srcs = ["number_kernel_test.cc"],
-    copts = ["-std=c++17"],
-    deps = [":decoder", "//tape/native:testing"],
-)
-
-# Native producer timing of the number kernels against the builtin parser (manual; WS8).
-cc_test(
-    name = "number_kernel_probe",
-    srcs = ["number_kernel_probe.cc"],
-    copts = [
-        "-std=c++17",
-        "-O3",
-    ],
-    tags = ["manual"],
-    deps = [":decoder", "//tape/native:testing"],
 )
