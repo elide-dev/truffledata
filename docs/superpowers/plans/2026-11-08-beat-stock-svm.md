@@ -10,10 +10,13 @@
 > forks, pinned CPU, preserved before-image, x86 claims only). Do not start this tranche without
 > a user instruction (AGENTS.md release completion note).
 
-> **Status 2026-11-09 (lead):** P0.1–P0.6 complete; WS1+WS4, WS7, WS10 and WS10b (FLOAT64)
-> admitted; WS3, WS5, WS6 (step 1), WS11 and WS10b INT64 killed on evidence; WS2, WS6 step 2,
-> WS8 and the `CsvText` cell type await Sam's rulings. Measurements and rulings are in
-> `2026-11-08-beat-stock-svm-ledger.md`; the branch is `perf/beat-stock-svm` (local only).
+> **Status 2026-11-09 (lead, updated):** P0.1–P0.6 complete; WS1+WS4, WS2, WS7, WS10 and WS10b
+> (FLOAT64) admitted; WS3, WS5, WS6 (both steps), WS8, WS11 and WS10b INT64 killed on evidence
+> (WS8's numeric fixture and WS11's probe harness stay as benchmark infrastructure). Sam ruled on
+> every open item on 2026-11-09 and added two workstreams: WS12 (Myna cells retained behind a
+> zero-overhead flag) and WS13 (small-string optimizations with TruffleString integration), §4a.
+> Measurements and rulings are in `2026-11-08-beat-stock-svm-ledger.md`; the branch is
+> `perf/beat-stock-svm` (local only).
 
 **Baseline:** `main` at `2e0df58` (0.10.0 released from `32a5f19`; integrated performance
 baseline `7fca64b` on top of `9a1dcec`). Preserved images: `build/svm-tranche-baseline/`.
@@ -271,6 +274,61 @@ consumer-side native build; `-march=compatibility` images with runtime ISA dispa
 - **Gate:** a `benchmarks/cells`-style probe calling one TD decode entry from a force-compiled root,
   cell vs current boundary, three forks; adopt per entry point only with a measured gain and
   unchanged allocation/graph gates. **Kill:** no measurable gain on any guest-called entry.
+
+## 4a. Addenda (Sam, 2026-11-09)
+
+### WS12 — Myna Truffle cells retained behind a zero-overhead flag
+
+- **Ruling (Sam):** Myna cells are a strategic bet ("they will get faster over time"); measured
+  gaps are filed on `elide-dev/myna` (#85 per-call allocation, #86 direct transition vs boundary,
+  #87 blocklist/interop wrapper) and TruffleData keeps cells *supported*: "behind some flag. can
+  be a build-time (SVM) or static (JVM) flag for zero-overhead."
+- **Mechanism:** `truffledata.buffa.cells` — folded at image build on SVM, `static final` on the
+  JVM; when on, the guest-facing Buffa decode entries call the generated `NativeCell` and publish
+  through `SlabMessage.produced`; slabs and errors byte-identical to the off route; no new
+  mandatory runtime dependency when off. Proof of zero overhead: every budgeted AOT symbol
+  identical and a paired run within fork range. The flag-on image is measured and recorded
+  whatever the sign; no kill rule (it is a bet, not an admission).
+
+### WS13 — Small-string optimizations and TruffleString integration
+
+- **Ruling (Sam):** "it might be cool to integrate with TruffleString too. let's add small-string
+  optimizations to the plan." Motivation: much JSON/YAML/CSV traffic is small documents with
+  small strings.
+- **Where we stand (MEASURED/CODE, 2026-11-09):** CSV copies cells ≤16 B as Latin-1 after a
+  two-word ASCII test (`Utf8.string`) and gains a lazy `CsvText` cell (wave 4); the JSON tape
+  carries an ASCII bit per string, copies ASCII strings once into thread scratch as Latin-1, sends
+  long non-ASCII text to simdutf, and compares member names without materializing (`TapeKey`, two
+  packed longs for ≤16 B); slab strings carry an ASCII bit and are cached per handle within a
+  message. Gaps: the JSON/YAML typed owners copy text byte-by-byte through a native read loop and
+  then the UTF-8 constructor; nothing reuses repeated small strings across documents; slab
+  materialization ignores its ASCII bit and takes a lock on first read; `TruffleString` is
+  produced only by the tape arenas and `TapeText.toTruffleString`, not by the typed, slab or CSV
+  paths.
+- **Mechanisms, in order:** (1) typed-owner text: word copy of the slot's bytes and the Latin-1
+  constructor when ASCII (ASCII known from the native slot or a SWAR test), JSON and YAML alike;
+  (2) a per-plan small-string cache for values and keys ≤16 B keyed on the packed words (the
+  `TapeKey` representation in reverse), zero-allocation on a hit, bounded size, per-thread or
+  lock-free, semantics identical (equal `String` contents; identity is never promised);
+  (3) `TruffleString` integration: `asTruffleString`/`isString` interop exports and a
+  `TruffleString`-returning accessor on typed records, slab rows and CSV cells that shares the
+  backing bytes where the lifetime allows (owned slab/heap tape/`CsvText` arena: no copy;
+  native-backed: copy once), with the encoding chosen from the ASCII bit (ISO-8859-1 vs UTF-8)
+  and lazy switching left to the guest; (4) slab `createText`: ASCII → Latin-1 copy, lock-free
+  publish like the WS1 view table.
+- **Gates:** every existing JSON/YAML/CSV/protobuf test suite, the 168/136 B floors and 48 B
+  owner, compiled-graph and AOT budgets; a new differential test that every materialization path
+  (String and TruffleString) equals the reference decode on the fixtures plus generated short
+  ASCII/Latin-1/UTF-8/surrogate strings; lifetime tests for shared-backing `TruffleString`s (a
+  closed owner must not be readable through a string it handed out — copy at the boundary where
+  that cannot be guaranteed).
+- **Measurement:** paired x86 SVM; headline is allocation per document and per read on the JSON
+  stream/snapshot and typed cells, the CSV copied-strings cells, the slab text cells, with time
+  as the admission gate (disjoint forks; kill <3% time *and* no allocation change on the cell).
+  Add a small-document, small-string fixture (≈200 B documents, ≤16 B values) to the JSON and
+  CSV comparison runners with the usual references if none exists.
+- **Effort:** 2–3 days. HYPOTHESIS: typed text reads −30–50% time and −100% allocation on cache
+  hits; snapshot/stream cells −5–10% allocation.
 
 ## 5. Sequencing
 
