@@ -1,0 +1,71 @@
+diff --git a/tape/src/main/java/dev/elide/truffledata/tape/TypedRecord.java b/tape/src/main/java/dev/elide/truffledata/tape/TypedRecord.java
+index ac61fa0..5d98b78 100644
+--- a/tape/src/main/java/dev/elide/truffledata/tape/TypedRecord.java
++++ b/tape/src/main/java/dev/elide/truffledata/tape/TypedRecord.java
+@@ -140,15 +140,24 @@ public final class TypedRecord extends AbstractRow implements AutoCloseable {
+     TypedOwner result = owner;
+     if (result == null) {
+       CompilerDirectives.transferToInterpreter();
+-      throw storageFailure();
++      throw misuse(STORAGE, 0);
+     }
+     return result;
+   }
+ 
+-  // Cold failures stay out of line in AOT code; compiled code deoptimizes before reaching them.
++  // Misuse failures (wrong kind, wrong accessor schema, bad ordinal, wrong representation) stay out
++  // of line in AOT code and deoptimize compiled code. Data-dependent failures (missing or null
++  // values) keep their inline throws, so code that expects them stays compiled.
++  private static final int ORDINAL = 0, KIND = 1, SCHEMA = 2, STORAGE = 3;
++
+   @TruffleBoundary
+-  private static IllegalStateException storageFailure() {
+-    return new IllegalStateException("Typed record storage");
++  private static RuntimeException misuse(int failure, int index) {
++    return switch (failure) {
++      case ORDINAL -> new IndexOutOfBoundsException(index);
++      case KIND -> new IllegalArgumentException("Field kind mismatch");
++      case SCHEMA -> new IllegalArgumentException("Accessor schema mismatch");
++      default -> new IllegalStateException("Typed record storage");
++    };
+   }
+ 
+   @TruffleBoundary
+@@ -313,7 +322,10 @@ public final class TypedRecord extends AbstractRow implements AutoCloseable {
+ 
+   private void check(int index) {
+     checkLive();
+-    if (index < 0 || index >= descriptor.size()) throw new IndexOutOfBoundsException(index);
++    if (index < 0 || index >= descriptor.size()) {
++      CompilerDirectives.transferToInterpreter();
++      throw misuse(ORDINAL, index);
++    }
+   }
+ 
+   @ExportMessage
+@@ -336,8 +348,10 @@ public final class TypedRecord extends AbstractRow implements AutoCloseable {
+ 
+   private long slot(int index, Field.Kind kind) {
+     check(index);
+-    if (descriptor.field(index).kind() != kind)
+-      throw new IllegalArgumentException("Field kind mismatch");
++    if (descriptor.field(index).kind() != kind) {
++      CompilerDirectives.transferToInterpreter();
++      throw misuse(KIND, index);
++    }
+     long bit = 1L << index;
+     if ((present & bit) == 0 || (nulls & bit) != 0)
+       throw new IllegalStateException("Field missing or null");
+@@ -346,8 +360,10 @@ public final class TypedRecord extends AbstractRow implements AutoCloseable {
+ 
+   long bits(TypedAccess access) {
+     checkLive();
+-    if (descriptor != access.schema)
+-      throw new IllegalArgumentException("Accessor schema mismatch");
++    if (descriptor != access.schema) {
++      CompilerDirectives.transferToInterpreter();
++      throw misuse(SCHEMA, 0);
++    }
+     // An owned record's schema has no RECORD field, so its accessors have no hops.
+     if (access.hops.length == 0) {
+       int index = leafIndex(present, nulls, access);
