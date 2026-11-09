@@ -1,8 +1,11 @@
 # TruffleData 0.11.0
 
 This release lands the "beat stock on SVM" performance tranche and a set of
-correctness fixes. Java 25, Myna 0.13.0 and Elide GraalVM 25.5.5-elide.27 remain
-the runtime baseline. Upgrade native attachments and generated bindings together.
+correctness fixes, and moves the baseline to Java 25, Myna 0.14.0, Elide GraalVM
+25.5.5-elide.28 and Elide toolchain 2026.11.6. Upgrade native attachments and generated
+bindings together: Myna 0.14.0 regenerates every ABI fingerprint, and Linux AArch64 now has
+its own ABI class (unsigned C `char`). The bindings jars carry both classes, and each consumer
+verifies a native library against the class of the platform it runs on.
 
 SVM / GraalVM Native Image is the production performance target; JVM correctness,
 API, ownership/lifetime and coverage tests remain required. All figures below are
@@ -39,6 +42,14 @@ candidate, is in `docs/superpowers/plans/2026-11-08-beat-stock-svm-ledger.md` an
   `-Dtruffledata.buffa.cells=true` is set. With the flag off, the native image's
   symbol table is unchanged. The cells route makes no performance claim. See
   `docs/BUFFA.md`.
+
+## Truffle cells (opt-in)
+
+Myna 0.14.0 Truffle cells are available as zero-overhead build-time (Native Image) / static
+(JVM) flags, default off until paired SVM measurements show a win. Hot call sites use the
+specialized `NativeCell` methods (`executeInt`, `executeLong`), so scalar results are not
+boxed. Flags: `truffledata.buffa.cells`, plus the CSV, JSON and YAML routes listed in each
+format's documentation where present.
 
 ## Fixes
 
