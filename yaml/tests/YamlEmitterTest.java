@@ -765,6 +765,56 @@ final class YamlEmitterTest {
     }
   }
 
+  /** Explicit documents, typed value overloads, UTF-8 output and the metadata-free forwarder. */
+  @Test
+  void documentsValuesAndForwarding() {
+    StringBuilder out = new StringBuilder();
+    try (YamlWriter w = new YamlWriter(out, YamlEmitOptions.DEFAULT.withExplicitEnd(true))) {
+      w.beginDocument();
+      w.beginSequence();
+      w.value(1L);
+      w.value(2.5);
+      w.value(true);
+      w.value("\u00e9");
+      w.end();
+      w.endDocument();
+      w.beginDocument();
+      w.value(-0.0);
+      w.beginDocument();
+      w.value(false);
+    }
+    String yaml = out.toString();
+    assertEquals("---\n- 1\n- 2.5\n- true\n- \u00e9\n...\n--- -0.0\n...\n--- false\n...\n", yaml);
+    assertEquals(List.of("doc", "[4", "i64:1", f64(2.5), "bool:true", "string:\u00e9", "end", "doc",
+        f64(-0.0), "doc", "bool:false"), reparse(YamlSchema.CORE, yaml, false));
+    String source = "a: &x [1, {b: null, c: true, d: \"s\"}]\ne: *x\nf: !!str 7\n";
+    try (YamlMessage message = SESSIONS.get(YamlSchema.CORE).decode(source.getBytes(StandardCharsets.UTF_8))) {
+      byte[] utf8 = YamlEmitter.emitUtf8(message.root(), YamlEmitOptions.DEFAULT.withPreserveMetadata(true));
+      assertEquals(YamlEmitter.emit(message.root(), YamlEmitOptions.DEFAULT.withPreserveMetadata(true)),
+          new String(utf8, StandardCharsets.UTF_8));
+      // The forwarder drops tags and anchors even when the writer would keep them.
+      StringBuilder forwarded = new StringBuilder();
+      try (YamlWriter w = new YamlWriter(forwarded, YamlEmitOptions.DEFAULT.withPreserveMetadata(true))) {
+        message.root().export(new YamlEmitter.WithoutMetadata(w));
+      }
+      assertEquals(YamlEmitter.emit(message.root()), forwarded.toString());
+      assertEquals(decodeEvents(YamlSchema.CORE, source, false),
+          reparse(YamlSchema.CORE, forwarded.toString(), false));
+    }
+  }
+
+  @Test
+  void optionsAreValues() {
+    YamlEmitOptions flow = YamlEmitOptions.DEFAULT.flow();
+    assertEquals(YamlEmitOptions.DEFAULT, flow.block());
+    assertEquals(YamlEmitOptions.DEFAULT.hashCode(), flow.block().hashCode());
+    assertNotEquals(YamlEmitOptions.DEFAULT, flow);
+    assertTrue(flow.toString().contains("flowDepth=0"), flow.toString());
+    // Percent escapes already in a tag URI are kept; other characters are escaped.
+    assertEquals("!<tag:example.com,2000:a%20b%25>", YamlScalars.tag("tag:example.com,2000:a%20b%"));
+    assertEquals("!<tag:example.com,2000:%25zz>", YamlScalars.tag("tag:example.com,2000:%zz"));
+  }
+
   // ---- formatting -----------------------------------------------------------------------------
 
   static Mp map(Object... kv) {

@@ -65,11 +65,11 @@ public final class YamlEmitter {
 
   private static final class Walk {
     private final YamlWriter writer;
-    private final Numbers numbers;
+    private final WithoutMetadata scalars;
 
     Walk(YamlWriter writer) {
       this.writer = writer;
-      this.numbers = new Numbers(writer);
+      this.scalars = new WithoutMetadata(writer);
     }
 
     void node(TapeValue v, boolean expanding) {
@@ -104,10 +104,8 @@ public final class YamlEmitter {
           for (TapeValue element : v.elements()) node(element, false);
           writer.end();
         }
-        case NULL -> writer.nullValue();
-        case BOOLEAN -> writer.booleanValue(v.booleanValue());
-        case STRING -> writer.value(v.stringValue());
-        case NUMBER -> v.export(numbers);
+        // Scalars export with their exact kind; their metadata was written above.
+        default -> v.export(scalars);
       }
     }
   }
@@ -122,24 +120,27 @@ public final class YamlEmitter {
     };
   }
 
-  /** Forwards one exported number with its exact kind, ignoring metadata events. */
-  private static final class Numbers implements TapeSink {
+  /**
+   * Forwards an export's values and structure to a writer without its tag, anchor and alias
+   * events (aliases are expanded).
+   */
+  static final class WithoutMetadata implements TapeSink {
     private final YamlWriter writer;
 
-    Numbers(YamlWriter writer) {
+    WithoutMetadata(YamlWriter writer) {
       this.writer = writer;
     }
 
-    @Override public void beginObject(long members) { throw new IllegalStateException(); }
-    @Override public void key(TapeText key) { throw new IllegalStateException(); }
-    @Override public void beginArray(long elements) { throw new IllegalStateException(); }
-    @Override public void end() { throw new IllegalStateException(); }
+    @Override public void beginObject(long members) { writer.beginObject(members); }
+    @Override public void key(TapeText key) { writer.key(key); }
+    @Override public void beginArray(long elements) { writer.beginArray(elements); }
+    @Override public void end() { writer.end(); }
     @Override public void nullValue() { writer.nullValue(); }
     @Override public void booleanValue(boolean value) { writer.booleanValue(value); }
     @Override public void longValue(long value) { writer.longValue(value); }
     @Override public void doubleValue(double value) { writer.doubleValue(value); }
     @Override public void unsignedValue(long bits) { writer.unsignedValue(bits); }
-    @Override public void decimalValue(TapeText token) { writer.decimalValue(token.toJavaString()); }
-    @Override public void stringValue(TapeText text) { writer.value(text.toJavaString()); }
+    @Override public void decimalValue(TapeText token) { writer.decimalValue(token); }
+    @Override public void stringValue(TapeText text) { writer.stringValue(text); }
   }
 }
