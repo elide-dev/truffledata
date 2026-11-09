@@ -241,6 +241,47 @@ public class TapeValue implements TruffleObject {
     };
   }
 
+  /**
+   * Sequential member traversal in source order: each entry is a key view and its value view.
+   * Linear in the member count, unlike repeated {@link #keyAt}/{@link #memberAt}.
+   */
+  @TruffleBoundary
+  public Iterable<java.util.Map.Entry<TapeValue, TapeValue>> members() {
+    if (kind() != Kind.OBJECT) throw new IllegalStateException("Not a " + owner.format().name + " object");
+    return () -> {
+      owner.check();
+      return new java.util.Iterator<>() {
+          private long remaining = owner.tape.length(node);
+          private long key = remaining == 0 ? -1 : owner.tape.first(node);
+
+          @Override
+          public boolean hasNext() {
+            return remaining > 0;
+          }
+
+          @Override
+          public java.util.Map.Entry<TapeValue, TapeValue> next() {
+            owner.check();
+            if (remaining == 0) throw new java.util.NoSuchElementException();
+            long value = owner.tape.next(key);
+            java.util.Map.Entry<TapeValue, TapeValue> entry =
+                new java.util.AbstractMap.SimpleImmutableEntry<>(
+                    new TapeValue(owner, key), aliasView(owner, value));
+            if (--remaining > 0) key = owner.tape.next(value);
+            return entry;
+          }
+        };
+    };
+  }
+
+  /**
+   * Anchor name of the node this view reads: for an alias view, the anchor of the alias's
+   * target ({@link #anchorName} describes the alias occurrence itself, which has none).
+   */
+  public @org.jspecify.annotations.Nullable String targetAnchorName() {
+    owner.check(); return owner.format().anchorName(node);
+  }
+
   // ---- InteropLibrary: containers ----
 
   private int tag() {

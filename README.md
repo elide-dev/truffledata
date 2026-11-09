@@ -365,7 +365,7 @@ arbitrary downstream guest code or every deployment configuration. See [Truffle 
 | [Contracts and samples](docs/CONTRACTS.md) | Schemas, nullity, protobuf presence, generated access and integration examples |
 | [Myna/Buffa](docs/BUFFA.md) | Native parsing, borrowed views, ownership, JVM and SVM setup |
 | [JSON](docs/JSON.md) | simdjson backend, ownership, number policy, interop and embedder export |
-| [YAML](docs/YAML.md) | Native YAML parsing, metadata, typed plans, sessions and streams |
+| [YAML](docs/YAML.md) | Native YAML parsing, metadata, typed plans, sessions, streams and a schema-exact emitter |
 | [CSV](docs/CSV.md) | Strict CSV contract, limits, typed plans, streaming, interop and export |
 | [Truffle guarantees](docs/TRUFFLE.md) | Specialization, boundaries, compilation and allocation gates |
 | [Comparison benchmarks](docs/COMPARISON_BENCHMARKS.md) | Raw results, charts, caveats and reproduction |
