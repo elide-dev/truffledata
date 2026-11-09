@@ -437,6 +437,28 @@ native_image(
     deps = [":json_profiling"],
 )
 
+# AOT symbol gate (P0.6) over the JSON typed readers, the snapshot copy and the interop read
+# bodies in the symbol-bearing json_svm_profile image; shape only, no timing.
+sh_test(
+    name = "json_aot_symbols",
+    size = "medium",
+    srcs = ["aot_symbols.sh"],
+    args = [
+        "$(rootpath :json_svm_profile)",
+        "$(rootpath json_aot_budgets.json)",
+    ],
+    data = [
+        "json_aot_budgets.json",
+        ":json_svm_profile",
+        "//tools/bench:aot_symbols.py",
+    ],
+    tags = ["manual"],
+    target_compatible_with = [
+        "@platforms//os:linux",
+        "@platforms//cpu:x86_64",
+    ],
+)
+
 sh_test(
     name = "json_profile",
     size = "large",
