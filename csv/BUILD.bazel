@@ -32,6 +32,8 @@ data_java_library(
         "src/main/java/dev/elide/truffledata/csv/kernel/SwarIndexer.java",
         "src/main/java/dev/elide/truffledata/csv/kernel/package-info.java",
     ],
+    # CsvBatch.row and CsvRow's typed getters carry @ForceInline, which Native Image honors (probe).
+    javacopts = ["--add-exports=java.base/jdk.internal.vm.annotation=ALL-UNNAMED"],
     visibility = ["//visibility:public"],
     deps = [
         "//core",
