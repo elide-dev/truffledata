@@ -88,7 +88,6 @@ public final class CsvBatch implements TruffleObject, AutoCloseable {
   }
 
   /** Throws once a mapped batch's mapping is closed. Inline: a null test and one load. */
-  @ForceInline
   void checkLive() {
     CsvMapping m = mapping;
     if (m != null && !m.open) throw CsvMapping.closed();
