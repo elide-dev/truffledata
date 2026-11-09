@@ -16,7 +16,7 @@ release_version(
 )
 
 COMMON = [
-    "org.graalvm.truffle:truffle-api:25.5.5-elide.27",
+    "org.graalvm.truffle:truffle-api:25.5.5-elide.28",
     "org.jspecify:jspecify:1.0.1",
 ]
 
@@ -354,8 +354,8 @@ test_suite(
         "csv-native",
         "csv-jvm",
     ] else []) + ([
-        "org.graalvm.sdk:nativeimage:25.5.5-elide.27",
-        "org.graalvm.sdk:word:25.5.5-elide.27",
+        "org.graalvm.sdk:nativeimage:25.5.5-elide.28",
+        "org.graalvm.sdk:word:25.5.5-elide.28",
     ] if module in [
         "protobuf-buffa",
         "protobuf-buffa-bindings",
@@ -394,7 +394,7 @@ maven_bom(
         "com.google.protobuf:protobuf-java:4.36.1",
         "com.google.protobuf:protobuf-java-util:4.36.1",
         "org.snakeyaml:snakeyaml-engine:3.2",
-    ] + [coordinate + ":25.5.5-elide.27" for coordinate in [
+    ] + [coordinate + ":25.5.5-elide.28" for coordinate in [
         "org.graalvm.truffle:truffle-runtime",
         "org.graalvm.polyglot:polyglot",
         "org.graalvm.js:js-language",

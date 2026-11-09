@@ -101,7 +101,7 @@ See [representation and compilation guarantees](docs/TRUFFLE.md),
 | `dev.elide:truffledata-csv-bindings` | Generated native CSV bindings |
 | `dev.elide:truffledata-bom` | Aligned libraries, drivers and runtime dependencies |
 
-The runtime baseline is **Java 25** and **Elide GraalVM `25.5.5-elide.27`**.
+The runtime baseline is **Java 25** and **Elide GraalVM `25.5.5-elide.28`**.
 Libraries are thin JARs; choose the adapters and guest runtimes your application needs.
 Driver-specific artifacts bring their upstream drivers transitively.
 
@@ -109,7 +109,7 @@ Driver-specific artifacts bring their upstream drivers transitively.
 repositories {
     mavenCentral()
     maven("https://maven.elide.dev")
-    maven("https://maven.elide.dev/gvm-elide/25.5.5-elide.27")
+    maven("https://maven.elide.dev/gvm-elide/25.5.5-elide.28")
 }
 dependencies {
     implementation(platform("dev.elide:truffledata-bom:0.11.0"))

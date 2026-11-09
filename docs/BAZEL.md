@@ -14,7 +14,7 @@ The pinned GraalVM fork version is shared by the SDK toolchains and Maven artifa
 
 ## Native optimization
 
-The Elide toolchain is pinned to v2026.11.5. Rust target compilation, host Cargo tooling, rustfmt, and rust-analyzer use its `rustversion` recommendation, `nightly-2026-10-09` (Rust LLVM 23.1.3). `rust-toolchain.toml` gives local tools the same dated pin; Bazel downloads have explicit SHA256 checksums.
+The Elide toolchain is pinned to v2026.11.6. Rust target compilation, host Cargo tooling, rustfmt, and rust-analyzer use its `rustversion` recommendation, `nightly-2026-10-09` (Rust LLVM 23.1.3). `rust-toolchain.toml` gives local tools the same dated pin; Bazel downloads have explicit SHA256 checksums.
 
 Default builds use `--compilation_mode=opt`, including transitive Rust crates. An adapter's explicit `-Copt-level=3` does not optimize its dependencies in `fastbuild`.
 

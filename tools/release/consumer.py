@@ -75,7 +75,7 @@ def main():
     element(element(pom, 'properties'), 'maven.compiler.release', '25')
     repositories = element(pom, 'repositories')
     for name, url in [('staged', (work / 'repository').as_uri()),
-                      ('elide-graalvm', 'https://maven.elide.dev/gvm-elide/25.5.5-elide.27')]:
+                      ('elide-graalvm', 'https://maven.elide.dev/gvm-elide/25.5.5-elide.28')]:
         repository = element(repositories, 'repository')
         element(repository, 'id', name)
         element(repository, 'url', url)
