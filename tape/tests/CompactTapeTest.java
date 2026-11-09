@@ -360,4 +360,56 @@ class CompactTapeTest {
     tape.copyMetadata(0, meta, 0, 4);
     assertArrayEquals(new int[4], meta);
   }
+
+  // TD_TAPE_HAS_META (flag bit 2): the compact tape carries one uint32 per word (0 on second
+  // words). toMyna() must re-index that to one uint32 per node and serve it through the Myna
+  // ABI v4 readMetadata hook, mirroring the native c::to_myna converter pinned by
+  // tape/native/ctape_test.cc::to_myna_refs_and_metadata. Previously it masked the flag off
+  // and never implemented readMetadata, so metadata(node) returned 0 on every interchange tape.
+
+  @Test void toMynaPreservesPerNodeMetadataOnAWideScalar() {
+    // The exact bug-report repro: a wide I64 node carrying metadata 777 over the value 42.
+    long[] words = {w(3, TapeReader.WIDE, 2, 0), 42};
+    int[] meta = {777, 0};
+    HeapTape heap = new HeapTape(words, new byte[0], "42".getBytes(StandardCharsets.UTF_8),
+        new long[0], meta, 2);
+    assertEquals(777, heap.metadata(0));                       // source preserves it
+    assertEquals(777, HeapTape.copy(heap, 0).metadata(0));     // the copy path already did
+    ValueTape myna = heap.toMyna();
+    myna.validate();
+    assertEquals(1, myna.nodeCount());
+    assertEquals(42, myna.signedValue(0));                     // the payload survives
+    assertEquals(777, myna.metadata(0));                       // the interchange must preserve it
+  }
+
+  @Test void toMynaReindexesMetadataFromWordIndexToNodeIndex() {
+    // Array [i64 42, true, null]: the wide i64 sits at word 2 (node 1) and the single-word true at
+    // word 4 (node 2). Metadata set on words 2 and 4 must land on nodes 1 and 2; second words and
+    // nodes without metadata read 0.
+    long[] words = {
+        w(8, TapeReader.WIDE, 3, 6), 0,                // array root, next 6
+        w(3, TapeReader.WIDE, 2, 0), 42,               // i64 42 (wide, words 2-3)
+        w(2, 0, 0, 0),                                  // true, word 4
+        w(0, 0, 0, 0),                                  // null, word 5
+    };
+    int[] meta = {0, 0, 0x77, 0, 0x11, 0};            // per-word: word 2 -> 0x77, word 4 -> 0x11
+    HeapTape heap = new HeapTape(words, new byte[0], "42".getBytes(StandardCharsets.UTF_8),
+        new long[0], meta, 2);
+    ValueTape myna = heap.toMyna();
+    myna.validate();
+    assertEquals(4, myna.nodeCount());
+    assertEquals(0, myna.metadata(0));                 // array root: word 0 held no metadata
+    assertEquals(0x77, myna.metadata(1));               // i64: re-indexed from word 2
+    assertEquals(0x11, myna.metadata(2));              // true: re-indexed from word 4
+    assertEquals(0, myna.metadata(3));                 // null: word 5 held 0
+    assertEquals(42, myna.signedValue(1));
+  }
+
+  @Test void toMynaReportsZeroMetadataForTapesWithoutTheMetaFlag() {
+    // JSON tapes never set TD_TAPE_HAS_META; the fix must not disturb that path, and
+    // metadata(node) stays 0 for every node (the common, regression-sensitive case).
+    ValueTape myna = document().toMyna();
+    myna.validate();
+    for (long n = 0; n < myna.nodeCount(); n++) assertEquals(0, myna.metadata(n));
+  }
 }

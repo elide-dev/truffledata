@@ -141,6 +141,10 @@ public final class HeapTape implements TapeReader {
     mapping[words.length] = nodes;
     long[] out = new long[nodes * 3];
     long[] dirs = new long[directory.length];
+    // Re-index the compact tape's per-word metadata table to one entry per node, mirroring
+    // the native c::to_myna converter (tape/native/ctape.h): node-start words contribute
+    // their per-word entry at the node index; second words stay 0 and are never visited.
+    int[] metaOut = (flags & 2) == 0 ? new int[0] : new int[nodes];
     for (long i = 0; i < nodeCount(); i = step(i)) {
       int n = mapping[(int) i], at = n * 3, k = kindAt(i);
       long w = word(i), len = length(i), payload = 0;
@@ -163,8 +167,9 @@ public final class HeapTape implements TapeReader {
         }
       }
       out[at] = tag | ((k == ValueTape.STRING || k == ValueTape.DECIMAL || k == ValueTape.OBJECT || k == ValueTape.ARRAY ? len : 0) << 32); out[at + 1] = payload; out[at + 2] = mapping[Math.toIntExact(next(i))];
+      if (metaOut.length != 0) metaOut[n] = metadata(i);
     }
-    return new HeapValueTape(out, pool.clone(), new byte[][] {Arrays.copyOf(input, input.length - 7)}, dirs, flags & 1);
+    return new HeapValueTape(out, pool.clone(), new byte[][] {Arrays.copyOf(input, input.length - 7)}, dirs, flags & 1, metaOut);
   }
   @Override public long nodeCount() { return words.length; }
   @Override public long poolSize() { return pool.length; }
