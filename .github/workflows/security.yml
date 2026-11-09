@@ -1,0 +1,67 @@
+name: Untrusted input
+on:
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    - cron: '23 6 * * *'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: security-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+jobs:
+  fuzz:
+    name: Sanitizers and fuzzing / Linux amd64
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      TD_FUZZ_SECONDS: ${{ github.event_name == 'schedule' && '900' || '30' }}
+    steps:
+      - uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Reserve build disk
+        run: sudo rm -rf /usr/local/lib/android /usr/share/dotnet
+      - name: Configure BuildBuddy
+        env:
+          BUILDBUDDY_API_KEY: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && (secrets.BUILDBUDDY_API_KEY || secrets.BUILDBUDDY_APIKEY) || '' }}
+        run: .github/scripts/configure-buildbuddy.sh
+      - name: Install Bazelisk
+        run: .github/scripts/install-bazelisk.sh
+      - name: Native sanitizer regressions and instrumentation canaries
+        run: >-
+          bazel test --config=asan --test_timeout=1200
+          //tools/fuzz:sanitizer_canary_test
+          //json/native:test //json/native:shape_fuzz_test //json/native:session_replay
+          //yaml/native:decoder_test //yaml/native:session_replay
+          //csv/native:api_test //csv/native:index_test //csv/native:index_replay
+          //tape/native:ctape_test
+      - name: Rust ASan regressions
+        run: bazel test --config=asan-rust //protobuf-buffa/native:test
+      - name: Native coverage-guided campaigns
+        run: >-
+          bazel test --config=fuzz --nocache_test_results --test_timeout=1200
+          --test_env="TD_FUZZ_SECONDS=$TD_FUZZ_SECONDS"
+          //json/native:session_fuzz //yaml/native:session_fuzz //csv/native:index_fuzz
+      - name: External slab regression and coverage-guided campaign
+        run: >-
+          bazel test --nocache_test_results --test_timeout=1200
+          --test_env="TD_FUZZ_SECONDS=$TD_FUZZ_SECONDS"
+          //protobuf-runtime:slab_replay //protobuf-runtime:slab_fuzz
+      - name: Preserve corpora, reproducers and sanitizer diagnostics
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: untrusted-input-${{ github.run_id }}
+          path: |
+            bazel-testlogs/**/test.log
+            bazel-testlogs/**/test.outputs/**
+          retention-days: 30
+      - name: Remove BuildBuddy credentials
+        if: always()
+        run: rm -f user.bazelrc

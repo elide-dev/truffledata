@@ -1,3 +1,4 @@
+load("//tools/fuzz:defs.bzl", "native_fuzzer")
 load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_library", "cc_test")
 
 # CSV structural indexer (simdjson stage-1 style) and its Myna seam. The optional
@@ -188,4 +189,11 @@ filegroup(
     name = "header",
     srcs = ["generated/seam.h"],
     visibility = ["//visibility:public"],
+)
+
+# buildifier: disable=duplicated-name
+native_fuzzer(
+    name = "index",
+    src = "index_fuzz.cc",
+    deps = [":index"],
 )

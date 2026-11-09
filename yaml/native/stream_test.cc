@@ -130,6 +130,9 @@ void truncation_and_failure() {
   run r = documents(s, "a: 1\n---\nb: [1, 2", 0);
   require(r.documents.size() == 1 && r.status == status_stream_truncated);
   require(documents(s, "a: 1\n---\nk: \"unterminated", 3).status == status_stream_truncated);
+  // Cut inside a flow sequence's implicit mapping (rapidyaml itself reports nothing there).
+  require(documents(s, "a: 1\n---\nb: [?", 0).status == status_stream_truncated);
+  require(documents(s, "a: 1\n---\nb: [:", 2).status == status_stream_truncated);
   // A final document cut inside a UTF-8 sequence.
   require(documents(s, "a: 1\n---\nb: \xC3", 0).status == status_stream_truncated);
   // A syntax error mid-stream fails that document, and the stream stays failed.

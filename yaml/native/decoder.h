@@ -297,6 +297,11 @@ class handler : public c4::yml::EventHandlerStack<handler, handler_state> {
   }
   // Writes the root null when the input held no document; publishes the descriptor.
   void finish() {
+    // rapidyaml 0.16.0 ends the stream without an error when the input stops inside a flow
+    // sequence's implicit single-pair mapping (`[?`, `[:`): its end-of-input check sees neither
+    // RSEQ nor RMAP in that state, so no end events arrive. An open frame here is a truncated
+    // document; it must never publish a tape with unterminated containers.
+    if (depth_) throw syntax_error("missing terminating ]").at(line(), column()).from_parser();
     if (writer_->word_count() == 0) {
       writer_->null();
       side(0, 0);
@@ -762,7 +767,7 @@ class handler : public c4::yml::EventHandlerStack<handler, handler_state> {
   void alias_value(c4::csubstr ref) {
     uint32_t id = resolve_alias(ref);
     frame* f = top();
-    if (!f && root_written_) throw error(status_internal, "YAML second root value");
+    if (!f && root_written_) fail("YAML second root value");
     if (f && f->kind == frame_kind::map && f->pairs) throw error(status_internal, "YAML value without a key");
     take_tag();
     has_pending_anchor_ = false;
@@ -1364,7 +1369,10 @@ class handler : public c4::yml::EventHandlerStack<handler, handler_state> {
 
   [[gnu::noinline]] void value(c4::csubstr s, scalar_style style, bool empty) {
     frame* f = top();
-    if (!f && root_written_) throw error(status_internal, "YAML second root value");
+    // A document holds one root node. rapidyaml 0.16.0 emits a second one for a bare tag after
+    // a closed root collection (`[a]\n!t`, fuzz finding), so this is malformed input, not an
+    // internal invariant.
+    if (!f && root_written_) fail("YAML second root value");
     if (f && f->kind == frame_kind::map && f->pairs) throw error(status_internal, "YAML value without a key");
     std::string_view text(s.str ? s.str : "", s.len);
     uint64_t span = lexical(s.str, s.len, style, empty);
@@ -1505,7 +1513,7 @@ class handler : public c4::yml::EventHandlerStack<handler, handler_state> {
   // ---- collections ----------------------------------------------------------------------------
   void open(uint32_t kind, uint32_t style, c4::yml::type_bits bits) {
     frame* parent = top();
-    if (!parent && root_written_) throw error(status_internal, "YAML second root value");
+    if (!parent && root_written_) fail("YAML second root value");
     if (parent && parent->kind == frame_kind::map && parent->pairs)
       throw error(status_internal, "YAML value without a key");
     begin_collection(kind, style);

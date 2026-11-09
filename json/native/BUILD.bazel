@@ -1,3 +1,4 @@
+load("//tools/fuzz:defs.bzl", "native_fuzzer")
 load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_library", "cc_test")
 
 cc_library(
@@ -279,4 +280,11 @@ cc_test(
     srcs = ["isa_probe.cc", ":isa_variants"],
     tags = ["manual"],
     deps = [":decoder", "//tape/native:testing"],
+)
+
+# buildifier: disable=duplicated-name
+native_fuzzer(
+    name = "session",
+    src = "session_fuzz.cc",
+    deps = [":decoder"],
 )
