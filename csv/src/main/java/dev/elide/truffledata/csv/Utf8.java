@@ -61,13 +61,22 @@ final class Utf8 {
    */
   @SuppressWarnings("deprecation") // String(byte[], int, int, int): the Latin-1 copy, for ASCII
   static String string(byte[] bytes, int offset, int length) {
-    if (length <= 16 && offset + 16 <= bytes.length) {
-      long mask = length >= 8 ? -1L : (1L << (length << 3)) - 1;
-      long high = length > 8 ? (length >= 16 ? -1L : (1L << ((length - 8) << 3)) - 1) : 0;
-      long words =
-          ((long) LONGS.get(bytes, offset) & mask) | ((long) LONGS.get(bytes, offset + 8) & high);
-      if ((words & HIGH_BITS) == 0) return new String(bytes, 0, offset, length);
-    }
+    if (length <= 16 && offset + 16 <= bytes.length && ascii(bytes, offset, length))
+      return new String(bytes, 0, offset, length);
     return new String(bytes, offset, length, StandardCharsets.UTF_8);
+  }
+
+  /** Whether [offset, offset + length) is ASCII, for length <= 16 and offset + 16 <= bytes.length. */
+  static boolean ascii(byte[] bytes, int offset, int length) {
+    long mask = length >= 8 ? -1L : (1L << (length << 3)) - 1;
+    long high = length > 8 ? (length >= 16 ? -1L : (1L << ((length - 8) << 3)) - 1) : 0;
+    long words =
+        ((long) LONGS.get(bytes, offset) & mask) | ((long) LONGS.get(bytes, offset + 8) & high);
+    return (words & HIGH_BITS) == 0;
+  }
+
+  /** Whether the eight bytes at {@code offset} are ASCII. */
+  static boolean asciiWord(byte[] bytes, int offset) {
+    return ((long) LONGS.get(bytes, offset) & HIGH_BITS) == 0;
   }
 }

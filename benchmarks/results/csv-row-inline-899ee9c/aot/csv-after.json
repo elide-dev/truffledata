@@ -1,0 +1,145 @@
+{
+  "image": "build/csv-probe-899ee9c/csv-comparison-profile",
+  "nm": "/Users/sam/.local/share/mise/shims/llvm-nm",
+  "objdump": "/Users/sam/.local/share/mise/shims/llvm-objdump",
+  "symbols": [
+    {
+      "pattern": "^CsvBatch_(row|checkLive|stringAt|readArrayElement|longSlow)$",
+      "symbol": "CsvBatch_checkLive_G8hi0GAAXq0ECgKrxx5JTD",
+      "name": "CsvBatch_checkLive",
+      "address": 7943808,
+      "size": 83,
+      "instructions": 36,
+      "calls": 2,
+      "frame": 24,
+      "stack_loads": 0,
+      "stack_stores": 0,
+      "call_targets": [
+        "CsvMapping_closed",
+        "ExceptionUnwind_unwindExceptionWithoutCalleeSavedRegisters"
+      ]
+    },
+    {
+      "pattern": "^CsvBatch_(row|checkLive|stringAt|readArrayElement|longSlow)$",
+      "symbol": "CsvBatch_longSlow_0CirH6Fwgt3XDdFqMnZH77",
+      "name": "CsvBatch_longSlow",
+      "address": 7944736,
+      "size": 500,
+      "instructions": 137,
+      "calls": 9,
+      "frame": 40,
+      "stack_loads": 3,
+      "stack_stores": 9,
+      "call_targets": [
+        "CsvRow_expected",
+        "ExceptionUnwind_unwindExceptionWithoutCalleeSavedRegisters",
+        "GenScavengeAllocationSupport_slowNewInstance",
+        "ImplicitExceptions_throwNewNullPointerException",
+        "ImplicitExceptions_throwNewOutOfBoundsExceptionWithArgs",
+        "Throwable_fillInStackTrace"
+      ]
+    },
+    {
+      "pattern": "^CsvBatch_(row|checkLive|stringAt|readArrayElement|longSlow)$",
+      "symbol": "CsvBatch_readArrayElement_Ph16HYkiryEJIFsSsPidc8",
+      "name": "CsvBatch_readArrayElement",
+      "address": 7945504,
+      "size": 307,
+      "instructions": 82,
+      "calls": 4,
+      "frame": 40,
+      "stack_loads": 3,
+      "stack_stores": 2,
+      "call_targets": [
+        "CsvMapping_closed",
+        "ExceptionUnwind_unwindExceptionWithoutCalleeSavedRegisters",
+        "GenScavengeAllocationSupport_slowNewInstance"
+      ]
+    },
+    {
+      "pattern": "^CsvBatch_(row|checkLive|stringAt|readArrayElement|longSlow)$",
+      "symbol": "CsvBatch_stringAt_WT5DgQRVrqJrwrzldR6E1I",
+      "name": "CsvBatch_stringAt",
+      "address": 7946528,
+      "size": 7023,
+      "instructions": 1618,
+      "calls": 75,
+      "frame": 104,
+      "stack_loads": 154,
+      "stack_stores": 89,
+      "call_targets": [
+        "Arrays_copyOf",
+        "Arrays_copyOfRange",
+        "CsvBatch_string",
+        "CsvRow_expected",
+        "ExceptionUnwind_unwindExceptionWithoutCalleeSavedRegisters",
+        "GenScavengeAllocationSupport_slowNewArray",
+        "GenScavengeAllocationSupport_slowNewInstance",
+        "ImplicitExceptions_throwNewIntrinsicOutOfBoundsException",
+        "ImplicitExceptions_throwNewNullPointerException",
+        "ImplicitExceptions_throwNewOutOfBoundsExceptionWithArgs",
+        "OutlinedSBMethodHolder_String_AIAI",
+        "Preconditions_outOfBounds",
+        "Preconditions_outOfBoundsCheckIndex",
+        "SVMIntrinsicStubsGen_stringCodingCountPositives",
+        "SVMIntrinsicStubsGen_stringLatin1Inflate",
+        "SafepointSlowpath_enterSlowPathSafepointCheckCalleeSavedCCONV",
+        "Throwable_fillInStackTrace"
+      ]
+    },
+    {
+      "pattern": "^CsvComparison_lambda\\$base\\$(4|9)$",
+      "symbol": "CsvComparison_lambda$base$4_1gN7s5EdCWFQc76jM3L7L6",
+      "name": "CsvComparison_lambda$base$4",
+      "address": 7848736,
+      "size": 1018,
+      "instructions": 233,
+      "calls": 14,
+      "frame": 56,
+      "stack_loads": 23,
+      "stack_stores": 23,
+      "call_targets": [
+        "CsvBatch_stringAt",
+        "Csv_parse",
+        "Csv_parseOwned",
+        "ExceptionUnwind_unwindExceptionWithoutCalleeSavedRegisters",
+        "GenScavengeAllocationSupport_slowNewInstance",
+        "ImplicitExceptions_throwNewNullPointerException",
+        "Preconditions_outOfBoundsCheckIndex",
+        "SVMIntrinsicStubsGen_arrayRegionEqualsS1S1",
+        "SafepointSlowpath_enterSlowPathSafepointCheckCalleeSavedCCONV",
+        "Throwable_fillInStackTrace"
+      ]
+    },
+    {
+      "pattern": "^CsvComparison_lambda\\$base\\$(4|9)$",
+      "symbol": "CsvComparison_lambda$base$9_KdcXeb3wa4ARV1SebJhk85",
+      "name": "CsvComparison_lambda$base$9",
+      "address": 7853376,
+      "size": 2087,
+      "instructions": 486,
+      "calls": 27,
+      "frame": 104,
+      "stack_loads": 87,
+      "stack_stores": 41,
+      "call_targets": [
+        "CsvBatch_booleanSlow",
+        "CsvBatch_doubleSlow",
+        "CsvBatch_longSlow",
+        "CsvPlan_parseBytes",
+        "ExceptionUnwind_unwindExceptionWithoutCalleeSavedRegisters",
+        "GenScavengeAllocationSupport_slowNewInstance",
+        "ImplicitExceptions_throwNewNullPointerException",
+        "ImplicitExceptions_throwNewOutOfBoundsExceptionWithArgs",
+        "Preconditions_outOfBoundsCheckIndex",
+        "SafepointSlowpath_enterSlowPathSafepointCheckCalleeSavedCCONV",
+        "Throwable_fillInStackTrace"
+      ]
+    }
+  ],
+  "unmatched": [
+    "^CsvRow_get(Long|Double|Boolean|String)$"
+  ],
+  "budgets": {},
+  "failures": []
+}

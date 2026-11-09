@@ -28,6 +28,7 @@ import dev.elide.truffledata.csv.CsvIndexing;
 import dev.elide.truffledata.csv.CsvLimits;
 import dev.elide.truffledata.csv.CsvPlan;
 import dev.elide.truffledata.csv.CsvRow;
+import dev.elide.truffledata.csv.CsvText;
 import dev.elide.truffledata.csv.kernel.CsvIndex;
 import dev.elide.truffledata.csv.kernel.CsvIndexer;
 import dev.elide.truffledata.csv.kernel.IndexedScanner;
@@ -145,6 +146,8 @@ public final class CsvComparison {
         List.of(
             "truffledata-batch", "truffledata-batch-native", "truffledata-batch-bytes",
             "truffledata-batch-owned", "truffledata-batch-owned-native", "truffledata-batch-owned-bytes",
+            "truffledata-text", "truffledata-text-native",
+            "truffledata-text-string", "truffledata-text-string-native",
             "truffledata-mapped", "truffledata-mapped-native", "sweep-batch-swar",
             "sweep-batch-native", "kernel-swar", "kernel-native", "fastcsv", "univocity",
             "commons-csv", "jackson"));
@@ -328,7 +331,11 @@ public final class CsvComparison {
           case "strings" ->
               engine.contains("mapped")
                   ? "truffledata-mapped"
-                  : engine.contains("owned") ? "truffledata-batch-owned" : "truffledata-batch";
+                  : engine.contains("owned")
+                      ? "truffledata-batch-owned"
+                      : engine.contains("text-string")
+                          ? "truffledata-text-string"
+                          : engine.contains("text") ? "truffledata-text" : "truffledata-batch";
           case "typed" -> "truffledata-plan";
           case "typed-build" -> "truffledata-plan-build";
           default -> throw new IllegalArgumentException("engine " + workload + "/" + engine);
@@ -411,6 +418,33 @@ public final class CsvComparison {
             for (int r = 0, n = batch.size(); r < n; r++) {
               CsvRow row = batch.row(r);
               for (int c = 0; c < width; c++) sum += row.getString(c).length();
+            }
+            return sum;
+          };
+          // Lazy text cells: one reusable CsvText walks every cell; the checksum (String length
+          // in UTF-16 units) is computed from the bytes without materializing a String.
+          case "truffledata-text" -> input -> {
+            CsvBatch batch = Csv.parse(input, FORMAT, BIG);
+            retained = batch;
+            long sum = 0;
+            int width = batch.schema().size();
+            CsvText text = new CsvText();
+            for (int r = 0, n = batch.size(); r < n; r++) {
+              CsvRow row = batch.row(r);
+              for (int c = 0; c < width; c++) sum += row.getText(c, text).charLength();
+            }
+            return sum;
+          };
+          // The same walk materializing every cell through the text (must match getString).
+          case "truffledata-text-string" -> input -> {
+            CsvBatch batch = Csv.parse(input, FORMAT, BIG);
+            retained = batch;
+            long sum = 0;
+            int width = batch.schema().size();
+            CsvText text = new CsvText();
+            for (int r = 0, n = batch.size(); r < n; r++) {
+              CsvRow row = batch.row(r);
+              for (int c = 0; c < width; c++) sum += row.getText(c, text).toString().length();
             }
             return sum;
           };

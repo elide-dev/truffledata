@@ -32,7 +32,30 @@ final class Dialect {
   final boolean lenientEof;
   final Nulls nulls;
 
+  /** DataLibrary and interop reads return STRING cells as {@link CsvText} ({@link CsvPlan#withTextCells}). */
+  final boolean textCells;
+
+  private Dialect(Dialect d, boolean textCells) {
+    format = d.format;
+    strict = d.strict;
+    delimiter = d.delimiter;
+    quote = d.quote;
+    quoting = d.quoting;
+    quoteChar = d.quoteChar;
+    escape = d.escape;
+    comment = d.comment;
+    ignoreEmptyLines = d.ignoreEmptyLines;
+    ignoreSurroundingSpaces = d.ignoreSurroundingSpaces;
+    trim = d.trim;
+    trailingData = d.trailingData;
+    trailingDelimiter = d.trailingDelimiter;
+    lenientEof = d.lenientEof;
+    nulls = d.nulls;
+    this.textCells = textCells;
+  }
+
   private Dialect(CsvFormat f) {
+    textCells = false;
     format = f;
     strict = f.strict();
     delimiter = f.delimiterBytes();
@@ -52,6 +75,10 @@ final class Dialect {
 
   static Dialect of(CsvFormat format) {
     return new Dialect(format);
+  }
+
+  Dialect withTextCells(boolean on) {
+    return on == textCells ? this : new Dialect(this, on);
   }
 
   /** A decoder for complex Commons spans (one per thread of use), or null for strict formats. */

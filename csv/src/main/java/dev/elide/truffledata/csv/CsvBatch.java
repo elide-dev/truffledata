@@ -192,6 +192,51 @@ public final class CsvBatch implements TruffleObject, AutoCloseable {
     return Utf8.string(input, CsvScanner.offset(span), CsvScanner.length(span));
   }
 
+  /**
+   * {@link CsvRow#getText}: binds {@code into} to the cell, or throws as {@link #stringAt} does. A
+   * host-inlining root like {@link #stringAt}, so the binding's field writes are inlined here
+   * instead of called per cell.
+   */
+  @BytecodeInterpreterSwitch
+  CsvText textAt(int row, int column, CsvText into) {
+    long[] v = columns[column].presentSpans;
+    if (row < v.length) {
+      into.bind(this, v[row]);
+      return into;
+    }
+    return textSlow(row, column, into);
+  }
+
+  private CsvText textSlow(int row, int column, CsvText into) {
+    checkLive();
+    Column c = columns[column];
+    long[] spans = c.spans;
+    if (spans == null || c.state(row) != Column.PRESENT)
+      throw CsvRow.expected(schema, column, "STRING");
+    into.bind(this, spans[row]);
+    return into;
+  }
+
+  /**
+   * One STRING cell's bytes after unescaping, in an array of exactly that length ({@link CsvText}
+   * cells that cannot view the input directly: escaped fields and mapped batches).
+   */
+  byte[] cellBytes(long span) {
+    checkLive();
+    int length = CsvScanner.length(span);
+    byte[] source = input;
+    CsvMapping m = mapping;
+    if (m != null) {
+      source = new byte[length];
+      m.copy(base + CsvScanner.offset(span), source, 0, length);
+      span = rebase(span);
+      if (!CsvScanner.escaped(span)) return source;
+    }
+    byte[] out = new byte[length];
+    int n = dialect.decode(source, span, out, 0, dialect.decoder());
+    return n == length ? out : java.util.Arrays.copyOf(out, n);
+  }
+
   private String stringSlow(int row, int column) {
     checkLive();
     Column c = columns[column];
