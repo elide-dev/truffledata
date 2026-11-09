@@ -2213,9 +2213,6 @@ impl<'a, 's> Decoder<'a, 's> {
             }
             return self.keep_unknown(start, end);
         }
-        if f.map_value_enum {
-            unsafe { (*o).invalid_map = false };
-        }
         if f.repeated {
             return self.pending.push(Pending {
                 ordinal: ordinal as u32,
