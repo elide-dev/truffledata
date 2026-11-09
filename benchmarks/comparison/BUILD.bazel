@@ -536,7 +536,9 @@ java_test(
             "--enable-monitoring=jfr",
             "-H:-DeleteLocalSymbols",
             "-H:+PreserveFramePointer",
-        ] if profile else []) + ["-H:-UnlockExperimentalVMOptions"],
+        ] if profile else []) + ["-H:-UnlockExperimentalVMOptions"] + (
+            ["-Dtruffledata.buffa.cells=true"] if cells == "on" else []
+        ),
         graalvm_sdk = "@graalvm_linux_amd64//:gvm",
         main_class = "dev.elide.truffledata.comparison." + main,
         optimization_mode = "2",
@@ -545,26 +547,39 @@ java_test(
             "@platforms//os:linux",
             "@platforms//cpu:x86_64",
         ],
-        deps = [":consumer"],
+        deps = [":consumer"] + (["//protobuf-buffa/cells"] if cells else []),
     )
-    for name, executable, main, profile in [
-        ("consumer_svm", "truffledata-consumer", "ConsumerComparison", False),
-        ("consumer_profile", "truffledata-consumer-profile", "ConsumerProfile", True),
+    for name, executable, main, profile, cells in [
+        ("consumer_svm", "truffledata-consumer", "ConsumerComparison", False, None),
+        ("consumer_profile", "truffledata-consumer-profile", "ConsumerProfile", True, None),
+        # WS12 (docs/BUFFA.md, truffledata.buffa.cells): the Myna cells route built in ("on"), and
+        # its artifact on the image class path with the flag off ("off"), which must add nothing.
+        ("consumer_svm_cells", "truffledata-consumer-cells", "ConsumerComparison", False, "on"),
+        ("consumer_profile_cells", "truffledata-consumer-cells-profile", "ConsumerProfile", True, "on"),
+        ("consumer_svm_cells_off", "truffledata-consumer-cells-off", "ConsumerComparison", False, "off"),
+        ("consumer_profile_cells_off", "truffledata-consumer-cells-off-profile", "ConsumerProfile", True, "off"),
     ]
 ]
 
-sh_test(
-    name = "consumer_native_smoke",
-    size = "large",
-    srcs = ["native_smoke.sh"],
-    args = ["$(rootpath :consumer_svm)"],
-    data = [":consumer_svm"],
-    tags = ["manual"],
-    target_compatible_with = [
-        "@platforms//os:linux",
-        "@platforms//cpu:x86_64",
-    ],
-)
+[
+    sh_test(
+        name = name,
+        size = "large",
+        srcs = ["native_smoke.sh"],
+        args = ["$(rootpath %s)" % image],
+        data = [image],
+        tags = ["manual"],
+        target_compatible_with = [
+            "@platforms//os:linux",
+            "@platforms//cpu:x86_64",
+        ],
+    )
+    for name, image in [
+        ("consumer_native_smoke", ":consumer_svm"),
+        # The 132-cell smoke matrix on the cells route (WS12).
+        ("consumer_native_smoke_cells", ":consumer_svm_cells"),
+    ]
+]
 
 java_binary(
     name = "consumer_jvm",

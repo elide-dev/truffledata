@@ -444,3 +444,50 @@ returns `BorrowedMaterializedRow`, whose `snapshot()` is durable. Lazy grandchil
 arrays remain scoped too. Reset or the next decode invalidates them even if their bytes
 were already materialized. Pinning and root/child retention follow the ordinary session
 rules. Full format details and conservative eager fallbacks are in [SLAB.md](SLAB.md).
+
+## Myna Truffle cells (`truffledata.buffa.cells`)
+
+`-Dtruffledata.buffa.cells=true` routes every slab producer call (`td_buffa_decode_slab`, and
+`td_buffa_decode_slab_small` on the JVM's bounded heap path) through Truffle cells that Myna
+generates from this module's seam, instead of the hand-written `@CFunction`/FFM calls. It covers
+`BuffaPlan.decodeSlab`/`decode` over heap and native input and the session/projection arena
+writes. The route is **off by default** and is retained as support for Myna cells, not as a speed
+option: on the measured x86-64 consumer cells it is slower today (see the WS12 results linked
+below). Everything else — budgets, the learned-capacity retry, the critical-size scratch fallback,
+extent checks, trimming, the trusted publication through `SlabMessage.produced`, error types,
+messages and order, ownership and lifetimes — is the backend's own; the slabs are byte-identical.
+
+- **Artifact.** The route lives in the separate `dev.elide:truffledata-protobuf-buffa-cells`
+  (Bazel `//protobuf-buffa/cells`), which bundles the generated cells and the `myna-truffle`
+  runtime. Nothing in `truffledata-protobuf-buffa` depends on it; with the flag off it need not be
+  on the class path, and if it is, nothing in it is reachable.
+- **Native Image.** The property is read **at image build time** by `BuffaFeature`, which registers
+  the cells backend factory instead of the static one. Pass it to `native-image` (and put the cells
+  artifact on the image class path). An image built without it contains no cells code; setting the
+  property when running an image has no effect.
+- **JVM.** The property is read once, when the backend selector initializes (a `static final`), and
+  picks the backend when `BuffaWire.open` loads a library; no decode path tests it. The JVM cells
+  use Myna's FFM cell backend, which binds through the class loader's lookup, so the cells backend
+  also `System.load`s the (fingerprint-checked) library, and only one library path per class loader.
+- **Seam and fingerprint.** The cells are generated from seams *derived* in the build from
+  `native/buffa.seam` (only the module options change: `truffle_cells=true`, `truffle_backend`
+  `native`/`ffm`, `truffle_transitions=direct`, and the Java package/class). The production seam,
+  bindings, ABI fingerprint and natives are unchanged. Myna folds the cells options into the
+  derived bindings' own fingerprint constant, which is never compared with the library; the
+  backends keep checking the library against the production fingerprint, and
+  `//bazel:myna_contract` checks that each derived descriptor equals the production descriptor
+  apart from those options.
+- **Shape.** The cells are called directly from the boundary-entered decode (one adopted cell per
+  backend), as Myna's generic `NativeCell.execute(Object[])`; heap arrays are pinned around the call
+  with plain `try/finally` (javac's try-with-resources reaches `Throwable.addSuppressed`, which the
+  runtime-compilation blocklist rejects) and lent as pointers on Native Image, and copied by Myna's
+  borrow rule on HotSpot. The known per-call costs are upstream issues elide-dev/myna#85 (argument
+  array, boxed carriers and borrow objects allocated per call), #86 (direct transitions not faster
+  than one boundary call on sub-microsecond imports) and #87.
+
+Tests: `//protobuf-buffa/cells/tests:jvm` (the shared acceptance suite with the flag on, the route
+check and a byte/error parity run of every slab entry against the FFM backend),
+`:jvm_off` (artifact present, flag off), `:native_test` (Native Image built with the flag: the shared
+native acceptance, the route check and parity against the static backend, with the blocklist
+checks), and `//benchmarks/comparison:consumer_native_smoke_cells` (the 132-cell consumer smoke
+matrix on the cells route).

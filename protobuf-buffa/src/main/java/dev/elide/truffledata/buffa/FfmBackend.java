@@ -392,7 +392,7 @@ final class FfmBackend implements BuffaWire.Backend {
    * Publish the slab the native producer just wrote (into, or copied into, an array this backend
    * allocated and never exposed) with the producer's certification and logical totals.
    */
-  private SlabMessage produced(ProtoPlan plan, byte[] owned, int extent, SlabLimits limits) {
+  SlabMessage produced(ProtoPlan plan, byte[] owned, int extent, SlabLimits limits) {
     return SlabMessage.produced(
         plan,
         owned,
@@ -453,6 +453,20 @@ final class FfmBackend implements BuffaWire.Backend {
     } finally {
       busy = false;
     }
+  }
+
+  // Hooks for the opt-in Myna cells route (truffledata-protobuf-buffa-cells, CellsFfmBackend),
+  // which wraps this backend and replaces only the slab producer call. This class never calls them.
+
+  /** Begin one slab decode exactly as {@link #slab} does; returns the slab result slot. */
+  MemorySegment beginSlab() {
+    acquireResult();
+    return slabResult;
+  }
+
+  /** End the slab decode begun by {@link #beginSlab}, as {@link #slab}'s {@code finally} does. */
+  void endSlab() {
+    busy = false;
   }
 
   private void detach() {

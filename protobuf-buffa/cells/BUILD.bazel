@@ -1,0 +1,132 @@
+load("@rules_java//java:defs.bzl", "java_library")
+load("//bazel:java.bzl", "data_java_library")
+
+package(default_visibility = ["//visibility:public"])
+
+# truffledata-protobuf-buffa-cells (docs/BUFFA.md, "Myna Truffle cells"): the opt-in route that makes
+# the Buffa slab decode's native call through Myna-generated Truffle cells. Selected only by
+# -Dtruffledata.buffa.cells=true (Native Image: at image build time, in BuffaFeature; JVM: once, in
+# BuffaWire). With the flag off nothing here is reachable, and the artifact need not be present.
+#
+# The cells are generated from seams *derived* from the production //protobuf-buffa/native:buffa.seam:
+# only the module line changes (cells options, package and class), so every import, struct and
+# contract is the production one by construction, and the production ABI fingerprint, bindings and
+# natives are unchanged. Myna folds the `truffle` options into the fingerprint, so the derived
+# bindings carry their own constant, which nothing compares against the library; the backends
+# verify the library against the production fingerprint instead, and //bazel:myna_contract checks
+# that each derived descriptor equals the production descriptor apart from those options.
+[
+    genrule(
+        name = "seam_" + variant,
+        srcs = ["//protobuf-buffa/native:buffa.seam"],
+        outs = ["cells_%s.seam" % variant],
+        cmd = ("sed -e 's| java_package=dev.elide.truffledata.buffa.generated java_class=Buffa | " +
+               "java_package=dev.elide.truffledata.buffa.cells.generated java_class=%s %s |' $< > $@ && " +
+               "grep -q '^module truffledata_buffa .* java_class=%s %s ' $@") % (
+            java_class,
+            options,
+            java_class,
+            options,
+        ),
+    )
+    for variant, java_class, options in [
+        # Native Image: cells call the static @CFunction bindings with direct transitions.
+        ("svm", "BuffaCells", "truffle_cells=true truffle_backend=native truffle_transitions=direct"),
+        # HotSpot: cells call the FFM bindings (loader lookup).
+        ("jvm", "BuffaCellsJvm", "truffle_cells=true truffle_backend=ffm"),
+    ]
+]
+
+[
+    genrule(
+        name = "bindings_" + variant,
+        srcs = [":seam_" + variant],
+        outs = ["generated/%s/%s" % (variant, out) for out in [
+            java_class + ".java",
+            java_class + "FFM.java",
+            java_class + "ForeignFeature.java",
+            java_class + "Truffle.java",
+            "seam.rs",
+            "seam.h",
+            "seam.json",
+            "seam.abi",
+            "seam.ll",
+            "META-INF/native-image/dev.elide.myna/dev.elide.truffledata.buffa.cells.generated.%s/native-image.properties" % java_class,
+        ]],
+        cmd = ("$(location @myna//:generator) validate $(location :seam_%s) " % variant +
+               "--targets x86_64-unknown-linux-gnu,aarch64-unknown-linux-gnu,aarch64-apple-darwin && " +
+               "$(location @myna//:generator) generate $(location :seam_%s) " % variant +
+               "--out $(RULEDIR)/generated/%s --target x86_64-unknown-linux-gnu" % variant),
+        tools = ["@myna//:generator"],
+    )
+    for variant, java_class in [
+        ("svm", "BuffaCells"),
+        ("jvm", "BuffaCellsJvm"),
+    ]
+]
+
+filegroup(
+    name = "descriptors",
+    srcs = [
+        "generated/jvm/seam.json",
+        "generated/svm/seam.json",
+    ],
+)
+
+# Myna output is generated as-is (no NullAway). Only the cells and the bindings they call ship:
+# BuffaCells (static @CFunction bindings) + BuffaCellsTruffle for Native Image, BuffaCellsJvmFFM +
+# BuffaCellsJvmTruffle for HotSpot, and the Native Image metadata of the native cells.
+filegroup(
+    name = "generated_sources",
+    srcs = [
+        "generated/jvm/BuffaCellsJvmFFM.java",
+        "generated/jvm/BuffaCellsJvmTruffle.java",
+        "generated/svm/BuffaCells.java",
+        "generated/svm/BuffaCellsTruffle.java",
+    ],
+)
+
+filegroup(
+    name = "native_resources",
+    srcs = ["generated/svm/META-INF/native-image/dev.elide.myna/dev.elide.truffledata.buffa.cells.generated.BuffaCells/native-image.properties"],
+)
+
+java_library(
+    name = "bindings",
+    srcs = [":generated_sources"],
+    resource_strip_prefix = "protobuf-buffa/cells/generated/svm",
+    resources = [":native_resources"],
+    deps = [
+        "//bazel:myna_compiler_sdk",
+        "@maven//:org_graalvm_sdk_nativeimage",
+        "@maven//:org_graalvm_sdk_word",
+        "@maven//:org_graalvm_truffle_truffle_api",
+        "@myna//:truffle",
+    ],
+)
+
+# The route itself: split package dev.elide.truffledata.buffa (the backends it wraps are
+# package-private); registered by BuffaFeature / CellsRoute by name, never by a service file.
+filegroup(
+    name = "sources",
+    srcs = [
+        "src/main/java/dev/elide/truffledata/buffa/CellsFfmBackend.java",
+        "src/main/java/dev/elide/truffledata/buffa/CellsSvmBackend.java",
+    ],
+)
+
+data_java_library(
+    name = "cells",
+    srcs = [":sources"],
+    deps = [
+        ":bindings",
+        "//core",
+        "//protobuf-buffa",
+        "//protobuf-buffa:bindings",
+        "//protobuf-runtime",
+        "@maven//:org_graalvm_sdk_nativeimage",
+        "@maven//:org_graalvm_sdk_word",
+        "@maven//:org_graalvm_truffle_truffle_api",
+        "@myna//:truffle",
+    ],
+)

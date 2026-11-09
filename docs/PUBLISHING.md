@@ -1,6 +1,6 @@
 # Maven publishing
 
-The release publishes twenty-one thin libraries and a dependency-management BOM, with source jars and POMs. The protobuf runtime can be consumed without protobuf-java. Version 0.7.0 shipped the first nine libraries; 0.8.0 adds the two shared tape artifacts, the three JSON artifacts and the four CSV artifacts, all in the BOM. Version 0.10.0 adds the three YAML artifacts, Javadoc jars, Gradle metadata and signed publication.
+The release publishes twenty-two thin libraries and a dependency-management BOM, with source jars and POMs. The protobuf runtime can be consumed without protobuf-java. Version 0.7.0 shipped the first nine libraries; 0.8.0 adds the two shared tape artifacts, the three JSON artifacts and the four CSV artifacts, all in the BOM. Version 0.10.0 adds the three YAML artifacts, Javadoc jars, Gradle metadata and signed publication. The next release adds the opt-in `truffledata-protobuf-buffa-cells` artifact.
 
 | Coordinate | Contents |
 | --- | --- |
@@ -11,6 +11,7 @@ The release publishes twenty-one thin libraries and a dependency-management BOM,
 | `dev.elide:truffledata-jdbc-postgresql:<version>` | pgJDBC integration; depends on JDBC, core and postgresql |
 | `dev.elide:truffledata-protobuf-buffa:<version>` | Optional native protobuf decoder and typed views; includes [prebuilt natives](#prebuilt-natives) |
 | `dev.elide:truffledata-protobuf-buffa-bindings:<version>` | Generated Myna bindings for JVM FFM and static SVM |
+| `dev.elide:truffledata-protobuf-buffa-cells:<version>` | Opt-in: Buffa slab decoding through Myna Truffle cells (`-Dtruffledata.buffa.cells=true`), with the generated cells and the bundled `myna-truffle` runtime; depends on truffledata-protobuf-buffa. Not needed with the flag off |
 | `dev.elide:truffledata-tape:<version>` | Format-neutral native tape layer shared by JSON and YAML: owners, values, sinks, export, snapshots, sessions, streams and typed records, plus the Myna value ABI runtime they extend; depends on core |
 | `dev.elide:truffledata-tape-jvm:<version>` | JVM FFM compact tape reader (`SegmentTape`); depends on truffledata-tape. Keep it out of native-image classpaths |
 | `dev.elide:truffledata-json:<version>` | Native simdjson JSON entry points (`JsonSession`, `JsonMessage`, `JsonStream`, typed plans), with the static SVM backend; depends on truffledata-tape; includes [prebuilt natives](#prebuilt-natives) |
@@ -86,7 +87,7 @@ dependencies {
 }
 ```
 
-For Maven, declare `https://maven.elide.dev` in `<repositories>` and the same coordinates in `<dependencies>`. Published POMs also declare the fork repository; Gradle and Bazel consumers must explicitly configure it. For Bazel, add the two repositories and desired coordinates to `maven.install`, then repin. Use core alone if neither adapter is needed. The release contains twenty-one libraries and the BOM. Publishing verifies public artifact bytes and metadata; isolated consumers check Maven resolution and JVM/static SVM execution. The staging examples can reproduce that version locally. Choose a new version for the next upload: published versions are immutable.
+For Maven, declare `https://maven.elide.dev` in `<repositories>` and the same coordinates in `<dependencies>`. Published POMs also declare the fork repository; Gradle and Bazel consumers must explicitly configure it. For Bazel, add the two repositories and desired coordinates to `maven.install`, then repin. Use core alone if neither adapter is needed. The release contains twenty-two libraries and the BOM. Publishing verifies public artifact bytes and metadata; isolated consumers check Maven resolution and JVM/static SVM execution. The staging examples can reproduce that version locally. Choose a new version for the next upload: published versions are immutable.
 
 
 ## BOM and consumer acceptance
@@ -131,6 +132,17 @@ archive as `libtruffledata_buffa.a`, add its directory to `-H:CLibraryPath`, and
 native attachment together: the backend verifies the generated ABI fingerprint.
 No native library is automatically extracted or loaded. JVM native use requires
 `--enable-native-access=ALL-UNNAMED`.
+
+### Optional Truffle cells route
+
+`dev.elide:truffledata-protobuf-buffa-cells` is never pulled in by the Buffa artifacts. Add it
+only to build with `-Dtruffledata.buffa.cells=true` (see [BUFFA.md](BUFFA.md#myna-truffle-cells-truffledatabuffacells)):
+on Native Image pass the property to `native-image` together with `BuffaFeature`; on the JVM pass
+it to the JVM. It uses the same native attachments as `truffledata-protobuf-buffa`. The jar
+bundles the exact Myna `myna-truffle` runtime its cells were generated against (Myna is not
+published to Maven), under `dev.elide.myna.truffle`; an application that already carries another
+`myna-truffle` must align the versions. It also carries Myna's generated Native Image metadata for
+its cell classes.
 
 `//tools/release:buffa_consumer` tests both native and fallback binary/text/JSON ingestion
 using publication jars and the published shared-library attachment. The explicit
@@ -237,7 +249,7 @@ published static archive into an image through `truffledata-csv-native` (without
 compare generic, typed and streamed parses and malformed-input diagnostics with the
 built-in kernel's. Release publishing and native CI require both static checks.
 
-The publisher includes all twenty-one Java libraries and the BOM, plus Buffa, JSON, YAML and CSV native attachments.
+The publisher includes all twenty-two Java libraries and the BOM, plus Buffa, JSON, YAML and CSV native attachments.
 
 ## Prebuilt natives
 

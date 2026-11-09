@@ -1383,9 +1383,15 @@ final class TypedAcceptance {
           Acceptance.check(sum == 840000, "session decode checksum");
         }
         System.out.println("SESSION decode bytes/message=" + Arrays.toString(rounds));
+        // The opt-in Myna cells route (truffledata.buffa.cells, //protobuf-buffa/cells) calls the
+        // producer through NativeCell.execute(Object[]): the argument array, boxed integers,
+        // pointer and borrow objects add 320 B/call on HotSpot (elide-dev/myna#85). Its own
+        // ceiling; the default route keeps the 48 B contract.
+        double budget = Boolean.getBoolean("truffledata.buffa.cells") ? 384.1 : 48.1;
         for (double allocated : rounds)
           Acceptance.check(
-              allocated <= 48.1, "session decode Java allocation <=48 bytes: " + allocated);
+              allocated <= budget,
+              "session decode Java allocation <=" + (int) budget + " bytes: " + allocated);
       }
     }
   }
