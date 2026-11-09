@@ -56,8 +56,9 @@ ingestion boundaries; present null and missing fields have distinct representati
 
 Use the JVM or Native Image. The optional Myna/Buffa backend supports JVM FFM and
 static SVM linkage, with Java fallback. The JSON and YAML backends support
-the same linkage through native parsers. CSV runs on both runtimes in pure Java,
-with an optional native structural-index kernel. Native attachments ship prebuilt for three platforms:
+the same linkage through native parsers; YAML also offers a pure-Java kernel.
+CSV runs on both runtimes in pure Java, with an optional native structural-index
+kernel. Native attachments ship prebuilt for three platforms:
 
 | Platform | Static archive | Shared library | LTO |
 | --- | --- | --- | --- |
