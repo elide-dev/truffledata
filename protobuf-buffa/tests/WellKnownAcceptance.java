@@ -146,6 +146,7 @@ final class WellKnownAcceptance {
     Acceptance.rejects(
         () -> decoder.compile(timestampPlan, 65536, List.of(timestampPlan, timestampPlan)),
         ContractViolation.class);
+    crossModelAnyRegistry(decoder);
     // Runtime-compiled schemas use exactly the same native dispatch as generated schemas.
     var runtime = ProtoCompiler.compile(null, Timestamp.getDescriptor(), Limits.DEFAULT, 8, 10000);
     try (var compiled = decoder.compile(runtime, 65536);
@@ -262,5 +263,92 @@ final class WellKnownAcceptance {
         Acceptance.check(nativeBytes < 16384, "WKT ingestion allocation budget");
       }
     }
+  }
+
+  /**
+   * The Any allowlist API (docs/BUFFA.md) permits a root plan and registry entries from different
+   * ProtoPlan.Models. Same-named nested types reached both via the root's message fields and via
+   * the registry must be structurally compared, not identity-compared, because BYTES and
+   * UINT64/FIXED64 defaults allocate fresh DataArray/ExactNumber instances per Model.
+   */
+  static void crossModelAnyRegistry(BuffaWire decoder) {
+    for (var kind :
+        List.of(
+            ProtoPlan.Kind.BYTES,
+            ProtoPlan.Kind.UINT64,
+            ProtoPlan.Kind.FIXED64,
+            ProtoPlan.Kind.STRING)) {
+      var rootModel = anyRegistryModel(kind);
+      var registryModel = anyRegistryModel(kind);
+      // Before the fix, BYTES/UINT64/FIXED64 threw ContractViolation("Conflicting nested Any
+      // contract") because record equals() compared DataArray/ExactNumber defaults by identity.
+      try (var compiled =
+          decoder.compile(
+              rootModel.type("Outer"), 65536, List.of(registryModel.type("Payload")))) {
+      }
+    }
+    // Genuinely conflicting nested types are still rejected.
+    var bytesModel = anyRegistryModel(ProtoPlan.Kind.BYTES);
+    var stringModel = anyRegistryModel(ProtoPlan.Kind.STRING);
+    Acceptance.rejects(
+        () ->
+            decoder.compile(
+                bytesModel.type("Outer"), 65536, List.of(stringModel.type("Payload"))),
+        ContractViolation.class);
+    // Same-Model registry entries (interned by name) still compile.
+    var same = anyRegistryModel(ProtoPlan.Kind.BYTES);
+    try (var compiled =
+        decoder.compile(same.type("Outer"), 65536, List.of(same.type("Payload")))) {
+    }
+  }
+
+  private static ProtoPlan.Model anyRegistryModel(ProtoPlan.Kind scalar) {
+    Object defaultValue =
+        switch (scalar) {
+          case BYTES -> DataArray.copyOfBytes(new byte[0]);
+          case UINT64, FIXED64 -> Values.normalize(java.math.BigInteger.ZERO);
+          case STRING -> "";
+          default -> throw new IllegalArgumentException(String.valueOf(scalar));
+        };
+    return new ProtoPlan.Model(
+        null,
+        List.of(
+            new ProtoPlan.Type(
+                "Outer",
+                false,
+                List.of(
+                    new ProtoPlan.FieldPlan(
+                        "payload",
+                        1,
+                        ProtoPlan.Kind.MESSAGE,
+                        false,
+                        false,
+                        true,
+                        false,
+                        false,
+                        -1,
+                        "Payload",
+                        null,
+                        Missing.INSTANCE))),
+            new ProtoPlan.Type(
+                "Payload",
+                false,
+                List.of(
+                    new ProtoPlan.FieldPlan(
+                        "data",
+                        1,
+                        scalar,
+                        false,
+                        false,
+                        false,
+                        false,
+                        false,
+                        -1,
+                        "",
+                        null,
+                        defaultValue)))),
+        Limits.DEFAULT,
+        64,
+        1_000_000);
   }
 }
