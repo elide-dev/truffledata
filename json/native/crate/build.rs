@@ -31,6 +31,7 @@ fn main() {
         .include("vendor/simdjson")
         .include("vendor/simdutf")
         .file("vendor/json/native/api.cc")
+        .file("vendor/json/native/number_kernel.cc")
         .file("vendor/tape/native/text.cc")
         .file("vendor/simdjson/simdjson.cpp");
     if bundled {
