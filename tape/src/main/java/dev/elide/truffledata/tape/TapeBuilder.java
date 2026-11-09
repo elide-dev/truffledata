@@ -39,11 +39,6 @@ public final class TapeBuilder {
     this.input = input;
   }
 
-  /** Words written so far: the index the next node gets. */
-  public int size() {
-    return size;
-  }
-
   private static long make(int kind, long flags, int field, long low) {
     return (long) kind << 60 | flags | ((long) (field & MAX_LENGTH) << 32) | (low & 0xffffffffL);
   }
@@ -230,21 +225,6 @@ public final class TapeBuilder {
     if (n != ((int) (words[b] >>> 32) & MAX_LENGTH)) return false;
     for (int i = 0; i < n; i++) if (textByte(a, i) != textByte(b, i)) return false;
     return true;
-  }
-
-  /** Whether a non-finite F64 was written (the descriptor then carries {@link #NONFINITE}). */
-  public boolean hasNonfinite() {
-    return nonfinite;
-  }
-
-  /** Per-word metadata so far ({@code yaml_meta}; 0 for second words). */
-  public int metadata(int index) {
-    return meta[index];
-  }
-
-  /** Replaces the metadata of the node at {@code index}. */
-  public void metadata(int index, int value) {
-    meta[index] = value;
   }
 
   /**

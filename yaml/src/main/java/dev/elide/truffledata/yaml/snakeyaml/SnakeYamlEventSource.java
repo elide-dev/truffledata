@@ -22,11 +22,7 @@ import org.snakeyaml.engine.v2.exceptions.Mark;
 import org.snakeyaml.engine.v2.exceptions.MarkedYamlEngineException;
 import org.snakeyaml.engine.v2.exceptions.YamlEngineException;
 import org.snakeyaml.engine.v2.parser.ParserImpl;
-import org.snakeyaml.engine.v2.scanner.Scanner;
-import org.snakeyaml.engine.v2.scanner.ScannerImpl;
 import org.snakeyaml.engine.v2.scanner.StreamReader;
-import org.snakeyaml.engine.v2.tokens.ScalarToken;
-import org.snakeyaml.engine.v2.tokens.Token;
 
 /**
  * The kernel's first event source: SnakeYAML Engine's low-level scanner and parser (no composer,
@@ -34,8 +30,7 @@ import org.snakeyaml.engine.v2.tokens.Token;
  * kernel's own. Only this class imports SnakeYAML.
  *
  * <p>Engine marks count code points; they are mapped back to byte offsets of the caller's UTF-8.
- * A scalar event's start mark covers its anchor and tag, so a recording scanner keeps the start of
- * the scalar token itself.
+ * A scalar event's start mark covers its anchor and tag; the scalar token itself starts past them.
  */
 public final class SnakeYamlEventSource implements YamlEventSource {
   public SnakeYamlEventSource() {}
@@ -58,8 +53,7 @@ public final class SnakeYamlEventSource implements YamlEventSource {
     LoadSettings settings = settings();
     String text = new String(utf8, 0, length, StandardCharsets.UTF_8);
     Positions positions = new Positions(utf8, length, text);
-    Recorder scanner = new Recorder(new ScannerImpl(settings, new StreamReader(settings, text)));
-    ParserImpl parser = new ParserImpl(settings, scanner);
+    ParserImpl parser = new ParserImpl(settings, new StreamReader(settings, text));
     try {
       while (parser.hasNext()) {
         Event event = parser.next();
@@ -89,7 +83,7 @@ public final class SnakeYamlEventSource implements YamlEventSource {
           }
           case MappingEnd -> events.mappingEnd(positions.mark(event.getStartMark()));
           case SequenceEnd -> events.sequenceEnd(positions.mark(event.getStartMark()));
-          case Scalar -> scalar((ScalarEvent) event, scanner.take(), positions, events);
+          case Scalar -> scalar((ScalarEvent) event, positions, events);
           case Alias ->
               events.alias(
                   ((AliasEvent) event).getAlias().getValue(), positions.mark(event.getStartMark()));
@@ -108,8 +102,7 @@ public final class SnakeYamlEventSource implements YamlEventSource {
     }
   }
 
-  private static void scalar(
-      ScalarEvent event, @Nullable ScalarToken token, Positions positions, YamlEvents events) {
+  private static void scalar(ScalarEvent event, Positions positions, YamlEvents events) {
     YamlScalarStyle style =
         switch (event.getScalarStyle()) {
           case SINGLE_QUOTED -> YamlScalarStyle.SINGLE_QUOTED;
@@ -118,10 +111,15 @@ public final class SnakeYamlEventSource implements YamlEventSource {
           case FOLDED -> YamlScalarStyle.FOLDED;
           default -> YamlScalarStyle.PLAIN;
         };
-    // No token: an empty scalar inferred from structure (a missing value, `key:`, `- `).
-    boolean empty = token == null;
-    YamlMark start = positions.mark(token == null ? event.getEndMark() : token.getStartMark());
-    YamlMark end = positions.mark(token == null ? event.getEndMark() : token.getEndMark());
+    // A plain token is never empty, so an empty plain value is an empty scalar inferred from
+    // structure (a missing value, `key:`, `- `), with no token of its own.
+    boolean empty = style == YamlScalarStyle.PLAIN && event.getValue().isEmpty();
+    YamlMark end = positions.mark(event.getEndMark());
+    YamlMark start = end;
+    if (!empty) {
+      start = positions.mark(event.getStartMark());
+      if (event.getAnchor().isPresent() || event.getTag().isPresent()) start = positions.token(start);
+    }
     events.scalar(
         event.getValue(),
         style,
@@ -136,55 +134,14 @@ public final class SnakeYamlEventSource implements YamlEventSource {
     return anchor.map(Anchor::getValue).orElse(null);
   }
 
-  /** Remembers the scalar token the parser consumed for the event it is producing. */
-  private static final class Recorder implements Scanner {
-    private final Scanner scanner;
-    private @Nullable ScalarToken scalar;
-
-    Recorder(Scanner scanner) {
-      this.scanner = scanner;
-    }
-
-    @Nullable ScalarToken take() {
-      ScalarToken token = scalar;
-      scalar = null;
-      return token;
-    }
-
-    @Override
-    public boolean checkToken(Token.ID... choices) {
-      return scanner.checkToken(choices);
-    }
-
-    @Override
-    public Token peekToken() {
-      return scanner.peekToken();
-    }
-
-    @Override
-    public Token next() {
-      Token token = scanner.next();
-      if (token instanceof ScalarToken value) scalar = value;
-      return token;
-    }
-
-    @Override
-    public boolean hasNext() {
-      return scanner.hasNext();
-    }
-
-    @Override
-    public void resetDocumentIndex() {
-      scanner.resetDocumentIndex();
-    }
-  }
-
   /** Engine code point indices to byte offsets of the source UTF-8. */
   private static final class Positions {
+    private final byte[] utf8;
     private final int length;
     private final int @Nullable [] offsets;
 
     Positions(byte[] utf8, int length, String text) {
+      this.utf8 = utf8;
       this.length = length;
       boolean ascii = true;
       for (int i = 0; i < length && ascii; i++) ascii = utf8[i] >= 0;
@@ -207,6 +164,35 @@ public final class SnakeYamlEventSource implements YamlEventSource {
       int[] table = offsets;
       if (table == null) return Math.min(Math.max(index, 0), length);
       return table[Math.min(Math.max(index, 0), table.length - 1)];
+    }
+
+    /**
+     * The start of the token after the properties at {@code mark}: past each anchor and tag, and the
+     * spaces, line breaks and comments between them and the token. Linear in the bytes skipped.
+     */
+    YamlMark token(YamlMark mark) {
+      int at = mark.offset(), line = mark.line(), column = mark.column();
+      while (at < length) {
+        byte c = utf8[at];
+        if (c == '&' || c == '!') {
+          while (at < length && utf8[at] != ' ' && utf8[at] != '\t' && utf8[at] != '\n' && utf8[at] != '\r') {
+            if ((utf8[at] & 0xC0) != 0x80) column++;
+            at++;
+          }
+        } else if (c == '#') {
+          while (at < length && utf8[at] != '\n') at++;
+        } else if (c == '\n') {
+          at++;
+          line++;
+          column = 1;
+        } else if (c == ' ' || c == '\t' || c == '\r') {
+          at++;
+          column++;
+        } else {
+          break;
+        }
+      }
+      return new YamlMark(at, line, column);
     }
 
     YamlMark mark(Optional<Mark> mark) {
