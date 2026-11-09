@@ -39,8 +39,14 @@ public final class YamlSession extends TapeSession<YamlMessage> {
   public static YamlSession open(YamlOptions options) {
     Objects.requireNonNull(options);
     YamlSessionProvider best = null;
-    for (YamlSessionProvider provider : Providers.ALL)
-      if (provider.available() && (best == null || provider.priority() > best.priority())) best = provider;
+    int rank = Integer.MIN_VALUE;
+    for (YamlSessionProvider provider : Providers.ALL) {
+      int priority = provider.priority();
+      if (priority > rank && provider.available()) {
+        best = provider;
+        rank = priority;
+      }
+    }
     if (best == null)
       throw new UnsupportedOperationException(
           "No YAML backend: add truffledata-yaml-native (a native image linking the static YAML"

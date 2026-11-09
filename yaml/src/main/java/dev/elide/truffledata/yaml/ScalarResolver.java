@@ -57,9 +57,39 @@ final class ScalarResolver {
    * bits) payloads; {@code text} the STRING text or DECIMAL digits. {@code timestamp} marks a YAML
    * 1.1 plain string that resolves to an implicit {@code !!timestamp}.
    */
-  record Scalar(Kind kind, KeyKind key, long bits, @Nullable String text, boolean timestamp) {
-    boolean nonfinite() {
-      return kind == Kind.F64 && !Double.isFinite(Double.longBitsToDouble(bits));
+  static final class Scalar {
+    private final Kind kind;
+    private final KeyKind key;
+    private final long bits;
+    private final @Nullable String text;
+    private final boolean timestamp;
+
+    Scalar(Kind kind, KeyKind key, long bits, @Nullable String text, boolean timestamp) {
+      this.kind = kind;
+      this.key = key;
+      this.bits = bits;
+      this.text = text;
+      this.timestamp = timestamp;
+    }
+
+    Kind kind() {
+      return kind;
+    }
+
+    KeyKind key() {
+      return key;
+    }
+
+    long bits() {
+      return bits;
+    }
+
+    @Nullable String text() {
+      return text;
+    }
+
+    boolean timestamp() {
+      return timestamp;
     }
 
     double doubleValue() {

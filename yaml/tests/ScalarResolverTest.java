@@ -240,4 +240,17 @@ final class ScalarResolverTest {
     assertFalse(ScalarResolver.plainIsString("x", YamlSchema.JSON));
     assertTrue(ScalarResolver.plainIsString("123", YamlSchema.FAILSAFE));
   }
+
+  /** Core type tags classify by their name; resolved kinds are the Myna value kinds by name. */
+  @Test
+  void tagAndKindNames() {
+    for (String name : new String[] {"STR", "INT", "FLOAT", "BOOL", "NULL", "SEQ", "MAP", "BINARY",
+        "TIMESTAMP", "SET", "OMAP", "PAIRS", "MERGE", "VALUE"})
+      assertEquals(ScalarResolver.Tag.valueOf(name),
+          ScalarResolver.classify(ScalarResolver.CORE_PREFIX + name.toLowerCase(java.util.Locale.ROOT)));
+    String[][] plain = {{"~", "NULL"}, {"true", "BOOL"}, {"1", "I64"}, {"18446744073709551615", "U64"},
+        {"1.5", "F64"}, {"18446744073709551616", "DECIMAL"}, {"x", "STRING"}};
+    for (String[] c : plain)
+      assertEquals(ScalarResolver.Kind.valueOf(c[1]), ScalarResolver.resolvePlain(c[0], YamlSchema.CORE).kind(), c[0]);
+  }
 }

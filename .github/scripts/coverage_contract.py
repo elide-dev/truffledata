@@ -101,6 +101,8 @@ DECLARATION_ONLY_SOURCES = {
     'tape/src/main/java/dev/elide/truffledata/tape/TapeLexical.java',
     'tape/src/main/java/dev/elide/truffledata/tape/TapeSink.java',
     'csv/src/main/java/dev/elide/truffledata/csv/CsvSink.java',
+    # The Java YAML kernel's parser SPI: one abstract method, implemented by each event source.
+    'yaml/src/main/java/dev/elide/truffledata/yaml/events/YamlEventSource.java',
 }
 
 JSON = 'json/src/main/java/dev/elide/truffledata/json/'
@@ -139,6 +141,11 @@ SVM_ONLY_METHODS = {
         'YamlSvm::decode ([BLdev/elide/truffledata/yaml/YamlOptions;)Ldev/elide/truffledata/yaml/YamlMessage;',
         'YamlSvm::openSession (Ldev/elide/truffledata/yaml/YamlOptions;)Ldev/elide/truffledata/yaml/YamlSession;',
         'YamlSvm::compile (Ldev/elide/truffledata/Schema;Ljava/util/Map;)Ldev/elide/truffledata/yaml/YamlPlan;'),
+    # The static-archive provider opens sessions only where it is available: in an image that links
+    # the archive (//yaml/tests:native_test). On the JVM YamlSession.open() ranks it, sees it is
+    # unavailable and opens the Java kernel instead.
+    **_yaml_methods('SvmSessionProvider',
+        'SvmSessionProvider::open (Ldev/elide/truffledata/yaml/YamlOptions;)Ldev/elide/truffledata/yaml/YamlSession;'),
     **_yaml_methods('YamlSession',
         'YamlSession::open ()Ldev/elide/truffledata/yaml/YamlSession;'),
     **_yaml_methods('SvmSessionBackend',

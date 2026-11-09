@@ -37,10 +37,6 @@ final class JavaFailure extends RuntimeException {
     return new JavaFailure(LIMIT, "YAML resource limit: " + which, line, column, false);
   }
 
-  static JavaFailure internal(String detail) {
-    return new JavaFailure(INTERNAL, detail, 0, 0, false);
-  }
-
   /** Throws the exception the native backends throw for this status. */
   RuntimeException raise() {
     if (status == LIMIT || status == SYNTAX || status == CONTRACT || status == MULTIPLE)

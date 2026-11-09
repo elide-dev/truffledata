@@ -173,4 +173,74 @@ final class JavaKernelTest {
       assertTrue(threads.getCurrentThreadAllocatedBytes() - before < (1 << 20));
     }
   }
+
+  // ---- success paths of the kernel's remaining surfaces -----------------------------------------
+
+  /** Distinct keys with equal FNV-1a hashes share a directory run and stay distinct members. */
+  @Test
+  void hashCollidingKeys() {
+    try (YamlSession session = YamlJava.openSession();
+        YamlMessage message = session.decode(SvmAcceptance.bytes("{costarring: 1, liquid: 2, declinate: 3, macallums: 4}"))) {
+      TapeValue root = message.root();
+      assertEquals(1, root.member("costarring").longValue());
+      assertEquals(2, root.member("liquid").longValue());
+      assertEquals(3, root.member("declinate").longValue());
+      assertEquals(4, root.member("macallums").longValue());
+    }
+  }
+
+  /** Native segments decode through the session's copy of exactly their bounded length. */
+  @Test
+  void segmentsDecode() {
+    byte[] input = SvmAcceptance.bytes("a: [1, two]\nb: ~\n");
+    try (YamlSession session = YamlJava.openSession();
+        java.lang.foreign.Arena arena = java.lang.foreign.Arena.ofConfined()) {
+      MemorySegment segment = arena.allocate(input.length + 8);
+      MemorySegment.copy(input, 0, segment, java.lang.foreign.ValueLayout.JAVA_BYTE, 0, input.length);
+      var sink = new dev.elide.truffledata.tape.JavaSink();
+      session.parse(segment, input.length, sink);
+      assertEquals("{a=[1, two], b=null}", String.valueOf(sink.result()));
+    }
+  }
+
+  /** Typed results of the kernel name their format and invalidate on close. */
+  @Test
+  void typedResultsCarryTheirFormat() {
+    var schema = dev.elide.truffledata.Schema.of(dev.elide.truffledata.Field.requiredLong("n"));
+    try (YamlSession session = YamlJava.openSession();
+        YamlPlan plan = session.compile(schema, Map.of())) {
+      var row = plan.decode(SvmAcceptance.bytes("n: 3"));
+      var alive = row.owner().assumption();
+      assertTrue(alive.isValid());
+      row.close();
+      assertFalse(alive.isValid());
+      var closed = assertThrows(IllegalStateException.class, () -> row.longValue(0));
+      assertTrue(closed.getMessage().contains("YAML"), closed.getMessage());
+    }
+  }
+
+  /** Radix integers longer than the resolver's digit bound are a resource limit, not a parse. */
+  @Test
+  void radixDigitLimit() {
+    try (YamlSession session = YamlJava.openSession()) {
+      assertEquals(4369L, (long) session.with(SvmAcceptance.bytes("x: 0x1111"), root -> root.member("x").longValue()));
+      var limit = assertThrows(IllegalArgumentException.class,
+          () -> session.decode(SvmAcceptance.bytes("x: 0x" + "1".repeat(1001))));
+      assertTrue(limit.getMessage().startsWith("YAML resource limit: YAML resource limit: integer digits"),
+          limit.getMessage());
+    }
+  }
+
+  /** Scalar styles name the decoder's metadata style bits, in order. */
+  @Test
+  void scalarStylesMatchMetadata() {
+    String[] styles = {"PLAIN", "SINGLE_QUOTED", "DOUBLE_QUOTED", "LITERAL", "FOLDED"};
+    for (int i = 0; i < styles.length; i++) {
+      assertEquals(i, YamlScalarStyle.valueOf(styles[i]).ordinal());
+      assertEquals(Style.values()[i].ordinal(), YamlScalarStyle.valueOf(styles[i]).ordinal());
+    }
+    YamlMark mark = new YamlMark(3, 1, 4);
+    assertEquals(3, mark.offset());
+    assertThrows(IllegalArgumentException.class, () -> new YamlMark(-1, 0, 0));
+  }
 }

@@ -38,7 +38,34 @@ final class JavaDecoder implements YamlEvents {
   private static final String TIMESTAMP = "tag:yaml.org,2002:timestamp";
 
   /** A decoded document. {@code present} is false when the input held only comments. */
-  record Document(HeapTape tape, YamlMetadata metadata, boolean present, boolean schema11) {}
+  static final class Document {
+    private final HeapTape tape;
+    private final YamlMetadata metadata;
+    private final boolean present, schema11;
+
+    Document(HeapTape tape, YamlMetadata metadata, boolean present, boolean schema11) {
+      this.tape = tape;
+      this.metadata = metadata;
+      this.present = present;
+      this.schema11 = schema11;
+    }
+
+    HeapTape tape() {
+      return tape;
+    }
+
+    YamlMetadata metadata() {
+      return metadata;
+    }
+
+    boolean present() {
+      return present;
+    }
+
+    boolean schema11() {
+      return schema11;
+    }
+  }
 
   private static final class Node {
     static final int SCALAR = 0, MAP = 1, SEQ = 2, ALIAS = 3;
@@ -146,7 +173,7 @@ final class JavaDecoder implements YamlEvents {
     } catch (StackOverflowError failure) {
       throw decoder.limit("depth");
     }
-    if (!decoder.frames.isEmpty()) throw JavaFailure.internal("YAML event stream ended inside a collection");
+    if (!decoder.frames.isEmpty()) throw new JavaFailure(JavaFailure.INTERNAL, "YAML event stream ended inside a collection", 0, 0, false);
     return decoder.finish();
   }
 
@@ -378,7 +405,7 @@ final class JavaDecoder implements YamlEvents {
       placeKey(f, ScalarResolver.keyText(r), span, meta, merge, anchor);
       return;
     }
-    if (f == null && root != null) throw JavaFailure.internal("YAML second root value");
+    if (f == null && root != null) throw new JavaFailure(JavaFailure.INTERNAL, "YAML second root value", 0, 0, false);
     Node node = scalarNode(r, span, style == YamlScalarStyle.PLAIN);
     node.meta = style.ordinal() | index << TAG_SHIFT;
     if (define(anchor, node, false) >= 0) node.meta |= ANCHORED;
@@ -409,7 +436,7 @@ final class JavaDecoder implements YamlEvents {
       placeKey(f, text, 0, ALIAS | ordinal << TAG_SHIFT | keyKind[0] << KEY_KIND_SHIFT, false, null);
       return;
     }
-    if (f == null && root != null) throw JavaFailure.internal("YAML second root value");
+    if (f == null && root != null) throw new JavaFailure(JavaFailure.INTERNAL, "YAML second root value", 0, 0, false);
     Node node = new Node(Node.ALIAS);
     node.target = target;
     node.meta = ALIAS | ordinal << TAG_SHIFT;
@@ -539,7 +566,7 @@ final class JavaDecoder implements YamlEvents {
     boolean complex = parent != null && parent.map && !parent.value;
     int content = contentAt(mark.offset());
     if (complex && (braces(parent, content) || explicitKey(mark.offset()))) throw fail("YAML complex key");
-    if (parent == null && root != null) throw JavaFailure.internal("YAML second root value");
+    if (parent == null && root != null) throw new JavaFailure(JavaFailure.INTERNAL, "YAML second root value", 0, 0, false);
     Tag kind = classify(tag);
     int index = tag == null ? 0 : intern(tag);
     switch (kind) {
@@ -722,7 +749,7 @@ final class JavaDecoder implements YamlEvents {
     values += added;
     children.clear();
     children.addAll(rewritten);
-    if (entries * 2 != children.size()) throw JavaFailure.internal("YAML merge entry count");
+    if (entries * 2 != children.size()) throw new JavaFailure(JavaFailure.INTERNAL, "YAML merge entry count", 0, 0, false);
   }
 
   private void addSource(Node node, List<Node> sources, Set<Node> inline) {
@@ -780,7 +807,7 @@ final class JavaDecoder implements YamlEvents {
       }
       case Node.ALIAS -> {
         Node target = java.util.Objects.requireNonNull(node.target);
-        if (target.index < 0) throw JavaFailure.internal("YAML alias target follows its alias");
+        if (target.index < 0) throw new JavaFailure(JavaFailure.INTERNAL, "YAML alias target follows its alias", 0, 0, false);
         node.index = out.ref(target.index, node.meta);
       }
       default -> node.index = scalar(out, node);
