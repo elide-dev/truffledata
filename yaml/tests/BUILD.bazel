@@ -28,6 +28,7 @@ java_test(
     name = "jvm",
     srcs = [
         "JsonSubsetDifferentialTest.java",
+        "ScalarResolverTest.java",
         "SnakeYamlDifferentialTest.java",
         "YamlContractTest.java",
         "YamlFuzz.java",
@@ -39,6 +40,8 @@ java_test(
         "dev.elide.truffledata.yaml.tests.YamlIntegrationTest",
         "--class",
         "dev.elide.truffledata.yaml.YamlContractTest",
+        "--class",
+        "dev.elide.truffledata.yaml.ScalarResolverTest",
         "--class",
         "dev.elide.truffledata.yaml.tests.YamlPlanTest",
         "--class",
