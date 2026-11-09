@@ -129,6 +129,16 @@ public final class JsonComparison {
           "jsoniter-any",
           "simdjson-java");
   static final List<String> COMPETITORS_INGEST_ONLY = List.of("jackson-stream", "simdjson-java");
+  // Numeric-heavy fixture (beat-stock plan WS8; JsonFixture.numericDocument): canada-style GeoJSON
+  // coordinate rings, ingest only. Native: session decode + six interop reads + close, and decode +
+  // close with no read; Gson, Jackson and fastjson2 trees read the same members.
+  static final List<String> NUMERIC =
+      List.of(
+          "gson-numeric",
+          "simdjson-numeric-interop",
+          "simdjson-numeric-decode",
+          "jackson-numeric",
+          "fastjson2-numeric");
 
   /**
    * One competitor engine, created at run time by {@link JsonCompetitors#engine}. Compiled reads
@@ -156,6 +166,7 @@ public final class JsonComparison {
       run(SESSION_TRUFFLE, "ingest", true, true);
       run(DECODE, "ingest", true, true);
       for (String engine : STREAMS) run(engine, "ingest", true, true);
+      for (String engine : NUMERIC) run(engine, "ingest", true, true);
       for (String engine : COMPETITORS) {
         if (!JsonCompetitors.available(engine)) {
           // simdjson-java in a -march=compatibility image (no 256-bit vector species).
@@ -180,6 +191,10 @@ public final class JsonComparison {
       throws Exception {
     if (STRUCTURAL.contains(engine)) {
       structural(engine, stage, memory, smoke);
+      return;
+    }
+    if (NUMERIC.contains(engine)) {
+      numeric(engine, stage, memory, smoke);
       return;
     }
     if (GENERIC.contains(engine)
@@ -460,6 +475,100 @@ public final class JsonComparison {
         root.close();
         context.leave();
       }
+    }
+  }
+
+  /**
+   * Numeric-heavy documents (WS8): ingest only, every engine parsing all coordinates of each
+   * document and reading the same six members, so number parsing dominates the native cells.
+   */
+  private static void numeric(String engine, String stage, boolean memory, boolean smoke)
+      throws Exception {
+    if (!stage.equals("ingest")) throw new IllegalArgumentException(engine + " measures ingest only");
+    int mode = NUMERIC.indexOf(engine);
+    boolean nativeEngine = mode == NumericReads.INTEROP || mode == NumericReads.DECODE;
+    try (var context = context(false)) {
+      context.initialize("td-compare");
+      context.enter();
+      var root = new NumericReads(engine, mode, nativeEngine ? JsonSession.open() : null);
+      try {
+        byte[][] inputs = new byte[ROWS][];
+        Object[] rows = new Object[ROWS];
+        long expected = 0;
+        for (int i = 0; i < ROWS; i++) {
+          inputs[i] = JsonFixture.numericDocument(i);
+          // Decode-only reads nothing: its checksum is one per successfully decoded document.
+          expected += mode == NumericReads.DECODE ? 1 : JsonFixture.numericChecksum(i);
+          // Rows exist for the shared sampler only; nothing is read after ingest.
+          rows[i] = inputs[i];
+        }
+        var target = (OptimizedCallTarget) root.getCallTarget();
+        Operation operation =
+            rotation -> {
+              long sum = 0;
+              for (int i = 0; i < ROWS; i++) sum += root.ingest(inputs[(i + rotation) & (ROWS - 1)]);
+              return sum;
+            };
+        sample("json-numeric", engine, stage, memory, smoke, target, rows, operation, expected);
+      } finally {
+        root.close();
+        context.leave();
+      }
+    }
+  }
+
+  /** The numeric fixture's per-document ingest; a root node only for the shared tier checks. */
+  private static final class NumericReads extends RootNode {
+    // NUMERIC order.
+    static final int GSON = 0, INTEROP = 1, DECODE = 2;
+    private final String name;
+    private final int mode;
+    private final @Nullable JsonSession session;
+    private final @Nullable Competitor competitor;
+    @Child private JsonFixture.NumericInteropReader reader = new JsonFixture.NumericInteropReader();
+
+    NumericReads(String engine, int mode, @Nullable JsonSession session) {
+      super(ComparisonLanguage.current());
+      this.name = "NumericReads[" + engine + "]";
+      this.mode = mode;
+      this.session = session;
+      this.competitor = mode > DECODE ? JsonCompetitors.numeric(engine) : null;
+    }
+
+    @Override
+    public String getName() {
+      return name;
+    }
+
+    @Override
+    public String toString() {
+      return name;
+    }
+
+    @Override
+    public Object execute(VirtualFrame frame) {
+      throw new UnsupportedOperationException(name + " measures ingest only");
+    }
+
+    long ingest(byte[] input) throws Exception {
+      if (competitor != null) return competitor.ingest(input);
+      if (mode == GSON) {
+        Object tree = JsonFixture.gsonParse(input);
+        retained = tree;
+        return JsonFixture.gsonNumericRead(tree);
+      }
+      JsonMessage message = Objects.requireNonNull(session).decode(input);
+      try {
+        if (mode == DECODE) return 1;
+        retained = message;
+        return reader.read(message.root());
+      } finally {
+        message.close();
+      }
+    }
+
+    void close() {
+      if (session != null) session.close();
     }
   }
 

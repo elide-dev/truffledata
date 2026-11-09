@@ -22,6 +22,25 @@ if os.environ.get('TEST_SHARD_STATUS_FILE'):
 # therefore shares its host and CPU; different shards are intentionally separate experiments.
 affinity = sorted(os.sched_getaffinity(0))
 os.sched_setaffinity(0, {affinity[shard % len(affinity)]})
+def numeric_checksum(i):
+    """JsonFixture.numericChecksum(i), derived independently from the generator's formulas."""
+    mask = (1 << 64) - 1
+    points = 160 + 4 * (i % 8)
+    state = 0x9E3779B97F4A7C15 ^ (i + 1)
+    micros = []
+    for _ in range(points - 1):
+        state = (state * 6364136223846793005 + 1442695040888963407) & mask
+        lon = -141_000_000 + (state >> 11) % 89_000_000
+        state = (state * 6364136223846793005 + 1442695040888963407) & mask
+        lat = 41_000_000 + (state >> 11) % 43_000_000
+        micros += [lon, lat]
+    micros += micros[:2]
+    return i + points + micros[0] + micros[1] + micros[-2] + micros[-1]
+
+
+NUMERIC = ('gson-numeric', 'simdjson-numeric-interop', 'simdjson-numeric-decode', 'jackson-numeric',
+           'fastjson2-numeric')
+NUMERIC_CHECKSUM = sum(numeric_checksum(i) for i in range(32))
 structural = ['simdjson-typed-' + kind for kind in ('nested', 'repeated', 'mixed', 'churn')]
 checksums = {}
 for mode, engine in enumerate(structural):
@@ -47,6 +66,10 @@ for names, workload, checksum in ((flat, 'json-scalar', 35984), (generic, 'json-
 # Decode-only (P0.3): session decode and close, no read; one per decoded document.
 workloads['simdjson-generic-decode'] = 'json-generic'
 checksums['simdjson-generic-decode'] = 32
+# Numeric-heavy fixture (WS8), ingest only; decode-only counts one per decoded document.
+for engine in NUMERIC:
+    workloads[engine] = 'json-numeric'
+    checksums[engine] = 32 if engine == 'simdjson-numeric-decode' else NUMERIC_CHECKSUM
 ALL_STAGES = ('ingest', 'read-aot', 'interpret', 'peak')
 # One complete paired group per shard, each engine with its stages: the four structural typed
 # workloads, the flat and generic controls (ingest/peak), the retained generic forms, and the flat
@@ -56,9 +79,12 @@ groups = [{engine: ALL_STAGES} for engine in structural] + [
     {engine: ('ingest', 'peak') for engine in generic},
     {'simdjson-snapshot': ALL_STAGES, 'simdjson-stream-interop': ('ingest',),
      'simdjson-generic-interop': ('ingest', 'peak'), 'simdjson-generic-decode': ('ingest',)},
-    {engine: ('read-aot', 'interpret') for engine in flat}]
+    {engine: ('read-aot', 'interpret') for engine in flat},
+    # WS8: the numeric family beside the mixed generic ingest cells as same-host controls.
+    {**{engine: ('ingest',) for engine in NUMERIC},
+     'simdjson-generic-interop': ('ingest',), 'simdjson-generic-decode': ('ingest',)}]
 if shards != len(groups) or not 0 <= shard < len(groups):
-    raise ValueError('expected eight complete paired workload groups')
+    raise ValueError('expected nine complete paired workload groups')
 group = groups[shard]
 engines = tuple(group)
 stages = tuple(dict.fromkeys(stage for stages in group.values() for stage in stages))

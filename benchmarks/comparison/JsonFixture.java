@@ -14,6 +14,8 @@ import dev.elide.truffledata.tape.TapeText;
 import dev.elide.truffledata.tape.TapeValue;
 import java.io.ByteArrayInputStream;
 import java.io.InputStreamReader;
+import java.math.BigDecimal;
+import java.math.MathContext;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
@@ -206,6 +208,131 @@ public final class JsonFixture {
             + values.getArraySize(scores.readMember(doc, "scores"))
             + (values.isString(note.readMember(doc, "note")) ? 1 : 0)
             + (values.isNull(parent.readMember(doc, "parent")) ? 1 : 0);
+      } catch (InteropException failure) {
+        throw CompilerDirectives.shouldNotReachHere(failure);
+      }
+    }
+  }
+
+  // ---- Numeric-heavy fixture (beat-stock plan WS8): canada-style GeoJSON coordinate rings. ----
+
+  /** Points in numeric document {@code i}'s single polygon ring (closed: last equals first). */
+  public static int numericPoints(int i) {
+    return 160 + 4 * (i % 8);
+  }
+
+  /** Deterministic 64-bit LCG (Knuth MMIX constants); json_typed_pair.py derives the same values. */
+  private static long next(long state) {
+    return state * 6364136223846793005L + 1442695040888963407L;
+  }
+
+  /**
+   * Coordinates of document {@code i} in integer microdegrees: {@code [lon0, lat0, lon1, lat1,
+   * ...]}, longitudes in [-141, -52), latitudes in [41, 84) as in canada.json's extent. The ring is
+   * closed (last point equals the first), as GeoJSON requires.
+   */
+  public static long[] numericMicros(int i) {
+    int points = numericPoints(i);
+    long[] micros = new long[2 * points];
+    long state = 0x9E3779B97F4A7C15L ^ (i + 1);
+    for (int p = 0; p < points - 1; p++) {
+      state = next(state);
+      micros[2 * p] = -141_000_000L + Long.remainderUnsigned(state >>> 11, 89_000_000L);
+      state = next(state);
+      micros[2 * p + 1] = 41_000_000L + Long.remainderUnsigned(state >>> 11, 43_000_000L);
+    }
+    micros[2 * points - 2] = micros[0];
+    micros[2 * points - 1] = micros[1];
+    return micros;
+  }
+
+  /**
+   * A coordinate spelled as canada.json spells them: the exact binary value of the nearest double
+   * to {@code micros / 10^6}, rounded to 17 significant digits (for example
+   * {@code -65.613616999999977}), so most fractions carry 14–15 digits. 17 digits round-trip.
+   */
+  static String coordinate(long micros) {
+    double value = micros / 1e6;
+    return new BigDecimal(value).round(new MathContext(17)).toPlainString();
+  }
+
+  /**
+   * Numeric document {@code i}: one GeoJSON Feature (about 6–7 KB) whose Polygon ring holds
+   * {@link #numericPoints} {@code [lon,lat]} pairs of 17-significant-digit doubles. The 32
+   * documents together are about 210 KB, the size of the native big fixture (1,000 mixed
+   * documents). Generated, not copied: no third-party data.
+   */
+  public static byte[] numericDocument(int i) {
+    long[] micros = numericMicros(i);
+    StringBuilder json = new StringBuilder(8192);
+    json.append("{\"type\":\"Feature\",\"properties\":{\"name\":\"ring-").append(i)
+        .append("\",\"id\":").append(i)
+        .append("},\"geometry\":{\"type\":\"Polygon\",\"coordinates\":[[");
+    for (int p = 0; p < micros.length / 2; p++) {
+      json.append(p == 0 ? "[" : ",[").append(coordinate(micros[2 * p])).append(',')
+          .append(coordinate(micros[2 * p + 1])).append(']');
+    }
+    return json.append("]]}}").toString().getBytes(StandardCharsets.UTF_8);
+  }
+
+  /**
+   * Checksum every numeric engine computes for document {@code i}: properties.id + the ring's point
+   * count + the first and last points' coordinates rounded to integer microdegrees.
+   */
+  public static long numericChecksum(int i) {
+    long[] micros = numericMicros(i);
+    int n = micros.length;
+    return i + n / 2 + micros[0] + micros[1] + micros[n - 2] + micros[n - 1];
+  }
+
+  static long micros(double degrees) {
+    return Math.round(degrees * 1e6);
+  }
+
+  @TruffleBoundary
+  public static long gsonNumericRead(Object tree) {
+    JsonObject o = ((JsonElement) tree).getAsJsonObject();
+    var ring =
+        o.getAsJsonObject("geometry").getAsJsonArray("coordinates").get(0).getAsJsonArray();
+    var first = ring.get(0).getAsJsonArray();
+    var last = ring.get(ring.size() - 1).getAsJsonArray();
+    return o.getAsJsonObject("properties").get("id").getAsLong()
+        + ring.size()
+        + micros(first.get(0).getAsDouble())
+        + micros(first.get(1).getAsDouble())
+        + micros(last.get(0).getAsDouble())
+        + micros(last.get(1).getAsDouble());
+  }
+
+  /** The numeric reads through cached interop, one library per site (like {@link InteropReader}). */
+  public static final class NumericInteropReader extends Node {
+    @Child private InteropLibrary properties = create();
+    @Child private InteropLibrary id = create();
+    @Child private InteropLibrary geometry = create();
+    @Child private InteropLibrary coordinates = create();
+    @Child private InteropLibrary rings = create();
+    @Child private InteropLibrary ring = create();
+    @Child private InteropLibrary point = create();
+    @Child private InteropLibrary values = create();
+
+    private static InteropLibrary create() {
+      return InteropLibrary.getFactory().createDispatched(1);
+    }
+
+    public long read(Object doc) {
+      try {
+        Object box = properties.readMember(doc, "properties");
+        Object shape = geometry.readMember(doc, "geometry");
+        Object first = rings.readArrayElement(coordinates.readMember(shape, "coordinates"), 0);
+        long size = ring.getArraySize(first);
+        Object a = ring.readArrayElement(first, 0);
+        Object b = ring.readArrayElement(first, size - 1);
+        return values.asLong(id.readMember(box, "id"))
+            + size
+            + micros(values.asDouble(point.readArrayElement(a, 0)))
+            + micros(values.asDouble(point.readArrayElement(a, 1)))
+            + micros(values.asDouble(point.readArrayElement(b, 0)))
+            + micros(values.asDouble(point.readArrayElement(b, 1)));
       } catch (InteropException failure) {
         throw CompilerDirectives.shouldNotReachHere(failure);
       }

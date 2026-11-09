@@ -15,6 +15,26 @@ binary = Path(sys.argv[1]).resolve()
 output = Path(os.environ['TEST_UNDECLARED_OUTPUTS_DIR'])
 output.mkdir(parents=True, exist_ok=True)
 binary_sha256 = hashlib.sha256(binary.read_bytes()).hexdigest()
+
+def numeric_checksum(i):
+    """JsonFixture.numericChecksum(i), derived independently from the generator's formulas."""
+    mask = (1 << 64) - 1
+    points = 160 + 4 * (i % 8)
+    state = 0x9E3779B97F4A7C15 ^ (i + 1)
+    micros = []
+    for _ in range(points - 1):
+        state = (state * 6364136223846793005 + 1442695040888963407) & mask
+        lon = -141_000_000 + (state >> 11) % 89_000_000
+        state = (state * 6364136223846793005 + 1442695040888963407) & mask
+        lat = 41_000_000 + (state >> 11) % 43_000_000
+        micros += [lon, lat]
+    micros += micros[:2]
+    return i + points + micros[0] + micros[1] + micros[-2] + micros[-1]
+
+
+NUMERIC = ('gson-numeric', 'simdjson-numeric-interop', 'simdjson-numeric-decode', 'jackson-numeric',
+           'fastjson2-numeric')
+NUMERIC_CHECKSUM = sum(numeric_checksum(i) for i in range(32))
 # Workload per engine and its 32-document checksum (JsonComparison and JsonFixture).
 WORKLOADS = {
     'json-scalar': (('gson-stream', 'simdjson-typed', 'simdjson-specialized'), 35984),
@@ -24,12 +44,13 @@ WORKLOADS = {
                       # Benchmark-only competitors (JsonCompetitors; the JSON scoreboard).
                       'jackson-tree', 'jackson-stream', 'fastjson2-tree', 'dsljson-map', 'jsoniter-any',
                       'simdjson-java'), 38219),
+    'json-numeric': (NUMERIC, NUMERIC_CHECKSUM),
 }
 STAGES = ('ingest', 'read-aot', 'interpret', 'peak')
 # Borrowed session parses and streams (Task F2) retain nothing to read later: ingest cells only.
 INGEST_ONLY = {'simdjson-session-java', 'simdjson-session-truffle', 'simdjson-generic-decode',
                'gson-stream-lines', 'simdjson-stream-java', 'simdjson-stream-interop',
-               'jackson-stream', 'simdjson-java'}
+               'jackson-stream', 'simdjson-java', *NUMERIC}
 # Engines this image cannot run (simdjson-java needs 256-bit vector species: the x86-64-v3 image).
 UNAVAILABLE = {engine for engines, _ in WORKLOADS.values() for engine in engines
                if subprocess.run([str(binary), '--available', engine]).returncode != 0}
@@ -38,6 +59,7 @@ WORKLOADS = {name: (tuple(e for e in engines if e not in UNAVAILABLE), checksum)
 workload_of = {engine: (name, checksum) for name, (engines, checksum) in WORKLOADS.items() for engine in engines}
 # Decode-only (P0.3) reads nothing: one per decoded document.
 workload_of['simdjson-generic-decode'] = ('json-generic', 32)
+workload_of['simdjson-numeric-decode'] = ('json-numeric', 32)
 jobs = [job for job in itertools.product(workload_of, STAGES, ('time', 'memory'), range(3))
         if job[0] not in INGEST_ONLY or job[1] == 'ingest']
 random.Random(20261105).shuffle(jobs)

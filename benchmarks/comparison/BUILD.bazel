@@ -350,7 +350,7 @@ sh_test(
     srcs = ["json_typed_pair.sh"],
     args = ["$(rootpath :json_typed_svm_candidate)", "$(rootpath :json_typed_svm_baseline)"],
     data = ["json_typed_pair.py", "JsonComparison.java", "JsonFixture.java", ":json_typed_svm_candidate", ":json_typed_svm_baseline"],
-    shard_count = 8,
+    shard_count = 9,
     exec_properties = {"EstimatedCPU": "4", "EstimatedMemory": "16GB"},
     tags = ["benchmark", "manual"],
     target_compatible_with = ["@platforms//os:linux", "@platforms//cpu:x86_64"],
