@@ -1,7 +1,7 @@
 load("@protobuf//bazel:proto_library.bzl", "proto_library")
 load("@rules_cc//cc:defs.bzl", "cc_binary")
 load("@rules_graalvm//graalvm:defs.bzl", "native_image")
-load("@rules_java//java:defs.bzl", "java_binary", "java_test")
+load("@rules_java//java:defs.bzl", "java_binary", "java_library", "java_test")
 load("@rules_rust//rust:defs.bzl", "rust_binary")
 load("@rules_shell//shell:sh_test.bzl", "sh_test")
 load("//bazel:java.bzl", "data_java_library")
@@ -350,7 +350,7 @@ sh_test(
     srcs = ["json_typed_pair.sh"],
     args = ["$(rootpath :json_typed_svm_candidate)", "$(rootpath :json_typed_svm_baseline)"],
     data = ["json_typed_pair.py", "JsonComparison.java", "JsonFixture.java", ":json_typed_svm_candidate", ":json_typed_svm_baseline"],
-    shard_count = 6,
+    shard_count = 9,
     exec_properties = {"EstimatedCPU": "4", "EstimatedMemory": "16GB"},
     tags = ["benchmark", "manual"],
     target_compatible_with = ["@platforms//os:linux", "@platforms//cpu:x86_64"],
@@ -437,6 +437,28 @@ native_image(
     deps = [":json_profiling"],
 )
 
+# AOT symbol gate (P0.6) over the JSON typed readers, the snapshot copy and the interop read
+# bodies in the symbol-bearing json_svm_profile image; shape only, no timing.
+sh_test(
+    name = "json_aot_symbols",
+    size = "medium",
+    srcs = ["aot_symbols.sh"],
+    args = [
+        "$(rootpath :json_svm_profile)",
+        "$(rootpath json_aot_budgets.json)",
+    ],
+    data = [
+        "json_aot_budgets.json",
+        ":json_svm_profile",
+        "//tools/bench:aot_symbols.py",
+    ],
+    tags = ["manual"],
+    target_compatible_with = [
+        "@platforms//os:linux",
+        "@platforms//cpu:x86_64",
+    ],
+)
+
 sh_test(
     name = "json_profile",
     size = "large",
@@ -460,6 +482,9 @@ data_java_library(
         "ConsumerProfile.java",
         "StockInteropFeature.java",
         "StockInteropRow.java",
+        # Benchmark-only decode pipeline probes (P0.1); split packages, never on a production path.
+        "probes/DecodeProbe.java",
+        "probes/PublishProbe.java",
     ],
     deps = [
         ":comparison",
@@ -471,6 +496,7 @@ data_java_library(
         "@maven//:com_google_protobuf_protobuf_java",
         "@maven//:org_graalvm_polyglot_polyglot",
         "@maven//:org_graalvm_sdk_nativeimage",
+        "@maven//:org_graalvm_sdk_word",
         "@maven//:org_graalvm_truffle_truffle_api",
         "@maven//:org_graalvm_truffle_truffle_runtime",
     ],
@@ -510,7 +536,9 @@ java_test(
             "--enable-monitoring=jfr",
             "-H:-DeleteLocalSymbols",
             "-H:+PreserveFramePointer",
-        ] if profile else []) + ["-H:-UnlockExperimentalVMOptions"],
+        ] if profile else []) + ["-H:-UnlockExperimentalVMOptions"] + (
+            ["-Dtruffledata.buffa.cells=true"] if cells == "on" else []
+        ),
         graalvm_sdk = "@graalvm_linux_amd64//:gvm",
         main_class = "dev.elide.truffledata.comparison." + main,
         optimization_mode = "2",
@@ -519,26 +547,39 @@ java_test(
             "@platforms//os:linux",
             "@platforms//cpu:x86_64",
         ],
-        deps = [":consumer"],
+        deps = [":consumer"] + (["//protobuf-buffa/cells"] if cells else []),
     )
-    for name, executable, main, profile in [
-        ("consumer_svm", "truffledata-consumer", "ConsumerComparison", False),
-        ("consumer_profile", "truffledata-consumer-profile", "ConsumerProfile", True),
+    for name, executable, main, profile, cells in [
+        ("consumer_svm", "truffledata-consumer", "ConsumerComparison", False, None),
+        ("consumer_profile", "truffledata-consumer-profile", "ConsumerProfile", True, None),
+        # WS12 (docs/BUFFA.md, truffledata.buffa.cells): the Myna cells route built in ("on"), and
+        # its artifact on the image class path with the flag off ("off"), which must add nothing.
+        ("consumer_svm_cells", "truffledata-consumer-cells", "ConsumerComparison", False, "on"),
+        ("consumer_profile_cells", "truffledata-consumer-cells-profile", "ConsumerProfile", True, "on"),
+        ("consumer_svm_cells_off", "truffledata-consumer-cells-off", "ConsumerComparison", False, "off"),
+        ("consumer_profile_cells_off", "truffledata-consumer-cells-off-profile", "ConsumerProfile", True, "off"),
     ]
 ]
 
-sh_test(
-    name = "consumer_native_smoke",
-    size = "large",
-    srcs = ["native_smoke.sh"],
-    args = ["$(rootpath :consumer_svm)"],
-    data = [":consumer_svm"],
-    tags = ["manual"],
-    target_compatible_with = [
-        "@platforms//os:linux",
-        "@platforms//cpu:x86_64",
-    ],
-)
+[
+    sh_test(
+        name = name,
+        size = "large",
+        srcs = ["native_smoke.sh"],
+        args = ["$(rootpath %s)" % image],
+        data = [image],
+        tags = ["manual"],
+        target_compatible_with = [
+            "@platforms//os:linux",
+            "@platforms//cpu:x86_64",
+        ],
+    )
+    for name, image in [
+        ("consumer_native_smoke", ":consumer_svm"),
+        # The 132-cell smoke matrix on the cells route (WS12).
+        ("consumer_native_smoke_cells", ":consumer_svm_cells"),
+    ]
+]
 
 java_binary(
     name = "consumer_jvm",
@@ -603,6 +644,180 @@ label_flag(
     ]
 ]
 
+# P0.1 decode pipeline ablation (plan 2026-11-08-beat-stock-svm): the production slab decoder
+# through its C ABI on the consumer fixture, with no JVM, transition, pinning or publication.
+cc_binary(
+    name = "consumer_native_probe",
+    testonly = True,
+    srcs = ["consumer_native_probe.c"],
+    copts = ["-O2"],
+    # Bazel's ThinLTO indexing cannot address members of the Rust archive; lld links its bitcode.
+    features = ["-thin_lto"],
+    tags = ["manual"],
+    target_compatible_with = [
+        "@platforms//os:linux",
+        "@platforms//cpu:x86_64",
+    ],
+    deps = ["//protobuf-buffa/native:truffledata_buffa"],
+)
+
+# Probe engines, production references and the standalone decoder on one worker (unsharded).
+sh_test(
+    name = "consumer_decode_ablation",
+    size = "enormous",
+    srcs = ["consumer_decode_ablation.sh"],
+    args = [
+        "$(rootpath :consumer_svm)",
+        "$(rootpath :consumer_profile)",
+        "$(rootpath :consumer_native_probe)",
+    ],
+    data = [
+        ":consumer_native_probe",
+        ":consumer_profile",
+        ":consumer_svm",
+        "//tools/bench:consumer.py",
+    ],
+    exec_properties = {
+        "EstimatedCPU": "4",
+        "EstimatedMemory": "16GB",
+    },
+    tags = [
+        "benchmark",
+        "manual",
+    ],
+    target_compatible_with = [
+        "@platforms//os:linux",
+        "@platforms//cpu:x86_64",
+    ],
+)
+
+# ---- WS11 Myna Truffle cell probe (plan 2026-11-08-beat-stock-svm §4 WS11; CONSUMER.md).
+# Benchmark-only: the probe seam enables cells in its own package; the shipped bindings, seam
+# fingerprint and natives are unchanged. The generated Rust/C outputs are discarded (the production
+# static archive exports the symbols).
+genrule(
+    name = "cells_bindings_generated",
+    testonly = True,
+    srcs = ["cells/cells.seam"],
+    outs = [
+        "cells/generated/BuffaCells.java",
+        "cells/generated/BuffaCellsFFM.java",
+        "cells/generated/BuffaCellsForeignFeature.java",
+        "cells/generated/BuffaCellsTruffle.java",
+        "cells/generated/seam.rs",
+        "cells/generated/seam.h",
+        "cells/generated/seam.json",
+        "cells/generated/seam.abi",
+        "cells/generated/seam.ll",
+        "cells/generated/META-INF/native-image/dev.elide.myna/dev.elide.truffledata.comparison.cells.generated.BuffaCells/native-image.properties",
+    ],
+    cmd = "$(location @myna//:generator) validate $(location cells/cells.seam) --targets x86_64-unknown-linux-gnu && " +
+          "$(location @myna//:generator) generate $(location cells/cells.seam) --out $(RULEDIR)/cells/generated --target x86_64-unknown-linux-gnu",
+    tags = ["manual"],
+    tools = ["@myna//:generator"],
+)
+
+# Myna output is generated as-is (no NullAway); the cells call the probe's own copy of the binding.
+java_library(
+    name = "cells_bindings",
+    testonly = True,
+    srcs = [
+        "cells/generated/BuffaCells.java",
+        "cells/generated/BuffaCellsTruffle.java",
+    ],
+    resource_strip_prefix = "benchmarks/comparison/cells/generated",
+    resources = ["cells/generated/META-INF/native-image/dev.elide.myna/dev.elide.truffledata.comparison.cells.generated.BuffaCells/native-image.properties"],
+    tags = ["manual"],
+    deps = [
+        "//bazel:myna_compiler_sdk",
+        "@maven//:org_graalvm_sdk_nativeimage",
+        "@maven//:org_graalvm_sdk_word",
+        "@maven//:org_graalvm_truffle_truffle_api",
+        "@myna//:truffle",
+    ],
+)
+
+data_java_library(
+    name = "cells_probe",
+    testonly = True,
+    srcs = [
+        "cells/CellsProbe.java",
+        # Split package for the backend's package-private plumbing; never on a production path.
+        "probes/CellProbe.java",
+    ],
+    tags = ["manual"],
+    deps = [
+        ":cells_bindings",
+        ":comparison",
+        ":contracts",
+        "//core",
+        "//protobuf-buffa",
+        "//protobuf-buffa:bindings",
+        "//protobuf-runtime",
+        "@maven//:com_google_protobuf_protobuf_java",
+        "@maven//:org_graalvm_polyglot_polyglot",
+        "@maven//:org_graalvm_sdk_nativeimage",
+        "@maven//:org_graalvm_sdk_word",
+        "@maven//:org_graalvm_truffle_truffle_api",
+        "@maven//:org_graalvm_truffle_truffle_runtime",
+        "@myna//:truffle",
+    ],
+)
+
+native_image(
+    name = "cells_probe_native",
+    testonly = True,
+    cc_deps = ["//protobuf-buffa/native:truffledata_buffa"],
+    exec_properties = {
+        "EstimatedCPU": "4",
+        "EstimatedMemory": "16GB",
+    },
+    executable_name = "truffledata-cells-probe",
+    extra_args = [
+        "--gc=serial",
+        "--add-exports=org.graalvm.truffle.runtime/com.oracle.truffle.runtime=ALL-UNNAMED",
+        "--parallelism=4",
+        "-march=compatibility",
+        "--initialize-at-build-time=dev.elide.truffledata",
+        "--initialize-at-run-time=dev.elide.truffledata.comparison.CellsProbe",
+        "--features=dev.elide.truffledata.buffa.BuffaFeature",
+        "-H:+UnlockExperimentalVMOptions",
+    ] + TRUFFLE_JIT_CHECKS + ["-H:-UnlockExperimentalVMOptions"],
+    graalvm_sdk = "@graalvm_linux_amd64//:gvm",
+    main_class = "dev.elide.truffledata.comparison.CellsProbe",
+    optimization_mode = "2",
+    tags = ["manual"],
+    target_compatible_with = [
+        "@platforms//os:linux",
+        "@platforms//cpu:x86_64",
+    ],
+    deps = [":cells_probe"],
+)
+
+# Every route of one binary on one worker, three fresh forks each (unsharded).
+sh_test(
+    name = "cells_probe_measure",
+    size = "enormous",
+    srcs = ["cells_probe.sh"],
+    args = ["$(rootpath :cells_probe_native)"],
+    data = [
+        ":cells_probe_native",
+        "cells_probe.py",
+    ],
+    exec_properties = {
+        "EstimatedCPU": "4",
+        "EstimatedMemory": "16GB",
+    },
+    tags = [
+        "benchmark",
+        "manual",
+    ],
+    target_compatible_with = [
+        "@platforms//os:linux",
+        "@platforms//cpu:x86_64",
+    ],
+)
+
 # ---- CSV comparison (benchmarks/comparison/CSV.md). Competitors are benchmark-only dependencies.
 
 label_flag(
@@ -610,12 +825,19 @@ label_flag(
     build_setting_default = ":csv_svm",
 )
 
+# The candidate defaults to the tree's image; point it at a preserved image to pair two
+# preserved binaries without rebuilding (e.g. a probe image while the tree has moved on).
+label_flag(
+    name = "csv_svm_candidate",
+    build_setting_default = ":csv_svm",
+)
+
 sh_test(
     name = "csv_pair",
     size = "enormous",
     srcs = ["csv_pair.sh"],
-    args = ["$(rootpath :csv_svm)", "$(rootpath :csv_svm_baseline)"],
-    data = ["csv_pair.py", ":csv_svm", ":csv_svm_baseline"],
+    args = ["$(rootpath :csv_svm_candidate)", "$(rootpath :csv_svm_baseline)"],
+    data = ["csv_pair.py", ":csv_svm_candidate", ":csv_svm_baseline"],
     exec_properties = {"EstimatedCPU": "4", "EstimatedMemory": "16GB"},
     shard_count = 8,
     tags = ["benchmark", "manual"],
@@ -638,6 +860,15 @@ CSV_COMPETITORS = [
     "@maven//:de_siegmar_fastcsv",
     "@maven//:org_apache_commons_commons_csv",
 ]
+
+# The fixture generator alone, for the CSV number-parser differential test (//csv/tests).
+data_java_library(
+    name = "csv_fixtures",
+    testonly = True,
+    srcs = ["CsvFixture.java"],
+    visibility = ["//csv/tests:__pkg__"],
+    deps = ["//core"],
+)
 
 data_java_library(
     name = "csv_comparison",
@@ -721,6 +952,65 @@ CSV_SVM_ARGS = [
         ("csv_svm_v3", "csv-comparison-v3", "-march=x86-64-v3"),
     ]
 ]
+
+# Symbol-bearing CSV images for diagnosis only (never measured for timing): the AOT symbol gate
+# (P0.6) and callgrind instruction profiles (`--profile`, plan 2026-11-08-beat-stock-svm P0.5).
+# They mirror consumer_profile (-H:-DeleteLocalSymbols, frame pointers) over the csv_svm flags;
+# csv_profile_debug adds -g so callgrind can attribute inlined code to source lines.
+[
+    native_image(
+        name = name,
+        testonly = True,
+        cc_deps = ["//csv/native:truffledata_csv"],
+        debug = debug,
+        exec_properties = {
+            "EstimatedCPU": "8",
+            "EstimatedMemory": "24GB",
+        },
+        executable_name = executable,
+        extra_args = CSV_SVM_ARGS + [
+            "-march=compatibility",
+            "-H:+UnlockExperimentalVMOptions",
+            "-H:-DeleteLocalSymbols",
+            "-H:+PreserveFramePointer",
+            "-H:-UnlockExperimentalVMOptions",
+        ],
+        graalvm_sdk = "@graalvm_linux_amd64//:gvm",
+        main_class = "dev.elide.truffledata.comparison.CsvComparisonSvm",
+        optimization_mode = "2",
+        tags = ["manual"],
+        target_compatible_with = [
+            "@platforms//os:linux",
+            "@platforms//cpu:x86_64",
+        ],
+        deps = [":csv_comparison_svm"],
+    )
+    for name, executable, debug in [
+        ("csv_profile", "csv-comparison-profile", False),
+        ("csv_profile_debug", "csv-comparison-profile-debug", True),
+    ]
+]
+
+# AOT symbol gate (P0.6) over the CSV framing loops and batch writers; shape only, no timing.
+sh_test(
+    name = "csv_aot_symbols",
+    size = "medium",
+    srcs = ["aot_symbols.sh"],
+    args = [
+        "$(rootpath :csv_profile)",
+        "$(rootpath csv_aot_budgets.json)",
+    ],
+    data = [
+        "csv_aot_budgets.json",
+        ":csv_profile",
+        "//tools/bench:aot_symbols.py",
+    ],
+    tags = ["manual"],
+    target_compatible_with = [
+        "@platforms//os:linux",
+        "@platforms//cpu:x86_64",
+    ],
+)
 
 CSV_JVM_FLAGS = [
     "--add-modules=jdk.incubator.vector",
@@ -1262,6 +1552,28 @@ sh_test(
 ]
 
 # B4 diagnostic-only sampling; ordinary images remain the performance controls.
+# AOT symbol gate (P0.6): instruction/call/frame ceilings over the symbol-bearing profile image.
+# Runs with the budget file's current ceilings; a read-path change re-pins them from its own image.
+sh_test(
+    name = "consumer_aot_symbols",
+    size = "medium",
+    srcs = ["aot_symbols.sh"],
+    args = [
+        "$(rootpath :consumer_profile)",
+        "$(rootpath consumer_aot_budgets.json)",
+    ],
+    data = [
+        "consumer_aot_budgets.json",
+        ":consumer_profile",
+        "//tools/bench:aot_symbols.py",
+    ],
+    tags = ["manual"],
+    target_compatible_with = [
+        "@platforms//os:linux",
+        "@platforms//cpu:x86_64",
+    ],
+)
+
 sh_test(
     name = "consumer_interpreter_profile",
     size = "large",

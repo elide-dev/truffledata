@@ -122,7 +122,9 @@ public final class BuffaWire implements AutoCloseable {
             ImageSingletons.lookup(NativeFactory.class).create(), Selected.SVM_STATIC);
     } else if (library != null && Files.isRegularFile(library)) {
       try {
-        return new BuffaWire(new FfmBackend(library), Selected.JVM_FFM);
+        return new BuffaWire(
+            CellsRoute.ENABLED ? CellsRoute.jvm(library) : new FfmBackend(library),
+            Selected.JVM_FFM);
       } catch (UnsatisfiedLinkError
           | IllegalCallerException
           | UnsupportedOperationException

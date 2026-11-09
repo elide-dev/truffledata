@@ -22,6 +22,25 @@ if os.environ.get('TEST_SHARD_STATUS_FILE'):
 # therefore shares its host and CPU; different shards are intentionally separate experiments.
 affinity = sorted(os.sched_getaffinity(0))
 os.sched_setaffinity(0, {affinity[shard % len(affinity)]})
+def numeric_checksum(i):
+    """JsonFixture.numericChecksum(i), derived independently from the generator's formulas."""
+    mask = (1 << 64) - 1
+    points = 160 + 4 * (i % 8)
+    state = 0x9E3779B97F4A7C15 ^ (i + 1)
+    micros = []
+    for _ in range(points - 1):
+        state = (state * 6364136223846793005 + 1442695040888963407) & mask
+        lon = -141_000_000 + (state >> 11) % 89_000_000
+        state = (state * 6364136223846793005 + 1442695040888963407) & mask
+        lat = 41_000_000 + (state >> 11) % 43_000_000
+        micros += [lon, lat]
+    micros += micros[:2]
+    return i + points + micros[0] + micros[1] + micros[-2] + micros[-1]
+
+
+NUMERIC = ('gson-numeric', 'simdjson-numeric-interop', 'simdjson-numeric-decode', 'jackson-numeric',
+           'fastjson2-numeric')
+NUMERIC_CHECKSUM = sum(numeric_checksum(i) for i in range(32))
 structural = ['simdjson-typed-' + kind for kind in ('nested', 'repeated', 'mixed', 'churn')]
 checksums = {}
 for mode, engine in enumerate(structural):
@@ -36,16 +55,50 @@ workloads = {engine: 'json-' + engine.removeprefix('simdjson-') for engine in st
 flat = ('simdjson-typed', 'simdjson-specialized', 'gson-stream')
 generic = ('simdjson-generic-interop', 'gson-tree', 'jackson-tree', 'fastjson2-tree',
            'dsljson-map', 'jsoniter-any')
-for names, workload, checksum in ((flat, 'json-scalar', 35984), (generic, 'json-generic', 38219)):
+# Retained generic forms (plan 2026-11-08-beat-stock-svm P0.4/WS7) beside the generic interop cell
+# on the same host: the snapshot cell has every stage; the lent stream root is ingest-only.
+retained = ('simdjson-snapshot', 'simdjson-stream-interop', 'simdjson-generic-interop')
+for names, workload, checksum in ((flat, 'json-scalar', 35984), (generic, 'json-generic', 38219),
+                                  (retained, 'json-generic', 38219)):
     for engine in names:
         workloads[engine] = workload
         checksums[engine] = checksum
-groups = [(engine,) for engine in structural] + [flat, generic]
+# Decode-only (P0.3): session decode and close, no read; one per decoded document.
+workloads['simdjson-generic-decode'] = 'json-generic'
+checksums['simdjson-generic-decode'] = 32
+# Numeric-heavy fixture (WS8), ingest only; decode-only counts one per decoded document.
+for engine in NUMERIC:
+    workloads[engine] = 'json-numeric'
+    checksums[engine] = 32 if engine == 'simdjson-numeric-decode' else NUMERIC_CHECKSUM
+ALL_STAGES = ('ingest', 'read-aot', 'interpret', 'peak')
+# One complete paired group per shard, each engine with its stages: the four structural typed
+# workloads, the flat and generic controls (ingest/peak), the retained generic forms, and the flat
+# typed read tiers (WS6).
+groups = [{engine: ALL_STAGES} for engine in structural] + [
+    {engine: ('ingest', 'peak') for engine in flat},
+    {engine: ('ingest', 'peak') for engine in generic},
+    {'simdjson-snapshot': ALL_STAGES, 'simdjson-stream-interop': ('ingest',),
+     'simdjson-generic-interop': ('ingest', 'peak'), 'simdjson-generic-decode': ('ingest',)},
+    {engine: ('read-aot', 'interpret') for engine in flat},
+    # WS8: the numeric family beside the mixed generic ingest cells as same-host controls.
+    {**{engine: ('ingest',) for engine in NUMERIC},
+     'simdjson-generic-interop': ('ingest',), 'simdjson-generic-decode': ('ingest',)}]
 if shards != len(groups) or not 0 <= shard < len(groups):
-    raise ValueError('expected six complete paired workload groups')
-engines = groups[shard]
-stages = ('ingest', 'read-aot', 'interpret', 'peak') if shard < 4 else ('ingest', 'peak')
-jobs = list(itertools.product(engines, stages, ('time', 'memory'), range(3)))
+    raise ValueError('expected nine complete paired workload groups')
+group = groups[shard]
+engines = tuple(group)
+stages = tuple(dict.fromkeys(stage for stages in group.values() for stage in stages))
+# JSON_PAIR_GROUPS=6,7 runs only those shards (the others exit without a report), so a
+# workstream can pair the cells it changes without re-measuring every group.
+selected = os.environ.get('JSON_PAIR_GROUPS')
+if selected and str(shard) not in selected.split(','):
+    print('shard', shard, 'not selected by JSON_PAIR_GROUPS', flush=True)
+    sys.exit(0)
+# JSON_PAIR_CANDIDATE_ONLY names engines the baseline image does not have (a new harness cell):
+# they run on the candidate alone and are reported unpaired, never as a ratio.
+candidate_only = set(filter(None, os.environ.get('JSON_PAIR_CANDIDATE_ONLY', '').split(',')))
+jobs = [(engine, stage, mode, fork) for engine in engines for stage in group[engine]
+        for mode in ('time', 'memory') for fork in range(3)]
 rng = random.Random(2026110801 + shard)
 rng.shuffle(jobs)
 records = []
@@ -59,7 +112,8 @@ report = {
     # The checksums below independently derive from this fixture's exact 32-document formulas.
     'fixture_source_sha256': hashlib.sha256(Path('benchmarks/comparison/JsonComparison.java').read_bytes()).hexdigest(),
     'generic_fixture_source_sha256': hashlib.sha256(Path('benchmarks/comparison/JsonFixture.java').read_bytes()).hexdigest(),
-    'group': list(engines), 'stages': list(stages),
+    'group': list(engines), 'stages': list(stages), 'engine_stages': {e: list(v) for e, v in group.items()},
+    'candidate_only': sorted(candidate_only),
     'expected_checksums': checksums, 'measurements': records,
 }
 def save():
@@ -74,7 +128,7 @@ for role, path in binary.items():
     smoke.check_returncode()
 
 for engine, stage, mode, fork in jobs:
-    order = ['candidate', 'baseline']
+    order = ['candidate'] if engine in candidate_only else ['candidate', 'baseline']
     rng.shuffle(order)
     for role in order:
         command = [str(binary[role]), engine, stage, mode]
@@ -116,9 +170,10 @@ for engine in engines:
                         raise AssertionError('Incomplete paired forks')
                     cells[role] = {'median': statistics.median(values), 'min': min(values), 'max': max(values), 'fork_medians': values}
             if cells:
-                if len(cells) != 2:
+                if len(cells) != (1 if engine in candidate_only else 2):
                     raise AssertionError('Missing paired image')
                 summary.append({'workload': workloads[engine], 'engine': engine, 'stage': stage, 'metric': metric, **cells,
-                    'baseline_over_candidate': cells['baseline']['median'] / cells['candidate']['median'] if cells['candidate']['median'] else None})
+                    'baseline_over_candidate': cells['baseline']['median'] / cells['candidate']['median']
+                    if 'baseline' in cells and cells['candidate']['median'] else None})
 report['summary'] = summary
 save()

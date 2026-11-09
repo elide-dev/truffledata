@@ -270,3 +270,28 @@ B/document against Gson's 13,404, excluding native memory. Snapshot reads alloca
 boundaries; the graph itself has none. These figures do not support a speedup claim
 for the generic path. The read cost and the snapshot allocation are the next things
 to investigate.
+
+## Numeric documents
+
+The `json-numeric` workload (`JsonFixture.numericDocument`, plan 2026-11-08-beat-stock-svm
+WS8) has 32 generated canada-style GeoJSON features. Each has a closed polygon ring of 160–188
+`[lon,lat]` pairs, spelled with 17 significant digits like canada.json (`-54.738137000000002`).
+The 32 documents total about 231 KB. The data is generated, not copied. Every engine is
+ingest-only and reads the same six members: `properties.id`, the ring size, and the first and
+last points rounded to microdegrees. The checksum is re-derived independently in
+`json_typed_pair.py`/`json_measure.py`.
+
+| Engine | Ingest |
+| --- | --- |
+| `simdjson-numeric-interop` | `JsonSession.decode`, six cached-interop reads, close |
+| `simdjson-numeric-decode` | `JsonSession.decode` and close, no read |
+| `gson-numeric` | Gson tree (`LazilyParsedNumber`: unread coordinates are never converted) |
+| `jackson-numeric` | Jackson `readTree` (`DoubleNode` per coordinate) |
+| `fastjson2-numeric` | fastjson2 `parseObject` (default `BigDecimal` decimals) |
+
+`json_native_smoke` runs every cell. `json_typed_pair` shard group 8 pairs the family with
+the mixed generic ingest/decode cells as same-host controls. This is the numeric-heavy
+admission identity Sam ruled for number-parsing changes: ≥3% here with no loss on big/huge
+mixed. The first candidate, a runtime-dispatched SSE4.2/AVX2 instantiation of simdjson's
+number parser, was 4–11% slower and was reverted; see
+[json-number-kernel-d34e525](../results/json-number-kernel-d34e525/).

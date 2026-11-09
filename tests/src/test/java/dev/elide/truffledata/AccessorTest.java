@@ -678,8 +678,12 @@ class AccessorTest {
         assertSame(generated.getClass(), generated.accessor(I64).exactRowClass);
         assertNotSame(
             generated.accessor(I64), ((AbstractRow) generated(right, 1, "x")).accessor(I64));
-        // Slab and static layouts share schemas across layouts, so they keep the virtual guard.
-        assertNull(((AbstractRow) slab(left, 1, "x")).accessor(I64).exactRowClass);
+        // Generated slab rows are one final class per (type, root-or-child), so their accessors
+        // report that class; static layouts share schemas across layouts and keep the virtual
+        // guard, as do runtime-plan and projected slab rows.
+        var slabRow = (AbstractRow) slab(left, 1, "x");
+        assertSame(slabRow.getClass(), slabRow.accessor(I64).exactRowClass);
+        assertNotSame(slabRow.accessor(I64), ((AbstractRow) slab(right, 1, "x")).accessor(I64));
         assertNull(statics.accessor(0).exactRowClass);
         // bind keeps the fast guard honest: an exact accessor that disagrees with accepts fails,
         // whether accepts rejects a row the guard admits or admits a row the guard rejects.

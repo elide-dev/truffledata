@@ -316,4 +316,100 @@ class CompactTapeTest {
     };
     assertEquals(children, tape.length(0));
   }
+
+  /** A reader with only the element-wise default copy hooks: an element-wise view of the heap tape. */
+  private static TapeReader elementWise(TapeReader tape) {
+    return new TapeReader() {
+      @Override public long nodeCount() { return tape.nodeCount(); }
+      @Override public long poolSize() { return tape.poolSize(); }
+      @Override public long inputSize() { return tape.inputSize(); }
+      @Override public long directorySize() { return tape.directorySize(); }
+      @Override public int flags() { return tape.flags(); }
+      @Override public long readWord(long index) { return tape.readWord(index); }
+      @Override public byte textByte(boolean owned, long offset) { return tape.textByte(owned, offset); }
+      @Override public long textWord(boolean owned, long offset, int length) { return tape.textWord(owned, offset, length); }
+      @Override public long directoryEntry(long index) { return tape.directoryEntry(index); }
+      @Override public int metadata(long index) { return tape.metadata(index); }
+    };
+  }
+
+  @Test void bulkCopyHooksMatchTheElementWiseDefaultsAndStayBounded() {
+    Owner owner = document();
+    for (long root : new long[] {0, 3, 6}) {
+      HeapTape bulk = HeapTape.copy(owner.tape, root), slow = HeapTape.copy(elementWise(owner.tape), root);
+      assertEquals(bulk.nodeCount(), slow.nodeCount());
+      for (long i = 0; i < bulk.nodeCount(); i++) assertEquals(slow.word(i), bulk.word(i), "word " + i);
+      assertEquals(slow.directorySize(), bulk.directorySize());
+      for (long i = 0; i < bulk.directorySize(); i++) assertEquals(slow.directoryEntry(i), bulk.directoryEntry(i));
+      assertEquals(slow.inputSize(), bulk.inputSize());
+      for (long i = 0; i < bulk.inputSize(); i++) assertEquals(slow.inputByte(i), bulk.inputByte(i));
+      assertEquals(slow.poolSize(), bulk.poolSize());
+      for (long i = 0; i < bulk.poolSize(); i++) assertEquals(slow.textByte(true, i), bulk.textByte(true, i));
+    }
+    HeapTape tape = HeapTape.copy(owner.tape, 0);
+    long[] out = new long[4];
+    int[] meta = new int[4];
+    assertThrows(IndexOutOfBoundsException.class, () -> tape.copyWords(tape.nodeCount() - 2, out, 0, 4));
+    assertThrows(IndexOutOfBoundsException.class, () -> tape.copyWords(-1, out, 0, 1));
+    assertThrows(IndexOutOfBoundsException.class, () -> tape.copyWords(0, out, 2, 4));
+    assertThrows(IndexOutOfBoundsException.class, () -> tape.copyDirectory(1, out, 0, 2));
+    assertThrows(IndexOutOfBoundsException.class, () -> tape.copyMetadata(tape.nodeCount(), meta, 0, 1));
+    assertThrows(IndexOutOfBoundsException.class, () -> elementWise(tape).copyWords(0, out, 0, 5));
+    tape.copyWords(0, out, 0, 4);
+    assertEquals(tape.word(0), out[0]);
+    tape.copyMetadata(0, meta, 0, 4);
+    assertArrayEquals(new int[4], meta);
+  }
+
+  // TD_TAPE_HAS_META (flag bit 2): the compact tape carries one uint32 per word (0 on second
+  // words). toMyna() must re-index that to one uint32 per node and serve it through the Myna
+  // ABI v4 readMetadata hook, mirroring the native c::to_myna converter pinned by
+  // tape/native/ctape_test.cc::to_myna_refs_and_metadata. Previously it masked the flag off
+  // and never implemented readMetadata, so metadata(node) returned 0 on every interchange tape.
+
+  @Test void toMynaPreservesPerNodeMetadataOnAWideScalar() {
+    // The exact bug-report repro: a wide I64 node carrying metadata 777 over the value 42.
+    long[] words = {w(3, TapeReader.WIDE, 2, 0), 42};
+    int[] meta = {777, 0};
+    HeapTape heap = new HeapTape(words, new byte[0], "42".getBytes(StandardCharsets.UTF_8),
+        new long[0], meta, 2);
+    assertEquals(777, heap.metadata(0));                       // source preserves it
+    assertEquals(777, HeapTape.copy(heap, 0).metadata(0));     // the copy path already did
+    ValueTape myna = heap.toMyna();
+    myna.validate();
+    assertEquals(1, myna.nodeCount());
+    assertEquals(42, myna.signedValue(0));                     // the payload survives
+    assertEquals(777, myna.metadata(0));                       // the interchange must preserve it
+  }
+
+  @Test void toMynaReindexesMetadataFromWordIndexToNodeIndex() {
+    // Array [i64 42, true, null]: the wide i64 sits at word 2 (node 1) and the single-word true at
+    // word 4 (node 2). Metadata set on words 2 and 4 must land on nodes 1 and 2; second words and
+    // nodes without metadata read 0.
+    long[] words = {
+        w(8, TapeReader.WIDE, 3, 6), 0,                // array root, next 6
+        w(3, TapeReader.WIDE, 2, 0), 42,               // i64 42 (wide, words 2-3)
+        w(2, 0, 0, 0),                                  // true, word 4
+        w(0, 0, 0, 0),                                  // null, word 5
+    };
+    int[] meta = {0, 0, 0x77, 0, 0x11, 0};            // per-word: word 2 -> 0x77, word 4 -> 0x11
+    HeapTape heap = new HeapTape(words, new byte[0], "42".getBytes(StandardCharsets.UTF_8),
+        new long[0], meta, 2);
+    ValueTape myna = heap.toMyna();
+    myna.validate();
+    assertEquals(4, myna.nodeCount());
+    assertEquals(0, myna.metadata(0));                 // array root: word 0 held no metadata
+    assertEquals(0x77, myna.metadata(1));               // i64: re-indexed from word 2
+    assertEquals(0x11, myna.metadata(2));              // true: re-indexed from word 4
+    assertEquals(0, myna.metadata(3));                 // null: word 5 held 0
+    assertEquals(42, myna.signedValue(1));
+  }
+
+  @Test void toMynaReportsZeroMetadataForTapesWithoutTheMetaFlag() {
+    // JSON tapes never set TD_TAPE_HAS_META; the fix must not disturb that path, and
+    // metadata(node) stays 0 for every node (the common, regression-sensitive case).
+    ValueTape myna = document().toMyna();
+    myna.validate();
+    for (long n = 0; n < myna.nodeCount(); n++) assertEquals(0, myna.metadata(n));
+  }
 }

@@ -53,16 +53,39 @@ public final class HeapTape implements TapeReader {
 
   @Override public long directoryEntry(long index) { return directory[(int) index]; }
   @Override public int metadata(long index) { return meta.length == 0 ? 0 : meta[(int) index]; }
+  @Override public void copyWords(long from, long[] output, int at, int count) {
+    TapeReader.checkCopy(from, words.length, output.length, at, count, "Tape word copy");
+    System.arraycopy(words, (int) from, output, at, count);
+  }
+  @Override public void copyDirectory(long from, long[] output, int at, int count) {
+    TapeReader.checkCopy(from, directory.length, output.length, at, count, "Tape directory copy");
+    System.arraycopy(directory, (int) from, output, at, count);
+  }
+  @Override public void copyMetadata(long from, int[] output, int at, int count) {
+    TapeReader.checkCopy(from, words.length, output.length, at, count, "Tape metadata copy");
+    if (meta.length == 0) Arrays.fill(output, at, at + count, 0);
+    else System.arraycopy(meta, (int) from, output, at, count);
+  }
 
+  /**
+   * Detaches the subtree at {@code root}: the words are read from the source once, in bulk, and
+   * both the extent scan and the rebase run over that heap copy (WS7). The retained input is
+   * trimmed to the bytes the subtree references, every text, scalar and container word is
+   * re-based to the copy, and the subtree's directory entries and metadata are copied in bulk.
+   */
   static HeapTape copy(TapeReader source, long root) {
     long end = source.next(root);
+    int count = Math.toIntExact(end - root);
+    int flags = source.flags();
+    long[] words = new long[count];
+    source.copyWords(root, words, 0, count);
     long inputFirst = source.inputSize(), inputLast = 0, poolFirst = source.poolSize(), poolLast = 0;
     long dirFirst = source.directorySize(), dirLast = 0;
-    int flags = source.flags();
-    for (long i = root; i < end;) {
-      long w = source.word(i);
+    for (int i = 0; i < count;) {
+      long w = words[i];
       int k = kind(w), len = field(w);
-      long second = ((k == 6 || k == 7 || k == 9) && (w & WIDE) != 0) ? source.word(i + 1) : 0;
+      boolean wide = (w & WIDE) != 0;
+      long second = ((k == 6 || k == 7 || k == 9) && wide) ? words[i + 1] : 0;
       long span = rawSpan(w, second, flags);
       if (span != 0) { inputFirst = Math.min(inputFirst, span >>> 32); inputLast = Math.max(inputLast, (span >>> 32) + (span & 0xffffffffL)); }
       if (k == 6 || k == 7) {
@@ -72,9 +95,9 @@ public final class HeapTape implements TapeReader {
       long dir = k == 9 ? second >>> 32 : 0;
       if (dir != 0) {
         dirFirst = Math.min(dirFirst, dir - 1);
-        dirLast = Math.max(dirLast, dir - 1 + (len == MAX_COUNT ? source.length(i) : len));
+        dirLast = Math.max(dirLast, dir - 1 + (len == MAX_COUNT ? source.length(root + i) : len));
       }
-      i = TapeReader.step(i, w);
+      i += wide ? 2 : 1;
     }
     if (inputLast == 0) inputFirst = 0;
     if (poolLast == 0) poolFirst = 0;
@@ -82,17 +105,20 @@ public final class HeapTape implements TapeReader {
     byte[] input = new byte[Math.addExact(Math.toIntExact(inputLast - inputFirst), 7)], pool = new byte[Math.toIntExact(poolLast - poolFirst)];
     source.copyText(false, inputFirst, input, 0, input.length - 7);
     source.copyText(true, poolFirst, pool, 0, pool.length);
-    long[] words = new long[Math.toIntExact(end - root)], dirs = new long[Math.toIntExact(dirLast - dirFirst)];
-    int[] meta = (flags & 2) == 0 ? new int[0] : new int[words.length];
-    for (int i = 0; i < dirs.length; i++) dirs[i] = source.directoryEntry(dirFirst + i);
-    for (long i = root; i < end;) {
-      int at = Math.toIntExact(i - root);
-      long w = source.word(i), second = (w & WIDE) == 0 ? 0 : source.word(i + 1);
+    long[] dirs = new long[Math.toIntExact(dirLast - dirFirst)];
+    source.copyDirectory(dirFirst, dirs, 0, dirs.length);
+    int[] meta = (flags & 2) == 0 ? new int[0] : new int[count];
+    if (meta.length != 0) source.copyMetadata(root, meta, 0, count);
+    for (int i = 0; i < count;) {
+      long w = words[i];
+      boolean wide = (w & WIDE) != 0;
       int k = kind(w);
       if (k == 8 || k == 9) {
         w = (w & ~0xffffffffL) | (low(w) - root);
-        long d = second >>> 32;
-        second = (d == 0 ? 0 : (d - dirFirst) << 32); // container source offsets are not exposed
+        if (wide) {
+          long d = words[i + 1] >>> 32;
+          words[i + 1] = d == 0 ? 0 : (d - dirFirst) << 32; // container source offsets are not exposed
+        }
       } else if (k == 10) {
         long target = low(w);
         w = (w & ~0xffffffffL) | (target < root ? 0xffffffffL : target - root);
@@ -100,12 +126,10 @@ public final class HeapTape implements TapeReader {
         long base = (w & OWNED) == 0 ? inputFirst : poolFirst;
         // Synthetic scalar values have no lexical span and therefore no input offset.
         if (k >= 6 || field(w) != 0) w = (w & ~0xffffffffL) | (low(w) - base);
-        if (k >= 6 && (w & WIDE) != 0 && second != 0) second -= inputFirst << 32;
+        if (k >= 6 && wide && words[i + 1] != 0) words[i + 1] -= inputFirst << 32;
       }
-      words[at] = w;
-      if ((w & WIDE) != 0) words[at + 1] = second;
-      if (meta.length != 0) meta[at] = source.metadata(i);
-      i = TapeReader.step(i, w);
+      words[i] = w;
+      i += wide ? 2 : 1;
     }
     return new HeapTape(words, pool, input, dirs, meta, flags, true);
   }
@@ -117,6 +141,10 @@ public final class HeapTape implements TapeReader {
     mapping[words.length] = nodes;
     long[] out = new long[nodes * 3];
     long[] dirs = new long[directory.length];
+    // Re-index the compact tape's per-word metadata table to one entry per node, mirroring
+    // the native c::to_myna converter (tape/native/ctape.h): node-start words contribute
+    // their per-word entry at the node index; second words stay 0 and are never visited.
+    int[] metaOut = (flags & 2) == 0 ? new int[0] : new int[nodes];
     for (long i = 0; i < nodeCount(); i = step(i)) {
       int n = mapping[(int) i], at = n * 3, k = kindAt(i);
       long w = word(i), len = length(i), payload = 0;
@@ -139,8 +167,9 @@ public final class HeapTape implements TapeReader {
         }
       }
       out[at] = tag | ((k == ValueTape.STRING || k == ValueTape.DECIMAL || k == ValueTape.OBJECT || k == ValueTape.ARRAY ? len : 0) << 32); out[at + 1] = payload; out[at + 2] = mapping[Math.toIntExact(next(i))];
+      if (metaOut.length != 0) metaOut[n] = metadata(i);
     }
-    return new HeapValueTape(out, pool.clone(), new byte[][] {Arrays.copyOf(input, input.length - 7)}, dirs, flags & 1);
+    return new HeapValueTape(out, pool.clone(), new byte[][] {Arrays.copyOf(input, input.length - 7)}, dirs, flags & 1, metaOut);
   }
   @Override public long nodeCount() { return words.length; }
   @Override public long poolSize() { return pool.length; }

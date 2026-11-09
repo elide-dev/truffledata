@@ -1,4 +1,4 @@
-//! Seam ABI 11: protobuf decoded into layout-compiled slabs (format `TDSLAB1`, docs/SLAB.md).
+//! Seam ABI 12: protobuf decoded into layout-compiled slabs (format `TDSLAB1`, docs/SLAB.md).
 //!
 //! A schema program (`TDB3` tables plus the `TDL1` layout section that Java appends) compiles
 //! once into checked descriptors; the layout is recomputed here and a program whose section
@@ -186,6 +186,9 @@ pub(crate) struct TypeDesc {
     pub(crate) words: u32,
     members: Box<[Box<[u32]>]>,
     required: Box<[u32]>,
+    /// Singular string/bytes fields with a non-empty default (proto2), for the logical
+    /// accounting of absent fields at record close: `(ordinal, cells, string bytes)`.
+    defaults: Box<[(u32, u32, u32)]>,
     map_entry: bool,
     value_message: bool,
     required_closure: bool,
@@ -448,12 +451,21 @@ pub fn compile(bytes: &[u8]) -> Result<Compiled> {
         let mut oneofs = 0u32;
         let mut wide = false;
         let mut required = Vec::new();
+        let mut defaults = Vec::new();
         {
             let mut count = 0;
+            let mut defaulted = 0;
             for ordinal in 0..n {
-                count += usize::from(p.word(base + 16 + 40 * ordinal + 8)? & 8 != 0);
+                let f = base + 16 + 40 * ordinal;
+                count += usize::from(p.word(f + 8)? & 8 != 0);
+                // Singular string/bytes entries carry their default's logical size at +16
+                // (enum entries keep their value table there; see NativeSchema).
+                defaulted += usize::from(
+                    matches!(p.word(f + 4)?, 9 | 12) && p.word(f + 8)? & 1 == 0 && p.word(f + 16)? != 0,
+                );
             }
             required.try_reserve_exact(count).map_err(|_| ALLOCATION)?;
+            defaults.try_reserve_exact(defaulted).map_err(|_| ALLOCATION)?;
         }
         for ordinal in 0..n {
             let f = base + 16 + 40 * ordinal;
@@ -519,6 +531,13 @@ pub fn compile(bytes: &[u8]) -> Result<Compiled> {
             }
             if is_required {
                 required.push(ordinal as u32);
+            }
+            if matches!(kind, 9 | 12) && !repeated {
+                let units = p.word(f + 16)?;
+                if units != 0 {
+                    // A string default counts UTF-16 bytes; a bytes default counts cells.
+                    defaults.push(if kind == 9 { (ordinal as u32, 0, units) } else { (ordinal as u32, units, 0) });
+                }
             }
             descs.push(FieldDesc {
                 tag: number << 3 | wire,
@@ -669,7 +688,8 @@ pub fn compile(bytes: &[u8]) -> Result<Compiled> {
             }
         }
         let required_closure = !required.is_empty();
-        let closes = value_message || required_closure;
+        // Absent-default accounting also needs the close (it reads the final presence bits).
+        let closes = value_message || required_closure || !defaults.is_empty();
         let has_map = descs.iter().any(|f| f.map);
         types.push(TypeDesc {
             entries: entries.into_boxed_slice(),
@@ -684,6 +704,7 @@ pub fn compile(bytes: &[u8]) -> Result<Compiled> {
             words,
             members: members.into_boxed_slice(),
             required: required.into_boxed_slice(),
+            defaults: defaults.into_boxed_slice(),
             map_entry,
             value_message,
             required_closure,
@@ -1298,6 +1319,14 @@ pub(crate) struct Decoder<'a, 's> {
     records: u64,
     handles: u64,
     certified: bool,
+    /// Logical accounting of the reachable slab, as `SlabMessage.validate` computes it: cells
+    /// (fields per record, list elements, bytes lengths, absent bytes defaults) and string bytes
+    /// (two per UTF-16 unit of present strings, absent string defaults, unknown spans).
+    cells: u64,
+    string_bytes: u64,
+    /// Cleared when an orphaned record subtree cannot be subtracted (a oneof clearing a message
+    /// member, a folded or dropped map entry): the totals are then reported as unknown.
+    exact: bool,
     projection: Option<Projection<'a>>,
     skip_utf8: bool,
     external: bool,
@@ -1313,13 +1342,23 @@ pub(crate) struct Decoder<'a, 's> {
     frames: Frames<'s>,
 }
 
-/// Outcome of a decode: the slab length (written, or needed), counts and header flags.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+/// Outcome of a decode: the slab length (written, or needed), counts, header flags and the
+/// logical totals of an unprojected owning slab (`u32::MAX`: unknown or saturated; see
+/// `Decoder::exact`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Outcome {
     pub bytes: u64,
     pub records: u32,
     pub handles: u32,
     pub flags: u32,
+    pub cells: u32,
+    pub string_bytes: u32,
+}
+
+impl Default for Outcome {
+    fn default() -> Self {
+        Outcome { bytes: 0, records: 0, handles: 0, flags: 0, cells: u32::MAX, string_bytes: u32::MAX }
+    }
 }
 
 impl<'a, 's> Decoder<'a, 's> {
@@ -1391,6 +1430,7 @@ impl<'a, 's> Decoder<'a, 's> {
             self.frames.push(size, self.frame_bound)?
         };
         self.records += 1;
+        self.cells += self.c.types[ty as usize].fields.len() as u64;
         write32(base, self.handles as u32);
         self.handles += 1;
         let full = self.projection.is_some_and(|p| k > 0 && unsafe {
@@ -1549,6 +1589,11 @@ impl<'a, 's> Decoder<'a, 's> {
         if n > MAX_LENGTH {
             return Err(BUDGET);
         }
+        if text {
+            self.string_bytes += 2 * units as u64;
+        } else {
+            self.cells += n as u64;
+        }
         let header = if ascii { 8 } else { 12 };
         let at = self.alloc(header + n, 4)?;
         let handle = self.handles as u32;
@@ -1572,6 +1617,7 @@ impl<'a, 's> Decoder<'a, 's> {
     #[inline(always)]
     fn ascii(&mut self, n: usize, a: u64, b: u64) -> Result<u32> {
         let at = self.alloc(8 + n, 4)?;
+        self.string_bytes += 2 * n as u64;
         let handle = self.handles as u32;
         self.handles += 1;
         if self.fits(at, 8 + n.max(8)) {
@@ -1644,6 +1690,21 @@ impl<'a, 's> Decoder<'a, 's> {
             Self::set_presence(base, m, false);
             let f = &t.fields[m];
             let slot = unsafe { base.add(f.slot as usize) };
+            // The cleared member's payload or record subtree is orphaned.
+            match f.op {
+                OP_STRING | OP_BYTES => {
+                    let previous = read32(slot);
+                    if previous != 0 {
+                        self.orphan(previous, f.op == OP_STRING);
+                    }
+                }
+                OP_MESSAGE | OP_GROUP => {
+                    if read32(slot) != 0 {
+                        self.exact = false;
+                    }
+                }
+                _ => {}
+            }
             if f.width == 8 {
                 write64(slot, 0);
             } else {
@@ -1963,6 +2024,11 @@ impl<'a, 's> Decoder<'a, 's> {
                             Some((a, b)) => tri!(self.ascii(n, a, b), off!(start)),
                             None => tri!(self.string(off!(at), n, e.op == H_STR), off!(start)),
                         }};
+                        // A later occurrence of a singular field orphans the earlier payload.
+                        let previous = read32(slot);
+                        if previous != 0 {
+                            self.orphan(previous, e.op == H_STR);
+                        }
                         write32(slot, header);
                         mark!(ordinal, e, n != 0);
                     }
@@ -2038,6 +2104,8 @@ impl<'a, 's> Decoder<'a, 's> {
             let e = &t.entries[cordinal];
             if e.flags & E_REPEATED != 0 {
                 if e.flags & E_MAP != 0 && closed.invalid_map {
+                    // The entry record stays in the slab as an orphan; its bytes go unknown.
+                    self.exact = false;
                     tri!(self.keep_unknown(cstart, off!(p)), cstart);
                 } else {
                     tri!(
@@ -2189,9 +2257,37 @@ impl<'a, 's> Decoder<'a, 's> {
         self.select(k, t, ordinal);
         // SAFETY: frame `k` is open.
         let base = unsafe { (*self.frame(k)).base };
-        write32(unsafe { base.add(f.slot as usize) }, header);
+        let slot = unsafe { base.add(f.slot as usize) };
+        let previous = read32(slot);
+        if previous != 0 {
+            self.orphan(previous, f.op == OP_STRING);
+        }
+        write32(slot, header);
         Self::set_presence(base, ordinal, f.explicit || n != 0);
         Ok(())
+    }
+
+    /// Subtract an orphaned string/bytes payload from the logical totals: a singular field's
+    /// earlier occurrence, or a cleared oneof member. The header is read back only when it was
+    /// written (inside the output's writable prefix); otherwise the totals become unknown.
+    #[cold]
+    #[inline(never)]
+    fn orphan(&mut self, header: u32, text: bool) {
+        let at = header as usize;
+        if !self.fits(at, 12) {
+            self.exact = false;
+            return;
+        }
+        // SAFETY: the header lies inside the output's writable prefix.
+        let p = unsafe { self.out.add(at) };
+        let word = read32(p);
+        let n = (word & MAX_LENGTH as u32) as u64;
+        if text {
+            let units = if word & ASCII != 0 { n } else { read32(unsafe { p.add(8) }) as u64 };
+            self.string_bytes = self.string_bytes.saturating_sub(2 * units);
+        } else {
+            self.cells = self.cells.saturating_sub(n);
+        }
     }
 
     /// A scalar that is repeated, a oneof member or a closed enum (or a map entry's enum value).
@@ -2277,6 +2373,7 @@ impl<'a, 's> Decoder<'a, 's> {
             self.table.len(),
             self.max,
         );
+        let totals = (self.cells, self.string_bytes, self.exact);
         // Nothing is written and the walk's virtual cursor is not budgeted.
         self.limit = 0;
         self.max = usize::MAX;
@@ -2289,6 +2386,7 @@ impl<'a, 's> Decoder<'a, 's> {
             self.limit,
             self.max,
         ) = (saved.0, saved.1, saved.2, saved.3, saved.4, saved.6);
+        (self.cells, self.string_bytes, self.exact) = totals;
         self.table.truncate(saved.5);
         result
     }
@@ -2330,6 +2428,7 @@ impl<'a, 's> Decoder<'a, 's> {
         }
         if self.unknown.len() > (o.unknown as usize) {
             let n = self.unknown.len() - (o.unknown as usize);
+            self.string_bytes += n as u64;
             let at = self.alloc(4 + n, 4)?;
             if self.fits(at, 4 + n) {
                 let bytes = &self.unknown.as_slice()[(o.unknown as usize)..];
@@ -2346,6 +2445,12 @@ impl<'a, 's> Decoder<'a, 's> {
         for &ordinal in t.required.iter() {
             if !Self::present(o.base, ordinal as usize) {
                 self.certified = false;
+            }
+        }
+        for &(ordinal, cells, string_bytes) in t.defaults.iter() {
+            if !Self::present(o.base, ordinal as usize) {
+                self.cells += cells as u64;
+                self.string_bytes += string_bytes as u64;
             }
         }
         self.pending.truncate(o.pending as usize);
@@ -2446,6 +2551,7 @@ impl<'a, 's> Decoder<'a, 's> {
             if count == 0 {
                 continue;
             }
+            self.cells += count as u64;
             let size = 8 + if counts_only { 0 } else { count * f.width as usize };
             let at = self.alloc(size, 8)?;
             if self.fits(at, size) {
@@ -2498,6 +2604,7 @@ impl<'a, 's> Decoder<'a, 's> {
             if count == 0 {
                 continue;
             }
+            self.cells += count as u64;
             let w = f.width as usize;
             let size = 8 + if counts_only { 0 } else { count * w };
             let at = self.alloc(size, 8)?;
@@ -2549,6 +2656,8 @@ impl<'a, 's> Decoder<'a, 's> {
                     let mut dead = b;
                     dead.ordinal = NONE;
                     self.pending.set(j, dead);
+                    // The folded entry's record is orphaned with its subtree.
+                    self.exact = false;
                     break;
                 }
             }
@@ -2578,6 +2687,7 @@ impl<'a, 's> Decoder<'a, 's> {
                 Some(&i) => {
                     items[i].value = items[j].value;
                     items[j].ordinal = NONE;
+                    self.exact = false;
                 }
                 None => {
                     seen.insert(key(&items[j]), j);
@@ -2691,6 +2801,9 @@ fn decode_projected_with<'a>(
         records: 0,
         handles: 0,
         certified: true,
+        cells: 0,
+        string_bytes: 0,
+        exact: true,
         projection,
         skip_utf8: false,
         external: false,
@@ -2746,11 +2859,23 @@ fn decode_root(d: &mut Decoder) -> Result<Outcome> {
         | if d.certified { SLAB_CERTIFIED } else { 0 }
         | if d.projection.is_some() { SLAB_PROJECTED } else { 0 }
         | if d.projection.is_some_and(|p| p.flags & Projection::LAX != 0) { SLAB_LAX } else { 0 };
+    // Logical totals accompany a completely written, unprojected owning slab whose orphans were
+    // all subtracted; anything else (a sizing or overflowing pass, projection, borrowing, lax,
+    // an orphaned record subtree, saturation) reports `u32::MAX`, which no publisher may trust.
+    let saturate = |total: u64| total.min(u32::MAX as u64) as u32;
+    let (cells, string_bytes) =
+        if d.exact && d.projection.is_none() && flags == (SLAB_OWNING | SLAB_CERTIFIED) && bytes <= d.limit {
+            (saturate(d.cells), saturate(d.string_bytes))
+        } else {
+            (u32::MAX, u32::MAX)
+        };
     let outcome = Outcome {
         bytes: bytes as u64,
         records: d.records as u32,
         handles: d.handles as u32,
         flags,
+        cells,
+        string_bytes,
     };
     if bytes > d.limit {
         return Ok(outcome);

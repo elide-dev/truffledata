@@ -77,6 +77,12 @@ class SvmYamlMessage extends YamlMessage implements TapeReader {
   @Override public void copyText(boolean owned, long offset, byte[] output, int at, int length) {
     SvmTape.copyText(owned ? pool : input, owned ? poolBytes : inputBytes, offset, output, at, length);
   }
+  @Override public void copyWords(long from, long[] output, int at, int count) {
+    SvmTape.copyWords(words, this.count, from, output, at, count);
+  }
+  @Override public void copyDirectory(long from, long[] output, int at, int count) {
+    SvmTape.copyWords(directory, directoryCount, from, output, at, count);
+  }
   @Override public long textWord(boolean owned, long offset, int length) {
     if (length == 0) return 0;
     long size = owned ? poolBytes : inputBytes;

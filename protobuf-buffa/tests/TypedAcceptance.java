@@ -992,6 +992,65 @@ final class TypedAcceptance {
     }
   }
 
+  /**
+   * The plan-wide learned slab capacity is a high-water mark; a small message decoded after a large
+   * one through the same compiled plan must not retain the large slab's whole allocation array. The
+   * native byte[] fast path (FFM and SVM) hands {@code SlabMessage.takeOwnership} a heap array
+   * sized by the learned capacity, so spare capacity beyond the slab's own extent (plus a small
+   * slack) must be trimmed. The Java producer always returns an exact-extent slab, so this scenario
+   * guards the two native backends against the same drift fixed for SvmBackend in 2424f09 and is
+   * the regression that catches a future per-backend divergence.
+   */
+  private static void slabCapacityTrimmedAfterLargeDecode(BuffaWire decoder) {
+    var contract = plan("Sample");
+    // Generous budget: neither message clamps the learned high-water mark, so a later small
+    // slab is decoded through the byte[] fast path with capacity equal to the large extent.
+    int maxSlabBytes = 1 << 20;
+    try (var compiled = decoder.compile(contract, maxSlabBytes)) {
+      var large =
+          contract
+              .newBuilder()
+              .set(0, 1L)
+              .set(2, DataArray.copyOfBytes(new byte[50000]))
+              .set(14, "large")
+              .build();
+      var small =
+          contract
+              .newBuilder()
+              .set(0, 2L)
+              .set(2, DataArray.copyOfBytes(new byte[256]))
+              .set(14, "small")
+              .build();
+      byte[] largeWire = contract.encode(large);
+      byte[] smallWire = contract.encode(small);
+      int largeExtent = SlabCodec.decode(contract.layout(), largeWire).length;
+      int smallExtent = SlabCodec.decode(contract.layout(), smallWire).length;
+      Acceptance.check(largeExtent > smallExtent, "large slab extent exceeds small");
+      Acceptance.check(
+          largeExtent < SlabLimits.CRITICAL_BYTES, "large slab stays in the byte[] fast path");
+      // Decode the large message first so the plan-wide learned capacity becomes its extent.
+      var largeResult = compiled.decode(largeWire, maxSlabBytes);
+      Acceptance.check(largeResult.slabBytes() == largeExtent, "large slab valid extent");
+      Acceptance.check(
+          largeResult.retainedSlabBytes() <= largeExtent + Math.max(256, largeExtent),
+          "large slab retains no spare capacity beyond its own extent");
+      // The small message now decodes through the byte[] fast path with capacity == largeExtent.
+      var smallResult = compiled.decode(smallWire, maxSlabBytes);
+      Acceptance.check(smallResult.slabBytes() == smallExtent, "small slab valid extent");
+      Acceptance.check(
+          smallResult.retainedSlabBytes() == smallResult.slabBytes(),
+          "small slab trimmed to its own extent after a large decode (no high-water"
+              + " amplification)");
+      Acceptance.check(
+          smallResult.retainedSlabBytes() < largeExtent,
+          "small slab does not retain the large slab's whole allocation array");
+      Acceptance.check(
+          smallResult.getSize(2) == 256, "small slab payload survives the trim without corruption");
+      largeResult.close();
+      smallResult.close();
+    }
+  }
+
   private static ProtoPlan.FieldPlan projectedField(
       String name,
       int number,
@@ -1383,9 +1442,15 @@ final class TypedAcceptance {
           Acceptance.check(sum == 840000, "session decode checksum");
         }
         System.out.println("SESSION decode bytes/message=" + Arrays.toString(rounds));
+        // The opt-in Myna cells route (truffledata.buffa.cells, //protobuf-buffa/cells) calls the
+        // producer through NativeCell.execute(Object[]): the argument array, boxed integers,
+        // pointer and borrow objects add 320 B/call on HotSpot (elide-dev/myna#85). Its own
+        // ceiling; the default route keeps the 48 B contract.
+        double budget = Boolean.getBoolean("truffledata.buffa.cells") ? 384.1 : 48.1;
         for (double allocated : rounds)
           Acceptance.check(
-              allocated <= 48.1, "session decode Java allocation <=48 bytes: " + allocated);
+              allocated <= budget,
+              "session decode Java allocation <=" + (int) budget + " bytes: " + allocated);
       }
     }
   }
@@ -1528,6 +1593,7 @@ final class TypedAcceptance {
 
   static void run(BuffaWire decoder) throws Exception {
     heapSlabOwnership(decoder);
+    slabCapacityTrimmedAfterLargeDecode(decoder);
     heapSlabGcStress(decoder);
     concurrentDurableSlabCaches(decoder);
     slabSessions(decoder);

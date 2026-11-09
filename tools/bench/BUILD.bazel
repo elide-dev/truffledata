@@ -4,19 +4,24 @@ sh_test(
     name = "test",
     srcs = ["test.sh"],
     data = [
+        "aot_symbols.py",
         "bench.py",
         "compare.py",
         "consumer.py",
+        "json_pair_summary.py",
         "profile_summary.py",
+        "test_aot_symbols.py",
         "test_bench.py",
         "test_compare.py",
         "test_consumer.py",
+        "test_json_pair_summary.py",
         "test_profile_summary.py",
         "//benchmarks:cases.json",
     ],
 )
 
 exports_files([
+    "aot_symbols.py",
     "compare.py",
     "consumer.py",
 ])

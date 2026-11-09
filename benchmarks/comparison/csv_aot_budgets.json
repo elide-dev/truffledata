@@ -1,0 +1,16 @@
+{
+  "_comment": "Instruction/call ceilings for the CSV framing loop, staged writers and getString in the csv_profile image (x86-64, -O2, -march=compatibility). Pinned on 2026-11-08 from the WS10 final image (afa4aa5) with ~10% headroom; a change that lowers a value re-pins it downward (never upward without a ledger ruling). Before WS10: frameFused 7,750/296, frameSpans 3,252/118, framePlain 1,133/25, stringAt 102/8 (beat-stock-svm ledger, WS10). WS10b (2026-11-09) removed Numbers.dot (153/4) with the word-path FLOAT64 conversion and re-pinned convertDoubles from 1,414 to 1,321 instructions; Numbers_shortDecimal/longDecimal/parseDouble are pinned from that image. Shape only; timings come from csv_pair.",
+  "^IndexScan_framePlain$": {"instructions": 1246, "calls": 28},
+  "^IndexScan_scan$": {"instructions": 255, "calls": 16},
+  "^BatchBuilder_record$": {"instructions": 198, "calls": 17},
+  "^BatchBuilder_recordSlow$": {"instructions": 163, "calls": 11},
+  "^BatchBuilder_convert$": {"instructions": 312, "calls": 28},
+  "^BatchBuilder_convertLongs$": {"instructions": 760, "calls": 34},
+  "^BatchBuilder_convertDoubles$": {"instructions": 1453, "calls": 42},
+  "^BatchBuilder_convertBooleans$": {"instructions": 283, "calls": 19},
+  "^BatchBuilder_shiftSpans$": {"instructions": 129, "calls": 8},
+  "^CsvBatch_stringAt$": {"instructions": 1745, "calls": 81},
+  "^Numbers_parseDouble$": {"instructions": 191, "calls": 12},
+  "^Numbers_shortDecimal$": {"instructions": 170, "calls": 0},
+  "^Numbers_longDecimal$": {"instructions": 224, "calls": 0}
+}

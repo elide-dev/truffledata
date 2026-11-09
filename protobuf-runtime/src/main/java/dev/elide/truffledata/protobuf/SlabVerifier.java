@@ -290,8 +290,13 @@ final class SlabVerifier {
       int unknown = unknown(bytes, record);
       if (unknown != 0) count(state, handles + 1, unknownLength(bytes, unknown));
     }
+    // Slab words are out-of-line loads on SVM (P0.1 ablation): read each presence word once per
+    // 32 ordinals rather than once per ordinal. The record span above covers every word.
+    int presence = 0;
     for (int ordinal = 0; ordinal < plan.size(); ordinal++) {
-      if (!present(bytes, record, ordinal)) {
+      if ((ordinal & 31) == 0)
+        presence = getInt(bytes, record + RECORD_PRESENCE + 4 * (ordinal >>> 5));
+      if ((presence & (1 << ordinal)) == 0) {
         var field = plan.field(ordinal);
         if (field.required()) used |= MISSING_REQUIRED;
         if (state != null && !field.repeated()) {
@@ -354,24 +359,26 @@ final class SlabVerifier {
       case STRING, BYTES -> {
         int header = getInt(bytes, at);
         span(extent, header, ASCII_HEADER_BYTES, 4);
-        int length = stringLength(bytes, header);
-        boolean string = kind == ProtoPlan.Kind.STRING;
+        // One load of the length word decides length, ASCII and external (the SlabFormat
+        // accessors would each reload it).
+        int word = getInt(bytes, header + STRING_LENGTH), length = word & LENGTH_MASK;
+        boolean string = kind == ProtoPlan.Kind.STRING, ascii = (word & ASCII) != 0;
         // External payloads exist only in projected borrowing slabs.
-        if (external(bytes, header)) throw bad();
-        span(extent, header, (long) headerBytes(bytes, header) + length, 4);
-        int id = stringHandle(bytes, header);
+        if ((word & EXTERNAL) != 0) throw bad();
+        int payload = header + (ascii ? ASCII_HEADER_BYTES : STRING_HEADER_BYTES);
+        span(extent, header, (long) (payload - header) + length, 4);
+        int id = getInt(bytes, header + STRING_HANDLE);
         boolean verified = state != null && id >= 0 && id < handles && state[id] != 0;
         used = claim(state, handles, used, id, header, string ? -1 : -2);
         if (used < 0) return used;
         if (string) {
-          int units = utf16Length(bytes, header);
+          int units = ascii ? length : getInt(bytes, header + STRING_UTF16);
           // A prior claim completed UTF-8 validation or threw. Identity/span checks above
           // still run, and repeated payloads are charged on every logical occurrence.
-          if (!verified && units != SlabCodec.utf16(bytes, payload(bytes, header), length))
-            throw bad();
+          if (!verified && units != SlabCodec.utf16(bytes, payload, length)) throw bad();
           if (state != null) count(state, handles + 1, 2L * units);
         } else {
-          if (ascii(bytes, header) || getInt(bytes, header + STRING_UTF16) != 0) throw bad();
+          if (ascii || getInt(bytes, header + STRING_UTF16) != 0) throw bad();
           if (state != null) count(state, handles, length);
         }
         return used;

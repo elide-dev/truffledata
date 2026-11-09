@@ -56,6 +56,18 @@ class ConsumerValidationTest(unittest.TestCase):
         self.assertEqual({stage for engine, mode, stage in CELLS if engine == 'slab-session'},
                          {'decode', 'resident'})
 
+    def test_decode_probes_stay_out_of_the_default_matrix(self):
+        from consumer import PROBE_ENGINES, PROBE_GROUPS
+        self.assertFalse({e for e, _, _ in CELLS} & set(PROBE_ENGINES))
+        self.assertTrue(all(supported(p, 'decode', 'holdout') for p in PROBE_ENGINES))
+        self.assertFalse(supported('probe-native', 'resident', 'full'))
+        self.assertFalse(supported('slab', 'decode', 'holdout'))
+        self.assertEqual(select_groups('holdout:decode'), [('holdout', 'decode')])
+        self.assertNotIn(('holdout', 'decode'), GROUPS)
+        self.assertEqual(PROBE_GROUPS, [('full', 'decode'), ('holdout', 'decode')])
+        self.assertEqual(select_engines(['candidate'], ['candidate=slab,probe-native']),
+                         {'candidate': ('slab', 'probe-native')})
+
     def test_slab_storage_requires_full_capacity_accounting(self):
         record = copy.deepcopy(self.VALID)
         record.update(engine='slab', native_index_retained=False, slab_bytes_per_row=100,

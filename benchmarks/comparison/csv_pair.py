@@ -24,8 +24,12 @@ GROUPS = [(dataset, size) for size in (1 << 20, 128 << 20) for dataset in DATASE
 ENGINES = {
     'strings': ('truffledata-batch', 'truffledata-batch-native',
                 'truffledata-batch-owned', 'truffledata-batch-owned-native',
+                'truffledata-text', 'truffledata-text-native',
+                'truffledata-text-string', 'truffledata-text-string-native',
                 'kernel-native', 'fastcsv', 'jackson'),
     'typed': ('truffledata-plan', 'truffledata-plan-native', 'kernel-native', 'fastcsv'),
+    # Batch construction alone; typed minus typed-build is the readback of every typed cell.
+    'typed-build': ('truffledata-plan', 'truffledata-plan-native'),
 }
 
 
@@ -97,7 +101,7 @@ def main(argv):
     dataset, size = GROUPS[shard]
     select = os.environ.get('CSV_PAIR_ENGINES', '')
     cells = [(w, e, dataset, size, 'ingest') for w, engines in ENGINES.items()
-             if w != 'typed' or dataset in ('numeric', 'mixed') for e in engines]
+             if not w.startswith('typed') or dataset in ('numeric', 'mixed') for e in engines]
     if shard == 0:
         cells += [('typed-reads', e, dataset, size, stage)
                   for e in ('truffledata-plan', 'batch-fastcsv')
@@ -134,6 +138,12 @@ def main(argv):
                 process = subprocess.run([str(binaries[label]), *map(str, cell)],
                                          text=True, capture_output=True)
                 if process.returncode:
+                    # A cell the baseline binary predates (a new engine) is recorded
+                    # candidate-only; its checksum is still checked against the workload's.
+                    if label == 'baseline' and 'IllegalArgumentException: engine' in process.stderr:
+                        report.setdefault('baseline_unsupported', []).append(list(cell))
+                        print(label, *cell, fork, 'unsupported', flush=True)
+                        continue
                     raise RuntimeError(f'{label} {cell}: {process.stdout}\n{process.stderr}')
                 lines = [line for line in process.stdout.splitlines() if line.startswith('{')]
                 if len(lines) != 1:

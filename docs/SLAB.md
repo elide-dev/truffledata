@@ -126,7 +126,10 @@ payload or lazy child was emitted and the reader must retain immutable source in
 `PROJECTED` requires the matching immutable selection for reads. `LAX`: strings inside omitted subtrees were
 not validated. `CERTIFIED`: every record's required fields are present and no singular message
 was merged; when it is clear, the owner checks required fields from presence before exposing the
-slab (producers never reject missing required fields themselves).
+slab (producers never reject missing required fields themselves). The native producer also
+reports the slab's logical totals beside the header (`SlabResult.cells`/`string_bytes`, ABI 12,
+below); an in-process owner that receives a `CERTIFIED` slab with totals inside its limits
+publishes it after the O(1) header check alone.
 
 **String header** (start aligned to 4):
 
@@ -220,10 +223,11 @@ map entry gets at close). Deeper nesting is a budget error.
 The header's `records` and `handles` count orphans. Producers must agree byte for byte, orphans
 and padding included; this is what `producers_agree_byte_for_byte` (Task A3) compares.
 
-## Native producer (seam ABI 11)
+## Native producer (seam ABI 12)
 
-`protobuf-buffa/native/slab.rs` exposes four `buffa.seam` imports. ABI 11 retires the
-earlier native view and scalar-only producers; `TDS1` and `TDP1` remain unchanged:
+`protobuf-buffa/native/slab.rs` exposes four `buffa.seam` imports. ABI 11 retired the
+earlier native view and scalar-only producers; ABI 12 adds the logical totals to `SlabResult`
+(the slab bytes, `TDS1` and `TDP1` are unchanged):
 
 - `compileLayout(schema, length, result)`: compiles a schema program (`TDB3` + `TDL1`) once into
   an owned handle (`result.data`; `result.count` types). The layout is recomputed from the TDB3
@@ -243,10 +247,21 @@ earlier native view and scalar-only producers; `TDS1` and `TDP1` remain unchange
   than `maxSlabBytes` is `BUDGET` (2), never `NEEDS_CAPACITY`, so the caller never allocates for
   it; `maxDepth` above the native bound of 128 and `maxSlabBytes` above `Integer.MAX_VALUE` are
   `BUDGET` up front. `result` (`SlabResult`, 32 B): `bytes u64 · records u32 · handles u32 · flags u32 · error u32 ·
-  reserved u64`; on a rejection `error` is the input offset of the innermost field being decoded
+  cells u32 · string_bytes u32`; on a rejection `error` is the input offset of the innermost field being decoded
   (for invalid UTF-8, of the string's first payload byte, which is where protobuf-java fails:
   strings are validated when read, in wire order). Other statuses: `ALLOCATION` (3), `PANIC` (4;
-  no unwind crosses the ABI).
+  no unwind crosses the ABI). `cells` and `string_bytes` are the logical totals of the reachable
+  slab exactly as `SlabMessage.validate` computes them (cells: fields per record, list elements,
+  bytes payload lengths and absent singular bytes defaults; string bytes: two per UTF-16 unit of
+  present strings, absent singular string defaults and unknown spans), accumulated during the
+  decode (orphaned string/bytes payloads of overwritten singular fields and cleared oneof members
+  are subtracted). They are reported only for an unprojected, non-borrowing decode whose header is
+  exactly `OWNING | CERTIFIED` and whose orphans were all accounted; otherwise (a projection, a
+  borrowed payload, a cleared `CERTIFIED`, a oneof clearing a message member, a folded or dropped
+  map entry, or a total at or above 2^32 − 1) both are `0xFFFFFFFF`, which no owner may trust.
+  The absent-default terms come from the TDB3 program: a singular string/bytes field entry
+  carries its default's logical size in word +16 (`NativeSchema`; zero for the usual empty
+  default; enum entries keep their value table there).
 - `decodeSlabSmall(...)`: the same, as a bounded native leaf: `length` and `capacity` above
   64 KiB are `BUDGET` before any work; no heap allocation and no lock. Its scratch (pending list
   elements, merge payloads, unknown bytes, unknown-table entries, frames) is fixed stack storage

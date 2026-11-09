@@ -47,8 +47,11 @@ final class JavaStream {
     if (finished || failed != 0) return 0;
     long pending = size - start;
     long limit = bufferBytes;
-    // An open document may grow the buffer, a buffer at a time, up to maxDocument + 1.
-    if (!complete && pending >= limit) limit = Math.min(pending + bufferBytes, (long) maxDocument + 1);
+    // An open document may grow the buffer, a buffer at a time, up to maxDocument + 5: the +5 lets
+    // a full terminating `---`/`...` marker line (the 3-byte marker, an optional CR, and its LF) be
+    // buffered before scan() can classify it (a line needs its LF), without counting the marker
+    // bytes toward the document (next() bounds the classified extent, not total pending).
+    if (!complete && pending >= limit) limit = Math.min(pending + bufferBytes, (long) maxDocument + 5);
     return (int) Math.min(Integer.MAX_VALUE - 8, pending < limit ? limit - pending : 0);
   }
 
@@ -93,7 +96,11 @@ final class JavaStream {
         end = size;
         if (end == start) return EMPTY;
       } else {
-        if (size - start > maxDocument) return fail(LIMIT);
+        // The open document itself is bounded by the classified extent (scan - start), not total
+        // pending (size - start): trailing unclassified bytes of a not-yet-complete terminating
+        // `---`/`...` marker line are not part of the document. The authoritative length check below
+        // decides at decode time, so only a document larger than maxDocument is LIMIT.
+        if (scan - start > maxDocument) return fail(LIMIT);
         return EMPTY;
       }
       byte[] chunk = Arrays.copyOfRange(data, start, end);

@@ -38,10 +38,13 @@ class PublicationTest(unittest.TestCase):
                     expected.update(('com.google.protobuf:protobuf-java', 'com.google.protobuf:protobuf-java-util', 'dev.elide:truffledata-protobuf-runtime'))
                 if module == 'protobuf-runtime':
                     expected.add('com.google.code.gson:gson')
-                if module in ('protobuf-buffa', 'protobuf-buffa-bindings'):
+                if module in ('protobuf-buffa', 'protobuf-buffa-bindings', 'protobuf-buffa-cells'):
                     expected.update(('org.graalvm.sdk:nativeimage', 'org.graalvm.sdk:word'))
                 if module == 'protobuf-buffa':
                     expected.update(('dev.elide:truffledata-protobuf-runtime', 'dev.elide:truffledata-protobuf-buffa-bindings'))
+                if module == 'protobuf-buffa-cells':
+                    expected.update(('dev.elide:truffledata-protobuf-runtime', 'dev.elide:truffledata-protobuf-buffa',
+                                     'dev.elide:truffledata-protobuf-buffa-bindings'))
                 if module in ('tape', 'json', 'json-bindings', 'yaml', 'yaml-bindings', 'yaml-native'):
                     expected.update(('org.graalvm.sdk:nativeimage', 'org.graalvm.sdk:word'))
                 if module == 'tape-jvm':
@@ -105,6 +108,24 @@ class PublicationTest(unittest.TestCase):
                             self.assertTrue(any(n.endswith('ReadLongNodeGen.class') for n in names))
                 for suffix in artifact_suffixes(module, classifiers):
                     self.assertTrue(Path(str(prefix) + suffix).is_file())
+                if module == 'protobuf-buffa-cells':
+                    # The opt-in cells route ships its generated cells, their Native Image metadata and
+                    # the myna-truffle runtime; the default Buffa artifacts carry none of it.
+                    with zipfile.ZipFile(str(prefix) + '.jar') as jar:
+                        names = set(jar.namelist())
+                    for name in ('dev/elide/truffledata/buffa/CellsSvmBackend.class',
+                                 'dev/elide/truffledata/buffa/CellsFfmBackend.class',
+                                 'dev/elide/truffledata/buffa/cells/generated/BuffaCellsTruffle.class',
+                                 'dev/elide/truffledata/buffa/cells/generated/BuffaCellsJvmTruffle.class',
+                                 'dev/elide/myna/truffle/NativeCell.class',
+                                 'META-INF/native-image/dev.elide.myna/myna-truffle/native-image.properties',
+                                 'META-INF/native-image/dev.elide.myna/dev.elide.truffledata.buffa.cells.generated.BuffaCells/native-image.properties'):
+                        self.assertIn(name, names)
+                    self.assertFalse({n for n in names if n.startswith('dev/elide/truffledata/buffa/generated/')})
+                if module in ('protobuf-buffa', 'protobuf-buffa-bindings'):
+                    with zipfile.ZipFile(str(prefix) + '.jar') as jar:
+                        self.assertFalse({n for n in jar.namelist() if n.startswith(('dev/elide/truffledata/buffa/cells/', 'dev/elide/myna/truffle/'))
+                                          or n.endswith(('CellsSvmBackend.class', 'CellsFfmBackend.class'))})
                 if module == 'protobuf-buffa-bindings':
                     with zipfile.ZipFile(str(prefix) + '.jar') as jar:
                         self.assertIn('dev/elide/truffledata/buffa/generated/Buffa.class', jar.namelist())

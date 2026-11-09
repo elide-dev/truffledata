@@ -19,7 +19,16 @@ import subprocess
 LEGACY_ENGINES = ('stock', 'generated-owned', 'native-view', 'native-eager')
 ENGINES = ('stock', 'stock-interop', 'generated-owned', 'slab', 'slab-native', 'slab-projected',
            'slab-lazy', 'slab-session', 'slab-session-projected')
+# Benchmark-only decode pipeline probes (plan 2026-11-08-beat-stock-svm P0.1, SVM only). Never in
+# the default matrix: they run only when a binary's engines name them, on the PROBE_GROUPS.
+PROBE_ENGINES = tuple('probe-' + kind for kind in (
+    'empty', 'lease', 'transition', 'leaf-call', 'pin-only', 'native-leaf', 'native', 'alloc', 'pin',
+    'trim', 'verify', 'publish-generic', 'publish', 'trusted', 'internal', 'heap-pin2',
+    'heap-copy-in', 'copy-out', 'copy-out-publish', 'copy-out-leaf-publish',
+    'trusted-copy-out-leaf', 'session-raw', 'plan', 'plan-heap', 'session'))
+PROBE_GROUPS = [('full', 'decode'), ('holdout', 'decode')]
 KNOWN_ENGINES = tuple(dict.fromkeys((*ENGINES, *LEGACY_ENGINES)))
+REPORTED_ENGINES = (*KNOWN_ENGINES, *PROBE_ENGINES)
 STAGES = ('decode', 'resident', 'heap', 'detach', 'first', 'interpret', 'peak')
 MODE_STAGES = (('sparse', STAGES), ('full', STAGES), ('holdout', ('resident', 'peak')),
                ('holdout-sparse', ('resident', 'peak')), ('large', ('decode', 'resident', 'peak')))
@@ -28,6 +37,10 @@ GROUPS = [(m, s) for m, stages in MODE_STAGES for s in stages]
 
 
 def supported(engine, stage, mode):
+    if engine in PROBE_ENGINES:
+        return (mode, stage) in PROBE_GROUPS
+    if (mode, stage) not in GROUPS:
+        return False
     if engine.startswith('slab-session') and stage not in ('decode', 'resident'):
         return False
     if engine == 'stock-interop' and stage not in ('interpret', 'peak'):
@@ -114,7 +127,7 @@ def select_engines(labels, specifications):
         engines = tuple(raw.split(','))
         if label not in selected or not engines or len(set(engines)) != len(engines):
             raise ValueError('Engine selection requires a known binary and unique engines')
-        if any(engine not in KNOWN_ENGINES for engine in engines):
+        if any(engine not in REPORTED_ENGINES for engine in engines):
             raise ValueError('Unknown consumer engine')
         selected[label] = engines
     return selected
@@ -137,17 +150,22 @@ def select_groups(specification):
     if specification is None:
         return GROUPS
     groups = [tuple(group.split(':')) for group in specification.split(',')]
-    if len(set(groups)) != len(groups) or any(group not in GROUPS for group in groups):
+    if len(set(groups)) != len(groups) or any(group not in GROUPS and group not in PROBE_GROUPS
+                                               for group in groups):
         raise ValueError('Groups must be unique known mode:stage pairs')
     return groups
+
+
+def reported_groups():
+    return GROUPS + [group for group in PROBE_GROUPS if group not in GROUPS]
 
 
 def summarize(rows, labels):
     """Median of fork medians per (binary, engine, mode, stage), with observed fork ranges."""
     summary = []
     for label in labels:
-        for mode, stage in GROUPS:
-            for engine in KNOWN_ENGINES:
+        for mode, stage in reported_groups():
+            for engine in REPORTED_ENGINES:
                 chosen = [r for r in rows if (r['binary'], r['engine'], r['mode'], r['stage'])
                           == (label, engine, mode, stage)]
                 times = [statistics.median(r['ns_per_row']) for r in chosen
@@ -210,14 +228,19 @@ def markdown(rows, labels, runtime='svm'):
              'whole cell (decode cells: decode and release only). Native transient allocation '
              'peaks are not measured.', '']
     index = {(s['binary'], s['engine'], s['mode'], s['stage']): s for s in summary}
+    # Probe columns and probe-only groups appear only when a probe was measured.
+    columns = (*KNOWN_ENGINES,
+               *(e for e in PROBE_ENGINES if any(s['engine'] == e for s in summary)))
+    groups = [g for g in reported_groups()
+              if g in GROUPS or any((s['mode'], s['stage']) == g for s in summary)]
     for label in labels:
         lines += [f'## {label}: ns/row (× stock)', '',
-                  '| Mode | Stage | ' + ' | '.join(KNOWN_ENGINES) + ' |',
-                  '|---|---|' + '---:|' * len(KNOWN_ENGINES)]
-        for mode, stage in GROUPS:
+                  '| Mode | Stage | ' + ' | '.join(columns) + ' |',
+                  '|---|---|' + '---:|' * len(columns)]
+        for mode, stage in groups:
             base = stock.get((label, mode, stage))
             cells = []
-            for engine in KNOWN_ENGINES:
+            for engine in columns:
                 s = index.get((label, engine, mode, stage))
                 if s is None:
                     cells.append('—')

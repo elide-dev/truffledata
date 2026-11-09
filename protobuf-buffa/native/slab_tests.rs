@@ -7,7 +7,8 @@ use crate::{Field, PANIC, seam};
 // ---- Schema programs (NativeSchema's TDB3 tables plus the TDL1 section) ----
 
 /// One field: number, TDB3 kind (ProtoPlan.Kind ordinal + 1), flags (1 repeated, 2 map,
-/// 4 explicit presence, 8 required, 16 open enum), child type, closed enum values, oneof index.
+/// 4 explicit presence, 8 required, 16 open enum), child type, closed enum values, oneof index,
+/// and for a singular string/bytes field the logical size of its default (word +16).
 #[derive(Clone)]
 struct F {
     number: u32,
@@ -16,6 +17,7 @@ struct F {
     child: u32,
     values: Vec<i32>,
     oneof: u32,
+    default_units: u32,
 }
 
 const DOUBLE: u32 = 1;
@@ -46,6 +48,7 @@ fn f(number: u32, kind: u32, flags: u32) -> F {
         child: u32::MAX,
         values: Vec::new(),
         oneof: NONE,
+        default_units: 0,
     }
 }
 
@@ -146,7 +149,7 @@ fn program(types: &[T]) -> Vec<u8> {
         words.extend([fields.len() as u32, *flags, name, 1]);
         for x in fields {
             let (table, n) = if x.values.is_empty() {
-                (0, 0)
+                (x.default_units, 0)
             } else {
                 let at = tables;
                 tables += 12 * x.values.len();
@@ -392,7 +395,9 @@ fn slab_depth(c: &Compiled, input: &[u8], depth: u32) -> std::result::Result<Vec
         &mut at,
     )
     .unwrap();
-    assert_eq!(written, sized, "sizing and writing agree");
+    // Logical totals accompany a written slab only (a sizing pass cannot read back the payloads
+    // that later occurrences orphan); everything else agrees between the two passes.
+    assert_eq!(Outcome { cells: u32::MAX, string_bytes: u32::MAX, ..written }, sized, "sizing and writing agree");
     Ok(out)
 }
 
@@ -864,7 +869,8 @@ fn needed_bytes_exact() {
                 handles: 0,
                 flags: 0,
                 error: 0,
-                reserved: 0,
+                cells: u32::MAX,
+            string_bytes: u32::MAX,
             };
             let rp = (&mut r as *mut seam::SlabResult).cast();
             let f = if small {
@@ -1416,6 +1422,125 @@ fn unknown_fields_preserved_in_order() {
     }
 }
 
+/// The written slab's `Outcome` (totals included) at a generous capacity.
+fn outcome(c: &Compiled, input: &[u8]) -> Outcome {
+    let mut out = vec![0xA5u8; 1 << 16];
+    let mut at = 0;
+    decode(&c, input, FLAG_OWNING, out.as_mut_ptr(), out.len(), DEPTH, MAX_SLAB, true, &mut at).unwrap()
+}
+
+/// ABI 12 logical totals follow `SlabMessage.validate`: fields per record, list elements, bytes
+/// lengths and absent bytes defaults as cells; present strings (two per UTF-16 unit), absent string
+/// defaults and unknown spans as string bytes; orphaned string/bytes payloads subtracted; unknown
+/// (`u32::MAX`) when a record subtree is orphaned, `CERTIFIED` is clear or nothing was written.
+#[test]
+fn logical_totals_follow_the_java_accounting() {
+    let schema = vec![(
+        512,
+        vec![
+            F { default_units: 10, ..f(1, STRING, EXPLICIT) }, // default "hello": 10 UTF-16 bytes
+            F { default_units: 3, ..f(2, BYTES, EXPLICIT) },   // default of three bytes: 3 cells
+            f(3, INT32, 0),
+            m(4, MESSAGE, EXPLICIT, 0),
+            f(5, STRING, REPEATED),
+            f(6, STRING, 0),
+        ],
+    )];
+    let c = compiled(&schema);
+    let exact = |o: Outcome| {
+        assert_eq!(o.flags, SLAB_OWNING | SLAB_CERTIFIED, "{o:?}");
+        (o.cells, o.string_bytes)
+    };
+    // An empty message: six fields, the absent bytes default and the absent string default.
+    assert_eq!(exact(outcome(&c, &[])), (6 + 3, 10));
+    // Present defaults replace their default terms; an implicit string counts its UTF-16 units.
+    let mut w = Vec::new();
+    bytes(&mut w, 1, b"hi");
+    bytes(&mut w, 2, &[9]);
+    bytes(&mut w, 6, "\u{e9}".as_bytes());
+    assert_eq!(exact(outcome(&c, &w)), (6 + 1, 2 * 2 + 2 * 1));
+    // A later occurrence of a singular string orphans the earlier payload, which is subtracted.
+    let mut w = Vec::new();
+    bytes(&mut w, 1, b"hi");
+    bytes(&mut w, 1, b"hey!");
+    bytes(&mut w, 1, "\u{4e2d}\u{6587}".as_bytes());
+    assert_eq!(exact(outcome(&c, &w)), (6 + 3, 2 * 2));
+    // An implicit string overwritten by an empty one is absent again (its default is empty).
+    let mut w = Vec::new();
+    bytes(&mut w, 6, b"abc");
+    bytes(&mut w, 6, b"");
+    assert_eq!(exact(outcome(&c, &w)), (6 + 3, 10));
+    // A later bytes occurrence is subtracted from the cells.
+    let mut w = Vec::new();
+    bytes(&mut w, 2, &[1, 2, 3, 4, 5]);
+    bytes(&mut w, 2, &[1]);
+    assert_eq!(exact(outcome(&c, &w)), (6 + 1, 10));
+    // Repeated strings: the list count and every element's units.
+    let mut w = Vec::new();
+    for s in [&b"a"[..], b"bb", b"ccc"] {
+        bytes(&mut w, 5, s);
+    }
+    assert_eq!(exact(outcome(&c, &w)), (6 + 3 + 3, 10 + 2 * 6));
+    // A child record charges its own fields and defaults.
+    let mut child = Vec::new();
+    field(&mut child, 3, 1);
+    let mut w = Vec::new();
+    bytes(&mut w, 4, &child);
+    assert_eq!(exact(outcome(&c, &w)), (2 * (6 + 3), 2 * 10));
+    // Unknown fields charge their span length as string bytes.
+    let mut w = Vec::new();
+    field(&mut w, 99, 1);
+    bytes(&mut w, 98, b"xyz");
+    assert_eq!(exact(outcome(&c, &w)), (6 + 3, 10 + 3 + 6)); // two-byte tags: 3 + 6 span bytes
+    // A merged singular message clears CERTIFIED: no totals.
+    let mut w = Vec::new();
+    bytes(&mut w, 4, &child);
+    bytes(&mut w, 4, &child);
+    let merged = outcome(&c, &w);
+    assert_eq!(merged.flags, SLAB_OWNING);
+    assert_eq!((merged.cells, merged.string_bytes), (u32::MAX, u32::MAX));
+    // A oneof switching away from a message member orphans that record subtree: unknown totals,
+    // while switching away from a string member is subtracted exactly.
+    let choice = compiled(&choice());
+    let mut w = Vec::new();
+    bytes(&mut w, 3, &{ let mut x = Vec::new(); field(&mut x, 1, 1); x });
+    field(&mut w, 1, 5);
+    let cleared = outcome(&choice, &w);
+    assert_eq!(cleared.flags, SLAB_OWNING | SLAB_CERTIFIED);
+    assert_eq!((cleared.cells, cleared.string_bytes), (u32::MAX, u32::MAX));
+    let mut w = Vec::new();
+    bytes(&mut w, 2, b"gone");
+    field(&mut w, 1, 5);
+    bytes(&mut w, 6, &[1, 2]);
+    field(&mut w, 4, 7);
+    assert_eq!(exact(outcome(&choice, &w)), (7, 0));
+    // Maps: distinct keys count entries, their records and key strings; a duplicate key folds an
+    // entry and orphans its record, so the totals become unknown.
+    let maps = compiled(&maps());
+    let entry = |key: &[u8], value: u64| {
+        let mut e = Vec::new();
+        bytes(&mut e, 1, key);
+        field(&mut e, 2, value);
+        e
+    };
+    let mut w = Vec::new();
+    bytes(&mut w, 1, &entry(b"a", 1));
+    bytes(&mut w, 1, &entry(b"bb", 2));
+    assert_eq!(exact(outcome(&maps, &w)), (2 + 2 + 2 * 2, 2 * 3));
+    bytes(&mut w, 1, &entry(b"a", 3));
+    let folded = outcome(&maps, &w);
+    assert_eq!(folded.flags, SLAB_OWNING | SLAB_CERTIFIED);
+    assert_eq!((folded.cells, folded.string_bytes), (u32::MAX, u32::MAX));
+    // Sizing and overflowing passes report no totals (nothing was written).
+    let mut at = 0;
+    let sized = decode(&c, &child, FLAG_OWNING | FLAG_SIZING_ONLY, std::ptr::null_mut(), 0, DEPTH, MAX_SLAB, true, &mut at).unwrap();
+    assert_eq!((sized.cells, sized.string_bytes), (u32::MAX, u32::MAX));
+    let mut small = [0u8; 8];
+    let short = decode(&c, &child, FLAG_OWNING, small.as_mut_ptr(), small.len(), DEPTH, MAX_SLAB, true, &mut at).unwrap();
+    assert!(short.bytes > small.len() as u64);
+    assert_eq!((short.cells, short.string_bytes), (u32::MAX, u32::MAX));
+}
+
 /// Nesting deeper than `max_depth` fails with BUDGET: messages, groups, unknown groups and the
 /// empty value record of a map entry at the limit.
 #[test]
@@ -1506,7 +1631,8 @@ fn small_entry_allocates_nothing() {
             handles: 0,
             flags: 0,
             error: 0,
-            reserved: 0,
+            cells: u32::MAX,
+            string_bytes: u32::MAX,
         };
         let rp = (&mut r as *mut seam::SlabResult).cast();
         for small in [true, false] {
@@ -1561,7 +1687,8 @@ fn small_entry_allocates_nothing() {
         handles: 0,
         flags: 0,
         error: 0,
-        reserved: 0,
+        cells: u32::MAX,
+            string_bytes: u32::MAX,
     };
     let rp = (&mut r as *mut seam::SlabResult).cast();
     unsafe {
@@ -1896,7 +2023,7 @@ fn projection_ffi_normal_and_critical_match_without_allocations() {
     let wire=[8,7,26,3,10,1,b'x',34,3,10,1,b'y'];
     let expected=projected_slab(&c,&wire,&mask,FLAG_BORROWING).unwrap();
     let mut output=vec![0xa5;expected.len()];
-    let mut result=seam::SlabResult {bytes:0,records:0,handles:0,flags:0,error:0,reserved:0};
+    let mut result=seam::SlabResult {bytes:0,records:0,handles:0,flags:0,error:0,cells:u32::MAX,string_bytes:u32::MAX};
     for call in [crate::td_buffa_decode_slab,crate::td_buffa_decode_slab_small] {
         let (status,allocations)=allocation_probe::allocations(|| unsafe {
             call((&c as *const Compiled).cast(),wire.as_ptr(),wire.len() as u64,FLAG_BORROWING,

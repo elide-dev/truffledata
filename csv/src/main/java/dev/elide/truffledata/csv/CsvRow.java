@@ -57,6 +57,23 @@ public final class CsvRow extends AbstractRow {
     return batch.stringAt(index, column);
   }
 
+  /**
+   * The STRING cell as a new {@link CsvText} bound to this batch (no copy of the bytes for unescaped
+   * heap cells). Throws {@link ContractViolation} on null, missing or non-STRING.
+   */
+  public CsvText getText(int column) {
+    return batch.textAt(index, column, new CsvText());
+  }
+
+  /**
+   * Binds the caller's reusable {@code into} to the STRING cell and returns it, so one text can
+   * walk a batch without allocating. Throws {@link ContractViolation} on null, missing or non-STRING
+   * (leaving {@code into} unchanged).
+   */
+  public CsvText getText(int column, CsvText into) {
+    return batch.textAt(index, column, Objects.requireNonNull(into));
+  }
+
   public long getLong(int column) {
     long[] v = batch.columns[column].presentLongs;
     return index < v.length ? v[index] : batch.longSlow(index, column);
@@ -82,7 +99,10 @@ public final class CsvRow extends AbstractRow {
     byte state = column.state(row);
     if (state != Column.PRESENT) return state == Column.NULL ? DataNull.INSTANCE : Missing.INSTANCE;
     long[] spans = column.spans;
-    if (spans != null) return CsvBatch.string(batch, spans[row]);
+    if (spans != null) {
+      long span = spans[row];
+      return batch.dialect.textCells ? CsvText.of(batch, span) : CsvBatch.string(batch, span);
+    }
     long[] longs = column.longs;
     if (longs != null) return longs[row];
     double[] doubles = column.doubles;

@@ -11,7 +11,7 @@ load(":native_consumer.bzl", "native_consumers")
 
 release_version(
     name = "version",
-    build_setting_default = "0.10.0-SNAPSHOT",
+    build_setting_default = "0.11.0-SNAPSHOT",
     visibility = ["//visibility:public"],
 )
 
@@ -30,6 +30,7 @@ MODULES = [
     "protobuf-runtime",
     "protobuf-buffa",
     "protobuf-buffa-bindings",
+    "protobuf-buffa-cells",
     "tape",
     "tape-jvm",
     "json",
@@ -50,6 +51,9 @@ MODULES = [
 # Publication libraries that are not the module's own //<module> target.
 LIBRARIES = {
     "protobuf-buffa-bindings": "//protobuf-buffa:bindings",
+    # The opt-in Myna Truffle cells route (-Dtruffledata.buffa.cells=true; docs/BUFFA.md), its
+    # generated cells and the exact myna-truffle runtime they were generated against.
+    "protobuf-buffa-cells": ":protobuf_buffa_cells_library",
     # The shared tape classes plus the exact Myna value ABI runtime they extend (YAML plan Task 4).
     "tape": ":tape_library",
     # JVM-only FFM tape reader, published separately like json-jvm.
@@ -86,6 +90,48 @@ java_library(
         "//bazel:myna_compiler_sdk",
         "//bazel:truffle_processor",
         "//core",
+        "@maven//:org_graalvm_sdk_nativeimage",
+        "@maven//:org_graalvm_sdk_word",
+        "@maven//:org_graalvm_truffle_truffle_api",
+        "@maven//:org_jspecify_jspecify",
+    ],
+)
+
+# truffledata-protobuf-buffa-cells: the route, the cells generated from the derived seams and Myna's
+# language-neutral cells runtime. Myna is not published to Maven, so its runtime ships here, as
+# truffledata-tape carries the Myna value ABI; nothing else in the release depends on this artifact.
+# //protobuf-buffa/cells compiles the route under NullAway; this republishes it.
+genrule(
+    name = "protobuf_buffa_cells_resources",
+    srcs = [
+        "//protobuf-buffa/cells:native_resources",
+        "@myna//:truffle_resources",
+    ],
+    outs = [
+        "cells_resources/META-INF/native-image/dev.elide.myna/dev.elide.truffledata.buffa.cells.generated.BuffaCells/native-image.properties",
+        "cells_resources/META-INF/native-image/dev.elide.myna/myna-truffle/native-image.properties",
+    ],
+    cmd = "cp $(location //protobuf-buffa/cells:native_resources) $(location cells_resources/META-INF/native-image/dev.elide.myna/dev.elide.truffledata.buffa.cells.generated.BuffaCells/native-image.properties) && " +
+          "cp $(location @myna//:truffle_resources) $(location cells_resources/META-INF/native-image/dev.elide.myna/myna-truffle/native-image.properties)",
+)
+
+java_library(
+    name = "protobuf_buffa_cells_library",
+    srcs = [
+        "//protobuf-buffa/cells:generated_sources",
+        "//protobuf-buffa/cells:sources",
+        "@myna//:truffle_sources",
+    ],
+    javacopts = ["-XepDisableAllChecks"],
+    resource_strip_prefix = "tools/release/cells_resources",
+    resources = [":protobuf_buffa_cells_resources"],
+    deps = [
+        "//bazel:myna_compiler_sdk",
+        "//bazel:truffle_processor",
+        "//core",
+        "//protobuf-buffa",
+        "//protobuf-buffa:bindings",
+        "//protobuf-runtime",
         "@maven//:org_graalvm_sdk_nativeimage",
         "@maven//:org_graalvm_sdk_word",
         "@maven//:org_graalvm_truffle_truffle_api",
@@ -274,6 +320,10 @@ test_suite(
         "dev.elide:truffledata-protobuf-runtime:{version}",
         "dev.elide:truffledata-protobuf-buffa-bindings:{version}",
     ] if module == "protobuf-buffa" else []) + ([
+        "dev.elide:truffledata-protobuf-runtime:{version}",
+        "dev.elide:truffledata-protobuf-buffa:{version}",
+        "dev.elide:truffledata-protobuf-buffa-bindings:{version}",
+    ] if module == "protobuf-buffa-cells" else []) + ([
         "dev.elide:truffledata-tape:{version}",
     ] if module == "tape-jvm" else []) + ([
         "dev.elide:truffledata-json-bindings:{version}",
@@ -309,6 +359,7 @@ test_suite(
     ] if module in [
         "protobuf-buffa",
         "protobuf-buffa-bindings",
+        "protobuf-buffa-cells",
         "tape",
         "json",
         "json-bindings",
@@ -405,6 +456,10 @@ sh_test(
         ":protobuf-runtime_import",
         ":protobuf-buffa-bindings_import",
     ] if module == "protobuf-buffa" else []) + ([
+        ":protobuf-buffa-bindings_import",
+        ":protobuf-buffa_import",
+        ":protobuf-runtime_import",
+    ] if module == "protobuf-buffa-cells" else []) + ([
         ":tape_import",
     ] if module == "tape-jvm" else []) + ([
         ":json-bindings_import",
@@ -440,6 +495,7 @@ sh_test(
     ] if module in [
         "protobuf-buffa",
         "protobuf-buffa-bindings",
+        "protobuf-buffa-cells",
         "tape",
         "json",
         "json-bindings",

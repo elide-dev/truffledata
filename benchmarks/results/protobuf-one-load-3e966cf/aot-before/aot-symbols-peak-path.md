@@ -1,0 +1,47 @@
+| Symbol | Instructions | Calls | Frame B | Stack loads | Stack stores |
+|---|---:|---:|---:|---:|---:|
+| `ConsumerComparison$FieldAudit_read` | 2297 | 139 | 104 | 190 | 97 |
+| `ConsumerComparison$SharedRoot` | 287 | 14 | 40 | 12 | 2 |
+| `ConsumerComparison$SharedRoot_execute` | 276 | 19 | 72 | 21 | 14 |
+| `ConsumerComparison$SharedRoot_score` | 2993 | 197 | 136 | 248 | 161 |
+| `DataLibraryGen$CachedDispatchFirst_getLimit` | 37 | 0 | 8 | 0 | 0 |
+| `DataLibraryGen$CachedDispatchNext_getLimit` | 12 | 1 | 24 | 0 | 0 |
+| `DataLibraryGen$CachedDispatch_accepts` | 35 | 0 | 8 | 0 | 0 |
+| `DataLibraryGen$CachedDispatch_getSchema` | 97 | 4 | 56 | 11 | 5 |
+| `DataLibraryGen$CachedDispatch_isPresent` | 91 | 4 | 56 | 12 | 6 |
+| `DataLibraryGen$CachedDispatch_read` | 91 | 4 | 56 | 12 | 6 |
+| `DataLibraryGen$CachedDispatch_readBoolean` | 91 | 4 | 56 | 12 | 6 |
+| `DataLibraryGen$CachedDispatch_readDouble` | 91 | 4 | 56 | 12 | 6 |
+| `DataLibraryGen$CachedDispatch_readLong` | 91 | 4 | 56 | 12 | 6 |
+| `DataLibraryGen$CachedDispatch_specialize` | 290 | 22 | 56 | 26 | 14 |
+| `BorrowedSlabRow$Slot_booleanOf` | 288 | 28 | 56 | 7 | 24 |
+| `BorrowedSlabRow$Slot_has` | 62 | 4 | 40 | 0 | 3 |
+| `BorrowedSlabRow$Slot_lengthBound` | 1266 | 127 | 120 | 89 | 137 |
+| `BorrowedSlabRow$Slot_lengthIn` | 1382 | 134 | 104 | 61 | 206 |
+| `BorrowedSlabRow$Slot_readBooleanBound` | 308 | 31 | 56 | 7 | 28 |
+| `BorrowedSlabRow$Slot_trusted` | 80 | 6 | 40 | 0 | 3 |
+| `SlabRow$Slot_booleanOf` | 330 | 30 | 72 | 7 | 35 |
+| `SlabRow$Slot_has` | 80 | 5 | 40 | 3 | 6 |
+| `SlabRow$Slot_lengthBound` | 1930 | 146 | 120 | 85 | 160 |
+| `SlabRow$Slot_lengthIn` | 1888 | 146 | 120 | 84 | 160 |
+| `SlabRow$Slot_readBooleanBound` | 342 | 31 | 72 | 8 | 35 |
+| `HashMap_get` | 38 | 1 | 24 | 0 | 0 |
+| `Layout_accessor` | 359 | 14 | 56 | 28 | 23 |
+| `ReadBooleanNode_accessed` | 83 | 5 | 24 | 1 | 3 |
+| `ReadLengthNode_accessed` | 36 | 2 | 24 | 0 | 0 |
+| `SlabArray_get` | 1055 | 72 | 72 | 32 | 168 |
+| `SlabArray_isArrayElementReadable` | 22 | 0 | 8 | 0 | 0 |
+| `SlabArray_readArrayElement` | 1069 | 73 | 72 | 37 | 168 |
+| `SlabArray_size` | 37 | 0 | 8 | 0 | 0 |
+| `SlabFormat_listCount` | 57 | 3 | 40 | 0 | 6 |
+| `SlabFormat_present` | 77 | 3 | 40 | 2 | 7 |
+| `SlabFormat_stringHandle` | 80 | 3 | 40 | 1 | 5 |
+| `SlabFormat_utf16Length` | 92 | 4 | 40 | 0 | 6 |
+| `SlabMessage_cached` | 45 | 2 | 24 | 0 | 1 |
+| `SlabMessage_expandChild` | 112 | 11 | 24 | 0 | 0 |
+| `SlabMessage_requireValue` | 178 | 20 | 40 | 1 | 21 |
+| `SlabMessage_unsigned` | 296 | 11 | 56 | 18 | 20 |
+| `SlabRow_get` | 1213 | 80 | 88 | 46 | 222 |
+| `SlabRow_has` | 144 | 10 | 40 | 0 | 16 |
+| `SlabRow_value` | 840 | 53 | 72 | 35 | 117 |
+| `ReadLongNodeGen\$InlineReaderNodeGen\$Inlined_execute` | (no match) | | | | |
