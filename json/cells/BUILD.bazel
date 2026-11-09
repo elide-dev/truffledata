@@ -1,0 +1,47 @@
+load("@rules_java//java:defs.bzl", "java_library")
+load("//bazel:myna.bzl", "myna_bindings")
+
+package(default_visibility = ["//visibility:public"])
+
+# The opt-in JSON Truffle cells route (-Dtruffledata.json.cells=true, default off until a paired
+# SVM measurement shows a win). Like //protobuf-buffa/cells, the cells come from a seam *derived*
+# from the production //json/native:json.seam: only the module line changes (cells options,
+# package and class), so every import, struct and contract is the production one and the
+# production ABI fingerprint, bindings and natives are unchanged. The derived fingerprint folds in
+# the cells options and is never compared with a library; JsonJvm verifies the production one.
+# JVM (FFM-backed cells) only so far; the SVM variant (truffle_backend=native, transitions=direct,
+# folded in a hosted Feature) is follow-up work.
+genrule(
+    name = "seam_jvm",
+    srcs = ["//json/native:json.seam"],
+    outs = ["cells_jvm.seam"],
+    cmd = ("sed -e 's| java_package=dev.elide.truffledata.json.generated java_class=Json | " +
+           "java_package=dev.elide.truffledata.json.cells.generated java_class=JsonCellsJvm " +
+           "truffle_cells=true truffle_backend=ffm |' $< > $@ && " +
+           "grep -q '^module truffledata_json .* java_class=JsonCellsJvm truffle_cells=true truffle_backend=ffm ' $@"),
+)
+
+myna_bindings(
+    name = "bindings_jvm",
+    abi = False,
+    java_class = "JsonCellsJvm",
+    java_package = "dev.elide.truffledata.json.cells.generated",
+    out = "generated/jvm",
+    seam = ":seam_jvm",
+    truffle = True,
+)
+
+java_library(
+    name = "bindings",
+    srcs = [
+        "generated/jvm/JsonCellsJvmFFM.java",
+        "generated/jvm/JsonCellsJvmTruffle.java",
+    ],
+    deps = [
+        "//bazel:myna_compiler_sdk",
+        "@maven//:org_graalvm_sdk_nativeimage",
+        "@maven//:org_graalvm_sdk_word",
+        "@maven//:org_graalvm_truffle_truffle_api",
+        "@myna//:truffle",
+    ],
+)
