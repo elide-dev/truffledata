@@ -7,7 +7,7 @@ import unittest
 import xml.etree.ElementTree as ET
 import zipfile
 
-from maven_repo import artifact_suffixes, built_classifiers, CLASSIFIERS, MODULES, NAMESPACE, stage, validate_version, TRIPLES
+from maven_repo import artifact_suffixes, built_classifiers, CLASSIFIERS, MODULES, MUSL_MODULES, NAMESPACE, NATIVE_MODULES, stage, validate_version, TRIPLES
 
 
 class PublicationTest(unittest.TestCase):
@@ -194,6 +194,21 @@ class PublicationTest(unittest.TestCase):
             for module in MODULES:
                 versions = ET.parse(repo / 'dev/elide' / ('truffledata-' + module) / 'maven-metadata.xml').findall('versioning/versions/version')
                 self.assertEqual([v.text for v in versions], [version, '0.0.1'])
+
+    def test_musl_suffixes(self):
+        # CSV and YAML ship static-only musl archives (no shared library, no bitcode twin); JSON and Buffa do not.
+        self.assertEqual(set(MUSL_MODULES), {'csv-native', 'yaml'})
+        self.assertTrue(set(MUSL_MODULES) <= set(NATIVE_MODULES))
+        for module in NATIVE_MODULES:
+            suffixes = artifact_suffixes(module)
+            musl = {s for s in suffixes if '-musl' in s}
+            if module in MUSL_MODULES:
+                self.assertEqual(musl, {'-linux-x86_64-musl.a', '-linux-aarch64-musl.a'})
+            else:
+                self.assertEqual(musl, set())
+            self.assertEqual('-native.h' in suffixes, module in ('protobuf-buffa', 'csv-native'))
+        self.assertEqual(artifact_suffixes('yaml', ('linux-aarch64-musl',)), ('.pom', '.jar', '-sources.jar', '-javadoc.jar', '.module', '-linux-aarch64-musl.a'))
+        self.assertEqual(artifact_suffixes('json', ('linux-aarch64-musl',)), ('.pom', '.jar', '-sources.jar', '-javadoc.jar', '.module'))
 
     def test_unsafe_versions(self):
         for version in ('../escape', '1.0.0/<tag>', '', 'latest'):

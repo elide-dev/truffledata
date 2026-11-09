@@ -32,6 +32,9 @@ TRIPLES = {
     'linux-aarch64-musl': 'aarch64-unknown-linux-musl',
 }
 NATIVE_MODULES = ('protobuf-buffa', 'json', 'yaml', 'csv-native')
+# Modules that also ship static-only musl archives, and the //tools/release native_attachments collection holding
+# them. Keep in sync with MUSL_NATIVES in tools/release/BUILD.bazel.
+MUSL_MODULES = {'csv-native': 'csv_musl_natives', 'yaml': 'yaml_musl_natives'}
 # ELF e_machine per Linux classifier.
 ELF_MACHINES = {'linux-x86_64': 0x3e, 'linux-aarch64': 0xb7}
 
@@ -45,7 +48,7 @@ def native_suffixes(classifiers=tuple(CLASSIFIERS)):
 
 
 def artifact_suffixes(module, classifiers=tuple(CLASSIFIERS)):
-    classifiers = tuple(c for c in classifiers if module == 'csv-native' or not c.endswith('-musl'))
+    classifiers = tuple(c for c in classifiers if module in MUSL_MODULES or not c.endswith('-musl'))
     if module == 'bom':
         return ('.pom', '.module')
     common = ('.pom', '.jar', '-sources.jar', '-javadoc.jar', '.module')
@@ -102,7 +105,7 @@ def stage(publications, repository, version, natives=(), classifiers=tuple(CLASS
         target.mkdir(parents=True, exist_ok=True)
         for suffix in artifact_suffixes(module, classifiers):
             name = artifact + '-' + version + suffix
-            candidates = [p for p in [source / name] + [Path(d) / collection / relative / version / name for d in natives for collection in (module + '_natives', 'csv_musl_natives')] if p.is_file()]
+            candidates = [p for p in [source / name] + [Path(d) / collection / relative / version / name for d in natives for collection in (module + '_natives',) + tuple(MUSL_MODULES.values())] if p.is_file()]
             if not candidates:
                 raise ValueError('Missing artifact: %s (looked in %s and %d natives directories)' % (name, source, len(natives)))
             path = candidates[0]
