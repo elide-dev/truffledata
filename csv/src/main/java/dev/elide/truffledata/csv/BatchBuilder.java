@@ -168,7 +168,7 @@ final class BatchBuilder implements CsvScanner.Records {
     }
     fusable = simple;
     spanOnly = strings;
-    stages = simple && !strings;
+    stages = simple;
   }
 
   /** Whether {@link IndexScan} frames this batch with the plain loop and staged records. */
