@@ -460,6 +460,9 @@ data_java_library(
         "ConsumerProfile.java",
         "StockInteropFeature.java",
         "StockInteropRow.java",
+        # Benchmark-only decode pipeline probes (P0.1); split packages, never on a production path.
+        "probes/DecodeProbe.java",
+        "probes/PublishProbe.java",
     ],
     deps = [
         ":comparison",
@@ -471,6 +474,7 @@ data_java_library(
         "@maven//:com_google_protobuf_protobuf_java",
         "@maven//:org_graalvm_polyglot_polyglot",
         "@maven//:org_graalvm_sdk_nativeimage",
+        "@maven//:org_graalvm_sdk_word",
         "@maven//:org_graalvm_truffle_truffle_api",
         "@maven//:org_graalvm_truffle_truffle_runtime",
     ],
@@ -602,6 +606,53 @@ label_flag(
         ("consumer_measure_jvm", "jvm", ":consumer_jvm", ":consumer_jvm_baseline"),
     ]
 ]
+
+# P0.1 decode pipeline ablation (plan 2026-11-08-beat-stock-svm): the production slab decoder
+# through its C ABI on the consumer fixture, with no JVM, transition, pinning or publication.
+cc_binary(
+    name = "consumer_native_probe",
+    testonly = True,
+    srcs = ["consumer_native_probe.c"],
+    copts = ["-O2"],
+    # Bazel's ThinLTO indexing cannot address members of the Rust archive; lld links its bitcode.
+    features = ["-thin_lto"],
+    tags = ["manual"],
+    target_compatible_with = [
+        "@platforms//os:linux",
+        "@platforms//cpu:x86_64",
+    ],
+    deps = ["//protobuf-buffa/native:truffledata_buffa"],
+)
+
+# Probe engines, production references and the standalone decoder on one worker (unsharded).
+sh_test(
+    name = "consumer_decode_ablation",
+    size = "enormous",
+    srcs = ["consumer_decode_ablation.sh"],
+    args = [
+        "$(rootpath :consumer_svm)",
+        "$(rootpath :consumer_profile)",
+        "$(rootpath :consumer_native_probe)",
+    ],
+    data = [
+        ":consumer_native_probe",
+        ":consumer_profile",
+        ":consumer_svm",
+        "//tools/bench:consumer.py",
+    ],
+    exec_properties = {
+        "EstimatedCPU": "4",
+        "EstimatedMemory": "16GB",
+    },
+    tags = [
+        "benchmark",
+        "manual",
+    ],
+    target_compatible_with = [
+        "@platforms//os:linux",
+        "@platforms//cpu:x86_64",
+    ],
+)
 
 # ---- CSV comparison (benchmarks/comparison/CSV.md). Competitors are benchmark-only dependencies.
 
