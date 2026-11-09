@@ -112,3 +112,5 @@ cc_toolchain(
     strip_files = ":bin",
     toolchain_config = ":config",
 )
+
+exports_files(["cc"])

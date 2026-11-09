@@ -368,6 +368,7 @@ arbitrary downstream guest code or every deployment configuration. See [Truffle 
 | [YAML](docs/YAML.md) | Native YAML parsing, metadata, typed plans, sessions and streams |
 | [CSV](docs/CSV.md) | Strict CSV contract, limits, typed plans, streaming, interop and export |
 | [Truffle guarantees](docs/TRUFFLE.md) | Specialization, boundaries, compilation and allocation gates |
+| [Untrusted-input testing](docs/FUZZING.md) | Fuzz harnesses, sanitizer profiles, corpus replay and coverage gaps |
 | [Comparison benchmarks](docs/COMPARISON_BENCHMARKS.md) | Raw results, charts, caveats and reproduction |
 | [Continuous benchmarks](docs/BENCHMARKS.md) | CodSpeed simulation cases and methodology |
 | [Build](docs/BAZEL.md) / [Publishing](docs/PUBLISHING.md) | Bazel, BuildBuddy, Maven artifacts and release operations |
