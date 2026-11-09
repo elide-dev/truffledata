@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import dev.elide.truffledata.*;
 import dev.elide.truffledata.buffa.*;
+import dev.elide.truffledata.buffa.generated.BuffaAbi;
 import dev.elide.truffledata.protobuf.*;
 import java.nio.file.*;
 import java.util.List;
@@ -18,8 +19,10 @@ final class AcceptanceTest {
             Objects.requireNonNull(System.getenv("TEST_WORKSPACE")),
             "protobuf-buffa/native");
     try (var files = Files.list(root)) {
+      // The production library, not the test-only other-ABI-class stub beside it.
       return files
           .filter(p -> p.toString().endsWith(".so") || p.toString().endsWith(".dylib"))
+          .filter(p -> !p.getFileName().toString().startsWith("other_abi_class"))
           .findFirst()
           .orElseThrow();
     }
@@ -163,13 +166,54 @@ final class AcceptanceTest {
 
   @Test
   void wrongAbiDoesNotFallBack() {
-    Path library =
-        Path.of(
-            Objects.requireNonNull(System.getenv("TEST_SRCDIR")),
-            Objects.requireNonNull(System.getenv("TEST_WORKSPACE")),
-            "protobuf-buffa/tests/wrong_abi.so");
+    Path library = runfile("protobuf-buffa/tests/wrong_abi.so");
     Acceptance.rejects(
         () -> BuffaWire.open(BuffaWire.Mode.NATIVE, library), IllegalStateException.class);
+  }
+
+  static Path runfile(String path) {
+    return Path.of(
+        Objects.requireNonNull(System.getenv("TEST_SRCDIR")),
+        Objects.requireNonNull(System.getenv("TEST_WORKSPACE")),
+        path);
+  }
+
+  static String fingerprintOf(String abiClass) throws Exception {
+    return Files.readString(
+            runfile("protobuf-buffa/native/generated/abi/" + abiClass + "/seam.abi"))
+        .strip();
+  }
+
+  /** Myna 0.14.0: the bindings carry each ABI class's fingerprint; Linux AArch64 selects its own. */
+  @Test
+  void abiClassFingerprintsFollowTheGeneratedClasses() throws Exception {
+    assertEquals(fingerprintOf("lp64_little"), BuffaAbi.LP64_LITTLE);
+    assertEquals(fingerprintOf("lp64_little_aapcs64"), BuffaAbi.LP64_LITTLE_AAPCS64);
+    assertNotEquals(BuffaAbi.LP64_LITTLE, BuffaAbi.LP64_LITTLE_AAPCS64);
+    assertEquals(
+        BuffaAbi.LP64_LITTLE_AAPCS64,
+        BuffaAbi.fingerprint(TargetAbi.of("Linux", "aarch64").charUnsigned()));
+    assertEquals(
+        BuffaAbi.LP64_LITTLE, BuffaAbi.fingerprint(TargetAbi.of("Linux", "amd64").charUnsigned()));
+    assertEquals(
+        BuffaAbi.LP64_LITTLE,
+        BuffaAbi.fingerprint(TargetAbi.of("Mac OS X", "aarch64").charUnsigned()));
+  }
+
+  /**
+   * A library of the other ABI class (Linux AArch64's fingerprint here, the shared x86-64/Apple one
+   * there) is rejected like any wrong ABI, never loaded as a fallback; this host's is accepted.
+   */
+  @Test
+  void otherAbiClassDoesNotFallBack() throws Exception {
+    Path other = runfile("protobuf-buffa/native/other_abi_class.so");
+    IllegalStateException failure =
+        assertThrows(
+            IllegalStateException.class, () -> BuffaWire.open(BuffaWire.Mode.NATIVE, other));
+    assertTrue(failure.getMessage().contains("ABI fingerprint mismatch"), failure.getMessage());
+    try (var accepted = BuffaWire.open(BuffaWire.Mode.NATIVE, library())) {
+      assertNotNull(accepted);
+    }
   }
 
   @Test

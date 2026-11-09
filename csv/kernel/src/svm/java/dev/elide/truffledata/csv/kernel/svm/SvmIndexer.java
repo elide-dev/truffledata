@@ -4,9 +4,11 @@ import dev.elide.truffledata.csv.CsvIndexing;
 import dev.elide.truffledata.csv.kernel.CsvIndex;
 import dev.elide.truffledata.csv.kernel.CsvIndexer;
 import dev.elide.truffledata.csv.kernel.generated.CsvNative;
+import dev.elide.truffledata.csv.kernel.generated.CsvNativeAbi;
 import java.nio.file.Path;
 import org.graalvm.nativeimage.ImageInfo;
 import org.graalvm.nativeimage.PinnedObject;
+import org.graalvm.nativeimage.Platform;
 import org.graalvm.nativeimage.c.type.CCharPointer;
 import org.graalvm.nativeimage.c.type.CIntPointer;
 import org.graalvm.nativeimage.c.type.CTypeConversion;
@@ -31,7 +33,10 @@ public final class SvmIndexer extends CsvIndexer {
   public SvmIndexer(byte delimiter, byte quote, boolean quoting, int kernel, int leafBytes) {
     super(delimiter, quote, quoting);
     if (!verified) {
-      if (!CTypeConversion.toJavaString(CsvNative.fingerprint()).equals(CsvNative.ABI_FINGERPRINT))
+      // The image's ABI class (Platform.includedIn folds at image build time): one constant.
+      String expected =
+          CsvNativeAbi.fingerprint(Platform.includedIn(Platform.LINUX_AARCH64.class));
+      if (!CTypeConversion.toJavaString(CsvNative.fingerprint()).equals(expected))
         throw new IllegalStateException("Myna/CSV ABI fingerprint mismatch");
       verified = true;
     }

@@ -28,6 +28,7 @@ data_java_library(
         "src/test/java/dev/elide/truffledata/ProtobufTest.java",
         "src/test/java/dev/elide/truffledata/RealDriversTest.java",
         "src/test/java/dev/elide/truffledata/SlabAccessTest.java",
+        "src/test/java/dev/elide/truffledata/TargetAbiTest.java",
         "src/test/java/dev/elide/truffledata/TestLanguage.java",
         "src/test/java/dev/elide/truffledata/package-info.java",
     ],
@@ -60,7 +61,7 @@ java_test(
         "--package",
         "dev.elide.truffledata",
         "--include-class",
-        "dev.elide.truffledata.(Accessor|Core|GeneratedCodec|GeneratedGraph|ProtoDescriptors|ProtoExplicitSource|ProtoNative|Jdbc|JdbcLifecycle|OwnedArray|SlabAccess|Protobuf|Polyglot|Policy|Contracts|Integration|JitMatrix)Test",
+        "dev.elide.truffledata.(Accessor|Core|GeneratedCodec|GeneratedGraph|ProtoDescriptors|ProtoExplicitSource|ProtoNative|Jdbc|JdbcLifecycle|OwnedArray|SlabAccess|Protobuf|Polyglot|Policy|Contracts|Integration|JitMatrix|TargetAbi)Test",
     ],
     data = [
         ":native_descriptors",

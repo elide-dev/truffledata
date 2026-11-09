@@ -25,6 +25,25 @@ fn base() -> cc::Build {
     build
 }
 
+/// The fingerprint of the target's Myna ABI class from the vendored seam.h, whose `TRUFFLEDATA_CSV_SEAM_ABI`
+/// define is selected by `__CHAR_UNSIGNED__` (Myna 0.14.0: AAPCS64 Linux, where C `char` is unsigned,
+/// is its own class). The compiled C++ takes the branch the compiler decides; this mirrors it for the
+/// Myna targets: aarch64 Linux is the unsigned-char class, every other supported target the signed one.
+/// `tests/link.rs` checks the two agree.
+fn seam_abi(seam: &str, target_os: &str, target_arch: &str) -> String {
+    let defines: Vec<&str> = seam
+        .lines()
+        .filter_map(|line| line.strip_prefix(ABI_DEFINE)?.strip_suffix('"'))
+        .collect();
+    let char_unsigned = target_os == "linux" && target_arch == "aarch64";
+    match defines.as_slice() {
+        // `#ifdef __CHAR_UNSIGNED__` branch first, then `#else`.
+        [unsigned, signed] => (if char_unsigned { unsigned } else { signed }).to_string(),
+        [only] => only.to_string(),
+        _ => panic!("expected one TRUFFLEDATA_CSV_SEAM_ABI define per ABI class in vendored seam.h"),
+    }
+}
+
 fn main() {
     let bundled = env::var_os("CARGO_FEATURE_BUNDLED_SIMDUTF").is_some();
     let external = env::var_os("CARGO_FEATURE_SIMDUTF_CRATE").is_some();
@@ -68,10 +87,7 @@ fn main() {
     build.compile("truffledata_csv");
 
     let seam = fs::read_to_string(SEAM).expect("read vendored seam.h");
-    let abi = seam
-        .lines()
-        .find_map(|line| line.strip_prefix(ABI_DEFINE)?.strip_suffix('"'))
-        .expect("TRUFFLEDATA_CSV_SEAM_ABI in vendored seam.h");
+    let abi = seam_abi(&seam, &env::var("CARGO_CFG_TARGET_OS").unwrap(), &env::var("CARGO_CFG_TARGET_ARCH").unwrap());
     let out = PathBuf::from(env::var_os("OUT_DIR").unwrap());
     fs::write(out.join("seam_abi.rs"), format!("pub const SEAM_ABI: &str = {abi:?};\n")).unwrap();
 

@@ -1,6 +1,8 @@
 package dev.elide.truffledata.yaml;
 
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
+import dev.elide.truffledata.TargetAbi;
+import dev.elide.truffledata.yaml.generated.YamlAbi;
 import dev.elide.truffledata.yaml.generated.YamlFFM;
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
@@ -30,8 +32,11 @@ public final class YamlJvm {
       } catch (Throwable failure) {
         throw callFailure(failure);
       }
-      if (!fingerprint.reinterpret(65).getString(0).equals(YamlFFM.ABI_FINGERPRINT))
-        throw new IllegalStateException("Myna/YAML ABI fingerprint mismatch");
+      // The host's ABI class fingerprint (Myna 0.14.0: Linux AArch64 has its own); never a fallback.
+      String expected = YamlAbi.fingerprint(TargetAbi.HOST.charUnsigned());
+      if (!fingerprint.reinterpret(expected.length() + 1).getString(0).equals(expected))
+        throw new IllegalStateException(
+            "Myna/YAML ABI fingerprint mismatch (expected the " + TargetAbi.HOST + " class)");
       return new YamlSession(options, new JvmSessionBackend(options, calls, arena));
     } catch (RuntimeException | Error failure) {
       arena.close();

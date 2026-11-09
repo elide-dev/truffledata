@@ -23,7 +23,7 @@ Everything is vendored under `vendor/`, so a git checkout at a tag builds withou
 | Path | Source |
 | --- | --- |
 | `vendor/csv/native` | `csv/native/api.cc`, `dispatch.cc`, the kernels and their headers |
-| `vendor/csv/native/generated/seam.h` | Myna generator output for `csv/native/csv.seam` |
+| `vendor/csv/native/generated/seam.h` | Myna generator output for `csv/native/csv.seam`, with `TRUFFLEDATA_CSV_SEAM_ABI` selected per ABI class by `__CHAR_UNSIGNED__` (`bazel/myna_abi.py`) |
 | `vendor/simdutf` | simdutf from the `simdutf` 0.7.0 crate's bundled C++ |
 
 Copts match `csv/native/BUILD.bazel`: `-std=c++17 -O3`, in every Cargo profile. Each kernel is
@@ -66,11 +66,14 @@ The crate sets no `#[global_allocator]`, panic strategy or profile.
 
 ## Keeping the vendored copy in sync
 
-`vendor/csv/native/generated/seam.h` must be byte-identical to the Myna generator output for
-the current `csv.seam`. The fingerprint `td_csv_fingerprint()` returns is compiled from it, and
-the published bindings jars compare that fingerprint at load time. `tests/link.rs` checks the
-linked fingerprint against the vendored header; CI compares the vendored header with
-`bazel-bin/csv/native/generated/seam.h`.
+`vendor/csv/native/generated/seam.h` must be byte-identical to `bazel-bin/csv/native/generated/seam.h`
+for the current `csv.seam`: the Myna generator output whose `TRUFFLEDATA_CSV_SEAM_ABI` define
+`bazel/myna_abi.py` selects per Myna 0.14.0 target ABI class with `__CHAR_UNSIGNED__` (AAPCS64 Linux,
+where C `char` is unsigned, has its own fingerprint; x86-64 and Apple arm64 share the other). The
+fingerprint `td_csv_fingerprint()` returns is compiled from it, so a Cargo build for any target reports its
+class's fingerprint, and the published bindings jars compare it at load time against the class they
+run on. `build.rs` mirrors the compiler's choice from the Cargo target (`aarch64` Linux is the
+unsigned-char class) for `SEAM_ABI`; `tests/link.rs` checks the linked fingerprint against both.
 
 To refresh every vendored file after changing the decoder, the seam or a pinned dependency:
 

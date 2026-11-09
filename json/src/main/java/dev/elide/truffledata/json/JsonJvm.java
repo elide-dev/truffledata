@@ -2,6 +2,8 @@ package dev.elide.truffledata.json;
 
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import dev.elide.truffledata.Schema;
+import dev.elide.truffledata.TargetAbi;
+import dev.elide.truffledata.json.generated.JsonAbi;
 import dev.elide.truffledata.json.generated.JsonFFM;
 import dev.elide.truffledata.tape.SegmentTape;
 import dev.elide.truffledata.tape.TapeLexical;
@@ -45,9 +47,12 @@ public final class JsonJvm implements JsonDecoder {
       } catch (Throwable failure) {
         throw callFailure(failure);
       }
-      String actual = fingerprint.reinterpret(JsonFFM.ABI_FINGERPRINT.length() + 1).getString(0);
-      if (!actual.equals(JsonFFM.ABI_FINGERPRINT))
-        throw new IllegalStateException("Myna/JSON ABI fingerprint mismatch");
+      // The host's ABI class fingerprint (Myna 0.14.0: Linux AArch64 has its own); never a fallback.
+      String expected = JsonAbi.fingerprint(TargetAbi.HOST.charUnsigned());
+      String actual = fingerprint.reinterpret(expected.length() + 1).getString(0);
+      if (!actual.equals(expected))
+        throw new IllegalStateException(
+            "Myna/JSON ABI fingerprint mismatch (expected the " + TargetAbi.HOST + " class)");
       decode = JsonFFM.decode(symbols);
       decodeAdopted = JsonFFM.decode_adopted(symbols);
       release = JsonFFM.release(symbols);

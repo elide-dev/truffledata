@@ -2,10 +2,12 @@ package dev.elide.truffledata.json;
 
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import dev.elide.truffledata.json.generated.Json;
+import dev.elide.truffledata.json.generated.JsonAbi;
 import dev.elide.truffledata.tape.SvmTape;
 import dev.elide.truffledata.tape.TapeBorrow;
 import org.graalvm.nativeimage.ImageInfo;
 import org.graalvm.nativeimage.PinnedObject;
+import org.graalvm.nativeimage.Platform;
 import org.graalvm.nativeimage.UnmanagedMemory;
 import org.graalvm.nativeimage.c.type.CTypeConversion;
 import org.graalvm.nativeimage.c.type.VoidPointer;
@@ -26,7 +28,9 @@ public final class JsonSvm {
 
   private static void verifyAbi() {
     if (!verified) {
-      if (!CTypeConversion.toJavaString(Json.fingerprint()).equals(Json.ABI_FINGERPRINT))
+      // The image's ABI class (Platform.includedIn folds at image build time): one constant.
+      String expected = JsonAbi.fingerprint(Platform.includedIn(Platform.LINUX_AARCH64.class));
+      if (!CTypeConversion.toJavaString(Json.fingerprint()).equals(expected))
         throw new IllegalStateException("Myna/JSON ABI fingerprint mismatch");
       verified = true;
     }

@@ -6,8 +6,10 @@ import dev.elide.myna.truffle.NativeCellRootNode;
 import dev.elide.myna.truffle.NativePointer;
 import dev.elide.truffledata.ContractViolation;
 import dev.elide.truffledata.Limits;
+import dev.elide.truffledata.TargetAbi;
 import dev.elide.truffledata.buffa.cells.generated.BuffaCellsJvmFFM;
 import dev.elide.truffledata.buffa.cells.generated.BuffaCellsJvmTruffle;
+import dev.elide.truffledata.buffa.generated.BuffaAbi;
 import dev.elide.truffledata.buffa.generated.BuffaFFM;
 import dev.elide.truffledata.protobuf.ProtoPlan;
 import dev.elide.truffledata.protobuf.SlabLimits;
@@ -67,9 +69,11 @@ final class CellsFfmBackend implements BuffaWire.Backend {
       } catch (Throwable failure) {
         throw FfmBackend.callFailure(failure);
       }
-      // The cells' own constant folds in the cells options; the library carries the production ABI.
-      if (!actual.equals(BuffaFFM.ABI_FINGERPRINT))
-        throw new IllegalStateException("Myna/Buffa ABI fingerprint mismatch");
+      // The cells' own constant folds in the cells options; the library carries the production ABI
+      // of the host's class (Myna 0.14.0: Linux AArch64 has its own); never a fallback.
+      if (!actual.equals(BuffaAbi.fingerprint(TargetAbi.HOST.charUnsigned())))
+        throw new IllegalStateException(
+            "Myna/Buffa ABI fingerprint mismatch (expected the " + TargetAbi.HOST + " class)");
       loaded = library;
     } else if (!loaded.equals(library))
       throw new IllegalStateException(

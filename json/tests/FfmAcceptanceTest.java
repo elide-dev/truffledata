@@ -2,6 +2,10 @@ package dev.elide.truffledata.json.tests;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import dev.elide.truffledata.TargetAbi;
+import dev.elide.truffledata.json.JsonDecoder;
+import dev.elide.truffledata.json.JsonJvm;
+import dev.elide.truffledata.json.generated.JsonAbi;
 import dev.elide.truffledata.json.generated.JsonFFM;
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
@@ -9,10 +13,50 @@ import java.lang.foreign.SymbolLookup;
 import java.lang.foreign.ValueLayout;
 import java.lang.invoke.MethodHandle;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
 
 final class FfmAcceptanceTest {
+  static Path runfile(String path) {
+    return Path.of(System.getenv("TEST_SRCDIR"), System.getenv("TEST_WORKSPACE"), path);
+  }
+
+  static String fingerprintOf(String abiClass) throws Exception {
+    return Files.readString(runfile("json/native/generated/abi/" + abiClass + "/seam.abi")).strip();
+  }
+
+  /** Myna 0.14.0: the bindings carry each ABI class's fingerprint; Linux AArch64 selects its own. */
+  @Test
+  void abiClassFingerprintsFollowTheGeneratedClasses() throws Exception {
+    assertEquals(fingerprintOf("lp64_little"), JsonAbi.LP64_LITTLE);
+    assertEquals(fingerprintOf("lp64_little_aapcs64"), JsonAbi.LP64_LITTLE_AAPCS64);
+    assertNotEquals(JsonAbi.LP64_LITTLE, JsonAbi.LP64_LITTLE_AAPCS64);
+    assertEquals(
+        JsonAbi.LP64_LITTLE_AAPCS64,
+        JsonAbi.fingerprint(TargetAbi.of("Linux", "aarch64").charUnsigned()));
+    assertEquals(
+        JsonAbi.LP64_LITTLE, JsonAbi.fingerprint(TargetAbi.of("Linux", "amd64").charUnsigned()));
+    assertEquals(
+        JsonAbi.LP64_LITTLE,
+        JsonAbi.fingerprint(TargetAbi.of("Mac OS X", "aarch64").charUnsigned()));
+  }
+
+  /**
+   * A library of the other ABI class (Linux AArch64's fingerprint here, the shared x86-64/Apple one
+   * there) is rejected before any symbol is bound, never loaded as a fallback; this host's is accepted.
+   */
+  @Test
+  void otherAbiClassLibraryIsRejected() throws Exception {
+    Path other = runfile("json/native/other_abi_class.so");
+    IllegalStateException failure =
+        assertThrows(IllegalStateException.class, () -> JsonJvm.open(other));
+    assertTrue(failure.getMessage().contains("ABI fingerprint mismatch"), failure.getMessage());
+    try (JsonDecoder accepted = JsonJvm.open(runfile("json/native/json_shared.so"))) {
+      assertNotNull(accepted);
+    }
+  }
+
   @Test
   void compilerInternalsAreNotOnTheApplicationClasspath() {
     assertThrows(
@@ -41,7 +85,9 @@ final class FfmAcceptanceTest {
       MethodHandle decode = JsonFFM.decode(lookup);
       MethodHandle release = JsonFFM.release(lookup);
       MemorySegment fingerprint = (MemorySegment) JsonFFM.fingerprint(lookup).invokeExact();
-      assertEquals(JsonFFM.ABI_FINGERPRINT, fingerprint.reinterpret(65).getString(0));
+      assertEquals(
+          JsonAbi.fingerprint(TargetAbi.HOST.charUnsigned()),
+          fingerprint.reinterpret(65).getString(0));
       MemorySegment result = owner.allocate(JsonFFM.JsonResult_LAYOUT);
       try {
         String source = "{\"n\":1e999999999999999999,\"s\":\"long escaped \\u4e2d text\"}";

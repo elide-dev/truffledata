@@ -1,43 +1,21 @@
 load("@rules_cc//cc:defs.bzl", "cc_library")
 load("@rules_rust//rust:defs.bzl", "rust_library", "rust_shared_library", "rust_static_library", "rust_test")
+load("//bazel:myna.bzl", "myna_bindings", "myna_other_class_stub")
 
 package(default_visibility = ["//visibility:public"])
 
-config_setting(
-    name = "linux_arm64",
-    constraint_values = [
-        "@platforms//os:linux",
-        "@platforms//cpu:aarch64",
-    ],
-)
-
-genrule(
+myna_bindings(
     name = "bindings",
-    srcs = ["buffa.seam"],
-    outs = [
-        "generated/BuffaFFM.java",
-        "generated/Buffa.java",
-        "generated/BuffaForeignFeature.java",
-        "generated/seam.rs",
-        "generated/seam.h",
-        "generated/seam.json",
-        "generated/seam.abi",
-        "generated/seam.ll",
-        "generated/META-INF/native-image/dev.elide.myna/dev.elide.truffledata.buffa.generated.Buffa/native-image.properties",
-    ],
-    cmd = "$(location @myna//:generator) validate $(location buffa.seam) --targets x86_64-unknown-linux-gnu,aarch64-unknown-linux-gnu,aarch64-apple-darwin && " +
-          "$(location @myna//:generator) generate $(location buffa.seam) --out $(RULEDIR)/generated --target " + select({
-        "@platforms//os:macos": "aarch64-apple-darwin",
-        ":linux_arm64": "aarch64-unknown-linux-gnu",
-        "//conditions:default": "x86_64-unknown-linux-gnu",
-    }),
-    tools = ["@myna//:generator"],
+    java_class = "Buffa",
+    java_package = "dev.elide.truffledata.buffa.generated",
+    seam = "buffa.seam",
 )
 
 filegroup(
     name = "java_bindings",
     srcs = [
         "generated/Buffa.java",
+        "generated/BuffaAbi.java",
         "generated/BuffaFFM.java",
     ],
 )
@@ -161,4 +139,12 @@ filegroup(
     name = "descriptor",
     srcs = ["generated/seam.json"],
     visibility = ["//visibility:public"],
+)
+
+# Test-only: a library reporting the fingerprint of the ABI class this host is not, which Buffa's
+# bindings must reject (and the per-class fingerprints the bindings' constants are checked against).
+myna_other_class_stub(
+    name = "other_abi_class",
+    abi = ":generated/abi",
+    symbol = "td_buffa_fingerprint",
 )
