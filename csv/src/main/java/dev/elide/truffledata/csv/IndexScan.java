@@ -112,7 +112,13 @@ final class IndexScan {
     try {
       if (records instanceof BatchBuilder b && b.fusable()) {
         if (b.spanOnly()) return frameSpans(idx, input, from, to, eof, b, recordBase, stopAfter);
-        int end = frameFused(idx, input, from, to, eof, b, recordBase, stopAfter);
+        int end;
+        b.indexing = true;
+        try {
+          end = framePlain(idx, input, from, to, eof, b, recordBase, stopAfter);
+        } finally {
+          b.indexing = false;
+        }
         b.convert(); // staged rows convert before any later record can report an error
         return end;
       }

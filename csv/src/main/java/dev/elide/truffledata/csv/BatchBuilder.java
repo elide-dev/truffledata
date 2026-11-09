@@ -91,6 +91,13 @@ final class BatchBuilder implements CsvScanner.Records {
 
   private int pending;
 
+  /**
+   * Set by {@link IndexScan} while its plain loop frames this batch: {@link #record} then stages
+   * complete records, and the scan converts them before it returns. The per-byte scanners report
+   * syntax errors before calling {@link #record}, so their records never stage.
+   */
+  boolean indexing;
+
   /** Per-record scratch for {@link #replay}, allocated on the first declined chunk. */
   private long[] replayRow = NO_WORDS;
 
@@ -432,6 +439,23 @@ final class BatchBuilder implements CsvScanner.Records {
   @Override
   @InliningCutoff
   public boolean record(long[] spans, int count, int start, int end) {
+    // Staged plans framed by the index scan: a complete, valid record only copies its spans.
+    long[][] s = staged;
+    if (indexing
+        && count == s.length
+        && writable
+        && ((start >= validFrom && end <= validTo) || Utf8.invalidOffset(input, start, end) < 0)) {
+      int k = pending;
+      for (int column = 0; column < count; column++) s[column][k] = spans[column];
+      advance(end);
+      if (++pending == CHUNK) convert();
+      return true;
+    }
+    return recordSlow(spans, count, start, end);
+  }
+
+  /** {@link #record} for every record the staged copy does not take. */
+  private boolean recordSlow(long[] spans, int count, int start, int end) {
     if (pending != 0) convert();
     if (rows == maxRows) {
       full = true;
