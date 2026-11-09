@@ -42,7 +42,7 @@ class PublicationTest(unittest.TestCase):
                     expected.update(('org.graalvm.sdk:nativeimage', 'org.graalvm.sdk:word'))
                 if module == 'protobuf-buffa':
                     expected.update(('dev.elide:truffledata-protobuf-runtime', 'dev.elide:truffledata-protobuf-buffa-bindings'))
-                if module in ('tape', 'json', 'json-bindings', 'yaml', 'yaml-bindings'):
+                if module in ('tape', 'json', 'json-bindings', 'yaml', 'yaml-bindings', 'yaml-native'):
                     expected.update(('org.graalvm.sdk:nativeimage', 'org.graalvm.sdk:word'))
                 if module == 'tape-jvm':
                     expected.add('dev.elide:truffledata-tape')
@@ -51,9 +51,15 @@ class PublicationTest(unittest.TestCase):
                 if module == 'json-jvm':
                     expected.update(('dev.elide:truffledata-json', 'dev.elide:truffledata-json-bindings', 'dev.elide:truffledata-tape-jvm'))
                 if module == 'yaml':
-                    expected.update(('dev.elide:truffledata-yaml-bindings', 'dev.elide:truffledata-tape'))
+                    expected.add('dev.elide:truffledata-tape')
+                if module == 'yaml-native':
+                    expected.update(('dev.elide:truffledata-yaml', 'dev.elide:truffledata-yaml-bindings'))
                 if module == 'yaml-jvm':
                     expected.update(('dev.elide:truffledata-yaml', 'dev.elide:truffledata-yaml-bindings', 'dev.elide:truffledata-tape-jvm'))
+                if module == 'yaml-java':
+                    expected.update(('dev.elide:truffledata-yaml', 'dev.elide:truffledata-tape'))
+                if module == 'yaml-snakeyaml':
+                    expected.update(('dev.elide:truffledata-yaml-java', 'org.snakeyaml:snakeyaml-engine'))
                 if module in ('csv-bindings', 'csv-native'):
                     expected.update(('org.graalvm.sdk:nativeimage', 'org.graalvm.sdk:word'))
                 if module in ('csv-native', 'csv-jvm'):
@@ -69,7 +75,8 @@ class PublicationTest(unittest.TestCase):
                         'org.graalvm.truffle:truffle-runtime', 'org.graalvm.polyglot:polyglot',
                         'org.graalvm.js:js-language', 'org.graalvm.python:python-language',
                         'org.graalvm.python:python-resources', 'com.mysql:mysql-connector-j',
-                        'org.postgresql:postgresql', 'org.xerial:sqlite-jdbc', 'com.google.protobuf:protobuf-java', 'com.google.protobuf:protobuf-java-util'}
+                        'org.postgresql:postgresql', 'org.xerial:sqlite-jdbc', 'com.google.protobuf:protobuf-java', 'com.google.protobuf:protobuf-java-util',
+                        'org.snakeyaml:snakeyaml-engine'}
                     self.assertEqual(root.findtext('m:packaging', namespaces=NAMESPACE), 'pom')
                     self.assertIsNone(root.find('m:dependencies', NAMESPACE))
                     self.assertFalse(Path(str(prefix) + '.jar').exists())

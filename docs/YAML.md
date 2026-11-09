@@ -2,7 +2,7 @@
 
 The native YAML backend uses rapidyaml 0.16.0 with strict YAML 1.2 core resolution. The Java integration is under development and is not yet a published artifact. Typed plans and static-image compiled reads are implemented; the compact producer is implemented, while full performance and release qualification remains unfinished; the [implementation ledger](superpowers/plans/2026-11-06-yaml-ledger.md) records verified scope.
 
-For JVM use, open a session with `YamlJvm.openSession(pathToNativeLibrary)`. For a static image linked against `//yaml/native:svm`, use `YamlSession.open()`. Sessions and retained messages are thread confined.
+For JVM use, open a session with `YamlJvm.openSession(pathToNativeLibrary)`. For a static image linked against `//yaml/native:svm`, add `truffledata-yaml-native` (`//yaml:svm`) and use `YamlSession.open()`. Sessions and retained messages are thread confined.
 
 ```java
 try (YamlSession session = YamlJvm.openSession(library);
@@ -39,6 +39,43 @@ copies large strings. The native producer negotiates capacity from decoded strin
 expanded canonical mapping keys and reused alias keys. An input-only `2 × length + 16` estimate
 is not a universal YAML bound; returned strings remain valid after the session parses again.
 The JVM FFM path currently copies text instead of sharing this arena.
+
+## Java kernel (no native library)
+
+`truffledata-yaml-java` is a pure-Java implementation of the same semantics behind the same
+`YamlSession`, `YamlMessage`, `TapeValue`, `TapeSink`, stream and typed-plan API, for plain JVMs
+without `yaml_shared` and for native images built without the static YAML archive (Windows,
+linux-musl, macOS x86_64). Add `truffledata-yaml-snakeyaml`, which brings the kernel and its first
+event source (SnakeYAML Engine 3.2's scanner and parser; no composer, constructor or resolver).
+
+`YamlSession.open(options)` picks among the `YamlSessionProvider` services on the class path: the
+static archive (`truffledata-yaml-native`) in a native image, otherwise the kernel
+(`YamlJava.openSession(options)` selects it explicitly, and `YamlJava.openSession(options, source)`
+takes any event source). `YamlPlan.compile` compiles on that same backend; `YamlSvm` remains the
+explicit static-archive entry point.
+
+The kernel sits above a parser-neutral event boundary, `dev.elide.truffledata.yaml.events`: a
+`YamlEventSource` reports resolved tags, styles, anchors and byte/line/column positions to
+`YamlEvents`. Policies (scalar resolution through the shared `ScalarResolver`, duplicate keys after
+resolution, merge order, alias and recursive-alias rules, 1.1 type tags, unknown tags, version
+directives, every `YamlLimits` budget), raw spans, the `yaml_meta` side tables, multi-document
+streams and typed plans are the kernel's own and depend only on that package; a future
+hand-written parser implements `YamlEventSource` alone. Errors have the native types and messages
+(`YAML syntax error: duplicate YAML key: a at line 2, column 1`).
+
+Native images without the archive: do not add `truffledata-yaml-native`; add
+`truffledata-yaml-snakeyaml`. `truffledata-yaml` holds no code that references the generated
+bindings and does not depend on them, so nothing pulls in their `@CLibrary` (which requires the
+archive), and images link even with `--link-at-build-time=dev.elide.truffledata`;
+`//tools/release:yaml_java_native` builds the published jars this way. Images need `--initialize-at-build-time=dev.elide.truffledata`, as
+every TruffleData image does.
+
+`JavaKernelDifferentialTest` compares the kernel with the native decoder on the yaml-test-suite,
+the probe fixtures, fuzzed documents, the native tests' policy cases, limits, chunked streams,
+guest strings and typed plans. Known differences, all from the parsers rather than the policies,
+are listed with reasons in `yaml/tests/java_kernel_excluded.txt`: SnakeYAML Engine's grammar gaps
+(the 45 pinned Engine cases, the `\L`/`\P` escapes, NEL as a line break), and raw spans of some quoted
+implicit block keys that the native decoder omits. `maxIndexBytes` charges the kernel's published tape, a lower bound of the native arena.
 
 ## Writing YAML
 

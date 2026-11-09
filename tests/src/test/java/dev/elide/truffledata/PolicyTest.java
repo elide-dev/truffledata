@@ -120,6 +120,7 @@ class PolicyTest {
             Map.entry("YamlSession.java", 5), // open ×2, stream, complete documents, compile.
             Map.entry("YamlPlan.java", 4), // compile ×2, decode, close.
             Map.entry("YamlJvm.java", 2), // Library open ×2.
+            Map.entry("YamlJava.java", 2), // Java kernel open ×2.
             Map.entry("YamlSvm.java", 3), // Native entry points.
             Map.entry("YamlMessage.java", 4), // Directives, metadata, assumption and close.
             Map.entry("Yaml.java", 2), // Binary and timestamp materialization.

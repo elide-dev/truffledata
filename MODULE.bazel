@@ -175,10 +175,10 @@ maven.install(
     ],
 )
 
-# Test-only oracle for YAML differential coverage.
+# The Java YAML kernel's event source (//yaml:snakeyaml, truffledata-yaml-snakeyaml) and the
+# oracle of the YAML differential tests.
 maven.artifact(
     name = "maven",
-    testonly = True,
     artifact = "snakeyaml-engine",
     group = "org.snakeyaml",
     version = "3.2",

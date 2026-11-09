@@ -66,7 +66,7 @@ final class SvmSessionBackend extends YamlSession.Backend {
 
   @Override
   YamlPlan compile(TypedLayout layout, YamlOptions options) {
-    return YamlPlan.create(layout, options);
+    return SvmPlanBackend.create(layout, options);
   }
 
   static void checkTyped(int status, VoidPointer result) {
@@ -75,13 +75,13 @@ final class SvmSessionBackend extends YamlSession.Backend {
       int length = Math.min(255, data.readInt(128));
       byte[] message = new byte[length];
       for (int i = 0; i < length; i++) message[i] = data.readByte(136 + i);
-      YamlSvm.checkDetailed(
+      YamlStatus.checkDetailed(
           status,
           new String(message, java.nio.charset.StandardCharsets.UTF_8),
           data.readLong(112),
           data.readLong(120));
     }
-    YamlSvm.checkStatus(status);
+    YamlStatus.checkStatus(status);
   }
 
   @Override
@@ -90,7 +90,7 @@ final class SvmSessionBackend extends YamlSession.Backend {
   @Override
   protected void decode(
       byte[] data, int offset, int length, int encoding, @Nullable TapeTextArena text) {
-    byte[] input = YamlSvm.utf8(data, offset, length, encoding);
+    byte[] input = YamlStatus.utf8(data, offset, length, encoding);
     // A non-null address is required even when YAML's input is empty.
     byte[] pinnedBytes = input.length == 0 ? new byte[1] : input;
     int status;
@@ -115,13 +115,13 @@ final class SvmSessionBackend extends YamlSession.Backend {
       int length = Math.min(255, data.readInt(184));
       byte[] message = new byte[length];
       for (int i = 0; i < length; i++) message[i] = data.readByte(192 + i);
-      YamlSvm.checkDetailed(
+      YamlStatus.checkDetailed(
           status,
           new String(message, java.nio.charset.StandardCharsets.UTF_8),
           data.readLong(168),
           data.readLong(176));
     }
-    YamlSvm.checkStatus(status);
+    YamlStatus.checkStatus(status);
   }
 
   @Override
@@ -153,7 +153,7 @@ final class SvmSessionBackend extends YamlSession.Backend {
           ensureCapacity((int) required);
           continue;
         }
-        YamlSvm.checkStatus(status);
+        YamlStatus.checkStatus(status);
         table = (Pointer) Yaml.YamlTextResult.table(output);
         return;
       }
@@ -230,7 +230,7 @@ final class SvmSessionBackend extends YamlSession.Backend {
       throw new OutOfMemoryError("YAML retained result allocation");
     }
     try {
-      YamlSvm.checkStatus(Yaml.session_retain(session, owned));
+      YamlStatus.checkStatus(Yaml.session_retain(session, owned));
       Pointer descriptor = (Pointer) Yaml.YamlResult.view(owned);
       long count = SvmYamlMessage.validate(descriptor);
       return SvmYamlMessage.create(

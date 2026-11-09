@@ -16,8 +16,11 @@ The release publishes twenty-one thin libraries and a dependency-management BOM,
 | `dev.elide:truffledata-json:<version>` | Native simdjson JSON entry points (`JsonSession`, `JsonMessage`, `JsonStream`, typed plans), with the static SVM backend; depends on truffledata-tape; includes [prebuilt natives](#prebuilt-natives) |
 | `dev.elide:truffledata-json-bindings:<version>` | Generated Myna JSON bindings |
 | `dev.elide:truffledata-json-jvm:<version>` | JVM FFM backend (`JsonJvm`); depends on truffledata-json and truffledata-tape-jvm. Keep it out of native-image classpaths |
-| `dev.elide:truffledata-yaml:<version>` | Native YAML documents, sessions, streams, metadata and typed plans; static SVM backend and prebuilt natives |
+| `dev.elide:truffledata-yaml:<version>` | YAML documents, sessions, streams, metadata, typed plans and the emitter, with no native code or bindings reference; carries the YAML [prebuilt natives](#prebuilt-natives); depends on truffledata-tape |
+| `dev.elide:truffledata-yaml-native:<version>` | Static SVM backend over the linked YAML archive (`YamlSvm`); depends on truffledata-yaml and truffledata-yaml-bindings. Add it only to native images that link the archive |
 | `dev.elide:truffledata-yaml-bindings:<version>` | Generated YAML ABI bindings |
+| `dev.elide:truffledata-yaml-java:<version>` | Pure-Java YAML kernel behind the same sessions (JVMs without `yaml_shared`, images without the archive); depends on truffledata-yaml |
+| `dev.elide:truffledata-yaml-snakeyaml:<version>` | SnakeYAML Engine event source for the Java kernel; depends on truffledata-yaml-java and snakeyaml-engine |
 | `dev.elide:truffledata-yaml-jvm:<version>` | JVM FFM provider for YAML; keep it out of native-image classpaths |
 | `dev.elide:truffledata-csv:<version>` | Strict streaming CSV batches, typed plans and export; pure Java for JVM and SVM, no native attachments; depends on core |
 | `dev.elide:truffledata-csv-bindings:<version>` | Generated Myna bindings of the native CSV structural-index kernel (static SVM and JVM FFM) |
