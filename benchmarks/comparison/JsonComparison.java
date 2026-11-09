@@ -108,6 +108,9 @@ public final class JsonComparison {
   static final String SESSION_JAVA = "simdjson-session-java";
   // Ingest-only: borrowed JsonSession.parse into a TruffleSink over the shared text arena (Task D2).
   static final String SESSION_TRUFFLE = "simdjson-session-truffle";
+  // Ingest-only: JsonSession.decode and close with no read at all, so the generic ingest cell's
+  // native decode + publication + release is timed beside its ten reads (plan P0.3).
+  static final String DECODE = "simdjson-generic-decode";
   // Ingest-only streams (Task F2): the 32 documents as one NDJSON buffer per operation. Gson splits
   // lines and parses each into a tree; the simdjson cells feed a JsonStream and export each
   // document into a JavaSink or read ten members of the lent root through interop.
@@ -151,6 +154,7 @@ public final class JsonComparison {
       run(WALK, "peak", true, true);
       run(SESSION_JAVA, "ingest", true, true);
       run(SESSION_TRUFFLE, "ingest", true, true);
+      run(DECODE, "ingest", true, true);
       for (String engine : STREAMS) run(engine, "ingest", true, true);
       for (String engine : COMPETITORS) {
         if (!JsonCompetitors.available(engine)) {
@@ -182,6 +186,7 @@ public final class JsonComparison {
         || engine.equals(WALK)
         || engine.equals(SESSION_JAVA)
         || engine.equals(SESSION_TRUFFLE)
+        || engine.equals(DECODE)
         || STREAMS.contains(engine)
         || COMPETITORS.contains(engine)) {
       generic(engine, stage, memory, smoke);
@@ -383,6 +388,8 @@ public final class JsonComparison {
                 ? GenericReads.SESSION_JAVA
                 : engine.equals(SESSION_TRUFFLE)
                     ? GenericReads.SESSION_TRUFFLE
+                    : engine.equals(DECODE)
+                    ? GenericReads.DECODE
                     : STREAMS.contains(engine)
                         ? GenericReads.STREAM_GSON + STREAMS.indexOf(engine)
                         : COMPETITORS.contains(engine) ? GenericReads.COMPETITOR : GENERIC.indexOf(engine);
@@ -391,6 +398,7 @@ public final class JsonComparison {
     boolean ingestOnly =
         mode == GenericReads.SESSION_JAVA
             || mode == GenericReads.SESSION_TRUFFLE
+            || mode == GenericReads.DECODE
             || streaming
             || COMPETITORS_INGEST_ONLY.contains(engine);
     if (ingestOnly && !ingest) throw new IllegalArgumentException(engine + " measures ingest only");
@@ -411,12 +419,15 @@ public final class JsonComparison {
         long expected = 0;
         for (int i = 0; i < ROWS; i++) {
           inputs[i] = JsonFixture.document(i);
-          expected += mode == GenericReads.WALK ? JsonFixture.walkChecksum(i) : JsonFixture.checksum(i);
+          // Decode-only reads nothing: its checksum is one per successfully decoded document.
+          expected += mode == GenericReads.WALK ? JsonFixture.walkChecksum(i)
+              : mode == GenericReads.DECODE ? 1 : JsonFixture.checksum(i);
           if (mode == GenericReads.COMPETITOR && !ingestOnly) {
             rows[i] = JsonCompetitors.parse(engine, inputs[i]);
           } else if (mode == GenericReads.GSON
               || mode == GenericReads.SESSION_JAVA
               || mode == GenericReads.SESSION_TRUFFLE
+              || mode == GenericReads.DECODE
               || mode == GenericReads.COMPETITOR
               || streaming) {
             // The session cell measures ingest only; rows exist for the shared sampler.
@@ -604,6 +615,8 @@ public final class JsonComparison {
     static final int STREAM_GSON = 7, STREAM_JAVA = 8, STREAM_INTEROP = 9;
     // A JsonCompetitors engine, named by `engine`.
     static final int COMPETITOR = 10;
+    // Session decode and close, no read (P0.3 timing split).
+    static final int DECODE = 11;
     private static final byte[] NDJSON = JsonFixture.ndjson(ROWS);
     private final @Nullable JsonStream stream;
     private final String name;
@@ -740,6 +753,10 @@ public final class JsonComparison {
         return JsonFixture.javaRead(tree);
       }
       JsonMessage message = session.decode(input);
+      if (mode == DECODE) {
+        message.close();
+        return 1;
+      }
       if (mode == SNAPSHOT) {
         TapeSnapshot snapshot;
         try {
