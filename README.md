@@ -90,6 +90,8 @@ See [representation and compilation guarantees](docs/TRUFFLE.md),
 | `dev.elide:truffledata-yaml` | Native YAML sessions, documents, streams, metadata and typed plans |
 | `dev.elide:truffledata-yaml-jvm` | YAML JVM FFM backend; keep it off native-image classpaths |
 | `dev.elide:truffledata-yaml-bindings` | Generated native YAML bindings |
+| `dev.elide:truffledata-yaml-java` | Pure-Java YAML kernel (no native library) behind the same sessions |
+| `dev.elide:truffledata-yaml-snakeyaml` | SnakeYAML Engine event source for the Java YAML kernel |
 | `dev.elide:truffledata-csv` | Strict streaming CSV into immutable string and primitive column batches, typed plans and one-pass export; pure Java |
 | `dev.elide:truffledata-csv-native` | Optional native CSV kernel and static SVM backend |
 | `dev.elide:truffledata-csv-jvm` | CSV JVM FFM provider; keep it off native-image classpaths |

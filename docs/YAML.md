@@ -39,3 +39,40 @@ copies large strings. The native producer negotiates capacity from decoded strin
 expanded canonical mapping keys and reused alias keys. An input-only `2 × length + 16` estimate
 is not a universal YAML bound; returned strings remain valid after the session parses again.
 The JVM FFM path currently copies text instead of sharing this arena.
+
+## Java kernel (no native library)
+
+`truffledata-yaml-java` is a pure-Java implementation of the same semantics behind the same
+`YamlSession`, `YamlMessage`, `TapeValue`, `TapeSink`, stream and typed-plan API, for plain JVMs
+without `yaml_shared` and for native images built without the static YAML archive (Windows,
+linux-musl, macOS x86_64). Add `truffledata-yaml-snakeyaml`, which brings the kernel and its first
+event source (SnakeYAML Engine 3.2's scanner and parser; no composer, constructor or resolver).
+
+`YamlSession.open(options)` picks the backend: the linked static archive in a native image,
+otherwise the kernel found on the class path (`YamlJava.openSession(options)` selects it
+explicitly, and `YamlJava.openSession(options, source)` takes any event source). `YamlSvm` and
+`YamlPlan.compile` remain static-archive entry points.
+
+The kernel sits above a parser-neutral event boundary, `dev.elide.truffledata.yaml.events`: a
+`YamlEventSource` reports resolved tags, styles, anchors and byte/line/column positions to
+`YamlEvents`. Policies (scalar resolution through the shared `ScalarResolver`, duplicate keys after
+resolution, merge order, alias and recursive-alias rules, 1.1 type tags, unknown tags, version
+directives, every `YamlLimits` budget), raw spans, the `yaml_meta` side tables, multi-document
+streams and typed plans are the kernel's own and depend only on that package; a future
+hand-written parser implements `YamlEventSource` alone. Errors have the native types and messages
+(`YAML syntax error: duplicate YAML key: a at line 2, column 1`).
+
+Native images without the archive: leave `truffledata-yaml-bindings` (whose `@CLibrary` requires
+the archive) off the image class path and add `truffledata-yaml-snakeyaml`. `truffledata-yaml`
+initializes `YamlLinkage` at build time, so the `@CFunction` backend is unreachable and images link
+even with `--link-at-build-time=dev.elide.truffledata`; `//tools/release:yaml_java_native` builds
+the published jars this way. Images need `--initialize-at-build-time=dev.elide.truffledata`, as
+every TruffleData image does.
+
+`JavaKernelDifferentialTest` compares the kernel with the native decoder on the yaml-test-suite,
+the probe fixtures, fuzzed documents, the native tests' policy cases, limits, chunked streams,
+guest strings and typed plans. Known differences, all from the parsers rather than the policies,
+are listed with reasons in `yaml/tests/java_kernel_excluded.txt`: SnakeYAML Engine's grammar gaps
+(the 45 pinned Engine cases, the `\L`/`\P` escapes, NEL as a line break), raw spans of some quoted
+implicit block keys that the native decoder omits, and a native retainSource bug in multi-line plain
+scalars. `maxIndexBytes` charges the kernel's published tape, a lower bound of the native arena.

@@ -353,9 +353,10 @@ final class JavaDecoder implements YamlEvents {
       int end) {
     position = start;
     Frame f = frames.peek();
-    if (style == YamlScalarStyle.DOUBLE_QUOTED) checkSurrogates(text);
+    // The native handler checks a tag when it arrives, before its scalar's text.
     Tag kind = classify(tag);
     int index = tag == null ? 0 : intern(tag);
+    if (style == YamlScalarStyle.DOUBLE_QUOTED) checkSurrogates(text);
     long span = lexical(style, empty, start.offset(), end);
     Scalar r = resolve(text, style, kind);
     if (r.timestamp() && index == 0) index = intern(TIMESTAMP);
