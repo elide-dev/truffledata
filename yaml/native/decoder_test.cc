@@ -250,6 +250,13 @@ void input_and_owned_strings() {
   uint64_t block = lexical_span(pristine.view, ordinal(pristine.view, 4));
   require(std::string(pristine.source + (quoted >> 32), uint32_t(quoted)) == "\"\\u00e9t\\u00e9 quoted, longer\"");
   require(std::string(pristine.source + (block >> 32), uint32_t(block)) == "|\n  literal block text");
+  // A folded plain scalar the same length as its source span ("d\ne" -> "d e") is published
+  // folded with a retained source too (yaml-test-suite 35KP, 82AN, EXG3, XLQ9).
+  for (const char* folded : {"k: d\n e\n", "- d\n  e\n", "d\ne\n", "k: ab\n cd\n"}) {
+    std::string plain = render(decode(s, folded).view);
+    require(plain.find(' ') != std::string::npos && plain.find("\\n") == std::string::npos);
+    require(render(decode(s, folded, yaml_session::retain_source).view) == plain);
+  }
 }
 
 std::string span(const yaml_session::document_view& d, size_t node) {
