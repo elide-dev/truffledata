@@ -24,6 +24,8 @@ GROUPS = [(dataset, size) for size in (1 << 20, 128 << 20) for dataset in DATASE
 ENGINES = {
     'strings': ('truffledata-batch', 'truffledata-batch-native',
                 'truffledata-batch-owned', 'truffledata-batch-owned-native',
+                'truffledata-text', 'truffledata-text-native',
+                'truffledata-text-string', 'truffledata-text-string-native',
                 'kernel-native', 'fastcsv', 'jackson'),
     'typed': ('truffledata-plan', 'truffledata-plan-native', 'kernel-native', 'fastcsv'),
     # Batch construction alone; typed minus typed-build is the readback of every typed cell.

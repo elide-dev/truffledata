@@ -56,8 +56,33 @@ public final class CsvPlan {
     else this.fixed = null;
   }
 
-  static CsvPlan generic(CsvFormat format) {
+  private CsvPlan(CsvPlan base, Dialect dialect) {
+    this.schema = base.schema;
+    this.format = base.format;
+    this.dialect = dialect;
+    this.byName = base.byName;
+    this.fixed = base.fixed;
+  }
+
+  /** The generic plan behind {@link Csv}: every column a STRING named by the header. */
+  public static CsvPlan generic(CsvFormat format) {
     return new CsvPlan(null, Objects.requireNonNull(format), Map.of());
+  }
+
+  /**
+   * A plan whose batches return STRING cells to DataLibrary and interop reads as {@link CsvText}
+   * (a lazy interop string bound to the batch) instead of {@code String}. {@link CsvRow#getString}
+   * and {@link CsvRow#getText} are unaffected. Off by default: core contracts that require a Java
+   * {@code String} for STRING values (strict {@code Values.validate}, length constraints) treat a
+   * {@code CsvText} as a type mismatch, so this is an opt-in for guests that consume the cell as an
+   * interop string.
+   */
+  public CsvPlan withTextCells(boolean on) {
+    return on == dialect.textCells ? this : new CsvPlan(this, dialect.withTextCells(on));
+  }
+
+  public boolean textCells() {
+    return dialect.textCells;
   }
 
   /**

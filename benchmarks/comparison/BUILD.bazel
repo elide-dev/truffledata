@@ -810,12 +810,19 @@ label_flag(
     build_setting_default = ":csv_svm",
 )
 
+# The candidate defaults to the tree's image; point it at a preserved image to pair two
+# preserved binaries without rebuilding (e.g. a probe image while the tree has moved on).
+label_flag(
+    name = "csv_svm_candidate",
+    build_setting_default = ":csv_svm",
+)
+
 sh_test(
     name = "csv_pair",
     size = "enormous",
     srcs = ["csv_pair.sh"],
-    args = ["$(rootpath :csv_svm)", "$(rootpath :csv_svm_baseline)"],
-    data = ["csv_pair.py", ":csv_svm", ":csv_svm_baseline"],
+    args = ["$(rootpath :csv_svm_candidate)", "$(rootpath :csv_svm_baseline)"],
+    data = ["csv_pair.py", ":csv_svm_candidate", ":csv_svm_baseline"],
     exec_properties = {"EstimatedCPU": "4", "EstimatedMemory": "16GB"},
     shard_count = 8,
     tags = ["benchmark", "manual"],
