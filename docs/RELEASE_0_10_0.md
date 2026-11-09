@@ -36,6 +36,11 @@ are disclosed but do not veto measured SVM gains.
 
 ## Distribution
 
+Published on [Elide Maven](https://maven.elide.dev/dev/elide/truffledata-bom/0.10.0/truffledata-bom-0.10.0.pom)
+and [GitHub](https://github.com/elide-dev/truffledata/releases/tag/v0.10.0).
+The signed Central bundle passed validation, but publication hit the organization's
+monthly release-size quota. Central is deferred under [#28](https://github.com/elide-dev/truffledata/issues/28).
+
 Twenty-one libraries and the BOM include source/Javadoc jars, Gradle module
 metadata, POMs, signatures and checksums. The project is dual licensed under MIT
 or Apache 2.0, at the consumer's option. The publisher validates a signed Central
@@ -141,8 +146,10 @@ with no delivery date, implementation commitment or promised speedup:
 This disposition does not waive semantic, ownership, allocation/graph or safety
 contracts. Recent combined coverage (455 tests; 201 production files across 12
 modules) and five-target native acceptance on each Linux ISA are retained as
-qualification evidence. Release execution uses the normal CI run and staged and
-public artifact checks; it does not repeat the full performance matrix or imply
-that publication checks have already completed. The
+qualification evidence. Normal candidate/main CI, staged native integrity and Gradle metadata checks passed.
+All 22 Elide Maven modules match public downloads; the isolated public Maven
+consumer passed. All 112 GitHub asset digests and anonymous SDK/checksum downloads
+match staging. Central remains deferred as described above. No additional
+performance matrix was run. The
 [release ledger](superpowers/plans/2026-11-07-distribution-ledger.md) records their
 actual status.

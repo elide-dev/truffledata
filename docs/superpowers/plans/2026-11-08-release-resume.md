@@ -1,5 +1,12 @@
 # Release 0.10.0 Resume Plan
 
+**Current status — release complete:** 0.10.0 is public on Elide Maven and GitHub
+from signed tag `v0.10.0` (`32a5f19`). Candidate/main CI and staged/public artifact
+checks passed. Central publication is explicitly deferred by Sam after Sonatype's
+organization quota rejection; #28 stays open. No further optimization work is
+active. See `benchmarks/results/release-0.10.0/` for receipts and the distribution
+ledger for the exact outcome. Historical checkpoints below are not restart orders.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans. Steps use checkbox (`- [ ]`) syntax for tracking. The ledger is `docs/superpowers/plans/2026-11-07-distribution-ledger.md` (append "Resume" lines).
 
 **Current goal:** Release `feat/followup-v5` as 0.10.0 to unblock TruffleCEL and Elide 1.6.3. Sam explicitly authorized this release after the completed SVM tranche, with remaining performance goals recorded as deferred investigations, not commitments. Push, normal CI, merge, signed tag, Maven/Central publication and GitHub release are authorized; earlier stay-local and pause checkpoints below are historical.
@@ -62,8 +69,9 @@ remain follow-ups; final staged-artifact qualification is still required.
 - [ ] Complete Cargo qualification/CI on Linux x86-64/AArch64 and macOS AArch64. One local JSON Cargo result does not establish this matrix.
 
 ### Task R7: Qualification and release
-- [x] Bound external serialized-slab verification with completed structural proofs keyed by handle/depth/projection, per-occurrence accounting and reused UTF-8 proofs (`d37d646`, fixture correction `afa0d3b`). The accepted format, identity, budgets and failure order are preserved. Independent review found no defect. Runtime 41/41 (`c61145d9`) and allocation 13/13 (`9a6b979f`) pass; the depth-28 alias graph completes in 0.002 seconds. Native allocation qualification follows in the exact candidate CI. Evidence: `benchmarks/results/protobuf-slab-verifier-20261108/`.
-- [ ] Push, PR #36 ready, CI green; reuse the recent native/negative-JIT/sanitizer evidence; five-platform staging; artifact consumers/integrity; signatures; merge; green main; publish 0.10.0; verify public artifacts; close only issues actually completed. Do not rerun the full performance or qualification matrices without a new failure that warrants it.
+- [x] Bound external serialized-slab verification with completed structural proofs keyed by handle/depth/projection, per-occurrence accounting and reused UTF-8 proofs (`d37d646`, fixture correction `afa0d3b`). The accepted format, identity, budgets and failure order are preserved. Independent review found no defect. Runtime 41/41 (`c61145d9`) and allocation 13/13 (`9a6b979f`) pass; the depth-28 alias graph completes in 0.002 seconds. Exact candidate/main native CI passed; scalar allocation remains 168/136/136 B. Evidence: `benchmarks/results/protobuf-slab-verifier-20261108/`.
+- [x] PR #36 merged; candidate/main CI passed; five-platform staging, native integrity, Gradle consumer, signatures, Elide Maven publication, signed GitHub release and public byte/consumer checks completed. Issues #24/#25/#26/#29/#30/#31/#32/#33/#35 closed after verification. The performance matrix was not repeated.
+- [ ] **Deferred by Sam:** Central publication (#28), blocked by the organization monthly release-size quota. Signed bundle validated, then deployment `539bb27c-71af-483e-99ee-89421374c702` entered FAILED on publish. Preserve the exact ZIP and receipts; resume only after instruction and available quota. #37/#38 remain follow-up work.
 
 Resume 2026-11-08 (hill climb, three Opus workers, Fable briefing/review): worktrees td-climb-slab (climb/slab: allocation-free slab verification, plan-cached SlabLimits, no per-message Budget, leaf `decodeSlabSmall` without PinnedObject, then native_smoke gates from the measured floor), td-climb-b4 (climb/b4: B4 phase 1 per 2026-11-08-protobuf-b4-design.md, TDD, consumer_measure), td-climb-json (climb/json: CodSpeed JSON −12%/−10% reproduced locally via RBE simulation image + valgrind in an amd64 container, bisect 223edf7..1cfcb37, zero-cost fix). Bazel runs serialized through a scratchpad lock wrapper; nothing pushed. Results merge into feat/followup-v5 after review.
 

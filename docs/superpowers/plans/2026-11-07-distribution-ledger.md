@@ -4,6 +4,45 @@ The user authorized every open TruffleData issue and the unfinished JSON,
 protobuf and YAML plans, with an intermediate release to unblock TruffleCEL.
 The user selected `MIT OR Apache-2.0` for this follow-up.
 
+## 0.10.0 released — Central explicitly deferred
+
+PR #36 merged as `32a5f1946f4107831aa68d9594122de0a83c8d7a`; signed tag
+[`v0.10.0`](https://github.com/elide-dev/truffledata/releases/tag/v0.10.0) identifies
+that exact source. The original main checkout is updated. All eight Actions jobs
+passed on [candidate 42537051733](https://github.com/elide-dev/truffledata/actions/runs/42537051733)
+and [main 42538839701](https://github.com/elide-dev/truffledata/actions/runs/42538839701),
+along with the separate BuildBuddy workflows. Main's two raw negative-build failures
+are expected controls confirmed by the successful JIT gate, including 651 matrix cases.
+
+- All 22 modules are published on Elide Maven. All 153 signed payloads and their
+  signatures (306 public files), plus 22 discovery metadata files, match staging.
+- Native integrity/export/ABI checks pass on all five applicable platforms; staged
+  Gradle metadata/BOM/binary/source/Javadoc consumption passes. The isolated public
+  Maven consumer resolves all 22 modules, compares bytes, compiles and runs.
+- All 112 GitHub asset digests match local bytes. Five CSV SDK bundles and the signed
+  checksums also pass anonymous download/byte/signature checks. Updated charts and
+  measured-source/image provenance are attached and committed.
+- Scalar native allocation remains 168 B generic / 136 B typed/generated. The earlier
+  SVM gains, reference comparisons, measured losses and uncommitted investigations
+  remain in the performance report and owning ledgers; no extra timing matrix ran.
+- Completed issues #24/#25/#26/#29/#30/#31/#32/#33/#35 are closed. #28/#37/#38 remain open.
+
+Central validated the exact signed bundle, then rejected publication because the
+organization's monthly release-size quota was exhausted. Its grace period ended
+2026-11-07; usage resets 2026-12-01. Deployment
+`539bb27c-71af-483e-99ee-89421374c702` is FAILED, with the service error preserved.
+Sam explicitly selected **Finish release; defer Central**. This completes the
+revised 0.10.0 release scope on Elide Maven/GitHub; it does not claim a Central
+publication. Keep #28 open and resume only after a new instruction and available
+quota, using the preserved signed ZIP rather than republishing immutable R2 paths.
+
+Compact CI, staging, signatures and public receipts:
+`benchmarks/results/release-0.10.0/`. Original staging and signed Central ZIP remain
+in the integration checkout's ignored `build/release-010-*` paths. The Bazel server
+used for packaging is shut down, workers are stopped, and no new hill-climbing
+tranche is active. Release-completion edits below this tag are documentation and
+receipts only, with no change to released library/native bytes.
+
 ## Current release decision — 2026-11-08
 
 Sam authorized releasing the completed work as **0.10.0** to unblock TruffleCEL

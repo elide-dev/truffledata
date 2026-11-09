@@ -1,0 +1,68 @@
+[
+  {
+    "phase": "linux-aarch64",
+    "started": "2026-11-08T23:49:00.721945+00:00",
+    "args": [
+      "--config=remote_arm64",
+      "//tools/release:natives",
+      "--//tools/release:version=0.10.0"
+    ],
+    "finished": "2026-11-09T00:09:34.123522+00:00",
+    "exit_code": 0
+  },
+  {
+    "phase": "linux-x86_64-musl",
+    "started": "2026-11-09T00:09:35.567860+00:00",
+    "args": [
+      "--config=remote_musl",
+      "//tools/release:csv_musl_natives",
+      "--//tools/release:version=0.10.0"
+    ],
+    "finished": "2026-11-09T00:10:54.563876+00:00",
+    "exit_code": 0
+  },
+  {
+    "phase": "linux-aarch64-musl",
+    "started": "2026-11-09T00:10:55.422022+00:00",
+    "args": [
+      "--config=remote_arm64_musl",
+      "//tools/release:csv_musl_natives",
+      "--//tools/release:version=0.10.0"
+    ],
+    "finished": "2026-11-09T00:12:49.492599+00:00",
+    "exit_code": 0
+  },
+  {
+    "phase": "macos-aarch64",
+    "started": "2026-11-09T00:12:50.430782+00:00",
+    "args": [
+      "--config=local",
+      "//tools/release:natives",
+      "--//tools/release:version=0.10.0"
+    ],
+    "finished": "2026-11-09T00:14:45.156727+00:00",
+    "exit_code": 0
+  },
+  {
+    "phase": "publications",
+    "started": "2026-11-09T00:14:47.197068+00:00",
+    "args": [
+      "--config=remote",
+      "//tools/release:publications",
+      "--//tools/release:version=0.10.0"
+    ],
+    "finished": "2026-11-09T00:15:09.063313+00:00",
+    "exit_code": 0
+  },
+  {
+    "phase": "host-tools",
+    "started": "2026-11-09T00:15:10.116923+00:00",
+    "args": [
+      "--config=local",
+      "@elide_toolchain_darwin_arm64//:bin",
+      "@graalvm_macos_aarch64//:jdk"
+    ],
+    "finished": "2026-11-09T00:15:10.397808+00:00",
+    "exit_code": 0
+  }
+]

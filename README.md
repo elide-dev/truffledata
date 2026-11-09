@@ -122,7 +122,8 @@ Buffa, JSON, YAML and CSV native attachments. See
 Release **0.10.0** adds native YAML APIs, compact JSON readers and streaming,
 protobuf slab ownership and projections, allocation-free unknown-field queries,
 CSV input windows/channel mapping, and native CSV SDKs with musl builds. Artifacts
-are dual MIT/Apache-2.0 licensed and prepared for signed Maven Central publication.
+are dual MIT/Apache-2.0 licensed and published on Elide Maven and GitHub. Maven
+Central publication is deferred after an organization quota rejection; see [#28](https://github.com/elide-dev/truffledata/issues/28).
 See the [0.10.0 notes](docs/RELEASE_0_10_0.md).
 
 Release **0.9.0** added prebuilt natives for Linux x86-64, Linux AArch64 and macOS

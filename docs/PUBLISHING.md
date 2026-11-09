@@ -29,6 +29,17 @@ The release publishes twenty-one thin libraries and a dependency-management BOM,
 
 All artifacts require Java 25 and currently target Elide GraalVM `25.5.5-elide.27`. They do not bundle GraalVM, guest languages, JDBC drivers, annotation processors, or test libraries. Select the runtime and guest languages in the embedding application. The driver integration artifacts declare their upstream drivers transitively; generic JDBC remains driver independent. JSpecify annotations and the Truffle API are compile dependencies. Release dependencies are checked against `maven_install.json` by `//tools/release:test`.
 
+## 0.10.0 publication status
+
+0.10.0 is published on Elide Maven and [GitHub](https://github.com/elide-dev/truffledata/releases/tag/v0.10.0).
+All 22 modules, signatures, metadata and public consumer resolution are verified.
+Central validated the signed bundle but blocked publication on the organization's
+monthly release-size quota (reset 2026-12-01). Central is explicitly deferred; [#28](https://github.com/elide-dev/truffledata/issues/28)
+remains open. Use the Elide repository configuration below. The
+[release receipts](../benchmarks/results/release-0.10.0/README.md) preserve the failed
+Central deployment and exact ZIP hash for a later authorized retry. Do not rerun
+`publish.sh 0.10.0 --publish` against the already published immutable version.
+
 ## Stage and inspect
 
 ```sh

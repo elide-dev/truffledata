@@ -1,0 +1,44 @@
+{
+  "release_head": "32a5f1946f4107831aa68d9594122de0a83c8d7a",
+  "job_id": 128909049629,
+  "job_url": "https://github.com/elide-dev/truffledata/actions/runs/42538839701/job/128909049629",
+  "enclosing_gate": {
+    "name": "Native JIT and blocklist rejection gates",
+    "status": "completed",
+    "conclusion": "success"
+  },
+  "controls": [
+    {
+      "context": "bazel build //tests/jit-negative:native",
+      "reported_status": "FAILURE",
+      "invocation_url": "https://elide-dev.buildbuddy.io/invocation/e2638e4d-3645-43d0-901c-5525f9e6e4d7",
+      "classification": "expected-rejection-validated",
+      "probe": "blocklist-negative-control",
+      "required_diagnostic_fragments": [
+        "Blocklisted methods are reachable for runtime compilation",
+        "java.math.BigDecimal.add(BigDecimal)",
+        "BlocklistProbe",
+        "OptimizedCallTarget.executeRootNode"
+      ],
+      "all_diagnostic_fragments_present": true,
+      "validation_marker": "Verified expected rejection: blocklist-negative-control"
+    },
+    {
+      "context": "bazel build //tests/jit-negative:never_compile",
+      "reported_status": "FAILURE",
+      "invocation_url": "https://elide-dev.buildbuddy.io/invocation/1e0611d3-2b4c-4c5b-8d46-e9c51c80c3db",
+      "classification": "expected-rejection-validated",
+      "probe": "never-compile-negative-control",
+      "required_diagnostic_fragments": [
+        "CompilerAsserts.neverPartOfCompilation reachable for runtime compilation",
+        "NeverCompileProbe$UnsafeRoot.execute"
+      ],
+      "all_diagnostic_fragments_present": true,
+      "validation_marker": "Verified expected rejection: never-compile-negative-control"
+    }
+  ],
+  "compiled_matrix_cases": 651,
+  "source_job_log_sha256": "ffbeeb4898f4e73675c726f450f8c08e4555ac90525dd91acff5e27ccef87d5a",
+  "source_job_log_bytes": 13247707,
+  "excerpt_sha256": "6ff573c1a3508a17f794996783e32fe841c7909b2fba01280460e0f7353dee8b"
+}

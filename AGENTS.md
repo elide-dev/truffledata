@@ -38,3 +38,14 @@ qualification; do not repeat broad benchmarks or extensive validation without a
 new change or failure that warrants it. Run focused checks for release fixes and
 validate the staged/published artifacts. Resume hill-climbing after the release
 as a separate tranche.
+
+## Release completion
+
+0.10.0 is released on Elide Maven and GitHub from signed tag `v0.10.0` at
+`32a5f1946f4107831aa68d9594122de0a83c8d7a`. Normal candidate/main CI and actual
+staged/public artifact checks passed. Sonatype validated the signed bundle, then
+blocked publication on the organization's monthly release-size quota. Sam explicitly
+selected “Finish release; defer Central.” Keep #28 open; do not retry Central or
+start another hill-climbing tranche without a new instruction. #37/#38 and the
+recorded performance investigations remain future work. Release receipts are in
+`benchmarks/results/release-0.10.0/`.
