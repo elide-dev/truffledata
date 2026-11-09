@@ -297,6 +297,11 @@ class handler : public c4::yml::EventHandlerStack<handler, handler_state> {
   }
   // Writes the root null when the input held no document; publishes the descriptor.
   void finish() {
+    // rapidyaml 0.16.0 ends the stream without an error when the input stops inside a flow
+    // sequence's implicit single-pair mapping (`[?`, `[:`): its end-of-input check sees neither
+    // RSEQ nor RMAP in that state, so no end events arrive. An open frame here is a truncated
+    // document; it must never publish a tape with unterminated containers.
+    if (depth_) throw syntax_error("missing terminating ]").at(line(), column()).from_parser();
     if (writer_->word_count() == 0) {
       writer_->null();
       side(0, 0);

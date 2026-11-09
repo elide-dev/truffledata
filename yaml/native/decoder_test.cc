@@ -109,6 +109,15 @@ void values() {
   // `[a: b]`: the sequence element becomes the key of a single-pair flow mapping.
   require(tape(s, "[a: b, c, \"d\": e, 1: f]") == "[{\"a\":\"b\"},\"c\",{\"d\":\"e\"},{\"1\":\"f\"}]");
   require(tape(s, "[: x]") == "[{\"\":\"x\"}]");
+  require(tape(s, "[? a : b]") == "[{\"a\":\"b\"}]");
+  // Input ending inside the implicit mapping: rapidyaml emits no end events and no error
+  // (fuzz finding); the decoder must reject the truncated document rather than publish an
+  // unterminated tape.
+  for (const char* cut : {"[?", "[? ", "[:", "[a, [?", "{a: [:"}) {
+    error e = failure(s, cut);
+    require(e.code == status_syntax && e.parser && std::string(e.what()) == "missing terminating ]");
+  }
+  require(failure(s, "[: ").code == status_syntax);  // rapidyaml's own parse error
   // Keys keep the resolved kind in yaml_meta bits 5-7.
   auto d = decode(s, "{~: a, true: b, 0x1F: c, 1.50: d, s: e, \"1\": f}");
   require(render(d.view) == "{\"\":\"a\",\"true\":\"b\",\"31\":\"c\",\"1.5\":\"d\",\"s\":\"e\",\"1\":\"f\"}");

@@ -1,14 +1,19 @@
 // One input is a reproducible sequence; no state leaks between fuzz iterations.
 #include "json/native/session.h"
 #include "json/native/status.h"
+#include <cstdio>
 #include <cstdlib>
 #include <memory>
 #include <vector>
 
 using namespace truffledata;
 namespace {
+[[noreturn]] void fail(const char* what, const char* detail) {
+  std::fprintf(stderr, "json session harness: %s: %s\n", what, detail);
+  std::abort();
+}
 void check(const td_tape_view& view) {
-  if (tape::ctape::validate(view)) std::abort();
+  if (const char* reason = tape::ctape::validate(view)) fail("invalid tape", reason);
 }
 struct Release { void operator()(json::session::retained* p) const { p->destroy(); } };
 }
@@ -35,7 +40,11 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
     } catch (...) {
       int status = json::current_exception_status();
       if (status != json::status_syntax && status != json::status_limit &&
-          status != json::status_allocation) std::abort();
+          status != json::status_allocation) {
+        std::fprintf(stderr, "json session harness: status %d\n", status);
+        try { throw; } catch (const std::exception& e) { fail("unexpected error", e.what()); } catch (...) {}
+        fail("unexpected error", "non-standard exception");
+      }
     }
     if (retained) check(retained->tape);
   };

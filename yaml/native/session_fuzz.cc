@@ -1,10 +1,15 @@
 #include "yaml/native/session.h"
+#include <cstdio>
 #include <cstdlib>
 #include <memory>
 using namespace truffledata;
 namespace {
+[[noreturn]] void fail(const char* what, const char* detail) {
+  std::fprintf(stderr, "yaml session harness: %s: %s\n", what, detail);
+  std::abort();
+}
 void check(const td_tape_view& view) {
-  if (tape::ctape::validate(view)) std::abort();
+  if (const char* reason = tape::ctape::validate(view)) fail("invalid tape", reason);
 }
 struct Release { void operator()(yaml::session::retained* p) const { p->destroy(); } };
 }
@@ -34,7 +39,11 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
       }
     } catch (const yaml::error& error) {
       if (error.code != yaml::status_syntax && error.code != yaml::status_limit &&
-          error.code != yaml::status_multiple_documents) std::abort();
+          error.code != yaml::status_multiple_documents) {
+        std::fprintf(stderr, "yaml session harness: status %d at %llu:%llu%s\n", int(error.code),
+                     (unsigned long long)error.line, (unsigned long long)error.column, error.parser ? " (parser)" : "");
+        fail("unexpected error", error.what());
+      }
     } catch (const std::length_error&) {
       // Counted index allocation budget.
     } catch (const std::bad_alloc&) {
