@@ -1,0 +1,147 @@
+HIR nodes in final schedule: 7106
+node classes (top 40):
+    1341 Begin
+     959 AArch64Address
+     853 Read
+     687 EndNode
+     574 If
+     450 FrameState
+     381 HotSpotCompression
+     372 Constant
+     214 Write
+     165 Merge
+     133 ValuePhi
+     131 AArch64PointerAdd
+     120 Deopt
+      86 MemoryAnchor
+      77 ReadRegister
+      68 ZeroExtend
+      64 HotSpotDirectCallTarget
+      62 InvokeWithException
+      55 Narrow
+      53 IsNull
+      52 IntegerTest
+      48 DynamicDeoptimize
+      32 NullCheck
+      15 ForeignCall
+      15 PrefetchAllocate
+      15 WordCast
+      15 Membar
+      15 PublishWrites
+      12 IntegerSwitch
+       9 LoopEnd
+       5 Conditional
+       4 Reinterpret
+       4 FloatConvert
+       3 LoopBegin
+       3 SignExtend
+       3 LoopExit
+       2 VirtualObjectState
+       2 Invoke
+       1 StartNode
+       1 Parameter
+call-like nodes:
+     1 InvokeWithException classInit: - callTarget: v11679 stateDuring: ?19375 stateAfter: - #next: v301 #exceptionEdge: v21044
+     1 InvokeWithException classInit: - callTarget: v11678 stateDuring: ?19376 stateAfter: - #next: v374 #exceptionEdge: v21029
+     1 InvokeWithException classInit: - callTarget: v11794 stateDuring: ?19377 stateAfter: - #next: v1010 #exceptionEdge: v21068
+     1 InvokeWithException classInit: - callTarget: v11793 stateDuring: ?19378 stateAfter: - #next: v1081 #exceptionEdge: v21056
+     1 InvokeWithException classInit: - callTarget: v12001 stateDuring: ?19379 stateAfter: - #next: v1353 #exceptionEdge: v21105
+     1 InvokeWithException classInit: - callTarget: v11972 stateDuring: ?19381 stateAfter: - #next: v1424 #exceptionEdge: v21093
+     1 ForeignCall stateAfter: - stateDuring: ?1587 arguments: v21116 #next: v23967
+     1 Membar #next: a18594
+     1 ForeignCall stateAfter: - stateDuring: ?1587 arguments: v21116 #next: v23973
+     1 Membar #next: a18731
+     1 InvokeWithException classInit: - callTarget: v12074 stateDuring: ?19382 stateAfter: - #next: v1853 #exceptionEdge: v21209
+     1 ForeignCall stateAfter: - stateDuring: ?1587 arguments: v21164 #next: v23971
+     1 Membar #next: a18721
+     1 InvokeWithException classInit: - callTarget: v12090 stateDuring: ?19383 stateAfter: - #next: v1828 #exceptionEdge: v21233
+     1 InvokeWithException classInit: - callTarget: v12195 stateDuring: ?19385 stateAfter: - #next: v1691 #exceptionEdge: v21269
+     1 InvokeWithException classInit: - callTarget: v12206 stateDuring: ?19386 stateAfter: - #next: v1931 #exceptionEdge: v21284
+     1 InvokeWithException classInit: - callTarget: v12104 stateDuring: ?19384 stateAfter: - #next: v1768 #exceptionEdge: v21257
+     1 ForeignCall stateAfter: - stateDuring: ?1587 arguments: v21164 #next: v23969
+     1 Membar #next: a18629
+     1 InvokeWithException classInit: - callTarget: v12255 stateDuring: ?19380 stateAfter: - #next: v1520 #exceptionEdge: v21382
+     1 InvokeWithException classInit: - callTarget: v12415 stateDuring: ?19388 stateAfter: - #next: v2215 #exceptionEdge: v21406
+     1 InvokeWithException classInit: - callTarget: v12416 stateDuring: ?19387 stateAfter: - #next: v2144 #exceptionEdge: v21418
+     1 ForeignCall stateAfter: - stateDuring: ?2376 arguments: v21116 #next: v23975
+     1 Membar #next: a18750
+     1 ForeignCall stateAfter: - stateDuring: ?2376 arguments: v21116 #next: v23977
+     1 Membar #next: a18812
+     1 InvokeWithException classInit: - callTarget: v12514 stateDuring: ?19390 stateAfter: - #next: v2641 #exceptionEdge: v21473
+     1 InvokeWithException classInit: - callTarget: v12531 stateDuring: ?19391 stateAfter: - #next: v2616 #exceptionEdge: v21497
+     1 InvokeWithException classInit: - callTarget: v12642 stateDuring: ?19393 stateAfter: - #next: v2479 #exceptionEdge: v21533
+     1 InvokeWithException classInit: - callTarget: v12655 stateDuring: ?19394 stateAfter: - #next: v2718 #exceptionEdge: v21548
+     1 InvokeWithException classInit: - callTarget: v12547 stateDuring: ?19392 stateAfter: - #next: v2556 #exceptionEdge: v21521
+     1 InvokeWithException classInit: - callTarget: v12679 stateDuring: ?19389 stateAfter: - #next: v2311 #exceptionEdge: v21603
+     1 InvokeWithException classInit: - callTarget: v12847 stateDuring: ?19396 stateAfter: - #next: v3015 #exceptionEdge: v21626
+     1 InvokeWithException classInit: - callTarget: v12848 stateDuring: ?19395 stateAfter: - #next: v2944 #exceptionEdge: v21638
+     1 ForeignCall stateAfter: - stateDuring: ?3176 arguments: v21116 #next: v23979
+     1 Membar #next: a18831
+     1 ForeignCall stateAfter: - stateDuring: ?3176 arguments: v21116 #next: v23985
+     1 Membar #next: a18959
+     1 InvokeWithException classInit: - callTarget: v12943 stateDuring: ?19398 stateAfter: - #next: v3441 #exceptionEdge: v21736
+     1 ForeignCall stateAfter: - stateDuring: ?3176 arguments: v21164 #next: v23983
+     1 Membar #next: a18949
+     1 InvokeWithException classInit: - callTarget: v12960 stateDuring: ?19399 stateAfter: - #next: v3416 #exceptionEdge: v21760
+     1 InvokeWithException classInit: - callTarget: v13071 stateDuring: ?19401 stateAfter: - #next: v3279 #exceptionEdge: v21796
+     1 InvokeWithException classInit: - callTarget: v13084 stateDuring: ?19402 stateAfter: - #next: v3518 #exceptionEdge: v21811
+     1 InvokeWithException classInit: - callTarget: v12976 stateDuring: ?19400 stateAfter: - #next: v3356 #exceptionEdge: v21784
+     1 ForeignCall stateAfter: - stateDuring: ?3176 arguments: v21164 #next: v23981
+     1 Membar #next: a18861
+     1 InvokeWithException classInit: - callTarget: v13108 stateDuring: ?19397 stateAfter: - #next: v3111 #exceptionEdge: v21909
+     1 InvokeWithException classInit: - callTarget: v13266 stateDuring: ?19404 stateAfter: - #next: v3789 #exceptionEdge: v21921
+     1 InvokeWithException classInit: - callTarget: v13267 stateDuring: ?19403 stateAfter: - #next: v3718 #exceptionEdge: v21933
+     1 ForeignCall stateAfter: - stateDuring: ?3950 arguments: v21116 #next: v23987
+     1 Membar #next: a18979
+     1 ForeignCall stateAfter: - stateDuring: ?3950 arguments: v21116 #next: v23993
+     1 Membar #next: a19107
+     1 InvokeWithException classInit: - callTarget: v13368 stateDuring: ?19406 stateAfter: - #next: v4215 #exceptionEdge: v22043
+     1 ForeignCall stateAfter: - stateDuring: ?3950 arguments: v21164 #next: v23991
+     1 Membar #next: a19097
+     1 InvokeWithException classInit: - callTarget: v13385 stateDuring: ?19407 stateAfter: - #next: v4190 #exceptionEdge: v22067
+     1 InvokeWithException classInit: - callTarget: v13496 stateDuring: ?19409 stateAfter: - #next: v4053 #exceptionEdge: v22103
+     1 InvokeWithException classInit: - callTarget: v13509 stateDuring: ?19410 stateAfter: - #next: v4292 #exceptionEdge: v22118
+     1 InvokeWithException classInit: - callTarget: v13401 stateDuring: ?19408 stateAfter: - #next: v4130 #exceptionEdge: v22091
+     1 ForeignCall stateAfter: - stateDuring: ?3950 arguments: v21164 #next: v23989
+     1 Membar #next: a19009
+     1 InvokeWithException classInit: - callTarget: v13536 stateDuring: ?19405 stateAfter: - #next: v3885 #exceptionEdge: v22216
+     1 InvokeWithException classInit: - callTarget: v13711 stateDuring: ?19412 stateAfter: - #next: v4603 #exceptionEdge: v22228
+     1 InvokeWithException classInit: - callTarget: v13744 stateDuring: ?19411 stateAfter: - #next: v4532 #exceptionEdge: v22240
+     1 InvokeWithException classInit: - callTarget: v13801 stateDuring: ?19413 stateAfter: - #next: v4965 #exceptionEdge: v22255
+     1 InvokeWithException classInit: - callTarget: v13827 stateDuring: ?19414 stateAfter: - #next: v4940 #exceptionEdge: v22279
+     1 InvokeWithException classInit: - callTarget: v13943 stateDuring: ?19416 stateAfter: - #next: v4803 #exceptionEdge: v22315
+     1 InvokeWithException classInit: - callTarget: v13978 stateDuring: ?19417 stateAfter: - #next: v5042 #exceptionEdge: v22330
+     1 InvokeWithException classInit: - callTarget: v14093 stateDuring: ?19418 stateAfter: - #next: v5320 #exceptionEdge: v22354
+     1 InvokeWithException classInit: - callTarget: v14092 stateDuring: ?19419 stateAfter: - #next: v5391 #exceptionEdge: v22342
+     1 InvokeWithException classInit: - callTarget: v14206 stateDuring: ?19420 stateAfter: - #next: v5727 #exceptionEdge: v22378
+     1 InvokeWithException classInit: - callTarget: v14205 stateDuring: ?19421 stateAfter: - #next: v5798 #exceptionEdge: v22366
+     1 InvokeWithException classInit: - callTarget: v14305 stateDuring: ?19422 stateAfter: - #next: v6085 #exceptionEdge: v22402
+     1 InvokeWithException classInit: - callTarget: v14304 stateDuring: ?19423 stateAfter: - #next: v6156 #exceptionEdge: v22390
+     1 InvokeWithException classInit: - callTarget: v14404 stateDuring: ?19424 stateAfter: - #next: v6448 #exceptionEdge: v22426
+     1 InvokeWithException classInit: - callTarget: v14403 stateDuring: ?19425 stateAfter: - #next: v6519 #exceptionEdge: v22414
+     1 InvokeWithException classInit: - callTarget: v14503 stateDuring: ?19426 stateAfter: - #next: v6809 #exceptionEdge: v22450
+     1 InvokeWithException classInit: - callTarget: v14502 stateDuring: ?19427 stateAfter: - #next: v6880 #exceptionEdge: v22438
+     1 InvokeWithException classInit: - callTarget: v14717 stateDuring: ?19429 stateAfter: - #next: v7266 #exceptionEdge: v22474
+     1 InvokeWithException classInit: - callTarget: v14750 stateDuring: ?19428 stateAfter: - #next: v7195 #exceptionEdge: v22486
+     1 InvokeWithException classInit: - callTarget: v14807 stateDuring: ?19430 stateAfter: - #next: v7628 #exceptionEdge: v22510
+     1 InvokeWithException classInit: - callTarget: v14828 stateDuring: ?19431 stateAfter: - #next: v10449 #exceptionEdge: v22522
+     1 InvokeWithException classInit: - callTarget: v14860 stateDuring: ?19433 stateAfter: - #next: v7603 #exceptionEdge: v22546
+     1 Invoke stateAfter: - classInit: - callTarget: v22636 stateDuring: ?7068 #next: v22630
+     1 ForeignCall stateAfter: - stateDuring: ?150 arguments: v21164 #next: v23995
+     1 Membar #next: a19289
+     1 Invoke stateAfter: - classInit: - callTarget: v22695 stateDuring: ?19293 #next: v22689
+     1 InvokeWithException classInit: - callTarget: v14980 stateDuring: ?19435 stateAfter: - #next: v7466 #exceptionEdge: v22594
+     1 InvokeWithException classInit: - callTarget: v14981 stateDuring: ?19436 stateAfter: - #next: v7705 #exceptionEdge: v22612
+     1 InvokeWithException classInit: - callTarget: v14878 stateDuring: ?19432 stateAfter: - #next: v10463 #exceptionEdge: v22558
+     1 InvokeWithException classInit: - callTarget: v14888 stateDuring: ?19434 stateAfter: - #next: v7543 #exceptionEdge: v22582
+     1 InvokeWithException classInit: - callTarget: v13842 stateDuring: ?19415 stateAfter: - #next: v4880 #exceptionEdge: v22303
+LIR call ops after final code analysis: 237
+    57 CALL_DIRECT parameters: [] temps: [] callTarget: HotSpotMethod<Projection.invalidField()> invokeKind: Static config: jdk.graal.compiler.hotspot.GraalH
+    45 FOREIGN_CALL parameters: [r1|QWORD] temps: [r0|ILLEGAL] callTarget: Stub<new_instance_or_null(KlassPointer)Object>@0x119af09c0:CallingConvention[r1|QW
+    39 CALL_DIRECT parameters: [] temps: [] callTarget: HotSpotMethod<SlabMessage.omitted()> invokeKind: Static config: jdk.graal.compiler.hotspot.GraalHotSp
+    21 CALL_DIRECT parameters: [r1|QWORD[.], r2|DWORD, r3|DWORD] temps: [] callTarget: HotSpotMethod<SlabMessage.createText(int, int)> invokeKind: Special co
+    21 CALL_DIRECT parameters: [r1|QWORD[.], r2|DWORD, r3|DWORD] temps: [] callTarget: HotSpotMethod<SlabMessage.createBlob(int, int)> invokeKind: Special co
+    18 CALL_DIRECT parameters: [r1|QWORD[.], r2|DWORD, r3|DWORD, r4|DWORD, r5|DWORD] temps: [] callTarget: HotSpotMethod<SlabMessage.createRow(int, int, bool
+    18 CALL_DIRECT parameters: [r1|QWORD[.], r2|DWORD, r3|QWORD] temps: [] callTarget: HotSpotMethod<SlabMessage.unsigned(int, long)> invokeKind: Special con
+    12 CALL_DIRECT parameters: [r1|QWORD[.], r2|DWORD, r3|DWORD, r4|DWORD, r5|DWORD] temps: [] callTarget: HotSpotMethod<SlabMessage.array(int, int, int, boo
+     6 CALL_DIRECT parameters: [r1|QWORD[.]] temps: [] callTarget: HotSpotMethod<HotSpotThreadLocalHandshake.doHandshake(Object)> invokeKind: Static config: 

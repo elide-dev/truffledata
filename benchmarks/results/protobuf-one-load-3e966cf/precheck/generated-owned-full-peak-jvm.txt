@@ -1,0 +1,55 @@
+HIR nodes in final schedule: 756
+node classes (top 40):
+     112 Read
+     103 Begin
+      98 AArch64Address
+      65 Constant
+      63 FrameState
+      51 EndNode
+      50 If
+      40 HotSpotCompression
+      27 ValuePhi
+      20 Merge
+      14 Deopt
+      14 Write
+      13 ZeroExtend
+       9 IsNull
+       9 LoopEnd
+       8 MemoryAnchor
+       6 HotSpotDirectCallTarget
+       5 LoopBegin
+       5 AArch64PointerAdd
+       5 ReadRegister
+       5 SignExtend
+       5 LoopExit
+       5 DynamicDeoptimize
+       4 InvokeWithException
+       2 VirtualObjectState
+       2 Invoke
+       2 Safepoint
+       1 StartNode
+       1 Parameter
+       1 VirtualArray
+       1 VirtualInstance
+       1 CurrentJavaThread
+       1 UnsignedMin
+       1 Narrow
+       1 ForeignCall
+       1 NullCheck
+       1 PrefetchAllocate
+       1 WordCast
+       1 Membar
+       1 PublishWrites
+call-like nodes:
+     1 Invoke stateAfter: - classInit: - callTarget: v5117 stateDuring: ?139 #next: v5111
+     1 InvokeWithException classInit: - callTarget: v3275 stateDuring: ?4899 stateAfter: - #next: v258 #exceptionEdge: v5134
+     1 InvokeWithException classInit: - callTarget: v3297 stateDuring: ?4900 stateAfter: - #next: v409 #exceptionEdge: v5149
+     1 InvokeWithException classInit: - callTarget: v3318 stateDuring: ?4901 stateAfter: - #next: v578 #exceptionEdge: v5175
+     1 InvokeWithException classInit: - callTarget: v3369 stateDuring: ?4902 stateAfter: - #next: v1315 #exceptionEdge: v5253
+     1 ForeignCall stateAfter: - stateDuring: ?150 arguments: v5350 #next: v5625
+     1 Membar #next: a4808
+     1 Invoke stateAfter: - classInit: - callTarget: v5410 stateDuring: ?4812 #next: v5404
+LIR call ops after final code analysis: 21
+    12 CALL_DIRECT parameters: [r1|QWORD[.]] temps: [] callTarget: HotSpotMethod<Accessor.foreignLength(Object)> invokeKind: Static config: jdk.graal.compile
+     6 CALL_DIRECT parameters: [r1|QWORD[.]] temps: [] callTarget: HotSpotMethod<HotSpotThreadLocalHandshake.doHandshake(Object)> invokeKind: Static config: 
+     3 FOREIGN_CALL parameters: [r1|QWORD] temps: [r0|ILLEGAL] callTarget: Stub<new_instance_or_null(KlassPointer)Object>@0x11b1b6f00:CallingConvention[r1|QW
