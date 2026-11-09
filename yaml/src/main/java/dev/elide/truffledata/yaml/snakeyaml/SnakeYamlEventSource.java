@@ -38,24 +38,28 @@ import org.snakeyaml.engine.v2.tokens.Token;
  * the scalar token itself.
  */
 public final class SnakeYamlEventSource implements YamlEventSource {
+  public SnakeYamlEventSource() {}
+
   // Marks are needed for positions; the per-document code point limit is the kernel's input limit.
   // The version function accepts every %YAML version: the kernel applies its own 1.x policy.
-  private static final LoadSettings SETTINGS =
-      LoadSettings.builder()
-          .setUseMarks(true)
-          .setParseComments(false)
-          .setCodePointLimit(Integer.MAX_VALUE)
-          .setVersionFunction(version -> version)
-          .build();
-
-  public SnakeYamlEventSource() {}
+  // Built per parse: no Engine object is held by this class, so images that initialize
+  // dev.elide.truffledata at build time never carry Engine state in their heap.
+  private static LoadSettings settings() {
+    return LoadSettings.builder()
+        .setUseMarks(true)
+        .setParseComments(false)
+        .setCodePointLimit(Integer.MAX_VALUE)
+        .setVersionFunction(version -> version)
+        .build();
+  }
 
   @Override
   public void parse(byte[] utf8, int length, YamlEvents events) {
+    LoadSettings settings = settings();
     String text = new String(utf8, 0, length, StandardCharsets.UTF_8);
     Positions positions = new Positions(utf8, length, text);
-    Recorder scanner = new Recorder(new ScannerImpl(SETTINGS, new StreamReader(SETTINGS, text)));
-    ParserImpl parser = new ParserImpl(SETTINGS, scanner);
+    Recorder scanner = new Recorder(new ScannerImpl(settings, new StreamReader(settings, text)));
+    ParserImpl parser = new ParserImpl(settings, scanner);
     try {
       while (parser.hasNext()) {
         Event event = parser.next();
