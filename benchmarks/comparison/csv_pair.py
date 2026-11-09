@@ -138,6 +138,12 @@ def main(argv):
                 process = subprocess.run([str(binaries[label]), *map(str, cell)],
                                          text=True, capture_output=True)
                 if process.returncode:
+                    # A cell the baseline binary predates (a new engine) is recorded
+                    # candidate-only; its checksum is still checked against the workload's.
+                    if label == 'baseline' and 'IllegalArgumentException: engine' in process.stderr:
+                        report.setdefault('baseline_unsupported', []).append(list(cell))
+                        print(label, *cell, fork, 'unsupported', flush=True)
+                        continue
                     raise RuntimeError(f'{label} {cell}: {process.stdout}\n{process.stderr}')
                 lines = [line for line in process.stdout.splitlines() if line.startswith('{')]
                 if len(lines) != 1:
