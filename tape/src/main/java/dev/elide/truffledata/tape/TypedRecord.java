@@ -137,7 +137,27 @@ public final class TypedRecord extends AbstractRow implements AutoCloseable {
   // The native owner. Owned records have no STRING, RECORD or ARRAY field and their accessors no
   // hops, so a kind or schema check rejects them before any caller of this.
   private TypedOwner nativeOwner() {
-    return stored(owner);
+    TypedOwner result = owner;
+    if (result == null) {
+      CompilerDirectives.transferToInterpreter();
+      throw storageFailure();
+    }
+    return result;
+  }
+
+  // Cold failures stay out of line in AOT code; compiled code deoptimizes before reaching them.
+  @TruffleBoundary
+  private static IllegalStateException storageFailure() {
+    return new IllegalStateException("Typed record storage");
+  }
+
+  @TruffleBoundary
+  private OwnerStateException lifetimeFailure() {
+    return new OwnerStateException(
+        stored(format),
+        Thread.currentThread() != thread
+            ? OwnerStateException.RECORD_THREAD
+            : OwnerStateException.RECORD_CLOSED);
   }
 
   private static <T> T stored(@Nullable T value) {
@@ -168,14 +188,18 @@ public final class TypedRecord extends AbstractRow implements AutoCloseable {
     closed = true;
   }
 
-  // Rejects closed or cross-thread access, in TypedOwner.check's order. An owned record keeps its
-  // own state, so its reads load nothing outside the record.
+  // Rejects closed or cross-thread access, in TypedOwner.check's order (a cross-thread read of a
+  // closed record reports the thread). An owned record keeps its own state, so its reads load
+  // nothing outside the record.
+  // The representation is tested on `values` alone, so the owned reads that follow fold their own
+  // test into this one.
   private void checkLive() {
-    if (values != null) {
-      if (Thread.currentThread() != thread)
-        throw new OwnerStateException(stored(format), OwnerStateException.RECORD_THREAD);
-      if (closed) throw new OwnerStateException(stored(format), OwnerStateException.RECORD_CLOSED);
-    } else nativeOwner().check();
+    if (values == null) {
+      nativeOwner().check();
+    } else if (Thread.currentThread() != thread || closed) {
+      CompilerDirectives.transferToInterpreter();
+      throw lifetimeFailure();
+    }
   }
 
   @Override
@@ -321,22 +345,15 @@ public final class TypedRecord extends AbstractRow implements AutoCloseable {
   }
 
   long bits(TypedAccess access) {
-    long[] owned = values;
-    if (owned != null) {
-      checkLive();
-      if (descriptor != access.schema)
-        throw new IllegalArgumentException("Accessor schema mismatch");
-      // A scalar-only schema has no RECORD field, so its accessors have no hops.
-      long bit = 1L << access.index;
-      if ((access.optional && (present & bit) == 0) || (access.nullable && (nulls & bit) != 0))
-        throw new IllegalStateException("Scalar missing or null");
-      return owned[access.index];
-    }
-    TypedOwner owner = nativeOwner();
-    owner.check();
+    checkLive();
     if (descriptor != access.schema)
       throw new IllegalArgumentException("Accessor schema mismatch");
-    if (access.hops.length == 0) return leaf(owner, base, present, nulls, access);
+    // An owned record's schema has no RECORD field, so its accessors have no hops.
+    if (access.hops.length == 0) {
+      int index = leafIndex(present, nulls, access);
+      long[] owned = values;
+      return owned != null ? owned[index] : nativeOwner().bits(base + index);
+    }
     return CompilerDirectives.isPartialEvaluationConstant(access)
         ? walkExploded(access)
         : walk(access);
@@ -344,10 +361,15 @@ public final class TypedRecord extends AbstractRow implements AutoCloseable {
 
   private static long leaf(
       TypedOwner owner, long base, long present, long nulls, TypedAccess access) {
+    return owner.bits(base + leafIndex(present, nulls, access));
+  }
+
+  // The accessor's leaf ordinal, once its presence contract holds for these masks.
+  private static int leafIndex(long present, long nulls, TypedAccess access) {
     long bit = 1L << access.index;
     if ((access.optional && (present & bit) == 0) || (access.nullable && (nulls & bit) != 0))
       throw new IllegalStateException("Scalar missing or null");
-    return owner.bits(base + access.index);
+    return access.index;
   }
 
   // Constant accessors unroll the hop walk; each hop is one slot load and one entry load.

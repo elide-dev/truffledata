@@ -77,8 +77,9 @@ class PolicyTest {
             // Java
             // member directories went with Myna ABI v4, JSON performance ledger V1: 10 -> 9).
             Map.entry("TapeOwner.java", 11),
-            // + owned scalar records (WS6 step 2): Scalars.detach (JVM copy) and the owner facade.
-            Map.entry("TypedRecord.java", 6),
+            // + owned scalar records (WS6 step 2): Scalars.detach (JVM copy), the owner facade and
+            // two cold failures kept out of line in AOT reads.
+            Map.entry("TypedRecord.java", 8),
             Map.entry("TypedOwner.java", 3),
             // Static (owner, node) slow paths per interop message and hint misses; the scan
             // boundary
