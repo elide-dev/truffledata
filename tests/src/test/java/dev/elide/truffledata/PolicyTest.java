@@ -82,7 +82,7 @@ class PolicyTest {
             // Static (owner, node) slow paths per interop message and hint misses; the scan
             // boundary
             // folded into TapeOwner.find behind the miss boundary (V1: 26 -> 25).
-            Map.entry("TapeValue.java", 26),
+            Map.entry("TapeValue.java", 27), // + members(): linear member walk for the YAML emitter (#42)
             Map.entry("TapeBorrow.java", 1), // Borrowed-result assumption.
             Map.entry("TapeExportNode.java", 1), // Cold fallback for heterogeneous export owners.
             // Key preparation from a String or from Myna's prepared Utf8Key (V1: 1 -> 2).
@@ -120,9 +120,11 @@ class PolicyTest {
             Map.entry("YamlSession.java", 5), // open ×2, stream, complete documents, compile.
             Map.entry("YamlPlan.java", 4), // compile ×2, decode, close.
             Map.entry("YamlJvm.java", 2), // Library open ×2.
+            Map.entry("YamlJava.java", 2), // Java kernel open ×2.
             Map.entry("YamlSvm.java", 3), // Native entry points.
             Map.entry("YamlMessage.java", 4), // Directives, metadata, assumption and close.
             Map.entry("Yaml.java", 2), // Binary and timestamp materialization.
+            Map.entry("YamlEmitter.java", 6), // Public emit entry points (#42): cold, allocate text.
             // CSV: diagnostics, materialization and the export walk stay out of compiled reads.
             Map.entry("CsvScanner.java", 2), // Static syntax and limit failures.
             Map.entry("CsvBatch.java", 2), // Static STRING materialization and the export walk.

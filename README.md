@@ -87,9 +87,12 @@ See [representation and compilation guarantees](docs/TRUFFLE.md),
 | `dev.elide:truffledata-json` | Native simdjson JSON sessions, messages, streams, typed plans and the static SVM backend |
 | `dev.elide:truffledata-json-jvm` | JVM FFM backend for JSON; keep it off native-image classpaths |
 | `dev.elide:truffledata-json-bindings` | Myna JSON bindings, pulled in by the JSON adapter |
-| `dev.elide:truffledata-yaml` | Native YAML sessions, documents, streams, metadata and typed plans |
+| `dev.elide:truffledata-yaml` | YAML sessions, documents, streams, metadata and typed plans (no native code) |
+| `dev.elide:truffledata-yaml-native` | Static SVM YAML backend; add it to native images that link the YAML archive |
 | `dev.elide:truffledata-yaml-jvm` | YAML JVM FFM backend; keep it off native-image classpaths |
 | `dev.elide:truffledata-yaml-bindings` | Generated native YAML bindings |
+| `dev.elide:truffledata-yaml-java` | Pure-Java YAML kernel (no native library) behind the same sessions |
+| `dev.elide:truffledata-yaml-snakeyaml` | SnakeYAML Engine event source for the Java YAML kernel |
 | `dev.elide:truffledata-csv` | Strict streaming CSV into immutable string and primitive column batches, typed plans and one-pass export; pure Java |
 | `dev.elide:truffledata-csv-native` | Optional native CSV kernel and static SVM backend |
 | `dev.elide:truffledata-csv-jvm` | CSV JVM FFM provider; keep it off native-image classpaths |
@@ -365,7 +368,7 @@ arbitrary downstream guest code or every deployment configuration. See [Truffle 
 | [Contracts and samples](docs/CONTRACTS.md) | Schemas, nullity, protobuf presence, generated access and integration examples |
 | [Myna/Buffa](docs/BUFFA.md) | Native parsing, borrowed views, ownership, JVM and SVM setup |
 | [JSON](docs/JSON.md) | simdjson backend, ownership, number policy, interop and embedder export |
-| [YAML](docs/YAML.md) | Native YAML parsing, metadata, typed plans, sessions and streams |
+| [YAML](docs/YAML.md) | Native YAML parsing, metadata, typed plans, sessions, streams and a schema-exact emitter |
 | [CSV](docs/CSV.md) | Strict CSV contract, limits, typed plans, streaming, interop and export |
 | [Truffle guarantees](docs/TRUFFLE.md) | Specialization, boundaries, compilation and allocation gates |
 | [Untrusted-input testing](docs/FUZZING.md) | Fuzz harnesses, sanitizer profiles, corpus replay and coverage gaps |

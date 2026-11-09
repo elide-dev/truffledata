@@ -116,7 +116,7 @@ final class JvmPlanBackend extends YamlPlan.Backend {
       } catch (Throwable failure) {
         throw YamlJvm.callFailure(failure);
       }
-      YamlSvm.checkStatus(status);
+      YamlStatus.checkStatus(status);
       published = true;
     } finally {
       if (!published) release();
@@ -149,13 +149,13 @@ final class JvmPlanBackend extends YamlPlan.Backend {
         String text =
             new String(
                 result.asSlice(136, length).toArray(ValueLayout.JAVA_BYTE), StandardCharsets.UTF_8);
-        YamlSvm.checkDetailed(
+        YamlStatus.checkDetailed(
             status,
             text,
             result.get(ValueLayout.JAVA_LONG, 112),
             result.get(ValueLayout.JAVA_LONG, 120));
       }
-      YamlSvm.checkStatus(status);
+      YamlStatus.checkStatus(status);
       TypedOwner owner = new JvmTypedOwner(result, schemas, () -> retire(result, resultArena));
       published = true;
       return owner;
