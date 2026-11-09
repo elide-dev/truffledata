@@ -21,7 +21,7 @@ if 'SNAPSHOT' in sys.argv[1].upper():
 PY
 bucket=${MAVEN_BUCKET:-elide:elide-maven}
 public=https://maven.elide.dev
-modules=(core jdbc jdbc-sqlite jdbc-mysql jdbc-postgresql protobuf protobuf-runtime protobuf-buffa protobuf-buffa-bindings tape tape-jvm json json-bindings json-jvm yaml yaml-bindings yaml-jvm yaml-java yaml-snakeyaml csv csv-bindings csv-native csv-jvm bom)
+modules=(core jdbc jdbc-sqlite jdbc-mysql jdbc-postgresql protobuf protobuf-runtime protobuf-buffa protobuf-buffa-bindings tape tape-jvm json json-bindings json-jvm yaml yaml-bindings yaml-native yaml-jvm yaml-java yaml-snakeyaml csv csv-bindings csv-native csv-jvm bom)
 bazel=${BAZEL:-$(command -v bazelisk || command -v bazel)}
 flag=--//tools/release:version=$version
 host=$(uname -s)-$(uname -m)
@@ -141,4 +141,4 @@ done
 rm -f "$repo/public-check"
 python3 tools/release/central.py publish --state "$repo.central.json"
 python3 tools/release/central.py wait --state "$repo.central.json" --until PUBLISHED
-echo "Published dev.elide:truffledata-{core,jdbc,jdbc-sqlite,jdbc-mysql,jdbc-postgresql,protobuf,protobuf-runtime,protobuf-buffa,protobuf-buffa-bindings,tape,tape-jvm,json,json-bindings,json-jvm,yaml,yaml-bindings,yaml-jvm,yaml-java,yaml-snakeyaml,csv,csv-bindings,csv-native,csv-jvm,bom}:$version at $public"
+echo "Published dev.elide:truffledata-{core,jdbc,jdbc-sqlite,jdbc-mysql,jdbc-postgresql,protobuf,protobuf-runtime,protobuf-buffa,protobuf-buffa-bindings,tape,tape-jvm,json,json-bindings,json-jvm,yaml,yaml-bindings,yaml-native,yaml-jvm,yaml-java,yaml-snakeyaml,csv,csv-bindings,csv-native,csv-jvm,bom}:$version at $public"

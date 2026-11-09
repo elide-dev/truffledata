@@ -6,7 +6,6 @@ import dev.elide.truffledata.tape.TapeSession;
 import dev.elide.truffledata.tape.TypedLayout;
 import java.util.Map;
 import java.util.Objects;
-import org.graalvm.nativeimage.ImageInfo;
 
 /**
  * Thread-confined YAML parser, arena, and borrowed-document lifetime: the native decoder (static
@@ -31,27 +30,39 @@ public final class YamlSession extends TapeSession<YamlMessage> {
   }
 
   /**
-   * A session on the best backend of this runtime: the linked static archive in a native image,
-   * otherwise the Java kernel when {@code truffledata-yaml-java} is on the class path. Throws
-   * {@link UnsupportedOperationException} when neither is available.
+   * A session on the best backend of this runtime: the static archive in a native image that
+   * carries {@code truffledata-yaml-native}, otherwise the Java kernel ({@code
+   * truffledata-yaml-java}). Throws {@link UnsupportedOperationException} when no backend is
+   * available.
    */
   @TruffleBoundary
   public static YamlSession open(YamlOptions options) {
     Objects.requireNonNull(options);
-    if (ImageInfo.inImageRuntimeCode() && YamlLinkage.NATIVE) return openNative(options);
-    YamlSessionProvider kernel = YamlLinkage.kernel();
-    if (kernel != null) return kernel.open(options);
-    return openNative(options);
+    YamlSessionProvider best = null;
+    for (YamlSessionProvider provider : Providers.ALL)
+      if (provider.available() && (best == null || provider.priority() > best.priority())) best = provider;
+    if (best == null)
+      throw new UnsupportedOperationException(
+          "No YAML backend: add truffledata-yaml-native (a native image linking the static YAML"
+              + " archive) or truffledata-yaml-snakeyaml (the Java kernel); on a JVM,"
+              + " YamlJvm.openSession takes the yaml_shared library");
+    return best.open(options);
   }
 
-  /** The static-archive session; the build-time constant keeps it out of archive-less images. */
-  static YamlSession openNative(YamlOptions options) {
-    if (ImageInfo.inImageRuntimeCode() && !YamlLinkage.NATIVE) throw YamlLinkage.unlinked();
-    YamlSvm.requireRuntime();
-    return new YamlSession(options, new SvmSessionBackend(options));
+  /** The backends on the class path, looked up once. */
+  private static final class Providers {
+    static final java.util.List<YamlSessionProvider> ALL = find();
+
+    private static java.util.List<YamlSessionProvider> find() {
+      java.util.List<YamlSessionProvider> found = new java.util.ArrayList<>();
+      for (YamlSessionProvider provider :
+          java.util.ServiceLoader.load(YamlSessionProvider.class, YamlSession.class.getClassLoader()))
+        found.add(provider);
+      return java.util.List.copyOf(found);
+    }
   }
 
-  /** Compiles an independent native plan using this session's policies and resource limits. */
+  /** Compiles an independent plan using this session's policies and resource limits. */
   @TruffleBoundary
   public YamlPlan compile(Schema root, Map<String, Schema> recordTypes) {
     Backend open = (Backend) check();
@@ -69,7 +80,7 @@ public final class YamlSession extends TapeSession<YamlMessage> {
 
   @Override
   protected void checkStatus(int status) {
-    YamlSvm.checkStatus(status);
+    YamlStatus.checkStatus(status);
   }
 
   @TruffleBoundary

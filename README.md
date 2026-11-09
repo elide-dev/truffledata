@@ -87,7 +87,8 @@ See [representation and compilation guarantees](docs/TRUFFLE.md),
 | `dev.elide:truffledata-json` | Native simdjson JSON sessions, messages, streams, typed plans and the static SVM backend |
 | `dev.elide:truffledata-json-jvm` | JVM FFM backend for JSON; keep it off native-image classpaths |
 | `dev.elide:truffledata-json-bindings` | Myna JSON bindings, pulled in by the JSON adapter |
-| `dev.elide:truffledata-yaml` | Native YAML sessions, documents, streams, metadata and typed plans |
+| `dev.elide:truffledata-yaml` | YAML sessions, documents, streams, metadata and typed plans (no native code) |
+| `dev.elide:truffledata-yaml-native` | Static SVM YAML backend; add it to native images that link the YAML archive |
 | `dev.elide:truffledata-yaml-jvm` | YAML JVM FFM backend; keep it off native-image classpaths |
 | `dev.elide:truffledata-yaml-bindings` | Generated native YAML bindings |
 | `dev.elide:truffledata-yaml-java` | Pure-Java YAML kernel (no native library) behind the same sessions |

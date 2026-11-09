@@ -105,7 +105,7 @@ final class JvmSessionBackend extends YamlSession.Backend {
   @Override
   protected void decode(
       byte[] bytes, int offset, int length, int encoding, @Nullable TapeTextArena text) {
-    byte[] utf8 = YamlSvm.utf8(bytes, offset, length, encoding);
+    byte[] utf8 = YamlStatus.utf8(bytes, offset, length, encoding);
     call(stage(utf8, 0, utf8.length), utf8.length);
   }
 
@@ -141,13 +141,13 @@ final class JvmSessionBackend extends YamlSession.Backend {
           new String(
               result.asSlice(192, Math.min(255, length)).toArray(ValueLayout.JAVA_BYTE),
               StandardCharsets.UTF_8);
-      YamlSvm.checkDetailed(
+      YamlStatus.checkDetailed(
           status,
           detail,
           result.get(ValueLayout.JAVA_LONG, 168),
           result.get(ValueLayout.JAVA_LONG, 176));
     }
-    YamlSvm.checkStatus(status);
+    YamlStatus.checkStatus(status);
   }
 
   @Override

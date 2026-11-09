@@ -50,7 +50,7 @@ final class JavaSessionBackend extends YamlSession.Backend {
   protected void decode(
       byte[] data, int offset, int length, int encoding, @Nullable TapeTextArena text) {
     current = null;
-    byte[] input = YamlSvm.utf8(data, offset, length, encoding);
+    byte[] input = YamlStatus.utf8(data, offset, length, encoding);
     try {
       current = decodeChunk(input);
     } catch (JavaFailure failure) {

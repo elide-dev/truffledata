@@ -2,7 +2,7 @@
 
 The native YAML backend uses rapidyaml 0.16.0 with strict YAML 1.2 core resolution. The Java integration is under development and is not yet a published artifact. Typed plans and static-image compiled reads are implemented; the compact producer is implemented, while full performance and release qualification remains unfinished; the [implementation ledger](superpowers/plans/2026-11-06-yaml-ledger.md) records verified scope.
 
-For JVM use, open a session with `YamlJvm.openSession(pathToNativeLibrary)`. For a static image linked against `//yaml/native:svm`, use `YamlSession.open()`. Sessions and retained messages are thread confined.
+For JVM use, open a session with `YamlJvm.openSession(pathToNativeLibrary)`. For a static image linked against `//yaml/native:svm`, add `truffledata-yaml-native` (`//yaml:svm`) and use `YamlSession.open()`. Sessions and retained messages are thread confined.
 
 ```java
 try (YamlSession session = YamlJvm.openSession(library);
@@ -48,10 +48,11 @@ without `yaml_shared` and for native images built without the static YAML archiv
 linux-musl, macOS x86_64). Add `truffledata-yaml-snakeyaml`, which brings the kernel and its first
 event source (SnakeYAML Engine 3.2's scanner and parser; no composer, constructor or resolver).
 
-`YamlSession.open(options)` picks the backend: the linked static archive in a native image,
-otherwise the kernel found on the class path (`YamlJava.openSession(options)` selects it
-explicitly, and `YamlJava.openSession(options, source)` takes any event source). `YamlSvm` and
-`YamlPlan.compile` remain static-archive entry points.
+`YamlSession.open(options)` picks among the `YamlSessionProvider` services on the class path: the
+static archive (`truffledata-yaml-native`) in a native image, otherwise the kernel
+(`YamlJava.openSession(options)` selects it explicitly, and `YamlJava.openSession(options, source)`
+takes any event source). `YamlPlan.compile` compiles on that same backend; `YamlSvm` remains the
+explicit static-archive entry point.
 
 The kernel sits above a parser-neutral event boundary, `dev.elide.truffledata.yaml.events`: a
 `YamlEventSource` reports resolved tags, styles, anchors and byte/line/column positions to
@@ -62,11 +63,11 @@ streams and typed plans are the kernel's own and depend only on that package; a 
 hand-written parser implements `YamlEventSource` alone. Errors have the native types and messages
 (`YAML syntax error: duplicate YAML key: a at line 2, column 1`).
 
-Native images without the archive: leave `truffledata-yaml-bindings` (whose `@CLibrary` requires
-the archive) off the image class path and add `truffledata-yaml-snakeyaml`. `truffledata-yaml`
-initializes `YamlLinkage` at build time, so the `@CFunction` backend is unreachable and images link
-even with `--link-at-build-time=dev.elide.truffledata`; `//tools/release:yaml_java_native` builds
-the published jars this way. Images need `--initialize-at-build-time=dev.elide.truffledata`, as
+Native images without the archive: do not add `truffledata-yaml-native`; add
+`truffledata-yaml-snakeyaml`. `truffledata-yaml` holds no code that references the generated
+bindings and does not depend on them, so nothing pulls in their `@CLibrary` (which requires the
+archive), and images link even with `--link-at-build-time=dev.elide.truffledata`;
+`//tools/release:yaml_java_native` builds the published jars this way. Images need `--initialize-at-build-time=dev.elide.truffledata`, as
 every TruffleData image does.
 
 `JavaKernelDifferentialTest` compares the kernel with the native decoder on the yaml-test-suite,

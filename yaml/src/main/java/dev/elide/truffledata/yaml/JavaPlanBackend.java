@@ -47,7 +47,7 @@ final class JavaPlanBackend extends YamlPlan.Backend {
                 || (layout.lengthUnits[at] != 0 && (layout.kinds[at] != STRING
                     || Long.compareUnsigned(layout.minimumLengths[at], layout.maximumLengths[at]) > 0))
                 || ((layout.kinds[at] == RECORD) != (layout.children[at] != TypedLayout.NO_CHILD));
-        if (bad) YamlSvm.checkStatus(1);
+        if (bad) YamlStatus.checkStatus(1);
       }
       ordinals[r] = names;
     }
@@ -57,9 +57,9 @@ final class JavaPlanBackend extends YamlPlan.Backend {
 
   // Recursive plans and plans deeper than 32 records are rejected, as native plan creation does.
   private int measure(int record, int level, byte[] depths) {
-    if (level > MAX_PLAN_DEPTH) YamlSvm.checkStatus(1);
+    if (level > MAX_PLAN_DEPTH) YamlStatus.checkStatus(1);
     final byte visiting = -1;
-    if (depths[record] == visiting) YamlSvm.checkStatus(1);
+    if (depths[record] == visiting) YamlStatus.checkStatus(1);
     if (depths[record] == 0) {
       depths[record] = visiting;
       int measured = 1;
@@ -70,7 +70,7 @@ final class JavaPlanBackend extends YamlPlan.Backend {
       }
       depths[record] = (byte) measured;
     }
-    if (level - 1 + depths[record] > MAX_PLAN_DEPTH) YamlSvm.checkStatus(1);
+    if (level - 1 + depths[record] > MAX_PLAN_DEPTH) YamlStatus.checkStatus(1);
     return depths[record];
   }
 

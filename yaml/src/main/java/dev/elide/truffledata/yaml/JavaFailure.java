@@ -3,7 +3,7 @@ package dev.elide.truffledata.yaml;
 /**
  * A Java-kernel decode failure carrying the native decoder's status, message and position, so
  * {@link #raise()} throws exactly what the native backends throw for the same status ({@link
- * YamlSvm#checkDetailed}, {@link YamlSvm#checkStatus}).
+ * YamlStatus#checkDetailed}, {@link YamlStatus#checkStatus}).
  */
 final class JavaFailure extends RuntimeException {
   private static final long serialVersionUID = 1L;
@@ -44,8 +44,8 @@ final class JavaFailure extends RuntimeException {
   /** Throws the exception the native backends throw for this status. */
   RuntimeException raise() {
     if (status == LIMIT || status == SYNTAX || status == CONTRACT || status == MULTIPLE)
-      YamlSvm.checkDetailed(status, detail, line, column);
-    YamlSvm.checkStatus(status);
+      YamlStatus.checkDetailed(status, detail, line, column);
+    YamlStatus.checkStatus(status);
     throw new IllegalStateException("YAML status " + status);
   }
 }

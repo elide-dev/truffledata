@@ -37,6 +37,7 @@ MODULES = [
     "json-jvm",
     "yaml",
     "yaml-bindings",
+    "yaml-native",
     "yaml-jvm",
     "yaml-java",
     "yaml-snakeyaml",
@@ -57,6 +58,8 @@ LIBRARIES = {
     # JVM-only FFM backend, published separately so static images never carry it.
     "json-jvm": "//json:jvm",
     "yaml-bindings": "//yaml:bindings",
+    # The static-archive backend; truffledata-yaml itself carries no bindings reference.
+    "yaml-native": "//yaml:svm",
     "yaml-jvm": "//yaml:jvm",
     # The pure-Java YAML kernel (no native library) and its SnakeYAML Engine event source.
     "yaml-java": "//yaml:java",
@@ -280,9 +283,11 @@ test_suite(
         "dev.elide:truffledata-json-bindings:{version}",
         "dev.elide:truffledata-tape-jvm:{version}",
     ] if module == "json-jvm" else []) + ([
-        "dev.elide:truffledata-yaml-bindings:{version}",
         "dev.elide:truffledata-tape:{version}",
     ] if module == "yaml" else []) + ([
+        "dev.elide:truffledata-yaml:{version}",
+        "dev.elide:truffledata-yaml-bindings:{version}",
+    ] if module == "yaml-native" else []) + ([
         "dev.elide:truffledata-yaml:{version}",
         "dev.elide:truffledata-yaml-bindings:{version}",
         "dev.elide:truffledata-tape-jvm:{version}",
@@ -309,6 +314,7 @@ test_suite(
         "json-bindings",
         "yaml",
         "yaml-bindings",
+        "yaml-native",
         "csv-bindings",
         "csv-native",
     ] else []) + ([
@@ -408,9 +414,11 @@ sh_test(
         ":json_import",
         ":tape-jvm_import",
     ] if module == "json-jvm" else []) + ([
-        ":yaml-bindings_import",
         ":tape_import",
     ] if module == "yaml" else []) + ([
+        ":yaml-bindings_import",
+        ":yaml_import",
+    ] if module == "yaml-native" else []) + ([
         ":yaml-bindings_import",
         ":yaml_import",
         ":tape-jvm_import",
@@ -437,6 +445,7 @@ sh_test(
         "json-bindings",
         "yaml",
         "yaml-bindings",
+        "yaml-native",
         "csv-bindings",
         "csv-native",
     ] else []) + ([
@@ -758,13 +767,15 @@ java_library(
         ":core_import",
         ":tape_import",
         ":yaml-jvm_compile",
+        ":yaml-native_import",
         ":yaml_import",
         "@maven//:org_graalvm_sdk_nativeimage",
     ],
 )
 
-# The Java kernel from the published jars alone: no yaml_shared library on the JVM, so
-# YamlSession.open() selects truffledata-yaml-java with the SnakeYAML Engine event source.
+# The Java kernel from the published jars alone: no yaml_shared library, no truffledata-yaml-native
+# and no bindings, so YamlSession.open() selects truffledata-yaml-java with the SnakeYAML Engine
+# event source.
 java_test(
     name = "yaml_java_consumer",
     srcs = ["YamlJavaConsumer.java"],
@@ -781,40 +792,9 @@ java_test(
 )
 
 # A native image without the static YAML archive (Windows, linux-musl, macOS x86_64 consumers):
-# truffledata-yaml-bindings is left off the image class path, so YamlLinkage folds the native
-# backend away and YamlSession.open() runs the Java kernel. --link-at-build-time fails the build
-# if any reachable code still references the absent bindings.
-java_import(
-    name = "yaml_without_bindings_import",
-    jars = [":yaml_binary"],
-    deps = [
-        ":core_import",
-        ":tape_import",
-        "@maven//:org_graalvm_sdk_nativeimage",
-        "@maven//:org_graalvm_sdk_word",
-        "@maven//:org_graalvm_truffle_truffle_api",
-        "@maven//:org_jspecify_jspecify",
-    ],
-)
-
-java_import(
-    name = "yaml-java_without_bindings_import",
-    jars = [":yaml-java_binary"],
-    deps = [
-        ":tape_import",
-        ":yaml_without_bindings_import",
-    ],
-)
-
-java_import(
-    name = "yaml-snakeyaml_without_bindings_import",
-    jars = [":yaml-snakeyaml_binary"],
-    deps = [
-        ":yaml-java_without_bindings_import",
-        "@maven//:org_snakeyaml_snakeyaml_engine",
-    ],
-)
-
+# neither truffledata-yaml-native nor truffledata-yaml-bindings is on the class path (truffledata-yaml
+# no longer depends on them), so YamlSession.open() runs the Java kernel. --link-at-build-time
+# fails the build if any reachable code references the absent bindings.
 java_library(
     name = "yaml_java_consumer_lib",
     testonly = True,
@@ -823,9 +803,9 @@ java_library(
     deps = [
         ":core_import",
         ":tape_import",
-        ":yaml-java_without_bindings_import",
-        ":yaml-snakeyaml_without_bindings_import",
-        ":yaml_without_bindings_import",
+        ":yaml-java_import",
+        ":yaml-snakeyaml_import",
+        ":yaml_import",
     ],
 )
 

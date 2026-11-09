@@ -20,9 +20,6 @@ data_java_library(
         "src/main/java/dev/elide/truffledata/yaml/Style.java",
         "src/main/java/dev/elide/truffledata/yaml/KeyKind.java",
         "src/main/java/dev/elide/truffledata/yaml/Yaml.java",
-        "src/main/java/dev/elide/truffledata/yaml/SvmSessionBackend.java",
-        "src/main/java/dev/elide/truffledata/yaml/SvmTypedOwner.java",
-        "src/main/java/dev/elide/truffledata/yaml/SvmYamlMessage.java",
         "src/main/java/dev/elide/truffledata/yaml/YamlPlan.java",
         "src/main/java/dev/elide/truffledata/yaml/YamlScalars.java",
         "src/main/java/dev/elide/truffledata/yaml/UnknownTags.java",
@@ -35,29 +32,53 @@ data_java_library(
         "src/main/java/dev/elide/truffledata/yaml/YamlMetadata.java",
         "src/main/java/dev/elide/truffledata/yaml/YamlOptions.java",
         "src/main/java/dev/elide/truffledata/yaml/YamlSchema.java",
-        "src/main/java/dev/elide/truffledata/yaml/YamlLinkage.java",
         "src/main/java/dev/elide/truffledata/yaml/YamlSession.java",
         "src/main/java/dev/elide/truffledata/yaml/YamlSessionProvider.java",
         "src/main/java/dev/elide/truffledata/yaml/YamlStream.java",
+        "src/main/java/dev/elide/truffledata/yaml/YamlStatus.java",
         "src/main/java/dev/elide/truffledata/yaml/YamlStreamOptions.java",
-        "src/main/java/dev/elide/truffledata/yaml/YamlSvm.java",
         "src/main/java/dev/elide/truffledata/yaml/YamlWriter.java",
         "src/main/java/dev/elide/truffledata/yaml/package-info.java",
     ],
-    # Initializes YamlLinkage at image build time, so images without the archive's bindings never
-    # reach the @CFunction backend.
-    resource_strip_prefix = "yaml/src/main/resources",
-    resources = ["src/main/resources/META-INF/native-image/dev.elide/truffledata-yaml/native-image.properties"],
     visibility = ["//visibility:public"],
     exports = ["//tape"],
     deps = [
-        ":bindings",
         "//tape",
         "//core",
         "@myna//:values",
         "@maven//:org_graalvm_sdk_nativeimage",
         "@maven//:org_graalvm_sdk_word",
         "@maven//:org_graalvm_truffle_truffle_api",
+    ],
+)
+
+# The static-archive backend (truffledata-yaml-native): SVM sessions, plans and retained messages
+# over the generated @CFunction bindings. Only images that link the static YAML archive carry it;
+# YamlSession.open() finds it as a service and prefers it in an image. Images without the archive
+# leave it (and the bindings, whose @CLibrary requires the archive) out and use //yaml:java.
+data_java_library(
+    name = "svm",
+    srcs = [
+        "src/main/java/dev/elide/truffledata/yaml/SvmPlanBackend.java",
+        "src/main/java/dev/elide/truffledata/yaml/SvmSessionBackend.java",
+        "src/main/java/dev/elide/truffledata/yaml/SvmSessionProvider.java",
+        "src/main/java/dev/elide/truffledata/yaml/SvmTypedOwner.java",
+        "src/main/java/dev/elide/truffledata/yaml/SvmYamlMessage.java",
+        "src/main/java/dev/elide/truffledata/yaml/YamlSvm.java",
+    ],
+    resource_strip_prefix = "yaml/src/svm/resources",
+    resources = ["src/svm/resources/META-INF/services/dev.elide.truffledata.yaml.YamlSessionProvider"],
+    visibility = ["//visibility:public"],
+    exports = [":yaml"],
+    deps = [
+        ":bindings",
+        ":yaml",
+        "//core",
+        "//tape",
+        "@maven//:org_graalvm_sdk_nativeimage",
+        "@maven//:org_graalvm_sdk_word",
+        "@maven//:org_graalvm_truffle_truffle_api",
+        "@myna//:values",
     ],
 )
 

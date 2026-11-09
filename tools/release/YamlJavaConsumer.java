@@ -14,6 +14,13 @@ public final class YamlJavaConsumer {
   }
 
   public static void main(String[] args) {
+    // truffledata-yaml no longer depends on the native bindings: they are absent here.
+    try {
+      Class.forName("dev.elide.truffledata.yaml.generated.Yaml");
+      throw new AssertionError("truffledata-yaml pulled in the native YAML bindings");
+    } catch (ClassNotFoundException expected) {
+      // The Java kernel needs neither truffledata-yaml-native nor truffledata-yaml-bindings.
+    }
     if (!(YamlJava.source() instanceof dev.elide.truffledata.yaml.events.YamlEventSource))
       throw new AssertionError("Published YAML event source");
     byte[] input = bytes("point: &p {n: 42, name: \"trüffle 雪\"}\nalias: *p\nbase: &b {x: 1}\nm: {<<: *b}\n");
