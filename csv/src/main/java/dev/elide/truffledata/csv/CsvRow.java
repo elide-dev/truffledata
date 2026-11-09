@@ -13,7 +13,6 @@ import dev.elide.truffledata.DataNull;
 import dev.elide.truffledata.Missing;
 import dev.elide.truffledata.Schema;
 import java.util.Objects;
-import jdk.internal.vm.annotation.ForceInline;
 
 /**
  * A view of one batch row. Rows are immutable and unconfined; members are named by the schema (the
@@ -75,19 +74,16 @@ public final class CsvRow extends AbstractRow {
     return batch.textAt(index, column, Objects.requireNonNull(into));
   }
 
-  @ForceInline
   public long getLong(int column) {
     long[] v = batch.columns[column].presentLongs;
     return index < v.length ? v[index] : batch.longSlow(index, column);
   }
 
-  @ForceInline
   public double getDouble(int column) {
     double[] v = batch.columns[column].presentDoubles;
     return index < v.length ? v[index] : batch.doubleSlow(index, column);
   }
 
-  @ForceInline
   public boolean getBoolean(int column) {
     boolean[] v = batch.columns[column].presentBooleans;
     return index < v.length ? v[index] : batch.booleanSlow(index, column);

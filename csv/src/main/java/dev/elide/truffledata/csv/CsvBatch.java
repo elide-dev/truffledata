@@ -10,7 +10,6 @@ import com.oracle.truffle.api.library.ExportLibrary;
 import com.oracle.truffle.api.library.ExportMessage;
 import dev.elide.truffledata.Schema;
 import java.util.Objects;
-import jdk.internal.vm.annotation.ForceInline;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -101,7 +100,6 @@ public final class CsvBatch implements TruffleObject, AutoCloseable {
     return size;
   }
 
-  @ForceInline
   public CsvRow row(int index) {
     checkLive();
     Objects.checkIndex(index, size);

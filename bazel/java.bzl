@@ -12,11 +12,11 @@ NULLAWAY_OPTS = [
     "-XepExcludedPaths:.*/_javac/.*",
 ]
 
-def data_java_library(name, deps = [], plugins = [], javacopts = [], **kwargs):
+def data_java_library(name, deps = [], plugins = [], **kwargs):
     java_library(
         name = name,
         deps = deps + ["@maven//:org_jspecify_jspecify", "//bazel:truffle_processor"],
         plugins = plugins + ["//bazel:nullaway"],
-        javacopts = NULLAWAY_OPTS + javacopts,
+        javacopts = NULLAWAY_OPTS,
         **kwargs
     )
