@@ -1,6 +1,7 @@
 package dev.elide.truffledata.csv;
 
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
+import com.oracle.truffle.api.HostCompilerDirectives.BytecodeInterpreterSwitch;
 import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.library.ExportLibrary;
@@ -145,6 +146,7 @@ public final class CsvText implements TruffleObject {
    * The length of {@link #toString()} in UTF-16 units, computed from the bytes without
    * materializing: one unit per code point, two for supplementary planes.
    */
+  @BytecodeInterpreterSwitch
   public int charLength() {
     live();
     byte[] b = resolve();
@@ -190,8 +192,12 @@ public final class CsvText implements TruffleObject {
         b, offset, length, TruffleString.Encoding.UTF_8, true);
   }
 
-  /** The cell as a String, built as {@link CsvRow#getString} builds it; cached per binding. */
-  @TruffleBoundary
+  /**
+   * The cell as a String, built as {@link CsvRow#getString} builds it; cached per binding. A
+   * host-inlining root like {@link CsvBatch#stringAt}: the lifetime test and the Latin-1 fast path
+   * are inlined here rather than called per cell.
+   */
+  @BytecodeInterpreterSwitch
   @Override
   public String toString() {
     live();
@@ -233,16 +239,19 @@ public final class CsvText implements TruffleObject {
   }
 
   @ExportMessage
+  @TruffleBoundary
   String asString() {
     return toString();
   }
 
   @ExportMessage
+  @TruffleBoundary
   TruffleString asTruffleString() {
     return toTruffleString();
   }
 
   @ExportMessage
+  @TruffleBoundary
   Object toDisplayString(@SuppressWarnings("unused") boolean allowSideEffects) {
     return toString();
   }

@@ -195,7 +195,12 @@ public final class CsvBatch implements TruffleObject, AutoCloseable {
     return Utf8.string(input, CsvScanner.offset(span), CsvScanner.length(span));
   }
 
-  /** {@link CsvRow#getText}: binds {@code into} to the cell, or throws as {@link #stringAt} does. */
+  /**
+   * {@link CsvRow#getText}: binds {@code into} to the cell, or throws as {@link #stringAt} does. A
+   * host-inlining root like {@link #stringAt}, so the binding's field writes are inlined here
+   * instead of called per cell.
+   */
+  @BytecodeInterpreterSwitch
   CsvText textAt(int row, int column, CsvText into) {
     long[] v = columns[column].presentSpans;
     if (row < v.length) {
