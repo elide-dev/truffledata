@@ -356,12 +356,10 @@ use_repo(crate, "crates", simdutf_src = "crates__simdutf-0.7.0")
 http_archive(
     name = "myna",
     build_file = "//bazel:myna.BUILD",
-    # TEMPORARY: Myna 0.14.0's release commit (elide-dev/myna#83, a284fd6) until the v0.14.0
-    # release tarball is published; switch to myna-source-0.14.0.tar.gz before releasing.
-    sha256 = "8b2fd8e690bb19502c25831fc7b17de3bde6cf730bae5b158ce96cd76de9d157",
-    strip_prefix = "myna-a284fd6e19133a9fe9b0821d9c9390f8ca3bf3d2",
+    sha256 = "14b45b73bda41734c5f66e601666d3241b275a45c188eacc17b155f644d5e20f",
+    strip_prefix = "myna-0.14.0",
     type = "tar.gz",
-    urls = ["https://codeload.github.com/elide-dev/myna/tar.gz/a284fd6e19133a9fe9b0821d9c9390f8ca3bf3d2"],
+    urls = ["https://github.com/elide-dev/myna/releases/download/v0.14.0/myna-source-0.14.0.tar.gz"],
 )
 
 # Production JSON adapter: match the parser qualified by Myna's value ABI tests.
