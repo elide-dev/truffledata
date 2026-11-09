@@ -1,0 +1,12 @@
+{
+  "_comment": "Instruction/call/frame ceilings for protobuf read-path symbols in the consumer profile image (x86-64, -O2, -march=compatibility). Pinned from the preserved 9a1dcec profile image on 2026-11-08 with ~10% headroom; a change that lowers a value re-pins it downward (never upward without a ledger ruling). Shape only; timings come from consumer_measure.",
+  "^SlabFormat_getInt$": {"instructions": 63, "calls": 3},
+  "^SlabFormat_getLong$": {"instructions": 63, "calls": 3},
+  "^Accessor_bound$": {"instructions": 94, "calls": 3},
+  "^SlabRow\\$Slot_accepts$": {"instructions": 53, "calls": 0},
+  "^SlabRow\\$Slot_longOf$": {"instructions": 530, "calls": 37},
+  "^SlabRow\\$Slot_readLongBound$": {"instructions": 535, "calls": 38},
+  "^SlabMessage_row$": {"instructions": 492, "calls": 17},
+  "^SlabMessage_array$": {"instructions": 393, "calls": 14},
+  "^SlabMessage_text$": {"instructions": 480, "calls": 18}
+}

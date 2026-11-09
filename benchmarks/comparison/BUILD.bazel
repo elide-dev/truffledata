@@ -1261,6 +1261,28 @@ sh_test(
 ]
 
 # B4 diagnostic-only sampling; ordinary images remain the performance controls.
+# AOT symbol gate (P0.6): instruction/call/frame ceilings over the symbol-bearing profile image.
+# Runs with the budget file's current ceilings; a read-path change re-pins them from its own image.
+sh_test(
+    name = "consumer_aot_symbols",
+    size = "medium",
+    srcs = ["aot_symbols.sh"],
+    args = [
+        "$(rootpath :consumer_profile)",
+        "$(rootpath consumer_aot_budgets.json)",
+    ],
+    data = [
+        "consumer_aot_budgets.json",
+        ":consumer_profile",
+        "//tools/bench:aot_symbols.py",
+    ],
+    tags = ["manual"],
+    target_compatible_with = [
+        "@platforms//os:linux",
+        "@platforms//cpu:x86_64",
+    ],
+)
+
 sh_test(
     name = "consumer_interpreter_profile",
     size = "large",
