@@ -32,12 +32,18 @@ data_java_library(
         "src/main/java/dev/elide/truffledata/yaml/YamlMetadata.java",
         "src/main/java/dev/elide/truffledata/yaml/YamlOptions.java",
         "src/main/java/dev/elide/truffledata/yaml/YamlSchema.java",
+        "src/main/java/dev/elide/truffledata/yaml/YamlLinkage.java",
         "src/main/java/dev/elide/truffledata/yaml/YamlSession.java",
+        "src/main/java/dev/elide/truffledata/yaml/YamlSessionProvider.java",
         "src/main/java/dev/elide/truffledata/yaml/YamlStream.java",
         "src/main/java/dev/elide/truffledata/yaml/YamlStreamOptions.java",
         "src/main/java/dev/elide/truffledata/yaml/YamlSvm.java",
         "src/main/java/dev/elide/truffledata/yaml/package-info.java",
     ],
+    # Initializes YamlLinkage at image build time, so images without the archive's bindings never
+    # reach the @CFunction backend.
+    resource_strip_prefix = "yaml/src/main/resources",
+    resources = ["src/main/resources/META-INF/native-image/dev.elide/truffledata-yaml/native-image.properties"],
     visibility = ["//visibility:public"],
     exports = ["//tape"],
     deps = [
@@ -71,6 +77,62 @@ data_java_library(
         "@maven//:org_graalvm_truffle_truffle_api",
         ":yaml",
         "//tape:jvm",
+    ],
+)
+
+# The pure-Java YAML kernel (#41): the parser-neutral event boundary (yaml.events), the decoder
+# with TruffleData's policies, heap compact tapes, streams and typed plans. No native library and no
+# parser dependency: an event source (below, or another implementation) is found as a service.
+data_java_library(
+    name = "java",
+    srcs = [
+        "src/main/java/dev/elide/truffledata/yaml/JavaDecoder.java",
+        "src/main/java/dev/elide/truffledata/yaml/JavaFailure.java",
+        "src/main/java/dev/elide/truffledata/yaml/JavaInput.java",
+        "src/main/java/dev/elide/truffledata/yaml/JavaPlanBackend.java",
+        "src/main/java/dev/elide/truffledata/yaml/JavaSessionBackend.java",
+        "src/main/java/dev/elide/truffledata/yaml/JavaSessionProvider.java",
+        "src/main/java/dev/elide/truffledata/yaml/JavaStream.java",
+        "src/main/java/dev/elide/truffledata/yaml/JavaTypedOwner.java",
+        "src/main/java/dev/elide/truffledata/yaml/YamlJava.java",
+        "src/main/java/dev/elide/truffledata/yaml/events/YamlEventSource.java",
+        "src/main/java/dev/elide/truffledata/yaml/events/YamlEvents.java",
+        "src/main/java/dev/elide/truffledata/yaml/events/YamlMark.java",
+        "src/main/java/dev/elide/truffledata/yaml/events/YamlScalarStyle.java",
+        "src/main/java/dev/elide/truffledata/yaml/events/YamlSyntaxException.java",
+        "src/main/java/dev/elide/truffledata/yaml/events/package-info.java",
+    ],
+    # YamlSession.open finds the kernel as a service when no native archive is linked.
+    resource_strip_prefix = "yaml/src/java/resources",
+    resources = ["src/java/resources/META-INF/services/dev.elide.truffledata.yaml.YamlSessionProvider"],
+    visibility = ["//visibility:public"],
+    exports = [
+        ":yaml",
+        "//tape",
+    ],
+    deps = [
+        ":yaml",
+        "//core",
+        "//tape",
+        "@maven//:org_graalvm_truffle_truffle_api",
+    ],
+)
+
+# The kernel's first event source: SnakeYAML Engine's scanner and parser only. Kept in its own
+# target and artifact so the dependency stays optional and swappable.
+data_java_library(
+    name = "snakeyaml",
+    srcs = [
+        "src/main/java/dev/elide/truffledata/yaml/snakeyaml/SnakeYamlEventSource.java",
+        "src/main/java/dev/elide/truffledata/yaml/snakeyaml/package-info.java",
+    ],
+    resource_strip_prefix = "yaml/src/snakeyaml/resources",
+    resources = ["src/snakeyaml/resources/META-INF/services/dev.elide.truffledata.yaml.events.YamlEventSource"],
+    visibility = ["//visibility:public"],
+    exports = [":java"],
+    deps = [
+        ":java",
+        "@maven//:org_snakeyaml_snakeyaml_engine",
     ],
 )
 

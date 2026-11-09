@@ -8,6 +8,7 @@ import dev.elide.truffledata.tape.TypedOwner;
 import dev.elide.truffledata.tape.TypedRecord;
 import dev.elide.truffledata.yaml.generated.Yaml;
 import java.util.Map;
+import org.graalvm.nativeimage.ImageInfo;
 import org.graalvm.nativeimage.PinnedObject;
 import org.graalvm.nativeimage.UnmanagedMemory;
 import org.graalvm.nativeimage.c.type.VoidPointer;
@@ -62,6 +63,8 @@ public final class YamlPlan implements AutoCloseable {
    */
   @TruffleBoundary
   public static YamlPlan compile(Schema root, Map<String, Schema> recordTypes) {
+    // A constant in images: keeps the @CFunction plan out of images without the archive.
+    if (ImageInfo.inImageRuntimeCode() && !YamlLinkage.NATIVE) throw YamlLinkage.unlinked();
     YamlSvm.requireRuntime();
     TypedLayout layout = new TypedLayout(root, recordTypes, YamlPlan.FORMAT);
     return create(layout, YamlOptions.DEFAULT);

@@ -6,8 +6,13 @@ import dev.elide.truffledata.tape.TapeSession;
 import dev.elide.truffledata.tape.TypedLayout;
 import java.util.Map;
 import java.util.Objects;
+import org.graalvm.nativeimage.ImageInfo;
 
-/** Thread-confined native YAML parser, arena, and borrowed-document lifetime. */
+/**
+ * Thread-confined YAML parser, arena, and borrowed-document lifetime: the native decoder (static
+ * archive in a native image, {@code yaml_shared} through {@link YamlJvm} on a JVM) or the pure-Java
+ * kernel ({@code truffledata-yaml-java}), which implement the same semantics.
+ */
 public final class YamlSession extends TapeSession<YamlMessage> {
   abstract static class Backend extends TapeSession.Backend<YamlMessage> {
     abstract YamlPlan compile(TypedLayout layout, YamlOptions options);
@@ -25,9 +30,23 @@ public final class YamlSession extends TapeSession<YamlMessage> {
     return open(YamlOptions.DEFAULT);
   }
 
+  /**
+   * A session on the best backend of this runtime: the linked static archive in a native image,
+   * otherwise the Java kernel when {@code truffledata-yaml-java} is on the class path. Throws
+   * {@link UnsupportedOperationException} when neither is available.
+   */
   @TruffleBoundary
   public static YamlSession open(YamlOptions options) {
     Objects.requireNonNull(options);
+    if (ImageInfo.inImageRuntimeCode() && YamlLinkage.NATIVE) return openNative(options);
+    YamlSessionProvider kernel = YamlLinkage.kernel();
+    if (kernel != null) return kernel.open(options);
+    return openNative(options);
+  }
+
+  /** The static-archive session; the build-time constant keeps it out of archive-less images. */
+  static YamlSession openNative(YamlOptions options) {
+    if (ImageInfo.inImageRuntimeCode() && !YamlLinkage.NATIVE) throw YamlLinkage.unlinked();
     YamlSvm.requireRuntime();
     return new YamlSession(options, new SvmSessionBackend(options));
   }

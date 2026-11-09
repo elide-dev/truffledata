@@ -438,7 +438,7 @@ final class YamlIntegrationTest {
       var values = java.util.Objects.requireNonNull(result).values().iterator();
       assertSame(values.next(), values.next());
       assertEquals(2, keys.size());
-      assertThrows(UnsupportedOperationException.class, YamlSession::open);
+      assertThrows(UnsupportedOperationException.class, YamlSvm::open);
     }
   }
 

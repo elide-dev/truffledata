@@ -694,6 +694,32 @@ final class ScalarResolver {
     return floatToken(strip(s));
   }
 
+  /**
+   * {@code !!binary} base64 as the native decoder accepts it (simdutf's forgiving decode, the
+   * WHATWG algorithm): ASCII whitespace anywhere, one or two {@code =} only when they complete a
+   * multiple of four characters, never a single dangling character.
+   */
+  static boolean validBase64(String text) {
+    int n = 0;
+    char[] body = new char[text.length()];
+    for (int i = 0; i < text.length(); i++) {
+      char c = text.charAt(i);
+      if (c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '\f') continue;
+      body[n++] = c;
+    }
+    if (n % 4 == 0 && n > 0 && body[n - 1] == '=') {
+      n--;
+      if (n > 0 && body[n - 1] == '=') n--;
+    }
+    if (n % 4 == 1) return false;
+    for (int i = 0; i < n; i++) {
+      char c = body[i];
+      if (!((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '+' || c == '/'))
+        return false;
+    }
+    return true;
+  }
+
   /** YAML 1.1 timestamp grammar (native valid_timestamp). */
   static boolean validTimestamp(String s) {
     int[] at = {0};

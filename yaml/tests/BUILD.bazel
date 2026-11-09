@@ -27,6 +27,8 @@ data_java_library(
 java_test(
     name = "jvm",
     srcs = [
+        "JavaKernelDifferentialTest.java",
+        "JavaKernelTest.java",
         "JsonSubsetDifferentialTest.java",
         "ScalarResolverTest.java",
         "SnakeYamlDifferentialTest.java",
@@ -48,8 +50,13 @@ java_test(
         "dev.elide.truffledata.yaml.tests.SnakeYamlDifferentialTest",
         "--class",
         "dev.elide.truffledata.yaml.tests.JsonSubsetDifferentialTest",
+        "--class",
+        "dev.elide.truffledata.yaml.tests.JavaKernelTest",
+        "--class",
+        "dev.elide.truffledata.yaml.tests.JavaKernelDifferentialTest",
     ],
     data = [
+        "java_kernel_excluded.txt",
         "snakeyaml_engine_excluded.txt",
         "//json/native:json_shared.so",
         "//yaml/native:testdata",
@@ -75,7 +82,9 @@ java_test(
         "//json:jvm",
         "//tape",
         "//yaml",
+        "//yaml:java",
         "//yaml:jvm",
+        "//yaml:snakeyaml",
         "@maven//:org_graalvm_truffle_truffle_api",
         "@maven//:org_junit_jupiter_junit_jupiter_api",
         "@maven//:org_snakeyaml_snakeyaml_engine",

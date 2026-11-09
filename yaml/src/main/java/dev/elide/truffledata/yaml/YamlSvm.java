@@ -18,6 +18,7 @@ public final class YamlSvm {
   static void requireRuntime() {
     if (!ImageInfo.inImageRuntimeCode())
       throw new UnsupportedOperationException("Static YAML requires SVM");
+    if (!YamlLinkage.NATIVE) throw YamlLinkage.unlinked();
     if (!verified) {
       if (!CTypeConversion.toJavaString(Yaml.fingerprint()).equals(Yaml.ABI_FINGERPRINT))
         throw new IllegalStateException("Myna/YAML ABI fingerprint mismatch");
@@ -65,7 +66,7 @@ public final class YamlSvm {
 
   @TruffleBoundary
   public static YamlSession open() {
-    return YamlSession.open();
+    return YamlSession.openNative(YamlOptions.DEFAULT);
   }
 
   @TruffleBoundary
@@ -75,7 +76,7 @@ public final class YamlSvm {
 
   @TruffleBoundary
   public static YamlMessage decode(byte[] input, YamlOptions options) {
-    try (YamlSession session = YamlSession.open(options)) {
+    try (YamlSession session = YamlSession.openNative(options)) {
       return session.decode(input);
     }
   }
