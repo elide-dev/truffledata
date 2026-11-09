@@ -1,3 +1,4 @@
+load("//tools/fuzz:defs.bzl", "native_fuzzer")
 load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_library", "cc_test")
 
 # Test-only yaml-test-suite event renderer over rapidyaml's ParseEngine. Header-only and
@@ -488,4 +489,11 @@ cc_library(
     name = "svm",
     visibility = ["//visibility:public"],
     deps = [":truffledata_yaml"],
+)
+
+# buildifier: disable=duplicated-name
+native_fuzzer(
+    name = "session",
+    src = "session_fuzz.cc",
+    deps = [":decoder"],
 )

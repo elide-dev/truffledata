@@ -109,6 +109,26 @@ void values() {
   // `[a: b]`: the sequence element becomes the key of a single-pair flow mapping.
   require(tape(s, "[a: b, c, \"d\": e, 1: f]") == "[{\"a\":\"b\"},\"c\",{\"d\":\"e\"},{\"1\":\"f\"}]");
   require(tape(s, "[: x]") == "[{\"\":\"x\"}]");
+  require(tape(s, "[? a : b]") == "[{\"a\":\"b\"}]");
+  // Input ending inside the implicit mapping: rapidyaml emits no end events and no error
+  // (fuzz finding); the decoder must reject the truncated document rather than publish an
+  // unterminated tape.
+  for (const char* cut : {"[?", "[? ", "[:", "[a, [?", "{a: [:"}) {
+    error e = failure(s, cut);
+    require(e.code == status_syntax && e.parser && std::string(e.what()) == "missing terminating ]");
+  }
+  require(failure(s, "[: ").code == status_syntax);  // rapidyaml's own parse error
+  // Three pending tags or anchors: rapidyaml's two-entry annotation array is bounded by a parse
+  // error (bazel/patches/rapidyaml-annotation-bounds.patch), not a compiled-out assertion.
+  for (const char* many : {"!a\n!b\n!c\nx", "&a\n&b\n&c\nx", "- !a\n  !b\n  !c\n  x", "!a\n!b\n!c\n!d\nx"}) {
+    error e = failure(s, many);
+    require(e.code == status_syntax && e.parser && std::string(e.what()) == "too many annotations");
+  }
+  // A bare tag after a closed root collection: rapidyaml emits a second root node (fuzz finding).
+  for (const char* two : {"[wo]\n!bo\n", "[wo] !bo\n", "{a: b}\n!t\n", "\"q\"\n!t\n"}) {
+    error e = failure(s, two);
+    require(e.code == status_syntax && std::string(e.what()) == "YAML second root value");
+  }
   // Keys keep the resolved kind in yaml_meta bits 5-7.
   auto d = decode(s, "{~: a, true: b, 0x1F: c, 1.50: d, s: e, \"1\": f}");
   require(render(d.view) == "{\"\":\"a\",\"true\":\"b\",\"31\":\"c\",\"1.5\":\"d\",\"s\":\"e\",\"1\":\"f\"}");

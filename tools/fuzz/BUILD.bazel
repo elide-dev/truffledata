@@ -1,0 +1,42 @@
+load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_library")
+load("@rules_shell//shell:sh_binary.bzl", "sh_binary")
+load("@rules_shell//shell:sh_test.bzl", "sh_test")
+
+package(default_visibility = ["//visibility:public"])
+
+cc_library(
+    name = "replay",
+    testonly = True,
+    srcs = ["replay.cc"],
+)
+
+exports_files([
+    "campaign.sh",
+    "run.sh",
+    "defs.bzl",
+])
+
+cc_binary(
+    name = "sanitizer_canary",
+    testonly = True,
+    srcs = ["sanitizer_canary.cc"],
+    tags = ["manual"],
+)
+
+sh_test(
+    name = "sanitizer_canary_test",
+    srcs = ["sanitizer_canary.sh"],
+    args = ["$(rootpath :sanitizer_canary)"],
+    data = [":sanitizer_canary"],
+    tags = ["manual"],
+)
+
+sh_binary(
+    name = "run_wrapper",
+    srcs = ["run.sh"],
+)
+
+config_setting(
+    name = "enabled",
+    define_values = {"td_fuzz": "1"},
+)

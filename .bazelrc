@@ -124,3 +124,22 @@ coverage:codecov --remote_download_toplevel
 # Static-only CSV release archives for Elide's musl targets; tools still run on GNU RBE hosts.
 build:remote_musl --config=remote --dynamic_mode=off --platforms=//bazel/platforms:linux_amd64_musl
 build:remote_arm64_musl --config=remote_arm64 --dynamic_mode=off --platforms=//bazel/platforms:linux_arm64_musl
+
+# Native security tests: GNU Linux amd64 with the upstream instrumented libc++ add-on.
+# Link one instrumented C++ runtime into each standalone test executable.
+build:asan --dynamic_mode=off
+build:asan --extra_toolchains=@elide_toolchain_asan//:asan
+build:asan --copt=-fsanitize=address,undefined
+build:asan --copt=-fno-sanitize-recover=all
+build:asan --copt=-gline-tables-only
+build:asan --linkopt=-fsanitize=address,undefined
+test:asan --run_under=//tools/fuzz:run_wrapper
+test:asan --test_env=ASAN_OPTIONS=detect_leaks=1:abort_on_error=1
+test:asan --test_env=UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1
+# Coverage instrumentation reaches parser dependencies, not only the harness TU.
+build:fuzz --config=asan
+build:fuzz --define=td_fuzz=1
+build:fuzz --copt=-fsanitize=fuzzer-no-link
+# Rust uses the same Clang ASan runtime as its C++ dependencies (no duplicate runtime).
+build:asan-rust --config=asan
+build:asan-rust --@rules_rust//rust/settings:extra_rustc_flags=-Zsanitizer=address,-Zexternal-clangrt

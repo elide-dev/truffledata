@@ -1,4 +1,5 @@
-load("@rules_java//java:defs.bzl", "java_library", "java_test")
+load("@rules_java//java:defs.bzl", "java_binary", "java_library", "java_test")
+load("@rules_shell//shell:sh_test.bzl", "sh_test")
 load("//bazel:java.bzl", "data_java_library")
 
 package(default_visibility = ["//visibility:public"])
@@ -111,5 +112,61 @@ java_library(
         "@maven//:org_graalvm_truffle_truffle_api",
         "@maven//:org_jspecify_jspecify",
         "@maven//:org_junit_jupiter_junit_jupiter_api",
+    ],
+)
+
+java_library(
+    name = "slab_fuzz_harness",
+    testonly = True,
+    srcs = ["src/test/java/dev/elide/truffledata/protobuf/SlabFuzz.java"],
+    deps = [
+        ":protobuf-runtime",
+        ":slab_test_fixtures",
+        "//core",
+    ],
+)
+
+java_test(
+    name = "slab_replay",
+    args = ["$(location " + s + ")" for s in glob(["corpus/slab/*"])],
+    data = glob(["corpus/slab/*"]),
+    main_class = "dev.elide.truffledata.protobuf.SlabFuzz",
+    use_testrunner = False,
+    runtime_deps = [":slab_fuzz_harness"],
+)
+
+java_binary(
+    name = "slab_fuzzer",
+    testonly = True,
+    args = [
+        "--target_class=dev.elide.truffledata.protobuf.SlabFuzz",
+        "--instrumentation_includes=dev.elide.truffledata.**",
+    ],
+    jvm_flags = [
+        "--enable-native-access=ALL-UNNAMED",
+        "-Xmx512m",
+        "-XX:+EnableDynamicAgentLoading",
+    ],
+    main_class = "com.code_intelligence.jazzer.Jazzer",
+    tags = ["manual"],
+    runtime_deps = [
+        ":slab_fuzz_harness",
+        "@jazzer",
+    ],
+)
+
+sh_test(
+    name = "slab_fuzz",
+    size = "medium",
+    srcs = ["//tools/fuzz:campaign.sh"],
+    args = [
+        "$(rootpath :slab_fuzzer)",
+        "--target_class=dev.elide.truffledata.protobuf.SlabFuzz",
+        "--instrumentation_includes=dev.elide.truffledata.**",
+    ] + ["$(rootpath " + s + ")" for s in glob(["corpus/slab/*"])],
+    data = [":slab_fuzzer"] + glob(["corpus/slab/*"]),
+    tags = [
+        "fuzz",
+        "manual",
     ],
 )

@@ -373,10 +373,14 @@ http_archive(
 )
 
 # Production YAML parser (docs/superpowers/plans/2026-11-06-yaml.md D1). The overlay fixes the
-# configuration: assertions off, tab tokens, exception callbacks. No patches.
+# configuration: assertions off, tab tokens, exception callbacks. One patch: pending tag/anchor
+# annotations are bounded by a parse error instead of a compiled-out assertion (fuzz finding;
+# bazel/patches/rapidyaml-annotation-bounds.patch).
 http_archive(
     name = "rapidyaml",
     build_file = "//bazel:rapidyaml.BUILD",
+    patch_strip = 1,
+    patches = ["//bazel/patches:rapidyaml-annotation-bounds.patch"],
     sha256 = "a0ce80a8f4211580c8703e57acb813a28ca6ec80908f6eb926be94be8e98d39d",
     strip_prefix = "rapidyaml.v0.16.0",
     type = "tar.gz",
@@ -416,3 +420,27 @@ musl_toolchain = use_repo_rule("//bazel:musl_toolchain_repo.bzl", "musl_toolchai
     "amd64",
     "arm64",
 ]]
+
+# Test-only instrumented libc++ and dependencies from the matching upstream release.
+sanitizer_toolchain = use_repo_rule("//bazel:sanitizer_toolchain_repo.bzl", "sanitizer_toolchain_repo")
+
+sanitizer_toolchain(
+    name = "elide_toolchain_asan",
+    addon_sha256 = "66a8e185531dd8d506c086d8f07b52bbe8a115ceeac5337c8afefbdd0855b6ea",
+    addon_urls = ["https://github.com/elide-dev/toolchain/releases/download/v%s/elide-toolchain-%s-linux-amd64-sanitizer-asan.tar.xz" % (ELIDE_TOOLCHAIN, ELIDE_TOOLCHAIN)],
+    base_sha256 = ELIDE_TOOLCHAIN_BUNDLES["linux_amd64"][1],
+    base_urls = ["https://github.com/elide-dev/toolchain/releases/download/v%s/elide-toolchain-%s-linux-amd64.tar.xz" % (ELIDE_TOOLCHAIN, ELIDE_TOOLCHAIN)],
+    base_wrapper = "@elide_toolchain_linux_amd64//:cc",
+    build_file = "//bazel:elide_toolchain.BUILD",
+)
+
+# Test-only JVM coverage-guided fuzzing; standalone jar includes its native driver.
+http_archive(
+    name = "jazzer",
+    build_file_content = """
+load("@rules_java//java:defs.bzl", "java_import")
+java_import(name = "jazzer", jars = ["jazzer_standalone.jar"], testonly = True, visibility = ["//visibility:public"])
+""",
+    sha256 = "6eeaf0026d75599b07527d93b576593ce847cfca8b337a579971a5a9cdf792d0",
+    urls = ["https://github.com/CodeIntelligenceTesting/jazzer/releases/download/v0.30.0/jazzer-linux-x86-64.tar.gz"],
+)
