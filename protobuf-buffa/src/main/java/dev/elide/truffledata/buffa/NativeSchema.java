@@ -37,8 +37,7 @@ final class NativeSchema {
             types.add(nested);
           } else if (!types
               .get(indices.get(nested.name()))
-              .definition()
-              .equals(nested.definition())) {
+              .matchesDefinition(nested.definition())) {
             throw new ContractViolation("Conflicting nested Any contract");
           }
         }
