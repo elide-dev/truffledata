@@ -1,5 +1,6 @@
 load("//tools/fuzz:defs.bzl", "native_fuzzer")
 load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_library", "cc_test")
+load("//bazel:myna.bzl", "myna_bindings")
 
 cc_library(
     name = "decoder",
@@ -53,35 +54,11 @@ cc_library(
     deps = [":decoder"],
 )
 
-config_setting(
-    name = "linux_arm64",
-    constraint_values = [
-        "@platforms//os:linux",
-        "@platforms//cpu:aarch64",
-    ],
-)
-
-genrule(
+myna_bindings(
     name = "bindings",
-    srcs = ["json.seam"],
-    outs = [
-        "generated/JsonFFM.java",
-        "generated/Json.java",
-        "generated/JsonForeignFeature.java",
-        "generated/seam.rs",
-        "generated/seam.h",
-        "generated/seam.json",
-        "generated/seam.abi",
-        "generated/seam.ll",
-        "generated/META-INF/native-image/dev.elide.myna/dev.elide.truffledata.json.generated.Json/native-image.properties",
-    ],
-    cmd = "$(location @myna//:generator) validate $(location json.seam) --targets x86_64-unknown-linux-gnu,aarch64-unknown-linux-gnu,aarch64-apple-darwin && " +
-          "$(location @myna//:generator) generate $(location json.seam) --out $(RULEDIR)/generated --target " + select({
-        "@platforms//os:macos": "aarch64-apple-darwin",
-        ":linux_arm64": "aarch64-unknown-linux-gnu",
-        "//conditions:default": "x86_64-unknown-linux-gnu",
-    }),
-    tools = ["@myna//:generator"],
+    java_class = "Json",
+    java_package = "dev.elide.truffledata.json.generated",
+    seam = "json.seam",
 )
 
 cc_library(
@@ -143,6 +120,7 @@ filegroup(
     name = "java_bindings",
     srcs = [
         "generated/Json.java",
+        "generated/JsonAbi.java",
         "generated/JsonFFM.java",
     ],
     visibility = ["//visibility:public"],

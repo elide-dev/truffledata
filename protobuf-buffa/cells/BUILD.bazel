@@ -1,5 +1,6 @@
 load("@rules_java//java:defs.bzl", "java_library")
 load("//bazel:java.bzl", "data_java_library")
+load("//bazel:myna.bzl", "myna_bindings")
 
 package(default_visibility = ["//visibility:public"])
 
@@ -37,27 +38,18 @@ package(default_visibility = ["//visibility:public"])
     ]
 ]
 
+# Generated for the configured target like the production bindings, so each derived descriptor
+# equals the production descriptor of the same ABI class on every platform (//bazel:myna_contract).
+# No ABI class constants: the cells' fingerprint is never compared with a library.
 [
-    genrule(
+    myna_bindings(
         name = "bindings_" + variant,
-        srcs = [":seam_" + variant],
-        outs = ["generated/%s/%s" % (variant, out) for out in [
-            java_class + ".java",
-            java_class + "FFM.java",
-            java_class + "ForeignFeature.java",
-            java_class + "Truffle.java",
-            "seam.rs",
-            "seam.h",
-            "seam.json",
-            "seam.abi",
-            "seam.ll",
-            "META-INF/native-image/dev.elide.myna/dev.elide.truffledata.buffa.cells.generated.%s/native-image.properties" % java_class,
-        ]],
-        cmd = ("$(location @myna//:generator) validate $(location :seam_%s) " % variant +
-               "--targets x86_64-unknown-linux-gnu,aarch64-unknown-linux-gnu,aarch64-apple-darwin && " +
-               "$(location @myna//:generator) generate $(location :seam_%s) " % variant +
-               "--out $(RULEDIR)/generated/%s --target x86_64-unknown-linux-gnu" % variant),
-        tools = ["@myna//:generator"],
+        abi = False,
+        java_class = java_class,
+        java_package = "dev.elide.truffledata.buffa.cells.generated",
+        out = "generated/" + variant,
+        seam = ":seam_" + variant,
+        truffle = True,
     )
     for variant, java_class in [
         ("svm", "BuffaCells"),

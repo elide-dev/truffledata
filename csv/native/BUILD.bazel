@@ -1,16 +1,9 @@
 load("//tools/fuzz:defs.bzl", "native_fuzzer")
 load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_library", "cc_test")
+load("//bazel:myna.bzl", "myna_bindings")
 
 # CSV structural indexer (simdjson stage-1 style) and its Myna seam. The optional
 # truffledata-csv-native provider supplies it to //csv scanners (csv/native/README.md).
-
-config_setting(
-    name = "linux_arm64",
-    constraint_values = [
-        "@platforms//os:linux",
-        "@platforms//cpu:aarch64",
-    ],
-)
 
 config_setting(
     name = "x86_64",
@@ -81,30 +74,15 @@ cc_library(
     ],
 )
 
-# Myna 0.13 names GNU Linux targets only. This seam uses libc-independent LP64
-# C scalars/pointers, so musl consumes the same generated layout and fingerprint;
-# the musl kernel and isolated archive are compiled and executed in their own gates.
-genrule(
+# Myna names GNU Linux targets only. This seam uses libc-independent LP64 C scalars/pointers, so
+# musl consumes the same generated layout and its ABI class's fingerprint (seam.h selects it by the
+# compiler's char signedness); the musl kernel and isolated archive are compiled and executed in
+# their own gates.
+myna_bindings(
     name = "bindings",
-    srcs = ["csv.seam"],
-    outs = [
-        "generated/CsvNativeFFM.java",
-        "generated/CsvNative.java",
-        "generated/CsvNativeForeignFeature.java",
-        "generated/seam.rs",
-        "generated/seam.h",
-        "generated/seam.json",
-        "generated/seam.abi",
-        "generated/seam.ll",
-        "generated/META-INF/native-image/dev.elide.myna/dev.elide.truffledata.csv.kernel.generated.CsvNative/native-image.properties",
-    ],
-    cmd = "$(location @myna//:generator) validate $(location csv.seam) --targets x86_64-unknown-linux-gnu,aarch64-unknown-linux-gnu,aarch64-apple-darwin && " +
-          "$(location @myna//:generator) generate $(location csv.seam) --out $(RULEDIR)/generated --target " + select({
-        "@platforms//os:macos": "aarch64-apple-darwin",
-        ":linux_arm64": "aarch64-unknown-linux-gnu",
-        "//conditions:default": "x86_64-unknown-linux-gnu",
-    }),
-    tools = ["@myna//:generator"],
+    java_class = "CsvNative",
+    java_package = "dev.elide.truffledata.csv.kernel.generated",
+    seam = "csv.seam",
 )
 
 cc_library(
@@ -156,6 +134,7 @@ filegroup(
     name = "java_bindings",
     srcs = [
         "generated/CsvNative.java",
+        "generated/CsvNativeAbi.java",
         "generated/CsvNativeFFM.java",
     ],
     visibility = ["//visibility:public"],

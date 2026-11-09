@@ -1,5 +1,6 @@
 load("//tools/fuzz:defs.bzl", "native_fuzzer")
 load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_library", "cc_test")
+load("//bazel:myna.bzl", "myna_bindings")
 
 # Test-only yaml-test-suite event renderer over rapidyaml's ParseEngine. Header-only and
 # configuration-neutral: link it with exactly one of @rapidyaml//:ryml or @rapidyaml//:ryml_assert.
@@ -62,38 +63,15 @@ cc_test(
 
 # ---- The native YAML decoder (plan Task 2) -----------------------------------------------------
 
-config_setting(
-    name = "linux_arm64",
-    constraint_values = [
-        "@platforms//os:linux",
-        "@platforms//cpu:aarch64",
-    ],
-)
-
 # Myna names GNU Linux targets only. This seam uses libc-independent LP64 C scalars/pointers, so
-# musl consumes the same generated layout and fingerprint; the static-only musl archive is compiled
-# and executed in its own gates (//tools/release:yaml_archive_test, :yaml_musl_c_*).
-genrule(
+# musl consumes the same generated layout and its ABI class's fingerprint (seam.h selects it by the
+# compiler's char signedness); the static-only musl archive is compiled and executed in its own gates
+# (//tools/release:yaml_archive_test, :yaml_musl_c_*).
+myna_bindings(
     name = "bindings",
-    srcs = ["yaml.seam"],
-    outs = [
-        "generated/YamlFFM.java",
-        "generated/Yaml.java",
-        "generated/YamlForeignFeature.java",
-        "generated/seam.rs",
-        "generated/seam.h",
-        "generated/seam.json",
-        "generated/seam.abi",
-        "generated/seam.ll",
-        "generated/META-INF/native-image/dev.elide.myna/dev.elide.truffledata.yaml.generated.Yaml/native-image.properties",
-    ],
-    cmd = "$(location @myna//:generator) validate $(location yaml.seam) --targets x86_64-unknown-linux-gnu,aarch64-unknown-linux-gnu,aarch64-apple-darwin && " +
-          "$(location @myna//:generator) generate $(location yaml.seam) --out $(RULEDIR)/generated --target " + select({
-        "@platforms//os:macos": "aarch64-apple-darwin",
-        ":linux_arm64": "aarch64-unknown-linux-gnu",
-        "//conditions:default": "x86_64-unknown-linux-gnu",
-    }),
-    tools = ["@myna//:generator"],
+    java_class = "Yaml",
+    java_package = "dev.elide.truffledata.yaml.generated",
+    seam = "yaml.seam",
 )
 
 # Header-only decoder core: input preparation, scalar resolution and tags, the rapidyaml event
@@ -166,6 +144,7 @@ filegroup(
     name = "java_bindings",
     srcs = [
         "generated/Yaml.java",
+        "generated/YamlAbi.java",
         "generated/YamlFFM.java",
     ],
     visibility = ["//visibility:public"],
