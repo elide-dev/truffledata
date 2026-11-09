@@ -57,18 +57,70 @@ template<template<class> class Walk> double measure(const std::string& source, u
   return ns;
 }
 using measured = double (*)(const std::string&,unsigned);
+// canada.json-style numeric document: arrays of coordinate pairs with 15-17 significant digits,
+// so nearly every token takes the double path (plan WS8 numeric probe).
+static std::string numeric_fixture(unsigned pairs) {
+  std::string source = "[";
+  uint64_t state = 0x9E3779B97F4A7C15ull;
+  char buffer[64];
+  for (unsigned i = 0; i < pairs; ++i) {
+    if (i) source += ',';
+    state = state * 6364136223846793005ull + 1442695040888963407ull;
+    double x = -180.0 + double(state >> 11) / double(1ull << 53) * 360.0;
+    state = state * 6364136223846793005ull + 1442695040888963407ull;
+    double y = -90.0 + double(state >> 11) / double(1ull << 53) * 180.0;
+    std::snprintf(buffer, sizeof buffer, "[%.15f,%.15f]", x, y);
+    source += buffer;
+  }
+  return source + "]";
+}
+// Exact-tape parity on the numeric fixture and the boundary numbers the walk's exact rules
+// cover (18-digit integers, negative zero, exponents, overflow to DECIMAL fallback).
+template<template<class> class Walk> void numeric_parity(const char* name) {
+  const char* cases[] = {"[0.1,-0.0,1e308,1e309,-1e-324,123456789012345678,1234567890123456789,"
+    "18446744073709551615,18446744073709551616,0.30000000000000004,1E+2,-65.613616999999977,2.2250738585072014e-308]",
+    "[1.7976931348623157e308,4.9e-324,100000000000000000000000,1e-400,-1.5e3,9007199254740993]"};
+  for (const char* source : cases) {
+    auto a = parse<json::stage2_walk>(source), b = parse<Walk>(source);
+    if (a.valid != b.valid || a.words != b.words || a.directories != b.directories || a.pool != b.pool)
+      throw std::runtime_error(std::string("numeric parity ") + name + ":" + source);
+  }
+  for (unsigned pairs : {1u, 37u, 1000u}) {
+    std::string source = numeric_fixture(pairs);
+    auto a = parse<json::stage2_walk>(source), b = parse<Walk>(source);
+    if (!a.valid || a.valid != b.valid || a.words != b.words || a.pool != b.pool)
+      throw std::runtime_error(std::string("numeric fixture parity ") + name);
+  }
+  std::printf("ISA %s numeric parity ok\n", name);
+}
 int main() {
-  measured tiers[] = {measure<json::stage2_walk>, nullptr, nullptr};
-  const char* names[] = {"baseline","avx2","avx512"};
+  measured tiers[] = {measure<json::stage2_walk>, nullptr, nullptr, nullptr, nullptr};
+  const char* names[] = {"baseline","avx2","avx512","sse42","avx2-scalar-numbers"};
   parity<json::stage2_walk>(names[0]);
 #if defined(__x86_64__)
   if (__builtin_cpu_supports("avx2") && __builtin_cpu_supports("bmi") && __builtin_cpu_supports("bmi2") && __builtin_cpu_supports("lzcnt") && __builtin_cpu_supports("popcnt")) {
-    tiers[1]=measure<json_avx2::stage2_walk>; parity<json_avx2::stage2_walk>(names[1]);
+    tiers[1]=measure<json_avx2::stage2_walk>; parity<json_avx2::stage2_walk>(names[1]); numeric_parity<json_avx2::stage2_walk>(names[1]);
+    tiers[4]=measure<json_avx2_scalar_numbers::stage2_walk>; parity<json_avx2_scalar_numbers::stage2_walk>(names[4]);
   }
   if (__builtin_cpu_supports("avx512bw") && __builtin_cpu_supports("avx512vl") && __builtin_cpu_supports("bmi2")) {
-    tiers[2]=measure<json_avx512::stage2_walk>; parity<json_avx512::stage2_walk>(names[2]);
+    tiers[2]=measure<json_avx512::stage2_walk>; parity<json_avx512::stage2_walk>(names[2]); numeric_parity<json_avx512::stage2_walk>(names[2]);
+  }
+  if (__builtin_cpu_supports("sse4.2") && __builtin_cpu_supports("pclmul") && __builtin_cpu_supports("popcnt")) {
+    tiers[3]=measure<json_sse42::stage2_walk>; parity<json_sse42::stage2_walk>(names[3]); numeric_parity<json_sse42::stage2_walk>(names[3]);
   }
 #endif
+  // Numeric fixture first (the WS8 question), then the mixed big/huge fixtures as before.
+  for (unsigned pairs : {2000u, 50000u}) {
+    std::string source = numeric_fixture(pairs);
+    unsigned repetitions = std::max<unsigned>(5, 20000000 / source.size());
+    for (unsigned round = 0; round < 5; ++round) {
+      double times[5]{};
+      for (unsigned n = 0; n < 5; ++n) { unsigned tier = round % 2 ? 4 - n : n; if (tiers[tier]) times[tier] = tiers[tier](source, repetitions); }
+      std::printf("ISA numeric bytes%zu round%u baseline %.0fns sse42-numbers %.0fns ratio %.3f avx2-numbers %.0fns ratio %.3f avx2-scalar-numbers %.0fns ratio %.3f avx512-numbers %.0fns ratio %.3f\n",
+        source.size(), round, times[0], times[3], times[3] ? times[0] / times[3] : 0, times[1], times[1] ? times[0] / times[1] : 0,
+        times[4], times[4] ? times[0] / times[4] : 0, times[2], times[2] ? times[0] / times[2] : 0);
+    }
+  }
   for (unsigned count : {1000u,20000u}) {
     std::string source="[";
     for (unsigned i=0;i<count;++i) {if(i)source+=',';source+=tape::testing::fixture(i);} source+=']';

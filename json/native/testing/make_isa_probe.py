@@ -4,15 +4,24 @@ import pathlib
 import sys
 source = pathlib.Path(sys.argv[1]).read_text()
 variants = []
-for name, target, width in [
-    ("avx2", "avx2,bmi,bmi2,lzcnt,popcnt", 32),
-    ("avx512", "avx512bw,avx512vl,bmi2", 64),
+# (name, target attribute, string-scan width, simdjson implementation whose number kernel the
+# variant calls). Under -march=compatibility `simdjson::builtin` is the fallback kernel; the
+# westmere/haswell kernels parse eight digits with SSSE3/AVX2 multiply-adds (plan WS8 probe).
+for name, target, width, numbers in [
+    ("avx2", "avx2,bmi,bmi2,lzcnt,popcnt", 32, "haswell"),
+    ("avx512", "avx512bw,avx512vl,bmi2", 64, "haswell"),
+    ("sse42", "sse4.2,pclmul,popcnt", 16, "westmere"),
+    ("avx2_scalar_numbers", "avx2,bmi,bmi2,lzcnt,popcnt", 32, "builtin"),
 ]:
     code = source.replace("TRUFFLEDATA_JSON_STAGE2_H", "TRUFFLEDATA_JSON_TESTING_STAGE2_" + name.upper() + "_H")
     code = code.replace("namespace truffledata::json {", "namespace truffledata::json_" + name + " {\nusing namespace truffledata::json;")
+    assert code.count("simdjson::builtin::numberparsing::parse_number") == 1
+    code = code.replace("simdjson::builtin::numberparsing::parse_number", "simdjson::" + numbers + "::numberparsing::parse_number")
     start = code.index("    __m128i v =", code.index("inline scan_hit scan_string"))
     end = code.index("#elif defined(__aarch64__)", start)
-    if width == 32:
+    if width == 16:
+        scanner = code[start:end]
+    elif width == 32:
         scanner = '''    __m256i v = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(text + offset));
     uint32_t matches = uint32_t(_mm256_movemask_epi8(_mm256_or_si256(
         _mm256_cmpeq_epi8(v, _mm256_set1_epi8('"')), _mm256_cmpeq_epi8(v, _mm256_set1_epi8('\\\\')))));
