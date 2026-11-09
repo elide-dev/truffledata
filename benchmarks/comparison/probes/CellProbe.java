@@ -99,21 +99,32 @@ public final class CellProbe implements AutoCloseable {
       long bytes;
       VoidPointer slot = WordFactory.pointer(result);
       // Neither address escapes this call. Empty buffers use a valid non-null address and zero size.
-      try (var pinnedInput = PinnedObject.create(input);
-          var pinnedOutput = PinnedObject.create(output)) {
-        status =
-            Buffa.decodeSlab(
-                WordFactory.pointer(compiled),
-                input.length == 0 ? WordFactory.pointer(result) : pinnedInput.addressOfArrayElement(0),
-                input.length,
-                1,
-                WordFactory.nullPointer(),
-                pinnedOutput.addressOfArrayElement(0),
-                capacity,
-                limits.maxDepth(),
-                limits.maxSlabBytes(),
-                slot);
-        bytes = Buffa.SlabResult.bytes(slot);
+      // Plain try/finally, not try-with-resources: javac's addSuppressed is on the runtime
+      // compilation blocklist (measured: the only violation the first image build reported).
+      PinnedObject pinnedInput = PinnedObject.create(input);
+      try {
+        PinnedObject pinnedOutput = PinnedObject.create(output);
+        try {
+          status =
+              Buffa.decodeSlab(
+                  WordFactory.pointer(compiled),
+                  input.length == 0
+                      ? WordFactory.pointer(result)
+                      : pinnedInput.addressOfArrayElement(0),
+                  input.length,
+                  1,
+                  WordFactory.nullPointer(),
+                  pinnedOutput.addressOfArrayElement(0),
+                  capacity,
+                  limits.maxDepth(),
+                  limits.maxSlabBytes(),
+                  slot);
+          bytes = Buffa.SlabResult.bytes(slot);
+        } finally {
+          pinnedOutput.close();
+        }
+      } finally {
+        pinnedInput.close();
       }
       return publish(input, output, status, bytes);
     } finally {
@@ -131,26 +142,35 @@ public final class CellProbe implements AutoCloseable {
       byte[] output = new byte[capacity];
       int status;
       long bytes;
-      try (var pinnedInput = PinnedObject.create(input);
-          var pinnedOutput = PinnedObject.create(output)) {
-        // Pointer arguments as a guest holding native memory passes them: interop pointers lent in
-        // place (Borrow.direct), integers as boxed Java values the coercions accept without interop.
-        status =
-            invoker.invoke(
-                new Object[] {
-                  NativePointer.of(compiled),
-                  NativePointer.of(
-                      input.length == 0 ? result : pinnedInput.addressOfArrayElement(0).rawValue()),
-                  (long) input.length,
-                  1,
-                  NativePointer.NULL,
-                  NativePointer.of(pinnedOutput.addressOfArrayElement(0).rawValue()),
-                  (long) capacity,
-                  limits.maxDepth(),
-                  (long) limits.maxSlabBytes(),
-                  NativePointer.of(result)
-                });
-        bytes = Buffa.SlabResult.bytes(WordFactory.pointer(result));
+      PinnedObject pinnedInput = PinnedObject.create(input);
+      try {
+        PinnedObject pinnedOutput = PinnedObject.create(output);
+        try {
+          // Pointer arguments as a guest holding native memory passes them: interop pointers lent
+          // in place (Borrow.direct), integers as boxed values the coercions accept without interop.
+          status =
+              invoker.invoke(
+                  new Object[] {
+                    NativePointer.of(compiled),
+                    NativePointer.of(
+                        input.length == 0
+                            ? result
+                            : pinnedInput.addressOfArrayElement(0).rawValue()),
+                    (long) input.length,
+                    1,
+                    NativePointer.NULL,
+                    NativePointer.of(pinnedOutput.addressOfArrayElement(0).rawValue()),
+                    (long) capacity,
+                    limits.maxDepth(),
+                    (long) limits.maxSlabBytes(),
+                    NativePointer.of(result)
+                  });
+          bytes = Buffa.SlabResult.bytes(WordFactory.pointer(result));
+        } finally {
+          pinnedOutput.close();
+        }
+      } finally {
+        pinnedInput.close();
       }
       return publish(input, output, status, bytes);
     } finally {

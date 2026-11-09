@@ -89,4 +89,36 @@ taskset -c 2 perf record -F 997 --call-graph fp -o full.perf -- \
 
 The diagnostic image enables JFR after warmup and takes three one-second samples. Its timing is excluded from comparisons. Hardware sampling includes startup and may not resolve compiled guest addresses; allocation-event counts are not bytes. The JSON profile summarizer accepts `dev.elide.truffledata.comparison.ConsumerComparison` as its class filter.
 
+## Myna Truffle cell probe (WS11)
+
+`//benchmarks/comparison:cells_probe_measure` is the gate probe of plan
+`docs/superpowers/plans/2026-11-08-beat-stock-svm.md` §4 WS11: one x86-64 SVM image
+(`cells_probe_native`, `cells/CellsProbe.java`) calls the guest-facing heap-input slab decode
+(`BuffaPlan.decodeSlab(byte[])`, what a TruffleCEL program hands over) from a force-compiled
+Truffle root over the consumer harness's full fixture, one route per process, three fresh forks
+per route on one pinned worker CPU (`cells_probe.py`):
+
+| Route | Mechanism |
+|---|---|
+| `boundary` | today's entry: the production `@TruffleBoundary` plan decode, one AOT call |
+| `boundary-body` | the probe's copy of that body (`probes/CellProbe.java`) behind a `@TruffleBoundary` |
+| `direct` | the body partial-evaluation visible; `Buffa.decodeSlab` compiles as a direct AOT-stub transition (graal#196) |
+| `cell` | the body with the native call through the generated Myna cell `BuffaCellsTruffle.decodeSlab_Cell` adopted as a child node |
+| `cell-interop` | the cell's `NativeFunction` wrapper through a dispatched `InteropLibrary` (the generic path) |
+
+Every route decodes the same 32 messages, publishes through the production
+`SlabMessage.takeOwnership` (itself a boundary: the verifier stays an AOT call on every route) and
+must produce the production slab bytes; every measured sample must observe compiled code under the
+unchanged 10,000-node graph budget and performance-warning gate. The cells come from
+`cells/cells.seam`, the production seam with `truffle_cells=true truffle_backend=native
+truffle_transitions=direct` generated into a benchmark-only package (its ABI fingerprint differs
+from the shipped `Buffa` binding only because of those options; `BuffaCells.java` is otherwise
+identical). The shipped bindings, seam fingerprint and natives are unchanged, and `@myna//:truffle`
+(the `myna-truffle` runtime of the pinned 0.13.0 archive) is a benchmark-only dependency.
+
+The retained outputs hold each process's JSON record, its Truffle compilation trace and the
+engine's compilation statistics (Graal node counts and the node-class histogram, which names the
+surviving invokes), `results.json` and `results.md`. Times are advisory shared-worker timings:
+compare routes within one run only.
+
 Broader claims still require unrelated-schema/fallback holdouts, complete native retention accounting, an actual Elide/TruffleCEL integration and release qualification. This harness does not replace those checks.
