@@ -50,7 +50,7 @@ final class JavaKernelDifferentialTest {
       "unpaired surrogate", "invalid Unicode escape");
 
   /** Events of an export that keeps aliases as references. */
-  static final class Events implements TapeSink {
+  static class Events implements TapeSink {
     final StringBuilder out;
     Events(StringBuilder out) { this.out = out; }
     public void beginObject(long n) { out.append("{").append(n).append(' '); }
@@ -446,11 +446,53 @@ final class JavaKernelDifferentialTest {
             expected = single(s.nativeSession, bytes(input));
             actual = single(s.java, bytes(input));
             if (!expected.equals(actual)) failures.add(limits + " " + input + "\n  native: " + expected + "\n  java:   " + actual);
+            expected = expanded(s.nativeSession, bytes(input));
+            actual = expanded(s.java, bytes(input));
+            if (!expected.equals(actual)) failures.add(limits + " expanded " + input + "\n  native: " + expected + "\n  java:   " + actual);
           }
         }
       }
     }
     assertTrue(failures.isEmpty(), String.join("\n", failures));
+  }
+
+  /** An export that expands every alias, charged against maxAliasExpansion. */
+  static String expanded(YamlSession session, byte[] input) {
+    try (YamlMessage message = session.decode(input)) {
+      StringBuilder out = new StringBuilder();
+      message.export(new Events(out) {
+        @Override public boolean alias(int id) { return false; }
+      });
+      return out.toString();
+    } catch (RuntimeException failure) {
+      return "reject " + category(failure);
+    }
+  }
+
+  /** Guest strings: Latin-1 and UTF-16 storage reach the decoder transcoded, as natively. */
+  @Test
+  void guestStrings() {
+    List<String> failures = new ArrayList<>();
+    try (Sessions s = Sessions.open(YamlOptions.DEFAULT)) {
+      for (String text : List.of("a: caf\u00e9\n", "k: \u96ea \ud83d\ude00\nl: [x, \"\u00e9\"]\n", "plain: ascii\n",
+          "bad: \ud800\n", "{a: 1, a: 2}")) {
+        var string = com.oracle.truffle.api.strings.TruffleString.fromJavaStringUncached(
+            text, com.oracle.truffle.api.strings.TruffleString.Encoding.UTF_16);
+        String expected = guest(s.nativeSession, string), actual = guest(s.java, string);
+        if (!expected.equals(actual)) failures.add(text + "\n  native: " + expected + "\n  java:   " + actual);
+      }
+    }
+    assertTrue(failures.isEmpty(), String.join("\n", failures));
+  }
+
+  static String guest(YamlSession session, com.oracle.truffle.api.strings.TruffleString text) {
+    try {
+      dev.elide.truffledata.tape.JavaSink sink = new dev.elide.truffledata.tape.JavaSink();
+      session.parse(text, sink);
+      return String.valueOf(sink.result());
+    } catch (RuntimeException failure) {
+      return "reject " + category(failure);
+    }
   }
 
   /** Incremental feeding: chunk sizes, backpressure, limits and failed streams. */
