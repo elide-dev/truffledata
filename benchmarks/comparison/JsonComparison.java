@@ -547,7 +547,8 @@ public final class JsonComparison {
 
     @Override
     public Object execute(VirtualFrame frame) {
-      throw new UnsupportedOperationException(name + " measures ingest only");
+      // Never called: numeric cells are ingest-only (a constant message keeps the graph clean).
+      throw CompilerDirectives.shouldNotReachHere("numeric engines measure ingest only");
     }
 
     long ingest(byte[] input) throws Exception {
