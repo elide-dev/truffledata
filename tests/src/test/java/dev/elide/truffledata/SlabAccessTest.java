@@ -243,6 +243,19 @@ class SlabAccessTest {
       assertEquals(outcome(() -> generic.read(projected)), outcome(() -> exact.read(root)));
       assertEquals(outcome(() -> generic.readLong(projected)), outcome(() -> exact.readLong(root)));
       assertEquals(outcome(() -> generic.length(projected)), outcome(() -> exact.length(root)));
+      assertEquals(outcome(() -> generic.readDouble(projected)), outcome(() -> exact.readDouble(root)));
+      assertEquals(
+          outcome(() -> generic.readBoolean(projected)), outcome(() -> exact.readBoolean(root)));
+      // The layout-bound hooks the read nodes call agree with the checked reads.
+      assertEquals(
+          outcome(() -> generic.readLongBound(projected)), outcome(() -> exact.readLong(root)));
+      assertEquals(
+          outcome(() -> generic.readDoubleBound(projected)), outcome(() -> exact.readDouble(root)));
+      assertEquals(
+          outcome(() -> generic.readBooleanBound(projected)),
+          outcome(() -> exact.readBoolean(root)));
+      assertEquals(
+          outcome(() -> generic.lengthBound(projected)), outcome(() -> exact.length(root)));
       assertEquals(projected.has(o), root.has(o));
     }
     assertThrows(IndexOutOfBoundsException.class, () -> root.get(sample.size()));
