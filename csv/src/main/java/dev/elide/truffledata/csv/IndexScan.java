@@ -169,7 +169,7 @@ final class IndexScan {
             if (next < to) {
               if (input[next] == LF) skip = next++;
             } else if (commonsFraming && !eof) {
-              return resume; // Commons peeks past a final CR
+              return resume; // Commons peeks past a final CR (may be the first half of CRLF)
             }
           }
           if (emptyLineRecords) {
@@ -181,7 +181,7 @@ final class IndexScan {
               return next;
             }
             resume = next;
-          } else if (!commonsFraming) {
+          } else {
             resume = next;
           }
           recordStart = fieldStart = next;
@@ -308,7 +308,7 @@ final class IndexScan {
             if (next < to) {
               if (input[next] == LF) skip = next++;
             } else if (commonsFraming && !eof) {
-              return resume; // Commons peeks past a final CR
+              return resume; // Commons peeks past a final CR (may be the first half of CRLF)
             }
           }
           if (emptyLineRecords) {
@@ -320,7 +320,7 @@ final class IndexScan {
               return next;
             }
             resume = next;
-          } else if (!commonsFraming) {
+          } else {
             resume = next;
           }
           recordStart = fieldStart = next;
@@ -453,7 +453,7 @@ final class IndexScan {
             if (next < to) {
               if (input[next] == LF) skip = next++;
             } else if (commonsFraming && !eof) {
-              return resume; // Commons peeks past a final CR
+              return resume; // Commons peeks past a final CR (may be the first half of CRLF)
             }
           }
           if (emptyLineRecords) {
@@ -465,7 +465,7 @@ final class IndexScan {
               return next;
             }
             resume = next;
-          } else if (!commonsFraming) {
+          } else {
             resume = next;
           }
           recordStart = fieldStart = next;

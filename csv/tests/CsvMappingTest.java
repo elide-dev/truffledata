@@ -314,4 +314,26 @@ final class CsvMappingTest {
       assertEquals("c\nd", batch.row(1).getString(1));
     }
   }
+
+  @Test
+  void blankLinesDoNotCountTowardMaxRecordBytesMapped() throws IOException {
+    // A run of blank lines exceeding maxRecordBytes, before a tiny record, streams
+    // correctly through a mapped window too (the fix is in CommonsScanner.scan, shared
+    // by the stream and mapped readers). parse() and the mapped stream agree.
+    CsvFormat format = CsvFormat.Predefined.DEFAULT.format().toBuilder().setHeader().build();
+    CsvLimits limits = new CsvLimits(1 << 20, 16, 16, 1024);
+    String blanks = "\n".repeat(20);
+    byte[] bytes = utf8(blanks + "h1,h2\n" + blanks + "a,b\n");
+    Path path = file("blanks.csv", bytes);
+    CsvBatch heap = Csv.parse(bytes, format, limits);
+    assertEquals(1, heap.size());
+    try (CsvMapping mapping = CsvMapping.map(path);
+        CsvReader reader = Csv.open(mapping, format, limits, 3)) {
+      assertEquals(Differential.names(heap), CsvBatchTest.names(reader.schema()));
+      List<List<@Nullable String>> streamed = new ArrayList<>();
+      for (CsvBatch b; (b = reader.next()) != null; ) streamed = Differential.rows(b, streamed);
+      assertEquals(rows(heap), streamed);
+      assertEquals(bytes.length, reader.position());
+    }
+  }
 }
