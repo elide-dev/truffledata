@@ -250,6 +250,49 @@ public class SlabMessage extends SlabRow implements ProtoMessage {
     return owning(layout, slab, extent, SlabVerifier.verifyOwning(slab, extent, layout, limits));
   }
 
+  /** Native accounting value meaning "unknown or saturated": never within a budget. */
+  private static final long UNKNOWN_TOTAL = 0xFFFF_FFFFL;
+
+  /**
+   * Publish a slab that this process's own native producer (seam ABI 12 {@code decodeSlab}) wrote
+   * into {@code slab}, an array the caller allocated for this decode and never exposed. The
+   * producer's reported header flags and logical totals ({@code SlabResult.cells} and {@code
+   * string_bytes}, unsigned, {@code 0xFFFFFFFF} when unknown) decide the verification: a {@code
+   * CERTIFIED} owning slab whose totals lie within the plan's limits is published after the O(1)
+   * header check alone, exactly as the Java verifier would have accepted it; anything else takes
+   * the {@link #INTERNAL} path (header check plus the exact {@code validate} walk), so a violation
+   * is reported with the same message and ordering as before.
+   *
+   * <p>This is the in-process producer entry (the Buffa backends' allocate-and-fill paths and
+   * their scratch retries). It trusts the array's provenance, not its bytes: external, shared,
+   * copied or projected slabs use {@link #copyOf}, {@link #copyProjectedOf} or {@link
+   * #takeOwnership}, which keep the full verifier.
+   */
+  @TruffleBoundary
+  public static SlabMessage produced(
+      ProtoPlan plan,
+      byte[] slab,
+      int extent,
+      int flags,
+      int cells,
+      int stringBytes,
+      SlabLimits limits) {
+    if (slab.length > limits.maxSlabBytes())
+      throw new ContractViolation("Retained slab byte budget exceeded");
+    Layout layout = plan.layout();
+    int header = check(slab, extent, layout);
+    long reportedCells = Integer.toUnsignedLong(cells);
+    long reportedBytes = Integer.toUnsignedLong(stringBytes);
+    Limits budget = plan.limits();
+    if (header == (OWNING | CERTIFIED)
+        && flags == header
+        && reportedCells != UNKNOWN_TOTAL
+        && reportedBytes != UNKNOWN_TOTAL
+        && reportedCells <= budget.maxCells()
+        && reportedBytes <= budget.maxStringBytes()) return create(layout, slab, extent, 0);
+    return create(layout, slab, extent, INTERNAL);
+  }
+
   public SlabMessage row() {
     return this;
   }

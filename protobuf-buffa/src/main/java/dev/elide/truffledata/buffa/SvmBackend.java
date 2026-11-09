@@ -277,7 +277,7 @@ final class SvmBackend implements BuffaWire.Backend {
         // one: spare room beyond the slab's own size (plus a small slack) is trimmed away.
         if (output.length - extent > Math.max(256, extent))
           output = java.util.Arrays.copyOf(output, extent);
-        return SlabMessage.takeOwnership(plan, output, extent, limits);
+        return produced(plan, output, extent, limits, result);
       }
     } finally {
       busy = false;
@@ -327,12 +327,29 @@ final class SvmBackend implements BuffaWire.Backend {
         // one: spare room beyond the slab's own size (plus a small slack) is trimmed away.
         if (output.length - extent > Math.max(256, extent))
           output = java.util.Arrays.copyOf(output, extent);
-        return SlabMessage.takeOwnership(plan, output, extent, limits);
+        return produced(plan, output, extent, limits, result);
       }
       throw new IllegalStateException("Native slab capacity retry failed");
     } finally {
       busy = false;
     }
+  }
+
+  /**
+   * Publish the slab the native producer just wrote into {@code output} (an array this backend
+   * allocated for the decode and never exposed) with the producer's certification and logical
+   * totals; the result slot is read while this backend still holds it.
+   */
+  private static SlabMessage produced(
+      ProtoPlan plan, byte[] output, int extent, SlabLimits limits, VoidPointer result) {
+    return SlabMessage.produced(
+        plan,
+        output,
+        extent,
+        Buffa.SlabResult.flags(result),
+        Buffa.SlabResult.cells(result),
+        Buffa.SlabResult.string_bytes(result),
+        limits);
   }
 
   /** Ordinary VM transition: input length is unbounded and must not delay safepoints. */

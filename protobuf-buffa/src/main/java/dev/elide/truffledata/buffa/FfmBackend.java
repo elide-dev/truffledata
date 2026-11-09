@@ -1,6 +1,7 @@
 package dev.elide.truffledata.buffa;
 
 import com.oracle.truffle.api.CompilerDirectives;
+import dev.elide.truffledata.ContractViolation;
 import dev.elide.truffledata.Limits;
 import dev.elide.truffledata.buffa.generated.BuffaFFM;
 import dev.elide.truffledata.protobuf.ProtoPlan;
@@ -378,13 +379,28 @@ final class FfmBackend implements BuffaWire.Backend {
         BuffaWire.status(status);
         if (bytes < 0 || bytes > capacity)
           throw new IllegalStateException("Invalid native slab extent");
-        return SlabMessage.takeOwnership(plan, output, Math.toIntExact(bytes), limits);
+        return produced(plan, output, Math.toIntExact(bytes), limits);
       }
     } finally {
       busy = false;
     }
     if (scratch) return BuffaWire.Backend.super.slab(compiled, input, plan, limits, capacity);
     throw new IllegalStateException("Native slab capacity retry failed");
+  }
+
+  /**
+   * Publish the slab the native producer just wrote (into, or copied into, an array this backend
+   * allocated and never exposed) with the producer's certification and logical totals.
+   */
+  private SlabMessage produced(ProtoPlan plan, byte[] owned, int extent, SlabLimits limits) {
+    return SlabMessage.produced(
+        plan,
+        owned,
+        extent,
+        slabResult.get(ValueLayout.JAVA_INT, BuffaFFM.SlabResult_flags_OFFSET),
+        slabResult.get(ValueLayout.JAVA_INT, BuffaFFM.SlabResult_cells_OFFSET),
+        slabResult.get(ValueLayout.JAVA_INT, BuffaFFM.SlabResult_string_bytes_OFFSET),
+        limits);
   }
 
   @Override
@@ -423,7 +439,14 @@ final class FfmBackend implements BuffaWire.Backend {
           BuffaWire.status(status);
           if (bytes < 0 || bytes > capacity)
             throw new IllegalStateException("Invalid native slab extent");
-          return SlabMessage.copyOf(plan, output.asSlice(0, bytes).asByteBuffer(), limits);
+          if (bytes > limits.maxSlabBytes())
+            throw new ContractViolation("Slab byte budget exceeded");
+          // The producer's output moves from the confined arena into an array this backend
+          // allocates and never exposes; its certification and totals describe these bytes.
+          int extent = Math.toIntExact(bytes);
+          byte[] owned = new byte[extent];
+          MemorySegment.copy(output, ValueLayout.JAVA_BYTE, 0, owned, 0, extent);
+          return produced(plan, owned, extent, limits);
         }
       }
       throw new IllegalStateException("Native slab capacity retry failed");
