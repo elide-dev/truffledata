@@ -115,7 +115,7 @@ try-import %workspace%/user.bazelrc
 
 # Instrument correctness tests only: probes change allocation and JIT graph budgets.
 coverage:codecov --combined_report=lcov
-coverage:codecov --instrumentation_filter=^//(core|jdbc|jdbc-sqlite|jdbc-mysql|jdbc-postgresql|protobuf|protobuf-runtime)(/|:),^//protobuf-buffa:protobuf-buffa$,^//json:(json|jvm)$,^//tape:(tape|jvm)$,^//yaml:(yaml|jvm)$,^//csv:csv$
+coverage:codecov --instrumentation_filter=^//(core|jdbc|jdbc-sqlite|jdbc-mysql|jdbc-postgresql|protobuf|protobuf-runtime)(/|:),^//protobuf-buffa:protobuf-buffa$,^//json:(json|jvm)$,^//tape:(tape|jvm)$,^//yaml:(yaml|jvm|svm|java|snakeyaml)$,^//csv:csv$
 coverage:codecov --test_tag_filters=-allocation,-jit
 coverage:codecov --test_arg=--exclude-tag --test_arg=allocation
 coverage:codecov --test_arg=--exclude-tag --test_arg=jit

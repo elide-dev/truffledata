@@ -9,7 +9,7 @@ import re
 import subprocess
 import tarfile
 
-from maven_repo import TRIPLES as PLATFORMS
+from maven_repo import MUSL_MODULES, TRIPLES as PLATFORMS
 
 LIBRARIES = {'csv-native': 'csv'}
 
@@ -33,8 +33,8 @@ def bundle(repository, version, module, classifier, header, llvm, output, revisi
     if not re.fullmatch(r'[0-9a-f]{40}', revision):
         raise ValueError('A full source commit is required')
     musl = classifier.endswith('-musl')
-    if musl and module != 'csv-native':
-        raise ValueError('Musl bundles currently support only CSV')
+    if musl and module not in MUSL_MODULES:
+        raise ValueError('No musl archive for ' + module)
     artifact = 'truffledata-' + module
     name = LIBRARIES[module]
     prefix = repository / 'dev/elide' / artifact / version / (artifact + '-' + version)
@@ -122,7 +122,7 @@ def main():
     from maven_repo import validate_version
     validate_version(args.version)
     for classifier in PLATFORMS:
-        if classifier.endswith('-musl') and args.module != 'csv-native':
+        if classifier.endswith('-musl') and args.module not in MUSL_MODULES:
             continue
         print(bundle(args.repository, args.version, args.module, classifier, args.header,
                      args.llvm_bin, args.output, args.revision, args.source_date_epoch, args.dirty))

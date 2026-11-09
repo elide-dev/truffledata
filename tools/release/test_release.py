@@ -7,7 +7,7 @@ import unittest
 import xml.etree.ElementTree as ET
 import zipfile
 
-from maven_repo import artifact_suffixes, built_classifiers, CLASSIFIERS, MODULES, NAMESPACE, stage, validate_version, TRIPLES
+from maven_repo import artifact_suffixes, built_classifiers, CLASSIFIERS, MODULES, MUSL_MODULES, NAMESPACE, NATIVE_MODULES, stage, validate_version, TRIPLES
 
 
 class PublicationTest(unittest.TestCase):
@@ -42,7 +42,7 @@ class PublicationTest(unittest.TestCase):
                     expected.update(('org.graalvm.sdk:nativeimage', 'org.graalvm.sdk:word'))
                 if module == 'protobuf-buffa':
                     expected.update(('dev.elide:truffledata-protobuf-runtime', 'dev.elide:truffledata-protobuf-buffa-bindings'))
-                if module in ('tape', 'json', 'json-bindings', 'yaml', 'yaml-bindings'):
+                if module in ('tape', 'json', 'json-bindings', 'yaml', 'yaml-bindings', 'yaml-native'):
                     expected.update(('org.graalvm.sdk:nativeimage', 'org.graalvm.sdk:word'))
                 if module == 'tape-jvm':
                     expected.add('dev.elide:truffledata-tape')
@@ -51,9 +51,15 @@ class PublicationTest(unittest.TestCase):
                 if module == 'json-jvm':
                     expected.update(('dev.elide:truffledata-json', 'dev.elide:truffledata-json-bindings', 'dev.elide:truffledata-tape-jvm'))
                 if module == 'yaml':
-                    expected.update(('dev.elide:truffledata-yaml-bindings', 'dev.elide:truffledata-tape'))
+                    expected.add('dev.elide:truffledata-tape')
+                if module == 'yaml-native':
+                    expected.update(('dev.elide:truffledata-yaml', 'dev.elide:truffledata-yaml-bindings'))
                 if module == 'yaml-jvm':
                     expected.update(('dev.elide:truffledata-yaml', 'dev.elide:truffledata-yaml-bindings', 'dev.elide:truffledata-tape-jvm'))
+                if module == 'yaml-java':
+                    expected.update(('dev.elide:truffledata-yaml', 'dev.elide:truffledata-tape'))
+                if module == 'yaml-snakeyaml':
+                    expected.update(('dev.elide:truffledata-yaml-java', 'org.snakeyaml:snakeyaml-engine'))
                 if module in ('csv-bindings', 'csv-native'):
                     expected.update(('org.graalvm.sdk:nativeimage', 'org.graalvm.sdk:word'))
                 if module in ('csv-native', 'csv-jvm'):
@@ -69,7 +75,8 @@ class PublicationTest(unittest.TestCase):
                         'org.graalvm.truffle:truffle-runtime', 'org.graalvm.polyglot:polyglot',
                         'org.graalvm.js:js-language', 'org.graalvm.python:python-language',
                         'org.graalvm.python:python-resources', 'com.mysql:mysql-connector-j',
-                        'org.postgresql:postgresql', 'org.xerial:sqlite-jdbc', 'com.google.protobuf:protobuf-java', 'com.google.protobuf:protobuf-java-util'}
+                        'org.postgresql:postgresql', 'org.xerial:sqlite-jdbc', 'com.google.protobuf:protobuf-java', 'com.google.protobuf:protobuf-java-util',
+                        'org.snakeyaml:snakeyaml-engine'}
                     self.assertEqual(root.findtext('m:packaging', namespaces=NAMESPACE), 'pom')
                     self.assertIsNone(root.find('m:dependencies', NAMESPACE))
                     self.assertFalse(Path(str(prefix) + '.jar').exists())
@@ -180,6 +187,16 @@ class PublicationTest(unittest.TestCase):
                         self.assertFalse(generated or svm in classes)
                         with zipfile.ZipFile(str(prefix) + '.jar') as jar:
                             self.assertEqual(jar.read(service).decode().split(), ['dev.elide.truffledata.csv.kernel.jvm.FfmIndexer$Backend'])
+                # Musl modules also carry target-triple copies of every attachment; other modules do not.
+                for suffix in artifact_suffixes(module, classifiers):
+                    if classifier not in suffix:
+                        continue
+                    alias = Path(str(prefix) + suffix.replace('-' + classifier, '-' + TRIPLES[classifier], 1))
+                    if module in MUSL_MODULES:
+                        self.assertEqual(alias.read_bytes(), Path(str(prefix) + suffix).read_bytes())
+                        self.assertEqual(Path(str(alias) + '.sha256').read_text().strip(), hashlib.sha256(alias.read_bytes()).hexdigest())
+                    else:
+                        self.assertFalse(alias.exists())
                 if module == 'json':
                     self.assertTrue(Path(str(prefix) + '-%s.a' % classifier).read_bytes().startswith(b'!<arch>\n'))
                     self.assertEqual(Path(str(prefix) + '-%s-bitcode.a' % classifier).is_file(), bitcode)
@@ -194,6 +211,21 @@ class PublicationTest(unittest.TestCase):
             for module in MODULES:
                 versions = ET.parse(repo / 'dev/elide' / ('truffledata-' + module) / 'maven-metadata.xml').findall('versioning/versions/version')
                 self.assertEqual([v.text for v in versions], [version, '0.0.1'])
+
+    def test_musl_suffixes(self):
+        # CSV and YAML ship static-only musl archives (no shared library, no bitcode twin); JSON and Buffa do not.
+        self.assertEqual(set(MUSL_MODULES), {'csv-native', 'yaml'})
+        self.assertTrue(set(MUSL_MODULES) <= set(NATIVE_MODULES))
+        for module in NATIVE_MODULES:
+            suffixes = artifact_suffixes(module)
+            musl = {s for s in suffixes if '-musl' in s}
+            if module in MUSL_MODULES:
+                self.assertEqual(musl, {'-linux-x86_64-musl.a', '-linux-aarch64-musl.a'})
+            else:
+                self.assertEqual(musl, set())
+            self.assertEqual('-native.h' in suffixes, module in ('protobuf-buffa', 'csv-native'))
+        self.assertEqual(artifact_suffixes('yaml', ('linux-aarch64-musl',)), ('.pom', '.jar', '-sources.jar', '-javadoc.jar', '.module', '-linux-aarch64-musl.a'))
+        self.assertEqual(artifact_suffixes('json', ('linux-aarch64-musl',)), ('.pom', '.jar', '-sources.jar', '-javadoc.jar', '.module'))
 
     def test_unsafe_versions(self):
         for version in ('../escape', '1.0.0/<tag>', '', 'latest'):

@@ -23,6 +23,30 @@ final class YamlIntegrationTest {
             "yaml/native/yaml_shared.so");
   }
 
+  /** #40: the default (fused) duplicate check reports the repeated key, not the mapping's close. */
+  @Test
+  void duplicateKeysReportTheRepeatedKey() {
+    String[][] cases = {
+      {"a: 1\na: 2\n", "duplicate YAML key: a at line 2, column 1"},
+      {"x: 0\na: 1\na: 2\nz: 3\n", "duplicate YAML key: a at line 3, column 1"},
+      {"m:\n  k: 1\n  k: 2\nn: 3\n", "duplicate YAML key: k at line 3, column 3"},
+    };
+    for (YamlOptions options :
+        new YamlOptions[] {YamlOptions.DEFAULT, YamlOptions.DEFAULT.withMergeKeys(true)}) {
+      try (YamlSession session = YamlJvm.openSession(library(), options)) {
+        for (String[] c : cases) {
+          IllegalArgumentException failure =
+              assertThrows(
+                  IllegalArgumentException.class,
+                  () -> session.validate(c[0].getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+          assertEquals("YAML syntax error: " + c[1], failure.getMessage(), c[0]);
+        }
+        // The session still decodes after a relocated failure.
+        assertEquals(2L, (long) session.with(SvmAcceptance.bytes("a: 1\nb: 2\n"), v -> v.size()));
+      }
+    }
+  }
+
   @Test
   void sharedAcceptance() {
     try (YamlSession session = YamlJvm.openSession(library())) {
@@ -438,7 +462,7 @@ final class YamlIntegrationTest {
       var values = java.util.Objects.requireNonNull(result).values().iterator();
       assertSame(values.next(), values.next());
       assertEquals(2, keys.size());
-      assertThrows(UnsupportedOperationException.class, YamlSession::open);
+      assertThrows(UnsupportedOperationException.class, YamlSvm::open);
     }
   }
 

@@ -14,6 +14,16 @@ if [ -z "${BUILDBUDDY_API_KEY:-}" ]; then
 fi
 printf 'common --remote_header=x-buildbuddy-api-key=%s\n' "$BUILDBUDDY_API_KEY" > user.bazelrc
 printf 'common --config=ci\n' >> user.bazelrc
+# Host-execution jobs (--config=local: native targets, link and archive gates) still fetch repository
+# archives through BuildBuddy's checksum-verified download cache, with direct download as the fallback, so a
+# GitHub release outage (504s) does not fail them. Bazel only allows the downloader beside a gRPC cache, so the
+# cache is configured but neither read nor written for actions: host results stay out of it (the macOS cc
+# wrapper picks an SDK outside action keys) and nothing cached elsewhere is reused on the host.
+printf 'common:local --remote_cache=grpcs://remote.buildbuddy.io\n' >> user.bazelrc
+printf 'common:local --noremote_upload_local_results\n' >> user.bazelrc
+printf 'common:local --noremote_accept_cached\n' >> user.bazelrc
+printf 'common:local --experimental_remote_downloader=grpcs://remote.buildbuddy.io\n' >> user.bazelrc
+printf 'common:local --experimental_remote_downloader_local_fallback\n' >> user.bazelrc
 # Bazel attaches this to each invocation in BuildBuddy, before the next command overwrites it.
 # Keep credentials out of the execution log: they are RPC headers, never action environment variables.
 if [ -n "${RUNNER_TEMP:-}" ]; then

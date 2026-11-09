@@ -157,7 +157,8 @@ class string_map {
     for (size_t i = hash & (capacity_ - 1);; i = (i + 1) & (capacity_ - 1)) {
       const slot& s = slots_[i];
       if (s.value == UINT32_MAX) return UINT32_MAX;
-      if (s.hash == hash && s.length == key.size() && std::memcmp(strings + s.offset, key.data(), key.size()) == 0)
+      // An empty name (`& [`) compares no bytes; its string table may still be null (UBSan, fuzz finding).
+      if (s.hash == hash && s.length == key.size() && (key.empty() || std::memcmp(strings + s.offset, key.data(), key.size()) == 0))
         return s.value;
     }
   }
@@ -172,7 +173,7 @@ class string_map {
         ++used_;
         return;
       }
-      if (s.hash == hash && s.length == length && std::memcmp(strings + s.offset, strings + offset, length) == 0) {
+      if (s.hash == hash && s.length == length && (length == 0 || std::memcmp(strings + s.offset, strings + offset, length) == 0)) {
         s.value = value;
         s.offset = offset;
         return;
@@ -274,6 +275,7 @@ class handler : public c4::yml::EventHandlerStack<handler, handler_state> {
     input_ = input;
     length_ = length;
     newlines_ = newlines;
+    key_at_ = nullptr;
     pristine_ = pristine;
     rules_ = rules;
     limits_ = limits;
@@ -797,7 +799,9 @@ class handler : public c4::yml::EventHandlerStack<handler, handler_state> {
 
   void write_alias_key(uint32_t ordinal) {
     frame* f = top();
-    if (!f || f->kind != frame_kind::map) throw error(status_internal, "YAML key outside a mapping");
+    // rapidyaml 0.16.0 emits a key inside a flow sequence for an empty implicit key closed by
+    // the wrong bracket (`k: [1, : [1, 2]}`, fuzz finding): malformed input, not an invariant.
+    if (!f || f->kind != frame_kind::map) fail("YAML key outside a mapping");
     uint64_t target = alias_targets_[ordinal];
     uint32_t tag = myna_kind(writer_->words()[target]);
     if (tag == MYNA_VALUE_ARRAY || tag == MYNA_VALUE_OBJECT) {
@@ -1291,7 +1295,11 @@ class handler : public c4::yml::EventHandlerStack<handler, handler_state> {
 
   [[gnu::always_inline]] void write_text(std::string_view text, bool key = false, uint64_t span = 0, bool plain = false) {
     ct::span raw = unpack(span);
-    if (plain && in_input(text.data(), text.size()) && raw.offset == size_t(text.data() - input_) && raw.length == text.size())
+    // With a retained source the writer references the pristine copy, so a folded multi-line
+    // scalar ("d\ne" read as "d e") whose source span happens to match its length must not be
+    // served from the source: folding only happens across line breaks.
+    if (plain && in_input(text.data(), text.size()) && raw.offset == size_t(text.data() - input_) && raw.length == text.size() &&
+        (!pristine_ || !has_newline(newlines_, raw.offset, size_t(raw.offset) + raw.length)))
       writer_->string_ref(raw, ascii_text(text), key);
     else if (!pristine_ && in_input(text.data(), text.size()))
       writer_->string_ref({uint32_t(text.data() - input_), uint32_t(text.size())}, raw, ascii_text(text), key);
@@ -1438,12 +1446,19 @@ class handler : public c4::yml::EventHandlerStack<handler, handler_state> {
     std::string_view text(s.str ? s.str : "", s.len);
     taken_tag tag = take_tag();
     uint64_t span = lexical(s.str, s.len, style, empty);
+    // A quoted key's text starts after its opening quote, which in-place filtering leaves intact.
+    key_at_ = s.str;
+    if (key_at_ && (style == scalar_style::single_quoted || style == scalar_style::double_quoted) && in_input(key_at_ - 1, 1))
+      --key_at_;
     write_key(text, style, empty, tag, span);
+    key_at_ = nullptr;
   }
 
   void write_key(std::string_view text, scalar_style style, bool empty, taken_tag tag, uint64_t span) {
     frame* f = top();
-    if (!f || f->kind != frame_kind::map) throw error(status_internal, "YAML key outside a mapping");
+    // rapidyaml 0.16.0 emits a key inside a flow sequence for an empty implicit key closed by
+    // the wrong bracket (`k: [1, : [1, 2]}`, fuzz finding): malformed input, not an invariant.
+    if (!f || f->kind != frame_kind::map) fail("YAML key outside a mapping");
     (void)empty;
     scalar r;
     if (!(fast_paths_ && tag.kind == tag_kind::none && style == scalar_style::plain && schema_ == schema::core &&
@@ -1474,7 +1489,7 @@ class handler : public c4::yml::EventHandlerStack<handler, handler_state> {
       target = top();
     } else if (merge) {
       if (f.merge != none) {
-        if (!rules_.last_wins) duplicate(f);
+        if (!rules_.last_wins) duplicate(f, "<<");
         remove_merge_entry(f);
       }
     } else if (!fused_duplicates() && !f.keys.insert(memory_, hash, canonical)) {
@@ -1483,7 +1498,7 @@ class handler : public c4::yml::EventHandlerStack<handler, handler_state> {
         open_pair(f);
         target = top();
       } else if (!rules_.last_wins) {
-        duplicate(f);
+        duplicate(f, canonical);
       } else {
         remove_entry(f, canonical);
       }
@@ -1501,7 +1516,20 @@ class handler : public c4::yml::EventHandlerStack<handler, handler_state> {
     }
   }
 
-  [[noreturn]] void duplicate(frame&) { fail("duplicate YAML key"); }
+  // Reported at the repeated key (the scanner is on it), naming its canonical spelling.
+  [[noreturn]] void duplicate(frame&, std::string_view key) {
+    error failure = syntax_error("duplicate YAML key").with(key).at(line(), column());
+    // The scanner is past the key token; report where the key starts. The newline bitmap was
+    // taken before in-place filtering, so it still delimits source lines.
+    if (key_at_ && in_input(key_at_, 0)) {
+      size_t offset = size_t(key_at_ - input_), start = offset;
+      while (start > 0 && !has_newline(newlines_, start - 1, start)) --start;
+      uint64_t column = 1;
+      for (size_t i = start; i < offset; ++i) column += (static_cast<unsigned char>(input_[i]) & 0xC0) != 0x80;
+      failure.at(1 + count_newlines(newlines_, 0, offset), column);
+    }
+    throw failure;
+  }
 
   std::string_view stable_copy(std::string_view text) {
     if (text.empty()) return text;
@@ -1525,7 +1553,9 @@ class handler : public c4::yml::EventHandlerStack<handler, handler_state> {
   // A collection used as a key: a complex key (rejected, or a new pair of a pairs mapping).
   void open_key(uint32_t kind, uint32_t style, c4::yml::type_bits bits) {
     frame* f = top();
-    if (!f || f->kind != frame_kind::map) throw error(status_internal, "YAML key outside a mapping");
+    // rapidyaml 0.16.0 emits a key inside a flow sequence for an empty implicit key closed by
+    // the wrong bracket (`k: [1, : [1, 2]}`, fuzz finding): malformed input, not an invariant.
+    if (!f || f->kind != frame_kind::map) fail("YAML key outside a mapping");
     complex_key_start(*f);
     begin_collection(kind, style);
     if (m_parent) m_parent->has_children = true;
@@ -1587,7 +1617,8 @@ class handler : public c4::yml::EventHandlerStack<handler, handler_state> {
           return cached ? cached->keys[index++].hash : directory_hash(text);
         });
       }
-      catch (const ct::duplicate_key&) { duplicate(*f); }
+      // The mapping is closing: neither the key nor its position is known here (#40).
+      catch (const ct::duplicate_key&) { throw syntax_error("duplicate YAML key").relocated().at(line(), column()); }
     } else writer_->end(f->node, f->count);
     // A template only becomes reusable after its directory proves all keys distinct.
     if (f->record != no_template) finish_template(*f);
@@ -1860,6 +1891,7 @@ class handler : public c4::yml::EventHandlerStack<handler, handler_state> {
   uint8_t template_next_[template_levels] = {};
   bool fast_paths_ = true;
   bool fused_duplicates_ = true;
+  const char* key_at_ = nullptr;  // source start of the scalar key being placed, for error positions
 };
 
 }  // namespace truffledata::yaml

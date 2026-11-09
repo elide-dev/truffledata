@@ -70,6 +70,9 @@ config_setting(
     ],
 )
 
+# Myna names GNU Linux targets only. This seam uses libc-independent LP64 C scalars/pointers, so
+# musl consumes the same generated layout and fingerprint; the static-only musl archive is compiled
+# and executed in its own gates (//tools/release:yaml_archive_test, :yaml_musl_c_*).
 genrule(
     name = "bindings",
     srcs = ["yaml.seam"],
@@ -147,6 +150,16 @@ cc_library(
     }),
     visibility = ["//visibility:public"],
     deps = [":decoder"],
+)
+
+# The C ABI headers for consumers of the release archive (the isolated archive test).
+filegroup(
+    name = "header",
+    srcs = [
+        "api.h",
+        "generated/seam.h",
+    ],
+    visibility = ["//visibility:public"],
 )
 
 filegroup(
