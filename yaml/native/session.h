@@ -138,6 +138,27 @@ class session final {
   // Decodes zero or one document. Invalidates the previous borrowed document. On any exception the
   // session holds no document and stays reusable.
   document_view decode(const uint8_t* data, size_t length, uint32_t flags) {
+    try {
+      return decode_once(data, length, flags);
+    } catch (error& failure) {
+      if (!failure.relocate || !fused_) throw;
+    }
+    // #40: the fused duplicate check fails when the mapping closes, past the repeated key. Only on
+    // that failure path, decode again with per-key checks, which fail at the key and name it.
+    fused_duplicates(false);
+    try {
+      decode_once(data, length, flags);
+    } catch (...) {
+      fused_duplicates(true);
+      throw;
+    }
+    fused_duplicates(true);
+    recycle();
+    throw error(status_internal, "YAML duplicate key not found");
+  }
+
+ private:
+  document_view decode_once(const uint8_t* data, size_t length, uint32_t flags) {
     recycle();
     if (flags & ~(retain_source | want_directories)) throw error(status_argument, "unsupported YAML decode flags");
     if (length > storage_limit()) throw limit_error("input bytes");
@@ -200,6 +221,8 @@ class session final {
     return current(length, memory_.allocations() - before);
   }
 
+ public:
+
   // A bound from actual decoded strings, including canonical and aliased mapping keys. Input
   // length alone does not bound these strings: a long anchored scalar can become many keys.
   size_t text_capacity() const {
@@ -236,7 +259,7 @@ class session final {
   bool live() const { return live_; }
   // Test hook (handler::fast_paths): false decodes through the general scalar paths only.
   void fast_paths(bool on) { handler_.fast_paths(on); }
-  void fused_duplicates(bool on) { handler_.fused_duplicates(on); }
+  void fused_duplicates(bool on) { fused_ = on; handler_.fused_duplicates(on); }
   // Invalidates the borrowed document without freeing: O(1), no allocation, no exception.
   void reset() noexcept { live_ = false; }
 
@@ -349,6 +372,7 @@ class session final {
   const char* source_ = nullptr;
   size_t source_length_ = 0;
   bool live_ = false;
+  bool fused_ = true;  // mirrors handler_.fused_duplicates (benchmarks and tests switch it off)
 };
 
 }  // namespace truffledata::yaml

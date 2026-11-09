@@ -274,6 +274,7 @@ class handler : public c4::yml::EventHandlerStack<handler, handler_state> {
     input_ = input;
     length_ = length;
     newlines_ = newlines;
+    key_at_ = nullptr;
     pristine_ = pristine;
     rules_ = rules;
     limits_ = limits;
@@ -1430,7 +1431,12 @@ class handler : public c4::yml::EventHandlerStack<handler, handler_state> {
     std::string_view text(s.str ? s.str : "", s.len);
     taken_tag tag = take_tag();
     uint64_t span = lexical(s.str, s.len, style, empty);
+    // A quoted key's text starts after its opening quote, which in-place filtering leaves intact.
+    key_at_ = s.str;
+    if (key_at_ && (style == scalar_style::single_quoted || style == scalar_style::double_quoted) && in_input(key_at_ - 1, 1))
+      --key_at_;
     write_key(text, style, empty, tag, span);
+    key_at_ = nullptr;
   }
 
   void write_key(std::string_view text, scalar_style style, bool empty, taken_tag tag, uint64_t span) {
@@ -1466,7 +1472,7 @@ class handler : public c4::yml::EventHandlerStack<handler, handler_state> {
       target = top();
     } else if (merge) {
       if (f.merge != none) {
-        if (!rules_.last_wins) duplicate(f);
+        if (!rules_.last_wins) duplicate(f, "<<");
         remove_merge_entry(f);
       }
     } else if (!fused_duplicates() && !f.keys.insert(memory_, hash, canonical)) {
@@ -1475,7 +1481,7 @@ class handler : public c4::yml::EventHandlerStack<handler, handler_state> {
         open_pair(f);
         target = top();
       } else if (!rules_.last_wins) {
-        duplicate(f);
+        duplicate(f, canonical);
       } else {
         remove_entry(f, canonical);
       }
@@ -1493,7 +1499,20 @@ class handler : public c4::yml::EventHandlerStack<handler, handler_state> {
     }
   }
 
-  [[noreturn]] void duplicate(frame&) { fail("duplicate YAML key"); }
+  // Reported at the repeated key (the scanner is on it), naming its canonical spelling.
+  [[noreturn]] void duplicate(frame&, std::string_view key) {
+    error failure = syntax_error("duplicate YAML key").with(key).at(line(), column());
+    // The scanner is past the key token; report where the key starts. The newline bitmap was
+    // taken before in-place filtering, so it still delimits source lines.
+    if (key_at_ && in_input(key_at_, 0)) {
+      size_t offset = size_t(key_at_ - input_), start = offset;
+      while (start > 0 && !has_newline(newlines_, start - 1, start)) --start;
+      uint64_t column = 1;
+      for (size_t i = start; i < offset; ++i) column += (static_cast<unsigned char>(input_[i]) & 0xC0) != 0x80;
+      failure.at(1 + count_newlines(newlines_, 0, offset), column);
+    }
+    throw failure;
+  }
 
   std::string_view stable_copy(std::string_view text) {
     if (text.empty()) return text;
@@ -1579,7 +1598,8 @@ class handler : public c4::yml::EventHandlerStack<handler, handler_state> {
           return cached ? cached->keys[index++].hash : directory_hash(text);
         });
       }
-      catch (const ct::duplicate_key&) { duplicate(*f); }
+      // The mapping is closing: neither the key nor its position is known here (#40).
+      catch (const ct::duplicate_key&) { throw syntax_error("duplicate YAML key").relocated().at(line(), column()); }
     } else writer_->end(f->node, f->count);
     // A template only becomes reusable after its directory proves all keys distinct.
     if (f->record != no_template) finish_template(*f);
@@ -1852,6 +1872,7 @@ class handler : public c4::yml::EventHandlerStack<handler, handler_state> {
   uint8_t template_next_[template_levels] = {};
   bool fast_paths_ = true;
   bool fused_duplicates_ = true;
+  const char* key_at_ = nullptr;  // source start of the scalar key being placed, for error positions
 };
 
 }  // namespace truffledata::yaml

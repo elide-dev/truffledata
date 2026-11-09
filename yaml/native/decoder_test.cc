@@ -140,8 +140,27 @@ void duplicate_keys_after_resolution() {
   for (const char* doc : {"{1: a, 0x1: b}", "{1: a, \"1\": b}", "{null: a, ~: b}", "{a: 1, \"a\": 2}", "{0o17: a, 15: b}",
                           "{1.5: a, 1.50: b}", "a: 1\nb: 2\na: 3\n", "{\"\": a, ~: b}"}) {
     error e = failure(s, doc);
-    require(e.code == status_syntax && std::string(e.what()) == "duplicate YAML key");
+    require(e.code == status_syntax && std::string(e.what()).rfind("duplicate YAML key: ", 0) == 0);
   }
+  // #40: reported at the repeated key and naming it, not where its mapping closes.
+  struct located { const char* doc; uint64_t line, column; const char* message; };
+  for (located c : {located{"a: 1\na: 2\n", 2, 1, "duplicate YAML key: a"},
+                    located{"x: 0\na: 1\na: 2\nz: 3\n", 3, 1, "duplicate YAML key: a"},
+                    located{"m:\n  k: 1\n  k: 2\nn: 3\n", 3, 3, "duplicate YAML key: k"},
+                    located{"{1: a, 0x1: b}", 1, 8, "duplicate YAML key: 1"},
+                    located{"q: 1\n'q': 2\n", 2, 1, "duplicate YAML key: q"},
+                    located{"t: >\n  folded\n  text\nk: 1\n  # c\nk: 2\n", 6, 1, "duplicate YAML key: k"},
+                    located{"[{\u00e9: 1, \u00e9: 2}]", 1, 9, "duplicate YAML key: \u00e9"}}) {
+    error e = failure(s, c.doc);
+    if (e.code != status_syntax || e.relocate || std::string(e.what()) != c.message || e.line != c.line ||
+        e.column != c.column)
+      std::fprintf(stderr, "%s -> %s at %llu:%llu\n", c.doc, e.what(), (unsigned long long)e.line,
+                   (unsigned long long)e.column);
+    require(e.code == status_syntax && !e.relocate && std::string(e.what()) == c.message);
+    require(e.line == c.line && e.column == c.column);
+  }
+  // The session keeps the fused check after a relocated failure.
+  require(ct::field(decode(s, "a: 1\nb: 2\n").view.words[0]) == 2);
   // Many keys move the table from the inline array to open addressing.
   std::string wide = "{";
   for (int i = 0; i < 100; ++i) wide += "k" + std::to_string(i) + ": " + std::to_string(i) + ", ";
