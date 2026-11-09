@@ -89,6 +89,13 @@ Jazzer instrumentation is Java fuzz coverage, not ASan instrumentation of the JV
   `decoder_test`, `stream_test`, and `yaml/native/corpus/session/{explicit-key-eof,empty-key-eof,explicit-key-eof-found}`.
   The upstream behaviour is worth reporting to rapidyaml; the decoder-side check stays regardless.
 
+- **YAML: bare tag after a closed root collection** (first PR campaign after the fix above,
+  3,137 executions; reproducer `a:(\xc8&a [wo]\n!bo\n\n`, whose failing step is the suffix
+  `[wo]\n!bo\n`). rapidyaml 0.16.0 emits a second root node (`=VAL <!bo> :`) instead of a parse
+  error. The decoder already refused a second root, but as `status_internal`, which the harness
+  treats as unexpected. A document holds one root node, so this is now a syntax error.
+  Regressions: `decoder_test` and `yaml/native/corpus/session/{root-then-tag,root-then-tag-found}`.
+
 Harness aborts print the reason (unexpected status and message, or the tape validator's
 diagnostic) before `abort()`, so a libFuzzer "deadly signal" can be triaged from its log.
 

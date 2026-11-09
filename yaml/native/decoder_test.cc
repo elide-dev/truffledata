@@ -118,6 +118,11 @@ void values() {
     require(e.code == status_syntax && e.parser && std::string(e.what()) == "missing terminating ]");
   }
   require(failure(s, "[: ").code == status_syntax);  // rapidyaml's own parse error
+  // A bare tag after a closed root collection: rapidyaml emits a second root node (fuzz finding).
+  for (const char* two : {"[wo]\n!bo\n", "[wo] !bo\n", "{a: b}\n!t\n", "\"q\"\n!t\n"}) {
+    error e = failure(s, two);
+    require(e.code == status_syntax && std::string(e.what()) == "YAML second root value");
+  }
   // Keys keep the resolved kind in yaml_meta bits 5-7.
   auto d = decode(s, "{~: a, true: b, 0x1F: c, 1.50: d, s: e, \"1\": f}");
   require(render(d.view) == "{\"\":\"a\",\"true\":\"b\",\"31\":\"c\",\"1.5\":\"d\",\"s\":\"e\",\"1\":\"f\"}");
