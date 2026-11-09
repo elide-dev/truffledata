@@ -4,6 +4,8 @@ def _impl(ctx):
     ctx.download_and_extract(url = ctx.attr.base_urls, sha256 = ctx.attr.base_sha256, stripPrefix = "elide-toolchain")
     ctx.download_and_extract(url = ctx.attr.addon_urls, sha256 = ctx.attr.addon_sha256, stripPrefix = "elide-toolchain")
     wrapper = ctx.read(ctx.attr.base_wrapper)
+    if wrapper.count('exec "$here/bin/clang"') != 1:
+        fail("elide toolchain cc wrapper changed shape; the ASan sysroot rewrite would not apply")
     wrapper = wrapper.replace('exec "$here/bin/clang"', 'set -- "$@" --sysroot="$here/sysroot/x86_64-unknown-linux-gnu+asan" -isystem "$here/include/x86_64-unknown-linux-gnu/asan/c++/v1" -L"$here/lib/x86_64-unknown-linux-gnu/asan"\nexec "$here/bin/clang"')
     ctx.file("cc", wrapper, executable = True)
     ctx.file("BUILD.bazel", ctx.read(ctx.attr.build_file) + '\ntoolchain(name = "asan", toolchain = ":cc_toolchain", toolchain_type = "@bazel_tools//tools/cpp:toolchain_type", exec_compatible_with = ["@platforms//os:linux", "@platforms//cpu:x86_64"], target_compatible_with = ["@platforms//os:linux", "@platforms//cpu:x86_64"])\n')
