@@ -722,6 +722,65 @@ CSV_SVM_ARGS = [
     ]
 ]
 
+# Symbol-bearing CSV images for diagnosis only (never measured for timing): the AOT symbol gate
+# (P0.6) and callgrind instruction profiles (`--profile`, plan 2026-11-08-beat-stock-svm P0.5).
+# They mirror consumer_profile (-H:-DeleteLocalSymbols, frame pointers) over the csv_svm flags;
+# csv_profile_debug adds -g so callgrind can attribute inlined code to source lines.
+[
+    native_image(
+        name = name,
+        testonly = True,
+        cc_deps = ["//csv/native:truffledata_csv"],
+        debug = debug,
+        exec_properties = {
+            "EstimatedCPU": "8",
+            "EstimatedMemory": "24GB",
+        },
+        executable_name = executable,
+        extra_args = CSV_SVM_ARGS + [
+            "-march=compatibility",
+            "-H:+UnlockExperimentalVMOptions",
+            "-H:-DeleteLocalSymbols",
+            "-H:+PreserveFramePointer",
+            "-H:-UnlockExperimentalVMOptions",
+        ],
+        graalvm_sdk = "@graalvm_linux_amd64//:gvm",
+        main_class = "dev.elide.truffledata.comparison.CsvComparisonSvm",
+        optimization_mode = "2",
+        tags = ["manual"],
+        target_compatible_with = [
+            "@platforms//os:linux",
+            "@platforms//cpu:x86_64",
+        ],
+        deps = [":csv_comparison_svm"],
+    )
+    for name, executable, debug in [
+        ("csv_profile", "csv-comparison-profile", False),
+        ("csv_profile_debug", "csv-comparison-profile-debug", True),
+    ]
+]
+
+# AOT symbol gate (P0.6) over the CSV framing loops and batch writers; shape only, no timing.
+sh_test(
+    name = "csv_aot_symbols",
+    size = "medium",
+    srcs = ["aot_symbols.sh"],
+    args = [
+        "$(rootpath :csv_profile)",
+        "$(rootpath csv_aot_budgets.json)",
+    ],
+    data = [
+        "csv_aot_budgets.json",
+        ":csv_profile",
+        "//tools/bench:aot_symbols.py",
+    ],
+    tags = ["manual"],
+    target_compatible_with = [
+        "@platforms//os:linux",
+        "@platforms//cpu:x86_64",
+    ],
+)
+
 CSV_JVM_FLAGS = [
     "--add-modules=jdk.incubator.vector",
     "--enable-native-access=ALL-UNNAMED",

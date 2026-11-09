@@ -17,7 +17,7 @@ The comparison cell for the CSV backend (plan Task 7, expanded). It measures the
 kernels (`csv/native`, `csv/kernel`) and the current pure-Java scanner against the Java CSV field
 and native references, on identical bytes and on the same worker.
 
-The latest paired change qualification is
+The latest paired change qualification is [`csv-writers-afa4aa5/`](../results/csv-writers-afa4aa5/README.md); the previous one is
 [`csv-span-only-20261108/`](../results/csv-span-only-20261108/README.md).
 The latest full cross-runtime matrix, with raw samples, hosts, binary hashes and caveats,
 is [`csv-3f23d0c/`](../results/csv-3f23d0c/README.md); earlier matrices are
@@ -73,6 +73,35 @@ worker.
   - SimpleFlatMapper: unmaintained.
   - zsv: would need a third-party C build. The csv/native kernel is itself the simdcsv design
     (simdjson stage 1), so `native-indexed-scan` stands in for that class.
+
+## Plain framing, staged column writers and getString (WS10, 2026-11-08)
+
+`afa4aa5` frames every batch with the scan loop (`framePlain`): while the index scan frames, a
+complete valid record only copies its spans into per-thread 64-row chunks, and each field is
+converted (or, for STRING, shifted) over the chunk in one monomorphic pass; declined records and
+per-byte scans take the per-record path after the staged rows convert, so diagnostics and their
+order are unchanged. `Numbers.dot` drops two software popcounts, and `getString` builds its
+String in one host-inlining root. The fused and span-only loops are gone.
+
+Paired x86 SVM against the preserved `e650d87` image, all eight shards, three forks
+([invocation ab5c9c3b](https://app.buildbuddy.io/invocation/ab5c9c3b-216c-497d-afb0-7d01d2f41b2c)),
+1 MiB native index:
+
+| Cell | Before GB/s | After GB/s | Time ratio | vs FastCSV after |
+|---|---:|---:|---:|---:|
+| typed numeric | 0.3233 | 0.3804 | 0.850 | 3.54× |
+| typed mixed | 0.4841 | 0.5468 | 0.885 | 3.15× |
+| copied strings numeric | 0.2316 | 0.2779 | 0.833 | 0.93× |
+| copied strings mixed | 0.2737 | 0.3246 | 0.843 | 1.03× |
+| owned strings numeric | 0.2606 | 0.3176 | 0.821 | 1.06× |
+| owned strings mixed | 0.3114 | 0.3767 | 0.827 | 1.19× |
+
+Every listed range separates; 128 MiB typed improves 12.8–13.2%, long quoted/escaped strings
+0–5%. Bytes/row, compiled read graphs and read-allocation gates are unchanged; competitors stay
+within ±2.3% (`kernel-native` typed gains 3.3% because it shares `Numbers`). The plan's typed
+≥0.7 GB/s and copied-strings ≥0.35 GB/s hypotheses are not reached. Instruction attribution,
+AOT shapes, the rejected conversion-only probe and all raw records:
+[`csv-writers-afa4aa5/`](../results/csv-writers-afa4aa5/README.md).
 
 ## Admitted span-only SVM follow-up (2026-11-08)
 

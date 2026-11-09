@@ -2,6 +2,7 @@ package dev.elide.truffledata.csv;
 
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
+import com.oracle.truffle.api.HostCompilerDirectives.BytecodeInterpreterSwitch;
 import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.interop.InvalidArrayIndexException;
 import com.oracle.truffle.api.interop.TruffleObject;
@@ -178,6 +179,11 @@ public final class CsvBatch implements TruffleObject, AutoCloseable {
     return booleans[row];
   }
 
+  /**
+   * {@link CsvRow#getString}: a host-inlining root, so Native Image inlines the Latin-1 test and
+   * the String construction for plain spans instead of calling through {@link Utf8#string}.
+   */
+  @BytecodeInterpreterSwitch
   String stringAt(int row, int column) {
     long[] v = columns[column].presentSpans;
     if (row >= v.length) return stringSlow(row, column);
