@@ -128,7 +128,7 @@ def run():
         jobs.extend((route, fork) for route in order)
     records = []
     for route, fork in jobs:
-        result = subprocess.run([str(binary), '-Xmx1g', '-XX:+UseSerialGC', route],
+        result = subprocess.run([str(binary), '-Xmx1g', route],
                                 capture_output=True, text=True, timeout=600, check=False)
         (logs / f'{route}-{fork}.stderr').write_text(result.stderr)
         (logs / f'{route}-{fork}.stdout').write_text(result.stdout)
