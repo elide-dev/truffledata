@@ -14,7 +14,6 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -55,8 +54,12 @@ final class JavaDecoder implements YamlEvents {
     @Nullable ArrayList<Node> children;
     // Aliases.
     @Nullable Node target;
+    // A key's value node, once attached.
+    @Nullable Node value;
     int index = -1;
-    boolean dead;
+    // Removed by a rewrite; anchored (an anchor names it) or targeted (an alias resolves to it)
+    // nodes may not be removed, which is checked as each node is marked.
+    boolean dead, anchored, targeted;
 
     Node(int type) {
       this.type = type;
@@ -73,7 +76,10 @@ final class JavaDecoder implements YamlEvents {
     final boolean map;
     final Tag tag;
     final int anchor;
-    final HashSet<String> keys = new HashSet<>();
+    // Canonical key text to its live key node: duplicate checks and LAST_WINS lookups are O(1).
+    final HashMap<String, Node> keys = new HashMap<>();
+    // Entries erased by LAST_WINS stay in the child list, marked dead, until the mapping closes.
+    boolean erased;
     // Offset of the first content byte (past properties): `{` for a flow mapping written with
     // braces; a single-pair mapping inside a flow sequence starts at its key instead.
     final int content;
@@ -215,6 +221,7 @@ final class JavaDecoder implements YamlEvents {
     if (anchor == null) return -1;
     int id = anchorNodes.size();
     anchorNodes.add(node);
+    node.anchored = true;
     anchorNames.add(anchor);
     anchorOpen.add(open);
     bindings.put(anchor, id);
@@ -232,6 +239,7 @@ final class JavaDecoder implements YamlEvents {
   }
 
   private int addAliasTarget(Node target) {
+    target.targeted = true;
     aliasTargets.add(target);
     return aliasTargets.size() - 1;
   }
@@ -441,9 +449,12 @@ final class JavaDecoder implements YamlEvents {
         f.merge = null;
         erase(f, previous);
       }
-    } else if (!f.keys.add(canonical)) {
-      if (!lastWins) throw duplicate(canonical);
-      erase(f, findKey(f, canonical));
+    } else {
+      Node previous = f.keys.get(canonical);
+      if (previous != null) {
+        if (!lastWins) throw duplicate(canonical);
+        erase(f, previous);
+      }
     }
     byte[] text = canonical.getBytes(StandardCharsets.UTF_8);
     charge(text.length);
@@ -458,6 +469,7 @@ final class JavaDecoder implements YamlEvents {
     if (define(anchor, key, false) >= 0) key.meta |= ANCHORED;
     f.node.children().add(key);
     if (merge) f.merge = key;
+    else f.keys.put(canonical, key);
     f.value = true;
   }
 
@@ -466,43 +478,43 @@ final class JavaDecoder implements YamlEvents {
     return fail("duplicate YAML key: " + key);
   }
 
-  private static Node findKey(Frame f, String canonical) {
-    byte[] text = canonical.getBytes(StandardCharsets.UTF_8);
-    List<Node> children = f.node.children();
-    for (int i = 0; i + 1 < children.size(); i += 2) {
-      Node key = children.get(i);
-      if (key != f.merge && java.util.Arrays.equals(key.text, text)) return key;
-    }
-    throw JavaFailure.internal("YAML duplicate key not found");
-  }
-
-  /** DuplicateKeys.LAST_WINS: removes the entry of {@code key}; it may hold no anchor or alias target. */
+  /**
+   * DuplicateKeys.LAST_WINS: removes the entry of {@code key}; it may hold no anchor or alias
+   * target. The entry is marked dead in O(its size) and dropped when the mapping closes, so many
+   * duplicates stay linear. Its nodes leave the value budget as the native writer's erase does;
+   * its text stays charged.
+   */
   private void erase(Frame f, Node key) {
-    List<Node> children = f.node.children();
-    int at = children.indexOf(key);
-    Node value = children.get(at + 1);
-    mark(key);
-    mark(value);
-    forbidRemoved("YAML duplicate key removes an anchored node");
-    values -= count(key) + count(value);
-    children.remove(at + 1);
-    children.remove(at);
+    struck = false;
+    long removed = kill(key, true) + kill(java.util.Objects.requireNonNull(key.value), true);
+    if (struck) throw fail("YAML duplicate key removes an anchored node");
+    values -= removed;
+    f.erased = true;
   }
 
-  private static void mark(Node node) {
+  // Set by kill() when it marks an anchored or alias-target node.
+  private boolean struck;
+
+  /** Marks {@code node} (and its subtree when {@code subtree}) removed; returns the nodes marked. */
+  private long kill(Node node, boolean subtree) {
     node.dead = true;
-    if (node.children != null) for (Node child : node.children) mark(child);
-  }
-
-  private static long count(Node node) {
+    struck |= node.anchored || node.targeted;
     long n = 1;
-    if (node.children != null) for (Node child : node.children) n += count(child);
+    if (subtree && node.children != null) for (Node child : node.children) n += kill(child, true);
     return n;
   }
 
-  private void forbidRemoved(String why) {
-    for (Node anchored : anchorNodes) if (anchored.dead) throw fail(why);
-    for (Node target : aliasTargets) if (target.dead) throw fail(why);
+  /** Drops the entries erased by LAST_WINS, once, when the mapping closes. */
+  private static void compact(Frame f) {
+    if (!f.erased) return;
+    List<Node> children = f.node.children();
+    int out = 0;
+    for (int i = 0; i + 1 < children.size(); i += 2) {
+      if (children.get(i).dead) continue;
+      children.set(out++, children.get(i));
+      children.set(out++, children.get(i + 1));
+    }
+    children.subList(out, children.size()).clear();
   }
 
   // ---- collections ------------------------------------------------------------------------------
@@ -586,6 +598,7 @@ final class JavaDecoder implements YamlEvents {
     position = mark;
     Frame f = frames.pop();
     if (f.complex) throw fail("YAML complex key");
+    compact(f);
     if (f.map && f.merge != null) merge(f);
     validateShape(f);
     if (f.anchor >= 0) anchorOpen.set(f.anchor, false);
@@ -593,8 +606,13 @@ final class JavaDecoder implements YamlEvents {
   }
 
   private void attach(@Nullable Frame f, Node node) {
-    if (f == null) root = node;
-    else f.node.children().add(node);
+    if (f == null) {
+      root = node;
+      return;
+    }
+    List<Node> children = f.node.children();
+    if (f.map) children.get(children.size() - 1).value = node;
+    children.add(node);
   }
 
   private static void childDone(@Nullable Frame f) {
@@ -642,8 +660,10 @@ final class JavaDecoder implements YamlEvents {
     } else {
       addSource(mergeValue, sources, inline);
     }
-    long before = 0;
-    for (Node child : children) before += count(child);
+    // Nodes removed and added by the rewrite; anchors and alias targets among the removed ones are
+    // detected as they are marked, and both are reported after the rewrite, as merge.h does.
+    long removed = 0, added = 0;
+    struck = false;
     ArrayList<Node> rewritten = new ArrayList<>(children.size());
     long entries = 0;
     for (int i = 0; i < children.size(); i += 2) {
@@ -654,20 +674,19 @@ final class JavaDecoder implements YamlEvents {
         entries++;
         continue;
       }
-      mergeKey.dead = true;
-      mergeValue.dead = true;
-      if (mergeValue.type == Node.SEQ) for (Node element : mergeValue.children()) element.dead = true;
+      removed += kill(mergeKey, false) + kill(mergeValue, false);
+      if (mergeValue.type == Node.SEQ) for (Node element : mergeValue.children()) removed += kill(element, false);
       for (Node source : sources) {
         boolean moved = inline.contains(source);
-        source.dead |= moved;
+        if (moved && !source.dead) removed += kill(source, false);
         List<Node> entriesOf = source.children();
         for (int j = 0; j < entriesOf.size(); j += 2) {
           Node kj = entriesOf.get(j), vj = entriesOf.get(j + 1);
           String text = new String(java.util.Objects.requireNonNull(kj.text), StandardCharsets.UTF_8);
           // An inline source's key node is replaced by its copy; its value moves when merged.
-          if (moved) kj.dead = true;
-          if (!f.keys.add(text)) {
-            if (moved) mark(vj);
+          if (moved) removed += kill(kj, false);
+          if (f.keys.containsKey(text)) {
+            if (moved) removed += kill(vj, true);
             continue;
           }
           Node copy = new Node(Node.SCALAR);
@@ -677,7 +696,9 @@ final class JavaDecoder implements YamlEvents {
           copy.span = kj.span;
           copy.inputRef = kj.inputRef;
           copy.meta = kj.meta & ~ANCHORED;
+          f.keys.put(text, copy);
           rewritten.add(copy);
+          added++;
           if (moved) {
             rewritten.add(vj);
           } else {
@@ -689,17 +710,16 @@ final class JavaDecoder implements YamlEvents {
             ref.target = target;
             ref.meta = ALIAS | addAliasTarget(target) << TAG_SHIFT;
             rewritten.add(ref);
+            added++;
           }
           entries++;
         }
       }
     }
-    forbidRemoved("YAML merge removes an anchored node");
-    long after = 0;
-    for (Node child : rewritten) after += count(child);
-    values -= before;
-    if (after > limits.maxNodes() - values) throw limit("tape value limit");
-    values += after;
+    if (struck) throw fail("YAML merge removes an anchored node");
+    values -= removed;
+    if (added > limits.maxNodes() - values) throw limit("tape value limit");
+    values += added;
     children.clear();
     children.addAll(rewritten);
     if (entries * 2 != children.size()) throw JavaFailure.internal("YAML merge entry count");

@@ -29,6 +29,9 @@ final class JavaStream {
   private final int bufferBytes;
   private byte[] data = new byte[0];
   private int size, start, scan, boundary;
+  // Bytes [scan, lineFrom) of the current partial line are known to hold no LF, so a long line fed
+  // in small chunks is searched once, not once per chunk.
+  private int lineFrom;
   private boolean complete, documentOpen, finished;
   private int failed;
   private @Nullable JavaFailure lastError;
@@ -39,16 +42,21 @@ final class JavaStream {
     this.bufferBytes = bufferBytes > 0 ? bufferBytes : 4096;
   }
 
-  /** Appends up to {@code length} bytes; fewer than offered means the buffer is full. */
-  int feed(byte[] bytes, int offset, int length) {
+  /** Bytes the next {@link #feed} accepts at most (0 once finished or failed). */
+  int room() {
     if (finished || failed != 0) return 0;
-    compact();
     long pending = size - start;
     long limit = bufferBytes;
     // An open document may grow the buffer, a buffer at a time, up to maxDocument + 1.
     if (!complete && pending >= limit) limit = Math.min(pending + bufferBytes, (long) maxDocument + 1);
-    long room = pending < limit ? limit - pending : 0;
-    int take = (int) Math.min(length, room);
+    return (int) Math.min(Integer.MAX_VALUE - 8, pending < limit ? limit - pending : 0);
+  }
+
+  /** Appends up to {@code length} bytes; fewer than offered means the buffer is full. */
+  int feed(byte[] bytes, int offset, int length) {
+    if (finished || failed != 0) return 0;
+    compact();
+    int take = Math.min(length, room());
     if (take == 0) return 0;
     reserve(size + take);
     System.arraycopy(bytes, offset, data, size, take);
@@ -131,12 +139,15 @@ final class JavaStream {
     while (!complete && scan < size) {
       int line = scan, left = size - scan;
       int lf = -1;
-      for (int i = line; i < size; i++)
+      for (int i = Math.max(line, lineFrom); i < size; i++)
         if (data[i] == '\n') {
           lf = i;
           break;
         }
-      if (lf < 0 && !finished) return;
+      if (lf < 0 && !finished) {
+        lineFrom = size;
+        return;
+      }
       int length = lf >= 0 ? lf - line + 1 : left;
       int body = line, bodyLeft = length;
       if (bodyLeft >= 3 && (data[body] & 255) == 0xEF && (data[body + 1] & 255) == 0xBB
@@ -197,6 +208,7 @@ final class JavaStream {
     if (keep > 0) System.arraycopy(data, start, data, 0, keep);
     size = keep;
     scan -= start;
+    lineFrom = Math.max(0, lineFrom - start);
     if (complete) boundary -= start;
     start = 0;
   }

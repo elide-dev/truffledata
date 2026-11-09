@@ -62,6 +62,8 @@ final class JavaSessionBackend extends YamlSession.Backend {
   protected void decode(MemorySegment data, long length) {
     if (length < 0 || length > data.byteSize() || length > Integer.MAX_VALUE - 8)
       throw new IllegalArgumentException("Expected a bounded YAML segment");
+    // Checked before copying: a segment is never copied past the input budget.
+    if (length > options.limits().maxInputBytes()) throw JavaFailure.limit("input bytes", 0, 0).raise();
     byte[] bytes = data.asSlice(0, length).toArray(ValueLayout.JAVA_BYTE);
     decode(bytes, 0, bytes.length, YamlSession.UTF8, null);
   }
@@ -146,9 +148,12 @@ final class JavaSessionBackend extends YamlSession.Backend {
 
   @Override
   protected long streamFeed(long stream, MemorySegment data) {
-    long length = Math.min(data.byteSize(), Integer.MAX_VALUE - 8);
-    byte[] bytes = data.asSlice(0, length).toArray(ValueLayout.JAVA_BYTE);
-    return stream(stream).feed(bytes, 0, bytes.length);
+    // Copy only what the stream accepts now, as td_yaml_stream_feed returns the accepted count.
+    JavaStream open = stream(stream);
+    long take = Math.min(data.byteSize(), open.room());
+    if (take == 0) return 0;
+    byte[] bytes = data.asSlice(0, take).toArray(ValueLayout.JAVA_BYTE);
+    return open.feed(bytes, 0, bytes.length);
   }
 
   @Override
