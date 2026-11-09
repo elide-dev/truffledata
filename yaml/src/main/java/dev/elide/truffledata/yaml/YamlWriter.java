@@ -78,6 +78,7 @@ public final class YamlWriter implements TapeSink, AutoCloseable {
   /** Anchor tokens written in this document, by their output names. */
   private final Map<Object, String> tokenNames = new HashMap<>();
   private final Set<String> usedNames = new HashSet<>();
+  private final Map<String, Integer> nextSuffix = new HashMap<>();
   /** Explicit anchor names to their latest definition's token. */
   private final Map<String, Object> latest = new HashMap<>();
 
@@ -380,6 +381,7 @@ public final class YamlWriter implements TapeSink, AutoCloseable {
     markerOnLine = false;
     tokenNames.clear();
     usedNames.clear();
+    nextSuffix.clear();
     latest.clear();
   }
 
@@ -467,10 +469,13 @@ public final class YamlWriter implements TapeSink, AutoCloseable {
     if (token != null) {
       String name = Objects.requireNonNull(pendingAnchor);
       // Sorting can reorder a redefined name around its aliases: each definition gets its own.
+      // The next suffix is remembered per name, so redefinitions stay linear overall.
       if (options.sortKeys() && usedNames.contains(name)) {
-        int n = 2;
-        while (usedNames.contains(name + "_" + n)) n++;
-        name = name + "_" + n;
+        String base = name;
+        int n = nextSuffix.getOrDefault(base, 2);
+        while (usedNames.contains(base + "_" + n)) n++;
+        nextSuffix.put(base, n + 1);
+        name = base + "_" + n;
       }
       usedNames.add(name);
       tokenNames.put(token, name);
