@@ -1,8 +1,8 @@
 package dev.elide.truffledata.buffa;
 
 import dev.elide.truffledata.protobuf.CellsFixtures;
-import dev.elide.truffledata.protobuf.ProtoPlan;
 import dev.elide.truffledata.protobuf.Projection;
+import dev.elide.truffledata.protobuf.ProtoPlan;
 import dev.elide.truffledata.protobuf.SlabLimits;
 import dev.elide.truffledata.protobuf.SlabMessage;
 import java.nio.file.Path;
@@ -182,8 +182,7 @@ public final class CellsParity {
       int flags = projection == null ? 1 : projection.decodeFlags();
       try {
         int written =
-            backend.writeSlab(
-                backend.prepareSlab(compiled), input, output, limits, flags, program);
+            backend.writeSlab(backend.prepareSlab(compiled), input, output, limits, flags, program);
         byte[] bytes = new byte[Math.max(0, written)];
         output.lease.bytes.duplicate().get(bytes);
         return "ok " + written + " " + HexFormat.of().formatHex(bytes);
@@ -215,7 +214,12 @@ public final class CellsParity {
   private static void equal(String cell, String expected, String actual) {
     if (!expected.equals(actual))
       throw new AssertionError(
-          "Cells route differs at " + cell + "\n  reference " + expected + "\n  cells     " + actual);
+          "Cells route differs at "
+              + cell
+              + "\n  reference "
+              + expected
+              + "\n  cells     "
+              + actual);
   }
 
   private static void check(boolean condition, String message) {

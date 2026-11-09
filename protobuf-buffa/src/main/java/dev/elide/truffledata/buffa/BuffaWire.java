@@ -123,7 +123,8 @@ public final class BuffaWire implements AutoCloseable {
     } else if (library != null && Files.isRegularFile(library)) {
       try {
         return new BuffaWire(
-            CellsRoute.ENABLED ? CellsRoute.jvm(library) : new FfmBackend(library), Selected.JVM_FFM);
+            CellsRoute.ENABLED ? CellsRoute.jvm(library) : new FfmBackend(library),
+            Selected.JVM_FFM);
       } catch (UnsatisfiedLinkError
           | IllegalCallerException
           | UnsupportedOperationException

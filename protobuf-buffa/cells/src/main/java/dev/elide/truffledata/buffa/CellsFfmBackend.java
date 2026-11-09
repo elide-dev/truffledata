@@ -25,11 +25,11 @@ import org.jspecify.annotations.Nullable;
  * read once by {@link CellsRoute}; docs/BUFFA.md): every slab producer call goes through a cell
  * generated with {@code truffle_backend=ffm} — {@code decodeSlabSmall} for bounded heap input,
  * {@code decodeSlab} otherwise, the same split the FFM backend makes. Everything else is the FFM
- * backend's: this wraps an {@link FfmBackend}, which loads and fingerprint-checks the library first,
- * shares its result slot and busy state through the backend's own hooks, and keeps its control flow,
- * so the slabs are byte-identical and the errors are the same, in the same order. The JVM is a
- * correctness target; the cells copy heap arrays (Myna's HotSpot borrow rule), which the FFM backend
- * lends in place.
+ * backend's: this wraps an {@link FfmBackend}, which loads and fingerprint-checks the library
+ * first, shares its result slot and busy state through the backend's own hooks, and keeps its
+ * control flow, so the slabs are byte-identical and the errors are the same, in the same order. The
+ * JVM is a correctness target; the cells copy heap arrays (Myna's HotSpot borrow rule), which the
+ * FFM backend lends in place.
  *
  * <p>Myna's FFM cells bind their symbols through the loader lookup, so the library is also loaded
  * into this class loader ({@link System#load}). One library per class loader: a second path is

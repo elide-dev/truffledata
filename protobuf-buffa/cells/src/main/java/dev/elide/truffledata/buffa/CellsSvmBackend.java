@@ -19,16 +19,16 @@ import org.jspecify.annotations.Nullable;
  * ({@code td_buffa_decode_slab}) goes through the generated {@code decodeSlab} cell instead of the
  * hand-written {@code @CFunction} call. Everything else is the static backend's: this wraps an
  * {@link SvmBackend}, shares its result slot and busy state through the backend's own hooks, and
- * keeps its exact control flow — budget checks, the learned-capacity retry, the critical-size scratch
- * fallback, the extent checks, the trim rule and the trusted publication through {@link
+ * keeps its exact control flow — budget checks, the learned-capacity retry, the critical-size
+ * scratch fallback, the extent checks, the trim rule and the trusted publication through {@link
  * SlabMessage#produced} — so the slabs are byte-identical and the errors are the same, in the same
  * order.
  *
- * <p>The cell is one adopted node per backend (a backend is confined to its decoder's thread), called
- * directly from the {@code @TruffleBoundary} decode entries, as the WS11 probe's {@code cell} route
- * did. Heap arrays are pinned here, around the call, with plain {@code try/finally} (javac's
- * try-with-resources reaches {@code Throwable.addSuppressed}, which the runtime-compilation
- * blocklist rejects), and lent to the cell as pointers.
+ * <p>The cell is one adopted node per backend (a backend is confined to its decoder's thread),
+ * called directly from the {@code @TruffleBoundary} decode entries, as the WS11 probe's {@code
+ * cell} route did. Heap arrays are pinned here, around the call, with plain {@code try/finally}
+ * (javac's try-with-resources reaches {@code Throwable.addSuppressed}, which the
+ * runtime-compilation blocklist rejects), and lent to the cell as pointers.
  */
 @NullMarked
 final class CellsSvmBackend implements BuffaWire.Backend {
