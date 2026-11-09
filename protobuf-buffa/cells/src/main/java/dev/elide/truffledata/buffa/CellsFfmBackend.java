@@ -86,8 +86,10 @@ final class CellsFfmBackend implements BuffaWire.Backend {
     return cell;
   }
 
+  // Specialized NativeCell calls (Myna 0.14.0): each cell is held as its concrete generated type,
+  // whose i32 result overrides executeInt with no box and no UnexpectedResultException.
   private static int call(
-      NativeCell cell,
+      BuffaCellsJvmTruffle.decodeSlab_Cell cell,
       long compiled,
       Object data,
       long length,
@@ -97,20 +99,47 @@ final class CellsFfmBackend implements BuffaWire.Backend {
       long capacity,
       SlabLimits limits,
       MemorySegment result) {
-    return (Integer)
-        cell.execute(
-            new Object[] {
-              NativePointer.of(compiled),
-              data,
-              length,
-              flags,
-              NativePointer.of(projection),
-              out,
-              capacity,
-              limits.maxDepth(),
-              (long) limits.maxSlabBytes(),
-              NativePointer.of(result.address())
-            });
+    return cell.executeInt(
+        arguments(compiled, data, length, flags, projection, out, capacity, limits, result));
+  }
+
+  private static int call(
+      BuffaCellsJvmTruffle.decodeSlabSmall_Cell cell,
+      long compiled,
+      Object data,
+      long length,
+      int flags,
+      long projection,
+      Object out,
+      long capacity,
+      SlabLimits limits,
+      MemorySegment result) {
+    return cell.executeInt(
+        arguments(compiled, data, length, flags, projection, out, capacity, limits, result));
+  }
+
+  private static Object[] arguments(
+      long compiled,
+      Object data,
+      long length,
+      int flags,
+      long projection,
+      Object out,
+      long capacity,
+      SlabLimits limits,
+      MemorySegment result) {
+    return new Object[] {
+      NativePointer.of(compiled),
+      data,
+      length,
+      flags,
+      NativePointer.of(projection),
+      out,
+      capacity,
+      limits.maxDepth(),
+      (long) limits.maxSlabBytes(),
+      NativePointer.of(result.address())
+    };
   }
 
   @Override

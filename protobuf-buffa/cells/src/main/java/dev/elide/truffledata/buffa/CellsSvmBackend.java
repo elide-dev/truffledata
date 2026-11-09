@@ -61,20 +61,21 @@ final class CellsSvmBackend implements BuffaWire.Backend {
       long capacity,
       SlabLimits limits,
       VoidPointer result) {
-    return (Integer)
-        decodeSlab.execute(
-            new Object[] {
-              NativePointer.of(compiled),
-              NativePointer.of(data),
-              length,
-              flags,
-              projection == 0 ? NativePointer.NULL : NativePointer.of(projection),
-              out == 0 ? NativePointer.NULL : NativePointer.of(out),
-              capacity,
-              limits.maxDepth(),
-              (long) limits.maxSlabBytes(),
-              NativePointer.of(result.rawValue())
-            });
+    // Specialized call (Myna 0.14.0): the concrete cell's i32 result overrides executeInt, so
+    // there is no result box and no UnexpectedResultException handler.
+    return decodeSlab.executeInt(
+        new Object[] {
+          NativePointer.of(compiled),
+          NativePointer.of(data),
+          length,
+          flags,
+          projection == 0 ? NativePointer.NULL : NativePointer.of(projection),
+          out == 0 ? NativePointer.NULL : NativePointer.of(out),
+          capacity,
+          limits.maxDepth(),
+          (long) limits.maxSlabBytes(),
+          NativePointer.of(result.rawValue())
+        });
   }
 
   @Override
