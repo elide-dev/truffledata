@@ -10,6 +10,11 @@
 > forks, pinned CPU, preserved before-image, x86 claims only). Do not start this tranche without
 > a user instruction (AGENTS.md release completion note).
 
+> **Status 2026-11-09 (lead):** P0.1–P0.6 complete; WS1+WS4, WS7, WS10 and WS10b (FLOAT64)
+> admitted; WS3, WS5, WS6 (step 1), WS11 and WS10b INT64 killed on evidence; WS2, WS6 step 2,
+> WS8 and the `CsvText` cell type await Sam's rulings. Measurements and rulings are in
+> `2026-11-08-beat-stock-svm-ledger.md`; the branch is `perf/beat-stock-svm` (local only).
+
 **Baseline:** `main` at `2e0df58` (0.10.0 released from `32a5f19`; integrated performance
 baseline `7fca64b` on top of `9a1dcec`). Preserved images: `build/svm-tranche-baseline/`.
 
@@ -82,7 +87,7 @@ consumer-side native build; `-march=compatibility` images with runtime ISA dispa
 
 ## 3. P0 — attribution first (days 1–2; nothing in §4 starts before its profile exists)
 
-- [ ] **P0.1 Protobuf decode pipeline ablation.** In `benchmarks/comparison` add probe engines that
+- [x] **P0.1 Protobuf decode pipeline ablation.** In `benchmarks/comparison` add probe engines that
   stop the SVM pipeline after each stage: native decode into reusable pinned scratch only; + fresh
   zeroed `byte[capacity]`; + the two `PinnedObject`s; + `copyOf` trim; + `verifyOwning`; +
   `takeOwnership`/owner publication; + harness loop. Three forks each, full and holdout fixtures,
@@ -95,18 +100,18 @@ consumer-side native build; `-march=compatibility` images with runtime ISA dispa
   size alone may explain much of the residual). Include a copy-instead-of-pin variant for inputs and
   outputs below Myna's measured 256 B borrow crossover (0.12.0 release notes; `SvmBackend.java:246-247`
   pins both on every message, and the consumer fixtures are 122–510 B).
-- [ ] **P0.2 Fresh interpreter/peak profile of the shipped image.** Every protobuf share cited
+- [x] **P0.2 Fresh interpreter/peak profile of the shipped image.** Every protobuf share cited
   in the ledgers (`Accessor.bound` 21.6%, `HashMap` 4.3%, `SlabMessage.array` 4.3%) predates the
   warm cache (`svm-next-tranche.md` says so). Re-run `consumer_interpreter_profile` on `7fca64b`
   and attribute harness frames separately from library frames.
-- [ ] **P0.3 JSON generic ingest split** (callgrind tooling exists): native decode vs session/owner
+- [x] **P0.3 JSON generic ingest split** (callgrind tooling exists): native decode vs session/owner
   publication vs directory-rank reads vs the ten interop reads vs harness views (240 of 384 B).
-- [ ] **P0.4 JSON current-source recapture.** Two shipped fixes (ABI 10 stream intent `5002235`,
+- [x] **P0.4 JSON current-source recapture.** Two shipped fixes (ABI 10 stream intent `5002235`,
   bulk snapshot copy `7a0c27f`) were never measured end to end against the preserved image; the
   2,060 ns snapshot and 1,289 ns stream-interop cells may already be stale.
-- [ ] **P0.5 CSV typed/strings callgrind** on mixed and numeric 1 MiB: framing vs `put` vs
+- [x] **P0.5 CSV typed/strings callgrind** on mixed and numeric 1 MiB: framing vs `put` vs
   conversion vs column grow/trim vs `getString`.
-- [ ] **P0.6 AOT symbol gate.** `tools/bench/aot_symbols.py`: objdump/nm over a Native Image,
+- [x] **P0.6 AOT symbol gate.** `tools/bench/aot_symbols.py`: objdump/nm over a Native Image,
   reporting instruction count, call count and frame size for named symbols (generated getters,
   `SlabFormat.*`, `Accessor.*`, `SlabRow$*Slot.*`, `IndexScan.frame*`, `BatchBuilder` writers,
   JSON typed readers), with budgets asserted in native smoke. This is the admission check for
