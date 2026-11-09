@@ -356,6 +356,7 @@ sh_test(
     srcs = ["test.sh"],
     data = [
         "central.py",
+        "check_natives.py",
         "licenses/simdutf-APACHE",
         "licenses/simdutf-ISA-BSD",
         "licenses/simdutf-MIT",
@@ -363,6 +364,7 @@ sh_test(
         "maven_repo.py",
         "native_bundle.py",
         "test_central.py",
+        "test_check_natives.py",
         "test_native_bundle.py",
         "test_release.py",
         ":publications",
@@ -1085,32 +1087,59 @@ cc_test(
     deps = [":csv_isolated"],
 )
 
-# Musl distribution is static-only and currently covers the CSV embedding kernel.
-native_attachments(
-    name = "csv_musl_natives",
+cc_import(
+    name = "yaml_isolated",
+    testonly = True,
+    hdrs = ["//yaml/native:header"],
+    static_library = ":yaml_archive",
+)
+
+cc_test(
+    name = "yaml_archive_test",
+    srcs = ["yaml_archive_test.c"],
+    features = ["-thin_lto"],
+    deps = [":yaml_isolated"],
+)
+
+# Musl distribution is static-only: module to (collection prefix, release archive, fingerprint). The CSV embedding
+# kernel and the YAML decoder ship musl archives; tools/release/maven_repo.py's MUSL_MODULES must match.
+MUSL_NATIVES = {
+    "csv-native": ("csv", ":csv_archive", "td_csv_fingerprint"),
+    "yaml": ("yaml", ":yaml_archive", "td_yaml_fingerprint"),
+}
+
+[native_attachments(
+    name = prefix + "_musl_natives",
     attachments = select({
         "//bazel/platforms:musl_amd64": {
-            ":csv_archive": "-linux-x86_64-musl.a",
-            ":csv_archive_manifest": "-linux-x86_64-musl.members.txt",
+            archive: "-linux-x86_64-musl.a",
+            archive + "_manifest": "-linux-x86_64-musl.members.txt",
         },
         "//bazel/platforms:musl_arm64": {
-            ":csv_archive": "-linux-aarch64-musl.a",
-            ":csv_archive_manifest": "-linux-aarch64-musl.members.txt",
+            archive: "-linux-aarch64-musl.a",
+            archive + "_manifest": "-linux-aarch64-musl.members.txt",
         },
         "//conditions:default": {},
     }),
-    module = "csv-native",
+    module = module,
+    tags = ["manual"],
+) for module, (prefix, archive, _fingerprint) in MUSL_NATIVES.items()]
+
+# Every musl module's attachments, collected per musl platform by tools/release/publish.sh.
+filegroup(
+    name = "musl_natives",
+    srcs = [":%s_musl_natives" % prefix for prefix, _archive, _fingerprint in MUSL_NATIVES.values()],
     tags = ["manual"],
 )
 
 # Musl has no shared attachment; prove both ordinary and ThinLTO static links.
-native_consumers(
-    name = "csv_musl_c",
-    archive = ":csv_archive",
-    fingerprint = "td_csv_fingerprint",
+[native_consumers(
+    name = prefix + "_musl_c",
+    archive = archive,
+    fingerprint = fingerprint,
     shared = None,
     tags = [
         "manual",
         "musl-consumer",
     ],
-)
+) for prefix, archive, fingerprint in MUSL_NATIVES.values()]

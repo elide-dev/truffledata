@@ -66,16 +66,3 @@ HMQ5@retain	native omits the raw span of a quoted implicit block key; the Java k
 HMQ5@yaml11	native omits the raw span of a quoted implicit block key; the Java kernel keeps it
 LQZ7@retain	native omits the raw span of a quoted implicit block key; the Java kernel keeps it
 LQZ7@yaml11	native omits the raw span of a quoted implicit block key; the Java kernel keeps it
-#
-# 3. Native bug (reported with #41): with retainSource, a multi-line plain scalar whose folded text
-#    is as long as its source (one line break folded to one space) is published as a reference to
-#    the pristine source, so its value keeps the line break ("d\ne" instead of "d e"). The Java
-#    kernel publishes the folded value, as the native decoder does without retainSource.
-35KP@retain	native keeps the unfolded line break of a multi-line plain scalar under retainSource
-35KP@yaml11	native keeps the unfolded line break of a multi-line plain scalar under retainSource
-82AN@retain	native keeps the unfolded line break of a multi-line plain scalar under retainSource
-82AN@yaml11	native keeps the unfolded line break of a multi-line plain scalar under retainSource
-EXG3@retain	native keeps the unfolded line break of a multi-line plain scalar under retainSource
-EXG3@yaml11	native keeps the unfolded line break of a multi-line plain scalar under retainSource
-XLQ9@retain	native keeps the unfolded line break of a multi-line plain scalar under retainSource
-XLQ9@yaml11	native keeps the unfolded line break of a multi-line plain scalar under retainSource

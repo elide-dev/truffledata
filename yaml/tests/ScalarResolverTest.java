@@ -107,7 +107,7 @@ final class ScalarResolverTest {
     }
   }
 
-  private static Set<String> corpus() {
+  static Set<String> corpus() {
     Set<String> out = new LinkedHashSet<>();
     for (String s :
         new String[] {
@@ -120,7 +120,7 @@ final class ScalarResolverTest {
           "18446744073709551615", "18446744073709551616", "123456789012345678901234567890",
           "-123456789012345678901234567890", "0x10000000000000000", "0o2000000000000000000000",
           "0xffffffffffffffff", "0x8000000000000000", "1.5", "-1.5", "+1.5", "1.", ".5", "-.5",
-          "1e3", "1E3", "1e+3", "1e-3", "1.e3", ".e3", "1e", "1.5e", "1e400", "-1e400", "1e-400",
+          "1e3", "1E3", "1e+3", "1e-3", "1.e3", ".e3", "1e", "1.5e", "1e400", "-1e400", "0009e400", "+00.5e999", "-000.e999", "00e999", "1e-400",
           "-1e-400", "0.1", "0.30000000000000004", "123456789.123456789", "1e15", "1e16", "1e14",
           "1e21", "1e-5", "1e-4", "0.0001", "0.00001", "5e-324", "1.7976931348623157e308",
           "100000000000000000000", "1_0.5", "1.0_5", "1.5e+3", "1.5e3", ".inf", "-.inf", "+.inf",
@@ -203,6 +203,16 @@ final class ScalarResolverTest {
     int at = outcome.indexOf(" at line ");
     String message = at < 0 ? outcome : outcome.substring(0, at);
     return message.replace("YAML syntax error: ", "");
+  }
+
+  @Test
+  void longZeroPrefixesNormalizeInLinearTime() {
+    String token = "0".repeat(2_000_000) + "1e400";
+    long start = System.nanoTime();
+    ScalarResolver.Scalar r = ScalarResolver.resolvePlain(token, YamlSchema.CORE);
+    assertEquals(ScalarResolver.Kind.DECIMAL, r.kind());
+    assertEquals("1e400", r.text());
+    assertTrue(System.nanoTime() - start < 5_000_000_000L, "quadratic normalization");
   }
 
   @Test

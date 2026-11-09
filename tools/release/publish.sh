@@ -60,13 +60,14 @@ platform_gates=(//tools/release:native_consumers //tools/release:buffa_consumer 
 "$bazel" test --config=remote_arm64 "${platform_gates[@]}" "$flag"
 [[ $host != Darwin-arm64 ]] || "$bazel" test --config=local "${platform_gates[@]}" "$flag"
 for config in remote_musl remote_arm64_musl; do
-  "$bazel" test --config="$config" //csv/native:api_test //csv/native:index_test //tools/release:csv_archive_test //tools/release:csv_musl_c_static_test //tools/release:csv_musl_c_thinlto_test "$flag"
+  "$bazel" test --config="$config" //csv/native:api_test //csv/native:index_test //tools/release:csv_archive_test //tools/release:csv_musl_c_static_test //tools/release:csv_musl_c_thinlto_test \
+    //yaml/native:api_test //yaml/native:input_test //yaml/native:stream_test //tools/release:yaml_archive_test //tools/release:yaml_musl_c_static_test //tools/release:yaml_musl_c_thinlto_test "$flag"
 done
 
 # One platform's //tools/release:natives build, copied out of bazel-out before the next invocation.
 collect() { # collect CLASSIFIER BAZEL_ARGS...
   local classifier=$1 target=//tools/release:natives
-  [[ $classifier != *-musl ]] || target=//tools/release:csv_musl_natives
+  [[ $classifier != *-musl ]] || target=//tools/release:musl_natives
   shift
   "$bazel" build "$@" "$target" "$flag"
   mkdir -p "$natives/$classifier"

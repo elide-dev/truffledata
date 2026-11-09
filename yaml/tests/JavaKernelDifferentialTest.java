@@ -276,6 +276,58 @@ final class JavaKernelDifferentialTest {
     assertTrue(stale.isEmpty(), "Excluded cases that no longer diverge: " + stale);
   }
 
+  /**
+   * The emitter's output, read by both decoders: every suite document the native decoder accepts is
+   * re-emitted under several emitter options and schemas, then parsed by both under that schema.
+   */
+  @Test
+  void emitterOutputs() throws Exception {
+    Map<String, String> excluded = excluded();
+    List<YamlEmitOptions> emits = new ArrayList<>();
+    for (YamlSchema schema : YamlSchema.values())
+      for (YamlEmitOptions base : List.of(YamlEmitOptions.DEFAULT, YamlEmitOptions.DEFAULT.flow(),
+          YamlEmitOptions.DEFAULT.withPreserveMetadata(true).withExplicitStart(true)))
+        emits.add(base.withSchema(schema));
+    List<String> failures = new ArrayList<>();
+    int compared = 0;
+    try (YamlSession source = YamlJvm.openSession(library(), YamlOptions.DEFAULT.retainSource(true));
+        var files = Files.walk(suite().toRealPath())) {
+      Path root = suite().toRealPath();
+      for (Path input : files.filter(p -> p.getFileName().toString().equals("in.yaml")).sorted().toList()) {
+        String name = root.relativize(input.getParent()).toString();
+        if (name.startsWith("name/") || name.startsWith("tags/") || excluded.containsKey(name)) continue;
+        for (YamlEmitOptions emit : emits) {
+          String yaml;
+          try (YamlStream documents = source.documents(Files.readAllBytes(input))) {
+            List<TapeValue> roots = new ArrayList<>();
+            List<YamlMessage> retained = new ArrayList<>();
+            for (TapeValue value; (value = documents.next()) != null; ) {
+              YamlMessage message = documents.retain();
+              retained.add(message);
+              roots.add(message.root());
+            }
+            try {
+              yaml = YamlEmitter.emitAll(roots, emit);
+            } finally {
+              for (YamlMessage message : retained) message.close();
+            }
+          } catch (RuntimeException rejected) {
+            continue; // not a document the native decoder (or the emitter) accepts
+          }
+          YamlOptions options = YamlOptions.DEFAULT.withSchema(emit.schema()).withUnknownTags(UnknownTags.PRESERVE);
+          try (Sessions s = Sessions.open(options)) {
+            String expected = stream(s.nativeSession, bytes(yaml)), actual = stream(s.java, bytes(yaml));
+            compared++;
+            if (!expected.equals(actual))
+              failures.add(name + " " + emit + "\n" + yaml + "\n  native: " + expected + "\n  java:   " + actual);
+          }
+        }
+      }
+    }
+    assertTrue(compared > 3000, "emitted documents compared: " + compared);
+    assertTrue(failures.isEmpty(), failures.size() + " divergences:\n" + String.join("\n", failures));
+  }
+
   @Test
   void probeFixturesAndFuzz() throws Exception {
     Map<String, Sessions> sessions = sessions();

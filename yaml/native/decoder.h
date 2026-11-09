@@ -1287,7 +1287,11 @@ class handler : public c4::yml::EventHandlerStack<handler, handler_state> {
 
   [[gnu::always_inline]] void write_text(std::string_view text, bool key = false, uint64_t span = 0, bool plain = false) {
     ct::span raw = unpack(span);
-    if (plain && in_input(text.data(), text.size()) && raw.offset == size_t(text.data() - input_) && raw.length == text.size())
+    // With a retained source the writer references the pristine copy, so a folded multi-line
+    // scalar ("d\ne" read as "d e") whose source span happens to match its length must not be
+    // served from the source: folding only happens across line breaks.
+    if (plain && in_input(text.data(), text.size()) && raw.offset == size_t(text.data() - input_) && raw.length == text.size() &&
+        (!pristine_ || !has_newline(newlines_, raw.offset, size_t(raw.offset) + raw.length)))
       writer_->string_ref(raw, ascii_text(text), key);
     else if (!pristine_ && in_input(text.data(), text.size()))
       writer_->string_ref({uint32_t(text.data() - input_), uint32_t(text.size())}, raw, ascii_text(text), key);

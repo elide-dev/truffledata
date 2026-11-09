@@ -514,9 +514,7 @@ final class ScalarResolver {
     else if (token.charAt(i) == '-') out.append(token.charAt(i++));
     int start = i;
     while (i < n && digit(token.charAt(i))) ++i;
-    String whole = token.substring(start, i);
-    while (whole.length() > 1 && whole.charAt(0) == '0') whole = whole.substring(1);
-    out.append(whole.isEmpty() ? "0" : whole);
+    out.append(start == i ? "0" : stripLeadingZeros(token.substring(start, i)));
     if (i < n && token.charAt(i) == '.') {
       ++i;
       int f = i;
