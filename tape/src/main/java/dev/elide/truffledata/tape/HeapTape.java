@@ -52,38 +52,6 @@ public final class HeapTape implements TapeReader {
   }
 
   @Override public long directoryEntry(long index) { return directory[(int) index]; }
-
-  /**
-   * {@link TapeReader#directoryKey} over this tape's own arrays: the default's checks, loads,
-   * comparison and miss result in one body, so a hinted snapshot read never dispatches through the
-   * {@code readWord}/{@code directoryEntry}/{@code textWord} hooks, even in images where several
-   * readers share the default. Pinned against the element-wise default by {@code CompactTapeTest}.
-   */
-  @Override public long directoryKey(long object, int rank, TapeKey key) {
-    long[] words = this.words;
-    long w = words[(int) object];
-    if (kind(w) != 9 || rank < 0 || rank >= field(w) || key.length > 16) return -1;
-    long start = words[(int) (object + 1)] >>> 32;
-    if (start == 0) return -1;
-    long entry = directory[(int) (start - 1 + rank)];
-    long k = object + (entry >>> 32);
-    long kw = words[(int) k];
-    long header = (7L << 28) | (KEY >>> 32) | key.length;
-    if (((kw & ~ASCII) >>> 32) != header) return -1;
-    // The header excludes OWNED, so a hinted key's bytes lie in the padded input.
-    long offset = low(kw);
-    if (inputWord(offset, Math.min(8, key.length)) != key.low) return -1;
-    if (key.length > 8 && inputWord(offset + 8, key.length - 8) != key.high) return -1;
-    return k;
-  }
-
-  /** {@link #textWord} over the padded input: one word load masked to {@code length} bytes. */
-  private long inputWord(long offset, int length) {
-    if (length == 0) return 0;
-    long value = WORD.getLong(input, (int) offset);
-    return length == 8 ? value : value & (-1L >>> (64 - length * 8));
-  }
-
   @Override public int metadata(long index) { return meta.length == 0 ? 0 : meta[(int) index]; }
   @Override public void copyWords(long from, long[] output, int at, int count) {
     TapeReader.checkCopy(from, words.length, output.length, at, count, "Tape word copy");
