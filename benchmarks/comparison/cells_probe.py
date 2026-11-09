@@ -42,8 +42,10 @@ def summarize(records):
 
 
 TRACE = re.compile(r'opt done.*?\|AST\s+(\d+).*?\|IR\s+(\d+)/\s*(\d+).*?\|CodeSize\s+(\d+)', re.S)
-# CompilationStatisticDetails prints the node-class histogram after the engine closes.
-HISTOGRAM = re.compile(r'^\s*(\S+)\s*:\s*count=\s*(\d+)', re.M)
+# CompilationStatisticDetails prints the node-class histogram after the engine closes; `count` is
+# the number of compilations, `sum` the number of nodes. Only the final (Graal tier) histogram is
+# kept: it follows the "after Graal tier" heading.
+HISTOGRAM = re.compile(r'^\s*(\S+)\s*:\s*count=\s*\d+,\s*sum=\s*(\d+)', re.M)
 
 
 def graph_facts(stderr):
@@ -54,10 +56,12 @@ def graph_facts(stderr):
         ast, pe, final, code = traces[-1]
         facts.update(ast_nodes=int(ast), graal_nodes_after_pe=int(pe),
                      graal_nodes_final=int(final), code_bytes=int(code), compilations=len(traces))
+    final = stderr.rfind('Graal nodes after Graal tier')
     invokes = {}
-    for name, count in HISTOGRAM.findall(stderr):
-        if 'Invoke' in name or name.endswith('Call') or 'ForeignCall' in name:
-            invokes[name] = int(count)
+    for name, total in HISTOGRAM.findall(stderr[final:] if final >= 0 else ''):
+        if ('Invoke' in name or 'ForeignCall' in name or 'Allocat' in name
+                or 'Deoptimize' in name) and int(total):
+            invokes[name] = int(total)
     if invokes:
         facts['invoke_nodes'] = invokes
     return facts
@@ -128,7 +132,7 @@ def run():
         jobs.extend((route, fork) for route in order)
     records = []
     for route, fork in jobs:
-        result = subprocess.run([str(binary), '-Xmx1g', route],
+        result = subprocess.run([str(binary), '-Xmx1g', '-XX:+PrintGC', route],
                                 capture_output=True, text=True, timeout=600, check=False)
         (logs / f'{route}-{fork}.stderr').write_text(result.stderr)
         (logs / f'{route}-{fork}.stdout').write_text(result.stdout)
