@@ -18,9 +18,10 @@ import org.jspecify.annotations.Nullable;
  * offset the per-byte scanner must resume from and sets {@link #fallback}. {@link CsvScanner} then
  * runs the per-byte scanner over that one record and resumes here.
  *
- * <p>Strict and Commons framing differ only at record boundaries: the strict loop commits skipped
- * empty lines (and a lone final CR) at once, while the Commons lexer commits them only with the
- * next complete record, and Commons formats may keep empty lines as one-field records.
+ * <p>Both framings commit skipped empty lines at once, so they never count toward the next
+ * record's {@code maxRecordBytes}. They differ only at record boundaries: Commons waits for the
+ * byte after a final CR (it may be the first half of CRLF), and Commons formats may keep empty
+ * lines as one-field records.
  *
  * <p>Not thread-safe; allocates only when a record is wider than any before it.
  */
