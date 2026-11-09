@@ -84,19 +84,26 @@ final class BatchBuilder implements CsvScanner.Records {
    * the chunk in one monomorphic pass, so no number parser is inlined into the framing loop.
    * Empty unless deferred.
    */
-  private final long[][] staged;
+  private long[][] staged = NO_STAGE;
+
+  private static final long[][] NO_STAGE = new long[0][];
+
+  /** The record width {@link #record} stages while chunks are lent ({@link #lend}), else -1. */
+  private int stagedWidth = -1;
+
+  /** Whether this binding stages: fusable, with at least one non-STRING field. */
+  private final boolean stages;
+
+  /**
+   * Per-thread staging chunks, lent to one builder for one index scan: the scan converts every
+   * staged row before it returns ({@link #giveBack}), so nothing is staged between scans.
+   */
+  private static final ThreadLocal<long @Nullable [][]> CHUNKS = new ThreadLocal<>();
 
   /** First row of the staged chunk; rows [chunkBase, chunkBase + pending) are not converted yet. */
   private int chunkBase;
 
   private int pending;
-
-  /**
-   * Set by {@link IndexScan} while its plain loop frames this batch: {@link #record} then stages
-   * complete records, and the scan converts them before it returns. The per-byte scanners report
-   * syntax errors before calling {@link #record}, so their records never stage.
-   */
-  boolean indexing;
 
   /** Per-record scratch for {@link #replay}, allocated on the first declined chunk. */
   private long[] replayRow = NO_WORDS;
@@ -161,14 +168,46 @@ final class BatchBuilder implements CsvScanner.Records {
     }
     fusable = simple;
     spanOnly = strings;
-    if (simple && !strings) {
-      staged = new long[binding.width][];
-      long[] discarded = new long[CHUNK];
-      for (int column = 0; column < binding.width; column++)
-        staged[column] = fuseKind[column] == SKIP ? discarded : new long[CHUNK];
-    } else {
-      staged = new long[0][];
+    stages = simple && !strings;
+  }
+
+  /** Whether {@link IndexScan} frames this batch with the plain loop and staged records. */
+  boolean stages() {
+    return stages;
+  }
+
+  /**
+   * Lends this builder the thread's staging chunks for one index scan. A scan nested in a
+   * callback finds none and allocates its own.
+   */
+  void lend() {
+    int width = binding.width;
+    long[][] chunks = CHUNKS.get();
+    CHUNKS.set(null);
+    if (chunks == null || chunks.length < width) {
+      chunks = new long[width][];
+      for (int column = 0; column < width; column++) chunks[column] = new long[CHUNK];
     }
+    staged = chunks;
+    stagedWidth = width;
+  }
+
+  /** Converts the staged rows (reporting their first diagnostic) and returns the chunks. */
+  void giveBack() {
+    try {
+      convert();
+    } finally {
+      abandon();
+    }
+  }
+
+  /** Returns the chunks without converting (the scan is failing); staged rows are dropped. */
+  void abandon() {
+    long[][] chunks = staged;
+    staged = NO_STAGE;
+    stagedWidth = -1;
+    pending = 0;
+    if (chunks.length != 0) CHUNKS.set(chunks);
   }
 
   /** Whether the index path may fill this batch through {@link #put} and {@link #commit}. */
@@ -440,11 +479,10 @@ final class BatchBuilder implements CsvScanner.Records {
   @InliningCutoff
   public boolean record(long[] spans, int count, int start, int end) {
     // Staged plans framed by the index scan: a complete, valid record only copies its spans.
-    long[][] s = staged;
-    if (indexing
-        && count == s.length
+    if (count == stagedWidth
         && writable
         && ((start >= validFrom && end <= validTo) || Utf8.invalidOffset(input, start, end) < 0)) {
+      long[][] s = staged;
       int k = pending;
       for (int column = 0; column < count; column++) s[column][k] = spans[column];
       advance(end);
@@ -473,7 +511,7 @@ final class BatchBuilder implements CsvScanner.Records {
     if (rows == capacity) grow(start);
     fill(rows, spans, count, number);
     advance(end);
-    if (staged.length != 0) chunkBase = rows;
+    chunkBase = rows;
     return true;
   }
 

@@ -111,15 +111,18 @@ final class IndexScan {
     SHARED.set(null); // a scan nested in a callback allocates its own
     try {
       if (records instanceof BatchBuilder b && b.fusable()) {
-        if (b.spanOnly()) return frameSpans(idx, input, from, to, eof, b, recordBase, stopAfter);
+        if (!b.stages()) return frameSpans(idx, input, from, to, eof, b, recordBase, stopAfter);
+        // Records stage only while the plain loop frames; the per-byte scanners report syntax
+        // errors before calling record(), so their records never stage.
         int end;
-        b.indexing = true;
+        b.lend();
         try {
           end = framePlain(idx, input, from, to, eof, b, recordBase, stopAfter);
-        } finally {
-          b.indexing = false;
+        } catch (RuntimeException | Error e) {
+          b.abandon();
+          throw e;
         }
-        b.convert(); // staged rows convert before any later record can report an error
+        b.giveBack(); // staged rows convert before any later record can report an error
         return end;
       }
       return framePlain(idx, input, from, to, eof, records, recordBase, stopAfter);
