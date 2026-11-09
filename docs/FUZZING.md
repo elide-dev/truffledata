@@ -107,6 +107,14 @@ Jazzer instrumentation is Java fuzz coverage, not ASan instrumentation of the JV
   lane passes unchanged. Regressions: `decoder_test` and
   `yaml/native/corpus/session/{three-tags,three-tags-found}`. Report upstream with the patch.
 
+- **YAML: key event inside a flow sequence** (PR fuzz campaign; reproducer
+  `k"}&ok": [1,iii", : [1,iii",i""]}`, minimized to `k: [1, : [1, 2]}`). For an empty implicit key
+  in a flow sequence closed by the wrong bracket, rapidyaml 0.16.0 emits a key event inside the
+  sequence rather than a parse error. The decoder refused it already, but as `status_internal`,
+  which the harness treats as unexpected; the input is malformed, so all three key entry points
+  now report `status_syntax`, as the second-root fix did. Regressions: `decoder_test` and
+  `yaml/native/corpus/session/{flow-key-outside-mapping,flow-key-outside-mapping-found}`.
+
 Harness aborts print the reason (unexpected status and message, or the tape validator's
 diagnostic) before `abort()`, so a libFuzzer "deadly signal" can be triaged from its log.
 
