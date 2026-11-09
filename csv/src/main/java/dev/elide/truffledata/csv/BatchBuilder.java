@@ -1,5 +1,6 @@
 package dev.elide.truffledata.csv;
 
+import com.oracle.truffle.api.HostCompilerDirectives.BytecodeInterpreterSwitch;
 import com.oracle.truffle.api.HostCompilerDirectives.InliningCutoff;
 import dev.elide.truffledata.ContractViolation;
 import dev.elide.truffledata.Field;
@@ -242,7 +243,10 @@ final class BatchBuilder implements CsvScanner.Records {
 
   // One field over a chunk. False on the first value the fused path would decline (no grammar
   // accepts it, a constraint, a complex Commons span): the chunk is then replayed per record.
+  // Host-inlining roots, as the framing loops are, so Native Image inlines the number parsers
+  // and their SWAR helpers into each monomorphic pass.
 
+  @BytecodeInterpreterSwitch
   private static boolean convertLongs(
       byte[] input, long[] spans, int n, long[] out, int base, boolean commons, @Nullable Field constrained) {
     try {
@@ -259,6 +263,7 @@ final class BatchBuilder implements CsvScanner.Records {
     }
   }
 
+  @BytecodeInterpreterSwitch
   private static boolean convertDoubles(
       byte[] input, long[] spans, int n, double[] out, int base, boolean commons, boolean binary32) {
     try {
@@ -275,6 +280,7 @@ final class BatchBuilder implements CsvScanner.Records {
     }
   }
 
+  @BytecodeInterpreterSwitch
   private static boolean convertBooleans(
       byte[] input, long[] spans, int n, boolean[] out, int base, boolean commons) {
     for (int i = 0; i < n; i++) {
