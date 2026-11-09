@@ -1,7 +1,9 @@
 package dev.elide.truffledata.csv;
 
+import com.oracle.truffle.api.HostCompilerDirectives.BytecodeInterpreterSwitch;
 import com.oracle.truffle.api.HostCompilerDirectives.InliningCutoff;
 import dev.elide.truffledata.ContractViolation;
+import dev.elide.truffledata.Field;
 import dev.elide.truffledata.Values;
 import java.util.Arrays;
 import org.jspecify.annotations.Nullable;
@@ -9,8 +11,14 @@ import org.jspecify.annotations.Nullable;
 /**
  * Fills one batch's columns as the scanner reports records: validates each record's UTF-8 and
  * width, then stores spans (STRING) or converts and stores primitives (INT64, FLOAT64, BOOLEAN) per
- * schema field in the same pass. Arrays grow geometrically and are trimmed when more than 1/8 of the
- * capacity is unused. Diagnostics name the record and field, never the field's text.
+ * schema field. Arrays grow geometrically and are trimmed when more than 1/8 of the capacity is
+ * unused. Diagnostics name the record and field, never the field's text.
+ *
+ * <p>Staged ingest ({@link #stages}): while the index scan frames a batch with its plain loop, a
+ * complete, valid record only copies its spans into per-column chunks of {@link #CHUNK} rows;
+ * {@link #convert} then converts each field over the chunk in one monomorphic pass. Every other
+ * record (and every record of the per-byte scanners) takes the per-record path, which converts the
+ * staged rows first, so diagnostics and their order are the per-record path's.
  */
 final class BatchBuilder implements CsvScanner.Records {
   private static final long[] NO_WORDS = new long[0];
@@ -52,25 +60,43 @@ final class BatchBuilder implements CsvScanner.Records {
   private int rows;
   private boolean full;
 
-  // Fused ingest ({@link #fusable}): the index path writes each field into row {@link #rows} as
-  // it frames it ({@link #put}) and commits the record at its end ({@link #commit}); a record it
-  // cannot convert in place goes through {@link #record} instead, which rewrites the same row.
-  private static final byte SKIP = -1;
-
-  /** Whether {@link #put} and {@link #commit} may build this batch. */
-  private final boolean fusable;
-
-  /** All retained fields are STRING: framing needs only span stores, never typed conversion. */
-  private final boolean spanOnly;
-
-  /** Per record column: the field kind it fills, or {@link #SKIP} (projected away). */
-  private final byte[] fuseKind;
-
-  /** Per record column: the field it fills, or -1 when projected away. */
-  private final int[] fuseField;
-
   /** Whether row {@link #rows} has capacity (false once the batch reaches maxBatchRows). */
   private boolean writable;
+
+  /** Rows per staged conversion chunk. */
+  static final int CHUNK = 64;
+
+  /**
+   * Per record column, the spans of the rows staged since {@link #chunkBase} (lent for one index
+   * scan, {@link #lend}); empty otherwise. No number parser is inlined into the framing loop.
+   */
+  private long[][] staged = NO_STAGE;
+
+  private static final long[][] NO_STAGE = new long[0][];
+
+  /** The record width {@link #record} stages while chunks are lent ({@link #lend}), else -1. */
+  private int stagedWidth = -1;
+
+  /**
+   * Whether this binding stages: every retained field is in its column, none needs a state array,
+   * and the null rule needs no decision beyond the strict legacy one (no typed grammar accepts an
+   * empty field and a STRING field stores it as is).
+   */
+  private final boolean stages;
+
+  /**
+   * Per-thread staging chunks, lent to one builder for one index scan: the scan converts every
+   * staged row before it returns ({@link #giveBack}), so nothing is staged between scans.
+   */
+  private static final ThreadLocal<long @Nullable [][]> CHUNKS = new ThreadLocal<>();
+
+  /** First row of the staged chunk; rows [chunkBase, chunkBase + pending) are not converted yet. */
+  private int chunkBase;
+
+  private int pending;
+
+  /** Per-record scratch for {@link #replay}, allocated on the first declined chunk. */
+  private long[] replayRow = NO_WORDS;
 
   /**
    * @param firstRecord data-record index of the first row
@@ -113,99 +139,157 @@ final class BatchBuilder implements CsvScanner.Records {
       states[f] = binding.stateful[f] ? new byte[this.capacity] : NO_STATES;
     }
     writable = rows < this.capacity;
-    fuseKind = new byte[binding.width];
-    fuseField = new int[binding.width];
-    Arrays.fill(fuseKind, SKIP);
-    Arrays.fill(fuseField, -1);
-    // Fused records hold every field (no state arrays) and need no null-token decision beyond the
-    // strict legacy rule, which no typed grammar accepts and a STRING field stores as is.
     boolean simple = !nullsActive || nullsLegacy;
-    boolean strings = true;
     for (int f = 0; f < fields; f++) {
-      strings &= binding.kinds[f] == CsvPlan.STRING;
       int column = binding.fieldToColumn[f];
       if (binding.stateful[f] || column < 0 || column >= binding.width) simple = false;
-      else {
-        fuseKind[column] = binding.kinds[f];
-        fuseField[column] = f;
-      }
     }
-    fusable = simple;
-    spanOnly = strings;
+    stages = simple;
   }
 
-  /** Whether the index path may fill this batch through {@link #put} and {@link #commit}. */
-  boolean fusable() {
-    return fusable;
-  }
-
-  /** Selects the span-only framing loop after {@link #fusable} has admitted this builder. */
-  boolean spanOnly() {
-    return spanOnly;
-  }
-
-  /** The all-STRING form of {@link #put}, with the plan's kind decision outside the field loop. */
-  boolean putSpan(int column, long span) {
-    if (column >= fuseField.length || !writable) return false;
-    int f = fuseField[column];
-    if (f >= 0) words[f][rows] = span + spanShift;
-    return true;
+  /** Whether {@link IndexScan} frames this batch with the plain loop and staged records. */
+  boolean stages() {
+    return stages;
   }
 
   /**
-   * Converts field {@code column} of the record being framed into row {@link #rows}. False when the
-   * record must go through {@link #record} (a value no grammar accepts, a constraint, a complex
-   * Commons span in a typed field, a column past the width, or no capacity): that path then
-   * reports the exact diagnostic, or accepts the record, rewriting the same row.
+   * Lends this builder the thread's staging chunks for one index scan. A scan nested in a
+   * callback finds none and allocates its own.
    */
-  boolean put(int column, long span) {
-    byte[] kinds = fuseKind;
-    if (column >= kinds.length || !writable) return false;
-    byte kind = kinds[column];
-    if (kind == SKIP) return true;
-    int f = fuseField[column];
-    if (kind == CsvPlan.STRING) {
-      words[f][rows] = span + spanShift;
-      return true;
+  void lend() {
+    int width = binding.width;
+    long[][] chunks = CHUNKS.get();
+    CHUNKS.set(null);
+    if (chunks == null || chunks.length < width) {
+      chunks = new long[width][];
+      for (int column = 0; column < width; column++) chunks[column] = new long[CHUNK];
     }
-    if (decoder != null && CsvScanner.escaped(span)) return false;
-    int offset = CsvScanner.offset(span);
-    int length = CsvScanner.length(span);
+    staged = chunks;
+    stagedWidth = width;
+  }
+
+  /** Converts the staged rows (reporting their first diagnostic) and returns the chunks. */
+  void giveBack() {
     try {
-      switch (kind) {
-        case CsvPlan.INT64 -> {
-          long value = Numbers.parseLong(input, offset, length);
-          if (binding.constrained[f]) Values.validateLong(binding.fields[f], value);
-          words[f][rows] = value;
-        }
-        case CsvPlan.FLOAT64 -> {
-          double value = Numbers.parseDouble(input, offset, length);
-          if (binding.binary32[f] && (double) (float) value != value) return false;
-          doubles[f][rows] = value;
-        }
-        default -> {
-          int b = bool(input, offset, length);
-          if (b < 0) return false;
-          booleans[f][rows] = b != 0;
-        }
+      convert();
+    } finally {
+      abandon();
+    }
+  }
+
+  /** Returns the chunks without converting (the scan is failing); staged rows are dropped. */
+  void abandon() {
+    long[][] chunks = staged;
+    staged = NO_STAGE;
+    stagedWidth = -1;
+    pending = 0;
+    if (chunks.length != 0) CHUNKS.set(chunks);
+  }
+
+  /**
+   * Converts the staged rows field by field. The first value no grammar accepts (or a constraint,
+   * or a complex Commons span) sends the whole chunk through {@link #replay}, which converts it
+   * row by row in record and field order as {@link #record} does, so diagnostics and their order
+   * are the per-record path's. Called when a chunk fills, before {@link #record} writes a row, and
+   * when the index scan returns, so no later framing error can overtake a staged one.
+   */
+  @InliningCutoff
+  void convert() {
+    int n = pending;
+    if (n == 0) return;
+    int base = chunkBase;
+    CsvPlan.Binding b = binding;
+    byte[] kinds = b.kinds;
+    int[] fieldToColumn = b.fieldToColumn;
+    boolean commons = decoder != null;
+    for (int f = 0; f < kinds.length; f++) {
+      long[] spans = staged[fieldToColumn[f]];
+      boolean converted =
+          switch (kinds[f]) {
+            case CsvPlan.STRING -> shiftSpans(spans, n, words[f], base, spanShift);
+            case CsvPlan.INT64 ->
+                convertLongs(input, spans, n, words[f], base, commons, b.constrained[f] ? b.fields[f] : null);
+            case CsvPlan.FLOAT64 ->
+                convertDoubles(input, spans, n, doubles[f], base, commons, b.binary32[f]);
+            default -> convertBooleans(input, spans, n, booleans[f], base, commons);
+          };
+      if (!converted) {
+        replay(base, n);
+        return;
       }
+    }
+    chunkBase = base + n;
+    pending = 0;
+  }
+
+  private static boolean shiftSpans(long[] spans, int n, long[] out, int base, long shift) {
+    for (int i = 0; i < n; i++) out[base + i] = spans[i] + shift;
+    return true;
+  }
+
+  // One field over a chunk. False on the first value the per-record path decides (no grammar
+  // accepts it, a constraint, a complex Commons span): the chunk is then replayed per record.
+  // Host-inlining roots, so Native Image inlines the number parsers
+  // and their SWAR helpers into each monomorphic pass.
+
+  @BytecodeInterpreterSwitch
+  private static boolean convertLongs(
+      byte[] input, long[] spans, int n, long[] out, int base, boolean commons, @Nullable Field constrained) {
+    try {
+      for (int i = 0; i < n; i++) {
+        long span = spans[i];
+        if (commons && CsvScanner.escaped(span)) return false;
+        long value = Numbers.parseLong(input, CsvScanner.offset(span), CsvScanner.length(span));
+        if (constrained != null) Values.validateLong(constrained, value);
+        out[base + i] = value;
+      }
+      return true;
     } catch (NumberFormatException | ContractViolation e) {
       return false;
     }
+  }
+
+  @BytecodeInterpreterSwitch
+  private static boolean convertDoubles(
+      byte[] input, long[] spans, int n, double[] out, int base, boolean commons, boolean binary32) {
+    try {
+      for (int i = 0; i < n; i++) {
+        long span = spans[i];
+        if (commons && CsvScanner.escaped(span)) return false;
+        double value = Numbers.parseDouble(input, CsvScanner.offset(span), CsvScanner.length(span));
+        if (binary32 && (double) (float) value != value) return false;
+        out[base + i] = value;
+      }
+      return true;
+    } catch (NumberFormatException e) {
+      return false;
+    }
+  }
+
+  @BytecodeInterpreterSwitch
+  private static boolean convertBooleans(
+      byte[] input, long[] spans, int n, boolean[] out, int base, boolean commons) {
+    for (int i = 0; i < n; i++) {
+      long span = spans[i];
+      if (commons && CsvScanner.escaped(span)) return false;
+      int b = bool(input, CsvScanner.offset(span), CsvScanner.length(span));
+      if (b < 0) return false;
+      out[base + i] = b != 0;
+    }
     return true;
   }
 
-  /**
-   * Commits the record of {@code count} fields that {@link #put} wrote, [start, end) of the input,
-   * after checking its width and, when the prevalidated range does not cover it, its UTF-8. False
-   * leaves the record to {@link #record} (which reports the error or handles a flexible width).
-   */
-  boolean commit(int count, int start, int end) {
-    if (count != binding.width) return false;
-    if ((start < validFrom || end > validTo) && Utf8.invalidOffset(input, start, end) >= 0)
-      return false;
-    advance(end);
-    return true;
+  /** The staged chunk through the per-record conversion ({@link #fill}), row by row. */
+  private void replay(int base, int n) {
+    int width = binding.width;
+    if (replayRow.length < width) replayRow = new long[width];
+    long[] row = replayRow;
+    for (int i = 0; i < n; i++) {
+      for (int column = 0; column < width; column++) row[column] = staged[column][i];
+      fill(base + i, row, width, recordBase + base + i + 1);
+    }
+    chunkBase = base + n;
+    pending = 0;
   }
 
   /** Counts one row and keeps row {@link #rows} writable while maxBatchRows allows. */
@@ -271,13 +355,29 @@ final class BatchBuilder implements CsvScanner.Records {
   }
 
   /**
-   * The per-record path: every record outside the fused path, and the fused path's declined
-   * records. An inlining cutoff, so the fused framing loop (a host-inlining root) calls it instead
-   * of inlining the whole builder.
+   * One framed record. While chunks are lent, a complete record within row capacity whose UTF-8 is
+   * valid (prevalidated, or checked here) is staged; everything else takes {@link #recordSlow}.
    */
   @Override
   @InliningCutoff
   public boolean record(long[] spans, int count, int start, int end) {
+    // Staged plans framed by the index scan: a complete, valid record only copies its spans.
+    if (count == stagedWidth
+        && writable
+        && ((start >= validFrom && end <= validTo) || Utf8.invalidOffset(input, start, end) < 0)) {
+      long[][] s = staged;
+      int k = pending;
+      for (int column = 0; column < count; column++) s[column][k] = spans[column];
+      advance(end);
+      if (++pending == CHUNK) convert();
+      return true;
+    }
+    return recordSlow(spans, count, start, end);
+  }
+
+  /** {@link #record} for every record the staged copy does not take. */
+  private boolean recordSlow(long[] spans, int count, int start, int end) {
+    if (pending != 0) convert();
     if (rows == maxRows) {
       full = true;
       return false;
@@ -292,7 +392,15 @@ final class BatchBuilder implements CsvScanner.Records {
       throw CsvScanner.syntax(
           number, byteBase + start, "record has " + count + " fields, expected " + b.width);
     if (rows == capacity) grow(start);
-    int row = rows;
+    fill(rows, spans, count, number);
+    advance(end);
+    chunkBase = rows;
+    return true;
+  }
+
+  /** Converts and stores one accepted record's fields into {@code row}; throws its diagnostic. */
+  private void fill(int row, long[] spans, int count, long number) {
+    CsvPlan.Binding b = binding;
     int[] fieldToColumn = b.fieldToColumn;
     for (int f = 0; f < fieldToColumn.length; f++) {
       int column = fieldToColumn[f];
@@ -318,8 +426,6 @@ final class BatchBuilder implements CsvScanner.Records {
         default -> booleans[f][row] = toBoolean(number, f, span);
       }
     }
-    advance(end);
-    return true;
   }
 
   // Escaped content holds quote bytes, which no numeric or boolean grammar accepts.
@@ -436,6 +542,7 @@ final class BatchBuilder implements CsvScanner.Records {
 
   /** Continues the batch over the next window: {@code shift} is its batch offset. */
   void window(byte[] input, int shift, long byteBase) {
+    convert();
     this.input = input;
     this.spanShift = (long) shift << 32;
     this.byteBase = byteBase;
@@ -450,6 +557,7 @@ final class BatchBuilder implements CsvScanner.Records {
   }
 
   private void trim() {
+    convert();
     if (capacity - rows > capacity / 8) resize(rows);
   }
 

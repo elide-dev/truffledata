@@ -202,7 +202,7 @@ void merge_semantics() {
   // Merging a non-mapping is an error.
   for (const char* bad : {"{<<: 1}", "{<<: [1]}", "a: &s [1]\nb: {<<: *s}\n", "{<<: [{a: 1}, 2]}"})
     require(message(s, bad) == "YAML merge of a non-mapping");
-  require(message(s, "{<<: {a: 1}, <<: {b: 2}}") == "duplicate YAML key");
+  require(message(s, "{<<: {a: 1}, <<: {b: 2}}") == "duplicate YAML key: <<");
   // An anchor that merging would remove is an error.
   require(message(s, "{<<: &m {a: 1}}") == "YAML merge removes an anchored node");
   // LAST_WINS interplay: explicit duplicates resolve first, then the merge fills gaps.

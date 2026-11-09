@@ -79,7 +79,10 @@ final class YamlPlanTest {
       assertThrows(
           IllegalArgumentException.class, () -> plan.decode(SvmAcceptance.bytes("word: xx")));
     }
-    assertThrows(UnsupportedOperationException.class, () -> YamlPlan.compile(number));
-    assertThrows(UnsupportedOperationException.class, () -> YamlPlan.compile(number, Map.of()));
+    // The static compile runs on YamlSession.open()'s backend: the Java kernel on this JVM.
+    try (var plan = YamlPlan.compile(number); var row = plan.decode(SvmAcceptance.bytes("n: 5"))) {
+      assertEquals(5, row.longValue(0));
+    }
+    assertThrows(UnsupportedOperationException.class, () -> YamlSvm.compile(number, Map.of()));
   }
 }

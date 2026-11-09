@@ -2,7 +2,7 @@
 
 The native YAML backend uses rapidyaml 0.16.0 with strict YAML 1.2 core resolution. The Java integration is under development and is not yet a published artifact. Typed plans and static-image compiled reads are implemented; the compact producer is implemented, while full performance and release qualification remains unfinished; the [implementation ledger](superpowers/plans/2026-11-06-yaml-ledger.md) records verified scope.
 
-For JVM use, open a session with `YamlJvm.openSession(pathToNativeLibrary)`. For a static image linked against `//yaml/native:svm`, use `YamlSession.open()`. Sessions and retained messages are thread confined.
+For JVM use, open a session with `YamlJvm.openSession(pathToNativeLibrary)`. For a static image linked against `//yaml/native:svm`, add `truffledata-yaml-native` (`//yaml:svm`) and use `YamlSession.open()`. Sessions and retained messages are thread confined.
 
 ```java
 try (YamlSession session = YamlJvm.openSession(library);
@@ -39,3 +39,76 @@ copies large strings. The native producer negotiates capacity from decoded strin
 expanded canonical mapping keys and reused alias keys. An input-only `2 × length + 16` estimate
 is not a universal YAML bound; returned strings remain valid after the session parses again.
 The JVM FFM path currently copies text instead of sharing this arena.
+
+## Java kernel (no native library)
+
+`truffledata-yaml-java` is a pure-Java implementation of the same semantics behind the same
+`YamlSession`, `YamlMessage`, `TapeValue`, `TapeSink`, stream and typed-plan API, for plain JVMs
+without `yaml_shared` and for native images built without the static YAML archive (Windows,
+linux-musl, macOS x86_64). Add `truffledata-yaml-snakeyaml`, which brings the kernel and its first
+event source (SnakeYAML Engine 3.2's scanner and parser; no composer, constructor or resolver).
+
+`YamlSession.open(options)` picks among the `YamlSessionProvider` services on the class path: the
+static archive (`truffledata-yaml-native`) in a native image, otherwise the kernel
+(`YamlJava.openSession(options)` selects it explicitly, and `YamlJava.openSession(options, source)`
+takes any event source). `YamlPlan.compile` compiles on that same backend; `YamlSvm` remains the
+explicit static-archive entry point.
+
+The kernel sits above a parser-neutral event boundary, `dev.elide.truffledata.yaml.events`: a
+`YamlEventSource` reports resolved tags, styles, anchors and byte/line/column positions to
+`YamlEvents`. Policies (scalar resolution through the shared `ScalarResolver`, duplicate keys after
+resolution, merge order, alias and recursive-alias rules, 1.1 type tags, unknown tags, version
+directives, every `YamlLimits` budget), raw spans, the `yaml_meta` side tables, multi-document
+streams and typed plans are the kernel's own and depend only on that package; a future
+hand-written parser implements `YamlEventSource` alone. Errors have the native types and messages
+(`YAML syntax error: duplicate YAML key: a at line 2, column 1`).
+
+Native images without the archive: do not add `truffledata-yaml-native`; add
+`truffledata-yaml-snakeyaml`. `truffledata-yaml` holds no code that references the generated
+bindings and does not depend on them, so nothing pulls in their `@CLibrary` (which requires the
+archive), and images link even with `--link-at-build-time=dev.elide.truffledata`;
+`//tools/release:yaml_java_native` builds the published jars this way. Images need `--initialize-at-build-time=dev.elide.truffledata`, as
+every TruffleData image does.
+
+`JavaKernelDifferentialTest` compares the kernel with the native decoder on the yaml-test-suite,
+the probe fixtures, fuzzed documents, the native tests' policy cases, limits, chunked streams,
+guest strings and typed plans. Known differences, all from the parsers rather than the policies,
+are listed with reasons in `yaml/tests/java_kernel_excluded.txt`: SnakeYAML Engine's grammar gaps
+(the 45 pinned Engine cases, the `\L`/`\P` escapes, NEL as a line break), and raw spans of some quoted
+implicit block keys that the native decoder omits. `maxIndexBytes` charges the kernel's published tape, a lower bound of the native arena.
+
+## Writing YAML
+
+`YamlWriter` is a streaming writer and a `TapeSink`, so `value.export(writer)` writes any YAML, JSON or snapshot tape. `YamlEmitter.emit(value, options)` wraps it for one document (`emitAll` for a stream, `emitUtf8` for bytes):
+
+```java
+try (YamlMessage message = session.decode(input)) {
+  String yaml = YamlEmitter.emit(message.root(),
+      YamlEmitOptions.DEFAULT.withSchema(YamlSchema.YAML_1_1).withSortKeys(true));
+}
+
+StringBuilder out = new StringBuilder();
+try (YamlWriter writer = new YamlWriter(out, YamlEmitOptions.DEFAULT.withFlowDepth(2))) {
+  writer.beginMapping();
+  writer.key("id");
+  writer.value("0o17");           // a string: written "0o17" because CORE reads 0o17 as 15
+  writer.key("base");
+  writer.anchor("b");
+  writer.beginMapping();
+  writer.key("x");
+  writer.value(1);
+  writer.end();
+  writer.key("copy");
+  writer.alias("b");
+  writer.end();
+}
+```
+
+Every scalar reads back as the same value under `YamlEmitOptions.schema()` (CORE by default). The writer shares the decoder's scalar resolution: a string is plain only when it resolves as a string under the schema (`"123"`, `"true"`, `"0o7"`, `""`, `".inf"` are quoted under CORE; `"yes"` and `"2024-01-01"` under YAML 1.1; every string under JSON) and is syntactically safe where it stands: no leading indicator or white space, no `: `/` #`/trailing `:`, no flow indicators in flow collections, no `---`/`...` document marker, no control, line-break, BOM or non-character code points. Other strings use the preferred quote style (double by default; strings that single quotes cannot carry use double quotes with YAML escapes) or, in block context, a literal block scalar with the matching chomping indicator (`|`, `|-`, `|+`) and an indentation indicator when the first line starts with white space. Keys longer than 1000 characters use the explicit `? key` form. Integers are written in decimal, unsigned and DECIMAL numbers with their exact digits, and floats with the shortest round-trip spelling (`-0.0`, `.inf`, `-.inf`, `.nan`; YAML 1.1 spellings always contain a `.`). Each typed spelling is checked against the resolver; when the schema has no plain spelling the value carries a core tag: every non-string under FAILSAFE (`!!int 1`, `!!null null`) and non-finite floats under JSON (`!!float .inf`). A DECIMAL float token that YAML 1.1 cannot spell with the same text, an unpaired surrogate, or a tag that contradicts its value throws `IllegalArgumentException`.
+
+Options (immutable, `with*`): schema, indent (1..9, default 2), `flowDepth` (collections at that depth or deeper use flow style; `block()`/`flow()` for all-block or all-flow), `sortKeys` (buffers each outermost mapping until it ends; an alias sorted before its anchor takes the anchored node), `indentSequences` (`key:\n  - a` versus `key:\n- a`), `quote`, `blockScalars`, `tildeNull`, `explicitStart`/`explicitEnd` and `preserveMetadata`. An empty collection is written `{}`/`[]`. Lines are never folded and comments are not written.
+
+Explicit calls cover what a sink lacks: `anchor(name)` and `tag(uri)` before a node or key, `alias(name)`, `style(Style)` hints (honored when they represent the value exactly), `key(text, KeyKind)` and `beginDocument()`/`endDocument()`. A second root value starts a new `---` document. With `preserveMetadata`, sink exports keep tags and aliases (anchors are named `a<id>`), and `YamlEmitter` additionally keeps source anchor names, scalar and collection styles and key kinds: `1: x` stays an integer key while `"1": x` stays a string key. An alias whose anchor lies outside the emitted subtree is expanded once and anchored there. Without it, tags are dropped and aliases expanded. Folded scalars are re-emitted as literal ones; anchor names are only renamed when key sorting meets a redefined name.
+
+Writer output is tested by re-parsing it natively and comparing exported events (including `-0.0`, NaN, U64 and DECIMAL) under all four schemas and eight option sets: a hazard corpus in every position, 9,600 seeded random documents with anchors, multi-document streams, 300 JSON fixtures, and the five fixtures plus every decodable pinned yaml-test-suite case re-emitted with and without metadata preservation. Two rapidyaml parse quirks are avoided by construction: a key starting with an indicator or `.` directly after an indentless sequence uses the explicit form, and an anchored or tagged block mapping in a sequence entry whose first key is explicit is written in flow style.
+

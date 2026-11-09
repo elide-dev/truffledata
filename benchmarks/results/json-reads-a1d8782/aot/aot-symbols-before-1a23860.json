@@ -1,0 +1,714 @@
+{
+  "image": "build/json-after-1a23860/json-comparison-profile",
+  "nm": "/Users/sam/.local/share/mise/shims/llvm-nm",
+  "objdump": "/Users/sam/.local/share/mise/shims/llvm-objdump",
+  "symbols": [
+    {
+      "pattern": "^HeapTape_copy$",
+      "symbol": "HeapTape_copy_gELUfAwSQyF1jr5lHeGLS6",
+      "name": "HeapTape_copy",
+      "address": 15346976,
+      "size": 3720,
+      "instructions": 815,
+      "calls": 32,
+      "frame": 152,
+      "stack_loads": 155,
+      "stack_stores": 81,
+      "call_targets": [
+        "GenScavengeAllocationSupport_slowNewArray",
+        "GenScavengeAllocationSupport_slowNewInstance",
+        "ImplicitExceptions_throwNewIntegerOverflowException",
+        "ImplicitExceptions_throwNewNegativeArraySizeException",
+        "ImplicitExceptions_throwNewNullPointerException",
+        "ImplicitExceptions_throwNewOutOfBoundsExceptionWithArgs",
+        "Math_toIntExact",
+        "SafepointSlowpath_enterSlowPathSafepointCheckCalleeSavedCCONV",
+        "SvmJsonMessage_copyText",
+        "SvmJsonMessage_metadata",
+        "TapeReader_length",
+        "TapeReader_next",
+        "TapeReader_rawSpan",
+        "TapeReader_word"
+      ]
+    },
+    {
+      "pattern": "^JsonComparison\\$Reads_(nativeValue|read)$",
+      "symbol": "JsonComparison$Reads_nativeValue_8r8vBDdjBk2dSBZZ0xEFpD",
+      "name": "JsonComparison$Reads_nativeValue",
+      "address": 15207360,
+      "size": 7174,
+      "instructions": 1500,
+      "calls": 73,
+      "frame": 88,
+      "stack_loads": 42,
+      "stack_stores": 97,
+      "call_targets": [
+        "ExceptionUnwind_unwindExceptionWithoutCalleeSavedRegisters",
+        "GenScavengeAllocationSupport_slowNewInstance",
+        "ImplicitExceptions_throwNewNullPointerException",
+        "IndexOutOfBoundsException",
+        "Throwable_fillInStackTrace",
+        "TypedRecord_walkExploded"
+      ]
+    },
+    {
+      "pattern": "^JsonComparison\\$Reads_(nativeValue|read)$",
+      "symbol": "JsonComparison$Reads_read_ulhlxW2JpBE7QApyRxVOz1",
+      "name": "JsonComparison$Reads_read",
+      "address": 15215232,
+      "size": 8678,
+      "instructions": 1823,
+      "calls": 82,
+      "frame": 120,
+      "stack_loads": 104,
+      "stack_stores": 139,
+      "call_targets": [
+        "ExceptionUnwind_unwindExceptionWithoutCalleeSavedRegisters",
+        "GenScavengeAllocationSupport_slowNewInstance",
+        "ImplicitExceptions_throwNewClassCastExceptionWithArgs",
+        "ImplicitExceptions_throwNewNullPointerException",
+        "ImplicitExceptions_throwNewOutOfBoundsExceptionWithArgs",
+        "IndexOutOfBoundsException",
+        "Throwable_fillInStackTrace",
+        "TypedRecord_walkExploded"
+      ]
+    },
+    {
+      "pattern": "^JsonFixture\\$InteropReader_read$",
+      "symbol": "JsonFixture$InteropReader_read_OT7zTloDowIrOeTjR9thuA",
+      "name": "JsonFixture$InteropReader_read",
+      "address": 15312448,
+      "size": 2397,
+      "instructions": 587,
+      "calls": 40,
+      "frame": 72,
+      "stack_loads": 54,
+      "stack_stores": 31,
+      "call_targets": [
+        "*%rax",
+        "CompilerDirectives_shouldNotReachHere",
+        "ExceptionUnwind_unwindExceptionWithoutCalleeSavedRegisters",
+        "ImplicitExceptions_createNullPointerException"
+      ]
+    },
+    {
+      "pattern": "^JsonSvm_decode$",
+      "symbol": "JsonSvm_decode_xs069bDs2BId1znQpMpx57",
+      "name": "JsonSvm_decode",
+      "address": 15339136,
+      "size": 1605,
+      "instructions": 367,
+      "calls": 22,
+      "frame": 104,
+      "stack_loads": 16,
+      "stack_stores": 12,
+      "call_targets": [
+        "*%r10",
+        "AbstractPinnedObjectSupport_create",
+        "ExceptionUnwind_unwindExceptionWithoutCalleeSavedRegisters",
+        "GenScavengeAllocationSupport_slowNewInstance",
+        "ImplicitExceptions_throwNewNullPointerException",
+        "JsonSvm_checkStatus",
+        "JsonSvm_publish",
+        "JsonSvm_verifyAbi",
+        "PosixLibC_free",
+        "SafepointSlowpath_enterSlowPathTransitionFromNativeToNewStatus",
+        "Throwable_addSuppressed",
+        "Throwable_fillInStackTrace",
+        "UnmanagedMemory_calloc",
+        "ractPinnedObjectSupport$PinnedObjectImpl_addressOfArrayElement",
+        "ractPinnedObjectSupport$PinnedObjectImpl_close"
+      ]
+    },
+    {
+      "pattern": "^SvmJsonMessage_copyText$",
+      "symbol": "SvmJsonMessage_copyText_LWWNnhr4kJ57BFxg6XDrK2",
+      "name": "SvmJsonMessage_copyText",
+      "address": 15342816,
+      "size": 110,
+      "instructions": 48,
+      "calls": 2,
+      "frame": 24,
+      "stack_loads": 0,
+      "stack_stores": 0,
+      "call_targets": [
+        "SvmTape_copyText"
+      ]
+    },
+    {
+      "pattern": "^SvmJsonMessage_directoryKey$",
+      "symbol": "SvmJsonMessage_directoryKey_LQZRy3Fz3K8LgwkygePKwI",
+      "name": "SvmJsonMessage_directoryKey",
+      "address": 15343168,
+      "size": 458,
+      "instructions": 141,
+      "calls": 0,
+      "frame": 8,
+      "stack_loads": 0,
+      "stack_stores": 0,
+      "call_targets": []
+    },
+    {
+      "pattern": "^SvmTape_copyText$",
+      "symbol": "SvmTape_copyText_YS4TXoDoaV7aq6qnesjM28",
+      "name": "SvmTape_copyText",
+      "address": 15360832,
+      "size": 110,
+      "instructions": 48,
+      "calls": 2,
+      "frame": 24,
+      "stack_loads": 0,
+      "stack_stores": 0,
+      "call_targets": [
+        "SvmTape_copyText"
+      ]
+    },
+    {
+      "pattern": "^SvmTape_copyText$",
+      "symbol": "SvmTape_copyText_QXHjExs0k21MQHNO7UWLCB",
+      "name": "SvmTape_copyText",
+      "address": 15360960,
+      "size": 734,
+      "instructions": 175,
+      "calls": 8,
+      "frame": 72,
+      "stack_loads": 23,
+      "stack_stores": 12,
+      "call_targets": [
+        "CheckedByteArraySupport_checkBounds",
+        "ExceptionUnwind_unwindExceptionWithoutCalleeSavedRegisters",
+        "GenScavengeAllocationSupport_slowNewInstance",
+        "ImplicitExceptions_throwNewOutOfBoundsExceptionWithArgs",
+        "SafepointSlowpath_enterSlowPathSafepointCheckCalleeSavedCCONV",
+        "Throwable_fillInStackTrace"
+      ]
+    },
+    {
+      "pattern": "^SvmTypedOwner_(bits|present|nulls|slotBase|plan)$",
+      "symbol": "SvmTypedOwner_bits_XHnP6TzsawD2wjPC6h0bz5",
+      "name": "SvmTypedOwner_bits",
+      "address": 15345920,
+      "size": 54,
+      "instructions": 25,
+      "calls": 0,
+      "frame": 8,
+      "stack_loads": 0,
+      "stack_stores": 0,
+      "call_targets": []
+    },
+    {
+      "pattern": "^SvmTypedOwner_(bits|present|nulls|slotBase|plan)$",
+      "symbol": "SvmTypedOwner_nulls_eDsqt4CCeMKwCTZCNE7e4D",
+      "name": "SvmTypedOwner_nulls",
+      "address": 15346528,
+      "size": 55,
+      "instructions": 24,
+      "calls": 0,
+      "frame": 8,
+      "stack_loads": 0,
+      "stack_stores": 0,
+      "call_targets": []
+    },
+    {
+      "pattern": "^SvmTypedOwner_(bits|present|nulls|slotBase|plan)$",
+      "symbol": "SvmTypedOwner_plan_AdV1fum0Zz9THSXzvtlz20",
+      "name": "SvmTypedOwner_plan",
+      "address": 15346592,
+      "size": 54,
+      "instructions": 25,
+      "calls": 0,
+      "frame": 8,
+      "stack_loads": 0,
+      "stack_stores": 0,
+      "call_targets": []
+    },
+    {
+      "pattern": "^SvmTypedOwner_(bits|present|nulls|slotBase|plan)$",
+      "symbol": "SvmTypedOwner_present_p7JyNMCSafD8CFe59rDnt7",
+      "name": "SvmTypedOwner_present",
+      "address": 15346656,
+      "size": 54,
+      "instructions": 25,
+      "calls": 0,
+      "frame": 8,
+      "stack_loads": 0,
+      "stack_stores": 0,
+      "call_targets": []
+    },
+    {
+      "pattern": "^SvmTypedOwner_(bits|present|nulls|slotBase|plan)$",
+      "symbol": "SvmTypedOwner_slotBase_CCeYA40zrPDnnv1DBztH7L",
+      "name": "SvmTypedOwner_slotBase",
+      "address": 15346720,
+      "size": 54,
+      "instructions": 25,
+      "calls": 0,
+      "frame": 8,
+      "stack_loads": 0,
+      "stack_stores": 0,
+      "call_targets": []
+    },
+    {
+      "pattern": "^TapeOwner_(find|check|checkSpecialized)$",
+      "symbol": "TapeOwner_check_Bj22guWu1wA9aBovO6bJuE",
+      "name": "TapeOwner_check",
+      "address": 15397568,
+      "size": 567,
+      "instructions": 134,
+      "calls": 5,
+      "frame": 40,
+      "stack_loads": 4,
+      "stack_stores": 3,
+      "call_targets": [
+        "ExceptionUnwind_unwindExceptionWithoutCalleeSavedRegisters",
+        "GenScavengeAllocationSupport_slowNewInstance",
+        "Throwable_fillInStackTrace"
+      ]
+    },
+    {
+      "pattern": "^TapeOwner_(find|check|checkSpecialized)$",
+      "symbol": "TapeOwner_checkSpecialized_fsDuS2YSEvEWd3iKpnthZL",
+      "name": "TapeOwner_checkSpecialized",
+      "address": 15399328,
+      "size": 567,
+      "instructions": 134,
+      "calls": 5,
+      "frame": 40,
+      "stack_loads": 4,
+      "stack_stores": 3,
+      "call_targets": [
+        "ExceptionUnwind_unwindExceptionWithoutCalleeSavedRegisters",
+        "GenScavengeAllocationSupport_slowNewInstance",
+        "Throwable_fillInStackTrace"
+      ]
+    },
+    {
+      "pattern": "^TapeOwner_(find|check|checkSpecialized)$",
+      "symbol": "TapeOwner_find_SZg7lHxsTUHcnauI2A1yBG",
+      "name": "TapeOwner_find",
+      "address": 15401184,
+      "size": 1805,
+      "instructions": 431,
+      "calls": 34,
+      "frame": 104,
+      "stack_loads": 67,
+      "stack_stores": 22,
+      "call_targets": [
+        "*%rax",
+        "ExceptionUnwind_unwindExceptionWithoutCalleeSavedRegisters",
+        "GenScavengeAllocationSupport_slowNewInstance",
+        "ImplicitExceptions_throwNewNullPointerException",
+        "ImplicitExceptions_throwNewOutOfBoundsExceptionWithArgs",
+        "TapeReader_directory",
+        "TapeReader_keyMatches",
+        "TapeReader_length",
+        "TapeReader_next",
+        "Throwable_fillInStackTrace"
+      ]
+    },
+    {
+      "pattern": "^TapeSnapshot_copy$",
+      "symbol": "TapeSnapshot_copy_Aqv3yTgsunJDouyMxBlON6",
+      "name": "TapeSnapshot_copy",
+      "address": 15427904,
+      "size": 223,
+      "instructions": 53,
+      "calls": 5,
+      "frame": 40,
+      "stack_loads": 3,
+      "stack_stores": 3,
+      "call_targets": [
+        "GenScavengeAllocationSupport_slowNewInstance",
+        "HeapTape_copy",
+        "ImplicitExceptions_throwNewNullPointerException",
+        "Math_toIntExact",
+        "TapeOwner_check"
+      ]
+    },
+    {
+      "pattern": "^TapeValue_memberNode$",
+      "symbol": "TapeValue_memberNode_7ib40QxKPS6yEutFGVYkmA",
+      "name": "TapeValue_memberNode",
+      "address": 15540512,
+      "size": 863,
+      "instructions": 195,
+      "calls": 11,
+      "frame": 72,
+      "stack_loads": 14,
+      "stack_stores": 18,
+      "call_targets": [
+        "*%rax",
+        "ExceptionUnwind_unwindExceptionWithoutCalleeSavedRegisters",
+        "GenScavengeAllocationSupport_slowNewInstance",
+        "ImplicitExceptions_throwNewNullPointerException",
+        "ImplicitExceptions_throwNewOutOfBoundsExceptionWithArgs",
+        "TapeValue_miss",
+        "Throwable_fillInStackTrace"
+      ]
+    },
+    {
+      "pattern": "^TapeValue_memberNode$",
+      "symbol": "TapeValue_memberNode_R7pcMNicTVJ2MhdyYOBzPF",
+      "name": "TapeValue_memberNode",
+      "address": 15541376,
+      "size": 326,
+      "instructions": 110,
+      "calls": 6,
+      "frame": 72,
+      "stack_loads": 18,
+      "stack_stores": 6,
+      "call_targets": [
+        "*%rax",
+        "ImplicitExceptions_throwNewNullPointerException",
+        "TapeValue_miss"
+      ]
+    },
+    {
+      "pattern": "^TapeValue_memberNode$",
+      "symbol": "TapeValue_memberNode_fc8oM4wQkJIKXm3m7JDje7",
+      "name": "TapeValue_memberNode",
+      "address": 15541728,
+      "size": 233,
+      "instructions": 89,
+      "calls": 5,
+      "frame": 56,
+      "stack_loads": 4,
+      "stack_stores": 4,
+      "call_targets": [
+        "*%rax",
+        "ImplicitExceptions_throwNewNullPointerException",
+        "TapeValue_miss"
+      ]
+    },
+    {
+      "pattern": "^TapeValue_memberNode$",
+      "symbol": "TapeValue_memberNode_7EoPOp788gDTV8EOlmJNcI",
+      "name": "TapeValue_memberNode",
+      "address": 15541984,
+      "size": 347,
+      "instructions": 94,
+      "calls": 7,
+      "frame": 72,
+      "stack_loads": 18,
+      "stack_stores": 6,
+      "call_targets": [
+        "*%rax",
+        "ImplicitExceptions_throwNewNullPointerException",
+        "ImplicitExceptions_throwNewOutOfBoundsExceptionWithArgs",
+        "TapeValue_miss"
+      ]
+    },
+    {
+      "pattern": "^TapeValue_memberNode$",
+      "symbol": "TapeValue_memberNode_hkRDgw23cUCoPD5oqeFAvF",
+      "name": "TapeValue_memberNode",
+      "address": 15542336,
+      "size": 297,
+      "instructions": 99,
+      "calls": 6,
+      "frame": 72,
+      "stack_loads": 12,
+      "stack_stores": 7,
+      "call_targets": [
+        "*%rax",
+        "ImplicitExceptions_throwNewNullPointerException",
+        "ImplicitExceptions_throwNewOutOfBoundsExceptionWithArgs",
+        "TapeValue_miss"
+      ]
+    },
+    {
+      "pattern": "^TypedAccess_(longValue|doubleValue|booleanValue)$",
+      "symbol": "TypedAccess_booleanValue_VUmqAYqu83BjD1E8qBt7HI",
+      "name": "TypedAccess_booleanValue",
+      "address": 15664320,
+      "size": 1357,
+      "instructions": 305,
+      "calls": 15,
+      "frame": 56,
+      "stack_loads": 7,
+      "stack_stores": 11,
+      "call_targets": [
+        "ExceptionUnwind_unwindExceptionWithoutCalleeSavedRegisters",
+        "GenScavengeAllocationSupport_slowNewInstance",
+        "ImplicitExceptions_throwNewNullPointerException",
+        "Throwable_fillInStackTrace",
+        "TypedRecord_walkExploded"
+      ]
+    },
+    {
+      "pattern": "^TypedAccess_(longValue|doubleValue|booleanValue)$",
+      "symbol": "TypedAccess_doubleValue_19ZzVn4vHN4Mnz5TLQ5f13",
+      "name": "TypedAccess_doubleValue",
+      "address": 15666272,
+      "size": 1389,
+      "instructions": 309,
+      "calls": 15,
+      "frame": 56,
+      "stack_loads": 7,
+      "stack_stores": 11,
+      "call_targets": [
+        "ExceptionUnwind_unwindExceptionWithoutCalleeSavedRegisters",
+        "GenScavengeAllocationSupport_slowNewInstance",
+        "ImplicitExceptions_throwNewNullPointerException",
+        "Throwable_fillInStackTrace",
+        "TypedRecord_walkExploded"
+      ]
+    },
+    {
+      "pattern": "^TypedAccess_(longValue|doubleValue|booleanValue)$",
+      "symbol": "TypedAccess_longValue_shzwIkag2EB9ygF6KRU7xC",
+      "name": "TypedAccess_longValue",
+      "address": 15668256,
+      "size": 1357,
+      "instructions": 302,
+      "calls": 15,
+      "frame": 56,
+      "stack_loads": 7,
+      "stack_stores": 11,
+      "call_targets": [
+        "ExceptionUnwind_unwindExceptionWithoutCalleeSavedRegisters",
+        "GenScavengeAllocationSupport_slowNewInstance",
+        "ImplicitExceptions_throwNewNullPointerException",
+        "Throwable_fillInStackTrace",
+        "TypedRecord_walkExploded"
+      ]
+    },
+    {
+      "pattern": "^TypedOwner_(check|checkThread)$",
+      "symbol": "TypedOwner_check_axCVdNQbWMBHJmTG8AvKuH",
+      "name": "TypedOwner_check",
+      "address": 15712512,
+      "size": 517,
+      "instructions": 139,
+      "calls": 5,
+      "frame": 40,
+      "stack_loads": 4,
+      "stack_stores": 3,
+      "call_targets": [
+        "ExceptionUnwind_unwindExceptionWithoutCalleeSavedRegisters",
+        "GenScavengeAllocationSupport_slowNewInstance",
+        "Throwable_fillInStackTrace"
+      ]
+    },
+    {
+      "pattern": "^TypedOwner_(check|checkThread)$",
+      "symbol": "TypedOwner_checkThread_usiJ1Dw3RoFqmd2vBijOQ1",
+      "name": "TypedOwner_checkThread",
+      "address": 15713600,
+      "size": 286,
+      "instructions": 67,
+      "calls": 3,
+      "frame": 40,
+      "stack_loads": 2,
+      "stack_stores": 2,
+      "call_targets": [
+        "ExceptionUnwind_unwindExceptionWithoutCalleeSavedRegisters",
+        "GenScavengeAllocationSupport_slowNewInstance",
+        "Throwable_fillInStackTrace"
+      ]
+    },
+    {
+      "pattern": "^TypedRecord_(bits|leaf|longValue|doubleValue|booleanValue|slotBits|slot|check|read|walkExploded)$",
+      "symbol": "TypedRecord_bits_eKw4E6cSRB1wfTdoOJgIx5",
+      "name": "TypedRecord_bits",
+      "address": 15738752,
+      "size": 1143,
+      "instructions": 255,
+      "calls": 12,
+      "frame": 56,
+      "stack_loads": 6,
+      "stack_stores": 10,
+      "call_targets": [
+        "ExceptionUnwind_unwindExceptionWithoutCalleeSavedRegisters",
+        "GenScavengeAllocationSupport_slowNewInstance",
+        "ImplicitExceptions_throwNewNullPointerException",
+        "Throwable_fillInStackTrace",
+        "TypedRecord_walkExploded"
+      ]
+    },
+    {
+      "pattern": "^TypedRecord_(bits|leaf|longValue|doubleValue|booleanValue|slotBits|slot|check|read|walkExploded)$",
+      "symbol": "TypedRecord_booleanValue_Wv4JgpISApICozl3RjEcYB",
+      "name": "TypedRecord_booleanValue",
+      "address": 15740032,
+      "size": 1349,
+      "instructions": 309,
+      "calls": 16,
+      "frame": 56,
+      "stack_loads": 9,
+      "stack_stores": 18,
+      "call_targets": [
+        "ExceptionUnwind_unwindExceptionWithoutCalleeSavedRegisters",
+        "GenScavengeAllocationSupport_slowNewInstance",
+        "ImplicitExceptions_throwNewNullPointerException",
+        "ImplicitExceptions_throwNewOutOfBoundsExceptionWithArgs",
+        "IndexOutOfBoundsException",
+        "Throwable_fillInStackTrace"
+      ]
+    },
+    {
+      "pattern": "^TypedRecord_(bits|leaf|longValue|doubleValue|booleanValue|slotBits|slot|check|read|walkExploded)$",
+      "symbol": "TypedRecord_check_YHc7itl6ac5XJIj1nx1c46",
+      "name": "TypedRecord_check",
+      "address": 15741696,
+      "size": 742,
+      "instructions": 186,
+      "calls": 10,
+      "frame": 56,
+      "stack_loads": 6,
+      "stack_stores": 16,
+      "call_targets": [
+        "ExceptionUnwind_unwindExceptionWithoutCalleeSavedRegisters",
+        "GenScavengeAllocationSupport_slowNewInstance",
+        "ImplicitExceptions_throwNewNullPointerException",
+        "IndexOutOfBoundsException",
+        "Throwable_fillInStackTrace"
+      ]
+    },
+    {
+      "pattern": "^TypedRecord_(bits|leaf|longValue|doubleValue|booleanValue|slotBits|slot|check|read|walkExploded)$",
+      "symbol": "TypedRecord_doubleValue_1TgdcCYMdEI3fYj2GK3DrC",
+      "name": "TypedRecord_doubleValue",
+      "address": 15742688,
+      "size": 1325,
+      "instructions": 300,
+      "calls": 16,
+      "frame": 56,
+      "stack_loads": 9,
+      "stack_stores": 18,
+      "call_targets": [
+        "ExceptionUnwind_unwindExceptionWithoutCalleeSavedRegisters",
+        "GenScavengeAllocationSupport_slowNewInstance",
+        "ImplicitExceptions_throwNewNullPointerException",
+        "ImplicitExceptions_throwNewOutOfBoundsExceptionWithArgs",
+        "IndexOutOfBoundsException",
+        "Throwable_fillInStackTrace"
+      ]
+    },
+    {
+      "pattern": "^TypedRecord_(bits|leaf|longValue|doubleValue|booleanValue|slotBits|slot|check|read|walkExploded)$",
+      "symbol": "TypedRecord_leaf_on7ygiKAIMFxwt9IY2mggJ",
+      "name": "TypedRecord_leaf",
+      "address": 15746880,
+      "size": 326,
+      "instructions": 103,
+      "calls": 4,
+      "frame": 24,
+      "stack_loads": 1,
+      "stack_stores": 1,
+      "call_targets": [
+        "ExceptionUnwind_unwindExceptionWithoutCalleeSavedRegisters",
+        "GenScavengeAllocationSupport_slowNewInstance",
+        "ImplicitExceptions_throwNewNullPointerException",
+        "Throwable_fillInStackTrace"
+      ]
+    },
+    {
+      "pattern": "^TypedRecord_(bits|leaf|longValue|doubleValue|booleanValue|slotBits|slot|check|read|walkExploded)$",
+      "symbol": "TypedRecord_longValue_j5UVnPdBLY5RukCEPjKmuJ",
+      "name": "TypedRecord_longValue",
+      "address": 15747360,
+      "size": 1325,
+      "instructions": 300,
+      "calls": 16,
+      "frame": 56,
+      "stack_loads": 9,
+      "stack_stores": 18,
+      "call_targets": [
+        "ExceptionUnwind_unwindExceptionWithoutCalleeSavedRegisters",
+        "GenScavengeAllocationSupport_slowNewInstance",
+        "ImplicitExceptions_throwNewNullPointerException",
+        "ImplicitExceptions_throwNewOutOfBoundsExceptionWithArgs",
+        "IndexOutOfBoundsException",
+        "Throwable_fillInStackTrace"
+      ]
+    },
+    {
+      "pattern": "^TypedRecord_(bits|leaf|longValue|doubleValue|booleanValue|slotBits|slot|check|read|walkExploded)$",
+      "symbol": "TypedRecord_read_c2OlRljoSfBRstfZZVbz36",
+      "name": "TypedRecord_read",
+      "address": 15750240,
+      "size": 4441,
+      "instructions": 916,
+      "calls": 45,
+      "frame": 72,
+      "stack_loads": 28,
+      "stack_stores": 85,
+      "call_targets": [
+        "ExceptionUnwind_unwindExceptionWithoutCalleeSavedRegisters",
+        "GenScavengeAllocationSupport_slowNewInstance",
+        "ImplicitExceptions_throwNewIntrinsicOutOfBoundsException",
+        "ImplicitExceptions_throwNewNullPointerException",
+        "ImplicitExceptions_throwNewOutOfBoundsExceptionWithArgs",
+        "IndexOutOfBoundsException",
+        "SvmTypedOwner_copyText",
+        "Throwable_fillInStackTrace",
+        "TypedOwner_unsigned",
+        "Values_normalize"
+      ]
+    },
+    {
+      "pattern": "^TypedRecord_(bits|leaf|longValue|doubleValue|booleanValue|slotBits|slot|check|read|walkExploded)$",
+      "symbol": "TypedRecord_slot_JkPSc6ABhI1l85cqMuRlZ4",
+      "name": "TypedRecord_slot",
+      "address": 15757952,
+      "size": 1317,
+      "instructions": 299,
+      "calls": 16,
+      "frame": 56,
+      "stack_loads": 9,
+      "stack_stores": 12,
+      "call_targets": [
+        "ExceptionUnwind_unwindExceptionWithoutCalleeSavedRegisters",
+        "GenScavengeAllocationSupport_slowNewInstance",
+        "ImplicitExceptions_throwNewNullPointerException",
+        "ImplicitExceptions_throwNewOutOfBoundsExceptionWithArgs",
+        "IndexOutOfBoundsException",
+        "Throwable_fillInStackTrace"
+      ]
+    },
+    {
+      "pattern": "^TypedRecord_(bits|leaf|longValue|doubleValue|booleanValue|slotBits|slot|check|read|walkExploded)$",
+      "symbol": "TypedRecord_slotBits_589dd88FfNHUp4oCd0PFy7",
+      "name": "TypedRecord_slotBits",
+      "address": 15759488,
+      "size": 1325,
+      "instructions": 302,
+      "calls": 16,
+      "frame": 56,
+      "stack_loads": 9,
+      "stack_stores": 19,
+      "call_targets": [
+        "ExceptionUnwind_unwindExceptionWithoutCalleeSavedRegisters",
+        "GenScavengeAllocationSupport_slowNewInstance",
+        "ImplicitExceptions_throwNewNullPointerException",
+        "ImplicitExceptions_throwNewOutOfBoundsExceptionWithArgs",
+        "IndexOutOfBoundsException",
+        "Throwable_fillInStackTrace"
+      ]
+    },
+    {
+      "pattern": "^TypedRecord_(bits|leaf|longValue|doubleValue|booleanValue|slotBits|slot|check|read|walkExploded)$",
+      "symbol": "TypedRecord_walkExploded_THYMv3fjbSDLGmMSAIICPI",
+      "name": "TypedRecord_walkExploded",
+      "address": 15766400,
+      "size": 1073,
+      "instructions": 259,
+      "calls": 15,
+      "frame": 72,
+      "stack_loads": 15,
+      "stack_stores": 10,
+      "call_targets": [
+        "ExceptionUnwind_unwindExceptionWithoutCalleeSavedRegisters",
+        "GenScavengeAllocationSupport_slowNewInstance",
+        "ImplicitExceptions_throwNewNullPointerException",
+        "ImplicitExceptions_throwNewOutOfBoundsExceptionWithArgs",
+        "Throwable_fillInStackTrace",
+        "TypedRecord_hopMismatch"
+      ]
+    }
+  ],
+  "unmatched": [],
+  "budgets": {},
+  "failures": []
+}

@@ -32,6 +32,25 @@ public interface TapeReader extends TapeLexical {
         || at < 0 || at > output.length - length) throw new IndexOutOfBoundsException("Tape text copy");
     for (int i = 0; i < length; i++) output[at + i] = textByte(owned, offset + i);
   }
+  /** Copies {@code count} words from {@code from} into caller-owned storage (snapshots, WS7). */
+  default void copyWords(long from, long[] output, int at, int count) {
+    checkCopy(from, nodeCount(), output.length, at, count, "Tape word copy");
+    for (int i = 0; i < count; i++) output[at + i] = readWord(from + i);
+  }
+  /** Copies {@code count} directory entries from {@code from}. */
+  default void copyDirectory(long from, long[] output, int at, int count) {
+    checkCopy(from, directorySize(), output.length, at, count, "Tape directory copy");
+    for (int i = 0; i < count; i++) output[at + i] = directoryEntry(from + i);
+  }
+  /** Copies the metadata of {@code count} words from {@code from}. */
+  default void copyMetadata(long from, int[] output, int at, int count) {
+    checkCopy(from, nodeCount(), output.length, at, count, "Tape metadata copy");
+    for (int i = 0; i < count; i++) output[at + i] = metadata(from + i);
+  }
+  static void checkCopy(long from, long size, int capacity, int at, int count, String what) {
+    if (from < 0 || count < 0 || from > size - count || at < 0 || at > capacity - count)
+      throw new IndexOutOfBoundsException(what);
+  }
 
   long directoryEntry(long index);
   int metadata(long index);

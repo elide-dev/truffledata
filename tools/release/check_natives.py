@@ -24,7 +24,7 @@ import sys
 import tempfile
 import zipfile
 
-from maven_repo import CLASSIFIERS, NATIVE_MODULES
+from maven_repo import CLASSIFIERS, MUSL_MODULES, NATIVE_MODULES
 
 # Rust's compiler_builtins is never LTO'd by rustc and carries no bitcode; the compiler-rt C objects it bundles are
 # named <crate hash>-<source>.o and define only compiler-rt's __-prefixed builtins and C11 atomic_* functions.
@@ -53,6 +53,12 @@ BINDINGS = {
     'csv-native': ('csv-bindings', 'dev/elide/truffledata/csv/kernel/generated/CsvNative.class'),
 }
 CSV_EXPORTS = {'td_csv_fingerprint', 'td_csv_kernel', 'td_csv_index', 'td_csv_index_leaf', 'td_csv_validate_utf8'}
+# The YAML seam's imports (yaml/native/yaml.seam). Its archive is not internalized, so these are required, not exact.
+YAML_EXPORTS = {'td_yaml_fingerprint', 'td_yaml_release', 'td_yaml_session_create', 'td_yaml_session_decode',
+                'td_yaml_session_write_text', 'td_yaml_session_retain', 'td_yaml_session_reset', 'td_yaml_session_release',
+                'td_yaml_stream_create', 'td_yaml_stream_feed', 'td_yaml_stream_finish', 'td_yaml_stream_next',
+                'td_yaml_stream_release', 'td_yaml_plan_create', 'td_yaml_plan_release', 'td_yaml_typed_decode',
+                'td_yaml_typed_release'}
 HEX64 = re.compile(rb'(?<![0-9a-f])[0-9a-f]{64}(?![0-9a-f])')
 
 
@@ -223,6 +229,8 @@ class Checker:
         defined = {line.split()[-1].lstrip('_') for line in self.tool('llvm-nm', *flags, '--defined-only', path).splitlines() if len(line.split()) >= 3}
         if module == 'csv-native' and defined != CSV_EXPORTS:
             self.fail(where, 'CSV public ABI mismatch: extra=%s missing=%s' % (sorted(defined - CSV_EXPORTS), sorted(CSV_EXPORTS - defined)))
+        if module == 'yaml' and not YAML_EXPORTS <= defined:
+            self.fail(where, 'YAML public ABI missing %s' % sorted(YAML_EXPORTS - defined))
         if FINGERPRINT[module].lstrip('_') not in defined:
             self.fail(where, 'does not export %s' % FINGERPRINT[module])
 
@@ -258,7 +266,7 @@ def main():
         else:
             checker.fail(jar.name, 'missing bindings jar')
         for classifier in args.classifiers:
-            if classifier.endswith('-musl') and module != 'csv-native':
+            if classifier.endswith('-musl') and module not in MUSL_MODULES:
                 continue
             extension, bitcode = CLASSIFIERS[classifier]
             def attachment(suffix):
@@ -280,14 +288,15 @@ def main():
             listing = manifest('-%s.members.txt' % classifier)
             if static and listing:
                 checker.archive(static, listing, 'fat' if linux else 'machine-code', where)
-                if module == 'csv-native':
+                # Musl modules have no shared library on those platforms, so their archives carry the export check.
+                if module in MUSL_MODULES:
                     checker.exports(static, module, where, ['--extern-only'])
             if bitcode:
                 twin, where = attachment('-%s-bitcode.a' % classifier)
                 listing = manifest('-%s-bitcode.members.txt' % classifier)
                 if twin and listing:
                     checker.archive(twin, listing, 'bitcode', where)
-                    if module == 'csv-native':
+                    if module in MUSL_MODULES:
                         checker.exports(twin, module, where, ['--extern-only'])
             shared, where = attachment('-%s%s' % (classifier, extension)) if extension else (None, '')
             for path, name in ((static, 'static archive'), (shared, 'shared library')):

@@ -36,6 +36,10 @@ class error : public std::exception {
   char text[capacity];
   size_t length;
   bool parser = false;  // raised by rapidyaml itself (through its error callbacks)
+  // A duplicate found by the fused (directory-time) key check, which runs when the mapping closes
+  // and so knows neither the key nor its position. The session re-decodes with per-key checks to
+  // report both; this error is only ever seen if that re-decode unexpectedly succeeds.
+  bool relocate = false;
 
   error(int32_t code_, std::string_view message, size_t offset_ = npos) : code(code_), offset(offset_) {
     length = message.size() < capacity - 1 ? message.size() : capacity - 1;
@@ -47,6 +51,10 @@ class error : public std::exception {
     for (char c : std::string_view(": ")) if (length < capacity - 1) text[length++] = c;
     for (char c : detail) if (length < capacity - 1) text[length++] = c;
     text[length] = 0;
+    return *this;
+  }
+  error& relocated() {
+    relocate = true;
     return *this;
   }
   error& from_parser() {

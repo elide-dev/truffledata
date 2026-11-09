@@ -60,6 +60,8 @@ import org.jspecify.annotations.Nullable;
  *       the indexed scanner per kernel, FastCSV's callback handler and Jackson's token stream).
  *   <li>{@code strings}: full materialization, one {@code java.lang.String} per data cell.
  *   <li>{@code typed}: scan plus typed decode of the INT64, FLOAT64 and BOOLEAN columns.
+ *   <li>{@code typed-build}: the {@code typed} batch construction alone ({@code CsvPlan.parse},
+ *       no cell readback), so construction and readback can be attributed separately.
  *   <li>{@code typed-reads}: retained typed rows read by a guest loop (read-aot, interpret, peak),
  *       CSV plan rows against core {@code Batch} rows built from FastCSV.
  * </ul>
@@ -106,7 +108,8 @@ public final class CsvComparison {
         }
       };
 
-  static final List<String> WORKLOADS = List.of("index", "scan", "strings", "typed", "typed-reads");
+  static final List<String> WORKLOADS =
+      List.of("index", "scan", "strings", "typed", "typed-build", "typed-reads");
   static final List<String> STAGES = List.of("ingest", "read-aot", "interpret", "peak");
   static final CsvFormat FORMAT = CsvFormat.RFC4180;
   static final CsvLimits BIG = new CsvLimits(Integer.MAX_VALUE - 64, 1 << 20, 4096, Integer.MAX_VALUE);
@@ -150,6 +153,7 @@ public final class CsvComparison {
         List.of(
             "truffledata-plan", "truffledata-plan-native", "truffledata-plan-bytes", "kernel-swar",
             "kernel-native", "fastcsv", "univocity", "commons-csv", "jackson"));
+    ENGINES.put("typed-build", List.of("truffledata-plan", "truffledata-plan-native"));
     ENGINES.put("typed-reads", List.of("truffledata-plan", "batch-fastcsv"));
   }
 
@@ -170,11 +174,14 @@ public final class CsvComparison {
       CsvFixture.write(args[1], Integer.parseInt(args[2]), Path.of(args[3]));
     } else if (args.length >= 1 && args[0].equals("--smoke")) {
       smoke(args.length > 1 ? Integer.parseInt(args[1]) : 64 << 10);
+    } else if (args.length == 6 && args[0].equals("--profile")) {
+      profile(args[1], args[2], args[3], Integer.parseInt(args[4]), Integer.parseInt(args[5]));
     } else if (args.length == 5) {
       cell(args[0], args[1], args[2], Integer.parseInt(args[3]), args[4], false);
     } else {
       throw new IllegalArgumentException(
-          "--fixture dataset bytes path | --smoke [bytes] | workload engine dataset bytes stage");
+          "--fixture dataset bytes path | --smoke [bytes] | --profile workload engine dataset bytes"
+              + " iterations | workload engine dataset bytes stage");
     }
   }
 
@@ -323,6 +330,7 @@ public final class CsvComparison {
                   ? "truffledata-mapped"
                   : engine.contains("owned") ? "truffledata-batch-owned" : "truffledata-batch";
           case "typed" -> "truffledata-plan";
+          case "typed-build" -> "truffledata-plan-build";
           default -> throw new IllegalArgumentException("engine " + workload + "/" + engine);
         };
     return reporting(path.equals("truffledata-mapped") ? new Mapped() : base(workload, path, dataset));
@@ -545,6 +553,18 @@ public final class CsvComparison {
           default -> new KernelEngine(indexer(engine), dataset, Mode.TYPED);
         };
       }
+      case "typed-build" -> {
+        if (!engine.equals("truffledata-plan-build"))
+          throw new IllegalArgumentException("engine " + workload + "/" + engine);
+        CsvPlan plan =
+            CsvPlan.compile(java.util.Objects.requireNonNull(CsvFixture.typedSchema(dataset)), FORMAT);
+        // The retained batch, without reading its cells; typed reads every cell of the same batch.
+        return input -> {
+          CsvBatch batch = plan.parse(input, BIG);
+          retained = batch;
+          return (long) batch.size() * 1_000_003L + batch.schema().size();
+        };
+      }
       default -> throw new IllegalArgumentException("workload " + workload);
     }
   }
@@ -723,6 +743,37 @@ public final class CsvComparison {
   }
 
   // ---------------------------------------------------------------- measurement
+
+  /**
+   * Instruction-profile mode (callgrind over the symbol-bearing {@code csv_profile} images): a
+   * fixed number of untimed runs of one shipped engine, after three warm-up runs. Collection
+   * toggles on {@link #profileRegion} so setup, fixture generation and warm-up are excluded.
+   */
+  private static void profile(String workload, String engineName, String dataset, int bytes, int iterations)
+      throws Exception {
+    List<String> engines = ENGINES.get(workload);
+    if (engines == null || !engines.contains(engineName) || workload.equals("typed-reads"))
+      throw new IllegalArgumentException("engine " + workload + "/" + engineName);
+    if (!available(engineName)) throw new IllegalStateException("CSV engine unavailable: " + engineName);
+    select(engineName);
+    byte[] input = CsvFixture.generate(dataset, bytes);
+    Engine engine = engine(workload, engineName, dataset);
+    long expected = engine.run(input);
+    for (int i = 0; i < 3; i++) check(engine.run(input), expected);
+    profileRegion(engine, input, expected, iterations);
+    System.out.printf(
+        Locale.ROOT,
+        "{\"profile\":\"%s\",\"engine\":\"%s\",\"kernel\":\"%s\",\"dataset\":\"%s\",\"bytes\":%d,"
+            + "\"iterations\":%d,\"checksum\":%d,\"sha256\":\"%s\"}%n",
+        workload, engineName, engine.kernel(), dataset, input.length, iterations, expected,
+        CsvFixture.sha256(input));
+  }
+
+  /** The profiled region; a separate method so callgrind can toggle collection on its symbol. */
+  private static void profileRegion(Engine engine, byte[] input, long expected, int iterations)
+      throws Exception {
+    for (int i = 0; i < iterations; i++) check(engine.run(input), expected);
+  }
 
   static void cell(String workload, String engineName, String dataset, int bytes, String stage, boolean smoke)
       throws Exception {

@@ -19,7 +19,7 @@ binary_sha256 = hashlib.sha256(binary.read_bytes()).hexdigest()
 WORKLOADS = {
     'json-scalar': (('gson-stream', 'simdjson-typed', 'simdjson-specialized'), 35984),
     'json-generic': (('gson-tree', 'simdjson-generic-java', 'simdjson-generic-interop', 'simdjson-snapshot',
-                      'simdjson-session-java', 'simdjson-session-truffle',
+                      'simdjson-session-java', 'simdjson-session-truffle', 'simdjson-generic-decode',
                       'gson-stream-lines', 'simdjson-stream-java', 'simdjson-stream-interop',
                       # Benchmark-only competitors (JsonCompetitors; the JSON scoreboard).
                       'jackson-tree', 'jackson-stream', 'fastjson2-tree', 'dsljson-map', 'jsoniter-any',
@@ -27,7 +27,7 @@ WORKLOADS = {
 }
 STAGES = ('ingest', 'read-aot', 'interpret', 'peak')
 # Borrowed session parses and streams (Task F2) retain nothing to read later: ingest cells only.
-INGEST_ONLY = {'simdjson-session-java', 'simdjson-session-truffle',
+INGEST_ONLY = {'simdjson-session-java', 'simdjson-session-truffle', 'simdjson-generic-decode',
                'gson-stream-lines', 'simdjson-stream-java', 'simdjson-stream-interop',
                'jackson-stream', 'simdjson-java'}
 # Engines this image cannot run (simdjson-java needs 256-bit vector species: the x86-64-v3 image).
@@ -36,6 +36,8 @@ UNAVAILABLE = {engine for engines, _ in WORKLOADS.values() for engine in engines
 WORKLOADS = {name: (tuple(e for e in engines if e not in UNAVAILABLE), checksum)
              for name, (engines, checksum) in WORKLOADS.items()}
 workload_of = {engine: (name, checksum) for name, (engines, checksum) in WORKLOADS.items() for engine in engines}
+# Decode-only (P0.3) reads nothing: one per decoded document.
+workload_of['simdjson-generic-decode'] = ('json-generic', 32)
 jobs = [job for job in itertools.product(workload_of, STAGES, ('time', 'memory'), range(3))
         if job[0] not in INGEST_ONLY or job[1] == 'ingest']
 random.Random(20261105).shuffle(jobs)

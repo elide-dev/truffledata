@@ -225,6 +225,120 @@ final class CsvFusedTest {
     same(() -> cells(Csv.parse(invalid, stop)));
   }
 
+  /** Typed rows past one deferred conversion chunk, with a fault at {@code row} (or none). */
+  private static String typedRows(int rows, int row, String fault) {
+    StringBuilder text = new StringBuilder("n,x,b,s\n");
+    for (int r = 0; r < rows; r++) {
+      if (r == row) text.append(fault);
+      else text.append(r).append(',').append(r).append(".25,").append(r % 3 == 0).append(",s").append(r);
+      text.append('\n');
+    }
+    return text.toString();
+  }
+
+  @Test
+  void deferredChunksKeepRecordAndFieldOrder() {
+    CsvPlan plan = CsvPlan.compile(TYPED, CsvFormat.RFC4180);
+    int chunk = BatchBuilder.CHUNK;
+    for (int row : new int[] {0, chunk - 1, chunk, chunk + 1, 2 * chunk + 7}) {
+      for (String fault :
+          new String[] {
+            "x,1,true,a", // INT64 grammar
+            "1,1.5.5,true,a", // FLOAT64 grammar
+            "1,1,yes,a", // BOOLEAN grammar
+            "1,x,maybe,a", // two bad fields: the first in field order wins
+            ",1,true,a", // legacy null in a required INT64
+            "1,1,true", // short record (a framing error, at commit)
+            "1,\"bad\"quote,true,a", // malformed quote (per-byte fallback)
+            "\"1\",\"2\",\"TRUE\",\"q\"\"t\"", // quoted typed values are accepted
+          }) {
+        String text = typedRows(3 * chunk, row, fault);
+        same(() -> cells(plan.parse(utf8(text))));
+        // A later framing error must not overtake an earlier staged conversion error.
+        same(() -> cells(plan.parse(utf8(text + "1,\"open"))));
+        same(() -> cells(plan.parse(utf8(text + "1,2,true,a,extra\n"))));
+      }
+    }
+    // A conversion error staged in one chunk and a width error in the next.
+    String twoFaults = typedRows(2 * chunk, chunk - 2, "q,1,true,a") + "1,1,true\n";
+    same(() -> cells(plan.parse(utf8(twoFaults))));
+    // Row limits stop mid-chunk; staged rows before the limit convert.
+    CsvLimits limit = new CsvLimits(1 << 20, chunk + 3, 64, 1 << 20);
+    same(() -> cells(plan.parse(utf8(typedRows(2 * chunk, -1, "")), limit)));
+    CsvPlan maxRows = CsvPlan.compile(TYPED, CsvFormat.RFC4180.toBuilder().setMaxRows(chunk + 5).build());
+    same(() -> cells(maxRows.parse(utf8(typedRows(2 * chunk, chunk + 9, "x,1,true,a")))));
+    same(() -> cells(maxRows.parse(utf8(typedRows(2 * chunk, chunk + 2, "x,1,true,a")))));
+  }
+
+  @Test
+  void deferredChunksCheckConstraintsAndCommonsSpans() {
+    int chunk = BatchBuilder.CHUNK;
+    Schema schema =
+        Schema.of(
+            Field.requiredLong("n")
+                .withConstraints(Constraints.NONE.withIntegerRange(new Constraints.IntegerRange(0, 999))),
+            new Field("x", Field.Kind.FLOAT64, false, false)
+                .withConstraints(Constraints.NONE.withFloatBits(32)));
+    CsvPlan plan = CsvPlan.compile(schema, CsvFormat.RFC4180);
+    StringBuilder ok = new StringBuilder("n,x\n");
+    for (int r = 0; r < 2 * chunk; r++) ok.append(r).append(",0.5\n");
+    same(() -> cells(plan.parse(utf8(ok.toString()))));
+    same(() -> cells(plan.parse(utf8(ok + "1000,0.5\n" + ok.substring(4)))));
+    same(() -> cells(plan.parse(utf8(ok + "7,0.1\n" + ok.substring(4)))));
+    // Commons complex spans in typed fields decode through the replayed per-record path.
+    CsvFormat commons =
+        CsvFormat.Predefined.DEFAULT.format().toBuilder().setHeader().setSkipHeaderRecord(true).build();
+    CsvPlan typed = CsvPlan.compile(TYPED, commons);
+    String rows = typedRows(2 * chunk, -1, "");
+    same(() -> cells(typed.parse(utf8(rows + "\"1\"\"\",1,true,a\n" + rows.substring(8)))));
+    same(() -> cells(typed.parse(utf8(rows + "1,1,true,\"a\"\"b\"\n" + rows.substring(8)))));
+  }
+
+  @Test
+  void deferredChunksAcrossReaderBuffers() throws Exception {
+    CsvPlan plan = CsvPlan.compile(TYPED, CsvFormat.RFC4180);
+    byte[] input = utf8(typedRows(5 * BatchBuilder.CHUNK + 3, -1, ""));
+    CsvBatch whole = plan.parse(input);
+    List<Object> streamed = new ArrayList<>();
+    try (CsvReader reader = plan.open(new java.io.ByteArrayInputStream(input), CsvLimits.DEFAULT, 1000)) {
+      for (CsvBatch batch = reader.next(); batch != null; batch = reader.next()) streamed.addAll(cells(batch));
+    }
+    assertEquals(cells(whole), streamed);
+    Path path = dir.resolve("typed.csv");
+    Files.write(path, input);
+    try (CsvBatch mapped = plan.parse(path)) {
+      assertEquals(cells(whole), cells(mapped));
+    }
+    streamed.clear();
+    try (CsvReader reader = plan.open(path, CsvLimits.DEFAULT, 1000)) {
+      for (CsvBatch batch = reader.next(); batch != null; batch = reader.next()) streamed.addAll(cells(batch));
+    }
+    assertEquals(cells(whole), streamed);
+    // Staging chunks are lent per thread for one scan: two readers of different widths alternate
+    // on one thread, and each must read exactly its own whole-batch cells.
+    CsvPlan narrow = CsvPlan.compile(Schema.of(Field.requiredLong("n")), CsvFormat.RFC4180);
+    byte[] other = utf8(typedRows(4 * BatchBuilder.CHUNK, -1, "").replace(",", "|"));
+    CsvPlan piped = CsvPlan.compile(TYPED, CsvFormat.RFC4180.toBuilder().setDelimiter('|').build());
+    List<Object> first = new ArrayList<>(), second = new ArrayList<>();
+    try (CsvReader a = plan.open(new java.io.ByteArrayInputStream(input), CsvLimits.DEFAULT, 1000);
+        CsvReader b = piped.open(new java.io.ByteArrayInputStream(other), CsvLimits.DEFAULT, 700)) {
+      CsvBatch x = a.next(), y = b.next();
+      while (x != null || y != null) {
+        if (x != null) {
+          first.addAll(cells(x));
+          x = a.next();
+        }
+        if (y != null) {
+          second.addAll(cells(y));
+          y = b.next();
+        }
+      }
+    }
+    assertEquals(cells(whole), first);
+    assertEquals(cells(piped.parse(other)), second);
+    assertEquals(cells(narrow.parse(input)).size(), 5 * BatchBuilder.CHUNK + 3);
+  }
+
   @Test
   void mappedCellsReadThroughTheSharedBuffer() throws Exception {
     String big = "y".repeat(5000); // past the 4 KiB mapped-cell buffer

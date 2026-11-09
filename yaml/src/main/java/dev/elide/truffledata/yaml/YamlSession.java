@@ -7,7 +7,11 @@ import dev.elide.truffledata.tape.TypedLayout;
 import java.util.Map;
 import java.util.Objects;
 
-/** Thread-confined native YAML parser, arena, and borrowed-document lifetime. */
+/**
+ * Thread-confined YAML parser, arena, and borrowed-document lifetime: the native decoder (static
+ * archive in a native image, {@code yaml_shared} through {@link YamlJvm} on a JVM) or the pure-Java
+ * kernel ({@code truffledata-yaml-java}), which implement the same semantics.
+ */
 public final class YamlSession extends TapeSession<YamlMessage> {
   abstract static class Backend extends TapeSession.Backend<YamlMessage> {
     abstract YamlPlan compile(TypedLayout layout, YamlOptions options);
@@ -25,14 +29,46 @@ public final class YamlSession extends TapeSession<YamlMessage> {
     return open(YamlOptions.DEFAULT);
   }
 
+  /**
+   * A session on the best backend of this runtime: the static archive in a native image that
+   * carries {@code truffledata-yaml-native}, otherwise the Java kernel ({@code
+   * truffledata-yaml-java}). Throws {@link UnsupportedOperationException} when no backend is
+   * available.
+   */
   @TruffleBoundary
   public static YamlSession open(YamlOptions options) {
     Objects.requireNonNull(options);
-    YamlSvm.requireRuntime();
-    return new YamlSession(options, new SvmSessionBackend(options));
+    YamlSessionProvider best = null;
+    int rank = Integer.MIN_VALUE;
+    for (YamlSessionProvider provider : Providers.ALL) {
+      int priority = provider.priority();
+      if (priority > rank && provider.available()) {
+        best = provider;
+        rank = priority;
+      }
+    }
+    if (best == null)
+      throw new UnsupportedOperationException(
+          "No YAML backend: add truffledata-yaml-native (a native image linking the static YAML"
+              + " archive) or truffledata-yaml-snakeyaml (the Java kernel); on a JVM,"
+              + " YamlJvm.openSession takes the yaml_shared library");
+    return best.open(options);
   }
 
-  /** Compiles an independent native plan using this session's policies and resource limits. */
+  /** The backends on the class path, looked up once. */
+  private static final class Providers {
+    static final java.util.List<YamlSessionProvider> ALL = find();
+
+    private static java.util.List<YamlSessionProvider> find() {
+      java.util.List<YamlSessionProvider> found = new java.util.ArrayList<>();
+      for (YamlSessionProvider provider :
+          java.util.ServiceLoader.load(YamlSessionProvider.class, YamlSession.class.getClassLoader()))
+        found.add(provider);
+      return java.util.List.copyOf(found);
+    }
+  }
+
+  /** Compiles an independent plan using this session's policies and resource limits. */
   @TruffleBoundary
   public YamlPlan compile(Schema root, Map<String, Schema> recordTypes) {
     Backend open = (Backend) check();
@@ -50,7 +86,7 @@ public final class YamlSession extends TapeSession<YamlMessage> {
 
   @Override
   protected void checkStatus(int status) {
-    YamlSvm.checkStatus(status);
+    YamlStatus.checkStatus(status);
   }
 
   @TruffleBoundary

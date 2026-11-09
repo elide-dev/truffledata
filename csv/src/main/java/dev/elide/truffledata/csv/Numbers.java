@@ -150,9 +150,10 @@ final class Numbers {
       low &= -1L << ((before - 8) << 3);
       high = 0;
     } else high &= -1L << (before << 3);
-    int count = Long.bitCount(low) + Long.bitCount(high);
-    if (count == 0) return to;
-    if (count > 1) return -1;
+    // At most one marked byte in both words, without Long.bitCount: -march=compatibility images
+    // have no POPCNT and compute each count in software (about 30 instructions).
+    if ((low | high) == 0) return to;
+    if ((low & (low - 1)) != 0 || (high & (high - 1)) != 0 || (low != 0 && high != 0)) return -1;
     return low != 0
         ? to - 8 + (Long.numberOfTrailingZeros(low) >>> 3)
         : to - 16 + (Long.numberOfTrailingZeros(high) >>> 3);

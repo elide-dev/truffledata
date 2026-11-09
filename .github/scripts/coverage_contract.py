@@ -61,6 +61,8 @@ ACCESS_SOURCES = {f'core/src/main/java/dev/elide/truffledata/{name}.java' for na
         'TapeFormat', 'TapeKey', 'TapeLexical', 'TapeOwner', 'TapeSession', 'TapeSink', 'TapeSnapshot',
         'TapeStream', 'TapeText', 'TapeTextArena', 'TapeValue', 'TruffleSink',
         'TypedAccess', 'TypedArray', 'TypedLayout', 'TypedOwner', 'TypedRecord',
+        # Java producers' compact-tape writer (the Java YAML kernel, #41).
+        'TapeBuilder',
     )
 } | {
     # Native YAML's JVM integration covers the common API; SVM intrinsics are tested in its image.
@@ -70,6 +72,16 @@ ACCESS_SOURCES = {f'core/src/main/java/dev/elide/truffledata/{name}.java' for na
         'ResultMetadata', 'YamlSession', 'YamlMessage', 'YamlStream', 'YamlStreamOptions',
         'YamlJvm', 'YamlSvm', 'JvmSessionBackend', 'SvmSessionBackend', 'YamlPlan',
         'JvmTypedOwner', 'SvmTypedOwner', 'JvmPlanBackend', 'SvmYamlMessage',
+        # Static-archive provider and plan (//yaml:svm, truffledata-yaml-native; #41).
+        'SvmPlanBackend', 'SvmSessionProvider', 'YamlSessionProvider', 'YamlStatus',
+        # Shared scalar resolution and the emitter (#42).
+        'ScalarResolver', 'YamlScalars', 'YamlEmitOptions', 'YamlEmitter', 'YamlWriter',
+        # The pure-Java kernel (//yaml:java), differentially tested against native (#41), its
+        # parser-neutral event boundary and the SnakeYAML Engine event source (//yaml:snakeyaml).
+        'JavaDecoder', 'JavaFailure', 'JavaInput', 'JavaPlanBackend', 'JavaSessionBackend',
+        'JavaSessionProvider', 'JavaStream', 'JavaTypedOwner', 'YamlJava',
+        'events/YamlEvents', 'events/YamlEventSource', 'events/YamlMark', 'events/YamlScalarStyle',
+        'events/YamlSyntaxException', 'snakeyaml/SnakeYamlEventSource',
     )
 } | {
     # Every CSV source: the scanner, ingest and typed conversions run on every read path, and the
@@ -89,6 +101,8 @@ DECLARATION_ONLY_SOURCES = {
     'tape/src/main/java/dev/elide/truffledata/tape/TapeLexical.java',
     'tape/src/main/java/dev/elide/truffledata/tape/TapeSink.java',
     'csv/src/main/java/dev/elide/truffledata/csv/CsvSink.java',
+    # The Java YAML kernel's parser SPI: one abstract method, implemented by each event source.
+    'yaml/src/main/java/dev/elide/truffledata/yaml/events/YamlEventSource.java',
 }
 
 JSON = 'json/src/main/java/dev/elide/truffledata/json/'
@@ -124,7 +138,14 @@ SVM_ONLY_METHODS = {
     **_yaml_methods('YamlSvm',
         'YamlSvm::open ()Ldev/elide/truffledata/yaml/YamlSession;',
         'YamlSvm::decode ([B)Ldev/elide/truffledata/yaml/YamlMessage;',
-        'YamlSvm::decode ([BLdev/elide/truffledata/yaml/YamlOptions;)Ldev/elide/truffledata/yaml/YamlMessage;'),
+        'YamlSvm::decode ([BLdev/elide/truffledata/yaml/YamlOptions;)Ldev/elide/truffledata/yaml/YamlMessage;',
+        'YamlSvm::openSession (Ldev/elide/truffledata/yaml/YamlOptions;)Ldev/elide/truffledata/yaml/YamlSession;',
+        'YamlSvm::compile (Ldev/elide/truffledata/Schema;Ljava/util/Map;)Ldev/elide/truffledata/yaml/YamlPlan;'),
+    # The static-archive provider opens sessions only where it is available: in an image that links
+    # the archive (//yaml/tests:native_test). On the JVM YamlSession.open() ranks it, sees it is
+    # unavailable and opens the Java kernel instead.
+    **_yaml_methods('SvmSessionProvider',
+        'SvmSessionProvider::open (Ldev/elide/truffledata/yaml/YamlOptions;)Ldev/elide/truffledata/yaml/YamlSession;'),
     **_yaml_methods('YamlSession',
         'YamlSession::open ()Ldev/elide/truffledata/yaml/YamlSession;'),
     **_yaml_methods('SvmSessionBackend',
@@ -178,13 +199,12 @@ SVM_ONLY_METHODS = {
         'SvmYamlMessage::metadata (J)I',
         'SvmYamlMessage::stringValue (J)Ljava/lang/String;',
         'SvmYamlMessage$Plain::aliases ()Z'),
-    **_yaml_methods('YamlPlan',
-        'YamlPlan::compile (Ldev/elide/truffledata/Schema;)Ldev/elide/truffledata/yaml/YamlPlan;',
-        'YamlPlan::compile (Ldev/elide/truffledata/Schema;Ljava/util/Map;)Ldev/elide/truffledata/yaml/YamlPlan;',
-        'YamlPlan::create (Ldev/elide/truffledata/tape/TypedLayout;Ldev/elide/truffledata/yaml/YamlOptions;)Ldev/elide/truffledata/yaml/YamlPlan;',
-        'YamlPlan$SvmBackend::create (Ldev/elide/truffledata/tape/TypedLayout;Ldev/elide/truffledata/yaml/YamlOptions;)Ldev/elide/truffledata/yaml/YamlPlan$SvmBackend;',
-        'YamlPlan$SvmBackend::decode ([B[Ldev/elide/truffledata/Schema;)Ldev/elide/truffledata/tape/TypedOwner;',
-        'YamlPlan$SvmBackend::release ()V'),
+    # The static-archive plan (truffledata-yaml-native); YamlPlan.compile itself now runs on the
+    # session backend of the runtime (the Java kernel on the JVM test class path).
+    **_yaml_methods('SvmPlanBackend',
+        'SvmPlanBackend::create (Ldev/elide/truffledata/tape/TypedLayout;Ldev/elide/truffledata/yaml/YamlOptions;)Ldev/elide/truffledata/yaml/YamlPlan;',
+        'SvmPlanBackend::decode ([B[Ldev/elide/truffledata/Schema;)Ldev/elide/truffledata/tape/TypedOwner;',
+        'SvmPlanBackend::release ()V'),
     **_yaml_methods('SvmTypedOwner',
         'SvmTypedOwner::bits (J)J',
         'SvmTypedOwner::text (J)Ljava/lang/String;',

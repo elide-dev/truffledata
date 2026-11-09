@@ -350,7 +350,7 @@ sh_test(
     srcs = ["json_typed_pair.sh"],
     args = ["$(rootpath :json_typed_svm_candidate)", "$(rootpath :json_typed_svm_baseline)"],
     data = ["json_typed_pair.py", "JsonComparison.java", "JsonFixture.java", ":json_typed_svm_candidate", ":json_typed_svm_baseline"],
-    shard_count = 6,
+    shard_count = 8,
     exec_properties = {"EstimatedCPU": "4", "EstimatedMemory": "16GB"},
     tags = ["benchmark", "manual"],
     target_compatible_with = ["@platforms//os:linux", "@platforms//cpu:x86_64"],
@@ -435,6 +435,28 @@ native_image(
         "@platforms//cpu:x86_64",
     ],
     deps = [":json_profiling"],
+)
+
+# AOT symbol gate (P0.6) over the JSON typed readers, the snapshot copy and the interop read
+# bodies in the symbol-bearing json_svm_profile image; shape only, no timing.
+sh_test(
+    name = "json_aot_symbols",
+    size = "medium",
+    srcs = ["aot_symbols.sh"],
+    args = [
+        "$(rootpath :json_svm_profile)",
+        "$(rootpath json_aot_budgets.json)",
+    ],
+    data = [
+        "json_aot_budgets.json",
+        ":json_svm_profile",
+        "//tools/bench:aot_symbols.py",
+    ],
+    tags = ["manual"],
+    target_compatible_with = [
+        "@platforms//os:linux",
+        "@platforms//cpu:x86_64",
+    ],
 )
 
 sh_test(
@@ -773,6 +795,65 @@ CSV_SVM_ARGS = [
     ]
 ]
 
+# Symbol-bearing CSV images for diagnosis only (never measured for timing): the AOT symbol gate
+# (P0.6) and callgrind instruction profiles (`--profile`, plan 2026-11-08-beat-stock-svm P0.5).
+# They mirror consumer_profile (-H:-DeleteLocalSymbols, frame pointers) over the csv_svm flags;
+# csv_profile_debug adds -g so callgrind can attribute inlined code to source lines.
+[
+    native_image(
+        name = name,
+        testonly = True,
+        cc_deps = ["//csv/native:truffledata_csv"],
+        debug = debug,
+        exec_properties = {
+            "EstimatedCPU": "8",
+            "EstimatedMemory": "24GB",
+        },
+        executable_name = executable,
+        extra_args = CSV_SVM_ARGS + [
+            "-march=compatibility",
+            "-H:+UnlockExperimentalVMOptions",
+            "-H:-DeleteLocalSymbols",
+            "-H:+PreserveFramePointer",
+            "-H:-UnlockExperimentalVMOptions",
+        ],
+        graalvm_sdk = "@graalvm_linux_amd64//:gvm",
+        main_class = "dev.elide.truffledata.comparison.CsvComparisonSvm",
+        optimization_mode = "2",
+        tags = ["manual"],
+        target_compatible_with = [
+            "@platforms//os:linux",
+            "@platforms//cpu:x86_64",
+        ],
+        deps = [":csv_comparison_svm"],
+    )
+    for name, executable, debug in [
+        ("csv_profile", "csv-comparison-profile", False),
+        ("csv_profile_debug", "csv-comparison-profile-debug", True),
+    ]
+]
+
+# AOT symbol gate (P0.6) over the CSV framing loops and batch writers; shape only, no timing.
+sh_test(
+    name = "csv_aot_symbols",
+    size = "medium",
+    srcs = ["aot_symbols.sh"],
+    args = [
+        "$(rootpath :csv_profile)",
+        "$(rootpath csv_aot_budgets.json)",
+    ],
+    data = [
+        "csv_aot_budgets.json",
+        ":csv_profile",
+        "//tools/bench:aot_symbols.py",
+    ],
+    tags = ["manual"],
+    target_compatible_with = [
+        "@platforms//os:linux",
+        "@platforms//cpu:x86_64",
+    ],
+)
+
 CSV_JVM_FLAGS = [
     "--add-modules=jdk.incubator.vector",
     "--enable-native-access=ALL-UNNAMED",
@@ -1003,6 +1084,7 @@ data_java_library(
         "//tape",
         "//yaml",
         "//yaml:jvm",
+        "//yaml:svm",
         "@maven//:org_graalvm_polyglot_polyglot",
         "@maven//:org_graalvm_sdk_nativeimage",
         "@maven//:org_graalvm_truffle_truffle_api",

@@ -316,4 +316,48 @@ class CompactTapeTest {
     };
     assertEquals(children, tape.length(0));
   }
+
+  /** A reader with only the element-wise default copy hooks: an element-wise view of the heap tape. */
+  private static TapeReader elementWise(TapeReader tape) {
+    return new TapeReader() {
+      @Override public long nodeCount() { return tape.nodeCount(); }
+      @Override public long poolSize() { return tape.poolSize(); }
+      @Override public long inputSize() { return tape.inputSize(); }
+      @Override public long directorySize() { return tape.directorySize(); }
+      @Override public int flags() { return tape.flags(); }
+      @Override public long readWord(long index) { return tape.readWord(index); }
+      @Override public byte textByte(boolean owned, long offset) { return tape.textByte(owned, offset); }
+      @Override public long textWord(boolean owned, long offset, int length) { return tape.textWord(owned, offset, length); }
+      @Override public long directoryEntry(long index) { return tape.directoryEntry(index); }
+      @Override public int metadata(long index) { return tape.metadata(index); }
+    };
+  }
+
+  @Test void bulkCopyHooksMatchTheElementWiseDefaultsAndStayBounded() {
+    Owner owner = document();
+    for (long root : new long[] {0, 3, 6}) {
+      HeapTape bulk = HeapTape.copy(owner.tape, root), slow = HeapTape.copy(elementWise(owner.tape), root);
+      assertEquals(bulk.nodeCount(), slow.nodeCount());
+      for (long i = 0; i < bulk.nodeCount(); i++) assertEquals(slow.word(i), bulk.word(i), "word " + i);
+      assertEquals(slow.directorySize(), bulk.directorySize());
+      for (long i = 0; i < bulk.directorySize(); i++) assertEquals(slow.directoryEntry(i), bulk.directoryEntry(i));
+      assertEquals(slow.inputSize(), bulk.inputSize());
+      for (long i = 0; i < bulk.inputSize(); i++) assertEquals(slow.inputByte(i), bulk.inputByte(i));
+      assertEquals(slow.poolSize(), bulk.poolSize());
+      for (long i = 0; i < bulk.poolSize(); i++) assertEquals(slow.textByte(true, i), bulk.textByte(true, i));
+    }
+    HeapTape tape = HeapTape.copy(owner.tape, 0);
+    long[] out = new long[4];
+    int[] meta = new int[4];
+    assertThrows(IndexOutOfBoundsException.class, () -> tape.copyWords(tape.nodeCount() - 2, out, 0, 4));
+    assertThrows(IndexOutOfBoundsException.class, () -> tape.copyWords(-1, out, 0, 1));
+    assertThrows(IndexOutOfBoundsException.class, () -> tape.copyWords(0, out, 2, 4));
+    assertThrows(IndexOutOfBoundsException.class, () -> tape.copyDirectory(1, out, 0, 2));
+    assertThrows(IndexOutOfBoundsException.class, () -> tape.copyMetadata(tape.nodeCount(), meta, 0, 1));
+    assertThrows(IndexOutOfBoundsException.class, () -> elementWise(tape).copyWords(0, out, 0, 5));
+    tape.copyWords(0, out, 0, 4);
+    assertEquals(tape.word(0), out[0]);
+    tape.copyMetadata(0, meta, 0, 4);
+    assertArrayEquals(new int[4], meta);
+  }
 }
