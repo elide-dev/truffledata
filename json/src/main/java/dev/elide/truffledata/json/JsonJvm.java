@@ -7,7 +7,6 @@ import dev.elide.truffledata.tape.SegmentTape;
 import dev.elide.truffledata.tape.TapeLexical;
 import dev.elide.truffledata.tape.TypedLayout;
 import dev.elide.truffledata.tape.TypedOwner;
-import dev.elide.truffledata.tape.TypedRecord;
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.SymbolLookup;
@@ -16,7 +15,6 @@ import java.lang.invoke.MethodHandle;
 import java.nio.file.Path;
 import java.util.Map;
 import java.util.Objects;
-import org.jspecify.annotations.Nullable;
 
 /**
  * JVM FFM backend. Its arena owns only the library; every message, typed plan and typed result owns
@@ -369,7 +367,7 @@ public final class JsonJvm implements JsonDecoder {
         throw callFailure(failure);
       }
       JsonSvm.checkStatus(status);
-      JsonPlan plan = new JsonPlan(layout, new Plan(handle, planArena));
+      JsonPlan plan = new JsonPlan(layout.records, new Plan(handle, planArena));
       published = true;
       return plan;
     } finally {
@@ -391,7 +389,7 @@ public final class JsonJvm implements JsonDecoder {
     }
 
     @Override
-    TypedRecord decode(byte[] utf8, Schema[] schemas, TypedRecord.@Nullable Scalars scalars) {
+    TypedOwner decode(byte[] utf8, Schema[] schemas) {
       if (!open) throw new IllegalStateException("JSON decoder closed");
       Arena resultArena = Arena.ofConfined();
       MemorySegment result;
@@ -427,8 +425,7 @@ public final class JsonJvm implements JsonDecoder {
             new JvmTypedOwner(
                 result, schemas, () -> retire(typedRelease, result, resultArena));
         published = true;
-        // A scalar-only plan's root is copied and the result released at once (owner.close()).
-        return scalars != null ? scalars.detach(owner) : owner.root();
+        return owner;
       } finally {
         if (!published) retire(typedRelease, result, resultArena);
       }

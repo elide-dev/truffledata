@@ -20,11 +20,8 @@ final class OwnerStateException extends IllegalStateException {
 
   @Override
   public String getMessage() {
-    // Owned typed records carry their format instead of an owner.
     TapeFormat format =
-        owner instanceof TapeFormat named
-            ? named
-            : owner instanceof TapeOwner tape ? tape.format() : ((TypedOwner) owner).format();
+        owner instanceof TapeOwner tape ? tape.format() : ((TypedOwner) owner).format();
     return switch (kind) {
       case CLOSED -> format.closed;
       case THREAD -> format.threadMismatch;

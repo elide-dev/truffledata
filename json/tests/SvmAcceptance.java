@@ -530,53 +530,6 @@ public final class SvmAcceptance {
     }
   }
 
-  /** Scalar-only plans decode owned records: copied values, the native lifetime contract. */
-  private static void ownedScalars() throws Exception {
-    var data = DataLibrary.factory().getUncached();
-    var schema =
-        dev.elide.truffledata.Schema.of(
-            dev.elide.truffledata.Field.requiredLong("n"),
-            new dev.elide.truffledata.Field(
-                "d", dev.elide.truffledata.Field.Kind.FLOAT64, true, true),
-            new dev.elide.truffledata.Field(
-                "b", dev.elide.truffledata.Field.Kind.BOOLEAN, false, false));
-    var n = new dev.elide.truffledata.tape.TypedAccess(schema, 0);
-    try (var plan = dev.elide.truffledata.json.JsonPlan.compile(schema)) {
-      byte[] input = "{\"b\":true,\"n\":-5,\"d\":null}".getBytes(StandardCharsets.UTF_8);
-      var record = plan.decode(input);
-      java.util.Arrays.fill(input, (byte) 'x');
-      require(record.longValue(0) == -5 && n.longValue(record) == -5 && record.booleanValue(2));
-      require(record.isNull(1) && data.read(record, 1) == DataNull.INSTANCE);
-      var snapshot = record.snapshot();
-      var owner = record.owner();
-      require(owner == record.owner() && owner.root() == record && owner.isOpen());
-      var alive = owner.assumption();
-      var rejected = new java.util.concurrent.atomic.AtomicInteger();
-      var thread =
-          new Thread(
-              () -> {
-                if (throwsState(() -> record.longValue(0))) rejected.incrementAndGet();
-                if (throwsState(() -> n.longValue(record))) rejected.incrementAndGet();
-                if (throwsState(record::close)) rejected.incrementAndGet();
-              });
-      thread.start();
-      thread.join();
-      require(rejected.get() == 3);
-      owner.close();
-      require(!alive.isValid() && !owner.isOpen());
-      require(throwsState(() -> record.longValue(0)));
-      require(throwsState(() -> n.longValue(record)));
-      require(throwsState(() -> data.read(record, 0)));
-      require(throwsState(record::snapshot));
-      record.close();
-      require(data.read(snapshot, 0).equals(-5L));
-      var other = plan.decode("{\"n\":1,\"b\":false}".getBytes(StandardCharsets.UTF_8));
-      require(data.read(other, 1) == Missing.INSTANCE);
-      other.close();
-      require(throwsState(() -> other.longValue(0)) && !other.owner().isOpen());
-    }
-  }
-
   private static void typed() {
     VoidPointer fields =
         UnmanagedMemory.calloc(Json.JsonScalarField.SIZE + Json.JsonRecordPlan.SIZE);
@@ -1084,7 +1037,6 @@ public final class SvmAcceptance {
     typed();
     schemaTyped();
     accessorContracts();
-    ownedScalars();
     nested();
     CompiledReads.run();
     scoped();

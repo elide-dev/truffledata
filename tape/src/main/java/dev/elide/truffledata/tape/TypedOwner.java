@@ -20,19 +20,13 @@ public abstract class TypedOwner implements AutoCloseable {
   @CompilationFinal(dimensions = 1)
   final Schema[] schemas;
 
-  private final Thread thread;
+  private final Thread thread = Thread.currentThread();
   private boolean open = true;
   private @Nullable Assumption alive;
 
   /** An owner confined to the calling thread, reading records of {@code schemas} (by plan ordinal). */
   protected TypedOwner(Schema[] schemas) {
-    this(schemas, Thread.currentThread());
-  }
-
-  // An owner confined to {@code thread}: the facade of an owned record, created on request.
-  TypedOwner(Schema[] schemas, Thread thread) {
     this.schemas = schemas;
-    this.thread = thread;
   }
 
   /** The format that produced this result, named in its messages. */
@@ -82,17 +76,7 @@ public abstract class TypedOwner implements AutoCloseable {
   /** The root record (entry 0). */
   public final TypedRecord root() {
     check();
-    return newRoot();
-  }
-
-  // Native results read entry 0 of their record table; an owned record's facade returns the record.
-  TypedRecord newRoot() {
     return new TypedRecord(this, 0);
-  }
-
-  // A facade created for an owned record that was already closed: closed, with nothing to release.
-  final void retired() {
-    open = false;
   }
 
   public final boolean isOpen() {

@@ -4,9 +4,9 @@ import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import dev.elide.truffledata.Schema;
 import dev.elide.truffledata.json.generated.Json;
 import dev.elide.truffledata.tape.TypedLayout;
+import dev.elide.truffledata.tape.TypedOwner;
 import dev.elide.truffledata.tape.TypedRecord;
 import java.util.Map;
-import org.jspecify.annotations.Nullable;
 import org.graalvm.nativeimage.PinnedObject;
 import org.graalvm.nativeimage.UnmanagedMemory;
 import org.graalvm.nativeimage.c.type.VoidPointer;
@@ -17,12 +17,6 @@ import org.graalvm.word.WordFactory;
  * Reusable, thread-confined native typed plan: a closed root record plus the record types it
  * reaches. Results own their storage independently of the plan. Compile through {@link
  * JsonDecoder#compile(Schema, Map)} on either backend, or {@link #compile(Schema, Map)} on SVM.
- *
- * <p>A plan whose root has only INT64, FLOAT64, BOOLEAN and EXACT fields decodes into an owned
- * {@link TypedRecord}: the root's values are copied once and the native result is released before
- * {@link #decode} returns. Plans with STRING, RECORD or ARRAY fields return records over the
- * retained native result. Both are confined to the decoding thread and fail every read once
- * closed.
  */
 public final class JsonPlan implements AutoCloseable {
   /** Maximum record nesting, counting the root as 1. */
@@ -44,28 +38,20 @@ public final class JsonPlan implements AutoCloseable {
    * the SVM implementation; the FFM one lives in the JVM backend library.
    */
   abstract static class Backend {
-    /**
-     * Decodes bounded input into a root record: an owned copy when {@code scalars} is non-null
-     * (the native result is released before returning), else over a new owner that takes the
-     * native result.
-     */
-    abstract TypedRecord decode(
-        byte[] utf8, Schema[] schemas, TypedRecord.@Nullable Scalars scalars);
+    /** Decodes bounded input into a new owner, which takes the native result. */
+    abstract TypedOwner decode(byte[] utf8, Schema[] schemas);
 
     /** Releases the native plan; called once, on the plan's thread. */
     abstract void release();
   }
 
   private final Schema[] schemas;
-  // Owned-record factory of a scalar-only plan; null when results stay native.
-  private final TypedRecord.@Nullable Scalars scalars;
   private final Backend backend;
   private final Thread thread = Thread.currentThread();
   private boolean open = true;
 
-  JsonPlan(TypedLayout layout, Backend backend) {
-    this.schemas = layout.records;
-    this.scalars = layout.scalars();
+  JsonPlan(Schema[] schemas, Backend backend) {
+    this.schemas = schemas;
     this.backend = backend;
   }
 
@@ -87,7 +73,7 @@ public final class JsonPlan implements AutoCloseable {
   public static JsonPlan compile(Schema root, Map<String, Schema> recordTypes) {
     JsonSvm.requireRuntime();
     TypedLayout layout = new TypedLayout(root, recordTypes, JsonMessage.FORMAT);
-    return new JsonPlan(layout, SvmBackend.create(layout));
+    return new JsonPlan(layout.records, SvmBackend.create(layout));
   }
 
   /** Static SVM plan: an unmanaged plan handle and direct {@code @CFunction} calls. */
@@ -163,11 +149,9 @@ public final class JsonPlan implements AutoCloseable {
     }
 
     @Override
-    TypedRecord decode(byte[] utf8, Schema[] schemas, TypedRecord.@Nullable Scalars scalars) {
+    TypedOwner decode(byte[] utf8, Schema[] schemas) {
       VoidPointer result = UnmanagedMemory.calloc(Json.JsonTypedResult.SIZE);
       if (result.isNull()) throw new OutOfMemoryError("JSON result allocation");
-      // Set once an owner has taken the result; otherwise it is released before returning.
-      boolean taken = false;
       try {
         try (PinnedObject input = PinnedObject.create(utf8)) {
           JsonSvm.checkStatus(
@@ -179,15 +163,11 @@ public final class JsonPlan implements AutoCloseable {
                   MAX_INDEX_BYTES,
                   result));
         }
-        if (scalars != null) return SvmTypedOwner.copyRoot(result, scalars);
-        SvmTypedOwner owner = new SvmTypedOwner(result, schemas);
-        taken = true;
-        return owner.root();
-      } finally {
-        if (!taken) {
-          Json.typed_release(result);
-          UnmanagedMemory.free(result);
-        }
+        return new SvmTypedOwner(result, schemas);
+      } catch (RuntimeException | Error failure) {
+        Json.typed_release(result);
+        UnmanagedMemory.free(result);
+        throw failure;
       }
     }
 
@@ -213,7 +193,7 @@ public final class JsonPlan implements AutoCloseable {
     if (!open) throw new IllegalStateException("JSON plan closed");
     if (utf8.length == 0 || utf8.length > MAX_INPUT_BYTES)
       throw new IllegalArgumentException("JSON input limit");
-    return backend.decode(utf8, schemas, scalars);
+    return backend.decode(utf8, schemas).root();
   }
 
   @Override
