@@ -61,6 +61,8 @@ ACCESS_SOURCES = {f'core/src/main/java/dev/elide/truffledata/{name}.java' for na
         'TapeFormat', 'TapeKey', 'TapeLexical', 'TapeOwner', 'TapeSession', 'TapeSink', 'TapeSnapshot',
         'TapeStream', 'TapeText', 'TapeTextArena', 'TapeValue', 'TruffleSink',
         'TypedAccess', 'TypedArray', 'TypedLayout', 'TypedOwner', 'TypedRecord',
+        # Java producers' compact-tape writer (the Java YAML kernel, #41).
+        'TapeBuilder',
     )
 } | {
     # Native YAML's JVM integration covers the common API; SVM intrinsics are tested in its image.
@@ -70,6 +72,16 @@ ACCESS_SOURCES = {f'core/src/main/java/dev/elide/truffledata/{name}.java' for na
         'ResultMetadata', 'YamlSession', 'YamlMessage', 'YamlStream', 'YamlStreamOptions',
         'YamlJvm', 'YamlSvm', 'JvmSessionBackend', 'SvmSessionBackend', 'YamlPlan',
         'JvmTypedOwner', 'SvmTypedOwner', 'JvmPlanBackend', 'SvmYamlMessage',
+        # Static-archive provider and plan (//yaml:svm, truffledata-yaml-native; #41).
+        'SvmPlanBackend', 'SvmSessionProvider', 'YamlSessionProvider', 'YamlStatus',
+        # Shared scalar resolution and the emitter (#42).
+        'ScalarResolver', 'YamlScalars', 'YamlEmitOptions', 'YamlEmitter', 'YamlWriter',
+        # The pure-Java kernel (//yaml:java), differentially tested against native (#41), its
+        # parser-neutral event boundary and the SnakeYAML Engine event source (//yaml:snakeyaml).
+        'JavaDecoder', 'JavaFailure', 'JavaInput', 'JavaPlanBackend', 'JavaSessionBackend',
+        'JavaSessionProvider', 'JavaStream', 'JavaTypedOwner', 'YamlJava',
+        'events/YamlEvents', 'events/YamlEventSource', 'events/YamlMark', 'events/YamlScalarStyle',
+        'events/YamlSyntaxException', 'snakeyaml/SnakeYamlEventSource',
     )
 } | {
     # Every CSV source: the scanner, ingest and typed conversions run on every read path, and the
