@@ -1,0 +1,106 @@
+# WS11 probe seam (plan 2026-11-08-beat-stock-svm §4): the production buffa.seam with Myna Truffle
+# cells enabled, generated into a benchmark-only package. The imports are byte-identical to
+# ../../../protobuf-buffa/native/buffa.seam; only the module options differ, so the generated
+# BuffaCells binding equals the shipped Buffa binding except for its ABI fingerprint, and its Rust
+# output is unused (the shipped static archive exports the symbols). Regenerate the import block
+# from the production seam whenever that file changes; the shipped bindings do not enable cells.
+module truffledata_buffa abi=11 target=x86_64-unknown-linux-gnu java_package=dev.elide.truffledata.comparison.cells.generated java_class=BuffaCells truffle_cells=true truffle_backend=native truffle_transitions=direct c_library=truffledata_buffa c_library_static=true
+struct Field size=24 align=8
+  field number type=u32 offset=0
+  field wire type=u32 offset=4
+  field value type=u64 offset=8
+  field length type=u32 offset=16
+  field end type=u32 offset=20
+end
+struct Result size=24 align=8
+  field data type=ptr<u8> offset=0
+  field count type=u64 offset=8
+  field capacity type=u64 offset=16
+end
+import fingerprint symbol=td_buffa_fingerprint return=ptr<u8> error=no_failure native_leaf=true@explicit_contract
+end
+import decode symbol=td_buffa_decode return=i32 error=no_failure native_leaf=false@explicit_contract
+  param data type=ptr<u8> nullable=false ownership=borrowed access=read
+  param length type=u64
+  param max_cells type=u64
+  param max_depth type=u32
+  param max_native_bytes type=u64
+  param result type=ptr<void> nullable=false ownership=borrowed access=write
+end
+import release symbol=td_buffa_release return=void error=no_failure native_leaf=false@explicit_contract
+  param result type=ptr<void> nullable=false ownership=borrowed access=read_write
+end
+import typed symbol=td_buffa_typed return=i32 error=no_failure native_leaf=false@explicit_contract
+  param schema type=ptr<u8> nullable=false ownership=borrowed access=read
+  param schema_length type=u64
+  param data type=ptr<u8> nullable=false ownership=borrowed access=read
+  param length type=u64
+  param format type=u32
+  param payload type=ptr<u8> nullable=false ownership=borrowed access=write
+  param payload_length type=u64
+  param max_cells type=u64
+  param max_string_bytes type=u64
+  param max_depth type=u32
+  param max_native_bytes type=u64
+  param result type=ptr<void> nullable=false ownership=borrowed access=write
+end
+import typedReuse symbol=td_buffa_typed_reuse return=i32 error=no_failure native_leaf=false@explicit_contract
+  param schema type=ptr<u8> nullable=false ownership=borrowed access=read
+  param schema_length type=u64
+  param data type=ptr<u8> nullable=false ownership=borrowed access=read
+  param length type=u64
+  param format type=u32
+  param payload type=ptr<u8> nullable=false ownership=borrowed access=write
+  param payload_length type=u64
+  param max_cells type=u64
+  param max_string_bytes type=u64
+  param max_depth type=u32
+  param max_native_bytes type=u64
+  param result type=ptr<void> nullable=false ownership=borrowed access=read_write
+end
+import utf8_to_utf16 symbol=td_buffa_utf8_to_utf16 return=i64 error=no_failure native_leaf=false@explicit_contract
+  param data type=ptr<u8> nullable=false ownership=borrowed access=read
+  param length type=u64
+  param output type=ptr<u16> nullable=false ownership=borrowed access=write
+  param capacity type=u64
+end
+struct SlabResult size=32 align=8
+  field bytes type=u64 offset=0
+  field records type=u32 offset=8
+  field handles type=u32 offset=12
+  field flags type=u32 offset=16
+  field error type=u32 offset=20
+  field reserved type=u64 offset=24
+end
+import compileLayout symbol=td_buffa_compile_layout return=i32 error=no_failure native_leaf=false@explicit_contract
+  param schema type=ptr<u8> nullable=false ownership=borrowed access=read
+  param schema_length type=u64
+  param result type=ptr<void> nullable=false ownership=borrowed access=write
+end
+import releaseLayout symbol=td_buffa_release_layout return=void error=no_failure native_leaf=false@explicit_contract
+  param compiled type=ptr<u8> nullable=true ownership=borrowed access=read_write
+end
+import decodeSlab symbol=td_buffa_decode_slab return=i32 error=no_failure native_leaf=false@explicit_contract
+  param compiled type=ptr<u8> nullable=false ownership=borrowed access=read
+  param data type=ptr<u8> nullable=false ownership=borrowed access=read
+  param length type=u64
+  param flags type=u32
+  param projection type=ptr<u8> nullable=true ownership=borrowed access=read
+  param out type=ptr<u8> nullable=true ownership=borrowed access=write
+  param capacity type=u64
+  param max_depth type=u32
+  param max_slab_bytes type=u64
+  param result type=ptr<void> nullable=false ownership=borrowed access=write
+end
+import decodeSlabSmall symbol=td_buffa_decode_slab_small return=i32 error=no_failure native_leaf=true@explicit_contract
+  param compiled type=ptr<u8> nullable=false ownership=borrowed access=read
+  param data type=ptr<u8> nullable=false ownership=borrowed access=read
+  param length type=u64
+  param flags type=u32
+  param projection type=ptr<u8> nullable=true ownership=borrowed access=read
+  param out type=ptr<u8> nullable=true ownership=borrowed access=write
+  param capacity type=u64
+  param max_depth type=u32
+  param max_slab_bytes type=u64
+  param result type=ptr<void> nullable=false ownership=borrowed access=write
+end

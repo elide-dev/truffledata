@@ -1,7 +1,7 @@
 load("@protobuf//bazel:proto_library.bzl", "proto_library")
 load("@rules_cc//cc:defs.bzl", "cc_binary")
 load("@rules_graalvm//graalvm:defs.bzl", "native_image")
-load("@rules_java//java:defs.bzl", "java_binary", "java_test")
+load("@rules_java//java:defs.bzl", "java_binary", "java_library", "java_test")
 load("@rules_rust//rust:defs.bzl", "rust_binary")
 load("@rules_shell//shell:sh_test.bzl", "sh_test")
 load("//bazel:java.bzl", "data_java_library")
@@ -661,6 +661,133 @@ sh_test(
         ":consumer_profile",
         ":consumer_svm",
         "//tools/bench:consumer.py",
+    ],
+    exec_properties = {
+        "EstimatedCPU": "4",
+        "EstimatedMemory": "16GB",
+    },
+    tags = [
+        "benchmark",
+        "manual",
+    ],
+    target_compatible_with = [
+        "@platforms//os:linux",
+        "@platforms//cpu:x86_64",
+    ],
+)
+
+# ---- WS11 Myna Truffle cell probe (plan 2026-11-08-beat-stock-svm §4 WS11; CONSUMER.md).
+# Benchmark-only: the probe seam enables cells in its own package; the shipped bindings, seam
+# fingerprint and natives are unchanged. The generated Rust/C outputs are discarded (the production
+# static archive exports the symbols).
+genrule(
+    name = "cells_bindings_generated",
+    testonly = True,
+    srcs = ["cells/cells.seam"],
+    outs = [
+        "cells/generated/BuffaCells.java",
+        "cells/generated/BuffaCellsFFM.java",
+        "cells/generated/BuffaCellsForeignFeature.java",
+        "cells/generated/BuffaCellsTruffle.java",
+        "cells/generated/seam.rs",
+        "cells/generated/seam.h",
+        "cells/generated/seam.json",
+        "cells/generated/seam.abi",
+        "cells/generated/seam.ll",
+        "cells/generated/META-INF/native-image/dev.elide.myna/dev.elide.truffledata.comparison.cells.generated.BuffaCells/native-image.properties",
+    ],
+    cmd = "$(location @myna//:generator) validate $(location cells/cells.seam) --targets x86_64-unknown-linux-gnu && " +
+          "$(location @myna//:generator) generate $(location cells/cells.seam) --out $(RULEDIR)/cells/generated --target x86_64-unknown-linux-gnu",
+    tags = ["manual"],
+    tools = ["@myna//:generator"],
+)
+
+# Myna output is generated as-is (no NullAway); the cells call the probe's own copy of the binding.
+java_library(
+    name = "cells_bindings",
+    testonly = True,
+    srcs = [
+        "cells/generated/BuffaCells.java",
+        "cells/generated/BuffaCellsTruffle.java",
+    ],
+    resource_strip_prefix = "benchmarks/comparison/cells/generated",
+    resources = ["cells/generated/META-INF/native-image/dev.elide.myna/dev.elide.truffledata.comparison.cells.generated.BuffaCells/native-image.properties"],
+    tags = ["manual"],
+    deps = [
+        "//bazel:myna_compiler_sdk",
+        "@maven//:org_graalvm_sdk_nativeimage",
+        "@maven//:org_graalvm_sdk_word",
+        "@maven//:org_graalvm_truffle_truffle_api",
+        "@myna//:truffle",
+    ],
+)
+
+data_java_library(
+    name = "cells_probe",
+    testonly = True,
+    srcs = [
+        "cells/CellsProbe.java",
+        # Split package for the backend's package-private plumbing; never on a production path.
+        "probes/CellProbe.java",
+    ],
+    tags = ["manual"],
+    deps = [
+        ":cells_bindings",
+        ":comparison",
+        ":contracts",
+        "//core",
+        "//protobuf-buffa",
+        "//protobuf-buffa:bindings",
+        "//protobuf-runtime",
+        "@maven//:com_google_protobuf_protobuf_java",
+        "@maven//:org_graalvm_polyglot_polyglot",
+        "@maven//:org_graalvm_sdk_nativeimage",
+        "@maven//:org_graalvm_sdk_word",
+        "@maven//:org_graalvm_truffle_truffle_api",
+        "@maven//:org_graalvm_truffle_truffle_runtime",
+        "@myna//:truffle",
+    ],
+)
+
+native_image(
+    name = "cells_probe_native",
+    testonly = True,
+    cc_deps = ["//protobuf-buffa/native:truffledata_buffa"],
+    exec_properties = {
+        "EstimatedCPU": "4",
+        "EstimatedMemory": "16GB",
+    },
+    executable_name = "truffledata-cells-probe",
+    extra_args = [
+        "--gc=serial",
+        "--add-exports=org.graalvm.truffle.runtime/com.oracle.truffle.runtime=ALL-UNNAMED",
+        "--parallelism=4",
+        "-march=compatibility",
+        "--initialize-at-build-time=dev.elide.truffledata",
+        "--initialize-at-run-time=dev.elide.truffledata.comparison.CellsProbe",
+        "--features=dev.elide.truffledata.buffa.BuffaFeature",
+        "-H:+UnlockExperimentalVMOptions",
+    ] + TRUFFLE_JIT_CHECKS + ["-H:-UnlockExperimentalVMOptions"],
+    graalvm_sdk = "@graalvm_linux_amd64//:gvm",
+    main_class = "dev.elide.truffledata.comparison.CellsProbe",
+    optimization_mode = "2",
+    tags = ["manual"],
+    target_compatible_with = [
+        "@platforms//os:linux",
+        "@platforms//cpu:x86_64",
+    ],
+    deps = [":cells_probe"],
+)
+
+# Every route of one binary on one worker, three fresh forks each (unsharded).
+sh_test(
+    name = "cells_probe_measure",
+    size = "enormous",
+    srcs = ["cells_probe.sh"],
+    args = ["$(rootpath :cells_probe_native)"],
+    data = [
+        ":cells_probe_native",
+        "cells_probe.py",
     ],
     exec_properties = {
         "EstimatedCPU": "4",
