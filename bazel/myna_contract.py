@@ -61,8 +61,37 @@ def verify(descriptor, archive):
     return name
 
 
+def verify_derived(production, derived):
+    """A cells seam derived from a production seam (protobuf-buffa/cells/BUILD.bazel) may differ
+    only in its module options: the Truffle cells block and the Java package/class. Every import,
+    struct, policy and the ABI itself must be the production one, so cells call the library the
+    production fingerprint check verified."""
+    with open(production, encoding="utf-8") as source:
+        base = json.load(source)
+    with open(derived, encoding="utf-8") as source:
+        cells = json.load(source)
+    assert "truffle" not in base, "production seams do not enable Truffle cells"
+    truffle = cells.get("truffle")
+    assert truffle and truffle["cells"] is True and truffle["backend"] in {"NATIVE", "FFM"}, truffle
+    assert truffle["coercion"] == "STRICT", truffle
+    assert cells["java"]["package"] == base["java"]["package"].rsplit(".", 1)[0] + ".cells.generated", cells["java"]
+    assert cells["java"]["class"] != base["java"]["class"], cells["java"]
+    rest = {key: value for key, value in cells.items() if key not in ("truffle", "java")}
+    assert rest == {key: value for key, value in base.items() if key != "java"}, derived
+    return cells["java"]["package"] + "." + cells["java"]["class"] + " (" + truffle["backend"] + ")"
+
+
 if __name__ == "__main__":
-    # Pairs of (descriptor, bindings jar or "-" for a descriptor-only check).
-    assert len(sys.argv) >= 3 and len(sys.argv) % 2 == 1
-    for start in range(1, len(sys.argv), 2):
-        print("Verified binding ABI 2 policy and packaged metadata:", verify(*sys.argv[start:start + 2]))
+    # Pairs of (descriptor, bindings jar or "-" for a descriptor-only check), then optionally
+    # --derived PRODUCTION DERIVED... for seams derived from a production seam.
+    args = sys.argv[1:]
+    derived = []
+    if "--derived" in args:
+        index = args.index("--derived")
+        args, derived = args[:index], args[index + 1:]
+        assert len(derived) >= 2, derived
+    assert len(args) >= 2 and len(args) % 2 == 0
+    for start in range(0, len(args), 2):
+        print("Verified binding ABI 2 policy and packaged metadata:", verify(*args[start:start + 2]))
+    for descriptor in derived[1:]:
+        print("Verified derived cells descriptor:", verify_derived(derived[0], descriptor))

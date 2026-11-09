@@ -82,6 +82,7 @@ See [representation and compilation guarantees](docs/TRUFFLE.md),
 | `dev.elide:truffledata-protobuf` | Protobuf host compatibility, runtime schema compilation and contract generation |
 | `dev.elide:truffledata-protobuf-buffa` | Native slab decoding, projections and reusable borrowed sessions |
 | `dev.elide:truffledata-protobuf-buffa-bindings` | Myna bindings, pulled in by the Buffa adapter |
+| `dev.elide:truffledata-protobuf-buffa-cells` | Opt-in: Buffa slab decoding through Myna Truffle cells (`-Dtruffledata.buffa.cells=true`) |
 | `dev.elide:truffledata-tape` | Shared native-tape values, sinks, export, snapshots, sessions, streams and typed records, with the Myna value ABI; pulled in by the JSON adapter |
 | `dev.elide:truffledata-tape-jvm` | JVM FFM tape reader, pulled in by the JSON JVM backend; keep it off native-image classpaths |
 | `dev.elide:truffledata-json` | Native simdjson JSON sessions, messages, streams, typed plans and the static SVM backend |

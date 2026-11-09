@@ -132,7 +132,11 @@ rust_test(
     data = ["//protobuf-runtime:golden_slabs"],
 )
 
-exports_files(["Cargo.toml"])
+exports_files([
+    "Cargo.toml",
+    # The protobuf-buffa-cells bindings are generated from a seam derived from this one.
+    "buffa.seam",
+])
 
 # Rust bundles simdutf's native objects; its final consumers still need the C++ runtime.
 # Preserve that requirement in CcInfo for Native Image's cc_deps, not just Cargo linkage.
