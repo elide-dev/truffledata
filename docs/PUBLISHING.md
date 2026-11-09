@@ -1,6 +1,6 @@
 # Maven publishing
 
-The release publishes twenty-two thin libraries and a dependency-management BOM, with source jars and POMs. The protobuf runtime can be consumed without protobuf-java. Version 0.7.0 shipped the first nine libraries; 0.8.0 adds the two shared tape artifacts, the three JSON artifacts and the four CSV artifacts, all in the BOM. Version 0.10.0 adds the three YAML artifacts, Javadoc jars, Gradle metadata and signed publication. Version 0.11.0 adds the opt-in `truffledata-protobuf-buffa-cells` artifact.
+The release publishes twenty-five thin libraries and a dependency-management BOM, with source jars and POMs. The protobuf runtime can be consumed without protobuf-java. Version 0.7.0 shipped the first nine libraries; 0.8.0 adds the two shared tape artifacts, the three JSON artifacts and the four CSV artifacts, all in the BOM. Version 0.10.0 adds the three YAML artifacts, Javadoc jars, Gradle metadata and signed publication. Version 0.11.0 adds the opt-in `truffledata-protobuf-buffa-cells` artifact.
 
 | Coordinate | Contents |
 | --- | --- |
@@ -87,7 +87,7 @@ dependencies {
 }
 ```
 
-For Maven, declare `https://maven.elide.dev` in `<repositories>` and the same coordinates in `<dependencies>`. Published POMs also declare the fork repository; Gradle and Bazel consumers must explicitly configure it. For Bazel, add the two repositories and desired coordinates to `maven.install`, then repin. Use core alone if neither adapter is needed. The release contains twenty-two libraries and the BOM. Publishing verifies public artifact bytes and metadata; isolated consumers check Maven resolution and JVM/static SVM execution. The staging examples can reproduce that version locally. Choose a new version for the next upload: published versions are immutable.
+For Maven, declare `https://maven.elide.dev` in `<repositories>` and the same coordinates in `<dependencies>`. Published POMs also declare the fork repository; Gradle and Bazel consumers must explicitly configure it. For Bazel, add the two repositories and desired coordinates to `maven.install`, then repin. Use core alone if neither adapter is needed. The release contains twenty-five libraries and the BOM. Publishing verifies public artifact bytes and metadata; isolated consumers check Maven resolution and JVM/static SVM execution. The staging examples can reproduce that version locally. Choose a new version for the next upload: published versions are immutable.
 
 
 ## BOM and consumer acceptance
@@ -249,7 +249,7 @@ published static archive into an image through `truffledata-csv-native` (without
 compare generic, typed and streamed parses and malformed-input diagnostics with the
 built-in kernel's. Release publishing and native CI require both static checks.
 
-The publisher includes all twenty-two Java libraries and the BOM, plus Buffa, JSON, YAML and CSV native attachments.
+The publisher includes all twenty-five Java libraries and the BOM, plus Buffa, JSON, YAML and CSV native attachments.
 
 ## Prebuilt natives
 
