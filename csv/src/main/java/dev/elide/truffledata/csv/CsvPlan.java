@@ -181,7 +181,9 @@ public final class CsvPlan {
    */
   long stopAfter(long consumed) {
     long max = format.maxRows();
-    return max > 0 ? consumed + max : Long.MAX_VALUE;
+    if (max <= 0) return Long.MAX_VALUE;
+    long limit = Long.MAX_VALUE - consumed;
+    return max > limit ? Long.MAX_VALUE : consumed + max;
   }
 
   /** Streams batches of about 1 MiB of input each. The reader owns the stream. */

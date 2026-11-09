@@ -392,6 +392,79 @@ final class CsvPlanTest {
   }
 
   @Test
+  void maxRowsLongMaxValueReadsAllRows() throws IOException {
+    // stopAfter(consumed) saturates instead of overflowing: 1 + Long.MAX_VALUE must not wrap to
+    // Long.MIN_VALUE (which would make every scanner stop before the first data record).
+    CsvPlan all = CsvPlan.generic(CsvFormat.RFC4180.toBuilder().setMaxRows(Long.MAX_VALUE).build());
+    assertEquals(Long.MAX_VALUE, all.stopAfter(0));
+    assertEquals(Long.MAX_VALUE, all.stopAfter(1));
+    assertEquals(Long.MAX_VALUE, all.stopAfter(Long.MAX_VALUE));
+    CsvPlan unlimited = CsvPlan.generic(CsvFormat.RFC4180);
+    assertEquals(Long.MAX_VALUE, unlimited.stopAfter(0));
+    assertEquals(Long.MAX_VALUE, unlimited.stopAfter(1));
+
+    byte[] bytes = utf8("h\n1\n2\n3\n");
+
+    // Whole parse: a headered format with maxRows = Long.MAX_VALUE reads all data rows.
+    CsvFormat every = CsvFormat.RFC4180.toBuilder().setMaxRows(Long.MAX_VALUE).build();
+    CsvBatch batch = Csv.parse(bytes, every);
+    assertEquals(3, batch.size());
+    assertEquals("1", batch.row(0).getString(0));
+    assertEquals("2", batch.row(1).getString(0));
+    assertEquals("3", batch.row(2).getString(0));
+
+    // Streaming reader: the same format reads all rows across batches.
+    try (CsvReader reader = Csv.open(new ChunkedInput(bytes, 1), every)) {
+      List<String> rows = new ArrayList<>();
+      for (CsvBatch next; (next = reader.next()) != null; )
+        for (int r = 0; r < next.size(); r++) rows.add(next.row(r).getString(0));
+      assertEquals(List.of("1", "2", "3"), rows);
+    }
+
+    // Indexed path: a large headered input (well above MIN_INDEX_BYTES) with maxRows =
+    // Long.MAX_VALUE reads every row.
+    byte[] large = utf8("id,name\n" + "42,\"a,b\"\n".repeat(4000));
+    CsvBatch indexed = Csv.parse(large, every);
+    assertEquals(4000, indexed.size());
+    assertEquals("42", indexed.row(0).getString(0));
+    assertEquals("a,b", indexed.row(0).getString(1));
+    assertEquals("42", indexed.row(3999).getString(0));
+
+    // Without a header (consumed = 0): no overflow, still reads all rows.
+    CsvFormat noHeader =
+        CsvFormat.RFC4180.withHeader(false).toBuilder().setMaxRows(Long.MAX_VALUE).build();
+    CsvBatch positional = Csv.parse(utf8("1\n2\n3\n"), noHeader);
+    assertEquals(3, positional.size());
+
+    // Near-overflow boundary: Long.MAX_VALUE - 1 with consumed = 1 does not wrap.
+    CsvFormat near = CsvFormat.RFC4180.toBuilder().setMaxRows(Long.MAX_VALUE - 1).build();
+    CsvBatch nearBatch = Csv.parse(bytes, near);
+    assertEquals(3, nearBatch.size());
+
+    // Commons (non-strict) format with a header + Long.MAX_VALUE: the same fix applies.
+    CsvFormat commons =
+        CsvFormat.Predefined.RFC4180.format().toBuilder()
+            .setHeader(true)
+            .setMaxRows(Long.MAX_VALUE)
+            .build();
+    CsvBatch commonsBatch = Csv.parse(bytes, commons);
+    assertEquals(3, commonsBatch.size());
+
+    // Small maxRows still caps the count (no regression).
+    CsvFormat two = CsvFormat.RFC4180.toBuilder().setMaxRows(2).build();
+    CsvBatch capped = Csv.parse(bytes, two);
+    assertEquals(2, capped.size());
+    assertEquals("1", capped.row(0).getString(0));
+    assertEquals("2", capped.row(1).getString(0));
+
+    // maxRows = 1 reads exactly one data row after the header.
+    CsvFormat one = CsvFormat.RFC4180.toBuilder().setMaxRows(1).build();
+    CsvBatch single = Csv.parse(bytes, one);
+    assertEquals(1, single.size());
+    assertEquals("1", single.row(0).getString(0));
+  }
+
+  @Test
   void diagnosticsOmitValues() {
     CsvPlan plan =
         CsvPlan.compile(
