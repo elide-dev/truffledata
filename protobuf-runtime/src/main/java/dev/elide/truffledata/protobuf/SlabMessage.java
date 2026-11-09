@@ -39,8 +39,28 @@ public final class SlabMessage extends SlabRow implements ProtoMessage {
 
   // Publishing the table is separate from publishing each lazily initialized entry.
   private volatile Object @Nullable [] handles;
-  /** Lazy views: a list at its slab offset, a boxed unsigned 64-bit value at {@code ~slot}. */
-  private @Nullable Map<Integer, Object> views;
+
+  /**
+   * Lazy views without handle ids (lists and boxed unsigned 64-bit values), in an open-addressed
+   * table keyed by slab offset: a list at {@code offset << 1 | expanded}, an unsigned value at
+   * {@code -slot}. Keys are published with release semantics after their view; the table reference
+   * itself is volatile, grows under this message's monitor and never removes an entry, so a warm
+   * hit is one acquire load and a stale table only produces a miss that rechecks under the lock.
+   */
+  private volatile @Nullable ViewTable views;
+
+  private static final VarHandle VIEW_KEY = MethodHandles.arrayElementVarHandle(long[].class);
+
+  private static final class ViewTable {
+    final long[] keys;
+    final Object[] values;
+    int size;
+
+    ViewTable(int capacity) {
+      keys = new long[capacity];
+      values = new Object[capacity];
+    }
+  }
 
   private SlabMessage(Layout layout, byte[] owned) {
     this(layout, owned, owned.length, null);
@@ -323,29 +343,75 @@ public final class SlabMessage extends SlabRow implements ProtoMessage {
     return array;
   }
 
-  private Map<Integer, Object> views() {
-    Map<Integer, Object> values = views;
-    if (values == null) views = values = new HashMap<>();
-    return values;
+  private static int viewSlot(long key, int mask) {
+    return (int) ((key * 0x9E3779B97F4A7C15L) >>> 32) & mask;
+  }
+
+  /** Warm view lookup: one volatile table load and acquire key loads, no lock. */
+  private @Nullable Object view(long key) {
+    ViewTable table = views;
+    if (table == null) return null;
+    long[] keys = table.keys;
+    int mask = keys.length - 1;
+    for (int slot = viewSlot(key, mask); ; slot = (slot + 1) & mask) {
+      long found = (long) VIEW_KEY.getAcquire(keys, slot);
+      if (found == key) return table.values[slot];
+      if (found == 0) return null;
+    }
+  }
+
+  /** Miss path: holds this message's monitor; grows the table before it is half full. */
+  private void publishView(long key, Object value) {
+    ViewTable table = views;
+    if (table == null || (table.size + 1) * 2 > table.keys.length) {
+      ViewTable grown = new ViewTable(table == null ? 8 : table.keys.length * 2);
+      if (table != null)
+        for (int i = 0; i < table.keys.length; i++)
+          if (table.keys[i] != 0) insertView(grown, table.keys[i], table.values[i]);
+      insertView(grown, key, value);
+      grown.size = (table == null ? 0 : table.size) + 1;
+      // The volatile write publishes every plain write to the new arrays.
+      views = grown;
+      return;
+    }
+    insertView(table, key, value);
+    table.size++;
+  }
+
+  private static void insertView(ViewTable table, long key, Object value) {
+    long[] keys = table.keys;
+    int mask = keys.length - 1;
+    int slot = viewSlot(key, mask);
+    while (keys[slot] != 0) slot = (slot + 1) & mask;
+    table.values[slot] = value;
+    VIEW_KEY.setRelease(keys, slot, key);
+  }
+
+  private static long listKey(int list, boolean expanded) {
+    // List offsets are positive multiples of 8; unsigned slots use the negative range.
+    return ((long) list << 1) | (expanded ? 1 : 0);
+  }
+
+  SlabArray array(int type, int ordinal, int list, boolean expanded) {
+    if (view(listKey(list, expanded)) instanceof SlabArray found) return found;
+    return createArray(type, ordinal, list, expanded);
   }
 
   @TruffleBoundary
-  synchronized SlabArray array(int type, int ordinal, int list, boolean expanded) {
-    Map<Integer, Object> values = views();
-    if (values.get(list) instanceof SlabArray found) return found;
+  private synchronized SlabArray createArray(int type, int ordinal, int list, boolean expanded) {
+    long key = listKey(list, expanded);
+    if (view(key) instanceof SlabArray found) return found;
     SlabArray result = new SlabArray(this, type, ordinal, list, expanded);
-    values.put(list, result);
+    publishView(key, result);
     return result;
   }
 
   @TruffleBoundary
   synchronized Object unsigned(int at, long bits) {
-    Map<Integer, Object> values = views();
-    // List offsets are positive, so complemented slot offsets never collide with them.
-    Object result = values.get(~at);
+    Object result = view(-(long) at);
     if (result == null) {
       result = SlabRow.unsigned(bits);
-      values.put(~at, result);
+      publishView(-(long) at, result);
     }
     return result;
   }
@@ -380,12 +446,17 @@ public final class SlabMessage extends SlabRow implements ProtoMessage {
   }
 
   void requireValue(int type, int ordinal, boolean expanded) {
+    if (omitted(type, ordinal, expanded)) throw omitted();
+  }
+
+  /** Whether a projection omits the field's value; constant per (type, ordinal, expanded). */
+  boolean omitted(int type, int ordinal, boolean expanded) {
     Projected state = projected;
-    if (state != null
+    return state != null
         && !expanded
         && !state.selection.wants(type, ordinal)
         && !(state.selection.lazyChildrenEnabled()
-            && layout.plan(type).field(ordinal).kind().message())) throw omitted();
+            && layout.plan(type).field(ordinal).kind().message());
   }
 
   boolean expandChild(int type, int ordinal) {
@@ -396,7 +467,7 @@ public final class SlabMessage extends SlabRow implements ProtoMessage {
   }
 
   @TruffleBoundary
-  private static ContractViolation omitted() {
+  static ContractViolation omitted() {
     return new ContractViolation("Field omitted by projection");
   }
 
