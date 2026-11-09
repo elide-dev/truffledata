@@ -329,6 +329,8 @@ public final class TypedRecord extends AbstractRow implements AutoCloseable {
 
   /** Slot payload of a present, non-null field of the given kind. */
   private long slotBits(int index, Field.Kind kind) {
+    long[] probe = values;
+    if (probe != null) return probe[index];
     long slot = slot(index, kind);
     long[] owned = values;
     return owned != null ? owned[index] : nativeOwner().bits(slot);
@@ -345,6 +347,8 @@ public final class TypedRecord extends AbstractRow implements AutoCloseable {
   }
 
   long bits(TypedAccess access) {
+    long[] probe = values;
+    if (probe != null) return probe[access.index];
     checkLive();
     if (descriptor != access.schema)
       throw new IllegalArgumentException("Accessor schema mismatch");
