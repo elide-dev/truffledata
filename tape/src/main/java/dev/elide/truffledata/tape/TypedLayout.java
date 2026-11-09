@@ -8,6 +8,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Objects;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Backend-neutral native plan table for typed decoding: records in ordinal order (0 is the root;
@@ -51,6 +52,7 @@ public final class TypedLayout {
   public final long[] maximumLengths;
 
   private final String format;
+  private final TypedRecord.@Nullable Scalars scalars;
 
   /**
    * Lays out a closed root schema and the record types it reaches. RECORD fields, and ARRAY fields
@@ -128,6 +130,30 @@ public final class TypedLayout {
         row(next, f, ordinals);
       }
     }
+    scalars = scalarOnly() ? new TypedRecord.Scalars(root, format) : null;
+  }
+
+  /**
+   * Owned-record factory when the root is the plan's only record and has only INT64, FLOAT64,
+   * BOOLEAN and EXACT fields (missing and null allowed): such results can be copied into an owned
+   * {@link TypedRecord} at decode and released at once. Null for any plan with a STRING, RECORD or
+   * ARRAY field, whose results stay native.
+   */
+  public TypedRecord.@Nullable Scalars scalars() {
+    return scalars;
+  }
+
+  private boolean scalarOnly() {
+    if (records.length != 1) return false;
+    for (int i = 0; i < records[0].size(); i++) {
+      switch (records[0].field(i).kind()) {
+        case INT64, FLOAT64, BOOLEAN, EXACT -> {}
+        default -> {
+          return false;
+        }
+      }
+    }
+    return true;
   }
 
   private void row(int at, Field f, Map<String, Integer> ordinals) {

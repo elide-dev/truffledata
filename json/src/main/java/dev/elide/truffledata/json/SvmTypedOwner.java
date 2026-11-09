@@ -5,6 +5,7 @@ import dev.elide.truffledata.Schema;
 import dev.elide.truffledata.json.generated.Json;
 import dev.elide.truffledata.tape.TapeFormat;
 import dev.elide.truffledata.tape.TypedOwner;
+import dev.elide.truffledata.tape.TypedRecord;
 import org.graalvm.nativeimage.UnmanagedMemory;
 import org.graalvm.nativeimage.c.type.VoidPointer;
 import org.graalvm.word.Pointer;
@@ -29,6 +30,29 @@ final class SvmTypedOwner extends TypedOwner {
     long recordCount = Json.JsonTypedResult.record_count(result);
     if (records == 0 || recordCount < 1 || (slotCount > 0 && slots == 0))
       throw new IllegalStateException("JSON typed result tables missing");
+  }
+
+  /**
+   * Copies the root record of a scalar-only plan's result into an owned record. The caller still
+   * releases {@code result}; nothing read here is retained.
+   */
+  static TypedRecord copyRoot(VoidPointer result, TypedRecord.Scalars scalars) {
+    long slots = Json.JsonTypedResult.slots(result).rawValue();
+    long slotCount = Json.JsonTypedResult.count(result);
+    VoidPointer root = Json.JsonTypedResult.records(result);
+    int size = scalars.size();
+    if (root.isNull() || Json.JsonTypedResult.record_count(result) < 1)
+      throw new IllegalStateException("JSON typed result tables missing");
+    long first = Integer.toUnsignedLong(Json.JsonRecordEntry.slots(root));
+    if (Json.JsonRecordEntry.plan(root) != 0
+        || (size > 0 && (slots == 0 || first + size > slotCount)))
+      throw new IllegalStateException("JSON typed result tables missing");
+    long[] values = new long[size];
+    long at = slots + first * Json.JsonScalarSlot.SIZE;
+    for (int i = 0; i < size; i++, at += Json.JsonScalarSlot.SIZE)
+      values[i] = Json.JsonScalarSlot.bits(WordFactory.<VoidPointer>pointer(at));
+    return scalars.record(
+        Json.JsonRecordEntry.present(root), Json.JsonRecordEntry.nulls(root), values);
   }
 
   private long slot(long index) {
