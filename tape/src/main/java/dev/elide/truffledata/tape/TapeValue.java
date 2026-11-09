@@ -21,13 +21,44 @@ import java.util.NoSuchElementException;
  * {@value #MAX_INTEGER_DIGITS} digits long, and fit no primitive type otherwise.
  */
 @ExportLibrary(InteropLibrary.class)
-public final class TapeValue implements TruffleObject {
+public class TapeValue implements TruffleObject {
   private final TapeOwner owner;
   private final long node;
 
   TapeValue(TapeOwner owner, long node) {
     this.owner = owner;
     this.node = node;
+  }
+
+  // YAML child views carry provenance; ordinary JSON views keep their existing layout.
+  private static final class AliasValue extends TapeValue {
+    private final long source;
+    AliasValue(TapeOwner owner, long node, long source) { super(owner, node); this.source = source; }
+    @Override long sourceNode() { return source; }
+  }
+
+  private static TapeValue view(TapeOwner owner, long source) {
+    return owner.aliases() ? aliasView(owner, source) : new TapeValue(owner, source);
+  }
+
+  private static TapeValue aliasView(TapeOwner owner, long source) {
+    long resolved = owner.resolve(source);
+    return owner.aliases() ? new AliasValue(owner, resolved, source) : new TapeValue(owner, resolved);
+  }
+
+  long sourceNode() { return node; }
+
+  /** Format-specific metadata of the source node, preserving alias provenance. */
+  public int metadataWord() { owner.check(); return owner.format().metadataWord(sourceNode()); }
+
+  /** Explicit or resolved type tag, when the producer provides one. */
+  public @org.jspecify.annotations.Nullable String tagUri() {
+    owner.check(); return owner.format().tagUri(node);
+  }
+
+  /** Source anchor name, when the producer provides one. */
+  public @org.jspecify.annotations.Nullable String anchorName() {
+    owner.check(); return owner.format().anchorName(sourceNode());
   }
 
   public enum Kind {
@@ -79,16 +110,16 @@ public final class TapeValue implements TruffleObject {
   @TruffleBoundary
   public String numberText() {
     if (kind() != Kind.NUMBER) throw new IllegalStateException("Not a " + owner.format().name + " number");
-    return owner.lexicalText(node);
+    return owner.numberText(node);
   }
 
-  /** Source spelling of a string, key or number, including quotes and escapes. */
+  /** Source spelling of a scalar with a retained lexical token, including quotes and escapes. */
   @TruffleBoundary
   public String rawText() {
     Kind kind = kind();
-    if (kind != Kind.NUMBER && kind != Kind.STRING)
-      throw new IllegalStateException(
-          owner.format().name + " containers, booleans and null have no raw text");
+    if (kind != Kind.NUMBER && kind != Kind.STRING
+        && ((kind != Kind.BOOLEAN && kind != Kind.NULL) || owner.lexical(node) == 0))
+      throw new IllegalStateException(owner.format().name + " value has no raw text");
     return owner.lexicalText(node);
   }
 
@@ -117,7 +148,7 @@ public final class TapeValue implements TruffleObject {
     if (kind() != Kind.OBJECT) throw new IllegalStateException("Not a " + owner.format().name + " object");
     long found = owner.find(node, key, null);
     if (found < 0) throw new NoSuchElementException("Missing " + owner.format().name + " member");
-    return new TapeValue(owner, owner.resolve(found));
+    return aliasView(owner, found);
   }
 
   /** Single-pass export of this subtree; see {@link TapeSink} and {@link TapeExportNode}. */
@@ -147,7 +178,7 @@ public final class TapeValue implements TruffleObject {
     long count = owner.tape.length(node);
     if (index < 0 || index >= count) throw new IndexOutOfBoundsException(owner.format().name + " member index");
     long key = owner.tape.first(node);
-    for (long i = 0; i < index; ++i) key = owner.tape.next(key + 1);
+    for (long i = 0; i < index; ++i) key = owner.tape.next(owner.tape.next(key));
     return new TapeValue(owner, key);
   }
 
@@ -155,28 +186,31 @@ public final class TapeValue implements TruffleObject {
   @TruffleBoundary
   public TapeValue memberAt(long index) {
     TapeValue key = keyAt(index);
-    return new TapeValue(owner, owner.resolve(key.node + 1));
+    return aliasView(owner, owner.tape.next(key.node));
   }
 
   /** Random access: small arrays are walked; larger ones use an index cached by the owner. */
   @TruffleBoundary
   public TapeValue element(long index) {
     if (kind() != Kind.ARRAY) throw new IllegalStateException("Not a " + owner.format().name + " array");
-    return new TapeValue(owner, elementNode(owner, node, index));
+    return view(owner, elementNode(owner, node, index));
   }
 
   /**
-   * Child node of an array, alias-resolved; static so compiled interop reads never pass a fresh
+   * Source child node of an array; static so compiled interop reads never pass a fresh
    * view to a boundary.
    */
   @TruffleBoundary
   private static long elementNode(TapeOwner owner, long array, long index) {
     long count = owner.tape.length(array);
     if (index < 0 || index >= count) throw new IndexOutOfBoundsException(owner.format().name + " array index");
-    if (count > TapeOwner.INDEX_THRESHOLD) return owner.resolve(owner.arrayIndex(array)[(int) index]);
+    if (count > TapeOwner.INDEX_THRESHOLD) {
+      long child = owner.arrayIndex(array)[(int) index];
+      return owner.aliases() ? child : owner.resolve(child);
+    }
     long child = owner.tape.first(array);
     for (long i = 0; i < index; ++i) child = owner.tape.next(child);
-    return owner.resolve(child);
+    return owner.aliases() ? child : owner.resolve(child);
   }
 
   /** Sequential traversal in source order without building an index. */
@@ -199,7 +233,7 @@ public final class TapeValue implements TruffleObject {
           public TapeValue next() {
             owner.check();
             if (remaining == 0) throw new java.util.NoSuchElementException();
-            TapeValue value = new TapeValue(owner, owner.resolve(child));
+            TapeValue value = aliasView(owner, child);
             if (--remaining > 0) child = owner.tape.next(child);
             return value;
           }
@@ -229,7 +263,7 @@ public final class TapeValue implements TruffleObject {
     long key = count == 0 ? -1 : owner.tape.first(node);
     for (int i = 0; i < keys.length; i++) {
       keys[i] = owner.tape.stringValue(key);
-      if (i + 1 < keys.length) key = owner.tape.next(key + 1);
+      if (i + 1 < keys.length) key = owner.tape.next(owner.tape.next(key));
     }
     return new DataArray(keys);
   }
@@ -261,20 +295,35 @@ public final class TapeValue implements TruffleObject {
    * none). Directories are sorted by hash, so the rank is the same for every member order of one
    * key set: documents that alternate member orders hit on every read, where the earlier position
    * hint (a key's offset, validated by a native side table) missed on every other one. The hint is
-   * validated by the receiver's kind and directory size, the entry's hash and the key node's tag,
-   * length and inline bytes; never by owner identity, so a stale hint only costs a miss. The hit
+   * validated by the receiver's kind and directory size, and the key node's tag,
+   * length and complete decoded bytes; never by owner identity, so a stale hint only costs a miss. The hit
    * path is one tape call of straight-line word loads and compares; misses (and keys longer than
-   * 16 bytes) search the directory behind a static boundary and update the hint.
+   * 16 bytes) search the directory behind a static boundary. Interop sites keep their initial rank constant;
+   * the host helper can update a mutable hint.
    *
    * <p>Aliases: a miss resolves the value it found inside its boundary, so reads of formats without
    * aliases compile with no resolution code at all. A hit returns the value node unresolved, so it
    * must never land on an alias: tapes of formats with aliases reject a key whose value is an alias
-   * in {@link TapeSource#keyNodeEquals}, and misses on such owners never teach a hint.
+   * by the compact directory reader, and misses on such owners never teach a hint.
    */
   static long memberNode(TapeOwner owner, long object, TapeKey key, int[] hint) {
-    int rank = hint[0] - 1;
+    return memberNode(owner, owner.tape, object, key, hint);
+  }
+
+  static long memberNode(TapeOwner owner, TapeReader reader, long object, TapeKey key, int[] hint) {
+    return memberNode(owner, reader, object, key, hint[0] - 1, hint);
+  }
+
+  private static long memberNode(TapeOwner owner, TapeReader reader, long object, TapeKey key,
+                                  int rank, int @org.jspecify.annotations.Nullable [] hint) {
+    return memberNode(owner, reader, object, key, rank, hint, owner.aliases());
+  }
+
+  /** As above with the owner's {@link TapeOwner#aliases()} already read once by the site. */
+  private static long memberNode(TapeOwner owner, TapeReader reader, long object, TapeKey key,
+                                  int rank, int @org.jspecify.annotations.Nullable [] hint, boolean aliases) {
     if (rank >= 0 && key.inline()) {
-      long k = owner.hinted(object, rank, key);
+      long k = TapeOwner.hinted(reader, object, rank, key, aliases);
       if (k >= 0) return k + 1;
     }
     return miss(owner, object, key, hint);
@@ -282,18 +331,24 @@ public final class TapeValue implements TruffleObject {
 
   /** Kind check, scan, hint update and alias resolution of a missed lookup: one call in compiled code. */
   @TruffleBoundary
-  private static long miss(TapeOwner owner, long object, TapeKey key, int[] hint) {
+  private static long miss(TapeOwner owner, long object, TapeKey key, int @org.jspecify.annotations.Nullable [] hint) {
     if (owner.tag(object) != ValueTape.OBJECT) return -1;
-    boolean aliases = owner.format().hasAliases();
+    boolean aliases = owner.aliases();
     // Misses on owners with aliases never teach a hint (a hit returns its value unresolved).
     long found = owner.find(object, key, aliases ? null : hint);
     if (found < 0) return found;
     return aliases ? owner.resolve(found) : found;
   }
 
-  /** A call site's directory-rank hint, cached with its key; 0 means no hint yet. */
-  static int[] newHint() {
-    return new int[1];
+  // Cache initialization only: retain the rank, never the owner. A different key set takes
+  // the checked miss path without mutating compiled constants or invalidating the call site.
+  static int rankOf(TapeValue receiver, @org.jspecify.annotations.Nullable TapeKey key) {
+    TapeOwner owner = receiver.owner;
+    owner.check();
+    if (key == null || owner.aliases() || owner.tag(receiver.node) != ValueTape.OBJECT) return -1;
+    int[] hint = new int[1];
+    owner.find(receiver.node, key, hint);
+    return hint[0] - 1;
   }
 
   // Guests usually read members by constant names: cache the encoded key per name identity so a
@@ -301,14 +356,19 @@ public final class TapeValue implements TruffleObject {
 
   @ExportMessage
   static final class IsMemberReadable {
-    @Specialization(guards = "name == cachedName", limit = "3")
+    @Specialization(guards = {"name == cachedName", "ownerClass(receiver) == ownerType", "readerMatches(receiver, ownerType, tapeType)"}, limit = "3")
     static boolean cached(
         TapeValue receiver,
         String name,
-        @Cached(value = "name", neverDefault = true) String cachedName,
+        @Cached(value = "name") String cachedName,
         @Cached("keyOf(name)") @org.jspecify.annotations.Nullable TapeKey key,
-        @Cached(value = "newHint()", dimensions = 0, neverDefault = true) int[] hint) {
-      return receiver.memberNode(key, hint) >= 0;
+        @Cached("rankOf(receiver, key)") int rank,
+        @Cached(value = "ownerClass(receiver)") Class<? extends TapeOwner> ownerType,
+        @Cached(value = "readerClass(receiver)") Class<? extends TapeReader> tapeType) {
+      TapeOwner owner = com.oracle.truffle.api.CompilerDirectives.castExact(receiver.owner, ownerType);
+      owner.checkSpecialized();
+      TapeReader reader = com.oracle.truffle.api.CompilerDirectives.castExact(owner.storage(), tapeType);
+      return key != null && memberNode(owner, reader, receiver.node, key, rank, null, owner.aliases()) >= 0;
     }
 
     @Specialization(replaces = "cached")
@@ -319,26 +379,49 @@ public final class TapeValue implements TruffleObject {
 
   @ExportMessage
   static final class ReadMember {
-    @Specialization(guards = "name == cachedName", limit = "3")
+    @Specialization(guards = {"name == cachedName", "ownerClass(receiver) == ownerType", "readerMatches(receiver, ownerType, tapeType)"}, limit = "3")
     static Object cached(
         TapeValue receiver,
         String name,
-        @Cached(value = "name", neverDefault = true) String cachedName,
+        @Cached(value = "name") String cachedName,
         @Cached("keyOf(name)") @org.jspecify.annotations.Nullable TapeKey key,
-        @Cached(value = "newHint()", dimensions = 0, neverDefault = true) int[] hint)
+        @Cached("rankOf(receiver, key)") int rank,
+        @Cached(value = "ownerClass(receiver)") Class<? extends TapeOwner> ownerType,
+        @Cached(value = "readerClass(receiver)") Class<? extends TapeReader> tapeType)
         throws UnknownIdentifierException {
-      return receiver.readFound(receiver.memberNode(key, hint), name);
+      TapeOwner owner = com.oracle.truffle.api.CompilerDirectives.castExact(receiver.owner, ownerType);
+      owner.checkSpecialized();
+      TapeReader reader = com.oracle.truffle.api.CompilerDirectives.castExact(owner.storage(), tapeType);
+      boolean aliases = owner.aliases();
+      long found = key == null ? -1 : memberNode(owner, reader, receiver.node, key, rank, null, aliases);
+      return readFound(owner, receiver.node, found, name, key, aliases);
     }
 
     @Specialization(replaces = "cached")
     static Object generic(TapeValue receiver, String name) throws UnknownIdentifierException {
-      return receiver.readFound(receiver.memberNode(keyOf(name), new int[1]), name);
+      TapeKey key = keyOf(name);
+      TapeOwner owner = receiver.owner;
+      owner.check();
+      long found = key == null ? -1 : memberNode(owner, receiver.node, key, new int[1]);
+      return readFound(owner, receiver.node, found, name, key);
     }
   }
 
-  private Object readFound(long found, String name) throws UnknownIdentifierException {
+  static Class<? extends TapeOwner> ownerClass(TapeValue receiver) { return receiver.owner.getClass(); }
+
+  private static Object readFound(TapeOwner owner, long object, long found, String name, @org.jspecify.annotations.Nullable TapeKey key) throws UnknownIdentifierException {
+    return readFound(owner, object, found, name, key, owner.aliases());
+  }
+
+  private static Object readFound(TapeOwner owner, long object, long found, String name,
+                                  @org.jspecify.annotations.Nullable TapeKey key, boolean aliases) throws UnknownIdentifierException {
     if (found < 0) throw unknown(name);
-    return new TapeValue(owner, found);
+    return aliases ? new AliasValue(owner, found, sourceMember(owner, object, key)) : new TapeValue(owner, found);
+  }
+
+  @TruffleBoundary
+  private static long sourceMember(TapeOwner owner, long object, @org.jspecify.annotations.Nullable TapeKey key) {
+    return owner.find(object, java.util.Objects.requireNonNull(key), null);
   }
 
   @TruffleBoundary
@@ -351,8 +434,7 @@ public final class TapeValue implements TruffleObject {
     return tag() == ValueTape.ARRAY;
   }
 
-  @ExportMessage
-  long getArraySize() throws UnsupportedMessageException {
+  long arraySizeInterop() throws UnsupportedMessageException {
     if (tag() != ValueTape.ARRAY) throw UnsupportedMessageException.create();
     return owner.tape.length(node);
   }
@@ -362,17 +444,58 @@ public final class TapeValue implements TruffleObject {
     return tag() == ValueTape.ARRAY && index >= 0 && index < owner.tape.length(node);
   }
 
-  @ExportMessage
-  Object readArrayElement(long index) throws InvalidArrayIndexException, UnsupportedMessageException {
+  Object arrayElementInterop(long index) throws InvalidArrayIndexException, UnsupportedMessageException {
     if (tag() != ValueTape.ARRAY) throw UnsupportedMessageException.create();
     if (index < 0 || index >= owner.tape.length(node)) throw InvalidArrayIndexException.create(index);
-    return new TapeValue(owner, elementNode(owner, node, index));
+    return view(owner, elementNode(owner, node, index));
+  }
+
+  private static long arrayLength(TapeReader reader, long node) throws UnsupportedMessageException {
+    long word = reader.readWord(node);
+    if (TapeReader.kind(word) != 8) throw UnsupportedMessageException.create();
+    int length = TapeReader.field(word);
+    return length == TapeReader.MAX_COUNT ? reader.length(node) : length;
+  }
+
+  @ExportMessage
+  static final class GetArraySize {
+    @Specialization(guards = {"ownerClass(receiver) == ownerType", "readerMatches(receiver, ownerType, tapeType)"}, limit = "3")
+    static long cached(TapeValue receiver,
+        @Cached(value = "ownerClass(receiver)") Class<? extends TapeOwner> ownerType,
+        @Cached(value = "readerClass(receiver)") Class<? extends TapeReader> tapeType)
+        throws UnsupportedMessageException {
+      TapeOwner owner = com.oracle.truffle.api.CompilerDirectives.castExact(receiver.owner, ownerType);
+      owner.checkSpecialized();
+      TapeReader reader = com.oracle.truffle.api.CompilerDirectives.castExact(owner.storage(), tapeType);
+      return arrayLength(reader, receiver.node);
+    }
+    @Specialization(replaces = "cached")
+    static long generic(TapeValue receiver) throws UnsupportedMessageException { return receiver.arraySizeInterop(); }
+  }
+
+  @ExportMessage
+  static final class ReadArrayElement {
+    @Specialization(guards = {"ownerClass(receiver) == ownerType", "readerMatches(receiver, ownerType, tapeType)"}, limit = "3")
+    static Object cached(TapeValue receiver, long index,
+        @Cached(value = "ownerClass(receiver)") Class<? extends TapeOwner> ownerType,
+        @Cached(value = "readerClass(receiver)") Class<? extends TapeReader> tapeType)
+        throws InvalidArrayIndexException, UnsupportedMessageException {
+      TapeOwner owner = com.oracle.truffle.api.CompilerDirectives.castExact(receiver.owner, ownerType);
+      owner.checkSpecialized();
+      TapeReader reader = com.oracle.truffle.api.CompilerDirectives.castExact(owner.storage(), tapeType);
+      long length = arrayLength(reader, receiver.node);
+      if (index < 0 || index >= length) throw InvalidArrayIndexException.create(index);
+      return view(owner, elementNode(owner, receiver.node, index));
+    }
+    @Specialization(replaces = "cached")
+    static Object generic(TapeValue receiver, long index) throws InvalidArrayIndexException, UnsupportedMessageException {
+      return receiver.arrayElementInterop(index);
+    }
   }
 
   // ---- InteropLibrary: scalars ----
 
-  @ExportMessage
-  boolean isNull() {
+  boolean nullInterop() {
     return tag() == ValueTape.NULL;
   }
 
@@ -381,14 +504,12 @@ public final class TapeValue implements TruffleObject {
     return tag() == ValueTape.BOOL;
   }
 
-  @ExportMessage
-  boolean asBoolean() throws UnsupportedMessageException {
+  boolean booleanInterop() throws UnsupportedMessageException {
     if (tag() != ValueTape.BOOL) throw UnsupportedMessageException.create();
     return owner.tape.booleanValue(node);
   }
 
-  @ExportMessage
-  boolean isString() {
+  boolean stringInterop() {
     return tag() == ValueTape.STRING;
   }
 
@@ -447,7 +568,7 @@ public final class TapeValue implements TruffleObject {
     // parsed here (numberText still returns them exactly).
     if ((int) owner.lexical(node) > MAX_DECIMAL_TOKEN_BYTES) return null;
     try {
-      return new BigDecimal(owner.lexicalText(node));
+      return new BigDecimal(owner.numberText(node));
     } catch (NumberFormatException | ArithmeticException overflow) {
       return null;
     }
@@ -552,35 +673,34 @@ public final class TapeValue implements TruffleObject {
 
   @ExportMessage
   boolean fitsInDouble() {
-    return !Double.isNaN(doubleOrNaN());
+    return tag() == ValueTape.F64 || !Double.isNaN(doubleOrNaN());
   }
 
   @ExportMessage
   boolean fitsInFloat() {
     double d = doubleOrNaN();
-    return !Double.isNaN(d) && (double) (float) d == d;
+    return (tag() == ValueTape.F64 && Double.isNaN(d)) || !Double.isNaN(d) && (double) (float) d == d;
   }
 
   @ExportMessage
   byte asByte() throws UnsupportedMessageException {
     if (!fitsInByte()) throw UnsupportedMessageException.create();
-    return (byte) asLong();
+    return (byte) longInterop();
   }
 
   @ExportMessage
   short asShort() throws UnsupportedMessageException {
     if (!fitsInShort()) throw UnsupportedMessageException.create();
-    return (short) asLong();
+    return (short) longInterop();
   }
 
   @ExportMessage
   int asInt() throws UnsupportedMessageException {
     if (!fitsInInt()) throw UnsupportedMessageException.create();
-    return (int) asLong();
+    return (int) longInterop();
   }
 
-  @ExportMessage
-  long asLong() throws UnsupportedMessageException {
+  long longInterop() throws UnsupportedMessageException {
     if (tag() == ValueTape.I64) return owner.tape.signedValue(node);
     return exactLong(owner, node);
   }
@@ -606,10 +726,129 @@ public final class TapeValue implements TruffleObject {
     return (float) doubleOrNaN();
   }
 
-  @ExportMessage
-  double asDouble() throws UnsupportedMessageException {
+  double doubleInterop() throws UnsupportedMessageException {
     double d = doubleOrNaN();
-    if (Double.isNaN(d)) throw UnsupportedMessageException.create();
+    if (Double.isNaN(d) && tag() != ValueTape.F64) throw UnsupportedMessageException.create();
     return d;
   }
+  // A view's node comes from a validated owner's root, member or element. After liveness,
+  // compact scalar reads can inspect that header directly, without translating its kind twice
+  // or checking a derived payload index again.
+  private static boolean kindIs(TapeReader tape, long node, int tag) {
+    int expected = switch (tag) {
+      case ValueTape.NULL -> 0;
+      case ValueTape.BOOL -> 1;
+      case ValueTape.I64 -> 3;
+      case ValueTape.U64 -> 4;
+      case ValueTape.F64 -> 5;
+      case ValueTape.DECIMAL -> 6;
+      case ValueTape.STRING -> 7;
+      case ValueTape.ARRAY -> 8;
+      case ValueTape.OBJECT -> 9;
+      default -> -1;
+    };
+    int actual = TapeReader.kind(tape.readWord(node));
+    return tag == ValueTape.BOOL ? actual == 1 || actual == 2 : actual == expected;
+  }
+
+  static Class<? extends TapeReader> readerClass(TapeValue receiver) { return receiver.owner.tape.getClass(); }
+
+  static boolean readerMatches(TapeValue receiver, Class<? extends TapeOwner> ownerType,
+                               Class<? extends TapeReader> tapeType) {
+    if ((Class<?>) ownerType == (Class<?>) tapeType) {
+      // The fused native owner's storage hook returns itself. Proving that identity avoids
+      // another class check through its final interface field; other implementations still
+      // verify the actual reader class below (or fail this identity check safely).
+      TapeOwner owner = com.oracle.truffle.api.CompilerDirectives.castExact(receiver.owner, ownerType);
+      return owner.storage() == owner;
+    }
+    return receiver.owner.tape.getClass() == tapeType;
+  }
+
+
+  @ExportMessage
+  static final class AsLong {
+    @Specialization(guards = {"ownerClass(receiver) == ownerType", "readerMatches(receiver, ownerType, tapeClass)"}, limit = "3")
+    static long cached(TapeValue receiver,
+        @Cached(value = "ownerClass(receiver)") Class<? extends TapeOwner> ownerType,
+        @Cached(value = "readerClass(receiver)") Class<? extends TapeReader> tapeClass)
+        throws UnsupportedMessageException {
+      TapeOwner owner = com.oracle.truffle.api.CompilerDirectives.castExact(receiver.owner, ownerType);
+      owner.checkSpecialized();
+      TapeReader tape = com.oracle.truffle.api.CompilerDirectives.castExact(owner.storage(), tapeClass);
+      if (kindIs(tape, receiver.node, ValueTape.I64))
+        return tape.readWord(receiver.node + 1);
+      return exactLong(receiver.owner, receiver.node);
+    }
+    @Specialization(replaces = "cached")
+    static long generic(TapeValue receiver) throws UnsupportedMessageException { return receiver.longInterop(); }
+  }
+
+  @ExportMessage
+  static final class AsDouble {
+    @Specialization(guards = {"ownerClass(receiver) == ownerType", "readerMatches(receiver, ownerType, tapeClass)"}, limit = "3")
+    static double cached(TapeValue receiver,
+        @Cached(value = "ownerClass(receiver)") Class<? extends TapeOwner> ownerType,
+        @Cached(value = "readerClass(receiver)") Class<? extends TapeReader> tapeClass)
+        throws UnsupportedMessageException {
+      TapeOwner owner = com.oracle.truffle.api.CompilerDirectives.castExact(receiver.owner, ownerType);
+      owner.checkSpecialized();
+      TapeReader tape = com.oracle.truffle.api.CompilerDirectives.castExact(owner.storage(), tapeClass);
+      if (kindIs(tape, receiver.node, ValueTape.F64))
+        return Double.longBitsToDouble(tape.readWord(receiver.node + 1));
+      double value = exactDouble(receiver.owner, receiver.node);
+      if (Double.isNaN(value)) throw UnsupportedMessageException.create();
+      return value;
+    }
+    @Specialization(replaces = "cached")
+    static double generic(TapeValue receiver) throws UnsupportedMessageException { return receiver.doubleInterop(); }
+  }
+
+  @ExportMessage
+  static final class AsBoolean {
+    @Specialization(guards = {"ownerClass(receiver) == ownerType", "readerMatches(receiver, ownerType, tapeClass)"}, limit = "3")
+    static boolean cached(TapeValue receiver,
+        @Cached(value = "ownerClass(receiver)") Class<? extends TapeOwner> ownerType,
+        @Cached(value = "readerClass(receiver)") Class<? extends TapeReader> tapeClass)
+        throws UnsupportedMessageException {
+      TapeOwner owner = com.oracle.truffle.api.CompilerDirectives.castExact(receiver.owner, ownerType);
+      owner.checkSpecialized();
+      TapeReader tape = com.oracle.truffle.api.CompilerDirectives.castExact(owner.storage(), tapeClass);
+      int kind = TapeReader.kind(tape.readWord(receiver.node));
+      if (kind != 1 && kind != 2) throw UnsupportedMessageException.create();
+      return kind == 2;
+    }
+    @Specialization(replaces = "cached")
+    static boolean generic(TapeValue receiver) throws UnsupportedMessageException { return receiver.booleanInterop(); }
+  }
+  @ExportMessage
+  static final class IsString {
+    @Specialization(guards = {"ownerClass(receiver) == ownerType", "readerMatches(receiver, ownerType, tapeClass)"}, limit = "3")
+    static boolean cached(TapeValue receiver,
+        @Cached(value = "ownerClass(receiver)") Class<? extends TapeOwner> ownerType,
+        @Cached(value = "readerClass(receiver)") Class<? extends TapeReader> tapeClass) {
+      TapeOwner owner = com.oracle.truffle.api.CompilerDirectives.castExact(receiver.owner, ownerType);
+      owner.checkSpecialized();
+      TapeReader tape = com.oracle.truffle.api.CompilerDirectives.castExact(owner.storage(), tapeClass);
+      return kindIs(tape, receiver.node, ValueTape.STRING);
+    }
+    @Specialization(replaces = "cached")
+    static boolean generic(TapeValue receiver) { return receiver.stringInterop(); }
+  }
+
+  @ExportMessage
+  static final class IsNull {
+    @Specialization(guards = {"ownerClass(receiver) == ownerType", "readerMatches(receiver, ownerType, tapeClass)"}, limit = "3")
+    static boolean cached(TapeValue receiver,
+        @Cached(value = "ownerClass(receiver)") Class<? extends TapeOwner> ownerType,
+        @Cached(value = "readerClass(receiver)") Class<? extends TapeReader> tapeClass) {
+      TapeOwner owner = com.oracle.truffle.api.CompilerDirectives.castExact(receiver.owner, ownerType);
+      owner.checkSpecialized();
+      TapeReader tape = com.oracle.truffle.api.CompilerDirectives.castExact(owner.storage(), tapeClass);
+      return kindIs(tape, receiver.node, ValueTape.NULL);
+    }
+    @Specialization(replaces = "cached")
+    static boolean generic(TapeValue receiver) { return receiver.nullInterop(); }
+  }
+
 }

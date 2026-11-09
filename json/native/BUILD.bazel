@@ -4,9 +4,11 @@ cc_library(
     name = "decoder",
     hdrs = [
         "decoder.h",
-        "legacy_decoder.h",
+        "decoder_common.h",
         "parser_pool.h",
         "session.h",
+        "stage1.h",
+        "stage2.h",
         "status.h",
         "stream.h",
     ],
@@ -21,23 +23,33 @@ cc_library(
 
 cc_test(
     name = "test",
-    srcs = ["decoder_test.cc"],
+    srcs = ["decoder_test.cc", "testing/ondemand_decoder.h"],
     copts = ["-std=c++17"],
     deps = [
+        ":myna_oracle",
         ":decoder",
         "//tape/native:testing",
     ],
 )
 
-# TRANSITIONAL (tape-gbps Task 2 -> Task 3): the 0.8.0 Myna-tape decoder the Java readers still use.
+# The previous Myna producer is a test-only differential oracle.
 cc_test(
-    name = "legacy_test",
-    srcs = ["legacy_decoder_test.cc"],
+    name = "myna_oracle_test",
+    srcs = ["testing/myna_oracle_test.cc"],
     copts = ["-std=c++17"],
     deps = [
+        ":myna_oracle",
         ":decoder",
         "//tape/native:testing",
     ],
+)
+
+cc_library(
+    name = "myna_oracle",
+    testonly = True,
+    hdrs = ["testing/myna_oracle.h", "testing/ondemand_pool.h"],
+    copts = ["-std=c++17"],
+    deps = [":decoder"],
 )
 
 config_setting(
@@ -96,14 +108,12 @@ cc_library(
     ],
 )
 
-# Everything a static (SVM) image links for JSON: the C ABI plus Myna's myna-values static library,
-# whose myna_utf8_to_utf16_v2 SvmValueTape calls for long strings. JVM builds use json_shared.so.
+# The C ABI and compact-tape simdutf transcoder for static images.
 cc_library(
     name = "svm",
     visibility = ["//visibility:public"],
     deps = [
         ":truffledata_json",
-        "//json/native/bridge",
     ],
 )
 
@@ -112,6 +122,7 @@ cc_test(
     srcs = ["api_test.cc"],
     copts = ["-std=c++17"],
     deps = [
+        ":myna_oracle",
         ":truffledata_json",
         "@myna//:values_headers",
     ],
@@ -194,4 +205,78 @@ cc_test(
         ":typed",
         "//protobuf-buffa/native:truffledata_buffa",
     ],
+)
+
+cc_test(
+    name = "stage2_test",
+    srcs = ["stage2_test.cc", "testing/ondemand_decoder.h"],
+    deps = [":decoder", "//tape/native:testing"],
+)
+
+cc_test(
+    name = "shape_fuzz_test",
+    srcs = ["shape_fuzz_test.cc"],
+    deps = [":decoder"],
+)
+
+cc_test(
+    name = "duplicate_probe",
+    srcs = ["duplicate_probe.cc"],
+    tags = ["manual"],
+    deps = [":decoder", "//tape/native:testing"],
+)
+
+cc_test(
+    name = "text_fusion_test",
+    srcs = ["text_fusion_test.cc", "testing/text_fusion_session.h", "testing/text_fusion_stage2.h"],
+    deps = [":decoder", "//tape/native:testing"],
+)
+
+cc_test(
+    name = "text_fusion_probe",
+    srcs = ["text_fusion_probe.cc", "testing/text_fusion_session.h", "testing/text_fusion_stage2.h"],
+    tags = ["manual"],
+    deps = [":decoder", "//tape/native:testing"],
+)
+
+cc_test(
+    name = "stage2_probe",
+    srcs = ["stage2_probe.cc", "testing/stage2_baseline_probe.h", "testing/ondemand_decoder.h", "testing/ondemand_pool.h"],
+    tags = ["manual"],
+    deps = [":decoder", "//tape/native:testing"],
+)
+
+cc_test(
+    name = "stream_probe",
+    srcs = ["stream_probe.cc", "testing/ondemand_session.h", "testing/ondemand_stream.h", "testing/ondemand_decoder.h"],
+    tags = ["manual"],
+    deps = [":decoder", "//tape/native:testing"],
+)
+
+cc_test(
+    name = "typed_stage2_test",
+    srcs = ["typed_stage2_test.cc", "testing/typed_ondemand.h"],
+    deps = [":typed"],
+)
+
+cc_test(
+    name = "typed_probe",
+    srcs = ["typed_probe.cc", "testing/typed_ondemand.h"],
+    tags = ["manual"],
+    deps = [":typed"],
+)
+
+genrule(
+    name = "isa_variants",
+    testonly = True,
+    srcs = ["stage2.h", "testing/make_isa_probe.py"],
+    outs = ["testing/isa_variants.h"],
+    cmd = "python3 $(location testing/make_isa_probe.py) $(location stage2.h) $@",
+)
+
+cc_test(
+    name = "isa_probe",
+    srcs = ["isa_probe.cc", ":isa_variants"],
+    tags = ["manual"],
+    deps = [":decoder", "//tape/native:testing"],
 )

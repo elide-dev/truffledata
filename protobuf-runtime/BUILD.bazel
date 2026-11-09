@@ -1,4 +1,4 @@
-load("@rules_java//java:defs.bzl", "java_test")
+load("@rules_java//java:defs.bzl", "java_library", "java_test")
 load("//bazel:java.bzl", "data_java_library")
 
 package(default_visibility = ["//visibility:public"])
@@ -6,21 +6,32 @@ package(default_visibility = ["//visibility:public"])
 data_java_library(
     name = "protobuf-runtime",
     srcs = [
+        "src/main/java/dev/elide/truffledata/protobuf/BoundedOutput.java",
         "src/main/java/dev/elide/truffledata/protobuf/GeneratedGraphInput.java",
         "src/main/java/dev/elide/truffledata/protobuf/GeneratedInput.java",
         "src/main/java/dev/elide/truffledata/protobuf/GeneratedMessage.java",
         "src/main/java/dev/elide/truffledata/protobuf/GeneratedOutput.java",
+        "src/main/java/dev/elide/truffledata/protobuf/GeneratedSlabWriter.java",
         "src/main/java/dev/elide/truffledata/protobuf/Layout.java",
+        "src/main/java/dev/elide/truffledata/protobuf/Projection.java",
         "src/main/java/dev/elide/truffledata/protobuf/ProtoAccess.java",
         "src/main/java/dev/elide/truffledata/protobuf/ProtoCodec.java",
         "src/main/java/dev/elide/truffledata/protobuf/ProtoDescriptors.java",
         "src/main/java/dev/elide/truffledata/protobuf/ProtoJson.java",
         "src/main/java/dev/elide/truffledata/protobuf/ProtoJsonType.java",
+        "src/main/java/dev/elide/truffledata/protobuf/ProtoMessage.java",
         "src/main/java/dev/elide/truffledata/protobuf/ProtoPlan.java",
         "src/main/java/dev/elide/truffledata/protobuf/ProtoRow.java",
         "src/main/java/dev/elide/truffledata/protobuf/ProtoText.java",
         "src/main/java/dev/elide/truffledata/protobuf/ProtoWire.java",
+        "src/main/java/dev/elide/truffledata/protobuf/SlabArray.java",
+        "src/main/java/dev/elide/truffledata/protobuf/SlabBytes.java",
+        "src/main/java/dev/elide/truffledata/protobuf/SlabCodec.java",
         "src/main/java/dev/elide/truffledata/protobuf/SlabFormat.java",
+        "src/main/java/dev/elide/truffledata/protobuf/SlabLimits.java",
+        "src/main/java/dev/elide/truffledata/protobuf/SlabMessage.java",
+        "src/main/java/dev/elide/truffledata/protobuf/SlabRow.java",
+        "src/main/java/dev/elide/truffledata/protobuf/SlabVerifier.java",
         "src/main/java/dev/elide/truffledata/protobuf/package-info.java",
     ],
     deps = [
@@ -37,11 +48,20 @@ java_test(
     size = "medium",
     srcs = [
         "src/test/java/dev/elide/truffledata/protobuf/LayoutTest.java",
+        "src/test/java/dev/elide/truffledata/protobuf/ProjectionTest.java",
+        "src/test/java/dev/elide/truffledata/protobuf/SlabCodecTest.java",
         "src/test/java/dev/elide/truffledata/protobuf/SlabReference.java",
+        "src/test/java/dev/elide/truffledata/protobuf/SlabVerifierTest.java",
     ],
     args = [
         "--class",
         "dev.elide.truffledata.protobuf.LayoutTest",
+        "--class",
+        "dev.elide.truffledata.protobuf.SlabCodecTest",
+        "--class",
+        "dev.elide.truffledata.protobuf.ProjectionTest",
+        "--class",
+        "dev.elide.truffledata.protobuf.SlabVerifierTest",
     ],
     data = [":golden_slabs"],
     jvm_flags = [
@@ -75,3 +95,21 @@ filegroup(
 )
 
 exports_files(["BUILD.bazel"])
+
+# The cross-language producer gate reuses the independent schema/corpus fixture.
+java_library(
+    name = "slab_test_fixtures",
+    testonly = True,
+    srcs = [
+        "src/test/java/dev/elide/truffledata/protobuf/LayoutTest.java",
+        "src/test/java/dev/elide/truffledata/protobuf/SlabReference.java",
+    ],
+    deps = [
+        ":protobuf-runtime",
+        "//core",
+        "@maven//:com_google_protobuf_protobuf_java",
+        "@maven//:org_graalvm_truffle_truffle_api",
+        "@maven//:org_jspecify_jspecify",
+        "@maven//:org_junit_jupiter_junit_jupiter_api",
+    ],
+)

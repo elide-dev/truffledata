@@ -1,4 +1,4 @@
-module truffledata_buffa abi=10 target=x86_64-unknown-linux-gnu java_package=dev.elide.truffledata.buffa.generated java_class=Buffa c_library=truffledata_buffa c_library_static=true
+module truffledata_buffa abi=11 target=x86_64-unknown-linux-gnu java_package=dev.elide.truffledata.buffa.generated java_class=Buffa c_library=truffledata_buffa c_library_static=true
 struct Field size=24 align=8
   field number type=u32 offset=0
   field wire type=u32 offset=4
@@ -52,50 +52,6 @@ import typedReuse symbol=td_buffa_typed_reuse return=i32 error=no_failure native
   param max_native_bytes type=u64
   param result type=ptr<void> nullable=false ownership=borrowed access=read_write
 end
-struct Scalars size=24 align=8
-  field first type=u64 offset=0
-  field second type=u64 offset=8
-  field present type=u64 offset=16
-end
-import scalars symbol=td_buffa_scalars return=i32 error=no_failure native_leaf=false@explicit_contract
-  param schema type=ptr<u8> nullable=false ownership=borrowed access=read
-  param schema_length type=u64
-  param data type=ptr<u8> nullable=false ownership=borrowed access=read
-  param length type=u64
-  param max_cells type=u64
-  param max_depth type=u32
-  param result type=ptr<void> nullable=false ownership=borrowed access=write
-end
-struct View size=32 align=8
-  field data type=ptr<u8> offset=0
-  field count type=u64 offset=8
-  field words type=u64 offset=16
-  field bytes type=u64 offset=24
-end
-import compileView symbol=td_buffa_compile_view return=i32 error=no_failure native_leaf=false@explicit_contract
-  param schema type=ptr<u8> nullable=false ownership=borrowed access=read
-  param schema_length type=u64
-  param result type=ptr<void> nullable=false ownership=borrowed access=write
-end
-import releaseCompiled symbol=td_buffa_release_compiled return=void error=no_failure native_leaf=false@explicit_contract
-  param compiled type=ptr<u8> nullable=true ownership=borrowed access=read_write
-end
-import decodeView symbol=td_buffa_decode_view return=i32 error=no_failure native_leaf=false@explicit_contract
-  param compiled type=ptr<u8> nullable=false ownership=borrowed access=read
-  param data type=ptr<u8> nullable=false ownership=borrowed access=read
-  param length type=u64
-  param max_cells type=u64
-  param max_string_bytes type=u64
-  param max_depth type=u32
-  param max_native_bytes type=u64
-  param scratch type=ptr<void> nullable=false ownership=borrowed access=read_write
-  param result type=ptr<void> nullable=false ownership=borrowed access=write
-end
-import releaseView symbol=td_buffa_release_view return=void error=no_failure native_leaf=false@explicit_contract
-  param data type=ptr<u8> nullable=true ownership=borrowed access=read_write
-  param bytes type=u64
-end
-
 import utf8_to_utf16 symbol=td_buffa_utf8_to_utf16 return=i64 error=no_failure native_leaf=false@explicit_contract
   param data type=ptr<u8> nullable=false ownership=borrowed access=read
   param length type=u64

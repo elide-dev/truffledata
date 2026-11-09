@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# release_archive.sh FORMAT OUTPUT MANIFEST BITCODE BITCODE_MANIFEST CC BIN ARCHIVE...
+# release_archive.sh FORMAT OUTPUT MANIFEST BITCODE BITCODE_MANIFEST CC BIN PUBLIC_SYMBOLS ARCHIVE...
 #
 # Merges static archives into one release archive whose members a consumer links with or without LTO
 # (docs/superpowers/plans/2026-11-07-release-matrix-ledger.md, Task R1):
@@ -27,8 +27,8 @@
 # MANIFEST (and BITCODE_MANIFEST) list each member and its kind (fat, machine-code or bitcode) for the release gate
 # (tools/release/check_natives.py).
 set -euo pipefail
-format=$1 output=$2 manifest=$3 bitcode=$4 bitcode_manifest=$5 cc=$6 bin=$7
-shift 7
+format=$1 output=$2 manifest=$3 bitcode=$4 bitcode_manifest=$5 cc=$6 bin=$7 public_symbols=$8
+shift 8
 case $format in
   elf) codegen=(-flto=thin -ffat-lto-objects) ar_format=gnu compiled=fat ;;
   macho) codegen=() ar_format=darwin compiled=machine-code ;;
@@ -81,6 +81,46 @@ bplace() { # bplace FILE NAME KIND: add FILE as BITCODE member NAME
   bnames+=("$name")
   bkinds+=("$3")
 }
+
+# Small C/C++ kernels can hide all implementation symbols before code generation.
+# Merge the IR first: object-level hiding would leave cross-member references or
+# allow an unrelated archive to satisfy them. Both machine code and ThinLTO now
+# expose exactly the seam's entry points.
+if [[ $public_symbols != - ]]; then
+  modules=() index=0
+  for archive in "$@"; do
+    archive=$(abs "$archive")
+    index=$((index + 1))
+    dir=$work/private$index
+    mkdir "$dir"
+    listing=$("$bin/llvm-ar" t "$archive")
+    seen= position=0
+    while IFS= read -r name; do
+      occurrence=$(($(grep -Fxc "$name" <<< "$seen" || true) + 1))
+      seen+=$name$'\n'
+      position=$((position + 1))
+      if [[ $name == *.o && $name != *.pic.o ]] && (($(grep -Fxc "${name%.o}.pic.o" <<< "$listing" || true) >= occurrence)); then
+        continue
+      fi
+      mkdir "$dir/$position"
+      (cd "$dir/$position" && "$bin/llvm-ar" xN "$occurrence" "$archive" "$name")
+      member=$dir/$position/$name
+      is_bitcode "$member" || { echo "private archive requires LLVM IR: $name" >&2; exit 1; }
+      modules+=("$member")
+    done <<< "$listing"
+  done
+  "$bin/llvm-link" "${modules[@]}" -o "$work/linked.bc"
+  "$bin/opt" -passes=internalize,globaldce -internalize-public-api-list="$public_symbols" "$work/linked.bc" -o "$work/private.bc"
+  compile "$work/private.bc" "$work/out/kernel.o"
+  "$bin/llvm-ar" rcsD --format="$ar_format" "$output" "$work/out/kernel.o"
+  printf 'kernel.o\t%s\n' "$compiled" > "$manifest"
+  if [[ $bitcode != - ]]; then
+    summarize "$work/private.bc" "$work/bc/kernel.o"
+    "$bin/llvm-ar" rcsD --format=darwin "$bitcode" "$work/bc/kernel.o"
+    printf 'kernel.o\tbitcode\n' > "$bitcode_manifest"
+  fi
+  exit 0
+fi
 
 index=0
 for archive in "$@"; do

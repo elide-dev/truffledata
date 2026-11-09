@@ -4,8 +4,8 @@
 //   ryml-ints(scan)             rapidyaml's integer event handler (src_extra; benchmark only)
 //   ryml-tree                   rapidyaml's stock tree parser
 //   libyaml(scan)               libyaml 0.2.5 events, every scalar touched (the probe's row; benchmark only)
-//   td-session(decode+reset)    td_yaml_session_decode then td_yaml_session_reset
-//   td-session(retain+release)  td_yaml_session_decode, td_yaml_session_retain, td_yaml_release
+//   td-session(decode+reset)    td_session_decode then td_session_reset
+//   td-session(retain+release)  td_session_decode, td_session_retain, td_yaml_release
 //   td-stream(documents)        multi-document input: td_yaml_stream_* over the whole buffer
 //
 // Every variant parses a fresh copy of the input (rapidyaml filters in place; the session copies
@@ -22,6 +22,7 @@
 #include "yaml/native/api.h"
 #include "yaml/native/reference_tape.h"
 #include "yaml/native/sampler.h"
+#include "yaml/native/typed.h"
 
 #include <c4/yml/event_handler_tree.hpp>
 #include <c4/yml/parse.hpp>
@@ -55,6 +56,7 @@ std::string basename(const std::string& path) {
   return slash == std::string::npos ? path : path.substr(slash + 1);
 }
 
+
 double best_ns(int iters, const std::function<uint64_t()>& f) {
   double best = 1e300;
   for (int round = 0; round < 7; ++round) {
@@ -77,6 +79,86 @@ YamlOptionsStruct options() {
   o.max_alias_expansion = 1000000;
   o.max_depth = 128;
   return o;
+}
+
+// The records fixture is a top-level sequence; a single enclosing field supplies the record-root
+// contract used by both typed backends. The identical wrapped bytes are used by every row.
+int duplicate_benchmark(const std::string& path, bool quick) {
+  using namespace truffledata::yaml;
+  std::string input = slurp(path);
+  truffledata::yaml::session baseline(session_options{}), fused(session_options{});
+  baseline.fused_duplicates(false);
+  auto decode = [&](truffledata::yaml::session& parser) {
+    auto view = parser.decode(reinterpret_cast<const uint8_t*>(input.data()), input.size(), 0);
+    uint64_t count = view.view.word_count; parser.reset(); return count;
+  };
+  int iters = quick ? 10 : 100;
+  double old = 1e300, current = 1e300;
+  for (int pass = 0; pass < 5; pass++) {
+    double before, after;
+    if (pass & 1) {
+      after = best_ns(iters, [&] { return decode(fused); });
+      before = best_ns(iters, [&] { return decode(baseline); });
+    } else {
+      before = best_ns(iters, [&] { return decode(baseline); });
+      after = best_ns(iters, [&] { return decode(fused); });
+    }
+    old = std::min(old, before); current = std::min(current, after);
+    std::printf("duplicate-fusion %s pass=%d baseline-ns=%.0f fused-ns=%.0f speedup=%.4f\n",
+                path.c_str(), pass, before, after, before / after);
+  }
+  std::printf("duplicate-fusion best baseline-ns=%.0f fused-ns=%.0f speedup=%.4f\n", old, current, old / current);
+  return 0;
+}
+
+int typed_benchmark(const std::string& path, bool quick) {
+  using namespace truffledata::yaml;
+  auto record = [](const char* name, uint32_t child, bool repeated = false) {
+    scalar_field field{name, scalar_kind::record}; field.child = child; field.repeated = repeated;
+    return field;
+  };
+  auto array = [](const char* name, scalar_kind kind) {
+    scalar_field field{name, kind}; field.repeated = true; return field;
+  };
+  typed_plan plan(std::vector<std::vector<scalar_field>>{
+      {record("records", 1, true)},
+      {{"id", scalar_kind::int64}, {"name", scalar_kind::string}, {"price", scalar_kind::float64},
+       {"active", scalar_kind::boolean}, array("tags", scalar_kind::string), record("dims", 2),
+       array("scores", scalar_kind::int64), {"note", scalar_kind::string},
+       {"parent", scalar_kind::int64, true, true}},
+      {{"w", scalar_kind::int64}, {"h", scalar_kind::float64}, {"unit", scalar_kind::string}}}, "YAML");
+  std::istringstream lines(slurp(path));
+  std::string line, input = "records:\n";
+  while (std::getline(lines, line)) input += "  " + line + '\n';
+  auto bytes = reinterpret_cast<const uint8_t*>(input.data());
+  session_options options;
+  options.storage.index_bytes = 256u << 20;
+  truffledata::yaml::session generic(options);
+  int iters = quick ? 10 : 100;
+  double generic_ns = best_ns(iters, [&] {
+    auto document = generic.decode(bytes, input.size(), 0);
+    auto* retained = generic.retain();
+    uint64_t nodes = document.view.word_count;
+    retained->destroy();
+    return nodes;
+  });
+  double typed_ns = best_ns(iters, [&] {
+    typed_document document(plan, input, options);
+    return document.size();
+  });
+  truffledata::yaml::session source_session(options);
+  typed_source source(source_session.decode(bytes, input.size(), truffledata::yaml::session::retain_source),
+                      options.rules.schema, false);
+  double walk_ns = best_ns(iters, [&] {
+    truffledata::tape::tape_typed<scalar_slot, record_entry, typed_source> slots(
+        plan, source, options.storage.index_bytes - source_session.memory().current(), options.max_alias_expansion);
+    return slots.size();
+  });
+  std::printf("typed records-block bytes=%zu generic-retain-ns=%.0f typed-ns=%.0f walk-ns=%.0f typed/generic=%.3f walk/typed=%.3f\n",
+              input.size(), generic_ns, typed_ns, walk_ns, typed_ns / generic_ns, walk_ns / typed_ns);
+  std::printf("typed<=1.2*generic=%s direct-handler-trigger(walk>15%%)=%s\n",
+              typed_ns <= 1.2 * generic_ns ? "PASS" : "MISS", walk_ns > .15 * typed_ns ? "OPEN" : "closed");
+  return 0; // An exploratory hypothesis report, not a relaxation of the release performance gate.
 }
 
 // libyaml events over `src` (every document), touching every scalar: the probe's libyaml(scan).
@@ -110,10 +192,10 @@ uint64_t stream_documents(void* session, const std::string& src) {
   uint64_t nodes = 0;
   for (;;) {
     YamlResult r{};
-    int32_t status = td_yaml_stream_next(st, &r);
+    int32_t status = td_yaml_stream_next(st, 0, &r);
     if (status == TD_YAML_STREAM_EMPTY) break;
     if (status != TD_YAML_OK) std::abort();
-    nodes += static_cast<const myna_value_view*>(r.view)->node_count;
+    nodes += static_cast<const td_tape_view*>(r.view)->word_count;
   }
   td_yaml_stream_release(st);
   return nodes;
@@ -145,15 +227,27 @@ int profile(const std::string& name, double seconds, const std::function<uint64_
 }  // namespace
 
 int main(int argc, char** argv) {
-  bool quick = false;
+  bool quick = false, typed = false, duplicates = false;
+  double minimum_ratio = 0;
   int passes = 1;
   double profile_seconds = 0;
   std::vector<std::string> files;
   for (int i = 1; i < argc; ++i) {
-    if (std::strcmp(argv[i], "--quick") == 0) quick = true;
+    if (std::strcmp(argv[i], "--typed") == 0) typed = true;
+    else if (std::strcmp(argv[i], "--duplicates") == 0) duplicates = true;
+    else if (std::strncmp(argv[i], "--minimum-ratio=", 16) == 0) minimum_ratio = std::atof(argv[i] + 16);
+    else if (std::strcmp(argv[i], "--quick") == 0) quick = true;
     else if (std::strncmp(argv[i], "--passes=", 9) == 0) passes = std::max(1, std::atoi(argv[i] + 9));
     else if (std::strncmp(argv[i], "--profile=", 10) == 0) profile_seconds = std::atof(argv[i] + 10);
     else files.push_back(argv[i]);
+  }
+  if (duplicates) {
+    if (files.size() != 1) return 2;
+    return duplicate_benchmark(files[0], quick);
+  }
+  if (typed) {
+    if (files.size() != 1) return 2;
+    return typed_benchmark(files[0], quick);
   }
   if (profile_seconds > 0) {
     YamlOptionsStruct po = options();
@@ -240,7 +334,7 @@ int main(int argc, char** argv) {
         row("td-session(decode+reset)", best_ns(iters, [&] {
           YamlResult r{};
           td_yaml_session_decode(session, reinterpret_cast<const uint8_t*>(src.data()), n, 0, nullptr, 0, &r);
-          uint64_t nodes = static_cast<const myna_value_view*>(r.view)->node_count;
+          uint64_t nodes = static_cast<const td_tape_view*>(r.view)->word_count;
           td_yaml_session_reset(session);
           return nodes;
         }));
@@ -248,7 +342,7 @@ int main(int argc, char** argv) {
           YamlResult r{}, kept{};
           td_yaml_session_decode(session, reinterpret_cast<const uint8_t*>(src.data()), n, 0, nullptr, 0, &r);
           td_yaml_session_retain(session, &kept);
-          uint64_t nodes = static_cast<const myna_value_view*>(kept.view)->node_count;
+          uint64_t nodes = static_cast<const td_tape_view*>(kept.view)->word_count;
           td_yaml_release(&kept);
           return nodes;
         }));
@@ -291,6 +385,10 @@ int main(int argc, char** argv) {
     std::printf("acceptance: records-block td-session(decode+reset) / ryml-ints(scan) = %.3f (best times over %d "
                 "passes; per pass min %.3f, median %.3f, max %.3f) (hypothesis >= 0.8): %s\n",
                 ratio, passes, gates.front(), gates[gates.size() / 2], gates.back(), ratio >= 0.8 ? "met" : "MISSED");
+    if (minimum_ratio > 0) {
+      std::printf("compact floor %.3f: %s\n", minimum_ratio, ratio >= minimum_ratio ? "PASS" : "FAIL");
+      if (ratio < minimum_ratio) return 1;
+    }
   }
   return 0;
 }

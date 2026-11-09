@@ -1,4 +1,4 @@
-//! Seam ABI 10: protobuf decoded into layout-compiled slabs (format `TDSLAB1`, docs/SLAB.md).
+//! Seam ABI 11: protobuf decoded into layout-compiled slabs (format `TDSLAB1`, docs/SLAB.md).
 //!
 //! A schema program (`TDB3` tables plus the `TDL1` layout section that Java appends) compiles
 //! once into checked descriptors; the layout is recomputed here and a program whose section
@@ -31,14 +31,22 @@ pub const NEEDS_CAPACITY: i32 = 6;
 
 /// Decode flags (`td_buffa_decode_slab`).
 pub const FLAG_OWNING: u32 = 1;
-/// Phase E (projection without validating unread strings): rejected until Task E1.
+/// Opt-in projection validation that defers UTF-8 checks for omitted/lazy subtrees.
 pub const FLAG_LAX: u32 = 2;
 /// Walk and size only: nothing is written and the result is `NEEDS_CAPACITY` (or an error).
 pub const FLAG_SIZING_ONLY: u32 = 4;
+/// The caller retains the input for external bytes and lazy child payloads.
+pub const FLAG_BORROWING: u32 = 8;
 
 /// Slab header flags (docs/SLAB.md).
 pub const SLAB_OWNING: u32 = 1;
 pub const SLAB_CERTIFIED: u32 = 8;
+pub const SLAB_BORROWING: u32 = 2;
+pub const SLAB_LAX: u32 = 4;
+pub const SLAB_PROJECTED: u32 = 16;
+pub const LAZY_CHILD: u32 = 1 << 31;
+const EXTERNAL: u32 = 1 << 30;
+const COUNTS_ONLY: u32 = 1;
 
 pub const SLAB_MAGIC: u32 = 0x3153_4454;
 const TDB3: u32 = 0x5444_4233;
@@ -180,6 +188,7 @@ pub(crate) struct TypeDesc {
     required: Box<[u32]>,
     map_entry: bool,
     value_message: bool,
+    required_closure: bool,
 }
 
 impl TypeDesc {
@@ -211,6 +220,72 @@ impl Compiled {
         } else {
             Err(MALFORMED)
         }
+    }
+}
+
+/// A validated, borrowed TDP1 mask. No allocation is needed on the critical decode path.
+/// Header words: magic, byte length, layout fingerprint, flags, type count, borrow threshold.
+/// Each type contributes field count followed by ceil(field count/32) wanted-bit words.
+#[derive(Clone, Copy)]
+pub struct Projection<'a> {
+    bytes: &'a [u8],
+    pub flags: u32,
+    pub borrow_bytes: u32,
+}
+
+impl<'a> Projection<'a> {
+    pub const MAGIC: u32 = 0x3150_4454;
+    pub const LAX: u32 = 1;
+    pub const LAZY: u32 = 2;
+    pub const BORROW_BYTES: u32 = 4;
+
+    pub fn parse(c: &Compiled, bytes: &'a [u8]) -> Result<Self> {
+        let words = Words(bytes);
+        if words.word(0)? != Self::MAGIC || words.word(4)? as usize != bytes.len()
+            || words.word(8)? != c.fingerprint || words.word(16)? as usize != c.types.len() {
+            return Err(MALFORMED);
+        }
+        let flags = words.word(12)?;
+        let borrow_bytes = words.word(20)?;
+        if flags & !(Self::LAX | Self::LAZY | Self::BORROW_BYTES) != 0
+            || (flags & Self::BORROW_BYTES != 0) != (borrow_bytes != 0) {
+            return Err(MALFORMED);
+        }
+        let mut at = 24usize;
+        for t in &c.types {
+            let count = t.fields.len();
+            if words.word(at)? as usize != count { return Err(MALFORMED); }
+            at += 4;
+            let n = count.div_ceil(32);
+            if n != 0 {
+                let last = words.word(at + 4 * (n - 1))?;
+                if count & 31 != 0 && last >> (count & 31) != 0 { return Err(MALFORMED); }
+            }
+            at = at.checked_add(4 * n).ok_or(MALFORMED)?;
+        }
+        if at != bytes.len() { return Err(MALFORMED); }
+        Ok(Self { bytes, flags, borrow_bytes })
+    }
+
+    /// The C contract requires an aligned readable header and its declared complete buffer.
+    /// The size must equal the compiled layout's independently derived mask extent.
+    pub unsafe fn from_raw(c: &Compiled, data: *const u8) -> Result<Self> {
+        if data.is_null() || data as usize & 3 != 0 { return Err(MALFORMED); }
+        let header = unsafe { std::slice::from_raw_parts(data, 24) };
+        let length = Words(header).word(4)? as usize;
+        let expected = c.types.iter().try_fold(24usize, |sum, t| sum.checked_add(4 + 4 * t.fields.len().div_ceil(32))).ok_or(MALFORMED)?;
+        if length != expected { return Err(MALFORMED); }
+        Self::parse(c, unsafe { std::slice::from_raw_parts(data, length) })
+    }
+
+    #[inline]
+    fn wanted(self, ty: u32, ordinal: usize) -> bool {
+        let mut at = 24usize;
+        for _ in 0..ty {
+            let fields = read32(unsafe { self.bytes.as_ptr().add(at) }) as usize;
+            at += 4 + 4 * fields.div_ceil(32);
+        }
+        read32(unsafe { self.bytes.as_ptr().add(at + 4 + 4 * (ordinal >> 5)) }) & (1 << (ordinal & 31)) != 0
     }
 }
 
@@ -593,7 +668,8 @@ pub fn compile(bytes: &[u8]) -> Result<Compiled> {
                 dispatch[f.tag as usize] = ordinal as u16 + 1;
             }
         }
-        let closes = value_message || !required.is_empty();
+        let required_closure = !required.is_empty();
+        let closes = value_message || required_closure;
         let has_map = descs.iter().any(|f| f.map);
         types.push(TypeDesc {
             entries: entries.into_boxed_slice(),
@@ -610,6 +686,7 @@ pub fn compile(bytes: &[u8]) -> Result<Compiled> {
             required: required.into_boxed_slice(),
             map_entry,
             value_message,
+            required_closure,
         });
     }
     if at != trailer || crc32(&bytes[section + 16..at]) != fingerprint {
@@ -622,6 +699,18 @@ pub fn compile(bytes: &[u8]) -> Result<Compiled> {
                 return Err(MALFORMED);
             }
         }
+    }
+    // Required children need full reachable-state validation (oneof clears and map replacement
+    // can orphan an incomplete child). Projection conservatively materializes these closures.
+    loop {
+        let mut changed = false;
+        for i in 0..types.len() {
+            if !types[i].required_closure && types[i].fields.iter().any(|f|
+                matches!(f.op, OP_MESSAGE | OP_GROUP) && types[f.child as usize].required_closure) {
+                types[i].required_closure = true; changed = true;
+            }
+        }
+        if !changed { break; }
     }
     Ok(Compiled {
         magic: COMPILED_MAGIC,
@@ -902,6 +991,8 @@ struct Frame {
     mark: Mark,
     invalid_map: bool,
     merged: bool,
+    /// An omitted lazy child that requires eager handling exposes its complete subtree.
+    full: bool,
 }
 
 /// `Frame::start` of the root: no field of a parent to charge.
@@ -1207,6 +1298,9 @@ pub(crate) struct Decoder<'a, 's> {
     records: u64,
     handles: u64,
     certified: bool,
+    projection: Option<Projection<'a>>,
+    skip_utf8: bool,
+    external: bool,
     /// Input offset of the field being decoded (the string payload for invalid UTF-8).
     pub(crate) error_at: usize,
     frame_bound: usize,
@@ -1299,6 +1393,11 @@ impl<'a, 's> Decoder<'a, 's> {
         self.records += 1;
         write32(base, self.handles as u32);
         self.handles += 1;
+        let full = self.projection.is_some_and(|p| k > 0 && unsafe {
+            let parent = &*self.frame(k - 1);
+            parent.full || (ordinal != NONE && p.flags & Projection::LAZY != 0
+                && !p.wanted(parent.ty, ordinal as usize))
+        });
         // SAFETY: frame `k` lies inside the stack (see `frame`).
         unsafe {
             self.frame(k).write(Frame {
@@ -1317,6 +1416,7 @@ impl<'a, 's> Decoder<'a, 's> {
                 mark,
                 invalid_map: false,
                 merged: false,
+                full,
             })
         };
         Ok(base)
@@ -1334,7 +1434,7 @@ impl<'a, 's> Decoder<'a, 's> {
             (f.ty, f.merged, f.pending as usize, f.merges as usize, f.unknown as usize)
         };
         let t = &c.types[ty as usize];
-        if merged || t.closes || self.pending.len() > pending || self.unknown.len() > unknown {
+        if merged || t.closes || self.has_projected_counts(k) || self.pending.len() > pending || self.unknown.len() > unknown {
             self.close(k)?;
         } else {
             self.merges.truncate(merges);
@@ -1433,9 +1533,12 @@ impl<'a, 's> Decoder<'a, 's> {
     /// Validate and place one string or bytes header with its owned payload.
     #[inline(never)]
     fn string(&mut self, start: usize, n: usize, text: bool) -> Result<u32> {
+        if !text && self.projection.is_some_and(|p| p.flags & Projection::BORROW_BYTES != 0 && n >= p.borrow_bytes as usize) {
+            return self.external_bytes(start, n);
+        }
         let input = self.input;
         let bytes = &input[start..start + n];
-        let (units, ascii) = if text {
+        let (units, ascii) = if text && !self.skip_utf8 {
             match validate_utf16_units(bytes) {
                 Some(found) => found,
                 None => return Err(self.fail(MALFORMED, start)),
@@ -1568,6 +1671,97 @@ impl<'a, 's> Decoder<'a, 's> {
         code
     }
 
+    #[inline]
+    fn counts_only(&self, ty: u32, ordinal: usize) -> bool {
+        let Some(p) = self.projection else { return false; };
+        let f = &self.c.types[ty as usize].fields[ordinal];
+        p.flags & Projection::LAZY == 0 && !p.wanted(ty, ordinal)
+            && f.op == OP_MESSAGE && f.repeated && !f.map && f.oneof == NONE
+            && !self.c.types[f.child as usize].required_closure
+    }
+
+    fn has_projected_counts(&self, k: usize) -> bool {
+        let frame = unsafe { &*self.frame(k) };
+        self.projection.is_some() && !frame.full && self.c.types[frame.ty as usize].lists.iter()
+            .any(|&ordinal| self.counts_only(frame.ty, ordinal as usize))
+    }
+
+    /// Validate an omitted payload without allocating output. Ordinary merge validation keeps
+    /// its old behavior; only this explicit projection walk may defer UTF-8.
+    fn projected_walk(&mut self, k: usize, ty: u32, start: usize, body: usize, end: usize) -> Result<()> {
+        let projection = self.projection.take();
+        let saved = self.skip_utf8;
+        self.skip_utf8 = projection.is_some_and(|p| p.flags & Projection::LAX != 0);
+        let result = self.walk(k, ty, end, 0, start, body);
+        self.projection = projection;
+        self.skip_utf8 = saved;
+        result.map(|_| ())
+    }
+
+    fn lazy_child(&mut self, body: usize, end: usize, depth: usize) -> Result<u32> {
+        let at = self.alloc(16, 8)?;
+        let handle = self.handles as u32;
+        self.handles += 1;
+        self.external = true;
+        if self.fits(at, 16) {
+            unsafe {
+                let p = self.out.add(at);
+                write32(p, body as u32); write32(p.add(4), (end - body) as u32);
+                write32(p.add(8), handle); write32(p.add(12), depth as u32);
+            }
+        }
+        Ok(offset(at) | LAZY_CHILD)
+    }
+
+    fn external_bytes(&mut self, body: usize, length: usize) -> Result<u32> {
+        if length > MAX_LENGTH { return Err(BUDGET); }
+        let at = self.alloc(16, 4)?;
+        let handle = self.handles as u32;
+        self.handles += 1;
+        self.external = true;
+        if self.fits(at, 16) {
+            unsafe {
+                let p = self.out.add(at);
+                write32(p, length as u32 | EXTERNAL); write32(p.add(4), handle);
+                write32(p.add(8), 0); write32(p.add(12), body as u32);
+            }
+        }
+        Ok(offset(at))
+    }
+
+    /// Common projected messages. Maps, groups and oneofs retain their complete eager semantics.
+    fn project_message(&mut self, k: usize, ordinal: usize, start: usize, pos: usize, end: usize) -> Result<usize> {
+        let o = unsafe { *self.frame(k) };
+        let f = &self.c.types[o.ty as usize].fields[ordinal];
+        if k >= self.max_depth as usize { return Err(BUDGET); }
+        let (n, body) = get_length(self.input, pos, end)?;
+        let child_end = body + n;
+        let (child, repeated, slot) = (f.child, f.repeated, f.slot);
+        self.projected_walk(k + 1, child, start, body, child_end)?;
+        let lazy = self.projection.is_some_and(|p| p.flags & Projection::LAZY != 0);
+        let base = unsafe { o.base.add(slot as usize) };
+        if repeated {
+            if lazy {
+                let value = self.lazy_child(body, child_end, k + 1)?;
+                self.pending.push(Pending { ordinal: ordinal as u32, klen: 0, value: value as u64, key: 0 })?;
+            } else {
+                write32(base, read32(base).checked_add(1).ok_or(BUDGET)?);
+            }
+        } else if lazy {
+            if read32(base) == 0 {
+                write32(base, self.lazy_child(body, child_end, k + 1)?);
+            } else {
+                // Multiple lazy occurrences conservatively materialize their merged value.
+                unsafe { (*self.frame(k)).merged = true; }
+            }
+            self.merges.push(Payload { ordinal: ordinal as u32, start: body as u32, end: child_end as u32 })?;
+        }
+        // Non-lazy omitted children need no merge scratch: each payload was fully validated,
+        // and required-field closures are always eager. No skipped child value will be read.
+        Self::set_presence(o.base, ordinal, true);
+        Ok(child_end)
+    }
+
     /// Decode frame `floor`'s body from `self.pos`, and every record nested in it, until that
     /// body ends; returns the body end (a group's end tag offset) with `self.pos` after it.
     /// Child records are entered and closed on the explicit stack (no recursion); `floor` stays
@@ -1693,6 +1887,28 @@ impl<'a, 's> Decoder<'a, 's> {
                 let e = unsafe { t.entries.get_unchecked(ordinal) };
                 // SAFETY: slots lie inside the record.
                 let slot = unsafe { base.add(e.slot as usize) };
+                if let Some(projection) = self.projection {
+                    let ty = unsafe { (*self.frame(k)).ty };
+                    if !unsafe { (*self.frame(k)).full } && !projection.wanted(ty, ordinal) && !t.map_entry {
+                        if matches!(e.op, H_MSG | H_RMSG) && e.flags & E_MAP == 0
+                            && !self.c.types[e.child as usize].required_closure {
+                            flush!();
+                            p = unsafe { origin.add(tri!(self.project_message(k, ordinal, off!(start), off!(p), off!(end)), off!(start))) };
+                            presence = read32(unsafe { base.add(4) });
+                            continue 'records;
+                        }
+                        if matches!(e.op, H_STR | H_BYTES) {
+                            let (n, at) = tri!(ptr_length(p, end), off!(start));
+                            if e.op == H_STR && projection.flags & Projection::LAX == 0
+                                && validate_utf16_units(&input[off!(at)..off!(at) + n]).is_none() {
+                                bail!(MALFORMED, off!(at));
+                            }
+                            p = unsafe { at.add(n) };
+                            mark!(ordinal, e, n != 0);
+                            continue 'records;
+                        }
+                    }
+                }
                 match e.op {
                     H_V32 => {
                         let (v, q) = tri!(ptr_varint(p, end), off!(start));
@@ -1742,10 +1958,11 @@ impl<'a, 's> Decoder<'a, 's> {
                         let (n, at) = tri!(ptr_length(p, end), off!(start));
                         p = unsafe { at.add(n) };
                         let short = if e.op == H_STR { ptr_short_ascii(at, n, limit) } else { None };
-                        let header = match short {
+                        let external = e.op == H_BYTES && self.projection.is_some_and(|p| p.flags & Projection::BORROW_BYTES != 0 && n >= p.borrow_bytes as usize);
+                        let header = if external { tri!(self.external_bytes(off!(at), n), off!(start)) } else { match short {
                             Some((a, b)) => tri!(self.ascii(n, a, b), off!(start)),
                             None => tri!(self.string(off!(at), n, e.op == H_STR), off!(start)),
-                        };
+                        }};
                         write32(slot, header);
                         mark!(ordinal, e, n != 0);
                     }
@@ -1794,6 +2011,7 @@ impl<'a, 's> Decoder<'a, 's> {
             let f = unsafe { &*self.frame(k) };
             let (cstart, cordinal, cbody) = (f.start(), f.ordinal as usize, f.body);
             let closed = if t.simple
+                && !self.has_projected_counts(k)
                 && !f.merged
                 && self.pending.len() == (f.pending as usize)
                 && self.unknown.len() == (f.unknown as usize)
@@ -2107,7 +2325,7 @@ impl<'a, 's> Decoder<'a, 's> {
                 Self::set_presence(o.base, 1, true);
             }
         }
-        if self.pending.len() > (o.pending as usize) {
+        if self.pending.len() > (o.pending as usize) || self.has_projected_counts(k) {
             self.lists(&o, t)?;
         }
         if self.unknown.len() > (o.unknown as usize) {
@@ -2162,11 +2380,14 @@ impl<'a, 's> Decoder<'a, 's> {
                 return Ok(());
             }
             floor = ordinal + 1;
-            if count < 2 {
-                continue;
-            }
             let f = &t.fields[ordinal as usize];
+            let full = o.full || self.projection.is_some_and(|p|
+                p.flags & Projection::LAZY != 0 && !p.wanted(o.ty, ordinal as usize) && !t.map_entry);
+            if count < 2 { continue; }
             self.open(k + 1, f.child, 0, 0, NONE, o.start(), 0)?;
+            if full {
+                unsafe { (*self.frame(k + 1)).full = true; }
+            }
             for i in first..last {
                 let p = self.merges.get(i);
                 if p.ordinal == ordinal {
@@ -2219,19 +2440,20 @@ impl<'a, 's> Decoder<'a, 's> {
         // Element write positions per list (0: not written, the list does not fit).
         let mut cursors = [0usize; DENSE_LISTS];
         for (index, &ordinal) in t.lists.iter().enumerate() {
-            let count = counts[index] as usize;
+            let f = &t.fields[ordinal as usize];
+            let counts_only = !o.full && self.counts_only(o.ty, ordinal as usize);
+            let count = if counts_only { read32(unsafe { o.base.add(f.slot as usize) }) as usize } else { counts[index] as usize };
             if count == 0 {
                 continue;
             }
-            let f = &t.fields[ordinal as usize];
-            let size = 8 + count * f.width as usize;
+            let size = 8 + if counts_only { 0 } else { count * f.width as usize };
             let at = self.alloc(size, 8)?;
             if self.fits(at, size) {
                 // SAFETY: the list lies inside the output's writable prefix.
                 let p = unsafe { self.out.add(at) };
                 write32(p, count as u32);
-                write32(unsafe { p.add(4) }, 0);
-                cursors[index] = at + 8;
+                write32(unsafe { p.add(4) }, if counts_only { COUNTS_ONLY } else { 0 });
+                cursors[index] = if counts_only { 0 } else { at + 8 };
             }
             write32(unsafe { o.base.add(f.slot as usize) }, offset(at));
             Self::set_presence(o.base, ordinal as usize, true);
@@ -2262,19 +2484,7 @@ impl<'a, 's> Decoder<'a, 's> {
     #[inline(never)]
     fn lists_sparse(&mut self, o: &Frame, t: &TypeDesc) -> Result<()> {
         let (first, last) = ((o.pending as usize), self.pending.len());
-        let mut floor = 0u32;
-        loop {
-            let mut ordinal = NONE;
-            for i in first..last {
-                let p = self.pending.get(i);
-                if p.ordinal >= floor && p.ordinal < ordinal {
-                    ordinal = p.ordinal;
-                }
-            }
-            if ordinal == NONE {
-                return Ok(());
-            }
-            floor = ordinal + 1;
+        for &ordinal in t.lists.iter() {
             let f = &t.fields[ordinal as usize];
             if f.map {
                 self.dedup(first, last, ordinal)?;
@@ -2283,17 +2493,19 @@ impl<'a, 's> Decoder<'a, 's> {
             for i in first..last {
                 count += usize::from(self.pending.get(i).ordinal == ordinal);
             }
+            let counts_only = !o.full && self.counts_only(o.ty, ordinal as usize);
+            if counts_only { count = read32(unsafe { o.base.add(f.slot as usize) }) as usize; }
             if count == 0 {
                 continue;
             }
             let w = f.width as usize;
-            let size = 8 + count * w;
+            let size = 8 + if counts_only { 0 } else { count * w };
             let at = self.alloc(size, 8)?;
             if self.fits(at, size) {
                 // SAFETY: the list lies inside the output's writable prefix.
                 let p = unsafe { self.out.add(at) };
                 write32(p, count as u32);
-                write32(unsafe { p.add(4) }, 0);
+                write32(unsafe { p.add(4) }, if counts_only { COUNTS_ONLY } else { 0 });
                 let mut e = unsafe { p.add(8) };
                 let items = &self.pending.as_slice()[first..last];
                 for item in items.iter().filter(|item| item.ordinal == ordinal) {
@@ -2308,6 +2520,7 @@ impl<'a, 's> Decoder<'a, 's> {
             write32(unsafe { o.base.add(f.slot as usize) }, offset(at));
             Self::set_presence(o.base, ordinal as usize, true);
         }
+        Ok(())
     }
 
     /// Fold later entries with an equal key into the first entry of that key (which keeps its
@@ -2407,6 +2620,16 @@ pub fn decode(
 }
 
 #[allow(clippy::too_many_arguments)]
+pub fn decode_projected(
+    compiled: &Compiled, input: &[u8], flags: u32, projection: Option<Projection<'_>>,
+    out: *mut u8, capacity: usize, max_depth: u32, max_slab_bytes: u64, spill: bool,
+    error_at: &mut usize,
+) -> Result<Outcome> {
+    let mut inline = Inline::new();
+    decode_projected_with(compiled, input, flags, projection, out, capacity, max_depth, max_slab_bytes, spill, error_at, &mut inline)
+}
+
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn decode_with(
     compiled: &Compiled,
     input: &[u8],
@@ -2419,9 +2642,24 @@ pub(crate) fn decode_with(
     error_at: &mut usize,
     inline: &mut Inline,
 ) -> Result<Outcome> {
+    decode_projected_with(compiled, input, flags, None, out, capacity, max_depth, max_slab_bytes, spill, error_at, inline)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn decode_projected_with<'a>(
+    compiled: &'a Compiled, input: &'a [u8], flags: u32, projection: Option<Projection<'a>>,
+    out: *mut u8, capacity: usize, max_depth: u32, max_slab_bytes: u64, spill: bool,
+    error_at: &mut usize, inline: &mut Inline,
+) -> Result<Outcome> {
     *error_at = 0;
-    if flags & FLAG_OWNING == 0 || flags & !(FLAG_OWNING | FLAG_SIZING_ONLY) != 0 {
-        // Borrowing slabs (Phase D) and LAX projection (Phase E) are not produced yet.
+    let ownership = flags & (FLAG_OWNING | FLAG_BORROWING);
+    if !matches!(ownership, FLAG_OWNING | FLAG_BORROWING)
+        || flags & !(FLAG_OWNING | FLAG_BORROWING | FLAG_LAX | FLAG_SIZING_ONLY) != 0 {
+        return Err(MALFORMED);
+    }
+    let options = projection.map_or(0, |p| p.flags);
+    if (flags & FLAG_LAX != 0) != (options & Projection::LAX != 0)
+        || options & (Projection::LAZY | Projection::BORROW_BYTES) != 0 && ownership != FLAG_BORROWING {
         return Err(MALFORMED);
     }
     if max_depth > MAX_DEPTH
@@ -2453,6 +2691,9 @@ pub(crate) fn decode_with(
         records: 0,
         handles: 0,
         certified: true,
+        projection,
+        skip_utf8: false,
+        external: false,
         error_at: usize::MAX,
         frame_bound,
         stack: inline.stack.as_mut_ptr().cast::<Frame>(),
@@ -2501,7 +2742,10 @@ fn decode_root(d: &mut Decoder) -> Result<Outcome> {
     if bytes > d.max {
         return Err(BUDGET);
     }
-    let flags = SLAB_OWNING | if d.certified { SLAB_CERTIFIED } else { 0 };
+    let flags = (if d.external { SLAB_BORROWING } else { SLAB_OWNING })
+        | if d.certified { SLAB_CERTIFIED } else { 0 }
+        | if d.projection.is_some() { SLAB_PROJECTED } else { 0 }
+        | if d.projection.is_some_and(|p| p.flags & Projection::LAX != 0) { SLAB_LAX } else { 0 };
     let outcome = Outcome {
         bytes: bytes as u64,
         records: d.records as u32,

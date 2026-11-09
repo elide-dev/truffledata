@@ -64,26 +64,16 @@ final class FfmAcceptanceTest {
         }
         MemorySegment view =
             result.get(ValueLayout.ADDRESS, JsonFFM.JsonResult_view_OFFSET).reinterpret(88);
-        // ABI 6: a complete 88-byte Myna value ABI v4 descriptor with the root object's directory.
-        assertEquals(4, view.get(ValueLayout.JAVA_INT, 0));
-        assertEquals(5, view.get(ValueLayout.JAVA_LONG, 16));
+        assertEquals(1, view.get(ValueLayout.JAVA_INT, 0));
+        assertEquals(7, view.get(ValueLayout.JAVA_LONG, 16));
         assertEquals(2, view.get(ValueLayout.JAVA_LONG, 64));
         assertEquals(0, view.get(ValueLayout.JAVA_LONG, 80));
-        MemorySegment nodes = view.get(ValueLayout.ADDRESS, 8).reinterpret(5 * 24);
-        long payload = nodes.get(ValueLayout.JAVA_LONG, 2 * 24 + 8);
-        long length = Integer.toUnsignedLong(nodes.get(ValueLayout.JAVA_INT, 2 * 24 + 4));
-        long regionCount = view.get(ValueLayout.JAVA_LONG, 48);
-        MemorySegment regions = view.get(ValueLayout.ADDRESS, 40).reinterpret(regionCount * 16);
-        long region = (payload >>> 32) - 1;
-        MemorySegment bytes =
-            regions
-                .get(ValueLayout.ADDRESS, region * 16)
-                .reinterpret(regions.get(ValueLayout.JAVA_LONG, region * 16 + 8));
-        assertEquals(
-            "1e999999999999999999",
-            new String(
-                bytes.asSlice(payload & 0xffffffffL, length).toArray(ValueLayout.JAVA_BYTE),
-                StandardCharsets.UTF_8));
+        var tape = new dev.elide.truffledata.tape.SegmentTape(view);
+        var borrowed = new dev.elide.truffledata.tape.TapeBorrow(tape, dev.elide.truffledata.tape.TapeFormat.of("JSON"));
+        assertEquals("1e999999999999999999", borrowed.root().member("n").numberText());
+        assertEquals("long escaped 中 text", borrowed.root().member("s").stringValue());
+        borrowed.toMyna().validate();
+
       } finally {
         release.invokeExact(result);
       }

@@ -74,7 +74,8 @@ public final class ContractPlugin {
       if (i != 0) source.append(",");
       source.append("type").append(i).append("()");
     }
-    source.append("), limits, maxDepth, maxWireBytes);\n }\n");
+    source.append(
+        "), limits, maxDepth, maxWireBytes, " + className + "::generatedSlabDecoder);\n }\n");
     for (int i = 0; i < definitions.size(); i++) {
       var type = definitions.get(i);
       source
@@ -150,6 +151,7 @@ public final class ContractPlugin {
     }
     for (int i = 0; i < definitions.size(); i++)
       OwnedGenerator.append(source, definitions.get(i), i);
+    SlabGenerator.append(source, definitions);
     GraphGenerator.header(source, definitions);
     for (var definition : definitions) graph.append(source, definition);
     // Schema-bound generated getters contain literal ordinals and no library dispatch.

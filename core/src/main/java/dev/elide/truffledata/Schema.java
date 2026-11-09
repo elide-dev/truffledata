@@ -3,7 +3,9 @@ package dev.elide.truffledata;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.function.IntFunction;
 import org.jspecify.annotations.Nullable;
 
@@ -13,6 +15,7 @@ public final class Schema {
   private final Field[] fields;
 
   private final DataArray names;
+  private final Map<String, Integer> ordinals;
   private final @org.jspecify.annotations.Nullable String typeName;
 
   // Accessor tables, filled on first request (slow path only): the library-backed defaults, and
@@ -28,6 +31,12 @@ public final class Schema {
     this.typeName = typeName;
     this.fields = fields.toArray(Field[]::new);
     this.names = new DataArray(fields.stream().map(Field::name).distinct().toArray());
+    Map<String, Integer> index = new HashMap<>();
+    for (int i = 0; i < this.fields.length; i++) {
+      String name = this.fields[i].name();
+      index.merge(name, i, (previous, next) -> -1);
+    }
+    this.ordinals = index;
   }
 
   public static Schema of(Field... fields) {
@@ -96,14 +105,7 @@ public final class Schema {
   /** Duplicate labels remain available by ordinal; named access must be unambiguous. */
   @TruffleBoundary
   public int indexOf(String name) {
-    int found = -1;
-    for (int i = 0; i < fields.length; i++) {
-      if (fields[i].name().equals(name)) {
-        if (found >= 0) return -1;
-        found = i;
-      }
-    }
-    return found;
+    return ordinals.getOrDefault(name, -1);
   }
 
   @com.oracle.truffle.api.dsl.Idempotent

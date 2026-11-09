@@ -1,0 +1,51 @@
+exec ${PAGER:-/usr/bin/less} "$0" || exit 1
+Executing tests from //benchmarks/comparison:yaml_native_smoke
+-----------------------------------------------------------------------------
+[To redirect Truffle log output to a file use one of the following options:
+* '--log.file=<path>' if the option is passed using a guest language launcher.
+* '-Dpolyglot.log.file=<path>' if the option is passed using the host Java launcher.
+* Configure logging using the polyglot embedding API.]
+[engine] Expansion tree for GenericReads[truffledata-yaml-interop] after truffleTier:
+Name         Frequency | Count    Size  Cycles   Ifs Loops Invokes Allocs | Self Count  Size Cycles   Ifs Loops Invokes Allocs | IRNode ASTNode Lang:File:Line:Chars 
+<root>            1.00 |  1943    1847    1605   107     1       0      0 |       1943  1847   1605   107     1       0      0 |  -  
+
+[engine] Expansion tree for GenericReads[truffledata-yaml-interop] after truffleTier:
+Name         Frequency | Count    Size  Cycles   Ifs Loops Invokes Allocs | Self Count  Size Cycles   Ifs Loops Invokes Allocs | IRNode ASTNode Lang:File:Line:Chars 
+<root>            1.00 |  1886    1795    1561   103     1       0      0 |       1886  1795   1561   103     1       0      0 |  -  
+
+[engine] perf info    GenericReads[truffledata-yaml-export]                       |Partial evaluation could not resolve virtual instanceof to an exact type due to: interface type check: SubstrateType<dev.elide.truffledata.tape.TapeReader>|Nodes [111|InstanceOf]
+  No stack trace available for [111|InstanceOf].
+[engine] Expansion tree for GenericReads[truffledata-yaml-export] after truffleTier:
+Name         Frequency | Count    Size  Cycles   Ifs Loops Invokes Allocs | Self Count  Size Cycles   Ifs Loops Invokes Allocs | IRNode ASTNode Lang:File:Line:Chars 
+<root>            1.00 |   290     291     232    16     1       0      0 |        290   291    232    16     1       0      0 |  -  
+
+[engine] perf info    GenericReads[truffledata-yaml-export]                       |Partial evaluation could not resolve virtual instanceof to an exact type due to: interface type check: SubstrateType<dev.elide.truffledata.tape.TapeReader>|Nodes [55|InstanceOf]
+  No stack trace available for [55|InstanceOf].
+[engine] Expansion tree for GenericReads[truffledata-yaml-export] after truffleTier:
+Name         Frequency | Count    Size  Cycles   Ifs Loops Invokes Allocs | Self Count  Size Cycles   Ifs Loops Invokes Allocs | IRNode ASTNode Lang:File:Line:Chars 
+<root>            1.00 |   231     237     188    12     1       0      0 |        231   237    188    12     1       0      0 |  -  
+
+{"workload":"yaml-config","engine":"truffledata-yaml-java","stage":"ingest","runtime":"svm","checksum":8403,"records":8,"input_bytes":3800,"ns_per_operation":[133779.0, 140829.0, 140335.25],"allocated_bytes_per_operation":[10808.0, 10808.0, 10808.0]}
+{"workload":"yaml-config","engine":"truffledata-yaml-truffle","stage":"ingest","runtime":"svm","checksum":8403,"records":8,"input_bytes":3800,"ns_per_operation":[216858.2, 229204.4, 219036.4],"allocated_bytes_per_operation":[17712.0, 17712.0, 17712.0]}
+{"workload":"yaml-config","engine":"truffledata-yaml-interop","stage":"ingest","runtime":"svm","checksum":8403,"records":8,"input_bytes":3800,"ns_per_operation":[67846.8, 72716.06666666667, 69365.46666666666],"allocated_bytes_per_operation":[4168.0, 4168.0, 4168.0]}
+{"workload":"yaml-config","engine":"truffledata-yaml-typed","stage":"ingest","runtime":"svm","checksum":8403,"records":8,"input_bytes":3800,"ns_per_operation":[37558.96428571428, 37901.18518518518, 34403.73333333333],"allocated_bytes_per_operation":[1296.0, 1296.0, 1296.0]}
+{"workload":"yaml-config","engine":"truffledata-yaml-snapshot","stage":"ingest","runtime":"svm","checksum":8403,"records":8,"input_bytes":3800,"ns_per_operation":[188403.5, 201970.4, 209080.33333333334],"allocated_bytes_per_operation":[15488.0, 15488.0, 15488.0]}
+{"workload":"yaml-records","engine":"truffledata-yaml-java","stage":"ingest","runtime":"svm","checksum":7002334,"records":1000,"input_bytes":247490,"ns_per_operation":[1.6461873E7, 1.6771075E7, 1.6825275E7],"allocated_bytes_per_operation":[1336856.0, 1336856.0, 1336856.0]}
+{"workload":"yaml-records","engine":"truffledata-yaml-truffle","stage":"ingest","runtime":"svm","checksum":7002334,"records":1000,"input_bytes":247490,"ns_per_operation":[6120709.0, 6227369.0, 6429484.0],"allocated_bytes_per_operation":[1735912.0, 1735912.0, 1735912.0]}
+{"workload":"yaml-records","engine":"truffledata-yaml-interop","stage":"ingest","runtime":"svm","checksum":7002334,"records":1000,"input_bytes":247490,"ns_per_operation":[3574295.0, 3573066.0, 3622265.0],"allocated_bytes_per_operation":[476768.0, 476768.0, 476768.0]}
+{"workload":"yaml-records","engine":"truffledata-yaml-typed","stage":"ingest","runtime":"svm","checksum":7002334,"records":1000,"input_bytes":247490,"ns_per_operation":[2232814.0, 2173692.0, 2230374.0],"allocated_bytes_per_operation":[144144.0, 144144.0, 144144.0]}
+{"workload":"yaml-records","engine":"truffledata-yaml-snapshot","stage":"ingest","runtime":"svm","checksum":7002334,"records":1000,"input_bytes":247490,"ns_per_operation":[4438406.0, 4413526.0, 1.0062075E7],"allocated_bytes_per_operation":[1884064.0, 1884064.0, 1884064.0]}
+{"workload":"yaml-flow","engine":"truffledata-yaml-java","stage":"ingest","runtime":"svm","checksum":7002334,"records":1000,"input_bytes":228494,"ns_per_operation":[4578577.0, 4660086.0, 4790178.0],"allocated_bytes_per_operation":[1372856.0, 1372856.0, 1372856.0]}
+{"workload":"yaml-flow","engine":"truffledata-yaml-truffle","stage":"ingest","runtime":"svm","checksum":7002334,"records":1000,"input_bytes":228494,"ns_per_operation":[6350102.0, 6395229.0, 5917709.0],"allocated_bytes_per_operation":[1733920.0, 1733920.0, 1733920.0]}
+{"workload":"yaml-flow","engine":"truffledata-yaml-interop","stage":"ingest","runtime":"svm","checksum":7002334,"records":1000,"input_bytes":228494,"ns_per_operation":[4182476.0, 4278397.0, 2403794.0],"allocated_bytes_per_operation":[512768.0, 512768.0, 512768.0]}
+{"workload":"yaml-flow","engine":"truffledata-yaml-typed","stage":"ingest","runtime":"svm","checksum":7002334,"records":1000,"input_bytes":228494,"ns_per_operation":[2355414.0, 2295454.0, 2341803.0],"allocated_bytes_per_operation":[144144.0, 144144.0, 144144.0]}
+{"workload":"yaml-flow","engine":"truffledata-yaml-snapshot","stage":"ingest","runtime":"svm","checksum":7002334,"records":1000,"input_bytes":228494,"ns_per_operation":[4262276.0, 4274526.0, 4281716.0],"allocated_bytes_per_operation":[2026072.0, 2026072.0, 2026072.0]}
+{"workload":"yaml-stream","engine":"truffledata-yaml-java","stage":"ingest","runtime":"svm","checksum":7002334,"records":1000,"input_bytes":215484,"ns_per_operation":[3254776.0, 3214135.0, 3226665.0],"allocated_bytes_per_operation":[1784304.0, 1784304.0, 1784304.0]}
+{"workload":"yaml-stream","engine":"truffledata-yaml-truffle","stage":"ingest","runtime":"svm","checksum":7002334,"records":1000,"input_bytes":215484,"ns_per_operation":[3578650.0, 3663066.0, 3588375.0],"allocated_bytes_per_operation":[2063904.0, 2063904.0, 2063904.0]}
+{"workload":"yaml-stream","engine":"truffledata-yaml-interop","stage":"ingest","runtime":"svm","checksum":7002334,"records":1000,"input_bytes":215484,"ns_per_operation":[2903944.0, 2912264.0, 2856504.0],"allocated_bytes_per_operation":[784080.0, 784080.0, 784080.0]}
+{"workload":"yaml-stream","engine":"truffledata-yaml-snapshot","stage":"ingest","runtime":"svm","checksum":7002334,"records":1000,"input_bytes":215484,"ns_per_operation":[5299828.0, 5227367.0, 5223758.0],"allocated_bytes_per_operation":[2353168.0, 2353168.0, 2353168.0]}
+{"workload":"yaml-flow","engine":"truffledata-json-interop","stage":"ingest","runtime":"svm","checksum":7002334,"records":1000,"input_bytes":228494,"ns_per_operation":[732116.0, 747315.5, 720931.5],"allocated_bytes_per_operation":[272568.0, 272568.0, 272568.0]}
+{"workload":"yaml-sink","engine":"truffledata-yaml-truffle","stage":"ingest","runtime":"svm","records":32,"allocated_bytes_per_record":[2101.0, 2101.0, 2101.0]}
+{"workload":"yaml-retained","engine":"truffledata-yaml-interop","stage":"peak","runtime":"svm","guest_compiled":true,"checksum":38219,"records":32,"allocated_bytes_per_record":[1.0, 1.0, 1.0]}
+{"workload":"yaml-retained","engine":"truffledata-yaml-export","stage":"peak","runtime":"svm","guest_compiled":true,"checksum":41019,"records":32,"allocated_bytes_per_record":[1.0, 1.0, 1.0]}
+YAML checksums, compiled graph and allocation gates passed

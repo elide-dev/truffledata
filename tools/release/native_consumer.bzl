@@ -53,13 +53,13 @@ lto_witness = rule(
     fragments = ["cpp"],
 )
 
-def native_consumers(name, archive, shared, fingerprint, probe = None):
+def native_consumers(name, archive, shared, fingerprint, probe = None, tags = ["native-consumer"]):
     """`<name>_static_test` (LTO off) and `<name>_thinlto_test` (ThinLTO): link `archive` into native_consumer.c, check
     the LTO witness, run it, and load `shared` with dlopen.
 
     On ELF both link the same fat archive; on macOS ThinLTO links the `<archive>_bitcode` twin with ld64.lld.
     """
-    defines = ["FINGERPRINT=" + fingerprint] + (["PROBE=" + probe] if probe else [])
+    defines = ["FINGERPRINT=" + fingerprint] + (["PROBE=" + probe] if probe else []) + ([] if shared else ["STATIC_ONLY"])
     linkopts = select({
         "@platforms//os:macos": [],
         "//conditions:default": [
@@ -72,6 +72,7 @@ def native_consumers(name, archive, shared, fingerprint, probe = None):
         name = name + "_machine_code",
         static_library = archive,
         testonly = True,
+        tags = tags,
     )
     cc_import(
         name = name + "_lto_input",
@@ -80,6 +81,7 @@ def native_consumers(name, archive, shared, fingerprint, probe = None):
             "//conditions:default": archive,
         }),
         testonly = True,
+        tags = tags,
     )
     for variant, lto in [("static", False), ("thinlto", True)]:
         binary = "%s_%s" % (name, variant)
@@ -92,6 +94,7 @@ def native_consumers(name, archive, shared, fingerprint, probe = None):
             linkopts = (["-flto=thin"] if lto else []) + linkopts,
             local_defines = defines,
             testonly = True,
+            tags = tags,
             deps = [":%s_%s" % (name, "lto_input" if lto else "machine_code")],
         )
         lto_witness(
@@ -100,18 +103,17 @@ def native_consumers(name, archive, shared, fingerprint, probe = None):
             lto = lto,
             symbol = fingerprint,
             testonly = True,
+            tags = tags,
         )
         sh_test(
             name = binary + "_test",
             srcs = ["native_consumer.sh"],
             args = [
                 "$(rootpath :%s)" % binary,
-                "$(rootpath %s)" % shared,
-            ],
+            ] + (["$(rootpath %s)" % shared] if shared else []),
             data = [
                 ":" + binary,
                 ":%s_witness" % binary,
-                shared,
-            ],
-            tags = ["native-consumer"],
+            ] + ([shared] if shared else []),
+            tags = tags,
         )

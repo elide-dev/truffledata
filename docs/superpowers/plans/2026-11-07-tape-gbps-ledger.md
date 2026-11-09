@@ -28,3 +28,82 @@ Task 2: Ruling: sanitizers found a C++17 ODR violation in an explicitly speciali
 Task 2: complete (tests: //json/native:test words_match_reference_corpus, walk_matches_reference, duplicate_rejected_after_unescaping (2/16/17/40/1,000 keys, adjacent, 17th == 1st, escaped vs raw, a brute-forced FNV-1a collision in A,B,A and B,x,A,B runs), number_classification_unchanged, raw_control_byte_rejected, invalid_utf8_rejected_before_walk, spans_are_exact_tokens, validate_only_rejects_everything_decode_rejects (60 malformed + corpus + 8 limit configurations), documents_and_hints, allocation_failure_at_every_growth (one-element hint over a per-request resource: 30 upstream allocations across words/pool/directory/pending growth, each failed once; real hint; validate-only key stack; document class); //json/native:legacy_test (the 0.8.0 decoder); api_test compact_sessions (TapeView 88, JsonResult 112, borrow/retain/validate-only/text arena per word/UTF-16 parity/result_myna round trip against the 0.8.0 decoder at threshold 2, outliving its session) plus validate-only in the fault-injected sequences and 10,000 allocation-free validate walks; stream_test over compact sessions with spans read through the published input, plus one Myna-session pass; red first: //json/native:test failed allocation_failure_at_every_growth (growth inside arena blocks reached upstream too rarely) before the per-request resource; bindings regenerated (bazel build //json/native:bindings, abi 7); bazel test //tape/native:all //json/native:all //yaml/native:all 18/18 → https://app.buildbuddy.io/invocation/8d23b200-fb20-4570-9fbb-487baf4d7945; ASan/UBSan the same 18 with --copt=-fsanitize=address,undefined --copt=-fno-sanitize-recover=all --linkopt=-fsanitize=address,undefined (fault injection at directory, pool, pending-key and key-stack growth) → https://app.buildbuddy.io/invocation/53dbd7b3-791a-460d-9dc7-015eb0e51187; bazel test //json/tests:jvm //json/tests:native_test //benchmarks/comparison:json_native_smoke 3/3 (0.8.0 path, gates unchanged) → https://app.buildbuddy.io/invocation/e6cb54e2-8c41-4b35-a20f-4a17be2405dc; bazel test //... plus //tools/release:json_native_test, :json_consumer, :consumer_test 55/55 (myna_contract with result_myna) → https://app.buildbuddy.io/invocation/c02a4d3a-a702-463e-85e2-e489c587bf32; probe rounds → https://app.buildbuddy.io/invocation/4e5122da-0325-4eac-95f6-b69ad96bb630 and https://app.buildbuddy.io/invocation/5aa5a5f4-d8f2-4cbc-9a47-e506aec7dd6c (benchmarks/results/tape-decoder-8447a53/, temporary target removed); bazel run --config=local //bazel/gazelle:check → no diff, local)
 Hand-off (Task 2 done): next is Task 3 (SVM readers on the compact tape). It starts by undoing the transitional surface listed in the Task 2 ruling above: Java sessions opt into TD_JSON_SESSION_COMPACT_TAPE (or compact becomes the only format), JsonResult drops lexical/lexical_count/key_hashes (112 -> 88), td_json_decode/_adopted move to json::document, and legacy_decoder.h, :legacy_test and the Myna branches of session.h/api.cc/api_test/stream_test go. Unmet Task 2 hypotheses (RBE ratios): V5 ≥ 0.92 × T8 on huge (0.880), V5 ≥ 1.5 × V4 (1.40–1.43), small V5 ≥ 1.35 × V4 (1.32), V5v ≥ 0.95 × W2c (0.82); Task 6 re-measures on unclemax.
 Revision (architect, 2026-11-07): docs/superpowers/plans/2026-11-07-json-sota.md supersedes Tasks 6, 7 and 9 here (producer: own stage 2 over simdjson's structural index, shape-cached duplicates, directories opt-in; probe benchmarks/results/json-sota-probe-ce7399f/: S3/V5 1.50–1.55 × on 4 KB and up, 1.39 × small, bit-identical tapes over the corpus). Task 3 continues unchanged with two amendments (no assumption that every object of ≥ 2 members has a directory; sink paths will stop requesting directories in the new plan's Task 3).
+
+Task 3–5 implementation in progress (followup worktree, 2026-11-07): JSON now publishes only compact tapes; seam ABI 8 drops the lexical/hash pointers and JsonResult is 88 bytes. SvmTape and SegmentTape bind the descriptor directly, TapeReader traverses word indices, and HeapTape snapshots copy the referenced ranges and rebase them. Myna conversion is explicit and detached; the old producer moved to the test-only testing/myna_oracle.h. YAML keeps its Myna adapter until its own cutover, so the Rust bridge remains linked by YAML but is no longer a JSON dependency. The bulk text bridge is now tape/native/text.cc (simdutf), with validation before output writes.
+Task 3–5 evidence so far: pinned local compiler passed api_test, stream_test, decoder_test and text_test; direct javac/JVM runs passed 30 scoped/FFM tests (including 200 generated documents and every subtree snapshot), 10 compact/owner tests, and seven coverage-inventory unit tests. These direct builds used proc:none and are behavioral evidence only. Bazel annotation/dependency, Native Image compiled-read and allocation, sanitizer, coverage, repository-wide and performance gates remain pending. No task is declared complete and no performance budget has been weakened. Owner-as-reader allocation fusion remains unimplemented until the Native Image allocation measurements identify the required change.
+
+Task 3–5 Bazel evidence: tape JVM and JSON JVM now pass with annotation processors/NullAway (JSON’s singleton-directory assertion was corrected to the adopted threshold2 policy), including the additional directoryless, absent-token and saturated-count cases. Native api/stream/decoder/transcoder tests pass. The first Native Image run exposed unresolved SvmTape.word calls in compiled interop; the benchmark image reported4398 interop/snapshot graph nodes against the unchanged2000 limit. Export walk was719 nodes,2loops,0calls/allocations. Runtime allocations already improved from480B to432B interop ingest (240B harness views plus192B library/root objects), and from313B to304.75B stream interop. These are progress measurements, not fulfillment of the stricter new owner-allocation targets. Checked word access was separated from raw pointer hooks, kind translation made a packed constant lookup, and hinted reads limited to clean single-word keys; requalification is pending.
+
+Followup qualification 523278e7: native producer/API/stream/differential and tape/JSON JVM tests pass. The packed-kind/raw-word changes reduce interop and snapshot graphs from4398 to3366 nodes, still above2000; scalar interop still leaves SvmTape.readWord calls during partial evaluation. A heap-only diagnostic reproduces the early virtual calls, independent of FFM. Caching the concrete reader Class in scalar export specializations and castExact exposes storage types during partial evaluation without adding fields to TapeValue; the local heap probe now passes fatal performance warnings. Native-backed JVM diagnostics reach JDK VarHandle calls instead; Native Image requalification remains pending. YAML's 10257ff4 native generic/alias/typed compiled checks pass with the scalar specializations. A corresponding owner-Class guard in ReadMember preserves early owner dispatch for nested YAML views.
+Shared YAML compact support: descriptor flag8 (TD_TAPE_YAML) makes clean unowned STRING spans name their plain tokens directly; quoted/folded/escaped values remain OWNED with explicit raw spans. BOOL/NULL can retain optional raw spans in their existing payload fields, with JSON's words remaining unchanged. Readers and subtree snapshots preserve/rebase these spans; rawText accepts boolean/null only when a lexical token exists. append now relocates REF targets only inside the copied source interval, preserving external targets beyond it. Native compact tests and nine local CompactTapeTest cases pass; formal requalification follows the YAML cutover.
+
+Task 8 compact YAML producer checkpoint: rapidyaml events now write ctape_writer
+words directly. Plain unfiltered strings reference input; filtered/normalized text
+is owned with embedded raw spans. Metadata indexes word offsets; lexical/hash side
+arrays are removed. Value aliases are REF words. Merge, last-wins, retroactive
+mappings and pair conversion operate on variable-width word ranges; pair conversion
+now applies anchor relocation once in original coordinates, preventing repeated
+moves when new offsets overlap later old blocks. A targeted regression covers this.
+Retained source is padded and becomes the descriptor input, preserving quoted raw
+text while owned decoded strings remain independent. YAML directories are built
+at mapping close after rewrites; a shared end_rescan hash callback reuses the exact
+short-key FNV cache without a new side array.
+
+Task 8 local evidence: four fixture tapes match the independent Myna builder;
+402/402 yaml-test-suite cases pass with whole/1-byte/7-byte feeding; 9,093 fast/general
+path decodes are byte-identical (2,740 matching errors). Decoder, semantic, corpus
+and parity suites also pass ASan+UBSan, including the anchor relocation regression.
+These runs preceded the final directory hash-cache overload; that small change is
+being requalified. No performance completion is claimed: a local paired smoke was
+noisy under concurrent builds (0.858/0.616/0.648 of ryml-ints), requiring isolated
+measurements. REJECT duplicate fusion and the 0.715 floor remain open, as do full
+Bazel/API/Java/release checks. The proposed text-arena bound 2*input+16 is not proven
+for YAML: very large hexadecimal mapping keys normalize to longer decimal text;
+size from actual decoded spans or report checked required capacity instead.
+The directory-cache requalification caught the legacy hash helper's 31-bit mask;
+compact directories require full unsigned FNV-1a. YAML now uses full 32-bit hashes
+consistently for its cache, duplicate checks and directories. ASan+UBSan parity
+again passes all 9,093 decodes with structural/directory validation after that fix.
+
+Task 3–4 owner fusion and retirement: TapeReader is a stateless storage interface. The retained
+SVM JSON owner embeds descriptor pointers/counts and implements it directly; managed JVM owners
+retain their FFM storage wrapper. Scalar, member and array interop cache concrete owner/reader
+classes before reading. This preserves the 24-byte TapeValue shape and permits nested reads to
+partially evaluate without residual SvmTape/SvmJsonMessage dispatch. JSON Native Image acceptance
+passes in c8037437, including array size/element roots added after the earlier d6a84c7b failure.
+
+Measured d6a84c7b allocations: interop ingest384B includes240B of harness views, leaving144B for
+the retained library owner/root (target160B); snapshot ingest1185B and JavaSink peak1177B are below
+their1200B gates. That run still failed compiled graph limits: interop3044nodes and snapshot3356,
+with snapshot11loops. These are not final acceptance numbers.
+
+After YAML compact cutover, Task4's transition is removed: LegacyTapeReader, SegmentValueTape,
+SvmValueTape and TapeSource are deleted. HeapValueTape is package-private output-only Myna ABI4
+interchange. TapeKey prepares strict UTF-8, packed words and FNV locally; source-compatible Myna
+prepared-key overloads copy into that representation. TapeLexical remains deliberately: YAML's
+pristine lexical source can differ from decoded compact input, including borrowed documents.
+Legacy owner tests now exercise compact words while preserving alias/directory/snapshot intent.
+Local tape JVM18/18 and the complete Truffle DSL source compilation pass.
+
+Plain immutable snapshots use a private concrete subtype whose alias-free behavior is constant,
+removing speculative alias-view allocations on variable-owner fixture reads. The snapshot's
+obsolete span array/reference is removed. Input has seven private padding bytes (excluded from
+logical inputSize and Myna output); exact masked word comparisons avoid a variable tail load at
+short keys. Directory hints check receiver kind, rank, entry hash, key header and decoded bytes;
+validated directory extents/relative key offsets are trusted instead of checked a second time.
+The full32-row fixture's local HotSpot graph drops2431→1952nodes with1loop,0calls and only its
+harness return-box allocation. This is diagnostic evidence, not the Native Image graph gate;
+new image/coverage/allocation requalification remains pending. Logs and harness are retained in
+benchmarks/results/tape-reader-followup/. No budget is relaxed.
+
+Task5 retirement: json/native/bridge is removed after its last SVM caller was retired. Cargo.toml,
+Cargo.lock and Cargo.Bazel.lock drop the unused Myna Rust text bridge and its exclusive transitive
+dependencies (Cargo offline resolution and Bazel repin442d1633). JSON/YAML use the shared C++
+simdutf transcoder; explicit Java/C Myna interchange remains. Generated bindings still use Myna.
+
+Task5 upstream audit: pinned Myna0.13.0 supplies the earlier YAML nonfinite/REF requests (#52/#53), ABI4 directories (#45), and whole-tape text export (#48), but not the new compact-ABI, fused-duplicate option or compact-text-export requests named M6–M8 in this plan. Exact drafts and source/API evidence are in `2026-11-07-myna-upstream-drafts.md`. They remain unfiled by coordinator instruction; none blocks TruffleData because ABI4 conversion and compact text export are implemented. No upstream request number is invented or marked resolved.
+
+Task3 reader final graph checkpoint: a0c08060 passes all24 JSON Native Image compilation cells and nine allocation cells. Retained interop1971/1915 and snapshots1961/1905 nodes (first/warm), with1loop,0calls,0allocations, clear the original2000limit. The subsequent generic lifetime-check fix is checkpoint65704aa and still needs its dedicated native acceptance recapture. Final image pairs/coverage/release gates remain open in the superseding producer ledger.
+
+
+Export followup after the complete unclemax pair: short-key caches were recomputing FNV through one storage read per byte before loading the same words for exact equality. Private Java/Truffle sink caches now hash those already loaded decoded words, while public key hashes/native directories keep exact FNV. The cursor reads its header once and text exports use checked bulk copying. Three alternating local JVM pairs improve1.127/1.191/1.189×;63JSON+21tape tests pass, including boundary/NUL/escaped-key identity. Evidence is in `benchmarks/results/json-export-followup/`; Native Image timing/graph/allocation qualification is still required.

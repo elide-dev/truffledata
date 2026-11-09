@@ -18,18 +18,15 @@ import org.jspecify.annotations.Nullable;
  * through {@link #resolve(long)}, which is the identity unless the owner's {@link #format()} holds
  * alias tables (YAML). Resolution runs only inside the read paths' existing boundaries (scans,
  * element walks, view-returning methods), so formats without aliases compile exactly as before; the
- * one inline path, a position-hinted member hit, is alias-free by contract (see {@link
- * TapeSource#keyNodeEquals}). The export walk does not resolve: exports handle aliases themselves.
+ * inline position-hinted path resolves compact references too. The export walk does not resolve:
+ * exports handle aliases themselves.
  *
  * <p>The format is a virtual property rather than a field so that format-specific owners (a JSON
  * message) carry no extra reference; liveness and confinement failures name it lazily ({@link
  * OwnerStateException}).
  */
 public abstract class TapeOwner {
-  protected final ValueTape tape;
-  // Same object as tape: the raw access hinted member reads and snapshots need, through one
-  // interface call.
-  private final TapeSource source;
+  protected final TapeReader tape;
   // Null means unconfined (immutable snapshot). Final fields keep every check inlinable.
   private final @Nullable Thread thread;
   // Exports in progress on the owning thread; close is refused while a walk reads the tape.
@@ -41,24 +38,34 @@ public abstract class TapeOwner {
   // and unconfined exports allocate their own.
   private @Nullable TapeText cursor;
 
-  /**
-   * An owner of {@code tape}, which must be one of this module's tapes ({@link SvmValueTape},
-   * {@code SegmentValueTape} or a snapshot's heap tape), confined to {@code thread} (null: an
-   * immutable owner that never closes).
-   */
-  protected TapeOwner(ValueTape tape, @Nullable Thread thread) {
+  /** An owner of validated compact storage, confined to thread unless immutable. */
+  protected TapeOwner(TapeReader tape, @Nullable Thread thread) {
     this.tape = tape;
-    this.source = (TapeSource) tape;
     this.thread = thread;
   }
 
-  /** The tape's raw access (the same object as {@link #tape}). */
-  final TapeSource source() {
-    return source;
+  /** Storage is on this owner; the concrete subtype must implement {@link TapeReader}. */
+  protected TapeOwner(@Nullable Thread thread) {
+    this.tape = (TapeReader) this;
+    this.thread = thread;
+  }
+
+  /**
+   * Storage hook; fused owners return themselves so compiled reads preserve that identity. Must
+   * return {@link #tape} (a fused owner's tape is itself): {@link #storage()} relies on it.
+   */
+  protected TapeReader reader() { return tape; }
+
+  /**
+   * {@link #reader()} for specialized sites. Host-interpreted code loads the final field instead
+   * of making a virtual call; partially evaluated code keeps the inlined identity of the hook.
+   */
+  final TapeReader storage() {
+    return com.oracle.truffle.api.CompilerDirectives.inInterpreter() ? tape : reader();
   }
 
   /** Throws when {@code format}'s alias tables (if any) do not cover {@code tape}. */
-  protected static TapeFormat checkFormat(ValueTape tape, TapeFormat format) {
+  protected static TapeFormat checkFormat(TapeReader tape, TapeFormat format) {
     int[] meta = format.meta;
     if (meta != null && meta.length != tape.nodeCount())
       throw new IllegalArgumentException("Alias side table does not cover the tape");
@@ -67,9 +74,26 @@ public abstract class TapeOwner {
 
   /** Rejects closed or cross-thread access; immutable owners never fail. */
   protected final void check() {
+    if (this instanceof TapeSnapshot) return;
     checkThread();
     if (pins < 0) throw new OwnerStateException(this, OwnerStateException.CLOSED);
   }
+
+  /** Exact-class interop sites can fold the confinement policy before their field checks. */
+  final void checkSpecialized() {
+    if (this instanceof TapeSnapshot) return;
+    // Host-interpreted code reads the field rather than calling the class-constant hook.
+    boolean confined = com.oracle.truffle.api.CompilerDirectives.inInterpreter() ? thread != null : confined();
+    if (confined && Thread.currentThread() != thread)
+      throw new OwnerStateException(this, OwnerStateException.THREAD);
+    if (pins < 0) throw new OwnerStateException(this, OwnerStateException.CLOSED);
+  }
+
+  /**
+   * Whether this owner is confined; concrete retained owners make this a class property. Must
+   * equal {@code thread != null} for the owner's thread: {@link #checkSpecialized()} relies on it.
+   */
+  protected boolean confined() { return thread != null; }
 
   /** Thread confinement only; liveness is covered by the assumption at cached sites. */
   protected final void checkThread() {
@@ -80,6 +104,9 @@ public abstract class TapeOwner {
   /** The format that produced this owner's tape: its name for messages and any alias tables. */
   public abstract TapeFormat format();
 
+  /** Whether reads need reference provenance; immutable/plain variants make it constant. */
+  protected boolean aliases() { return format().hasAliases(); }
+
   /**
    * The node an alias stands for, or {@code node} itself (always, for formats without aliases).
    * Throws {@link IllegalStateException} when an alias names no node of this tape. Called from
@@ -88,7 +115,7 @@ public abstract class TapeOwner {
   public final long resolve(long node) {
     TapeFormat format = format();
     int[] meta = format.meta;
-    if (meta == null) return node;
+    if (meta == null || format.aliasTargets == null) return tape.resolveReference(node);
     return format.alias(meta, node, tape.nodeCount());
   }
 
@@ -158,16 +185,6 @@ public abstract class TapeOwner {
   protected abstract byte lexicalByte(long offset);
 
   /**
-   * Native side-table entry of a node: bit 31 marks string and key nodes whose bytes are all ASCII;
-   * key nodes carry the low 15 bits of their FNV-1a hash in bits 16-30 and their offset from the
-   * object node in bits 0-15 (0 beyond 65535). Other nodes carry 0 in bits 0-30.
-   */
-  final int meta(long node) {
-    if (node < 0 || node >= tape.nodeCount()) throw new IndexOutOfBoundsException("Node index");
-    return source.keyMeta(node);
-  }
-
-  /**
    * The key node of {@code object} at entry {@code rank} of its Myna v4 directory when that is
    * exactly {@code key} (inline, at most 16 bytes), else -1. A directory lists only its own object's
    * keys and its order (unsigned hash, then offset) does not depend on member order, so a site's
@@ -175,10 +192,10 @@ public abstract class TapeOwner {
    * object word, payload, entry and the key's inline words, compared exactly (Myna zero-pads inline
    * text). No loop, no allocation; {@code object} must be a valid node.
    */
-  final long hinted(long object, int rank, TapeKey key) {
+  static long hinted(TapeReader reader, long object, int rank, TapeKey key, boolean aliases) {
     // Keys of at most 8 bytes have an all-zero high word (zero padding); the site's key is a
     // constant, so `wide` folds and short keys skip the third word.
-    return source.directoryKey(object, rank, key.hash, key.header, key.low, key.high, key.length > 8);
+    return aliases ? -1 : reader.directoryKey(object, rank, key);
   }
 
   /**
@@ -190,34 +207,33 @@ public abstract class TapeOwner {
    */
   final long find(long object, TapeKey key, int @Nullable [] rank) {
     long count = tape.length(object);
-    long payload = tape.bits(object);
-    if (payload != 0 && tape.version() == ValueTape.ABI_VERSION_V4) {
+    long payload = tape.directory(object);
+    if (payload != 0) {
       long start = payload - 1;
-      if (start > source.directorySize() || count > source.directorySize() - start)
+      if (start > tape.directorySize() || count > tape.directorySize() - start)
         throw new IllegalArgumentException("Invalid directory extent");
       long low = start, high = start + count;
       while (low < high) {
         long mid = (low + high) >>> 1;
-        if (Integer.compareUnsigned((int) source.directoryEntry(mid), key.hash) < 0) low = mid + 1;
+        if (Integer.compareUnsigned((int) tape.directoryEntry(mid), key.hash) < 0) low = mid + 1;
         else high = mid;
       }
       long end = tape.next(object);
       for (long entry = low; entry < start + count; entry++) {
-        long word = source.directoryEntry(entry);
+        long word = tape.directoryEntry(entry);
         if ((int) word != key.hash) break;
         long k = object + (word >>> 32);
         if (k <= object || k >= end - 1) throw new IllegalArgumentException("Invalid directory entry");
-        if (tape.keyMatches(k, key.prepared)) {
+        if (tape.keyMatches(k, key)) {
           if (rank != null && entry - start < Integer.MAX_VALUE) rank[0] = (int) (entry - start) + 1;
-          return k + 1;
+          return tape.next(k);
         }
       }
       return -1;
     }
     long end = tape.next(object);
-    int side = key.sideHash();
-    for (long k = object + 1; k < end; k = tape.next(k + 1))
-      if (((meta(k) >>> 16) & 0x7fff) == side && tape.keyMatches(k, key.prepared)) return k + 1;
+    for (long k = tape.first(object); k < end; k = tape.next(tape.next(k)))
+      if (tape.keyMatches(k, key)) return tape.next(k);
     return -1;
   }
 
@@ -229,16 +245,58 @@ public abstract class TapeOwner {
   @TruffleBoundary
   public final int directories() {
     check();
-    if (tape.version() != ValueTape.ABI_VERSION_V4) return 0;
     int count = 0;
-    for (long node = 0; node < tape.nodeCount(); node++)
-      if (tape.kindAt(node) == ValueTape.OBJECT && tape.bits(node) != 0) count++;
+    for (long node = 0; node < tape.nodeCount(); node = tape.step(node))
+      if (tape.kindAt(node) == ValueTape.OBJECT && tape.directory(node) != 0) count++;
     return count;
   }
 
-  /** True when a string or key node's decoded bytes are all ASCII; false for other nodes. */
-  final boolean ascii(long node) {
-    return meta(node) < 0;
+  @TruffleBoundary
+  final String numberText(long node) {
+    check();
+    if (!format().hasAliases()) return lexicalText(node);
+    // Preserve exact decimal digits when the input already has JSON grammar. YAML-specific
+    // spellings normalize without rounding through binary64; radix/sexagesimal forms use bits.
+    String spelling = lexicalText(node).replace("_", "");
+    if (spelling.startsWith("+")) spelling = spelling.substring(1);
+    int sign = spelling.startsWith("-") ? 1 : 0;
+    if (spelling.length() > sign && spelling.charAt(sign) == '.')
+      spelling = spelling.substring(0, sign) + "0" + spelling.substring(sign);
+    int point = spelling.indexOf('.');
+    if (point >= 0 && (point + 1 == spelling.length()
+        || spelling.charAt(point + 1) == 'e' || spelling.charAt(point + 1) == 'E'))
+      spelling = spelling.substring(0, point + 1) + "0" + spelling.substring(point + 1);
+    if (jsonNumber(spelling)) return spelling;
+    return switch (tape.kindAt(node)) {
+      case ValueTape.I64 -> Long.toString(tape.signedValue(node));
+      case ValueTape.U64 -> Long.toUnsignedString(tape.unsignedBits(node));
+      case ValueTape.F64 -> Double.toString(tape.doubleValue(node));
+      case ValueTape.DECIMAL -> tape.decimalText(node);
+      default -> throw new IllegalStateException("Not a number");
+    };
+  }
+
+  private static boolean jsonNumber(String token) {
+    int at = token.startsWith("-") ? 1 : 0, length = token.length();
+    if (at == length) return false;
+    if (token.charAt(at) == '0') at++;
+    else {
+      if (token.charAt(at) < '1' || token.charAt(at) > '9') return false;
+      while (at < length && token.charAt(at) >= '0' && token.charAt(at) <= '9') at++;
+    }
+    if (at < length && token.charAt(at) == '.') {
+      int first = ++at;
+      while (at < length && token.charAt(at) >= '0' && token.charAt(at) <= '9') at++;
+      if (at == first) return false;
+    }
+    if (at < length && (token.charAt(at) == 'e' || token.charAt(at) == 'E')) {
+      at++;
+      if (at < length && (token.charAt(at) == '-' || token.charAt(at) == '+')) at++;
+      int first = at;
+      while (at < length && token.charAt(at) >= '0' && token.charAt(at) <= '9') at++;
+      if (at == first) return false;
+    }
+    return at == length;
   }
 
   @TruffleBoundary
@@ -333,7 +391,14 @@ public abstract class TapeOwner {
   @TruffleBoundary
   final TapeSnapshot snapshot(long root) {
     check();
-    return TapeSnapshot.copy(this, (TapeSource) tape, root);
+    return TapeSnapshot.copy(this, root);
+  }
+
+  /** Detached Myna ABI v4 interchange copy of this document. */
+  @TruffleBoundary
+  public final ValueTape toMyna() {
+    check();
+    return HeapTape.copy(tape, 0).toMyna();
   }
 
   /** Cache only retained owners; uncached ingestion and megamorphic sites use ordinary checks. */

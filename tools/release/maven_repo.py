@@ -3,13 +3,14 @@
 import argparse
 import datetime
 import hashlib
+import json
 from pathlib import Path
 import re
 import shutil
 import xml.etree.ElementTree as ET
 import zipfile
 
-MODULES = ('core', 'jdbc', 'jdbc-sqlite', 'jdbc-mysql', 'jdbc-postgresql', 'protobuf', 'protobuf-runtime', 'protobuf-buffa', 'protobuf-buffa-bindings', 'tape', 'tape-jvm', 'json', 'json-bindings', 'json-jvm', 'csv', 'csv-bindings', 'csv-native', 'csv-jvm', 'bom')
+MODULES = ('core', 'jdbc', 'jdbc-sqlite', 'jdbc-mysql', 'jdbc-postgresql', 'protobuf', 'protobuf-runtime', 'protobuf-buffa', 'protobuf-buffa-bindings', 'tape', 'tape-jvm', 'json', 'json-bindings', 'json-jvm', 'yaml', 'yaml-bindings', 'yaml-jvm', 'csv', 'csv-bindings', 'csv-native', 'csv-jvm', 'bom')
 NAMESPACE = {'m': 'http://maven.apache.org/POM/4.0.0'}
 
 
@@ -20,8 +21,17 @@ CLASSIFIERS = {
     'linux-x86_64': ('.so', False),
     'linux-aarch64': ('.so', False),
     'macos-aarch64': ('.dylib', True),
+    'linux-x86_64-musl': (None, False),
+    'linux-aarch64-musl': (None, False),
 }
-NATIVE_MODULES = ('protobuf-buffa', 'json', 'csv-native')
+TRIPLES = {
+    'linux-x86_64': 'x86_64-unknown-linux-gnu',
+    'linux-aarch64': 'aarch64-unknown-linux-gnu',
+    'macos-aarch64': 'aarch64-apple-darwin',
+    'linux-x86_64-musl': 'x86_64-unknown-linux-musl',
+    'linux-aarch64-musl': 'aarch64-unknown-linux-musl',
+}
+NATIVE_MODULES = ('protobuf-buffa', 'json', 'yaml', 'csv-native')
 # ELF e_machine per Linux classifier.
 ELF_MACHINES = {'linux-x86_64': 0x3e, 'linux-aarch64': 0xb7}
 
@@ -30,15 +40,16 @@ def native_suffixes(classifiers=tuple(CLASSIFIERS)):
     suffixes = ()
     for classifier in classifiers:
         extension, bitcode = CLASSIFIERS[classifier]
-        suffixes += ('-%s.a' % classifier,) + (('-%s-bitcode.a' % classifier,) if bitcode else ()) + ('-%s%s' % (classifier, extension),)
+        suffixes += ('-%s.a' % classifier,) + (('-%s-bitcode.a' % classifier,) if bitcode else ()) + (('-%s%s' % (classifier, extension),) if extension else ())
     return suffixes
 
 
 def artifact_suffixes(module, classifiers=tuple(CLASSIFIERS)):
+    classifiers = tuple(c for c in classifiers if module == 'csv-native' or not c.endswith('-musl'))
     if module == 'bom':
-        return ('.pom',)
-    common = ('.pom', '.jar', '-sources.jar')
-    if module == 'protobuf-buffa':
+        return ('.pom', '.module')
+    common = ('.pom', '.jar', '-sources.jar', '-javadoc.jar', '.module')
+    if module in ('protobuf-buffa', 'csv-native'):
         return common + native_suffixes(classifiers) + ('-native.h',)
     if module in NATIVE_MODULES:
         return common + native_suffixes(classifiers)
@@ -91,7 +102,7 @@ def stage(publications, repository, version, natives=(), classifiers=tuple(CLASS
         target.mkdir(parents=True, exist_ok=True)
         for suffix in artifact_suffixes(module, classifiers):
             name = artifact + '-' + version + suffix
-            candidates = [p for p in [source / name] + [Path(d) / (module + '_natives') / relative / version / name for d in natives] if p.is_file()]
+            candidates = [p for p in [source / name] + [Path(d) / collection / relative / version / name for d in natives for collection in (module + '_natives', 'csv_musl_natives')] if p.is_file()]
             if not candidates:
                 raise ValueError('Missing artifact: %s (looked in %s and %d natives directories)' % (name, source, len(natives)))
             path = candidates[0]
@@ -103,10 +114,20 @@ def stage(publications, repository, version, natives=(), classifiers=tuple(CLASS
                 for key, expected in [('groupId', 'dev.elide'), ('artifactId', artifact), ('version', version)]:
                     if root.findtext('m:' + key, namespaces=NAMESPACE) != expected:
                         raise ValueError('Incorrect POM coordinates: ' + str(path))
-            elif suffix in ('.jar', '-sources.jar'):
+            elif suffix == '.module':
+                metadata = json.loads(path.read_text())
+                if next(iter(metadata), None) != 'formatVersion' or metadata.get('formatVersion') != '1.1' or any(metadata.get('component', {}).get(k) != v for k, v in [('group', 'dev.elide'), ('module', artifact), ('version', version)]):
+                    raise ValueError('Incorrect Gradle module coordinates: ' + str(path))
+                variants = metadata.get('variants', [])
+                if not variants or len({v['name'] for v in variants}) != len(variants):
+                    raise ValueError('Missing or duplicate Gradle variants: ' + str(path))
+                for variant in variants:
+                    if not variant.get('attributes'):
+                        raise ValueError('Missing Gradle variant attributes: ' + str(path))
+            elif suffix in ('.jar', '-sources.jar', '-javadoc.jar'):
                 with zipfile.ZipFile(path) as jar:
                     names = jar.namelist()
-                    if not any(n.endswith('.java' if suffix == '-sources.jar' else '.class') for n in names):
+                    if not any(n.endswith('.java' if suffix == '-sources.jar' else '.html' if suffix == '-javadoc.jar' else '.class') for n in names):
                         raise ValueError('Empty artifact: ' + str(path))
                     if any(n.startswith(('org/', 'com/')) for n in names):
                         raise ValueError('Bundled third-party classes: ' + str(path))
@@ -116,6 +137,15 @@ def stage(publications, repository, version, natives=(), classifiers=tuple(CLASS
                 raise ValueError('Empty native header')
             shutil.copyfile(path, target / name)
             checksums(target / name)
+        if module == 'csv-native':
+            # Triple names are stable for non-Maven stagers; preserve historical classifiers too.
+            for classifier in classifiers:
+                for suffix in native_suffixes((classifier,)):
+                    name = artifact + '-' + version
+                    original = target / (name + suffix)
+                    alias = target / (name + suffix.replace('-' + classifier, '-' + TRIPLES[classifier], 1))
+                    shutil.copyfile(original, alias)
+                    checksums(alias)
         metadata = target.parent / 'maven-metadata.xml'
         if metadata.exists():
             root = ET.parse(metadata).getroot()

@@ -1,0 +1,6 @@
+validate=0 accepted {"aa":1,"bb":2,"cc":3}
+validate=0 accepted {"aa":1,"bb":2,"dd":3}
+validate=0 rejected {"\u0000\u0000":1,"\u0000\u0000":2,"dd":3}: duplicate key
+validate=1 accepted {"aa":1,"bb":2,"cc":3}
+validate=1 accepted {"aa":1,"bb":2,"dd":3}
+validate=1 rejected {"\u0000\u0000":1,"\u0000\u0000":2,"dd":3}: duplicate key

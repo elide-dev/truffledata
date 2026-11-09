@@ -187,6 +187,11 @@ Add a Step 0 (x86 writer diagnosis, probe-first, retained under `benchmarks/resu
 
 **Commit** — `perf: compile runtime protobuf plans into Truffle decoder roots`
 
+**Measured ruling (2026-11-07):** A4 is closed under this stop rule. Both runtimes pass
+Type/wide64 compilation and parity, but compiled/generated is 1.164× on JVM and 16.367×
+on SVM, so the joint ≤ 1.2× gate fails. Table-driven Java remains the runtime-plan floor;
+no automatic compiled decoder is adopted. See [retained evidence](../../../benchmarks/results/protobuf-compiled-decoder-dab2dbc5/README.md).
+
 ### Task E1 — Projection (amended)
 
 Add a `Projection.lazyChildren()` mode: unwanted singular/repeated message fields keep `(input offset, length)` in the slab under an `EXTERNAL`-like child header and are decoded into the slab (appended) on first access; the slab is then `BORROWING` until every lazy child is realised or `retain()` copies the input. Gate: sparse resident ≤ 0.5× full resident on the holdout.

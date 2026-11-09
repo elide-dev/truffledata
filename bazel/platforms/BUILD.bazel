@@ -59,3 +59,40 @@ platform(
         "EstimatedMemory": "6GB",
     },
 )
+
+# The default keeps existing Linux builds on glibc. Musl is an explicit release lane.
+constraint_setting(
+    name = "libc",
+    default_constraint_value = ":glibc",
+)
+
+constraint_value(
+    name = "glibc",
+    constraint_setting = ":libc",
+)
+
+constraint_value(
+    name = "musl",
+    constraint_setting = ":libc",
+)
+
+[platform(
+    name = "linux_" + cpu + "_musl",
+    constraint_values = [":musl"],
+    parents = [":rbe_linux_" + cpu],
+) for cpu in [
+    "amd64",
+    "arm64",
+]]
+
+[config_setting(
+    name = "musl_" + cpu,
+    constraint_values = [
+        "@platforms//os:linux",
+        "@platforms//cpu:" + arch,
+        ":musl",
+    ],
+) for cpu, arch in [
+    ("amd64", "x86_64"),
+    ("arm64", "aarch64"),
+]]

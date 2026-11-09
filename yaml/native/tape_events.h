@@ -38,13 +38,7 @@ class event_renderer {
   const session::document_view& d_;
 
   std::string_view text(uint64_t index) const {
-    const myna_value_node& n = d_.view.nodes[index];
-    if (n.tag & MYNA_VALUE_REGION_TEXT) {
-      uint32_t region = uint32_t(n.payload >> 32);
-      const uint8_t* base = region == 0 ? d_.view.bytes : d_.view.regions[region - 1].data;
-      return {reinterpret_cast<const char*>(base + uint32_t(n.payload)), n.length};
-    }
-    return {reinterpret_cast<const char*>(&n.payload), n.length};
+    return ct::text(d_.view, index);
   }
 
   // Anchor name of `index`, if anchored (anchors are sorted by node).
@@ -83,29 +77,29 @@ class event_renderer {
 
   // Renders the subtree at `index`; returns the index after it.
   uint64_t node(uint64_t index, std::string& out) const {
-    const myna_value_node& n = d_.view.nodes[index];
+    uint64_t n = d_.view.words[index];
     uint32_t meta = d_.meta[index];
-    uint32_t kind = n.tag & MYNA_VALUE_KIND_MASK;
+    uint32_t kind = ct::kind(n);
     if (meta & meta_alias) {
       uint64_t target = d_.alias_targets[meta >> meta_tag_shift];
       out += "=ALI *";
       out += anchor_of(target);
       out += '\n';
-      return index + 1;
+      return ct::step(index, n);
     }
-    if (kind == MYNA_VALUE_OBJECT || kind == MYNA_VALUE_ARRAY) {
+    if (kind == ct::kind_object || kind == ct::kind_array) {
       uint32_t style = meta & meta_style_mask;
-      bool pairs = kind == MYNA_VALUE_ARRAY && n.length && (d_.meta[index + 1] & meta_style_mask) == style_pair;
-      bool mapping = kind == MYNA_VALUE_OBJECT || pairs;
+      bool pairs = kind == ct::kind_array && ct::field(n) && (d_.meta[index + 2] & meta_style_mask) == style_pair;
+      bool mapping = kind == ct::kind_object || pairs;
       out += mapping ? "+MAP" : "+SEQ";
       if (style == style_flow) out += mapping ? " {}" : " []";
       properties(index, out);
       out += '\n';
-      uint64_t at = index + 1;
-      uint64_t children = kind == MYNA_VALUE_OBJECT ? 2 * uint64_t(n.length) : n.length;
+      uint64_t at = index + 2;
+      uint64_t children = kind == ct::kind_object ? 2 * uint64_t(ct::field(n)) : ct::field(n);
       for (uint64_t i = 0; i < children; ++i) {
         if (pairs) {
-          at = node(at + 1, out);  // key and value of the pair
+          at = node(at + 2, out);  // key and value of the pair
           at = node(at, out);
         } else {
           at = node(at, out);
@@ -120,16 +114,16 @@ class event_renderer {
     out += style_char(meta & meta_style_mask);
     std::string_view value;
     bool key_kind_string = ((meta & meta_key_kind_mask) >> meta_key_kind_shift) == 0;
-    if (kind == MYNA_VALUE_STRING && key_kind_string) {
+    if (kind == ct::kind_string && key_kind_string) {
       value = text(index);
     } else {
-      uint64_t span = d_.lexical[index];
+      uint64_t span = lexical_span(d_.view, index);
       if (span) value = std::string_view(d_.source + (span >> 32), uint32_t(span));
     }
     c4::yml::escape_scalar_fn([&](c4::csubstr part) { out.append(part.str, part.len); },
                               c4::csubstr(value.data(), value.size()));
     out += '\n';
-    return index + 1;
+    return ct::step(index, n);
   }
 };
 

@@ -2,7 +2,8 @@
 // the 200-document corpus, directory-fused duplicate detection, number classification, exact
 // spans, strict input, validate-only parity and allocation failure at every growth step.
 #include "json/native/decoder.h"
-#include "json/native/legacy_decoder.h"
+#include "json/native/testing/ondemand_decoder.h"
+#include "json/native/testing/myna_oracle.h"
 #include "json/native/session.h"
 #include "json/native/status.h"
 #include "tape/native/testing.h"
@@ -73,7 +74,7 @@ struct scratch {
 struct pair {
   simdjson::padded_string padded;
   scratch a, b;
-  json::tape_decoder<tape::ctape_writer> compact{&a.arena, {}};
+  json::testing::ondemand_decoder<tape::ctape_writer> compact{&a.arena, {}};
   json::legacy::tape_decoder<tape::tape_writer> reference{&b.arena, {}, 2};
   td_tape_view view{};
   myna_value_view_v4 myna{};
@@ -363,7 +364,7 @@ void spans_are_exact_tokens() {
       tokens(root, padded.data(), expected);
     }
     scratch s;
-    json::tape_decoder<tape::ctape_writer> decoder(&s.arena, {});
+    json::testing::ondemand_decoder<tape::ctape_writer> decoder(&s.arena, {});
     decoder.start(std::string_view(padded.data(), padded.size()), json::hint_for(padded.size(), {}, {}));
     simdjson::ondemand::parser second;
     auto doc = second.iterate(padded).value();
@@ -436,7 +437,7 @@ void validate_only_rejects_everything_decode_rejects() {
   }
   for (const auto& source : corpus()) {
     auto d = s.decode(source.data(), source.size(), json::session::encoding::utf8, true);
-    require(!d.tape && !d.myna && !s.live() && d.input_length == source.size());
+    require(!d.tape && !s.live() && d.input_length == source.size());
   }
   // Limits: the same values, text bytes, depth and input bounds.
   const std::string doc = "[\"xx\",[1],{\"k\":\"v\"}]";
@@ -489,8 +490,8 @@ void documents_and_hints() {
     json::legacy::document reference(big);
     require(large.allocations().index_retained_bytes < reference.allocations().index_retained_bytes);
   }
-  // Growth past the hint (one word per input byte) moves to larger spans; the overlap is charged
-  // to the peak, the exact peak budget decodes and one byte less is a limit.
+  // Structural presizing handles dense input without array growth: peak equals retained bytes.
+  // The exact peak budget decodes and one byte less remains a limit.
   {
     std::string dense = "[";
     for (int i = 0; i < 40000; ++i) dense += i ? ",1" : "1";
@@ -498,7 +499,7 @@ void documents_and_hints() {
     document grown(dense);
     auto stats = grown.allocations();
     require(grown.value_count() == 40001 && grown.view().word_count == 80002);
-    require(stats.index_peak_bytes > stats.index_retained_bytes);
+    require(stats.index_peak_bytes == stats.index_retained_bytes);
     { document exact(dense, {}, tape::storage_limits{dense.size(), stats.index_peak_bytes}); }
     require(throws([&] { document d(dense, {}, tape::storage_limits{dense.size(), stats.index_peak_bytes - 1}); }));
     require(throws([&] { document d(dense, {}, tape::storage_limits{dense.size() - 1, SIZE_MAX}); }));
@@ -545,7 +546,7 @@ template<class Writer> void decode_with(std::pmr::memory_resource* upstream, con
   tape::block_arena blocks(&memory);
   owning_memory each(&memory);
   simdjson::padded_string padded(source);
-  json::tape_decoder<Writer> decoder(arena ? static_cast<std::pmr::memory_resource*>(&blocks) : &each, {});
+  json::testing::ondemand_decoder<Writer> decoder(arena ? static_cast<std::pmr::memory_resource*>(&blocks) : &each, {});
   decoder.start(std::string_view(padded.data(), padded.size()), hint);
   simdjson::ondemand::parser parser;
   auto root = parser.iterate(padded).value();
@@ -586,11 +587,48 @@ void allocation_failure_at_every_growth() {
   fault_memory memory(SIZE_MAX);
   require(throws([&] { document d(object_with_keys(300, 299, "kA"), {}, {}, &memory); }) && memory.live == 0);
 }
+
+void templates_survive_documents_and_reject_escaped_duplicates() {
+  auto object = [](const std::vector<std::string>& keys) {
+    std::string text = "{";
+    for (size_t i = 0; i < keys.size(); ++i) {
+      if (i) text += ',';
+      text += '"' + keys[i] + "\":" + std::to_string(i);
+    }
+    return text + '}';
+  };
+  for (bool validate : {false, true}) {
+    json::session session({}, {});
+    auto decode = [&](const std::string& text) {
+      return status_of([&] { session.decode(text.data(), text.size(), json::session::encoding::utf8, validate); });
+    };
+    for (unsigned count = 2; count <= 32; ++count) {
+      std::vector<std::string> keys;
+      for (unsigned i = 0; i < count; ++i) keys.push_back("key" + std::to_string(i));
+      require(decode(object(keys)) == json::status_ok);
+      // Different encoded spelling of the exact same decoded template sequence is a hit.
+      keys[0] = "\\u006bey0";
+      require(decode(object(keys)) == json::status_ok);
+      for (unsigned position = 0; position <= count; ++position) {
+        auto duplicate = keys;
+        duplicate.insert(duplicate.begin() + position, "key0");
+        require(decode(object(duplicate)) == json::status_syntax);
+      }
+      keys.pop_back();
+      require(decode(object(keys)) == json::status_ok);
+      keys.push_back(std::string(40, 'x'));
+      require(decode(object(keys)) == json::status_ok);
+      keys.push_back(std::string(40, 'x'));
+      require(decode(object(keys)) == json::status_syntax);
+    }
+  }
+}
 }  // namespace
 
 int main() {
   struct test { const char* name; void (*run)(); };
   const test tests[] = {
+      {"templates_survive_documents_and_reject_escaped_duplicates", templates_survive_documents_and_reject_escaped_duplicates},
       {"words_match_reference_corpus", words_match_reference_corpus},
       {"walk_matches_reference", walk_matches_reference},
       {"duplicate_rejected_after_unescaping", duplicate_rejected_after_unescaping},

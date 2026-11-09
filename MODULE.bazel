@@ -1,6 +1,6 @@
 module(
     name = "truffledata",
-    version = "0.9.0",
+    version = "0.10.0",
 )
 
 bazel_dep(name = "platforms", version = "1.1.0")
@@ -157,6 +157,9 @@ maven.install(
         # Benchmark-only JSON competitors (//benchmarks/comparison, the JSON scoreboard); no library
         # depends on them. Jackson streaming and databind share the CSV competitor's version.
         "com.fasterxml.jackson.core:jackson-databind:2.22.4",
+        # Benchmark-only YAML competitors; no published module depends on them.
+        "com.fasterxml.jackson.dataformat:jackson-dataformat-yaml:2.22.4",
+        "org.yaml:snakeyaml:2.7",
         "com.alibaba.fastjson2:fastjson2:2.0.66",
         "com.dslplatform:dsl-json:2.0.2",
         "com.jsoniter:jsoniter:0.9.23",
@@ -175,18 +178,18 @@ maven.install(
 # Test-only oracle for YAML differential coverage.
 maven.artifact(
     name = "maven",
+    testonly = True,
     artifact = "snakeyaml-engine",
     group = "org.snakeyaml",
-    testonly = True,
     version = "3.2",
 )
 
 # Test-only oracle for the CSV differential suite (//csv/tests); no library depends on it.
 maven.artifact(
     name = "maven",
+    testonly = True,
     artifact = "commons-csv",
     group = "org.apache.commons",
-    testonly = True,
     version = "1.14.1",
 )
 use_repo(maven, "maven")
@@ -400,3 +403,16 @@ http_archive(
     type = "tar.gz",
     urls = ["https://github.com/yaml/yaml-test-suite/archive/refs/tags/data-2022-01-17.tar.gz"],
 )
+
+# Symlink overlays reuse the pinned GNU host tools with the bundle's musl sysroot.
+# The original repository remains unchanged and no second LLVM extraction is needed.
+musl_toolchain = use_repo_rule("//bazel:musl_toolchain_repo.bzl", "musl_toolchain_repo")
+
+[musl_toolchain(
+    name = "elide_toolchain_musl_" + cpu,
+    base = "@elide_toolchain_linux_" + cpu + "//:BUILD.bazel",
+    build_file = "//bazel:musl_toolchain.BUILD",
+) for cpu in [
+    "amd64",
+    "arm64",
+]]

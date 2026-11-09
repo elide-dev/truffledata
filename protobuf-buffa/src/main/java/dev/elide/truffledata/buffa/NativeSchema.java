@@ -109,7 +109,7 @@ final class NativeSchema {
         }
       }
       // TDL1 slab layout (docs/SLAB.md): appended after every TDB3 table and string, which only
-      // header offsets reach, so ABI 9 readers never see it. The trailer locates the section.
+      // header offsets reach, so ordinary typed-index readers ignore it. The trailer locates it.
       int section = (out.position() + 3) & ~3;
       out.position(section);
       out.put(layout);

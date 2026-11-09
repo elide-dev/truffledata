@@ -19,16 +19,20 @@ data_java_library(
         "src/test/java/dev/elide/truffledata/JdbcLifecycleTest.java",
         "src/test/java/dev/elide/truffledata/JdbcTest.java",
         "src/test/java/dev/elide/truffledata/JitMatrixTest.java",
+        "src/test/java/dev/elide/truffledata/OwnedArrayTest.java",
         "src/test/java/dev/elide/truffledata/PolicyTest.java",
         "src/test/java/dev/elide/truffledata/PolyglotTest.java",
         "src/test/java/dev/elide/truffledata/ProtoDescriptorsTest.java",
+        "src/test/java/dev/elide/truffledata/ProtoExplicitSourceTest.java",
         "src/test/java/dev/elide/truffledata/ProtoNativeTest.java",
         "src/test/java/dev/elide/truffledata/ProtobufTest.java",
         "src/test/java/dev/elide/truffledata/RealDriversTest.java",
+        "src/test/java/dev/elide/truffledata/SlabAccessTest.java",
         "src/test/java/dev/elide/truffledata/TestLanguage.java",
         "src/test/java/dev/elide/truffledata/package-info.java",
     ],
     deps = [
+        ":explicit_host_java",
         "//benchmarks",
         "//core",
         "//jdbc",
@@ -56,7 +60,7 @@ java_test(
         "--package",
         "dev.elide.truffledata",
         "--include-class",
-        "dev.elide.truffledata.(Accessor|Core|GeneratedCodec|GeneratedGraph|ProtoDescriptors|ProtoNative|Jdbc|JdbcLifecycle|Protobuf|Polyglot|Policy|Contracts|Integration|JitMatrix)Test",
+        "dev.elide.truffledata.(Accessor|Core|GeneratedCodec|GeneratedGraph|ProtoDescriptors|ProtoExplicitSource|ProtoNative|Jdbc|JdbcLifecycle|OwnedArray|SlabAccess|Protobuf|Polyglot|Policy|Contracts|Integration|JitMatrix)Test",
     ],
     data = [
         ":native_descriptors",
@@ -72,6 +76,7 @@ java_test(
         "//protobuf:sources",
         "//protobuf-runtime:sources",
         "//tape:sources",
+        "//yaml:sources",
     ],
     exec_properties = {
         "EstimatedCPU": "4",
@@ -308,4 +313,23 @@ proto_contract_library(
     testonly = True,
     class_name = "WellKnownContracts",
     proto_deps = [":wkt_proto"],
+)
+
+genrule(
+    name = "explicit_host_source",
+    testonly = True,
+    srcs = ["explicit_host.proto"],
+    outs = ["ExplicitHost.java"],
+    cmd = "$(location @protobuf//:protoc) --proto_path=tests --java_out=$(@D) $(location explicit_host.proto) && mv $(@D)/dev/elide/truffledata/host/ExplicitHost.java $@",
+    tools = ["@protobuf//:protoc"],
+)
+
+data_java_library(
+    name = "explicit_host_java",
+    testonly = True,
+    srcs = [
+        "explicit_host/package-info.java",
+        ":explicit_host_source",
+    ],
+    deps = ["@maven//:com_google_protobuf_protobuf_java"],
 )

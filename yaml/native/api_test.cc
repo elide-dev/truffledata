@@ -14,12 +14,13 @@
 #include <string>
 
 using namespace truffledata::yaml;
+using yaml_session = truffledata::yaml::session;
 using truffledata::yaml::testing::fault_memory;
 using truffledata::yaml::testing::render;
 
 namespace {
-static_assert(sizeof(YamlResult) == 488 && offsetof(YamlResult, error_message) == 232, "YamlResult ABI");
-static_assert(offsetof(YamlResult, key_hashes) == 88 && offsetof(YamlResult, yaml_meta) == 96, "shared JSON prefix");
+static_assert(sizeof(YamlResult) == 448 && offsetof(YamlResult, error_message) == 192, "YamlResult ABI");
+static_assert(offsetof(YamlResult, yaml_meta) == 72, "compact YAML metadata");
 static_assert(sizeof(YamlOptionsStruct) == 80, "YamlOptionsStruct ABI");
 
 YamlOptionsStruct defaults() {
@@ -41,7 +42,39 @@ std::string error_text(const YamlResult& r) {
   return std::string(reinterpret_cast<const char*>(&r) + offsetof(YamlResult, error_message), r.error_message_length);
 }
 bool nothing_published(const YamlResult& r) {
-  return !r.owner && !r.view && !r.lexical && !r.key_hashes && !r.yaml_meta && !r.source && r.lexical_count == 0;
+  return !r.owner && !r.view && !r.yaml_meta && !r.source;
+}
+
+void typed_plans() {
+  auto options = defaults();
+  YamlRecordPlan record{0, 1};
+  YamlScalarField field{};
+  field.name = reinterpret_cast<uint8_t*>(const_cast<char*>("n"));
+  field.name_length = 1; field.kind = 1; field.flags = 1; field.child = UINT32_MAX;
+  field.minimum = INT64_MIN; field.maximum = INT64_MAX;
+  YamlPlan plan{};
+  require(td_yaml_plan_create(&record, 1, &field, 1, 1024, &options, &plan) == TD_YAML_OK);
+  require(td_yaml_plan_create(&record, 1, &field, 1, 1024, &options, &plan) == TD_YAML_ARGUMENT);
+  auto decode = [&](const char* text, YamlTypedResult& result) {
+    return td_yaml_typed_decode(&plan, reinterpret_cast<const uint8_t*>(text), std::strlen(text), &result);
+  };
+  YamlTypedResult good{}, bad{};
+  require(decode("n: 0x1f", good) == TD_YAML_OK && good.owner && good.count == 1 && good.present == 1);
+  require(decode("n: 1", good) == TD_YAML_ARGUMENT);
+  require(decode("n: '31'", bad) == TD_YAML_CONTRACT && !bad.owner && !bad.slots && bad.error_message_length > 0);
+  require(decode("n: [", bad) == TD_YAML_SYNTAX && bad.error_line > 0 && !bad.owner);
+  require(decode("other: 1", bad) == TD_YAML_CONTRACT && !bad.owner);
+  td_yaml_plan_release(&plan); td_yaml_plan_release(&plan);
+  YamlScalarSlot copied;
+  std::memcpy(&copied, good.slots, sizeof copied);
+  require(copied.bits == 31); // Result survives plan close.
+  td_yaml_typed_release(&good); td_yaml_typed_release(&good); td_yaml_typed_release(&bad);
+  require(!good.owner && !good.slots);
+  require(decode("n: 1", bad) == TD_YAML_ARGUMENT);
+  field.child = 0;
+  require(td_yaml_plan_create(&record, 1, &field, 1, 1024, &options, &plan) == TD_YAML_ARGUMENT);
+  field.child = UINT32_MAX;
+  require(td_yaml_plan_create(&record, 1, &field, 1, 0, &options, &plan) == TD_YAML_LIMIT);
 }
 
 void sessions() {
@@ -51,23 +84,23 @@ void sessions() {
   YamlResult borrowed{}, kept{};
   const std::string first = "s: first document text beyond inline\nn: 1\n";
   require(run(s, first, borrowed) == TD_YAML_OK);
-  require(!borrowed.owner && borrowed.view && borrowed.lexical_count == 5 && borrowed.key_hashes && borrowed.yaml_meta);
+  require(!borrowed.owner && borrowed.view && borrowed.yaml_meta);
   require(borrowed.document_flags == TD_YAML_DOC_PRESENT && borrowed.error_message_length == 0);
-  auto* view = static_cast<const myna_value_view*>(borrowed.view);
-  const myna_value_node* nodes = view->nodes;
+  auto* view = static_cast<const td_tape_view*>(borrowed.view);
+  const uint64_t* nodes = view->words;
   require(render(*view) == "{\"s\":\"first document text beyond inline\",\"n\":1}");
   // Retain moves storage: the retained descriptor points at the same nodes.
   require(td_yaml_session_retain(s, &kept) == TD_YAML_OK);
-  require(kept.owner && static_cast<const myna_value_view*>(kept.view)->nodes == nodes);
+  require(kept.owner && static_cast<const td_tape_view*>(kept.view)->words == nodes);
   require(td_yaml_session_retain(s, &kept) == TD_YAML_ARGUMENT);
   YamlResult other{};
   require(td_yaml_session_retain(s, &other) == TD_YAML_ARGUMENT);
   // The next decode reuses the session; the retained document is untouched.
   require(run(s, "s: second document overwrites session storage\nn: 2\n", borrowed) == TD_YAML_OK);
-  auto* retained = static_cast<const myna_value_view*>(kept.view);
+  auto* retained = static_cast<const td_tape_view*>(kept.view);
   require(render(*retained) == "{\"s\":\"first document text beyond inline\",\"n\":1}");
-  const uint64_t* spans = static_cast<const uint64_t*>(kept.lexical);
-  require(std::string(reinterpret_cast<const char*>(kept.source) + (spans[4] >> 32), uint32_t(spans[4])) == "1");
+  uint64_t span = lexical_span(*retained, testing::ordinal(*retained, 4));
+  require(std::string(reinterpret_cast<const char*>(kept.source) + (span >> 32), uint32_t(span)) == "1");
   // A failed decode publishes nothing but the error and leaves the session reusable.
   for (auto bad : {"a: [1, 2\n", "{a: 1, a: 2}", "\"unterminated\n", "a: b: c\n"}) {
     require(run(s, bad, borrowed) == TD_YAML_SYNTAX);
@@ -95,8 +128,9 @@ void sessions() {
   // Source retention publishes a pristine copy for quoted spans.
   require(run(s, "k: 'it''s'\n", borrowed, TD_YAML_RETAIN_SOURCE) == TD_YAML_OK);
   require(borrowed.document_flags & TD_YAML_DOC_SOURCE_RETAINED);
-  spans = static_cast<const uint64_t*>(borrowed.lexical);
-  require(std::string(reinterpret_cast<const char*>(borrowed.source) + (spans[2] >> 32), uint32_t(spans[2])) == "'it''s'");
+  const auto& quoted = *static_cast<const td_tape_view*>(borrowed.view);
+  span = lexical_span(quoted, testing::ordinal(quoted, 2));
+  require(std::string(reinterpret_cast<const char*>(borrowed.source) + (span >> 32), uint32_t(span)) == "'it''s'");
   // Non-finite floats are flagged.
   require(run(s, "[.inf, -.inf, .nan]", borrowed) == TD_YAML_OK && (borrowed.document_flags & TD_YAML_DOC_NONFINITE));
   // Input limits apply per document.
@@ -126,6 +160,132 @@ void sessions() {
   require(std::strcmp(reinterpret_cast<const char*>(td_yaml_fingerprint()), TRUFFLEDATA_YAML_SEAM_ABI) == 0);
 }
 
+void directory_policy() {
+  auto options = defaults();
+  void* s = td_yaml_session_create(&options);
+  require(s != nullptr);
+  YamlResult borrowed{}, kept{};
+  const std::string doc = "[{a: 1, b: 2}, {a: 3, b: 4}, {b: 5, a: 6}, {a: 7, b: 8}, {a: 9}]";
+  require(run(s, doc, borrowed) == TD_YAML_OK);
+  const auto& before = *static_cast<const td_tape_view*>(borrowed.view);
+  require((before.flags & TD_TAPE_NO_DIRECTORIES) && before.directory_count == 0);
+  require(ct::validate(before) == nullptr);
+  auto expected = render(before);
+  const uint64_t* words = before.words;
+  require(td_yaml_session_retain(s, &kept) == TD_YAML_OK);
+  const auto& owned = *static_cast<const td_tape_view*>(kept.view);
+  require(!(owned.flags & TD_TAPE_NO_DIRECTORIES) && owned.directory_count == 8 && owned.words == words);
+  require(ct::validate(owned) == nullptr && render(owned) == expected);
+  td_yaml_release(&kept);
+  require(run(s, doc, borrowed, TD_YAML_WANT_DIRECTORIES) == TD_YAML_OK);
+  const auto& direct = *static_cast<const td_tape_view*>(borrowed.view);
+  require(!(direct.flags & TD_TAPE_NO_DIRECTORIES) && direct.directory_count == 8);
+  require(render(direct) == expected && ct::validate(direct) == nullptr);
+  for (const auto& bad : {"[{a: 1, b: 2}, {a: 3, a: 4}]", "[{a: 1, b: 2}, {a: 3, b: 4, a: 5}]"})
+    for (uint32_t flags : {0u, TD_YAML_WANT_DIRECTORIES})
+      require(run(s, bad, borrowed, flags) == TD_YAML_SYNTAX);
+  require(run(s, "{}", borrowed, 8) == TD_YAML_ARGUMENT);
+  td_yaml_session_release(s);
+
+  // Directory allocation failure preserves a complete borrowed tape for a retry.
+  std::string wide = "{";
+  for (int i = 0; i < 5000; ++i) wide += "k" + std::to_string(i) + ": 1, ";
+  wide += "}";
+  auto exercise = [&](size_t fail) {
+    fault_memory memory;
+    size_t allocations = 0;
+    {
+      yaml_session session(session_options{}, &memory);
+      session.decode(reinterpret_cast<const uint8_t*>(wide.data()), wide.size(), 0);
+      size_t start = memory.calls;
+      if (fail != SIZE_MAX) memory.fail_at = start + fail;
+      yaml_session::retained* owner = nullptr;
+      try { owner = session.retain(); }
+      catch (const std::bad_alloc&) {
+        require(fail != SIZE_MAX && session.live());
+        require((session.view().flags & TD_TAPE_NO_DIRECTORIES) && ct::validate(session.view()) == nullptr);
+        memory.fail_at = SIZE_MAX;
+        owner = session.retain();
+      }
+      allocations = memory.calls - start;
+      require(owner && !(owner->view.flags & TD_TAPE_NO_DIRECTORIES) && ct::validate(owner->view) == nullptr);
+      owner->destroy();
+    }
+    require(memory.live == 0);
+    return allocations;
+  };
+  size_t allocations = exercise(SIZE_MAX);
+  require(allocations >= 2);
+  for (size_t fail = 0; fail < allocations; ++fail) exercise(fail);
+}
+
+void persistent_templates() {
+  auto options = defaults();
+  void* s = td_yaml_session_create(&options);
+  require(s);
+  YamlResult borrowed{}, kept{};
+  for (uint32_t flags : {0u, TD_YAML_WANT_DIRECTORIES}) {
+    // A partial mapping may have recorded a duplicate prefix but never checked it at close.
+    for (const char* partial : {"{x: 1, x: [", "{x: 1, y: [", "[{x: 1, y: 2}, {x: 3, x: ["}) {
+      require(run(s, partial, borrowed, flags) == TD_YAML_SYNTAX);
+      require(run(s, "{x: 1, x: 2}", borrowed, flags) == TD_YAML_SYNTAX);
+      require(run(s, "{x: 1, y: 2, x: 3}", borrowed, flags) == TD_YAML_SYNTAX);
+    }
+    require(run(s, "{x: 1, y: 2}", borrowed, flags) == TD_YAML_OK);
+    require(td_yaml_session_retain(s, &kept) == TD_YAML_OK);
+    // Retaining detaches the old input. Mismatch recovery must read the template's owned bytes.
+    require(run(s, "{x: 3, z: 4}", borrowed, flags) == TD_YAML_OK);
+    require(run(s, "{y: 5, x: 6}", borrowed, flags) == TD_YAML_OK);
+    require(run(s, "{x: 1, !!str x: 2}", borrowed, flags) == TD_YAML_SYNTAX);
+    require(run(s, "{x: 1, 'x': 2}", borrowed, flags) == TD_YAML_SYNTAX);
+    require(render(*static_cast<const td_tape_view*>(kept.view)) == "{\"x\":1,\"y\":2}");
+    td_yaml_release(&kept);
+  }
+  td_yaml_session_release(s);
+}
+
+void shared_text_capacity() {
+  YamlOptionsStruct options = defaults();
+  void* session = td_yaml_session_create(&options);
+  require(session);
+  YamlResult document{};
+  YamlTextResult text{};
+  require(td_yaml_session_write_text(session, nullptr, 0, &text) == TD_YAML_ARGUMENT);
+  std::string input = "anchor: &key " + std::string(1024, 'x') + "\nitems: [";
+  for (int i = 0; i < 20; ++i) input += std::string(i ? ", " : "") + "{*key : value}";
+  input += "]\nunicode: [café, 雪, 😀, '', ascii]\n";
+  require(run(session, input, document) == TD_YAML_OK);
+  require(td_yaml_session_write_text(session, nullptr, 0, &text) == TD_YAML_OK);
+  require(text.required_capacity > 2 * input.size() + 16 && !text.table && !text.bytes_written);
+  std::vector<uint8_t> bytes(text.required_capacity, 0xA5);
+  require(td_yaml_session_write_text(session, bytes.data(), 2, &text) == TD_YAML_TEXT_TOO_SMALL);
+  require(!text.table && !text.bytes_written && bytes[0] == 0xA5 && bytes[2] == 0xA5);
+  require(td_yaml_session_write_text(session, bytes.data(), bytes.size(), &text) == TD_YAML_OK);
+  require(text.table && text.bytes_written <= bytes.size());
+  const auto& view = *static_cast<const td_tape_view*>(document.view);
+  const auto* table = static_cast<const uint64_t*>(text.table);
+  for (uint64_t i = 0; i < view.word_count; i = ct::step(i, view.words[i])) {
+    uint64_t entry = table[i];
+    if (ct::kind(view.words[i]) != ct::kind_string) { require(entry == 0); continue; }
+    std::string_view source = ct::text(view, i);
+    size_t offset = entry >> 32, length = uint32_t(entry) >> 1;
+    require(offset + length <= text.bytes_written);
+    std::vector<char16_t> expected(source.size() + 1);
+    size_t count = simdutf::convert_valid_utf8_to_utf16le(source.data(), source.size(), expected.data());
+    if (entry & 1) {
+      require(length == 2 * count && std::memcmp(bytes.data() + offset, expected.data(), length) == 0);
+    } else {
+      require(length == count);
+      for (size_t j = 0; j < count; ++j) require(expected[j] == bytes[offset + j]);
+    }
+  }
+  td_yaml_session_reset(session);
+  require(td_yaml_session_write_text(session, nullptr, 0, &text) == TD_YAML_ARGUMENT && !text.table);
+  require(run(session, "null", document) == TD_YAML_OK);
+  require(td_yaml_session_write_text(session, nullptr, 0, &text) == TD_YAML_OK && text.required_capacity == 0);
+  td_yaml_session_release(session);
+}
+
 std::string deep(int depth) {
   std::string doc;
   for (int i = 0; i < depth; ++i) doc += std::string(size_t(i) * 2, ' ') + "k" + std::to_string(i) + ":\n";
@@ -144,12 +304,15 @@ void allocation_failures() {
   // Every upstream allocation of a decode/retain/decode sequence can fail; the session stays
   // consistent and everything is freed once the session and the retained owner are destroyed.
   auto sequence = [&](fault_memory& memory) {
-    session::retained* owner = nullptr;
+    yaml_session::retained* owner = nullptr;
     {
-      session s(session_options{}, &memory);
+      yaml_session s(session_options{}, &memory);
       try {
         s.decode(reinterpret_cast<const uint8_t*>(doc.data()), doc.size(), 0);
-        s.decode(reinterpret_cast<const uint8_t*>(wide.data()), wide.size(), session::retain_source);
+        s.decode(reinterpret_cast<const uint8_t*>(wide.data()), wide.size(), yaml_session::retain_source);
+        const uint64_t* table = nullptr;
+        std::vector<uint8_t> text(s.text_capacity());
+        require(s.write_text(text.data(), text.size(), table) <= text.size());
         owner = s.retain();
         s.decode(reinterpret_cast<const uint8_t*>(nested.data()), nested.size(), 0);
         s.decode(reinterpret_cast<const uint8_t*>(big.data()), big.size(), 0);
@@ -169,7 +332,7 @@ void allocation_failures() {
   size_t rapidyaml = 0;
   {
     fault_memory probe;
-    session s(session_options{}, &probe);
+    yaml_session s(session_options{}, &probe);
     s.decode(reinterpret_cast<const uint8_t*>(doc.data()), doc.size(), 0);
     size_t before = s.memory().allocations();
     s.decode(reinterpret_cast<const uint8_t*>(nested.data()), nested.size(), 0);
@@ -190,7 +353,7 @@ void allocation_failures() {
 
   // Steady state: after warm-up a session decodes without any upstream allocation and keeps a
   // bounded number of blocks.
-  session s(session_options{});
+  yaml_session s(session_options{});
   for (int i = 0; i < 3; ++i) s.decode(reinterpret_cast<const uint8_t*>(doc.data()), doc.size(), 0);
   size_t blocks = s.arena_blocks(), allocations = s.memory().allocations();
   for (int i = 0; i < 10000; ++i) {
@@ -201,9 +364,9 @@ void allocation_failures() {
   // Large inputs are not kept: the input buffer above 1 MiB is released before the next decode.
   std::string huge = "- " + std::string(size_t(1) << 21, 'x') + "\n";
   s.decode(reinterpret_cast<const uint8_t*>(huge.data()), huge.size(), 0);
-  require(s.input_capacity() > session::retained_input_limit);
+  require(s.input_capacity() > yaml_session::retained_input_limit);
   s.decode(reinterpret_cast<const uint8_t*>(doc.data()), doc.size(), 0);
-  require(s.input_capacity() <= session::retained_input_limit);
+  require(s.input_capacity() <= yaml_session::retained_input_limit);
   require(s.memory().current() <= truffledata::tape::block_arena::retained_blocks * truffledata::tape::block_arena::max_block + 4096);
 }
 }  // namespace
@@ -211,6 +374,10 @@ void allocation_failures() {
 int main() {
   try {
     sessions();
+    typed_plans();
+    shared_text_capacity();
+    directory_policy();
+    persistent_templates();
     allocation_failures();
   } catch (const std::exception& e) {
     std::fprintf(stderr, "api_test failure: %s\n", e.what());

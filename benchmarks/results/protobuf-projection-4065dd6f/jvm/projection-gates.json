@@ -1,0 +1,70 @@
+[
+  {
+    "name": "selected-small",
+    "numerator": [
+      "slab-projected",
+      "sparse",
+      "resident"
+    ],
+    "denominator": [
+      "slab",
+      "sparse",
+      "resident"
+    ],
+    "ratio": 0.8638390397254438,
+    "ceiling": 0.85,
+    "passed": false,
+    "required": true
+  },
+  {
+    "name": "selected-holdout",
+    "numerator": [
+      "slab-projected",
+      "holdout-sparse",
+      "resident"
+    ],
+    "denominator": [
+      "slab",
+      "holdout",
+      "resident"
+    ],
+    "ratio": 0.48924338717176563,
+    "ceiling": 0.5,
+    "passed": true,
+    "required": true
+  },
+  {
+    "name": "lazy-holdout",
+    "numerator": [
+      "slab-lazy",
+      "holdout-sparse",
+      "resident"
+    ],
+    "denominator": [
+      "slab",
+      "holdout",
+      "resident"
+    ],
+    "ratio": 0.3460171064103519,
+    "ceiling": 0.5,
+    "passed": true,
+    "required": true
+  },
+  {
+    "name": "session-lazy-holdout",
+    "numerator": [
+      "slab-session-projected",
+      "holdout-sparse",
+      "resident"
+    ],
+    "denominator": [
+      "slab-session",
+      "holdout",
+      "resident"
+    ],
+    "ratio": 0.589007564294411,
+    "ceiling": 0.5,
+    "passed": false,
+    "required": false
+  }
+]

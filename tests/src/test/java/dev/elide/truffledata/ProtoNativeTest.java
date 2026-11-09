@@ -8,6 +8,7 @@ import dev.elide.truffledata.generated.TruffleDataContracts;
 import dev.elide.truffledata.protobuf.*;
 import java.nio.file.*;
 import java.util.*;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
 
 class ProtoNativeTest {
@@ -48,15 +49,30 @@ class ProtoNativeTest {
   @Test
   void unknownWireAccessIsDefensiveAcrossPresenceLayouts() throws Exception {
     for (int size : new int[] {1, 65}) {
-      var plan = ProtoCompiler.compile(null, presenceDescriptor(size, false), Limits.DEFAULT, 8, WIRE_LIMIT);
+      var plan =
+          ProtoCompiler.compile(
+              null, presenceDescriptor(size, false), Limits.DEFAULT, 8, WIRE_LIMIT);
       byte[] wire = {(byte) 0xa0, 6, (byte) 0x81, 0, 10, 1, 42};
       var row = plan.decode(wire);
       assertArrayEquals(wire, row.unknownFieldBytes());
+      assertTrue(row.hasUnknownFields());
+      assertEquals(wire.length, row.unknownFieldByteCount());
       byte[] exposed = row.unknownFieldBytes();
       exposed[0] = 0;
       wire[0] = 0;
       assertEquals((byte) 0xa0, row.unknownFieldBytes()[0]);
       assertArrayEquals(new byte[0], plan.newBuilder().build().unknownFieldBytes());
+      assertEquals(7, row.unknownFieldByteCount());
+      for (var known : List.of(plan.newBuilder().build(), plan.decode(new byte[] {8, 42}))) {
+        assertFalse(known.hasUnknownFields());
+        assertEquals(0, known.unknownFieldByteCount());
+      }
+      // Raw presence includes an empty unknown group even when semantic policies normalize it.
+      byte[] emptyGroup = {(byte) 0xa3, 6, (byte) 0xa4, 6};
+      var grouped = plan.decode(emptyGroup);
+      assertTrue(grouped.hasUnknownFields());
+      assertEquals(emptyGroup.length, grouped.unknownFieldByteCount());
+      assertArrayEquals(emptyGroup, grouped.unknownFieldBytes());
     }
   }
 
@@ -1073,6 +1089,8 @@ class ProtoNativeTest {
     assertEquals(42L, get(source.snapshot(DynamicMessage.newBuilder(d)), "count"));
     byte[] unknownEnum = new byte[] {24, 99, 34, 3, 1, 99, 2, (byte) 0xa0, 6, 7};
     var unknown = plan.decode(unknownEnum);
+    assertTrue(unknown.hasUnknownFields());
+    assertEquals(7, unknown.unknownFieldByteCount()); // Two rejected enum values and field100.
     assertFalse(has(unknown, "status"));
     assertEquals(2, ((DataArray) get(unknown, "statuses")).size());
     assertEquals(
@@ -1252,6 +1270,327 @@ class ProtoNativeTest {
   }
 
   @Test
+  void generatedSlabDecoderMatchesRuntimeProducer() {
+    var plan = plan("truffledata.lossless.Sample");
+    var decoder = new TruffleDataContracts.SlabDecoder_truffledata$lossless$Sample(plan);
+    for (byte[] wire :
+        List.of(
+            new byte[0],
+            new byte[] {8, 42},
+            new byte[] {
+              66, 2, 8, 1, 66, 2, 8, 2
+            }, // Singular-message merge restarts the table path.
+            new byte[] {90, 2, 8, 3, 80, 7, 90, 2, 8, 9}, // Oneof clears retain orphan handles.
+            new byte[] {74, 3, 0, 1, 2, 72, 3}, // Packed and unpacked values share one list.
+            new byte[] {(byte) 0x98, 6, 42, 10, 0}, // Unknown number and wrong wire type.
+            new byte[] {58, 7, 10, 1, 120, 18, 2, 8, 1, 58, 7, 10, 1, 120, 18, 2, 8, 2}))
+      assertArrayEquals(
+          dev.elide.truffledata.protobuf.SlabCodec.decode(plan.layout(), wire),
+          decoder.decode(wire));
+    for (byte[] malformed :
+        List.of(
+            new byte[] {0},
+            new byte[] {8, (byte) 128},
+            new byte[] {66, 2, 8},
+            new byte[] {122, 2, (byte) 0xc0, (byte) 0x80},
+            new byte[] {74, 1, (byte) 128})) {
+      assertThrows(ContractViolation.class, () -> SlabCodec.decode(plan.layout(), malformed));
+      assertThrows(ContractViolation.class, () -> decoder.decode(malformed));
+    }
+    var required = plan("truffledata.lossless.Required");
+    var requiredDecoder =
+        new TruffleDataContracts.SlabDecoder_truffledata$lossless$Required(required);
+    for (byte[] wire : List.of(new byte[0], new byte[] {18, 0}, new byte[] {8, 1, 18, 2, 8, 2}))
+      assertArrayEquals(SlabCodec.decode(required.layout(), wire), requiredDecoder.decode(wire));
+    assertThrows(
+        ContractViolation.class,
+        () ->
+            new TruffleDataContracts.SlabDecoder_truffledata$lossless$Sample(
+                plan("google.protobuf.Timestamp")));
+  }
+
+  private static DynamicMessage projectedTree(Descriptor descriptor, Random random, int depth) {
+    var message = DynamicMessage.newBuilder(descriptor);
+    message.setField(descriptor.findFieldByName("id"), random.nextInt());
+    message.setField(
+        descriptor.findFieldByName("text"), List.of("", "ascii", "λ", "😀").get(random.nextInt(4)));
+    message.setField(
+        descriptor.findFieldByName("blob"),
+        ByteString.copyFrom(new byte[] {(byte) random.nextInt(), -1, 0}));
+    for (int i = random.nextInt(8); i > 0; i--)
+      message.addRepeatedField(descriptor.findFieldByName("numbers"), random.nextInt());
+    for (int i = random.nextInt(4); i > 0; i--)
+      message.addRepeatedField(descriptor.findFieldByName("texts"), "text-λ-" + i);
+    if (depth > 0) {
+      if (random.nextBoolean())
+        message.setField(
+            descriptor.findFieldByName("child"), projectedTree(descriptor, random, depth - 1));
+      for (int i = random.nextInt(4); i > 0; i--)
+        message.addRepeatedField(
+            descriptor.findFieldByName("children"), projectedTree(descriptor, random, depth - 1));
+    }
+    return message.build();
+  }
+
+  private static byte @Nullable [] projectedParity(
+      ProtoPlan plan,
+      byte[] wire,
+      int offset,
+      int length,
+      SlabLimits limits,
+      Projection projection) {
+    byte[] expected;
+    try {
+      expected = SlabCodec.decode(plan.layout(), wire, offset, length, limits, projection);
+    } catch (ContractViolation invalid) {
+      assertThrows(
+          ContractViolation.class,
+          () -> plan.decodeSlabBytes(wire, offset, length, limits, projection));
+      return null;
+    }
+    byte[] actual = plan.decodeSlabBytes(wire, offset, length, limits, projection);
+    assertArrayEquals(expected, actual);
+    return actual;
+  }
+
+  @Test
+  void generatedProjectionsPreserveBytesWindowsValidationAndBudgets() throws Exception {
+    var contract = plan("truffledata.lossless.ProjectedTree");
+    var descriptor = descriptor(contract.name());
+    var sparse = Projection.builder(contract).select("id", "text").build().lazyChildren();
+    var projections =
+        List.of(
+            sparse,
+            sparse.lax(),
+            sparse.borrowBytes(1),
+            Projection.builder(contract).select("id", "text").build(),
+            Projection.builder(contract).build(),
+            Projection.builder(contract).select("child", "children").build(),
+            Projection.all(contract),
+            Projection.builder(contract).build().lazyChildren(),
+            Projection.builder(contract).select("child", "children").build().lazyChildren(),
+            Projection.all(contract).lazyChildren());
+    var random = new Random(0x51ab_71ee);
+    for (int round = 0; round < 256; round++) {
+      byte[] wire = projectedTree(descriptor, random, 2).toByteArray();
+      byte[] window = new byte[wire.length + 11];
+      System.arraycopy(wire, 0, window, 5, wire.length);
+      var limits = SlabLimits.forInput(contract.layout(), wire.length);
+      for (var projection : projections) {
+        byte[] expected =
+            Objects.requireNonNull(
+                projectedParity(contract, wire, 0, wire.length, limits, projection));
+        assertArrayEquals(
+            expected, projectedParity(contract, window, 5, wire.length, limits, projection));
+        var exact = new SlabLimits(32, expected.length);
+        assertArrayEquals(
+            expected, projectedParity(contract, window, 5, wire.length, exact, projection));
+        assertNull(
+            projectedParity(
+                contract,
+                wire,
+                0,
+                wire.length,
+                new SlabLimits(32, expected.length - 1),
+                projection));
+        projectedParity(contract, wire, 0, wire.length, new SlabLimits(0, 1 << 20), projection);
+        byte[] corrupt = wire.clone();
+        corrupt[random.nextInt(corrupt.length)] = (byte) random.nextInt(256);
+        projectedParity(contract, corrupt, 0, corrupt.length, limits, projection);
+        projectedParity(contract, wire, 0, random.nextInt(wire.length), limits, projection);
+        // The second occurrence of a singular child requires a merged eager record.
+        if (round % 16 == 0) {
+          byte[] duplicate = new byte[wire.length * 2];
+          System.arraycopy(wire, 0, duplicate, 0, wire.length);
+          System.arraycopy(wire, 0, duplicate, wire.length, wire.length);
+          projectedParity(
+              contract,
+              duplicate,
+              0,
+              duplicate.length,
+              SlabLimits.forInput(contract.layout(), duplicate.length),
+              projection);
+        }
+      }
+    }
+    // Required fields, groups, oneofs and maps retain the complete table semantics.
+    for (String name :
+        List.of(
+            "truffledata.lossless.Sample",
+            "truffledata.lossless.Required",
+            "truffledata.lossless.OptionalRequired",
+            "truffledata.lossless.Legacy")) {
+      var complex = plan(name);
+      for (var projection :
+          List.of(
+              Projection.builder(complex).build(),
+              Projection.builder(complex).build().lazyChildren()))
+        for (byte[] wire :
+            List.of(
+                new byte[0],
+                new byte[] {8, 1},
+                new byte[] {18, 0},
+                new byte[] {10, 0},
+                new byte[] {10, 2, 10, 0},
+                new byte[] {66, 2, 8, 1, 66, 2, 8, 2},
+                new byte[] {(byte) 0x98, 6, 42}))
+          projectedParity(
+              complex,
+              wire,
+              0,
+              wire.length,
+              SlabLimits.forInput(complex.layout(), wire.length),
+              projection);
+    }
+  }
+
+  @Test
+  void generatedSlabHintsPreserveConcurrentOwnershipAndExactBudgets() throws Exception {
+    var contract = plan("truffledata.lossless.Sample");
+    var decoder = new TruffleDataContracts.SlabDecoder_truffledata$lossless$Sample(contract);
+    var inputs = new ArrayList<byte[]>();
+    var expected = new ArrayList<byte[]>();
+    // Same wire length can require different slab extents (ASCII and non-ASCII headers),
+    // and unrelated lengths share the bounded cache. Neither case may change output or budgets.
+    for (String text : List.of("abcdefgh", "λλλλ", "x", "y".repeat(65), "z".repeat(120))) {
+      byte[] utf8 = text.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+      byte[] wire = new byte[utf8.length + 2];
+      wire[0] = 122;
+      wire[1] = (byte) utf8.length;
+      System.arraycopy(utf8, 0, wire, 2, utf8.length);
+      inputs.add(wire);
+      expected.add(SlabCodec.decode(contract.layout(), wire));
+    }
+    try (var pool = java.util.concurrent.Executors.newFixedThreadPool(4)) {
+      var jobs = new ArrayList<java.util.concurrent.Future<?>>();
+      for (int worker = 0; worker < 4; worker++) {
+        final int first = worker;
+        jobs.add(
+            pool.submit(
+                () -> {
+                  byte[] retained = decoder.decode(inputs.get(first));
+                  for (int round = 0; round < 256; round++) {
+                    int index = (round + first) % inputs.size();
+                    byte[] wire = inputs.get(index), wanted = expected.get(index);
+                    byte[] decoded =
+                        decoder.decode(wire, 0, wire.length, new SlabLimits(128, wanted.length));
+                    assertArrayEquals(wanted, decoded);
+                    assertNotSame(retained, decoded);
+                    assertThrows(
+                        ContractViolation.class,
+                        () ->
+                            decoder.decode(
+                                wire, 0, wire.length, new SlabLimits(128, wanted.length - 1)));
+                  }
+                  assertArrayEquals(expected.get(first), retained);
+                }));
+      }
+      for (var job : jobs) job.get();
+    }
+  }
+
+  @Test
+  void generatedSlabScalarAndListLoopsPreserveBitsAndBudgets() throws Exception {
+    var random = new Random(0x51ab_1234);
+    for (String name :
+        List.of("truffledata.lossless.Flat", "truffledata.lossless.RepeatedScalars")) {
+      var contract = plan(name);
+      var descriptor = descriptor(name);
+      var flat =
+          name.endsWith("Flat")
+              ? new TruffleDataContracts.SlabDecoder_truffledata$lossless$Flat(contract)
+              : null;
+      var repeated =
+          name.endsWith("RepeatedScalars")
+              ? new TruffleDataContracts.SlabDecoder_truffledata$lossless$RepeatedScalars(contract)
+              : null;
+      for (int round = 0; round < 1000; round++) {
+        var message = DynamicMessage.newBuilder(descriptor);
+        for (var field : descriptor.getFields()) {
+          int count = field.isRepeated() ? random.nextInt(5) : random.nextInt(2);
+          for (int i = 0; i < count; i++) {
+            Object value =
+                switch (field.getJavaType()) {
+                  case INT -> random.nextInt();
+                  case LONG -> random.nextLong();
+                  case FLOAT -> Float.intBitsToFloat(random.nextInt());
+                  case DOUBLE -> Double.longBitsToDouble(random.nextLong());
+                  case BOOLEAN -> random.nextBoolean();
+                  case STRING -> List.of("", "plain", "λ", "😀x").get(random.nextInt(4));
+                  case BYTE_STRING -> ByteString.copyFrom(new byte[] {(byte) round, (byte) i, -1});
+                  case ENUM ->
+                      field.getEnumType().findValueByNumberCreatingIfUnknown(random.nextInt(5));
+                  default -> throw new AssertionError();
+                };
+            if (field.isRepeated()) message.addRepeatedField(field, value);
+            else message.setField(field, value);
+          }
+        }
+        byte[] wire = message.build().toByteArray();
+        byte[] expected = SlabCodec.decode(contract.layout(), wire);
+        byte[] actual =
+            flat != null ? flat.decode(wire) : Objects.requireNonNull(repeated).decode(wire);
+        assertArrayEquals(expected, actual, name + "/" + round);
+        if (round % 50 == 0) {
+          byte[] window = new byte[wire.length + 9];
+          System.arraycopy(wire, 0, window, 4, wire.length);
+          var exact = new SlabLimits(128, expected.length);
+          assertArrayEquals(
+              expected,
+              flat != null
+                  ? flat.decode(window, 4, wire.length, exact)
+                  : Objects.requireNonNull(repeated).decode(window, 4, wire.length, exact));
+          var small = new SlabLimits(128, expected.length - 1);
+          assertThrows(
+              ContractViolation.class,
+              () -> {
+                if (flat != null) flat.decode(window, 4, wire.length, small);
+                else Objects.requireNonNull(repeated).decode(window, 4, wire.length, small);
+              });
+        }
+      }
+    }
+    var shallow = boundedPlan("truffledata.lossless.Sample", Limits.DEFAULT, 1, WIRE_LIMIT);
+    var decoder = new TruffleDataContracts.SlabDecoder_truffledata$lossless$Sample(shallow);
+    assertThrows(
+        ContractViolation.class,
+        () -> decoder.decode(new byte[] {66, 0}, 0, 2, new SlabLimits(128, 4096)));
+  }
+
+  @Test
+  void modelBindsSlabProducerOnceAndDurableDecodeUsesIt() throws Exception {
+    var bound = new java.util.concurrent.atomic.AtomicInteger();
+    var decoded = new java.util.concurrent.atomic.AtomicInteger();
+    var definition =
+        new ProtoPlan.Type("Factory", false, List.of(plan("truffledata.lossless.Sample").field(0)));
+    var model =
+        new ProtoPlan.Model(
+            null,
+            List.of(definition),
+            Limits.DEFAULT,
+            8,
+            WIRE_LIMIT,
+            contract -> {
+              bound.incrementAndGet();
+              return (input, offset, length, limits) -> {
+                decoded.incrementAndGet();
+                return SlabCodec.decode(contract.layout(), input, offset, length, limits);
+              };
+            });
+    var contract = model.type("Factory");
+    try (var pool = java.util.concurrent.Executors.newFixedThreadPool(4)) {
+      var futures = new ArrayList<java.util.concurrent.Future<Long>>();
+      for (int i = 0; i < 32; i++)
+        futures.add(
+            pool.submit(
+                () -> (long) DATA.read(SlabMessage.decode(contract, new byte[] {8, 7}), 0)));
+      for (var future : futures) assertEquals(7L, future.get());
+    }
+    assertEquals(1, bound.get());
+    assertEquals(32, decoded.get());
+  }
+
+  @Test
   void runtimeDescriptorSetsGeneratorAndSourceIdentity() throws Exception {
     Path path =
         Path.of(
@@ -1368,6 +1707,9 @@ class ProtoNativeTest {
     byte[] closedMap = {74, 5, 10, 1, 120, 16, 99};
     var reference = DynamicMessage.parseFrom(d, closedMap);
     var row = legacy.decode(closedMap);
+    assertTrue(row.hasUnknownFields());
+    assertEquals(closedMap.length, row.unknownFieldByteCount());
+    assertArrayEquals(closedMap, row.unknownFieldBytes());
     // The wire contract preserves the whole entry as unknown. DynamicMessage instead retains
     // a default-valued entry, so Source deliberately normalizes this case through the wire codec.
     assertEquals(0, ((DataArray) get(row, "states")).size());

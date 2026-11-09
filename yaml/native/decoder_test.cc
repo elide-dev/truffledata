@@ -15,8 +15,11 @@
 #include <vector>
 
 using namespace truffledata::yaml;
+using yaml_session = truffledata::yaml::session;
 using truffledata::yaml::testing::node_text;
 using truffledata::yaml::testing::render;
+using truffledata::yaml::testing::ordinal;
+using truffledata::yaml::testing::node_count;
 
 namespace {
 std::string slurp(const std::string& path) {
@@ -37,7 +40,7 @@ session_options with(policy rules = {}, myna::value_limits values = {}) {
   return o;
 }
 
-session::document_view decode(session& s, const std::string& text, uint32_t flags = 0) {
+yaml_session::document_view decode(yaml_session& s, const std::string& text, uint32_t flags = 0) {
   try {
     return s.decode(reinterpret_cast<const uint8_t*>(text.data()), text.size(), flags);
   } catch (const error&) {
@@ -46,8 +49,8 @@ session::document_view decode(session& s, const std::string& text, uint32_t flag
     throw std::runtime_error(std::string(e.what()) + " decoding: " + text.substr(0, 200));
   }
 }
-std::string tape(session& s, const std::string& text) { return render(decode(s, text).view); }
-error failure(session& s, const std::string& text) {
+std::string tape(yaml_session& s, const std::string& text) { return render(decode(s, text).view); }
+error failure(yaml_session& s, const std::string& text) {
   try {
     decode(s, text);
   } catch (const error& e) {
@@ -57,7 +60,7 @@ error failure(session& s, const std::string& text) {
 }
 
 void tape_matches_reference_builder(const std::vector<std::string>& fixtures) {
-  session s(with());
+  yaml_session s(with());
   size_t compared = 0;
   for (const auto& path : fixtures) {
     std::string name = basename(path);
@@ -78,14 +81,14 @@ void tape_matches_reference_builder(const std::vector<std::string>& fixtures) {
     }
     require(ours == theirs);
     std::printf("tape_matches_reference_builder: %-20s %8zu bytes  %7llu nodes  equal\n", name.c_str(), text.size(),
-                (unsigned long long)decode(s, text).view.node_count);
+                (unsigned long long)node_count(decode(s, text).view));
     ++compared;
   }
   require(compared == 4);
 }
 
 void values() {
-  session s(with());
+  yaml_session s(with());
   require(tape(s, "") == "null");
   require(tape(s, "# only a comment\n") == "null");
   require(tape(s, "---\n") == "null");
@@ -110,9 +113,9 @@ void values() {
   auto d = decode(s, "{~: a, true: b, 0x1F: c, 1.50: d, s: e, \"1\": f}");
   require(render(d.view) == "{\"\":\"a\",\"true\":\"b\",\"31\":\"c\",\"1.5\":\"d\",\"s\":\"e\",\"1\":\"f\"}");
   uint32_t kinds[] = {1, 2, 3, 4, 0, 0};
-  for (int i = 0; i < 6; ++i) require(((d.meta[1 + 2 * i] >> meta_key_kind_shift) & 7) == kinds[i]);
-  require((d.meta[11] & meta_style_mask) == uint32_t(scalar_style::double_quoted));
-  require((d.meta[0] & meta_style_mask) == style_flow);
+  for (int i = 0; i < 6; ++i) require(((d.meta[ordinal(d.view, 1 + 2 * i)] >> meta_key_kind_shift) & 7) == kinds[i]);
+  require((d.meta[ordinal(d.view, 11)] & meta_style_mask) == uint32_t(scalar_style::double_quoted));
+  require((d.meta[ordinal(d.view, 0)] & meta_style_mask) == style_flow);
   // %YAML 1.1 is recorded; 2.0 is rejected.
   require(decode(s, "%YAML 1.1\n--- yes\n").version == ((1u << 16) | 1));
   require(tape(s, "%YAML 1.1\n--- yes\n") == "\"yes\"");
@@ -122,18 +125,18 @@ void values() {
   require(e.code == status_syntax && e.line > 0);
   // An alias is a NULL node with the alias bit (semantics_test covers the side tables).
   auto aliased = decode(s, "a: &x 1\nb: *x\n");
-  require(render(aliased.view) == "{\"a\":1,\"b\":null}" && (aliased.meta[4] & meta_alias) && aliased.alias_targets[0] == 2);
+  require(render(aliased.view) == "{\"a\":1,\"b\":null}" && (aliased.meta[ordinal(d.view, 4)] & meta_alias) && aliased.alias_targets[0] == ordinal(aliased.view, 2));
   // The JSON and failsafe schemas.
-  session json(with(policy{schema::json}));
+  yaml_session json(with(policy{schema::json}));
   require(tape(json, "{\"a\": [1, -0, 1.5, true, null, \"x\"]}") == "{\"a\":[1,f-0,f1.5,true,null,\"x\"]}");
   require(failure(json, "a: 1").code == status_syntax);
   require(failure(json, "[.5]").code == status_syntax);
-  session failsafe(with(policy{schema::failsafe}));
+  yaml_session failsafe(with(policy{schema::failsafe}));
   require(tape(failsafe, "a: [1, ~, true, ]") == "{\"a\":[\"1\",\"~\",\"true\"]}");
 }
 
 void duplicate_keys_after_resolution() {
-  session s(with());
+  yaml_session s(with());
   for (const char* doc : {"{1: a, 0x1: b}", "{1: a, \"1\": b}", "{null: a, ~: b}", "{a: 1, \"a\": 2}", "{0o17: a, 15: b}",
                           "{1.5: a, 1.50: b}", "a: 1\nb: 2\na: 3\n", "{\"\": a, ~: b}"}) {
     error e = failure(s, doc);
@@ -142,30 +145,27 @@ void duplicate_keys_after_resolution() {
   // Many keys move the table from the inline array to open addressing.
   std::string wide = "{";
   for (int i = 0; i < 100; ++i) wide += "k" + std::to_string(i) + ": " + std::to_string(i) + ", ";
-  require(decode(s, wide + "}").view.nodes[0].length == 100);
+  require(ct::field(decode(s, wide + "}").view.words[0]) == 100);
   require(failure(s, wide + "k42: x}").code == status_syntax);
   // Nested mappings have their own key sets.
   require(tape(s, "{a: {a: 1}, b: {a: 2}}") == "{\"a\":{\"a\":1},\"b\":{\"a\":2}}");
 
   policy last;
   last.last_wins = true;
-  session lw(with(last));
+  yaml_session lw(with(last));
   auto d = decode(lw, "{a: 1, a: 2}");
-  require(render(d.view) == "{\"a\":2}" && d.view.nodes[0].length == 1 && d.view.node_count == 3);
+  require(render(d.view) == "{\"a\":2}" && ct::field(d.view.words[0]) == 1 && node_count(d.view) == 3);
   d = decode(lw, "a: [1, {x: y}]\nb: long string value beyond inline\na: 3\nc: {a: 4}\nb: 5\n");
   require(render(d.view) == "{\"a\":3,\"c\":{\"a\":4},\"b\":5}");
-  // Side tables follow the compaction: key offsets from the object are exact again.
-  for (uint64_t i = 1; i < d.view.node_count;) {
-    require((d.hashes[i] & truffledata::tape::key_offset_mask) == i);
-    i = myna_value_next(&d.view.nodes[i + 1], i + 1);
-  }
-  require(d.lexical.size() == d.view.node_count && d.meta.size() == d.view.node_count);
+  // Directory offsets and metadata follow variable-width compaction.
+  require(ct::validate(d.view) == nullptr);
+  require(d.meta.size() == d.view.word_count);
   require(render(decode(lw, "{1: a, 0x1: b, \"1\": c}").view) == "{\"1\":\"c\"}");
   require(render(decode(lw, "[{k: 1, k: 2}, {k: 3}]").view) == "[{\"k\":2},{\"k\":3}]");
 }
 
 void complex_key_rejected() {
-  session s(with());
+  yaml_session s(with());
   for (const char* doc : {"? [a, b]\n: c\n", "{[a]: x}", "{{a: 1}: x}", "[a]: b\n", "{a: 1}: x\n", "? {a: 1}\n: x\n",
                           "[[a]: b]", "[{a: 1}: b]"}) {
     error e = failure(s, doc);
@@ -177,52 +177,70 @@ void complex_key_rejected() {
 }
 
 void depth_limit() {
-  session s(with());
+  yaml_session s(with());
   for (int depth : {128, 129}) {
     std::string flow = std::string(size_t(depth), '[') + std::string(size_t(depth), ']');
     std::string block;
     for (int i = 0; i < depth; ++i) block += std::string(size_t(i) * 2, ' ') + "k:\n";
     block += std::string(size_t(depth) * 2, ' ') + "v\n";
     if (depth == 128) {
-      require(decode(s, flow).view.node_count == 128);
-      require(decode(s, block).view.node_count == 2 * 128 + 1);
+      require(node_count(decode(s, flow).view) == 128);
+      require(node_count(decode(s, block).view) == 2 * 128 + 1);
     } else {
       require(failure(s, flow).code == status_limit);
       require(failure(s, block).code == status_limit);
     }
   }
-  session shallow(with({}, myna::value_limits{UINT32_MAX, UINT32_MAX, 2}));
+  yaml_session shallow(with({}, myna::value_limits{UINT32_MAX, UINT32_MAX, 2}));
   require(tape(shallow, "[[1]]") == "[[1]]");
   require(failure(shallow, "[[[1]]]").code == status_limit);
 }
 
-void inline_and_region_strings() {
-  session s(with());
+void input_and_owned_strings() {
+  yaml_session s(with());
   const std::string doc = "- 0123456789abcdef\n- 0123456789abcdefg\n- \"\\u00e9t\\u00e9 quoted, longer\"\n- |\n  literal block text\n"
                           "- \"\\L grows\"\n";
   auto d = decode(s, doc);
-  const auto* n = d.view.nodes;
+  const auto* n = d.view.words;
   require(render(d.view) == "[\"0123456789abcdef\",\"0123456789abcdefg\",\"\xC3\xA9t\xC3\xA9 quoted, longer\",\"literal block text\\n\",\"\xE2\x80\xA8 grows\"]");
-  require(n[1].tag == MYNA_VALUE_STRING && n[1].length == 16);                          // inline
-  require(n[2].tag == (MYNA_VALUE_STRING | MYNA_VALUE_REGION_TEXT) && (n[2].payload >> 32) == 1);  // input region
-  require(n[3].tag == (MYNA_VALUE_STRING | MYNA_VALUE_REGION_TEXT) && (n[3].payload >> 32) == 1);  // filtered in place
-  require(n[4].tag == (MYNA_VALUE_STRING | MYNA_VALUE_REGION_TEXT) && (n[4].payload >> 32) == 1);
-  // `\L` (U+2028, 3 bytes for 2) grows the scalar: rapidyaml filters it into its arena and the
-  // decoder copies it into the tape's owned text (region 0).
-  require(n[5].tag == MYNA_VALUE_STRING || ((n[5].payload >> 32) == 0));
-  require(node_text(d.view, 5) == "\xE2\x80\xA8 grows");
-  // ASCII bits on strings.
-  require((d.hashes[1] & truffledata::tape::ascii_flag) && !(d.hashes[3] & truffledata::tape::ascii_flag));
+  require(ct::kind(n[ordinal(d.view, 1)]) == ct::kind_string && ct::field(n[ordinal(d.view, 1)]) == 16);
+  require(!(n[ordinal(d.view, 1)] & ct::owned_flag));
+  require(!(n[ordinal(d.view, 2)] & ct::owned_flag));
+  // Shrinking quoted/block text stays in filtered input; text that grows into rapidyaml's
+  // separate arena still needs owned pool storage. Both carry an independent raw-span word.
+  for (size_t i : {size_t(3), size_t(4)}) {
+    size_t at = ordinal(d.view, i);
+    require((n[at] & ct::wide_flag) && !(n[at] & ct::owned_flag));
+    require(lexical_span(d.view, at) == 0);
+  }
+  require((n[ordinal(d.view, 5)] & (ct::wide_flag | ct::owned_flag)) == (ct::wide_flag | ct::owned_flag));
+  require(lexical_span(d.view, ordinal(d.view, 5)) == 0);
+  require(node_text(d.view, ordinal(d.view, 5)) == "\xE2\x80\xA8 grows");
+  require((n[ordinal(d.view, 1)] & ct::ascii_flag) && !(n[ordinal(d.view, 3)] & ct::ascii_flag));
+  const std::string expected = render(d.view);
+  truffledata::tape::index_memory allocations(SIZE_MAX, std::pmr::new_delete_resource());
+  truffledata::tape::block_arena copies(&allocations);
+  require(ct::validate(d.view) == nullptr);
+  require(render(ct::to_myna(d.view, &copies).base) == expected);
+  auto pristine = decode(s, doc, yaml_session::retain_source);
+  require(render(pristine.view) == expected && ct::validate(pristine.view) == nullptr);
+  require(render(ct::to_myna(pristine.view, &copies).base) == expected);
+  for (size_t i : {size_t(3), size_t(4), size_t(5)})
+    require(pristine.view.words[ordinal(pristine.view, i)] & ct::owned_flag);
+  uint64_t quoted = lexical_span(pristine.view, ordinal(pristine.view, 3));
+  uint64_t block = lexical_span(pristine.view, ordinal(pristine.view, 4));
+  require(std::string(pristine.source + (quoted >> 32), uint32_t(quoted)) == "\"\\u00e9t\\u00e9 quoted, longer\"");
+  require(std::string(pristine.source + (block >> 32), uint32_t(block)) == "|\n  literal block text");
 }
 
-std::string span(const session::document_view& d, size_t node) {
-  uint64_t s = d.lexical[node];
+std::string span(const yaml_session::document_view& d, size_t node) {
+  uint64_t s = lexical_span(d.view, ordinal(d.view, node));
   if (!s) return "";
   return std::string(d.source + (s >> 32), uint32_t(s));
 }
 
 void lexical_spans_plain_always_quoted_with_retain_source() {
-  session s(with());
+  yaml_session s(with());
   const std::string doc = "plain: 0x1F\n'single': 'it''s'\n\"double\": \"a\\tb\"\nmulti: one\n  two\nblock: |\n  text\n"
                           "flow: [1, two , +3]\nempty:\n";
   auto d = decode(s, doc);
@@ -235,11 +253,11 @@ void lexical_spans_plain_always_quoted_with_retain_source() {
   require(span(d, 7) == "multi" && span(d, 8) == "");  // multi-line plain
   require(span(d, 9) == "block" && span(d, 10) == "");
   require(span(d, 11) == "flow" && span(d, 13) == "1" && span(d, 14) == "two" && span(d, 15) == "+3");
-  require(span(d, 16) == "empty" && d.lexical[17] == 0);
-  require(d.lexical[0] == 0 && d.lexical[12] == 0);  // collections carry no span
+  require(span(d, 16) == "empty" && lexical_span(d.view, ordinal(d.view, 17)) == 0);
+  require(lexical_span(d.view, ordinal(d.view, 0)) == 0 && lexical_span(d.view, ordinal(d.view, 12)) == 0);  // collections carry no span
   require(!(d.flags & doc_source_retained) && d.source != nullptr);
 
-  auto r = decode(s, doc, session::retain_source);
+  auto r = decode(s, doc, yaml_session::retain_source);
   require(r.flags & doc_source_retained);
   require(span(r, 2) == "0x1F");
   require(span(r, 3) == "'single'" && span(r, 4) == "'it''s'");
@@ -249,12 +267,12 @@ void lexical_spans_plain_always_quoted_with_retain_source() {
   // Comments after scalars do not widen spans.
   auto c = decode(s, "- x # note\n- y\n# trailing\n- z\n");
   require(span(c, 1) == "x" && span(c, 2) == "y" && span(c, 3) == "z");
-  auto f = decode(s, "- a\n- folded: >\n    one\n    two\n", session::retain_source);
+  auto f = decode(s, "- a\n- folded: >\n    one\n    two\n", yaml_session::retain_source);
   require(span(f, 4) == ">\n    one\n    two");
 }
 
 void multiple_documents_rejected_by_decode(const std::vector<std::string>& fixtures) {
-  session s(with());
+  yaml_session s(with());
   for (const char* doc : {"a\n---\nb\n", "--- a\n--- b\n", "a\n...\n---\nb\n", "---\n---\n"}) {
     error e = failure(s, doc);
     require(e.code == status_multiple_documents);
@@ -273,7 +291,7 @@ int main(int argc, char** argv) {
     duplicate_keys_after_resolution();
     complex_key_rejected();
     depth_limit();
-    inline_and_region_strings();
+    input_and_owned_strings();
     lexical_spans_plain_always_quoted_with_retain_source();
     multiple_documents_rejected_by_decode(fixtures);
   } catch (const std::exception& e) {

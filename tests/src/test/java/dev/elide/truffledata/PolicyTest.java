@@ -21,7 +21,7 @@ class PolicyTest {
             Objects.requireNonNull(System.getenv("TEST_WORKSPACE")));
     Map<String, Integer> budgets =
         Map.ofEntries(
-            Map.entry("Values.java", 6),
+            Map.entry("Values.java", 7),
             Map.entry("DataLibrary.java", 1),
             Map.entry("PayloadBudget.java", 1), // Strict-only immutable-backing diagnostics.
             // Name lookup, plus the two accessor-table lookups (Task B2), taken on specialization
@@ -40,11 +40,18 @@ class PolicyTest {
             Map.entry("JdbcCursor.java", 7),
             Map.entry("JdbcSource.java", 6),
             Map.entry("ProtobufAdapter.java", 5),
-            // Generated contract binding and the lazily compiled slab layout, outside reads.
-            Map.entry("ProtoPlan.java", 12),
-            Map.entry("Layout.java", 3), // Slab layout compilation (×2) and TDL1 parsing.
+            // Generated binding/decoding, lazy layout and the cold durable-array size fallback.
+            Map.entry("ProtoPlan.java", 18),
+            Map.entry(
+                "SlabMessage.java", 16), // Decode/copy, projected lazy reads, usage and encoding.
+            Map.entry("Projection.java", 1), // Invalid field-index diagnostic.
+            Map.entry("SlabCodec.java", 1), // Invalid UTF-8 diagnostic construction.
+            Map.entry("GeneratedSlabWriter.java", 1), // Invalid input-window diagnostic.
+            Map.entry(
+                "Layout.java",
+                4), // Compilation (×2), TDL1 parsing and layout-local accessor cache.
             Map.entry("ProtoRow.java", 3),
-            Map.entry("ProtoCompiler.java", 8),
+            Map.entry("ProtoCompiler.java", 9),
             Map.entry("ProtoDescriptors.java", 1),
             Map.entry("ProtoWire.java", 1),
             Map.entry("GeneratedMessage.java", 1),
@@ -63,20 +70,21 @@ class PolicyTest {
             // TypedAccess).
             Map.entry(
                 "JavaSink.java",
-                9), // Embedder tree building and key interning, outside the tape walk.
+                10), // Embedder tree building and key interning, outside the tape walk.
             Map.entry("TypedAccess.java", 2),
             Map.entry("TypedArray.java", 1),
             // Close, pinning, array index, export cursors, the native-directory diagnostic (the
             // Java
             // member directories went with Myna ABI v4, JSON performance ledger V1: 10 -> 9).
-            Map.entry("TapeOwner.java", 9),
+            Map.entry("TapeOwner.java", 11),
             Map.entry("TypedRecord.java", 4),
             Map.entry("TypedOwner.java", 3),
             // Static (owner, node) slow paths per interop message and hint misses; the scan
             // boundary
             // folded into TapeOwner.find behind the miss boundary (V1: 26 -> 25).
-            Map.entry("TapeValue.java", 25),
+            Map.entry("TapeValue.java", 26),
             Map.entry("TapeBorrow.java", 1), // Borrowed-result assumption.
+            Map.entry("TapeExportNode.java", 1), // Cold fallback for heterogeneous export owners.
             // Key preparation from a String or from Myna's prepared Utf8Key (V1: 1 -> 2).
             Map.entry("TapeKey.java", 2),
             Map.entry(
@@ -85,7 +93,7 @@ class PolicyTest {
             Map.entry(
                 "TapeTextArena.java", 1), // TruffleString over a session text arena (sink side).
             Map.entry(
-                "TruffleSink.java", 9), // Reference guest sink: tree building and key interning.
+                "TruffleSink.java", 10), // Reference guest sink: tree building and key interning.
             // The session and stream entry points JsonSession (13) and JsonStream (10) held: the
             // shared bookkeeping moved here, the JSON-only ones stayed below.
             Map.entry(
@@ -105,6 +113,16 @@ class PolicyTest {
             Map.entry("SvmTypedOwner.java", 1),
             Map.entry("JsonSession.java", 3), // open ×2 and stream; the rest is TapeSession's.
             Map.entry("JsonStream.java", 2), // skip and truncatedBytes; the rest is TapeStream's.
+            // YAML: native entry points, detached metadata, explicit materialization and the
+            // bounded alias export. Alias provenance stays behind existing read boundaries.
+            Map.entry("AliasExport.java", 1),
+            Map.entry("TapeReader.java", 1), // Explicit compatibility copy to Myna.
+            Map.entry("YamlSession.java", 5), // open ×2, stream, complete documents, compile.
+            Map.entry("YamlPlan.java", 4), // compile ×2, decode, close.
+            Map.entry("YamlJvm.java", 2), // Library open ×2.
+            Map.entry("YamlSvm.java", 3), // Native entry points.
+            Map.entry("YamlMessage.java", 4), // Directives, metadata, assumption and close.
+            Map.entry("Yaml.java", 2), // Binary and timestamp materialization.
             // CSV: diagnostics, materialization and the export walk stay out of compiled reads.
             Map.entry("CsvScanner.java", 2), // Static syntax and limit failures.
             Map.entry("CsvBatch.java", 2), // Static STRING materialization and the export walk.
@@ -113,6 +131,16 @@ class PolicyTest {
             Map.entry("Numbers.java", 1), // Static Double.parseDouble fallback.
             Map.entry("CsvMapping.java", 1)); // Static closed-mapping failure.
     Pattern limit = Pattern.compile("limit\\s*=\\s*\"(\\d+)\"");
+    // Bound accessor hooks skip the layout check, so only a guard-dominated accessed
+    // specialization may call one (protobuf B4): one call in each of the four read nodes.
+    Pattern boundCall = Pattern.compile("\\.(readLong|readDouble|readBoolean|length)Bound\\(");
+    Set<String> boundCallers =
+        Set.of(
+            "ReadLongNode.java",
+            "ReadDoubleNode.java",
+            "ReadBooleanNode.java",
+            "ReadLengthNode.java");
+    int boundCalls = 0;
     Map<String, Integer> exportedMessages =
         new HashMap<>(
             Map.of(
@@ -137,6 +165,9 @@ class PolicyTest {
                 "JdbcCursor.java",
                 9));
     exportedMessages.put("GeneratedMessage.java", 5);
+    exportedMessages.put("SlabRow.java", 5);
+    exportedMessages.put("SlabArray.java", 4);
+    exportedMessages.put("SlabBytes.java", 4);
     exportedMessages.put("TapeValue.java", 29);
     exportedMessages.put("TypedArray.java", 4);
     exportedMessages.put("TypedRecord.java", 6);
@@ -156,6 +187,7 @@ class PolicyTest {
           "protobuf-runtime",
           "json",
           "tape",
+          "yaml",
           "csv"
         }) {
       try (var paths = Files.walk(root.resolve(module + "/src/main/java"))) {
@@ -183,6 +215,13 @@ class PolicyTest {
               budgets.getOrDefault(path.getFileName().toString(), 0).intValue(),
               boundaries,
               "Review the boundary budget for " + path);
+          var hooks = boundCall.matcher(source);
+          while (hooks.find()) {
+            assertTrue(
+                boundCallers.contains(path.getFileName().toString()),
+                "Bound accessor hooks are for the read nodes' accessed specializations: " + path);
+            boundCalls++;
+          }
           var matches = limit.matcher(source);
           while (matches.find())
             assertTrue(Integer.parseInt(matches.group(1)) <= 3, "PIC budget: " + path);
@@ -192,6 +231,7 @@ class PolicyTest {
     }
     assertEquals(accessSurfaces, seenSurfaces, "Exported surface inventory changed");
     assertTrue(checked >= 18, "Missing policy inputs");
+    assertEquals(4, boundCalls, "One bound hook call per read node");
     String policy = Files.readString(root.resolve("bazel/java.bzl"));
     assertTrue(policy.contains("-Xep:NullAway:ERROR"));
     assertTrue(policy.contains("-XepOpt:NullAway:JSpecifyMode=true"));

@@ -6,7 +6,7 @@ import sys
 
 ACCESS_CLASSES = {
     'AbstractRow', 'DataArray', 'DataLibrary', 'DynamicRecord', 'ExactNumber',
-    'Missing', 'PayloadBudget', 'ReadBooleanNode', 'ReadDoubleNode', 'ReadLengthNode', 'ReadLongNode',
+    'Missing', 'OwnedArray', 'PayloadBudget', 'ReadBooleanNode', 'ReadDoubleNode', 'ReadLengthNode', 'ReadLongNode',
     # Layout-bound accessors (protobuf performance plan Task B2): AccessorTest and
     # TypedAcceptance.accessors run every method against the uncached DataLibrary.
     'Accessor', 'LibraryAccessor',
@@ -15,6 +15,10 @@ ACCESS_CLASSES = {
 
 ACCESS_SOURCES = {f'core/src/main/java/dev/elide/truffledata/{name}.java' for name in ACCESS_CLASSES} | {
     'protobuf-runtime/src/main/java/dev/elide/truffledata/protobuf/ProtoRow.java',
+    'protobuf-runtime/src/main/java/dev/elide/truffledata/protobuf/SlabRow.java',
+    'protobuf-runtime/src/main/java/dev/elide/truffledata/protobuf/SlabMessage.java',
+    'protobuf-runtime/src/main/java/dev/elide/truffledata/protobuf/SlabArray.java',
+    'protobuf-runtime/src/main/java/dev/elide/truffledata/protobuf/SlabBytes.java',
     'protobuf-runtime/src/main/java/dev/elide/truffledata/protobuf/ProtoAccess.java',
     'protobuf-runtime/src/main/java/dev/elide/truffledata/protobuf/ProtoCodec.java',
     'protobuf-runtime/src/main/java/dev/elide/truffledata/protobuf/GeneratedMessage.java',
@@ -22,13 +26,17 @@ ACCESS_SOURCES = {f'core/src/main/java/dev/elide/truffledata/{name}.java' for na
     'protobuf-runtime/src/main/java/dev/elide/truffledata/protobuf/GeneratedGraphInput.java',
     'protobuf-runtime/src/main/java/dev/elide/truffledata/protobuf/GeneratedOutput.java',
     'protobuf-buffa/src/main/java/dev/elide/truffledata/buffa/BorrowedBytes.java',
+    'protobuf-buffa/src/main/java/dev/elide/truffledata/buffa/BorrowedSlabRow.java',
+    'protobuf-buffa/src/main/java/dev/elide/truffledata/buffa/BorrowedSlabMessage.java',
+    'protobuf-buffa/src/main/java/dev/elide/truffledata/buffa/BorrowedSlabArray.java',
+    'protobuf-buffa/src/main/java/dev/elide/truffledata/buffa/BorrowedMaterializedArray.java',
+    'protobuf-buffa/src/main/java/dev/elide/truffledata/buffa/BorrowedMaterializedRow.java',
+    'protobuf-buffa/src/main/java/dev/elide/truffledata/buffa/SlabSession.java',
     'protobuf-buffa/src/main/java/dev/elide/truffledata/buffa/WireField.java',
     'protobuf-buffa/src/main/java/dev/elide/truffledata/buffa/WireInput.java',
     'protobuf-buffa/src/main/java/dev/elide/truffledata/buffa/WireMessage.java',
     'protobuf-buffa/src/main/java/dev/elide/truffledata/buffa/ViewOwner.java',
     'protobuf-buffa/src/main/java/dev/elide/truffledata/buffa/TypedRow.java',
-    'protobuf-buffa/src/main/java/dev/elide/truffledata/buffa/NativeRow.java',
-    'protobuf-buffa/src/main/java/dev/elide/truffledata/buffa/ScalarRow.java',
     'protobuf-buffa/src/main/java/dev/elide/truffledata/buffa/TypedArray.java',
     'protobuf-buffa/src/main/java/dev/elide/truffledata/buffa/TypedMessage.java',
 } | {
@@ -38,7 +46,7 @@ ACCESS_SOURCES = {f'core/src/main/java/dev/elide/truffledata/{name}.java' for na
         'JsonDecoder', 'JsonJvm', 'JsonLimits', 'JsonMessage', 'JsonPlan',
         'JsonSession', 'JsonStream', 'JsonStreamOptions', 'JsonSvm',
         # JvmSessionBackend was missing before Task 4 (test_coverage_contract failed on it).
-        'JvmSessionBackend', 'JvmTypedOwner', 'SvmTypedOwner',
+        'JvmSessionBackend', 'JvmTypedOwner', 'SvmTypedOwner', 'SvmJsonMessage',
     )
 } | {
     # Every hand-written shared tape source (//tape and //tape:jvm), run on this lane through the JSON
@@ -49,10 +57,19 @@ ACCESS_SOURCES = {f'core/src/main/java/dev/elide/truffledata/{name}.java' for na
     # JsonMessage.Lexical → TapeLexical; JavaSink, TruffleSink and the tapes keep their names;
     # TapeSession, TapeStream and TapeFormat hold what JsonSession and JsonStream shared.
     f'tape/src/main/java/dev/elide/truffledata/tape/{name}.java' for name in (
-        'HeapValueTape', 'JavaSink', 'OwnerStateException', 'SegmentValueTape', 'SvmValueTape', 'TapeBorrow', 'TapeExportNode',
+        'HeapTape', 'TapeReader', 'SvmTape', 'SegmentTape', 'AliasExport', 'HeapValueTape', 'JavaSink', 'OwnerStateException', 'TapeBorrow', 'TapeExportNode',
         'TapeFormat', 'TapeKey', 'TapeLexical', 'TapeOwner', 'TapeSession', 'TapeSink', 'TapeSnapshot',
-        'TapeSource', 'TapeStream', 'TapeText', 'TapeTextArena', 'TapeValue', 'TruffleSink',
+        'TapeStream', 'TapeText', 'TapeTextArena', 'TapeValue', 'TruffleSink',
         'TypedAccess', 'TypedArray', 'TypedLayout', 'TypedOwner', 'TypedRecord',
+    )
+} | {
+    # Native YAML's JVM integration covers the common API; SVM intrinsics are tested in its image.
+    f'yaml/src/main/java/dev/elide/truffledata/yaml/{name}.java' for name in (
+        'Aliases', 'DuplicateKeys', 'KeyKind', 'Style', 'UnknownTags', 'VersionDirective',
+        'Yaml', 'YamlSchema', 'YamlOptions', 'YamlLimits', 'YamlDirectives', 'YamlMetadata',
+        'ResultMetadata', 'YamlSession', 'YamlMessage', 'YamlStream', 'YamlStreamOptions',
+        'YamlJvm', 'YamlSvm', 'JvmSessionBackend', 'SvmSessionBackend', 'YamlPlan',
+        'JvmTypedOwner', 'SvmTypedOwner', 'JvmPlanBackend', 'SvmYamlMessage',
     )
 } | {
     # Every CSV source: the scanner, ingest and typed conversions run on every read path, and the
@@ -71,7 +88,6 @@ ACCESS_SOURCES = {f'core/src/main/java/dev/elide/truffledata/{name}.java' for na
 DECLARATION_ONLY_SOURCES = {
     'tape/src/main/java/dev/elide/truffledata/tape/TapeLexical.java',
     'tape/src/main/java/dev/elide/truffledata/tape/TapeSink.java',
-    'tape/src/main/java/dev/elide/truffledata/tape/TapeSource.java',
     'csv/src/main/java/dev/elide/truffledata/csv/CsvSink.java',
 }
 
@@ -91,22 +107,102 @@ def _tape_methods(source, *signatures):
     return {TAPE + source + '.java': {TAPE_CLASS + signature for signature in signatures}}
 
 
+def _yaml_methods(source, *signatures):
+    return {'yaml/src/main/java/dev/elide/truffledata/yaml/' + source + '.java':
+            {'dev/elide/truffledata/yaml/' + signature for signature in signatures}}
+
+
 # JVM LCOV cannot execute an SVM pointer intrinsic. Keep the exact method visible in gap reports;
-# native_views_test and consumer_native_smoke exercise these loads under SVM's JIT checks.
+# native_test and consumer_native_smoke exercise these loads under SVM's JIT checks.
 # JSON: these run only in a static image (//json/tests:native_test, json_native_smoke and
 # //tools/release:json_native_test). On the JVM, JsonSvm.requireRuntime rejects every entry point
 # before native code runs, and the word-typed tapes and owners below exist only behind it.
 SVM_ONLY_METHODS = {
+    # YAML has the same static-image split as JSON. These entry points reject the JVM before
+    # JaCoCo reaches a probe; YamlContractTest checks rejection, and //yaml/tests:native_test
+    # exercises decoding, borrowed and retained results, metadata, streams and release.
+    **_yaml_methods('YamlSvm',
+        'YamlSvm::open ()Ldev/elide/truffledata/yaml/YamlSession;',
+        'YamlSvm::decode ([B)Ldev/elide/truffledata/yaml/YamlMessage;',
+        'YamlSvm::decode ([BLdev/elide/truffledata/yaml/YamlOptions;)Ldev/elide/truffledata/yaml/YamlMessage;'),
+    **_yaml_methods('YamlSession',
+        'YamlSession::open ()Ldev/elide/truffledata/yaml/YamlSession;'),
+    **_yaml_methods('SvmSessionBackend',
+        'SvmSessionBackend::compile (Ldev/elide/truffledata/tape/TypedLayout;Ldev/elide/truffledata/yaml/YamlOptions;)Ldev/elide/truffledata/yaml/YamlPlan;',
+        'SvmSessionBackend::writeOptions (Lorg/graalvm/word/Pointer;Ldev/elide/truffledata/yaml/YamlOptions;)V',
+        'SvmSessionBackend::checkTyped (ILorg/graalvm/nativeimage/c/type/VoidPointer;)V',
+        'SvmSessionBackend$1::integer (JJ)I',
+        'SvmSessionBackend$1::octet (JJ)B',
+        'SvmSessionBackend$1::pointer (JI)J',
+        'SvmSessionBackend$1::word (JJ)J',
+        'SvmSessionBackend$2::run ()V',
+        'SvmSessionBackend$Storage::inputByte (J)B',
+        'SvmSessionBackend$Storage::run ()V',
+        'SvmSessionBackend$Storage::span (J)J',
+        'SvmSessionBackend$NativeText::entry (J)J',
+        'SvmSessionBackend$NativeText::write (Lorg/graalvm/nativeimage/c/type/VoidPointer;)V',
+        'SvmSessionBackend::borrow ()Ldev/elide/truffledata/tape/TapeBorrow;',
+        'SvmSessionBackend::check (ILorg/graalvm/nativeimage/c/type/VoidPointer;)V',
+        'SvmSessionBackend::directories (Z)V',
+        'SvmSessionBackend::decode (Ljava/lang/foreign/MemorySegment;J)V',
+        'SvmSessionBackend::decode ([BIIILdev/elide/truffledata/tape/TapeTextArena;)V',
+        'SvmSessionBackend::release ()V',
+        'SvmSessionBackend::reset ()V',
+        'SvmSessionBackend::retain ()Ldev/elide/truffledata/tape/TapeOwner;',
+        'SvmSessionBackend::retain ()Ldev/elide/truffledata/yaml/YamlMessage;',
+        'SvmSessionBackend::streamCreate (II)J',
+        'SvmSessionBackend::streamFeed (JLjava/lang/foreign/MemorySegment;)J',
+        'SvmSessionBackend::streamFeed (J[BII)I',
+        'SvmSessionBackend::streamFinish (J)V',
+        'SvmSessionBackend::streamNext (J)I',
+        'SvmSessionBackend::streamRelease (J)V',
+        'SvmSessionBackend::tape (Lorg/graalvm/nativeimage/c/type/VoidPointer;)Ldev/elide/truffledata/tape/SvmTape;',
+        'SvmSessionBackend::textArena ([B)Ldev/elide/truffledata/tape/TapeTextArena;'),
+    **_yaml_methods('SvmYamlMessage',
+        'SvmYamlMessage::validate (Lorg/graalvm/word/Pointer;)J',
+        'SvmYamlMessage::create (Lorg/graalvm/word/Pointer;JLdev/elide/truffledata/yaml/YamlMetadata;)Ldev/elide/truffledata/yaml/YamlMessage;',
+        'SvmYamlMessage::reader ()Ldev/elide/truffledata/tape/TapeReader;',
+        'SvmYamlMessage::lexical (J)J',
+        'SvmYamlMessage::lexicalByte (J)B',
+        'SvmYamlMessage::release ()V',
+        'SvmYamlMessage::nodeCount ()J',
+        'SvmYamlMessage::poolSize ()J',
+        'SvmYamlMessage::inputSize ()J',
+        'SvmYamlMessage::directorySize ()J',
+        'SvmYamlMessage::flags ()I',
+        'SvmYamlMessage::readWord (J)J',
+        'SvmYamlMessage::textByte (ZJ)B',
+        'SvmYamlMessage::copyText (ZJ[BII)V',
+        'SvmYamlMessage::textWord (ZJI)J',
+        'SvmYamlMessage::directoryEntry (J)J',
+        'SvmYamlMessage::metadata (J)I',
+        'SvmYamlMessage::stringValue (J)Ljava/lang/String;',
+        'SvmYamlMessage$Plain::aliases ()Z'),
+    **_yaml_methods('YamlPlan',
+        'YamlPlan::compile (Ldev/elide/truffledata/Schema;)Ldev/elide/truffledata/yaml/YamlPlan;',
+        'YamlPlan::compile (Ldev/elide/truffledata/Schema;Ljava/util/Map;)Ldev/elide/truffledata/yaml/YamlPlan;',
+        'YamlPlan::create (Ldev/elide/truffledata/tape/TypedLayout;Ldev/elide/truffledata/yaml/YamlOptions;)Ldev/elide/truffledata/yaml/YamlPlan;',
+        'YamlPlan$SvmBackend::create (Ldev/elide/truffledata/tape/TypedLayout;Ldev/elide/truffledata/yaml/YamlOptions;)Ldev/elide/truffledata/yaml/YamlPlan$SvmBackend;',
+        'YamlPlan$SvmBackend::decode ([B[Ldev/elide/truffledata/Schema;)Ldev/elide/truffledata/tape/TypedOwner;',
+        'YamlPlan$SvmBackend::release ()V'),
+    **_yaml_methods('SvmTypedOwner',
+        'SvmTypedOwner::bits (J)J',
+        'SvmTypedOwner::text (J)Ljava/lang/String;',
+        'SvmTypedOwner::copyText (J)Ljava/lang/String;',
+        'SvmTypedOwner::present (J)J',
+        'SvmTypedOwner::nulls (J)J',
+        'SvmTypedOwner::slotBase (J)I',
+        'SvmTypedOwner::plan (J)I',
+        'SvmTypedOwner::slot (J)J',
+        'SvmTypedOwner::entry (J)J',
+        'SvmTypedOwner::release ()V',
+        'SvmTypedOwner::format ()Ldev/elide/truffledata/tape/TapeFormat;'),
     # The no-argument form is the static-image entry point (the kernel is linked; no library path).
     # It delegates to loadNative(null), which on the JVM test class path always throws because no
     # native backend is present, so JaCoCo records no probe although CsvFusedTest calls it.
     # //tools/release:csv_kernel_native_test runs it in an image.
     'csv/src/main/java/dev/elide/truffledata/csv/CsvIndexing.java': {
         'dev/elide/truffledata/csv/CsvIndexing::loadNative ()Ldev/elide/truffledata/csv/CsvIndexing$Provider;',
-    },
-    'protobuf-buffa/src/main/java/dev/elide/truffledata/buffa/NativeRow.java': {
-        'dev/elide/truffledata/buffa/NativeRow::entry '
-        '(Ldev/elide/truffledata/buffa/BuffaWire$Tape;I)Lorg/graalvm/word/Pointer;',
     },
     # Static entry points: each throws from requireRuntime (a callee) on the JVM, so JaCoCo records
     # no probe even though JvmScopedTest and FfmAcceptanceTest call them; the rest is the native
@@ -121,17 +217,10 @@ SVM_ONLY_METHODS = {
         'JsonSvm::publish (Lorg/graalvm/nativeimage/c/type/VoidPointer;Ljava/lang/Runnable;)'
         'Ldev/elide/truffledata/json/JsonMessage;',
         'JsonSvm::release (J)V',
-        'JsonSvm::tape (Lorg/graalvm/nativeimage/c/type/VoidPointer;)Ldev/elide/truffledata/tape/SvmValueTape;',
-        'JsonSvm::tables (Lorg/graalvm/nativeimage/c/type/VoidPointer;Ldev/elide/truffledata/tape/SvmValueTape;'
-        'Ljava/lang/Runnable;)Ldev/elide/truffledata/json/JsonSvm$SvmResult;',
         'JsonSvm::adoptResult (Lorg/graalvm/nativeimage/c/type/VoidPointer;)Ldev/elide/truffledata/json/JsonMessage;',
         # Result accessors (Myna v4 descriptor, side tables, retained input) and the session's
         # rebindable borrow reader (JSON performance ledger V1; was JsonSvm::borrow).
         'JsonSvm::descriptor (Lorg/graalvm/nativeimage/c/type/VoidPointer;)Lorg/graalvm/word/Pointer;',
-        'JsonSvm::hashes (Lorg/graalvm/nativeimage/c/type/VoidPointer;)Lorg/graalvm/word/Pointer;',
-        'JsonSvm::spans (Lorg/graalvm/nativeimage/c/type/VoidPointer;Ldev/elide/truffledata/tape/SvmValueTape;)'
-        'Lorg/graalvm/word/Pointer;',
-        'JsonSvm::inputRegion (Lorg/graalvm/nativeimage/c/type/VoidPointer;)Lorg/graalvm/word/Pointer;',
         'JsonSvm$Borrows::borrow (Lorg/graalvm/nativeimage/c/type/VoidPointer;)Ldev/elide/truffledata/tape/TapeBorrow;',
         # The decoder handle returned by open() and the lexical table built by publish().
         'JsonSvm$1::decode ([BLdev/elide/truffledata/json/JsonLimits;)Ldev/elide/truffledata/json/JsonMessage;',
@@ -139,12 +228,28 @@ SVM_ONLY_METHODS = {
         'Ldev/elide/truffledata/json/JsonMessage;',
         'JsonSvm$1::compile (Ldev/elide/truffledata/Schema;Ljava/util/Map;)Ldev/elide/truffledata/json/JsonPlan;',
         'JsonSvm$1::close ()V',
-        # The side tables and release of one published result (lexical accessor and close action).
-        'JsonSvm$SvmLexical::span (J)J',
-        'JsonSvm$SvmLexical::inputByte (J)B',
-        'JsonSvm$SvmLexical::bind (Lorg/graalvm/word/Pointer;Lorg/graalvm/word/Pointer;J)V',
-        'JsonSvm$SvmResult::run ()V',
-        'JsonSvm$AdoptedResult::run ()V',
+    ),
+    # The fused retained JSON owner embeds native pointers; its storage operations run in
+    # //json/tests:native_test and the retained/interop allocation cells of json_native_smoke.
+    **_json_methods(
+        'SvmJsonMessage',
+        'SvmJsonMessage::reader ()Ldev/elide/truffledata/tape/TapeReader;',
+        'SvmJsonMessage::release ()V',
+        'SvmJsonMessage::nodeCount ()J',
+        'SvmJsonMessage::poolSize ()J',
+        'SvmJsonMessage::inputSize ()J',
+        'SvmJsonMessage::directorySize ()J',
+        'SvmJsonMessage::flags ()I',
+        'SvmJsonMessage::readWord (J)J',
+        # Native pointer hint edge cases run in SvmAcceptance.nativeDirectoryHints.
+        'SvmJsonMessage::directoryKey (JILdev/elide/truffledata/tape/TapeKey;)J',
+        'SvmJsonMessage::textByte (ZJ)B',
+        'SvmJsonMessage::copyText (ZJ[BII)V',
+        'SvmJsonMessage::textWord (ZJI)J',
+        'SvmJsonMessage::directoryEntry (J)J',
+        'SvmJsonMessage::metadata (J)I',
+        'SvmJsonMessage::stringValue (J)Ljava/lang/String;',
+        'SvmJsonMessage$Adopted::release ()V',
     ),
     # Static-image session backend: open() throws from requireRuntime on the JVM (JvmScopedTest
     # asserts it), so the SVM backend and its text arenas run only in //json/tests:native_test
@@ -204,25 +309,28 @@ SVM_ONLY_METHODS = {
         'JsonPlan$SvmBackend::decode ([B[Ldev/elide/truffledata/Schema;)Ldev/elide/truffledata/tape/TypedOwner;',
         'JsonPlan$SvmBackend::release ()V',
     ),
-    # Word-pointer tape over a native descriptor; constructed only by JsonSvm.publish and the
-    # static-image session backend.
+    # The compact reader's pointer operations and bulk transcoder execute only in native images.
     **_tape_methods(
-        'SvmValueTape',
-        'SvmValueTape::nodeInt (J)I',
-        'SvmValueTape::nodeLong (J)J',
-        'SvmValueTape::keyMeta (J)I',
-        # Myna v4 directory access and the session reader's rebinding (JSON performance ledger V1).
-        'SvmValueTape::directorySize ()J',
-        'SvmValueTape::directoryEntry (J)J',
-        'SvmValueTape::directoryKey (JIIJJJZ)J',
-        'SvmValueTape::rebind (Lorg/graalvm/word/Pointer;Lorg/graalvm/word/Pointer;)V',
-        'SvmValueTape::bindTables (Lorg/graalvm/word/Pointer;)V',
-        'SvmValueTape::simdThreshold ()I',
-        'SvmValueTape::regionCount ()J',
-        'SvmValueTape::regionSize (J)J',
-        'SvmValueTape::copyRegion (JJ[BII)V',
-        # simdutf bridge for long non-ASCII strings (myna_utf8_to_utf16_v2, linked only into images).
-        'SvmValueTape::decodeExternalUtf8 (JJI)Ljava/lang/String;',
+        'SvmTape',
+        'SvmTape::rebind (Lorg/graalvm/word/Pointer;)V',
+        'SvmTape::nodeCount ()J',
+        'SvmTape::poolSize ()J',
+        'SvmTape::inputSize ()J',
+        'SvmTape::directorySize ()J',
+        'SvmTape::flags ()I',
+        'SvmTape::decodeUtf8 (Lorg/graalvm/word/Pointer;I)Ljava/lang/String;',
+        'SvmTape::readWord (J)J',
+        # Both the standalone reader and fused owner are covered by nativeDirectoryHints.
+        'SvmTape::directoryKey (JILdev/elide/truffledata/tape/TapeKey;)J',
+        'SvmTape::directoryKey (Lorg/graalvm/word/Pointer;Lorg/graalvm/word/Pointer;'
+        'Lorg/graalvm/word/Pointer;JILdev/elide/truffledata/tape/TapeKey;)J',
+        'SvmTape::textByte (ZJ)B',
+        'SvmTape::copyText (ZJ[BII)V',
+        'SvmTape::copyText (Lorg/graalvm/word/Pointer;JJ[BII)V',
+        'SvmTape::textWord (ZJI)J',
+        'SvmTape::directoryEntry (J)J',
+        'SvmTape::metadata (J)I',
+        'SvmTape::stringValue (J)Ljava/lang/String;',
     ),
     # Word-accessor typed owner; constructed only by the static plan backend.
     **_json_methods(
@@ -245,19 +353,27 @@ SVM_ONLY_METHODS = {
 # Methods the JVM coverage lane cannot reach on HotSpot although they are not SVM code. Each entry
 # names why; nothing else is exempt.
 JVM_UNREACHABLE_METHODS = {
+    # Defensive extent guard: every borrowed read follows a native-verified slab and a Java-side
+    # verifier, so no public call can present an offset outside the retained extent.
+    'protobuf-buffa/src/main/java/dev/elide/truffledata/buffa/SlabSession.java': {
+        'dev/elide/truffledata/buffa/SlabSession::outside ()Ljava/lang/IndexOutOfBoundsException;',
+    },
+    # Synthetic tag cursors expose resolved URI text but no source token: lexical() is always0,
+    # so rawText rejects before a byte accessor can run. Tag view/snapshot/lifetime hooks are tested.
+    **_tape_methods('AliasExport', 'AliasExport$1::lexicalByte (J)B'),
+    # Native typed tables always use HotSpot's exact native segment class; these fallbacks are
+    # present for other JVM implementations, matching the JSON typed owner.
+    **_yaml_methods('JvmTypedOwner',
+        'JvmTypedOwner::readOtherLong (Ljava/lang/foreign/MemorySegment;J)J',
+        'JvmTypedOwner::readOtherInt (Ljava/lang/foreign/MemorySegment;J)I'),
+    # The borrowed lexical holder owns no native result and is never released independently.
+    # Retained results override run() with the actual release, covered by YamlIntegrationTest.
+    **_yaml_methods('JvmSessionBackend', 'JvmSessionBackend$Storage::run ()V'),
     # Compiled-code fallback for a non-constant TypedAccess: the interpreter reports every value as a
     # partial-evaluation constant (so it takes walkExploded), and the coverage lane excludes JIT.
     # Exercised on SVM by the dynamic NestedReads root in json/tests/CompiledReads.java. (Was
     # JsonRecord::walk.)
     **_tape_methods('TypedRecord', 'TypedRecord::walk (Ldev/elide/truffledata/tape/TypedAccess;)J'),
-    # YAML alias tables: JSON formats have none, so this lane (JSON suites) never builds or reads
-    # them; //tape/tests:jvm (TapeOwnerTest) runs all three, and YAML Task 5 adds lane coverage.
-    **_tape_methods(
-        'TapeFormat',
-        'TapeFormat::withAliases ([J[I)Ldev/elide/truffledata/tape/TapeFormat;',
-        'TapeFormat::alias ([IJJ)J',
-        'TapeFormat::outside (Ldev/elide/truffledata/tape/TapeFormat;)Ljava/lang/IllegalStateException;',
-    ),
     # Fallbacks for a segment that is not HotSpot's native segment class. Typed tables are always
     # reinterpreted native segments, so on HotSpot only the exact-class fast path runs.
     **_json_methods(

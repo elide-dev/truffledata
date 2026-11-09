@@ -13,6 +13,7 @@
 #include <myna/values.hpp>
 
 #include <charconv>
+#include <c4/ext/fast_float.hpp>
 #include <cmath>
 #include <cstdint>
 #include <memory_resource>
@@ -68,7 +69,7 @@ void plain(myna::value_builder& b, std::string_view s, Text text) {
     }
     if (digits && i == e) {
       double v;
-      auto r = std::from_chars(c == '+' ? p + 1 : p, e, v);
+      auto r = fast_float::from_chars(c == '+' ? p + 1 : p, e, v);
       if (r.ec == std::errc() && std::isfinite(v)) return b.floating(v);
       return text();
     }

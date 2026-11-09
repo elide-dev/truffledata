@@ -1,8 +1,8 @@
 # Continuous simulation benchmarks
 
 Every main push and pull request runs the reusable
-[CodSpeed workflow](../.github/workflows/benchmarks.yml). The initial suite has
-24 stable identities in [cases.json](../benchmarks/cases.json); executable
+[CodSpeed workflow](../.github/workflows/benchmarks.yml). The suite has
+28 stable identities in [cases.json](../benchmarks/cases.json); executable
 workloads live in [SimulationBenchmark.java](../benchmarks/src/main/java/dev/elide/truffledata/bench/SimulationBenchmark.java).
 Bazel builds a Linux amd64 Native Image with the library's pinned GraalVM and LLVM
 toolchains through BuildBuddy RBE/RBC. The CI client executes it under CodSpeed
@@ -32,6 +32,7 @@ JMH remains available for JVM diagnostics.
 | Protobuf wire/static | Decode the same bytes as DynamicMessage, snapshot and consume names |
 | MySQL/Postgres fixture batch/static | Bind, execute fixture, normalize Java Integer/null, validate signed/unsigned int32 contracts, ingest four fields, sum IDs and close cursor resources |
 | JSON generic Gson tree/Java export/interop/snapshot | Parse 256 mixed documents with Gson's tree parser, or decode them with simdjson and export through `JavaSink`, read through adopted cached interop, or snapshot then read; consume ten members and release native storage. Image-only: the JVM smoke runs the other 20 |
+| YAML generic Java export/interop/typed/snapshot | Parse 256 prepared YAML documents through the native parser, materialize or read the result, validate its checksum and release native storage. Image-only |
 
 Each region performs **eight iterations of 256 rows/messages**. Schemas, layouts,
 input data, descriptors, call targets and four warmup iterations are prepared

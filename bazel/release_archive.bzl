@@ -46,6 +46,7 @@ def _release_archive_impl(ctx):
             bitcode_manifest[0].path if bitcode_manifest else "-",
             cc.compiler_executable,
             cc.ar_executable.rpartition("/")[0],
+            ",".join(ctx.attr.public_symbols) or "-",
         ] + [archive.path for archive in archives],
         inputs = archives,
         tools = cc.all_files,
@@ -67,6 +68,7 @@ _release_archive = rule(
     attrs = {
         "archives": attr.label_list(allow_files = [".a"], cfg = _bitcode, mandatory = True),
         "format": attr.string(values = ["elf", "macho"], mandatory = True),
+        "public_symbols": attr.string_list(),
         "_script": attr.label(default = "//bazel:release_archive.sh", executable = True, cfg = "exec", allow_single_file = True),
     },
     toolchains = use_cc_toolchain(),

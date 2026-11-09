@@ -177,6 +177,55 @@ final class CsvFusedTest {
   }
 
   @Test
+  void spanOnlyProjectionAndFallbackMatchPerByte() {
+    // Retained fields are reordered and the middle input column is projected away. Grow the
+    // column arrays before exercising fallback, so stale partially written rows cannot hide.
+    Schema schema =
+        Schema.of(
+            new Field("b", Field.Kind.STRING, false, false),
+            new Field("a", Field.Kind.STRING, false, false));
+    CsvPlan plan = CsvPlan.compile(schema, CsvFormat.RFC4180);
+    String prefix = "a,ignored,b\r\n" + "first,unused,\"last\"\"quoted\"\r\n".repeat(40);
+    for (String tail :
+        new String[] {
+          "é,,end", // final unterminated row
+          ",,\"\"\r\n", // legacy empty STRINGs stay present
+          "next,unused\r\n", // too short after the first projected store
+          "next,unused,last,extra\r\n", // too wide after every projected store
+          "next,\"bad\"quote,last\r\n", // malformed projected-away field
+          "next,\"unterminated,last", // incomplete quote after a projected store
+        }) {
+      byte[] input = utf8(prefix + tail);
+      same(() -> cells(plan.parse(input)));
+      same(() -> cells(plan.parseOwned(input)));
+    }
+    byte[] invalid = utf8(prefix + "next,unused,last\n");
+    invalid[invalid.length - 2] = (byte) 0xC3;
+    same(() -> cells(plan.parse(invalid)));
+
+    // A flexible short row may omit only projected-away columns; record() accepts and rewrites
+    // the partial fused row. The following full row must still land at the next batch position.
+    CsvPlan flexible =
+        CsvPlan.compile(
+            Schema.of(new Field("a", Field.Kind.STRING, false, false)),
+            CsvFormat.RFC4180.withFlexible(true));
+    same(() -> cells(flexible.parse(utf8("a,ignored\nfirst\nsecond,unused\nlast"))));
+  }
+
+  @Test
+  void spanOnlyLimitsPreserveErrorOrder() {
+    String text = "a,b\nfirst,one\nsecond,two\nthird,three\n";
+    CsvLimits two = new CsvLimits(1 << 20, 2, 64, 1 << 20);
+    same(() -> cells(Csv.parse(utf8(text), CsvFormat.RFC4180, two)));
+    CsvFormat stop = CsvFormat.RFC4180.toBuilder().setMaxRows(2).build();
+    same(() -> cells(Csv.parse(utf8(text + "\"bad"), stop)));
+    // maxRows disables whole-range prevalidation: UTF-8 must still precede the width error.
+    byte[] invalid = utf8("a,b\nfirst,one\nbad,utf8,extra\n");
+    invalid[invalid.length - 3] = (byte) 0xC3;
+    same(() -> cells(Csv.parse(invalid, stop)));
+  }
+
+  @Test
   void mappedCellsReadThroughTheSharedBuffer() throws Exception {
     String big = "y".repeat(5000); // past the 4 KiB mapped-cell buffer
     Path path = dir.resolve("m.csv");

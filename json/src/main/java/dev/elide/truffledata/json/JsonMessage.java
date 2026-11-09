@@ -3,30 +3,37 @@ package dev.elide.truffledata.json;
 import com.oracle.truffle.api.Assumption;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.Truffle;
-import dev.elide.myna.values.ValueTape;
+import dev.elide.truffledata.tape.TapeReader;
 import dev.elide.truffledata.tape.TapeFormat;
-import dev.elide.truffledata.tape.TapeLexical;
 import dev.elide.truffledata.tape.TapeOwner;
 import org.jspecify.annotations.Nullable;
 
 /** Thread-confined owner of a validated JSON index. Closing invalidates every derived view. */
-public final class JsonMessage extends TapeOwner implements AutoCloseable {
+public abstract class JsonMessage extends TapeOwner implements AutoCloseable {
   /** JSON tapes hold no alias nodes: one shared format, without alias tables. */
   static final TapeFormat FORMAT = TapeFormat.of("JSON");
 
   /**
-   * A published result's lexical tables and its release (run once, on close), as one object: a
-   * message is allocated per retained document, so it carries a single reference for both.
+   * The JVM result's release action, run once on close. Native messages store their result
+   * address and compact reader fields directly on the owner.
    */
-  interface Storage extends TapeLexical, Runnable {}
+  interface Storage extends Runnable {}
 
-  private final Storage storage;
   private @Nullable Assumption alive;
 
-  JsonMessage(ValueTape tape, Storage storage) {
-    super(tape, Thread.currentThread());
-    this.storage = storage;
+  JsonMessage(TapeReader tape) { super(tape, Thread.currentThread()); }
+  JsonMessage() { super(Thread.currentThread()); }
+  protected abstract void release();
+
+  static final class Managed extends JsonMessage {
+    private final Storage storage;
+    Managed(TapeReader tape, Storage storage) { super(tape); this.storage = storage; }
+    @Override protected void release() { storage.run(); }
   }
+
+  @Override protected final boolean confined() { return true; }
+
+  @Override protected final boolean aliases() { return false; }
 
   @Override
   public TapeFormat format() {
@@ -44,12 +51,12 @@ public final class JsonMessage extends TapeOwner implements AutoCloseable {
   @Override
   protected long lexical(long node) {
     if (node < 0 || node >= tape.nodeCount()) throw new IndexOutOfBoundsException("Node index");
-    return storage.span(node);
+    return tape.span(node);
   }
 
   @Override
   protected byte lexicalByte(long offset) {
-    return storage.inputByte(offset);
+    return tape.inputByte(offset);
   }
 
   @Override
@@ -57,7 +64,7 @@ public final class JsonMessage extends TapeOwner implements AutoCloseable {
   public void close() {
     if (markClosed()) {
       if (alive != null) alive.invalidate();
-      storage.run();
+      release();
     }
   }
 }

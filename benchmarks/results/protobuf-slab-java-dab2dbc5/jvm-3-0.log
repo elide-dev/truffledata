@@ -1,0 +1,13 @@
+VM OpenJDK 64-Bit Server VM 25.0.4.1.1+1-jvmci-25.5-b24
+model name	: AMD EPYC
+WRITER_BYTES small c81dcebb56e4edfcb04628c362c85a518e54438098b6d1e64561a6f98739c437
+{"mode":"small","case":"probe-slab-reused","variant":3,"runtime":"jvm","input_bytes":149.9,"ns_per_message":[413.0282569027016, 412.7448862510731, 408.35092651574547, 408.09554958866545, 407.8118556701031, 408.4527614854267, 409.29941674852654],"bytes_per_message":[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]}
+WRITER_BYTES holdout 86f1ac7148b6801ff657b39ac6fb0ea4ef093ab9d303f6f3eed63eb2d69b2711
+{"mode":"holdout","case":"probe-slab-reused","variant":3,"runtime":"jvm","input_bytes":510.0,"ns_per_message":[1199.169944359171, 1198.8003691983122, 1213.186092779503, 1204.3982899807322, 1198.7881185270426, 1205.4432075699133, 1201.9861959134616],"bytes_per_message":[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]}
+WRITER_BYTES large 45061354f9f191107608621e92f722f85576f3d2dad3890b0594f33cb7cc0886
+{"mode":"large","case":"probe-slab-reused","variant":3,"runtime":"jvm","input_bytes":51822.3,"ns_per_message":[137091.7995923913, 135400.52194148937, 126863.946875, 126814.290625, 126641.605625, 127013.0575, 128546.65178571429],"bytes_per_message":[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]}
+CHECKSUM 31564087856
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::putInt has been called by com.oracle.truffle.api.memory.UnsafeByteArraySupport (file:/workspace/bazel-out/rbe_linux_amd64-opt/bin/benchmarks/comparison/slab_writer_measure.runfiles/rules_jvm_external++maven+maven/org/graalvm/truffle/truffle-api/25.5.5-elide.27/processed_truffle-api-25.5.5-elide.27.jar)
+WARNING: Please consider reporting this to the maintainers of class com.oracle.truffle.api.memory.UnsafeByteArraySupport
+WARNING: sun.misc.Unsafe::putInt will be removed in a future release

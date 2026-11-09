@@ -729,6 +729,52 @@ final class JvmScopedTest {
   }
 
   @Test
+  void typedRepeatedRecordsKeepDescendantsAndEscapedKeysIndependent() {
+    Schema leaf = new Schema("Leaf", List.of(new Field("text", Field.Kind.STRING, false, false)));
+    Schema branch = new Schema("Branch", List.of(Field.requiredLong("id"),
+        record("leaf", "Leaf", false, false),
+        array("values", Field.requiredLong("value"), false, false)));
+    Schema root = Schema.of(array("items", record("item", "Branch", false, false), false, false));
+    try (JsonDecoder decoder = JsonJvm.open(library());
+        JsonPlan plan = decoder.compile(root, Map.of("Branch", branch, "Leaf", leaf))) {
+      for (int count : new int[] {0, 1, 2, 8, 17, 33}) {
+        StringBuilder json = new StringBuilder("{\"items\":[");
+        for (int i = 0; i < count; i++) {
+          if (i != 0) json.append(',');
+          json.append("{\"leaf\":{\"text\":\"\\u4e2d\\n").append(i)
+              .append("\"},\"values\":[").append(i).append(',').append(-i)
+              .append("],\"\\u0069d\":").append(i).append('}');
+        }
+        byte[] input = utf8(json.append("]}").toString());
+        try (TypedRecord record = plan.decode(input)) {
+          Arrays.fill(input, (byte) 'x');
+          TypedArray items = record.array(0);
+          assertEquals(count, items.size());
+          for (int i = 0; i < count; i++) {
+            TypedRecord item = items.record(i);
+            assertEquals(i, item.longValue(0));
+            assertEquals("中\n" + i, item.record(1).stringValue(0));
+            assertEquals(i, item.array(2).longValue(0));
+            assertEquals(-i, item.array(2).longValue(1));
+          }
+        }
+      }
+      for (String bad : List.of(
+          "{\"items\":[null]}",
+          "{\"items\":[{\"id\":0,\"leaf\":{\"text\":\"x\"},\"values\":[1,]}]}",
+          "{\"items\":[{\"id\":0,\"\\u0069d\":1,\"leaf\":{\"text\":\"x\"},\"values\":[]}]}",
+          "{\"items\":[{\"id\":0,\"leaf\":{\"text\":\"x\",\"extra\":0},\"values\":[]}]}",
+          "{\"items\":[{\"id\":0,\"leaf\":{\"text\":\"\\ud800\"},\"values\":[]}]}",
+          "{\"items\":[]} trailing")) {
+        assertThrows(IllegalArgumentException.class, () -> plan.decode(utf8(bad)), bad);
+      }
+      try (TypedRecord stillUsable = plan.decode(utf8("{\"items\":[]}"))) {
+        assertEquals(0, stillUsable.array(0).size());
+      }
+    }
+  }
+
+  @Test
   void plansRejectDecodingAfterTheirDecoderCloses() {
     Schema schema = Schema.of(Field.requiredLong("n"));
     JsonDecoder decoder = JsonJvm.open(library());
@@ -1117,6 +1163,30 @@ final class JvmScopedTest {
           () -> JsonJvm.openSession(library(), dev.elide.truffledata.json.JsonLimits.DEFAULT, bad));
   }
 
+
+  @Test
+  void streamsSelectDirectoriesForEachBorrowedDocument() throws Exception {
+    String doc = "{\"a\":1,\"b\":2,\"c\":3,\"d\":4,\"e\":5,\"f\":6,\"g\":7,\"h\":8,\"nested\":{\"z\":9,\"y\":10}}\n";
+    byte[] input = utf8(doc.repeat(16));
+    try (JsonSession session = JsonJvm.openSession(library(), dev.elide.truffledata.json.JsonLimits.DEFAULT);
+        var stream = session.stream(new dev.elide.truffledata.json.JsonStreamOptions(1024, 1024))) {
+      assertEquals(input.length, stream.feed(input));
+      stream.finish();
+      for (int i = 0; i < 8; i++) {
+        var sink = new dev.elide.truffledata.tape.JavaSink();
+        assertTrue(stream.next(sink));
+        assertEquals(8L, tree(sink).get("h"));
+        TapeValue borrowed = stream.next();
+        assertNotNull(borrowed);
+        assertEquals(2, borrowed.snapshot().directories());
+        assertEquals(9L, borrowed.member("nested").member("z").longValue());
+        assertEquals(1L, borrowed.member("a").longValue());
+      }
+      assertNull(stream.next());
+      assertEquals(16, stream.documents());
+    }
+  }
+
   /** Performance plan Task F2: JSON streams over a JVM session (mirrors json/native/stream_test). */
   @Test
   void jvmStreamsCarryOverBorrowRetainAndSkip() throws Exception {
@@ -1274,4 +1344,43 @@ final class JvmScopedTest {
       @Override public void stringValue(dev.elide.truffledata.tape.TapeText text) { action.run(); }
     };
   }
+  @Test
+  void compactSnapshotsAndMynaInterchangePreserveEverySubtree() {
+    try (JsonDecoder decoder = JsonJvm.open(library())) {
+      for (int i = 0; i < 200; i++) {
+        String source = "{\"k\":[" + i + ",-0.0,true,null,{\"e\\u0073caped\":\"line\\n中\"}],\"plain\":\"text-" + i + "\"}";
+        try (JsonMessage message = decoder.decode(utf8(source))) {
+          checkCompactSubtree(message.root());
+          message.toMyna().validate();
+        }
+      }
+    }
+  }
+
+  private static void checkCompactSubtree(TapeValue value) {
+    var snapshot = value.snapshot();
+    assertEquals(value.kind(), snapshot.root().kind());
+    snapshot.toMyna().validate();
+    var first = new dev.elide.truffledata.tape.JavaSink();
+    var second = new dev.elide.truffledata.tape.JavaSink();
+    value.export(first);
+    snapshot.export(second);
+    assertEquals(first.result(), second.result());
+    switch (value.kind()) {
+      case NUMBER, STRING -> assertEquals(value.rawText(), snapshot.root().rawText());
+      case ARRAY -> {
+        assertEquals(value.size(), snapshot.root().size());
+        for (TapeValue element : value.elements()) checkCompactSubtree(element);
+      }
+      case OBJECT -> {
+        assertEquals(value.size(), snapshot.root().size());
+        for (long i = 0; i < value.size(); i++) {
+          assertEquals(value.keyAt(i).rawText(), snapshot.root().keyAt(i).rawText());
+          checkCompactSubtree(value.memberAt(i));
+        }
+      }
+      default -> {}
+    }
+  }
+
 }

@@ -1,0 +1,117 @@
+# Nested/repeated structural typed JSON candidate
+
+Status: **qualified specifically for nested/repeated typed ingestion**. The paired SVM run
+measures 1.105–1.184x ingest gains across four workloads, with unchanged Java allocations and
+all existing semantic/graph/allocation checks passing. Generic interop ingest regresses 2.20%,
+flat typed ingest moves +1.50% with overlapping ranges, and read-tier changes remain disclosed.
+No universal JSON speedup, full release qualification or total-memory win is claimed.
+See [admission.md](admission.md) for the decision, tradeoffs and current competitor table,
+and [paired.md](paired.md) for every measured cell.
+
+The baseline image has production `9a1dcec` and the identical Java harness from `c43af1c`
+(integration `d3f40cf`). `baseline.json` records its image/source hashes. No PGO, ISA change,
+consumer-side native generation, ABI or retained result layout change is introduced.
+
+## Implementation and contracts
+
+The structural writer extends the existing scalar producer with at most 64 record/array frames
+for the already bounded 32-record schemas. Immutable schema/key/selected-field pointers are
+cached in frames; slots remain integer indexes because the arenas may grow. An array's stage1
+indexes are counted before exactly reserving contiguous scalar slots or record entries, including
+record arrays whose elements allocate descendants. Required/null/type/range/UTF-8/lexical and
+input/index limit checks remain in force. All structural input must pass before publication.
+
+On a failed nested decode, the partial arenas are released and the old On-Demand walk is replayed
+to preserve established public error classification, including malformed arrays with tight
+budgets. A structural failure never publishes a result even if the old walk were to accept it.
+The independent test-only On-Demand producer remains the acceptance/output oracle. Flat scalar
+plans retain a separate compile-time specialization. The checked-in Cargo headers match the
+production sources.
+
+## Current evidence
+
+- `native-initial.log`: pinned Linux x86-64 invocation
+  [194aaa6f](https://app.buildbuddy.io/invocation/194aaa6f-c162-4137-902c-48645700e1f2),
+  all four native typed/API/probe targets pass. Exact differential: 155,635 cases.
+  The initial producer ratios (old/new, five rounds) were nested **1.075–1.140x**,
+  repeated **0.977–0.985x**, mixed **0.958–0.987x**, churn **0.966–0.980x**.
+  `initial-writer.patch` and `initial-sources.json` preserve this rejected version.
+- `native-revised-jvm.log`, `native-revised-summary.json`: invocation
+  [a8ded6b6](https://app.buildbuddy.io/invocation/a8ded6b6-9c8e-4abc-aa0c-adcfaeaf6afa),
+  all five targets pass: 155,647 exact native cases, typed/API tests and 64 JVM tests.
+  Five alternating native producer rounds give nested **1.294–1.349x**, repeated
+  **1.167–1.237x**, mixed **0.996–1.156x**, churn **1.134–1.531x**. This pins the repository
+  toolchain; these in-process probes do not pin a CPU or replace fresh-process SVM pairs.
+- `native-arm64-frame-revision.log`: Apple Clang 21, Arm64 diagnostic after caching schema,
+  selected field/key pointers and slot indexes, and initializing only active frame members.
+  Five-round native producer ratios were nested **1.347–1.450x**, repeated **1.029–1.059x**,
+  mixed **1.044–1.057x**, churn **1.051–1.103x**. These are a different host/toolchain and
+  do not establish pinned Linux or SVM gains. The subsequent expected-key wrap comparison
+  removes a dynamic modulo without changing its result; the revised pinned-toolchain result above includes it.
+- `native-arm64-wrap.log`: a later local diagnostic has substantial host variance (the
+  unchanged On-Demand baseline is roughly 1.5–2x slower than the previous local run and
+  repeated ratios span 0.904–1.193x). It is retained as inconclusive, not admission evidence.
+- `sanitizers-arm64.log`, `sanitizer-metadata.json`, `sanitize.py`: all dependencies and five
+  tests compiled with ASan+UBSan. Typed exact differential, typed/API contracts, generic
+  200-document/60-malformed corpus, and one million decoded-key shape sequences pass.
+- `typed-wrap-check.log`, `typed-wrap-sources.json`: the final expected-key wrap and additional
+  empty-child/late-invalid-element cases pass ASan+UBSan: **155,647 cases**. For nested/repeated
+  plans the differential compares exact status, slots/bits, decoded text, lexical bytes, record
+  tables and index memory extents. The pre-existing flat corpus compares acceptance/output.
+- `svm-build-smokes.log`: invocation
+  [135dd53e](https://app.buildbuddy.io/invocation/135dd53e-6a25-410d-bccd-9e3fef05a2fc)
+  builds/downloads the candidate comparison image and passes Native Image acceptance,
+  the existing **24 compiled graph checks and nine allocation budgets**, and all 16 typed
+  baseline smoke cells. `sdk.json` records the pinned SDK archive and compilation settings;
+  `candidate-image.json` records the preserved candidate hash and source checkpoint.
+- `svm-typed-candidate-smoke.log`: invocation
+  [e00f4947](https://app.buildbuddy.io/invocation/e00f4947-0d2e-4fa1-ba2a-96b9fa1617fc)
+  passes all 16 candidate cells. `typed-smoke-allocations.json` verifies exact baseline/candidate
+  checksums, tier markers and Java allocations. Each new public read helper compiles; final
+  expansion rows have 1,292 nodes, three loops and zero unresolved invokes. This records
+  the new workloads without replacing or weakening the existing graph budgets.
+- `cargo-arm64.log`: the synchronized source package builds and passes its link/fingerprint test.
+
+The revised probe's exact fixture index storage matches the oracle: nested **736 B retained /
+1,056 B peak**, repeated **6,032 / 8,592 B**, mixed **2,944 / 4,224 B** for the unescaped first
+input and **3,040 / 4,320 B** for the escaped/reordered second input. Parser input capacity is
+not actual scratch memory. The new per-record key metadata belongs to the reusable plan,
+not each message; escaped output text is separately owned and plain strings reference the
+result's owned input.
+
+## Paired SVM qualification
+
+`//benchmarks/comparison:json_typed_pair` keeps six groups on independent pinned CPUs; each
+complete before/after cell stays on one host/CPU. Four groups are nested, repeated16, mixed4
+escaped/reordered, and churn0..8. Two control groups retain the flat scalar and generic competitor
+workloads. Every image first runs `--typed-smoke`; three fresh forks per image/cell retain raw
+samples, checksums, source/image hashes, tier markers and medians/ranges. Four typed groups
+measure ingest/read-aot/interpret/peak; controls measure ingest/peak. Memory and time are separate.
+The nested/repeated fixtures are never compared numerically with generic competitor fixtures.
+
+The local baseline label is `//build/json-typed-tranche-baseline:json-comparison`, supplied through
+`--//benchmarks/comparison:json_typed_svm_baseline=...`. It is a hard link to the preserved image;
+no machine-specific baseline label or binary is committed.
+
+Independent worker review found no concrete correctness defect in frame initialization,
+plan-pointer lifetime, arena indexing, record-array scalar rejection or error replay. Its
+remaining performance lead is array lookahead (binary search and descendant rescans), to be
+judged by the paired results; the old On-Demand count also rescans descendants.
+
+## Final integration audit
+
+Review of integration `6ded68d` confirms the measured production/test sources match their
+recorded hashes, all six paired artifacts match the manifest, and `paired.md` reproduces
+exactly from all 408 raw records. The 34 allocation cells remain equal. This tranche adds
+no Java production access methods or coverage exemptions; the final combined coverage lane
+is still an integration check, not replaced by this source review.
+
+The audit also found pre-existing Cargo vendor drift: the canonical delayed shape-template
+installation from `6e1cfc1` was absent from `vendor/tape/native/ctape.h` at both baseline
+`9a1dcec` and integration `6ded68d`. The vendored header is now synchronized; all 21 vendored
+files with repository counterparts match exactly. This packages an already measured
+production optimization and does not change either preserved SVM image. The local Arm64
+Cargo build and link/fingerprint test pass after synchronization; see
+`cargo-vendor-sync-arm64.log` and its adjacent command/hash metadata. The stale producer
+description in `docs/JSON.md` now describes structural nested decoding and failure-only
+On-Demand diagnostics. No performance budget, fixture or admission claim changes.

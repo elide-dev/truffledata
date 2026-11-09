@@ -42,6 +42,36 @@ final class AcceptanceTest {
   }
 
   @Test
+  void projectedOwningValidationFailureReleasesAdoptedInput() throws Exception {
+    var released = new java.util.concurrent.atomic.AtomicInteger();
+    var contract = TypedAcceptance.projectedBudgetPlan();
+    var projection =
+        dev.elide.truffledata.protobuf.Projection.builder(contract)
+            .select("id", "text", "blob")
+            .build()
+            .lazyChildren()
+            .borrowBytes(1);
+    try (var decoder = BuffaWire.open(BuffaWire.Mode.NATIVE, library());
+        var compiled = decoder.compile(contract, 65536);
+        var selected = compiled.project(projection);
+        var arena = java.lang.foreign.Arena.ofConfined()) {
+      byte[] invalid = {18, 1, 120, 34, 0};
+      var segment = arena.allocate(invalid.length);
+      segment.copyFrom(java.lang.foreign.MemorySegment.ofArray(invalid));
+      try (var input = BuffaJvm.adopt(segment, released::incrementAndGet)) {
+        Acceptance.rejects(
+            () -> selected.decode(input, 65536), dev.elide.truffledata.ContractViolation.class);
+        Acceptance.check(released.get() == 0, "caller still owns failed input");
+      }
+      Acceptance.check(released.get() == 1, "failed owning validation released its source lease");
+      var recovered = selected.decode(new byte[] {8, 7, 34, 0}, 65536);
+      Acceptance.check(
+          recovered.getLong(0) == 7, "cached projected session recovers after failure");
+    }
+    Acceptance.check(released.get() == 1, "adopted source released exactly once");
+  }
+
+  @Test
   void cachedLifetimeChecksSurviveCloseAndCacheSaturation() throws Exception {
     try (var decoder = BuffaWire.open(BuffaWire.Mode.NATIVE, library())) {
       CompiledReads.cachedLifetimes(decoder);
@@ -64,8 +94,23 @@ final class AcceptanceTest {
       Acceptance.check(decoder.selected() == BuffaWire.Selected.JAVA, "missing native library");
     }
     try (var decoder = BuffaWire.open(BuffaWire.Mode.AUTO, library())) {
-      Acceptance.check(decoder.selected() == BuffaWire.Selected.JVM_FFM, "native selected");
+      Acceptance.check(
+          decoder.selected() == BuffaWire.Selected.JAVA, "JVM AUTO selects Java slab producer");
       Acceptance.randomized(decoder);
+    }
+  }
+
+  @Test
+  void jvmNativeSelectionCanBeExplicitlyEnabled() throws Exception {
+    String previous = System.getProperty("truffledata.buffa.jvmNative");
+    try {
+      System.setProperty("truffledata.buffa.jvmNative", "true");
+      try (var decoder = BuffaWire.open(BuffaWire.Mode.AUTO, library())) {
+        Acceptance.check(decoder.selected() == BuffaWire.Selected.JVM_FFM, "JVM native override");
+      }
+    } finally {
+      if (previous == null) System.clearProperty("truffledata.buffa.jvmNative");
+      else System.setProperty("truffledata.buffa.jvmNative", previous);
     }
   }
 
@@ -88,17 +133,17 @@ final class AcceptanceTest {
       try (var plan = decoder.compile(TypedAcceptance.plan("Sample"), 65536);
           var input = decoder.allocate(wire.length).put(wire)) {
         for (int i = 0; i < 2000; i++)
-          try (var message = plan.decode(input, 4096)) {
+          try (var message = plan.decode(input, 131072)) {
             message.row();
           }
         long before = bean.getThreadAllocatedBytes(thread);
         for (int i = 0; i < 1000; i++)
-          try (var message = plan.decode(input, 4096)) {
+          try (var message = plan.decode(input, 131072)) {
             message.row();
           }
         long perMessage = (bean.getThreadAllocatedBytes(thread) - before) / 1000;
         System.out.println("BUFFA typed bytes/message=" + perMessage);
-        Acceptance.check(perMessage < 16384, "typed binary avoids payload-sized Java copy");
+        Acceptance.check(perMessage < 100000, "owning slab retains one payload copy");
       }
     }
   }
@@ -119,6 +164,6 @@ final class AcceptanceTest {
             Objects.requireNonNull(System.getenv("TEST_WORKSPACE")),
             "protobuf-buffa/tests/wrong_abi.so");
     Acceptance.rejects(
-        () -> BuffaWire.open(BuffaWire.Mode.AUTO, library), IllegalStateException.class);
+        () -> BuffaWire.open(BuffaWire.Mode.NATIVE, library), IllegalStateException.class);
   }
 }

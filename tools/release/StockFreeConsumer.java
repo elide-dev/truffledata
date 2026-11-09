@@ -47,6 +47,13 @@ public final class StockFreeConsumer {
     var getters = new WellKnownContracts.Access_google$protobuf$Timestamp(timestamp);
     var value = timestamp.parseText("seconds: 123 nanos: 456");
     byte[] wire = timestamp.encode(value);
+    var slabDecoder = new WellKnownContracts.SlabDecoder_google$protobuf$Timestamp(timestamp);
+    check(
+        Arrays.equals(slabDecoder.decode(wire), SlabCodec.decode(timestamp.layout(), wire)),
+        "generated native-free slab producer");
+    var durable = timestamp.decodeSlab(wire);
+    check(durable.getLong(0) == 123 && durable.snapshot() == durable, "durable Java slab");
+    check(Arrays.equals(wire, durable.encode()), "slab serialization without stock runtime");
     var generated = getters.decode(wire);
     check(
         generated.get_seconds() == 123 && generated.get_nanos() == 456, "generated inline fields");
@@ -103,15 +110,19 @@ public final class StockFreeConsumer {
         var plan = decoder.compile(timestamp, 1_000_000);
         var input = decoder.allocate(wire.length).put(wire)) {
       check((decoder.selected() != BuffaWire.Selected.JAVA) == nativeExpected, "backend");
-      TypedRow borrowed;
+      var durableBackend = plan.decodeSlab(input, 4096);
+      check(durableBackend.getLong(0) == 123, "durable backend slab");
+      check(Arrays.equals(wire, durableBackend.encode()), "durable backend serialization");
+      SlabMessage durableAfterClose;
       try (var message = plan.decode(input, 4096)) {
-        borrowed = message.row();
-        check(getters.get_seconds(borrowed) == 123, "borrowed scalar");
-        check(getters.get_nanos(borrowed) == 456, "borrowed nanos");
+        durableAfterClose = message;
+        check(getters.get_seconds(message.row()) == 123, "durable scalar");
+        check(getters.get_nanos(message.row()) == 456, "durable nanos");
+        check(message.snapshot() == message, "identity snapshot");
         check(Arrays.equals(wire, timestamp.encode(message.snapshot())), "detach");
-        check(Arrays.equals(wire, message.encode()), "borrowed serialization");
+        check(Arrays.equals(wire, message.encode()), "durable serialization");
       }
-      rejects(() -> getters.get_seconds(borrowed), IllegalStateException.class);
+      check(getters.get_seconds(durableAfterClose) == 123, "durable row survives close");
       try (var text = plan.parseText("seconds: 123 nanos: 456", 4096);
           var json = plan.parseJson("\"1970-01-01T00:02:03.000000456Z\"", 4096)) {
         check(Arrays.equals(wire, text.encode()), "text serialization");

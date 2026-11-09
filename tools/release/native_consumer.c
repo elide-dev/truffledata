@@ -1,7 +1,9 @@
 // A C consumer of one release native (tools/release/native_consumer.bzl): it links the release static archive (with
 // or without LTO), calls the module's ABI fingerprint (and the JSON Rust bridge probe), then loads the release shared
 // library with dlopen and checks it reports the same fingerprint.
+#ifndef STATIC_ONLY
 #include <dlfcn.h>
+#endif
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
@@ -38,6 +40,10 @@ int main(int argc, char **argv) {
     return 1;
   }
 #endif
+  #ifdef STATIC_ONLY
+  printf("%s: static archive reports %.64s\n", NAME(FINGERPRINT), linked);
+  return 0;
+  #else
   if (argc != 2) {
     fprintf(stderr, "usage: %s SHARED_LIBRARY\n", argv[0]);
     return 2;
@@ -60,4 +66,5 @@ int main(int argc, char **argv) {
   }
   printf("%s: static and shared report %.64s\n", NAME(FINGERPRINT), linked);
   return 0;
+  #endif
 }

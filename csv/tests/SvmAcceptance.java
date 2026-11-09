@@ -73,6 +73,39 @@ public final class SvmAcceptance {
     rejects(() -> Csv.parse(new byte[] {'a', '\n', (byte) 0xC0, (byte) 0x80}, CsvFormat.RFC4180), "CSV");
   }
 
+  /** Above the index threshold on every ISA: reordered STRING spans, growth and fallback. */
+  private static void indexedStrings() {
+    int rows = 1024;
+    var text = new StringBuilder("left,ignored,right\r\n");
+    for (int i = 0; i < rows; i++)
+      text.append("café")
+          .append(i)
+          .append(",\"ignored,cell\",\"q\"\"")
+          .append(i)
+          .append("\n雪\"\r\n");
+    byte[] input = utf8(text.toString());
+    require(input.length > 16 << 10, "indexed strings exceed provider threshold");
+    var schema =
+        Schema.of(
+            new Field("right", Field.Kind.STRING, false, false),
+            new Field("left", Field.Kind.STRING, false, false));
+    var plan = CsvPlan.compile(schema, CsvFormat.RFC4180);
+    // Ownership is transferred only after the copied parse. Neither parse mutates the bytes.
+    var copied = plan.parse(input);
+    var owned = plan.parseOwned(input);
+    for (var batch : List.of(copied, owned)) {
+      require(batch.size() == rows && batch.schema() == schema, "indexed string batch");
+      for (int i = 0; i < rows; i++) {
+        require(batch.row(i).getString(0).equals("q\"" + i + "\n雪"), "indexed quoted right " + i);
+        require(batch.row(i).getString(1).equals("café" + i), "indexed projected left " + i);
+      }
+    }
+    String failure = "CSV syntax at record " + (rows + 2);
+    // The malformed field is projected away, but the parser must still reject its syntax.
+    rejects(() -> plan.parse(utf8(text + "next,\"bad\"quote,last\r\n")), failure);
+    rejects(() -> plan.parseOwned(utf8(text + "next,unused\r\n")), failure);
+  }
+
   /** Streaming: every cut of a tricky input matches the whole parse; batches share the schema. */
   private static void stream() throws Exception {
     byte[] input = utf8("k,v\n1,\"\"\"\"\r\n2,\"x\r\ny\"\r3,中\n\n4,\"\"\n");
@@ -260,6 +293,7 @@ public final class SvmAcceptance {
       context.enter();
       try {
         parse();
+        indexedStrings();
         stream();
         typed();
         export();

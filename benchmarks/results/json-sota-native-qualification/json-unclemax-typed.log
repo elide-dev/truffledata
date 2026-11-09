@@ -1,0 +1,43 @@
+deps/simdutf.cpp:38062:34: warning: array index 2 is past the end of the array (that has type 'simd8<signed char>[2]') [-Warray-bounds]
+ 38062 |           this->check_utf8_bytes(input.chunks[2], input.chunks[1]);
+       |                                  ^            ~
+deps/simdutf.cpp:5668:3: note: array 'chunks' declared here
+ 5668 |   simd8<T> chunks[NUM_CHUNKS];
+      |   ^
+deps/simdutf.cpp:38063:34: warning: array index 3 is past the end of the array (that has type 'simd8<signed char>[2]') [-Warray-bounds]
+ 38063 |           this->check_utf8_bytes(input.chunks[3], input.chunks[2]);
+       |                                  ^            ~
+deps/simdutf.cpp:5668:3: note: array 'chunks' declared here
+ 5668 |   simd8<T> chunks[NUM_CHUNKS];
+      |   ^
+deps/simdutf.cpp:38063:51: warning: array index 2 is past the end of the array (that has type 'simd8<signed char>[2]') [-Warray-bounds]
+ 38063 |           this->check_utf8_bytes(input.chunks[3], input.chunks[2]);
+       |                                                   ^            ~
+deps/simdutf.cpp:5668:3: note: array 'chunks' declared here
+ 5668 |   simd8<T> chunks[NUM_CHUNKS];
+      |   ^
+deps/simdutf.cpp:38150:34: warning: array index 2 is past the end of the array (that has type 'simd8<signed char>[2]') [-Warray-bounds]
+ 38150 |           this->check_utf8_bytes(input.chunks[2], input.chunks[1]);
+       |                                  ^            ~
+deps/simdutf.cpp:5668:3: note: array 'chunks' declared here
+ 5668 |   simd8<T> chunks[NUM_CHUNKS];
+      |   ^
+deps/simdutf.cpp:38151:34: warning: array index 3 is past the end of the array (that has type 'simd8<signed char>[2]') [-Warray-bounds]
+ 38151 |           this->check_utf8_bytes(input.chunks[3], input.chunks[2]);
+       |                                  ^            ~
+deps/simdutf.cpp:5668:3: note: array 'chunks' declared here
+ 5668 |   simd8<T> chunks[NUM_CHUNKS];
+      |   ^
+deps/simdutf.cpp:38151:51: warning: array index 2 is past the end of the array (that has type 'simd8<signed char>[2]') [-Warray-bounds]
+ 38151 |           this->check_utf8_bytes(input.chunks[3], input.chunks[2]);
+       |                                                   ^            ~
+deps/simdutf.cpp:5668:3: note: array 'chunks' declared here
+ 5668 |   simd8<T> chunks[NUM_CHUNKS];
+      |   ^
+6 warnings generated.
+typed structural oracle parity: 143054 cases
+typed round0 ondemand 133.84ns structural 76.14ns ratio 1.758
+typed round1 ondemand 130.27ns structural 76.26ns ratio 1.708
+typed round2 ondemand 135.02ns structural 76.19ns ratio 1.772
+typed round3 ondemand 125.30ns structural 76.27ns ratio 1.643
+typed round4 ondemand 124.12ns structural 76.14ns ratio 1.630

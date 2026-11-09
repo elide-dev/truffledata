@@ -115,8 +115,12 @@ try-import %workspace%/user.bazelrc
 
 # Instrument correctness tests only: probes change allocation and JIT graph budgets.
 coverage:codecov --combined_report=lcov
-coverage:codecov --instrumentation_filter=^//(core|jdbc|jdbc-sqlite|jdbc-mysql|jdbc-postgresql|protobuf|protobuf-runtime)(/|:),^//protobuf-buffa:protobuf-buffa$,^//json:(json|jvm)$,^//tape:(tape|jvm)$,^//csv:csv$
+coverage:codecov --instrumentation_filter=^//(core|jdbc|jdbc-sqlite|jdbc-mysql|jdbc-postgresql|protobuf|protobuf-runtime)(/|:),^//protobuf-buffa:protobuf-buffa$,^//json:(json|jvm)$,^//tape:(tape|jvm)$,^//yaml:(yaml|jvm)$,^//csv:csv$
 coverage:codecov --test_tag_filters=-allocation,-jit
 coverage:codecov --test_arg=--exclude-tag --test_arg=allocation
 coverage:codecov --test_arg=--exclude-tag --test_arg=jit
 coverage:codecov --remote_download_toplevel
+
+# Static-only CSV release archives for Elide's musl targets; tools still run on GNU RBE hosts.
+build:remote_musl --config=remote --dynamic_mode=off --platforms=//bazel/platforms:linux_amd64_musl
+build:remote_arm64_musl --config=remote_arm64 --dynamic_mode=off --platforms=//bazel/platforms:linux_arm64_musl

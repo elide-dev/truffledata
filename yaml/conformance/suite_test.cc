@@ -28,6 +28,7 @@
 #include <vector>
 
 using namespace truffledata::yaml;
+using yaml_session = truffledata::yaml::session;
 
 namespace {
 
@@ -75,14 +76,14 @@ struct outcome {
 };
 
 // documents(byte[]) over `yaml`, fed in `chunk`-byte pieces (0: all at once).
-outcome decode_stream(session& s, const std::string& yaml, size_t chunk) {
+outcome decode_stream(yaml_session& s, const std::string& yaml, size_t chunk) {
   outcome r;
   stream st(s, size_t(64) << 20, size_t(64) << 20);
   r.events = "+STR\n";
   size_t fed = 0;
   auto drain = [&]() -> bool {
     for (;;) {
-      session::document_view d;
+      yaml_session::document_view d;
       int32_t status = st.next(&d);
       if (status == status_stream_empty) return true;
       if (status != status_ok) {
@@ -186,7 +187,7 @@ int main(int argc, char** argv) {
   try {
     require(!expected_path.empty(), "--expected-failures=<file> is required");
     auto expected = read_expected_failures(expected_path);
-    session s(conformance_options());
+    yaml_session s(conformance_options());
     std::set<std::string> seen;
     size_t passed = 0, valid = 0, valid_passed = 0, errors = 0, errors_detected = 0, documents = 0;
     std::vector<std::string> problems;

@@ -27,6 +27,7 @@ import org.postgresql.util.ByteConverter;
 
 /** Fixed-work comparisons; orchestration forks each cell and separates timing from allocations. */
 @NullMarked
+@SuppressWarnings("removal")
 public final class Comparison {
   static final int ROWS = 32;
   static Runnable beforeSamples = () -> {};
@@ -70,8 +71,6 @@ public final class Comparison {
       run(args[0], args[1], args[2], false, args[3].equals("memory"));
     }
   }
-
-  private static final boolean NATIVE_VIEWS = Boolean.getBoolean("truffledata.buffa.views");
 
   static List<String> engines(String workload) {
     if (workload.equals("proto-bytes"))
@@ -183,10 +182,31 @@ public final class Comparison {
             long before = counter.getThreadAllocatedBytes(thread);
             measure(operation, 8, fixture.expected);
             double bytes = (counter.getThreadAllocatedBytes(thread) - before) / (8.0 * ROWS);
+            // Measured durable slab floor (2026-11-08): byte[56] clone 64 B; clone plus
+            // takeOwnership 112 B (48 B SlabMessage); typed native ingest 136 B. The 24 B
+            // native-only residue is consistent with the output PinnedObject, which is kept.
+            // Generic ingest adds two boxed Longs (32 B) in this harness's DataLibrary reads.
+            // The breakdown probe below and protobuf-slab-allocation-20261108 retain evidence;
+            // earlier 152/120 B estimates used incorrect array-header and pin assumptions.
             double budget =
                 engine.equals("buffa")
-                    ? (stage.equals("ingest") ? 128 : 96)
+                    ? (stage.equals("ingest") ? 168 : 136)
                     : (stage.equals("ingest") ? 96 : 64);
+            // Evidence for the budget: the durable slab's own extent and retained capacity.
+            if (retained instanceof SlabMessage slab)
+              System.out.println(
+                  "ALLOCATION compact-scalar "
+                      + engine
+                      + " "
+                      + stage
+                      + " slabBytes="
+                      + slab.slabBytes()
+                      + " retainedSlabBytes="
+                      + slab.retainedSlabBytes());
+            if (engine.equals("buffa")
+                && stage.equals("ingest")
+                && retained instanceof SlabMessage slab)
+              compactScalarAllocationBreakdown(fixture, slab, counter, thread);
             if (bytes < 0 || bytes > budget)
               throw new AssertionError(
                   "Compact scalar allocation budget: " + bytes + " > " + budget);
@@ -248,7 +268,7 @@ public final class Comparison {
             stage,
             ImageInfo.inImageRuntimeCode() ? "svm" : "jvm",
             fixture.decoder == null ? "none" : fixture.decoder.selected(),
-            NATIVE_VIEWS,
+            false,
             peak,
             ROWS,
             fixture.expected,
@@ -258,6 +278,38 @@ public final class Comparison {
         context.leave();
       }
     }
+  }
+
+  /** Separate durable publication from the native decode path using the same scalar slab. */
+  private static void compactScalarAllocationBreakdown(
+      Fixture fixture, SlabMessage slab, ThreadMXBean counter, long thread) throws Exception {
+    byte[] template = slab.slabCopy();
+    ProtoPlan plan = slab.plan();
+    var limits = new SlabLimits(plan.maxDepth() - 1, template.length);
+    int iterations = 256;
+    for (int i = 0; i < iterations; i++)
+      retained = SlabMessage.takeOwnership(plan, template.clone(), template.length, limits);
+    long before = counter.getThreadAllocatedBytes(thread);
+    for (int i = 0; i < iterations; i++) retained = template.clone();
+    double array = (counter.getThreadAllocatedBytes(thread) - before) / (double) iterations;
+    before = counter.getThreadAllocatedBytes(thread);
+    for (int i = 0; i < iterations; i++)
+      retained = SlabMessage.takeOwnership(plan, template.clone(), template.length, limits);
+    double publication = (counter.getThreadAllocatedBytes(thread) - before) / (double) iterations;
+    Operation typed = fixture::ingestTyped;
+    measure(typed, 8, fixture.expected);
+    before = counter.getThreadAllocatedBytes(thread);
+    measure(typed, 8, fixture.expected);
+    double typedIngest = (counter.getThreadAllocatedBytes(thread) - before) / (8.0 * ROWS);
+    System.out.println(
+        "ALLOCATION compact-scalar buffa breakdown array="
+            + array
+            + " publication="
+            + publication
+            + " typed-ingest="
+            + typedIngest
+            + " native-residue="
+            + (typedIngest - publication));
   }
 
   private interface Operation {
@@ -308,7 +360,7 @@ public final class Comparison {
     final String[] json = new String[ROWS];
     final ByteString[] immutableWire = new ByteString[ROWS];
     final Object[] rows = new Object[ROWS];
-    final @Nullable TypedMessage[] messages = new TypedMessage[ROWS];
+    final @Nullable ProtoMessage[] messages = new ProtoMessage[ROWS];
     final @Nullable WireInput[] inputs = new WireInput[ROWS];
     final JsonFormat.Parser jsonParser = JsonFormat.parser();
     final ProtoPlan plan;
@@ -421,8 +473,8 @@ public final class Comparison {
         if (decoder != null) {
           inputs[i] = decoder.allocate(wire[i].length).put(wire[i]);
           messages[i] = parseNative(i);
-          if (NATIVE_VIEWS && mixed && !Objects.requireNonNull(messages[i]).nativeBacked())
-            throw new AssertionError("Mixed native-view benchmark fell back to eager decoding");
+          if (mixed && !(messages[i] instanceof SlabMessage))
+            throw new AssertionError("Binary benchmark must use an owning slab");
           rows[i] = Objects.requireNonNull(messages[i]).row();
         } else rows[i] = parse(i);
       }
@@ -458,14 +510,10 @@ public final class Comparison {
       return Timestamp.parseFrom(wire[i]);
     }
 
-    TypedMessage parseNative(int i) {
+    ProtoMessage parseNative(int i) {
       return workload.equals("timestamp-json")
           ? Objects.requireNonNull(nativePlan).parseJson(json[i], 1 << 20)
-          : NATIVE_VIEWS
-              ? Objects.requireNonNull(nativePlan)
-                  .decodeView(Objects.requireNonNull(inputs[i]), 1 << 20)
-              : Objects.requireNonNull(nativePlan)
-                  .decode(Objects.requireNonNull(inputs[i]), 1 << 20);
+          : Objects.requireNonNull(nativePlan).decode(Objects.requireNonNull(inputs[i]), 1 << 20);
     }
 
     long project(int rotation) {
@@ -903,7 +951,7 @@ public final class Comparison {
     private static Object element(Object array, int index) {
       return array instanceof BorrowedArray borrowed
           ? borrowed.element(index)
-          : ((DataArray) array).get(index);
+          : ((OwnedArray) array).get(index);
     }
 
     public long read(ProtoAccess row) {

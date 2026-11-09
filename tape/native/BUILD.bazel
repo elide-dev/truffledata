@@ -6,13 +6,17 @@ load("@rules_cc//cc:defs.bzl", "cc_library", "cc_test")
 # arena.
 cc_library(
     name = "tape",
+    srcs = ["text.cc"],
     hdrs = [
         "arena.h",
         "ctape.h",
         "index_memory.h",
         "key_table.h",
         "tape_writer.h",
+        "tape_typed.h",
         "text_arena.h",
+        "typed_plan.h",
+        "typed_slots.h",
     ],
     copts = ["-std=c++17"],
     visibility = ["//visibility:public"],
@@ -41,6 +45,13 @@ cc_test(
 cc_test(
     name = "ctape_test",
     srcs = ["ctape_test.cc"],
+    copts = ["-std=c++17"],
+    deps = [":tape"],
+)
+
+cc_test(
+    name = "text_test",
+    srcs = ["text_test.cc"],
     copts = ["-std=c++17"],
     deps = [":tape"],
 )

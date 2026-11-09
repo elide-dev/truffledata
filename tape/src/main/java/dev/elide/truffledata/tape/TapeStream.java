@@ -92,9 +92,9 @@ public abstract class TapeStream<M extends TapeOwner> implements AutoCloseable {
   }
 
   /** Decodes the next document, or returns null after a status that means "no document". */
-  private TapeSession.@Nullable Backend<M> advance() {
+  private TapeSession.@Nullable Backend<M> advance(boolean byKey) {
     TapeSession.Backend<M> open = backend();
-    int status = open.streamNext(handle);
+    int status = open.streamNext(handle, byKey);
     if (status == TapeSession.STREAM_EMPTY) return null;
     if (status == TapeSession.STREAM_TRUNCATED)
       throw new IllegalArgumentException(
@@ -112,7 +112,7 @@ public abstract class TapeStream<M extends TapeOwner> implements AutoCloseable {
   @TruffleBoundary
   public final boolean next(TapeSink sink) {
     Objects.requireNonNull(sink);
-    TapeSession.Backend<M> open = advance();
+    TapeSession.Backend<M> open = advance(false);
     if (open == null) return false;
     session.exportStreamed(open, sink);
     return true;
@@ -125,7 +125,7 @@ public abstract class TapeStream<M extends TapeOwner> implements AutoCloseable {
    */
   @TruffleBoundary
   public final @Nullable TapeValue next() {
-    TapeSession.Backend<M> open = advance();
+    TapeSession.Backend<M> open = advance(true);
     return open == null ? null : session.lendStreamed(open, this);
   }
 

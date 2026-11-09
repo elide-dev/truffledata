@@ -6,6 +6,7 @@ import dev.elide.truffledata.Schema;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.UncheckedIOException;
+import java.nio.channels.FileChannel;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -35,7 +36,9 @@ public final class CsvPlan {
   private final CsvFormat format;
   final Dialect dialect;
 
-  /** Typed plans with named columns: field index by name (case-insensitive with ignoreHeaderCase). */
+  /**
+   * Typed plans with named columns: field index by name (case-insensitive with ignoreHeaderCase).
+   */
   private final Map<String, Integer> byName;
 
   /** The binding fixed by the plan (typed positional, or explicit header names), or null. */
@@ -83,7 +86,9 @@ public final class CsvPlan {
     return new CsvPlan(
         schema,
         format,
-        format.ignoreHeaderCase() ? java.util.Collections.unmodifiableMap(byName) : Map.copyOf(byName));
+        format.ignoreHeaderCase()
+            ? java.util.Collections.unmodifiableMap(byName)
+            : Map.copyOf(byName));
   }
 
   private static IllegalArgumentException unsupported(Field field, String reason) {
@@ -110,21 +115,62 @@ public final class CsvPlan {
    * INT64, FLOAT64 and BOOLEAN fields converts every value during the scan and retains no input.
    */
   public CsvBatch parse(byte[] utf8, CsvLimits limits) {
-    if (utf8.length > limits.maxBatchBytes()) throw CsvScanner.limit("maxBatchBytes");
-    int from = hasBom(utf8, utf8.length) ? 3 : 0;
+    return parse(utf8, 0, utf8.length, limits);
+  }
+
+  public CsvBatch parse(byte[] utf8, int from, int to) {
+    return parse(utf8, from, to, CsvLimits.DEFAULT);
+  }
+
+  /** Parses [from, to); STRING fields retain one copy of this window only. */
+  public CsvBatch parse(byte[] utf8, int from, int to, CsvLimits limits) {
+    return parseBytes(utf8, from, to, limits, false);
+  }
+
+  public CsvBatch parseOwned(byte[] utf8) {
+    return parseOwned(utf8, CsvLimits.DEFAULT);
+  }
+
+  public CsvBatch parseOwned(byte[] utf8, CsvLimits limits) {
+    return parseOwned(utf8, 0, utf8.length, limits);
+  }
+
+  public CsvBatch parseOwned(byte[] utf8, int from, int to) {
+    return parseOwned(utf8, from, to, CsvLimits.DEFAULT);
+  }
+
+  /**
+   * Transfers the entire array to the returned batch without copying. Only [from, to) is parsed.
+   * The caller must not mutate the backing array while the batch or any of its rows is reachable.
+   * Primitive-only batches retain no input. {@link CsvBatch#inputBytes()} reports retained bytes,
+   * including bytes outside the parsed window for a batch that retains this array.
+   */
+  public CsvBatch parseOwned(byte[] utf8, int from, int to, CsvLimits limits) {
+    return parseBytes(utf8, from, to, limits, true);
+  }
+
+  private CsvBatch parseBytes(byte[] utf8, int from, int to, CsvLimits limits, boolean owned) {
+    Objects.checkFromToIndex(from, to, utf8.length);
+    if (to - from > limits.maxBatchBytes()) throw CsvScanner.limit("maxBatchBytes");
+    int begin = hasBom(utf8, from, to) ? from + 3 : from;
     CsvScanner scanner = new CsvScanner(format, limits);
+    scanner.byteBase = -((long) from);
     Binder binder = new Binder(this);
-    binder.bind(scanner, utf8, from, utf8.length, true);
+    binder.bind(scanner, utf8, begin, to, true);
     Binding binding = Objects.requireNonNull(binder.binding);
-    // Header names are materialized by the binder, so only STRING cells need the input retained.
-    byte[] input = binding.strings ? utf8.clone() : utf8;
+    boolean copy = binding.strings && !owned;
+    byte[] input = copy ? java.util.Arrays.copyOfRange(utf8, from, to) : utf8;
+    int end = binder.end - (copy ? from : 0);
+    int limit = copy ? to - from : to;
+    if (copy) scanner.byteBase = 0;
     long base = binder.consumed;
     scanner.recordBase = base;
     scanner.stopAfter = stopAfter(base);
-    BatchBuilder builder = new BatchBuilder(binding, input, limits, dialect, 0, base, 0, 16);
-    builder.expect(binder.end, input.length);
-    if (format.maxRows() == 0) builder.prevalidate(scanner, binder.end, input.length);
-    scanner.scan(input, binder.end, input.length, true, builder);
+    BatchBuilder builder =
+        new BatchBuilder(binding, input, limits, dialect, 0, base, scanner.byteBase, 16);
+    builder.expect(end, limit);
+    if (format.maxRows() == 0) builder.prevalidate(scanner, end, limit);
+    scanner.scan(input, end, limit, true, builder);
     if (builder.full()) throw CsvScanner.limit("maxBatchRows");
     return binding.strings ? builder.build() : builder.buildDetached();
   }
@@ -147,6 +193,23 @@ public final class CsvPlan {
     return new CsvReader(input, this, limits, batchBytes);
   }
 
+  /**
+   * Streams an in-memory window; the reader copies each batch once. The caller keeps the input
+   * unchanged until the reader is closed; returned heap batches are independent of later changes.
+   */
+  public CsvReader open(byte[] utf8, int from, int to, CsvLimits limits, int batchBytes) {
+    Objects.checkFromToIndex(from, to, utf8.length);
+    return open(new java.io.ByteArrayInputStream(utf8, from, to - from), limits, batchBytes);
+  }
+
+  public CsvReader open(byte[] utf8, int from, int to) {
+    return open(utf8, from, to, CsvLimits.DEFAULT, Csv.DEFAULT_BATCH_BYTES);
+  }
+
+  public CsvReader open(byte[] utf8) {
+    return open(utf8, 0, utf8.length);
+  }
+
   /** One batch over a caller-owned mapping; valid while the mapping is open. */
   public CsvBatch parse(CsvMapping mapping) {
     return parse(mapping, CsvLimits.DEFAULT);
@@ -157,7 +220,9 @@ public final class CsvPlan {
     return mapped(mapping, limits, false);
   }
 
-  /** One batch over a private confined mapping of {@code path}; {@link CsvBatch#close()} unmaps it. */
+  /**
+   * One batch over a private confined mapping of {@code path}; {@link CsvBatch#close()} unmaps it.
+   */
   public CsvBatch parse(Path path) throws IOException {
     return parse(path, CsvLimits.DEFAULT);
   }
@@ -167,6 +232,38 @@ public final class CsvPlan {
     try {
       return mapped(mapping, limits, true);
     } catch (RuntimeException e) {
+      mapping.close();
+      throw e;
+    }
+  }
+
+  /**
+   * Maps a caller-owned channel; closing the returned batch unmaps it, leaving the channel open.
+   */
+  public CsvBatch parse(FileChannel channel) throws IOException {
+    return parse(channel, CsvLimits.DEFAULT);
+  }
+
+  public CsvBatch parse(FileChannel channel, CsvLimits limits) throws IOException {
+    CsvMapping mapping = CsvMapping.map(channel);
+    try {
+      return mapped(mapping, limits, true);
+    } catch (RuntimeException | Error e) {
+      mapping.close();
+      throw e;
+    }
+  }
+
+  /** Maps a caller-owned channel; closing the reader unmaps it, leaving the channel open. */
+  public CsvReader open(FileChannel channel) throws IOException {
+    return open(channel, CsvLimits.DEFAULT, Csv.DEFAULT_BATCH_BYTES);
+  }
+
+  public CsvReader open(FileChannel channel, CsvLimits limits, int batchBytes) throws IOException {
+    CsvMapping mapping = CsvMapping.map(channel);
+    try {
+      return new CsvReader(mapping, true, this, limits, batchBytes);
+    } catch (RuntimeException | Error e) {
       mapping.close();
       throw e;
     }
@@ -206,10 +303,14 @@ public final class CsvPlan {
   }
 
   static boolean hasBom(byte[] input, int length) {
-    return length >= 3
-        && input[0] == (byte) 0xEF
-        && input[1] == (byte) 0xBB
-        && input[2] == (byte) 0xBF;
+    return hasBom(input, 0, length);
+  }
+
+  private static boolean hasBom(byte[] input, int from, int to) {
+    return to - from >= 3
+        && input[from] == (byte) 0xEF
+        && input[from + 1] == (byte) 0xBB
+        && input[from + 2] == (byte) 0xBF;
   }
 
   private static int[] identity(int size) {
@@ -284,8 +385,7 @@ public final class CsvPlan {
   private Binding genericBinding(String[] names) {
     List<Field> fields = new ArrayList<>(names.length);
     for (String name : names)
-      fields.add(
-          new Field(name, Field.Kind.STRING, dialect.nulls.configured(), format.flexible()));
+      fields.add(new Field(name, Field.Kind.STRING, dialect.nulls.configured(), format.flexible()));
     return new Binding(new Schema(fields), names.length, identity(names.length));
   }
 
@@ -348,7 +448,9 @@ public final class CsvPlan {
     }
   }
 
-  /** Captures (and with a header or a skipped record, consumes) the first record to bind the plan. */
+  /**
+   * Captures (and with a header or a skipped record, consumes) the first record to bind the plan.
+   */
   static final class Binder implements CsvScanner.Records {
     private final CsvPlan plan;
     private byte[] input = new byte[0];

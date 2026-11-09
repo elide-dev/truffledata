@@ -3,7 +3,7 @@ package dev.elide.truffledata.json;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import dev.elide.truffledata.Schema;
 import dev.elide.truffledata.json.generated.JsonFFM;
-import dev.elide.truffledata.tape.SegmentValueTape;
+import dev.elide.truffledata.tape.SegmentTape;
 import dev.elide.truffledata.tape.TapeLexical;
 import dev.elide.truffledata.tape.TypedLayout;
 import dev.elide.truffledata.tape.TypedOwner;
@@ -136,56 +136,15 @@ public final class JsonJvm implements JsonDecoder {
     }
   }
 
-  /** Reader over a published JsonResult: its descriptor and key-hash side table. */
-  static SegmentValueTape tape(MemorySegment result) {
-    MemorySegment descriptor = result.get(ValueLayout.ADDRESS, JsonFFM.JsonResult_view_OFFSET);
-    return SegmentValueTape.of(
-        descriptor, result.get(ValueLayout.ADDRESS, JsonFFM.JsonResult_key_hashes_OFFSET));
+  /** Reader of the compact descriptor; native result storage owns its input and arrays. */
+  static SegmentTape tape(MemorySegment result) {
+    return new SegmentTape(result.get(ValueLayout.ADDRESS, JsonFFM.JsonResult_view_OFFSET));
   }
 
-  /** Lexical spans and retained input of a published JsonResult. */
-  static TapeLexical lexical(MemorySegment result, SegmentValueTape tape) {
-    long spanCount = result.get(ValueLayout.JAVA_LONG, JsonFFM.JsonResult_lexical_count_OFFSET);
-    if (spanCount != tape.nodeCount()) throw new IllegalStateException("JSON lexical table mismatch");
-    MemorySegment spans =
-        result.get(ValueLayout.ADDRESS, JsonFFM.JsonResult_lexical_OFFSET).reinterpret(spanCount * 8);
-    MemorySegment input = tape.region(1);
-    return new TapeLexical() {
-      @Override
-      public long span(long node) {
-        return spans.get(ValueLayout.JAVA_LONG, node * 8);
-      }
-
-      @Override
-      public byte inputByte(long offset) {
-        return input.get(ValueLayout.JAVA_BYTE, offset);
-      }
-    };
-  }
-
-  /** Message owning a published result (freed through td_json_release when it closes). */
   private JsonMessage message(MemorySegment result, Arena resultArena, Runnable onClose) {
-    SegmentValueTape tape = tape(result);
-    TapeLexical lexical = lexical(result, tape);
+    SegmentTape tape = tape(result);
     live++;
-    return new JsonMessage(
-        tape,
-        new JsonMessage.Storage() {
-          @Override
-          public long span(long node) {
-            return lexical.span(node);
-          }
-
-          @Override
-          public byte inputByte(long offset) {
-            return lexical.inputByte(offset);
-          }
-
-          @Override
-          public void run() {
-            releaseResult(result, resultArena, onClose);
-          }
-        });
+    return new JsonMessage.Managed(tape, () -> releaseResult(result, resultArena, onClose));
   }
 
   // ---- Sessions (performance plan Task E1) ----

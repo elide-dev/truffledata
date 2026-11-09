@@ -21,6 +21,8 @@ public final class JavaSink implements TapeSink {
   private @Nullable String key;
   private @Nullable Object result;
   private boolean done;
+  private @Nullable Map<Integer, @Nullable Object> anchors;
+  private int pendingAnchor = -1;
 
   /** A sink that materializes every key. */
   public JavaSink() {
@@ -40,7 +42,7 @@ public final class JavaSink implements TapeSink {
    */
   public static final class KeyCache {
     static final int CAPACITY = 1024;
-    // Open addressing at load factor ≤ 1/2, indexed by the 15-bit key hash.
+    // Open addressing at load factor ≤ 1/2, using decoded inline words or the key hash.
     private final String[] names = new String[2 * CAPACITY];
     private final byte[][] utf8 = new byte[2 * CAPACITY][];
     // Node words of names stored inline (at most 16 bytes): three per slot, word 0 nonzero; other
@@ -57,9 +59,9 @@ public final class JavaSink implements TapeSink {
     @TruffleBoundary
     String intern(TapeText key) {
       int mask = names.length - 1;
-      int slot = key.hash() & mask;
       long[] w = probe;
       boolean inline = key.inlineWords(w, 0);
+      int slot = (inline ? TapeText.inlineHash(w) : key.hash()) & mask;
       for (String name; (name = names[slot]) != null; slot = (slot + 1) & mask) {
         int at = 3 * slot;
         if (inline
@@ -88,6 +90,12 @@ public final class JavaSink implements TapeSink {
   @SuppressWarnings("unchecked")
   @TruffleBoundary
   private void add(@Nullable Object value) {
+    if (pendingAnchor >= 0) {
+      Map<Integer, @Nullable Object> table = anchors;
+      if (table == null) anchors = table = new LinkedHashMap<>();
+      table.put(pendingAnchor, value);
+      pendingAnchor = -1;
+    }
     if (open.isEmpty()) {
       if (done) throw new IllegalStateException("Sink already holds a value");
       result = value;
@@ -100,6 +108,18 @@ public final class JavaSink implements TapeSink {
     } else {
       ((List<@Nullable Object>) open.get(open.size() - 1)).add(value);
     }
+  }
+
+  @Override
+  public void anchor(int id) { pendingAnchor = id; }
+
+  @Override
+  @TruffleBoundary
+  public boolean alias(int id) {
+    Map<Integer, @Nullable Object> table = anchors;
+    if (table == null || !table.containsKey(id)) return false;
+    add(table.get(id));
+    return true;
   }
 
   private void push(Object container) {

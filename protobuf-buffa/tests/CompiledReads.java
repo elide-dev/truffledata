@@ -6,11 +6,13 @@ import com.oracle.truffle.api.interop.*;
 import com.oracle.truffle.api.nodes.*;
 import dev.elide.truffledata.*;
 import dev.elide.truffledata.buffa.*;
+import dev.elide.truffledata.protobuf.Projection;
 import dev.elide.truffledata.protobuf.ProtoPlan;
 import java.util.List;
 import org.graalvm.nativeimage.ImageInfo;
 import org.graalvm.polyglot.Context;
 
+@SuppressWarnings("removal")
 final class CompiledReads {
   private CompiledReads() {}
 
@@ -28,6 +30,7 @@ final class CompiledReads {
       try {
         cachedPlans(decoder);
         arrayViews(decoder);
+        interpretedLifetimes(decoder);
         var cachedRoot = new WktRoot(false);
         var cachedTarget = cachedRoot.getCallTarget();
         try (var message = plan.parseJson("7", 4096)) {
@@ -61,6 +64,285 @@ final class CompiledReads {
     }
   }
 
+  /**
+   * Interpreter-tier lifetimes (the enclosing context disables compilation): adopted read nodes
+   * cache each layout's accessor, and their bound reads still reject a closed typed message and a
+   * reset or closed slab session through ReadLongNode, ReadDoubleNode, ReadBooleanNode and
+   * ReadLengthNode.
+   */
+  private static void interpretedLifetimes(BuffaWire decoder) {
+    var sample = TypedAcceptance.plan("Sample");
+    int[] typedOrdinals = {
+      sample.schema().indexOf("count"),
+      sample.schema().indexOf("f"),
+      sample.schema().indexOf("flag"),
+      sample.schema().indexOf("text")
+    };
+    Object[] typedValues = {1234L, 1.5, true, 5};
+    try (var compiled = decoder.compile(sample, 65536)) {
+      var root = new LifetimeRoot();
+      var target = root.getCallTarget();
+      for (int round = 0; round < 3; round++) {
+        var message =
+            compiled.parseText("count: 1234 text: 'hello' blob: 'abc' f: 1.5 flag: true", 4096);
+        Object row = message.row();
+        interpretedReads(target, row, typedOrdinals, typedValues, "typed");
+        message.close();
+        interpretedRejections(target, row, typedOrdinals, "closed typed message");
+      }
+      Acceptance.check(NodeUtil.countNodes(root) <= 64, "interpreted lifetime AST budget");
+    }
+    if (decoder.selected() == BuffaWire.Selected.JAVA) return;
+    var model =
+        dev.elide.truffledata.generated.TruffleDataContracts.create(
+            TestLanguage.current(), Limits.DEFAULT, 16, 65536);
+    var flat = model.type("truffledata.lossless.Flat");
+    // Flat ordinals: i64, real, flag, text.
+    int[] slabOrdinals = {1, 12, 10, 13};
+    Object[] slabValues = {7L, 2.5, true, 3};
+    byte[] wire =
+        flat.encode(flat.newBuilder().set(1, 7L).set(12, 2.5).set(10, true).set(13, "λ😀").build());
+    try (var plan = decoder.compile(flat, 65536);
+        var input = decoder.allocate(wire.length).put(wire);
+        var session = plan.newSession(4096)) {
+      var root = new LifetimeRoot();
+      var target = root.getCallTarget();
+      Object row = session.decode(input);
+      Acceptance.check(row instanceof BorrowedSlabRow, "slab session yields borrowed rows");
+      interpretedReads(target, row, slabOrdinals, slabValues, "slab session");
+      session.reset();
+      interpretedRejections(target, row, slabOrdinals, "reset slab session");
+      Object current = session.decode(input);
+      interpretedReads(target, current, slabOrdinals, slabValues, "slab session after reset");
+      session.close();
+      interpretedRejections(target, current, slabOrdinals, "closed slab session");
+      Acceptance.check(NodeUtil.countNodes(root) <= 64, "interpreted slab AST budget");
+    }
+  }
+
+  private static void interpretedReads(
+      CallTarget target, Object row, int[] ordinals, Object[] values, String what) {
+    for (int warm = 0; warm < 3; warm++)
+      for (int operation = 0; operation < ordinals.length; operation++)
+        Acceptance.check(
+            values[operation].equals(target.call(row, operation, ordinals[operation])),
+            what + " interpreted read " + operation);
+  }
+
+  private static void interpretedRejections(
+      CallTarget target, Object row, int[] ordinals, String what) {
+    for (int operation = 0; operation < ordinals.length; operation++) {
+      int read = operation;
+      Acceptance.rejects(() -> target.call(row, read, ordinals[read]), IllegalStateException.class);
+    }
+  }
+
+  private static final class LifetimeRoot extends RootNode {
+    @Child private ReadLongNode longs = ReadLongNode.create();
+    @Child private ReadDoubleNode doubles = ReadDoubleNode.create();
+    @Child private ReadBooleanNode booleans = ReadBooleanNode.create();
+    @Child private ReadLengthNode lengths = ReadLengthNode.create();
+
+    LifetimeRoot() {
+      super(null);
+    }
+
+    @Override
+    public Object execute(VirtualFrame frame) {
+      Object[] args = frame.getArguments();
+      Object row = args[0];
+      int operation = (Integer) args[1], ordinal = (Integer) args[2];
+      return switch (operation) {
+        case 0 -> longs.execute(row, ordinal);
+        case 1 -> doubles.execute(row, ordinal);
+        case 2 -> booleans.execute(row, ordinal);
+        default -> lengths.execute(row, ordinal);
+      };
+    }
+  }
+
+  private static void slabSessionReads(BuffaWire decoder) {
+    if (decoder.selected() == BuffaWire.Selected.JAVA) return;
+    var contract = WellKnownAcceptance.model().type("google.protobuf.Int64Value");
+    try (var plan = decoder.compile(contract, 65536);
+        var input = decoder.allocate(2).put(new byte[] {8, 42});
+        var session = plan.newSession(4096)) {
+      var row = session.decode(input);
+      var root = new ConstantWktRoot(row);
+      var target = root.getCallTarget();
+      for (int i = 0; i < 200 && !root.compiled; i++) target.call(100000);
+      Acceptance.check(root.compiled, "session constant reads compiled");
+      Acceptance.check((Long) target.call(1000) == 42000, "session compiled scalar");
+      if (!ImageInfo.inImageCode()) {
+        var bean =
+            (com.sun.management.ThreadMXBean)
+                java.lang.management.ManagementFactory.getThreadMXBean();
+        bean.setThreadAllocatedMemoryEnabled(true);
+        // The guest may compile before HotSpot compiles the FFM adapter methods it calls.
+        // Stabilize that host code before observing allocations; keep every measured round below
+        // the existing per-read ceiling, rather than choosing a best sample.
+        for (int i = 0; i < 8; i++) target.call(1000000);
+        long thread = Thread.currentThread().threadId();
+        double[] rounds = new double[3];
+        for (int i = 0; i < rounds.length; i++) {
+          long before = bean.getThreadAllocatedBytes(thread);
+          target.call(1000000);
+          rounds[i] = (bean.getThreadAllocatedBytes(thread) - before) / 1000000.0;
+        }
+        System.out.println("SESSION compiled FFM bytes/read=" + java.util.Arrays.toString(rounds));
+        for (double bytes : rounds)
+          Acceptance.check(bytes <= 0.05, "session compiled FFM allocation budget: " + bytes);
+      }
+      session.decode(input);
+      Acceptance.rejects(() -> target.call(1), IllegalStateException.class);
+      var current = session.decode(input);
+      var variable = new WktRoot(false);
+      var variableTarget = variable.getCallTarget();
+      for (int i = 0; i < 200 && !variable.compiled; i++) variableTarget.call(current, 100000);
+      Acceptance.check(variable.compiled, "session parameter reads compiled");
+      session.close();
+      Acceptance.rejects(() -> variableTarget.call(current, 1), IllegalStateException.class);
+    }
+  }
+
+  private static void unknownFieldReads(BuffaWire decoder) {
+    var model =
+        dev.elide.truffledata.generated.TruffleDataContracts.create(
+            TestLanguage.current(), Limits.DEFAULT, 16, 65536);
+    var plan = model.type("truffledata.lossless.Flat");
+    var access =
+        new dev.elide.truffledata.generated.TruffleDataContracts.Access_truffledata$lossless$Flat(
+            plan);
+    // An empty unknown group has four raw bytes although it contains no nested values.
+    byte[] wire = {(byte) 0x9b, 6, (byte) 0x9c, 6};
+    unknownQueries(plan.decode(wire), 0, 4);
+    unknownQueries(access.decode(wire), 1, 4);
+    unknownQueries(plan.decodeSlab(wire), 2, 4);
+    unknownQueries(plan.decode(new byte[0]), 0, 0);
+    unknownQueries(access.decode(new byte[0]), 1, 0);
+    unknownQueries(plan.decodeSlab(new byte[0]), 2, 0);
+    if (decoder.selected() == BuffaWire.Selected.JAVA) return;
+    try (var compiled = decoder.compile(plan, 65536);
+        var input = decoder.allocate(wire.length).put(wire);
+        var empty = decoder.allocate(0);
+        var session = compiled.newSession(4096)) {
+      var row = session.decode(input);
+      var root = unknownQueries(row, 3, 4);
+      var durable = row.retain();
+      session.reset();
+      Acceptance.rejects(row::hasUnknownFields, IllegalStateException.class);
+      Acceptance.rejects(row::unknownFieldByteCount, IllegalStateException.class);
+      Acceptance.rejects(() -> root.getCallTarget().call(row, 1), IllegalStateException.class);
+      unknownQueries(durable, 2, 4);
+      unknownQueries(session.decode(empty), 3, 0);
+    }
+    // The plan reuses its default slab limits; every budget still applies after another one.
+    try (var compiled = decoder.compile(plan, 65536);
+        var input = decoder.allocate(wire.length).put(wire)) {
+      int extent = compiled.decodeSlab(wire, 65536).slabBytes();
+      Acceptance.rejects(() -> compiled.decodeSlab(wire, extent - 8), RuntimeException.class);
+      Acceptance.check(compiled.decode(wire, extent).slabBytes() == extent, "cached byte limits");
+      Acceptance.rejects(() -> compiled.decodeSlab(input, extent - 8), RuntimeException.class);
+      Acceptance.check(compiled.decode(input, extent).slabBytes() == extent, "cached input limits");
+    }
+  }
+
+  private static UnknownQueryRoot unknownQueries(Object row, int kind, int bytes) {
+    var root = new UnknownQueryRoot(kind);
+    var target = root.getCallTarget();
+    long value = bytes + (bytes == 0 ? 0 : 1);
+    for (int i = 0; i < 200 && !root.compiled; i++) target.call(row, 100000);
+    Acceptance.check(root.compiled, "unknown-byte queries compiled kind " + kind);
+    Acceptance.check(
+        (Long) target.call(row, 1000) == value * 1000,
+        "raw unknown-byte count and presence kind " + kind);
+    var bean =
+        (com.sun.management.ThreadMXBean) java.lang.management.ManagementFactory.getThreadMXBean();
+    Acceptance.check(bean.isThreadAllocatedMemorySupported(), "unknown query allocation counter");
+    bean.setThreadAllocatedMemoryEnabled(true);
+    long thread = Thread.currentThread().threadId();
+    target.call(row, 1000000);
+    long before = bean.getThreadAllocatedBytes(thread);
+    long observed = (Long) target.call(row, 1000000);
+    double allocation = (bean.getThreadAllocatedBytes(thread) - before) / 1000000.0;
+    Acceptance.check(
+        observed == value * 1000000 && allocation <= 0.05,
+        "unknown queries allocate no per-read storage: kind " + kind + " bytes/read=" + allocation);
+    System.out.println(
+        "UNKNOWN kind=" + kind + " raw_bytes=" + bytes + " compiled=true bytes/read=" + allocation);
+    Acceptance.check(NodeUtil.countNodes(root) <= 16, "unknown query AST budget");
+    return root;
+  }
+
+  private static final class UnknownQueryRoot extends RootNode {
+    final int kind;
+    boolean compiled;
+
+    UnknownQueryRoot(int kind) {
+      super(TestLanguage.current());
+      this.kind = kind;
+    }
+
+    @Override
+    public Object execute(VirtualFrame frame) {
+      Object row = frame.getArguments()[0];
+      int count = (Integer) frame.getArguments()[1];
+      long sum = 0;
+      for (int i = 0; i < count; i++) {
+        sum +=
+            switch (kind) {
+              case 0 -> {
+                var value = (dev.elide.truffledata.protobuf.ProtoRow) row;
+                yield value.unknownFieldByteCount() + (value.hasUnknownFields() ? 1 : 0);
+              }
+              case 1 -> {
+                var value = (dev.elide.truffledata.protobuf.GeneratedMessage) row;
+                yield value.unknownFieldByteCount() + (value.hasUnknownFields() ? 1 : 0);
+              }
+              case 2 -> {
+                var value = (dev.elide.truffledata.protobuf.SlabRow) row;
+                yield value.unknownFieldByteCount() + (value.hasUnknownFields() ? 1 : 0);
+              }
+              default -> {
+                var value = (BorrowedSlabRow) row;
+                yield value.unknownFieldByteCount() + (value.hasUnknownFields() ? 1 : 0);
+              }
+            };
+      }
+      if (CompilerDirectives.inInterpreter()) LoopNode.reportLoopCount(this, count);
+      compiled |= CompilerDirectives.inCompiledCode();
+      return sum;
+    }
+  }
+
+  private static void lazyProjectionReads(BuffaWire decoder) {
+    if (decoder.selected() == BuffaWire.Selected.JAVA) return;
+    var contract = TypedAcceptance.plan("Sample");
+    var selection = Projection.builder(contract).build().lazyChildren();
+    byte[] wire =
+        contract.encode(
+            contract
+                .newBuilder()
+                .set(7, contract.nested(7).newBuilder().set(0, 42L).build())
+                .build());
+    try (var base = decoder.compile(contract, 65536);
+        var plan = base.project(selection);
+        var input = decoder.allocate(wire.length).put(wire);
+        var session = plan.newSession(65536)) {
+      var message = session.decode(input);
+      Object child = message.get(7);
+      var root = new ConstantWktRoot(child);
+      var target = root.getCallTarget();
+      for (int i = 0; i < 200 && !root.compiled; i++) target.call(100000);
+      Acceptance.check(
+          root.compiled && (Long) target.call(1000) == 42000,
+          "lazy projected child reads compiled");
+      Acceptance.check(NodeUtil.countNodes(root) <= 192, "lazy projected access AST budget");
+      session.reset();
+      Acceptance.rejects(() -> target.call(1), IllegalStateException.class);
+    }
+  }
+
   private static void arrayViews(BuffaWire decoder) {
     var contract = TypedAcceptance.plan("RepeatedScalars");
     var root = new ArrayLengthRoot();
@@ -81,16 +363,13 @@ final class CompiledReads {
         var empty = plan.decodeView(emptyInput, 65536)) {
       Acceptance.check((Integer) target.call(message.row()) == 2, "shared native array length");
       Acceptance.check((Integer) target.call(empty.row()) == 0, "empty native array length");
-      var rejected = new java.util.concurrent.atomic.AtomicInteger();
+      var successful = new java.util.concurrent.atomic.AtomicInteger();
       Object countedRow = message.row();
       var other =
           new Thread(
               () -> {
-                try {
-                  ((BorrowedArray) data.read(countedRow, 0)).size();
-                } catch (IllegalStateException expected) {
-                  rejected.incrementAndGet();
-                }
+                if (((OwnedArray) data.read(countedRow, 0)).size() == 2)
+                  successful.incrementAndGet();
               });
       other.start();
       try {
@@ -99,7 +378,7 @@ final class CompiledReads {
         Thread.currentThread().interrupt();
         throw new AssertionError(failure);
       }
-      Acceptance.check(rejected.get() == 1, "array access enforces thread ownership");
+      Acceptance.check(successful.get() == 1, "durable array supports cross-thread reads");
       Acceptance.rejects(() -> message.row().get(-1), IndexOutOfBoundsException.class);
       Acceptance.rejects(() -> message.row().get(contract.size()), IndexOutOfBoundsException.class);
       Object array = data.read(message.row(), 0);
@@ -123,14 +402,13 @@ final class CompiledReads {
       } catch (InvalidArrayIndexException failure) {
         throw new AssertionError(failure);
       }
-      DataArray detached = ((BorrowedArray) data.read(message.row(), 14)).snapshot();
+      OwnedArray detached = (OwnedArray) data.read(message.row(), 14);
       Object row = message.row();
       message.close();
-      Acceptance.rejects(() -> target.call(row), IllegalStateException.class);
-      Acceptance.rejects(() -> ((BorrowedArray) array).size(), IllegalStateException.class);
-      Acceptance.rejects(() -> ((BorrowedArray) array).snapshot(), IllegalStateException.class);
+      Acceptance.check((Integer) target.call(row) == 2, "durable cached array survives close");
+      Acceptance.check(((OwnedArray) array).size() == 2, "durable array size after close");
       Acceptance.check(
-          ((DataArray) detached.get(0)).get(0).equals(7L), "nested array snapshot survives close");
+          ((OwnedArray) detached.get(0)).get(0).equals(7L), "nested array snapshot survives close");
     }
   }
 
@@ -199,7 +477,9 @@ final class CompiledReads {
         }
         Object closed = message.row();
         message.close();
-        Acceptance.rejects(() -> target.call(closed), IllegalStateException.class);
+        Acceptance.check(
+            (Long) target.call(closed) == value + (!flag ? 100 : 0),
+            "durable cached plan after close");
         Acceptance.check(
             (Long) target.call(defaults.row()) == fallback + (flag ? 100 : 0),
             "independent owner after close");
@@ -238,6 +518,9 @@ final class CompiledReads {
       context.enter();
       try {
         nativeViewReads(decoder);
+        slabSessionReads(decoder);
+        unknownFieldReads(decoder);
+        lazyProjectionReads(decoder);
         generatedReads(decoder);
         generatedOwnedReads();
         generatedProjection();
@@ -262,7 +545,13 @@ final class CompiledReads {
                   "typed compiled value");
               Acceptance.check(NodeUtil.countNodes(typedRoot) <= 192, "typed access AST budget");
               typed.close();
-              Acceptance.rejects(() -> typedTarget.call(typedRow, 1), IllegalStateException.class);
+              if (format == 0)
+                Acceptance.check(
+                    ((Long) typedTarget.call(typedRow, 1)) == 255,
+                    "durable compiled value after close");
+              else
+                Acceptance.rejects(
+                    () -> typedTarget.call(typedRow, 1), IllegalStateException.class);
             }
           }
         }
@@ -615,9 +904,7 @@ final class CompiledReads {
     try (var plan = decoder.compile(contract, 65536);
         var input = decoder.allocate(6).put(new byte[] {8, (byte) 0xe8, 7, 26, 1, (byte) 255});
         var message = plan.decodeView(input, 4096)) {
-      Acceptance.check(
-          message.nativeBacked() == (decoder.selected() != BuffaWire.Selected.JAVA),
-          "compiled native view selected");
+      Acceptance.check(message.slabBacked(), "compiled native view selected");
       Object row = message.row();
       Object originalBytes = message.row().get(2);
       var constant = new ConstantValueRoot(row);
@@ -626,8 +913,7 @@ final class CompiledReads {
       Acceptance.check(constant.compiled, "constant native value reader compiled");
       // Host access promotes the single-value cache after the guest captured this row.
       Acceptance.check(
-          ((BorrowedArray) message.row().get(3)).size() == 0,
-          "empty repeated field promotes cache");
+          ((OwnedArray) message.row().get(3)).size() == 0, "empty repeated field promotes cache");
       constant.compiled = false;
       Acceptance.check(
           constantTarget.call(1000) == originalBytes,
@@ -649,9 +935,9 @@ final class CompiledReads {
           NodeUtil.countNodes(bytes) <= 192 && NodeUtil.countNodes(integer) <= 192,
           "native view AST budget");
       message.close();
-      Acceptance.rejects(() -> constantTarget.call(1), IllegalStateException.class);
-      Acceptance.rejects(() -> byteTarget.call(row, 1), IllegalStateException.class);
-      Acceptance.rejects(() -> integerTarget.call(row, 1), IllegalStateException.class);
+      Acceptance.check(constantTarget.call(1) == originalBytes, "durable constant after close");
+      Acceptance.check((Long) byteTarget.call(row, 1) == 255, "durable byte after close");
+      Acceptance.check((Long) integerTarget.call(row, 1) == 1000, "durable integer after close");
     }
   }
 

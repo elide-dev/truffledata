@@ -5,7 +5,7 @@ import com.oracle.truffle.api.library.*;
 
 /** Immutable interop sequence of already normalized values. */
 @ExportLibrary(InteropLibrary.class)
-public final class DataArray implements TruffleObject {
+public final class DataArray implements OwnedArray {
   private final Object values;
 
   public DataArray(Object[] values) {

@@ -3,15 +3,33 @@ package dev.elide.truffledata.tape;
 import com.oracle.truffle.api.Assumption;
 
 /** Immutable, thread-safe, heap-owned tape index. Never closes; reads never touch native memory. */
-public final class TapeSnapshot extends TapeOwner {
-  private final long[] spans;
+public class TapeSnapshot extends TapeOwner {
   // The heap tape is the owner's `tape`; holding the format instead keeps snapshots at their size.
   private final TapeFormat format;
+  private final byte @org.jspecify.annotations.Nullable [] lexicalInput;
 
-  private TapeSnapshot(HeapValueTape tape, long[] spans, TapeFormat format) {
+  private TapeSnapshot(TapeReader tape, TapeFormat format) {
+    this(tape, format, null);
+  }
+
+  private TapeSnapshot(TapeReader tape, TapeFormat format, byte @org.jspecify.annotations.Nullable [] lexicalInput) {
     super(tape, null);
-    this.spans = spans;
+    this.lexicalInput = lexicalInput;
     this.format = checkFormat(tape, format);
+  }
+
+  // Metadata-bearing snapshots use this class; plain snapshots make the absence of alias
+  // behavior a class property so fresh child views stay scalar-replaceable in compiled reads.
+  @Override protected boolean aliases() { return true; }
+
+  private static final class Plain extends TapeSnapshot {
+    Plain(TapeReader tape, TapeFormat format) { super(tape, format); }
+    @Override protected boolean aliases() { return false; }
+  }
+
+  private static TapeSnapshot create(TapeReader tape, TapeFormat format,
+      byte @org.jspecify.annotations.Nullable [] source) {
+    return format.hasAliases() ? new TapeSnapshot(tape, format, source) : new Plain(tape, format);
   }
 
   /**
@@ -20,27 +38,29 @@ public final class TapeSnapshot extends TapeOwner {
    * copied as references, never expanded: per-node words are sliced to the subtree and targets
    * re-based to it, so an alias whose target lies outside the subtree throws when read.
    */
-  static TapeSnapshot copy(TapeOwner owner, TapeSource source, long root) {
+  static TapeSnapshot copy(TapeOwner owner, long root) {
     owner.check();
-    HeapValueTape heap = HeapValueTape.copy(owner.tape, source, root);
-    int count = Math.toIntExact(heap.nodeCount());
-    long[] spans = new long[count];
-    for (int i = 0; i < count; i++) spans[i] = owner.lexical(root + i);
-    TapeFormat format = owner.format();
-    int[] meta = format.meta;
-    long[] targets = format.aliasTargets;
-    if (meta != null && targets != null) {
-      int[] slice = new int[count];
-      System.arraycopy(meta, Math.toIntExact(root), slice, 0, count);
-      long[] rebased = new long[targets.length];
-      for (int i = 0; i < targets.length; i++) rebased[i] = targets[i] - root;
-      format = format.withAliases(rebased, slice);
+    HeapTape heap = HeapTape.copy(owner.tape, root);
+    TapeFormat format = owner.format().slice(root, Math.toIntExact(heap.nodeCount()));
+    byte[] source = null;
+    if (format.hasAliases()) {
+      long inputFirst = 0, extent = 0;
+      for (long node = 0; node < heap.nodeCount(); node = heap.step(node)) {
+        long span = heap.span(node);
+        if (span == 0) continue;
+        inputFirst = (owner.lexical(root + node) >>> 32) - (span >>> 32);
+        extent = Math.max(extent, (span >>> 32) + (span & 0xffffffffL));
+      }
+      source = new byte[Math.toIntExact(extent)];
+      for (int i = 0; i < source.length; i++) source[i] = owner.lexicalByte(inputFirst + i);
     }
-    return new TapeSnapshot(heap, spans, format);
+    return create(heap, format, source);
   }
 
   public long nodeCount() {
-    return tape.nodeCount();
+    long count = 0;
+    for (long i = 0; i < tape.nodeCount(); i = tape.step(i)) count++;
+    return count;
   }
 
   @Override
@@ -55,12 +75,14 @@ public final class TapeSnapshot extends TapeOwner {
 
   @Override
   protected long lexical(long node) {
-    return spans[Math.toIntExact(node)];
+    return tape.span(node);
   }
 
   @Override
   protected byte lexicalByte(long offset) {
-    return ((HeapValueTape) tape).inputByte(offset);
+    byte[] source = lexicalInput;
+    if (source != null) return source[Math.toIntExact(offset)];
+    return tape.inputByte(offset);
   }
 
   /** A snapshot of a snapshot shares nothing mutable, so the same storage is returned. */

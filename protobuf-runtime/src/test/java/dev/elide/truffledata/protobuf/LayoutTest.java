@@ -27,8 +27,9 @@ class LayoutTest {
   @Test
   void unknownFieldBytesAreOwnedAndPreserveEveryWireKind() {
     var plan = unknowns();
-    byte[] wire = {40, 7, 49, 1, 2, 3, 4, 5, 6, 7, 8, 58, 2, 11, 12,
-        67, 8, 1, 68, 77, 1, 2, 3, 4, 16, 9};
+    byte[] wire = {
+      40, 7, 49, 1, 2, 3, 4, 5, 6, 7, 8, 58, 2, 11, 12, 67, 8, 1, 68, 77, 1, 2, 3, 4, 16, 9
+    };
     var row = plan.decode(wire);
     assertArrayEquals(wire, row.unknownFieldBytes());
     byte[] exposed = row.unknownFieldBytes();

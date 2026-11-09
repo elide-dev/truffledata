@@ -1,0 +1,210 @@
+INFO: Invocation ID: a8ded6b6-9c8e-4abc-aa0c-adcfaeaf6afa
+INFO: Streaming build results to: https://app.buildbuddy.io/invocation/a8ded6b6-9c8e-4abc-aa0c-adcfaeaf6afa
+Computing main repo mapping: 
+Loading: 
+Loading: 0 packages loaded
+Analyzing: 5 targets (0 packages loaded, 0 targets configured)
+Analyzing: 5 targets (0 packages loaded, 0 targets configured)
+
+INFO: Analyzed 5 targets (0 packages loaded, 0 targets configured).
+[10 / 48] Building tape/libjvm.jar (1 source file) and running annotation processors (TruffleProcessor, VerifyTruffleProcessor, LanguageRegistrationProcessor, VerifyCompilationFinalProcessor); 1s remote, remote-cache ... (6 actions running)
+[12 / 48] Compiling json/native/typed_probe.cc; 10s remote, remote-cache ... (6 actions, 5 running)
+[12 / 48] Compiling json/native/typed_probe.cc; 12s remote, remote-cache ... (6 actions running)
+[13 / 48] Compiling json/native/typed_probe.cc; 15s remote, remote-cache ... (6 actions, 5 running)
+[13 / 48] Compiling json/native/typed_probe.cc; 17s remote, remote-cache ... (6 actions running)
+[15 / 48] Compiling json/native/typed_probe.cc; 19s remote, remote-cache ... (6 actions, 5 running)
+INFO: From Compiling json/native/api.cc:
+json/native/api.cc:10:26: warning: comparison of different enumeration types ('td_json_status' and 'truffledata::json::status') [-Wenum-compare]
+   10 | static_assert(TD_JSON_OK == truffledata::json::status_ok && TD_JSON_ARGUMENT == truffledata::json::status_argument
+      |               ~~~~~~~~~~ ^  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+json/native/api.cc:10:78: warning: comparison of different enumeration types ('td_json_status' and 'truffledata::json::status') [-Wenum-compare]
+   10 | static_assert(TD_JSON_OK == truffledata::json::status_ok && TD_JSON_ARGUMENT == truffledata::json::status_argument
+      |                                                             ~~~~~~~~~~~~~~~~ ^  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+json/native/api.cc:11:32: warning: comparison of different enumeration types ('td_json_status' and 'truffledata::json::status') [-Wenum-compare]
+   11 |               && TD_JSON_LIMIT == truffledata::json::status_limit && TD_JSON_ALLOCATION == truffledata::json::status_allocation
+      |                  ~~~~~~~~~~~~~ ^  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+json/native/api.cc:11:89: warning: comparison of different enumeration types ('td_json_status' and 'truffledata::json::status') [-Wenum-compare]
+   11 |               && TD_JSON_LIMIT == truffledata::json::status_limit && TD_JSON_ALLOCATION == truffledata::json::status_allocation
+      |                                                                      ~~~~~~~~~~~~~~~~~~ ^  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+json/native/api.cc:12:33: warning: comparison of different enumeration types ('td_json_status' and 'truffledata::json::status') [-Wenum-compare]
+   12 |               && TD_JSON_SYNTAX == truffledata::json::status_syntax && TD_JSON_INTERNAL == truffledata::json::status_internal
+      |                  ~~~~~~~~~~~~~~ ^  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+json/native/api.cc:12:89: warning: comparison of different enumeration types ('td_json_status' and 'truffledata::json::status') [-Wenum-compare]
+   12 |               && TD_JSON_SYNTAX == truffledata::json::status_syntax && TD_JSON_INTERNAL == truffledata::json::status_internal
+      |                                                                        ~~~~~~~~~~~~~~~~ ^  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+json/native/api.cc:13:35: warning: comparison of different enumeration types ('td_json_status' and 'truffledata::json::status') [-Wenum-compare]
+   13 |               && TD_JSON_CONTRACT == truffledata::json::status_contract
+      |                  ~~~~~~~~~~~~~~~~ ^  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+json/native/api.cc:14:41: warning: comparison of different enumeration types ('td_json_status' and 'truffledata::json::status') [-Wenum-compare]
+   14 |               && TD_JSON_TEXT_TOO_SMALL == truffledata::json::status_text_too_small
+      |                  ~~~~~~~~~~~~~~~~~~~~~~ ^  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+json/native/api.cc:15:39: warning: comparison of different enumeration types ('td_json_status' and 'truffledata::json::status') [-Wenum-compare]
+   15 |               && TD_JSON_STREAM_EMPTY == truffledata::json::status_stream_empty
+      |                  ~~~~~~~~~~~~~~~~~~~~ ^  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+json/native/api.cc:16:43: warning: comparison of different enumeration types ('td_json_status' and 'truffledata::json::status') [-Wenum-compare]
+   16 |               && TD_JSON_STREAM_TRUNCATED == truffledata::json::status_stream_truncated,
+      |                  ~~~~~~~~~~~~~~~~~~~~~~~~ ^  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+10 warnings generated.
+[16 / 48] Compiling json/native/typed_probe.cc; 21s remote, remote-cache ... (5 actions running)
+INFO: From Compiling json/native/api.cc:
+json/native/api.cc:10:26: warning: comparison of different enumeration types ('td_json_status' and 'truffledata::json::status') [-Wenum-compare]
+   10 | static_assert(TD_JSON_OK == truffledata::json::status_ok && TD_JSON_ARGUMENT == truffledata::json::status_argument
+      |               ~~~~~~~~~~ ^  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+json/native/api.cc:10:78: warning: comparison of different enumeration types ('td_json_status' and 'truffledata::json::status') [-Wenum-compare]
+   10 | static_assert(TD_JSON_OK == truffledata::json::status_ok && TD_JSON_ARGUMENT == truffledata::json::status_argument
+      |                                                             ~~~~~~~~~~~~~~~~ ^  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+json/native/api.cc:11:32: warning: comparison of different enumeration types ('td_json_status' and 'truffledata::json::status') [-Wenum-compare]
+   11 |               && TD_JSON_LIMIT == truffledata::json::status_limit && TD_JSON_ALLOCATION == truffledata::json::status_allocation
+      |                  ~~~~~~~~~~~~~ ^  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+json/native/api.cc:11:89: warning: comparison of different enumeration types ('td_json_status' and 'truffledata::json::status') [-Wenum-compare]
+   11 |               && TD_JSON_LIMIT == truffledata::json::status_limit && TD_JSON_ALLOCATION == truffledata::json::status_allocation
+      |                                                                      ~~~~~~~~~~~~~~~~~~ ^  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+json/native/api.cc:12:33: warning: comparison of different enumeration types ('td_json_status' and 'truffledata::json::status') [-Wenum-compare]
+   12 |               && TD_JSON_SYNTAX == truffledata::json::status_syntax && TD_JSON_INTERNAL == truffledata::json::status_internal
+      |                  ~~~~~~~~~~~~~~ ^  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+json/native/api.cc:12:89: warning: comparison of different enumeration types ('td_json_status' and 'truffledata::json::status') [-Wenum-compare]
+   12 |               && TD_JSON_SYNTAX == truffledata::json::status_syntax && TD_JSON_INTERNAL == truffledata::json::status_internal
+      |                                                                        ~~~~~~~~~~~~~~~~ ^  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+json/native/api.cc:13:35: warning: comparison of different enumeration types ('td_json_status' and 'truffledata::json::status') [-Wenum-compare]
+   13 |               && TD_JSON_CONTRACT == truffledata::json::status_contract
+      |                  ~~~~~~~~~~~~~~~~ ^  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+json/native/api.cc:14:41: warning: comparison of different enumeration types ('td_json_status' and 'truffledata::json::status') [-Wenum-compare]
+   14 |               && TD_JSON_TEXT_TOO_SMALL == truffledata::json::status_text_too_small
+      |                  ~~~~~~~~~~~~~~~~~~~~~~ ^  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+json/native/api.cc:15:39: warning: comparison of different enumeration types ('td_json_status' and 'truffledata::json::status') [-Wenum-compare]
+   15 |               && TD_JSON_STREAM_EMPTY == truffledata::json::status_stream_empty
+      |                  ~~~~~~~~~~~~~~~~~~~~ ^  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+json/native/api.cc:16:43: warning: comparison of different enumeration types ('td_json_status' and 'truffledata::json::status') [-Wenum-compare]
+   16 |               && TD_JSON_STREAM_TRUNCATED == truffledata::json::status_stream_truncated,
+      |                  ~~~~~~~~~~~~~~~~~~~~~~~~ ^  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+10 warnings generated.
+[17 / 48] Compiling json/native/typed_probe.cc; 22s remote, remote-cache ... (5 actions, 4 running)
+[17 / 48] Compiling json/native/typed_probe.cc; 24s remote, remote-cache ... (6 actions running)
+[18 / 48] Compiling json/native/typed_stage2_test.cc; 25s remote, remote-cache ... (6 actions, 5 running)
+[18 / 48] Compiling json/native/typed_stage2_test.cc; 27s remote, remote-cache ... (6 actions running)
+[19 / 48] Compiling json/native/typed_stage2_test.cc; 33s remote, remote-cache ... (5 actions running)
+[20 / 48] LTO indexing json/native/typed_test.lto/bazel-out/rbe_linux_amd64-opt/bin/json/native/_objs/typed_test/typed_test.o.imports; 18s remote, remote-cache ... (5 actions running)
+[21 / 48] LTO indexing json/native/json_shared.so.lto/bazel-out/rbe_linux_amd64-opt/bin/json/native/_objs/truffledata_json/api.pic.o.imports; 12s remote, remote-cache ... (5 actions, 4 running)
+[21 / 48] LTO indexing json/native/json_shared.so.lto/bazel-out/rbe_linux_amd64-opt/bin/json/native/_objs/truffledata_json/api.pic.o.imports; 13s remote, remote-cache ... (5 actions running)
+[22 / 48] LTO indexing json/native/json_shared.so.lto/bazel-out/rbe_linux_amd64-opt/bin/json/native/_objs/truffledata_json/api.pic.o.imports; 15s remote, remote-cache ... (5 actions, 4 running)
+[22 / 48] LTO indexing json/native/json_shared.so.lto/bazel-out/rbe_linux_amd64-opt/bin/json/native/_objs/truffledata_json/api.pic.o.imports; 17s remote, remote-cache ... (5 actions running)
+[26 / 48] LTO indexing json/native/typed_probe.lto/bazel-out/rbe_linux_amd64-opt/bin/json/native/_objs/typed_probe/typed_probe.o.imports; 15s remote, remote-cache ... (6 actions running)
+[26 / 48] LTO indexing json/native/typed_probe.lto/bazel-out/rbe_linux_amd64-opt/bin/json/native/_objs/typed_probe/typed_probe.o.imports; 26s remote, remote-cache ... (6 actions running)
+[27 / 48] LTO indexing json/native/typed_probe.lto/bazel-out/rbe_linux_amd64-opt/bin/json/native/_objs/typed_probe/typed_probe.o.imports; 28s remote, remote-cache ... (6 actions running)
+[29 / 48] LTO indexing json/native/typed_probe.lto/bazel-out/rbe_linux_amd64-opt/bin/json/native/_objs/typed_probe/typed_probe.o.imports; 29s remote, remote-cache ... (5 actions running)
+[30 / 48] LTO Backend Compile json/native/libtruffledata_json.so.lto/bazel-out/rbe_linux_amd64-opt/bin/json/native/_objs/truffledata_json/api.pic.o; 19s remote, remote-cache ... (5 actions, 4 running)
+[30 / 48] LTO Backend Compile json/native/libtruffledata_json.so.lto/bazel-out/rbe_linux_amd64-opt/bin/json/native/_objs/truffledata_json/api.pic.o; 20s remote, remote-cache ... (5 actions running)
+[31 / 48] LTO Backend Compile json/native/json_shared.so.lto/bazel-out/rbe_linux_amd64-opt/bin/json/native/_objs/json_shared.so/api.pic.o; 19s remote, remote-cache ... (5 actions running)
+[32 / 48] LTO Backend Compile json/native/typed_stage2_test.lto/bazel-out/rbe_linux_amd64-opt/bin/json/native/_objs/typed_stage2_test/typed_stage2_test.o; 10s remote, remote-cache ... (5 actions, 4 running)
+[32 / 48] LTO Backend Compile json/native/typed_stage2_test.lto/bazel-out/rbe_linux_amd64-opt/bin/json/native/_objs/typed_stage2_test/typed_stage2_test.o; 12s remote, remote-cache ... (5 actions running)
+[33 / 48] LTO Backend Compile json/native/typed_stage2_test.lto/bazel-out/rbe_linux_amd64-opt/bin/json/native/_objs/typed_stage2_test/typed_stage2_test.o; 17s remote, remote-cache ... (5 actions, 4 running)
+[34 / 49] LTO Backend Compile json/native/typed_stage2_test.lto/bazel-out/rbe_linux_amd64-opt/bin/json/native/_objs/typed_stage2_test/typed_stage2_test.o; 18s remote, remote-cache ... (5 actions running)
+[34 / 49] LTO Backend Compile json/native/typed_stage2_test.lto/bazel-out/rbe_linux_amd64-opt/bin/json/native/_objs/typed_stage2_test/typed_stage2_test.o; 22s remote, remote-cache ... (5 actions running)
+INFO: From Testing //json/native:typed_test:
+==================== Test output for //json/native:typed_test:
+Typed nested and repeated JSON slots, contracts and retained ownership passed
+================================================================================
+[35 / 49] 1 / 5 tests; LTO Backend Compile json/native/typed_stage2_test.lto/bazel-out/rbe_linux_amd64-opt/bin/json/native/_objs/typed_stage2_test/typed_stage2_test.o; 24s remote, remote-cache ... (4 actions running)
+[36 / 49] 1 / 5 tests; LTO Backend Compile json/native/typed_stage2_test.lto/bazel-out/rbe_linux_amd64-opt/bin/json/native/_objs/typed_stage2_test/typed_stage2_test.o; 25s remote, remote-cache ... (4 actions, 3 running)
+[36 / 49] 1 / 5 tests; LTO Backend Compile json/native/typed_stage2_test.lto/bazel-out/rbe_linux_amd64-opt/bin/json/native/_objs/typed_stage2_test/typed_stage2_test.o; 26s remote, remote-cache ... (4 actions running)
+[37 / 49] 1 / 5 tests; Linking json/native/libtruffledata_json.so; 23s remote, remote-cache ... (4 actions, 3 running)
+[37 / 49] 1 / 5 tests; Linking json/native/libtruffledata_json.so; 25s remote, remote-cache ... (4 actions running)
+[38 / 49] 1 / 5 tests; Linking json/native/libtruffledata_json.so; 27s remote, remote-cache ... (4 actions, 3 running)
+[39 / 50] 1 / 5 tests; Linking json/native/libtruffledata_json.so; 29s remote, remote-cache ... (4 actions running)
+[40 / 50] 1 / 5 tests; Linking json/native/typed_probe; 17s remote, remote-cache ... (4 actions, 3 running)
+[41 / 50] 1 / 5 tests; Linking json/native/typed_probe; 18s remote, remote-cache ... (4 actions running)
+[41 / 50] 2 / 5 tests; Linking json/native/typed_probe; 22s remote, remote-cache ... (4 actions running)
+INFO: From Testing //json/tests:jvm:
+==================== Test output for //json/tests:jvm:
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by com.oracle.truffle.api.strings.TStringUnsafe (file:/workspace/bazel-out/rbe_linux_amd64-opt/bin/json/tests/jvm.runfiles/rules_jvm_external++maven+maven/org/graalvm/truffle/truffle-api/25.5.5-elide.27/processed_truffle-api-25.5.5-elide.27.jar)
+WARNING: Please consider reporting this to the maintainers of class com.oracle.truffle.api.strings.TStringUnsafe
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+JSON E2 diagnostic: 210 B validate critical 391 ns, normal 520 ns (62936 decodes under GC stress)
+
+Test run finished after 5573 ms
+[         5 containers found      ]
+[         0 containers skipped    ]
+[         5 containers started    ]
+[         0 containers aborted    ]
+[         5 containers successful ]
+[         0 containers failed     ]
+[        64 tests found           ]
+[         0 tests skipped         ]
+[        64 tests started         ]
+[         0 tests aborted         ]
+[        64 tests successful      ]
+[         0 tests failed          ]
+
+================================================================================
+[42 / 50] 2 / 5 tests; Linking json/native/typed_probe; 23s remote, remote-cache ... (3 actions running)
+[44 / 51] 2 / 5 tests; Linking json/native/typed_probe; 24s remote, remote-cache ... (3 actions running)
+[46 / 52] 2 / 5 tests; LTO indexing json/native/api_test.lto/bazel-out/rbe_linux_amd64-opt/bin/json/native/_objs/api_test/api_test.o.imports; 8s remote, remote-cache ... (3 actions running)
+[48 / 52] 2 / 5 tests; Testing //json/native:typed_stage2_test; 5s remote, remote-cache ... (3 actions, 2 running)
+[48 / 52] 2 / 5 tests; Testing //json/native:typed_stage2_test; 7s remote, remote-cache ... (3 actions running)
+[48 / 52] 2 / 5 tests; Testing //json/native:typed_stage2_test; 9s remote, remote-cache ... (3 actions running)
+[48 / 52] 2 / 5 tests; Testing //json/native:typed_stage2_test; 11s remote, remote-cache ... (3 actions running)
+[48 / 52] 2 / 5 tests; Testing //json/native:typed_stage2_test; 12s remote, remote-cache ... (3 actions running)
+[48 / 52] 3 / 5 tests; Testing //json/native:typed_stage2_test; 15s remote, remote-cache ... (3 actions running)
+INFO: From Testing //json/native:typed_stage2_test:
+==================== Test output for //json/native:typed_stage2_test:
+typed structural oracle parity: 155647 cases
+================================================================================
+[49 / 52] 3 / 5 tests; Testing //json/native:typed_probe; 16s remote, remote-cache ... (2 actions running)
+INFO: From Testing //json/native:typed_probe:
+==================== Test output for //json/native:typed_probe:
+typed round0 ondemand 208.10ns structural 114.24ns ratio 1.822
+typed round1 ondemand 210.90ns structural 112.74ns ratio 1.871
+typed round2 ondemand 208.32ns structural 110.77ns ratio 1.881
+typed round3 ondemand 208.52ns structural 111.72ns ratio 1.867
+typed round4 ondemand 210.93ns structural 112.86ns ratio 1.869
+nested input0 bytes92 slots9 records3 old_index736 new_index736 old_peak1056 new_peak1056 old_allocs6 new_allocs6
+nested input1 bytes93 slots9 records3 old_index736 new_index736 old_peak1056 new_peak1056 old_allocs6 new_allocs6
+nested round0 ondemand 406.70ns structural 314.42ns ratio 1.294
+nested round1 ondemand 407.49ns structural 312.41ns ratio 1.304
+nested round2 ondemand 411.77ns structural 309.58ns ratio 1.330
+nested round3 ondemand 408.59ns structural 308.06ns ratio 1.326
+nested round4 ondemand 424.59ns structural 314.81ns ratio 1.349
+repeated input0 bytes1032 slots105 records35 old_index6032 new_index6032 old_peak8592 new_peak8592 old_allocs11 new_allocs11
+repeated input1 bytes1033 slots105 records35 old_index6032 new_index6032 old_peak8592 new_peak8592 old_allocs11 new_allocs11
+repeated round0 ondemand 3633.52ns structural 3114.29ns ratio 1.167
+repeated round1 ondemand 3902.12ns structural 3154.26ns ratio 1.237
+repeated round2 ondemand 3569.25ns structural 2998.44ns ratio 1.190
+repeated round3 ondemand 3554.86ns structural 2990.97ns ratio 1.189
+repeated round4 ondemand 3561.96ns structural 2993.83ns ratio 1.190
+mixed input0 bytes324 slots33 records11 old_index2944 new_index2944 old_peak4224 new_peak4224 old_allocs10 new_allocs10
+mixed input1 bytes381 slots33 records11 old_index3040 new_index3040 old_peak4320 new_peak4320 old_allocs9 new_allocs9
+mixed round0 ondemand 1322.93ns structural 1328.11ns ratio 0.996
+mixed round1 ondemand 1311.69ns structural 1239.93ns ratio 1.058
+mixed round2 ondemand 1333.27ns structural 1280.88ns ratio 1.041
+mixed round3 ondemand 1306.69ns structural 1130.63ns ratio 1.156
+mixed round4 ondemand 1310.37ns structural 1270.50ns ratio 1.031
+churn input0 bytes92 slots9 records3 old_index736 new_index736 old_peak1056 new_peak1056 old_allocs6 new_allocs6
+churn input1 bytes173 slots15 records5 old_index832 new_index832 old_peak1008 new_peak1008 old_allocs7 new_allocs7
+churn round0 ondemand 1497.28ns structural 1077.18ns ratio 1.390
+churn round1 ondemand 1289.20ns structural 1081.35ns ratio 1.192
+churn round2 ondemand 1362.90ns structural 1202.22ns ratio 1.134
+churn round3 ondemand 1674.99ns structural 1094.09ns ratio 1.531
+churn round4 ondemand 1290.52ns structural 1076.91ns ratio 1.198
+================================================================================
+[50 / 52] 4 / 5 tests; Linking json/native/api_test; 12s remote, remote-cache
+[51 / 52] 4 / 5 tests; [Prepa] runfiles for //json/native:api_test
+[52 / 53] 4 / 5 tests; Testing //json/native:api_test; 0s remote, remote-cache
+[52 / 53] 4 / 5 tests; Testing //json/native:api_test; 5s remote, remote-cache
+INFO: From Testing //json/native:api_test:
+==================== Test output for //json/native:api_test:
+================================================================================
+INFO: Found 5 test targets...
+INFO: Elapsed time: 134.106s, Critical Path: 133.12s
+INFO: 42 processes: 10 action cache hit, 6 remote cache hit, 7 internal, 33 remote.
+INFO: Build completed successfully, 42 total actions
+INFO: 
+//json/native:api_test                                                   PASSED in 4.9s
+//json/native:typed_probe                                                PASSED in 10.0s
+//json/native:typed_stage2_test                                          PASSED in 9.5s
+//json/native:typed_test                                                 PASSED in 4.7s
+//json/tests:jvm                                                         PASSED in 13.0s
+
+Executed 5 out of 5 tests: 5 tests pass.
+There were tests whose specified size is too big. Use the --test_verbose_timeout_warnings command line option to see which ones these are.
+INFO: Streaming build results to: https://app.buildbuddy.io/invocation/a8ded6b6-9c8e-4abc-aa0c-adcfaeaf6afa

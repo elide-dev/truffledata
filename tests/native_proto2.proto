@@ -29,3 +29,7 @@ message DefaultGraph {
   repeated FlatDefaults children = 2;
   optional string text = 3 [default = "root"];
 }
+// Empty optional children still need eager representation when a descendant can be required.
+message OptionalRequired {
+  optional DefaultGraph child = 1;
+}

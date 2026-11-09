@@ -5,18 +5,23 @@ import dev.elide.truffledata.buffa.*;
 import dev.elide.truffledata.generated.TruffleDataContracts;
 import dev.elide.truffledata.protobuf.*;
 import java.util.*;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 
 /** The same typed/native semantic and ownership corpus runs on JVM and both SVM images. */
+@SuppressWarnings("removal")
 final class TypedAcceptance {
   private static final DataLibrary DATA = DataLibrary.factory().getUncached();
   private static final int NATIVE = 1_000_000;
 
   private TypedAcceptance() {}
 
-  static TypedMessage decode(BuffaPlan plan, WireInput input, int budget) {
-    return Boolean.getBoolean("truffledata.tests.nativeViews")
-        ? plan.decodeView(input, budget)
-        : plan.decode(input, budget);
+  static SlabMessage decode(BuffaPlan plan, WireInput input, int budget) {
+    var message = plan.decode(input, budget);
+    Acceptance.check(message.snapshot() == message, "slab identity snapshot");
+    Acceptance.check(message.slabBacked(), "binary decode returns owning slab");
+    return message;
   }
 
   static ProtoPlan plan(String name) {
@@ -32,6 +37,14 @@ final class TypedAcceptance {
         try (var parsed =
             compiled.parseText("count: 1234 text: 'hello' blob: 'abc' f: 1.5 flag: true", NATIVE)) {
           var row = parsed.row();
+          accessors(row);
+          // An adopted cached library site reaches the assumption-guarded owner check.
+          var cachedSite = new CachedLongRead().getCallTarget();
+          int countOrdinal = p.schema().indexOf("count");
+          Acceptance.check(
+              (Long) cachedSite.call(row, countOrdinal) == 1234
+                  && (Long) cachedSite.call(row, countOrdinal) == 1234,
+              "cached library scalar export");
           Acceptance.check(
               DATA.readDouble(row, p.schema().indexOf("f")) == 1.5, "primitive double export");
           Acceptance.rejects(
@@ -122,16 +135,16 @@ final class TypedAcceptance {
       try (var compiled = decoder.compile(p, 65536)) {
         try (var leftInput = decoder.allocate(2).put(new byte[] {8, 1});
             var rightInput = decoder.allocate(2).put(new byte[] {8, 2});
-            var left = decode(compiled, leftInput, 0);
-            var right = decode(compiled, rightInput, 0);
-            var sibling = decode(compiled, leftInput, 0)) {
+            var left = decode(compiled, leftInput, NATIVE);
+            var right = decode(compiled, rightInput, NATIVE);
+            var sibling = decode(compiled, leftInput, NATIVE)) {
           Acceptance.check(
               left.row().getLong(0) == 1 && right.row().getLong(0) == 2,
               "native scalar scratch is not retained by messages");
           var leftRow = left.row();
           leftInput.close();
           left.close();
-          Acceptance.rejects(() -> leftRow.getLong(0), IllegalStateException.class);
+          Acceptance.check(leftRow.getLong(0) == 1, "durable scalar survives close");
           Acceptance.check(
               sibling.row().getLong(0) == 1 && right.row().getLong(0) == 2,
               "closing one message preserves sibling and separate-input views");
@@ -140,14 +153,14 @@ final class TypedAcceptance {
             List.of(new byte[] {8, 7}, new byte[] {8, 1, 8, 0}, new byte[] {8, 2, 16, 99, 24, 7})) {
           var expected = p.decode(wire);
           try (var input = decoder.allocate(wire.length).put(wire);
-              var parsed = decode(compiled, input, 0)) {
-            Acceptance.check(
-                parsed.nativeIndexBytes() == 0, "scalar decode allocates no native index");
+              var parsed = decode(compiled, input, NATIVE)) {
+            Acceptance.check(parsed.slabBacked(), "scalar decode owns its slab");
             var row = parsed.row();
             equal(expected, row);
             equal(expected, parsed.snapshot());
             Acceptance.check(
-                Arrays.equals(wire, parsed.encode()), "binary forwarding preserves unknowns");
+                Arrays.equals(p.encode(expected), parsed.encode()),
+                "slab encoding preserves unknowns");
             Acceptance.check(
                 row.has(0) == expected.has(0) && row.getLong(0) == expected.getLong(0),
                 "compact presence and primitive");
@@ -174,9 +187,10 @@ final class TypedAcceptance {
             Acceptance.check(!accessor.accepts(expected), "accessor rejects another layout");
             Acceptance.rejects(() -> accessor.read(expected), ContractViolation.class);
             parsed.close();
-            Acceptance.rejects(() -> row.getLong(0), IllegalStateException.class);
-            Acceptance.rejects(() -> accessor.present(row), IllegalStateException.class);
-            Acceptance.rejects(() -> accessor.read(row), IllegalStateException.class);
+            Acceptance.check(row.getLong(0) == expected.getLong(0), "durable scalar read");
+            Acceptance.check(
+                accessor.present(row) == DATA.isPresent(expected, 0), "durable presence");
+            Acceptance.check(accessor.read(row).equals(expected.get(0)), "durable accessor");
           }
         }
         try (var empty = decoder.allocate(0);
@@ -192,7 +206,7 @@ final class TypedAcceptance {
         }
         // A failed native parse must release the reusable result slot.
         try (var input = decoder.allocate(2).put(new byte[] {8, 9});
-            var parsed = decode(compiled, input, 0)) {
+            var parsed = decode(compiled, input, NATIVE)) {
           Acceptance.check(parsed.row().getLong(0) == 9, "reuse after failure");
         }
       }
@@ -361,7 +375,7 @@ final class TypedAcceptance {
         "nested detached contents survive close");
   }
 
-  static TypedMessage retainedUnicode(BuffaWire decoder) {
+  static SlabMessage retainedUnicode(BuffaWire decoder) {
     var p = plan("Sample");
     byte[] wire =
         p.encode(p.newBuilder().set(p.schema().indexOf("text"), "é中😀".repeat(1024)).build());
@@ -441,7 +455,7 @@ final class TypedAcceptance {
               Acceptance.check(parsed.snapshot().get(0).equals(text), "Unicode snapshot");
               var row = parsed.row();
               parsed.close();
-              Acceptance.rejects(() -> row.get(0), IllegalStateException.class);
+              Acceptance.check(row.get(0).equals(text), "durable Unicode survives close");
             } finally {
               input.close();
             }
@@ -487,8 +501,7 @@ final class TypedAcceptance {
         Acceptance.rejects(() -> decode(compiled, malformed, NATIVE), ContractViolation.class);
       }
       try (var valid = decoder.allocate(wire.length).put(wire)) {
-        if (decoder.selected() != BuffaWire.Selected.JAVA)
-          Acceptance.rejects(() -> decode(compiled, valid, 1), ContractViolation.class);
+        Acceptance.rejects(() -> decode(compiled, valid, 1), ContractViolation.class);
         try (var recovered = decode(compiled, valid, NATIVE)) {
           Acceptance.check(recovered.row().getLong(0) == 7, "reuse recovers after failure");
         }
@@ -502,8 +515,9 @@ final class TypedAcceptance {
         }
       }
       try (var emptyInput = decoder.allocate(0);
-          var empty = decode(compiled, emptyInput, 0)) {
-        Acceptance.check(empty.nativeIndexBytes() == 0, "zero budget discards cached capacity");
+          var empty = decode(compiled, emptyInput, NATIVE)) {
+        Acceptance.rejects(() -> decode(compiled, emptyInput, 0), ContractViolation.class);
+        Acceptance.check(empty.slabBytes() > 0, "empty slab accounts for header and record");
         Acceptance.check(!empty.row().has(0), "empty decode does not inherit presence");
       }
       compiled.close();
@@ -551,12 +565,10 @@ final class TypedAcceptance {
             var expected = p.decode(payload);
             try (var input = decoder.allocate(payload.length).put(payload);
                 var view = compiled.decodeView(input, NATIVE)) {
-              Acceptance.check(
-                  view.nativeBacked() == (decoder.selected() != BuffaWire.Selected.JAVA),
-                  "scalar contract selects native backing");
+              Acceptance.check(view.slabBacked(), "scalar contract selects native backing");
               equal(expected, view.row());
               equal(expected, view.row());
-              if (view.nativeBacked() && p == contract && !text.isEmpty()) {
+              if (view.slabBacked() && p == contract && !text.isEmpty()) {
                 int ordinal = p.schema().indexOf("u64");
                 Acceptance.check(
                     view.row().get(ordinal) == view.row().get(ordinal),
@@ -595,14 +607,14 @@ final class TypedAcceptance {
             Acceptance.check(row.getSize(0) == count, "cached repeated count");
             Object value = row.get(0);
             int size =
-                value instanceof BorrowedArray array ? array.size() : ((DataArray) value).size();
+                value instanceof BorrowedArray array ? array.size() : ((OwnedArray) value).size();
             Acceptance.check(size == count, "materialized repeated size");
             equal(contract.decode(payload), row);
             Acceptance.check(row.getSize(0) == count, "size after element materialization");
             Acceptance.rejects(() -> row.getSize(-1), IndexOutOfBoundsException.class);
             Acceptance.rejects(() -> row.getSize(1), IndexOutOfBoundsException.class);
             view.close();
-            Acceptance.rejects(() -> row.getSize(0), IllegalStateException.class);
+            Acceptance.check(row.getSize(0) == count, "durable array survives close");
             if (value instanceof BorrowedArray array)
               Acceptance.rejects(array::size, IllegalStateException.class);
           }
@@ -668,9 +680,7 @@ final class TypedAcceptance {
         byte[] payload = wire.toByteArray();
         try (var input = decoder.allocate(payload.length).put(payload);
             var view = compiled.decodeView(input, 4_000_000)) {
-          Acceptance.check(
-              view.nativeBacked() == (decoder.selected() != BuffaWire.Selected.JAVA),
-              "wide counts retain native backing");
+          Acceptance.check(view.slabBacked(), "wide counts retain native backing");
           var row = (ProtoAccess) view.row().get(0);
           Acceptance.check(row.getSize(0) == count, "wide nested count");
           Acceptance.check(row.get(1).equals("x"), "wide nested trailing position");
@@ -678,10 +688,10 @@ final class TypedAcceptance {
           Object last =
               values instanceof BorrowedArray array
                   ? array.element(count - 1)
-                  : ((DataArray) values).get(count - 1);
+                  : ((OwnedArray) values).get(count - 1);
           Acceptance.check(last.equals((long) ((count - 1) % 100)), "wide last element");
           view.close();
-          Acceptance.rejects(() -> row.getSize(0), IllegalStateException.class);
+          Acceptance.check(row.getSize(0) > 0, "durable array survives close");
         }
       }
     }
@@ -712,9 +722,7 @@ final class TypedAcceptance {
         byte[] payload = wire.toByteArray();
         try (var input = decoder.allocate(payload.length).put(payload);
             var view = compiled.decodeView(input, NATIVE)) {
-          Acceptance.check(
-              view.nativeBacked() == (decoder.selected() != BuffaWire.Selected.JAVA),
-              "duplicate scalars retain native backing");
+          Acceptance.check(view.slabBacked(), "duplicate scalars retain native backing");
           equal(contract.decode(payload), view.row());
           Acceptance.check(
               view.row().getLong(0) == duplicates, "last scalar wins across index spans");
@@ -724,11 +732,10 @@ final class TypedAcceptance {
   }
 
   private static void nativeViewBudgets(BuffaWire decoder) {
-    if (decoder.selected() == BuffaWire.Selected.JAVA) return;
     var sample = plan("Sample");
-    // Three schema cells + one index entry + three byte cells: native decoding must charge all
-    // seven even though the Java view never materializes the byte field.
-    for (int cells : new int[] {6, 7}) {
+    // Three schema cells + three byte cells. Slabs do not allocate an occurrence index entry.
+    // This is the same retained-cell accounting as ProtoRow, even before the bytes are read.
+    for (int cells : new int[] {5, 6}) {
       var contract =
           new ProtoPlan.Model(
                   null,
@@ -743,11 +750,14 @@ final class TypedAcceptance {
               .type("BudgetView");
       try (var compiled = decoder.compile(contract, 65536);
           var input = decoder.allocate(5).put(new byte[] {26, 3, 1, 2, 3})) {
-        if (cells == 6) {
+        if (cells == 5) {
+          Acceptance.rejects(
+              () -> contract.decode(new byte[] {26, 3, 1, 2, 3}), ContractViolation.class);
           Acceptance.rejects(() -> compiled.decodeView(input, NATIVE), ContractViolation.class);
         } else {
           try (var view = compiled.decodeView(input, NATIVE)) {
-            Acceptance.check(view.nativeBacked(), "exact cell budget retains native view");
+            equal(contract.decode(new byte[] {26, 3, 1, 2, 3}), view.row());
+            Acceptance.check(view.slabBacked(), "exact retained cell budget");
             Acceptance.check(view.row().getSize(2) == 3, "byte cells charged by native decoder");
           }
         }
@@ -764,9 +774,7 @@ final class TypedAcceptance {
         var input = decoder.allocate(wire.length).put(wire);
         var view = compiled.decodeView(input, NATIVE);
         var sibling = compiled.decodeView(input, NATIVE)) {
-      Acceptance.check(
-          view.nativeBacked() == (decoder.selected() != BuffaWire.Selected.JAVA),
-          "eligible graph uses native backing");
+      Acceptance.check(view.slabBacked(), "eligible graph uses native backing");
       input.close();
       compiled.close();
       equal(expected, view.row());
@@ -781,7 +789,7 @@ final class TypedAcceptance {
     try (var compiled = decoder.compile(required, 65536);
         var input = decoder.allocate(merged.length).put(merged);
         var view = compiled.decodeView(input, NATIVE)) {
-      Acceptance.check(!view.nativeBacked(), "singular message merge uses eager path");
+      Acceptance.check(view.slabBacked(), "singular message merge stays slab backed");
       equal(required.decode(merged), view.row());
     }
     try (var compiled = decoder.compile(required, 65536);
@@ -941,7 +949,590 @@ final class TypedAcceptance {
         "TDL1 section bytes");
   }
 
+  private static void heapSlabOwnership(BuffaWire decoder) {
+    var contract = plan("Sample");
+    try (var compiled = decoder.compile(contract, 65536)) {
+      for (int bytes : new int[] {0, 31, 65536, 100000}) {
+        var expected =
+            contract
+                .newBuilder()
+                .set(0, 42L)
+                .set(2, DataArray.copyOfBytes(new byte[bytes]))
+                .set(14, "cached λ😀")
+                .build();
+        byte[] wire = contract.encode(expected);
+        int exact = SlabCodec.decode(contract.layout(), wire).length;
+        long copiedBefore = decoder.copiedSlabInputBytes();
+        var result = compiled.decode(wire, exact);
+        equal(expected, result.row());
+        long copied = decoder.copiedSlabInputBytes() - copiedBefore;
+        boolean scratch =
+            decoder.selected() != BuffaWire.Selected.JAVA
+                && (wire.length > SlabLimits.CRITICAL_BYTES || exact > SlabLimits.CRITICAL_BYTES);
+        Acceptance.check(
+            copied == (scratch ? wire.length : 0), "bounded heap path input copy accounting");
+        copiedBefore = decoder.copiedSlabInputBytes();
+        equal(expected, compiled.decode(wire, new SlabLimits(16, exact, 0)).row());
+        Acceptance.check(
+            decoder.copiedSlabInputBytes() - copiedBefore
+                == (decoder.selected() == BuffaWire.Selected.JAVA ? 0 : wire.length),
+            "zero pin bound uses scratch");
+        Acceptance.check(
+            result.retainedSlabBytes() <= exact, "all retained slab capacity is bounded");
+        Acceptance.rejects(() -> compiled.decode(wire, exact - 1), ContractViolation.class);
+        Arrays.fill(wire, (byte) 0);
+        result.close();
+        Acceptance.check(
+            result.snapshot() == result && result.row() == result, "owning identity after close");
+        Acceptance.check(
+            Arrays.equals(contract.encode(expected), result.encode()),
+            "input mutation cannot change owning result");
+        Acceptance.check(result.getSize(2) == bytes, "heap slab byte length");
+      }
+    }
+  }
+
+  private static ProtoPlan.FieldPlan projectedField(
+      String name,
+      int number,
+      ProtoPlan.Kind kind,
+      boolean repeated,
+      String child,
+      Object defaultValue) {
+    return new ProtoPlan.FieldPlan(
+        name,
+        number,
+        kind,
+        repeated,
+        false,
+        !repeated,
+        false,
+        false,
+        -1,
+        child,
+        null,
+        defaultValue);
+  }
+
+  private static void slabProjections(BuffaWire decoder) throws Exception {
+    var i64 = ProtoPlan.Kind.INT64;
+    var text = ProtoPlan.Kind.STRING;
+    var message = ProtoPlan.Kind.MESSAGE;
+    var blob = ProtoPlan.Kind.BYTES;
+    var root =
+        new ProtoPlan.Type(
+            "ProjectionRoot",
+            false,
+            List.of(
+                projectedField("id", 1, i64, false, "", 0L),
+                projectedField("text", 2, text, false, "", ""),
+                projectedField("child", 3, message, false, "ProjectionChild", Missing.INSTANCE),
+                projectedField("children", 4, message, true, "ProjectionChild", Missing.INSTANCE),
+                projectedField("blob", 5, blob, false, "", DataArray.copyOfBytes(new byte[0]))));
+    var child =
+        new ProtoPlan.Type(
+            "ProjectionChild",
+            false,
+            List.of(
+                projectedField("value", 1, i64, false, "", 0L),
+                projectedField("text", 2, text, false, "", ""),
+                projectedField("blob", 3, blob, false, "", DataArray.copyOfBytes(new byte[0])),
+                projectedField("items", 4, i64, true, "", 0L),
+                projectedField("next", 5, message, false, "ProjectionChild", Missing.INSTANCE),
+                projectedField("real", 6, ProtoPlan.Kind.DOUBLE, false, "", 0.0),
+                projectedField("flag", 7, ProtoPlan.Kind.BOOL, false, "", false)));
+    var contract =
+        new ProtoPlan.Model(null, List.of(root, child), Limits.DEFAULT, 16, NATIVE)
+            .type("ProjectionRoot");
+    byte[] wire =
+        contract.encode(
+            contract.parseText(
+                "id: 7 text: 'omitted' child { value: 42 text: 'λ😀' blob: 'ab' items: 1 items: 2"
+                    + " next { value: 9 } real: 1.5 flag: true } children { value: 21 } children {"
+                    + " value: 22 } blob: 'large'"));
+    var sparse = Projection.builder(contract).select("id").build();
+    var deferred =
+        Projection.builder(contract).select("id", "blob").build().lazyChildren().borrowBytes(2);
+    try (var compiled = decoder.compile(contract, 65536);
+        var selected = compiled.project(sparse);
+        var lazy = compiled.project(deferred);
+        var lax = compiled.project(deferred.lax())) {
+      var row = selected.decode(wire, 65536);
+      Acceptance.check(
+          row.getLong(0) == 7 && row.getSize(3) == 2 && row.has(2),
+          "projected owning counts and presence");
+      Acceptance.rejects(() -> row.get(2), ContractViolation.class);
+      var counts = (OwnedArray) row.get(3);
+      Acceptance.rejects(() -> counts.get(0), ContractViolation.class);
+      var owned = lazy.decode(wire, 65536);
+      Acceptance.check(((SlabRow) owned.get(2)).get(1).equals("λ😀"), "owning lazy child is full");
+      Acceptance.check(
+          owned.retainedInputBytes() == wire.length, "owning external input accounting");
+      byte[] bad = {26, 3, 18, 1, (byte) 0xc0};
+      Acceptance.rejects(() -> lazy.decode(bad, 65536), ContractViolation.class);
+      var laxRow = lax.decode(bad, 65536);
+      Acceptance.rejects(() -> laxRow.get(2), ContractViolation.class);
+      if (decoder.selected() == BuffaWire.Selected.JAVA) return;
+      try (var session = lazy.newSession(65536);
+          var input = decoder.allocate(wire.length).put(wire)) {
+        var borrowed = session.decode(input);
+        Acceptance.check(
+            session.retainedInputBytes() == wire.length, "session retains immutable source lease");
+        input.close(); // Only the session's immutable lease keeps external spans alive.
+        var nested = (BorrowedMaterializedRow) borrowed.get(2);
+        Acceptance.check(
+            nested.getLong(0) == 42 && nested.get(1).equals("λ😀"), "strict lazy child read");
+        // Partial projections reject encoding; omitted fields reject reads.
+        Acceptance.check(borrowed.getSize(3) == 2, "borrowed repeated count");
+        Acceptance.rejects(borrowed::encode, ContractViolation.class);
+        Acceptance.rejects(() -> borrowed.get(1), ContractViolation.class);
+        // Materialized child surface: schema, presence, sizes, scalars and unknown bytes.
+        Acceptance.check(
+            nested.plan().name().equals("ProjectionChild")
+                && DATA.getSchema(nested) == nested.plan().schema()
+                && nested.has(0)
+                && nested.has(6)
+                && nested.getSize(3) == 2
+                && nested.getDouble(5) == 1.5
+                && nested.getBoolean(6)
+                && DATA.readLong(nested, 0) == 42
+                && DATA.readDouble(nested, 5) == 1.5
+                && DATA.readBoolean(nested, 6)
+                && DATA.read(nested, 5).equals(1.5)
+                && nested.unknownFieldBytes().length == 0,
+            "materialized child surface");
+        var arrays = com.oracle.truffle.api.interop.InteropLibrary.getUncached();
+        var items = nested.get(3);
+        Acceptance.check(
+            arrays.hasArrayElements(items)
+                && arrays.getArraySize(items) == 2
+                && arrays.isArrayElementReadable(items, 1)
+                && !arrays.isArrayElementReadable(items, 2)
+                && arrays.readArrayElement(items, 1).equals(2L)
+                && ((BorrowedArray) items).size() == 2,
+            "materialized array interop");
+        Acceptance.check(borrowed.get(2) == nested, "lazy child cached by handle");
+        var numbers = (BorrowedArray) nested.get(3);
+        var childBlob = (BorrowedArray) nested.get(2);
+        var external = (BorrowedArray) borrowed.get(4);
+        var grandchildren = (BorrowedMaterializedRow) nested.get(4);
+        Acceptance.check(
+            numbers.element(1).equals(2L) && grandchildren.getLong(0) == 9,
+            "lazy descendants retain scope");
+        Acceptance.check(
+            childBlob.element(0).equals(97L) && external.element(0).equals(108L),
+            "lazy and external bytes readable");
+        Acceptance.rejects(() -> new DataArray(new Object[] {nested}), ContractViolation.class);
+        Acceptance.rejects(() -> new DataArray(new Object[] {numbers}), ContractViolation.class);
+        var retained = borrowed.retain();
+        var retainedChild = nested.snapshot();
+        var retainedNumbers = numbers.snapshot();
+        var retainedBlob = external.snapshot();
+        try (var pin = borrowed.pin()) {
+          Acceptance.rejects(session::reset, IllegalStateException.class);
+        }
+        session.reset();
+        Acceptance.check(session.retainedInputBytes() == 0, "reset releases source lease");
+        Acceptance.rejects(() -> nested.getLong(0), IllegalStateException.class);
+        Acceptance.rejects(numbers::size, IllegalStateException.class);
+        Acceptance.rejects(() -> grandchildren.getLong(0), IllegalStateException.class);
+        Acceptance.rejects(() -> external.element(0), IllegalStateException.class);
+        Acceptance.check(
+            retainedChild.getLong(0) == 42
+                && retainedNumbers.get(1).equals(2L)
+                && retainedBlob.get(0).equals(108L),
+            "explicit lazy and byte snapshots survive reset");
+        Acceptance.check(
+            ((SlabRow) retained.get(2)).get(1).equals("λ😀"),
+            "root retention preserves deferred input");
+      }
+      try (var session = lax.newSession(65536);
+          var badInput = decoder.allocate(bad.length).put(bad)) {
+        var scoped = session.decode(badInput);
+        badInput.close();
+        Acceptance.rejects(() -> scoped.get(2), ContractViolation.class);
+        Acceptance.rejects(() -> scoped.get(2), ContractViolation.class);
+      }
+    }
+  }
+
+  static ProtoPlan projectedBudgetPlan() {
+    var i64 = ProtoPlan.Kind.INT64;
+    var type =
+        new ProtoPlan.Type(
+            "ProjectedBudget",
+            false,
+            List.of(
+                projectedField("id", 1, i64, false, "", 0L),
+                projectedField("text", 2, ProtoPlan.Kind.STRING, false, "", ""),
+                projectedField(
+                    "blob", 3, ProtoPlan.Kind.BYTES, false, "", DataArray.copyOfBytes(new byte[0])),
+                projectedField(
+                    "child",
+                    4,
+                    ProtoPlan.Kind.MESSAGE,
+                    false,
+                    "ProjectedBudget",
+                    Missing.INSTANCE)));
+    return new ProtoPlan.Model(null, List.of(type), new Limits(1, 4, 4, 0), 8, NATIVE)
+        .type("ProjectedBudget");
+  }
+
+  private static void projectedRetainBudgets(BuffaWire decoder) {
+    var contract = projectedBudgetPlan();
+    var projection =
+        Projection.builder(contract)
+            .select("id", "text", "blob")
+            .build()
+            .lazyChildren()
+            .borrowBytes(1);
+    byte[] valid = {8, 7, 34, 0};
+    try (var compiled = decoder.compile(contract, 65536);
+        var selected = compiled.project(projection)) {
+      // The omitted child makes this a borrowing slab. Failure occurs only when the copied
+      // owner applies the logical payload/cell limit, after native production succeeds.
+      for (byte[] invalid : new byte[][] {{18, 1, 120, 34, 0}, {26, 1, 120, 34, 0}}) {
+        Acceptance.rejects(() -> selected.decode(invalid, 65536), ContractViolation.class);
+        var recovered = selected.decode(valid, 65536);
+        Acceptance.check(
+            recovered.getLong(0) == 7, "projected owning recovery after budget failure");
+        if (decoder.selected() != BuffaWire.Selected.JAVA) {
+          try (var session = selected.newSession(65536);
+              var bad = decoder.allocate(invalid.length).put(invalid);
+              var good = decoder.allocate(valid.length).put(valid)) {
+            Acceptance.rejects(() -> session.decode(bad), ContractViolation.class);
+            Acceptance.check(
+                session.retainedInputBytes() == 0, "failed borrow releases its source");
+            Acceptance.check(session.decode(good).getLong(0) == 7, "borrow budget recovery");
+          }
+        }
+      }
+    }
+    var required = plan("Required");
+    try (var compiled = decoder.compile(required, 65536);
+        var selected = compiled.project(Projection.builder(required).build().lazyChildren())) {
+      Acceptance.rejects(() -> selected.decode(new byte[0], 65536), ContractViolation.class);
+      Acceptance.check(
+          selected.decode(new byte[] {8, 7}, 65536).has(0),
+          "projected owning required presence remains checked");
+    }
+  }
+
+  private static void slabSessions(BuffaWire decoder) throws Exception {
+    var contract = plan("Sample");
+    try (var compiled = decoder.compile(contract, 65536)) {
+      if (decoder.selected() == BuffaWire.Selected.JAVA) {
+        Acceptance.rejects(() -> compiled.newSession(65536), UnsupportedOperationException.class);
+        return;
+      }
+      var childPlan = contract.nested(7);
+      var child = childPlan.decode(new byte[] {8, 7, (byte) 0x98, 6, 9});
+      var expected =
+          contract
+              .newBuilder()
+              .set(0, 42L)
+              .set(2, DataArray.copyOfBytes(new byte[] {3, 4}))
+              .set(7, child)
+              .set(8, new DataArray(new Object[] {2L, -3L}))
+              .set(14, "λ😀")
+              .build();
+      byte[] wire = contract.encode(expected);
+      try (var input = decoder.allocate(wire.length).put(wire);
+          var malformed = decoder.allocate(1).put(new byte[] {(byte) 0xff});
+          var session = compiled.newSession(65536)) {
+        var first = session.decode(input);
+        var nested = (BorrowedSlabRow) first.get(7);
+        var numbers = (BorrowedArray) first.get(8);
+        var blob = (BorrowedArray) first.get(2);
+        equal(expected, first);
+        accessors(first);
+        // Root flyweight surface: identity, extent, durable copies and unknown-field queries.
+        Acceptance.check(first.row() == first && first.slabBacked(), "root flyweight");
+        Acceptance.check(first.slabBytes() > 0, "borrowed slab extent");
+        Acceptance.check(
+            !first.hasUnknownFields() && first.unknownFieldByteCount() == 0,
+            "borrowed root unknown-field query");
+        Acceptance.check(
+            first.snapshot().getLong(0) == 42 && Arrays.equals(first.encode(), wire),
+            "borrowed durable copies agree");
+        // Covariant overrides reached through their supertypes.
+        ProtoMessage asMessage = first;
+        BorrowedSlabRow asRow = first;
+        Acceptance.check(
+            asMessage.row() == first
+                && ((SlabRow) asMessage.snapshot()).getLong(0) == 42
+                && asRow.snapshot().getLong(0) == 42,
+            "borrowed root supertype views");
+        var retained = first.retain();
+        var retainedChild = nested.snapshot();
+        var retainedNumbers = numbers.snapshot();
+        Acceptance.check(
+            first.getLong(0) == 42 && first.stringLength(14) == 3,
+            "session scalar and UTF16 reads");
+        Acceptance.check(first.get(14) == first.get(14), "session string cached by handle");
+        Acceptance.check(
+            Arrays.equals(child.unknownFieldBytes(), nested.unknownFieldBytes()),
+            "borrowed child unknowns");
+        Acceptance.rejects(() -> new DataArray(new Object[] {first}), ContractViolation.class);
+        Acceptance.rejects(() -> new DataArray(new Object[] {nested}), ContractViolation.class);
+        Acceptance.rejects(() -> new DataArray(new Object[] {numbers}), ContractViolation.class);
+        try (var pin = first.pin()) {
+          Acceptance.rejects(() -> session.decode(input), IllegalStateException.class);
+          Acceptance.rejects(session::reset, IllegalStateException.class);
+          Acceptance.rejects(session::close, IllegalStateException.class);
+          Acceptance.rejects(first::close, IllegalStateException.class);
+          Acceptance.check(first.getLong(0) == 42, "pin failure preserves current borrow");
+        }
+        var failures = new java.util.concurrent.atomic.AtomicInteger();
+        Thread other =
+            new Thread(
+                () -> {
+                  try {
+                    first.getLong(0);
+                  } catch (IllegalStateException expectedFailure) {
+                    failures.incrementAndGet();
+                  }
+                  try {
+                    numbers.size();
+                  } catch (IllegalStateException expectedFailure) {
+                    failures.incrementAndGet();
+                  }
+                });
+        other.start();
+        other.join();
+        Acceptance.check(failures.get() == 2, "session views are thread confined");
+        int capacity = session.arenaBytes();
+        var second = session.decode(input);
+        Acceptance.check(session.arenaBytes() == capacity, "session arena capacity reused");
+        Acceptance.rejects(() -> first.getLong(0), IllegalStateException.class);
+        Acceptance.rejects(() -> nested.getLong(0), IllegalStateException.class);
+        Acceptance.rejects(numbers::size, IllegalStateException.class);
+        Acceptance.rejects(() -> blob.element(0), IllegalStateException.class);
+        first.close();
+        Acceptance.check(second.getLong(0) == 42, "stale close cannot expire newer borrow");
+        Acceptance.rejects(() -> session.decode(malformed), ContractViolation.class);
+        Acceptance.rejects(() -> second.getLong(0), IllegalStateException.class);
+        var third = session.decode(input);
+        session.reset();
+        Acceptance.rejects(() -> third.getLong(0), IllegalStateException.class);
+        var fourth = session.decode(input);
+        compiled.close();
+        Acceptance.check(fourth.getLong(0) == 42, "session owns its compiled layout");
+        session.close();
+        Acceptance.rejects(() -> fourth.getLong(0), IllegalStateException.class);
+        equal(expected, retained);
+        Acceptance.check(
+            retainedChild.getLong(0) == 7
+                && Arrays.equals(child.unknownFieldBytes(), retainedChild.unknownFieldBytes()),
+            "child snapshot preserves unknowns after close");
+        Acceptance.check(
+            retainedNumbers.get(1).equals(-3L), "array snapshot survives session close");
+      }
+    }
+    for (String name : List.of("Flat", "RepeatedScalars")) {
+      var scalars = plan(name);
+      String text =
+          name.equals("Flat")
+              ? "i32: -3 i64: -4 u32: 4294967295 u64: 18446744073709551615 s32: -5 s64: -6 f32: 17"
+                  + " f64: 18446744073709551615 sf32: -7 sf64: -8 flag: true single: 1.5 real:"
+                  + " -2.5 text: 'λ' blob: 'ab' status: YES selected_text: 'choice'"
+              : "i32: -3 i64: -4 u32: 4294967295 u64: 18446744073709551615 s32: -5 s64: -6 f32: 17"
+                  + " f64: 18446744073709551615 sf32: -7 sf64: -8 flag: true single: 1.5 real:"
+                  + " -2.5 text: 'λ' blob: 'ab'";
+      var expected = scalars.parseText(text);
+      byte[] wire = scalars.encode(expected);
+      try (var compiled = decoder.compile(scalars, 65536);
+          var input = decoder.allocate(wire.length).put(wire);
+          var session = compiled.newSession(65536)) {
+        var row = session.decode(input);
+        equal(expected, row);
+        accessors(row);
+        var interop = com.oracle.truffle.api.interop.InteropLibrary.getUncached();
+        for (int i = 0; i < scalars.size(); i++) {
+          Object value = row.get(i);
+          if (value instanceof BorrowedArray array) {
+            Acceptance.check(interop.hasArrayElements(array), "session array interop");
+            Acceptance.check(
+                interop.getArraySize(array) == array.size(), "session array interop size");
+            if (array.size() != 0) equal(array.element(0), interop.readArrayElement(array, 0));
+            equal(array.snapshot(), value);
+          }
+        }
+      }
+    }
+    var scalar = WellKnownAcceptance.model().type("google.protobuf.Int64Value");
+    try (var compiled = decoder.compile(scalar, 65536);
+        var input = decoder.allocate(2).put(new byte[] {8, 42});
+        var session = compiled.newSession(4096)) {
+      // Warm the same call site that measurement uses, including its host FFM adapter profile.
+      long until = System.nanoTime() + 1_500_000_000L;
+      do {
+        sessionDecodeSum(session, input, 20000);
+      } while (System.nanoTime() < until);
+      if (!org.graalvm.nativeimage.ImageInfo.inImageCode()) {
+        var bean =
+            (com.sun.management.ThreadMXBean)
+                java.lang.management.ManagementFactory.getThreadMXBean();
+        bean.setThreadAllocatedMemoryEnabled(true);
+        long id = Thread.currentThread().threadId();
+        double[] rounds = new double[3];
+        for (int round = 0; round < rounds.length; round++) {
+          long before = bean.getThreadAllocatedBytes(id);
+          long sum = sessionDecodeSum(session, input, 20000);
+          rounds[round] = (bean.getThreadAllocatedBytes(id) - before) / 20000.0;
+          Acceptance.check(sum == 840000, "session decode checksum");
+        }
+        System.out.println("SESSION decode bytes/message=" + Arrays.toString(rounds));
+        for (double allocated : rounds)
+          Acceptance.check(
+              allocated <= 48.1, "session decode Java allocation <=48 bytes: " + allocated);
+      }
+    }
+  }
+
+  private static long sessionDecodeSum(SlabSession session, WireInput input, int count) {
+    long sum = 0;
+    for (int i = 0; i < count; i++) sum += session.decode(input).getLong(0);
+    return sum;
+  }
+
+  private static void heapSlabGcStress(BuffaWire decoder) {
+    if (decoder.selected() == BuffaWire.Selected.JAVA) return;
+    var running = new java.util.concurrent.atomic.AtomicBoolean(true);
+    var started = new java.util.concurrent.CountDownLatch(1);
+    Thread collector =
+        new Thread(
+            () -> {
+              started.countDown();
+              for (int i = 0; i < 8 && running.get(); i++) {
+                System.gc();
+                Thread.yield();
+              }
+            });
+    collector.start();
+    try (var compiled = decoder.compile(plan("Sample"), 65536)) {
+      started.await();
+      var retained = new ArrayList<SlabMessage>();
+      for (int i = 0; i < 128; i++) {
+        byte[] wire =
+            compiled
+                .contract()
+                .encode(
+                    compiled
+                        .contract()
+                        .newBuilder()
+                        .set(0, (long) i)
+                        .set(14, "heap-λ-" + i)
+                        .build());
+        retained.add(compiled.decode(wire, 4096));
+        Arrays.fill(wire, (byte) 0);
+      }
+      compiled.close();
+      for (int i = 0; i < retained.size(); i++) {
+        var result = retained.get(i);
+        Acceptance.check(
+            result.getLong(0) == i && result.get(14).equals("heap-λ-" + i),
+            "pinned addresses do not escape the decode call");
+      }
+    } catch (InterruptedException failure) {
+      Thread.currentThread().interrupt();
+      throw new AssertionError(failure);
+    } finally {
+      running.set(false);
+      try {
+        collector.join();
+      } catch (InterruptedException failure) {
+        Thread.currentThread().interrupt();
+        throw new AssertionError(failure);
+      }
+    }
+  }
+
+  /** Runs on JVM and both native ISAs: durable view publication is not thread-confined. */
+  private static void concurrentDurableSlabCaches(BuffaWire decoder) throws Exception {
+    var contract = plan("Sample");
+    int countOrdinal = contract.schema().indexOf("count");
+    int textOrdinal = contract.schema().indexOf("text");
+    int blobOrdinal = contract.schema().indexOf("blob");
+    int childOrdinal = contract.schema().indexOf("child");
+    int childValueOrdinal = contract.nested(childOrdinal).schema().indexOf("a");
+    int childTextOrdinal = contract.nested(childOrdinal).schema().indexOf("b");
+    byte[] wire =
+        contract.encode(
+            contract.parseText("count: 7 text: 'λ😀' blob: 'ab' child { a: 42 b: 'child-λ' }"));
+    var projection =
+        Projection.builder(contract).select("count", "text", "blob").build().lazyChildren();
+    try (var compiled = decoder.compile(contract, 65536);
+        var lazy = compiled.project(projection);
+        var readers = Executors.newFixedThreadPool(8)) {
+      for (var source : List.of(compiled, lazy)) {
+        var sequential = source.decode(wire, 65536);
+        int initialRetained = sequential.retainedSlabBytes();
+        ((SlabRow) sequential.get(childOrdinal)).get(childTextOrdinal);
+        var expectedUsage = sequential.logicalUsage();
+        int childRetained = sequential.retainedSlabBytes() - initialRetained;
+        for (int round = 0; round < 8; round++) {
+          var message = source.decode(wire, 65536);
+          // BuffaPlan learns its first-array capacity; compare the child's added retention,
+          // not an earlier decode's potentially larger retained capacity.
+          int expectedRetained = message.retainedSlabBytes() + childRetained;
+          var start = new CountDownLatch(1);
+          var results = new ArrayList<Future<Object[]>>();
+          for (int worker = 0; worker < 8; worker++)
+            results.add(
+                readers.submit(
+                    () -> {
+                      start.await();
+                      var child = (SlabRow) message.get(childOrdinal);
+                      Object text = message.get(textOrdinal);
+                      var blob = (OwnedArray) message.get(blobOrdinal);
+                      Object childText = child.get(childTextOrdinal);
+                      for (int repeat = 0; repeat < 64; repeat++) {
+                        Acceptance.check(
+                            child == message.get(childOrdinal)
+                                && text == message.get(textOrdinal)
+                                && blob == message.get(blobOrdinal)
+                                && childText == child.get(childTextOrdinal),
+                            "durable cache warm identity");
+                        Acceptance.check(
+                            message.getLong(countOrdinal) == 7
+                                && child.getLong(childValueOrdinal) == 42
+                                && text.equals("λ😀")
+                                && childText.equals("child-λ")
+                                && blob.size() == 2
+                                && blob.get(0).equals(97L)
+                                && blob.get(1).equals(98L),
+                            "durable cache initialized contents");
+                        Acceptance.check(
+                            message.retainedSlabBytes() == expectedRetained,
+                            "lazy child publishes retained-byte accounting");
+                      }
+                      return new Object[] {child, text, blob, childText};
+                    }));
+          start.countDown();
+          Object[] first = results.getFirst().get();
+          for (var result : results) {
+            Object[] actual = result.get();
+            for (int i = 0; i < first.length; i++)
+              Acceptance.check(first[i] == actual[i], "durable cache cold identity across readers");
+          }
+          Acceptance.check(
+              message.logicalUsage().equals(expectedUsage)
+                  && message.retainedSlabBytes() == expectedRetained,
+              "concurrent lazy child charges the budget once");
+        }
+      }
+    }
+    System.out.println("BUFFA durable cache cold/warm publication passed");
+  }
+
   static void run(BuffaWire decoder) throws Exception {
+    heapSlabOwnership(decoder);
+    heapSlabGcStress(decoder);
+    concurrentDurableSlabCaches(decoder);
+    slabSessions(decoder);
+    slabProjections(decoder);
+    projectedRetainBudgets(decoder);
     schemaProgramGolden();
     nativeViews(decoder);
     nativeScalarViews(decoder);
@@ -1239,7 +1830,9 @@ final class TypedAcceptance {
           // The nested string has not been read: snapshot must resolve it while retaining safety.
           var detached = parsed.snapshot();
           parsed.close();
-          Acceptance.rejects(() -> DATA.read(row, ordinal), IllegalStateException.class);
+          if (format == 0)
+            Acceptance.check(DATA.read(row, ordinal) == first, "durable string survives close");
+          else Acceptance.rejects(() -> DATA.read(row, ordinal), IllegalStateException.class);
           equal(expected, detached);
         }
       }
@@ -1292,6 +1885,25 @@ final class TypedAcceptance {
    * Layout-bound accessors (Task B2) agree with the uncached library on every method: identity per
    * layout, values, presence, primitive rejections and contract lengths.
    */
+  /** Adopts a cached DataLibrary site so its owner-check specializations can execute. */
+  private static final class CachedLongRead extends com.oracle.truffle.api.nodes.RootNode {
+    @Child private DataLibrary data = DataLibrary.factory().createDispatched(3);
+
+    CachedLongRead() {
+      super(null);
+    }
+
+    @Override
+    public Object execute(com.oracle.truffle.api.frame.VirtualFrame frame) {
+      Object[] args = frame.getArguments();
+      try {
+        return data.readLong(args[0], (int) args[1]);
+      } catch (com.oracle.truffle.api.nodes.UnexpectedResultException failure) {
+        throw new AssertionError(failure);
+      }
+    }
+  }
+
   static void accessors(AbstractRow row) {
     for (int i = 0; i < row.schema().size(); i++) {
       int ordinal = i;
@@ -1313,18 +1925,16 @@ final class TypedAcceptance {
       Acceptance.check(a.schema().size() == b.schema().size(), "typed schema width");
       for (int i = 0; i < a.schema().size(); i++) {
         equal(DATA.read(a, i), DATA.read(b, i));
-        if (a instanceof ProtoRow proto && b instanceof TypedRow typed)
-          Acceptance.check(proto.has(i) == typed.has(i), "typed presence " + i);
-        if (a instanceof ProtoRow proto && b instanceof ProtoRow snapshot)
-          Acceptance.check(proto.has(i) == snapshot.has(i), "snapshot presence " + i);
+        if (a instanceof ProtoAccess proto && b instanceof ProtoAccess other)
+          Acceptance.check(proto.has(i) == other.has(i), "protobuf presence " + i);
       }
-    } else if (expected instanceof DataArray a) {
-      int size = actual instanceof DataArray b ? b.size() : ((BorrowedArray) actual).size();
+    } else if (expected instanceof OwnedArray a) {
+      int size = actual instanceof OwnedArray b ? b.size() : ((BorrowedArray) actual).size();
       Acceptance.check(a.size() == size, "typed array length");
       for (int i = 0; i < size; i++)
         equal(
             a.get(i),
-            actual instanceof DataArray b ? b.get(i) : ((BorrowedArray) actual).element(i));
+            actual instanceof OwnedArray b ? b.get(i) : ((BorrowedArray) actual).element(i));
     } else if (expected instanceof ExactNumber a && actual instanceof ExactNumber b)
       Acceptance.check(a.decimal().compareTo(b.decimal()) == 0, "typed exact integer");
     else

@@ -1,0 +1,130 @@
+exec ${PAGER:-/usr/bin/less} "$0" || exit 1
+Executing tests from //yaml/native:compact_bench
+-----------------------------------------------------------------------------
+pass 1 of 3
+variant                      fixture                   bytes        best ns       MB/s
+memcpy                       config.yaml                3788             31   121100.7
+ryml-ints(scan)              config.yaml                3788           9160      413.5
+ryml-tree                    config.yaml                3788          10528      359.8
+libyaml(scan)                config.yaml                3788          37822      100.2
+td-session(decode+reset)     config.yaml                3788          16307      232.3
+td-session(retain+release)   config.yaml                3788          18438      205.4
+memcpy                       records-block.yaml       242028           1863   129939.0
+ryml-ints(scan)              records-block.yaml       242028         770660      314.1
+ryml-tree                    records-block.yaml       242028         959872      252.1
+libyaml(scan)                records-block.yaml       242028        3152616       76.8
+td-session(decode+reset)     records-block.yaml       242028        1112129      217.6
+td-session(retain+release)   records-block.yaml       242028        1299267      186.3
+memcpy                       records-flow.yaml        222485           1712   129932.7
+ryml-ints(scan)              records-flow.yaml        222485         584867      380.4
+ryml-tree                    records-flow.yaml        222485         737569      301.6
+libyaml(scan)                records-flow.yaml        222485        3181365       69.9
+td-session(decode+reset)     records-flow.yaml        222485         851041      261.4
+td-session(retain+release)   records-flow.yaml        222485        1019839      218.2
+memcpy                       records-stream.yaml      216984           1677   129426.6
+ryml-ints(scan)              records-stream.yaml      216984         779492      278.4
+ryml-tree                    records-stream.yaml      216984         977827      221.9
+libyaml(scan)                records-stream.yaml      216984        3278576       66.2
+td-stream(documents)         records-stream.yaml      216984        1543308      140.6
+memcpy                       text-heavy.yaml          345370           2708   127541.0
+ryml-ints(scan)              text-heavy.yaml          345370         420363      821.6
+ryml-tree                    text-heavy.yaml          345370         445761      774.8
+libyaml(scan)                text-heavy.yaml          345370        1275047      270.9
+td-session(decode+reset)     text-heavy.yaml          345370         545332      633.3
+td-session(retain+release)   text-heavy.yaml          345370         559507      617.3
+pass 1 gate: records-block td-session(decode+reset) / ryml-ints(scan) = 0.693
+
+pass 2 of 3
+variant                      fixture                   bytes        best ns       MB/s
+memcpy                       config.yaml                3788             47    80496.9
+ryml-ints(scan)              config.yaml                3788           9148      414.1
+ryml-tree                    config.yaml                3788          10501      360.7
+libyaml(scan)                config.yaml                3788          37951       99.8
+td-session(decode+reset)     config.yaml                3788          16448      230.3
+td-session(retain+release)   config.yaml                3788          18421      205.6
+memcpy                       records-block.yaml       242028           1867   129604.2
+ryml-ints(scan)              records-block.yaml       242028         770602      314.1
+ryml-tree                    records-block.yaml       242028         962589      251.4
+libyaml(scan)                records-block.yaml       242028        3159371       76.6
+td-session(decode+reset)     records-block.yaml       242028        1121259      215.9
+td-session(retain+release)   records-block.yaml       242028        1301905      185.9
+memcpy                       records-flow.yaml        222485           1705   130476.8
+ryml-ints(scan)              records-flow.yaml        222485         584167      380.9
+ryml-tree                    records-flow.yaml        222485         736114      302.2
+libyaml(scan)                records-flow.yaml        222485        3174162       70.1
+td-session(decode+reset)     records-flow.yaml        222485         844636      263.4
+td-session(retain+release)   records-flow.yaml        222485        1019535      218.2
+memcpy                       records-stream.yaml      216984           1673   129671.7
+ryml-ints(scan)              records-stream.yaml      216984         776070      279.6
+ryml-tree                    records-stream.yaml      216984         977067      222.1
+libyaml(scan)                records-stream.yaml      216984        3334049       65.1
+td-stream(documents)         records-stream.yaml      216984        1531120      141.7
+memcpy                       text-heavy.yaml          345370           2635   131076.7
+ryml-ints(scan)              text-heavy.yaml          345370         420490      821.4
+ryml-tree                    text-heavy.yaml          345370         447312      772.1
+libyaml(scan)                text-heavy.yaml          345370        1348936      256.0
+td-session(decode+reset)     text-heavy.yaml          345370         547411      630.9
+td-session(retain+release)   text-heavy.yaml          345370         563926      612.4
+pass 2 gate: records-block td-session(decode+reset) / ryml-ints(scan) = 0.687
+
+pass 3 of 3
+variant                      fixture                   bytes        best ns       MB/s
+memcpy                       config.yaml                3788             28   135594.1
+ryml-ints(scan)              config.yaml                3788           9200      411.7
+ryml-tree                    config.yaml                3788          10489      361.1
+libyaml(scan)                config.yaml                3788          37931       99.9
+td-session(decode+reset)     config.yaml                3788          16421      230.7
+td-session(retain+release)   config.yaml                3788          18565      204.0
+memcpy                       records-block.yaml       242028           1878   128847.0
+ryml-ints(scan)              records-block.yaml       242028         776623      311.6
+ryml-tree                    records-block.yaml       242028         970300      249.4
+libyaml(scan)                records-block.yaml       242028        3168474       76.4
+td-session(decode+reset)     records-block.yaml       242028        1118653      216.4
+td-session(retain+release)   records-block.yaml       242028        1301180      186.0
+memcpy                       records-flow.yaml        222485           1713   129848.0
+ryml-ints(scan)              records-flow.yaml        222485         585093      380.3
+ryml-tree                    records-flow.yaml        222485         738392      301.3
+libyaml(scan)                records-flow.yaml        222485        3171065       70.2
+td-session(decode+reset)     records-flow.yaml        222485         849313      262.0
+td-session(retain+release)   records-flow.yaml        222485        1015738      219.0
+memcpy                       records-stream.yaml      216984           1675   129519.0
+ryml-ints(scan)              records-stream.yaml      216984         776625      279.4
+ryml-tree                    records-stream.yaml      216984         976739      222.2
+libyaml(scan)                records-stream.yaml      216984        3253451       66.7
+td-stream(documents)         records-stream.yaml      216984        1536265      141.2
+memcpy                       text-heavy.yaml          345370           2635   131084.9
+ryml-ints(scan)              text-heavy.yaml          345370         422880      816.7
+ryml-tree                    text-heavy.yaml          345370         446063      774.3
+libyaml(scan)                text-heavy.yaml          345370        1289764      267.8
+td-session(decode+reset)     text-heavy.yaml          345370         567351      608.7
+td-session(retain+release)   text-heavy.yaml          345370         583683      591.7
+pass 3 gate: records-block td-session(decode+reset) / ryml-ints(scan) = 0.694
+
+best over 3 passes
+variant                      fixture                   bytes        best ns       MB/s    /ints    /tree /libyaml
+ryml-ints(scan)              config.yaml                3788           9148      414.1    1.000    1.147    4.135
+ryml-tree                    config.yaml                3788          10489      361.1    0.872    1.000    3.606
+libyaml(scan)                config.yaml                3788          37822      100.2    0.242    0.277    1.000
+td-session(decode+reset)     config.yaml                3788          16307      232.3    0.561    0.643    2.319
+td-session(retain+release)   config.yaml                3788          18421      205.6    0.497    0.569    2.053
+ryml-ints(scan)              records-block.yaml       242028         770602      314.1    1.000    1.246    4.091
+ryml-tree                    records-block.yaml       242028         959872      252.1    0.803    1.000    3.284
+libyaml(scan)                records-block.yaml       242028        3152616       76.8    0.244    0.304    1.000
+td-session(decode+reset)     records-block.yaml       242028        1112129      217.6    0.693    0.863    2.835
+td-session(retain+release)   records-block.yaml       242028        1299267      186.3    0.593    0.739    2.426
+ryml-ints(scan)              records-flow.yaml        222485         584167      380.9    1.000    1.260    5.428
+ryml-tree                    records-flow.yaml        222485         736114      302.2    0.794    1.000    4.308
+libyaml(scan)                records-flow.yaml        222485        3171065       70.2    0.184    0.232    1.000
+td-session(decode+reset)     records-flow.yaml        222485         844636      263.4    0.692    0.872    3.754
+td-session(retain+release)   records-flow.yaml        222485        1015738      219.0    0.575    0.725    3.122
+ryml-ints(scan)              records-stream.yaml      216984         776070      279.6    1.000    1.259    4.192
+ryml-tree                    records-stream.yaml      216984         976739      222.2    0.795    1.000    3.331
+libyaml(scan)                records-stream.yaml      216984        3253451       66.7    0.239    0.300    1.000
+td-stream(documents)         records-stream.yaml      216984        1531120      141.7    0.507    0.638    2.125
+ryml-ints(scan)              text-heavy.yaml          345370         420363      821.6    1.000    1.060    3.033
+ryml-tree                    text-heavy.yaml          345370         445761      774.8    0.943    1.000    2.860
+libyaml(scan)                text-heavy.yaml          345370        1275047      270.9    0.330    0.350    1.000
+td-session(decode+reset)     text-heavy.yaml          345370         545332      633.3    0.771    0.817    2.338
+td-session(retain+release)   text-heavy.yaml          345370         559507      617.3    0.751    0.797    2.279
+acceptance: records-block td-session(decode+reset) / ryml-ints(scan) = 0.693 (best times over 3 passes; per pass min 0.687, median 0.693, max 0.694) (hypothesis >= 0.8): MISSED
+compact floor 0.715: FAIL

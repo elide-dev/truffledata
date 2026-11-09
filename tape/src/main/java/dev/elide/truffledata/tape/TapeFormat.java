@@ -30,8 +30,21 @@ public final class TapeFormat {
   final String recordThreadMismatch;
   final long @Nullable [] aliasTargets;
   final int @Nullable [] meta;
+  final long[] anchorNodes;
+  final String[] tagUris;
+  final String[] anchorNames;
+  final long maxAliasExpansion;
 
   private TapeFormat(String name, long @Nullable [] aliasTargets, int @Nullable [] meta) {
+    this(name, aliasTargets, meta, new long[0], new String[0], new String[0], 1_000_000);
+  }
+
+  private TapeFormat(String name, long @Nullable [] aliasTargets, int @Nullable [] meta,
+      long[] anchorNodes, String[] anchorNames, String[] tagUris, long maxAliasExpansion) {
+    this.anchorNodes = anchorNodes;
+    this.anchorNames = anchorNames;
+    this.tagUris = tagUris;
+    this.maxAliasExpansion = maxAliasExpansion;
     this.name = Objects.requireNonNull(name);
     this.closed = name + " message closed";
     this.threadMismatch = name + " message thread mismatch";
@@ -39,6 +52,22 @@ public final class TapeFormat {
     this.recordThreadMismatch = name + " record thread mismatch";
     this.aliasTargets = aliasTargets;
     this.meta = meta;
+  }
+
+  // Document metadata changes, but the format's immutable diagnostic strings do not.
+  private TapeFormat(TapeFormat base, long @Nullable [] aliases, int @Nullable [] meta,
+      long[] anchors, String[] names, String[] tags, long budget) {
+    this.name = base.name;
+    this.closed = base.closed;
+    this.threadMismatch = base.threadMismatch;
+    this.recordClosed = base.recordClosed;
+    this.recordThreadMismatch = base.recordThreadMismatch;
+    this.aliasTargets = aliases;
+    this.meta = meta;
+    this.anchorNodes = anchors;
+    this.anchorNames = names;
+    this.tagUris = tags;
+    this.maxAliasExpansion = budget;
   }
 
   /** A format without alias nodes, named {@code name} in messages. */
@@ -51,7 +80,55 @@ public final class TapeFormat {
    * and {@code aliasTargets} one node index per alias ordinal. The arrays are not copied.
    */
   public TapeFormat withAliases(long[] aliasTargets, int[] meta) {
-    return new TapeFormat(name, Objects.requireNonNull(aliasTargets), Objects.requireNonNull(meta));
+    return new TapeFormat(this, Objects.requireNonNull(aliasTargets), Objects.requireNonNull(meta),
+        anchorNodes, anchorNames, tagUris, maxAliasExpansion);
+  }
+
+  /** Metadata for a compact tape whose value aliases are native REF words. */
+  public TapeFormat withMetadata(int[] meta) {
+    return new TapeFormat(this, null, Objects.requireNonNull(meta),
+        anchorNodes, anchorNames, tagUris, maxAliasExpansion);
+  }
+
+  /** Attach detached YAML anchor/tag tables and the per-export expansion budget. */
+  public TapeFormat withEvents(long[] anchors, String[] names, String[] tags, long expansionBudget) {
+    if (expansionBudget <= 0) throw new IllegalArgumentException("Alias expansion budget must be positive");
+    if (anchors.length != names.length) throw new IllegalArgumentException("Anchor metadata length mismatch");
+    return new TapeFormat(this, aliasTargets, meta, anchors.length == 0 ? anchors : anchors.clone(),
+        names.length == 0 ? names : names.clone(), tags.length == 0 ? tags : tags.clone(), expansionBudget);
+  }
+
+  TapeFormat slice(long root, int count) {
+    int[] metadata = meta;
+    long[] aliases = aliasTargets;
+    if (metadata == null) return this;
+    int[] slice = java.util.Arrays.copyOfRange(metadata, Math.toIntExact(root), Math.toIntExact(root) + count);
+    long[] rebased = aliases == null ? null : aliases.clone();
+    if (rebased != null) for (int i = 0; i < rebased.length; i++) rebased[i] -= root;
+    long[] anchors = anchorNodes.clone();
+    for (int i = 0; i < anchors.length; i++) anchors[i] -= root;
+    return new TapeFormat(this, rebased, slice, anchors, anchorNames, tagUris, maxAliasExpansion);
+  }
+
+  int anchorId(long node) {
+    for (int i = 0; i < anchorNodes.length; i++) if (anchorNodes[i] == node) return i;
+    return -1;
+  }
+
+  /** Raw producer metadata, or zero when none is present. */
+  public int metadataWord(long node) { return meta == null ? 0 : meta[Math.toIntExact(node)]; }
+
+  /** Type tag for a source node; aliases carry no tag of their own. */
+  public @Nullable String tagUri(long node) {
+    int word = metadataWord(node);
+    int index = word >>> ORDINAL_SHIFT;
+    return (word & ALIAS) != 0 || index == 0 ? null : tagUris[index - 1];
+  }
+
+  /** Source anchor name, or null. */
+  public @Nullable String anchorName(long node) {
+    int id = anchorId(node);
+    return id < 0 ? null : anchorNames[id];
   }
 
   /** The format's name, as used in messages. */

@@ -8,6 +8,7 @@ import java.util.Objects;
 import org.jspecify.annotations.Nullable;
 
 /** Internal ownership transfer checks, shared by the JVM and static SVM acceptance images. */
+@SuppressWarnings("removal")
 public final class NativeTapeAcceptance {
   private NativeTapeAcceptance() {}
 
@@ -67,56 +68,25 @@ public final class NativeTapeAcceptance {
         var first = decoder.allocate(2).put(new byte[] {8, 42});
         var second = decoder.allocate(2).put(new byte[] {8, 99})) {
       var backend = Objects.requireNonNull(decoder.backend);
-      try (var proof = backend.typed(schema, first, 3, empty, plan, 65536)) {
-        if (!proof.viewReady()) throw new AssertionError("native binary view proof");
-      }
-      // ABI 9 views own one allocation each; decoder scratch (shared by eager and view decodes)
-      // is reused underneath them without ever being retained by a result.
-      long views = backend.compileView(schema);
-      try (var compiled = decoder.compile(plan, 65536);
-          var view = compiled.decodeView(first, 65536);
-          var retained = Objects.requireNonNull(backend.view(views, first, plan, 65536, false))) {
-        if (!view.nativeBacked()) throw new AssertionError("native view selected");
-        if (!retained.viewReady() || retained.count() != 1 || retained.words != 3)
-          throw new AssertionError("view directory extent");
-        // One 24-byte entry plus three directory words, rounded up to whole entry slots.
-        if (retained.allocated != 48)
-          throw new AssertionError("exact view allocation");
-        // Default decodes ask for a budget fallback instead of a ContractViolation; views do not.
-        if (backend.view(views, second, plan, 1, true) != null)
-          throw new AssertionError("budget fallback signal");
-        try {
-          backend.view(views, second, plan, 1, false);
-          throw new AssertionError("strict view budget");
-        } catch (dev.elide.truffledata.ContractViolation expected) {
-          // The scoped view API keeps reporting native budget failures.
-        }
-        byte[] expected = new byte[retained.bytes().capacity()];
-        retained.bytes().get(0, expected);
+      try (var compiled = decoder.compile(plan, 65536)) {
+        var retained = compiled.decode(first, 65536);
+        byte[] expected = retained.encode();
         for (int i = 0; i < 8; i++) {
           try (var scratch = backend.typed(schema, second, 0, empty, plan, 65536)) {
             if (scratch.count() != 1) throw new AssertionError("scratch count");
           }
-          try (var again = Objects.requireNonNull(backend.view(views, second, plan, 65536, false))) {
-            if (again.count() != 1) throw new AssertionError("view scratch count");
+          try (var again = compiled.decode(second, 65536)) {
+            if (again.getLong(0) != 99) throw new AssertionError("slab scratch reuse");
           }
         }
-        try (var other = Objects.requireNonNull(backend.view(views, second, plan, 65536, false))) {
-          decoder.close();
-          if (view.row().getLong(0) != 42) throw new AssertionError("view after decoder close");
-          for (int i = 0; i < expected.length; i++)
-            if (retained.bytes().get(i) != expected[i])
-              throw new AssertionError("retained index changed");
-          if (other.count() != 1 || other.bytes().getLong(8) != 99)
-            throw new AssertionError("second retained index");
-          retained.close();
-          retained.close();
-          if (other.bytes().getLong(8) != 99)
-            throw new AssertionError("independent index ownership");
-        }
-      } finally {
-        // Compiled schemas and views stay releasable after their decoder closes.
-        backend.releaseCompiled(views);
+        var other = compiled.decode(second, 65536);
+        compiled.close();
+        decoder.close();
+        if (retained.getLong(0) != 42 || !java.util.Arrays.equals(retained.encode(), expected))
+          throw new AssertionError("durable slab after decoder close");
+        retained.close();
+        retained.close();
+        if (other.getLong(0) != 99) throw new AssertionError("independent slab ownership");
       }
     }
   }

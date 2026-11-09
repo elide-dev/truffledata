@@ -105,12 +105,26 @@ public final class ProtoRow extends AbstractRow implements ProtoAccess {
 
   /**
    * A defensive copy of the preserved unknown wire fields of this record, in wire order. Includes
-   * unknown numbers, mismatched wire types, rejected closed-enum values and map entries, and unknown
-   * groups. Declared child messages expose their own unknown bytes. Bytes are not canonicalized:
-   * equality policies may parse these fields independently.
+   * unknown numbers, mismatched wire types, rejected closed-enum values and map entries, and
+   * unknown groups. Declared child messages expose their own unknown bytes. Bytes are not
+   * canonicalized: equality policies may parse these fields independently.
    */
   public byte[] unknownFieldBytes() {
     return unknown().clone();
+  }
+
+  /** Whether this record retains raw unknown wire bytes, without copying or allocating. */
+  public final boolean hasUnknownFields() {
+    return unknownFieldByteCount() != 0;
+  }
+
+  /**
+   * Number of raw unknown wire bytes retained by this record, without copying or allocating.
+   * Includes empty unknown groups; excludes declared child records' unknown fields. This is a
+   * storage query, not a semantic equality or canonicalization operation.
+   */
+  public final int unknownFieldByteCount() {
+    return unknown().length;
   }
 
   byte[] unknown() {
@@ -188,12 +202,16 @@ public final class ProtoRow extends AbstractRow implements ProtoAccess {
                 plan, i, plan.compactScalars ? null : ((AbstractRow) rowStorage).accessor(i)));
   }
 
+  /**
+   * Layout (plan): ProtoRow is final and each plan owns its schema, so the layout is exactly
+   * (class, schema identity). Delegated storage reads stay checked against the stored layout.
+   */
   private static final class Owned extends Accessor {
     private final ProtoPlan plan;
     private final @Nullable Accessor stored;
 
     Owned(ProtoPlan plan, int ordinal, @Nullable Accessor stored) {
-      super(plan.schema(), ordinal);
+      super(plan.schema(), ordinal, ProtoRow.class);
       this.plan = plan;
       this.stored = stored;
     }
@@ -206,6 +224,12 @@ public final class ProtoRow extends AbstractRow implements ProtoAccess {
     private ProtoRow row(Object row) {
       if (row instanceof ProtoRow r && r.plan == plan) return r;
       throw mismatch();
+    }
+
+    /** A row the read node's exact-layout guard already admitted. */
+    private ProtoRow trusted(Object row) {
+      assertAccepted(row);
+      return (ProtoRow) row;
     }
 
     @Override
@@ -222,27 +246,59 @@ public final class ProtoRow extends AbstractRow implements ProtoAccess {
 
     @Override
     public long readLong(Object row) throws UnexpectedResultException {
-      var r = row(row);
+      return longOf(row(row));
+    }
+
+    @Override
+    protected long readLongBound(Object row) throws UnexpectedResultException {
+      return longOf(trusted(row));
+    }
+
+    private long longOf(ProtoRow r) throws UnexpectedResultException {
       return stored == null ? r.scalarUnchecked(ordinal()) : stored.readLong(r.storage);
     }
 
     @Override
     public double readDouble(Object row) throws UnexpectedResultException {
-      var r = row(row);
+      return doubleOf(row(row));
+    }
+
+    @Override
+    protected double readDoubleBound(Object row) throws UnexpectedResultException {
+      return doubleOf(trusted(row));
+    }
+
+    private double doubleOf(ProtoRow r) throws UnexpectedResultException {
       if (stored == null) throw new UnexpectedResultException(r.scalarUnchecked(ordinal()));
       return stored.readDouble(r.storage);
     }
 
     @Override
     public boolean readBoolean(Object row) throws UnexpectedResultException {
-      var r = row(row);
+      return booleanOf(row(row));
+    }
+
+    @Override
+    protected boolean readBooleanBound(Object row) throws UnexpectedResultException {
+      return booleanOf(trusted(row));
+    }
+
+    private boolean booleanOf(ProtoRow r) throws UnexpectedResultException {
       if (stored == null) throw new UnexpectedResultException(r.scalarUnchecked(ordinal()));
       return stored.readBoolean(r.storage);
     }
 
     @Override
     public int length(Object row) {
-      var r = row(row);
+      return lengthIn(row(row));
+    }
+
+    @Override
+    protected int lengthBound(Object row) {
+      return lengthIn(trusted(row));
+    }
+
+    private int lengthIn(ProtoRow r) {
       return stored == null ? lengthOf(r.boxedScalar(ordinal())) : stored.length(r.storage);
     }
   }
@@ -324,7 +380,7 @@ public final class ProtoRow extends AbstractRow implements ProtoAccess {
 
     private void validateType(ProtoPlan.FieldPlan field, Object value) {
       if (field.repeated()) {
-        DataArray items = (DataArray) value;
+        OwnedArray items = (OwnedArray) value;
         if (items.size() > plan.model.limits.maxCells())
           throw new ContractViolation("Repeated budget");
         Set<Object> keys = new HashSet<>();
@@ -341,10 +397,12 @@ public final class ProtoRow extends AbstractRow implements ProtoAccess {
       if (value instanceof String text) ProtoPlan.validateString(text);
       if (field.kind().message()) {
         if (!(value instanceof ProtoAccess row)
-            || !(row instanceof ProtoRow || row instanceof GeneratedMessage)
+            || !(row instanceof ProtoRow
+                || row instanceof GeneratedMessage
+                || row instanceof SlabRow)
             || row.plan() != plan.model.type(field.typeName()))
           throw new ContractViolation("Nested message plan mismatch");
-      } else if (field.kind() == ProtoPlan.Kind.BYTES && !((DataArray) value).isBytes()) {
+      } else if (field.kind() == ProtoPlan.Kind.BYTES && !((OwnedArray) value).isBytes()) {
         throw new ContractViolation("Protobuf bytes require compact binary storage");
       } else if (field.enumType() != null && !field.enumType().accepts(((Long) value).intValue())) {
         throw new ContractViolation("Unknown closed-enum value");
@@ -404,7 +462,7 @@ public final class ProtoRow extends AbstractRow implements ProtoAccess {
   }
 
   static boolean nonDefault(ProtoPlan.FieldPlan field, Object value) {
-    if (value instanceof DataArray array) return array.size() != 0;
+    if (value instanceof OwnedArray array) return array.size() != 0;
     if (value instanceof ExactNumber number && field.defaultValue() instanceof ExactNumber other)
       return number.decimal().compareTo(other.decimal()) != 0;
     return !value.equals(field.defaultValue());
@@ -441,7 +499,7 @@ public final class ProtoRow extends AbstractRow implements ProtoAccess {
 
     void value(Object value, int depth, int maxDepth) {
       if (value instanceof String s) bytes(2L * s.length());
-      else if (value instanceof DataArray array) {
+      else if (value instanceof OwnedArray array) {
         cells(array.size());
         if (!array.isBytes())
           for (int i = 0; i < array.size(); i++) value(array.get(i), depth, maxDepth);
@@ -449,6 +507,11 @@ public final class ProtoRow extends AbstractRow implements ProtoAccess {
         if (depth >= maxDepth) throw new ContractViolation("Protobuf nesting budget exceeded");
         cells(row.plan().size());
         bytes(row.unknown.length);
+        for (int i = 0; i < row.plan().size(); i++) value(row.get(i), depth + 1, maxDepth);
+      } else if (value instanceof SlabRow row) {
+        if (depth >= maxDepth) throw new ContractViolation("Protobuf nesting budget exceeded");
+        cells(row.plan().size());
+        bytes(row.unknownFieldByteCount());
         for (int i = 0; i < row.plan().size(); i++) value(row.get(i), depth + 1, maxDepth);
       } else if (value instanceof ProtoRow row) {
         if (depth >= maxDepth) throw new ContractViolation("Protobuf nesting budget exceeded");

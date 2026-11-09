@@ -1,0 +1,16 @@
+exec ${PAGER:-/usr/bin/less} "$0" || exit 1
+Executing tests from //benchmarks/comparison:protobuf_ingestion_jvm
+-----------------------------------------------------------------------------
+{"case":"bind-generated","runtime":"jvm","ns_per_op":[1709771.125, 856006.25, 1129732.5892857143, 53277.944515306124, 41421.68092105263]}
+{"case":"snapshot-generated","runtime":"jvm","ns_per_op":[3687.8800436526662, 3681.991782516494, 4326.655938538206, 3702.8656694312795, 3668.7648180751175]}
+{"case":"snapshot-dynamic","runtime":"jvm","ns_per_op":[2556.831642670157, 2514.840682330222, 2513.170432614989, 2506.5899703240293, 2572.500102863726]}
+{"case":"wire-generated","runtime":"jvm","ns_per_op":[1893.5948103490064, 2169.5641835601223, 1940.2120142165384, 1811.457794748435, 1798.2477776179517]}
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::putInt has been called by com.oracle.truffle.api.memory.UnsafeByteArraySupport (file:/workspace/bazel-out/rbe_linux_amd64-opt/bin/benchmarks/comparison/protobuf_ingestion_jvm.runfiles/rules_jvm_external++maven+maven/org/graalvm/truffle/truffle-api/25.5.5-elide.27/processed_truffle-api-25.5.5-elide.27.jar)
+WARNING: Please consider reporting this to the maintainers of class com.oracle.truffle.api.memory.UnsafeByteArraySupport
+WARNING: sun.misc.Unsafe::putInt will be removed in a future release
+{"case":"stock-parse","runtime":"jvm","ns_per_op":[221.89888484151328, 217.74369425863992, 218.69596594726235, 218.41201600503214, 221.75012240292915]}
+{"case":"slab-table","runtime":"jvm","ns_per_op":[625.7997792704413, 631.4270993291846, 629.8151600032243, 635.5692518099731, 631.487534856935]}
+{"case":"slab-generated","runtime":"jvm","ns_per_op":[163.82943726801852, 155.12908418053294, 154.26222356599862, 155.205949401037, 155.0838320827378]}
+{"case":"snapshot-closed-map-fallback","runtime":"jvm","ns_per_op":[1645.7970823678113, 1637.8139409976943, 1660.6312433581297, 1639.3854254091482, 1644.590941380762]}
+{"case":"wire-closed-map","runtime":"jvm","ns_per_op":[1198.812097207304, 1197.8940509046304, 1201.0561587240584, 1204.8619458365458, 1208.1702661178108]}

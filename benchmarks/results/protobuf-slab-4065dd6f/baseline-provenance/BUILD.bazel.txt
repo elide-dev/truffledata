@@ -1,0 +1,20 @@
+load("@rules_shell//shell:sh_binary.bzl", "sh_binary")
+load("@rules_shell//shell:sh_test.bzl", "sh_test")
+package(default_visibility = ["//visibility:public"])
+exports_files(["truffledata-consumer"])
+alias(name = "consumer_svm", actual = "truffledata-consumer")
+sh_binary(
+    name = "consumer_jvm",
+    srcs = ["consumer_jvm.sh"],
+    data = ["consumer_jvm_deploy.jar", "libtruffledata_buffa.so", "//build/protobuf-baseline-fecb39f/sdk:files"],
+)
+
+sh_test(
+    name = "smoke",
+    size = "large",
+    srcs = ["smoke.sh"],
+    args = ["$(rootpath :consumer_svm)", "$(rootpath :consumer_jvm)"],
+    data = [":consumer_svm", ":consumer_jvm", "//tools/bench:consumer.py"],
+    target_compatible_with = ["@platforms//os:linux", "@platforms//cpu:x86_64"],
+    tags = ["manual"],
+)

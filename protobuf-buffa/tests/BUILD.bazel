@@ -3,7 +3,7 @@ load("@rules_graalvm//graalvm:defs.bzl", "native_image")
 load("@rules_java//java:defs.bzl", "java_test")
 load("@rules_shell//shell:sh_test.bzl", "sh_test")
 load("//bazel:java.bzl", "data_java_library")
-load("//bazel:jit.bzl", "TRUFFLE_JIT_CHECKS")
+load("//bazel:jit.bzl", "LINUX_SVM_PLATFORMS", "LINUX_SVM_SDK", "TRUFFLE_JIT_CHECKS")
 
 package(default_visibility = ["//visibility:public"])
 
@@ -53,7 +53,6 @@ data_java_library(
         jvm_flags = [
             "--enable-native-access=ALL-UNNAMED",
             "-Dtruffledata.strict=" + strict,
-            "-Dtruffledata.tests.nativeViews=" + ("true" if "views" in name else "false"),
             "-ea",
         ],
         main_class = "dev.elide.bazel.junit.BazelJUnitRunner",
@@ -64,15 +63,15 @@ data_java_library(
         ],
         deps = [
             ":acceptance",
+            "//core",
             "//protobuf-buffa",
+            "//protobuf-runtime",
             "@maven//:org_junit_jupiter_junit_jupiter_api",
         ],
     )
     for name, strict in [
         ("jvm", "true"),
         ("jvm_non_strict", "false"),
-        ("jvm_views", "false"),
-        ("jvm_views_strict", "true"),
     ]
 ]
 
@@ -90,20 +89,16 @@ data_java_library(
             "--gc=serial",
             "-ea",
             "-Dtruffledata.strict=" + strict,
-            "-Dtruffledata.tests.nativeViews=" + ("true" if "views" in name else "false"),
             "--initialize-at-build-time=dev.elide.truffledata",
             "--parallelism=8",
             "-march=compatibility",
             "-H:+UnlockExperimentalVMOptions",
         ] + TRUFFLE_JIT_CHECKS + ["-H:-UnlockExperimentalVMOptions"] + (["--features=dev.elide.truffledata.buffa.BuffaFeature"] if enabled else []),
-        graalvm_sdk = "@graalvm_linux_amd64//:gvm",
+        graalvm_sdk = LINUX_SVM_SDK,
         main_class = "dev.elide.truffledata.buffa.tests.Acceptance",
         optimization_mode = "2",
         tags = ["manual"],
-        target_compatible_with = [
-            "@platforms//os:linux",
-            "@platforms//cpu:x86_64",
-        ],
+        target_compatible_with = LINUX_SVM_PLATFORMS,
         deps = [
             ":acceptance",
             "@maven//:org_graalvm_truffle_truffle_runtime",
@@ -112,7 +107,6 @@ data_java_library(
     for name, enabled, strict in [
         ("native", True, "true"),
         ("native_non_strict", True, "false"),
-        ("native_views", True, "false"),
         ("fallback", False, "true"),
     ]
 ]
@@ -128,15 +122,11 @@ data_java_library(
         ],
         data = [":" + name],
         tags = ["manual"],
-        target_compatible_with = [
-            "@platforms//os:linux",
-            "@platforms//cpu:x86_64",
-        ],
+        target_compatible_with = LINUX_SVM_PLATFORMS,
     )
     for name, mode in [
         ("native", "native"),
         ("native_non_strict", "native"),
-        ("native_views", "native"),
         ("fallback", "java"),
     ]
 ]
@@ -167,7 +157,9 @@ java_test(
     ],
     deps = [
         ":acceptance",
+        "//core",
         "//protobuf-buffa",
+        "//protobuf-runtime",
         "@maven//:org_junit_jupiter_junit_jupiter_api",
     ],
 )
@@ -177,4 +169,34 @@ cc_binary(
     testonly = True,
     srcs = ["wrong_abi.c"],
     linkshared = True,
+)
+
+java_test(
+    name = "slab_producers",
+    size = "medium",
+    srcs = ["SlabNativeParity.java"],
+    args = [
+        "--class",
+        "dev.elide.truffledata.protobuf.SlabNativeParity",
+    ],
+    data = ["//protobuf-buffa/native:shared"],
+    jvm_flags = [
+        "--enable-native-access=ALL-UNNAMED",
+        "-Dpolyglot.engine.WarnInterpreterOnly=false",
+    ],
+    main_class = "dev.elide.bazel.junit.BazelJUnitRunner",
+    use_testrunner = False,
+    runtime_deps = [
+        "//bazel/junit:runner",
+        "@maven//:org_graalvm_truffle_truffle_runtime",
+    ],
+    deps = [
+        ":acceptance",
+        "//core",
+        "//protobuf-buffa",
+        "//protobuf-buffa:bindings",
+        "//protobuf-runtime",
+        "//protobuf-runtime:slab_test_fixtures",
+        "@maven//:org_junit_jupiter_junit_jupiter_api",
+    ],
 )

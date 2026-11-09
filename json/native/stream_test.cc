@@ -23,26 +23,13 @@ void require(bool condition, const char* what) {
 }
 #define REQUIRE(c) require((c), #c)
 
-std::string text_of(const myna_value_view* view, size_t index) {
-  const auto& node = view->nodes[index];
-  if ((node.tag & MYNA_VALUE_REGION_TEXT) == 0) {
-    std::string out;
-    for (uint32_t i = 0; i < node.length; ++i) out += char(myna_value_inline_byte(&node, i));
-    return out;
-  }
-  auto region = node.payload >> 32;
-  const uint8_t* data = region == 0 ? view->bytes : view->regions[region - 1].data;
-  return std::string(reinterpret_cast<const char*>(data + uint32_t(node.payload)), node.length);
-}
-
 namespace c = truffledata::tape::ctape;
 
 // Order-sensitive digest of a tape, so two decodes of one document agree exactly. A compact tape:
 // every word (kinds, flags, counts, `next`, values and the spans, which index the document's own
 // input), the directory, the pool and the input bytes, and the text of every span read through the
 // published input (a stream document's spans must index the session's copy, not the carry-over
-// buffer). A Myna tape (TRANSITIONAL): kinds, lengths, payloads and text plus lexical spans and key
-// meta.
+// buffer).
 uint64_t digest(const JsonResult& result) {
   uint64_t h = 1469598103934665603ull;
   auto mix = [&](uint64_t v) {
@@ -54,7 +41,6 @@ uint64_t digest(const JsonResult& result) {
   if (static_cast<const td_tape_view*>(result.view)->version == TD_TAPE_VIEW_VERSION) {
     const auto& t = *static_cast<const td_tape_view*>(result.view);
     REQUIRE(c::validate(t) == nullptr);
-    REQUIRE(!result.lexical && !result.key_hashes);
     for (uint64_t i = 0; i < t.word_count; ++i) mix(t.words[i]);
     for (uint64_t i = 0; i < t.directory_count; ++i) mix(t.directory[i]);
     for (uint64_t i = 0; i < t.pool_bytes; ++i) mix(t.pool[i]);
@@ -71,21 +57,7 @@ uint64_t digest(const JsonResult& result) {
     }
     return h;
   }
-  auto* view = static_cast<const myna_value_view*>(result.view);
-  for (size_t i = 0; i < view->node_count; ++i) {
-    const auto& node = view->nodes[i];
-    uint32_t kind = node.tag & MYNA_VALUE_KIND_MASK;
-    mix(kind);
-    mix(node.length);
-    if (kind == MYNA_VALUE_STRING || kind == MYNA_VALUE_DECIMAL) {
-      for (char c : text_of(view, i)) mix(uint8_t(c));
-    } else if (kind != MYNA_VALUE_ARRAY && kind != MYNA_VALUE_OBJECT) {
-      mix(node.payload);
-    }
-    mix(static_cast<const uint64_t*>(result.lexical)[i]);
-    mix(static_cast<const uint32_t*>(result.key_hashes)[i]);
-  }
-  return h;
+  throw std::runtime_error("Expected compact tape");
 }
 
 // Deterministic documents of every root kind, separated by assorted whitespace (or nothing
@@ -130,9 +102,8 @@ corpus make_corpus(size_t count) {
   return out;
 }
 
-const JsonLimitsStruct limits{1 << 20, 1 << 20, 100000, 1 << 20, 128, TD_JSON_SESSION_COMPACT_TAPE};
-// TRANSITIONAL (Task 2 -> Task 3): sessions publishing the 0.8.0 Myna tape, as the Java readers use.
-const JsonLimitsStruct myna_limits{1 << 20, 1 << 20, 100000, 1 << 20, 128, 0};
+const JsonLimitsStruct limits{1 << 20, 1 << 20, 100000, 1 << 20, 128, 0};
+
 
 std::vector<uint64_t> expected_digests(const corpus& c, const JsonLimitsStruct& with = limits) {
   void* s = td_json_session_create(&with);
@@ -153,7 +124,7 @@ std::vector<uint64_t> run_stream(void* stream, const std::string& input, size_t 
   size_t at = 0;
   auto drain = [&]() {
     for (;;) {
-      int32_t status = td_json_stream_next(stream, &r);
+      int32_t status = td_json_stream_next(stream, 0, &r);
       if (status == TD_JSON_OK) {
         out.push_back(digest(r));
         continue;
@@ -197,13 +168,7 @@ void stream_boundary_exactness() {
       td_json_session_release(s);
     }
   }
-  // TRANSITIONAL: Myna-tape sessions stream the same documents as their own decodes.
-  std::vector<uint64_t> myna = expected_digests(c, myna_limits);
-  void* s = td_json_session_create(&myna_limits);
-  void* stream = td_json_stream_create(s, 512, 512);
-  REQUIRE(run_stream(stream, c.bytes, 4096) == myna);
-  td_json_stream_release(stream);
-  td_json_session_release(s);
+
 }
 
 struct harness {
@@ -222,7 +187,7 @@ struct harness {
   uint64_t feed(const std::string& bytes) {
     return td_json_stream_feed(stream, reinterpret_cast<const uint8_t*>(bytes.data()), bytes.size());
   }
-  int32_t next() { return td_json_stream_next(stream, &result); }
+  int32_t next() { return td_json_stream_next(stream, 0, &result); }
   const td_tape_view& tape() const { return *static_cast<const td_tape_view*>(result.view); }
   std::string root_text() { return std::string(c::text(tape(), 0)); }
   uint64_t root_payload() { return tape().words[1]; }
@@ -237,6 +202,33 @@ struct harness {
     }
   }
 };
+
+
+// Access intent is per document, including speculative structural extents on a warm session.
+// A rejected flag must not consume input or disturb the previously selected storage mode.
+void directory_modes() {
+  const std::string doc = R"({"a":1,"b":2,"c":3,"d":4,"e":5,"f":6,"g":7,"h":8,"nested":{"z":9,"y":10}})";
+  std::string batch;
+  for (int i = 0; i < 200; ++i) batch += doc + '\n';
+  harness h;
+  REQUIRE(h.feed(batch) == batch.size());
+  td_json_stream_finish(h.stream);
+  void* expected_session = td_json_session_create(&limits);
+  for (int i = 0; i < 200; ++i) {
+    JsonResult invalid{};
+    REQUIRE(td_json_stream_next(h.stream, TD_JSON_WANT_TEXT, &invalid) == TD_JSON_ARGUMENT);
+    REQUIRE(invalid.view == nullptr && invalid.owner == nullptr);
+    const uint32_t flags = i % 2 ? TD_JSON_WANT_DIRECTORIES : 0;
+    REQUIRE(td_json_stream_next(h.stream, flags, &h.result) == TD_JSON_OK);
+    REQUIRE((h.tape().directory_count != 0) == (flags != 0));
+    JsonResult expected{};
+    REQUIRE(td_json_session_decode(expected_session, reinterpret_cast<const uint8_t*>(doc.data()),
+                                   doc.size(), flags, nullptr, 0, &expected) == TD_JSON_OK);
+    REQUIRE(digest(h.result) == digest(expected));
+  }
+  REQUIRE(td_json_stream_next(h.stream, TD_JSON_WANT_DIRECTORIES, &h.result) == TD_JSON_STREAM_EMPTY);
+  td_json_session_release(expected_session);
+}
 
 void truncation_and_scalars() {
   {
@@ -367,9 +359,9 @@ void errors_and_skip() {
     td_json_stream_feed(stream, reinterpret_cast<const uint8_t*>("[[[1]]] [[1]]"), 13);
     td_json_stream_finish(stream);
     JsonResult r{};
-    REQUIRE(td_json_stream_next(stream, &r) == TD_JSON_LIMIT);
+    REQUIRE(td_json_stream_next(stream, 0, &r) == TD_JSON_LIMIT);
     REQUIRE(td_json_stream_skip(stream) == TD_JSON_OK);
-    REQUIRE(td_json_stream_next(stream, &r) == TD_JSON_OK);
+    REQUIRE(td_json_stream_next(stream, 0, &r) == TD_JSON_OK);
     td_json_stream_release(stream);
     td_json_session_release(s);
   }
@@ -382,14 +374,38 @@ void errors_and_skip() {
     REQUIRE(td_json_stream_create(nullptr, 64, 64) == nullptr);
     void* stream = td_json_stream_create(s, 64, 64);
     JsonResult misaligned[2]{};
-    REQUIRE(td_json_stream_next(stream, reinterpret_cast<uint8_t*>(misaligned) + 1) == TD_JSON_ARGUMENT);
-    REQUIRE(td_json_stream_next(nullptr, misaligned) == TD_JSON_ARGUMENT);
+    REQUIRE(td_json_stream_next(stream, 0, reinterpret_cast<uint8_t*>(misaligned) + 1) == TD_JSON_ARGUMENT);
+    REQUIRE(td_json_stream_next(nullptr, 0, misaligned) == TD_JSON_ARGUMENT);
     REQUIRE(td_json_stream_feed(stream, nullptr, 4) == 0);
     REQUIRE(td_json_stream_skip(nullptr) == TD_JSON_ARGUMENT);
     REQUIRE(td_json_stream_truncated_bytes(nullptr) == 0);
     td_json_stream_release(stream);
     td_json_stream_release(nullptr);
     td_json_session_release(s);
+  }
+}
+
+// Extent hints are only candidates. A shorter root followed by more roots, and a longer
+// root whose inner object closes at the hinted index, must both fall back to exact boundaries.
+void structural_extent_hints() {
+  {
+    harness h;
+    h.feed(R"({"long key to retain input capacity":[]} {} {} {})");
+    td_json_stream_finish(h.stream);
+    for (unsigned i = 0; i < 4; ++i) REQUIRE(h.next() == TD_JSON_OK);
+    REQUIRE(h.next() == TD_JSON_STREAM_EMPTY);
+  }
+  {
+    harness h;
+    h.feed(R"({"a":"retained capacity larger than the prefix"} {"a":{},"b":2} {"a":{},"b":} [3])");
+    td_json_stream_finish(h.stream);
+    REQUIRE(h.next() == TD_JSON_OK);
+    REQUIRE(h.next() == TD_JSON_OK && h.root_kind() == MYNA_VALUE_OBJECT);
+    REQUIRE(c::field(h.tape().words[0]) == 2);
+    REQUIRE(h.next() == TD_JSON_SYNTAX);
+    REQUIRE(td_json_stream_skip(h.stream) == TD_JSON_OK);
+    REQUIRE(h.next() == TD_JSON_OK && h.root_kind() == MYNA_VALUE_ARRAY);
+    REQUIRE(h.next() == TD_JSON_STREAM_EMPTY);
   }
 }
 
@@ -518,8 +534,10 @@ void allocations() {
 
 int main() {
   try {
+    directory_modes();
     truncation_and_scalars();
     errors_and_skip();
+    structural_extent_hints();
     backpressure_and_retain();
     stream_boundary_exactness();
     allocations();

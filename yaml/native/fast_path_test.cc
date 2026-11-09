@@ -20,6 +20,7 @@
 #include <vector>
 
 using namespace truffledata::yaml;
+using yaml_session = truffledata::yaml::session;
 
 namespace {
 std::string slurp(const std::string& path) {
@@ -36,17 +37,15 @@ void append(std::string& out, const T* data, size_t count) {
 
 // Everything a decode publishes, as bytes (region payloads hold the region index and offset, which
 // both runs share; region base pointers are the session buffer in both and are not compared).
-std::string snapshot(const session::document_view& d) {
+std::string snapshot(const yaml_session::document_view& d) {
   std::string out;
-  append(out, d.view.nodes, d.view.node_count);
-  out += "|bytes|";
-  append(out, d.view.bytes, d.view.byte_count);
-  out += "|regions|" + std::to_string(d.view.region_count) + "|flags|" + std::to_string(d.view.flags);
-  for (uint64_t r = 0; r < d.view.region_count; ++r) out += "|" + std::to_string(d.view.regions[r].length);
-  out += "|lexical|";
-  append(out, d.lexical.data(), d.lexical.size());
-  out += "|hashes|";
-  append(out, d.hashes.data(), d.hashes.size());
+  if (const char* problem = ct::validate(d.view)) throw std::runtime_error(problem);
+  append(out, d.view.words, d.view.word_count);
+  out += "|pool|";
+  append(out, d.view.pool, d.view.pool_bytes);
+  out += "|directory|";
+  append(out, d.view.directory, d.view.directory_count);
+  out += "|flags|" + std::to_string(d.view.flags);
   out += "|meta|";
   append(out, d.meta.data(), d.meta.size());
   out += "|tags|";
@@ -64,14 +63,14 @@ std::string snapshot(const session::document_view& d) {
 }
 
 // All documents of `yaml` (documents(byte[]): the stream over the complete buffer).
-std::string decode_all(session& s, const std::string& yaml, bool fast) {
+std::string decode_all(yaml_session& s, const std::string& yaml, bool fast) {
   s.fast_paths(fast);
   stream st(s, size_t(64) << 20, size_t(64) << 20);
   std::string out;
   st.feed(reinterpret_cast<const uint8_t*>(yaml.data()), yaml.size());
   st.finish();
   for (;;) {
-    session::document_view d;
+    yaml_session::document_view d;
     int32_t status = st.next(&d);
     if (status == status_stream_empty) break;
     if (status != status_ok) {
@@ -86,7 +85,7 @@ std::string decode_all(session& s, const std::string& yaml, bool fast) {
 }
 
 // One session decode (zero or one document) with `flags`, e.g. retain_source.
-std::string decode_one(session& s, const std::string& yaml, uint32_t flags, bool fast) {
+std::string decode_one(yaml_session& s, const std::string& yaml, uint32_t flags, bool fast) {
   s.fast_paths(fast);
   try {
     return "#doc " + snapshot(s.decode(reinterpret_cast<const uint8_t*>(yaml.data()), yaml.size(), flags));
@@ -229,11 +228,11 @@ int main(int argc, char** argv) {
     for (const std::string& doc : template_documents()) inputs.emplace_back("<template " + std::to_string(t++) + ">", doc);
     size_t compared = 0, errors = 0;
     for (const mode& m : modes()) {
-      session s(m.options);
+      yaml_session s(m.options);
       for (int run = 0; run < 3; ++run) {
         for (const auto& input : inputs) {
           // run 0: documents(byte[]); runs 1 and 2: one session decode, with retained source in run 2.
-          uint32_t flags = run == 2 ? uint32_t(session::retain_source) : 0;
+          uint32_t flags = run == 2 ? uint32_t(yaml_session::retain_source) : 0;
           std::string fast = run ? decode_one(s, input.second, flags, true) : decode_all(s, input.second, true);
           std::string general = run ? decode_one(s, input.second, flags, false) : decode_all(s, input.second, false);
           if (fast != general) {
@@ -243,12 +242,26 @@ int main(int argc, char** argv) {
                          m.name, at, fast.size(), general.size());
           }
           require(fast == general);
+          s.fused_duplicates(false);
+          std::string separate = run ? decode_one(s, input.second, flags, true) : decode_all(s, input.second, true);
+          s.fused_duplicates(true);
+          // Fused duplicate rejection happens at mapping close, so diagnostics may point later
+          // than the incremental key check; successful documents and rejection statuses agree.
+          auto status_only = [](std::string text) {
+            size_t error = text.find("#error ");
+            size_t detail = error == std::string::npos ? std::string::npos : text.find(':', error);
+            if (detail != std::string::npos) text.resize(detail);
+            return text;
+          };
+          if (status_only(fast) != status_only(separate))
+            std::fprintf(stderr, "%s [%s]: fused and separate duplicate checks differ\n", input.first.c_str(), m.name);
+          require(status_only(fast) == status_only(separate));
           ++compared;
           errors += fast.find("#error") != std::string::npos;
         }
       }
     }
-    std::printf("fast_path_test: %zu decodes equal with fast paths on and off (%zu ending in the same error)\n",
+    std::printf("fast_path_test: %zu decodes equal with fast paths and duplicate fusion on and off (%zu ending in the same error)\n",
                 compared, errors);
   } catch (const std::exception& e) {
     std::fprintf(stderr, "fast_path_test failure: %s\n", e.what());

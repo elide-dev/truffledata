@@ -69,6 +69,76 @@ struct scratch {
 
 // ---- tests ----------------------------------------------------------------------------------
 
+void yaml_plain_and_constant_spans() {
+  const std::string input = "plain yes null";
+  scratch s;
+  ctape_writer w(&s.arena, {});
+  w.input(input);
+  size_t root = w.begin(c::kind_array, 0);
+  w.string_ref({0, 5}, true, false); w.boolean(true, {6, 3}); w.null({10, 4});
+  w.end(root, 3);
+  auto view = w.view(); view.flags |= TD_TAPE_YAML;
+  require(c::validate(view) == nullptr);
+  require(c::field(view.words[3]) == 3 && c::low(view.words[3]) == 6);
+  require(c::field(view.words[4]) == 4 && c::low(view.words[4]) == 10);
+  require(throws([&] { w.boolean(false, {14, 1}); }));
+}
+
+void yaml_filtered_input_strings() {
+  const std::string input = "prefix decoded string longer than sixteen bytes raw-token";
+  scratch s;
+  ctape_writer w(&s.arena, {});
+  w.input(input);
+  w.string_ref({7, 40}, {48, 9}, true, false);
+  auto view = w.view();
+  require(c::validate(view) != nullptr);  // Existing JSON combination remains invalid.
+  view.flags |= TD_TAPE_YAML;
+  require(c::validate(view) == nullptr && view.pool_bytes == 0 && view.word_count == 2);
+  require(c::text(view, 0) == input.substr(7, 40));
+  require(view.words[1] == (uint64_t(48) << 32 | 9));
+  auto copied = c::to_myna(view, &s.arena);
+  const auto& value = copied.base.nodes[0];
+  require(value.tag == (MYNA_VALUE_STRING | MYNA_VALUE_REGION_TEXT));
+  require(myna_value_region_id(&value) == 1 && myna_value_offset(&value) == 7 && value.length == 40);
+  uint64_t words[] = {view.words[0], view.words[1]};
+  view.words = words;
+  words[1] = uint64_t(input.size()) << 32 | 1;
+  require(c::validate(view) != nullptr);  // The independent raw span is checked too.
+  words[1] = 0;
+  words[0] = c::make(c::kind_decimal, c::wide_flag, 1, 0);
+  require(c::validate(view) != nullptr);  // DECIMAL retains its original allowed combinations.
+}
+
+void pop_scalar_preserves_pending_keys() {
+  scratch s;
+  ctape_writer w(&s.arena, {});
+  w.input("ab");
+  size_t root = w.begin(c::kind_object, 0);
+  require(throws([&] { w.pop_scalar(root); }));
+  w.member_key(root, hash("a"));
+  w.string_ref({0, 1}, true, true);
+  require(throws([&] { w.pop_scalar(2); }));
+  size_t scalar = w.word_count();
+  w.integer(9, {});
+  require(throws([&] { w.pop_scalar(0); }));
+  w.pop_scalar(scalar);
+  size_t nested = w.begin(c::kind_object, 1);
+  w.member_key(nested, hash("b"));
+  w.string_ref({1, 1}, true, true);
+  w.null();
+  w.end(nested, 1);
+  w.member_key(root, hash("b"));
+  w.string_ref({1, 1}, true, true);
+  scalar = w.word_count();
+  w.ref(nested);
+  w.pop_scalar(scalar);
+  w.boolean(true);
+  w.end(root, 2);
+  require(w.value_count() == 7);
+  require(c::validate(w.view()) == nullptr);
+  require(throws([&] { w.pop_scalar(w.word_count()); }));
+}
+
 void words_follow_the_layout() {
   const std::string input = R"({"a":1,"bb":[true,null,"x\n"],"c":1.5})";
   scratch s;
@@ -433,6 +503,19 @@ void erase_append_truncate_renumber() {
     require(c::after(5, v.words[5]) == 11 && c::low(v.words[9]) == 7 && c::low(v.words[10]) == 2);
     require(throws([&] { w.append(saved.data(), 1, 0); }));  // half a container
   }
+  // A rewrite's copied REF can name an already-emitted target beyond the source slice.
+  // Only targets inside [origin, origin+count) relocate with the slice.
+  {
+    scratch s;
+    ctape_writer w(&s.arena, {});
+    w.input(input);
+    size_t root = w.begin(c::kind_array, 0);
+    w.boolean(false); w.boolean(true);
+    uint64_t external = c::make(c::kind_ref, 0, 0, 2);
+    w.append(&external, 1, 3); // destination4, origin1, source slice[1,2)
+    w.end(root, 3);
+    require(c::low(w.words()[4]) == 2 && c::validate(w.view()) == nullptr);
+  }
   // Rewrites refuse to run while announced keys are pending (JSON never rewrites).
   {
     scratch s;
@@ -547,7 +630,7 @@ void validate_rejects_corruption() {
   corrupt([](W& x, W&, td_tape_view&) { x[9] = c::make(c::kind_ref, 0, 0, 6); });   // REF to an open ancestor
   corrupt([](W& x, W&, td_tape_view&) { x[8] = c::make(c::kind_ref, 0, 0, 9); });   // REF forward
   corrupt([](W& x, W&, td_tape_view&) { x[8] = c::make(c::kind_ref, 0, 0, 4); });   // REF to a second word
-  corrupt([](W& x, W&, td_tape_view&) { x[8] = c::make(c::kind_true, 0, 1, 0); });  // payload on a constant
+  corrupt([](W& x, W&, td_tape_view&) { x[8] = c::make(c::kind_true, 0, 1, UINT32_MAX); });  // constant span past input
   corrupt([](W& x, W&, td_tape_view&) { x[9] |= c::owned_flag | c::wide_flag; });  // OWNED text without its raw word
   corrupt([](W& x, W&, td_tape_view&) {                                          // ASCII claimed for non-ASCII text
     x[11] = c::make(c::kind_string, c::owned_flag | c::wide_flag | c::ascii_flag, 2, 0);
@@ -632,12 +715,203 @@ void allocation_failure_at_every_growth() {
     }
   }
 }
+// Build through the decoded-key API with optional cache. Separate writers and arenas ensure
+// templates cannot accidentally retain prior document pointers.
+struct shape_document { std::vector<uint64_t> words, directory; std::vector<uint8_t> pool; };
+shape_document write_shape(const std::vector<std::string>& keys, key_shape_cache* cache, bool wide = false, unsigned depth = 0, bool directories = true, bool retain = false) {
+  std::pmr::monotonic_buffer_resource memory;
+  ctape_writer writer(&memory, {});
+  writer.input({});
+  writer.directories(directories);
+  writer.shapes(cache);
+  std::vector<size_t> arrays;
+  for (unsigned d = 0; d < depth; ++d) arrays.push_back(writer.begin(c::kind_array, d));
+  size_t object = writer.begin(c::kind_object, depth);
+  for (size_t i = 0; i < keys.size(); ++i) {
+    const auto& key = keys[i];
+    writer.key_text(object, reinterpret_cast<const uint8_t*>(key.data()), uint32_t(key.size()));
+    writer.string(key, {}, true, true);
+    if (wide && i % 3 == 0) writer.integer(int64_t(i), {});
+    else if (wide && i % 3 == 1) {
+      size_t array = writer.begin(c::kind_array, depth + 1);
+      writer.null(); writer.string("owned", {}, true, false); writer.end(array, 2);
+    } else writer.boolean(i % 2);
+  }
+  writer.end(object, keys.size());
+  for (size_t i = arrays.size(); i > 0; --i) writer.end(arrays[i - 1], 1);
+  if (retain) writer.build_directories();
+  auto view = writer.view();
+  require(c::validate(view) == nullptr);
+  require(bool(view.flags & TD_TAPE_NO_DIRECTORIES) == (!directories && !retain));
+  if (!directories && !retain) require(view.directory_count == 0);
+  return {{view.words, view.words + view.word_count}, {view.directory, view.directory + view.directory_count},
+          {view.pool, view.pool + view.pool_bytes}};
+}
+
+void shape_cache_rejects_duplicates() {
+  key_shape_cache cache;
+  // Templates install from a depth's second object on; prime depth 0 so each count installs.
+  write_shape({"prime0", "prime1"}, &cache);
+  require(cache.levels[0].count == 0);
+  for (unsigned count = 2; count <= 32; ++count) {
+    std::vector<std::string> keys;
+    for (unsigned i = 0; i < count; ++i) keys.push_back("key" + std::to_string(i));
+    write_shape(keys, &cache);
+    require(cache.levels[0].count == count);
+    // Every insertion position, including a complete template match followed by an extra key.
+    for (unsigned position = 0; position <= count; ++position) {
+      auto duplicate = keys;
+      duplicate.insert(duplicate.begin() + position, keys.front());
+      require(throws_as<c::duplicate_key>([&] { write_shape(duplicate, &cache); }));
+    }
+    for (unsigned position = 1; position < count; ++position) {
+      auto duplicate = keys; duplicate[position] = keys.front();
+      require(throws_as<c::duplicate_key>([&] { write_shape(duplicate, &cache); }));
+    }
+    // A shorter prefix is valid but cannot inherit the longer template's count.
+    keys.pop_back();
+    write_shape(keys, &cache);
+  }
+  std::string long_key(40, 'x');
+  require(throws_as<c::duplicate_key>([&] { write_shape({long_key, "short", long_key}, &cache); }));
+  write_shape({"a", "b"}, &cache, false, 31);
+  write_shape({"a", "b"}, &cache, false, 31);
+  require(cache.levels[31].count == 2);
+  require(throws_as<c::duplicate_key>([&] { write_shape({"a", "a"}, &cache, false, 31); }));
+  require(throws_as<c::duplicate_key>([&] { write_shape({"a", "a"}, &cache, false, 32); }));
+}
+
+void directoryless_shapes_still_check_duplicates() {
+  key_shape_cache cache;
+  for (unsigned count : {2u, 3u, 24u, 32u, 33u, 100u}) {
+    std::vector<std::string> keys;
+    for (unsigned i = 0; i < count; ++i) keys.push_back("field" + std::to_string(i));
+    for (unsigned round = 0; round < 3; ++round) {
+      write_shape(keys, &cache, round % 2, 0, false);
+      auto retained = write_shape(keys, &cache, round % 2, 0, false, true);
+      auto normal = write_shape(keys, nullptr, round % 2);
+      require(retained.words == normal.words && retained.directory == normal.directory && retained.pool == normal.pool);
+      for (unsigned duplicate = 0; duplicate < count; ++duplicate) {
+        auto bad = keys; bad.insert(bad.begin() + duplicate, keys.back());
+        require(throws_as<c::duplicate_key>([&] { write_shape(bad, &cache, false, 0, false); }));
+      }
+      std::reverse(keys.begin(), keys.end());
+    }
+  }
+  // Directory construction can fail after a borrowed document succeeded. Roll back every
+  // partially published object pointer and permit a retry on the same live words.
+  fault_memory memory(SIZE_MAX);
+  block_arena arena(&memory);
+  block_arena::storage original;
+  ctape_writer writer(&arena, {});
+  writer.directories(false); writer.input({});
+  size_t root = writer.begin(c::kind_object, 0);
+  for (std::string key : {"first", "second"}) {
+    writer.key_text(root, reinterpret_cast<const uint8_t*>(key.data()), key.size());
+    writer.string(key, {}, true, true); writer.null();
+  }
+  writer.end(root, 2);
+  arena.detach(original, &memory);  // keep original words live; directories need a fresh block
+  memory.fail_at = memory.calls;
+  require(throws_as<std::bad_alloc>([&] { writer.build_directories(); }));
+  require(c::validate(writer.view()) == nullptr && writer.view().directory_count == 0);
+  memory.fail_at = SIZE_MAX;
+  writer.build_directories();
+  require(c::validate(writer.view()) == nullptr && writer.view().directory_count == 2);
+}
+
+void producer_proofs_close_directoryless_objects() {
+  scratch storage;
+  ctape_writer writer(&storage.arena, {});
+  writer.directories(false); writer.input({});
+  size_t root = writer.begin(c::kind_object, 0);
+  writer.string("first", {}, true, true); writer.integer(1, {});
+  writer.string("second", {}, true, true); writer.integer(2, {});
+  writer.end_distinct(root, 2);
+  require(c::validate(writer.view()) == nullptr && writer.view().directory_count == 0);
+  const auto* words = writer.words();
+  writer.build_directories();
+  require(writer.words() == words && writer.view().directory_count == 2 && c::validate(writer.view()) == nullptr);
+
+  for (unsigned misuse = 0; misuse < 4; ++misuse) {
+    scratch state;
+    ctape_writer bad(&state.arena, {});
+    bad.directories(misuse == 0); bad.input({});
+    key_shape_cache cache;
+    if (misuse == 1) bad.shapes(&cache);
+    size_t object = bad.begin(misuse == 2 ? c::kind_array : c::kind_object, 0);
+    if (misuse == 3) bad.member_key(object, 0);
+    require(throws_as<std::logic_error>([&] { bad.end_distinct(object, 0); }));
+  }
+  // Validation is independent of the producer proof. A deliberately false proof cannot
+  // make duplicate decoded keys pass the full structural/directoryless validator.
+  scratch invalid;
+  ctape_writer bad(&invalid.arena, {});
+  bad.directories(false); bad.input({});
+  size_t object = bad.begin(c::kind_object, 0);
+  bad.string("same", {}, true, true); bad.null();
+  bad.string("same", {}, true, true); bad.null();
+  bad.end_distinct(object, 2);
+  require(c::validate(bad.view()) != nullptr);
+}
+
+void shape_key_replacement_preserves_aliased_bytes() {
+  key_shape_cache::key key;
+  for (const std::string text : {std::string("aa"), std::string("x\0y", 3), std::string(32, 'z')}) {
+    const uint32_t hash = myna_value_hash(reinterpret_cast<const uint8_t*>(text.data()), text.size());
+    key.set(text, hash);
+    key.set({reinterpret_cast<const char*>(key.bytes), key.length}, hash);
+    require(key.length == text.size() && key.hash == hash);
+    require(std::memcmp(key.bytes, text.data(), text.size()) == 0);
+    for (size_t i = text.size(); i < sizeof key.bytes; ++i) require(key.bytes[i] == 0);
+    if (text.size() > 1) {
+      std::string suffix = text.substr(1);
+      key.set({reinterpret_cast<const char*>(key.bytes + 1), text.size() - 1}, 0);
+      require(std::memcmp(key.bytes, suffix.data(), suffix.size()) == 0);
+    }
+  }
+}
+
+void shape_templates_install_on_second_object() {
+  key_shape_cache cache;
+  std::vector<std::string> keys{"id", "name", "price"};
+  auto sorted = write_shape(keys, nullptr);
+  // The first object of a depth only marks it; the second installs; later ones match.
+  for (unsigned round = 0; round < 3; ++round) {
+    auto cached = write_shape(keys, &cache);
+    require(cached.words == sorted.words && cached.directory == sorted.directory && cached.pool == sorted.pool);
+    require(cache.levels[0].seen && cache.levels[0].count == (round == 0 ? 0u : 3u));
+  }
+  require(cache.levels[1].count == 0 && !cache.levels[1].seen);
+}
+
+void permuted_directories_match_sorted() {
+  key_shape_cache cache;
+  std::vector<std::string> keys;
+  for (unsigned i = 0; i < 32; ++i) keys.push_back("field" + std::to_string(i));
+  for (unsigned round = 0; round < 8; ++round) {
+    auto cached = write_shape(keys, &cache, round % 2);
+    auto sorted = write_shape(keys, nullptr, round % 2);
+    require(cached.words == sorted.words && cached.directory == sorted.directory && cached.pool == sorted.pool);
+    if (round % 2) std::reverse(keys.begin(), keys.end());
+  }
+  require(cache.levels[0].count == 32);
+}
 }  // namespace
 
 int main() {
   struct test { const char* name; void (*run)(); };
   const test tests[] = {
+      {"directoryless_shapes_still_check_duplicates", directoryless_shapes_still_check_duplicates},
+      {"producer_proofs_close_directoryless_objects", producer_proofs_close_directoryless_objects},
+      {"shape_cache_rejects_duplicates", shape_cache_rejects_duplicates},
+      {"shape_templates_install_on_second_object", shape_templates_install_on_second_object},
+      {"shape_key_replacement_preserves_aliased_bytes", shape_key_replacement_preserves_aliased_bytes},
+      {"permuted_directories_match_sorted", permuted_directories_match_sorted},
       {"words_follow_the_layout", words_follow_the_layout},
+      {"pop_scalar_preserves_pending_keys", pop_scalar_preserves_pending_keys},
+      {"yaml_plain_and_constant_spans", yaml_plain_and_constant_spans},
+      {"yaml_filtered_input_strings", yaml_filtered_input_strings},
       {"duplicates_detected_in_sorted_directory", duplicates_detected_in_sorted_directory},
       {"singleton_objects_have_no_directory", singleton_objects_have_no_directory},
       {"counts_saturate_and_validate", counts_saturate_and_validate},

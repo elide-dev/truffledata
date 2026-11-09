@@ -46,6 +46,47 @@ final class CsvApiSurfaceTest {
     }
   }
 
+  /** Windowed, owned and channel overloads parse the same records as the copying entry points. */
+  @Test
+  void windowedOwnedAndChannelOverloadsAgree() throws Exception {
+    byte[] framed = "xx\nn,s\n1,a\n2,b\nyy".getBytes(StandardCharsets.UTF_8);
+    int from = 3, to = framed.length - 2;
+    byte[] exact = java.util.Arrays.copyOfRange(framed, from, to);
+    CsvBatch reference = Csv.parse(exact, CsvFormat.RFC4180);
+    assertEquals(2, reference.size());
+    assertEquals("b", Csv.parse(framed, from, to, CsvFormat.RFC4180).row(1).getString(1));
+    assertEquals("b", Csv.parseOwned(framed, from, to, CsvFormat.RFC4180).row(1).getString(1));
+    assertEquals("a", Csv.parseOwned(exact.clone(), CsvFormat.RFC4180).row(0).getString(1));
+    assertEquals(
+        2, Csv.parseOwned(exact.clone(), CsvFormat.RFC4180, CsvLimits.DEFAULT).size());
+    try (CsvReader reader = Csv.open(exact, CsvFormat.RFC4180)) {
+      CsvBatch batch = reader.next();
+      assertNotNull(batch);
+      assertEquals(2, batch.size());
+      assertNull(reader.next());
+    }
+    Schema schema = Schema.of(Field.requiredLong("n"), new Field("s", Field.Kind.STRING, false, false));
+    CsvPlan plan = CsvPlan.compile(schema, CsvFormat.RFC4180);
+    assertEquals(2L, plan.parseOwned(exact.clone()).row(1).getLong(0));
+    assertEquals(1L, plan.parseOwned(exact.clone(), CsvLimits.DEFAULT).row(0).getLong(0));
+    try (CsvReader reader = plan.open(exact)) {
+      assertEquals(2L, java.util.Objects.requireNonNull(reader.next()).row(1).getLong(0));
+    }
+    try (CsvReader reader = plan.open(framed, from, to)) {
+      assertEquals(1L, java.util.Objects.requireNonNull(reader.next()).row(0).getLong(0));
+    }
+    Path path = file(new String(exact, StandardCharsets.UTF_8));
+    try (java.nio.channels.FileChannel channel =
+        java.nio.channels.FileChannel.open(path, java.nio.file.StandardOpenOption.READ)) {
+      assertEquals(2L, plan.parse(channel).row(1).getLong(0));
+    }
+    try (java.nio.channels.FileChannel channel =
+            java.nio.channels.FileChannel.open(path, java.nio.file.StandardOpenOption.READ);
+        CsvReader reader = plan.open(channel)) {
+      assertEquals("a", java.util.Objects.requireNonNull(reader.next()).row(0).getString(1));
+    }
+  }
+
   @Test
   void builderSettersAndEnumsRoundTrip() {
     CsvFormat format =

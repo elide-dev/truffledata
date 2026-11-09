@@ -83,6 +83,27 @@ final class JsonExportTest {
     }
   }
 
+  @Test
+  void sinkAndReaderModesPreserveValuesAndRetainedDirectories() {
+    byte[] source = JvmScopedTest.utf8("{\"b\":1,\"a\":{\"x\":2,\"y\":3}}");
+    try (var session = JsonJvm.openSession(JvmScopedTest.library(), dev.elide.truffledata.json.JsonLimits.DEFAULT)) {
+      int[] observedKeys = {0};
+      session.parse(source, new Counting() {
+        @Override public void key(TapeText key) {
+          assertFalse(key.view().stringValue().isEmpty());
+          observedKeys[0]++;
+        }
+      });
+      assertEquals(4, observedKeys[0]);
+      long value = session.with(source, root -> root.member("a").member("y").longValue());
+      assertEquals(3L, value);
+      try (var retained = session.decode(source)) {
+        assertEquals(2, retained.directories());
+        assertEquals(2, retained.root().member("a").member("x").longValue());
+      }
+    }
+  }
+
   /** Counts events without materializing anything. */
   private static class Counting implements TapeSink {
     long keys, values, begins, ends;
@@ -546,6 +567,52 @@ final class JsonExportTest {
       assertEquals(1024, keys.size());
       assertThrows(NullPointerException.class, () -> new JavaSink(null));
     }
+  }
+
+  @Test
+  void keyCachesDistinguishWordBoundariesAndReuseEscapedSpellings() {
+    var javaKeys = new JavaSink.KeyCache();
+    var truffleKeys = new TruffleSink.KeyCache();
+    String[] names = {"", "a", "a\0", "a\0\0", "abcdefgh", "abcdefghx", "abcdefghijklmno",
+        "abcdefghijklmnop", "abcdefghijklmnopq", "éééé", "éééééééé", "ééééééééx", "中😀", "\n\t\r"};
+    var firstJava = new ArrayList<Object>();
+    var firstTruffle = new ArrayList<Object>();
+    try (var decoder = decoder()) {
+      for (int round = 0; round < 2; round++) {
+        var source = new StringBuilder("{");
+        var expected = new LinkedHashMap<String, Long>();
+        for (int i = 0; i < names.length; i++) {
+          int at = round == 0 ? i : names.length - 1 - i;
+          String name = names[at];
+          if (i != 0) source.append(',');
+          // The second document spells every UTF-16 unit as an escape; cache equality uses UTF-8.
+          if (round == 0) source.append(new com.google.gson.JsonPrimitive(name));
+          else {
+            source.append('"');
+            for (int ch = 0; ch < name.length(); ch++) source.append(String.format("\\u%04x", (int) name.charAt(ch)));
+            source.append('"');
+          }
+          source.append(':').append(at);
+          expected.put(name, (long) at);
+        }
+        try (var message = decoder.decode(JvmScopedTest.utf8(source.append('}').toString()))) {
+          var javaSink = new JavaSink(javaKeys);
+          var truffleSink = new TruffleSink(truffleKeys);
+          message.export(javaSink); message.export(truffleSink);
+          assertEquals(expected, javaSink.result());
+          assertEquals(expected, fromTruffle(truffleSink.result()));
+          var actualJava = new ArrayList<Object>(((Map<?, ?>) javaSink.result()).keySet());
+          var actualTruffle = new ArrayList<Object>(((Map<?, ?>) truffleSink.result()).keySet());
+          if (round == 0) { firstJava.addAll(actualJava); firstTruffle.addAll(actualTruffle); }
+          else for (int i = 0; i < names.length; i++) {
+            assertSame(firstJava.get(i), actualJava.get(names.length - 1 - i));
+            assertSame(firstTruffle.get(i), actualTruffle.get(names.length - 1 - i));
+          }
+        }
+      }
+    }
+    assertEquals(names.length, javaKeys.size());
+    assertEquals(names.length, truffleKeys.size());
   }
 
   @Test

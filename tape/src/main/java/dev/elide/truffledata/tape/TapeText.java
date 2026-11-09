@@ -26,8 +26,13 @@ public final class TapeText {
   // The owner exports pin; a session rebinds its cursor to each borrowed document.
   private TapeOwner owner;
   private long node = -1;
+  // Header word of the bound node when the walk already loaded it, else 0 (no text node has a
+  // zero header: text kinds are nonzero), loaded on first use. The tape is immutable while bound.
+  private long header;
   // Open containers of the export walk: exclusive end node, sign bit set for objects.
   final long[] ends = new long[TapeExportNode.MAX_DEPTH];
+  // YAML frames and tag cursors grow during warm-up, then exports reuse them without allocation.
+  AliasExport.@Nullable State aliasState;
   private byte[] scratch = EMPTY;
   // Text arena of the session parse this cursor serves (Task D2), else null.
   private @Nullable TapeTextArena arena;
@@ -42,6 +47,7 @@ public final class TapeText {
   void rebind(TapeOwner next) {
     owner = next;
     node = -1;
+    header = 0;
   }
 
   /** Attaches the session's text arena for one borrowed parse, or detaches it (null). */
@@ -51,10 +57,18 @@ public final class TapeText {
 
   void bind(long next) {
     node = next;
+    header = 0;
+  }
+
+  /** Binds {@code next} with the header word the caller already loaded from this owner's tape. */
+  void bind(long next, long word) {
+    node = next;
+    header = word;
   }
 
   void unbind() {
     node = -1;
+    header = 0;
   }
 
   private long node() {
@@ -64,14 +78,32 @@ public final class TapeText {
     return bound;
   }
 
+  /** Header word of the bound node {@code at} (as returned by {@link #node()}). */
+  private long header(long at) {
+    long word = header;
+    return word != 0 ? word : (header = owner.tape.word(at));
+  }
+
+  /** Copies a key or string's decoded bytes given its loaded header; one storage call. */
+  private void copyText(long at, long word, byte[] output, int offset) {
+    int kind = TapeReader.kind(word);
+    if (kind == 7 || kind == 6)
+      owner.tape.copyText((word & TapeReader.OWNED) != 0, TapeReader.low(word), output, offset, TapeReader.field(word));
+    else owner.tape.copyStringUtf8(at, output, offset);
+  }
+
   /** Decoded UTF-8 length of a key or string; the token length of a decimal. */
   public int utf8Length() {
-    return Math.toIntExact(owner.tape.length(node()));
+    long at = node();
+    long word = header(at);
+    int kind = TapeReader.kind(word);
+    return kind == 7 || kind == 6 ? TapeReader.field(word) : Math.toIntExact(owner.tape.length(at));
   }
 
   /** True when every decoded byte is ASCII (from the decoder's side table, no scan). */
   public boolean isAscii() {
-    return owner.ascii(node());
+    long at = node();
+    return (header(at) & TapeReader.ASCII) != 0;
   }
 
   /**
@@ -79,7 +111,7 @@ public final class TapeText {
    * for strings and decimals. Equal keys have equal hashes in every document.
    */
   public int hash() {
-    return (owner.meta(node()) >>> 16) & 0x7fff;
+    return owner.tape.hash(node()) & 0x7fff;
   }
 
   /**
@@ -87,48 +119,45 @@ public final class TapeText {
    * inline string or key, and returns whether it was.
    */
   boolean inlineWords(long[] words, int offset) {
-    long at = node() * ValueTape.NODE_SIZE;
-    TapeSource source = owner.source();
-    long header = source.nodeLong(at);
-    if ((int) header != ValueTape.STRING || (header >>> 32) > TapeKey.INLINE_BYTES) return false;
-    words[offset] = header;
-    words[offset + 1] = source.nodeLong(at + 8);
-    words[offset + 2] = source.nodeLong(at + 16);
+    long at = node();
+    TapeReader tape = owner.tape;
+    long header = header(at);
+    int length = TapeReader.field(header);
+    if (TapeReader.kind(header) != 7 || length > TapeKey.INLINE_BYTES) return false;
+    boolean owned = (header & TapeReader.OWNED) != 0;
+    long start = TapeReader.low(header);
+    words[offset] = ValueTape.STRING | ((long) length << 32);
+    words[offset + 1] = tape.textWord(owned, start, Math.min(8, length));
+    words[offset + 2] = tape.textWord(owned, start + 8, Math.max(0, length - 8));
     return true;
   }
 
-  /**
-   * Copies an inline string's bytes (at most 16, no storage flag) from its two node words, or
-   * returns false for other nodes. Replaces Myna's per-byte checked reads for short text.
-   */
-  private boolean copyInline(long at, int length, byte[] output, int offset) {
-    if (length > TapeKey.INLINE_BYTES) return false;
-    TapeSource source = owner.source();
-    long word = at * ValueTape.NODE_SIZE;
-    if (source.nodeInt(word) != ValueTape.STRING) return false;
-    java.util.Objects.checkFromIndexSize(offset, length, output.length);
-    long low = source.nodeLong(word + 8);
-    for (int i = 0; i < Math.min(length, 8); i++) output[offset + i] = (byte) (low >>> (8 * i));
-    if (length > 8) {
-      long high = source.nodeLong(word + 16);
-      for (int i = 8; i < length; i++) output[offset + i] = (byte) (high >>> (8 * (i - 8)));
-    }
-    return true;
+  /** Private cache hash of decoded inline words; full words still decide key equality. */
+  static int inlineHash(long[] words) {
+    long hash = words[1] ^ Long.rotateLeft(words[2], 29) ^ ((words[0] >>> 32) * 0x9e3779b97f4a7c15L);
+    hash = (hash ^ (hash >>> 33)) * 0xc4ceb9fe1a85ec53L;
+    return (int) (hash ^ (hash >>> 32));
   }
 
   /** Decoded text of a key or string, or the exact source token of a decimal. */
   @TruffleBoundary
   public String toJavaString() {
     long at = node();
-    if (owner.tag(at) == ValueTape.DECIMAL) return owner.lexicalText(at);
-    int length = Math.toIntExact(owner.tape.length(at));
+    // One header load decides kind, length, ASCII and extent; one storage call copies the text.
+    long word = header(at);
+    if (TapeReader.kind(word) != 7) {
+      if (TapeReader.valueKind(word) == ValueTape.DECIMAL) return owner.numberText(at);
+      word = 0;
+    }
+    int length = word != 0 ? TapeReader.field(word) : Math.toIntExact(owner.tape.length(at));
     if (length == 0) return "";
-    boolean ascii = owner.ascii(at);
+    boolean ascii = word != 0 ? (word & TapeReader.ASCII) != 0 : owner.tape.isAscii(at);
     // Long non-ASCII strings: the tape's bulk transcoder (simdutf straight into the String's
     // UTF-16 on SVM). ASCII strings become Latin-1 Strings with one copy from scratch.
     if (!ascii && length >= BULK_THRESHOLD) return owner.tape.stringValue(at);
     byte[] buffer = length <= MAX_SCRATCH ? scratch(length) : new byte[length];
-    if (!copyInline(at, length, buffer, 0)) owner.tape.copyStringUtf8(at, buffer, 0);
+    if (word != 0) owner.tape.copyText((word & TapeReader.OWNED) != 0, TapeReader.low(word), buffer, 0, length);
+    else owner.tape.copyStringUtf8(at, buffer, 0);
     // Tape strings are valid UTF-8 (stage 1 validated the input; escapes were decoded by simdjson),
     // so the decoding constructor never substitutes.
     return new String(buffer, 0, length, ascii ? StandardCharsets.ISO_8859_1 : StandardCharsets.UTF_8);
@@ -152,11 +181,11 @@ public final class TapeText {
   public TruffleString toTruffleString(TruffleString.Encoding encoding) {
     long at = node();
     if (owner.tag(at) == ValueTape.DECIMAL)
-      return TruffleString.fromJavaStringUncached(owner.lexicalText(at), encoding);
+      return TruffleString.fromJavaStringUncached(owner.numberText(at), encoding);
     TapeTextArena text = arena;
     if (text != null) return text.string(at, encoding);
-    byte[] bytes = new byte[Math.toIntExact(owner.tape.length(at))];
-    if (!copyInline(at, bytes.length, bytes, 0)) owner.tape.copyStringUtf8(at, bytes, 0);
+    byte[] bytes = new byte[utf8Length()];
+    copyText(at, header(at), bytes, 0);
     TruffleString utf8 =
         TruffleString.fromByteArrayUncached(bytes, 0, bytes.length, TruffleString.Encoding.UTF_8, false);
     return encoding == TruffleString.Encoding.UTF_8 ? utf8 : utf8.switchEncodingUncached(encoding);
@@ -166,9 +195,11 @@ public final class TapeText {
   @TruffleBoundary
   public int copyUtf8(byte[] output, int offset) {
     long at = node();
-    int length = Math.toIntExact(owner.tape.length(at));
-    if (owner.tag(at) == ValueTape.STRING && copyInline(at, length, output, offset)) return length;
-    return owner.tape.copyStringUtf8(at, output, offset);
+    long word = header(at);
+    int kind = TapeReader.kind(word);
+    if (kind != 7 && kind != 6) return owner.tape.copyStringUtf8(at, output, offset);
+    copyText(at, word, output, offset);
+    return TapeReader.field(word);
   }
 
   /** Whether a key or string decodes to exactly {@code utf8}, without materializing it. */

@@ -14,6 +14,7 @@ import sys
 binary = Path(sys.argv[1]).resolve()
 output = Path(os.environ['TEST_UNDECLARED_OUTPUTS_DIR'])
 output.mkdir(parents=True, exist_ok=True)
+binary_sha256 = hashlib.sha256(binary.read_bytes()).hexdigest()
 # Workload per engine and its 32-document checksum (JsonComparison and JsonFixture).
 WORKLOADS = {
     'json-scalar': (('gson-stream', 'simdjson-typed', 'simdjson-specialized'), 35984),
@@ -40,7 +41,14 @@ jobs = [job for job in itertools.product(workload_of, STAGES, ('time', 'memory')
 random.Random(20261105).shuffle(jobs)
 results = []
 for engine, stage, mode, fork in jobs:
-    process = subprocess.run([str(binary), engine, stage, mode], capture_output=True, text=True, check=True)
+    command = [str(binary), engine, stage, mode]
+    process = subprocess.run(command, capture_output=True, text=True)
+    if process.returncode:
+        (output / 'json-comparison-failure.json').write_text(json.dumps({
+            'command': command, 'fork': fork, 'returncode': process.returncode,
+            'stdout': process.stdout, 'stderr': process.stderr,
+        }, indent=2) + '\n')
+        process.check_returncode()
     lines = [line for line in process.stdout.splitlines() if line.startswith('{')]
     if len(lines) != 1:
         raise ValueError('Expected one measurement record')
@@ -57,8 +65,13 @@ for engine, stage, mode, fork in jobs:
         raise ValueError('Invalid samples')
     row['fork'] = fork
     results.append(row)
+    # Keep completed fresh-process samples if a later cell fails or the remote runner stops.
+    (output / 'json-comparison.partial.json').write_text(json.dumps({
+        'schema': 1, 'binary_sha256': binary_sha256,
+        'complete': False, 'measurements': results,
+    }, indent=2) + '\n')
     print(engine, stage, mode, fork, samples, flush=True)
-report = {'schema': 1, 'binary_sha256': hashlib.sha256(binary.read_bytes()).hexdigest(),
+report = {'schema': 1, 'binary_sha256': binary_sha256,
     'unavailable': sorted(UNAVAILABLE),
     'platform': platform.platform(), 'cpu': Path('/proc/cpuinfo').read_text(), 'measurements': results}
 (output / 'json-comparison.json').write_text(json.dumps(report, indent=2) + '\n')

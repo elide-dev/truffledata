@@ -1,6 +1,6 @@
 load("@protobuf//bazel:proto_library.bzl", "proto_library")
-load("@rules_graalvm//graalvm:defs.bzl", "native_image")
 load("@rules_cc//cc:defs.bzl", "cc_binary")
+load("@rules_graalvm//graalvm:defs.bzl", "native_image")
 load("@rules_java//java:defs.bzl", "java_binary", "java_test")
 load("@rules_rust//rust:defs.bzl", "rust_binary")
 load("@rules_shell//shell:sh_test.bzl", "sh_test")
@@ -63,20 +63,6 @@ java_test(
     args = ["--smoke"],
     data = ["//protobuf-buffa/native:shared"],
     jvm_flags = ["--enable-native-access=ALL-UNNAMED"],
-    main_class = "dev.elide.truffledata.comparison.Comparison",
-    use_testrunner = False,
-    runtime_deps = [":comparison"],
-)
-
-java_test(
-    name = "smoke_views",
-    size = "large",
-    args = ["--smoke"],
-    data = ["//protobuf-buffa/native:shared"],
-    jvm_flags = [
-        "--enable-native-access=ALL-UNNAMED",
-        "-Dtruffledata.buffa.views=true",
-    ],
     main_class = "dev.elide.truffledata.comparison.Comparison",
     use_testrunner = False,
     runtime_deps = [":comparison"],
@@ -217,11 +203,7 @@ sh_test(
             "@platforms//cpu:x86_64",
         ],
     )
-    # measure_views selects opt-in native views (BuffaPlan.decodeView) for the mixed buffa cells.
-    for name, extra in [
-        ("measure", []),
-        ("measure_views", ["--views"]),
-    ]
+    for name, extra in [("measure", [])]
 ]
 
 sh_test(
@@ -268,7 +250,10 @@ sh_test(
 data_java_library(
     name = "json_fixture",
     srcs = ["JsonFixture.java"],
-    visibility = ["//benchmarks:__pkg__"],
+    visibility = [
+        "//benchmarks:__pkg__",
+        "//yaml/tests:__pkg__",
+    ],
     deps = [
         "//json",
         "@maven//:com_google_code_gson_gson",
@@ -345,6 +330,31 @@ data_java_library(
         ("json_svm_v3", "json-comparison-v3", "-march=x86-64-v3"),
     ]
 ]
+
+# Override with preserved images built from identical fixtures. Candidate overrides allow
+# independent worker images to share one paired-measurement invocation before integration.
+label_flag(
+    name = "json_typed_svm_candidate",
+    build_setting_default = ":json_svm",
+)
+
+label_flag(
+    name = "json_typed_svm_baseline",
+    build_setting_default = ":json_svm",
+)
+
+sh_test(
+    name = "json_typed_pair",
+    size = "enormous",
+    timeout = "long",
+    srcs = ["json_typed_pair.sh"],
+    args = ["$(rootpath :json_typed_svm_candidate)", "$(rootpath :json_typed_svm_baseline)"],
+    data = ["json_typed_pair.py", "JsonComparison.java", "JsonFixture.java", ":json_typed_svm_candidate", ":json_typed_svm_baseline"],
+    shard_count = 6,
+    exec_properties = {"EstimatedCPU": "4", "EstimatedMemory": "16GB"},
+    tags = ["benchmark", "manual"],
+    target_compatible_with = ["@platforms//os:linux", "@platforms//cpu:x86_64"],
+)
 
 sh_test(
     name = "json_native_smoke",
@@ -448,6 +458,8 @@ data_java_library(
     srcs = [
         "ConsumerComparison.java",
         "ConsumerProfile.java",
+        "StockInteropFeature.java",
+        "StockInteropRow.java",
     ],
     deps = [
         ":comparison",
@@ -492,7 +504,7 @@ java_test(
             "-march=compatibility",
             "--initialize-at-build-time=dev.elide.truffledata",
             "--initialize-at-run-time=dev.elide.truffledata.comparison.Comparison",
-            "--features=dev.elide.truffledata.buffa.BuffaFeature",
+            "--features=dev.elide.truffledata.buffa.BuffaFeature,dev.elide.truffledata.comparison.StockInteropFeature",
             "-H:+UnlockExperimentalVMOptions",
         ] + TRUFFLE_JIT_CHECKS + ([
             "--enable-monitoring=jfr",
@@ -540,6 +552,11 @@ java_binary(
 # Before/after baselines: override with an executable from an earlier revision; by default each
 # measurement runs only the current build. Labels are never committed for local baselines.
 label_flag(
+    name = "consumer_svm_candidate",
+    build_setting_default = ":consumer_svm",
+)
+
+label_flag(
     name = "consumer_svm_baseline",
     build_setting_default = ":consumer_svm",
 )
@@ -581,12 +598,29 @@ label_flag(
         ],
     )
     for name, runtime, candidate, baseline in [
-        ("consumer_measure", "svm", ":consumer_svm", ":consumer_svm_baseline"),
+        ("consumer_measure", "svm", ":consumer_svm_candidate", ":consumer_svm_baseline"),
         ("consumer_measure_jvm", "jvm", ":consumer_jvm", ":consumer_jvm_baseline"),
     ]
 ]
 
 # ---- CSV comparison (benchmarks/comparison/CSV.md). Competitors are benchmark-only dependencies.
+
+label_flag(
+    name = "csv_svm_baseline",
+    build_setting_default = ":csv_svm",
+)
+
+sh_test(
+    name = "csv_pair",
+    size = "enormous",
+    srcs = ["csv_pair.sh"],
+    args = ["$(rootpath :csv_svm)", "$(rootpath :csv_svm_baseline)"],
+    data = ["csv_pair.py", ":csv_svm", ":csv_svm_baseline"],
+    exec_properties = {"EstimatedCPU": "4", "EstimatedMemory": "16GB"},
+    shard_count = 8,
+    tags = ["benchmark", "manual"],
+    target_compatible_with = ["@platforms//os:linux", "@platforms//cpu:x86_64"],
+)
 
 # Benchmark-only access to package-private CSV internals (the strict scanner, UTF-8 validator and
 # number parsers); never part of a published artifact.
@@ -814,3 +848,429 @@ java_binary(
         ("csv_measure_jvm", "jvm", ":csv_jvm"),
     ]
 ]
+
+# Reproducible host ingestion and pure-Java producer measurements; setup is outside timed cells.
+data_java_library(
+    name = "protobuf_ingestion",
+    testonly = True,
+    srcs = [
+        "SourceIngestionFeature.java",
+        "SourceIngestionProbe.java",
+    ],
+    deps = [
+        ":contracts",
+        "//core",
+        "//protobuf",
+        "@maven//:com_google_protobuf_protobuf_java",
+        "@maven//:org_graalvm_sdk_nativeimage",
+        "@maven//:org_graalvm_truffle_truffle_api",
+    ],
+)
+
+java_test(
+    name = "protobuf_ingestion_jvm",
+    size = "medium",
+    exec_properties = {
+        "EstimatedCPU": "4",
+        "EstimatedMemory": "4GB",
+    },
+    jvm_flags = [
+        "--enable-native-access=ALL-UNNAMED",
+        "-Dpolyglot.engine.WarnInterpreterOnly=false",
+        "-Xms512m",
+        "-Xmx512m",
+        "-XX:+UseSerialGC",
+        "-Dingestion.warmupMillis=3000",
+        "-Dingestion.sampleMillis=250",
+    ],
+    main_class = "dev.elide.truffledata.comparison.SourceIngestionProbe",
+    tags = ["manual"],
+    use_testrunner = False,
+    runtime_deps = [":protobuf_ingestion"],
+)
+
+native_image(
+    name = "protobuf_ingestion_native",
+    testonly = True,
+    exec_properties = {
+        "EstimatedCPU": "4",
+        "EstimatedMemory": "8GB",
+    },
+    executable_name = "protobuf-ingestion",
+    extra_args = [
+        "--gc=serial",
+        "--parallelism=4",
+        "-march=compatibility",
+        "--initialize-at-build-time=dev.elide.truffledata",
+        "--initialize-at-run-time=dev.elide.truffledata.comparison.SourceIngestionProbe",
+        "--features=dev.elide.truffledata.comparison.SourceIngestionFeature",
+    ],
+    graalvm_sdk = "@graalvm_linux_amd64//:gvm",
+    main_class = "dev.elide.truffledata.comparison.SourceIngestionProbe",
+    optimization_mode = "2",
+    tags = ["manual"],
+    target_compatible_with = [
+        "@platforms//os:linux",
+        "@platforms//cpu:x86_64",
+    ],
+    deps = [":protobuf_ingestion"],
+)
+
+sh_test(
+    name = "protobuf_ingestion_svm",
+    size = "medium",
+    srcs = ["protobuf_ingestion.sh"],
+    args = ["$(location :protobuf_ingestion_native)"],
+    data = [":protobuf_ingestion_native"],
+    tags = ["manual"],
+)
+
+# YAML keeps JVM competitors separate from the statically linked implementation.
+data_java_library(
+    name = "yaml_fixture",
+    srcs = ["YamlFixture.java"],
+    visibility = ["//benchmarks:__pkg__"],
+    deps = [
+        ":json_fixture",
+        "//core",
+        "@maven//:com_google_code_gson_gson",
+    ],
+)
+
+data_java_library(
+    name = "yaml_comparison",
+    testonly = True,
+    srcs = [
+        "ComparisonLanguage.java",
+        "YamlComparison.java",
+    ],
+    deps = [
+        ":json_fixture",
+        ":yaml_fixture",
+        "//core",
+        "//json",
+        "//tape",
+        "//yaml",
+        "//yaml:jvm",
+        "@maven//:org_graalvm_polyglot_polyglot",
+        "@maven//:org_graalvm_sdk_nativeimage",
+        "@maven//:org_graalvm_truffle_truffle_api",
+        "@maven//:org_graalvm_truffle_truffle_runtime",
+    ],
+)
+
+data_java_library(
+    name = "yaml_competitors",
+    testonly = True,
+    srcs = [
+        "YamlCompetitors.java",
+        "YamlJvmComparison.java",
+    ],
+    deps = [
+        ":yaml_comparison",
+        ":yaml_fixture",
+        "@maven//:com_fasterxml_jackson_core_jackson_core",
+        "@maven//:com_fasterxml_jackson_core_jackson_databind",
+        "@maven//:com_fasterxml_jackson_dataformat_jackson_dataformat_yaml",
+        "@maven//:org_snakeyaml_snakeyaml_engine",
+        "@maven//:org_yaml_snakeyaml",
+    ],
+)
+
+java_binary(
+    name = "yaml_jvm",
+    testonly = True,
+    jvm_flags = [
+        "--enable-native-access=ALL-UNNAMED",
+        "-Xms512m",
+        "-Xmx512m",
+        "-XX:+UseSerialGC",
+    ],
+    main_class = "dev.elide.truffledata.comparison.YamlJvmComparison",
+    runtime_deps = [":yaml_competitors"],
+)
+
+native_image(
+    name = "yaml_svm",
+    testonly = True,
+    cc_deps = [
+        "//json/native:svm",
+        "//yaml/native:svm",
+    ],
+    exec_properties = {
+        "EstimatedCPU": "8",
+        "EstimatedMemory": "24GB",
+    },
+    executable_name = "yaml-comparison",
+    extra_args = [
+        "--gc=serial",
+        "--parallelism=8",
+        "-march=compatibility",
+        "--initialize-at-build-time=dev.elide.truffledata",
+        "--add-exports=org.graalvm.truffle.runtime/com.oracle.truffle.runtime=ALL-UNNAMED",
+        "-H:+UnlockExperimentalVMOptions",
+    ] + TRUFFLE_JIT_CHECKS + ["-H:-UnlockExperimentalVMOptions"],
+    graalvm_sdk = "@graalvm_linux_amd64//:gvm",
+    main_class = "dev.elide.truffledata.comparison.YamlComparison",
+    optimization_mode = "2",
+    tags = ["manual"],
+    target_compatible_with = [
+        "@platforms//os:linux",
+        "@platforms//cpu:x86_64",
+    ],
+    deps = [":yaml_comparison"],
+)
+
+sh_test(
+    name = "yaml_native_smoke",
+    size = "large",
+    srcs = ["yaml_smoke.sh"],
+    args = ["$(rootpath :yaml_svm)"],
+    data = [
+        "yaml_smoke.py",
+        ":yaml_svm",
+    ],
+    tags = ["manual"],
+    target_compatible_with = [
+        "@platforms//os:linux",
+        "@platforms//cpu:x86_64",
+    ],
+)
+
+sh_test(
+    name = "yaml_measure",
+    size = "large",
+    timeout = "eternal",
+    srcs = ["yaml_measure.sh"],
+    args = [
+        "$(rootpath :yaml_svm)",
+        "$(rootpath :yaml_jvm)",
+        "$(rootpath //yaml/native:yaml_shared.so)",
+    ],
+    data = [
+        "yaml_measure.py",
+        ":yaml_jvm",
+        ":yaml_svm",
+        "//yaml/native:yaml_shared.so",
+    ],
+    exec_properties = {
+        "EstimatedCPU": "4",
+        "EstimatedMemory": "4GB",
+    },
+    tags = [
+        "benchmark",
+        "manual",
+    ],
+    target_compatible_with = [
+        "@platforms//os:linux",
+        "@platforms//cpu:x86_64",
+    ],
+)
+
+# A4 evidence gate: keep the candidate isolated until compiled parity, graph and speed pass.
+data_java_library(
+    name = "compiled_slab_probe",
+    testonly = True,
+    srcs = ["CompiledSlabProbe.java"],
+    deps = [
+        ":comparison",
+        ":contracts",
+        "//core",
+        "//protobuf-runtime",
+        "@maven//:com_google_protobuf_protobuf_java",
+        "@maven//:org_graalvm_polyglot_polyglot",
+        "@maven//:org_graalvm_sdk_nativeimage",
+        "@maven//:org_graalvm_truffle_truffle_api",
+        "@maven//:org_graalvm_truffle_truffle_runtime",
+    ],
+)
+
+java_test(
+    name = "compiled_slab_jvm",
+    size = "large",
+    exec_properties = {
+        "EstimatedCPU": "4",
+        "EstimatedMemory": "4GB",
+    },
+    jvm_flags = [
+        "--enable-native-access=ALL-UNNAMED",
+        "-Xms512m",
+        "-Xmx512m",
+        "-XX:+UseSerialGC",
+    ],
+    main_class = "dev.elide.truffledata.comparison.CompiledSlabProbe",
+    tags = ["manual"],
+    use_testrunner = False,
+    runtime_deps = [":compiled_slab_probe"],
+)
+
+native_image(
+    name = "compiled_slab_native",
+    testonly = True,
+    exec_properties = {
+        "EstimatedCPU": "4",
+        "EstimatedMemory": "12GB",
+    },
+    executable_name = "compiled-slab-probe",
+    extra_args = [
+        "--gc=serial",
+        "--parallelism=4",
+        "-march=compatibility",
+        "--initialize-at-build-time=dev.elide.truffledata",
+        "--initialize-at-run-time=dev.elide.truffledata.comparison.CompiledSlabProbe",
+        "--add-exports=org.graalvm.truffle.runtime/com.oracle.truffle.runtime=ALL-UNNAMED",
+    ] + TRUFFLE_JIT_CHECKS,
+    graalvm_sdk = "@graalvm_linux_amd64//:gvm",
+    main_class = "dev.elide.truffledata.comparison.CompiledSlabProbe",
+    optimization_mode = "2",
+    tags = ["manual"],
+    target_compatible_with = [
+        "@platforms//os:linux",
+        "@platforms//cpu:x86_64",
+    ],
+    deps = [":compiled_slab_probe"],
+)
+
+sh_test(
+    name = "compiled_slab_svm",
+    size = "large",
+    srcs = ["protobuf_ingestion.sh"],
+    args = ["$(location :compiled_slab_native)"],
+    data = [":compiled_slab_native"],
+    tags = ["manual"],
+)
+
+# A3 diagnostics: identical input bytes, fresh production output, and isolated writer variants.
+data_java_library(
+    name = "slab_writer_probe",
+    testonly = True,
+    srcs = [
+        "SlabWriterProbe.java",
+        "SourceIngestionFeature.java",
+    ],
+    deps = [
+        ":contracts",
+        "//core",
+        "//protobuf-runtime",
+        "@maven//:com_google_protobuf_protobuf_java",
+        "@maven//:org_graalvm_sdk_nativeimage",
+    ],
+)
+
+java_binary(
+    name = "slab_writer_jvm",
+    testonly = True,
+    jvm_flags = [
+        "--enable-native-access=ALL-UNNAMED",
+        "-Dpolyglot.engine.WarnInterpreterOnly=false",
+        "-Xms512m",
+        "-Xmx512m",
+        "-XX:+UseSerialGC",
+    ],
+    main_class = "dev.elide.truffledata.comparison.SlabWriterProbe",
+    runtime_deps = [":slab_writer_probe"],
+)
+
+native_image(
+    name = "slab_writer_svm",
+    testonly = True,
+    exec_properties = {
+        "EstimatedCPU": "4",
+        "EstimatedMemory": "8GB",
+    },
+    executable_name = "slab-writer-probe",
+    extra_args = [
+        "--gc=serial",
+        "--parallelism=4",
+        "-march=compatibility",
+        "--initialize-at-build-time=dev.elide.truffledata",
+        "--features=dev.elide.truffledata.comparison.SourceIngestionFeature",
+    ],
+    graalvm_sdk = "@graalvm_linux_amd64//:gvm",
+    main_class = "dev.elide.truffledata.comparison.SlabWriterProbe",
+    optimization_mode = "2",
+    tags = ["manual"],
+    target_compatible_with = [
+        "@platforms//os:linux",
+        "@platforms//cpu:x86_64",
+    ],
+    deps = [":slab_writer_probe"],
+)
+
+sh_test(
+    name = "slab_writer_measure",
+    size = "large",
+    timeout = "eternal",
+    srcs = ["slab_writer_measure.sh"],
+    args = [
+        "$(rootpath :slab_writer_jvm)",
+        "$(rootpath :slab_writer_svm)",
+    ],
+    data = [
+        "slab_writer_measure.py",
+        ":slab_writer_jvm",
+        ":slab_writer_svm",
+    ],
+    exec_properties = {
+        "EstimatedCPU": "4",
+        "EstimatedMemory": "4GB",
+    },
+    tags = [
+        "benchmark",
+        "manual",
+    ],
+    target_compatible_with = [
+        "@platforms//os:linux",
+        "@platforms//cpu:x86_64",
+    ],
+)
+
+# E1 ratios span sparse/full holdout groups, so each runtime keeps all cells on one worker.
+[
+    sh_test(
+        name = name,
+        size = "enormous",
+        srcs = ["consumer_measure.sh"],
+        args = [
+            runtime,
+            "$(rootpath %s)" % binary,
+            "$(rootpath %s)" % binary,
+            "projection",
+        ],
+        data = [
+            binary,
+            "//tools/bench:consumer.py",
+        ],
+        exec_properties = {
+            "EstimatedCPU": "4",
+            "EstimatedMemory": "16GB",
+        },
+        tags = [
+            "benchmark",
+            "manual",
+        ],
+        target_compatible_with = [
+            "@platforms//os:linux",
+            "@platforms//cpu:x86_64",
+        ],
+    )
+    for name, runtime, binary in [
+        ("consumer_projection_measure", "svm", ":consumer_svm"),
+        ("consumer_projection_measure_jvm", "jvm", ":consumer_jvm"),
+    ]
+]
+
+# B4 diagnostic-only sampling; ordinary images remain the performance controls.
+sh_test(
+    name = "consumer_interpreter_profile",
+    size = "large",
+    timeout = "long",
+    srcs = ["consumer_interpreter_profile.sh"],
+    args = ["$(rootpath :consumer_profile)"],
+    data = [":consumer_profile"],
+    tags = ["manual"],
+    target_compatible_with = [
+        "@platforms//os:linux",
+        "@platforms//cpu:x86_64",
+    ],
+)

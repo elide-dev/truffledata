@@ -1,0 +1,80 @@
+load("@rules_java//java:defs.bzl", "java_library")
+load("//bazel:java.bzl", "data_java_library")
+
+java_library(
+    name = "bindings",
+    srcs = ["//yaml/native:java_bindings"],
+    resource_strip_prefix = "yaml/native/generated",
+    resources = ["//yaml/native:native_resources"],
+    visibility = ["//visibility:public"],
+    deps = ["//bazel:myna_compiler_sdk", "@maven//:org_graalvm_sdk_nativeimage", "@maven//:org_graalvm_sdk_word"],
+)
+
+data_java_library(
+    name = "yaml",
+    srcs = [
+        "src/main/java/dev/elide/truffledata/yaml/Aliases.java",
+        "src/main/java/dev/elide/truffledata/yaml/DuplicateKeys.java",
+        "src/main/java/dev/elide/truffledata/yaml/ResultMetadata.java",
+        "src/main/java/dev/elide/truffledata/yaml/Style.java",
+        "src/main/java/dev/elide/truffledata/yaml/KeyKind.java",
+        "src/main/java/dev/elide/truffledata/yaml/Yaml.java",
+        "src/main/java/dev/elide/truffledata/yaml/SvmSessionBackend.java",
+        "src/main/java/dev/elide/truffledata/yaml/SvmTypedOwner.java",
+        "src/main/java/dev/elide/truffledata/yaml/SvmYamlMessage.java",
+        "src/main/java/dev/elide/truffledata/yaml/YamlPlan.java",
+        "src/main/java/dev/elide/truffledata/yaml/UnknownTags.java",
+        "src/main/java/dev/elide/truffledata/yaml/VersionDirective.java",
+        "src/main/java/dev/elide/truffledata/yaml/YamlDirectives.java",
+        "src/main/java/dev/elide/truffledata/yaml/YamlLimits.java",
+        "src/main/java/dev/elide/truffledata/yaml/YamlMessage.java",
+        "src/main/java/dev/elide/truffledata/yaml/YamlMetadata.java",
+        "src/main/java/dev/elide/truffledata/yaml/YamlOptions.java",
+        "src/main/java/dev/elide/truffledata/yaml/YamlSchema.java",
+        "src/main/java/dev/elide/truffledata/yaml/YamlSession.java",
+        "src/main/java/dev/elide/truffledata/yaml/YamlStream.java",
+        "src/main/java/dev/elide/truffledata/yaml/YamlStreamOptions.java",
+        "src/main/java/dev/elide/truffledata/yaml/YamlSvm.java",
+        "src/main/java/dev/elide/truffledata/yaml/package-info.java",
+    ],
+    visibility = ["//visibility:public"],
+    exports = ["//tape"],
+    deps = [
+        ":bindings",
+        "//tape",
+        "//core",
+        "@myna//:values",
+        "@maven//:org_graalvm_sdk_nativeimage",
+        "@maven//:org_graalvm_sdk_word",
+        "@maven//:org_graalvm_truffle_truffle_api",
+    ],
+)
+
+data_java_library(
+    name = "jvm",
+    srcs = [
+        "src/main/java/dev/elide/truffledata/yaml/JvmSessionBackend.java",
+        "src/main/java/dev/elide/truffledata/yaml/JvmTypedOwner.java",
+        "src/main/java/dev/elide/truffledata/yaml/JvmPlanBackend.java",
+        "src/main/java/dev/elide/truffledata/yaml/YamlJvm.java",
+    ],
+    visibility = ["//visibility:public"],
+    exports = ["//tape"],
+    deps = [
+        ":bindings",
+        "//tape",
+        "//core",
+        "@myna//:values",
+        "@maven//:org_graalvm_sdk_nativeimage",
+        "@maven//:org_graalvm_sdk_word",
+        "@maven//:org_graalvm_truffle_truffle_api",
+        ":yaml",
+        "//tape:jvm",
+    ],
+)
+
+filegroup(
+    name = "sources",
+    srcs = glob(["src/main/java/**/*.java"]),
+    visibility = ["//visibility:public"],
+)

@@ -182,7 +182,7 @@ void failsafe_schema() {
 }
 
 void key_texts() {
-  char buffer[32];
+  char buffer[40];
   require(key_text(plain("~"), buffer).empty());
   require(key_text(plain("null"), buffer).empty());
   require(key_text(plain("TRUE"), buffer) == "true");

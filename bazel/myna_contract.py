@@ -17,11 +17,11 @@ def verify(descriptor, archive):
                              "session_create", "session_decode", "session_decode_small", "session_retain", "session_reset", "session_release",
                              "stream_create", "stream_feed", "stream_finish", "stream_next", "stream_skip",
                              "stream_truncated_bytes", "stream_release", "result_myna"},
-        # ABI 10 adds the slab imports; the ABI 9 view imports stay until Task G1 retires them.
-        "truffledata_buffa": {"fingerprint", "decode", "release", "typed", "typedReuse", "scalars", "utf8_to_utf16",
-                              "compileView", "releaseCompiled", "decodeView", "releaseView",
+        # ABI 11 retires view imports; layout-compiled slabs and typed text indexes remain.
+        "truffledata_buffa": {"fingerprint", "decode", "release", "typed", "typedReuse", "utf8_to_utf16",
                               "compileLayout", "releaseLayout", "decodeSlab", "decodeSlabSmall"},
         "truffledata_yaml": {"fingerprint", "release", "session_create", "session_decode", "session_retain",
+                             "session_write_text", "plan_create", "plan_release", "typed_decode", "typed_release",
                              "session_reset", "session_release", "stream_create", "stream_feed", "stream_finish",
                              "stream_next", "stream_release"},
     }[module["name"]]
@@ -43,7 +43,7 @@ def verify(descriptor, archive):
         assert function["nativeCallPolicy"] == policy, function
     name = module["java"]["package"] + "." + module["java"]["class"]
     if archive == "-":
-        # Native-only module (YAML until its Java bindings library lands, plan Task 5).
+        # Native descriptor-only validation; Java packaging is checked with its archive below.
         return name
     with zipfile.ZipFile(archive) as jar:
         resource = "META-INF/native-image/dev.elide.myna/" + name + "/native-image.properties"

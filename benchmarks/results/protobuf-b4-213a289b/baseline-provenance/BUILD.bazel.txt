@@ -1,0 +1,12 @@
+load("@rules_java//java:defs.bzl", "java_binary", "java_import")
+package(default_visibility = ["//visibility:public"])
+exports_files(["truffledata-consumer"])
+alias(name = "consumer_svm", actual = "truffledata-consumer")
+java_import(name = "payload", jars = ["baseline_payload.jar"])
+java_binary(
+    name = "consumer_jvm",
+    main_class = "dev.elide.truffledata.comparison.ConsumerComparison",
+    jvm_flags = ["--enable-native-access=ALL-UNNAMED"],
+    runtime_deps = [":payload"],
+    data = ["//protobuf-buffa/native:shared"],
+)

@@ -1,0 +1,7 @@
+# Bounded generated producer capacity hints
+
+The owning generated decoder's previous single `(wire length, slab extent)` hint thrashes when messages of different lengths alternate. The candidate retains 64 atomic opaque length/extent pairs per prepared decoder, never input/output references. Hash collisions and differing shapes with equal wire lengths remain hints only: writer growth, trimming and slab/depth budgets are unchanged. Every call returns fresh owning bytes.
+
+Local macOS arm64, GraalVM 25.5.5-elide.27: on the same 32 mixed messages per small/holdout/large fixture, allocated bytes/message fall from 2256.5 to 773.25, 6908.75 to 2451.75, and 701017.25 to 351103. Median times in this single diagnostic run change from approximately 183/560/47366 ns to 145/475/38544 ns. These timings are local exploratory evidence, not final x86 or release-gate claims. Full raw five-sample results are retained, including variation.
+
+The production generator was compiled directly, emitted fresh Type contracts and passed byte-for-byte parity with the table producer and retained writer sketches on all 96 small/holdout/large fixtures. Its short timing samples in `td-hint-generator-parity.log` are functional preflight only. A regression test exercises concurrent shared decoding, retained independent results, equal wire lengths with different extents, cache collisions and exact/one-below slab budgets. Integrated qualification and the three-fork x86 writer/performance matrix remain pending.

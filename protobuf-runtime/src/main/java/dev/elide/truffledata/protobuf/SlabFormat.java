@@ -25,6 +25,7 @@ public final class SlabFormat {
   public static final int HEADER_HANDLES = 16;
   public static final int HEADER_ROOT = 20;
   public static final int HEADER_LAYOUT = 24;
+
   /** Offset of the unknown table (records with unknown fields), 0 when no record has any. */
   public static final int HEADER_UNKNOWNS = 28;
 
@@ -40,6 +41,15 @@ public final class SlabFormat {
 
   /** Every record's required fields are present and no singular message was merged. */
   public static final int CERTIFIED = 8;
+
+  /** The slab needs its immutable projection mask for field access. */
+  public static final int PROJECTED = 16;
+
+  /** Tagged child slot referring to a 16-byte input-span header. */
+  public static final int LAZY_CHILD = 0x8000_0000;
+
+  public static final int LAZY_HEADER_BYTES = 16;
+  public static final int COUNTS_ONLY = 1;
 
   /** The root record always follows the header. */
   public static final int ROOT = HEADER_BYTES;
@@ -120,12 +130,18 @@ public final class SlabFormat {
 
   /** Checks magic, length, root and layout fingerprint; returns the flags. */
   public static int check(byte[] slab, Layout layout) {
-    if (slab.length < HEADER_BYTES
+    return check(slab, slab.length, layout);
+  }
+
+  static int check(byte[] slab, int extent, Layout layout) {
+    if (extent < HEADER_BYTES
+        || (extent & 7) != 0
+        || extent > slab.length
         || getInt(slab, HEADER_MAGIC) != MAGIC
-        || getInt(slab, HEADER_BYTES_USED) != slab.length
+        || getInt(slab, HEADER_BYTES_USED) != extent
         || getInt(slab, HEADER_ROOT) != ROOT
         || getInt(slab, HEADER_LAYOUT) != layout.fingerprint()
-        || slab.length < ROOT + layout.recordBytes(0))
+        || extent < ROOT + layout.recordBytes(0))
       throw new ContractViolation("Not a slab of this layout");
     int flags = getInt(slab, HEADER_FLAGS);
     if (Integer.bitCount(flags & (OWNING | BORROWING)) != 1)

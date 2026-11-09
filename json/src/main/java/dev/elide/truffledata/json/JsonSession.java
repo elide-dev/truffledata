@@ -55,6 +55,10 @@ public final class JsonSession extends TapeSession<JsonMessage> {
    * Adds the JSON-only stream calls to the shared backend.
    */
   abstract static class Backend extends TapeSession.Backend<JsonMessage> {
+    private int directoryFlag = 32;
+    @Override protected final void directories(boolean enabled) { directoryFlag = enabled ? 32 : 0; }
+    final int directoryFlag() { return directoryFlag; }
+
     /** td_json_stream_skip: resumes after a document-level failure; returns the native status. */
     abstract int streamSkip(long stream);
 
@@ -151,7 +155,7 @@ public final class JsonSession extends TapeSession<JsonMessage> {
                 session,
                 pinned.addressOfArrayElement(offset),
                 length,
-                inputFlag(encoding) | (textArray == null ? 0 : TEXT),
+                inputFlag(encoding) | directoryFlag() | (textArray == null ? 0 : TEXT),
                 out == null ? WordFactory.<CCharPointer>nullPointer() : out.addressOfArrayElement(0),
                 textArray == null ? 0 : textArray.length,
                 result);
@@ -228,8 +232,9 @@ public final class JsonSession extends TapeSession<JsonMessage> {
 
     @Override
     protected int streamNext(long stream) {
-      return Json.stream_next(WordFactory.pointer(stream), result);
+      return Json.stream_next(WordFactory.pointer(stream), directoryFlag(), result);
     }
+
 
     @Override
     int streamSkip(long stream) {

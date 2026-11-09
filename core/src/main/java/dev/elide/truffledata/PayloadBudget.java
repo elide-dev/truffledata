@@ -46,7 +46,7 @@ public final class PayloadBudget {
     if (value instanceof String text) {
       long bytes = 2L * text.length();
       stringBytes(bytes);
-    } else if (value instanceof DataArray array) {
+    } else if (value instanceof OwnedArray array) {
       cells(array.size());
       if (!array.isBytes() || depth == 128)
         for (int i = 0; i < array.size(); i++) accept(array.get(i), depth + 1);

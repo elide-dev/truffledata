@@ -1,33 +1,30 @@
 # Native JSON decoder
 
-The C++ decoder traverses simdjson 5.1.1 On-Demand directly into a Myna value ABI
-v4 index (Myna 0.11.0), without an intermediate DOM. Typed plans write fixed scalar
-slots instead. Both sit behind one versioned C ABI, `json.seam` (application ABI 7),
+The C++ decoder runs its checked stage2 grammar over simdjson 5.1.1's stage1 structural index into the compact tape, without an intermediate DOM. Myna ABI v4 is available on demand for interchange. Typed plans write fixed scalar
+slots instead. Both sit behind one versioned C ABI, `json.seam` (application ABI 10),
 which generates the direct SVM `@CFunction` bindings and JVM FFM handles. The Java
 owners, guest interop, export and snapshot contracts are described in
 [docs/JSON.md](../../docs/JSON.md).
 
-## Compact tape (ABI 7, tape-gbps plan Task 2)
+## Compact tape (ABI 10)
 
-`decoder.h` now walks On-Demand into the compact tape of `//tape/native:ctape.h` (plan
+`decoder.h` drives the structural walk into the compact tape of `//tape/native:ctape.h` (plan
 `docs/superpowers/plans/2026-11-07-tape-gbps.md` §3): one 64-bit word per value, a second
 word for numbers, containers and escaped (pool-owned) text; number and string words carry
 their exact token or body span in the retained input, keys carry the `KEY` flag and strings
-the `ASCII` flag, so there are no lexical-span or key-meta side tables. Every object of at
+the `ASCII` flag, so there are no lexical-span or key-meta side tables. When directories are requested, every object of at
 least two members gets a directory run of `key_offset << 32 | FNV-1a` entries, and the
 duplicate-key check happens while that run is sorted (equal hashes are byte-compared); one-member
-objects have none. `tape_decoder<null_writer>` is the validate-only walk
+objects have none. `stage2_walk<structural_null_writer>` is the validate-only walk
 (`TD_JSON_VALIDATE_ONLY`): the same limits and the same sorted-run duplicate check over a
-scratch key stack, nothing written. A session created with `TD_JSON_SESSION_COMPACT_TAPE`
-(`JsonLimitsStruct.flags`) publishes `td_tape_view` descriptors (`json.seam` `TapeView`, 88
-bytes) for decodes, retains and stream documents, with a text arena indexed by word;
-`td_json_result_myna` converts a compact result into an owned Myna ABI v4 result (its own input
-copy) for interchange. Until the Java readers move to the compact tape (plan Task 3), sessions
-without the flag and `td_json_decode`/`_adopted` still publish the 0.8.0 representation below,
-from `legacy_decoder.h`; `JsonResult` keeps its `lexical`, `lexical_count` and `key_hashes`
-fields (null for compact results) until then.
+scratch key stack, nothing written. Every decode, retain and streamed document publishes
+an 88-byte `td_tape_view` descriptor (`json.seam` `TapeView`), with a text arena indexed by
+word. `JsonResult` is 88 bytes; lexical and key metadata side tables have been removed.
+`JsonLimitsStruct.flags` is reserved and must be zero. Session/stream decode flags separately include `TD_JSON_WANT_DIRECTORIES`; sink-only paths omit directories and retention reconstructs them transactionally. `td_json_result_myna` converts a
+compact result into an independently owned Myna ABI v4 result with its own input copy.
+The previous Myna and generic On-Demand producers live only in `testing/myna_oracle.h` and `testing/ondemand_decoder.h`, for differential tests. Nested/repeated typed plans keep their dedicated On-Demand slot writer; flat scalar plans use stage2 after exact contract qualification.
 
-## Generic documents (0.8.0 representation, until Task 3)
+## Generic documents
 
 The decoder accepts every root kind, rejects decoded duplicate keys and trailing
 input, and validates number grammar without restricting numeric range. Every value
@@ -40,10 +37,8 @@ and `copied_input_bytes` equals `length`. The library never frees adopted memory
 the caller keeps it valid until `td_json_release` returns.
 
 Parsers are leased from a bounded process-wide pool (at most eight idle) and
-returned before decode completes. `get_string()` output is treated as parser
-scratch: unescaped strings longer than 16 bytes reference the retained input
-region, escaped strings are copied into message-owned bytes, and short strings are
-inline. No retained document depends on parser scratch, so parser reuse cannot
+returned before decode completes. Unescaped strings reference retained input; stage2 decodes escaped strings directly into
+the message-owned pool. Even short strings use those regions, rather than inline node bytes. No retained document depends on parser scratch, so parser reuse cannot
 overwrite a live document. A document cannot be copied or reparsed.
 
 Numbers are classified once:
@@ -56,28 +51,15 @@ Numbers are classified once:
 | Other token with a finite `get_double()` | F64, simdjson's nearest binary64 |
 | Anything else, such as `1E400` | DECIMAL, referencing the token in the input |
 
-Every node has a packed lexical span, `offset << 32 | length`, into region 1, the
-retained input. Strings and keys keep their quotes and escapes, numbers keep their
-exact spelling, and containers, booleans and null carry zero.
-`JsonResult.lexical`/`lexical_count` publish that array, one entry per node.
+String and number words retain their exact lexical span in the input. Owned text carries
+a second word `offset << 32 | length` for its original token, including quotes and escapes.
+Containers, booleans and null have no lexical text. `SvmTape`, `SegmentTape` and `HeapTape`
+read the same words directly, and skip second words during traversal.
 
-`JsonResult.view` points at a complete 88-byte `myna_value_view_v4` (ABI 6; ABI 5
-published the 56-byte v3 descriptor). Every object with at least one member has a
-Myna directory (`directory`/`directory_count`): one `(hash, key_offset)` entry per
-member, `hash` being `myna_value_hash` (32-bit FNV-1a over the decoded key bytes)
-and `key_offset` the key node's distance from its object, sorted by unsigned hash
-and then offset. The object's payload is its first entry plus one; empty objects
-keep payload 0. The duplicate-key check computes the same hash, and the writer takes
-it from the decoder rather than re-hashing key bytes when the object closes. JSON
-tapes carry no v4 metadata table (`metadata_count` 0) and no REF nodes. Java readers
-look members up through the directory and remember a member's rank in it.
-
-`JsonResult.key_hashes` publishes a side table with the node count: one `uint32_t`
-per node. Bit 31 marks string and key nodes whose decoded bytes are all ASCII (the
-text arena and export cursors use it); key nodes also carry the low 15 bits of their
-hash in bits 16–30 (export cursors' `hash()`, the sinks' key caches) and their
-offset from their object in bits 0–15, a layout shared with YAML's decoder. Member
-lookup no longer reads it.
+Directories contain `(FNV-1a hash, key word offset)` entries sorted by unsigned hash,
+then offset. Every object with at least two members has a directory; singleton objects
+are scanned. Java lookup validates a remembered directory rank against the current key's
+bytes. ASCII and key flags are embedded in the word, without a separate side table.
 
 ### The lean walk
 
@@ -87,40 +69,31 @@ lookup no longer reads it.
   `-0` still reads the raw token's sign. Rejected spellings (`01`, `1.`, `.5`, `1e`,
   `-`) and the I64/U64/F64/DECIMAL classification are unchanged.
 - String and key bodies with no backslash and no byte below 0x20 are referenced
-  in the input (or inlined) without `get_string()`/`unescaped_key()`. Stage 1 has
+  in the input without `get_string()`/`unescaped_key()`. Stage 1 has
   validated UTF-8 for the whole buffer before the walk, and rejects raw control
   bytes; bodies failing the scan still go through simdjson's unescaping.
-- Duplicate keys are checked per object after escape decoding: a linear
-  `(hash, length, bytes)` compare over up to 16 keys on the stack, then an
-  open-addressing table in counted index memory.
+- Duplicate keys are checked after escape decoding while sorting object directories;
+  equal hashes compare their decoded bytes. Validate-only decodes use the same check over
+  a scratch stack without publishing a directory.
 
 ### Arena storage and the tape writer
 
-Nodes, owned text, the region table, lexical spans and key hashes are written by
-`tape_writer.h` into a `block_arena` (`arena.h`) rather than through Myna's
-`value_builder`. The decoder presizes every array from the input length (one node
-per four input bytes, never more than the Myna node limit or a fixed share of the
-index budget), so a typical document makes one upstream allocation: a single arena
-block. Arrays above 32 KiB are allocated upstream directly and freed on growth,
-so big tapes do not strand arena space. The writer enforces the builder's node,
-text, depth and container limits and produces byte-identical nodes, bytes and
-regions, and the same v4 directories as Myna's builder with `enable_v4`;
-`//json/native:test` runs both writers over a 200-document corpus. Myna 0.11.0's
-builder can reserve storage (elide-dev/myna#46), and the parity writer uses it, but
-the raw writer stays the production path: the builder still wraps each write in a
-poisoning try/catch, keeps a slot stack and re-hashes every key when its object
-closes (`benchmarks/results/json-v4-*` measures both decoders).
+Words, owned text and directories are written by `ctape_writer` into a `block_arena`.
+The decoder presizes storage from the input length and charges allocation overlap to the
+index budget. Arrays above 32 KiB use direct upstream allocations. Native differential
+tests compare every compact value and its Myna conversion against the previous producer
+on the 200-document corpus, including duplicate keys, malformed input and allocation failure.
 
 ## Sessions
 
-`session.h` keeps one On-Demand parser, a padded input buffer and a block arena per
+`session.h` keeps one stage1 structural parser, a padded input buffer and a block arena per
 thread-confined session, so a small document costs no native allocation in steady
 state (`//json/native:api_test` decodes 10,000 documents with zero index
 allocations after warm-up). `td_json_session_decode` copies the input into the
 session and writes a *borrowed* `JsonResult` (null owner) that stays valid until
 the next call on the session. `td_json_session_retain` moves the document's arena
 blocks, large allocations and input buffer into a new owner in O(blocks): node
-pointers are unchanged and nothing is copied. `td_json_session_reset` is an O(1)
+pointers and input bytes are unchanged. A directoryless document first builds its directories by a checked rescan; allocation failure leaves the borrow live and permits retry. `td_json_session_reset` is an O(1)
 native leaf that only invalidates the borrow; the next decode recycles storage,
 keeps at most four arena blocks, and drops parsers and input buffers that grew past
 1 MiB. `td_json_session_decode_small` is the same decode bounded by
@@ -145,13 +118,11 @@ copying.
 concatenated JSON) one at a time into a session, with the carry-over contract of YAML's
 `td_yaml_stream_*`. `stream_feed` copies into a carry-over buffer of at most
 `2 × max_document_bytes` and returns the bytes it accepted (fewer: drain with `stream_next`, then
-feed the rest). Each region of buffered bytes runs through the stream's own simdjson parser with
-`iterate_many` (batch at least the maximum document); when its documents are delivered, its
-`truncated_bytes()` tail moves to the front of the buffer. Until `stream_finish`, a region never ends
+feed the rest). Each region runs through the stream's own stage1 parser in partial or final streaming mode (batch at least the maximum document). Structural sentinels identify complete roots and the incomplete tail; delivered bytes are dropped and the tail moves to the front. Stage2 validates each root before publication. Until `stream_finish`, a region never ends
 inside a UTF-8 sequence and a root number or literal touching the end is held back. Each document's
 bytes are copied into the session's input buffer, which becomes its region, so a borrowed document
 survives later feeds and `session_retain` works as for `session_decode`. Only whitespace separates
-documents (simdjson's comma format accepts doubled and missing commas); a BOM is skipped only at the
+documents; a BOM is skipped only at the
 start of the stream. Document-level errors can be skipped with `stream_skip`; stage-1 errors
 (invalid UTF-8, raw control bytes) fail a whole batch and cannot.
 
@@ -159,7 +130,7 @@ start of the stream. Document-level errors can be skipped with `stream_skip`; st
 
 `storage_limits` caps logical input bytes before copying, and index allocations
 before requesting memory. The budget is charged per arena block and per large
-allocation, not per node: Myna nodes, regions, lexical spans, key hashes, owned text
+allocation, not per node: compact words, directories, owned text
 and duplicate-key tables share it, unused block tails count, and the overlap of a
 large array and its grown replacement counts toward the peak. Presizing depends
 only on the input length and the configured limits, so a document's allocation
@@ -175,9 +146,9 @@ presented as scratch. These limits are not a total native-memory budget.
 ## Native interface
 
 `api.h` documents status codes and caller obligations. Decode publishes an owning
-`JsonResult` only after validation, including a pointer to the immutable Myna
+`JsonResult` only after validation, including a pointer to the immutable compact
 descriptor; reads need no further native calls. Callers must check the binding
-fingerprint and Myna view version before reading those layouts.
+fingerprint and compact view version before reading those layouts.
 
 Initialize results to zero, never copy their ownership, and release each result on
 the same storage; releasing it again is harmless. A live result cannot be
@@ -261,13 +232,20 @@ bazel test //json/native:all //tape/native:all \
   --linkopt=-fsanitize=address,undefined
 ```
 
-The SVM target links `//json/native:svm` statically: the C ABI plus `bridge/`, a thin
-Rust static library over Myna's `myna-values` 0.9.1 whose `myna_utf8_to_utf16_v2` (simdutf)
-`SvmValueTape` calls to materialize non-ASCII strings of 256 bytes or more
-(`td_json_bridge_present` is its link probe). It adds compiled-read gates: typed
+The SVM target links `//json/native:svm`: the C ABI and the shared tape's simdutf
+transcoder (`td_tape_utf8_to_utf16`). `SvmTape` uses it for non-ASCII strings of at least
+256 bytes; JSON images no longer link the Myna Rust bridge. Compiled-read gates cover typed
 primitive reads, generic member reads, interop reads and export loops each require
 observed compiled execution with performance warnings as errors, Graal graphs of at
 most 10,000 nodes, ASTs of at most 192 nodes, and at most 0.05 Java bytes per
 iteration. The typed and generic gates also require compiled reads to fail after
 close while a sibling stays valid. These measure retained reads, not parse-time
 allocation, native memory, interpreter throughput or parity with a stock parser.
+
+## Structural qualification
+
+Flat scalar plans use immutable schema-key positions and exact byte checks, then the same slot, nullability, range, width and Unicode contracts. Reordered keys, colliding first-byte buckets, long names and escaped names retain checked decoded-key lookup. Completed documents retain no plan or parser lease. Decoded strings replace the prior owned parser string buffer; as before, that text/input memory is separate from the slot-index budget. Nested and repeated plans continue through On-Demand and preserve their contiguous slot/record layout.
+
+`typed_stage2_test` compares 143,054 inputs with the previous typed writer; `typed_probe` is the same-process scalar pair. `isa_probe` generates target-attributed AVX2/AVX-512 walk instantiations from the exact production source, checks each against baseline, then measures each tier. These wider kernels are test-only: unclemax did not clear the required 3% improvement, so portable production kernels remain selected.
+
+Structural reservations account for the complete index plus at most one extra word per open container, including malformed prefixes. Directoryless pending-key scratch grows only on shape misses; initial decoded-text capacity is bounded and escape reservations end at the following structural index. The speculative stream path still requires complete worst-case capacity before trying an extent hint. None of these changes alter compact word widths or the logical memory lower bound.

@@ -12,6 +12,25 @@ import org.junit.jupiter.api.Test;
 
 class CoreTest {
   @Test
+  void wideSchemaLookupPreservesAmbiguityAndHashCollisions() {
+    var fields = new ArrayList<Field>();
+    for (int i = 0; i < 2048; i++) fields.add(Field.requiredLong("column" + i));
+    fields.add(Field.requiredLong("Aa"));
+    fields.add(Field.requiredLong("BB")); // same String hash, different name
+    fields.add(Field.requiredLong("duplicate"));
+    fields.add(Field.requiredLong("duplicate"));
+    fields.add(Field.requiredLong("duplicate"));
+    var schema = new Schema(fields);
+    for (int i = 0; i < 2048; i++) assertEquals(i, schema.indexOf("column" + i));
+    assertEquals(2048, schema.indexOf("Aa"));
+    assertEquals(2049, schema.indexOf("BB"));
+    assertEquals(-1, schema.indexOf("duplicate"));
+    assertEquals(-1, schema.indexOf("absent"));
+    assertEquals(-1, Schema.of().indexOf("column0"));
+    assertEquals("duplicate", schema.field(2050).name());
+  }
+
+  @Test
   void immutableStoragePayloadWalkPreservesExactBudgetsAndFacadeContracts() {
     try (var context = org.graalvm.polyglot.Context.newBuilder("td-test").build()) {
       context.initialize("td-test");

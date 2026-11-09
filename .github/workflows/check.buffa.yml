@@ -34,7 +34,7 @@ jobs:
       - name: Install Bazelisk
         run: .github/scripts/install-bazelisk.sh
       - name: Test static linkage and native-free fallback
-        run: bazel test //protobuf-buffa/tests:native_test //protobuf-buffa/tests:native_non_strict_test //protobuf-buffa/tests:native_views_test //protobuf-buffa/tests:fallback_test //json/tests:native_test //csv/tests:native_test //benchmarks/comparison:native_smoke //benchmarks/comparison:consumer_native_smoke //benchmarks/comparison:json_native_smoke //tools/release:buffa_native_test //tools/release:stock_free_native_test //tools/release:json_native_test //tools/release:csv_native_test //tools/release:csv_kernel_native_test
+        run: bazel test //protobuf-buffa/tests:native_test //protobuf-buffa/tests:native_non_strict_test //protobuf-buffa/tests:fallback_test //json/tests:native_test //yaml/tests:native_test //csv/tests:native_test //benchmarks/comparison:native_smoke //benchmarks/comparison:consumer_native_smoke //benchmarks/comparison:json_native_smoke //benchmarks/comparison:yaml_native_smoke //tools/release:buffa_native_test //tools/release:stock_free_native_test //tools/release:json_native_test //tools/release:yaml_native_test //tools/release:csv_native_test //tools/release:csv_kernel_native_test
       - name: Preserve JUnit
         if: ${{ !cancelled() }}
         run: python3 .github/scripts/reports.py junit

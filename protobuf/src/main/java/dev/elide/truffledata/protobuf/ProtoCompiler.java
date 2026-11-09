@@ -19,22 +19,42 @@ public final class ProtoCompiler {
   }
 
   private static List<ProtoPlan.Type> definitions(Collection<Descriptor> roots, Limits limits) {
+    return definitions(roots, limits, List.of(), false);
+  }
+
+  private static List<ProtoPlan.Type> definitions(
+      Collection<Descriptor> roots,
+      Limits limits,
+      List<FieldDescriptor> extensions,
+      boolean explicit) {
+    Set<FieldDescriptor> used = Collections.newSetFromMap(new IdentityHashMap<>());
+    Set<FieldDescriptor> supplied = Collections.newSetFromMap(new IdentityHashMap<>());
+    for (FieldDescriptor extension : extensions)
+      if (!extension.isExtension() || !supplied.add(extension))
+        throw new ContractViolation("Duplicate or non-extension descriptor");
     Map<String, ProtoPlan.Type> result = new LinkedHashMap<>();
     long metadata = 0;
     Deque<Descriptor> pending = new ArrayDeque<>(roots);
     while (!pending.isEmpty()) {
       Descriptor descriptor = pending.removeFirst();
       if (result.containsKey(descriptor.getFullName())) continue;
-      if (descriptor.getFile().toProto().getSyntax().equals("editions")
-          || descriptor.toProto().getExtensionRangeCount() != 0
-          || descriptor.getOptions().getMessageSetWireFormat())
+      if (!explicit
+          && (descriptor.getFile().toProto().getSyntax().equals("editions")
+              || descriptor.toProto().getExtensionRangeCount() != 0
+              || descriptor.getOptions().getMessageSetWireFormat()))
         throw new ContractViolation("Editions/extensions/MessageSet require an explicit backend");
-      limits.check(1, descriptor.getFields().size());
-      metadata += descriptor.getFields().size();
+      List<FieldDescriptor> declared = new ArrayList<>(descriptor.getFields());
+      for (FieldDescriptor extension : extensions)
+        if (extension.getContainingType() == descriptor) {
+          declared.add(extension);
+          used.add(extension);
+        }
+      limits.check(1, declared.size());
+      metadata += declared.size();
       if (result.size() >= limits.maxColumns() || metadata > limits.maxCells())
         throw new ContractViolation("Protobuf descriptor graph budget exceeded");
       List<ProtoPlan.FieldPlan> fields = new ArrayList<>();
-      for (FieldDescriptor field : descriptor.getFields()) {
+      for (FieldDescriptor field : declared) {
         ProtoPlan.Kind kind = ProtoPlan.Kind.valueOf(field.getType().name());
         ProtoPlan.EnumType enumeration = null;
         if (kind == ProtoPlan.Kind.ENUM) {
@@ -58,7 +78,7 @@ public final class ProtoCompiler {
         var oneof = field.getContainingOneof();
         fields.add(
             new ProtoPlan.FieldPlan(
-                field.getName(),
+                field.isExtension() ? field.getFullName() : field.getName(),
                 field.getNumber(),
                 kind,
                 field.isRepeated(),
@@ -70,13 +90,15 @@ public final class ProtoCompiler {
                 typeName,
                 enumeration,
                 defaultValue,
-                field.getJsonName()));
+                field.isExtension() ? "[" + field.getFullName() + "]" : field.getJsonName()));
       }
       result.put(
           descriptor.getFullName(),
           new ProtoPlan.Type(
               descriptor.getFullName(), descriptor.getOptions().getMapEntry(), fields));
     }
+    if (used.size() != extensions.size())
+      throw new ContractViolation("Unreachable extension descriptor");
     return List.copyOf(result.values());
   }
 
@@ -179,8 +201,20 @@ public final class ProtoCompiler {
    */
   @TruffleBoundary
   public static Source bind(ProtoPlan plan, Descriptor descriptor) {
+    return bind(plan, descriptor, List.of());
+  }
+
+  /**
+   * Bind a resolved plan to an explicit descriptor graph and extension allowlist. Resolved Editions
+   * field features are read through the descriptor API; ordinary compilation still requires an
+   * explicit backend for these graphs. Extension ordinals follow registration order.
+   */
+  @TruffleBoundary
+  public static Source bind(
+      ProtoPlan plan, Descriptor descriptor, List<FieldDescriptor> extensions) {
+    extensions = List.copyOf(extensions);
     boolean closedMaps = false;
-    for (var type : definitions(List.of(descriptor), plan.model.limits)) {
+    for (var type : definitions(List.of(descriptor), plan.model.limits, extensions, true)) {
       ProtoPlan expected = plan.model.type(type.name());
       if (expected.size() != type.fields().size()
           || expected.definition().mapEntry() != type.mapEntry())
@@ -209,13 +243,14 @@ public final class ProtoCompiler {
                 actual.enumType(),
                 field.defaultValue(),
                 actual.jsonName());
-        if (!shape.equals(field) || !sameDefault(actual.defaultValue(), field.defaultValue()))
+        if (!shape.equals(field)
+            || (!field.repeated() && !sameDefault(actual.defaultValue(), field.defaultValue())))
           throw new ContractViolation("Message field differs from plan: " + actual.name());
       }
     }
     if (!descriptor.getFullName().equals(plan.name()))
       throw new ContractViolation("Root type mismatch");
-    return new Source(plan, descriptor, closedMaps);
+    return new Source(plan, descriptor, closedMaps, extensions);
   }
 
   private static boolean sameDefault(Object left, Object right) {
@@ -238,12 +273,73 @@ public final class ProtoCompiler {
   public static final class Source {
     private final ProtoPlan plan;
     private final Descriptor descriptor;
-    private final boolean closedMaps;
 
-    private Source(ProtoPlan plan, Descriptor descriptor, boolean closedMaps) {
+    /** Representation support is decided during preparation, before any host message is sized. */
+    public enum Ingestion {
+      DIRECT,
+      WIRE_NORMALIZED,
+      UNSUPPORTED
+    }
+
+    private final boolean closedMaps;
+    private final Map<Descriptor, List<FieldDescriptor>> fields;
+    private final Set<Descriptor> extensible = Collections.newSetFromMap(new IdentityHashMap<>());
+    private final ExtensionRegistry registry;
+    private final Ingestion ingestion;
+
+    private Source(
+        ProtoPlan plan,
+        Descriptor descriptor,
+        boolean closedMaps,
+        List<FieldDescriptor> extensions) {
       this.plan = plan;
       this.descriptor = descriptor;
       this.closedMaps = closedMaps;
+      registry = ExtensionRegistry.newInstance();
+      for (FieldDescriptor extension : extensions) {
+        if (extension.getJavaType() == FieldDescriptor.JavaType.MESSAGE)
+          registry.add(extension, DynamicMessage.getDefaultInstance(extension.getMessageType()));
+        else registry.add(extension);
+      }
+      Map<Descriptor, List<FieldDescriptor>> resolved = new IdentityHashMap<>();
+      Deque<Descriptor> pending = new ArrayDeque<>();
+      pending.add(descriptor);
+      boolean messageSet = false;
+      while (!pending.isEmpty()) {
+        Descriptor current = pending.removeFirst();
+        if (resolved.containsKey(current)) continue;
+        messageSet |= current.getOptions().getMessageSetWireFormat();
+        if (current.toProto().getExtensionRangeCount() != 0) extensible.add(current);
+        List<FieldDescriptor> all = new ArrayList<>(current.getFields());
+        for (FieldDescriptor extension : extensions)
+          if (extension.getContainingType() == current) all.add(extension);
+        resolved.put(current, List.copyOf(all));
+        for (FieldDescriptor field : all)
+          if (field.getJavaType() == FieldDescriptor.JavaType.MESSAGE)
+            pending.add(field.getMessageType());
+      }
+      fields = Collections.unmodifiableMap(resolved);
+      ingestion =
+          closedMaps
+              ? (messageSet ? Ingestion.UNSUPPORTED : Ingestion.WIRE_NORMALIZED)
+              : Ingestion.DIRECT;
+    }
+
+    public Ingestion ingestion() {
+      return ingestion;
+    }
+
+    private List<FieldDescriptor> fields(MessageOrBuilder message) {
+      List<FieldDescriptor> bound = fields.get(message.getDescriptorForType());
+      if (bound == null) throw new ContractViolation("Nested descriptor identity mismatch");
+      // Ordinary messages cannot contain extensions. Avoid constructing protobuf-java's
+      // reflective populated-field map in that common prepared path.
+      if (extensible.contains(message.getDescriptorForType()))
+        for (FieldDescriptor field : message.getAllFields().keySet())
+          if (!bound.contains(field))
+            throw new UnsupportedOperationException(
+                "Unregistered extension: " + field.getFullName());
+      return bound;
     }
 
     public ProtoPlan plan() {
@@ -254,6 +350,9 @@ public final class ProtoCompiler {
     public ProtoRow snapshot(MessageOrBuilder message) {
       if (message.getDescriptorForType() != descriptor)
         throw new ContractViolation("Descriptor identity mismatch");
+      if (ingestion == Ingestion.UNSUPPORTED)
+        throw new UnsupportedOperationException(
+            "MessageSet with closed-enum maps needs wire normalization");
       if (closedMaps) {
         // DynamicMessage retains closed-enum map entries differently from the wire contract.
         // Normalize this uncommon compatibility case through the shared decoder, with preflight
@@ -266,33 +365,102 @@ public final class ProtoCompiler {
           throw new ContractViolation("Wire byte budget exceeded");
         return plan.decode(immutable.toByteArray());
       }
-      return ProtoCompiler.snapshot(plan, message, new ProtoRow.Budget(plan.model.limits), 1);
+      return ProtoCompiler.snapshot(plan, message, new ProtoRow.Budget(plan.model.limits), 1, this);
     }
 
-    private void preflight(MessageOrBuilder message, ProtoRow.Budget budget, int depth) {
+    /** Calculate bounded wire size ourselves before invoking recursive protobuf-java sizing. */
+    private long preflight(MessageOrBuilder message, ProtoRow.Budget budget, int depth) {
       if (depth > plan.model.maxDepth)
         throw new ContractViolation("Message nesting budget exceeded");
-      var fields = message.getDescriptorForType().getFields();
+      var fields = fields(message);
       budget.cells(fields.size());
+      long size = 0;
       for (var field : fields) {
+        int tag = CodedOutputStream.computeTagSize(field.getNumber());
         if (field.isRepeated()) {
           int count = message.getRepeatedFieldCount(field);
           budget.cells(count);
-          for (int i = 0; i < count; i++)
-            preflightValue(message.getRepeatedField(field, i), budget, depth);
-        } else if (message.hasField(field)) preflightValue(message.getField(field), budget, depth);
+          long payload = 0;
+          for (int i = 0; i < count; i++) {
+            long item = preflightValue(field, message.getRepeatedField(field, i), budget, depth);
+            payload = wireSize(payload + item + (field.isPacked() ? 0 : tag));
+          }
+          if (field.isPacked() && count != 0)
+            payload =
+                wireSize(payload + tag + CodedOutputStream.computeUInt32SizeNoTag((int) payload));
+          size = wireSize(size + payload);
+        } else if (message.hasField(field))
+          size =
+              wireSize(size + tag + preflightValue(field, message.getField(field), budget, depth));
       }
-      validateUnknown(
-          message.getUnknownFields(), budget, depth, plan.model.maxDepth, plan.model.maxWireBytes);
+      var unknown = message.getUnknownFields();
+      validateUnknown(unknown, budget, depth, plan.model.maxDepth, plan.model.maxWireBytes);
+      return wireSize(size + unknownWireSize(unknown));
     }
 
-    private void preflightValue(Object value, ProtoRow.Budget budget, int depth) {
-      if (value instanceof MessageOrBuilder nested) preflight(nested, budget, depth + 1);
-      else if (value instanceof ByteString bytes) {
+    private long wireSize(long size) {
+      if (size > plan.model.maxWireBytes) throw new ContractViolation("Wire byte budget exceeded");
+      return size;
+    }
+
+    private long unknownWireSize(UnknownFieldSet fields) {
+      long size = 0;
+      for (var entry : fields.asMap().entrySet()) {
+        var field = entry.getValue();
+        int tag = CodedOutputStream.computeTagSize(entry.getKey());
+        size =
+            wireSize(
+                size
+                    + (long) (tag + 4) * field.getFixed32List().size()
+                    + (long) (tag + 8) * field.getFixed64List().size());
+        for (long value : field.getVarintList())
+          size = wireSize(size + tag + CodedOutputStream.computeUInt64SizeNoTag(value));
+        for (var bytes : field.getLengthDelimitedList())
+          size =
+              wireSize(
+                  size
+                      + tag
+                      + CodedOutputStream.computeUInt32SizeNoTag(bytes.size())
+                      + bytes.size());
+        for (var group : field.getGroupList())
+          size = wireSize(size + 2L * tag + unknownWireSize(group));
+      }
+      return size;
+    }
+
+    private long preflightValue(
+        FieldDescriptor field, Object value, ProtoRow.Budget budget, int depth) {
+      if (value instanceof MessageOrBuilder nested) {
+        long size = preflight(nested, budget, depth + 1);
+        return wireSize(
+            size
+                + (field.getType() == FieldDescriptor.Type.GROUP
+                    ? CodedOutputStream.computeTagSize(field.getNumber())
+                    : CodedOutputStream.computeUInt32SizeNoTag((int) size)));
+      }
+      if (value instanceof ByteString bytes) {
         budget.cells(bytes.size());
-        if (bytes.size() > plan.model.maxWireBytes)
-          throw new ContractViolation("Wire byte budget exceeded");
-      } else if (value instanceof String text) budget.bytes(2L * text.length());
+        return wireSize(
+            (long) bytes.size() + CodedOutputStream.computeUInt32SizeNoTag(bytes.size()));
+      }
+      if (value instanceof String text) {
+        budget.bytes(2L * text.length());
+        int bytes = GeneratedOutput.utf8Length(text);
+        return wireSize((long) bytes + CodedOutputStream.computeUInt32SizeNoTag(bytes));
+      }
+      return switch (field.getType()) {
+        case DOUBLE, FIXED64, SFIXED64 -> 8;
+        case FLOAT, FIXED32, SFIXED32 -> 4;
+        case BOOL -> 1;
+        case INT32 -> CodedOutputStream.computeInt32SizeNoTag((Integer) value);
+        case UINT32 -> CodedOutputStream.computeUInt32SizeNoTag((Integer) value);
+        case SINT32 -> CodedOutputStream.computeSInt32SizeNoTag((Integer) value);
+        case SINT64 -> CodedOutputStream.computeSInt64SizeNoTag((Long) value);
+        case INT64, UINT64 -> CodedOutputStream.computeUInt64SizeNoTag((Long) value);
+        case ENUM ->
+            CodedOutputStream.computeEnumSizeNoTag(((EnumValueDescriptor) value).getNumber());
+        default -> throw new ContractViolation("Invalid host field representation");
+      };
     }
 
     /** Compatibility text parser; temporary protobuf builders never escape into the row graph. */
@@ -300,7 +468,7 @@ public final class ProtoCompiler {
     public ProtoRow parseText(String text) throws TextFormat.ParseException {
       textBudget(text);
       var builder = DynamicMessage.newBuilder(descriptor);
-      TextFormat.getParser().merge(text, builder);
+      TextFormat.getParser().merge(text, registry, builder);
       return snapshot(builder);
     }
 
@@ -342,11 +510,11 @@ public final class ProtoCompiler {
   }
 
   private static ProtoRow snapshot(
-      ProtoPlan plan, MessageOrBuilder message, ProtoRow.Budget budget, int depth) {
+      ProtoPlan plan, MessageOrBuilder message, ProtoRow.Budget budget, int depth, Source source) {
     if (depth > plan.model.maxDepth) throw new ContractViolation("Message nesting budget exceeded");
     budget.cells(plan.size());
     var builder = plan.newBuilder();
-    var fields = message.getDescriptorForType().getFields();
+    var fields = source.fields(message);
     for (int i = 0; i < plan.size(); i++) {
       var f = fields.get(i);
       if (f.isRepeated()) {
@@ -354,7 +522,7 @@ public final class ProtoCompiler {
         budget.cells(count);
         Object[] values = new Object[count];
         for (int j = 0; j < count; j++)
-          values[j] = value(plan, i, f, message.getRepeatedField(f, j), budget, depth);
+          values[j] = value(plan, i, f, message.getRepeatedField(f, j), budget, depth, source);
         // Maps expose last-key-wins semantics, including DynamicMessage's repeated entries.
         if (f.isMapField()) {
           Map<Object, Object> entries = new LinkedHashMap<>();
@@ -364,7 +532,7 @@ public final class ProtoCompiler {
         }
         builder.set(i, new DataArray(values));
       } else if (message.hasField(f))
-        builder.set(i, value(plan, i, f, message.getField(f), budget, depth));
+        builder.set(i, value(plan, i, f, message.getField(f), budget, depth, source));
     }
     long payload =
         validateUnknown(
@@ -410,9 +578,10 @@ public final class ProtoCompiler {
       FieldDescriptor field,
       Object value,
       ProtoRow.Budget budget,
-      int depth) {
+      int depth,
+      Source source) {
     if (value instanceof MessageOrBuilder nested)
-      return snapshot(plan.nested(index), nested, budget, depth + 1);
+      return snapshot(plan.nested(index), nested, budget, depth + 1, source);
     if (value instanceof ByteString bytes) budget.cells(bytes.size());
     if (value instanceof String string) budget.bytes(2L * string.length());
     return normalize(field, value);

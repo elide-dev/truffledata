@@ -11,6 +11,7 @@
 #include <vector>
 
 using namespace truffledata::yaml;
+using yaml_session = truffledata::yaml::session;
 using truffledata::yaml::testing::render;
 
 namespace {
@@ -103,11 +104,11 @@ std::string utf32(const std::u32string& s, bool little) {
   return out;
 }
 
-std::string decode(session& s, const std::string& bytes) {
+std::string decode(yaml_session& s, const std::string& bytes) {
   auto d = s.decode(reinterpret_cast<const uint8_t*>(bytes.data()), bytes.size(), 0);
   return render(d.view);
 }
-int32_t failure(session& s, const std::string& bytes) {
+int32_t failure(yaml_session& s, const std::string& bytes) {
   try {
     s.decode(reinterpret_cast<const uint8_t*>(bytes.data()), bytes.size(), 0);
   } catch (const error& e) {
@@ -118,7 +119,7 @@ int32_t failure(session& s, const std::string& bytes) {
 
 void encodings() {
   session_options options;
-  session s(options);
+  yaml_session s(options);
   const std::u16string text16 = u"k: vé\nlist: [1, \U0001F600, x]\n";
   const std::u32string text32 = U"k: vé\nlist: [1, \U0001F600, x]\n";
   const std::string text8 = "k: v\xC3\xA9\nlist: [1, \xF0\x9F\x98\x80, x]\n";

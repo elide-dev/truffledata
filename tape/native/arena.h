@@ -272,11 +272,19 @@ public:
     size_ += count;
     return first;
   }
+  // Appends within a proven reservation. Only producers whose complete structural count bounds
+  // every subsequent append may use this; callers must keep size + count <= reserved capacity.
+  T* extend_reserved(size_t count) {
+    T* first = data_ + size_;
+    size_ += count;
+    return first;
+  }
   // Forgets the storage (its arena owns it) without freeing.
   void forget() { data_ = nullptr; size_ = capacity_ = 0; }
   T* data() { return data_; }
   const T* data() const { return data_; }
   size_t size() const { return size_; }
+  size_t capacity() const { return capacity_; }
   T& operator[](size_t i) { return data_[i]; }
   const T& operator[](size_t i) const { return data_[i]; }
   T& back() { return data_[size_ - 1]; }

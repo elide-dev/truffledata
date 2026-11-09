@@ -1,0 +1,7 @@
+# Generated slab integration probe
+
+Invocation `c8037437-590f-4105-b0dc-564b25845ab5`, Linux x86-64 RBE, GraalVM `25.5.5-elide.27`, A3 source checkpoint `d10847d` plus then-uncommitted session and wrapper-free owning validation work. Raw prepared-source/generated/table/stock measurements are retained unchanged. One process per runtime; these are advisory implementation probes, not paired release qualification.
+
+The JVM stock cell is visibly underwarmed despite its configured 3 s warmup: its five samples range from about 7,902 to 23,921 to 2,945 to 666 to 217 ns/op. Its median must not be used as the generated-producer reference. JVM generated samples are around 159 ns, but comparing that median to the stock cold samples would manufacture a speedup. The SVM generated median is around 483 ns against stock 635 ns (about 0.76×); this is still advisory and does not displace the native SVM producer. Required final measurements need a stable stock warmup and interleaved cells/forks.
+
+The same invocation passed runtime, core explicit-source/generated contract, Buffa JVM/native-free fallback/56,000 producer parity, both ingestion probes and JSON native/stage2 targets. D1 Native Image builds failed on a cold bounds-error blocklist path, and the JVM full session consumer exceeded its 10,000 compiler graph budget. Those failures are tracked separately; neither this directory nor the earlier owning consumer pass qualifies session release gates.

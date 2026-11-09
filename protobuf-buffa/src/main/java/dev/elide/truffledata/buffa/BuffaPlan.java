@@ -17,55 +17,45 @@ public final class BuffaPlan implements AutoCloseable {
   private final BuffaWire decoder;
   private final ProtoPlan plan;
   private final ReadProfile profile;
-  private final boolean compactScalars;
-  private final NativeRow.@Nullable Validation nativeViews;
   private final List<ProtoPlan> anyTypes;
   private final WireInput schema;
-  private final WireInput empty;
 
-  /** ABI 9 compiled view schema, owned by this plan; zero without a native view backend. */
-  private long views;
+  /** Native compiled slab layout, owned by this plan; zero before first native decode. */
+  private long slabLayout;
+
+  private int slabCapacity;
+
+  /** Immutable default limits of the last {@code maxSlabBytes}, reused instead of per decode. */
+  private @Nullable SlabLimits slabLimits;
+
+  private final int maxSchemaBytes;
+  private final @Nullable Projection projection;
+  private @Nullable SlabSession projectedSession;
+  private @Nullable SlabLimits projectedLimits;
 
   private boolean open = true;
 
   BuffaPlan(BuffaWire decoder, ProtoPlan plan, int maxSchemaBytes, List<ProtoPlan> anyTypes) {
+    this(decoder, plan, maxSchemaBytes, anyTypes, null);
+  }
+
+  private BuffaPlan(
+      BuffaWire decoder,
+      ProtoPlan plan,
+      int maxSchemaBytes,
+      List<ProtoPlan> anyTypes,
+      @Nullable Projection projection) {
+    this.projection = projection;
     this.decoder = decoder;
+    this.maxSchemaBytes = maxSchemaBytes;
     this.plan = Objects.requireNonNull(plan);
     this.anyTypes = List.copyOf(anyTypes);
     var types = NativeSchema.types(plan, this.anyTypes, maxSchemaBytes);
     byte[] program = NativeSchema.encode(types, this.anyTypes, maxSchemaBytes);
     profile = new ReadProfile(types);
-    nativeViews = NativeRow.validation(types);
-    boolean compact = plan.size() > 0 && plan.size() <= 2;
-    for (int i = 0; i < plan.size(); i++) {
-      var field = plan.field(i);
-      compact &=
-          !field.repeated()
-              && field.oneof() < 0
-              && (field.kind() == ProtoPlan.Kind.INT32 || field.kind() == ProtoPlan.Kind.INT64)
-              && field.defaultValue() instanceof Long
-              && plan.schema().field(i).equals(field.contract());
-    }
-    compactScalars = compact;
     schema = decoder.allocate(program.length).put(program);
-    try {
-      empty = decoder.allocate(0);
-    } catch (RuntimeException | Error failure) {
-      schema.close();
-      throw failure;
-    }
     // Schema input is immutable for the lifetime of this plan.
     schema.retain().release();
-    var backend = decoder.backend;
-    if (backend != null && nativeViews != null) {
-      try {
-        views = backend.compileView(schema);
-      } catch (RuntimeException | Error failure) {
-        empty.close();
-        schema.close();
-        throw failure;
-      }
-    }
   }
 
   public ProtoPlan contract() {
@@ -77,23 +67,147 @@ public final class BuffaPlan implements AutoCloseable {
     if (!open) throw new IllegalStateException("Native plan closed");
   }
 
-  @TruffleBoundary
-  public TypedMessage decode(WireInput input, int maxNativeBytes) {
-    check();
-    return parse(input, empty, 0, maxNativeBytes, false);
+  /** Cache immutable default limits for the current byte bound. */
+  private SlabLimits slabLimits(int maxSlabBytes) {
+    SlabLimits limits = slabLimits;
+    if (limits == null || limits.maxSlabBytes() != maxSlabBytes)
+      slabLimits = limits = new SlabLimits(plan.maxDepth() - 1, maxSlabBytes);
+    return limits;
   }
 
   /**
-   * Request an owned native view. Binary standard schemas decode into one native allocation with
-   * schema-directed field directories, read by lazy Java wrappers; unsupported shapes and
-   * singular-message merges retain the eager semantics-preserving path. The native budget bounds
-   * the retained view together with any decoder scratch growth. Scalar-only plans retain their
-   * smaller inline representation.
+   * First-attempt slab capacity. The retained heap array is the message's own storage, so once a
+   * message of this plan has been decoded the learned extent is reused exactly; a larger message
+   * retries once with the extent the producer reports. The first decode sizes from the input.
    */
+  private int firstCapacity(int maxSlabBytes, int inputBytes) {
+    long guess = slabCapacity > 0 ? slabCapacity : 4L * inputBytes + 256;
+    return (int) Math.min(maxSlabBytes, guess);
+  }
+
   @TruffleBoundary
-  public TypedMessage decodeView(WireInput input, int maxNativeBytes) {
+  public SlabMessage decode(WireInput input, int maxSlabBytes) {
+    return decodeSlab(input, maxSlabBytes);
+  }
+
+  @TruffleBoundary
+  public SlabMessage decode(byte[] input, int maxSlabBytes) {
+    return decodeSlab(input, maxSlabBytes);
+  }
+
+  /** Bind one immutable selection in an independently closeable compiled plan. */
+  @TruffleBoundary
+  public BuffaPlan project(Projection selection) {
     check();
-    return parse(input, empty, 0, maxNativeBytes, true);
+    selection.requireLayout(plan.layout());
+    return new BuffaPlan(decoder, plan, maxSchemaBytes, anyTypes, selection);
+  }
+
+  /** Create a native arena session; Java-only consumers use the durable decode methods. */
+  @TruffleBoundary
+  public SlabSession newSession(int maxSlabBytes) {
+    check();
+    if (decoder.backend == null)
+      throw new UnsupportedOperationException("Slab sessions require native memory");
+    return new SlabSession(
+        decoder,
+        plan,
+        maxSchemaBytes,
+        new SlabLimits(plan.maxDepth() - 1, maxSlabBytes, 0),
+        projection);
+  }
+
+  /** Decode binary protobuf into a durable slab that retains neither its input nor this plan. */
+  @TruffleBoundary
+  public SlabMessage decodeSlab(WireInput input, int maxSlabBytes) {
+    check();
+    if (input.size() > plan.maxWireBytes()) throw new ContractViolation("Typed input budget");
+    var limits = slabLimits(maxSlabBytes);
+    if (projection != null) return projected(input, limits);
+    var source = input.retain();
+    try {
+      var backend = decoder.backend;
+      if (backend == null) return javaSlab(source.bytes, limits);
+      long compiled = slabLayout();
+      int capacity = firstCapacity(maxSlabBytes, input.size());
+      SlabMessage result = backend.slab(compiled, input, plan, limits, capacity);
+      slabCapacity = Math.max(slabCapacity, result.slabBytes());
+      return result;
+    } finally {
+      source.release();
+    }
+  }
+
+  @TruffleBoundary
+  public SlabMessage decodeSlab(byte[] input, int maxSlabBytes) {
+    return decode(input, slabLimits(maxSlabBytes));
+  }
+
+  /** Decode with explicit slab and critical-call bounds; a zero critical bound disables pinning. */
+  @TruffleBoundary
+  public SlabMessage decode(byte[] input, SlabLimits limits) {
+    check();
+    if (limits.maxDepth() >= plan.maxDepth())
+      limits = new SlabLimits(plan.maxDepth() - 1, limits.maxSlabBytes(), limits.criticalBytes());
+    if (input.length > plan.maxWireBytes()) throw new ContractViolation("Typed input budget");
+    int maxSlabBytes = limits.maxSlabBytes();
+    if (projection != null) {
+      if (decoder.backend == null)
+        return SlabMessage.decode(plan, input, 0, input.length, limits, projection);
+      try (var nativeInput = decoder.allocate(input.length).put(input)) {
+        decoder.backend.recordSlabInputCopy(input.length);
+        return projected(nativeInput, limits);
+      }
+    }
+    if (decoder.backend == null) return SlabMessage.decode(plan, input, 0, input.length, limits);
+    int capacity = firstCapacity(maxSlabBytes, input.length);
+    SlabMessage result = decoder.backend.slab(slabLayout(), input, plan, limits, capacity);
+    slabCapacity = Math.max(slabCapacity, result.slabBytes());
+    return result;
+  }
+
+  private SlabMessage projected(WireInput input, SlabLimits limits) {
+    Projection selection = Objects.requireNonNull(projection);
+    if (decoder.backend == null) {
+      byte[] bytes = new byte[input.size()];
+      input.lease.bytes.duplicate().get(bytes);
+      return SlabMessage.decode(plan, bytes, 0, bytes.length, limits, selection);
+    }
+    SlabSession session = projectedSession;
+    if (session == null || !limits.equals(projectedLimits)) {
+      if (session != null) session.close();
+      projectedSession =
+          session = new SlabSession(decoder, plan, maxSchemaBytes, limits, selection);
+      projectedLimits = limits;
+    }
+    return session.decodeRetained(input);
+  }
+
+  private long slabLayout() {
+    var backend = Objects.requireNonNull(decoder.backend);
+    if (slabLayout == 0) {
+      if (anyTypes.isEmpty()) slabLayout = backend.compileLayout(schema);
+      else {
+        // Binary Any payloads stay bytes; the slab fingerprint contains only reachable types.
+        byte[] program =
+            NativeSchema.encode(
+                NativeSchema.types(plan, List.of(), maxSchemaBytes), List.of(), maxSchemaBytes);
+        try (var binarySchema = decoder.allocate(program.length).put(program)) {
+          slabLayout = backend.compileLayout(binarySchema);
+        }
+      }
+    }
+    return slabLayout;
+  }
+
+  /**
+   * @deprecated Binary decoding now returns a durable owning slab. Use {@link #decode(WireInput,
+   *     int)}.
+   */
+  @Deprecated(forRemoval = true)
+  @TruffleBoundary
+  public SlabMessage decodeView(WireInput input, int maxSlabBytes) {
+    return decode(input, maxSlabBytes);
   }
 
   @TruffleBoundary
@@ -117,90 +231,24 @@ public final class BuffaPlan implements AutoCloseable {
     byte[] utf8 = text.getBytes(StandardCharsets.UTF_8);
     try (var input = decoder.allocate(utf8.length).put(utf8);
         var payload = decoder.allocate(Math.multiplyExact(utf8.length, 2))) {
-      return parse(input, payload, format, nativeBytes, false);
+      return parse(input, payload, format, nativeBytes);
     }
   }
 
-  private TypedMessage parse(
-      WireInput input, WireInput payload, int format, int nativeBytes, boolean view) {
+  private TypedMessage parse(WireInput input, WireInput payload, int format, int nativeBytes) {
     if (nativeBytes < 0 || input.size() > plan.maxWireBytes())
       throw new ContractViolation("Typed input budget");
     WireInput.Lease source = input.retain();
     TypedMessage owner = null;
     try {
-      owner = new TypedMessage((format == 0 ? input : payload).retain(), format == 0);
+      owner = new TypedMessage(payload.retain());
       var backend = decoder.backend;
       if (backend == null) {
-        ProtoRow owned =
-            format == 0
-                ? plan.decode(source.bytes)
-                : format == 1
-                    ? plan.parseText(
-                        StandardCharsets.UTF_8.decode(source.bytes.duplicate()).toString())
-                    : plan.parseJson(
-                        StandardCharsets.UTF_8.decode(source.bytes.duplicate()).toString(),
-                        anyTypes);
+        String text = StandardCharsets.UTF_8.decode(source.bytes.duplicate()).toString();
+        ProtoAccess owned = format == 1 ? plan.parseText(text) : plan.parseJson(text, anyTypes);
         return owner.finish(fromJava(owner, owned), 0);
       }
-      if (format == 0 && compactScalars)
-        return compact(owner, backend.scalars(schema, input, plan));
-      boolean useView = view && views != 0 && format == 0;
-      if (!view && views != 0 && format == 0) {
-        // Default decode of a view-eligible schema: native decoding writes field directories, so
-        // Java builds the owned row tree directly instead of rediscovering fields. The transient
-        // view is released before returning. A view that exceeds the budget only through its
-        // directories falls back to the index-only route, which accepts exactly what it did.
-        var directed = backend.view(views, input, plan, nativeBytes, true);
-        if (directed != null) {
-          try {
-            if (directed.viewReady() && !STRICT)
-              return owner.finish(
-                  directed(
-                      new DecodeContext(owner, 0, plan.limits().maxCells(), profile),
-                      plan,
-                      profile.hints[0],
-                      directed,
-                      0,
-                      directed.count(),
-                      0,
-                      1),
-                  directed.allocated);
-            // Required fields, merges and strict audits keep the general semantic path.
-            State state =
-                new State(
-                    plan,
-                    profile.hints[0],
-                    new DecodeContext(owner, format, plan.limits().maxCells(), profile));
-            state.consume(directed, 0, directed.count());
-            return owner.finish(state.finish(1), directed.allocated);
-          } finally {
-            directed.close();
-          }
-        }
-      }
-      var tape =
-          useView
-              ? Objects.requireNonNull(backend.view(views, input, plan, nativeBytes, false))
-              : backend.typed(schema, input, format, payload, plan, nativeBytes);
-      boolean retained = false;
-      try {
-        if (useView
-            && (tape.viewReady()
-                || NativeRow.validate(Objects.requireNonNull(nativeViews), tape))) {
-          if (STRICT) {
-            var audit =
-                new State(
-                    plan,
-                    profile.hints[0],
-                    new DecodeContext(owner, format, plan.limits().maxCells(), profile));
-            audit.consume(tape, 0, tape.count());
-            audit.finish(1);
-          }
-          var row = new NativeRow(owner, plan, tape, 0, tape.count(), 0);
-          owner.retainIndex(tape);
-          retained = true;
-          return owner.finish(row, tape.allocated);
-        }
+      try (var tape = backend.typed(schema, input, format, payload, plan, nativeBytes)) {
         State state =
             new State(
                 plan,
@@ -208,8 +256,6 @@ public final class BuffaPlan implements AutoCloseable {
                 new DecodeContext(owner, format, plan.limits().maxCells(), profile));
         state.consume(tape, 0, tape.count());
         return owner.finish(state.finish(1), tape.allocated);
-      } finally {
-        if (!retained) tape.close();
       }
     } catch (RuntimeException | Error failure) {
       if (owner != null) owner.close();
@@ -219,125 +265,17 @@ public final class BuffaPlan implements AutoCloseable {
     }
   }
 
-  /**
-   * Build one owned row from a certified view directory: no merges, no required fields and only
-   * standard contracts (view eligibility), so the State staging, oneof clearing and finish pass
-   * have nothing to do. Cells were charged by the native decoder under the same limit with the
-   * same per-type, per-entry and byte charges as State, so Java does not charge them twice.
-   */
-  private static TypedRow directed(
-      DecodeContext context,
-      ProtoPlan plan,
-      TypeProfile hints,
-      BuffaWire.Tape tape,
-      int start,
-      int end,
-      int directory,
-      int depth) {
-    if (depth > plan.maxDepth()) throw new ContractViolation("Typed nesting budget");
-    Object[] values = Arrays.copyOf(hints.defaults, hints.defaults.length, Object[].class);
-    long presence = 0;
-    for (int i = 0; i < values.length; i++) {
-      var field = plan.field(i);
-      int word = start == end ? 0 : NativeRow.word(tape, directory + i);
-      if (field.repeated()) {
-        if (word == 0) {
-          values[i] = context.emptyArray();
-          continue;
-        }
-        int count = NativeRow.word(tape, word);
-        Object[] items = new Object[count];
-        for (int k = 0; k < count; k++)
-          items[k] =
-              directedValue(
-                  context, plan, hints, tape, i, NativeRow.word(tape, word + 1 + k), true, depth);
-        values[i] = new TypedArray(context.owner, items);
-        presence |= 1L << i;
-      } else if (word != 0) {
-        Object value = directedValue(context, plan, hints, tape, i, word - 1, false, depth);
-        values[i] = value;
-        if (field.explicitPresence() || State.nonDefault(field, value)) presence |= 1L << i;
-      }
-    }
-    return new TypedRow.ArrayRow(context.owner, plan, values, presence, State.NO_SEEN_FIELDS);
+  private SlabMessage javaSlab(java.nio.ByteBuffer source, SlabLimits limits) {
+    var bytes = source.duplicate();
+    if (bytes.hasArray())
+      return SlabMessage.decode(
+          plan, bytes.array(), bytes.arrayOffset() + bytes.position(), bytes.remaining(), limits);
+    byte[] copy = new byte[bytes.remaining()];
+    bytes.get(copy);
+    return SlabMessage.decode(plan, copy, 0, copy.length, limits);
   }
 
-  private static Object directedValue(
-      DecodeContext context,
-      ProtoPlan plan,
-      TypeProfile hints,
-      BuffaWire.Tape tape,
-      int ordinal,
-      int index,
-      boolean repeated,
-      int depth) {
-    var field = plan.field(ordinal);
-    var buffer = tape.bytes();
-    int at = Math.multiplyExact(index, Buffa.Field.SIZE);
-    long value = buffer.getLong(at + (int) BuffaFFM.Field_value_OFFSET);
-    int length = buffer.getInt(at + (int) BuffaFFM.Field_length_OFFSET);
-    int kind = buffer.getInt(at + (int) BuffaFFM.Field_wire_OFFSET);
-    if (kind != field.kind().ordinal() + 1 || length < 0)
-      throw new IllegalStateException("Native kind mismatch");
-    if (field.kind().message()) {
-      int next = buffer.getInt(at + (int) BuffaFFM.Field_end_OFFSET);
-      return directed(
-          context,
-          plan.nested(ordinal),
-          Objects.requireNonNull(hints.children[ordinal]),
-          tape,
-          index + 1,
-          next,
-          Math.toIntExact(value),
-          depth + 1);
-    }
-    return switch (field.kind()) {
-      case STRING -> {
-        // Same deferral rule as State: singular, empty default and not yet read by this plan.
-        if (!repeated && ((String) field.defaultValue()).isEmpty() && !hints.stringReads[ordinal])
-          yield length == 0
-              ? ""
-              : new TypedRow.Utf8(
-                  context.owner, Math.toIntExact(value), length, hints.stringReads, ordinal);
-        yield context.owner.utf8(Math.toIntExact(value), length);
-      }
-      case BYTES -> new BorrowedBytes(context.owner, Math.toIntExact(value), length);
-      case DOUBLE -> Double.longBitsToDouble(value);
-      case FLOAT -> (double) Float.intBitsToFloat((int) value);
-      case BOOL -> value != 0;
-      case INT32, SINT32, SFIXED32, ENUM -> (long) (int) value;
-      case UINT32, FIXED32 -> value & 0xffffffffL;
-      case UINT64, FIXED64 ->
-          Values.normalize(
-              value >= 0
-                  ? BigInteger.valueOf(value)
-                  : BigInteger.valueOf(value & Long.MAX_VALUE).setBit(63));
-      default -> value;
-    };
-  }
-
-  /** Fixed native scalar output avoids allocating or materializing an index. */
-  private TypedMessage compact(TypedMessage owner, BuffaWire.Scalars values) {
-    long present = values.present();
-    long first = (present & 1) != 0 ? values.first() : (Long) plan.field(0).defaultValue();
-    long second =
-        plan.size() == 2
-            ? ((present & 2) != 0 ? values.second() : (Long) plan.field(1).defaultValue())
-            : 0;
-    for (int i = 0; i < plan.size(); i++) {
-      var field = plan.field(i);
-      if (field.required() && (present & (1L << i)) == 0)
-        throw new ContractViolation("Missing required field");
-      if (!field.explicitPresence()) {
-        long value = i == 0 ? first : second;
-        if (value == (Long) field.defaultValue()) present &= ~(1L << i);
-        else present |= 1L << i;
-      }
-    }
-    return owner.finish(new ScalarRow(owner, plan, first, second, present), 0);
-  }
-
-  private static TypedRow fromJava(ViewOwner owner, ProtoRow row) {
+  private static TypedRow fromJava(ViewOwner owner, ProtoAccess row) {
     Object[] values = new Object[row.plan().size()];
     boolean[] present =
         values.length > Long.SIZE ? new boolean[values.length] : State.NO_SEEN_FIELDS;
@@ -354,8 +292,14 @@ public final class BuffaPlan implements AutoCloseable {
   }
 
   private static Object javaValue(ViewOwner owner, Object value) {
-    if (value instanceof ProtoRow row) return fromJava(owner, row);
-    if (value instanceof DataArray array && !array.isBytes()) {
+    if (value instanceof ProtoAccess row) return fromJava(owner, row);
+    if (value instanceof OwnedArray array) {
+      if (array.isBytes()) {
+        if (array instanceof DataArray) return array;
+        byte[] bytes = new byte[array.size()];
+        array.copyBytesTo(bytes, 0);
+        return DataArray.copyOfBytes(bytes);
+      }
       Object[] items = new Object[array.size()];
       for (int i = 0; i < items.length; i++) items[i] = javaValue(owner, array.get(i));
       return new TypedArray(owner, items);
@@ -368,13 +312,13 @@ public final class BuffaPlan implements AutoCloseable {
   public void close() {
     schema.lease.thread();
     if (open) {
+      if (projectedSession != null) projectedSession.close();
       open = false;
-      long compiled = views;
-      views = 0;
+      long layout = slabLayout;
+      slabLayout = 0;
       try {
-        if (compiled != 0) Objects.requireNonNull(decoder.backend).releaseCompiled(compiled);
+        if (layout != 0) Objects.requireNonNull(decoder.backend).releaseLayout(layout);
       } finally {
-        empty.close();
         schema.close();
       }
     }

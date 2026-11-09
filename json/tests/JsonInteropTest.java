@@ -78,9 +78,13 @@ final class JsonInteropTest {
   }
 
   @Test
-  void rejectsReadsAfterClose() {
+  void rejectsReadsAfterClose() throws ReflectiveOperationException {
     try (Context context = context(); JsonDecoder decoder = JsonJvm.open(JvmScopedTest.library())) {
       JsonMessage message = decode(decoder);
+      // The class-constant compiled hook must agree with this owner's interpreter policy.
+      var confined = JsonMessage.class.getDeclaredMethod("confined");
+      confined.setAccessible(true);
+      assertEquals(true, confined.invoke(message));
       Value root = context.asValue(message.root());
       message.close();
       PolyglotException failure = assertThrows(PolyglotException.class, () -> root.getMember("z"));
@@ -279,6 +283,25 @@ final class JsonInteropTest {
   }
 
   @Test
+  void cachedMissingRankStillFindsLaterKeys() throws Exception {
+    try (JsonDecoder decoder = JsonJvm.open(JvmScopedTest.library());
+        JsonMessage missing = message(decoder, "{\"a\":1,\"b\":2}");
+        JsonMessage present = message(decoder, "{\"id\":7,\"b\":2}");
+        JsonMessage reordered = message(decoder, "{\"b\":2,\"id\":8}")) {
+      InteropLibrary site = site();
+      assertFalse(site.isMemberReadable(missing.root(), "id"));
+      assertThrows(com.oracle.truffle.api.interop.UnknownIdentifierException.class,
+          () -> site.readMember(missing.root(), "id"));
+      for (int round = 0; round < 20; round++) {
+        assertTrue(site.isMemberReadable(present.root(), "id"));
+        assertEquals(7L, site.asLong(site.readMember(present.root(), "id")));
+        assertEquals(8L, site.asLong(site.readMember(reordered.root(), "id")));
+        assertFalse(site.isMemberReadable(missing.root(), "id"));
+      }
+    }
+  }
+
+  @Test
   void escapedLongAndNonAsciiKeysMatchTheirDecodedBytes() throws Exception {
     String longKey = "a_member_name_longer_than_sixteen_bytes";
     try (JsonDecoder decoder = JsonJvm.open(JvmScopedTest.library());
@@ -386,7 +409,8 @@ final class JsonInteropTest {
         TapeValue inner = empty.root().member("e");
         assertFalse(site.isMemberReadable(inner, "id"));
         assertThrows(java.util.NoSuchElementException.class, () -> inner.member("id"));
-        assertEquals(1, empty.directories());
+        // Compact tapes omit directories for singleton objects as well as empty ones.
+        assertEquals(0, empty.directories());
       }
     }
   }

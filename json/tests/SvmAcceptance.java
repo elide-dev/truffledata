@@ -38,10 +38,10 @@ public final class SvmAcceptance {
     }
   }
 
-  private static NativeValueTape tape(VoidPointer result) {
+  private static ValueTape tape(VoidPointer result) {
     Pointer descriptor = (Pointer) Json.JsonResult.view(result);
-    require(descriptor.readInt(0) == ValueTape.ABI_VERSION_V4);
-    NativeValueTape tape = new NativeValueTape(descriptor);
+    require(descriptor.readInt(0) == 1);
+    ValueTape tape = new dev.elide.truffledata.tape.TapeBorrow(new dev.elide.truffledata.tape.SvmTape(descriptor), dev.elide.truffledata.tape.TapeFormat.of("JSON")).toMyna();
     tape.validate();
     return tape;
   }
@@ -725,6 +725,23 @@ public final class SvmAcceptance {
     dev.elide.truffledata.json.JsonMessage kept;
     var session = dev.elide.truffledata.json.JsonSession.open();
     try {
+
+      String indexed = "{\"a\":1,\"b\":2,\"c\":3,\"d\":4,\"e\":5,\"f\":6,\"g\":7,\"h\":8,\"nested\":{\"z\":9,\"y\":10}}\n";
+      byte[] alternating = indexed.repeat(16).getBytes(StandardCharsets.UTF_8);
+      try (var stream = session.stream(new dev.elide.truffledata.json.JsonStreamOptions(1024, 1024))) {
+        require(stream.feed(alternating) == alternating.length);
+        stream.finish();
+        for (int i = 0; i < 8; i++) {
+          var sink = new dev.elide.truffledata.tape.JavaSink();
+          require(stream.next(sink));
+          require(Long.valueOf(8).equals(((java.util.Map<?, ?>) java.util.Objects.requireNonNull(sink.result())).get("h")));
+          var borrowed = java.util.Objects.requireNonNull(stream.next());
+          require(borrowed.snapshot().directories() == 2);
+          require(borrowed.member("nested").member("z").longValue() == 9);
+          require(borrowed.member("a").longValue() == 1);
+        }
+        require(stream.next() == null && stream.documents() == 16);
+      }
       for (int chunk : new int[] {1, 13, 4096}) {
         try (var stream = session.stream(options)) {
           long sum = 0;
@@ -787,17 +804,8 @@ public final class SvmAcceptance {
     kept.close();
   }
 
-  // Link probe of //json/native/bridge (Myna's myna-values static library).
-  @org.graalvm.nativeimage.c.function.CFunction("td_json_bridge_present")
-  private static native int bridgePresent();
-
-  /**
-   * Task D1: the image links Myna's simdutf bridge, and strings of 256 or more non-ASCII bytes
-   * (transcoded by myna_utf8_to_utf16_v2) decode exactly like shorter ones (decoded locally),
-   * through views, the export cursor and a borrowed session parse.
-   */
+  /** Compact-tape bulk transcoding at the 256-byte crossover, through views and exports. */
   private static void textBridge() {
-    require(bridgePresent() == 1);
     for (int units : new int[] {125, 126, 150, 2000}) {
       // A 4-byte emoji, units × "é" (2 bytes) and "z": 255 bytes (local), 257, 305 and 4005
       // (bulk). The escaped spelling lands in the decoded text region; the raw one is referenced
@@ -971,7 +979,56 @@ public final class SvmAcceptance {
     }
   }
 
+  /** Native hint shortcuts must compare every decoded byte and reject stale ranks safely. */
+  private static void nativeDirectoryHints() {
+    String[] names = {"", "a", "abcdefg", "abcdefgh", "abcdefghi", "abcdefghijklmno",
+        "abcdefghijklmnop", "abcdefghijklmnopq", "é", "escaped"};
+    StringBuilder json = new StringBuilder("{");
+    for (int i = 0; i < names.length; i++) {
+      if (i != 0) json.append(',');
+      json.append('"').append(i == names.length - 1 ? "esc\\u0061ped" : names[i])
+          .append("\":").append(i);
+    }
+    json.append('}');
+    try (var message = dev.elide.truffledata.json.JsonSvm.decode(json.toString().getBytes(StandardCharsets.UTF_8))) {
+      checkNativeDirectoryHints((dev.elide.truffledata.tape.TapeReader) message, names);
+    }
+    VoidPointer result = UnmanagedMemory.calloc(Json.JsonResult.SIZE);
+    if (result.isNull()) throw new OutOfMemoryError();
+    try {
+      require(decode(json.toString(), result) == 0);
+      checkNativeDirectoryHints(
+          new dev.elide.truffledata.tape.SvmTape((Pointer) Json.JsonResult.view(result)), names);
+    } finally {
+      Json.release(result);
+      UnmanagedMemory.free(result);
+    }
+  }
+
+  private static void checkNativeDirectoryHints(dev.elide.truffledata.tape.TapeReader tape, String[] names) {
+    for (int i = 0; i < names.length; i++) {
+      var key = dev.elide.truffledata.tape.TapeKey.of(names[i]);
+      int hits = 0;
+      for (int rank = -1; rank <= names.length; rank++) {
+        long found = tape.directoryKey(0, rank, key);
+        if (found < 0) continue;
+        hits++;
+        require(tape.keyMatches(found, key));
+        require(tape.signedValue(found + 1) == i);
+        require(tape.directoryKey(found, rank, key) == -1); // a key is not an object
+        require(tape.directoryKey(found + 1, rank, key) == -1); // nor its scalar value
+      }
+      // Escaped and >16-byte keys deliberately take the checked search path.
+      require(hits == (i == names.length - 1 || key.utf8Length() > 16 ? 0 : 1));
+    }
+    for (String missing : new String[] {"z", "abcdefgZ", "abcdefghZ", "abcdefghijklmnoZ"}) {
+      var key = dev.elide.truffledata.tape.TapeKey.of(missing);
+      for (int rank = 0; rank < names.length; rank++) require(tape.directoryKey(0, rank, key) == -1);
+    }
+  }
+
   public static void main(String[] args) throws Exception {
+    nativeDirectoryHints();
     textBridge();
     textArenas();
     utf16Input();
@@ -998,7 +1055,7 @@ public final class SvmAcceptance {
                       + " 😀\",\"n\":1e999999999999999999,\"a\":[true,null]}",
                   first)
               == 0);
-      NativeValueTape view = tape(first);
+      ValueTape view = tape(first);
       long text = view.find(0, ValueTape.Utf8Key.of("text"));
       long number = view.find(0, ValueTape.Utf8Key.of("n"));
       require(view.stringValue(text).equals("a long escaped string 中 😀"));

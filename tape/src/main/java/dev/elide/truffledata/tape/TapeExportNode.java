@@ -1,6 +1,9 @@
 package dev.elide.truffledata.tape;
 
 import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
+import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
+import org.jspecify.annotations.Nullable;
 import com.oracle.truffle.api.nodes.Node;
 import dev.elide.myna.values.ValueTape;
 
@@ -17,6 +20,9 @@ public final class TapeExportNode extends Node {
 
   private static final long OBJECT_BIT = Long.MIN_VALUE;
   private int maxDepthSeen;
+  @CompilationFinal private @Nullable Class<? extends TapeOwner> ownerClass;
+  @CompilationFinal private @Nullable Class<? extends TapeReader> readerClass;
+  @CompilationFinal private boolean aliases;
 
   TapeExportNode() {}
 
@@ -30,34 +36,67 @@ public final class TapeExportNode extends Node {
   }
 
   public void execute(TapeValue value, TapeSink sink) {
-    int depth = walk(value.owner(), value.node(), sink);
+    TapeOwner owner = value.owner();
+    if (ownerClass == null) {
+      CompilerDirectives.transferToInterpreterAndInvalidate();
+      ownerClass = owner.getClass();
+      readerClass = owner.tape.getClass();
+      aliases = owner.format().hasAliases();
+    }
+    Class<? extends TapeOwner> ownerType = java.util.Objects.requireNonNull(ownerClass);
+    Class<? extends TapeReader> readerType = java.util.Objects.requireNonNull(readerClass);
+    int depth;
+    if (owner.getClass() == ownerType && owner.tape.getClass() == readerType) {
+      TapeOwner exact = CompilerDirectives.castExact(owner, ownerType);
+      depth = exact.format().hasAliases() == aliases
+          ? walk(exact, CompilerDirectives.castExact(owner.tape, readerType), value.node(), sink, aliases)
+          : generic(owner, value.node(), sink);
+    } else {
+      depth = generic(owner, value.node(), sink);
+    }
     if (depth > maxDepthSeen) maxDepthSeen = depth;
   }
 
   /** Returns the deepest container stack used. */
   static int walk(TapeOwner owner, long root, TapeSink sink) {
+    return walk(owner, owner.tape, root, sink, owner.format().hasAliases());
+  }
+
+  @TruffleBoundary
+  private static int generic(TapeOwner owner, long root, TapeSink sink) {
+    return walk(owner, root, sink);
+  }
+
+  private static int walk(TapeOwner owner, TapeReader tape, long root, TapeSink sink, boolean aliases) {
     owner.pin();
     TapeText text = owner.exportCursor();
     try {
-      return loop(owner, root, sink, text);
+      return aliases ? AliasExport.walk(owner, root, sink, text) : loop(owner, tape, root, sink, text);
     } finally {
       text.unbind();
       owner.unpin();
     }
   }
 
+  /** {@link TapeReader#word} against a count loaded once per walk: one storage call per word. */
+  private static long word(TapeReader tape, long index, long count) {
+    if (index < 0 || index >= count) throw new IndexOutOfBoundsException("Tape word");
+    return tape.readWord(index);
+  }
+
   /**
    * {@code text.ends} holds each open container's exclusive end node, sign bit set for objects;
    * {@code text} is bound to each key, string and decimal for exactly the duration of its event.
    */
-  private static int loop(TapeOwner owner, long root, TapeSink sink, TapeText text) {
+  private static int loop(TapeOwner owner, TapeReader tape, long root, TapeSink sink, TapeText text) {
     long[] ends = text.ends;
-    ValueTape tape = owner.tape;
     int depth = 0;
     int deepest = 0;
     boolean expectKey = false;
     long end = tape.next(root);
     long cursor = root;
+    // The tape is immutable while the owner is pinned: check node words against one count.
+    long words = tape.nodeCount();
     while (true) {
       while (depth > 0 && cursor == (ends[depth - 1] & ~OBJECT_BIT)) {
         sink.end();
@@ -65,43 +104,47 @@ public final class TapeExportNode extends Node {
         expectKey = depth > 0 && ends[depth - 1] < 0;
       }
       if (cursor >= end) return deepest;
+      // One header load per node: kind, count, extent and step decode from it statically, so the
+      // walk makes one storage call per node (two for 8-byte scalars) instead of one per accessor.
+      long word = word(tape, cursor, words);
       if (expectKey) {
-        text.bind(cursor);
+        text.bind(cursor, word);
         sink.key(text);
         text.unbind();
-        cursor++;
+        cursor = TapeReader.step(cursor, word);
         expectKey = false;
         continue;
       }
-      int tag = owner.tag(cursor);
+      int tag = TapeReader.valueKind(word);
       if (tag == ValueTape.OBJECT || tag == ValueTape.ARRAY) {
         if (depth == MAX_DEPTH) {
           CompilerDirectives.transferToInterpreter();
           throw new IllegalStateException(owner.format().name + " export depth limit");
         }
-        long count = tape.length(cursor);
+        int field = TapeReader.field(word);
+        long count = field == TapeReader.MAX_COUNT ? tape.length(cursor) : field;
         boolean object = tag == ValueTape.OBJECT;
         if (object) sink.beginObject(count);
         else sink.beginArray(count);
-        ends[depth++] = tape.next(cursor) | (object ? OBJECT_BIT : 0);
+        ends[depth++] = TapeReader.low(word) | (object ? OBJECT_BIT : 0);
         if (depth > deepest) deepest = depth;
-        cursor++;
+        cursor = TapeReader.step(cursor, word);
         expectKey = object;
         continue;
       }
       switch (tag) {
         case ValueTape.NULL -> sink.nullValue();
-        case ValueTape.BOOL -> sink.booleanValue(tape.booleanValue(cursor));
-        case ValueTape.I64 -> sink.longValue(tape.signedValue(cursor));
-        case ValueTape.U64 -> sink.unsignedValue(tape.unsignedBits(cursor));
-        case ValueTape.F64 -> sink.doubleValue(tape.doubleValue(cursor));
+        case ValueTape.BOOL -> sink.booleanValue(TapeReader.kind(word) == 2);
+        case ValueTape.I64 -> sink.longValue(word(tape, cursor + 1, words));
+        case ValueTape.U64 -> sink.unsignedValue(word(tape, cursor + 1, words));
+        case ValueTape.F64 -> sink.doubleValue(Double.longBitsToDouble(word(tape, cursor + 1, words)));
         case ValueTape.STRING -> {
-          text.bind(cursor);
+          text.bind(cursor, word);
           sink.stringValue(text);
           text.unbind();
         }
         case ValueTape.DECIMAL -> {
-          text.bind(cursor);
+          text.bind(cursor, word);
           sink.decimalValue(text);
           text.unbind();
         }
@@ -110,7 +153,7 @@ public final class TapeExportNode extends Node {
           throw new IllegalStateException("Unknown " + owner.format().name + " node kind");
         }
       }
-      cursor = tape.next(cursor);
+      cursor = TapeReader.step(cursor, word);
       expectKey = depth > 0 && ends[depth - 1] < 0;
     }
   }

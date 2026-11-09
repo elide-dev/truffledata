@@ -77,3 +77,307 @@ Task A2b: Ruling (measurement, gate missed; stop rule applied): same RBE worker,
 Task A2b: Note (Task E3, withdrawn by the SOTA plan before it started): a generated-style prototype for the probe schema, writing byte-identical slabs and bailing out to the universal decoder on anything rare, measured 0.65 × the table decoder on x86-64 but 0.85 × on arm64 (exploration run 1); nothing was built.
 Task A2b: Note: the commit sits on the cherry-picked SOTA plan (`3f0da21` as `26b26e0`); the retained probe is the SOTA probe plus `slab_prev`, removed from the build (with its temporary `explicit_tail_calls` crate attribute, needed only by the probe's `fast_tail`) before the commit.
 Task A2b: complete (`//protobuf-buffa/native:test` all 39 tests unchanged and green, incl. golden_slabs_match, entries_match_view_decoder, needed_bytes_exact, budget_rejects_before_allocation, invalid_utf8_rejected_same_byte_as_java, small_entry_allocates_nothing, failure_injection_leaks_nothing; `bazel test //...` plus native_test, fallback_test, consumer_smoke, consumer_native_smoke, smoke, native_smoke: 59/59 pass incl. `//bazel:myna_contract`, https://app.buildbuddy.io/invocation/55c3f9cb-0ca6-42b8-953c-5aec89870fa1; one-off ASan run of `//protobuf-buffa/native:test` (A2's flags) passed, https://app.buildbuddy.io/invocation/bdb28c96-db9d-4ece-9c3b-ae35dd33c4c2; coverage lane 8/8 and coverage_contract.py pass, https://app.buildbuddy.io/invocation/6a5cc8e8-463d-43ef-aead-28d7db751e7d; gazelle check clean; measurement https://app.buildbuddy.io/invocation/cd2e0d13-536d-4169-9057-214dafa8b88c).
+
+
+## Follow-up implementation (in progress; after the intermediate release)
+
+Task A3: implemented a bounded owning Java slab producer, schema-checked generated field-number dispatch, strict UTF-8 validation/UTF-16 sizing with an ASCII word fast path, and a primitive pending-value scratch buffer. The generated dispatch still shares generic scalar handlers; it has not yet met the schema-specialized producer performance target. Direct javac/JUnit on OpenJDK 25 with the pinned GraalVM .27 APIs passed ten native slab goldens, 8,000 seeded inputs per seven schemas against the independent format model, 10,000 UTF-8 cases, and exact budget/slice checks. `//protobuf-buffa/tests:slab_producers` now compares the live native and Java producers on that corpus; the live 56,000-input Java/Rust comparison passed in invocation a84f1952-1564-4f57-a0fe-20a2de49e8da. Exact malformed error-offset agreement and paired JVM/SVM producer measurements remain pending.
+Task B1: partial, additive: SlabMessage/SlabRow live in protobuf-runtime so native-free/generated consumers do not need the Buffa module. They provide durable owning bytes, identity snapshots, layout-bound scalar accessors, UTF-16 lengths from headers, unknown-field copies, and direct re-encoding. Arrays and bytes now use lazy durable wrappers under the additive core OwnedArray contract; ownership transfer rejects nested scoped arrays and PayloadBudget traverses durable arrays. Ten direct tests pass after the lazy-wrapper and external-slab validation changes. The Buffa Mode.JAVA binary fallback now consumes Java-produced slabs and adapts them to the existing scoped TypedRow API. The existing complete JVM fallback semantic acceptance passed with directly compiled candidate classes. The additive FFM/SVM bridge now compiles layouts lazily, uses capacity hints with one exact retry and copies/validates native slabs before publication; its integrated test is pending. Default return-type migration, native pin/critical calls, sessions, projection, retirement and performance gates remain pending; no completion or speed claim is made.
+Issue #2: ProtoRow.unknownFieldBytes returns an independent byte array; docs describe preserved wire order and the packed closed-enum normalization. The isolated patch was supplied to the coordinator for the intermediate release.
+Issue #33: explicit bound snapshots now accept resolved Editions metadata and registered extensions, including direct known/unknown MessageSet ingestion. Source.ingestion reports DIRECT, WIRE_NORMALIZED or UNSUPPORTED at preparation; MessageSet combined with closed-enum maps remains explicitly UNSUPPORTED. Direct javac/JUnit tests pass for message/scalar/repeated extensions, Editions presence, empty extension ranges, nested unknown MessageSet payloads without host serialization, ownership, descriptor mismatch, depth and closed-map preflight before host sizing. Complete Bazel/SVM tests and the requested separate JVM/SVM ingestion measurements remain pending.
+
+Follow-up verification: invocation `0bbf237b-b7be-463b-8ae9-5d66ca7c8aa1` passes runtime tests, native/Java Buffa acceptance (each successful binary case additionally compares the slab's normalized encoding), 143 core/API tests, 651 JIT matrix cases, compiled/allocation gates, and the consumer smoke matrix including the additive `slab` engine. Scalar/string-length slab reads measure 0.000044 B/read in both static and batch schema configurations. The live 56,000-input producer suite, including reusable FFM bridge calls, passes in `631339ba-fbfd-47bb-b3ce-9fa7341abaec` after adding its direct Buffa dependency. Generated decoders now emit literal per-field slot offsets as well as number switches; handlers remain shared. SVM bridge tests and performance measurements are next.
+
+
+Follow-up B1 migration (pending integrated native gates): `BuffaPlan.decode` now returns a durable `SlabMessage`; deprecated `decodeView` delegates to it. `ProtoMessage` supplies the shared row/snapshot/encode surface for binary and scoped text/JSON results. All default binary semantic tests now exercise slabs, including normalized unknown-field encoding, bytes lengths, cached unsigned values, cross-thread reads, and closure survival. The complete directly compiled Java fallback acceptance passes after migration. A temporary `decodeLegacy` entry exists only to retain the old benchmark baseline until G1; it is not the new default.
+Follow-up B3/C1 implementation (native execution pending): heap decode pins SVM input/output only around one bounded native call; FFM uses the generated `decodeSlabSmall` descriptor with `Linker.Option.critical(true)` because Myna's convenience critical binding uses `critical(false)` and cannot admit heap segments. Inputs/capacities beyond the explicit bound use native scratch plus a copy. The bound defaults to 64 KiB and can be lowered to zero through `SlabLimits`. Bounded native scratch exhaustion retries the same native producer with a normal transition, never Java. `SlabMessage.takeOwnership` requires exclusive ownership/no retained writable aliases, verifies the slab before publication, separates valid extent from retained capacity, and charges the full capacity to the slab budget. `copyOf` remains defensive. Direct ownership/extent and explicit-source tests pass (8 tests); native pin/critical execution, GC stress and performance gates remain pending.
+Follow-up C1 selection: JVM AUTO selects Java unless `truffledata.buffa.jvmNative=true`; explicit NATIVE and SVM Feature selection keep native semantics. The native-free release consumer now asserts Java slab generation and durable default results.
+Follow-up B1 string ruling: the current owner materializes one cached `String` per accessed string handle via the JDK UTF-8 constructor. It does not claim TruffleString sharing or zero-copy string materialization. Length reads use validated UTF-16 metadata without materializing a String.
+Issue #33 acceptance expansion: generated and dynamic host fixtures now exercise scalar/repeated/message extensions, MessageSet known and unknown payloads, and closed-enum maps. An explicit combined MessageSet/closed-map graph reports UNSUPPORTED during preparation and rejects snapshots consistently. Direct JUnit passes all six explicit-source tests; Bazel and JVM/SVM probe evidence remain pending.
+
+Follow-up migration verification, invocation `e3f5ca2b-bab5-4f11-8ab9-0bd5d7be2f42`: all 146 core/API tests and both JVM and SVM consumer smoke matrices pass. Four Buffa gates were build-blocked by an internal ABI 9 ownership test still calling deprecated `decodeView`; it now explicitly uses the temporary legacy baseline. The SVM host-ingestion probe needs protobuf-java generated-field reflection metadata; a probe-only Feature supplies it. The JVM probe ran, but its 0.5-second warmup showed large compilation/worker swings, so those samples are not accepted performance evidence; the retained runner now requests four CPUs, fixes heap/collector, and warms each operation for three seconds. The directly compiled full native acceptance passes on macOS arm64 after correcting the FFM heap-segment method-handle argument type. Native tests exercise input/output ownership under GC, 64 KiB boundary/scratch copies, and an explicit zero critical bound. The slab retained-cell budget now matches ProtoRow's schema cells plus array elements; the retired native occurrence-index cell is absent, proved at exact/one-below budgets on both producers.
+
+## Default slab migration qualification and session implementation checkpoint
+
+Invocation `e62e3348-a1c0-492b-bd3e-c0f2708904b0` passed all 12 selected targets: protobuf runtime; Buffa JVM, Native Image, native-free fallback and 56,000 paired slab producers; JVM and Native Image consumer smoke and prepared-source probes; JSON stage2 probe/differential and compact tape tests. This qualifies the default owning migration captured by that invocation. Generated fast-loop/factory work and the later session work were not in its input snapshot.
+
+Raw prepared-source/producer probe output is retained in `benchmarks/results/protobuf-ingestion-e62e3348/`. The old shared-handler generated producer and direct host-source snapshots miss their speed targets; this is advisory single-worker evidence, not a completed performance gate. The follow-up prepared source path now avoids building protobuf-java's populated-field map for descriptors without extension ranges; extension-capable descriptors still validate every populated extension against the prepared binding. A fresh measurement is required.
+
+D1 now has a reusable native arena and borrowed root/child/array API with explicit retain, pins and decode epochs. Implementation change from the proposal: reuse ABI 10 caller-owned output buffers, rather than duplicate arena ownership in new Rust exports. The output contains owning payloads, with no input lease after decode. Runtime child-copy validation tests pass (12 direct runtime/ownership tests total); direct JVM native and fallback acceptance pass with pin, reset, stale close, failed decode, thread confinement, child unknown retention and closed-plan ownership checks. The direct native session decode allocation bound is at most 48 B/message after caching the FFM compiled address wrapper once per session. Formal JIT/Native Image session lifetime gates, the new consumer session cells and paired performance evidence remain pending. Large-payload input borrowing and projection are still unfinished; this checkpoint does not complete D1/E1/G1 or the release gates.
+
+
+### A3 specialized generated Java producer checkpoint
+
+Generated contracts now emit complete per-record tag switches, scalar operations, literal slot offsets, local presence words, repeated-value loops and direct calls for nested records. The bounded writer contains wire/storage primitives without field-descriptor dispatch. Uncommon maps, groups, unknown/wrong-wire fields, closed-enum unknowns and singular-message merges restart from the original input through the reference table producer; no partial result escapes. Schemas above 128 fields use that fallback to avoid Java method-size limits. Model factories bind the checked generated decoder once, so durable Java slab decode selects it automatically. A single volatile capacity hint remembers only the previous wire length and slab extent; each decode owns a fresh array. Explicit limits remain bounded by the plan's nesting/wire limits.
+
+Direct compilation on the pinned GraalVM .27 APIs passed all 36 ProtoNativeTest tests, including scalar bit patterns, packed/unpacked lists, UTF-8, required certification, oneof/merge behavior, input windows, exact byte/depth limits and concurrent factory binding. An additional seeded differential run matched the table producer on 136,000 inputs over 17 schemas (112,572 accepted; all remaining inputs rejected by both). These direct runs do not replace the integrated Bazel/Native Image gates.
+
+Advisory macOS arm64 local measurement on a six-field Type fixture (127-byte wire, 552-byte slab), with per-operation warmup and five samples: generated 113–116 ns/message versus stock protobuf-java 167–168 ns and table producer 408–412 ns; generated allocation 760–784 B/message versus stock 1,320 B. This misses the planned generated ≤0.55×stock time target. Formal paired JVM/SVM measurements, broader fixture gates and exact malformed-error offsets remain open; A3 is not marked complete.
+
+
+### E1 native projection and borrowed-payload checkpoint
+
+ABI 10's existing projection argument now accepts a checked immutable TDP1 mask (layout fingerprint, field counts, wanted bitsets, flags and byte-borrow threshold). Explicit BORROWING decode flags permit input-relative lazy child headers and external byte payloads; ordinary null-projection owning decode retains its format and behavior. Unwanted non-map repeated messages keep count-only lists without child records. Unwanted ordinary singular messages validate their wire payloads without writing child records; ordinary singular strings validate then omit payload storage. The optional lax mode defers UTF-8 only in omitted/lazy subtrees, while still checking structural, numeric and depth constraints. Full wanted masks produce byte-identical slabs apart from the PROJECTED header flag.
+
+Ruling: lazy child references are high-bit-tagged slab offsets to aligned 16-byte headers containing input offset, length, handle and absolute depth. Count-only lists use reserved list word 1. External bytes use the existing EXTERNAL bit with a 16-byte header containing length, handle, zero UTF-16 count and input offset. The caller must retain immutable input for borrowed slabs. Lazy singular merges, groups, oneofs and maps conservatively use eager handling. Message closures containing required fields also stay eager: a global missing-required flag cannot distinguish an incomplete child later orphaned by a oneof/map replacement from a live invalid child. The owner validates reachable eager children. Fixed scalar slots and repeated scalar payloads remain physically stored in this iteration; the projection's read mask makes omitted values inaccessible.
+
+Direct macOS arm64 Rust qualification passes 49 tests, including all previous 39 native tests, 8,000 generated inputs in full-mask/strict-sparse/lazy modes, exact full-mask bytes, omitted payload/counts, lazy span/depth metadata, merge and required-closure fallbacks, invalid UTF-8 and malformed structure, mask validation, exact budgets, and normal/critical FFI parity with zero measured native heap allocations. All 49 also pass AddressSanitizer with leak detection using pinned nightly 2026-10-09. Raw output is retained in `benchmarks/results/protobuf-projection-native-macos-20261107/`. Java producers/readers, borrowed-input lifetime integration, cross-language projected parity and sparse-resident performance remain pending; this native checkpoint does not complete E1 or its performance gates.
+
+
+### D1 session gates and A4 compiled-producer experiment
+
+Invocation `78b45781-b0ce-4712-a70b-026f3c9fbc0d` passes the complete JVM/SVM
+consumer smoke with the session engine, Buffa JVM/SVM acceptance, native-free
+fallback, 56,000 producer pairs, runtime tests and all 49 native tests. Session
+scalar decode allocation remains <=48 B/message and compiled reads <=0.05 B/read;
+stale roots/children/arrays, reset/failed decode, pins and independently retained
+children are covered. The full resident session consumer compiles under the
+unchanged 10,000-node budget. JVM foreign-memory loads use three narrow memory
+entry boundaries; Native Image reads retain direct pointer loads. Cold lifetime
+and range diagnostics stay outside compiled read graphs.
+
+A4's isolated runtime-schema decoder passed 2,048 mutated/truncated inputs and
+compiled representative Type and 64-field layouts within 10,000 nodes on JVM.
+Linux x86-64 short-run median was 389.7 ns/op versus generated 156.6 ns/op (~2.49x),
+missing the <=1.2x adoption gate. No production decoder selection changed. A4's
+Native Image build exposed input-window and malformed-UTF8 diagnostics reaching
+blocked JDK code; cold helper fixes are pending the next formal retry. Raw logs
+are retained in `benchmarks/results/protobuf-session-78b45781/`. This invocation
+is not whole-repository green: core depended on a new YAML benchmark nullability
+fix and the separate YAML parser performance gate also failed.
+
+
+### E1 cross-language producer qualification
+
+The Java table producer now mirrors TDP1 masks, count-only lists, lazy child headers, input-relative bytes borrowing and strict/lax omitted-subtree validation. Singular merge scratch retains original input spans and decodes them sequentially into one record, preserving external offsets without payload concatenation. Native and Java eager fallbacks in lazy mode now expand the complete descendant subtree (required closures, oneofs, groups and merged children), matching what a strictly realised lazy child exposes. This is a representation/ownership rule, not permission to skip validation.
+
+Local macOS arm64 qualification passes 126,000 projected exact-byte/status pairs across nine modes and seven schema families, plus the existing 56,000 ordinary pairs and 11 Java codec tests. Nonzero input windows, exact output/depth budgets, partial masks, borrowed payloads, Unicode, merges, maps, groups, closed enums and required fields are covered. Native tests now pass 50/50 with AddressSanitizer and leak detection; the added regression checks full descendant expansion through required/oneof/group fallbacks, including merges. Raw evidence and source hashes are in `benchmarks/results/protobuf-projection-cross-language-20261107/`. Owning/scoped reader integration, remote qualification and sparse-resident performance remain separate gates; E1 is not yet complete.
+
+
+### E1 Java producer, owning readers and scoped input leases
+
+Immutable Projection masks now bind through BuffaPlan.project. Both producers emit
+TDP1-selected slabs; Java owning readers validate projected offsets/counts/handles,
+reject omitted value reads, retain counts/presence, and realize omitted lazy children
+as complete strictly validated subtrees. All-field projections re-encode external
+bytes; partial projection encoding rejects explicitly. Owning deferred results copy
+only the supplied input window and report retained input capacity separately.
+
+Native projected sessions retain the immutable WireInput lease while external bytes
+or lazy children refer to it. Closing the caller's input handle preserves reads;
+reset, next/failed decode and close invalidate all materialized descendant rows and
+arrays. Explicit retain/snapshot is durable. Lazy materializations charge cumulative
+logical budgets and retained slab capacity; absolute child depth cannot expand the
+original bound. SlabMessage.logicalUsage computes counters without materializing
+strings or wrapper graphs.
+
+Direct tests pass four owning ProjectionTest methods, full JAVA/FFM Buffa acceptance
+and fatal-warning compiled reads, including a compiled lazy child expiring on reset.
+Raw evidence is in benchmarks/results/protobuf-projection-java-local/. Linux native
+and JVM/SVM integrated qualification remains pending after nullability fixes. No E1
+sparse-resident speed gate is claimed; that measurement and ABI9 retirement remain.
+
+
+### G1 native view retirement checkpoint
+
+The native view implementation, View struct and four view imports are removed in seam ABI 11. Slab/projection formats remain TDS1/TDP1. Binary typed indexes remain as a validation oracle and text/ProtoJSON infrastructure; retired format 3 is rejected. The 8,000-case native differential now scans the independent typed index directly instead of recreating deleted view directories. All 43 remaining native tests pass locally with AddressSanitizer and leak detection (seven obsolete view-specific tests were removed with their code). Myna 0.13.0 descriptor validation and symbol inspection pass; fingerprint and raw evidence are retained in `benchmarks/results/protobuf-view-retirement-20261107/`. Integrated Java retirement and final remote/platform checks remain pending.
+
+
+### G1 Java retirement and current consumer matrix
+
+Removed NativeRow/ScalarRow, retained native view directories, view/scalar backend calls and
+format-3 typed-index certification from Java production. Binary decode uses slabs; text and
+ProtoJSON retain ArrayRow values with input leases. The deprecated decodeView Java spelling
+remains a durable decode alias. Duplicate legacy-view acceptance/benchmark targets are retired.
+Current consumer cells cover owning/full/projected/lazy slabs and reusable sessions; historical
+baseline engines and modes are explicitly selectable without requesting removed candidate paths.
+A stock host-interop bridge exercises the same shared read nodes and real cached protobuf getters,
+with immutable child wrapper/count caching. Its compiled full fixture remains within the unchanged
+10,000 graph budget. Retained input, slab extent/capacity and native arena capacity are separate.
+
+Local Java fallback, FFM acceptance, compiled query/lifetime suite and five new consumer cells pass;
+raw logs are in benchmarks/results/protobuf-java-retirement-local/. The ten orchestration tests
+pass, including baseline mode selection and projection/input accounting checks. No E1 performance
+claim follows from these short qualification runs. Final Linux JVM/SVM, coverage and paired
+three-fork sparse-resident/holdout gates remain pending.
+
+### Native ABI 11 scalar retirement and raw unknown queries
+
+The final G1 seam also removes the obsolete `Scalars` result and `td_buffa_scalars` export. All 42 remaining native tests pass with ASan/leak detection; the scalar-only test is removed with that implementation. The final fingerprint is `5bd597bd050e2bf8bc22a54529dbfa28be83491afb14ab03d3a9a2c2e2a01e52`; refreshed symbols, descriptor policy and raw evidence accompany the native retirement record. Obsolete view-only CI/publication target aliases are removed after their coverage moved to the default slab path.
+
+Issue #35 adds allocation-free `hasUnknownFields()` and `unknownFieldByteCount()` to immutable, generated, owning slab and borrowed slab rows. Counts describe retained raw bytes, including empty unknown groups, independently of semantic equality. Borrowed queries retain epoch checks. Local compiled probes cover all four representations, allocation bounds and reset rejection; integrated JVM/Native Image verification is running in invocation `dab2dbc5-ae9d-4a8e-b29c-5d43be2cadc3`.
+
+
+### A4 closed under its evidence gate
+
+Formal invocation dab2dbc5-ae9d-4a8e-b29c-5d43be2cadc3 passes Type/wide64 compilation,
+unchanged 10,000-node graphs and decoder parity on JVM/SVM. Median compiled/generated
+is 181.1/155.6 ns (1.164×) on JVM and 9594.6/586.2 ns (16.367×) on SVM. The required
+≤1.2× gate on both runtimes fails. The amended A4 stop rule therefore keeps table-driven
+Java as the runtime-plan floor; no production compiled-decoder dispatch is adopted.
+Raw logs and the ruling are in benchmarks/results/protobuf-compiled-decoder-dab2dbc5/.
+
+
+### G2 producer matrix documented
+
+BUFFA.md and SLAB.md now distinguish generated contracts, runtime tables, JVM/SVM defaults,
+native-free fallback, selected-field Java tables, native sessions and unchanged text parsing.
+They record the A4 non-adoption ruling and the bounded 64-entry length/extent hint cache,
+including fresh output ownership and per-call capacity limits. No unmeasured speed target
+is presented as achieved. Full G1/E1 measurements and final release qualification remain open.
+
+### E1 first complete resident measurements and concrete follow-up
+
+Invocation `a0c08060-b429-4a00-829e-4d2b4c726df6` runs three fresh processes for every
+projection cell on each runtime. The full results are retained in
+`benchmarks/results/protobuf-projection-a0c08060/`. Native selected-small and selected-holdout
+pass at 0.673× and 0.343×, but lazy holdout misses at 0.503×. JVM selected-small, selected-holdout
+and lazy holdout miss at 1.201×, 0.553× and 0.902×. The additional session-lazy ratios are
+informational, not new release gates. E1 remains open.
+
+Two measured-path inefficiencies are corrected before another qualification: Java's internal
+projected producer no longer runs the external offset/handle verifier in addition to its wire
+checks and logical-budget validation; external slab imports still do. Native owning projected
+decode no longer allocates a temporary borrowed message just to retain and release it. The
+shared session operation preserves its source lease, pin, epoch and failure-release behavior.
+New internal-projection tests cover missing required roots/children, string/cell limits and depth.
+
+### Issue #33 prepared-source qualification
+
+The same invocation passes `//tests:test` and the separate ordinary JVM/SVM ingestion probes.
+The full explicit-plan acceptance matrix covers Editions, scalar/repeated/message extensions,
+known and unknown nested MessageSet, closed-enum-map normalization, preparation eligibility,
+and preflight budget rejection before recursive host sizing. Complete raw samples and the
+methodological limits are retained in `benchmarks/results/protobuf-prepared-source-a0c08060/`.
+Direct generated snapshots are 1.95× JVM / 2.07× SVM the wire route's time on this fixture;
+wire-normalized fallback is 1.37× / 1.41×. Binding samples remain startup-sensitive and are
+reported separately without suppressing outliers. #33 defines no numeric speed threshold;
+its semantic and disclosure requirements are qualified, with no throughput improvement claimed.
+
+## Current plan audit for the 0.10 follow-up
+
+This table supersedes the earlier checkpoint-level “pending” statements; it does not erase
+missed measurements. Implementation, performance hypotheses, and release qualification are
+separate. The latest completed projection/profile qualification is `d0c3e664-9f56-466e-8460-4443a1e231e9`;
+subsequent B4 and E1 changes require a fresh complete capture.
+
+| Task | Implemented behavior and evidence | Remaining measurement or release work |
+|---|---|---|
+| A1 / A2 / A2b | Layout, bounded native producer, goldens, independent differential corpus, exact capacities and required/merge semantics exist. A2b closes under its explicit one-iteration stop rule; native throughput was 1,052 MB/s and small decode 1.75× hand-slab, both below the desired performance. | No new native codegen escalation: that would contradict the recorded stop rule. Final platform/sanitizer qualification still applies. |
+| A3 | Native-free table and per-schema Java producers, generated factory dispatch, bounded capacity hints, UTF-8 checks, restarts and concurrency/budget tests exist. Final fresh-process writer probe retains 126 cells in `protobuf-slab-java-a0c08060/`. | JVM generated/stock is 0.839× small, 0.695× holdout and 1.117× large; table is 2.545× / 2.010× / 3.341×. The small/large generated and runtime-table hypotheses remain unachieved. Probe word-zero/span ratios 1.141× / 1.099× / 1.276× also miss the all-shape 1.2× writer gate. Investigation remains open; do not mark A3 speed goals complete. |
+| A4 | Type/wide64 parity and unchanged graphs pass JVM/SVM. The joint compiled/generated gate misses on SVM (16.367×). | Closed under the explicit stop rule. Runtime plans retain the table producer; no compiled decoder is adopted in production. |
+| B1 / B2 | Default binary decode returns durable slabs; lazy rows/arrays/bytes, cached strings, metadata lengths, unknown preservation, identity snapshots, maps, oneofs and layout-bound accessors exist. Core allocation/JIT and Buffa functional gates pass in the combined run. | Final paired read/ingestion/allocation evidence belongs to G1. The String ruling is one cached Java String per handle, not an unimplemented promise of TruffleString backing-array sharing. |
+| B3 / C1 | SVM bounded heap pins, JVM explicit critical FFM, normal-call scratch fallback, capacity retry, native selection and Java AUTO default exist. Native/fallback/FFM tests and GC/lifetime/copy checks pass. | The newly added `slab-native` engine supplies the previously missing explicit JVM native-versus-Java measurement. Its local decode/heap/resident/peak checks pass; remote full smoke and paired C1 ratios are pending. |
+| B4 | SVM JFR and AOT symbol evidence in `protobuf-interpreter-d0c3e664/` identifies binding/dispatch costs. A prototype adds DSL-inlined field readers while preserving the existing public cached API, with six-layout contract/cache-churn tests and local consumer correctness checks. | **Unfinished required task.** The prototype is not accepted on timing evidence yet. Full paired G1 must evaluate <=2.5× stock and peak unchanged/better against the historical image; the reflective stock-interop control does not replace the ordinary stock denominator. No stop rule has closed these gates. |
+| D1 | Reusable caller-owned native arenas, epoch-checked children/arrays, pins, failure/reset invalidation and durable retain exist. The implementation deliberately reuses slab buffer FFI rather than adding a second Rust arena allocator. | Native lifetime/compiled gates pass. The unchanged <=48.1 B/decode bound passes the subsequent formal retry; the latest local FFM rounds report 0/0/0 B after warmup. Session/full resident ratios await G1. |
+| E1 | Strict/lax masks, omitted counts/presence, lazy full child realization, external bytes, budgets and lease integration exist. 126,000 projected plus 56,000 ordinary cross-language pairs and ASan pass. | **Required performance gates remain open.** Three-fork `d0c3e664` selected-small/holdout pass on JVM (0.8293×/0.4585×) and SVM (0.6666×/0.3427×); lazy holdout still misses at 0.7955× JVM / 0.5057× SVM. Dense handle verification, primitive pending-list writes, generated lazy projection and removal of a duplicate immediate-retain walk await fresh qualification. |
+| E2 | Text and ProtoJSON preserve the existing scoped ArrayRow/typed-index path and full acceptance coverage. | **Optional, not activated by this scope:** the plan explicitly conditions slab migration on a need for Elide text throughput and lists that throughput as a non-goal. No text speedup or State retirement is claimed. |
+| E3 / F | Native schema codegen is withdrawn by the SOTA revision; repository PGO is removed by the user ruling. | No work remains under these tasks. Sampling for B4 does not enable or depend on PGO. |
+| G1 | ABI11 removes native View/Scalars exports and Java binary NativeRow/ScalarRow paths. The 132-cell current harness includes stock interop, explicit JVM FFM, projections and sessions; retired engines exist only in historical artifacts. | **Release evidence pending:** exact historical SVM artifact and `fecb39f` JVM/.24 SDK pass baseline smoke; full same-worker paired JVM/SVM matrices and the retained generated-getter `measure` run must finish. Then update PERFORMANCE_REVIEW and comparison docs. The duplicate `measure_views` candidate is intentionally gone with its implementation. |
+| G2 | BUFFA/SLAB/CONTRACTS document producer selection, ownership, explicit-source semantics, ABI11, projection restrictions and A4 non-adoption. | Final ledger and release notes must incorporate remaining measurements and state every miss accurately. |
+| G3 | Current runtime, native producer, core/JIT, Buffa native/fallback and published artifact tests pass; the native-free consumer source duplicate is fixed. | **Release blocker:** final `//...`, all explicit release/native/sanitizer/coverage targets, metadata/platform matrix, and green main are still required. The previous generated-getter, non-strict allocation and stock-free consumer failures are fixed; fresh source capture must still qualify the B4/E1 changes. Other format gates are coordinated in their ledgers. |
+| #2 / #33 / #35 | Raw defensive unknown bytes shipped in 0.9. Explicit source binding eligibility/preflight and full acceptance matrix pass; #33 ordinary-call costs are reported without a speedup claim. Raw unknown presence/count APIs pass semantic, compiled, allocation and lifetime checks across all four row representations. | No unimplemented public behavior was found for these issues. #33 has no numeric speed ceiling; direct snapshots are slower on the measured fixture. Final shared regression/coverage still applies. |
+
+Two scope distinctions prevent misleading retirement claims. The native typed format-0 walk
+remains an independent test oracle, and typed-index infrastructure/Java State/ViewOwner remain
+necessary for the optional text/ProtoJSON path; **retired binary slab consumers retain no index**.
+Large-byte borrowing is explicit through `Projection.borrowBytes()` (4096-byte default threshold),
+and the scoped decode operation is `newSession().decode()` rather than a separate
+`decodeBorrowed` spelling. Owning default decode stays independent of caller input; lazy owning
+results retain an immutable copy, while sessions retain an explicit input lease. These are the
+implemented API/ownership choices, not claims that every historical class or spelling was deleted.
+
+A3 final fresh-process writer qualification ([a0c08060](https://app.buildbuddy.io/invocation/a0c08060-b429-4a00-829e-4d2b4c726df6)): all126 cells (three forks per runtime/fixture/variant) pass96-fixture exact-byte parity and retain every sample. Word-zeroing probe/span ratios are1.141small/1.099holdout/1.276large, so the Step0 bound is met for the first two but not large. Production generated/stock is0.839/0.695/1.117; table/stock2.545/2.010/3.341. The amended small/large and table hypotheses remain missed. Production already uses fresh zeroed output, so the reused probe's zeroing optimization is not copied into it. The bounded extent cache reduces allocations, but does not close the timing gap. Raw evidence and methodology are in `benchmarks/results/protobuf-slab-java-a0c08060/`; no performance floor has been relaxed.
+
+
+### E1 validation reuse and generated lazy review
+
+The immediate native owning path now skips the logical walk of an unpublished borrow. Its
+final `copyProjectedOf` still performs structural verification and all logical/required/budget
+checks before returning an owner. Public borrowed decoding keeps its complete validation.
+New shared acceptance checks cover selected string/cell failures, required fields and successful
+reuse; a JVM native adoption test proves failure releases the source lease exactly once. Local
+Java fallback and FFM acceptance pass. This is a concrete cost reduction, not a performance pass.
+
+Independent generated-projection review found a transitive required-closure edge: an empty
+omitted child can have an optional descendant type containing required fields. Generated code
+must eagerly fall back even when that descendant is absent. The producer now checks the full
+closure before emitting a lazy pointer, and the formal proto2 corpus includes that shape. Merge,
+strict/lax scan, depth, relative-window offset, flag and bounded-hint paths were also reviewed.
+The next formal parity and resident measurements remain required.
+
+
+## Requested pause checkpoint — full qualification `4065dd6f` (2026-11-07)
+
+The immutable `5002235` qualification completed: 86/93 test targets pass, four fail to build and three fail remotely. All 20 paired G1 shards completed and merged with strict provenance: 208 summary cells / 1,248 raw records per runtime. Evidence, historical deploy-JAR/native/SDK provenance and worker ranges are retained in [`protobuf-slab-4065dd6f`](../../../benchmarks/results/protobuf-slab-4065dd6f/README.md). This compares baseline SDK `.24` with candidate `.27`; it does not isolate library changes.
+
+- **B4 remains open:** SVM full interpreter generated-owned/stock 4.358× and slab/stock 6.729× exceed 2.5×. Generated-owned full peak/historical is 1.090× SVM / 0.924× JVM; slab/native-view full peak is 2.275× / 1.457×. The [profile](../../../benchmarks/results/protobuf-interpreter-4065dd6f/README.md) still attributes 18.7% of generated-owned leaf samples to `Accessor.bound`. No proposed protected read-hook optimization was started before the pause.
+- **E1 remains open:** [SVM required ratios](../../../benchmarks/results/protobuf-projection-4065dd6f/README.md) all pass (selected-small 0.664427, selected-holdout 0.373690, lazy-holdout 0.497736). JVM selected-small 0.863839 misses 0.85; holdout selected 0.489243 and lazy 0.346017 pass. Root's subsequent generated eager-projection extension `844aafe` has local 29,440-pair exact parity but awaits formal resident qualification.
+- **Other measured criteria:** B3 SVM full heap/resident 1.0309 meets +5%; sparse 1.0698 misses. C1 JVM native/Java resident 2.193× sparse, 1.724× full, 1.435× large misses its 1.3× hypothesis. Broader revised SOTA hypotheses and ranges are retained in `assessment.json`; they are not relabeled as achieved. A2b/A4 explicit stop decisions, optional unactivated E2 and withdrawn E3/PGO remain unchanged.
+- Both 132-cell JVM/SVM consumer smokes and their unchanged graph/allocation checks passed. Core, runtime, slab producer parity, native/fallback Buffa, stock-free published artifact consumers and ABI gates passed in this snapshot. Buffa JVM test BUILD strict-dependency corrections are committed in `b79a787` but require the next capture; the analogous YAML correction is `c11fa85`.
+- **Correctness checkpoint `63fd6d4`:** SlabRow accessors are cached by their owning root Layout, not the shared child Schema. Both cache-initialization orders and public cross-layout rejection are covered; local Layout/Projection tests pass 17/17 with assertions, and compilation plus 14 existing codec/ownership tests pass. This later fix is not included in the immutable benchmark snapshot.
+- **Known CI work to resume:** inline-reader method coverage (`ReadBooleanNode$InlineReader::accessedInline` reported first) and the separate legacy comparison `native_smoke` compact scalar allocation failure (416 B > 128 B). No budget relaxation or exclusion was applied. Additional public slab/session API coverage identified locally remains unimplemented. No further measurements or production performance changes were started after the user requested the pause.
+
+Next protobuf work after resume: requalify the committed correctness/generated-projection/build fixes; address B4 structurally while preserving public mismatch/required/null and borrowed lifetime checks; close required E1 JVM selected-small and peak/allocation/coverage failures; then update final performance review/release status from fresh evidence. Full main/release qualification remains the parent task; this checkpoint is not release approval.
+
+Resume 2026-11-08: Measured (legacy native_smoke, https://app.buildbuddy.io/invocation/a50e95b8-5b36-49ce-bafe-7caef20cdee7 and https://app.buildbuddy.io/invocation/a347c92f-33e8-4c17-ada2-c5a22c44da84): compact-scalar buffa ingest 312 B/message and ingest-typed 280 B/message, slabBytes=retainedSlabBytes=56 (Timestamp: 32 B header + 24 B record). Breakdown (SVM compressed refs, 8 B object / 16 B array headers): owned slab byte[56] 72 + SlabMessage 56 + SlabVerifier 56 + verifier long[1] 24 + verifier byte[0] 16 + ProtoRow.Budget 32 + SlabLimits 24 + PinnedObject 16 = 296 derived, 16 unattributed. Ruling: the 128/96 B gates are NOT re-based — about 170 B of the cost is per-message verifier, budget, limits and pin objects the design does not need. Next climb: allocation-free slab verification (reuse a plan-held verifier or primitive-state verify), cache SlabLimits per plan/limit, avoid the per-call Budget, and drop the PinnedObject residue; floor is about 72 (array) + 56 (message) B, then set the gate from the measured floor.
+
+### Resume 2026-11-08: measured durable slab allocation floor
+
+`d529c56` + `961d479` reduce legacy compact-scalar Buffa ingest from **312 to
+168 B/message**. The original 128 B gate fails as expected in
+[226e5f97](https://app.buildbuddy.io/invocation/226e5f97-f7d7-4994-b66e-dcdc577089a0).
+A differential allocation probe in
+[c07af12f](https://app.buildbuddy.io/invocation/c07af12f-2f94-4f8e-9b9a-6a5493648c09)
+measures an escaping `byte[56]` clone at **64 B**, clone plus verified
+`takeOwnership` at **112 B** (48 B message), and typed native ingest at **136 B**.
+The **24 B native residue** is consistent with the retained output PinnedObject
+(source inspection plus differential measurement, not allocation-class profiling).
+Generic ingestion adds **32 B** for two harness-boxed Longs. This supersedes the
+older array-header and zero-pin assumptions behind the unmeasured 152/120 estimate.
+`Comparison.java` now gates the measured floor at **168 B generic / 136 B typed
+and generated**, with no change to other engines or performance gates. Full probe
+and test evidence: [`protobuf-slab-allocation-20261108`](../../../benchmarks/results/protobuf-slab-allocation-20261108/README.md).
+
+Full legacy native smoke passes in
+[7b240f5f](https://app.buildbuddy.io/invocation/7b240f5f-6a9f-40cd-ace9-a26bca831bd4),
+including the 168/136/136 B generic/typed/generated ingestion cells. Core, runtime
+and Buffa JVM suites pass in c07af12f. The new bounded recursive-alias
+test pins per-visit budget accounting. **The pre-existing shared-subgraph time
+amplification remains a separate release blocker**: structure verification can
+walk exponentially many logical occurrences before budget rejection. Memoization
+must retain depth, identity, budget, projection and error-order semantics.
+
+
+### B4 exact-layout guards and bound hooks — measured rejection (2026-11-08)
+
+- Candidate `38f7399` versus exact `1cfcb37`, both SDK `.27`; harness `6edd5e3` supports explicit modern baseline engine/mode selections while preserving historical defaults. SVM invocation `213a289b`, JVM `d12b5d0b`: all 20 shards pass; each runtime merges to complete=true, 195 cells / 1,170 raw records. [Evidence and rejected patch](../../../benchmarks/results/protobuf-b4-213a289b/README.md). These captures precede the separate slab-allocation integration.
+- SVM full generated interpreter 259.36 → 213.56 ns (−17.7%); generated/stock 4.229× → 3.501×. Slab 415.16 → 410.13 ns; slab/stock 6.769× → 6.724×. Both still miss 2.5×. Sparse generated 36.36 → 31.83 ns (−12.4%), slab 52.64 → 52.29 ns.
+- Full generated peak 49.22 → 50.17 ns SVM (ranges overlap), 20.01 → 17.33 ns JVM (improves). Full slab peak 312.70 → 311.65 ns SVM, 130.07 → 131.40 ns JVM (ranges overlap). Candidate generated accessor allocation remains 0.000044 B/read; unchanged 0.05 ceiling. Both 132-cell consumer smokes pass (`7f8ce7c9`).
+- Rejection: JVM full generated interpreter 50.07 [49.95, 50.70] → 60.17 [59.31, 62.76] ns (+20.2%); JVM full slab resident 2116.13 [1050.14, 2274.72] → 2977.25 [2798.34, 3397.35] ns (+40.7%). The narrower design §4 SVM interpreter criterion does not authorize accepting these measured JVM regressions. Production restored; no protected Accessor API ships. Useful cached/inline parity, layout and interpreted lifetime tests stay; API-specific tests are archived with the rejected patch.
+- Verdict: **B4 open; Phase 1 rejected.** No budget relaxed, no Phase 2/profiling cycle started. Final combined-branch coverage and release qualification remain separate.
+
+
+### B4 Phase 1 reinstated — explicit SVM priority (2026-11-08)
+
+- User clarification supersedes the preceding rejection: SVM is the primary production performance target; JVM provides correctness/testing. JVM timing regressions remain visible in the unchanged paired measurements, but do not veto the measured SVM gain. Restore the exact production delta `1cfcb37..38f7399`, API-specific/strict tests and call-site policy on the integrated slab/JSON branch.
+- SVM full generated interpretation improves 259.36 → 213.56 ns (−17.7%, nonoverlapping ranges), 4.229× → 3.501× stock; sparse improves 36.36 → 31.83 ns (−12.4%). Slab full interpretation improves only 415.16 → 410.13 ns, 6.769× → 6.724× stock. The absolute 2.5× gate remains open.
+- SVM peak review: generated full 49.22 [48.99, 49.68] → 50.17 [49.37, 50.49] ns (+1.92%); generated sparse 9.802 [9.681, 9.815] → 9.840 [9.800, 9.911] (+0.39%). Slab full −0.33%, sparse +0.21%; both ranges overlap too. No demonstrated SVM peak regression under the original fork-range criterion; no claim of statistical equivalence. Complete data remain in `protobuf-b4-213a289b`.
+- Exact-class equivalence still excludes slab/static/borrowed layouts; public accessors remain checked, bound reads retain owner lifetime and projection checks. Slab allocation/verifier/cache changes and JSON changes remain intact. Protected Accessor additions are documented in `docs/RELEASE_0_10_0.md`.
+- Verdict: **Phase 1 admitted for SVM; B4 still open.** Historical JVM +20.2% interpreter and +40.7% slab resident regressions remain disclosed. No further JVM timing runs or Phase 2 implementation are included. Integration validation follows below.
+- Fresh integration verification: all seven correctness/native/allocation targets pass `d19a0431` (both native smokes, core/runtime and Buffa JVM strict/non-strict); consumer SVM smoke covers 132 cells. Scalar native ingest stays 168 B generic / 136 B typed/generated, 56 B slab; generated compiled reads stay 0.000044 B/read, other accessor representations 0.000556. Nine-target coverage passes `f2c1f687`; reports and access-method contract pass across 201 sources/12 modules, no new exemption. Logs, XML and source hashes are in `protobuf-b4-213a289b/correctness/admitted-d19a0431/`.
+
+
+### SVM warm handle cache — admitted after cold-path refinement (2026-11-08)
+
+- Baseline `9a1dcec` includes restored B4 Phase 1 and slab allocation fixes. Fresh restored-image profiling (`8bad3434`) guided an isolated record/text/blob cache experiment. Warm hits now acquire published slots; synchronized misses recheck and release-publish fully initialized views. No new owner fields, public API, schema/projection/lifetime exceptions or unlocked mutable-map reads. List/unsigned caches remain synchronized.
+- Initial `f045f5c` passes seven targets (`4097845d`) and a complete all-nine-engine SVM pair (`950032e5`): full slab interpretation −14.9%, peak −33.5%, with a direct projected sparse first-read cost +8.7%. Preserve that candidate/image and all measurements; do not substitute later timings for it.
+- Refinement `e4cec9f` forwards the already decoded handle into synchronized miss creation/lazy realization. All seven targets pass again (`4902bb19`), including 132 consumer native cells, unchanged graph/AST gates, compiled read allocation 0.000044 B/read generated / 0.000556 others, and scalar native allocation 168 B generic / 136 B typed/generated. Publication remains 112 B = 64 B array + 48 B owner. Shared durable cold/warm race tests cover native-backed and Java-backed JVM decoders, including lazy single-charge accounting; they also run in final x86/Arm acceptance.
+- Final paired SVM invocation `1159ca42` is complete: 264 cells / 1,584 raw records, three forks, all nine engines/five modes, exact image hashes verified per shard. All 132 Java-allocation/retention pairs are identical. Full slab interpreter 418.926 → 351.174 ns (−16.17%), peak 310.534 → 210.799 (−32.12%); sparse interpreter 52.867 → 44.072 (−16.64%), peak 30.053 → 21.134 (−29.68%). All four observed ranges are disjoint. Native large peak improves 44.61%, native large resident 8.03%, both disjoint.
+- Cold tradeoffs remain explicit: projected sparse first read is now +2.39% with overlapping ranges; native sparse first is +4.49% and lazy +3.25%, disjoint. Full native first improves 8.36%, disjoint. No final pair has a >5% slowdown with disjoint ranges; this observation creates no new threshold. Initial decode/session/control shifts are retained in the evidence, with source audit showing those paths do not execute the changed helpers. No outlier is discarded.
+- Verdict: **refined warm cache admitted for x86 SVM; B4 remains open** at full interpreter/stock 5.652× slab and 3.471× generated. Generated full interpreter/peak ranges overlap. No JVM timing veto or run; correctness/coverage stays required. Parent integrates code/tests as `de2e498`, `598ce6f`, `4fd49c2`, `7fca64b` and runs combined method coverage plus x86/Arm native acceptance. These elapsed-time gains do not establish Arm performance. [Complete evidence, ranges, source hashes and admission](../../../benchmarks/results/protobuf-warm-cache-9a1dcec/README.md).
+
+
+Final SVM tranche integration (2026-11-08): production/test tip `7fca64b`; combined coverage `b436036f` passes nine targets / 455 tests, 201 production files across 12 modules and the existing access-method contract. All five native acceptance targets pass on Linux x86-64 (`6227eb3c`) and Arm64 (`0de92e3b`), including strict/non-strict/fallback protobuf publication races. Production source hashes agree across both native archives. No coverage exemption, allocation or graph budget changed. [Final comparison, qualification and release status](../../../benchmarks/results/svm-tranche-20261108/README.md). This completes the local tranche, not full release qualification. Nothing pushed or published; pause requested.
+
+0.10.0 disposition (2026-11-08): Sam subsequently authorized release for the TruffleCEL and Elide 1.6.3 integrations. B4's ≤2.5× direct-stock interpreter target remains unmet (5.652× slab, 3.471× generated) and is deferred from 0.10.0, alongside remaining sparse decode/cold-read performance gaps. The final cache candidate's 16.2% full interpreted / 32.1% full peak SVM improvements and native/lazy sparse first-read +4.49%/+3.25% tradeoffs remain as measured; allocation/retention pairs match. E1/C1 JVM-only timing objections remain superseded by the SVM production priority. Repeated-list indexing, dispatch specialization and opt-in bulk scoped decode are possible investigations with no delivery commitment or promised improvement. The external shared-subgraph verifier safety risk is separate release remediation, not waived as performance work. Standalone Buffa Cargo packaging/composed-link completion is excluded from this Maven/native release and is not claimed ready. Recent combined coverage and x86/Arm acceptance are reused with normal release checks; no fresh full timing matrix or Arm speed claim is implied. Actual safety/CI/artifact/publication status remains in the parent release ledger.

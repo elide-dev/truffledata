@@ -1,11 +1,9 @@
 package dev.elide.truffledata.json;
 
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
-import dev.elide.myna.values.ValueTape;
 import dev.elide.truffledata.json.generated.Json;
-import dev.elide.truffledata.tape.SvmValueTape;
+import dev.elide.truffledata.tape.SvmTape;
 import dev.elide.truffledata.tape.TapeBorrow;
-import dev.elide.truffledata.tape.TapeLexical;
 import org.graalvm.nativeimage.ImageInfo;
 import org.graalvm.nativeimage.PinnedObject;
 import org.graalvm.nativeimage.UnmanagedMemory;
@@ -147,165 +145,36 @@ public final class JsonSvm {
     }
   }
 
-  /**
-   * Native side tables and retained input of one published result, plus its release. One object
-   * per message serves as both the lexical accessor and the close action; a session keeps one
-   * rebindable accessor for its borrows ({@link Borrows}).
-   */
-  static class SvmLexical implements TapeLexical {
-    private Pointer spans;
-    private Pointer inputData;
-    private long inputLength;
-
-    SvmLexical(Pointer spans, Pointer inputData, long inputLength) {
-      bind(spans, inputData, inputLength);
-    }
-
-    final void bind(Pointer spans, Pointer inputData, long inputLength) {
-      this.spans = spans;
-      this.inputData = inputData;
-      this.inputLength = inputLength;
-    }
-
-    @Override
-    public final long span(long node) {
-      return spans.readLong(WordFactory.signed(node * 8));
-    }
-
-    @Override
-    public final byte inputByte(long offset) {
-      if (offset < 0 || offset >= inputLength) throw new IndexOutOfBoundsException("JSON lexical offset");
-      return inputData.readByte(WordFactory.signed(offset));
-    }
-  }
-
-  /** An owned result: its lexical accessor is also its close action (one object per message). */
-  static class SvmResult extends SvmLexical implements JsonMessage.Storage {
-    private final long address;
-
-    SvmResult(Pointer spans, Pointer inputData, long inputLength, long address) {
-      super(spans, inputData, inputLength);
-      this.address = address;
-    }
-
-    @Override
-    public void run() {
-      release(address);
-    }
-  }
-
-  /** An adopted region's result: its caller's release runs after the native one. */
-  static final class AdoptedResult extends SvmResult {
-    private final Runnable onClose;
-
-    AdoptedResult(Pointer spans, Pointer inputData, long inputLength, long address, Runnable onClose) {
-      super(spans, inputData, inputLength, address);
-      this.onClose = onClose;
-    }
-
-    @Override
-    public void run() {
-      try {
-        super.run();
-      } finally {
-        onClose.run();
-      }
-    }
-  }
-
-  /** The published result's descriptor: Myna value ABI v4 (ABI 6 of this library). */
   private static Pointer descriptor(VoidPointer result) {
     Pointer descriptor = (Pointer) Json.JsonResult.view(result);
-    if (descriptor.isNull() || descriptor.readInt(0) != ValueTape.ABI_VERSION_V4)
-      throw new IllegalStateException("Unsupported Myna value ABI");
+    if (descriptor.isNull() || descriptor.readInt(0) != 1)
+      throw new IllegalStateException("Unsupported compact tape ABI");
     return descriptor;
   }
 
-  private static Pointer hashes(VoidPointer result) {
-    Pointer hashes = (Pointer) Json.JsonResult.key_hashes(result);
-    if (hashes.isNull()) throw new IllegalStateException("JSON key-hash table missing");
-    return hashes;
-  }
-
-  /** Validates a published result and builds its tape reader. */
-  private static SvmValueTape tape(VoidPointer result) {
-    return new SvmValueTape(descriptor(result), hashes(result));
-  }
-
-  private static Pointer spans(VoidPointer result, SvmValueTape tape) {
-    Pointer spans = (Pointer) Json.JsonResult.lexical(result);
-    long spanCount = Json.JsonResult.lexical_count(result);
-    if (spanCount != tape.nodeCount() || (spanCount > 0 && spans.isNull()))
-      throw new IllegalStateException("JSON lexical table mismatch");
-    return spans;
-  }
-
-  // Region table entry 0 (region 1) is the retained input: {data, length}.
-  private static Pointer inputRegion(VoidPointer result) {
-    Pointer descriptor = (Pointer) Json.JsonResult.view(result);
-    Pointer regions = (Pointer) descriptor.readWord(40);
-    if (regions.isNull() || descriptor.readLong(48) < 1)
-      throw new IllegalStateException("JSON input region missing");
-    return regions;
-  }
-
-  /**
-   * Lexical accessor of an owned result, released on close (then {@code onClose}, for adopted
-   * regions). Results without a caller release carry no callback field: one is allocated per
-   * retained message.
-   */
-  private static SvmResult tables(
-      VoidPointer result, SvmValueTape tape, @org.jspecify.annotations.Nullable Runnable onClose) {
-    Pointer spans = spans(result, tape);
-    Pointer regions = inputRegion(result);
-    return onClose == null
-        ? new SvmResult(spans, regions.readWord(0), regions.readLong(8), result.rawValue())
-        : new AdoptedResult(spans, regions.readWord(0), regions.readLong(8), result.rawValue(), onClose);
-  }
-
   private static JsonMessage publish(VoidPointer result, @org.jspecify.annotations.Nullable Runnable onClose) {
-    SvmValueTape tape = tape(result);
-    return new JsonMessage(tape, tables(result, tape, onClose));
+    return onClose == null ? new SvmJsonMessage(descriptor(result), result.rawValue())
+        : new SvmJsonMessage.Adopted(descriptor(result), result.rawValue(), onClose);
   }
 
-  /** Message owning a retained session result; the result storage is released on failure too. */
   static JsonMessage adoptResult(VoidPointer result) {
-    try {
-      return publish(result, null);
-    } catch (RuntimeException | Error failure) {
-      release(result.rawValue());
-      throw failure;
-    }
+    try { return publish(result, null); }
+    catch (RuntimeException | Error failure) { release(result.rawValue()); throw failure; }
   }
 
-  /**
-   * One session's reusable tape reader and lexical accessor (Myna 0.11.0's rebindable readers,
-   * elide-dev/myna#47): every borrow of the session reads through them, rebound to the session's
-   * current result, so a borrow allocates only its owner. A borrow ends (closing its owner) before
-   * the session's next call, so no live owner ever sees a rebinding.
-   */
+  /** A borrow ends before the next rebind, so one reader serves the session. */
   static final class Borrows {
-    private @org.jspecify.annotations.Nullable SvmValueTape tape;
-    private @org.jspecify.annotations.Nullable SvmLexical lexical;
-
-    /** Borrowed owner over the session's current result; the session ends it before its next call. */
+    private @org.jspecify.annotations.Nullable SvmTape tape;
     TapeBorrow borrow(VoidPointer result) {
       Pointer descriptor = descriptor(result);
-      Pointer hashes = hashes(result);
-      SvmValueTape reader = tape;
-      if (reader == null) tape = reader = new SvmValueTape(descriptor, hashes);
-      else reader.rebind(descriptor, hashes);
-      Pointer spans = spans(result, reader);
-      Pointer regions = inputRegion(result);
-      SvmLexical tables = lexical;
-      if (tables == null) lexical = tables = new SvmLexical(spans, regions.readWord(0), regions.readLong(8));
-      else tables.bind(spans, regions.readWord(0), regions.readLong(8));
-      return new TapeBorrow(reader, tables, JsonMessage.FORMAT);
+      SvmTape reader = tape;
+      if (reader == null) tape = reader = new SvmTape(descriptor);
+      else reader.rebind(descriptor);
+      return new TapeBorrow(reader, JsonMessage.FORMAT);
     }
   }
 
-
-  private static void release(long address) {
+  static void release(long address) {
     if (address == 0) return;
     VoidPointer result = WordFactory.pointer(address);
     Json.release(result);

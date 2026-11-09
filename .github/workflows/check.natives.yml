@@ -1,0 +1,68 @@
+name: Check - Native targets
+on:
+  workflow_call:
+    secrets:
+      BUILDBUDDY_API_KEY:
+        required: false
+      BUILDBUDDY_APIKEY:
+        required: false
+permissions:
+  contents: read
+jobs:
+  csv:
+    name: CSV / ${{ matrix.target }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: aarch64-unknown-linux-gnu
+            runner: ubuntu-24.04-arm
+            platform: ''
+            shared: true
+          - target: x86_64-unknown-linux-musl
+            runner: ubuntu-24.04
+            platform: --dynamic_mode=off --platforms=//bazel/platforms:linux_amd64_musl
+            shared: false
+          - target: aarch64-unknown-linux-musl
+            runner: ubuntu-24.04-arm
+            platform: --dynamic_mode=off --platforms=//bazel/platforms:linux_arm64_musl
+            shared: false
+          - target: aarch64-apple-darwin
+            runner: macos-15
+            platform: ''
+            shared: true
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43 # v2.22.3
+        with:
+          egress-policy: audit
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Reserve disk for repository extraction
+        if: runner.os == 'Linux'
+        run: sudo rm -rf /usr/local/lib/android /usr/share/dotnet
+      - name: Configure BuildBuddy cache
+        env:
+          BUILDBUDDY_API_KEY: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && (secrets.BUILDBUDDY_API_KEY || secrets.BUILDBUDDY_APIKEY) || '' }}
+        run: .github/scripts/configure-buildbuddy.sh
+      - name: Install Bazelisk
+        run: .github/scripts/install-bazelisk.sh
+      - name: Native kernel and isolated archive acceptance
+        env:
+          TARGET_PLATFORM: ${{ matrix.platform }}
+        run: bazel test --config=local $TARGET_PLATFORM //csv/native:api_test //csv/native:index_test //tools/release:csv_archive_test
+      - name: Shared loading and ThinLTO acceptance
+        if: matrix.shared
+        run: bazel test --config=local //tools/release:csv_c_static_test //tools/release:csv_c_thinlto_test
+      - name: Musl static ThinLTO acceptance
+        if: ${{ !matrix.shared }}
+        env:
+          TARGET_PLATFORM: ${{ matrix.platform }}
+        run: bazel test --config=local $TARGET_PLATFORM //tools/release:csv_musl_c_static_test //tools/release:csv_musl_c_thinlto_test
+      - name: Remove BuildBuddy credentials
+        if: always()
+        run: rm -f user.bazelrc

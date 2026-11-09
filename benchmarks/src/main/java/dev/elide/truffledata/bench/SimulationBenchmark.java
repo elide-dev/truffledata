@@ -9,12 +9,15 @@ import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.object.*;
 import dev.elide.truffledata.*;
 import dev.elide.truffledata.comparison.JsonFixture;
+import dev.elide.truffledata.comparison.YamlFixture;
 import dev.elide.truffledata.jdbc.*;
 import dev.elide.truffledata.json.JsonMessage;
 import dev.elide.truffledata.json.JsonSvm;
 import dev.elide.truffledata.protobuf.ProtobufAdapter;
 import dev.elide.truffledata.tape.JavaSink;
 import dev.elide.truffledata.tape.TapeSnapshot;
+import dev.elide.truffledata.tape.TruffleSink;
+import dev.elide.truffledata.yaml.YamlSession;
 import java.sql.*;
 import java.util.*;
 import org.graalvm.nativeimage.ImageInfo;
@@ -98,8 +101,8 @@ public final class SimulationBenchmark {
                   + "}");
           count++;
         }
-        // The JSON cases link the static simdjson backend, so the JVM smoke runs the other 20.
-        int all = ImageInfo.inImageRuntimeCode() ? 24 : 20;
+        // JSON and YAML cases link static native backends; the JVM smoke runs the other 20.
+        int all = ImageInfo.inImageRuntimeCode() ? 28 : 20;
         if (count != (smoke ? all : 1)) throw new AssertionError("Unexpected case count " + count);
       } finally {
         context.leave();
@@ -306,7 +309,10 @@ public final class SimulationBenchmark {
                 }));
       }
     }
-    if (ImageInfo.inImageRuntimeCode()) json(cases);
+    if (ImageInfo.inImageRuntimeCode()) {
+      json(cases);
+      yaml(cases);
+    }
     return cases;
   }
 
@@ -321,7 +327,9 @@ public final class SimulationBenchmark {
     String[] names = {"gson-tree", "java-export", "interop-read", "snapshot"};
     for (int mode = 0; mode < names.length; mode++) {
       CallTarget target = new JsonIngestRoot(mode).getCallTarget();
-      cases.add(new Case("json-generic-" + names[mode], expected, () -> (Long) target.call((Object) inputs)));
+      cases.add(
+          new Case(
+              "json-generic-" + names[mode], expected, () -> (Long) target.call((Object) inputs)));
     }
   }
 
@@ -372,6 +380,62 @@ public final class SimulationBenchmark {
       } finally {
         message.close();
       }
+    }
+  }
+
+  /** Same mixed records as JSON, encoded as block YAML for the native simulation. */
+  private static void yaml(List<Case> cases) {
+    byte[][] inputs = new byte[ROWS][];
+    long expected = 0;
+    for (int i = 0; i < ROWS; i++) {
+      inputs[i] = YamlFixture.document(i);
+      expected += JsonFixture.checksum(i);
+    }
+    String[] names = {"java-export", "truffle-export", "interop-read", "snapshot"};
+    for (int mode = 0; mode < names.length; mode++) {
+      CallTarget target = new YamlIngestRoot(mode).getCallTarget();
+      cases.add(
+          new Case(
+              "yaml-generic-" + names[mode], expected, () -> (Long) target.call((Object) inputs)));
+    }
+  }
+
+  private static final class YamlIngestRoot extends RootNode {
+    private final int mode;
+    private final JavaSink.KeyCache keys = new JavaSink.KeyCache();
+    private final TruffleSink.KeyCache truffleKeys = new TruffleSink.KeyCache();
+    @Child private JsonFixture.InteropReader reader = new JsonFixture.InteropReader();
+
+    YamlIngestRoot(int mode) {
+      super(BenchmarkLanguage.current().language());
+      this.mode = mode;
+    }
+
+    public Object execute(VirtualFrame frame) {
+      long sum = 0;
+      try (var session = YamlSession.open()) {
+        for (byte[] input : (byte[][]) frame.getArguments()[0]) {
+          if (mode == 0) {
+            var sink = new JavaSink(keys);
+            session.parse(input, sink);
+            retained = Objects.requireNonNull(sink.result());
+            sum += JsonFixture.javaRead(retained);
+          } else if (mode == 1) {
+            var sink = new TruffleSink(truffleKeys);
+            session.parse(input, sink);
+            retained = Objects.requireNonNull(sink.result());
+            sum += JsonFixture.truffleRead(retained);
+          } else
+            try (var message = session.decode(input)) {
+              if (mode == 3) {
+                var snapshot = message.snapshot();
+                retained = snapshot;
+                sum += reader.read(snapshot.root());
+              } else sum += reader.read(message.root());
+            }
+        }
+      }
+      return sum;
     }
   }
 

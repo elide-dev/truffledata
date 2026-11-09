@@ -1,0 +1,9 @@
+exec ${PAGER:-/usr/bin/less} "$0" || exit 1
+Executing tests from //yaml/native:duplicate_bench
+-----------------------------------------------------------------------------
+duplicate-fusion yaml/native/testdata/records-block.yaml pass=0 baseline-ns=1338631 fused-ns=1294622 speedup=1.0340
+duplicate-fusion yaml/native/testdata/records-block.yaml pass=1 baseline-ns=1338440 fused-ns=1294013 speedup=1.0343
+duplicate-fusion yaml/native/testdata/records-block.yaml pass=2 baseline-ns=1354426 fused-ns=1296281 speedup=1.0449
+duplicate-fusion yaml/native/testdata/records-block.yaml pass=3 baseline-ns=1340213 fused-ns=1296282 speedup=1.0339
+duplicate-fusion yaml/native/testdata/records-block.yaml pass=4 baseline-ns=1338729 fused-ns=1297029 speedup=1.0322
+duplicate-fusion best baseline-ns=1338440 fused-ns=1294013 speedup=1.0343

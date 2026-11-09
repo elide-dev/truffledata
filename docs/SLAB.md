@@ -11,7 +11,43 @@ Sources: `protobuf-runtime/.../Layout.java` (layout compiler and the `TDL1` prog
 `SlabFormat.java` (constants and accessors), the executable model of this document,
 `protobuf-runtime/src/test/.../SlabReference.java`, which the golden slabs in
 `protobuf-runtime/src/test/resources/slab/` are checked against, and the native producer
-`protobuf-buffa/native/slab.rs` (seam ABI 10, below), which reproduces every golden byte for byte.
+`protobuf-buffa/native/slab.rs` (seam ABI 11, below), which reproduces every golden byte for byte.
+
+## Java ownership
+
+`ProtoPlan.decodeSlab` is native-free. Generated `SlabDecoder_<Type>` classes select
+constant field-number and slot dispatch after checking the supplied schema. Both produce
+the same owning bytes as the native decoder. `BuffaPlan.decode` returns the runtime
+`SlabMessage` owner using the selected producer.
+
+Owning `SlabMessage`/`SlabRow` values are immutable and may be read across threads.
+`row()` and `snapshot()` return the root owner itself; `close()` has no effect.
+Children, strings, byte arrays and repeated arrays are lazy cached views of immutable
+slab bytes. Byte/repeated values implement `OwnedArray`; a `String` copies UTF-8 once
+when materialized. UTF-16 lengths are available without materializing strings.
+
+`copyOf` defensively copies an external buffer. `takeOwnership` is a trusted bridge
+operation: it transfers exclusive ownership of a freshly produced array, and the caller
+must discard every writable alias. Both validate structure before publishing a row.
+A capacity-backed array may be larger than the header's valid extent. Offset validation
+uses that extent, `slabCopy()` returns exactly it, and `retainedSlabBytes()` accounts
+for the full array against `maxSlabBytes`.
+
+### Producer selection
+
+Generated contract models bind their Java slab decoder once; runtime-created models use
+`SlabCodec`. `ProtoPlan.decodeSlab` always follows this native-free route. Buffa JVM `AUTO`
+uses Java, while SVM `AUTO` uses the linked native archive when present and otherwise the
+same Java fallback. Explicit native mode can use FFM on the JVM. Generated Java also supports
+eligible lazy projections; other selected Java decodes use the table producer. Native selected
+decodes use TDP1 with the compiled layout. Native
+sessions reuse caller-owned storage and return epoch-checked borrows rather than changing
+ordinary decode ownership. See the [producer matrix](BUFFA.md#producer-and-ownership-matrix)
+for text and explicit retention behavior.
+
+The experimental Truffle-compiled decoder is not a production dispatch option: its joint
+JVM/SVM speed gate failed. This does not change the generated-contract path or the required
+native-free fallback.
 
 ## Conventions
 
@@ -74,10 +110,10 @@ offsets), 8 (`I64`, `F64`), 1 (`BOOL`).
 ```
 header (32 B)
   0  magic    u32  'TDS1' = 0x31534454
-  4  flags    u32  OWNING 1 · BORROWING 2 · LAX 4 · CERTIFIED 8
+  4  flags    u32  OWNING 1 · BORROWING 2 · LAX 4 · CERTIFIED 8 · PROJECTED 16
   8  bytes    u32  slab length (a multiple of 8)
  12  records  u32  record allocations, including orphans
- 16  handles  u32  handles assigned (records + string/bytes headers)
+ 16  handles  u32  handles assigned (records + string/bytes + lazy-child headers)
  20  root     u32  offset of the root record: always 32
  24  layout   u32  Layout.fingerprint() of the producing program
  28  unknowns u32  offset of the unknown table, 0 if no record has unknown fields
@@ -85,8 +121,9 @@ header (32 B)
 ```
 
 Exactly one of `OWNING` and `BORROWING` is set. `OWNING`: no string or bytes header references
-input bytes; the slab depends on nothing. `BORROWING`: at least one header is `EXTERNAL` and the
-reader must hold an input lease. `LAX` (Phase E): strings inside projected-away subtrees were
+input bytes or lazy child spans; the slab needs no source input. `BORROWING`: an external
+payload or lazy child was emitted and the reader must retain immutable source input.
+`PROJECTED` requires the matching immutable selection for reads. `LAX`: strings inside omitted subtrees were
 not validated. `CERTIFIED`: every record's required fields are present and no singular message
 was merged; when it is clear, the owner checks required fields from presence before exposing the
 slab (producers never reject missing required fields themselves).
@@ -183,10 +220,10 @@ map entry gets at close). Deeper nesting is a budget error.
 The header's `records` and `handles` count orphans. Producers must agree byte for byte, orphans
 and padding included; this is what `producers_agree_byte_for_byte` (Task A3) compares.
 
-## Native producer (seam ABI 10)
+## Native producer (seam ABI 11)
 
-`protobuf-buffa/native/slab.rs` behind four `buffa.seam` imports (the ABI 9 view imports stay
-until Task G1):
+`protobuf-buffa/native/slab.rs` exposes four `buffa.seam` imports. ABI 11 retires the
+earlier native view and scalar-only producers; `TDS1` and `TDP1` remain unchanged:
 
 - `compileLayout(schema, length, result)`: compiles a schema program (`TDB3` + `TDL1`) once into
   an owned handle (`result.data`; `result.count` types). The layout is recomputed from the TDB3
@@ -195,14 +232,16 @@ until Task G1):
   section that differs from Java's only there describes another consistent layout of the same
   tables; programs come from `NativeSchema`, never from input. `releaseLayout(handle)` frees it.
 - `decodeSlab(compiled, data, length, flags, projection, out, capacity, maxDepth, maxSlabBytes,
-  result)`: `flags` `OWNING = 1` (required), `LAX = 2` (rejected until Task E1), `SIZING_ONLY = 4`;
-  `projection` must be null until Task E1. Writes the slab to `out[..capacity]` and returns 0,
+  result)`: `flags` exactly one of `OWNING = 1` or `BORROWING = 8`, optional `LAX = 2`
+  and `SIZING_ONLY = 4`. `projection` is null for an ordinary owning decode, or a
+  checked TDP1 program as specified below. Lazy children and external bytes require BORROWING;
+  LAX must agree with the program. Writes the slab to `out[..capacity]` and returns 0,
   or `NEEDS_CAPACITY` (6) with `result.bytes` the **exact** slab length when it does not fit (or
   under `SIZING_ONLY`); a retry with that capacity succeeds. Allocations that do not fit are not
   written, but the walk continues to the end (records that do not fit are kept in decoder
   frames), so the count is exact and errors are reported exactly as with room. A slab longer
   than `maxSlabBytes` is `BUDGET` (2), never `NEEDS_CAPACITY`, so the caller never allocates for
-  it; `maxDepth` above 128 (the ABI 9 bound) and `maxSlabBytes` above `Integer.MAX_VALUE` are
+  it; `maxDepth` above the native bound of 128 and `maxSlabBytes` above `Integer.MAX_VALUE` are
   `BUDGET` up front. `result` (`SlabResult`, 32 B): `bytes u64 · records u32 · handles u32 · flags u32 · error u32 ·
   reserved u64`; on a rejection `error` is the input offset of the innermost field being decoded
   (for invalid UTF-8, of the string's first payload byte, which is where protobuf-java fails:
@@ -216,10 +255,10 @@ until Task G1):
 
 ## Schema program section (`TDL1`)
 
-`NativeSchema` appends the layout of its type list to the ABI 9 `TDB3` schema program, after the
-last TDB3 byte (enum tables and strings), at the next multiple of 4 (zero padding). TDB3 readers
-reach data only through header offsets and never look past it, so the ABI 9 library is unaffected
-(`appended_layout_section_is_invisible_to_abi9` in `typed_view_tests.rs`).
+`NativeSchema` appends the layout of its type list to the `TDB3` schema program, after the
+last TDB3 byte (enum tables and strings), at the next multiple of 4 (zero padding).
+Ordinary typed-index readers reach data through TDB3 offsets; the slab compiler reads and
+validates the appended layout section. No retired view decoder is required.
 
 ```
 section
@@ -262,3 +301,76 @@ slab. Schemas are the `LayoutTest` factories of the same name (`timestamp`, `goo
 `LayoutTest.golden_slabs_decode_by_hand` holds the timestamp, map, oneof, unknown and merge slabs
 as hand-written words, compares every golden with the reference model, and reads every golden
 back field by field against `ProtoRow`.
+
+### Generated decoder selection
+
+`ContractPlugin.create` supplies immutable per-type decoder factories in the generated `ProtoPlan.Model`. The first slab decode binds that type's generated decoder once; subsequent `SlabMessage.decode` and Buffa Java-backend calls reuse the binding. Runtime-created models retain the table producer. Generated fast loops cover ordinary scalar, oneof, repeated and nested-message cases and restart through the table producer for unknown fields, maps, groups and singular-message merges. Both paths write the same format and preserve byte parity. A bounded 64-entry atomic hint table retains wire-length/slab-extent pairs, avoiding repeated growth for varied input sizes. Each candidate capacity is checked against the current limits before allocation; collisions or concurrent updates affect capacity estimates only. Input and output arrays are never cached, and every returned slab owns fresh storage.
+
+Generated lazy projections have a separate checked loop and capacity-hint table. They require
+`lazyChildren()` without byte borrowing; omitted children use a validation-only scan before
+publishing input-relative spans. Required descendants, maps, groups, oneofs, unknown fields and
+singular-message merges restart the table producer when encountered. Required descendant
+eligibility comes from the complete type closure, including optional descendants absent from
+the wire. Runtime-created models and custom decoder lambdas retain the table fallback. These
+routes share strict/lax validation, depth limits, flags and slab-budget behavior.
+
+### Native arena borrows
+
+`SlabSession` retains a reusable native buffer containing the same owning slab format. Its rows carry the session's decode epoch, and every value read checks that epoch and thread before loading native memory. No assumption object is allocated per decode. A new decode or reset invalidates previous rows, including compiled constant receivers. A pin prevents buffer recycling until released. Root retain copies the valid extent once into an owning slab; child snapshots additionally verify that the requested record/type is reachable in the copied graph. Arbitrary offsets and overwritten orphan records cannot be selected.
+
+
+## Parse-time projections and deferred payloads
+
+`Projection.builder(plan).select("id").selectType("Child", "name").build()` creates an
+immutable wanted mask for the closed layout. Map-entry key/value fields are selected for
+structural map handling. `BuffaPlan.project(selection)` creates an independently closeable
+plan; its native mask is compiled once in the reusable projected session. Runtime-only
+Java plans use the equivalent `SlabCodec` producer. Ordinary decode keeps its null-mask path.
+
+Presence remains visible even for omitted values. Repeated fields keep their cardinality;
+reading an omitted element or scalar throws `ContractViolation`. An unselected message list
+without lazy children uses an aligned 8-byte `[count, 1]` header and no element slots.
+Ordinary omitted strings and message subtrees avoid payload allocation. Fixed scalar slots
+and repeated scalars remain physically stored in this implementation, though the read mask
+still rejects their values. Groups, maps, oneofs, singular merges and child closures with
+required fields conservatively stay eager. Reachable required fields are validated before
+publication, including those in eager omitted children.
+
+`lazyChildren()` preserves omitted child wire spans. Each tagged child pointer has its high
+bit set; the remaining bits address an aligned 16-byte header containing `[inputOffset,
+inputLength, handle, absoluteDepth]`. The first read decodes the complete child strictly,
+caches it, and charges additional logical cells, string bytes and retained slab capacity.
+Absolute depth constrains the remaining decode budget. Eager fallbacks for an omitted lazy
+child also decode its complete subtree, so lazy reads have the same field availability.
+`lax()` skips only UTF-8 validation in omitted subtrees; wire structure, numeric and depth
+checks still run. Reading a lazy child revalidates UTF-8 strictly, including after a previous
+failed read. Omitted scalar text has no readable payload, even in lax mode.
+
+`borrowBytes(threshold)` references selected bytes payloads at or above the threshold (default
+4096). Their aligned 16-byte header is `[length | EXTERNAL, handle, 0, inputOffset]`.
+Strings retain ordinary validated headers. Offset and length always address the supplied
+input window. TDP1 is little endian and 4-byte aligned: six words `[magic 0x31504454,
+byteLength, layoutFingerprint, flags, typeCount, borrowBytes]`, followed in closed type order
+by a field-count word and `ceil(fieldCount/32)` wanted words per type. Flags are LAX=1,
+LAZY_CHILDREN=2 and BORROW_BYTES=4; unused tail bits must be zero and byteLength exact.
+These program bits differ from the decode and result flags.
+
+Owning projected messages retain a defensive source-input copy only when the produced slab
+contains external references. `retainedInputBytes()` reports that separate capacity;
+`retainedSlabBytes()` includes materialized lazy children. `logicalUsage()` reports budgeted
+cells/string bytes without materializing text or child wrappers. External projected imports
+use `copyProjectedOf` or `copyProjectedRecordOf`; plain `copyOf` and `takeOwnership` reject
+projected slabs without their mask and input metadata. All imports check external spans,
+count-only markers, lazy depth and handle identities before exposing a row. Partial projections
+cannot be re-encoded; an all-field projection supports ordinary encoding, including external
+bytes. Closing an owning projected message remains a no-op.
+
+Native sessions retain an immutable source lease only while the current slab references input.
+Closing the caller's input handle is safe. Reset, next decode, failed decode or close releases
+that lease and invalidates lazy materializations and their nested row/array wrappers. Explicit
+root/child/array snapshots copy or own every retained dependency and survive session closure.
+
+An immediate owning decode through a native projected session copies and validates the final
+owner before returning. It does not first publish or validate an intermediate borrowed row.
+Public session decoding still checks required fields and logical budgets before returning a
+borrow; failures in either route release the retained source and invalidate the attempted epoch.
