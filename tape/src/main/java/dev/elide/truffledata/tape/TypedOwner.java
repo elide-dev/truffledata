@@ -21,10 +21,7 @@ public abstract class TypedOwner implements AutoCloseable {
   final Schema[] schemas;
 
   private final Thread thread = Thread.currentThread();
-  // The owning thread while open, null once closed: one load answers both the confinement and
-  // the liveness question on every read (WS6), and only the slow path names which one failed.
-  // Another thread sees either the owner's thread or null, and both reject it.
-  private @Nullable Thread gate = thread;
+  private boolean open = true;
   private @Nullable Assumption alive;
 
   /** An owner confined to the calling thread, reading records of {@code schemas} (by plan ordinal). */
@@ -35,9 +32,13 @@ public abstract class TypedOwner implements AutoCloseable {
   /** The format that produced this result, named in its messages. */
   protected abstract TapeFormat format();
 
-  /** Rejects closed or cross-thread access. */
+  /**
+   * Rejects closed or cross-thread access. The final thread compare stays first so partial
+   * evaluation folds the checks of one record's reads to one (a single mutable "gate" field
+   * measured 0.79x at peak, WS6 ledger); only the rejection is outlined.
+   */
   final void check() {
-    if (gate != Thread.currentThread()) throw rejected();
+    if (Thread.currentThread() != thread || !open) throw rejected();
   }
 
   // Cross-thread access is reported as such even on a closed owner, as before.
@@ -90,7 +91,7 @@ public abstract class TypedOwner implements AutoCloseable {
 
   public final boolean isOpen() {
     checkThread();
-    return gate != null;
+    return open;
   }
 
   /** Valid while this owner is open; closing invalidates it. */
@@ -107,8 +108,8 @@ public abstract class TypedOwner implements AutoCloseable {
   @TruffleBoundary
   public final void close() {
     checkThread();
-    if (gate != null) {
-      gate = null;
+    if (open) {
+      open = false;
       if (alive != null) alive.invalidate();
       release();
     }
