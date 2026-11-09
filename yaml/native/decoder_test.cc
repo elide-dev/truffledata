@@ -118,6 +118,12 @@ void values() {
     require(e.code == status_syntax && e.parser && std::string(e.what()) == "missing terminating ]");
   }
   require(failure(s, "[: ").code == status_syntax);  // rapidyaml's own parse error
+  // Three pending tags or anchors: rapidyaml's two-entry annotation array is bounded by a parse
+  // error (bazel/patches/rapidyaml-annotation-bounds.patch), not a compiled-out assertion.
+  for (const char* many : {"!a\n!b\n!c\nx", "&a\n&b\n&c\nx", "- !a\n  !b\n  !c\n  x", "!a\n!b\n!c\n!d\nx"}) {
+    error e = failure(s, many);
+    require(e.code == status_syntax && e.parser && std::string(e.what()) == "too many annotations");
+  }
   // A bare tag after a closed root collection: rapidyaml emits a second root node (fuzz finding).
   for (const char* two : {"[wo]\n!bo\n", "[wo] !bo\n", "{a: b}\n!t\n", "\"q\"\n!t\n"}) {
     error e = failure(s, two);

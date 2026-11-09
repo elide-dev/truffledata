@@ -96,6 +96,17 @@ Jazzer instrumentation is Java fuzz coverage, not ASan instrumentation of the JV
   treats as unexpected. A document holds one root node, so this is now a syntax error.
   Regressions: `decoder_test` and `yaml/native/corpus/session/{root-then-tag,root-then-tag-found}`.
 
+- **YAML: pending-annotation overflow in rapidyaml** (second PR campaign, 51,968 executions;
+  UBSan `index 2 out of bounds for type 'Entry[2]'` at `parse_engine.def.hpp:4345`; reproducer
+  `!b\n!b\n!bow\naeu`, minimized to `!a\n!b\n!c\nx`). rapidyaml 0.16.0 stores pending tags and
+  anchors in a two-entry array bounded only by an assertion that production builds compile out, so
+  a third consecutive annotation writes past the array inside the parse engine. This is the one
+  memory-safety finding so far and it is upstream. Fixed by a pinned source patch
+  (`bazel/patches/rapidyaml-annotation-bounds.patch`) that raises the parse error
+  `too many annotations` in all three `_add_annotation` overloads; the yaml-test-suite conformance
+  lane passes unchanged. Regressions: `decoder_test` and
+  `yaml/native/corpus/session/{three-tags,three-tags-found}`. Report upstream with the patch.
+
 Harness aborts print the reason (unexpected status and message, or the tape validator's
 diagnostic) before `abort()`, so a libFuzzer "deadly signal" can be triaged from its log.
 

@@ -9,7 +9,7 @@
 #
 # The switches are `defines`, not `copts`: they must reach every translation unit that instantiates
 # ParseEngine<Handler>, including TruffleData's own handlers. src_extra (the integer event handler)
-# stays out of these targets. No patches are applied.
+# stays out of these targets. MODULE.bazel applies one source patch (annotation bounds).
 load("@rules_cc//cc:defs.bzl", "cc_library")
 
 _SRCS = glob([

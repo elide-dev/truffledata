@@ -1,0 +1,41 @@
+--- a/src/c4/yml/parse_engine.def.hpp
++++ b/src/c4/yml/parse_engine.def.hpp
+@@ -4310,6 +4310,12 @@
+ {
+     _c4dbgpf("store annotation[{}]: {}", dst->num_entries, prs_(str));
+     RYML_ASSERT_PARSE_CB_(m_evt_handler->m_stack.m_callbacks, dst->num_entries < C4_COUNTOF(dst->annotations), m_evt_handler->m_curr->pos); // NOLINT(bugprone-sizeof-expression)
++    // The assertion above is compiled out in release builds; a third consecutive tag or anchor
++    // would otherwise write past the two-entry array (fuzz finding).
++    if C4_UNLIKELY(dst->num_entries >= C4_COUNTOF(dst->annotations)) // NOLINT(bugprone-sizeof-expression)
++    {
++        _c4err("too many annotations");
++    }
+     dst->annotations[dst->num_entries].str = str;
+     dst->annotations[dst->num_entries].indentation = {};
+     dst->annotations[dst->num_entries].line = {};
+@@ -4322,6 +4328,12 @@
+ {
+     _c4dbgpf("store annotation[{}]: '{}' indentation={} line={}", dst->num_entries, maybe_null_str_(str), indentation, line);
+     RYML_ASSERT_PARSE_CB_(m_evt_handler->m_stack.m_callbacks, dst->num_entries < C4_COUNTOF(dst->annotations), m_evt_handler->m_curr->pos); // NOLINT(bugprone-sizeof-expression)
++    // The assertion above is compiled out in release builds; a third consecutive tag or anchor
++    // would otherwise write past the two-entry array (fuzz finding).
++    if C4_UNLIKELY(dst->num_entries >= C4_COUNTOF(dst->annotations)) // NOLINT(bugprone-sizeof-expression)
++    {
++        _c4err("too many annotations");
++    }
+     if C4_UNLIKELY(dst->num_entries && dst->annotations[0].line == line)
+     {
+         _c4err("parse error");
+@@ -4338,6 +4350,12 @@
+ {
+     _c4dbgpf("store annotation[{}]: '{}'->'{}' indentation={} line={}", dst->num_entries, orig, maybe_null_str_(str), indentation, line);
+     RYML_ASSERT_PARSE_CB_(m_evt_handler->m_stack.m_callbacks, dst->num_entries < C4_COUNTOF(dst->annotations), m_evt_handler->m_curr->pos); // NOLINT(bugprone-sizeof-expression)
++    // The assertion above is compiled out in release builds; a third consecutive tag or anchor
++    // would otherwise write past the two-entry array (fuzz finding).
++    if C4_UNLIKELY(dst->num_entries >= C4_COUNTOF(dst->annotations)) // NOLINT(bugprone-sizeof-expression)
++    {
++        _c4err("too many annotations");
++    }
+     if C4_UNLIKELY(dst->num_entries && dst->annotations[0].line == line)
+     {
+         _c4err("parse error");
