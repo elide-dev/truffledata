@@ -4,7 +4,10 @@ SVM is the performance admission target. JVM correctness, API and coverage tests
 required; historical JVM timings below are descriptive and do not veto SVM improvements.
 
 For a before/after SVM experiment, `:csv_pair` accepts an executable through
-`--//benchmarks/comparison:csv_svm_baseline=//path:binary`. Each of its eight
+`--//benchmarks/comparison:csv_svm_baseline=//path:binary` (and the candidate through
+`--//benchmarks/comparison:csv_svm_candidate=…`, default the tree's image, so two preserved
+images can be paired without rebuilding; a cell the baseline binary predates is recorded
+candidate-only). Each of its eight
 fixture shards interleaves both binaries on the same worker with three fresh
 forks, verifies complete result checksums and input hashes, and retains raw
 timing/allocation records plus medians and fork ranges. `CSV_PAIR_SHARDS` and
@@ -17,7 +20,9 @@ The comparison cell for the CSV backend (plan Task 7, expanded). It measures the
 kernels (`csv/native`, `csv/kernel`) and the current pure-Java scanner against the Java CSV field
 and native references, on identical bytes and on the same worker.
 
-The latest paired change qualification is [`csv-numbers-5f0406d/`](../results/csv-numbers-5f0406d/README.md); the previous ones are
+The latest paired change qualification is [`csv-lazy-text-3c1d175/`](../results/csv-lazy-text-3c1d175/README.md)
+(with the killed probe [`csv-row-inline-899ee9c/`](../results/csv-row-inline-899ee9c/README.md)); the previous ones are
+[`csv-numbers-5f0406d/`](../results/csv-numbers-5f0406d/README.md),
 [`csv-writers-afa4aa5/`](../results/csv-writers-afa4aa5/README.md) and
 [`csv-span-only-20261108/`](../results/csv-span-only-20261108/README.md).
 The latest full cross-runtime matrix, with raw samples, hosts, binary hashes and caveats,
@@ -74,6 +79,34 @@ worker.
   - SimpleFlatMapper: unmaintained.
   - zsv: would need a third-party C build. The csv/native kernel is itself the simdcsv design
     (simdjson stage 1), so `native-indexed-scan` stands in for that class.
+
+## Lazy `CsvText` cells (wave 4, 2026-11-09)
+
+`6d5f938` + `050bccd` add a retained lazy STRING cell: `CsvRow.getText(c, into)` rebinds one
+caller-owned `CsvText` to each cell (no allocation, no copy for unescaped heap cells); the text
+reads bytes, counts UTF-16 units, compares, hashes, or materializes a `String`/`TruffleString`
+on demand, and fails every read once its mapped batch is closed. Two new `strings` cells,
+compared with the copied-strings cell of the same shard, run and binary (the baseline binary
+predates them), x86 SVM, invocation
+[07be4722](https://app.buildbuddy.io/invocation/07be4722-6aa2-4c07-ae91-98d8d3330f46), native
+index, loaded workers (ratios only):
+
+| Cell | Lazy text / copied strings (time) | Materializing through the text / `getString` | B/row text vs copied |
+|---|---:|---:|---:|
+| strings numeric 1 MiB | 0.751 (separate) | 0.931 (overlap) | 148 vs 404 |
+| strings mixed 1 MiB | 0.764 (separate) | 0.942 (overlap) | 464 vs 1,363 |
+| strings numeric 128 MiB | 0.670 (overlap, one fork) | 1.066 (overlap) | 217 vs 473 |
+| strings mixed 128 MiB | 0.649 (separate) | 0.933 (overlap) | 464 vs 1,362 |
+
+The per-cell `String`s (256 B/row numeric, 899 B/row mixed) are gone from the lazy path; what
+remains is the batch and the row view. A first image paid two out-of-line calls per cell on the
+materializing path (1.11–1.35× `getString`); making `textAt`, `toString` and `charLength`
+host-inlining roots like `stringAt` removed that. The companion probe, force-inlining
+`CsvBatch.row` and the typed getters (JDK-internal `ForceInline`), scalar-replaces the row
+(exactly −24 B/row on every typed and strings cell) but never separated from worker noise in
+four pairs (typed numeric native 0.85–1.03, all overlapping) and was reverted under Sam's
+ruling. Details: [`csv-lazy-text-3c1d175/`](../results/csv-lazy-text-3c1d175/README.md),
+[`csv-row-inline-899ee9c/`](../results/csv-row-inline-899ee9c/README.md).
 
 ## FLOAT64 conversion from the field's words (WS10b, 2026-11-09)
 

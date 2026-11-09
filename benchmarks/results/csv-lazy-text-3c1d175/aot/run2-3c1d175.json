@@ -1,0 +1,319 @@
+{
+  "image": "build/csv-text-3c1d175/csv-comparison-profile",
+  "nm": "/Users/sam/.local/share/mise/shims/llvm-nm",
+  "objdump": "/Users/sam/.local/share/mise/shims/llvm-objdump",
+  "symbols": [
+    {
+      "pattern": "^CsvBatch_(textAt|textSlow|cellBytes|stringAt|row|checkLive)$",
+      "symbol": "CsvBatch_cellBytes_rxrirSs1OOI4PZWrzTjvv4",
+      "name": "CsvBatch_cellBytes",
+      "address": 7949440,
+      "size": 1314,
+      "instructions": 342,
+      "calls": 10,
+      "frame": 88,
+      "stack_loads": 44,
+      "stack_stores": 22,
+      "call_targets": [
+        "Arrays_copyOf",
+        "CsvBatch_checkLive",
+        "CsvMapping_copy",
+        "Dialect_decode",
+        "Dialect_decoder",
+        "GenScavengeAllocationSupport_slowNewArray",
+        "ImplicitExceptions_throwNewNullPointerException"
+      ]
+    },
+    {
+      "pattern": "^CsvBatch_(textAt|textSlow|cellBytes|stringAt|row|checkLive)$",
+      "symbol": "CsvBatch_checkLive_G8hi0GAAXq0ECgKrxx5JTD",
+      "name": "CsvBatch_checkLive",
+      "address": 7950912,
+      "size": 83,
+      "instructions": 36,
+      "calls": 2,
+      "frame": 24,
+      "stack_loads": 0,
+      "stack_stores": 0,
+      "call_targets": [
+        "CsvMapping_closed",
+        "ExceptionUnwind_unwindExceptionWithoutCalleeSavedRegisters"
+      ]
+    },
+    {
+      "pattern": "^CsvBatch_(textAt|textSlow|cellBytes|stringAt|row|checkLive)$",
+      "symbol": "CsvBatch_row_6Q6vTiGGYiIfOCxBPMbVfJ",
+      "name": "CsvBatch_row",
+      "address": 7952448,
+      "size": 211,
+      "instructions": 67,
+      "calls": 4,
+      "frame": 40,
+      "stack_loads": 4,
+      "stack_stores": 2,
+      "call_targets": [
+        "CsvBatch_checkLive",
+        "ExceptionUnwind_unwindExceptionWithoutCalleeSavedRegisters",
+        "GenScavengeAllocationSupport_slowNewInstance",
+        "Preconditions_outOfBoundsCheckIndex"
+      ]
+    },
+    {
+      "pattern": "^CsvBatch_(textAt|textSlow|cellBytes|stringAt|row|checkLive)$",
+      "symbol": "CsvBatch_stringAt_WT5DgQRVrqJrwrzldR6E1I",
+      "name": "CsvBatch_stringAt",
+      "address": 7953376,
+      "size": 6821,
+      "instructions": 1586,
+      "calls": 74,
+      "frame": 104,
+      "stack_loads": 152,
+      "stack_stores": 90,
+      "call_targets": [
+        "Arrays_copyOf",
+        "Arrays_copyOfRange",
+        "CsvBatch_string",
+        "CsvMapping_closed",
+        "CsvRow_expected",
+        "ExceptionUnwind_unwindExceptionWithoutCalleeSavedRegisters",
+        "GenScavengeAllocationSupport_slowNewArray",
+        "GenScavengeAllocationSupport_slowNewInstance",
+        "ImplicitExceptions_throwNewIntrinsicOutOfBoundsException",
+        "ImplicitExceptions_throwNewNullPointerException",
+        "ImplicitExceptions_throwNewOutOfBoundsExceptionWithArgs",
+        "OutlinedSBMethodHolder_String_AIAI",
+        "Preconditions_outOfBounds",
+        "Preconditions_outOfBoundsCheckIndex",
+        "SVMIntrinsicStubsGen_stringCodingCountPositives",
+        "SVMIntrinsicStubsGen_stringLatin1Inflate",
+        "SafepointSlowpath_enterSlowPathSafepointCheckCalleeSavedCCONV",
+        "Throwable_fillInStackTrace"
+      ]
+    },
+    {
+      "pattern": "^CsvBatch_(textAt|textSlow|cellBytes|stringAt|row|checkLive)$",
+      "symbol": "CsvBatch_textAt_DoPVraB4aQLGa3Lm1Lyn17",
+      "name": "CsvBatch_textAt",
+      "address": 7960224,
+      "size": 916,
+      "instructions": 242,
+      "calls": 10,
+      "frame": 40,
+      "stack_loads": 0,
+      "stack_stores": 9,
+      "call_targets": [
+        "CsvMapping_closed",
+        "CsvRow_expected",
+        "ExceptionUnwind_unwindExceptionWithoutCalleeSavedRegisters",
+        "ImplicitExceptions_throwNewNullPointerException",
+        "ImplicitExceptions_throwNewOutOfBoundsExceptionWithArgs"
+      ]
+    },
+    {
+      "pattern": "^CsvComparison_lambda\\$base\\$(4|5|6)$",
+      "symbol": "CsvComparison_lambda$base$4_1gN7s5EdCWFQc76jM3L7L6",
+      "name": "CsvComparison_lambda$base$4",
+      "address": 7856224,
+      "size": 767,
+      "instructions": 173,
+      "calls": 11,
+      "frame": 72,
+      "stack_loads": 24,
+      "stack_stores": 23,
+      "call_targets": [
+        "CsvBatch_row",
+        "CsvBatch_stringAt",
+        "Csv_parse",
+        "Csv_parseOwned",
+        "ImplicitExceptions_throwNewNullPointerException",
+        "SVMIntrinsicStubsGen_arrayRegionEqualsS1S1"
+      ]
+    },
+    {
+      "pattern": "^CsvComparison_lambda\\$base\\$(4|5|6)$",
+      "symbol": "CsvComparison_lambda$base$5_PvzbXHmCdS6rHTaEEr4DBI",
+      "name": "CsvComparison_lambda$base$5",
+      "address": 7856992,
+      "size": 651,
+      "instructions": 166,
+      "calls": 8,
+      "frame": 88,
+      "stack_loads": 18,
+      "stack_stores": 15,
+      "call_targets": [
+        "CsvBatch_row",
+        "CsvBatch_textAt",
+        "CsvText_charLength",
+        "Csv_parse",
+        "GenScavengeAllocationSupport_slowNewInstance",
+        "ImplicitExceptions_throwNewNullPointerException"
+      ]
+    },
+    {
+      "pattern": "^CsvComparison_lambda\\$base\\$(4|5|6)$",
+      "symbol": "CsvComparison_lambda$base$6_5aRWNCNEy6JxFbqjyFCKN1",
+      "name": "CsvComparison_lambda$base$6",
+      "address": 7857664,
+      "size": 688,
+      "instructions": 171,
+      "calls": 9,
+      "frame": 88,
+      "stack_loads": 22,
+      "stack_stores": 16,
+      "call_targets": [
+        "CsvBatch_row",
+        "CsvBatch_textAt",
+        "CsvText_toString",
+        "Csv_parse",
+        "GenScavengeAllocationSupport_slowNewInstance",
+        "ImplicitExceptions_throwNewNullPointerException"
+      ]
+    },
+    {
+      "pattern": "^CsvText_",
+      "symbol": "CsvText_charLength_QywWPhHJLBCnUiZzL6wF06",
+      "name": "CsvText_charLength",
+      "address": 8027808,
+      "size": 1080,
+      "instructions": 270,
+      "calls": 15,
+      "frame": 56,
+      "stack_loads": 2,
+      "stack_stores": 11,
+      "call_targets": [
+        "CsvMapping_closed",
+        "CsvText_fetch",
+        "ExceptionUnwind_unwindExceptionWithoutCalleeSavedRegisters",
+        "GenScavengeAllocationSupport_slowNewInstance",
+        "ImplicitExceptions_throwNewNullPointerException",
+        "ImplicitExceptions_throwNewOutOfBoundsExceptionWithArgs",
+        "Preconditions_outOfBoundsCheckIndex",
+        "SafepointSlowpath_enterSlowPathSafepointCheckCalleeSavedCCONV",
+        "Throwable_fillInStackTrace"
+      ]
+    },
+    {
+      "pattern": "^CsvText_",
+      "symbol": "CsvText_equals_71Myu1Qss5DnF8zdArzLM6",
+      "name": "CsvText_equals",
+      "address": 8028896,
+      "size": 350,
+      "instructions": 97,
+      "calls": 6,
+      "frame": 40,
+      "stack_loads": 9,
+      "stack_stores": 4,
+      "call_targets": [
+        "Arrays_equals",
+        "CsvText_fetch",
+        "CsvText_live"
+      ]
+    },
+    {
+      "pattern": "^CsvText_",
+      "symbol": "CsvText_fetch_tmR9IjVBDpB5kcwlfeN60F",
+      "name": "CsvText_fetch",
+      "address": 8029248,
+      "size": 308,
+      "instructions": 85,
+      "calls": 4,
+      "frame": 40,
+      "stack_loads": 2,
+      "stack_stores": 2,
+      "call_targets": [
+        "CsvBatch_cellBytes",
+        "ExceptionUnwind_unwindExceptionWithoutCalleeSavedRegisters",
+        "GenScavengeAllocationSupport_slowNewInstance",
+        "Throwable_fillInStackTrace"
+      ]
+    },
+    {
+      "pattern": "^CsvText_",
+      "symbol": "CsvText_hashCode_wR7AWah2O1748Bv5P5Ci7J",
+      "name": "CsvText_hashCode",
+      "address": 8029568,
+      "size": 302,
+      "instructions": 99,
+      "calls": 6,
+      "frame": 40,
+      "stack_loads": 3,
+      "stack_stores": 2,
+      "call_targets": [
+        "CsvText_fetch",
+        "CsvText_live",
+        "ImplicitExceptions_throwNewNullPointerException",
+        "ImplicitExceptions_throwNewOutOfBoundsExceptionWithArgs",
+        "SafepointSlowpath_enterSlowPathSafepointCheckCalleeSavedCCONV"
+      ]
+    },
+    {
+      "pattern": "^CsvText_",
+      "symbol": "CsvText_live_Pck4hUDVwN6495wPz9tC03",
+      "name": "CsvText_live",
+      "address": 8029888,
+      "size": 269,
+      "instructions": 82,
+      "calls": 4,
+      "frame": 24,
+      "stack_loads": 1,
+      "stack_stores": 2,
+      "call_targets": [
+        "CsvBatch_checkLive",
+        "ExceptionUnwind_unwindExceptionWithoutCalleeSavedRegisters",
+        "GenScavengeAllocationSupport_slowNewInstance",
+        "Throwable_fillInStackTrace"
+      ]
+    },
+    {
+      "pattern": "^CsvText_",
+      "symbol": "CsvText_toString_9bDozDnGnw4okaGjG1KdqF",
+      "name": "CsvText_toString",
+      "address": 8030176,
+      "size": 7282,
+      "instructions": 1666,
+      "calls": 74,
+      "frame": 120,
+      "stack_loads": 156,
+      "stack_stores": 90,
+      "call_targets": [
+        "Arrays_copyOf",
+        "Arrays_copyOfRange",
+        "CsvBatch_string",
+        "CsvMapping_closed",
+        "ExceptionUnwind_unwindExceptionWithoutCalleeSavedRegisters",
+        "GenScavengeAllocationSupport_slowNewArray",
+        "GenScavengeAllocationSupport_slowNewInstance",
+        "ImplicitExceptions_throwNewIntrinsicOutOfBoundsException",
+        "ImplicitExceptions_throwNewNullPointerException",
+        "ImplicitExceptions_throwNewOutOfBoundsExceptionWithArgs",
+        "OutlinedSBMethodHolder_String_AIAI",
+        "Preconditions_outOfBounds",
+        "Preconditions_outOfBoundsCheckIndex",
+        "SVMIntrinsicStubsGen_stringCodingCountPositives",
+        "SVMIntrinsicStubsGen_stringLatin1Inflate",
+        "SafepointSlowpath_enterSlowPathSafepointCheckCalleeSavedCCONV",
+        "Throwable_fillInStackTrace"
+      ]
+    },
+    {
+      "pattern": "^CsvText_",
+      "symbol": "CsvText_toTruffleString_3NV43JyFUN0idr6fkhbps3",
+      "name": "CsvText_toTruffleString",
+      "address": 8037472,
+      "size": 278,
+      "instructions": 76,
+      "calls": 4,
+      "frame": 88,
+      "stack_loads": 5,
+      "stack_stores": 14,
+      "call_targets": [
+        "CsvText_fetch",
+        "CsvText_live",
+        "TruffleString$FromByteArrayNode_fromByteArray"
+      ]
+    }
+  ],
+  "unmatched": [],
+  "budgets": {},
+  "failures": []
+}

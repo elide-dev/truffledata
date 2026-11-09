@@ -95,7 +95,7 @@ code), `typed-build` Java 1.08 / 0.95 (separate). The mixed native "separate" ro
 baseline fork at 5.52 ns/B; its candidate forks (2.01–2.07) sit inside the baseline's other two
 (2.29–2.70) only on the low side. Loaded again.
 
-### Run 3 (`../csv-lazy-text-6d5f938/pairs/run1-with-probe/`, invocation `d3a6708f`; shards 0, 1, 4, 5)
+### Run 3 (`../csv-lazy-text-3c1d175/pairs/run1-with-probe/`, invocation `d3a6708f`; shards 0, 1, 4, 5)
 
 The first `CsvText` candidate image (`6d5f938`) carries this probe unchanged, so its typed cells
 are a third observation of the same change against the same baseline.
