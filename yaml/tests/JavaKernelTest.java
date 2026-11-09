@@ -140,13 +140,15 @@ final class JavaKernelTest {
   /** A long line fed in small chunks is searched for its line break once. */
   @Test
   void longStreamLinesStayLinear() {
-    byte[] line = SvmAcceptance.bytes("x".repeat(8 << 20) + "\n---\ny\n");
+    // 65,536 feeds of 16 bytes: rescanning the partial line per feed is ~34G byte checks, while the
+    // linear path stays fast even under coverage instrumentation on a loaded CI runner.
+    byte[] line = SvmAcceptance.bytes("x".repeat(1 << 20) + "\n---\ny\n");
     assertTimeoutPreemptively(LINEAR, () -> {
       try (YamlSession session = YamlJava.openSession();
           YamlStream stream = session.stream(new YamlStreamOptions(16 << 20, 16 << 20))) {
-        for (int fed = 0; fed < line.length; ) fed += stream.feed(line, fed, Math.min(64, line.length - fed));
+        for (int fed = 0; fed < line.length; ) fed += stream.feed(line, fed, Math.min(16, line.length - fed));
         stream.finish();
-        assertEquals(8 << 20, stream.next().stringValue().length());
+        assertEquals(1 << 20, stream.next().stringValue().length());
         assertEquals("y", stream.next().stringValue());
       }
     });
