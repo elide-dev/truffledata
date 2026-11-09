@@ -8,7 +8,7 @@ import xml.etree.ElementTree as ET
 import zipfile
 
 from maven_repo import artifact_suffixes, built_classifiers, CLASSIFIERS, MODULES, MUSL_MODULES, NAMESPACE, NATIVE_MODULES, stage, validate_version, TRIPLES
-from check_natives import abi_fingerprints, BINDINGS
+from check_natives import abi_fingerprints, abi_source, BINDINGS
 
 # The bindings jars and their generated ABI class constants (check_natives.BINDINGS, by bindings module).
 ABI_CLASSES = {bindings: entry for bindings, entry in BINDINGS.values()}
@@ -139,7 +139,9 @@ class PublicationTest(unittest.TestCase):
                     # 0.14.0 target ABI class (bazel/myna.bzl), and its sources name them for the release gate.
                     with zipfile.ZipFile(str(prefix) + '.jar') as jar, zipfile.ZipFile(str(prefix) + '-sources.jar') as sources:
                         self.assertIn(ABI_CLASSES[module] + '.class', jar.namelist())
-                        self.assertIsNotNone(abi_fingerprints(sources.read(ABI_CLASSES[module] + '.java').decode(), jar.read(ABI_CLASSES[module] + '.class')))
+                        text = abi_source(sources, ABI_CLASSES[module])
+                        self.assertIsNotNone(text, module)
+                        self.assertIsNotNone(abi_fingerprints(text, jar.read(ABI_CLASSES[module] + '.class')), module)
                 if module.startswith('json') or module.startswith('tape'):
                     with zipfile.ZipFile(str(prefix) + '.jar') as jar:
                         names = {n for n in jar.namelist() if not n.endswith('/')}

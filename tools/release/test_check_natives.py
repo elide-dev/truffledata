@@ -2,7 +2,10 @@
 import unittest
 from unittest.mock import patch
 
-from check_natives import abi_fingerprints, ABI_CLASS, Checker, CSV_EXPORTS, YAML_EXPORTS
+import io
+import zipfile
+
+from check_natives import abi_fingerprints, abi_source, ABI_CLASS, Checker, CSV_EXPORTS, YAML_EXPORTS
 
 
 def listing(symbols):
@@ -46,6 +49,15 @@ class AbiClassTest(unittest.TestCase):
         self.assertEqual(found[ABI_CLASS['linux-aarch64-musl']], UNSIGNED)
         for classifier in ('linux-x86_64', 'linux-x86_64-musl', 'macos-aarch64'):
             self.assertEqual(found[ABI_CLASS[classifier]], SIGNED)
+
+    def test_source_entry_is_found_by_its_build_path(self):
+        buffer = io.BytesIO()
+        with zipfile.ZipFile(buffer, 'w') as sources:
+            sources.writestr('protobuf-buffa/native/generated/BuffaAbi.java', ABI_SOURCE % (SIGNED, UNSIGNED))
+            sources.writestr('protobuf-buffa/native/generated/Buffa.java', 'class Buffa {}')
+        with zipfile.ZipFile(io.BytesIO(buffer.getvalue())) as sources:
+            self.assertEqual(abi_source(sources, 'dev/elide/truffledata/buffa/generated/BuffaAbi'), ABI_SOURCE % (SIGNED, UNSIGNED))
+            self.assertIsNone(abi_source(sources, 'dev/elide/truffledata/json/generated/JsonAbi'))
 
     def test_inconsistent_bindings_are_rejected(self):
         # A class missing from the sources, the classes sharing one fingerprint, or the compiled class holding others.

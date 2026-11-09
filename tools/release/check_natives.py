@@ -68,6 +68,14 @@ YAML_EXPORTS = {'td_yaml_fingerprint', 'td_yaml_release', 'td_yaml_session_creat
 HEX64 = re.compile(rb'(?<![0-9a-f])[0-9a-f]{64}(?![0-9a-f])')
 
 
+def abi_source(sources, entry):
+    """The generated <Class>Abi.java text from a bindings sources jar, whose entries keep Bazel's build paths
+    (for example protobuf-buffa/native/generated/BuffaAbi.java), or None when it is absent or ambiguous."""
+    name = entry.rsplit('/', 1)[-1] + '.java'
+    matches = [n for n in sources.namelist() if n == name or n.endswith('/' + name)]
+    return sources.read(matches[0]).decode() if len(matches) == 1 else None
+
+
 def abi_fingerprints(source, binary):
     """{ABI class: fingerprint} from a bindings jar's generated <Class>Abi: the constants named in its sources jar,
     which must be exactly the 64-hex strings its compiled class holds. None when either is inconsistent."""
@@ -277,7 +285,8 @@ def main():
         fingerprints = None
         if jar.is_file() and sources.is_file():
             with zipfile.ZipFile(jar) as archive, zipfile.ZipFile(sources) as source_archive:
-                fingerprints = abi_fingerprints(source_archive.read(entry + '.java').decode(), archive.read(entry + '.class'))
+                text = abi_source(source_archive, entry)
+                fingerprints = abi_fingerprints(text, archive.read(entry + '.class')) if text else None
             if fingerprints is None:
                 checker.fail(jar.name, '%s does not hold exactly one fingerprint per ABI class %s' % (entry, sorted(set(ABI_CLASS.values()))))
         else:

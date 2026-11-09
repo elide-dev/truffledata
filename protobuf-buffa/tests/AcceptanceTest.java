@@ -19,8 +19,10 @@ final class AcceptanceTest {
             Objects.requireNonNull(System.getenv("TEST_WORKSPACE")),
             "protobuf-buffa/native");
     try (var files = Files.list(root)) {
+      // The production library, not the test-only other-ABI-class stub beside it.
       return files
           .filter(p -> p.toString().endsWith(".so") || p.toString().endsWith(".dylib"))
+          .filter(p -> !p.getFileName().toString().startsWith("other_abi_class"))
           .findFirst()
           .orElseThrow();
     }
