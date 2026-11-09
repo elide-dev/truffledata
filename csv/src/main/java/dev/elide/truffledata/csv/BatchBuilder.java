@@ -11,8 +11,14 @@ import org.jspecify.annotations.Nullable;
 /**
  * Fills one batch's columns as the scanner reports records: validates each record's UTF-8 and
  * width, then stores spans (STRING) or converts and stores primitives (INT64, FLOAT64, BOOLEAN) per
- * schema field in the same pass. Arrays grow geometrically and are trimmed when more than 1/8 of the
- * capacity is unused. Diagnostics name the record and field, never the field's text.
+ * schema field. Arrays grow geometrically and are trimmed when more than 1/8 of the capacity is
+ * unused. Diagnostics name the record and field, never the field's text.
+ *
+ * <p>Staged ingest ({@link #stages}): while the index scan frames a batch with its plain loop, a
+ * complete, valid record only copies its spans into per-column chunks of {@link #CHUNK} rows;
+ * {@link #convert} then converts each field over the chunk in one monomorphic pass. Every other
+ * record (and every record of the per-byte scanners) takes the per-record path, which converts the
+ * staged rows first, so diagnostics and their order are the per-record path's.
  */
 final class BatchBuilder implements CsvScanner.Records {
   private static final long[] NO_WORDS = new long[0];
@@ -54,35 +60,15 @@ final class BatchBuilder implements CsvScanner.Records {
   private int rows;
   private boolean full;
 
-  // Fused ingest ({@link #fusable}): the index path writes each field into row {@link #rows} as
-  // it frames it ({@link #put}) and commits the record at its end ({@link #commit}); a record it
-  // cannot convert in place goes through {@link #record} instead, which rewrites the same row.
-  private static final byte SKIP = -1;
-
-  /** Whether {@link #put} and {@link #commit} may build this batch. */
-  private final boolean fusable;
-
-  /** All retained fields are STRING: framing needs only span stores, never typed conversion. */
-  private final boolean spanOnly;
-
-  /** Per record column: the field kind it fills, or {@link #SKIP} (projected away). */
-  private final byte[] fuseKind;
-
-  /** Per record column: the field it fills, or -1 when projected away. */
-  private final int[] fuseField;
-
   /** Whether row {@link #rows} has capacity (false once the batch reaches maxBatchRows). */
   private boolean writable;
 
-  /** Rows per deferred conversion chunk ({@link #stage}). */
+  /** Rows per staged conversion chunk. */
   static final int CHUNK = 64;
 
   /**
-   * Deferred conversion (fusable bindings with a non-STRING field): per record column, the spans
-   * of the rows framed since {@link #chunkBase}; projected-away columns share one discarded
-   * buffer. Framing only stores spans ({@link #stage}); {@link #convert} converts each field over
-   * the chunk in one monomorphic pass, so no number parser is inlined into the framing loop.
-   * Empty unless deferred.
+   * Per record column, the spans of the rows staged since {@link #chunkBase} (lent for one index
+   * scan, {@link #lend}); empty otherwise. No number parser is inlined into the framing loop.
    */
   private long[][] staged = NO_STAGE;
 
@@ -91,7 +77,11 @@ final class BatchBuilder implements CsvScanner.Records {
   /** The record width {@link #record} stages while chunks are lent ({@link #lend}), else -1. */
   private int stagedWidth = -1;
 
-  /** Whether this binding stages: fusable, with at least one non-STRING field. */
+  /**
+   * Whether this binding stages: every retained field is in its column, none needs a state array,
+   * and the null rule needs no decision beyond the strict legacy one (no typed grammar accepts an
+   * empty field and a STRING field stores it as is).
+   */
   private final boolean stages;
 
   /**
@@ -149,25 +139,11 @@ final class BatchBuilder implements CsvScanner.Records {
       states[f] = binding.stateful[f] ? new byte[this.capacity] : NO_STATES;
     }
     writable = rows < this.capacity;
-    fuseKind = new byte[binding.width];
-    fuseField = new int[binding.width];
-    Arrays.fill(fuseKind, SKIP);
-    Arrays.fill(fuseField, -1);
-    // Fused records hold every field (no state arrays) and need no null-token decision beyond the
-    // strict legacy rule, which no typed grammar accepts and a STRING field stores as is.
     boolean simple = !nullsActive || nullsLegacy;
-    boolean strings = true;
     for (int f = 0; f < fields; f++) {
-      strings &= binding.kinds[f] == CsvPlan.STRING;
       int column = binding.fieldToColumn[f];
       if (binding.stateful[f] || column < 0 || column >= binding.width) simple = false;
-      else {
-        fuseKind[column] = binding.kinds[f];
-        fuseField[column] = f;
-      }
     }
-    fusable = simple;
-    spanOnly = strings;
     stages = simple;
   }
 
@@ -208,42 +184,6 @@ final class BatchBuilder implements CsvScanner.Records {
     stagedWidth = -1;
     pending = 0;
     if (chunks.length != 0) CHUNKS.set(chunks);
-  }
-
-  /** Whether the index path may fill this batch through {@link #put} and {@link #commit}. */
-  boolean fusable() {
-    return fusable;
-  }
-
-  /** Selects the span-only framing loop after {@link #fusable} has admitted this builder. */
-  boolean spanOnly() {
-    return spanOnly;
-  }
-
-  /** The all-STRING form of {@link #put}, with the plan's kind decision outside the field loop. */
-  boolean putSpan(int column, long span) {
-    if (column >= fuseField.length || !writable) return false;
-    int f = fuseField[column];
-    if (f >= 0) words[f][rows] = span + spanShift;
-    return true;
-  }
-
-  /**
-   * The deferred form of {@link #put}: stores the span of field {@code column} of the record being
-   * framed; {@link #commitStaged} counts the record and {@link #convert} converts its chunk.
-   */
-  boolean stage(int column, long span) {
-    long[][] s = staged;
-    if (column >= s.length || !writable) return false;
-    s[column][pending] = span;
-    return true;
-  }
-
-  /** {@link #commit} for {@link #stage}d records; converts the chunk once it is full. */
-  boolean commitStaged(int count, int start, int end) {
-    if (!commit(count, start, end)) return false;
-    if (++pending == CHUNK) convert();
-    return true;
   }
 
   /**
@@ -287,9 +227,9 @@ final class BatchBuilder implements CsvScanner.Records {
     return true;
   }
 
-  // One field over a chunk. False on the first value the fused path would decline (no grammar
+  // One field over a chunk. False on the first value the per-record path decides (no grammar
   // accepts it, a constraint, a complex Commons span): the chunk is then replayed per record.
-  // Host-inlining roots, as the framing loops are, so Native Image inlines the number parsers
+  // Host-inlining roots, so Native Image inlines the number parsers
   // and their SWAR helpers into each monomorphic pass.
 
   @BytecodeInterpreterSwitch
@@ -350,62 +290,6 @@ final class BatchBuilder implements CsvScanner.Records {
     }
     chunkBase = base + n;
     pending = 0;
-  }
-
-  /**
-   * Converts field {@code column} of the record being framed into row {@link #rows}. False when the
-   * record must go through {@link #record} (a value no grammar accepts, a constraint, a complex
-   * Commons span in a typed field, a column past the width, or no capacity): that path then
-   * reports the exact diagnostic, or accepts the record, rewriting the same row.
-   */
-  boolean put(int column, long span) {
-    byte[] kinds = fuseKind;
-    if (column >= kinds.length || !writable) return false;
-    byte kind = kinds[column];
-    if (kind == SKIP) return true;
-    int f = fuseField[column];
-    if (kind == CsvPlan.STRING) {
-      words[f][rows] = span + spanShift;
-      return true;
-    }
-    if (decoder != null && CsvScanner.escaped(span)) return false;
-    int offset = CsvScanner.offset(span);
-    int length = CsvScanner.length(span);
-    try {
-      switch (kind) {
-        case CsvPlan.INT64 -> {
-          long value = Numbers.parseLong(input, offset, length);
-          if (binding.constrained[f]) Values.validateLong(binding.fields[f], value);
-          words[f][rows] = value;
-        }
-        case CsvPlan.FLOAT64 -> {
-          double value = Numbers.parseDouble(input, offset, length);
-          if (binding.binary32[f] && (double) (float) value != value) return false;
-          doubles[f][rows] = value;
-        }
-        default -> {
-          int b = bool(input, offset, length);
-          if (b < 0) return false;
-          booleans[f][rows] = b != 0;
-        }
-      }
-    } catch (NumberFormatException | ContractViolation e) {
-      return false;
-    }
-    return true;
-  }
-
-  /**
-   * Commits the record of {@code count} fields that {@link #put} wrote, [start, end) of the input,
-   * after checking its width and, when the prevalidated range does not cover it, its UTF-8. False
-   * leaves the record to {@link #record} (which reports the error or handles a flexible width).
-   */
-  boolean commit(int count, int start, int end) {
-    if (count != binding.width) return false;
-    if ((start < validFrom || end > validTo) && Utf8.invalidOffset(input, start, end) >= 0)
-      return false;
-    advance(end);
-    return true;
   }
 
   /** Counts one row and keeps row {@link #rows} writable while maxBatchRows allows. */
@@ -471,9 +355,8 @@ final class BatchBuilder implements CsvScanner.Records {
   }
 
   /**
-   * The per-record path: every record outside the fused path, and the fused path's declined
-   * records. An inlining cutoff, so the fused framing loop (a host-inlining root) calls it instead
-   * of inlining the whole builder.
+   * One framed record. While chunks are lent, a complete record within row capacity whose UTF-8 is
+   * valid (prevalidated, or checked here) is staged; everything else takes {@link #recordSlow}.
    */
   @Override
   @InliningCutoff

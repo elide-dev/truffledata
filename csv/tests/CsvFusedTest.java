@@ -314,6 +314,29 @@ final class CsvFusedTest {
       for (CsvBatch batch = reader.next(); batch != null; batch = reader.next()) streamed.addAll(cells(batch));
     }
     assertEquals(cells(whole), streamed);
+    // Staging chunks are lent per thread for one scan: two readers of different widths alternate
+    // on one thread, and each must read exactly its own whole-batch cells.
+    CsvPlan narrow = CsvPlan.compile(Schema.of(Field.requiredLong("n")), CsvFormat.RFC4180);
+    byte[] other = utf8(typedRows(4 * BatchBuilder.CHUNK, -1, "").replace(",", "|"));
+    CsvPlan piped = CsvPlan.compile(TYPED, CsvFormat.RFC4180.toBuilder().setDelimiter('|').build());
+    List<Object> first = new ArrayList<>(), second = new ArrayList<>();
+    try (CsvReader a = plan.open(new java.io.ByteArrayInputStream(input), CsvLimits.DEFAULT, 1000);
+        CsvReader b = piped.open(new java.io.ByteArrayInputStream(other), CsvLimits.DEFAULT, 700)) {
+      CsvBatch x = a.next(), y = b.next();
+      while (x != null || y != null) {
+        if (x != null) {
+          first.addAll(cells(x));
+          x = a.next();
+        }
+        if (y != null) {
+          second.addAll(cells(y));
+          y = b.next();
+        }
+      }
+    }
+    assertEquals(cells(whole), first);
+    assertEquals(cells(piped.parse(other)), second);
+    assertEquals(cells(narrow.parse(input)).size(), 5 * BatchBuilder.CHUNK + 3);
   }
 
   @Test
