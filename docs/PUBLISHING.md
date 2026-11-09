@@ -50,7 +50,7 @@ bazel build //tools/release:publications --//tools/release:version=0.10.0
 tools/release/publish.sh 0.10.0
 ```
 
-The staging command builds the prebuilt natives for Linux amd64 and arm64 GNU, CSV static musl on both Linux architectures, and macOS Arm64 (Linux on BuildBuddy RBE, macOS locally, so run it on an Apple silicon Mac; see [Prebuilt natives](#prebuilt-natives)), gates them with `tools/release/check_natives.py`, and prints a unique directory under `build/release-repo.*`; the collected per-platform build outputs and member manifests stay beside it in `build/release-repo.*.natives`. Each library artifact includes its binary jar (including generated Truffle implementations), source jar, POM, and MD5/SHA-1/SHA-256/SHA-512 checksums. Source jars come from the library's JavaInfo, rather than an independently maintained source list. The default Bazel version is `0.10.0-SNAPSHOT` for checks; the release script requires an explicit immutable version and refuses snapshots.
+The staging command builds the prebuilt natives for Linux amd64 and arm64 GNU, CSV and YAML static musl on both Linux architectures, and macOS Arm64 (Linux on BuildBuddy RBE, macOS locally, so run it on an Apple silicon Mac; see [Prebuilt natives](#prebuilt-natives)), gates them with `tools/release/check_natives.py`, and prints a unique directory under `build/release-repo.*`; the collected per-platform build outputs and member manifests stay beside it in `build/release-repo.*.natives`. Each library artifact includes its binary jar (including generated Truffle implementations), source jar, POM, and MD5/SHA-1/SHA-256/SHA-512 checksums. Source jars come from the library's JavaInfo, rather than an independently maintained source list. The default Bazel version is `0.10.0-SNAPSHOT` for checks; the release script requires an explicit immutable version and refuses snapshots.
 
 ## Upload
 
@@ -308,11 +308,12 @@ the same source jars and dependency classpaths as the binary publication.
 Gradle metadata carries API/runtime variants and BOM constraints; consumers
 still configure the Elide repository for the GraalVM fork dependencies.
 
-CSV also ships static-only `linux-x86_64-musl` and `linux-aarch64-musl` archives,
-plus target-triple aliases for every archive. Musl builds use the pinned
-Elide toolchain's musl 1.2.5 sysroot, static dependencies and the same ABI
-fingerprint as the GNU and macOS bindings. Per-target CI runs the kernel and
-isolated archive on Linux x86-64/AArch64 and macOS AArch64.
+CSV and YAML also ship static-only `linux-x86_64-musl` and `linux-aarch64-musl`
+archives, plus target-triple aliases for each of their native attachments. Musl
+builds use the pinned Elide toolchain's musl 1.2.5 sysroot, static dependencies
+and the same ABI fingerprint as the GNU and macOS bindings. Per-target CI runs
+the CSV kernel, the YAML decoder and each isolated archive on Linux
+x86-64/AArch64 (GNU and musl) and macOS AArch64.
 
 `truffledata-csv-native-<version>-native.h` is the C ABI header. Each classifier
 has a `.json` manifest next to its native attachments, with required link
