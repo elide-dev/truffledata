@@ -1,0 +1,773 @@
+{
+  "schema": 1,
+  "source": "9855c83",
+  "seed": 20261109,
+  "forks": 3,
+  "routes": [
+    "boundary",
+    "boundary-body",
+    "direct",
+    "cell",
+    "cell-interop"
+  ],
+  "binary_sha256": "25bbb2c9807dd650a1616bcc612c0ee39f3750e913b07a00f7aa3b34cc9f6684",
+  "host": {
+    "system": "Linux",
+    "node": "(none)",
+    "release": "5.15.0",
+    "version": "#1 SMP Thu Oct 15 18:05:01 UTC 2026",
+    "machine": "x86_64",
+    "processor": "x86_64"
+  },
+  "affinity": [
+    6
+  ],
+  "logical_cpus": 7,
+  "load_average": [
+    0.0,
+    0.0,
+    0.0
+  ],
+  "cpu_model": "AMD EPYC",
+  "load_average_after": [
+    0.341796875,
+    0.0810546875,
+    0.02685546875
+  ],
+  "measurements": [
+    {
+      "route": "cell",
+      "runtime": "svm",
+      "rows": 32,
+      "compiled": true,
+      "ast_nodes": 14,
+      "graph_budget": 10000,
+      "checksum": 3764254882730299103,
+      "input_bytes_per_row": 149.906,
+      "slab_bytes_per_row": 547.25,
+      "capacity_bytes": 728,
+      "ns_per_row": [
+        864.9254139587943,
+        869.4581957383203,
+        867.7791949916759,
+        866.7891534437362,
+        870.964199240524
+      ],
+      "java_bytes_per_row": [
+        1000.25,
+        1000.25,
+        1000.25
+      ],
+      "fork": 0,
+      "graph": {
+        "ast_nodes": 14,
+        "graal_nodes_after_pe": 702,
+        "graal_nodes_final": 2413,
+        "code_bytes": 11240,
+        "compilations": 1,
+        "invoke_nodes": {
+          "ForeignCallNode": 45,
+          "InvokeWithExceptionNode": 25,
+          "DeoptimizeNode": 17,
+          "DynamicDeoptimizeNode": 2
+        }
+      }
+    },
+    {
+      "route": "direct",
+      "runtime": "svm",
+      "rows": 32,
+      "compiled": true,
+      "ast_nodes": 2,
+      "graph_budget": 10000,
+      "checksum": 3764254882730299103,
+      "input_bytes_per_row": 149.906,
+      "slab_bytes_per_row": 547.25,
+      "capacity_bytes": 728,
+      "ns_per_row": [
+        1194.2549287683823,
+        11474.111216517857,
+        21318.68198529412,
+        126930.52578125,
+        869.5721982758621
+      ],
+      "java_bytes_per_row": [
+        832.25,
+        832.25,
+        832.25
+      ],
+      "fork": 0,
+      "graph": {
+        "ast_nodes": 2,
+        "graal_nodes_after_pe": 387,
+        "graal_nodes_final": 1138,
+        "code_bytes": 5139,
+        "compilations": 1,
+        "invoke_nodes": {
+          "ForeignCallNode": 16,
+          "InvokeWithExceptionNode": 12,
+          "DeoptimizeNode": 7,
+          "DynamicDeoptimizeNode": 2
+        }
+      }
+    },
+    {
+      "route": "cell-interop",
+      "runtime": "svm",
+      "rows": 32,
+      "compiled": true,
+      "ast_nodes": 7,
+      "graph_budget": 10000,
+      "checksum": 3764254882730299103,
+      "input_bytes_per_row": 149.906,
+      "slab_bytes_per_row": 547.25,
+      "capacity_bytes": 728,
+      "ns_per_row": [
+        868.4868489583333,
+        872.2965785435268,
+        865.7033715739203,
+        868.8323654513889,
+        866.3671701773836
+      ],
+      "java_bytes_per_row": [
+        1000.25,
+        1000.25,
+        1000.25
+      ],
+      "fork": 0,
+      "graph": {
+        "ast_nodes": 7,
+        "graal_nodes_after_pe": 715,
+        "graal_nodes_final": 2820,
+        "code_bytes": 12600,
+        "compilations": 1,
+        "invoke_nodes": {
+          "ForeignCallNode": 51,
+          "InvokeWithExceptionNode": 32,
+          "DeoptimizeNode": 26,
+          "DynamicDeoptimizeNode": 3
+        }
+      }
+    },
+    {
+      "route": "boundary",
+      "runtime": "svm",
+      "rows": 32,
+      "compiled": true,
+      "ast_nodes": 2,
+      "graph_budget": 10000,
+      "checksum": 3764254882730299103,
+      "input_bytes_per_row": 149.906,
+      "slab_bytes_per_row": 547.25,
+      "capacity_bytes": 728,
+      "ns_per_row": [
+        1811.260036892361,
+        4133.749772652116,
+        869.0904564098998,
+        849.4303668478261,
+        849.5486582880435
+      ],
+      "java_bytes_per_row": [
+        832.25,
+        832.25,
+        832.25
+      ],
+      "fork": 0,
+      "graph": {
+        "ast_nodes": 2,
+        "graal_nodes_after_pe": 52,
+        "graal_nodes_final": 1467,
+        "code_bytes": 5129,
+        "compilations": 1,
+        "invoke_nodes": {
+          "DeoptimizeNode": 32,
+          "InvokeWithExceptionNode": 32,
+          "ForeignCallNode": 3
+        }
+      }
+    },
+    {
+      "route": "boundary-body",
+      "runtime": "svm",
+      "rows": 32,
+      "compiled": true,
+      "ast_nodes": 2,
+      "graph_budget": 10000,
+      "checksum": 3764254882730299103,
+      "input_bytes_per_row": 149.906,
+      "slab_bytes_per_row": 547.25,
+      "capacity_bytes": 728,
+      "ns_per_row": [
+        845.9568198728355,
+        853.7356330171943,
+        851.8624344703159,
+        853.0932041484716,
+        849.5496858016304
+      ],
+      "java_bytes_per_row": [
+        832.25,
+        832.25,
+        832.25
+      ],
+      "fork": 0,
+      "graph": {
+        "ast_nodes": 2,
+        "graal_nodes_after_pe": 51,
+        "graal_nodes_final": 1466,
+        "code_bytes": 5001,
+        "compilations": 1,
+        "invoke_nodes": {
+          "DeoptimizeNode": 32,
+          "InvokeWithExceptionNode": 32,
+          "ForeignCallNode": 3
+        }
+      }
+    },
+    {
+      "route": "boundary",
+      "runtime": "svm",
+      "rows": 32,
+      "compiled": true,
+      "ast_nodes": 2,
+      "graph_budget": 10000,
+      "checksum": 3764254882730299103,
+      "input_bytes_per_row": 149.906,
+      "slab_bytes_per_row": 547.25,
+      "capacity_bytes": 728,
+      "ns_per_row": [
+        900.7826045866935,
+        866.8635280972838,
+        850.2743683691513,
+        849.4537491508153,
+        848.0617373915401
+      ],
+      "java_bytes_per_row": [
+        832.25,
+        832.25,
+        832.25
+      ],
+      "fork": 1,
+      "graph": {
+        "ast_nodes": 2,
+        "graal_nodes_after_pe": 52,
+        "graal_nodes_final": 1467,
+        "code_bytes": 5129,
+        "compilations": 1,
+        "invoke_nodes": {
+          "DeoptimizeNode": 32,
+          "InvokeWithExceptionNode": 32,
+          "ForeignCallNode": 3
+        }
+      }
+    },
+    {
+      "route": "direct",
+      "runtime": "svm",
+      "rows": 32,
+      "compiled": true,
+      "ast_nodes": 2,
+      "graph_budget": 10000,
+      "checksum": 3764254882730299103,
+      "input_bytes_per_row": 149.906,
+      "slab_bytes_per_row": 547.25,
+      "capacity_bytes": 728,
+      "ns_per_row": [
+        841.8476310212594,
+        837.4076400053591,
+        829.2450167351537,
+        827.180080191799,
+        826.8927579365079
+      ],
+      "java_bytes_per_row": [
+        832.25,
+        832.25,
+        832.25
+      ],
+      "fork": 1,
+      "graph": {
+        "ast_nodes": 2,
+        "graal_nodes_after_pe": 387,
+        "graal_nodes_final": 1138,
+        "code_bytes": 5139,
+        "compilations": 1,
+        "invoke_nodes": {
+          "ForeignCallNode": 16,
+          "InvokeWithExceptionNode": 12,
+          "DeoptimizeNode": 7,
+          "DynamicDeoptimizeNode": 2
+        }
+      }
+    },
+    {
+      "route": "cell",
+      "runtime": "svm",
+      "rows": 32,
+      "compiled": true,
+      "ast_nodes": 14,
+      "graph_budget": 10000,
+      "checksum": 3764254882730299103,
+      "input_bytes_per_row": 149.906,
+      "slab_bytes_per_row": 547.25,
+      "capacity_bytes": 728,
+      "ns_per_row": [
+        846.8199866264897,
+        852.6110576267721,
+        848.9825936482084,
+        849.0773870114007,
+        841.9924611058728
+      ],
+      "java_bytes_per_row": [
+        1000.25,
+        1000.25,
+        1000.25
+      ],
+      "fork": 1,
+      "graph": {
+        "ast_nodes": 14,
+        "graal_nodes_after_pe": 702,
+        "graal_nodes_final": 2413,
+        "code_bytes": 11240,
+        "compilations": 1,
+        "invoke_nodes": {
+          "ForeignCallNode": 45,
+          "InvokeWithExceptionNode": 25,
+          "DeoptimizeNode": 17,
+          "DynamicDeoptimizeNode": 2
+        }
+      }
+    },
+    {
+      "route": "boundary-body",
+      "runtime": "svm",
+      "rows": 32,
+      "compiled": true,
+      "ast_nodes": 2,
+      "graph_budget": 10000,
+      "checksum": 3764254882730299103,
+      "input_bytes_per_row": 149.906,
+      "slab_bytes_per_row": 547.25,
+      "capacity_bytes": 728,
+      "ns_per_row": [
+        860.4223611302313,
+        861.5687362183021,
+        884.3945842760181,
+        856.500877087897,
+        860.986444280011
+      ],
+      "java_bytes_per_row": [
+        832.25,
+        832.25,
+        832.25
+      ],
+      "fork": 1,
+      "graph": {
+        "ast_nodes": 2,
+        "graal_nodes_after_pe": 51,
+        "graal_nodes_final": 1466,
+        "code_bytes": 5001,
+        "compilations": 1,
+        "invoke_nodes": {
+          "DeoptimizeNode": 32,
+          "InvokeWithExceptionNode": 32,
+          "ForeignCallNode": 3
+        }
+      }
+    },
+    {
+      "route": "cell-interop",
+      "runtime": "svm",
+      "rows": 32,
+      "compiled": true,
+      "ast_nodes": 7,
+      "graph_budget": 10000,
+      "checksum": 3764254882730299103,
+      "input_bytes_per_row": 149.906,
+      "slab_bytes_per_row": 547.25,
+      "capacity_bytes": 728,
+      "ns_per_row": [
+        867.2258124653163,
+        860.166692450495,
+        861.3451051417951,
+        862.3643289528146,
+        858.5452198819978
+      ],
+      "java_bytes_per_row": [
+        1000.25,
+        1000.25,
+        1000.25
+      ],
+      "fork": 1,
+      "graph": {
+        "ast_nodes": 7,
+        "graal_nodes_after_pe": 715,
+        "graal_nodes_final": 2820,
+        "code_bytes": 12600,
+        "compilations": 1,
+        "invoke_nodes": {
+          "ForeignCallNode": 51,
+          "InvokeWithExceptionNode": 32,
+          "DeoptimizeNode": 26,
+          "DynamicDeoptimizeNode": 3
+        }
+      }
+    },
+    {
+      "route": "direct",
+      "runtime": "svm",
+      "rows": 32,
+      "compiled": true,
+      "ast_nodes": 2,
+      "graph_budget": 10000,
+      "checksum": 3764254882730299103,
+      "input_bytes_per_row": 149.906,
+      "slab_bytes_per_row": 547.25,
+      "capacity_bytes": 728,
+      "ns_per_row": [
+        829.8733578821656,
+        831.2078582114361,
+        835.1088241185897,
+        842.921929780205,
+        847.5252423400217
+      ],
+      "java_bytes_per_row": [
+        832.25,
+        832.25,
+        832.25
+      ],
+      "fork": 2,
+      "graph": {
+        "ast_nodes": 2,
+        "graal_nodes_after_pe": 387,
+        "graal_nodes_final": 1138,
+        "code_bytes": 5139,
+        "compilations": 1,
+        "invoke_nodes": {
+          "ForeignCallNode": 16,
+          "InvokeWithExceptionNode": 12,
+          "DeoptimizeNode": 7,
+          "DynamicDeoptimizeNode": 2
+        }
+      }
+    },
+    {
+      "route": "cell",
+      "runtime": "svm",
+      "rows": 32,
+      "compiled": true,
+      "ast_nodes": 14,
+      "graph_budget": 10000,
+      "checksum": 3764254882730299103,
+      "input_bytes_per_row": 149.906,
+      "slab_bytes_per_row": 547.25,
+      "capacity_bytes": 728,
+      "ns_per_row": [
+        843.2982571467098,
+        849.3506581182065,
+        849.9755604619565,
+        844.9098184121622,
+        853.1163687227074
+      ],
+      "java_bytes_per_row": [
+        1000.25,
+        1000.25,
+        1000.25
+      ],
+      "fork": 2,
+      "graph": {
+        "ast_nodes": 14,
+        "graal_nodes_after_pe": 702,
+        "graal_nodes_final": 2413,
+        "code_bytes": 11240,
+        "compilations": 1,
+        "invoke_nodes": {
+          "ForeignCallNode": 45,
+          "InvokeWithExceptionNode": 25,
+          "DeoptimizeNode": 17,
+          "DynamicDeoptimizeNode": 2
+        }
+      }
+    },
+    {
+      "route": "cell-interop",
+      "runtime": "svm",
+      "rows": 32,
+      "compiled": true,
+      "ast_nodes": 7,
+      "graph_budget": 10000,
+      "checksum": 3764254882730299103,
+      "input_bytes_per_row": 149.906,
+      "slab_bytes_per_row": 547.25,
+      "capacity_bytes": 728,
+      "ns_per_row": [
+        867.507574049667,
+        878.9559063906074,
+        855.4620486870897,
+        858.5749914148352,
+        973.3363023427771
+      ],
+      "java_bytes_per_row": [
+        1000.25,
+        1000.25,
+        1000.25
+      ],
+      "fork": 2,
+      "graph": {
+        "ast_nodes": 7,
+        "graal_nodes_after_pe": 715,
+        "graal_nodes_final": 2820,
+        "code_bytes": 12600,
+        "compilations": 1,
+        "invoke_nodes": {
+          "ForeignCallNode": 51,
+          "InvokeWithExceptionNode": 32,
+          "DeoptimizeNode": 26,
+          "DynamicDeoptimizeNode": 3
+        }
+      }
+    },
+    {
+      "route": "boundary",
+      "runtime": "svm",
+      "rows": 32,
+      "compiled": true,
+      "ast_nodes": 2,
+      "graph_budget": 10000,
+      "checksum": 3764254882730299103,
+      "input_bytes_per_row": 149.906,
+      "slab_bytes_per_row": 547.25,
+      "capacity_bytes": 728,
+      "ns_per_row": [
+        849.7859205163044,
+        855.3933474083698,
+        849.3001825747283,
+        923.1498487308146,
+        912.1659905557176
+      ],
+      "java_bytes_per_row": [
+        832.25,
+        832.25,
+        832.25
+      ],
+      "fork": 2,
+      "graph": {
+        "ast_nodes": 2,
+        "graal_nodes_after_pe": 52,
+        "graal_nodes_final": 1467,
+        "code_bytes": 5129,
+        "compilations": 1,
+        "invoke_nodes": {
+          "DeoptimizeNode": 32,
+          "InvokeWithExceptionNode": 32,
+          "ForeignCallNode": 3
+        }
+      }
+    },
+    {
+      "route": "boundary-body",
+      "runtime": "svm",
+      "rows": 32,
+      "compiled": true,
+      "ast_nodes": 2,
+      "graph_budget": 10000,
+      "checksum": 3764254882730299103,
+      "input_bytes_per_row": 149.906,
+      "slab_bytes_per_row": 547.25,
+      "capacity_bytes": 728,
+      "ns_per_row": [
+        866.8222526330377,
+        868.23296875,
+        870.8162105025056,
+        854.4158171106558,
+        855.1070842450766
+      ],
+      "java_bytes_per_row": [
+        832.25,
+        832.25,
+        832.25
+      ],
+      "fork": 2,
+      "graph": {
+        "ast_nodes": 2,
+        "graal_nodes_after_pe": 51,
+        "graal_nodes_final": 1466,
+        "code_bytes": 5001,
+        "compilations": 1,
+        "invoke_nodes": {
+          "DeoptimizeNode": 32,
+          "InvokeWithExceptionNode": 32,
+          "ForeignCallNode": 3
+        }
+      }
+    }
+  ],
+  "summary": {
+    "boundary": {
+      "compiled": true,
+      "forks": 3,
+      "checksum": 3764254882730299103,
+      "ns_per_row": {
+        "median": 855.3933474083698,
+        "min": 850.2743683691513,
+        "max": 869.0904564098998,
+        "forks": [
+          869.0904564098998,
+          850.2743683691513,
+          855.3933474083698
+        ]
+      },
+      "java_bytes_per_row": {
+        "median": 832.25,
+        "min": 832.25,
+        "max": 832.25
+      },
+      "ast_nodes": 2,
+      "graph": {
+        "ast_nodes": 2,
+        "graal_nodes_after_pe": 52,
+        "graal_nodes_final": 1467,
+        "code_bytes": 5129,
+        "compilations": 1,
+        "invoke_nodes": {
+          "DeoptimizeNode": 32,
+          "InvokeWithExceptionNode": 32,
+          "ForeignCallNode": 3
+        }
+      }
+    },
+    "boundary-body": {
+      "compiled": true,
+      "forks": 3,
+      "checksum": 3764254882730299103,
+      "ns_per_row": {
+        "median": 860.986444280011,
+        "min": 851.8624344703159,
+        "max": 866.8222526330377,
+        "forks": [
+          851.8624344703159,
+          860.986444280011,
+          866.8222526330377
+        ]
+      },
+      "java_bytes_per_row": {
+        "median": 832.25,
+        "min": 832.25,
+        "max": 832.25
+      },
+      "ast_nodes": 2,
+      "graph": {
+        "ast_nodes": 2,
+        "graal_nodes_after_pe": 51,
+        "graal_nodes_final": 1466,
+        "code_bytes": 5001,
+        "compilations": 1,
+        "invoke_nodes": {
+          "DeoptimizeNode": 32,
+          "InvokeWithExceptionNode": 32,
+          "ForeignCallNode": 3
+        }
+      }
+    },
+    "direct": {
+      "compiled": true,
+      "forks": 3,
+      "checksum": 3764254882730299103,
+      "ns_per_row": {
+        "median": 835.1088241185897,
+        "min": 829.2450167351537,
+        "max": 11474.111216517857,
+        "forks": [
+          11474.111216517857,
+          829.2450167351537,
+          835.1088241185897
+        ]
+      },
+      "java_bytes_per_row": {
+        "median": 832.25,
+        "min": 832.25,
+        "max": 832.25
+      },
+      "ast_nodes": 2,
+      "graph": {
+        "ast_nodes": 2,
+        "graal_nodes_after_pe": 387,
+        "graal_nodes_final": 1138,
+        "code_bytes": 5139,
+        "compilations": 1,
+        "invoke_nodes": {
+          "ForeignCallNode": 16,
+          "InvokeWithExceptionNode": 12,
+          "DeoptimizeNode": 7,
+          "DynamicDeoptimizeNode": 2
+        }
+      }
+    },
+    "cell": {
+      "compiled": true,
+      "forks": 3,
+      "checksum": 3764254882730299103,
+      "ns_per_row": {
+        "median": 849.3506581182065,
+        "min": 848.9825936482084,
+        "max": 867.7791949916759,
+        "forks": [
+          867.7791949916759,
+          848.9825936482084,
+          849.3506581182065
+        ]
+      },
+      "java_bytes_per_row": {
+        "median": 1000.25,
+        "min": 1000.25,
+        "max": 1000.25
+      },
+      "ast_nodes": 14,
+      "graph": {
+        "ast_nodes": 14,
+        "graal_nodes_after_pe": 702,
+        "graal_nodes_final": 2413,
+        "code_bytes": 11240,
+        "compilations": 1,
+        "invoke_nodes": {
+          "ForeignCallNode": 45,
+          "InvokeWithExceptionNode": 25,
+          "DeoptimizeNode": 17,
+          "DynamicDeoptimizeNode": 2
+        }
+      }
+    },
+    "cell-interop": {
+      "compiled": true,
+      "forks": 3,
+      "checksum": 3764254882730299103,
+      "ns_per_row": {
+        "median": 867.507574049667,
+        "min": 861.3451051417951,
+        "max": 868.4868489583333,
+        "forks": [
+          868.4868489583333,
+          861.3451051417951,
+          867.507574049667
+        ]
+      },
+      "java_bytes_per_row": {
+        "median": 1000.25,
+        "min": 1000.25,
+        "max": 1000.25
+      },
+      "ast_nodes": 7,
+      "graph": {
+        "ast_nodes": 7,
+        "graal_nodes_after_pe": 715,
+        "graal_nodes_final": 2820,
+        "code_bytes": 12600,
+        "compilations": 1,
+        "invoke_nodes": {
+          "ForeignCallNode": 51,
+          "InvokeWithExceptionNode": 32,
+          "DeoptimizeNode": 26,
+          "DynamicDeoptimizeNode": 3
+        }
+      }
+    }
+  }
+}
