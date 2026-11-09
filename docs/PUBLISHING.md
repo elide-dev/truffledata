@@ -309,7 +309,7 @@ Gradle metadata carries API/runtime variants and BOM constraints; consumers
 still configure the Elide repository for the GraalVM fork dependencies.
 
 CSV and YAML also ship static-only `linux-x86_64-musl` and `linux-aarch64-musl`
-archives; CSV additionally has target-triple aliases for every archive. Musl
+archives, plus target-triple aliases for each of their native attachments. Musl
 builds use the pinned Elide toolchain's musl 1.2.5 sysroot, static dependencies
 and the same ABI fingerprint as the GNU and macOS bindings. Per-target CI runs
 the CSV kernel, the YAML decoder and each isolated archive on Linux

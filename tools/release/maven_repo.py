@@ -140,7 +140,7 @@ def stage(publications, repository, version, natives=(), classifiers=tuple(CLASS
                 raise ValueError('Empty native header')
             shutil.copyfile(path, target / name)
             checksums(target / name)
-        if module == 'csv-native':
+        if module in MUSL_MODULES:
             # Triple names are stable for non-Maven stagers; preserve historical classifiers too.
             for classifier in classifiers:
                 for suffix in native_suffixes((classifier,)):

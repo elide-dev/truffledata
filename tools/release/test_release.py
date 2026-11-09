@@ -180,6 +180,16 @@ class PublicationTest(unittest.TestCase):
                         self.assertFalse(generated or svm in classes)
                         with zipfile.ZipFile(str(prefix) + '.jar') as jar:
                             self.assertEqual(jar.read(service).decode().split(), ['dev.elide.truffledata.csv.kernel.jvm.FfmIndexer$Backend'])
+                # Musl modules also carry target-triple copies of every attachment; other modules do not.
+                for suffix in artifact_suffixes(module, classifiers):
+                    if classifier not in suffix:
+                        continue
+                    alias = Path(str(prefix) + suffix.replace('-' + classifier, '-' + TRIPLES[classifier], 1))
+                    if module in MUSL_MODULES:
+                        self.assertEqual(alias.read_bytes(), Path(str(prefix) + suffix).read_bytes())
+                        self.assertEqual(Path(str(alias) + '.sha256').read_text().strip(), hashlib.sha256(alias.read_bytes()).hexdigest())
+                    else:
+                        self.assertFalse(alias.exists())
                 if module == 'json':
                     self.assertTrue(Path(str(prefix) + '-%s.a' % classifier).read_bytes().startswith(b'!<arch>\n'))
                     self.assertEqual(Path(str(prefix) + '-%s-bitcode.a' % classifier).is_file(), bitcode)
