@@ -144,7 +144,8 @@ class stream final {
         end = next == parser_.size() ? region_tail_ : region_start_ + indexes[next];
         while (end > at && stage2_detail::whitespace(uint8_t(data_[end - 1]))) --end;
       }
-      if (!scanned_finished_ && end == region_end_ && token != '{' && token != '[' && token != '"') {
+      if (!finished_ && !scanned_finished_ && end == region_end_ && token != '{' && token != '[' &&
+          token != '"') {
         // A root number or literal touching the buffered end may continue in the next feed.
         abandon(at);
         return idle();

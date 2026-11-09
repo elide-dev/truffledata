@@ -270,6 +270,31 @@ void truncation_and_scalars() {
     REQUIRE(h.feed("[1]") == 0);  // finished
   }
   {
+    // finish() while a region is still active must not hold back a final complete
+    // root literal at the buffered end as if more input could come (the region-open
+    // snapshot of finished_ is stale once finish() is called).
+    harness h;
+    REQUIRE(h.feed("1000 true") == 9);
+    REQUIRE(h.next() == TD_JSON_OK && h.root_kind() == MYNA_VALUE_I64 && h.root_payload() == 1000);
+    td_json_stream_finish(h.stream);
+    REQUIRE(h.next() == TD_JSON_OK && h.root_kind() == MYNA_VALUE_BOOL);
+    REQUIRE(td_json_stream_truncated_bytes(h.stream) == 0);
+    REQUIRE(h.next() == TD_JSON_STREAM_EMPTY);
+  }
+  {
+    // A skippable syntax error in the final root must surface as a syntax error
+    // (skippable), not be masked as an unskippable stream_truncated, when
+    // finish() is called while the region is still active.
+    harness h;
+    REQUIRE(h.feed("1000 12x") == 8);
+    REQUIRE(h.next() == TD_JSON_OK && h.root_kind() == MYNA_VALUE_I64 && h.root_payload() == 1000);
+    td_json_stream_finish(h.stream);
+    REQUIRE(h.next() == TD_JSON_SYNTAX);
+    REQUIRE(td_json_stream_skip(h.stream) == TD_JSON_OK);
+    REQUIRE(h.next() == TD_JSON_STREAM_EMPTY);
+    REQUIRE(td_json_stream_truncated_bytes(h.stream) == 0);
+  }
+  {
     // A finished final literal that is not one is a syntax error, not truncation.
     harness h;
     h.feed("[1] tru");
