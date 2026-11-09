@@ -49,3 +49,14 @@ selected “Finish release; defer Central.” Keep #28 open; do not retry Centra
 start another hill-climbing tranche without a new instruction. #37/#38 and the
 recorded performance investigations remain future work. Release receipts are in
 `benchmarks/results/release-0.10.0/`.
+
+# 0.11.0 release authorization
+
+On 2026-11-09 Sam instructed: "i want to get truffledata out, let's settle and green
+and merge and release". That authorizes settling the beat-stock-svm tranche (CSV wave
+4 and WS12 merged; WS13 deferred), including the reviewed bot fixes #53–#56 and
+#58–#61 (#57 was excluded: protobuf-java's generated code keeps the last map value,
+and #57 deviates from that), PR/CI, merge, signed tag `v0.11.0`, Elide Maven and
+GitHub publication, and public artifact verification. Central stays deferred under
+#28 until the quota resets (2026-12-01). The same evidence, safety and
+honest-reporting rules as 0.10.0 apply.

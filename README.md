@@ -111,19 +111,26 @@ repositories {
     maven("https://maven.elide.dev/gvm-elide/25.5.5-elide.27")
 }
 dependencies {
-    implementation(platform("dev.elide:truffledata-bom:0.10.0"))
+    implementation(platform("dev.elide:truffledata-bom:0.11.0"))
     implementation("dev.elide:truffledata-core")
     implementation("dev.elide:truffledata-protobuf")
     // Add JDBC integrations or protobuf-buffa as needed.
 }
 ```
 
-[Release 0.10.0](https://github.com/elide-dev/truffledata/releases/tag/v0.10.0) includes
+[Release 0.11.0](https://github.com/elide-dev/truffledata/releases/tag/v0.11.0) includes
 source/Javadoc JARs, consumer POMs, Gradle metadata, signatures, checksums, and
 Buffa, JSON, YAML and CSV native attachments. See
 [publishing and consumption](docs/PUBLISHING.md) for Maven, Bazel and native linking.
 
-Release **0.10.0** adds native YAML APIs, compact JSON readers and streaming,
+Release **0.11.0** lands the SVM performance tranche: protobuf full slab decode
+in about 0.52× stock protobuf-java's time, faster CSV typed/string readback, opt-in lazy `CsvText`
+cells, faster JSON snapshot ingest, an opt-in Buffa Myna-cells artifact, and
+correctness fixes across CSV, tape, Buffa, JSON and YAML. Maven Central remains
+deferred under [#28](https://github.com/elide-dev/truffledata/issues/28). See the
+[0.11.0 notes](docs/RELEASE_0_11_0.md).
+
+Release **0.10.0** added native YAML APIs, compact JSON readers and streaming,
 protobuf slab ownership and projections, allocation-free unknown-field queries,
 CSV input windows/channel mapping, and native CSV SDKs with musl builds. Artifacts
 are dual MIT/Apache-2.0 licensed and published on Elide Maven and GitHub. Maven
