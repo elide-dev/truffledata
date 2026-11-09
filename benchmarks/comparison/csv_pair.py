@@ -26,6 +26,8 @@ ENGINES = {
                 'truffledata-batch-owned', 'truffledata-batch-owned-native',
                 'kernel-native', 'fastcsv', 'jackson'),
     'typed': ('truffledata-plan', 'truffledata-plan-native', 'kernel-native', 'fastcsv'),
+    # Batch construction alone; typed minus typed-build is the readback of every typed cell.
+    'typed-build': ('truffledata-plan', 'truffledata-plan-native'),
 }
 
 
@@ -97,7 +99,7 @@ def main(argv):
     dataset, size = GROUPS[shard]
     select = os.environ.get('CSV_PAIR_ENGINES', '')
     cells = [(w, e, dataset, size, 'ingest') for w, engines in ENGINES.items()
-             if w != 'typed' or dataset in ('numeric', 'mixed') for e in engines]
+             if not w.startswith('typed') or dataset in ('numeric', 'mixed') for e in engines]
     if shard == 0:
         cells += [('typed-reads', e, dataset, size, stage)
                   for e in ('truffledata-plan', 'batch-fastcsv')
