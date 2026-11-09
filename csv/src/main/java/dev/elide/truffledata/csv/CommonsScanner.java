@@ -81,6 +81,15 @@ final class CommonsScanner {
   private boolean lastTokenDelimiter;
   private long ordinal;
 
+  /**
+   * The offset of the first byte past the blank/comment lines skipped by the current
+   * {@code nextToken}, for {@link #scan}'s incomplete tail when no token of the pending
+   * record has been parsed yet. Once a token is parsed, {@code recordStart} is the
+   * record-relative start; this is only read before that, so {@code filled - end} measures
+   * record bytes only and {@code CsvReader.checkIncomplete} matches the strict scanner.
+   */
+  private int pendingStart;
+
   // The current token.
   private int type;
   private boolean quoted;
@@ -127,6 +136,7 @@ final class CommonsScanner {
     pos = from;
     ordinal = 0;
     int start = from;
+    int recordStart = -1;
     try {
       for (; ; ) {
         if (recordBase + ordinal >= stopAfter) {
@@ -138,7 +148,7 @@ final class CommonsScanner {
         lastChar = LF;
         lastTokenDelimiter = false;
         int count = 0;
-        int recordStart = -1;
+        recordStart = -1;
         int recordEnd = -1;
         for (; ; ) {
           nextToken();
@@ -158,11 +168,16 @@ final class CommonsScanner {
           return pos; // only empty lines and comments remained
         }
         if (recordEnd - recordStart > maxRecordBytes) throw CsvScanner.limit("maxRecordBytes");
-        if (!records.record(spans, count, recordStart, pos)) return start;
+        if (!records.record(spans, count, recordStart, pos)) return recordStart;
         ordinal++;
       }
     } catch (Incomplete e) {
-      return start;
+      // The incomplete tail starts at the pending record's first byte (after blank/comment
+      // lines were skipped), so CsvReader.checkIncomplete measures record bytes only. When
+      // the first token of the record was already parsed, that is recordStart; otherwise
+      // pendingStart is the post-skip offset (the would-be first byte, or `to` if the
+      // buffer ends mid-skip with no pending record).
+      return recordStart >= 0 ? recordStart : pendingStart;
     }
   }
 
@@ -352,12 +367,14 @@ final class CommonsScanner {
   private void nextToken() {
     int last = lastChar;
     int cPos = pos;
+    pendingStart = cPos;
     int c = read();
     boolean eol = readEndOfLine(c);
     if (ignoreEmptyLines) {
       while (eol && startOfLine(last)) {
         last = c;
         cPos = pos;
+        pendingStart = cPos;
         c = read();
         eol = readEndOfLine(c);
         if (c == EOF) {

@@ -261,4 +261,103 @@ final class CsvReaderTest {
         IllegalArgumentException.class,
         () -> Csv.open(new ChunkedInput(new byte[0], 1), CsvFormat.RFC4180, CsvLimits.DEFAULT, 0));
   }
+
+  /**
+   * Streams {@code text} at every batch size and asserts the result matches the whole parse, with
+   * the schema, data rows and final position equal. Used by the blank-line limit tests below.
+   */
+  private static void streamMatchesParse(String text, CsvFormat format, CsvLimits limits)
+      throws IOException {
+    byte[] bytes = utf8(text);
+    CsvBatch parsed = Csv.parse(bytes, format, limits);
+    for (int batch = 1; batch <= bytes.length; batch++) {
+      try (CsvReader reader = Csv.open(new ChunkedInput(bytes, batch), format, limits, batch)) {
+        assertEquals(names(parsed.schema()), names(reader.schema()), "schema batch " + batch);
+        assertEquals(rows(parsed), drain(reader), "data batch " + batch);
+        assertEquals(bytes.length, reader.position(), "position batch " + batch);
+      }
+    }
+  }
+
+  @Test
+  void blankLinesDoNotCountTowardMaxRecordBytes() throws IOException {
+    // Skipped blank lines are not record content (docs/CSV.md): a run of blank lines
+    // exceeding maxRecordBytes, before a tiny record, must not trip the streaming
+    // maxRecordBytes limit. parse() already agrees; streaming must match parse() under
+    // identical limits. The strict scanner already measures only record bytes; this
+    // exercises the Commons path (CommonsScanner) and the strict path as a control.
+    CsvLimits limits = new CsvLimits(1 << 20, 16, 16, 1024);
+    String blanks = "\n".repeat(20); // 20 bytes > maxRecordBytes (16)
+    CsvFormat commonsNoHeader = CsvFormat.Predefined.DEFAULT.format();
+    CsvFormat commonsHeader = commonsNoHeader.toBuilder().setHeader().build();
+    CsvFormat strictNoHeader = CsvFormat.RFC4180.withHeader(false);
+    CsvFormat strictHeader = CsvFormat.RFC4180;
+    // Commons, no header: blank lines before the width-setting first record (bind path).
+    streamMatchesParse(blanks + "a,b\nc,d\n", commonsNoHeader, limits);
+    // Commons, header: blank lines before the header (bind) and before data (next).
+    streamMatchesParse(blanks + "h1,h2\n" + blanks + "a,b\n", commonsHeader, limits);
+    // Strict, no header: control (strict already measures only record bytes).
+    streamMatchesParse(blanks + "a,b\nc,d\n", strictNoHeader, limits);
+    // Strict, header: control.
+    streamMatchesParse(blanks + "h1,h2\n" + blanks + "a,b\n", strictHeader, limits);
+  }
+
+  @Test
+  void crlfBlankLinesDoNotCountTowardMaxRecordBytes() throws IOException {
+    // CRLF blank lines are skipped too; a run exceeding maxRecordBytes must not trip the limit.
+    CsvLimits limits = new CsvLimits(1 << 20, 16, 16, 1024);
+    String blanks = "\r\n".repeat(20); // 40 bytes > maxRecordBytes (16)
+    CsvFormat format = CsvFormat.Predefined.DEFAULT.format().toBuilder().setHeader().build();
+    streamMatchesParse(blanks + "h1,h2\r\n" + blanks + "a,b\r\n", format, limits);
+  }
+
+  @Test
+  void blankLinesAndCommentsDoNotCountTowardMaxRecordBytes() throws IOException {
+    // Complete blank lines and complete comments are not record content: a run of each
+    // exceeding maxRecordBytes, before a tiny record, streams correctly.
+    CsvFormat format =
+        CsvFormat.Predefined.DEFAULT.format().toBuilder().setHeader().setCommentMarker('#').build();
+    CsvLimits limits = new CsvLimits(1 << 20, 16, 16, 1024);
+    String blanks = "\n".repeat(20);
+    streamMatchesParse(
+        blanks + "# comment\n" + blanks + "h1,h2\n" + blanks + "# another\n" + blanks + "a,b\n",
+        format,
+        limits);
+  }
+
+  @Test
+  void incompleteCommentStillCountsTowardMaxRecordBytes() throws IOException {
+    // An incomplete comment counts toward maxRecordBytes while it is incomplete in a stream
+    // (docs/CSV.md): a comment longer than the limit, buffered mid-comment, still trips it.
+    CsvFormat format =
+        CsvFormat.Predefined.DEFAULT.format().toBuilder().setCommentMarker('#').build();
+    CsvLimits limits = new CsvLimits(1 << 20, 16, 16, 1024);
+    byte[] bytes = utf8("#" + "x".repeat(20)); // 21-byte comment, no terminator
+    try (CsvReader reader = Csv.open(new ChunkedInput(bytes, 3), format, limits, 3)) {
+      var e = assertThrows(IllegalArgumentException.class, reader::schema);
+      assertEquals("CSV resource limit: maxRecordBytes", e.getMessage());
+    }
+  }
+
+  @Test
+  void blankLineRunLargerThanMaxRecordBytesAtModerateLimits() throws IOException {
+    // A blank-line run exceeding maxRecordBytes at a moderate limit (not just 16) streams
+    // correctly: the fix is not sensitive to the specific limit value.
+    CsvFormat format = CsvFormat.Predefined.DEFAULT.format().toBuilder().setHeader().build();
+    CsvLimits limits = new CsvLimits(1 << 20, 4096, 16, 1024);
+    int blankCount = limits.maxRecordBytes() + 100;
+    StringBuilder sb = new StringBuilder(blankCount + 8);
+    for (int i = 0; i < blankCount; i++) sb.append('\n');
+    sb.append("h1,h2\na,b\n");
+    byte[] bytes = utf8(sb.toString());
+    CsvBatch parsed = Csv.parse(bytes, format, limits);
+    assertEquals(1, parsed.size());
+    assertEquals("a", parsed.row(0).getString(0));
+    assertEquals("b", parsed.row(0).getString(1));
+    try (CsvReader reader = Csv.open(new ChunkedInput(bytes, 256), format, limits, 256)) {
+      assertEquals(List.of("h1", "h2"), names(reader.schema()));
+      assertEquals(rows(parsed), drain(reader));
+      assertEquals(bytes.length, reader.position());
+    }
+  }
 }
