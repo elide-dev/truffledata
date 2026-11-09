@@ -71,6 +71,11 @@ final class SlabArray implements OwnedArray {
   @Override
   public Object get(int index) {
     Objects.checkIndex(index, count);
+    return element(index);
+  }
+
+  /** The element at an index already checked against {@link #count}. */
+  private Object element(int index) {
     if (omitted) throw SlabMessage.omitted();
     byte[] slab = owner.bytes;
     int at = SlabFormat.listElement(list, width, index);
@@ -103,9 +108,10 @@ final class SlabArray implements OwnedArray {
     return index >= 0 && index < count;
   }
 
+  // One unsigned compare covers both bounds; the element body is the one get(int) uses.
   @ExportMessage
   Object readArrayElement(long index) throws InvalidArrayIndexException {
-    if (!isArrayElementReadable(index)) throw InvalidArrayIndexException.create(index);
-    return get((int) index);
+    if (Long.compareUnsigned(index, count) >= 0) throw InvalidArrayIndexException.create(index);
+    return element((int) index);
   }
 }
