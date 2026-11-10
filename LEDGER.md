@@ -19,6 +19,32 @@ The lead reads these together as: land the code now with every cells flag defaul
 after the 0.16.0 pin, the measurements and the release packaging. A session restart at 19:16
 killed every worker; nothing is running in the background.
 
+### In flight at 19:50 PST (after PR #67 was pushed at `0e668836`)
+
+- PR #67 CI running on `0e668836`; merge (squash, admin if needed) when the checks finish.
+  `codecov/patch` is advisory and has failed on every recent PR.
+- **Myna 0.16.0 is tagged but its GitHub release is still a DRAFT** (checked 19:46 PST: tag
+  `v0.16.0` is public, `isDraft` true, the public tarball URL returns 404). The draft's source
+  tarball has sha256 `51149cbf…138b51e3`; re-verify it against `SHA256SUMS` once the release is
+  published, because a draft's assets can still be replaced. Until then the pin builds only
+  where the tarball is seeded locally (`--distdir`), so it cannot go through CI. It adds a
+  `public static invoke(...)` on every generated cell: native carriers and raw `long` addresses,
+  no `Object[]`, boxes, `NativePointer` or `Borrow` — "the entry for host code compiled ahead of
+  time". Myna measures it at the cost of the direct call, 0 B. All four truffledata routes call
+  from host code, so every call site should move to `invoke`.
+- Follow-up branch `release/0.11.0-finish` (worktree `.claude/worktrees/finish-011`, from
+  `0e668836`): the lead's post-landing work. So far: YAML Native Image cells shared image-wide
+  (were built per session), with four-thread parity; its tests are running.
+- Opus worker `myna-016` (worktree `.claude/worktrees/myna-016`, branch `deps/myna-0.16.0`):
+  re-pin to 0.16.0, vendor refresh, all lanes green with call sites unchanged, and report the
+  generated `invoke` signatures.
+- Opus worker `cells-release-2` (worktree `.claude/worktrees/cells2-release`, branch
+  `cells2-release`): merge the release branch into the WIP packaging commit, finish and test it.
+- Then, by the lead: merge `deps/myna-0.16.0`, the YAML change and `cells2-release` into
+  `release/0.11.0-finish`; convert every route's call sites to `invoke` and update the
+  call-shape scans and AOT checks to require it; run every lane; LIFT THE BENCHMARK HOLD and run
+  the four paired measurements; rule each default; open the follow-up PR; CI; merge; publish.
+
 ### What is on `deps/myna-0.14.0` (local head; see `git log`), being landed through PR #67
 
 - Everything in "What landed" below (Myna 0.14.0, GVM .28, toolchain 2026.11.6, F1, #57).
