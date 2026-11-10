@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import com.oracle.truffle.api.Assumption;
 import dev.elide.myna.values.ValueTape;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import org.junit.jupiter.api.Test;
 
 class CompactTapeTest {
@@ -411,5 +412,42 @@ class CompactTapeTest {
     ValueTape myna = document().toMyna();
     myna.validate();
     for (long n = 0; n < myna.nodeCount(); n++) assertEquals(0, myna.metadata(n));
+  }
+
+  @Test void endThrowsInsteadOfHangingWhenAnInnerArrayIsStillOpen() {
+    TapeBuilder builder = new TapeBuilder(new byte[0]);
+    builder.begin(false, 0);
+    builder.begin(false, 0);
+    IllegalStateException failure = assertThrows(IllegalStateException.class,
+        () -> assertTimeoutPreemptively(Duration.ofSeconds(2), () -> builder.end(0)));
+    assertEquals("Tape container is not closed", failure.getMessage());
+  }
+
+  @Test void endThrowsWhenAnInnerContainerValueIsStillOpenInAnObject() {
+    TapeBuilder builder = new TapeBuilder("k".getBytes(StandardCharsets.UTF_8));
+    builder.begin(true, 0);
+    builder.stringRef(1L, true, true, 0);
+    builder.begin(false, 0);
+    IllegalStateException failure = assertThrows(IllegalStateException.class,
+        () -> assertTimeoutPreemptively(Duration.ofSeconds(2), () -> builder.end(0)));
+    assertEquals("Tape container is not closed", failure.getMessage());
+  }
+
+  @Test void builderProducesAReadableObjectWithADirectoryWhenBeginEndArePaired() {
+    byte[] input = "ba".getBytes(StandardCharsets.UTF_8);
+    TapeBuilder builder = new TapeBuilder(input);
+    builder.begin(true, 0);
+    builder.stringRef(1L, true, true, 0);
+    builder.longValue(1, 0, 0);
+    builder.stringRef((1L << 32) | 1, true, true, 0);
+    int inner = builder.begin(false, 0);
+    builder.longValue(2, 0, 0);
+    builder.end(inner);
+    builder.end(0);
+    HeapTape tape = builder.build(0);
+    Owner owner = new Owner(tape);
+    assertEquals(1, owner.root().member("b").longValue());
+    assertEquals(2, owner.root().member("a").element(0).longValue());
+    tape.toMyna().validate();
   }
 }
