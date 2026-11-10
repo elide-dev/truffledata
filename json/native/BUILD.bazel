@@ -276,3 +276,9 @@ myna_other_class_stub(
     symbol = "td_json_fingerprint",
     visibility = ["//json/tests:__pkg__"],
 )
+
+# Read by //json/cells, which derives the cells seam from it.
+exports_files(
+    ["json.seam"],
+    visibility = ["//json/cells:__pkg__"],
+)
