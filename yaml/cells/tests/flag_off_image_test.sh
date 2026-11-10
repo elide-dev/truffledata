@@ -11,7 +11,7 @@ count() { grep -a -c -F -e "$2" "$1" || true; }
 # The route's selector, the route's classes, the generated cells and the myna-truffle runtime.
 names=(
   "dev.elide.truffledata.yaml.SvmCells"
-  "dev.elide.truffledata.yaml.Cells"
+  "dev.elide.truffledata.yaml.CellsSvm"
   "dev.elide.truffledata.yaml.cells.generated"
   "dev.elide.myna.truffle"
 )

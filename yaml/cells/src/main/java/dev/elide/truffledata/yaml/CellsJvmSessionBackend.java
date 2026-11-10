@@ -1,6 +1,5 @@
 package dev.elide.truffledata.yaml;
 
-import dev.elide.myna.truffle.NativePointer;
 import dev.elide.truffledata.TargetAbi;
 import dev.elide.truffledata.tape.SegmentTape;
 import dev.elide.truffledata.tape.TapeBorrow;
@@ -29,6 +28,13 @@ import org.jspecify.annotations.Nullable;
  * and its cells. The control flow is the backend's, so tapes are identical and errors are the
  * same, in the same order. Nothing here catches a cell failure or falls back to the FFM calls.
  *
+ * <p>Every cell call uses the cell's static {@code invoke} entry (Myna 0.16.0), a plain static call
+ * with raw addresses: no cell instance, argument array, box, {@code NativePointer} or {@code
+ * Borrow}. On this backend it wraps each address in {@code MemorySegment.ofAddress} for the FFM
+ * downcall, and a failure surfaces exactly as through the cell's {@code execute} (which calls the
+ * same {@code invoke}). It does not hold any caller's segment scope, so it is used only for memory
+ * this backend owns and keeps alive for the call.
+ *
  * <p>Caller-supplied native segments ({@link #decode(MemorySegment, long)} and {@link
  * #streamFeed(long, MemorySegment)}) stay on the FFM binding, by design: a cell lends a raw
  * address, while the FFM downcall acquires the segment's scope for the call, so a closed arena or
@@ -40,7 +46,7 @@ import org.jspecify.annotations.Nullable;
  * into this class loader ({@link System#load}) and must be the image the FFM backend verified: the
  * cells' symbols must resolve to the same addresses as that library's, and it must carry the
  * production fingerprint. One library per class loader: a second path is rejected rather than
- * silently called through the first. See {@link Cells} for the calling convention.
+ * silently called through the first.
  */
 final class CellsJvmSessionBackend extends YamlSession.Backend {
   /** The imports this route calls through cells: each must bind in the verified library. */
@@ -61,61 +67,19 @@ final class CellsJvmSessionBackend extends YamlSession.Backend {
 
   private final JvmSessionBackend backend;
   private final YamlOptions options;
-  private final YamlCellsJvmTruffle.session_decode_Cell decode;
-  private final YamlCellsJvmTruffle.session_retain_Cell retain;
-  private final YamlCellsJvmTruffle.stream_feed_Cell feed;
-  private final YamlCellsJvmTruffle.stream_next_Cell next;
-  // Pointer and void results have no typed method: these four go through execute(Object[]).
-  private final YamlCellsJvmTruffle.session_reset_Cell reset;
-  private final YamlCellsJvmTruffle.stream_create_Cell streamCreate;
-  private final YamlCellsJvmTruffle.stream_finish_Cell streamFinish;
-  private final YamlCellsJvmTruffle.stream_release_Cell streamRelease;
 
-  // One argument array per cell, in seam order; `*` slots are written per call (see Cells).
-  /** session, data*, length*, flags*, text_out = NULL, text_capacity = 0, result. */
-  private final @Nullable Object[] decodeArguments;
+  /** The session's handle and result slot: they live as long as {@link #backend}. */
+  private final long session;
 
-  /** session, result*. */
-  private final @Nullable Object[] retainArguments;
-
-  /** stream*, data*, length*. */
-  private final @Nullable Object[] feedArguments = new Object[3];
-
-  /** stream*, flags*, result. */
-  private final @Nullable Object[] nextArguments;
-
-  /** session. */
-  private final Object[] resetArguments;
-
-  /** session, max_document_bytes*, buffer_bytes*. */
-  private final @Nullable Object[] streamCreateArguments;
-
-  /** stream*: stream_finish and stream_release. */
-  private final @Nullable Object[] streamArguments = new Object[1];
-
-  private final Cells.Handle stream = new Cells.Handle();
+  private final long result;
 
   /** Called by {@link CellsRoute#jvm}, which releases {@code backend} if this throws. */
   CellsJvmSessionBackend(JvmSessionBackend backend, Path library) {
     this.backend = backend;
     this.options = backend.sessionOptions();
     bind(library.toAbsolutePath());
-    decode = Cells.adopt(new YamlCellsJvmTruffle.session_decode_Cell());
-    retain = Cells.adopt(new YamlCellsJvmTruffle.session_retain_Cell());
-    feed = Cells.adopt(new YamlCellsJvmTruffle.stream_feed_Cell());
-    next = Cells.adopt(new YamlCellsJvmTruffle.stream_next_Cell());
-    reset = Cells.adopt(new YamlCellsJvmTruffle.session_reset_Cell());
-    streamCreate = Cells.adopt(new YamlCellsJvmTruffle.stream_create_Cell());
-    streamFinish = Cells.adopt(new YamlCellsJvmTruffle.stream_finish_Cell());
-    streamRelease = Cells.adopt(new YamlCellsJvmTruffle.stream_release_Cell());
-    // The session and its result slot live as long as this backend: one carrier each.
-    NativePointer session = NativePointer.of(backend.sessionHandle().address());
-    NativePointer result = NativePointer.of(backend.resultSlot().address());
-    decodeArguments = new Object[] {session, null, null, null, NativePointer.NULL, 0L, result};
-    retainArguments = new Object[] {session, null};
-    nextArguments = new Object[] {null, null, result};
-    resetArguments = new Object[] {session};
-    streamCreateArguments = new Object[] {session, null, null};
+    session = backend.sessionHandle().address();
+    result = backend.resultSlot().address();
   }
 
   private static synchronized void bind(Path library) {
@@ -183,16 +147,10 @@ final class CellsJvmSessionBackend extends YamlSession.Backend {
     byte[] utf8 = YamlStatus.utf8(bytes, offset, length, encoding);
     // Staged exactly as the FFM backend stages it: the buffer is the backend's own.
     MemorySegment staged = backend.stage(utf8, 0, utf8.length);
-    @Nullable Object[] arguments = decodeArguments;
-    int status;
-    try {
-      arguments[1] = NativePointer.of(staged.address());
-      arguments[2] = (long) utf8.length;
-      arguments[3] = backend.decodeFlags();
-      status = decode.executeInt(arguments);
-    } finally {
-      arguments[1] = null;
-    }
+    // text_out = NULL, text_capacity = 0: HotSpot has no shared-text arena.
+    int status =
+        YamlCellsJvmTruffle.session_decode_Cell.invoke(
+            session, staged.address(), utf8.length, backend.decodeFlags(), 0L, 0L, result);
     JvmSessionBackend.check(status, backend.resultSlot());
   }
 
@@ -219,14 +177,7 @@ final class CellsJvmSessionBackend extends YamlSession.Backend {
     MemorySegment owned = ownedArena.allocate(YamlFFM.YamlResult_LAYOUT);
     boolean retained = false;
     try {
-      @Nullable Object[] arguments = retainArguments;
-      int status;
-      try {
-        arguments[1] = NativePointer.of(owned.address());
-        status = retain.executeInt(arguments);
-      } finally {
-        arguments[1] = null;
-      }
+      int status = YamlCellsJvmTruffle.session_retain_Cell.invoke(session, owned.address());
       JvmSessionBackend.check(status, owned);
       SegmentTape tape = JvmSessionBackend.tape(owned);
       YamlMetadata meta =
@@ -271,7 +222,7 @@ final class CellsJvmSessionBackend extends YamlSession.Backend {
 
   @Override
   protected void reset() {
-    reset.execute(resetArguments);
+    YamlCellsJvmTruffle.session_reset_Cell.invoke(session);
   }
 
   @Override
@@ -281,28 +232,16 @@ final class CellsJvmSessionBackend extends YamlSession.Backend {
 
   @Override
   protected long streamCreate(int maxDocumentBytes, int growth) {
-    @Nullable Object[] arguments = streamCreateArguments;
-    arguments[1] = (long) maxDocumentBytes;
-    arguments[2] = (long) growth;
-    // A pointer result: the cell returns its NativePointer carrier (NULL for a failed allocation).
-    NativePointer created = (NativePointer) streamCreate.execute(arguments);
-    if (created.address() == 0) throw new OutOfMemoryError("YAML stream allocation");
-    stream.set(created);
-    return created.address();
+    // NULL for a failed allocation.
+    long created = YamlCellsJvmTruffle.stream_create_Cell.invoke(session, maxDocumentBytes, growth);
+    if (created == 0) throw new OutOfMemoryError("YAML stream allocation");
+    return created;
   }
 
   @Override
   protected int streamFeed(long stream, byte[] bytes, int offset, int length) {
     MemorySegment staged = backend.stage(bytes, offset, length);
-    @Nullable Object[] arguments = feedArguments;
-    try {
-      arguments[0] = this.stream.of(stream);
-      arguments[1] = NativePointer.of(staged.address());
-      arguments[2] = (long) length;
-      return (int) feed.executeLong(arguments);
-    } finally {
-      arguments[1] = null;
-    }
+    return (int) YamlCellsJvmTruffle.stream_feed_Cell.invoke(stream, staged.address(), length);
   }
 
   /** The caller's segment: on the FFM binding, which holds its scope for the call (see above). */
@@ -313,25 +252,18 @@ final class CellsJvmSessionBackend extends YamlSession.Backend {
 
   @Override
   protected void streamFinish(long stream) {
-    @Nullable Object[] arguments = streamArguments;
-    arguments[0] = this.stream.of(stream);
-    streamFinish.execute(arguments);
+    YamlCellsJvmTruffle.stream_finish_Cell.invoke(stream);
   }
 
   @Override
   protected int streamNext(long stream) {
-    @Nullable Object[] arguments = nextArguments;
-    arguments[0] = this.stream.of(stream);
-    arguments[1] = backend.decodeFlags();
-    int status = next.executeInt(arguments);
+    int status = YamlCellsJvmTruffle.stream_next_Cell.invoke(stream, backend.decodeFlags(), result);
     if (status != 8 && status != 9) JvmSessionBackend.check(status, backend.resultSlot());
     return status;
   }
 
   @Override
   protected void streamRelease(long stream) {
-    @Nullable Object[] arguments = streamArguments;
-    arguments[0] = this.stream.of(stream);
-    streamRelease.execute(arguments);
+    YamlCellsJvmTruffle.stream_release_Cell.invoke(stream);
   }
 }

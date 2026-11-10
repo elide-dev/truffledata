@@ -24,7 +24,7 @@ CELLS_ROUTES = {
          'dev/elide/truffledata/json/JsonCellsFeature.class'),
         'dev/elide/truffledata/json/cells/generated/', 'JsonCells', 'dev/elide/truffledata/json/generated/', ()),
     'yaml-cells': (
-        ('dev/elide/truffledata/yaml/Cells.class', 'dev/elide/truffledata/yaml/CellsSvm.class',
+        ('dev/elide/truffledata/yaml/CellsSvm.class',
          'dev/elide/truffledata/yaml/CellsSvmSessionBackend.class',
          'dev/elide/truffledata/yaml/CellsSvmPlanBackend.class', 'dev/elide/truffledata/yaml/CellsJvmSessionBackend.class',
          'dev/elide/truffledata/yaml/CellsJvmPlanBackend.class'),

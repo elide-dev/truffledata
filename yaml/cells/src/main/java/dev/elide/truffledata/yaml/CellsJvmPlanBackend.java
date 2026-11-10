@@ -1,6 +1,5 @@
 package dev.elide.truffledata.yaml;
 
-import dev.elide.myna.truffle.NativePointer;
 import dev.elide.truffledata.Schema;
 import dev.elide.truffledata.tape.TypedOwner;
 import dev.elide.truffledata.yaml.cells.generated.YamlCellsJvmTruffle;
@@ -9,27 +8,24 @@ import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
 import java.nio.charset.StandardCharsets;
-import org.jspecify.annotations.Nullable;
 
 /**
- * The FFM plan with the cells route: {@code typed_decode} goes through its cell ({@code
- * executeInt}); compilation, the library reference count and release are the wrapped {@link
- * JvmPlanBackend}'s, and the input is staged exactly as it stages it. Every pointer the cell
- * receives is owned here for the call; see {@link Cells} for the calling convention.
+ * The FFM plan with the cells route: {@code typed_decode} goes through the cell's static {@code
+ * invoke} entry (see {@link CellsJvmSessionBackend}); compilation, the library reference count and
+ * release are the wrapped {@link JvmPlanBackend}'s, and the input is staged exactly as it stages
+ * it. Every address the cell receives is owned here and outlives the call.
  */
 final class CellsJvmPlanBackend extends YamlPlan.Backend {
   private final JvmPlanBackend backend;
-  private final YamlCellsJvmTruffle.typed_decode_Cell decode;
 
-  /** plan, data*, length*, result*: reused, a plan is confined to its thread (see Cells). */
-  private final @Nullable Object[] decodeArguments;
+  /** The plan handle: it lives as long as {@link #backend}. */
+  private final long plan;
 
-  /** Takes over {@code backend}: releases it if the cell cannot be set up. */
+  /** Takes over {@code backend}: releases it if this cannot be set up. */
   CellsJvmPlanBackend(JvmPlanBackend backend) {
     this.backend = backend;
     try {
-      decode = Cells.adopt(new YamlCellsJvmTruffle.typed_decode_Cell());
-      decodeArguments = new Object[] {NativePointer.of(backend.handle().address()), null, null, null};
+      plan = backend.handle().address();
     } catch (RuntimeException | Error failure) {
       backend.release();
       throw failure;
@@ -53,17 +49,9 @@ final class CellsJvmPlanBackend extends YamlPlan.Backend {
       try {
         MemorySegment data = input.allocate(Math.max(1, utf8.length));
         MemorySegment.copy(utf8, 0, data, ValueLayout.JAVA_BYTE, 0, utf8.length);
-        @Nullable Object[] arguments = decodeArguments;
-        int status;
-        try {
-          arguments[1] = NativePointer.of(data.address());
-          arguments[2] = (long) utf8.length;
-          arguments[3] = NativePointer.of(result.address());
-          status = decode.executeInt(arguments);
-        } finally {
-          arguments[1] = null;
-          arguments[3] = null;
-        }
+        int status =
+            YamlCellsJvmTruffle.typed_decode_Cell.invoke(
+                plan, data.address(), utf8.length, result.address());
         if (status == 2 || status == 4 || status == 6 || status == 7) {
           int length = Math.min(255, result.get(ValueLayout.JAVA_INT, 128));
           String text =

@@ -1,6 +1,5 @@
 package dev.elide.truffledata.yaml;
 
-import dev.elide.myna.truffle.NativePointer;
 import dev.elide.truffledata.Schema;
 import dev.elide.truffledata.tape.TypedLayout;
 import dev.elide.truffledata.tape.TypedOwner;
@@ -9,33 +8,31 @@ import dev.elide.truffledata.yaml.generated.Yaml;
 import org.graalvm.nativeimage.PinnedObject;
 import org.graalvm.nativeimage.UnmanagedMemory;
 import org.graalvm.nativeimage.c.type.VoidPointer;
-import org.jspecify.annotations.Nullable;
 
 /**
- * The static plan with the cells route: {@code typed_decode} goes through the image's shared cell
- * ({@link CellsSvm}, {@code executeInt}); the plan itself (compilation and release) is the static {@link SvmPlanBackend}'s,
- * wrapped, so contracts, errors and the owner are the same. The input is pinned around the call,
- * as the static plan pins it, and lent as a pointer; see {@link Cells} for the calling convention.
+ * The static plan with the cells route: {@code typed_decode} goes through the cell's static {@code
+ * invoke} entry (raw addresses, nothing allocated; see {@link CellsSvmSessionBackend}); the plan
+ * itself (compilation and release) is the static {@link SvmPlanBackend}'s, wrapped, so contracts,
+ * errors and the owner are the same. The input is pinned around the call, as the static plan pins
+ * it, and lent without a copy; the plan handle and the result outlive the call.
  */
 final class CellsSvmPlanBackend extends YamlPlan.Backend {
   private final SvmPlanBackend backend;
-  private final YamlCellsTruffle.typed_decode_Cell decode;
 
-  /** plan, data*, length*, result*: reused, a plan is confined to its thread (see Cells). */
-  private final @Nullable Object[] decodeArguments;
+  /** The plan handle: it lives as long as {@link #backend}. */
+  private final long plan;
 
-  private CellsSvmPlanBackend(CellsSvm cells, SvmPlanBackend backend) {
+  private CellsSvmPlanBackend(SvmPlanBackend backend) {
     this.backend = backend;
-    decode = cells.typedDecode;
-    decodeArguments = new Object[] {NativePointer.of(backend.handle().rawValue()), null, null, null};
+    plan = backend.handle().rawValue();
   }
 
-  static YamlPlan create(CellsSvm cells, TypedLayout layout, YamlOptions options) {
+  static YamlPlan create(TypedLayout layout, YamlOptions options) {
     YamlPlan plan = SvmPlanBackend.create(layout, options);
     try {
       return new YamlPlan(
           layout.records,
-          new CellsSvmPlanBackend(cells, (SvmPlanBackend) plan.backend()),
+          new CellsSvmPlanBackend((SvmPlanBackend) plan.backend()),
           options.limits().maxInputBytes());
     } catch (RuntimeException | Error failure) {
       plan.close();
@@ -48,17 +45,13 @@ final class CellsSvmPlanBackend extends YamlPlan.Backend {
     VoidPointer result = UnmanagedMemory.calloc(Yaml.YamlTypedResult.SIZE);
     if (result.isNull()) throw new OutOfMemoryError("YAML result allocation");
     try {
-      @Nullable Object[] arguments = decodeArguments;
       int status;
       PinnedObject input = PinnedObject.create(utf8);
       try {
-        arguments[1] = NativePointer.of(input.addressOfArrayElement(0).rawValue());
-        arguments[2] = (long) utf8.length;
-        arguments[3] = NativePointer.of(result.rawValue());
-        status = decode.executeInt(arguments);
+        status =
+            YamlCellsTruffle.typed_decode_Cell.invoke(
+                plan, input.addressOfArrayElement(0).rawValue(), utf8.length, result.rawValue());
       } finally {
-        arguments[1] = null;
-        arguments[3] = null;
         input.close();
       }
       SvmSessionBackend.checkTyped(status, result);
