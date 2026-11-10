@@ -26,6 +26,12 @@ The lead reads these together as: land the code now with every cells flag defaul
 after the 0.16.0 pin, the measurements and the release packaging. A session restart at 19:16
 killed every worker; nothing is running in the background.
 
+### RELEASED 22:54 PST — 0.11.0 is public; nothing is running
+
+Tag `v0.11.0` (signed) at `ae32c97d`; Elide Maven and the GitHub release are public and verified;
+Central is blocked on quota (#28). Receipts and the open YAML fuzz finding:
+`benchmarks/results/release-0.11.0/README.md`. Everything below this entry is history.
+
 ### RESUMED 21:45 PST — Sam: "finish the release at 0.11.0. we can benchmark it after. downstream libs are waiting"
 
 - The JSON probe commit `e3a52764` broke CI on #68 (`RequireExplicitNullMarking` in

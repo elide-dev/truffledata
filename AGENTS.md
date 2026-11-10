@@ -77,3 +77,18 @@ artifacts are wired into release packaging. `LEDGER.md` ("Current state") has th
 open items and the commands. After the release: re-run the benchmarks, cut new benchmark cards
 for the README, and clean up the README.
 
+## 0.11.0 release completion (2026-11-09)
+
+Sam then instructed: "finish the release at `0.11.0`. we can benchmark it after. downstream libs
+are waiting", and "keep going until it's published". 0.11.0 is released on Elide Maven and GitHub
+from signed tag `v0.11.0` at `ae32c97df70795bf5e3f9ee3909a3724fd23ce1f`, on Myna 0.16.0 with all
+four cells routes on `invoke` and the 29-library packaging. Every `truffledata.<format>.cells`
+flag is default off: Buffa, YAML and CSV measured as ties
+(`benchmarks/results/cells-flag-9570099/`); the JSON route is not timed (its probe is on branch
+`bench/json-document-probe`, never built). Central validated the bundle and blocked publication on
+the quota again; #28 stays open, do not retry before 2026-12-01 without instruction. Receipts are
+in `benchmarks/results/release-0.11.0/`.
+
+Open after the release: a YAML fuzz finding in rapidyaml on main (see the receipts README; not
+fixed in 0.11.0); the JSON cells timing; then, as Sam listed, re-run the benchmarks, new
+benchmark cards for the README, and the README cleanup. Do not start these without instruction.
