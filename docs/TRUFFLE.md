@@ -128,8 +128,9 @@ features still require acceptance; image construction alone is insufficient evid
 ## Host inlining budgets for downstream images
 
 TruffleData sets no Truffle host-inlining option (the only `native-image.properties` it ships are
-Myna's generated binding metadata and, in the opt-in `truffledata-protobuf-buffa-cells`, the
-cells' class-initialization metadata; none sets an inlining option), so a consumer image uses the Native Image defaults
+Myna's generated binding metadata, in the opt-in `*-cells` route artifacts the cells'
+class-initialization metadata (and, in `truffledata-csv-cells`, the registration of
+`CsvCellsFeature`), and in `truffledata-cells` the `myna-truffle` runtime's; none sets an inlining option), so a consumer image uses the Native Image defaults
 (`-H:TruffleHostInliningMaxSubtreeInvokes=32`, `-H:TruffleHostInliningBaseBudget=5000`).
 On the protobuf consumer benchmark (x86-64 SVM, paired images, three forks; see
 `benchmarks/results/protobuf-dispatch-5815c56/`), building the *image* with

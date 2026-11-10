@@ -97,8 +97,8 @@ java_library(
 # The route: HotSpot (CellsFfmIndexer, via FfmIndexer.Backend when the flag is on) and Native Image
 # (CellsSvmIndexer, registered at image build time by CsvCellsFeature, which this jar's
 # native-image.properties enables).
-data_java_library(
-    name = "cells",
+filegroup(
+    name = "sources",
     srcs = [
         "src/main/java/dev/elide/truffledata/csv/cells/CellsFfmIndexer.java",
         "src/main/java/dev/elide/truffledata/csv/cells/CellsSvmIndexer.java",
@@ -106,8 +106,19 @@ data_java_library(
         "src/main/java/dev/elide/truffledata/csv/cells/CsvCellsRoute.java",
         "src/main/java/dev/elide/truffledata/csv/cells/package-info.java",
     ],
+)
+
+# The route's own Native Image metadata (registers CsvCellsFeature), shipped in truffledata-csv-cells.
+filegroup(
+    name = "route_resources",
+    srcs = ["src/main/resources/META-INF/native-image/dev.elide.truffledata/truffledata-csv-cells/native-image.properties"],
+)
+
+data_java_library(
+    name = "cells",
+    srcs = [":sources"],
     resource_strip_prefix = "csv/cells/src/main/resources",
-    resources = ["src/main/resources/META-INF/native-image/dev.elide.truffledata/truffledata-csv-cells/native-image.properties"],
+    resources = [":route_resources"],
     deps = [
         ":bindings",
         "//core",

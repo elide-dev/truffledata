@@ -84,20 +84,24 @@ See [representation and compilation guarantees](docs/TRUFFLE.md),
 | `dev.elide:truffledata-protobuf-buffa` | Native slab decoding, projections and reusable borrowed sessions |
 | `dev.elide:truffledata-protobuf-buffa-bindings` | Myna bindings, pulled in by the Buffa adapter |
 | `dev.elide:truffledata-protobuf-buffa-cells` | Opt-in: Buffa slab decoding through Myna Truffle cells (`-Dtruffledata.buffa.cells=true`) |
+| `dev.elide:truffledata-cells` | Myna's Truffle cells runtime, pulled in by the opt-in `*-cells` routes |
 | `dev.elide:truffledata-tape` | Shared native-tape values, sinks, export, snapshots, sessions, streams and typed records, with the Myna value ABI; pulled in by the JSON adapter |
 | `dev.elide:truffledata-tape-jvm` | JVM FFM tape reader, pulled in by the JSON JVM backend; keep it off native-image classpaths |
 | `dev.elide:truffledata-json` | Native simdjson JSON sessions, messages, streams, typed plans and the static SVM backend |
 | `dev.elide:truffledata-json-jvm` | JVM FFM backend for JSON; keep it off native-image classpaths |
 | `dev.elide:truffledata-json-bindings` | Myna JSON bindings, pulled in by the JSON adapter |
+| `dev.elide:truffledata-json-cells` | Opt-in: the JSON document decode through Myna Truffle cells (`-Dtruffledata.json.cells=true`) |
 | `dev.elide:truffledata-yaml` | YAML sessions, documents, streams, metadata and typed plans (no native code) |
 | `dev.elide:truffledata-yaml-native` | Static SVM YAML backend; add it to native images that link the YAML archive |
 | `dev.elide:truffledata-yaml-jvm` | YAML JVM FFM backend; keep it off native-image classpaths |
 | `dev.elide:truffledata-yaml-bindings` | Generated native YAML bindings |
 | `dev.elide:truffledata-yaml-java` | Pure-Java YAML kernel (no native library) behind the same sessions |
 | `dev.elide:truffledata-yaml-snakeyaml` | SnakeYAML Engine event source for the Java YAML kernel |
+| `dev.elide:truffledata-yaml-cells` | Opt-in: the native YAML decode path through Myna Truffle cells (`-Dtruffledata.yaml.cells=true`) |
 | `dev.elide:truffledata-csv` | Strict streaming CSV into immutable string and primitive column batches, typed plans and one-pass export; pure Java |
 | `dev.elide:truffledata-csv-native` | Optional native CSV kernel and static SVM backend |
 | `dev.elide:truffledata-csv-jvm` | CSV JVM FFM provider; keep it off native-image classpaths |
+| `dev.elide:truffledata-csv-cells` | Opt-in: the native CSV kernel through Myna Truffle cells (`-Dtruffledata.csv.cells=true`) |
 | `dev.elide:truffledata-csv-bindings` | Generated native CSV bindings |
 | `dev.elide:truffledata-bom` | Aligned libraries, drivers and runtime dependencies |
 

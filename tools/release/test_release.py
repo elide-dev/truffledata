@@ -13,6 +13,34 @@ from check_natives import abi_fingerprints, abi_source, BINDINGS
 # The bindings jars and their generated ABI class constants (check_natives.BINDINGS, by bindings module).
 ABI_CLASSES = {bindings: entry for bindings, entry in BINDINGS.values()}
 
+# The opt-in Myna Truffle cells routes: module -> (route classes, generated cells package, SVM cells class, the production
+# generated bindings package the route must not repackage, the route's own extra resources).
+CELLS_ROUTES = {
+    'protobuf-buffa-cells': (
+        ('dev/elide/truffledata/buffa/CellsSvmBackend.class', 'dev/elide/truffledata/buffa/CellsFfmBackend.class'),
+        'dev/elide/truffledata/buffa/cells/generated/', 'BuffaCells', 'dev/elide/truffledata/buffa/generated/', ()),
+    'json-cells': (
+        ('dev/elide/truffledata/json/CellsSvm.class', 'dev/elide/truffledata/json/CellsFfm.class',
+         'dev/elide/truffledata/json/JsonCellsFeature.class'),
+        'dev/elide/truffledata/json/cells/generated/', 'JsonCells', 'dev/elide/truffledata/json/generated/', ()),
+    'yaml-cells': (
+        ('dev/elide/truffledata/yaml/Cells.class', 'dev/elide/truffledata/yaml/CellsSvm.class',
+         'dev/elide/truffledata/yaml/CellsSvmSessionBackend.class',
+         'dev/elide/truffledata/yaml/CellsSvmPlanBackend.class', 'dev/elide/truffledata/yaml/CellsJvmSessionBackend.class',
+         'dev/elide/truffledata/yaml/CellsJvmPlanBackend.class'),
+        'dev/elide/truffledata/yaml/cells/generated/', 'YamlCells', 'dev/elide/truffledata/yaml/generated/', ()),
+    'csv-cells': (
+        ('dev/elide/truffledata/csv/cells/CsvCellsRoute.class', 'dev/elide/truffledata/csv/cells/CellsSvmIndexer.class',
+         'dev/elide/truffledata/csv/cells/CellsFfmIndexer.class', 'dev/elide/truffledata/csv/cells/CsvCellsFeature.class'),
+        'dev/elide/truffledata/csv/kernel/cells/generated/', 'CsvCells', 'dev/elide/truffledata/csv/kernel/generated/',
+        ('META-INF/native-image/dev.elide.truffledata/truffledata-csv-cells/native-image.properties',)),
+}
+# Myna's cells runtime, published once in truffledata-cells.
+MYNA_TRUFFLE = 'dev/elide/myna/truffle/'
+MYNA_TRUFFLE_METADATA = 'META-INF/native-image/dev.elide.myna/myna-truffle/'
+# Every default artifact (all but the cells runtime, the routes and the BOM) must carry neither cells nor the cells runtime.
+CELLS_FREE = tuple(m for m in MODULES if m not in CELLS_ROUTES and m not in ('cells', 'bom'))
+
 
 class PublicationTest(unittest.TestCase):
     def test_publications(self):
@@ -25,6 +53,7 @@ class PublicationTest(unittest.TestCase):
         self.assertEqual(len(classifiers), 1)
         classifier = classifiers[0]
         extension, bitcode = CLASSIFIERS[classifier]
+        jars = {}
         with tempfile.TemporaryDirectory() as temporary:
             repo = Path(temporary)
             with self.assertRaisesRegex(ValueError, 'Missing artifact'):
@@ -36,8 +65,13 @@ class PublicationTest(unittest.TestCase):
                 prefix = directory / version / (artifact + '-' + version)
                 root = ET.parse(str(prefix) + '.pom').getroot()
                 expected = {'org.graalvm.truffle:truffle-api', 'org.jspecify:jspecify'}
-                if module != 'core':
+                if module not in ('core', 'cells'):
                     expected.add('dev.elide:truffledata-core')
+                if module == 'cells':
+                    # Myna's runtime alone: no TruffleData dependency.
+                    expected.update(('org.graalvm.sdk:nativeimage', 'org.graalvm.sdk:word'))
+                if module in CELLS_ROUTES:
+                    expected.update(('dev.elide:truffledata-cells', 'org.graalvm.sdk:nativeimage', 'org.graalvm.sdk:word'))
                 if module == 'protobuf':
                     expected.update(('com.google.protobuf:protobuf-java', 'com.google.protobuf:protobuf-java-util', 'dev.elide:truffledata-protobuf-runtime'))
                 if module == 'protobuf-runtime':
@@ -49,6 +83,14 @@ class PublicationTest(unittest.TestCase):
                 if module == 'protobuf-buffa-cells':
                     expected.update(('dev.elide:truffledata-protobuf-runtime', 'dev.elide:truffledata-protobuf-buffa',
                                      'dev.elide:truffledata-protobuf-buffa-bindings'))
+                if module == 'json-cells':
+                    expected.update(('dev.elide:truffledata-json', 'dev.elide:truffledata-json-bindings'))
+                if module == 'yaml-cells':
+                    expected.update(('dev.elide:truffledata-tape', 'dev.elide:truffledata-tape-jvm', 'dev.elide:truffledata-yaml',
+                                     'dev.elide:truffledata-yaml-bindings', 'dev.elide:truffledata-yaml-jvm',
+                                     'dev.elide:truffledata-yaml-native'))
+                if module == 'csv-cells':
+                    expected.update(('dev.elide:truffledata-csv', 'dev.elide:truffledata-csv-bindings', 'dev.elide:truffledata-csv-native'))
                 if module in ('tape', 'json', 'json-bindings', 'yaml', 'yaml-bindings', 'yaml-native'):
                     expected.update(('org.graalvm.sdk:nativeimage', 'org.graalvm.sdk:word'))
                 if module == 'tape-jvm':
@@ -112,24 +154,30 @@ class PublicationTest(unittest.TestCase):
                             self.assertTrue(any(n.endswith('ReadLongNodeGen.class') for n in names))
                 for suffix in artifact_suffixes(module, classifiers):
                     self.assertTrue(Path(str(prefix) + suffix).is_file())
-                if module == 'protobuf-buffa-cells':
-                    # The opt-in cells route ships its generated cells, their Native Image metadata and
-                    # the myna-truffle runtime; the default Buffa artifacts carry none of it.
+                if module != 'bom':
                     with zipfile.ZipFile(str(prefix) + '.jar') as jar:
-                        names = set(jar.namelist())
-                    for name in ('dev/elide/truffledata/buffa/CellsSvmBackend.class',
-                                 'dev/elide/truffledata/buffa/CellsFfmBackend.class',
-                                 'dev/elide/truffledata/buffa/cells/generated/BuffaCellsTruffle.class',
-                                 'dev/elide/truffledata/buffa/cells/generated/BuffaCellsJvmTruffle.class',
-                                 'dev/elide/myna/truffle/NativeCell.class',
-                                 'META-INF/native-image/dev.elide.myna/myna-truffle/native-image.properties',
-                                 'META-INF/native-image/dev.elide.myna/dev.elide.truffledata.buffa.cells.generated.BuffaCells/native-image.properties'):
+                        jars[module] = {n for n in jar.namelist() if not n.endswith('/')}
+                if module in CELLS_ROUTES:
+                    # Each opt-in cells route ships its route, both generated cell sets (Native Image cells over the
+                    # static bindings, HotSpot cells over FFM) and the Native Image metadata of its SVM cells, but
+                    # neither Myna's runtime (truffledata-cells) nor the production bindings.
+                    routes, package, cells, bindings, resources = CELLS_ROUTES[module]
+                    names = jars[module]
+                    for name in routes + tuple(package + cells + suffix + '.class' for suffix in ('', 'Truffle', 'JvmFFM', 'JvmTruffle')) + (
+                            'META-INF/native-image/dev.elide.myna/%s/native-image.properties' % (package.replace('/', '.') + cells),) + resources:
                         self.assertIn(name, names)
-                    self.assertFalse({n for n in names if n.startswith('dev/elide/truffledata/buffa/generated/')})
-                if module in ('protobuf-buffa', 'protobuf-buffa-bindings'):
-                    with zipfile.ZipFile(str(prefix) + '.jar') as jar:
-                        self.assertFalse({n for n in jar.namelist() if n.startswith(('dev/elide/truffledata/buffa/cells/', 'dev/elide/myna/truffle/'))
-                                          or n.endswith(('CellsSvmBackend.class', 'CellsFfmBackend.class'))})
+                    self.assertFalse({n for n in names if n.startswith(('dev/elide/myna/', bindings, MYNA_TRUFFLE_METADATA))})
+                    self.assertFalse({n for n in names if n.startswith('META-INF/native-image/')}
+                                     - {'META-INF/native-image/dev.elide.myna/%s/native-image.properties' % (package.replace('/', '.') + cells)}
+                                     - set(resources))
+                if module == 'cells':
+                    # Myna's cells runtime and its metadata, and nothing else.
+                    names = jars[module]
+                    for name in (MYNA_TRUFFLE + 'NativeCell.class', MYNA_TRUFFLE + 'NativeCellRootNode.class',
+                                 MYNA_TRUFFLE + 'NativePointer.class', MYNA_TRUFFLE_METADATA + 'native-image.properties'):
+                        self.assertIn(name, names)
+                    self.assertFalse({n for n in names if n.endswith('.class') and not n.startswith(MYNA_TRUFFLE)})
+                    self.assertFalse({n for n in names if n.startswith('META-INF/native-image/') and not n.startswith(MYNA_TRUFFLE_METADATA)})
                 if module == 'protobuf-buffa-bindings':
                     with zipfile.ZipFile(str(prefix) + '.jar') as jar:
                         self.assertIn('dev/elide/truffledata/buffa/generated/Buffa.class', jar.namelist())
@@ -240,6 +288,19 @@ class PublicationTest(unittest.TestCase):
                 tree = ET.parse(metadata)
                 ET.SubElement(tree.getroot().find('versioning/versions'), 'version').text = '0.0.1'
                 tree.write(metadata)
+            # Myna's cells runtime ships in truffledata-cells alone; no default artifact carries a route's classes,
+            # its generated cells or the runtime.
+            self.assertEqual({m for m, names in jars.items() if any(n.startswith(MYNA_TRUFFLE) for n in names)}, {'cells'})
+            route_classes = set().union(*(jars[m] for m in CELLS_ROUTES)) - {n for n in jars['cells']}
+            route_classes = {n for n in route_classes if n.endswith('.class')}
+            self.assertTrue({'json', 'json-jvm', 'yaml', 'yaml-native', 'yaml-jvm', 'csv', 'csv-native', 'csv-jvm',
+                             'protobuf-buffa'} <= set(CELLS_FREE))
+            for module in CELLS_FREE:
+                self.assertFalse(jars[module] & route_classes, module)
+                self.assertFalse({n for n in jars[module] if '/cells/' in n or n.startswith((MYNA_TRUFFLE, MYNA_TRUFFLE_METADATA))}, module)
+            for module in CELLS_ROUTES:
+                for other in set(CELLS_ROUTES) - {module}:
+                    self.assertFalse({n for n in jars[module] & jars[other] if n.endswith('.class')}, (module, other))
             stage(base, repo, version, classifiers=classifiers)
             for module in MODULES:
                 versions = ET.parse(repo / 'dev/elide' / ('truffledata-' + module) / 'maven-metadata.xml').findall('versioning/versions/version')

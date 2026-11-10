@@ -736,6 +736,47 @@ the shipped native paths stand, as ratios within their shard:
   16 SVM rows (0.24–0.67× on the short-field fixtures): Rust reuses one record buffer, while this
   API returns one `String` per cell over a retained batch (CSV ledger).
 
+## Myna Truffle cells (`truffledata.csv.cells`)
+
+`-Dtruffledata.csv.cells=true` routes the optional native CSV kernel's calls through Truffle cells
+that Myna generates from this module's seam, instead of the generated `@CFunction`/FFM calls:
+`td_csv_index`, `td_csv_index_leaf`, `td_csv_validate_utf8` and `td_csv_kernel` (and, on Native
+Image, the fingerprint check). The indexes, diagnostics and errors are the kernel's own. The route
+is **off by default** and does not touch the pure-Java scanner of `truffledata-csv`; it is support
+for Myna cells and makes no performance claim.
+
+Measured: see docs/RELEASE_0_11_0.md
+
+- **Artifact.** `dev.elide:truffledata-csv-cells` (Bazel `//csv/cells`) carries the route
+  (`CsvCellsRoute`, `CellsSvmIndexer`, `CellsFfmIndexer`, `CsvCellsFeature`), both generated cell
+  sets, Myna's Native Image metadata for the Native Image cells and its own
+  `META-INF/native-image/dev.elide.truffledata/truffledata-csv-cells/native-image.properties`,
+  which registers `CsvCellsFeature`. It depends on `truffledata-cells` (Myna's cells runtime),
+  `truffledata-csv`, `truffledata-csv-bindings` and `truffledata-csv-native`, and uses the same
+  natives as `truffledata-csv-native`. Nothing in the default CSV artifacts depends on it; with the
+  flag off it need not be on the class path.
+- **Native Image.** Put `truffledata-csv-native` and the cells artifact on the image class path and
+  pass `-Dtruffledata.csv.cells=true` to `native-image`; no `--features` option is needed, since the
+  jar registers `CsvCellsFeature`. With the flag the Feature registers the cells backend, which
+  `SvmIndexer.Backend.load` defers to; without it the Feature registers nothing and the image
+  contains no cells code. The flag and the route must agree or the image build fails, with no
+  fallback: the build-time holder `CellsRoute` of `truffledata-csv-native` rejects the flag without
+  the cells artifact on the image class path, and a registered cells backend without the flag.
+  Setting the property when running an image has no effect.
+- **JVM.** Pass the property to the JVM with `truffledata-csv-jvm` and the cells artifact on the
+  class path. It is read once, when `CellsRoute` initializes (a `static final`), and selects the
+  provider in `FfmIndexer.Backend.load`; the flag without the artifact fails there rather than
+  falling back. Myna's FFM cells bind through the class loader's lookup, so the cells also
+  `System.load` the fingerprint-checked library.
+- **Seam and fingerprint.** The cells come from seams *derived* in the build from
+  `csv/native/csv.seam`: only the module options change. The production seam, bindings, ABI
+  fingerprint (`CsvNativeAbi`, which the backends verify) and natives are unchanged, and
+  `//bazel:myna_contract --derived` checks each derived descriptor.
+- **No `resource` or `borrow` declarations.** The seam has no create/release pairs, so there is no
+  `resource` to declare, and Myna 0.14.0's call `borrow` cannot apply to `td_csv_index` or
+  `td_csv_index_leaf`, because a call borrow requires every other parameter to be scalar and `out`
+  is a `ptr<i32>`. Expressing it would need a C ABI change (see `csv/cells/BUILD.bazel`).
+
 ## Deferred
 
 - Kind-specialized typed writers and a native index-to-column materializer. The current

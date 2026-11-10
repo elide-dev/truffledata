@@ -490,6 +490,50 @@ through bounded `MemorySegment`s with an exact-class cast. A JVM plan rejects
 decoding once its decoder closes; records it returned stay valid, the plan must
 still be closed, and the library stays loaded until the last plan and record close.
 
+## Myna Truffle cells (`truffledata.json.cells`)
+
+`-Dtruffledata.json.cells=true` routes the document decode's native calls through Truffle cells
+that Myna generates from this module's seam, instead of the generated `@CFunction`/FFM calls: on
+Native Image `td_json_decode`, `td_json_decode_adopted` and `td_json_release` (`JsonSvm`), on
+HotSpot `td_json_decode_adopted` and `td_json_release` (`JsonJvm`, whose `decode(byte[])` copies
+into an adopted arena). Every check, limit, status mapping, error and owner lifetime stays the
+backend's own. The route is **off by default**; it is support for Myna cells and makes no
+performance claim.
+
+Measured: see docs/RELEASE_0_11_0.md
+
+- **Artifact.** `dev.elide:truffledata-json-cells` (Bazel `//json/cells`) carries the route
+  (`CellsSvm`, `CellsFfm`, `JsonCellsFeature`), both generated cell sets and Myna's Native Image
+  metadata for the Native Image cells; it depends on `truffledata-cells` (Myna's cells runtime),
+  `truffledata-json` and `truffledata-json-bindings`. Nothing in the default JSON artifacts
+  depends on it; with the flag off it need not be on the class path. It uses the same natives as
+  `truffledata-json`.
+- **Native Image.** Pass `-Dtruffledata.json.cells=true` and
+  `--features=dev.elide.truffledata.json.JsonCellsFeature` to `native-image`, with the cells
+  artifact on the image class path. The Feature installs the cells at image build time and
+  `JsonCellsRoute.ENABLED` folds, so an image built without the flag contains no cells code;
+  setting the property when running an image has no effect. The flag and the route must agree or
+  the image build fails, with no silent fallback: the build-time holder `JsonCellsRoute` of
+  `truffledata-json` rejects the flag without the Feature, and the Feature cannot load without the
+  artifact. The Feature without the flag installs nothing.
+- **JVM.** Pass the property to the JVM with `truffledata-json-jvm` and the cells artifact on the
+  class path. It is read once, when `JsonCellsRoute` initializes (a `static final`), and
+  `JsonJvm.open` binds the cells; the flag without the artifact fails there. Myna's FFM cells bind
+  through the class loader's lookup, so the cells also `System.load` the fingerprint-checked
+  library: one library path per class loader.
+- **Seam and fingerprint.** The cells come from seams *derived* in the build from
+  `native/json.seam`: only the module options change (`truffle_cells=true`, `truffle_backend`
+  `native`/`ffm`, `truffle_transitions=direct`, package and class). The production seam, bindings,
+  ABI fingerprint and natives are unchanged; the backends check the library against the production
+  fingerprint, and `//bazel:myna_contract` checks that each derived descriptor equals the
+  production one apart from those options.
+- **No `resource` or `borrow` declarations.** Myna 0.14.0's validator cannot express them for
+  these C signatures without an ABI change: a resource `create` must take only scalars and return
+  `ptr<Opaque>`, and a call borrow allows no other pointer parameter, while every JSON buffer import
+  also takes a result, session or plan pointer. `td_json_decode_adopted` also retains its input,
+  which a call-lifetime borrow would misdeclare, and either declaration would make the derived
+  descriptor differ from the production one (see `json/cells/BUILD.bazel`).
+
 ## Remaining for facades
 
 These interfaces exist for follow-on adapters: ordered members (`keyAt`,
