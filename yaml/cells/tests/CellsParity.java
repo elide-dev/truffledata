@@ -89,7 +89,7 @@ public final class CellsParity {
     Map<String, byte[]> corpus = new TreeMap<>();
     Path real = root.toRealPath();
     try (var walk = Files.walk(real)) {
-      for (Path file : walk.filter(p -> p.getFileName().toString().endsWith(suffix)).toList())
+      for (Path file : walk.filter(p -> Files.isRegularFile(p) && p.getFileName().toString().endsWith(suffix)).toList())
         corpus.put(real.relativize(file).toString(), Files.readAllBytes(file));
     }
     return corpus;

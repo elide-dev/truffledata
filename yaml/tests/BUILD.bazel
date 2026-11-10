@@ -22,6 +22,8 @@ data_java_library(
         "@maven//:org_graalvm_polyglot_polyglot",
         "@maven//:org_graalvm_truffle_truffle_api",
     ],
+    # Also the cells route's acceptance (//yaml/cells/tests).
+    visibility = ["//yaml/cells/tests:__pkg__"],
 )
 
 java_test(

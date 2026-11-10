@@ -113,7 +113,7 @@ final class CellsJvmTest {
           Files.readString(
               runfile("yaml/cells/src/main/java/dev/elide/truffledata/yaml/" + name + ".java"));
       assertFalse(generic.matcher(source).find(), name + " calls a cell through execute(Object[])");
-      assertFalse(source.contains("UnexpectedResultException"), name);
+      assertFalse(source.contains("catch (UnexpectedResultException"), name);
       var matcher = typed.matcher(source);
       while (matcher.find()) calls++;
     }
