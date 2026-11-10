@@ -114,7 +114,7 @@ final class CellsRouteTest {
         assertEquals(expected, calling.group(2), source + ": " + calling.group());
       }
       assertEquals(cells.size(), calls, source + " calls every cell exactly once");
-      assertFalse(text.contains("UnexpectedResultException"), source);
+      assertFalse(text.contains("catch (UnexpectedResultException"), source);
     }
   }
 }

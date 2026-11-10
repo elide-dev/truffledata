@@ -274,7 +274,10 @@ myna_other_class_stub(
     name = "other_abi_class",
     abi = ":generated/abi",
     symbol = "td_json_fingerprint",
-    visibility = ["//json/tests:__pkg__"],
+    visibility = [
+        "//json/cells/tests:__pkg__",
+        "//json/tests:__pkg__",
+    ],
 )
 
 # Read by //json/cells, which derives the cells seam from it.

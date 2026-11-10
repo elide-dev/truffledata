@@ -76,6 +76,16 @@ final class CellsFfm implements JsonCellsRoute.Jvm {
   @Override
   public int decodeAdopted(
       MemorySegment data, long length, long capacity, JsonLimits limits, MemorySegment result) {
+    // Myna's FFM cells lend pointers as MemorySegment.ofAddress(address): the downcall no longer
+    // sees the caller's segment, so it cannot make the scope check the baseline downcall makes. Make
+    // it here, at the same point (after the result is allocated, before native code), through an
+    // access of the segment: a foreign confined segment throws WrongThreadException and a closed one
+    // IllegalStateException, from the same session check and with the same messages. (length > 0
+    // is checked by every caller, so the first byte is in bounds.) Residual difference: the baseline
+    // downcall also holds a *shared* arena open for the call's extent; nothing public can, so a
+    // shared arena closed by another thread during the call is not caught here. Closing an adopted
+    // region before its message closes already breaks JsonDecoder#adopt's contract on both routes.
+    data.get(ValueLayout.JAVA_BYTE, 0);
     // Specialized call (Myna 0.14.0): the concrete cell's i32 result overrides executeInt, with no
     // result box and no UnexpectedResultException handler.
     return decodeAdopted.executeInt(
