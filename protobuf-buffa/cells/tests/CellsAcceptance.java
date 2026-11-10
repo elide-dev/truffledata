@@ -23,15 +23,15 @@ public final class CellsAcceptance {
   /**
    * Java bytes per {@code writeSlab} call the cells route may add over the static backend in this
    * image. The cell call runs in AOT-compiled host code below a {@code @TruffleBoundary}, where
-   * nothing guarantees scalar replacement, so the ceiling covers everything that call may allocate
-   * when nothing is scalar-replaced (CellsSvmBackend): a NativePointer each for the input and
-   * output addresses (16 B each), a box for the arena capacity (16 B; the length here is below the
-   * JDK's small-value cache), and the three Borrow objects Myna's BytesCoercion builds for the
-   * {@code compiled}, {@code data} and {@code out} byte pointers (48 B each): 192 B, rounded up to
-   * 256 B for object alignment. Without the reuse in CellsSvmBackend the same call also allocated
-   * the argument array (56 B) and the compiled-layout and result-slot pointers.
+   * nothing is scalar-replaced, so this is everything the call allocates (CellsSvmBackend): a
+   * NativePointer each for the input and output addresses (16 B each), a box for the arena capacity
+   * (16 B; the length here is below the JDK's small-value cache), and the three Borrow objects
+   * Myna's BytesCoercion builds for the {@code compiled}, {@code data} and {@code out} byte
+   * pointers (48 B each): 192 B, exactly what linux-amd64 measured (the static backend: 0 B).
+   * Without the reuse in CellsSvmBackend the same call also allocated the argument array and the
+   * compiled-layout and result-slot pointers.
    */
-  static final double CELLS_EXTRA_BYTES_PER_CALL = 256;
+  static final double CELLS_EXTRA_BYTES_PER_CALL = 192;
 
   private CellsAcceptance() {}
 

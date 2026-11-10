@@ -498,7 +498,8 @@ messages and order, ownership and lifetimes — is the backend's own; the slabs 
   output addresses, a box for a length or capacity outside the JDK's small-value cache, and Myna's
   own `Borrow` for each non-null byte-pointer parameter (`compiled`, `data`, `out`).
   `CellsAcceptance` measures the Java bytes per `writeSlab` call of the static backend and the cells
-  route in the image and holds the difference to 256 B. Upstream: elide-dev/myna#85 (per-call
+  route in the image and holds the difference to 192 B: on linux-amd64 it measured exactly that
+  (the static backend: 0 B), so nothing on this call is scalar-replaced. Upstream: elide-dev/myna#85 (per-call
   allocation), #86 (direct transitions not faster than one boundary call on sub-microsecond
   imports) and #87.
 - **Ownership declarations.** Myna's `resource` and `borrow ... lifetime=call` declarations do not
