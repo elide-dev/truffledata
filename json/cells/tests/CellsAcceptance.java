@@ -26,27 +26,48 @@ public final class CellsAcceptance {
     if (!JsonCellsRoute.ENABLED) throw new AssertionError("Image built without the JSON cells route");
     if (!(ImageSingletons.lookup(JsonCellsRoute.Svm.class) instanceof CellsSvm))
       throw new AssertionError("JSON cells route is not CellsSvm");
+    // The cells count their native calls in an image built with -ea, as this one must be.
+    boolean counting = false;
+    assert counting = true;
+    if (!counting) throw new AssertionError("Build the JSON cells acceptance image with -ea");
     List<byte[]> inputs = CellsInputs.inputs();
     int ok = 0;
     int errors = 0;
+    // JsonSvm decodes that pass its own checks and so reach the native call.
+    long reached = 0;
+    long[] before = CellsSvm.calls();
     for (int i = 0; i < inputs.size(); i++) {
       byte[] input = inputs.get(i);
       for (JsonLimits limits : CellsInputs.LIMITS) {
         String expected = CellsInputs.outcome(() -> decode(input, limits));
         same(i, "decode", expected, CellsInputs.outcome(() -> JsonSvm.decode(input, limits)));
+        if (input.length > 0 && input.length <= limits.maxInputBytes()) reached++;
         if (expected.startsWith("ok")) ok++;
         else errors++;
       }
       for (long padding : new long[] {0, 64}) {
         String expected = adopted(input, padding, false);
         same(i, "adopt+" + padding, expected, adopted(input, padding, true));
+        if (input.length > 0) reached++;
         if (expected.startsWith("ok")) ok++;
         else errors++;
       }
     }
     if (ok < 100 || errors < 100)
       throw new AssertionError("Parity inputs too one-sided: " + ok + " ok, " + errors + " errors");
-    System.out.println("JSON cells parity (SVM): " + ok + " ok, " + errors + " errors");
+    // Every message is closed by now. Each JsonSvm decode that reached native code went through a
+    // decode cell, exactly once (none took the production binding), and each of those results was
+    // released through the release cell, exactly once (a leak or a double release breaks it).
+    long[] after = CellsSvm.calls();
+    long decodes = after[0] - before[0];
+    long releases = after[1] - before[1];
+    if (reached == 0 || decodes != reached || releases != reached)
+      throw new AssertionError(
+          "JSON cells route: " + reached + " decodes reached native code, the cells made "
+              + decodes + " decodes and " + releases + " releases");
+    System.out.println(
+        "JSON cells parity (SVM): " + ok + " ok, " + errors + " errors; " + decodes
+            + " cell decodes, " + releases + " cell releases");
     SvmAcceptance.main(args);
     System.out.println("JSON cells native acceptance passed");
   }

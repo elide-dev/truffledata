@@ -33,6 +33,20 @@ data_java_library(
     ],
 )
 
+# The route alone, for the production-shaped image below.
+data_java_library(
+    name = "shape",
+    testonly = True,
+    srcs = ["CellsShape.java"],
+    deps = [
+        ":inputs",
+        "//json",
+        "//json/cells",
+        "@maven//:org_graalvm_sdk_nativeimage",
+        "@maven//:org_graalvm_sdk_word",
+    ],
+)
+
 # HotSpot. `jvm`: the cells route with the flag on, its parity against the production binding,
 # and every //json/tests JVM suite rerun on it; `jvm_off`: the artifact present with the flag off
 # (the route stays FFM; parity still runs, calling the cells directly).
@@ -149,4 +163,60 @@ sh_test(
     ],
     tags = ["manual"],
     target_compatible_with = LINUX_SVM_PLATFORMS,
+)
+
+# The route in an image built like a consumer's: the flag and the Feature, no assertions, and no
+# caller of the production bindings of the routed imports. It keeps its local symbols so that
+# :aot_shape can read the compiled shape of the route (brief item 2: scalar cells are called through
+# their typed method, never the generic execute). Shape only; timings come from the paired harness.
+native_image(
+    name = "native_profile",
+    testonly = True,
+    cc_deps = ["//json/native:svm"],
+    exec_properties = {
+        "EstimatedCPU": "8",
+        "EstimatedMemory": "24GB",
+    },
+    executable_name = "json_cells_profile",
+    extra_args = [
+        "--gc=serial",
+        "-Dtruffledata.json.cells=true",
+        "--initialize-at-build-time=dev.elide.truffledata",
+        "--parallelism=8",
+        "-march=compatibility",
+        "-H:+UnlockExperimentalVMOptions",
+        "-H:-DeleteLocalSymbols",
+    ] + TRUFFLE_JIT_CHECKS + [
+        "-H:-UnlockExperimentalVMOptions",
+        "--features=dev.elide.truffledata.json.JsonCellsFeature",
+    ],
+    graalvm_sdk = "@graalvm_linux_amd64//:gvm",
+    main_class = "dev.elide.truffledata.json.CellsShape",
+    optimization_mode = "2",
+    tags = ["manual"],
+    target_compatible_with = [
+        "@platforms//os:linux",
+        "@platforms//cpu:x86_64",
+    ],
+    deps = [
+        ":shape",
+        "@maven//:org_graalvm_truffle_truffle_runtime",
+    ],
+)
+
+sh_test(
+    name = "aot_shape",
+    size = "medium",
+    srcs = ["aot_shape.sh"],
+    args = ["$(rootpath :native_profile)"],
+    data = [
+        "aot_shape.py",
+        ":native_profile",
+        "//tools/bench:aot_symbols.py",
+    ],
+    tags = ["manual"],
+    target_compatible_with = [
+        "@platforms//os:linux",
+        "@platforms//cpu:x86_64",
+    ],
 )

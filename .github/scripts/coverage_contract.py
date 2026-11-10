@@ -43,7 +43,7 @@ ACCESS_SOURCES = {f'core/src/main/java/dev/elide/truffledata/{name}.java' for na
     # Every hand-written JSON source (//json and //json:jvm); generated bindings live in //json:bindings.
     # The format-neutral classes moved to //tape (YAML plan Task 4) and are listed below.
     f'json/src/main/java/dev/elide/truffledata/json/{name}.java' for name in (
-        'JsonDecoder', 'JsonJvm', 'JsonLimits', 'JsonMessage', 'JsonPlan',
+        'JsonCellsRoute', 'JsonDecoder', 'JsonJvm', 'JsonLimits', 'JsonMessage', 'JsonPlan',
         'JsonSession', 'JsonStream', 'JsonStreamOptions', 'JsonSvm',
         # JvmSessionBackend was missing before Task 4 (test_coverage_contract failed on it).
         'JvmSessionBackend', 'JvmTypedOwner', 'SvmTypedOwner', 'SvmJsonMessage',
@@ -226,6 +226,13 @@ SVM_ONLY_METHODS = {
     'csv/src/main/java/dev/elide/truffledata/csv/CsvIndexing.java': {
         'dev/elide/truffledata/csv/CsvIndexing::loadNative ()Ldev/elide/truffledata/csv/CsvIndexing$Provider;',
     },
+    # The opt-in cells route's flag holder (truffledata.json.cells). Its JVM half runs on this lane
+    # (JvmScopedTest.cellsRouteIsOptInAndNeedsItsArtifact); the image's cells singleton exists only
+    # in an image built with the flag and JsonCellsFeature (//json/cells/tests:native_test).
+    **_json_methods(
+        'JsonCellsRoute',
+        'JsonCellsRoute::svm ()Ldev/elide/truffledata/json/JsonCellsRoute$Svm;',
+    ),
     # Static entry points: each throws from requireRuntime (a callee) on the JVM, so JaCoCo records
     # no probe even though JvmScopedTest and FfmAcceptanceTest call them; the rest is the native
     # decode, ABI check, result publication and release that only an image can link.

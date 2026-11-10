@@ -36,6 +36,11 @@ final class CellsFfm implements JsonCellsRoute.Jvm {
   private final JsonCellsJvmTruffle.decode_adopted_Cell decodeAdopted;
   private final JsonCellsJvmTruffle.release_Cell release;
 
+  // With -ea only (the test lanes): the native calls made through these cells, so the tests can
+  // prove that JsonJvm takes this route and releases every result exactly once.
+  private long decodes;
+  private long releases;
+
   CellsFfm(Path library) {
     bind(library.toAbsolutePath().normalize());
     decodeAdopted = adopt(new JsonCellsJvmTruffle.decode_adopted_Cell());
@@ -73,9 +78,26 @@ final class CellsFfm implements JsonCellsRoute.Jvm {
     return cell;
   }
 
+  /** {decodes, releases} made through these cells so far; counted only with assertions enabled. */
+  long[] calls() {
+    return new long[] {decodes, releases};
+  }
+
+  private boolean decoded() {
+    decodes++;
+    return true;
+  }
+
+  private boolean released() {
+    releases++;
+    return true;
+  }
+
   @Override
   public int decodeAdopted(
       MemorySegment data, long length, long capacity, JsonLimits limits, MemorySegment result) {
+    // Counted on entry: JsonJvm releases the result of every call, the refused ones included.
+    assert decoded();
     // Myna's FFM cells lend pointers as MemorySegment.ofAddress(address): the downcall no longer
     // sees the caller's segment, so it cannot make the scope check the baseline downcall makes. Make
     // it here, at the same point (after the result is allocated, before native code), through an
@@ -104,6 +126,7 @@ final class CellsFfm implements JsonCellsRoute.Jvm {
 
   @Override
   public void release(MemorySegment result) {
+    assert released();
     // A void result: the generic call is the only one the cell has.
     release.execute(new Object[] {NativePointer.of(result.address())});
   }
