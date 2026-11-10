@@ -20,7 +20,7 @@ package(default_visibility = ["//visibility:public"])
 # - release and typed_release: results outlive the session or plan that produced them;
 # - on the JVM, caller-supplied native segments: the FFM downcall holds the segment's scope for the
 #   call (a closed or foreign-thread segment is rejected); a cell would lend a raw address.
-# The derived seams declare no `resource` and no `borrow`: Myna 0.14.0 rejects both for these
+# The derived seams declare no `resource` and no `borrow`: Myna (0.16.0) rejects both for these
 # import shapes (a resource constructor must take scalars and return the handle; a call borrow
 # allows no other pointer parameter), so inputs are pinned or staged as the baseline does.
 #

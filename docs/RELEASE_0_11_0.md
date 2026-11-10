@@ -37,11 +37,11 @@ candidate, is in `docs/superpowers/plans/2026-11-08-beat-stock-svm-ledger.md` an
   public. See `docs/CSV.md` "Text cells".
 - Protobuf: `SlabRow` and `SlabMessage` are no longer final; generated classes get
   a protected surface. `SlabMessage.produced` is public.
-- Buffa: the new opt-in artifact `dev.elide:truffledata-protobuf-buffa-cells`
-  routes slab decoding through Myna Truffle cells when
-  `-Dtruffledata.buffa.cells=true` is set. With the flag off, the native image's
-  symbol table is unchanged. The cells route makes no performance claim. See
-  `docs/BUFFA.md`.
+- Myna Truffle cells: Buffa, JSON, YAML and CSV each have an opt-in route that makes
+  their native calls through Myna-generated cells
+  (`-Dtruffledata.<format>.cells=true`, default off), shipped in separate
+  artifacts. With the flag off the default route's code is unchanged. See
+  "Truffle cells (opt-in)" below.
 
 ## Truffle cells (opt-in)
 
@@ -59,33 +59,33 @@ and CSV have negative-control builds for this; Buffa's Feature is required by ev
 | YAML | the static backend's session decode, shared text, retain, reset, streams and typed decode |
 | CSV | the index kernel (`index`, `index_leaf`), `validate_utf8` and `kernel` |
 
-Scalar results use the specialized `NativeCell` methods (`executeInt`, `executeLong`) on the
-concrete generated cell; a source scan over all four routes enforces it, and for Buffa and JSON
-a disassembly check of the flag-on image confirms it. Every route has parity tests against the
-default route, on the JVM and in a Native Image, comparing results and errors.
+In a Native Image the routes are host code compiled ahead of time, so they call each generated
+cell's static `invoke` entry (new in Myna 0.16.0): native carriers and raw addresses, with no
+argument array, box, pointer carrier or borrow object. A source scan over all four routes requires
+`invoke` and rejects any `execute` call in a Native Image route; for Buffa and JSON a check of the
+built flag-on image confirms that no cell `execute` symbol is called. On HotSpot the routes use
+`invoke` wherever every buffer is a native address, and the typed `executeInt` where a heap array
+is lent (Buffa's small heap entry). Every route has parity tests against the default route, on the
+JVM and in a Native Image, comparing results and errors.
+
+@@MEASURED@@
 
 What the routes do not do:
 
-- **No `resource` or `borrow` declarations.** Myna's validator cannot express them for these C
-  signatures: creates return a status and write the handle through an out-parameter, and every
-  buffer import also takes a result or handle pointer. Where a borrow is expressible it would
-  copy heap inputs under 256 bytes in a Native Image, where the default route pins them.
-- **No performance claim.** The routes are called from host code below a Truffle boundary, where
-  Myna's cell entry allocates on every call. Buffa measures 192 B per producer call in a Native
-  Image (224 B when the input and output buffers change between calls) against 0 B on the
-  default route; the other routes have the same shape and are not yet
-  measured. Paired SVM timings are on hold for Myna 0.16.0. Until they exist every flag stays
-  off.
+- **No `resource` or `borrow` declarations.** Myna's validator (0.16.0) cannot express them for
+  these C signatures: creates return a status and write the handle into a caller-allocated result
+  struct, and every buffer import also takes a result or handle pointer. With `invoke` the routes
+  need neither: they keep each address valid for the call exactly as the default routes do.
 - **On HotSpot, cells cannot hold a caller's memory segment open for the call.** Buffa and JSON
   make the confined-thread and liveness checks themselves before the call; YAML keeps
   caller-segment calls on the default binding. A shared arena closed by another thread during
-  a cells call is not caught.
+  a cells call is not caught. HotSpot performance of the cells routes is not a goal of this
+  release.
 
 Each route ships in its own artifact: `truffledata-protobuf-buffa-cells`,
 `truffledata-json-cells`, `truffledata-yaml-cells` and `truffledata-csv-cells`. They depend on the
 new `truffledata-cells`, which carries Myna's cells runtime once; no default artifact depends on
-any of them. Pending before 0.11.0 is published: the Myna 0.16.0 pin, the paired measurements and
-each flag's default.
+any of them.
 
 ## Fixes
 

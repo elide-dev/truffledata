@@ -773,7 +773,7 @@ Measured: see docs/RELEASE_0_11_0.md
   fingerprint (`CsvNativeAbi`, which the backends verify) and natives are unchanged, and
   `//bazel:myna_contract --derived` checks each derived descriptor.
 - **No `resource` or `borrow` declarations.** The seam has no create/release pairs, so there is no
-  `resource` to declare, and Myna 0.14.0's call `borrow` cannot apply to `td_csv_index` or
+  `resource` to declare, and Myna's call `borrow` cannot apply to `td_csv_index` or
   `td_csv_index_leaf`, because a call borrow requires every other parameter to be scalar and `out`
   is a `ptr<i32>`. Expressing it would need a C ABI change (see `csv/cells/BUILD.bazel`).
 

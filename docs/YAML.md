@@ -165,7 +165,7 @@ Measured: see docs/RELEASE_0_11_0.md
   `native/yaml.seam`: only the module options change. The production seam, bindings, ABI
   fingerprint and natives are unchanged, and `//bazel:myna_contract --derived` checks each derived
   descriptor against the production one.
-- **No `resource` or `borrow` declarations.** Myna 0.14.0's validator cannot express them for
+- **No `resource` or `borrow` declarations.** Myna's validator (0.16.0) cannot express them for
   these C signatures without an ABI change: a resource `create` must take only scalars, but
   `session_create` takes the options and `stream_create` the session, and `plan_create` returns a
   status and writes the plan through `result`; a call borrow allows one buffer and scalars only,

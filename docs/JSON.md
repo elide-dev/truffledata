@@ -541,7 +541,7 @@ Measured: see docs/RELEASE_0_11_0.md
   ABI fingerprint and natives are unchanged; the backends check the library against the production
   fingerprint, and `//bazel:myna_contract` checks that each derived descriptor equals the
   production one apart from those options.
-- **No `resource` or `borrow` declarations.** Myna 0.14.0's validator cannot express them for
+- **No `resource` or `borrow` declarations.** Myna's validator (0.16.0) cannot express them for
   these C signatures without an ABI change: a resource `create` must take only scalars and return
   `ptr<Opaque>`, and a call borrow allows no other pointer parameter, while every JSON buffer import
   also takes a result, session or plan pointer. `td_json_decode_adopted` also retains its input,

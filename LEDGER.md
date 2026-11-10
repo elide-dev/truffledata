@@ -1,4 +1,4 @@
-# TruffleData — resume ledger (updated 2026-11-09 20:05 PST)
+# TruffleData — resume ledger (updated 2026-11-09 21:20 PST)
 
 Sam paused all work to resume with **Fable 5.2**. This file is the single entry point:
 read it, then the linked ledgers, then act. Project rules: `AGENTS.md` (SVM is the
@@ -7,6 +7,7 @@ production performance target; never weaken safety checks; serialize local Bazel
 ## Current state — 2026-11-09 19:45 PST — READ THIS FIRST
 
 Sam's instructions, newest first (all binding):
+- 21:02 "OK, let's finish out JSON and anything else needed for release."
 - 20:26 "i don't care about JVM/Hotspot performance at this time, for this release, only SVM
   performance. so don't roll anything back on JVM's account." So: JVM allocation or timing
   regressions (e.g. the Buffa flag-on session decode at 528 B on Myna 0.16.0) are recorded, not
@@ -25,7 +26,7 @@ The lead reads these together as: land the code now with every cells flag defaul
 after the 0.16.0 pin, the measurements and the release packaging. A session restart at 19:16
 killed every worker; nothing is running in the background.
 
-### Follow-up branch `release/0.11.0-finish` — state at 20:05 PST
+### Follow-up branch `release/0.11.0-finish` — state at 21:20 PST
 
 THIS COPY OF THE LEDGER (on `release/0.11.0-finish`, worktree `.claude/worktrees/finish-011`) is
 the current one; the copy on `deps/myna-0.14.0` stops at the PR #67 push.
@@ -95,21 +96,51 @@ the current one; the copy on `deps/myna-0.14.0` stops at the PR #67 push.
   `X_Cell.invoke(...)` in Native Image route sources (file name contains `Svm`), forbids every
   `execute*` call there, and checks that an `invoke` names a cell the generated sources declare
   with that entry. It fails until Buffa, JSON and YAML are converted.
-- Conversion workers (Opus, launched 20:20 PST, each from `f3545f09` in its own worktree
-  `.claude/worktrees/cells3-<fmt>`, branch `cells3-<fmt>`): `invoke-json`, `invoke-yaml`,
-  `invoke-buffa`. Each converts its Native Image route to `invoke` (no cell instances, argument
-  arrays or pointer carriers), its HotSpot route where buffers are native addresses, flips its
-  gates from "typed execute" to "invoke", re-measures allocation ceilings, and runs its JVM and
-  Native Image lanes. Generated `invoke` signatures are in each worker's brief and can be
-  re-read from `bazel-bin/<fmt>/cells/generated/{svm,jvm}/*Truffle.java` after
-  `bzl.sh build --remote_download_outputs=all //<fmt>/cells:generated_sources`.
-- Next, in order: Fable review of each worker's diff; merge the three branches and `myna-016`'s
-  remaining commits here; run every lane (`bazel test //...` plus the manual Native Image
-  targets, the negative controls, the coverage lane with `//json/cells/tests:jvm` added); LIFT
-  THE BENCHMARK HOLD and run the four paired measurements (commands in the 19:10 note below);
-  rule each default; update `docs/RELEASE_0_11_0.md` (Myna 0.16.0, measured numbers) and
-  `AGENTS.md`; open the follow-up PR; CI; merge; publish (commands under "Repository state");
-  then the post-release README and benchmark-card work.
+- **All four routes are on `invoke`** (merged here by 21:05 PST; Opus worker per format, each
+  diff reviewed by the lead; the lead converted CSV and finished JSON after its worker stalled):
+  - CSV `af678315`: Native Image indexer calls `index_Cell`/`index_leaf_Cell`/`validate_utf8_Cell`/
+    `kernel_Cell`/`fingerprint_Cell` `.invoke`; HotSpot unchanged (typed execute on its own
+    native copy buffers).
+  - YAML (`cells3-yaml` @ `d733de46`): all ten calls on both runtimes; caller-segment calls stay
+    on the FFM binding; `Cells.java` deleted; the lead's shared-cells change is superseded.
+  - Buffa (`cells3-buffa` @ `2df5896b`): Native Image `decodeSlab_Cell.invoke` on all three
+    entries (the entry the static backend uses); HotSpot native-address entries on `invoke`, the
+    heap entry keeps typed `executeInt`. Measured: Native Image 0 B extra per producer call in
+    both shapes (ceilings 144/176 → 0); HotSpot flag-on session decode 0 B (ceiling 0.1 B).
+  - JSON (`cells3-json` @ `4f1a1ef1`): decode, decode_adopted, release on both runtimes; the
+    boxed-limits cache and OOM fallback are gone. Measured in `native_test`: cells 24 B, static
+    24 B per decode+release (the pin). The lead fixed `//json/cells/tests:aot_shape` to
+    recognise an inlined `invoke` (indirect native call plus transition), as Buffa's gate does.
+- **Verification on `113c02a5` (Myna 0.16.0, all routes on `invoke`), RBE linux-x86_64:**
+  - `bazel test //...` plus every manual Native Image target: 100/100 (BuildBuddy
+    `159c360c-2872-4a9d-8573-c8f6f4fc2d82`).
+  - Negative controls: all three fail with the guard's message
+    (`6e45ba55-15c8-4826-ad67-62ee28ca362e`).
+  - Coverage lane 10/10, `reports.py coverage` and `coverage_contract.py` exit 0
+    (`0d1de8ba-6751-46b0-8bd2-393d4106aa3a`).
+- **Benchmark hold lifted** (Myna 0.16.0 pinned, routes on `invoke`): the four paired
+  measurements were launched at 21:17 PST in one invocation, log `<scratchpad>/rel-pairs1.log`:
+  `csv_pair`, `json_typed_pair`, `yaml_pair`, `consumer_measure`, each with its
+  `…_svm_candidate` flag set to the `…_svm_cells` image (for `consumer_measure` also
+  `TRUFFLEDATA_CONSUMER_BASELINE_ENGINES`/`_MODES` set to the current engine and mode lists).
+- **DISK**: the Mac's main APFS container is 99.6% full (about 8 GB free of 2 TB; the Bazel
+  volume shares it). The publish script builds macOS natives and consumer gates locally and
+  needs the 2026.11.6 macOS toolchain and a GraalVM SDK extracted: expect to need 15–20 GB.
+  The lead removed today's ten merged worktrees and about 13 GiB of Bazel output bases
+  (today's workers, older `.claude/worktrees/agent-*`, the stale `td-release-0.11.0`); branches
+  are kept. Not touched: the 100 GiB `root/cache/repos`, other projects' output bases, and the
+  main checkout's `build/` (0.10.0 Central artifacts — must be preserved). Sam was asked to
+  free space or approve clearing the repository cache. Do not start `publish.sh` without room.
+- Next, in order: read the paired results and write `benchmarks/results/cells-flag-<sha>/`;
+  rule each flag's default by Sam's rule; fill the `@@MEASURED@@` marker in
+  `docs/RELEASE_0_11_0.md`; push `release/0.11.0-finish` and open the follow-up PR; CI; merge;
+  recreate a clean release checkout at the merged commit; `tools/release/publish.sh 0.11.0`
+  (stage first), then `--publish` as under "Repository state" (Central stays deferred, #28:
+  the script's Central upload/validate runs before R2; its final Central publish step is
+  expected to fail on quota as in 0.10.0 — see `benchmarks/results/release-0.10.0/README.md`);
+  signed tag `v0.11.0`, GitHub release, public verification, receipts under
+  `benchmarks/results/release-0.11.0/`, `AGENTS.md` "Release completion"; then the README and
+  benchmark-card work.
 
 ### What is on `deps/myna-0.14.0` (local head; see `git log`), being landed through PR #67
 
