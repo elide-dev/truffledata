@@ -41,6 +41,12 @@ the current one; the copy on `deps/myna-0.14.0` stops at the PR #67 push.
   session. Fix on our side: move every route entry whose buffers are native addresses (already
   scope-checked by the route) to `invoke` on HotSpot too; keep typed `execute` only where a heap
   array is lent.
+  Sam's Myna session replied at 20:05 PST: cause found (a recursive `BytesCoercion.execute`
+  path that host JITs compile, so each byte parameter's `Borrow` is no longer scalar-replaced
+  when several cells share a JVM); fixed under the Graal JIT by elide-dev/myna#105, which ships
+  as **0.16.1**, not in 0.16.0; under C2 the `execute` path stays heavier than 0.14.0 even then.
+  It confirms `invoke` is the right entry for host code on HotSpot too (a plain static call).
+  0.16.0 publication is held only for Myna main CI's native Linux and macOS jobs.
 - **Myna 0.16.0 is tagged but its GitHub release is still a DRAFT** (checked 19:46 PST: tag
   `v0.16.0` public, `isDraft` true, public tarball URL 404). Draft tarball sha256
   `51149cbf…138b51e3`; re-verify against `SHA256SUMS` once published. Until then the pin builds
