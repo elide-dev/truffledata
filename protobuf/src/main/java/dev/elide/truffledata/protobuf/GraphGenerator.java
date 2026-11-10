@@ -145,7 +145,7 @@ final class GraphGenerator {
                       .map(Object::toString)
                       .toList()))
           .append(" -> true; default -> false;};\n");
-      if (type.mapEntry() && i == 1) out.append(" invalidMapEnum=!accepted;\n");
+      if (type.mapEntry() && i == 1) out.append(" if(!accepted) invalidMapEnum=true;\n");
       out.append(" if(!accepted) { unknown=input.")
           .append(
               packed ? "enumeration(unknown," + f.number() + ",value)" : "retain(unknown,start)")

@@ -266,8 +266,9 @@ final class SlabReference {
         continue;
       }
       long bits = scalar(r, field.kind(), end);
-      if (plan.definition().mapEntry() && ordinal == 1 && enumeration != null)
-        open.invalidMapEnum = !enumeration.accepts((int) bits);
+      if (plan.definition().mapEntry() && ordinal == 1 && enumeration != null
+          && !enumeration.accepts((int) bits))
+        open.invalidMapEnum = true;
       if (enumeration != null && !enumeration.accepts((int) bits)) {
         open.unknown.write(r.in, start, r.pos - start);
         continue;

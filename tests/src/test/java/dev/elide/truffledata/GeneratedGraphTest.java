@@ -403,6 +403,63 @@ class GeneratedGraphTest {
   }
 
   @Test
+  void closedEnumMapEntryWithDuplicateValueOccurrencesSticksRejectionAndRoundTripsStably()
+      throws Exception {
+    var plans = model();
+    var legacy = plans.type(PREFIX + "Legacy");
+    var access = new TruffleDataContracts.Access_truffledata$lossless$Legacy(legacy);
+    var descriptor = descriptor(legacy.name());
+    // A single map entry with key "a" whose value field (field 2, closed enum MapStatus) appears
+    // twice: an out-of-set value 9 first, then a valid MAP_ONE=1. Wire-legal last-occurrence-wins
+    // merging; the sticky rejection flag must orphan the whole entry so the round trip is stable.
+    byte[] invalidThenValid = {74, 7, 10, 1, 97, 16, 9, 16, 1};
+    var result = access.decode(invalidThenValid);
+    equivalent(legacy, invalidThenValid, result);
+    // The entry is orphaned: the map is empty and the whole entry is preserved as unknown bytes.
+    assertEquals(0, result.get_states().size());
+    assertTrue(result.hasUnknownFields());
+    assertEquals(invalidThenValid.length, result.unknownFieldByteCount());
+    // Re-encoding is byte-identical to the original wire (stable).
+    assertArrayEquals(invalidThenValid, result.encode());
+    // Re-decoding the re-encoded bytes produces the same result (idempotent round trip).
+    var redecoded = access.decode(result.encode());
+    assertEquals(0, redecoded.get_states().size());
+    assertArrayEquals(result.encode(), redecoded.encode());
+    // protobuf-java parses both the original and re-encoded bytes to the same stable result.
+    assertEquals(
+        DynamicMessage.parseFrom(descriptor, invalidThenValid),
+        DynamicMessage.parseFrom(descriptor, result.encode()));
+    // The reverse order (valid first, invalid second) is also orphaned by the sticky flag.
+    byte[] validThenInvalid = {74, 7, 10, 1, 97, 16, 1, 16, 9};
+    var reverse = access.decode(validThenInvalid);
+    equivalent(legacy, validThenInvalid, reverse);
+    assertEquals(0, reverse.get_states().size());
+    assertTrue(reverse.hasUnknownFields());
+    assertArrayEquals(validThenInvalid, reverse.encode());
+    assertArrayEquals(reverse.encode(), access.decode(reverse.encode()).encode());
+    assertEquals(
+        DynamicMessage.parseFrom(descriptor, validThenInvalid),
+        DynamicMessage.parseFrom(descriptor, reverse.encode()));
+    // Two valid occurrences: last-occurrence-wins, entry accepted (no regression). Encode
+    // normalizes duplicate value occurrences to a single declared value (7 bytes, not 9).
+    byte[] twoValid = {74, 7, 10, 1, 97, 16, 1, 16, 1};
+    byte[] twoValidNormalized = {74, 5, 10, 1, 97, 16, 1};
+    var accepted = access.decode(twoValid);
+    equivalent(legacy, twoValid, accepted);
+    assertEquals(1, accepted.get_states().size());
+    assertFalse(accepted.hasUnknownFields());
+    assertArrayEquals(twoValidNormalized, accepted.encode());
+    assertArrayEquals(accepted.encode(), access.decode(accepted.encode()).encode());
+    // Two invalid occurrences: entry orphaned (no regression).
+    byte[] twoInvalid = {74, 7, 10, 1, 97, 16, 9, 16, 9};
+    var bothRejected = access.decode(twoInvalid);
+    equivalent(legacy, twoInvalid, bothRejected);
+    assertEquals(0, bothRejected.get_states().size());
+    assertTrue(bothRejected.hasUnknownFields());
+    assertArrayEquals(twoInvalid, bothRejected.encode());
+  }
+
+  @Test
   void mapsUseLastValueAndIntegerValueEqualityAndDefaultMessageValues() {
     var plan = model().type(PREFIX + "Sample");
     var access = new TruffleDataContracts.Access_truffledata$lossless$Sample(plan);

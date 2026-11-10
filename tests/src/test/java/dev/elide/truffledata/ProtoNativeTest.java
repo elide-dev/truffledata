@@ -1720,6 +1720,56 @@ class ProtoNativeTest {
   }
 
   @Test
+  void closedEnumMapDuplicateValueOccurrencesStickRejectionAndRoundTripStably() throws Exception {
+    var d = descriptor("truffledata.lossless.Legacy");
+    var legacy = plan(d.getFullName());
+    // Map entry with key "a" and value field appearing twice: out-of-set 9 first, then valid
+    // MAP_ONE=1. The sticky rejection flag must orphan the whole entry so the round trip is
+    // byte-stable instead of losing the valid value on re-decode.
+    byte[] invalidThenValid = {74, 7, 10, 1, 97, 16, 9, 16, 1};
+    var row = legacy.decode(invalidThenValid);
+    assertTrue(row.hasUnknownFields());
+    assertEquals(invalidThenValid.length, row.unknownFieldByteCount());
+    assertArrayEquals(invalidThenValid, row.unknownFieldBytes());
+    assertEquals(0, ((DataArray) get(row, "states")).size());
+    // Re-encoding is byte-identical and re-decoding is idempotent.
+    byte[] encoded = legacy.encode(row);
+    assertArrayEquals(invalidThenValid, encoded);
+    var redecoded = legacy.decode(encoded);
+    assertEquals(0, ((DataArray) get(redecoded, "states")).size());
+    assertArrayEquals(encoded, legacy.encode(redecoded));
+    // protobuf-java agrees on both the original and re-encoded bytes.
+    assertEquals(
+        DynamicMessage.parseFrom(d, invalidThenValid),
+        DynamicMessage.parseFrom(d, encoded));
+    // Reverse order (valid first, invalid second) is also orphaned.
+    byte[] validThenInvalid = {74, 7, 10, 1, 97, 16, 1, 16, 9};
+    var reverse = legacy.decode(validThenInvalid);
+    assertTrue(reverse.hasUnknownFields());
+    assertEquals(validThenInvalid.length, reverse.unknownFieldByteCount());
+    assertArrayEquals(validThenInvalid, reverse.unknownFieldBytes());
+    assertEquals(0, ((DataArray) get(reverse, "states")).size());
+    assertArrayEquals(validThenInvalid, legacy.encode(reverse));
+    // Two valid occurrences: last-occurrence-wins, entry accepted (no regression). Encode
+    // normalizes duplicate value occurrences to a single declared value (7 bytes, not 9).
+    byte[] twoValid = {74, 7, 10, 1, 97, 16, 1, 16, 1};
+    byte[] twoValidNormalized = {74, 5, 10, 1, 97, 16, 1};
+    var accepted = legacy.decode(twoValid);
+    assertFalse(accepted.hasUnknownFields());
+    assertEquals(1, ((DataArray) get(accepted, "states")).size());
+    assertArrayEquals(twoValidNormalized, legacy.encode(accepted));
+    assertArrayEquals(legacy.encode(accepted), legacy.encode(legacy.decode(legacy.encode(accepted))));
+    // Two invalid occurrences: entry orphaned (no regression).
+    byte[] twoInvalid = {74, 7, 10, 1, 97, 16, 9, 16, 9};
+    var bothRejected = legacy.decode(twoInvalid);
+    assertTrue(bothRejected.hasUnknownFields());
+    assertEquals(twoInvalid.length, bothRejected.unknownFieldByteCount());
+    assertArrayEquals(twoInvalid, bothRejected.unknownFieldBytes());
+    assertEquals(0, ((DataArray) get(bothRejected, "states")).size());
+    assertArrayEquals(twoInvalid, legacy.encode(bothRejected));
+  }
+
+  @Test
   void unicodeAndUnknownGroupValidationApplyToAllInputPaths() throws Exception {
     var p = plan("truffledata.lossless.Sample");
     assertThrows(ContractViolation.class, () -> p.newBuilder().set(14, "\ud800"));

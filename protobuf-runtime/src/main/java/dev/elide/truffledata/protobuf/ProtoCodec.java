@@ -314,8 +314,9 @@ final class ProtoCodec {
         } else {
           value = scalar(field.kind(), end);
           var enumeration = field.enumType();
-          if (state.plan.definition().mapEntry() && ordinal == 1 && enumeration != null)
-            state.invalidMapEnum = !enumeration.accepts(((Long) value).intValue());
+          if (state.plan.definition().mapEntry() && ordinal == 1 && enumeration != null
+              && !enumeration.accepts(((Long) value).intValue()))
+            state.invalidMapEnum = true;
           if (enumeration != null && !enumeration.accepts(((Long) value).intValue())) {
             retain(state, start);
             continue;
