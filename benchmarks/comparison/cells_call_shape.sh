@@ -3,7 +3,9 @@
 # symbol-bearing image built with -Dtruffledata.buffa.cells=true, the cells backend reaches the
 # slab producer through the generated cell's static invoke (decodeSlab_Cell.invoke or
 # decodeSlabSmall_Cell.invoke, Myna 0.16.0), or has invoke inlined and calls the native binding
-# directly; no CellsSvmBackend method calls any _Cell_execute* symbol (the guest entries, which
+# directly (no invoke symbol in the image; the backend method makes an indirect native call followed
+# by the C call's native-to-Java transition) — required of both slab overloads and writeSlab; no
+# CellsSvmBackend method calls any _Cell_execute* symbol (the guest entries, which
 # coerce an Object[] of guest values and allocate in ahead-of-time host code), the generic
 # NativeCell.execute, or anything about UnexpectedResultException. Usage: cells_call_shape.sh IMAGE.
 # Shape only, no timing; the source-level twin is //protobuf-buffa/cells/tests:call_shape.
@@ -27,22 +29,37 @@ if not backend:
 # Any execute entry of a cell (typed or generic), the generic NativeCell entry, or a result unboxing.
 forbidden = re.compile(r'_Cell_execute|NativeCell_execute|UnexpectedResultException')
 invoke = re.compile(r'decodeSlab(Small)?_Cell_invoke$')
-# invoke inlined into the backend: the backend calls the native binding itself (the cells' static
-# @CFunction binding, BuffaCells, with its direct transition; or the producer's C symbol).
-native = re.compile(r'^BuffaCells_decodeSlab(Small)?$|(^|[^A-Za-z0-9])td_buffa_decode_slab(_small)?$')
-reached = []
+# invoke inlined into the backend (then the image has no invoke symbol of its own): the backend
+# makes the native call itself, an indirect call through the binding's address with the C call's
+# native-to-Java transition after it. No other native call is made by these methods.
+indirect = re.compile(r'^\*%|^x[0-9]+$|^blr')
+transition = re.compile(r'SafepointSlowpath_enterSlowPathTransitionFromNativeTo')
+invoke_symbols = [row['name'] for row in rows if invoke.search(row['name'])]
+executes = [row['name'] for row in rows if forbidden.search(row['name'])]
+print('CALL SHAPE invoke symbols in the image: %s' % (invoke_symbols or 'none (inlined)'))
+print('CALL SHAPE _Cell_execute* symbols in the image: %d' % len(executes))
+entries = {'CellsSvmBackend_slab': 0, 'CellsSvmBackend_writeSlab': 0}
 for row in backend:
-    for target in row['call_targets']:
+    targets = row['call_targets']
+    for target in targets:
         if forbidden.search(target):
             failures.append('%s calls %s' % (row['name'], target))
-        if invoke.search(target) or native.search(target):
-            reached.append('%s -> %s' % (row['name'], target))
-if backend and not reached:
-    failures.append(
-        'no CellsSvmBackend method calls decodeSlab_Cell.invoke / decodeSlabSmall_Cell.invoke '
-        'or, with invoke inlined, the native binding')
-for edge in reached:
-    print('CALL SHAPE producer edge ' + edge)
+    called = [t for t in targets if invoke.search(t)]
+    inlined = (not invoke_symbols and any(indirect.search(t) for t in targets)
+               and any(transition.search(t) for t in targets))
+    if called or inlined:
+        print('CALL SHAPE producer edge %s -> %s' % (
+            row['name'], ', '.join(called) if called else 'inlined invoke (native call, transition)'))
+        if row['name'] in entries:
+            entries[row['name']] += 1
+# Each slab producer entry reaches the producer this way: both slab overloads and writeSlab.
+if backend:
+    if entries['CellsSvmBackend_slab'] < 2:
+        failures.append('%d of 2 CellsSvmBackend_slab overloads reach decodeSlab_Cell.invoke '
+                        '(called, or inlined as a native call)' % entries['CellsSvmBackend_slab'])
+    if entries['CellsSvmBackend_writeSlab'] < 1:
+        failures.append('CellsSvmBackend_writeSlab does not reach decodeSlab_Cell.invoke '
+                        '(called, or inlined as a native call)')
 for failure in failures:
     print('CALL SHAPE FAIL ' + failure, file=sys.stderr)
 sys.exit(1 if failures else 0)
