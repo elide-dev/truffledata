@@ -1,0 +1,22 @@
+# Codecov reads the JVM coverage upload only (flag `jvm`, .github/workflows/check.bazel.yml).
+#
+# Native Image code cannot run on that lane: the static-image backends use word types, @CFunction
+# calls and image singletons, their entry points reject the JVM before any native code runs, and
+# hosted Features run only inside the image builder. Those sources are excluded here so that the
+# project and patch figures describe code the JVM lane can execute. They are not untested: the
+# native_test targets run them in an image, and .github/scripts/coverage_contract.py names every
+# such method (SVM_ONLY_METHODS) and fails CI on any other uncovered access method.
+ignore:
+  - "**/Svm*.java"      # static-image backends, tapes, owners and route holders
+  - "**/*Svm.java"      # JsonSvm, YamlSvm, BuffaSvm, CellsSvm: static-image entry points
+  - "**/*Feature.java"  # hosted-only Native Image Features
+  - "**/svm/**"         # the CSV kernel's static-image backend
+
+coverage:
+  status:
+    patch:
+      default:
+        # Files with both JVM and Native Image arms (the cells route holders, backends with
+        # image-only branches) still have lines this lane cannot reach. The enforced gate is
+        # coverage_contract.py; the patch figure is reported without failing the commit.
+        informational: true
