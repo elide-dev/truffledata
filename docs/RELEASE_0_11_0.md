@@ -81,7 +81,7 @@ and the per-format default) is follow-up work.
 
 Published on Elide Maven and GitHub. Maven Central stays deferred under
 [#28](https://github.com/elide-dev/truffledata/issues/28) until the organization's
-release-size quota resets. Twenty-five libraries and the BOM ship with
+release-size quota resets. Twenty-nine libraries and the BOM ship with
 source/Javadoc jars, Gradle module metadata, POMs, signatures and checksums,
 dual licensed MIT or Apache 2.0.
 

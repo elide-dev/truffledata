@@ -30,30 +30,38 @@ MODULES = [
     "protobuf-runtime",
     "protobuf-buffa",
     "protobuf-buffa-bindings",
+    "cells",
     "protobuf-buffa-cells",
     "tape",
     "tape-jvm",
     "json",
     "json-bindings",
     "json-jvm",
+    "json-cells",
     "yaml",
     "yaml-bindings",
     "yaml-native",
     "yaml-jvm",
     "yaml-java",
     "yaml-snakeyaml",
+    "yaml-cells",
     "csv",
     "csv-bindings",
     "csv-native",
     "csv-jvm",
+    "csv-cells",
 ]
 
 # Publication libraries that are not the module's own //<module> target.
 LIBRARIES = {
     "protobuf-buffa-bindings": "//protobuf-buffa:bindings",
-    # The opt-in Myna Truffle cells route (-Dtruffledata.buffa.cells=true; docs/BUFFA.md), its
-    # generated cells and the exact myna-truffle runtime they were generated against.
+    # The opt-in Myna Truffle cells routes (-Dtruffledata.<format>.cells=true) and the shared Myna
+    # cells runtime they depend on (CELLS_ROUTES).
+    "cells": ":cells_library",
     "protobuf-buffa-cells": ":protobuf_buffa_cells_library",
+    "json-cells": ":json_cells_library",
+    "yaml-cells": ":yaml_cells_library",
+    "csv-cells": ":csv_cells_library",
     # The shared tape classes plus the exact Myna value ABI runtime they extend (YAML plan Task 4).
     "tape": ":tape_library",
     # JVM-only FFM tape reader, published separately like json-jvm.
@@ -97,47 +105,121 @@ java_library(
     ],
 )
 
-# truffledata-protobuf-buffa-cells: the route, the cells generated from the derived seams and Myna's
-# language-neutral cells runtime. Myna is not published to Maven, so its runtime ships here, as
-# truffledata-tape carries the Myna value ABI; nothing else in the release depends on this artifact.
-# //protobuf-buffa/cells compiles the route under NullAway; this republishes it.
+# truffledata-cells: Myna's language-neutral Truffle cells runtime (myna-truffle: NativeCell,
+# coercions, pointers, borrows) and its Native Image metadata. Myna is not published to Maven, so the
+# runtime ships here exactly once, as truffledata-tape carries the Myna value ABI; every opt-in cells
+# route (CELLS_ROUTES) depends on it and carries no copy. No default artifact depends on it.
 genrule(
-    name = "protobuf_buffa_cells_resources",
-    srcs = [
-        "//protobuf-buffa/cells:native_resources",
-        "@myna//:truffle_resources",
-    ],
-    outs = [
-        "cells_resources/META-INF/native-image/dev.elide.myna/dev.elide.truffledata.buffa.cells.generated.BuffaCells/native-image.properties",
-        "cells_resources/META-INF/native-image/dev.elide.myna/myna-truffle/native-image.properties",
-    ],
-    cmd = "cp $(location //protobuf-buffa/cells:native_resources) $(location cells_resources/META-INF/native-image/dev.elide.myna/dev.elide.truffledata.buffa.cells.generated.BuffaCells/native-image.properties) && " +
-          "cp $(location @myna//:truffle_resources) $(location cells_resources/META-INF/native-image/dev.elide.myna/myna-truffle/native-image.properties)",
+    name = "cells_runtime_resources",
+    srcs = ["@myna//:truffle_resources"],
+    outs = ["cells_runtime/META-INF/native-image/dev.elide.myna/myna-truffle/native-image.properties"],
+    cmd = "cp $< $@",
 )
 
 java_library(
-    name = "protobuf_buffa_cells_library",
+    name = "cells_library",
+    srcs = ["@myna//:truffle_sources"],
+    javacopts = ["-XepDisableAllChecks"],
+    resource_strip_prefix = "tools/release/cells_runtime",
+    resources = [":cells_runtime_resources"],
+    deps = [
+        "//bazel:truffle_processor",
+        "@maven//:org_graalvm_sdk_nativeimage",
+        "@maven//:org_graalvm_sdk_word",
+        "@maven//:org_graalvm_truffle_truffle_api",
+    ],
+)
+
+# The opt-in Myna Truffle cells routes (docs/PUBLISHING.md, "Myna Truffle cells"): module ->
+# (cells package, generated SVM cells class, the route's own resources {label: path in the jar},
+# compile deps besides :cells_library). Each artifact carries the route classes, both generated cell
+# sets (SVM and JVM) and the Native Image metadata of the SVM cells; the runtime comes from
+# truffledata-cells. The packages compile the routes under NullAway; these republish them.
+CELLS_ROUTES = {
+    "protobuf-buffa-cells": (
+        "protobuf-buffa/cells",
+        "dev.elide.truffledata.buffa.cells.generated.BuffaCells",
+        {},
+        [
+            "//core",
+            "//protobuf-buffa",
+            "//protobuf-buffa:bindings",
+            "//protobuf-runtime",
+        ],
+    ),
+    "json-cells": (
+        "json/cells",
+        "dev.elide.truffledata.json.cells.generated.JsonCells",
+        {},
+        [
+            "//core",
+            "//json",
+            "//json:bindings",
+        ],
+    ),
+    "yaml-cells": (
+        "yaml/cells",
+        "dev.elide.truffledata.yaml.cells.generated.YamlCells",
+        {},
+        [
+            "//core",
+            "//tape",
+            "//tape:jvm",
+            "//yaml",
+            "//yaml:bindings",
+            "//yaml:jvm",
+            "//yaml:svm",
+            "@myna//:values",
+        ],
+    ),
+    "csv-cells": (
+        "csv/cells",
+        "dev.elide.truffledata.csv.kernel.cells.generated.CsvCells",
+        # Registers CsvCellsFeature in any image that has this jar on its class path.
+        {"//csv/cells:route_resources": "META-INF/native-image/dev.elide.truffledata/truffledata-csv-cells/native-image.properties"},
+        [
+            "//core",
+            "//csv",
+            "//csv/kernel:bindings",
+            "//csv/kernel:svm",
+        ],
+    ),
+}
+
+[genrule(
+    name = module.replace("-", "_") + "_resources",
+    srcs = ["//%s:native_resources" % package] + list(resources),
+    outs = ["%s_resources/META-INF/native-image/dev.elide.myna/%s/native-image.properties" % (module, cells)] + [
+        "%s_resources/%s" % (module, path)
+        for path in resources.values()
+    ],
+    cmd = " && ".join([
+        "cp $(location //%s:native_resources) $(location %s_resources/META-INF/native-image/dev.elide.myna/%s/native-image.properties)" % (package, module, cells),
+    ] + [
+        "cp $(location %s) $(location %s_resources/%s)" % (label, module, path)
+        for label, path in resources.items()
+    ]),
+) for module, (package, cells, resources, _deps) in CELLS_ROUTES.items()]
+
+[java_library(
+    name = module.replace("-", "_") + "_library",
     srcs = [
-        "//protobuf-buffa/cells:generated_sources",
-        "//protobuf-buffa/cells:sources",
-        "@myna//:truffle_sources",
+        "//%s:generated_sources" % package,
+        "//%s:sources" % package,
     ],
     javacopts = ["-XepDisableAllChecks"],
-    resource_strip_prefix = "tools/release/cells_resources",
-    resources = [":protobuf_buffa_cells_resources"],
-    deps = [
+    resource_strip_prefix = "tools/release/%s_resources" % module,
+    resources = [":%s_resources" % module.replace("-", "_")],
+    deps = deps + [
+        ":cells_library",
         "//bazel:myna_compiler_sdk",
         "//bazel:truffle_processor",
-        "//core",
-        "//protobuf-buffa",
-        "//protobuf-buffa:bindings",
-        "//protobuf-runtime",
         "@maven//:org_graalvm_sdk_nativeimage",
         "@maven//:org_graalvm_sdk_word",
         "@maven//:org_graalvm_truffle_truffle_api",
         "@maven//:org_jspecify_jspecify",
     ],
-)
+) for module, (package, _cells, _resources, deps) in CELLS_ROUTES.items()]
 
 # The generated JSON bindings; the Myna value runtime they were generated against ships in
 # truffledata-tape from the same release.
@@ -310,7 +392,13 @@ test_suite(
         NATIVES[module][1],
         NATIVES[module][2],
     ) if module in NATIVES else {},
-    dependencies = COMMON + ([] if module == "core" else ["dev.elide:truffledata-core:{version}"]) + ([
+    # truffledata-cells is Myna's runtime alone: it needs neither core nor any format.
+    dependencies = COMMON + ([] if module in [
+        "core",
+        "cells",
+    ] else ["dev.elide:truffledata-core:{version}"]) + ([
+        "dev.elide:truffledata-cells:{version}",
+    ] if module in CELLS_ROUTES else []) + ([
         "com.google.protobuf:protobuf-java:4.36.1",
         "com.google.protobuf:protobuf-java-util:4.36.1",
         "dev.elide:truffledata-protobuf-runtime:{version}",
@@ -326,6 +414,20 @@ test_suite(
     ] if module == "protobuf-buffa-cells" else []) + ([
         "dev.elide:truffledata-tape:{version}",
     ] if module == "tape-jvm" else []) + ([
+        "dev.elide:truffledata-json:{version}",
+        "dev.elide:truffledata-json-bindings:{version}",
+    ] if module == "json-cells" else []) + ([
+        "dev.elide:truffledata-tape:{version}",
+        "dev.elide:truffledata-tape-jvm:{version}",
+        "dev.elide:truffledata-yaml:{version}",
+        "dev.elide:truffledata-yaml-bindings:{version}",
+        "dev.elide:truffledata-yaml-jvm:{version}",
+        "dev.elide:truffledata-yaml-native:{version}",
+    ] if module == "yaml-cells" else []) + ([
+        "dev.elide:truffledata-csv:{version}",
+        "dev.elide:truffledata-csv-bindings:{version}",
+        "dev.elide:truffledata-csv-native:{version}",
+    ] if module == "csv-cells" else []) + ([
         "dev.elide:truffledata-json-bindings:{version}",
         "dev.elide:truffledata-tape:{version}",
     ] if module == "json" else []) + ([
@@ -357,9 +459,9 @@ test_suite(
         "org.graalvm.sdk:nativeimage:25.5.5-elide.28",
         "org.graalvm.sdk:word:25.5.5-elide.28",
     ] if module in [
+        "cells",
         "protobuf-buffa",
         "protobuf-buffa-bindings",
-        "protobuf-buffa-cells",
         "tape",
         "json",
         "json-bindings",
@@ -368,7 +470,7 @@ test_suite(
         "yaml-native",
         "csv-bindings",
         "csv-native",
-    ] else []) + ([
+    ] or module in CELLS_ROUTES else []) + ([
         "dev.elide:truffledata-jdbc:{version}",
         "org.xerial:sqlite-jdbc:3.53.4.0",
     ] if module == "jdbc-sqlite" else []) + ([
@@ -446,7 +548,12 @@ sh_test(
     deps = [
         "@maven//:org_graalvm_truffle_truffle_api",
         "@maven//:org_jspecify_jspecify",
-    ] + ([] if module == "core" else [":core_import"]) + ([
+    ] + ([] if module in [
+        "core",
+        "cells",
+    ] else [":core_import"]) + ([
+        ":cells_import",
+    ] if module in CELLS_ROUTES else []) + ([
         "@maven//:com_google_protobuf_protobuf_java",
         "@maven//:com_google_protobuf_protobuf_java_util",
         ":protobuf-runtime_import",
@@ -462,6 +569,20 @@ sh_test(
     ] if module == "protobuf-buffa-cells" else []) + ([
         ":tape_import",
     ] if module == "tape-jvm" else []) + ([
+        ":json-bindings_import",
+        ":json_import",
+    ] if module == "json-cells" else []) + ([
+        ":tape-jvm_import",
+        ":tape_import",
+        ":yaml-bindings_import",
+        ":yaml-jvm_import",
+        ":yaml-native_import",
+        ":yaml_import",
+    ] if module == "yaml-cells" else []) + ([
+        ":csv-bindings_import",
+        ":csv-native_import",
+        ":csv_import",
+    ] if module == "csv-cells" else []) + ([
         ":json-bindings_import",
         ":tape_import",
     ] if module == "json" else []) + ([
@@ -493,9 +614,9 @@ sh_test(
         "@maven//:org_graalvm_sdk_nativeimage",
         "@maven//:org_graalvm_sdk_word",
     ] if module in [
+        "cells",
         "protobuf-buffa",
         "protobuf-buffa-bindings",
-        "protobuf-buffa-cells",
         "tape",
         "json",
         "json-bindings",
@@ -504,7 +625,7 @@ sh_test(
         "yaml-native",
         "csv-bindings",
         "csv-native",
-    ] else []) + ([
+    ] or module in CELLS_ROUTES else []) + ([
         ":jdbc_import",
         "@maven//:org_xerial_sqlite_jdbc",
     ] if module == "jdbc-sqlite" else []) + ([

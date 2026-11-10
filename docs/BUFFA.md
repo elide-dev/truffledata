@@ -458,8 +458,9 @@ extent checks, trimming, the trusted publication through `SlabMessage.produced`,
 messages and order, ownership and lifetimes — is the backend's own; the slabs are byte-identical.
 
 - **Artifact.** The route lives in the separate `dev.elide:truffledata-protobuf-buffa-cells`
-  (Bazel `//protobuf-buffa/cells`), which bundles the generated cells and the `myna-truffle`
-  runtime. Nothing in `truffledata-protobuf-buffa` depends on it; with the flag off it need not be
+  (Bazel `//protobuf-buffa/cells`), which carries the generated cells and depends on
+  `truffledata-cells`, where the `myna-truffle` runtime ships once for every cells route
+  ([PUBLISHING.md](PUBLISHING.md#optional-truffle-cells-routes)). Nothing in `truffledata-protobuf-buffa` depends on it; with the flag off it need not be
   on the class path, and if it is, nothing in it is reachable.
 - **Native Image.** The property is read **at image build time** by `BuffaFeature`, which registers
   the cells backend factory instead of the static one. Pass it to `native-image` (and put the cells

@@ -1,6 +1,6 @@
 # Maven publishing
 
-The release publishes twenty-five thin libraries and a dependency-management BOM, with source jars and POMs. The protobuf runtime can be consumed without protobuf-java. Version 0.7.0 shipped the first nine libraries; 0.8.0 adds the two shared tape artifacts, the three JSON artifacts and the four CSV artifacts, all in the BOM. Version 0.10.0 adds the three YAML artifacts, Javadoc jars, Gradle metadata and signed publication. Version 0.11.0 adds the opt-in `truffledata-protobuf-buffa-cells` artifact.
+The release publishes twenty-nine thin libraries and a dependency-management BOM, with source jars and POMs. The protobuf runtime can be consumed without protobuf-java. Version 0.7.0 shipped the first nine libraries; 0.8.0 adds the two shared tape artifacts, the three JSON artifacts and the four CSV artifacts, all in the BOM. Version 0.10.0 adds the three YAML artifacts, Javadoc jars, Gradle metadata and signed publication. Version 0.11.0 adds the opt-in Myna Truffle cells routes `truffledata-protobuf-buffa-cells`, `truffledata-json-cells`, `truffledata-yaml-cells` and `truffledata-csv-cells`, and `truffledata-cells`, the Myna cells runtime they share.
 
 | Coordinate | Contents |
 | --- | --- |
@@ -11,22 +11,26 @@ The release publishes twenty-five thin libraries and a dependency-management BOM
 | `dev.elide:truffledata-jdbc-postgresql:<version>` | pgJDBC integration; depends on JDBC, core and postgresql |
 | `dev.elide:truffledata-protobuf-buffa:<version>` | Optional native protobuf decoder and typed views; includes [prebuilt natives](#prebuilt-natives) |
 | `dev.elide:truffledata-protobuf-buffa-bindings:<version>` | Generated Myna bindings for JVM FFM and static SVM |
-| `dev.elide:truffledata-protobuf-buffa-cells:<version>` | Opt-in: Buffa slab decoding through Myna Truffle cells (`-Dtruffledata.buffa.cells=true`), with the generated cells and the bundled `myna-truffle` runtime; depends on truffledata-protobuf-buffa. Not needed with the flag off |
+| `dev.elide:truffledata-cells:<version>` | Myna's language-neutral Truffle cells runtime (`myna-truffle`, package `dev.elide.myna.truffle`) and its Native Image metadata, shared by the four opt-in cells routes; no default artifact depends on it. See [Optional Truffle cells routes](#optional-truffle-cells-routes) |
+| `dev.elide:truffledata-protobuf-buffa-cells:<version>` | Opt-in: Buffa slab decoding through Myna Truffle cells (`-Dtruffledata.buffa.cells=true`), with the generated cells; depends on truffledata-cells, truffledata-protobuf-buffa, its bindings and truffledata-protobuf-runtime. Not needed with the flag off |
 | `dev.elide:truffledata-tape:<version>` | Format-neutral native tape layer shared by JSON and YAML: owners, values, sinks, export, snapshots, sessions, streams and typed records, plus the Myna value ABI runtime they extend; depends on core |
 | `dev.elide:truffledata-tape-jvm:<version>` | JVM FFM compact tape reader (`SegmentTape`); depends on truffledata-tape. Keep it out of native-image classpaths |
 | `dev.elide:truffledata-json:<version>` | Native simdjson JSON entry points (`JsonSession`, `JsonMessage`, `JsonStream`, typed plans), with the static SVM backend; depends on truffledata-tape; includes [prebuilt natives](#prebuilt-natives) |
 | `dev.elide:truffledata-json-bindings:<version>` | Generated Myna JSON bindings |
 | `dev.elide:truffledata-json-jvm:<version>` | JVM FFM backend (`JsonJvm`); depends on truffledata-json and truffledata-tape-jvm. Keep it out of native-image classpaths |
+| `dev.elide:truffledata-json-cells:<version>` | Opt-in: the JSON document decode through Myna Truffle cells (`-Dtruffledata.json.cells=true`), with the generated cells and `JsonCellsFeature`; depends on truffledata-cells, truffledata-json and truffledata-json-bindings. Not needed with the flag off |
 | `dev.elide:truffledata-yaml:<version>` | YAML documents, sessions, streams, metadata, typed plans and the emitter, with no native code or bindings reference; carries the YAML [prebuilt natives](#prebuilt-natives); depends on truffledata-tape |
 | `dev.elide:truffledata-yaml-native:<version>` | Static SVM backend over the linked YAML archive (`YamlSvm`); depends on truffledata-yaml and truffledata-yaml-bindings. Add it only to native images that link the archive |
 | `dev.elide:truffledata-yaml-bindings:<version>` | Generated YAML ABI bindings |
 | `dev.elide:truffledata-yaml-java:<version>` | Pure-Java YAML kernel behind the same sessions (JVMs without `yaml_shared`, images without the archive); depends on truffledata-yaml |
 | `dev.elide:truffledata-yaml-snakeyaml:<version>` | SnakeYAML Engine event source for the Java kernel; depends on truffledata-yaml-java and snakeyaml-engine |
 | `dev.elide:truffledata-yaml-jvm:<version>` | JVM FFM provider for YAML; keep it out of native-image classpaths |
+| `dev.elide:truffledata-yaml-cells:<version>` | Opt-in: the YAML decode path through Myna Truffle cells (`-Dtruffledata.yaml.cells=true`), with the generated cells; depends on truffledata-cells and truffledata-yaml, truffledata-yaml-bindings, truffledata-yaml-native, truffledata-yaml-jvm, truffledata-tape and truffledata-tape-jvm (one jar carries the route for both runtimes, so its POM also brings the JVM-only yaml-jvm and tape-jvm onto a native-image class path). Not needed with the flag off |
 | `dev.elide:truffledata-csv:<version>` | Strict streaming CSV batches, typed plans and export; pure Java for JVM and SVM, no native attachments; depends on core |
 | `dev.elide:truffledata-csv-bindings:<version>` | Generated Myna bindings of the native CSV structural-index kernel (static SVM and JVM FFM) |
 | `dev.elide:truffledata-csv-native:<version>` | Optional native CSV kernel: the static SVM backend; includes [prebuilt natives](#prebuilt-natives); depends on truffledata-csv and its bindings |
 | `dev.elide:truffledata-csv-jvm:<version>` | JVM FFM backend of the native CSV kernel; depends on truffledata-csv and its bindings. Keep it out of native-image classpaths |
+| `dev.elide:truffledata-csv-cells:<version>` | Opt-in: the native CSV kernel's calls through Myna Truffle cells (`-Dtruffledata.csv.cells=true`), with the generated cells and `CsvCellsFeature` (registered by the jar); depends on truffledata-cells, truffledata-csv, truffledata-csv-bindings and truffledata-csv-native. Not needed with the flag off |
 | `dev.elide:truffledata-bom:<version>` | POM-only dependency management for the tested libraries, drivers and runtime |
 | `dev.elide:truffledata-protobuf-runtime:<version>` | Stock-free plans, codecs, runtime descriptor compilation and generated-record support; core, Gson and Truffle dependencies |
 | `dev.elide:truffledata-protobuf:<version>` | Optional Message/descriptor compatibility bridge and build-time contract generator; depends on protobuf-runtime, protobuf-java and protobuf-java-util |
@@ -133,16 +137,35 @@ native attachment together: the backend verifies the generated ABI fingerprint.
 No native library is automatically extracted or loaded. JVM native use requires
 `--enable-native-access=ALL-UNNAMED`.
 
-### Optional Truffle cells route
+### Optional Truffle cells routes
 
-`dev.elide:truffledata-protobuf-buffa-cells` is never pulled in by the Buffa artifacts. Add it
-only to build with `-Dtruffledata.buffa.cells=true` (see [BUFFA.md](BUFFA.md#myna-truffle-cells-truffledatabuffacells)):
-on Native Image pass the property to `native-image` together with `BuffaFeature`; on the JVM pass
-it to the JVM. It uses the same native attachments as `truffledata-protobuf-buffa`. The jar
-bundles the exact Myna `myna-truffle` runtime its cells were generated against (Myna is not
-published to Maven), under `dev.elide.myna.truffle`; an application that already carries another
-`myna-truffle` must align the versions. It also carries Myna's generated Native Image metadata for
-its cell classes.
+Buffa, JSON, YAML and CSV each have an opt-in route that sends selected native calls through
+Truffle cells Myna generates from a seam derived from the production one. Each is off by default
+and lives in its own artifact, which no default artifact depends on:
+
+| Flag (default `false`) | Artifact | Native Image | Details |
+| --- | --- | --- | --- |
+| `truffledata.buffa.cells` | `truffledata-protobuf-buffa-cells` | `--features=dev.elide.truffledata.buffa.BuffaFeature` | [BUFFA.md](BUFFA.md#myna-truffle-cells-truffledatabuffacells) |
+| `truffledata.json.cells` | `truffledata-json-cells` | `--features=dev.elide.truffledata.json.JsonCellsFeature` | [JSON.md](JSON.md#myna-truffle-cells-truffledatajsoncells) |
+| `truffledata.yaml.cells` | `truffledata-yaml-cells` | `--features=dev.elide.truffledata.yaml.YamlFeature` | [YAML.md](YAML.md#myna-truffle-cells-truffledatayamlcells) |
+| `truffledata.csv.cells` | `truffledata-csv-cells` | `CsvCellsFeature`, registered by the jar's `native-image.properties` | [CSV.md](CSV.md#myna-truffle-cells-truffledatacsvcells) |
+
+Add a route's artifact only to run with its flag set. On Native Image pass `-D<flag>=true` to
+`native-image` with the Feature shown and the artifact on the image class path: the route is fixed
+at image build time, and an image built without the flag contains no cells code. On the JVM pass
+the property to the JVM; it is read once. A route uses the same native attachments as its default
+artifact, and the production seams, bindings, ABI fingerprints and natives are unchanged.
+
+Every route artifact carries its route classes, both generated cell sets (the Native Image cells
+over the static `@CFunction` bindings and the HotSpot cells over FFM) and Myna's generated Native
+Image metadata for its Native Image cells class. None carries Myna's runtime: the exact
+`myna-truffle` runtime the cells were generated against ships once, in `truffledata-cells`, under
+`dev.elide.myna.truffle` with its own `META-INF/native-image/dev.elide.myna/myna-truffle/`
+metadata, the same way `truffledata-tape` carries the Myna value ABI (Myna is not published to
+Maven). An application that already carries another `myna-truffle` must align the versions.
+`//tools/release:test` checks that each route jar holds its route, cells and metadata and no
+`dev.elide.myna.truffle` class, that the runtime is in `truffledata-cells` alone, and that the
+default artifacts hold neither cells nor the runtime.
 
 `//tools/release:buffa_consumer` tests both native and fallback binary/text/JSON ingestion
 using publication jars and the published shared-library attachment. The explicit
@@ -249,7 +272,7 @@ published static archive into an image through `truffledata-csv-native` (without
 compare generic, typed and streamed parses and malformed-input diagnostics with the
 built-in kernel's. Release publishing and native CI require both static checks.
 
-The publisher includes all twenty-five Java libraries and the BOM, plus Buffa, JSON, YAML and CSV native attachments.
+The publisher includes all twenty-nine Java libraries and the BOM, plus Buffa, JSON, YAML and CSV native attachments.
 
 ## Prebuilt natives
 

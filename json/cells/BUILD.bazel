@@ -5,6 +5,8 @@ load("//bazel:myna.bzl", "myna_bindings")
 package(default_visibility = [
     "//bazel:__pkg__",
     "//json:__subpackages__",
+    # truffledata-json-cells republishes the route, the generated cells and their metadata.
+    "//tools/release:__pkg__",
 ])
 
 # truffledata-json-cells: the opt-in route that makes the JSON document decode's native calls
