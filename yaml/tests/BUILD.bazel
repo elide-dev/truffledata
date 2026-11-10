@@ -22,6 +22,8 @@ data_java_library(
         "@maven//:org_graalvm_polyglot_polyglot",
         "@maven//:org_graalvm_truffle_truffle_api",
     ],
+    # Also the cells route's acceptance (//yaml/cells/tests).
+    visibility = ["//yaml/cells/tests:__pkg__"],
 )
 
 java_test(
@@ -62,6 +64,8 @@ java_test(
         "java_kernel_excluded.txt",
         "snakeyaml_engine_excluded.txt",
         "//json/native:json_shared.so",
+        "//yaml/native:other_abi_class.so",
+        "//yaml/native:other_abi_class_fingerprints",
         "//yaml/native:testdata",
         "//yaml/native:yaml_shared.so",
         "@yaml_test_suite//:cases",
@@ -85,6 +89,7 @@ java_test(
         "//json:jvm",
         "//tape",
         "//yaml",
+        "//yaml:bindings",
         "//yaml:java",
         "//yaml:jvm",
         "//yaml:snakeyaml",
@@ -122,6 +127,8 @@ native_image(
         "@platforms//os:linux",
         "@platforms//cpu:x86_64",
     ],
+    # Also scanned by //yaml/cells/tests:flag_off_image_test: the image without the cells route.
+    visibility = ["//yaml/cells/tests:__pkg__"],
     deps = [
         ":acceptance",
         "//yaml:svm",
@@ -140,4 +147,13 @@ sh_test(
         "@platforms//os:linux",
         "@platforms//cpu:x86_64",
     ],
+)
+
+# Also run on the opt-in cells route (//yaml/cells/tests:jvm), with the flag on.
+exports_files(
+    [
+        "YamlIntegrationTest.java",
+        "YamlPlanTest.java",
+    ],
+    visibility = ["//yaml/cells/tests:__pkg__"],
 )

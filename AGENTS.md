@@ -57,6 +57,23 @@ and merge and release". That authorizes settling the beat-stock-svm tranche (CSV
 4 and WS12 merged; WS13 deferred), including the reviewed bot fixes #53–#56 and
 #58–#61 (#57 was excluded: protobuf-java's generated code keeps the last map value,
 and #57 deviates from that), PR/CI, merge, signed tag `v0.11.0`, Elide Maven and
-GitHub publication, and public artifact verification. Central stays deferred under
+GitHub publication, and public artifact verification. (Update 2026-11-09 16:14 PST: Sam
+then merged #57 to main himself as `1158dc93`, so 0.11.0 includes it; the deviation from
+protobuf-java generated code for invalid-then-valid entries is known and recorded.) Central stays deferred under
 #28 until the quota resets (2026-12-01). The same evidence, safety and
 honest-reporting rules as 0.10.0 apply.
+
+## 0.11.0 landing and what still gates publication (2026-11-09)
+
+Sam's later instructions on 2026-11-09, in order: "let's finish and then publish" (finish the
+Myna Truffle cells adoption on all four seams first); "hold on final benchmarks, as myna is
+releasing fixes in 0.16.0"; "get this landed". PR #67 therefore lands the cells routes for Buffa,
+JSON, YAML and CSV with every `truffledata.<format>.cells` flag default off, on Myna 0.14.0.
+
+Do not publish 0.11.0 until: Myna 0.16.0 is pinned and the cells routes are rebuilt on it; the
+paired SVM measurements (flag on vs off) are recorded and each flag's default is ruled by Sam's
+rule (default on only if cells beat the baseline on SVM); and the JSON, YAML and CSV cells
+artifacts are wired into release packaging. `LEDGER.md` ("Current state") has the evidence, the
+open items and the commands. After the release: re-run the benchmarks, cut new benchmark cards
+for the README, and clean up the README.
+

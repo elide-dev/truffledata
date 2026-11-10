@@ -21,12 +21,12 @@ git_override(
     remote = "https://github.com/sgammon/rules_graalvm.git",
 )
 
-GRAALVM = "25.5.5-elide.27"
+GRAALVM = "25.5.5-elide.28"
 
 GRAALVM_DISTS = {
-    "macos-aarch64": "e8ece6d4c8f3f1bc582d447ec36e7ade69d9cf4fc0e30c58bc40af39a9541f0c",
-    "linux-x64": "b6d316ed0b81354949704afe632e1e2a1551d637736df5b6b03088cc5b09c852",
-    "linux-aarch64": "c37b539081b55b2eb99abc593d06c037ec2421c2aa71aa8430c2d0b0a94b4ec8",
+    "macos-aarch64": "8a244c653dc7875c72efbb8e1a42b5dd8e11fe73e616beb6b84e598ab170b207",
+    "linux-x64": "398d8587d0ac7ab2610a979cdc43f0ad03a484b4be0e09a1bcc64f2ec703f148",
+    "linux-aarch64": "c4d0426c5a06a6e36f8d946d2b1ba5915f54373d35ebd53397501c2c6b189b7a",
 }
 
 # The fork names its archives macos-aarch64, linux-amd64 and linux-aarch64.
@@ -35,9 +35,9 @@ GRAALVM_ARCHIVES = {key: key.replace("x64", "amd64") for key in GRAALVM_DISTS}
 # The EE toolchain profile (docs/NATIVE_BENCHMARKS.md): the fork's Oracle GraalVM overlay of the same release, the test and
 # run runtime under --config=ee (compilation stays on CE). Its budgets and graph expectations are tracked separately.
 GRAALVM_EE_DISTS = {
-    "macos-aarch64": "fc0f2818cb694e1abcc18f06a4bf049c090364e4b15441cc409b6a17a6c79509",
-    "linux-x64": "78d0334f16fd399635e74575d214d009c950b536ecb4b4bc37fde1176775f43f",
-    "linux-aarch64": "ccd0130761408a0154c9e7c3d2ea79f79689befa09f2bc2ee804744f17798954",
+    "macos-aarch64": "1a02d7bf08a024805b93a201d28f7113d9236751f80179bce6b0f1caed38af3d",
+    "linux-x64": "95ed83fdc6e0de7ffa69226cd031762ea759a0212d583c47bcfd368fe18bbb45",
+    "linux-aarch64": "ffa1c91cb63e095d1aa8618ad04d1811da586508e0db8c26ac31e60661a29a38",
 }
 
 # One repository per platform and edition (graalvm_<os>_<cpu>, graalvm_ee_<os>_<cpu>), its toolchains constrained to that
@@ -213,12 +213,12 @@ go_sdk = use_extension("@rules_go//go:extensions.bzl", "go_sdk", dev_dependency 
 http_archive = use_repo_rule("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
 
 # ---- C/C++: elide-dev/toolchain (LLVM 23, libc++, lld, ThinLTO bitcode sysroots).
-ELIDE_TOOLCHAIN = "2026.11.5"
+ELIDE_TOOLCHAIN = "2026.11.6"
 
 ELIDE_TOOLCHAIN_BUNDLES = {
-    "darwin_arm64": ("darwin-arm64", "4b3b2353e3f50fb5dbd834183e1d1f5fe0a449b0e3110ef1bcc44b3aead50383"),
-    "linux_amd64": ("linux-amd64", "e3841f87b3d9d29a48fd0e12eb0834fcb361f62fd14c4cf40a1a6fc83cba2d4a"),
-    "linux_arm64": ("linux-arm64", "296a5ebb7d56953d24de184e336be903cb1cfe5b54cdf7ad814a5ff714c47ff5"),
+    "darwin_arm64": ("darwin-arm64", "6991bdab452cc0a06e132615362658c590077b0d8a1ccfe0797dce610b987a61"),
+    "linux_amd64": ("linux-amd64", "5df3cba750336d628fe2c5150215a28c738221bf51bd16904168ab20bef02110"),
+    "linux_arm64": ("linux-arm64", "47838559c5eb8978730726c963c3f22c905c7a587c1290a53f24c2dce1c46154"),
 }
 
 [http_archive(
@@ -266,7 +266,7 @@ http_file(
 # Optional Buffa backend: reproducible Rust compilation under the same RBE toolchain.
 bazel_dep(name = "rules_rust", version = "0.74.0")
 
-# Match elide-dev/toolchain v2026.11.5 rustversion (LLVM 23.1.3; unchanged since v2026.11.1).
+# Match elide-dev/toolchain v2026.11.6 rustversion (LLVM 23.1.3; unchanged since v2026.11.1).
 RUST_VERSION = "nightly/2026-10-09"
 
 RUST_SHA256S = {
@@ -356,10 +356,10 @@ use_repo(crate, "crates", simdutf_src = "crates__simdutf-0.7.0")
 http_archive(
     name = "myna",
     build_file = "//bazel:myna.BUILD",
-    sha256 = "ad91203d6dca224c12a1aba916198ed28c61d4af5e99562f1a899608a446b453",
-    strip_prefix = "myna-0.13.0",
+    sha256 = "14b45b73bda41734c5f66e601666d3241b275a45c188eacc17b155f644d5e20f",
+    strip_prefix = "myna-0.14.0",
     type = "tar.gz",
-    urls = ["https://github.com/elide-dev/myna/releases/download/v0.13.0/myna-source-0.13.0.tar.gz"],
+    urls = ["https://github.com/elide-dev/myna/releases/download/v0.14.0/myna-source-0.14.0.tar.gz"],
 )
 
 # Production JSON adapter: match the parser qualified by Myna's value ABI tests.

@@ -25,6 +25,8 @@ data_java_library(
         "@maven//:org_graalvm_truffle_truffle_api",
         "@myna//:values",
     ],
+    # The cells image (//json/cells/tests:native) reruns this suite on the cells route.
+    visibility = ["//json/cells/tests:__pkg__"],
 )
 
 native_image(
@@ -83,7 +85,11 @@ java_test(
         "--class",
         "dev.elide.truffledata.json.tests.JvmScopedTest",
     ],
-    data = ["//json/native:json_shared.so"],
+    data = [
+        "//json/native:json_shared.so",
+        "//json/native:other_abi_class.so",
+        "//json/native:other_abi_class_fingerprints",
+    ],
     jvm_flags = [
         "--enable-native-access=ALL-UNNAMED",
         "-Dpolyglot.engine.WarnInterpreterOnly=false",
@@ -106,4 +112,16 @@ java_test(
         "@maven//:org_junit_jupiter_junit_jupiter_api",
         "@myna//:values",
     ],
+)
+
+# The JVM suites, rerun on the JSON cells route by //json/cells/tests:jvm.
+exports_files(
+    [
+        "FfmAcceptanceTest.java",
+        "JsonExportTest.java",
+        "JsonInteropTest.java",
+        "JvmScopedTest.java",
+        "native_test.sh",
+    ],
+    visibility = ["//json/cells/tests:__pkg__"],
 )

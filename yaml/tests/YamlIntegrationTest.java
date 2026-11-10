@@ -2,10 +2,13 @@ package dev.elide.truffledata.yaml.tests;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import dev.elide.truffledata.TargetAbi;
 import dev.elide.truffledata.tape.JavaSink;
 import dev.elide.truffledata.tape.TapeSink;
 import dev.elide.truffledata.tape.TapeText;
 import dev.elide.truffledata.yaml.*;
+import dev.elide.truffledata.yaml.generated.YamlAbi;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
 import org.snakeyaml.engine.v2.api.Load;
@@ -15,12 +18,46 @@ import org.snakeyaml.engine.v2.schema.CoreSchema;
 final class YamlIntegrationTest {
   static Path library() {
     String override = System.getProperty("yaml.library");
-    return override != null
-        ? Path.of(override)
-        : Path.of(
-            System.getenv("TEST_SRCDIR"),
-            System.getenv("TEST_WORKSPACE"),
-            "yaml/native/yaml_shared.so");
+    return override != null ? Path.of(override) : runfile("yaml/native/yaml_shared.so");
+  }
+
+  static Path runfile(String path) {
+    return Path.of(System.getenv("TEST_SRCDIR"), System.getenv("TEST_WORKSPACE"), path);
+  }
+
+  static String fingerprintOf(String abiClass) throws Exception {
+    return Files.readString(runfile("yaml/native/generated/abi/" + abiClass + "/seam.abi")).strip();
+  }
+
+  /** Myna 0.14.0: the bindings carry each ABI class's fingerprint; Linux AArch64 selects its own. */
+  @Test
+  void abiClassFingerprintsFollowTheGeneratedClasses() throws Exception {
+    assertEquals(fingerprintOf("lp64_little"), YamlAbi.LP64_LITTLE);
+    assertEquals(fingerprintOf("lp64_little_aapcs64"), YamlAbi.LP64_LITTLE_AAPCS64);
+    assertNotEquals(YamlAbi.LP64_LITTLE, YamlAbi.LP64_LITTLE_AAPCS64);
+    assertEquals(
+        YamlAbi.LP64_LITTLE_AAPCS64,
+        YamlAbi.fingerprint(TargetAbi.of("Linux", "aarch64").charUnsigned()));
+    assertEquals(
+        YamlAbi.LP64_LITTLE, YamlAbi.fingerprint(TargetAbi.of("Linux", "amd64").charUnsigned()));
+    assertEquals(
+        YamlAbi.LP64_LITTLE,
+        YamlAbi.fingerprint(TargetAbi.of("Mac OS X", "aarch64").charUnsigned()));
+  }
+
+  /**
+   * A library of the other ABI class (Linux AArch64's fingerprint here, the shared x86-64/Apple one
+   * there) is rejected before any call is bound, never loaded as a fallback; this host's is accepted.
+   */
+  @Test
+  void otherAbiClassLibraryIsRejected() {
+    Path other = runfile("yaml/native/other_abi_class.so");
+    IllegalStateException failure =
+        assertThrows(IllegalStateException.class, () -> YamlJvm.openSession(other));
+    assertTrue(failure.getMessage().contains("ABI fingerprint mismatch"), failure.getMessage());
+    try (YamlSession accepted = YamlJvm.openSession(library())) {
+      assertNotNull(accepted);
+    }
   }
 
   /** #40: the default (fused) duplicate check reports the repeated key, not the mapping's close. */

@@ -1443,10 +1443,11 @@ final class TypedAcceptance {
         }
         System.out.println("SESSION decode bytes/message=" + Arrays.toString(rounds));
         // The opt-in Myna cells route (truffledata.buffa.cells, //protobuf-buffa/cells) calls the
-        // producer through NativeCell.execute(Object[]): the argument array, boxed integers,
-        // pointer and borrow objects add 320 B/call on HotSpot (elide-dev/myna#85). Its own
+        // producer through the concrete cell's executeInt(Object[]): per-call pointers, boxed
+        // carriers and Myna's borrow objects (elide-dev/myna#85) add allocation on HotSpot: 240 B
+        // measured with the reused argument array and cached pointers (320 B before). Its own
         // ceiling; the default route keeps the 48 B contract.
-        double budget = Boolean.getBoolean("truffledata.buffa.cells") ? 384.1 : 48.1;
+        double budget = Boolean.getBoolean("truffledata.buffa.cells") ? 288.1 : 48.1;
         for (double allocated : rounds)
           Acceptance.check(
               allocated <= budget,

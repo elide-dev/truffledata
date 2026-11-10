@@ -4,8 +4,10 @@ import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import dev.elide.truffledata.Schema;
 import dev.elide.truffledata.tape.TypedLayout;
 import dev.elide.truffledata.yaml.generated.Yaml;
+import dev.elide.truffledata.yaml.generated.YamlAbi;
 import java.util.Map;
 import org.graalvm.nativeimage.ImageInfo;
+import org.graalvm.nativeimage.Platform;
 import org.graalvm.nativeimage.c.type.CTypeConversion;
 
 /**
@@ -23,7 +25,9 @@ public final class YamlSvm {
     if (!ImageInfo.inImageRuntimeCode())
       throw new UnsupportedOperationException("Static YAML requires SVM");
     if (!verified) {
-      if (!CTypeConversion.toJavaString(Yaml.fingerprint()).equals(Yaml.ABI_FINGERPRINT))
+      // The image's ABI class (Platform.includedIn folds at image build time): one constant.
+      String expected = YamlAbi.fingerprint(Platform.includedIn(Platform.LINUX_AARCH64.class));
+      if (!CTypeConversion.toJavaString(Yaml.fingerprint()).equals(expected))
         throw new IllegalStateException("Myna/YAML ABI fingerprint mismatch");
       verified = true;
     }
@@ -37,13 +41,19 @@ public final class YamlSvm {
 
   static YamlSession openSession(YamlOptions options) {
     requireRuntime();
+    // The cells route is fixed at image build time (YamlFeature); SvmRoute folds, and fails
+    // the image build when the flag and the Feature disagree.
+    if (SvmRoute.ENABLED)
+      return new YamlSession(options, SvmRoute.cells().session(options));
     return new YamlSession(options, new SvmSessionBackend(options));
   }
 
   /** A plan over the static archive with the default options (see {@link YamlPlan#compile}). */
   public static YamlPlan compile(Schema root, Map<String, Schema> recordTypes) {
     requireRuntime();
-    return SvmPlanBackend.create(new TypedLayout(root, recordTypes, YamlPlan.FORMAT), YamlOptions.DEFAULT);
+    TypedLayout layout = new TypedLayout(root, recordTypes, YamlPlan.FORMAT);
+    if (SvmRoute.ENABLED) return SvmRoute.cells().plan(layout, YamlOptions.DEFAULT);
+    return SvmPlanBackend.create(layout, YamlOptions.DEFAULT);
   }
 
   @TruffleBoundary

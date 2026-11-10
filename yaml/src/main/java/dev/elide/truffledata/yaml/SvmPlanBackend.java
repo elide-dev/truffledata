@@ -109,6 +109,11 @@ final class SvmPlanBackend extends YamlPlan.Backend {
     }
   }
 
+  // Hook for the opt-in Myna cells route (yaml/cells, CellsSvmPlanBackend); never called here.
+  VoidPointer handle() {
+    return handle;
+  }
+
   @Override
   void release() {
     Yaml.plan_release(handle);

@@ -1,0 +1,145 @@
+load("@rules_java//java:defs.bzl", "java_library")
+load("//bazel:java.bzl", "data_java_library")
+load("//bazel:myna.bzl", "myna_bindings")
+
+package(default_visibility = ["//visibility:public"])
+
+# truffledata-csv-cells: the opt-in route that makes the native CSV kernel's calls (td_csv_index,
+# td_csv_index_leaf, td_csv_validate_utf8, td_csv_kernel) through Myna-generated Truffle cells,
+# modelled on //protobuf-buffa/cells. Selected only by -Dtruffledata.csv.cells=true (default off):
+# on the JVM read once into a static final (FfmIndexer.Backend); in a Native Image at image build
+# time, by CsvCellsFeature, which this artifact's native-image.properties registers. With the flag
+# off nothing here is reachable and the production //csv/kernel route is unchanged.
+#
+# The cells come from seams *derived* from the production //csv/native:csv.seam: only the module
+# line changes (cells options, package and class), so every import is the production one by
+# construction and the production fingerprint, bindings and natives are unchanged
+# (//bazel:myna_contract --derived). The backends verify the library against the production
+# fingerprint (CsvNativeAbi). The seam has no create/release pairs (no `resource`), and Myna's
+# `borrow` cannot apply to td_csv_index/_leaf (a call borrow requires every other parameter to be
+# scalar; `out` is a ptr<i32>).
+[
+    genrule(
+        name = "seam_" + variant,
+        srcs = ["//csv/native:csv.seam"],
+        outs = ["cells_%s.seam" % variant],
+        cmd = ("sed -e 's| java_package=dev.elide.truffledata.csv.kernel.generated java_class=CsvNative | " +
+               "java_package=dev.elide.truffledata.csv.kernel.cells.generated java_class=%s %s |' $< > $@ && " +
+               "grep -q '^module truffledata_csv .* java_class=%s %s ' $@") % (
+            java_class,
+            options,
+            java_class,
+            options,
+        ),
+    )
+    for variant, java_class, options in [
+        # Native Image: cells call the static @CFunction bindings with direct transitions.
+        ("svm", "CsvCells", "truffle_cells=true truffle_backend=native truffle_transitions=direct"),
+        # HotSpot: cells call the FFM bindings (loader lookup).
+        ("jvm", "CsvCellsJvm", "truffle_cells=true truffle_backend=ffm"),
+    ]
+]
+
+[
+    myna_bindings(
+        name = "bindings_" + variant,
+        abi = False,
+        java_class = java_class,
+        java_package = "dev.elide.truffledata.csv.kernel.cells.generated",
+        out = "generated/" + variant,
+        seam = ":seam_" + variant,
+        truffle = True,
+    )
+    for variant, java_class in [
+        ("svm", "CsvCells"),
+        ("jvm", "CsvCellsJvm"),
+    ]
+]
+
+filegroup(
+    name = "descriptors",
+    srcs = [
+        "generated/jvm/seam.json",
+        "generated/svm/seam.json",
+    ],
+)
+
+# Myna output is generated as-is (no NullAway). Only the cells and the bindings they call ship.
+filegroup(
+    name = "generated_sources",
+    srcs = [
+        "generated/jvm/CsvCellsJvmFFM.java",
+        "generated/jvm/CsvCellsJvmTruffle.java",
+        "generated/svm/CsvCells.java",
+        "generated/svm/CsvCellsTruffle.java",
+    ],
+)
+
+filegroup(
+    name = "native_resources",
+    srcs = ["generated/svm/META-INF/native-image/dev.elide.myna/dev.elide.truffledata.csv.kernel.cells.generated.CsvCells/native-image.properties"],
+)
+
+java_library(
+    name = "bindings",
+    srcs = [":generated_sources"],
+    resource_strip_prefix = "csv/cells/generated/svm",
+    resources = [":native_resources"],
+    deps = [
+        "//bazel:myna_compiler_sdk",
+        "@maven//:org_graalvm_sdk_nativeimage",
+        "@maven//:org_graalvm_sdk_word",
+        "@maven//:org_graalvm_truffle_truffle_api",
+        "@myna//:truffle",
+    ],
+)
+
+# The route: HotSpot (CellsFfmIndexer, via FfmIndexer.Backend when the flag is on) and Native Image
+# (CellsSvmIndexer, registered at image build time by CsvCellsFeature, which this jar's
+# native-image.properties enables).
+data_java_library(
+    name = "cells",
+    srcs = [
+        "src/main/java/dev/elide/truffledata/csv/cells/CellsFfmIndexer.java",
+        "src/main/java/dev/elide/truffledata/csv/cells/CellsSvmIndexer.java",
+        "src/main/java/dev/elide/truffledata/csv/cells/CsvCellsFeature.java",
+        "src/main/java/dev/elide/truffledata/csv/cells/CsvCellsRoute.java",
+        "src/main/java/dev/elide/truffledata/csv/cells/package-info.java",
+    ],
+    resource_strip_prefix = "csv/cells/src/main/resources",
+    resources = ["src/main/resources/META-INF/native-image/dev.elide.truffledata/truffledata-csv-cells/native-image.properties"],
+    deps = [
+        ":bindings",
+        "//core",
+        "//csv",
+        "//csv/kernel:bindings",
+        "//csv/kernel:svm",
+        "@maven//:org_graalvm_sdk_nativeimage",
+        "@maven//:org_graalvm_sdk_word",
+        "@maven//:org_graalvm_truffle_truffle_api",
+        "@myna//:truffle",
+    ],
+)
+
+# The route sources, for the typed-call source scan (//csv/cells/tests:CellsRouteTest).
+exports_files(
+    [
+        "src/main/java/dev/elide/truffledata/csv/cells/CellsFfmIndexer.java",
+        "src/main/java/dev/elide/truffledata/csv/cells/CellsSvmIndexer.java",
+    ],
+    visibility = ["//csv/cells/tests:__pkg__"],
+)
+
+# The hand-written cell call sites and the generated cells that classify them, for the call-shape
+# scan (//protobuf-buffa/cells/tests:call_shape).
+filegroup(
+    name = "call_sites",
+    srcs = [
+        "generated/jvm/CsvCellsJvmTruffle.java",
+        "generated/svm/CsvCellsTruffle.java",
+        "src/main/java/dev/elide/truffledata/csv/cells/CellsFfmIndexer.java",
+        "src/main/java/dev/elide/truffledata/csv/cells/CellsSvmIndexer.java",
+        "src/main/java/dev/elide/truffledata/csv/cells/CsvCellsRoute.java",
+    ],
+    visibility = ["//protobuf-buffa/cells/tests:__pkg__"],
+)

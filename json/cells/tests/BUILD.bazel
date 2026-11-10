@@ -1,0 +1,227 @@
+load("@rules_graalvm//graalvm:defs.bzl", "native_image")
+load("@rules_java//java:defs.bzl", "java_test")
+load("@rules_shell//shell:sh_test.bzl", "sh_test")
+load("//bazel:java.bzl", "data_java_library")
+load("//bazel:jit.bzl", "LINUX_SVM_PLATFORMS", "LINUX_SVM_SDK", "TRUFFLE_JIT_CHECKS")
+
+# The JSON Myna cells route (truffledata.json.cells, default off). The flag-off suites are the
+# existing //json/tests targets, which do not see this artifact.
+
+# Shared by both lanes (split package: the route and the backends are package-private).
+data_java_library(
+    name = "inputs",
+    testonly = True,
+    srcs = ["CellsInputs.java"],
+    deps = [
+        "//json",
+    ],
+)
+
+# Native Image parity and the shared acceptance suite, on the cells route.
+data_java_library(
+    name = "acceptance",
+    testonly = True,
+    srcs = ["CellsAcceptance.java"],
+    deps = [
+        ":inputs",
+        "//json",
+        "//json:bindings",
+        "//json/cells",
+        "//json/cells:bindings",
+        "//json/tests:acceptance",
+        "@maven//:org_graalvm_polyglot_polyglot",
+        "@maven//:org_graalvm_sdk_nativeimage",
+        "@maven//:org_graalvm_sdk_word",
+        "@maven//:org_graalvm_truffle_truffle_api",
+        "@myna//:truffle",
+    ],
+)
+
+# The route alone, for the production-shaped image below.
+data_java_library(
+    name = "shape",
+    testonly = True,
+    srcs = ["CellsShape.java"],
+    deps = [
+        ":inputs",
+        "//json",
+        "//json/cells",
+        "@maven//:org_graalvm_sdk_nativeimage",
+        "@maven//:org_graalvm_sdk_word",
+    ],
+)
+
+# HotSpot. `jvm`: the cells route with the flag on, its parity against the production binding,
+# and every //json/tests JVM suite rerun on it; `jvm_off`: the artifact present with the flag off
+# (the route stays FFM; parity still runs, calling the cells directly).
+[
+    java_test(
+        name = name,
+        size = "large",
+        srcs = [
+            "CellsParity.java",
+            "CellsRouteTest.java",
+            "//json/tests:FfmAcceptanceTest.java",
+            "//json/tests:JsonExportTest.java",
+            "//json/tests:JsonInteropTest.java",
+            "//json/tests:JvmScopedTest.java",
+        ],
+        args = [
+            "--class",
+            "dev.elide.truffledata.json.CellsRouteTest",
+        ] + ([
+            "--class",
+            "dev.elide.truffledata.json.tests.FfmAcceptanceTest",
+            "--class",
+            "dev.elide.truffledata.json.tests.JsonExportTest",
+            "--class",
+            "dev.elide.truffledata.json.tests.JsonInteropTest",
+            "--class",
+            "dev.elide.truffledata.json.tests.JvmScopedTest",
+        ] if flag == "true" else []),
+        data = [
+            "//json/cells:sources",
+            "//json/native:json_shared.so",
+            "//json/native:other_abi_class.so",
+            "//json/native:other_abi_class_fingerprints",
+            "//json/native:session_corpus",
+        ],
+        jvm_flags = [
+            "--enable-native-access=ALL-UNNAMED",
+            "-Dpolyglot.engine.WarnInterpreterOnly=false",
+            "-Dtruffledata.json.cells=" + flag,
+            "-Dtruffledata.json.cells.expected=" + flag,
+            "-ea",
+        ],
+        main_class = "dev.elide.bazel.junit.BazelJUnitRunner",
+        use_testrunner = False,
+        runtime_deps = [
+            "//bazel/junit:runner",
+            "@maven//:org_graalvm_truffle_truffle_runtime",
+        ],
+        deps = [
+            ":inputs",
+            "//core",
+            "//json",
+            "//json:bindings",
+            "//json:jvm",
+            "//json/cells",
+            "//json/cells:bindings",
+            "@maven//:com_google_code_gson_gson",
+            "@maven//:org_graalvm_polyglot_polyglot",
+            "@maven//:org_graalvm_truffle_truffle_api",
+            "@maven//:org_junit_jupiter_junit_jupiter_api",
+            "@myna//:truffle",
+            "@myna//:values",
+        ],
+    )
+    for name, flag in [
+        ("jvm", "true"),
+        ("jvm_off", "false"),
+    ]
+]
+
+# Native Image built with the flag and the Feature: the route check, parity against the
+# production static bindings with exact cell call accounting, the cells called from
+# runtime-compiled code, then the shared native acceptance (//json/tests:SvmAcceptance) on the
+# cells route, with the runtime-compilation blocklist checks on.
+native_image(
+    name = "native",
+    testonly = True,
+    cc_deps = ["//json/native:svm"],
+    exec_properties = {
+        "EstimatedCPU": "8",
+        "EstimatedMemory": "24GB",
+    },
+    executable_name = "json_cells_acceptance",
+    extra_args = [
+        "--gc=serial",
+        "-ea",
+        "-Dtruffledata.json.cells=true",
+        "--initialize-at-build-time=dev.elide.truffledata",
+        "--parallelism=8",
+        "-march=compatibility",
+        "-H:+UnlockExperimentalVMOptions",
+    ] + TRUFFLE_JIT_CHECKS + [
+        "-H:-UnlockExperimentalVMOptions",
+        "--features=dev.elide.truffledata.json.JsonCellsFeature",
+    ],
+    graalvm_sdk = LINUX_SVM_SDK,
+    main_class = "dev.elide.truffledata.json.CellsAcceptance",
+    optimization_mode = "2",
+    tags = ["manual"],
+    target_compatible_with = LINUX_SVM_PLATFORMS,
+    deps = [
+        ":acceptance",
+        "@maven//:org_graalvm_truffle_truffle_runtime",
+    ],
+)
+
+sh_test(
+    name = "native_test",
+    size = "large",
+    srcs = ["//json/tests:native_test.sh"],
+    args = ["$(rootpath :native)"],
+    data = [
+        ":native",
+        "//json/native:session_corpus",
+    ],
+    tags = ["manual"],
+    target_compatible_with = LINUX_SVM_PLATFORMS,
+)
+
+# The route in an image built like a consumer's: the flag and the Feature, no assertions, and no
+# caller of the production bindings of the routed imports. It keeps its local symbols so that
+# :aot_shape can read the compiled shape of the route (brief item 2: scalar cells are called through
+# their typed method, never the generic execute). Shape only; timings come from the paired harness.
+native_image(
+    name = "native_profile",
+    testonly = True,
+    cc_deps = ["//json/native:svm"],
+    exec_properties = {
+        "EstimatedCPU": "8",
+        "EstimatedMemory": "24GB",
+    },
+    executable_name = "json_cells_profile",
+    extra_args = [
+        "--gc=serial",
+        "-Dtruffledata.json.cells=true",
+        "--initialize-at-build-time=dev.elide.truffledata",
+        "--parallelism=8",
+        "-march=compatibility",
+        "-H:+UnlockExperimentalVMOptions",
+        "-H:-DeleteLocalSymbols",
+    ] + TRUFFLE_JIT_CHECKS + [
+        "-H:-UnlockExperimentalVMOptions",
+        "--features=dev.elide.truffledata.json.JsonCellsFeature",
+    ],
+    graalvm_sdk = "@graalvm_linux_amd64//:gvm",
+    main_class = "dev.elide.truffledata.json.CellsShape",
+    optimization_mode = "2",
+    tags = ["manual"],
+    target_compatible_with = [
+        "@platforms//os:linux",
+        "@platforms//cpu:x86_64",
+    ],
+    deps = [
+        ":shape",
+        "@maven//:org_graalvm_truffle_truffle_runtime",
+    ],
+)
+
+sh_test(
+    name = "aot_shape",
+    size = "medium",
+    srcs = ["aot_shape.sh"],
+    args = ["$(rootpath :native_profile)"],
+    data = [
+        "aot_shape.py",
+        ":native_profile",
+        "//tools/bench:aot_symbols.py",
+    ],
+    tags = ["manual"],
+    target_compatible_with = [
+        "@platforms//os:linux",
+        "@platforms//cpu:x86_64",
+    ],
+)

@@ -53,6 +53,7 @@ java_library(
 data_java_library(
     name = "jvm",
     srcs = [
+        "src/jvm/java/dev/elide/truffledata/csv/kernel/jvm/CellsRoute.java",
         "src/jvm/java/dev/elide/truffledata/csv/kernel/jvm/FfmIndexer.java",
         "src/jvm/java/dev/elide/truffledata/csv/kernel/jvm/package-info.java",
     ],
@@ -62,6 +63,7 @@ data_java_library(
     visibility = ["//visibility:public"],
     deps = [
         ":bindings",
+        "//core",
         "//csv",
     ],
 )
@@ -70,6 +72,7 @@ data_java_library(
 data_java_library(
     name = "svm",
     srcs = [
+        "src/svm/java/dev/elide/truffledata/csv/kernel/svm/CellsRoute.java",
         "src/svm/java/dev/elide/truffledata/csv/kernel/svm/SvmIndexer.java",
         "src/svm/java/dev/elide/truffledata/csv/kernel/svm/package-info.java",
     ],

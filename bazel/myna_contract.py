@@ -1,15 +1,29 @@
 #!/usr/bin/env python3
 """Check emitted ABI policy and the resources actually packaged with Java bindings."""
+import hashlib
 import json
+import re
 import sys
 import zipfile
 
+# Myna 0.14.0 target ABI classes (bazel/myna.bzl): the signed-char LP64 little-endian class shared by
+# x86-64 and Apple arm64, and AAPCS64 Linux (aarch64-unknown-linux-gnu), whose char is unsigned.
+CLASSES = {
+    "LP64_LITTLE": {"dataModel": "LP64", "byteOrder": "little"},
+    "LP64_LITTLE_AAPCS64": {"dataModel": "LP64", "byteOrder": "little", "charUnsigned": True},
+}
+HEX64 = re.compile(rb"(?<![0-9a-f])[0-9a-f]{64}(?![0-9a-f])")
+
+
+def load(path):
+    with open(path, encoding="utf-8") as source:
+        return json.load(source)
+
 
 def verify(descriptor, archive):
-    with open(descriptor, encoding="utf-8") as source:
-        module = json.load(source)
+    module = load(descriptor)
     assert module["schemaVersion"] == 3
-    assert module["targetAbi"] == {"dataModel": "LP64", "byteOrder": "little"}
+    assert module["targetAbi"] in CLASSES.values(), module["targetAbi"]
     assert "targetTriple" not in module
     assert module["bindingAbiVersion"] == 2
     expected = {
@@ -24,6 +38,8 @@ def verify(descriptor, archive):
                              "session_write_text", "plan_create", "plan_release", "typed_decode", "typed_release",
                              "session_reset", "session_release", "stream_create", "stream_feed", "stream_finish",
                              "stream_next", "stream_release"},
+        # csv/native/csv.seam: the structural index kernel (ABI 1).
+        "truffledata_csv": {"fingerprint", "kernel", "index", "index_leaf", "validate_utf8"},
     }[module["name"]]
     functions = module["functions"]
     assert {f["logicalName"] for f in functions} == expected
@@ -36,6 +52,8 @@ def verify(descriptor, archive):
         # protobuf-buffa/native/lib.rs: the ABI query and the 64 KiB-bounded, allocation-free
         # slab decode (input and capacity checked before any work).
         "truffledata_buffa": {"fingerprint", "decodeSlabSmall"},
+        # csv/native/api.h: the ABI query, the kernel selection and the 64 KiB-bounded index leaf.
+        "truffledata_csv": {"fingerprint", "kernel", "index_leaf"},
     }[module["name"]]
     for function in functions:
         assert function["direction"] == "IMPORT"
@@ -61,15 +79,44 @@ def verify(descriptor, archive):
     return name
 
 
+def verify_classes(descriptor, archive, per_class):
+    """The production bindings carry every ABI class's fingerprint (bazel/myna.bzl, bazel/myna_abi.py):
+    `per_class` lists each class's seam.json and seam.abi; the descriptors must differ only in
+    `targetAbi`, each seam.abi must be its seam.json's SHA-256, the configured target's descriptor must
+    be one of them, and the jar's `<Class>Abi` constants must be exactly those fingerprints."""
+    module = load(descriptor)
+    fingerprints = {}
+    canonical = None
+    for cls, (class_descriptor, class_abi) in per_class.items():
+        with open(class_descriptor, encoding="utf-8") as source:
+            text = source.read()
+        with open(class_abi, encoding="utf-8") as source:
+            fingerprint = source.read().strip()
+        assert hashlib.sha256(text.encode("utf-8")).hexdigest() == fingerprint, class_abi
+        parsed = json.loads(text)
+        assert parsed["targetAbi"] == CLASSES[cls], (cls, parsed["targetAbi"])
+        rest = {key: value for key, value in parsed.items() if key != "targetAbi"}
+        assert canonical is None or rest == canonical, "ABI classes differ beyond targetAbi: " + class_descriptor
+        canonical = rest
+        fingerprints[cls] = fingerprint
+    assert len(set(fingerprints.values())) == len(fingerprints), fingerprints
+    assert {key: value for key, value in module.items() if key != "targetAbi"} == canonical, descriptor
+    assert module["targetAbi"] in CLASSES.values()
+    name = module["java"]["package"] + "." + module["java"]["class"] + "Abi"
+    if archive != "-":
+        with zipfile.ZipFile(archive) as jar:
+            constants = set(HEX64.findall(jar.read(name.replace(".", "/") + ".class")))
+        assert constants == {f.encode() for f in fingerprints.values()}, (name, constants)
+    return name + " " + ", ".join("%s=%s" % (cls, f[:12] + "...") for cls, f in fingerprints.items())
+
+
 def verify_derived(production, derived):
-    """A cells seam derived from a production seam (protobuf-buffa/cells/BUILD.bazel) may differ
+    """A cells seam derived from a production seam (protobuf-buffa/cells, csv/cells, json/cells and yaml/cells BUILD.bazel) may differ
     only in its module options: the Truffle cells block and the Java package/class. Every import,
     struct, policy and the ABI itself must be the production one, so cells call the library the
     production fingerprint check verified."""
-    with open(production, encoding="utf-8") as source:
-        base = json.load(source)
-    with open(derived, encoding="utf-8") as source:
-        cells = json.load(source)
+    base = load(production)
+    cells = load(derived)
     assert "truffle" not in base, "production seams do not enable Truffle cells"
     truffle = cells.get("truffle")
     assert truffle and truffle["cells"] is True and truffle["backend"] in {"NATIVE", "FFM"}, truffle
@@ -82,16 +129,30 @@ def verify_derived(production, derived):
 
 
 if __name__ == "__main__":
-    # Pairs of (descriptor, bindings jar or "-" for a descriptor-only check), then optionally
-    # --derived PRODUCTION DERIVED... for seams derived from a production seam.
+    # Entries of (descriptor, bindings jar or "-" for a descriptor-only check), each optionally
+    # followed by --classes LP64_LITTLE.json LP64_LITTLE.abi LP64_LITTLE_AAPCS64.json LP64_LITTLE_AAPCS64.abi
+    # for production seams, then optionally one or more --derived PRODUCTION DERIVED... groups for
+    # seams derived from a production seam.
     args = sys.argv[1:]
-    derived = []
+    groups = []
     if "--derived" in args:
         index = args.index("--derived")
-        args, derived = args[:index], args[index + 1:]
-        assert len(derived) >= 2, derived
-    assert len(args) >= 2 and len(args) % 2 == 0
-    for start in range(0, len(args), 2):
-        print("Verified binding ABI 2 policy and packaged metadata:", verify(*args[start:start + 2]))
-    for descriptor in derived[1:]:
-        print("Verified derived cells descriptor:", verify_derived(derived[0], descriptor))
+        args, rest = args[:index], args[index:]
+        while rest:
+            assert rest[0] == "--derived", rest
+            end = rest.index("--derived", 1) if "--derived" in rest[1:] else len(rest)
+            group, rest = rest[1:end], rest[end:]
+            assert len(group) >= 2, group
+            groups.append(group)
+    assert len(args) >= 2
+    while args:
+        descriptor, archive, args = args[0], args[1], args[2:]
+        print("Verified binding ABI 2 policy and packaged metadata:", verify(descriptor, archive))
+        if args and args[0] == "--classes":
+            files, args = args[1:1 + 2 * len(CLASSES)], args[1 + 2 * len(CLASSES):]
+            assert len(files) == 2 * len(CLASSES), files
+            per_class = {cls: (files[2 * i], files[2 * i + 1]) for i, cls in enumerate(CLASSES)}
+            print("Verified ABI class fingerprints:", verify_classes(descriptor, archive, per_class))
+    for derived in groups:
+        for descriptor in derived[1:]:
+            print("Verified derived cells descriptor:", verify_derived(derived[0], descriptor))

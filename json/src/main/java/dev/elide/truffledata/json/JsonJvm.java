@@ -2,6 +2,8 @@ package dev.elide.truffledata.json;
 
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import dev.elide.truffledata.Schema;
+import dev.elide.truffledata.TargetAbi;
+import dev.elide.truffledata.json.generated.JsonAbi;
 import dev.elide.truffledata.json.generated.JsonFFM;
 import dev.elide.truffledata.tape.SegmentTape;
 import dev.elide.truffledata.tape.TapeLexical;
@@ -15,6 +17,7 @@ import java.lang.invoke.MethodHandle;
 import java.nio.file.Path;
 import java.util.Map;
 import java.util.Objects;
+import org.jspecify.annotations.Nullable;
 
 /**
  * JVM FFM backend. Its arena owns only the library; every message, typed plan and typed result owns
@@ -32,6 +35,8 @@ public final class JsonJvm implements JsonDecoder {
   private final MethodHandle typedDecode;
   private final MethodHandle typedRelease;
   private final SymbolLookup symbols;
+  // The cells route (JsonCellsRoute, -Dtruffledata.json.cells=true): set exactly when ENABLED.
+  private final JsonCellsRoute.@Nullable Jvm cells;
   private boolean open = true;
   // Messages, typed plans and typed results not yet closed.
   private int live;
@@ -45,9 +50,12 @@ public final class JsonJvm implements JsonDecoder {
       } catch (Throwable failure) {
         throw callFailure(failure);
       }
-      String actual = fingerprint.reinterpret(JsonFFM.ABI_FINGERPRINT.length() + 1).getString(0);
-      if (!actual.equals(JsonFFM.ABI_FINGERPRINT))
-        throw new IllegalStateException("Myna/JSON ABI fingerprint mismatch");
+      // The host's ABI class fingerprint (Myna 0.14.0: Linux AArch64 has its own); never a fallback.
+      String expected = JsonAbi.fingerprint(TargetAbi.HOST.charUnsigned());
+      String actual = fingerprint.reinterpret(expected.length() + 1).getString(0);
+      if (!actual.equals(expected))
+        throw new IllegalStateException(
+            "Myna/JSON ABI fingerprint mismatch (expected the " + TargetAbi.HOST + " class)");
       decode = JsonFFM.decode(symbols);
       decodeAdopted = JsonFFM.decode_adopted(symbols);
       release = JsonFFM.release(symbols);
@@ -55,6 +63,8 @@ public final class JsonJvm implements JsonDecoder {
       planRelease = JsonFFM.plan_release(symbols);
       typedDecode = JsonFFM.typed_decode(symbols);
       typedRelease = JsonFFM.typed_release(symbols);
+      // After the production fingerprint check, so a wrong library fails the same way either way.
+      cells = JsonCellsRoute.ENABLED ? JsonCellsRoute.jvm(library) : null;
     } catch (RuntimeException | Error failure) {
       libraryArena.close();
       throw failure;
@@ -108,22 +118,27 @@ public final class JsonJvm implements JsonDecoder {
     boolean published = false;
     try {
       int status;
-      try {
+      if (JsonCellsRoute.ENABLED)
         status =
-            (int)
-                decodeAdopted.invokeExact(
-                    data,
-                    length,
-                    data.byteSize(),
-                    limits.maxInputBytes(),
-                    limits.maxIndexBytes(),
-                    limits.maxNodes(),
-                    limits.maxTextBytes(),
-                    limits.maxDepth(),
-                    result);
-      } catch (Throwable failure) {
-        throw callFailure(failure);
-      }
+            Objects.requireNonNull(cells)
+                .decodeAdopted(data, length, data.byteSize(), limits, result);
+      else
+        try {
+          status =
+              (int)
+                  decodeAdopted.invokeExact(
+                      data,
+                      length,
+                      data.byteSize(),
+                      limits.maxInputBytes(),
+                      limits.maxIndexBytes(),
+                      limits.maxNodes(),
+                      limits.maxTextBytes(),
+                      limits.maxDepth(),
+                      result);
+        } catch (Throwable failure) {
+          throw callFailure(failure);
+        }
       JsonSvm.checkStatus(status);
       JsonMessage message = message(result, resultArena, onClose);
       published = true;
@@ -242,6 +257,10 @@ public final class JsonJvm implements JsonDecoder {
   }
 
   private void free(MemorySegment result) {
+    if (JsonCellsRoute.ENABLED) {
+      Objects.requireNonNull(cells).release(result);
+      return;
+    }
     try {
       release.invokeExact(result);
     } catch (Throwable failure) {

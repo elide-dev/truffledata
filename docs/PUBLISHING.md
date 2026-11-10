@@ -31,7 +31,7 @@ The release publishes twenty-five thin libraries and a dependency-management BOM
 | `dev.elide:truffledata-protobuf-runtime:<version>` | Stock-free plans, codecs, runtime descriptor compilation and generated-record support; core, Gson and Truffle dependencies |
 | `dev.elide:truffledata-protobuf:<version>` | Optional Message/descriptor compatibility bridge and build-time contract generator; depends on protobuf-runtime, protobuf-java and protobuf-java-util |
 
-All artifacts require Java 25 and currently target Elide GraalVM `25.5.5-elide.27`. They do not bundle GraalVM, guest languages, JDBC drivers, annotation processors, or test libraries. Select the runtime and guest languages in the embedding application. The driver integration artifacts declare their upstream drivers transitively; generic JDBC remains driver independent. JSpecify annotations and the Truffle API are compile dependencies. Release dependencies are checked against `maven_install.json` by `//tools/release:test`.
+All artifacts require Java 25 and currently target Elide GraalVM `25.5.5-elide.28`. They do not bundle GraalVM, guest languages, JDBC drivers, annotation processors, or test libraries. Select the runtime and guest languages in the embedding application. The driver integration artifacts declare their upstream drivers transitively; generic JDBC remains driver independent. JSpecify annotations and the Truffle API are compile dependencies. Release dependencies are checked against `maven_install.json` by `//tools/release:test`.
 
 ## 0.10.0 publication status
 
@@ -77,7 +77,7 @@ For version `0.11.0`, Gradle consumers can use:
 repositories {
     mavenCentral()
     maven("https://maven.elide.dev")
-    maven("https://maven.elide.dev/gvm-elide/25.5.5-elide.27")
+    maven("https://maven.elide.dev/gvm-elide/25.5.5-elide.28")
 }
 dependencies {
     implementation(platform("dev.elide:truffledata-bom:0.11.0"))
@@ -302,10 +302,26 @@ ThinLTO-summarized `.llvm.lto`, except the exemptions above), a macOS machine-co
 lacks machine code or still carries bitcode, a macOS bitcode member is not ThinLTO
 bitcode, a shared library needs a library or binds an undefined symbol outside the
 platform allowlist above (Rust std's weak probes for newer glibc functions excepted), or a dylib's install name is not `@rpath/...`, or any platform's library lacks the ABI fingerprint
-that the published bindings jar verifies. Myna 0.13.0 hashes the resolved ABI class
-(LP64, little-endian on these platforms), so every target shares the fingerprint.
-Each bindings generation first runs Myna multi-target validation across the release
-triples, rejecting layout divergence before building native libraries.
+of its ABI class that the published bindings jar verifies (or carries another class's).
+
+**ABI classes.** Myna hashes the resolved target ABI class, and since Myna 0.14.0 the
+signedness of C `char` is part of it: `x86_64-unknown-linux-gnu` and `aarch64-apple-darwin`
+share the LP64 little-endian signed-`char` class (`LP64_LITTLE`), while
+`aarch64-unknown-linux-gnu` (AAPCS64, unsigned `char`) is its own class
+(`LP64_LITTLE_AAPCS64`) with its own fingerprint, even for seams without a `char` carrier.
+The classes' generated code is otherwise identical, so each bindings jar is published once
+and serves every platform: `bazel/myna.bzl` validates each class across its release triples
+(rejecting layout divergence within a class), generates for the build's target, and
+`bazel/myna_abi.py` adds a generated `<Class>Abi` (`JsonAbi`, `YamlAbi`, `BuffaAbi`,
+`CsvNativeAbi`) holding both fingerprints, folds both into one `seam.h` whose ABI define
+follows the compiler's `__CHAR_UNSIGNED__`, and fails the build if the classes differ in
+anything else. A JVM (FFM) backend selects the class once from the host (`TargetAbi.HOST`,
+`os.name`/`os.arch`); a Native Image backend selects it at image build time
+(`Platform.includedIn(LINUX_AARCH64)`), so a static image folds one constant. A library of
+the other class is rejected like any ABI mismatch (`other_abi_class.so` tests per format),
+never loaded as a fallback; `//bazel:myna_contract` checks that each jar's constants are
+exactly the per-class fingerprints and that the classes' descriptors differ only in
+`charUnsigned`.
 
 **Consumers per platform.** `//tools/release:native_consumers` links each release static
 archive into a C program with LTO off and with ThinLTO (on macOS, the bitcode archive with
@@ -326,7 +342,9 @@ still configure the Elide repository for the GraalVM fork dependencies.
 CSV and YAML also ship static-only `linux-x86_64-musl` and `linux-aarch64-musl`
 archives, plus target-triple aliases for each of their native attachments. Musl
 builds use the pinned Elide toolchain's musl 1.2.5 sysroot, static dependencies
-and the same ABI fingerprint as the GNU and macOS bindings. Per-target CI runs
+and the ABI fingerprint of their architecture's class (x86-64 musl the shared
+signed-`char` class, AArch64 musl the AAPCS64 class, selected in `seam.h` by
+`__CHAR_UNSIGNED__`), which the bindings verify the same way. Per-target CI runs
 the CSV kernel, the YAML decoder and each isolated archive on Linux
 x86-64/AArch64 (GNU and musl) and macOS AArch64.
 

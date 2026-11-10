@@ -3,6 +3,8 @@ package dev.elide.truffledata.buffa;
 import com.oracle.truffle.api.CompilerDirectives;
 import dev.elide.truffledata.ContractViolation;
 import dev.elide.truffledata.Limits;
+import dev.elide.truffledata.TargetAbi;
+import dev.elide.truffledata.buffa.generated.BuffaAbi;
 import dev.elide.truffledata.buffa.generated.BuffaFFM;
 import dev.elide.truffledata.protobuf.ProtoPlan;
 import dev.elide.truffledata.protobuf.SlabLimits;
@@ -112,8 +114,10 @@ final class FfmBackend implements BuffaWire.Backend {
       var actual =
           new String(
               address.reinterpret(64).toArray(ValueLayout.JAVA_BYTE), StandardCharsets.US_ASCII);
-      if (!actual.equals(BuffaFFM.ABI_FINGERPRINT))
-        throw new IllegalStateException("Myna/Buffa ABI fingerprint mismatch");
+      // The host's ABI class fingerprint (Myna 0.14.0: Linux AArch64 has its own); never a fallback.
+      if (!actual.equals(BuffaAbi.fingerprint(TargetAbi.HOST.charUnsigned())))
+        throw new IllegalStateException(
+            "Myna/Buffa ABI fingerprint mismatch (expected the " + TargetAbi.HOST + " class)");
       decode = BuffaFFM.decode(symbols);
       release = BuffaFFM.release(symbols);
       typed = BuffaFFM.typedReuse(symbols);

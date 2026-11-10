@@ -1,0 +1,198 @@
+load("@rules_graalvm//graalvm:defs.bzl", "native_image")
+load("@rules_java//java:defs.bzl", "java_test")
+load("@rules_shell//shell:sh_test.bzl", "sh_test")
+load("//bazel:java.bzl", "data_java_library")
+load("//bazel:jit.bzl", "LINUX_SVM_PLATFORMS", "LINUX_SVM_SDK", "TRUFFLE_JIT_CHECKS")
+
+# The YAML Myna cells route (truffledata.yaml.cells; yaml/cells/BUILD.bazel). The flag-off suites
+# are the existing //yaml/tests targets, which do not see this artifact.
+
+data_java_library(
+    name = "parity",
+    testonly = True,
+    srcs = [
+        # Split package: test-only bridges to the package-private backends.
+        "CellsAcceptance.java",
+        "CellsParity.java",
+    ],
+    deps = [
+        "//core",
+        "//tape",
+        "//yaml",
+        "//yaml/cells",
+        "//yaml/tests:acceptance",
+        "//yaml:svm",
+        "@maven//:org_graalvm_truffle_truffle_api",
+    ],
+)
+
+# HotSpot. `jvm`: the flag on — the YAML integration and plan suites run on the cells route, plus
+# the route, exact parity, result-lifetime, native-segment scope and specialized-call checks;
+# `jvm_off`: the artifact present with the flag off (route stays FFM; the same checks still run,
+# constructing both backends directly). `jvm` is also in the CI coverage lane
+# (.github/workflows/check.bazel.yml): it is what runs the baseline backends' cells hooks.
+[
+    java_test(
+        name = name,
+        size = "large",
+        srcs = [
+            "CellsJvmTest.java",
+        ] + ([
+            "//yaml/tests:YamlIntegrationTest.java",
+            "//yaml/tests:YamlPlanTest.java",
+        ] if flag == "true" else []),
+        args = [
+            "--class",
+            "dev.elide.truffledata.yaml.CellsJvmTest",
+        ] + ([
+            "--class",
+            "dev.elide.truffledata.yaml.tests.YamlIntegrationTest",
+            "--class",
+            "dev.elide.truffledata.yaml.tests.YamlPlanTest",
+        ] if flag == "true" else []),
+        data = [
+            ":cells_sources",
+            "//yaml/native:other_abi_class.so",
+            "//yaml/native:other_abi_class_fingerprints",
+            "//yaml/native:session_corpus",
+            "//yaml/native:testdata",
+            "//yaml/native:yaml_shared.so",
+            "@yaml_test_suite//:cases",
+        ],
+        jvm_flags = [
+            "--enable-native-access=ALL-UNNAMED",
+            "-Dpolyglot.engine.WarnInterpreterOnly=false",
+            "-Dtruffledata.yaml.cells=" + flag,
+            "-Dtruffledata.yaml.cells.expected=" + flag,
+            "-ea",
+        ],
+        main_class = "dev.elide.bazel.junit.BazelJUnitRunner",
+        use_testrunner = False,
+        runtime_deps = [
+            "//bazel/junit:runner",
+            "@maven//:org_graalvm_truffle_truffle_runtime",
+        ],
+        deps = [
+            ":parity",
+            "//core",
+            "//tape",
+            "//yaml",
+            "//yaml:bindings",
+            "//yaml:java",
+            "//yaml:jvm",
+            "//yaml:snakeyaml",
+            "//yaml:svm",
+            "//yaml/cells",
+            "//yaml/cells:bindings",
+            "//yaml/tests:acceptance",
+            "@maven//:org_graalvm_polyglot_polyglot",
+            "@maven//:org_graalvm_truffle_truffle_api",
+            "@maven//:org_junit_jupiter_junit_jupiter_api",
+            "@maven//:org_snakeyaml_snakeyaml_engine",
+            "@myna//:truffle",
+            "@myna//:values",
+        ],
+    )
+    for name, flag in [
+        ("jvm", "true"),
+        ("jvm_off", "false"),
+    ]
+]
+
+# The cells route sources, scanned by CellsJvmTest for the specialized-call rule.
+filegroup(
+    name = "cells_sources",
+    srcs = ["//yaml/cells:sources"],
+)
+
+# Native Images with this artifact on the class path and YamlFeature registered, with the
+# runtime-compilation blocklist checks on. `native`: built with the flag — the route check, the
+# shared YAML native acceptance on the cells route and exact parity with the static backend.
+# `native_off`: the same build without the flag — the shared YAML native acceptance on the static
+# backend; flag_off_image_test checks that this image carries no cells code.
+[
+    native_image(
+        name = name,
+        testonly = True,
+        cc_deps = ["//yaml/native:svm"],
+        exec_properties = {
+            "EstimatedCPU": "8",
+            "EstimatedMemory": "24GB",
+        },
+        executable_name = executable,
+        extra_args = [
+            "--gc=serial",
+            "-ea",
+        ] + flag + [
+            "--initialize-at-build-time=dev.elide.truffledata",
+            "--parallelism=8",
+            "-march=compatibility",
+            "-H:+UnlockExperimentalVMOptions",
+        ] + TRUFFLE_JIT_CHECKS + [
+            "-H:-UnlockExperimentalVMOptions",
+            "--features=dev.elide.truffledata.yaml.YamlFeature",
+        ],
+        graalvm_sdk = LINUX_SVM_SDK,
+        main_class = main_class,
+        optimization_mode = "2",
+        tags = ["manual"],
+        target_compatible_with = LINUX_SVM_PLATFORMS,
+        deps = [
+            ":parity",
+            "@maven//:org_graalvm_truffle_truffle_runtime",
+        ],
+    )
+    for name, executable, flag, main_class in [
+        (
+            "native",
+            "yaml_cells",
+            ["-Dtruffledata.yaml.cells=true"],
+            "dev.elide.truffledata.yaml.CellsAcceptance",
+        ),
+        (
+            "native_off",
+            "yaml_cells_off",
+            [],
+            "dev.elide.truffledata.yaml.tests.SvmAcceptance",
+        ),
+    ]
+]
+
+sh_test(
+    name = "native_test",
+    size = "large",
+    srcs = ["native_test.sh"],
+    args = ["$(rootpath :native)"],
+    data = [
+        ":native",
+        "//yaml/native:session_corpus",
+        "//yaml/native:testdata",
+        "@yaml_test_suite//:cases",
+    ],
+    tags = ["manual"],
+    target_compatible_with = LINUX_SVM_PLATFORMS,
+)
+
+# Flag-off shape, from the images themselves: neither the baseline YAML image (//yaml/tests:native:
+# no flag, no Feature, this artifact absent) nor `native_off` (this artifact present and the Feature
+# registered, flag off) names a cells type — not the route's selector (SvmCells, so YamlSvm's test
+# for it folded at build time), no route class and no myna-truffle class — and `native_off` passes
+# the YAML native acceptance on the static backend. The image built with the flag names them all,
+# so the scan can tell.
+sh_test(
+    name = "flag_off_image_test",
+    size = "medium",
+    srcs = ["flag_off_image_test.sh"],
+    args = [
+        "$(rootpath //yaml/tests:native)",
+        "$(rootpath :native_off)",
+        "$(rootpath :native)",
+    ],
+    data = [
+        ":native",
+        ":native_off",
+        "//yaml/tests:native",
+    ],
+    tags = ["manual"],
+    target_compatible_with = LINUX_SVM_PLATFORMS,
+)

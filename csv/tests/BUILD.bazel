@@ -152,6 +152,37 @@ java_test(
     deps = JVM_DEPS,
 )
 
+# Myna 0.14.0 ABI classes of the native kernel (CsvNativeAbiTest): its FFM backend, the kernel and
+# the other-ABI-class stub. Its own lane, since the pure-Java suites assert that no native backend
+# service is on their class path.
+java_test(
+    name = "jvm_native_abi",
+    srcs = ["CsvNativeAbiTest.java"],
+    args = [
+        "--class",
+        "dev.elide.truffledata.csv.CsvNativeAbiTest",
+    ],
+    data = [
+        "//csv/native:csv_shared.so",
+        "//csv/native:other_abi_class.so",
+        "//csv/native:other_abi_class_fingerprints",
+    ],
+    jvm_flags = [
+        "--enable-native-access=ALL-UNNAMED",
+        "-ea",
+    ],
+    main_class = "dev.elide.bazel.junit.BazelJUnitRunner",
+    use_testrunner = False,
+    runtime_deps = ["//bazel/junit:runner"],
+    deps = [
+        "//core",
+        "//csv",
+        "//csv/kernel:bindings",
+        "//csv/kernel:jvm",
+        "@maven//:org_junit_jupiter_junit_jupiter_api",
+    ],
+)
+
 # Every suite again with the index path forced at every input size over 64-byte kernel calls
 # (ForceIndex, registered by JUnit extension autodetection), so the unchanged scanner, reader,
 # plan, Commons differential and mapped-input suites also check the index path and its fallback.

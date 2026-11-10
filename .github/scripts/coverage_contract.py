@@ -43,7 +43,7 @@ ACCESS_SOURCES = {f'core/src/main/java/dev/elide/truffledata/{name}.java' for na
     # Every hand-written JSON source (//json and //json:jvm); generated bindings live in //json:bindings.
     # The format-neutral classes moved to //tape (YAML plan Task 4) and are listed below.
     f'json/src/main/java/dev/elide/truffledata/json/{name}.java' for name in (
-        'JsonDecoder', 'JsonJvm', 'JsonLimits', 'JsonMessage', 'JsonPlan',
+        'JsonCellsRoute', 'JsonDecoder', 'JsonJvm', 'JsonLimits', 'JsonMessage', 'JsonPlan',
         'JsonSession', 'JsonStream', 'JsonStreamOptions', 'JsonSvm',
         # JvmSessionBackend was missing before Task 4 (test_coverage_contract failed on it).
         'JvmSessionBackend', 'JvmTypedOwner', 'SvmTypedOwner', 'SvmJsonMessage',
@@ -74,6 +74,10 @@ ACCESS_SOURCES = {f'core/src/main/java/dev/elide/truffledata/{name}.java' for na
         'JvmTypedOwner', 'SvmTypedOwner', 'JvmPlanBackend', 'SvmYamlMessage',
         # Static-archive provider and plan (//yaml:svm, truffledata-yaml-native; #41).
         'SvmPlanBackend', 'SvmSessionProvider', 'YamlSessionProvider', 'YamlStatus',
+        # The opt-in Myna cells route's selectors (truffledata.yaml.cells): the JVM holder, the
+        # image singleton's interface, its build-time holder and the hosted Feature. The route
+        # itself is //yaml/cells.
+        'CellsRoute', 'SvmCells', 'SvmRoute', 'YamlFeature',
         # Shared scalar resolution and the emitter (#42).
         'ScalarResolver', 'YamlScalars', 'YamlEmitOptions', 'YamlEmitter', 'YamlWriter',
         # The pure-Java kernel (//yaml:java), differentially tested against native (#41), its
@@ -98,6 +102,9 @@ ACCESS_SOURCES = {f'core/src/main/java/dev/elide/truffledata/{name}.java' for na
 # Interfaces with only abstract methods have an LCOV record but no executable method. Any method
 # they gain is enforced like every other access method.
 DECLARATION_ONLY_SOURCES = {
+    # The cells route's image singleton (//yaml:svm): two abstract methods, implemented by
+    # //yaml/cells and reached only in an image built with -Dtruffledata.yaml.cells=true.
+    'yaml/src/main/java/dev/elide/truffledata/yaml/SvmCells.java',
     'tape/src/main/java/dev/elide/truffledata/tape/TapeLexical.java',
     'tape/src/main/java/dev/elide/truffledata/tape/TapeSink.java',
     'csv/src/main/java/dev/elide/truffledata/csv/CsvSink.java',
@@ -148,7 +155,23 @@ SVM_ONLY_METHODS = {
         'SvmSessionProvider::open (Ldev/elide/truffledata/yaml/YamlOptions;)Ldev/elide/truffledata/yaml/YamlSession;'),
     **_yaml_methods('YamlSession',
         'YamlSession::open ()Ldev/elide/truffledata/yaml/YamlSession;'),
+    # The hosted Feature of the opt-in cells route runs only inside the image builder;
+    # //yaml/cells/tests:native_test (flag on) and :flag_off_image_test (flag off) run it.
+    **_yaml_methods('YamlFeature',
+        'YamlFeature::afterRegistration (Lorg/graalvm/nativeimage/hosted/Feature$AfterRegistrationAccess;)V'),
+    # The image's route holder: initialized by the image builder (where it fails the build if the
+    # flag and the Feature disagree) and read only behind YamlSvm.requireRuntime, which rejects the
+    # JVM first. //yaml/tests:native_test (flag off) and //yaml/cells/tests:native_test (flag on)
+    # run it; //benchmarks/comparison:yaml_svm_cells_unregistered is its negative control.
+    **_yaml_methods('SvmRoute',
+        'SvmRoute::enabled ()Z',
+        'SvmRoute::cells ()Ldev/elide/truffledata/yaml/SvmCells;'),
     **_yaml_methods('SvmSessionBackend',
+        # Hooks read by the cells route's static backend (//yaml/cells, CellsSvmSessionBackend);
+        # //yaml/cells/tests:native_test runs them in an image built with the flag.
+        'SvmSessionBackend::sessionHandle ()Lorg/graalvm/nativeimage/c/type/VoidPointer;',
+        'SvmSessionBackend::resultSlot ()Lorg/graalvm/nativeimage/c/type/VoidPointer;',
+        'SvmSessionBackend::decodeFlags ()I',
         'SvmSessionBackend::compile (Ldev/elide/truffledata/tape/TypedLayout;Ldev/elide/truffledata/yaml/YamlOptions;)Ldev/elide/truffledata/yaml/YamlPlan;',
         'SvmSessionBackend::writeOptions (Lorg/graalvm/word/Pointer;Ldev/elide/truffledata/yaml/YamlOptions;)V',
         'SvmSessionBackend::checkTyped (ILorg/graalvm/nativeimage/c/type/VoidPointer;)V',
@@ -204,6 +227,8 @@ SVM_ONLY_METHODS = {
     # The static-archive plan (truffledata-yaml-native); YamlPlan.compile itself now runs on the
     # session backend of the runtime (the Java kernel on the JVM test class path).
     **_yaml_methods('SvmPlanBackend',
+        # Hook read by the cells route's static plan (//yaml/cells, CellsSvmPlanBackend).
+        'SvmPlanBackend::handle ()Lorg/graalvm/nativeimage/c/type/VoidPointer;',
         'SvmPlanBackend::create (Ldev/elide/truffledata/tape/TypedLayout;Ldev/elide/truffledata/yaml/YamlOptions;)Ldev/elide/truffledata/yaml/YamlPlan;',
         'SvmPlanBackend::decode ([B[Ldev/elide/truffledata/Schema;)Ldev/elide/truffledata/tape/TypedOwner;',
         'SvmPlanBackend::release ()V'),
@@ -226,6 +251,13 @@ SVM_ONLY_METHODS = {
     'csv/src/main/java/dev/elide/truffledata/csv/CsvIndexing.java': {
         'dev/elide/truffledata/csv/CsvIndexing::loadNative ()Ldev/elide/truffledata/csv/CsvIndexing$Provider;',
     },
+    # The opt-in cells route's flag holder (truffledata.json.cells). Its JVM half runs on this lane
+    # (JvmScopedTest.cellsRouteIsOptInAndNeedsItsArtifact); the image's cells singleton exists only
+    # in an image built with the flag and JsonCellsFeature (//json/cells/tests:native_test).
+    **_json_methods(
+        'JsonCellsRoute',
+        'JsonCellsRoute::svm ()Ldev/elide/truffledata/json/JsonCellsRoute$Svm;',
+    ),
     # Static entry points: each throws from requireRuntime (a callee) on the JVM, so JaCoCo records
     # no probe even though JvmScopedTest and FfmAcceptanceTest call them; the rest is the native
     # decode, ABI check, result publication and release that only an image can link.
@@ -239,6 +271,8 @@ SVM_ONLY_METHODS = {
         'JsonSvm::publish (Lorg/graalvm/nativeimage/c/type/VoidPointer;Ljava/lang/Runnable;)'
         'Ldev/elide/truffledata/json/JsonMessage;',
         'JsonSvm::release (J)V',
+        # The opt-in cells route's pinned decode (//json/cells/tests:native_test; flag off it folds away).
+        'JsonSvm::cellsDecode ([BLdev/elide/truffledata/json/JsonLimits;Lorg/graalvm/nativeimage/c/type/VoidPointer;)I',
         'JsonSvm::adoptResult (Lorg/graalvm/nativeimage/c/type/VoidPointer;)Ldev/elide/truffledata/json/JsonMessage;',
         # Result accessors (Myna v4 descriptor, side tables, retained input) and the session's
         # rebindable borrow reader (JSON performance ledger V1; was JsonSvm::borrow).

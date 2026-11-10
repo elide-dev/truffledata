@@ -2,6 +2,7 @@ package dev.elide.truffledata.buffa;
 
 import dev.elide.truffledata.Limits;
 import dev.elide.truffledata.buffa.generated.Buffa;
+import dev.elide.truffledata.buffa.generated.BuffaAbi;
 import dev.elide.truffledata.protobuf.ProtoPlan;
 import dev.elide.truffledata.protobuf.SlabLimits;
 import dev.elide.truffledata.protobuf.SlabMessage;
@@ -66,7 +67,9 @@ final class SvmBackend implements BuffaWire.Backend {
   SvmBackend() {
     byte[] fingerprint = new byte[64];
     CTypeConversion.asByteBuffer(Buffa.fingerprint(), 64).get(fingerprint);
-    if (!new String(fingerprint, StandardCharsets.US_ASCII).equals(Buffa.ABI_FINGERPRINT))
+    // The image's ABI class (Platform.includedIn folds at image build time): one constant.
+    String expected = BuffaAbi.fingerprint(Platform.includedIn(Platform.LINUX_AARCH64.class));
+    if (!new String(fingerprint, StandardCharsets.US_ASCII).equals(expected))
       throw new IllegalStateException("Myna/Buffa ABI fingerprint mismatch");
     VoidPointer result = UnmanagedMemory.calloc(SLAB + Buffa.SlabResult.SIZE);
     if (result.isNull()) throw new OutOfMemoryError("Native result allocation");

@@ -1,0 +1,145 @@
+load("@rules_java//java:defs.bzl", "java_library")
+load("//bazel:java.bzl", "data_java_library")
+load("//bazel:myna.bzl", "myna_bindings")
+
+package(default_visibility = ["//visibility:public"])
+
+# truffledata-yaml-cells: the opt-in route that makes a YAML session's own native calls through
+# Myna-generated Truffle cells: session_decode, session_write_text (Native Image), session_retain,
+# session_reset, stream_create, stream_feed, stream_next, stream_finish, stream_release and a plan's
+# typed_decode. Selected only by -Dtruffledata.yaml.cells=true (Native Image: at image build time,
+# with --features=dev.elide.truffledata.yaml.YamlFeature from //yaml:svm; JVM: once, in YamlJvm's
+# CellsRoute). With the flag off nothing here is reachable, and the artifact need not be present.
+#
+# What stays on the production bindings, and why (src/main/java/.../Cells.java has the detail):
+# - session_create/session_release and plan_create/plan_release: the wrapped baseline backend
+#   creates and releases its own handles;
+# - release and typed_release: results outlive the session or plan that holds the cells;
+# - on the JVM, caller-supplied native segments: the FFM downcall holds the segment's scope for the
+#   call (a closed or foreign-thread segment is rejected); a cell would lend a raw address.
+# The derived seams declare no `resource` and no `borrow`: Myna 0.14.0 rejects both for these
+# import shapes (a resource constructor must take scalars and return the handle; a call borrow
+# allows no other pointer parameter), so inputs are pinned or staged as the baseline does.
+#
+# Generated from seams *derived* from the production //yaml/native:yaml.seam: only the module line
+# changes (cells options, package and class), so every import, struct and contract is the
+# production one and the production ABI fingerprint, bindings and natives are unchanged
+# (//bazel:myna_contract --derived checks it).
+[
+    genrule(
+        name = "seam_" + variant,
+        srcs = ["//yaml/native:yaml.seam"],
+        outs = ["cells_%s.seam" % variant],
+        cmd = ("sed -e 's| java_package=dev.elide.truffledata.yaml.generated java_class=Yaml | " +
+               "java_package=dev.elide.truffledata.yaml.cells.generated java_class=%s %s |' $< > $@ && " +
+               "grep -q '^module truffledata_yaml .* java_class=%s %s ' $@") % (
+            java_class,
+            options,
+            java_class,
+            options,
+        ),
+    )
+    for variant, java_class, options in [
+        ("svm", "YamlCells", "truffle_cells=true truffle_backend=native truffle_transitions=direct"),
+        ("jvm", "YamlCellsJvm", "truffle_cells=true truffle_backend=ffm"),
+    ]
+]
+
+[
+    myna_bindings(
+        name = "bindings_" + variant,
+        abi = False,
+        java_class = java_class,
+        java_package = "dev.elide.truffledata.yaml.cells.generated",
+        out = "generated/" + variant,
+        seam = ":seam_" + variant,
+        truffle = True,
+    )
+    for variant, java_class in [
+        ("svm", "YamlCells"),
+        ("jvm", "YamlCellsJvm"),
+    ]
+]
+
+filegroup(
+    name = "descriptors",
+    srcs = [
+        "generated/jvm/seam.json",
+        "generated/svm/seam.json",
+    ],
+)
+
+filegroup(
+    name = "generated_sources",
+    srcs = [
+        "generated/jvm/YamlCellsJvmFFM.java",
+        "generated/jvm/YamlCellsJvmTruffle.java",
+        "generated/svm/YamlCells.java",
+        "generated/svm/YamlCellsTruffle.java",
+    ],
+)
+
+filegroup(
+    name = "native_resources",
+    srcs = ["generated/svm/META-INF/native-image/dev.elide.myna/dev.elide.truffledata.yaml.cells.generated.YamlCells/native-image.properties"],
+)
+
+java_library(
+    name = "bindings",
+    srcs = [":generated_sources"],
+    resource_strip_prefix = "yaml/cells/generated/svm",
+    resources = [":native_resources"],
+    deps = [
+        "//bazel:myna_compiler_sdk",
+        "@maven//:org_graalvm_sdk_nativeimage",
+        "@maven//:org_graalvm_sdk_word",
+        "@maven//:org_graalvm_truffle_truffle_api",
+        "@myna//:truffle",
+    ],
+)
+
+# The route itself: split package dev.elide.truffledata.yaml (the backends it wraps are
+# package-private); registered by YamlFeature / CellsRoute by name, never by a service file.
+filegroup(
+    name = "sources",
+    srcs = [
+        "src/main/java/dev/elide/truffledata/yaml/Cells.java",
+        "src/main/java/dev/elide/truffledata/yaml/CellsJvmPlanBackend.java",
+        "src/main/java/dev/elide/truffledata/yaml/CellsJvmSessionBackend.java",
+        "src/main/java/dev/elide/truffledata/yaml/CellsSvm.java",
+        "src/main/java/dev/elide/truffledata/yaml/CellsSvmPlanBackend.java",
+        "src/main/java/dev/elide/truffledata/yaml/CellsSvmSessionBackend.java",
+    ],
+)
+
+data_java_library(
+    name = "cells",
+    srcs = [":sources"],
+    deps = [
+        ":bindings",
+        "//core",
+        "//tape",
+        "//tape:jvm",
+        "//yaml",
+        "//yaml:bindings",
+        "//yaml:jvm",
+        "//yaml:svm",
+        "@maven//:org_graalvm_sdk_nativeimage",
+        "@maven//:org_graalvm_sdk_word",
+        "@maven//:org_graalvm_truffle_truffle_api",
+        "@myna//:truffle",
+        "@myna//:values",
+    ],
+)
+
+# The hand-written cell call sites and the generated cells that classify them, for the call-shape
+# scan (//protobuf-buffa/cells/tests:call_shape).
+filegroup(
+    name = "call_sites",
+    srcs = [
+        "generated/jvm/YamlCellsJvmTruffle.java",
+        "generated/svm/YamlCellsTruffle.java",
+        ":sources",
+    ],
+    visibility = ["//protobuf-buffa/cells/tests:__pkg__"],
+)

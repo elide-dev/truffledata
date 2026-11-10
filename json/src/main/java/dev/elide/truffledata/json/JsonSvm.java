@@ -2,10 +2,12 @@ package dev.elide.truffledata.json;
 
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import dev.elide.truffledata.json.generated.Json;
+import dev.elide.truffledata.json.generated.JsonAbi;
 import dev.elide.truffledata.tape.SvmTape;
 import dev.elide.truffledata.tape.TapeBorrow;
 import org.graalvm.nativeimage.ImageInfo;
 import org.graalvm.nativeimage.PinnedObject;
+import org.graalvm.nativeimage.Platform;
 import org.graalvm.nativeimage.UnmanagedMemory;
 import org.graalvm.nativeimage.c.type.CTypeConversion;
 import org.graalvm.nativeimage.c.type.VoidPointer;
@@ -26,7 +28,9 @@ public final class JsonSvm {
 
   private static void verifyAbi() {
     if (!verified) {
-      if (!CTypeConversion.toJavaString(Json.fingerprint()).equals(Json.ABI_FINGERPRINT))
+      // The image's ABI class (Platform.includedIn folds at image build time): one constant.
+      String expected = JsonAbi.fingerprint(Platform.includedIn(Platform.LINUX_AARCH64.class));
+      if (!CTypeConversion.toJavaString(Json.fingerprint()).equals(expected))
         throw new IllegalStateException("Myna/JSON ABI fingerprint mismatch");
       verified = true;
     }
@@ -90,7 +94,9 @@ public final class JsonSvm {
     if (result.isNull()) throw new OutOfMemoryError("JSON result allocation");
     try {
       int status;
-      try (PinnedObject pinned = PinnedObject.create(utf8)) {
+      // Folded at image build (JsonCellsRoute): an image without the flag compiles the else arm only.
+      if (JsonCellsRoute.ENABLED) status = cellsDecode(utf8, limits, result);
+      else try (PinnedObject pinned = PinnedObject.create(utf8)) {
         status =
             Json.decode(
                 pinned.addressOfArrayElement(0),
@@ -128,20 +134,40 @@ public final class JsonSvm {
     if (result.isNull()) throw new OutOfMemoryError("JSON result allocation");
     try {
       checkStatus(
-          Json.decode_adopted(
-              (org.graalvm.nativeimage.c.type.CCharPointer) WordFactory.pointer(address),
-              length,
-              capacity,
-              limits.maxInputBytes(),
-              limits.maxIndexBytes(),
-              limits.maxNodes(),
-              limits.maxTextBytes(),
-              limits.maxDepth(),
-              result));
+          JsonCellsRoute.ENABLED
+              ? JsonCellsRoute.svm()
+                  .decodeAdopted(address, length, capacity, limits, result.rawValue())
+              : Json.decode_adopted(
+                  (org.graalvm.nativeimage.c.type.CCharPointer) WordFactory.pointer(address),
+                  length,
+                  capacity,
+                  limits.maxInputBytes(),
+                  limits.maxIndexBytes(),
+                  limits.maxNodes(),
+                  limits.maxTextBytes(),
+                  limits.maxDepth(),
+                  result));
       return publish(result, release);
     } catch (RuntimeException | Error failure) {
       release(result.rawValue());
       throw failure;
+    }
+  }
+
+  /**
+   * {@code td_json_decode} through the cells route. The array is pinned here, around the call, with
+   * plain {@code try/finally} (try-with-resources reaches {@code Throwable.addSuppressed}, which the
+   * runtime-compilation blocklist rejects), and lent as a pointer: the cell neither copies nor
+   * retains it, and the native decode copies the input into its own padded storage, as the baseline.
+   */
+  private static int cellsDecode(byte[] utf8, JsonLimits limits, VoidPointer result) {
+    PinnedObject pinned = PinnedObject.create(utf8);
+    try {
+      return JsonCellsRoute.svm()
+          .decode(
+              pinned.addressOfArrayElement(0).rawValue(), utf8.length, limits, result.rawValue());
+    } finally {
+      pinned.close();
     }
   }
 
@@ -177,7 +203,8 @@ public final class JsonSvm {
   static void release(long address) {
     if (address == 0) return;
     VoidPointer result = WordFactory.pointer(address);
-    Json.release(result);
+    if (JsonCellsRoute.ENABLED) JsonCellsRoute.svm().release(address);
+    else Json.release(result);
     UnmanagedMemory.free(result);
   }
 }
