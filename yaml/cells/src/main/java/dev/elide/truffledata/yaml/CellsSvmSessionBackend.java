@@ -1,6 +1,5 @@
 package dev.elide.truffledata.yaml;
 
-import dev.elide.myna.truffle.NativePointer;
 import dev.elide.truffledata.tape.TapeBorrow;
 import dev.elide.truffledata.tape.TapeTextArena;
 import dev.elide.truffledata.tape.TypedLayout;
@@ -23,92 +22,40 @@ import org.jspecify.annotations.Nullable;
  * stream_release} — go through cells generated with {@code truffle_backend=native
  * truffle_transitions=direct}. Everything else is the static backend's: this wraps an {@link
  * SvmSessionBackend}, which owns the native session and result slot and creates and releases
- * them; retained results release through the static binding, because they outlive this backend
- * and its cells. It reads the backend's state through its hooks and keeps its exact control flow,
- * so tapes are identical and errors are the same, in the same order. Nothing here catches a cell
- * failure or falls back to the static calls.
+ * them; retained results release through the static binding, because they outlive this backend.
+ * It reads the backend's state through its hooks and keeps its exact control flow, so tapes are
+ * identical and errors are the same, in the same order. Nothing here catches a cell failure or
+ * falls back to the static calls.
  *
- * <p>Heap arrays are pinned here, around the call, exactly as the static backend pins them, with
- * plain {@code try/finally} (try-with-resources reaches {@code Throwable.addSuppressed}, which the
- * runtime-compilation blocklist rejects), and lent to the cell as pointers: no copy. The calling
- * convention, the reused argument arrays and what still allocates per call are described on {@link
- * Cells}.
+ * <p>This is host code, compiled ahead of time and called below Truffle boundaries, so every call
+ * uses the cell's static {@code invoke} entry (Myna 0.16.0): native carriers and raw addresses, with
+ * no cell instance, argument array, box, {@code NativePointer} or {@code Borrow}; it allocates
+ * nothing and costs the direct call. The cells' {@code execute} methods, which coerce guest values
+ * and then call the same {@code invoke}, are for guest code and are not used here. The caller keeps
+ * every address valid for the call: heap arrays are pinned around it, exactly as the static
+ * backend pins them, with plain {@code try/finally} (try-with-resources reaches {@code
+ * Throwable.addSuppressed}, which the runtime-compilation blocklist rejects), and lent without a
+ * copy; the session, the result slot and a stream are the wrapped backend's and outlive the call.
  */
 final class CellsSvmSessionBackend extends YamlSession.Backend {
-  private final CellsSvm cells;
   private final SvmSessionBackend backend;
   private final YamlOptions options;
-  // The image's shared cells (CellsSvm), each held as its concrete generated type.
-  private final YamlCellsTruffle.session_decode_Cell decode;
-  private final YamlCellsTruffle.session_write_text_Cell writeText;
-  private final YamlCellsTruffle.session_retain_Cell retain;
-  private final YamlCellsTruffle.stream_feed_Cell feed;
-  private final YamlCellsTruffle.stream_next_Cell next;
-  // Pointer and void results have no typed method: these four go through execute(Object[]).
-  private final YamlCellsTruffle.session_reset_Cell reset;
-  private final YamlCellsTruffle.stream_create_Cell streamCreate;
-  private final YamlCellsTruffle.stream_finish_Cell streamFinish;
-  private final YamlCellsTruffle.stream_release_Cell streamRelease;
 
-  // One argument array per cell, in seam order; `*` slots are written per call (see Cells).
-  /** session, data*, length*, flags*, text_out = NULL, text_capacity = 0, result. */
-  private final @Nullable Object[] decodeArguments;
+  /** The session's handle and result slot: they live as long as {@link #backend}. */
+  private final long session;
 
-  /** session, text_out*, text_capacity*, result*. */
-  private final @Nullable Object[] writeTextArguments;
+  private final long result;
 
-  /** session, result*. */
-  private final @Nullable Object[] retainArguments;
-
-  /** stream*, data*, length*. */
-  private final @Nullable Object[] feedArguments = new Object[3];
-
-  /** stream*, flags*, result. */
-  private final @Nullable Object[] nextArguments;
-
-  /** session. */
-  private final Object[] resetArguments;
-
-  /** session, max_document_bytes*, buffer_bytes*. */
-  private final @Nullable Object[] streamCreateArguments;
-
-  /** stream*: stream_finish and stream_release. */
-  private final @Nullable Object[] streamArguments = new Object[1];
-
-  private final Cells.Handle stream = new Cells.Handle();
-
-  CellsSvmSessionBackend(CellsSvm cells, YamlOptions options) {
-    this.cells = cells;
+  CellsSvmSessionBackend(YamlOptions options) {
     this.options = options;
-    decode = cells.decode;
-    writeText = cells.writeText;
-    retain = cells.retain;
-    feed = cells.feed;
-    next = cells.next;
-    reset = cells.reset;
-    streamCreate = cells.streamCreate;
-    streamFinish = cells.streamFinish;
-    streamRelease = cells.streamRelease;
     backend = new SvmSessionBackend(options);
-    try {
-      // The session and its result slot live as long as this backend: one carrier each.
-      NativePointer session = NativePointer.of(backend.sessionHandle().rawValue());
-      NativePointer result = NativePointer.of(backend.resultSlot().rawValue());
-      decodeArguments = new Object[] {session, null, null, null, NativePointer.NULL, 0L, result};
-      writeTextArguments = new Object[] {session, null, null, null};
-      retainArguments = new Object[] {session, null};
-      nextArguments = new Object[] {null, null, result};
-      resetArguments = new Object[] {session};
-      streamCreateArguments = new Object[] {session, null, null};
-    } catch (RuntimeException | Error failure) {
-      backend.release();
-      throw failure;
-    }
+    session = backend.sessionHandle().rawValue();
+    result = backend.resultSlot().rawValue();
   }
 
   @Override
   YamlPlan compile(TypedLayout layout, YamlOptions options) {
-    return CellsSvmPlanBackend.create(cells, layout, options);
+    return CellsSvmPlanBackend.create(layout, options);
   }
 
   @Override
@@ -122,16 +69,20 @@ final class CellsSvmSessionBackend extends YamlSession.Backend {
     byte[] input = YamlStatus.utf8(data, offset, length, encoding);
     // A non-null address is required even when YAML's input is empty.
     byte[] pinnedBytes = input.length == 0 ? new byte[1] : input;
-    @Nullable Object[] arguments = decodeArguments;
     int status;
     PinnedObject pin = PinnedObject.create(pinnedBytes);
     try {
-      arguments[1] = NativePointer.of(pin.addressOfArrayElement(0).rawValue());
-      arguments[2] = (long) input.length;
-      arguments[3] = backend.decodeFlags();
-      status = decode.executeInt(arguments);
+      // text_out = NULL, text_capacity = 0: shared text is written by session_write_text.
+      status =
+          YamlCellsTruffle.session_decode_Cell.invoke(
+              session,
+              pin.addressOfArrayElement(0).rawValue(),
+              input.length,
+              backend.decodeFlags(),
+              0L,
+              0L,
+              result);
     } finally {
-      arguments[1] = null;
       pin.close();
     }
     SvmSessionBackend.check(status, backend.resultSlot());
@@ -158,34 +109,27 @@ final class CellsSvmSessionBackend extends YamlSession.Backend {
 
     void write() {
       VoidPointer output = StackValue.get(Yaml.YamlTextResult.SIZE);
-      @Nullable Object[] arguments = writeTextArguments;
-      try {
-        arguments[3] = NativePointer.of(output.rawValue());
-        for (; ; ) {
-          int status;
-          byte[] bytes = array();
-          PinnedObject pin = PinnedObject.create(bytes);
-          try {
-            arguments[1] = NativePointer.of(pin.addressOfArrayElement(0).rawValue());
-            arguments[2] = (long) bytes.length;
-            status = writeText.executeInt(arguments);
-          } finally {
-            arguments[1] = null;
-            pin.close();
-          }
-          if (status == 10) {
-            long required = Yaml.YamlTextResult.required_capacity(output);
-            if (required > Integer.MAX_VALUE || required <= bytes.length)
-              throw new IllegalArgumentException("YAML text arena capacity");
-            ensureCapacity((int) required);
-            continue;
-          }
-          YamlStatus.checkStatus(status);
-          table = (Pointer) Yaml.YamlTextResult.table(output);
-          return;
+      for (; ; ) {
+        int status;
+        byte[] bytes = array();
+        PinnedObject pin = PinnedObject.create(bytes);
+        try {
+          status =
+              YamlCellsTruffle.session_write_text_Cell.invoke(
+                  session, pin.addressOfArrayElement(0).rawValue(), bytes.length, output.rawValue());
+        } finally {
+          pin.close();
         }
-      } finally {
-        arguments[3] = null;
+        if (status == 10) {
+          long required = Yaml.YamlTextResult.required_capacity(output);
+          if (required > Integer.MAX_VALUE || required <= bytes.length)
+            throw new IllegalArgumentException("YAML text arena capacity");
+          ensureCapacity((int) required);
+          continue;
+        }
+        YamlStatus.checkStatus(status);
+        table = (Pointer) Yaml.YamlTextResult.table(output);
+        return;
       }
     }
 
@@ -208,14 +152,7 @@ final class CellsSvmSessionBackend extends YamlSession.Backend {
       throw new OutOfMemoryError("YAML retained result allocation");
     }
     try {
-      @Nullable Object[] arguments = retainArguments;
-      int status;
-      try {
-        arguments[1] = NativePointer.of(owned.rawValue());
-        status = retain.executeInt(arguments);
-      } finally {
-        arguments[1] = null;
-      }
+      int status = YamlCellsTruffle.session_retain_Cell.invoke(session, owned.rawValue());
       YamlStatus.checkStatus(status);
       Pointer descriptor = (Pointer) Yaml.YamlResult.view(owned);
       long count = SvmYamlMessage.validate(descriptor);
@@ -237,7 +174,7 @@ final class CellsSvmSessionBackend extends YamlSession.Backend {
 
   @Override
   protected void reset() {
-    reset.execute(resetArguments);
+    YamlCellsTruffle.session_reset_Cell.invoke(session);
   }
 
   @Override
@@ -247,27 +184,20 @@ final class CellsSvmSessionBackend extends YamlSession.Backend {
 
   @Override
   protected long streamCreate(int maxDocumentBytes, int growth) {
-    @Nullable Object[] arguments = streamCreateArguments;
-    arguments[1] = (long) maxDocumentBytes;
-    arguments[2] = (long) growth;
-    // A pointer result: the cell returns its NativePointer carrier (NULL for a failed allocation).
-    NativePointer created = (NativePointer) streamCreate.execute(arguments);
-    if (created.address() == 0) throw new OutOfMemoryError("YAML stream allocation");
-    stream.set(created);
-    return created.address();
+    // NULL for a failed allocation.
+    long created = YamlCellsTruffle.stream_create_Cell.invoke(session, maxDocumentBytes, growth);
+    if (created == 0) throw new OutOfMemoryError("YAML stream allocation");
+    return created;
   }
 
   @Override
   protected int streamFeed(long stream, byte[] bytes, int offset, int length) {
-    @Nullable Object[] arguments = feedArguments;
     PinnedObject pin = PinnedObject.create(bytes);
     try {
-      arguments[0] = this.stream.of(stream);
-      arguments[1] = NativePointer.of(pin.addressOfArrayElement(offset).rawValue());
-      arguments[2] = (long) length;
-      return (int) feed.executeLong(arguments);
+      return (int)
+          YamlCellsTruffle.stream_feed_Cell.invoke(
+              stream, pin.addressOfArrayElement(offset).rawValue(), length);
     } finally {
-      arguments[1] = null;
       pin.close();
     }
   }
@@ -279,25 +209,18 @@ final class CellsSvmSessionBackend extends YamlSession.Backend {
 
   @Override
   protected void streamFinish(long stream) {
-    @Nullable Object[] arguments = streamArguments;
-    arguments[0] = this.stream.of(stream);
-    streamFinish.execute(arguments);
+    YamlCellsTruffle.stream_finish_Cell.invoke(stream);
   }
 
   @Override
   protected int streamNext(long stream) {
-    @Nullable Object[] arguments = nextArguments;
-    arguments[0] = this.stream.of(stream);
-    arguments[1] = backend.decodeFlags();
-    int status = next.executeInt(arguments);
+    int status = YamlCellsTruffle.stream_next_Cell.invoke(stream, backend.decodeFlags(), result);
     if (status != 8 && status != 9) SvmSessionBackend.check(status, backend.resultSlot());
     return status;
   }
 
   @Override
   protected void streamRelease(long stream) {
-    @Nullable Object[] arguments = streamArguments;
-    arguments[0] = this.stream.of(stream);
-    streamRelease.execute(arguments);
+    YamlCellsTruffle.stream_release_Cell.invoke(stream);
   }
 }

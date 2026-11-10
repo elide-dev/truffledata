@@ -124,10 +124,20 @@ on the JVM, calls on a caller-supplied native segment stay on the production bin
 stay the backend's own, and the tapes are identical. The route is **off by default**; it is
 support for Myna cells and makes no performance claim.
 
+Every routed call uses the generated cell's static `invoke` entry (Myna 0.16.0), for example
+`YamlCellsTruffle.session_decode_Cell.invoke(session, data, length, flags, 0, 0, result)`: native
+carriers and raw `long` addresses, with no cell instance, argument array, box, `NativePointer` or
+`Borrow`. The route is host code below Truffle boundaries, where a cell's `execute(Object[])` would
+allocate per call; `invoke` is the entry Myna provides for host code. The caller keeps every
+address valid for the call: on Native Image, heap input is pinned around it as the static backend
+pins it; on the JVM, `invoke` is passed only memory the backend owns (its staging buffer, result
+slot, handles and per-call result segments). It wraps each address with `MemorySegment.ofAddress`
+and holds no segment scope, which is why calls on a caller-supplied segment stay on the FFM binding.
+
 Measured: see docs/RELEASE_0_11_0.md
 
 - **Artifact.** `dev.elide:truffledata-yaml-cells` (Bazel `//yaml/cells`) carries the route
-  (`Cells`, `CellsSvm`, `CellsSvmSessionBackend`, `CellsSvmPlanBackend`, `CellsJvmSessionBackend`,
+  (`CellsSvm`, `CellsSvmSessionBackend`, `CellsSvmPlanBackend`, `CellsJvmSessionBackend`,
   `CellsJvmPlanBackend`), both generated cell sets and Myna's Native Image metadata for the Native
   Image cells. It depends on `truffledata-cells` (Myna's cells runtime), `truffledata-yaml`,
   `truffledata-yaml-bindings`, `truffledata-yaml-native`, `truffledata-yaml-jvm`,
@@ -141,7 +151,7 @@ Measured: see docs/RELEASE_0_11_0.md
 - **Native Image.** Pass `-Dtruffledata.yaml.cells=true` and
   `--features=dev.elide.truffledata.yaml.YamlFeature` to `native-image`, with
   `truffledata-yaml-native` and the cells artifact on the image class path. `YamlFeature` registers
-  the cells at image build time; without the flag it registers nothing and the image contains no
+  the cells route at image build time; without the flag it registers nothing and the image contains no
   cells code. The flag and the route must agree or the image build fails, with no fallback: the
   flag without the artifact fails in `YamlFeature`, and the flag without `YamlFeature` fails when
   the build-time holder `SvmRoute` initializes. Setting the property when running an image has no

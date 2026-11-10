@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import dev.elide.myna.truffle.NativeCell;
 import dev.elide.myna.truffle.NativeCellException;
+import dev.elide.myna.truffle.NativeCellRootNode;
 import dev.elide.myna.truffle.NativePointer;
 import dev.elide.truffledata.tape.JavaSink;
 import dev.elide.truffledata.yaml.cells.generated.YamlCellsJvmTruffle;
@@ -29,7 +30,7 @@ import org.junit.jupiter.api.Test;
  * The YAML cells route on HotSpot ({@code truffledata.yaml.cells}): the route the flag selects,
  * exact parity of the cells backend with the FFM backend over the YAML corpus (testdata, the
  * session fuzz corpus, the yaml-test-suite and built-in edge cases), typed plans, result lifetimes,
- * the scope checks of caller-supplied native segments, and the specialized-call rule. Runs with the
+ * the scope checks of caller-supplied native segments, and the invoke call shape. Runs with the
  * flag on ({@code jvm}) and off ({@code jvm_off}); parity constructs both backends directly either
  * way.
  */
@@ -111,9 +112,9 @@ final class CellsJvmTest {
   @Test
   void everyCellBindingRejectsMissingOrRedirectedSymbols() throws Exception {
     Set<String> symbols = new TreeSet<>(Set.of("td_yaml_fingerprint"));
-    Pattern constructor = Pattern.compile("new YamlCellsJvmTruffle\\.(\\w+)_Cell\\(");
+    Pattern call = Pattern.compile("YamlCellsJvmTruffle\\.(\\w+)_Cell\\.invoke\\(");
     for (String name : List.of("CellsJvmSessionBackend", "CellsJvmPlanBackend")) {
-      var matcher = constructor.matcher(source(name));
+      var matcher = call.matcher(source(name));
       while (matcher.find()) symbols.add("td_yaml_" + matcher.group(1));
     }
     assertTrue(symbols.contains("td_yaml_stream_release"));
@@ -273,70 +274,80 @@ final class CellsJvmTest {
     assertTrue(foreign[0].contains("| feed reject java.lang.WrongThreadException"), foreign[0]);
   }
 
-  // ---- the specialized-call rule ----
+  // ---- the call shape ----
 
   private static String source(String name) throws Exception {
     return Files.readString(
         runfile("yaml/cells/src/main/java/dev/elide/truffledata/yaml/" + name + ".java"));
   }
 
-  private static Set<String> matches(Pattern pattern, String source) {
+  /** The {@code <cell>} of every {@code <generated class>.<cell>_Cell.invoke(} call in {@code source}. */
+  private static Set<String> invoked(String generated, String source) {
     Set<String> found = new TreeSet<>();
-    var matcher = pattern.matcher(source);
-    while (matcher.find()) found.add(matcher.group(1) + matcher.group(2));
+    var matcher =
+        Pattern.compile("\\b" + generated + "\\.(\\w+)_Cell\\.invoke\\(").matcher(source);
+    while (matcher.find()) found.add(matcher.group(1));
     return found;
   }
 
   /**
-   * Every scalar-result cell call site holds the concrete {@code *_Cell} and calls its typed method;
-   * generic {@code execute(Object[])} is used only by the pointer- and void-result cells; no call
-   * builds its argument array, boxes a result or handles {@code UnexpectedResultException}.
+   * The route is host code below Truffle boundaries, so it calls each cell's static {@code invoke}
+   * (Myna 0.16.0) and nothing else: per source, exactly the expected cells, each through its own
+   * runtime's generated class; no {@code execute} call of any kind, no cell instance, no argument
+   * array, no {@code NativePointer}, no boxed cast and no {@code UnexpectedResultException}. The
+   * HotSpot sources make no other cell call either: their caller-segment paths go through the
+   * wrapped FFM backend.
    */
   @Test
-  void scalarCellsUseSpecializedCalls() throws Exception {
-    Pattern call = Pattern.compile("(\\w+)(\\.execute\\w*)\\(");
-    Set<String> lifecycle =
+  void cellsAreCalledThroughInvoke() throws Exception {
+    Set<String> session =
         Set.of(
-            "reset.execute", "streamCreate.execute", "streamFinish.execute", "streamRelease.execute");
+            "session_decode",
+            "session_retain",
+            "session_reset",
+            "stream_create",
+            "stream_feed",
+            "stream_next",
+            "stream_finish",
+            "stream_release");
     Map<String, Set<String>> expected =
         Map.of(
             "CellsSvmSessionBackend",
-            union(
-                lifecycle,
-                "decode.executeInt",
-                "writeText.executeInt",
-                "retain.executeInt",
-                "feed.executeLong",
-                "next.executeInt"),
+            union(session, "session_write_text"),
             "CellsJvmSessionBackend",
-            union(
-                lifecycle,
-                "decode.executeInt",
-                "retain.executeInt",
-                "feed.executeLong",
-                "next.executeInt"),
+            session,
             "CellsSvmPlanBackend",
-            Set.of("decode.executeInt"),
+            Set.of("typed_decode"),
             "CellsJvmPlanBackend",
-            Set.of("decode.executeInt"),
-            "Cells",
-            Set.of(),
+            Set.of("typed_decode"),
             "CellsSvm",
             Set.of());
     for (var file : expected.entrySet()) {
       String name = file.getKey(), text = source(name);
-      assertEquals(file.getValue(), matches(call, text), name);
+      boolean svm = name.contains("Svm");
+      String own = svm ? "YamlCellsTruffle" : "YamlCellsJvmTruffle";
+      String other = svm ? "YamlCellsJvmTruffle" : "YamlCellsTruffle";
+      assertEquals(file.getValue(), invoked(own, text), name);
+      assertEquals(Set.of(), invoked(other, text), name);
+      // Every invoke call is one of those: none through another class, an alias or an import.
+      int calls = 0;
+      for (var matcher = Pattern.compile("\\.invoke\\(").matcher(text); matcher.find(); ) calls++;
+      int qualified = 0;
+      for (var matcher = Pattern.compile("\\b" + own + "\\.\\w+_Cell\\.invoke\\(").matcher(text);
+          matcher.find(); )
+        qualified++;
+      assertEquals(qualified, calls, name);
+      assertFalse(Pattern.compile("\\.execute\\w*\\(").matcher(text).find(), name);
+      assertFalse(Pattern.compile("\\bnew\\s+\\w+\\.\\w+_Cell\\s*\\(").matcher(text).find(), name);
+      assertFalse(Pattern.compile("_Cell\\s+\\w+\\s*[;=]").matcher(text).find(), name);
+      assertFalse(Pattern.compile("\\bNativeCell\\b").matcher(text).find(), name);
+      assertFalse(text.contains("new Object["), name);
+      assertFalse(text.contains("import dev.elide.myna"), name);
+      assertFalse(Pattern.compile("\\bNativePointer\\.").matcher(text).find(), name);
       assertFalse(
           Pattern.compile("(import|catch|throws)\\b[^;{]*UnexpectedResultException").matcher(text).find(),
           name);
       assertFalse(Pattern.compile("\\((Integer|Long|Double|Boolean)\\)").matcher(text).find(), name);
-      // Argument arrays are fields, filled per call: none is built at a call site.
-      assertFalse(Pattern.compile("execute\\w*\\(\\s*new Object\\[").matcher(text).find(), name);
-      for (String declaration : text.split("\n"))
-        if (declaration.contains("new Object["))
-          assertTrue(declaration.contains("Arguments = new Object["), name + ": " + declaration);
-      // Each cell is declared as its concrete generated type, never as NativeCell.
-      assertFalse(Pattern.compile("\\bNativeCell\\s+\\w+\\s*[;=]").matcher(text).find(), name);
     }
     // The sources the scan covers are all the route's sources.
     try (var files = Files.list(runfile("yaml/cells/src/main/java/dev/elide/truffledata/yaml"))) {
@@ -353,40 +364,52 @@ final class CellsJvmTest {
   }
 
   /**
-   * The typed methods the route calls are the generated overrides (Myna 0.14.0), on both the FFM
-   * and the Native Image cells: {@code NativeCell}'s defaults would unbox {@code execute}.
+   * The {@code invoke} entries the route calls exist with the expected signatures (Myna 0.16.0),
+   * public and static, on both the FFM and the Native Image cells.
    */
   @Test
-  void generatedCellsOverrideTheirTypedMethod() throws Exception {
-    Map<String, String> typed =
+  void generatedCellsDeclareInvoke() throws Exception {
+    Class<?> L = long.class, I = int.class, V = void.class;
+    Map<String, List<Class<?>>> signatures =
         Map.of(
-            "session_decode_Cell", "executeInt",
-            "session_write_text_Cell", "executeInt",
-            "session_retain_Cell", "executeInt",
-            "stream_feed_Cell", "executeLong",
-            "stream_next_Cell", "executeInt",
-            "typed_decode_Cell", "executeInt");
+            "session_decode_Cell", List.of(I, L, L, L, I, L, L, L),
+            "session_write_text_Cell", List.of(I, L, L, L, L),
+            "session_retain_Cell", List.of(I, L, L),
+            "session_reset_Cell", List.of(V, L),
+            "stream_create_Cell", List.of(L, L, L, L),
+            "stream_feed_Cell", List.of(L, L, L, L),
+            "stream_next_Cell", List.of(I, L, I, L),
+            "stream_finish_Cell", List.of(V, L),
+            "stream_release_Cell", List.of(V, L),
+            "typed_decode_Cell", List.of(I, L, L, L, L));
     for (String outer : List.of("YamlCellsJvmTruffle", "YamlCellsTruffle"))
-      for (var cell : typed.entrySet()) {
+      for (var cell : signatures.entrySet()) {
         Class<?> type =
             Class.forName(
                 "dev.elide.truffledata.yaml.cells.generated." + outer + "$" + cell.getKey(),
                 false,
                 CellsJvmTest.class.getClassLoader());
         assertTrue(NativeCell.class.isAssignableFrom(type), type.getName());
-        assertEquals(
-            type, type.getMethod(cell.getValue(), Object[].class).getDeclaringClass(), type.getName());
+        List<Class<?>> signature = cell.getValue();
+        var invoke =
+            type.getMethod(
+                "invoke", signature.subList(1, signature.size()).toArray(new Class<?>[0]));
+        assertEquals(type, invoke.getDeclaringClass(), type.getName());
+        assertEquals(signature.get(0), invoke.getReturnType(), type.getName());
+        assertTrue(java.lang.reflect.Modifier.isStatic(invoke.getModifiers()), type.getName());
       }
   }
 
   /**
-   * Strict coercion ({@code truffle_coercion=strict}): a null or null-address pointer for a
+   * The cells' guest entry (the route itself uses {@code invoke}), strict coercion ({@code
+   * truffle_coercion=strict}): a null or null-address pointer for a
    * non-nullable parameter, an out-of-range integer and a wrong argument count are rejected with
    * {@code NativeCellException} before any native call.
    */
   @Test
   void strictCoercionRejectsBeforeTheCall() {
-    var next = Cells.adopt(new YamlCellsJvmTruffle.stream_next_Cell());
+    var next = new YamlCellsJvmTruffle.stream_next_Cell();
+    new NativeCellRootNode(next).adoptChildren();
     NativePointer somewhere = NativePointer.of(16);
     assertThrows(
         NativeCellException.class, () -> next.executeInt(new Object[] {null, 0, somewhere}));
