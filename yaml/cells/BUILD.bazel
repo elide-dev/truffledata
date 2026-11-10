@@ -1,14 +1,18 @@
 load("@rules_java//java:defs.bzl", "java_library")
+load("//bazel:java.bzl", "data_java_library")
 load("//bazel:myna.bzl", "myna_bindings")
 
 package(default_visibility = ["//visibility:public"])
 
-# YAML Myna Truffle cells (Cells C, docs/superpowers/plans/2026-11-09-myna-0.14-ledger.md): the
-# BINDINGS ONLY. Nothing calls them in 0.11.0: there is no truffledata.yaml.cells flag, no route
-# and no parity test yet (LEDGER.md).
+# truffledata-yaml-cells: the opt-in route that makes the YAML decode path's native calls
+# (session_decode, session_write_text, session_retain, stream_feed, stream_next, typed_decode)
+# through Myna-generated Truffle cells. Selected only by -Dtruffledata.yaml.cells=true (Native
+# Image: at image build time, in //yaml:svm's YamlFeature; JVM: once, in YamlJvm's CellsRoute).
+# With the flag off nothing here is reachable, and the artifact need not be present.
 # Generated from seams *derived* from the production //yaml/native:yaml.seam: only the module line
 # changes (cells options, package and class), so every import, struct and contract is the
-# production one and the production ABI fingerprint, bindings and natives are unchanged.
+# production one and the production ABI fingerprint, bindings and natives are unchanged
+# (//bazel:myna_contract --derived checks it).
 [
     genrule(
         name = "seam_" + variant,
@@ -79,5 +83,38 @@ java_library(
         "@maven//:org_graalvm_sdk_word",
         "@maven//:org_graalvm_truffle_truffle_api",
         "@myna//:truffle",
+    ],
+)
+
+# The route itself: split package dev.elide.truffledata.yaml (the backends it wraps are
+# package-private); registered by YamlFeature / CellsRoute by name, never by a service file.
+filegroup(
+    name = "sources",
+    srcs = [
+        "src/main/java/dev/elide/truffledata/yaml/CellsJvmPlanBackend.java",
+        "src/main/java/dev/elide/truffledata/yaml/CellsJvmSessionBackend.java",
+        "src/main/java/dev/elide/truffledata/yaml/CellsSvm.java",
+        "src/main/java/dev/elide/truffledata/yaml/CellsSvmPlanBackend.java",
+        "src/main/java/dev/elide/truffledata/yaml/CellsSvmSessionBackend.java",
+    ],
+)
+
+data_java_library(
+    name = "cells",
+    srcs = [":sources"],
+    deps = [
+        ":bindings",
+        "//core",
+        "//tape",
+        "//tape:jvm",
+        "//yaml",
+        "//yaml:bindings",
+        "//yaml:jvm",
+        "//yaml:svm",
+        "@maven//:org_graalvm_sdk_nativeimage",
+        "@maven//:org_graalvm_sdk_word",
+        "@maven//:org_graalvm_truffle_truffle_api",
+        "@myna//:truffle",
+        "@myna//:values",
     ],
 )

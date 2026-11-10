@@ -248,7 +248,18 @@ cc_test(
 filegroup(
     name = "testdata",
     srcs = glob(["testdata/*.yaml"]),
-    visibility = ["//yaml/tests:__pkg__"],
+    visibility = [
+        "//yaml/cells/tests:__pkg__",
+        "//yaml/tests:__pkg__",
+    ],
+)
+
+# The session fuzzer's seed corpus, also read by the cells parity tests (//yaml/cells/tests).
+filegroup(
+    name = "session_corpus",
+    testonly = True,
+    srcs = glob(["corpus/session/*"]),
+    visibility = ["//yaml/cells/tests:__pkg__"],
 )
 
 cc_test(
@@ -484,7 +495,10 @@ myna_other_class_stub(
     name = "other_abi_class",
     abi = ":generated/abi",
     symbol = "td_yaml_fingerprint",
-    visibility = ["//yaml/tests:__pkg__"],
+    visibility = [
+        "//yaml/cells/tests:__pkg__",
+        "//yaml/tests:__pkg__",
+    ],
 )
 
 # The YAML cells bindings (//yaml/cells) are generated from a seam derived from this one.

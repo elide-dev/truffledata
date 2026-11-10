@@ -23,6 +23,7 @@ public final class YamlJvm {
   public static YamlSession openSession(Path library, YamlOptions options) {
     Objects.requireNonNull(options);
     Arena arena = Arena.ofConfined();
+    JvmSessionBackend backend;
     try {
       SymbolLookup symbols = SymbolLookup.libraryLookup(library.toAbsolutePath(), arena);
       YamlFFM.LibraryBinding calls = new YamlFFM.LibraryBinding(symbols);
@@ -37,11 +38,14 @@ public final class YamlJvm {
       if (!fingerprint.reinterpret(expected.length() + 1).getString(0).equals(expected))
         throw new IllegalStateException(
             "Myna/YAML ABI fingerprint mismatch (expected the " + TargetAbi.HOST + " class)");
-      return new YamlSession(options, new JvmSessionBackend(options, calls, arena));
+      backend = new JvmSessionBackend(options, calls, arena);
     } catch (RuntimeException | Error failure) {
       arena.close();
       throw failure;
     }
+    // The opt-in cells route (static final: folded); on failure it releases the backend, which
+    // closes the library arena.
+    return new YamlSession(options, CellsRoute.ENABLED ? CellsRoute.jvm(backend, library) : backend);
   }
 
   static RuntimeException callFailure(Throwable failure) {

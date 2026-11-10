@@ -87,6 +87,26 @@ final class SvmSessionBackend extends YamlSession.Backend {
   @Override
   protected void directories(boolean enabled) { directories = enabled; }
 
+  // Hooks for the opt-in Myna cells route (yaml/cells, CellsSvmSessionBackend), which wraps this
+  // backend and makes the decode-path calls through cells. Nothing in this class calls them; they
+  // are unreachable in an image built without -Dtruffledata.yaml.cells=true.
+
+  VoidPointer sessionHandle() {
+    return session;
+  }
+
+  VoidPointer resultSlot() {
+    return result;
+  }
+
+  YamlOptions sessionOptions() {
+    return options;
+  }
+
+  int decodeFlags() {
+    return (options.retainSource() ? 2 : 0) | (directories ? 4 : 0);
+  }
+
   @Override
   protected void decode(
       byte[] data, int offset, int length, int encoding, @Nullable TapeTextArena text) {
@@ -109,7 +129,7 @@ final class SvmSessionBackend extends YamlSession.Backend {
     if (text != null) ((NativeText) text).write(session);
   }
 
-  private static void check(int status, VoidPointer result) {
+  static void check(int status, VoidPointer result) {
     if (status == 2 || status == 4 || status == 6 || status == 7) {
       Pointer data = (Pointer) result;
       int length = Math.min(255, data.readInt(184));
@@ -164,7 +184,7 @@ final class SvmSessionBackend extends YamlSession.Backend {
     }
   }
 
-  private static final ResultMetadata.Memory MEMORY =
+  static final ResultMetadata.Memory MEMORY =
       new ResultMetadata.Memory() {
         public long pointer(long base, int offset) {
           return word(base, offset);

@@ -164,7 +164,22 @@ final class JvmPlanBackend extends YamlPlan.Backend {
     }
   }
 
-  private void retire(MemorySegment result, Arena resultArena) {
+  // Hooks for the opt-in Myna cells route (yaml/cells, CellsJvmPlanBackend); never called here.
+
+  MemorySegment handle() {
+    return handle;
+  }
+
+  YamlFFM.LibraryBinding calls() {
+    return calls;
+  }
+
+  /** Holds the library for one more result; {@link #retire} lets it go. */
+  void retainLibrary() {
+    retain.run();
+  }
+
+  void retire(MemorySegment result, Arena resultArena) {
     try {
       calls.typed_release(result);
     } catch (Throwable failure) {

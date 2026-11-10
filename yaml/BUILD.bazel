@@ -59,11 +59,13 @@ data_java_library(
 data_java_library(
     name = "svm",
     srcs = [
+        "src/main/java/dev/elide/truffledata/yaml/SvmCells.java",
         "src/main/java/dev/elide/truffledata/yaml/SvmPlanBackend.java",
         "src/main/java/dev/elide/truffledata/yaml/SvmSessionBackend.java",
         "src/main/java/dev/elide/truffledata/yaml/SvmSessionProvider.java",
         "src/main/java/dev/elide/truffledata/yaml/SvmTypedOwner.java",
         "src/main/java/dev/elide/truffledata/yaml/SvmYamlMessage.java",
+        "src/main/java/dev/elide/truffledata/yaml/YamlFeature.java",
         "src/main/java/dev/elide/truffledata/yaml/YamlSvm.java",
     ],
     resource_strip_prefix = "yaml/src/svm/resources",
@@ -85,6 +87,7 @@ data_java_library(
 data_java_library(
     name = "jvm",
     srcs = [
+        "src/main/java/dev/elide/truffledata/yaml/CellsRoute.java",
         "src/main/java/dev/elide/truffledata/yaml/JvmSessionBackend.java",
         "src/main/java/dev/elide/truffledata/yaml/JvmTypedOwner.java",
         "src/main/java/dev/elide/truffledata/yaml/JvmPlanBackend.java",
