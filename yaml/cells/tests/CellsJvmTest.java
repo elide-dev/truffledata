@@ -17,6 +17,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
@@ -103,6 +104,42 @@ final class CellsJvmTest {
       assertFalse(arena.scope().isAlive());
     } finally {
       Files.deleteIfExists(copy);
+    }
+  }
+
+  /** Each cell actually constructed by the JVM route must belong to the verified native image. */
+  @Test
+  void everyCellBindingRejectsMissingOrRedirectedSymbols() throws Exception {
+    Set<String> symbols = new TreeSet<>(Set.of("td_yaml_fingerprint"));
+    Pattern constructor = Pattern.compile("new YamlCellsJvmTruffle\\.(\\w+)_Cell\\(");
+    for (String name : List.of("CellsJvmSessionBackend", "CellsJvmPlanBackend")) {
+      var matcher = constructor.matcher(source(name));
+      while (matcher.find()) symbols.add("td_yaml_" + matcher.group(1));
+    }
+    assertTrue(symbols.contains("td_yaml_stream_release"));
+    Map<String, MemorySegment> addresses = new TreeMap<>();
+    for (String symbol : symbols)
+      addresses.put(symbol, MemorySegment.ofAddress(16L * (addresses.size() + 1)));
+    SymbolLookup verified = name -> Optional.ofNullable(addresses.get(name));
+    Path library = Path.of("verified-yaml.so");
+    assertDoesNotThrow(() -> CellsJvmSessionBackend.verifyBindings(library, verified, verified));
+    for (String symbol : symbols) {
+      SymbolLookup missing = name -> name.equals(symbol) ? Optional.empty() : verified.find(name);
+      SymbolLookup redirected =
+          name -> name.equals(symbol) ? Optional.of(MemorySegment.ofAddress(4096)) : verified.find(name);
+      for (SymbolLookup bound : List.of(missing, redirected)) {
+        IllegalStateException failure =
+            assertThrows(
+                IllegalStateException.class,
+                () -> CellsJvmSessionBackend.verifyBindings(library, verified, bound),
+                symbol);
+        assertTrue(failure.getMessage().contains(symbol), failure.getMessage());
+      }
+      // Even agreement on absence is invalid: the verified library must export every used symbol.
+      assertThrows(
+          IllegalStateException.class,
+          () -> CellsJvmSessionBackend.verifyBindings(library, missing, missing),
+          symbol);
     }
   }
 

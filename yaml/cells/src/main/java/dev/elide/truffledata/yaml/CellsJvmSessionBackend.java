@@ -48,8 +48,12 @@ final class CellsJvmSessionBackend extends YamlSession.Backend {
     "td_yaml_fingerprint",
     "td_yaml_session_decode",
     "td_yaml_session_retain",
+    "td_yaml_session_reset",
+    "td_yaml_stream_create",
     "td_yaml_stream_feed",
+    "td_yaml_stream_finish",
     "td_yaml_stream_next",
+    "td_yaml_stream_release",
     "td_yaml_typed_decode",
   };
 
@@ -123,17 +127,7 @@ final class CellsJvmSessionBackend extends YamlSession.Backend {
       SymbolLookup bound = SymbolLookup.loaderLookup();
       try (Arena probe = Arena.ofConfined()) {
         SymbolLookup verified = SymbolLookup.libraryLookup(library, probe);
-        for (String symbol : SYMBOLS) {
-          long expected = verified.find(symbol).map(MemorySegment::address).orElse(0L);
-          long actual = bound.find(symbol).map(MemorySegment::address).orElse(0L);
-          if (expected == 0 || actual != expected)
-            throw new IllegalStateException(
-                "YAML cells would bind "
-                    + symbol
-                    + " outside "
-                    + library
-                    + ": another copy of the YAML natives is loaded in this class loader");
-        }
+        verifyBindings(library, verified, bound);
       }
       MemorySegment fingerprint;
       try {
@@ -151,6 +145,21 @@ final class CellsJvmSessionBackend extends YamlSession.Backend {
     } else if (!loaded.equals(library))
       throw new IllegalStateException(
           "YAML cells are bound to " + loaded + " in this class loader, not " + library);
+  }
+
+  /** Reject missing or redirected imports before constructing any cells with native handles. */
+  static void verifyBindings(Path library, SymbolLookup verified, SymbolLookup bound) {
+    for (String symbol : SYMBOLS) {
+      long expected = verified.find(symbol).map(MemorySegment::address).orElse(0L);
+      long actual = bound.find(symbol).map(MemorySegment::address).orElse(0L);
+      if (expected == 0 || actual != expected)
+        throw new IllegalStateException(
+            "YAML cells would bind "
+                + symbol
+                + " outside "
+                + library
+                + ": another copy of the YAML natives is loaded in this class loader");
+    }
   }
 
   @Override
