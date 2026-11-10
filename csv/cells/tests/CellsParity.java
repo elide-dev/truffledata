@@ -69,6 +69,74 @@ final class CellsParity {
     return compared;
   }
 
+  /**
+   * The routes' cells are shared by every indexer, so indexers on several threads call the same
+   * cells at once: each thread runs its own stream and UTF-8 comparison over the best kernel.
+   */
+  static void concurrent(Route baseline, Route cells, int threads) throws Exception {
+    Throwable[] failures = new Throwable[threads];
+    Thread[] workers = new Thread[threads];
+    for (int t = 0; t < threads; t++) {
+      int id = t;
+      workers[t] =
+          new Thread(
+              () -> {
+                try {
+                  for (int round = 0; round < 4; round++) {
+                    byte[] format = FORMATS[(id + round) % FORMATS.length];
+                    int split = (id + round) % 2 == 0 ? 0 : Integer.MAX_VALUE;
+                    CsvIndexer a = baseline.create(format[0], format[1], format[2] != 0, 0, split);
+                    CsvIndexer b = cells.create(format[0], format[1], format[2] != 0, 0, split);
+                    try {
+                      index(a, b, format, new Random(977L * id + round));
+                      utf8(a, b, new Random(id + 13L * round));
+                    } finally {
+                      close(a);
+                      close(b);
+                    }
+                  }
+                } catch (Throwable failure) {
+                  failures[id] = failure;
+                }
+              });
+      workers[t].start();
+    }
+    for (Thread worker : workers) worker.join();
+    for (Throwable failure : failures)
+      if (failure != null) throw new AssertionError("CSV cells parity: concurrent use", failure);
+  }
+
+  /**
+   * An indexer handed to another thread between calls (scanners are not thread-safe, but they are
+   * not thread-bound either): the stream continues with the same entries and carry.
+   */
+  static void handOff(Route baseline, Route cells) throws Exception {
+    byte[] format = FORMATS[0];
+    CsvIndexer a = baseline.create(format[0], format[1], true, 0, Integer.MAX_VALUE);
+    CsvIndexer b = cells.create(format[0], format[1], true, 0, Integer.MAX_VALUE);
+    try {
+      index(a, b, format, new Random(5));
+      Throwable[] failure = new Throwable[1];
+      Thread other =
+          new Thread(
+              () -> {
+                try {
+                  index(a, b, format, new Random(6));
+                  utf8(a, b, new Random(7));
+                } catch (Throwable thrown) {
+                  failure[0] = thrown;
+                }
+              });
+      other.start();
+      other.join();
+      if (failure[0] != null)
+        throw new AssertionError("CSV cells parity: hand-off to another thread", failure[0]);
+    } finally {
+      close(a);
+      close(b);
+    }
+  }
+
   private static void close(CsvIndexer indexer) {
     if (indexer instanceof AutoCloseable closeable)
       try {

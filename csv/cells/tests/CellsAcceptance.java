@@ -23,6 +23,13 @@ public final class CellsAcceptance {
             (d, q, quoting, kernel, split) -> new CellsSvmIndexer(d, q, quoting, kernel, split),
             baseline,
             routed);
+    CellsParity.Route base = (d, q, quoting, kernel, split) -> new SvmIndexer(d, q, quoting, kernel, split);
+    CellsParity.Route cells =
+        (d, q, quoting, kernel, split) -> new CellsSvmIndexer(d, q, quoting, kernel, split);
+    CellsParity.handOff(base, cells);
+    CellsParity.concurrent(base, cells, 4);
+    // Every indexer shares the image's one set of cells.
+    CellsParity.require(CellsSvmIndexer.Cells.get() == CellsSvmIndexer.Cells.get(), "shared cells");
     System.out.println(
         "CSV cells acceptance: OK, "
             + CellsParity.describe(routed)
