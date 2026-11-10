@@ -43,6 +43,15 @@ does its own implementation pass; "frontier, SoTA performance" is expected.
   `0c975af1-855c-40e2-8f8d-c4de1b9f1da4`): `//bazel:myna_contract`, `//csv/tests:{jvm,
   jvm_native_abi}`, `//json/tests:jvm`, `//yaml/tests:jvm`, `//tests:test`. This is the first
   real load of natives under the `LP64_LITTLE_AAPCS64` class (JVM side).
+- SVM linux amd64 on pushed head `d1ca534c`, 8/8 pass (BuildBuddy
+  `64a1b297-e7b5-40a1-bc54-1255d267e78d`, finished 16:40 PST):
+  `//protobuf-buffa/cells/tests:native_test` (first execution of the SVM `executeInt` route),
+  `//protobuf-buffa/tests:native_test`, `//{json,yaml,csv}/tests:native_test` (cached),
+  `//benchmarks/comparison:{json,csv,consumer}_aot_symbols` (budgets hold).
+- PR #67 CI on `d1ca534c` at 16:41 PST: 12 pass, 2 pending (Benchmarks / simulation,
+  Sanitizers and fuzzing), `codecov/patch` fails (it also failed on #57, which merged; check
+  whether the uncovered lines are SVM-only before merging). This ledger commit is local only:
+  pushing it would restart CI, so push it together with the next real change.
 - Fable reviews of all three cells diffs: no blocking findings. They were read-only.
 
 ### NOT done — the release gate is NOT met
@@ -56,9 +65,8 @@ release with cells as-is (notes already say so honestly) or finish adoption firs
 - Resource declarations for create/release pairs, call-scoped borrows, `NativeBytes`/`HeapBytes`.
 - A test that fails when a scalar cell call goes through `execute()` (brief item 2).
 - **No paired SVM measurement for any format**, so no per-format default decision. All flags off.
-- Not run: `//protobuf-buffa/cells/tests:native_test` (manual; the SVM `executeInt` change is
-  compiled but never executed); SVM amd64 `native_test`s and `{json,csv,consumer}_aot_symbols`;
-  arm64 `native_test`s; macOS local lanes; staged release.
+- Not run: arm64 `native_test`s (the SVM-side exercise of the AAPCS64 class); macOS local
+  lanes; staged release.
 - Performance lead for the measurement tranche (hypothesis, unmeasured): both Buffa cells
   backends build an `Object[10]` with boxed `long`/`int` and four `NativePointer.of` per call,
   from `@TruffleBoundary` entries. Myna's docs say native cells scalar-replace this under
@@ -73,7 +81,7 @@ release with cells as-is (notes already say so honestly) or finish adoption firs
    and `//yaml/cells` under `bazel test //...`; coverage contract; `PolicyTest` budgets).
 2. Get Sam's ruling on the gate (above). If "finish adoption": JSON route first, then YAML, CSV;
    one format at a time, each with parity test, then paired SVM measurement.
-3. Run the not-run gates above (Buffa cells `native_test` first).
+3. Run the not-run gates above (arm64 `native_test`s first).
 4. Merge #67, publish from the merged commit (commands under "Repository state"), tag, GitHub
    release, verify, receipts in `benchmarks/results/release-0.11.0/`, update `AGENTS.md`.
 5. **After the release (Sam, 16:21 PST):** re-run the benchmarks, cut much prettier benchmark
