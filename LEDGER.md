@@ -79,9 +79,18 @@ the current one; the copy on `deps/myna-0.14.0` stops at the PR #67 push.
   - `af678315` CSV Native Image route converted to `invoke`, with its tests. NOT COMPILED yet:
     this branch is on Myna 0.14.0 until `deps/myna-0.16.0` merges. It is the reference shape for
     the other three routes.
-- `deps/myna-0.16.0` @ `d9bc0e34` (pin + vendored headers) is merged here (`e6f186e5`). Opus
-  worker `myna-016` is still finishing in its worktree: Native Image lanes on 0.16.0 with call
-  sites unchanged, and the Buffa HotSpot ceiling recorded at 528 B. Merge its later commits.
+- `deps/myna-0.16.0` @ `20214fda` is fully merged here (`26b16938`); worker `myna-016` is done.
+  With call sites still on `execute`, all 33 JVM and Native Image lanes pass on 0.16.0
+  (BuildBuddy `b6879035-5851-4ca5-a71f-3e5c14096634`). Fingerprints 0.14.0 → 0.16.0
+  (LP64_LITTLE / AAPCS64): json `e5b80baa…`/`618e840d…`, csv `6959bf53…`/`b4aa5219…`,
+  yaml `d3090eec…`/`a2692115…`, buffa `ab0fcf09…`/`997a9d09…`. Myna's `values.h`/`values.hpp`
+  are unchanged (value ABI v3). **The `execute` path got heavier on 0.16.0**: Buffa Native
+  Image 144 → 192 B per producer call (176 → 224 B when buffers alternate; Myna's `Borrow` grew),
+  HotSpot flag-on session decode 240 → 528 B. Both ceilings were set to the measured values and
+  recorded as regressions of the `execute` entry; the `invoke` conversion is what removes the
+  Native Image cost.
+- CSV on `invoke` verified on 0.16.0, 9/9 (BuildBuddy `9b080536-5baa-46ae-a086-75c9a68ff66b`):
+  `//csv/cells/tests:{jvm,jvm_off,native_test}`, CSV baselines, `csv_aot_symbols`, contract.
 - `f3545f09`: the shared scan `//protobuf-buffa/cells/tests:call_shape` now REQUIRES
   `X_Cell.invoke(...)` in Native Image route sources (file name contains `Svm`), forbids every
   `execute*` call there, and checks that an `invoke` names a cell the generated sources declare
@@ -94,7 +103,6 @@ the current one; the copy on `deps/myna-0.14.0` stops at the PR #67 push.
   Native Image lanes. Generated `invoke` signatures are in each worker's brief and can be
   re-read from `bazel-bin/<fmt>/cells/generated/{svm,jvm}/*Truffle.java` after
   `bzl.sh build --remote_download_outputs=all //<fmt>/cells:generated_sources`.
-- CSV conversion (`af678315`) verification on 0.16.0 queued: `<scratchpad>/finish-csv1.log`.
 - Next, in order: Fable review of each worker's diff; merge the three branches and `myna-016`'s
   remaining commits here; run every lane (`bazel test //...` plus the manual Native Image
   targets, the negative controls, the coverage lane with `//json/cells/tests:jvm` added); LIFT
