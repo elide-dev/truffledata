@@ -335,43 +335,52 @@ data_java_library(
 # native calls (JsonSvm.decode/adopt/release) go through cells; sessions, streams and typed plans
 # are the same code in both images and serve as A/A controls. For the paired measurement:
 #   bazel test :json_typed_pair --//benchmarks/comparison:json_typed_svm_candidate=//benchmarks/comparison:json_svm_cells
-native_image(
-    name = "json_svm_cells",
-    testonly = True,
-    cc_deps = ["//json/native:svm"],
-    exec_properties = {
-        "EstimatedCPU": "8",
-        "EstimatedMemory": "24GB",
-    },
-    executable_name = "json-comparison-cells",
-    extra_args = [
-        "--gc=serial",
-        "--parallelism=8",
-        "-march=compatibility",
-        "--add-modules=jdk.incubator.vector",
-        "--initialize-at-build-time=dev.elide.truffledata",
-        "--initialize-at-run-time=dev.elide.truffledata.comparison.JsonCompetitors",
-        "--initialize-at-build-time=com.alibaba.fastjson2",
-        "--add-exports=org.graalvm.truffle.runtime/com.oracle.truffle.runtime=ALL-UNNAMED",
-        "-H:+UnlockExperimentalVMOptions",
-    ] + TRUFFLE_JIT_CHECKS + [
-        "-H:-UnlockExperimentalVMOptions",
-        "-Dtruffledata.json.cells=true",
-        "--features=dev.elide.truffledata.json.JsonCellsFeature",
-    ],
-    graalvm_sdk = "@graalvm_linux_amd64//:gvm",
-    main_class = "dev.elide.truffledata.comparison.JsonComparison",
-    optimization_mode = "2",
-    tags = ["manual"],
-    target_compatible_with = [
-        "@platforms//os:linux",
-        "@platforms//cpu:x86_64",
-    ],
-    deps = [
-        ":json_comparison",
-        "//json/cells",
-    ],
-)
+# json_svm_cells_unregistered is a negative control: the flag without the Feature and the cells
+# artifact. It must FAIL to build (JsonCellsRoute), never quietly build the baseline route.
+[
+    native_image(
+        name = name,
+        testonly = True,
+        cc_deps = ["//json/native:svm"],
+        exec_properties = {
+            "EstimatedCPU": "8",
+            "EstimatedMemory": "24GB",
+        },
+        executable_name = executable,
+        extra_args = [
+            "--gc=serial",
+            "--parallelism=8",
+            "-march=compatibility",
+            "--add-modules=jdk.incubator.vector",
+            "--initialize-at-build-time=dev.elide.truffledata",
+            "--initialize-at-run-time=dev.elide.truffledata.comparison.JsonCompetitors",
+            "--initialize-at-build-time=com.alibaba.fastjson2",
+            "--add-exports=org.graalvm.truffle.runtime/com.oracle.truffle.runtime=ALL-UNNAMED",
+            "-H:+UnlockExperimentalVMOptions",
+        ] + TRUFFLE_JIT_CHECKS + [
+            "-H:-UnlockExperimentalVMOptions",
+            "-Dtruffledata.json.cells=true",
+        ] + features,
+        graalvm_sdk = "@graalvm_linux_amd64//:gvm",
+        main_class = "dev.elide.truffledata.comparison.JsonComparison",
+        optimization_mode = "2",
+        tags = ["manual"],
+        target_compatible_with = [
+            "@platforms//os:linux",
+            "@platforms//cpu:x86_64",
+        ],
+        deps = [":json_comparison"] + cells,
+    )
+    for name, executable, features, cells in [
+        (
+            "json_svm_cells",
+            "json-comparison-cells",
+            ["--features=dev.elide.truffledata.json.JsonCellsFeature"],
+            ["//json/cells"],
+        ),
+        ("json_svm_cells_unregistered", "json-comparison-cells-unregistered", [], []),
+    ]
+]
 
 # Override with preserved images built from identical fixtures. Candidate overrides allow
 # independent worker images to share one paired-measurement invocation before integration.
@@ -1001,32 +1010,37 @@ CSV_SVM_ARGS = [
 # kernel-native constructs SvmIndexer directly and is the same code in both images (an A/A
 # control). For the paired flag-on vs flag-off measurement:
 #   bazel test :csv_pair --//benchmarks/comparison:csv_svm_candidate=//benchmarks/comparison:csv_svm_cells
-native_image(
-    name = "csv_svm_cells",
-    testonly = True,
-    cc_deps = ["//csv/native:truffledata_csv"],
-    exec_properties = {
-        "EstimatedCPU": "8",
-        "EstimatedMemory": "24GB",
-    },
-    executable_name = "csv-comparison-cells",
-    extra_args = CSV_SVM_ARGS + [
-        "-march=compatibility",
-        "-Dtruffledata.csv.cells=true",
-    ],
-    graalvm_sdk = "@graalvm_linux_amd64//:gvm",
-    main_class = "dev.elide.truffledata.comparison.CsvComparisonSvm",
-    optimization_mode = "2",
-    tags = ["manual"],
-    target_compatible_with = [
-        "@platforms//os:linux",
-        "@platforms//cpu:x86_64",
-    ],
-    deps = [
-        ":csv_comparison_svm",
-        "//csv/cells",
-    ],
-)
+# csv_svm_cells_unregistered is a negative control: the flag without the cells artifact. It must
+# FAIL to build (csv/kernel svm CellsRoute), never quietly build the static route.
+[
+    native_image(
+        name = name,
+        testonly = True,
+        cc_deps = ["//csv/native:truffledata_csv"],
+        exec_properties = {
+            "EstimatedCPU": "8",
+            "EstimatedMemory": "24GB",
+        },
+        executable_name = executable,
+        extra_args = CSV_SVM_ARGS + [
+            "-march=compatibility",
+            "-Dtruffledata.csv.cells=true",
+        ],
+        graalvm_sdk = "@graalvm_linux_amd64//:gvm",
+        main_class = "dev.elide.truffledata.comparison.CsvComparisonSvm",
+        optimization_mode = "2",
+        tags = ["manual"],
+        target_compatible_with = [
+            "@platforms//os:linux",
+            "@platforms//cpu:x86_64",
+        ],
+        deps = [":csv_comparison_svm"] + cells,
+    )
+    for name, executable, cells in [
+        ("csv_svm_cells", "csv-comparison-cells", ["//csv/cells"]),
+        ("csv_svm_cells_unregistered", "csv-comparison-cells-unregistered", []),
+    ]
+]
 
 # Symbol-bearing CSV images for diagnosis only (never measured for timing): the AOT symbol gate
 # (P0.6) and callgrind instruction profiles (`--profile`, plan 2026-11-08-beat-stock-svm P0.5).
@@ -1389,43 +1403,52 @@ native_image(
 
 # The yaml_svm image with the Myna Truffle cells route on (docs/YAML.md): the static backend's
 # decode, retain, stream and typed-decode calls go through cells.
-native_image(
-    name = "yaml_svm_cells",
-    testonly = True,
-    cc_deps = [
-        "//json/native:svm",
-        "//yaml/native:svm",
-    ],
-    exec_properties = {
-        "EstimatedCPU": "8",
-        "EstimatedMemory": "24GB",
-    },
-    executable_name = "yaml-comparison-cells",
-    extra_args = [
-        "--gc=serial",
-        "--parallelism=8",
-        "-march=compatibility",
-        "--initialize-at-build-time=dev.elide.truffledata",
-        "--add-exports=org.graalvm.truffle.runtime/com.oracle.truffle.runtime=ALL-UNNAMED",
-        "-H:+UnlockExperimentalVMOptions",
-    ] + TRUFFLE_JIT_CHECKS + [
-        "-H:-UnlockExperimentalVMOptions",
-        "-Dtruffledata.yaml.cells=true",
-        "--features=dev.elide.truffledata.yaml.YamlFeature",
-    ],
-    graalvm_sdk = "@graalvm_linux_amd64//:gvm",
-    main_class = "dev.elide.truffledata.comparison.YamlComparison",
-    optimization_mode = "2",
-    tags = ["manual"],
-    target_compatible_with = [
-        "@platforms//os:linux",
-        "@platforms//cpu:x86_64",
-    ],
-    deps = [
-        ":yaml_comparison",
-        "//yaml/cells",
-    ],
-)
+# yaml_svm_cells_unregistered is a negative control: the flag without the Feature and the cells
+# artifact. It must FAIL to build, never quietly build the baseline route.
+[
+    native_image(
+        name = name,
+        testonly = True,
+        cc_deps = [
+            "//json/native:svm",
+            "//yaml/native:svm",
+        ],
+        exec_properties = {
+            "EstimatedCPU": "8",
+            "EstimatedMemory": "24GB",
+        },
+        executable_name = executable,
+        extra_args = [
+            "--gc=serial",
+            "--parallelism=8",
+            "-march=compatibility",
+            "--initialize-at-build-time=dev.elide.truffledata",
+            "--add-exports=org.graalvm.truffle.runtime/com.oracle.truffle.runtime=ALL-UNNAMED",
+            "-H:+UnlockExperimentalVMOptions",
+        ] + TRUFFLE_JIT_CHECKS + [
+            "-H:-UnlockExperimentalVMOptions",
+            "-Dtruffledata.yaml.cells=true",
+        ] + features,
+        graalvm_sdk = "@graalvm_linux_amd64//:gvm",
+        main_class = "dev.elide.truffledata.comparison.YamlComparison",
+        optimization_mode = "2",
+        tags = ["manual"],
+        target_compatible_with = [
+            "@platforms//os:linux",
+            "@platforms//cpu:x86_64",
+        ],
+        deps = [":yaml_comparison"] + cells,
+    )
+    for name, executable, features, cells in [
+        (
+            "yaml_svm_cells",
+            "yaml-comparison-cells",
+            ["--features=dev.elide.truffledata.yaml.YamlFeature"],
+            ["//yaml/cells"],
+        ),
+        ("yaml_svm_cells_unregistered", "yaml-comparison-cells-unregistered", [], []),
+    ]
+]
 
 # Before/after SVM pairs: two images interleaved on one worker and one pinned CPU, three fresh
 # forks each, one shard per workload (yaml_pair.py). Both default to the tree's image; for the
