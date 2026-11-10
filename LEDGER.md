@@ -47,6 +47,36 @@ measurement decides each flag's default, and Sam's instruction is finish, then p
 verification runs, and wait to be re-tasked for 0.16.0. The lead sent the Myna session
 (`myna-6c`, Sam's) the measured host-code allocation breakdown and the validator limits.
 
+**State at 19:10 PST (lead's own pass, all local on `deps/myna-0.14.0`):**
+- Integrated tree `f4669d4d`, RBE linux-x86_64, 11/11 pass (BuildBuddy
+  `e6ed721a-9017-4912-af15-69e98dd2bbaf`): `//{csv,json,yaml,protobuf-buffa}/cells/tests:{jvm,jvm_off}`,
+  `//protobuf-buffa/cells/tests:call_shape` (now scanning all four formats),
+  `//bazel:myna_contract` (four derived groups), `//tests:test`.
+- `13b2bf97` CSV: the static backend goes through a build-time-initialized holder
+  (`csv/kernel/.../svm/CellsRoute.java`, the JSON route's shape); an image built with the flag
+  but without `truffledata-csv-cells` now fails the build. Verification (CSV cells + baseline
+  native tests, `csv_aot_symbols`, JVM lanes) running: `<scratchpad>/integ-csv-guard.log`.
+  TODO same guard for YAML once its Fable pass reports (YAML still builds the baseline silently
+  when the flag is set without `--features=...YamlFeature`). Buffa cannot be silent: its Feature
+  registers the baseline factory too.
+- `098a66aa` bench: `//benchmarks/comparison:{csv_svm_cells,json_svm_cells,yaml_svm_cells}` flag-on
+  images and `:yaml_pair` (new paired YAML harness, `yaml_pair.py`). Paired runs, once unheld:
+  `csv_pair` with `--//benchmarks/comparison:csv_svm_candidate=…:csv_svm_cells`,
+  `json_typed_pair` with `…json_typed_svm_candidate=…:json_svm_cells`, `yaml_pair` with
+  `…yaml_svm_candidate=…:yaml_svm_cells`, `consumer_measure` with
+  `…consumer_svm_candidate=…:consumer_svm_cells`. Only the `-native` CSV engines, the JSON
+  document-decode engines and the YAML static-backend engines take the cells route; the others
+  are A/A controls.
+- Buffa Fable pass done (`9595eab1`, merged): fixed a use-after-free on the JVM cells route
+  (raw address lent without the FFM downcall's scope check; proven by mutation), SVM
+  allocation 192 → 144 B/call (176 B when buffers alternate; the rest is Myna's three `Borrow`
+  objects), parity now varies depth limits, new `//benchmarks/comparison:consumer_cells_call_shape`
+  (disassembles the flag-on image: `executeInt` is called directly). Open: the same AOT
+  call-shape gate for CSV/JSON/YAML flag-on images (needs symbol-bearing flag-on images; do it
+  after the 0.16.0 bump, since generated cells will change).
+- JSON Fable pass has committed `308dd55c` (not yet reported, not yet re-merged); YAML's is
+  still editing.
+
 **State at 19:00 PST:** the lead merged `cells2-{csv,buffa,json,yaml}` at their then-current
 heads into `deps/myna-0.14.0` locally (`f4669d4d`; conflicts in `bazel/BUILD.bazel`,
 `json/cells/BUILD.bazel`, `yaml/cells/BUILD.bazel` resolved by keeping both sides; CSV joined
