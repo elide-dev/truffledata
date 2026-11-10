@@ -1,8 +1,16 @@
 package dev.elide.truffledata.json;
 
+import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.nodes.LoopNode;
+import com.oracle.truffle.api.nodes.RootNode;
+import dev.elide.myna.truffle.NativePointer;
+import dev.elide.truffledata.json.cells.generated.JsonCellsTruffle;
 import dev.elide.truffledata.json.generated.Json;
 import dev.elide.truffledata.json.tests.SvmAcceptance;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
+import org.graalvm.polyglot.Context;
 import org.graalvm.nativeimage.ImageSingletons;
 import org.graalvm.nativeimage.PinnedObject;
 import org.graalvm.nativeimage.UnmanagedMemory;
@@ -68,8 +76,108 @@ public final class CellsAcceptance {
     System.out.println(
         "JSON cells parity (SVM): " + ok + " ok, " + errors + " errors; " + decodes
             + " cell decodes, " + releases + " cell releases");
+    compiled();
     SvmAcceptance.main(args);
     System.out.println("JSON cells native acceptance passed");
+  }
+
+  /**
+   * JSON cells called from runtime-compiled Truffle code, the way a language's function node calls
+   * them: the node holds the concrete cells, builds the arguments in compiled code and calls the
+   * scalar cell through {@code executeInt}. The root must reach compiled code and stay there
+   * (the image is built with the runtime-compilation blocklist checks). The allocation per
+   * decode-and-release pair is printed, not budgeted: it is a fact for the measurement step.
+   */
+  private static void compiled() {
+    byte[] document = "{\"a\":[1,true,\"text\"],\"b\":{\"c\":-2.5}}".getBytes(StandardCharsets.UTF_8);
+    long length = document.length;
+    long capacity = length + 64;
+    Pointer region = UnmanagedMemory.calloc(WordFactory.unsigned(capacity));
+    VoidPointer result = UnmanagedMemory.calloc(Json.JsonResult.SIZE);
+    try (Context context =
+        Context.newBuilder("json-test")
+            .allowExperimentalOptions(true)
+            .option("engine.BackgroundCompilation", "false")
+            .option("engine.CompilationFailureAction", "Throw")
+            .build()) {
+      if (region.isNull() || result.isNull()) throw new OutOfMemoryError();
+      for (int b = 0; b < document.length; b++) region.writeByte(b, document[b]);
+      context.initialize("json-test");
+      context.enter();
+      try {
+        CellCalls root = new CellCalls();
+        var target = root.getCallTarget();
+        Object[] arguments = {region.rawValue(), length, capacity, result.rawValue(), 1000};
+        for (int i = 0; i < 200 && !root.compiled; i++)
+          if ((Integer) target.call(arguments) != 0) throw new AssertionError("Cell decode status");
+        if (!root.compiled) throw new AssertionError("JSON cells must execute in compiled code");
+        var bean =
+            (com.sun.management.ThreadMXBean)
+                java.lang.management.ManagementFactory.getThreadMXBean();
+        if (!bean.isThreadAllocatedMemorySupported())
+          throw new AssertionError("JSON cells allocation counter required");
+        bean.setThreadAllocatedMemoryEnabled(true);
+        long thread = Thread.currentThread().threadId();
+        int rounds = 100000;
+        arguments[4] = rounds;
+        long before = bean.getThreadAllocatedBytes(thread);
+        Object status = target.call(arguments);
+        double bytes = (bean.getThreadAllocatedBytes(thread) - before) / (double) rounds;
+        if ((Integer) status != 0) throw new AssertionError("Compiled cell decode status");
+        if (!root.last) throw new AssertionError("JSON cells left compiled code");
+        System.out.println(
+            "JSON cells compiled=true bytes/decode+release=" + bytes + " (not budgeted)");
+      } finally {
+        context.leave();
+      }
+    } finally {
+      UnmanagedMemory.free(result);
+      UnmanagedMemory.free(region);
+    }
+  }
+
+  /** {@code td_json_decode_adopted} then {@code td_json_release} through their cells, in a loop. */
+  private static final class CellCalls extends RootNode {
+    @Child private JsonCellsTruffle.decode_adopted_Cell decode = new JsonCellsTruffle.decode_adopted_Cell();
+    @Child private JsonCellsTruffle.release_Cell release = new JsonCellsTruffle.release_Cell();
+    boolean compiled;
+    boolean last;
+
+    CellCalls() {
+      super(null);
+    }
+
+    @Override
+    public Object execute(VirtualFrame frame) {
+      Object[] arguments = frame.getArguments();
+      long data = (Long) arguments[0];
+      long length = (Long) arguments[1];
+      long capacity = (Long) arguments[2];
+      long result = (Long) arguments[3];
+      int rounds = (Integer) arguments[4];
+      JsonLimits limits = JsonLimits.DEFAULT;
+      int status = 0;
+      for (int i = 0; i < rounds; i++) {
+        status |=
+            decode.executeInt(
+                new Object[] {
+                  NativePointer.of(data),
+                  length,
+                  capacity,
+                  limits.maxInputBytes(),
+                  limits.maxIndexBytes(),
+                  limits.maxNodes(),
+                  limits.maxTextBytes(),
+                  limits.maxDepth(),
+                  NativePointer.of(result)
+                });
+        release.execute(new Object[] {NativePointer.of(result)});
+      }
+      if (CompilerDirectives.inInterpreter()) LoopNode.reportLoopCount(this, rounds);
+      last = CompilerDirectives.inCompiledCode();
+      compiled |= last;
+      return status;
+    }
   }
 
   private static void same(int input, String what, String expected, String actual) {

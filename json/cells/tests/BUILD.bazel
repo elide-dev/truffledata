@@ -27,9 +27,13 @@ data_java_library(
         "//json",
         "//json:bindings",
         "//json/cells",
+        "//json/cells:bindings",
         "//json/tests:acceptance",
+        "@maven//:org_graalvm_polyglot_polyglot",
         "@maven//:org_graalvm_sdk_nativeimage",
         "@maven//:org_graalvm_sdk_word",
+        "@maven//:org_graalvm_truffle_truffle_api",
+        "@myna//:truffle",
     ],
 )
 
@@ -118,8 +122,9 @@ data_java_library(
 ]
 
 # Native Image built with the flag and the Feature: the route check, parity against the
-# production static bindings, then the shared native acceptance (//json/tests:SvmAcceptance) on
-# the cells route, with the runtime-compilation blocklist checks on.
+# production static bindings with exact cell call accounting, the cells called from
+# runtime-compiled code, then the shared native acceptance (//json/tests:SvmAcceptance) on the
+# cells route, with the runtime-compilation blocklist checks on.
 native_image(
     name = "native",
     testonly = True,

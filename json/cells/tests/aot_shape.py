@@ -46,6 +46,12 @@ def main():
                 failures.append('%s boxes through %s' % (row['name'], target))
     if 'JsonSvm_decode' not in names:
         failures.append('no JsonSvm_decode symbol: the image must keep local symbols and compile the route')
+    # Where the typed method was not inlined, it is what the route calls.
+    targets = {row['name']: row['call_targets'] for row in result['symbols']}
+    for caller, cell in (('CellsSvm_decode', 'decode'), ('CellsSvm_decodeAdopted', 'decode_adopted')):
+        typed = 'JsonCellsTruffle$%s_Cell_executeInt' % cell
+        if caller in targets and typed in names and typed not in targets[caller]:
+            failures.append('%s does not call %s' % (caller, typed))
     # The production bindings of the routed imports must not be compiled into this image: every
     # decode and release goes through the cells' derived bindings.
     for name in sorted(names):

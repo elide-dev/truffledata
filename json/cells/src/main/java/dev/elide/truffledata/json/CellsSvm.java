@@ -25,10 +25,14 @@ import org.jspecify.annotations.NullMarked;
  * {@code HeapBytes} input would be copied there, NUL-terminated, because the seam declares no
  * {@code borrow}) and without inserting an interop library, so the shared nodes are never mutated.
  *
- * <p>What Myna's cell API costs per call, when the compiler does not scalar-replace it: the {@code
- * Object[]} argument array, one box per integer argument outside the box caches, one {@link
- * NativePointer} per pointer, and the {@code Borrow} the generated cell makes for the {@code
- * ptr<u8>} input (a {@link NativePointer} takes {@code BytesCoercion}'s slow path).
+ * <p>What Myna's cell API costs per call. An -O2 image does not inline the generated {@code
+ * executeInt} (//json/cells/tests:aot_shape prints the compiled shape), so its arguments are real
+ * objects: per decode the {@code Object[]} argument array, a {@code Long} for the length (and one
+ * for an adopted region's capacity), a {@link NativePointer} for the input and one for the result,
+ * and the {@code Borrow} the generated cell makes for the {@code ptr<u8>} input (a {@link
+ * NativePointer} takes {@code BytesCoercion}'s slow path); per release an {@code Object[1]} and a
+ * {@link NativePointer}. The baseline makes none of these. The five limit arguments would be five
+ * more boxes per call; they are boxed once per limits object instead ({@link Limits}).
  */
 @NullMarked
 final class CellsSvm extends JsonCellsRoute.Svm {
@@ -41,6 +45,43 @@ final class CellsSvm extends JsonCellsRoute.Svm {
   private final JsonCellsTruffle.decode_Cell decode;
   private final JsonCellsTruffle.decode_adopted_Cell decodeAdopted;
   private final JsonCellsTruffle.release_Cell release;
+
+  // The boxes of the last limits that were not the default. The cells are shared by every thread
+  // and this field is racy on purpose: the holder is immutable, and each caller uses only a holder
+  // it has compared with its own limits (or made), so a lost update costs one allocation.
+  private Limits last = Limits.DEFAULT;
+
+  /**
+   * A {@link JsonLimits}' five native arguments as the boxes the cell API takes. The values are
+   * above the box caches (the default depth, 128, included), so boxing them per call would allocate
+   * five objects per decode.
+   */
+  private static final class Limits {
+    static final Limits DEFAULT = new Limits(JsonLimits.DEFAULT);
+
+    final JsonLimits limits;
+    final Long maxInputBytes;
+    final Long maxIndexBytes;
+    final Long maxNodes;
+    final Long maxTextBytes;
+    final Integer maxDepth;
+
+    Limits(JsonLimits limits) {
+      this.limits = limits;
+      maxInputBytes = limits.maxInputBytes();
+      maxIndexBytes = limits.maxIndexBytes();
+      maxNodes = limits.maxNodes();
+      maxTextBytes = limits.maxTextBytes();
+      maxDepth = limits.maxDepth();
+    }
+  }
+
+  private Limits boxed(JsonLimits limits) {
+    if (limits == JsonLimits.DEFAULT) return Limits.DEFAULT;
+    Limits cached = last;
+    if (cached.limits != limits && !cached.limits.equals(limits)) last = cached = new Limits(limits);
+    return cached;
+  }
 
   CellsSvm() {
     decode = adopt(new JsonCellsTruffle.decode_Cell());
@@ -75,15 +116,16 @@ final class CellsSvm extends JsonCellsRoute.Svm {
   @Override
   int decode(long data, long length, JsonLimits limits, long result) {
     assert decoded();
+    Limits boxed = boxed(limits);
     return decode.executeInt(
         new Object[] {
           NativePointer.of(data),
           length,
-          limits.maxInputBytes(),
-          limits.maxIndexBytes(),
-          limits.maxNodes(),
-          limits.maxTextBytes(),
-          limits.maxDepth(),
+          boxed.maxInputBytes,
+          boxed.maxIndexBytes,
+          boxed.maxNodes,
+          boxed.maxTextBytes,
+          boxed.maxDepth,
           NativePointer.of(result)
         });
   }
@@ -91,16 +133,17 @@ final class CellsSvm extends JsonCellsRoute.Svm {
   @Override
   int decodeAdopted(long data, long length, long capacity, JsonLimits limits, long result) {
     assert decoded();
+    Limits boxed = boxed(limits);
     return decodeAdopted.executeInt(
         new Object[] {
           NativePointer.of(data),
           length,
           capacity,
-          limits.maxInputBytes(),
-          limits.maxIndexBytes(),
-          limits.maxNodes(),
-          limits.maxTextBytes(),
-          limits.maxDepth(),
+          boxed.maxInputBytes,
+          boxed.maxIndexBytes,
+          boxed.maxNodes,
+          boxed.maxTextBytes,
+          boxed.maxDepth,
           NativePointer.of(result)
         });
   }
