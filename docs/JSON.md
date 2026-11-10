@@ -521,6 +521,20 @@ Measured: see docs/RELEASE_0_11_0.md
   `JsonJvm.open` binds the cells; the flag without the artifact fails there. Myna's FFM cells bind
   through the class loader's lookup, so the cells also `System.load` the fingerprint-checked
   library: one library path per class loader.
+- **Call shape.** Both routes call the generated cells' static `invoke` entry (Myna 0.16.0) for
+  decode, adopted decode and release: native carriers and raw `long` addresses, with no cell
+  instance, `Object[]` argument array, boxed carrier, `NativePointer` or `Borrow`. The routes are
+  host code (compiled ahead of time on Native Image), where a cell's `execute(Object[])` path is
+  not scalar-replaced; `invoke` coerces nothing and allocates nothing, so the caller keeps every
+  address valid for the call (`JsonSvm` keeps the input pinned or adopted, and the result
+  allocated). The cells' `execute` methods remain the entry for guest code. On HotSpot,
+  `invoke` is a `@TruffleBoundary` static over the FFM downcall and does not track the caller's
+  segment scope, so `CellsFfm` first touches the input segment, which raises the same
+  `WrongThreadException` or `IllegalStateException` the baseline downcall raises for a foreign
+  confined or closed segment. `//json/cells/tests:jvm` scans both routes for this shape,
+  `//json/cells/tests:aot_shape` checks the compiled Native Image route calls no `execute`
+  method, and `//json/cells/tests:native_test` checks the route allocates exactly what the
+  production static bindings allocate per call.
 - **Seam and fingerprint.** The cells come from seams *derived* in the build from
   `native/json.seam`: only the module options change (`truffle_cells=true`, `truffle_backend`
   `native`/`ffm`, `truffle_transitions=direct`, package and class). The production seam, bindings,

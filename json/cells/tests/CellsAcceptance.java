@@ -76,15 +76,141 @@ public final class CellsAcceptance {
     System.out.println(
         "JSON cells parity (SVM): " + ok + " ok, " + errors + " errors; " + decodes
             + " cell decodes, " + releases + " cell releases");
+    routeAllocation();
     compiled();
     SvmAcceptance.main(args);
     System.out.println("JSON cells native acceptance passed");
   }
 
   /**
+   * The route's own allocation against the static route's, for the same input in this image. The
+   * route calls the cells' static {@code invoke} (Myna 0.16.0), which allocates nothing, so:
+   *
+   * <ul>
+   *   <li>per native decode and release, {@link CellsSvm} allocates exactly what the production
+   *       static bindings called directly allocate (the same pin on both sides), and
+   *   <li>per {@link JsonSvm#decode} and close, and per {@link JsonSvm#adopt} and close, the route
+   *       allocates no more than this class's baseline over the production bindings (whose
+   *       message, an anonymous subclass capturing its address and release, is no smaller).
+   * </ul>
+   */
+  private static void routeAllocation() {
+    byte[] document = "{\"a\":[1,true,\"text\"],\"b\":{\"c\":-2.5}}".getBytes(StandardCharsets.UTF_8);
+    JsonLimits limits = JsonLimits.DEFAULT;
+    long capacity = document.length + 64;
+    Pointer region = UnmanagedMemory.calloc(WordFactory.unsigned(capacity));
+    VoidPointer result = UnmanagedMemory.calloc(Json.JsonResult.SIZE);
+    try {
+      if (region.isNull() || result.isNull()) throw new OutOfMemoryError();
+      for (int b = 0; b < document.length; b++) region.writeByte(b, document[b]);
+      // Lambdas capture raw addresses, never a word.
+      long address = region.rawValue();
+      long out = result.rawValue();
+      CellsSvm route = (CellsSvm) ImageSingletons.lookup(JsonCellsRoute.Svm.class);
+      Runnable cellCalls =
+          () -> {
+            PinnedObject pinned = PinnedObject.create(document);
+            int status;
+            try {
+              status =
+                  route.decode(
+                      pinned.addressOfArrayElement(0).rawValue(), document.length, limits, out);
+            } finally {
+              pinned.close();
+            }
+            route.release(out);
+            int adopted =
+                route.decodeAdopted(address, document.length, capacity, limits, out);
+            route.release(out);
+            if ((status | adopted) != 0) throw new AssertionError("Cell decode status");
+          };
+      Runnable staticCalls =
+          () -> {
+            PinnedObject pinned = PinnedObject.create(document);
+            int status;
+            try {
+              status =
+                  Json.decode(
+                      pinned.addressOfArrayElement(0),
+                      document.length,
+                      limits.maxInputBytes(),
+                      limits.maxIndexBytes(),
+                      limits.maxNodes(),
+                      limits.maxTextBytes(),
+                      limits.maxDepth(),
+                      (VoidPointer) WordFactory.pointer(out));
+            } finally {
+              pinned.close();
+            }
+            Json.release(WordFactory.pointer(out));
+            int adopted =
+                Json.decode_adopted(
+                    (CCharPointer) WordFactory.pointer(address),
+                    document.length,
+                    capacity,
+                    limits.maxInputBytes(),
+                    limits.maxIndexBytes(),
+                    limits.maxNodes(),
+                    limits.maxTextBytes(),
+                    limits.maxDepth(),
+                    (VoidPointer) WordFactory.pointer(out));
+            Json.release(WordFactory.pointer(out));
+            if ((status | adopted) != 0) throw new AssertionError("Static decode status");
+          };
+      double cells = allocated(cellCalls);
+      double bindings = allocated(staticCalls);
+      System.out.println(
+          "JSON cells route bytes/(decode+release+adopted decode+release): cells=" + cells
+              + " static=" + bindings);
+      if (cells != bindings)
+        throw new AssertionError(
+            "JSON cells route allocates " + cells + " B per call pair, the static bindings " + bindings);
+      Runnable noRelease = () -> {};
+      double routeMessages =
+          allocated(
+              () -> {
+                JsonSvm.decode(document, limits).close();
+                JsonSvm.adopt(address, document.length, capacity, noRelease).close();
+              });
+      double baselineMessages =
+          allocated(
+              () -> {
+                decode(document, limits).close();
+                adopt(address, document.length, capacity, noRelease).close();
+              });
+      System.out.println(
+          "JSON cells route bytes/(decode+close+adopt+close): route=" + routeMessages
+              + " baseline=" + baselineMessages);
+      if (routeMessages > baselineMessages)
+        throw new AssertionError(
+            "JSON cells route allocates " + routeMessages + " B per message pair, the baseline "
+                + baselineMessages);
+    } finally {
+      UnmanagedMemory.free(result);
+      UnmanagedMemory.free(region);
+    }
+  }
+
+  /** Bytes the current thread allocates per run of {@code body}, after a warm-up. */
+  private static double allocated(Runnable body) {
+    var bean =
+        (com.sun.management.ThreadMXBean) java.lang.management.ManagementFactory.getThreadMXBean();
+    if (!bean.isThreadAllocatedMemorySupported())
+      throw new AssertionError("JSON cells allocation counter required");
+    bean.setThreadAllocatedMemoryEnabled(true);
+    long thread = Thread.currentThread().threadId();
+    for (int i = 0; i < 1000; i++) body.run();
+    int rounds = 20000;
+    long before = bean.getThreadAllocatedBytes(thread);
+    for (int i = 0; i < rounds; i++) body.run();
+    return (bean.getThreadAllocatedBytes(thread) - before) / (double) rounds;
+  }
+
+  /**
    * JSON cells called from runtime-compiled Truffle code, the way a language's function node calls
    * them: the node holds the concrete cells, builds the arguments in compiled code and calls the
-   * scalar cell through {@code executeInt}. The root must reach compiled code and stay there
+   * scalar cell through {@code executeInt}. This is the guest-style path (the route itself calls
+   * {@code invoke}; see {@link #routeAllocation}). The root must reach compiled code and stay there
    * (the image is built with the runtime-compilation blocklist checks). The allocation per
    * decode-and-release pair is printed, not budgeted: it is a fact for the measurement step.
    */
