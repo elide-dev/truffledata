@@ -35,8 +35,10 @@ import org.jspecify.annotations.Nullable;
  * Cells}.
  */
 final class CellsSvmSessionBackend extends YamlSession.Backend {
+  private final CellsSvm cells;
   private final SvmSessionBackend backend;
   private final YamlOptions options;
+  // The image's shared cells (CellsSvm), each held as its concrete generated type.
   private final YamlCellsTruffle.session_decode_Cell decode;
   private final YamlCellsTruffle.session_write_text_Cell writeText;
   private final YamlCellsTruffle.session_retain_Cell retain;
@@ -75,19 +77,20 @@ final class CellsSvmSessionBackend extends YamlSession.Backend {
 
   private final Cells.Handle stream = new Cells.Handle();
 
-  CellsSvmSessionBackend(YamlOptions options) {
+  CellsSvmSessionBackend(CellsSvm cells, YamlOptions options) {
+    this.cells = cells;
     this.options = options;
+    decode = cells.decode;
+    writeText = cells.writeText;
+    retain = cells.retain;
+    feed = cells.feed;
+    next = cells.next;
+    reset = cells.reset;
+    streamCreate = cells.streamCreate;
+    streamFinish = cells.streamFinish;
+    streamRelease = cells.streamRelease;
     backend = new SvmSessionBackend(options);
     try {
-      decode = Cells.adopt(new YamlCellsTruffle.session_decode_Cell());
-      writeText = Cells.adopt(new YamlCellsTruffle.session_write_text_Cell());
-      retain = Cells.adopt(new YamlCellsTruffle.session_retain_Cell());
-      feed = Cells.adopt(new YamlCellsTruffle.stream_feed_Cell());
-      next = Cells.adopt(new YamlCellsTruffle.stream_next_Cell());
-      reset = Cells.adopt(new YamlCellsTruffle.session_reset_Cell());
-      streamCreate = Cells.adopt(new YamlCellsTruffle.stream_create_Cell());
-      streamFinish = Cells.adopt(new YamlCellsTruffle.stream_finish_Cell());
-      streamRelease = Cells.adopt(new YamlCellsTruffle.stream_release_Cell());
       // The session and its result slot live as long as this backend: one carrier each.
       NativePointer session = NativePointer.of(backend.sessionHandle().rawValue());
       NativePointer result = NativePointer.of(backend.resultSlot().rawValue());
@@ -105,7 +108,7 @@ final class CellsSvmSessionBackend extends YamlSession.Backend {
 
   @Override
   YamlPlan compile(TypedLayout layout, YamlOptions options) {
-    return CellsSvmPlanBackend.create(layout, options);
+    return CellsSvmPlanBackend.create(cells, layout, options);
   }
 
   @Override

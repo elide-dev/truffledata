@@ -40,24 +40,54 @@ public final class CellsAcceptance {
     List<String> mismatches =
         CellsParity.compare(
             options -> new YamlSession(options, new SvmSessionBackend(options)),
-            options -> new YamlSession(options, new CellsSvmSessionBackend(options)),
+            options -> new YamlSession(options, new CellsSvmSessionBackend(CellsSvm.image(), options)),
             corpus);
     require(mismatches.isEmpty(), mismatches.size() + " mismatches:\n" + String.join("\n", mismatches));
     mismatches =
         CellsParity.compareTyped(
             options -> new YamlSession(options, new SvmSessionBackend(options)),
-            options -> new YamlSession(options, new CellsSvmSessionBackend(options)),
+            options -> new YamlSession(options, new CellsSvmSessionBackend(CellsSvm.image(), options)),
             CellsSvmPlanBackend.class);
     require(mismatches.isEmpty(), String.join("\n", mismatches));
     String expected =
         CellsParity.lifetimes(options -> new YamlSession(options, new SvmSessionBackend(options)));
     String actual =
         CellsParity.lifetimes(
-            options -> new YamlSession(options, new CellsSvmSessionBackend(options)));
+            options -> new YamlSession(options, new CellsSvmSessionBackend(CellsSvm.image(), options)));
     require(expected.contains("core: {"), "baseline results did not outlive their session: " + expected);
     require(expected.equals(actual), "lifetimes\n  baseline: " + expected + "\n  cells:    " + actual);
+    // The image's cells are shared by every session on every thread (CellsSvm): the same exact
+    // parity over the built-in inputs from four threads at once, each with its own sessions.
+    Map<String, byte[]> builtIn = CellsParity.builtIn();
+    List<String> concurrent = java.util.Collections.synchronizedList(new java.util.ArrayList<>());
+    Thread[] threads = new Thread[4];
+    for (int t = 0; t < threads.length; t++) {
+      threads[t] =
+          new Thread(
+              () -> {
+                try {
+                  for (int round = 0; round < 3; round++)
+                    concurrent.addAll(
+                        CellsParity.compare(
+                            options -> new YamlSession(options, new SvmSessionBackend(options)),
+                            options ->
+                                new YamlSession(
+                                    options, new CellsSvmSessionBackend(CellsSvm.image(), options)),
+                            builtIn));
+                } catch (Throwable failure) {
+                  concurrent.add("thread failed: " + failure);
+                }
+              });
+      threads[t].start();
+    }
+    for (Thread thread : threads) thread.join();
+    require(concurrent.isEmpty(), "concurrent parity:\n" + String.join("\n", concurrent));
+    require(
+        CellsSvm.image() == CellsSvm.image() && CellsSvm.image().decode == CellsSvm.image().decode,
+        "the image's cells are one shared set");
     System.out.println(
         "YAML cells route: acceptance and exact parity over " + corpus.size() + " inputs x "
-            + CellsParity.MODES.size() + " modes passed");
+            + CellsParity.MODES.size() + " modes passed; shared cells from "
+            + threads.length + " threads");
   }
 }

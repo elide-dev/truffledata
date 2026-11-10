@@ -12,8 +12,8 @@ import org.graalvm.nativeimage.c.type.VoidPointer;
 import org.jspecify.annotations.Nullable;
 
 /**
- * The static plan with the cells route: {@code typed_decode} goes through its cell ({@code
- * executeInt}); the plan itself (compilation and release) is the static {@link SvmPlanBackend}'s,
+ * The static plan with the cells route: {@code typed_decode} goes through the image's shared cell
+ * ({@link CellsSvm}, {@code executeInt}); the plan itself (compilation and release) is the static {@link SvmPlanBackend}'s,
  * wrapped, so contracts, errors and the owner are the same. The input is pinned around the call,
  * as the static plan pins it, and lent as a pointer; see {@link Cells} for the calling convention.
  */
@@ -24,18 +24,18 @@ final class CellsSvmPlanBackend extends YamlPlan.Backend {
   /** plan, data*, length*, result*: reused, a plan is confined to its thread (see Cells). */
   private final @Nullable Object[] decodeArguments;
 
-  private CellsSvmPlanBackend(SvmPlanBackend backend) {
+  private CellsSvmPlanBackend(CellsSvm cells, SvmPlanBackend backend) {
     this.backend = backend;
-    decode = Cells.adopt(new YamlCellsTruffle.typed_decode_Cell());
+    decode = cells.typedDecode;
     decodeArguments = new Object[] {NativePointer.of(backend.handle().rawValue()), null, null, null};
   }
 
-  static YamlPlan create(TypedLayout layout, YamlOptions options) {
+  static YamlPlan create(CellsSvm cells, TypedLayout layout, YamlOptions options) {
     YamlPlan plan = SvmPlanBackend.create(layout, options);
     try {
       return new YamlPlan(
           layout.records,
-          new CellsSvmPlanBackend((SvmPlanBackend) plan.backend()),
+          new CellsSvmPlanBackend(cells, (SvmPlanBackend) plan.backend()),
           options.limits().maxInputBytes());
     } catch (RuntimeException | Error failure) {
       plan.close();
