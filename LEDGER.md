@@ -1,4 +1,4 @@
-# TruffleData — resume ledger (updated 2026-11-09 19:55 PST)
+# TruffleData — resume ledger (updated 2026-11-09 20:05 PST)
 
 Sam paused all work to resume with **Fable 5.2**. This file is the single entry point:
 read it, then the linked ledgers, then act. Project rules: `AGENTS.md` (SVM is the
@@ -7,7 +7,8 @@ production performance target; never weaken safety checks; serialize local Bazel
 ## Current state — 2026-11-09 19:45 PST — READ THIS FIRST
 
 Sam's instructions, newest first (all binding):
-- 19:22 "get this landed": merge PR #67 to main now, with what is verified.
+- 19:49 "it's fine, adjust codecov ignores/settings if needed to pass".
+- 19:22 "get this landed": merge PR #67 to main now, with what is verified. DONE 20:01 PST.
 - 18:55 "hold on final benchmarks, as myna is releasing fixes in 0.16.0": no paired SVM
   measurement until Myna 0.16.0 is pinned. Measurement decides each flag's default.
 - 17:15 "let's finish and then publish": publish 0.11.0 only after adoption is finished.
@@ -19,16 +20,27 @@ The lead reads these together as: land the code now with every cells flag defaul
 after the 0.16.0 pin, the measurements and the release packaging. A session restart at 19:16
 killed every worker; nothing is running in the background.
 
-### Follow-up branch `release/0.11.0-finish` — state at 19:55 PST
+### Follow-up branch `release/0.11.0-finish` — state at 20:05 PST
 
 THIS COPY OF THE LEDGER (on `release/0.11.0-finish`, worktree `.claude/worktrees/finish-011`) is
 the current one; the copy on `deps/myna-0.14.0` stops at the PR #67 push.
 
-- **PR #67** (`deps/myna-0.14.0`, head `1c858284`): CI rerunning after `codecov.yml` was added at
-  Sam's request ("adjust codecov ignores/settings if needed to pass"): Native Image-only sources
-  are ignored and the patch status is informational; `coverage_contract.py` stays the enforced
-  gate. Merge (squash, admin if needed) when the run finishes; the run on `0e668836` had 13
-  passes and only `codecov/patch` failing, with Buffa and benchmark simulation unfinished.
+- **PR #67 IS MERGED** (20:01 PST): squash commit `02c8c247` on main, 16/16 checks green on
+  head `1c858284` first, including `codecov/patch` after `codecov.yml` was added at Sam's request
+  ("adjust codecov ignores/settings if needed to pass": Native Image-only sources ignored, patch
+  status informational; `coverage_contract.py` stays the enforced gate). Main now has all four
+  cells routes, flags default off, on Myna 0.14.0. CI on main at `02c8c247` was running at
+  20:05 PST: check `gh run list --branch main`. This branch has main merged in (`-s ours`:
+  main's tree is exactly `1c858284`, which this branch already contained).
+- The main checkout sits on `deps/myna-0.14.0` (tree identical to main). Its LOCAL `main` branch
+  is stale and diverged (1 local commit `59508196`, 174 behind): left untouched, do not reset it
+  without asking Sam.
+- HotSpot finding from the 0.16.0 re-pin: Buffa flag-on session decode allocates 528 B/message
+  on Myna 0.16.0 against 240 B on 0.14.0 (flag off: 0 B on both). The worker raised the test
+  ceiling to the measured value and recorded it as a regression. The lead told Sam's Myna
+  session. Fix on our side: move every route entry whose buffers are native addresses (already
+  scope-checked by the route) to `invoke` on HotSpot too; keep typed `execute` only where a heap
+  array is lent.
 - **Myna 0.16.0 is tagged but its GitHub release is still a DRAFT** (checked 19:46 PST: tag
   `v0.16.0` public, `isDraft` true, public tarball URL 404). Draft tarball sha256
   `51149cbf…138b51e3`; re-verify against `SHA256SUMS` once published. Until then the pin builds
@@ -37,10 +49,11 @@ the current one; the copy on `deps/myna-0.14.0` stops at the PR #67 push.
   addresses; no `Object[]`, boxes, `NativePointer` or `Borrow`): "the entry for host code
   compiled ahead of time", measured by Myna at the cost of the direct call, 0 B.
 - **Design ruling (lead):** Native Image routes are host code, so they call `X_Cell.invoke(...)`
-  and hold no cell instance, argument array or pointer carrier. HotSpot routes keep the typed
-  `executeInt`/`executeLong` calls (correctness target; their inputs are heap arrays and caller
-  segments that `invoke`'s raw addresses cannot carry without new copies). Every call-shape gate
-  must then REQUIRE `invoke` on the Native Image sources and typed calls on the HotSpot ones.
+  and hold no cell instance, argument array or pointer carrier. HotSpot routes use `invoke` for
+  entries whose buffers are all native addresses the route has scope-checked, and keep the typed
+  `executeInt`/`executeLong` calls only where a heap array is lent (Myna copies it). Every
+  call-shape gate must then REQUIRE `invoke` on the Native Image sources, and on HotSpot allow
+  only `invoke` and typed calls.
 - On this branch now (`git log 1c858284..`):
   - `17c8620b` YAML Native Image cells shared image-wide + four-thread parity. Verified 7/7
     (BuildBuddy `bbff5392-f8a0-4dc7-870f-9ca38a454e2c`). Becomes moot for the Native Image route
