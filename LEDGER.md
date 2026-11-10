@@ -28,6 +28,13 @@ Running: workflow `wf_aeb0d186-edf` (script and journal under
   `cells2-buffa` also adds the scalar-call scan test and investigates per-call argument cost.
 - F1 gates worker in the F1 worktree (detached at `d1ca534c`): arm64 `native_test`s, then macOS
   local lanes; fixes, if any, on branch `f1-gate-fixes`.
+- **Myna 0.15.0** (Sam, 17:16 PST: "myna 0.15.0 is out"): version-only release over 0.14.0 (one
+  commit: `VERSION` constant, Myna's toolchain pin → 2026.11.6; binding ABI version still 2),
+  but the version is folded into every ABI fingerprint, so all seam fingerprints and vendored
+  crate headers change. Opus worker `myna-015` is doing the bump in
+  `.claude/worktrees/myna-015`, branch `deps/myna-0.15.0` (source tarball sha256
+  `b3a22121…1978483e`). Merge it AFTER the cells branches; then re-run the contract and native
+  lanes on the merged tree, since cells branches were built against 0.14.0 fingerprints.
 - If this session dies: inspect each `cells2-*` branch (`git log deps/myna-0.14.0..cells2-X`),
   trust only what its tests show, and continue from "Next steps" below.
 
