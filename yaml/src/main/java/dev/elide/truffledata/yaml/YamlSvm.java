@@ -48,11 +48,6 @@ public final class YamlSvm {
     return new YamlSession(options, new SvmSessionBackend(options));
   }
 
-  /** Whether this image was built with the cells route (tests). */
-  static boolean cellsRoute() {
-    return ImageSingletons.contains(SvmCells.class);
-  }
-
   /** A plan over the static archive with the default options (see {@link YamlPlan#compile}). */
   public static YamlPlan compile(Schema root, Map<String, Schema> recordTypes) {
     requireRuntime();

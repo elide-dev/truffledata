@@ -8,6 +8,35 @@ import java.util.Map;
 import org.junit.jupiter.api.Test;
 
 final class YamlContractTest {
+  /**
+   * The cells route without its artifact (this suite's class path has no truffledata-yaml-cells):
+   * it fails, never falling back to the FFM backend, and releases the backend it was given, which
+   * lets the library go.
+   */
+  @Test
+  void cellsRouteWithoutItsArtifactFailsAndReleasesTheBackend() {
+    assertFalse(CellsRoute.ENABLED);
+    java.nio.file.Path library =
+        java.nio.file.Path.of(
+            System.getenv("TEST_SRCDIR"),
+            System.getenv("TEST_WORKSPACE"),
+            "yaml/native/yaml_shared.so");
+    java.lang.foreign.Arena arena = java.lang.foreign.Arena.ofConfined();
+    JvmSessionBackend backend =
+        new JvmSessionBackend(
+            YamlOptions.DEFAULT,
+            new dev.elide.truffledata.yaml.generated.YamlFFM.LibraryBinding(
+                java.lang.foreign.SymbolLookup.libraryLookup(library.toAbsolutePath(), arena)),
+            arena);
+    IllegalStateException failure =
+        assertThrows(IllegalStateException.class, () -> CellsRoute.jvm(backend, library));
+    assertEquals(
+        "-Dtruffledata.yaml.cells=true needs truffledata-yaml-cells on the class path",
+        failure.getMessage());
+    assertInstanceOf(ClassNotFoundException.class, failure.getCause());
+    assertFalse(arena.scope().isAlive());
+  }
+
   @Test
   void enumOrdinalsMatchNativePolicies() {
     assertArrayEquals(

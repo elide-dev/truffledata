@@ -99,10 +99,7 @@ final class SvmSessionBackend extends YamlSession.Backend {
     return result;
   }
 
-  YamlOptions sessionOptions() {
-    return options;
-  }
-
+  /** The flags every decode of this backend passes: the same expression as its own calls. */
   int decodeFlags() {
     return (options.retainSource() ? 2 : 0) | (directories ? 4 : 0);
   }

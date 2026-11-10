@@ -2,23 +2,35 @@ package dev.elide.truffledata.yaml;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import dev.elide.myna.truffle.NativeCell;
+import dev.elide.myna.truffle.NativeCellException;
+import dev.elide.myna.truffle.NativePointer;
+import dev.elide.truffledata.tape.JavaSink;
+import dev.elide.truffledata.yaml.cells.generated.YamlCellsJvmTruffle;
 import dev.elide.truffledata.yaml.generated.YamlFFM;
 import java.lang.foreign.Arena;
+import java.lang.foreign.MemorySegment;
 import java.lang.foreign.SymbolLookup;
+import java.lang.foreign.ValueLayout;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.TreeMap;
+import java.util.TreeSet;
+import java.util.concurrent.CountDownLatch;
 import java.util.regex.Pattern;
 import org.junit.jupiter.api.Test;
 
 /**
  * The YAML cells route on HotSpot ({@code truffledata.yaml.cells}): the route the flag selects,
  * exact parity of the cells backend with the FFM backend over the YAML corpus (testdata, the
- * session fuzz corpus, the yaml-test-suite and built-in edge cases), typed plans, and the
- * specialized-call rule. Runs with the flag on ({@code jvm}) and off ({@code jvm_off}); parity
- * constructs both backends directly either way.
+ * session fuzz corpus, the yaml-test-suite and built-in edge cases), typed plans, result lifetimes,
+ * the scope checks of caller-supplied native segments, and the specialized-call rule. Runs with the
+ * flag on ({@code jvm}) and off ({@code jvm_off}); parity constructs both backends directly either
+ * way.
  */
 final class CellsJvmTest {
   static Path runfile(String path) {
@@ -69,6 +81,31 @@ final class CellsJvmTest {
     assertThrows(IllegalStateException.class, () -> YamlJvm.openSession(other));
   }
 
+  /** The cells bind one library per class loader; another path fails and releases its backend. */
+  @Test
+  void secondLibraryPathIsRejected() throws Exception {
+    try (YamlSession first = open(YamlOptions.DEFAULT, true)) {
+      assertEquals(CellsJvmSessionBackend.class, CellsParity.backend(first).getClass());
+    }
+    Path copy = Path.of(System.getenv("TEST_TMPDIR"), "yaml_shared_copy.so");
+    try {
+      Files.copy(library(), copy, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+      Arena arena = Arena.ofConfined();
+      JvmSessionBackend backend =
+          new JvmSessionBackend(
+              YamlOptions.DEFAULT,
+              new YamlFFM.LibraryBinding(SymbolLookup.libraryLookup(copy.toAbsolutePath(), arena)),
+              arena);
+      IllegalStateException failure =
+          assertThrows(IllegalStateException.class, () -> CellsRoute.jvm(backend, copy));
+      assertTrue(failure.getMessage().startsWith("YAML cells are bound to "), failure.getMessage());
+      // The route released the backend, which let its library go: exactly one release.
+      assertFalse(arena.scope().isAlive());
+    } finally {
+      Files.deleteIfExists(copy);
+    }
+  }
+
   static Map<String, byte[]> corpus() throws Exception {
     Map<String, byte[]> corpus = new TreeMap<>(CellsParity.builtIn());
     corpus.putAll(CellsParity.files(runfile("yaml/native/testdata"), ".yaml"));
@@ -100,25 +137,232 @@ final class CellsJvmTest {
     assertTrue(mismatches.isEmpty(), String.join("\n", mismatches));
   }
 
-  /** Every scalar cell call site holds the concrete *_Cell and uses executeInt/executeLong. */
+  /** Messages, retained stream documents and typed rows read after their session and plan close. */
+  @Test
+  void resultsOutliveTheirSessionOnBothRoutes() {
+    String baseline = CellsParity.lifetimes(options -> open(options, false));
+    assertEquals(baseline, CellsParity.lifetimes(options -> open(options, true)));
+    assertTrue(baseline.contains("core: {"), baseline);
+  }
+
+  // ---- caller-supplied native segments ----
+
+  private static String attempt(Runnable action) {
+    try {
+      action.run();
+      return "ok";
+    } catch (RuntimeException failure) {
+      return CellsParity.failure(failure);
+    }
+  }
+
+  /** Parses and feeds {@code segment}; the outcomes, with any rejection's class and message. */
+  private static String segmentOutcome(boolean cells, MemorySegment segment, long length) {
+    StringBuilder out = new StringBuilder();
+    try (YamlSession session = open(YamlOptions.DEFAULT, cells)) {
+      JavaSink sink = new JavaSink();
+      String parsed = attempt(() -> session.parse(segment, length, sink));
+      out.append(parsed);
+      if (parsed.equals("ok")) out.append(" -> ").append(sink.result());
+      out.append(" | feed ");
+      try (YamlStream stream = session.stream(YamlStreamOptions.DEFAULT)) {
+        long[] accepted = new long[1];
+        String fed = attempt(() -> accepted[0] = stream.feed(segment));
+        if (!fed.equals("ok")) return out.append(fed).toString();
+        stream.finish();
+        JavaSink document = new JavaSink();
+        boolean next = stream.next(document);
+        out.append(accepted[0]).append(" next ").append(next);
+        if (next) out.append(' ').append(document.result());
+      }
+    }
+    return out.toString();
+  }
+
+  /**
+   * Caller-supplied native segments keep the FFM scope checks on the cells route: a live segment
+   * decodes identically, and a closed arena or another thread's confined segment is rejected by the
+   * downcall, never lent to the decoder as a raw address.
+   */
+  @Test
+  void nativeSegmentsKeepTheirScopeChecks() throws Exception {
+    byte[] yaml = "a: [1, two]\n".getBytes(StandardCharsets.UTF_8);
+    String[] live = new String[2], closed = new String[2], foreign = new String[2];
+    for (int route = 0; route < 2; route++) {
+      boolean cells = route == 1;
+      try (Arena arena = Arena.ofConfined()) {
+        MemorySegment segment = arena.allocate(yaml.length);
+        MemorySegment.copy(yaml, 0, segment, ValueLayout.JAVA_BYTE, 0, yaml.length);
+        live[route] = segmentOutcome(cells, segment, yaml.length);
+      }
+
+      Arena gone = Arena.ofConfined();
+      MemorySegment freed = gone.allocate(yaml.length);
+      gone.close();
+      closed[route] = segmentOutcome(cells, freed, yaml.length);
+
+      MemorySegment[] other = new MemorySegment[1];
+      CountDownLatch ready = new CountDownLatch(1), release = new CountDownLatch(1);
+      Thread owner =
+          new Thread(
+              () -> {
+                try (Arena confined = Arena.ofConfined()) {
+                  other[0] = confined.allocate(yaml.length);
+                  MemorySegment.copy(yaml, 0, other[0], ValueLayout.JAVA_BYTE, 0, yaml.length);
+                  ready.countDown();
+                  release.await();
+                } catch (InterruptedException interrupted) {
+                  Thread.currentThread().interrupt();
+                }
+              });
+      owner.start();
+      try {
+        ready.await();
+        foreign[route] = segmentOutcome(cells, other[0], yaml.length);
+      } finally {
+        release.countDown();
+        owner.join();
+      }
+    }
+    assertEquals(live[0], live[1]);
+    assertTrue(live[0].startsWith("ok -> "), live[0]);
+    assertTrue(live[0].contains(" | feed " + yaml.length + " next true "), live[0]);
+    assertEquals(closed[0], closed[1]);
+    assertTrue(
+        closed[0].startsWith("reject java.lang.IllegalStateException: Already closed"), closed[0]);
+    assertTrue(closed[0].contains("| feed reject java.lang.IllegalStateException"), closed[0]);
+    assertEquals(foreign[0], foreign[1]);
+    assertTrue(foreign[0].startsWith("reject java.lang.WrongThreadException"), foreign[0]);
+    assertTrue(foreign[0].contains("| feed reject java.lang.WrongThreadException"), foreign[0]);
+  }
+
+  // ---- the specialized-call rule ----
+
+  private static String source(String name) throws Exception {
+    return Files.readString(
+        runfile("yaml/cells/src/main/java/dev/elide/truffledata/yaml/" + name + ".java"));
+  }
+
+  private static Set<String> matches(Pattern pattern, String source) {
+    Set<String> found = new TreeSet<>();
+    var matcher = pattern.matcher(source);
+    while (matcher.find()) found.add(matcher.group(1) + matcher.group(2));
+    return found;
+  }
+
+  /**
+   * Every scalar-result cell call site holds the concrete {@code *_Cell} and calls its typed method;
+   * generic {@code execute(Object[])} is used only by the pointer- and void-result cells; no call
+   * builds its argument array, boxes a result or handles {@code UnexpectedResultException}.
+   */
   @Test
   void scalarCellsUseSpecializedCalls() throws Exception {
-    Pattern generic = Pattern.compile("\\.execute\\(");
-    Pattern typed = Pattern.compile("\\.execute(Int|Long)\\(");
-    int calls = 0;
-    for (String name :
-        List.of(
-            "CellsSvmSessionBackend", "CellsSvmPlanBackend", "CellsJvmSessionBackend", "CellsJvmPlanBackend")) {
-      String source =
-          Files.readString(
-              runfile("yaml/cells/src/main/java/dev/elide/truffledata/yaml/" + name + ".java"));
-      assertFalse(generic.matcher(source).find(), name + " calls a cell through execute(Object[])");
-      assertFalse(source.contains("catch (UnexpectedResultException"), name);
-      var matcher = typed.matcher(source);
-      while (matcher.find()) calls++;
+    Pattern call = Pattern.compile("(\\w+)(\\.execute\\w*)\\(");
+    Set<String> lifecycle =
+        Set.of(
+            "reset.execute", "streamCreate.execute", "streamFinish.execute", "streamRelease.execute");
+    Map<String, Set<String>> expected =
+        Map.of(
+            "CellsSvmSessionBackend",
+            union(
+                lifecycle,
+                "decode.executeInt",
+                "writeText.executeInt",
+                "retain.executeInt",
+                "feed.executeLong",
+                "next.executeInt"),
+            "CellsJvmSessionBackend",
+            union(
+                lifecycle,
+                "decode.executeInt",
+                "retain.executeInt",
+                "feed.executeLong",
+                "next.executeInt"),
+            "CellsSvmPlanBackend",
+            Set.of("decode.executeInt"),
+            "CellsJvmPlanBackend",
+            Set.of("decode.executeInt"),
+            "Cells",
+            Set.of(),
+            "CellsSvm",
+            Set.of());
+    for (var file : expected.entrySet()) {
+      String name = file.getKey(), text = source(name);
+      assertEquals(file.getValue(), matches(call, text), name);
+      assertFalse(
+          Pattern.compile("(import|catch|throws)\\b[^;{]*UnexpectedResultException").matcher(text).find(),
+          name);
+      assertFalse(Pattern.compile("\\((Integer|Long|Double|Boolean)\\)").matcher(text).find(), name);
+      // Argument arrays are fields, filled per call: none is built at a call site.
+      assertFalse(Pattern.compile("execute\\w*\\(\\s*new Object\\[").matcher(text).find(), name);
+      for (String declaration : text.split("\n"))
+        if (declaration.contains("new Object["))
+          assertTrue(declaration.contains("Arguments = new Object["), name + ": " + declaration);
+      // Each cell is declared as its concrete generated type, never as NativeCell.
+      assertFalse(Pattern.compile("\\bNativeCell\\s+\\w+\\s*[;=]").matcher(text).find(), name);
     }
-    // session_decode, session_write_text, session_retain, stream_feed, stream_next (SVM: 5 sites),
-    // typed_decode (SVM 1), JVM: decode, retain, feed x2, next, typed_decode (6).
-    assertEquals(12, calls);
+    // The sources the scan covers are all the route's sources.
+    try (var files = Files.list(runfile("yaml/cells/src/main/java/dev/elide/truffledata/yaml"))) {
+      Set<String> names = new TreeSet<>();
+      files.forEach(file -> names.add(file.getFileName().toString().replace(".java", "")));
+      assertEquals(new TreeSet<>(expected.keySet()), names);
+    }
+  }
+
+  private static Set<String> union(Set<String> base, String... more) {
+    Set<String> all = new TreeSet<>(base);
+    all.addAll(List.of(more));
+    return all;
+  }
+
+  /**
+   * The typed methods the route calls are the generated overrides (Myna 0.14.0), on both the FFM
+   * and the Native Image cells: {@code NativeCell}'s defaults would unbox {@code execute}.
+   */
+  @Test
+  void generatedCellsOverrideTheirTypedMethod() throws Exception {
+    Map<String, String> typed =
+        Map.of(
+            "session_decode_Cell", "executeInt",
+            "session_write_text_Cell", "executeInt",
+            "session_retain_Cell", "executeInt",
+            "stream_feed_Cell", "executeLong",
+            "stream_next_Cell", "executeInt",
+            "typed_decode_Cell", "executeInt");
+    for (String outer : List.of("YamlCellsJvmTruffle", "YamlCellsTruffle"))
+      for (var cell : typed.entrySet()) {
+        Class<?> type =
+            Class.forName(
+                "dev.elide.truffledata.yaml.cells.generated." + outer + "$" + cell.getKey(),
+                false,
+                CellsJvmTest.class.getClassLoader());
+        assertTrue(NativeCell.class.isAssignableFrom(type), type.getName());
+        assertEquals(
+            type, type.getMethod(cell.getValue(), Object[].class).getDeclaringClass(), type.getName());
+      }
+  }
+
+  /**
+   * Strict coercion ({@code truffle_coercion=strict}): a null or null-address pointer for a
+   * non-nullable parameter, an out-of-range integer and a wrong argument count are rejected with
+   * {@code NativeCellException} before any native call.
+   */
+  @Test
+  void strictCoercionRejectsBeforeTheCall() {
+    var next = Cells.adopt(new YamlCellsJvmTruffle.stream_next_Cell());
+    NativePointer somewhere = NativePointer.of(16);
+    assertThrows(
+        NativeCellException.class, () -> next.executeInt(new Object[] {null, 0, somewhere}));
+    assertThrows(
+        NativeCellException.class,
+        () -> next.executeInt(new Object[] {NativePointer.NULL, 0, somewhere}));
+    assertThrows(
+        NativeCellException.class, () -> next.executeInt(new Object[] {somewhere, -1, somewhere}));
+    assertThrows(
+        NativeCellException.class,
+        () -> next.executeInt(new Object[] {somewhere, 1L << 32, somewhere}));
+    assertThrows(
+        NativeCellException.class, () -> next.executeInt(new Object[] {somewhere, "4", somewhere}));
+    assertThrows(NativeCellException.class, () -> next.executeInt(new Object[] {somewhere, 0}));
   }
 }
