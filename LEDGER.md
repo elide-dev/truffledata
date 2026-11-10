@@ -1,32 +1,88 @@
-# TruffleData — resume ledger (paused 2026-11-09 ~16:00 PST)
+# TruffleData — resume ledger (updated 2026-11-09 16:30 PST)
 
 Sam paused all work to resume with **Fable 5.2**. This file is the single entry point:
 read it, then the linked ledgers, then act. Project rules: `AGENTS.md` (SVM is the
 production performance target; never weaken safety checks; serialize local Bazel).
 
-## Resume 2026-11-09 16:05 PST (Fable 5.2 lead) — IN PROGRESS
+## Resume outcome — 2026-11-09 16:05–16:30 PST (Fable 5.2 lead) — READ THIS FIRST
 
-Sam: "resume this and finish it, your time budget is 30-45mins to wrap up", workers on Opus,
-Fable only for the most sensitive critical code. Running now (workflow run `wf_b9eb1329-456`,
-worker deadline 16:30 PST):
+This section is current. Everything from "Goal in flight" down is the state at the 16:00 pause
+and is superseded wherever it disagrees (worker state, "#57 is held", next steps).
 
-- Opus worker per worktree: `cells-a` (Buffa tests, then CSV route or trim), `cells-b` (JSON),
-  `cells-c` (YAML), and the F1 remaining gates in the F1 worktree (arm64 lane first, then SVM
-  amd64, then macOS local). Each cells branch must end as a correct, tested subset; untested
-  work is trimmed in a new commit.
-- Fable critical-section review of each cells diff (`git diff 0e0c539e...HEAD`) after its worker.
-- Bazel lock wrapper for this session:
-  `/private/tmp/claude-501/-Users-sam-workspace-graalvm-truffledata/f86c3c78-8f8a-4faf-8736-a1f1ee674e61/scratchpad/bzl.sh`.
-- **#57 is no longer held.** Sam merged it to main himself at 16:14 PST (`1158dc93`); main is
-  merged into `deps/myna-0.14.0`. 0.11.0 therefore ships the sticky closed-enum map-entry
-  rejection: stable round trip, but an invalid-then-valid entry is orphaned where protobuf-java
-  generated code keeps it (evidence in the #57 thread). Option (b) there (keep the entry, drop
-  invalid occurrences) is open follow-up. Lines below that say "#57 is held" are superseded.
-- Sam also asked for: Fable check of the Opus work, then a Fable implementation pass on the
-  cells code before merge (hot decode paths first).
-- Lead then: merge reviewed branches into `deps/myna-0.14.0`, push, watch PR #67. Outcomes are
-  recorded in "Resume outcome" below when the workflow returns; until that section exists,
-  treat the worker state below as the last known truth and inspect each worktree's `git log`.
+Sam's instructions this session: "resume this and finish it, your time budget is 30-45mins to
+wrap up"; Opus workers, Fable only for the most sensitive code; Fable checks the Opus work and
+does its own implementation pass; "frontier, SoTA performance" is expected.
+
+### What landed on `deps/myna-0.14.0` (PR #67)
+
+- **main merged in, including #57.** Sam merged #57 himself at 16:14 PST (`1158dc93`). 0.11.0
+  ships the sticky closed-enum map-entry rejection: stable round trip, but an out-of-set value
+  followed by a valid one orphans the entry where protobuf-java generated code keeps it
+  (evidence in the #57 thread; option (b) there — keep the entry, drop invalid occurrences — is
+  open follow-up). Recorded in `docs/RELEASE_0_11_0.md` and `AGENTS.md`.
+- **Buffa cells (`cells-a`, merged):** both cells backends hold the concrete `decodeSlab_Cell` /
+  `decodeSlabSmall_Cell` and call `executeInt`. Flag `truffledata.buffa.cells` stays default off.
+- **JSON cells (`cells-b`, merged): bindings only.** `//json/cells:bindings` (JVM, FFM-backed)
+  builds from a seam derived from `json.seam`. No flag, no route, no test calls it.
+- **YAML cells (`cells-c`, merged): bindings only.** `//yaml/cells:bindings` (SVM + JVM) builds.
+  No flag, no route. `bazel/myna_contract.py` now takes several `--derived` groups.
+- **CSV cells: nothing.** The never-compiled WIP (`f8fae309`) was removed (`c3ee0142`); it failed
+  analysis on a visibility error for `//csv/native:csv.seam`.
+- **Lead pass (`ade9b453` + follow-up):** JSON derived seam registered with
+  `//bazel:myna_contract --derived`; BUILD comments no longer describe JSON/YAML flags that do
+  not exist; `json/cells` visibility narrowed to `//bazel` and `//json`; release notes rewritten
+  to say only Buffa has a cells route.
+
+### Evidence
+
+- Merged branch, RBE linux-x86_64, 7/7 pass (BuildBuddy `f2659e70-212a-4699-ae5f-6d7ee36d812f`):
+  `//bazel:myna_contract`, `//protobuf-buffa/cells/tests:{jvm,jvm_off}`, `//json/tests:jvm`,
+  `//yaml/tests:jvm` (both cached), `//tests:test`, `//protobuf-runtime:test` (the last two
+  cover #57 on this branch); `//json/cells:bindings` and `//yaml/cells:bindings` build.
+- F1, linux arm64 (`--config=remote_arm64`), 6/6 pass (BuildBuddy
+  `0c975af1-855c-40e2-8f8d-c4de1b9f1da4`): `//bazel:myna_contract`, `//csv/tests:{jvm,
+  jvm_native_abi}`, `//json/tests:jvm`, `//yaml/tests:jvm`, `//tests:test`. This is the first
+  real load of natives under the `LP64_LITTLE_AAPCS64` class (JVM side).
+- Fable reviews of all three cells diffs: no blocking findings. They were read-only.
+
+### NOT done — the release gate is NOT met
+
+Sam's gate is full cells adoption on all four seams. What exists is one Buffa route plus
+JSON/YAML bindings. Do not publish 0.11.0 on the strength of this section; ask Sam whether to
+release with cells as-is (notes already say so honestly) or finish adoption first.
+
+- Routes + flags + flag-on parity tests: JSON (route `decode_adopted`), YAML, CSV (JVM and SVM).
+- SVM cells variants and hosted Features for JSON and CSV.
+- Resource declarations for create/release pairs, call-scoped borrows, `NativeBytes`/`HeapBytes`.
+- A test that fails when a scalar cell call goes through `execute()` (brief item 2).
+- **No paired SVM measurement for any format**, so no per-format default decision. All flags off.
+- Not run: `//protobuf-buffa/cells/tests:native_test` (manual; the SVM `executeInt` change is
+  compiled but never executed); SVM amd64 `native_test`s and `{json,csv,consumer}_aot_symbols`;
+  arm64 `native_test`s; macOS local lanes; staged release.
+- Performance lead for the measurement tranche (hypothesis, unmeasured): both Buffa cells
+  backends build an `Object[10]` with boxed `long`/`int` and four `NativePointer.of` per call,
+  from `@TruffleBoundary` entries. Myna's docs say native cells scalar-replace this under
+  partial evaluation; behind a boundary nothing guarantees it. Check allocation with the flag on
+  before any default-on ruling.
+- F1 rulings still open for Sam: combined `seam.h` vs per-class headers; unknown host defaults
+  to the signed-char class.
+
+### Next steps (in order)
+
+1. Watch PR #67 CI on the pushed head; fix what it finds (first Linux build of `//json/cells`
+   and `//yaml/cells` under `bazel test //...`; coverage contract; `PolicyTest` budgets).
+2. Get Sam's ruling on the gate (above). If "finish adoption": JSON route first, then YAML, CSV;
+   one format at a time, each with parity test, then paired SVM measurement.
+3. Run the not-run gates above (Buffa cells `native_test` first).
+4. Merge #67, publish from the merged commit (commands under "Repository state"), tag, GitHub
+   release, verify, receipts in `benchmarks/results/release-0.11.0/`, update `AGENTS.md`.
+5. **After the release (Sam, 16:21 PST):** re-run the benchmarks, cut much prettier benchmark
+   cards for the README, and do a README cleanup pass.
+
+Session facts: Bazel lock wrapper
+`/private/tmp/claude-501/-Users-sam-workspace-graalvm-truffledata/f86c3c78-8f8a-4faf-8736-a1f1ee674e61/scratchpad/bzl.sh`
+(recreate from `docs/superpowers/plans/briefs/2026-11-08-beat-stock-svm/bzl.sh` if gone). Worker
+worktrees (`cells-a`, `cells-b`, `cells-c`, F1) are merged and clean; safe to remove.
 
 ## Goal in flight
 

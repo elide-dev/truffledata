@@ -1,7 +1,10 @@
 load("@rules_java//java:defs.bzl", "java_library")
 load("//bazel:myna.bzl", "myna_bindings")
 
-package(default_visibility = ["//json:__subpackages__"])
+package(default_visibility = [
+    "//bazel:__pkg__",
+    "//json:__subpackages__",
+])
 
 # JSON Myna Truffle cell BINDINGS ONLY. Nothing calls them in 0.11.0: there is no
 # truffledata.json.cells flag, no route and no parity test yet (LEDGER.md). Like //protobuf-buffa/cells, the cells come from a seam *derived*
