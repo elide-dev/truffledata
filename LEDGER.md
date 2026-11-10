@@ -13,6 +13,30 @@ Sam's instructions this session: "resume this and finish it, your time budget is
 wrap up"; Opus workers, Fable only for the most sensitive code; Fable checks the Opus work and
 does its own implementation pass; "frontier, SoTA performance" is expected.
 
+### IN PROGRESS since 17:15 PST — full adoption, then publish
+
+Sam ruled at 17:15 PST: "let's finish and then publish" — finish full cells adoption, then
+release 0.11.0 (publication is authorized; no further permission round). The gate question
+below is therefore answered: finish first.
+
+Running: workflow `wf_aeb0d186-edf` (script and journal under
+`~/.claude/projects/-Users-sam-workspace-graalvm-truffledata/f86c3c78-8f8a-4faf-8736-a1f1ee674e61/`).
+- Worktrees `.claude/worktrees/cells2-{json,yaml,csv,buffa}`, branches `cells2-<format>`, all
+  cut from `e6767595`. Per format: Opus implements (flag, JVM + SVM routes, parity tests incl. a
+  manual `native_test`, resource/borrow declarations, contract registration), then a Fable pass
+  reviews and fixes critical sections in the same worktree and re-runs JVM + SVM lanes.
+  `cells2-buffa` also adds the scalar-call scan test and investigates per-call argument cost.
+- F1 gates worker in the F1 worktree (detached at `d1ca534c`): arm64 `native_test`s, then macOS
+  local lanes; fixes, if any, on branch `f1-gate-fixes`.
+- If this session dies: inspect each `cells2-*` branch (`git log deps/myna-0.14.0..cells2-X`),
+  trust only what its tests show, and continue from "Next steps" below.
+
+Then, by the lead: merge the branches that pass; paired SVM measurement per format, flag on vs
+off, serial (nothing else running); rule each default per Sam's rule; push; CI green; merge #67;
+publish; tag; GitHub release; verify; receipts; post-release README/bench work.
+
+PR #67 CI on `d1ca534c` finished: all pass except `codecov/patch`.
+
 ### What landed on `deps/myna-0.14.0` (PR #67)
 
 - **main merged in, including #57.** Sam merged #57 himself at 16:14 PST (`1158dc93`). 0.11.0
