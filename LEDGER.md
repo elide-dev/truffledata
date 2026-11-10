@@ -1,4 +1,4 @@
-# TruffleData — resume ledger (updated 2026-11-09 20:10 PST)
+# TruffleData — resume ledger (updated 2026-11-09 19:55 PST)
 
 Sam paused all work to resume with **Fable 5.2**. This file is the single entry point:
 read it, then the linked ledgers, then act. Project rules: `AGENTS.md` (SVM is the
@@ -19,7 +19,7 @@ The lead reads these together as: land the code now with every cells flag defaul
 after the 0.16.0 pin, the measurements and the release packaging. A session restart at 19:16
 killed every worker; nothing is running in the background.
 
-### Follow-up branch `release/0.11.0-finish` — state at 20:10 PST
+### Follow-up branch `release/0.11.0-finish` — state at 19:55 PST
 
 THIS COPY OF THE LEDGER (on `release/0.11.0-finish`, worktree `.claude/worktrees/finish-011`) is
 the current one; the copy on `deps/myna-0.14.0` stops at the PR #67 push.
