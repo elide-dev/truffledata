@@ -501,8 +501,9 @@ messages and order, ownership and lifetimes — is the backend's own; the slabs 
   every use; nothing reads through it. What Myna still allocates on every call is its own `Borrow`
   for each non-null byte-pointer parameter (`compiled`, `data`, `out`). `CellsAcceptance` measures
   the Java bytes per `writeSlab` call of the static backend and the cells route in the image and
-  holds the difference to 144 B with the same input and arena on every call (the three `Borrow`
-  objects) and to 176 B when both alternate (plus a `NativePointer` for each new address); the
+  holds the difference to 192 B with the same input and arena on every call (the three `Borrow`
+  objects; 144 B on Myna 0.14.0) and to 224 B when both alternate (plus a `NativePointer` for each
+  new address; 176 B on Myna 0.14.0); the
   static backend allocates 0 B, so nothing on this call is scalar-replaced. A changing length or
   capacity outside the JDK's small-value cache adds a 16 B box each. Upstream: elide-dev/myna#85
   (per-call allocation), #86 (direct transitions not faster than one boundary call on

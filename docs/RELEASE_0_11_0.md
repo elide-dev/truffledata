@@ -71,8 +71,8 @@ What the routes do not do:
   buffer import also takes a result or handle pointer. Where a borrow is expressible it would
   copy heap inputs under 256 bytes in a Native Image, where the default route pins them.
 - **No performance claim.** The routes are called from host code below a Truffle boundary, where
-  Myna's cell entry allocates on every call. Buffa measures 144 B per producer call in a Native
-  Image (176 B when the input and output buffers change between calls) against 0 B on the
+  Myna's cell entry allocates on every call. Buffa measures 192 B per producer call in a Native
+  Image (224 B when the input and output buffers change between calls) against 0 B on the
   default route; the other routes have the same shape and are not yet
   measured. Paired SVM timings are on hold for Myna 0.16.0. Until they exist every flag stays
   off.
