@@ -492,16 +492,28 @@ messages and order, ownership and lifetimes — is the backend's own; the slabs 
   run in AOT-compiled host code below a `@TruffleBoundary`, not in partially evaluated guest code,
   so Myna's scalar replacement of the argument array, boxes and pointers (measured from
   runtime-compiled roots) is not guaranteed here. Each backend therefore reuses one argument array
-  (the cell only reads it, and the backend's busy check excludes reentry) and caches the pointers
-  and boxes whose values repeat: the compiled layout, the projection mask, its result slot and the
-  limits. What varies per call is still allocated: a `NativePointer` for each of the input and
-  output addresses, a box for a length or capacity outside the JDK's small-value cache, and Myna's
-  own `Borrow` for each non-null byte-pointer parameter (`compiled`, `data`, `out`).
-  `CellsAcceptance` measures the Java bytes per `writeSlab` call of the static backend and the cells
-  route in the image and holds the difference to 192 B: on linux-amd64 it measured exactly that
-  (the static backend: 0 B), so nothing on this call is scalar-replaced. Upstream: elide-dev/myna#85 (per-call
-  allocation), #86 (direct transitions not faster than one boundary call on sub-microsecond
-  imports) and #87.
+  (the cell only reads it; a decoder is thread-confined and the backend's busy check excludes
+  reentry) and caches the pointers and boxes whose values repeat: the compiled layout, the
+  projection mask, its result slot and the limits, and on Native Image also the input and output
+  addresses, the length and the capacity, which repeat when a session decodes from one buffer into
+  its arena. A cached pointer is an address in a box, compared with the current address before
+  every use; nothing reads through it. What Myna still allocates on every call is its own `Borrow`
+  for each non-null byte-pointer parameter (`compiled`, `data`, `out`). `CellsAcceptance` measures
+  the Java bytes per `writeSlab` call of the static backend and the cells route in the image and
+  holds the difference to 144 B with the same input and arena on every call (the three `Borrow`
+  objects) and to 176 B when both alternate (plus a `NativePointer` for each new address); the
+  static backend allocates 0 B, so nothing on this call is scalar-replaced. A changing length or
+  capacity outside the JDK's small-value cache adds a 16 B box each. Upstream: elide-dev/myna#85
+  (per-call allocation), #86 (direct transitions not faster than one boundary call on
+  sub-microsecond imports) and #87.
+- **Region scope on HotSpot.** The FFM backend hands `MemorySegment`s to the downcall, which
+  refuses one whose scope is closed or confined to another thread. A cell lends a raw address, so
+  the cells backend makes that check itself before every call, with the downcall's exceptions in
+  the downcall's order; without it a region closed behind an adopted input (`BuffaJvm.adopt`)
+  reached the producer as a dangling pointer. One difference remains and Myna forces it: the
+  downcall also keeps a shared scope open for the duration of the call, and a generated FFM cell
+  cannot, so a shared arena closed by another thread while the producer runs is not rejected on
+  this route. Native Image inputs are raw addresses on both routes.
 - **Ownership declarations.** Myna's `resource` and `borrow ... lifetime=call` declarations do not
   fit this seam, so the derived seams add none. A resource's `create` must take only scalars and
   return `ptr<resource>`, and its `destroy` must take one non-null `transferred_to_callee` pointer;
@@ -514,9 +526,10 @@ messages and order, ownership and lifetimes — is the backend's own; the slabs 
   busy-checked.
 
 Tests: `//protobuf-buffa/cells/tests:jvm` (the shared acceptance suite with the flag on, the route
-check and a byte/error parity run of every slab entry against the FFM backend),
+check and a byte/error parity run of every slab entry against the FFM backend, including depth
+limits and adopted regions whose scope is closed or owned by another thread),
 `:jvm_off` (artifact present, flag off), `:call_shape` (the specialized-call scan),
 `:native_test` (Native Image built with the flag: the shared native acceptance, the route check,
-parity against the static backend and the per-call allocation ceiling, with the blocklist
+parity against the static backend and the per-call allocation ceilings, with the blocklist
 checks), and `//benchmarks/comparison:consumer_native_smoke_cells` (the 132-cell consumer smoke
 matrix on the cells route).

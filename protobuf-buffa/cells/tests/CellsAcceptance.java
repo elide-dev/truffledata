@@ -16,22 +16,26 @@ import org.jspecify.annotations.NullMarked;
  * the static backend's slab producer calls go through the generated cells, the full shared
  * acceptance (semantics, budgets, ownership, randomized parity) passes unchanged, and the cells
  * route is byte-identical to the static backend it wraps. It also measures the Java allocation per
- * slab producer call of both backends, and holds the cells route to its own ceiling.
+ * slab producer call of both backends, and holds the cells route to its own ceilings.
  */
 @NullMarked
 public final class CellsAcceptance {
   /**
    * Java bytes per {@code writeSlab} call the cells route may add over the static backend in this
-   * image. The cell call runs in AOT-compiled host code below a {@code @TruffleBoundary}, where
-   * nothing is scalar-replaced, so this is everything the call allocates (CellsSvmBackend): a
-   * NativePointer each for the input and output addresses (16 B each), a box for the arena capacity
-   * (16 B; the length here is below the JDK's small-value cache), and the three Borrow objects
-   * Myna's BytesCoercion builds for the {@code compiled}, {@code data} and {@code out} byte
-   * pointers (48 B each): 192 B, exactly what linux-amd64 measured (the static backend: 0 B).
-   * Without the reuse in CellsSvmBackend the same call also allocated the argument array and the
-   * compiled-layout and result-slot pointers.
+   * image (the static backend: 0 B). The cell call runs in AOT-compiled host code below a {@code
+   * @TruffleBoundary}, where nothing is scalar-replaced, so this is everything the call allocates
+   * (CellsSvmBackend). With a session's usual shape, the same input buffer and arena on every
+   * call, only Myna's own objects remain: the three Borrow objects its BytesCoercion builds for
+   * the {@code compiled}, {@code data} and {@code out} byte pointers (48 B each).
    */
-  static final double CELLS_EXTRA_BYTES_PER_CALL = 192;
+  static final double CELLS_EXTRA_BYTES_PER_CALL = 144;
+
+  /**
+   * The same when the input and the arena change on every call: a NativePointer for each new
+   * address (16 B each) on top of the three Borrow objects. A length or capacity that changes and
+   * lies outside the JDK's small-value cache would add a 16 B box each; here they repeat.
+   */
+  static final double CELLS_EXTRA_BYTES_PER_VARYING_CALL = 176;
 
   private CellsAcceptance() {}
 
@@ -55,23 +59,30 @@ public final class CellsAcceptance {
       throw new AssertionError("No per-thread allocation counter in this image");
     bean.setThreadAllocatedMemoryEnabled(true);
     // Three measured rounds each, after a warm-up; the lowest round of each is compared.
-    double[] referenceRounds = perCall(bean, new SvmBackend());
-    double[] cellsRounds = perCall(bean, new CellsSvmBackend(new SvmBackend()));
-    System.out.println(
-        "CELLS SVM writeSlab Java bytes/call reference="
-            + Arrays.toString(referenceRounds)
-            + " cells="
-            + Arrays.toString(cellsRounds));
-    double reference = referenceRounds[0], cells = cellsRounds[0];
-    if (cells - reference > CELLS_EXTRA_BYTES_PER_CALL)
-      throw new AssertionError(
-          "Cells writeSlab allocates "
-              + (cells - reference)
-              + " B/call over the static backend; ceiling "
-              + CELLS_EXTRA_BYTES_PER_CALL);
+    for (boolean varying : new boolean[] {false, true}) {
+      double[] referenceRounds = perCall(bean, new SvmBackend(), varying);
+      double[] cellsRounds = perCall(bean, new CellsSvmBackend(new SvmBackend()), varying);
+      System.out.println(
+          "CELLS SVM writeSlab Java bytes/call"
+              + (varying ? " (input and arena alternate)" : " (same input and arena)")
+              + " reference="
+              + Arrays.toString(referenceRounds)
+              + " cells="
+              + Arrays.toString(cellsRounds));
+      double extra = cellsRounds[0] - referenceRounds[0];
+      double ceiling = varying ? CELLS_EXTRA_BYTES_PER_VARYING_CALL : CELLS_EXTRA_BYTES_PER_CALL;
+      if (extra > ceiling)
+        throw new AssertionError(
+            "Cells writeSlab allocates "
+                + extra
+                + " B/call over the static backend; ceiling "
+                + ceiling
+                + (varying ? " (input and arena alternate)" : " (same input and arena)"));
+    }
   }
 
-  private static double[] perCall(com.sun.management.ThreadMXBean bean, BuffaWire.Backend backend) {
+  private static double[] perCall(
+      com.sun.management.ThreadMXBean bean, BuffaWire.Backend backend, boolean varying) {
     final int calls = 20_000;
     long thread = Thread.currentThread().threadId();
     try {
@@ -87,15 +98,26 @@ public final class CellsAcceptance {
         var limits = new SlabLimits(32, 1 << 20);
         Object prepared = backend.prepareSlab(compiled);
         try (var input = backend.allocate(wire.length).put(wire);
-            var output = backend.allocate(1 << 16)) {
+            var output = backend.allocate(1 << 16);
+            var otherInput = backend.allocate(wire.length).put(wire);
+            var otherOutput = backend.allocate(1 << 16)) {
           long sum = 0;
           for (int i = 0; i < calls; i++)
             sum += backend.writeSlab(prepared, input, output, limits, 1, null);
           double[] rounds = new double[3];
           for (int round = 0; round < rounds.length; round++) {
             long before = bean.getThreadAllocatedBytes(thread);
-            for (int i = 0; i < calls; i++)
-              sum += backend.writeSlab(prepared, input, output, limits, 1, null);
+            for (int i = 0; i < calls; i++) {
+              boolean other = varying && (i & 1) != 0;
+              sum +=
+                  backend.writeSlab(
+                      prepared,
+                      other ? otherInput : input,
+                      other ? otherOutput : output,
+                      limits,
+                      1,
+                      null);
+            }
             long after = bean.getThreadAllocatedBytes(thread);
             if (before < 0 || after < 0)
               throw new AssertionError("Per-thread allocation counter unavailable");

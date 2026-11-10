@@ -58,15 +58,23 @@ final class CellsSvmBackend implements BuffaWire.Backend {
   // What does not change from call to call is reused: one argument array per backend (the cell only
   // reads arguments[i] into its coercions and keeps nothing; a backend is confined to its decoder's
   // thread and beginSlab's busy check excludes reentry), and one cached pointer or box per slot
-  // whose value repeats (the compiled layout, the projection mask, the backend's own result slot,
-  // the limits). Each still varies freely: a changed value is boxed afresh, never reused stale.
-  // What does vary per call (the input and output addresses, the input length and capacity) is
-  // allocated per call, as are the cell's own Borrow objects for its byte-pointer parameters
-  // (Myna's BytesCoercion: compiled, data and a non-null out), which Myna allocates internally.
+  // whose value repeats: the compiled layout, the projection mask, the backend's own result slot and
+  // the limits always; the input and output addresses, the input length and the capacity when the
+  // caller repeats them (a slab session's arena and its capacity are stable from call to call, and
+  // an input buffer is often reused; the heap entries pin fresh arrays, so their addresses miss).
+  // A cached pointer is only the address in a box: it is compared with the current address before
+  // every use and nothing reads through it, so it extends no borrow and keeps no memory reachable.
+  // Each slot still varies freely: a changed value is boxed afresh, never reused stale. What
+  // remains per call is the cell's own Borrow objects for its byte-pointer parameters (Myna's
+  // BytesCoercion: compiled, data and a non-null out), which Myna allocates internally.
   private final Object[] arguments = new Object[10];
   private NativePointer compiledPointer = NativePointer.NULL;
+  private NativePointer dataPointer = NativePointer.NULL;
   private NativePointer projectionPointer = NativePointer.NULL;
+  private NativePointer outPointer = NativePointer.NULL;
   private NativePointer resultPointer = NativePointer.NULL;
+  private Long lengthBox = 0L;
+  private Long capacityBox = 0L;
   private Integer maxDepth = 0;
   private Long maxSlabBytes = 0L;
 
@@ -89,19 +97,23 @@ final class CellsSvmBackend implements BuffaWire.Backend {
       SlabLimits limits,
       VoidPointer result) {
     if (compiledPointer.address() != compiled) compiledPointer = NativePointer.of(compiled);
+    if (dataPointer.address() != data) dataPointer = NativePointer.of(data);
     if (projectionPointer.address() != projection) projectionPointer = NativePointer.of(projection);
+    if (outPointer.address() != out) outPointer = NativePointer.of(out);
+    if (lengthBox != length) lengthBox = length;
+    if (capacityBox != capacity) capacityBox = capacity;
     if (resultPointer.address() != result.rawValue())
       resultPointer = NativePointer.of(result.rawValue());
     if (maxDepth != limits.maxDepth()) maxDepth = limits.maxDepth();
     if (maxSlabBytes != limits.maxSlabBytes()) maxSlabBytes = (long) limits.maxSlabBytes();
     Object[] arguments = this.arguments;
     arguments[0] = compiledPointer;
-    arguments[1] = NativePointer.of(data);
-    arguments[2] = length;
+    arguments[1] = dataPointer;
+    arguments[2] = lengthBox;
     arguments[3] = flags;
     arguments[4] = projectionPointer;
-    arguments[5] = NativePointer.of(out);
-    arguments[6] = capacity;
+    arguments[5] = outPointer;
+    arguments[6] = capacityBox;
     arguments[7] = maxDepth;
     arguments[8] = maxSlabBytes;
     arguments[9] = resultPointer;

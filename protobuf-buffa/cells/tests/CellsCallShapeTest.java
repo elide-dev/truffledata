@@ -32,7 +32,8 @@ import org.junit.jupiter.api.Test;
  * call_sites} filegroup (its hand-written sources and its generated {@code *Truffle.java}), listed
  * in this test's {@code data}. A format without a cells package yet (CSV) simply has nothing to
  * scan; the scan reports which formats it saw. Receivers resolve by name within a file: a name
- * declared with several types (in different methods) must satisfy the rules for each of them.
+ * declared with several types (in different methods) must satisfy the rules for each of them, and
+ * a receiver declared with {@code var} is rejected, since the scan cannot see its type.
  */
 final class CellsCallShapeTest {
   private static final List<String> FORMATS = List.of("protobuf-buffa", "json", "yaml", "csv");
@@ -219,6 +220,16 @@ final class CellsCallShapeTest {
                 }
                 """)
             .isEmpty());
+    // A receiver whose type `var` hides.
+    assertFalse(
+        violations(
+                """
+                final class Route {
+                  private final DemoTruffle.status_Cell status;
+                  Object a(Object[] arguments) { var cell = status; return cell.execute(arguments); }
+                }
+                """)
+            .isEmpty());
     // A call whose receiver cannot be resolved.
     assertFalse(
         violations(
@@ -246,6 +257,7 @@ final class CellsCallShapeTest {
             "\\b([A-Z][\\w.]*)(?:\\s*<[^;(){}]*>)?(?:\\s*\\[\\s*\\])*\\s+(\\w+)\\s*(?=[;=,)])");
     private static final Pattern CALL =
         Pattern.compile("(?:(\\w+)|(\\)))\\s*\\.\\s*(execute(?:Int|Long|Double|Boolean)?)\\s*\\(");
+    private static final Pattern INFERRED = Pattern.compile("\\bvar\\s+(\\w+)\\s*[=:]");
     private static final Pattern BOX_CAST =
         Pattern.compile(
             "\\(\\s*(?:java\\.lang\\.)?(?:Integer|Long|Double|Boolean|Short|Byte|Float|Character|Number)\\s*\\)\\s*\\(?\\s*(?:this\\s*\\.\\s*)?\\w*\\s*$");
@@ -300,6 +312,10 @@ final class CellsCallShapeTest {
       }
       Matcher c = CELL_DECLARATION.matcher(text);
       while (c.find()) declared.computeIfAbsent(c.group(2), k -> new HashSet<>()).add(c.group(1));
+      // `var` hides the type from this scan, so a cell behind it could take any call.
+      Set<String> inferred = new HashSet<>();
+      Matcher i = INFERRED.matcher(text);
+      while (i.find()) inferred.add(i.group(1));
       int typed = 0;
       Matcher call = CALL.matcher(text);
       while (call.find()) {
@@ -314,6 +330,8 @@ final class CellsCallShapeTest {
           if (!generic || receiver == null)
             violations.add(
                 where + " on an unresolved receiver: hold the concrete *_Cell in a field or local");
+          else if (inferred.contains(receiver))
+            violations.add(where + " on `var " + receiver + "`: declare the concrete type");
           else if (text.substring(call.end()).stripLeading().startsWith("new Object"))
             violations.add(where + " with an Object[] on an unresolved receiver " + receiver);
           continue;

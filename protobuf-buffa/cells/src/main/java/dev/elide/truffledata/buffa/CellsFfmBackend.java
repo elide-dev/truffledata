@@ -100,6 +100,28 @@ final class CellsFfmBackend implements BuffaWire.Backend {
   private Integer maxDepth = 0;
   private Long maxSlabBytes = 0L;
 
+  /**
+   * A native region as the cell's buffer argument, after the check the FFM backend's downcall makes
+   * on every segment it is handed and a cell cannot make: the cell lends the raw address, so a
+   * region whose scope was closed behind an adopted input ({@link BuffaJvm#adopt}: "region scope
+   * remains checked on every access"), or that is confined to another thread, would otherwise reach
+   * native code as a dangling pointer. Same exceptions as the downcall, in its order (thread, then
+   * liveness), raised before the call like the downcall's own. The downcall additionally keeps a
+   * shared scope open for the duration of the call; a generated FFM cell has no way to (it takes an
+   * address), so a shared arena closed by another thread during the call is the one case this
+   * cannot reject. CellsParity compares both failures with the FFM backend's.
+   */
+  private static NativeBytes lend(MemorySegment region, boolean writable) {
+    return NativeBytes.of(live(region), writable);
+  }
+
+  private static MemorySegment live(MemorySegment region) {
+    if (!region.isAccessibleBy(Thread.currentThread()))
+      throw new WrongThreadException("Attempted access outside owning thread");
+    if (!region.scope().isAlive()) throw new IllegalStateException("Already closed");
+    return region;
+  }
+
   // Specialized NativeCell calls (Myna 0.14.0): each cell is held as its concrete generated type,
   // whose i32 result overrides executeInt with no box and no UnexpectedResultException.
   private int call(
@@ -243,11 +265,11 @@ final class CellsFfmBackend implements BuffaWire.Backend {
               call(
                   decodeSlab,
                   compiled,
-                  NativeBytes.of(memory, false),
+                  lend(memory, false),
                   input.size(),
                   1,
                   0,
-                  NativeBytes.of(output, true),
+                  lend(output, true),
                   capacity,
                   limits,
                   slabResult);
@@ -284,22 +306,21 @@ final class CellsFfmBackend implements BuffaWire.Backend {
     if (!(input.lease.attachment instanceof MemorySegment source)
         || !(output.lease.attachment instanceof MemorySegment destination))
       throw new IllegalArgumentException("Slab arena is not JVM native memory");
-    long mask =
+    MemorySegment mask =
         projection == null
-            ? 0
-            : ((MemorySegment) java.util.Objects.requireNonNull(projection.lease.attachment))
-                .address();
+            ? MemorySegment.NULL
+            : (MemorySegment) java.util.Objects.requireNonNull(projection.lease.attachment);
     MemorySegment slabResult = backend.beginSlab();
     try {
       int status =
           call(
               decodeSlab,
               ((MemorySegment) compiled).address(),
-              NativeBytes.of(source, false),
+              lend(source, false),
               input.size(),
               flags,
-              mask,
-              NativeBytes.of(destination, true),
+              live(mask).address(),
+              lend(destination, true),
               output.size(),
               limits,
               slabResult);
