@@ -159,6 +159,8 @@ class IntegrationTest {
           assertEquals(
               mysql ? StaticLayout.Storage.UINT : StaticLayout.Storage.INT, layout.storageKind(0));
           assertEquals(new Constraints.Decimal(5, 2), schema.field(3).constraints().decimal());
+          assertEquals(Field.Kind.BOOLEAN, schema.field(4).kind());
+          assertEquals(StaticLayout.Storage.BOOLEAN, layout.storageKind(4));
           try (var cursor =
               JdbcSource.executeStatic(
                   fixture.connection,
@@ -298,7 +300,7 @@ class IntegrationTest {
                       new String[] {"id", "name", "score", "balance", "enabled"}[i];
                   case "getColumnType" ->
                       new int[] {
-                            Types.INTEGER, Types.VARCHAR, Types.BIGINT, Types.DECIMAL, Types.BOOLEAN
+                            Types.INTEGER, Types.VARCHAR, Types.BIGINT, Types.DECIMAL, Types.BIT
                           }
                           [i];
                   case "isNullable" ->
