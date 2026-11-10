@@ -73,6 +73,14 @@ class NativeBundleTest(unittest.TestCase):
                     self.assertFalse([name for name in manifest['files'] if name.endswith('.so')])
                 with self.assertRaisesRegex(ValueError, 'Unsupported native module'):
                     bundle(root / 'repo', version, 'json', 'linux-aarch64-musl', header, root / 'llvm', root / 'bad', 'a' * 40, 1234)
+                # A header with one fingerprint per ABI class (Myna 0.14.0+): AAPCS64 Linux takes its own class.
+                other = b'cd' * 32
+                header.write_bytes(b'/* ABI: ' + other + b' (LP64_LITTLE), ' + fingerprint + b' (LP64_LITTLE_AAPCS64) */\n#define ABI "' + fingerprint + b'"\n#define ABI "' + other + b'"\n')
+                with tarfile.open(bundle(root / 'repo', version, 'csv-native', 'linux-aarch64-musl', header, root / 'llvm', root / 'out2', 'a' * 40, 1234)) as archive:
+                    self.assertEqual(json.load(archive.extractfile('manifest.json'))['abiFingerprint'], fingerprint.decode())
+                header.write_bytes(b'/* ABI: ' + fingerprint + b' (LP64_LITTLE), ' + other + b' (LP64_LITTLE_AAPCS64) */\n')
+                with self.assertRaisesRegex(ValueError, 'ABI mismatch'):
+                    bundle(root / 'repo', version, 'csv-native', 'linux-aarch64-musl', header, root / 'llvm', root / 'bad2', 'a' * 40, 1234)
 
 
 if __name__ == '__main__':
