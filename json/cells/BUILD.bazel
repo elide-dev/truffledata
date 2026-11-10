@@ -1,4 +1,5 @@
 load("@rules_java//java:defs.bzl", "java_library")
+load("//bazel:java.bzl", "data_java_library")
 load("//bazel:myna.bzl", "myna_bindings")
 
 package(default_visibility = [
@@ -6,40 +7,88 @@ package(default_visibility = [
     "//json:__subpackages__",
 ])
 
-# JSON Myna Truffle cell BINDINGS ONLY. Nothing calls them in 0.11.0: there is no
-# truffledata.json.cells flag, no route and no parity test yet (LEDGER.md). Like //protobuf-buffa/cells, the cells come from a seam *derived*
-# from the production //json/native:json.seam: only the module line changes (cells options,
-# package and class), so every import, struct and contract is the production one and the
-# production ABI fingerprint, bindings and natives are unchanged. The derived fingerprint folds in
-# the cells options and is never compared with a library; JsonJvm verifies the production one.
-# JVM (FFM-backed cells) only so far; the SVM variant (truffle_backend=native, transitions=direct,
-# folded in a hosted Feature) is follow-up work.
-genrule(
-    name = "seam_jvm",
-    srcs = ["//json/native:json.seam"],
-    outs = ["cells_jvm.seam"],
-    cmd = ("sed -e 's| java_package=dev.elide.truffledata.json.generated java_class=Json | " +
-           "java_package=dev.elide.truffledata.json.cells.generated java_class=JsonCellsJvm " +
-           "truffle_cells=true truffle_backend=ffm |' $< > $@ && " +
-           "grep -q '^module truffledata_json .* java_class=JsonCellsJvm truffle_cells=true truffle_backend=ffm ' $@"),
+# truffledata-json-cells: the opt-in route that makes the JSON document decode's native calls
+# (td_json_decode, td_json_decode_adopted, td_json_release) go through Myna-generated Truffle
+# cells. Selected only by -Dtruffledata.json.cells=true (Native Image: at image build time, by
+# JsonCellsFeature; JVM: once, in JsonCellsRoute). With the flag off nothing here is reachable.
+#
+# Like //protobuf-buffa/cells, the cells come from seams *derived* from the production
+# //json/native:json.seam: only the module line changes (cells options, package and class), so every
+# import, struct and contract is the production one and the production ABI fingerprint, bindings and
+# natives are unchanged. The derived fingerprint folds in the cells options and is never compared
+# with a library; the backends verify the production one. //bazel:myna_contract checks that each
+# derived descriptor equals the production descriptor apart from those options.
+#
+# No `resource` or `borrow` declarations: Myna 0.14.0 rejects both for every JSON import without a C
+# ABI change (OwnershipValidator: a resource create must take only scalars and return
+# ptr<Opaque>; a call borrow allows no other pointer parameter, and every JSON buffer import also
+# takes a result/session/plan pointer). td_json_decode_adopted also retains its input, which a
+# call-lifetime borrow would misdeclare. Adding either would also make the derived descriptor
+# differ from the production one.
+[
+    genrule(
+        name = "seam_" + variant,
+        srcs = ["//json/native:json.seam"],
+        outs = ["cells_%s.seam" % variant],
+        cmd = ("sed -e 's| java_package=dev.elide.truffledata.json.generated java_class=Json | " +
+               "java_package=dev.elide.truffledata.json.cells.generated java_class=%s %s |' $< > $@ && " +
+               "grep -q '^module truffledata_json .* java_class=%s %s ' $@") % (
+            java_class,
+            options,
+            java_class,
+            options,
+        ),
+    )
+    for variant, java_class, options in [
+        # Native Image: cells call the static @CFunction bindings with direct transitions.
+        ("svm", "JsonCells", "truffle_cells=true truffle_backend=native truffle_transitions=direct"),
+        # HotSpot: cells call the FFM bindings (loader lookup).
+        ("jvm", "JsonCellsJvm", "truffle_cells=true truffle_backend=ffm"),
+    ]
+]
+
+# Generated for the configured target like the production bindings, so each derived descriptor
+# equals the production descriptor of the same ABI class (//bazel:myna_contract). No ABI class
+# constants: the cells' fingerprint is never compared with a library.
+[
+    myna_bindings(
+        name = "bindings_" + variant,
+        abi = False,
+        java_class = java_class,
+        java_package = "dev.elide.truffledata.json.cells.generated",
+        out = "generated/" + variant,
+        seam = ":seam_" + variant,
+        truffle = True,
+    )
+    for variant, java_class in [
+        ("svm", "JsonCells"),
+        ("jvm", "JsonCellsJvm"),
+    ]
+]
+
+# Myna output is generated as-is (no NullAway). Only the cells and the bindings they call ship:
+# JsonCells (static @CFunction bindings) + JsonCellsTruffle for Native Image, JsonCellsJvmFFM +
+# JsonCellsJvmTruffle for HotSpot, and the Native Image metadata of the native cells.
+filegroup(
+    name = "generated_sources",
+    srcs = [
+        "generated/jvm/JsonCellsJvmFFM.java",
+        "generated/jvm/JsonCellsJvmTruffle.java",
+        "generated/svm/JsonCells.java",
+        "generated/svm/JsonCellsTruffle.java",
+    ],
 )
 
-myna_bindings(
-    name = "bindings_jvm",
-    abi = False,
-    java_class = "JsonCellsJvm",
-    java_package = "dev.elide.truffledata.json.cells.generated",
-    out = "generated/jvm",
-    seam = ":seam_jvm",
-    truffle = True,
+filegroup(
+    name = "native_resources",
+    srcs = ["generated/svm/META-INF/native-image/dev.elide.myna/dev.elide.truffledata.json.cells.generated.JsonCells/native-image.properties"],
 )
 
 java_library(
     name = "bindings",
-    srcs = [
-        "generated/jvm/JsonCellsJvmFFM.java",
-        "generated/jvm/JsonCellsJvmTruffle.java",
-    ],
+    srcs = [":generated_sources"],
+    resource_strip_prefix = "json/cells/generated/svm",
+    resources = [":native_resources"],
     deps = [
         "//bazel:myna_compiler_sdk",
         "@maven//:org_graalvm_sdk_nativeimage",
@@ -49,13 +98,43 @@ java_library(
     ],
 )
 
-# Hand-written cell call sites (none yet) and the generated cells that classify them, for the
-# call-shape scan (//protobuf-buffa/cells/tests:call_shape).
+
+# The route itself: split package dev.elide.truffledata.json (JsonCellsRoute and the backends are
+# package-private). CellsFfm is found by name (JsonCellsRoute.jvm); CellsSvm is installed by
+# JsonCellsFeature (--features=dev.elide.truffledata.json.JsonCellsFeature). Never a service file.
+filegroup(
+    name = "sources",
+    srcs = [
+        "src/main/java/dev/elide/truffledata/json/CellsFfm.java",
+        "src/main/java/dev/elide/truffledata/json/CellsSvm.java",
+        "src/main/java/dev/elide/truffledata/json/JsonCellsFeature.java",
+    ],
+)
+
+data_java_library(
+    name = "cells",
+    srcs = [":sources"],
+    visibility = ["//visibility:public"],
+    deps = [
+        ":bindings",
+        "//core",
+        "//json",
+        "//json:bindings",
+        "@maven//:org_graalvm_sdk_nativeimage",
+        "@maven//:org_graalvm_sdk_word",
+        "@maven//:org_graalvm_truffle_truffle_api",
+        "@myna//:truffle",
+    ],
+)
+
+# The hand-written cell call sites and the generated cells that classify them, for the call-shape
+# scan (//protobuf-buffa/cells/tests:call_shape).
 filegroup(
     name = "call_sites",
-    srcs = glob(
-        ["src/**/*.java"],
-        allow_empty = True,
-    ) + ["generated/jvm/JsonCellsJvmTruffle.java"],
+    srcs = [
+        "generated/jvm/JsonCellsJvmTruffle.java",
+        "generated/svm/JsonCellsTruffle.java",
+        ":sources",
+    ],
     visibility = ["//protobuf-buffa/cells/tests:__pkg__"],
 )

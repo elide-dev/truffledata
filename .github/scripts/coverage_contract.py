@@ -239,6 +239,8 @@ SVM_ONLY_METHODS = {
         'JsonSvm::publish (Lorg/graalvm/nativeimage/c/type/VoidPointer;Ljava/lang/Runnable;)'
         'Ldev/elide/truffledata/json/JsonMessage;',
         'JsonSvm::release (J)V',
+        # The opt-in cells route's pinned decode (//json/cells/tests:native_test; flag off it folds away).
+        'JsonSvm::cellsDecode ([BLdev/elide/truffledata/json/JsonLimits;Lorg/graalvm/nativeimage/c/type/VoidPointer;)I',
         'JsonSvm::adoptResult (Lorg/graalvm/nativeimage/c/type/VoidPointer;)Ldev/elide/truffledata/json/JsonMessage;',
         # Result accessors (Myna v4 descriptor, side tables, retained input) and the session's
         # rebindable borrow reader (JSON performance ledger V1; was JsonSvm::borrow).

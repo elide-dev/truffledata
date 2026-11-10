@@ -132,7 +132,9 @@ sh_test(
         "$(rootpath //csv/cells:libbindings.jar)",
         "$(rootpath //csv/cells:generated/jvm/seam.json)",
         "-",
-        # The JSON cells bindings (json/cells, JVM only so far): derived from the production seam.
+        # The opt-in JSON cells bindings (json/cells): derived from the production seam.
+        "$(rootpath //json/cells:generated/svm/seam.json)",
+        "$(rootpath //json/cells:libbindings.jar)",
         "$(rootpath //json/cells:generated/jvm/seam.json)",
         "-",
         "--derived",
@@ -141,6 +143,7 @@ sh_test(
         "$(rootpath //csv/cells:generated/jvm/seam.json)",
         "--derived",
         "$(rootpath //json/native:descriptor)",
+        "$(rootpath //json/cells:generated/svm/seam.json)",
         "$(rootpath //json/cells:generated/jvm/seam.json)",
         "--derived",
         "$(rootpath //protobuf-buffa/native:descriptor)",
@@ -159,6 +162,8 @@ sh_test(
         "//csv/native:descriptor",
         "//json:libbindings.jar",
         "//json/cells:generated/jvm/seam.json",
+        "//json/cells:generated/svm/seam.json",
+        "//json/cells:libbindings.jar",
         "//json/native:descriptor",
         "//protobuf-buffa:libbindings.jar",
         "//protobuf-buffa/cells:generated/jvm/seam.json",
