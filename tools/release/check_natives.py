@@ -329,7 +329,11 @@ def main():
             others = {f.encode() for cls, f in (fingerprints or {}).items() if cls != ABI_CLASS[classifier]}
             for path, name in ((static, 'static archive'), (shared, 'shared library')):
                 if path and expected:
-                    held = set(HEX64.findall(path.read_bytes()))
+                    # Rust string constants are not NUL-terminated, so a fingerprint can sit directly against another
+                    # constant that starts or ends with a hex digit: look for the exact known values, not for
+                    # delimited hex runs (which then serve only to report what a failing library does hold).
+                    data = path.read_bytes()
+                    held = set(HEX64.findall(data)) | {f for f in others | {expected} if f in data}
                     if expected not in held:
                         reported = sorted(held - {expected})
                         checker.fail(path.name, '%s lacks the bindings\' %s ABI fingerprint %s (64-hex strings it holds: %s)'
