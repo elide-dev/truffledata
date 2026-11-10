@@ -1,10 +1,10 @@
 load("@rules_java//java:defs.bzl", "java_library")
 load("//bazel:myna.bzl", "myna_bindings")
 
-package(default_visibility = ["//visibility:public"])
+package(default_visibility = ["//json:__subpackages__"])
 
-# The opt-in JSON Truffle cells route (-Dtruffledata.json.cells=true, default off until a paired
-# SVM measurement shows a win). Like //protobuf-buffa/cells, the cells come from a seam *derived*
+# JSON Myna Truffle cell BINDINGS ONLY. Nothing calls them in 0.11.0: there is no
+# truffledata.json.cells flag, no route and no parity test yet (LEDGER.md). Like //protobuf-buffa/cells, the cells come from a seam *derived*
 # from the production //json/native:json.seam: only the module line changes (cells options,
 # package and class), so every import, struct and contract is the production one and the
 # production ABI fingerprint, bindings and natives are unchanged. The derived fingerprint folds in

@@ -45,11 +45,17 @@ candidate, is in `docs/superpowers/plans/2026-11-08-beat-stock-svm-ledger.md` an
 
 ## Truffle cells (opt-in)
 
-Myna 0.14.0 Truffle cells are available as zero-overhead build-time (Native Image) / static
-(JVM) flags, default off until paired SVM measurements show a win. Hot call sites use the
-specialized `NativeCell` methods (`executeInt`, `executeLong`), so scalar results are not
-boxed. Flags: `truffledata.buffa.cells`, plus the CSV, JSON and YAML routes listed in each
-format's documentation where present.
+Only the Buffa slab producer has a Myna 0.14.0 Truffle cells route in this release:
+`truffledata.buffa.cells`, a build-time (Native Image) / `static final` (JVM) flag, default off.
+Its call sites hold the concrete generated cell and call `executeInt`, so the status result is
+not boxed. The JVM route passes its flag-on and flag-off parity tests; the Native Image route
+with this change compiles but its `native_test` has not been run, and there is no paired SVM
+measurement, so the route makes no performance claim.
+
+JSON and YAML ship no cells route and no flag: their cell bindings are generated and checked
+against the production seams in the build, and nothing calls them. CSV has no cells bindings.
+Full adoption (routes, resource and borrow declarations, `NativeBytes`, paired SVM measurement
+and the per-format default) is follow-up work.
 
 ## Fixes
 
@@ -62,6 +68,10 @@ format's documentation where present.
 - Buffa: FFM slab messages trim spare learned capacity before retaining the
   array, as SVM already did (#56).
 - Buffa: nested `Any` contracts are compared structurally across models (#61).
+- Protobuf: a closed-enum map entry with repeated value occurrences is rejected if any
+  occurrence is out of set, so `encode()`/`decode()` round trips are stable (#57). Known
+  deviation: for an out-of-set value followed by a valid one, protobuf-java generated code
+  keeps the entry with the last value; TruffleData now moves the whole entry to unknown fields.
 - JSON: after `finish()`, a final root scalar that touches the end of the
   buffered input is released (#58).
 - YAML: the stream document limit is enforced on the classified extent rather
