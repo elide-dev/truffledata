@@ -29,8 +29,8 @@ the current one; the copy on `deps/myna-0.14.0` stops at the PR #67 push.
   head `1c858284` first, including `codecov/patch` after `codecov.yml` was added at Sam's request
   ("adjust codecov ignores/settings if needed to pass": Native Image-only sources ignored, patch
   status informational; `coverage_contract.py` stays the enforced gate). Main now has all four
-  cells routes, flags default off, on Myna 0.14.0. CI on main at `02c8c247` was running at
-  20:05 PST: check `gh run list --branch main`. This branch has main merged in (`-s ours`:
+  cells routes, flags default off, on Myna 0.14.0. **Main is green at `02c8c247`** (20:13 PST:
+  CI success, Untrusted input success, combined status success). This branch has main merged in (`-s ours`:
   main's tree is exactly `1c858284`, which this branch already contained).
 - The main checkout sits on `deps/myna-0.14.0` (tree identical to main). Its LOCAL `main` branch
   is stale and diverged (1 local commit `59508196`, 174 behind): left untouched, do not reset it
