@@ -47,10 +47,9 @@ the current one; the copy on `deps/myna-0.14.0` stops at the PR #67 push.
   as **0.16.1**, not in 0.16.0; under C2 the `execute` path stays heavier than 0.14.0 even then.
   It confirms `invoke` is the right entry for host code on HotSpot too (a plain static call).
   0.16.0 publication is held only for Myna main CI's native Linux and macOS jobs.
-- **Myna 0.16.0 is tagged but its GitHub release is still a DRAFT** (checked 19:46 PST: tag
-  `v0.16.0` public, `isDraft` true, public tarball URL 404). Draft tarball sha256
-  `51149cbf…138b51e3`; re-verify against `SHA256SUMS` once published. Until then the pin builds
-  only where the tarball is seeded locally (`--distdir`), so it cannot go through CI.
+- **Myna 0.16.0 is PUBLISHED** (20:17 PST, `publishedAt` 2026-11-10T04:16:57Z). The public
+  tarball's sha256 is `51149cbf503d60dbe6a3e7178455dfc34b8335dd5fbe6b803423d409138b51e3`, equal to
+  `SHA256SUMS` and to the pin on `deps/myna-0.16.0`, so the pin can go through CI.
   0.16.0 adds `public static invoke(...)` on every generated cell (native carriers, raw `long`
   addresses; no `Object[]`, boxes, `NativePointer` or `Borrow`): "the entry for host code
   compiled ahead of time", measured by Myna at the cost of the direct call, 0 B.
