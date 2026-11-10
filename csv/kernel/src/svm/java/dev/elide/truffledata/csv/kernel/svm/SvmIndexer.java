@@ -7,6 +7,7 @@ import dev.elide.truffledata.csv.kernel.generated.CsvNative;
 import dev.elide.truffledata.csv.kernel.generated.CsvNativeAbi;
 import java.nio.file.Path;
 import org.graalvm.nativeimage.ImageInfo;
+import org.graalvm.nativeimage.ImageSingletons;
 import org.graalvm.nativeimage.PinnedObject;
 import org.graalvm.nativeimage.Platform;
 import org.graalvm.nativeimage.c.type.CCharPointer;
@@ -127,6 +128,11 @@ public final class SvmIndexer extends CsvIndexer {
 
     @Override
     public CsvIndexing.Provider load(@Nullable Path library) {
+      // An image built with -Dtruffledata.csv.cells=true registers the Myna Truffle cells backend
+      // here (CsvCellsFeature, truffledata-csv-cells); without it no such singleton exists and the
+      // image contains no cells code.
+      if (ImageSingletons.contains(CsvIndexing.NativeBackend.class))
+        return ImageSingletons.lookup(CsvIndexing.NativeBackend.class).load(library);
       return provider();
     }
   }

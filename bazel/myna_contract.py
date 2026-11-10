@@ -111,7 +111,7 @@ def verify_classes(descriptor, archive, per_class):
 
 
 def verify_derived(production, derived):
-    """A cells seam derived from a production seam (protobuf-buffa/cells, json/cells and yaml/cells BUILD.bazel) may differ
+    """A cells seam derived from a production seam (protobuf-buffa/cells, csv/cells, json/cells and yaml/cells BUILD.bazel) may differ
     only in its module options: the Truffle cells block and the Java package/class. Every import,
     struct, policy and the ABI itself must be the production one, so cells call the library the
     production fingerprint check verified."""

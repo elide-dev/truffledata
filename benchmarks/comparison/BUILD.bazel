@@ -953,6 +953,39 @@ CSV_SVM_ARGS = [
     ]
 ]
 
+# The csv_svm image with the Myna Truffle cells route on (-Dtruffledata.csv.cells=true and
+# truffledata-csv-cells on the class path; CsvCellsFeature registers through the jar). Only the
+# engines that install CsvIndexing.loadNative() (the "-native" engines) take the cells route;
+# kernel-native constructs SvmIndexer directly and is the same code in both images (an A/A
+# control). For the paired flag-on vs flag-off measurement:
+#   bazel test :csv_pair --//benchmarks/comparison:csv_svm_candidate=//benchmarks/comparison:csv_svm_cells
+native_image(
+    name = "csv_svm_cells",
+    testonly = True,
+    cc_deps = ["//csv/native:truffledata_csv"],
+    exec_properties = {
+        "EstimatedCPU": "8",
+        "EstimatedMemory": "24GB",
+    },
+    executable_name = "csv-comparison-cells",
+    extra_args = CSV_SVM_ARGS + [
+        "-march=compatibility",
+        "-Dtruffledata.csv.cells=true",
+    ],
+    graalvm_sdk = "@graalvm_linux_amd64//:gvm",
+    main_class = "dev.elide.truffledata.comparison.CsvComparisonSvm",
+    optimization_mode = "2",
+    tags = ["manual"],
+    target_compatible_with = [
+        "@platforms//os:linux",
+        "@platforms//cpu:x86_64",
+    ],
+    deps = [
+        ":csv_comparison_svm",
+        "//csv/cells",
+    ],
+)
+
 # Symbol-bearing CSV images for diagnosis only (never measured for timing): the AOT symbol gate
 # (P0.6) and callgrind instruction profiles (`--profile`, plan 2026-11-08-beat-stock-svm P0.5).
 # They mirror consumer_profile (-H:-DeleteLocalSymbols, frame pointers) over the csv_svm flags;

@@ -1,0 +1,109 @@
+load("@rules_graalvm//graalvm:defs.bzl", "native_image")
+load("@rules_java//java:defs.bzl", "java_test")
+load("@rules_shell//shell:sh_test.bzl", "sh_test")
+load("//bazel:java.bzl", "data_java_library")
+load("//bazel:jit.bzl", "LINUX_SVM_PLATFORMS", "LINUX_SVM_SDK", "TRUFFLE_JIT_CHECKS")
+
+# The CSV Myna cells route (truffledata.csv.cells). The flag-off suites are the existing //csv
+# targets, which do not see this artifact.
+
+data_java_library(
+    name = "parity",
+    testonly = True,
+    srcs = [
+        # Split package: test-only bridges to the package-private route indexers.
+        "CellsAcceptance.java",
+        "CellsParity.java",
+    ],
+    deps = [
+        "//csv",
+        "//csv/cells",
+        "//csv/kernel:svm",
+    ],
+)
+
+# HotSpot. `jvm`: the flag on (loadNative is the cells route); `jvm_off`: the artifact present with
+# the flag off (the route stays FFM; parity still runs, constructing both routes directly).
+[
+    java_test(
+        name = name,
+        size = "large",
+        srcs = ["CellsRouteTest.java"],
+        args = [
+            "--class",
+            "dev.elide.truffledata.csv.cells.CellsRouteTest",
+        ],
+        data = [
+            "//csv/cells:src/main/java/dev/elide/truffledata/csv/cells/CellsFfmIndexer.java",
+            "//csv/cells:src/main/java/dev/elide/truffledata/csv/cells/CellsSvmIndexer.java",
+            "//csv/native:csv_shared.so",
+            "//csv/native:other_abi_class.so",
+        ],
+        jvm_flags = [
+            "--enable-native-access=ALL-UNNAMED",
+            "-Dtruffledata.csv.cells=" + flag,
+            "-Dtruffledata.csv.cells.expected=" + flag,
+            "-ea",
+        ],
+        main_class = "dev.elide.bazel.junit.BazelJUnitRunner",
+        use_testrunner = False,
+        runtime_deps = [
+            "//bazel/junit:runner",
+            "@maven//:org_graalvm_truffle_truffle_runtime",
+        ],
+        deps = [
+            ":parity",
+            "//csv",
+            "//csv/cells",
+            "//csv/kernel:jvm",
+            "@maven//:org_junit_jupiter_junit_jupiter_api",
+            "@myna//:truffle",
+        ],
+    )
+    for name, flag in [
+        ("jvm", "true"),
+        ("jvm_off", "false"),
+    ]
+]
+
+# Native Image built with the flag: the published loadNative path is the cells route, checked
+# against the static backend, with the runtime-compilation blocklist checks on. CsvCellsFeature is
+# not passed here: the cells jar's native-image.properties must register it.
+native_image(
+    name = "native",
+    testonly = True,
+    cc_deps = ["//csv/native:truffledata_csv"],
+    exec_properties = {
+        "EstimatedCPU": "8",
+        "EstimatedMemory": "24GB",
+    },
+    executable_name = "csv_cells",
+    extra_args = [
+        "--gc=serial",
+        "-ea",
+        "-Dtruffledata.csv.cells=true",
+        "--initialize-at-build-time=dev.elide.truffledata",
+        "--parallelism=8",
+        "-march=compatibility",
+        "-H:+UnlockExperimentalVMOptions",
+    ] + TRUFFLE_JIT_CHECKS + ["-H:-UnlockExperimentalVMOptions"],
+    graalvm_sdk = LINUX_SVM_SDK,
+    main_class = "dev.elide.truffledata.csv.cells.CellsAcceptance",
+    optimization_mode = "2",
+    tags = ["manual"],
+    target_compatible_with = LINUX_SVM_PLATFORMS,
+    deps = [
+        ":parity",
+        "@maven//:org_graalvm_truffle_truffle_runtime",
+    ],
+)
+
+sh_test(
+    name = "native_test",
+    size = "large",
+    srcs = ["native_test.sh"],
+    args = ["$(rootpath :native)"],
+    data = [":native"],
+    tags = ["manual"],
+    target_compatible_with = LINUX_SVM_PLATFORMS,
+)

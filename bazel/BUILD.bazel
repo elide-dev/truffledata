@@ -127,9 +127,18 @@ sh_test(
         "$(rootpath //yaml/cells:libbindings.jar)",
         "$(rootpath //yaml/cells:generated/jvm/seam.json)",
         "-",
+        # The opt-in CSV kernel cells bindings (csv/cells): derived from the production seam.
+        "$(rootpath //csv/cells:generated/svm/seam.json)",
+        "$(rootpath //csv/cells:libbindings.jar)",
+        "$(rootpath //csv/cells:generated/jvm/seam.json)",
+        "-",
         # The JSON cells bindings (json/cells, JVM only so far): derived from the production seam.
         "$(rootpath //json/cells:generated/jvm/seam.json)",
         "-",
+        "--derived",
+        "$(rootpath //csv/native:descriptor)",
+        "$(rootpath //csv/cells:generated/svm/seam.json)",
+        "$(rootpath //csv/cells:generated/jvm/seam.json)",
         "--derived",
         "$(rootpath //json/native:descriptor)",
         "$(rootpath //json/cells:generated/jvm/seam.json)",
@@ -143,6 +152,9 @@ sh_test(
         "$(rootpath //yaml/cells:generated/jvm/seam.json)",
     ],
     data = [
+        "//csv/cells:generated/jvm/seam.json",
+        "//csv/cells:generated/svm/seam.json",
+        "//csv/cells:libbindings.jar",
         "//csv/kernel:libbindings.jar",
         "//csv/native:descriptor",
         "//json:libbindings.jar",
