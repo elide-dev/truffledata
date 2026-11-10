@@ -12,11 +12,15 @@ import org.graalvm.nativeimage.ImageSingletons;
  *
  * <p>The flag and the registration must agree, or the image build fails: a flag without {@code
  * --features=dev.elide.truffledata.yaml.YamlFeature} does not quietly build the static route.
+ *
+ * <p>The name is deliberate: //yaml/cells/tests:flag_off_image_test proves that an image built
+ * without the flag does not contain the {@link SvmCells} type by searching the binary for that
+ * name, so this holder, which every static image contains, must not share its prefix.
  */
-final class SvmCellsRoute {
+final class SvmRoute {
   static final boolean ENABLED = enabled();
 
-  private SvmCellsRoute() {}
+  private SvmRoute() {}
 
   private static boolean enabled() {
     // Only a Native Image has image singletons; YamlSvm rejects every other runtime before it gets

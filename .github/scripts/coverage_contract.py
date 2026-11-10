@@ -77,7 +77,7 @@ ACCESS_SOURCES = {f'core/src/main/java/dev/elide/truffledata/{name}.java' for na
         # The opt-in Myna cells route's selectors (truffledata.yaml.cells): the JVM holder, the
         # image singleton's interface, its build-time holder and the hosted Feature. The route
         # itself is //yaml/cells.
-        'CellsRoute', 'SvmCells', 'SvmCellsRoute', 'YamlFeature',
+        'CellsRoute', 'SvmCells', 'SvmRoute', 'YamlFeature',
         # Shared scalar resolution and the emitter (#42).
         'ScalarResolver', 'YamlScalars', 'YamlEmitOptions', 'YamlEmitter', 'YamlWriter',
         # The pure-Java kernel (//yaml:java), differentially tested against native (#41), its
@@ -163,9 +163,9 @@ SVM_ONLY_METHODS = {
     # flag and the Feature disagree) and read only behind YamlSvm.requireRuntime, which rejects the
     # JVM first. //yaml/tests:native_test (flag off) and //yaml/cells/tests:native_test (flag on)
     # run it; //benchmarks/comparison:yaml_svm_cells_unregistered is its negative control.
-    **_yaml_methods('SvmCellsRoute',
-        'SvmCellsRoute::enabled ()Z',
-        'SvmCellsRoute::cells ()Ldev/elide/truffledata/yaml/SvmCells;'),
+    **_yaml_methods('SvmRoute',
+        'SvmRoute::enabled ()Z',
+        'SvmRoute::cells ()Ldev/elide/truffledata/yaml/SvmCells;'),
     **_yaml_methods('SvmSessionBackend',
         # Hooks read by the cells route's static backend (//yaml/cells, CellsSvmSessionBackend);
         # //yaml/cells/tests:native_test runs them in an image built with the flag.

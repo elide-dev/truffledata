@@ -41,10 +41,10 @@ public final class YamlSvm {
 
   static YamlSession openSession(YamlOptions options) {
     requireRuntime();
-    // The cells route is fixed at image build time (YamlFeature); SvmCellsRoute folds, and fails
+    // The cells route is fixed at image build time (YamlFeature); SvmRoute folds, and fails
     // the image build when the flag and the Feature disagree.
-    if (SvmCellsRoute.ENABLED)
-      return new YamlSession(options, SvmCellsRoute.cells().session(options));
+    if (SvmRoute.ENABLED)
+      return new YamlSession(options, SvmRoute.cells().session(options));
     return new YamlSession(options, new SvmSessionBackend(options));
   }
 
@@ -52,7 +52,7 @@ public final class YamlSvm {
   public static YamlPlan compile(Schema root, Map<String, Schema> recordTypes) {
     requireRuntime();
     TypedLayout layout = new TypedLayout(root, recordTypes, YamlPlan.FORMAT);
-    if (SvmCellsRoute.ENABLED) return SvmCellsRoute.cells().plan(layout, YamlOptions.DEFAULT);
+    if (SvmRoute.ENABLED) return SvmRoute.cells().plan(layout, YamlOptions.DEFAULT);
     return SvmPlanBackend.create(layout, YamlOptions.DEFAULT);
   }
 
