@@ -7,6 +7,7 @@ import dev.elide.truffledata.yaml.generated.Yaml;
 import dev.elide.truffledata.yaml.generated.YamlAbi;
 import java.util.Map;
 import org.graalvm.nativeimage.ImageInfo;
+import org.graalvm.nativeimage.ImageSingletons;
 import org.graalvm.nativeimage.Platform;
 import org.graalvm.nativeimage.c.type.CTypeConversion;
 
@@ -41,13 +42,24 @@ public final class YamlSvm {
 
   static YamlSession openSession(YamlOptions options) {
     requireRuntime();
+    // The cells route is fixed at image build time (YamlFeature): contains() folds to a constant.
+    if (ImageSingletons.contains(SvmCells.class))
+      return new YamlSession(options, ImageSingletons.lookup(SvmCells.class).session(options));
     return new YamlSession(options, new SvmSessionBackend(options));
+  }
+
+  /** Whether this image was built with the cells route (tests). */
+  static boolean cellsRoute() {
+    return ImageSingletons.contains(SvmCells.class);
   }
 
   /** A plan over the static archive with the default options (see {@link YamlPlan#compile}). */
   public static YamlPlan compile(Schema root, Map<String, Schema> recordTypes) {
     requireRuntime();
-    return SvmPlanBackend.create(new TypedLayout(root, recordTypes, YamlPlan.FORMAT), YamlOptions.DEFAULT);
+    TypedLayout layout = new TypedLayout(root, recordTypes, YamlPlan.FORMAT);
+    if (ImageSingletons.contains(SvmCells.class))
+      return ImageSingletons.lookup(SvmCells.class).plan(layout, YamlOptions.DEFAULT);
+    return SvmPlanBackend.create(layout, YamlOptions.DEFAULT);
   }
 
   @TruffleBoundary

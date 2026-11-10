@@ -129,3 +129,17 @@ exports_files(
     ],
     visibility = ["//csv/cells/tests:__pkg__"],
 )
+
+# The hand-written cell call sites and the generated cells that classify them, for the call-shape
+# scan (//protobuf-buffa/cells/tests:call_shape).
+filegroup(
+    name = "call_sites",
+    srcs = [
+        "generated/jvm/CsvCellsJvmTruffle.java",
+        "generated/svm/CsvCellsTruffle.java",
+        "src/main/java/dev/elide/truffledata/csv/cells/CellsFfmIndexer.java",
+        "src/main/java/dev/elide/truffledata/csv/cells/CellsSvmIndexer.java",
+        "src/main/java/dev/elide/truffledata/csv/cells/CsvCellsRoute.java",
+    ],
+    visibility = ["//protobuf-buffa/cells/tests:__pkg__"],
+)

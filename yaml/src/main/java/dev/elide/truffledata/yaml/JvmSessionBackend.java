@@ -44,7 +44,7 @@ final class JvmSessionBackend extends YamlSession.Backend {
     }
   }
 
-  private MemorySegment stage(byte[] bytes, int offset, int length) {
+  MemorySegment stage(byte[] bytes, int offset, int length) {
     if (staging.byteSize() < Math.max(1, length)) {
       Arena grown = Arena.ofConfined();
       MemorySegment replacement;
@@ -87,7 +87,7 @@ final class JvmSessionBackend extends YamlSession.Backend {
       o.set(ValueLayout.JAVA_INT, 48L + 4L * i, policies[i]);
   }
 
-  private void reference() {
+  void reference() {
     references++;
   }
 
@@ -101,6 +101,29 @@ final class JvmSessionBackend extends YamlSession.Backend {
 
   @Override
   protected void directories(boolean enabled) { directories = enabled; }
+
+  // Hooks for the opt-in Myna cells route (yaml/cells, CellsJvmSessionBackend), which wraps this
+  // backend and makes the decode-path calls through cells; nothing in this class calls them.
+
+  YamlFFM.LibraryBinding calls() {
+    return calls;
+  }
+
+  MemorySegment sessionHandle() {
+    return session;
+  }
+
+  MemorySegment resultSlot() {
+    return result;
+  }
+
+  YamlOptions sessionOptions() {
+    return options;
+  }
+
+  int decodeFlags() {
+    return (options.retainSource() ? 2 : 0) | (directories ? 4 : 0);
+  }
 
   @Override
   protected void decode(
@@ -134,7 +157,7 @@ final class JvmSessionBackend extends YamlSession.Backend {
     check(status, result);
   }
 
-  private static void check(int status, MemorySegment result) {
+  static void check(int status, MemorySegment result) {
     if (status == 2 || status == 4 || status == 6 || status == 7) {
       int length = result.get(ValueLayout.JAVA_INT, 184);
       String detail =
@@ -155,7 +178,7 @@ final class JvmSessionBackend extends YamlSession.Backend {
     return null;
   }
 
-  private static final ResultMetadata.Memory MEMORY =
+  static final ResultMetadata.Memory MEMORY =
       new ResultMetadata.Memory() {
         private MemorySegment at(long base, long offset, long size) {
           return MemorySegment.ofAddress(base + offset).reinterpret(size);
@@ -178,11 +201,11 @@ final class JvmSessionBackend extends YamlSession.Backend {
         }
       };
 
-  private static SegmentTape tape(MemorySegment r) {
+  static SegmentTape tape(MemorySegment r) {
     return new SegmentTape(r.get(ValueLayout.ADDRESS, 8));
   }
 
-  private static class Storage implements YamlMessage.Storage {
+  static class Storage implements YamlMessage.Storage {
     final SegmentTape tape;
     final MemorySegment source;
 
@@ -262,7 +285,7 @@ final class JvmSessionBackend extends YamlSession.Backend {
     }
   }
 
-  private void dereference() {
+  void dereference() {
     if (--references == 0) library.close();
   }
 

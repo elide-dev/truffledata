@@ -62,6 +62,11 @@ public final class YamlPlan implements AutoCloseable {
     }
   }
 
+  /** The plan's backend; for the opt-in cells route (yaml/cells), which wraps it. */
+  Backend backend() {
+    return backend;
+  }
+
   private void checkThread() {
     if (Thread.currentThread() != thread)
       throw new IllegalStateException("YAML plan thread mismatch");
