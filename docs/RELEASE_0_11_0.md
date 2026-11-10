@@ -45,17 +45,45 @@ candidate, is in `docs/superpowers/plans/2026-11-08-beat-stock-svm-ledger.md` an
 
 ## Truffle cells (opt-in)
 
-Only the Buffa slab producer has a Myna 0.14.0 Truffle cells route in this release:
-`truffledata.buffa.cells`, a build-time (Native Image) / `static final` (JVM) flag, default off.
-Its call sites hold the concrete generated cell and call `executeInt`, so the status result is
-not boxed. The JVM route passes its flag-on and flag-off parity tests; the Native Image route
-with this change compiles but its `native_test` has not been run, and there is no paired SVM
-measurement, so the route makes no performance claim.
+All four native seams have a Myna Truffle cells route behind a flag that is off by default:
+`truffledata.buffa.cells`, `truffledata.json.cells`, `truffledata.yaml.cells` and
+`truffledata.csv.cells`. On the JVM the flag is a `static final` read once. In a Native Image the
+route is chosen when the image is built, and an image built without the flag contains no cells
+code. Setting the flag without the route's Feature or artifact fails the image build (JSON, YAML
+and CSV have negative-control builds for this; Buffa's Feature is required by every Buffa image).
 
-JSON and YAML ship no cells route and no flag: their cell bindings are generated and checked
-against the production seams in the build, and nothing calls them. CSV has no cells bindings.
-Full adoption (routes, resource and borrow declarations, `NativeBytes`, paired SVM measurement
-and the per-format default) is follow-up work.
+| Format | Native calls that go through cells |
+|---|---|
+| Buffa | the slab producer (`decode_slab`, `decode_slab_small`) |
+| JSON | document decode (`decode`, `decode_adopted`, `release`); sessions, streams and typed plans are not routed |
+| YAML | the static backend's session decode, shared text, retain, reset, streams and typed decode |
+| CSV | the index kernel (`index`, `index_leaf`), `validate_utf8` and `kernel` |
+
+Scalar results use the specialized `NativeCell` methods (`executeInt`, `executeLong`) on the
+concrete generated cell; a source scan over all four routes enforces it, and for Buffa and JSON
+a disassembly check of the flag-on image confirms it. Every route has parity tests against the
+default route, on the JVM and in a Native Image, comparing results and errors.
+
+What the routes do not do:
+
+- **No `resource` or `borrow` declarations.** Myna's validator cannot express them for these C
+  signatures: creates return a status and write the handle through an out-parameter, and every
+  buffer import also takes a result or handle pointer. Where a borrow is expressible it would
+  copy heap inputs under 256 bytes in a Native Image, where the default route pins them.
+- **No performance claim.** The routes are called from host code below a Truffle boundary, where
+  Myna's cell entry allocates on every call. Buffa measures 144 B per producer call in a Native
+  Image (176 B when the input and output buffers change between calls) against 0 B on the
+  default route; the other routes have the same shape and are not yet
+  measured. Paired SVM timings are on hold for Myna 0.16.0. Until they exist every flag stays
+  off.
+- **On HotSpot, cells cannot hold a caller's memory segment open for the call.** Buffa and JSON
+  make the confined-thread and liveness checks themselves before the call; YAML keeps
+  caller-segment calls on the default binding. A shared arena closed by another thread during
+  a cells call is not caught.
+
+Pending before 0.11.0 is published: the Myna 0.16.0 pin, the paired measurements and each
+flag's default, and release packaging for the JSON, YAML and CSV route artifacts (only
+`truffledata-protobuf-buffa-cells` is in the release module list today).
 
 ## Fixes
 
@@ -87,7 +115,7 @@ dual licensed MIT or Apache 2.0.
 
 ## Deferred
 
-Small strings and TruffleString cells (WS13), quiet-worker timing pairs for the
-Buffa cells route and for CSV `CsvBatch.row` inlining, JSON typed per-record check
+Small strings and TruffleString cells (WS13), quiet-worker timing pairs for CSV
+`CsvBatch.row` inlining, JSON typed per-record check
 folding, and the CSV register-pressure inner loop are future work. They are
 hypotheses, not committed outcomes. Issues #37 and #38 remain open.
