@@ -2,6 +2,7 @@ package dev.elide.truffledata.json;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import dev.elide.myna.truffle.NativeCell;
 import dev.elide.myna.truffle.NativeCellException;
 import dev.elide.myna.truffle.NativeCellRootNode;
 import dev.elide.myna.truffle.NativePointer;
@@ -11,8 +12,11 @@ import java.lang.foreign.MemorySegment;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.lang.reflect.Field;
+import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
 import java.util.List;
-import java.util.regex.Matcher;
+import java.util.Map;
 import java.util.regex.Pattern;
 import org.junit.jupiter.api.Test;
 
@@ -112,35 +116,81 @@ final class CellsRouteTest {
   }
 
   /**
-   * Brief item 2: every scalar-result cell is held as its concrete generated type and called through
-   * its typed method; the generic {@code execute(Object[])} only for the void {@code release}. A
-   * source scan of both backends fails if a scalar cell call is routed through {@code execute}.
+   * The call shape of both routes (Myna 0.16.0). The Native Image route is host code compiled ahead
+   * of time, and the HotSpot route lends only native segments it has scope-checked, so each calls
+   * the generated cells' static {@code invoke} (native carriers and raw addresses, nothing
+   * allocated) for decode, adopted decode and release, and neither holds a cell, builds an argument
+   * array, boxes a carrier or makes a {@code NativePointer}. No {@code execute} call of any kind
+   * remains on either route. The HotSpot route keeps its explicit scope check, ahead of the call.
    */
   @Test
-  void scalarCellsUseTypedCalls() throws Exception {
-    Pattern field = Pattern.compile("private final (\\S+) (\\w+);");
-    Pattern call = Pattern.compile("(\\w+)\\.(execute\\w*)\\(");
-    for (String source : List.of("CellsFfm.java", "CellsSvm.java")) {
+  void routesCallTheCellsInvokeEntry() throws Exception {
+    Map<String, String> generated =
+        Map.of(
+            "CellsSvm.java", "dev.elide.truffledata.json.cells.generated.JsonCellsTruffle",
+            "CellsFfm.java", "dev.elide.truffledata.json.cells.generated.JsonCellsJvmTruffle");
+    for (var entry : generated.entrySet()) {
+      String source = entry.getKey();
+      Class<?> route =
+          Class.forName("dev.elide.truffledata.json." + source.replace(".java", ""), false, getClass().getClassLoader());
+      for (Field field : route.getDeclaredFields())
+        assertFalse(NativeCell.class.isAssignableFrom(field.getType()), "route holds no cell: " + field);
+      assertEquals(0, route.getDeclaredClasses().length, route + " nests no holder");
       String text =
           Files.readString(
               runfile("json/cells/src/main/java/dev/elide/truffledata/json/" + source));
-      java.util.Map<String, String> cells = new java.util.HashMap<>();
-      Matcher fields = field.matcher(text);
-      while (fields.find())
-        if (fields.group(1).endsWith("_Cell")) cells.put(fields.group(2), fields.group(1));
-      assertFalse(cells.isEmpty(), source);
-      assertFalse(text.contains("NativeCell decode"), source);
-      int calls = 0;
-      Matcher calling = call.matcher(text);
-      while (calling.find()) {
-        String type = cells.get(calling.group(1));
-        if (type == null) continue;
-        calls++;
-        String expected = type.endsWith(".release_Cell") ? "execute" : "executeInt";
-        assertEquals(expected, calling.group(2), source + ": " + calling.group());
+      // Comments describe execute; only code is scanned.
+      String code = text.replaceAll("(?s)/\\*.*?\\*/", "").replaceAll("(?m)//.*$", "");
+      for (String forbidden :
+          List.of(
+              ".execute",
+              "new Object[",
+              "NativePointer",
+              "NativeCell",
+              "Borrow",
+              "Long.valueOf",
+              "Integer.valueOf",
+              "catch (UnexpectedResultException"))
+        assertFalse(code.contains(forbidden), source + " uses " + forbidden);
+      String owner = entry.getValue().substring(entry.getValue().lastIndexOf('.') + 1);
+      List<String> cells =
+          source.equals("CellsSvm.java")
+              ? List.of("decode_Cell", "decode_adopted_Cell", "release_Cell")
+              : List.of("decode_adopted_Cell", "release_Cell");
+      for (String cell : cells)
+        assertEquals(
+            1,
+            code.split(Pattern.quote(owner + "." + cell + ".invoke("), -1).length - 1,
+            source + " must call " + cell + ".invoke exactly once");
+      // Each called cell declares the static entry with exactly the carriers the route passes.
+      Class<?> holder = Class.forName(entry.getValue(), false, route.getClassLoader());
+      for (Class<?> cell : holder.getDeclaredClasses()) {
+        if (!cells.contains(cell.getSimpleName())) continue;
+        Class<?>[] expected =
+            switch (cell.getSimpleName()) {
+              case "decode_Cell" ->
+                  new Class<?>[] {long.class, long.class, long.class, long.class, long.class, long.class, int.class, long.class};
+              case "decode_adopted_Cell" ->
+                  new Class<?>[] {
+                    long.class, long.class, long.class, long.class, long.class, long.class, long.class, int.class, long.class
+                  };
+              default -> new Class<?>[] {long.class};
+            };
+        Method invoke = cell.getDeclaredMethod("invoke", expected);
+        assertTrue(Modifier.isStatic(invoke.getModifiers()), invoke.toString());
+        assertEquals(
+            cell.getSimpleName().equals("release_Cell") ? void.class : int.class,
+            invoke.getReturnType(),
+            invoke.toString());
       }
-      assertEquals(cells.size(), calls, source + " calls every cell exactly once");
-      assertFalse(text.contains("catch (UnexpectedResultException"), source);
     }
+    // The HotSpot route restores the downcall's scope check on the caller's segment, before the
+    // cell call (JvmScopedTest#adoptingAnotherThreadsConfinedSegmentFailsInTheDowncall).
+    String ffm =
+        Files.readString(
+            runfile("json/cells/src/main/java/dev/elide/truffledata/json/CellsFfm.java"));
+    int check = ffm.indexOf("data.get(ValueLayout.JAVA_BYTE, 0);");
+    assertTrue(check > 0, "CellsFfm scope check");
+    assertTrue(check < ffm.indexOf("decode_adopted_Cell.invoke("), "scope check precedes the call");
   }
 }
