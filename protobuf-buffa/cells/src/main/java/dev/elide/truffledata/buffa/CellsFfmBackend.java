@@ -93,7 +93,7 @@ final class CellsFfmBackend implements BuffaWire.Backend {
   // beginSlab's busy check excludes reentry), and one cached pointer or box per slot whose value
   // repeats. The buffer slots are cleared after each call, so the array never keeps a caller's
   // input or a produced slab reachable.
-  private final Object[] arguments = new Object[10];
+  private final @Nullable Object[] arguments = new Object[10];
   private NativePointer compiledPointer = NativePointer.NULL;
   private NativePointer projectionPointer = NativePointer.NULL;
   private NativePointer resultPointer = NativePointer.NULL;
@@ -113,7 +113,7 @@ final class CellsFfmBackend implements BuffaWire.Backend {
       long capacity,
       SlabLimits limits,
       MemorySegment result) {
-    Object[] arguments =
+    @Nullable Object[] arguments =
         arguments(compiled, data, length, flags, projection, out, capacity, limits, result);
     try {
       return cell.executeInt(arguments);
@@ -134,7 +134,7 @@ final class CellsFfmBackend implements BuffaWire.Backend {
       long capacity,
       SlabLimits limits,
       MemorySegment result) {
-    Object[] arguments =
+    @Nullable Object[] arguments =
         arguments(compiled, data, length, flags, projection, out, capacity, limits, result);
     try {
       return cell.executeInt(arguments);
@@ -144,7 +144,7 @@ final class CellsFfmBackend implements BuffaWire.Backend {
     }
   }
 
-  private Object[] arguments(
+  private @Nullable Object[] arguments(
       long compiled,
       Object data,
       long length,
@@ -160,7 +160,7 @@ final class CellsFfmBackend implements BuffaWire.Backend {
       resultPointer = NativePointer.of(result.address());
     if (maxDepth != limits.maxDepth()) maxDepth = limits.maxDepth();
     if (maxSlabBytes != limits.maxSlabBytes()) maxSlabBytes = (long) limits.maxSlabBytes();
-    Object[] arguments = this.arguments;
+    @Nullable Object[] arguments = this.arguments;
     arguments[0] = compiledPointer;
     arguments[1] = data;
     arguments[2] = length;
