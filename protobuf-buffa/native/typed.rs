@@ -265,8 +265,8 @@ impl<'a, 'b> Decoder<'a, 'b> {
             } else {
                 let value = scalar(kind, input)?;
                 let accepted = f.enumeration(value as i32)?;
-                if flags & 1 != 0 && number == 2 && kind == 14 {
-                    invalid_map = !accepted;
+                if flags & 1 != 0 && number == 2 && kind == 14 && !accepted {
+                    invalid_map = true;
                 }
                 if accepted {
                     self.push(f, value, 0)?;

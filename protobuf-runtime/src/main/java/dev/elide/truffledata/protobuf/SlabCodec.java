@@ -418,8 +418,9 @@ public final class SlabCodec {
         continue;
       }
       long bits = scalar(r, field.kind(), end);
-      if (plan.definition().mapEntry() && ordinal == 1 && enumeration != null)
-        open.invalidMapEnum = !enumeration.accepts((int) bits);
+      if (plan.definition().mapEntry() && ordinal == 1 && enumeration != null
+          && !enumeration.accepts((int) bits))
+        open.invalidMapEnum = true;
       if (enumeration != null && !enumeration.accepts((int) bits)) {
         unknown(open).write(r.in, start, r.pos - start);
         continue;
