@@ -172,8 +172,9 @@ sh_test(
 
 # The route in an image built like a consumer's: the flag and the Feature, no assertions, and no
 # caller of the production bindings of the routed imports. It keeps its local symbols so that
-# :aot_shape can read the compiled shape of the route (brief item 2: scalar cells are called through
-# their typed method, never the generic execute). Shape only; timings come from the paired harness.
+# :aot_shape can read the compiled shape of the route (host code: it reaches each routed import
+# through the cell's static invoke, Myna 0.16.0, and calls no execute method). Shape only; timings
+# come from the paired harness.
 native_image(
     name = "native_profile",
     testonly = True,

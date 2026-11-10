@@ -11,13 +11,16 @@ package(default_visibility = ["//visibility:public"])
 # with --features=dev.elide.truffledata.yaml.YamlFeature from //yaml:svm; JVM: once, in YamlJvm's
 # CellsRoute). With the flag off nothing here is reachable, and the artifact need not be present.
 #
-# What stays on the production bindings, and why (src/main/java/.../Cells.java has the detail):
+# Every routed call uses the generated cell's static `invoke` entry (Myna 0.16.0: native carriers
+# and raw addresses, no cell instance, argument array, box, NativePointer or Borrow), on Native Image
+# and on HotSpot; the backends' class documentation has the detail.
+# What stays on the production bindings, and why:
 # - session_create/session_release and plan_create/plan_release: the wrapped baseline backend
 #   creates and releases its own handles;
-# - release and typed_release: results outlive the session or plan that holds the cells;
+# - release and typed_release: results outlive the session or plan that produced them;
 # - on the JVM, caller-supplied native segments: the FFM downcall holds the segment's scope for the
 #   call (a closed or foreign-thread segment is rejected); a cell would lend a raw address.
-# The derived seams declare no `resource` and no `borrow`: Myna 0.14.0 rejects both for these
+# The derived seams declare no `resource` and no `borrow`: Myna (0.16.0) rejects both for these
 # import shapes (a resource constructor must take scalars and return the handle; a call borrow
 # allows no other pointer parameter), so inputs are pinned or staged as the baseline does.
 #
@@ -103,7 +106,6 @@ java_library(
 filegroup(
     name = "sources",
     srcs = [
-        "src/main/java/dev/elide/truffledata/yaml/Cells.java",
         "src/main/java/dev/elide/truffledata/yaml/CellsJvmPlanBackend.java",
         "src/main/java/dev/elide/truffledata/yaml/CellsJvmSessionBackend.java",
         "src/main/java/dev/elide/truffledata/yaml/CellsSvm.java",

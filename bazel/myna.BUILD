@@ -26,8 +26,9 @@ java_library(
 )
 
 # myna-truffle: the language-neutral runtime of Myna's Truffle native cells (NativeCell, coercions,
-# pointers, borrows). Used by the opt-in truffledata-protobuf-buffa-cells route (which bundles it:
-# Myna is not published to Maven) and the WS11 probe; nothing on a default path depends on it.
+# pointers, borrows). Used by the opt-in <format>/cells routes and the WS11 probe; nothing on a
+# default path depends on it. Myna is not published to Maven: the release ships this runtime once,
+# as truffledata-cells (//tools/release:cells_library), which every *-cells route artifact depends on.
 # Needs the Truffle DSL processor for its interop exports.
 filegroup(
     name = "truffle_sources",

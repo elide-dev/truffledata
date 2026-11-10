@@ -1442,12 +1442,14 @@ final class TypedAcceptance {
           Acceptance.check(sum == 840000, "session decode checksum");
         }
         System.out.println("SESSION decode bytes/message=" + Arrays.toString(rounds));
-        // The opt-in Myna cells route (truffledata.buffa.cells, //protobuf-buffa/cells) calls the
-        // producer through the concrete cell's executeInt(Object[]): per-call pointers, boxed
-        // carriers and Myna's borrow objects (elide-dev/myna#85) add allocation on HotSpot: 240 B
-        // measured with the reused argument array and cached pointers (320 B before). Its own
-        // ceiling; the default route keeps the 48 B contract.
-        double budget = Boolean.getBoolean("truffledata.buffa.cells") ? 288.1 : 48.1;
+        // The opt-in Myna cells route (truffledata.buffa.cells, //protobuf-buffa/cells) has its
+        // own ceiling; the default route keeps the 48 B contract. Its session writes call the
+        // decodeSlab cell's static invoke (raw addresses, no argument array, box, NativePointer or
+        // Borrow) and measured 0 B/message. History, flag on: 320 B, then 240 B with a reused
+        // argument array and cached pointers, through executeInt(Object[]) on Myna 0.14.0
+        // (elide-dev/myna#85); 528 B through executeInt on Myna 0.16.0; 0 B through invoke. The
+        // 0.1 B/message is under 2 KB per 20000-message round: no per-message allocation fits.
+        double budget = Boolean.getBoolean("truffledata.buffa.cells") ? 0.1 : 48.1;
         for (double allocated : rounds)
           Acceptance.check(
               allocated <= budget,

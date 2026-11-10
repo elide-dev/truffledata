@@ -111,43 +111,62 @@ final class CellsRouteTest {
   }
 
   /**
-   * Brief item 2: every scalar-result cell is held as its concrete generated type, which overrides
-   * the typed method, and no call site routes a scalar cell through the generic execute (only the
-   * pointer-result fingerprint cell may use it).
+   * The call shape of each route. HotSpot: every scalar-result cell is held as its concrete
+   * generated type, which overrides the typed method, and no call site routes a scalar cell through
+   * the generic execute. Native Image: host code calls each cell's static {@code invoke} (Myna
+   * 0.16.0: native carriers and raw addresses, nothing allocated) and holds no cell, argument
+   * array, box or {@code NativePointer} at all.
    */
   @Test
-  void scalarCellsUseTypedCalls() throws Exception {
-    for (Class<?> route : List.of(CellsFfmIndexer.class, CellsSvmIndexer.class)) {
-      int cells = 0;
-      List<Class<?>> holders = new java.util.ArrayList<>(List.of(route.getDeclaredClasses()));
-      holders.add(route);
-      for (Class<?> holder : holders)
-        for (Field field : holder.getDeclaredFields()) {
-          if (!NativeCell.class.isAssignableFrom(field.getType())) continue;
-          cells++;
-          assertNotEquals(NativeCell.class, field.getType(), field.toString());
-          String typed = field.getType().getSimpleName().equals("kernel_Cell") ? "executeInt" : "executeLong";
-          assertEquals(
-              field.getType(),
-              field.getType().getDeclaredMethod(typed, Object[].class).getDeclaringClass(),
-              field + " must override " + typed);
-        }
-      // index, leaf and validate in the indexer; those and kernel in the shared holder.
-      assertEquals(7, cells, route + " cells");
-    }
-    for (String source :
-        List.of(
-            "csv/cells/src/main/java/dev/elide/truffledata/csv/cells/CellsFfmIndexer.java",
-            "csv/cells/src/main/java/dev/elide/truffledata/csv/cells/CellsSvmIndexer.java")) {
-      List<String> lines = Files.readAllLines(runfile(source));
-      int typed = 0;
-      for (String line : lines) {
-        if (line.contains(".execute(") || line.contains(".execute (")) {
-          assertTrue(line.contains("fingerprint_Cell"), source + ": generic execute: " + line);
-        }
-        if (line.contains(".executeLong(") || line.contains(".executeInt(")) typed++;
+  void cellCallsHaveTheRoutesShape() throws Exception {
+    // HotSpot: index, leaf and validate in the indexer; those and kernel in the shared holder.
+    int cells = 0;
+    List<Class<?>> holders = new java.util.ArrayList<>(List.of(CellsFfmIndexer.class.getDeclaredClasses()));
+    holders.add(CellsFfmIndexer.class);
+    for (Class<?> holder : holders)
+      for (Field field : holder.getDeclaredFields()) {
+        if (!NativeCell.class.isAssignableFrom(field.getType())) continue;
+        cells++;
+        assertNotEquals(NativeCell.class, field.getType(), field.toString());
+        String typed = field.getType().getSimpleName().equals("kernel_Cell") ? "executeInt" : "executeLong";
+        assertEquals(
+            field.getType(),
+            field.getType().getDeclaredMethod(typed, Object[].class).getDeclaringClass(),
+            field + " must override " + typed);
       }
-      assertTrue(typed >= 3, source + ": typed calls " + typed);
+    assertEquals(7, cells, "HotSpot cells");
+    String jvm = "csv/cells/src/main/java/dev/elide/truffledata/csv/cells/CellsFfmIndexer.java";
+    int typed = 0;
+    for (String line : Files.readAllLines(runfile(jvm))) {
+      assertFalse(line.contains(".execute(") || line.contains(".execute ("), jvm + ": generic execute: " + line);
+      if (line.contains(".executeLong(") || line.contains(".executeInt(")) typed++;
+    }
+    assertTrue(typed >= 3, jvm + ": typed calls " + typed);
+
+    // Native Image: no cell instance and nothing a cell's execute would need.
+    for (Field field : CellsSvmIndexer.class.getDeclaredFields())
+      assertFalse(NativeCell.class.isAssignableFrom(field.getType()), "host code holds no cell: " + field);
+    assertEquals(0, CellsSvmIndexer.class.getDeclaredClasses().length - 1, "only the Backend is nested");
+    String svm = "csv/cells/src/main/java/dev/elide/truffledata/csv/cells/CellsSvmIndexer.java";
+    String text = Files.readString(runfile(svm));
+    // Comments describe execute; only code is scanned.
+    String code = text.replaceAll("(?s)/\\*.*?\\*/", "").replaceAll("(?m)//.*$", "");
+    for (String forbidden : List.of(".execute", "new Object[", "NativePointer", "NativeCell", "Long.valueOf", "Integer.valueOf"))
+      assertFalse(code.contains(forbidden), svm + " uses " + forbidden);
+    for (String cell : List.of("index_Cell", "index_leaf_Cell", "validate_utf8_Cell", "kernel_Cell", "fingerprint_Cell"))
+      assertTrue(code.contains("CsvCellsTruffle." + cell + ".invoke("), svm + " must call " + cell + ".invoke");
+    // Each generated cell declares the static entry the route calls.
+    Class<?> generated =
+        Class.forName(
+            "dev.elide.truffledata.csv.kernel.cells.generated.CsvCellsTruffle",
+            false,
+            CellsSvmIndexer.class.getClassLoader());
+    for (Class<?> cell : generated.getDeclaredClasses()) {
+      if (!NativeCell.class.isAssignableFrom(cell)) continue;
+      boolean entry = false;
+      for (var method : cell.getDeclaredMethods())
+        entry |= method.getName().equals("invoke") && java.lang.reflect.Modifier.isStatic(method.getModifiers());
+      assertTrue(entry, cell + " has no static invoke");
     }
   }
 }

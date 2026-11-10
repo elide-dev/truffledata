@@ -56,8 +56,35 @@ public final class CellsAcceptance {
             options -> new YamlSession(options, new CellsSvmSessionBackend(options)));
     require(expected.contains("core: {"), "baseline results did not outlive their session: " + expected);
     require(expected.equals(actual), "lifetimes\n  baseline: " + expected + "\n  cells:    " + actual);
+    // The route holds no cell instance and no per-call state outside each session: the same exact
+    // parity over the built-in inputs from four threads at once, each with its own sessions.
+    Map<String, byte[]> builtIn = CellsParity.builtIn();
+    List<String> concurrent = java.util.Collections.synchronizedList(new java.util.ArrayList<>());
+    Thread[] threads = new Thread[4];
+    for (int t = 0; t < threads.length; t++) {
+      threads[t] =
+          new Thread(
+              () -> {
+                try {
+                  for (int round = 0; round < 3; round++)
+                    concurrent.addAll(
+                        CellsParity.compare(
+                            options -> new YamlSession(options, new SvmSessionBackend(options)),
+                            options ->
+                                new YamlSession(
+                                    options, new CellsSvmSessionBackend(options)),
+                            builtIn));
+                } catch (Throwable failure) {
+                  concurrent.add("thread failed: " + failure);
+                }
+              });
+      threads[t].start();
+    }
+    for (Thread thread : threads) thread.join();
+    require(concurrent.isEmpty(), "concurrent parity:\n" + String.join("\n", concurrent));
     System.out.println(
         "YAML cells route: acceptance and exact parity over " + corpus.size() + " inputs x "
-            + CellsParity.MODES.size() + " modes passed");
+            + CellsParity.MODES.size() + " modes passed; concurrent parity from "
+            + threads.length + " threads");
   }
 }

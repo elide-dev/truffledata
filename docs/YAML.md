@@ -112,3 +112,63 @@ Explicit calls cover what a sink lacks: `anchor(name)` and `tag(uri)` before a n
 
 Writer output is tested by re-parsing it natively and comparing exported events (including `-0.0`, NaN, U64 and DECIMAL) under all four schemas and eight option sets: a hazard corpus in every position, 9,600 seeded random documents with anchors, multi-document streams, 300 JSON fixtures, and the five fixtures plus every decodable pinned yaml-test-suite case re-emitted with and without metadata preservation. Two rapidyaml parse quirks are avoided by construction: a key starting with an indicator or `.` directly after an indentless sequence uses the explicit form, and an anchored or tagged block mapping in a sequence entry whose first key is explicit is written in flow style.
 
+## Myna Truffle cells (`truffledata.yaml.cells`)
+
+`-Dtruffledata.yaml.cells=true` routes a native session's own calls through Truffle cells that
+Myna generates from this module's seam, instead of the generated `@CFunction`/FFM calls:
+`session_decode`, `session_retain`, `session_reset`, `stream_create`, `stream_feed`,
+`stream_next`, `stream_finish`, `stream_release` and a plan's `typed_decode` on both runtimes, and
+`session_write_text` on Native Image. Session and plan creation and release, result release and,
+on the JVM, calls on a caller-supplied native segment stay on the production bindings
+(`yaml/cells/BUILD.bazel` gives the reasons). Lifecycles, staging, limits, errors and their order
+stay the backend's own, and the tapes are identical. The route is **off by default**; it is
+support for Myna cells and makes no performance claim.
+
+Every routed call uses the generated cell's static `invoke` entry (Myna 0.16.0), for example
+`YamlCellsTruffle.session_decode_Cell.invoke(session, data, length, flags, 0, 0, result)`: native
+carriers and raw `long` addresses, with no cell instance, argument array, box, `NativePointer` or
+`Borrow`. The route is host code below Truffle boundaries, where a cell's `execute(Object[])` would
+allocate per call; `invoke` is the entry Myna provides for host code. The caller keeps every
+address valid for the call: on Native Image, heap input is pinned around it as the static backend
+pins it; on the JVM, `invoke` is passed only memory the backend owns (its staging buffer, result
+slot, handles and per-call result segments). It wraps each address with `MemorySegment.ofAddress`
+and holds no segment scope, which is why calls on a caller-supplied segment stay on the FFM binding.
+
+Measured: see docs/RELEASE_0_11_0.md
+
+- **Artifact.** `dev.elide:truffledata-yaml-cells` (Bazel `//yaml/cells`) carries the route
+  (`CellsSvm`, `CellsSvmSessionBackend`, `CellsSvmPlanBackend`, `CellsJvmSessionBackend`,
+  `CellsJvmPlanBackend`), both generated cell sets and Myna's Native Image metadata for the Native
+  Image cells. It depends on `truffledata-cells` (Myna's cells runtime), `truffledata-yaml`,
+  `truffledata-yaml-bindings`, `truffledata-yaml-native`, `truffledata-yaml-jvm`,
+  `truffledata-tape` and `truffledata-tape-jvm`: one jar carries the route for both runtimes, so
+  on a native-image class path it also brings the JVM-only `truffledata-yaml-jvm` and
+  `truffledata-tape-jvm` (the flag-on test image, `//yaml/cells/tests:native_test`, is built with
+  them on its class path). Nothing in the
+  default YAML artifacts depends on it; with the flag off it need not be on the class path. It uses
+  the same natives as `truffledata-yaml`. The Java kernel (`truffledata-yaml-java`) has no native
+  calls and no cells route.
+- **Native Image.** Pass `-Dtruffledata.yaml.cells=true` and
+  `--features=dev.elide.truffledata.yaml.YamlFeature` to `native-image`, with
+  `truffledata-yaml-native` and the cells artifact on the image class path. `YamlFeature` registers
+  the cells route at image build time; without the flag it registers nothing and the image contains no
+  cells code. The flag and the route must agree or the image build fails, with no fallback: the
+  flag without the artifact fails in `YamlFeature`, and the flag without `YamlFeature` fails when
+  the build-time holder `SvmRoute` initializes. Setting the property when running an image has no
+  effect.
+- **JVM.** Pass the property to the JVM with `truffledata-yaml-jvm` and the cells artifact on the
+  class path. It is read once, when `CellsRoute` initializes (a `static final`), and selects the
+  backend in `YamlJvm.openSession`; the flag without the artifact fails there. Myna's FFM cells
+  bind through the class loader's lookup, so the cells also `System.load` the fingerprint-checked
+  library: one library path per class loader.
+- **Seam and fingerprint.** The cells come from seams *derived* in the build from
+  `native/yaml.seam`: only the module options change. The production seam, bindings, ABI
+  fingerprint and natives are unchanged, and `//bazel:myna_contract --derived` checks each derived
+  descriptor against the production one.
+- **No `resource` or `borrow` declarations.** Myna's validator (0.16.0) cannot express them for
+  these C signatures without an ABI change: a resource `create` must take only scalars, but
+  `session_create` takes the options and `stream_create` the session, and `plan_create` returns a
+  status and writes the plan through `result`; a call borrow allows one buffer and scalars only,
+  while every YAML buffer import (`session_decode`, `stream_feed`, `typed_decode`) also takes a
+  session, stream or plan pointer and a result pointer. Declaring them would change the import
+  signatures, that is, the C ABI.

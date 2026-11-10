@@ -1,0 +1,45 @@
+
+## buffa
+routed: 83 cells; ratio flag-on/flag-off median 1.004, min 0.647, max 3.311; fork ranges disjoint: 3 faster, 10 slower
+controls (same code in both images): 49 cells; ratio flag-on/flag-off median 1.009, min 0.700, max 2.178; fork ranges disjoint: 4 faster, 7 slower
+routed allocation: 83 cells compared, 0 differ
+   0.647  overlap   slab-projected/sparse/resident  off 1888.845 [1266.096..4342.075]  on 1222.874 [1165.250..1306.446] ns_per_row
+   0.863  overlap   slab-session-projected/sparse/resident  off 921.918 [771.911..2005.686]  on 795.413 [736.526..804.435] ns_per_row
+   0.909  overlap   slab/sparse/interpret  off 40.555 [37.658..52.419]  on 36.851 [34.933..37.936] ns_per_row
+   0.913  overlap   slab-session-projected/sparse/decode  off 705.471 [651.050..1117.124]  on 644.268 [628.319..657.115] ns_per_row
+   3.311  overlap   slab-lazy/sparse/first  off 76.207 [74.914..78.788]  on 252.328 [74.767..2255.919] ns_per_row
+   2.358  overlap   slab/sparse/first  off 62.629 [56.890..69.997]  on 147.686 [69.655..1591.537] ns_per_row
+   1.795  DISJOINT  slab-projected/holdout-sparse/resident  off 1783.367 [1752.188..1832.635]  on 3200.518 [1964.488..10555.466] ns_per_row
+   1.765  overlap   slab-projected/sparse/detach  off 1972.820 [1872.114..2107.790]  on 3481.489 [2002.510..5631.533] ns_per_row
+   backends (off, on): [('SVM_STATIC', 'SVM_STATIC')]
+
+## json
+routed: none
+controls (same code in both images): 55 cells; ratio flag-on/flag-off median 1.004, min 0.758, max 2.815; fork ranges disjoint: 1 faster, 3 slower
+routed allocation: 0 cells compared, 0 differ
+
+## yaml
+routed: 19 cells; ratio flag-on/flag-off median 1.011, min 0.872, max 1.172; fork ranges disjoint: 0 faster, 1 slower
+controls (same code in both images): none
+routed allocation: 19 cells compared, 0 differ
+   0.872  overlap   yaml-config/truffledata-yaml-typed  off 20784.586 [18680.446..22265.262]  on 18113.984 [17645.217..141325.709] ns_per_operation
+   0.942  overlap   yaml-flow/truffledata-yaml-java  off 2430480.518 [2296430.227..2575679.269]  on 2290485.330 [2229973.411..2375724.106] ns_per_operation
+   0.945  overlap   yaml-records/truffledata-yaml-java  off 2549578.342 [2448773.146..2576443.333]  on 2409827.723 [2378940.600..2608547.195] ns_per_operation
+   0.959  overlap   yaml-stream/truffledata-yaml-truffle  off 3942702.941 [3562563.333..4561007.778]  on 3780561.509 [3714012.593..3882678.654] ns_per_operation
+   1.172  overlap   yaml-config/truffledata-yaml-snapshot  off 37638.007 [36304.275..38685.518]  on 44097.057 [37428.301..179930.970] ns_per_operation
+   1.071  overlap   yaml-config/truffledata-yaml-truffle  off 24434.241 [24158.199..24674.682]  on 26169.639 [24434.576..29364.605] ns_per_operation
+   1.058  overlap   yaml-records/truffledata-yaml-truffle  off 2672336.387 [2649681.539..2762933.301]  on 2827799.296 [2644842.842..3234856.540] ns_per_operation
+   1.036  DISJOINT  yaml-stream/truffledata-yaml-interop  off 2859731.143 [2833141.408..2887973.143]  on 2962389.279 [2948072.206..3451744.655] ns_per_operation
+
+## csv
+routed: 40 cells; ratio flag-on/flag-off median 1.011, min 0.754, max 1.194; fork ranges disjoint: 1 faster, 1 slower
+controls (same code in both images): 78 cells; ratio flag-on/flag-off median 0.996, min 0.807, max 1.173; fork ranges disjoint: 3 faster, 2 slower
+routed allocation: 40 cells compared, 0 differ
+   0.754  overlap   typed/truffledata-plan-native/mixed/128MiB/ingest  off 2.634 [2.032..2.662]  on 1.986 [1.958..2.056] ns_per_byte
+   0.872  overlap   strings/truffledata-text-native/numeric/1MiB/ingest  off 2.691 [2.257..3.240]  on 2.347 [2.208..2.638] ns_per_byte
+   0.893  DISJOINT  strings/truffledata-text-native/escaped/1MiB/ingest  off 2.961 [2.822..2.970]  on 2.645 [2.534..2.701] ns_per_byte
+   0.904  overlap   typed/truffledata-plan-native/numeric/1MiB/ingest  off 2.669 [2.062..2.754]  on 2.412 [2.053..3.496] ns_per_byte
+   1.194  overlap   strings/truffledata-text-string-native/escaped/1MiB/ingest  off 3.076 [2.913..3.654]  on 3.672 [2.757..3.700] ns_per_byte
+   1.167  overlap   strings/truffledata-batch-native/quoted/128MiB/ingest  off 1.113 [1.064..9.612]  on 1.299 [1.066..1.588] ns_per_byte
+   1.081  overlap   strings/truffledata-batch-native/mixed/128MiB/ingest  off 3.716 [3.533..5.091]  on 4.017 [3.872..4.036] ns_per_byte
+   1.074  overlap   strings/truffledata-text-string-native/escaped/128MiB/ingest  off 3.411 [3.203..4.002]  on 3.663 [3.414..3.763] ns_per_byte

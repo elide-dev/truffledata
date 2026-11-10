@@ -5,6 +5,8 @@ load("//bazel:myna.bzl", "myna_bindings")
 package(default_visibility = [
     "//bazel:__pkg__",
     "//json:__subpackages__",
+    # truffledata-json-cells republishes the route, the generated cells and their metadata.
+    "//tools/release:__pkg__",
 ])
 
 # truffledata-json-cells: the opt-in route that makes the JSON document decode's native calls
@@ -19,7 +21,7 @@ package(default_visibility = [
 # with a library; the backends verify the production one. //bazel:myna_contract checks that each
 # derived descriptor equals the production descriptor apart from those options.
 #
-# No `resource` or `borrow` declarations: Myna 0.14.0 rejects both for every JSON import without a C
+# No `resource` or `borrow` declarations: Myna (0.16.0) rejects both for every JSON import without a C
 # ABI change (OwnershipValidator: a resource create must take only scalars and return
 # ptr<Opaque>; a call borrow allows no other pointer parameter, and every JSON buffer import also
 # takes a result/session/plan pointer). td_json_decode_adopted also retains its input, which a

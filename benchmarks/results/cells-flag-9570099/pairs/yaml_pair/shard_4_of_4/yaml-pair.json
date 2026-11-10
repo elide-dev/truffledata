@@ -1,0 +1,834 @@
+{
+  "schema": "yaml-pair-1",
+  "runtime": "svm",
+  "workload": "yaml-stream",
+  "forks": 3,
+  "complete": true,
+  "platform": "Linux-5.15.0-x86_64-with-glibc2.39",
+  "hostname": "(none)",
+  "cpu": "processor\t: 0\nvendor_id\t: AuthenticAMD\ncpu family\t: 26\nmodel\t\t: 2\nmodel name\t: AMD EPYC\nstepping\t: 1\nmicrocode\t: 0x1000065\ncpu MHz\t\t: 2700.000\ncache size\t: 512 KB\nphysical id\t: 0\nsiblings\t: 7\ncore id\t\t: 0\ncpu cores\t: 7\napicid\t\t: 0\ninitial apicid\t: 0\nfpu\t\t: yes\nfpu_exception\t: yes\ncpuid level\t: 16\nwp\t\t: yes\nflags\t\t: fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ht syscall nx mmxext fxsr_opt pdpe1gb rdtscp lm rep_good nopl cpuid extd_apicid tsc_known_freq pni pclmulqdq ssse3 fma cx16 pcid sse4_1 sse4_2 x2apic movbe popcnt tsc_deadline_timer aes xsave avx f16c rdrand hypervisor lahf_lm cmp_legacy svm cr8_legacy abm sse4a misalignsse 3dnowprefetch osvw topoext perfctr_core invpcid_single ssbd ibrs ibpb stibp vmmcall fsgsbase tsc_adjust bmi1 avx2 smep bmi2 erms invpcid avx512f avx512dq rdseed adx smap avx512ifma clflushopt clwb avx512cd sha_ni avx512bw avx512vl xsaveopt xsavec xgetbv1 xsaves avx_vnni avx512_bf16 clzero xsaveerptr wbnoinvd arat npt lbrv nrip_save tsc_scale vmcb_clean flushbyasid pausefilter pfthreshold v_vmsave_vmload vgif avx512vbmi umip pku avx512_vbmi2 gfni vaes vpclmulqdq avx512_vnni avx512_bitalg avx512_vpopcntdq rdpid movdiri movdir64b fsrm avx512_vp2intersect flush_l1d\nbugs\t\t: sysret_ss_attrs spectre_v1 spectre_v2 spec_store_bypass\nbogomips\t: 5400.00\nTLB size\t: 1024 4K pages\nclflush size\t: 64\ncache_alignment\t: 64\naddress sizes\t: 52 bits physical, 57 bits virtual\npower management:\n\nprocessor\t: 1\nvendor_id\t: AuthenticAMD\ncpu family\t: 26\nmodel\t\t: 2\nmodel name\t: AMD EPYC\nstepping\t: 1\nmicrocode\t: 0x1000065\ncpu MHz\t\t: 2700.000\ncache size\t: 512 KB\nphysical id\t: 0\nsiblings\t: 7\ncore id\t\t: 1\ncpu cores\t: 7\napicid\t\t: 1\ninitial apicid\t: 1\nfpu\t\t: yes\nfpu_exception\t: yes\ncpuid level\t: 16\nwp\t\t: yes\nflags\t\t: fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ht syscall nx mmxext fxsr_opt pdpe1gb rdtscp lm rep_good nopl cpuid extd_apicid tsc_known_freq pni pclmulqdq ssse3 fma cx16 pcid sse4_1 sse4_2 x2apic movbe popcnt tsc_deadline_timer aes xsave avx f16c rdrand hypervisor lahf_lm cmp_legacy svm cr8_legacy abm sse4a misalignsse 3dnowprefetch osvw topoext perfctr_core invpcid_single ssbd ibrs ibpb stibp vmmcall fsgsbase tsc_adjust bmi1 avx2 smep bmi2 erms invpcid avx512f avx512dq rdseed adx smap avx512ifma clflushopt clwb avx512cd sha_ni avx512bw avx512vl xsaveopt xsavec xgetbv1 xsaves avx_vnni avx512_bf16 clzero xsaveerptr wbnoinvd arat npt lbrv nrip_save tsc_scale vmcb_clean flushbyasid pausefilter pfthreshold v_vmsave_vmload vgif avx512vbmi umip pku avx512_vbmi2 gfni vaes vpclmulqdq avx512_vnni avx512_bitalg avx512_vpopcntdq rdpid movdiri movdir64b fsrm avx512_vp2intersect flush_l1d\nbugs\t\t: sysret_ss_attrs spectre_v1 spectre_v2 spec_store_bypass\nbogomips\t: 5400.00\nTLB size\t: 1024 4K pages\nclflush size\t: 64\ncache_alignment\t: 64\naddress sizes\t: 52 bits physical, 57 bits virtual\npower management:\n\nprocessor\t: 2\nvendor_id\t: AuthenticAMD\ncpu family\t: 26\nmodel\t\t: 2\nmodel name\t: AMD EPYC\nstepping\t: 1\nmicrocode\t: 0x1000065\ncpu MHz\t\t: 2700.000\ncache size\t: 512 KB\nphysical id\t: 0\nsiblings\t: 7\ncore id\t\t: 2\ncpu cores\t: 7\napicid\t\t: 2\ninitial apicid\t: 2\nfpu\t\t: yes\nfpu_exception\t: yes\ncpuid level\t: 16\nwp\t\t: yes\nflags\t\t: fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ht syscall nx mmxext fxsr_opt pdpe1gb rdtscp lm rep_good nopl cpuid extd_apicid tsc_known_freq pni pclmulqdq ssse3 fma cx16 pcid sse4_1 sse4_2 x2apic movbe popcnt tsc_deadline_timer aes xsave avx f16c rdrand hypervisor lahf_lm cmp_legacy svm cr8_legacy abm sse4a misalignsse 3dnowprefetch osvw topoext perfctr_core invpcid_single ssbd ibrs ibpb stibp vmmcall fsgsbase tsc_adjust bmi1 avx2 smep bmi2 erms invpcid avx512f avx512dq rdseed adx smap avx512ifma clflushopt clwb avx512cd sha_ni avx512bw avx512vl xsaveopt xsavec xgetbv1 xsaves avx_vnni avx512_bf16 clzero xsaveerptr wbnoinvd arat npt lbrv nrip_save tsc_scale vmcb_clean flushbyasid pausefilter pfthreshold v_vmsave_vmload vgif avx512vbmi umip pku avx512_vbmi2 gfni vaes vpclmulqdq avx512_vnni avx512_bitalg avx512_vpopcntdq rdpid movdiri movdir64b fsrm avx512_vp2intersect flush_l1d\nbugs\t\t: sysret_ss_attrs spectre_v1 spectre_v2 spec_store_bypass\nbogomips\t: 5400.00\nTLB size\t: 1024 4K pages\nclflush size\t: 64\ncache_alignment\t: 64\naddress sizes\t: 52 bits physical, 57 bits virtual\npower management:\n\nprocessor\t: 3\nvendor_id\t: AuthenticAMD\ncpu family\t: 26\nmodel\t\t: 2\nmodel name\t: AMD EPYC\nstepping\t: 1\nmicrocode\t: 0x1000065\ncpu MHz\t\t: 2700.000\ncache size\t: 512 KB\nphysical id\t: 0\nsiblings\t: 7\ncore id\t\t: 3\ncpu cores\t: 7\napicid\t\t: 3\ninitial apicid\t: 3\nfpu\t\t: yes\nfpu_exception\t: yes\ncpuid level\t: 16\nwp\t\t: yes\nflags\t\t: fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ht syscall nx mmxext fxsr_opt pdpe1gb rdtscp lm rep_good nopl cpuid extd_apicid tsc_known_freq pni pclmulqdq ssse3 fma cx16 pcid sse4_1 sse4_2 x2apic movbe popcnt tsc_deadline_timer aes xsave avx f16c rdrand hypervisor lahf_lm cmp_legacy svm cr8_legacy abm sse4a misalignsse 3dnowprefetch osvw topoext perfctr_core invpcid_single ssbd ibrs ibpb stibp vmmcall fsgsbase tsc_adjust bmi1 avx2 smep bmi2 erms invpcid avx512f avx512dq rdseed adx smap avx512ifma clflushopt clwb avx512cd sha_ni avx512bw avx512vl xsaveopt xsavec xgetbv1 xsaves avx_vnni avx512_bf16 clzero xsaveerptr wbnoinvd arat npt lbrv nrip_save tsc_scale vmcb_clean flushbyasid pausefilter pfthreshold v_vmsave_vmload vgif avx512vbmi umip pku avx512_vbmi2 gfni vaes vpclmulqdq avx512_vnni avx512_bitalg avx512_vpopcntdq rdpid movdiri movdir64b fsrm avx512_vp2intersect flush_l1d\nbugs\t\t: sysret_ss_attrs spectre_v1 spectre_v2 spec_store_bypass\nbogomips\t: 5400.00\nTLB size\t: 1024 4K pages\nclflush size\t: 64\ncache_alignment\t: 64\naddress sizes\t: 52 bits physical, 57 bits virtual\npower management:\n\nprocessor\t: 4\nvendor_id\t: AuthenticAMD\ncpu family\t: 26\nmodel\t\t: 2\nmodel name\t: AMD EPYC\nstepping\t: 1\nmicrocode\t: 0x1000065\ncpu MHz\t\t: 2700.000\ncache size\t: 512 KB\nphysical id\t: 0\nsiblings\t: 7\ncore id\t\t: 4\ncpu cores\t: 7\napicid\t\t: 4\ninitial apicid\t: 4\nfpu\t\t: yes\nfpu_exception\t: yes\ncpuid level\t: 16\nwp\t\t: yes\nflags\t\t: fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ht syscall nx mmxext fxsr_opt pdpe1gb rdtscp lm rep_good nopl cpuid extd_apicid tsc_known_freq pni pclmulqdq ssse3 fma cx16 pcid sse4_1 sse4_2 x2apic movbe popcnt tsc_deadline_timer aes xsave avx f16c rdrand hypervisor lahf_lm cmp_legacy svm cr8_legacy abm sse4a misalignsse 3dnowprefetch osvw topoext perfctr_core invpcid_single ssbd ibrs ibpb stibp vmmcall fsgsbase tsc_adjust bmi1 avx2 smep bmi2 erms invpcid avx512f avx512dq rdseed adx smap avx512ifma clflushopt clwb avx512cd sha_ni avx512bw avx512vl xsaveopt xsavec xgetbv1 xsaves avx_vnni avx512_bf16 clzero xsaveerptr wbnoinvd arat npt lbrv nrip_save tsc_scale vmcb_clean flushbyasid pausefilter pfthreshold v_vmsave_vmload vgif avx512vbmi umip pku avx512_vbmi2 gfni vaes vpclmulqdq avx512_vnni avx512_bitalg avx512_vpopcntdq rdpid movdiri movdir64b fsrm avx512_vp2intersect flush_l1d\nbugs\t\t: sysret_ss_attrs spectre_v1 spectre_v2 spec_store_bypass\nbogomips\t: 5400.00\nTLB size\t: 1024 4K pages\nclflush size\t: 64\ncache_alignment\t: 64\naddress sizes\t: 52 bits physical, 57 bits virtual\npower management:\n\nprocessor\t: 5\nvendor_id\t: AuthenticAMD\ncpu family\t: 26\nmodel\t\t: 2\nmodel name\t: AMD EPYC\nstepping\t: 1\nmicrocode\t: 0x1000065\ncpu MHz\t\t: 2700.000\ncache size\t: 512 KB\nphysical id\t: 0\nsiblings\t: 7\ncore id\t\t: 5\ncpu cores\t: 7\napicid\t\t: 5\ninitial apicid\t: 5\nfpu\t\t: yes\nfpu_exception\t: yes\ncpuid level\t: 16\nwp\t\t: yes\nflags\t\t: fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ht syscall nx mmxext fxsr_opt pdpe1gb rdtscp lm rep_good nopl cpuid extd_apicid tsc_known_freq pni pclmulqdq ssse3 fma cx16 pcid sse4_1 sse4_2 x2apic movbe popcnt tsc_deadline_timer aes xsave avx f16c rdrand hypervisor lahf_lm cmp_legacy svm cr8_legacy abm sse4a misalignsse 3dnowprefetch osvw topoext perfctr_core invpcid_single ssbd ibrs ibpb stibp vmmcall fsgsbase tsc_adjust bmi1 avx2 smep bmi2 erms invpcid avx512f avx512dq rdseed adx smap avx512ifma clflushopt clwb avx512cd sha_ni avx512bw avx512vl xsaveopt xsavec xgetbv1 xsaves avx_vnni avx512_bf16 clzero xsaveerptr wbnoinvd arat npt lbrv nrip_save tsc_scale vmcb_clean flushbyasid pausefilter pfthreshold v_vmsave_vmload vgif avx512vbmi umip pku avx512_vbmi2 gfni vaes vpclmulqdq avx512_vnni avx512_bitalg avx512_vpopcntdq rdpid movdiri movdir64b fsrm avx512_vp2intersect flush_l1d\nbugs\t\t: sysret_ss_attrs spectre_v1 spectre_v2 spec_store_bypass\nbogomips\t: 5400.00\nTLB size\t: 1024 4K pages\nclflush size\t: 64\ncache_alignment\t: 64\naddress sizes\t: 52 bits physical, 57 bits virtual\npower management:\n\nprocessor\t: 6\nvendor_id\t: AuthenticAMD\ncpu family\t: 26\nmodel\t\t: 2\nmodel name\t: AMD EPYC\nstepping\t: 1\nmicrocode\t: 0x1000065\ncpu MHz\t\t: 2700.000\ncache size\t: 512 KB\nphysical id\t: 0\nsiblings\t: 7\ncore id\t\t: 6\ncpu cores\t: 7\napicid\t\t: 6\ninitial apicid\t: 6\nfpu\t\t: yes\nfpu_exception\t: yes\ncpuid level\t: 16\nwp\t\t: yes\nflags\t\t: fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ht syscall nx mmxext fxsr_opt pdpe1gb rdtscp lm rep_good nopl cpuid extd_apicid tsc_known_freq pni pclmulqdq ssse3 fma cx16 pcid sse4_1 sse4_2 x2apic movbe popcnt tsc_deadline_timer aes xsave avx f16c rdrand hypervisor lahf_lm cmp_legacy svm cr8_legacy abm sse4a misalignsse 3dnowprefetch osvw topoext perfctr_core invpcid_single ssbd ibrs ibpb stibp vmmcall fsgsbase tsc_adjust bmi1 avx2 smep bmi2 erms invpcid avx512f avx512dq rdseed adx smap avx512ifma clflushopt clwb avx512cd sha_ni avx512bw avx512vl xsaveopt xsavec xgetbv1 xsaves avx_vnni avx512_bf16 clzero xsaveerptr wbnoinvd arat npt lbrv nrip_save tsc_scale vmcb_clean flushbyasid pausefilter pfthreshold v_vmsave_vmload vgif avx512vbmi umip pku avx512_vbmi2 gfni vaes vpclmulqdq avx512_vnni avx512_bitalg avx512_vpopcntdq rdpid movdiri movdir64b fsrm avx512_vp2intersect flush_l1d\nbugs\t\t: sysret_ss_attrs spectre_v1 spectre_v2 spec_store_bypass\nbogomips\t: 5400.00\nTLB size\t: 1024 4K pages\nclflush size\t: 64\ncache_alignment\t: 64\naddress sizes\t: 52 bits physical, 57 bits virtual\npower management:\n\n",
+  "started_unix": 1794287847.0711985,
+  "original_cpu_affinity": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6
+  ],
+  "measured_cpu": 3,
+  "binary_sha256": {
+    "candidate": "0672d4c666fa871ec2a3d7ee51e5a7ab95b1d589f20f16881293de6fc84c3369",
+    "baseline": "a420329a57b5d0b97b529926d5c55cb82fcea6d0831667ce542c94a4d232633e"
+  },
+  "source": {
+    "candidate": "113c02a5 cells flag on",
+    "baseline": "113c02a5 cells flag off"
+  },
+  "measurements": [
+    {
+      "workload": "yaml-stream",
+      "engine": "truffledata-yaml-java",
+      "stage": "ingest",
+      "runtime": "svm",
+      "checksum": 7002334,
+      "records": 1000,
+      "input_bytes": 215484,
+      "ns_per_operation": [
+        3457670.5172413792,
+        3348432.5,
+        3455271.5517241377
+      ],
+      "allocated_bytes_per_operation": [
+        1784304.0,
+        1784304.0,
+        1784304.0
+      ],
+      "role": "candidate",
+      "fork": 2,
+      "order": [
+        "candidate",
+        "baseline"
+      ]
+    },
+    {
+      "workload": "yaml-stream",
+      "engine": "truffledata-yaml-java",
+      "stage": "ingest",
+      "runtime": "svm",
+      "checksum": 7002334,
+      "records": 1000,
+      "input_bytes": 215484,
+      "ns_per_operation": [
+        3607667.1428571427,
+        3545952.6315789474,
+        3604000.1785714286
+      ],
+      "allocated_bytes_per_operation": [
+        1784304.0,
+        1784304.0,
+        1784304.0
+      ],
+      "role": "baseline",
+      "fork": 2,
+      "order": [
+        "candidate",
+        "baseline"
+      ]
+    },
+    {
+      "workload": "yaml-stream",
+      "engine": "truffledata-yaml-truffle",
+      "stage": "ingest",
+      "runtime": "svm",
+      "checksum": 7002334,
+      "records": 1000,
+      "input_bytes": 215484,
+      "ns_per_operation": [
+        4616228.636363637,
+        4561007.777777778,
+        4008823.0
+      ],
+      "allocated_bytes_per_operation": [
+        2063904.0,
+        2063904.0,
+        2063904.0
+      ],
+      "role": "baseline",
+      "fork": 2,
+      "order": [
+        "baseline",
+        "candidate"
+      ]
+    },
+    {
+      "workload": "yaml-stream",
+      "engine": "truffledata-yaml-truffle",
+      "stage": "ingest",
+      "runtime": "svm",
+      "checksum": 7002334,
+      "records": 1000,
+      "input_bytes": 215484,
+      "ns_per_operation": [
+        4593535.659090909,
+        3731274.814814815,
+        3780561.5094339624
+      ],
+      "allocated_bytes_per_operation": [
+        2063904.0,
+        2063904.0,
+        2063904.0
+      ],
+      "role": "candidate",
+      "fork": 2,
+      "order": [
+        "baseline",
+        "candidate"
+      ]
+    },
+    {
+      "workload": "yaml-stream",
+      "engine": "truffledata-yaml-snapshot",
+      "stage": "ingest",
+      "runtime": "svm",
+      "checksum": 7002334,
+      "records": 1000,
+      "input_bytes": 215484,
+      "ns_per_operation": [
+        5023713.75,
+        4945466.8292682925,
+        4915836.585365853
+      ],
+      "allocated_bytes_per_operation": [
+        2353168.0,
+        2353168.0,
+        2353168.0
+      ],
+      "role": "baseline",
+      "fork": 1,
+      "order": [
+        "baseline",
+        "candidate"
+      ]
+    },
+    {
+      "workload": "yaml-stream",
+      "engine": "truffledata-yaml-snapshot",
+      "stage": "ingest",
+      "runtime": "svm",
+      "checksum": 7002334,
+      "records": 1000,
+      "input_bytes": 215484,
+      "ns_per_operation": [
+        5215663.333333333,
+        5450227.297297297,
+        4983395.609756097
+      ],
+      "allocated_bytes_per_operation": [
+        2353168.0,
+        2353168.0,
+        2353168.0
+      ],
+      "role": "candidate",
+      "fork": 1,
+      "order": [
+        "baseline",
+        "candidate"
+      ]
+    },
+    {
+      "workload": "yaml-stream",
+      "engine": "truffledata-yaml-interop",
+      "stage": "ingest",
+      "runtime": "svm",
+      "checksum": 7002334,
+      "records": 1000,
+      "input_bytes": 215484,
+      "ns_per_operation": [
+        2937626.6666666665,
+        2992950.880597015,
+        2962389.279411765
+      ],
+      "allocated_bytes_per_operation": [
+        784080.0,
+        784080.0,
+        784080.0
+      ],
+      "role": "candidate",
+      "fork": 1,
+      "order": [
+        "candidate",
+        "baseline"
+      ]
+    },
+    {
+      "workload": "yaml-stream",
+      "engine": "truffledata-yaml-interop",
+      "stage": "ingest",
+      "runtime": "svm",
+      "checksum": 7002334,
+      "records": 1000,
+      "input_bytes": 215484,
+      "ns_per_operation": [
+        2957266.029411765,
+        2833141.408450704,
+        2826657.7464788733
+      ],
+      "allocated_bytes_per_operation": [
+        784080.0,
+        784080.0,
+        784080.0
+      ],
+      "role": "baseline",
+      "fork": 1,
+      "order": [
+        "candidate",
+        "baseline"
+      ]
+    },
+    {
+      "workload": "yaml-stream",
+      "engine": "truffledata-yaml-java",
+      "stage": "ingest",
+      "runtime": "svm",
+      "checksum": 7002334,
+      "records": 1000,
+      "input_bytes": 215484,
+      "ns_per_operation": [
+        3241147.7419354836,
+        3189964.9206349207,
+        3481234.6551724137
+      ],
+      "allocated_bytes_per_operation": [
+        1784304.0,
+        1784304.0,
+        1784304.0
+      ],
+      "role": "candidate",
+      "fork": 1,
+      "order": [
+        "candidate",
+        "baseline"
+      ]
+    },
+    {
+      "workload": "yaml-stream",
+      "engine": "truffledata-yaml-java",
+      "stage": "ingest",
+      "runtime": "svm",
+      "checksum": 7002334,
+      "records": 1000,
+      "input_bytes": 215484,
+      "ns_per_operation": [
+        3228239.35483871,
+        3396499.661016949,
+        3341695.5
+      ],
+      "allocated_bytes_per_operation": [
+        1784304.0,
+        1784304.0,
+        1784304.0
+      ],
+      "role": "baseline",
+      "fork": 1,
+      "order": [
+        "candidate",
+        "baseline"
+      ]
+    },
+    {
+      "workload": "yaml-stream",
+      "engine": "truffledata-yaml-java",
+      "stage": "ingest",
+      "runtime": "svm",
+      "checksum": 7002334,
+      "records": 1000,
+      "input_bytes": 215484,
+      "ns_per_operation": [
+        3280995.081967213,
+        3277015.3225806453,
+        3225111.4285714286
+      ],
+      "allocated_bytes_per_operation": [
+        1784304.0,
+        1784304.0,
+        1784304.0
+      ],
+      "role": "candidate",
+      "fork": 0,
+      "order": [
+        "candidate",
+        "baseline"
+      ]
+    },
+    {
+      "workload": "yaml-stream",
+      "engine": "truffledata-yaml-java",
+      "stage": "ingest",
+      "runtime": "svm",
+      "checksum": 7002334,
+      "records": 1000,
+      "input_bytes": 215484,
+      "ns_per_operation": [
+        3245993.870967742,
+        3606272.3214285714,
+        3222959.6825396824
+      ],
+      "allocated_bytes_per_operation": [
+        1784304.0,
+        1784304.0,
+        1784304.0
+      ],
+      "role": "baseline",
+      "fork": 0,
+      "order": [
+        "candidate",
+        "baseline"
+      ]
+    },
+    {
+      "workload": "yaml-stream",
+      "engine": "truffledata-yaml-truffle",
+      "stage": "ingest",
+      "runtime": "svm",
+      "checksum": 7002334,
+      "records": 1000,
+      "input_bytes": 215484,
+      "ns_per_operation": [
+        3652834.345454545,
+        3986746.274509804,
+        3942702.9411764704
+      ],
+      "allocated_bytes_per_operation": [
+        2063904.0,
+        2063904.0,
+        2063904.0
+      ],
+      "role": "baseline",
+      "fork": 1,
+      "order": [
+        "baseline",
+        "candidate"
+      ]
+    },
+    {
+      "workload": "yaml-stream",
+      "engine": "truffledata-yaml-truffle",
+      "stage": "ingest",
+      "runtime": "svm",
+      "checksum": 7002334,
+      "records": 1000,
+      "input_bytes": 215484,
+      "ns_per_operation": [
+        3711083.3333333335,
+        3714012.592592593,
+        4040627.0
+      ],
+      "allocated_bytes_per_operation": [
+        2063904.0,
+        2063904.0,
+        2063904.0
+      ],
+      "role": "candidate",
+      "fork": 1,
+      "order": [
+        "baseline",
+        "candidate"
+      ]
+    },
+    {
+      "workload": "yaml-stream",
+      "engine": "truffledata-yaml-snapshot",
+      "stage": "ingest",
+      "runtime": "svm",
+      "checksum": 7002334,
+      "records": 1000,
+      "input_bytes": 215484,
+      "ns_per_operation": [
+        5296869.2105263155,
+        5002137.0,
+        5009366.0
+      ],
+      "allocated_bytes_per_operation": [
+        2353168.0,
+        2353168.0,
+        2353168.0
+      ],
+      "role": "candidate",
+      "fork": 0,
+      "order": [
+        "candidate",
+        "baseline"
+      ]
+    },
+    {
+      "workload": "yaml-stream",
+      "engine": "truffledata-yaml-snapshot",
+      "stage": "ingest",
+      "runtime": "svm",
+      "checksum": 7002334,
+      "records": 1000,
+      "input_bytes": 215484,
+      "ns_per_operation": [
+        4959570.463414635,
+        4963462.219512195,
+        4930393.146341464
+      ],
+      "allocated_bytes_per_operation": [
+        2353168.0,
+        2353168.0,
+        2353168.0
+      ],
+      "role": "baseline",
+      "fork": 0,
+      "order": [
+        "candidate",
+        "baseline"
+      ]
+    },
+    {
+      "workload": "yaml-stream",
+      "engine": "truffledata-yaml-interop",
+      "stage": "ingest",
+      "runtime": "svm",
+      "checksum": 7002334,
+      "records": 1000,
+      "input_bytes": 215484,
+      "ns_per_operation": [
+        2831361.5492957747,
+        2859731.1428571427,
+        2913923.3333333335
+      ],
+      "allocated_bytes_per_operation": [
+        784080.0,
+        784080.0,
+        784080.0
+      ],
+      "role": "baseline",
+      "fork": 0,
+      "order": [
+        "baseline",
+        "candidate"
+      ]
+    },
+    {
+      "workload": "yaml-stream",
+      "engine": "truffledata-yaml-interop",
+      "stage": "ingest",
+      "runtime": "svm",
+      "checksum": 7002334,
+      "records": 1000,
+      "input_bytes": 215484,
+      "ns_per_operation": [
+        3021689.552238806,
+        3451744.6551724137,
+        3668072.727272727
+      ],
+      "allocated_bytes_per_operation": [
+        784080.0,
+        784080.0,
+        784080.0
+      ],
+      "role": "candidate",
+      "fork": 0,
+      "order": [
+        "baseline",
+        "candidate"
+      ]
+    },
+    {
+      "workload": "yaml-stream",
+      "engine": "truffledata-yaml-snapshot",
+      "stage": "ingest",
+      "runtime": "svm",
+      "checksum": 7002334,
+      "records": 1000,
+      "input_bytes": 215484,
+      "ns_per_operation": [
+        4829071.69047619,
+        4908637.073170732,
+        4894446.804878049
+      ],
+      "allocated_bytes_per_operation": [
+        2353168.0,
+        2353168.0,
+        2353168.0
+      ],
+      "role": "baseline",
+      "fork": 2,
+      "order": [
+        "baseline",
+        "candidate"
+      ]
+    },
+    {
+      "workload": "yaml-stream",
+      "engine": "truffledata-yaml-snapshot",
+      "stage": "ingest",
+      "runtime": "svm",
+      "checksum": 7002334,
+      "records": 1000,
+      "input_bytes": 215484,
+      "ns_per_operation": [
+        4920237.317073171,
+        4916705.853658536,
+        4980617.073170732
+      ],
+      "allocated_bytes_per_operation": [
+        2353168.0,
+        2353168.0,
+        2353168.0
+      ],
+      "role": "candidate",
+      "fork": 2,
+      "order": [
+        "baseline",
+        "candidate"
+      ]
+    },
+    {
+      "workload": "yaml-stream",
+      "engine": "truffledata-yaml-interop",
+      "stage": "ingest",
+      "runtime": "svm",
+      "checksum": 7002334,
+      "records": 1000,
+      "input_bytes": 215484,
+      "ns_per_operation": [
+        3188817.301587302,
+        2887973.1428571427,
+        2854384.084507042
+      ],
+      "allocated_bytes_per_operation": [
+        784080.0,
+        784080.0,
+        784080.0
+      ],
+      "role": "baseline",
+      "fork": 2,
+      "order": [
+        "baseline",
+        "candidate"
+      ]
+    },
+    {
+      "workload": "yaml-stream",
+      "engine": "truffledata-yaml-interop",
+      "stage": "ingest",
+      "runtime": "svm",
+      "checksum": 7002334,
+      "records": 1000,
+      "input_bytes": 215484,
+      "ns_per_operation": [
+        2945265.4264705884,
+        2948072.205882353,
+        2956040.3088235296
+      ],
+      "allocated_bytes_per_operation": [
+        784080.0,
+        784080.0,
+        784080.0
+      ],
+      "role": "candidate",
+      "fork": 2,
+      "order": [
+        "baseline",
+        "candidate"
+      ]
+    },
+    {
+      "workload": "yaml-stream",
+      "engine": "truffledata-yaml-truffle",
+      "stage": "ingest",
+      "runtime": "svm",
+      "checksum": 7002334,
+      "records": 1000,
+      "input_bytes": 215484,
+      "ns_per_operation": [
+        3674883.4545454546,
+        3882678.653846154,
+        3930353.653846154
+      ],
+      "allocated_bytes_per_operation": [
+        2063904.0,
+        2063904.0,
+        2063904.0
+      ],
+      "role": "candidate",
+      "fork": 0,
+      "order": [
+        "candidate",
+        "baseline"
+      ]
+    },
+    {
+      "workload": "yaml-stream",
+      "engine": "truffledata-yaml-truffle",
+      "stage": "ingest",
+      "runtime": "svm",
+      "checksum": 7002334,
+      "records": 1000,
+      "input_bytes": 215484,
+      "ns_per_operation": [
+        3558211.5789473685,
+        3592108.9285714286,
+        3562563.3333333335
+      ],
+      "allocated_bytes_per_operation": [
+        2063904.0,
+        2063904.0,
+        2063904.0
+      ],
+      "role": "baseline",
+      "fork": 0,
+      "order": [
+        "candidate",
+        "baseline"
+      ]
+    }
+  ],
+  "finished_unix": 1794287935.550008,
+  "summary": [
+    {
+      "engine": "truffledata-yaml-java",
+      "candidate": {
+        "ns_per_operation": {
+          "median": 3277015.3225806453,
+          "min": 3241147.7419354836,
+          "max": 3455271.5517241377,
+          "fork_medians": [
+            3455271.5517241377,
+            3241147.7419354836,
+            3277015.3225806453
+          ]
+        },
+        "allocated_bytes_per_operation": {
+          "median": 1784304.0,
+          "min": 1784304.0,
+          "max": 1784304.0,
+          "fork_medians": [
+            1784304.0,
+            1784304.0,
+            1784304.0
+          ]
+        },
+        "allocated_bytes_per_record": 1784.304
+      },
+      "baseline": {
+        "ns_per_operation": {
+          "median": 3341695.5,
+          "min": 3245993.870967742,
+          "max": 3604000.1785714286,
+          "fork_medians": [
+            3604000.1785714286,
+            3341695.5,
+            3245993.870967742
+          ]
+        },
+        "allocated_bytes_per_operation": {
+          "median": 1784304.0,
+          "min": 1784304.0,
+          "max": 1784304.0,
+          "fork_medians": [
+            1784304.0,
+            1784304.0,
+            1784304.0
+          ]
+        },
+        "allocated_bytes_per_record": 1784.304
+      },
+      "candidate_over_baseline": 0.9806445029418884
+    },
+    {
+      "engine": "truffledata-yaml-truffle",
+      "candidate": {
+        "ns_per_operation": {
+          "median": 3780561.5094339624,
+          "min": 3714012.592592593,
+          "max": 3882678.653846154,
+          "fork_medians": [
+            3780561.5094339624,
+            3714012.592592593,
+            3882678.653846154
+          ]
+        },
+        "allocated_bytes_per_operation": {
+          "median": 2063904.0,
+          "min": 2063904.0,
+          "max": 2063904.0,
+          "fork_medians": [
+            2063904.0,
+            2063904.0,
+            2063904.0
+          ]
+        },
+        "allocated_bytes_per_record": 2063.904
+      },
+      "baseline": {
+        "ns_per_operation": {
+          "median": 3942702.9411764704,
+          "min": 3562563.3333333335,
+          "max": 4561007.777777778,
+          "fork_medians": [
+            4561007.777777778,
+            3942702.9411764704,
+            3562563.3333333335
+          ]
+        },
+        "allocated_bytes_per_operation": {
+          "median": 2063904.0,
+          "min": 2063904.0,
+          "max": 2063904.0,
+          "fork_medians": [
+            2063904.0,
+            2063904.0,
+            2063904.0
+          ]
+        },
+        "allocated_bytes_per_record": 2063.904
+      },
+      "candidate_over_baseline": 0.9588755647682332
+    },
+    {
+      "engine": "truffledata-yaml-interop",
+      "candidate": {
+        "ns_per_operation": {
+          "median": 2962389.279411765,
+          "min": 2948072.205882353,
+          "max": 3451744.6551724137,
+          "fork_medians": [
+            2962389.279411765,
+            3451744.6551724137,
+            2948072.205882353
+          ]
+        },
+        "allocated_bytes_per_operation": {
+          "median": 784080.0,
+          "min": 784080.0,
+          "max": 784080.0,
+          "fork_medians": [
+            784080.0,
+            784080.0,
+            784080.0
+          ]
+        },
+        "allocated_bytes_per_record": 784.08
+      },
+      "baseline": {
+        "ns_per_operation": {
+          "median": 2859731.1428571427,
+          "min": 2833141.408450704,
+          "max": 2887973.1428571427,
+          "fork_medians": [
+            2833141.408450704,
+            2859731.1428571427,
+            2887973.1428571427
+          ]
+        },
+        "allocated_bytes_per_operation": {
+          "median": 784080.0,
+          "min": 784080.0,
+          "max": 784080.0,
+          "fork_medians": [
+            784080.0,
+            784080.0,
+            784080.0
+          ]
+        },
+        "allocated_bytes_per_record": 784.08
+      },
+      "candidate_over_baseline": 1.0358978279517763
+    },
+    {
+      "engine": "truffledata-yaml-snapshot",
+      "candidate": {
+        "ns_per_operation": {
+          "median": 5009366.0,
+          "min": 4920237.317073171,
+          "max": 5215663.333333333,
+          "fork_medians": [
+            5215663.333333333,
+            5009366.0,
+            4920237.317073171
+          ]
+        },
+        "allocated_bytes_per_operation": {
+          "median": 2353168.0,
+          "min": 2353168.0,
+          "max": 2353168.0,
+          "fork_medians": [
+            2353168.0,
+            2353168.0,
+            2353168.0
+          ]
+        },
+        "allocated_bytes_per_record": 2353.168
+      },
+      "baseline": {
+        "ns_per_operation": {
+          "median": 4945466.8292682925,
+          "min": 4894446.804878049,
+          "max": 4959570.463414635,
+          "fork_medians": [
+            4945466.8292682925,
+            4959570.463414635,
+            4894446.804878049
+          ]
+        },
+        "allocated_bytes_per_operation": {
+          "median": 2353168.0,
+          "min": 2353168.0,
+          "max": 2353168.0,
+          "fork_medians": [
+            2353168.0,
+            2353168.0,
+            2353168.0
+          ]
+        },
+        "allocated_bytes_per_record": 2353.168
+      },
+      "candidate_over_baseline": 1.0129207561060847
+    }
+  ]
+}

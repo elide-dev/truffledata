@@ -9,7 +9,8 @@ import org.graalvm.word.WordFactory;
  * The JSON cells route alone, in an image built like a consumer's (the flag and {@code
  * JsonCellsFeature}, no assertions, nothing that calls the production bindings of the routed
  * imports): //json/cells/tests:aot_shape runs it, then reads the compiled shape of the route from
- * its symbols.
+ * its symbols (each routed import reached through its cell's static {@code invoke}, no {@code
+ * execute} call).
  */
 public final class CellsShape {
   private CellsShape() {}

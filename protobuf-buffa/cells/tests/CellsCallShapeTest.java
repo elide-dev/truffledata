@@ -20,13 +20,23 @@ import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
 
 /**
- * Specialized NativeCell calls (Myna 0.14.0; docs/superpowers/plans/briefs/2026-11-09-myna-0.14,
- * item 2): every hand-written call site of a scalar-result cell, in every {@code <format>/cells}
- * package, holds the concrete generated {@code *_Cell} type and calls the typed method the
- * generator overrides ({@code executeInt}, {@code executeLong}, {@code executeDouble}, {@code
- * executeBoolean}). Generic {@code execute(Object[])} is allowed only on cells without a typed
- * override (pointer, void and resource results). Boxed casts or unboxing of a cell result, and
- * {@code UnexpectedResultException} handlers, are rejected everywhere.
+ * The call shape of every hand-written cell call site, in every {@code <format>/cells} package
+ * (docs/superpowers/plans/briefs/2026-11-09-myna-0.14, item 2; Myna 0.16.0's {@code invoke}).
+ *
+ * <ul>
+ *   <li>Native Image routes (sources whose file name contains {@code Svm}) are host code compiled
+ *       ahead of time, where a cell's {@code execute(Object[])} path is not scalar-replaced: they
+ *       call the generated cell's static {@code invoke} (native carriers and raw addresses,
+ *       nothing allocated) and never an {@code execute} method.
+ *   <li>HotSpot routes call {@code invoke} too wherever every buffer is a native address; where
+ *       they lend a heap array they hold the concrete generated {@code *_Cell} type and call the
+ *       typed method the generator overrides ({@code executeInt}, {@code executeLong}, {@code
+ *       executeDouble}, {@code executeBoolean}). Generic {@code execute(Object[])} is allowed only
+ *       on cells without a typed override (pointer, void and resource results).
+ *   <li>Boxed casts or unboxing of a cell result, and {@code UnexpectedResultException} handlers,
+ *       are rejected everywhere; an {@code invoke} must name a cell the scanned generated sources
+ *       declare with that static entry.
+ * </ul>
  *
  * <p>A source scan over the runfiles: each {@code <format>/cells} package exports a {@code
  * call_sites} filegroup (its hand-written sources and its generated {@code *Truffle.java}), listed
@@ -74,11 +84,21 @@ final class CellsCallShapeTest {
     var scan = Scan.of(generated);
     assertTrue(scan.cells.containsKey("decodeSlab_Cell"), "generated Buffa cells not parsed");
     List<String> violations = new ArrayList<>();
-    int typed = 0;
-    for (var entry : handwritten.entrySet())
-      typed += scan.check(entry.getKey(), entry.getValue(), violations);
+    int typed = 0, direct = 0, nativeImageDirect = 0;
+    for (var entry : handwritten.entrySet()) {
+      Scan.Calls calls = scan.check(entry.getKey(), entry.getValue(), violations);
+      typed += calls.typed();
+      direct += calls.direct();
+      if (Scan.nativeImage(entry.getKey())) nativeImageDirect += calls.direct();
+    }
+    System.out.println(
+        "CELLS call-shape scan: " + direct + " invoke calls (" + nativeImageDirect
+            + " in Native Image routes), " + typed + " typed execute calls");
     assertEquals(List.of(), violations, "cells call sites");
-    assertTrue(typed >= 3, "expected the Buffa typed executeInt call sites, found " + typed);
+    // Never vacuous: each format's Native Image route makes at least one invoke call.
+    assertTrue(
+        nativeImageDirect >= 4, "expected invoke calls in every Native Image route, found " + nativeImageDirect);
+    assertTrue(typed + direct >= 8, "expected the routes' call sites, found " + (typed + direct));
   }
 
   // The scanner itself: each rule fails on a minimal offending source.
@@ -87,6 +107,9 @@ final class CellsCallShapeTest {
       """
       public final class DemoTruffle {
           public static final class status_Cell extends NativeCell {
+              public static int invoke(long handle) {
+                  return 0;
+              }
               @Override
               public Object execute(Object[] arguments) {
                   return executeInt(arguments);
@@ -112,10 +135,80 @@ final class CellsCallShapeTest {
       """;
 
   private static List<String> violations(String source) {
+    return violations("demo/cells/src/Route.java", source);
+  }
+
+  private static List<String> violations(String path, String source) {
     var scan = Scan.of(Map.of("demo/cells/generated/DemoTruffle.java", GENERATED));
     var out = new ArrayList<String>();
-    scan.check("demo/cells/src/Route.java", source, out);
+    scan.check(path, source, out);
     return out;
+  }
+
+  @Test
+  void acceptsInvokeAndCountsIt() {
+    var scan = Scan.of(Map.of("demo/cells/generated/DemoTruffle.java", GENERATED));
+    var out = new ArrayList<String>();
+    Scan.Calls calls =
+        scan.check(
+            "demo/cells/src/RouteSvm.java",
+            """
+            final class RouteSvm {
+              int a(long handle) { return DemoTruffle.status_Cell.invoke(handle); }
+              int b(long handle) { return status_Cell.invoke(handle); }
+              // status.execute(arguments) in a comment is not a call
+            }
+            """,
+            out);
+    assertEquals(List.of(), out);
+    assertEquals(2, calls.direct());
+    assertEquals(0, calls.typed());
+  }
+
+  @Test
+  void rejectsExecuteInANativeImageRoute() {
+    // Typed or not: ahead-of-time host code allocates on every execute path.
+    assertFalse(
+        violations(
+                "demo/cells/src/RouteSvm.java",
+                """
+                final class RouteSvm {
+                  private final DemoTruffle.status_Cell status;
+                  int a(Object[] arguments) { return status.executeInt(arguments); }
+                }
+                """)
+            .isEmpty());
+    assertFalse(
+        violations(
+                "demo/cells/src/SvmRoute.java",
+                """
+                final class SvmRoute {
+                  private final DemoTruffle.open_Cell open;
+                  Object a(Object[] arguments) { return open.execute(arguments); }
+                }
+                """)
+            .isEmpty());
+  }
+
+  @Test
+  void rejectsInvokeOnAnUnknownCellOrOneWithoutTheEntry() {
+    assertFalse(
+        violations(
+                """
+                final class Route {
+                  int a(long handle) { return OtherTruffle.mystery_Cell.invoke(handle); }
+                }
+                """)
+            .isEmpty());
+    // size_Cell is declared by the scanned source, but without a static invoke.
+    assertFalse(
+        violations(
+                """
+                final class Route {
+                  long a() { return DemoTruffle.size_Cell.invoke(); }
+                }
+                """)
+            .isEmpty());
   }
 
   @Test
@@ -258,6 +351,18 @@ final class CellsCallShapeTest {
     private static final Pattern CALL =
         Pattern.compile("(?:(\\w+)|(\\)))\\s*\\.\\s*(execute(?:Int|Long|Double|Boolean)?)\\s*\\(");
     private static final Pattern INFERRED = Pattern.compile("\\bvar\\s+(\\w+)\\s*[=:]");
+    private static final Pattern STATIC_INVOKE =
+        Pattern.compile("\\bstatic\\s+[\\w.\\[\\]]+\\s+invoke\\s*\\(");
+    private static final Pattern INVOKE = Pattern.compile("\\b(\\w+_Cell)\\s*\\.\\s*invoke\\s*\\(");
+    private static final Pattern NATIVE_IMAGE_SOURCE = Pattern.compile("(?:^|/)[^/]*Svm[^/]*\\.java$");
+
+    /** Typed {@code execute*} calls and static {@code invoke} calls found in one source. */
+    record Calls(int typed, int direct) {}
+
+    /** Whether a source is a Native Image route: host code compiled ahead of time. */
+    static boolean nativeImage(String path) {
+      return NATIVE_IMAGE_SOURCE.matcher(path).find();
+    }
     private static final Pattern BOX_CAST =
         Pattern.compile(
             "\\(\\s*(?:java\\.lang\\.)?(?:Integer|Long|Double|Boolean|Short|Byte|Float|Character|Number)\\s*\\)\\s*\\(?\\s*(?:this\\s*\\.\\s*)?\\w*\\s*$");
@@ -267,6 +372,9 @@ final class CellsCallShapeTest {
 
     /** Cell simple name to its typed method, or {@code ""} for a cell without one. */
     final Map<String, String> cells = new HashMap<>();
+
+    /** Cells whose generated class declares the static {@code invoke} entry (Myna 0.16.0). */
+    final Set<String> invokable = new HashSet<>();
 
     private final Set<String> ambiguous = new HashSet<>();
 
@@ -283,8 +391,10 @@ final class CellsCallShapeTest {
         }
         for (int i = 0; i < names.size(); i++) {
           int end = i + 1 < names.size() ? starts.get(i + 1) : text.length();
-          Matcher typed = TYPED_OVERRIDE.matcher(text.substring(starts.get(i), end));
+          String body = text.substring(starts.get(i), end);
+          Matcher typed = TYPED_OVERRIDE.matcher(body);
           String method = typed.find() ? typed.group(2) : "";
+          if (STATIC_INVOKE.matcher(body).find()) scan.invokable.add(names.get(i));
           String previous = scan.cells.putIfAbsent(names.get(i), method);
           // Same simple name in two modules with different result kinds: refuse to guess.
           if (previous != null && !previous.equals(method)) scan.ambiguous.add(names.get(i));
@@ -293,9 +403,21 @@ final class CellsCallShapeTest {
       return scan;
     }
 
-    /** Appends violations for one hand-written source; returns the number of typed calls. */
-    int check(String path, String source, List<String> violations) {
+    /** Appends violations for one hand-written source; returns its typed and invoke calls. */
+    Calls check(String path, String source, List<String> violations) {
       String text = strip(source);
+      boolean nativeImage = nativeImage(path);
+      int direct = 0;
+      Matcher invoke = INVOKE.matcher(text);
+      while (invoke.find()) {
+        String type = invoke.group(1);
+        String where = path + ":" + line(text, invoke.start()) + ": " + type + ".invoke(";
+        if (!cells.containsKey(type) || ambiguous.contains(type))
+          violations.add(where + ", which no scanned generated *Truffle.java classifies");
+        else if (!invokable.contains(type))
+          violations.add(where + ", but the generated cell declares no static invoke");
+        else direct++;
+      }
       if (text.contains("UnexpectedResultException"))
         violations.add(path + ": UnexpectedResultException (hold the concrete *_Cell instead)");
       // Receiver name -> every type it is declared with in this file.
@@ -346,6 +468,16 @@ final class CellsCallShapeTest {
           }
           if (!type.endsWith("_Cell")) continue;
           cell = true;
+          if (nativeImage) {
+            violations.add(
+                where
+                    + " on "
+                    + type
+                    + " in a Native Image route: ahead-of-time host code calls "
+                    + type
+                    + ".invoke");
+            continue;
+          }
           String override = cells.get(type);
           if (override == null || ambiguous.contains(type))
             violations.add(
@@ -368,7 +500,7 @@ final class CellsCallShapeTest {
         if (close > 0 && UNBOX.matcher(text.substring(close + 1)).find())
           violations.add(where + " result is unboxed");
       }
-      return typed;
+      return new Calls(typed, direct);
     }
 
     private static int line(String text, int offset) {

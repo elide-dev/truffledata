@@ -1,0 +1,1835 @@
+{
+  "schema": 1,
+  "complete": true,
+  "source": "113c02a5 cells flag on (candidate) vs off (baseline); Myna 0.16.0; SDK 25.5.5-elide.28",
+  "baseline_source": "113c02a5 cells flag off",
+  "platform": "Linux-5.15.0-x86_64-with-glibc2.39",
+  "hostname": "(none)",
+  "cpu": "processor\t: 0\nvendor_id\t: AuthenticAMD\ncpu family\t: 25\nmodel\t\t: 160\nmodel name\t: AMD EPYC\nstepping\t: 2\nmicrocode\t: 0x1000065\ncpu MHz\t\t: 2246.624\ncache size\t: 512 KB\nphysical id\t: 0\nsiblings\t: 7\ncore id\t\t: 0\ncpu cores\t: 7\napicid\t\t: 0\ninitial apicid\t: 0\nfpu\t\t: yes\nfpu_exception\t: yes\ncpuid level\t: 16\nwp\t\t: yes\nflags\t\t: fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ht syscall nx mmxext fxsr_opt pdpe1gb rdtscp lm rep_good nopl cpuid extd_apicid tsc_known_freq pni pclmulqdq ssse3 fma cx16 pcid sse4_1 sse4_2 x2apic movbe popcnt tsc_deadline_timer aes xsave avx f16c rdrand hypervisor lahf_lm cmp_legacy svm cr8_legacy abm sse4a misalignsse 3dnowprefetch osvw topoext perfctr_core invpcid_single ssbd ibrs ibpb stibp vmmcall fsgsbase tsc_adjust bmi1 avx2 smep bmi2 erms invpcid avx512f avx512dq rdseed adx smap avx512ifma clflushopt clwb avx512cd sha_ni avx512bw avx512vl xsaveopt xsavec xgetbv1 xsaves avx512_bf16 clzero xsaveerptr wbnoinvd arat npt lbrv nrip_save tsc_scale vmcb_clean flushbyasid pausefilter pfthreshold v_vmsave_vmload vgif avx512vbmi umip pku avx512_vbmi2 gfni vaes vpclmulqdq avx512_vnni avx512_bitalg avx512_vpopcntdq rdpid fsrm flush_l1d\nbugs\t\t: sysret_ss_attrs spectre_v1 spectre_v2 spec_store_bypass\nbogomips\t: 4493.24\nTLB size\t: 1024 4K pages\nclflush size\t: 64\ncache_alignment\t: 64\naddress sizes\t: 52 bits physical, 57 bits virtual\npower management:\n\nprocessor\t: 1\nvendor_id\t: AuthenticAMD\ncpu family\t: 25\nmodel\t\t: 160\nmodel name\t: AMD EPYC\nstepping\t: 2\nmicrocode\t: 0x1000065\ncpu MHz\t\t: 2246.624\ncache size\t: 512 KB\nphysical id\t: 0\nsiblings\t: 7\ncore id\t\t: 1\ncpu cores\t: 7\napicid\t\t: 1\ninitial apicid\t: 1\nfpu\t\t: yes\nfpu_exception\t: yes\ncpuid level\t: 16\nwp\t\t: yes\nflags\t\t: fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ht syscall nx mmxext fxsr_opt pdpe1gb rdtscp lm rep_good nopl cpuid extd_apicid tsc_known_freq pni pclmulqdq ssse3 fma cx16 pcid sse4_1 sse4_2 x2apic movbe popcnt tsc_deadline_timer aes xsave avx f16c rdrand hypervisor lahf_lm cmp_legacy svm cr8_legacy abm sse4a misalignsse 3dnowprefetch osvw topoext perfctr_core invpcid_single ssbd ibrs ibpb stibp vmmcall fsgsbase tsc_adjust bmi1 avx2 smep bmi2 erms invpcid avx512f avx512dq rdseed adx smap avx512ifma clflushopt clwb avx512cd sha_ni avx512bw avx512vl xsaveopt xsavec xgetbv1 xsaves avx512_bf16 clzero xsaveerptr wbnoinvd arat npt lbrv nrip_save tsc_scale vmcb_clean flushbyasid pausefilter pfthreshold v_vmsave_vmload vgif avx512vbmi umip pku avx512_vbmi2 gfni vaes vpclmulqdq avx512_vnni avx512_bitalg avx512_vpopcntdq rdpid fsrm flush_l1d\nbugs\t\t: sysret_ss_attrs spectre_v1 spectre_v2 spec_store_bypass\nbogomips\t: 4493.24\nTLB size\t: 1024 4K pages\nclflush size\t: 64\ncache_alignment\t: 64\naddress sizes\t: 52 bits physical, 57 bits virtual\npower management:\n\nprocessor\t: 2\nvendor_id\t: AuthenticAMD\ncpu family\t: 25\nmodel\t\t: 160\nmodel name\t: AMD EPYC\nstepping\t: 2\nmicrocode\t: 0x1000065\ncpu MHz\t\t: 2246.624\ncache size\t: 512 KB\nphysical id\t: 0\nsiblings\t: 7\ncore id\t\t: 2\ncpu cores\t: 7\napicid\t\t: 2\ninitial apicid\t: 2\nfpu\t\t: yes\nfpu_exception\t: yes\ncpuid level\t: 16\nwp\t\t: yes\nflags\t\t: fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ht syscall nx mmxext fxsr_opt pdpe1gb rdtscp lm rep_good nopl cpuid extd_apicid tsc_known_freq pni pclmulqdq ssse3 fma cx16 pcid sse4_1 sse4_2 x2apic movbe popcnt tsc_deadline_timer aes xsave avx f16c rdrand hypervisor lahf_lm cmp_legacy svm cr8_legacy abm sse4a misalignsse 3dnowprefetch osvw topoext perfctr_core invpcid_single ssbd ibrs ibpb stibp vmmcall fsgsbase tsc_adjust bmi1 avx2 smep bmi2 erms invpcid avx512f avx512dq rdseed adx smap avx512ifma clflushopt clwb avx512cd sha_ni avx512bw avx512vl xsaveopt xsavec xgetbv1 xsaves avx512_bf16 clzero xsaveerptr wbnoinvd arat npt lbrv nrip_save tsc_scale vmcb_clean flushbyasid pausefilter pfthreshold v_vmsave_vmload vgif avx512vbmi umip pku avx512_vbmi2 gfni vaes vpclmulqdq avx512_vnni avx512_bitalg avx512_vpopcntdq rdpid fsrm flush_l1d\nbugs\t\t: sysret_ss_attrs spectre_v1 spectre_v2 spec_store_bypass\nbogomips\t: 4493.24\nTLB size\t: 1024 4K pages\nclflush size\t: 64\ncache_alignment\t: 64\naddress sizes\t: 52 bits physical, 57 bits virtual\npower management:\n\nprocessor\t: 3\nvendor_id\t: AuthenticAMD\ncpu family\t: 25\nmodel\t\t: 160\nmodel name\t: AMD EPYC\nstepping\t: 2\nmicrocode\t: 0x1000065\ncpu MHz\t\t: 2246.624\ncache size\t: 512 KB\nphysical id\t: 0\nsiblings\t: 7\ncore id\t\t: 3\ncpu cores\t: 7\napicid\t\t: 3\ninitial apicid\t: 3\nfpu\t\t: yes\nfpu_exception\t: yes\ncpuid level\t: 16\nwp\t\t: yes\nflags\t\t: fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ht syscall nx mmxext fxsr_opt pdpe1gb rdtscp lm rep_good nopl cpuid extd_apicid tsc_known_freq pni pclmulqdq ssse3 fma cx16 pcid sse4_1 sse4_2 x2apic movbe popcnt tsc_deadline_timer aes xsave avx f16c rdrand hypervisor lahf_lm cmp_legacy svm cr8_legacy abm sse4a misalignsse 3dnowprefetch osvw topoext perfctr_core invpcid_single ssbd ibrs ibpb stibp vmmcall fsgsbase tsc_adjust bmi1 avx2 smep bmi2 erms invpcid avx512f avx512dq rdseed adx smap avx512ifma clflushopt clwb avx512cd sha_ni avx512bw avx512vl xsaveopt xsavec xgetbv1 xsaves avx512_bf16 clzero xsaveerptr wbnoinvd arat npt lbrv nrip_save tsc_scale vmcb_clean flushbyasid pausefilter pfthreshold v_vmsave_vmload vgif avx512vbmi umip pku avx512_vbmi2 gfni vaes vpclmulqdq avx512_vnni avx512_bitalg avx512_vpopcntdq rdpid fsrm flush_l1d\nbugs\t\t: sysret_ss_attrs spectre_v1 spectre_v2 spec_store_bypass\nbogomips\t: 4493.24\nTLB size\t: 1024 4K pages\nclflush size\t: 64\ncache_alignment\t: 64\naddress sizes\t: 52 bits physical, 57 bits virtual\npower management:\n\nprocessor\t: 4\nvendor_id\t: AuthenticAMD\ncpu family\t: 25\nmodel\t\t: 160\nmodel name\t: AMD EPYC\nstepping\t: 2\nmicrocode\t: 0x1000065\ncpu MHz\t\t: 2246.624\ncache size\t: 512 KB\nphysical id\t: 0\nsiblings\t: 7\ncore id\t\t: 4\ncpu cores\t: 7\napicid\t\t: 4\ninitial apicid\t: 4\nfpu\t\t: yes\nfpu_exception\t: yes\ncpuid level\t: 16\nwp\t\t: yes\nflags\t\t: fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ht syscall nx mmxext fxsr_opt pdpe1gb rdtscp lm rep_good nopl cpuid extd_apicid tsc_known_freq pni pclmulqdq ssse3 fma cx16 pcid sse4_1 sse4_2 x2apic movbe popcnt tsc_deadline_timer aes xsave avx f16c rdrand hypervisor lahf_lm cmp_legacy svm cr8_legacy abm sse4a misalignsse 3dnowprefetch osvw topoext perfctr_core invpcid_single ssbd ibrs ibpb stibp vmmcall fsgsbase tsc_adjust bmi1 avx2 smep bmi2 erms invpcid avx512f avx512dq rdseed adx smap avx512ifma clflushopt clwb avx512cd sha_ni avx512bw avx512vl xsaveopt xsavec xgetbv1 xsaves avx512_bf16 clzero xsaveerptr wbnoinvd arat npt lbrv nrip_save tsc_scale vmcb_clean flushbyasid pausefilter pfthreshold v_vmsave_vmload vgif avx512vbmi umip pku avx512_vbmi2 gfni vaes vpclmulqdq avx512_vnni avx512_bitalg avx512_vpopcntdq rdpid fsrm flush_l1d\nbugs\t\t: sysret_ss_attrs spectre_v1 spectre_v2 spec_store_bypass\nbogomips\t: 4493.24\nTLB size\t: 1024 4K pages\nclflush size\t: 64\ncache_alignment\t: 64\naddress sizes\t: 52 bits physical, 57 bits virtual\npower management:\n\nprocessor\t: 5\nvendor_id\t: AuthenticAMD\ncpu family\t: 25\nmodel\t\t: 160\nmodel name\t: AMD EPYC\nstepping\t: 2\nmicrocode\t: 0x1000065\ncpu MHz\t\t: 2246.624\ncache size\t: 512 KB\nphysical id\t: 0\nsiblings\t: 7\ncore id\t\t: 5\ncpu cores\t: 7\napicid\t\t: 5\ninitial apicid\t: 5\nfpu\t\t: yes\nfpu_exception\t: yes\ncpuid level\t: 16\nwp\t\t: yes\nflags\t\t: fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ht syscall nx mmxext fxsr_opt pdpe1gb rdtscp lm rep_good nopl cpuid extd_apicid tsc_known_freq pni pclmulqdq ssse3 fma cx16 pcid sse4_1 sse4_2 x2apic movbe popcnt tsc_deadline_timer aes xsave avx f16c rdrand hypervisor lahf_lm cmp_legacy svm cr8_legacy abm sse4a misalignsse 3dnowprefetch osvw topoext perfctr_core invpcid_single ssbd ibrs ibpb stibp vmmcall fsgsbase tsc_adjust bmi1 avx2 smep bmi2 erms invpcid avx512f avx512dq rdseed adx smap avx512ifma clflushopt clwb avx512cd sha_ni avx512bw avx512vl xsaveopt xsavec xgetbv1 xsaves avx512_bf16 clzero xsaveerptr wbnoinvd arat npt lbrv nrip_save tsc_scale vmcb_clean flushbyasid pausefilter pfthreshold v_vmsave_vmload vgif avx512vbmi umip pku avx512_vbmi2 gfni vaes vpclmulqdq avx512_vnni avx512_bitalg avx512_vpopcntdq rdpid fsrm flush_l1d\nbugs\t\t: sysret_ss_attrs spectre_v1 spectre_v2 spec_store_bypass\nbogomips\t: 4493.24\nTLB size\t: 1024 4K pages\nclflush size\t: 64\ncache_alignment\t: 64\naddress sizes\t: 52 bits physical, 57 bits virtual\npower management:\n\nprocessor\t: 6\nvendor_id\t: AuthenticAMD\ncpu family\t: 25\nmodel\t\t: 160\nmodel name\t: AMD EPYC\nstepping\t: 2\nmicrocode\t: 0x1000065\ncpu MHz\t\t: 2246.624\ncache size\t: 512 KB\nphysical id\t: 0\nsiblings\t: 7\ncore id\t\t: 6\ncpu cores\t: 7\napicid\t\t: 6\ninitial apicid\t: 6\nfpu\t\t: yes\nfpu_exception\t: yes\ncpuid level\t: 16\nwp\t\t: yes\nflags\t\t: fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ht syscall nx mmxext fxsr_opt pdpe1gb rdtscp lm rep_good nopl cpuid extd_apicid tsc_known_freq pni pclmulqdq ssse3 fma cx16 pcid sse4_1 sse4_2 x2apic movbe popcnt tsc_deadline_timer aes xsave avx f16c rdrand hypervisor lahf_lm cmp_legacy svm cr8_legacy abm sse4a misalignsse 3dnowprefetch osvw topoext perfctr_core invpcid_single ssbd ibrs ibpb stibp vmmcall fsgsbase tsc_adjust bmi1 avx2 smep bmi2 erms invpcid avx512f avx512dq rdseed adx smap avx512ifma clflushopt clwb avx512cd sha_ni avx512bw avx512vl xsaveopt xsavec xgetbv1 xsaves avx512_bf16 clzero xsaveerptr wbnoinvd arat npt lbrv nrip_save tsc_scale vmcb_clean flushbyasid pausefilter pfthreshold v_vmsave_vmload vgif avx512vbmi umip pku avx512_vbmi2 gfni vaes vpclmulqdq avx512_vnni avx512_bitalg avx512_vpopcntdq rdpid fsrm flush_l1d\nbugs\t\t: sysret_ss_attrs spectre_v1 spectre_v2 spec_store_bypass\nbogomips\t: 4493.24\nTLB size\t: 1024 4K pages\nclflush size\t: 64\ncache_alignment\t: 64\naddress sizes\t: 52 bits physical, 57 bits virtual\npower management:\n\n",
+  "affinity": [
+    0
+  ],
+  "shard": 7,
+  "shards": 9,
+  "binary_sha256": {
+    "candidate": "cdeb8fc3f5ac37504398dadd8ab4074918447b7db1eb5a9c3bbfda428457d86b",
+    "baseline": "cafb97bfa2411072350b0f3437b6e9c04e3b2d85ab2a0ea765c5c5260426032b"
+  },
+  "fixture_source_sha256": "be7b4a2645666ac3efe8ad1436d30a8d175282c59644e29a7fb9dfdf353f8a1a",
+  "generic_fixture_source_sha256": "bdf8be2def4614793a207bf2d6195ff31714885ae37dcab9d9511d9dbf841710",
+  "group": [
+    "simdjson-typed",
+    "simdjson-specialized",
+    "gson-stream"
+  ],
+  "stages": [
+    "read-aot",
+    "interpret"
+  ],
+  "engine_stages": {
+    "simdjson-typed": [
+      "read-aot",
+      "interpret"
+    ],
+    "simdjson-specialized": [
+      "read-aot",
+      "interpret"
+    ],
+    "gson-stream": [
+      "read-aot",
+      "interpret"
+    ]
+  },
+  "candidate_only": [],
+  "expected_checksums": {
+    "simdjson-typed-nested": 7968,
+    "simdjson-typed-repeated": 1306656,
+    "simdjson-typed-mixed": 330336,
+    "simdjson-typed-churn": 307220,
+    "simdjson-typed": 35984,
+    "simdjson-specialized": 35984,
+    "gson-stream": 35984,
+    "simdjson-generic-interop": 38219,
+    "gson-tree": 38219,
+    "jackson-tree": 38219,
+    "fastjson2-tree": 38219,
+    "dsljson-map": 38219,
+    "jsoniter-any": 38219,
+    "simdjson-snapshot": 38219,
+    "simdjson-stream-interop": 38219,
+    "simdjson-generic-decode": 32,
+    "gson-numeric": -2150921114,
+    "simdjson-numeric-interop": -2150921114,
+    "simdjson-numeric-decode": 32,
+    "jackson-numeric": -2150921114,
+    "fastjson2-numeric": -2150921114
+  },
+  "measurements": [
+    {
+      "workload": "json-scalar",
+      "engine": "gson-stream",
+      "stage": "read-aot",
+      "runtime": "svm",
+      "guest_compiled": false,
+      "checksum": 35984,
+      "rows": 32,
+      "ns_per_row": [
+        2.1316399685017244,
+        2.13811569614711,
+        2.1551447519031335
+      ],
+      "role": "candidate",
+      "fork": 1,
+      "order": [
+        "candidate",
+        "baseline"
+      ]
+    },
+    {
+      "workload": "json-scalar",
+      "engine": "gson-stream",
+      "stage": "read-aot",
+      "runtime": "svm",
+      "guest_compiled": false,
+      "checksum": 35984,
+      "rows": 32,
+      "ns_per_row": [
+        2.122291915108332,
+        2.1572261311561394,
+        2.118986580359855
+      ],
+      "role": "baseline",
+      "fork": 1,
+      "order": [
+        "candidate",
+        "baseline"
+      ]
+    },
+    {
+      "workload": "json-scalar",
+      "engine": "gson-stream",
+      "stage": "read-aot",
+      "runtime": "svm",
+      "guest_compiled": false,
+      "checksum": 35984,
+      "rows": 32,
+      "allocated_bytes_per_row": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "role": "candidate",
+      "fork": 0,
+      "order": [
+        "candidate",
+        "baseline"
+      ]
+    },
+    {
+      "workload": "json-scalar",
+      "engine": "gson-stream",
+      "stage": "read-aot",
+      "runtime": "svm",
+      "guest_compiled": false,
+      "checksum": 35984,
+      "rows": 32,
+      "allocated_bytes_per_row": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "role": "baseline",
+      "fork": 0,
+      "order": [
+        "candidate",
+        "baseline"
+      ]
+    },
+    {
+      "workload": "json-scalar",
+      "engine": "gson-stream",
+      "stage": "interpret",
+      "runtime": "svm",
+      "guest_compiled": false,
+      "checksum": 35984,
+      "rows": 32,
+      "ns_per_row": [
+        2.8692468878525266,
+        2.953695508143298,
+        2.899178386498902
+      ],
+      "role": "candidate",
+      "fork": 0,
+      "order": [
+        "candidate",
+        "baseline"
+      ]
+    },
+    {
+      "workload": "json-scalar",
+      "engine": "gson-stream",
+      "stage": "interpret",
+      "runtime": "svm",
+      "guest_compiled": false,
+      "checksum": 35984,
+      "rows": 32,
+      "ns_per_row": [
+        2.8834328847388697,
+        2.9356072791123164,
+        2.90421626910383
+      ],
+      "role": "baseline",
+      "fork": 0,
+      "order": [
+        "candidate",
+        "baseline"
+      ]
+    },
+    {
+      "workload": "json-scalar",
+      "engine": "simdjson-typed",
+      "stage": "interpret",
+      "runtime": "svm",
+      "guest_compiled": false,
+      "checksum": 35984,
+      "rows": 32,
+      "ns_per_row": [
+        8.946722792181777,
+        8.94890628577152,
+        8.92348511456049
+      ],
+      "role": "candidate",
+      "fork": 0,
+      "order": [
+        "candidate",
+        "baseline"
+      ]
+    },
+    {
+      "workload": "json-scalar",
+      "engine": "simdjson-typed",
+      "stage": "interpret",
+      "runtime": "svm",
+      "guest_compiled": false,
+      "checksum": 35984,
+      "rows": 32,
+      "ns_per_row": [
+        9.026732405995935,
+        9.05800875428876,
+        8.640891429471868
+      ],
+      "role": "baseline",
+      "fork": 0,
+      "order": [
+        "candidate",
+        "baseline"
+      ]
+    },
+    {
+      "workload": "json-scalar",
+      "engine": "gson-stream",
+      "stage": "read-aot",
+      "runtime": "svm",
+      "guest_compiled": false,
+      "checksum": 35984,
+      "rows": 32,
+      "ns_per_row": [
+        2.1667066201022807,
+        2.1913212324425597,
+        2.2866099361713337
+      ],
+      "role": "candidate",
+      "fork": 0,
+      "order": [
+        "candidate",
+        "baseline"
+      ]
+    },
+    {
+      "workload": "json-scalar",
+      "engine": "gson-stream",
+      "stage": "read-aot",
+      "runtime": "svm",
+      "guest_compiled": false,
+      "checksum": 35984,
+      "rows": 32,
+      "ns_per_row": [
+        2.31261941108046,
+        2.881971667238403,
+        2.7863903833670967
+      ],
+      "role": "baseline",
+      "fork": 0,
+      "order": [
+        "candidate",
+        "baseline"
+      ]
+    },
+    {
+      "workload": "json-scalar",
+      "engine": "gson-stream",
+      "stage": "interpret",
+      "runtime": "svm",
+      "guest_compiled": false,
+      "checksum": 35984,
+      "rows": 32,
+      "allocated_bytes_per_row": [
+        2.0,
+        2.0,
+        2.0
+      ],
+      "role": "baseline",
+      "fork": 1,
+      "order": [
+        "baseline",
+        "candidate"
+      ]
+    },
+    {
+      "workload": "json-scalar",
+      "engine": "gson-stream",
+      "stage": "interpret",
+      "runtime": "svm",
+      "guest_compiled": false,
+      "checksum": 35984,
+      "rows": 32,
+      "allocated_bytes_per_row": [
+        2.0,
+        2.0,
+        2.0
+      ],
+      "role": "candidate",
+      "fork": 1,
+      "order": [
+        "baseline",
+        "candidate"
+      ]
+    },
+    {
+      "workload": "json-scalar",
+      "engine": "simdjson-specialized",
+      "stage": "read-aot",
+      "runtime": "svm",
+      "guest_compiled": false,
+      "checksum": 35984,
+      "rows": 32,
+      "ns_per_row": [
+        13.116057267890708,
+        12.482642550166155,
+        12.09936983167121
+      ],
+      "role": "candidate",
+      "fork": 0,
+      "order": [
+        "candidate",
+        "baseline"
+      ]
+    },
+    {
+      "workload": "json-scalar",
+      "engine": "simdjson-specialized",
+      "stage": "read-aot",
+      "runtime": "svm",
+      "guest_compiled": false,
+      "checksum": 35984,
+      "rows": 32,
+      "ns_per_row": [
+        12.043773643598989,
+        11.640179076799333,
+        11.838138314180595
+      ],
+      "role": "baseline",
+      "fork": 0,
+      "order": [
+        "candidate",
+        "baseline"
+      ]
+    },
+    {
+      "workload": "json-scalar",
+      "engine": "simdjson-specialized",
+      "stage": "read-aot",
+      "runtime": "svm",
+      "guest_compiled": false,
+      "checksum": 35984,
+      "rows": 32,
+      "ns_per_row": [
+        16.299176245410546,
+        16.094726884160902,
+        15.722228611144626
+      ],
+      "role": "candidate",
+      "fork": 1,
+      "order": [
+        "candidate",
+        "baseline"
+      ]
+    },
+    {
+      "workload": "json-scalar",
+      "engine": "simdjson-specialized",
+      "stage": "read-aot",
+      "runtime": "svm",
+      "guest_compiled": false,
+      "checksum": 35984,
+      "rows": 32,
+      "ns_per_row": [
+        17.123933382823456,
+        17.391915606637287,
+        16.047203515111693
+      ],
+      "role": "baseline",
+      "fork": 1,
+      "order": [
+        "candidate",
+        "baseline"
+      ]
+    },
+    {
+      "workload": "json-scalar",
+      "engine": "gson-stream",
+      "stage": "read-aot",
+      "runtime": "svm",
+      "guest_compiled": false,
+      "checksum": 35984,
+      "rows": 32,
+      "ns_per_row": [
+        2.2791705199192496,
+        2.2725615114395246,
+        5.197887290902689
+      ],
+      "role": "baseline",
+      "fork": 2,
+      "order": [
+        "baseline",
+        "candidate"
+      ]
+    },
+    {
+      "workload": "json-scalar",
+      "engine": "gson-stream",
+      "stage": "read-aot",
+      "runtime": "svm",
+      "guest_compiled": false,
+      "checksum": 35984,
+      "rows": 32,
+      "ns_per_row": [
+        9.660008028656126,
+        8.186341515990803,
+        22.72324028156947
+      ],
+      "role": "candidate",
+      "fork": 2,
+      "order": [
+        "baseline",
+        "candidate"
+      ]
+    },
+    {
+      "workload": "json-scalar",
+      "engine": "simdjson-typed",
+      "stage": "read-aot",
+      "runtime": "svm",
+      "guest_compiled": false,
+      "checksum": 35984,
+      "rows": 32,
+      "ns_per_row": [
+        41.99572795286017,
+        52.444594383239746,
+        56.89650822129361
+      ],
+      "role": "baseline",
+      "fork": 1,
+      "order": [
+        "baseline",
+        "candidate"
+      ]
+    },
+    {
+      "workload": "json-scalar",
+      "engine": "simdjson-typed",
+      "stage": "read-aot",
+      "runtime": "svm",
+      "guest_compiled": false,
+      "checksum": 35984,
+      "rows": 32,
+      "ns_per_row": [
+        68.89349497919497,
+        60.91034421667589,
+        75.76831330552614
+      ],
+      "role": "candidate",
+      "fork": 1,
+      "order": [
+        "baseline",
+        "candidate"
+      ]
+    },
+    {
+      "workload": "json-scalar",
+      "engine": "simdjson-typed",
+      "stage": "read-aot",
+      "runtime": "svm",
+      "guest_compiled": false,
+      "checksum": 35984,
+      "rows": 32,
+      "ns_per_row": [
+        81.18642831777598,
+        32.15636171473329,
+        49.25203286447832
+      ],
+      "role": "baseline",
+      "fork": 2,
+      "order": [
+        "baseline",
+        "candidate"
+      ]
+    },
+    {
+      "workload": "json-scalar",
+      "engine": "simdjson-typed",
+      "stage": "read-aot",
+      "runtime": "svm",
+      "guest_compiled": false,
+      "checksum": 35984,
+      "rows": 32,
+      "ns_per_row": [
+        90.56328572018046,
+        45.27425445810249,
+        42.98253276986136
+      ],
+      "role": "candidate",
+      "fork": 2,
+      "order": [
+        "baseline",
+        "candidate"
+      ]
+    },
+    {
+      "workload": "json-scalar",
+      "engine": "simdjson-typed",
+      "stage": "interpret",
+      "runtime": "svm",
+      "guest_compiled": false,
+      "checksum": 35984,
+      "rows": 32,
+      "allocated_bytes_per_row": [
+        2.0,
+        2.0,
+        2.0
+      ],
+      "role": "candidate",
+      "fork": 0,
+      "order": [
+        "candidate",
+        "baseline"
+      ]
+    },
+    {
+      "workload": "json-scalar",
+      "engine": "simdjson-typed",
+      "stage": "interpret",
+      "runtime": "svm",
+      "guest_compiled": false,
+      "checksum": 35984,
+      "rows": 32,
+      "allocated_bytes_per_row": [
+        2.0,
+        2.0,
+        2.0
+      ],
+      "role": "baseline",
+      "fork": 0,
+      "order": [
+        "candidate",
+        "baseline"
+      ]
+    },
+    {
+      "workload": "json-scalar",
+      "engine": "simdjson-typed",
+      "stage": "interpret",
+      "runtime": "svm",
+      "guest_compiled": false,
+      "checksum": 35984,
+      "rows": 32,
+      "ns_per_row": [
+        145.50479472052191,
+        242.24339899027123,
+        486.0805206298828
+      ],
+      "role": "candidate",
+      "fork": 1,
+      "order": [
+        "candidate",
+        "baseline"
+      ]
+    },
+    {
+      "workload": "json-scalar",
+      "engine": "simdjson-typed",
+      "stage": "interpret",
+      "runtime": "svm",
+      "guest_compiled": false,
+      "checksum": 35984,
+      "rows": 32,
+      "ns_per_row": [
+        646.4251521183894,
+        74.41877918130547,
+        76.05195949388587
+      ],
+      "role": "baseline",
+      "fork": 1,
+      "order": [
+        "candidate",
+        "baseline"
+      ]
+    },
+    {
+      "workload": "json-scalar",
+      "engine": "simdjson-typed",
+      "stage": "read-aot",
+      "runtime": "svm",
+      "guest_compiled": false,
+      "checksum": 35984,
+      "rows": 32,
+      "allocated_bytes_per_row": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "role": "candidate",
+      "fork": 2,
+      "order": [
+        "candidate",
+        "baseline"
+      ]
+    },
+    {
+      "workload": "json-scalar",
+      "engine": "simdjson-typed",
+      "stage": "read-aot",
+      "runtime": "svm",
+      "guest_compiled": false,
+      "checksum": 35984,
+      "rows": 32,
+      "allocated_bytes_per_row": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "role": "baseline",
+      "fork": 2,
+      "order": [
+        "candidate",
+        "baseline"
+      ]
+    },
+    {
+      "workload": "json-scalar",
+      "engine": "simdjson-specialized",
+      "stage": "interpret",
+      "runtime": "svm",
+      "guest_compiled": false,
+      "checksum": 35984,
+      "rows": 32,
+      "ns_per_row": [
+        6286.101806640625,
+        578.0061543782552,
+        1083.605487530048
+      ],
+      "role": "candidate",
+      "fork": 0,
+      "order": [
+        "candidate",
+        "baseline"
+      ]
+    },
+    {
+      "workload": "json-scalar",
+      "engine": "simdjson-specialized",
+      "stage": "interpret",
+      "runtime": "svm",
+      "guest_compiled": false,
+      "checksum": 35984,
+      "rows": 32,
+      "ns_per_row": [
+        1819.2311197916667,
+        522.6626892089844,
+        130.68532870678192
+      ],
+      "role": "baseline",
+      "fork": 0,
+      "order": [
+        "candidate",
+        "baseline"
+      ]
+    },
+    {
+      "workload": "json-scalar",
+      "engine": "simdjson-typed",
+      "stage": "read-aot",
+      "runtime": "svm",
+      "guest_compiled": false,
+      "checksum": 35984,
+      "rows": 32,
+      "ns_per_row": [
+        74.94133735141871,
+        143.08322924236919,
+        69.77284965302024
+      ],
+      "role": "candidate",
+      "fork": 0,
+      "order": [
+        "candidate",
+        "baseline"
+      ]
+    },
+    {
+      "workload": "json-scalar",
+      "engine": "simdjson-typed",
+      "stage": "read-aot",
+      "runtime": "svm",
+      "guest_compiled": false,
+      "checksum": 35984,
+      "rows": 32,
+      "ns_per_row": [
+        66.45028023097827,
+        25.17895256121134,
+        30.26881127218598
+      ],
+      "role": "baseline",
+      "fork": 0,
+      "order": [
+        "candidate",
+        "baseline"
+      ]
+    },
+    {
+      "workload": "json-scalar",
+      "engine": "gson-stream",
+      "stage": "interpret",
+      "runtime": "svm",
+      "guest_compiled": false,
+      "checksum": 35984,
+      "rows": 32,
+      "allocated_bytes_per_row": [
+        2.0,
+        2.0,
+        2.0
+      ],
+      "role": "baseline",
+      "fork": 2,
+      "order": [
+        "baseline",
+        "candidate"
+      ]
+    },
+    {
+      "workload": "json-scalar",
+      "engine": "gson-stream",
+      "stage": "interpret",
+      "runtime": "svm",
+      "guest_compiled": false,
+      "checksum": 35984,
+      "rows": 32,
+      "allocated_bytes_per_row": [
+        2.0,
+        2.0,
+        2.0
+      ],
+      "role": "candidate",
+      "fork": 2,
+      "order": [
+        "baseline",
+        "candidate"
+      ]
+    },
+    {
+      "workload": "json-scalar",
+      "engine": "gson-stream",
+      "stage": "interpret",
+      "runtime": "svm",
+      "guest_compiled": false,
+      "checksum": 35984,
+      "rows": 32,
+      "allocated_bytes_per_row": [
+        2.0,
+        2.0,
+        2.0
+      ],
+      "role": "candidate",
+      "fork": 0,
+      "order": [
+        "candidate",
+        "baseline"
+      ]
+    },
+    {
+      "workload": "json-scalar",
+      "engine": "gson-stream",
+      "stage": "interpret",
+      "runtime": "svm",
+      "guest_compiled": false,
+      "checksum": 35984,
+      "rows": 32,
+      "allocated_bytes_per_row": [
+        2.0,
+        2.0,
+        2.0
+      ],
+      "role": "baseline",
+      "fork": 0,
+      "order": [
+        "candidate",
+        "baseline"
+      ]
+    },
+    {
+      "workload": "json-scalar",
+      "engine": "simdjson-specialized",
+      "stage": "read-aot",
+      "runtime": "svm",
+      "guest_compiled": false,
+      "checksum": 35984,
+      "rows": 32,
+      "allocated_bytes_per_row": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "role": "candidate",
+      "fork": 1,
+      "order": [
+        "candidate",
+        "baseline"
+      ]
+    },
+    {
+      "workload": "json-scalar",
+      "engine": "simdjson-specialized",
+      "stage": "read-aot",
+      "runtime": "svm",
+      "guest_compiled": false,
+      "checksum": 35984,
+      "rows": 32,
+      "allocated_bytes_per_row": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "role": "baseline",
+      "fork": 1,
+      "order": [
+        "candidate",
+        "baseline"
+      ]
+    },
+    {
+      "workload": "json-scalar",
+      "engine": "simdjson-specialized",
+      "stage": "interpret",
+      "runtime": "svm",
+      "guest_compiled": false,
+      "checksum": 35984,
+      "rows": 32,
+      "allocated_bytes_per_row": [
+        2.0,
+        2.0,
+        2.0
+      ],
+      "role": "candidate",
+      "fork": 1,
+      "order": [
+        "candidate",
+        "baseline"
+      ]
+    },
+    {
+      "workload": "json-scalar",
+      "engine": "simdjson-specialized",
+      "stage": "interpret",
+      "runtime": "svm",
+      "guest_compiled": false,
+      "checksum": 35984,
+      "rows": 32,
+      "allocated_bytes_per_row": [
+        2.0,
+        2.0,
+        2.0
+      ],
+      "role": "baseline",
+      "fork": 1,
+      "order": [
+        "candidate",
+        "baseline"
+      ]
+    },
+    {
+      "workload": "json-scalar",
+      "engine": "simdjson-typed",
+      "stage": "interpret",
+      "runtime": "svm",
+      "guest_compiled": false,
+      "checksum": 35984,
+      "rows": 32,
+      "allocated_bytes_per_row": [
+        2.0,
+        2.0,
+        2.0
+      ],
+      "role": "candidate",
+      "fork": 2,
+      "order": [
+        "candidate",
+        "baseline"
+      ]
+    },
+    {
+      "workload": "json-scalar",
+      "engine": "simdjson-typed",
+      "stage": "interpret",
+      "runtime": "svm",
+      "guest_compiled": false,
+      "checksum": 35984,
+      "rows": 32,
+      "allocated_bytes_per_row": [
+        2.0,
+        2.0,
+        2.0
+      ],
+      "role": "baseline",
+      "fork": 2,
+      "order": [
+        "candidate",
+        "baseline"
+      ]
+    },
+    {
+      "workload": "json-scalar",
+      "engine": "gson-stream",
+      "stage": "read-aot",
+      "runtime": "svm",
+      "guest_compiled": false,
+      "checksum": 35984,
+      "rows": 32,
+      "allocated_bytes_per_row": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "role": "candidate",
+      "fork": 1,
+      "order": [
+        "candidate",
+        "baseline"
+      ]
+    },
+    {
+      "workload": "json-scalar",
+      "engine": "gson-stream",
+      "stage": "read-aot",
+      "runtime": "svm",
+      "guest_compiled": false,
+      "checksum": 35984,
+      "rows": 32,
+      "allocated_bytes_per_row": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "role": "baseline",
+      "fork": 1,
+      "order": [
+        "candidate",
+        "baseline"
+      ]
+    },
+    {
+      "workload": "json-scalar",
+      "engine": "gson-stream",
+      "stage": "read-aot",
+      "runtime": "svm",
+      "guest_compiled": false,
+      "checksum": 35984,
+      "rows": 32,
+      "allocated_bytes_per_row": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "role": "candidate",
+      "fork": 2,
+      "order": [
+        "candidate",
+        "baseline"
+      ]
+    },
+    {
+      "workload": "json-scalar",
+      "engine": "gson-stream",
+      "stage": "read-aot",
+      "runtime": "svm",
+      "guest_compiled": false,
+      "checksum": 35984,
+      "rows": 32,
+      "allocated_bytes_per_row": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "role": "baseline",
+      "fork": 2,
+      "order": [
+        "candidate",
+        "baseline"
+      ]
+    },
+    {
+      "workload": "json-scalar",
+      "engine": "simdjson-typed",
+      "stage": "read-aot",
+      "runtime": "svm",
+      "guest_compiled": false,
+      "checksum": 35984,
+      "rows": 32,
+      "allocated_bytes_per_row": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "role": "candidate",
+      "fork": 0,
+      "order": [
+        "candidate",
+        "baseline"
+      ]
+    },
+    {
+      "workload": "json-scalar",
+      "engine": "simdjson-typed",
+      "stage": "read-aot",
+      "runtime": "svm",
+      "guest_compiled": false,
+      "checksum": 35984,
+      "rows": 32,
+      "allocated_bytes_per_row": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "role": "baseline",
+      "fork": 0,
+      "order": [
+        "candidate",
+        "baseline"
+      ]
+    },
+    {
+      "workload": "json-scalar",
+      "engine": "gson-stream",
+      "stage": "interpret",
+      "runtime": "svm",
+      "guest_compiled": false,
+      "checksum": 35984,
+      "rows": 32,
+      "ns_per_row": [
+        35.580035330235276,
+        14.277879146107455,
+        11.285731401989949
+      ],
+      "role": "baseline",
+      "fork": 2,
+      "order": [
+        "baseline",
+        "candidate"
+      ]
+    },
+    {
+      "workload": "json-scalar",
+      "engine": "gson-stream",
+      "stage": "interpret",
+      "runtime": "svm",
+      "guest_compiled": false,
+      "checksum": 35984,
+      "rows": 32,
+      "ns_per_row": [
+        4.64896547966846,
+        3.232494603207237,
+        3.00492006753015
+      ],
+      "role": "candidate",
+      "fork": 2,
+      "order": [
+        "baseline",
+        "candidate"
+      ]
+    },
+    {
+      "workload": "json-scalar",
+      "engine": "simdjson-specialized",
+      "stage": "interpret",
+      "runtime": "svm",
+      "guest_compiled": false,
+      "checksum": 35984,
+      "rows": 32,
+      "allocated_bytes_per_row": [
+        2.0,
+        2.0,
+        2.0
+      ],
+      "role": "baseline",
+      "fork": 0,
+      "order": [
+        "baseline",
+        "candidate"
+      ]
+    },
+    {
+      "workload": "json-scalar",
+      "engine": "simdjson-specialized",
+      "stage": "interpret",
+      "runtime": "svm",
+      "guest_compiled": false,
+      "checksum": 35984,
+      "rows": 32,
+      "allocated_bytes_per_row": [
+        2.0,
+        2.0,
+        2.0
+      ],
+      "role": "candidate",
+      "fork": 0,
+      "order": [
+        "baseline",
+        "candidate"
+      ]
+    },
+    {
+      "workload": "json-scalar",
+      "engine": "simdjson-specialized",
+      "stage": "read-aot",
+      "runtime": "svm",
+      "guest_compiled": false,
+      "checksum": 35984,
+      "rows": 32,
+      "allocated_bytes_per_row": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "role": "baseline",
+      "fork": 2,
+      "order": [
+        "baseline",
+        "candidate"
+      ]
+    },
+    {
+      "workload": "json-scalar",
+      "engine": "simdjson-specialized",
+      "stage": "read-aot",
+      "runtime": "svm",
+      "guest_compiled": false,
+      "checksum": 35984,
+      "rows": 32,
+      "allocated_bytes_per_row": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "role": "candidate",
+      "fork": 2,
+      "order": [
+        "baseline",
+        "candidate"
+      ]
+    },
+    {
+      "workload": "json-scalar",
+      "engine": "simdjson-specialized",
+      "stage": "read-aot",
+      "runtime": "svm",
+      "guest_compiled": false,
+      "checksum": 35984,
+      "rows": 32,
+      "allocated_bytes_per_row": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "role": "baseline",
+      "fork": 0,
+      "order": [
+        "baseline",
+        "candidate"
+      ]
+    },
+    {
+      "workload": "json-scalar",
+      "engine": "simdjson-specialized",
+      "stage": "read-aot",
+      "runtime": "svm",
+      "guest_compiled": false,
+      "checksum": 35984,
+      "rows": 32,
+      "allocated_bytes_per_row": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "role": "candidate",
+      "fork": 0,
+      "order": [
+        "baseline",
+        "candidate"
+      ]
+    },
+    {
+      "workload": "json-scalar",
+      "engine": "simdjson-specialized",
+      "stage": "read-aot",
+      "runtime": "svm",
+      "guest_compiled": false,
+      "checksum": 35984,
+      "rows": 32,
+      "ns_per_row": [
+        11.615066891279138,
+        11.627549293154761,
+        11.64521852098725
+      ],
+      "role": "baseline",
+      "fork": 2,
+      "order": [
+        "baseline",
+        "candidate"
+      ]
+    },
+    {
+      "workload": "json-scalar",
+      "engine": "simdjson-specialized",
+      "stage": "read-aot",
+      "runtime": "svm",
+      "guest_compiled": false,
+      "checksum": 35984,
+      "rows": 32,
+      "ns_per_row": [
+        11.722968103331933,
+        12.519422687467982,
+        14.82105914365898
+      ],
+      "role": "candidate",
+      "fork": 2,
+      "order": [
+        "baseline",
+        "candidate"
+      ]
+    },
+    {
+      "workload": "json-scalar",
+      "engine": "simdjson-typed",
+      "stage": "interpret",
+      "runtime": "svm",
+      "guest_compiled": false,
+      "checksum": 35984,
+      "rows": 32,
+      "allocated_bytes_per_row": [
+        2.0,
+        2.0,
+        2.0
+      ],
+      "role": "candidate",
+      "fork": 1,
+      "order": [
+        "candidate",
+        "baseline"
+      ]
+    },
+    {
+      "workload": "json-scalar",
+      "engine": "simdjson-typed",
+      "stage": "interpret",
+      "runtime": "svm",
+      "guest_compiled": false,
+      "checksum": 35984,
+      "rows": 32,
+      "allocated_bytes_per_row": [
+        2.0,
+        2.0,
+        2.0
+      ],
+      "role": "baseline",
+      "fork": 1,
+      "order": [
+        "candidate",
+        "baseline"
+      ]
+    },
+    {
+      "workload": "json-scalar",
+      "engine": "simdjson-typed",
+      "stage": "read-aot",
+      "runtime": "svm",
+      "guest_compiled": false,
+      "checksum": 35984,
+      "rows": 32,
+      "allocated_bytes_per_row": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "role": "baseline",
+      "fork": 1,
+      "order": [
+        "baseline",
+        "candidate"
+      ]
+    },
+    {
+      "workload": "json-scalar",
+      "engine": "simdjson-typed",
+      "stage": "read-aot",
+      "runtime": "svm",
+      "guest_compiled": false,
+      "checksum": 35984,
+      "rows": 32,
+      "allocated_bytes_per_row": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "role": "candidate",
+      "fork": 1,
+      "order": [
+        "baseline",
+        "candidate"
+      ]
+    },
+    {
+      "workload": "json-scalar",
+      "engine": "simdjson-specialized",
+      "stage": "interpret",
+      "runtime": "svm",
+      "guest_compiled": false,
+      "checksum": 35984,
+      "rows": 32,
+      "allocated_bytes_per_row": [
+        2.0,
+        2.0,
+        2.0
+      ],
+      "role": "candidate",
+      "fork": 2,
+      "order": [
+        "candidate",
+        "baseline"
+      ]
+    },
+    {
+      "workload": "json-scalar",
+      "engine": "simdjson-specialized",
+      "stage": "interpret",
+      "runtime": "svm",
+      "guest_compiled": false,
+      "checksum": 35984,
+      "rows": 32,
+      "allocated_bytes_per_row": [
+        2.0,
+        2.0,
+        2.0
+      ],
+      "role": "baseline",
+      "fork": 2,
+      "order": [
+        "candidate",
+        "baseline"
+      ]
+    },
+    {
+      "workload": "json-scalar",
+      "engine": "simdjson-specialized",
+      "stage": "interpret",
+      "runtime": "svm",
+      "guest_compiled": false,
+      "checksum": 35984,
+      "rows": 32,
+      "ns_per_row": [
+        14.237814025167541,
+        14.076507708993375,
+        14.133659645363137
+      ],
+      "role": "candidate",
+      "fork": 1,
+      "order": [
+        "candidate",
+        "baseline"
+      ]
+    },
+    {
+      "workload": "json-scalar",
+      "engine": "simdjson-specialized",
+      "stage": "interpret",
+      "runtime": "svm",
+      "guest_compiled": false,
+      "checksum": 35984,
+      "rows": 32,
+      "ns_per_row": [
+        16.12956836453517,
+        13.897024595154294,
+        14.214181447583575
+      ],
+      "role": "baseline",
+      "fork": 1,
+      "order": [
+        "candidate",
+        "baseline"
+      ]
+    },
+    {
+      "workload": "json-scalar",
+      "engine": "simdjson-typed",
+      "stage": "interpret",
+      "runtime": "svm",
+      "guest_compiled": false,
+      "checksum": 35984,
+      "rows": 32,
+      "ns_per_row": [
+        9.323223923544848,
+        9.236461091149772,
+        9.758566193919863
+      ],
+      "role": "candidate",
+      "fork": 2,
+      "order": [
+        "candidate",
+        "baseline"
+      ]
+    },
+    {
+      "workload": "json-scalar",
+      "engine": "simdjson-typed",
+      "stage": "interpret",
+      "runtime": "svm",
+      "guest_compiled": false,
+      "checksum": 35984,
+      "rows": 32,
+      "ns_per_row": [
+        10.261174917020886,
+        10.070735771009378,
+        10.639213322762412
+      ],
+      "role": "baseline",
+      "fork": 2,
+      "order": [
+        "candidate",
+        "baseline"
+      ]
+    },
+    {
+      "workload": "json-scalar",
+      "engine": "simdjson-specialized",
+      "stage": "interpret",
+      "runtime": "svm",
+      "guest_compiled": false,
+      "checksum": 35984,
+      "rows": 32,
+      "ns_per_row": [
+        13.900818634901166,
+        13.905319318141373,
+        14.119657695086705
+      ],
+      "role": "baseline",
+      "fork": 2,
+      "order": [
+        "baseline",
+        "candidate"
+      ]
+    },
+    {
+      "workload": "json-scalar",
+      "engine": "simdjson-specialized",
+      "stage": "interpret",
+      "runtime": "svm",
+      "guest_compiled": false,
+      "checksum": 35984,
+      "rows": 32,
+      "ns_per_row": [
+        15.733839841233086,
+        22.309336418653057,
+        22.06426847712658
+      ],
+      "role": "candidate",
+      "fork": 2,
+      "order": [
+        "baseline",
+        "candidate"
+      ]
+    },
+    {
+      "workload": "json-scalar",
+      "engine": "gson-stream",
+      "stage": "interpret",
+      "runtime": "svm",
+      "guest_compiled": false,
+      "checksum": 35984,
+      "rows": 32,
+      "ns_per_row": [
+        5.458165734486757,
+        4.371364988223908,
+        4.122758869865543
+      ],
+      "role": "candidate",
+      "fork": 1,
+      "order": [
+        "candidate",
+        "baseline"
+      ]
+    },
+    {
+      "workload": "json-scalar",
+      "engine": "gson-stream",
+      "stage": "interpret",
+      "runtime": "svm",
+      "guest_compiled": false,
+      "checksum": 35984,
+      "rows": 32,
+      "ns_per_row": [
+        5.006073886422458,
+        4.245694656027329,
+        4.262050661949171
+      ],
+      "role": "baseline",
+      "fork": 1,
+      "order": [
+        "candidate",
+        "baseline"
+      ]
+    }
+  ],
+  "summary": [
+    {
+      "workload": "json-scalar",
+      "engine": "simdjson-typed",
+      "stage": "read-aot",
+      "metric": "ns_per_row",
+      "candidate": {
+        "median": 68.89349497919497,
+        "min": 45.27425445810249,
+        "max": 74.94133735141871,
+        "fork_medians": [
+          68.89349497919497,
+          45.27425445810249,
+          74.94133735141871
+        ]
+      },
+      "baseline": {
+        "median": 49.25203286447832,
+        "min": 30.26881127218598,
+        "max": 52.444594383239746,
+        "fork_medians": [
+          52.444594383239746,
+          49.25203286447832,
+          30.26881127218598
+        ]
+      },
+      "baseline_over_candidate": 0.7149010640170289
+    },
+    {
+      "workload": "json-scalar",
+      "engine": "simdjson-typed",
+      "stage": "read-aot",
+      "metric": "allocated_bytes_per_row",
+      "candidate": {
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0,
+        "fork_medians": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "baseline": {
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0,
+        "fork_medians": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "baseline_over_candidate": null
+    },
+    {
+      "workload": "json-scalar",
+      "engine": "simdjson-typed",
+      "stage": "interpret",
+      "metric": "ns_per_row",
+      "candidate": {
+        "median": 9.323223923544848,
+        "min": 8.946722792181777,
+        "max": 242.24339899027123,
+        "fork_medians": [
+          8.946722792181777,
+          242.24339899027123,
+          9.323223923544848
+        ]
+      },
+      "baseline": {
+        "median": 10.261174917020886,
+        "min": 9.026732405995935,
+        "max": 76.05195949388587,
+        "fork_medians": [
+          9.026732405995935,
+          76.05195949388587,
+          10.261174917020886
+        ]
+      },
+      "baseline_over_candidate": 1.1006037183240165
+    },
+    {
+      "workload": "json-scalar",
+      "engine": "simdjson-typed",
+      "stage": "interpret",
+      "metric": "allocated_bytes_per_row",
+      "candidate": {
+        "median": 2.0,
+        "min": 2.0,
+        "max": 2.0,
+        "fork_medians": [
+          2.0,
+          2.0,
+          2.0
+        ]
+      },
+      "baseline": {
+        "median": 2.0,
+        "min": 2.0,
+        "max": 2.0,
+        "fork_medians": [
+          2.0,
+          2.0,
+          2.0
+        ]
+      },
+      "baseline_over_candidate": 1.0
+    },
+    {
+      "workload": "json-scalar",
+      "engine": "simdjson-specialized",
+      "stage": "read-aot",
+      "metric": "ns_per_row",
+      "candidate": {
+        "median": 12.519422687467982,
+        "min": 12.482642550166155,
+        "max": 16.094726884160902,
+        "fork_medians": [
+          12.482642550166155,
+          16.094726884160902,
+          12.519422687467982
+        ]
+      },
+      "baseline": {
+        "median": 11.838138314180595,
+        "min": 11.627549293154761,
+        "max": 17.123933382823456,
+        "fork_medians": [
+          11.838138314180595,
+          17.123933382823456,
+          11.627549293154761
+        ]
+      },
+      "baseline_over_candidate": 0.9455818059430683
+    },
+    {
+      "workload": "json-scalar",
+      "engine": "simdjson-specialized",
+      "stage": "read-aot",
+      "metric": "allocated_bytes_per_row",
+      "candidate": {
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0,
+        "fork_medians": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "baseline": {
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0,
+        "fork_medians": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "baseline_over_candidate": null
+    },
+    {
+      "workload": "json-scalar",
+      "engine": "simdjson-specialized",
+      "stage": "interpret",
+      "metric": "ns_per_row",
+      "candidate": {
+        "median": 22.06426847712658,
+        "min": 14.133659645363137,
+        "max": 1083.605487530048,
+        "fork_medians": [
+          1083.605487530048,
+          14.133659645363137,
+          22.06426847712658
+        ]
+      },
+      "baseline": {
+        "median": 14.214181447583575,
+        "min": 13.905319318141373,
+        "max": 522.6626892089844,
+        "fork_medians": [
+          522.6626892089844,
+          14.214181447583575,
+          13.905319318141373
+        ]
+      },
+      "baseline_over_candidate": 0.6442172085749875
+    },
+    {
+      "workload": "json-scalar",
+      "engine": "simdjson-specialized",
+      "stage": "interpret",
+      "metric": "allocated_bytes_per_row",
+      "candidate": {
+        "median": 2.0,
+        "min": 2.0,
+        "max": 2.0,
+        "fork_medians": [
+          2.0,
+          2.0,
+          2.0
+        ]
+      },
+      "baseline": {
+        "median": 2.0,
+        "min": 2.0,
+        "max": 2.0,
+        "fork_medians": [
+          2.0,
+          2.0,
+          2.0
+        ]
+      },
+      "baseline_over_candidate": 1.0
+    },
+    {
+      "workload": "json-scalar",
+      "engine": "gson-stream",
+      "stage": "read-aot",
+      "metric": "ns_per_row",
+      "candidate": {
+        "median": 2.1913212324425597,
+        "min": 2.13811569614711,
+        "max": 9.660008028656126,
+        "fork_medians": [
+          2.13811569614711,
+          2.1913212324425597,
+          9.660008028656126
+        ]
+      },
+      "baseline": {
+        "median": 2.2791705199192496,
+        "min": 2.122291915108332,
+        "max": 2.7863903833670967,
+        "fork_medians": [
+          2.122291915108332,
+          2.7863903833670967,
+          2.2791705199192496
+        ]
+      },
+      "baseline_over_candidate": 1.0400896437163476
+    },
+    {
+      "workload": "json-scalar",
+      "engine": "gson-stream",
+      "stage": "read-aot",
+      "metric": "allocated_bytes_per_row",
+      "candidate": {
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0,
+        "fork_medians": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "baseline": {
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0,
+        "fork_medians": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "baseline_over_candidate": null
+    },
+    {
+      "workload": "json-scalar",
+      "engine": "gson-stream",
+      "stage": "interpret",
+      "metric": "ns_per_row",
+      "candidate": {
+        "median": 3.232494603207237,
+        "min": 2.899178386498902,
+        "max": 4.371364988223908,
+        "fork_medians": [
+          2.899178386498902,
+          3.232494603207237,
+          4.371364988223908
+        ]
+      },
+      "baseline": {
+        "median": 4.262050661949171,
+        "min": 2.90421626910383,
+        "max": 14.277879146107455,
+        "fork_medians": [
+          2.90421626910383,
+          14.277879146107455,
+          4.262050661949171
+        ]
+      },
+      "baseline_over_candidate": 1.3185020193755073
+    },
+    {
+      "workload": "json-scalar",
+      "engine": "gson-stream",
+      "stage": "interpret",
+      "metric": "allocated_bytes_per_row",
+      "candidate": {
+        "median": 2.0,
+        "min": 2.0,
+        "max": 2.0,
+        "fork_medians": [
+          2.0,
+          2.0,
+          2.0
+        ]
+      },
+      "baseline": {
+        "median": 2.0,
+        "min": 2.0,
+        "max": 2.0,
+        "fork_medians": [
+          2.0,
+          2.0,
+          2.0
+        ]
+      },
+      "baseline_over_candidate": 1.0
+    }
+  ]
+}

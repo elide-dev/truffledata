@@ -1,7 +1,6 @@
 package dev.elide.truffledata.buffa;
 
 import dev.elide.myna.truffle.HeapBytes;
-import dev.elide.myna.truffle.NativeBytes;
 import dev.elide.myna.truffle.NativeCell;
 import dev.elide.myna.truffle.NativeCellRootNode;
 import dev.elide.myna.truffle.NativePointer;
@@ -31,9 +30,18 @@ import org.jspecify.annotations.Nullable;
  * backend's: this wraps an {@link FfmBackend}, which loads and fingerprint-checks the library
  * first, shares its result slot and busy state through the backend's own hooks, and keeps its
  * control flow, so the slabs are byte-identical and the errors are the same, in the same order. The
- * JVM is a correctness target; the cells copy heap arrays ({@link HeapBytes}: Myna's HotSpot borrow
- * rule), which the FFM backend lends in place. Native input, output and arena segments cross as
- * {@link NativeBytes}, which the cells lend in place with their extent.
+ * JVM is a correctness target.
+ *
+ * <p>Two call shapes. Where every buffer is native memory (a {@link WireInput} input, the arena of
+ * {@link #writeSlab}, the confined output of the native-input {@link #slab}), the route calls the
+ * {@code decodeSlab} cell's static {@code invoke} entry (Myna 0.16.0) with raw addresses, after the
+ * same thread and liveness checks the FFM backend's downcall makes ({@link #live}): no argument
+ * array, box, {@code NativePointer} or {@code Borrow}, and the caller keeps every address valid
+ * for the call. The heap-array entry ({@link #slab(long, byte[], ProtoPlan, SlabLimits, int)})
+ * stays on the {@code decodeSlabSmall} cell's typed {@code executeInt}: {@code invoke} takes only
+ * raw addresses, and a heap array has no stable address on HotSpot, so lending one needs Myna's
+ * borrow ({@link HeapBytes}, which copies it to scratch memory and copies the output back; the FFM
+ * backend lends it in place).
  *
  * <p>Myna's FFM cells bind their symbols through the loader lookup, so the library is also loaded
  * into this class loader ({@link System#load}). One library per class loader: a second path is
@@ -44,14 +52,12 @@ final class CellsFfmBackend implements BuffaWire.Backend {
   private static @Nullable Path loaded;
 
   private final FfmBackend backend;
-  private final BuffaCellsJvmTruffle.decodeSlab_Cell decodeSlab;
   private final BuffaCellsJvmTruffle.decodeSlabSmall_Cell decodeSlabSmall;
 
   CellsFfmBackend(Path library) {
     backend = new FfmBackend(library);
     try {
       bind(library.toAbsolutePath());
-      decodeSlab = adopt(new BuffaCellsJvmTruffle.decodeSlab_Cell());
       decodeSlabSmall = adopt(new BuffaCellsJvmTruffle.decodeSlabSmall_Cell());
     } catch (RuntimeException | Error failure) {
       backend.close();
@@ -88,11 +94,11 @@ final class CellsFfmBackend implements BuffaWire.Backend {
     return created;
   }
 
-  // Per-call argument cost, as in CellsSvmBackend: one argument array per backend (the cells only
-  // read arguments[i] into their coercions; a backend is confined to its decoder's thread and
-  // beginSlab's busy check excludes reentry), and one cached pointer or box per slot whose value
-  // repeats. The buffer slots are cleared after each call, so the array never keeps a caller's
-  // input or a produced slab reachable.
+  // Per-call argument cost of the heap entry's typed call: one argument array per backend (the
+  // cell only reads arguments[i] into its coercions; a backend is confined to its decoder's thread
+  // and beginSlab's busy check excludes reentry), and one cached pointer or box per slot whose
+  // value repeats. The buffer slots are cleared after each call, so the array never keeps a
+  // caller's input or a produced slab reachable.
   private final @Nullable Object[] arguments = new Object[10];
   private NativePointer compiledPointer = NativePointer.NULL;
   private NativePointer projectionPointer = NativePointer.NULL;
@@ -101,50 +107,50 @@ final class CellsFfmBackend implements BuffaWire.Backend {
   private Long maxSlabBytes = 0L;
 
   /**
-   * A native region as the cell's buffer argument, after the check the FFM backend's downcall makes
-   * on every segment it is handed and a cell cannot make: the cell lends the raw address, so a
-   * region whose scope was closed behind an adopted input ({@link BuffaJvm#adopt}: "region scope
-   * remains checked on every access"), or that is confined to another thread, would otherwise reach
-   * native code as a dangling pointer. Same exceptions as the downcall, in its order (thread, then
-   * liveness), raised before the call like the downcall's own. The downcall additionally keeps a
-   * shared scope open for the duration of the call; a generated FFM cell has no way to (it takes an
-   * address), so a shared arena closed by another thread during the call is the one case this
-   * cannot reject. CellsParity compares both failures with the FFM backend's.
+   * The raw address of a native region for the cell's {@code invoke}, after the check the FFM
+   * backend's downcall makes on every segment it is handed and {@code invoke} cannot make: it takes
+   * the raw address, so a region whose scope was closed behind an adopted input ({@link
+   * BuffaJvm#adopt}: "region scope remains checked on every access"), or that is confined to
+   * another thread, would otherwise reach native code as a dangling pointer. Same exceptions as the
+   * downcall, in its order (thread, then liveness), raised before the call like the downcall's own.
+   * The downcall additionally keeps a shared scope open for the duration of the call; {@code
+   * invoke} has no way to (it takes an address and tracks no caller's scope), so a shared arena
+   * closed by another thread during the call is the one case this cannot reject. CellsParity
+   * compares both failures with the FFM backend's.
    */
-  private static NativeBytes lend(MemorySegment region, boolean writable) {
-    return NativeBytes.of(live(region), writable);
-  }
-
-  private static MemorySegment live(MemorySegment region) {
+  private static long live(MemorySegment region) {
     if (!region.isAccessibleBy(Thread.currentThread()))
       throw new WrongThreadException("Attempted access outside owning thread");
     if (!region.scope().isAlive()) throw new IllegalStateException("Already closed");
-    return region;
+    return region.address();
   }
 
-  // Specialized NativeCell calls (Myna 0.14.0): each cell is held as its concrete generated type,
-  // whose i32 result overrides executeInt with no box and no UnexpectedResultException.
-  private int call(
-      BuffaCellsJvmTruffle.decodeSlab_Cell cell,
+  /** {@code td_buffa_decode_slab} through the cell's static entry; arguments in seam order. */
+  private static int decodeSlab(
       long compiled,
-      Object data,
+      long data,
       long length,
       int flags,
       long projection,
-      Object out,
+      long out,
       long capacity,
       SlabLimits limits,
       MemorySegment result) {
-    @Nullable Object[] arguments =
-        arguments(compiled, data, length, flags, projection, out, capacity, limits, result);
-    try {
-      return cell.executeInt(arguments);
-    } finally {
-      arguments[1] = null;
-      arguments[5] = null;
-    }
+    return BuffaCellsJvmTruffle.decodeSlab_Cell.invoke(
+        compiled,
+        data,
+        length,
+        flags,
+        projection,
+        out,
+        capacity,
+        limits.maxDepth(),
+        limits.maxSlabBytes(),
+        result.address());
   }
 
+  // Specialized NativeCell call (Myna 0.14.0): the cell is held as its concrete generated type,
+  // whose i32 result overrides executeInt with no box and no UnexpectedResultException.
   private int call(
       BuffaCellsJvmTruffle.decodeSlabSmall_Cell cell,
       long compiled,
@@ -262,14 +268,13 @@ final class CellsFfmBackend implements BuffaWire.Backend {
         try (Arena arena = Arena.ofConfined()) {
           MemorySegment output = arena.allocate(Math.max(1, capacity), 8);
           int status =
-              call(
-                  decodeSlab,
+              decodeSlab(
                   compiled,
-                  lend(memory, false),
+                  live(memory),
                   input.size(),
                   1,
                   0,
-                  lend(output, true),
+                  live(output),
                   capacity,
                   limits,
                   slabResult);
@@ -312,15 +317,15 @@ final class CellsFfmBackend implements BuffaWire.Backend {
             : (MemorySegment) java.util.Objects.requireNonNull(projection.lease.attachment);
     MemorySegment slabResult = backend.beginSlab();
     try {
+      // Argument order is check order: source, mask, destination, as the typed call checked them.
       int status =
-          call(
-              decodeSlab,
+          decodeSlab(
               ((MemorySegment) compiled).address(),
-              lend(source, false),
+              live(source),
               input.size(),
               flags,
-              live(mask).address(),
-              lend(destination, true),
+              live(mask),
+              live(destination),
               output.size(),
               limits,
               slabResult);
