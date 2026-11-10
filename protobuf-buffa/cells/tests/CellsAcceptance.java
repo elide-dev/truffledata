@@ -22,26 +22,21 @@ import org.jspecify.annotations.NullMarked;
 public final class CellsAcceptance {
   /**
    * Java bytes per {@code writeSlab} call the cells route may add over the static backend in this
-   * image (the static backend: 0 B). The cell call runs in AOT-compiled host code below a {@code
-   * @TruffleBoundary}, where nothing is scalar-replaced, so this is everything the call allocates
-   * (CellsSvmBackend). With a session's usual shape, the same input buffer and arena on every
-   * call, only Myna's own objects remain: the three Borrow objects its BytesCoercion builds for
-   * the {@code compiled}, {@code data} and {@code out} byte pointers. Measured 144 B on Myna
-   * 0.14.0 (48 B per Borrow); 192 B on Myna 0.16.0 through the cell's execute path, whose
-   * Borrow is a reworked mutable object (kind, address, length, owner, array, source, offset,
-   * flags; 64 B each if the three Borrows are all that remains, inferred, not measured per object). A recorded regression of the execute entry, not a fix; the route moves
-   * to the cell's static invoke, which takes raw addresses and makes no Borrow, in the next step.
+   * image (the static backend: 0 B), with a session's usual shape: the same input buffer and arena
+   * on every call. The route calls the cell's static {@code invoke} (Myna 0.16.0; CellsSvmBackend):
+   * native carriers and raw addresses, nothing allocated. History: 144 B on Myna 0.14.0 through
+   * the typed {@code executeInt(Object[])} with a reused argument array and cached pointers (the
+   * three {@code Borrow} objects of the byte-pointer parameters), 0 B measured through {@code
+   * invoke}.
    */
-  static final double CELLS_EXTRA_BYTES_PER_CALL = 192;
+  static final double CELLS_EXTRA_BYTES_PER_CALL = 0;
 
   /**
-   * The same when the input and the arena change on every call: a NativePointer for each new
-   * address (16 B each) on top of the three Borrow objects. A length or capacity that changes and
-   * lies outside the JDK's small-value cache would add a 16 B box each; here they repeat.
-   * Measured 176 B on Myna 0.14.0 and 224 B on Myna 0.16.0 (the same +48 B as the same-input
-   * case); a recorded regression of the execute entry, as above.
+   * The same when the input and the arena change on every call. History: 176 B on Myna 0.14.0
+   * through {@code executeInt} (a {@code NativePointer} for each new address on top of the three
+   * {@code Borrow} objects), 0 B measured through {@code invoke}: nothing is boxed per address.
    */
-  static final double CELLS_EXTRA_BYTES_PER_VARYING_CALL = 224;
+  static final double CELLS_EXTRA_BYTES_PER_VARYING_CALL = 0;
 
   private CellsAcceptance() {}
 
