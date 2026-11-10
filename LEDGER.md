@@ -26,7 +26,7 @@ The lead reads these together as: land the code now with every cells flag defaul
 after the 0.16.0 pin, the measurements and the release packaging. A session restart at 19:16
 killed every worker; nothing is running in the background.
 
-### RELEASED 23:10 PST — 0.11.0 is public; nothing is running
+### RELEASED 22:54 PST — 0.11.0 is public; nothing is running
 
 Tag `v0.11.0` (signed) at `ae32c97d`; Elide Maven and the GitHub release are public and verified;
 Central is blocked on quota (#28). Receipts and the open YAML fuzz finding:
