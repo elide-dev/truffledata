@@ -38,6 +38,37 @@ Running: workflow `wf_aeb0d186-edf` (script and journal under
 - If this session dies: inspect each `cells2-*` branch (`git log deps/myna-0.14.0..cells2-X`),
   trust only what its tests show, and continue from "Next steps" below.
 
+**State at 18:55 PST** (workflow journal has every worker's full report):
+- F1 gates: linux arm64 `--config=remote_arm64` 11/11 pass (BuildBuddy
+  `c4ea276d-35c8-4c03-ac9f-61be5894987b`): `//{json,csv}/tests:native_test`,
+  `//protobuf-buffa/tests:native_test` and the eight `//tools/release:native_consumers` C tests —
+  the SVM-side exercise of `LP64_LITTLE_AAPCS64`. `//yaml/tests:native_test` is x86_64-only by
+  design (`yaml/tests/BUILD.bazel`, since `5cbd7ab7`), so YAML SVM has no arm64 native test; its
+  C consumers did pass on arm64. macOS `--config=local` lanes did NOT run: the Bazel volume was
+  full (848 MiB free). The lead removed five orphaned output bases (workspaces gone; ~7 GiB);
+  8.6 GiB free at 18:50. The 100 GiB `root/cache/repos` shared repository cache was not touched.
+- `cells2-csv` @ `1c9f4f0c`: Opus implementation + Fable pass done, verdict merge; lead reviewed
+  the SVM route (equivalent to `SvmIndexer` apart from per-call `NativePointer`×2, a boxed
+  length and Myna's `Borrow`) and added `//benchmarks/comparison:csv_svm_cells`. The paired
+  measurement is running: `csv_pair` with candidate `csv_svm_cells`, log
+  `<scratchpad>/csv_pair.log`.
+- `cells2-buffa`, `cells2-json`, `cells2-yaml`: Opus implementations done and green on JVM +
+  SVM lanes per their reports; Fable passes running in the same worktrees.
+- Findings that shape the rest (from the implementers, confirmed by reading Myna):
+  1. `resource`/`borrow` declarations are not expressible for almost every import without a C
+     ABI change (Myna's `OwnershipValidator`: a resource create takes only scalars and returns
+     the pointer; a call borrow allows no other pointer parameter). Where a borrow is possible
+     it would copy heap inputs under 256 B on SVM where the baseline pins. Lead ruling: not
+     adopted; recorded as a Myna-side gap, not a truffledata omission. Sam may overrule.
+  2. Cells are called from host code below `@TruffleBoundary`, outside partial evaluation, so
+     nothing is scalar-replaced: Buffa measured 192 B/call on SVM against 0 B baseline after
+     reusing the argument array. This is Myna's `execute*(Object[])` entry plus `Borrow`
+     objects (elide-dev/myna#85). Expect "no win" on paired timing; measure anyway.
+  3. YAML and CSV build the baseline silently when the flag is set without the Feature / cells
+     jar; JSON fails the image build. Lead to make all four fail the build (port JSON's
+     build-time-initialized route holder) before merge.
+- `myna-015`: stalled idle after one commit; nudged at 18:45.
+
 Then, by the lead: merge the branches that pass; paired SVM measurement per format, flag on vs
 off, serial (nothing else running); rule each default per Sam's rule; push; CI green; merge #67;
 publish; tag; GitHub release; verify; receipts; post-release README/bench work.
