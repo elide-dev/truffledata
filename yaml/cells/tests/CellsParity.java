@@ -19,10 +19,11 @@ import java.util.function.Function;
 
 /**
  * Cells route against the baseline route on the same inputs and options, compared exactly: every
- * stream document (fed whole and in 7-byte chunks), each retained document, the single-document
- * decode with its directives, shared-text parses and typed plans; a rejection must be the same
- * exception class with the same message at the same point. Shared by the JVM test and the native
- * image (no JUnit).
+ * stream document (fed whole, and in 7-byte slices drained as they complete), each retained
+ * document, the single-document decode with its directives, parses of a slice and of a guest
+ * string, borrowed reads, validation, shared-text parses, typed plans, and results read after
+ * their session and plan are closed; a rejection must be the same exception class with the same
+ * message at the same point. Shared by the JVM test and the native image (no JUnit).
  */
 public final class CellsParity {
   private CellsParity() {}
@@ -185,23 +186,35 @@ public final class CellsParity {
     }
   }
 
-  /** Incremental stream: 7-byte feeds, each document read as soon as one is complete. */
+  /**
+   * Incremental stream: 7-byte slices of the input array (fed at their offset), with every complete
+   * document exported through a sink as soon as the stream has it (so "no complete document yet" is
+   * answered after each feed), then the end of input.
+   */
   static String chunked(YamlSession session, byte[] input) {
     StringBuilder out = new StringBuilder();
     try (YamlStream stream = session.stream(new YamlStreamOptions(1 << 16, 32))) {
       for (int at = 0; at < input.length; ) {
-        int length = Math.min(7, input.length - at);
-        int accepted = stream.feed(java.util.Arrays.copyOfRange(input, at, at + length));
+        int accepted = stream.feed(input, at, Math.min(7, input.length - at));
         out.append("fed ").append(accepted).append(' ');
-        if (accepted == 0) break;
         at += accepted;
+        boolean drained = drain(stream, out);
+        if (accepted == 0 && !drained) break;
       }
       stream.finish();
-      for (TapeValue root; (root = stream.next()) != null; )
-        out.append("doc ").append(describe(root)).append('\n');
-      return out.toString();
+      drain(stream, out);
+      return out.append("documents ").append(stream.documents()).toString();
     } catch (RuntimeException failure) {
       return out + failure(failure);
+    }
+  }
+
+  private static boolean drain(YamlStream stream, StringBuilder out) {
+    boolean any = false;
+    for (; ; any = true) {
+      var sink = new dev.elide.truffledata.tape.JavaSink();
+      if (!stream.next(sink)) return any;
+      out.append("doc ").append(sink.result()).append('\n');
     }
   }
 
@@ -229,6 +242,45 @@ public final class CellsParity {
               new dev.elide.truffledata.tape.TruffleSink.KeyCache());
       session.parse(input, sink);
       out.append(sink.result());
+    } catch (RuntimeException failure) {
+      out.append(failure(failure));
+    }
+    // A slice of a larger array: the input is not at the array's start.
+    out.append(" | slice ");
+    try {
+      byte[] padded = new byte[input.length + 5];
+      java.util.Arrays.fill(padded, (byte) '#');
+      System.arraycopy(input, 0, padded, 3, input.length);
+      var sink = new dev.elide.truffledata.tape.JavaSink();
+      session.parse(padded, 3, input.length, sink);
+      out.append(sink.result());
+    } catch (RuntimeException failure) {
+      out.append(failure(failure));
+    }
+    // A guest string: ASCII, Latin-1 or UTF-16 storage, converted before the native call.
+    out.append(" | string ");
+    try {
+      var sink = new dev.elide.truffledata.tape.JavaSink();
+      session.parse(
+          com.oracle.truffle.api.strings.TruffleString.fromJavaStringUncached(
+              new String(input, StandardCharsets.UTF_8),
+              com.oracle.truffle.api.strings.TruffleString.Encoding.UTF_16),
+          sink);
+      out.append(sink.result());
+    } catch (RuntimeException failure) {
+      out.append(failure(failure));
+    }
+    // A borrowed read (decoded for access by key) and a validation (decode, then reset).
+    out.append(" | with ");
+    try {
+      out.append(session.with(input, CellsParity::describe));
+    } catch (RuntimeException failure) {
+      out.append(failure(failure));
+    }
+    out.append(" | validate ");
+    try {
+      session.validate(input);
+      out.append("ok");
     } catch (RuntimeException failure) {
       out.append(failure(failure));
     }
@@ -321,6 +373,56 @@ public final class CellsParity {
       }
     }
     return mismatches;
+  }
+
+  /**
+   * Results that outlive what produced them: a decoded message, a retained stream document and a
+   * typed record, each read after its session, stream and plan are closed (twice: a second close
+   * is a no-op), then released themselves.
+   */
+  static String lifetimes(Function<YamlOptions, YamlSession> open) {
+    StringBuilder out = new StringBuilder();
+    for (var mode : MODES.entrySet()) {
+      out.append(mode.getKey()).append(": ");
+      try {
+        out.append(lifetime(open.apply(mode.getValue())));
+      } catch (RuntimeException failure) {
+        out.append(failure(failure));
+      }
+      out.append('\n');
+    }
+    return out.toString();
+  }
+
+  private static YamlMessage firstRetained(YamlSession session, byte[] input) {
+    try (YamlStream documents = session.documents(input)) {
+      documents.next();
+      return documents.retain();
+    }
+  }
+
+  private static String lifetime(YamlSession session) {
+    try (session;
+        YamlMessage decoded = session.decode(utf8("k: [v, w]\n"));
+        YamlMessage streamed = firstRetained(session, utf8("a: &x [1, two, 3.5]\nb: *x\n---\nc: d\n"));
+        YamlPlan plan = session.compile(FLAT, Map.of());
+        TypedRecord row = plan.decode(utf8("s: x\nn: 7\nf: 1.5\nb: false\n"))) {
+      session.close();
+      plan.close();
+      session.close();
+      plan.close();
+      return describe(decoded.root())
+          + " / "
+          + describe(streamed.root())
+          + " / "
+          + row.stringValue(0)
+          + ","
+          + row.longValue(1);
+    }
+  }
+
+  private static byte[] utf8(String text) {
+    return text.getBytes(StandardCharsets.UTF_8);
   }
 
   /** The backend a session runs on (the route check). */

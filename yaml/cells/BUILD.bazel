@@ -4,11 +4,23 @@ load("//bazel:myna.bzl", "myna_bindings")
 
 package(default_visibility = ["//visibility:public"])
 
-# truffledata-yaml-cells: the opt-in route that makes the YAML decode path's native calls
-# (session_decode, session_write_text, session_retain, stream_feed, stream_next, typed_decode)
-# through Myna-generated Truffle cells. Selected only by -Dtruffledata.yaml.cells=true (Native
-# Image: at image build time, in //yaml:svm's YamlFeature; JVM: once, in YamlJvm's CellsRoute).
-# With the flag off nothing here is reachable, and the artifact need not be present.
+# truffledata-yaml-cells: the opt-in route that makes a YAML session's own native calls through
+# Myna-generated Truffle cells: session_decode, session_write_text (Native Image), session_retain,
+# session_reset, stream_create, stream_feed, stream_next, stream_finish, stream_release and a plan's
+# typed_decode. Selected only by -Dtruffledata.yaml.cells=true (Native Image: at image build time,
+# with --features=dev.elide.truffledata.yaml.YamlFeature from //yaml:svm; JVM: once, in YamlJvm's
+# CellsRoute). With the flag off nothing here is reachable, and the artifact need not be present.
+#
+# What stays on the production bindings, and why (src/main/java/.../Cells.java has the detail):
+# - session_create/session_release and plan_create/plan_release: the wrapped baseline backend
+#   creates and releases its own handles;
+# - release and typed_release: results outlive the session or plan that holds the cells;
+# - on the JVM, caller-supplied native segments: the FFM downcall holds the segment's scope for the
+#   call (a closed or foreign-thread segment is rejected); a cell would lend a raw address.
+# The derived seams declare no `resource` and no `borrow`: Myna 0.14.0 rejects both for these
+# import shapes (a resource constructor must take scalars and return the handle; a call borrow
+# allows no other pointer parameter), so inputs are pinned or staged as the baseline does.
+#
 # Generated from seams *derived* from the production //yaml/native:yaml.seam: only the module line
 # changes (cells options, package and class), so every import, struct and contract is the
 # production one and the production ABI fingerprint, bindings and natives are unchanged
@@ -91,6 +103,7 @@ java_library(
 filegroup(
     name = "sources",
     srcs = [
+        "src/main/java/dev/elide/truffledata/yaml/Cells.java",
         "src/main/java/dev/elide/truffledata/yaml/CellsJvmPlanBackend.java",
         "src/main/java/dev/elide/truffledata/yaml/CellsJvmSessionBackend.java",
         "src/main/java/dev/elide/truffledata/yaml/CellsSvm.java",

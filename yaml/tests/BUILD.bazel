@@ -127,6 +127,8 @@ native_image(
         "@platforms//os:linux",
         "@platforms//cpu:x86_64",
     ],
+    # Also scanned by //yaml/cells/tests:flag_off_image_test: the image without the cells route.
+    visibility = ["//yaml/cells/tests:__pkg__"],
     deps = [
         ":acceptance",
         "//yaml:svm",

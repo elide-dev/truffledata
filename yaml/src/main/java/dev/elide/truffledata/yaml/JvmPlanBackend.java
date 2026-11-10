@@ -170,10 +170,6 @@ final class JvmPlanBackend extends YamlPlan.Backend {
     return handle;
   }
 
-  YamlFFM.LibraryBinding calls() {
-    return calls;
-  }
-
   /** Holds the library for one more result; {@link #retire} lets it go. */
   void retainLibrary() {
     retain.run();

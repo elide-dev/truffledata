@@ -74,6 +74,9 @@ ACCESS_SOURCES = {f'core/src/main/java/dev/elide/truffledata/{name}.java' for na
         'JvmTypedOwner', 'SvmTypedOwner', 'JvmPlanBackend', 'SvmYamlMessage',
         # Static-archive provider and plan (//yaml:svm, truffledata-yaml-native; #41).
         'SvmPlanBackend', 'SvmSessionProvider', 'YamlSessionProvider', 'YamlStatus',
+        # The opt-in Myna cells route's selectors (truffledata.yaml.cells): the JVM holder, the
+        # image singleton's interface and the hosted Feature. The route itself is //yaml/cells.
+        'CellsRoute', 'SvmCells', 'YamlFeature',
         # Shared scalar resolution and the emitter (#42).
         'ScalarResolver', 'YamlScalars', 'YamlEmitOptions', 'YamlEmitter', 'YamlWriter',
         # The pure-Java kernel (//yaml:java), differentially tested against native (#41), its
@@ -98,6 +101,9 @@ ACCESS_SOURCES = {f'core/src/main/java/dev/elide/truffledata/{name}.java' for na
 # Interfaces with only abstract methods have an LCOV record but no executable method. Any method
 # they gain is enforced like every other access method.
 DECLARATION_ONLY_SOURCES = {
+    # The cells route's image singleton (//yaml:svm): two abstract methods, implemented by
+    # //yaml/cells and reached only in an image built with -Dtruffledata.yaml.cells=true.
+    'yaml/src/main/java/dev/elide/truffledata/yaml/SvmCells.java',
     'tape/src/main/java/dev/elide/truffledata/tape/TapeLexical.java',
     'tape/src/main/java/dev/elide/truffledata/tape/TapeSink.java',
     'csv/src/main/java/dev/elide/truffledata/csv/CsvSink.java',
@@ -148,7 +154,16 @@ SVM_ONLY_METHODS = {
         'SvmSessionProvider::open (Ldev/elide/truffledata/yaml/YamlOptions;)Ldev/elide/truffledata/yaml/YamlSession;'),
     **_yaml_methods('YamlSession',
         'YamlSession::open ()Ldev/elide/truffledata/yaml/YamlSession;'),
+    # The hosted Feature of the opt-in cells route runs only inside the image builder;
+    # //yaml/cells/tests:native_test (flag on) and :flag_off_image_test (flag off) run it.
+    **_yaml_methods('YamlFeature',
+        'YamlFeature::afterRegistration (Lorg/graalvm/nativeimage/hosted/Feature$AfterRegistrationAccess;)V'),
     **_yaml_methods('SvmSessionBackend',
+        # Hooks read by the cells route's static backend (//yaml/cells, CellsSvmSessionBackend);
+        # //yaml/cells/tests:native_test runs them in an image built with the flag.
+        'SvmSessionBackend::sessionHandle ()Lorg/graalvm/nativeimage/c/type/VoidPointer;',
+        'SvmSessionBackend::resultSlot ()Lorg/graalvm/nativeimage/c/type/VoidPointer;',
+        'SvmSessionBackend::decodeFlags ()I',
         'SvmSessionBackend::compile (Ldev/elide/truffledata/tape/TypedLayout;Ldev/elide/truffledata/yaml/YamlOptions;)Ldev/elide/truffledata/yaml/YamlPlan;',
         'SvmSessionBackend::writeOptions (Lorg/graalvm/word/Pointer;Ldev/elide/truffledata/yaml/YamlOptions;)V',
         'SvmSessionBackend::checkTyped (ILorg/graalvm/nativeimage/c/type/VoidPointer;)V',
@@ -204,6 +219,8 @@ SVM_ONLY_METHODS = {
     # The static-archive plan (truffledata-yaml-native); YamlPlan.compile itself now runs on the
     # session backend of the runtime (the Java kernel on the JVM test class path).
     **_yaml_methods('SvmPlanBackend',
+        # Hook read by the cells route's static plan (//yaml/cells, CellsSvmPlanBackend).
+        'SvmPlanBackend::handle ()Lorg/graalvm/nativeimage/c/type/VoidPointer;',
         'SvmPlanBackend::create (Ldev/elide/truffledata/tape/TypedLayout;Ldev/elide/truffledata/yaml/YamlOptions;)Ldev/elide/truffledata/yaml/YamlPlan;',
         'SvmPlanBackend::decode ([B[Ldev/elide/truffledata/Schema;)Ldev/elide/truffledata/tape/TypedOwner;',
         'SvmPlanBackend::release ()V'),
