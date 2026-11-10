@@ -1,0 +1,82 @@
+load("@rules_java//java:defs.bzl", "java_library")
+load("//bazel:myna.bzl", "myna_bindings")
+
+package(default_visibility = ["//visibility:public"])
+
+# YAML Myna Truffle cells (Cells C, docs/superpowers/plans/2026-11-09-myna-0.14-ledger.md): the
+# opt-in route behind -Dtruffledata.yaml.cells=true (default off; no paired SVM measurement yet).
+# Generated from seams *derived* from the production //yaml/native:yaml.seam: only the module line
+# changes (cells options, package and class), so every import, struct and contract is the
+# production one and the production ABI fingerprint, bindings and natives are unchanged.
+[
+    genrule(
+        name = "seam_" + variant,
+        srcs = ["//yaml/native:yaml.seam"],
+        outs = ["cells_%s.seam" % variant],
+        cmd = ("sed -e 's| java_package=dev.elide.truffledata.yaml.generated java_class=Yaml | " +
+               "java_package=dev.elide.truffledata.yaml.cells.generated java_class=%s %s |' $< > $@ && " +
+               "grep -q '^module truffledata_yaml .* java_class=%s %s ' $@") % (
+            java_class,
+            options,
+            java_class,
+            options,
+        ),
+    )
+    for variant, java_class, options in [
+        ("svm", "YamlCells", "truffle_cells=true truffle_backend=native truffle_transitions=direct"),
+        ("jvm", "YamlCellsJvm", "truffle_cells=true truffle_backend=ffm"),
+    ]
+]
+
+[
+    myna_bindings(
+        name = "bindings_" + variant,
+        abi = False,
+        java_class = java_class,
+        java_package = "dev.elide.truffledata.yaml.cells.generated",
+        out = "generated/" + variant,
+        seam = ":seam_" + variant,
+        truffle = True,
+    )
+    for variant, java_class in [
+        ("svm", "YamlCells"),
+        ("jvm", "YamlCellsJvm"),
+    ]
+]
+
+filegroup(
+    name = "descriptors",
+    srcs = [
+        "generated/jvm/seam.json",
+        "generated/svm/seam.json",
+    ],
+)
+
+filegroup(
+    name = "generated_sources",
+    srcs = [
+        "generated/jvm/YamlCellsJvmFFM.java",
+        "generated/jvm/YamlCellsJvmTruffle.java",
+        "generated/svm/YamlCells.java",
+        "generated/svm/YamlCellsTruffle.java",
+    ],
+)
+
+filegroup(
+    name = "native_resources",
+    srcs = ["generated/svm/META-INF/native-image/dev.elide.myna/dev.elide.truffledata.yaml.cells.generated.YamlCells/native-image.properties"],
+)
+
+java_library(
+    name = "bindings",
+    srcs = [":generated_sources"],
+    resource_strip_prefix = "yaml/cells/generated/svm",
+    resources = [":native_resources"],
+    deps = [
+        "//bazel:myna_compiler_sdk",
+        "@maven//:org_graalvm_sdk_nativeimage",
+        "@maven//:org_graalvm_sdk_word",
+        "@maven//:org_graalvm_truffle_truffle_api",
+        "@myna//:truffle",
+    ],
+)

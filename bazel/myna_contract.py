@@ -131,13 +131,19 @@ def verify_derived(production, derived):
 if __name__ == "__main__":
     # Entries of (descriptor, bindings jar or "-" for a descriptor-only check), each optionally
     # followed by --classes LP64_LITTLE.json LP64_LITTLE.abi LP64_LITTLE_AAPCS64.json LP64_LITTLE_AAPCS64.abi
-    # for production seams, then optionally --derived PRODUCTION DERIVED... for seams derived from one.
+    # for production seams, then optionally one or more --derived PRODUCTION DERIVED... groups for
+    # seams derived from a production seam.
     args = sys.argv[1:]
-    derived = []
+    groups = []
     if "--derived" in args:
         index = args.index("--derived")
-        args, derived = args[:index], args[index + 1:]
-        assert len(derived) >= 2, derived
+        args, rest = args[:index], args[index:]
+        while rest:
+            assert rest[0] == "--derived", rest
+            end = rest.index("--derived", 1) if "--derived" in rest[1:] else len(rest)
+            group, rest = rest[1:end], rest[end:]
+            assert len(group) >= 2, group
+            groups.append(group)
     assert len(args) >= 2
     while args:
         descriptor, archive, args = args[0], args[1], args[2:]
@@ -147,5 +153,6 @@ if __name__ == "__main__":
             assert len(files) == 2 * len(CLASSES), files
             per_class = {cls: (files[2 * i], files[2 * i + 1]) for i, cls in enumerate(CLASSES)}
             print("Verified ABI class fingerprints:", verify_classes(descriptor, archive, per_class))
-    for descriptor in derived[1:]:
-        print("Verified derived cells descriptor:", verify_derived(derived[0], descriptor))
+    for derived in groups:
+        for descriptor in derived[1:]:
+            print("Verified derived cells descriptor:", verify_derived(derived[0], descriptor))

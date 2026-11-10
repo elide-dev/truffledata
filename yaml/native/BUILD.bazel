@@ -486,3 +486,6 @@ myna_other_class_stub(
     symbol = "td_yaml_fingerprint",
     visibility = ["//yaml/tests:__pkg__"],
 )
+
+# The YAML cells bindings (//yaml/cells) are generated from a seam derived from this one.
+exports_files(["yaml.seam"])

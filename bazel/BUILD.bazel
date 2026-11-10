@@ -122,10 +122,19 @@ sh_test(
         "$(rootpath //protobuf-buffa/cells:libbindings.jar)",
         "$(rootpath //protobuf-buffa/cells:generated/jvm/seam.json)",
         "-",
+        # The opt-in YAML cells bindings (yaml/cells): derived from the production seam.
+        "$(rootpath //yaml/cells:generated/svm/seam.json)",
+        "$(rootpath //yaml/cells:libbindings.jar)",
+        "$(rootpath //yaml/cells:generated/jvm/seam.json)",
+        "-",
         "--derived",
         "$(rootpath //protobuf-buffa/native:descriptor)",
         "$(rootpath //protobuf-buffa/cells:generated/svm/seam.json)",
         "$(rootpath //protobuf-buffa/cells:generated/jvm/seam.json)",
+        "--derived",
+        "$(rootpath //yaml/native:descriptor)",
+        "$(rootpath //yaml/cells:generated/svm/seam.json)",
+        "$(rootpath //yaml/cells:generated/jvm/seam.json)",
     ],
     data = [
         "//csv/kernel:libbindings.jar",
@@ -138,6 +147,9 @@ sh_test(
         "//protobuf-buffa/cells:libbindings.jar",
         "//protobuf-buffa/native:descriptor",
         "//yaml:libbindings.jar",
+        "//yaml/cells:generated/jvm/seam.json",
+        "//yaml/cells:generated/svm/seam.json",
+        "//yaml/cells:libbindings.jar",
         "//yaml/native:descriptor",
     ] + [
         "//%s:generated/abi/%s/%s" % (pkg, cls, file)
