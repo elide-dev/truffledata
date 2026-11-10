@@ -7,6 +7,11 @@ production performance target; never weaken safety checks; serialize local Bazel
 ## Current state — 2026-11-09 19:45 PST — READ THIS FIRST
 
 Sam's instructions, newest first (all binding):
+- 20:26 "i don't care about JVM/Hotspot performance at this time, for this release, only SVM
+  performance. so don't roll anything back on JVM's account." So: JVM allocation or timing
+  regressions (e.g. the Buffa flag-on session decode at 528 B on Myna 0.16.0) are recorded, not
+  fixed and not blocking; HotSpot route conversions to `invoke` are optional. JVM correctness
+  tests still must pass.
 - 19:49 "it's fine, adjust codecov ignores/settings if needed to pass".
 - 19:22 "get this landed": merge PR #67 to main now, with what is verified. DONE 20:01 PST.
 - 18:55 "hold on final benchmarks, as myna is releasing fixes in 0.16.0": no paired SVM
