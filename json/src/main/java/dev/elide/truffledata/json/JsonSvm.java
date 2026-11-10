@@ -94,7 +94,9 @@ public final class JsonSvm {
     if (result.isNull()) throw new OutOfMemoryError("JSON result allocation");
     try {
       int status;
-      try (PinnedObject pinned = PinnedObject.create(utf8)) {
+      // Folded at image build (JsonCellsRoute): an image without the flag compiles the else arm only.
+      if (JsonCellsRoute.ENABLED) status = cellsDecode(utf8, limits, result);
+      else try (PinnedObject pinned = PinnedObject.create(utf8)) {
         status =
             Json.decode(
                 pinned.addressOfArrayElement(0),
@@ -132,20 +134,40 @@ public final class JsonSvm {
     if (result.isNull()) throw new OutOfMemoryError("JSON result allocation");
     try {
       checkStatus(
-          Json.decode_adopted(
-              (org.graalvm.nativeimage.c.type.CCharPointer) WordFactory.pointer(address),
-              length,
-              capacity,
-              limits.maxInputBytes(),
-              limits.maxIndexBytes(),
-              limits.maxNodes(),
-              limits.maxTextBytes(),
-              limits.maxDepth(),
-              result));
+          JsonCellsRoute.ENABLED
+              ? JsonCellsRoute.svm()
+                  .decodeAdopted(address, length, capacity, limits, result.rawValue())
+              : Json.decode_adopted(
+                  (org.graalvm.nativeimage.c.type.CCharPointer) WordFactory.pointer(address),
+                  length,
+                  capacity,
+                  limits.maxInputBytes(),
+                  limits.maxIndexBytes(),
+                  limits.maxNodes(),
+                  limits.maxTextBytes(),
+                  limits.maxDepth(),
+                  result));
       return publish(result, release);
     } catch (RuntimeException | Error failure) {
       release(result.rawValue());
       throw failure;
+    }
+  }
+
+  /**
+   * {@code td_json_decode} through the cells route. The array is pinned here, around the call, with
+   * plain {@code try/finally} (try-with-resources reaches {@code Throwable.addSuppressed}, which the
+   * runtime-compilation blocklist rejects), and lent as a pointer: the cell neither copies nor
+   * retains it, and the native decode copies the input into its own padded storage, as the baseline.
+   */
+  private static int cellsDecode(byte[] utf8, JsonLimits limits, VoidPointer result) {
+    PinnedObject pinned = PinnedObject.create(utf8);
+    try {
+      return JsonCellsRoute.svm()
+          .decode(
+              pinned.addressOfArrayElement(0).rawValue(), utf8.length, limits, result.rawValue());
+    } finally {
+      pinned.close();
     }
   }
 
@@ -181,7 +203,8 @@ public final class JsonSvm {
   static void release(long address) {
     if (address == 0) return;
     VoidPointer result = WordFactory.pointer(address);
-    Json.release(result);
+    if (JsonCellsRoute.ENABLED) JsonCellsRoute.svm().release(address);
+    else Json.release(result);
     UnmanagedMemory.free(result);
   }
 }

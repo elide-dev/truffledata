@@ -282,3 +282,11 @@ exports_files(
     ["json.seam"],
     visibility = ["//json/cells:__pkg__"],
 )
+
+# The session fuzzer's seed corpus (two control bytes, then the document), replayed by the JSON
+# cells parity tests.
+filegroup(
+    name = "session_corpus",
+    srcs = glob(["corpus/session/*"]),
+    visibility = ["//json/cells/tests:__pkg__"],
+)
