@@ -23,7 +23,11 @@ killed every worker; nothing is running in the background.
 
 - PR #67 CI running on `0e668836`; merge (squash, admin if needed) when the checks finish.
   `codecov/patch` is advisory and has failed on every recent PR.
-- **Myna 0.16.0 is published** (19:44 PST; source tarball sha256 `51149cbf…138b51e3`). It adds a
+- **Myna 0.16.0 is tagged but its GitHub release is still a DRAFT** (checked 19:46 PST: tag
+  `v0.16.0` is public, `isDraft` true, the public tarball URL returns 404). The draft's source
+  tarball has sha256 `51149cbf…138b51e3`; re-verify it against `SHA256SUMS` once the release is
+  published, because a draft's assets can still be replaced. Until then the pin builds only
+  where the tarball is seeded locally (`--distdir`), so it cannot go through CI. It adds a
   `public static invoke(...)` on every generated cell: native carriers and raw `long` addresses,
   no `Object[]`, boxes, `NativePointer` or `Borrow` — "the entry for host code compiled ahead of
   time". Myna measures it at the cost of the direct call, 0 B. All four truffledata routes call
