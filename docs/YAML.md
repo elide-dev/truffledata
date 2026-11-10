@@ -114,29 +114,38 @@ Writer output is tested by re-parsing it natively and comparing exported events 
 
 ## Myna Truffle cells (`truffledata.yaml.cells`)
 
-`-Dtruffledata.yaml.cells=true` routes the native decode path through Truffle cells that Myna
-generates from this module's seam, instead of the generated `@CFunction`/FFM calls:
-`session_decode`, `session_retain`, `stream_feed`, `stream_next` and `typed_decode` on both
-runtimes, and `session_write_text` on Native Image. Session, stream and plan lifecycles, staging,
-limits, errors and their order stay the backend's own, and the tapes are identical. The route is
-**off by default**; it is support for Myna cells and makes no performance claim.
+`-Dtruffledata.yaml.cells=true` routes a native session's own calls through Truffle cells that
+Myna generates from this module's seam, instead of the generated `@CFunction`/FFM calls:
+`session_decode`, `session_retain`, `session_reset`, `stream_create`, `stream_feed`,
+`stream_next`, `stream_finish`, `stream_release` and a plan's `typed_decode` on both runtimes, and
+`session_write_text` on Native Image. Session and plan creation and release, result release and,
+on the JVM, calls on a caller-supplied native segment stay on the production bindings
+(`yaml/cells/BUILD.bazel` gives the reasons). Lifecycles, staging, limits, errors and their order
+stay the backend's own, and the tapes are identical. The route is **off by default**; it is
+support for Myna cells and makes no performance claim.
 
 Measured: see docs/RELEASE_0_11_0.md
 
 - **Artifact.** `dev.elide:truffledata-yaml-cells` (Bazel `//yaml/cells`) carries the route
-  (`CellsSvm`, `CellsSvmSessionBackend`, `CellsSvmPlanBackend`, `CellsJvmSessionBackend`,
+  (`Cells`, `CellsSvm`, `CellsSvmSessionBackend`, `CellsSvmPlanBackend`, `CellsJvmSessionBackend`,
   `CellsJvmPlanBackend`), both generated cell sets and Myna's Native Image metadata for the Native
-  Image cells; it depends on `truffledata-cells` (Myna's cells runtime) and `truffledata-yaml`, `truffledata-yaml-bindings`, `truffledata-yaml-native`, `truffledata-yaml-jvm`, `truffledata-tape` and `truffledata-tape-jvm`, because one jar carries the route for both runtimes; on a native-image class path
-  it therefore also brings the JVM-only `truffledata-yaml-jvm` and `truffledata-tape-jvm`. Nothing in the
+  Image cells. It depends on `truffledata-cells` (Myna's cells runtime), `truffledata-yaml`,
+  `truffledata-yaml-bindings`, `truffledata-yaml-native`, `truffledata-yaml-jvm`,
+  `truffledata-tape` and `truffledata-tape-jvm`: one jar carries the route for both runtimes, so
+  on a native-image class path it also brings the JVM-only `truffledata-yaml-jvm` and
+  `truffledata-tape-jvm` (the flag-on test image, `//yaml/cells/tests:native_test`, is built with
+  them on its class path). Nothing in the
   default YAML artifacts depends on it; with the flag off it need not be on the class path. It uses
   the same natives as `truffledata-yaml`. The Java kernel (`truffledata-yaml-java`) has no native
   calls and no cells route.
 - **Native Image.** Pass `-Dtruffledata.yaml.cells=true` and
   `--features=dev.elide.truffledata.yaml.YamlFeature` to `native-image`, with
   `truffledata-yaml-native` and the cells artifact on the image class path. `YamlFeature` registers
-  the cells at image build time (and fails the build if the artifact is missing); without the flag
-  it registers nothing and the image contains no cells code. Setting the property when running an
-  image has no effect.
+  the cells at image build time; without the flag it registers nothing and the image contains no
+  cells code. The flag and the route must agree or the image build fails, with no fallback: the
+  flag without the artifact fails in `YamlFeature`, and the flag without `YamlFeature` fails when
+  the build-time holder `SvmRoute` initializes. Setting the property when running an image has no
+  effect.
 - **JVM.** Pass the property to the JVM with `truffledata-yaml-jvm` and the cells artifact on the
   class path. It is read once, when `CellsRoute` initializes (a `static final`), and selects the
   backend in `YamlJvm.openSession`; the flag without the artifact fails there. Myna's FFM cells

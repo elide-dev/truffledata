@@ -512,8 +512,10 @@ Measured: see docs/RELEASE_0_11_0.md
   `--features=dev.elide.truffledata.json.JsonCellsFeature` to `native-image`, with the cells
   artifact on the image class path. The Feature installs the cells at image build time and
   `JsonCellsRoute.ENABLED` folds, so an image built without the flag contains no cells code;
-  setting the property when running an image has no effect. The flag without the Feature, or the
-  Feature's route without the flag, fails the image build: there is no silent fallback.
+  setting the property when running an image has no effect. The flag and the route must agree or
+  the image build fails, with no silent fallback: the build-time holder `JsonCellsRoute` of
+  `truffledata-json` rejects the flag without the Feature, and the Feature cannot load without the
+  artifact. The Feature without the flag installs nothing.
 - **JVM.** Pass the property to the JVM with `truffledata-json-jvm` and the cells artifact on the
   class path. It is read once, when `JsonCellsRoute` initializes (a `static final`), and
   `JsonJvm.open` binds the cells; the flag without the artifact fails there. Myna's FFM cells bind

@@ -81,9 +81,11 @@ What the routes do not do:
   caller-segment calls on the default binding. A shared arena closed by another thread during
   a cells call is not caught.
 
-Pending before 0.11.0 is published: the Myna 0.16.0 pin, the paired measurements and each
-flag's default, and release packaging for the JSON, YAML and CSV route artifacts (only
-`truffledata-protobuf-buffa-cells` is in the release module list today).
+Each route ships in its own artifact: `truffledata-protobuf-buffa-cells`,
+`truffledata-json-cells`, `truffledata-yaml-cells` and `truffledata-csv-cells`. They depend on the
+new `truffledata-cells`, which carries Myna's cells runtime once; no default artifact depends on
+any of them. Pending before 0.11.0 is published: the Myna 0.16.0 pin, the paired measurements and
+each flag's default.
 
 ## Fixes
 

@@ -759,7 +759,10 @@ Measured: see docs/RELEASE_0_11_0.md
   pass `-Dtruffledata.csv.cells=true` to `native-image`; no `--features` option is needed, since the
   jar registers `CsvCellsFeature`. With the flag the Feature registers the cells backend, which
   `SvmIndexer.Backend.load` defers to; without it the Feature registers nothing and the image
-  contains no cells code. Setting the property when running an image has no effect.
+  contains no cells code. The flag and the route must agree or the image build fails, with no
+  fallback: the build-time holder `CellsRoute` of `truffledata-csv-native` rejects the flag without
+  the cells artifact on the image class path, and a registered cells backend without the flag.
+  Setting the property when running an image has no effect.
 - **JVM.** Pass the property to the JVM with `truffledata-csv-jvm` and the cells artifact on the
   class path. It is read once, when `CellsRoute` initializes (a `static final`), and selects the
   provider in `FfmIndexer.Backend.load`; the flag without the artifact fails there rather than

@@ -91,7 +91,7 @@ dependencies {
 }
 ```
 
-For Maven, declare `https://maven.elide.dev` in `<repositories>` and the same coordinates in `<dependencies>`. Published POMs also declare the fork repository; Gradle and Bazel consumers must explicitly configure it. For Bazel, add the two repositories and desired coordinates to `maven.install`, then repin. Use core alone if neither adapter is needed. The release contains twenty-five libraries and the BOM. Publishing verifies public artifact bytes and metadata; isolated consumers check Maven resolution and JVM/static SVM execution. The staging examples can reproduce that version locally. Choose a new version for the next upload: published versions are immutable.
+For Maven, declare `https://maven.elide.dev` in `<repositories>` and the same coordinates in `<dependencies>`. Published POMs also declare the fork repository; Gradle and Bazel consumers must explicitly configure it. For Bazel, add the two repositories and desired coordinates to `maven.install`, then repin. Use core alone if neither adapter is needed. The release contains twenty-nine libraries and the BOM. Publishing verifies public artifact bytes and metadata; isolated consumers check Maven resolution and JVM/static SVM execution. The staging examples can reproduce that version locally. Choose a new version for the next upload: published versions are immutable.
 
 
 ## BOM and consumer acceptance
@@ -152,7 +152,9 @@ and lives in its own artifact, which no default artifact depends on:
 
 Add a route's artifact only to run with its flag set. On Native Image pass `-D<flag>=true` to
 `native-image` with the Feature shown and the artifact on the image class path: the route is fixed
-at image build time, and an image built without the flag contains no cells code. On the JVM pass
+at image build time, and an image built without the flag contains no cells code. For JSON, YAML
+and CSV, setting the flag without the route fails the image build rather than falling back to the
+default route; Buffa's Feature is required by every Buffa image. On the JVM pass
 the property to the JVM; it is read once. A route uses the same native attachments as its default
 artifact, and the production seams, bindings, ABI fingerprints and natives are unchanged.
 
