@@ -24,7 +24,8 @@ CELLS_ROUTES = {
          'dev/elide/truffledata/json/JsonCellsFeature.class'),
         'dev/elide/truffledata/json/cells/generated/', 'JsonCells', 'dev/elide/truffledata/json/generated/', ()),
     'yaml-cells': (
-        ('dev/elide/truffledata/yaml/CellsSvm.class', 'dev/elide/truffledata/yaml/CellsSvmSessionBackend.class',
+        ('dev/elide/truffledata/yaml/Cells.class', 'dev/elide/truffledata/yaml/CellsSvm.class',
+         'dev/elide/truffledata/yaml/CellsSvmSessionBackend.class',
          'dev/elide/truffledata/yaml/CellsSvmPlanBackend.class', 'dev/elide/truffledata/yaml/CellsJvmSessionBackend.class',
          'dev/elide/truffledata/yaml/CellsJvmPlanBackend.class'),
         'dev/elide/truffledata/yaml/cells/generated/', 'YamlCells', 'dev/elide/truffledata/yaml/generated/', ()),
@@ -37,9 +38,8 @@ CELLS_ROUTES = {
 # Myna's cells runtime, published once in truffledata-cells.
 MYNA_TRUFFLE = 'dev/elide/myna/truffle/'
 MYNA_TRUFFLE_METADATA = 'META-INF/native-image/dev.elide.myna/myna-truffle/'
-# Default artifacts that must carry neither cells nor the cells runtime.
-CELLS_FREE = ('protobuf-buffa', 'protobuf-buffa-bindings', 'json', 'json-bindings', 'json-jvm', 'yaml', 'yaml-bindings',
-              'yaml-native', 'yaml-jvm', 'yaml-java', 'csv', 'csv-bindings', 'csv-native', 'csv-jvm')
+# Every default artifact (all but the cells runtime, the routes and the BOM) must carry neither cells nor the cells runtime.
+CELLS_FREE = tuple(m for m in MODULES if m not in CELLS_ROUTES and m not in ('cells', 'bom'))
 
 
 class PublicationTest(unittest.TestCase):
@@ -293,6 +293,8 @@ class PublicationTest(unittest.TestCase):
             self.assertEqual({m for m, names in jars.items() if any(n.startswith(MYNA_TRUFFLE) for n in names)}, {'cells'})
             route_classes = set().union(*(jars[m] for m in CELLS_ROUTES)) - {n for n in jars['cells']}
             route_classes = {n for n in route_classes if n.endswith('.class')}
+            self.assertTrue({'json', 'json-jvm', 'yaml', 'yaml-native', 'yaml-jvm', 'csv', 'csv-native', 'csv-jvm',
+                             'protobuf-buffa'} <= set(CELLS_FREE))
             for module in CELLS_FREE:
                 self.assertFalse(jars[module] & route_classes, module)
                 self.assertFalse({n for n in jars[module] if '/cells/' in n or n.startswith((MYNA_TRUFFLE, MYNA_TRUFFLE_METADATA))}, module)
