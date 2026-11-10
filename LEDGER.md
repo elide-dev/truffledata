@@ -26,6 +26,14 @@ The lead reads these together as: land the code now with every cells flag defaul
 after the 0.16.0 pin, the measurements and the release packaging. A session restart at 19:16
 killed every worker; nothing is running in the background.
 
+### 2026-11-10 — post-release re-bench and README cards (branch `bench/0.11.0-cards`)
+
+Sam: "re-run benchmarks and update charts in the readme with fonts and in our design"; "do all
+benchmarks on that machine" (unclemax, `ssh sam@10.5.0.25`). All four suites ran at `091f9d0` on
+unclemax, sequentially on CPU 12 (`benchmarks/comparison/host_run.sh`); an RBE capture was discarded
+for mixed-host variance. Cards: `tools/bench/plot_cards.py` (Elide tokens and fonts), output
+`docs/images/bench-0.11.0/`, raw reports `benchmarks/results/bench-0.11.0/`. README cleanup is next.
+
 ### RELEASED 22:54 PST — 0.11.0 is public; nothing is running
 
 Tag `v0.11.0` (signed) at `ae32c97d`; Elide Maven and the GitHub release are public and verified;

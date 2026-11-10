@@ -1,0 +1,828 @@
+{
+  "schema": "yaml-pair-1",
+  "runtime": "svm",
+  "workload": "yaml-stream",
+  "forks": 3,
+  "complete": true,
+  "platform": "Linux-7.0.0-43-generic-x86_64-with-glibc2.43",
+  "hostname": "unclemax",
+  "cpu": "processor\t: 0\nvendor_id\t: AuthenticAMD\ncpu family\t: 26\nmodel\t\t: 8\nmodel name\t: AMD Ryzen Threadripper PRO 9965WX 24-Cores\nstepping\t: 1\nmicrocode\t: 0xb008121\ncpu MHz\t\t: 1223.623\ncache size\t: 1024 KB\nphysical id\t: 0\nsiblings\t: 48\ncore id\t\t: 0\ncpu cores\t: 24\napicid\t\t: 0\ninitial apicid\t: 0\nfpu\t\t: yes\nfpu_exception\t: yes\ncpuid level\t: 16\nwp\t\t: yes\nflags\t\t: fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ht syscall nx mmxext fxsr_opt pdpe1gb rdtscp lm constant_tsc rep_good amd_lbr_v2 nopl xtopology nonstop_tsc cpuid extd_apicid aperfmperf rapl pni pclmulqdq monitor ssse3 fma cx16 pcid sse4_1 sse4_2 x2apic movbe popcnt aes xsave avx f16c rdrand lahf_lm cmp_legacy svm extapic cr8_legacy abm sse4a misalignsse 3dnowprefetch osvw ibs skinit wdt tce topoext perfctr_core perfctr_nb bpext perfctr_llc mwaitx cpuid_fault cpb cat_l3 cdp_l3 hw_pstate ssbd mba perfmon_v2 ibrs ibpb stibp ibrs_enhanced vmmcall fsgsbase tsc_adjust bmi1 avx2 smep bmi2 erms invpcid cqm rdt_a avx512f avx512dq rdseed adx smap avx512ifma clflushopt clwb avx512cd sha_ni avx512bw avx512vl xsaveopt xsavec xgetbv1 xsaves cqm_llc cqm_occup_llc cqm_mbm_total cqm_mbm_local user_shstk avx_vnni avx512_bf16 clzero irperf xsaveerptr rdpru wbnoinvd amd_ppin cppc arat npt lbrv svm_lock nrip_save tsc_scale vmcb_clean flushbyasid decodeassists pausefilter pfthreshold avic v_vmsave_vmload vgif x2avic v_spec_ctrl vnmi avx512vbmi umip pku ospke avx512_vbmi2 gfni vaes vpclmulqdq avx512_vnni avx512_bitalg avx512_vpopcntdq la57 rdpid bus_lock_detect movdiri movdir64b overflow_recov succor smca fsrm avx512_vp2intersect flush_l1d debug_swap amd_lbr_pmc_freeze\nbugs\t\t: sysret_ss_attrs spectre_v1 spectre_v2 spec_store_bypass srso spectre_v2_user vmscape tlbi\nbogomips\t: 8386.75\nTLB size\t: 192 4K pages\nclflush size\t: 64\ncache_alignment\t: 64\naddress sizes\t: 52 bits physical, 57 bits virtual\npower management: ts ttp tm hwpstate cpb eff_freq_ro [13] [14]\n\nprocessor\t: 1\nvendor_id\t: AuthenticAMD\ncpu family\t: 26\nmodel\t\t: 8\nmodel name\t: AMD Ryzen Threadripper PRO 9965WX 24-Cores\nstepping\t: 1\nmicrocode\t: 0xb008121\ncpu MHz\t\t: 4200.717\ncache size\t: 1024 KB\nphysical id\t: 0\nsiblings\t: 48\ncore id\t\t: 1\ncpu cores\t: 24\napicid\t\t: 2\ninitial apicid\t: 2\nfpu\t\t: yes\nfpu_exception\t: yes\ncpuid level\t: 16\nwp\t\t: yes\nflags\t\t: fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ht syscall nx mmxext fxsr_opt pdpe1gb rdtscp lm constant_tsc rep_good amd_lbr_v2 nopl xtopology nonstop_tsc cpuid extd_apicid aperfmperf rapl pni pclmulqdq monitor ssse3 fma cx16 pcid sse4_1 sse4_2 x2apic movbe popcnt aes xsave avx f16c rdrand lahf_lm cmp_legacy svm extapic cr8_legacy abm sse4a misalignsse 3dnowprefetch osvw ibs skinit wdt tce topoext perfctr_core perfctr_nb bpext perfctr_llc mwaitx cpuid_fault cpb cat_l3 cdp_l3 hw_pstate ssbd mba perfmon_v2 ibrs ibpb stibp ibrs_enhanced vmmcall fsgsbase tsc_adjust bmi1 avx2 smep bmi2 erms invpcid cqm rdt_a avx512f avx512dq rdseed adx smap avx512ifma clflushopt clwb avx512cd sha_ni avx512bw avx512vl xsaveopt xsavec xgetbv1 xsaves cqm_llc cqm_occup_llc cqm_mbm_total cqm_mbm_local user_shstk avx_vnni avx512_bf16 clzero irperf xsaveerptr rdpru wbnoinvd amd_ppin cppc arat npt lbrv svm_lock nrip_save tsc_scale vmcb_clean flushbyasid decodeassists pausefilter pfthreshold avic v_vmsave_vmload vgif x2avic v_spec_ctrl vnmi avx512vbmi umip pku ospke avx512_vbmi2 gfni vaes vpclmulqdq avx512_vnni avx512_bitalg avx512_vpopcntdq la57 rdpid bus_lock_detect movdiri movdir64b overflow_recov succor smca fsrm avx512_vp2intersect flush_l1d debug_swap amd_lbr_pmc_freeze\nbugs\t\t: sysret_ss_attrs spectre_v1 spectre_v2 spec_store_bypass srso spectre_v2_user vmscape tlbi\nbogomips\t: 8386.75\nTLB size\t: 192 4K pages\nclflush size\t: 64\ncache_alignment\t: 64\naddress sizes\t: 52 bits physical, 57 bits virtual\npower management: ts ttp tm hwpstate cpb eff_freq_ro [13] [14]\n\nprocessor\t: 2\nvendor_id\t: AuthenticAMD\ncpu family\t: 26\nmodel\t\t: 8\nmodel name\t: AMD Ryzen Threadripper PRO 9965WX 24-Cores\nstepping\t: 1\nmicrocode\t: 0xb008121\ncpu MHz\t\t: 1223.623\ncache size\t: 1024 KB\nphysical id\t: 0\nsiblings\t: 48\ncore id\t\t: 2\ncpu cores\t: 24\napicid\t\t: 4\ninitial apicid\t: 4\nfpu\t\t: yes\nfpu_exception\t: yes\ncpuid level\t: 16\nwp\t\t: yes\nflags\t\t: fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ht syscall nx mmxext fxsr_opt pdpe1gb rdtscp lm constant_tsc rep_good amd_lbr_v2 nopl xtopology nonstop_tsc cpuid extd_apicid aperfmperf rapl pni pclmulqdq monitor ssse3 fma cx16 pcid sse4_1 sse4_2 x2apic movbe popcnt aes xsave avx f16c rdrand lahf_lm cmp_legacy svm extapic cr8_legacy abm sse4a misalignsse 3dnowprefetch osvw ibs skinit wdt tce topoext perfctr_core perfctr_nb bpext perfctr_llc mwaitx cpuid_fault cpb cat_l3 cdp_l3 hw_pstate ssbd mba perfmon_v2 ibrs ibpb stibp ibrs_enhanced vmmcall fsgsbase tsc_adjust bmi1 avx2 smep bmi2 erms invpcid cqm rdt_a avx512f avx512dq rdseed adx smap avx512ifma clflushopt clwb avx512cd sha_ni avx512bw avx512vl xsaveopt xsavec xgetbv1 xsaves cqm_llc cqm_occup_llc cqm_mbm_total cqm_mbm_local user_shstk avx_vnni avx512_bf16 clzero irperf xsaveerptr rdpru wbnoinvd amd_ppin cppc arat npt lbrv svm_lock nrip_save tsc_scale vmcb_clean flushbyasid decodeassists pausefilter pfthreshold avic v_vmsave_vmload vgif x2avic v_spec_ctrl vnmi avx512vbmi umip pku ospke avx512_vbmi2 gfni vaes vpclmulqdq avx512_vnni avx512_bitalg avx512_vpopcntdq la57 rdpid bus_lock_detect movdiri movdir64b overflow_recov succor smca fsrm avx512_vp2intersect flush_l1d debug_swap amd_lbr_pmc_freeze\nbugs\t\t: sysret_ss_attrs spectre_v1 spectre_v2 spec_store_bypass srso spectre_v2_user vmscape tlbi\nbogomips\t: 8386.75\nTLB size\t: 192 4K pages\nclflush size\t: 64\ncache_alignment\t: 64\naddress sizes\t: 52 bits physical, 57 bits virtual\npower management: ts ttp tm hwpstate cpb eff_freq_ro [13] [14]\n\nprocessor\t: 3\nvendor_id\t: AuthenticAMD\ncpu family\t: 26\nmodel\t\t: 8\nmodel name\t: AMD Ryzen Threadripper PRO 9965WX 24-Cores\nstepping\t: 1\nmicrocode\t: 0xb008121\ncpu MHz\t\t: 3262.127\ncache size\t: 1024 KB\nphysical id\t: 0\nsiblings\t: 48\ncore id\t\t: 3\ncpu cores\t: 24\napicid\t\t: 6\ninitial apicid\t: 6\nfpu\t\t: yes\nfpu_exception\t: yes\ncpuid level\t: 16\nwp\t\t: yes\nflags\t\t: fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ht syscall nx mmxext fxsr_opt pdpe1gb rdtscp lm constant_tsc rep_good amd_lbr_v2 nopl xtopology nonstop_tsc cpuid extd_apicid aperfmperf rapl pni pclmulqdq monitor ssse3 fma cx16 pcid sse4_1 sse4_2 x2apic movbe popcnt aes xsave avx f16c rdrand lahf_lm cmp_legacy svm extapic cr8_legacy abm sse4a misalignsse 3dnowprefetch osvw ibs skinit wdt tce topoext perfctr_core perfctr_nb bpext perfctr_llc mwaitx cpuid_fault cpb cat_l3 cdp_l3 hw_pstate ssbd mba perfmon_v2 ibrs ibpb stibp ibrs_enhanced vmmcall fsgsbase tsc_adjust bmi1 avx2 smep bmi2 erms invpcid cqm rdt_a avx512f avx512dq rdseed adx smap avx512ifma clflushopt clwb avx512cd sha_ni avx512bw avx512vl xsaveopt xsavec xgetbv1 xsaves cqm_llc cqm_occup_llc cqm_mbm_total cqm_mbm_local user_shstk avx_vnni avx512_bf16 clzero irperf xsaveerptr rdpru wbnoinvd amd_ppin cppc arat npt lbrv svm_lock nrip_save tsc_scale vmcb_clean flushbyasid decodeassists pausefilter pfthreshold avic v_vmsave_vmload vgif x2avic v_spec_ctrl vnmi avx512vbmi umip pku ospke avx512_vbmi2 gfni vaes vpclmulqdq avx512_vnni avx512_bitalg avx512_vpopcntdq la57 rdpid bus_lock_detect movdiri movdir64b overflow_recov succor smca fsrm avx512_vp2intersect flush_l1d debug_swap amd_lbr_pmc_freeze\nbugs\t\t: sysret_ss_attrs spectre_v1 spectre_v2 spec_store_bypass srso spectre_v2_user vmscape tlbi\nbogomips\t: 8386.75\nTLB size\t: 192 4K pages\nclflush size\t: 64\ncache_alignment\t: 64\naddress sizes\t: 52 bits physical, 57 bits virtual\npower management: ts ttp tm hwpstate cpb eff_freq_ro [13] [14]\n\nprocessor\t: 4\nvendor_id\t: AuthenticAMD\ncpu family\t: 26\nmodel\t\t: 8\nmodel name\t: AMD Ryzen Threadripper PRO 9965WX 24-Cores\nstepping\t: 1\nmicrocode\t: 0xb008121\ncpu MHz\t\t: 1223.623\ncache size\t: 1024 KB\nphysical id\t: 0\nsiblings\t: 48\ncore id\t\t: 4\ncpu cores\t: 24\napicid\t\t: 8\ninitial apicid\t: 8\nfpu\t\t: yes\nfpu_exception\t: yes\ncpuid level\t: 16\nwp\t\t: yes\nflags\t\t: fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ht syscall nx mmxext fxsr_opt pdpe1gb rdtscp lm constant_tsc rep_good amd_lbr_v2 nopl xtopology nonstop_tsc cpuid extd_apicid aperfmperf rapl pni pclmulqdq monitor ssse3 fma cx16 pcid sse4_1 sse4_2 x2apic movbe popcnt aes xsave avx f16c rdrand lahf_lm cmp_legacy svm extapic cr8_legacy abm sse4a misalignsse 3dnowprefetch osvw ibs skinit wdt tce topoext perfctr_core perfctr_nb bpext perfctr_llc mwaitx cpuid_fault cpb cat_l3 cdp_l3 hw_pstate ssbd mba perfmon_v2 ibrs ibpb stibp ibrs_enhanced vmmcall fsgsbase tsc_adjust bmi1 avx2 smep bmi2 erms invpcid cqm rdt_a avx512f avx512dq rdseed adx smap avx512ifma clflushopt clwb avx512cd sha_ni avx512bw avx512vl xsaveopt xsavec xgetbv1 xsaves cqm_llc cqm_occup_llc cqm_mbm_total cqm_mbm_local user_shstk avx_vnni avx512_bf16 clzero irperf xsaveerptr rdpru wbnoinvd amd_ppin cppc arat npt lbrv svm_lock nrip_save tsc_scale vmcb_clean flushbyasid decodeassists pausefilter pfthreshold avic v_vmsave_vmload vgif x2avic v_spec_ctrl vnmi avx512vbmi umip pku ospke avx512_vbmi2 gfni vaes vpclmulqdq avx512_vnni avx512_bitalg avx512_vpopcntdq la57 rdpid bus_lock_detect movdiri movdir64b overflow_recov succor smca fsrm avx512_vp2intersect flush_l1d debug_swap amd_lbr_pmc_freeze\nbugs\t\t: sysret_ss_attrs spectre_v1 spectre_v2 spec_store_bypass srso spectre_v2_user vmscape tlbi\nbogomips\t: 8386.75\nTLB size\t: 192 4K pages\nclflush size\t: 64\ncache_alignment\t: 64\naddress sizes\t: 52 bits physical, 57 bits virtual\npower management: ts ttp tm hwpstate cpb eff_freq_ro [13] [14]\n\nprocessor\t: 5\nvendor_id\t: AuthenticAMD\ncpu family\t: 26\nmodel\t\t: 8\nmodel name\t: AMD Ryzen Threadripper PRO 9965WX 24-Cores\nstepping\t: 1\nmicrocode\t: 0xb008121\ncpu MHz\t\t: 1223.623\ncache size\t: 1024 KB\nphysical id\t: 0\nsiblings\t: 48\ncore id\t\t: 5\ncpu cores\t: 24\napicid\t\t: 10\ninitial apicid\t: 10\nfpu\t\t: yes\nfpu_exception\t: yes\ncpuid level\t: 16\nwp\t\t: yes\nflags\t\t: fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ht syscall nx mmxext fxsr_opt pdpe1gb rdtscp lm constant_tsc rep_good amd_lbr_v2 nopl xtopology nonstop_tsc cpuid extd_apicid aperfmperf rapl pni pclmulqdq monitor ssse3 fma cx16 pcid sse4_1 sse4_2 x2apic movbe popcnt aes xsave avx f16c rdrand lahf_lm cmp_legacy svm extapic cr8_legacy abm sse4a misalignsse 3dnowprefetch osvw ibs skinit wdt tce topoext perfctr_core perfctr_nb bpext perfctr_llc mwaitx cpuid_fault cpb cat_l3 cdp_l3 hw_pstate ssbd mba perfmon_v2 ibrs ibpb stibp ibrs_enhanced vmmcall fsgsbase tsc_adjust bmi1 avx2 smep bmi2 erms invpcid cqm rdt_a avx512f avx512dq rdseed adx smap avx512ifma clflushopt clwb avx512cd sha_ni avx512bw avx512vl xsaveopt xsavec xgetbv1 xsaves cqm_llc cqm_occup_llc cqm_mbm_total cqm_mbm_local user_shstk avx_vnni avx512_bf16 clzero irperf xsaveerptr rdpru wbnoinvd amd_ppin cppc arat npt lbrv svm_lock nrip_save tsc_scale vmcb_clean flushbyasid decodeassists pausefilter pfthreshold avic v_vmsave_vmload vgif x2avic v_spec_ctrl vnmi avx512vbmi umip pku ospke avx512_vbmi2 gfni vaes vpclmulqdq avx512_vnni avx512_bitalg avx512_vpopcntdq la57 rdpid bus_lock_detect movdiri movdir64b overflow_recov succor smca fsrm avx512_vp2intersect flush_l1d debug_swap amd_lbr_pmc_freeze\nbugs\t\t: sysret_ss_attrs spectre_v1 spectre_v2 spec_store_bypass srso spectre_v2_user vmscape tlbi\nbogomips\t: 8386.75\nTLB size\t: 192 4K pages\nclflush size\t: 64\ncache_alignment\t: 64\naddress sizes\t: 52 bits physical, 57 bits virtual\npower management: ts ttp tm hwpstate cpb eff_freq_ro [13] [14]\n\nprocessor\t: 6\nvendor_id\t: AuthenticAMD\ncpu family\t: 26\nmodel\t\t: 8\nmodel name\t: AMD Ryzen Threadripper PRO 9965WX 24-Cores\nstepping\t: 1\nmicrocode\t: 0xb008121\ncpu MHz\t\t: 4195.448\ncache size\t: 1024 KB\nphysical id\t: 0\nsiblings\t: 48\ncore id\t\t: 8\ncpu cores\t: 24\napicid\t\t: 16\ninitial apicid\t: 16\nfpu\t\t: yes\nfpu_exception\t: yes\ncpuid level\t: 16\nwp\t\t: yes\nflags\t\t: fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ht syscall nx mmxext fxsr_opt pdpe1gb rdtscp lm constant_tsc rep_good amd_lbr_v2 nopl xtopology nonstop_tsc cpuid extd_apicid aperfmperf rapl pni pclmulqdq monitor ssse3 fma cx16 pcid sse4_1 sse4_2 x2apic movbe popcnt aes xsave avx f16c rdrand lahf_lm cmp_legacy svm extapic cr8_legacy abm sse4a misalignsse 3dnowprefetch osvw ibs skinit wdt tce topoext perfctr_core perfctr_nb bpext perfctr_llc mwaitx cpuid_fault cpb cat_l3 cdp_l3 hw_pstate ssbd mba perfmon_v2 ibrs ibpb stibp ibrs_enhanced vmmcall fsgsbase tsc_adjust bmi1 avx2 smep bmi2 erms invpcid cqm rdt_a avx512f avx512dq rdseed adx smap avx512ifma clflushopt clwb avx512cd sha_ni avx512bw avx512vl xsaveopt xsavec xgetbv1 xsaves cqm_llc cqm_occup_llc cqm_mbm_total cqm_mbm_local user_shstk avx_vnni avx512_bf16 clzero irperf xsaveerptr rdpru wbnoinvd amd_ppin cppc arat npt lbrv svm_lock nrip_save tsc_scale vmcb_clean flushbyasid decodeassists pausefilter pfthreshold avic v_vmsave_vmload vgif x2avic v_spec_ctrl vnmi avx512vbmi umip pku ospke avx512_vbmi2 gfni vaes vpclmulqdq avx512_vnni avx512_bitalg avx512_vpopcntdq la57 rdpid bus_lock_detect movdiri movdir64b overflow_recov succor smca fsrm avx512_vp2intersect flush_l1d debug_swap amd_lbr_pmc_freeze\nbugs\t\t: sysret_ss_attrs spectre_v1 spectre_v2 spec_store_bypass srso spectre_v2_user vmscape tlbi\nbogomips\t: 8386.75\nTLB size\t: 192 4K pages\nclflush size\t: 64\ncache_alignment\t: 64\naddress sizes\t: 52 bits physical, 57 bits virtual\npower management: ts ttp tm hwpstate cpb eff_freq_ro [13] [14]\n\nprocessor\t: 7\nvendor_id\t: AuthenticAMD\ncpu family\t: 26\nmodel\t\t: 8\nmodel name\t: AMD Ryzen Threadripper PRO 9965WX 24-Cores\nstepping\t: 1\nmicrocode\t: 0xb008121\ncpu MHz\t\t: 1223.623\ncache size\t: 1024 KB\nphysical id\t: 0\nsiblings\t: 48\ncore id\t\t: 9\ncpu cores\t: 24\napicid\t\t: 18\ninitial apicid\t: 18\nfpu\t\t: yes\nfpu_exception\t: yes\ncpuid level\t: 16\nwp\t\t: yes\nflags\t\t: fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ht syscall nx mmxext fxsr_opt pdpe1gb rdtscp lm constant_tsc rep_good amd_lbr_v2 nopl xtopology nonstop_tsc cpuid extd_apicid aperfmperf rapl pni pclmulqdq monitor ssse3 fma cx16 pcid sse4_1 sse4_2 x2apic movbe popcnt aes xsave avx f16c rdrand lahf_lm cmp_legacy svm extapic cr8_legacy abm sse4a misalignsse 3dnowprefetch osvw ibs skinit wdt tce topoext perfctr_core perfctr_nb bpext perfctr_llc mwaitx cpuid_fault cpb cat_l3 cdp_l3 hw_pstate ssbd mba perfmon_v2 ibrs ibpb stibp ibrs_enhanced vmmcall fsgsbase tsc_adjust bmi1 avx2 smep bmi2 erms invpcid cqm rdt_a avx512f avx512dq rdseed adx smap avx512ifma clflushopt clwb avx512cd sha_ni avx512bw avx512vl xsaveopt xsavec xgetbv1 xsaves cqm_llc cqm_occup_llc cqm_mbm_total cqm_mbm_local user_shstk avx_vnni avx512_bf16 clzero irperf xsaveerptr rdpru wbnoinvd amd_ppin cppc arat npt lbrv svm_lock nrip_save tsc_scale vmcb_clean flushbyasid decodeassists pausefilter pfthreshold avic v_vmsave_vmload vgif x2avic v_spec_ctrl vnmi avx512vbmi umip pku ospke avx512_vbmi2 gfni vaes vpclmulqdq avx512_vnni avx512_bitalg avx512_vpopcntdq la57 rdpid bus_lock_detect movdiri movdir64b overflow_recov succor smca fsrm avx512_vp2intersect flush_l1d debug_swap amd_lbr_pmc_freeze\nbugs\t\t: sysret_ss_attrs spectre_v1 spectre_v2 spec_store_bypass srso spectre_v2_user vmscape tlbi\nbogomips\t: 8386.75\nTLB size\t: 192 4K pages\nclflush size\t: 64\ncache_alignment\t: 64\naddress sizes\t: 52 bits physical, 57 bits virtual\npower management: ts ttp tm hwpstate cpb eff_freq_ro [13] [14]\n\nprocessor\t: 8\nvendor_id\t: AuthenticAMD\ncpu family\t: 26\nmodel\t\t: 8\nmodel name\t: AMD Ryzen Threadripper PRO 9965WX 24-Cores\nstepping\t: 1\nmicrocode\t: 0xb008121\ncpu MHz\t\t: 4181.035\ncache size\t: 1024 KB\nphysical id\t: 0\nsiblings\t: 48\ncore id\t\t: 10\ncpu cores\t: 24\napicid\t\t: 20\ninitial apicid\t: 20\nfpu\t\t: yes\nfpu_exception\t: yes\ncpuid level\t: 16\nwp\t\t: yes\nflags\t\t: fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ht syscall nx mmxext fxsr_opt pdpe1gb rdtscp lm constant_tsc rep_good amd_lbr_v2 nopl xtopology nonstop_tsc cpuid extd_apicid aperfmperf rapl pni pclmulqdq monitor ssse3 fma cx16 pcid sse4_1 sse4_2 x2apic movbe popcnt aes xsave avx f16c rdrand lahf_lm cmp_legacy svm extapic cr8_legacy abm sse4a misalignsse 3dnowprefetch osvw ibs skinit wdt tce topoext perfctr_core perfctr_nb bpext perfctr_llc mwaitx cpuid_fault cpb cat_l3 cdp_l3 hw_pstate ssbd mba perfmon_v2 ibrs ibpb stibp ibrs_enhanced vmmcall fsgsbase tsc_adjust bmi1 avx2 smep bmi2 erms invpcid cqm rdt_a avx512f avx512dq rdseed adx smap avx512ifma clflushopt clwb avx512cd sha_ni avx512bw avx512vl xsaveopt xsavec xgetbv1 xsaves cqm_llc cqm_occup_llc cqm_mbm_total cqm_mbm_local user_shstk avx_vnni avx512_bf16 clzero irperf xsaveerptr rdpru wbnoinvd amd_ppin cppc arat npt lbrv svm_lock nrip_save tsc_scale vmcb_clean flushbyasid decodeassists pausefilter pfthreshold avic v_vmsave_vmload vgif x2avic v_spec_ctrl vnmi avx512vbmi umip pku ospke avx512_vbmi2 gfni vaes vpclmulqdq avx512_vnni avx512_bitalg avx512_vpopcntdq la57 rdpid bus_lock_detect movdiri movdir64b overflow_recov succor smca fsrm avx512_vp2intersect flush_l1d debug_swap amd_lbr_pmc_freeze\nbugs\t\t: sysret_ss_attrs spectre_v1 spectre_v2 spec_store_bypass srso spectre_v2_user vmscape tlbi\nbogomips\t: 8386.75\nTLB size\t: 192 4K pages\nclflush size\t: 64\ncache_alignment\t: 64\naddress sizes\t: 52 bits physical, 57 bits virtual\npower management: ts ttp tm hwpstate cpb eff_freq_ro [13] [14]\n\nprocessor\t: 9\nvendor_id\t: AuthenticAMD\ncpu family\t: 26\nmodel\t\t: 8\nmodel name\t: AMD Ryzen Threadripper PRO 9965WX 24-Cores\nstepping\t: 1\nmicrocode\t: 0xb008121\ncpu MHz\t\t: 4160.615\ncache size\t: 1024 KB\nphysical id\t: 0\nsiblings\t: 48\ncore id\t\t: 11\ncpu cores\t: 24\napicid\t\t: 22\ninitial apicid\t: 22\nfpu\t\t: yes\nfpu_exception\t: yes\ncpuid level\t: 16\nwp\t\t: yes\nflags\t\t: fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ht syscall nx mmxext fxsr_opt pdpe1gb rdtscp lm constant_tsc rep_good amd_lbr_v2 nopl xtopology nonstop_tsc cpuid extd_apicid aperfmperf rapl pni pclmulqdq monitor ssse3 fma cx16 pcid sse4_1 sse4_2 x2apic movbe popcnt aes xsave avx f16c rdrand lahf_lm cmp_legacy svm extapic cr8_legacy abm sse4a misalignsse 3dnowprefetch osvw ibs skinit wdt tce topoext perfctr_core perfctr_nb bpext perfctr_llc mwaitx cpuid_fault cpb cat_l3 cdp_l3 hw_pstate ssbd mba perfmon_v2 ibrs ibpb stibp ibrs_enhanced vmmcall fsgsbase tsc_adjust bmi1 avx2 smep bmi2 erms invpcid cqm rdt_a avx512f avx512dq rdseed adx smap avx512ifma clflushopt clwb avx512cd sha_ni avx512bw avx512vl xsaveopt xsavec xgetbv1 xsaves cqm_llc cqm_occup_llc cqm_mbm_total cqm_mbm_local user_shstk avx_vnni avx512_bf16 clzero irperf xsaveerptr rdpru wbnoinvd amd_ppin cppc arat npt lbrv svm_lock nrip_save tsc_scale vmcb_clean flushbyasid decodeassists pausefilter pfthreshold avic v_vmsave_vmload vgif x2avic v_spec_ctrl vnmi avx512vbmi umip pku ospke avx512_vbmi2 gfni vaes vpclmulqdq avx512_vnni avx512_bitalg avx512_vpopcntdq la57 rdpid bus_lock_detect movdiri movdir64b overflow_recov succor smca fsrm avx512_vp2intersect flush_l1d debug_swap amd_lbr_pmc_freeze\nbugs\t\t: sysret_ss_attrs spectre_v1 spectre_v2 spec_store_bypass srso spectre_v2_user vmscape tlbi\nbogomips\t: 8386.75\nTLB size\t: 192 4K pages\nclflush size\t: 64\ncache_alignment\t: 64\naddress sizes\t: 52 bits physical, 57 bits virtual\npower management: ts ttp tm hwpstate cpb eff_freq_ro [13] [14]\n\nprocessor\t: 10\nvendor_id\t: AuthenticAMD\ncpu family\t: 26\nmodel\t\t: 8\nmodel name\t: AMD Ryzen Threadripper PRO 9965WX 24-Cores\nstepping\t: 1\nmicrocode\t: 0xb008121\ncpu MHz\t\t: 4139.852\ncache size\t: 1024 KB\nphysical id\t: 0\nsiblings\t: 48\ncore id\t\t: 12\ncpu cores\t: 24\napicid\t\t: 24\ninitial apicid\t: 24\nfpu\t\t: yes\nfpu_exception\t: yes\ncpuid level\t: 16\nwp\t\t: yes\nflags\t\t: fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ht syscall nx mmxext fxsr_opt pdpe1gb rdtscp lm constant_tsc rep_good amd_lbr_v2 nopl xtopology nonstop_tsc cpuid extd_apicid aperfmperf rapl pni pclmulqdq monitor ssse3 fma cx16 pcid sse4_1 sse4_2 x2apic movbe popcnt aes xsave avx f16c rdrand lahf_lm cmp_legacy svm extapic cr8_legacy abm sse4a misalignsse 3dnowprefetch osvw ibs skinit wdt tce topoext perfctr_core perfctr_nb bpext perfctr_llc mwaitx cpuid_fault cpb cat_l3 cdp_l3 hw_pstate ssbd mba perfmon_v2 ibrs ibpb stibp ibrs_enhanced vmmcall fsgsbase tsc_adjust bmi1 avx2 smep bmi2 erms invpcid cqm rdt_a avx512f avx512dq rdseed adx smap avx512ifma clflushopt clwb avx512cd sha_ni avx512bw avx512vl xsaveopt xsavec xgetbv1 xsaves cqm_llc cqm_occup_llc cqm_mbm_total cqm_mbm_local user_shstk avx_vnni avx512_bf16 clzero irperf xsaveerptr rdpru wbnoinvd amd_ppin cppc arat npt lbrv svm_lock nrip_save tsc_scale vmcb_clean flushbyasid decodeassists pausefilter pfthreshold avic v_vmsave_vmload vgif x2avic v_spec_ctrl vnmi avx512vbmi umip pku ospke avx512_vbmi2 gfni vaes vpclmulqdq avx512_vnni avx512_bitalg avx512_vpopcntdq la57 rdpid bus_lock_detect movdiri movdir64b overflow_recov succor smca fsrm avx512_vp2intersect flush_l1d debug_swap amd_lbr_pmc_freeze\nbugs\t\t: sysret_ss_attrs spectre_v1 spectre_v2 spec_store_bypass srso spectre_v2_user vmscape tlbi\nbogomips\t: 8386.75\nTLB size\t: 192 4K pages\nclflush size\t: 64\ncache_alignment\t: 64\naddress sizes\t: 52 bits physical, 57 bits virtual\npower management: ts ttp tm hwpstate cpb eff_freq_ro [13] [14]\n\nprocessor\t: 11\nvendor_id\t: AuthenticAMD\ncpu family\t: 26\nmodel\t\t: 8\nmodel name\t: AMD Ryzen Threadripper PRO 9965WX 24-Cores\nstepping\t: 1\nmicrocode\t: 0xb008121\ncpu MHz\t\t: 4148.695\ncache size\t: 1024 KB\nphysical id\t: 0\nsiblings\t: 48\ncore id\t\t: 13\ncpu cores\t: 24\napicid\t\t: 26\ninitial apicid\t: 26\nfpu\t\t: yes\nfpu_exception\t: yes\ncpuid level\t: 16\nwp\t\t: yes\nflags\t\t: fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ht syscall nx mmxext fxsr_opt pdpe1gb rdtscp lm constant_tsc rep_good amd_lbr_v2 nopl xtopology nonstop_tsc cpuid extd_apicid aperfmperf rapl pni pclmulqdq monitor ssse3 fma cx16 pcid sse4_1 sse4_2 x2apic movbe popcnt aes xsave avx f16c rdrand lahf_lm cmp_legacy svm extapic cr8_legacy abm sse4a misalignsse 3dnowprefetch osvw ibs skinit wdt tce topoext perfctr_core perfctr_nb bpext perfctr_llc mwaitx cpuid_fault cpb cat_l3 cdp_l3 hw_pstate ssbd mba perfmon_v2 ibrs ibpb stibp ibrs_enhanced vmmcall fsgsbase tsc_adjust bmi1 avx2 smep bmi2 erms invpcid cqm rdt_a avx512f avx512dq rdseed adx smap avx512ifma clflushopt clwb avx512cd sha_ni avx512bw avx512vl xsaveopt xsavec xgetbv1 xsaves cqm_llc cqm_occup_llc cqm_mbm_total cqm_mbm_local user_shstk avx_vnni avx512_bf16 clzero irperf xsaveerptr rdpru wbnoinvd amd_ppin cppc arat npt lbrv svm_lock nrip_save tsc_scale vmcb_clean flushbyasid decodeassists pausefilter pfthreshold avic v_vmsave_vmload vgif x2avic v_spec_ctrl vnmi avx512vbmi umip pku ospke avx512_vbmi2 gfni vaes vpclmulqdq avx512_vnni avx512_bitalg avx512_vpopcntdq la57 rdpid bus_lock_detect movdiri movdir64b overflow_recov succor smca fsrm avx512_vp2intersect flush_l1d debug_swap amd_lbr_pmc_freeze\nbugs\t\t: sysret_ss_attrs spectre_v1 spectre_v2 spec_store_bypass srso spectre_v2_user vmscape tlbi\nbogomips\t: 8386.75\nTLB size\t: 192 4K pages\nclflush size\t: 64\ncache_alignment\t: 64\naddress sizes\t: 52 bits physical, 57 bits virtual\npower management: ts ttp tm hwpstate cpb eff_freq_ro [13] [14]\n\nprocessor\t: 12\nvendor_id\t: AuthenticAMD\ncpu family\t: 26\nmodel\t\t: 8\nmodel name\t: AMD Ryzen Threadripper PRO 9965WX 24-Cores\nstepping\t: 1\nmicrocode\t: 0xb008121\ncpu MHz\t\t: 5032.782\ncache size\t: 1024 KB\nphysical id\t: 0\nsiblings\t: 48\ncore id\t\t: 16\ncpu cores\t: 24\napicid\t\t: 32\ninitial apicid\t: 32\nfpu\t\t: yes\nfpu_exception\t: yes\ncpuid level\t: 16\nwp\t\t: yes\nflags\t\t: fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ht syscall nx mmxext fxsr_opt pdpe1gb rdtscp lm constant_tsc rep_good amd_lbr_v2 nopl xtopology nonstop_tsc cpuid extd_apicid aperfmperf rapl pni pclmulqdq monitor ssse3 fma cx16 pcid sse4_1 sse4_2 x2apic movbe popcnt aes xsave avx f16c rdrand lahf_lm cmp_legacy svm extapic cr8_legacy abm sse4a misalignsse 3dnowprefetch osvw ibs skinit wdt tce topoext perfctr_core perfctr_nb bpext perfctr_llc mwaitx cpuid_fault cpb cat_l3 cdp_l3 hw_pstate ssbd mba perfmon_v2 ibrs ibpb stibp ibrs_enhanced vmmcall fsgsbase tsc_adjust bmi1 avx2 smep bmi2 erms invpcid cqm rdt_a avx512f avx512dq rdseed adx smap avx512ifma clflushopt clwb avx512cd sha_ni avx512bw avx512vl xsaveopt xsavec xgetbv1 xsaves cqm_llc cqm_occup_llc cqm_mbm_total cqm_mbm_local user_shstk avx_vnni avx512_bf16 clzero irperf xsaveerptr rdpru wbnoinvd amd_ppin cppc arat npt lbrv svm_lock nrip_save tsc_scale vmcb_clean flushbyasid decodeassists pausefilter pfthreshold avic v_vmsave_vmload vgif x2avic v_spec_ctrl vnmi avx512vbmi umip pku ospke avx512_vbmi2 gfni vaes vpclmulqdq avx512_vnni avx512_bitalg avx512_vpopcntdq la57 rdpid bus_lock_detect movdiri movdir64b overflow_recov succor smca fsrm avx512_vp2intersect flush_l1d debug_swap amd_lbr_pmc_freeze\nbugs\t\t: sysret_ss_attrs spectre_v1 spectre_v2 spec_store_bypass srso spectre_v2_user vmscape tlbi\nbogomips\t: 8386.75\nTLB size\t: 192 4K pages\nclflush size\t: 64\ncache_alignment\t: 64\naddress sizes\t: 52 bits physical, 57 bits virtual\npower management: ts ttp tm hwpstate cpb eff_freq_ro [13] [14]\n\nprocessor\t: 13\nvendor_id\t: AuthenticAMD\ncpu family\t: 26\nmodel\t\t: 8\nmodel name\t: AMD Ryzen Threadripper PRO 9965WX 24-Cores\nstepping\t: 1\nmicrocode\t: 0xb008121\ncpu MHz\t\t: 1223.623\ncache size\t: 1024 KB\nphysical id\t: 0\nsiblings\t: 48\ncore id\t\t: 17\ncpu cores\t: 24\napicid\t\t: 34\ninitial apicid\t: 34\nfpu\t\t: yes\nfpu_exception\t: yes\ncpuid level\t: 16\nwp\t\t: yes\nflags\t\t: fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ht syscall nx mmxext fxsr_opt pdpe1gb rdtscp lm constant_tsc rep_good amd_lbr_v2 nopl xtopology nonstop_tsc cpuid extd_apicid aperfmperf rapl pni pclmulqdq monitor ssse3 fma cx16 pcid sse4_1 sse4_2 x2apic movbe popcnt aes xsave avx f16c rdrand lahf_lm cmp_legacy svm extapic cr8_legacy abm sse4a misalignsse 3dnowprefetch osvw ibs skinit wdt tce topoext perfctr_core perfctr_nb bpext perfctr_llc mwaitx cpuid_fault cpb cat_l3 cdp_l3 hw_pstate ssbd mba perfmon_v2 ibrs ibpb stibp ibrs_enhanced vmmcall fsgsbase tsc_adjust bmi1 avx2 smep bmi2 erms invpcid cqm rdt_a avx512f avx512dq rdseed adx smap avx512ifma clflushopt clwb avx512cd sha_ni avx512bw avx512vl xsaveopt xsavec xgetbv1 xsaves cqm_llc cqm_occup_llc cqm_mbm_total cqm_mbm_local user_shstk avx_vnni avx512_bf16 clzero irperf xsaveerptr rdpru wbnoinvd amd_ppin cppc arat npt lbrv svm_lock nrip_save tsc_scale vmcb_clean flushbyasid decodeassists pausefilter pfthreshold avic v_vmsave_vmload vgif x2avic v_spec_ctrl vnmi avx512vbmi umip pku ospke avx512_vbmi2 gfni vaes vpclmulqdq avx512_vnni avx512_bitalg avx512_vpopcntdq la57 rdpid bus_lock_detect movdiri movdir64b overflow_recov succor smca fsrm avx512_vp2intersect flush_l1d debug_swap amd_lbr_pmc_freeze\nbugs\t\t: sysret_ss_attrs spectre_v1 spectre_v2 spec_store_bypass srso spectre_v2_user vmscape tlbi\nbogomips\t: 8386.75\nTLB size\t: 192 4K pages\nclflush size\t: 64\ncache_alignment\t: 64\naddress sizes\t: 52 bits physical, 57 bits virtual\npower management: ts ttp tm hwpstate cpb eff_freq_ro [13] [14]\n\nprocessor\t: 14\nvendor_id\t: AuthenticAMD\ncpu family\t: 26\nmodel\t\t: 8\nmodel name\t: AMD Ryzen Threadripper PRO 9965WX 24-Cores\nstepping\t: 1\nmicrocode\t: 0xb008121\ncpu MHz\t\t: 1223.623\ncache size\t: 1024 KB\nphysical id\t: 0\nsiblings\t: 48\ncore id\t\t: 18\ncpu cores\t: 24\napicid\t\t: 36\ninitial apicid\t: 36\nfpu\t\t: yes\nfpu_exception\t: yes\ncpuid level\t: 16\nwp\t\t: yes\nflags\t\t: fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ht syscall nx mmxext fxsr_opt pdpe1gb rdtscp lm constant_tsc rep_good amd_lbr_v2 nopl xtopology nonstop_tsc cpuid extd_apicid aperfmperf rapl pni pclmulqdq monitor ssse3 fma cx16 pcid sse4_1 sse4_2 x2apic movbe popcnt aes xsave avx f16c rdrand lahf_lm cmp_legacy svm extapic cr8_legacy abm sse4a misalignsse 3dnowprefetch osvw ibs skinit wdt tce topoext perfctr_core perfctr_nb bpext perfctr_llc mwaitx cpuid_fault cpb cat_l3 cdp_l3 hw_pstate ssbd mba perfmon_v2 ibrs ibpb stibp ibrs_enhanced vmmcall fsgsbase tsc_adjust bmi1 avx2 smep bmi2 erms invpcid cqm rdt_a avx512f avx512dq rdseed adx smap avx512ifma clflushopt clwb avx512cd sha_ni avx512bw avx512vl xsaveopt xsavec xgetbv1 xsaves cqm_llc cqm_occup_llc cqm_mbm_total cqm_mbm_local user_shstk avx_vnni avx512_bf16 clzero irperf xsaveerptr rdpru wbnoinvd amd_ppin cppc arat npt lbrv svm_lock nrip_save tsc_scale vmcb_clean flushbyasid decodeassists pausefilter pfthreshold avic v_vmsave_vmload vgif x2avic v_spec_ctrl vnmi avx512vbmi umip pku ospke avx512_vbmi2 gfni vaes vpclmulqdq avx512_vnni avx512_bitalg avx512_vpopcntdq la57 rdpid bus_lock_detect movdiri movdir64b overflow_recov succor smca fsrm avx512_vp2intersect flush_l1d debug_swap amd_lbr_pmc_freeze\nbugs\t\t: sysret_ss_attrs spectre_v1 spectre_v2 spec_store_bypass srso spectre_v2_user vmscape tlbi\nbogomips\t: 8386.75\nTLB size\t: 192 4K pages\nclflush size\t: 64\ncache_alignment\t: 64\naddress sizes\t: 52 bits physical, 57 bits virtual\npower management: ts ttp tm hwpstate cpb eff_freq_ro [13] [14]\n\nprocessor\t: 15\nvendor_id\t: AuthenticAMD\ncpu family\t: 26\nmodel\t\t: 8\nmodel name\t: AMD Ryzen Threadripper PRO 9965WX 24-Cores\nstepping\t: 1\nmicrocode\t: 0xb008121\ncpu MHz\t\t: 1223.623\ncache size\t: 1024 KB\nphysical id\t: 0\nsiblings\t: 48\ncore id\t\t: 19\ncpu cores\t: 24\napicid\t\t: 38\ninitial apicid\t: 38\nfpu\t\t: yes\nfpu_exception\t: yes\ncpuid level\t: 16\nwp\t\t: yes\nflags\t\t: fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ht syscall nx mmxext fxsr_opt pdpe1gb rdtscp lm constant_tsc rep_good amd_lbr_v2 nopl xtopology nonstop_tsc cpuid extd_apicid aperfmperf rapl pni pclmulqdq monitor ssse3 fma cx16 pcid sse4_1 sse4_2 x2apic movbe popcnt aes xsave avx f16c rdrand lahf_lm cmp_legacy svm extapic cr8_legacy abm sse4a misalignsse 3dnowprefetch osvw ibs skinit wdt tce topoext perfctr_core perfctr_nb bpext perfctr_llc mwaitx cpuid_fault cpb cat_l3 cdp_l3 hw_pstate ssbd mba perfmon_v2 ibrs ibpb stibp ibrs_enhanced vmmcall fsgsbase tsc_adjust bmi1 avx2 smep bmi2 erms invpcid cqm rdt_a avx512f avx512dq rdseed adx smap avx512ifma clflushopt clwb avx512cd sha_ni avx512bw avx512vl xsaveopt xsavec xgetbv1 xsaves cqm_llc cqm_occup_llc cqm_mbm_total cqm_mbm_local user_shstk avx_vnni avx512_bf16 clzero irperf xsaveerptr rdpru wbnoinvd amd_ppin cppc arat npt lbrv svm_lock nrip_save tsc_scale vmcb_clean flushbyasid decodeassists pausefilter pfthreshold avic v_vmsave_vmload vgif x2avic v_spec_ctrl vnmi avx512vbmi umip pku ospke avx512_vbmi2 gfni vaes vpclmulqdq avx512_vnni avx512_bitalg avx512_vpopcntdq la57 rdpid bus_lock_detect movdiri movdir64b overflow_recov succor smca fsrm avx512_vp2intersect flush_l1d debug_swap amd_lbr_pmc_freeze\nbugs\t\t: sysret_ss_attrs spectre_v1 spectre_v2 spec_store_bypass srso spectre_v2_user vmscape tlbi\nbogomips\t: 8386.75\nTLB size\t: 192 4K pages\nclflush size\t: 64\ncache_alignment\t: 64\naddress sizes\t: 52 bits physical, 57 bits virtual\npower management: ts ttp tm hwpstate cpb eff_freq_ro [13] [14]\n\nprocessor\t: 16\nvendor_id\t: AuthenticAMD\ncpu family\t: 26\nmodel\t\t: 8\nmodel name\t: AMD Ryzen Threadripper PRO 9965WX 24-Cores\nstepping\t: 1\nmicrocode\t: 0xb008121\ncpu MHz\t\t: 1223.623\ncache size\t: 1024 KB\nphysical id\t: 0\nsiblings\t: 48\ncore id\t\t: 20\ncpu cores\t: 24\napicid\t\t: 40\ninitial apicid\t: 40\nfpu\t\t: yes\nfpu_exception\t: yes\ncpuid level\t: 16\nwp\t\t: yes\nflags\t\t: fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ht syscall nx mmxext fxsr_opt pdpe1gb rdtscp lm constant_tsc rep_good amd_lbr_v2 nopl xtopology nonstop_tsc cpuid extd_apicid aperfmperf rapl pni pclmulqdq monitor ssse3 fma cx16 pcid sse4_1 sse4_2 x2apic movbe popcnt aes xsave avx f16c rdrand lahf_lm cmp_legacy svm extapic cr8_legacy abm sse4a misalignsse 3dnowprefetch osvw ibs skinit wdt tce topoext perfctr_core perfctr_nb bpext perfctr_llc mwaitx cpuid_fault cpb cat_l3 cdp_l3 hw_pstate ssbd mba perfmon_v2 ibrs ibpb stibp ibrs_enhanced vmmcall fsgsbase tsc_adjust bmi1 avx2 smep bmi2 erms invpcid cqm rdt_a avx512f avx512dq rdseed adx smap avx512ifma clflushopt clwb avx512cd sha_ni avx512bw avx512vl xsaveopt xsavec xgetbv1 xsaves cqm_llc cqm_occup_llc cqm_mbm_total cqm_mbm_local user_shstk avx_vnni avx512_bf16 clzero irperf xsaveerptr rdpru wbnoinvd amd_ppin cppc arat npt lbrv svm_lock nrip_save tsc_scale vmcb_clean flushbyasid decodeassists pausefilter pfthreshold avic v_vmsave_vmload vgif x2avic v_spec_ctrl vnmi avx512vbmi umip pku ospke avx512_vbmi2 gfni vaes vpclmulqdq avx512_vnni avx512_bitalg avx512_vpopcntdq la57 rdpid bus_lock_detect movdiri movdir64b overflow_recov succor smca fsrm avx512_vp2intersect flush_l1d debug_swap amd_lbr_pmc_freeze\nbugs\t\t: sysret_ss_attrs spectre_v1 spectre_v2 spec_store_bypass srso spectre_v2_user vmscape tlbi\nbogomips\t: 8386.75\nTLB size\t: 192 4K pages\nclflush size\t: 64\ncache_alignment\t: 64\naddress sizes\t: 52 bits physical, 57 bits virtual\npower management: ts ttp tm hwpstate cpb eff_freq_ro [13] [14]\n\nprocessor\t: 17\nvendor_id\t: AuthenticAMD\ncpu family\t: 26\nmodel\t\t: 8\nmodel name\t: AMD Ryzen Threadripper PRO 9965WX 24-Cores\nstepping\t: 1\nmicrocode\t: 0xb008121\ncpu MHz\t\t: 1223.623\ncache size\t: 1024 KB\nphysical id\t: 0\nsiblings\t: 48\ncore id\t\t: 21\ncpu cores\t: 24\napicid\t\t: 42\ninitial apicid\t: 42\nfpu\t\t: yes\nfpu_exception\t: yes\ncpuid level\t: 16\nwp\t\t: yes\nflags\t\t: fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ht syscall nx mmxext fxsr_opt pdpe1gb rdtscp lm constant_tsc rep_good amd_lbr_v2 nopl xtopology nonstop_tsc cpuid extd_apicid aperfmperf rapl pni pclmulqdq monitor ssse3 fma cx16 pcid sse4_1 sse4_2 x2apic movbe popcnt aes xsave avx f16c rdrand lahf_lm cmp_legacy svm extapic cr8_legacy abm sse4a misalignsse 3dnowprefetch osvw ibs skinit wdt tce topoext perfctr_core perfctr_nb bpext perfctr_llc mwaitx cpuid_fault cpb cat_l3 cdp_l3 hw_pstate ssbd mba perfmon_v2 ibrs ibpb stibp ibrs_enhanced vmmcall fsgsbase tsc_adjust bmi1 avx2 smep bmi2 erms invpcid cqm rdt_a avx512f avx512dq rdseed adx smap avx512ifma clflushopt clwb avx512cd sha_ni avx512bw avx512vl xsaveopt xsavec xgetbv1 xsaves cqm_llc cqm_occup_llc cqm_mbm_total cqm_mbm_local user_shstk avx_vnni avx512_bf16 clzero irperf xsaveerptr rdpru wbnoinvd amd_ppin cppc arat npt lbrv svm_lock nrip_save tsc_scale vmcb_clean flushbyasid decodeassists pausefilter pfthreshold avic v_vmsave_vmload vgif x2avic v_spec_ctrl vnmi avx512vbmi umip pku ospke avx512_vbmi2 gfni vaes vpclmulqdq avx512_vnni avx512_bitalg avx512_vpopcntdq la57 rdpid bus_lock_detect movdiri movdir64b overflow_recov succor smca fsrm avx512_vp2intersect flush_l1d debug_swap amd_lbr_pmc_freeze\nbugs\t\t: sysret_ss_attrs spectre_v1 spectre_v2 spec_store_bypass srso spectre_v2_user vmscape tlbi\nbogomips\t: 8386.75\nTLB size\t: 192 4K pages\nclflush size\t: 64\ncache_alignment\t: 64\naddress sizes\t: 52 bits physical, 57 bits virtual\npower management: ts ttp tm hwpstate cpb eff_freq_ro [13] [14]\n\nprocessor\t: 18\nvendor_id\t: AuthenticAMD\ncpu family\t: 26\nmodel\t\t: 8\nmodel name\t: AMD Ryzen Threadripper PRO 9965WX 24-Cores\nstepping\t: 1\nmicrocode\t: 0xb008121\ncpu MHz\t\t: 1223.623\ncache size\t: 1024 KB\nphysical id\t: 0\nsiblings\t: 48\ncore id\t\t: 24\ncpu cores\t: 24\napicid\t\t: 48\ninitial apicid\t: 48\nfpu\t\t: yes\nfpu_exception\t: yes\ncpuid level\t: 16\nwp\t\t: yes\nflags\t\t: fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ht syscall nx mmxext fxsr_opt pdpe1gb rdtscp lm constant_tsc rep_good amd_lbr_v2 nopl xtopology nonstop_tsc cpuid extd_apicid aperfmperf rapl pni pclmulqdq monitor ssse3 fma cx16 pcid sse4_1 sse4_2 x2apic movbe popcnt aes xsave avx f16c rdrand lahf_lm cmp_legacy svm extapic cr8_legacy abm sse4a misalignsse 3dnowprefetch osvw ibs skinit wdt tce topoext perfctr_core perfctr_nb bpext perfctr_llc mwaitx cpuid_fault cpb cat_l3 cdp_l3 hw_pstate ssbd mba perfmon_v2 ibrs ibpb stibp ibrs_enhanced vmmcall fsgsbase tsc_adjust bmi1 avx2 smep bmi2 erms invpcid cqm rdt_a avx512f avx512dq rdseed adx smap avx512ifma clflushopt clwb avx512cd sha_ni avx512bw avx512vl xsaveopt xsavec xgetbv1 xsaves cqm_llc cqm_occup_llc cqm_mbm_total cqm_mbm_local user_shstk avx_vnni avx512_bf16 clzero irperf xsaveerptr rdpru wbnoinvd amd_ppin cppc arat npt lbrv svm_lock nrip_save tsc_scale vmcb_clean flushbyasid decodeassists pausefilter pfthreshold avic v_vmsave_vmload vgif x2avic v_spec_ctrl vnmi avx512vbmi umip pku ospke avx512_vbmi2 gfni vaes vpclmulqdq avx512_vnni avx512_bitalg avx512_vpopcntdq la57 rdpid bus_lock_detect movdiri movdir64b overflow_recov succor smca fsrm avx512_vp2intersect flush_l1d debug_swap amd_lbr_pmc_freeze\nbugs\t\t: sysret_ss_attrs spectre_v1 spectre_v2 spec_store_bypass srso spectre_v2_user vmscape tlbi\nbogomips\t: 8386.75\nTLB size\t: 192 4K pages\nclflush size\t: 64\ncache_alignment\t: 64\naddress sizes\t: 52 bits physical, 57 bits virtual\npower management: ts ttp tm hwpstate cpb eff_freq_ro [13] [14]\n\nprocessor\t: 19\nvendor_id\t: AuthenticAMD\ncpu family\t: 26\nmodel\t\t: 8\nmodel name\t: AMD Ryzen Threadripper PRO 9965WX 24-Cores\nstepping\t: 1\nmicrocode\t: 0xb008121\ncpu MHz\t\t: 1223.623\ncache size\t: 1024 KB\nphysical id\t: 0\nsiblings\t: 48\ncore id\t\t: 25\ncpu cores\t: 24\napicid\t\t: 50\ninitial apicid\t: 50\nfpu\t\t: yes\nfpu_exception\t: yes\ncpuid level\t: 16\nwp\t\t: yes\nflags\t\t: fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ht syscall nx mmxext fxsr_opt pdpe1gb rdtscp lm constant_tsc rep_good amd_lbr_v2 nopl xtopology nonstop_tsc cpuid extd_apicid aperfmperf rapl pni pclmulqdq monitor ssse3 fma cx16 pcid sse4_1 sse4_2 x2apic movbe popcnt aes xsave avx f16c rdrand lahf_lm cmp_legacy svm extapic cr8_legacy abm sse4a misalignsse 3dnowprefetch osvw ibs skinit wdt tce topoext perfctr_core perfctr_nb bpext perfctr_llc mwaitx cpuid_fault cpb cat_l3 cdp_l3 hw_pstate ssbd mba perfmon_v2 ibrs ibpb stibp ibrs_enhanced vmmcall fsgsbase tsc_adjust bmi1 avx2 smep bmi2 erms invpcid cqm rdt_a avx512f avx512dq rdseed adx smap avx512ifma clflushopt clwb avx512cd sha_ni avx512bw avx512vl xsaveopt xsavec xgetbv1 xsaves cqm_llc cqm_occup_llc cqm_mbm_total cqm_mbm_local user_shstk avx_vnni avx512_bf16 clzero irperf xsaveerptr rdpru wbnoinvd amd_ppin cppc arat npt lbrv svm_lock nrip_save tsc_scale vmcb_clean flushbyasid decodeassists pausefilter pfthreshold avic v_vmsave_vmload vgif x2avic v_spec_ctrl vnmi avx512vbmi umip pku ospke avx512_vbmi2 gfni vaes vpclmulqdq avx512_vnni avx512_bitalg avx512_vpopcntdq la57 rdpid bus_lock_detect movdiri movdir64b overflow_recov succor smca fsrm avx512_vp2intersect flush_l1d debug_swap amd_lbr_pmc_freeze\nbugs\t\t: sysret_ss_attrs spectre_v1 spectre_v2 spec_store_bypass srso spectre_v2_user vmscape tlbi\nbogomips\t: 8386.75\nTLB size\t: 192 4K pages\nclflush size\t: 64\ncache_alignment\t: 64\naddress sizes\t: 52 bits physical, 57 bits virtual\npower management: ts ttp tm hwpstate cpb eff_freq_ro [13] [14]\n\nprocessor\t: 20\nvendor_id\t: AuthenticAMD\ncpu family\t: 26\nmodel\t\t: 8\nmodel name\t: AMD Ryzen Threadripper PRO 9965WX 24-Cores\nstepping\t: 1\nmicrocode\t: 0xb008121\ncpu MHz\t\t: 4551.633\ncache size\t: 1024 KB\nphysical id\t: 0\nsiblings\t: 48\ncore id\t\t: 26\ncpu cores\t: 24\napicid\t\t: 52\ninitial apicid\t: 52\nfpu\t\t: yes\nfpu_exception\t: yes\ncpuid level\t: 16\nwp\t\t: yes\nflags\t\t: fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ht syscall nx mmxext fxsr_opt pdpe1gb rdtscp lm constant_tsc rep_good amd_lbr_v2 nopl xtopology nonstop_tsc cpuid extd_apicid aperfmperf rapl pni pclmulqdq monitor ssse3 fma cx16 pcid sse4_1 sse4_2 x2apic movbe popcnt aes xsave avx f16c rdrand lahf_lm cmp_legacy svm extapic cr8_legacy abm sse4a misalignsse 3dnowprefetch osvw ibs skinit wdt tce topoext perfctr_core perfctr_nb bpext perfctr_llc mwaitx cpuid_fault cpb cat_l3 cdp_l3 hw_pstate ssbd mba perfmon_v2 ibrs ibpb stibp ibrs_enhanced vmmcall fsgsbase tsc_adjust bmi1 avx2 smep bmi2 erms invpcid cqm rdt_a avx512f avx512dq rdseed adx smap avx512ifma clflushopt clwb avx512cd sha_ni avx512bw avx512vl xsaveopt xsavec xgetbv1 xsaves cqm_llc cqm_occup_llc cqm_mbm_total cqm_mbm_local user_shstk avx_vnni avx512_bf16 clzero irperf xsaveerptr rdpru wbnoinvd amd_ppin cppc arat npt lbrv svm_lock nrip_save tsc_scale vmcb_clean flushbyasid decodeassists pausefilter pfthreshold avic v_vmsave_vmload vgif x2avic v_spec_ctrl vnmi avx512vbmi umip pku ospke avx512_vbmi2 gfni vaes vpclmulqdq avx512_vnni avx512_bitalg avx512_vpopcntdq la57 rdpid bus_lock_detect movdiri movdir64b overflow_recov succor smca fsrm avx512_vp2intersect flush_l1d debug_swap amd_lbr_pmc_freeze\nbugs\t\t: sysret_ss_attrs spectre_v1 spectre_v2 spec_store_bypass srso spectre_v2_user vmscape tlbi\nbogomips\t: 8386.75\nTLB size\t: 192 4K pages\nclflush size\t: 64\ncache_alignment\t: 64\naddress sizes\t: 52 bits physical, 57 bits virtual\npower management: ts ttp tm hwpstate cpb eff_freq_ro [13] [14]\n\nprocessor\t: 21\nvendor_id\t: AuthenticAMD\ncpu family\t: 26\nmodel\t\t: 8\nmodel name\t: AMD Ryzen Threadripper PRO 9965WX 24-Cores\nstepping\t: 1\nmicrocode\t: 0xb008121\ncpu MHz\t\t: 1223.623\ncache size\t: 1024 KB\nphysical id\t: 0\nsiblings\t: 48\ncore id\t\t: 27\ncpu cores\t: 24\napicid\t\t: 54\ninitial apicid\t: 54\nfpu\t\t: yes\nfpu_exception\t: yes\ncpuid level\t: 16\nwp\t\t: yes\nflags\t\t: fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ht syscall nx mmxext fxsr_opt pdpe1gb rdtscp lm constant_tsc rep_good amd_lbr_v2 nopl xtopology nonstop_tsc cpuid extd_apicid aperfmperf rapl pni pclmulqdq monitor ssse3 fma cx16 pcid sse4_1 sse4_2 x2apic movbe popcnt aes xsave avx f16c rdrand lahf_lm cmp_legacy svm extapic cr8_legacy abm sse4a misalignsse 3dnowprefetch osvw ibs skinit wdt tce topoext perfctr_core perfctr_nb bpext perfctr_llc mwaitx cpuid_fault cpb cat_l3 cdp_l3 hw_pstate ssbd mba perfmon_v2 ibrs ibpb stibp ibrs_enhanced vmmcall fsgsbase tsc_adjust bmi1 avx2 smep bmi2 erms invpcid cqm rdt_a avx512f avx512dq rdseed adx smap avx512ifma clflushopt clwb avx512cd sha_ni avx512bw avx512vl xsaveopt xsavec xgetbv1 xsaves cqm_llc cqm_occup_llc cqm_mbm_total cqm_mbm_local user_shstk avx_vnni avx512_bf16 clzero irperf xsaveerptr rdpru wbnoinvd amd_ppin cppc arat npt lbrv svm_lock nrip_save tsc_scale vmcb_clean flushbyasid decodeassists pausefilter pfthreshold avic v_vmsave_vmload vgif x2avic v_spec_ctrl vnmi avx512vbmi umip pku ospke avx512_vbmi2 gfni vaes vpclmulqdq avx512_vnni avx512_bitalg avx512_vpopcntdq la57 rdpid bus_lock_detect movdiri movdir64b overflow_recov succor smca fsrm avx512_vp2intersect flush_l1d debug_swap amd_lbr_pmc_freeze\nbugs\t\t: sysret_ss_attrs spectre_v1 spectre_v2 spec_store_bypass srso spectre_v2_user vmscape tlbi\nbogomips\t: 8386.75\nTLB size\t: 192 4K pages\nclflush size\t: 64\ncache_alignment\t: 64\naddress sizes\t: 52 bits physical, 57 bits virtual\npower management: ts ttp tm hwpstate cpb eff_freq_ro [13] [14]\n\nprocessor\t: 22\nvendor_id\t: AuthenticAMD\ncpu family\t: 26\nmodel\t\t: 8\nmodel name\t: AMD Ryzen Threadripper PRO 9965WX 24-Cores\nstepping\t: 1\nmicrocode\t: 0xb008121\ncpu MHz\t\t: 3211.245\ncache size\t: 1024 KB\nphysical id\t: 0\nsiblings\t: 48\ncore id\t\t: 28\ncpu cores\t: 24\napicid\t\t: 56\ninitial apicid\t: 56\nfpu\t\t: yes\nfpu_exception\t: yes\ncpuid level\t: 16\nwp\t\t: yes\nflags\t\t: fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ht syscall nx mmxext fxsr_opt pdpe1gb rdtscp lm constant_tsc rep_good amd_lbr_v2 nopl xtopology nonstop_tsc cpuid extd_apicid aperfmperf rapl pni pclmulqdq monitor ssse3 fma cx16 pcid sse4_1 sse4_2 x2apic movbe popcnt aes xsave avx f16c rdrand lahf_lm cmp_legacy svm extapic cr8_legacy abm sse4a misalignsse 3dnowprefetch osvw ibs skinit wdt tce topoext perfctr_core perfctr_nb bpext perfctr_llc mwaitx cpuid_fault cpb cat_l3 cdp_l3 hw_pstate ssbd mba perfmon_v2 ibrs ibpb stibp ibrs_enhanced vmmcall fsgsbase tsc_adjust bmi1 avx2 smep bmi2 erms invpcid cqm rdt_a avx512f avx512dq rdseed adx smap avx512ifma clflushopt clwb avx512cd sha_ni avx512bw avx512vl xsaveopt xsavec xgetbv1 xsaves cqm_llc cqm_occup_llc cqm_mbm_total cqm_mbm_local user_shstk avx_vnni avx512_bf16 clzero irperf xsaveerptr rdpru wbnoinvd amd_ppin cppc arat npt lbrv svm_lock nrip_save tsc_scale vmcb_clean flushbyasid decodeassists pausefilter pfthreshold avic v_vmsave_vmload vgif x2avic v_spec_ctrl vnmi avx512vbmi umip pku ospke avx512_vbmi2 gfni vaes vpclmulqdq avx512_vnni avx512_bitalg avx512_vpopcntdq la57 rdpid bus_lock_detect movdiri movdir64b overflow_recov succor smca fsrm avx512_vp2intersect flush_l1d debug_swap amd_lbr_pmc_freeze\nbugs\t\t: sysret_ss_attrs spectre_v1 spectre_v2 spec_store_bypass srso spectre_v2_user vmscape tlbi\nbogomips\t: 8386.75\nTLB size\t: 192 4K pages\nclflush size\t: 64\ncache_alignment\t: 64\naddress sizes\t: 52 bits physical, 57 bits virtual\npower management: ts ttp tm hwpstate cpb eff_freq_ro [13] [14]\n\nprocessor\t: 23\nvendor_id\t: AuthenticAMD\ncpu family\t: 26\nmodel\t\t: 8\nmodel name\t: AMD Ryzen Threadripper PRO 9965WX 24-Cores\nstepping\t: 1\nmicrocode\t: 0xb008121\ncpu MHz\t\t: 1223.623\ncache size\t: 1024 KB\nphysical id\t: 0\nsiblings\t: 48\ncore id\t\t: 29\ncpu cores\t: 24\napicid\t\t: 58\ninitial apicid\t: 58\nfpu\t\t: yes\nfpu_exception\t: yes\ncpuid level\t: 16\nwp\t\t: yes\nflags\t\t: fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ht syscall nx mmxext fxsr_opt pdpe1gb rdtscp lm constant_tsc rep_good amd_lbr_v2 nopl xtopology nonstop_tsc cpuid extd_apicid aperfmperf rapl pni pclmulqdq monitor ssse3 fma cx16 pcid sse4_1 sse4_2 x2apic movbe popcnt aes xsave avx f16c rdrand lahf_lm cmp_legacy svm extapic cr8_legacy abm sse4a misalignsse 3dnowprefetch osvw ibs skinit wdt tce topoext perfctr_core perfctr_nb bpext perfctr_llc mwaitx cpuid_fault cpb cat_l3 cdp_l3 hw_pstate ssbd mba perfmon_v2 ibrs ibpb stibp ibrs_enhanced vmmcall fsgsbase tsc_adjust bmi1 avx2 smep bmi2 erms invpcid cqm rdt_a avx512f avx512dq rdseed adx smap avx512ifma clflushopt clwb avx512cd sha_ni avx512bw avx512vl xsaveopt xsavec xgetbv1 xsaves cqm_llc cqm_occup_llc cqm_mbm_total cqm_mbm_local user_shstk avx_vnni avx512_bf16 clzero irperf xsaveerptr rdpru wbnoinvd amd_ppin cppc arat npt lbrv svm_lock nrip_save tsc_scale vmcb_clean flushbyasid decodeassists pausefilter pfthreshold avic v_vmsave_vmload vgif x2avic v_spec_ctrl vnmi avx512vbmi umip pku ospke avx512_vbmi2 gfni vaes vpclmulqdq avx512_vnni avx512_bitalg avx512_vpopcntdq la57 rdpid bus_lock_detect movdiri movdir64b overflow_recov succor smca fsrm avx512_vp2intersect flush_l1d debug_swap amd_lbr_pmc_freeze\nbugs\t\t: sysret_ss_attrs spectre_v1 spectre_v2 spec_store_bypass srso spectre_v2_user vmscape tlbi\nbogomips\t: 8386.75\nTLB size\t: 192 4K pages\nclflush size\t: 64\ncache_alignment\t: 64\naddress sizes\t: 52 bits physical, 57 bits virtual\npower management: ts ttp tm hwpstate cpb eff_freq_ro [13] [14]\n\nprocessor\t: 24\nvendor_id\t: AuthenticAMD\ncpu family\t: 26\nmodel\t\t: 8\nmodel name\t: AMD Ryzen Threadripper PRO 9965WX 24-Cores\nstepping\t: 1\nmicrocode\t: 0xb008121\ncpu MHz\t\t: 1223.623\ncache size\t: 1024 KB\nphysical id\t: 0\nsiblings\t: 48\ncore id\t\t: 0\ncpu cores\t: 24\napicid\t\t: 1\ninitial apicid\t: 1\nfpu\t\t: yes\nfpu_exception\t: yes\ncpuid level\t: 16\nwp\t\t: yes\nflags\t\t: fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ht syscall nx mmxext fxsr_opt pdpe1gb rdtscp lm constant_tsc rep_good amd_lbr_v2 nopl xtopology nonstop_tsc cpuid extd_apicid aperfmperf rapl pni pclmulqdq monitor ssse3 fma cx16 pcid sse4_1 sse4_2 x2apic movbe popcnt aes xsave avx f16c rdrand lahf_lm cmp_legacy svm extapic cr8_legacy abm sse4a misalignsse 3dnowprefetch osvw ibs skinit wdt tce topoext perfctr_core perfctr_nb bpext perfctr_llc mwaitx cpuid_fault cpb cat_l3 cdp_l3 hw_pstate ssbd mba perfmon_v2 ibrs ibpb stibp ibrs_enhanced vmmcall fsgsbase tsc_adjust bmi1 avx2 smep bmi2 erms invpcid cqm rdt_a avx512f avx512dq rdseed adx smap avx512ifma clflushopt clwb avx512cd sha_ni avx512bw avx512vl xsaveopt xsavec xgetbv1 xsaves cqm_llc cqm_occup_llc cqm_mbm_total cqm_mbm_local user_shstk avx_vnni avx512_bf16 clzero irperf xsaveerptr rdpru wbnoinvd amd_ppin cppc arat npt lbrv svm_lock nrip_save tsc_scale vmcb_clean flushbyasid decodeassists pausefilter pfthreshold avic v_vmsave_vmload vgif x2avic v_spec_ctrl vnmi avx512vbmi umip pku ospke avx512_vbmi2 gfni vaes vpclmulqdq avx512_vnni avx512_bitalg avx512_vpopcntdq la57 rdpid bus_lock_detect movdiri movdir64b overflow_recov succor smca fsrm avx512_vp2intersect flush_l1d debug_swap amd_lbr_pmc_freeze\nbugs\t\t: sysret_ss_attrs spectre_v1 spectre_v2 spec_store_bypass srso spectre_v2_user vmscape tlbi\nbogomips\t: 8386.75\nTLB size\t: 192 4K pages\nclflush size\t: 64\ncache_alignment\t: 64\naddress sizes\t: 52 bits physical, 57 bits virtual\npower management: ts ttp tm hwpstate cpb eff_freq_ro [13] [14]\n\nprocessor\t: 25\nvendor_id\t: AuthenticAMD\ncpu family\t: 26\nmodel\t\t: 8\nmodel name\t: AMD Ryzen Threadripper PRO 9965WX 24-Cores\nstepping\t: 1\nmicrocode\t: 0xb008121\ncpu MHz\t\t: 1223.623\ncache size\t: 1024 KB\nphysical id\t: 0\nsiblings\t: 48\ncore id\t\t: 1\ncpu cores\t: 24\napicid\t\t: 3\ninitial apicid\t: 3\nfpu\t\t: yes\nfpu_exception\t: yes\ncpuid level\t: 16\nwp\t\t: yes\nflags\t\t: fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ht syscall nx mmxext fxsr_opt pdpe1gb rdtscp lm constant_tsc rep_good amd_lbr_v2 nopl xtopology nonstop_tsc cpuid extd_apicid aperfmperf rapl pni pclmulqdq monitor ssse3 fma cx16 pcid sse4_1 sse4_2 x2apic movbe popcnt aes xsave avx f16c rdrand lahf_lm cmp_legacy svm extapic cr8_legacy abm sse4a misalignsse 3dnowprefetch osvw ibs skinit wdt tce topoext perfctr_core perfctr_nb bpext perfctr_llc mwaitx cpuid_fault cpb cat_l3 cdp_l3 hw_pstate ssbd mba perfmon_v2 ibrs ibpb stibp ibrs_enhanced vmmcall fsgsbase tsc_adjust bmi1 avx2 smep bmi2 erms invpcid cqm rdt_a avx512f avx512dq rdseed adx smap avx512ifma clflushopt clwb avx512cd sha_ni avx512bw avx512vl xsaveopt xsavec xgetbv1 xsaves cqm_llc cqm_occup_llc cqm_mbm_total cqm_mbm_local user_shstk avx_vnni avx512_bf16 clzero irperf xsaveerptr rdpru wbnoinvd amd_ppin cppc arat npt lbrv svm_lock nrip_save tsc_scale vmcb_clean flushbyasid decodeassists pausefilter pfthreshold avic v_vmsave_vmload vgif x2avic v_spec_ctrl vnmi avx512vbmi umip pku ospke avx512_vbmi2 gfni vaes vpclmulqdq avx512_vnni avx512_bitalg avx512_vpopcntdq la57 rdpid bus_lock_detect movdiri movdir64b overflow_recov succor smca fsrm avx512_vp2intersect flush_l1d debug_swap amd_lbr_pmc_freeze\nbugs\t\t: sysret_ss_attrs spectre_v1 spectre_v2 spec_store_bypass srso spectre_v2_user vmscape tlbi\nbogomips\t: 8386.75\nTLB size\t: 192 4K pages\nclflush size\t: 64\ncache_alignment\t: 64\naddress sizes\t: 52 bits physical, 57 bits virtual\npower management: ts ttp tm hwpstate cpb eff_freq_ro [13] [14]\n\nprocessor\t: 26\nvendor_id\t: AuthenticAMD\ncpu family\t: 26\nmodel\t\t: 8\nmodel name\t: AMD Ryzen Threadripper PRO 9965WX 24-Cores\nstepping\t: 1\nmicrocode\t: 0xb008121\ncpu MHz\t\t: 4741.681\ncache size\t: 1024 KB\nphysical id\t: 0\nsiblings\t: 48\ncore id\t\t: 2\ncpu cores\t: 24\napicid\t\t: 5\ninitial apicid\t: 5\nfpu\t\t: yes\nfpu_exception\t: yes\ncpuid level\t: 16\nwp\t\t: yes\nflags\t\t: fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ht syscall nx mmxext fxsr_opt pdpe1gb rdtscp lm constant_tsc rep_good amd_lbr_v2 nopl xtopology nonstop_tsc cpuid extd_apicid aperfmperf rapl pni pclmulqdq monitor ssse3 fma cx16 pcid sse4_1 sse4_2 x2apic movbe popcnt aes xsave avx f16c rdrand lahf_lm cmp_legacy svm extapic cr8_legacy abm sse4a misalignsse 3dnowprefetch osvw ibs skinit wdt tce topoext perfctr_core perfctr_nb bpext perfctr_llc mwaitx cpuid_fault cpb cat_l3 cdp_l3 hw_pstate ssbd mba perfmon_v2 ibrs ibpb stibp ibrs_enhanced vmmcall fsgsbase tsc_adjust bmi1 avx2 smep bmi2 erms invpcid cqm rdt_a avx512f avx512dq rdseed adx smap avx512ifma clflushopt clwb avx512cd sha_ni avx512bw avx512vl xsaveopt xsavec xgetbv1 xsaves cqm_llc cqm_occup_llc cqm_mbm_total cqm_mbm_local user_shstk avx_vnni avx512_bf16 clzero irperf xsaveerptr rdpru wbnoinvd amd_ppin cppc arat npt lbrv svm_lock nrip_save tsc_scale vmcb_clean flushbyasid decodeassists pausefilter pfthreshold avic v_vmsave_vmload vgif x2avic v_spec_ctrl vnmi avx512vbmi umip pku ospke avx512_vbmi2 gfni vaes vpclmulqdq avx512_vnni avx512_bitalg avx512_vpopcntdq la57 rdpid bus_lock_detect movdiri movdir64b overflow_recov succor smca fsrm avx512_vp2intersect flush_l1d debug_swap amd_lbr_pmc_freeze\nbugs\t\t: sysret_ss_attrs spectre_v1 spectre_v2 spec_store_bypass srso spectre_v2_user vmscape tlbi\nbogomips\t: 8386.75\nTLB size\t: 192 4K pages\nclflush size\t: 64\ncache_alignment\t: 64\naddress sizes\t: 52 bits physical, 57 bits virtual\npower management: ts ttp tm hwpstate cpb eff_freq_ro [13] [14]\n\nprocessor\t: 27\nvendor_id\t: AuthenticAMD\ncpu family\t: 26\nmodel\t\t: 8\nmodel name\t: AMD Ryzen Threadripper PRO 9965WX 24-Cores\nstepping\t: 1\nmicrocode\t: 0xb008121\ncpu MHz\t\t: 1223.623\ncache size\t: 1024 KB\nphysical id\t: 0\nsiblings\t: 48\ncore id\t\t: 3\ncpu cores\t: 24\napicid\t\t: 7\ninitial apicid\t: 7\nfpu\t\t: yes\nfpu_exception\t: yes\ncpuid level\t: 16\nwp\t\t: yes\nflags\t\t: fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ht syscall nx mmxext fxsr_opt pdpe1gb rdtscp lm constant_tsc rep_good amd_lbr_v2 nopl xtopology nonstop_tsc cpuid extd_apicid aperfmperf rapl pni pclmulqdq monitor ssse3 fma cx16 pcid sse4_1 sse4_2 x2apic movbe popcnt aes xsave avx f16c rdrand lahf_lm cmp_legacy svm extapic cr8_legacy abm sse4a misalignsse 3dnowprefetch osvw ibs skinit wdt tce topoext perfctr_core perfctr_nb bpext perfctr_llc mwaitx cpuid_fault cpb cat_l3 cdp_l3 hw_pstate ssbd mba perfmon_v2 ibrs ibpb stibp ibrs_enhanced vmmcall fsgsbase tsc_adjust bmi1 avx2 smep bmi2 erms invpcid cqm rdt_a avx512f avx512dq rdseed adx smap avx512ifma clflushopt clwb avx512cd sha_ni avx512bw avx512vl xsaveopt xsavec xgetbv1 xsaves cqm_llc cqm_occup_llc cqm_mbm_total cqm_mbm_local user_shstk avx_vnni avx512_bf16 clzero irperf xsaveerptr rdpru wbnoinvd amd_ppin cppc arat npt lbrv svm_lock nrip_save tsc_scale vmcb_clean flushbyasid decodeassists pausefilter pfthreshold avic v_vmsave_vmload vgif x2avic v_spec_ctrl vnmi avx512vbmi umip pku ospke avx512_vbmi2 gfni vaes vpclmulqdq avx512_vnni avx512_bitalg avx512_vpopcntdq la57 rdpid bus_lock_detect movdiri movdir64b overflow_recov succor smca fsrm avx512_vp2intersect flush_l1d debug_swap amd_lbr_pmc_freeze\nbugs\t\t: sysret_ss_attrs spectre_v1 spectre_v2 spec_store_bypass srso spectre_v2_user vmscape tlbi\nbogomips\t: 8386.75\nTLB size\t: 192 4K pages\nclflush size\t: 64\ncache_alignment\t: 64\naddress sizes\t: 52 bits physical, 57 bits virtual\npower management: ts ttp tm hwpstate cpb eff_freq_ro [13] [14]\n\nprocessor\t: 28\nvendor_id\t: AuthenticAMD\ncpu family\t: 26\nmodel\t\t: 8\nmodel name\t: AMD Ryzen Threadripper PRO 9965WX 24-Cores\nstepping\t: 1\nmicrocode\t: 0xb008121\ncpu MHz\t\t: 1223.623\ncache size\t: 1024 KB\nphysical id\t: 0\nsiblings\t: 48\ncore id\t\t: 4\ncpu cores\t: 24\napicid\t\t: 9\ninitial apicid\t: 9\nfpu\t\t: yes\nfpu_exception\t: yes\ncpuid level\t: 16\nwp\t\t: yes\nflags\t\t: fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ht syscall nx mmxext fxsr_opt pdpe1gb rdtscp lm constant_tsc rep_good amd_lbr_v2 nopl xtopology nonstop_tsc cpuid extd_apicid aperfmperf rapl pni pclmulqdq monitor ssse3 fma cx16 pcid sse4_1 sse4_2 x2apic movbe popcnt aes xsave avx f16c rdrand lahf_lm cmp_legacy svm extapic cr8_legacy abm sse4a misalignsse 3dnowprefetch osvw ibs skinit wdt tce topoext perfctr_core perfctr_nb bpext perfctr_llc mwaitx cpuid_fault cpb cat_l3 cdp_l3 hw_pstate ssbd mba perfmon_v2 ibrs ibpb stibp ibrs_enhanced vmmcall fsgsbase tsc_adjust bmi1 avx2 smep bmi2 erms invpcid cqm rdt_a avx512f avx512dq rdseed adx smap avx512ifma clflushopt clwb avx512cd sha_ni avx512bw avx512vl xsaveopt xsavec xgetbv1 xsaves cqm_llc cqm_occup_llc cqm_mbm_total cqm_mbm_local user_shstk avx_vnni avx512_bf16 clzero irperf xsaveerptr rdpru wbnoinvd amd_ppin cppc arat npt lbrv svm_lock nrip_save tsc_scale vmcb_clean flushbyasid decodeassists pausefilter pfthreshold avic v_vmsave_vmload vgif x2avic v_spec_ctrl vnmi avx512vbmi umip pku ospke avx512_vbmi2 gfni vaes vpclmulqdq avx512_vnni avx512_bitalg avx512_vpopcntdq la57 rdpid bus_lock_detect movdiri movdir64b overflow_recov succor smca fsrm avx512_vp2intersect flush_l1d debug_swap amd_lbr_pmc_freeze\nbugs\t\t: sysret_ss_attrs spectre_v1 spectre_v2 spec_store_bypass srso spectre_v2_user vmscape tlbi\nbogomips\t: 8386.75\nTLB size\t: 192 4K pages\nclflush size\t: 64\ncache_alignment\t: 64\naddress sizes\t: 52 bits physical, 57 bits virtual\npower management: ts ttp tm hwpstate cpb eff_freq_ro [13] [14]\n\nprocessor\t: 29\nvendor_id\t: AuthenticAMD\ncpu family\t: 26\nmodel\t\t: 8\nmodel name\t: AMD Ryzen Threadripper PRO 9965WX 24-Cores\nstepping\t: 1\nmicrocode\t: 0xb008121\ncpu MHz\t\t: 1223.623\ncache size\t: 1024 KB\nphysical id\t: 0\nsiblings\t: 48\ncore id\t\t: 5\ncpu cores\t: 24\napicid\t\t: 11\ninitial apicid\t: 11\nfpu\t\t: yes\nfpu_exception\t: yes\ncpuid level\t: 16\nwp\t\t: yes\nflags\t\t: fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ht syscall nx mmxext fxsr_opt pdpe1gb rdtscp lm constant_tsc rep_good amd_lbr_v2 nopl xtopology nonstop_tsc cpuid extd_apicid aperfmperf rapl pni pclmulqdq monitor ssse3 fma cx16 pcid sse4_1 sse4_2 x2apic movbe popcnt aes xsave avx f16c rdrand lahf_lm cmp_legacy svm extapic cr8_legacy abm sse4a misalignsse 3dnowprefetch osvw ibs skinit wdt tce topoext perfctr_core perfctr_nb bpext perfctr_llc mwaitx cpuid_fault cpb cat_l3 cdp_l3 hw_pstate ssbd mba perfmon_v2 ibrs ibpb stibp ibrs_enhanced vmmcall fsgsbase tsc_adjust bmi1 avx2 smep bmi2 erms invpcid cqm rdt_a avx512f avx512dq rdseed adx smap avx512ifma clflushopt clwb avx512cd sha_ni avx512bw avx512vl xsaveopt xsavec xgetbv1 xsaves cqm_llc cqm_occup_llc cqm_mbm_total cqm_mbm_local user_shstk avx_vnni avx512_bf16 clzero irperf xsaveerptr rdpru wbnoinvd amd_ppin cppc arat npt lbrv svm_lock nrip_save tsc_scale vmcb_clean flushbyasid decodeassists pausefilter pfthreshold avic v_vmsave_vmload vgif x2avic v_spec_ctrl vnmi avx512vbmi umip pku ospke avx512_vbmi2 gfni vaes vpclmulqdq avx512_vnni avx512_bitalg avx512_vpopcntdq la57 rdpid bus_lock_detect movdiri movdir64b overflow_recov succor smca fsrm avx512_vp2intersect flush_l1d debug_swap amd_lbr_pmc_freeze\nbugs\t\t: sysret_ss_attrs spectre_v1 spectre_v2 spec_store_bypass srso spectre_v2_user vmscape tlbi\nbogomips\t: 8386.75\nTLB size\t: 192 4K pages\nclflush size\t: 64\ncache_alignment\t: 64\naddress sizes\t: 52 bits physical, 57 bits virtual\npower management: ts ttp tm hwpstate cpb eff_freq_ro [13] [14]\n\nprocessor\t: 30\nvendor_id\t: AuthenticAMD\ncpu family\t: 26\nmodel\t\t: 8\nmodel name\t: AMD Ryzen Threadripper PRO 9965WX 24-Cores\nstepping\t: 1\nmicrocode\t: 0xb008121\ncpu MHz\t\t: 1223.623\ncache size\t: 1024 KB\nphysical id\t: 0\nsiblings\t: 48\ncore id\t\t: 8\ncpu cores\t: 24\napicid\t\t: 17\ninitial apicid\t: 17\nfpu\t\t: yes\nfpu_exception\t: yes\ncpuid level\t: 16\nwp\t\t: yes\nflags\t\t: fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ht syscall nx mmxext fxsr_opt pdpe1gb rdtscp lm constant_tsc rep_good amd_lbr_v2 nopl xtopology nonstop_tsc cpuid extd_apicid aperfmperf rapl pni pclmulqdq monitor ssse3 fma cx16 pcid sse4_1 sse4_2 x2apic movbe popcnt aes xsave avx f16c rdrand lahf_lm cmp_legacy svm extapic cr8_legacy abm sse4a misalignsse 3dnowprefetch osvw ibs skinit wdt tce topoext perfctr_core perfctr_nb bpext perfctr_llc mwaitx cpuid_fault cpb cat_l3 cdp_l3 hw_pstate ssbd mba perfmon_v2 ibrs ibpb stibp ibrs_enhanced vmmcall fsgsbase tsc_adjust bmi1 avx2 smep bmi2 erms invpcid cqm rdt_a avx512f avx512dq rdseed adx smap avx512ifma clflushopt clwb avx512cd sha_ni avx512bw avx512vl xsaveopt xsavec xgetbv1 xsaves cqm_llc cqm_occup_llc cqm_mbm_total cqm_mbm_local user_shstk avx_vnni avx512_bf16 clzero irperf xsaveerptr rdpru wbnoinvd amd_ppin cppc arat npt lbrv svm_lock nrip_save tsc_scale vmcb_clean flushbyasid decodeassists pausefilter pfthreshold avic v_vmsave_vmload vgif x2avic v_spec_ctrl vnmi avx512vbmi umip pku ospke avx512_vbmi2 gfni vaes vpclmulqdq avx512_vnni avx512_bitalg avx512_vpopcntdq la57 rdpid bus_lock_detect movdiri movdir64b overflow_recov succor smca fsrm avx512_vp2intersect flush_l1d debug_swap amd_lbr_pmc_freeze\nbugs\t\t: sysret_ss_attrs spectre_v1 spectre_v2 spec_store_bypass srso spectre_v2_user vmscape tlbi\nbogomips\t: 8386.75\nTLB size\t: 192 4K pages\nclflush size\t: 64\ncache_alignment\t: 64\naddress sizes\t: 52 bits physical, 57 bits virtual\npower management: ts ttp tm hwpstate cpb eff_freq_ro [13] [14]\n\nprocessor\t: 31\nvendor_id\t: AuthenticAMD\ncpu family\t: 26\nmodel\t\t: 8\nmodel name\t: AMD Ryzen Threadripper PRO 9965WX 24-Cores\nstepping\t: 1\nmicrocode\t: 0xb008121\ncpu MHz\t\t: 1223.623\ncache size\t: 1024 KB\nphysical id\t: 0\nsiblings\t: 48\ncore id\t\t: 9\ncpu cores\t: 24\napicid\t\t: 19\ninitial apicid\t: 19\nfpu\t\t: yes\nfpu_exception\t: yes\ncpuid level\t: 16\nwp\t\t: yes\nflags\t\t: fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ht syscall nx mmxext fxsr_opt pdpe1gb rdtscp lm constant_tsc rep_good amd_lbr_v2 nopl xtopology nonstop_tsc cpuid extd_apicid aperfmperf rapl pni pclmulqdq monitor ssse3 fma cx16 pcid sse4_1 sse4_2 x2apic movbe popcnt aes xsave avx f16c rdrand lahf_lm cmp_legacy svm extapic cr8_legacy abm sse4a misalignsse 3dnowprefetch osvw ibs skinit wdt tce topoext perfctr_core perfctr_nb bpext perfctr_llc mwaitx cpuid_fault cpb cat_l3 cdp_l3 hw_pstate ssbd mba perfmon_v2 ibrs ibpb stibp ibrs_enhanced vmmcall fsgsbase tsc_adjust bmi1 avx2 smep bmi2 erms invpcid cqm rdt_a avx512f avx512dq rdseed adx smap avx512ifma clflushopt clwb avx512cd sha_ni avx512bw avx512vl xsaveopt xsavec xgetbv1 xsaves cqm_llc cqm_occup_llc cqm_mbm_total cqm_mbm_local user_shstk avx_vnni avx512_bf16 clzero irperf xsaveerptr rdpru wbnoinvd amd_ppin cppc arat npt lbrv svm_lock nrip_save tsc_scale vmcb_clean flushbyasid decodeassists pausefilter pfthreshold avic v_vmsave_vmload vgif x2avic v_spec_ctrl vnmi avx512vbmi umip pku ospke avx512_vbmi2 gfni vaes vpclmulqdq avx512_vnni avx512_bitalg avx512_vpopcntdq la57 rdpid bus_lock_detect movdiri movdir64b overflow_recov succor smca fsrm avx512_vp2intersect flush_l1d debug_swap amd_lbr_pmc_freeze\nbugs\t\t: sysret_ss_attrs spectre_v1 spectre_v2 spec_store_bypass srso spectre_v2_user vmscape tlbi\nbogomips\t: 8386.75\nTLB size\t: 192 4K pages\nclflush size\t: 64\ncache_alignment\t: 64\naddress sizes\t: 52 bits physical, 57 bits virtual\npower management: ts ttp tm hwpstate cpb eff_freq_ro [13] [14]\n\nprocessor\t: 32\nvendor_id\t: AuthenticAMD\ncpu family\t: 26\nmodel\t\t: 8\nmodel name\t: AMD Ryzen Threadripper PRO 9965WX 24-Cores\nstepping\t: 1\nmicrocode\t: 0xb008121\ncpu MHz\t\t: 1223.623\ncache size\t: 1024 KB\nphysical id\t: 0\nsiblings\t: 48\ncore id\t\t: 10\ncpu cores\t: 24\napicid\t\t: 21\ninitial apicid\t: 21\nfpu\t\t: yes\nfpu_exception\t: yes\ncpuid level\t: 16\nwp\t\t: yes\nflags\t\t: fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ht syscall nx mmxext fxsr_opt pdpe1gb rdtscp lm constant_tsc rep_good amd_lbr_v2 nopl xtopology nonstop_tsc cpuid extd_apicid aperfmperf rapl pni pclmulqdq monitor ssse3 fma cx16 pcid sse4_1 sse4_2 x2apic movbe popcnt aes xsave avx f16c rdrand lahf_lm cmp_legacy svm extapic cr8_legacy abm sse4a misalignsse 3dnowprefetch osvw ibs skinit wdt tce topoext perfctr_core perfctr_nb bpext perfctr_llc mwaitx cpuid_fault cpb cat_l3 cdp_l3 hw_pstate ssbd mba perfmon_v2 ibrs ibpb stibp ibrs_enhanced vmmcall fsgsbase tsc_adjust bmi1 avx2 smep bmi2 erms invpcid cqm rdt_a avx512f avx512dq rdseed adx smap avx512ifma clflushopt clwb avx512cd sha_ni avx512bw avx512vl xsaveopt xsavec xgetbv1 xsaves cqm_llc cqm_occup_llc cqm_mbm_total cqm_mbm_local user_shstk avx_vnni avx512_bf16 clzero irperf xsaveerptr rdpru wbnoinvd amd_ppin cppc arat npt lbrv svm_lock nrip_save tsc_scale vmcb_clean flushbyasid decodeassists pausefilter pfthreshold avic v_vmsave_vmload vgif x2avic v_spec_ctrl vnmi avx512vbmi umip pku ospke avx512_vbmi2 gfni vaes vpclmulqdq avx512_vnni avx512_bitalg avx512_vpopcntdq la57 rdpid bus_lock_detect movdiri movdir64b overflow_recov succor smca fsrm avx512_vp2intersect flush_l1d debug_swap amd_lbr_pmc_freeze\nbugs\t\t: sysret_ss_attrs spectre_v1 spectre_v2 spec_store_bypass srso spectre_v2_user vmscape tlbi\nbogomips\t: 8386.75\nTLB size\t: 192 4K pages\nclflush size\t: 64\ncache_alignment\t: 64\naddress sizes\t: 52 bits physical, 57 bits virtual\npower management: ts ttp tm hwpstate cpb eff_freq_ro [13] [14]\n\nprocessor\t: 33\nvendor_id\t: AuthenticAMD\ncpu family\t: 26\nmodel\t\t: 8\nmodel name\t: AMD Ryzen Threadripper PRO 9965WX 24-Cores\nstepping\t: 1\nmicrocode\t: 0xb008121\ncpu MHz\t\t: 1223.623\ncache size\t: 1024 KB\nphysical id\t: 0\nsiblings\t: 48\ncore id\t\t: 11\ncpu cores\t: 24\napicid\t\t: 23\ninitial apicid\t: 23\nfpu\t\t: yes\nfpu_exception\t: yes\ncpuid level\t: 16\nwp\t\t: yes\nflags\t\t: fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ht syscall nx mmxext fxsr_opt pdpe1gb rdtscp lm constant_tsc rep_good amd_lbr_v2 nopl xtopology nonstop_tsc cpuid extd_apicid aperfmperf rapl pni pclmulqdq monitor ssse3 fma cx16 pcid sse4_1 sse4_2 x2apic movbe popcnt aes xsave avx f16c rdrand lahf_lm cmp_legacy svm extapic cr8_legacy abm sse4a misalignsse 3dnowprefetch osvw ibs skinit wdt tce topoext perfctr_core perfctr_nb bpext perfctr_llc mwaitx cpuid_fault cpb cat_l3 cdp_l3 hw_pstate ssbd mba perfmon_v2 ibrs ibpb stibp ibrs_enhanced vmmcall fsgsbase tsc_adjust bmi1 avx2 smep bmi2 erms invpcid cqm rdt_a avx512f avx512dq rdseed adx smap avx512ifma clflushopt clwb avx512cd sha_ni avx512bw avx512vl xsaveopt xsavec xgetbv1 xsaves cqm_llc cqm_occup_llc cqm_mbm_total cqm_mbm_local user_shstk avx_vnni avx512_bf16 clzero irperf xsaveerptr rdpru wbnoinvd amd_ppin cppc arat npt lbrv svm_lock nrip_save tsc_scale vmcb_clean flushbyasid decodeassists pausefilter pfthreshold avic v_vmsave_vmload vgif x2avic v_spec_ctrl vnmi avx512vbmi umip pku ospke avx512_vbmi2 gfni vaes vpclmulqdq avx512_vnni avx512_bitalg avx512_vpopcntdq la57 rdpid bus_lock_detect movdiri movdir64b overflow_recov succor smca fsrm avx512_vp2intersect flush_l1d debug_swap amd_lbr_pmc_freeze\nbugs\t\t: sysret_ss_attrs spectre_v1 spectre_v2 spec_store_bypass srso spectre_v2_user vmscape tlbi\nbogomips\t: 8386.75\nTLB size\t: 192 4K pages\nclflush size\t: 64\ncache_alignment\t: 64\naddress sizes\t: 52 bits physical, 57 bits virtual\npower management: ts ttp tm hwpstate cpb eff_freq_ro [13] [14]\n\nprocessor\t: 34\nvendor_id\t: AuthenticAMD\ncpu family\t: 26\nmodel\t\t: 8\nmodel name\t: AMD Ryzen Threadripper PRO 9965WX 24-Cores\nstepping\t: 1\nmicrocode\t: 0xb008121\ncpu MHz\t\t: 1223.623\ncache size\t: 1024 KB\nphysical id\t: 0\nsiblings\t: 48\ncore id\t\t: 12\ncpu cores\t: 24\napicid\t\t: 25\ninitial apicid\t: 25\nfpu\t\t: yes\nfpu_exception\t: yes\ncpuid level\t: 16\nwp\t\t: yes\nflags\t\t: fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ht syscall nx mmxext fxsr_opt pdpe1gb rdtscp lm constant_tsc rep_good amd_lbr_v2 nopl xtopology nonstop_tsc cpuid extd_apicid aperfmperf rapl pni pclmulqdq monitor ssse3 fma cx16 pcid sse4_1 sse4_2 x2apic movbe popcnt aes xsave avx f16c rdrand lahf_lm cmp_legacy svm extapic cr8_legacy abm sse4a misalignsse 3dnowprefetch osvw ibs skinit wdt tce topoext perfctr_core perfctr_nb bpext perfctr_llc mwaitx cpuid_fault cpb cat_l3 cdp_l3 hw_pstate ssbd mba perfmon_v2 ibrs ibpb stibp ibrs_enhanced vmmcall fsgsbase tsc_adjust bmi1 avx2 smep bmi2 erms invpcid cqm rdt_a avx512f avx512dq rdseed adx smap avx512ifma clflushopt clwb avx512cd sha_ni avx512bw avx512vl xsaveopt xsavec xgetbv1 xsaves cqm_llc cqm_occup_llc cqm_mbm_total cqm_mbm_local user_shstk avx_vnni avx512_bf16 clzero irperf xsaveerptr rdpru wbnoinvd amd_ppin cppc arat npt lbrv svm_lock nrip_save tsc_scale vmcb_clean flushbyasid decodeassists pausefilter pfthreshold avic v_vmsave_vmload vgif x2avic v_spec_ctrl vnmi avx512vbmi umip pku ospke avx512_vbmi2 gfni vaes vpclmulqdq avx512_vnni avx512_bitalg avx512_vpopcntdq la57 rdpid bus_lock_detect movdiri movdir64b overflow_recov succor smca fsrm avx512_vp2intersect flush_l1d debug_swap amd_lbr_pmc_freeze\nbugs\t\t: sysret_ss_attrs spectre_v1 spectre_v2 spec_store_bypass srso spectre_v2_user vmscape tlbi\nbogomips\t: 8386.75\nTLB size\t: 192 4K pages\nclflush size\t: 64\ncache_alignment\t: 64\naddress sizes\t: 52 bits physical, 57 bits virtual\npower management: ts ttp tm hwpstate cpb eff_freq_ro [13] [14]\n\nprocessor\t: 35\nvendor_id\t: AuthenticAMD\ncpu family\t: 26\nmodel\t\t: 8\nmodel name\t: AMD Ryzen Threadripper PRO 9965WX 24-Cores\nstepping\t: 1\nmicrocode\t: 0xb008121\ncpu MHz\t\t: 1223.623\ncache size\t: 1024 KB\nphysical id\t: 0\nsiblings\t: 48\ncore id\t\t: 13\ncpu cores\t: 24\napicid\t\t: 27\ninitial apicid\t: 27\nfpu\t\t: yes\nfpu_exception\t: yes\ncpuid level\t: 16\nwp\t\t: yes\nflags\t\t: fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ht syscall nx mmxext fxsr_opt pdpe1gb rdtscp lm constant_tsc rep_good amd_lbr_v2 nopl xtopology nonstop_tsc cpuid extd_apicid aperfmperf rapl pni pclmulqdq monitor ssse3 fma cx16 pcid sse4_1 sse4_2 x2apic movbe popcnt aes xsave avx f16c rdrand lahf_lm cmp_legacy svm extapic cr8_legacy abm sse4a misalignsse 3dnowprefetch osvw ibs skinit wdt tce topoext perfctr_core perfctr_nb bpext perfctr_llc mwaitx cpuid_fault cpb cat_l3 cdp_l3 hw_pstate ssbd mba perfmon_v2 ibrs ibpb stibp ibrs_enhanced vmmcall fsgsbase tsc_adjust bmi1 avx2 smep bmi2 erms invpcid cqm rdt_a avx512f avx512dq rdseed adx smap avx512ifma clflushopt clwb avx512cd sha_ni avx512bw avx512vl xsaveopt xsavec xgetbv1 xsaves cqm_llc cqm_occup_llc cqm_mbm_total cqm_mbm_local user_shstk avx_vnni avx512_bf16 clzero irperf xsaveerptr rdpru wbnoinvd amd_ppin cppc arat npt lbrv svm_lock nrip_save tsc_scale vmcb_clean flushbyasid decodeassists pausefilter pfthreshold avic v_vmsave_vmload vgif x2avic v_spec_ctrl vnmi avx512vbmi umip pku ospke avx512_vbmi2 gfni vaes vpclmulqdq avx512_vnni avx512_bitalg avx512_vpopcntdq la57 rdpid bus_lock_detect movdiri movdir64b overflow_recov succor smca fsrm avx512_vp2intersect flush_l1d debug_swap amd_lbr_pmc_freeze\nbugs\t\t: sysret_ss_attrs spectre_v1 spectre_v2 spec_store_bypass srso spectre_v2_user vmscape tlbi\nbogomips\t: 8386.75\nTLB size\t: 192 4K pages\nclflush size\t: 64\ncache_alignment\t: 64\naddress sizes\t: 52 bits physical, 57 bits virtual\npower management: ts ttp tm hwpstate cpb eff_freq_ro [13] [14]\n\nprocessor\t: 36\nvendor_id\t: AuthenticAMD\ncpu family\t: 26\nmodel\t\t: 8\nmodel name\t: AMD Ryzen Threadripper PRO 9965WX 24-Cores\nstepping\t: 1\nmicrocode\t: 0xb008121\ncpu MHz\t\t: 1223.623\ncache size\t: 1024 KB\nphysical id\t: 0\nsiblings\t: 48\ncore id\t\t: 16\ncpu cores\t: 24\napicid\t\t: 33\ninitial apicid\t: 33\nfpu\t\t: yes\nfpu_exception\t: yes\ncpuid level\t: 16\nwp\t\t: yes\nflags\t\t: fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ht syscall nx mmxext fxsr_opt pdpe1gb rdtscp lm constant_tsc rep_good amd_lbr_v2 nopl xtopology nonstop_tsc cpuid extd_apicid aperfmperf rapl pni pclmulqdq monitor ssse3 fma cx16 pcid sse4_1 sse4_2 x2apic movbe popcnt aes xsave avx f16c rdrand lahf_lm cmp_legacy svm extapic cr8_legacy abm sse4a misalignsse 3dnowprefetch osvw ibs skinit wdt tce topoext perfctr_core perfctr_nb bpext perfctr_llc mwaitx cpuid_fault cpb cat_l3 cdp_l3 hw_pstate ssbd mba perfmon_v2 ibrs ibpb stibp ibrs_enhanced vmmcall fsgsbase tsc_adjust bmi1 avx2 smep bmi2 erms invpcid cqm rdt_a avx512f avx512dq rdseed adx smap avx512ifma clflushopt clwb avx512cd sha_ni avx512bw avx512vl xsaveopt xsavec xgetbv1 xsaves cqm_llc cqm_occup_llc cqm_mbm_total cqm_mbm_local user_shstk avx_vnni avx512_bf16 clzero irperf xsaveerptr rdpru wbnoinvd amd_ppin cppc arat npt lbrv svm_lock nrip_save tsc_scale vmcb_clean flushbyasid decodeassists pausefilter pfthreshold avic v_vmsave_vmload vgif x2avic v_spec_ctrl vnmi avx512vbmi umip pku ospke avx512_vbmi2 gfni vaes vpclmulqdq avx512_vnni avx512_bitalg avx512_vpopcntdq la57 rdpid bus_lock_detect movdiri movdir64b overflow_recov succor smca fsrm avx512_vp2intersect flush_l1d debug_swap amd_lbr_pmc_freeze\nbugs\t\t: sysret_ss_attrs spectre_v1 spectre_v2 spec_store_bypass srso spectre_v2_user vmscape tlbi\nbogomips\t: 8386.75\nTLB size\t: 192 4K pages\nclflush size\t: 64\ncache_alignment\t: 64\naddress sizes\t: 52 bits physical, 57 bits virtual\npower management: ts ttp tm hwpstate cpb eff_freq_ro [13] [14]\n\nprocessor\t: 37\nvendor_id\t: AuthenticAMD\ncpu family\t: 26\nmodel\t\t: 8\nmodel name\t: AMD Ryzen Threadripper PRO 9965WX 24-Cores\nstepping\t: 1\nmicrocode\t: 0xb008121\ncpu MHz\t\t: 1223.623\ncache size\t: 1024 KB\nphysical id\t: 0\nsiblings\t: 48\ncore id\t\t: 17\ncpu cores\t: 24\napicid\t\t: 35\ninitial apicid\t: 35\nfpu\t\t: yes\nfpu_exception\t: yes\ncpuid level\t: 16\nwp\t\t: yes\nflags\t\t: fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ht syscall nx mmxext fxsr_opt pdpe1gb rdtscp lm constant_tsc rep_good amd_lbr_v2 nopl xtopology nonstop_tsc cpuid extd_apicid aperfmperf rapl pni pclmulqdq monitor ssse3 fma cx16 pcid sse4_1 sse4_2 x2apic movbe popcnt aes xsave avx f16c rdrand lahf_lm cmp_legacy svm extapic cr8_legacy abm sse4a misalignsse 3dnowprefetch osvw ibs skinit wdt tce topoext perfctr_core perfctr_nb bpext perfctr_llc mwaitx cpuid_fault cpb cat_l3 cdp_l3 hw_pstate ssbd mba perfmon_v2 ibrs ibpb stibp ibrs_enhanced vmmcall fsgsbase tsc_adjust bmi1 avx2 smep bmi2 erms invpcid cqm rdt_a avx512f avx512dq rdseed adx smap avx512ifma clflushopt clwb avx512cd sha_ni avx512bw avx512vl xsaveopt xsavec xgetbv1 xsaves cqm_llc cqm_occup_llc cqm_mbm_total cqm_mbm_local user_shstk avx_vnni avx512_bf16 clzero irperf xsaveerptr rdpru wbnoinvd amd_ppin cppc arat npt lbrv svm_lock nrip_save tsc_scale vmcb_clean flushbyasid decodeassists pausefilter pfthreshold avic v_vmsave_vmload vgif x2avic v_spec_ctrl vnmi avx512vbmi umip pku ospke avx512_vbmi2 gfni vaes vpclmulqdq avx512_vnni avx512_bitalg avx512_vpopcntdq la57 rdpid bus_lock_detect movdiri movdir64b overflow_recov succor smca fsrm avx512_vp2intersect flush_l1d debug_swap amd_lbr_pmc_freeze\nbugs\t\t: sysret_ss_attrs spectre_v1 spectre_v2 spec_store_bypass srso spectre_v2_user vmscape tlbi\nbogomips\t: 8386.75\nTLB size\t: 192 4K pages\nclflush size\t: 64\ncache_alignment\t: 64\naddress sizes\t: 52 bits physical, 57 bits virtual\npower management: ts ttp tm hwpstate cpb eff_freq_ro [13] [14]\n\nprocessor\t: 38\nvendor_id\t: AuthenticAMD\ncpu family\t: 26\nmodel\t\t: 8\nmodel name\t: AMD Ryzen Threadripper PRO 9965WX 24-Cores\nstepping\t: 1\nmicrocode\t: 0xb008121\ncpu MHz\t\t: 1223.623\ncache size\t: 1024 KB\nphysical id\t: 0\nsiblings\t: 48\ncore id\t\t: 18\ncpu cores\t: 24\napicid\t\t: 37\ninitial apicid\t: 37\nfpu\t\t: yes\nfpu_exception\t: yes\ncpuid level\t: 16\nwp\t\t: yes\nflags\t\t: fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ht syscall nx mmxext fxsr_opt pdpe1gb rdtscp lm constant_tsc rep_good amd_lbr_v2 nopl xtopology nonstop_tsc cpuid extd_apicid aperfmperf rapl pni pclmulqdq monitor ssse3 fma cx16 pcid sse4_1 sse4_2 x2apic movbe popcnt aes xsave avx f16c rdrand lahf_lm cmp_legacy svm extapic cr8_legacy abm sse4a misalignsse 3dnowprefetch osvw ibs skinit wdt tce topoext perfctr_core perfctr_nb bpext perfctr_llc mwaitx cpuid_fault cpb cat_l3 cdp_l3 hw_pstate ssbd mba perfmon_v2 ibrs ibpb stibp ibrs_enhanced vmmcall fsgsbase tsc_adjust bmi1 avx2 smep bmi2 erms invpcid cqm rdt_a avx512f avx512dq rdseed adx smap avx512ifma clflushopt clwb avx512cd sha_ni avx512bw avx512vl xsaveopt xsavec xgetbv1 xsaves cqm_llc cqm_occup_llc cqm_mbm_total cqm_mbm_local user_shstk avx_vnni avx512_bf16 clzero irperf xsaveerptr rdpru wbnoinvd amd_ppin cppc arat npt lbrv svm_lock nrip_save tsc_scale vmcb_clean flushbyasid decodeassists pausefilter pfthreshold avic v_vmsave_vmload vgif x2avic v_spec_ctrl vnmi avx512vbmi umip pku ospke avx512_vbmi2 gfni vaes vpclmulqdq avx512_vnni avx512_bitalg avx512_vpopcntdq la57 rdpid bus_lock_detect movdiri movdir64b overflow_recov succor smca fsrm avx512_vp2intersect flush_l1d debug_swap amd_lbr_pmc_freeze\nbugs\t\t: sysret_ss_attrs spectre_v1 spectre_v2 spec_store_bypass srso spectre_v2_user vmscape tlbi\nbogomips\t: 8386.75\nTLB size\t: 192 4K pages\nclflush size\t: 64\ncache_alignment\t: 64\naddress sizes\t: 52 bits physical, 57 bits virtual\npower management: ts ttp tm hwpstate cpb eff_freq_ro [13] [14]\n\nprocessor\t: 39\nvendor_id\t: AuthenticAMD\ncpu family\t: 26\nmodel\t\t: 8\nmodel name\t: AMD Ryzen Threadripper PRO 9965WX 24-Cores\nstepping\t: 1\nmicrocode\t: 0xb008121\ncpu MHz\t\t: 1223.623\ncache size\t: 1024 KB\nphysical id\t: 0\nsiblings\t: 48\ncore id\t\t: 19\ncpu cores\t: 24\napicid\t\t: 39\ninitial apicid\t: 39\nfpu\t\t: yes\nfpu_exception\t: yes\ncpuid level\t: 16\nwp\t\t: yes\nflags\t\t: fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ht syscall nx mmxext fxsr_opt pdpe1gb rdtscp lm constant_tsc rep_good amd_lbr_v2 nopl xtopology nonstop_tsc cpuid extd_apicid aperfmperf rapl pni pclmulqdq monitor ssse3 fma cx16 pcid sse4_1 sse4_2 x2apic movbe popcnt aes xsave avx f16c rdrand lahf_lm cmp_legacy svm extapic cr8_legacy abm sse4a misalignsse 3dnowprefetch osvw ibs skinit wdt tce topoext perfctr_core perfctr_nb bpext perfctr_llc mwaitx cpuid_fault cpb cat_l3 cdp_l3 hw_pstate ssbd mba perfmon_v2 ibrs ibpb stibp ibrs_enhanced vmmcall fsgsbase tsc_adjust bmi1 avx2 smep bmi2 erms invpcid cqm rdt_a avx512f avx512dq rdseed adx smap avx512ifma clflushopt clwb avx512cd sha_ni avx512bw avx512vl xsaveopt xsavec xgetbv1 xsaves cqm_llc cqm_occup_llc cqm_mbm_total cqm_mbm_local user_shstk avx_vnni avx512_bf16 clzero irperf xsaveerptr rdpru wbnoinvd amd_ppin cppc arat npt lbrv svm_lock nrip_save tsc_scale vmcb_clean flushbyasid decodeassists pausefilter pfthreshold avic v_vmsave_vmload vgif x2avic v_spec_ctrl vnmi avx512vbmi umip pku ospke avx512_vbmi2 gfni vaes vpclmulqdq avx512_vnni avx512_bitalg avx512_vpopcntdq la57 rdpid bus_lock_detect movdiri movdir64b overflow_recov succor smca fsrm avx512_vp2intersect flush_l1d debug_swap amd_lbr_pmc_freeze\nbugs\t\t: sysret_ss_attrs spectre_v1 spectre_v2 spec_store_bypass srso spectre_v2_user vmscape tlbi\nbogomips\t: 8386.75\nTLB size\t: 192 4K pages\nclflush size\t: 64\ncache_alignment\t: 64\naddress sizes\t: 52 bits physical, 57 bits virtual\npower management: ts ttp tm hwpstate cpb eff_freq_ro [13] [14]\n\nprocessor\t: 40\nvendor_id\t: AuthenticAMD\ncpu family\t: 26\nmodel\t\t: 8\nmodel name\t: AMD Ryzen Threadripper PRO 9965WX 24-Cores\nstepping\t: 1\nmicrocode\t: 0xb008121\ncpu MHz\t\t: 1223.623\ncache size\t: 1024 KB\nphysical id\t: 0\nsiblings\t: 48\ncore id\t\t: 20\ncpu cores\t: 24\napicid\t\t: 41\ninitial apicid\t: 41\nfpu\t\t: yes\nfpu_exception\t: yes\ncpuid level\t: 16\nwp\t\t: yes\nflags\t\t: fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ht syscall nx mmxext fxsr_opt pdpe1gb rdtscp lm constant_tsc rep_good amd_lbr_v2 nopl xtopology nonstop_tsc cpuid extd_apicid aperfmperf rapl pni pclmulqdq monitor ssse3 fma cx16 pcid sse4_1 sse4_2 x2apic movbe popcnt aes xsave avx f16c rdrand lahf_lm cmp_legacy svm extapic cr8_legacy abm sse4a misalignsse 3dnowprefetch osvw ibs skinit wdt tce topoext perfctr_core perfctr_nb bpext perfctr_llc mwaitx cpuid_fault cpb cat_l3 cdp_l3 hw_pstate ssbd mba perfmon_v2 ibrs ibpb stibp ibrs_enhanced vmmcall fsgsbase tsc_adjust bmi1 avx2 smep bmi2 erms invpcid cqm rdt_a avx512f avx512dq rdseed adx smap avx512ifma clflushopt clwb avx512cd sha_ni avx512bw avx512vl xsaveopt xsavec xgetbv1 xsaves cqm_llc cqm_occup_llc cqm_mbm_total cqm_mbm_local user_shstk avx_vnni avx512_bf16 clzero irperf xsaveerptr rdpru wbnoinvd amd_ppin cppc arat npt lbrv svm_lock nrip_save tsc_scale vmcb_clean flushbyasid decodeassists pausefilter pfthreshold avic v_vmsave_vmload vgif x2avic v_spec_ctrl vnmi avx512vbmi umip pku ospke avx512_vbmi2 gfni vaes vpclmulqdq avx512_vnni avx512_bitalg avx512_vpopcntdq la57 rdpid bus_lock_detect movdiri movdir64b overflow_recov succor smca fsrm avx512_vp2intersect flush_l1d debug_swap amd_lbr_pmc_freeze\nbugs\t\t: sysret_ss_attrs spectre_v1 spectre_v2 spec_store_bypass srso spectre_v2_user vmscape tlbi\nbogomips\t: 8386.75\nTLB size\t: 192 4K pages\nclflush size\t: 64\ncache_alignment\t: 64\naddress sizes\t: 52 bits physical, 57 bits virtual\npower management: ts ttp tm hwpstate cpb eff_freq_ro [13] [14]\n\nprocessor\t: 41\nvendor_id\t: AuthenticAMD\ncpu family\t: 26\nmodel\t\t: 8\nmodel name\t: AMD Ryzen Threadripper PRO 9965WX 24-Cores\nstepping\t: 1\nmicrocode\t: 0xb008121\ncpu MHz\t\t: 1223.623\ncache size\t: 1024 KB\nphysical id\t: 0\nsiblings\t: 48\ncore id\t\t: 21\ncpu cores\t: 24\napicid\t\t: 43\ninitial apicid\t: 43\nfpu\t\t: yes\nfpu_exception\t: yes\ncpuid level\t: 16\nwp\t\t: yes\nflags\t\t: fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ht syscall nx mmxext fxsr_opt pdpe1gb rdtscp lm constant_tsc rep_good amd_lbr_v2 nopl xtopology nonstop_tsc cpuid extd_apicid aperfmperf rapl pni pclmulqdq monitor ssse3 fma cx16 pcid sse4_1 sse4_2 x2apic movbe popcnt aes xsave avx f16c rdrand lahf_lm cmp_legacy svm extapic cr8_legacy abm sse4a misalignsse 3dnowprefetch osvw ibs skinit wdt tce topoext perfctr_core perfctr_nb bpext perfctr_llc mwaitx cpuid_fault cpb cat_l3 cdp_l3 hw_pstate ssbd mba perfmon_v2 ibrs ibpb stibp ibrs_enhanced vmmcall fsgsbase tsc_adjust bmi1 avx2 smep bmi2 erms invpcid cqm rdt_a avx512f avx512dq rdseed adx smap avx512ifma clflushopt clwb avx512cd sha_ni avx512bw avx512vl xsaveopt xsavec xgetbv1 xsaves cqm_llc cqm_occup_llc cqm_mbm_total cqm_mbm_local user_shstk avx_vnni avx512_bf16 clzero irperf xsaveerptr rdpru wbnoinvd amd_ppin cppc arat npt lbrv svm_lock nrip_save tsc_scale vmcb_clean flushbyasid decodeassists pausefilter pfthreshold avic v_vmsave_vmload vgif x2avic v_spec_ctrl vnmi avx512vbmi umip pku ospke avx512_vbmi2 gfni vaes vpclmulqdq avx512_vnni avx512_bitalg avx512_vpopcntdq la57 rdpid bus_lock_detect movdiri movdir64b overflow_recov succor smca fsrm avx512_vp2intersect flush_l1d debug_swap amd_lbr_pmc_freeze\nbugs\t\t: sysret_ss_attrs spectre_v1 spectre_v2 spec_store_bypass srso spectre_v2_user vmscape tlbi\nbogomips\t: 8386.75\nTLB size\t: 192 4K pages\nclflush size\t: 64\ncache_alignment\t: 64\naddress sizes\t: 52 bits physical, 57 bits virtual\npower management: ts ttp tm hwpstate cpb eff_freq_ro [13] [14]\n\nprocessor\t: 42\nvendor_id\t: AuthenticAMD\ncpu family\t: 26\nmodel\t\t: 8\nmodel name\t: AMD Ryzen Threadripper PRO 9965WX 24-Cores\nstepping\t: 1\nmicrocode\t: 0xb008121\ncpu MHz\t\t: 1223.623\ncache size\t: 1024 KB\nphysical id\t: 0\nsiblings\t: 48\ncore id\t\t: 24\ncpu cores\t: 24\napicid\t\t: 49\ninitial apicid\t: 49\nfpu\t\t: yes\nfpu_exception\t: yes\ncpuid level\t: 16\nwp\t\t: yes\nflags\t\t: fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ht syscall nx mmxext fxsr_opt pdpe1gb rdtscp lm constant_tsc rep_good amd_lbr_v2 nopl xtopology nonstop_tsc cpuid extd_apicid aperfmperf rapl pni pclmulqdq monitor ssse3 fma cx16 pcid sse4_1 sse4_2 x2apic movbe popcnt aes xsave avx f16c rdrand lahf_lm cmp_legacy svm extapic cr8_legacy abm sse4a misalignsse 3dnowprefetch osvw ibs skinit wdt tce topoext perfctr_core perfctr_nb bpext perfctr_llc mwaitx cpuid_fault cpb cat_l3 cdp_l3 hw_pstate ssbd mba perfmon_v2 ibrs ibpb stibp ibrs_enhanced vmmcall fsgsbase tsc_adjust bmi1 avx2 smep bmi2 erms invpcid cqm rdt_a avx512f avx512dq rdseed adx smap avx512ifma clflushopt clwb avx512cd sha_ni avx512bw avx512vl xsaveopt xsavec xgetbv1 xsaves cqm_llc cqm_occup_llc cqm_mbm_total cqm_mbm_local user_shstk avx_vnni avx512_bf16 clzero irperf xsaveerptr rdpru wbnoinvd amd_ppin cppc arat npt lbrv svm_lock nrip_save tsc_scale vmcb_clean flushbyasid decodeassists pausefilter pfthreshold avic v_vmsave_vmload vgif x2avic v_spec_ctrl vnmi avx512vbmi umip pku ospke avx512_vbmi2 gfni vaes vpclmulqdq avx512_vnni avx512_bitalg avx512_vpopcntdq la57 rdpid bus_lock_detect movdiri movdir64b overflow_recov succor smca fsrm avx512_vp2intersect flush_l1d debug_swap amd_lbr_pmc_freeze\nbugs\t\t: sysret_ss_attrs spectre_v1 spectre_v2 spec_store_bypass srso spectre_v2_user vmscape tlbi\nbogomips\t: 8386.75\nTLB size\t: 192 4K pages\nclflush size\t: 64\ncache_alignment\t: 64\naddress sizes\t: 52 bits physical, 57 bits virtual\npower management: ts ttp tm hwpstate cpb eff_freq_ro [13] [14]\n\nprocessor\t: 43\nvendor_id\t: AuthenticAMD\ncpu family\t: 26\nmodel\t\t: 8\nmodel name\t: AMD Ryzen Threadripper PRO 9965WX 24-Cores\nstepping\t: 1\nmicrocode\t: 0xb008121\ncpu MHz\t\t: 1223.623\ncache size\t: 1024 KB\nphysical id\t: 0\nsiblings\t: 48\ncore id\t\t: 25\ncpu cores\t: 24\napicid\t\t: 51\ninitial apicid\t: 51\nfpu\t\t: yes\nfpu_exception\t: yes\ncpuid level\t: 16\nwp\t\t: yes\nflags\t\t: fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ht syscall nx mmxext fxsr_opt pdpe1gb rdtscp lm constant_tsc rep_good amd_lbr_v2 nopl xtopology nonstop_tsc cpuid extd_apicid aperfmperf rapl pni pclmulqdq monitor ssse3 fma cx16 pcid sse4_1 sse4_2 x2apic movbe popcnt aes xsave avx f16c rdrand lahf_lm cmp_legacy svm extapic cr8_legacy abm sse4a misalignsse 3dnowprefetch osvw ibs skinit wdt tce topoext perfctr_core perfctr_nb bpext perfctr_llc mwaitx cpuid_fault cpb cat_l3 cdp_l3 hw_pstate ssbd mba perfmon_v2 ibrs ibpb stibp ibrs_enhanced vmmcall fsgsbase tsc_adjust bmi1 avx2 smep bmi2 erms invpcid cqm rdt_a avx512f avx512dq rdseed adx smap avx512ifma clflushopt clwb avx512cd sha_ni avx512bw avx512vl xsaveopt xsavec xgetbv1 xsaves cqm_llc cqm_occup_llc cqm_mbm_total cqm_mbm_local user_shstk avx_vnni avx512_bf16 clzero irperf xsaveerptr rdpru wbnoinvd amd_ppin cppc arat npt lbrv svm_lock nrip_save tsc_scale vmcb_clean flushbyasid decodeassists pausefilter pfthreshold avic v_vmsave_vmload vgif x2avic v_spec_ctrl vnmi avx512vbmi umip pku ospke avx512_vbmi2 gfni vaes vpclmulqdq avx512_vnni avx512_bitalg avx512_vpopcntdq la57 rdpid bus_lock_detect movdiri movdir64b overflow_recov succor smca fsrm avx512_vp2intersect flush_l1d debug_swap amd_lbr_pmc_freeze\nbugs\t\t: sysret_ss_attrs spectre_v1 spectre_v2 spec_store_bypass srso spectre_v2_user vmscape tlbi\nbogomips\t: 8386.75\nTLB size\t: 192 4K pages\nclflush size\t: 64\ncache_alignment\t: 64\naddress sizes\t: 52 bits physical, 57 bits virtual\npower management: ts ttp tm hwpstate cpb eff_freq_ro [13] [14]\n\nprocessor\t: 44\nvendor_id\t: AuthenticAMD\ncpu family\t: 26\nmodel\t\t: 8\nmodel name\t: AMD Ryzen Threadripper PRO 9965WX 24-Cores\nstepping\t: 1\nmicrocode\t: 0xb008121\ncpu MHz\t\t: 1223.623\ncache size\t: 1024 KB\nphysical id\t: 0\nsiblings\t: 48\ncore id\t\t: 26\ncpu cores\t: 24\napicid\t\t: 53\ninitial apicid\t: 53\nfpu\t\t: yes\nfpu_exception\t: yes\ncpuid level\t: 16\nwp\t\t: yes\nflags\t\t: fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ht syscall nx mmxext fxsr_opt pdpe1gb rdtscp lm constant_tsc rep_good amd_lbr_v2 nopl xtopology nonstop_tsc cpuid extd_apicid aperfmperf rapl pni pclmulqdq monitor ssse3 fma cx16 pcid sse4_1 sse4_2 x2apic movbe popcnt aes xsave avx f16c rdrand lahf_lm cmp_legacy svm extapic cr8_legacy abm sse4a misalignsse 3dnowprefetch osvw ibs skinit wdt tce topoext perfctr_core perfctr_nb bpext perfctr_llc mwaitx cpuid_fault cpb cat_l3 cdp_l3 hw_pstate ssbd mba perfmon_v2 ibrs ibpb stibp ibrs_enhanced vmmcall fsgsbase tsc_adjust bmi1 avx2 smep bmi2 erms invpcid cqm rdt_a avx512f avx512dq rdseed adx smap avx512ifma clflushopt clwb avx512cd sha_ni avx512bw avx512vl xsaveopt xsavec xgetbv1 xsaves cqm_llc cqm_occup_llc cqm_mbm_total cqm_mbm_local user_shstk avx_vnni avx512_bf16 clzero irperf xsaveerptr rdpru wbnoinvd amd_ppin cppc arat npt lbrv svm_lock nrip_save tsc_scale vmcb_clean flushbyasid decodeassists pausefilter pfthreshold avic v_vmsave_vmload vgif x2avic v_spec_ctrl vnmi avx512vbmi umip pku ospke avx512_vbmi2 gfni vaes vpclmulqdq avx512_vnni avx512_bitalg avx512_vpopcntdq la57 rdpid bus_lock_detect movdiri movdir64b overflow_recov succor smca fsrm avx512_vp2intersect flush_l1d debug_swap amd_lbr_pmc_freeze\nbugs\t\t: sysret_ss_attrs spectre_v1 spectre_v2 spec_store_bypass srso spectre_v2_user vmscape tlbi\nbogomips\t: 8386.75\nTLB size\t: 192 4K pages\nclflush size\t: 64\ncache_alignment\t: 64\naddress sizes\t: 52 bits physical, 57 bits virtual\npower management: ts ttp tm hwpstate cpb eff_freq_ro [13] [14]\n\nprocessor\t: 45\nvendor_id\t: AuthenticAMD\ncpu family\t: 26\nmodel\t\t: 8\nmodel name\t: AMD Ryzen Threadripper PRO 9965WX 24-Cores\nstepping\t: 1\nmicrocode\t: 0xb008121\ncpu MHz\t\t: 1223.623\ncache size\t: 1024 KB\nphysical id\t: 0\nsiblings\t: 48\ncore id\t\t: 27\ncpu cores\t: 24\napicid\t\t: 55\ninitial apicid\t: 55\nfpu\t\t: yes\nfpu_exception\t: yes\ncpuid level\t: 16\nwp\t\t: yes\nflags\t\t: fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ht syscall nx mmxext fxsr_opt pdpe1gb rdtscp lm constant_tsc rep_good amd_lbr_v2 nopl xtopology nonstop_tsc cpuid extd_apicid aperfmperf rapl pni pclmulqdq monitor ssse3 fma cx16 pcid sse4_1 sse4_2 x2apic movbe popcnt aes xsave avx f16c rdrand lahf_lm cmp_legacy svm extapic cr8_legacy abm sse4a misalignsse 3dnowprefetch osvw ibs skinit wdt tce topoext perfctr_core perfctr_nb bpext perfctr_llc mwaitx cpuid_fault cpb cat_l3 cdp_l3 hw_pstate ssbd mba perfmon_v2 ibrs ibpb stibp ibrs_enhanced vmmcall fsgsbase tsc_adjust bmi1 avx2 smep bmi2 erms invpcid cqm rdt_a avx512f avx512dq rdseed adx smap avx512ifma clflushopt clwb avx512cd sha_ni avx512bw avx512vl xsaveopt xsavec xgetbv1 xsaves cqm_llc cqm_occup_llc cqm_mbm_total cqm_mbm_local user_shstk avx_vnni avx512_bf16 clzero irperf xsaveerptr rdpru wbnoinvd amd_ppin cppc arat npt lbrv svm_lock nrip_save tsc_scale vmcb_clean flushbyasid decodeassists pausefilter pfthreshold avic v_vmsave_vmload vgif x2avic v_spec_ctrl vnmi avx512vbmi umip pku ospke avx512_vbmi2 gfni vaes vpclmulqdq avx512_vnni avx512_bitalg avx512_vpopcntdq la57 rdpid bus_lock_detect movdiri movdir64b overflow_recov succor smca fsrm avx512_vp2intersect flush_l1d debug_swap amd_lbr_pmc_freeze\nbugs\t\t: sysret_ss_attrs spectre_v1 spectre_v2 spec_store_bypass srso spectre_v2_user vmscape tlbi\nbogomips\t: 8386.75\nTLB size\t: 192 4K pages\nclflush size\t: 64\ncache_alignment\t: 64\naddress sizes\t: 52 bits physical, 57 bits virtual\npower management: ts ttp tm hwpstate cpb eff_freq_ro [13] [14]\n\nprocessor\t: 46\nvendor_id\t: AuthenticAMD\ncpu family\t: 26\nmodel\t\t: 8\nmodel name\t: AMD Ryzen Threadripper PRO 9965WX 24-Cores\nstepping\t: 1\nmicrocode\t: 0xb008121\ncpu MHz\t\t: 1223.623\ncache size\t: 1024 KB\nphysical id\t: 0\nsiblings\t: 48\ncore id\t\t: 28\ncpu cores\t: 24\napicid\t\t: 57\ninitial apicid\t: 57\nfpu\t\t: yes\nfpu_exception\t: yes\ncpuid level\t: 16\nwp\t\t: yes\nflags\t\t: fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ht syscall nx mmxext fxsr_opt pdpe1gb rdtscp lm constant_tsc rep_good amd_lbr_v2 nopl xtopology nonstop_tsc cpuid extd_apicid aperfmperf rapl pni pclmulqdq monitor ssse3 fma cx16 pcid sse4_1 sse4_2 x2apic movbe popcnt aes xsave avx f16c rdrand lahf_lm cmp_legacy svm extapic cr8_legacy abm sse4a misalignsse 3dnowprefetch osvw ibs skinit wdt tce topoext perfctr_core perfctr_nb bpext perfctr_llc mwaitx cpuid_fault cpb cat_l3 cdp_l3 hw_pstate ssbd mba perfmon_v2 ibrs ibpb stibp ibrs_enhanced vmmcall fsgsbase tsc_adjust bmi1 avx2 smep bmi2 erms invpcid cqm rdt_a avx512f avx512dq rdseed adx smap avx512ifma clflushopt clwb avx512cd sha_ni avx512bw avx512vl xsaveopt xsavec xgetbv1 xsaves cqm_llc cqm_occup_llc cqm_mbm_total cqm_mbm_local user_shstk avx_vnni avx512_bf16 clzero irperf xsaveerptr rdpru wbnoinvd amd_ppin cppc arat npt lbrv svm_lock nrip_save tsc_scale vmcb_clean flushbyasid decodeassists pausefilter pfthreshold avic v_vmsave_vmload vgif x2avic v_spec_ctrl vnmi avx512vbmi umip pku ospke avx512_vbmi2 gfni vaes vpclmulqdq avx512_vnni avx512_bitalg avx512_vpopcntdq la57 rdpid bus_lock_detect movdiri movdir64b overflow_recov succor smca fsrm avx512_vp2intersect flush_l1d debug_swap amd_lbr_pmc_freeze\nbugs\t\t: sysret_ss_attrs spectre_v1 spectre_v2 spec_store_bypass srso spectre_v2_user vmscape tlbi\nbogomips\t: 8386.75\nTLB size\t: 192 4K pages\nclflush size\t: 64\ncache_alignment\t: 64\naddress sizes\t: 52 bits physical, 57 bits virtual\npower management: ts ttp tm hwpstate cpb eff_freq_ro [13] [14]\n\nprocessor\t: 47\nvendor_id\t: AuthenticAMD\ncpu family\t: 26\nmodel\t\t: 8\nmodel name\t: AMD Ryzen Threadripper PRO 9965WX 24-Cores\nstepping\t: 1\nmicrocode\t: 0xb008121\ncpu MHz\t\t: 1223.623\ncache size\t: 1024 KB\nphysical id\t: 0\nsiblings\t: 48\ncore id\t\t: 29\ncpu cores\t: 24\napicid\t\t: 59\ninitial apicid\t: 59\nfpu\t\t: yes\nfpu_exception\t: yes\ncpuid level\t: 16\nwp\t\t: yes\nflags\t\t: fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ht syscall nx mmxext fxsr_opt pdpe1gb rdtscp lm constant_tsc rep_good amd_lbr_v2 nopl xtopology nonstop_tsc cpuid extd_apicid aperfmperf rapl pni pclmulqdq monitor ssse3 fma cx16 pcid sse4_1 sse4_2 x2apic movbe popcnt aes xsave avx f16c rdrand lahf_lm cmp_legacy svm extapic cr8_legacy abm sse4a misalignsse 3dnowprefetch osvw ibs skinit wdt tce topoext perfctr_core perfctr_nb bpext perfctr_llc mwaitx cpuid_fault cpb cat_l3 cdp_l3 hw_pstate ssbd mba perfmon_v2 ibrs ibpb stibp ibrs_enhanced vmmcall fsgsbase tsc_adjust bmi1 avx2 smep bmi2 erms invpcid cqm rdt_a avx512f avx512dq rdseed adx smap avx512ifma clflushopt clwb avx512cd sha_ni avx512bw avx512vl xsaveopt xsavec xgetbv1 xsaves cqm_llc cqm_occup_llc cqm_mbm_total cqm_mbm_local user_shstk avx_vnni avx512_bf16 clzero irperf xsaveerptr rdpru wbnoinvd amd_ppin cppc arat npt lbrv svm_lock nrip_save tsc_scale vmcb_clean flushbyasid decodeassists pausefilter pfthreshold avic v_vmsave_vmload vgif x2avic v_spec_ctrl vnmi avx512vbmi umip pku ospke avx512_vbmi2 gfni vaes vpclmulqdq avx512_vnni avx512_bitalg avx512_vpopcntdq la57 rdpid bus_lock_detect movdiri movdir64b overflow_recov succor smca fsrm avx512_vp2intersect flush_l1d debug_swap amd_lbr_pmc_freeze\nbugs\t\t: sysret_ss_attrs spectre_v1 spectre_v2 spec_store_bypass srso spectre_v2_user vmscape tlbi\nbogomips\t: 8386.75\nTLB size\t: 192 4K pages\nclflush size\t: 64\ncache_alignment\t: 64\naddress sizes\t: 52 bits physical, 57 bits virtual\npower management: ts ttp tm hwpstate cpb eff_freq_ro [13] [14]\n\n",
+  "started_unix": 1794296968.4203944,
+  "original_cpu_affinity": [
+    12
+  ],
+  "measured_cpu": 12,
+  "binary_sha256": {
+    "candidate": "a420329a57b5d0b97b529926d5c55cb82fcea6d0831667ce542c94a4d232633e",
+    "baseline": "a420329a57b5d0b97b529926d5c55cb82fcea6d0831667ce542c94a4d232633e"
+  },
+  "source": {
+    "candidate": "091f9d02",
+    "baseline": "091f9d02"
+  },
+  "measurements": [
+    {
+      "workload": "yaml-stream",
+      "engine": "truffledata-yaml-java",
+      "stage": "ingest",
+      "runtime": "svm",
+      "checksum": 7002334,
+      "records": 1000,
+      "input_bytes": 215484,
+      "ns_per_operation": [
+        2400570.023809524,
+        2404433.6785714286,
+        2404115.7023809524
+      ],
+      "allocated_bytes_per_operation": [
+        1784304.0,
+        1784304.0,
+        1784304.0
+      ],
+      "role": "candidate",
+      "fork": 2,
+      "order": [
+        "candidate",
+        "baseline"
+      ]
+    },
+    {
+      "workload": "yaml-stream",
+      "engine": "truffledata-yaml-java",
+      "stage": "ingest",
+      "runtime": "svm",
+      "checksum": 7002334,
+      "records": 1000,
+      "input_bytes": 215484,
+      "ns_per_operation": [
+        2393842.761904762,
+        2393607.1666666665,
+        2391899.726190476
+      ],
+      "allocated_bytes_per_operation": [
+        1784304.0,
+        1784304.0,
+        1784304.0
+      ],
+      "role": "baseline",
+      "fork": 2,
+      "order": [
+        "candidate",
+        "baseline"
+      ]
+    },
+    {
+      "workload": "yaml-stream",
+      "engine": "truffledata-yaml-truffle",
+      "stage": "ingest",
+      "runtime": "svm",
+      "checksum": 7002334,
+      "records": 1000,
+      "input_bytes": 215484,
+      "ns_per_operation": [
+        2701392.36,
+        2701330.013333333,
+        2703825.527027027
+      ],
+      "allocated_bytes_per_operation": [
+        2063904.0,
+        2063904.0,
+        2063904.0
+      ],
+      "role": "baseline",
+      "fork": 2,
+      "order": [
+        "baseline",
+        "candidate"
+      ]
+    },
+    {
+      "workload": "yaml-stream",
+      "engine": "truffledata-yaml-truffle",
+      "stage": "ingest",
+      "runtime": "svm",
+      "checksum": 7002334,
+      "records": 1000,
+      "input_bytes": 215484,
+      "ns_per_operation": [
+        2696495.28,
+        2697430.6666666665,
+        2694505.76
+      ],
+      "allocated_bytes_per_operation": [
+        2063904.0,
+        2063904.0,
+        2063904.0
+      ],
+      "role": "candidate",
+      "fork": 2,
+      "order": [
+        "baseline",
+        "candidate"
+      ]
+    },
+    {
+      "workload": "yaml-stream",
+      "engine": "truffledata-yaml-snapshot",
+      "stage": "ingest",
+      "runtime": "svm",
+      "checksum": 7002334,
+      "records": 1000,
+      "input_bytes": 215484,
+      "ns_per_operation": [
+        3659482.8,
+        3655188.909090909,
+        3650194.654545455
+      ],
+      "allocated_bytes_per_operation": [
+        2353168.0,
+        2353168.0,
+        2353168.0
+      ],
+      "role": "baseline",
+      "fork": 1,
+      "order": [
+        "baseline",
+        "candidate"
+      ]
+    },
+    {
+      "workload": "yaml-stream",
+      "engine": "truffledata-yaml-snapshot",
+      "stage": "ingest",
+      "runtime": "svm",
+      "checksum": 7002334,
+      "records": 1000,
+      "input_bytes": 215484,
+      "ns_per_operation": [
+        3719768.6481481483,
+        3707747.796296296,
+        3720855.8333333335
+      ],
+      "allocated_bytes_per_operation": [
+        2353168.0,
+        2353168.0,
+        2353168.0
+      ],
+      "role": "candidate",
+      "fork": 1,
+      "order": [
+        "baseline",
+        "candidate"
+      ]
+    },
+    {
+      "workload": "yaml-stream",
+      "engine": "truffledata-yaml-interop",
+      "stage": "ingest",
+      "runtime": "svm",
+      "checksum": 7002334,
+      "records": 1000,
+      "input_bytes": 215484,
+      "ns_per_operation": [
+        2155250.5483870967,
+        2152322.064516129,
+        2151108.0967741935
+      ],
+      "allocated_bytes_per_operation": [
+        784080.0,
+        784080.0,
+        784080.0
+      ],
+      "role": "candidate",
+      "fork": 1,
+      "order": [
+        "candidate",
+        "baseline"
+      ]
+    },
+    {
+      "workload": "yaml-stream",
+      "engine": "truffledata-yaml-interop",
+      "stage": "ingest",
+      "runtime": "svm",
+      "checksum": 7002334,
+      "records": 1000,
+      "input_bytes": 215484,
+      "ns_per_operation": [
+        2158018.0430107526,
+        2150997.9139784947,
+        2142856.265957447
+      ],
+      "allocated_bytes_per_operation": [
+        784080.0,
+        784080.0,
+        784080.0
+      ],
+      "role": "baseline",
+      "fork": 1,
+      "order": [
+        "candidate",
+        "baseline"
+      ]
+    },
+    {
+      "workload": "yaml-stream",
+      "engine": "truffledata-yaml-java",
+      "stage": "ingest",
+      "runtime": "svm",
+      "checksum": 7002334,
+      "records": 1000,
+      "input_bytes": 215484,
+      "ns_per_operation": [
+        2411803.0361445784,
+        2409338.738095238,
+        2401404.9285714286
+      ],
+      "allocated_bytes_per_operation": [
+        1784304.0,
+        1784304.0,
+        1784304.0
+      ],
+      "role": "candidate",
+      "fork": 1,
+      "order": [
+        "candidate",
+        "baseline"
+      ]
+    },
+    {
+      "workload": "yaml-stream",
+      "engine": "truffledata-yaml-java",
+      "stage": "ingest",
+      "runtime": "svm",
+      "checksum": 7002334,
+      "records": 1000,
+      "input_bytes": 215484,
+      "ns_per_operation": [
+        2397551.035714286,
+        2400596.3214285714,
+        2395006.011904762
+      ],
+      "allocated_bytes_per_operation": [
+        1784304.0,
+        1784304.0,
+        1784304.0
+      ],
+      "role": "baseline",
+      "fork": 1,
+      "order": [
+        "candidate",
+        "baseline"
+      ]
+    },
+    {
+      "workload": "yaml-stream",
+      "engine": "truffledata-yaml-java",
+      "stage": "ingest",
+      "runtime": "svm",
+      "checksum": 7002334,
+      "records": 1000,
+      "input_bytes": 215484,
+      "ns_per_operation": [
+        2443007.463414634,
+        2444832.6341463416,
+        2450510.073170732
+      ],
+      "allocated_bytes_per_operation": [
+        1784304.0,
+        1784304.0,
+        1784304.0
+      ],
+      "role": "candidate",
+      "fork": 0,
+      "order": [
+        "candidate",
+        "baseline"
+      ]
+    },
+    {
+      "workload": "yaml-stream",
+      "engine": "truffledata-yaml-java",
+      "stage": "ingest",
+      "runtime": "svm",
+      "checksum": 7002334,
+      "records": 1000,
+      "input_bytes": 215484,
+      "ns_per_operation": [
+        2405063.5,
+        2408558.869047619,
+        2403924.523809524
+      ],
+      "allocated_bytes_per_operation": [
+        1784304.0,
+        1784304.0,
+        1784304.0
+      ],
+      "role": "baseline",
+      "fork": 0,
+      "order": [
+        "candidate",
+        "baseline"
+      ]
+    },
+    {
+      "workload": "yaml-stream",
+      "engine": "truffledata-yaml-truffle",
+      "stage": "ingest",
+      "runtime": "svm",
+      "checksum": 7002334,
+      "records": 1000,
+      "input_bytes": 215484,
+      "ns_per_operation": [
+        2708235.3513513515,
+        2711863.7702702703,
+        2708830.027027027
+      ],
+      "allocated_bytes_per_operation": [
+        2063904.0,
+        2063904.0,
+        2063904.0
+      ],
+      "role": "baseline",
+      "fork": 1,
+      "order": [
+        "baseline",
+        "candidate"
+      ]
+    },
+    {
+      "workload": "yaml-stream",
+      "engine": "truffledata-yaml-truffle",
+      "stage": "ingest",
+      "runtime": "svm",
+      "checksum": 7002334,
+      "records": 1000,
+      "input_bytes": 215484,
+      "ns_per_operation": [
+        2720005.054054054,
+        2718029.6486486485,
+        2718600.364864865
+      ],
+      "allocated_bytes_per_operation": [
+        2063904.0,
+        2063904.0,
+        2063904.0
+      ],
+      "role": "candidate",
+      "fork": 1,
+      "order": [
+        "baseline",
+        "candidate"
+      ]
+    },
+    {
+      "workload": "yaml-stream",
+      "engine": "truffledata-yaml-snapshot",
+      "stage": "ingest",
+      "runtime": "svm",
+      "checksum": 7002334,
+      "records": 1000,
+      "input_bytes": 215484,
+      "ns_per_operation": [
+        3695738.654545455,
+        3701881.690909091,
+        3694325.6363636362
+      ],
+      "allocated_bytes_per_operation": [
+        2353168.0,
+        2353168.0,
+        2353168.0
+      ],
+      "role": "candidate",
+      "fork": 0,
+      "order": [
+        "candidate",
+        "baseline"
+      ]
+    },
+    {
+      "workload": "yaml-stream",
+      "engine": "truffledata-yaml-snapshot",
+      "stage": "ingest",
+      "runtime": "svm",
+      "checksum": 7002334,
+      "records": 1000,
+      "input_bytes": 215484,
+      "ns_per_operation": [
+        3726920.0555555555,
+        3729285.8333333335,
+        3747313.277777778
+      ],
+      "allocated_bytes_per_operation": [
+        2353168.0,
+        2353168.0,
+        2353168.0
+      ],
+      "role": "baseline",
+      "fork": 0,
+      "order": [
+        "candidate",
+        "baseline"
+      ]
+    },
+    {
+      "workload": "yaml-stream",
+      "engine": "truffledata-yaml-interop",
+      "stage": "ingest",
+      "runtime": "svm",
+      "checksum": 7002334,
+      "records": 1000,
+      "input_bytes": 215484,
+      "ns_per_operation": [
+        2173271.0215053763,
+        2171612.7311827955,
+        2169516.0322580645
+      ],
+      "allocated_bytes_per_operation": [
+        784080.0,
+        784080.0,
+        784080.0
+      ],
+      "role": "baseline",
+      "fork": 0,
+      "order": [
+        "baseline",
+        "candidate"
+      ]
+    },
+    {
+      "workload": "yaml-stream",
+      "engine": "truffledata-yaml-interop",
+      "stage": "ingest",
+      "runtime": "svm",
+      "checksum": 7002334,
+      "records": 1000,
+      "input_bytes": 215484,
+      "ns_per_operation": [
+        2149080.35106383,
+        2147289.265957447,
+        2142917.914893617
+      ],
+      "allocated_bytes_per_operation": [
+        784080.0,
+        784080.0,
+        784080.0
+      ],
+      "role": "candidate",
+      "fork": 0,
+      "order": [
+        "baseline",
+        "candidate"
+      ]
+    },
+    {
+      "workload": "yaml-stream",
+      "engine": "truffledata-yaml-snapshot",
+      "stage": "ingest",
+      "runtime": "svm",
+      "checksum": 7002334,
+      "records": 1000,
+      "input_bytes": 215484,
+      "ns_per_operation": [
+        3653098.018181818,
+        3653616.618181818,
+        3650165.963636364
+      ],
+      "allocated_bytes_per_operation": [
+        2353168.0,
+        2353168.0,
+        2353168.0
+      ],
+      "role": "baseline",
+      "fork": 2,
+      "order": [
+        "baseline",
+        "candidate"
+      ]
+    },
+    {
+      "workload": "yaml-stream",
+      "engine": "truffledata-yaml-snapshot",
+      "stage": "ingest",
+      "runtime": "svm",
+      "checksum": 7002334,
+      "records": 1000,
+      "input_bytes": 215484,
+      "ns_per_operation": [
+        3687929.981818182,
+        3688363.727272727,
+        3677555.4727272727
+      ],
+      "allocated_bytes_per_operation": [
+        2353168.0,
+        2353168.0,
+        2353168.0
+      ],
+      "role": "candidate",
+      "fork": 2,
+      "order": [
+        "baseline",
+        "candidate"
+      ]
+    },
+    {
+      "workload": "yaml-stream",
+      "engine": "truffledata-yaml-interop",
+      "stage": "ingest",
+      "runtime": "svm",
+      "checksum": 7002334,
+      "records": 1000,
+      "input_bytes": 215484,
+      "ns_per_operation": [
+        2158898.989247312,
+        2153986.2365591396,
+        2150091.234042553
+      ],
+      "allocated_bytes_per_operation": [
+        784080.0,
+        784080.0,
+        784080.0
+      ],
+      "role": "baseline",
+      "fork": 2,
+      "order": [
+        "baseline",
+        "candidate"
+      ]
+    },
+    {
+      "workload": "yaml-stream",
+      "engine": "truffledata-yaml-interop",
+      "stage": "ingest",
+      "runtime": "svm",
+      "checksum": 7002334,
+      "records": 1000,
+      "input_bytes": 215484,
+      "ns_per_operation": [
+        2145597.234042553,
+        2143260.3191489363,
+        2138043.755319149
+      ],
+      "allocated_bytes_per_operation": [
+        784080.0,
+        784080.0,
+        784080.0
+      ],
+      "role": "candidate",
+      "fork": 2,
+      "order": [
+        "baseline",
+        "candidate"
+      ]
+    },
+    {
+      "workload": "yaml-stream",
+      "engine": "truffledata-yaml-truffle",
+      "stage": "ingest",
+      "runtime": "svm",
+      "checksum": 7002334,
+      "records": 1000,
+      "input_bytes": 215484,
+      "ns_per_operation": [
+        2674617.9066666667,
+        2681762.9066666667,
+        2679156.8666666667
+      ],
+      "allocated_bytes_per_operation": [
+        2063904.0,
+        2063904.0,
+        2063904.0
+      ],
+      "role": "candidate",
+      "fork": 0,
+      "order": [
+        "candidate",
+        "baseline"
+      ]
+    },
+    {
+      "workload": "yaml-stream",
+      "engine": "truffledata-yaml-truffle",
+      "stage": "ingest",
+      "runtime": "svm",
+      "checksum": 7002334,
+      "records": 1000,
+      "input_bytes": 215484,
+      "ns_per_operation": [
+        2710504.378378378,
+        2712334.2837837837,
+        2717245.8513513515
+      ],
+      "allocated_bytes_per_operation": [
+        2063904.0,
+        2063904.0,
+        2063904.0
+      ],
+      "role": "baseline",
+      "fork": 0,
+      "order": [
+        "candidate",
+        "baseline"
+      ]
+    }
+  ],
+  "finished_unix": 1794297055.5277407,
+  "summary": [
+    {
+      "engine": "truffledata-yaml-java",
+      "candidate": {
+        "ns_per_operation": {
+          "median": 2409338.738095238,
+          "min": 2404115.7023809524,
+          "max": 2444832.6341463416,
+          "fork_medians": [
+            2404115.7023809524,
+            2409338.738095238,
+            2444832.6341463416
+          ]
+        },
+        "allocated_bytes_per_operation": {
+          "median": 1784304.0,
+          "min": 1784304.0,
+          "max": 1784304.0,
+          "fork_medians": [
+            1784304.0,
+            1784304.0,
+            1784304.0
+          ]
+        },
+        "allocated_bytes_per_record": 1784.304
+      },
+      "baseline": {
+        "ns_per_operation": {
+          "median": 2397551.035714286,
+          "min": 2393607.1666666665,
+          "max": 2405063.5,
+          "fork_medians": [
+            2393607.1666666665,
+            2397551.035714286,
+            2405063.5
+          ]
+        },
+        "allocated_bytes_per_operation": {
+          "median": 1784304.0,
+          "min": 1784304.0,
+          "max": 1784304.0,
+          "fork_medians": [
+            1784304.0,
+            1784304.0,
+            1784304.0
+          ]
+        },
+        "allocated_bytes_per_record": 1784.304
+      },
+      "candidate_over_baseline": 1.0049165595248488
+    },
+    {
+      "engine": "truffledata-yaml-truffle",
+      "candidate": {
+        "ns_per_operation": {
+          "median": 2696495.28,
+          "min": 2679156.8666666667,
+          "max": 2718600.364864865,
+          "fork_medians": [
+            2696495.28,
+            2718600.364864865,
+            2679156.8666666667
+          ]
+        },
+        "allocated_bytes_per_operation": {
+          "median": 2063904.0,
+          "min": 2063904.0,
+          "max": 2063904.0,
+          "fork_medians": [
+            2063904.0,
+            2063904.0,
+            2063904.0
+          ]
+        },
+        "allocated_bytes_per_record": 2063.904
+      },
+      "baseline": {
+        "ns_per_operation": {
+          "median": 2708830.027027027,
+          "min": 2701392.36,
+          "max": 2712334.2837837837,
+          "fork_medians": [
+            2701392.36,
+            2708830.027027027,
+            2712334.2837837837
+          ]
+        },
+        "allocated_bytes_per_operation": {
+          "median": 2063904.0,
+          "min": 2063904.0,
+          "max": 2063904.0,
+          "fork_medians": [
+            2063904.0,
+            2063904.0,
+            2063904.0
+          ]
+        },
+        "allocated_bytes_per_record": 2063.904
+      },
+      "candidate_over_baseline": 0.9954464669602895
+    },
+    {
+      "engine": "truffledata-yaml-interop",
+      "candidate": {
+        "ns_per_operation": {
+          "median": 2147289.265957447,
+          "min": 2143260.3191489363,
+          "max": 2152322.064516129,
+          "fork_medians": [
+            2152322.064516129,
+            2147289.265957447,
+            2143260.3191489363
+          ]
+        },
+        "allocated_bytes_per_operation": {
+          "median": 784080.0,
+          "min": 784080.0,
+          "max": 784080.0,
+          "fork_medians": [
+            784080.0,
+            784080.0,
+            784080.0
+          ]
+        },
+        "allocated_bytes_per_record": 784.08
+      },
+      "baseline": {
+        "ns_per_operation": {
+          "median": 2153986.2365591396,
+          "min": 2150997.9139784947,
+          "max": 2171612.7311827955,
+          "fork_medians": [
+            2150997.9139784947,
+            2171612.7311827955,
+            2153986.2365591396
+          ]
+        },
+        "allocated_bytes_per_operation": {
+          "median": 784080.0,
+          "min": 784080.0,
+          "max": 784080.0,
+          "fork_medians": [
+            784080.0,
+            784080.0,
+            784080.0
+          ]
+        },
+        "allocated_bytes_per_record": 784.08
+      },
+      "candidate_over_baseline": 0.9968908944319018
+    },
+    {
+      "engine": "truffledata-yaml-snapshot",
+      "candidate": {
+        "ns_per_operation": {
+          "median": 3695738.654545455,
+          "min": 3687929.981818182,
+          "max": 3719768.6481481483,
+          "fork_medians": [
+            3719768.6481481483,
+            3695738.654545455,
+            3687929.981818182
+          ]
+        },
+        "allocated_bytes_per_operation": {
+          "median": 2353168.0,
+          "min": 2353168.0,
+          "max": 2353168.0,
+          "fork_medians": [
+            2353168.0,
+            2353168.0,
+            2353168.0
+          ]
+        },
+        "allocated_bytes_per_record": 2353.168
+      },
+      "baseline": {
+        "ns_per_operation": {
+          "median": 3655188.909090909,
+          "min": 3653098.018181818,
+          "max": 3729285.8333333335,
+          "fork_medians": [
+            3655188.909090909,
+            3729285.8333333335,
+            3653098.018181818
+          ]
+        },
+        "allocated_bytes_per_operation": {
+          "median": 2353168.0,
+          "min": 2353168.0,
+          "max": 2353168.0,
+          "fork_medians": [
+            2353168.0,
+            2353168.0,
+            2353168.0
+          ]
+        },
+        "allocated_bytes_per_record": 2353.168
+      },
+      "candidate_over_baseline": 1.0110937482201516
+    }
+  ]
+}
