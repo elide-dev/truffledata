@@ -479,41 +479,47 @@ messages and order, ownership and lifetimes — is the backend's own; the slabs 
   run on (`BuffaAbi`; Myna 0.14.0 gives Linux AArch64 its own, see
   [PUBLISHING.md](PUBLISHING.md#prebuilt-natives)), and `//bazel:myna_contract` checks that each
   derived descriptor equals the production descriptor apart from those options.
-- **Shape.** The cells are called directly from the boundary-entered decode (one adopted cell per
-  backend). Each call holds the concrete generated `decodeSlab_Cell`/`decodeSlabSmall_Cell` and
-  calls its specialized `executeInt` (Myna 0.14.0): no result box and no
-  `UnexpectedResultException`. `//protobuf-buffa/cells/tests:call_shape` scans every
-  `<format>/cells` package and fails on a scalar cell called through `execute(Object[])`, a boxed
-  cast or unboxing of a cell result, or an `UnexpectedResultException` handler. Heap arrays are
-  pinned around the call with plain `try/finally` (javac's try-with-resources reaches
-  `Throwable.addSuppressed`, which the runtime-compilation blocklist rejects) and lent as pointers
-  on Native Image, and copied by Myna's borrow rule (`HeapBytes`) on HotSpot, where native segments
-  cross as `NativeBytes`.
-- **Per-call cost.** `NativeCell`'s only entries take an `Object[]` of guest values, and these calls
-  run in AOT-compiled host code below a `@TruffleBoundary`, not in partially evaluated guest code,
-  so Myna's scalar replacement of the argument array, boxes and pointers (measured from
-  runtime-compiled roots) is not guaranteed here. Each backend therefore reuses one argument array
-  (the cell only reads it; a decoder is thread-confined and the backend's busy check excludes
-  reentry) and caches the pointers and boxes whose values repeat: the compiled layout, the
-  projection mask, its result slot and the limits, and on Native Image also the input and output
-  addresses, the length and the capacity, which repeat when a session decodes from one buffer into
-  its arena. A cached pointer is an address in a box, compared with the current address before
-  every use; nothing reads through it. What Myna still allocates on every call is its own `Borrow`
-  for each non-null byte-pointer parameter (`compiled`, `data`, `out`). `CellsAcceptance` measures
-  the Java bytes per `writeSlab` call of the static backend and the cells route in the image and
-  holds the difference to 144 B with the same input and arena on every call (the three `Borrow`
-  objects) and to 176 B when both alternate (plus a `NativePointer` for each new address); the
-  static backend allocates 0 B, so nothing on this call is scalar-replaced. A changing length or
-  capacity outside the JDK's small-value cache adds a 16 B box each. Upstream: elide-dev/myna#85
-  (per-call allocation), #86 (direct transitions not faster than one boundary call on
+- **Shape.** The backends are host code, compiled ahead of time on Native Image and called below
+  the decode entries' `@TruffleBoundary`, so they use each generated cell's static `invoke` entry
+  (Myna 0.16.0): native carriers and raw `long` addresses, with no cell instance, argument array,
+  box, `NativePointer` or `Borrow`. `invoke` coerces and borrows nothing, so the caller keeps every
+  address valid for the call: heap arrays are pinned around it with plain `try/finally` (javac's
+  try-with-resources reaches `Throwable.addSuppressed`, which the runtime-compilation blocklist
+  rejects), and native inputs, arenas and the result slot stay held by their leases and the
+  backend. On Native Image every entry calls `decodeSlab_Cell.invoke`, the same native entry the
+  static backend calls (it never uses the leaf `decodeSlabSmall`), so the two routes differ only
+  in which generated binding they call; in the symbol-bearing flag-on consumer image `invoke` is
+  inlined into both `slab` overloads and `writeSlab`, which make the native call themselves and
+  call no `execute` symbol (`//benchmarks/comparison:consumer_cells_call_shape`). On HotSpot the entries whose buffers are all native
+  memory (native input, the session and projection arena writes) call `decodeSlab_Cell.invoke`
+  after the region scope check below; the bounded heap-input entry keeps the concrete
+  `decodeSlabSmall_Cell` and its typed `executeInt` (no result box, no
+  `UnexpectedResultException`), because `invoke` takes only addresses and a HotSpot heap array has
+  none: Myna's borrow (`HeapBytes`) copies it to scratch memory and the output back, where the FFM
+  backend lends it in place. `//protobuf-buffa/cells/tests:call_shape` scans every
+  `<format>/cells` package: Native Image routes must call `invoke` and no `execute` method, HotSpot
+  routes may call `invoke` or a typed `execute*`, and a boxed cast or unboxing of a cell result or
+  an `UnexpectedResultException` handler fails everywhere.
+- **Per-call cost.** `CellsAcceptance` measures the Java bytes per `writeSlab` call of the static
+  backend and the cells route in the Native Image and holds the difference to 0 B, with the same
+  input and arena on every call and with both alternating. Measured through `invoke`: 0 B per call on both routes in both shapes (the static backend 0 B,
+  the cells route 0 B).
+  Through `executeInt(Object[])` on Myna 0.14.0 the route allocated 144 B per call (the three
+  `Borrow` objects of the byte-pointer parameters, with a reused argument array and cached
+  pointers) and 176 B when the buffers alternated (plus a `NativePointer` per new address). On
+  HotSpot the shared acceptance's session decode measured 0 B/message on the cells route through
+  `invoke` (0 B with the flag off as well), against 240 B through `executeInt` on Myna 0.14.0 and
+  528 B on Myna 0.16.0; its flag-on ceiling is 0.1 B/message and the default route keeps its 48 B
+  contract. These are allocation counts, not timings. Upstream: elide-dev/myna#85 (per-call
+  allocation of `execute`), #86 (direct transitions not faster than one boundary call on
   sub-microsecond imports) and #87.
 - **Region scope on HotSpot.** The FFM backend hands `MemorySegment`s to the downcall, which
-  refuses one whose scope is closed or confined to another thread. A cell lends a raw address, so
+  refuses one whose scope is closed or confined to another thread. `invoke` takes a raw address, so
   the cells backend makes that check itself before every call, with the downcall's exceptions in
   the downcall's order; without it a region closed behind an adopted input (`BuffaJvm.adopt`)
   reached the producer as a dangling pointer. One difference remains and Myna forces it: the
-  downcall also keeps a shared scope open for the duration of the call, and a generated FFM cell
-  cannot, so a shared arena closed by another thread while the producer runs is not rejected on
+  downcall also keeps a shared scope open for the duration of the call, and `invoke`, which tracks
+  no caller's scope, cannot, so a shared arena closed by another thread while the producer runs is not rejected on
   this route. Native Image inputs are raw addresses on both routes.
 - **Ownership declarations.** Myna's `resource` and `borrow ... lifetime=call` declarations do not
   fit this seam, so the derived seams add none. A resource's `create` must take only scalars and
@@ -529,10 +535,10 @@ messages and order, ownership and lifetimes — is the backend's own; the slabs 
 Tests: `//protobuf-buffa/cells/tests:jvm` (the shared acceptance suite with the flag on, the route
 check and a byte/error parity run of every slab entry against the FFM backend, including depth
 limits and adopted regions whose scope is closed or owned by another thread),
-`:jvm_off` (artifact present, flag off), `:call_shape` (the specialized-call scan),
+`:jvm_off` (artifact present, flag off), `:call_shape` (the call-shape scan),
 `:native_test` (Native Image built with the flag: the shared native acceptance, the route check,
 parity against the static backend and the per-call allocation ceilings, with the blocklist
 checks), `//benchmarks/comparison:consumer_cells_call_shape` (the symbol-bearing flag-on consumer
-image: the cells backend calls `decodeSlab_Cell.executeInt` and never the generic
-`execute(Object[])`), and `//benchmarks/comparison:consumer_native_smoke_cells` (the 132-cell
+image: the cells backend reaches the producer through `decodeSlab_Cell.invoke`, or has it inlined
+and calls the native binding directly, and calls no `_Cell_execute*` symbol), and `//benchmarks/comparison:consumer_native_smoke_cells` (the 132-cell
 consumer smoke matrix on the cells route).
