@@ -1383,4 +1383,39 @@ final class JvmScopedTest {
     }
   }
 
+  /**
+   * The Myna cells route ({@code -Dtruffledata.json.cells}) is off unless asked for, and it never
+   * falls back to another route: binding it without the {@code truffledata-json-cells} artifact
+   * fails and names the artifact. On the cells lane (//json/cells/tests:jvm) the artifact is on the
+   * class path and the same call binds.
+   */
+  @Test
+  void cellsRouteIsOptInAndNeedsItsArtifact() throws Exception {
+    Class<?> route = Class.forName("dev.elide.truffledata.json.JsonCellsRoute");
+    var enabled = route.getDeclaredField("ENABLED");
+    enabled.setAccessible(true);
+    assertEquals(Boolean.getBoolean("truffledata.json.cells"), enabled.getBoolean(null));
+    var bind = route.getDeclaredMethod("jvm", Path.class);
+    bind.setAccessible(true);
+    boolean artifact;
+    try {
+      Class.forName("dev.elide.truffledata.json.CellsFfm", false, route.getClassLoader());
+      artifact = true;
+    } catch (ClassNotFoundException absent) {
+      artifact = false;
+    }
+    if (artifact) {
+      assertNotNull(bind.invoke(null, library()));
+      return;
+    }
+    // This lane sets no flag: off is the default.
+    assertFalse(enabled.getBoolean(null));
+    var failure =
+        assertThrows(
+            java.lang.reflect.InvocationTargetException.class, () -> bind.invoke(null, library()));
+    assertInstanceOf(IllegalStateException.class, failure.getCause());
+    assertTrue(
+        failure.getCause().getMessage().contains("truffledata-json-cells"),
+        failure.getCause().getMessage());
+  }
 }

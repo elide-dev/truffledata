@@ -58,6 +58,23 @@ final class CellsParity {
           else errors++;
         }
       }
+      // Every message is closed by now. Each result a cell decoded into was released through the
+      // release cell exactly once (a leak or a double release breaks the equality), and with the
+      // flag on JsonJvm made exactly as many cell calls as the cells called directly: none of its
+      // decodes took another route.
+      long[] directCalls = cells.calls();
+      if (directCalls[0] == 0 || directCalls[0] != directCalls[1])
+        throw new AssertionError(
+            "Cells called directly: " + directCalls[0] + " decodes, " + directCalls[1] + " releases");
+      CellsFfm route = CellsRouteTest.cells(decoder);
+      if (JsonCellsRoute.ENABLED != (route != null))
+        throw new AssertionError("Route cells " + route + " with the flag " + JsonCellsRoute.ENABLED);
+      if (route != null && !java.util.Arrays.equals(directCalls, route.calls()))
+        throw new AssertionError(
+            "JsonJvm made "
+                + java.util.Arrays.toString(route.calls())
+                + " cell calls, the cells called directly "
+                + java.util.Arrays.toString(directCalls));
     }
     if (ok < 100 || errors < 100)
       throw new AssertionError("Parity inputs too one-sided: " + ok + " ok, " + errors + " errors");

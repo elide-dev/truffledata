@@ -26,21 +26,47 @@ final class CellsRouteTest {
     return runfile("json/native/json_shared.so");
   }
 
-  /** The flag is read once and selects the route; the lane states which one it expects. */
+  /** The cells a decoder bound when it opened; {@code null} on the baseline route. */
+  static CellsFfm cells(JsonDecoder decoder) throws ReflectiveOperationException {
+    var field = JsonJvm.class.getDeclaredField("cells");
+    field.setAccessible(true);
+    return (CellsFfm) field.get(decoder);
+  }
+
+  /**
+   * The flag is read once and selects the route; the lane states which one it expects. With the
+   * flag on, a decode and the release of its result each go through a cell, exactly once.
+   */
   @Test
   void routeFollowsTheFlag() throws Exception {
     boolean expected = Boolean.getBoolean("truffledata.json.cells.expected");
     assertEquals(expected, JsonCellsRoute.ENABLED);
     assertEquals(expected, Boolean.getBoolean(JsonCellsRoute.PROPERTY));
+    byte[] document = "{\"a\":[1,true]}".getBytes(StandardCharsets.UTF_8);
     try (JsonDecoder decoder = JsonJvm.open(library())) {
-      var field = JsonJvm.class.getDeclaredField("cells");
-      field.setAccessible(true);
-      Object cells = field.get(decoder);
-      if (expected) assertInstanceOf(CellsFfm.class, cells);
-      else assertNull(cells);
-      try (JsonMessage message = decoder.decode("{\"a\":[1,true]}".getBytes(StandardCharsets.UTF_8))) {
+      CellsFfm cells = cells(decoder);
+      assertEquals(expected, cells != null);
+      try (JsonMessage message = decoder.decode(document)) {
         assertTrue(CellsInputs.render(message).startsWith("ok "));
+        if (cells != null) assertArrayEquals(new long[] {1, 0}, cells.calls());
       }
+      if (cells != null) assertArrayEquals(new long[] {1, 1}, cells.calls());
+      // A refused document's result is released through the cell as well.
+      assertThrows(
+          IllegalArgumentException.class,
+          () -> decoder.decode("[1,".getBytes(StandardCharsets.UTF_8)));
+      if (cells != null) assertArrayEquals(new long[] {2, 2}, cells.calls());
+    }
+    // A property change after initialization does not move the route.
+    String previous = System.getProperty(JsonCellsRoute.PROPERTY);
+    try {
+      System.setProperty(JsonCellsRoute.PROPERTY, Boolean.toString(!expected));
+      try (JsonDecoder decoder = JsonJvm.open(library())) {
+        assertEquals(expected, cells(decoder) != null);
+      }
+    } finally {
+      if (previous == null) System.clearProperty(JsonCellsRoute.PROPERTY);
+      else System.setProperty(JsonCellsRoute.PROPERTY, previous);
     }
   }
 
