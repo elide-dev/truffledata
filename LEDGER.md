@@ -4,6 +4,23 @@ Sam paused all work to resume with **Fable 5.2**. This file is the single entry 
 read it, then the linked ledgers, then act. Project rules: `AGENTS.md` (SVM is the
 production performance target; never weaken safety checks; serialize local Bazel).
 
+## Resume 2026-11-09 16:05 PST (Fable 5.2 lead) — IN PROGRESS
+
+Sam: "resume this and finish it, your time budget is 30-45mins to wrap up", workers on Opus,
+Fable only for the most sensitive critical code. Running now (workflow run `wf_b9eb1329-456`,
+worker deadline 16:30 PST):
+
+- Opus worker per worktree: `cells-a` (Buffa tests, then CSV route or trim), `cells-b` (JSON),
+  `cells-c` (YAML), and the F1 remaining gates in the F1 worktree (arm64 lane first, then SVM
+  amd64, then macOS local). Each cells branch must end as a correct, tested subset; untested
+  work is trimmed in a new commit.
+- Fable critical-section review of each cells diff (`git diff 0e0c539e...HEAD`) after its worker.
+- Bazel lock wrapper for this session:
+  `/private/tmp/claude-501/-Users-sam-workspace-graalvm-truffledata/f86c3c78-8f8a-4faf-8736-a1f1ee674e61/scratchpad/bzl.sh`.
+- Lead then: merge reviewed branches into `deps/myna-0.14.0`, push, watch PR #67. Outcomes are
+  recorded in "Resume outcome" below when the workflow returns; until that section exists,
+  treat the worker state below as the last known truth and inspect each worktree's `git log`.
+
 ## Goal in flight
 
 Release **truffledata 0.11.0**. Sam's gate: ship after the **Myna 0.14.0 +
