@@ -17,6 +17,13 @@ worker deadline 16:30 PST):
 - Fable critical-section review of each cells diff (`git diff 0e0c539e...HEAD`) after its worker.
 - Bazel lock wrapper for this session:
   `/private/tmp/claude-501/-Users-sam-workspace-graalvm-truffledata/f86c3c78-8f8a-4faf-8736-a1f1ee674e61/scratchpad/bzl.sh`.
+- **#57 is no longer held.** Sam merged it to main himself at 16:14 PST (`1158dc93`); main is
+  merged into `deps/myna-0.14.0`. 0.11.0 therefore ships the sticky closed-enum map-entry
+  rejection: stable round trip, but an invalid-then-valid entry is orphaned where protobuf-java
+  generated code keeps it (evidence in the #57 thread). Option (b) there (keep the entry, drop
+  invalid occurrences) is open follow-up. Lines below that say "#57 is held" are superseded.
+- Sam also asked for: Fable check of the Opus work, then a Fable implementation pass on the
+  cells code before merge (hot decode paths first).
 - Lead then: merge reviewed branches into `deps/myna-0.14.0`, push, watch PR #67. Outcomes are
   recorded in "Resume outcome" below when the workflow returns; until that section exists,
   treat the worker state below as the last known truth and inspect each worktree's `git log`.

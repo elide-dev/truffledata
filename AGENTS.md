@@ -57,6 +57,8 @@ and merge and release". That authorizes settling the beat-stock-svm tranche (CSV
 4 and WS12 merged; WS13 deferred), including the reviewed bot fixes #53–#56 and
 #58–#61 (#57 was excluded: protobuf-java's generated code keeps the last map value,
 and #57 deviates from that), PR/CI, merge, signed tag `v0.11.0`, Elide Maven and
-GitHub publication, and public artifact verification. Central stays deferred under
+GitHub publication, and public artifact verification. (Update 2026-11-09 16:14 PST: Sam
+then merged #57 to main himself as `1158dc93`, so 0.11.0 includes it; the deviation from
+protobuf-java generated code for invalid-then-valid entries is known and recorded.) Central stays deferred under
 #28 until the quota resets (2026-12-01). The same evidence, safety and
 honest-reporting rules as 0.10.0 apply.
