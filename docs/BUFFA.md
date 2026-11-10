@@ -531,5 +531,7 @@ limits and adopted regions whose scope is closed or owned by another thread),
 `:jvm_off` (artifact present, flag off), `:call_shape` (the specialized-call scan),
 `:native_test` (Native Image built with the flag: the shared native acceptance, the route check,
 parity against the static backend and the per-call allocation ceilings, with the blocklist
-checks), and `//benchmarks/comparison:consumer_native_smoke_cells` (the 132-cell consumer smoke
-matrix on the cells route).
+checks), `//benchmarks/comparison:consumer_cells_call_shape` (the symbol-bearing flag-on consumer
+image: the cells backend calls `decodeSlab_Cell.executeInt` and never the generic
+`execute(Object[])`), and `//benchmarks/comparison:consumer_native_smoke_cells` (the 132-cell
+consumer smoke matrix on the cells route).
