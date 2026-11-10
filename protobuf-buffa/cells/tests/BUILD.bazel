@@ -27,6 +27,29 @@ data_java_library(
     ],
 )
 
+# Specialized NativeCell calls in every <format>/cells package: a source scan that fails when a
+# scalar-result cell call goes through execute(Object[]), a boxed cast or an unboxing, or an
+# UnexpectedResultException handler. A new <format>/cells package exports `call_sites` and is
+# listed here; a format without one (CSV, so far) has nothing to scan.
+java_test(
+    name = "call_shape",
+    size = "small",
+    srcs = ["CellsCallShapeTest.java"],
+    args = [
+        "--class",
+        "dev.elide.truffledata.cells.CellsCallShapeTest",
+    ],
+    data = [
+        "//json/cells:call_sites",
+        "//protobuf-buffa/cells:call_sites",
+        "//yaml/cells:call_sites",
+    ],
+    main_class = "dev.elide.bazel.junit.BazelJUnitRunner",
+    use_testrunner = False,
+    runtime_deps = ["//bazel/junit:runner"],
+    deps = ["@maven//:org_junit_jupiter_junit_jupiter_api"],
+)
+
 # HotSpot. `jvm`: the shared acceptance suite with the flag on, plus the route and byte-identity
 # checks; `jvm_off`: the artifact present with the flag off (route stays FFM; parity still runs,
 # constructing both backends directly).

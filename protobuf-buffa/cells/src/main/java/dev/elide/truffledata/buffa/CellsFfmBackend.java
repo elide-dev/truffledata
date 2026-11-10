@@ -1,6 +1,7 @@
 package dev.elide.truffledata.buffa;
 
 import dev.elide.myna.truffle.HeapBytes;
+import dev.elide.myna.truffle.NativeBytes;
 import dev.elide.myna.truffle.NativeCell;
 import dev.elide.myna.truffle.NativeCellRootNode;
 import dev.elide.myna.truffle.NativePointer;
@@ -30,8 +31,9 @@ import org.jspecify.annotations.Nullable;
  * backend's: this wraps an {@link FfmBackend}, which loads and fingerprint-checks the library
  * first, shares its result slot and busy state through the backend's own hooks, and keeps its
  * control flow, so the slabs are byte-identical and the errors are the same, in the same order. The
- * JVM is a correctness target; the cells copy heap arrays (Myna's HotSpot borrow rule), which the
- * FFM backend lends in place.
+ * JVM is a correctness target; the cells copy heap arrays ({@link HeapBytes}: Myna's HotSpot borrow
+ * rule), which the FFM backend lends in place. Native input, output and arena segments cross as
+ * {@link NativeBytes}, which the cells lend in place with their extent.
  *
  * <p>Myna's FFM cells bind their symbols through the loader lookup, so the library is also loaded
  * into this class loader ({@link System#load}). One library per class loader: a second path is
@@ -80,15 +82,27 @@ final class CellsFfmBackend implements BuffaWire.Backend {
           "Buffa cells are bound to " + loaded + " in this class loader, not " + library);
   }
 
-  private static <T extends NativeCell> T adopt(T cell) {
+  private static <T extends NativeCell> T adopt(T created) {
     // A cell holds call-site profiles and is adopted once, under its own language-neutral root.
-    new NativeCellRootNode(cell).adoptChildren();
-    return cell;
+    new NativeCellRootNode(created).adoptChildren();
+    return created;
   }
+
+  // Per-call argument cost, as in CellsSvmBackend: one argument array per backend (the cells only
+  // read arguments[i] into their coercions; a backend is confined to its decoder's thread and
+  // beginSlab's busy check excludes reentry), and one cached pointer or box per slot whose value
+  // repeats. The buffer slots are cleared after each call, so the array never keeps a caller's
+  // input or a produced slab reachable.
+  private final Object[] arguments = new Object[10];
+  private NativePointer compiledPointer = NativePointer.NULL;
+  private NativePointer projectionPointer = NativePointer.NULL;
+  private NativePointer resultPointer = NativePointer.NULL;
+  private Integer maxDepth = 0;
+  private Long maxSlabBytes = 0L;
 
   // Specialized NativeCell calls (Myna 0.14.0): each cell is held as its concrete generated type,
   // whose i32 result overrides executeInt with no box and no UnexpectedResultException.
-  private static int call(
+  private int call(
       BuffaCellsJvmTruffle.decodeSlab_Cell cell,
       long compiled,
       Object data,
@@ -99,11 +113,17 @@ final class CellsFfmBackend implements BuffaWire.Backend {
       long capacity,
       SlabLimits limits,
       MemorySegment result) {
-    return cell.executeInt(
-        arguments(compiled, data, length, flags, projection, out, capacity, limits, result));
+    Object[] arguments =
+        arguments(compiled, data, length, flags, projection, out, capacity, limits, result);
+    try {
+      return cell.executeInt(arguments);
+    } finally {
+      arguments[1] = null;
+      arguments[5] = null;
+    }
   }
 
-  private static int call(
+  private int call(
       BuffaCellsJvmTruffle.decodeSlabSmall_Cell cell,
       long compiled,
       Object data,
@@ -114,11 +134,17 @@ final class CellsFfmBackend implements BuffaWire.Backend {
       long capacity,
       SlabLimits limits,
       MemorySegment result) {
-    return cell.executeInt(
-        arguments(compiled, data, length, flags, projection, out, capacity, limits, result));
+    Object[] arguments =
+        arguments(compiled, data, length, flags, projection, out, capacity, limits, result);
+    try {
+      return cell.executeInt(arguments);
+    } finally {
+      arguments[1] = null;
+      arguments[5] = null;
+    }
   }
 
-  private static Object[] arguments(
+  private Object[] arguments(
       long compiled,
       Object data,
       long length,
@@ -128,18 +154,24 @@ final class CellsFfmBackend implements BuffaWire.Backend {
       long capacity,
       SlabLimits limits,
       MemorySegment result) {
-    return new Object[] {
-      NativePointer.of(compiled),
-      data,
-      length,
-      flags,
-      NativePointer.of(projection),
-      out,
-      capacity,
-      limits.maxDepth(),
-      (long) limits.maxSlabBytes(),
-      NativePointer.of(result.address())
-    };
+    if (compiledPointer.address() != compiled) compiledPointer = NativePointer.of(compiled);
+    if (projectionPointer.address() != projection) projectionPointer = NativePointer.of(projection);
+    if (resultPointer.address() != result.address())
+      resultPointer = NativePointer.of(result.address());
+    if (maxDepth != limits.maxDepth()) maxDepth = limits.maxDepth();
+    if (maxSlabBytes != limits.maxSlabBytes()) maxSlabBytes = (long) limits.maxSlabBytes();
+    Object[] arguments = this.arguments;
+    arguments[0] = compiledPointer;
+    arguments[1] = data;
+    arguments[2] = length;
+    arguments[3] = flags;
+    arguments[4] = projectionPointer;
+    arguments[5] = out;
+    arguments[6] = capacity;
+    arguments[7] = maxDepth;
+    arguments[8] = maxSlabBytes;
+    arguments[9] = resultPointer;
+    return arguments;
   }
 
   @Override
@@ -211,11 +243,11 @@ final class CellsFfmBackend implements BuffaWire.Backend {
               call(
                   decodeSlab,
                   compiled,
-                  NativePointer.of(memory.address()),
+                  NativeBytes.of(memory, false),
                   input.size(),
                   1,
                   0,
-                  NativePointer.of(output.address()),
+                  NativeBytes.of(output, true),
                   capacity,
                   limits,
                   slabResult);
@@ -263,11 +295,11 @@ final class CellsFfmBackend implements BuffaWire.Backend {
           call(
               decodeSlab,
               ((MemorySegment) compiled).address(),
-              NativePointer.of(source.address()),
+              NativeBytes.of(source, false),
               input.size(),
               flags,
               mask,
-              NativePointer.of(destination.address()),
+              NativeBytes.of(destination, true),
               output.size(),
               limits,
               slabResult);

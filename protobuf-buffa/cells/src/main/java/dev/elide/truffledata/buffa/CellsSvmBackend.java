@@ -29,6 +29,13 @@ import org.jspecify.annotations.Nullable;
  * cell} route did. Heap arrays are pinned here, around the call, with plain {@code try/finally}
  * (javac's try-with-resources reaches {@code Throwable.addSuppressed}, which the
  * runtime-compilation blocklist rejects), and lent to the cell as pointers.
+ *
+ * <p>Byte regions cross as {@link NativePointer}, not Myna's buffer objects, on purpose. {@code
+ * HeapBytes} would make Myna copy heap arrays below {@code Borrow.pinThreshold()} (256 B by
+ * default) into scratch memory and copy the output back, where the static backend pins them in
+ * place. {@code NativeBytes.of(address, size)} builds a {@code MemorySegment} view per call, more
+ * allocation than a pointer, and none of these imports has a {@code borrow} declaration (Myna's
+ * borrows take one buffer and scalar arguments only), so the cell uses only the address either way.
  */
 @NullMarked
 final class CellsSvmBackend implements BuffaWire.Backend {
@@ -42,6 +49,26 @@ final class CellsSvmBackend implements BuffaWire.Backend {
 
   private final SvmBackend backend;
   private final BuffaCellsTruffle.decodeSlab_Cell decodeSlab;
+
+  // Per-call argument cost. NativeCell's only entries take an Object[] of guest values, so each
+  // call needs an argument array, a NativePointer per pointer and a box per scalar outside the
+  // JDK's small-value caches. This call runs in AOT-compiled host code below a @TruffleBoundary,
+  // not in partially evaluated guest code, so none of that is scalar-replaced unless the AOT
+  // inliner happens to inline the whole cell (CellsAcceptance prints the measured bytes per call).
+  // What does not change from call to call is reused: one argument array per backend (the cell only
+  // reads arguments[i] into its coercions and keeps nothing; a backend is confined to its decoder's
+  // thread and beginSlab's busy check excludes reentry), and one cached pointer or box per slot
+  // whose value repeats (the compiled layout, the projection mask, the backend's own result slot,
+  // the limits). Each still varies freely: a changed value is boxed afresh, never reused stale.
+  // What does vary per call (the input and output addresses, the input length and capacity) is
+  // allocated per call, as are the cell's own Borrow objects for its byte-pointer parameters
+  // (Myna's BytesCoercion: compiled, data and a non-null out), which Myna allocates internally.
+  private final Object[] arguments = new Object[10];
+  private NativePointer compiledPointer = NativePointer.NULL;
+  private NativePointer projectionPointer = NativePointer.NULL;
+  private NativePointer resultPointer = NativePointer.NULL;
+  private Integer maxDepth = 0;
+  private Long maxSlabBytes = 0L;
 
   CellsSvmBackend(SvmBackend backend) {
     this.backend = backend;
@@ -61,21 +88,26 @@ final class CellsSvmBackend implements BuffaWire.Backend {
       long capacity,
       SlabLimits limits,
       VoidPointer result) {
+    if (compiledPointer.address() != compiled) compiledPointer = NativePointer.of(compiled);
+    if (projectionPointer.address() != projection) projectionPointer = NativePointer.of(projection);
+    if (resultPointer.address() != result.rawValue())
+      resultPointer = NativePointer.of(result.rawValue());
+    if (maxDepth != limits.maxDepth()) maxDepth = limits.maxDepth();
+    if (maxSlabBytes != limits.maxSlabBytes()) maxSlabBytes = (long) limits.maxSlabBytes();
+    Object[] arguments = this.arguments;
+    arguments[0] = compiledPointer;
+    arguments[1] = NativePointer.of(data);
+    arguments[2] = length;
+    arguments[3] = flags;
+    arguments[4] = projectionPointer;
+    arguments[5] = NativePointer.of(out);
+    arguments[6] = capacity;
+    arguments[7] = maxDepth;
+    arguments[8] = maxSlabBytes;
+    arguments[9] = resultPointer;
     // Specialized call (Myna 0.14.0): the concrete cell's i32 result overrides executeInt, so
     // there is no result box and no UnexpectedResultException handler.
-    return decodeSlab.executeInt(
-        new Object[] {
-          NativePointer.of(compiled),
-          NativePointer.of(data),
-          length,
-          flags,
-          projection == 0 ? NativePointer.NULL : NativePointer.of(projection),
-          out == 0 ? NativePointer.NULL : NativePointer.of(out),
-          capacity,
-          limits.maxDepth(),
-          (long) limits.maxSlabBytes(),
-          NativePointer.of(result.rawValue())
-        });
+    return decodeSlab.executeInt(arguments);
   }
 
   @Override

@@ -479,16 +479,43 @@ messages and order, ownership and lifetimes — is the backend's own; the slabs 
   [PUBLISHING.md](PUBLISHING.md#prebuilt-natives)), and `//bazel:myna_contract` checks that each
   derived descriptor equals the production descriptor apart from those options.
 - **Shape.** The cells are called directly from the boundary-entered decode (one adopted cell per
-  backend), as Myna's generic `NativeCell.execute(Object[])`; heap arrays are pinned around the call
-  with plain `try/finally` (javac's try-with-resources reaches `Throwable.addSuppressed`, which the
-  runtime-compilation blocklist rejects) and lent as pointers on Native Image, and copied by Myna's
-  borrow rule on HotSpot. The known per-call costs are upstream issues elide-dev/myna#85 (argument
-  array, boxed carriers and borrow objects allocated per call), #86 (direct transitions not faster
-  than one boundary call on sub-microsecond imports) and #87.
+  backend). Each call holds the concrete generated `decodeSlab_Cell`/`decodeSlabSmall_Cell` and
+  calls its specialized `executeInt` (Myna 0.14.0): no result box and no
+  `UnexpectedResultException`. `//protobuf-buffa/cells/tests:call_shape` scans every
+  `<format>/cells` package and fails on a scalar cell called through `execute(Object[])`, a boxed
+  cast or unboxing of a cell result, or an `UnexpectedResultException` handler. Heap arrays are
+  pinned around the call with plain `try/finally` (javac's try-with-resources reaches
+  `Throwable.addSuppressed`, which the runtime-compilation blocklist rejects) and lent as pointers
+  on Native Image, and copied by Myna's borrow rule (`HeapBytes`) on HotSpot, where native segments
+  cross as `NativeBytes`.
+- **Per-call cost.** `NativeCell`'s only entries take an `Object[]` of guest values, and these calls
+  run in AOT-compiled host code below a `@TruffleBoundary`, not in partially evaluated guest code,
+  so Myna's scalar replacement of the argument array, boxes and pointers (measured from
+  runtime-compiled roots) is not guaranteed here. Each backend therefore reuses one argument array
+  (the cell only reads it, and the backend's busy check excludes reentry) and caches the pointers
+  and boxes whose values repeat: the compiled layout, the projection mask, its result slot and the
+  limits. What varies per call is still allocated: a `NativePointer` for each of the input and
+  output addresses, a box for a length or capacity outside the JDK's small-value cache, and Myna's
+  own `Borrow` for each non-null byte-pointer parameter (`compiled`, `data`, `out`).
+  `CellsAcceptance` measures the Java bytes per `writeSlab` call of the static backend and the cells
+  route in the image and holds the difference to 256 B. Upstream: elide-dev/myna#85 (per-call
+  allocation), #86 (direct transitions not faster than one boundary call on sub-microsecond
+  imports) and #87.
+- **Ownership declarations.** Myna's `resource` and `borrow ... lifetime=call` declarations do not
+  fit this seam, so the derived seams add none. A resource's `create` must take only scalars and
+  return `ptr<resource>`, and its `destroy` must take one non-null `transferred_to_callee` pointer;
+  `compileLayout` returns an `i32` status and writes the layout through a `result` pointer, and
+  `releaseLayout` takes a nullable borrowed pointer. A call borrow allows one buffer and scalar
+  arguments only, and every Buffa import that takes a byte buffer also takes another pointer
+  (`result`, `out`, `compiled`, `payload` or `output`). Declaring them would change the import
+  signatures, that is, the C ABI. Layout and result-slot lifetimes stay with their existing owners,
+  unchanged: `BuffaPlan` and `SlabSession` release their layouts, and the result slot is
+  busy-checked.
 
 Tests: `//protobuf-buffa/cells/tests:jvm` (the shared acceptance suite with the flag on, the route
 check and a byte/error parity run of every slab entry against the FFM backend),
-`:jvm_off` (artifact present, flag off), `:native_test` (Native Image built with the flag: the shared
-native acceptance, the route check and parity against the static backend, with the blocklist
+`:jvm_off` (artifact present, flag off), `:call_shape` (the specialized-call scan),
+`:native_test` (Native Image built with the flag: the shared native acceptance, the route check,
+parity against the static backend and the per-call allocation ceiling, with the blocklist
 checks), and `//benchmarks/comparison:consumer_native_smoke_cells` (the 132-cell consumer smoke
 matrix on the cells route).
