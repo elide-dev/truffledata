@@ -1607,6 +1607,25 @@ sh_test(
     ],
 )
 
+# AOT call shape of the Buffa cells route (brief item 2 of the Myna 0.14 cells adoption): in the
+# symbol-bearing flag-on image the cells backend calls the concrete cell's executeInt and never
+# the generic, boxing NativeCell.execute(Object[]). Shape only.
+sh_test(
+    name = "consumer_cells_call_shape",
+    size = "medium",
+    srcs = ["cells_call_shape.sh"],
+    args = ["$(rootpath :consumer_profile_cells)"],
+    data = [
+        ":consumer_profile_cells",
+        "//tools/bench:aot_symbols.py",
+    ],
+    tags = ["manual"],
+    target_compatible_with = [
+        "@platforms//os:linux",
+        "@platforms//cpu:x86_64",
+    ],
+)
+
 sh_test(
     name = "consumer_interpreter_profile",
     size = "large",

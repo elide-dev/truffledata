@@ -81,3 +81,17 @@ java_library(
         "@myna//:truffle",
     ],
 )
+
+# Hand-written cell call sites (none yet) and the generated cells that classify them, for the
+# call-shape scan (//protobuf-buffa/cells/tests:call_shape).
+filegroup(
+    name = "call_sites",
+    srcs = glob(
+        ["src/**/*.java"],
+        allow_empty = True,
+    ) + [
+        "generated/jvm/YamlCellsJvmTruffle.java",
+        "generated/svm/YamlCellsTruffle.java",
+    ],
+    visibility = ["//protobuf-buffa/cells/tests:__pkg__"],
+)

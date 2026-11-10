@@ -122,3 +122,15 @@ data_java_library(
         "@myna//:truffle",
     ],
 )
+
+# The hand-written cell call sites and the generated cells that classify them, for the call-shape
+# scan (//protobuf-buffa/cells/tests:call_shape). Every <format>/cells package exports one.
+filegroup(
+    name = "call_sites",
+    srcs = [
+        "generated/jvm/BuffaCellsJvmTruffle.java",
+        "generated/svm/BuffaCellsTruffle.java",
+        ":sources",
+    ],
+    visibility = ["//protobuf-buffa/cells/tests:__pkg__"],
+)
