@@ -15,10 +15,11 @@ import org.graalvm.nativeimage.ImageSingletons;
  * folds), and {@link JsonJvm} binds the cells when it opens. In a Native Image the route is chosen
  * when the image is built: {@code JsonCellsFeature} (in the cells artifact, registered with {@code
  * --features}) installs the {@link Svm} singleton when the flag is set, and this holder, initialized
- * at image build time with the rest of {@code dev.elide.truffledata}, folds {@link #ENABLED}, so an
- * image built without the flag compiles the baseline calls alone. A flag without the Feature (or
- * the Feature's route without the flag) fails the image build: there is no silent fallback from one
- * route to the other.
+ * at image build time with the rest of {@code dev.elide.truffledata} (as every TruffleData image
+ * requires), folds {@link #ENABLED}, so an image built without the flag compiles the baseline calls
+ * alone. A flag without the Feature fails the image build, and so does the route's singleton
+ * without the flag: there is no silent fallback from one route to the other. (The Feature without
+ * the flag installs nothing: the flag is the switch.)
  */
 final class JsonCellsRoute {
   static final String PROPERTY = "truffledata.json.cells";
@@ -29,7 +30,9 @@ final class JsonCellsRoute {
 
   private static boolean enabled() {
     boolean requested = Boolean.getBoolean(PROPERTY);
-    if (!ImageInfo.inImageCode()) return requested;
+    // HotSpot: the flag alone. Not inImageCode(): the Native Image tracing agent sets the image-code
+    // property on an ordinary JVM too, where ImageSingletons do not exist.
+    if (!ImageInfo.inImageBuildtimeCode() && !ImageInfo.inImageRuntimeCode()) return requested;
     boolean registered = ImageSingletons.contains(Svm.class);
     if (ImageInfo.inImageBuildtimeCode() && requested != registered)
       throw new IllegalStateException(
@@ -63,8 +66,15 @@ final class JsonCellsRoute {
     void release(MemorySegment result);
   }
 
-  /** The image's cells (only reachable when {@link #ENABLED} folds true). */
+  /**
+   * The image's cells; only reachable when {@link #ENABLED} folds true. {@code contains} folds when
+   * this is parsed, so an image without the route never looks its singleton up: one that
+   * initializes this holder at run time still builds and takes the baseline calls, where a bare
+   * lookup of the absent singleton would fail its build.
+   */
   static Svm svm() {
+    if (!ImageSingletons.contains(Svm.class))
+      throw new IllegalStateException("The JSON cells route is not in this image");
     return ImageSingletons.lookup(Svm.class);
   }
 

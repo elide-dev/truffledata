@@ -1,10 +1,80 @@
-# TruffleData — resume ledger (updated 2026-11-09 16:30 PST)
+# TruffleData — resume ledger (updated 2026-11-09 19:45 PST)
 
 Sam paused all work to resume with **Fable 5.2**. This file is the single entry point:
 read it, then the linked ledgers, then act. Project rules: `AGENTS.md` (SVM is the
 production performance target; never weaken safety checks; serialize local Bazel).
 
-## Resume outcome — 2026-11-09 16:05–16:30 PST (Fable 5.2 lead) — READ THIS FIRST
+## Current state — 2026-11-09 19:45 PST — READ THIS FIRST
+
+Sam's instructions, newest first (all binding):
+- 19:22 "get this landed": merge PR #67 to main now, with what is verified.
+- 18:55 "hold on final benchmarks, as myna is releasing fixes in 0.16.0": no paired SVM
+  measurement until Myna 0.16.0 is pinned. Measurement decides each flag's default.
+- 17:15 "let's finish and then publish": publish 0.11.0 only after adoption is finished.
+- 17:16 "myna 0.15.0 is out" (superseded by 0.16.0 before it was merged).
+- After release: re-bench, much prettier benchmark cards for the README, README cleanup.
+- Workers on Opus; Fable reviews their work and does its own implementation pass.
+
+The lead reads these together as: land the code now with every cells flag default off; publish
+after the 0.16.0 pin, the measurements and the release packaging. A session restart at 19:16
+killed every worker; nothing is running in the background.
+
+### What is on `deps/myna-0.14.0` (local head; see `git log`), being landed through PR #67
+
+- Everything in "What landed" below (Myna 0.14.0, GVM .28, toolchain 2026.11.6, F1, #57).
+- **Cells routes on all four seams, flags default off**: `truffledata.{buffa,json,yaml,csv}.cells`.
+  Opus implemented each; a Fable pass reviewed and fixed each (CSV and Buffa passes reported;
+  the JSON and YAML passes had committed their fixes but died before reporting, and the lead
+  reviewed those commits). Notable fixes from the passes: use-after-free on the Buffa JVM route
+  (raw address lent without the FFM scope check), a native-memory leak and per-parse cell
+  construction on CSV, OOM-safe release and once-per-limits boxing on JSON, caller-segment calls
+  kept on the FFM binding and complete symbol verification on YAML.
+- **Lead's pass**: integrated the four branches; CSV and YAML now fail the image build when the
+  flag is set without the route (JSON already did) — holders `csv/kernel/.../svm/CellsRoute`,
+  `yaml/.../SvmRoute`, `json/.../JsonCellsRoute`; CSV joined the call-shape scan; coverage
+  contract inventories the new YAML holder; flag-on benchmark images
+  `//benchmarks/comparison:{csv,json,yaml}_svm_cells`, negative controls
+  `…_svm_cells_unregistered`, and a paired YAML harness `:yaml_pair`.
+
+### Evidence on the integrated tree (`9194c035`, RBE linux-x86_64)
+
+- `bazel test //...` plus every manual Native Image target for cells and baselines:
+  100/100 pass (BuildBuddy `62c0a34e-6f32-4725-beb6-7d351c0ddec1`). Includes
+  `//{csv,json,yaml,protobuf-buffa}/cells/tests:native_test`, `//yaml/cells/tests:flag_off_image_test`,
+  `//json/cells/tests:aot_shape`, the four baseline `native_test`s,
+  `//benchmarks/comparison:{json,csv,consumer}_aot_symbols` and `:consumer_cells_call_shape`.
+- Negative controls: all three `…_svm_cells_unregistered` images fail to build with the guard's
+  message (BuildBuddy `1f9d9352-7d03-4b00-8a93-5c214119d378`).
+- CI coverage lane (ten targets, `--config=codecov`) passes and `coverage_contract.py` exits 0
+  (BuildBuddy `9eaf8d4f-20e6-4bc0-a026-49182ef961bf`); `.github/scripts` unit tests pass.
+- F1 linux arm64 11/11 (BuildBuddy `c4ea276d-35c8-4c03-ac9f-61be5894987b`), on `d1ca534c`.
+- NOT run on the integrated tree: arm64 lanes, macOS `--config=local` lanes, a staged release.
+
+### Not done — needed before 0.11.0 is published
+
+1. **Myna 0.16.0** (not released at 19:40 PST; watch `gh release list -R elide-dev/myna`). Re-pin
+   with the procedure in `docs/superpowers/plans/2026-11-09-myna-0.14-ledger.md` ("Myna re-pin
+   procedure"), rebuild every cells route, adapt to what 0.16.0 changes (a cheaper call shape
+   would replace the reused argument arrays), rerun all lanes. Branch `deps/myna-0.15.0`
+   (`0cc11e36`) is the proven dry run; do not merge it.
+2. **Paired SVM measurements**, flag on vs off, then each flag's default (Sam's rule: on only if
+   it beats baseline). Commands are in the 19:10 state note below. Expect no win on 0.14.0:
+   cells run in host code below a `@TruffleBoundary`, so Myna's `execute*(Object[])` entry and
+   its `Borrow` objects allocate per call (Buffa 144–176 B/call vs 0 B).
+3. **Release packaging** for `truffledata-{json,yaml,csv}-cells` plus a shared `truffledata-cells`
+   runtime (25 → 29 libraries) and per-format docs: branch `cells2-release` @ `1cff1f2c`, an
+   UNTESTED WIP commit of the dead worker's files. Finish, run `//tools/release:test`, merge.
+4. **YAML Native Image route builds nine cells per session**; `YamlSvm.decode` opens a session per
+   call. Share the cells image-wide (as CSV and JSON do) before measuring YAML.
+5. AOT call-shape gate for the CSV and YAML flag-on images (Buffa and JSON have one).
+6. macOS local lanes; arm64 lanes on the final tree; staged release; then publish as in
+   "Repository state". Central stays deferred (#28).
+7. Upstream: the lead sent Sam's Myna session the measured allocation breakdown and the
+   validator limits; file issues only if 0.16.0 does not cover them.
+8. F1 rulings still open for Sam: combined `seam.h` vs per-class headers; unknown host defaults
+   to the signed-char class.
+
+## History: resume 16:05–19:10 PST (superseded by "Current state" wherever it disagrees)
 
 This section is current. Everything from "Goal in flight" down is the state at the 16:00 pause
 and is superseded wherever it disagrees (worker state, "#57 is held", next steps).
@@ -37,6 +107,55 @@ Running: workflow `wf_aeb0d186-edf` (script and journal under
   lanes on the merged tree, since cells branches were built against 0.14.0 fingerprints.
 - If this session dies: inspect each `cells2-*` branch (`git log deps/myna-0.14.0..cells2-X`),
   trust only what its tests show, and continue from "Next steps" below.
+
+**HOLD (Sam, 18:55 PST): "hold on final benchmarks, as myna is releasing fixes in 0.16.0".**
+No paired SVM measurement until Myna 0.16.0 is pinned and the cells are rebuilt on it. The CSV
+`csv_pair` run was interrupted before it measured anything (BuildBuddy
+`c6ee03ef-be77-4018-8a0d-d44fd858d70c`, cancelled). The release therefore waits on 0.16.0:
+measurement decides each flag's default, and Sam's instruction is finish, then publish.
+`myna-015` was told to commit its 0.15.0 refresh as a proven procedure, skip the long
+verification runs, and wait to be re-tasked for 0.16.0. The lead sent the Myna session
+(`myna-6c`, Sam's) the measured host-code allocation breakdown and the validator limits.
+
+**State at 19:10 PST (lead's own pass, all local on `deps/myna-0.14.0`):**
+- Integrated tree `f4669d4d`, RBE linux-x86_64, 11/11 pass (BuildBuddy
+  `e6ed721a-9017-4912-af15-69e98dd2bbaf`): `//{csv,json,yaml,protobuf-buffa}/cells/tests:{jvm,jvm_off}`,
+  `//protobuf-buffa/cells/tests:call_shape` (now scanning all four formats),
+  `//bazel:myna_contract` (four derived groups), `//tests:test`.
+- `13b2bf97` CSV: the static backend goes through a build-time-initialized holder
+  (`csv/kernel/.../svm/CellsRoute.java`, the JSON route's shape); an image built with the flag
+  but without `truffledata-csv-cells` now fails the build. Verification (CSV cells + baseline
+  native tests, `csv_aot_symbols`, JVM lanes) running: `<scratchpad>/integ-csv-guard.log`.
+  TODO same guard for YAML once its Fable pass reports (YAML still builds the baseline silently
+  when the flag is set without `--features=...YamlFeature`). Buffa cannot be silent: its Feature
+  registers the baseline factory too.
+- `098a66aa` bench: `//benchmarks/comparison:{csv_svm_cells,json_svm_cells,yaml_svm_cells}` flag-on
+  images and `:yaml_pair` (new paired YAML harness, `yaml_pair.py`). Paired runs, once unheld:
+  `csv_pair` with `--//benchmarks/comparison:csv_svm_candidate=…:csv_svm_cells`,
+  `json_typed_pair` with `…json_typed_svm_candidate=…:json_svm_cells`, `yaml_pair` with
+  `…yaml_svm_candidate=…:yaml_svm_cells`, `consumer_measure` with
+  `…consumer_svm_candidate=…:consumer_svm_cells`. Only the `-native` CSV engines, the JSON
+  document-decode engines and the YAML static-backend engines take the cells route; the others
+  are A/A controls.
+- Buffa Fable pass done (`9595eab1`, merged): fixed a use-after-free on the JVM cells route
+  (raw address lent without the FFM downcall's scope check; proven by mutation), SVM
+  allocation 192 → 144 B/call (176 B when buffers alternate; the rest is Myna's three `Borrow`
+  objects), parity now varies depth limits, new `//benchmarks/comparison:consumer_cells_call_shape`
+  (disassembles the flag-on image: `executeInt` is called directly). Open: the same AOT
+  call-shape gate for CSV/JSON/YAML flag-on images (needs symbol-bearing flag-on images; do it
+  after the 0.16.0 bump, since generated cells will change).
+- JSON Fable pass has committed `308dd55c` (not yet reported, not yet re-merged); YAML's is
+  still editing.
+
+**State at 19:00 PST:** the lead merged `cells2-{csv,buffa,json,yaml}` at their then-current
+heads into `deps/myna-0.14.0` locally (`f4669d4d`; conflicts in `bazel/BUILD.bazel`,
+`json/cells/BUILD.bazel`, `yaml/cells/BUILD.bazel` resolved by keeping both sides; CSV joined
+the call-shape scan). Fable passes for buffa/json/yaml are still committing in their worktrees:
+re-merge each branch when its pass reports. Opus worker `cells-release` (worktree
+`.claude/worktrees/cells2-release`, branch `cells2-release`) is wiring release packaging: a
+shared `truffledata-cells` runtime artifact plus `truffledata-{protobuf-buffa,json,yaml,csv}-cells`
+(25 → 29 libraries) and per-format docs. Integration JVM run over all four routes is queued
+(`<scratchpad>/integ-jvm1.log`).
 
 **State at 18:55 PST** (workflow journal has every worker's full report):
 - F1 gates: linux arm64 `--config=remote_arm64` 11/11 pass (BuildBuddy
