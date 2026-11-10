@@ -190,5 +190,14 @@ myna_other_class_stub(
     name = "other_abi_class",
     abi = ":generated/abi",
     symbol = "td_csv_fingerprint",
-    visibility = ["//csv/tests:__pkg__"],
+    visibility = [
+        "//csv/cells/tests:__pkg__",
+        "//csv/tests:__pkg__",
+    ],
+)
+
+# The production seam, for the Truffle cells seams derived from it (csv/cells/BUILD.bazel).
+exports_files(
+    ["csv.seam"],
+    visibility = ["//csv/cells:__pkg__"],
 )

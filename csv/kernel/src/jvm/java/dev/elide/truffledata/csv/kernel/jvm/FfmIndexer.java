@@ -156,6 +156,8 @@ public final class FfmIndexer extends CsvIndexer implements AutoCloseable {
     public CsvIndexing.Provider load(@Nullable Path library) {
       if (library == null)
         throw new IllegalStateException("The JVM CSV kernel needs the csv_shared library path");
+      // -Dtruffledata.csv.cells=true (read once, CellsRoute): the Myna Truffle cells route.
+      if (CellsRoute.ENABLED) return CellsRoute.jvm(library.toAbsolutePath().normalize());
       return LOADED.computeIfAbsent(library.toAbsolutePath().normalize(), Library::load).provider();
     }
   }
