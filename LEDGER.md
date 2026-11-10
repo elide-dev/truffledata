@@ -38,6 +38,25 @@ Running: workflow `wf_aeb0d186-edf` (script and journal under
 - If this session dies: inspect each `cells2-*` branch (`git log deps/myna-0.14.0..cells2-X`),
   trust only what its tests show, and continue from "Next steps" below.
 
+**HOLD (Sam, 18:55 PST): "hold on final benchmarks, as myna is releasing fixes in 0.16.0".**
+No paired SVM measurement until Myna 0.16.0 is pinned and the cells are rebuilt on it. The CSV
+`csv_pair` run was interrupted before it measured anything (BuildBuddy
+`c6ee03ef-be77-4018-8a0d-d44fd858d70c`, cancelled). The release therefore waits on 0.16.0:
+measurement decides each flag's default, and Sam's instruction is finish, then publish.
+`myna-015` was told to commit its 0.15.0 refresh as a proven procedure, skip the long
+verification runs, and wait to be re-tasked for 0.16.0. The lead sent the Myna session
+(`myna-6c`, Sam's) the measured host-code allocation breakdown and the validator limits.
+
+**State at 19:00 PST:** the lead merged `cells2-{csv,buffa,json,yaml}` at their then-current
+heads into `deps/myna-0.14.0` locally (`f4669d4d`; conflicts in `bazel/BUILD.bazel`,
+`json/cells/BUILD.bazel`, `yaml/cells/BUILD.bazel` resolved by keeping both sides; CSV joined
+the call-shape scan). Fable passes for buffa/json/yaml are still committing in their worktrees:
+re-merge each branch when its pass reports. Opus worker `cells-release` (worktree
+`.claude/worktrees/cells2-release`, branch `cells2-release`) is wiring release packaging: a
+shared `truffledata-cells` runtime artifact plus `truffledata-{protobuf-buffa,json,yaml,csv}-cells`
+(25 → 29 libraries) and per-format docs. Integration JVM run over all four routes is queued
+(`<scratchpad>/integ-jvm1.log`).
+
 **State at 18:55 PST** (workflow journal has every worker's full report):
 - F1 gates: linux arm64 `--config=remote_arm64` 11/11 pass (BuildBuddy
   `c4ea276d-35c8-4c03-ac9f-61be5894987b`): `//{json,csv}/tests:native_test`,
