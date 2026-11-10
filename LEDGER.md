@@ -74,17 +74,29 @@ the current one; the copy on `deps/myna-0.14.0` stops at the PR #67 push.
   - `af678315` CSV Native Image route converted to `invoke`, with its tests. NOT COMPILED yet:
     this branch is on Myna 0.14.0 until `deps/myna-0.16.0` merges. It is the reference shape for
     the other three routes.
-- Opus worker `myna-016` (worktree `.claude/worktrees/myna-016`, branch `deps/myna-0.16.0`):
-  re-pin, vendor refresh, all lanes green with call sites unchanged, and the generated `invoke`
-  signatures. Running.
-- Next, in order: merge `deps/myna-0.16.0` here; get the CSV conversion green; convert JSON,
-  YAML and Buffa Native Image routes the same way (Opus worker per format in its own worktree,
-  Fable review), updating `//protobuf-buffa/cells/tests:call_shape`, the per-route scans,
-  `//json/cells/tests:aot_shape`, `//benchmarks/comparison:consumer_cells_call_shape` and the
-  Buffa allocation ceilings (expect 0 B extra); run every lane; LIFT THE BENCHMARK HOLD and run
-  the four paired measurements (commands in the 19:10 note below); rule each default; add
-  `//json/cells/tests:jvm` to the coverage lane; open the follow-up PR once the Myna release is
-  public; CI; merge; publish.
+- `deps/myna-0.16.0` @ `d9bc0e34` (pin + vendored headers) is merged here (`e6f186e5`). Opus
+  worker `myna-016` is still finishing in its worktree: Native Image lanes on 0.16.0 with call
+  sites unchanged, and the Buffa HotSpot ceiling recorded at 528 B. Merge its later commits.
+- `f3545f09`: the shared scan `//protobuf-buffa/cells/tests:call_shape` now REQUIRES
+  `X_Cell.invoke(...)` in Native Image route sources (file name contains `Svm`), forbids every
+  `execute*` call there, and checks that an `invoke` names a cell the generated sources declare
+  with that entry. It fails until Buffa, JSON and YAML are converted.
+- Conversion workers (Opus, launched 20:20 PST, each from `f3545f09` in its own worktree
+  `.claude/worktrees/cells3-<fmt>`, branch `cells3-<fmt>`): `invoke-json`, `invoke-yaml`,
+  `invoke-buffa`. Each converts its Native Image route to `invoke` (no cell instances, argument
+  arrays or pointer carriers), its HotSpot route where buffers are native addresses, flips its
+  gates from "typed execute" to "invoke", re-measures allocation ceilings, and runs its JVM and
+  Native Image lanes. Generated `invoke` signatures are in each worker's brief and can be
+  re-read from `bazel-bin/<fmt>/cells/generated/{svm,jvm}/*Truffle.java` after
+  `bzl.sh build --remote_download_outputs=all //<fmt>/cells:generated_sources`.
+- CSV conversion (`af678315`) verification on 0.16.0 queued: `<scratchpad>/finish-csv1.log`.
+- Next, in order: Fable review of each worker's diff; merge the three branches and `myna-016`'s
+  remaining commits here; run every lane (`bazel test //...` plus the manual Native Image
+  targets, the negative controls, the coverage lane with `//json/cells/tests:jvm` added); LIFT
+  THE BENCHMARK HOLD and run the four paired measurements (commands in the 19:10 note below);
+  rule each default; update `docs/RELEASE_0_11_0.md` (Myna 0.16.0, measured numbers) and
+  `AGENTS.md`; open the follow-up PR; CI; merge; publish (commands under "Repository state");
+  then the post-release README and benchmark-card work.
 
 ### What is on `deps/myna-0.14.0` (local head; see `git log`), being landed through PR #67
 
