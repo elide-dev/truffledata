@@ -30,7 +30,7 @@ data_java_library(
 # Specialized NativeCell calls in every <format>/cells package: a source scan that fails when a
 # scalar-result cell call goes through execute(Object[]), a boxed cast or an unboxing, or an
 # UnexpectedResultException handler. A new <format>/cells package exports `call_sites` and is
-# listed here; a format without one (CSV, so far) has nothing to scan.
+# listed here.
 java_test(
     name = "call_shape",
     size = "small",
@@ -40,6 +40,7 @@ java_test(
         "dev.elide.truffledata.cells.CellsCallShapeTest",
     ],
     data = [
+        "//csv/cells:call_sites",
         "//json/cells:call_sites",
         "//protobuf-buffa/cells:call_sites",
         "//yaml/cells:call_sites",
