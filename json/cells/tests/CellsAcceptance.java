@@ -64,6 +64,8 @@ public final class CellsAcceptance {
     Pointer region = UnmanagedMemory.calloc(WordFactory.unsigned(Math.max(1, capacity)));
     if (region.isNull()) throw new OutOfMemoryError();
     for (int b = 0; b < input.length; b++) region.writeByte(b, input[b]);
+    // Lambdas capture the raw address, never a word.
+    long address = region.rawValue();
     boolean[] released = {false};
     Runnable release =
         () -> {
@@ -75,8 +77,8 @@ public final class CellsAcceptance {
           CellsInputs.outcome(
               () ->
                   route
-                      ? JsonSvm.adopt(region.rawValue(), input.length, capacity, release)
-                      : adopt(region.rawValue(), input.length, capacity, release));
+                      ? JsonSvm.adopt(address, input.length, capacity, release)
+                      : adopt(address, input.length, capacity, release));
       if (released[0] != outcome.startsWith("ok"))
         throw new AssertionError("Adopted release ran " + released[0] + " for " + outcome);
       return outcome;
@@ -149,11 +151,12 @@ public final class CellsAcceptance {
     Pointer descriptor = (Pointer) Json.JsonResult.view(result);
     if (descriptor.isNull() || descriptor.readInt(0) != 1)
       throw new IllegalStateException("Unsupported compact tape ABI");
-    return new SvmJsonMessage(descriptor, result.rawValue()) {
+    long address = result.rawValue();
+    return new SvmJsonMessage(descriptor, address) {
       @Override
       protected void release() {
         try {
-          free(result);
+          free(WordFactory.pointer(address));
         } finally {
           if (onClose != null) onClose.run();
         }
