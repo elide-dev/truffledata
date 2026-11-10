@@ -154,7 +154,7 @@ final class CellsParity {
     } catch (RuntimeException failure) {
       expected = failure;
     }
-    require(expected != null, "baseline accepted a bad call");
+    if (expected == null) throw new AssertionError("CSV cells parity: baseline accepted a bad call");
     sameFailure(expected, cells);
   }
 

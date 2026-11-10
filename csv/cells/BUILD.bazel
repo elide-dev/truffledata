@@ -24,7 +24,7 @@ package(default_visibility = ["//visibility:public"])
         srcs = ["//csv/native:csv.seam"],
         outs = ["cells_%s.seam" % variant],
         cmd = ("sed -e 's| java_package=dev.elide.truffledata.csv.kernel.generated java_class=CsvNative | " +
-               "java_package=dev.elide.truffledata.csv.cells.generated java_class=%s %s |' $< > $@ && " +
+               "java_package=dev.elide.truffledata.csv.kernel.cells.generated java_class=%s %s |' $< > $@ && " +
                "grep -q '^module truffledata_csv .* java_class=%s %s ' $@") % (
             java_class,
             options,
@@ -45,7 +45,7 @@ package(default_visibility = ["//visibility:public"])
         name = "bindings_" + variant,
         abi = False,
         java_class = java_class,
-        java_package = "dev.elide.truffledata.csv.cells.generated",
+        java_package = "dev.elide.truffledata.csv.kernel.cells.generated",
         out = "generated/" + variant,
         seam = ":seam_" + variant,
         truffle = True,
@@ -77,7 +77,7 @@ filegroup(
 
 filegroup(
     name = "native_resources",
-    srcs = ["generated/svm/META-INF/native-image/dev.elide.myna/dev.elide.truffledata.csv.cells.generated.CsvCells/native-image.properties"],
+    srcs = ["generated/svm/META-INF/native-image/dev.elide.myna/dev.elide.truffledata.csv.kernel.cells.generated.CsvCells/native-image.properties"],
 )
 
 java_library(

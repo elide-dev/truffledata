@@ -3,7 +3,7 @@ package dev.elide.truffledata.csv.cells;
 import dev.elide.myna.truffle.NativeCellRootNode;
 import dev.elide.myna.truffle.NativePointer;
 import dev.elide.truffledata.csv.CsvIndexing;
-import dev.elide.truffledata.csv.cells.generated.CsvCellsTruffle;
+import dev.elide.truffledata.csv.kernel.cells.generated.CsvCellsTruffle;
 import dev.elide.truffledata.csv.kernel.CsvIndex;
 import dev.elide.truffledata.csv.kernel.CsvIndexer;
 import dev.elide.truffledata.csv.kernel.generated.CsvNativeAbi;
