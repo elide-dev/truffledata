@@ -1,4 +1,4 @@
-# TruffleData — resume ledger (updated 2026-11-09 19:45 PST)
+# TruffleData — resume ledger (updated 2026-11-09 20:10 PST)
 
 Sam paused all work to resume with **Fable 5.2**. This file is the single entry point:
 read it, then the linked ledgers, then act. Project rules: `AGENTS.md` (SVM is the
@@ -19,31 +19,54 @@ The lead reads these together as: land the code now with every cells flag defaul
 after the 0.16.0 pin, the measurements and the release packaging. A session restart at 19:16
 killed every worker; nothing is running in the background.
 
-### In flight at 19:50 PST (after PR #67 was pushed at `0e668836`)
+### Follow-up branch `release/0.11.0-finish` — state at 20:10 PST
 
-- PR #67 CI running on `0e668836`; merge (squash, admin if needed) when the checks finish.
-  `codecov/patch` is advisory and has failed on every recent PR.
+THIS COPY OF THE LEDGER (on `release/0.11.0-finish`, worktree `.claude/worktrees/finish-011`) is
+the current one; the copy on `deps/myna-0.14.0` stops at the PR #67 push.
+
+- **PR #67** (`deps/myna-0.14.0`, head `1c858284`): CI rerunning after `codecov.yml` was added at
+  Sam's request ("adjust codecov ignores/settings if needed to pass"): Native Image-only sources
+  are ignored and the patch status is informational; `coverage_contract.py` stays the enforced
+  gate. Merge (squash, admin if needed) when the run finishes; the run on `0e668836` had 13
+  passes and only `codecov/patch` failing, with Buffa and benchmark simulation unfinished.
 - **Myna 0.16.0 is tagged but its GitHub release is still a DRAFT** (checked 19:46 PST: tag
-  `v0.16.0` is public, `isDraft` true, the public tarball URL returns 404). The draft's source
-  tarball has sha256 `51149cbf…138b51e3`; re-verify it against `SHA256SUMS` once the release is
-  published, because a draft's assets can still be replaced. Until then the pin builds only
-  where the tarball is seeded locally (`--distdir`), so it cannot go through CI. It adds a
-  `public static invoke(...)` on every generated cell: native carriers and raw `long` addresses,
-  no `Object[]`, boxes, `NativePointer` or `Borrow` — "the entry for host code compiled ahead of
-  time". Myna measures it at the cost of the direct call, 0 B. All four truffledata routes call
-  from host code, so every call site should move to `invoke`.
-- Follow-up branch `release/0.11.0-finish` (worktree `.claude/worktrees/finish-011`, from
-  `0e668836`): the lead's post-landing work. So far: YAML Native Image cells shared image-wide
-  (were built per session), with four-thread parity; its tests are running.
+  `v0.16.0` public, `isDraft` true, public tarball URL 404). Draft tarball sha256
+  `51149cbf…138b51e3`; re-verify against `SHA256SUMS` once published. Until then the pin builds
+  only where the tarball is seeded locally (`--distdir`), so it cannot go through CI.
+  0.16.0 adds `public static invoke(...)` on every generated cell (native carriers, raw `long`
+  addresses; no `Object[]`, boxes, `NativePointer` or `Borrow`): "the entry for host code
+  compiled ahead of time", measured by Myna at the cost of the direct call, 0 B.
+- **Design ruling (lead):** Native Image routes are host code, so they call `X_Cell.invoke(...)`
+  and hold no cell instance, argument array or pointer carrier. HotSpot routes keep the typed
+  `executeInt`/`executeLong` calls (correctness target; their inputs are heap arrays and caller
+  segments that `invoke`'s raw addresses cannot carry without new copies). Every call-shape gate
+  must then REQUIRE `invoke` on the Native Image sources and typed calls on the HotSpot ones.
+- On this branch now (`git log 1c858284..`):
+  - `17c8620b` YAML Native Image cells shared image-wide + four-thread parity. Verified 7/7
+    (BuildBuddy `bbff5392-f8a0-4dc7-870f-9ca38a454e2c`). Becomes moot for the Native Image route
+    once YAML moves to `invoke` (no cell instances), but stays correct meanwhile.
+  - `cells2-release` @ `2a33a8c0` merged: release packaging done by Opus worker
+    `cells-release-2`: `truffledata-cells` (Myna's cells runtime, once) plus
+    `truffledata-{protobuf-buffa,json,yaml,csv}-cells`; 25 → 29 libraries in every module list,
+    the BOM, README and `docs/PUBLISHING.md`; per-format docs sections. `//tools/release:test`
+    passes (BuildBuddy `ae8b8d87-c4e6-4386-9596-95b9fd465690`). Not run: a staged release or a
+    Maven-resolved consumer of the new artifacts. Caveat for Sam: `truffledata-yaml-cells`' POM
+    brings the JVM-only `truffledata-yaml-jvm` and `truffledata-tape-jvm` onto a Native Image
+    class path, because the route jar holds both runtimes' backends (the Buffa precedent).
+  - `af678315` CSV Native Image route converted to `invoke`, with its tests. NOT COMPILED yet:
+    this branch is on Myna 0.14.0 until `deps/myna-0.16.0` merges. It is the reference shape for
+    the other three routes.
 - Opus worker `myna-016` (worktree `.claude/worktrees/myna-016`, branch `deps/myna-0.16.0`):
-  re-pin to 0.16.0, vendor refresh, all lanes green with call sites unchanged, and report the
-  generated `invoke` signatures.
-- Opus worker `cells-release-2` (worktree `.claude/worktrees/cells2-release`, branch
-  `cells2-release`): merge the release branch into the WIP packaging commit, finish and test it.
-- Then, by the lead: merge `deps/myna-0.16.0`, the YAML change and `cells2-release` into
-  `release/0.11.0-finish`; convert every route's call sites to `invoke` and update the
-  call-shape scans and AOT checks to require it; run every lane; LIFT THE BENCHMARK HOLD and run
-  the four paired measurements; rule each default; open the follow-up PR; CI; merge; publish.
+  re-pin, vendor refresh, all lanes green with call sites unchanged, and the generated `invoke`
+  signatures. Running.
+- Next, in order: merge `deps/myna-0.16.0` here; get the CSV conversion green; convert JSON,
+  YAML and Buffa Native Image routes the same way (Opus worker per format in its own worktree,
+  Fable review), updating `//protobuf-buffa/cells/tests:call_shape`, the per-route scans,
+  `//json/cells/tests:aot_shape`, `//benchmarks/comparison:consumer_cells_call_shape` and the
+  Buffa allocation ceilings (expect 0 B extra); run every lane; LIFT THE BENCHMARK HOLD and run
+  the four paired measurements (commands in the 19:10 note below); rule each default; add
+  `//json/cells/tests:jvm` to the coverage lane; open the follow-up PR once the Myna release is
+  public; CI; merge; publish.
 
 ### What is on `deps/myna-0.14.0` (local head; see `git log`), being landed through PR #67
 
