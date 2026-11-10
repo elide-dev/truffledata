@@ -162,6 +162,60 @@ these results do not establish an overall performance win.
 
 ## Performance
 
+Measured on the released **0.11.0** tree on one quiet host (AMD Ryzen Threadripper PRO
+9965WX), with every benchmark run in sequence on one pinned CPU. Native Image on Linux
+x86-64, O2, serial GC, no PGO, every cells flag off. Each bar is the median of fresh
+processes, and the whiskers show the full range across those processes.
+
+- **JSON:** compiled guest reads take **27.0 ns per document**, against 64.2 for Jackson and 90.4 for
+  fastjson2. Parse plus ten reads takes 764 ns: level with DSL-JSON, ahead of jsoniter, Jackson
+  and Gson, and **1.18× slower than fastjson2**. Number-heavy documents parse **2.16× faster than
+  fastjson2** while allocating about a tenth of its Java heap.
+- **Protobuf:** slab decode + release takes **307 ns per message against protobuf-java's 615**, and
+  2.42× less time on a large message; reading every field as well takes 523 ns against 655. Compiled guest reads of
+  generated messages take 20.4 ns, less than half the 44.7 ns of direct protobuf-java getters. Interpreted
+  reads remain **3.67× slower** than those getters, though 8× faster than protobuf-java
+  objects exposed through interop.
+- **CSV:** the retained typed batch reads mixed CSV at **0.74 GB/s, 3.3× FastCSV** (0.66 GB/s, 3.0×,
+  at 128 MiB), and the index scan without retention reaches 1.14 GB/s. With every field as a String, the
+  owned batch leads FastCSV at 1 MiB (0.50 against 0.41 GB/s) but is level at 128 MiB, where the
+  copied batch is **0.91× FastCSV**.
+- **YAML** has no other library in the native image; its card compares TruffleData's APIs.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/bench-0.11.0/json-dark.svg">
+  <img alt="JSON on Native Image: TruffleData against fastjson2, DSL-JSON, jsoniter, Jackson and Gson" src="docs/images/bench-0.11.0/json-light.svg">
+</picture>
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/bench-0.11.0/protobuf-dark.svg">
+  <img alt="Protobuf on Native Image: TruffleData generated messages, slab and session against protobuf-java" src="docs/images/bench-0.11.0/protobuf-light.svg">
+</picture>
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/bench-0.11.0/csv-dark.svg">
+  <img alt="CSV on Native Image: TruffleData batches and index scan against FastCSV and Jackson CSV" src="docs/images/bench-0.11.0/csv-light.svg">
+</picture>
+
+<details>
+<summary>YAML: TruffleData APIs compared</summary>
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/bench-0.11.0/yaml-dark.svg">
+  <img alt="YAML on Native Image: five TruffleData ways to consume the same parse" src="docs/images/bench-0.11.0/yaml-light.svg">
+</picture>
+
+</details>
+
+These are workload-specific results on one machine, not guarantees. Java heap figures
+exclude native memory. Comparisons are within one suite's fixture; the card notes state each
+fixture's terms. See the [methodology and regeneration](docs/COMPARISON_BENCHMARKS.md#release-0110-benchmark-cards),
+[every plotted value](docs/images/bench-0.11.0/cards.md), [raw reports](benchmarks/results/bench-0.11.0/README.md)
+and [image and source hashes](docs/images/bench-0.11.0/manifest.json).
+
+<details>
+<summary>0.10.0 paired SVM charts</summary>
+
 The **0.10.0** charts use the completed November 8 paired SVM runs: three fresh
 processes per image/cell, Linux x86-64, O2, serial GC, and no PGO. The baseline is
 `9a1dcec`; each format's candidate was measured in its own preserved image.
@@ -195,6 +249,8 @@ Whiskers retain every fork's range; they are not confidence intervals. Java heap
 figures exclude native storage. See the [current report and raw evidence](benchmarks/results/svm-tranche-20261108/README.md),
 [chart methodology and regeneration](docs/COMPARISON_BENCHMARKS.md#release-0100-paired-svm-charts),
 and [source/image/artifact hashes](docs/images/svm-tranche-20261108/comparison-manifest.json).
+
+</details>
 
 <details>
 <summary>Historical 0.3.0–0.5.0 measurements</summary>

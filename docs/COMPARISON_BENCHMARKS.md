@@ -1,5 +1,50 @@
 # SVM comparison benchmarks
 
+## Release 0.11.0 benchmark cards
+
+The README cards are a fresh capture of the released **0.11.0** tree (`091f9d0`, the
+`v0.11.0` code plus release receipts) on **2026-11-10**. Every suite ran on one quiet
+dedicated host, `unclemax` (AMD Ryzen Threadripper PRO 9965WX, 24 cores), one shard after
+another on one pinned logical CPU, so panels and cards can be read side by side. The four
+SVM images were built by Bazel on BuildBuddy at that revision (invocation `84d35d8e`), hash-checked,
+and run by `benchmarks/comparison/host_run.sh` with each suite's own harness:
+`json_typed_pair` (nine shards), `consumer_measure` (ten), `yaml_pair` (four) and `csv_pair`
+(eight). All flags are at their release defaults (every `truffledata.<format>.cells` flag off).
+Linux x86-64, Elide GraalVM `25.5.5-elide.28`, O2, serial GC, no PGO.
+
+The paired harnesses received the same image as candidate and baseline, so each cell has two
+interleaved groups of three fresh processes on the same CPU. Those six processes are pooled:
+bars are the median of six process medians and whiskers span all six. The two groups also act
+as an A/A control; their ratio is recorded per cell in the raw reports. Protobuf's harness runs
+an image once when both sides match, so its bars are three processes. Whiskers are full ranges,
+not confidence intervals. Java heap figures are allocation counters and exclude native memory.
+
+Each card compares TruffleData with the other implementations measured in the same suite, on
+the same fixture and the same work (checksums are verified per engine). The comparison chip
+names the TruffleData API it uses and compares it with the best other implementation in that
+panel, never a chosen weaker one. YAML has no other library in its native image, so its card
+compares TruffleData's consumption APIs only. An earlier BuildBuddy capture of the same tree
+was discarded: its shards landed on mixed AMD and Intel workers, and the same JSON cell moved by
+up to 35% between shards.
+
+Regenerate the cards without running a benchmark:
+
+```sh
+python3 -m venv build/plot-venv
+build/plot-venv/bin/pip install fonttools brotli
+build/plot-venv/bin/python tools/bench/plot_cards.py render benchmarks/results/bench-0.11.0 \
+  docs/images/bench-0.11.0 --label 0.11.0 --revision 091f9d0 --invocation 84d35d8e \
+  --measured 2026-11-10
+```
+
+To capture again, build the four suites' runfiles at the revision, copy them to the host and run
+`REVISION=<sha> CPU=<cpu> ./host_run.sh`; then `plot_cards.py collect <host out dir> <results dir>`.
+The cards are hand-built SVG in Elide's design tokens (Instrument Sans, Inter and JetBrains Mono,
+OFL, subset and embedded per card; `tools/bench/fonts`), with light and dark variants for the
+README's `<picture>` elements. [Values table](images/bench-0.11.0/cards.md),
+[normalized data](images/bench-0.11.0/data.json), [manifest](images/bench-0.11.0/manifest.json)
+and [raw reports](../benchmarks/results/bench-0.11.0/README.md).
+
 ## Release 0.10.0 paired SVM charts
 
 These charts use the completed **2026-11-08** experiments against production
