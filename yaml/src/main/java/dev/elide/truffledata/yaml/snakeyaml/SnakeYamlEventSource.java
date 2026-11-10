@@ -113,15 +113,26 @@ public final class SnakeYamlEventSource implements YamlEventSource {
         };
     // A plain token is never empty, so an empty plain value is an empty scalar inferred from
     // structure (a missing value, `key:`, `- `), with no token of its own.
-    boolean empty = style == YamlScalarStyle.PLAIN && event.getValue().isEmpty();
+    String value = event.getValue();
+    boolean empty = style == YamlScalarStyle.PLAIN && value.isEmpty();
     YamlMark end = positions.mark(event.getEndMark());
     YamlMark start = end;
     if (!empty) {
       start = positions.mark(event.getStartMark());
       if (event.getAnchor().isPresent() || event.getTag().isPresent()) start = positions.token(start);
     }
+    // SnakeYAML Engine 3.2 synthesizes a phantom trailing '\n' for a keep-chomped block scalar
+    // (|+ / >+) whose last content line is terminated at end-of-input without a final line
+    // break: keep chomping preserves trailing line breaks, of which there are none at EOF, so
+    // the value must end at the last content byte (as the strip variant does, and as the native
+    // decoder and the YAML 1.2 spec require). Drop the synthesized break to match.
+    if ((style == YamlScalarStyle.LITERAL || style == YamlScalarStyle.FOLDED)
+        && value.endsWith("\n")
+        && positions.keepChompedAtEof(start.offset(), end.offset())) {
+      value = value.substring(0, value.length() - 1);
+    }
     events.scalar(
-        event.getValue(),
+        value,
         style,
         empty,
         anchor(event.getAnchor()),
@@ -199,6 +210,39 @@ public final class SnakeYamlEventSource implements YamlEventSource {
       if (mark.isEmpty()) return YamlMark.UNKNOWN;
       Mark m = mark.get();
       return new YamlMark(offset(m.getIndex()), m.getLine() + 1, m.getColumn() + 1);
+    }
+
+    /**
+     * Whether a LITERAL/FOLDED block scalar whose token starts at {@code start} and whose Engine
+     * span ends at {@code end} is a keep-chomped scalar whose last content line is terminated at
+     * end-of-input without a final line break. Engine 3.2 synthesizes a phantom trailing {@code \n}
+     * for that shape; the native decoder and the YAML 1.2 spec end the value at the last content
+     * byte, so the caller drops the synthesized break when this returns true.
+     *
+     * <p>The header at {@code start} is the {@code |}/{@code >} indicator followed by an optional
+     * chomping ({@code -}/{@code +}) and indentation (1-9) indicator, in either order. The content
+     * reaches EOF without a line break iff the Engine span ends at EOF and the byte just before EOF
+     * is content, not a line break.
+     */
+    boolean keepChompedAtEof(int start, int end) {
+      if (end != length || end <= start || end <= 0) return false;
+      byte indicator = utf8[start];
+      if (indicator != '|' && indicator != '>') return false;
+      int i = start + 1;
+      char chomp = 0;
+      if (i < end) {
+        byte c = utf8[i];
+        if (c == '+' || c == '-') chomp = (char) c;
+        else if (c >= '1' && c <= '9') {
+          if (++i < end) {
+            byte d = utf8[i];
+            if (d == '+' || d == '-') chomp = (char) d;
+          }
+        }
+      }
+      if (chomp != '+') return false;
+      byte last = utf8[end - 1];
+      return last != '\n' && last != '\r';
     }
   }
 }
