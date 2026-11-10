@@ -331,6 +331,48 @@ data_java_library(
     ]
 ]
 
+# The json_svm image with the Myna Truffle cells route on (docs/JSON.md): the document decode's
+# native calls (JsonSvm.decode/adopt/release) go through cells; sessions, streams and typed plans
+# are the same code in both images and serve as A/A controls. For the paired measurement:
+#   bazel test :json_typed_pair --//benchmarks/comparison:json_typed_svm_candidate=//benchmarks/comparison:json_svm_cells
+native_image(
+    name = "json_svm_cells",
+    testonly = True,
+    cc_deps = ["//json/native:svm"],
+    exec_properties = {
+        "EstimatedCPU": "8",
+        "EstimatedMemory": "24GB",
+    },
+    executable_name = "json-comparison-cells",
+    extra_args = [
+        "--gc=serial",
+        "--parallelism=8",
+        "-march=compatibility",
+        "--add-modules=jdk.incubator.vector",
+        "--initialize-at-build-time=dev.elide.truffledata",
+        "--initialize-at-run-time=dev.elide.truffledata.comparison.JsonCompetitors",
+        "--initialize-at-build-time=com.alibaba.fastjson2",
+        "--add-exports=org.graalvm.truffle.runtime/com.oracle.truffle.runtime=ALL-UNNAMED",
+        "-H:+UnlockExperimentalVMOptions",
+    ] + TRUFFLE_JIT_CHECKS + [
+        "-H:-UnlockExperimentalVMOptions",
+        "-Dtruffledata.json.cells=true",
+        "--features=dev.elide.truffledata.json.JsonCellsFeature",
+    ],
+    graalvm_sdk = "@graalvm_linux_amd64//:gvm",
+    main_class = "dev.elide.truffledata.comparison.JsonComparison",
+    optimization_mode = "2",
+    tags = ["manual"],
+    target_compatible_with = [
+        "@platforms//os:linux",
+        "@platforms//cpu:x86_64",
+    ],
+    deps = [
+        ":json_comparison",
+        "//json/cells",
+    ],
+)
+
 # Override with preserved images built from identical fixtures. Candidate overrides allow
 # independent worker images to share one paired-measurement invocation before integration.
 label_flag(
@@ -1343,6 +1385,88 @@ native_image(
         "@platforms//cpu:x86_64",
     ],
     deps = [":yaml_comparison"],
+)
+
+# The yaml_svm image with the Myna Truffle cells route on (docs/YAML.md): the static backend's
+# decode, retain, stream and typed-decode calls go through cells.
+native_image(
+    name = "yaml_svm_cells",
+    testonly = True,
+    cc_deps = [
+        "//json/native:svm",
+        "//yaml/native:svm",
+    ],
+    exec_properties = {
+        "EstimatedCPU": "8",
+        "EstimatedMemory": "24GB",
+    },
+    executable_name = "yaml-comparison-cells",
+    extra_args = [
+        "--gc=serial",
+        "--parallelism=8",
+        "-march=compatibility",
+        "--initialize-at-build-time=dev.elide.truffledata",
+        "--add-exports=org.graalvm.truffle.runtime/com.oracle.truffle.runtime=ALL-UNNAMED",
+        "-H:+UnlockExperimentalVMOptions",
+    ] + TRUFFLE_JIT_CHECKS + [
+        "-H:-UnlockExperimentalVMOptions",
+        "-Dtruffledata.yaml.cells=true",
+        "--features=dev.elide.truffledata.yaml.YamlFeature",
+    ],
+    graalvm_sdk = "@graalvm_linux_amd64//:gvm",
+    main_class = "dev.elide.truffledata.comparison.YamlComparison",
+    optimization_mode = "2",
+    tags = ["manual"],
+    target_compatible_with = [
+        "@platforms//os:linux",
+        "@platforms//cpu:x86_64",
+    ],
+    deps = [
+        ":yaml_comparison",
+        "//yaml/cells",
+    ],
+)
+
+# Before/after SVM pairs: two images interleaved on one worker and one pinned CPU, three fresh
+# forks each, one shard per workload (yaml_pair.py). Both default to the tree's image; for the
+# cells route:
+#   bazel test :yaml_pair --//benchmarks/comparison:yaml_svm_candidate=//benchmarks/comparison:yaml_svm_cells
+label_flag(
+    name = "yaml_svm_candidate",
+    build_setting_default = ":yaml_svm",
+)
+
+label_flag(
+    name = "yaml_svm_baseline",
+    build_setting_default = ":yaml_svm",
+)
+
+sh_test(
+    name = "yaml_pair",
+    size = "enormous",
+    srcs = ["yaml_pair.sh"],
+    args = [
+        "$(rootpath :yaml_svm_candidate)",
+        "$(rootpath :yaml_svm_baseline)",
+    ],
+    data = [
+        "yaml_pair.py",
+        ":yaml_svm_baseline",
+        ":yaml_svm_candidate",
+    ],
+    exec_properties = {
+        "EstimatedCPU": "4",
+        "EstimatedMemory": "16GB",
+    },
+    shard_count = 4,
+    tags = [
+        "benchmark",
+        "manual",
+    ],
+    target_compatible_with = [
+        "@platforms//os:linux",
+        "@platforms//cpu:x86_64",
+    ],
 )
 
 sh_test(
