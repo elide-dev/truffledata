@@ -1,10 +1,10 @@
 # TruffleData 0.11.0
 
 This release lands the "beat stock on SVM" performance tranche and a set of
-correctness fixes, and moves the baseline to Java 25, Myna 0.14.0, Elide GraalVM
+correctness fixes, and moves the baseline to Java 25, Myna 0.16.0, Elide GraalVM
 25.5.5-elide.28 and Elide toolchain 2026.11.6. Upgrade native attachments and generated
-bindings together: Myna 0.14.0 regenerates every ABI fingerprint, and Linux AArch64 now has
-its own ABI class (unsigned C `char`). The bindings jars carry both classes, and each consumer
+bindings together: Myna 0.16.0 regenerates every ABI fingerprint, and since Myna 0.14.0 Linux
+AArch64 has its own ABI class (unsigned C `char`). The bindings jars carry both classes, and each consumer
 verifies a native library against the class of the platform it runs on.
 
 SVM / GraalVM Native Image is the production performance target; JVM correctness,

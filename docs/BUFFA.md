@@ -280,7 +280,7 @@ row fields before the next decode can reuse it.
 
 ## SIMD Unicode and Myna values foundation
 
-Myna is pinned to the `0.11.0` release source archive (`myna-source-0.11.0.tar.gz`, SHA-256 `ce1dc5ff…fd42`).
+Myna is pinned to the `0.16.0` release source archive (`myna-source-0.16.0.tar.gz`, SHA-256 `51149cbf…51e3`).
 Its generator, Java value readers (`@myna//:values`) and C++ ABI headers
 (`@myna//:values_headers`) are separate Bazel targets. The value ABI is v3; it is
 independent of the Buffa seam ABI, now v7 with compact index entries

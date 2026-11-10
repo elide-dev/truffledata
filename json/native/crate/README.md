@@ -25,7 +25,7 @@ Everything is vendored under `vendor/`, so a git checkout at a tag builds withou
 | `vendor/json/native` | `json/native/api.cc` and the decoder headers |
 | `vendor/json/native/generated/seam.h` | Myna generator output for `json/native/json.seam`, with `TRUFFLEDATA_JSON_SEAM_ABI` selected per ABI class by `__CHAR_UNSIGNED__` (`bazel/myna_abi.py`) |
 | `vendor/tape/native` | `tape/native/*.h` and `text.cc` |
-| `vendor/myna/include` | Myna 0.14.0 value headers |
+| `vendor/myna/include` | Myna 0.16.0 value headers |
 | `vendor/simdjson` | simdjson 5.1.1 single header |
 | `vendor/simdutf` | simdutf from the `simdutf` 0.7.0 crate's bundled C++ |
 
