@@ -26,6 +26,46 @@ The lead reads these together as: land the code now with every cells flag defaul
 after the 0.16.0 pin, the measurements and the release packaging. A session restart at 19:16
 killed every worker; nothing is running in the background.
 
+### STOPPED at 21:35 PST (usage limit) — 0.11.0 is NOT released; resume here
+
+Sam set the goal "release 0.11.0" at 21:20 PST. State when the lead stopped:
+
+- **PR #68** (`release/0.11.0-finish` → main) is open. CI on `95700998`: every check passed
+  except `Benchmarks / simulation`, still running at 21:33. Local-only commits after that head
+  (push them): `e3a52764` JSON document probe + `probe_pair.py`, and this ledger commit.
+- **Paired measurements** (Bazel invocation in THIS worktree, log `<scratchpad>/rel-pairs1.log`):
+  `json_typed_pair`, `yaml_pair`, `consumer_measure` finished; `csv_pair` had shards 5 and 6
+  (128 MiB) still running. Outputs land in `bazel-testlogs/benchmarks/comparison/<test>/shard_*/test.outputs/`.
+  Summarize with `<scratchpad>/summ/summarize_pairs.py bazel-testlogs <outdir>`. Partial read
+  (flag-on / flag-off, 3 forks): Buffa 83 routed cells median 1.004 (controls 1.009), allocation
+  equal in all 83; YAML 19 routed cells median 1.011, 18 of 19 fork ranges overlap, allocation
+  equal; JSON typed pair has NO routed cell (it times `JsonSession`), controls median 1.004; CSV
+  1 MiB shards 8 routed cells median 0.954 (controls 1.011), 128 MiB shards pending. Reading so
+  far: ties, so every flag stays default off — confirm on the complete CSV data.
+- **Still to run:** `bzl.sh test //benchmarks/comparison:json_document_pair` (the routed JSON
+  timing; images `json_document_svm{,_cells}` have never been built — fix the probe if it does
+  not compile).
+- **Then:** write `benchmarks/results/cells-flag-<sha>/` (README + `pairs/` from the summarizer
+  output), replace the `@@MEASURED@@` marker in `docs/RELEASE_0_11_0.md`, state each default,
+  push, wait for CI, squash-merge #68.
+- **Staging dry run** is running unattended from `/Users/sam/workspace/graalvm/td-release-0.11.0`
+  (detached at `95700998`), log `<scratchpad>/stage-dry1.log`; stage mode only, no publishing
+  side effects. It shares the Bazel lock, so it starts after the measurement. Its purpose is to
+  show whether the local macOS native build fits on the disk (host about 8 GB free).
+- **Publish** (after merge, from that checkout at the merged commit, clean tree):
+  `BAZEL=<scratchpad>/bzl.sh MAVEN_BUCKET=r2:elide-maven SSL_CERT_FILE=/etc/ssl/cert.pem CENTRAL_CREDENTIALS_FILE=$HOME/.m2/settings-publishing.xml tools/release/publish.sh 0.11.0 --publish`.
+  Preflight passed at 21:28: `SIGNING_KEY_ID` is set and GPG signs without a prompt; `r2:` is
+  reachable. Expect the final Central publish step to fail on quota (deferred, #28) after the
+  R2 upload, as in 0.10.0.
+- **Tag and GitHub release:** v0.10.0 was signed with OpenPGP, not the repo's x509 default:
+  `git -c gpg.format=openpgp -c user.signingkey=$SIGNING_KEY_ID tag -s v0.11.0 <merged commit>`.
+  Assets as in v0.10.0 (charts from `docs/images/svm-tranche-20261108/`, native attachments,
+  five CSV SDK bundles, `release-assets.json`, signed `SHA256SUMS`): draft assembler at
+  `<scratchpad>/summ/release_assets.py` (untested). Then public verification, receipts under
+  `benchmarks/results/release-0.11.0/`, `AGENTS.md` "Release completion", README/bench cards.
+- No subagents are running. Scratchpad:
+  `/private/tmp/claude-501/-Users-sam-workspace-graalvm-truffledata/f86c3c78-8f8a-4faf-8736-a1f1ee674e61/scratchpad`.
+
 ### Follow-up branch `release/0.11.0-finish` — state at 21:20 PST
 
 THIS COPY OF THE LEDGER (on `release/0.11.0-finish`, worktree `.claude/worktrees/finish-011`) is
