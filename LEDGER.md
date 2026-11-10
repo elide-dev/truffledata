@@ -26,6 +26,19 @@ The lead reads these together as: land the code now with every cells flag defaul
 after the 0.16.0 pin, the measurements and the release packaging. A session restart at 19:16
 killed every worker; nothing is running in the background.
 
+### RESUMED 21:45 PST — Sam: "finish the release at 0.11.0. we can benchmark it after. downstream libs are waiting"
+
+- The JSON probe commit `e3a52764` broke CI on #68 (`RequireExplicitNullMarking` in
+  `JsonDocumentProbe.java`; never built). Reverted on this branch; kept on branch
+  `bench/json-document-probe` for the post-release benchmarking. The JSON route is NOT timed.
+- Paired measurements are complete (CSV 128 MiB shards included):
+  `benchmarks/results/cells-flag-9570099/`. Buffa 1.004 (83), YAML 1.011 (19), CSV 1.011 (40),
+  all inside control noise, allocation equal. Ruling: every cells flag default off.
+- The earlier staging dry run died with the session after its first gate passed (103 tests);
+  it never reached the local macOS build.
+- Next: CI green on #68, squash-merge, publish from the merged commit, signed tag, GitHub
+  release, public verification, receipts. The section below is the older stop note.
+
 ### STOPPED at 21:35 PST (usage limit) — 0.11.0 is NOT released; resume here
 
 Sam set the goal "release 0.11.0" at 21:20 PST. State when the lead stopped:

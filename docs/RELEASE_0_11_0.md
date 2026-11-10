@@ -68,7 +68,20 @@ built flag-on image confirms that no cell `execute` symbol is called. On HotSpot
 is lent (Buffa's small heap entry). Every route has parity tests against the default route, on the
 JVM and in a Native Image, comparing results and errors.
 
-@@MEASURED@@
+Measured (paired Native Image runs, flag on over flag off, three forks per cell; evidence in
+`benchmarks/results/cells-flag-9570099/`):
+
+| Format | Routed cells | Median ratio (on / off) | Controls median | Allocation |
+|---|---|---|---|---|
+| Buffa | 83 | 1.004 | 1.009 | equal in all 83 |
+| YAML | 19 | 1.011 | none | equal in all 19 |
+| CSV | 40 | 1.011 | 0.996 | equal in all 40 |
+| JSON | not measured | | 1.004 | |
+
+The routed medians are inside the control noise: a tie, not a win. Every
+`truffledata.<format>.cells` flag is therefore **default off** in 0.11.0. The JSON route has no
+timing yet (the paired JSON harness times `JsonSession`, which the route does not serve); its
+flag is default off unmeasured. Further benchmarking follows the release.
 
 What the routes do not do:
 
