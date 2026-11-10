@@ -42,10 +42,16 @@ def bundle(repository, version, module, classifier, header, llvm, output, revisi
     shared = None if musl else Path(str(prefix) + '-' + classifier + ('.dylib' if mac else '.so'))
     static = Path(str(prefix) + '-' + classifier + '.a')
     header_bytes = header.read_bytes()
+    # Since Myna 0.14.0 a header names one fingerprint per ABI class: "<hex> (LP64_LITTLE), <hex> (LP64_LITTLE_AAPCS64)".
+    # AAPCS64 Linux (unsigned char) is its own class; every other platform is LP64_LITTLE (check_natives.ABI_CLASS).
     fingerprints = set(re.findall(rb'\b[0-9a-f]{64}\b', header_bytes))
-    if len(fingerprints) != 1:
-        raise ValueError('Header must contain exactly one ABI fingerprint: ' + str(header))
-    fingerprint = fingerprints.pop()
+    classes = dict((name, value) for value, name in re.findall(rb'\b([0-9a-f]{64}) \((LP64_LITTLE(?:_AAPCS64)?)\)', header_bytes))
+    if len(fingerprints) == 1 and not classes:
+        fingerprint = fingerprints.pop()
+    elif set(classes) == {b'LP64_LITTLE', b'LP64_LITTLE_AAPCS64'} and fingerprints == set(classes.values()) and len(fingerprints) == 2:
+        fingerprint = classes[b'LP64_LITTLE_AAPCS64' if classifier.startswith('linux-aarch64') else b'LP64_LITTLE']
+    else:
+        raise ValueError('Header must contain one ABI fingerprint, or one per ABI class: ' + str(header))
     files = {
         'lib/libtruffledata_' + name + '.a': static.read_bytes(),
         'include/truffledata_' + name + '.h': header_bytes,
