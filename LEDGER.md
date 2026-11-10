@@ -45,6 +45,8 @@ killed every worker; nothing is running in the background.
   `//benchmarks/comparison:{json,csv,consumer}_aot_symbols` and `:consumer_cells_call_shape`.
 - Negative controls: all three `…_svm_cells_unregistered` images fail to build with the guard's
   message (BuildBuddy `1f9d9352-7d03-4b00-8a93-5c214119d378`).
+- CI coverage lane (ten targets, `--config=codecov`) passes and `coverage_contract.py` exits 0
+  (BuildBuddy `9eaf8d4f-20e6-4bc0-a026-49182ef961bf`); `.github/scripts` unit tests pass.
 - F1 linux arm64 11/11 (BuildBuddy `c4ea276d-35c8-4c03-ac9f-61be5894987b`), on `d1ca534c`.
 - NOT run on the integrated tree: arm64 lanes, macOS `--config=local` lanes, a staged release.
 
