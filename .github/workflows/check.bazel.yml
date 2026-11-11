@@ -14,7 +14,7 @@ permissions:
 jobs:
   test:
     name: Tests and coverage
-    runs-on: ${{ vars.BUILD_CACHE_ENABLED == 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && vars.RUNNER_DEFAULT || 'ubuntu-24.04' }}
+    runs-on: ${{ vars.BUILD_CACHE_ENABLED == 'true' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository)) && vars.RUNNER_DEFAULT || 'ubuntu-24.04' }}
     timeout-minutes: 90
     steps:
       - name: Harden runner
@@ -31,8 +31,8 @@ jobs:
           sudo rm -rf /usr/local/lib/android /usr/share/dotnet
           df -h /
       - name: Connect shared build cache
-        if: ${{ vars.BUILD_CACHE_ENABLED == 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
-        uses: elide-dev/.github/actions/setup-build-cache@f541daba8bc80b55e91f65158953d749fdd8609c # reviewed immutable action
+        if: ${{ vars.BUILD_CACHE_ENABLED == 'true' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository)) }}
+        uses: elide-tools/buildcache@8793ebc8390759f473d8174276e6d1a836ccc456 # reviewed immutable action
         with:
           endpoint: ${{ vars.BUILD_CACHE_ENDPOINT }}
       - name: Configure BuildBuddy
