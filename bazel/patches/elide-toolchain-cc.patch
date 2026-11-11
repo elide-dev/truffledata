@@ -1,6 +1,6 @@
 --- a/cc	1969-12-31 16:00:00
 +++ b/cc	2026-10-07 10:31:54
-@@ -0,0 +1,43 @@
+@@ -0,0 +1,51 @@
 +#!/bin/sh
 +# elide-dev/toolchain's clang for Bazel, native-image and Cargo. The host triple's cfg (target, sysroot, compiler-rt,
 +# libunwind, libc++, lld) is passed explicitly with <CFGDIR> as this wrapper's own path rather than auto-loaded: clang
@@ -10,6 +10,14 @@
 +# On macOS the bundle overlays the system SDK (SDKROOT, else xcrun's). LLVM 23's lld cannot read the stubs of SDKs newer
 +# than macOS 26 (Xcode 27), so such an SDK falls back to the newest CommandLineTools SDK it can read.
 +here=$(dirname "$0")
++# OCI runtimes may resolve a script's executable to an absolute path before exec.
++# Keep tools inside the current execroot relative, as Bazel's depfile validation
++# expects. Tools outside the execroot retain their absolute location.
++execroot=$(pwd -P)
++case "$here" in
++  "$execroot") here=. ;;
++  "$execroot"/*) here=${here#"$execroot"/} ;;
++esac
 +case "$(uname -s)" in
 +  Darwin)
 +    triple=arm64-apple-darwin
