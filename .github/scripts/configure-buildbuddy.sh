@@ -14,6 +14,10 @@ if [ -z "${BUILDBUDDY_API_KEY:-}" ]; then
 fi
 printf 'common --remote_header=x-buildbuddy-api-key=%s\n' "$BUILDBUDDY_API_KEY" > user.bazelrc
 printf 'common --config=ci\n' >> user.bazelrc
+if [ "${ELIDE_BUILD_CACHE_ENABLED:-}" = true ]; then
+  printf 'common --config=shared_cache\n' >> user.bazelrc
+  echo "GCP shared-cache execution enabled"
+fi
 # Host-execution jobs (--config=local: native targets, link and archive gates) still fetch repository
 # archives through BuildBuddy's checksum-verified download cache, with direct download as the fallback, so a
 # GitHub release outage (504s) does not fail them. Bazel only allows the downloader beside a gRPC cache, so the

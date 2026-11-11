@@ -92,6 +92,13 @@ common:remote_arm64 --config=remote
 common:remote_arm64 --platforms=//bazel/platforms:rbe_linux_arm64
 common:remote_arm64 --host_platform=//bazel/platforms:rbe_linux_arm64
 
+
+# Nearby GCP execution; selected by trusted CI only after shared-cache setup succeeds.
+# --config=remote retains hosted BuildBuddy execution; --config=local remains host-local.
+common:shared_cache --remote_executor=grpcs://elide-dev.buildbuddy.io:443
+common:shared_cache --platforms=//bazel/platforms:rbe_linux_amd64_shared
+common:shared_cache --host_platform=//bazel/platforms:rbe_linux_amd64_shared
+
 # Explicit host execution for performance measurements and workspace tools (bazel run). Never write host results to
 # the remote cache: the macOS C/C++ wrapper selects a host SDK outside action keys.
 common:local --remote_executor=
