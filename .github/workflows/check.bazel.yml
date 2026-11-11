@@ -32,7 +32,7 @@ jobs:
           df -h /
       - name: Connect shared build cache
         if: ${{ vars.BUILD_CACHE_ENABLED == 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
-        uses: elide-dev/.github/actions/setup-build-cache@3008d9ce40bb234cf3162269b3734f98763258b2 # reviewed immutable action
+        uses: elide-dev/.github/actions/setup-build-cache@f541daba8bc80b55e91f65158953d749fdd8609c # reviewed immutable action
         with:
           endpoint: ${{ vars.BUILD_CACHE_ENDPOINT }}
       - name: Configure BuildBuddy
