@@ -45,3 +45,9 @@ These workflows have no GitHub Actions archives of Bazel, Gradle, or sccache
 build outputs to remove. The Bazel remote profile already disables its redundant
 disk action cache. Repository downloads and worker-local file caches remain
 useful alongside the shared CAS.
+
+The pinned C/C++ compiler wrapper normalizes its location to an execroot-relative
+path when an OCI runtime invokes it by absolute path inside the working directory.
+This keeps generated header dependency paths valid under Bazel's existing strict
+checks. Tools outside that directory retain their absolute path; compiler versions,
+header allowlists, and macOS SDK selection are unchanged.
