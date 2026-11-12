@@ -72,7 +72,9 @@ jobs:
           files: build/reports/coverage/lcov.info
           disable_search: true
           flags: jvm
-          fail_ci_if_error: true
+          # Codecov is a reporting dashboard; its availability (or the repository being deactivated
+          # there) must not fail correctness CI; the tests and coverage_contract.py are the gates.
+          fail_ci_if_error: false
       - name: Upload JUnit results to Codecov
         if: ${{ !cancelled() && hashFiles('build/reports/junit.xml') != '' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
         uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
@@ -84,7 +86,9 @@ jobs:
           report_type: test_results
           disable_search: true
           flags: jvm
-          fail_ci_if_error: true
+          # Codecov is a reporting dashboard; its availability (or the repository being deactivated
+          # there) must not fail correctness CI; the tests and coverage_contract.py are the gates.
+          fail_ci_if_error: false
       - name: Remove BuildBuddy credentials
         if: always()
         run: rm -f user.bazelrc
