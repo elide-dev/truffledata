@@ -49,7 +49,9 @@ jobs:
           report_type: test_results
           disable_search: true
           flags: buffa-svm
-          fail_ci_if_error: true
+          # Codecov is a reporting dashboard; its availability (or the repository being deactivated
+          # there) must not fail correctness CI; the tests and coverage_contract.py are the gates.
+          fail_ci_if_error: false
       - name: Remove BuildBuddy credentials
         if: always()
         run: rm -f user.bazelrc
