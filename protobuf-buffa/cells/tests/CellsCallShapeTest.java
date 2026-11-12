@@ -34,8 +34,9 @@ import org.junit.jupiter.api.Test;
  *       executeDouble}, {@code executeBoolean}). Generic {@code execute(Object[])} is allowed only
  *       on cells without a typed override (pointer, void and resource results).
  *   <li>Boxed casts or unboxing of a cell result, and {@code UnexpectedResultException} handlers,
- *       are rejected everywhere; an {@code invoke} must name a cell the scanned generated sources
- *       declare with that static entry.
+ *       are rejected everywhere; an {@code invoke} must name a cell its own package's generated
+ *       sources declare with that static entry (a resource's destroy cell has none since Myna
+ *       0.18.0; no route calls one).
  * </ul>
  *
  * <p>A source scan over the runfiles: each {@code <format>/cells} package exports a {@code
@@ -81,11 +82,25 @@ final class CellsCallShapeTest {
     assertTrue(
         handwritten.keySet().stream().anyMatch(p -> p.endsWith("/CellsFfmBackend.java")),
         "Buffa FFM cells route not scanned: " + handwritten.keySet());
-    var scan = Scan.of(generated);
-    assertTrue(scan.cells.containsKey("decodeSlab_Cell"), "generated Buffa cells not parsed");
+    // A route can only name its own package's generated cells, so each format is scanned against
+    // its own: the same simple name may be a scalar cell in one format and a resource create in
+    // another (Buffa's decode_Cell is a create since protobuf-buffa/cells/ownership.seam; JSON's is
+    // not).
+    var scans = new HashMap<String, Scan>();
+    for (String format : FORMATS) {
+      var own = new TreeMap<String, String>();
+      generated.forEach((path, text) -> {
+        if (path.startsWith(format + "/")) own.put(path, text);
+      });
+      scans.put(format, Scan.of(own));
+    }
+    assertTrue(
+        scans.get("protobuf-buffa").cells.containsKey("decodeSlab_Cell"),
+        "generated Buffa cells not parsed");
     List<String> violations = new ArrayList<>();
     int typed = 0, direct = 0, nativeImageDirect = 0;
     for (var entry : handwritten.entrySet()) {
+      Scan scan = scans.get(entry.getKey().substring(0, entry.getKey().indexOf('/')));
       Scan.Calls calls = scan.check(entry.getKey(), entry.getValue(), violations);
       typed += calls.typed();
       direct += calls.direct();

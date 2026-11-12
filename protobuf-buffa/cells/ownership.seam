@@ -1,0 +1,87 @@
+# Myna ownership for the Buffa cells (bazel/cells_seam.py). Production buffa.seam is unchanged.
+#
+# Contracts (protobuf-buffa/native/lib.rs, unicode.rs, typed.rs, slab.rs):
+# - nounwind: every entry is a Rust `extern "C"` fn (not "C-unwind"), so an unwind reaching the
+#   ABI aborts the process (Rust >= 1.81; the toolchain is nightly/2026-10-09); the bodies also run
+#   under catch_unwind and report status 4. simdutf (C++, utf8_to_utf16) does not throw.
+# - nocapture/readonly on the byte inputs: the decoders keep input *offsets*, never addresses (the
+#   wire index stores `value` as an offset, typed.rs line ~262 likewise, and slabs "retain input
+#   offsets, never raw input addresses"); slab::Compiled owns its tables (no lifetime into the
+#   schema). No entry writes or retains schema, data or the slab/typed outputs past the call.
+#
+# Resources:
+# - `Layout`: td_buffa_compile_layout writes an owned handle into Result.data on status 0 (and
+#   zeroes the struct first, so any other status leaves nothing to release);
+#   td_buffa_release_layout drops it. The production seam types that handle as ptr<u8> inside the
+#   shared `Result`, so the cells seam copies `Result` as `LayoutResult` (same size, alignment,
+#   fields and offsets) with `data` typed ptr<Layout>, and the destroy takes ptr<Layout>: the same C
+#   pointer. The destroy is declared non-null (the native accepts null as a no-op; the owner never
+#   passes it) and takes ownership.
+# - `Result` (in place): td_buffa_decode zeroes the caller's Result and on status 0 fills it with
+#   an owned field index; td_buffa_release takes the same struct address and frees it. A function
+#   is the create of at most one resource, a struct is one resource and `release` can be the
+#   destroy of only one, so td_buffa_typed / td_buffa_typed_reuse, which fill the same struct,
+#   keep their result as a pass-through pointer. (typedReuse also consumes the previous index in
+#   its struct, an operation on an owned resource that Myna 0.18.0 cannot declare yet.)
+#
+# Edits beyond facts (bazel/cells_seam.py allows exactly these): `copy struct`, ptr<void> typed as
+# a struct, a ptr<u8> Layout handle typed ptr<Layout>, and the destroys' ownership/nullability.
+copy struct Result LayoutResult
+edit field LayoutResult.data type=ptr<Layout>
+opaque Layout
+resource Layout representation=native threading=confined create=compileLayout destroy=releaseLayout handle=result.data success=0
+resource Result representation=native threading=confined create=decode destroy=release handle=result success=0
+edit import compileLayout +nounwind=true@explicit_contract
+edit param compileLayout.result type=ptr<LayoutResult>
+edit import releaseLayout +nounwind=true@explicit_contract
+edit param releaseLayout.compiled type=ptr<Layout> nullable=false ownership=transferred_to_callee
+edit import decode +nounwind=true@explicit_contract
+edit param decode.result type=ptr<Result>
+edit import release +nounwind=true@explicit_contract
+edit param release.result type=ptr<Result> ownership=transferred_to_callee
+
+# Call borrows: each byte buffer drops its length from the guest signature.
+borrow compileLayout schema length=schema_length lifetime=call
+edit param compileLayout.schema +nocapture=true@explicit_contract +readonly=true@explicit_contract
+
+borrow decode data length=length lifetime=call
+edit param decode.data +nocapture=true@explicit_contract +readonly=true@explicit_contract
+
+borrow typed schema length=schema_length lifetime=call
+borrow typed data length=length lifetime=call
+borrow typed payload length=payload_length lifetime=call
+edit import typed +nounwind=true@explicit_contract
+edit param typed.schema +nocapture=true@explicit_contract +readonly=true@explicit_contract
+edit param typed.data +nocapture=true@explicit_contract +readonly=true@explicit_contract
+edit param typed.payload +nocapture=true@explicit_contract
+
+borrow typedReuse schema length=schema_length lifetime=call
+borrow typedReuse data length=length lifetime=call
+borrow typedReuse payload length=payload_length lifetime=call
+edit import typedReuse +nounwind=true@explicit_contract
+edit param typedReuse.schema +nocapture=true@explicit_contract +readonly=true@explicit_contract
+edit param typedReuse.data +nocapture=true@explicit_contract +readonly=true@explicit_contract
+edit param typedReuse.payload +nocapture=true@explicit_contract
+
+# `output` is ptr<u16>: not a byte buffer, so it stays a pass-through pointer.
+borrow utf8_to_utf16 data length=length lifetime=call
+edit import utf8_to_utf16 +nounwind=true@explicit_contract
+edit param utf8_to_utf16.data +nocapture=true@explicit_contract +readonly=true@explicit_contract
+
+# `out` may be absent (null with capacity 0: the native accepts exactly that). `compiled` is "a live
+# handle from td_buffa_compile_layout", so it is typed ptr<Layout> (the same C pointer) and a guest
+# passes the Layout owner, which the cell refuses once closed. `projection` (a TDP1 mask whose
+# extent is in its own header, no length parameter) stays a pass-through pointer.
+borrow decodeSlab data length=length lifetime=call
+borrow decodeSlab out length=capacity lifetime=call
+edit import decodeSlab +nounwind=true@explicit_contract
+edit param decodeSlab.compiled type=ptr<Layout>
+edit param decodeSlab.data +nocapture=true@explicit_contract +readonly=true@explicit_contract
+edit param decodeSlab.out +nocapture=true@explicit_contract
+
+borrow decodeSlabSmall data length=length lifetime=call
+borrow decodeSlabSmall out length=capacity lifetime=call
+edit import decodeSlabSmall +nounwind=true@explicit_contract
+edit param decodeSlabSmall.compiled type=ptr<Layout>
+edit param decodeSlabSmall.data +nocapture=true@explicit_contract +readonly=true@explicit_contract
+edit param decodeSlabSmall.out +nocapture=true@explicit_contract
