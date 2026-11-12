@@ -2,10 +2,17 @@ package dev.elide.truffledata.csv.cells;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import dev.elide.myna.truffle.HeapBytes;
+import dev.elide.myna.truffle.NativeBytes;
 import dev.elide.myna.truffle.NativeCell;
+import dev.elide.myna.truffle.NativePointer;
 import dev.elide.truffledata.csv.CsvIndexing;
 import dev.elide.truffledata.csv.kernel.jvm.FfmIndexer;
+import java.lang.foreign.Arena;
+import java.lang.foreign.MemorySegment;
+import java.lang.foreign.ValueLayout;
 import java.lang.reflect.Field;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
@@ -58,37 +65,37 @@ final class CellsRouteTest {
   void guestCallsBorrowTheirBuffers() {
     CsvCellsRoute.jvm(library());
     var validate = CellsFfmIndexer.Cells.VALIDATE;
-    byte[] valid = "a,b,\u00e9\n".getBytes(java.nio.charset.StandardCharsets.UTF_8);
+    byte[] valid = "a,b,\u00e9\n".getBytes(StandardCharsets.UTF_8);
     byte[] invalid = {'a', ',', (byte) 0xC3, '\n'};
-    assertEquals(-1, validate.executeLong(new Object[] {new dev.elide.myna.truffle.HeapBytes(valid, false)}));
-    assertEquals(2, validate.executeLong(new Object[] {new dev.elide.myna.truffle.HeapBytes(invalid, false)}));
+    assertEquals(-1, validate.executeLong(new Object[] {new HeapBytes(valid, false)}));
+    assertEquals(2, validate.executeLong(new Object[] {new HeapBytes(invalid, false)}));
     // The length is no longer a guest argument.
     assertThrows(
         RuntimeException.class,
-        () -> validate.executeLong(new Object[] {new dev.elide.myna.truffle.HeapBytes(valid, false), (long) valid.length}));
-    try (java.lang.foreign.Arena arena = java.lang.foreign.Arena.ofConfined()) {
+        () -> validate.executeLong(new Object[] {new HeapBytes(valid, false), (long) valid.length}));
+    try (Arena arena = Arena.ofConfined()) {
       var segment = arena.allocate(invalid.length);
-      java.lang.foreign.MemorySegment.copy(invalid, 0, segment, java.lang.foreign.ValueLayout.JAVA_BYTE, 0, invalid.length);
-      assertEquals(2, validate.executeLong(new Object[] {dev.elide.myna.truffle.NativeBytes.of(segment, false)}));
+      MemorySegment.copy(invalid, 0, segment, ValueLayout.JAVA_BYTE, 0, invalid.length);
+      assertEquals(2, validate.executeLong(new Object[] {NativeBytes.of(segment, false)}));
       // The index cell: `data` borrowed, `out` a raw address, the packed count << 8 | carry.
       var out = arena.allocate(4L * invalid.length, 4);
       long packed =
           CellsFfmIndexer.Cells.INDEX.executeLong(
               new Object[] {
-                new dev.elide.myna.truffle.HeapBytes(invalid, false),
-                dev.elide.myna.truffle.NativePointer.of(out.address()),
+                new HeapBytes(invalid, false),
+                NativePointer.of(out.address()),
                 ',' | '"' << 8 | 1 << 16,
                 0,
                 0L
               });
       assertTrue(packed >= 0 && (packed >>> 8) == 2, Long.toString(packed));
     }
-    java.lang.foreign.Arena closed = java.lang.foreign.Arena.ofShared();
+    Arena closed = Arena.ofShared();
     var stale = closed.allocate(8);
     closed.close();
     assertThrows(
         RuntimeException.class,
-        () -> validate.executeLong(new Object[] {dev.elide.myna.truffle.NativeBytes.of(stale, false)}));
+        () -> validate.executeLong(new Object[] {NativeBytes.of(stale, false)}));
   }
 
   @Test
@@ -128,10 +135,10 @@ final class CellsRouteTest {
     CsvCellsRoute.jvm(library());
     for (Field field : CellsFfmIndexer.class.getDeclaredFields())
       assertFalse(
-          java.lang.foreign.Arena.class.isAssignableFrom(field.getType()),
+          Arena.class.isAssignableFrom(field.getType()),
           "an arena field needs a close no scanner makes: " + field);
     CellsFfmIndexer indexer = new CellsFfmIndexer((byte) ',', (byte) '"', true, 0, 1 << 20);
-    byte[] input = "a,b\n1,2\n".getBytes(java.nio.charset.StandardCharsets.US_ASCII);
+    byte[] input = "a,b\n1,2\n".getBytes(StandardCharsets.US_ASCII);
     int[] out = new int[64];
     int first = indexer.index(input, 0, input.length, out);
     assertTrue(first > 0, "entries " + first);

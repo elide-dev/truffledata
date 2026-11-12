@@ -769,13 +769,20 @@ Measured: see docs/RELEASE_0_11_0.md
   falling back. Myna's FFM cells bind through the class loader's lookup, so the cells also
   `System.load` the fingerprint-checked library.
 - **Seam and fingerprint.** The cells come from seams *derived* in the build from
-  `csv/native/csv.seam`: only the module options change. The production seam, bindings, ABI
-  fingerprint (`CsvNativeAbi`, which the backends verify) and natives are unchanged, and
-  `//bazel:myna_contract --derived` checks each derived descriptor.
-- **No `resource` or `borrow` declarations.** The seam has no create/release pairs, so there is no
-  `resource` to declare, and Myna's call `borrow` cannot apply to `td_csv_index` or
-  `td_csv_index_leaf`, because a call borrow requires every other parameter to be scalar and `out`
-  is a `ptr<i32>`. Expressing it would need a C ABI change (see `csv/cells/BUILD.bazel`).
+  `csv/native/csv.seam` by `bazel/cells_seam.py`: the module options change, and
+  `csv/cells/ownership.seam` adds Myna ownership declarations, which only the cells projection
+  carries. The production seam, bindings, ABI fingerprint (`CsvNativeAbi`, which the backends
+  verify) and natives are unchanged, and `//bazel:myna_contract --derived` checks that each
+  derived descriptor differs from the production one only by the cells options and those
+  declarations.
+- **Borrows (Myna 0.18.0).** `data` is a call `borrow` on `td_csv_index`, `td_csv_index_leaf` and
+  `td_csv_validate_utf8`, with the explicit `nounwind`, `nocapture` and `readonly` contracts it
+  requires (the kernels and simdutf neither throw nor allocate, and read exactly `length` bytes).
+  A guest passes the buffer and the cell derives `length`; `out` stays a pass-through address,
+  since Myna has no borrow for an `i32` buffer without a length of its own. The HotSpot route
+  lends a `NativeBytes` view of its input segment, so the FFM linker holds that segment's scope for
+  the call; the Native Image route still calls each cell's static `invoke` with raw addresses,
+  unchanged. The seam has no create/release pairs, so there is no `resource` to declare.
 
 ## Deferred
 

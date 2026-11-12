@@ -84,6 +84,16 @@ java_import(
     neverlink = True,
 )
 
+# bazel/cells_seam.py's overlay policy and the ownership delta myna_contract accepts.
+sh_test(
+    name = "cells_seam_test",
+    srcs = ["test_cells_seam.py"],
+    data = [
+        "cells_seam.py",
+        "myna_contract.py",
+    ],
+)
+
 sh_test(
     name = "myna_contract",
     srcs = ["myna_contract.py"],
