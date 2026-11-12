@@ -3,6 +3,7 @@ package dev.elide.truffledata.yaml;
 import dev.elide.truffledata.tape.TapeBorrow;
 import dev.elide.truffledata.tape.TapeTextArena;
 import dev.elide.truffledata.tape.TypedLayout;
+import dev.elide.truffledata.yaml.cells.generated.YamlCells;
 import dev.elide.truffledata.yaml.cells.generated.YamlCellsTruffle;
 import dev.elide.truffledata.yaml.generated.Yaml;
 import java.lang.foreign.MemorySegment;
@@ -18,9 +19,9 @@ import org.jspecify.annotations.Nullable;
  * The static backend with the Myna Truffle cells route ({@code -Dtruffledata.yaml.cells=true} at
  * image build time, {@link YamlFeature}): the session's own native calls — {@code session_decode},
  * {@code session_write_text}, {@code session_retain}, {@code session_reset} (still a leaf), {@code
- * stream_create}, {@code stream_feed}, {@code stream_next}, {@code stream_finish} and {@code
- * stream_release} — go through cells generated with {@code truffle_backend=native
- * truffle_transitions=direct}. Everything else is the static backend's: this wraps an {@link
+ * stream_create}, {@code stream_feed}, {@code stream_next} and {@code stream_finish} — go through
+ * cells generated with {@code truffle_backend=native truffle_transitions=direct}, and {@code
+ * stream_release} through the same cells class's derived binding (below). Everything else is the static backend's: this wraps an {@link
  * SvmSessionBackend}, which owns the native session and result slot and creates and releases
  * them; retained results release through the static binding, because they outlive this backend.
  * It reads the backend's state through its hooks and keeps its exact control flow, so tapes are
@@ -36,6 +37,12 @@ import org.jspecify.annotations.Nullable;
  * backend pins them, with plain {@code try/finally} (try-with-resources reaches {@code
  * Throwable.addSuppressed}, which the runtime-compilation blocklist rejects), and lent without a
  * copy; the session, the result slot and a stream are the wrapped backend's and outlive the call.
+ *
+ * <p>Since Myna 0.18.0 the cells seam declares the stream a resource (yaml/cells/ownership.seam),
+ * whose destroy cell has no static {@code invoke}: its {@code execute} takes only the owner a
+ * guest's {@code stream_create} cell returned. The route's streams are raw handles, so {@link
+ * #streamRelease} calls {@link YamlCells#stream_release}, the derived {@code @CFunction} binding
+ * that the former {@code invoke} called: the same symbol and transition, nothing allocated.
  */
 final class CellsSvmSessionBackend extends YamlSession.Backend {
   private final SvmSessionBackend backend;
@@ -221,6 +228,7 @@ final class CellsSvmSessionBackend extends YamlSession.Backend {
 
   @Override
   protected void streamRelease(long stream) {
-    YamlCellsTruffle.stream_release_Cell.invoke(stream);
+    // The destroy of the YamlStream resource: no invoke, so the cells' raw binding (see above).
+    YamlCells.stream_release(WordFactory.pointer(stream));
   }
 }

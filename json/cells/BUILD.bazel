@@ -11,28 +11,36 @@ package(default_visibility = [
 
 # truffledata-json-cells: the opt-in route that makes the JSON document decode's native calls
 # (td_json_decode, td_json_decode_adopted, td_json_release) go through Myna-generated Truffle
-# cells. Selected only by -Dtruffledata.json.cells=true (Native Image: at image build time, by
+# cells (td_json_release, a resource's destroy since Myna 0.18.0, through the cells' own binding). Selected only by -Dtruffledata.json.cells=true (Native Image: at image build time, by
 # JsonCellsFeature; JVM: once, in JsonCellsRoute). With the flag off nothing here is reachable.
 #
 # Like //protobuf-buffa/cells, the cells come from seams *derived* from the production
-# //json/native:json.seam: only the module line changes (cells options, package and class), so every
-# import, struct and contract is the production one and the production ABI fingerprint, bindings and
-# natives are unchanged. The derived fingerprint folds in the cells options and is never compared
-# with a library; the backends verify the production one. //bazel:myna_contract checks that each
-# derived descriptor equals the production descriptor apart from those options.
+# //json/native:json.seam (bazel/cells_seam.py): the module line changes (cells options, package and
+# class) and ownership.seam adds Myna 0.18.0 ownership, which only the cells projection carries.
+# Every import, struct and ABI type is the production one, so the production ABI fingerprint,
+# bindings and natives are unchanged. The derived fingerprint folds in the cells options and the
+# ownership and is never compared with a library; the backends verify the production one.
+# //bazel:myna_contract checks that each derived descriptor equals the production descriptor apart
+# from those options and the ownership delta.
 #
-# No `resource` or `borrow` declarations: Myna (0.16.0) rejects both for every JSON import without a C
-# ABI change (OwnershipValidator: a resource create must take only scalars and return
-# ptr<Opaque>; a call borrow allows no other pointer parameter, and every JSON buffer import also
-# takes a result/session/plan pointer). td_json_decode_adopted also retains its input, which a
-# call-lifetime borrow would misdeclare. Adding either would also make the derived descriptor
-# differ from the production one.
+# Declared (ownership.seam has the contract of each against json/native/api.cc):
+# - resources JsonSession (session_create/session_release) and JsonStream (stream_create, which
+#   holds its session open, /stream_release); in-place results JsonResult (decode_adopted/release),
+#   JsonPlan (plan_create/plan_release) and JsonTypedResult (typed_decode/typed_release), success 0;
+# - call borrows on decode, typed_decode, session_decode(_small) (data, and the nullable text_out)
+#   and stream_feed; a borrow of decode_adopted's input held until its JsonResult is released.
+# Not declared: decode, session_retain and result_myna as creates. They initialize JsonResult too,
+# and a struct is one resource with one create, so `release` takes only decode_adopted's owners in
+# a guest call (decode_adopted subsumes decode for guests: with too little padding it copies).
+# The routes call `invoke`, unchanged, and reach `release` through the cells' raw binding: a
+# resource's destroy cell has no `invoke`.
 [
     cells_seam(
         name = "seam_" + variant,
         java_class = java_class,
         java_package = "dev.elide.truffledata.json.cells.generated",
         options = options,
+        ownership = "ownership.seam",
         production = "//json/native:json.seam",
     )
     for variant, java_class, options in [

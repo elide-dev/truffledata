@@ -6,7 +6,9 @@ The route is host code compiled ahead of time, so it calls each cell's static in
 argument array, boxes, NativePointers and Borrow are not scalar-replaced there. Fails if a route
 symbol calls any `*_Cell_execute*` symbol or any cells coercion, borrow or boxing helper, if a kept
 invoke symbol boxes, or if the route does not reach each routed import (decode, decode_adopted,
-release) through its cell's invoke. Where the compiler inlined invoke (then the image has no invoke
+release) through its cell's invoke. Release is the destroy of the JsonResult resource since Myna
+0.18.0 (json/cells/ownership.seam), and a destroy cell has no invoke: the route calls the cells'
+derived binding JsonCells.release, the one invoke called, which the check accepts as it always has. Where the compiler inlined invoke (then the image has no invoke
 symbol and no binding symbol of its own), the route symbol makes the native call itself: an
 indirect call through the binding's address followed by the C call's native-to-Java transition;
 that is required of the symbol that owns each import. Prints, for every route symbol the image
@@ -79,7 +81,7 @@ def main():
     if 'JsonSvm_decode' not in names:
         failures.append('no JsonSvm_decode symbol: the image must keep local symbols and compile the route')
     # Each routed import is reached from the route through its cell's invoke (or the derived binding
-    # or native symbol that invoke calls). With invoke inlined, the image keeps none of those
+    # or native symbol that invoke calls; release, a destroy without invoke, through the binding). With invoke inlined, the image keeps none of those
     # symbols and the symbol that owns the import makes the native call itself.
     kept = sorted(name for name in names if INVOKE.search(name))
     print('INVOKE symbols in the image: %s' % (', '.join(kept) or 'none (inlined)'))

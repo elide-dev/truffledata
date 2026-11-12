@@ -190,6 +190,56 @@ final class CellsCallShapeTest {
             .isEmpty());
   }
 
+  /**
+   * One cell name in two formats with different shapes (Myna 0.18.0: a status create returns an
+   * owner, so it has no typed override, where the same name elsewhere is a scalar call): a call
+   * qualified by its generated class resolves against that class alone.
+   */
+  @Test
+  void resolvesQualifiedInvokeAcrossFormats() {
+    String other =
+        """
+        public final class OtherTruffle {
+            public static final class status_Cell extends NativeCell {
+                public static int invoke(long handle) {
+                    return 0;
+                }
+                @Override
+                public Object execute(Object[] arguments) {
+                    return NativePointer.NULL;
+                }
+            }
+            public static final class open_Cell extends NativeCell {
+                public static long invoke() {
+                    return 0;
+                }
+            }
+        }
+        """;
+    var scan =
+        Scan.of(
+            Map.of(
+                "demo/cells/generated/DemoTruffle.java", GENERATED,
+                "other/cells/generated/OtherTruffle.java", other));
+    var out = new ArrayList<String>();
+    Scan.Calls calls =
+        scan.check(
+            "demo/cells/src/RouteSvm.java",
+            """
+            final class RouteSvm {
+              int a(long handle) { return DemoTruffle.status_Cell.invoke(handle); }
+              int b(long handle) { return OtherTruffle.status_Cell.invoke(handle); }
+              long c() { return OtherTruffle.open_Cell.invoke(); }
+            }
+            """,
+            out);
+    assertEquals(List.of(), out);
+    assertEquals(3, calls.direct());
+    // DemoTruffle's open_Cell has no invoke, though OtherTruffle's has.
+    scan.check("demo/cells/src/RouteSvm.java", "long d() { return DemoTruffle.open_Cell.invoke(); }", out);
+    assertEquals(1, out.size(), out.toString());
+  }
+
   @Test
   void rejectsInvokeOnAnUnknownCellOrOneWithoutTheEntry() {
     assertFalse(
@@ -353,7 +403,8 @@ final class CellsCallShapeTest {
     private static final Pattern INFERRED = Pattern.compile("\\bvar\\s+(\\w+)\\s*[=:]");
     private static final Pattern STATIC_INVOKE =
         Pattern.compile("\\bstatic\\s+[\\w.\\[\\]]+\\s+invoke\\s*\\(");
-    private static final Pattern INVOKE = Pattern.compile("\\b(\\w+_Cell)\\s*\\.\\s*invoke\\s*\\(");
+    private static final Pattern INVOKE =
+        Pattern.compile("\\b(?:(\\w+)\\s*\\.\\s*)?(\\w+_Cell)\\s*\\.\\s*invoke\\s*\\(");
     private static final Pattern NATIVE_IMAGE_SOURCE = Pattern.compile("(?:^|/)[^/]*Svm[^/]*\\.java$");
 
     /** Typed {@code execute*} calls and static {@code invoke} calls found in one source. */
@@ -378,10 +429,20 @@ final class CellsCallShapeTest {
 
     private final Set<String> ambiguous = new HashSet<>();
 
+    /**
+     * Per generated class ({@code <Outer>.<cell>_Cell}): whether the cell declares the static
+     * {@code invoke}. A call qualified by its generated class resolves here, so a cell name shared by
+     * two formats with different shapes (since Myna 0.18.0, a create in one and a plain call in the
+     * other, or a destroy without {@code invoke}) is told apart.
+     */
+    final Map<String, Boolean> qualified = new HashMap<>();
+
     static Scan of(Map<String, String> generated) {
       var scan = new Scan();
-      for (var source : generated.values()) {
-        String text = strip(source);
+      for (var file : generated.entrySet()) {
+        String name = file.getKey().substring(file.getKey().lastIndexOf('/') + 1);
+        String outer = name.endsWith(".java") ? name.substring(0, name.length() - 5) : name;
+        String text = strip(file.getValue());
         Matcher m = CELL_CLASS.matcher(text);
         List<Integer> starts = new ArrayList<>();
         List<String> names = new ArrayList<>();
@@ -394,7 +455,9 @@ final class CellsCallShapeTest {
           String body = text.substring(starts.get(i), end);
           Matcher typed = TYPED_OVERRIDE.matcher(body);
           String method = typed.find() ? typed.group(2) : "";
-          if (STATIC_INVOKE.matcher(body).find()) scan.invokable.add(names.get(i));
+          boolean entry = STATIC_INVOKE.matcher(body).find();
+          if (entry) scan.invokable.add(names.get(i));
+          scan.qualified.put(outer + "." + names.get(i), entry);
           String previous = scan.cells.putIfAbsent(names.get(i), method);
           // Same simple name in two modules with different result kinds: refuse to guess.
           if (previous != null && !previous.equals(method)) scan.ambiguous.add(names.get(i));
@@ -410,9 +473,13 @@ final class CellsCallShapeTest {
       int direct = 0;
       Matcher invoke = INVOKE.matcher(text);
       while (invoke.find()) {
-        String type = invoke.group(1);
+        String outer = invoke.group(1), type = invoke.group(2);
         String where = path + ":" + line(text, invoke.start()) + ": " + type + ".invoke(";
-        if (!cells.containsKey(type) || ambiguous.contains(type))
+        Boolean entry = outer == null ? null : qualified.get(outer + "." + type);
+        if (entry != null) {
+          if (entry) direct++;
+          else violations.add(where + ", but the generated cell declares no static invoke");
+        } else if (!cells.containsKey(type) || ambiguous.contains(type))
           violations.add(where + ", which no scanned generated *Truffle.java classifies");
         else if (!invokable.contains(type))
           violations.add(where + ", but the generated cell declares no static invoke");
