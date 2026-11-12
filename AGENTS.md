@@ -104,3 +104,13 @@ PR/CI/merge, signed tag `v0.12.0`, Elide Maven and GitHub publication, and publi
 verification. Central stays deferred under #28 until the quota resets (2026-12-01); do not retry
 it without instruction. The same evidence, safety and honest-reporting rules apply. Every
 `truffledata.<format>.cells` flag stays default off (no new paired flag measurement was taken).
+
+## 0.12.0 release completion (2026-11-12)
+
+0.12.0 is released on Elide Maven and GitHub from signed tag `v0.12.0` at
+`c378d6d837a248f19fcc12fcff8799415695f244` (Sam: tag the green commit; notes and cards may follow on
+main). At Sam's instruction the publish skipped the gates main CI had already run and kept only the
+per-platform consumer gates. Central was not attempted (#28, quota resets 2026-12-01). README cards
+are a fresh unclemax capture at the tag. Receipts: `benchmarks/results/release-0.12.0/`. Open: the
+rapidyaml fuzz finding; adopting typed `execute*` with lent segments on the HotSpot routes (proposed,
+not authorized).
