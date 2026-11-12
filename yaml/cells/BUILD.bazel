@@ -1,6 +1,6 @@
 load("@rules_java//java:defs.bzl", "java_library")
 load("//bazel:java.bzl", "data_java_library")
-load("//bazel:myna.bzl", "myna_bindings")
+load("//bazel:myna.bzl", "cells_seam", "myna_bindings")
 
 package(default_visibility = ["//visibility:public"])
 
@@ -29,18 +29,12 @@ package(default_visibility = ["//visibility:public"])
 # production one and the production ABI fingerprint, bindings and natives are unchanged
 # (//bazel:myna_contract --derived checks it).
 [
-    genrule(
+    cells_seam(
         name = "seam_" + variant,
-        srcs = ["//yaml/native:yaml.seam"],
-        outs = ["cells_%s.seam" % variant],
-        cmd = ("sed -e 's| java_package=dev.elide.truffledata.yaml.generated java_class=Yaml | " +
-               "java_package=dev.elide.truffledata.yaml.cells.generated java_class=%s %s |' $< > $@ && " +
-               "grep -q '^module truffledata_yaml .* java_class=%s %s ' $@") % (
-            java_class,
-            options,
-            java_class,
-            options,
-        ),
+        java_class = java_class,
+        java_package = "dev.elide.truffledata.yaml.cells.generated",
+        options = options,
+        production = "//yaml/native:yaml.seam",
     )
     for variant, java_class, options in [
         ("svm", "YamlCells", "truffle_cells=true truffle_backend=native truffle_transitions=direct"),

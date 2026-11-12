@@ -27,6 +27,7 @@ ABI_CLASSES = {
 
 _GENERATOR = "@myna//:generator"
 _FOLD = "//bazel:myna_abi.py"
+_CELLS_SEAM = "//bazel:cells_seam.py"
 
 def _target_select():
     return select({
@@ -91,6 +92,31 @@ def myna_bindings(name, seam, java_class, java_package, out = "generated", abi =
         cmd = cmd,
         tools = [_GENERATOR] + ([_FOLD] if abi else []),
         visibility = visibility,
+    )
+
+def cells_seam(name, production, java_package, java_class, options, ownership = None):
+    """Derive a Truffle cells seam from a production seam (bazel/cells_seam.py).
+
+    The module line gets the cells package, class and options. `ownership`, when given, is the
+    format's ownership overlay: Myna `borrow`/`resource` declarations and the edits they need,
+    which only the cells projection carries. //bazel:myna_contract checks the derived descriptor.
+    """
+    srcs = [production] + ([ownership] if ownership else [])
+    cmd = "python3 $(location %s) $(location %s) $@ --package %s --class %s --options '%s'" % (
+        _CELLS_SEAM,
+        production,
+        java_package,
+        java_class,
+        options,
+    )
+    if ownership:
+        cmd += " --ownership $(location %s)" % ownership
+    native.genrule(
+        name = name,
+        srcs = srcs,
+        outs = [name.replace("seam_", "cells_") + ".seam"],
+        cmd = cmd,
+        tools = [_CELLS_SEAM],
     )
 
 def myna_other_class_stub(name, abi, symbol, **kwargs):

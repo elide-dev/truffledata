@@ -1,6 +1,6 @@
 load("@rules_java//java:defs.bzl", "java_library")
 load("//bazel:java.bzl", "data_java_library")
-load("//bazel:myna.bzl", "myna_bindings")
+load("//bazel:myna.bzl", "cells_seam", "myna_bindings")
 
 package(default_visibility = ["//visibility:public"])
 
@@ -17,18 +17,12 @@ package(default_visibility = ["//visibility:public"])
 # verify the library against the production fingerprint instead, and //bazel:myna_contract checks
 # that each derived descriptor equals the production descriptor apart from those options.
 [
-    genrule(
+    cells_seam(
         name = "seam_" + variant,
-        srcs = ["//protobuf-buffa/native:buffa.seam"],
-        outs = ["cells_%s.seam" % variant],
-        cmd = ("sed -e 's| java_package=dev.elide.truffledata.buffa.generated java_class=Buffa | " +
-               "java_package=dev.elide.truffledata.buffa.cells.generated java_class=%s %s |' $< > $@ && " +
-               "grep -q '^module truffledata_buffa .* java_class=%s %s ' $@") % (
-            java_class,
-            options,
-            java_class,
-            options,
-        ),
+        java_class = java_class,
+        java_package = "dev.elide.truffledata.buffa.cells.generated",
+        options = options,
+        production = "//protobuf-buffa/native:buffa.seam",
     )
     for variant, java_class, options in [
         # Native Image: cells call the static @CFunction bindings with direct transitions.

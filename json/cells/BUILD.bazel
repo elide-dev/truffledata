@@ -1,6 +1,6 @@
 load("@rules_java//java:defs.bzl", "java_library")
 load("//bazel:java.bzl", "data_java_library")
-load("//bazel:myna.bzl", "myna_bindings")
+load("//bazel:myna.bzl", "cells_seam", "myna_bindings")
 
 package(default_visibility = [
     "//bazel:__pkg__",
@@ -28,18 +28,12 @@ package(default_visibility = [
 # call-lifetime borrow would misdeclare. Adding either would also make the derived descriptor
 # differ from the production one.
 [
-    genrule(
+    cells_seam(
         name = "seam_" + variant,
-        srcs = ["//json/native:json.seam"],
-        outs = ["cells_%s.seam" % variant],
-        cmd = ("sed -e 's| java_package=dev.elide.truffledata.json.generated java_class=Json | " +
-               "java_package=dev.elide.truffledata.json.cells.generated java_class=%s %s |' $< > $@ && " +
-               "grep -q '^module truffledata_json .* java_class=%s %s ' $@") % (
-            java_class,
-            options,
-            java_class,
-            options,
-        ),
+        java_class = java_class,
+        java_package = "dev.elide.truffledata.json.cells.generated",
+        options = options,
+        production = "//json/native:json.seam",
     )
     for variant, java_class, options in [
         # Native Image: cells call the static @CFunction bindings with direct transitions.

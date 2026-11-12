@@ -110,22 +110,78 @@ def verify_classes(descriptor, archive, per_class):
     return name + " " + ", ".join("%s=%s" % (cls, f[:12] + "...") for cls, f in fingerprints.items())
 
 
+# What a cells seam may add to the production descriptor (bazel/cells_seam.py): Myna ownership
+# declarations, which only the cells projection carries, and the edits they need.
+OWNERSHIP_SECTIONS = ("borrows", "resources")
+OWNERSHIP_FACTS = {"nounwind", "nocapture", "readonly"}
+NAMED_POINTER = re.compile(r"ptr<[A-Z][A-Za-z0-9_]*>")
+
+
+def ownership_delta(base, cells, path, destroys):
+    """Assert that `cells` equals `base` apart from the ownership delta; return what it adds."""
+    added = []
+    if isinstance(base, dict) and isinstance(cells, dict):
+        keys = set(base) | set(cells)
+        for key in sorted(keys):
+            here = path + "/" + key
+            if key not in base:
+                if path.rsplit("/", 1)[-1] == "facts" and key in OWNERSHIP_FACTS:
+                    fact = cells[key]
+                    assert fact["value"] == "true" and fact["provenance"] == "EXPLICIT_CONTRACT", (here, fact)
+                    added.append(here)
+                    continue
+                if path == "" and key in OWNERSHIP_SECTIONS:
+                    added.append(here)
+                    continue
+                raise AssertionError("cells descriptor adds %s" % here)
+            if key not in cells:
+                raise AssertionError("cells descriptor drops %s" % here)
+            added += ownership_delta(base[key], cells[key], here, destroys)
+        return added
+    if isinstance(base, list) and isinstance(cells, list):
+        if path == "/opaqueTypes":
+            assert all(entry in cells for entry in base), (path, base, cells)
+            return [path + "/" + json.dumps(entry) for entry in cells if entry not in base]
+        assert len(base) == len(cells), (path, len(base), len(cells))
+        for index, (left, right) in enumerate(zip(base, cells)):
+            added += ownership_delta(left, right, path + "/" + str(index), destroys)
+        return added
+    if base == cells:
+        return added
+    leaf = path.rsplit("/", 1)[-1]
+    if leaf in ("type", "returnType") and base == "ptr<void>" and NAMED_POINTER.fullmatch(str(cells)):
+        return added + [path]
+    if leaf == "ownership" and (base, cells) == ("BORROWED", "TRANSFERRED_TO_CALLEE"):
+        function = path.split("/")[2]
+        assert function in destroys, "only a resource's destroy takes ownership: " + path
+        return added + [path]
+    raise AssertionError("cells descriptor changes %s: %r -> %r" % (path, base, cells))
+
+
 def verify_derived(production, derived):
-    """A cells seam derived from a production seam (protobuf-buffa/cells, csv/cells, json/cells and yaml/cells BUILD.bazel) may differ
-    only in its module options: the Truffle cells block and the Java package/class. Every import,
-    struct, policy and the ABI itself must be the production one, so cells call the library the
+    """A cells seam derived from a production seam (bazel/cells_seam.py; protobuf-buffa/cells, csv/cells,
+    json/cells and yaml/cells BUILD.bazel) may differ in its module options (the Truffle cells block
+    and the Java package/class) and by Myna ownership declarations: `borrow` and `resource` lines, the
+    opaque types they name, the explicit nounwind/nocapture/readonly contracts they require, ptr<void>
+    narrowed to a named pointer, and ownership transferred on a resource's destroy. Every import,
+    struct, policy and the ABI itself is otherwise the production one, so cells call the library the
     production fingerprint check verified."""
     base = load(production)
     cells = load(derived)
     assert "truffle" not in base, "production seams do not enable Truffle cells"
+    assert not any(base.get(key) for key in OWNERSHIP_SECTIONS), "production seams declare no ownership"
     truffle = cells.get("truffle")
     assert truffle and truffle["cells"] is True and truffle["backend"] in {"NATIVE", "FFM"}, truffle
     assert truffle["coercion"] == "STRICT", truffle
     assert cells["java"]["package"] == base["java"]["package"].rsplit(".", 1)[0] + ".cells.generated", cells["java"]
     assert cells["java"]["class"] != base["java"]["class"], cells["java"]
+    names = [function["logicalName"] for function in cells["functions"]]
+    destroys = {str(names.index(resource["destroy"])) for resource in cells.get("resources", [])}
     rest = {key: value for key, value in cells.items() if key not in ("truffle", "java")}
-    assert rest == {key: value for key, value in base.items() if key != "java"}, derived
-    return cells["java"]["package"] + "." + cells["java"]["class"] + " (" + truffle["backend"] + ")"
+    added = ownership_delta({key: value for key, value in base.items() if key != "java"}, rest, "", destroys)
+    owned = "%d borrows, %d resources" % (len(cells.get("borrows", [])), len(cells.get("resources", [])))
+    return cells["java"]["package"] + "." + cells["java"]["class"] + " (" + truffle["backend"] + "; " + owned + \
+        ("; %d ownership edits" % len(added) if added else "") + ")"
 
 
 if __name__ == "__main__":

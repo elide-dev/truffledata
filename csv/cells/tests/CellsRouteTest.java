@@ -48,6 +48,49 @@ final class CellsRouteTest {
     }
   }
 
+  /**
+   * The borrows of csv/cells/ownership.seam (Myna 0.18.0), as a guest calls the cells: each byte
+   * buffer is one argument whose length the cell derives, heap bytes are copied for the call,
+   * native views are lent in place, and a segment whose scope is closed is refused before native
+   * code runs.
+   */
+  @Test
+  void guestCallsBorrowTheirBuffers() {
+    CsvCellsRoute.jvm(library());
+    var validate = CellsFfmIndexer.Cells.VALIDATE;
+    byte[] valid = "a,b,\u00e9\n".getBytes(java.nio.charset.StandardCharsets.UTF_8);
+    byte[] invalid = {'a', ',', (byte) 0xC3, '\n'};
+    assertEquals(-1, validate.executeLong(new Object[] {new dev.elide.myna.truffle.HeapBytes(valid, false)}));
+    assertEquals(2, validate.executeLong(new Object[] {new dev.elide.myna.truffle.HeapBytes(invalid, false)}));
+    // The length is no longer a guest argument.
+    assertThrows(
+        RuntimeException.class,
+        () -> validate.executeLong(new Object[] {new dev.elide.myna.truffle.HeapBytes(valid, false), (long) valid.length}));
+    try (java.lang.foreign.Arena arena = java.lang.foreign.Arena.ofConfined()) {
+      var segment = arena.allocate(invalid.length);
+      java.lang.foreign.MemorySegment.copy(invalid, 0, segment, java.lang.foreign.ValueLayout.JAVA_BYTE, 0, invalid.length);
+      assertEquals(2, validate.executeLong(new Object[] {dev.elide.myna.truffle.NativeBytes.of(segment, false)}));
+      // The index cell: `data` borrowed, `out` a raw address, the packed count << 8 | carry.
+      var out = arena.allocate(4L * invalid.length, 4);
+      long packed =
+          CellsFfmIndexer.Cells.INDEX.executeLong(
+              new Object[] {
+                new dev.elide.myna.truffle.HeapBytes(invalid, false),
+                dev.elide.myna.truffle.NativePointer.of(out.address()),
+                ',' | '"' << 8 | 1 << 16,
+                0,
+                0L
+              });
+      assertTrue(packed >= 0 && (packed >>> 8) == 2, Long.toString(packed));
+    }
+    java.lang.foreign.Arena closed = java.lang.foreign.Arena.ofShared();
+    var stale = closed.allocate(8);
+    closed.close();
+    assertThrows(
+        RuntimeException.class,
+        () -> validate.executeLong(new Object[] {dev.elide.myna.truffle.NativeBytes.of(stale, false)}));
+  }
+
   @Test
   void cellsMatchTheFfmBaseline() throws Exception {
     Path library = library();

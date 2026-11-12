@@ -1,6 +1,6 @@
 load("@rules_java//java:defs.bzl", "java_library")
 load("//bazel:java.bzl", "data_java_library")
-load("//bazel:myna.bzl", "myna_bindings")
+load("//bazel:myna.bzl", "cells_seam", "myna_bindings")
 
 package(default_visibility = ["//visibility:public"])
 
@@ -19,18 +19,13 @@ package(default_visibility = ["//visibility:public"])
 # `borrow` cannot apply to td_csv_index/_leaf (a call borrow requires every other parameter to be
 # scalar; `out` is a ptr<i32>).
 [
-    genrule(
+    cells_seam(
         name = "seam_" + variant,
-        srcs = ["//csv/native:csv.seam"],
-        outs = ["cells_%s.seam" % variant],
-        cmd = ("sed -e 's| java_package=dev.elide.truffledata.csv.kernel.generated java_class=CsvNative | " +
-               "java_package=dev.elide.truffledata.csv.kernel.cells.generated java_class=%s %s |' $< > $@ && " +
-               "grep -q '^module truffledata_csv .* java_class=%s %s ' $@") % (
-            java_class,
-            options,
-            java_class,
-            options,
-        ),
+        java_class = java_class,
+        java_package = "dev.elide.truffledata.csv.kernel.cells.generated",
+        options = options,
+        ownership = "ownership.seam",
+        production = "//csv/native:csv.seam",
     )
     for variant, java_class, options in [
         # Native Image: cells call the static @CFunction bindings with direct transitions.
