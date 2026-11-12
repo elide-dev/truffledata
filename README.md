@@ -116,7 +116,7 @@ repositories {
     maven("https://maven.elide.dev/gvm-elide/25.5.5-elide.28")
 }
 dependencies {
-    implementation(platform("dev.elide:truffledata-bom:0.11.0"))
+    implementation(platform("dev.elide:truffledata-bom:0.12.0"))
     implementation("dev.elide:truffledata-core")
     implementation("dev.elide:truffledata-protobuf")
     // Add JDBC integrations or protobuf-buffa as needed.
