@@ -4,7 +4,8 @@ import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.LoopNode;
 import com.oracle.truffle.api.nodes.RootNode;
-import dev.elide.myna.truffle.NativePointer;
+import dev.elide.myna.truffle.NativeBytes;
+import dev.elide.myna.truffle.NativeResource;
 import dev.elide.truffledata.json.cells.generated.JsonCellsTruffle;
 import dev.elide.truffledata.json.generated.Json;
 import dev.elide.truffledata.json.tests.SvmAcceptance;
@@ -209,10 +210,14 @@ public final class CellsAcceptance {
   /**
    * JSON cells called from runtime-compiled Truffle code, the way a language's function node calls
    * them: the node holds the concrete cells, builds the arguments in compiled code and calls the
-   * scalar cell through {@code executeInt}. This is the guest-style path (the route itself calls
-   * {@code invoke}; see {@link #routeAllocation}). The root must reach compiled code and stay there
-   * (the image is built with the runtime-compilation blocklist checks). The allocation per
-   * decode-and-release pair is printed, not budgeted: it is a fact for the measurement step.
+   * cells through {@code execute}. This is the guest-style path (the route itself calls {@code
+   * invoke}; see {@link #routeAllocation}). Since Myna 0.18.0 (json/cells/ownership.seam) the
+   * adopted decode is the create of the {@code JsonResult} resource: its input is a borrow held
+   * until the result is released (the region is lent in place as a {@link NativeBytes}, whose size
+   * is the capacity), it returns the result's owner, and the release cell takes that owner. The
+   * root must reach compiled code and stay there (the image is built with the runtime-compilation
+   * blocklist checks). The allocation per decode-and-release pair is printed, not budgeted: it is
+   * a fact for the measurement step (a create allocates its owner and the runtime's struct).
    */
   private static void compiled() {
     byte[] document = "{\"a\":[1,true,\"text\"],\"b\":{\"c\":-2.5}}".getBytes(StandardCharsets.UTF_8);
@@ -233,7 +238,12 @@ public final class CellsAcceptance {
       try {
         CellCalls root = new CellCalls();
         var target = root.getCallTarget();
-        Object[] arguments = {region.rawValue(), length, capacity, result.rawValue(), 1000};
+        Object[] arguments = {
+          NativeBytes.of(region.rawValue(), capacity, false),
+          length,
+          NativeBytes.of(result.rawValue(), Json.JsonResult.SIZE, true),
+          1000
+        };
         for (int i = 0; i < 200 && !root.compiled; i++)
           if ((Integer) target.call(arguments) != 0) throw new AssertionError("Cell decode status");
         if (!root.compiled) throw new AssertionError("JSON cells must execute in compiled code");
@@ -245,7 +255,7 @@ public final class CellsAcceptance {
         bean.setThreadAllocatedMemoryEnabled(true);
         long thread = Thread.currentThread().threadId();
         int rounds = 100000;
-        arguments[4] = rounds;
+        arguments[3] = rounds;
         long before = bean.getThreadAllocatedBytes(thread);
         Object status = target.call(arguments);
         double bytes = (bean.getThreadAllocatedBytes(thread) - before) / (double) rounds;
@@ -262,7 +272,10 @@ public final class CellsAcceptance {
     }
   }
 
-  /** {@code td_json_decode_adopted} then {@code td_json_release} through their cells, in a loop. */
+  /**
+   * {@code td_json_decode_adopted} then {@code td_json_release} through their cells, in a loop: the
+   * create returns the {@code JsonResult} owner and the destroy cell closes it.
+   */
   private static final class CellCalls extends RootNode {
     @Child private JsonCellsTruffle.decode_adopted_Cell decode = new JsonCellsTruffle.decode_adopted_Cell();
     @Child private JsonCellsTruffle.release_Cell release = new JsonCellsTruffle.release_Cell();
@@ -276,28 +289,27 @@ public final class CellsAcceptance {
     @Override
     public Object execute(VirtualFrame frame) {
       Object[] arguments = frame.getArguments();
-      long data = (Long) arguments[0];
+      Object data = arguments[0];
       long length = (Long) arguments[1];
-      long capacity = (Long) arguments[2];
-      long result = (Long) arguments[3];
-      int rounds = (Integer) arguments[4];
+      Object result = arguments[2];
+      int rounds = (Integer) arguments[3];
       JsonLimits limits = JsonLimits.DEFAULT;
       int status = 0;
       for (int i = 0; i < rounds; i++) {
-        status |=
-            decode.executeInt(
+        Object owner =
+            decode.execute(
                 new Object[] {
-                  NativePointer.of(data),
+                  data,
                   length,
-                  capacity,
                   limits.maxInputBytes(),
                   limits.maxIndexBytes(),
                   limits.maxNodes(),
                   limits.maxTextBytes(),
                   limits.maxDepth(),
-                  NativePointer.of(result)
+                  result
                 });
-        release.execute(new Object[] {NativePointer.of(result)});
+        if (!(owner instanceof NativeResource)) status |= 1;
+        release.execute(new Object[] {owner});
       }
       if (CompilerDirectives.inInterpreter()) LoopNode.reportLoopCount(this, rounds);
       last = CompilerDirectives.inCompiledCode();

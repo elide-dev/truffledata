@@ -1,16 +1,18 @@
 package dev.elide.truffledata.json;
 
+import dev.elide.truffledata.json.cells.generated.JsonCells;
 import dev.elide.truffledata.json.cells.generated.JsonCellsTruffle;
+import org.graalvm.word.WordFactory;
 import org.jspecify.annotations.NullMarked;
 
 /**
  * The Native Image cells route ({@code -Dtruffledata.json.cells=true} at image build time, selected
- * by {@link JsonCellsFeature}): {@link JsonSvm}'s {@code td_json_decode}, {@code
- * td_json_decode_adopted} and {@code td_json_release} calls go through cells generated with {@code
- * truffle_backend=native truffle_transitions=direct}, which call the derived static {@code
- * @CFunction} bindings. {@link JsonSvm} keeps every check, the pinning, the result allocation, the
- * status mapping and the owner lifetimes; this class only makes the call, so messages are identical
- * and errors are the same, in the same order.
+ * by {@link JsonCellsFeature}): {@link JsonSvm}'s {@code td_json_decode} and {@code
+ * td_json_decode_adopted} calls go through cells generated with {@code truffle_backend=native
+ * truffle_transitions=direct}, which call the derived static {@code @CFunction} bindings, and its
+ * {@code td_json_release} call through the derived binding itself (below). {@link JsonSvm} keeps
+ * every check, the pinning, the result allocation, the status mapping and the owner lifetimes; this
+ * class only makes the call, so messages are identical and errors are the same, in the same order.
  *
  * <p>The route is host code, compiled ahead of time and called below Truffle boundaries, so it uses
  * each cell's static {@code invoke} entry (Myna 0.16.0): native carriers and raw addresses, with no
@@ -22,6 +24,14 @@ import org.jspecify.annotations.NullMarked;
  * (or adopted) and the result allocated until the call returns. Nothing the cells' coercions would
  * have refused can reach the call: {@link JsonLimits} admits only positive limits and a depth within
  * 1..128, and {@link JsonSvm} rejects empty input and a null adopted region before the call.
+ *
+ * <p>Since Myna 0.18.0 the cells seam declares {@code JsonResult} a resource initialized in place
+ * by {@code td_json_decode_adopted} and destroyed by {@code td_json_release}
+ * (json/cells/ownership.seam). A resource's destroy cell has no static {@code invoke} (its {@code
+ * execute} takes only the owner its create returned), so release calls the same cells class's raw
+ * {@code @CFunction} binding, {@link JsonCells#release}, which is exactly what the destroy cell's
+ * owner calls and what {@code invoke} called before: the same derived binding, transition and
+ * symbol, with nothing allocated.
  */
 @NullMarked
 final class CellsSvm extends JsonCellsRoute.Svm {
@@ -80,6 +90,7 @@ final class CellsSvm extends JsonCellsRoute.Svm {
     assert released();
     // Release runs while a message closes and while a failed decode unwinds (after an
     // OutOfMemoryError too): invoke allocates nothing, so it cannot fail for want of heap.
-    JsonCellsTruffle.release_Cell.invoke(result);
+    // The destroy of the JsonResult resource: no invoke, so the cells' raw binding (see above).
+    JsonCells.release(WordFactory.pointer(result));
   }
 }

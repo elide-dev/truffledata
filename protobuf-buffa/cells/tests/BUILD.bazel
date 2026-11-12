@@ -94,10 +94,14 @@ java_test(
             "//protobuf-buffa",
             "//protobuf-buffa:bindings",
             "//protobuf-buffa/cells",
+            # CellsRouteTest calls the generated cells as a guest would (ownership.seam).
+            "//protobuf-buffa/cells:bindings",
             "//protobuf-buffa/tests:acceptance",
             "//protobuf-runtime",
             "//protobuf-runtime:slab_test_fixtures",
+            "@maven//:org_graalvm_truffle_truffle_api",
             "@maven//:org_junit_jupiter_junit_jupiter_api",
+            "@myna//:truffle",
         ],
     )
     for name, flag in [

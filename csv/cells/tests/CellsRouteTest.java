@@ -2,10 +2,17 @@ package dev.elide.truffledata.csv.cells;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import dev.elide.myna.truffle.HeapBytes;
+import dev.elide.myna.truffle.NativeBytes;
 import dev.elide.myna.truffle.NativeCell;
+import dev.elide.myna.truffle.NativePointer;
 import dev.elide.truffledata.csv.CsvIndexing;
 import dev.elide.truffledata.csv.kernel.jvm.FfmIndexer;
+import java.lang.foreign.Arena;
+import java.lang.foreign.MemorySegment;
+import java.lang.foreign.ValueLayout;
 import java.lang.reflect.Field;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
@@ -48,6 +55,49 @@ final class CellsRouteTest {
     }
   }
 
+  /**
+   * The borrows of csv/cells/ownership.seam (Myna 0.18.0), as a guest calls the cells: each byte
+   * buffer is one argument whose length the cell derives, heap bytes are copied for the call,
+   * native views are lent in place, and a segment whose scope is closed is refused before native
+   * code runs.
+   */
+  @Test
+  void guestCallsBorrowTheirBuffers() {
+    CsvCellsRoute.jvm(library());
+    var validate = CellsFfmIndexer.Cells.VALIDATE;
+    byte[] valid = "a,b,\u00e9\n".getBytes(StandardCharsets.UTF_8);
+    byte[] invalid = {'a', ',', (byte) 0xC3, '\n'};
+    assertEquals(-1, validate.executeLong(new Object[] {new HeapBytes(valid, false)}));
+    assertEquals(2, validate.executeLong(new Object[] {new HeapBytes(invalid, false)}));
+    // The length is no longer a guest argument.
+    assertThrows(
+        RuntimeException.class,
+        () -> validate.executeLong(new Object[] {new HeapBytes(valid, false), (long) valid.length}));
+    try (Arena arena = Arena.ofConfined()) {
+      var segment = arena.allocate(invalid.length);
+      MemorySegment.copy(invalid, 0, segment, ValueLayout.JAVA_BYTE, 0, invalid.length);
+      assertEquals(2, validate.executeLong(new Object[] {NativeBytes.of(segment, false)}));
+      // The index cell: `data` borrowed, `out` a raw address, the packed count << 8 | carry.
+      var out = arena.allocate(4L * invalid.length, 4);
+      long packed =
+          CellsFfmIndexer.Cells.INDEX.executeLong(
+              new Object[] {
+                new HeapBytes(invalid, false),
+                NativePointer.of(out.address()),
+                ',' | '"' << 8 | 1 << 16,
+                0,
+                0L
+              });
+      assertTrue(packed >= 0 && (packed >>> 8) == 2, Long.toString(packed));
+    }
+    Arena closed = Arena.ofShared();
+    var stale = closed.allocate(8);
+    closed.close();
+    assertThrows(
+        RuntimeException.class,
+        () -> validate.executeLong(new Object[] {NativeBytes.of(stale, false)}));
+  }
+
   @Test
   void cellsMatchTheFfmBaseline() throws Exception {
     Path library = library();
@@ -85,10 +135,10 @@ final class CellsRouteTest {
     CsvCellsRoute.jvm(library());
     for (Field field : CellsFfmIndexer.class.getDeclaredFields())
       assertFalse(
-          java.lang.foreign.Arena.class.isAssignableFrom(field.getType()),
+          Arena.class.isAssignableFrom(field.getType()),
           "an arena field needs a close no scanner makes: " + field);
     CellsFfmIndexer indexer = new CellsFfmIndexer((byte) ',', (byte) '"', true, 0, 1 << 20);
-    byte[] input = "a,b\n1,2\n".getBytes(java.nio.charset.StandardCharsets.US_ASCII);
+    byte[] input = "a,b\n1,2\n".getBytes(StandardCharsets.US_ASCII);
     int[] out = new int[64];
     int first = indexer.index(input, 0, input.length, out);
     assertTrue(first > 0, "entries " + first);

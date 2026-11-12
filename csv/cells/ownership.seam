@@ -1,0 +1,19 @@
+# Myna ownership for the CSV cells (bazel/cells_seam.py). Production csv.seam is unchanged.
+#
+# `data` is a call borrow on the three byte imports: the guest passes a buffer and the cell derives
+# `length`. td_csv_index/_leaf keep `out` (ptr<i32>, `length` entries by contract) as a pass-through
+# pointer: Myna has no length-less or i32-element borrow, so it stays a guest address.
+#
+# Contracts (csv/native/api.cc): the three functions read exactly `length` bytes of `data`, never
+# write or retain it, and cannot unwind: the kernels and simdutf neither throw nor allocate
+# (csv/native/index_test.cc counts every operator new during indexing).
+borrow index data length=length lifetime=call
+borrow index_leaf data length=length lifetime=call
+borrow validate_utf8 data length=length lifetime=call
+
+edit import index +nounwind=true@explicit_contract
+edit import index_leaf +nounwind=true@explicit_contract
+edit import validate_utf8 +nounwind=true@explicit_contract
+edit param index.data +nocapture=true@explicit_contract +readonly=true@explicit_contract
+edit param index_leaf.data +nocapture=true@explicit_contract +readonly=true@explicit_contract
+edit param validate_utf8.data +nocapture=true@explicit_contract +readonly=true@explicit_contract

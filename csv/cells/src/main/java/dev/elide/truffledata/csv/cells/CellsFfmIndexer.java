@@ -2,6 +2,7 @@ package dev.elide.truffledata.csv.cells;
 
 import dev.elide.myna.truffle.NativeCell;
 import dev.elide.myna.truffle.NativeCellRootNode;
+import dev.elide.myna.truffle.NativeBytes;
 import dev.elide.myna.truffle.NativePointer;
 import dev.elide.truffledata.TargetAbi;
 import dev.elide.truffledata.csv.kernel.cells.generated.CsvCellsJvmFFM;
@@ -21,6 +22,9 @@ import org.jspecify.annotations.Nullable;
  * and {@code td_csv_validate_utf8} call goes through a cell generated with {@code
  * truffle_backend=ffm}, held as its concrete {@code *_Cell} type and called through the specialized
  * {@code executeLong} (Myna 0.14.0: no result box, no {@code UnexpectedResultException} handler).
+ * Since Myna 0.18.0 {@code data} is a declared borrow: input is lent as a {@code NativeBytes} view
+ * of its segment, so the cell derives the length and the FFM linker holds the segment's scope for
+ * the call; {@code out} stays a raw address (Myna has no {@code i32}-element borrow).
  *
  * <p>The checks, the packed result, the carry rule and the error messages are {@code FfmIndexer}'s,
  * so results and errors are identical. Myna's FFM cells take no heap segments (HotSpot copies heap
@@ -145,9 +149,10 @@ final class CellsFfmIndexer extends CsvIndexer implements AutoCloseable {
     long result;
     try {
       MemorySegment.copy(input, from, source, ValueLayout.JAVA_BYTE, 0, length);
+      // `data` is a borrow (csv/cells/ownership.seam): the cell derives `length` from the view and
+      // passes its segment to the downcall, whose scope the linker holds for the call.
       Object[] arguments = {
-        NativePointer.of(source.address()),
-        (long) length,
+        NativeBytes.of(source.asSlice(0, length), false),
         NativePointer.of(target.address()),
         format,
         kernel,
@@ -158,7 +163,7 @@ final class CellsFfmIndexer extends CsvIndexer implements AutoCloseable {
       if (result > 0)
         MemorySegment.copy(target, ValueLayout.JAVA_INT, 0, out, 0, (int) (result >>> 8));
     } finally {
-      // The cell takes raw addresses: the automatic arena must stay reachable across the call.
+      // `out` is a raw address: the automatic arena must stay reachable across the call.
       Reference.reachabilityFence(source);
       Reference.reachabilityFence(target);
     }
@@ -176,8 +181,7 @@ final class CellsFfmIndexer extends CsvIndexer implements AutoCloseable {
     MemorySegment source = this.input;
     try {
       MemorySegment.copy(input, from, source, ValueLayout.JAVA_BYTE, 0, length);
-      long r =
-          validate.executeLong(new Object[] {NativePointer.of(source.address()), (long) length});
+      long r = validate.executeLong(new Object[] {NativeBytes.of(source.asSlice(0, length), false)});
       return r < 0 ? -1 : r;
     } finally {
       Reference.reachabilityFence(source);

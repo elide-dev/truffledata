@@ -13,8 +13,9 @@ import org.jspecify.annotations.Nullable;
 
 /**
  * The HotSpot cells route ({@code -Dtruffledata.json.cells=true}, read once by {@link
- * JsonCellsRoute}): {@link JsonJvm}'s {@code td_json_decode_adopted} and {@code td_json_release}
- * calls go through cells generated with {@code truffle_backend=ffm}. {@link JsonJvm} keeps every
+ * JsonCellsRoute}): {@link JsonJvm}'s {@code td_json_decode_adopted} call goes through a cell
+ * generated with {@code truffle_backend=ffm}, and its {@code td_json_release} call through the same
+ * cells class's FFM binding. {@link JsonJvm} keeps every
  * check, the result arena, the status mapping and the owner lifetimes, so messages are identical
  * and errors are the same, in the same order. Both buffers are native segments, so the route calls
  * each cell's static {@code invoke} entry (Myna 0.16.0) with their raw addresses: no cell instance,
@@ -24,6 +25,14 @@ import org.jspecify.annotations.Nullable;
  * neither copies nor retains anything (the adopted input is retained by the native result, exactly
  * as on the baseline route), and it does not track the caller's segment scope: the route checks
  * that itself, before the call.
+ *
+ * <p>Since Myna 0.18.0 the cells seam declares {@code JsonResult} a resource initialized in place
+ * by {@code td_json_decode_adopted} and destroyed by {@code td_json_release}
+ * (json/cells/ownership.seam). A resource's destroy cell has no static {@code invoke} (its {@code
+ * execute} takes only the owner its create returned), so release calls {@link
+ * JsonCellsJvmFFM#release}, the downcall the destroy cell's owner and the former {@code invoke}
+ * make, with the result segment itself: the linker holds its scope for the call, as on the
+ * baseline route.
  *
  * <p>Myna's FFM cells bind their symbols through the loader lookup, so the library is also loaded
  * into this class loader ({@link System#load}) and its fingerprint checked against the production
@@ -115,6 +124,13 @@ final class CellsFfm implements JsonCellsRoute.Jvm {
   @Override
   public void release(MemorySegment result) {
     assert released();
-    JsonCellsJvmTruffle.release_Cell.invoke(result.address());
+    // The destroy of the JsonResult resource: no invoke, so the cells' FFM binding (see above).
+    try {
+      JsonCellsJvmFFM.release(result);
+    } catch (RuntimeException | Error failure) {
+      throw failure;
+    } catch (Throwable failure) {
+      throw new IllegalStateException("Native invocation failed", failure);
+    }
   }
 }

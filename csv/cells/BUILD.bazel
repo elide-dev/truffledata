@@ -1,6 +1,6 @@
 load("@rules_java//java:defs.bzl", "java_library")
 load("//bazel:java.bzl", "data_java_library")
-load("//bazel:myna.bzl", "myna_bindings")
+load("//bazel:myna.bzl", "cells_seam", "myna_bindings")
 
 package(default_visibility = ["//visibility:public"])
 
@@ -11,26 +11,20 @@ package(default_visibility = ["//visibility:public"])
 # time, by CsvCellsFeature, which this artifact's native-image.properties registers. With the flag
 # off nothing here is reachable and the production //csv/kernel route is unchanged.
 #
-# The cells come from seams *derived* from the production //csv/native:csv.seam: only the module
-# line changes (cells options, package and class), so every import is the production one by
-# construction and the production fingerprint, bindings and natives are unchanged
-# (//bazel:myna_contract --derived). The backends verify the library against the production
-# fingerprint (CsvNativeAbi). The seam has no create/release pairs (no `resource`), and Myna's
-# `borrow` cannot apply to td_csv_index/_leaf (a call borrow requires every other parameter to be
-# scalar; `out` is a ptr<i32>).
+# The cells come from seams *derived* from the production //csv/native:csv.seam (bazel/cells_seam.py):
+# the module line changes (cells options, package and class), and ownership.seam adds the Myna
+# ownership declarations only the cells carry (call borrows of `data`; see that file). Every import
+# is otherwise the production one, and the production fingerprint, bindings and natives are
+# unchanged (//bazel:myna_contract --derived). The backends verify the library against the
+# production fingerprint (CsvNativeAbi). The seam has no create/release pairs (no `resource`).
 [
-    genrule(
+    cells_seam(
         name = "seam_" + variant,
-        srcs = ["//csv/native:csv.seam"],
-        outs = ["cells_%s.seam" % variant],
-        cmd = ("sed -e 's| java_package=dev.elide.truffledata.csv.kernel.generated java_class=CsvNative | " +
-               "java_package=dev.elide.truffledata.csv.kernel.cells.generated java_class=%s %s |' $< > $@ && " +
-               "grep -q '^module truffledata_csv .* java_class=%s %s ' $@") % (
-            java_class,
-            options,
-            java_class,
-            options,
-        ),
+        java_class = java_class,
+        java_package = "dev.elide.truffledata.csv.kernel.cells.generated",
+        options = options,
+        ownership = "ownership.seam",
+        production = "//csv/native:csv.seam",
     )
     for variant, java_class, options in [
         # Native Image: cells call the static @CFunction bindings with direct transitions.

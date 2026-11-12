@@ -1,0 +1,117 @@
+# Myna ownership for the JSON cells (bazel/cells_seam.py; Myna 0.18.0). Production json.seam, its
+# fingerprint, bindings and natives are unchanged: only the cells projection carries these lines.
+#
+# Every claim below is an explicit contract of json/native/api.cc and the headers it includes.
+#
+# nounwind: no C++ exception crosses these entries. decode, decode_adopted, typed_decode,
+# plan_create, session_create, stream_create and session_decode(_small) run everything that can
+# throw (allocation, simdjson, the stage-2 walk) inside `catch (...)` and map it to a status or a
+# null handle (status.h current_exception_status is itself noexcept); their code outside the `try`
+# only checks arguments. stream_feed calls stream::feed, which is `noexcept` and catches its own
+# allocation failure. release, plan_release, typed_release, session_release and stream_release
+# only `delete` (destructors are implicitly noexcept) or call result_owner::destroy (noexcept).
+# The other imports are not declared nounwind: nothing below needs it of them.
+#
+# Threading: every resource is `confined`. Sessions and streams are serialized by contract and do
+# no locking (api.h), and results and plans have no synchronization of their own, so nothing here
+# may be used or released from another thread.
+
+opaque JsonSession
+opaque JsonStream
+
+# session_create copies JsonLimitsStruct and keeps nothing of it; it returns null on invalid limits
+# or allocation failure. A stream keeps a reference to its session (stream.h `session& session_`),
+# so stream_create's session is captured and, in cells, a stream holds its session open.
+resource JsonSession representation=native threading=confined create=session_create destroy=session_release
+resource JsonStream representation=native threading=confined create=stream_create destroy=stream_release
+
+# In-place results: the create fills the caller's struct and its destroy takes that same struct
+# address. Each of these creates returns TD_JSON_OK (0) only after publishing a live owner; every
+# other status leaves the struct zeroed (or, for a struct that is already live, unchanged), so
+# there is nothing to release. typed_decode keeps no pointer to its plan once it returns
+# (json/native/typed.h: "completed documents retain no plan pointer"), hence `nocapture` on `plan`:
+# a typed result does not hold its plan open.
+#
+# One struct maps to one resource and a resource has one create, so JsonResult can have only one of
+# its four producers (decode, decode_adopted, session_retain, result_myna) as its create, and
+# `release`, its destroy, then takes only that create's owners. decode_adopted is the create: it
+# is the one whose input must outlive the call (below), and it subsumes decode for guests (a
+# capacity below length + SIMDJSON_PADDING makes it copy the input, exactly as decode does). The
+# results of decode, session_retain and result_myna are written to the guest's own buffer as
+# before, but the release cell refuses that buffer: host code (the routes) releases them through
+# the raw binding, and guest code that needs to release a result decodes with decode_adopted.
+resource JsonResult representation=native threading=confined create=decode_adopted destroy=release handle=result success=0
+resource JsonPlan representation=native threading=confined create=plan_create destroy=plan_release handle=result success=0
+resource JsonTypedResult representation=native threading=confined create=typed_decode destroy=typed_release handle=result success=0
+
+# Call borrows. Each function reads exactly `length` bytes of `data` (decode and typed_decode copy
+# them into a padded_string; session_decode copies or transcodes them into the session's input;
+# stream_feed memcpys at most `length` of them into the carry-over buffer), never writes them, and
+# keeps no pointer to them: results point into native-owned copies. Misaligned UTF-16 input is
+# TD_JSON_ARGUMENT, not a precondition. session_decode's text_out is written within text_capacity
+# only (tape/native/text_arena.h checks every entry against it; too small is
+# TD_JSON_TEXT_TOO_SMALL), is absent (null, 0) unless TD_JSON_WANT_TEXT is set, and is not
+# retained: the text table lives in the session arena and holds offsets. A misaligned text_out is
+# TD_JSON_ARGUMENT, so a guest that asks for text lends a 2-byte-aligned buffer.
+borrow decode data length=length lifetime=call
+borrow typed_decode data length=length lifetime=call
+borrow session_decode data length=length lifetime=call
+borrow session_decode text_out length=text_capacity lifetime=call
+borrow session_decode_small data length=length lifetime=call
+borrow session_decode_small text_out length=text_capacity lifetime=call
+borrow stream_feed data length=length lifetime=call
+
+# decode_adopted keeps its input until the result is released. Its extent is `capacity`, not
+# `length`: with capacity >= length + SIMDJSON_PADDING the document adopts data[0, capacity) and
+# simdjson reads past `length` into that padding (json/native/decoder.h), so a borrow of `length`
+# bytes would let it read past the lent buffer. `length` stays a guest argument, checked against
+# capacity (capacity < length is TD_JSON_ARGUMENT). Below that the input is copied and nothing is
+# kept, which the held borrow over-approximates. The input is only read.
+borrow decode_adopted data length=capacity lifetime=resource:JsonResult
+
+edit import session_create return=ptr<JsonSession> +nounwind=true@explicit_contract
+edit import session_release +nounwind=true@explicit_contract
+edit param session_release.session type=ptr<JsonSession> ownership=transferred_to_callee
+edit import stream_create return=ptr<JsonStream> +nounwind=true@explicit_contract
+edit param stream_create.session type=ptr<JsonSession>
+edit import stream_release +nounwind=true@explicit_contract
+edit param stream_release.stream type=ptr<JsonStream> ownership=transferred_to_callee
+
+edit import decode_adopted +nounwind=true@explicit_contract
+edit param decode_adopted.data +readonly=true@explicit_contract
+edit param decode_adopted.result type=ptr<JsonResult>
+edit import release +nounwind=true@explicit_contract
+edit param release.result type=ptr<JsonResult> ownership=transferred_to_callee
+edit import plan_create +nounwind=true@explicit_contract
+edit param plan_create.result type=ptr<JsonPlan>
+edit import plan_release +nounwind=true@explicit_contract
+edit param plan_release.plan type=ptr<JsonPlan> ownership=transferred_to_callee
+edit import typed_decode +nounwind=true@explicit_contract
+edit param typed_decode.plan type=ptr<JsonPlan> +nocapture=true@explicit_contract
+edit param typed_decode.data +nocapture=true@explicit_contract +readonly=true@explicit_contract
+edit param typed_decode.result type=ptr<JsonTypedResult>
+edit import typed_release +nounwind=true@explicit_contract
+edit param typed_release.result type=ptr<JsonTypedResult> ownership=transferred_to_callee
+
+edit import decode +nounwind=true@explicit_contract
+edit param decode.data +nocapture=true@explicit_contract +readonly=true@explicit_contract
+edit import session_decode +nounwind=true@explicit_contract
+edit param session_decode.data +nocapture=true@explicit_contract +readonly=true@explicit_contract
+edit param session_decode.text_out +nocapture=true@explicit_contract
+edit import session_decode_small +nounwind=true@explicit_contract
+edit param session_decode_small.data +nocapture=true@explicit_contract +readonly=true@explicit_contract
+edit param session_decode_small.text_out +nocapture=true@explicit_contract
+edit import stream_feed +nounwind=true@explicit_contract
+edit param stream_feed.data +nocapture=true@explicit_contract +readonly=true@explicit_contract
+
+# The session and stream parameters of the other imports name their resource, so a guest passes
+# the owner (a parameter typed ptr<void> refuses every owner).
+edit param session_decode.session type=ptr<JsonSession>
+edit param session_decode_small.session type=ptr<JsonSession>
+edit param session_retain.session type=ptr<JsonSession>
+edit param session_reset.session type=ptr<JsonSession>
+edit param stream_feed.stream type=ptr<JsonStream>
+edit param stream_finish.stream type=ptr<JsonStream>
+edit param stream_next.stream type=ptr<JsonStream>
+edit param stream_skip.stream type=ptr<JsonStream>
+edit param stream_truncated_bytes.stream type=ptr<JsonStream>

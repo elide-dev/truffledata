@@ -124,7 +124,8 @@ on the JVM, calls on a caller-supplied native segment stay on the production bin
 stay the backend's own, and the tapes are identical. The route is **off by default**; it is
 support for Myna cells and makes no performance claim.
 
-Every routed call uses the generated cell's static `invoke` entry (Myna 0.16.0), for example
+Every routed call except `stream_release` uses the generated cell's static `invoke` entry (Myna
+0.16.0; `stream_release` is a resource's destroy since 0.18.0 and has none, see below), for example
 `YamlCellsTruffle.session_decode_Cell.invoke(session, data, length, flags, 0, 0, result)`: native
 carriers and raw `long` addresses, with no cell instance, argument array, box, `NativePointer` or
 `Borrow`. The route is host code below Truffle boundaries, where a cell's `execute(Object[])` would
@@ -162,13 +163,21 @@ Measured: see docs/RELEASE_0_11_0.md
   bind through the class loader's lookup, so the cells also `System.load` the fingerprint-checked
   library: one library path per class loader.
 - **Seam and fingerprint.** The cells come from seams *derived* in the build from
-  `native/yaml.seam`: only the module options change. The production seam, bindings, ABI
-  fingerprint and natives are unchanged, and `//bazel:myna_contract --derived` checks each derived
-  descriptor against the production one.
-- **No `resource` or `borrow` declarations.** Myna's validator (0.16.0) cannot express them for
-  these C signatures without an ABI change: a resource `create` must take only scalars, but
-  `session_create` takes the options and `stream_create` the session, and `plan_create` returns a
-  status and writes the plan through `result`; a call borrow allows one buffer and scalars only,
-  while every YAML buffer import (`session_decode`, `stream_feed`, `typed_decode`) also takes a
-  session, stream or plan pointer and a result pointer. Declaring them would change the import
-  signatures, that is, the C ABI.
+  `native/yaml.seam` (`bazel/cells_seam.py`): the module options change and
+  `yaml/cells/ownership.seam` adds Myna ownership declarations, which only the cells carry. The
+  production seam, bindings, ABI fingerprint and natives are unchanged, and
+  `//bazel:myna_contract --derived` checks each derived descriptor against the production one,
+  allowing only the options and that ownership delta.
+- **Ownership (Myna 0.18.0).** `yaml/cells/ownership.seam` declares, each with its contract
+  checked against `native/api.cc`: resources `YamlSession` (`session_create`/`session_release`)
+  and `YamlStream` (`stream_create`/`stream_release`; a guest's stream holds its session open);
+  in-place results `YamlResult` (`session_retain`/`release`, the only owned producer; a retained
+  result does not hold its session), `YamlPlan` (`plan_create`/`plan_release`) and
+  `YamlTypedResult` (`typed_decode`/`typed_release`), each created on status 0 only; and call
+  borrows on `session_decode` (`data`, and `text_out`, which must be absent), `session_write_text`
+  (the nullable `text_out`), `stream_feed` and `typed_decode`. No YAML import keeps its input, so
+  there is no held borrow. `nounwind` is declared only where every throwing path is caught:
+  `stream_finish` and `stream_next` run outside any `try` and carry no claim. Every resource is
+  `confined`. The route is host code and keeps `invoke`; `stream_release`, a resource's destroy,
+  has no `invoke`, so it calls `YamlCells.stream_release` (Native Image) and
+  `YamlCellsJvmFFM.stream_release` (HotSpot), the bindings the former `invoke` reached.

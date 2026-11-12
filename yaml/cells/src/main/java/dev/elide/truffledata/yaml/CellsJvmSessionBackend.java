@@ -19,9 +19,10 @@ import org.jspecify.annotations.Nullable;
  * The HotSpot backend with the Myna Truffle cells route ({@code -Dtruffledata.yaml.cells=true},
  * read once by {@link CellsRoute}): the session's own native calls over memory this backend owns —
  * {@code session_decode} and {@code stream_feed} of staged heap input, {@code session_retain},
- * {@code session_reset}, {@code stream_create}, {@code stream_next}, {@code stream_finish}, {@code
- * stream_release} and, through {@link CellsJvmPlanBackend}, {@code typed_decode} — go through
- * cells generated with {@code truffle_backend=ffm}. Everything else is the FFM backend's: this
+ * {@code session_reset}, {@code stream_create}, {@code stream_next}, {@code stream_finish} and,
+ * through {@link CellsJvmPlanBackend}, {@code typed_decode} — go through cells generated with
+ * {@code truffle_backend=ffm}, and {@code stream_release} through the same cells class's FFM
+ * binding (below). Everything else is the FFM backend's: this
  * wraps a {@link JvmSessionBackend}, which loaded and fingerprint-checked the library, owns the
  * session, result slot, staging buffer and library reference count, and creates and releases the
  * session; retained results release through the FFM binding, because they outlive this backend
@@ -34,6 +35,12 @@ import org.jspecify.annotations.Nullable;
  * downcall, and a failure surfaces exactly as through the cell's {@code execute} (which calls the
  * same {@code invoke}). It does not hold any caller's segment scope, so it is used only for memory
  * this backend owns and keeps alive for the call.
+ *
+ * <p>Since Myna 0.18.0 the cells seam declares the stream a resource (yaml/cells/ownership.seam),
+ * whose destroy cell has no static {@code invoke}: its {@code execute} takes only the owner a
+ * guest's {@code stream_create} cell returned. The route's streams are raw handles, so {@link
+ * #streamRelease} calls {@link YamlCellsJvmFFM#stream_release}, the downcall the former {@code
+ * invoke} made, over the same {@code MemorySegment.ofAddress} view.
  *
  * <p>Caller-supplied native segments ({@link #decode(MemorySegment, long)} and {@link
  * #streamFeed(long, MemorySegment)}) stay on the FFM binding, by design: a cell lends a raw
@@ -49,7 +56,10 @@ import org.jspecify.annotations.Nullable;
  * silently called through the first.
  */
 final class CellsJvmSessionBackend extends YamlSession.Backend {
-  /** The imports this route calls through cells: each must bind in the verified library. */
+  /**
+   * The imports this route calls through cells or, for {@code stream_release} (a destroy without
+   * {@code invoke}), through the cells' own FFM binding: each must bind in the verified library.
+   */
   private static final String[] SYMBOLS = {
     "td_yaml_fingerprint",
     "td_yaml_session_decode",
@@ -264,6 +274,13 @@ final class CellsJvmSessionBackend extends YamlSession.Backend {
 
   @Override
   protected void streamRelease(long stream) {
-    YamlCellsJvmTruffle.stream_release_Cell.invoke(stream);
+    // The destroy of the YamlStream resource: no invoke, so the cells' FFM binding (see above).
+    try {
+      YamlCellsJvmFFM.stream_release(MemorySegment.ofAddress(stream));
+    } catch (RuntimeException | Error failure) {
+      throw failure;
+    } catch (Throwable failure) {
+      throw new IllegalStateException("Native invocation failed", failure);
+    }
   }
 }

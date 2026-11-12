@@ -471,14 +471,16 @@ messages and order, ownership and lifetimes — is the backend's own; the slabs 
   use Myna's FFM cell backend, which binds through the class loader's lookup, so the cells backend
   also `System.load`s the (fingerprint-checked) library, and only one library path per class loader.
 - **Seam and fingerprint.** The cells are generated from seams *derived* in the build from
-  `native/buffa.seam` (only the module options change: `truffle_cells=true`, `truffle_backend`
-  `native`/`ffm`, `truffle_transitions=direct`, and the Java package/class). The production seam,
-  bindings, ABI fingerprint and natives are unchanged. Myna folds the cells options into the
-  derived bindings' own fingerprint constant, which is never compared with the library; the
-  backends keep checking the library against the production fingerprint of the ABI class they
-  run on (`BuffaAbi`; Myna 0.14.0 gives Linux AArch64 its own, see
+  `native/buffa.seam` by `bazel/cells_seam.py`: the module options change (`truffle_cells=true`,
+  `truffle_backend` `native`/`ffm`, `truffle_transitions=direct`, and the Java package/class),
+  and `cells/ownership.seam` adds the Myna ownership declarations below. The production seam,
+  bindings, ABI fingerprint and natives are unchanged. Myna folds the cells options and the
+  ownership into the derived bindings' own fingerprint constant, which is never compared with the
+  library; the backends keep checking the library against the production fingerprint of the ABI
+  class they run on (`BuffaAbi`; Myna 0.14.0 gives Linux AArch64 its own, see
   [PUBLISHING.md](PUBLISHING.md#prebuilt-natives)), and `//bazel:myna_contract` checks that each
-  derived descriptor equals the production descriptor apart from those options.
+  derived descriptor equals the production descriptor apart from those options and the ownership
+  delta `cells_seam.py` allows.
 - **Shape.** The backends are host code, compiled ahead of time on Native Image and called below
   the decode entries' `@TruffleBoundary`, so they use each generated cell's static `invoke` entry
   (Myna 0.16.0): native carriers and raw `long` addresses, with no cell instance, argument array,
@@ -521,20 +523,46 @@ messages and order, ownership and lifetimes — is the backend's own; the slabs 
   downcall also keeps a shared scope open for the duration of the call, and `invoke`, which tracks
   no caller's scope, cannot, so a shared arena closed by another thread while the producer runs is not rejected on
   this route. Native Image inputs are raw addresses on both routes.
-- **Ownership declarations.** Myna's `resource` and `borrow ... lifetime=call` declarations do not
-  fit this seam, so the derived seams add none. A resource's `create` must take only scalars and
-  return `ptr<resource>`, and its `destroy` must take one non-null `transferred_to_callee` pointer;
-  `compileLayout` returns an `i32` status and writes the layout through a `result` pointer, and
-  `releaseLayout` takes a nullable borrowed pointer. A call borrow allows one buffer and scalar
-  arguments only, and every Buffa import that takes a byte buffer also takes another pointer
-  (`result`, `out`, `compiled`, `payload` or `output`). Declaring them would change the import
-  signatures, that is, the C ABI. Layout and result-slot lifetimes stay with their existing owners,
-  unchanged: `BuffaPlan` and `SlabSession` release their layouts, and the result slot is
-  busy-checked.
+- **Ownership declarations (Myna 0.18.0).** `cells/ownership.seam` declares, for guest code
+  calling the cells through `execute`, what Myna 0.18.0 can express of this seam, each contract
+  checked against `native/` (the overlay's comments cite the code):
+  - **`Layout`**, an opaque resource: `compileLayout` is its create, reporting status 0 and
+    writing the handle into the result struct's `data` (`handle=result.data success=0`; any other
+    status leaves the struct zeroed and nothing to release), and `releaseLayout` its destroy. The
+    guest gets a `NativeResource` that closes once (a second close or destroy is a no-op, as Myna
+    defines it) and a failing compile raises `NativeStatusException` with the native status. The
+    production seam types the handle as `ptr<u8>` inside the `Result` struct that `decode` and
+    `typed` share, so the cells seam types it on `LayoutResult`, a copy of `Result` with the same
+    size, fields and offsets, and as `ptr<Layout>` on `releaseLayout` (declared non-null, which the
+    owner never passes) and on `decodeSlab`/`decodeSlabSmall`'s `compiled`, so a guest passes the
+    owner there and a closed one is refused before native code runs. Each is the same C pointer.
+  - **`Result`**, initialized in place: `decode` fills the runtime's struct (status 0) and
+    `release` frees its field index from the same address. `typed`/`typedReuse` fill the same
+    struct but are not declared as creates: a struct is one resource and `release` can be the
+    destroy of only one. Their `result` stays a pass-through pointer.
+  - **Call borrows** on every byte buffer, whose length the cell derives (the guest-visible arity
+    drops it): `compileLayout` `schema`; `decode` `data`; `typed`/`typedReuse` `schema`, `data`
+    and `payload`; `utf8_to_utf16` `data`; `decodeSlab`/`decodeSlabSmall` `data` and the nullable
+    `out` (absent means null with capacity 0, which the native accepts). All are `nocapture`: the
+    decoders keep input offsets, never addresses, and `slab::Compiled` owns its tables.
+  - **Not declared**: `utf8_to_utf16`'s `output` (a `ptr<u16>`, not a byte buffer) and
+    `decodeSlab`'s `projection` (a TDP1 mask whose extent is in its own header, with no length
+    parameter) stay pass-through pointers. Every import is `nounwind`: each is a Rust `extern "C"`
+    function, so an unwind reaching the ABI aborts, and the bodies run under `catch_unwind`.
+
+  The routes do not use any of this: they call `invoke` with raw addresses, which ownership leaves
+  unchanged (Myna 0.18.0 gives a resource's destroy cell no `invoke`, and no route calls one), so
+  layout and result-slot lifetimes stay with their existing owners: `BuffaPlan` and `SlabSession`
+  release their layouts, and the result slot is busy-checked. The HotSpot heap entry's typed
+  `decodeSlabSmall` call now passes eight arguments, its two lengths derived from the
+  `HeapBytes`. `CellsRouteTest` exercises the declarations as a guest would.
 
 Tests: `//protobuf-buffa/cells/tests:jvm` (the shared acceptance suite with the flag on, the route
 check and a byte/error parity run of every slab entry against the FFM backend, including depth
-limits and adopted regions whose scope is closed or owned by another thread),
+limits and adopted regions whose scope is closed or owned by another thread, and the guest calls
+of the ownership declarations: `Layout` and in-place `Result` owners closed once and refused after
+close, borrows from heap bytes and `NativeBytes`, a closed scope refused, a failing create's
+status, each result equal to the FFM backend's),
 `:jvm_off` (artifact present, flag off), `:call_shape` (the call-shape scan),
 `:native_test` (Native Image built with the flag: the shared native acceptance, the route check,
 parity against the static backend and the per-call allocation ceilings, with the blocklist
