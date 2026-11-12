@@ -6,34 +6,43 @@ package(default_visibility = ["//visibility:public"])
 
 # truffledata-yaml-cells: the opt-in route that makes a YAML session's own native calls through
 # Myna-generated Truffle cells: session_decode, session_write_text (Native Image), session_retain,
-# session_reset, stream_create, stream_feed, stream_next, stream_finish, stream_release and a plan's
-# typed_decode. Selected only by -Dtruffledata.yaml.cells=true (Native Image: at image build time,
+# session_reset, stream_create, stream_feed, stream_next, stream_finish and a plan's typed_decode,
+# plus stream_release through the cells' own binding (a resource's destroy since Myna 0.18.0). Selected only by -Dtruffledata.yaml.cells=true (Native Image: at image build time,
 # with --features=dev.elide.truffledata.yaml.YamlFeature from //yaml:svm; JVM: once, in YamlJvm's
 # CellsRoute). With the flag off nothing here is reachable, and the artifact need not be present.
 #
 # Every routed call uses the generated cell's static `invoke` entry (Myna 0.16.0: native carriers
 # and raw addresses, no cell instance, argument array, box, NativePointer or Borrow), on Native Image
-# and on HotSpot; the backends' class documentation has the detail.
+# and on HotSpot, except stream_release: a resource's destroy cell has no `invoke` (Myna 0.18.0), so
+# the route calls the same cells class's raw binding; the backends' class documentation has the
+# detail.
 # What stays on the production bindings, and why:
 # - session_create/session_release and plan_create/plan_release: the wrapped baseline backend
 #   creates and releases its own handles;
 # - release and typed_release: results outlive the session or plan that produced them;
 # - on the JVM, caller-supplied native segments: the FFM downcall holds the segment's scope for the
 #   call (a closed or foreign-thread segment is rejected); a cell would lend a raw address.
-# The derived seams declare no `resource` and no `borrow`: Myna (0.16.0) rejects both for these
-# import shapes (a resource constructor must take scalars and return the handle; a call borrow
-# allows no other pointer parameter), so inputs are pinned or staged as the baseline does.
+# The route's inputs are pinned or staged as the baseline does and passed to `invoke`, which
+# borrows nothing.
 #
-# Generated from seams *derived* from the production //yaml/native:yaml.seam: only the module line
-# changes (cells options, package and class), so every import, struct and contract is the
+# Generated from seams *derived* from the production //yaml/native:yaml.seam (bazel/cells_seam.py):
+# the module line changes (cells options, package and class) and ownership.seam adds Myna 0.18.0
+# ownership, which only the cells projection carries, so every import, struct and ABI type is the
 # production one and the production ABI fingerprint, bindings and natives are unchanged
-# (//bazel:myna_contract --derived checks it).
+# (//bazel:myna_contract --derived checks it). Declared (ownership.seam has the contract of each
+# against yaml/native/api.cc): resources YamlSession (session_create/session_release) and
+# YamlStream (stream_create, which holds its session open, /stream_release); in-place results
+# YamlResult (session_retain/release, its only owned producer), YamlPlan (plan_create/plan_release)
+# and YamlTypedResult (typed_decode/typed_release), success 0; call borrows on session_decode (data,
+# and text_out, which must be absent), session_write_text (the nullable text_out), stream_feed and
+# typed_decode. No held borrow: no YAML import keeps its input.
 [
     cells_seam(
         name = "seam_" + variant,
         java_class = java_class,
         java_package = "dev.elide.truffledata.yaml.cells.generated",
         options = options,
+        ownership = "ownership.seam",
         production = "//yaml/native:yaml.seam",
     )
     for variant, java_class, options in [

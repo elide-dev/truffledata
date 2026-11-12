@@ -1,0 +1,102 @@
+# Myna ownership for the YAML cells (bazel/cells_seam.py; Myna 0.18.0). Production yaml.seam, its
+# fingerprint, bindings and natives are unchanged: only the cells projection carries these lines.
+#
+# Every claim below is an explicit contract of yaml/native/api.cc and the headers it includes.
+#
+# nounwind: no C++ exception crosses these entries. session_create, stream_create, session_decode,
+# session_write_text, session_retain, stream_feed, plan_create and typed_decode run everything that
+# can throw (allocation, rapidyaml, whose error callbacks throw truffledata::yaml::error, the
+# decoder's limits) inside `catch (...)` and map it to a status, a null handle or zero bytes
+# accepted; translate() rethrows only inside its own `try` and catches everything. Their code
+# outside the `try` only checks arguments, formats a fixed message (memcpy) or reads plain session
+# fields (session::live, session::current). release, plan_release, typed_release, session_release
+# and stream_release only `delete` (destructors are implicitly noexcept) or call
+# result_owner::destroy (noexcept). Not claimed, and not needed by anything below: api.cc calls
+# stream::finish() and stream::next() outside any `try`, and next() catches only
+# truffledata::yaml::error and std::bad_alloc from the session decode it runs.
+#
+# Threading: every resource is `confined`. Sessions and streams are serialized by contract and do
+# no locking (api.h), and results and plans have no synchronization of their own.
+
+opaque YamlSession
+opaque YamlStream
+
+# session_create copies YamlOptionsStruct and keeps nothing of it; it returns null on invalid
+# options or allocation failure. A stream keeps a reference to its session (stream.h
+# `session& session_`), so stream_create's session is captured and, in cells, a stream holds its
+# session open.
+resource YamlSession representation=native threading=confined create=session_create destroy=session_release
+resource YamlStream representation=native threading=confined create=stream_create destroy=stream_release
+
+# In-place results: the create fills the caller's struct and its destroy takes that same struct
+# address. Each create returns TD_YAML_OK (0) only after publishing a live owner; every other status
+# leaves no owner (the struct is zeroed apart from its error message, line and column, or, for a
+# struct that is already live, unchanged), so there is nothing to release.
+#
+# session_retain is the only producer of an owned YamlResult (session_decode and stream_next write
+# borrowed results, owner null), so `release` is its destroy. The retained result owns the arena
+# blocks and input moved out of the session and keeps no pointer to the session ("retained results
+# stay valid" after session_release, api.h), hence `nocapture` on its session: a retained result
+# does not hold its session open. Likewise a typed result keeps no pointer to its plan
+# (tape/native/tape_typed.h: "Completed results retain no plan/source pointer"), and decodes its own
+# copy of the input (typed.h: session::retain_source).
+resource YamlResult representation=native threading=confined create=session_retain destroy=release handle=result success=0
+resource YamlPlan representation=native threading=confined create=plan_create destroy=plan_release handle=result success=0
+resource YamlTypedResult representation=native threading=confined create=typed_decode destroy=typed_release handle=result success=0
+
+# Call borrows. Each function reads exactly `length` bytes of `data` (session::decode validates and
+# copies, or transcodes, them into the session's input; detect() reads only the first bytes within
+# `length`; stream::feed memcpys at most `length` of them into its buffer), never writes them, and
+# keeps no pointer to them: results point into native-owned copies.
+# session_decode's text_out must be absent (null, 0): any other value is TD_YAML_ARGUMENT before
+# native code touches it, so the nullable borrow is never written. session_write_text's text_out is
+# absent to ask for the required capacity; when present it is written only after
+# capacity >= text_capacity() is checked, within `capacity` (tape/native/text_arena.h), and never
+# retained (the table lives in the session arena and holds offsets). An odd text_out address is
+# TD_YAML_ARGUMENT, so a guest lends a 2-byte-aligned buffer.
+borrow session_decode data length=length lifetime=call
+borrow session_decode text_out length=text_capacity lifetime=call
+borrow session_write_text text_out length=text_capacity lifetime=call
+borrow stream_feed data length=length lifetime=call
+borrow typed_decode data length=length lifetime=call
+
+edit import session_create return=ptr<YamlSession> +nounwind=true@explicit_contract
+edit import session_release +nounwind=true@explicit_contract
+edit param session_release.session type=ptr<YamlSession> ownership=transferred_to_callee
+edit import stream_create return=ptr<YamlStream> +nounwind=true@explicit_contract
+edit param stream_create.session type=ptr<YamlSession>
+edit import stream_release +nounwind=true@explicit_contract
+edit param stream_release.stream type=ptr<YamlStream> ownership=transferred_to_callee
+
+edit import session_retain +nounwind=true@explicit_contract
+edit param session_retain.session type=ptr<YamlSession> +nocapture=true@explicit_contract
+edit param session_retain.result type=ptr<YamlResult>
+edit import release +nounwind=true@explicit_contract
+edit param release.result type=ptr<YamlResult> ownership=transferred_to_callee
+edit import plan_create +nounwind=true@explicit_contract
+edit param plan_create.result type=ptr<YamlPlan>
+edit import plan_release +nounwind=true@explicit_contract
+edit param plan_release.plan type=ptr<YamlPlan> ownership=transferred_to_callee
+edit import typed_decode +nounwind=true@explicit_contract
+edit param typed_decode.plan type=ptr<YamlPlan> +nocapture=true@explicit_contract
+edit param typed_decode.data +nocapture=true@explicit_contract +readonly=true@explicit_contract
+edit param typed_decode.result type=ptr<YamlTypedResult>
+edit import typed_release +nounwind=true@explicit_contract
+edit param typed_release.result type=ptr<YamlTypedResult> ownership=transferred_to_callee
+
+edit import session_decode +nounwind=true@explicit_contract
+edit param session_decode.data +nocapture=true@explicit_contract +readonly=true@explicit_contract
+edit param session_decode.text_out +nocapture=true@explicit_contract
+edit import session_write_text +nounwind=true@explicit_contract
+edit param session_write_text.text_out +nocapture=true@explicit_contract
+edit import stream_feed +nounwind=true@explicit_contract
+edit param stream_feed.data +nocapture=true@explicit_contract +readonly=true@explicit_contract
+
+# The session and stream parameters of the other imports name their resource, so a guest passes
+# the owner (a parameter typed ptr<void> refuses every owner).
+edit param session_decode.session type=ptr<YamlSession>
+edit param session_write_text.session type=ptr<YamlSession>
+edit param session_reset.session type=ptr<YamlSession>
+edit param stream_feed.stream type=ptr<YamlStream>
+edit param stream_finish.stream type=ptr<YamlStream>
+edit param stream_next.stream type=ptr<YamlStream>

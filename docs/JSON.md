@@ -522,7 +522,8 @@ Measured: see docs/RELEASE_0_11_0.md
   through the class loader's lookup, so the cells also `System.load` the fingerprint-checked
   library: one library path per class loader.
 - **Call shape.** Both routes call the generated cells' static `invoke` entry (Myna 0.16.0) for
-  decode, adopted decode and release: native carriers and raw `long` addresses, with no cell
+  decode and adopted decode, and release through the same cells class's raw binding (below):
+  native carriers and raw `long` addresses, with no cell
   instance, `Object[]` argument array, boxed carrier, `NativePointer` or `Borrow`. The routes are
   host code (compiled ahead of time on Native Image), where a cell's `execute(Object[])` path is
   not scalar-replaced; `invoke` coerces nothing and allocates nothing, so the caller keeps every
@@ -536,17 +537,37 @@ Measured: see docs/RELEASE_0_11_0.md
   method, and `//json/cells/tests:native_test` checks the route allocates exactly what the
   production static bindings allocate per call.
 - **Seam and fingerprint.** The cells come from seams *derived* in the build from
-  `native/json.seam`: only the module options change (`truffle_cells=true`, `truffle_backend`
-  `native`/`ffm`, `truffle_transitions=direct`, package and class). The production seam, bindings,
-  ABI fingerprint and natives are unchanged; the backends check the library against the production
-  fingerprint, and `//bazel:myna_contract` checks that each derived descriptor equals the
-  production one apart from those options.
-- **No `resource` or `borrow` declarations.** Myna's validator (0.16.0) cannot express them for
-  these C signatures without an ABI change: a resource `create` must take only scalars and return
-  `ptr<Opaque>`, and a call borrow allows no other pointer parameter, while every JSON buffer import
-  also takes a result, session or plan pointer. `td_json_decode_adopted` also retains its input,
-  which a call-lifetime borrow would misdeclare, and either declaration would make the derived
-  descriptor differ from the production one (see `json/cells/BUILD.bazel`).
+  `native/json.seam` (`bazel/cells_seam.py`): the module options change (`truffle_cells=true`,
+  `truffle_backend` `native`/`ffm`, `truffle_transitions=direct`, package and class) and
+  `json/cells/ownership.seam` adds Myna ownership declarations, which only the cells carry. The
+  production seam, bindings, ABI fingerprint and natives are unchanged; the backends check the
+  library against the production fingerprint, and `//bazel:myna_contract` checks that each derived
+  descriptor equals the production one apart from those options and the ownership delta (the
+  declarations, explicit `nounwind`/`nocapture`/`readonly` contracts, `ptr<void>` narrowed to the
+  named resource or struct, and ownership transferred on each destroy).
+- **Ownership (Myna 0.18.0).** `json/cells/ownership.seam` declares, each with its contract
+  checked against `native/api.cc`:
+  - resources `JsonSession` (`session_create`/`session_release`) and `JsonStream`
+    (`stream_create`/`stream_release`; a guest's stream holds its session open), and in-place
+    results `JsonResult` (`decode_adopted`/`release`), `JsonPlan` (`plan_create`/`plan_release`)
+    and `JsonTypedResult` (`typed_decode`/`typed_release`), each created on status 0 only;
+  - call borrows on `decode`, `typed_decode`, `session_decode`, `session_decode_small` (`data`,
+    and the nullable `text_out`) and `stream_feed`, so a guest passes each buffer and the cell
+    derives its length;
+  - a borrow of `decode_adopted`'s input held until its `JsonResult` is released. Its extent is
+    `capacity`, not `length`: with enough padding the native side adopts and reads the whole
+    region.
+
+  Not declared: `decode`, `session_retain` and `result_myna` as creates. They initialize
+  `JsonResult` too, and Myna maps a struct to one resource with one create, so the guest-facing
+  `release` cell takes only `decode_adopted`'s owners; `decode_adopted` covers `decode` for guests
+  (with too little padding it copies its input). `nounwind` is declared only where every throwing
+  path is caught (`stream_finish`, `stream_next` and the other imports need none). Every resource is
+  `confined`. Guest code that asks for UTF-16 input or a text arena lends 2-byte-aligned buffers:
+  misalignment is `TD_JSON_ARGUMENT`. The routes are host code and keep `invoke`; `release`, a
+  resource's destroy, has no `invoke`, so they call `JsonCells.release` (Native Image) and
+  `JsonCellsJvmFFM.release` (HotSpot, with the result segment itself), the bindings the destroy
+  cell and the former `invoke` reach.
 
 ## Remaining for facades
 
