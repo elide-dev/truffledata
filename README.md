@@ -116,17 +116,22 @@ repositories {
     maven("https://maven.elide.dev/gvm-elide/25.5.5-elide.28")
 }
 dependencies {
-    implementation(platform("dev.elide:truffledata-bom:0.11.0"))
+    implementation(platform("dev.elide:truffledata-bom:0.12.0"))
     implementation("dev.elide:truffledata-core")
     implementation("dev.elide:truffledata-protobuf")
     // Add JDBC integrations or protobuf-buffa as needed.
 }
 ```
 
-[Release 0.11.0](https://github.com/elide-dev/truffledata/releases/tag/v0.11.0) includes
+[Release 0.12.0](https://github.com/elide-dev/truffledata/releases/tag/v0.12.0) includes
 source/Javadoc JARs, consumer POMs, Gradle metadata, signatures, checksums, and
 Buffa, JSON, YAML and CSV native attachments. See
 [publishing and consumption](docs/PUBLISHING.md) for Maven, Bazel and native linking.
+
+Release **0.12.0** moves to Myna 0.18.0 and adopts its ownership model (borrows, resources,
+status-reporting creates, held borrows) in the opt-in Myna Truffle cells of Buffa, JSON, YAML and
+CSV; default routes are unchanged. Native attachments and bindings must be upgraded together (new
+ABI fingerprints). See the [0.12.0 notes](docs/RELEASE_0_12_0.md).
 
 Release **0.11.0** lands the SVM performance tranche: protobuf full slab decode
 in about 0.52× stock protobuf-java's time, faster CSV typed/string readback, opt-in lazy `CsvText`

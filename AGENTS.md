@@ -92,3 +92,15 @@ in `benchmarks/results/release-0.11.0/`.
 Open after the release: a YAML fuzz finding in rapidyaml on main (see the receipts README; not
 fixed in 0.11.0); the JSON cells timing; then, as Sam listed, re-run the benchmarks, new
 benchmark cards for the README, and the README cleanup. Do not start these without instruction.
+
+# 0.12.0 release authorization (2026-11-11)
+
+Sam instructed: "adopt latest myna plz and make main green", then "adopt the latest myna features
+and push that as a pr", then "OK, let's get it green on main, re-bench, update charts preserving
+style in readme, and release". That authorizes: merging #96 (Myna 0.18.0 cells ownership) after
+green CI, a fresh single-host capture on unclemax of the four comparison suites at the release code
+(`c378d6d8`), new README cards in the 0.11.0 card style (`tools/bench/plot_cards.py`), the release
+PR/CI/merge, signed tag `v0.12.0`, Elide Maven and GitHub publication, and public artifact
+verification. Central stays deferred under #28 until the quota resets (2026-12-01); do not retry
+it without instruction. The same evidence, safety and honest-reporting rules apply. Every
+`truffledata.<format>.cells` flag stays default off (no new paired flag measurement was taken).
