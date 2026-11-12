@@ -53,7 +53,10 @@ a lent segment's scope, and copied heap buffers carry no 2-byte alignment guaran
 
 ## Performance
 
-PERFORMANCE_PLACEHOLDER
+No performance work is in this release, and every cells flag stays off, so the default routes run
+the same code as 0.11.0 apart from regenerated bindings. The README benchmark cards are a fresh
+single-host capture of the release code (`c378d6d8`) on unclemax with the 0.11.0 method; see
+`docs/COMPARISON_BENCHMARKS.md`.
 
 ## Not in this release
 
