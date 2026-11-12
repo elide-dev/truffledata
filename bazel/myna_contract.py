@@ -117,7 +117,7 @@ OWNERSHIP_FACTS = {"nounwind", "nocapture", "readonly"}
 NAMED_POINTER = re.compile(r"ptr<[A-Z][A-Za-z0-9_]*>")
 
 
-def ownership_delta(base, cells, path, destroys):
+def ownership_delta(base, cells, path, destroys, handles=frozenset()):
     """Assert that `cells` equals `base` apart from the ownership delta; return what it adds."""
     added = []
     if isinstance(base, dict) and isinstance(cells, dict):
@@ -136,21 +136,38 @@ def ownership_delta(base, cells, path, destroys):
                 raise AssertionError("cells descriptor adds %s" % here)
             if key not in cells:
                 raise AssertionError("cells descriptor drops %s" % here)
-            added += ownership_delta(base[key], cells[key], here, destroys)
+            added += ownership_delta(base[key], cells[key], here, destroys, handles)
         return added
     if isinstance(base, list) and isinstance(cells, list):
         if path == "/opaqueTypes":
             assert all(entry in cells for entry in base), (path, base, cells)
             return [path + "/" + json.dumps(entry) for entry in cells if entry not in base]
+        if path == "/structs":
+            # `copy struct` (cells_seam.py): a production struct under another name, so a resource
+            # handle field can be typed without retyping the production struct other imports share.
+            names = {struct["name"] for struct in base}
+            copies = [struct for struct in cells if struct["name"] not in names]
+            for copy in copies:
+                assert any(struct_copy(struct, copy, handles) for struct in base), "cells descriptor adds struct %r" % copy
+                added.append(path + "/" + copy["name"])
+            cells = [struct for struct in cells if struct["name"] in names]
         assert len(base) == len(cells), (path, len(base), len(cells))
         for index, (left, right) in enumerate(zip(base, cells)):
-            added += ownership_delta(left, right, path + "/" + str(index), destroys)
+            added += ownership_delta(left, right, path + "/" + str(index), destroys, handles)
         return added
     if base == cells:
         return added
     leaf = path.rsplit("/", 1)[-1]
     if leaf in ("type", "returnType") and base == "ptr<void>" and NAMED_POINTER.fullmatch(str(cells)):
         return added + [path]
+    # A production ptr<u8> that carries an opaque resource's handle may be typed as that resource
+    # (the same C pointer), and a destroy may require its handle non-null (stricter for the caller;
+    # the owner never passes null): Myna's resource rules need both.
+    if path.startswith("/functions/") and path.split("/")[3] in ("parameters", "abiParameters"):
+        if leaf == "type" and base == "ptr<u8>" and cells in {"ptr<%s>" % name for name in handles}:
+            return added + [path]
+        if leaf == "nullable" and (base, cells) == (True, False) and path.split("/")[2] in destroys:
+            return added + [path]
     if leaf == "ownership" and (base, cells) == ("BORROWED", "TRANSFERRED_TO_CALLEE"):
         function = path.split("/")[2]
         assert function in destroys, "only a resource's destroy takes ownership: " + path
@@ -158,12 +175,29 @@ def ownership_delta(base, cells, path, destroys):
     raise AssertionError("cells descriptor changes %s: %r -> %r" % (path, base, cells))
 
 
+def struct_copy(base, copy, handles):
+    """`copy` is `base` under another name: same size, alignment, fields and offsets, with at most a
+    ptr<void> field narrowed to a named pointer or a ptr<u8> typed as an opaque resource handle."""
+    if (base["size"], base["alignment"], len(base["fields"])) != (copy["size"], copy["alignment"], len(copy["fields"])):
+        return False
+    for left, right in zip(base["fields"], copy["fields"]):
+        if set(left) != set(right) or any(left[key] != right[key] for key in left if key != "type"):
+            return False
+        if left["type"] != right["type"] and not (
+                (left["type"] == "ptr<void>" and NAMED_POINTER.fullmatch(str(right["type"])))
+                or (left["type"] == "ptr<u8>" and right["type"] in {"ptr<%s>" % name for name in handles})):
+            return False
+    return True
+
+
 def verify_derived(production, derived):
     """A cells seam derived from a production seam (bazel/cells_seam.py; protobuf-buffa/cells, csv/cells,
     json/cells and yaml/cells BUILD.bazel) may differ in its module options (the Truffle cells block
     and the Java package/class) and by Myna ownership declarations: `borrow` and `resource` lines, the
     opaque types they name, the explicit nounwind/nocapture/readonly contracts they require, ptr<void>
-    narrowed to a named pointer, and ownership transferred on a resource's destroy. Every import,
+    narrowed to a named pointer, a ptr<u8> typed as an opaque resource's handle, ownership transferred
+    on (and a non-null handle required by) a resource's destroy, and copies of production structs
+    whose pointer fields are typed that way. Every import,
     struct, policy and the ABI itself is otherwise the production one, so cells call the library the
     production fingerprint check verified."""
     base = load(production)
@@ -177,8 +211,9 @@ def verify_derived(production, derived):
     assert cells["java"]["class"] != base["java"]["class"], cells["java"]
     names = [function["logicalName"] for function in cells["functions"]]
     destroys = {str(names.index(resource["destroy"])) for resource in cells.get("resources", [])}
+    handles = {resource["name"] for resource in cells.get("resources", [])} & set(cells.get("opaqueTypes", []))
     rest = {key: value for key, value in cells.items() if key not in ("truffle", "java")}
-    added = ownership_delta({key: value for key, value in base.items() if key != "java"}, rest, "", destroys)
+    added = ownership_delta({key: value for key, value in base.items() if key != "java"}, rest, "", destroys, handles)
     owned = "%d borrows, %d resources" % (len(cells.get("borrows", [])), len(cells.get("resources", [])))
     return cells["java"]["package"] + "." + cells["java"]["class"] + " (" + truffle["backend"] + "; " + owned + \
         ("; %d ownership edits" % len(added) if added else "") + ")"

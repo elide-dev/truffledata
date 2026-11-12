@@ -41,7 +41,12 @@ import org.jspecify.annotations.Nullable;
  * stays on the {@code decodeSlabSmall} cell's typed {@code executeInt}: {@code invoke} takes only
  * raw addresses, and a heap array has no stable address on HotSpot, so lending one needs Myna's
  * borrow ({@link HeapBytes}, which copies it to scratch memory and copies the output back; the FFM
- * backend lends it in place).
+ * backend lends it in place). Since Myna 0.18.0 {@code data} and {@code out} are declared call
+ * borrows (protobuf-buffa/cells/ownership.seam): the cell derives {@code length} and {@code
+ * capacity} from the buffers, so the guest call takes eight arguments, and {@code compiled} is
+ * typed as the {@code Layout} resource's handle, which this host code passes as a {@link
+ * NativePointer} (a guest passes the owner {@code compileLayout} returned). Nothing on this route
+ * calls a destroy cell: layouts and the result slot keep their existing owners.
  *
  * <p>Myna's FFM cells bind their symbols through the loader lookup, so the library is also loaded
  * into this class loader ({@link System#load}). One library per class loader: a second path is
@@ -98,8 +103,10 @@ final class CellsFfmBackend implements BuffaWire.Backend {
   // cell only reads arguments[i] into its coercions; a backend is confined to its decoder's thread
   // and beginSlab's busy check excludes reentry), and one cached pointer or box per slot whose
   // value repeats. The buffer slots are cleared after each call, so the array never keeps a
-  // caller's input or a produced slab reachable.
-  private final @Nullable Object[] arguments = new Object[10];
+  // caller's input or a produced slab reachable. `data` and `out` are declared borrows
+  // (protobuf-buffa/cells/ownership.seam, Myna 0.18.0): the cell derives `length` and `capacity`
+  // from the buffers, so the guest-visible call takes eight arguments, not ten.
+  private final @Nullable Object[] arguments = new Object[8];
   private NativePointer compiledPointer = NativePointer.NULL;
   private NativePointer projectionPointer = NativePointer.NULL;
   private NativePointer resultPointer = NativePointer.NULL;
@@ -155,31 +162,27 @@ final class CellsFfmBackend implements BuffaWire.Backend {
       BuffaCellsJvmTruffle.decodeSlabSmall_Cell cell,
       long compiled,
       Object data,
-      long length,
       int flags,
       long projection,
       Object out,
-      long capacity,
       SlabLimits limits,
       MemorySegment result) {
     @Nullable Object[] arguments =
-        arguments(compiled, data, length, flags, projection, out, capacity, limits, result);
+        arguments(compiled, data, flags, projection, out, limits, result);
     try {
       return cell.executeInt(arguments);
     } finally {
       arguments[1] = null;
-      arguments[5] = null;
+      arguments[4] = null;
     }
   }
 
   private @Nullable Object[] arguments(
       long compiled,
       Object data,
-      long length,
       int flags,
       long projection,
       Object out,
-      long capacity,
       SlabLimits limits,
       MemorySegment result) {
     if (compiledPointer.address() != compiled) compiledPointer = NativePointer.of(compiled);
@@ -191,14 +194,12 @@ final class CellsFfmBackend implements BuffaWire.Backend {
     @Nullable Object[] arguments = this.arguments;
     arguments[0] = compiledPointer;
     arguments[1] = data;
-    arguments[2] = length;
-    arguments[3] = flags;
-    arguments[4] = projectionPointer;
-    arguments[5] = out;
-    arguments[6] = capacity;
-    arguments[7] = maxDepth;
-    arguments[8] = maxSlabBytes;
-    arguments[9] = resultPointer;
+    arguments[2] = flags;
+    arguments[3] = projectionPointer;
+    arguments[4] = out;
+    arguments[5] = maxDepth;
+    arguments[6] = maxSlabBytes;
+    arguments[7] = resultPointer;
     return arguments;
   }
 
@@ -219,11 +220,9 @@ final class CellsFfmBackend implements BuffaWire.Backend {
                 decodeSlabSmall,
                 compiled,
                 new HeapBytes(input, false),
-                input.length,
                 1,
                 0,
                 new HeapBytes(output, true),
-                capacity,
                 limits,
                 slabResult);
         long bytes = slabResult.get(ValueLayout.JAVA_LONG, BuffaFFM.SlabResult_bytes_OFFSET);

@@ -28,6 +28,9 @@ import org.jspecify.annotations.Nullable;
  * carriers and raw addresses, with no cell instance, argument array, box, {@code NativePointer} or
  * {@code Borrow}. That entry allocates nothing; the cell's {@code execute} methods, which coerce
  * guest values and then call the same {@code invoke}, are for guest code and are not used here.
+ * The Myna 0.18.0 ownership declarations (protobuf-buffa/cells/ownership.seam: borrows, the
+ * {@code Layout} and {@code Result} resources) shape only {@code execute}; {@code invoke} keeps
+ * every binding parameter, lengths included.
  * The caller keeps every address valid for the call: heap arrays are pinned around it with plain
  * {@code try/finally} (javac's try-with-resources reaches {@code Throwable.addSuppressed}, which
  * the runtime-compilation blocklist rejects), and native inputs, arenas and the result slot are

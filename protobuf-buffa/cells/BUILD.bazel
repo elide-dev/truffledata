@@ -9,19 +9,35 @@ package(default_visibility = ["//visibility:public"])
 # -Dtruffledata.buffa.cells=true (Native Image: at image build time, in BuffaFeature; JVM: once, in
 # BuffaWire). With the flag off nothing here is reachable, and the artifact need not be present.
 #
-# The cells are generated from seams *derived* from the production //protobuf-buffa/native:buffa.seam:
-# only the module line changes (cells options, package and class), so every import, struct and
-# contract is the production one by construction, and the production ABI fingerprint, bindings and
-# natives are unchanged. Myna folds the `truffle` options into the fingerprint, so the derived
-# bindings carry their own constant, which nothing compares against the library; the backends
-# verify the library against the production fingerprint instead, and //bazel:myna_contract checks
-# that each derived descriptor equals the production descriptor apart from those options.
+# The cells are generated from seams *derived* from the production //protobuf-buffa/native:buffa.seam
+# (bazel/cells_seam.py): the module line gets the cells options, package and class, and
+# ownership.seam adds Myna 0.18.0 ownership that only the cells carry. Declared (each contract
+# checked against protobuf-buffa/native, see ownership.seam):
+#   - `Layout`: compileLayout is its create (handle written into the result struct's `data`,
+#     success=0), releaseLayout its destroy. The handle field is typed on `LayoutResult`, a copy of
+#     the production `Result` struct, because decode/typed share `Result`; decodeSlab(Small)'s
+#     `compiled` is typed ptr<Layout> (the same C pointer), so a guest passes the owner.
+#   - `Result`, initialized in place by decode (success=0) and destroyed by release.
+#   - call borrows (length dropped from the guest signature) on every byte buffer: compileLayout
+#     `schema`; decode `data`; typed/typedReuse `schema`, `data`, `payload`; utf8_to_utf16 `data`;
+#     decodeSlab/decodeSlabSmall `data` and the nullable `out`.
+# Not declared: typed/typedReuse as creates (a struct is one resource and `release` the destroy of
+# one), utf8_to_utf16's `output` (ptr<u16>, not a byte buffer), and decodeSlab's `projection` (no
+# length parameter); those stay pass-through pointers. The routes call `invoke`, which ownership
+# leaves unchanged, and no destroy cell (which has no `invoke` since Myna 0.18.0). Every import,
+# struct and the C ABI otherwise stay the production ones, so the production fingerprint, bindings
+# and natives are unchanged. Myna folds the `truffle` options and the ownership into the fingerprint, so the
+# derived bindings carry their own constant, which nothing compares against the library; the
+# backends verify the library against the production fingerprint instead, and
+# //bazel:myna_contract checks that each derived descriptor equals the production descriptor apart
+# from those options and the ownership delta cells_seam.py allows.
 [
     cells_seam(
         name = "seam_" + variant,
         java_class = java_class,
         java_package = "dev.elide.truffledata.buffa.cells.generated",
         options = options,
+        ownership = "ownership.seam",
         production = "//protobuf-buffa/native:buffa.seam",
     )
     for variant, java_class, options in [

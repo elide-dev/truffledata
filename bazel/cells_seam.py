@@ -9,6 +9,9 @@ only the cells projection carries: the production seam, its fingerprint, binding
 exactly as they are. The overlay holds two kinds of lines:
 
 - `opaque`, `resource` and `borrow` declarations, inserted verbatim after the module line;
+- `copy struct NAME COPY`: a copy of production struct NAME under another name, inserted after it:
+  same size, alignment, fields and offsets, so that a resource handle field can be typed (see
+  below) without changing the production struct, which other imports share;
 - edits of production declarations, each of which must match exactly one line:
       edit import NAME KEY=VALUE...          an attribute on the `import NAME` line
       edit param NAME.PARAM KEY=VALUE...     an attribute on a `param` line of `import NAME`
@@ -18,8 +21,13 @@ exactly as they are. The overlay holds two kinds of lines:
 Only the edits an ownership declaration needs are accepted, so a cells seam cannot drift from the
 production ABI by accident: the explicit contracts `nounwind`, `nocapture` and `readonly`; narrowing
 a `ptr<void>` to a pointer to an opaque type or struct (the same C type); and
-`ownership=transferred_to_callee` on a resource's destroy parameter. //bazel:myna_contract checks
-the resulting descriptor against the production one under the same rules.
+`ownership=transferred_to_callee` on a resource's destroy parameter. Two more edits are accepted
+only where Myna's resource rules need them: a production seam may carry an opaque handle as a
+`ptr<u8>`, which may be typed as a pointer to an opaque resource the overlay declares (the same C
+pointer; Myna needs it on the destroy, on the create's handle field, and to accept the owner where
+the handle is used), and a destroy parameter may become `nullable=false` (stricter for the caller:
+the owner never passes null). //bazel:myna_contract checks the resulting descriptor against the
+production one under the same rules.
 """
 import argparse
 import re
@@ -37,7 +45,9 @@ def attributes(line):
     return dict(token.split("=", 1) for token in line.split() if "=" in token)
 
 
-def apply(line, changes, where):
+def apply(line, changes, where, handles=(), destroy=False):
+    """`handles`: the opaque resources a ptr<u8> may be typed as; `destroy`: the line is a resource
+    destroy's parameter, which may also be made non-null."""
     for change in changes:
         add = change.startswith("+")
         key, _, value = change.lstrip("+").partition("=")
@@ -55,8 +65,13 @@ def apply(line, changes, where):
             fail("%s: %s is not declared, use +%s" % (where, key, key))
         old = present[key]
         if key in ("type", "return"):
-            if old != "ptr<void>" or not re.fullmatch(r"ptr<[A-Z][A-Za-z0-9_]*>", value):
-                fail("%s: only ptr<void> may be narrowed to a named pointer, not %s -> %s" % (where, old, value))
+            handle = old == "ptr<u8>" and value[4:-1] in handles
+            if not (old == "ptr<void>" or handle) or not re.fullmatch(r"ptr<[A-Z][A-Za-z0-9_]*>", value):
+                fail("%s: only ptr<void> (or a ptr<u8> handle, as an opaque resource) may be narrowed "
+                     "to a named pointer, not %s -> %s" % (where, old, value))
+        elif key == "nullable" and destroy:
+            if (old, value) != ("true", "false"):
+                fail("%s: a destroy parameter may only become nullable=false, not %s -> %s" % (where, old, value))
         elif key == "ownership":
             if (old, value) != ("borrowed", "transferred_to_callee"):
                 fail("%s: ownership may only become transferred_to_callee, not %s -> %s" % (where, old, value))
@@ -78,11 +93,39 @@ def derive(source, package, java_class, options, overlay):
         fail("module line has no java_package/java_class pair")
     lines[module[0]] = head
 
+    entries = [(number, raw.strip()) for number, raw in enumerate(overlay.split("\n") if overlay else [], 1)]
+    entries = [(number, text) for number, text in entries if text and not text.startswith("#")]
+    # Copies first, so edits can name them; then the destroys the overlay's resources declare.
+    copies = set()
+    for number, text in entries:
+        parts = text.split()
+        if parts[:2] != ["copy", "struct"]:
+            continue
+        if len(parts) != 4:
+            fail("ownership line %d: expected `copy struct NAME COPY`: %r" % (number, text))
+        name, copy = parts[2], parts[3]
+        starts = [i for i, line in enumerate(lines) if line.split()[:2] == ["struct", name]]
+        if len(starts) != 1 or any(line.split()[:2] == ["struct", copy] for line in lines):
+            fail("ownership line %d: struct %s must exist once and %s not at all" % (number, name, copy))
+        end = next(i for i in range(starts[0], len(lines)) if lines[i].strip() == "end")
+        block = lines[starts[0]:end + 1]
+        block[0] = re.sub(r"^struct %s " % re.escape(name), "struct %s " % copy, block[0])
+        lines[end + 1:end + 1] = block
+        copies.add(copy)
+    destroys, resources, opaques = set(), set(), set()
+    for number, text in entries:
+        if text.startswith("resource "):
+            resources.add(text.split()[1])
+            destroys.update(re.findall(r" destroy=(\S+)", text))
+        elif text.startswith("opaque "):
+            opaques.add(text.split()[1])
+    handles = resources & opaques
+
     inserts = []
-    for number, raw in enumerate(overlay.split("\n") if overlay else [], 1):
-        text = raw.strip()
+    for number, text in entries:
+        raw = text
         where = "ownership line %d" % number
-        if not text or text.startswith("#"):
+        if text.startswith("copy struct "):
             continue
         if text.startswith(DECLARATIONS):
             inserts.append(text)
@@ -106,7 +149,9 @@ def derive(source, package, java_class, options, overlay):
                     matches.append(i)
         if len(matches) != 1:
             fail("%s: %s %s matches %d lines" % (where, kind, target, len(matches)))
-        lines[matches[0]] = apply(lines[matches[0]], changes, where)
+        typed = handles if kind == "param" or (kind == "field" and owner in copies) else ()
+        destroy = kind == "param" and owner in destroys
+        lines[matches[0]] = apply(lines[matches[0]], changes, where, typed, destroy)
 
     if inserts:
         lines[module[0] + 1:module[0] + 1] = inserts
