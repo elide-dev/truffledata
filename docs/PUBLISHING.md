@@ -1,6 +1,6 @@
 # Maven publishing
 
-The release publishes twenty-nine thin libraries and a dependency-management BOM, with source jars and POMs. The protobuf runtime can be consumed without protobuf-java. Version 0.7.0 shipped the first nine libraries; 0.8.0 adds the two shared tape artifacts, the three JSON artifacts and the four CSV artifacts, all in the BOM. Version 0.10.0 adds the three YAML artifacts, Javadoc jars, Gradle metadata and signed publication. Version 0.11.0 adds the opt-in Myna Truffle cells routes `truffledata-protobuf-buffa-cells`, `truffledata-json-cells`, `truffledata-yaml-cells` and `truffledata-csv-cells`, and `truffledata-cells`, the Myna cells runtime they share.
+The release publishes thirty thin libraries and a dependency-management BOM, with source jars and POMs. The protobuf runtime can be consumed without protobuf-java. Version 0.7.0 shipped the first nine libraries; 0.8.0 adds the two shared tape artifacts, the three JSON artifacts and the four CSV artifacts, all in the BOM. Version 0.10.0 adds the three YAML artifacts, Javadoc jars, Gradle metadata and signed publication. Version 0.13.0 adds the experimental `truffledata-bebop`. Version 0.11.0 adds the opt-in Myna Truffle cells routes `truffledata-protobuf-buffa-cells`, `truffledata-json-cells`, `truffledata-yaml-cells` and `truffledata-csv-cells`, and `truffledata-cells`, the Myna cells runtime they share.
 
 | Coordinate | Contents |
 | --- | --- |
@@ -31,6 +31,7 @@ The release publishes twenty-nine thin libraries and a dependency-management BOM
 | `dev.elide:truffledata-csv-native:<version>` | Optional native CSV kernel: the static SVM backend; includes [prebuilt natives](#prebuilt-natives); depends on truffledata-csv and its bindings |
 | `dev.elide:truffledata-csv-jvm:<version>` | JVM FFM backend of the native CSV kernel; depends on truffledata-csv and its bindings. Keep it out of native-image classpaths |
 | `dev.elide:truffledata-csv-cells:<version>` | Opt-in: the native CSV kernel's calls through Myna Truffle cells (`-Dtruffledata.csv.cells=true`), with the generated cells and `CsvCellsFeature` (registered by the jar); depends on truffledata-cells, truffledata-csv, truffledata-csv-bindings and truffledata-csv-native. Not needed with the flag off |
+| `dev.elide:truffledata-bebop:<version>` | **Experimental.** Bebop encoding and decoding in the 2026 indexed wire layout, with general and strict profiles, a `bebopc` descriptor-set loader and in-place rows, arrays and column views; pure Java for JVM and SVM, no native attachments; depends on core. The optional native validator is not published. See [the Bebop backend](BEBOP.md) |
 | `dev.elide:truffledata-bom:<version>` | POM-only dependency management for the tested libraries, drivers and runtime |
 | `dev.elide:truffledata-protobuf-runtime:<version>` | Stock-free plans, codecs, runtime descriptor compilation and generated-record support; core, Gson and Truffle dependencies |
 | `dev.elide:truffledata-protobuf:<version>` | Optional Message/descriptor compatibility bridge and build-time contract generator; depends on protobuf-runtime, protobuf-java and protobuf-java-util |
@@ -274,7 +275,7 @@ published static archive into an image through `truffledata-csv-native` (without
 compare generic, typed and streamed parses and malformed-input diagnostics with the
 built-in kernel's. Release publishing and native CI require both static checks.
 
-The publisher includes all twenty-nine Java libraries and the BOM, plus Buffa, JSON, YAML and CSV native attachments.
+The publisher includes all thirty Java libraries and the BOM, plus Buffa, JSON, YAML and CSV native attachments.
 
 ## Prebuilt natives
 
