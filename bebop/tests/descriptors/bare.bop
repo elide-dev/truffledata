@@ -1,0 +1,31 @@
+edition = "2026"
+
+#decorator(unique) {
+    targets = FIELD
+}
+
+struct Bare {
+    @unique
+    xs: int32[];
+    ys: uint8[];
+}
+
+message Wrapper {
+    bare(1): Bare;
+    @unique
+    old(3): int32[];
+    choice(2): Choice;
+
+    union Choice {
+        A(1): { a: int8; };
+        B(2): message { b(1): string; };
+    }
+}
+
+mut struct Counter {
+    n: uint32;
+}
+
+local message Secret {
+    s(1): string;
+}

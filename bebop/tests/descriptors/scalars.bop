@@ -1,0 +1,48 @@
+edition = "2026"
+package golden.scalars
+
+/// Every scalar kind, positionally.
+struct AllScalars {
+    b: bool;
+    u8: byte;
+    i8: int8;
+    i16: int16;
+    u16: uint16;
+    i32: int32;
+    u32: uint32;
+    i64: int64;
+    u64: uint64;
+    i128: int128;
+    u128: uint128;
+    f16: float16;
+    f32: float32;
+    f64: float64;
+    bf16: bfloat16;
+    s: string;
+    id: uuid;
+    at: timestamp;
+    span: duration;
+}
+
+/// Every scalar kind, tagged.
+message AllScalarsMessage {
+    b(1): bool;
+    u8(2): byte;
+    i8(3): int8;
+    i16(4): int16;
+    u16(5): uint16;
+    i32(6): int32;
+    u32(7): uint32;
+    i64(8): int64;
+    u64(9): uint64;
+    i128(10): int128;
+    u128(11): uint128;
+    f16(12): float16;
+    f32(13): float32;
+    f64(14): float64;
+    bf16(15): bfloat16;
+    s(16): string;
+    id(17): uuid;
+    at(18): timestamp;
+    span(19): duration;
+}

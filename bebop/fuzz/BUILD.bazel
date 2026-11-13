@@ -1,0 +1,64 @@
+load("@rules_java//java:defs.bzl", "java_binary", "java_library", "java_test")
+load("@rules_shell//shell:sh_test.bzl", "sh_test")
+
+# Untrusted-input testing (docs/FUZZING.md): a Jazzer harness, its replay over generated seeds and
+# the checked-in corpus as an ordinary test, and the campaign as a manual target.
+java_library(
+    name = "harness",
+    testonly = True,
+    srcs = ["BebopFuzz.java"],
+    deps = [
+        "//bebop",
+        "//bebop/tests:fixtures",
+    ],
+)
+
+java_test(
+    name = "replay",
+    args = ["$(location " + s + ")" for s in glob(["corpus/*"])],
+    data = glob(["corpus/*"]),
+    jvm_flags = ["-Dpolyglot.engine.WarnInterpreterOnly=false"],
+    main_class = "dev.elide.truffledata.bebop.BebopFuzz",
+    use_testrunner = False,
+    runtime_deps = [
+        ":harness",
+        "@maven//:org_graalvm_truffle_truffle_runtime",
+    ],
+)
+
+java_binary(
+    name = "fuzzer",
+    testonly = True,
+    args = [
+        "--target_class=dev.elide.truffledata.bebop.BebopFuzz",
+        "--instrumentation_includes=dev.elide.truffledata.**",
+    ],
+    jvm_flags = [
+        "-Dpolyglot.engine.WarnInterpreterOnly=false",
+        "-Xmx512m",
+        "-XX:+EnableDynamicAgentLoading",
+    ],
+    main_class = "com.code_intelligence.jazzer.Jazzer",
+    tags = ["manual"],
+    runtime_deps = [
+        ":harness",
+        "@jazzer",
+        "@maven//:org_graalvm_truffle_truffle_runtime",
+    ],
+)
+
+sh_test(
+    name = "campaign",
+    size = "medium",
+    srcs = ["//tools/fuzz:campaign.sh"],
+    args = [
+        "$(rootpath :fuzzer)",
+        "--target_class=dev.elide.truffledata.bebop.BebopFuzz",
+        "--instrumentation_includes=dev.elide.truffledata.**",
+    ] + ["$(rootpath " + s + ")" for s in glob(["corpus/*"])],
+    data = [":fuzzer"] + glob(["corpus/*"]),
+    tags = [
+        "fuzz",
+        "manual",
+    ],
+)

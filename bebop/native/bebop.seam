@@ -1,0 +1,15 @@
+module truffledata_bebop abi=1 target=x86_64-unknown-linux-gnu java_package=dev.elide.truffledata.bebop.kernel.generated java_class=BebopNative c_library=truffledata_bebop c_library_static=true
+import fingerprint symbol=td_bebop_fingerprint return=ptr<u8> error=no_failure native_leaf=true@explicit_contract
+end
+import validate symbol=td_bebop_validate return=i64 error=no_failure native_leaf=false@explicit_contract
+  param program type=ptr<u8> nullable=false ownership=borrowed access=read
+  param program_length type=u64
+  param data type=ptr<u8> nullable=false ownership=borrowed access=read
+  param length type=u64
+end
+import validate_leaf symbol=td_bebop_validate_leaf return=i64 error=no_failure native_leaf=true@explicit_contract
+  param program type=ptr<u8> nullable=false ownership=borrowed access=read
+  param program_length type=u64
+  param data type=ptr<u8> nullable=false ownership=borrowed access=read
+  param length type=u64
+end

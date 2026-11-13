@@ -1,0 +1,139 @@
+edition = "2026"
+package golden.types
+
+import "scalars.bop"
+
+/// Marks a field's array as a set. A user convention, not a protocol default.
+#decorator(set) {
+    targets = FIELD
+}
+
+/// A decorator with an argument, which the loader ignores.
+#decorator(note) {
+    targets = ALL
+    param text!: string
+}
+
+enum Color {
+    RED = 0;
+    GREEN = 1;
+    BLUE = 2;
+}
+
+enum Small : byte {
+    NONE = 0;
+    LOW = 1;
+    HIGH = 255;
+}
+
+enum Tiny : int8 {
+    MIN = -128;
+    MINUS_ONE = -1;
+    ZERO = 0;
+    MAX = 127;
+}
+
+enum Short : int16 {
+    MIN = -32768;
+    ZERO = 0;
+    MAX = 32767;
+}
+
+enum Port : uint16 {
+    NONE = 0;
+    HTTP = 80;
+    TOP = 65535;
+}
+
+enum Signed : int32 {
+    MIN = -2147483648;
+    ZERO = 0;
+}
+
+enum Wide : uint32 {
+    ZERO = 0;
+    TOP = 4294967295;
+}
+
+enum Long : int64 {
+    MIN = -0x7FFFFFFFFFFFFFFF;
+    MINUS_TWO = -2;
+    ZERO = 0;
+    MAX = 0x7FFFFFFFFFFFFFFF;
+}
+
+enum Huge : uint64 {
+    ZERO = 0;
+    TOP = 0x7FFFFFFFFFFFFFFF;
+}
+
+struct Outer {
+    id: int32;
+    inner: Inner;
+    mode: Mode;
+    all: golden.scalars.AllScalars;
+
+    struct Inner {
+        label: string;
+        deep: Deeper;
+
+        message Deeper {
+            n(1): uint64;
+        }
+    }
+
+    enum Mode : uint16 {
+        IDLE = 0;
+        ON = 1;
+        OFF = 2;
+    }
+}
+
+message Envelope {
+    header(1): Header;
+    body(2): Shape;
+    @set
+    tags(3): string[];
+    matrix(4): int32[3][2];
+    lookup(5): map[string, Outer];
+    byColor(6): map[uint16, int64[]];
+    digest(7): byte[16];
+    nested(8): map[uuid, map[int32, string[]]];
+    @note("gone")
+    old(9): golden.scalars.AllScalarsMessage;
+    jagged(10): int16[][];
+    corners(11): Outer.Inner[2];
+    small(12): map[bool, Small];
+    far(200): bool;
+
+    message Header {
+        id(1): uuid;
+        sent(2): timestamp;
+    }
+}
+
+union Shape {
+    Circle(1): { radius: float32; };
+    Polygon(2): message { points(1): float32[2][]; };
+    plain(3): golden.scalars.AllScalars;
+    header(4): Envelope.Header;
+    Empty(5): {};
+}
+
+struct Bag {
+    @set
+    ids: uuid[];
+    @set
+    colors: Color[];
+    plain: int32[];
+    @golden.types.set
+    spelled: int32[];
+    @set
+    grid: string[][];
+}
+
+service Echo {
+    Ping(Envelope): Envelope;
+}
+
+const int32 ANSWER = 42;

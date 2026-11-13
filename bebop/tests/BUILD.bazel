@@ -1,0 +1,77 @@
+load("@rules_java//java:defs.bzl", "java_library", "java_test")
+
+CLASSES = [
+    "BebopCodecTest",
+    "BebopDescriptorsTest",
+    "BebopEdgeTest",
+    "BebopFixtureTest",
+    "BebopRowTest",
+    "BebopStrictTest",
+    "BebopUpstreamTest",
+    "BebopViewTest",
+]
+
+FIXTURES = [
+    "Abstract.java",
+    "FixtureFiles.java",
+    "Fixtures.java",
+    "Gen.java",
+    "package-info.java",
+]
+
+# Schemas, random values and the guest-view comparison, shared with the fuzz harness.
+java_library(
+    name = "fixtures",
+    testonly = True,
+    srcs = FIXTURES,
+    data = ["//bebop/fixtures"],
+    visibility = ["//bebop:__subpackages__"],
+    deps = [
+        "//bebop",
+        "//core",
+        "@maven//:org_jspecify_jspecify",
+        "@maven//:org_junit_jupiter_junit_jupiter_api",
+    ],
+)
+
+# Descriptor sets compiled by upstream's bebopc at 2026.0.0-alpha.6 from the .bop sources beside
+# them, and values encoded by its C runtime (descriptors/gen). Produced on macOS; read as data here.
+filegroup(
+    name = "descriptors",
+    srcs = glob(["descriptors/**"]),
+)
+
+java_test(
+    name = "jvm",
+    srcs = glob(
+        ["*.java"],
+        exclude = FIXTURES,
+    ),
+    data = [":descriptors"],
+    args = [
+        arg
+        for name in CLASSES
+        for arg in [
+            "--class",
+            "dev.elide.truffledata.bebop." + name,
+        ]
+    ],
+    jvm_flags = [
+        "-Dpolyglot.engine.WarnInterpreterOnly=false",
+        "-ea",
+    ],
+    main_class = "dev.elide.bazel.junit.BazelJUnitRunner",
+    use_testrunner = False,
+    runtime_deps = [
+        "//bazel/junit:runner",
+        "@maven//:org_graalvm_truffle_truffle_runtime",
+    ],
+    deps = [
+        ":fixtures",
+        "//bebop",
+        "//core",
+        "@maven//:org_graalvm_truffle_truffle_api",
+        "@maven//:org_jspecify_jspecify",
+        "@maven//:org_junit_jupiter_junit_jupiter_api",
+    ],
+)

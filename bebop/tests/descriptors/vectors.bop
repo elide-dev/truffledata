@@ -1,0 +1,38 @@
+edition = "2026"
+package golden.vectors
+
+/// A struct whose fixed-width time fields are followed by a sentinel. Declared first: bebopc keeps
+/// source order, and its C generator needs a by-value struct defined before use.
+struct Stamped {
+    at: timestamp;
+    span: duration;
+    sentinel: int32;
+}
+
+/// Timestamps and durations as message fields, in arrays, and in a struct before a sentinel.
+message Times {
+    at(1): timestamp;
+    span(2): duration;
+    ats(3): timestamp[];
+    spans(4): duration[];
+    fixedAts(5): timestamp[2];
+    fixedSpans(6): duration[2];
+    stamped(7): Stamped;
+}
+
+/// Fields at tags chosen to select each directory kind; `pad` sets the payload size.
+message Directory {
+    t1(1): byte;
+    t2(2): byte;
+    t3(3): byte;
+    t4(4): byte;
+    t5(5): byte;
+    t8(8): byte;
+    t9(9): byte;
+    t16(16): byte;
+    t17(17): byte;
+    t32(32): byte;
+    t33(33): byte;
+    t255(255): byte;
+    pad(6): byte[];
+}

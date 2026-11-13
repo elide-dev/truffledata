@@ -1,0 +1,108 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "bebop-fixtures/1",
+ "title": "Bebop shared fixtures, format 1",
+ "type": "object",
+ "required": ["format", "wire", "profile", "definitions", "cases"],
+ "additionalProperties": false,
+ "properties": {
+  "format": {"const": "bebop-fixtures/1"},
+  "note": {"type": "string"},
+  "wire": {"type": "string", "pattern": "^bebop-[0-9A-Za-z.-]+@[0-9a-f]{40}$"},
+  "profile": {
+   "oneOf": [
+    {"type": "object", "required": ["name"], "additionalProperties": false, "properties": {"name": {"const": "general"}}},
+    {
+     "type": "object",
+     "required": ["name", "rules", "admit", "nan16", "nanBrain16", "nan32", "nan64"],
+     "additionalProperties": false,
+     "properties": {
+      "name": {"const": "strict"},
+      "rules": {"type": "string", "minLength": 1},
+      "admit": {"const": "all"},
+      "nan16": {"type": "string", "pattern": "^[0-9a-f]{4}$"},
+      "nanBrain16": {"type": "string", "pattern": "^[0-9a-f]{4}$"},
+      "nan32": {"type": "string", "pattern": "^[0-9a-f]{8}$"},
+      "nan64": {"type": "string", "pattern": "^[0-9a-f]{16}$"}
+     }
+    }
+   ]
+  },
+  "definitions": {
+   "type": "array",
+   "items": {
+    "oneOf": [
+     {"type": "object", "required": ["enum", "base", "members"], "additionalProperties": false, "properties": {"enum": {"type": "string"}, "base": {"type": "string"}, "members": {"type": "array", "items": {"type": "array", "prefixItems": [{"type": "string"}, {"$ref": "#/$defs/decimal"}], "minItems": 2, "maxItems": 2}}}},
+     {"type": "object", "required": ["struct", "fields"], "additionalProperties": false, "properties": {"struct": {"type": "string"}, "fields": {"type": "array", "items": {"type": "array", "prefixItems": [{"type": "string"}, {"$ref": "#/$defs/type"}], "minItems": 2, "maxItems": 2}}}},
+     {"type": "object", "required": ["message", "fields"], "additionalProperties": false, "properties": {"message": {"type": "string"}, "fields": {"type": "array", "items": {"type": "array", "prefixItems": [{"type": "integer", "minimum": 1, "maximum": 255}, {"type": "string"}, {"$ref": "#/$defs/type"}], "minItems": 3, "maxItems": 3}}}},
+     {"type": "object", "required": ["union", "branches"], "additionalProperties": false, "properties": {"union": {"type": "string"}, "branches": {"type": "array", "items": {"type": "array", "prefixItems": [{"type": "integer", "minimum": 0, "maximum": 255}, {"type": "string"}, {"$ref": "#/$defs/type"}], "minItems": 3, "maxItems": 3}}}}
+    ]
+   }
+  },
+  "cases": {
+   "type": "array",
+   "items": {
+    "type": "object",
+    "required": ["name", "kind"],
+    "additionalProperties": false,
+    "properties": {
+     "name": {"type": "string"},
+     "kind": {"enum": ["wire-accept", "wire-reject", "host-normalize", "host-reject", "resource", "duration-adapter"]},
+     "root": {"$ref": "#/$defs/type"},
+     "bytes": {"$ref": "#/$defs/hex"},
+     "value": {"$ref": "#/$defs/value"},
+     "host": {"$ref": "#/$defs/value"},
+     "canonical": {"type": "boolean"},
+     "error": {"enum": ["malformed", "limit", "unsupported", "value", "none"]},
+     "operation": {"enum": ["decode", "validate"]},
+     "limits": {
+      "type": "object",
+      "required": ["maxBytes", "maxCount", "maxDepth", "maxWork", "maxAllocation"],
+      "additionalProperties": false,
+      "properties": {
+       "maxBytes": {"type": "integer"},
+       "maxCount": {"type": "integer"},
+       "maxDepth": {"type": "integer"},
+       "maxWork": {"$ref": "#/$defs/decimal"},
+       "maxAllocation": {"$ref": "#/$defs/decimal"}
+      }
+     }
+    }
+   }
+  }
+ },
+ "$defs": {
+  "decimal": {"type": "string", "pattern": "^-?[0-9]+$"},
+  "hex": {"type": "string", "pattern": "^([0-9a-f]{2})*$"},
+  "type": {
+   "oneOf": [
+    {"enum": ["bool", "byte", "int8", "int16", "uint16", "int32", "uint32", "int64", "uint64", "int128", "uint128", "float16", "float32", "float64", "bfloat16", "uuid", "timestamp", "duration", "string", "utc-instant"]},
+    {"type": "object", "required": ["array"], "additionalProperties": false, "properties": {"array": {"$ref": "#/$defs/type"}}},
+    {"type": "object", "required": ["set"], "additionalProperties": false, "properties": {"set": {"$ref": "#/$defs/type"}}},
+    {"type": "object", "required": ["fixed"], "additionalProperties": false, "properties": {"fixed": {"type": "array", "prefixItems": [{"$ref": "#/$defs/type"}, {"type": "integer", "minimum": 1, "maximum": 65535}], "minItems": 2, "maxItems": 2}}},
+    {"type": "object", "required": ["map"], "additionalProperties": false, "properties": {"map": {"type": "array", "items": {"$ref": "#/$defs/type"}, "minItems": 2, "maxItems": 2}}},
+    {"type": "object", "required": ["ref"], "additionalProperties": false, "properties": {"ref": {"type": "string"}}}
+   ]
+  },
+  "value": {
+   "oneOf": [
+    {"type": "null"},
+    {"type": "object", "required": ["bool"], "additionalProperties": false, "properties": {"bool": {"type": "boolean"}}},
+    {"type": "object", "required": ["int"], "additionalProperties": false, "properties": {"int": {"$ref": "#/$defs/decimal"}}},
+    {"type": "object", "required": ["bits"], "additionalProperties": false, "properties": {"bits": {"type": "string", "pattern": "^([0-9a-f]{4}|[0-9a-f]{8}|[0-9a-f]{16})$"}}},
+    {"type": "object", "required": ["bits32"], "additionalProperties": false, "properties": {"bits32": {"type": "string", "pattern": "^[0-9a-f]{8}$"}}},
+    {"type": "object", "required": ["string"], "additionalProperties": false, "properties": {"string": {"type": "string"}}},
+    {"type": "object", "required": ["uuid"], "additionalProperties": false, "properties": {"uuid": {"type": "string", "pattern": "^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$"}}},
+    {"type": "object", "required": ["timestamp"], "additionalProperties": false, "properties": {"timestamp": {"type": "array", "items": {"$ref": "#/$defs/decimal"}, "minItems": 3, "maxItems": 3}}},
+    {"type": "object", "required": ["duration"], "additionalProperties": false, "properties": {"duration": {"type": "array", "items": {"$ref": "#/$defs/decimal"}, "minItems": 2, "maxItems": 2}}},
+    {"type": "object", "required": ["bytes"], "additionalProperties": false, "properties": {"bytes": {"$ref": "#/$defs/hex"}}},
+    {"type": "object", "required": ["raw"], "additionalProperties": false, "properties": {"raw": {"$ref": "#/$defs/hex"}}},
+    {"type": "object", "required": ["seq"], "additionalProperties": false, "properties": {"seq": {"type": "array", "items": {"$ref": "#/$defs/value"}}}},
+    {"type": "object", "required": ["set"], "additionalProperties": false, "properties": {"set": {"type": "array", "items": {"$ref": "#/$defs/value"}}}},
+    {"type": "object", "required": ["map"], "additionalProperties": false, "properties": {"map": {"type": "array", "items": {"type": "array", "items": {"$ref": "#/$defs/value"}, "minItems": 2, "maxItems": 2}}}},
+    {"type": "object", "required": ["record"], "additionalProperties": false, "properties": {"record": {"type": "array", "items": {"$ref": "#/$defs/value"}}}},
+    {"type": "object", "required": ["union"], "additionalProperties": false, "properties": {"union": {"type": "array", "prefixItems": [{"type": "integer", "minimum": 0, "maximum": 255}, {"$ref": "#/$defs/value"}], "minItems": 2, "maxItems": 2}}}
+   ]
+  }
+ }
+}

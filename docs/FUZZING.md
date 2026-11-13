@@ -12,6 +12,7 @@ Production build settings and performance contracts are unchanged.
 | YAML native sessions | Arbitrary encoded input; schema, duplicate, merge and alias policies; full/partial/repeated decode, retention, reset and recovery; compact-tape structural validation | libFuzzer + ASan/UBSan |
 | CSV native indexing | Arbitrary bytes and format, carry derived from preceding chunks, chunk boundaries; each host-supported kernel against scalar entries and carry | libFuzzer + ASan/UBSan |
 | External serialized slabs | Arbitrary bytes and mutations of valid slabs for nine schemas, including a recursive message; reference, bitmap, identity and public-copy agreement including logical usage | Jazzer on JVM |
+| Bebop codec | Arbitrary bytes for ten root types under the general and a strict profile; decoder, allocation-free validator and strict reference agree on acceptance and reason; accepted bytes re-encode and read in place as they decode | Jazzer on JVM |
 | Buffa Rust | Existing wire, typed, slab and ownership regression tests | Rust ASan plus instrumented native dependencies |
 
 Every fuzz input describes a deterministic case; sessions are created within that case.
@@ -34,6 +35,7 @@ bazel test --config=asan-rust //protobuf-buffa/native:test
 bazel test --config=fuzz --nocache_test_results \
   //json/native:session_fuzz //yaml/native:session_fuzz //csv/native:index_fuzz
 bazel test --nocache_test_results //protobuf-runtime:slab_replay //protobuf-runtime:slab_fuzz
+bazel test --nocache_test_results //bebop/fuzz:replay //bebop/fuzz:campaign
 ```
 
 `*_replay` tests run without sanitizer flags as part of ordinary `//...` testing. Campaigns
