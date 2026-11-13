@@ -104,3 +104,19 @@ PR/CI/merge, signed tag `v0.12.0`, Elide Maven and GitHub publication, and publi
 verification. Central stays deferred under #28 until the quota resets (2026-12-01); do not retry
 it without instruction. The same evidence, safety and honest-reporting rules apply. Every
 `truffledata.<format>.cells` flag stays default off (no new paired flag measurement was taken).
+
+# 0.13.0 release authorization (2026-11-12)
+
+Sam instructed: "let's get both merged and a release issued. call Bebop experimental in the readme
+with a pretty admonishment. Clean up the artifacts table". That authorizes: merging #101 (sanitizer
+toolchain pin) and #100 (experimental Bebop) after green CI, the release PR/CI/merge, signed tag
+`v0.13.0`, Elide Maven and GitHub publication, and public artifact verification. Central stays
+deferred under #28 until the quota resets (2026-12-01); do not retry it without instruction. The
+same evidence, safety and honest-reporting rules apply.
+
+0.13.0 publishes `truffledata-bebop` (pure Java, experimental) as the thirtieth library. The
+native Bebop validator (`//bebop/native`, `//bebop/kernel`) is not published and stays opt-in in
+the repository: no paired SVM measurement exists, so there is no performance claim and no default
+change. No benchmark capture was taken for this release.
+
+Sam also instructed (2026-11-12): never add `Co-Authored-By` trailers for Claude to commits.
