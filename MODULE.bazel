@@ -426,7 +426,7 @@ sanitizer_toolchain = use_repo_rule("//bazel:sanitizer_toolchain_repo.bzl", "san
 
 sanitizer_toolchain(
     name = "elide_toolchain_asan",
-    addon_sha256 = "66a8e185531dd8d506c086d8f07b52bbe8a115ceeac5337c8afefbdd0855b6ea",
+    addon_sha256 = "a1a999fcaf7bbee4991e26b2a8f21b43f1f0879e08126df1ef5c400cff167274",
     addon_urls = ["https://github.com/elide-dev/toolchain/releases/download/v%s/elide-toolchain-%s-linux-amd64-sanitizer-asan.tar.xz" % (ELIDE_TOOLCHAIN, ELIDE_TOOLCHAIN)],
     base_sha256 = ELIDE_TOOLCHAIN_BUNDLES["linux_amd64"][1],
     base_urls = ["https://github.com/elide-dev/toolchain/releases/download/v%s/elide-toolchain-%s-linux-amd64.tar.xz" % (ELIDE_TOOLCHAIN, ELIDE_TOOLCHAIN)],
