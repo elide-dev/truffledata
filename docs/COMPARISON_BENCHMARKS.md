@@ -1,5 +1,25 @@
 # SVM comparison benchmarks
 
+## Release 0.12.0 benchmark cards
+
+The README cards are a fresh capture of the **0.12.0** release code (`c378d6d`, the `v0.12.0`
+tag) on **2026-11-12**, with the method of the 0.11.0 cards below: the same host (`unclemax`), the
+same pinned CPU (12), all 31 shards of the four suites in sequence, the four SVM images built by
+Bazel on BuildBuddy at that revision (invocation `87042130`) and hash-checked, every
+`truffledata.<format>.cells` flag off. Linux x86-64, Elide GraalVM `25.5.5-elide.28`, O2, serial
+GC, no PGO. The same-image control spans 0.967–1.042 across the JSON timing cells. Against the
+0.11.0 capture, heap is identical and timings move within that band, as expected for a release
+that changes no default route ([raw reports](../benchmarks/results/bench-0.12.0/README.md)).
+
+```sh
+build/plot-venv/bin/python tools/bench/plot_cards.py render benchmarks/results/bench-0.12.0 \
+  docs/images/bench-0.12.0 --label 0.12.0 --revision c378d6d \
+  --invocation 87042130-904c-4470-b660-b73e70355f56 --measured 2026-11-12
+```
+
+[Values table](images/bench-0.12.0/cards.md), [normalized data](images/bench-0.12.0/data.json),
+[manifest](images/bench-0.12.0/manifest.json).
+
 ## Release 0.11.0 benchmark cards
 
 The README cards are a fresh capture of the released **0.11.0** tree (`091f9d0`, the

@@ -44,7 +44,7 @@ public final class JdbcContracts {
                 new Field(
                     name, Field.Kind.FLOAT64, nullable, false, Constraints.NONE.withFloatBits(32));
             case Types.FLOAT, Types.DOUBLE -> new Field(name, Field.Kind.FLOAT64, nullable, false);
-            case Types.BOOLEAN -> new Field(name, Field.Kind.BOOLEAN, nullable, false);
+            case Types.BIT, Types.BOOLEAN -> new Field(name, Field.Kind.BOOLEAN, nullable, false);
             case Types.NUMERIC, Types.DECIMAL -> new Field(name, Field.Kind.EXACT, nullable, false);
             case Types.CHAR,
                 Types.NCHAR,

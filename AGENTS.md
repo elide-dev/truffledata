@@ -105,6 +105,16 @@ verification. Central stays deferred under #28 until the quota resets (2026-12-0
 it without instruction. The same evidence, safety and honest-reporting rules apply. Every
 `truffledata.<format>.cells` flag stays default off (no new paired flag measurement was taken).
 
+## 0.12.0 release completion (2026-11-12)
+
+0.12.0 is released on Elide Maven and GitHub from signed tag `v0.12.0` at
+`c378d6d837a248f19fcc12fcff8799415695f244` (Sam: tag the green commit; notes and cards may follow on
+main). At Sam's instruction the publish skipped the gates main CI had already run and kept only the
+per-platform consumer gates. Central was not attempted (#28, quota resets 2026-12-01). README cards
+are a fresh unclemax capture at the tag. Receipts: `benchmarks/results/release-0.12.0/`. Open: the
+rapidyaml fuzz finding; adopting typed `execute*` with lent segments on the HotSpot routes (proposed,
+not authorized).
+
 # 0.13.0 release authorization (2026-11-12)
 
 Sam instructed: "let's get both merged and a release issued. call Bebop experimental in the readme
@@ -120,3 +130,25 @@ the repository: no paired SVM measurement exists, so there is no performance cla
 change. No benchmark capture was taken for this release.
 
 Sam also instructed (2026-11-12): never add `Co-Authored-By` trailers for Claude to commits.
+
+## 0.13.0 release completion (2026-11-12)
+
+0.13.0 is released on Elide Maven and GitHub from signed tag `v0.13.0` at
+`6b6c78d09812f54e04a9e8afa571a393390720b8`. As for 0.12.0, the publish skipped the gates main CI
+had already run and kept the per-platform consumer gates. Central was not attempted (#28, quota
+resets 2026-12-01). The public artifacts were verified against the staged bytes, and the public
+`truffledata-bebop` jar passed a consumer check. Receipts: `benchmarks/results/release-0.13.0/`.
+Open: the rapidyaml fuzz finding; for Bebop, a `.bop` parser, a set convention for `.bop` sources,
+a strict rule for `@flags` enums, registration in the root source-policy and JIT-matrix tests, and
+any SVM measurement (none exists, so the native validator stays unpublished and opt-in).
+
+# 0.13.1 release authorization (2026-11-13)
+
+Sam instructed: "let's crunch through these on an integration branch, and get it merged and
+released." That authorizes: the integration branch `integration/0.14.0` (named before the version
+was chosen) carrying the open fix PRs #79–#83, the doc PRs #85–#87, #99 and #103, the 0.12.0 bench
+cards #98 and the rapidyaml fix for #72/#73; the release PR/CI/merge, signed tag `v0.13.1` (a
+fixes-only release, so a patch version), Elide Maven and GitHub publication, and public artifact
+verification. Central stays deferred under #28 until the quota resets (2026-12-01); do not retry it
+without instruction. The same evidence, safety and honest-reporting rules apply. No benchmark
+capture is taken for this release. Never add `Co-Authored-By` trailers for Claude.

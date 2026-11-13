@@ -1,6 +1,6 @@
 # YAML comparison
 
-The comparison uses the pinned GraalVM 25.5.5-elide.27 APIs and native compiler, Myna 0.13.0 bindings, SnakeYAML Engine 3.2, SnakeYAML 2.7 and Jackson YAML 2.22.4. Competitors are benchmark dependencies only. `yaml_jvm` runs our FFM implementation and all four JVM competitors. `yaml_svm` statically links our YAML and JSON implementations, without JVM competitor libraries.
+The comparison uses the pinned GraalVM 25.5.5-elide.28 APIs and native compiler, Myna 0.16.0 bindings, SnakeYAML Engine 3.2, SnakeYAML 2.7 and Jackson YAML 2.22.4. Competitors are benchmark dependencies only. `yaml_jvm` runs our FFM implementation and all four JVM competitors. `yaml_svm` statically links our YAML and JSON implementations, without JVM competitor libraries.
 
 ## Fixtures and work
 

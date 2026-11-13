@@ -1,6 +1,6 @@
 module(
     name = "truffledata",
-    version = "0.13.0",
+    version = "0.13.1",
 )
 
 bazel_dep(name = "platforms", version = "1.1.0")
@@ -373,14 +373,18 @@ http_archive(
 )
 
 # Production YAML parser (docs/superpowers/plans/2026-11-06-yaml.md D1). The overlay fixes the
-# configuration: assertions off, tab tokens, exception callbacks. One patch: pending tag/anchor
-# annotations are bounded by a parse error instead of a compiled-out assertion (fuzz finding;
-# bazel/patches/rapidyaml-annotation-bounds.patch).
+# configuration: assertions off, tab tokens, exception callbacks. Two patches: pending tag/anchor
+# annotations are bounded by a parse error instead of a compiled-out assertion, and a missing
+# same-line annotation is a parse error instead of an unreachable point (fuzz findings;
+# bazel/patches/rapidyaml-annotation-bounds.patch, rapidyaml-same-line-annotations.patch).
 http_archive(
     name = "rapidyaml",
     build_file = "//bazel:rapidyaml.BUILD",
     patch_strip = 1,
-    patches = ["//bazel/patches:rapidyaml-annotation-bounds.patch"],
+    patches = [
+        "//bazel/patches:rapidyaml-annotation-bounds.patch",
+        "//bazel/patches:rapidyaml-same-line-annotations.patch",
+    ],
     sha256 = "a0ce80a8f4211580c8703e57acb813a28ca6ec80908f6eb926be94be8e98d39d",
     strip_prefix = "rapidyaml.v0.16.0",
     type = "tar.gz",
