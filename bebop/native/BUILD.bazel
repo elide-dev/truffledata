@@ -1,0 +1,86 @@
+load("@rules_cc//cc:defs.bzl", "cc_library")
+load("@rules_rust//rust:defs.bzl", "rust_library", "rust_shared_library", "rust_static_library", "rust_test")
+load("//bazel:myna.bzl", "myna_bindings")
+
+package(default_visibility = ["//visibility:public"])
+
+# The Bebop validation kernel: one call checks a whole encoded value against the schema program
+# the Java codec compiles. Opt-in; the Java validator is the reference and the fallback.
+myna_bindings(
+    name = "bindings",
+    java_class = "BebopNative",
+    java_package = "dev.elide.truffledata.bebop.kernel.generated",
+    seam = "bebop.seam",
+)
+
+filegroup(
+    name = "java_bindings",
+    srcs = [
+        "generated/BebopNative.java",
+        "generated/BebopNativeAbi.java",
+        "generated/BebopNativeFFM.java",
+    ],
+)
+
+filegroup(
+    name = "native_resources",
+    srcs = ["generated/META-INF/native-image/dev.elide.myna/dev.elide.truffledata.bebop.kernel.generated.BebopNative/native-image.properties"],
+)
+
+SRCS = [
+    "generated/seam.rs",
+    "lib.rs",
+    "validate.rs",
+]
+
+rust_library(
+    name = "lib",
+    srcs = SRCS,
+    crate_name = "truffledata_bebop",
+    crate_root = "lib.rs",
+    edition = "2024",
+    rustc_flags = ["-Copt-level=3"],
+    deps = ["@crates//:simdutf"],
+)
+
+rust_static_library(
+    name = "truffledata_bebop",
+    srcs = SRCS,
+    crate_name = "truffledata_bebop",
+    crate_root = "lib.rs",
+    edition = "2024",
+    link_deps = [":cpp_runtime"],
+    rustc_flags = ["-Copt-level=3"],
+    deps = ["@crates//:simdutf"],
+)
+
+rust_shared_library(
+    name = "shared",
+    srcs = SRCS,
+    crate_name = "truffledata_bebop",
+    crate_root = "lib.rs",
+    edition = "2024",
+    rustc_flags = ["-Copt-level=3"] + select({
+        "@platforms//os:macos": ["-Clink-arg=-Wl,-install_name,@rpath/libtruffledata_bebop.dylib"],
+        "//conditions:default": [],
+    }),
+    deps = ["@crates//:simdutf"],
+)
+
+rust_test(
+    name = "test",
+    size = "small",
+    crate = ":lib",
+)
+
+# Rust bundles simdutf's native objects; its final consumers still need the C++ runtime.
+cc_library(
+    name = "cpp_runtime",
+    linkopts = select({
+        "@platforms//os:macos": ["-lc++"],
+        "//conditions:default": [
+            "-lc++",
+            "-lc++abi",
+        ],
+    }),
+)

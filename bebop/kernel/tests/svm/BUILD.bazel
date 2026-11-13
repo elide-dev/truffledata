@@ -1,0 +1,53 @@
+load("@rules_graalvm//graalvm:defs.bzl", "native_image")
+load("@rules_java//java:defs.bzl", "java_library")
+load("@rules_shell//shell:sh_test.bzl", "sh_test")
+load("//bazel:jit.bzl", "LINUX_SVM_PLATFORMS", "LINUX_SVM_SDK")
+
+# Native Image acceptance of the statically linked validator against the Java reference.
+java_library(
+    name = "acceptance",
+    testonly = True,
+    srcs = ["KernelAcceptance.java"],
+    deps = [
+        "//bebop",
+        "//bebop/kernel:svm",
+        "//bebop/tests:fixtures",
+    ],
+)
+
+native_image(
+    name = "native",
+    testonly = True,
+    cc_deps = ["//bebop/native:truffledata_bebop"],
+    exec_properties = {
+        "EstimatedCPU": "8",
+        "EstimatedMemory": "24GB",
+    },
+    executable_name = "bebop_kernel_acceptance",
+    extra_args = [
+        "--gc=serial",
+        "--initialize-at-build-time=dev.elide.truffledata",
+        "-ea",
+        "--parallelism=8",
+        "-march=compatibility",
+    ],
+    graalvm_sdk = LINUX_SVM_SDK,
+    main_class = "dev.elide.truffledata.bebop.KernelAcceptance",
+    optimization_mode = "2",
+    tags = ["manual"],
+    target_compatible_with = LINUX_SVM_PLATFORMS,
+    deps = [
+        ":acceptance",
+        "@maven//:org_graalvm_truffle_truffle_runtime",
+    ],
+)
+
+sh_test(
+    name = "native_test",
+    size = "large",
+    srcs = ["native_test.sh"],
+    args = ["$(rootpath :native)"],
+    data = [":native"],
+    tags = ["manual"],
+    target_compatible_with = LINUX_SVM_PLATFORMS,
+)

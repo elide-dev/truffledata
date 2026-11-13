@@ -1,0 +1,16 @@
+[package]
+name = "truffledata-bebop"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[lib]
+path = "lib.rs"
+crate-type = ["rlib", "staticlib", "cdylib"]
+
+[dependencies]
+# Same CPU-dispatched Unicode implementation used by the other native adapters.
+simdutf = "=0.7.0"
+
+# Built by Bazel; this manifest only lets the crate be opened on its own.
+[workspace]

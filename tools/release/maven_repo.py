@@ -10,7 +10,7 @@ import shutil
 import xml.etree.ElementTree as ET
 import zipfile
 
-MODULES = ('core', 'jdbc', 'jdbc-sqlite', 'jdbc-mysql', 'jdbc-postgresql', 'protobuf', 'protobuf-runtime', 'protobuf-buffa', 'protobuf-buffa-bindings', 'cells', 'protobuf-buffa-cells', 'tape', 'tape-jvm', 'json', 'json-bindings', 'json-jvm', 'json-cells', 'yaml', 'yaml-bindings', 'yaml-native', 'yaml-jvm', 'yaml-java', 'yaml-snakeyaml', 'yaml-cells', 'csv', 'csv-bindings', 'csv-native', 'csv-jvm', 'csv-cells', 'bom')
+MODULES = ('core', 'jdbc', 'jdbc-sqlite', 'jdbc-mysql', 'jdbc-postgresql', 'protobuf', 'protobuf-runtime', 'protobuf-buffa', 'protobuf-buffa-bindings', 'cells', 'protobuf-buffa-cells', 'tape', 'tape-jvm', 'json', 'json-bindings', 'json-jvm', 'json-cells', 'yaml', 'yaml-bindings', 'yaml-native', 'yaml-jvm', 'yaml-java', 'yaml-snakeyaml', 'yaml-cells', 'csv', 'csv-bindings', 'csv-native', 'csv-jvm', 'csv-cells', 'bebop', 'bom')
 NAMESPACE = {'m': 'http://maven.apache.org/POM/4.0.0'}
 
 

@@ -13,7 +13,7 @@ and length constraints inform validation and specialized access.
 
 [Get started](#choose-an-artifact) · [Architecture](#architecture) ·
 [Contracts and samples](docs/CONTRACTS.md) · [Performance](#performance) ·
-[Native Buffa integration](docs/BUFFA.md)
+[Native Buffa integration](docs/BUFFA.md) · [Bebop (experimental)](docs/BEBOP.md)
 
 ```java
 Schema result = Schema.of(Field.requiredLong("a"));
@@ -38,6 +38,7 @@ flowchart LR
     Proto["Protobuf messages / binary / text"] --> Adapt
     Json["JSON text (simdjson)"] --> Adapt
     Csv["CSV text (strict RFC 4180)"] --> Adapt
+    Bebop["Bebop binary (experimental)"] --> Adapt
     Objects["Objects + sequences"] --> Adapt
     Schema["Build-time or runtime schema"] --> Adapt
     Adapt --> Owned["Immutable batches (incl. CSV) / static rows"]
@@ -70,40 +71,51 @@ See [representation and compilation guarantees](docs/TRUFFLE.md),
 [ownership and native setup](docs/BUFFA.md), the [JSON backend](docs/JSON.md),
 [YAML backend](docs/YAML.md), and [CSV backend](docs/CSV.md).
 
+> [!WARNING]
+> **Bebop support is experimental.** `truffledata-bebop` encodes and decodes
+> [Bebop](https://github.com/6over3/bebop-next) values in the 2026 indexed wire layout, with a
+> strict profile that accepts one encoding per value and in-place reads for guests. It tracks an
+> upstream alpha (`2026.0.0-alpha.6`), its strict profile is not frozen, and its API, wire
+> identities and fixtures can change in any release. No performance has been measured. Read the
+> [Bebop backend](docs/BEBOP.md) before depending on it.
+
 ## Choose an artifact
 
-| Maven coordinate | Purpose |
+Every artifact is in the `dev.elide` group, for example `dev.elide:truffledata-core`.
+
+| Artifact | Purpose |
 | --- | --- |
-| `dev.elide:truffledata-core` | Schemas, batches, static/dynamic objects, sequences and interop |
-| `dev.elide:truffledata-jdbc` | Driver-independent JDBC ingestion and query contracts |
-| `dev.elide:truffledata-jdbc-sqlite` | Native SQLite integration |
-| `dev.elide:truffledata-jdbc-mysql` | MySQL Connector/J integration |
-| `dev.elide:truffledata-jdbc-postgresql` | pgJDBC integration |
-| `dev.elide:truffledata-protobuf-runtime` | Stock-free protobuf plans, slab codecs and generated-record support |
-| `dev.elide:truffledata-protobuf` | Protobuf host compatibility, runtime schema compilation and contract generation |
-| `dev.elide:truffledata-protobuf-buffa` | Native slab decoding, projections and reusable borrowed sessions |
-| `dev.elide:truffledata-protobuf-buffa-bindings` | Myna bindings, pulled in by the Buffa adapter |
-| `dev.elide:truffledata-protobuf-buffa-cells` | Opt-in: Buffa slab decoding through Myna Truffle cells (`-Dtruffledata.buffa.cells=true`) |
-| `dev.elide:truffledata-cells` | Myna's Truffle cells runtime, pulled in by the opt-in `*-cells` routes |
-| `dev.elide:truffledata-tape` | Shared native-tape values, sinks, export, snapshots, sessions, streams and typed records, with the Myna value ABI; pulled in by the JSON adapter |
-| `dev.elide:truffledata-tape-jvm` | JVM FFM tape reader, pulled in by the JSON JVM backend; keep it off native-image classpaths |
-| `dev.elide:truffledata-json` | Native simdjson JSON sessions, messages, streams, typed plans and the static SVM backend |
-| `dev.elide:truffledata-json-jvm` | JVM FFM backend for JSON; keep it off native-image classpaths |
-| `dev.elide:truffledata-json-bindings` | Myna JSON bindings, pulled in by the JSON adapter |
-| `dev.elide:truffledata-json-cells` | Opt-in: the JSON document decode through Myna Truffle cells (`-Dtruffledata.json.cells=true`) |
-| `dev.elide:truffledata-yaml` | YAML sessions, documents, streams, metadata and typed plans (no native code) |
-| `dev.elide:truffledata-yaml-native` | Static SVM YAML backend; add it to native images that link the YAML archive |
-| `dev.elide:truffledata-yaml-jvm` | YAML JVM FFM backend; keep it off native-image classpaths |
-| `dev.elide:truffledata-yaml-bindings` | Generated native YAML bindings |
-| `dev.elide:truffledata-yaml-java` | Pure-Java YAML kernel (no native library) behind the same sessions |
-| `dev.elide:truffledata-yaml-snakeyaml` | SnakeYAML Engine event source for the Java YAML kernel |
-| `dev.elide:truffledata-yaml-cells` | Opt-in: the native YAML decode path through Myna Truffle cells (`-Dtruffledata.yaml.cells=true`) |
-| `dev.elide:truffledata-csv` | Strict streaming CSV into immutable string and primitive column batches, typed plans and one-pass export; pure Java |
-| `dev.elide:truffledata-csv-native` | Optional native CSV kernel and static SVM backend |
-| `dev.elide:truffledata-csv-jvm` | CSV JVM FFM provider; keep it off native-image classpaths |
-| `dev.elide:truffledata-csv-cells` | Opt-in: the native CSV kernel through Myna Truffle cells (`-Dtruffledata.csv.cells=true`) |
-| `dev.elide:truffledata-csv-bindings` | Generated native CSV bindings |
-| `dev.elide:truffledata-bom` | Aligned libraries, drivers and runtime dependencies |
+| `truffledata-core` | Schemas, batches, static/dynamic objects, sequences and interop |
+| `truffledata-jdbc` | Driver-independent JDBC ingestion and query contracts |
+| `truffledata-jdbc-sqlite` | Native SQLite integration |
+| `truffledata-jdbc-mysql` | MySQL Connector/J integration |
+| `truffledata-jdbc-postgresql` | pgJDBC integration |
+| `truffledata-protobuf-runtime` | Stock-free protobuf plans, slab codecs and generated-record support |
+| `truffledata-protobuf` | Protobuf host compatibility, runtime schema compilation and contract generation |
+| `truffledata-protobuf-buffa` | Native slab decoding, projections and reusable borrowed sessions |
+| `truffledata-protobuf-buffa-bindings` | Myna bindings, pulled in by the Buffa adapter |
+| `truffledata-protobuf-buffa-cells` | Opt-in: Buffa slab decoding through Myna Truffle cells (`-Dtruffledata.buffa.cells=true`) |
+| `truffledata-cells` | Myna's Truffle cells runtime, pulled in by the opt-in `*-cells` routes |
+| `truffledata-tape` | Shared native-tape values, sinks, export, snapshots, sessions, streams and typed records, with the Myna value ABI; pulled in by the JSON adapter |
+| `truffledata-tape-jvm` | JVM FFM tape reader, pulled in by the JSON JVM backend; keep it off native-image classpaths |
+| `truffledata-json` | Native simdjson JSON sessions, messages, streams, typed plans and the static SVM backend |
+| `truffledata-json-jvm` | JVM FFM backend for JSON; keep it off native-image classpaths |
+| `truffledata-json-bindings` | Myna JSON bindings, pulled in by the JSON adapter |
+| `truffledata-json-cells` | Opt-in: the JSON document decode through Myna Truffle cells (`-Dtruffledata.json.cells=true`) |
+| `truffledata-yaml` | YAML sessions, documents, streams, metadata and typed plans (no native code) |
+| `truffledata-yaml-native` | Static SVM YAML backend; add it to native images that link the YAML archive |
+| `truffledata-yaml-jvm` | YAML JVM FFM backend; keep it off native-image classpaths |
+| `truffledata-yaml-bindings` | Generated native YAML bindings |
+| `truffledata-yaml-java` | Pure-Java YAML kernel (no native library) behind the same sessions |
+| `truffledata-yaml-snakeyaml` | SnakeYAML Engine event source for the Java YAML kernel |
+| `truffledata-yaml-cells` | Opt-in: the native YAML decode path through Myna Truffle cells (`-Dtruffledata.yaml.cells=true`) |
+| `truffledata-csv` | Strict streaming CSV into immutable string and primitive column batches, typed plans and one-pass export; pure Java |
+| `truffledata-csv-native` | Optional native CSV kernel and static SVM backend |
+| `truffledata-csv-jvm` | CSV JVM FFM provider; keep it off native-image classpaths |
+| `truffledata-csv-cells` | Opt-in: the native CSV kernel through Myna Truffle cells (`-Dtruffledata.csv.cells=true`) |
+| `truffledata-csv-bindings` | Generated native CSV bindings |
+| `truffledata-bebop` | **Experimental.** Bebop encoding and decoding (general and strict profiles), `bebopc` descriptor loading, in-place rows, arrays and column views; pure Java |
+| `truffledata-bom` | Aligned libraries, drivers and runtime dependencies |
 
 The runtime baseline is **Java 25** and **Elide GraalVM `25.5.5-elide.28`**.
 Libraries are thin JARs; choose the adapters and guest runtimes your application needs.

@@ -1,0 +1,28 @@
+edition = "2026"
+package golden.flags
+
+/// bebopc marks an enum as flags when a decorator spelled `flags` is applied.
+#decorator(flags) {
+    targets = ENUM
+}
+
+@flags
+enum Perm : uint8 {
+    NONE = 0;
+    READ = 1;
+    WRITE = 1 << 1;
+    EXEC = 1 << 2;
+    READ_WRITE = READ | WRITE;
+}
+
+@flags
+enum Signed : int16 {
+    NONE = 0;
+    LOW = 1;
+    MINUS_EIGHT = -0x8;
+}
+
+struct File {
+    name: string;
+    perm: Perm;
+}

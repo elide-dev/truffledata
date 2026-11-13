@@ -1,0 +1,706 @@
+{
+ "format": "bebop-fixtures/1",
+ "note": "Host-side normalization and refusal under the strict profile; not wire acceptance.",
+ "wire": "bebop-2026.0.0-alpha.6@f73e40a1b118aff6d29d91a00ed3fdb7b4fe5e8c",
+ "profile": {
+  "name": "strict",
+  "rules": "strict-rules-0.11",
+  "admit": "all",
+  "nan16": "7e00",
+  "nanBrain16": "7fc0",
+  "nan32": "7fc00000",
+  "nan64": "7ff8000000000000"
+ },
+ "definitions": [
+  {
+   "enum": "Status",
+   "base": "byte",
+   "members": [
+    [
+     "ACTIVE",
+     "1"
+    ],
+    [
+     "GONE",
+     "3"
+    ]
+   ]
+  },
+  {
+   "struct": "Empty",
+   "fields": []
+  },
+  {
+   "struct": "Point",
+   "fields": [
+    [
+     "x",
+     "float32"
+    ],
+    [
+     "y",
+     "float32"
+    ]
+   ]
+  },
+  {
+   "struct": "Circle",
+   "fields": [
+    [
+     "radius",
+     "float32"
+    ]
+   ]
+  },
+  {
+   "struct": "Rectangle",
+   "fields": [
+    [
+     "width",
+     "float32"
+    ],
+    [
+     "height",
+     "float32"
+    ]
+   ]
+  },
+  {
+   "struct": "Stamped",
+   "fields": [
+    [
+     "at",
+     "timestamp"
+    ],
+    [
+     "sentinel",
+     "uint32"
+    ]
+   ]
+  },
+  {
+   "struct": "Spanned",
+   "fields": [
+    [
+     "span",
+     "duration"
+    ],
+    [
+     "sentinel",
+     "uint32"
+    ]
+   ]
+  },
+  {
+   "message": "UserRequest",
+   "fields": [
+    [
+     1,
+     "user_id",
+     "int32"
+    ],
+    [
+     2,
+     "include_profile",
+     "bool"
+    ]
+   ]
+  },
+  {
+   "message": "Times",
+   "fields": [
+    [
+     1,
+     "at",
+     "timestamp"
+    ],
+    [
+     2,
+     "span",
+     "duration"
+    ],
+    [
+     3,
+     "tail",
+     "byte"
+    ]
+   ]
+  },
+  {
+   "message": "Instant",
+   "fields": [
+    [
+     1,
+     "at",
+     "utc-instant"
+    ],
+    [
+     2,
+     "any",
+     "timestamp"
+    ]
+   ]
+  },
+  {
+   "message": "Wide",
+   "fields": [
+    [
+     1,
+     "a",
+     "byte"
+    ],
+    [
+     2,
+     "b",
+     "byte"
+    ],
+    [
+     3,
+     "c",
+     "byte"
+    ],
+    [
+     9,
+     "d",
+     "byte"
+    ],
+    [
+     17,
+     "e",
+     "byte"
+    ],
+    [
+     33,
+     "f",
+     "byte"
+    ],
+    [
+     255,
+     "g",
+     "byte"
+    ]
+   ]
+  },
+  {
+   "union": "Shape",
+   "branches": [
+    [
+     1,
+     "Circle",
+     {
+      "ref": "Circle"
+     }
+    ],
+    [
+     2,
+     "Rectangle",
+     {
+      "ref": "Rectangle"
+     }
+    ]
+   ]
+  }
+ ],
+ "cases": [
+  {
+   "name": "float32 NaN payload normalizes",
+   "kind": "host-normalize",
+   "root": "float32",
+   "host": {
+    "bits": "ffc12345"
+   },
+   "bytes": "0000c07f",
+   "value": {
+    "bits": "7fc00000"
+   }
+  },
+  {
+   "name": "float64 NaN payload normalizes",
+   "kind": "host-normalize",
+   "root": "float64",
+   "host": {
+    "bits": "fff8000000000123"
+   },
+   "bytes": "000000000000f87f",
+   "value": {
+    "bits": "7ff8000000000000"
+   }
+  },
+  {
+   "name": "float16 NaN from a float32 host NaN",
+   "kind": "host-normalize",
+   "root": "float16",
+   "host": {
+    "bits32": "ffc12345"
+   },
+   "bytes": "007e",
+   "value": {
+    "bits": "7e00"
+   }
+  },
+  {
+   "name": "bfloat16 NaN from a float32 host NaN",
+   "kind": "host-normalize",
+   "root": "bfloat16",
+   "host": {
+    "bits32": "7f812345"
+   },
+   "bytes": "c07f",
+   "value": {
+    "bits": "7fc0"
+   }
+  },
+  {
+   "name": "set members are sorted and deduplicated",
+   "kind": "host-normalize",
+   "root": {
+    "set": "uint16"
+   },
+   "host": {
+    "set": [
+     {
+      "int": "2"
+     },
+     {
+      "int": "1"
+     },
+     {
+      "int": "256"
+     },
+     {
+      "int": "1"
+     },
+     {
+      "int": "2"
+     }
+    ]
+   },
+   "bytes": "03000000000101000200",
+   "value": {
+    "set": [
+     {
+      "int": "256"
+     },
+     {
+      "int": "1"
+     },
+     {
+      "int": "2"
+     }
+    ]
+   }
+  },
+  {
+   "name": "map entries are sorted",
+   "kind": "host-normalize",
+   "root": {
+    "map": [
+     "string",
+     "bool"
+    ]
+   },
+   "host": {
+    "map": [
+     [
+      {
+       "string": "aa"
+      },
+      {
+       "bool": true
+      }
+     ],
+     [
+      {
+       "string": "b"
+      },
+      {
+       "bool": false
+      }
+     ]
+    ]
+   },
+   "bytes": "02000000010000006200000200000061610001",
+   "value": {
+    "map": [
+     [
+      {
+       "string": "b"
+      },
+      {
+       "bool": false
+      }
+     ],
+     [
+      {
+       "string": "aa"
+      },
+      {
+       "bool": true
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "nested sets normalize, the sequence around them does not",
+   "kind": "host-normalize",
+   "root": {
+    "array": {
+     "set": "uint16"
+    }
+   },
+   "host": {
+    "seq": [
+     {
+      "set": [
+       {
+        "int": "2"
+       },
+       {
+        "int": "1"
+       },
+       {
+        "int": "2"
+       }
+      ]
+     },
+     {
+      "set": [
+       {
+        "int": "1"
+       }
+      ]
+     }
+    ]
+   },
+   "bytes": "020000000200000001000200010000000100",
+   "value": {
+    "seq": [
+     {
+      "set": [
+       {
+        "int": "1"
+       },
+       {
+        "int": "2"
+       }
+      ]
+     },
+     {
+      "set": [
+       {
+        "int": "1"
+       }
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "signed zeros stay distinct in a set",
+   "kind": "host-normalize",
+   "root": {
+    "set": "float64"
+   },
+   "host": {
+    "set": [
+     {
+      "bits": "8000000000000000"
+     },
+     {
+      "bits": "0000000000000000"
+     }
+    ]
+   },
+   "bytes": "0200000000000000000000000000000000000080",
+   "value": {
+    "set": [
+     {
+      "bits": "0000000000000000"
+     },
+     {
+      "bits": "8000000000000000"
+     }
+    ]
+   }
+  },
+  {
+   "name": "float16 does not round: 0.1f",
+   "kind": "host-reject",
+   "root": "float16",
+   "host": {
+    "bits32": "3dcccccd"
+   },
+   "error": "value"
+  },
+  {
+   "name": "float16 does not round: just above the largest finite",
+   "kind": "host-reject",
+   "root": "float16",
+   "host": {
+    "bits32": "477fe100"
+   },
+   "error": "value"
+  },
+  {
+   "name": "float16 does not flush: below the smallest subnormal",
+   "kind": "host-reject",
+   "root": "float16",
+   "host": {
+    "bits32": "33000000"
+   },
+   "error": "value"
+  },
+  {
+   "name": "bfloat16 does not round: 0.1f",
+   "kind": "host-reject",
+   "root": "bfloat16",
+   "host": {
+    "bits32": "3dcccccd"
+   },
+   "error": "value"
+  },
+  {
+   "name": "timestamp nanoseconds 10^9",
+   "kind": "host-reject",
+   "root": "timestamp",
+   "host": {
+    "timestamp": [
+     "0",
+     "1000000000",
+     "0"
+    ]
+   },
+   "error": "value"
+  },
+  {
+   "name": "timestamp offset past a day",
+   "kind": "host-reject",
+   "root": "timestamp",
+   "host": {
+    "timestamp": [
+     "0",
+     "0",
+     "86400001"
+    ]
+   },
+   "error": "value"
+  },
+  {
+   "name": "utc instant with an offset is not repaired",
+   "kind": "host-reject",
+   "root": "utc-instant",
+   "host": {
+    "timestamp": [
+     "5",
+     "0",
+     "3600000"
+    ]
+   },
+   "error": "value"
+  },
+  {
+   "name": "duration with inconsistent signs is not repaired",
+   "kind": "host-reject",
+   "root": "duration",
+   "host": {
+    "duration": [
+     "1",
+     "-1"
+    ]
+   },
+   "error": "value"
+  },
+  {
+   "name": "duration nanos 10^9",
+   "kind": "host-reject",
+   "root": "duration",
+   "host": {
+    "duration": [
+     "0",
+     "1000000000"
+    ]
+   },
+   "error": "value"
+  },
+  {
+   "name": "undeclared enum value",
+   "kind": "host-reject",
+   "root": {
+    "ref": "Status"
+   },
+   "host": {
+    "int": "2"
+   },
+   "error": "value"
+  },
+  {
+   "name": "unknown union branch",
+   "kind": "host-reject",
+   "root": {
+    "ref": "Shape"
+   },
+   "host": {
+    "union": [
+     9,
+     {
+      "raw": "aabb"
+     }
+    ]
+   },
+   "error": "value"
+  },
+  {
+   "name": "int32 out of range",
+   "kind": "host-reject",
+   "root": "int32",
+   "host": {
+    "int": "2147483648"
+   },
+   "error": "value"
+  },
+  {
+   "name": "uint128 negative",
+   "kind": "host-reject",
+   "root": "uint128",
+   "host": {
+    "int": "-1"
+   },
+   "error": "value"
+  },
+  {
+   "name": "adapter: -1 s +0.5 s",
+   "kind": "duration-adapter",
+   "host": {
+    "duration": [
+     "-1",
+     "500000000"
+    ]
+   },
+   "value": {
+    "duration": [
+     "0",
+     "-500000000"
+    ]
+   }
+  },
+  {
+   "name": "adapter: +1 s -1 ns",
+   "kind": "duration-adapter",
+   "host": {
+    "duration": [
+     "1",
+     "-1"
+    ]
+   },
+   "value": {
+    "duration": [
+     "0",
+     "999999999"
+    ]
+   }
+  },
+  {
+   "name": "adapter: carries whole seconds",
+   "kind": "duration-adapter",
+   "host": {
+    "duration": [
+     "1",
+     "2000000001"
+    ]
+   },
+   "value": {
+    "duration": [
+     "3",
+     "1"
+    ]
+   }
+  },
+  {
+   "name": "adapter: canonical input is unchanged",
+   "kind": "duration-adapter",
+   "host": {
+    "duration": [
+     "-3",
+     "-7"
+    ]
+   },
+   "value": {
+    "duration": [
+     "-3",
+     "-7"
+    ]
+   }
+  },
+  {
+   "name": "adapter: most negative nanos",
+   "kind": "duration-adapter",
+   "host": {
+    "duration": [
+     "0",
+     "-2147483648"
+    ]
+   },
+   "value": {
+    "duration": [
+     "-2",
+     "-147483648"
+    ]
+   }
+  },
+  {
+   "name": "adapter: maximum stays in range",
+   "kind": "duration-adapter",
+   "host": {
+    "duration": [
+     "9223372036854775807",
+     "999999999"
+    ]
+   },
+   "value": {
+    "duration": [
+     "9223372036854775807",
+     "999999999"
+    ]
+   }
+  },
+  {
+   "name": "adapter: overflow above",
+   "kind": "duration-adapter",
+   "host": {
+    "duration": [
+     "9223372036854775807",
+     "1000000000"
+    ]
+   },
+   "error": "value"
+  },
+  {
+   "name": "adapter: overflow below",
+   "kind": "duration-adapter",
+   "host": {
+    "duration": [
+     "-9223372036854775808",
+     "-1000000000"
+    ]
+   },
+   "error": "value"
+  },
+  {
+   "name": "adapter: brought back into range",
+   "kind": "duration-adapter",
+   "host": {
+    "duration": [
+     "-9223372036854775808",
+     "1"
+    ]
+   },
+   "value": {
+    "duration": [
+     "-9223372036854775807",
+     "-999999999"
+    ]
+   }
+  }
+ ]
+}

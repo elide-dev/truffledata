@@ -1,0 +1,55 @@
+load("@rules_graalvm//graalvm:defs.bzl", "native_image")
+load("@rules_shell//shell:sh_test.bzl", "sh_test")
+load("//bazel:java.bzl", "data_java_library")
+load("//bazel:jit.bzl", "LINUX_SVM_PLATFORMS", "LINUX_SVM_SDK", "TRUFFLE_JIT_CHECKS")
+
+# Native Image acceptance: codec and strict-profile smoke checks, bulk views, guest reads, and the
+# compiled-read gates (compiled, AST budget, allocation budget).
+data_java_library(
+    name = "acceptance",
+    testonly = True,
+    srcs = glob(["*.java"]),
+    deps = [
+        "//bebop",
+        "//core",
+        "@maven//:org_graalvm_polyglot_polyglot",
+        "@maven//:org_graalvm_truffle_truffle_api",
+    ],
+)
+
+native_image(
+    name = "native",
+    testonly = True,
+    exec_properties = {
+        "EstimatedCPU": "8",
+        "EstimatedMemory": "24GB",
+    },
+    executable_name = "bebop_acceptance",
+    extra_args = [
+        "--gc=serial",
+        "--initialize-at-build-time=dev.elide.truffledata",
+        "-ea",
+        "--parallelism=8",
+        "-march=compatibility",
+        "-H:+UnlockExperimentalVMOptions",
+    ] + TRUFFLE_JIT_CHECKS + ["-H:-UnlockExperimentalVMOptions"],
+    graalvm_sdk = LINUX_SVM_SDK,
+    main_class = "dev.elide.truffledata.bebop.tests.SvmAcceptance",
+    optimization_mode = "2",
+    tags = ["manual"],
+    target_compatible_with = LINUX_SVM_PLATFORMS,
+    deps = [
+        ":acceptance",
+        "@maven//:org_graalvm_truffle_truffle_runtime",
+    ],
+)
+
+sh_test(
+    name = "native_test",
+    size = "large",
+    srcs = ["native_test.sh"],
+    args = ["$(rootpath :native)"],
+    data = [":native"],
+    tags = ["manual"],
+    target_compatible_with = LINUX_SVM_PLATFORMS,
+)

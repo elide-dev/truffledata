@@ -1,0 +1,1675 @@
+{
+ "format": "bebop-fixtures/1",
+ "note": "Wire acceptance under the strict profile.",
+ "wire": "bebop-2026.0.0-alpha.6@f73e40a1b118aff6d29d91a00ed3fdb7b4fe5e8c",
+ "profile": {
+  "name": "strict",
+  "rules": "strict-rules-0.11",
+  "admit": "all",
+  "nan16": "7e00",
+  "nanBrain16": "7fc0",
+  "nan32": "7fc00000",
+  "nan64": "7ff8000000000000"
+ },
+ "definitions": [
+  {
+   "enum": "Status",
+   "base": "byte",
+   "members": [
+    [
+     "ACTIVE",
+     "1"
+    ],
+    [
+     "GONE",
+     "3"
+    ]
+   ]
+  },
+  {
+   "struct": "Empty",
+   "fields": []
+  },
+  {
+   "struct": "Point",
+   "fields": [
+    [
+     "x",
+     "float32"
+    ],
+    [
+     "y",
+     "float32"
+    ]
+   ]
+  },
+  {
+   "struct": "Circle",
+   "fields": [
+    [
+     "radius",
+     "float32"
+    ]
+   ]
+  },
+  {
+   "struct": "Rectangle",
+   "fields": [
+    [
+     "width",
+     "float32"
+    ],
+    [
+     "height",
+     "float32"
+    ]
+   ]
+  },
+  {
+   "struct": "Stamped",
+   "fields": [
+    [
+     "at",
+     "timestamp"
+    ],
+    [
+     "sentinel",
+     "uint32"
+    ]
+   ]
+  },
+  {
+   "struct": "Spanned",
+   "fields": [
+    [
+     "span",
+     "duration"
+    ],
+    [
+     "sentinel",
+     "uint32"
+    ]
+   ]
+  },
+  {
+   "message": "UserRequest",
+   "fields": [
+    [
+     1,
+     "user_id",
+     "int32"
+    ],
+    [
+     2,
+     "include_profile",
+     "bool"
+    ]
+   ]
+  },
+  {
+   "message": "Times",
+   "fields": [
+    [
+     1,
+     "at",
+     "timestamp"
+    ],
+    [
+     2,
+     "span",
+     "duration"
+    ],
+    [
+     3,
+     "tail",
+     "byte"
+    ]
+   ]
+  },
+  {
+   "message": "Instant",
+   "fields": [
+    [
+     1,
+     "at",
+     "utc-instant"
+    ],
+    [
+     2,
+     "any",
+     "timestamp"
+    ]
+   ]
+  },
+  {
+   "message": "Wide",
+   "fields": [
+    [
+     1,
+     "a",
+     "byte"
+    ],
+    [
+     2,
+     "b",
+     "byte"
+    ],
+    [
+     3,
+     "c",
+     "byte"
+    ],
+    [
+     9,
+     "d",
+     "byte"
+    ],
+    [
+     17,
+     "e",
+     "byte"
+    ],
+    [
+     33,
+     "f",
+     "byte"
+    ],
+    [
+     255,
+     "g",
+     "byte"
+    ]
+   ]
+  },
+  {
+   "union": "Shape",
+   "branches": [
+    [
+     1,
+     "Circle",
+     {
+      "ref": "Circle"
+     }
+    ],
+    [
+     2,
+     "Rectangle",
+     {
+      "ref": "Rectangle"
+     }
+    ]
+   ]
+  }
+ ],
+ "cases": [
+  {
+   "name": "false",
+   "kind": "wire-accept",
+   "root": "bool",
+   "bytes": "00",
+   "value": {
+    "bool": false
+   }
+  },
+  {
+   "name": "true",
+   "kind": "wire-accept",
+   "root": "bool",
+   "bytes": "01",
+   "value": {
+    "bool": true
+   }
+  },
+  {
+   "name": "boolean 02",
+   "kind": "wire-reject",
+   "root": "bool",
+   "bytes": "02",
+   "error": "malformed"
+  },
+  {
+   "name": "boolean ff",
+   "kind": "wire-reject",
+   "root": "bool",
+   "bytes": "ff",
+   "error": "malformed"
+  },
+  {
+   "name": "float16 canonical NaN",
+   "kind": "wire-accept",
+   "root": "float16",
+   "bytes": "007e",
+   "value": {
+    "bits": "7e00"
+   }
+  },
+  {
+   "name": "float16 NaN payload",
+   "kind": "wire-reject",
+   "root": "float16",
+   "bytes": "017e",
+   "error": "malformed"
+  },
+  {
+   "name": "float16 NaN sign",
+   "kind": "wire-reject",
+   "root": "float16",
+   "bytes": "00fe",
+   "error": "malformed"
+  },
+  {
+   "name": "float16 signaling NaN",
+   "kind": "wire-reject",
+   "root": "float16",
+   "bytes": "017c",
+   "error": "malformed"
+  },
+  {
+   "name": "bfloat16 canonical NaN",
+   "kind": "wire-accept",
+   "root": "bfloat16",
+   "bytes": "c07f",
+   "value": {
+    "bits": "7fc0"
+   }
+  },
+  {
+   "name": "bfloat16 NaN payload",
+   "kind": "wire-reject",
+   "root": "bfloat16",
+   "bytes": "c17f",
+   "error": "malformed"
+  },
+  {
+   "name": "bfloat16 NaN sign",
+   "kind": "wire-reject",
+   "root": "bfloat16",
+   "bytes": "c0ff",
+   "error": "malformed"
+  },
+  {
+   "name": "bfloat16 signaling NaN",
+   "kind": "wire-reject",
+   "root": "bfloat16",
+   "bytes": "817f",
+   "error": "malformed"
+  },
+  {
+   "name": "float32 canonical NaN",
+   "kind": "wire-accept",
+   "root": "float32",
+   "bytes": "0000c07f",
+   "value": {
+    "bits": "7fc00000"
+   }
+  },
+  {
+   "name": "float32 NaN payload",
+   "kind": "wire-reject",
+   "root": "float32",
+   "bytes": "0100c07f",
+   "error": "malformed"
+  },
+  {
+   "name": "float32 NaN sign",
+   "kind": "wire-reject",
+   "root": "float32",
+   "bytes": "0000c0ff",
+   "error": "malformed"
+  },
+  {
+   "name": "float32 signaling NaN",
+   "kind": "wire-reject",
+   "root": "float32",
+   "bytes": "0100807f",
+   "error": "malformed"
+  },
+  {
+   "name": "float64 canonical NaN",
+   "kind": "wire-accept",
+   "root": "float64",
+   "bytes": "000000000000f87f",
+   "value": {
+    "bits": "7ff8000000000000"
+   }
+  },
+  {
+   "name": "float64 NaN payload",
+   "kind": "wire-reject",
+   "root": "float64",
+   "bytes": "010000000000f87f",
+   "error": "malformed"
+  },
+  {
+   "name": "float64 NaN sign",
+   "kind": "wire-reject",
+   "root": "float64",
+   "bytes": "000000000000f8ff",
+   "error": "malformed"
+  },
+  {
+   "name": "float16 +0",
+   "kind": "wire-accept",
+   "root": "float16",
+   "bytes": "0000",
+   "value": {
+    "bits": "0000"
+   }
+  },
+  {
+   "name": "float16 -0",
+   "kind": "wire-accept",
+   "root": "float16",
+   "bytes": "0080",
+   "value": {
+    "bits": "8000"
+   }
+  },
+  {
+   "name": "float16 smallest subnormal",
+   "kind": "wire-accept",
+   "root": "float16",
+   "bytes": "0100",
+   "value": {
+    "bits": "0001"
+   }
+  },
+  {
+   "name": "float16 largest subnormal",
+   "kind": "wire-accept",
+   "root": "float16",
+   "bytes": "ff03",
+   "value": {
+    "bits": "03ff"
+   }
+  },
+  {
+   "name": "float16 smallest normal",
+   "kind": "wire-accept",
+   "root": "float16",
+   "bytes": "0004",
+   "value": {
+    "bits": "0400"
+   }
+  },
+  {
+   "name": "float16 largest finite",
+   "kind": "wire-accept",
+   "root": "float16",
+   "bytes": "ff7b",
+   "value": {
+    "bits": "7bff"
+   }
+  },
+  {
+   "name": "float16 +inf",
+   "kind": "wire-accept",
+   "root": "float16",
+   "bytes": "007c",
+   "value": {
+    "bits": "7c00"
+   }
+  },
+  {
+   "name": "float16 -inf",
+   "kind": "wire-accept",
+   "root": "float16",
+   "bytes": "00fc",
+   "value": {
+    "bits": "fc00"
+   }
+  },
+  {
+   "name": "bfloat16 -0",
+   "kind": "wire-accept",
+   "root": "bfloat16",
+   "bytes": "0080",
+   "value": {
+    "bits": "8000"
+   }
+  },
+  {
+   "name": "bfloat16 smallest subnormal",
+   "kind": "wire-accept",
+   "root": "bfloat16",
+   "bytes": "0100",
+   "value": {
+    "bits": "0001"
+   }
+  },
+  {
+   "name": "bfloat16 largest subnormal",
+   "kind": "wire-accept",
+   "root": "bfloat16",
+   "bytes": "7f00",
+   "value": {
+    "bits": "007f"
+   }
+  },
+  {
+   "name": "bfloat16 smallest normal",
+   "kind": "wire-accept",
+   "root": "bfloat16",
+   "bytes": "8000",
+   "value": {
+    "bits": "0080"
+   }
+  },
+  {
+   "name": "bfloat16 +inf",
+   "kind": "wire-accept",
+   "root": "bfloat16",
+   "bytes": "807f",
+   "value": {
+    "bits": "7f80"
+   }
+  },
+  {
+   "name": "float32 -0",
+   "kind": "wire-accept",
+   "root": "float32",
+   "bytes": "00000080",
+   "value": {
+    "bits": "80000000"
+   }
+  },
+  {
+   "name": "float32 smallest subnormal",
+   "kind": "wire-accept",
+   "root": "float32",
+   "bytes": "01000000",
+   "value": {
+    "bits": "00000001"
+   }
+  },
+  {
+   "name": "float64 +0",
+   "kind": "wire-accept",
+   "root": "float64",
+   "bytes": "0000000000000000",
+   "value": {
+    "bits": "0000000000000000"
+   }
+  },
+  {
+   "name": "float64 -0",
+   "kind": "wire-accept",
+   "root": "float64",
+   "bytes": "0000000000000080",
+   "value": {
+    "bits": "8000000000000000"
+   }
+  },
+  {
+   "name": "float64 smallest subnormal",
+   "kind": "wire-accept",
+   "root": "float64",
+   "bytes": "0100000000000000",
+   "value": {
+    "bits": "0000000000000001"
+   }
+  },
+  {
+   "name": "int128 minimum",
+   "kind": "wire-accept",
+   "root": "int128",
+   "bytes": "00000000000000000000000000000080",
+   "value": {
+    "int": "-170141183460469231731687303715884105728"
+   }
+  },
+  {
+   "name": "int128 minus two",
+   "kind": "wire-accept",
+   "root": "int128",
+   "bytes": "feffffffffffffffffffffffffffffff",
+   "value": {
+    "int": "-2"
+   }
+  },
+  {
+   "name": "uint128 maximum",
+   "kind": "wire-accept",
+   "root": "uint128",
+   "bytes": "ffffffffffffffffffffffffffffffff",
+   "value": {
+    "int": "340282366920938463463374607431768211455"
+   }
+  },
+  {
+   "name": "uint64 maximum",
+   "kind": "wire-accept",
+   "root": "uint64",
+   "bytes": "ffffffffffffffff",
+   "value": {
+    "int": "18446744073709551615"
+   }
+  },
+  {
+   "name": "int64 minimum",
+   "kind": "wire-accept",
+   "root": "int64",
+   "bytes": "0000000000000080",
+   "value": {
+    "int": "-9223372036854775808"
+   }
+  },
+  {
+   "name": "uuid nil",
+   "kind": "wire-accept",
+   "root": "uuid",
+   "bytes": "00000000000000000000000000000000",
+   "value": {
+    "uuid": "00000000-0000-0000-0000-000000000000"
+   }
+  },
+  {
+   "name": "uuid max",
+   "kind": "wire-accept",
+   "root": "uuid",
+   "bytes": "ffffffffffffffffffffffffffffffff",
+   "value": {
+    "uuid": "ffffffff-ffff-ffff-ffff-ffffffffffff"
+   }
+  },
+  {
+   "name": "uuid byte order",
+   "kind": "wire-accept",
+   "root": "uuid",
+   "bytes": "00112233445566778899aabbccddeeff",
+   "value": {
+    "uuid": "00112233-4455-6677-8899-aabbccddeeff"
+   }
+  },
+  {
+   "name": "uuid unfamiliar variant and version",
+   "kind": "wire-accept",
+   "root": "uuid",
+   "bytes": "ffeeddccbbaaf988f766554433221100",
+   "value": {
+    "uuid": "ffeeddcc-bbaa-f988-f766-554433221100"
+   }
+  },
+  {
+   "name": "timestamp seconds minimum",
+   "kind": "wire-accept",
+   "root": "timestamp",
+   "bytes": "00000000000000800000000000000000",
+   "value": {
+    "timestamp": [
+     "-9223372036854775808",
+     "0",
+     "0"
+    ]
+   }
+  },
+  {
+   "name": "timestamp seconds maximum",
+   "kind": "wire-accept",
+   "root": "timestamp",
+   "bytes": "ffffffffffffff7fffc99a3b00000000",
+   "value": {
+    "timestamp": [
+     "9223372036854775807",
+     "999999999",
+     "0"
+    ]
+   }
+  },
+  {
+   "name": "timestamp offset +1 day",
+   "kind": "wire-accept",
+   "root": "timestamp",
+   "bytes": "ffffffffffffffffffc99a3b005c2605",
+   "value": {
+    "timestamp": [
+     "-1",
+     "999999999",
+     "86400000"
+    ]
+   }
+  },
+  {
+   "name": "timestamp offset -1 day",
+   "kind": "wire-accept",
+   "root": "timestamp",
+   "bytes": "00000000000000000000000000a4d9fa",
+   "value": {
+    "timestamp": [
+     "0",
+     "0",
+     "-86400000"
+    ]
+   }
+  },
+  {
+   "name": "timestamp millisecond offset",
+   "kind": "wire-accept",
+   "root": "timestamp",
+   "bytes": "05000000000000000100000001000000",
+   "value": {
+    "timestamp": [
+     "5",
+     "1",
+     "1"
+    ]
+   }
+  },
+  {
+   "name": "timestamp odd negative offset",
+   "kind": "wire-accept",
+   "root": "timestamp",
+   "bytes": "050000000000000001000000b39e43ff",
+   "value": {
+    "timestamp": [
+     "5",
+     "1",
+     "-12345677"
+    ]
+   }
+  },
+  {
+   "name": "same instant, offset zero",
+   "kind": "wire-accept",
+   "root": "timestamp",
+   "bytes": "05000000000000000000000000000000",
+   "value": {
+    "timestamp": [
+     "5",
+     "0",
+     "0"
+    ]
+   }
+  },
+  {
+   "name": "same instant, offset +1h is another value",
+   "kind": "wire-accept",
+   "root": "timestamp",
+   "bytes": "05000000000000000000000080ee3600",
+   "value": {
+    "timestamp": [
+     "5",
+     "0",
+     "3600000"
+    ]
+   }
+  },
+  {
+   "name": "timestamp nanoseconds 10^9",
+   "kind": "wire-reject",
+   "root": "timestamp",
+   "bytes": "000000000000000000ca9a3b00000000",
+   "error": "malformed"
+  },
+  {
+   "name": "timestamp nanoseconds -1",
+   "kind": "wire-reject",
+   "root": "timestamp",
+   "bytes": "0000000000000000ffffffff00000000",
+   "error": "malformed"
+  },
+  {
+   "name": "timestamp offset past +1 day",
+   "kind": "wire-reject",
+   "root": "timestamp",
+   "bytes": "000000000000000000000000015c2605",
+   "error": "malformed"
+  },
+  {
+   "name": "timestamp offset past -1 day",
+   "kind": "wire-reject",
+   "root": "timestamp",
+   "bytes": "000000000000000000000000ffa3d9fa",
+   "error": "malformed"
+  },
+  {
+   "name": "timestamp truncated to 12 bytes",
+   "kind": "wire-reject",
+   "root": "timestamp",
+   "bytes": "010000000000000002000000",
+   "error": "malformed"
+  },
+  {
+   "name": "timestamp truncated to 13 bytes",
+   "kind": "wire-reject",
+   "root": "timestamp",
+   "bytes": "01000000000000000200000003",
+   "error": "malformed"
+  },
+  {
+   "name": "timestamp truncated to 14 bytes",
+   "kind": "wire-reject",
+   "root": "timestamp",
+   "bytes": "0100000000000000020000000300",
+   "error": "malformed"
+  },
+  {
+   "name": "timestamp truncated to 15 bytes",
+   "kind": "wire-reject",
+   "root": "timestamp",
+   "bytes": "010000000000000002000000030000",
+   "error": "malformed"
+  },
+  {
+   "name": "timestamp with a 17th byte",
+   "kind": "wire-reject",
+   "root": "timestamp",
+   "bytes": "0100000000000000020000000300000000",
+   "error": "malformed"
+  },
+  {
+   "name": "utc instant",
+   "kind": "wire-accept",
+   "root": "utc-instant",
+   "bytes": "05000000000000000700000000000000",
+   "value": {
+    "timestamp": [
+     "5",
+     "7",
+     "0"
+    ]
+   }
+  },
+  {
+   "name": "utc instant with an offset",
+   "kind": "wire-reject",
+   "root": "utc-instant",
+   "bytes": "05000000000000000700000080ee3600",
+   "error": "malformed"
+  },
+  {
+   "name": "utc instant with offset -1 ms",
+   "kind": "wire-reject",
+   "root": "utc-instant",
+   "bytes": "050000000000000007000000ffffffff",
+   "error": "malformed"
+  },
+  {
+   "name": "utc instant field beside a general timestamp",
+   "kind": "wire-accept",
+   "root": {
+    "ref": "Instant"
+   },
+   "bytes": "230000000500000000000000000000000000000005000000000000000000000080ee3600100310",
+   "value": {
+    "record": [
+     {
+      "timestamp": [
+       "5",
+       "0",
+       "0"
+      ]
+     },
+     {
+      "timestamp": [
+       "5",
+       "0",
+       "3600000"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "utc instant field with an offset",
+   "kind": "wire-reject",
+   "root": {
+    "ref": "Instant"
+   },
+   "bytes": "2300000005000000000000000000000060ea000005000000000000000000000000000000100310",
+   "error": "malformed"
+  },
+  {
+   "name": "duration zero",
+   "kind": "wire-accept",
+   "root": "duration",
+   "bytes": "000000000000000000000000",
+   "value": {
+    "duration": [
+     "0",
+     "0"
+    ]
+   }
+  },
+  {
+   "name": "duration maximum",
+   "kind": "wire-accept",
+   "root": "duration",
+   "bytes": "ffffffffffffff7fffc99a3b",
+   "value": {
+    "duration": [
+     "9223372036854775807",
+     "999999999"
+    ]
+   }
+  },
+  {
+   "name": "duration minimum",
+   "kind": "wire-accept",
+   "root": "duration",
+   "bytes": "0000000000000080013665c4",
+   "value": {
+    "duration": [
+     "-9223372036854775808",
+     "-999999999"
+    ]
+   }
+  },
+  {
+   "name": "duration zero seconds, positive nanos",
+   "kind": "wire-accept",
+   "root": "duration",
+   "bytes": "000000000000000005000000",
+   "value": {
+    "duration": [
+     "0",
+     "5"
+    ]
+   }
+  },
+  {
+   "name": "duration zero seconds, negative nanos",
+   "kind": "wire-accept",
+   "root": "duration",
+   "bytes": "0000000000000000fbffffff",
+   "value": {
+    "duration": [
+     "0",
+     "-5"
+    ]
+   }
+  },
+  {
+   "name": "duration negative",
+   "kind": "wire-accept",
+   "root": "duration",
+   "bytes": "ffffffffffffffff013665c4",
+   "value": {
+    "duration": [
+     "-1",
+     "-999999999"
+    ]
+   }
+  },
+  {
+   "name": "duration +1 s, -1 ns",
+   "kind": "wire-reject",
+   "root": "duration",
+   "bytes": "0100000000000000ffffffff",
+   "error": "malformed"
+  },
+  {
+   "name": "duration -1 s, +1 ns",
+   "kind": "wire-reject",
+   "root": "duration",
+   "bytes": "ffffffffffffffff01000000",
+   "error": "malformed"
+  },
+  {
+   "name": "duration nanos 10^9",
+   "kind": "wire-reject",
+   "root": "duration",
+   "bytes": "000000000000000000ca9a3b",
+   "error": "malformed"
+  },
+  {
+   "name": "duration nanos -10^9",
+   "kind": "wire-reject",
+   "root": "duration",
+   "bytes": "0000000000000000003665c4",
+   "error": "malformed"
+  },
+  {
+   "name": "duration truncated to 11 bytes",
+   "kind": "wire-reject",
+   "root": "duration",
+   "bytes": "0100000000000000020000",
+   "error": "malformed"
+  },
+  {
+   "name": "timestamps in an array",
+   "kind": "wire-accept",
+   "root": {
+    "array": "timestamp"
+   },
+   "bytes": "0200000001000000000000000200000003000000fcffffffffffffff05000000faffffff",
+   "value": {
+    "seq": [
+     {
+      "timestamp": [
+       "1",
+       "2",
+       "3"
+      ]
+     },
+     {
+      "timestamp": [
+       "-4",
+       "5",
+       "-6"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "timestamps in a fixed array",
+   "kind": "wire-accept",
+   "root": {
+    "fixed": [
+     "timestamp",
+     2
+    ]
+   },
+   "bytes": "0100000000000000020000000300000007000000000000000800000009000000",
+   "value": {
+    "seq": [
+     {
+      "timestamp": [
+       "1",
+       "2",
+       "3"
+      ]
+     },
+     {
+      "timestamp": [
+       "7",
+       "8",
+       "9"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "timestamp then a sentinel in a struct",
+   "kind": "wire-accept",
+   "root": {
+    "ref": "Stamped"
+   },
+   "bytes": "01000000000000000200000003000000efbeadde",
+   "value": {
+    "record": [
+     {
+      "timestamp": [
+       "1",
+       "2",
+       "3"
+      ]
+     },
+     {
+      "int": "3735928559"
+     }
+    ]
+   }
+  },
+  {
+   "name": "duration then a sentinel in a struct",
+   "kind": "wire-accept",
+   "root": {
+    "ref": "Spanned"
+   },
+   "bytes": "fffffffffffffffffeffffffefbeadde",
+   "value": {
+    "record": [
+     {
+      "duration": [
+       "-1",
+       "-2"
+      ]
+     },
+     {
+      "int": "3735928559"
+     }
+    ]
+   }
+  },
+  {
+   "name": "structs with timestamps in an array",
+   "kind": "wire-accept",
+   "root": {
+    "array": {
+     "ref": "Stamped"
+    }
+   },
+   "bytes": "02000000010000000000000002000000030000000a000000040000000000000005000000060000000b000000",
+   "value": {
+    "seq": [
+     {
+      "record": [
+       {
+        "timestamp": [
+         "1",
+         "2",
+         "3"
+        ]
+       },
+       {
+        "int": "10"
+       }
+      ]
+     },
+     {
+      "record": [
+       {
+        "timestamp": [
+         "4",
+         "5",
+         "6"
+        ]
+       },
+       {
+        "int": "11"
+       }
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "temporal message fields",
+   "kind": "wire-accept",
+   "root": {
+    "ref": "Times"
+   },
+   "bytes": "210000000100000000000000020000000300000004000000000000000500000009101c0710",
+   "value": {
+    "record": [
+     {
+      "timestamp": [
+       "1",
+       "2",
+       "3"
+      ]
+     },
+     {
+      "duration": [
+       "4",
+       "5"
+      ]
+     },
+     {
+      "int": "9"
+     }
+    ]
+   }
+  },
+  {
+   "name": "timestamp field with a 12-byte range",
+   "kind": "wire-reject",
+   "root": {
+    "ref": "Times"
+   },
+   "bytes": "10000000010000000000000002000000090c0510",
+   "error": "malformed"
+  },
+  {
+   "name": "timestamp array short by one byte",
+   "kind": "wire-reject",
+   "root": {
+    "array": "timestamp"
+   },
+   "bytes": "01000000010000000000000002000000030000",
+   "error": "malformed"
+  },
+  {
+   "name": "absent",
+   "kind": "wire-accept",
+   "root": {
+    "ref": "UserRequest"
+   },
+   "bytes": "0100000000",
+   "value": {
+    "record": [
+     null,
+     null
+    ]
+   }
+  },
+  {
+   "name": "present zero",
+   "kind": "wire-accept",
+   "root": {
+    "ref": "UserRequest"
+   },
+   "bytes": "080000000000000000040310",
+   "value": {
+    "record": [
+     {
+      "int": "0"
+     },
+     {
+      "bool": false
+     }
+    ]
+   }
+  },
+  {
+   "name": "one present zero",
+   "kind": "wire-accept",
+   "root": {
+    "ref": "UserRequest"
+   },
+   "bytes": "06000000000000000110",
+   "value": {
+    "record": [
+     {
+      "int": "0"
+     },
+     null
+    ]
+   }
+  },
+  {
+   "name": "unknown tag",
+   "kind": "wire-reject",
+   "root": {
+    "ref": "UserRequest"
+   },
+   "bytes": "090000002a000000ffff040510",
+   "error": "malformed"
+  },
+  {
+   "name": "zero-byte range for an int32",
+   "kind": "wire-reject",
+   "root": {
+    "ref": "UserRequest"
+   },
+   "bytes": "070000002a000000040310",
+   "error": "malformed"
+  },
+  {
+   "name": "unknown enum value",
+   "kind": "wire-reject",
+   "root": {
+    "ref": "Status"
+   },
+   "bytes": "02",
+   "error": "malformed"
+  },
+  {
+   "name": "declared enum value",
+   "kind": "wire-accept",
+   "root": {
+    "ref": "Status"
+   },
+   "bytes": "03",
+   "value": {
+    "int": "3"
+   }
+  },
+  {
+   "name": "unknown union branch",
+   "kind": "wire-reject",
+   "root": {
+    "ref": "Shape"
+   },
+   "bytes": "0300000009aabb",
+   "error": "malformed"
+  },
+  {
+   "name": "mask 8",
+   "kind": "wire-accept",
+   "root": {
+    "ref": "Wide"
+   },
+   "bytes": "0700000001020301020710",
+   "value": {
+    "record": [
+     {
+      "int": "1"
+     },
+     {
+      "int": "2"
+     },
+     {
+      "int": "3"
+     },
+     null,
+     null,
+     null,
+     null
+    ]
+   }
+  },
+  {
+   "name": "tiny 1 above tag 8",
+   "kind": "wire-accept",
+   "root": {
+    "ref": "Wide"
+   },
+   "bytes": "03000000040904",
+   "value": {
+    "record": [
+     null,
+     null,
+     null,
+     {
+      "int": "4"
+     },
+     null,
+     null,
+     null
+    ]
+   }
+  },
+  {
+   "name": "mask 16",
+   "kind": "wire-accept",
+   "root": {
+    "ref": "Wide"
+   },
+   "bytes": "06000000010401010114",
+   "value": {
+    "record": [
+     {
+      "int": "1"
+     },
+     null,
+     null,
+     {
+      "int": "4"
+     },
+     null,
+     null,
+     null
+    ]
+   }
+  },
+  {
+   "name": "tiny 2 over mask 32",
+   "kind": "wire-accept",
+   "root": {
+    "ref": "Wide"
+   },
+   "bytes": "06000000010501011108",
+   "value": {
+    "record": [
+     {
+      "int": "1"
+     },
+     null,
+     null,
+     null,
+     {
+      "int": "5"
+     },
+     null,
+     null
+    ]
+   }
+  },
+  {
+   "name": "mask 32",
+   "kind": "wire-accept",
+   "root": {
+    "ref": "Wide"
+   },
+   "bytes": "0c000000010203050102030700010018",
+   "value": {
+    "record": [
+     {
+      "int": "1"
+     },
+     {
+      "int": "2"
+     },
+     {
+      "int": "3"
+     },
+     null,
+     {
+      "int": "5"
+     },
+     null,
+     null
+    ]
+   }
+  },
+  {
+   "name": "blocks",
+   "kind": "wire-accept",
+   "root": {
+    "ref": "Wide"
+   },
+   "bytes": "1a000000010203060701020304000700000003010000000400000040831c",
+   "value": {
+    "record": [
+     {
+      "int": "1"
+     },
+     {
+      "int": "2"
+     },
+     {
+      "int": "3"
+     },
+     null,
+     null,
+     {
+      "int": "6"
+     },
+     {
+      "int": "7"
+     }
+    ]
+   }
+  },
+  {
+   "name": "map sorted by little-endian key bytes",
+   "kind": "wire-accept",
+   "root": {
+    "map": [
+     "int32",
+     "bool"
+    ]
+   },
+   "bytes": "0300000000010000010100000000ffffffff01",
+   "value": {
+    "map": [
+     [
+      {
+       "int": "256"
+      },
+      {
+       "bool": true
+      }
+     ],
+     [
+      {
+       "int": "1"
+      },
+      {
+       "bool": false
+      }
+     ],
+     [
+      {
+       "int": "-1"
+      },
+      {
+       "bool": true
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "map unsorted",
+   "kind": "wire-reject",
+   "root": {
+    "map": [
+     "int32",
+     "bool"
+    ]
+   },
+   "bytes": "0200000001000000000001000001",
+   "error": "malformed"
+  },
+  {
+   "name": "map duplicate",
+   "kind": "wire-reject",
+   "root": {
+    "map": [
+     "int32",
+     "bool"
+    ]
+   },
+   "bytes": "0200000001000000000100000001",
+   "error": "malformed"
+  },
+  {
+   "name": "string keys: length prefix leads",
+   "kind": "wire-accept",
+   "root": {
+    "map": [
+     "string",
+     "bool"
+    ]
+   },
+   "bytes": "02000000010000006200010200000061610001",
+   "value": {
+    "map": [
+     [
+      {
+       "string": "b"
+      },
+      {
+       "bool": true
+      }
+     ],
+     [
+      {
+       "string": "aa"
+      },
+      {
+       "bool": true
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "set sorted",
+   "kind": "wire-accept",
+   "root": {
+    "set": "uint16"
+   },
+   "bytes": "03000000000101000200",
+   "value": {
+    "set": [
+     {
+      "int": "256"
+     },
+     {
+      "int": "1"
+     },
+     {
+      "int": "2"
+     }
+    ]
+   }
+  },
+  {
+   "name": "set unsorted",
+   "kind": "wire-reject",
+   "root": {
+    "set": "uint16"
+   },
+   "bytes": "0200000001000001",
+   "error": "malformed"
+  },
+  {
+   "name": "set duplicate",
+   "kind": "wire-reject",
+   "root": {
+    "set": "uint16"
+   },
+   "bytes": "0200000001000100",
+   "error": "malformed"
+  },
+  {
+   "name": "sequence keeps order and duplicates",
+   "kind": "wire-accept",
+   "root": {
+    "array": "uint16"
+   },
+   "bytes": "03000000020001000200",
+   "value": {
+    "seq": [
+     {
+      "int": "2"
+     },
+     {
+      "int": "1"
+     },
+     {
+      "int": "2"
+     }
+    ]
+   }
+  },
+  {
+   "name": "set of sequences",
+   "kind": "wire-accept",
+   "root": {
+    "set": {
+     "array": "byte"
+    }
+   },
+   "bytes": "020000000100000002020000000101",
+   "value": {
+    "set": [
+     {
+      "bytes": "02"
+     },
+     {
+      "bytes": "0101"
+     }
+    ]
+   }
+  },
+  {
+   "name": "sequence of sets",
+   "kind": "wire-accept",
+   "root": {
+    "array": {
+     "set": "uint16"
+    }
+   },
+   "bytes": "030000000100000002000200000001000200010000000200",
+   "value": {
+    "seq": [
+     {
+      "set": [
+       {
+        "int": "2"
+       }
+      ]
+     },
+     {
+      "set": [
+       {
+        "int": "1"
+       },
+       {
+        "int": "2"
+       }
+      ]
+     },
+     {
+      "set": [
+       {
+        "int": "2"
+       }
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "sequence of sets with an unsorted inner set",
+   "kind": "wire-reject",
+   "root": {
+    "array": {
+     "set": "uint16"
+    }
+   },
+   "bytes": "010000000200000002000100",
+   "error": "malformed"
+  },
+  {
+   "name": "the same bytes as a sequence of sequences",
+   "kind": "wire-accept",
+   "root": {
+    "array": {
+     "array": "uint16"
+    }
+   },
+   "bytes": "010000000200000002000100",
+   "value": {
+    "seq": [
+     {
+      "seq": [
+       {
+        "int": "2"
+       },
+       {
+        "int": "1"
+       }
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "set of zero-byte elements has one member",
+   "kind": "wire-accept",
+   "root": {
+    "set": {
+     "ref": "Empty"
+    }
+   },
+   "bytes": "01000000",
+   "value": {
+    "set": [
+     {
+      "record": []
+     }
+    ]
+   }
+  },
+  {
+   "name": "set of two zero-byte elements",
+   "kind": "wire-reject",
+   "root": {
+    "set": {
+     "ref": "Empty"
+    }
+   },
+   "bytes": "02000000",
+   "error": "malformed"
+  },
+  {
+   "name": "uuid set in byte order",
+   "kind": "wire-accept",
+   "root": {
+    "set": "uuid"
+   },
+   "bytes": "0200000000000000000000000000000000000001ff000000000000000000000000000000",
+   "value": {
+    "set": [
+     {
+      "uuid": "00000000-0000-0000-0000-000000000001"
+     },
+     {
+      "uuid": "ff000000-0000-0000-0000-000000000000"
+     }
+    ]
+   }
+  },
+  {
+   "name": "trailing byte",
+   "kind": "wire-reject",
+   "root": "bool",
+   "bytes": "0100",
+   "error": "malformed"
+  },
+  {
+   "name": "invalid UTF-8",
+   "kind": "wire-reject",
+   "root": "string",
+   "bytes": "02000000c32800",
+   "error": "malformed"
+  },
+  {
+   "name": "string with embedded NUL",
+   "kind": "wire-accept",
+   "root": "string",
+   "bytes": "0300000061006200",
+   "value": {
+    "string": "a\u0000b"
+   }
+  }
+ ]
+}

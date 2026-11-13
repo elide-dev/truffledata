@@ -1,0 +1,7 @@
+# Shared positive and negative vectors (format bebop-fixtures/1): README.md describes the format,
+# fixtures.schema.json checks it, gen.py writes the files with an encoder of its own.
+filegroup(
+    name = "fixtures",
+    srcs = glob(["*.json"]),
+    visibility = ["//bebop:__subpackages__"],
+)

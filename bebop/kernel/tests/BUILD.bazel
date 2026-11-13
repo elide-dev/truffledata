@@ -1,0 +1,26 @@
+load("@rules_java//java:defs.bzl", "java_test")
+
+# The native validator through FFM against the Java reference.
+java_test(
+    name = "jvm",
+    srcs = ["KernelDifferentialTest.java"],
+    args = [
+        "--class",
+        "dev.elide.truffledata.bebop.KernelDifferentialTest",
+    ],
+    data = ["//bebop/native:shared"],
+    jvm_flags = [
+        "--enable-native-access=ALL-UNNAMED",
+        "-ea",
+    ],
+    main_class = "dev.elide.bazel.junit.BazelJUnitRunner",
+    use_testrunner = False,
+    runtime_deps = ["//bazel/junit:runner"],
+    deps = [
+        "//bebop",
+        "//bebop/kernel:jvm",
+        "//bebop/tests:fixtures",
+        "//core",
+        "@maven//:org_junit_jupiter_junit_jupiter_api",
+    ],
+)

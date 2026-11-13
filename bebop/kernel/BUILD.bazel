@@ -1,0 +1,44 @@
+load("@rules_java//java:defs.bzl", "java_library")
+load("//bazel:java.bzl", "data_java_library")
+
+# Backends of the native Bebop validator (bebop/native). //bebop neither bundles nor loads them:
+# an application asks for one by passing it to BebopCodec.open/adopt.
+
+# Generated Myna bindings for bebop/native (SVM @CFunction and JVM FFM).
+java_library(
+    name = "bindings",
+    srcs = ["//bebop/native:java_bindings"],
+    resource_strip_prefix = "bebop/native/generated",
+    resources = ["//bebop/native:native_resources"],
+    visibility = ["//visibility:public"],
+    deps = [
+        "//bazel:myna_compiler_sdk",
+        "@maven//:org_graalvm_sdk_nativeimage",
+        "@maven//:org_graalvm_sdk_word",
+    ],
+)
+
+# JVM FFM backend (loads //bebop/native:shared).
+data_java_library(
+    name = "jvm",
+    srcs = glob(["src/jvm/java/**/*.java"]),
+    visibility = ["//visibility:public"],
+    deps = [
+        ":bindings",
+        "//bebop",
+        "//core",
+    ],
+)
+
+# Native Image backend (links //bebop/native:truffledata_bebop statically).
+data_java_library(
+    name = "svm",
+    srcs = glob(["src/svm/java/**/*.java"]),
+    visibility = ["//visibility:public"],
+    deps = [
+        ":bindings",
+        "//bebop",
+        "@maven//:org_graalvm_sdk_nativeimage",
+        "@maven//:org_graalvm_sdk_word",
+    ],
+)

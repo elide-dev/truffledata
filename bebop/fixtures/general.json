@@ -1,0 +1,694 @@
+{
+ "format": "bebop-fixtures/1",
+ "note": "Wire acceptance under the general profile.",
+ "wire": "bebop-2026.0.0-alpha.6@f73e40a1b118aff6d29d91a00ed3fdb7b4fe5e8c",
+ "profile": {
+  "name": "general"
+ },
+ "definitions": [
+  {
+   "enum": "Status",
+   "base": "byte",
+   "members": [
+    [
+     "ACTIVE",
+     "1"
+    ],
+    [
+     "GONE",
+     "3"
+    ]
+   ]
+  },
+  {
+   "struct": "Empty",
+   "fields": []
+  },
+  {
+   "struct": "Point",
+   "fields": [
+    [
+     "x",
+     "float32"
+    ],
+    [
+     "y",
+     "float32"
+    ]
+   ]
+  },
+  {
+   "struct": "Circle",
+   "fields": [
+    [
+     "radius",
+     "float32"
+    ]
+   ]
+  },
+  {
+   "struct": "Rectangle",
+   "fields": [
+    [
+     "width",
+     "float32"
+    ],
+    [
+     "height",
+     "float32"
+    ]
+   ]
+  },
+  {
+   "struct": "Stamped",
+   "fields": [
+    [
+     "at",
+     "timestamp"
+    ],
+    [
+     "sentinel",
+     "uint32"
+    ]
+   ]
+  },
+  {
+   "struct": "Spanned",
+   "fields": [
+    [
+     "span",
+     "duration"
+    ],
+    [
+     "sentinel",
+     "uint32"
+    ]
+   ]
+  },
+  {
+   "message": "UserRequest",
+   "fields": [
+    [
+     1,
+     "user_id",
+     "int32"
+    ],
+    [
+     2,
+     "include_profile",
+     "bool"
+    ]
+   ]
+  },
+  {
+   "message": "Times",
+   "fields": [
+    [
+     1,
+     "at",
+     "timestamp"
+    ],
+    [
+     2,
+     "span",
+     "duration"
+    ],
+    [
+     3,
+     "tail",
+     "byte"
+    ]
+   ]
+  },
+  {
+   "message": "Instant",
+   "fields": [
+    [
+     1,
+     "at",
+     "utc-instant"
+    ],
+    [
+     2,
+     "any",
+     "timestamp"
+    ]
+   ]
+  },
+  {
+   "message": "Wide",
+   "fields": [
+    [
+     1,
+     "a",
+     "byte"
+    ],
+    [
+     2,
+     "b",
+     "byte"
+    ],
+    [
+     3,
+     "c",
+     "byte"
+    ],
+    [
+     9,
+     "d",
+     "byte"
+    ],
+    [
+     17,
+     "e",
+     "byte"
+    ],
+    [
+     33,
+     "f",
+     "byte"
+    ],
+    [
+     255,
+     "g",
+     "byte"
+    ]
+   ]
+  },
+  {
+   "union": "Shape",
+   "branches": [
+    [
+     1,
+     "Circle",
+     {
+      "ref": "Circle"
+     }
+    ],
+    [
+     2,
+     "Rectangle",
+     {
+      "ref": "Rectangle"
+     }
+    ]
+   ]
+  }
+ ],
+ "cases": [
+  {
+   "name": "spec string hello",
+   "kind": "wire-accept",
+   "root": "string",
+   "bytes": "0500000068656c6c6f00",
+   "value": {
+    "string": "hello"
+   }
+  },
+  {
+   "name": "spec enum",
+   "kind": "wire-accept",
+   "root": {
+    "ref": "Status"
+   },
+   "bytes": "01",
+   "value": {
+    "int": "1"
+   }
+  },
+  {
+   "name": "spec int32 array",
+   "kind": "wire-accept",
+   "root": {
+    "array": "int32"
+   },
+   "bytes": "03000000010000000200000003000000",
+   "value": {
+    "seq": [
+     {
+      "int": "1"
+     },
+     {
+      "int": "2"
+     },
+     {
+      "int": "3"
+     }
+    ]
+   }
+  },
+  {
+   "name": "spec fixed bytes",
+   "kind": "wire-accept",
+   "root": {
+    "fixed": [
+     "byte",
+     4
+    ]
+   },
+   "bytes": "deadbeef",
+   "value": {
+    "bytes": "deadbeef"
+   }
+  },
+  {
+   "name": "spec map",
+   "kind": "wire-accept",
+   "root": {
+    "map": [
+     "byte",
+     "int32"
+    ]
+   },
+   "bytes": "02000000016400000002c8000000",
+   "value": {
+    "map": [
+     [
+      {
+       "int": "1"
+      },
+      {
+       "int": "100"
+      }
+     ],
+     [
+      {
+       "int": "2"
+      },
+      {
+       "int": "200"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "spec struct",
+   "kind": "wire-accept",
+   "root": {
+    "ref": "Point"
+   },
+   "bytes": "0000803f00000040",
+   "value": {
+    "record": [
+     {
+      "bits": "3f800000"
+     },
+     {
+      "bits": "40000000"
+     }
+    ]
+   }
+  },
+  {
+   "name": "spec message both fields",
+   "kind": "wire-accept",
+   "root": {
+    "ref": "UserRequest"
+   },
+   "bytes": "080000002a00000001040310",
+   "value": {
+    "record": [
+     {
+      "int": "42"
+     },
+     {
+      "bool": true
+     }
+    ]
+   }
+  },
+  {
+   "name": "spec message one field",
+   "kind": "wire-accept",
+   "root": {
+    "ref": "UserRequest"
+   },
+   "bytes": "060000002a0000000110",
+   "value": {
+    "record": [
+     {
+      "int": "42"
+     },
+     null
+    ]
+   }
+  },
+  {
+   "name": "spec message empty",
+   "kind": "wire-accept",
+   "root": {
+    "ref": "UserRequest"
+   },
+   "bytes": "0100000000",
+   "value": {
+    "record": [
+     null,
+     null
+    ]
+   }
+  },
+  {
+   "name": "spec union circle",
+   "kind": "wire-accept",
+   "root": {
+    "ref": "Shape"
+   },
+   "bytes": "05000000010000a040",
+   "value": {
+    "union": [
+     1,
+     {
+      "record": [
+       {
+        "bits": "40a00000"
+       }
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "spec array of arrays",
+   "kind": "wire-accept",
+   "root": {
+    "array": {
+     "array": "int32"
+    }
+   },
+   "bytes": "020000000200000001000000020000000100000003000000",
+   "value": {
+    "seq": [
+     {
+      "seq": [
+       {
+        "int": "1"
+       },
+       {
+        "int": "2"
+       }
+      ]
+     },
+     {
+      "seq": [
+       {
+        "int": "3"
+       }
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "spec array of strings",
+   "kind": "wire-accept",
+   "root": {
+    "array": "string"
+   },
+   "bytes": "02000000020000006162000300000063646500",
+   "value": {
+    "seq": [
+     {
+      "string": "ab"
+     },
+     {
+      "string": "cde"
+     }
+    ]
+   }
+  },
+  {
+   "name": "nonzero boolean is true",
+   "kind": "wire-accept",
+   "root": "bool",
+   "bytes": "02",
+   "value": {
+    "bool": true
+   },
+   "canonical": false
+  },
+  {
+   "name": "unknown tag is skipped",
+   "kind": "wire-accept",
+   "root": {
+    "ref": "UserRequest"
+   },
+   "bytes": "090000002a000000ffff040510",
+   "value": {
+    "record": [
+     {
+      "int": "42"
+     },
+     null
+    ]
+   },
+   "canonical": false
+  },
+  {
+   "name": "unknown branch keeps its content",
+   "kind": "wire-accept",
+   "root": {
+    "ref": "Shape"
+   },
+   "bytes": "0300000009aabb",
+   "value": {
+    "union": [
+     9,
+     {
+      "raw": "aabb"
+     }
+    ]
+   }
+  },
+  {
+   "name": "NaN payload is preserved",
+   "kind": "wire-accept",
+   "root": "float32",
+   "bytes": "0100f87f",
+   "value": {
+    "bits": "7ff80001"
+   }
+  },
+  {
+   "name": "timestamp with negative nanoseconds",
+   "kind": "wire-accept",
+   "root": "timestamp",
+   "bytes": "0000000000000000ffffffff00000000",
+   "value": {
+    "timestamp": [
+     "0",
+     "-1",
+     "0"
+    ]
+   }
+  },
+  {
+   "name": "embedded NUL",
+   "kind": "wire-accept",
+   "root": "string",
+   "bytes": "0300000061006200",
+   "value": {
+    "string": "a\u0000b"
+   }
+  },
+  {
+   "name": "tiny directory where mask 8 ties",
+   "kind": "wire-reject",
+   "root": {
+    "ref": "UserRequest"
+   },
+   "bytes": "060000002a0000000104",
+   "error": "malformed"
+  },
+  {
+   "name": "mask 16 where mask 8 fits",
+   "kind": "wire-reject",
+   "root": {
+    "ref": "UserRequest"
+   },
+   "bytes": "070000002a000000010014",
+   "error": "malformed"
+  },
+  {
+   "name": "boundary width not minimal",
+   "kind": "wire-reject",
+   "root": {
+    "ref": "UserRequest"
+   },
+   "bytes": "060000002a0000000111",
+   "error": "malformed"
+  },
+  {
+   "name": "reserved control bit",
+   "kind": "wire-reject",
+   "root": {
+    "ref": "UserRequest"
+   },
+   "bytes": "060000002a0000000130",
+   "error": "malformed"
+  },
+  {
+   "name": "payload with empty directory",
+   "kind": "wire-reject",
+   "root": {
+    "ref": "UserRequest"
+   },
+   "bytes": "050000002a00000000",
+   "error": "malformed"
+  },
+  {
+   "name": "trailing byte",
+   "kind": "wire-reject",
+   "root": {
+    "ref": "UserRequest"
+   },
+   "bytes": "060000002a000000011000",
+   "error": "malformed"
+  },
+  {
+   "name": "field shorter than its range",
+   "kind": "wire-reject",
+   "root": {
+    "ref": "UserRequest"
+   },
+   "bytes": "080000002a00000001030310",
+   "error": "malformed"
+  },
+  {
+   "name": "string terminator not NUL",
+   "kind": "wire-reject",
+   "root": "string",
+   "bytes": "02000000616201",
+   "error": "malformed"
+  },
+  {
+   "name": "string overlong UTF-8",
+   "kind": "wire-reject",
+   "root": "string",
+   "bytes": "02000000c08000",
+   "error": "malformed"
+  },
+  {
+   "name": "string surrogate",
+   "kind": "wire-reject",
+   "root": "string",
+   "bytes": "03000000eda08000",
+   "error": "malformed"
+  },
+  {
+   "name": "duplicate map key",
+   "kind": "wire-reject",
+   "root": {
+    "map": [
+     "int32",
+     "int32"
+    ]
+   },
+   "bytes": "0200000001000000050000000100000006000000",
+   "error": "malformed"
+  },
+  {
+   "name": "count exceeds remaining bytes",
+   "kind": "wire-reject",
+   "root": {
+    "array": "int32"
+   },
+   "bytes": "ffffffff01000000",
+   "error": "malformed"
+  },
+  {
+   "name": "timestamp truncated to 12 bytes",
+   "kind": "wire-reject",
+   "root": "timestamp",
+   "bytes": "010000000000000002000000",
+   "error": "malformed"
+  },
+  {
+   "name": "zero-byte elements, huge count",
+   "kind": "resource",
+   "root": {
+    "array": {
+     "ref": "Empty"
+    }
+   },
+   "bytes": "ffffffff",
+   "operation": "decode",
+   "limits": {
+    "maxBytes": 1024,
+    "maxCount": 1024,
+    "maxDepth": 8,
+    "maxWork": "4096",
+    "maxAllocation": "65536"
+   },
+   "error": "limit"
+  },
+  {
+   "name": "work budget",
+   "kind": "resource",
+   "root": {
+    "array": "int16"
+   },
+   "bytes": "06000000000001000200030004000500",
+   "operation": "validate",
+   "limits": {
+    "maxBytes": 1024,
+    "maxCount": 1024,
+    "maxDepth": 8,
+    "maxWork": "5",
+    "maxAllocation": "65536"
+   },
+   "error": "limit"
+  },
+  {
+   "name": "allocation budget refuses decode",
+   "kind": "resource",
+   "root": {
+    "array": "string"
+   },
+   "bytes": "01000000280000003031323334353637383930313233343536373839303132333435363738393031323334353637383900",
+   "operation": "decode",
+   "limits": {
+    "maxBytes": 1024,
+    "maxCount": 1024,
+    "maxDepth": 8,
+    "maxWork": "4096",
+    "maxAllocation": "64"
+   },
+   "error": "limit"
+  },
+  {
+   "name": "allocation-free validation accepts the same bytes",
+   "kind": "resource",
+   "root": {
+    "array": "string"
+   },
+   "bytes": "01000000280000003031323334353637383930313233343536373839303132333435363738393031323334353637383900",
+   "operation": "validate",
+   "limits": {
+    "maxBytes": 1024,
+    "maxCount": 1024,
+    "maxDepth": 8,
+    "maxWork": "4096",
+    "maxAllocation": "64"
+   },
+   "error": "none"
+  },
+  {
+   "name": "input exceeds byte budget",
+   "kind": "resource",
+   "root": {
+    "array": "byte"
+   },
+   "bytes": "140000000000000000000000000000000000000000000000",
+   "operation": "validate",
+   "limits": {
+    "maxBytes": 16,
+    "maxCount": 1024,
+    "maxDepth": 8,
+    "maxWork": "4096",
+    "maxAllocation": "65536"
+   },
+   "error": "limit"
+  }
+ ]
+}
