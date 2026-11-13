@@ -25,12 +25,12 @@ import org.snakeyaml.engine.v2.parser.ParserImpl;
 import org.snakeyaml.engine.v2.scanner.StreamReader;
 
 /**
- * The kernel's first event source: SnakeYAML Engine's low-level scanner and parser (no composer,
- * no constructor, no resolver), so every TruffleData policy above the event boundary is the
- * kernel's own. Only this class imports SnakeYAML.
+ * The kernel's first event source: SnakeYAML Engine's low-level scanner and parser (no composer, no
+ * constructor, no resolver), so every TruffleData policy above the event boundary is the kernel's
+ * own. Only this class imports SnakeYAML.
  *
- * <p>Engine marks count code points; they are mapped back to byte offsets of the caller's UTF-8.
- * A scalar event's start mark covers its anchor and tag; the scalar token itself starts past them.
+ * <p>Engine marks count code points; they are mapped back to byte offsets of the caller's UTF-8. A
+ * scalar event's start mark covers its anchor and tag; the scalar token itself starts past them.
  */
 public final class SnakeYamlEventSource implements YamlEventSource {
   public SnakeYamlEventSource() {}
@@ -54,51 +54,63 @@ public final class SnakeYamlEventSource implements YamlEventSource {
     String text = new String(utf8, 0, length, StandardCharsets.UTF_8);
     Positions positions = new Positions(utf8, length, text);
     ParserImpl parser = new ParserImpl(settings, new StreamReader(settings, text));
-    try {
-      while (parser.hasNext()) {
-        Event event = parser.next();
-        switch (event.getEventId()) {
-          case StreamStart -> events.streamStart();
-          case StreamEnd -> events.streamEnd();
-          case DocumentStart -> {
-            DocumentStartEvent start = (DocumentStartEvent) event;
-            Optional<SpecVersion> spec = start.getSpecVersion();
-            int version = 0;
-            if (spec.isPresent()) {
-              int major = spec.get().getMajor(), minor = spec.get().getMinor();
-              version = Math.min(major, 0x7fff) << 16 | Math.min(minor, 0xffff);
-            }
-            Map<String, String> tags = start.getTags();
-            events.documentStart(start.isExplicit(), version, tags, positions.mark(event.getStartMark()));
-          }
-          case DocumentEnd ->
-              events.documentEnd(((DocumentEndEvent) event).isExplicit(), positions.mark(event.getStartMark()));
-          case MappingStart, SequenceStart -> {
-            CollectionStartEvent start = (CollectionStartEvent) event;
-            String anchor = anchor(start.getAnchor());
-            String tag = start.getTag().orElse(null);
-            YamlMark mark = positions.mark(event.getStartMark());
-            if (event.getEventId() == Event.ID.MappingStart) events.mappingStart(anchor, tag, start.isFlow(), mark);
-            else events.sequenceStart(anchor, tag, start.isFlow(), mark);
-          }
-          case MappingEnd -> events.mappingEnd(positions.mark(event.getStartMark()));
-          case SequenceEnd -> events.sequenceEnd(positions.mark(event.getStartMark()));
-          case Scalar -> scalar((ScalarEvent) event, positions, events);
-          case Alias ->
-              events.alias(
-                  ((AliasEvent) event).getAlias().getValue(), positions.mark(event.getStartMark()));
-          default -> {} // comments are not requested
-        }
+    // Only the Engine's own parser calls are guarded: an exception thrown by the handler
+    // propagates unchanged and ends the parse (the YamlEventSource contract). The Engine
+    // failure is chained as the cause so it is never lost.
+    while (true) {
+      Event event;
+      try {
+        if (!parser.hasNext()) break;
+        event = parser.next();
+      } catch (MarkedYamlEngineException failure) {
+        Optional<Mark> mark =
+            failure.getProblemMark().isPresent()
+                ? failure.getProblemMark()
+                : failure.getContextMark();
+        String problem = failure.getProblem();
+        throw new YamlSyntaxException(
+            problem == null || problem.isEmpty() ? String.valueOf(failure.getContext()) : problem,
+            positions.mark(mark),
+            failure);
+      } catch (YamlEngineException failure) {
+        throw new YamlSyntaxException(
+            String.valueOf(failure.getMessage()), YamlMark.UNKNOWN, failure);
       }
-    } catch (MarkedYamlEngineException failure) {
-      Optional<Mark> mark =
-          failure.getProblemMark().isPresent() ? failure.getProblemMark() : failure.getContextMark();
-      String problem = failure.getProblem();
-      throw new YamlSyntaxException(
-          problem == null || problem.isEmpty() ? String.valueOf(failure.getContext()) : problem,
-          positions.mark(mark));
-    } catch (YamlEngineException failure) {
-      throw new YamlSyntaxException(String.valueOf(failure.getMessage()), YamlMark.UNKNOWN);
+      switch (event.getEventId()) {
+        case StreamStart -> events.streamStart();
+        case StreamEnd -> events.streamEnd();
+        case DocumentStart -> {
+          DocumentStartEvent start = (DocumentStartEvent) event;
+          Optional<SpecVersion> spec = start.getSpecVersion();
+          int version = 0;
+          if (spec.isPresent()) {
+            int major = spec.get().getMajor(), minor = spec.get().getMinor();
+            version = Math.min(major, 0x7fff) << 16 | Math.min(minor, 0xffff);
+          }
+          Map<String, String> tags = start.getTags();
+          events.documentStart(
+              start.isExplicit(), version, tags, positions.mark(event.getStartMark()));
+        }
+        case DocumentEnd ->
+            events.documentEnd(
+                ((DocumentEndEvent) event).isExplicit(), positions.mark(event.getStartMark()));
+        case MappingStart, SequenceStart -> {
+          CollectionStartEvent start = (CollectionStartEvent) event;
+          String anchor = anchor(start.getAnchor());
+          String tag = start.getTag().orElse(null);
+          YamlMark mark = positions.mark(event.getStartMark());
+          if (event.getEventId() == Event.ID.MappingStart)
+            events.mappingStart(anchor, tag, start.isFlow(), mark);
+          else events.sequenceStart(anchor, tag, start.isFlow(), mark);
+        }
+        case MappingEnd -> events.mappingEnd(positions.mark(event.getStartMark()));
+        case SequenceEnd -> events.sequenceEnd(positions.mark(event.getStartMark()));
+        case Scalar -> scalar((ScalarEvent) event, positions, events);
+        case Alias ->
+            events.alias(
+                ((AliasEvent) event).getAlias().getValue(), positions.mark(event.getStartMark()));
+        default -> {} // comments are not requested
+      }
     }
   }
 
@@ -119,7 +131,8 @@ public final class SnakeYamlEventSource implements YamlEventSource {
     YamlMark start = end;
     if (!empty) {
       start = positions.mark(event.getStartMark());
-      if (event.getAnchor().isPresent() || event.getTag().isPresent()) start = positions.token(start);
+      if (event.getAnchor().isPresent() || event.getTag().isPresent())
+        start = positions.token(start);
     }
     // SnakeYAML Engine 3.2 synthesizes a phantom trailing '\n' for a keep-chomped block scalar
     // (|+ / >+) whose last content line is terminated at end-of-input without a final line
@@ -178,15 +191,19 @@ public final class SnakeYamlEventSource implements YamlEventSource {
     }
 
     /**
-     * The start of the token after the properties at {@code mark}: past each anchor and tag, and the
-     * spaces, line breaks and comments between them and the token. Linear in the bytes skipped.
+     * The start of the token after the properties at {@code mark}: past each anchor and tag, and
+     * the spaces, line breaks and comments between them and the token. Linear in the bytes skipped.
      */
     YamlMark token(YamlMark mark) {
       int at = mark.offset(), line = mark.line(), column = mark.column();
       while (at < length) {
         byte c = utf8[at];
         if (c == '&' || c == '!') {
-          while (at < length && utf8[at] != ' ' && utf8[at] != '\t' && utf8[at] != '\n' && utf8[at] != '\r') {
+          while (at < length
+              && utf8[at] != ' '
+              && utf8[at] != '\t'
+              && utf8[at] != '\n'
+              && utf8[at] != '\r') {
             if ((utf8[at] & 0xC0) != 0x80) column++;
             at++;
           }
