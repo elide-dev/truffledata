@@ -120,3 +120,14 @@ the repository: no paired SVM measurement exists, so there is no performance cla
 change. No benchmark capture was taken for this release.
 
 Sam also instructed (2026-11-12): never add `Co-Authored-By` trailers for Claude to commits.
+
+## 0.13.0 release completion (2026-11-12)
+
+0.13.0 is released on Elide Maven and GitHub from signed tag `v0.13.0` at
+`6b6c78d09812f54e04a9e8afa571a393390720b8`. As for 0.12.0, the publish skipped the gates main CI
+had already run and kept the per-platform consumer gates. Central was not attempted (#28, quota
+resets 2026-12-01). The public artifacts were verified against the staged bytes, and the public
+`truffledata-bebop` jar passed a consumer check. Receipts: `benchmarks/results/release-0.13.0/`.
+Open: the rapidyaml fuzz finding; for Bebop, a `.bop` parser, a set convention for `.bop` sources,
+a strict rule for `@flags` enums, registration in the root source-policy and JIT-matrix tests, and
+any SVM measurement (none exists, so the native validator stays unpublished and opt-in).
