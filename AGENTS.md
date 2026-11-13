@@ -141,3 +141,14 @@ resets 2026-12-01). The public artifacts were verified against the staged bytes,
 Open: the rapidyaml fuzz finding; for Bebop, a `.bop` parser, a set convention for `.bop` sources,
 a strict rule for `@flags` enums, registration in the root source-policy and JIT-matrix tests, and
 any SVM measurement (none exists, so the native validator stays unpublished and opt-in).
+
+# 0.13.1 release authorization (2026-11-13)
+
+Sam instructed: "let's crunch through these on an integration branch, and get it merged and
+released." That authorizes: the integration branch `integration/0.14.0` (named before the version
+was chosen) carrying the open fix PRs #79–#83, the doc PRs #85–#87, #99 and #103, the 0.12.0 bench
+cards #98 and the rapidyaml fix for #72/#73; the release PR/CI/merge, signed tag `v0.13.1` (a
+fixes-only release, so a patch version), Elide Maven and GitHub publication, and public artifact
+verification. Central stays deferred under #28 until the quota resets (2026-12-01); do not retry it
+without instruction. The same evidence, safety and honest-reporting rules apply. No benchmark
+capture is taken for this release. Never add `Co-Authored-By` trailers for Claude.
