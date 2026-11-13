@@ -152,3 +152,12 @@ fixes-only release, so a patch version), Elide Maven and GitHub publication, and
 verification. Central stays deferred under #28 until the quota resets (2026-12-01); do not retry it
 without instruction. The same evidence, safety and honest-reporting rules apply. No benchmark
 capture is taken for this release. Never add `Co-Authored-By` trailers for Claude.
+
+## 0.13.1 release completion (2026-11-13)
+
+0.13.1 is released on Elide Maven and GitHub from signed tag `v0.13.1` at
+`1f3845bd60b8c658bf833f300e09caad49923c21`. Main CI and Untrusted input passed on that commit; the
+publish skipped the gates they had run and kept the per-platform consumer gates. Central was not
+attempted (#28, quota resets 2026-12-01). The public artifacts were verified against the staged
+bytes. Receipts: `benchmarks/results/release-0.13.1/`. Open: reporting the rapidyaml finding
+upstream; #89; the Bebop and performance follow-ups listed under 0.13.0.
