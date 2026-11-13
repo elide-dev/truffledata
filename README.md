@@ -128,17 +128,22 @@ repositories {
     maven("https://maven.elide.dev/gvm-elide/25.5.5-elide.28")
 }
 dependencies {
-    implementation(platform("dev.elide:truffledata-bom:0.12.0"))
+    implementation(platform("dev.elide:truffledata-bom:0.13.0"))
     implementation("dev.elide:truffledata-core")
     implementation("dev.elide:truffledata-protobuf")
     // Add JDBC integrations or protobuf-buffa as needed.
 }
 ```
 
-[Release 0.12.0](https://github.com/elide-dev/truffledata/releases/tag/v0.12.0) includes
+[Release 0.13.0](https://github.com/elide-dev/truffledata/releases/tag/v0.13.0) includes
 source/Javadoc JARs, consumer POMs, Gradle metadata, signatures, checksums, and
 Buffa, JSON, YAML and CSV native attachments. See
 [publishing and consumption](docs/PUBLISHING.md) for Maven, Bazel and native linking.
+
+Release **0.13.0** adds experimental [Bebop](docs/BEBOP.md) support as `truffledata-bebop`:
+encoding and decoding in the 2026 indexed wire layout, a strict profile, a `bebopc` descriptor
+loader and in-place reads. The other libraries and their natives are built from the same sources
+as 0.12.0. See the [0.13.0 notes](docs/RELEASE_0_13_0.md).
 
 Release **0.12.0** moves to Myna 0.18.0 and adopts its ownership model (borrows, resources,
 status-reporting creates, held borrows) in the opt-in Myna Truffle cells of Buffa, JSON, YAML and
