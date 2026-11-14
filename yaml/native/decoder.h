@@ -1268,11 +1268,20 @@ class handler : public c4::yml::EventHandlerStack<handler, handler_state> {
   // build's code stays byte-identical). granit's token starts at the first non-blank content line,
   // so blank lines between the header and it are skipped.
   uint64_t block_span(size_t content, size_t position) const {
+    // A keep-chomped scalar of blank lines only: granit's token starts at the indicator itself.
+    if (content < length_ && (pristine_[content] == '|' || pristine_[content] == '>')) {
+      size_t end = position;
+      while (end > content + 1 && space(pristine_[end - 1])) --end;
+      return pack(content, end - content);
+    }
     // The header line (`|`, `>-`, `!tag |2 # comment`) is the last non-blank line before the content.
     size_t at = content;
     while (at > 0 && pristine_[at - 1] != '\n') --at;  // start of the content's line
-    size_t header_end, header;
-    for (;;) {
+    size_t header_end = content, header = at;
+    // An empty block scalar's token can sit at the end of its header line (`keep: |+`).
+    bool own_line = true;
+    for (size_t i = at; i < content && own_line; ++i) own_line = pristine_[i] == ' ' || pristine_[i] == '\t';
+    for (; own_line;) {
       if (at == 0) return 0;
       header_end = at - 1, header = header_end;
       while (header > 0 && pristine_[header - 1] != '\n') --header;

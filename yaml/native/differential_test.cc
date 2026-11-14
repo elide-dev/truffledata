@@ -1,13 +1,16 @@
 // Differential test of the opt-in Rust parser backend against rapidyaml (design step 7): the
 // rapidyaml and granit-parser builds of diff_dump.cc describe the same inputs under the same
 // policies (yaml-test-suite inputs, probe fixtures, the session fuzz corpus and seeded generated
-// documents), and every description must agree: status; on success the events, resolved values,
-// per-node kinds, styles, key kinds, tags, anchors, alias targets and lexical spans, side tables,
-// document flags and version; on a handler (policy) error its message. Parser messages and error
-// positions (`~` lines) differ by design and are counted, not compared.
+// documents), and every description must agree: the error status, or on success the events,
+// resolved values, per-node kinds, styles, key kinds, tags, anchors, alias targets and lexical
+// spans, side tables, document flags and version. Error messages and positions are not
+// contractual (ruling 2026-11-14: status match is sufficient); they are counted, not compared.
 //
-// A difference is either fixed or listed in differential_exclusions.txt with a reason
-// (`input[ mode]<TAB>reason`); the list is exact: an entry that matches no difference fails.
+// A remaining difference is fixed, or explained by a class in differential_exclusions.txt:
+// `class<TAB>kind<TAB>regex<TAB>reason`, where kind is granit-rejects (rapidyaml accepts),
+// granit-accepts (rapidyaml rejects) or document (both accept, different documents) and the regex
+// (ECMAScript) must match the input text. Only spec-conformant granit behaviour may be listed. The
+// list is exact: a class that explains no difference fails.
 //
 // Usage: differential_test --ryml=<diff_dump> --rs=<diff_dump_rs> --exclusions=<file>
 //                          [--generated=N --seed=S] <input>...
@@ -15,6 +18,7 @@
 #include <cstdlib>
 #include <fstream>
 #include <map>
+#include <regex>
 #include <set>
 #include <sstream>
 #include <stdexcept>
@@ -66,13 +70,31 @@ dump parse(const std::string& text) {
   return d;
 }
 
+// The contractual part of a description: no informational lines, no error messages, and the
+// error status without the parser/handler origin.
 std::string strict(const std::string& block) {
   std::string out;
   std::istringstream lines(block);
   std::string line;
-  while (std::getline(lines, line))
-    if (line.empty() || line[0] != '~') out += line + "\n";
+  while (std::getline(lines, line)) {
+    if (!line.empty() && line[0] == '~') continue;
+    if (line.rfind("message ", 0) == 0) continue;
+    if (line.rfind("error ", 0) == 0 && line.size() > 7 && line.compare(line.size() - 7, 7, " parser") == 0)
+      line.resize(line.size() - 7);
+    out += line + "\n";
+  }
   return out;
+}
+
+bool has_error(const std::string& block) { return block.rfind("error ", 0) == 0 || block.find("\nerror ") != std::string::npos; }
+
+std::string read_input(const std::string& path) {
+  std::ifstream in(path, std::ios::binary);
+  std::ostringstream out;
+  out << in.rdbuf();
+  std::string text = out.str();
+  if (path.find("/session/") != std::string::npos) text = text.size() > 2 ? text.substr(2) : std::string();
+  return text;
 }
 
 std::vector<std::string> lines_of(const std::string& block) {
@@ -104,18 +126,29 @@ bool span_additions_only(const std::string& left, const std::string& right) {
   return any;
 }
 
-std::string first_line(const std::string& block) { return block.substr(0, block.find('\n')); }
+struct exclusion {
+  std::string name, kind, pattern, reason;
+  std::regex regex;
+  size_t matched = 0;
+};
 
-std::map<std::string, std::string> read_exclusions(const std::string& path) {
-  std::map<std::string, std::string> out;
+std::vector<exclusion> read_exclusions(const std::string& path) {
+  std::vector<exclusion> out;
   std::ifstream in(path);
   if (!in) throw std::runtime_error("cannot read " + path);
   std::string line;
+  std::set<std::string> names;
   while (std::getline(in, line)) {
     if (line.empty() || line[0] == '#') continue;
-    size_t tab = line.find('\t');
-    if (tab == std::string::npos || tab + 1 >= line.size()) throw std::runtime_error("exclusion without a reason: " + line);
-    if (!out.emplace(line.substr(0, tab), line.substr(tab + 1)).second) throw std::runtime_error("duplicate exclusion " + line);
+    std::vector<std::string> f;
+    std::istringstream cells(line);
+    std::string cell;
+    while (std::getline(cells, cell, '\t')) f.push_back(cell);
+    if (f.size() != 4 || f[3].empty()) throw std::runtime_error("exclusions are class<TAB>kind<TAB>regex<TAB>reason: " + line);
+    if (f[1] != "granit-rejects" && f[1] != "granit-accepts" && f[1] != "document")
+      throw std::runtime_error("unknown exclusion kind: " + line);
+    if (!names.insert(f[0]).second) throw std::runtime_error("duplicate exclusion " + f[0]);
+    out.push_back({f[0], f[1], f[2], f[3], std::regex(f[2], std::regex::ECMAScript)});
   }
   return out;
 }
@@ -144,7 +177,9 @@ int main(int argc, char** argv) {
     const std::string args = " --list=" + list + " --generated=" + generated + " --seed=" + seed;
     dump a = parse(run(ryml + args)), b = parse(run(rs + args));
     auto exclusions = read_exclusions(exclusions_path);
-    std::set<std::string> used;
+    std::map<std::string, std::string> texts;  // input -> text, for the exclusion patterns
+    for (const auto& input : inputs) texts[input] = read_input(input);
+    for (const auto& [name, text] : a.generated) texts[name] = text;
 
     size_t compared = 0, equal = 0, informational = 0, excluded = 0, errors_both = 0, spans_added = 0;
     std::map<std::string, size_t> classes, examples;
@@ -156,7 +191,7 @@ int main(int argc, char** argv) {
       if (other == b.blocks.end()) throw std::runtime_error("missing in the Rust dump: " + key);
       const std::string& right = other->second;
       ++compared;
-      const bool left_error = left.rfind("error ", 0) == 0, right_error = right.rfind("error ", 0) == 0;
+      const bool left_error = has_error(left), right_error = has_error(right);
       if (left_error && right_error) ++errors_both;
       if (strict(left) == strict(right)) {
         ++equal;
@@ -168,15 +203,25 @@ int main(int argc, char** argv) {
         ++spans_added;
         continue;
       }
-      std::string cls;
-      if (left_error != right_error) cls = left_error ? "rapidyaml error, granit ok" : "granit error, rapidyaml ok";
-      else if (left_error) cls = first_line(left) != first_line(right) ? "different error status" : "different handler message";
-      else cls = "different document";
+      std::string cls, kind;
+      if (left_error != right_error) {
+        cls = left_error ? "rapidyaml error, granit ok" : "granit error, rapidyaml ok";
+        kind = left_error ? "granit-accepts" : "granit-rejects";
+      } else {
+        cls = left_error ? "different error status" : "different document";
+        kind = left_error ? "status" : "document";
+      }
       ++classes[cls];
-      auto listed = exclusions.find(key);
-      if (listed == exclusions.end()) listed = exclusions.find(input);
-      if (listed != exclusions.end()) {
-        used.insert(listed->first);
+      const std::string& text = texts[input];
+      bool explained = false;
+      for (exclusion& x : exclusions) {
+        if (x.kind == kind && std::regex_search(text, x.regex)) {
+          ++x.matched;
+          explained = true;
+          break;
+        }
+      }
+      if (explained) {
         ++excluded;
         continue;
       }
@@ -186,16 +231,22 @@ int main(int argc, char** argv) {
       problems.push_back(report);
       if (examples[cls]++ < 6) shown.push_back(report);
     }
-    for (const auto& [pattern, reason] : exclusions)
-      if (!used.count(pattern)) problems.push_back("exclusion matches no difference: " + pattern + " (" + reason + ")");
+    for (const exclusion& x : exclusions)
+      if (!x.matched) problems.push_back("exclusion matches no difference: " + x.name);
 
     std::printf("differential_test: %zu decodes compared (%zu inputs x %zu policies); %zu equal (%zu both failing), "
-                "%zu where granit adds lexical spans rapidyaml omits, %zu excluded, %zu unexplained; parser messages or "
-                "error positions differ in %zu equal decodes\n",
+                "%zu where granit adds lexical spans rapidyaml omits, %zu excluded, %zu unexplained; error messages or "
+                "positions differ in %zu equal decodes\n",
                 compared, inputs.size() + std::stoul(generated), compared / (inputs.size() + std::stoul(generated)),
                 equal, errors_both, spans_added, excluded, problems.size(), informational);
     for (const auto& [cls, count] : classes) std::printf("  %s: %zu\n", cls.c_str(), count);
+    for (const exclusion& x : exclusions) std::printf("  excluded by %s (%s): %zu\n", x.name.c_str(), x.kind.c_str(), x.matched);
     for (const auto& report : shown) std::fprintf(stderr, "\n%s\n", report.c_str());
+    // Every unexplained difference, for review (bazel-testlogs/.../test.outputs/differences.txt).
+    if (const char* outputs = std::getenv("TEST_UNDECLARED_OUTPUTS_DIR")) {
+      std::ofstream all(std::string(outputs) + "/differences.txt");
+      for (const auto& report : problems) all << report << "\n\n";
+    }
     for (size_t i = 0; i < problems.size(); ++i)
       if (problems[i].rfind("exclusion", 0) == 0) std::fprintf(stderr, "%s\n", problems[i].c_str());
     if (!problems.empty()) {

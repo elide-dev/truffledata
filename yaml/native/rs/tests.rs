@@ -421,3 +421,13 @@ fn nesting_limits_are_above_the_decoder_depth() {
     let too_deep = "[".repeat(300) + &"]".repeat(300);
     assert_eq!(pull(&too_deep).1.unwrap().status, STATUS_SYNTAX);
 }
+
+#[test]
+fn tag_directive_needs_separation() {
+    // granit-parser 2.1.0 accepts this (YAML 1.2.2 [88] requires blanks); the adapter rejects it.
+    let f = pull("%TAG !e!tag:x,2000:\n--- !e!a b\n").1.unwrap();
+    assert_eq!((f.status, f.line, f.column), (STATUS_SYNTAX, 1, 9));
+    assert!(pull("%TAG !e! tag:x,2000:\n--- !e!a b\n").1.is_none());
+    assert!(pull("%TAG !! tag:x,2000:\n%TAG ! tag:y:\n--- !!a b\n").1.is_none());
+    assert!(pull("# c\n%TAG !e!\ttag:x,2000:\n--- !e!a b\n").1.is_none());
+}

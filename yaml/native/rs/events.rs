@@ -135,7 +135,7 @@ impl<'a> Batcher<'a> {
             parser: Parser::new_from_str_with_options(input, options()),
             directives: tag_directives(input),
             next_directive: 0,
-            pending: None,
+            pending: tag_separation(input),
             done: false,
         }
     }
@@ -368,6 +368,49 @@ fn scalar_style(style: ScalarStyle) -> u8 {
 /// report them, so a scanner pass reads them for the directives side table; it runs only when a
 /// directive line opens the input (after blank and comment lines). Scan errors end the pass; the
 /// parser reports them.
+/// granit-parser 2.1.0 accepts `%TAG !e!tag:x,2000:` (no separation between the handle and the
+/// prefix), which YAML 1.2.2 production [88] forbids and rapidyaml rejects. Until upstream fixes
+/// it, the directive lines that open the input are checked here: `%TAG`, blanks, a handle (`!`,
+/// `!!` or `!word!`), then a blank. Only that defect is checked; granit validates the rest.
+fn tag_separation(input: &str) -> Option<Failure> {
+    let mut offset = 0usize;
+    for (number, line) in input.split('\n').enumerate() {
+        let trimmed = line.trim_start_matches([' ', '\t']);
+        let start = offset;
+        offset += line.len() + 1;
+        if trimmed.is_empty() || trimmed.starts_with('#') {
+            continue;
+        }
+        if !line.starts_with('%') {
+            return None;
+        }
+        let Some(rest) = line.strip_prefix("%TAG") else { continue };
+        let handle = rest.trim_start_matches([' ', '\t']);
+        if handle.len() == rest.len() || !handle.starts_with('!') {
+            continue; // other malformations: granit reports them
+        }
+        let bytes = handle.as_bytes();
+        let mut end = 1;
+        while bytes.get(end).is_some_and(|b| b.is_ascii_alphanumeric() || *b == b'-') {
+            end += 1;
+        }
+        if bytes.get(end) == Some(&b'!') {
+            end += 1;
+        }
+        if bytes.get(end).is_some_and(|b| *b != b' ' && *b != b'\t' && *b != b'\r') {
+            let column = line.len() - handle.len() + end;
+            return Some(Failure {
+                status: STATUS_SYNTAX,
+                line: clamp(number + 1),
+                column: clamp(column + 1),
+                offset: clamp(start + column),
+                message: "expected whitespace between the %TAG handle and prefix".into(),
+            });
+        }
+    }
+    None
+}
+
 fn tag_directives(input: &str) -> Vec<(String, String)> {
     let opens_with_directive = input
         .lines()

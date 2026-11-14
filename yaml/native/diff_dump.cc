@@ -103,7 +103,12 @@ void describe(const yaml_session::document_view& d, std::string& out) {
     }
     if (ct::kind(w) == ct::kind_string) {
       out += " text=";
-      out += ct::text(d.view, i);
+      // One line per node: line breaks in the text are escaped.
+      for (char c : ct::text(d.view, i)) {
+        if (c == '\n') out += "\\n";
+        else if (c == '\\') out += "\\\\";
+        else out += c;
+      }
     }
     if (uint64_t span = lexical_span(d.view, i)) out += " span=" + std::to_string(span >> 32) + ":" + std::to_string(uint32_t(span));
     out += '\n';

@@ -225,8 +225,6 @@ cc_binary(
 cc_test(
     name = "differential_test",
     size = "large",
-    # Manual until design step 7 is accepted: unexplained differences remain to be ruled.
-    tags = ["manual"],
     srcs = ["differential_test.cc"],
     args = [
         "--ryml=$(rootpath :diff_dump)",
