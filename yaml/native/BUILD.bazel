@@ -259,7 +259,10 @@ filegroup(
     name = "session_corpus",
     testonly = True,
     srcs = glob(["corpus/session/*"]),
-    visibility = ["//yaml/cells/tests:__pkg__"],
+    visibility = [
+        "//yaml/cells/tests:__pkg__",
+        "//yaml/native/rs:__pkg__",
+    ],
 )
 
 cc_test(

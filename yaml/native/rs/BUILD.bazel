@@ -7,6 +7,7 @@ package(default_visibility = ["//yaml:__subpackages__"])
 SRCS = [
     "events.rs",
     "ffi.rs",
+    "hostile.rs",
     "lib.rs",
     "tests.rs",
 ]
@@ -34,15 +35,20 @@ rust_static_library(
     deps = DEPS,
 )
 
-# Event mapping, positions, panic containment, and the yaml-test-suite rendered from the C records
-# (402/402 with strict flow and document markers, at three batch sizes).
+# Event mapping, positions, panic containment, the yaml-test-suite rendered from the C records
+# (402/402 with strict flow and document markers, at three batch sizes), and the hostile-input
+# pins: 34 generated shapes scale linearly, deep nesting errors, the session corpus returns cleanly.
 rust_test(
     name = "test",
     size = "small",
     crate = ":lib",
     data = [
+        "//yaml/native:session_corpus",
         "@yaml_test_suite//:cases",
         "@yaml_test_suite//:inputs",
     ],
-    env = {"YAML_TEST_SUITE_INPUTS": "$(rootpaths @yaml_test_suite//:inputs)"},
+    env = {
+        "YAML_SESSION_CORPUS": "$(rootpaths //yaml/native:session_corpus)",
+        "YAML_TEST_SUITE_INPUTS": "$(rootpaths @yaml_test_suite//:inputs)",
+    },
 )

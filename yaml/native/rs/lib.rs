@@ -15,4 +15,6 @@ pub use events::options;
 pub use granit_parser;
 
 #[cfg(test)]
+mod hostile;
+#[cfg(test)]
 mod tests;
