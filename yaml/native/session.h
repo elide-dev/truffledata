@@ -11,7 +11,9 @@
 //
 // With TD_YAML_PARSER_RUST (//yaml/native:truffledata_yaml_rs, opt-in) the parser is granit-parser
 // behind rust_source.h instead of the ParseEngine; everything else here is shared. The Rust
-// parser's heap goes through the Rust global allocator and is not charged to maxIndexBytes.
+// parser's heap goes through the Rust global allocator and is not charged to maxIndexBytes (ruling
+// 2026-11-14); it is bounded indirectly by the input size limit, granit's 255 nesting cap,
+// maxDepth and maxAliases, and //yaml/native/rs:test pins that it grows linearly with the input.
 #include "tape/native/arena.h"
 #include "tape/native/index_memory.h"
 #include "tape/native/text_arena.h"

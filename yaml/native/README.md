@@ -159,6 +159,92 @@ llvm-symbolizer --obj=bazel-out/rbe_linux_amd64-opt/bin/yaml/native/bench_profil
 
 `benchmarks/results/yaml-decoder-*/` keep the folded stacks and summaries.
 
+## Pure-Rust parser backend (opt-in, evaluation)
+
+A second parser behind the same seam, ABI, handler and tape: granit-parser 2.1.0
+(`#![forbid(unsafe_code)]`, MIT OR Apache-2.0) in `yaml/native/rs`, driven by `rust_source.h`
+when `TD_YAML_PARSER_RUST` is defined. Only the parser changes; schemas, keys, duplicates,
+merges, aliases, tags, limits, the tape, streams and typed plans are the same C++ code. It is a
+memory-safety option, not a performance one: rapidyaml stays the default, nothing published links
+the Rust backend, and the default library is byte-identical with or without it.
+
+| Piece | Role |
+| --- | --- |
+| `rs/events.rs` | granit events as flat `td_yaml_rs_event` records, pulled in batches of 256 (safe code) |
+| `rs/ffi.rs` | `td_yaml_rs_*` C ABI; the crate's only `unsafe`; every entry under `catch_unwind` |
+| `rust_source.h` | The driver: records to `yaml::handler` entry points; owned text copied to the handler arena |
+| `:decoder_rs`, `:truffledata_yaml_rs`, `:yaml_rs_shared.so` | The Rust-backed decoder, C ABI library and shared object |
+
+Pull, not push: no C++ exception unwinds through Rust and a Rust panic returns an internal error.
+granit runs with spec indentation, anchor events and unresolved aliases delivered (the handler
+reports "undefined YAML alias" itself). Its nesting caps stay at 255, above `maxDepth` (<= 128), so
+depth failures keep the LIMIT status.
+
+Rulings (2026-11-14):
+
+- **Heap.** granit allocates on the Rust global allocator in every decode (it has no reusable parser
+  state). That memory is not charged to `maxIndexBytes`; it is bounded indirectly by the input size
+  limit, granit's 255 nesting cap, `maxDepth` and `maxAliases`. `api_test`'s no-allocation pin is
+  unchanged and covers the decoder side; `//yaml/native/rs:test` pins that granit's allocations per
+  parse grow linearly on 34 stress shapes.
+- **Errors.** Statuses must match rapidyaml; parser messages and positions are not contractual.
+  Decoder-originated messages (duplicates, aliases, tags, limits) are identical. Errors caused by
+  the input ending are placed at the end of the input, so `yaml::stream` can report truncation.
+- **Differences.** Where granit is spec-correct it is the reference; each reviewed class is in
+  `differential_exclusions.txt` with a YAML 1.2.2 production and an example.
+
+Answers to the design's open questions:
+
+- `%TAG`: granit applies directives but does not report them; a scanner pass over a leading `%` block
+  fills the directives table. Tags arrive resolved (handle + suffix), matching the suite.
+- Spans: quoted spans include the quotes; block-scalar tokens start at the first non-blank content
+  line (or at the indicator for blank-only keep scalars), so `block_span` finds the header; multi-line
+  plain spans run from the first to the last content byte. With a retained source the Rust backend
+  also spans quoted implicit keys, which rapidyaml leaves without a span.
+- Strict-duplicate relocation re-runs the driver; positions match (#40).
+- Not built: musl, linux-aarch64, cross-language ThinLTO in the release transition, macOS outside the
+  crate's own `cargo test`.
+- Not measured: no throughput, allocation or SVM number exists for this backend (design steps 11-12).
+
+Known differences from rapidyaml (all in `differential_exclusions.txt`): granit rejects plain
+scalars starting with `]`/`}`, empty anchor names, verbatim tags with blanks, `{}` in `%TAG`
+prefixes, content after directives without `---`, `---` not followed by a blank, `| -` headers and
+multi-line implicit keys, all of which YAML 1.2 forbids; it accepts flow collections as implicit
+keys of nested block mappings; properties alone on a `- ` line apply to the following mapping; a
+flow key with an empty value is followed by sibling keys. `[<<: x]` is a merge key on the Rust path
+only (the rapidyaml path's retroactive single-pair mapping skips merge handling). Whether a failing
+final stream document is TRUNCATED or SYNTAX follows each parser's error position and differs in
+both directions; that class awaits a ruling.
+
+granit-parser 2.1.0 defects found (both worked around in `events.rs`, to report upstream):
+
+- It accepts `%TAG !e!tag:x,2000:` with no blank between handle and prefix (YAML 1.2.2 [88]).
+- It appends a line break to a clip or keep block scalar whose last content line ends the input
+  without one (`- |\n  a` reads as `"a\n"`; [165] gives `"a"`).
+
+The adapter also gives granit's unsupported-`%YAML`-major and surrogate-escape errors the
+decoder's messages, without the parser flag, as the rapidyaml backend reports them.
+
+Open (2026-11-14): `differential_test` and `//yaml/tests:jvm_rs` are tagged manual. After the last
+two adapter fixes the differential has 8 unexplained decodes (one generated input, `gen/4662`, a
+different document under every policy), and the Java kernel differential has 4 suite divergences
+(2G84/02-03: the Rust backend spans an empty `|1-`/`|1+` scalar that rapidyaml and the Java
+kernel do not) and 21 policy divergences, among them `[a]: b` under JSON (decoder message
+order: complex key before the JSON schema error), and a too-deep unclosed flow document (LIMIT
+on rapidyaml, TRUNCATED on granit, which reports the end of input before delivering the
+over-deep start). These need classification or a ruling before steps 7 and 10 count as accepted.
+
+```sh
+bazel test //yaml/native/rs:test //yaml/conformance:yaml_test_suite_rs //yaml/native:differential_test \
+  //yaml/native:rust_source_test //yaml/native:semantics_test_rs //yaml/native:typed_test_rs \
+  //yaml/native:stream_test_rs //yaml/native:api_test_rs //yaml/native:session_rs_replay \
+  //yaml/tests:jvm_rs
+bazel test --config=asan-rust //yaml/native/rs:test //yaml/native:session_rs_replay
+bazel test --config=fuzz --@rules_rust//rust/settings:extra_rustc_flags=-Zsanitizer=address,-Zexternal-clangrt \
+  --nocache_test_results --test_env=TD_FUZZ_SECONDS=900 --test_timeout=1200 //yaml/native:session_rs_fuzz
+cargo test --manifest-path yaml/native/rs/Cargo.toml   # YAML_TEST_SUITE_INPUTS=<in.yaml paths> for the suite
+```
+
 ## Verification
 
 ```sh

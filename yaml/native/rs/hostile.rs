@@ -2,7 +2,7 @@
 //! syntax error at granit's limit, and the C++ session fuzzer's corpus returns cleanly.
 #![allow(clippy::unwrap_used, clippy::indexing_slicing)]
 
-use crate::events::{Batcher, Failure, RsEvent, STATUS_INTERNAL, STATUS_SYNTAX};
+use crate::events::{Batcher, Failure, RsEvent, STATUS_DECODER_SYNTAX, STATUS_INTERNAL, STATUS_SYNTAX};
 use std::fmt::Write as _;
 use std::time::{Duration, Instant};
 
@@ -206,7 +206,7 @@ fn session_corpus_returns_cleanly() {
             Err(_) => Ok(()),  // the session rejects invalid UTF-8 before parsing
         };
         if let Err(f) = &outcome {
-            assert_eq!(f.status, STATUS_SYNTAX, "{}: {f:?}", path.display());
+            assert!(f.status == STATUS_SYNTAX || f.status == STATUS_DECODER_SYNTAX, "{}: {f:?}", path.display());
         }
         seen.push(path.file_name().unwrap().to_string_lossy().into_owned());
     }

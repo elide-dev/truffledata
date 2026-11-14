@@ -44,6 +44,10 @@ pub const FLAG_ANCHOR_IN_SCRATCH: u8 = 1 << 5;
 pub const STATUS_SYNTAX: i32 = -1;
 pub const STATUS_INTERNAL: i32 = -2;
 pub const STATUS_ARGUMENT: i32 = -3;
+/// A syntax error the rapidyaml backend raises in the decoder rather than in its parser (so it
+/// carries the decoder's message and is never a stream truncation): unsupported %YAML major
+/// versions and invalid or unpaired surrogate escapes, which granit rejects while scanning.
+pub const STATUS_DECODER_SYNTAX: i32 = -4;
 
 /// The C record (`td_yaml_rs_event` in `yaml/native/rust_source.h`). Offsets are bytes; `line`
 /// is 1-based and `column` is a 1-based code-point column of the node's first character (after
@@ -234,6 +238,12 @@ impl<'a> Batcher<'a> {
                     r.flags |= FLAG_EMPTY | FLAG_TEXT_IN_INPUT;
                     r.text_offset = r.raw_offset;
                     r.text_length = 0;
+                } else if self.fabricated_final_break(style, &span, &text) {
+                    // granit-parser 2.1.0 appends a line break to a clip or keep block scalar whose
+                    // last content line ends the input without one; YAML 1.2.2 [165]
+                    // (b-chomped-last: b-as-line-feed | end-of-input) keeps none.
+                    let trimmed = text.get(..text.len() - 1).unwrap_or("");
+                    (r.text_offset, r.text_length) = push(scratch, trimmed.as_bytes())?;
                 } else {
                     self.text(&mut r, &text, scratch)?;
                 }
@@ -266,6 +276,19 @@ impl<'a> Batcher<'a> {
     fn scan_failure(&self, error: &ScanError) -> Failure {
         use granit_parser::ErrorKind as K;
         let mut failure = Failure::scan(error);
+        let decoder_message = match error.kind() {
+            K::UnsupportedYamlMajorVersion => Some("unsupported YAML version (only 1.x)"),
+            K::InvalidLowSurrogate | K::MissingLowSurrogate | K::UnpairedLowSurrogate => {
+                Some("unpaired surrogate in a YAML quoted scalar")
+            }
+            K::InvalidUnicodeEscape => Some("invalid Unicode escape in a YAML quoted scalar"),
+            _ => None,
+        };
+        if let Some(message) = decoder_message {
+            failure.status = STATUS_DECODER_SYNTAX;
+            failure.message = message.to_owned();
+            return failure;
+        }
         if matches!(
             error.kind(),
             K::UnexpectedEof
@@ -283,6 +306,18 @@ impl<'a> Batcher<'a> {
             failure.offset = clamp(self.input.len());
         }
         failure
+    }
+
+    fn fabricated_final_break(&self, style: ScalarStyle, span: &Span, text: &str) -> bool {
+        if !matches!(style, ScalarStyle::Literal | ScalarStyle::Folded) || !text.ends_with('\n') {
+            return false;
+        }
+        if span.end.byte_offset() != Some(self.input.len()) || self.input.ends_with(['\n', '\r']) {
+            return false;
+        }
+        // The input's last line is content of this scalar (not a blank line).
+        let last = self.input.rsplit('\n').next().unwrap_or("");
+        !last.trim_matches([' ', '\t']).is_empty()
     }
 
     // Position and raw span of an event.

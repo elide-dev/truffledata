@@ -116,6 +116,9 @@ class rust_source {
   [[noreturn]] static void raise(const td_yaml_rs_error& f) {
     std::string_view message(f.message, f.message_length < sizeof f.message ? f.message_length : 0);
     if (f.status == -1) throw syntax_error(message).at(f.line, f.column).from_parser();
+    // A syntax error rapidyaml's backend raises in the decoder (unsupported %YAML version,
+    // unpaired surrogates): the decoder's message, and never a stream truncation.
+    if (f.status == -4) throw syntax_error(message).at(f.line, f.column);
     throw error(status_internal, message.empty() ? std::string_view("YAML parser failure") : message);
   }
 

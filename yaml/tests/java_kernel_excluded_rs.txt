@@ -1,0 +1,68 @@
+# yaml-test-suite cases where the Java kernel (SnakeYAML Engine 3.2 events) and the native decoder
+# (rapidyaml) disagree; JavaKernelDifferentialTest fails on any other divergence and on an entry
+# here that stops diverging. `CASE` covers every option mode, `CASE@mode` one mode.
+#
+# 1. Engine grammar: the parser itself rejects valid YAML or accepts invalid YAML. These are the
+#    known SnakeYAML Engine failures pinned in snakeyaml_engine_excluded.txt (Engine's message after
+#    the TAB); the kernel's policies never run differently on them.
+2JQS	Engine rejects valid YAML: while parsing a block mapping in reader, line 1, column 1: : a ^ expected <block end>, but found ':' in reader, line 1, column 1: : a ^
+4MUZ/00	Engine rejects valid YAML: while parsing a flow mapping in reader, line 1, column 1: {"foo" ^ expected ',' or '}', but got : in reader, line 2, column 1: : "bar"} ^
+4MUZ/01	Engine rejects valid YAML: while parsing a flow mapping in reader, line 1, column 1: {"foo" ^ expected ',' or '}', but got : in reader, line 2, column 1: : bar} ^
+4MUZ/02	Engine rejects valid YAML: while parsing a flow mapping in reader, line 1, column 1: {foo ^ expected ',' or '}', but got : in reader, line 2, column 1: : bar} ^
+58MP	Engine rejects valid YAML: while parsing a flow node in reader, line 1, column 5: {x: :x} ^ expected the node content, but found ':' in reader, line 1, column 5: {x: :x} ^
+5MUD	Engine rejects valid YAML: while parsing a flow mapping in reader, line 2, column 1: { "foo" ^ expected ',' or '}', but got : in reader, line 3, column 3: :bar } ^
+5T43	Engine rejects valid YAML: while parsing a flow node in reader, line 2, column 11: - { "key"::value } ^ expected the node content, but found ':' in reader, line 2, column 11: - { "key"::value }
+6CA3	Engine rejects valid YAML: while scanning for the next token found character '\t(TAB)' that cannot start any token. (Do not use \t(TAB) for indentation) in reader, line 1, column 1: [ ^
+6M2F	Engine rejects valid YAML: while parsing a block mapping in reader, line 1, column 1: ? &a a ^ expected <block end>, but found ':' in reader, line 3, column 1: : *a ^
+7Z25	Engine rejects valid YAML: expected '<document start>', but found '<block mapping start>' in reader, line 4, column 1: key: value ^
+9C9N	Engine accepts invalid YAML (the suite expects an error)
+9JBA	Engine accepts invalid YAML (the suite expects an error)
+9SA2	Engine rejects valid YAML: while parsing a flow mapping in reader, line 3, column 3: - { "multi ^ expected ',' or '}', but got : in reader, line 4, column 8: line": value} ^
+CFD4	Engine rejects valid YAML: while parsing a flow node in reader, line 1, column 5: - [ : empty key ] ^ expected the node content, but found ':' in reader, line 1, column 5: - [ : empty key ] ^
+CVW2	Engine accepts invalid YAML (the suite expects an error)
+DBG4	Engine rejects valid YAML: while parsing a flow node in reader, line 8, column 5: - [ ::vector, ^ expected the node content, but found ':' in reader, line 8, column 5: - [ ::vector, ^
+DK3J	Engine rejects valid YAML: expected '<document start>', but found '<scalar>' in reader, line 2, column 1: line1 ^
+DK95/01	Engine accepts invalid YAML (the suite expects an error)
+FP8R	Engine rejects valid YAML: expected '<document start>', but found '<scalar>' in reader, line 2, column 1: line1 ^
+FRK4	Engine rejects valid YAML: while parsing a flow node in reader, line 3, column 3: : bar, ^ expected the node content, but found ':' in reader, line 3, column 3: : bar, ^
+HM87/00	Engine rejects valid YAML: while parsing a flow node in reader, line 1, column 2: [:x] ^ expected the node content, but found ':' in reader, line 1, column 2: [:x] ^
+HS5T	Engine rejects valid YAML: while scanning for the next token found character '\t(TAB)' that cannot start any token. (Do not use \t(TAB) for indentation) in reader, line 4, column 1: 3rd non-empty ^
+HWV9	Engine rejects valid YAML: while parsing a block node in reader, line 1, column 1: ... ^ expected the node content, but found '<document end>' in reader, line 1, column 1: ... ^
+JEF9/02	Engine produces different events
+K3WX	Engine rejects valid YAML: while parsing a flow mapping in reader, line 2, column 1: { "foo" # comment ^ expected ',' or '}', but got : in reader, line 3, column 3: :bar } ^
+M7A3	Engine rejects valid YAML: expected '<document start>', but found '<scalar>' in reader, line 6, column 1: | ^
+NB6Z	Engine rejects valid YAML: while parsing a block mapping in reader, line 1, column 1: key: ^ expected <block end>, but found '<scalar>' in reader, line 5, column 3: tabs ^
+NHX8	Engine rejects valid YAML: while parsing a block mapping in reader, line 1, column 1: : ^ expected <block end>, but found ':' in reader, line 1, column 1: : ^
+NJ66	Engine rejects valid YAML: while parsing a flow mapping in reader, line 3, column 3: - { multi ^ expected ',' or '}', but got : in reader, line 4, column 7: line: value} ^
+NKF9	Engine rejects valid YAML: while parsing a block mapping in reader, line 2, column 1: key: value ^ expected <block end>, but found ':' in reader, line 3, column 1: : empty key ^
+Q5MG	Engine rejects valid YAML: while scanning for the next token found character '\t(TAB)' that cannot start any token. (Do not use \t(TAB) for indentation) in reader, line 1, column 1: {} ^
+QB6E	Engine accepts invalid YAML (the suite expects an error)
+QT73	Engine rejects valid YAML: while parsing a block node in reader, line 2, column 1: ... ^ expected the node content, but found '<document end>' in reader, line 2, column 1: ... ^
+S3PD	Engine rejects valid YAML: while parsing a block mapping in reader, line 1, column 1: plain key: in-line value ^ expected <block end>, but found ':' in reader, line 2, column 1: : # Both empty ^
+SM9W/01	Engine rejects valid YAML: while parsing a block mapping in reader, line 1, column 1: : ^ expected <block end>, but found ':' in reader, line 1, column 1: : ^
+SU5Z	Engine accepts invalid YAML (the suite expects an error)
+UKK6/00	Engine rejects valid YAML: while parsing a block mapping in reader, line 1, column 3: - : ^ expected <block end>, but found ':' in reader, line 1, column 3: - : ^
+UT92	Engine rejects valid YAML: while parsing a flow mapping in reader, line 2, column 1: { matches ^ expected ',' or '}', but got : in reader, line 3, column 3: % : 20 } ^
+UV7Q	Engine rejects valid YAML: while parsing a block collection in reader, line 2, column 2: - x ^ expected <block end>, but found '<scalar>' in reader, line 3, column 4: x ^
+VJP3/01	Engine rejects valid YAML: while parsing a flow mapping in reader, line 1, column 4: k: { ^ expected ',' or '}', but got : in reader, line 3, column 2: : ^
+W4TN	Engine rejects valid YAML: while scanning a directive in reader, line 3, column 1: %!PS-Adobe-2.0 ^ expected alphabetic or numeric character, but found !(33) in reader, line 3, column 2: %!PS-Adobe-2.0 ^
+W5VH	Engine rejects valid YAML: while scanning an anchor in reader, line 1, column 4: a: &:@*!$"<foo>: scalar a ^ unexpected character found *(42) in reader, line 1, column 7: a: &:@*!$"<foo>: scalar a ^
+WZ62	Engine rejects valid YAML: while scanning a tag in reader, line 2, column 9: foo : !!str, ^ expected ' ', but found ',' (44) in reader, line 2, column 14: foo : !!str, ^
+Y79Y/003	Engine accepts invalid YAML (the suite expects an error)
+#
+# 2. Native raw spans of quoted implicit block keys. With retainSource the native decoder takes a
+#    quoted scalar's span from rapidyaml's scanner position, which for some implicit block keys is
+#    already past the `:` (so the span check fails and rawText() has none). The Java kernel reports
+#    every quoted scalar's span from its token; values and other metadata agree.
+26DV@retain	native omits the raw span of a quoted implicit block key; the Java kernel keeps it
+26DV@yaml11	native omits the raw span of a quoted implicit block key; the Java kernel keeps it
+6H3V@retain	native omits the raw span of a quoted implicit block key; the Java kernel keeps it
+6H3V@yaml11	native omits the raw span of a quoted implicit block key; the Java kernel keeps it
+6SLA@retain	native omits the raw span of a quoted implicit block key; the Java kernel keeps it
+6SLA@yaml11	native omits the raw span of a quoted implicit block key; the Java kernel keeps it
+87E4@retain	native omits the raw span of a quoted implicit block key; the Java kernel keeps it
+87E4@yaml11	native omits the raw span of a quoted implicit block key; the Java kernel keeps it
+HMQ5@retain	native omits the raw span of a quoted implicit block key; the Java kernel keeps it
+HMQ5@yaml11	native omits the raw span of a quoted implicit block key; the Java kernel keeps it
+LQZ7@retain	native omits the raw span of a quoted implicit block key; the Java kernel keeps it
+LQZ7@yaml11	native omits the raw span of a quoted implicit block key; the Java kernel keeps it

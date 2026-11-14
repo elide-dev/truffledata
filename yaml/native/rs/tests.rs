@@ -424,6 +424,28 @@ fn nesting_limits_are_above_the_decoder_depth() {
 }
 
 #[test]
+fn block_scalar_at_end_of_input_without_break() {
+    // granit-parser 2.1.0 appends "\n" here; YAML 1.2.2 [165] keeps no break at end of input.
+    for (input, expected) in [("- |\n  a", "a"), ("- |+\n  a", "a"), ("- >\n  a", "a"), ("- |\n  a\n", "a\n"), ("- |-\n  a", "a")] {
+        let r = ok(input);
+        let s = r.iter().find(|r| r.e.kind == KIND_SCALAR).unwrap();
+        assert_eq!(s.text, expected, "{input:?}");
+    }
+}
+
+#[test]
+fn decoder_equivalent_errors() {
+    for (input, message) in [
+        ("%YAML 2.0\n--- x\n", "unsupported YAML version (only 1.x)"),
+        ("\"\\ud800\"\n", "unpaired surrogate in a YAML quoted scalar"),
+        ("\"\\udc00\"\n", "unpaired surrogate in a YAML quoted scalar"),
+    ] {
+        let f = pull(input).1.unwrap();
+        assert_eq!((f.status, f.message.as_str()), (STATUS_DECODER_SYNTAX, message), "{input:?}");
+    }
+}
+
+#[test]
 fn tag_directive_needs_separation() {
     // granit-parser 2.1.0 accepts this (YAML 1.2.2 [88] requires blanks); the adapter rejects it.
     let f = pull("%TAG !e!tag:x,2000:\n--- !e!a b\n").1.unwrap();

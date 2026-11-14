@@ -239,7 +239,9 @@ final class JavaKernelDifferentialTest {
 
   static Map<String, String> excluded() throws Exception {
     Map<String, String> excluded = new TreeMap<>();
-    for (String line : Files.readAllLines(SnakeYamlDifferentialTest.workspace("yaml/tests/java_kernel_excluded.txt")))
+    // yaml.kernel.excluded: the Rust parser backend's own list (//yaml/tests:jvm_rs).
+    String list = System.getProperty("yaml.kernel.excluded", "yaml/tests/java_kernel_excluded.txt");
+    for (String line : Files.readAllLines(SnakeYamlDifferentialTest.workspace(list)))
       if (!line.isBlank() && !line.startsWith("#")) {
         String[] parts = line.split("\t", 2);
         excluded.put(parts[0], parts.length > 1 ? parts[1] : "");
