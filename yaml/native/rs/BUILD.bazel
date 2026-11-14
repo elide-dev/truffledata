@@ -1,0 +1,23 @@
+load("@rules_rust//rust:defs.bzl", "rust_library", "rust_test")
+
+# The opt-in pure-Rust YAML parser backend (granit-parser 2.1.0). Not part of the default YAML
+# library or any release archive: //yaml/native:truffledata_yaml stays on rapidyaml.
+SRCS = ["lib.rs"]
+
+DEPS = ["@crates//:granit-parser"]
+
+rust_library(
+    name = "lib",
+    srcs = SRCS,
+    crate_name = "truffledata_yaml_parser",
+    crate_root = "lib.rs",
+    edition = "2024",
+    rustc_flags = ["-Copt-level=3"],
+    deps = DEPS,
+)
+
+rust_test(
+    name = "test",
+    size = "small",
+    crate = ":lib",
+)
