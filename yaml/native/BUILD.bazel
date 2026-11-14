@@ -1,6 +1,7 @@
 load("//tools/fuzz:defs.bzl", "native_fuzzer")
 load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_library", "cc_test")
 load("//bazel:myna.bzl", "myna_bindings", "myna_other_class_stub")
+load("@rules_shell//shell:sh_test.bzl", "sh_test")
 
 # Test-only yaml-test-suite event renderer over rapidyaml's ParseEngine. Header-only and
 # configuration-neutral: link it with exactly one of @rapidyaml//:ryml or @rapidyaml//:ryml_assert.
@@ -653,6 +654,53 @@ native_fuzzer(
     name = "session",
     src = "session_fuzz.cc",
     deps = [":decoder"],
+)
+
+# Design step 9: the session harness (session_fuzz.cc, same oracle) on the Rust backend. The
+# replay runs the shared session corpus in ordinary testing; the campaign needs --config=fuzz
+# (C++ instrumented) plus -Zsanitizer=address for the Rust code (docs/FUZZING.md).
+cc_binary(
+    name = "session_rs_replay_bin",
+    testonly = True,
+    srcs = ["session_fuzz.cc"],
+    copts = ["-std=c++17"],
+    deps = [
+        ":decoder_rs",
+        "//tools/fuzz:replay",
+    ],
+)
+
+sh_test(
+    name = "session_rs_replay",
+    srcs = ["//tools/fuzz:run.sh"],
+    args = ["$(rootpath :session_rs_replay_bin)"] + ["$(rootpath " + s + ")" for s in glob(["corpus/session/*"])],
+    data = [":session_rs_replay_bin"] + glob(["corpus/session/*"]),
+)
+
+cc_binary(
+    name = "session_rs_fuzzer",
+    testonly = True,
+    srcs = ["session_fuzz.cc"],
+    copts = ["-std=c++17"],
+    linkopts = ["-fsanitize=fuzzer"],
+    tags = ["manual"],
+    target_compatible_with = select({
+        "//tools/fuzz:enabled": [],
+        "//conditions:default": ["@platforms//:incompatible"],
+    }),
+    deps = [":decoder_rs"],
+)
+
+sh_test(
+    name = "session_rs_fuzz",
+    size = "medium",
+    srcs = ["//tools/fuzz:campaign.sh"],
+    args = ["$(rootpath :session_rs_fuzzer)"] + ["$(rootpath " + s + ")" for s in glob(["corpus/session/*"])],
+    data = [":session_rs_fuzzer"] + glob(["corpus/session/*"]),
+    tags = [
+        "fuzz",
+        "manual",
+    ],
 )
 
 # Test-only: a library reporting the fingerprint of the ABI class this host is not, which YAML's

@@ -10,6 +10,7 @@ Production build settings and performance contracts are unchanged.
 | --- | --- | --- |
 | JSON native sessions | Arbitrary UTF-8/UTF-16/Latin-1 bytes; validation/directory modes; full/partial/repeated decode, retained ownership, reset and recovery; compact-tape structural validation | libFuzzer + ASan/UBSan |
 | YAML native sessions | Arbitrary encoded input; schema, duplicate, merge and alias policies; full/partial/repeated decode, retention, reset and recovery; compact-tape structural validation | libFuzzer + ASan/UBSan |
+| YAML native sessions, Rust parser backend (opt-in, granit-parser) | The same harness and oracle over `//yaml/native:decoder_rs` (`session_rs_replay`, `session_rs_fuzz`) | libFuzzer + ASan/UBSan on C++, `-Zsanitizer=address` on Rust |
 | CSV native indexing | Arbitrary bytes and format, carry derived from preceding chunks, chunk boundaries; each host-supported kernel against scalar entries and carry | libFuzzer + ASan/UBSan |
 | External serialized slabs | Arbitrary bytes and mutations of valid slabs for nine schemas, including a recursive message; reference, bitmap, identity and public-copy agreement including logical usage | Jazzer on JVM |
 | Bebop codec | Arbitrary bytes for ten root types under the general and a strict profile; decoder, allocation-free validator and strict reference agree on acceptance and reason; accepted bytes re-encode and read in place as they decode | Jazzer on JVM |
