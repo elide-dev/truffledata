@@ -70,6 +70,9 @@ pub struct RsEvent {
     pub version: u32,
 }
 
+// rust_source.h static_asserts the same size.
+const _: () = assert!(std::mem::size_of::<RsEvent>() == 48);
+
 /// A parse failure: status, 1-based line and code-point column, input byte offset, message.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Failure {

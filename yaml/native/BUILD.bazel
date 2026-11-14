@@ -131,6 +131,71 @@ cc_library(
     deps = [":decoder"],
 )
 
+# ---- The opt-in pure-Rust parser backend (granit-parser, yaml/native/rs) -----------------------
+# The same decoder core with rust_source.h in place of rapidyaml's ParseEngine. TD_YAML_PARSER_RUST
+# reaches every translation unit that includes session.h through `defines`. Evaluation only: no
+# release archive, artifact or Java route links these targets; :truffledata_yaml stays on rapidyaml.
+cc_library(
+    name = "decoder_rs",
+    hdrs = ["rust_source.h"],
+    copts = ["-std=c++17"],
+    defines = ["TD_YAML_PARSER_RUST"],
+    visibility = ["//yaml:__subpackages__"],
+    deps = [
+        ":decoder",
+        "//yaml/native/rs:truffledata_yaml_parser",
+    ],
+)
+
+cc_library(
+    name = "truffledata_yaml_rs",
+    srcs = ["api.cc"],
+    hdrs = [
+        "api.h",
+        "generated/seam.h",
+    ],
+    copts = [
+        "-std=c++17",
+        "-O3",
+    ],
+    linkopts = select({
+        "@platforms//os:macos": ["-lc++"],
+        "//conditions:default": [
+            "-lc++",
+            "-lc++abi",
+        ],
+    }),
+    visibility = ["//yaml:__subpackages__"],
+    deps = [":decoder_rs"],
+)
+
+cc_binary(
+    name = "yaml_rs_shared.so",
+    srcs = ["api.cc"],
+    copts = [
+        "-std=c++17",
+        "-O3",
+    ],
+    linkopts = select({
+        "@platforms//os:macos": ["-Wl,-install_name,@rpath/libtruffledata_yaml_rs.dylib", "-Wl,-dead_strip_dylibs"],
+        "//conditions:default": [],
+    }),
+    linkshared = True,
+    linkstatic = True,
+    visibility = ["//yaml:__subpackages__"],
+    deps = [":truffledata_yaml_rs"],
+)
+
+cc_test(
+    name = "rust_source_test",
+    srcs = ["rust_source_test.cc"],
+    copts = ["-std=c++17"],
+    deps = [
+        ":decoder_rs",
+        ":testing",
+    ],
+)
+
 # The C ABI headers for consumers of the release archive (the isolated archive test).
 filegroup(
     name = "header",

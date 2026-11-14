@@ -8,6 +8,10 @@
 // rapidyaml's own allocations (its parser stack, tag cache) go through c4::yml::Callbacks into the
 // session's counted index_memory, so they are charged to maxIndexBytes and fail like every other
 // allocation; its error callbacks throw yaml::error with the line and column.
+//
+// With TD_YAML_PARSER_RUST (//yaml/native:truffledata_yaml_rs, opt-in) the parser is granit-parser
+// behind rust_source.h instead of the ParseEngine; everything else here is shared. The Rust
+// parser's heap goes through the Rust global allocator and is not charged to maxIndexBytes.
 #include "tape/native/arena.h"
 #include "tape/native/index_memory.h"
 #include "tape/native/text_arena.h"
@@ -16,7 +20,11 @@
 #include "yaml/native/input.h"
 
 #include <c4/yml/common.hpp>
+#ifdef TD_YAML_PARSER_RUST
+#include "yaml/native/rust_source.h"
+#else
 #include <c4/yml/parse_engine.def.hpp>
+#endif
 
 #include <cstddef>
 #include <cstdint>
@@ -123,8 +131,11 @@ class session final {
         options_(options),
         memory_(options.storage.index_bytes, upstream),
         arena_(&memory_),
-        handler_(callbacks(&memory_)),
-        engine_(&handler_, parser_options()) {
+        handler_(callbacks(&memory_))
+#ifndef TD_YAML_PARSER_RUST
+        , engine_(&handler_, parser_options())
+#endif
+  {
     if (options.values.depth > 128) throw std::invalid_argument("YAML depth limit above 128");
   }
   session(const session&) = delete;
@@ -202,7 +213,11 @@ class session final {
       handler_.start(&arena_, input_, text, newlines, pristine, rules, options_.values, hint.nodes, hint.bytes,
                      (flags & want_directories) != 0);
       try {
+#ifdef TD_YAML_PARSER_RUST
+        parser_.parse(handler_, input_, text);
+#else
         engine_.parse_in_place_ev("yaml", c4::substr(input_, text));
+#endif
       } catch (error& failure) {
         if (!failure.line) failure.at(handler_.line(), handler_.column());
         throw;
@@ -365,7 +380,11 @@ class session final {
   tape::block_arena arena_;
   tape::arena_vec<uint64_t> text_table_;
   handler handler_;
+#ifdef TD_YAML_PARSER_RUST
+  rust_source parser_;
+#else
   c4::yml::ParseEngine<handler> engine_;
+#endif
   char* input_ = nullptr;
   size_t input_capacity_ = 0;
   size_t input_length_ = 0;
