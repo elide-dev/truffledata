@@ -186,6 +186,53 @@ cc_binary(
     deps = [":truffledata_yaml_rs"],
 )
 
+# Design step 8: the semantics, stream, typed and API suites on the Rust backend. Assertions that
+# pin rapidyaml's own parser behaviour are split with TD_YAML_PARSER_RUST in the sources.
+cc_test(
+    name = "semantics_test_rs",
+    srcs = ["semantics_test.cc"],
+    copts = ["-std=c++17"],
+    deps = [
+        ":decoder_rs",
+        ":testing",
+    ],
+)
+
+cc_test(
+    name = "typed_test_rs",
+    srcs = ["typed_test.cc"],
+    copts = ["-std=c++17"],
+    deps = [
+        ":decoder_rs",
+        ":testing",
+    ],
+)
+
+cc_test(
+    name = "stream_test_rs",
+    size = "medium",
+    srcs = ["stream_test.cc"],
+    args = ["$(rootpaths :testdata)"],
+    copts = ["-std=c++17"],
+    data = [":testdata"],
+    deps = [
+        ":testing",
+        ":truffledata_yaml_rs",
+    ],
+)
+
+cc_test(
+    name = "api_test_rs",
+    size = "medium",
+    srcs = ["api_test.cc"],
+    copts = ["-std=c++17"],
+    deps = [
+        ":testing",
+        ":truffledata_yaml_rs",
+        "@myna//:values_headers",
+    ],
+)
+
 cc_test(
     name = "rust_source_test",
     srcs = ["rust_source_test.cc"],

@@ -189,7 +189,7 @@ impl<'a> Batcher<'a> {
                 self.done = true;
                 return Ok(None);
             }
-            Some(Err(error)) => return Err(Failure::scan(&error)),
+            Some(Err(error)) => return Err(self.scan_failure(&error)),
             Some(Ok(next)) => next,
         };
         let mut r = self.record(&span)?;
@@ -256,6 +256,33 @@ impl<'a> Batcher<'a> {
             _ => return Err(Failure::internal("unexpected YAML parser event")),
         }
         Ok(Some(r))
+    }
+
+    // A scan error. Errors caused by the input ending inside a construct (an open flow collection
+    // or quoted scalar, a dangling key) are placed at the end of the input, as rapidyaml places
+    // them: yaml::stream reports a final document that fails there as truncated
+    // (TD_YAML_STREAM_TRUNCATED), so the position decides the status. granit reports some of them
+    // at the construct's start (an unclosed bracket at the bracket).
+    fn scan_failure(&self, error: &ScanError) -> Failure {
+        use granit_parser::ErrorKind as K;
+        let mut failure = Failure::scan(error);
+        if matches!(
+            error.kind(),
+            K::UnexpectedEof
+                | K::UnexpectedEofFlowSequence
+                | K::UnexpectedEofFlowMapping
+                | K::UnexpectedEofImplicitFlowMapping
+                | K::UnexpectedEofBlockSequence
+                | K::UnexpectedEofBlockMapping
+                | K::UnclosedFlowCollection { .. }
+                | K::UnclosedQuotedScalar
+        ) {
+            let last_line = self.input.rsplit('\n').next().unwrap_or("");
+            failure.line = clamp(self.input.matches('\n').count() + 1);
+            failure.column = clamp(last_line.chars().count() + 1);
+            failure.offset = clamp(self.input.len());
+        }
+        failure
     }
 
     // Position and raw span of an event.
@@ -325,7 +352,7 @@ impl<'a> Batcher<'a> {
                     }
                     r.anchor_length = clamp(name.len());
                 }
-                Some(Err(error)) => return Err(Failure::scan(&error)),
+                Some(Err(error)) => return Err(self.scan_failure(&error)),
                 _ => return Err(Failure::internal("YAML anchor event missing after its node")),
             }
         }

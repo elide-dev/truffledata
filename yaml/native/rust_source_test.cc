@@ -77,7 +77,7 @@ void spans() {
 void errors() {
   yaml_session s(with());
   error e = failure(s, "a: 1\nb: [1, 2\n");
-  require(e.code == status_syntax && e.parser && e.line == 2 && e.column == 4);
+  require(e.code == status_syntax && e.parser && e.line == 3 && e.column == 1);
   require(failure(s, "a\n---\nb\n").code == status_multiple_documents);
   require(failure(s, std::string(129, '[') + std::string(129, ']')).code == status_limit);
   require(failure(s, "a: *x\n").code == status_syntax);

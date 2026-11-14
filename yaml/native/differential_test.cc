@@ -8,7 +8,8 @@
 //
 // A remaining difference is fixed, or explained by a class in differential_exclusions.txt:
 // `class<TAB>kind<TAB>regex<TAB>reason`, where kind is granit-rejects (rapidyaml accepts),
-// granit-accepts (rapidyaml rejects) or document (both accept, different documents) and the regex
+// granit-accepts (rapidyaml rejects), document (both accept, different documents) or truncation
+// (both fail; only the stream's TRUNCATED vs SYNTAX classification differs) and the regex
 // (ECMAScript) must match the input text. Only spec-conformant granit behaviour may be listed. The
 // list is exact: a class that explains no difference fails.
 //
@@ -145,7 +146,7 @@ std::vector<exclusion> read_exclusions(const std::string& path) {
     std::string cell;
     while (std::getline(cells, cell, '\t')) f.push_back(cell);
     if (f.size() != 4 || f[3].empty()) throw std::runtime_error("exclusions are class<TAB>kind<TAB>regex<TAB>reason: " + line);
-    if (f[1] != "granit-rejects" && f[1] != "granit-accepts" && f[1] != "document")
+    if (f[1] != "granit-rejects" && f[1] != "granit-accepts" && f[1] != "document" && f[1] != "truncation")
       throw std::runtime_error("unknown exclusion kind: " + line);
     if (!names.insert(f[0]).second) throw std::runtime_error("duplicate exclusion " + f[0]);
     out.push_back({f[0], f[1], f[2], f[3], std::regex(f[2], std::regex::ECMAScript)});
@@ -210,6 +211,16 @@ int main(int argc, char** argv) {
       } else {
         cls = left_error ? "different error status" : "different document";
         kind = left_error ? "status" : "document";
+        // Both fail with a syntax error and only the stream's truncated classification differs.
+        auto untruncated = [](std::string text) {
+          size_t at = text.find("truncated\n");
+          if (at != std::string::npos) text.erase(at, 10);
+          return text;
+        };
+        if (left_error && untruncated(strict(left)) == untruncated(strict(right))) {
+          cls = "truncated vs syntax";
+          kind = "truncation";
+        }
       }
       ++classes[cls];
       const std::string& text = texts[input];

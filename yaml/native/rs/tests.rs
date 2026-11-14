@@ -379,13 +379,14 @@ fn errors_follow_earlier_records() {
     // The records before a scan error are delivered first, whatever the batch size.
     for capacity in [1, 2, 64] {
         let (records, failure) = pull_with(b"a: 1\nb: [1, 2\n", capacity, false);
-        // granit reports the unclosed bracket at the bracket, after the flow sequence's first item
-        // (it scans one token ahead, so `2` itself is not delivered).
+        // The input ended inside the flow sequence: the error is placed at the end of the input (as
+        // rapidyaml does; granit itself points at the bracket). granit scans one token ahead, so `2`
+        // itself is not delivered.
         assert!(records.iter().any(|r| r.text == "b") && records.iter().any(|r| r.e.kind == KIND_SEQ_START));
         let f = failure.unwrap();
         assert_eq!(
             (f.status, f.line, f.column, f.message.as_str()),
-            (STATUS_SYNTAX, 2, 4, "unclosed bracket '['")
+            (STATUS_SYNTAX, 3, 1, "unclosed bracket '['")
         );
     }
     let (_, failure) = pull_with(b"a: \xff\n", 4, false);

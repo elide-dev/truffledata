@@ -6,6 +6,62 @@ use crate::events::{Batcher, Failure, RsEvent, STATUS_INTERNAL, STATUS_SYNTAX};
 use std::fmt::Write as _;
 use std::time::{Duration, Instant};
 
+// Test binary only: counts this thread's heap allocations so the Rust-side allocation of a parse
+// (outside the decoder's index budget, by the 2026-11-14 ruling) can be pinned as linear in the
+// input. Production builds set no global allocator (#37).
+struct Counting;
+thread_local! {
+    static COUNTS: std::cell::Cell<(u64, u64)> = const { std::cell::Cell::new((0, 0)) };
+}
+#[allow(unsafe_code)]
+unsafe impl std::alloc::GlobalAlloc for Counting {
+    unsafe fn alloc(&self, layout: std::alloc::Layout) -> *mut u8 {
+        let _ = COUNTS.try_with(|c| {
+            let (n, b) = c.get();
+            c.set((n + 1, b + layout.size() as u64));
+        });
+        // SAFETY: forwarded unchanged to the system allocator.
+        unsafe { std::alloc::System.alloc(layout) }
+    }
+    unsafe fn dealloc(&self, ptr: *mut u8, layout: std::alloc::Layout) {
+        // SAFETY: as above.
+        unsafe { std::alloc::System.dealloc(ptr, layout) }
+    }
+    unsafe fn realloc(&self, ptr: *mut u8, layout: std::alloc::Layout, size: usize) -> *mut u8 {
+        let _ = COUNTS.try_with(|c| {
+            let (n, b) = c.get();
+            c.set((n + 1, b + size as u64));
+        });
+        // SAFETY: as above.
+        unsafe { std::alloc::System.realloc(ptr, layout, size) }
+    }
+}
+#[global_allocator]
+static ALLOCATOR: Counting = Counting;
+
+fn allocations(input: &str) -> (u64, u64) {
+    let before = COUNTS.with(std::cell::Cell::get);
+    let _ = run(input);
+    let after = COUNTS.with(std::cell::Cell::get);
+    (after.0 - before.0, after.1 - before.1)
+}
+
+/// The parser's own heap use per parse (allocations and bytes requested) grows at most linearly:
+/// each shape at 4n allocates at most 6x what it allocates at n (floors of 64 allocations and
+/// 64 KiB). This is the guard for the parser-side allocation the decoder's budget does not see.
+#[test]
+fn parser_allocation_is_linear() {
+    let mut problems = Vec::new();
+    for case in SHAPES {
+        let n = if *case == "deep-block-map" { 500 } else { 20_000 };
+        let (small, large) = (allocations(&shape(case, n)), allocations(&shape(case, 4 * n)));
+        if large.0 > small.0.max(64) * 6 || large.1 > small.1.max(65_536) * 6 {
+            problems.push(format!("{case}: n {small:?}, 4n {large:?}"));
+        }
+    }
+    assert!(problems.is_empty(), "non-linear parser allocation:\n{}", problems.join("\n"));
+}
+
 fn run(input: &str) -> Result<usize, Failure> {
     let mut batcher = Batcher::new(input);
     let mut out = vec![RsEvent::default(); 256];

@@ -143,6 +143,8 @@ std::string decode_all(yaml_session& s, const std::string& yaml, uint32_t flags)
     int32_t status = st.next(&d, flags);
     if (status == status_stream_empty) break;
     if (status != status_ok) {
+      // The stream's status (truncated vs syntax depends on where the parser places the error).
+      if (status == status_stream_truncated) out += "truncated\n";
       if (const auto& e = st.last_error()) describe_error(*e, out);
       else out += "error " + std::to_string(status) + "\n";
       break;
