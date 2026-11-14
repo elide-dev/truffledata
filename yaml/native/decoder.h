@@ -1265,14 +1265,22 @@ class handler : public c4::yml::EventHandlerStack<handler, handler_state> {
   }
 #ifdef TD_YAML_PARSER_RUST
   // The literal/folded case above for a content offset and token end (a copy, so the rapidyaml
-  // build's code stays byte-identical).
+  // build's code stays byte-identical). granit's token starts at the first non-blank content line,
+  // so blank lines between the header and it are skipped.
   uint64_t block_span(size_t content, size_t position) const {
-    // The header line (`|`, `>-`, `!tag |2 # comment`) is the line before the content.
+    // The header line (`|`, `>-`, `!tag |2 # comment`) is the last non-blank line before the content.
     size_t at = content;
     while (at > 0 && pristine_[at - 1] != '\n') --at;  // start of the content's line
-    if (at == 0) return 0;
-    size_t header_end = at - 1, header = header_end;
-    while (header > 0 && pristine_[header - 1] != '\n') --header;
+    size_t header_end, header;
+    for (;;) {
+      if (at == 0) return 0;
+      header_end = at - 1, header = header_end;
+      while (header > 0 && pristine_[header - 1] != '\n') --header;
+      bool blank_line = true;
+      for (size_t i = header; i < header_end && blank_line; ++i) blank_line = pristine_[i] == ' ' || pristine_[i] == '\t' || pristine_[i] == '\r';
+      if (!blank_line) break;
+      at = header;
+    }
     size_t indicator = SIZE_MAX;
     for (size_t i = header; i < header_end; ++i) {
       char c = pristine_[i];

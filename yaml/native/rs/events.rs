@@ -109,12 +109,13 @@ fn clamp(value: usize) -> u32 {
     u32::try_from(value).unwrap_or(u32::MAX)
 }
 
-/// Parser options used for every decode: spec indentation rules (yaml-test-suite 9C9N) and anchor
-/// names delivered as events. Nesting limits stay at granit's defaults (255), above the decoder's
-/// own depth limit (at most 128), so the handler's limit error is the one users see. Implicit keys
-/// keep YAML's 1024-character limit.
+/// Parser options used for every decode: spec indentation rules (yaml-test-suite 9C9N), anchor
+/// names delivered as events, and aliases to unknown anchors delivered as aliases (the decoder
+/// rejects them itself, with rapidyaml's status and message). Nesting limits stay at granit's
+/// defaults (255), above the decoder's own depth limit (at most 128), so the handler's limit error
+/// is the one users see. Implicit keys keep YAML's 1024-character limit.
 pub fn options() -> granit_parser::Options {
-    granit_parser::options! { strict_indentation: true, emit_anchor_events: true }
+    granit_parser::options! { strict_indentation: true, emit_anchor_events: true, emit_unresolved_aliases: true }
 }
 
 /// One document stream's records, pulled batch by batch.
@@ -238,7 +239,9 @@ impl<'a> Batcher<'a> {
                 }
                 self.properties(&mut r, anchor, tag.as_deref(), scratch)?;
             }
-            Event::Alias(_) => {
+            // Unresolved aliases are delivered too: the handler reports "undefined YAML alias" (as
+            // with rapidyaml) and applies reject_aliases, max_aliases and recursion checks.
+            Event::Alias(_) | Event::UnresolvedAlias(_) => {
                 r.kind = KIND_ALIAS;
                 r.flags |= FLAG_ANCHOR;
                 // The span is the `*name` token; the handler resolves the name itself.

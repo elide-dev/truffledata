@@ -193,6 +193,22 @@ fn render(records: &[Rec]) -> String {
     out + "-STR\n"
 }
 
+/// An alias naming no anchor defined before it in its document.
+fn undefined_alias(records: &[Rec]) -> bool {
+    let mut defined = std::collections::HashSet::new();
+    for r in records {
+        match r.e.kind {
+            KIND_DOC_START => defined.clear(),
+            KIND_ALIAS if !defined.contains(&r.anchor) => return true,
+            KIND_SCALAR | KIND_SEQ_START | KIND_MAP_START if r.e.flags & FLAG_ANCHOR != 0 => {
+                defined.insert(r.anchor.clone());
+            }
+            _ => {}
+        }
+    }
+    false
+}
+
 /// The probe's conformance.py normalization with strict flow and document markers.
 fn normalize(text: &str) -> Vec<String> {
     let mut anchors: HashMap<String, usize> = HashMap::new();
@@ -256,6 +272,8 @@ fn yaml_test_suite() {
         for capacity in [1, 3, 256] {
             let (records, failure) = pull_with(&src, capacity, false);
             outcomes.push(match failure {
+                // The decoder rejects aliases to unknown anchors (granit delivers them).
+                None if undefined_alias(&records) => Err(STATUS_SYNTAX),
                 None => Ok(render(&records)),
                 Some(f) => Err(f.status),
             });
@@ -372,6 +390,15 @@ fn errors_follow_earlier_records() {
     }
     let (_, failure) = pull_with(b"a: \xff\n", 4, false);
     assert_eq!(failure.unwrap().status, STATUS_SYNTAX);
+}
+
+#[test]
+fn unresolved_aliases_are_delivered() {
+    // The decoder, not granit, rejects them, with rapidyaml's "undefined YAML alias".
+    let r = ok("a: *missing\nb: &x 1\nc: *x\n");
+    let aliases: Vec<_> = r.iter().filter(|r| r.e.kind == KIND_ALIAS).map(|r| r.anchor.as_str()).collect();
+    assert_eq!(aliases, ["missing", "x"]);
+    assert!(undefined_alias(&r));
 }
 
 #[test]

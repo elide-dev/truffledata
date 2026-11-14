@@ -196,6 +196,59 @@ cc_test(
     ],
 )
 
+# The differential against rapidyaml: one dumper per parser (a binary holds one), compared by
+# :differential_test over the suite inputs, probe fixtures, session corpus and 5,000 seeded
+# generated documents under eight policies.
+cc_binary(
+    name = "diff_dump",
+    testonly = True,
+    srcs = ["diff_dump.cc"],
+    copts = ["-std=c++17"],
+    deps = [
+        ":tape_events",
+        ":testing",
+    ],
+)
+
+cc_binary(
+    name = "diff_dump_rs",
+    testonly = True,
+    srcs = ["diff_dump.cc"],
+    copts = ["-std=c++17"],
+    deps = [
+        ":decoder_rs",
+        ":tape_events",
+        ":testing",
+    ],
+)
+
+cc_test(
+    name = "differential_test",
+    size = "large",
+    # Manual until design step 7 is accepted: unexplained differences remain to be ruled.
+    tags = ["manual"],
+    srcs = ["differential_test.cc"],
+    args = [
+        "--ryml=$(rootpath :diff_dump)",
+        "--rs=$(rootpath :diff_dump_rs)",
+        "--exclusions=$(rootpath differential_exclusions.txt)",
+        "--generated=5000",
+        "--seed=20261114",
+        "$(rootpaths :testdata)",
+        "$(rootpaths :session_corpus)",
+        "$(rootpaths @yaml_test_suite//:inputs)",
+    ],
+    copts = ["-std=c++17"],
+    data = [
+        "differential_exclusions.txt",
+        ":diff_dump",
+        ":diff_dump_rs",
+        ":session_corpus",
+        ":testdata",
+        "@yaml_test_suite//:inputs",
+    ],
+)
+
 # The C ABI headers for consumers of the release archive (the isolated archive test).
 filegroup(
     name = "header",

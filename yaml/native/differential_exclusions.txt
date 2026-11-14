@@ -1,0 +1,10 @@
+# Reviewed differences between the rapidyaml and granit-parser backends, read by
+# //yaml/native:differential_test (design step 7).
+#
+# Format, one per line: KEY<TAB>reason
+#   KEY     an input (a path as the test receives it, or gen/<n> for a generated document), or
+#           "<input> <policy>" for one policy only
+#   reason  why the difference is accepted, and which backend is right
+#
+# A difference is fixed if the handler or the Rust driver causes it; only parser behaviour may be
+# listed. The list is exact: an entry that matches no difference fails the test.
