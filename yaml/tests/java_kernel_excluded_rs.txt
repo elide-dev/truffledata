@@ -1,3 +1,5 @@
+# Rust parser backend copy (//yaml/tests:jvm_rs): the rapidyaml list minus the quoted-key span omissions
+# granit does not have, plus the 2G84 entries at the end.
 # yaml-test-suite cases where the Java kernel (SnakeYAML Engine 3.2 events) and the native decoder
 # (rapidyaml) disagree; JavaKernelDifferentialTest fails on any other divergence and on an entry
 # here that stops diverging. `CASE` covers every option mode, `CASE@mode` one mode.
@@ -54,15 +56,7 @@ Y79Y/003	Engine accepts invalid YAML (the suite expects an error)
 #    quoted scalar's span from rapidyaml's scanner position, which for some implicit block keys is
 #    already past the `:` (so the span check fails and rawText() has none). The Java kernel reports
 #    every quoted scalar's span from its token; values and other metadata agree.
-26DV@retain	native omits the raw span of a quoted implicit block key; the Java kernel keeps it
-26DV@yaml11	native omits the raw span of a quoted implicit block key; the Java kernel keeps it
-6H3V@retain	native omits the raw span of a quoted implicit block key; the Java kernel keeps it
-6H3V@yaml11	native omits the raw span of a quoted implicit block key; the Java kernel keeps it
-6SLA@retain	native omits the raw span of a quoted implicit block key; the Java kernel keeps it
-6SLA@yaml11	native omits the raw span of a quoted implicit block key; the Java kernel keeps it
-87E4@retain	native omits the raw span of a quoted implicit block key; the Java kernel keeps it
-87E4@yaml11	native omits the raw span of a quoted implicit block key; the Java kernel keeps it
-HMQ5@retain	native omits the raw span of a quoted implicit block key; the Java kernel keeps it
-HMQ5@yaml11	native omits the raw span of a quoted implicit block key; the Java kernel keeps it
-LQZ7@retain	native omits the raw span of a quoted implicit block key; the Java kernel keeps it
-LQZ7@yaml11	native omits the raw span of a quoted implicit block key; the Java kernel keeps it
+#
+# Rust parser backend only (//yaml/tests:jvm_rs): an empty block scalar with an indentation indicator at the end of input.
+2G84/02	Rust backend: with retained source an empty "--- |1-" scalar keeps its source span "|1-"; rapidyaml and Engine give none (the token is the real source spelling)
+2G84/03	Rust backend: as 2G84/02 for "--- |1+"

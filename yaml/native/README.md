@@ -206,15 +206,26 @@ Answers to the design's open questions:
   crate's own `cargo test`.
 - Not measured: no throughput, allocation or SVM number exists for this backend (design steps 11-12).
 
-Known differences from rapidyaml (all in `differential_exclusions.txt`): granit rejects plain
-scalars starting with `]`/`}`, empty anchor names, verbatim tags with blanks, `{}` in `%TAG`
-prefixes, content after directives without `---`, `---` not followed by a blank, `| -` headers and
-multi-line implicit keys, all of which YAML 1.2 forbids; it accepts flow collections as implicit
-keys of nested block mappings; properties alone on a `- ` line apply to the following mapping; a
-flow key with an empty value is followed by sibling keys. `[<<: x]` is a merge key on the Rust path
-only (the rapidyaml path's retroactive single-pair mapping skips merge handling). Whether a failing
-final stream document is TRUNCATED or SYNTAX follows each parser's error position and differs in
-both directions; that class awaits a ruling.
+Known differences (all accepted; `differential_exclusions.txt` for rapidyaml, `java_kernel_excluded_rs.txt`
+and `POLICY_DIVERGENCES_RS` in `JavaKernelDifferentialTest` for the Java kernel, applied only to the
+Rust run). The rapidyaml differential: 43,392 decodes, 42,613 equal, 108 where the Rust backend adds
+a source span rapidyaml omits, 671 explained by 15 classes, 0 unexplained.
+
+- Spec-correct rejections rapidyaml lets through: plain scalars starting with `]`/`}`, empty anchor
+  names, verbatim tags with blanks, `{}` in `%TAG` prefixes, content after directives without `---`,
+  `---` not followed by a blank, `| -` headers, multi-line implicit keys.
+- Spec-correct acceptance: flow collections as implicit keys of nested block mappings.
+- Different documents: properties alone on a `- ` line apply to the following mapping (an alias to
+  it inside is then recursive); a flow key with an empty value is followed by sibling keys; a clip or
+  keep block scalar that ends the input without a line break has none (YAML 1.2.2 [165]; rapidyaml
+  and SnakeYAML Engine add one for clip).
+- `[<<: x]` is a merge key on the Rust path only (the rapidyaml path's retroactive single-pair
+  mapping skips merge handling).
+- Ruled 2026-11-14, keep granit: a failing final stream document is TRUNCATED or SYNTAX by where each
+  parser places the error (446 decodes); an over-deep unclosed flow document is TRUNCATED on granit
+  (end of input reported before the over-deep start) and LIMIT on rapidyaml.
+- Messages (not contractual): under JSON, `[a]: b` reports "YAML complex key" before the schema
+  error; with a retained source an empty `|1-`/`|1+` scalar keeps its span (2G84/02, /03).
 
 granit-parser 2.1.0 defects found (both worked around in `events.rs`, to report upstream):
 
@@ -222,17 +233,8 @@ granit-parser 2.1.0 defects found (both worked around in `events.rs`, to report 
 - It appends a line break to a clip or keep block scalar whose last content line ends the input
   without one (`- |\n  a` reads as `"a\n"`; [165] gives `"a"`).
 
-The adapter also gives granit's unsupported-`%YAML`-major and surrogate-escape errors the
-decoder's messages, without the parser flag, as the rapidyaml backend reports them.
-
-Open (2026-11-14): `differential_test` and `//yaml/tests:jvm_rs` are tagged manual. After the last
-two adapter fixes the differential has 8 unexplained decodes (one generated input, `gen/4662`, a
-different document under every policy), and the Java kernel differential has 4 suite divergences
-(2G84/02-03: the Rust backend spans an empty `|1-`/`|1+` scalar that rapidyaml and the Java
-kernel do not) and 21 policy divergences, among them `[a]: b` under JSON (decoder message
-order: complex key before the JSON schema error), and a too-deep unclosed flow document (LIMIT
-on rapidyaml, TRUNCATED on granit, which reports the end of input before delivering the
-over-deep start). These need classification or a ruling before steps 7 and 10 count as accepted.
+The adapter gives granit's unsupported-`%YAML`-major and unpaired-surrogate errors the decoder's
+messages, without the parser flag, as the rapidyaml backend reports them.
 
 ```sh
 bazel test //yaml/native/rs:test //yaml/conformance:yaml_test_suite_rs //yaml/native:differential_test \

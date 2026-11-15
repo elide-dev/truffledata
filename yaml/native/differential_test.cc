@@ -61,7 +61,10 @@ dump parse(const std::string& text) {
       std::string name = line.substr(3);
       size_t next = text.find("\n## gen/", at - 1);
       size_t stop = next == std::string::npos ? text.size() : next + 1;
-      d.generated[name] = text.substr(at, stop - at);
+      std::string input = text.substr(at, stop - at);
+      // The dump ends each generated input with one extra line break; the patterns see the input.
+      if (!input.empty() && input.back() == '\n') input.pop_back();
+      d.generated[name] = input;
       at = stop;
       current = nullptr;
     } else if (current) {

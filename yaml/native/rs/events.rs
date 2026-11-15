@@ -281,7 +281,6 @@ impl<'a> Batcher<'a> {
             K::InvalidLowSurrogate | K::MissingLowSurrogate | K::UnpairedLowSurrogate => {
                 Some("unpaired surrogate in a YAML quoted scalar")
             }
-            K::InvalidUnicodeEscape => Some("invalid Unicode escape in a YAML quoted scalar"),
             _ => None,
         };
         if let Some(message) = decoder_message {

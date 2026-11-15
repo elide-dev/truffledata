@@ -140,12 +140,10 @@ java_test(
         "-Dpolyglot.engine.WarnInterpreterOnly=false",
         "-Dyaml.library=$(rootpath //yaml/native:yaml_rs_shared.so)",
         "-Dyaml.kernel.excluded=yaml/tests/java_kernel_excluded_rs.txt",
+        "-Dyaml.kernel.backend=rust",
         "-ea",
     ],
     main_class = "dev.elide.bazel.junit.BazelJUnitRunner",
-    # Manual until step 10 is accepted: 4 suite and 21 policy divergences remain to be ruled
-    # (yaml/native/README.md, "Pure-Rust parser backend").
-    tags = ["manual"],
     use_testrunner = False,
     runtime_deps = [
         "//bazel/junit:runner",
